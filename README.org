@@ -15,5 +15,18 @@
 
 Script to setup this repo
 #+BEGIN_SRC bash
-cobra-cli init --author "John Hilliard jhilliard@polygon.technology" --license lgpl-3.0 --viper
+cobra-cli init
 #+END_SRC
+
+This is the content of my ~~/.cobra.yaml~ file
+#+begin_src yaml
+---
+author: Polygon <engineering@polygon.technology>
+license: lgpl-3.0
+useViper: true
+#+end_src
+
+* Reference
+
+
+- https://github.com/spf13/cobra-cli/blob/main/README.md
