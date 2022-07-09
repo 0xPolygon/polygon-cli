@@ -17,6 +17,8 @@ Script to setup this repo
 #+BEGIN_SRC bash
 cobra-cli init
 cobra-cli add version
+cobra-cli add hash
+cobra-cli add mnemonic
 #+END_SRC
 
 This is the content of my ~~/.cobra.yaml~ file

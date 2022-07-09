@@ -1,11 +1,16 @@
 
 INSTALL_DIR:=~/go/bin/
 BIN_NAME:=polycli
+BUILD_DIR:=./out
 
-build:
-	go build -o $(BIN_NAME) main.go
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
+build: $(BUILD_DIR)
+	go build -o $(BUILD_DIR)/$(BIN_NAME) main.go
 
 install: build
-	cp $(BIN_NAME) $(INSTALL_DIR)
+	cp $(BUILD_DIR)/$(BIN_NAME) $(INSTALL_DIR)
 
-
+clean:
+	$(RM) -r $(BUILD_DIR)
