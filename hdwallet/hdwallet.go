@@ -11,7 +11,11 @@ var (
 )
 
 func NewMnemonic(wordCount int) (string, error) {
-	entropy, err := bip39.NewEntropy(wordsToBits[wordCount])
+	bits, hasKey := wordsToBits[wordCount]
+	if !hasKey {
+		return "", fmt.Errorf("The word count needs to be 12, 15, 18, 21, or 24. Got %d", wordCount)
+	}
+	entropy, err := bip39.NewEntropy(bits)
 	if err != nil {
 		return "", fmt.Errorf("There was an error getting entropy: %s", err.Error())
 	}
