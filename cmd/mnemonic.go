@@ -19,14 +19,12 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/maticnetwork/polygon-cli/hdwallet"
 	"github.com/spf13/cobra"
-	"github.com/tyler-smith/go-bip39"
 )
 
 var (
 	inputWords *int
-
-	wordsToBits = map[int]int{12: 128, 15: 160, 18: 192, 21: 224, 24: 256}
 )
 
 // mnemonicCmd represents the mnemonic command
@@ -39,19 +37,13 @@ If you're looking to generate a full HD wallet, you'll need to use
 some of the other commands, this command is meant only for generating
 the mnemonic phrase rather than a full set of wallets and addresses
 `,
-	Run: func(cmd *cobra.Command, args []string) {
-		entropy, err := bip39.NewEntropy(wordsToBits[*inputWords])
+	RunE: func(cmd *cobra.Command, args []string) error {
+		mnemonic, err := hdwallet.NewMnemonic(*inputWords)
 		if err != nil {
-			cmd.PrintErrf("There was an error getting entropy: %s", err.Error())
-			return
-		}
-
-		mnemonic, err := bip39.NewMnemonic(entropy)
-		if err != nil {
-			cmd.PrintErrf("There was an error creating the mnemonic: %s", err.Error())
-			return
+			return err
 		}
 		cmd.Println(mnemonic)
+		return nil
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if *inputWords < 12 {
