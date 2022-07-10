@@ -36,33 +36,33 @@ type (
 		useRawEntropy  bool
 	}
 	PolyWalletExport struct {
-		RootKey           string
-		Seed              string
-		Mnemonic          string
-		Passphrase        string
-		DerivationPath    string
-		AccountPublicKey  string
-		AccountPrivateKey string
-		BIP32PublicKey    string
-		BIP32PrivateKey   string
+		RootKey           string               `json:",omitempty"`
+		Seed              string               `json:",omitempty"`
+		Mnemonic          string               `json:",omitempty"`
+		Passphrase        string               `json:",omitempty"`
+		DerivationPath    string               `json:",omitempty"`
+		AccountPublicKey  string               `json:",omitempty"`
+		AccountPrivateKey string               `json:",omitempty"`
+		BIP32PublicKey    string               `json:",omitempty"`
+		BIP32PrivateKey   string               `json:",omitempty"`
 		Addresses         []*PolyAddressExport `json:",omitempty"`
 		multiAddress
 	}
 	multiAddress struct {
-		HexPublicKey       string
-		HexPrivateKey      string
-		ETHAddress         string
-		BTCAddress         string
-		WIF                string
-		ECDSAAddress       string
-		Sr25519Address     string
-		Ed25519Address     string
-		ECDSAAddressSS58   string
-		Sr25519AddressSS58 string
-		Ed25519AddressSS58 string
+		HexPublicKey       string `json:",omitempty"`
+		HexPrivateKey      string `json:",omitempty"`
+		ETHAddress         string `json:",omitempty"`
+		BTCAddress         string `json:",omitempty"`
+		WIF                string `json:",omitempty"`
+		ECDSAAddress       string `json:",omitempty"`
+		Sr25519Address     string `json:",omitempty"`
+		Ed25519Address     string `json:",omitempty"`
+		ECDSAAddressSS58   string `json:",omitempty"`
+		Sr25519AddressSS58 string `json:",omitempty"`
+		Ed25519AddressSS58 string `json:",omitempty"`
 	}
 	PolyAddressExport struct {
-		Path string
+		Path string `json:",omitempty"`
 		multiAddress
 	}
 )

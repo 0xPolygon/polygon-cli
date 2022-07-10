@@ -40,28 +40,29 @@ var (
 // walletCmd represents the wallet command
 var walletCmd = &cobra.Command{
 	Use:   "wallet [create|inspect]",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Create or inspect a bip39(ish) wallet",
+	Long: `This command is meant to simplify the operations of creating wallets
+across v1 and avail. This command can take a seed phrase and spit out
+child accounts or generate new accmounts along with a seed phrase`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		mode := args[0]
+		var err error
+		var mnemonic string
 		if mode == "inspect" {
 			// in the case of inspect, we'll partse a mnemonic and then continue
-			return fmt.Errorf("Not implemented yet")
+			mnemonic, err = getFileOrFlag(inputMnemonicFile, inputMnemonic)
+			if err != nil {
+				return err
+			}
+		} else {
+			mnemonic, err = hdwallet.NewMnemonic(*inputWords, *inputLang)
+			if err != nil {
+				return err
+			}
 		}
-
-		mnemonic, err := hdwallet.NewMnemonic(*inputWords, *inputLang)
-		if err != nil {
-			return err
-		}
-		// TODO remove this once we implement inspect
 		// mnemonic = "maid palace spring laptop shed when text taxi pupil movie athlete tag"
-		mnemonic = "crop cash unable insane eight faith inflict route frame loud box vibrant"
-		mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+		// mnemonic = "crop cash unable insane eight faith inflict route frame loud box vibrant"
+		// mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 		password, err := getFileOrFlag(inputPasswordFile, inputPassword)
 		pw, err := hdwallet.NewPolyWallet(mnemonic, password)
 		if err != nil {
