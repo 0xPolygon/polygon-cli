@@ -1,8 +1,10 @@
 package hdwallet
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
 	"crypto/sha512"
+
 	"encoding/hex"
 	"fmt"
 	"regexp"
@@ -13,6 +15,8 @@ import (
 
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+
+	"github.com/oasisprotocol/curve25519-voi/primitives/sr25519"
 	"github.com/tyler-smith/go-bip32"
 	"github.com/tyler-smith/go-bip39"
 	"github.com/tyler-smith/go-bip39/wordlists"
@@ -34,16 +38,18 @@ type (
 		useRawEntropy  bool
 	}
 	PolyWalletExport struct {
-		RootKey           string
-		Seed              string
-		Mnemonic          string
-		Passphrase        string
-		DerivationPath    string
-		AccountPublicKey  string
-		AccountPrivateKey string
-		BIP32PublicKey    string
-		BIP32PrivateKey   string
-		Addresses         []*PolyAddressExport
+		RootKey              string
+		Seed                 string
+		Mnemonic             string
+		Passphrase           string
+		DerivationPath       string
+		AccountPublicKey     string
+		AccountPrivateKey    string
+		AccountPublicKeyHex  string
+		AccountPrivateKeyHex string
+		BIP32PublicKey       string
+		BIP32PrivateKey      string
+		Addresses            []*PolyAddressExport
 	}
 	PolyAddressExport struct {
 		Path          string
@@ -77,6 +83,23 @@ const (
 	CurveEd25519
 	CurveSr25519
 )
+
+func GenPrivKeyFromSecret(seed []byte, c PolyCurve) (interface{}, error) {
+	if c == CurveEd25519 {
+		return ed25519.NewKeyFromSeed(seed[0:32]), nil
+	}
+	if c == CurveSr25519 {
+		msk, err := sr25519.NewMiniSecretKeyFromBytes(seed[0:32])
+		if err != nil {
+			return nil, err
+		}
+		sk := msk.ExpandEd25519()
+		return sk, nil
+	}
+	// https://pkg.go.dev/crypto/ed25519
+
+	return nil, fmt.Errorf("Unable to generate private key from secret")
+}
 
 func NewPolyWallet(mnemonic, password string) (*PolyWallet, error) {
 	pw := new(PolyWallet)
@@ -157,6 +180,26 @@ func (p *PolyWallet) ExportAddresses(count int) (*PolyWalletExport, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// substrate
+	pk, _ := GenPrivKeyFromSecret(p.rawSeed, CurveEd25519)
+	fmt.Println(hex.EncodeToString(pk.(ed25519.PrivateKey).Public().(ed25519.PublicKey)))
+
+	pk, err = GenPrivKeyFromSecret(p.rawSeed, CurveSr25519)
+	if err != nil {
+		panic(err.Error())
+	}
+	data, _ := pk.(*sr25519.SecretKey).PublicKey().MarshalBinary()
+	fmt.Println(hex.EncodeToString(data))
+
+	curve := secp256k1.S256()
+	x1, y1 := curve.ScalarBaseMult(p.rawSeed[0:32])
+	fullKey := append(x1.Bytes(), y1.Bytes()...)
+	fmt.Println(hex.EncodeToString(fullKey))
+	compressedKey := append([]byte{0x02}, x1.Bytes()...)
+	fmt.Println(hex.EncodeToString(compressedKey))
+	// \ substrate
+
 	pwe.RootKey = rootKey.String()
 
 	accountKey, err := p.GetKeyForPath(p.derivationPath)
@@ -165,6 +208,8 @@ func (p *PolyWallet) ExportAddresses(count int) (*PolyWalletExport, error) {
 	}
 	pwe.AccountPrivateKey = accountKey.String()
 	pwe.AccountPublicKey = accountKey.PublicKey().String()
+	pwe.AccountPrivateKeyHex = hex.EncodeToString(accountKey.Key)
+	pwe.AccountPublicKeyHex = hex.EncodeToString(accountKey.PublicKey().Key)
 
 	bip32Key, err := p.GetKeyForPath(p.derivationPath + "/0")
 	if err != nil {

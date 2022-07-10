@@ -36,6 +36,8 @@ docker run parity/subkey:latest inspect --scheme "Sr25519" "crop cash unable ins
 docker run parity/subkey:latest inspect --scheme "Ed25519" "crop cash unable insane eight faith inflict route frame loud box vibrant"
 
 docker run parity/subkey:latest inspect --password "Substrate" --scheme "Ecdsa" "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+docker run parity/subkey:latest inspect --password "Substrate" --scheme "Sr25519" "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+docker run parity/subkey:latest inspect --password "Substrate" --scheme "Ed25519" "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 
 docker run parity/subkey:latest --help
 #+end_src
