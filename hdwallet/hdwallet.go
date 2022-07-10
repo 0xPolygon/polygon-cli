@@ -29,8 +29,9 @@ type (
 		derivationPath string
 		rawSeed        []byte
 		curve          PolyCurve
-		kdfIterations  int
+		kdfIterations  uint
 		keyCache       map[string]*bip32.Key
+		useRawEntropy  bool
 	}
 	PolyWalletExport struct {
 		RootKey           string
@@ -84,11 +85,13 @@ func NewPolyWallet(mnemonic, password string) (*PolyWallet, error) {
 	pw.derivationPath = "m/44'/60'/0'"
 	pw.curve = CurveSecp256k1
 	pw.kdfIterations = 2048
+	pw.keyCache = make(map[string]*bip32.Key, 0)
+	pw.useRawEntropy = false
 	err := pw.parseMnemonic()
 	if err != nil {
 		return nil, err
 	}
-	pw.keyCache = make(map[string]*bip32.Key, 0)
+
 	return pw, nil
 }
 func (p *PolyWallet) SetPath(path string) error {
@@ -99,8 +102,38 @@ func (p *PolyWallet) SetPath(path string) error {
 	p.derivationPath = path
 	return nil
 }
+func (p *PolyWallet) SetIterations(iterations uint) error {
+	p.kdfIterations = iterations
+	err := p.parseMnemonic()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+func (p *PolyWallet) SetUseRawEntropy(e bool) error {
+	p.useRawEntropy = e
+	err := p.parseMnemonic()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func (p *PolyWallet) parseMnemonic() error {
+	// substrate / polkadot
+	// https://github.com/paritytech/substrate-bip39/blob/master/src/lib.rs
+	if p.useRawEntropy {
+		r, err := bip39.EntropyFromMnemonic(p.Mnemonic)
+		if err != nil {
+			return err
+		}
+		seed := pbkdf2.Key(r, []byte("mnemonic"+p.Passphrase), int(p.kdfIterations), 64, sha512.New)
+		p.rawSeed = seed
+		return nil
+	}
+
 	// 2048 is the default for bip39
 	if p.kdfIterations == 2048 {
 		seed := bip39.NewSeed(p.Mnemonic, p.Passphrase)
@@ -109,17 +142,7 @@ func (p *PolyWallet) parseMnemonic() error {
 	}
 
 	// there might be a reason why someone would want a different number of iterations
-	if p.kdfIterations > 0 {
-		p.rawSeed = pbkdf2.Key([]byte(p.Mnemonic), []byte("mnemonic"+p.Passphrase), p.kdfIterations, 64, sha512.New)
-		return nil
-	}
-
-	// substrate uses the raw entropy from the mnemonic
-	var err error
-	p.rawSeed, err = bip39.EntropyFromMnemonic(p.Mnemonic)
-	if err != nil {
-		return err
-	}
+	p.rawSeed = pbkdf2.Key([]byte(p.Mnemonic), []byte("mnemonic"+p.Passphrase), int(p.kdfIterations), 64, sha512.New)
 	return nil
 }
 

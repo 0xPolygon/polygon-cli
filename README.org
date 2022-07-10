@@ -29,6 +29,21 @@ license: lgpl-3.0
 useViper: true
 #+end_src
 
+
+#+begin_src bash
+docker run parity/subkey:latest inspect --scheme "Ecdsa" "crop cash unable insane eight faith inflict route frame loud box vibrant"
+docker run parity/subkey:latest inspect --scheme "Sr25519" "crop cash unable insane eight faith inflict route frame loud box vibrant"
+docker run parity/subkey:latest inspect --scheme "Ed25519" "crop cash unable insane eight faith inflict route frame loud box vibrant"
+
+docker run parity/subkey:latest inspect --password "Substrate" --scheme "Ecdsa" "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+
+docker run parity/subkey:latest --help
+#+end_src
+https://github.com/paritytech/tiny-bip39/blob/master/src/mnemonic.rs
+https://github.com/paritytech/substrate-bip39/blob/master/src/lib.rs
+https://docs.rs/sp-core/2.0.0-alpha.2/sp_core/crypto/trait.Pair.html
+https://github.com/paritytech/substrate/blob/0ba251c9388452c879bfcca425ada66f1f9bc802/client/cli/src/commands/utils.rs#L77
+
 * Reference
 
 

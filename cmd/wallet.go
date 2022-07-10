@@ -26,13 +26,15 @@ import (
 )
 
 var (
-	inputCurve         *string
-	inputKDFIterations *int
-	inputPassword      *string
-	inputPasswordFile  *string
-	inputMnemonic      *string
-	inputMnemonicFile  *string
-	inputPath          *string
+	inputCurve               *string
+	inputKDFIterations       *uint
+	inputPassword            *string
+	inputPasswordFile        *string
+	inputMnemonic            *string
+	inputMnemonicFile        *string
+	inputPath                *string
+	inputAddressesToGenerate *uint
+	inputUseRawEntropy       *bool
 )
 
 // walletCmd represents the wallet command
@@ -56,7 +58,10 @@ to quickly create a Cobra application.`,
 		if err != nil {
 			return err
 		}
-		mnemonic = "maid palace spring laptop shed when text taxi pupil movie athlete tag"
+		// TODO remove this once we implement inspect
+		// mnemonic = "maid palace spring laptop shed when text taxi pupil movie athlete tag"
+		mnemonic = "crop cash unable insane eight faith inflict route frame loud box vibrant"
+		mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 		password, err := getFileOrFlag(inputPasswordFile, inputPassword)
 		pw, err := hdwallet.NewPolyWallet(mnemonic, password)
 		if err != nil {
@@ -66,8 +71,16 @@ to quickly create a Cobra application.`,
 		if err != nil {
 			return err
 		}
+		err = pw.SetIterations(*inputKDFIterations)
+		if err != nil {
+			return err
+		}
+		err = pw.SetUseRawEntropy(*inputUseRawEntropy)
+		if err != nil {
+			return err
+		}
 
-		key, err := pw.ExportAddresses(2)
+		key, err := pw.ExportAddresses(int(*inputAddressesToGenerate))
 		if err != nil {
 			return err
 		}
@@ -107,8 +120,9 @@ func getFileOrFlag(filename *string, flag *string) (string, error) {
 func init() {
 	rootCmd.AddCommand(walletCmd)
 	inputCurve = walletCmd.PersistentFlags().String("curve", "secp256k1", "ed25519, sr25519, or secp256k1")
-	inputKDFIterations = walletCmd.PersistentFlags().Int("i", 2048, "Number of pbkdf2 iterations to perform")
+	inputKDFIterations = walletCmd.PersistentFlags().Uint("iterations", 2048, "Number of pbkdf2 iterations to perform")
 	inputWords = walletCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
+	inputAddressesToGenerate = walletCmd.PersistentFlags().Uint("addresses", 10, "The number of addresses to generate")
 	inputLang = walletCmd.PersistentFlags().String("language", "english", "Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
 	// https://github.com/satoshilabs/slips/blob/master/slip-0044.md
 	// 0 - bitcoin
@@ -119,6 +133,7 @@ func init() {
 	inputPasswordFile = walletCmd.PersistentFlags().String("password-file", "", "Password stored in a file used along with the mnemonic")
 	inputMnemonic = walletCmd.PersistentFlags().String("mnemonic", "", "A mnemonic phrase used to generate entropy")
 	inputMnemonicFile = walletCmd.PersistentFlags().String("mnemonic-file", "", "A mneomonic phrase written in a file used to generate entropy")
+	inputUseRawEntropy = walletCmd.PersistentFlags().Bool("raw-entropy", false, "substrate and polkda dot don't follow strict bip39 and use raw entropy")
 
 	// Here you will define your flags and configuration settings.
 
