@@ -26,7 +26,6 @@ import (
 )
 
 var (
-	inputCurve               *string
 	inputKDFIterations       *uint
 	inputPassword            *string
 	inputPasswordFile        *string
@@ -35,6 +34,7 @@ var (
 	inputPath                *string
 	inputAddressesToGenerate *uint
 	inputUseRawEntropy       *bool
+	inputRootOnly            *bool
 )
 
 // walletCmd represents the wallet command
@@ -80,7 +80,16 @@ to quickly create a Cobra application.`,
 			return err
 		}
 
-		key, err := pw.ExportAddresses(int(*inputAddressesToGenerate))
+		if *inputRootOnly {
+			key, err := pw.ExportRootAddress()
+			if err != nil {
+				return err
+			}
+			out, _ := json.MarshalIndent(key, " ", " ")
+			fmt.Println(string(out))
+			return nil
+		}
+		key, err := pw.ExportHDAddresses(int(*inputAddressesToGenerate))
 		if err != nil {
 			return err
 		}
@@ -119,7 +128,6 @@ func getFileOrFlag(filename *string, flag *string) (string, error) {
 
 func init() {
 	rootCmd.AddCommand(walletCmd)
-	inputCurve = walletCmd.PersistentFlags().String("curve", "secp256k1", "ed25519, sr25519, or secp256k1")
 	inputKDFIterations = walletCmd.PersistentFlags().Uint("iterations", 2048, "Number of pbkdf2 iterations to perform")
 	inputWords = walletCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
 	inputAddressesToGenerate = walletCmd.PersistentFlags().Uint("addresses", 10, "The number of addresses to generate")
@@ -134,14 +142,5 @@ func init() {
 	inputMnemonic = walletCmd.PersistentFlags().String("mnemonic", "", "A mnemonic phrase used to generate entropy")
 	inputMnemonicFile = walletCmd.PersistentFlags().String("mnemonic-file", "", "A mneomonic phrase written in a file used to generate entropy")
 	inputUseRawEntropy = walletCmd.PersistentFlags().Bool("raw-entropy", false, "substrate and polkda dot don't follow strict bip39 and use raw entropy")
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// walletCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// walletCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	inputRootOnly = walletCmd.PersistentFlags().Bool("root-only", false, "don't produce HD accounts. Just produce a single wallet")
 }

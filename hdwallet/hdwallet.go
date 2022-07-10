@@ -11,53 +11,59 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/crypto/sha3"
-
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-
 	"github.com/oasisprotocol/curve25519-voi/primitives/sr25519"
 	"github.com/tyler-smith/go-bip32"
 	"github.com/tyler-smith/go-bip39"
 	"github.com/tyler-smith/go-bip39/wordlists"
+	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/ripemd160"
+	"golang.org/x/crypto/sha3"
 )
 
 type (
-	PolyCurve int
+	PolySignature int
 
 	PolyWallet struct {
 		Mnemonic       string
 		Passphrase     string
 		derivationPath string
 		rawSeed        []byte
-		curve          PolyCurve
 		kdfIterations  uint
 		keyCache       map[string]*bip32.Key
 		useRawEntropy  bool
 	}
 	PolyWalletExport struct {
-		RootKey              string
-		Seed                 string
-		Mnemonic             string
-		Passphrase           string
-		DerivationPath       string
-		AccountPublicKey     string
-		AccountPrivateKey    string
-		AccountPublicKeyHex  string
-		AccountPrivateKeyHex string
-		BIP32PublicKey       string
-		BIP32PrivateKey      string
-		Addresses            []*PolyAddressExport
+		RootKey           string
+		Seed              string
+		Mnemonic          string
+		Passphrase        string
+		DerivationPath    string
+		AccountPublicKey  string
+		AccountPrivateKey string
+		BIP32PublicKey    string
+		BIP32PrivateKey   string
+		Addresses         []*PolyAddressExport `json:",omitempty"`
+		multiAddress
+	}
+	multiAddress struct {
+		HexPublicKey       string
+		HexPrivateKey      string
+		ETHAddress         string
+		BTCAddress         string
+		WIF                string
+		ECDSAAddress       string
+		Sr25519Address     string
+		Ed25519Address     string
+		ECDSAAddressSS58   string
+		Sr25519AddressSS58 string
+		Ed25519AddressSS58 string
 	}
 	PolyAddressExport struct {
-		Path          string
-		HexPublicKey  string
-		HexPrivateKey string
-		ETHAddress    string
-		BTCAddress    string
-		WIF           string
+		Path string
+		multiAddress
 	}
 )
 
@@ -79,16 +85,16 @@ var (
 )
 
 const (
-	CurveSecp256k1 PolyCurve = iota
-	CurveEd25519
-	CurveSr25519
+	SignatureSecp256k1 PolySignature = iota
+	SignatureEd25519
+	SignatureSr25519
 )
 
-func GenPrivKeyFromSecret(seed []byte, c PolyCurve) (interface{}, error) {
-	if c == CurveEd25519 {
+func GenPrivKeyFromSecret(seed []byte, c PolySignature) (interface{}, error) {
+	if c == SignatureEd25519 {
 		return ed25519.NewKeyFromSeed(seed[0:32]), nil
 	}
-	if c == CurveSr25519 {
+	if c == SignatureSr25519 {
 		msk, err := sr25519.NewMiniSecretKeyFromBytes(seed[0:32])
 		if err != nil {
 			return nil, err
@@ -101,12 +107,43 @@ func GenPrivKeyFromSecret(seed []byte, c PolyCurve) (interface{}, error) {
 	return nil, fmt.Errorf("Unable to generate private key from secret")
 }
 
+func GetPublicKeyFromSeed(seed []byte, c PolySignature, compressed bool) ([]byte, error) {
+	if c == SignatureEd25519 {
+		prvKey := ed25519.NewKeyFromSeed(seed[0:32])
+		pubKey := prvKey.Public()
+		return pubKey.(ed25519.PublicKey), nil
+
+	}
+	if c == SignatureSr25519 {
+		msk, err := sr25519.NewMiniSecretKeyFromBytes(seed[0:32])
+		if err != nil {
+			return nil, err
+		}
+		sk := msk.ExpandEd25519()
+		pubData, err := sk.PublicKey().MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		return pubData, nil
+	}
+
+	// default to ecdsa
+	curve := secp256k1.S256()
+	x1, y1 := curve.ScalarBaseMult(seed[0:32])
+	if compressed {
+		compressedKey := append([]byte{0x02}, x1.Bytes()...)
+		return compressedKey, nil
+	}
+	fullKey := append(x1.Bytes(), y1.Bytes()...)
+
+	return fullKey, nil
+}
+
 func NewPolyWallet(mnemonic, password string) (*PolyWallet, error) {
 	pw := new(PolyWallet)
 	pw.Mnemonic = mnemonic
 	pw.Passphrase = password
 	pw.derivationPath = "m/44'/60'/0'"
-	pw.curve = CurveSecp256k1
 	pw.kdfIterations = 2048
 	pw.keyCache = make(map[string]*bip32.Key, 0)
 	pw.useRawEntropy = false
@@ -168,8 +205,46 @@ func (p *PolyWallet) parseMnemonic() error {
 	p.rawSeed = pbkdf2.Key([]byte(p.Mnemonic), []byte("mnemonic"+p.Passphrase), int(p.kdfIterations), 64, sha512.New)
 	return nil
 }
+func (p *PolyWallet) ExportRootAddress() (*PolyWalletExport, error) {
+	pwe := new(PolyWalletExport)
+	pwe.Mnemonic = p.Mnemonic
+	pwe.Passphrase = p.Passphrase // ???
+	pwe.Seed = hex.EncodeToString(p.rawSeed)
+	// assumes bip44
+	rootKey, err := p.GetKeyForPath("m")
+	if err != nil {
+		return nil, err
+	}
 
-func (p *PolyWallet) ExportAddresses(count int) (*PolyWalletExport, error) {
+	pwe.RootKey = rootKey.String()
+	pwe.HexPublicKey = hex.EncodeToString(rootKey.PublicKey().Key)
+	pwe.HexPrivateKey = hex.EncodeToString(rootKey.Key)
+	pwe.WIF = toWIF(rootKey)
+	pwe.BTCAddress = toBTCAddress(rootKey)
+	pwe.ETHAddress = toETHAddress(rootKey)
+	addr, err := GetPublicKeyFromSeed(p.rawSeed, SignatureSecp256k1, true)
+	if err != nil {
+		return nil, err
+	}
+	pwe.ECDSAAddress = hex.EncodeToString(addr)
+	pwe.ECDSAAddressSS58 = substrateSS58(addr)
+	addr, err = GetPublicKeyFromSeed(p.rawSeed, SignatureEd25519, true)
+	if err != nil {
+		return nil, err
+	}
+	pwe.Ed25519Address = hex.EncodeToString(addr)
+	pwe.Ed25519AddressSS58 = substrateSS58(addr)
+	addr, err = GetPublicKeyFromSeed(p.rawSeed, SignatureSr25519, true)
+	if err != nil {
+		return nil, err
+	}
+	pwe.Sr25519Address = hex.EncodeToString(addr)
+	pwe.Sr25519AddressSS58 = substrateSS58(addr)
+
+	return pwe, nil
+
+}
+func (p *PolyWallet) ExportHDAddresses(count int) (*PolyWalletExport, error) {
 	pwe := new(PolyWalletExport)
 	pwe.Mnemonic = p.Mnemonic
 	pwe.Passphrase = p.Passphrase // ???
@@ -181,25 +256,6 @@ func (p *PolyWallet) ExportAddresses(count int) (*PolyWalletExport, error) {
 		return nil, err
 	}
 
-	// substrate
-	pk, _ := GenPrivKeyFromSecret(p.rawSeed, CurveEd25519)
-	fmt.Println(hex.EncodeToString(pk.(ed25519.PrivateKey).Public().(ed25519.PublicKey)))
-
-	pk, err = GenPrivKeyFromSecret(p.rawSeed, CurveSr25519)
-	if err != nil {
-		panic(err.Error())
-	}
-	data, _ := pk.(*sr25519.SecretKey).PublicKey().MarshalBinary()
-	fmt.Println(hex.EncodeToString(data))
-
-	curve := secp256k1.S256()
-	x1, y1 := curve.ScalarBaseMult(p.rawSeed[0:32])
-	fullKey := append(x1.Bytes(), y1.Bytes()...)
-	fmt.Println(hex.EncodeToString(fullKey))
-	compressedKey := append([]byte{0x02}, x1.Bytes()...)
-	fmt.Println(hex.EncodeToString(compressedKey))
-	// \ substrate
-
 	pwe.RootKey = rootKey.String()
 
 	accountKey, err := p.GetKeyForPath(p.derivationPath)
@@ -208,8 +264,6 @@ func (p *PolyWallet) ExportAddresses(count int) (*PolyWalletExport, error) {
 	}
 	pwe.AccountPrivateKey = accountKey.String()
 	pwe.AccountPublicKey = accountKey.PublicKey().String()
-	pwe.AccountPrivateKeyHex = hex.EncodeToString(accountKey.Key)
-	pwe.AccountPublicKeyHex = hex.EncodeToString(accountKey.PublicKey().Key)
 
 	bip32Key, err := p.GetKeyForPath(p.derivationPath + "/0")
 	if err != nil {
@@ -404,4 +458,13 @@ func NewMnemonic(wordCount int, lang string) (string, error) {
 
 func init() {
 	rePathValidator = regexp.MustCompile(pathValidator)
+}
+
+// https://github.com/paritytech/substrate/blob/8310936bd25519cee81abb01d2b164805f01bc25/primitives/core/src/crypto.rs#L264
+// https://wiki.polkadot.network/docs/learn-accounts#for-the-curious-how-prefixes-work
+func substrateSS58(pub []byte) string {
+	data := append([]byte{42}, pub...)
+	prefix := []byte("SS58PRE")
+	h := blake2b.Sum512(append(prefix, data...))
+	return base58.Encode(append(data, h[:2]...))
 }
