@@ -26,6 +26,8 @@ import (
 )
 
 var (
+	inputWords               *int
+	inputLang                *string
 	inputKDFIterations       *uint
 	inputPassword            *string
 	inputPasswordFile        *string

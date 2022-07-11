@@ -24,8 +24,8 @@ import (
 )
 
 var (
-	inputWords *int
-	inputLang  *string
+	inputMnemonicWords *int
+	inputMnemonicLang  *string
 )
 
 // mnemonicCmd represents the mnemonic command
@@ -39,7 +39,7 @@ some of the other commands, this command is meant only for generating
 the mnemonic phrase rather than a full set of wallets and addresses
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		mnemonic, err := hdwallet.NewMnemonic(*inputWords, *inputLang)
+		mnemonic, err := hdwallet.NewMnemonic(*inputMnemonicWords, *inputMnemonicLang)
 		if err != nil {
 			return err
 		}
@@ -63,8 +63,8 @@ the mnemonic phrase rather than a full set of wallets and addresses
 
 func init() {
 	rootCmd.AddCommand(mnemonicCmd)
-	inputWords = mnemonicCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
-	inputLang = mnemonicCmd.PersistentFlags().String("language", "english", "Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
+	inputMnemonicWords = mnemonicCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
+	inputMnemonicLang = mnemonicCmd.PersistentFlags().String("language", "english", "Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command

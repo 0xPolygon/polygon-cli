@@ -10,6 +10,7 @@ build: $(BUILD_DIR)
 	go build -o $(BUILD_DIR)/$(BIN_NAME) main.go
 
 install: build
+	$(RM) $(INSTALL_DIR)/$(BIN_NAME)
 	cp $(BUILD_DIR)/$(BIN_NAME) $(INSTALL_DIR)
 
 clean:

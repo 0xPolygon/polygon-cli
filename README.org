@@ -13,6 +13,57 @@
 #+LaTeX_CLASS_OPTIONS: [letterpaper]
 
 
+* Hash
+#+begin_src bash
+$ echo -n "hello" > hello.txt
+$ polycli hash sha1 --file hello.txt
+aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d
+$ echo -n "hello" | polycli hash sha1
+aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d
+$ polycli hash sha1 hello
+aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d
+#+end_src
+
+* Mnemonic
+#+begin_src bash
+$ polycli mnemonic
+enact only hair era deposit coffee key swing chief dilemma vivid owner helmet jazz trigger caught gather sister mutual uncover hedgehog undo slush else
+$ polycli mnemonic --language spanish
+aire mecha vino álbum bazar cerca barro perro crónica opinar finito cocina aduana límite abuso ronda croqueta huracán violín niño rodar riñón pilar fumar
+$ polycli mnemonic --language spanish --words 12
+sardina momento ruta rulo truco mochila pronto varón adicto rehén ajuste bebida
+#+end_src
+
+* Wallet
+
+Create an avail style wallet:
+#+begin_src bash
+polycli wallet create --raw-entropy --root-only --words 15 --language english
+#+end_src
+
+
+Inspect an avail style wallet that uses a password
+#+begin_src bash
+polycli wallet inspect --raw-entropy --root-only --language english --password "Substrate" --mnemonic "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+#+end_src
+
+Generate 5 addresses for BTC:
+#+begin_src bash
+polycli wallet create --path "m/44'/0'/0'" --addresses 5
+#+end_src
+
+Generate 5 addresses for ETH:
+#+begin_src bash
+polycli wallet create --path "m/44'/60'/0'" --addresses 5
+#+end_src
+
+Generate 5 addresses for MATIC:
+#+begin_src bash
+polycli wallet create --path "m/44'/966'/0'" --addresses 5
+#+end_src
+
+
+* Adding Commands
 Script to setup this repo
 #+BEGIN_SRC bash
 cobra-cli init
@@ -20,6 +71,7 @@ cobra-cli add version
 cobra-cli add hash
 cobra-cli add mnemonic
 #+END_SRC
+
 
 This is the content of my ~~/.cobra.yaml~ file
 #+begin_src yaml
@@ -29,22 +81,6 @@ license: lgpl-3.0
 useViper: true
 #+end_src
 
-
-#+begin_src bash
-docker run parity/subkey:latest inspect --scheme "Ecdsa" "crop cash unable insane eight faith inflict route frame loud box vibrant"
-docker run parity/subkey:latest inspect --scheme "Sr25519" "crop cash unable insane eight faith inflict route frame loud box vibrant"
-docker run parity/subkey:latest inspect --scheme "Ed25519" "crop cash unable insane eight faith inflict route frame loud box vibrant"
-
-docker run parity/subkey:latest inspect --password "Substrate" --scheme "Ecdsa" "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-docker run parity/subkey:latest inspect --password "Substrate" --scheme "Sr25519" "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-docker run parity/subkey:latest inspect --password "Substrate" --scheme "Ed25519" "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-
-docker run parity/subkey:latest --help
-#+end_src
-https://github.com/paritytech/tiny-bip39/blob/master/src/mnemonic.rs
-https://github.com/paritytech/substrate-bip39/blob/master/src/lib.rs
-https://docs.rs/sp-core/2.0.0-alpha.2/sp_core/crypto/trait.Pair.html
-https://github.com/paritytech/substrate/blob/0ba251c9388452c879bfcca425ada66f1f9bc802/client/cli/src/commands/utils.rs#L77
 
 * Reference
 
