@@ -40,8 +40,8 @@ import (
 //
 
 var (
-	inputNodeKeyChain *string
-	inputNodeKeyType  *string
+	inputNodeKeyProtocol *string
+	inputNodeKeyType     *string
 )
 
 // nodekeyCmd represents the nodekey command
@@ -55,11 +55,11 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if *inputNodeKeyChain == "devp2p" {
+		if *inputNodeKeyProtocol == "devp2p" {
 			generateETHNodeKey()
 			return nil
 		}
-		return fmt.Errorf("%s is not implemented yet", *inputNodeKeyChain)
+		return fmt.Errorf("%s is not implemented yet", *inputNodeKeyProtocol)
 	},
 }
 
@@ -116,7 +116,7 @@ func generateETHNodeKey() error {
 func init() {
 	rootCmd.AddCommand(nodekeyCmd)
 
-	inputNodeKeyChain = nodekeyCmd.PersistentFlags().String("chain", "devp2p", "devp2p|libp2p|pex")
+	inputNodeKeyProtocol = nodekeyCmd.PersistentFlags().String("protocol", "devp2p", "devp2p|libp2p|pex")
 	inputNodeKeyType = nodekeyCmd.PersistentFlags().String("key-type", "ed25519", "The type of key")
 
 	// Here you will define your flags and configuration settings.
