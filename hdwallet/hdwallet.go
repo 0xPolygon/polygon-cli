@@ -154,6 +154,14 @@ func NewPolyWallet(mnemonic, password string) (*PolyWallet, error) {
 
 	return pw, nil
 }
+func NewPolyWalletFromSeed(seed []byte) (*PolyWallet, error) {
+	pw := new(PolyWallet)
+	pw.derivationPath = "m/44'/60'/0'"
+	pw.kdfIterations = 2048
+	pw.keyCache = make(map[string]*bip32.Key, 0)
+	pw.useRawEntropy = false
+	return pw, nil
+}
 func (p *PolyWallet) SetPath(path string) error {
 	// TODO validate the path more carefully
 	if !rePathValidator.MatchString(path) {
