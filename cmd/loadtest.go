@@ -17,6 +17,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package cmd
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
@@ -33,10 +34,10 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/maticnetwork/polygon-cli/jsonrpc"
-
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"golang.org/x/time/rate"
 )
 
 var (
@@ -55,15 +56,6 @@ var loadtestCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		// c.SendTx(
-		// 	*inputLoadTestParams.PrivateKey,
-		// 	UnitFinney,
-		// 	inputLoadTestParams.CurrentGas,
-		// 	"0x4592d8f8d7b001e72cb26a73e4fa1806a51ac79d", // TODO
-		// 	*inputLoadTestParams.CurrentNonce,
-		// 	big.NewInt(int64(*inputLoadTestParams.ChainID)),
-		// 	inputLoadTestParams.URL.String(),
-		// )
 		return nil
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
@@ -128,6 +120,7 @@ type (
 		PrivateKey    *string
 		ToAddress     *string
 		HexSendAmount *string
+		RateLimit     *float64
 
 		// Computed
 		CurrentGas      *big.Int
@@ -162,12 +155,12 @@ func init() {
 	ltp.ChainID = loadtestCmd.PersistentFlags().Uint64("chain-id", 1256, "The chain id for the transactions that we're going to send")
 	ltp.ToAddress = loadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
 	ltp.HexSendAmount = loadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The address that we're going to send to")
+	ltp.RateLimit = loadtestCmd.PersistentFlags().Float64("rate-limit", 1, "A limit to the number of transactions we'll execute per seconds")
 
 	inputLoadTestParams = *ltp
 
 	// TODO batch size
 	// TODO Compression
-	// TODO transfer size
 	// TODO array of RPC endpoints to round robin?
 }
 
@@ -342,6 +335,12 @@ func mainLoop(c *jsonrpc.Client) error {
 	sendAmt := ltp.SendAmount
 	prvKey := ltp.ECDSAPrivateKey
 	chainID := big.NewInt(int64(*ltp.ChainID))
+	ctx := context.Background()
+
+	rl := rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
+	if *ltp.RateLimit == 0.0 {
+		rl = nil
+	}
 
 	var currentNonceMutex sync.Mutex
 	var i int64
@@ -353,6 +352,13 @@ func mainLoop(c *jsonrpc.Client) error {
 		go func(i int64) {
 			var j int64
 			for j = 0; j < requests; j = j + 1 {
+
+				if rl != nil {
+					err := rl.Wait(ctx)
+					if err != nil {
+						log.Error().Err(err).Msg("Encountered a rate limiting error")
+					}
+				}
 
 				// TODO support different modes (transfer, contract deploy, contract call, multi, etc)
 				currentNonceMutex.Lock()
