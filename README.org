@@ -86,3 +86,7 @@ useViper: true
 
 
 - https://github.com/spf13/cobra-cli/blob/main/README.md
+
+
+local geth testing
+./build/bin/geth --dev --http --http.addr localhost --http.port 8546 --http.api eth,web3,personal,net --verbosity 5
