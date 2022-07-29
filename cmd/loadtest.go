@@ -17,15 +17,20 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package cmd
 
 import (
+	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
 	"math/big"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	ethcommon "github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/maticnetwork/polygon-cli/jsonrpc"
 
@@ -36,7 +41,6 @@ import (
 
 var (
 	inputLoadTestParams loadTestParams
-	OneETH              = big.NewInt(1000000000000000000)
 )
 
 // loadtestCmd represents the loadtest command
@@ -46,30 +50,20 @@ var loadtestCmd = &cobra.Command{
 	Long:  `Loadtest gives us a simple way to run a generic load test against an eth/EVM style json RPC endpoint`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Debug().Msg("Starting Loadtest")
-		log.Trace().Interface("Input Params", inputLoadTestParams).Msg("Params")
-		c := jsonrpc.NewClient()
-		c.SetTimeout(time.Duration(*inputLoadTestParams.Timeout) * time.Second)
-		if *inputLoadTestParams.Auth != "" {
-			c.SetAuth(*inputLoadTestParams.Auth)
-		}
-		if *inputLoadTestParams.Proxy != "" {
-			c.SetProxy(*inputLoadTestParams.Proxy, *inputLoadTestParams.ProxyAuth)
-		}
-		c.SetKeepAlive(*inputLoadTestParams.KeepAlive)
-		_, err := getInitialAccountValues(c)
+
+		err := runLoadTest()
 		if err != nil {
 			return err
 		}
-
-		c.SendTx(
-			*inputLoadTestParams.PrivateKey,
-			OneETH,
-			inputLoadTestParams.CurrentGas,
-			"0x4592d8f8d7b001e72cb26a73e4fa1806a51ac79d", // TODO
-			*inputLoadTestParams.CurrentNonce,
-			big.NewInt(int64(*inputLoadTestParams.ChainID)),
-			inputLoadTestParams.URL.String(),
-		)
+		// c.SendTx(
+		// 	*inputLoadTestParams.PrivateKey,
+		// 	UnitFinney,
+		// 	inputLoadTestParams.CurrentGas,
+		// 	"0x4592d8f8d7b001e72cb26a73e4fa1806a51ac79d", // TODO
+		// 	*inputLoadTestParams.CurrentNonce,
+		// 	big.NewInt(int64(*inputLoadTestParams.ChainID)),
+		// 	inputLoadTestParams.URL.String(),
+		// )
 		return nil
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
@@ -117,22 +111,31 @@ func setLogLevel(ltp loadTestParams) {
 
 type (
 	loadTestParams struct {
-		Requests     *int64
-		Concurrency  *int64
-		TimeLimit    *int64
-		Timeout      *int64
-		PostFile     *string
-		Verbosity    *int64
-		Auth         *string
-		Proxy        *string
-		ProxyAuth    *string
-		KeepAlive    *bool
-		PrettyLogs   *bool
-		URL          *url.URL
-		ChainID      *uint64
-		PrivateKey   *string
-		CurrentGas   *big.Int
-		CurrentNonce *uint64
+		// inputs
+		Requests      *int64
+		Concurrency   *int64
+		TimeLimit     *int64
+		Timeout       *int64
+		PostFile      *string
+		Verbosity     *int64
+		Auth          *string
+		Proxy         *string
+		ProxyAuth     *string
+		KeepAlive     *bool
+		PrettyLogs    *bool
+		URL           *url.URL
+		ChainID       *uint64
+		PrivateKey    *string
+		ToAddress     *string
+		HexSendAmount *string
+
+		// Computed
+		CurrentGas      *big.Int
+		CurrentNonce    *uint64
+		ECDSAPrivateKey *ecdsa.PrivateKey
+		FromETHAddress  *ethcommon.Address
+		ToETHAddress    *ethcommon.Address
+		SendAmount      *big.Int
 	}
 )
 
@@ -157,69 +160,224 @@ func init() {
 	ltp.PrettyLogs = loadtestCmd.PersistentFlags().Bool("pretty-logs", true, "Should we log in pretty format or JSON")
 	ltp.PrivateKey = loadtestCmd.PersistentFlags().String("private-key", "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa", "The hex encoded private key that we'll use to sending transactions")
 	ltp.ChainID = loadtestCmd.PersistentFlags().Uint64("chain-id", 1256, "The chain id for the transactions that we're going to send")
+	ltp.ToAddress = loadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
+	ltp.HexSendAmount = loadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The address that we're going to send to")
 
 	inputLoadTestParams = *ltp
 
 	// TODO batch size
 	// TODO Compression
+	// TODO transfer size
+	// TODO array of RPC endpoints to round robin?
 }
 
-func getInitialAccountValues(c *jsonrpc.Client) (interface{}, error) {
+func initalizeLoadTestParams(c *jsonrpc.Client) error {
+	log.Info().Msg("Connecting with RPC endpoint to initialize load test parameters")
 	resp, err := c.MakeRequest(inputLoadTestParams.URL.String(), "eth_gasPrice", nil)
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Msg("Unable to retrieve gas price")
+		return err
 	}
 	log.Trace().Interface("current gas price", resp.Result).Msg("Retreived current gas price")
 
-	gasHexString, ok := resp.Result.(string)
-	if !ok {
-		return nil, fmt.Errorf("Could not assert %v as a string", resp.Result)
-	}
-	rawGas, err := hex.DecodeString(gasHexString[2:])
+	gas, err := hexToBigInt(resp.Result)
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Msg("Unable to parse gas")
+		return err
 	}
-	gas := big.NewInt(0)
-	gas.SetBytes(rawGas)
+
 	log.Trace().Interface("current gas price big int", gas).Msg("Converted gas to big int")
 
 	privateKey, err := ethcrypto.HexToECDSA(*inputLoadTestParams.PrivateKey)
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Msg("Couldn't process the hex private key")
+		return err
 	}
-	ethAddress := ethcrypto.PubkeyToAddress(privateKey.PublicKey)
 
-	address := "0xa0ebe20d02245b6540ae2c16c695dc815ea38f7e"
+	ethAddress := ethcrypto.PubkeyToAddress(privateKey.PublicKey)
 	resp, err = c.MakeRequest(inputLoadTestParams.URL.String(), "eth_getTransactionCount", []any{ethAddress.Hex(), "latest"})
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Msg("Unable to get the transaction count for the user")
+		return err
 	}
-	log.Trace().Interface("count", resp.Result).Str("address", address).Msg("Retrieved the current transaction count")
-	var nonce uint64 = 2
+	log.Trace().Interface("count", resp.Result).Str("address", ethAddress.Hex()).Msg("Retrieved the current transaction count")
+
+	var nonce uint64
+	// if we don't get a response we're going to assume we're starting from one
 	if resp.Result == nil {
 		nonce = 1
 	} else {
-		nonceHexString, ok := resp.Result.(string)
-		if !ok {
-			return nil, fmt.Errorf("Could not assert %v as a string", resp.Result)
+		nonce, err = hexToUint64(resp.Result)
+		if err != nil {
+			return err
 		}
-		nonce = hex2int(nonceHexString)
 	}
 
-	resp, err = c.MakeRequest(inputLoadTestParams.URL.String(), "eth_getBalance", []any{address, "latest"})
+	resp, err = c.MakeRequest(inputLoadTestParams.URL.String(), "eth_getBalance", []any{ethAddress.Hex(), "latest"})
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Msg("Unable to get account balance")
+		return err
 	}
-	log.Trace().Interface("balance", resp.Result).Msg("Current account balance")
+	accountBal, err := hexToBigInt(resp.Result)
+	if err != nil {
+		log.Error().Err(err).Msg("Couldn't check account balance")
+		return err
+	}
 
+	log.Trace().Interface("balance", accountBal).Msg("Current account balance")
+
+	toAddr := ethcommon.HexToAddress(*inputLoadTestParams.ToAddress)
+
+	amt, err := hexToBigInt(*inputLoadTestParams.HexSendAmount)
+	if err != nil {
+		log.Error().Err(err).Msg("couldn't parse send amount")
+		return err
+	}
+
+	inputLoadTestParams.ToETHAddress = &toAddr
+	inputLoadTestParams.SendAmount = amt
 	inputLoadTestParams.CurrentGas = gas
 	inputLoadTestParams.CurrentNonce = &nonce
+	inputLoadTestParams.ECDSAPrivateKey = privateKey
+	inputLoadTestParams.FromETHAddress = &ethAddress
 
-	return nil, nil
+	return nil
 }
 
-func hex2int(hexStr string) uint64 {
-	cleaned := strings.Replace(hexStr, "0x", "", -1)
-	result, _ := strconv.ParseUint(cleaned, 16, 64)
-	return uint64(result)
+func hexToBigInt(raw any) (bi *big.Int, err error) {
+	bi = big.NewInt(0)
+	hexString, ok := raw.(string)
+	if !ok {
+		err = fmt.Errorf("Could not assert value %v as a string", raw)
+		return
+	}
+	hexString = strings.Replace(hexString, "0x", "", -1)
+	if len(hexString)%2 != 0 {
+		log.Trace().Str("original", hexString).Msg("Hex of odd length")
+		hexString = "0" + hexString
+	}
+
+	rawGas, err := hex.DecodeString(hexString)
+	if err != nil {
+		log.Error().Err(err).Str("hex", hexString).Msg("Unable to decode hex string")
+		return
+	}
+	bi.SetBytes(rawGas)
+	return
+}
+
+func hexToUint64(raw any) (uint64, error) {
+	hexString, ok := raw.(string)
+	if !ok {
+		return 0, fmt.Errorf("Could not assert %v as a string", hexString)
+	}
+
+	hexString = strings.Replace(hexString, "0x", "", -1)
+	if len(hexString)%2 != 0 {
+		log.Trace().Str("original", hexString).Msg("Hex of odd length")
+		hexString = "0" + hexString
+	}
+
+	result, err := strconv.ParseUint(hexString, 16, 64)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to decode hex string")
+		return 0, err
+	}
+	return uint64(result), nil
+}
+
+func runLoadTest() error {
+	log.Info().Msg("Starting Load Test")
+
+	c := jsonrpc.NewClient()
+	c.SetTimeout(time.Duration(*inputLoadTestParams.Timeout) * time.Second)
+	c.SetKeepAlive(*inputLoadTestParams.KeepAlive)
+
+	// if the user provided http auth credentials we'll set them here
+	if *inputLoadTestParams.Auth != "" {
+		c.SetAuth(*inputLoadTestParams.Auth)
+	}
+
+	// If the user wanted to use a proxy, we'll configure that here
+	if *inputLoadTestParams.Proxy != "" {
+		c.SetProxy(*inputLoadTestParams.Proxy, *inputLoadTestParams.ProxyAuth)
+	}
+
+	err := initalizeLoadTestParams(c)
+	if err != nil {
+		return err
+	}
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt)
+
+	errCh := make(chan error)
+	go func() {
+		errCh <- mainLoop(c)
+	}()
+
+	select {
+	case <-sigCh:
+		log.Info().Msg("Interrupted.. Stopping load test")
+		return nil
+	case err := <-errCh:
+		if err != nil {
+			log.Fatal().Err(err).Msg("Received critical error while running load test")
+			return err
+		}
+	}
+	return nil
+}
+
+func mainLoop(c *jsonrpc.Client) error {
+	ltp := inputLoadTestParams
+	log.Trace().Interface("Input Params", ltp).Msg("Params")
+
+	rpcUrl := inputLoadTestParams.URL.String()
+	routines := *ltp.Concurrency
+	requests := *ltp.Requests
+	currentNonce := *ltp.CurrentNonce
+	currentGas := ltp.CurrentGas
+	sendTo := ltp.ToETHAddress
+	sendAmt := ltp.SendAmount
+	prvKey := ltp.ECDSAPrivateKey
+	chainID := big.NewInt(int64(*ltp.ChainID))
+
+	var currentNonceMutex sync.Mutex
+	var i int64
+
+	var wg sync.WaitGroup
+	for i = 0; i < routines; i = i + 1 {
+		log.Trace().Int64("routine", i).Msg("Starting Thread")
+		wg.Add(1)
+		go func(i int64) {
+			var j int64
+			for j = 0; j < requests; j = j + 1 {
+
+				// TODO support different modes (transfer, contract deploy, contract call, multi, etc)
+				currentNonceMutex.Lock()
+				myNonceValue := currentNonce
+				currentNonce = currentNonce + 1
+				currentNonceMutex.Unlock()
+				gasLimit := uint64(21000)
+
+				lt := ethtypes.LegacyTx{
+					Nonce:    myNonceValue,
+					GasPrice: currentGas,
+					Gas:      gasLimit,
+					To:       sendTo,
+					Value:    sendAmt,
+					Data:     nil,
+				}
+				c.SendTx(rpcUrl, &lt, prvKey, chainID)
+
+				log.Trace().Int64("routine", i).Int64("request", j).Msg("Request")
+			}
+			wg.Done()
+		}(i)
+
+	}
+	log.Trace().Msg("Finished starting go routines. Waiting..")
+	wg.Wait()
+	return nil
 }

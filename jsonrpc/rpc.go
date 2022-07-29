@@ -2,9 +2,9 @@ package jsonrpc
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -27,6 +27,7 @@ type (
 		hasAuth    bool
 		counter    uint64
 	}
+
 	RPCBase struct {
 		JSONRPC string `json:"jsonrpc"`
 		ID      uint64 `json:"id"`
@@ -46,6 +47,19 @@ type (
 		Error  RPCError `json:"error"`
 		RPCBase
 	}
+)
+
+var (
+	UnitWei       = big.NewInt(1)                                    // | 1 | 1 | wei | Wei
+	UnitBabbage   = new(big.Int).Mul(UnitWei, big.NewInt(1000))      // | 1,000 | 10^3^ | Babbage | Kilowei or femtoether
+	UnitLovelace  = new(big.Int).Mul(UnitBabbage, big.NewInt(1000))  // | 1,000,000 | 10^6^ | Lovelace | Megawei or picoether
+	UnitShannon   = new(big.Int).Mul(UnitLovelace, big.NewInt(1000)) // | 1,000,000,000 | 10^9^ | Shannon | Gigawei or nanoether
+	UnitSzabo     = new(big.Int).Mul(UnitShannon, big.NewInt(1000))  // | 1,000,000,000,000 | 10^12^ | Szabo | Microether or micro
+	UnitFinney    = new(big.Int).Mul(UnitSzabo, big.NewInt(1000))    // | 1,000,000,000,000,000 | 10^15^ | Finney | Milliether or milli
+	UnitEther     = new(big.Int).Mul(UnitFinney, big.NewInt(1000))   // | 1,000,000,000,000,000,000 | 10^18^ | Ether | Ether
+	UnitGrand     = new(big.Int).Mul(UnitEther, big.NewInt(1000))    // | 1,000,000,000,000,000,000,000 | 10^21^ | Grand | Kiloether
+	UnitMegaether = new(big.Int).Mul(UnitGrand, big.NewInt(1000))    // | 1,000,000,000,000,000,000,000,000 | 10^24^ | | Megaether
+
 )
 
 func NewClient() *Client {
@@ -141,40 +155,7 @@ func (c *Client) Inc() uint64 {
 	return c.counter
 }
 
-// func init() {
-
-// 	privateKey, err := ethcrypto.HexToECDSA("fad9c8855b740a0b7ed4c221dbad0f33a83a49cad6b3fe8d5817ac83d38b6a19")
-// 	if err != nil {
-// 	}
-
-// 	var nonce uint64 = 1
-
-// 	value := big.NewInt(1000000000000000000) // in wei (1 eth)
-// 	gasLimit := uint64(21000)                // in units
-// 	gasPrice := big.NewInt(1)                // , err := client.SuggestGasPrice(context.Background())
-
-// 	toAddress := ethcommon.HexToAddress("0x4592d8f8d7b001e72cb26a73e4fa1806a51ac79d")
-// 	var data []byte
-// 	tx := ethtypes.NewTransaction(nonce, toAddress, value, gasLimit, gasPrice, data)
-
-// 	chainID := big.NewInt(123) // client.NetworkID(context.Background())
-
-// 	signedTx, err := ethtypes.SignTx(tx, ethtypes.NewEIP155Signer(chainID), privateKey)
-// 	if err != nil {
-// 		// log.Fatal(err)
-// 	}
-
-// 	// ts := ethtypes.Transactions{signedTx}
-// 	// rawTx := hex.EncodeToString(ts.GetRlp(0))
-
-// 	// fmt.Printf(rawTx) // f86...772
-// 	var buf bytes.Buffer
-// 	signedTx.EncodeRLP(&buf)
-// 	fmt.Println(hex.EncodeToString(buf.Bytes()))
-
-// }
-
-func (c *Client) SendTx(pk string, value *big.Int, gasPrice *big.Int, toAddress string, nonce uint64, chainID *big.Int, url string) error {
+func (c *Client) SendTxSimple(pk string, value *big.Int, gasPrice *big.Int, toAddress string, nonce uint64, chainID *big.Int, url string) error {
 	privateKey, err := ethcrypto.HexToECDSA(pk)
 	if err != nil {
 		return err
@@ -208,7 +189,6 @@ func (c *Client) SendTx(pk string, value *big.Int, gasPrice *big.Int, toAddress 
 	// fmt.Printf(rawTx) // f86...772
 	var buf bytes.Buffer
 	signedTx.EncodeRLP(&buf)
-	fmt.Println(hex.EncodeToString(buf.Bytes()))
 
 	resp, err := c.MakeRequest(url, "eth_sendRawTransaction", []any{"0x" + hex.EncodeToString(buf.Bytes())})
 	if err != nil {
@@ -224,5 +204,24 @@ func (c *Client) SendTx(pk string, value *big.Int, gasPrice *big.Int, toAddress 
 	log.Trace().Interface("txreceipt", resp.Result).Msg("Got transaction receipt")
 
 	return nil
+}
 
+func (c *Client) SendTx(url string, txdata ethtypes.TxData, privateKey *ecdsa.PrivateKey, chainID *big.Int) (*RPCResp, error) {
+	tx := ethtypes.NewTx(txdata)
+
+	signedTx, err := ethtypes.SignTx(tx, ethtypes.NewEIP155Signer(chainID), privateKey)
+	if err != nil {
+		log.Error().Err(err).Msg("could not sign transaction")
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	signedTx.EncodeRLP(&buf)
+
+	resp, err := c.MakeRequest(url, "eth_sendRawTransaction", []any{"0x" + hex.EncodeToString(buf.Bytes())})
+	if err != nil {
+		log.Error().Err(err).Msg("There was an issue sending the raw transaction")
+		return nil, err
+	}
+	return resp, nil
 }
