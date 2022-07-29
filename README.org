@@ -90,3 +90,7 @@ useViper: true
 
 local geth testing
 ./build/bin/geth --dev --http --http.addr localhost --http.port 8546 --http.api eth,web3,personal,net --verbosity 5
+
+Test account:
+
+code code code code code code code code code code code quality

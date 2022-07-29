@@ -15,3 +15,6 @@ install: build
 
 clean:
 	$(RM) -r $(BUILD_DIR)
+
+test:
+	go test github.com/maticnetwork/polygon-cli/...

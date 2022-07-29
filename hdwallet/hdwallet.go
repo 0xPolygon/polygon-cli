@@ -140,6 +140,9 @@ func GetPublicKeyFromSeed(seed []byte, c PolySignature, compressed bool) ([]byte
 }
 
 func NewPolyWallet(mnemonic, password string) (*PolyWallet, error) {
+	if !bip39.IsMnemonicValid(mnemonic) {
+		return nil, fmt.Errorf("The given mnemonic is invalid: %s", mnemonic)
+	}
 	pw := new(PolyWallet)
 	pw.Mnemonic = mnemonic
 	pw.Passphrase = password
