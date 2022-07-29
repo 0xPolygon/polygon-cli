@@ -64,17 +64,17 @@ func NewClient() *Client {
 	return c
 }
 
-func (c Client) SetTimeout(duration time.Duration) {
+func (c *Client) SetTimeout(duration time.Duration) {
 	c.httpClient.Timeout = duration
 }
 
-func (c Client) SetAuth(auth string) {
+func (c *Client) SetAuth(auth string) {
 	pieces := strings.SplitN(auth, ":", 2)
 	c.username = pieces[0]
 	c.password = pieces[1]
 	c.hasAuth = true
 }
-func (c Client) SetProxy(proxy, proxyAuth string) {
+func (c *Client) SetProxy(proxy, proxyAuth string) {
 	t := c.httpClient.Transport.(*http.Transport)
 	if proxyAuth != "" {
 		pieces := strings.SplitN(proxyAuth, ":", 2)
@@ -91,7 +91,7 @@ func (c Client) SetProxy(proxy, proxyAuth string) {
 	}
 }
 
-func (c Client) SetKeepAlive(shouldKeepAlive bool) {
+func (c *Client) SetKeepAlive(shouldKeepAlive bool) {
 	t := c.httpClient.Transport.(*http.Transport)
 	if shouldKeepAlive {
 		t.DisableKeepAlives = false
@@ -100,10 +100,10 @@ func (c Client) SetKeepAlive(shouldKeepAlive bool) {
 	}
 }
 
-func (c Client) MakeRawRequest() {
+func (c *Client) MakeRawRequest() {
 
 }
-func (c Client) MakeRequest(url, method string, params []any) (*RPCResp, error) {
+func (c *Client) MakeRequest(url, method string, params []any) (*RPCResp, error) {
 	body := RPCReq{}
 
 	body.Method = method
@@ -174,7 +174,7 @@ func (c *Client) Inc() uint64 {
 
 // }
 
-func (c Client) SendTx(pk string, value *big.Int, gasPrice *big.Int, toAddress string, nonce uint64, chainID *big.Int, url string) error {
+func (c *Client) SendTx(pk string, value *big.Int, gasPrice *big.Int, toAddress string, nonce uint64, chainID *big.Int, url string) error {
 	privateKey, err := ethcrypto.HexToECDSA(pk)
 	if err != nil {
 		return err
