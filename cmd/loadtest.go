@@ -42,6 +42,7 @@ import (
 
 var (
 	inputLoadTestParams loadTestParams
+	loadTestResults     []loadTestSample
 )
 
 // loadtestCmd represents the loadtest command
@@ -102,6 +103,14 @@ func setLogLevel(ltp loadTestParams) {
 }
 
 type (
+	loadTestSample struct {
+		GoRoutineID int64
+		RequestID   int64
+		RequestTime time.Time
+		WaitTime    time.Duration
+		Receipt     string
+		IsError     bool
+	}
 	loadTestParams struct {
 		// inputs
 		Requests      *int64
@@ -154,8 +163,8 @@ func init() {
 	ltp.PrivateKey = loadtestCmd.PersistentFlags().String("private-key", "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa", "The hex encoded private key that we'll use to sending transactions")
 	ltp.ChainID = loadtestCmd.PersistentFlags().Uint64("chain-id", 1256, "The chain id for the transactions that we're going to send")
 	ltp.ToAddress = loadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
-	ltp.HexSendAmount = loadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The address that we're going to send to")
-	ltp.RateLimit = loadtestCmd.PersistentFlags().Float64("rate-limit", 1, "A limit to the number of transactions we'll execute per seconds")
+	ltp.HexSendAmount = loadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
+	ltp.RateLimit = loadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
 
 	inputLoadTestParams = *ltp
 
@@ -293,7 +302,16 @@ func runLoadTest() error {
 
 	// If the user wanted to use a proxy, we'll configure that here
 	if *inputLoadTestParams.Proxy != "" {
+		log.Trace().Str("proxy", *inputLoadTestParams.Proxy).Msg("Configuring proxy")
 		c.SetProxy(*inputLoadTestParams.Proxy, *inputLoadTestParams.ProxyAuth)
+	}
+
+	timeLimit := *inputLoadTestParams.TimeLimit
+	var overallTimer *time.Timer
+	if timeLimit > 0 {
+		overallTimer = time.NewTimer(time.Duration(timeLimit) * time.Second)
+	} else {
+		overallTimer = new(time.Timer)
 	}
 
 	err := initalizeLoadTestParams(c)
@@ -304,25 +322,56 @@ func runLoadTest() error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt)
 
+	loadTestResults = make([]loadTestSample, 0)
 	errCh := make(chan error)
 	go func() {
 		errCh <- mainLoop(c)
 	}()
 
 	select {
+	case <-overallTimer.C:
+		log.Info().Msg("Time's up")
 	case <-sigCh:
 		log.Info().Msg("Interrupted.. Stopping load test")
-		return nil
 	case err := <-errCh:
 		if err != nil {
 			log.Fatal().Err(err).Msg("Received critical error while running load test")
-			return err
 		}
 	}
+	printResults(loadTestResults)
 	return nil
 }
 
+func printResults(lts []loadTestSample) {
+	if len(lts) == 0 {
+		log.Error().Msg("No results recorded")
+		return
+	}
+
+	fmt.Println("* Results")
+	fmt.Printf("Samples: %d\n", len(lts))
+
+	var startTime = lts[0].RequestTime
+	var endTime = lts[len(lts)-1].RequestTime
+	var meanWait float64
+	var totalWait float64 = 0
+	var numErrors uint64 = 0
+
+	for _, s := range lts {
+		if s.IsError {
+			numErrors += 1
+		}
+		totalWait = float64(s.WaitTime.Seconds()) + totalWait
+	}
+	meanWait = totalWait / float64(len(lts))
+	fmt.Printf("Start: %s\n", startTime)
+	fmt.Printf("End: %s\n", endTime)
+	fmt.Printf("Mean Wait: %0.4f\n", meanWait)
+	fmt.Printf("Num errors: %d\n", numErrors)
+}
+
 func mainLoop(c *jsonrpc.Client) error {
+
 	ltp := inputLoadTestParams
 	log.Trace().Interface("Input Params", ltp).Msg("Params")
 
@@ -338,7 +387,7 @@ func mainLoop(c *jsonrpc.Client) error {
 	ctx := context.Background()
 
 	rl := rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
-	if *ltp.RateLimit == 0.0 {
+	if *ltp.RateLimit <= 0.0 {
 		rl = nil
 	}
 
@@ -375,7 +424,10 @@ func mainLoop(c *jsonrpc.Client) error {
 					Value:    sendAmt,
 					Data:     nil,
 				}
-				c.SendTx(rpcUrl, &lt, prvKey, chainID)
+				startReq := time.Now()
+				resp, err := c.SendTx(rpcUrl, &lt, prvKey, chainID)
+				endReq := time.Now()
+				recordSample(i, j, resp, err, startReq, endReq)
 
 				log.Trace().Int64("routine", i).Int64("request", j).Msg("Request")
 			}
@@ -386,4 +438,24 @@ func mainLoop(c *jsonrpc.Client) error {
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
 	return nil
+}
+
+func recordSample(goRoutineID, requestID int64, response *jsonrpc.RPCResp, err error, start, end time.Time) {
+	s := loadTestSample{}
+	s.GoRoutineID = goRoutineID
+	s.RequestID = requestID
+	s.RequestTime = start
+	s.WaitTime = end.Sub(start)
+	if err != nil || response.Error.Code != 0 {
+		s.IsError = true
+	}
+	var ok bool
+	s.Receipt, ok = response.Result.(string)
+	if !ok {
+		log.Trace().Msg("Could not assert a string type for the response")
+
+	}
+	log.Trace().Interface("resp", response).Msg("recording sample")
+	loadTestResults = append(loadTestResults, s)
+
 }
