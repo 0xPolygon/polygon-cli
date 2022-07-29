@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/maticnetwork/polygon-cli/jsonrpc"
 
 	"github.com/rs/zerolog"
@@ -154,7 +155,7 @@ func init() {
 
 	// extended parameters
 	ltp.PrettyLogs = loadtestCmd.PersistentFlags().Bool("pretty-logs", true, "Should we log in pretty format or JSON")
-	ltp.PrivateKey = loadtestCmd.PersistentFlags().String("private-key", "b4aae9379117d358bbc72adc868e03c20e38f5e6a8491d672dd98757db04b9c3", "The hex encoded private key that we'll use to sending transactions")
+	ltp.PrivateKey = loadtestCmd.PersistentFlags().String("private-key", "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa", "The hex encoded private key that we'll use to sending transactions")
 	ltp.ChainID = loadtestCmd.PersistentFlags().Uint64("chain-id", 1256, "The chain id for the transactions that we're going to send")
 
 	inputLoadTestParams = *ltp
@@ -182,8 +183,14 @@ func getInitialAccountValues(c *jsonrpc.Client) (interface{}, error) {
 	gas.SetBytes(rawGas)
 	log.Trace().Interface("current gas price big int", gas).Msg("Converted gas to big int")
 
+	privateKey, err := ethcrypto.HexToECDSA(*inputLoadTestParams.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+	ethAddress := ethcrypto.PubkeyToAddress(privateKey.PublicKey)
+
 	address := "0xa0ebe20d02245b6540ae2c16c695dc815ea38f7e"
-	resp, err = c.MakeRequest(inputLoadTestParams.URL.String(), "eth_getTransactionCount", []any{address, "latest"})
+	resp, err = c.MakeRequest(inputLoadTestParams.URL.String(), "eth_getTransactionCount", []any{ethAddress.Hex(), "latest"})
 	if err != nil {
 		return nil, err
 	}
