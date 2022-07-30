@@ -5,10 +5,12 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"math/big"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -114,9 +116,6 @@ func (c *Client) SetKeepAlive(shouldKeepAlive bool) {
 	}
 }
 
-func (c *Client) MakeRawRequest() {
-
-}
 func (c *Client) MakeRequest(url, method string, params []any) (*RPCResp, error) {
 	body := RPCReq{}
 
@@ -146,6 +145,9 @@ func (c *Client) MakeRequest(url, method string, params []any) (*RPCResp, error)
 	if err != nil {
 		log.Trace().Interface("resp bod", respBody).Msg("There was an error unmarshalling the json response")
 		return nil, err
+	}
+	if r.Error.Code != 0 {
+		return r, fmt.Errorf("RPC Error: %s", r.Error.Message)
 	}
 	return r, nil
 }
@@ -224,4 +226,47 @@ func (c *Client) SendTx(url string, txdata ethtypes.TxData, privateKey *ecdsa.Pr
 		return nil, err
 	}
 	return resp, nil
+}
+
+// HexToBigInt assumes that it's input is a hex encoded string and
+// will try to convert it to a big int
+func HexToBigInt(raw any) (bi *big.Int, err error) {
+	bi = big.NewInt(0)
+	hexString, ok := raw.(string)
+	if !ok {
+		err = fmt.Errorf("Could not assert value %v as a string", raw)
+		return
+	}
+	hexString = strings.Replace(hexString, "0x", "", -1)
+	if len(hexString)%2 != 0 {
+		hexString = "0" + hexString
+	}
+
+	rawGas, err := hex.DecodeString(hexString)
+	if err != nil {
+		log.Error().Err(err).Str("hex", hexString).Msg("Unable to decode hex string")
+		return
+	}
+	bi.SetBytes(rawGas)
+	return
+}
+
+// HexToUint64 assumes that its input is a hex encoded string and it
+// will attempt to convert this into a uint64
+func HexToUint64(raw any) (uint64, error) {
+	hexString, ok := raw.(string)
+	if !ok {
+		return 0, fmt.Errorf("Could not assert %v as a string", hexString)
+	}
+
+	hexString = strings.Replace(hexString, "0x", "", -1)
+	if len(hexString)%2 != 0 {
+		hexString = "0" + hexString
+	}
+
+	result, err := strconv.ParseUint(hexString, 16, 64)
+	if err != nil {
+		return 0, err
+	}
+	return uint64(result), nil
 }
