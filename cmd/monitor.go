@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/url"
+	"time"
 
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
@@ -48,46 +49,52 @@ var monitorCmd = &cobra.Command{
 	Long:  ``,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c := jsonrpc.NewClient()
-		resps, err := c.MakeRequestBatch(args[0], []string{"eth_blockNumber", "net_version", "net_peerCount", "eth_gasPrice"}, [][]any{nil, nil, nil, nil})
+		ms := new(monitorStatus)
+		_, err := c.MakeRequestBatch(args[0], []string{"eth_blockNumber", "net_version", "net_peerCount", "eth_gasPrice"}, [][]any{nil, nil, nil, nil})
 		if err != nil {
 			return err
 		}
-		ms := new(monitorStatus)
-
 		ms.MaxBlockRetrieved = big.NewInt(0)
 		ms.Blocks = make(map[string]*jsonrpc.RawBlockResponse, 0)
-		ms.HeadBlock = jsonrpc.MustConvHexToBigInt(resps[0].Result)
 		ms.ChainID = big.NewInt(0)
-		ms.ChainID.SetString(resps[1].Result.(string), 10)
-		ms.PeerCount = jsonrpc.MustConvHexToUint64(resps[2].Result)
-		ms.GasPrice = jsonrpc.MustConvHexToBigInt(resps[3].Result)
 
-		from := big.NewInt(0)
-		from.Sub(ms.HeadBlock, big.NewInt(25))
-		getBlockRange(from, ms.HeadBlock, c, args[0], ms)
-		// if true {
-		// 	if false {
-		// 		fmt.Println(string(jsonData))
-		// 	}
+		isUiRendered := false
+		errChan := make(chan error)
+		go func() {
+			for {
+				resps, err := c.MakeRequestBatch(args[0], []string{"eth_blockNumber", "net_version", "net_peerCount", "eth_gasPrice"}, [][]any{nil, nil, nil, nil})
+				if err != nil {
+					log.Error().Err(err).Msg("Encountered issue fetching network information")
+					continue
+				}
 
-		// 	for _, b := range ms.Blocks {
-		// 		fmt.Printf("Block: %d\n", b.Number.ToUint64())
-		// 		fmt.Printf("Extra: %s\n", b.ExtraData)
-		// 		var h *ethtypes.Header = new(ethtypes.Header)
-		// 		jsonData, _ := json.Marshal(b)
-		// 		err = h.UnmarshalJSON(jsonData)
-		// 		if err != nil {
-		// 			return err
-		// 		}
-		// 		sig := b.ExtraData[len(b.ExtraData)-130:]
-		// 		fmt.Printf("Sig 1: %s\n", sig)
-		// 		ecrecover(h)
+				ms.HeadBlock = jsonrpc.MustConvHexToBigInt(resps[0].Result)
+				ms.ChainID.SetString(resps[1].Result.(string), 10)
+				ms.PeerCount = jsonrpc.MustConvHexToUint64(resps[2].Result)
+				ms.GasPrice = jsonrpc.MustConvHexToBigInt(resps[3].Result)
 
-		// 	}
-		// 	return nil
-		// }
+				from := big.NewInt(0)
 
-		return renderMonitorUI(ms)
+				// if the max block is 0, meaning we haven't fetched any blocks, we're going to start with head - 25
+				if ms.MaxBlockRetrieved.Cmp(from) == 0 {
+					from.Sub(ms.HeadBlock, big.NewInt(25))
+				} else {
+					from = ms.MaxBlockRetrieved
+				}
+				ms.getBlockRange(from, ms.HeadBlock, c, args[0])
+				if !isUiRendered {
+					go func() {
+						errChan <- renderMonitorUI(ms)
+					}()
+
+				}
+				time.Sleep(5 * time.Second)
+			}
+
+		}()
+
+		err = <-errChan
+		return err
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
@@ -105,7 +112,7 @@ var monitorCmd = &cobra.Command{
 	},
 }
 
-func getBlockRange(from, to *big.Int, c *jsonrpc.Client, url string, ms *monitorStatus) (any, error) {
+func (ms *monitorStatus) getBlockRange(from, to *big.Int, c *jsonrpc.Client, url string) (any, error) {
 	one := big.NewInt(1)
 	methods := make([]string, 0)
 	params := make([][]any, 0)
@@ -149,7 +156,41 @@ func init() {
 }
 
 func renderMonitorUI(ms *monitorStatus) error {
+	if err := ui.Init(); err != nil {
+		return err
+	}
+	defer ui.Close()
 
+	paintMonitor(ms)
+	currentBn := ms.HeadBlock
+	uiEvents := ui.PollEvents()
+	ticker := time.NewTicker(2 * time.Second).C
+	for {
+		select {
+		case e := <-uiEvents:
+			switch e.ID { // event string/identifier
+			case "q", "<C-c>": // press 'q' or 'C-c' to quit
+				return nil
+			}
+			switch e.Type {
+			case ui.ResizeEvent:
+				paintMonitor(ms)
+				break
+
+			}
+		// use Go's built-in tickers for updating and drawing data
+		case <-ticker:
+			if currentBn != ms.HeadBlock {
+				paintMonitor(ms)
+				currentBn = ms.HeadBlock
+			}
+
+		}
+	}
+	return nil
+}
+
+func paintMonitor(ms *monitorStatus) error {
 	blocks := make([]jsonrpc.RawBlockResponse, 0)
 	for _, b := range ms.Blocks {
 		blocks = append(blocks, *b)
@@ -182,8 +223,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 	h0.Title = "Current Height"
 
 	h1 := widgets.NewParagraph()
-	gp := ms.GasPrice.Div(ms.GasPrice, jsonrpc.UnitShannon)
-	h1.Text = fmt.Sprintf("%s gwei", gp.String())
+	h1.Text = fmt.Sprintf("%s wei", ms.GasPrice.String())
 	h1.Title = "Gas Price"
 
 	h2 := widgets.NewParagraph()
@@ -232,11 +272,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 	p0.Text = ""
 	p0.Title = "no impl"
 
-	if err := ui.Init(); err != nil {
-		return err
-	}
-	defer ui.Close()
-
 	grid := ui.NewGrid()
 	termWidth, termHeight := ui.TerminalDimensions()
 	grid.SetRect(0, 0, termWidth, termHeight)
@@ -261,16 +296,5 @@ func renderMonitorUI(ms *monitorStatus) error {
 	)
 
 	ui.Render(grid)
-
-	for e := range ui.PollEvents() {
-		if e.Type == ui.KeyboardEvent {
-			break
-		}
-		if e.Type == ui.ResizeEvent {
-			termWidth, termHeight := ui.TerminalDimensions()
-			grid.SetRect(0, 0, termWidth, termHeight)
-			ui.Render(grid)
-		}
-	}
 	return nil
 }
