@@ -512,3 +512,17 @@ func NewRawBlockResponseFromAny(raw any) (*RawBlockResponse, error) {
 	return nil, nil
 
 }
+
+func (r RawQuantityResponse) ToUint64() uint64 {
+	hexString := strings.Replace(string(r), "0x", "", -1)
+	if len(hexString)%2 != 0 {
+		hexString = "0" + hexString
+	}
+
+	result, err := strconv.ParseUint(hexString, 16, 64)
+	if err != nil {
+		return 0
+	}
+	return uint64(result)
+
+}
