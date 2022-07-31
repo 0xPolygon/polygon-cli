@@ -163,6 +163,9 @@ type (
 
 		// uncles: Array - Array of uncle hashes.
 		Uncles []RawQuantityResponse `json:"uncles"`
+
+		// baseFeePerGass: QUANTITY - fixed per block fee
+		BaseFeePerGas RawQuantityResponse `json:"baseFeePerGas"`
 	}
 )
 

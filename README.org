@@ -106,6 +106,13 @@ socat - UNIX-CONNECT:/var/folders/zs/k8swqskj1t79cgnjh6yt0fqm0000gn/T/geth.ipc
 {"id": 1, "method": "eth_subscribe", "params": ["newHeads"]}
 
 
+curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "net_version", "params": []}' 172.26.26.12:8545
+
+curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_getBlockByNumber", "params": ["0x1DE8531", true]}' https://polygon-rpc.com
+curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "clique_getSigner", "params": ["0x1DE8531", true]}' https://polygon-rpc.com
+
+
+
 curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_subscribe", "params": ["newHeads"]}' ws://127.0.0.1:8545
 
 telnet 172.26.26.12 8545

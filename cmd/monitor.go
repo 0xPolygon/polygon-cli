@@ -17,7 +17,6 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"net/url"
@@ -58,17 +57,35 @@ var monitorCmd = &cobra.Command{
 		ms.MaxBlockRetrieved = big.NewInt(0)
 		ms.Blocks = make(map[string]*jsonrpc.RawBlockResponse, 0)
 		ms.HeadBlock = jsonrpc.MustConvHexToBigInt(resps[0].Result)
-		ms.ChainID = jsonrpc.MustConvHexToBigInt(resps[1].Result)
+		ms.ChainID = big.NewInt(0)
+		ms.ChainID.SetString(resps[1].Result.(string), 10)
 		ms.PeerCount = jsonrpc.MustConvHexToUint64(resps[2].Result)
 		ms.GasPrice = jsonrpc.MustConvHexToBigInt(resps[3].Result)
 
 		from := big.NewInt(0)
 		from.Sub(ms.HeadBlock, big.NewInt(25))
 		getBlockRange(from, ms.HeadBlock, c, args[0], ms)
-		jsonData, _ := json.Marshal(ms)
-		if false {
-			fmt.Println(string(jsonData))
-		}
+		// if true {
+		// 	if false {
+		// 		fmt.Println(string(jsonData))
+		// 	}
+
+		// 	for _, b := range ms.Blocks {
+		// 		fmt.Printf("Block: %d\n", b.Number.ToUint64())
+		// 		fmt.Printf("Extra: %s\n", b.ExtraData)
+		// 		var h *ethtypes.Header = new(ethtypes.Header)
+		// 		jsonData, _ := json.Marshal(b)
+		// 		err = h.UnmarshalJSON(jsonData)
+		// 		if err != nil {
+		// 			return err
+		// 		}
+		// 		sig := b.ExtraData[len(b.ExtraData)-130:]
+		// 		fmt.Printf("Sig 1: %s\n", sig)
+		// 		ecrecover(h)
+
+		// 	}
+		// 	return nil
+		// }
 
 		return renderMonitorUI(ms)
 	},
@@ -150,10 +167,10 @@ func renderMonitorUI(ms *monitorStatus) error {
 	}
 
 	table3.ColumnResizer = func() {
-		defaultWidth := (table3.Inner.Dx() - (12 * 3)) / 2
+		defaultWidth := (table3.Inner.Dx() - (12*3 + 42)) / 1
 		columnWidths[0] = 12
 		columnWidths[1] = defaultWidth
-		columnWidths[2] = defaultWidth
+		columnWidths[2] = 42
 		columnWidths[3] = 12
 		columnWidths[4] = 12
 	}
@@ -248,6 +265,11 @@ func renderMonitorUI(ms *monitorStatus) error {
 	for e := range ui.PollEvents() {
 		if e.Type == ui.KeyboardEvent {
 			break
+		}
+		if e.Type == ui.ResizeEvent {
+			termWidth, termHeight := ui.TerminalDimensions()
+			grid.SetRect(0, 0, termWidth, termHeight)
+			ui.Render(grid)
 		}
 	}
 	return nil
