@@ -161,7 +161,9 @@ func renderMonitorUI(ms *monitorStatus) error {
 	}
 	defer ui.Close()
 
-	paintMonitor(ms)
+	redraw := getMonitorRedraw(ms)
+	redraw(ms)
+
 	currentBn := ms.HeadBlock
 	uiEvents := ui.PollEvents()
 	ticker := time.NewTicker(2 * time.Second).C
@@ -174,14 +176,16 @@ func renderMonitorUI(ms *monitorStatus) error {
 			}
 			switch e.Type {
 			case ui.ResizeEvent:
-				paintMonitor(ms)
+				ui.Clear()
+				redraw = getMonitorRedraw(ms)
+				redraw(ms)
 				break
 
 			}
 		// use Go's built-in tickers for updating and drawing data
 		case <-ticker:
 			if currentBn != ms.HeadBlock {
-				paintMonitor(ms)
+				redraw(ms)
 				currentBn = ms.HeadBlock
 			}
 
@@ -190,25 +194,17 @@ func renderMonitorUI(ms *monitorStatus) error {
 	return nil
 }
 
-func paintMonitor(ms *monitorStatus) error {
-	blocks := make([]jsonrpc.RawBlockResponse, 0)
-	for _, b := range ms.Blocks {
-		blocks = append(blocks, *b)
-	}
+func getMonitorRedraw(ms *monitorStatus) func(*monitorStatus) {
 
-	table3 := widgets.NewTable()
-	table3.Rows = metrics.GetSimpleBlockRecords(blocks)
-	table3.TextStyle = ui.NewStyle(ui.ColorWhite)
-	table3.RowSeparator = true
+	blockTable := widgets.NewTable()
+
+	blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
+	blockTable.RowSeparator = true
 
 	columnWidths := make([]int, 5)
-	if len(columnWidths) != len(table3.Rows[0]) {
-		// i've messed up
-		return fmt.Errorf("Something went wrong with table setup")
-	}
 
-	table3.ColumnResizer = func() {
-		defaultWidth := (table3.Inner.Dx() - (12*3 + 42)) / 1
+	blockTable.ColumnResizer = func() {
+		defaultWidth := (blockTable.Inner.Dx() - (12*3 + 42)) / 1
 		columnWidths[0] = 12
 		columnWidths[1] = defaultWidth
 		columnWidths[2] = 42
@@ -216,61 +212,47 @@ func paintMonitor(ms *monitorStatus) error {
 		columnWidths[4] = 12
 	}
 
-	table3.ColumnWidths = columnWidths
+	blockTable.ColumnWidths = columnWidths
 
 	h0 := widgets.NewParagraph()
-	h0.Text = ms.HeadBlock.String()
 	h0.Title = "Current Height"
 
 	h1 := widgets.NewParagraph()
-	h1.Text = fmt.Sprintf("%s wei", ms.GasPrice.String())
 	h1.Title = "Gas Price"
 
 	h2 := widgets.NewParagraph()
-	h2.Text = fmt.Sprintf("%d", ms.PeerCount)
 	h2.Title = "Current Peers"
 
 	h3 := widgets.NewParagraph()
-	h3.Text = ms.ChainID.String()
 	h3.Title = "Chain ID"
 
 	h4 := widgets.NewParagraph()
-	h4.Text = fmt.Sprintf("%0.2f", metrics.GetMeanBlockTime(blocks))
 	h4.Title = "Avg Block Time"
 
 	sl0 := widgets.NewSparkline()
-	sl0.Data = metrics.GetTxsPerBlock(blocks)
 	sl0.LineColor = ui.ColorRed
 	slg0 := widgets.NewSparklineGroup(sl0)
 	slg0.Title = "TXs / Block"
 
 	sl1 := widgets.NewSparkline()
-	sl1.Data = metrics.GetMeanGasPricePerBlock(blocks)
 	sl1.LineColor = ui.ColorGreen
 	slg1 := widgets.NewSparklineGroup(sl1)
 	slg1.Title = "Gas Price"
 
 	sl2 := widgets.NewSparkline()
-	sl2.Data = metrics.GetSizePerBlock(blocks)
 	sl2.LineColor = ui.ColorYellow
 	slg2 := widgets.NewSparklineGroup(sl2)
 	slg2.Title = "Block Size"
 
 	sl3 := widgets.NewSparkline()
-	sl3.Data = metrics.GetUnclesPerBlock(blocks)
 	sl3.LineColor = ui.ColorBlue
 	slg3 := widgets.NewSparklineGroup(sl3)
 	slg3.Title = "Uncles"
 
 	sl4 := widgets.NewSparkline()
-	sl4.Data = metrics.GetGasPerBlock(blocks)
 	sl4.LineColor = ui.ColorMagenta
 	slg4 := widgets.NewSparklineGroup(sl4)
 	slg4.Title = "Gas Used"
-
-	p0 := widgets.NewParagraph()
-	p0.Text = ""
-	p0.Title = "no impl"
 
 	grid := ui.NewGrid()
 	termWidth, termHeight := ui.TerminalDimensions()
@@ -292,9 +274,33 @@ func paintMonitor(ms *monitorStatus) error {
 			ui.NewCol(1.0/5, slg3),
 			ui.NewCol(1.0/5, slg4),
 		),
-		ui.NewRow(1.0/2, table3),
+		ui.NewRow(1.0/2, blockTable),
 	)
 
-	ui.Render(grid)
-	return nil
+	redraw := func(ms *monitorStatus) {
+		blocks := make([]jsonrpc.RawBlockResponse, 0)
+		for _, b := range ms.Blocks {
+			blocks = append(blocks, *b)
+		}
+		h0.Text = ms.HeadBlock.String()
+		h1.Text = fmt.Sprintf("%s wei", ms.GasPrice.String())
+		h2.Text = fmt.Sprintf("%d", ms.PeerCount)
+		h3.Text = ms.ChainID.String()
+		h4.Text = fmt.Sprintf("%0.2f", metrics.GetMeanBlockTime(blocks))
+
+		sl0.Data = metrics.GetTxsPerBlock(blocks)
+		sl1.Data = metrics.GetMeanGasPricePerBlock(blocks)
+		sl2.Data = metrics.GetSizePerBlock(blocks)
+		sl3.Data = metrics.GetUnclesPerBlock(blocks)
+		sl4.Data = metrics.GetGasPerBlock(blocks)
+		blockTable.Rows = metrics.GetSimpleBlockRecords(blocks)
+
+		if len(columnWidths) != len(blockTable.Rows[0]) {
+			// i've messed up
+			panic(fmt.Sprintf("Mis matched between columns and specified widths"))
+		}
+
+		ui.Render(grid)
+	}
+	return redraw
 }
