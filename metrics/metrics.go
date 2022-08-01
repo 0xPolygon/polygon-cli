@@ -129,7 +129,7 @@ func GetSimpleBlockRecords(blocks []jsonrpc.RawBlockResponse) [][]string {
 	}
 
 	if !isMined {
-		header[2] = "Signer"
+		header[3] = "Signer"
 	}
 
 	records := make([][]string, 0)
