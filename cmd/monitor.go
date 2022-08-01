@@ -106,6 +106,7 @@ var monitorCmd = &cobra.Command{
 					go func() {
 						errChan <- renderMonitorUI(ms)
 					}()
+					isUiRendered = true
 
 				}
 				time.Sleep(5 * time.Second)
@@ -302,15 +303,11 @@ func renderMonitorUI(ms *monitorStatus) error {
 			case "q", "<C-c>":
 				return nil
 			case "<Resize>":
-				fmt.Println("Resizing seems very buggy right now, quitting..")
-				return nil
-				// payload := e.Payload.(ui.Resize)
-				// grid.SetRect(0, 0, payload.Width, payload.Height)
-				// ui.Clear()
-				// // ui.Render(grid)
-				// redraw(ms)
-				// break
-
+				payload := e.Payload.(ui.Resize)
+				grid.SetRect(0, 0, payload.Width, payload.Height)
+				ui.Clear()
+				redraw(ms)
+				break
 			}
 		case <-ticker:
 			if currentBn != ms.HeadBlock {
