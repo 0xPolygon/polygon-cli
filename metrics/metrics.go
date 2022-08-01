@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -110,6 +111,7 @@ func GetSimpleBlockRecords(blocks []jsonrpc.RawBlockResponse) [][]string {
 
 	header := []string{
 		"Block #",
+		"Timestamp",
 		"Block Hash",
 		"Author",
 		"Tx Count",
@@ -134,6 +136,8 @@ func GetSimpleBlockRecords(blocks []jsonrpc.RawBlockResponse) [][]string {
 	records = append(records, header)
 	for j := len(bs) - 1; j >= 0; j = j - 1 {
 		author := string(bs[j].Miner)
+		ts := bs[j].Timestamp.ToInt64()
+		ut := time.Unix(ts, 0)
 		if !isMined {
 			signer, err := getBlockSigner(bs[j])
 			if err == nil {
@@ -142,6 +146,7 @@ func GetSimpleBlockRecords(blocks []jsonrpc.RawBlockResponse) [][]string {
 		}
 		record := []string{
 			fmt.Sprintf("%d", bs[j].Number.ToUint64()),
+			ut.Format(time.RFC822),
 			string(bs[j].Hash),
 			author,
 			fmt.Sprintf("%d", len(bs[j].Transactions)),

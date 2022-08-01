@@ -68,10 +68,30 @@ var monitorCmd = &cobra.Command{
 					continue
 				}
 
-				ms.HeadBlock = jsonrpc.MustConvHexToBigInt(resps[0].Result)
-				ms.ChainID.SetString(resps[1].Result.(string), 10)
-				ms.PeerCount = jsonrpc.MustConvHexToUint64(resps[2].Result)
-				ms.GasPrice = jsonrpc.MustConvHexToBigInt(resps[3].Result)
+				ms.HeadBlock, err = jsonrpc.ConvHexToBigInt(resps[0].Result)
+				cString, ok := resps[1].Result.(string)
+				if !ok {
+					errChan <- fmt.Errorf("The chain id string was the wrong type: %v", resps[1].Result)
+					return
+				}
+
+				ms.ChainID.SetString(cString, 10)
+				if err != nil {
+					errChan <- err
+					return
+				}
+
+				ms.PeerCount, err = jsonrpc.ConvHexToUint64(resps[2].Result)
+				if err != nil {
+					errChan <- err
+					return
+				}
+
+				ms.GasPrice, err = jsonrpc.ConvHexToBigInt(resps[3].Result)
+				if err != nil {
+					errChan <- err
+					return
+				}
 
 				from := big.NewInt(0)
 
@@ -161,55 +181,21 @@ func renderMonitorUI(ms *monitorStatus) error {
 	}
 	defer ui.Close()
 
-	redraw := getMonitorRedraw(ms)
-	redraw(ms)
-
-	currentBn := ms.HeadBlock
-	uiEvents := ui.PollEvents()
-	ticker := time.NewTicker(2 * time.Second).C
-	for {
-		select {
-		case e := <-uiEvents:
-			switch e.ID { // event string/identifier
-			case "q", "<C-c>": // press 'q' or 'C-c' to quit
-				return nil
-			}
-			switch e.Type {
-			case ui.ResizeEvent:
-				ui.Clear()
-				redraw = getMonitorRedraw(ms)
-				redraw(ms)
-				break
-
-			}
-		// use Go's built-in tickers for updating and drawing data
-		case <-ticker:
-			if currentBn != ms.HeadBlock {
-				redraw(ms)
-				currentBn = ms.HeadBlock
-			}
-
-		}
-	}
-	return nil
-}
-
-func getMonitorRedraw(ms *monitorStatus) func(*monitorStatus) {
-
 	blockTable := widgets.NewTable()
 
 	blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
 	blockTable.RowSeparator = true
 
-	columnWidths := make([]int, 5)
+	columnWidths := make([]int, 6)
 
 	blockTable.ColumnResizer = func() {
-		defaultWidth := (blockTable.Inner.Dx() - (12*3 + 42)) / 1
+		defaultWidth := (blockTable.Inner.Dx() - (12*3 + 42 + 20)) / 1
 		columnWidths[0] = 12
-		columnWidths[1] = defaultWidth
-		columnWidths[2] = 42
-		columnWidths[3] = 12
+		columnWidths[1] = 20
+		columnWidths[2] = defaultWidth
+		columnWidths[3] = 42
 		columnWidths[4] = 12
+		columnWidths[5] = 12
 	}
 
 	blockTable.ColumnWidths = columnWidths
@@ -255,8 +241,6 @@ func getMonitorRedraw(ms *monitorStatus) func(*monitorStatus) {
 	slg4.Title = "Gas Used"
 
 	grid := ui.NewGrid()
-	termWidth, termHeight := ui.TerminalDimensions()
-	grid.SetRect(0, 0, termWidth, termHeight)
 
 	grid.Set(
 		ui.NewRow(1.0/8,
@@ -276,6 +260,9 @@ func getMonitorRedraw(ms *monitorStatus) func(*monitorStatus) {
 		),
 		ui.NewRow(1.0/2, blockTable),
 	)
+
+	termWidth, termHeight := ui.TerminalDimensions()
+	grid.SetRect(0, 0, termWidth, termHeight)
 
 	redraw := func(ms *monitorStatus) {
 		blocks := make([]jsonrpc.RawBlockResponse, 0)
@@ -302,5 +289,37 @@ func getMonitorRedraw(ms *monitorStatus) func(*monitorStatus) {
 
 		ui.Render(grid)
 	}
-	return redraw
+
+	currentBn := ms.HeadBlock
+	uiEvents := ui.PollEvents()
+	ticker := time.NewTicker(time.Second).C
+
+	redraw(ms)
+	for {
+		select {
+		case e := <-uiEvents:
+			switch e.ID {
+			case "q", "<C-c>":
+				return nil
+			case "<Resize>":
+				fmt.Println("Resizing seems very buggy right now, quitting..")
+				return nil
+				// payload := e.Payload.(ui.Resize)
+				// grid.SetRect(0, 0, payload.Width, payload.Height)
+				// ui.Clear()
+				// // ui.Render(grid)
+				// redraw(ms)
+				// break
+
+			}
+		case <-ticker:
+			if currentBn != ms.HeadBlock {
+				currentBn = ms.HeadBlock
+				redraw(ms)
+				break
+			}
+		}
+	}
+
+	return nil
 }

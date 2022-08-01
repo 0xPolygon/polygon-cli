@@ -529,3 +529,16 @@ func (r RawQuantityResponse) ToUint64() uint64 {
 	return uint64(result)
 
 }
+func (r RawQuantityResponse) ToInt64() int64 {
+	hexString := strings.Replace(string(r), "0x", "", -1)
+	if len(hexString)%2 != 0 {
+		hexString = "0" + hexString
+	}
+
+	result, err := strconv.ParseUint(hexString, 16, 64)
+	if err != nil {
+		return 0
+	}
+	return int64(result)
+
+}
