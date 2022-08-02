@@ -375,24 +375,38 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 	}
 	cops := new(bind.CallOpts)
 
-	addr, deplyTx, ltContract, err := contracts.DeployLoadTester(tops, c)
+	addr, deplyTx, _, err := contracts.DeployLoadTester(tops, c)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create the load testing contract")
 		return err
 	}
-	fmt.Println(addr)
+	log.Trace().Interface("contractaddress", addr).Msg("Load test contract address")
 
 	// block while the contract is pending
+	bn, err := c.BlockNumber(ctx)
+	if err != nil {
+		return err
+	}
 	for {
 		pendCount, err := c.PendingTransactionCount(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to get pending transaction count")
 			return err
 		}
-		if pendCount < 1 {
+		bn2, err := c.BlockNumber(ctx)
+		if err != nil {
+			return err
+		}
+
+		if pendCount < 1 && bn != bn2 {
 			break
 		}
 		time.Sleep(time.Second)
+	}
+	ltContract, err := contracts.NewLoadTester(addr, c)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to instantiate new contract")
+		return err
 	}
 
 	ltCounter, err := ltContract.GetCallCounter(cops)
