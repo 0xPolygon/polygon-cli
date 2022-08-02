@@ -44,9 +44,24 @@ import (
 	"golang.org/x/time/rate"
 )
 
+const (
+	loadTestModeTransaction = "t"
+	loadTestModeDeploy      = "d"
+	loadTestModeCall        = "c"
+	loadTestModeFunction    = "f"
+	loadTestModeRandom      = "r"
+)
+
 var (
 	inputLoadTestParams loadTestParams
 	loadTestResults     []loadTestSample
+	validLoadTestModes  = []string{
+		loadTestModeTransaction,
+		loadTestModeDeploy,
+		loadTestModeCall,
+		loadTestModeFunction,
+		loadTestModeRandom,
+	}
 )
 
 // loadtestCmd represents the loadtest command
@@ -77,8 +92,20 @@ var loadtestCmd = &cobra.Command{
 			return fmt.Errorf("The scheme %s is not supported", url.Scheme)
 		}
 		inputLoadTestParams.URL = url
+		if !contains(validLoadTestModes, *inputLoadTestParams.Mode) {
+			return fmt.Errorf("The mode %s is not recognized", *inputLoadTestParams.Mode)
+		}
 		return nil
 	},
+}
+
+func contains[T comparable](haystack []T, needle T) bool {
+	for _, s := range haystack {
+		if needle == s {
+			return true
+		}
+	}
+	return false
 }
 
 func setLogLevel(ltp loadTestParams) {
@@ -128,6 +155,9 @@ type (
 		ToAddress     *string
 		HexSendAmount *string
 		RateLimit     *float64
+		Mode          *string
+		Function      *uint64
+		Iterations    *uint64
 
 		// Computed
 		CurrentGas      *big.Int
@@ -157,6 +187,9 @@ func init() {
 	ltp.ToAddress = loadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
 	ltp.HexSendAmount = loadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
 	ltp.RateLimit = loadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
+	ltp.Mode = loadtestCmd.PersistentFlags().StringP("mode", "m", "t", "t - sending transactions\nd - deploy contract\nc - call random contract functions\nf - call specific contract function")
+	ltp.Function = loadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` ")
+	ltp.Iterations = loadtestCmd.PersistentFlags().Uint64P("iterations", "i", 100, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop")
 
 	inputLoadTestParams = *ltp
 
@@ -345,11 +378,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 	routines := *ltp.Concurrency
 	requests := *ltp.Requests
 	currentNonce := *ltp.CurrentNonce
-	currentGas := ltp.CurrentGas
-	sendTo := ltp.ToETHAddress
-	sendAmt := ltp.SendAmount
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
+	mode := *ltp.Mode
 
 	rl := rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
 	if *ltp.RateLimit <= 0.0 {
@@ -415,6 +446,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 		wg.Add(1)
 		go func(i int64) {
 			var j int64
+			var startReq time.Time
+			var endReq time.Time
+
 			for j = 0; j < requests; j = j + 1 {
 
 				if rl != nil {
@@ -423,24 +457,31 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 						log.Error().Err(err).Msg("Encountered a rate limiting error")
 					}
 				}
-
-				// TODO support different modes (transfer, contract deploy, contract call, multi, etc)
 				currentNonceMutex.Lock()
 				myNonceValue := currentNonce
 				currentNonce = currentNonce + 1
 				currentNonceMutex.Unlock()
-				gasLimit := uint64(21000)
 
-				tx := ethtypes.NewTransaction(myNonceValue, *sendTo, sendAmt, gasLimit, currentGas, nil)
-				stx, err := ethtypes.SignTx(tx, ethtypes.NewEIP155Signer(chainID), privateKey)
-				if err != nil {
-					log.Error().Err(err).Msg("Unable to sign transaction")
-					return
+				// if we're doing random, we'll just pick one based on the current index
+				if mode == loadTestModeRandom {
+					mode = validLoadTestModes[int(i+j)%len(validLoadTestModes)]
 				}
-
-				startReq := time.Now()
-				err = c.SendTransaction(ctx, stx)
-				endReq := time.Now()
+				switch mode {
+				case loadTestModeTransaction:
+					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue)
+					break
+				case loadTestModeDeploy:
+					startReq, endReq, err = loadtestDeploy(ctx, c)
+					break
+				case loadTestModeCall:
+					startReq, endReq, err = loadtestCall(ctx, c, ltContract)
+					break
+				case loadTestModeFunction:
+					startReq, endReq, err = loadtestFunction(ctx, c, ltContract)
+					break
+				default:
+					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
+				}
 				recordSample(i, j, err, startReq, endReq)
 				if err != nil {
 					log.Trace().Err(err).Msg("Recorded an error while sending transactions")
@@ -455,6 +496,85 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
 	return nil
+}
+
+func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+
+	gasPrice := ltp.CurrentGas
+	to := ltp.ToETHAddress // TODO we should have some different controls for sending to/ from various addresses
+	amount := ltp.SendAmount
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+
+	gasLimit := uint64(21000)
+	tx := ethtypes.NewTransaction(nonce, *to, amount, gasLimit, gasPrice, nil)
+	stx, err := ethtypes.SignTx(tx, ethtypes.NewEIP155Signer(chainID), privateKey)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to sign transaction")
+		return
+	}
+
+	t1 = time.Now()
+	err = c.SendTransaction(ctx, stx)
+	t2 = time.Now()
+	return
+}
+func loadtestDeploy(ctx context.Context, c *ethclient.Client) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+
+	t1 = time.Now()
+	_, _, _, err = contracts.DeployLoadTester(tops, c)
+	t2 = time.Now()
+	return
+}
+
+func loadtestFunction(ctx context.Context, c *ethclient.Client, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+	iterations := ltp.Iterations
+	f := ltp.Function
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+
+	t1 = time.Now()
+	_, err = contracts.CallLoadTestFunctionByOpCode(*f, ltContract, tops, *iterations)
+	t2 = time.Now()
+	return
+}
+func loadtestCall(ctx context.Context, c *ethclient.Client, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+	iterations := ltp.Iterations
+	f := contracts.GetRandomOPCode()
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+
+	t1 = time.Now()
+	_, err = contracts.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
+	t2 = time.Now()
+	return
 }
 
 func recordSample(goRoutineID, requestID int64, err error, start, end time.Time) {

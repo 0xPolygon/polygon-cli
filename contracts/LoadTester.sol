@@ -37,7 +37,7 @@ contract LoadTester {
 
     function testMUL(uint x) public returns(uint) {
         inc();
-        uint result = 0x0DEADBEEF0002;
+        uint result = 0xDEADBEEF0002;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
             {
