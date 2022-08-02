@@ -120,13 +120,7 @@ type (
 		Requests      *int64
 		Concurrency   *int64
 		TimeLimit     *int64
-		Timeout       *int64
-		PostFile      *string
 		Verbosity     *int64
-		Auth          *string
-		Proxy         *string
-		ProxyAuth     *string
-		KeepAlive     *bool
 		PrettyLogs    *bool
 		URL           *url.URL
 		ChainID       *uint64
@@ -153,14 +147,8 @@ func init() {
 	ltp.Requests = loadtestCmd.PersistentFlags().Int64P("requests", "n", 1, "Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results.")
 	ltp.Concurrency = loadtestCmd.PersistentFlags().Int64P("concurrency", "c", 1, "Number of multiple requests to perform at a time. Default is one request at a time.")
 	ltp.TimeLimit = loadtestCmd.PersistentFlags().Int64P("time-limit", "t", -1, "Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no timelimit.")
-	ltp.Timeout = loadtestCmd.PersistentFlags().Int64P("timeout", "s", 30, "Maximum number of seconds to wait before the socket times out. Default is 30 seconds.")
-	ltp.PostFile = loadtestCmd.PersistentFlags().StringP("post-file", "p", "", "File containing data to POST.")
 	// https://logging.apache.org/log4j/2.x/manual/customloglevels.html
 	ltp.Verbosity = loadtestCmd.PersistentFlags().Int64P("verbosity", "v", 200, "0 - Silent\n100 Fatals\n200 Errors\n300 Warnings\n400 INFO\n500 Debug\n600 Trace")
-	ltp.Auth = loadtestCmd.PersistentFlags().StringP("auth", "A", "", "username:password used for www basic auth")
-	ltp.Proxy = loadtestCmd.PersistentFlags().StringP("proxy", "X", "", "proxy:port combination to use a proxy server for the requests.")
-	ltp.ProxyAuth = loadtestCmd.PersistentFlags().StringP("proxy-auth", "P", "", "Supply BASIC Authentication credentials to a proxy en-route. The username and password are separated by a single : and sent on the wire base64 encoded. The string is sent regardless of whether the proxy needs it (i.e., has sent an 407 proxy authentication needed).")
-	ltp.KeepAlive = loadtestCmd.PersistentFlags().BoolP("keep-alive", "k", true, "Enable the HTTP KeepAlive feature, i.e., perform multiple requests within one HTTP session.")
 
 	// extended parameters
 	ltp.PrettyLogs = loadtestCmd.PersistentFlags().Bool("pretty-logs", true, "Should we log in pretty format or JSON")
@@ -375,12 +363,14 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 	}
 	cops := new(bind.CallOpts)
 
-	addr, deplyTx, _, err := contracts.DeployLoadTester(tops, c)
+	addr, _, _, err := contracts.DeployLoadTester(tops, c)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create the load testing contract")
 		return err
 	}
 	log.Trace().Interface("contractaddress", addr).Msg("Load test contract address")
+	// bump the nonce since deploying a contract should cause it to increase
+	currentNonce = currentNonce + 1
 
 	// block while the contract is pending
 	bn, err := c.BlockNumber(ctx)
@@ -415,10 +405,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 		return err
 	}
 	log.Trace().Interface("counter", ltCounter).Msg("Number of contract calls")
-
-	_ = tops
-	_ = cops
-	_ = deplyTx
 
 	var currentNonceMutex sync.Mutex
 	var i int64
@@ -456,6 +442,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 				err = c.SendTransaction(ctx, stx)
 				endReq := time.Now()
 				recordSample(i, j, err, startReq, endReq)
+				if err != nil {
+					log.Trace().Err(err).Msg("Recorded an error while sending transactions")
+				}
 
 				log.Trace().Int64("routine", i).Int64("request", j).Msg("Request")
 			}
