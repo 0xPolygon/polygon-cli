@@ -99,7 +99,6 @@ Test account:
 code code code code code code code code code code code quality
 
 
-https://github.com/gizak/termui
 
 
 socat - UNIX-CONNECT:/var/folders/zs/k8swqskj1t79cgnjh6yt0fqm0000gn/T/geth.ipc

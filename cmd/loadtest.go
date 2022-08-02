@@ -33,6 +33,7 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/maticnetwork/polygon-cli/contracts"
 	"github.com/maticnetwork/polygon-cli/jsonrpc"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -375,7 +376,7 @@ func mainLoop(c *jsonrpc.Client) error {
 	ltp := inputLoadTestParams
 	log.Trace().Interface("Input Params", ltp).Msg("Params")
 
-	rpcUrl := inputLoadTestParams.URL.String()
+	rpcURL := inputLoadTestParams.URL.String()
 	routines := *ltp.Concurrency
 	requests := *ltp.Requests
 	currentNonce := *ltp.CurrentNonce
@@ -390,6 +391,15 @@ func mainLoop(c *jsonrpc.Client) error {
 	if *ltp.RateLimit <= 0.0 {
 		rl = nil
 	}
+
+	cc := jsonrpc.NewChainClient(c, rpcURL, prvKey, chainID)
+	contractResp, err := createLoadTesterContract(cc, currentNonce, currentGas)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create the load testing contract")
+		return err
+	}
+	fmt.Println(contractResp)
+	currentNonce += 1
 
 	var currentNonceMutex sync.Mutex
 	var i int64
@@ -425,7 +435,7 @@ func mainLoop(c *jsonrpc.Client) error {
 					Data:     nil,
 				}
 				startReq := time.Now()
-				resp, err := c.SendTx(rpcUrl, &lt, prvKey, chainID)
+				resp, err := c.SendTx(rpcURL, &lt, prvKey, chainID)
 				endReq := time.Now()
 				recordSample(i, j, resp, err, startReq, endReq)
 
@@ -441,6 +451,9 @@ func mainLoop(c *jsonrpc.Client) error {
 }
 
 func recordSample(goRoutineID, requestID int64, response *jsonrpc.RPCResp, err error, start, end time.Time) {
+	if response == nil {
+		return
+	}
 	s := loadTestSample{}
 	s.GoRoutineID = goRoutineID
 	s.RequestID = requestID
@@ -457,5 +470,43 @@ func recordSample(goRoutineID, requestID int64, response *jsonrpc.RPCResp, err e
 	}
 	log.Trace().Interface("resp", response).Msg("recording sample")
 	loadTestResults = append(loadTestResults, s)
+
+}
+
+func createLoadTesterContract(c *jsonrpc.ChainClient, nonce uint64, gasPrice *big.Int) (interface{}, error) {
+	var gasLimit uint64 = 0x192f64
+	contract, err := contracts.GetLoadTesterBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	lt := ethtypes.LegacyTx{
+		Nonce:    nonce,
+		GasPrice: gasPrice,
+		Gas:      gasLimit,
+		To:       nil,
+		Value:    jsonrpc.UnitEther,
+		Data:     contract,
+	}
+
+	resp, err := c.SendTx(&lt)
+	if err != nil {
+		return nil, err
+	}
+
+	wait := time.Millisecond * 500
+	for i := 0; i < 5; i = i + 1 {
+		receipt, err := c.GetTxReceipt(resp.Result.(string))
+		if err != nil {
+			return nil, err
+		}
+		if receipt != nil {
+			return receipt, nil
+		}
+		time.Sleep(wait)
+		wait = time.Duration(float64(wait) * 1.5)
+	}
+
+	return nil, fmt.Errorf("Unable to get tx receipt")
 
 }

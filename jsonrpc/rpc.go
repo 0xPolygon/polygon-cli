@@ -29,6 +29,12 @@ type (
 		hasAuth    bool
 		counter    uint64
 	}
+	ChainClient struct {
+		RPCClient  *Client
+		URL        string
+		PrivateKey *ecdsa.PrivateKey
+		ChainID    *big.Int
+	}
 
 	RPCBase struct {
 		JSONRPC string `json:"jsonrpc"`
@@ -52,6 +58,11 @@ type (
 	RPCBlockResp struct {
 		Result RawBlockResponse `json:"result"`
 		Error  RPCError         `json:"error"`
+		RPCBase
+	}
+	RPCReceiptResp struct {
+		Result RawTxReceipt `json:"result"`
+		Error  RPCError
 		RPCBase
 	}
 
@@ -167,6 +178,46 @@ type (
 		// baseFeePerGass: QUANTITY - fixed per block fee
 		BaseFeePerGas RawQuantityResponse `json:"baseFeePerGas"`
 	}
+	RawTxReceipt struct {
+		// transactionHash: DATA, 32 Bytes - hash of the transaction.
+		TransactionHash RawData32Response `json:"transactionHash"`
+
+		// transactionIndex: QUANTITY - integer of the transactions index position in the block.
+		TransactionIndex RawQuantityResponse `json:"transactionIndex"`
+
+		// blockHash: DATA, 32 Bytes - hash of the block where this transaction was in.
+		BlockHash RawData32Response `json:"blockHash"`
+
+		// blockNumber: QUANTITY - block number where this transaction was in.
+		BlockNumber RawQuantityResponse `json:"blockNumber"`
+
+		// from: DATA, 20 Bytes - address of the sender.
+		From RawData20Response `json:"from"`
+
+		// to: DATA, 20 Bytes - address of the receiver. null when its a contract creation transaction.
+		To RawDataResponse `json:"to"`
+
+		// cumulativeGasUsed : QUANTITY - The total amount of gas used when this transaction was executed in the block.
+		CumulativeGasUsed RawQuantityResponse `json:"cumulativeGasUsed"`
+
+		// gasUsed : QUANTITY - The amount of gas used by this specific transaction alone.
+		GasUsed RawQuantityResponse `json:"gasUsed"`
+
+		// contractAddress : DATA, 20 Bytes - The contract address created, if the transaction was a contract creation, otherwise null.
+		ContractAddress RawData20Response `json:"contractAddress"`
+
+		// logs: Array - Array of log objects, which this transaction generated.
+		Logs []RawDataResponse `json:"logs"`
+
+		// logsBloom: DATA, 256 Bytes - Bloom filter for light clients to quickly retrieve related logs. It also returns either :
+		LogsBloom RawData256Response `json:"logsBloom"`
+
+		// root : DATA 32 bytes of post-transaction stateroot (pre Byzantium)
+		Root RawData32Response `json:"root"`
+
+		// status: QUANTITY either 1 (success) or 0 (failure)
+		Status RawQuantityResponse `json:"status"`
+	}
 )
 
 var (
@@ -196,6 +247,39 @@ func NewClient() *Client {
 	c.httpClient = httpClient
 	c.counter = 0
 	return c
+}
+
+func NewChainClient(c *Client, url string, privateKey *ecdsa.PrivateKey, chainID *big.Int) *ChainClient {
+	cc := new(ChainClient)
+	cc.RPCClient = c
+	cc.URL = url
+	cc.PrivateKey = privateKey
+	cc.ChainID = chainID
+
+	return cc
+}
+func (cc *ChainClient) SendTx(txdata ethtypes.TxData) (*RPCResp, error) {
+	return cc.RPCClient.SendTx(cc.URL, txdata, cc.PrivateKey, cc.ChainID)
+}
+func (cc *ChainClient) GetTxReceipt(hash string) (*RawTxReceipt, error) {
+	body := cc.RPCClient.BuildRequest("eth_getTransactionReceipt", []any{hash})
+	respBody, err := cc.RPCClient.doRequest(cc.URL, body)
+	if err != nil {
+		return nil, err
+	}
+
+	var r *RPCReceiptResp = new(RPCReceiptResp)
+	err = json.Unmarshal(respBody, r)
+	if err != nil {
+		return nil, err
+	}
+
+	// we might get a null response if the transaction has been mined yet
+	if string(r.Result.TransactionHash) == "" {
+		return nil, nil
+	}
+
+	return &r.Result, nil
 }
 
 func (c *Client) SetTimeout(duration time.Duration) {
