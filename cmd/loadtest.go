@@ -49,7 +49,8 @@ const (
 	loadTestModeDeploy      = "d"
 	loadTestModeCall        = "c"
 	loadTestModeFunction    = "f"
-	loadTestModeRandom      = "r"
+	// r should be last to exclude it from random mode selection
+	loadTestModeRandom = "r"
 )
 
 var (
@@ -339,6 +340,13 @@ func runLoadTest(ctx context.Context) error {
 		}
 	}
 	printResults(loadTestResults)
+
+	ptc, err := ec.PendingTransactionCount(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get the number of pending transactions before closing")
+	} else if ptc > 0 {
+		log.Info().Uint("pending", ptc).Msg("there are still oustanding transactions. There might be issues restarting with the same sending key until those transactions clear")
+	}
 	return nil
 }
 
@@ -462,11 +470,12 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 				currentNonce = currentNonce + 1
 				currentNonceMutex.Unlock()
 
+				localMode := mode
 				// if we're doing random, we'll just pick one based on the current index
-				if mode == loadTestModeRandom {
-					mode = validLoadTestModes[int(i+j)%len(validLoadTestModes)]
+				if localMode == loadTestModeRandom {
+					localMode = validLoadTestModes[int(i+j)%(len(validLoadTestModes)-1)]
 				}
-				switch mode {
+				switch localMode {
 				case loadTestModeTransaction:
 					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue)
 					break
@@ -487,7 +496,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 					log.Trace().Err(err).Msg("Recorded an error while sending transactions")
 				}
 
-				log.Trace().Int64("routine", i).Int64("request", j).Msg("Request")
+				log.Trace().Int64("routine", i).Str("mode", localMode).Int64("request", j).Msg("Request")
 			}
 			wg.Done()
 		}(i)
