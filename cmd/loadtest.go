@@ -30,11 +30,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
+
 	"github.com/maticnetwork/polygon-cli/contracts"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -374,6 +376,28 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 	fmt.Println(contractResp.ContractAddress)
 	currentNonce += 1
 
+	ltContract, err := contracts.NewLoadTester(contractResp.ContractAddress, c)
+	if err != nil {
+		log.Error().Err(err).Msg("create loadtester")
+		return err
+	}
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return err
+	}
+	cops := new(bind.CallOpts)
+
+	addID, err := ltContract.TestADD(cops, big.NewInt(1))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to call test contract")
+		return err
+	}
+	log.Trace().Interface("txnhash", addID).Msg("Pending tx")
+
+	_ = tops
+
 	var currentNonceMutex sync.Mutex
 	var i int64
 
@@ -468,5 +492,4 @@ func createLoadTesterContract(ctx context.Context, c *ethclient.Client, nonce ui
 	}
 
 	return nil, fmt.Errorf("Unable to get tx receipt")
-
 }
