@@ -368,20 +368,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 		rl = nil
 	}
 
-	contractResp, err := createLoadTesterContract(ctx, c, currentNonce, currentGas)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create the load testing contract")
-		return err
-	}
-	fmt.Println(contractResp.ContractAddress)
-	currentNonce += 1
-
-	ltContract, err := contracts.NewLoadTester(contractResp.ContractAddress, c)
-	if err != nil {
-		log.Error().Err(err).Msg("create loadtester")
-		return err
-	}
-
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
@@ -389,14 +375,36 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 	}
 	cops := new(bind.CallOpts)
 
-	addID, err := ltContract.TestADD(cops, big.NewInt(1))
+	addr, deplyTx, ltContract, err := contracts.DeployLoadTester(tops, c)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create the load testing contract")
+		return err
+	}
+	fmt.Println(addr)
+
+	// block while the contract is pending
+	for {
+		pendCount, err := c.PendingTransactionCount(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to get pending transaction count")
+			return err
+		}
+		if pendCount < 1 {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	ltCounter, err := ltContract.GetCallCounter(cops)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to call test contract")
 		return err
 	}
-	log.Trace().Interface("txnhash", addID).Msg("Pending tx")
+	log.Trace().Interface("counter", ltCounter).Msg("Number of contract calls")
 
 	_ = tops
+	_ = cops
+	_ = deplyTx
 
 	var currentNonceMutex sync.Mutex
 	var i int64

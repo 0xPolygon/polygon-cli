@@ -2,6 +2,16 @@
 pragma solidity ^0.8.4;
 
 contract LoadTester {
+    uint256 callCounter;
+
+    function getCallCounter() public view returns (uint256){
+        return callCounter;
+    }
+    function inc() public returns (uint256){
+        callCounter = callCounter + 1;
+        return callCounter;
+    }
+
     // A few op codes that aren't being tested specifically
     // 0x00 STOP - 0 Gas and doesn't do anything
     // 0x50 POP - exists in the Yul instructions, but is so low level that an empty for loop would test it
@@ -13,7 +23,8 @@ contract LoadTester {
     // 0x80 to 0x8F - DUPi
     // 0x90 to 0x9F - SWAPi
     // 0xF0 to 0xFF - These contract level functions are bit tricky to test in isolation. It's easier to test them with contact calls
-    function testADD(uint x) public pure returns(uint) {
+    function testADD(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0001;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -23,7 +34,9 @@ contract LoadTester {
         }
         return result;
     }
-    function testMUL(uint x) public pure returns(uint) {
+
+    function testMUL(uint x) public returns(uint) {
+        inc();
         uint result = 0x0DEADBEEF0002;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -33,7 +46,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testSUB(uint x) public pure returns(uint) {
+    function testSUB(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0003;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -43,7 +57,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testDIV(uint x) public pure returns(uint) {
+    function testDIV(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0004;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -53,7 +68,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testSDIV(uint x) public pure returns(uint) {
+    function testSDIV(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0005;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -63,7 +79,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testMOD(uint x) public pure returns(uint) {
+    function testMOD(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0006;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -73,7 +90,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testSMOD(uint x) public pure returns(uint) {
+    function testSMOD(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0007;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -83,7 +101,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testADDMOD(uint x) public pure returns(uint) {
+    function testADDMOD(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0008;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -93,7 +112,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testMULMOD(uint x) public pure returns(uint) {
+    function testMULMOD(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0009;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -103,7 +123,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testEXP(uint x) public pure returns(uint) {
+    function testEXP(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF000A;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -113,7 +134,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testSIGNEXTEND(uint x) public pure returns(uint) {
+    function testSIGNEXTEND(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF000B;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -123,7 +145,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testLT(uint x) public pure returns(uint) {
+    function testLT(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0010;
         assembly {
             let v := 0
@@ -134,7 +157,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testGT(uint x) public pure returns(uint) {
+    function testGT(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0011;
         assembly {
             let v := 0
@@ -145,7 +169,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testSLT(uint x) public pure returns(uint) {
+    function testSLT(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0012;
         assembly {
             let v := 0
@@ -156,7 +181,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testSGT(uint x) public pure returns(uint) {
+    function testSGT(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0013;
         assembly {
             let v := 0
@@ -167,7 +193,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testEQ(uint x) public pure returns(uint) {
+    function testEQ(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0014;
         assembly {
             let v := 0
@@ -178,7 +205,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testISZERO(uint x) public pure returns(uint) {
+    function testISZERO(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0015;
         assembly {
             let v := 0
@@ -189,7 +217,8 @@ contract LoadTester {
         }
         return result;
     }    
-    function testAND(uint x) public pure returns(uint) {
+    function testAND(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0016;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -199,7 +228,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testOR(uint x) public pure returns(uint) {
+    function testOR(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0017;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -209,7 +239,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testXOR(uint x) public pure returns(uint) {
+    function testXOR(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0018;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -219,7 +250,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testNOT(uint x) public pure returns(uint) {
+    function testNOT(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0019;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -230,7 +262,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testBYTE(uint x) public pure returns(uint) {
+    function testBYTE(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF001A;
         assembly {
             let v := 0
@@ -241,7 +274,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testSHL(uint x) public pure returns(uint) {
+    function testSHL(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF001B;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -251,7 +285,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testSHR(uint x) public pure returns(uint) {
+    function testSHR(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF001C;
         assembly {
             let v := 0
@@ -262,7 +297,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testSAR(uint x) public pure returns(uint) {
+    function testSAR(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF001D;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -272,7 +308,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testSHA3(uint x) public pure returns(uint) {
+    function testSHA3(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0020;
         assembly {
             mstore(0x00, hex"FFFFFFFF00000000000000000000000000000000000000000000000000000000")
@@ -285,7 +322,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testADDRESS(uint x) public view returns(uint) {
+    function testADDRESS(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0030;
         assembly {
             let v := 0
@@ -296,7 +334,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testBALANCE(uint x) public view returns(uint) {
+    function testBALANCE(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0031;
         assembly {
             let v := 0
@@ -308,7 +347,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testORIGIN(uint x) public view returns(uint) {
+    function testORIGIN(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0032;
         assembly {
             let v := 0
@@ -319,7 +359,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testCALLER(uint x) public view returns(uint) {
+    function testCALLER(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0033;
         assembly {
             let v := 0
@@ -330,7 +371,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testCALLVALUE(uint x) public view returns(uint) {
+    function testCALLVALUE(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0034;
         assembly {
             let v := 0
@@ -341,7 +383,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testCALLDATALOAD(uint x) public pure returns(uint) {
+    function testCALLDATALOAD(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0035;
         assembly {
             let v := 0
@@ -352,7 +395,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testCALLDATASIZE(uint x) public pure returns(uint) {
+    function testCALLDATASIZE(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0036;
         assembly {
             let v := 0
@@ -363,7 +407,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testCALLDATACOPY(uint x) public pure returns(uint) {
+    function testCALLDATACOPY(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0037;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -374,7 +419,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testCODESIZE(uint x) public pure returns(uint) {
+    function testCODESIZE(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0038;
         assembly {
             let v := 0
@@ -385,7 +431,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testCODECOPY(uint x) public pure returns(uint) {
+    function testCODECOPY(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0039;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -395,7 +442,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testGASPRICE(uint x) public view returns(uint) {
+    function testGASPRICE(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF003A;
         assembly {
             let v := 0
@@ -406,7 +454,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testEXTCODESIZE(uint x) public view returns(uint) {
+    function testEXTCODESIZE(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF003B;
         assembly {
             let v := 0
@@ -418,7 +467,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testRETURNDATASIZE(uint x) public pure returns(uint) {
+    function testRETURNDATASIZE(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF003D;
         assembly {
             let v := 0
@@ -429,7 +479,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testRETURNDATACOPY(uint x) public pure returns(uint) {
+    function testRETURNDATACOPY(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF003E;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -440,7 +491,8 @@ contract LoadTester {
         return result;
     }
 
-    function testBLOCKHASH(uint x) public view returns(uint) {
+    function testBLOCKHASH(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0040;
         assembly {
             let v := 0
@@ -452,7 +504,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testCOINBASE(uint x) public view returns(uint) {
+    function testCOINBASE(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0041;
         assembly {
             let v := 0
@@ -463,7 +516,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testTIMESTAMP(uint x) public view returns(uint) {
+    function testTIMESTAMP(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0042;
         assembly {
             let v := 0
@@ -474,7 +528,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testNUMBER(uint x) public view returns(uint) {
+    function testNUMBER(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0043;
         assembly {
             let v := 0
@@ -485,7 +540,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testDIFFICULTY(uint x) public view returns(uint) {
+    function testDIFFICULTY(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0044;
         assembly {
             let v := 0
@@ -496,7 +552,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testGASLIMIT(uint x) public view returns(uint) {
+    function testGASLIMIT(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0045;
         assembly {
             let v := 0
@@ -507,7 +564,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testCHAINID(uint x) public view returns(uint) {
+    function testCHAINID(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0046;
         assembly {
             let v := 0
@@ -518,7 +576,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testSELFBALANCE(uint x) public view returns(uint) {
+    function testSELFBALANCE(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0047;
         assembly {
             let v := 0
@@ -529,7 +588,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testBASEFEE(uint x) public view returns(uint) {
+    function testBASEFEE(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0048;
         assembly {
             let v := 0
@@ -540,7 +600,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testMLOAD(uint x) public pure returns(uint) {
+    function testMLOAD(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0051;
         assembly {
             let v := 0
@@ -553,7 +614,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testMSTORE(uint x) public pure returns(uint) {
+    function testMSTORE(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0052;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -563,7 +625,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testMSTORE8(uint x) public pure returns(uint) {
+    function testMSTORE8(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0053;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -574,6 +637,7 @@ contract LoadTester {
         return result;
     }
     function testSLOAD(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0054;
         assembly {
             sstore(0x00, result)
@@ -585,6 +649,7 @@ contract LoadTester {
         return result;
     }
     function testSSTORE(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0055;
         assembly {
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
@@ -595,7 +660,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testMSIZE(uint x) public pure returns(uint) {
+    function testMSIZE(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF0059;
         assembly {
             let v := 0
@@ -606,7 +672,8 @@ contract LoadTester {
         }
         return result;
     }
-    function testGAS(uint x) public view returns(uint) {
+    function testGAS(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF005A;
         assembly {
             let v := 0
@@ -618,6 +685,7 @@ contract LoadTester {
         return result;
     }
     function testLOG0(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF00A0;
         assembly {
             mstore(0x10, result)
@@ -629,6 +697,7 @@ contract LoadTester {
         return result;
     }
     function testLOG1(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF00A1;
         assembly {
             mstore(0x10, result)
@@ -640,6 +709,7 @@ contract LoadTester {
         return result;
     }
     function testLOG2(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF00A2;
         assembly {
             mstore(0x10, result)
@@ -651,6 +721,7 @@ contract LoadTester {
         return result;
     }
     function testLOG3(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF00A3;
         assembly {
             mstore(0x10, result)
@@ -662,6 +733,7 @@ contract LoadTester {
         return result;
     }
     function testLOG4(uint x) public returns(uint) {
+        inc();
         uint result = 0xDEADBEEF00A4;
         assembly {
             mstore(0x10, result)
