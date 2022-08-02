@@ -33,8 +33,9 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
+	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/maticnetwork/polygon-cli/contracts"
-	"github.com/maticnetwork/polygon-cli/jsonrpc"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -54,7 +55,7 @@ var loadtestCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Debug().Msg("Starting Loadtest")
 
-		err := runLoadTest()
+		err := runLoadTest(cmd.Context())
 		if err != nil {
 			return err
 		}
@@ -174,22 +175,14 @@ func init() {
 	// TODO array of RPC endpoints to round robin?
 }
 
-func initalizeLoadTestParams(c *jsonrpc.Client) error {
+func initalizeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	log.Info().Msg("Connecting with RPC endpoint to initialize load test parameters")
-	resp, err := c.MakeRequest(inputLoadTestParams.URL.String(), "eth_gasPrice", nil)
+	gas, err := c.SuggestGasPrice(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to retrieve gas price")
 		return err
 	}
-	log.Trace().Interface("current gas price", resp.Result).Msg("Retreived current gas price")
-
-	gas, err := hexToBigInt(resp.Result)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to parse gas")
-		return err
-	}
-
-	log.Trace().Interface("current gas price big int", gas).Msg("Converted gas to big int")
+	log.Trace().Interface("gasprice", gas).Msg("Retreived current gas price")
 
 	privateKey, err := ethcrypto.HexToECDSA(*inputLoadTestParams.PrivateKey)
 	if err != nil {
@@ -197,36 +190,26 @@ func initalizeLoadTestParams(c *jsonrpc.Client) error {
 		return err
 	}
 
+	blockNumber, err := c.BlockNumber(ctx)
+	bigBlockNumber := big.NewInt(int64(blockNumber))
+	if err != nil {
+		log.Error().Err(err).Msg("Couldn't get the current block number")
+		return err
+	}
+	log.Trace().Uint64("blocknumber", blockNumber).Msg("Current Block Number")
+
 	ethAddress := ethcrypto.PubkeyToAddress(privateKey.PublicKey)
-	resp, err = c.MakeRequest(inputLoadTestParams.URL.String(), "eth_getTransactionCount", []any{ethAddress.Hex(), "latest"})
+
+	nonce, err := c.NonceAt(ctx, ethAddress, bigBlockNumber)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get the transaction count for the user")
+		log.Error().Err(err).Msg("Unable to get account nonce")
 		return err
 	}
-	log.Trace().Interface("count", resp.Result).Str("address", ethAddress.Hex()).Msg("Retrieved the current transaction count")
-
-	var nonce uint64
-	// if we don't get a response we're going to assume we're starting from one
-	if resp.Result == nil {
-		nonce = 1
-	} else {
-		nonce, err = hexToUint64(resp.Result)
-		if err != nil {
-			return err
-		}
-	}
-
-	resp, err = c.MakeRequest(inputLoadTestParams.URL.String(), "eth_getBalance", []any{ethAddress.Hex(), "latest"})
+	accountBal, err := c.BalanceAt(ctx, ethAddress, bigBlockNumber)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get account balance")
+		log.Error().Err(err).Msg("Unable to get the balance for the account")
 		return err
 	}
-	accountBal, err := hexToBigInt(resp.Result)
-	if err != nil {
-		log.Error().Err(err).Msg("Couldn't check account balance")
-		return err
-	}
-
 	log.Trace().Interface("balance", accountBal).Msg("Current account balance")
 
 	toAddr := ethcommon.HexToAddress(*inputLoadTestParams.ToAddress)
@@ -289,23 +272,8 @@ func hexToUint64(raw any) (uint64, error) {
 	return uint64(result), nil
 }
 
-func runLoadTest() error {
+func runLoadTest(ctx context.Context) error {
 	log.Info().Msg("Starting Load Test")
-
-	c := jsonrpc.NewClient()
-	c.SetTimeout(time.Duration(*inputLoadTestParams.Timeout) * time.Second)
-	c.SetKeepAlive(*inputLoadTestParams.KeepAlive)
-
-	// if the user provided http auth credentials we'll set them here
-	if *inputLoadTestParams.Auth != "" {
-		c.SetAuth(*inputLoadTestParams.Auth)
-	}
-
-	// If the user wanted to use a proxy, we'll configure that here
-	if *inputLoadTestParams.Proxy != "" {
-		log.Trace().Str("proxy", *inputLoadTestParams.Proxy).Msg("Configuring proxy")
-		c.SetProxy(*inputLoadTestParams.Proxy, *inputLoadTestParams.ProxyAuth)
-	}
 
 	timeLimit := *inputLoadTestParams.TimeLimit
 	var overallTimer *time.Timer
@@ -315,7 +283,15 @@ func runLoadTest() error {
 		overallTimer = new(time.Timer)
 	}
 
-	err := initalizeLoadTestParams(c)
+	rpc, err := ethrpc.DialContext(ctx, inputLoadTestParams.URL.String())
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to dial rpc")
+		return err
+	}
+	rpc.SetHeader("Accept-Encoding", "identity")
+	ec := ethclient.NewClient(rpc)
+
+	err = initalizeLoadTestParams(ctx, ec)
 	if err != nil {
 		return err
 	}
@@ -326,7 +302,7 @@ func runLoadTest() error {
 	loadTestResults = make([]loadTestSample, 0)
 	errCh := make(chan error)
 	go func() {
-		errCh <- mainLoop(c)
+		errCh <- mainLoop(ctx, ec)
 	}()
 
 	select {
@@ -371,34 +347,31 @@ func printResults(lts []loadTestSample) {
 	fmt.Printf("Num errors: %d\n", numErrors)
 }
 
-func mainLoop(c *jsonrpc.Client) error {
+func mainLoop(ctx context.Context, c *ethclient.Client) error {
 
 	ltp := inputLoadTestParams
 	log.Trace().Interface("Input Params", ltp).Msg("Params")
 
-	rpcURL := inputLoadTestParams.URL.String()
 	routines := *ltp.Concurrency
 	requests := *ltp.Requests
 	currentNonce := *ltp.CurrentNonce
 	currentGas := ltp.CurrentGas
 	sendTo := ltp.ToETHAddress
 	sendAmt := ltp.SendAmount
-	prvKey := ltp.ECDSAPrivateKey
-	chainID := big.NewInt(int64(*ltp.ChainID))
-	ctx := context.Background()
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
 
 	rl := rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
 	if *ltp.RateLimit <= 0.0 {
 		rl = nil
 	}
 
-	cc := jsonrpc.NewChainClient(c, rpcURL, prvKey, chainID)
-	contractResp, err := createLoadTesterContract(cc, currentNonce, currentGas)
+	contractResp, err := createLoadTesterContract(ctx, c, currentNonce, currentGas)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create the load testing contract")
 		return err
 	}
-	fmt.Println(contractResp)
+	fmt.Println(contractResp.ContractAddress)
 	currentNonce += 1
 
 	var currentNonceMutex sync.Mutex
@@ -426,18 +399,17 @@ func mainLoop(c *jsonrpc.Client) error {
 				currentNonceMutex.Unlock()
 				gasLimit := uint64(21000)
 
-				lt := ethtypes.LegacyTx{
-					Nonce:    myNonceValue,
-					GasPrice: currentGas,
-					Gas:      gasLimit,
-					To:       sendTo,
-					Value:    sendAmt,
-					Data:     nil,
+				tx := ethtypes.NewTransaction(myNonceValue, *sendTo, sendAmt, gasLimit, currentGas, nil)
+				stx, err := ethtypes.SignTx(tx, ethtypes.NewEIP155Signer(chainID), privateKey)
+				if err != nil {
+					log.Error().Err(err).Msg("Unable to sign transaction")
+					return
 				}
+
 				startReq := time.Now()
-				resp, err := c.SendTx(rpcURL, &lt, prvKey, chainID)
+				err = c.SendTransaction(ctx, stx)
 				endReq := time.Now()
-				recordSample(i, j, resp, err, startReq, endReq)
+				recordSample(i, j, err, startReq, endReq)
 
 				log.Trace().Int64("routine", i).Int64("request", j).Msg("Request")
 			}
@@ -450,57 +422,45 @@ func mainLoop(c *jsonrpc.Client) error {
 	return nil
 }
 
-func recordSample(goRoutineID, requestID int64, response *jsonrpc.RPCResp, err error, start, end time.Time) {
-	if response == nil {
-		return
-	}
+func recordSample(goRoutineID, requestID int64, err error, start, end time.Time) {
 	s := loadTestSample{}
 	s.GoRoutineID = goRoutineID
 	s.RequestID = requestID
 	s.RequestTime = start
 	s.WaitTime = end.Sub(start)
-	if err != nil || response.Error.Code != 0 {
+	if err != nil {
 		s.IsError = true
 	}
-	var ok bool
-	s.Receipt, ok = response.Result.(string)
-	if !ok {
-		log.Trace().Msg("Could not assert a string type for the response")
-
-	}
-	log.Trace().Interface("resp", response).Msg("recording sample")
 	loadTestResults = append(loadTestResults, s)
-
 }
 
-func createLoadTesterContract(c *jsonrpc.ChainClient, nonce uint64, gasPrice *big.Int) (interface{}, error) {
+func createLoadTesterContract(ctx context.Context, c *ethclient.Client, nonce uint64, gasPrice *big.Int) (*ethtypes.Receipt, error) {
 	var gasLimit uint64 = 0x192f64
 	contract, err := contracts.GetLoadTesterBytes()
 	if err != nil {
 		return nil, err
 	}
 
-	lt := ethtypes.LegacyTx{
-		Nonce:    nonce,
-		GasPrice: gasPrice,
-		Gas:      gasLimit,
-		To:       nil,
-		Value:    jsonrpc.UnitEther,
-		Data:     contract,
+	ltp := inputLoadTestParams
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+
+	tx := ethtypes.NewContractCreation(nonce, big.NewInt(0), gasLimit, gasPrice, contract)
+	stx, err := ethtypes.SignTx(tx, ethtypes.NewEIP155Signer(chainID), privateKey)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to sign transaction")
+		return nil, err
 	}
 
-	resp, err := c.SendTx(&lt)
+	err = c.SendTransaction(ctx, stx)
 	if err != nil {
 		return nil, err
 	}
 
 	wait := time.Millisecond * 500
 	for i := 0; i < 5; i = i + 1 {
-		receipt, err := c.GetTxReceipt(resp.Result.(string))
-		if err != nil {
-			return nil, err
-		}
-		if receipt != nil {
+		receipt, err := c.TransactionReceipt(ctx, stx.Hash())
+		if err == nil {
 			return receipt, nil
 		}
 		time.Sleep(wait)
