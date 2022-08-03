@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/url"
+	"sort"
 	"time"
 
 	ui "github.com/gizak/termui/v3"
@@ -270,18 +271,25 @@ func renderMonitorUI(ms *monitorStatus) error {
 		for _, b := range ms.Blocks {
 			blocks = append(blocks, *b)
 		}
+		recentBlocks := metrics.BlockSlice(blocks)
+		// 25 needs to be a variable / parameter
+		if len(recentBlocks) > 25 {
+			sort.Sort(recentBlocks)
+			recentBlocks = recentBlocks[len(recentBlocks)-25 : len(recentBlocks)-1]
+		}
+
 		h0.Text = ms.HeadBlock.String()
 		h1.Text = fmt.Sprintf("%s wei", ms.GasPrice.String())
 		h2.Text = fmt.Sprintf("%d", ms.PeerCount)
 		h3.Text = ms.ChainID.String()
-		h4.Text = fmt.Sprintf("%0.2f", metrics.GetMeanBlockTime(blocks))
+		h4.Text = fmt.Sprintf("%0.2f", metrics.GetMeanBlockTime(recentBlocks))
 
-		sl0.Data = metrics.GetTxsPerBlock(blocks)
-		sl1.Data = metrics.GetMeanGasPricePerBlock(blocks)
-		sl2.Data = metrics.GetSizePerBlock(blocks)
-		sl3.Data = metrics.GetUnclesPerBlock(blocks)
-		sl4.Data = metrics.GetGasPerBlock(blocks)
-		blockTable.Rows = metrics.GetSimpleBlockRecords(blocks)
+		sl0.Data = metrics.GetTxsPerBlock(recentBlocks)
+		sl1.Data = metrics.GetMeanGasPricePerBlock(recentBlocks)
+		sl2.Data = metrics.GetSizePerBlock(recentBlocks)
+		sl3.Data = metrics.GetUnclesPerBlock(recentBlocks)
+		sl4.Data = metrics.GetGasPerBlock(recentBlocks)
+		blockTable.Rows = metrics.GetSimpleBlockRecords(recentBlocks)
 
 		if len(columnWidths) != len(blockTable.Rows[0]) {
 			// i've messed up
@@ -306,6 +314,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 				payload := e.Payload.(ui.Resize)
 				grid.SetRect(0, 0, payload.Width, payload.Height)
 				ui.Clear()
+				ui.Render(grid)
 				redraw(ms)
 				break
 			}
