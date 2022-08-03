@@ -49,8 +49,8 @@ const (
 	loadTestModeDeploy      = "d"
 	loadTestModeCall        = "c"
 	loadTestModeFunction    = "f"
-	// r should be last to exclude it from random mode selection
-	loadTestModeRandom = "r"
+	loadTestModeInc         = "i"
+	loadTestModeRandom      = "r"
 )
 
 var (
@@ -61,6 +61,8 @@ var (
 		loadTestModeDeploy,
 		loadTestModeCall,
 		loadTestModeFunction,
+		loadTestModeInc,
+		// r should be last to exclude it from random mode selection
 		loadTestModeRandom,
 	}
 )
@@ -427,7 +429,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 			return err
 		}
 
-		if pendCount < 1 && bn != bn2 {
+		if pendCount < 1 && bn+2 < bn2 {
 			break
 		}
 		time.Sleep(time.Second)
@@ -487,6 +489,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 					break
 				case loadTestModeFunction:
 					startReq, endReq, err = loadtestFunction(ctx, c, ltContract)
+					break
+				case loadTestModeInc:
+					startReq, endReq, err = loadtestInc(ctx, c, ltContract)
 					break
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
@@ -582,6 +587,23 @@ func loadtestCall(ctx context.Context, c *ethclient.Client, ltContract *contract
 
 	t1 = time.Now()
 	_, err = contracts.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
+	t2 = time.Now()
+	return
+}
+func loadtestInc(ctx context.Context, c *ethclient.Client, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+
+	t1 = time.Now()
+	_, err = ltContract.Inc(tops)
 	t2 = time.Now()
 	return
 }

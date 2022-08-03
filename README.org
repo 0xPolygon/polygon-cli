@@ -128,3 +128,11 @@ Host: 127.0.0.1:8545
 Content-Type: application/json
 
 {"id": 1, "method": "eth_subscribe", "params": ["newHeads"]}
+
+
+curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_blockNumber", "params": []}' http://127.0.0.1:8888
+curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_getBlockByNumber", "params": ["0x7d57", true]}' http://127.0.0.1:8888
+curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_getBalance", "params": ["0x85da99c8a7c2c95964c8efd687e95e632fc533d6", "latest"]}' http://127.0.0.1:8888
+
+
+go run main.go loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 1000 --rate-limit 1 http://localhost:8888 --mode t

@@ -34,7 +34,11 @@ func GetMeanBlockTime(blocks []jsonrpc.RawBlockResponse) float64 {
 
 	times := make([]int, 0)
 	for _, block := range blocks {
-		blockTime := jsonrpc.MustConvHexToUint64(block.Timestamp)
+		blockTime, err := jsonrpc.ConvHexToUint64(block.Timestamp)
+		if err != nil {
+			// TODO what's wrong?
+			return 0
+		}
 		times = append(times, int(blockTime))
 	}
 
