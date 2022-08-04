@@ -1,0 +1,60 @@
+project_name: polycli
+
+release:
+  disable: false
+  draft: true
+  prerelease: auto
+
+builds:
+  - id: darwin-amd64
+    main: ./main.go
+    binary: polycli
+    goos:
+      - darwin
+    goarch:
+      - amd64
+    env:
+      - CC=o64-clang
+      - CXX=o64-clang++
+    ldflags:
+      -s -w
+
+  - id: darwin-arm64
+    main: ./main.go
+    binary: polycli
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    env:
+      - CC=oa64-clang
+      - CXX=oa64-clang++
+    ldflags:
+      -s -w
+
+  - id: linux-amd64
+    main: ./main.go
+    binary: polycli
+    goos:
+      - linux
+    goarch:
+      - amd64
+    env:
+      - CC=gcc
+      - CXX=g++
+    ldflags:
+      -s -w -extldflags "-static"
+
+  - id: linux-arm64
+    main: ./main.go
+    binary: polycli
+    goos:
+      - linux
+    goarch:
+      - arm64
+    env:
+      - CC=aarch64-linux-gnu-gcc
+      - CXX=aarch64-linux-gnu-g++
+    ldflags:
+      -s -w -extldflags "-static"
+
