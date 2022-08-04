@@ -51,7 +51,7 @@ var monitorCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c := jsonrpc.NewClient()
 		ms := new(monitorStatus)
-		_, err := c.MakeRequestBatch(args[0], []string{"eth_blockNumber", "net_version", "net_peerCount", "eth_gasPrice"}, [][]any{nil, nil, nil, nil})
+		_, err := c.MakeRequestBatch(args[0], []string{"eth_blockNumber", "net_version", "net_peerCount", "eth_gasPrice", "eth_chainId"}, [][]any{nil, nil, nil, nil, nil})
 		if err != nil {
 			return err
 		}
@@ -63,20 +63,20 @@ var monitorCmd = &cobra.Command{
 		errChan := make(chan error)
 		go func() {
 			for {
-				resps, err := c.MakeRequestBatch(args[0], []string{"eth_blockNumber", "net_version", "net_peerCount", "eth_gasPrice"}, [][]any{nil, nil, nil, nil})
+				resps, err := c.MakeRequestBatch(args[0], []string{"eth_blockNumber", "net_version", "net_peerCount", "eth_gasPrice", "eth_chainId"}, [][]any{nil, nil, nil, nil, nil})
 				if err != nil {
 					log.Error().Err(err).Msg("Encountered issue fetching network information")
+					time.Sleep(5 * time.Second)
 					continue
 				}
 
 				ms.HeadBlock, err = jsonrpc.ConvHexToBigInt(resps[0].Result)
-				cString, ok := resps[1].Result.(string)
-				if !ok {
-					errChan <- fmt.Errorf("The chain id string was the wrong type: %v", resps[1].Result)
+				if err != nil {
+					errChan <- err
 					return
 				}
 
-				ms.ChainID.SetString(cString, 10)
+				ms.ChainID, err = jsonrpc.ConvHexToBigInt(resps[4].Result)
 				if err != nil {
 					errChan <- err
 					return
@@ -149,6 +149,10 @@ func (ms *monitorStatus) getBlockRange(from, to *big.Int, c *jsonrpc.Client, url
 	}
 	for _, r := range resps {
 		block := r.Result
+		if block.Timestamp == "" {
+			// in this case, going to assume we got an empty response of some kind
+			continue
+		}
 		ms.Blocks[string(block.Number)] = &block
 		bi, err := jsonrpc.ConvHexToBigInt(block.Number)
 		if err != nil {
@@ -191,13 +195,13 @@ func renderMonitorUI(ms *monitorStatus) error {
 	columnWidths := make([]int, 6)
 
 	blockTable.ColumnResizer = func() {
-		defaultWidth := (blockTable.Inner.Dx() - (12*3 + 42 + 20)) / 1
+		defaultWidth := (blockTable.Inner.Dx() - (12 + 22 + 42 + 12 + 14)) / 1
 		columnWidths[0] = 12
-		columnWidths[1] = 20
+		columnWidths[1] = 22
 		columnWidths[2] = defaultWidth
 		columnWidths[3] = 42
 		columnWidths[4] = 12
-		columnWidths[5] = 12
+		columnWidths[5] = 14
 	}
 
 	blockTable.ColumnWidths = columnWidths
@@ -279,7 +283,9 @@ func renderMonitorUI(ms *monitorStatus) error {
 		}
 
 		h0.Text = ms.HeadBlock.String()
-		h1.Text = fmt.Sprintf("%s wei", ms.GasPrice.String())
+		gasGwei := new(big.Int)
+		gasGwei.Div(ms.GasPrice, jsonrpc.UnitShannon)
+		h1.Text = fmt.Sprintf("%s gwei", gasGwei.String())
 		h2.Text = fmt.Sprintf("%d", ms.PeerCount)
 		h3.Text = ms.ChainID.String()
 		h4.Text = fmt.Sprintf("%0.2f", metrics.GetMeanBlockTime(recentBlocks))

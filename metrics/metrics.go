@@ -31,13 +31,11 @@ func GetMeanBlockTime(blocks []jsonrpc.RawBlockResponse) float64 {
 	if len(blocks) < 2 {
 		return 0
 	}
-
 	times := make([]int, 0)
 	for _, block := range blocks {
 		blockTime, err := jsonrpc.ConvHexToUint64(block.Timestamp)
 		if err != nil {
-			// TODO what's wrong?
-			return 0
+			continue
 		}
 		times = append(times, int(blockTime))
 	}
@@ -150,7 +148,7 @@ func GetSimpleBlockRecords(blocks []jsonrpc.RawBlockResponse) [][]string {
 		}
 		record := []string{
 			fmt.Sprintf("%d", bs[j].Number.ToUint64()),
-			ut.Format(time.RFC822),
+			ut.Format("02 Jan 06 15:04:05 MST"),
 			string(bs[j].Hash),
 			author,
 			fmt.Sprintf("%d", len(bs[j].Transactions)),

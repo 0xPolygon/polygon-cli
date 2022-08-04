@@ -413,39 +413,29 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 	// bump the nonce since deploying a contract should cause it to increase
 	currentNonce = currentNonce + 1
 
-	// block while the contract is pending
-	bn, err := c.BlockNumber(ctx)
-	if err != nil {
-		return err
-	}
-	for {
-		pendCount, err := c.PendingTransactionCount(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to get pending transaction count")
-			return err
-		}
-		bn2, err := c.BlockNumber(ctx)
-		if err != nil {
-			return err
-		}
-
-		if pendCount < 1 && bn+2 < bn2 {
-			break
-		}
-		time.Sleep(time.Second)
-	}
 	ltContract, err := contracts.NewLoadTester(addr, c)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to instantiate new contract")
 		return err
 	}
 
-	ltCounter, err := ltContract.GetCallCounter(cops)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to call test contract")
-		return err
+	// block while the contract is pending
+	waitCounter := 30
+	for {
+		ltCounter, err := ltContract.GetCallCounter(cops)
+		if err != nil {
+			log.Trace().Msg("Waiting for contract to deploy")
+			time.Sleep(time.Second)
+			if waitCounter < 1 {
+				log.Error().Err(err).Msg("Exhausted waiting period for contract deployment")
+				return err
+			}
+			waitCounter = waitCounter - 1
+			continue
+		}
+		log.Trace().Interface("counter", ltCounter).Msg("Number of contract calls")
+		break
 	}
-	log.Trace().Interface("counter", ltCounter).Msg("Number of contract calls")
 
 	var currentNonceMutex sync.Mutex
 	var i int64

@@ -133,6 +133,13 @@ Content-Type: application/json
 curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_blockNumber", "params": []}' http://127.0.0.1:8888
 curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_getBlockByNumber", "params": ["0x7d57", true]}' http://127.0.0.1:8888
 curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_getBalance", "params": ["0x85da99c8a7c2c95964c8efd687e95e632fc533d6", "latest"]}' http://127.0.0.1:8888
+curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_getCode", "params": ["0x79954f948079ee9ef1d15eff3e07ceaef7cdf3b4", "latest"]}' http://127.0.0.1:8888
+
+curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_getBlockByNumber", "params": ["0x813C", true]}' http://127.0.0.1:8888
 
 
 go run main.go loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 1000 --rate-limit 1 http://localhost:8888 --mode t
+
+Use this command to get a block that's close to the gas cap... It' wil make 50 requests over 100 sections where each TX is very close to the limit of 50000000 gas
+./linux-amd64-polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 50 --rate-limit 0.5 http://private.validator-002.devnet02.pos-v3.polygon.private:8545 --mode f --function 164 --iterations 25078
+./linux-amd64-polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 50 --rate-limit 0.5 http://private.validator-001.devnet02.pos-v3.polygon.private:8545 --mode f --function 164 --iterations 25078
