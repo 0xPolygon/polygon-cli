@@ -69,7 +69,7 @@ var (
 
 // loadtestCmd represents the loadtest command
 var loadtestCmd = &cobra.Command{
-	Use:   "loadtest [options] rpc-endpoint",
+	Use:   "loadtest rpc-endpoint",
 	Short: "A simple script for quickly running a load test",
 	Long:  `Loadtest gives us a simple way to run a generic load test against an eth/EVM style json RPC endpoint`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -406,7 +406,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 
 	addr, _, _, err := contracts.DeployLoadTester(tops, c)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to create the load testing contract")
+		log.Error().Err(err).Msg("Failed to create the load testing contract. Do you have the right chain id?")
 		return err
 	}
 	log.Trace().Interface("contractaddress", addr).Msg("Load test contract address")

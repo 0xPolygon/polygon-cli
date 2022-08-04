@@ -47,13 +47,11 @@ var (
 // nodekeyCmd represents the nodekey command
 var nodekeyCmd = &cobra.Command{
 	Use:   "nodekey",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Generate Node Keys",
+	Long: `This is meant to be a simple utility for generating node keys for
+different block chain clients and protocols. Right now we've only
+implemented devp2p because that's what we needed first.
+`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if *inputNodeKeyProtocol == "devp2p" {
 			generateETHNodeKey()
@@ -62,23 +60,6 @@ to quickly create a Cobra application.`,
 		return fmt.Errorf("%s is not implemented yet", *inputNodeKeyProtocol)
 	},
 }
-
-// func generateP2PNodeKey() error {
-// 	r := rand.Reader
-// 	prvKey, _, err := p2pcrypto.GenerateKeyPairWithReader(p2pcrypto.RSA, 2048, r)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	fmt.Println()
-// 	fmt.Println(prvKey.GetPublic())
-// 	id, err := peer.IDFromPrivateKey(prvKey)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	fmt.Println(id)
-// 	return nil
-
-// }
 
 type (
 	nodeKeyOut struct {

@@ -249,7 +249,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 	grid := ui.NewGrid()
 
 	grid.Set(
-		ui.NewRow(1.0/8,
+		ui.NewRow(1.0/10,
 			ui.NewCol(1.0/5, h0),
 			ui.NewCol(1.0/5, h1),
 			ui.NewCol(1.0/5, h2),
@@ -257,14 +257,14 @@ func renderMonitorUI(ms *monitorStatus) error {
 			ui.NewCol(1.0/5, h4),
 		),
 
-		ui.NewRow(3.0/8,
+		ui.NewRow(4.0/10,
 			ui.NewCol(1.0/5, slg0),
 			ui.NewCol(1.0/5, slg1),
 			ui.NewCol(1.0/5, slg2),
 			ui.NewCol(1.0/5, slg3),
 			ui.NewCol(1.0/5, slg4),
 		),
-		ui.NewRow(1.0/2, blockTable),
+		ui.NewRow(3.0/5, blockTable),
 	)
 
 	termWidth, termHeight := ui.TerminalDimensions()

@@ -17,8 +17,6 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/maticnetwork/polygon-cli/version"
 
 	"github.com/spf13/cobra"
@@ -27,15 +25,10 @@ import (
 // versionCmd represents the version command
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Get the current version of this application",
+	Long:  `Nothing fancy. Print the version of this application`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("Polygon CLI Version %s\n", version.Version)
+		cmd.Printf("Polygon CLI Version %s\n", version.Version)
 	},
 }
 
