@@ -51,7 +51,7 @@ var monitorCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c := jsonrpc.NewClient()
 		ms := new(monitorStatus)
-		_, err := c.MakeRequestBatch(args[0], []string{"eth_blockNumber", "net_version", "net_peerCount", "eth_gasPrice", "eth_chainId"}, [][]any{nil, nil, nil, nil, nil})
+		_, err := c.MakeRequestBatch(args[0], []string{"eth_blockNumber", "net_peerCount", "eth_gasPrice", "eth_chainId"}, [][]any{nil, nil, nil, nil})
 		if err != nil {
 			return err
 		}
@@ -63,7 +63,7 @@ var monitorCmd = &cobra.Command{
 		errChan := make(chan error)
 		go func() {
 			for {
-				resps, err := c.MakeRequestBatch(args[0], []string{"eth_blockNumber", "net_version", "net_peerCount", "eth_gasPrice", "eth_chainId"}, [][]any{nil, nil, nil, nil, nil})
+				resps, err := c.MakeRequestBatch(args[0], []string{"eth_blockNumber", "net_peerCount", "eth_gasPrice", "eth_chainId"}, [][]any{nil, nil, nil, nil})
 				if err != nil {
 					log.Error().Err(err).Msg("Encountered issue fetching network information")
 					time.Sleep(5 * time.Second)
@@ -76,7 +76,7 @@ var monitorCmd = &cobra.Command{
 					return
 				}
 
-				ms.ChainID, err = jsonrpc.ConvHexToBigInt(resps[4].Result)
+				ms.ChainID, err = jsonrpc.ConvHexToBigInt(resps[3].Result)
 				if err != nil {
 					errChan <- err
 					return
@@ -102,6 +102,7 @@ var monitorCmd = &cobra.Command{
 				} else {
 					from = ms.MaxBlockRetrieved
 				}
+				// log.Trace().Str("from", from.String()).Str("to", ms.HeadBlock.String()).Msg("Fetching block range")
 				ms.getBlockRange(from, ms.HeadBlock, c, args[0])
 				if !isUiRendered {
 					go func() {
@@ -151,14 +152,17 @@ func (ms *monitorStatus) getBlockRange(from, to *big.Int, c *jsonrpc.Client, url
 		block := r.Result
 		if block.Timestamp == "" {
 			// in this case, going to assume we got an empty response of some kind
+			log.Warn().Msg("Encountered a block with no timestamp?")
 			continue
 		}
-		ms.Blocks[string(block.Number)] = &block
+
 		bi, err := jsonrpc.ConvHexToBigInt(block.Number)
 		if err != nil {
 			// unclear why this would happen
 			log.Error().Err(err).Msg("Could not convert block number")
+			continue
 		}
+		ms.Blocks[string(block.Number)] = &block
 		if ms.MaxBlockRetrieved.Cmp(bi) == -1 {
 			ms.MaxBlockRetrieved = bi
 
@@ -270,6 +274,8 @@ func renderMonitorUI(ms *monitorStatus) error {
 	termWidth, termHeight := ui.TerminalDimensions()
 	grid.SetRect(0, 0, termWidth, termHeight)
 
+	var selectedBlockIdx *int
+
 	redraw := func(ms *monitorStatus) {
 		blocks := make([]jsonrpc.RawBlockResponse, 0)
 		for _, b := range ms.Blocks {
@@ -279,7 +285,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 		// 25 needs to be a variable / parameter
 		if len(recentBlocks) > 25 {
 			sort.Sort(recentBlocks)
-			recentBlocks = recentBlocks[len(recentBlocks)-25 : len(recentBlocks)-1]
+			recentBlocks = recentBlocks[len(recentBlocks)-25 : len(recentBlocks)]
 		}
 
 		h0.Text = ms.HeadBlock.String()
@@ -295,14 +301,47 @@ func renderMonitorUI(ms *monitorStatus) error {
 		sl2.Data = metrics.GetSizePerBlock(recentBlocks)
 		sl3.Data = metrics.GetUnclesPerBlock(recentBlocks)
 		sl4.Data = metrics.GetGasPerBlock(recentBlocks)
-		blockTable.Rows = metrics.GetSimpleBlockRecords(recentBlocks)
 
+		// assuming we haven't selected a particular row... we should get new blocks
+		if selectedBlockIdx == nil {
+			blockTable.Rows = metrics.GetSimpleBlockRecords(recentBlocks)
+		}
 		if len(columnWidths) != len(blockTable.Rows[0]) {
 			// i've messed up
 			panic(fmt.Sprintf("Mis matched between columns and specified widths"))
 		}
 
+		for i := 0; i < len(blockTable.Rows); i = i + 1 {
+			blockTable.RowStyles[i] = ui.NewStyle(ui.ColorWhite)
+		}
+		if selectedBlockIdx != nil && *selectedBlockIdx > 0 && *selectedBlockIdx < len(blockTable.Rows) {
+			blockTable.RowStyles[*selectedBlockIdx] = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
+		}
+
 		ui.Render(grid)
+	}
+
+	listDraw := func() {
+		l := widgets.NewList()
+		l.Title = "List"
+		l.Rows = []string{
+			"[0] github.com/gizak/termui/v3",
+			"[1] [你好，世界](fg:blue)",
+			"[2] [こんにちは世界](fg:red)",
+			"[3] [color](fg:white,bg:green) output",
+			"[4] output.go",
+			"[5] random_out.go",
+			"[6] dashboard.go",
+			"[7] foo",
+			"[8] bar",
+			"[9] baz",
+		}
+		l.TextStyle = ui.NewStyle(ui.ColorYellow)
+		l.WrapText = false
+		l.SetRect(0, 0, 25, 8)
+
+		ui.Render(l)
+
 	}
 
 	currentBn := ms.HeadBlock
@@ -310,12 +349,23 @@ func renderMonitorUI(ms *monitorStatus) error {
 	ticker := time.NewTicker(time.Second).C
 
 	redraw(ms)
+
+	currIdx := 0
 	for {
 		select {
 		case e := <-uiEvents:
 			switch e.ID {
 			case "q", "<C-c>":
 				return nil
+			case "<Escape>":
+				selectedBlockIdx = nil
+				redraw(ms)
+				break
+			case "<Enter>":
+				// TODO
+				_ = listDraw
+				// listDraw()
+				break
 			case "<Resize>":
 				payload := e.Payload.(ui.Resize)
 				grid.SetRect(0, 0, payload.Width, payload.Height)
@@ -323,6 +373,29 @@ func renderMonitorUI(ms *monitorStatus) error {
 				ui.Render(grid)
 				redraw(ms)
 				break
+			case "<Up>", "<Down>", "<Left>", "<Right>":
+				if selectedBlockIdx == nil {
+					currIdx = 1
+					selectedBlockIdx = &currIdx
+					redraw(ms)
+					break
+				}
+				currIdx = *selectedBlockIdx
+
+				if e.ID == "<Down>" {
+					currIdx = currIdx + 1
+				} else if e.ID == "<Up>" {
+					currIdx = currIdx - 1
+				}
+				if currIdx > 0 && currIdx < 25 { // need a better way to understand how many rows are visble
+					selectedBlockIdx = &currIdx
+				}
+				redraw(ms)
+				break
+			case "<MouseLeft>", "<MouseRight>", "<MouseRelease>", "<MouseWheelUp>", "<MouseWheelDown>":
+				break
+			default:
+				log.Trace().Str("id", e.ID).Msg("Unknown ui event")
 			}
 		case <-ticker:
 			if currentBn != ms.HeadBlock {
