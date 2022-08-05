@@ -2,41 +2,49 @@ package metrics
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
+	"math/big"
 	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
-	"github.com/maticnetwork/polygon-cli/jsonrpc"
+)
+
+var (
+	UnitWei       = big.NewInt(1)                                    // | 1 | 1 | wei | Wei
+	UnitBabbage   = new(big.Int).Mul(UnitWei, big.NewInt(1000))      // | 1,000 | 10^3^ | Babbage | Kilowei or femtoether
+	UnitLovelace  = new(big.Int).Mul(UnitBabbage, big.NewInt(1000))  // | 1,000,000 | 10^6^ | Lovelace | Megawei or picoether
+	UnitShannon   = new(big.Int).Mul(UnitLovelace, big.NewInt(1000)) // | 1,000,000,000 | 10^9^ | Shannon | Gigawei or nanoether
+	UnitSzabo     = new(big.Int).Mul(UnitShannon, big.NewInt(1000))  // | 1,000,000,000,000 | 10^12^ | Szabo | Microether or micro
+	UnitFinney    = new(big.Int).Mul(UnitSzabo, big.NewInt(1000))    // | 1,000,000,000,000,000 | 10^15^ | Finney | Milliether or milli
+	UnitEther     = new(big.Int).Mul(UnitFinney, big.NewInt(1000))   // | 1,000,000,000,000,000,000 | 10^18^ | Ether | Ether
+	UnitGrand     = new(big.Int).Mul(UnitEther, big.NewInt(1000))    // | 1,000,000,000,000,000,000,000 | 10^21^ | Grand | Kiloether
+	UnitMegaether = new(big.Int).Mul(UnitGrand, big.NewInt(1000))    // | 1,000,000,000,000,000,000,000,000 | 10^24^ | | Megaether
 )
 
 type (
-	BlockSlice []jsonrpc.RawBlockResponse
+	SortableBlocks []*ethtypes.Block
 )
 
-func (a BlockSlice) Len() int {
+func (a SortableBlocks) Len() int {
 	return len(a)
 }
-func (a BlockSlice) Swap(i, j int) {
+func (a SortableBlocks) Swap(i, j int) {
 	a[i], a[j] = a[j], a[i]
 }
-func (a BlockSlice) Less(i, j int) bool {
-	return a[i].Timestamp.ToUint64() < a[j].Timestamp.ToUint64()
+func (a SortableBlocks) Less(i, j int) bool {
+	return a[i].Time() < a[j].Time()
 }
 
-func GetMeanBlockTime(blocks []jsonrpc.RawBlockResponse) float64 {
+func GetMeanBlockTime(blocks []*ethtypes.Block) float64 {
 	if len(blocks) < 2 {
 		return 0
 	}
 	times := make([]int, 0)
 	for _, block := range blocks {
-		blockTime, err := jsonrpc.ConvHexToUint64(block.Timestamp)
-		if err != nil {
-			continue
-		}
+		blockTime := block.Time()
 		times = append(times, int(blockTime))
 	}
 
@@ -49,66 +57,71 @@ func GetMeanBlockTime(blocks []jsonrpc.RawBlockResponse) float64 {
 	return float64(maxTime-minTime) / float64(len(sortTimes)-1)
 }
 
-func GetTxsPerBlock(blocks []jsonrpc.RawBlockResponse) []float64 {
-	bs := BlockSlice(blocks)
+func GetTxsPerBlock(blocks []*ethtypes.Block) []float64 {
+	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
 	txns := make([]float64, 0)
 	for _, b := range bs {
-		txns = append(txns, float64(len(b.Transactions)))
+		txns = append(txns, float64(len(b.Transactions())))
 	}
 	return txns
 }
-func GetUnclesPerBlock(blocks []jsonrpc.RawBlockResponse) []float64 {
-	bs := BlockSlice(blocks)
+func GetUnclesPerBlock(blocks []*ethtypes.Block) []float64 {
+	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
 	uncles := make([]float64, 0)
 	for _, b := range bs {
-		uncles = append(uncles, float64(len(b.Uncles)))
+		uncles = append(uncles, float64(len(b.Uncles())))
 	}
 	return uncles
 }
 
-func GetSizePerBlock(blocks []jsonrpc.RawBlockResponse) []float64 {
-	bs := BlockSlice(blocks)
+func GetSizePerBlock(blocks []*ethtypes.Block) []float64 {
+	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
 	bSize := make([]float64, 0)
 	for _, b := range bs {
-		bSize = append(bSize, float64(b.Size.ToUint64()))
+		bSize = append(bSize, float64(b.Size()))
 	}
 	return bSize
 }
-func GetGasPerBlock(blocks []jsonrpc.RawBlockResponse) []float64 {
-	bs := BlockSlice(blocks)
+func GetGasPerBlock(blocks []*ethtypes.Block) []float64 {
+	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
 	gasUsed := make([]float64, 0)
 	for _, b := range bs {
-		gasUsed = append(gasUsed, float64(b.GasUsed.ToUint64()))
+		gasUsed = append(gasUsed, float64(b.GasUsed()))
 	}
 	return gasUsed
 }
 
-func GetMeanGasPricePerBlock(blocks []jsonrpc.RawBlockResponse) []float64 {
-	bs := BlockSlice(blocks)
+func GetMeanGasPricePerBlock(blocks []*ethtypes.Block) []float64 {
+	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
 	gasPrices := make([]float64, 0)
 	for _, b := range bs {
-		var totGas uint64 = 0
-		for _, tx := range b.Transactions {
-			totGas += tx.GasPrice.ToUint64()
+		totGas := big.NewInt(0)
+		txs := b.Transactions()
+		if len(txs) < 1 {
+			gasPrices = append(gasPrices, 0.0)
+			continue
 		}
-		meanGas := float64(totGas) / float64(len(b.Transactions))
-		gasPrices = append(gasPrices, meanGas)
+		for _, tx := range txs {
+			totGas.Add(totGas, tx.GasPrice())
+		}
+		meanGas := totGas.Div(totGas, big.NewInt(int64(len(txs))))
+		gasPrices = append(gasPrices, float64(meanGas.Int64()))
 	}
 	return gasPrices
 }
 
-func GetSimpleBlockRecords(blocks []jsonrpc.RawBlockResponse) [][]string {
-	bs := BlockSlice(blocks)
+func GetSimpleBlockRecords(blocks []*ethtypes.Block) [][]string {
+	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
 	header := []string{
@@ -126,7 +139,9 @@ func GetSimpleBlockRecords(blocks []jsonrpc.RawBlockResponse) [][]string {
 
 	isMined := true
 
-	if string(blocks[0].Miner) == "0x0000000000000000000000000000000000000000" {
+	blockHeader := blocks[0].Header()
+
+	if blockHeader.Coinbase.String() == "0x0000000000000000000000000000000000000000" {
 		isMined = false
 	}
 
@@ -137,37 +152,26 @@ func GetSimpleBlockRecords(blocks []jsonrpc.RawBlockResponse) [][]string {
 	records := make([][]string, 0)
 	records = append(records, header)
 	for j := len(bs) - 1; j >= 0; j = j - 1 {
-		author := string(bs[j].Miner)
-		ts := bs[j].Timestamp.ToInt64()
-		ut := time.Unix(ts, 0)
+		author := bs[j].Header().Coinbase.String()
+		ts := bs[j].Time()
+		ut := time.Unix(int64(ts), 0)
 		if !isMined {
-			signer, err := getBlockSigner(bs[j])
+			signer, err := ecrecover(bs[j].Header())
 			if err == nil {
 				author = "0x" + hex.EncodeToString(signer)
 			}
 		}
 		record := []string{
-			fmt.Sprintf("%d", bs[j].Number.ToUint64()),
+			fmt.Sprintf("%d", bs[j].Number()),
 			ut.Format("02 Jan 06 15:04:05 MST"),
-			string(bs[j].Hash),
+			bs[j].Hash().String(),
 			author,
-			fmt.Sprintf("%d", len(bs[j].Transactions)),
-			fmt.Sprintf("%d", bs[j].GasUsed.ToUint64()),
+			fmt.Sprintf("%d", len(bs[j].Transactions())),
+			fmt.Sprintf("%d", bs[j].GasUsed()),
 		}
 		records = append(records, record)
 	}
 	return records
-}
-
-func getBlockSigner(b jsonrpc.RawBlockResponse) ([]byte, error) {
-	var h *ethtypes.Header = new(ethtypes.Header)
-	// the common interface here is json, so I'm going to convert from my raw type to to a smart geth type for clique validtor information
-	jsonData, _ := json.Marshal(b)
-	err := h.UnmarshalJSON(jsonData)
-	if err != nil {
-		return nil, err
-	}
-	return ecrecover(h)
 }
 
 func ecrecover(header *ethtypes.Header) ([]byte, error) {

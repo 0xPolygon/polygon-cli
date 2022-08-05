@@ -17,15 +17,19 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"net/url"
 	"sort"
 	"time"
 
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
+	ethrpc "github.com/ethereum/go-ethereum/rpc"
+
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
-	"github.com/maticnetwork/polygon-cli/jsonrpc"
 	"github.com/maticnetwork/polygon-cli/metrics"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -38,10 +42,43 @@ type (
 		PeerCount uint64
 		GasPrice  *big.Int
 
-		Blocks            map[string]*jsonrpc.RawBlockResponse
+		Blocks            map[string]*ethtypes.Block
 		MaxBlockRetrieved *big.Int
 	}
+	chainState struct {
+		HeadBlock uint64
+		ChainID   *big.Int
+		PeerCount uint64
+		GasPrice  *big.Int
+	}
 )
+
+func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, error) {
+	var err error
+	cs := new(chainState)
+	cs.HeadBlock, err = ec.BlockNumber(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	cs.ChainID, err = ec.ChainID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	cs.PeerCount, err = ec.PeerCount(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	cs.GasPrice, err = ec.SuggestGasPrice(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return cs, nil
+
+}
 
 // monitorCmd represents the monitor command
 var monitorCmd = &cobra.Command{
@@ -49,50 +86,36 @@ var monitorCmd = &cobra.Command{
 	Short: "A simple terminal monitor for a blockchain",
 	Long:  ``,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c := jsonrpc.NewClient()
-		ms := new(monitorStatus)
-		_, err := c.MakeRequestBatch(args[0], []string{"eth_blockNumber", "net_peerCount", "eth_gasPrice", "eth_chainId"}, [][]any{nil, nil, nil, nil})
+		ctx := cmd.Context()
+
+		rpc, err := ethrpc.DialContext(ctx, args[0])
 		if err != nil {
+			log.Error().Err(err).Msg("Unable to dial rpc")
 			return err
 		}
+		ec := ethclient.NewClient(rpc)
+
+		ms := new(monitorStatus)
+
 		ms.MaxBlockRetrieved = big.NewInt(0)
-		ms.Blocks = make(map[string]*jsonrpc.RawBlockResponse, 0)
+		ms.Blocks = make(map[string]*ethtypes.Block, 0)
 		ms.ChainID = big.NewInt(0)
 
 		isUiRendered := false
 		errChan := make(chan error)
 		go func() {
 			for {
-				resps, err := c.MakeRequestBatch(args[0], []string{"eth_blockNumber", "net_peerCount", "eth_gasPrice", "eth_chainId"}, [][]any{nil, nil, nil, nil})
+				cs, err := getChainState(ctx, ec)
 				if err != nil {
 					log.Error().Err(err).Msg("Encountered issue fetching network information")
 					time.Sleep(5 * time.Second)
 					continue
 				}
 
-				ms.HeadBlock, err = jsonrpc.ConvHexToBigInt(resps[0].Result)
-				if err != nil {
-					errChan <- err
-					return
-				}
-
-				ms.ChainID, err = jsonrpc.ConvHexToBigInt(resps[3].Result)
-				if err != nil {
-					errChan <- err
-					return
-				}
-
-				ms.PeerCount, err = jsonrpc.ConvHexToUint64(resps[2].Result)
-				if err != nil {
-					errChan <- err
-					return
-				}
-
-				ms.GasPrice, err = jsonrpc.ConvHexToBigInt(resps[3].Result)
-				if err != nil {
-					errChan <- err
-					return
-				}
+				ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
+				ms.ChainID = cs.ChainID
+				ms.PeerCount = cs.PeerCount
+				ms.GasPrice = cs.GasPrice
 
 				from := big.NewInt(0)
 
@@ -103,7 +126,7 @@ var monitorCmd = &cobra.Command{
 					from = ms.MaxBlockRetrieved
 				}
 				// log.Trace().Str("from", from.String()).Str("to", ms.HeadBlock.String()).Msg("Fetching block range")
-				ms.getBlockRange(from, ms.HeadBlock, c, args[0])
+				ms.getBlockRange(ctx, from, ms.HeadBlock, ec, args[0])
 				if !isUiRendered {
 					go func() {
 						errChan <- renderMonitorUI(ms)
@@ -135,54 +158,26 @@ var monitorCmd = &cobra.Command{
 	},
 }
 
-func (ms *monitorStatus) getBlockRange(from, to *big.Int, c *jsonrpc.Client, url string) (any, error) {
+func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c *ethclient.Client, url string) error {
 	one := big.NewInt(1)
-	methods := make([]string, 0)
-	params := make([][]any, 0)
 	for i := from; i.Cmp(to) != 1; i.Add(i, one) {
-		methods = append(methods, "eth_getBlockByNumber")
-		params = append(params, []any{"0x" + i.Text(16), true})
-	}
-	var resps []jsonrpc.RPCBlockResp
-	err := c.MakeRequestBatchGenric(url, methods, params, &resps)
-	if err != nil {
-		return nil, err
-	}
-	for _, r := range resps {
-		block := r.Result
-		if block.Timestamp == "" {
-			// in this case, going to assume we got an empty response of some kind
-			log.Warn().Msg("Encountered a block with no timestamp?")
-			continue
-		}
-
-		bi, err := jsonrpc.ConvHexToBigInt(block.Number)
+		block, err := c.BlockByNumber(ctx, i)
 		if err != nil {
-			// unclear why this would happen
-			log.Error().Err(err).Msg("Could not convert block number")
-			continue
+			return err
 		}
-		ms.Blocks[string(block.Number)] = &block
-		if ms.MaxBlockRetrieved.Cmp(bi) == -1 {
-			ms.MaxBlockRetrieved = bi
 
+		ms.Blocks[block.Number().String()] = block
+
+		if ms.MaxBlockRetrieved.Cmp(block.Number()) == -1 {
+			ms.MaxBlockRetrieved = block.Number()
 		}
+
 	}
-	return nil, nil
+	return nil
 }
 
 func init() {
 	rootCmd.AddCommand(monitorCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// monitorCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// monitorCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
 func renderMonitorUI(ms *monitorStatus) error {
@@ -277,20 +272,20 @@ func renderMonitorUI(ms *monitorStatus) error {
 	var selectedBlockIdx *int
 
 	redraw := func(ms *monitorStatus) {
-		blocks := make([]jsonrpc.RawBlockResponse, 0)
+		blocks := make([]*ethtypes.Block, 0)
 		for _, b := range ms.Blocks {
-			blocks = append(blocks, *b)
+			blocks = append(blocks, b)
 		}
-		recentBlocks := metrics.BlockSlice(blocks)
+		recentBlocks := metrics.SortableBlocks(blocks)
+		sort.Sort(recentBlocks)
 		// 25 needs to be a variable / parameter
 		if len(recentBlocks) > 25 {
-			sort.Sort(recentBlocks)
 			recentBlocks = recentBlocks[len(recentBlocks)-25 : len(recentBlocks)]
 		}
 
 		h0.Text = ms.HeadBlock.String()
 		gasGwei := new(big.Int)
-		gasGwei.Div(ms.GasPrice, jsonrpc.UnitShannon)
+		gasGwei.Div(ms.GasPrice, metrics.UnitShannon)
 		h1.Text = fmt.Sprintf("%s gwei", gasGwei.String())
 		h2.Text = fmt.Sprintf("%d", ms.PeerCount)
 		h3.Text = ms.ChainID.String()
