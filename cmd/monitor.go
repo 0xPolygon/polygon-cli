@@ -68,7 +68,8 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 
 	cs.PeerCount, err = ec.PeerCount(ctx)
 	if err != nil {
-		return nil, err
+		// log.Info().Err(err).Msg("Using fake peer count")
+		cs.PeerCount = 0
 	}
 
 	cs.GasPrice, err = ec.SuggestGasPrice(ctx)
@@ -146,13 +147,10 @@ var monitorCmd = &cobra.Command{
 		if len(args) != 1 {
 			return fmt.Errorf("Expected exactly one argument")
 		}
-		url, err := url.Parse(args[0])
+		_, err := url.Parse(args[0])
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to parse url input error")
 			return err
-		}
-		if url.Scheme != "http" && url.Scheme != "https" {
-			return fmt.Errorf("The scheme %s is not supported", url.Scheme)
 		}
 		return nil
 	},
