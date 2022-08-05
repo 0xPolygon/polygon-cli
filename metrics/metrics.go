@@ -174,6 +174,43 @@ func GetSimpleBlockRecords(blocks []*ethtypes.Block) [][]string {
 	return records
 }
 
+func GetSimpleBlockFields(block *ethtypes.Block) []string {
+	ts := block.Time()
+	ut := time.Unix(int64(ts), 0)
+
+	blockHeader := block.Header()
+	author := "Mined  by"
+
+	authorAddress := blockHeader.Coinbase.String()
+
+	if authorAddress == "0x0000000000000000000000000000000000000000" {
+		author = "Signed by"
+		signer, _ := ecrecover(blockHeader)
+		authorAddress = hex.EncodeToString(signer)
+	}
+
+	return []string{
+		"",
+		fmt.Sprintf("Block Height: %s", block.Number()),
+		fmt.Sprintf("Timestamp:    %d (%s)", ts, ut.Format(time.RFC3339)),
+		fmt.Sprintf("Transactions: %d", len(block.Transactions())),
+		fmt.Sprintf("%s:    %s", author, authorAddress),
+		fmt.Sprintf("Difficulty:   %s", block.Difficulty()),
+		fmt.Sprintf("Size:         %s", block.Size()),
+		fmt.Sprintf("Uncles:       %d", len(block.Uncles())),
+		fmt.Sprintf("Gas used:     %d", block.GasUsed()),
+		fmt.Sprintf("Gas limit:    %d", block.GasLimit()),
+		fmt.Sprintf("Base Fee:     %s", block.BaseFee()),
+		fmt.Sprintf("Extra data:   %s", string(block.Extra())),
+		fmt.Sprintf("Hash:         %s", block.Hash()),
+		fmt.Sprintf("Parent Hash:  %s", block.ParentHash()),
+		fmt.Sprintf("Uncle Hash:   %s", block.UncleHash()),
+		fmt.Sprintf("State Root:   %s", block.Root()),
+		fmt.Sprintf("Tx Hash:      %s", block.TxHash()),
+		fmt.Sprintf("Nonce:        %d", block.Nonce()),
+	}
+}
+
 func ecrecover(header *ethtypes.Header) ([]byte, error) {
 	signature := header.Extra[len(header.Extra)-ethcrypto.SignatureLength:]
 	pubkey, err := ethcrypto.Ecrecover(clique.SealHash(header).Bytes(), signature)

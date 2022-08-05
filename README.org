@@ -283,6 +283,9 @@ polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 50 -
 This is a basic tool for monitoring block production on a local RPC
 end point.
 
+If you're using the terminal UI and you'd like to be able to select
+text for copying, you might need to use a modifier key.
+
 * Nodekey
 
 The ~nodekey~ command is still in progress, but the idea is to have a

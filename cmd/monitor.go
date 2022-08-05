@@ -51,6 +51,13 @@ type (
 		PeerCount uint64
 		GasPrice  *big.Int
 	}
+	monitorMode int
+)
+
+const (
+	monitorModeHelp     monitorMode = iota
+	monitorModeExplorer monitorMode = iota
+	monitorModeBlock    monitorMode = iota
 )
 
 func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, error) {
@@ -184,6 +191,8 @@ func renderMonitorUI(ms *monitorStatus) error {
 	}
 	defer ui.Close()
 
+	currentMode := monitorModeExplorer
+
 	blockTable := widgets.NewTable()
 
 	blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
@@ -244,6 +253,29 @@ func renderMonitorUI(ms *monitorStatus) error {
 	slg4.Title = "Gas Used"
 
 	grid := ui.NewGrid()
+	blockGrid := ui.NewGrid()
+
+	b0 := widgets.NewParagraph()
+	b0.Title = "Block Headers"
+	b0.Text = "Foo"
+
+	b1 := widgets.NewList()
+	b1.Title = "Block Info"
+	b1.TextStyle = ui.NewStyle(ui.ColorYellow)
+	b1.WrapText = false
+
+	b2 := widgets.NewParagraph()
+	b2.Title = "Transactions"
+	b2.Text = "Foooo"
+
+	blockGrid.Set(
+		ui.NewRow(1.0/10, b0),
+
+		ui.NewRow(9.0/10,
+			ui.NewCol(1.0/2, b1),
+			ui.NewCol(1.0/2, b2),
+		),
+	)
 
 	grid.Set(
 		ui.NewRow(1.0/10,
@@ -266,10 +298,24 @@ func renderMonitorUI(ms *monitorStatus) error {
 
 	termWidth, termHeight := ui.TerminalDimensions()
 	grid.SetRect(0, 0, termWidth, termHeight)
+	blockGrid.SetRect(0, 0, termWidth, termHeight)
 
 	var selectedBlockIdx *int
+	var selectedBlock *ethtypes.Block
 
 	redraw := func(ms *monitorStatus) {
+		if currentMode == monitorModeHelp {
+			// render a help
+		} else if currentMode == monitorModeBlock {
+			// render a block
+			b1.Rows = metrics.GetSimpleBlockFields(selectedBlock)
+
+			ui.Clear()
+			ui.Render(blockGrid)
+			return
+		}
+
+		//default
 		blocks := make([]*ethtypes.Block, 0)
 		for _, b := range ms.Blocks {
 			blocks = append(blocks, b)
@@ -309,6 +355,8 @@ func renderMonitorUI(ms *monitorStatus) error {
 		}
 		if selectedBlockIdx != nil && *selectedBlockIdx > 0 && *selectedBlockIdx < len(blockTable.Rows) {
 			blockTable.RowStyles[*selectedBlockIdx] = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
+			// the block table is reversed and has an extra row for the header
+			selectedBlock = recentBlocks[len(recentBlocks)-*selectedBlockIdx]
 		}
 
 		ui.Render(grid)
@@ -352,18 +400,22 @@ func renderMonitorUI(ms *monitorStatus) error {
 				return nil
 			case "<Escape>":
 				selectedBlockIdx = nil
+				currentMode = monitorModeExplorer
 				redraw(ms)
 				break
 			case "<Enter>":
 				// TODO
+				if selectedBlockIdx != nil {
+					currentMode = monitorModeBlock
+				}
 				_ = listDraw
-				// listDraw()
+				redraw(ms)
 				break
 			case "<Resize>":
 				payload := e.Payload.(ui.Resize)
 				grid.SetRect(0, 0, payload.Width, payload.Height)
+				blockGrid.SetRect(0, 0, payload.Width, payload.Height)
 				ui.Clear()
-				ui.Render(grid)
 				redraw(ms)
 				break
 			case "<Up>", "<Down>", "<Left>", "<Right>":
