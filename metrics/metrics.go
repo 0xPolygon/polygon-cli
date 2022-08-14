@@ -201,7 +201,7 @@ func GetSimpleBlockFields(block *ethtypes.Block) []string {
 		fmt.Sprintf("Gas used:     %d", block.GasUsed()),
 		fmt.Sprintf("Gas limit:    %d", block.GasLimit()),
 		fmt.Sprintf("Base Fee:     %s", block.BaseFee()),
-		fmt.Sprintf("Extra data:   %s", string(block.Extra())),
+		fmt.Sprintf("Extra data:   %s", RawDataToASCII(block.Extra())),
 		fmt.Sprintf("Hash:         %s", block.Hash()),
 		fmt.Sprintf("Parent Hash:  %s", block.ParentHash()),
 		fmt.Sprintf("Uncle Hash:   %s", block.UncleHash()),
@@ -209,6 +209,44 @@ func GetSimpleBlockFields(block *ethtypes.Block) []string {
 		fmt.Sprintf("Tx Hash:      %s", block.TxHash()),
 		fmt.Sprintf("Nonce:        %d", block.Nonce()),
 	}
+}
+func GetSimpleBlockTxFields(block *ethtypes.Block, chainID *big.Int) []string {
+	fields := make([]string, 0)
+	blank := ""
+	for _, tx := range block.Transactions() {
+		txFields := GetSimpleTxFields(tx, chainID, block.BaseFee())
+		fields = append(fields, blank)
+		fields = append(fields, txFields...)
+	}
+	return fields
+}
+func GetSimpleTxFields(tx *ethtypes.Transaction, chainID, baseFee *big.Int) []string {
+	fields := make([]string, 0)
+	msg, err := tx.AsMessage(ethtypes.NewEIP155Signer(chainID), baseFee)
+
+	fields = append(fields, fmt.Sprintf("Tx Hash: %s", tx.Hash()))
+
+	txMethod := "Transfer"
+	if tx.To() == nil {
+		// Contract deployment
+		txMethod = "Contract Deployment"
+	} else if len(tx.Data()) > 4 {
+		// Contract call
+		txMethod = hex.EncodeToString(tx.Data()[0:4])
+	}
+
+	fields = append(fields, fmt.Sprintf("To: %s", tx.To()))
+	if err == nil {
+		fields = append(fields, fmt.Sprintf("From: %s", msg.From()))
+	}
+	fields = append(fields, fmt.Sprintf("Method: %s", txMethod))
+	fields = append(fields, fmt.Sprintf("Value: %s", tx.Value()))
+	fields = append(fields, fmt.Sprintf("Gas: %d", tx.Gas()))
+	fields = append(fields, fmt.Sprintf("Gas Price: %s", tx.GasPrice()))
+	fields = append(fields, fmt.Sprintf("Nonce: %d", tx.Nonce()))
+	fields = append(fields, fmt.Sprintf("Data: %s", hex.EncodeToString(tx.Data())))
+
+	return fields
 }
 
 func ecrecover(header *ethtypes.Header) ([]byte, error) {
@@ -220,4 +258,16 @@ func ecrecover(header *ethtypes.Header) ([]byte, error) {
 	signer := ethcrypto.Keccak256(pubkey[1:])[12:]
 
 	return signer, nil
+}
+
+func RawDataToASCII(data []byte) string {
+	retString := ""
+	for _, b := range data {
+		if b >= 32 && b < 127 {
+			retString = retString + string(b)
+		} else {
+			retString = retString + fmt.Sprintf("\\x%X", b)
+		}
+	}
+	return retString
 }

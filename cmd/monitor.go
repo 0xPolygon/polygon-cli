@@ -257,16 +257,17 @@ func renderMonitorUI(ms *monitorStatus) error {
 
 	b0 := widgets.NewParagraph()
 	b0.Title = "Block Headers"
-	b0.Text = "Foo"
+	b0.Text = "Use the arrow keys to scroll through the transactions. Press <Esc> to go back to the explorer view"
 
 	b1 := widgets.NewList()
 	b1.Title = "Block Info"
 	b1.TextStyle = ui.NewStyle(ui.ColorYellow)
 	b1.WrapText = false
 
-	b2 := widgets.NewParagraph()
+	b2 := widgets.NewList()
 	b2.Title = "Transactions"
-	b2.Text = "Foooo"
+	b2.TextStyle = ui.NewStyle(ui.ColorGreen)
+	b2.WrapText = true
 
 	blockGrid.Set(
 		ui.NewRow(1.0/10, b0),
@@ -309,6 +310,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 		} else if currentMode == monitorModeBlock {
 			// render a block
 			b1.Rows = metrics.GetSimpleBlockFields(selectedBlock)
+			b2.Rows = metrics.GetSimpleBlockTxFields(selectedBlock, ms.ChainID)
 
 			ui.Clear()
 			ui.Render(blockGrid)
@@ -362,29 +364,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 		ui.Render(grid)
 	}
 
-	listDraw := func() {
-		l := widgets.NewList()
-		l.Title = "List"
-		l.Rows = []string{
-			"[0] github.com/gizak/termui/v3",
-			"[1] [你好，世界](fg:blue)",
-			"[2] [こんにちは世界](fg:red)",
-			"[3] [color](fg:white,bg:green) output",
-			"[4] output.go",
-			"[5] random_out.go",
-			"[6] dashboard.go",
-			"[7] foo",
-			"[8] bar",
-			"[9] baz",
-		}
-		l.TextStyle = ui.NewStyle(ui.ColorYellow)
-		l.WrapText = false
-		l.SetRect(0, 0, 25, 8)
-
-		ui.Render(l)
-
-	}
-
 	currentBn := ms.HeadBlock
 	uiEvents := ui.PollEvents()
 	ticker := time.NewTicker(time.Second).C
@@ -408,7 +387,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 				if selectedBlockIdx != nil {
 					currentMode = monitorModeBlock
 				}
-				_ = listDraw
 				redraw(ms)
 				break
 			case "<Resize>":
@@ -419,6 +397,15 @@ func renderMonitorUI(ms *monitorStatus) error {
 				redraw(ms)
 				break
 			case "<Up>", "<Down>", "<Left>", "<Right>":
+				if currentMode == monitorModeBlock {
+					if e.ID == "<Down>" {
+						b2.ScrollDown()
+					} else if e.ID == "<Up>" {
+						b2.ScrollUp()
+					}
+					redraw(ms)
+					break
+				}
 				if selectedBlockIdx == nil {
 					currIdx = 1
 					selectedBlockIdx = &currIdx
