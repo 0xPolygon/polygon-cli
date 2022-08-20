@@ -320,7 +320,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 
 	redraw := func(ms *monitorStatus) {
 		if currentMode == monitorModeHelp {
-			// render a help
+			// TODO add some help context?
 		} else if currentMode == monitorModeBlock {
 			// render a block
 			b1.Rows = metrics.GetSimpleBlockFields(selectedBlock)

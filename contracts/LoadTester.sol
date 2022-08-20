@@ -12,7 +12,7 @@ contract LoadTester {
         callCounter = callCounter + 1;
         return callCounter;
     }
-    function addToDumpter(bytes calldata trash) public returns(uint256) {
+    function store(bytes calldata trash) public returns(uint256) {
         dumpster.push(trash);
         return dumpster.length;
     }

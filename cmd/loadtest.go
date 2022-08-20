@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math/big"
 	"net/url"
 	"os"
@@ -51,6 +52,7 @@ const (
 	loadTestModeFunction    = "f"
 	loadTestModeInc         = "i"
 	loadTestModeRandom      = "r"
+	loadTestModeStore       = "s"
 )
 
 var (
@@ -62,8 +64,54 @@ var (
 		loadTestModeCall,
 		loadTestModeFunction,
 		loadTestModeInc,
+		loadTestModeStore,
 		// r should be last to exclude it from random mode selection
 		loadTestModeRandom,
+	}
+	hexwords = []byte{
+		0x00, 0x0F, 0xF1, 0xCE,
+		0x00, 0xBA, 0xB1, 0x0C,
+		0x1B, 0xAD, 0xB0, 0x02,
+		0x8B, 0xAD, 0xF0, 0x0D,
+		0xAB, 0xAD, 0xBA, 0xBE,
+		0xB1, 0x05, 0xF0, 0x0D,
+		0xB1, 0x6B, 0x00, 0xB5,
+		0x0B, 0x00, 0xB1, 0x35,
+		0xBA, 0xAA, 0xAA, 0xAD,
+		0xBA, 0xAD, 0xF0, 0x0D,
+		0xBA, 0xD2, 0x22, 0x22,
+		0xBA, 0xDD, 0xCA, 0xFE,
+		0xCA, 0xFE, 0xB0, 0xBA,
+		0xB0, 0xBA, 0xBA, 0xBE,
+		0xBE, 0xEF, 0xBA, 0xBE,
+		0xC0, 0x00, 0x10, 0xFF,
+		0xCA, 0xFE, 0xBA, 0xBE,
+		0xCA, 0xFE, 0xD0, 0x0D,
+		0xCE, 0xFA, 0xED, 0xFE,
+		0x0D, 0x15, 0xEA, 0x5E,
+		0xDA, 0xBB, 0xAD, 0x00,
+		0xDE, 0xAD, 0x2B, 0xAD,
+		0xDE, 0xAD, 0xBA, 0xAD,
+		0xDE, 0xAD, 0xBA, 0xBE,
+		0xDE, 0xAD, 0xBE, 0xAF,
+		0xDE, 0xAD, 0xBE, 0xEF,
+		0xDE, 0xAD, 0xC0, 0xDE,
+		0xDE, 0xAD, 0xDE, 0xAD,
+		0xDE, 0xAD, 0xD0, 0x0D,
+		0xDE, 0xAD, 0xFA, 0x11,
+		0xDE, 0xAD, 0x10, 0xCC,
+		0xDE, 0xAD, 0xFE, 0xED,
+		0xDE, 0xCA, 0xFB, 0xAD,
+		0xDE, 0xFE, 0xC8, 0xED,
+		0xD0, 0xD0, 0xCA, 0xCA,
+		0xE0, 0x11, 0xCF, 0xD0,
+		0xFA, 0xCE, 0xFE, 0xED,
+		0xFB, 0xAD, 0xBE, 0xEF,
+		0xFE, 0xE1, 0xDE, 0xAD,
+		0xFE, 0xED, 0xBA, 0xBE,
+		0xFE, 0xED, 0xC0, 0xDE,
+		0xFF, 0xBA, 0xDD, 0x11,
+		0xF0, 0x0D, 0xBA, 0xBE,
 	}
 )
 
@@ -137,6 +185,8 @@ func setLogLevel(ltp loadTestParams) {
 }
 
 type (
+	hexwordReader struct {
+	}
 	loadTestSample struct {
 		GoRoutineID int64
 		RequestID   int64
@@ -161,6 +211,7 @@ type (
 		Mode          *string
 		Function      *uint64
 		Iterations    *uint64
+		ByteCount     *uint64
 
 		// Computed
 		CurrentGas      *big.Int
@@ -190,10 +241,10 @@ func init() {
 	ltp.ToAddress = loadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
 	ltp.HexSendAmount = loadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
 	ltp.RateLimit = loadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
-	ltp.Mode = loadtestCmd.PersistentFlags().StringP("mode", "m", "t", "t - sending transactions\nd - deploy contract\nc - call random contract functions\nf - call specific contract function")
+	ltp.Mode = loadtestCmd.PersistentFlags().StringP("mode", "m", "t", "t - sending transactions\nd - deploy contract\nc - call random contract functions\nf - call specific contract function\ns - store mode")
 	ltp.Function = loadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` ")
 	ltp.Iterations = loadtestCmd.PersistentFlags().Uint64P("iterations", "i", 100, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop")
-
+	ltp.ByteCount = loadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	inputLoadTestParams = *ltp
 
 	// TODO batch size
@@ -483,6 +534,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 				case loadTestModeInc:
 					startReq, endReq, err = loadtestInc(ctx, c, ltContract)
 					break
+				case loadTestModeStore:
+					startReq, endReq, err = loadtestStore(ctx, c, ltContract)
+					break
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -597,6 +651,25 @@ func loadtestInc(ctx context.Context, c *ethclient.Client, ltContract *contracts
 	t2 = time.Now()
 	return
 }
+func loadtestStore(ctx context.Context, c *ethclient.Client, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+
+	inputData := make([]byte, *ltp.ByteCount, *ltp.ByteCount)
+	hexwordRead(inputData)
+	t1 = time.Now()
+	_, err = ltContract.Store(tops, inputData)
+	t2 = time.Now()
+	return
+}
 
 func recordSample(goRoutineID, requestID int64, err error, start, end time.Time) {
 	s := loadTestSample{}
@@ -644,4 +717,18 @@ func createLoadTesterContract(ctx context.Context, c *ethclient.Client, nonce ui
 	}
 
 	return nil, fmt.Errorf("Unable to get tx receipt")
+}
+
+func hexwordRead(b []byte) (int, error) {
+	hw := hexwordReader{}
+	return io.ReadFull(&hw, b)
+}
+
+func (hw *hexwordReader) Read(p []byte) (n int, err error) {
+	hwLen := len(hexwords)
+	for k := range p {
+		p[k] = hexwords[k%hwLen]
+	}
+	n = len(p)
+	return
 }

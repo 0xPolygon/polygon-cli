@@ -465,6 +465,6 @@ in Yul and Solidity. The workflow for modifying this contract is.
 2. Compile the contracts:
    - ~solc LoadTester.sol --bin --abi -o . --overwrite~
 3. Run ~abigen~
-   - ~/code/go-ethereum/build/bin/abigen --abi LoadTester.abi --pkg contracts --type LoadTester --bin LoadTester.bin --out loadtester.go~
+   - ~abigen --abi LoadTester.abi --pkg contracts --type LoadTester --bin LoadTester.bin --out loadtester.go~
 4. Run the loadtester to enure it deploys and runs sucessfully
    - ~go run main.go loadtest --verbosity 700 http://127.0.0.1:8541~
