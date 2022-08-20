@@ -108,6 +108,7 @@ var monitorCmd = &cobra.Command{
 		ms.MaxBlockRetrieved = big.NewInt(0)
 		ms.Blocks = make(map[string]rpctypes.PolyBlock, 0)
 		ms.ChainID = big.NewInt(0)
+		zero := big.NewInt(0)
 
 		isUiRendered := false
 		errChan := make(chan error)
@@ -132,6 +133,10 @@ var monitorCmd = &cobra.Command{
 					from.Sub(ms.HeadBlock, big.NewInt(25))
 				} else {
 					from = ms.MaxBlockRetrieved
+				}
+
+				if from.Cmp(zero) < 0 {
+					from.SetInt64(0)
 				}
 				ms.getBlockRange(ctx, from, ms.HeadBlock, rpc, args[0])
 				if !isUiRendered {
