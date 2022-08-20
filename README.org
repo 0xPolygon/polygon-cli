@@ -301,6 +301,19 @@ polycli nodekey
 #+RESULTS:
 : {"PublicKey":"17ffba3cf930eb2b35bf5b79b9d8e5f0431452be921280dc15210f454b6523cfa73e16a216ab44e0743250d1eede57167d00edb4654ed75a103d06645634a364\n","PrivateKey":"f997cbdd5e7cd57852bdabbe8287d8e881bf367134c1a6eaa4e90fccaca55acc","ENR":"enode://17ffba3cf930eb2b35bf5b79b9d8e5f0431452be921280dc15210f454b6523cfa73e16a216ab44e0743250d1eede57167d00edb4654ed75a103d06645634a364@0.0.0.0:30303?discport=40886"}
 
+* RPC
+
+This is a simple tool to avoid typing JSON on the command line while
+making RPC calls. The implementation is generic and this is meant to
+be a complete generic RPC tool.
+
+#+begin_src shell
+
+polycli rpc https://polygon-rpc.com eth_blockNumber
+
+polycli rpc https://polygon-rpc.com eth_getBlockByNumber 0x1e99576 true
+#+end_src
+
 * Adding Commands
 Script to setup this repo
 #+BEGIN_SRC bash
@@ -327,8 +340,50 @@ mode in order to make sure the various functions work properly. First,
 we'll startup geth.
 
 #+begin_src shell
+# Geth
 ./build/bin/geth --dev --dev.period 2 --http --http.addr localhost --http.port 8545 --http.api eth,web3,personal,net --verbosity 5
+
+# v3
+go run cmd/borv3/main.go server --dev \
+    --dev.period 2 \
+    --ws --ws.port 8546 \
+    --http --http.port 8545 \
+    --jsonrpc.modules eth,web3,personal,net \
+    --log-level debug \
+    --ipcpath ./borv3ipc \
+    --rpc.gascap 18446744073709551615 \
+    --rpc.txfeecap 0 \
+    --miner.gaslimit  10 \
+    --miner.gasprice 1 \
+    --gpo.blocks 1 \
+    --gpo.percentile 1 \
+    --gpo.maxprice 10 \
+    --gpo.ignoreprice 2
 #+end_src
+
+Simple startup script for borv3 from our testing
+#+begin_src bash
+#!/bin/bash
+
+num=4
+
+rm -rf test-dir-*
+rm genesis.json
+
+# rm borv3
+# go build -o borv3 cmd/borv3/main.go
+
+./borv3 init-account --datadir test-dir --num $num
+./borv3 init-genesis --premine 0x85da99c8a7c2c95964c8efd687e95e632fc533d6
+
+seq 1 $num | while read -r line
+do
+    ./borv3 server --chain genesis.json --datadir test-dir-$line --port 3030$line --mine --http --http.port 854$line --jsonrpc.modules eth --rpc.gascap 18446744073709551615 &
+done
+
+# ps aux | grep borv3 | grep -v grep | awk '{print $2}' | xargs kill -9
+#+end_src
+
 
 In the logs, we'll see a line that says IPC endpoint opened:
 
@@ -380,15 +435,24 @@ socat - UNIX-CONNECT:/var/folders/zs/k8swqskj1t79cgnjh6yt0fqm0000gn/T/geth.ipc
 Useful RPCs when testing
 
 #+begin_src shell
-curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "net_version", "params": []}' https://polygon-rpc.com
+curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "net_version", "params": []}' https://polygon-rpc.com
 curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_blockNumber", "params": []}' https://polygon-rpc.com
-curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_getBlockByNumber", "params": ["0x1DE8531", true]}' https://polygon-rpc.com
-curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "clique_getSigner", "params": ["0x1DE8531", true]}' https://polygon-rpc.com
-curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_getBalance", "params": ["0x85da99c8a7c2c95964c8efd687e95e632fc533d6", "latest"]}' https://polygon-rpc.com
-curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_getCode", "params": ["0x79954f948079ee9ef1d15eff3e07ceaef7cdf3b4", "latest"]}' https://polygon-rpc.com
+curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "eth_getBlockByNumber", "params": ["0x1DE8531", true]}' https://polygon-rpc.com
+curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "clique_getSigner", "params": ["0x1DE8531", true]}' https://polygon-rpc.com
+curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "eth_getBalance", "params": ["0x85da99c8a7c2c95964c8efd687e95e632fc533d6", "latest"]}' https://polygon-rpc.com
+curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "eth_getCode", "params": ["0x79954f948079ee9ef1d15eff3e07ceaef7cdf3b4", "latest"]}' https://polygon-rpc.com
+
+
+curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "txpool_inspect", "params": []}' http://localhost:8545
+curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "txpool_status", "params": []}' http://localhost:8545
+curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "eth_gasPrice", "params": []}' http://localhost:8545
+curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "admin_peers", "params": []}' http://localhost:8545
 #+end_src
 
 
-
+#+begin_src shell
+websocat ws://34.208.176.205:9944
+{"jsonrpc":"2.0", "id": 1, "method": "chain_subscribeNewHead", "params": []}
+#+end_src
 
 
