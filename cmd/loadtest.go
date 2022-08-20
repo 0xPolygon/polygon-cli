@@ -91,7 +91,7 @@ var loadtestCmd = &cobra.Command{
 			log.Error().Err(err).Msg("Unable to parse url input error")
 			return err
 		}
-		if url.Scheme != "http" && url.Scheme != "https" {
+		if url.Scheme != "http" && url.Scheme != "https" && url.Scheme != "ws" && url.Scheme != "wss" {
 			return fmt.Errorf("The scheme %s is not supported", url.Scheme)
 		}
 		inputLoadTestParams.URL = url
