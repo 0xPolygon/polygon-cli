@@ -227,8 +227,7 @@ func GetSimpleTxFields(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) [
 	fields = append(fields, fmt.Sprintf("Tx Hash: %s", tx.Hash()))
 
 	txMethod := "Transfer"
-	if tx.To().String() == "" {
-		// TODO DOUBLE CHECK THIS!!!!!!!!!!!!!!
+	if tx.To().String() == "0x0000000000000000000000000000000000000000" {
 		// Contract deployment
 		txMethod = "Contract Deployment"
 	} else if len(tx.Data()) > 4 {
@@ -243,6 +242,7 @@ func GetSimpleTxFields(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) [
 	fields = append(fields, fmt.Sprintf("Gas: %d", tx.Gas()))
 	fields = append(fields, fmt.Sprintf("Gas Price: %s", tx.GasPrice()))
 	fields = append(fields, fmt.Sprintf("Nonce: %d", tx.Nonce()))
+	fields = append(fields, fmt.Sprintf("Data Len: %d", len(tx.Data())))
 	fields = append(fields, fmt.Sprintf("Data: %s", hex.EncodeToString(tx.Data())))
 
 	return fields
