@@ -164,14 +164,26 @@ var monitorCmd = &cobra.Command{
 
 func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c *ethrpc.Client, url string) error {
 	one := big.NewInt(1)
+	blms := make([]ethrpc.BatchElem, 0)
 	for i := from; i.Cmp(to) != 1; i.Add(i, one) {
-		// block, err := c.BlockByNumber(ctx, i)
 		r := new(rpctypes.RawBlockResponse)
-		err := c.CallContext(ctx, r, "eth_getBlockByNumber", "0x"+i.Text(16), true)
-		if err != nil {
+		var err error
+		blms = append(blms, ethrpc.BatchElem{
+			Method: "eth_getBlockByNumber",
+			Args:   []interface{}{"0x" + i.Text(16), true},
+			Result: r,
+			Error:  err,
+		})
+	}
+	err := c.BatchCallContext(ctx, blms)
+	if err != nil {
+		return err
+	}
+	for _, b := range blms {
+		if b.Error != nil {
 			return err
 		}
-		pb := rpctypes.NewPolyBlock(r)
+		pb := rpctypes.NewPolyBlock(b.Result.(*rpctypes.RawBlockResponse))
 
 		ms.Blocks[pb.Number().String()] = pb
 
