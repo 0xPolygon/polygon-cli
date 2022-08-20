@@ -3,6 +3,7 @@ pragma solidity ^0.8.4;
 
 contract LoadTester {
     uint256 callCounter;
+    bytes[] public dumpster;
 
     function getCallCounter() public view returns (uint256){
         return callCounter;
@@ -10,6 +11,10 @@ contract LoadTester {
     function inc() public returns (uint256){
         callCounter = callCounter + 1;
         return callCounter;
+    }
+    function addToDumpter(bytes calldata trash) public returns(uint256) {
+        dumpster.push(trash);
+        return dumpster.length;
     }
 
     // A few op codes that aren't being tested specifically

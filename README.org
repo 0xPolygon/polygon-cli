@@ -456,3 +456,15 @@ websocat ws://34.208.176.205:9944
 #+end_src
 
 
+* Load Test Contract
+
+The codebase has a contract that used for load testing. It's written
+in Yul and Solidity. The workflow for modifying this contract is.
+
+1. Make changes to file:contracts/LoadTester.sol
+2. Compile the contracts:
+   - ~solc LoadTester.sol --bin --abi -o . --overwrite~
+3. Run ~abigen~
+   - ~/code/go-ethereum/build/bin/abigen --abi LoadTester.abi --pkg contracts --type LoadTester --bin LoadTester.bin --out loadtester.go~
+4. Run the loadtester to enure it deploys and runs sucessfully
+   - ~go run main.go loadtest --verbosity 700 http://127.0.0.1:8541~
