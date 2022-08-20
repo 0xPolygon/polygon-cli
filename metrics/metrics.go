@@ -2,14 +2,17 @@ package metrics
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"sort"
 	"time"
 
+	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/maticnetwork/polygon-cli/rpctypes"
 )
 
 var (
@@ -25,7 +28,7 @@ var (
 )
 
 type (
-	SortableBlocks []*ethtypes.Block
+	SortableBlocks []rpctypes.PolyBlock
 )
 
 func (a SortableBlocks) Len() int {
@@ -38,7 +41,7 @@ func (a SortableBlocks) Less(i, j int) bool {
 	return a[i].Time() < a[j].Time()
 }
 
-func GetMeanBlockTime(blocks []*ethtypes.Block) float64 {
+func GetMeanBlockTime(blocks []rpctypes.PolyBlock) float64 {
 	if len(blocks) < 2 {
 		return 0
 	}
@@ -57,7 +60,7 @@ func GetMeanBlockTime(blocks []*ethtypes.Block) float64 {
 	return float64(maxTime-minTime) / float64(len(sortTimes)-1)
 }
 
-func GetTxsPerBlock(blocks []*ethtypes.Block) []float64 {
+func GetTxsPerBlock(blocks []rpctypes.PolyBlock) []float64 {
 	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
@@ -67,7 +70,7 @@ func GetTxsPerBlock(blocks []*ethtypes.Block) []float64 {
 	}
 	return txns
 }
-func GetUnclesPerBlock(blocks []*ethtypes.Block) []float64 {
+func GetUnclesPerBlock(blocks []rpctypes.PolyBlock) []float64 {
 	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
@@ -78,7 +81,7 @@ func GetUnclesPerBlock(blocks []*ethtypes.Block) []float64 {
 	return uncles
 }
 
-func GetSizePerBlock(blocks []*ethtypes.Block) []float64 {
+func GetSizePerBlock(blocks []rpctypes.PolyBlock) []float64 {
 	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
@@ -88,7 +91,7 @@ func GetSizePerBlock(blocks []*ethtypes.Block) []float64 {
 	}
 	return bSize
 }
-func GetGasPerBlock(blocks []*ethtypes.Block) []float64 {
+func GetGasPerBlock(blocks []rpctypes.PolyBlock) []float64 {
 	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
@@ -99,7 +102,7 @@ func GetGasPerBlock(blocks []*ethtypes.Block) []float64 {
 	return gasUsed
 }
 
-func GetMeanGasPricePerBlock(blocks []*ethtypes.Block) []float64 {
+func GetMeanGasPricePerBlock(blocks []rpctypes.PolyBlock) []float64 {
 	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
@@ -120,7 +123,7 @@ func GetMeanGasPricePerBlock(blocks []*ethtypes.Block) []float64 {
 	return gasPrices
 }
 
-func GetSimpleBlockRecords(blocks []*ethtypes.Block) [][]string {
+func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) [][]string {
 	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
@@ -139,9 +142,7 @@ func GetSimpleBlockRecords(blocks []*ethtypes.Block) [][]string {
 
 	isMined := true
 
-	blockHeader := blocks[0].Header()
-
-	if blockHeader.Coinbase.String() == "0x0000000000000000000000000000000000000000" {
+	if blocks[0].Miner().String() == "0x0000000000000000000000000000000000000000" {
 		isMined = false
 	}
 
@@ -152,20 +153,20 @@ func GetSimpleBlockRecords(blocks []*ethtypes.Block) [][]string {
 	records := make([][]string, 0)
 	records = append(records, header)
 	for j := len(bs) - 1; j >= 0; j = j - 1 {
-		author := bs[j].Header().Coinbase.String()
+		author := bs[j].Miner()
 		ts := bs[j].Time()
 		ut := time.Unix(int64(ts), 0)
 		if !isMined {
-			signer, err := ecrecover(bs[j].Header())
+			signer, err := ecrecover(&bs[j])
 			if err == nil {
-				author = "0x" + hex.EncodeToString(signer)
+				author = ethcommon.HexToAddress("0x" + hex.EncodeToString(signer))
 			}
 		}
 		record := []string{
 			fmt.Sprintf("%d", bs[j].Number()),
 			ut.Format("02 Jan 06 15:04:05 MST"),
 			bs[j].Hash().String(),
-			author,
+			author.String(),
 			fmt.Sprintf("%d", len(bs[j].Transactions())),
 			fmt.Sprintf("%d", bs[j].GasUsed()),
 		}
@@ -174,19 +175,20 @@ func GetSimpleBlockRecords(blocks []*ethtypes.Block) [][]string {
 	return records
 }
 
-func GetSimpleBlockFields(block *ethtypes.Block) []string {
+func GetSimpleBlockFields(block rpctypes.PolyBlock) []string {
 	ts := block.Time()
 	ut := time.Unix(int64(ts), 0)
 
-	blockHeader := block.Header()
 	author := "Mined  by"
 
-	authorAddress := blockHeader.Coinbase.String()
-
+	authorAddress := block.Miner().String()
 	if authorAddress == "0x0000000000000000000000000000000000000000" {
 		author = "Signed by"
-		signer, _ := ecrecover(blockHeader)
-		authorAddress = hex.EncodeToString(signer)
+		signer, err := ecrecover(&block)
+		if err == nil {
+			authorAddress = hex.EncodeToString(signer)
+		}
+
 	}
 
 	return []string{
@@ -196,7 +198,7 @@ func GetSimpleBlockFields(block *ethtypes.Block) []string {
 		fmt.Sprintf("Transactions: %d", len(block.Transactions())),
 		fmt.Sprintf("%s:    %s", author, authorAddress),
 		fmt.Sprintf("Difficulty:   %s", block.Difficulty()),
-		fmt.Sprintf("Size:         %s", block.Size()),
+		fmt.Sprintf("Size:         %d", block.Size()),
 		fmt.Sprintf("Uncles:       %d", len(block.Uncles())),
 		fmt.Sprintf("Gas used:     %d", block.GasUsed()),
 		fmt.Sprintf("Gas limit:    %d", block.GasLimit()),
@@ -210,7 +212,7 @@ func GetSimpleBlockFields(block *ethtypes.Block) []string {
 		fmt.Sprintf("Nonce:        %d", block.Nonce()),
 	}
 }
-func GetSimpleBlockTxFields(block *ethtypes.Block, chainID *big.Int) []string {
+func GetSimpleBlockTxFields(block rpctypes.PolyBlock, chainID *big.Int) []string {
 	fields := make([]string, 0)
 	blank := ""
 	for _, tx := range block.Transactions() {
@@ -220,14 +222,13 @@ func GetSimpleBlockTxFields(block *ethtypes.Block, chainID *big.Int) []string {
 	}
 	return fields
 }
-func GetSimpleTxFields(tx *ethtypes.Transaction, chainID, baseFee *big.Int) []string {
+func GetSimpleTxFields(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) []string {
 	fields := make([]string, 0)
-	msg, err := tx.AsMessage(ethtypes.NewEIP155Signer(chainID), baseFee)
-
 	fields = append(fields, fmt.Sprintf("Tx Hash: %s", tx.Hash()))
 
 	txMethod := "Transfer"
-	if tx.To() == nil {
+	if tx.To().String() == "" {
+		// TODO DOUBLE CHECK THIS!!!!!!!!!!!!!!
 		// Contract deployment
 		txMethod = "Contract Deployment"
 	} else if len(tx.Data()) > 4 {
@@ -236,9 +237,7 @@ func GetSimpleTxFields(tx *ethtypes.Transaction, chainID, baseFee *big.Int) []st
 	}
 
 	fields = append(fields, fmt.Sprintf("To: %s", tx.To()))
-	if err == nil {
-		fields = append(fields, fmt.Sprintf("From: %s", msg.From()))
-	}
+	fields = append(fields, fmt.Sprintf("From: %s", tx.From()))
 	fields = append(fields, fmt.Sprintf("Method: %s", txMethod))
 	fields = append(fields, fmt.Sprintf("Value: %s", tx.Value()))
 	fields = append(fields, fmt.Sprintf("Gas: %d", tx.Gas()))
@@ -249,8 +248,22 @@ func GetSimpleTxFields(tx *ethtypes.Transaction, chainID, baseFee *big.Int) []st
 	return fields
 }
 
-func ecrecover(header *ethtypes.Header) ([]byte, error) {
-	signature := header.Extra[len(header.Extra)-ethcrypto.SignatureLength:]
+func ecrecover(block *rpctypes.PolyBlock) ([]byte, error) {
+	input, err := json.Marshal(*block)
+	if err != nil {
+		return nil, err
+	}
+	header := new(ethtypes.Header)
+	err = header.UnmarshalJSON(input)
+	if err != nil {
+		panic(err)
+		return nil, err
+	}
+	sigStart := len(header.Extra) - ethcrypto.SignatureLength
+	if sigStart < 0 || sigStart > len(header.Extra) {
+		return nil, fmt.Errorf("Unable to recover signature")
+	}
+	signature := header.Extra[sigStart:]
 	pubkey, err := ethcrypto.Ecrecover(clique.SealHash(header).Bytes(), signature)
 	if err != nil {
 		return nil, err

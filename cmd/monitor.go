@@ -24,13 +24,13 @@ import (
 	"sort"
 	"time"
 
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
 	"github.com/maticnetwork/polygon-cli/metrics"
+	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -42,7 +42,7 @@ type (
 		PeerCount uint64
 		GasPrice  *big.Int
 
-		Blocks            map[string]*ethtypes.Block
+		Blocks            map[string]rpctypes.PolyBlock
 		MaxBlockRetrieved *big.Int
 	}
 	chainState struct {
@@ -106,7 +106,7 @@ var monitorCmd = &cobra.Command{
 		ms := new(monitorStatus)
 
 		ms.MaxBlockRetrieved = big.NewInt(0)
-		ms.Blocks = make(map[string]*ethtypes.Block, 0)
+		ms.Blocks = make(map[string]rpctypes.PolyBlock, 0)
 		ms.ChainID = big.NewInt(0)
 
 		isUiRendered := false
@@ -133,8 +133,7 @@ var monitorCmd = &cobra.Command{
 				} else {
 					from = ms.MaxBlockRetrieved
 				}
-				// log.Trace().Str("from", from.String()).Str("to", ms.HeadBlock.String()).Msg("Fetching block range")
-				ms.getBlockRange(ctx, from, ms.HeadBlock, ec, args[0])
+				ms.getBlockRange(ctx, from, ms.HeadBlock, rpc, args[0])
 				if !isUiRendered {
 					go func() {
 						errChan <- renderMonitorUI(ms)
@@ -163,18 +162,21 @@ var monitorCmd = &cobra.Command{
 	},
 }
 
-func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c *ethclient.Client, url string) error {
+func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c *ethrpc.Client, url string) error {
 	one := big.NewInt(1)
 	for i := from; i.Cmp(to) != 1; i.Add(i, one) {
-		block, err := c.BlockByNumber(ctx, i)
+		// block, err := c.BlockByNumber(ctx, i)
+		r := new(rpctypes.RawBlockResponse)
+		err := c.CallContext(ctx, r, "eth_getBlockByNumber", "0x"+i.Text(16), true)
 		if err != nil {
 			return err
 		}
+		pb := rpctypes.NewPolyBlock(r)
 
-		ms.Blocks[block.Number().String()] = block
+		ms.Blocks[pb.Number().String()] = pb
 
-		if ms.MaxBlockRetrieved.Cmp(block.Number()) == -1 {
-			ms.MaxBlockRetrieved = block.Number()
+		if ms.MaxBlockRetrieved.Cmp(pb.Number()) == -1 {
+			ms.MaxBlockRetrieved = pb.Number()
 		}
 
 	}
@@ -302,7 +304,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 	blockGrid.SetRect(0, 0, termWidth, termHeight)
 
 	var selectedBlockIdx *int
-	var selectedBlock *ethtypes.Block
+	var selectedBlock rpctypes.PolyBlock
 
 	redraw := func(ms *monitorStatus) {
 		if currentMode == monitorModeHelp {
@@ -318,7 +320,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 		}
 
 		//default
-		blocks := make([]*ethtypes.Block, 0)
+		blocks := make([]rpctypes.PolyBlock, 0)
 		for _, b := range ms.Blocks {
 			blocks = append(blocks, b)
 		}
