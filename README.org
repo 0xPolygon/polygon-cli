@@ -341,7 +341,7 @@ we'll startup geth.
 
 #+begin_src shell
 # Geth
-./build/bin/geth --dev --dev.period 2 --http --http.addr localhost --http.port 8545 --http.api eth,web3,personal,net --verbosity 5 --rpc.gascap 18446744073709551615  --rpc.txfeecap 0 --miner.gaslimit  10 --miner.gasprice 1 --gpo.blocks 1 --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2
+./build/bin/geth --dev --dev.period 2 --http --http.addr localhost --http.port 8545 --http.api eth,web3,personal,net --verbosity 5 --rpc.gascap 18446744073709551615  --rpc.txfeecap 0 --miner.gaslimit  10 --miner.gasprice 1 --gpo.blocks 1 --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2 --dev.gaslimit 18446744073709551615
 
 
 # v3

@@ -53,6 +53,7 @@ const (
 	loadTestModeInc         = "i"
 	loadTestModeRandom      = "r"
 	loadTestModeStore       = "s"
+	loadTestModeLong        = "l"
 )
 
 var (
@@ -65,6 +66,7 @@ var (
 		loadTestModeFunction,
 		loadTestModeInc,
 		loadTestModeStore,
+		loadTestModeLong,
 		// r should be last to exclude it from random mode selection
 		loadTestModeRandom,
 	}
@@ -455,16 +457,30 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 	}
 	cops := new(bind.CallOpts)
 
-	addr, _, _, err := contracts.DeployLoadTester(tops, c)
+	ltAddr, _, _, err := contracts.DeployLoadTester(tops, c)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to create the load testing contract. Do you have the right chain id?")
+		log.Error().Err(err).Msg("Failed to create the load testing contract. Do you have the right chain id? Do you have enough funds?")
 		return err
 	}
-	log.Trace().Interface("contractaddress", addr).Msg("Load test contract address")
+	log.Trace().Interface("contractaddress", ltAddr).Msg("Load test contract address")
 	// bump the nonce since deploying a contract should cause it to increase
 	currentNonce = currentNonce + 1
 
-	ltContract, err := contracts.NewLoadTester(addr, c)
+	delegatorAddr, _, _, err := contracts.DeployDelegator(tops, c)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create the delegator contract. Do you have the right chain id? Do you have enough funds?")
+		return err
+	}
+	log.Trace().Interface("contractaddress", delegatorAddr).Msg("Delegator contract address")
+	currentNonce = currentNonce + 1
+
+	ltContract, err := contracts.NewLoadTester(ltAddr, c)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to instantiate new contract")
+		return err
+	}
+
+	delegatorContract, err := contracts.NewDelegator(delegatorAddr, c)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to instantiate new contract")
 		return err
@@ -486,6 +502,12 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 		}
 		log.Trace().Interface("counter", ltCounter).Msg("Number of contract calls")
 		break
+	}
+
+	_, err = delegatorContract.Call(tops, ltAddr, []byte{0x12, 0x87, 0xa6, 0x8c})
+	if err != nil {
+		log.Error().Err(err).Msg("Load Test contract deployed successfully, but delegator contract failed.")
+		return err
 	}
 
 	var currentNonceMutex sync.Mutex
@@ -523,19 +545,22 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue)
 					break
 				case loadTestModeDeploy:
-					startReq, endReq, err = loadtestDeploy(ctx, c)
+					startReq, endReq, err = loadtestDeploy(ctx, c, myNonceValue)
 					break
 				case loadTestModeCall:
-					startReq, endReq, err = loadtestCall(ctx, c, ltContract)
+					startReq, endReq, err = loadtestCall(ctx, c, myNonceValue, ltContract)
 					break
 				case loadTestModeFunction:
-					startReq, endReq, err = loadtestFunction(ctx, c, ltContract)
+					startReq, endReq, err = loadtestFunction(ctx, c, myNonceValue, ltContract)
 					break
 				case loadTestModeInc:
-					startReq, endReq, err = loadtestInc(ctx, c, ltContract)
+					startReq, endReq, err = loadtestInc(ctx, c, myNonceValue, ltContract)
 					break
 				case loadTestModeStore:
-					startReq, endReq, err = loadtestStore(ctx, c, ltContract)
+					startReq, endReq, err = loadtestStore(ctx, c, myNonceValue, ltContract)
+					break
+				case loadTestModeLong:
+					startReq, endReq, err = loadtestLong(ctx, c, myNonceValue, delegatorContract, ltAddr)
 					break
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
@@ -578,7 +603,7 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 	t2 = time.Now()
 	return
 }
-func loadtestDeploy(ctx context.Context, c *ethclient.Client) (t1 time.Time, t2 time.Time, err error) {
+func loadtestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -589,6 +614,7 @@ func loadtestDeploy(ctx context.Context, c *ethclient.Client) (t1 time.Time, t2 
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
 	}
+	tops.Nonce = new(big.Int).SetUint64(nonce)
 
 	t1 = time.Now()
 	_, _, _, err = contracts.DeployLoadTester(tops, c)
@@ -596,7 +622,7 @@ func loadtestDeploy(ctx context.Context, c *ethclient.Client) (t1 time.Time, t2 
 	return
 }
 
-func loadtestFunction(ctx context.Context, c *ethclient.Client, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+func loadtestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -609,13 +635,14 @@ func loadtestFunction(ctx context.Context, c *ethclient.Client, ltContract *cont
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
 	}
+	tops.Nonce = new(big.Int).SetUint64(nonce)
 
 	t1 = time.Now()
 	_, err = contracts.CallLoadTestFunctionByOpCode(*f, ltContract, tops, *iterations)
 	t2 = time.Now()
 	return
 }
-func loadtestCall(ctx context.Context, c *ethclient.Client, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -628,13 +655,14 @@ func loadtestCall(ctx context.Context, c *ethclient.Client, ltContract *contract
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
 	}
+	tops.Nonce = new(big.Int).SetUint64(nonce)
 
 	t1 = time.Now()
 	_, err = contracts.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
 	t2 = time.Now()
 	return
 }
-func loadtestInc(ctx context.Context, c *ethclient.Client, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+func loadtestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -645,13 +673,14 @@ func loadtestInc(ctx context.Context, c *ethclient.Client, ltContract *contracts
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
 	}
+	tops.Nonce = new(big.Int).SetUint64(nonce)
 
 	t1 = time.Now()
 	_, err = ltContract.Inc(tops)
 	t2 = time.Now()
 	return
 }
-func loadtestStore(ctx context.Context, c *ethclient.Client, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -662,11 +691,34 @@ func loadtestStore(ctx context.Context, c *ethclient.Client, ltContract *contrac
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
 	}
+	tops.Nonce = new(big.Int).SetUint64(nonce)
 
 	inputData := make([]byte, *ltp.ByteCount, *ltp.ByteCount)
 	hexwordRead(inputData)
 	t1 = time.Now()
 	_, err = ltContract.Store(tops, inputData)
+	t2 = time.Now()
+	return
+}
+func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delegatorContract *contracts.Delegator, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+	tops.Nonce = new(big.Int).SetUint64(nonce)
+
+	// TODO the deletgated call should be a parameter
+	t1 = time.Now()
+	// loopBlockHashUntilLimit
+	_, err = delegatorContract.LoopDelegateCall(tops, ltAddress, []byte{0xa2, 0x71, 0xb7, 0x21})
+	// loopUntilLimit
+	// _, err = delegatorContract.LoopDelegateCall(tops, ltAddress, []byte{0x65, 0x9b, 0xbb, 0x4f})
 	t2 = time.Now()
 	return
 }

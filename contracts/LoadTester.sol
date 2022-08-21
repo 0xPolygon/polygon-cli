@@ -3,6 +3,7 @@ pragma solidity ^0.8.4;
 
 contract LoadTester {
     uint256 callCounter;
+    uint256 loopCounter;
     bytes[] public dumpster;
 
     function getCallCounter() public view returns (uint256){
@@ -15,6 +16,21 @@ contract LoadTester {
     function store(bytes calldata trash) public returns(uint256) {
         dumpster.push(trash);
         return dumpster.length;
+    }
+    function loopUntilLimit() public returns (uint256) {
+        inc();
+        while(gasleft() > 1000) {
+            loopCounter += 1;
+        }
+        return loopCounter;
+    }
+    function loopBlockHashUntilLimit() public returns (uint256) {
+        inc();
+        while(gasleft() > 1000) {
+            loopCounter += 1;
+            blockhash(loopCounter % block.number);
+        }
+        return loopCounter;
     }
 
     // A few op codes that aren't being tested specifically
