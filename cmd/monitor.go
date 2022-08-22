@@ -322,6 +322,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 
 	var selectedBlockIdx *int
 	var selectedBlock rpctypes.PolyBlock
+	var setBlock = false
 
 	redraw := func(ms *monitorStatus) {
 		if currentMode == monitorModeHelp {
@@ -375,9 +376,16 @@ func renderMonitorUI(ms *monitorStatus) error {
 			blockTable.RowStyles[i] = ui.NewStyle(ui.ColorWhite)
 		}
 		if selectedBlockIdx != nil && *selectedBlockIdx > 0 && *selectedBlockIdx < len(blockTable.Rows) {
+
 			blockTable.RowStyles[*selectedBlockIdx] = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
 			// the block table is reversed and has an extra row for the header
-			selectedBlock = recentBlocks[len(recentBlocks)-*selectedBlockIdx]
+
+			// only changed the selected block when the user presses the up down keys. Otherwise this will adjust when the table is updated automatically
+			if setBlock {
+				selectedBlock = recentBlocks[len(recentBlocks)-*selectedBlockIdx]
+				setBlock = false
+			}
+
 		}
 
 		ui.Render(grid)
@@ -415,6 +423,18 @@ func renderMonitorUI(ms *monitorStatus) error {
 				ui.Clear()
 				redraw(ms)
 				break
+			case "<PageDown>", "<PageUp>":
+				if currentMode == monitorModeBlock {
+					if e.ID == "<PageDown>" {
+						b2.ScrollPageDown()
+					} else if e.ID == "<PageUp>" {
+						b2.ScrollPageUp()
+					}
+					redraw(ms)
+					break
+				}
+
+				break
 			case "<Up>", "<Down>", "<Left>", "<Right>":
 				if currentMode == monitorModeBlock {
 					if e.ID == "<Down>" {
@@ -428,6 +448,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 				if selectedBlockIdx == nil {
 					currIdx = 1
 					selectedBlockIdx = &currIdx
+					setBlock = true
 					redraw(ms)
 					break
 				}
@@ -435,12 +456,15 @@ func renderMonitorUI(ms *monitorStatus) error {
 
 				if e.ID == "<Down>" {
 					currIdx = currIdx + 1
+					setBlock = true
 				} else if e.ID == "<Up>" {
 					currIdx = currIdx - 1
+					setBlock = true
 				}
 				if currIdx > 0 && currIdx < 25 { // need a better way to understand how many rows are visble
 					selectedBlockIdx = &currIdx
 				}
+
 				redraw(ms)
 				break
 			case "<MouseLeft>", "<MouseRight>", "<MouseRelease>", "<MouseWheelUp>", "<MouseWheelDown>":
