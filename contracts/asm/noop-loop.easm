@@ -1,0 +1,28 @@
+        ;; Push a value on the stack for tracking the number of iterations that we've done
+        ;; int32
+        PUSH 0x00000000
+
+        ;; create a jump dest and label for looping
+loop:
+
+        ;; increment the counter
+        PUSH 0x1
+        ADD
+
+        ;; Get the counter and compare to our arbitrary limit
+        DUP1
+
+        ;; 18 Gas per loop
+        PUSH 0x65B9A
+        GT
+
+        ;; push the jump destination for looping
+        PUSH @loop
+        JUMPI
+
+        ;; drop the iterator
+        POP
+
+        STOP
+
+        

@@ -1,0 +1,14 @@
+        ;; 0x12 is the number of instructions in our runtime code
+        PUSH 0x14
+        ;; this is the position of the runtime code in the paylod
+        PUSH 0x0C
+        ;; this is the slot where we'll store this data
+        PUSH 0x00
+        CODECOPY
+
+        ;; this is the length of the runtime code again
+        PUSH 0x14
+        ;; the slot
+        PUSH 0x00
+        
+        RETURN
