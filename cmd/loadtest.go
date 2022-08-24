@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"math/rand"
 	"net/url"
 	"os"
 	"os/signal"
@@ -204,6 +205,7 @@ type (
 		TimeLimit     *int64
 		Verbosity     *int64
 		PrettyLogs    *bool
+		ToRandom      *bool
 		URL           *url.URL
 		ChainID       *uint64
 		PrivateKey    *string
@@ -214,6 +216,7 @@ type (
 		Function      *uint64
 		Iterations    *uint64
 		ByteCount     *uint64
+		Seed          *int64
 
 		// Computed
 		CurrentGas      *big.Int
@@ -241,12 +244,14 @@ func init() {
 	ltp.PrivateKey = loadtestCmd.PersistentFlags().String("private-key", "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa", "The hex encoded private key that we'll use to sending transactions")
 	ltp.ChainID = loadtestCmd.PersistentFlags().Uint64("chain-id", 1256, "The chain id for the transactions that we're going to send")
 	ltp.ToAddress = loadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
+	ltp.ToRandom = loadtestCmd.PersistentFlags().Bool("to-random", true, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
 	ltp.HexSendAmount = loadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
 	ltp.RateLimit = loadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
 	ltp.Mode = loadtestCmd.PersistentFlags().StringP("mode", "m", "t", "t - sending transactions\nd - deploy contract\nc - call random contract functions\nf - call specific contract function\ns - store mode")
 	ltp.Function = loadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` ")
 	ltp.Iterations = loadtestCmd.PersistentFlags().Uint64P("iterations", "i", 100, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop")
 	ltp.ByteCount = loadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
+	ltp.Seed = loadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
 	inputLoadTestParams = *ltp
 
 	// TODO batch size
@@ -305,6 +310,8 @@ func initalizeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	inputLoadTestParams.CurrentNonce = &nonce
 	inputLoadTestParams.ECDSAPrivateKey = privateKey
 	inputLoadTestParams.FromETHAddress = &ethAddress
+
+	rand.Seed(*inputLoadTestParams.Seed)
 
 	return nil
 }
@@ -585,7 +592,12 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 	ltp := inputLoadTestParams
 
 	gasPrice := ltp.CurrentGas
-	to := ltp.ToETHAddress // TODO we should have some different controls for sending to/ from various addresses
+
+	to := ltp.ToETHAddress
+	if *ltp.ToRandom {
+		to = getRandomAddress()
+	}
+
 	amount := ltp.SendAmount
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
@@ -783,4 +795,18 @@ func (hw *hexwordReader) Read(p []byte) (n int, err error) {
 	}
 	n = len(p)
 	return
+}
+
+func getRandomAddress() *ethcommon.Address {
+	addr := make([]byte, 20, 20)
+	n, err := rand.Read(addr)
+	if err != nil {
+		log.Error().Err(err).Msg("There was an issue getting random bytes for the address")
+	}
+	if n != 20 {
+		log.Error().Int("n", n).Msg("Somehow we didn't read 20 random bytes")
+	}
+	realAddr := ethcommon.BytesToAddress(addr)
+	return &realAddr
+
 }
