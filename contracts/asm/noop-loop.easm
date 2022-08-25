@@ -1,6 +1,5 @@
         ;; Push a value on the stack for tracking the number of iterations that we've done
-        ;; int32
-        PUSH 0x00000000
+        PUSH 0x00
 
         ;; create a jump dest and label for looping
 loop:
@@ -9,11 +8,12 @@ loop:
         PUSH 0x1
         ADD
 
-        ;; Get the counter and compare to our arbitrary limit
-        DUP1
 
-        ;; 18 Gas per loop
-        PUSH 0x65B9A
+        ;; Leave 4096 Gas
+        PUSH 0x1000
+
+        ;; Get the remaining amount of GAS
+        GAS
         GT
 
         ;; push the jump destination for looping
