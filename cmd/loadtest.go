@@ -247,7 +247,7 @@ func init() {
 	ltp.ToRandom = loadtestCmd.PersistentFlags().Bool("to-random", true, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
 	ltp.HexSendAmount = loadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
 	ltp.RateLimit = loadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
-	ltp.Mode = loadtestCmd.PersistentFlags().StringP("mode", "m", "t", "t - sending transactions\nd - deploy contract\nc - call random contract functions\nf - call specific contract function\ns - store mode")
+	ltp.Mode = loadtestCmd.PersistentFlags().StringP("mode", "m", "t", "t - sending transactions\nd - deploy contract\nc - call random contract functions\nf - call specific contract function\ns - store mode\nl - long running mode")
 	ltp.Function = loadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` ")
 	ltp.Iterations = loadtestCmd.PersistentFlags().Uint64P("iterations", "i", 100, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop")
 	ltp.ByteCount = loadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
@@ -516,6 +516,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 		log.Error().Err(err).Msg("Load Test contract deployed successfully, but delegator contract failed.")
 		return err
 	}
+	currentNonce = currentNonce + 1
 
 	var currentNonceMutex sync.Mutex
 	var i int64
@@ -724,6 +725,7 @@ func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delega
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
+	tops.GasLimit = 10000000
 
 	// TODO the deletgated call should be a parameter
 	t1 = time.Now()

@@ -314,6 +314,21 @@ polycli rpc https://polygon-rpc.com eth_blockNumber
 polycli rpc https://polygon-rpc.com eth_getBlockByNumber 0x1e99576 true
 #+end_src
 
+* Dumpblocks
+
+For various reasons, we might want to dump a large range of blocks for
+analytics or replay purposes. This is a simple util to export over RPC
+a range of blocks.
+
+This would download the first 500K blocks and zip them and then look
+for blocks with transactions that create an account.
+
+#+begin_src shell
+polycli dumpblocks http://172.26.26.12:8545/ 0 500000 | gzip > foo.gz
+
+zcat < foo.gz | jq '. | select(.transactions | length > 0) | select(.transactions[].to == null)'
+#+end_src
+
 * Adding Commands
 Script to setup this repo
 #+BEGIN_SRC bash
