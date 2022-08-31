@@ -232,7 +232,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 	blockTable.ColumnWidths = columnWidths
 
 	h0 := widgets.NewParagraph()
-	h0.Title = "Current Height"
+	h0.Title = "Current"
 
 	h1 := widgets.NewParagraph()
 	h1.Title = "Gas Price"
@@ -349,7 +349,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 			recentBlocks = recentBlocks[len(recentBlocks)-25 : len(recentBlocks)]
 		}
 
-		h0.Text = ms.HeadBlock.String()
+		h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
 		gasGwei := new(big.Int)
 		gasGwei.Div(ms.GasPrice, metrics.UnitShannon)
 		h1.Text = fmt.Sprintf("%s gwei", gasGwei.String())

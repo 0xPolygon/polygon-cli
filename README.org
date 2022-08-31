@@ -484,3 +484,4 @@ in Yul and Solidity. The workflow for modifying this contract is.
    - ~abigen --abi LoadTester.abi --pkg contracts --type LoadTester --bin LoadTester.bin --out loadtester.go~
 4. Run the loadtester to enure it deploys and runs sucessfully
    - ~go run main.go loadtest --verbosity 700 http://127.0.0.1:8541~
+

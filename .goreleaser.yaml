@@ -17,7 +17,13 @@ builds:
       - CC=o64-clang
       - CXX=o64-clang++
     ldflags:
-      -s -w
+      - -s -w
+      - -X "github.com/maticnetwork/polygon-cli/version.Version={{.Version}}"
+      - -X "github.com/maticnetwork/polygon-cli/version.Commit={{.Commit}}"
+      - -X "github.com/maticnetwork/polygon-cli/version.Date={{.Date}}"
+      - -X "github.com/maticnetwork/polygon-cli/version.BuiltBy=goreleaser"
+    tags:
+      - netgo
 
   - id: darwin-arm64
     main: ./main.go
@@ -30,7 +36,13 @@ builds:
       - CC=oa64-clang
       - CXX=oa64-clang++
     ldflags:
-      -s -w
+      - -s -w
+      - -X "github.com/maticnetwork/polygon-cli/version.Version={{.Version}}"
+      - -X "github.com/maticnetwork/polygon-cli/version.Commit={{.Commit}}"
+      - -X "github.com/maticnetwork/polygon-cli/version.Date={{.Date}}"
+      - -X "github.com/maticnetwork/polygon-cli/version.BuiltBy=goreleaser"
+    tags:
+      - netgo
 
   - id: linux-amd64
     main: ./main.go
@@ -43,7 +55,13 @@ builds:
       - CC=gcc
       - CXX=g++
     ldflags:
-      -s -w -extldflags "-static"
+      - -s -w -extldflags "-static"
+      - -X "github.com/maticnetwork/polygon-cli/version.Version={{.Version}}"
+      - -X "github.com/maticnetwork/polygon-cli/version.Commit={{.Commit}}"
+      - -X "github.com/maticnetwork/polygon-cli/version.Date={{.Date}}"
+      - -X "github.com/maticnetwork/polygon-cli/version.BuiltBy=goreleaser"
+    tags:
+      - netgo
 
   - id: linux-arm64
     main: ./main.go
@@ -56,5 +74,12 @@ builds:
       - CC=aarch64-linux-gnu-gcc
       - CXX=aarch64-linux-gnu-g++
     ldflags:
-      -s -w -extldflags "-static"
+      - -s -w -extldflags "-static"
+      - -X "github.com/maticnetwork/polygon-cli/version.Version={{.Version}}"
+      - -X "github.com/maticnetwork/polygon-cli/version.Commit={{.Commit}}"
+      - -X "github.com/maticnetwork/polygon-cli/version.Date={{.Date}}"
+      - -X "github.com/maticnetwork/polygon-cli/version.BuiltBy=goreleaser"
+    tags:
+      - netgo
+
 

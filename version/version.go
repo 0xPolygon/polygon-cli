@@ -1,3 +1,8 @@
 package version
 
-const Version = "0.1.0"
+var (
+	Version = "dev"
+	Commit  = "none"
+	Date    = "unknown"
+	BuiltBy = "unknown"
+)
