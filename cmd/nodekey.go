@@ -45,6 +45,7 @@ var (
 	inputNodeKeyIP       *string
 	inputNodeKeyTCP      *int
 	inputNodeKeyUDP      *int
+	inputNodeKeyFile     *string
 )
 
 // nodekeyCmd represents the nodekey command
@@ -74,6 +75,10 @@ type (
 
 func generateETHNodeKey() error {
 	nodeKey, err := gethcrypto.GenerateKey()
+
+	if *inputNodeKeyFile != "" {
+		nodeKey, err = gethcrypto.LoadECDSA(*inputNodeKeyFile)
+	}
 	if err != nil {
 		return fmt.Errorf("could not generate key: %v", err)
 	}
@@ -105,6 +110,8 @@ func init() {
 	inputNodeKeyIP = nodekeyCmd.PersistentFlags().StringP("ip", "i", "0.0.0.0", "The IP to be associated with this address")
 	inputNodeKeyTCP = nodekeyCmd.PersistentFlags().IntP("tcp", "t", 30303, "The tcp Port to be associated with this address")
 	inputNodeKeyUDP = nodekeyCmd.PersistentFlags().IntP("udp", "u", 0, "The udp Port to be associated with this address")
+
+	inputNodeKeyFile = nodekeyCmd.PersistentFlags().StringP("file", "f", "", "A file with the private nodekey in hex format")
 
 	// Here you will define your flags and configuration settings.
 
