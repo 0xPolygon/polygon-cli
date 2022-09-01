@@ -42,6 +42,9 @@ import (
 var (
 	inputNodeKeyProtocol *string
 	inputNodeKeyType     *string
+	inputNodeKeyIP       *string
+	inputNodeKeyTCP      *int
+	inputNodeKeyUDP      *int
 )
 
 // nodekeyCmd represents the nodekey command
@@ -74,14 +77,14 @@ func generateETHNodeKey() error {
 	if err != nil {
 		return fmt.Errorf("could not generate key: %v", err)
 	}
+
 	ko := nodeKeyOut{}
-	ko.PublicKey = fmt.Sprintf("%x\n", gethcrypto.FromECDSAPub(&nodeKey.PublicKey)[1:])
+	ko.PublicKey = fmt.Sprintf("%x", gethcrypto.FromECDSAPub(&nodeKey.PublicKey)[1:])
 	prvKeyBytes := gethcrypto.FromECDSA(nodeKey)
 	ko.PrivateKey = hex.EncodeToString(prvKeyBytes)
 
-	// err = gethcrypto.SaveECDSA("/dev/stdout", nodeKey)
-	ip := net.IPv4(0, 0, 0, 0)
-	n := gethenode.NewV4(&nodeKey.PublicKey, ip, 30303, 303030)
+	ip := net.ParseIP(*inputNodeKeyIP)
+	n := gethenode.NewV4(&nodeKey.PublicKey, ip, *inputNodeKeyTCP, *inputNodeKeyUDP)
 
 	ko.ENR = n.String()
 
@@ -99,6 +102,9 @@ func init() {
 
 	inputNodeKeyProtocol = nodekeyCmd.PersistentFlags().String("protocol", "devp2p", "devp2p|libp2p|pex")
 	inputNodeKeyType = nodekeyCmd.PersistentFlags().String("key-type", "ed25519", "The type of key")
+	inputNodeKeyIP = nodekeyCmd.PersistentFlags().StringP("ip", "i", "0.0.0.0", "The IP to be associated with this address")
+	inputNodeKeyTCP = nodekeyCmd.PersistentFlags().IntP("tcp", "t", 30303, "The tcp Port to be associated with this address")
+	inputNodeKeyUDP = nodekeyCmd.PersistentFlags().IntP("udp", "u", 0, "The udp Port to be associated with this address")
 
 	// Here you will define your flags and configuration settings.
 
