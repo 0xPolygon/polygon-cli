@@ -46,6 +46,7 @@ var (
 	inputNodeKeyTCP      *int
 	inputNodeKeyUDP      *int
 	inputNodeKeyFile     *string
+	inputNodeKeySign     *bool
 )
 
 // nodekeyCmd represents the nodekey command
@@ -91,6 +92,19 @@ func generateETHNodeKey() error {
 	ip := net.ParseIP(*inputNodeKeyIP)
 	n := gethenode.NewV4(&nodeKey.PublicKey, ip, *inputNodeKeyTCP, *inputNodeKeyUDP)
 
+	if *inputNodeKeySign {
+		r := n.Record()
+		err = gethenode.SignV4(r, nodeKey)
+		if err != nil {
+			return err
+		}
+		n, err = gethenode.New(gethenode.ValidSchemes, r)
+		if err != nil {
+			return err
+		}
+	}
+
+	// ko.ENR = n.URLv4()
 	ko.ENR = n.String()
 
 	out, err := json.Marshal(ko)
@@ -110,6 +124,7 @@ func init() {
 	inputNodeKeyIP = nodekeyCmd.PersistentFlags().StringP("ip", "i", "0.0.0.0", "The IP to be associated with this address")
 	inputNodeKeyTCP = nodekeyCmd.PersistentFlags().IntP("tcp", "t", 30303, "The tcp Port to be associated with this address")
 	inputNodeKeyUDP = nodekeyCmd.PersistentFlags().IntP("udp", "u", 0, "The udp Port to be associated with this address")
+	inputNodeKeySign = nodekeyCmd.PersistentFlags().BoolP("sign", "s", false, "Should the node record be signed?")
 
 	inputNodeKeyFile = nodekeyCmd.PersistentFlags().StringP("file", "f", "", "A file with the private nodekey in hex format")
 
