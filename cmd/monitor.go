@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"net/url"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -43,6 +44,7 @@ type (
 		GasPrice  *big.Int
 
 		Blocks            map[string]rpctypes.PolyBlock
+		BlocksLock        sync.RWMutex
 		MaxBlockRetrieved *big.Int
 	}
 	chainState struct {
@@ -106,7 +108,9 @@ var monitorCmd = &cobra.Command{
 		ms := new(monitorStatus)
 
 		ms.MaxBlockRetrieved = big.NewInt(0)
+		ms.BlocksLock.Lock()
 		ms.Blocks = make(map[string]rpctypes.PolyBlock, 0)
+		ms.BlocksLock.Unlock()
 		ms.ChainID = big.NewInt(0)
 		zero := big.NewInt(0)
 
@@ -190,7 +194,9 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 		}
 		pb := rpctypes.NewPolyBlock(b.Result.(*rpctypes.RawBlockResponse))
 
+		ms.BlocksLock.Lock()
 		ms.Blocks[pb.Number().String()] = pb
+		ms.BlocksLock.Unlock()
 
 		if ms.MaxBlockRetrieved.Cmp(pb.Number()) == -1 {
 			ms.MaxBlockRetrieved = pb.Number()
@@ -339,9 +345,13 @@ func renderMonitorUI(ms *monitorStatus) error {
 
 		//default
 		blocks := make([]rpctypes.PolyBlock, 0)
+
+		ms.BlocksLock.RLock()
 		for _, b := range ms.Blocks {
 			blocks = append(blocks, b)
 		}
+		ms.BlocksLock.RUnlock()
+
 		recentBlocks := metrics.SortableBlocks(blocks)
 		sort.Sort(recentBlocks)
 		// 25 needs to be a variable / parameter
