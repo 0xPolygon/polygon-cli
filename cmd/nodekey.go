@@ -17,6 +17,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package cmd
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -24,6 +25,9 @@ import (
 
 	gethcrypto "github.com/ethereum/go-ethereum/crypto"
 	gethenode "github.com/ethereum/go-ethereum/p2p/enode"
+
+	libp2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
+	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
 
 	//	p2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
 
@@ -59,8 +63,10 @@ implemented devp2p because that's what we needed first.
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if *inputNodeKeyProtocol == "devp2p" {
-			generateETHNodeKey()
-			return nil
+			return generateETHNodeKey()
+		}
+		if *inputNodeKeyProtocol == "libp2p" {
+			return generateLibp2pNodeKey()
 		}
 		return fmt.Errorf("%s is not implemented yet", *inputNodeKeyProtocol)
 	},
@@ -70,9 +76,40 @@ type (
 	nodeKeyOut struct {
 		PublicKey  string
 		PrivateKey string
-		ENR        string
+		ENR        string `json:",omitempty"`
 	}
 )
+
+func generateLibp2pNodeKey() error {
+	// TODO use the function that allows for key type to be specified
+	prvKey, _, err := libp2pcrypto.GenerateEd25519Key(rand.Reader)
+	if err != nil {
+		return err
+	}
+
+	rawPrvKey, err := prvKey.Raw()
+	if err != nil {
+		return err
+	}
+
+	id, err := libp2ppeer.IDFromPrivateKey(prvKey)
+	if err != nil {
+		return err
+	}
+	nko := nodeKeyOut{
+		PublicKey:  id.String(),
+		PrivateKey: hex.EncodeToString(rawPrvKey),
+	}
+
+	out, err := json.Marshal(nko)
+	if err != nil {
+		return fmt.Errorf("could not json marshel the key data %v", err)
+	}
+
+	fmt.Println(string(out))
+
+	return nil
+}
 
 func generateETHNodeKey() error {
 	nodeKey, err := gethcrypto.GenerateKey()
