@@ -1,0 +1,93 @@
+        ;; Value of 0 at offset 0
+        PUSH 0x0
+        PUSH 0x0
+        SSTORE
+
+        ;; Value of 1 at offset 1
+        PUSH 0x1
+        PUSH 0x1
+        SSTORE
+
+        ;; Set current fib offset and duplicate it
+        PUSH 0x2
+loop:
+        DUP1
+
+
+        ;; Subtract 1 from the current offset
+        PUSH 0x1
+        SWAP1
+        SUB
+        DUP1
+
+        ;; Subtract 1 from the current offset (again)
+        PUSH 0x1
+        SWAP1
+        SUB
+
+        ;; Load the two offsets from memory and add them together
+        SLOAD
+        SWAP1
+        SLOAD
+        ADD
+
+        ;; Store the current offset and latest fib in memory
+        DUP2
+        SSTORE
+
+        ;; increment the offset
+        PUSH 0x1
+        ADD
+
+        ;; Compare the current offset to 341
+        DUP1
+        PUSH 0x155
+        GT
+
+        PUSH @loop
+        JUMPI
+
+        ;; we're done... drop the iterator
+        POP
+
+
+
+        ;; Push a value on the stack for tracking the number of iterations that we've done
+        PUSH 0x00
+
+        ;; create a jump dest and label for looping
+loop2:
+        DUP1
+
+        PUSH 0x20
+        MUL
+
+        DUP2
+
+        SLOAD
+
+        SWAP1
+        MSTORE
+
+
+        ;; increment the counter
+        PUSH 0x1
+        ADD
+
+
+        DUP1
+        PUSH 0x155
+        GT
+
+        ;; push the jump destination for looping
+        PUSH @loop2
+        JUMPI
+
+
+        PUSH 0x20
+        MUL
+
+        PUSH 0x0
+        RETURN
+
+        STOP

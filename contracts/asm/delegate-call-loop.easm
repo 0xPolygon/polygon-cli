@@ -1,0 +1,54 @@
+        ;; Push a value on the stack for tracking the number of iterations that we've done
+        PUSH 0x00000000
+
+        ;; create a jump dest and label for looping
+loop:
+
+        ;; increment the counter
+        PUSH 0x1
+        ADD
+
+
+
+        ;; 0 retsize should be fine
+        PUSH 0x00
+        ;; Same with ret offset.. no need to pass data
+        DUP1
+        ;; Same with arg size
+        DUP1
+        ;; Same with arg offset
+        DUP1
+        DUP1
+        ;; push the address of the contract that we want to call
+        PUSH 0x0000000000000000000000000000000000000001
+        ;; PUSH 0xd2581362bbd7c8ad4ab412068198cde1a8a9bd3b
+        ;; how much gas to send? let's do about 450K
+        PUSH 0x70000
+
+        CALL
+
+        ;; ignore the return for now
+        POP
+
+
+
+
+        
+
+        ;; Get the counter and compare to our arbitrary limit
+        DUP1
+
+        ;; 18 Gas per loop
+        PUSH 0x65B9A
+        GT
+
+        ;; push the jump destination for looping
+        PUSH @loop
+        JUMPI
+
+        ;; drop the iterator
+        POP
+
+        STOP
+
+        

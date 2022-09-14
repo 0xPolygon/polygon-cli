@@ -1,0 +1,33 @@
+        ;; Push a value on the stack for tracking the number of iterations that we've done
+        PUSH 0x00
+
+        ;; create a jump dest and label for looping
+loop:
+
+        ;; increment the counter
+        PUSH 0x1
+        ADD
+
+
+        ;; Put the current counter into memory. This will bloat things up nicely
+        DUP1
+        DUP1
+        SSTORE
+        
+        ;; SSTORE is very expensive so we need to make sure we have enough
+        PUSH 0x8000
+
+        ;; Get the remaining amount of GAS
+        GAS
+        GT
+
+        ;; push the jump destination for looping
+        PUSH @loop
+        JUMPI
+
+        ;; drop the iterator
+        POP
+
+        STOP
+
+        

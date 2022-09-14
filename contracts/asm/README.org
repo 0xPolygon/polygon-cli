@@ -26,6 +26,13 @@ limits of the EVM and network
 ./build/bin/evm compile ~/code/polygon-cli/contracts/asm/sstore-loop.easm > sstore-loop.bin
 ./build/bin/evm --codefile sstore-loop.bin --gas 100000 --debug --json --dump run
 
+./build/bin/evm compile ~/code/polygon-cli/contracts/asm/fib.easm > fib.bin
+./build/bin/evm --codefile fib.bin --gas 100000 --debug --json --dump run
+
+
+./build/bin/evm compile ~/code/polygon-cli/contracts/asm/fib-nostore.easm > fib-nostore.bin
+./build/bin/evm --codefile fib-nostore.bin --gas 100000 --debug --json --dump run
+
 
 
 cat noop-loop.bin | tr -d "\n" | wc

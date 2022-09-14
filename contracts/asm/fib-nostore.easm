@@ -1,0 +1,71 @@
+;;; This is a memory only fibonacci implementation. The previous
+;;; implementation was using storage slots to store the first ~300 fib
+;;; numbers so that after the contract was deployed the storage slots
+;;; would have different fib numbers. That's a bit expensive and
+;;; pointless since I have no functions and no one can see the storage
+;;; slots easily. So in this case I'm just going to use memory and
+;;; return memory space with this data in it.
+
+        ;; Value of 0 at offset 0
+        PUSH 0x0
+        PUSH 0x0
+        MSTORE
+
+        ;; Value of 1 at offset 32. Since each number is 32 bytes
+        ;; every number will increment the offset by 32 bytes
+        PUSH 0x1
+        PUSH 0x20
+        MSTORE
+
+        ;; We're now 64 bytes in. The first two numbers are hard
+        ;; coded, the of the code a loop to generate more numbers
+        PUSH 0x40
+loop:
+        ;; Duplicate the current offset so that we can use it
+        DUP1
+
+        ;; Subtract 32 from the current offset (f - 1)
+        PUSH 0x20
+        SWAP1
+        SUB
+
+        ;; Duplicate the previous number so that we can use it again
+        DUP1
+
+        ;; Subtract 32 from the current offset (f - 2)
+        PUSH 0x20
+        SWAP1
+        SUB
+
+        ;; Load the values of (f - 1) and (f - 2) from memory and add them together
+        MLOAD
+        SWAP1
+        MLOAD
+        ADD
+
+        ;; Store the current offset and latest fib in memory
+        DUP2
+        MSTORE
+
+        ;; increment the offset
+        PUSH 0x20
+        ADD
+
+        ;; Compare the current offset to 370*32. This is approximately the biggest number we can store natively work on in our instructions. The 370th fib number is
+        ;; 94611056096305838013295371573764256526437182762229865607320618320601813254535
+        ;; d12bf5c7f45a49f54fdf4e79a339eb28e1cc739052cbfa4bcc70eb22d7c28187
+        ;; After this number the ADD operation will start overflowing, so we need to stop
+        DUP1
+        PUSH 0x2E60
+        GT
+
+        PUSH @loop
+        JUMPI
+
+        ;; we're done... drop the iterator
+        POP
+
+        PUSH 0x2E60
+        PUSH 0x0
+
+        RETURN
