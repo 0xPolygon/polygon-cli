@@ -17,10 +17,12 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package cmd
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 
 	gethcrypto "github.com/ethereum/go-ethereum/crypto"
@@ -74,15 +76,17 @@ implemented devp2p because that's what we needed first.
 
 type (
 	nodeKeyOut struct {
-		PublicKey  string
-		PrivateKey string
-		ENR        string `json:",omitempty"`
+		PublicKey      string
+		PrivateKey     string
+		FullPrivateKey string `json:",omitempty"`
+		ENR            string `json:",omitempty"`
 	}
 )
 
 func generateLibp2pNodeKey() error {
 	// TODO use the function that allows for key type to be specified
-	prvKey, _, err := libp2pcrypto.GenerateEd25519Key(rand.Reader)
+	rand32 := io.LimitReader(rand.Reader, 32)
+	prvKey, _, err := libp2pcrypto.GenerateEd25519Key(rand32)
 	if err != nil {
 		return err
 	}
@@ -97,8 +101,10 @@ func generateLibp2pNodeKey() error {
 		return err
 	}
 	nko := nodeKeyOut{
-		PublicKey:  id.String(),
-		PrivateKey: hex.EncodeToString(rawPrvKey),
+		PublicKey: id.String(),
+		// half of the private key is the public key. Substrate doesn't handle this well and need just the 32 byte seed/private key
+		PrivateKey:     hex.EncodeToString(rawPrvKey[0:ed25519.PublicKeySize]),
+		FullPrivateKey: hex.EncodeToString(rawPrvKey),
 	}
 
 	out, err := json.Marshal(nko)
