@@ -67,12 +67,12 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 	cs := new(chainState)
 	cs.HeadBlock, err = ec.BlockNumber(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Couldn't fetch block number: %s", err.Error())
 	}
 
 	cs.ChainID, err = ec.ChainID(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Couldn't fetch chain id: %s", err.Error())
 	}
 
 	cs.PeerCount, err = ec.PeerCount(ctx)
@@ -83,7 +83,7 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 
 	cs.GasPrice, err = ec.SuggestGasPrice(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Couldn't estimate gas: %s", err.Error())
 	}
 
 	return cs, nil
