@@ -24,14 +24,16 @@ import (
 )
 
 var (
-	inputMetricsToDashFile            *string
-	inputMetricsToDashPrefix          *string
-	inputMetricsToDashTitle           *string
-	inputMetricsToDashDesc            *string
-	inputMetricsToDashHeight          *int
-	inputMetricsToDashWidth           *int
-	inputMetricsToTemplateVars        *[]string
-	inputMetricsToTemplateVarDefaults *[]string
+	inputMetricsToDashFile                *string
+	inputMetricsToDashPrefix              *string
+	inputMetricsToDashTitle               *string
+	inputMetricsToDashDesc                *string
+	inputMetricsToDashHeight              *int
+	inputMetricsToDashWidth               *int
+	inputMetricsToDashTemplateVars        *[]string
+	inputMetricsToDashTemplateVarDefaults *[]string
+	inputMetricsToDashStripPrefixes       *[]string
+	inputMetricsToDashPretty              *bool
 )
 
 // metricsToDashCmd represents the metricsToDash command
@@ -53,8 +55,10 @@ to quickly create a Cobra application.`,
 			Description:         *inputMetricsToDashDesc,
 			WidgetHeight:        *inputMetricsToDashHeight,
 			WidgetWidth:         *inputMetricsToDashWidth,
-			TemplateVars:        *inputMetricsToTemplateVars,
-			TemplateVarDefaults: *inputMetricsToTemplateVarDefaults,
+			TemplateVars:        *inputMetricsToDashTemplateVars,
+			TemplateVarDefaults: *inputMetricsToDashTemplateVarDefaults,
+			StripPrefixes:       *inputMetricsToDashStripPrefixes,
+			Pretty:              *inputMetricsToDashPretty,
 		}
 		data, err := dashboard.ConvertMetricsToDashboard(&do)
 		if err != nil {
@@ -79,8 +83,11 @@ func init() {
 	inputMetricsToDashWidth = metricsToDashCmd.PersistentFlags().IntP("width", "W", 4, "widget width")
 	inputMetricsToDashHeight = metricsToDashCmd.PersistentFlags().IntP("height", "H", 3, "widget height")
 
-	inputMetricsToTemplateVars = metricsToDashCmd.PersistentFlags().StringArrayP("template-vars", "T", []string{}, "The template variables to use for the dashboard")
-	inputMetricsToTemplateVarDefaults = metricsToDashCmd.PersistentFlags().StringArrayP("template-var-defaults", "D", []string{}, "The defaults to use for the template variables")
+	inputMetricsToDashTemplateVars = metricsToDashCmd.PersistentFlags().StringArrayP("template-vars", "T", []string{}, "The template variables to use for the dashboard")
+	inputMetricsToDashTemplateVarDefaults = metricsToDashCmd.PersistentFlags().StringArrayP("template-var-defaults", "D", []string{}, "The defaults to use for the template variables")
+
+	inputMetricsToDashStripPrefixes = metricsToDashCmd.PersistentFlags().StringArrayP("strip-prefix", "s", []string{}, "A prefix that can be removed from the metrics")
+	inputMetricsToDashPretty = metricsToDashCmd.PersistentFlags().BoolP("pretty-name", "P", true, "Should the metric names be prettified")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:

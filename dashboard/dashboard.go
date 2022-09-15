@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type (
@@ -20,6 +23,8 @@ type (
 		WidgetHeight        int
 		TemplateVars        []string
 		TemplateVarDefaults []string
+		StripPrefixes       []string
+		Pretty              bool
 	}
 
 	DataDogTemplateVariables struct {
@@ -221,7 +226,15 @@ func NewDataDogHistogramWidget(dopts *DashboardOptions, mf *dto.MetricFamily) *D
 // newDataDogWidget will initialize a basic object with arrays with one item in them
 func newDataDogWidget(dopts *DashboardOptions, mf *dto.MetricFamily) *DataDogWidget {
 	w := new(DataDogWidget)
-	w.Definition.Title = *mf.Name
+	name := *mf.Name
+	for _, strip := range dopts.StripPrefixes {
+		name = strings.TrimPrefix(name, strip)
+	}
+	if dopts.Pretty {
+		name = strings.ReplaceAll(name, "_", " ")
+		name = cases.Title(language.English, cases.Compact).String(name)
+	}
+	w.Definition.Title = name
 	w.Definition.Type = "timeseries"
 	w.Definition.TitleSize = "16"
 	w.Definition.TitleAlign = "left"
