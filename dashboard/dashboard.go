@@ -151,8 +151,7 @@ func MetricsToDataDog(dopts *DashboardOptions, metrics map[string]*dto.MetricFam
 		case dto.MetricType_UNTYPED:
 			continue
 		case dto.MetricType_HISTOGRAM:
-			continue
-			// Saimples of observations
+			w = NewDataDogHistogramWidget(dopts, v)
 		default:
 			continue
 		}
@@ -204,6 +203,16 @@ func NewDataDogGaugeWidget(dopts *DashboardOptions, mf *dto.MetricFamily) *DataD
 	w := newDataDogWidget(dopts, mf)
 
 	w.Definition.Requests[0].Queries[0].Query = fmt.Sprintf("avg:%s%s{$basedn,$host}", dopts.Prefix, *mf.Name)
+	w.Definition.Requests[0].Queries[0].DataSource = "metrics"
+	w.Definition.Requests[0].Queries[0].Name = "autoquery"
+	return w
+}
+
+func NewDataDogHistogramWidget(dopts *DashboardOptions, mf *dto.MetricFamily) *DataDogWidget {
+	w := newDataDogWidget(dopts, mf)
+
+	// Datadog ignores buckets by default, so we'll just use the sum field
+	w.Definition.Requests[0].Queries[0].Query = fmt.Sprintf("avg:%s%s.sum{$basedn,$host}.as_count()", dopts.Prefix, *mf.Name)
 	w.Definition.Requests[0].Queries[0].DataSource = "metrics"
 	w.Definition.Requests[0].Queries[0].Name = "autoquery"
 	return w
