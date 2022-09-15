@@ -141,10 +141,10 @@ func MetricsToDataDog(dopts *DashboardOptions, metrics map[string]*dto.MetricFam
 
 		case dto.MetricType_COUNTER:
 			// Monotonically increasing counter. By default we probalby want to show the derivative
-			w = NewDataDogCounterWidget(dopts, index, v)
+			w = NewDataDogCounterWidget(dopts, v)
 		case dto.MetricType_GAUGE:
 			// Numerical value that can go up and down
-			continue
+			w = NewDataDogGaugeWidget(dopts, v)
 		case dto.MetricType_SUMMARY:
 			// Samples of obervations
 			continue
@@ -191,7 +191,26 @@ func MetricsToDataDog(dopts *DashboardOptions, metrics map[string]*dto.MetricFam
 	return dash, nil
 }
 
-func NewDataDogCounterWidget(dopts *DashboardOptions, index int, mf *dto.MetricFamily) *DataDogWidget {
+func NewDataDogCounterWidget(dopts *DashboardOptions, mf *dto.MetricFamily) *DataDogWidget {
+	w := newDataDogWidget(dopts, mf)
+
+	w.Definition.Requests[0].Queries[0].Query = fmt.Sprintf("sum:%s%s.count{$basedn,$host}.as_count()", dopts.Prefix, *mf.Name)
+	w.Definition.Requests[0].Queries[0].DataSource = "metrics"
+	w.Definition.Requests[0].Queries[0].Name = "autoquery"
+	return w
+}
+
+func NewDataDogGaugeWidget(dopts *DashboardOptions, mf *dto.MetricFamily) *DataDogWidget {
+	w := newDataDogWidget(dopts, mf)
+
+	w.Definition.Requests[0].Queries[0].Query = fmt.Sprintf("avg:%s%s{$basedn,$host}", dopts.Prefix, *mf.Name)
+	w.Definition.Requests[0].Queries[0].DataSource = "metrics"
+	w.Definition.Requests[0].Queries[0].Name = "autoquery"
+	return w
+}
+
+// newDataDogWidget will initialize a basic object with arrays with one item in them
+func newDataDogWidget(dopts *DashboardOptions, mf *dto.MetricFamily) *DataDogWidget {
 	w := new(DataDogWidget)
 	w.Definition.Title = *mf.Name
 	w.Definition.Type = "timeseries"
@@ -200,12 +219,8 @@ func NewDataDogCounterWidget(dopts *DashboardOptions, index int, mf *dto.MetricF
 
 	f := DataDogFormula{}
 	f.Formula = "autoquery"
-	f.Alias = "fff"
 
 	q := DataDogQuery{}
-	q.Query = fmt.Sprintf("sum:%s%s.count{$basedn,$host}.as_count()", dopts.Prefix, *mf.Name)
-	q.DataSource = "metrics"
-	q.Name = "autoquery"
 
 	r := DataDogRequest{}
 	r.Formulas = []DataDogFormula{f}
