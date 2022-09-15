@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
@@ -11,12 +12,14 @@ import (
 
 type (
 	DashboardOptions struct {
-		File         string
-		Prefix       string
-		Title        string
-		Description  string
-		WidgetWidth  int
-		WidgetHeight int
+		File                string
+		Prefix              string
+		Title               string
+		Description         string
+		WidgetWidth         int
+		WidgetHeight        int
+		TemplateVars        []string
+		TemplateVarDefaults []string
 	}
 
 	DataDogTemplateVariables struct {
@@ -29,10 +32,10 @@ type (
 	DataDogFormula struct {
 		Alias              string        `json:"alias,omitempty"`
 		ConditionalFormats []interface{} `json:"conditional_formats,omitempty"`
-		// Limit              struct {
-		// 	Count int    `json:"count,omitempty"`
-		// 	Order string `json:"order,omitempty"`
-		// } `json:"limit,omitempty"`
+		Limit              struct {
+			Count int    `json:"count,omitempty"`
+			Order string `json:"order,omitempty"`
+		} `json:"limit,omitempty"`
 		CellDisplayMode string `json:"cell_display_mode,omitempty"`
 		Formula         string `json:"formula,omitempty"`
 	}
@@ -46,6 +49,11 @@ type (
 		Formulas       []DataDogFormula `json:"formulas,omitempty"`
 		ResponseFormat string           `json:"response_format,omitempty"`
 		Queries        []DataDogQuery   `json:"queries,omitempty"`
+		Style          struct {
+			Palette   string `json:"palette"`
+			LineType  string `json:"line_type"`
+			LineWidth string `json:"line_width"`
+		} `json:"style"`
 	}
 	DataDogWidget struct {
 		//		ID         int64 `json:"id"`
@@ -62,7 +70,8 @@ type (
 		} `json:"definition"`
 		Layout DataDogLayout `json:"layout,omitempty"`
 	}
-	DataDogLayout struct {
+	DataDogWidgets []DataDogWidget
+	DataDogLayout  struct {
 		X      int `json:"x"`
 		Y      int `json:"y"`
 		Width  int `json:"width,omitempty"`
@@ -78,11 +87,18 @@ type (
 		IsReadOnly        bool                       `json:"is_read_only,omitempty"`
 		NotifyList        []interface{}              `json:"notify_list,omitempty"`
 		ReflowType        string                     `json:"reflow_type,omitempty"`
-		//		ID                string                     `json:"id,omitempty"`
+		ID                string                     `json:"id,omitempty"`
 	}
 )
 
+func (a DataDogWidgets) Len() int           { return len(a) }
+func (a DataDogWidgets) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a DataDogWidgets) Less(i, j int) bool { return a[i].Definition.Title < a[j].Definition.Title }
+
 func ConvertMetricsToDashboard(input *DashboardOptions) ([]byte, error) {
+	if len(input.TemplateVars) != len(input.TemplateVarDefaults) && len(input.TemplateVarDefaults) > 0 {
+		return nil, fmt.Errorf("The length of the template vars and template var defaults arguents do not match")
+	}
 	metrics, err := ParseMetricsFile(input.File)
 	if err != nil {
 		return nil, err
@@ -145,23 +161,33 @@ func MetricsToDataDog(dopts *DashboardOptions, metrics map[string]*dto.MetricFam
 		index += 1
 
 	}
+
+	sort.Sort(DataDogWidgets(widgets))
+
+	for k := range widgets {
+		l := DataDogLayout{
+			X:      (k % (12 / dopts.WidgetWidth)) * dopts.WidgetWidth,
+			Y:      0,
+			Width:  dopts.WidgetWidth,
+			Height: dopts.WidgetHeight,
+		}
+		widgets[k].Layout = l
+	}
+
 	dash.Widgets = widgets
 	dash.LayoutType = "ordered"
 	dash.ReflowType = "fixed"
-	dash.TemplateVariables = []DataDogTemplateVariables{
-		DataDogTemplateVariables{
-			Name:            "basedn",
-			Prefix:          "basedn",
+	tv := make([]DataDogTemplateVariables, 0)
+	for k, v := range dopts.TemplateVars {
+		dv := DataDogTemplateVariables{
+			Name:            v,
+			Prefix:          v,
 			AvailableValues: []string{},
-			Default:         "",
-		},
-		DataDogTemplateVariables{
-			Name:            "host",
-			Prefix:          "host",
-			AvailableValues: []string{},
-			Default:         "",
-		},
+			Default:         dopts.TemplateVarDefaults[k],
+		}
+		tv = append(tv, dv)
 	}
+	dash.TemplateVariables = tv
 	return dash, nil
 }
 
@@ -171,13 +197,6 @@ func NewDataDogCounterWidget(dopts *DashboardOptions, index int, mf *dto.MetricF
 	w.Definition.Type = "timeseries"
 	w.Definition.TitleSize = "16"
 	w.Definition.TitleAlign = "left"
-
-	w.Layout = DataDogLayout{
-		X:      (index % (12 / dopts.WidgetWidth)) * dopts.WidgetWidth,
-		Y:      0,
-		Width:  dopts.WidgetWidth,
-		Height: dopts.WidgetHeight,
-	}
 
 	f := DataDogFormula{}
 	f.Formula = "autoquery"
@@ -192,6 +211,9 @@ func NewDataDogCounterWidget(dopts *DashboardOptions, index int, mf *dto.MetricF
 	r.Formulas = []DataDogFormula{f}
 	r.Queries = []DataDogQuery{q}
 	r.ResponseFormat = "timeseries"
+	r.Style.Palette = "dog_classic"
+	r.Style.LineType = "solid"
+	r.Style.LineWidth = "normal"
 
 	w.Definition.Requests = []DataDogRequest{r}
 
