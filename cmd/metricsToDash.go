@@ -34,6 +34,7 @@ var (
 	inputMetricsToDashTemplateVarDefaults *[]string
 	inputMetricsToDashStripPrefixes       *[]string
 	inputMetricsToDashPretty              *bool
+	inputMetricsToDashShowHelp            *bool
 )
 
 // metricsToDashCmd represents the metricsToDash command
@@ -59,6 +60,7 @@ to quickly create a Cobra application.`,
 			TemplateVarDefaults: *inputMetricsToDashTemplateVarDefaults,
 			StripPrefixes:       *inputMetricsToDashStripPrefixes,
 			Pretty:              *inputMetricsToDashPretty,
+			ShowHelp:            *inputMetricsToDashShowHelp,
 		}
 		data, err := dashboard.ConvertMetricsToDashboard(&do)
 		if err != nil {
@@ -88,6 +90,8 @@ func init() {
 
 	inputMetricsToDashStripPrefixes = metricsToDashCmd.PersistentFlags().StringArrayP("strip-prefix", "s", []string{}, "A prefix that can be removed from the metrics")
 	inputMetricsToDashPretty = metricsToDashCmd.PersistentFlags().BoolP("pretty-name", "P", true, "Should the metric names be prettified")
+
+	inputMetricsToDashShowHelp = metricsToDashCmd.PersistentFlags().BoolP("show-help", "S", false, "Should we show the help text for each metric")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:

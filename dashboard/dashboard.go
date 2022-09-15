@@ -25,6 +25,7 @@ type (
 		TemplateVarDefaults []string
 		StripPrefixes       []string
 		Pretty              bool
+		ShowHelp            bool
 	}
 
 	DataDogTemplateVariables struct {
@@ -61,8 +62,9 @@ type (
 		} `json:"style"`
 	}
 	DataDogWidget struct {
-		//		ID         int64 `json:"id"`
+		ID         int64 `json:"id"`
 		Definition struct {
+			helpText      string
 			Title         string           `json:"title,omitempty"`
 			TitleSize     string           `json:"title_size,omitempty"`
 			TitleAlign    string           `json:"title_align,omitempty"`
@@ -72,6 +74,9 @@ type (
 			ShowLegend    bool             `json:"show_legend,omitempty"`
 			LegendLayout  string           `json:"legend_layout,omitempty"`
 			LegendColumns []string         `json:"legend_columns,omitempty"`
+			Text          string           `json:"text,omitempty"`
+			FontSize      string           `json:"font_size,omitempty"`
+			Content       string           `json:"content,omitempty"`
 		} `json:"definition"`
 		Layout DataDogLayout `json:"layout,omitempty"`
 	}
@@ -168,19 +173,64 @@ func MetricsToDataDog(dopts *DashboardOptions, metrics map[string]*dto.MetricFam
 
 	sort.Sort(DataDogWidgets(widgets))
 
+	currentX := 0
+	currentY := 0
+
+	helpWidgets := make([]DataDogWidget, 0)
 	for k := range widgets {
+		currentX = (k % (12 / dopts.WidgetWidth)) * dopts.WidgetWidth
+		if (k % (12 / dopts.WidgetWidth)) == 0 {
+			currentY += dopts.WidgetHeight
+		}
+
+		adjustedHeight := dopts.WidgetHeight
+		adjustedY := currentY
+		if dopts.ShowHelp {
+			hw := NewDataDogNoteWidget(dopts, widgets[k].Definition.helpText)
+			hw.Layout = DataDogLayout{
+				X:      currentX,
+				Y:      currentY,
+				Width:  dopts.WidgetWidth,
+				Height: 1,
+			}
+			helpWidgets = append(helpWidgets, *hw)
+
+			adjustedY = currentY + 1
+			adjustedHeight = dopts.WidgetHeight - 1
+		}
+
 		l := DataDogLayout{
-			X:      (k % (12 / dopts.WidgetWidth)) * dopts.WidgetWidth,
-			Y:      0,
+			// X:      (k % (12 / dopts.WidgetWidth)) * dopts.WidgetWidth,
+			// Y:      int(math.Floor(float64(k/(12/dopts.WidgetWidth)))) * dopts.WidgetHeight,
+			X:      currentX,
+			Y:      adjustedY,
 			Width:  dopts.WidgetWidth,
-			Height: dopts.WidgetHeight,
+			Height: adjustedHeight,
 		}
 		widgets[k].Layout = l
 	}
 
-	dash.Widgets = widgets
+	if dopts.ShowHelp {
+		finalWidgets := make([]DataDogWidget, 0)
+		itemsPerRow := 12 / dopts.WidgetWidth
+		for i := 0; i < len(widgets); i = i + itemsPerRow {
+			for j := i; j-i < itemsPerRow && j < len(helpWidgets); j = j + 1 {
+				finalWidgets = append(finalWidgets, helpWidgets[j])
+			}
+			for j := i; j-i < itemsPerRow && j < len(widgets); j = j + 1 {
+				finalWidgets = append(finalWidgets, widgets[j])
+			}
+		}
+		dash.Widgets = finalWidgets
+	} else {
+		dash.Widgets = widgets
+	}
+
+	// dash.LayoutType = "free"
 	dash.LayoutType = "ordered"
 	dash.ReflowType = "fixed"
+	// dash.ReflowType = "auto"
+	dash.IsReadOnly = true
 	tv := make([]DataDogTemplateVariables, 0)
 	for k, v := range dopts.TemplateVars {
 		dv := DataDogTemplateVariables{
@@ -191,6 +241,7 @@ func MetricsToDataDog(dopts *DashboardOptions, metrics map[string]*dto.MetricFam
 		}
 		tv = append(tv, dv)
 	}
+
 	dash.TemplateVariables = tv
 	return dash, nil
 }
@@ -235,6 +286,7 @@ func newDataDogWidget(dopts *DashboardOptions, mf *dto.MetricFamily) *DataDogWid
 		name = cases.Title(language.English, cases.Compact).String(name)
 	}
 	w.Definition.Title = name
+	w.Definition.helpText = *mf.Help
 	w.Definition.Type = "timeseries"
 	w.Definition.TitleSize = "16"
 	w.Definition.TitleAlign = "left"
@@ -254,5 +306,22 @@ func newDataDogWidget(dopts *DashboardOptions, mf *dto.MetricFamily) *DataDogWid
 
 	w.Definition.Requests = []DataDogRequest{r}
 
+	return w
+}
+
+func NewDataDogTextWidget(dopts *DashboardOptions, text string) *DataDogWidget {
+	w := new(DataDogWidget)
+
+	w.Definition.Type = "free_text"
+	w.Definition.Text = text
+	w.Definition.FontSize = "auto"
+	return w
+}
+func NewDataDogNoteWidget(dopts *DashboardOptions, text string) *DataDogWidget {
+	w := new(DataDogWidget)
+
+	w.Definition.Type = "note"
+	w.Definition.Content = text
+	w.Definition.FontSize = "auto"
 	return w
 }
