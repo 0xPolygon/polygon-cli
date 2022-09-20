@@ -329,6 +329,16 @@ polycli dumpblocks http://172.26.26.12:8545/ 0 500000 | gzip > foo.gz
 zcat < foo.gz | jq '. | select(.transactions | length > 0) | select(.transactions[].to == null)'
 #+end_src
 
+* Metrics To Dash
+
+Given an openmetrics / prometheus response, create a json file that
+can be used to create a dashboard with all of the metrics in one view
+
+#+begin_src shell
+go run main.go metrics-to-dash -i avail-metrics.txt -p avail. -t "Avail Devnet Dashboard" -T basedn -D devnet01.avail.polygon.private -T host -D validator-001 -s substrate_ -s sub_ -P true -S true
+#+end_src
+
+
 * Adding Commands
 Script to setup this repo
 #+BEGIN_SRC bash
