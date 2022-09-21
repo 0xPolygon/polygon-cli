@@ -217,6 +217,7 @@ type (
 		Iterations    *uint64
 		ByteCount     *uint64
 		Seed          *int64
+		IsAvail       *bool
 
 		// Computed
 		CurrentGas      *big.Int
@@ -252,6 +253,7 @@ func init() {
 	ltp.Iterations = loadtestCmd.PersistentFlags().Uint64P("iterations", "i", 100, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop")
 	ltp.ByteCount = loadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.Seed = loadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
+	ltp.IsAvail = loadtestCmd.PersistentFlags().Bool("data-avail", false, "Is this a test of avail rather than an EVM / Geth Chain")
 	inputLoadTestParams = *ltp
 
 	// TODO batch size
@@ -377,9 +379,22 @@ func runLoadTest(ctx context.Context) error {
 	rpc.SetHeader("Accept-Encoding", "identity")
 	ec := ethclient.NewClient(rpc)
 
-	err = initalizeLoadTestParams(ctx, ec)
-	if err != nil {
-		return err
+	var loopFunc func() error
+	if *inputLoadTestParams.IsAvail {
+		log.Info().Msg("Running in Avail mode")
+		loopFunc = func() error {
+			return availLoop(ctx, rpc)
+		}
+
+	} else {
+		log.Info().Msg("Starting Load Test")
+		err = initalizeLoadTestParams(ctx, ec)
+		if err != nil {
+			return err
+		}
+		loopFunc = func() error {
+			return mainLoop(ctx, ec)
+		}
 	}
 
 	sigCh := make(chan os.Signal, 1)
@@ -388,7 +403,8 @@ func runLoadTest(ctx context.Context) error {
 	loadTestResults = make([]loadTestSample, 0)
 	errCh := make(chan error)
 	go func() {
-		errCh <- mainLoop(ctx, ec)
+		// errCh <- mainLoop(ctx, ec)
+		errCh <- loopFunc()
 	}()
 
 	select {
@@ -401,8 +417,10 @@ func runLoadTest(ctx context.Context) error {
 			log.Fatal().Err(err).Msg("Received critical error while running load test")
 		}
 	}
+
 	printResults(loadTestResults)
 
+	// TODO this doesn't make sense for avail
 	ptc, err := ec.PendingTransactionCount(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get the number of pending transactions before closing")
@@ -811,4 +829,104 @@ func getRandomAddress() *ethcommon.Address {
 	realAddr := ethcommon.BytesToAddress(addr)
 	return &realAddr
 
+}
+
+func availLoop(ctx context.Context, c *ethrpc.Client) error {
+
+	ltp := inputLoadTestParams
+	log.Trace().Interface("Input Params", ltp).Msg("Params")
+
+	routines := *ltp.Concurrency
+	requests := *ltp.Requests
+	currentNonce := uint64(0) // *ltp.CurrentNonce
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+	mode := *ltp.Mode
+
+	_ = chainID
+	_ = privateKey
+
+	rl := rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
+	if *ltp.RateLimit <= 0.0 {
+		rl = nil
+	}
+
+	var currentNonceMutex sync.Mutex
+	var err error
+	var i int64
+
+	var wg sync.WaitGroup
+	for i = 0; i < routines; i = i + 1 {
+		log.Trace().Int64("routine", i).Msg("Starting Thread")
+		wg.Add(1)
+		go func(i int64) {
+			var j int64
+			var startReq time.Time
+			var endReq time.Time
+
+			for j = 0; j < requests; j = j + 1 {
+
+				if rl != nil {
+					err := rl.Wait(ctx)
+					if err != nil {
+						log.Error().Err(err).Msg("Encountered a rate limiting error")
+					}
+				}
+				currentNonceMutex.Lock()
+				myNonceValue := currentNonce
+				currentNonce = currentNonce + 1
+				currentNonceMutex.Unlock()
+
+				localMode := mode
+				// if we're doing random, we'll just pick one based on the current index
+				if localMode == loadTestModeRandom {
+					localMode = validLoadTestModes[int(i+j)%(len(validLoadTestModes)-1)]
+				}
+				switch localMode {
+				case loadTestModeTransaction:
+					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
+					break
+				case loadTestModeDeploy:
+					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
+					break
+				case loadTestModeCall:
+					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
+					break
+				case loadTestModeFunction:
+					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
+					break
+				case loadTestModeInc:
+					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
+					break
+				case loadTestModeStore:
+					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
+					break
+				case loadTestModeLong:
+					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
+					break
+				default:
+					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
+				}
+				recordSample(i, j, err, startReq, endReq)
+				if err != nil {
+					log.Trace().Err(err).Msg("Recorded an error while sending transactions")
+				}
+
+				log.Trace().Int64("routine", i).Str("mode", localMode).Int64("request", j).Msg("Request")
+			}
+			wg.Done()
+		}(i)
+
+	}
+	log.Trace().Msg("Finished starting go routines. Waiting..")
+	wg.Wait()
+	return nil
+
+}
+
+func loadtestNotImplemented(ctx context.Context, c *ethrpc.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+	t1 = time.Now()
+	t2 = time.Now()
+	err = fmt.Errorf("This method is not implemented")
+	return
 }
