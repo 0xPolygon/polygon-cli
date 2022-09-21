@@ -32,6 +32,10 @@ import (
 	"sync"
 	"time"
 
+	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
+	gssignature "github.com/centrifuge/go-substrate-rpc-client/v4/signature"
+	gstypes "github.com/centrifuge/go-substrate-rpc-client/v4/types"
+
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -261,7 +265,7 @@ func init() {
 	// TODO array of RPC endpoints to round robin?
 }
 
-func initalizeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
+func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	log.Info().Msg("Connecting with RPC endpoint to initialize load test parameters")
 	gas, err := c.SuggestGasPrice(ctx)
 	if err != nil {
@@ -383,16 +387,21 @@ func runLoadTest(ctx context.Context) error {
 	if *inputLoadTestParams.IsAvail {
 		log.Info().Msg("Running in Avail mode")
 		loopFunc = func() error {
-			return availLoop(ctx, rpc)
+			api, err := gsrpc.NewSubstrateAPI(inputLoadTestParams.URL.String())
+			if err != nil {
+				return err
+			}
+			return availLoop(ctx, api)
 		}
 
 	} else {
 		log.Info().Msg("Starting Load Test")
-		err = initalizeLoadTestParams(ctx, ec)
-		if err != nil {
-			return err
-		}
 		loopFunc = func() error {
+			err = initializeLoadTestParams(ctx, ec)
+			if err != nil {
+				return err
+			}
+
 			return mainLoop(ctx, ec)
 		}
 	}
@@ -831,7 +840,8 @@ func getRandomAddress() *ethcommon.Address {
 
 }
 
-func availLoop(ctx context.Context, c *ethrpc.Client) error {
+func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
+	var err error
 
 	ltp := inputLoadTestParams
 	log.Trace().Interface("Input Params", ltp).Msg("Params")
@@ -846,13 +856,23 @@ func availLoop(ctx context.Context, c *ethrpc.Client) error {
 	_ = chainID
 	_ = privateKey
 
+	meta, err := c.RPC.State.GetMetadataLatest()
+	if err != nil {
+		return err
+	}
+
+	genesisHash, err := c.RPC.Chain.GetBlockHash(0)
+	if err != nil {
+		return err
+	}
+
 	rl := rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
 	if *ltp.RateLimit <= 0.0 {
 		rl = nil
 	}
 
 	var currentNonceMutex sync.Mutex
-	var err error
+
 	var i int64
 
 	var wg sync.WaitGroup
@@ -882,9 +902,10 @@ func availLoop(ctx context.Context, c *ethrpc.Client) error {
 				if localMode == loadTestModeRandom {
 					localMode = validLoadTestModes[int(i+j)%(len(validLoadTestModes)-1)]
 				}
+				// this function should probably be abstracted
 				switch localMode {
 				case loadTestModeTransaction:
-					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
+					startReq, endReq, err = loadtestSubstrateTransfer(ctx, c, myNonceValue, meta, genesisHash)
 					break
 				case loadTestModeDeploy:
 					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
@@ -924,9 +945,106 @@ func availLoop(ctx context.Context, c *ethrpc.Client) error {
 
 }
 
-func loadtestNotImplemented(ctx context.Context, c *ethrpc.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+func loadtestNotImplemented(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	t1 = time.Now()
 	t2 = time.Now()
 	err = fmt.Errorf("This method is not implemented")
+	return
+}
+
+func loadtestSubstrateTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64, meta *gstypes.Metadata, genesisHash gstypes.Hash) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+	if *ltp.ToRandom {
+		log.Error().Msg("Sending to random is not implemented for substrate yet")
+	}
+
+	// Create a call, transferring 12345 units to Bob
+	bob, err := gstypes.NewMultiAddressFromHexAccountID(*ltp.ToAddress)
+	if err != nil {
+		return
+	}
+
+	// 1 unit of transfer
+	bal, ok := new(big.Int).SetString("100000000000000", 10)
+	if !ok {
+		err = fmt.Errorf("failed to convert balance")
+		return
+	}
+
+	gsCall, err := gstypes.NewCall(meta, "Balances.transfer", bob, gstypes.NewUCompact(bal))
+	if err != nil {
+		return
+	}
+
+	// Create the extrinsic
+	ext := gstypes.NewExtrinsic(gsCall)
+
+	rv, err := c.RPC.State.GetRuntimeVersionLatest()
+	if err != nil {
+		return
+	}
+
+	kp, err := gssignature.KeyringPairFromSecret(*ltp.PrivateKey, 42 /*hopefully?*/)
+	if err != nil {
+		return
+	}
+
+	// key, err := gstypes.CreateStorageKey(meta, "System", "Account", kp.PublicKey)
+	// if err != nil {
+	// 	return
+	// }
+
+	// var accountInfo gstypes.AccountInfo
+	// ok, err = c.RPC.State.GetStorageLatest(key, &accountInfo)
+	// if err != nil {
+	// 	return
+	// }
+	// if !ok {
+	// 	err = fmt.Errorf("GetStorageLatest failed to retrieve account information")
+	// 	return
+	// }
+
+	mb, err := gstypes.Encode(ext.Method)
+	if err != nil {
+		return
+	}
+
+	payload := gstypes.ExtrinsicPayloadV4{
+		ExtrinsicPayloadV3: gstypes.ExtrinsicPayloadV3{
+			Method:      mb,
+			Era:         gstypes.ExtrinsicEra{IsMortalEra: false},
+			Nonce:       gstypes.NewUCompactFromUInt(nonce),
+			Tip:         gstypes.NewUCompactFromUInt(100),
+			SpecVersion: rv.SpecVersion,
+			GenesisHash: genesisHash,
+			BlockHash:   genesisHash,
+		},
+		TransactionVersion: rv.TransactionVersion,
+	}
+
+	signerPubKey := gstypes.NewMultiAddressFromAccountID(kp.PublicKey)
+
+	sig, err := payload.Sign(kp)
+	if err != nil {
+		return
+	}
+
+	extSig := gstypes.ExtrinsicSignatureV4{
+		Signer:    signerPubKey,
+		Signature: gstypes.MultiSignature{IsSr25519: true, AsSr25519: sig},
+		Era:       gstypes.ExtrinsicEra{IsMortalEra: false},
+		Nonce:     gstypes.NewUCompactFromUInt(nonce),
+		Tip:       gstypes.NewUCompactFromUInt(100),
+	}
+	ext.Signature = extSig
+
+	// ext.Version |= gstypes.ExtrinsicBitSigned
+
+	// Send the extrinsic
+	t1 = time.Now()
+	respHash, err := c.RPC.Author.SubmitExtrinsic(ext)
+	t2 = time.Now()
+
+	log.Trace().Bytes("responsehash", respHash[:]).Msg("Hash from submitted extrinsic")
 	return
 }
