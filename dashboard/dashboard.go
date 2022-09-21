@@ -64,21 +64,24 @@ type (
 	DataDogWidget struct {
 		ID         int64 `json:"id"`
 		Definition struct {
-			helpText      string
-			Title         string           `json:"title,omitempty"`
-			TitleSize     string           `json:"title_size,omitempty"`
-			TitleAlign    string           `json:"title_align,omitempty"`
-			Type          string           `json:"type,omitempty"`
-			Requests      []DataDogRequest `json:"requests,omitempty"`
-			HasSearchBar  string           `json:"has_search_bar,omitempty"`
-			ShowLegend    bool             `json:"show_legend,omitempty"`
-			LegendLayout  string           `json:"legend_layout,omitempty"`
-			LegendColumns []string         `json:"legend_columns,omitempty"`
-			Text          string           `json:"text,omitempty"`
-			FontSize      string           `json:"font_size,omitempty"`
-			Content       string           `json:"content,omitempty"`
+			helpText        string
+			Title           string           `json:"title,omitempty"`
+			TitleSize       string           `json:"title_size,omitempty"`
+			TitleAlign      string           `json:"title_align,omitempty"`
+			Type            string           `json:"type,omitempty"`
+			Requests        []DataDogRequest `json:"requests,omitempty"`
+			HasSearchBar    string           `json:"has_search_bar,omitempty"`
+			ShowLegend      bool             `json:"show_legend,omitempty"`
+			LegendLayout    string           `json:"legend_layout,omitempty"`
+			LegendColumns   []string         `json:"legend_columns,omitempty"`
+			Text            string           `json:"text,omitempty"`
+			FontSize        string           `json:"font_size,omitempty"`
+			Content         string           `json:"content,omitempty"`
+			Widgets         DataDogWidgets   `json:"widgets,omitempty"`
+			BackgroundColor string           `json:"background_color,omitempty"`
+			LayoutType      string           `json:"layout_type,omitempty"`
 		} `json:"definition"`
-		Layout DataDogLayout `json:"layout,omitempty"`
+		Layout *DataDogLayout `json:"layout,omitempty"`
 	}
 	DataDogWidgets []DataDogWidget
 	DataDogLayout  struct {
@@ -187,7 +190,7 @@ func MetricsToDataDog(dopts *DashboardOptions, metrics map[string]*dto.MetricFam
 		adjustedY := currentY
 		if dopts.ShowHelp {
 			hw := NewDataDogNoteWidget(dopts, widgets[k].Definition.helpText)
-			hw.Layout = DataDogLayout{
+			hw.Layout = &DataDogLayout{
 				X:      currentX,
 				Y:      currentY,
 				Width:  dopts.WidgetWidth,
@@ -207,7 +210,7 @@ func MetricsToDataDog(dopts *DashboardOptions, metrics map[string]*dto.MetricFam
 			Width:  dopts.WidgetWidth,
 			Height: adjustedHeight,
 		}
-		widgets[k].Layout = l
+		widgets[k].Layout = &l
 	}
 
 	if dopts.ShowHelp {
@@ -225,6 +228,10 @@ func MetricsToDataDog(dopts *DashboardOptions, metrics map[string]*dto.MetricFam
 	} else {
 		dash.Widgets = widgets
 	}
+
+	g := NewDataDogGroupWidget(dopts, "Auto Widgets", "vivid_purple")
+	g.Definition.Widgets = dash.Widgets
+	dash.Widgets = []DataDogWidget{*g}
 
 	// dash.LayoutType = "free"
 	dash.LayoutType = "ordered"
@@ -323,5 +330,17 @@ func NewDataDogNoteWidget(dopts *DashboardOptions, text string) *DataDogWidget {
 	w.Definition.Type = "note"
 	w.Definition.Content = text
 	w.Definition.FontSize = "auto"
+	return w
+}
+
+func NewDataDogGroupWidget(dopts *DashboardOptions, title, color string) *DataDogWidget {
+	w := new(DataDogWidget)
+
+	w.Definition.Type = "group"
+	w.Definition.Title = title
+	w.Definition.BackgroundColor = color
+	w.Definition.LayoutType = "ordered"
+	w.Definition.Widgets = make([]DataDogWidget, 0)
+
 	return w
 }
