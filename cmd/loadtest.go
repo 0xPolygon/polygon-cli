@@ -952,6 +952,15 @@ func loadtestNotImplemented(ctx context.Context, c *gsrpc.SubstrateAPI, nonce ui
 	return
 }
 
+type AvailExtrinsicPayload struct {
+	gstypes.ExtrinsicPayloadV4
+	AppId gstypes.U32
+}
+type AvailExtrinsicSignature struct {
+	gstypes.ExtrinsicSignatureV4
+	AppId gstypes.U32
+}
+
 func loadtestSubstrateTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64, meta *gstypes.Metadata, genesisHash gstypes.Hash) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 	if *ltp.ToRandom {
@@ -1022,23 +1031,38 @@ func loadtestSubstrateTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce
 		TransactionVersion: rv.TransactionVersion,
 	}
 
+	availPayload := AvailExtrinsicPayload{
+		ExtrinsicPayloadV4: payload,
+		AppId:              gstypes.U32(0),
+	}
+
 	signerPubKey := gstypes.NewMultiAddressFromAccountID(kp.PublicKey)
 
-	sig, err := payload.Sign(kp)
+	// sig, err := availPayload.Sign(kp)
+	// if err != nil {
+	// 	return
+	// }
+
+	b, err := gstypes.Encode(availPayload)
+	if err != nil {
+		return
+	}
+
+	sig, err := gssignature.Sign(b, kp.URI)
 	if err != nil {
 		return
 	}
 
 	extSig := gstypes.ExtrinsicSignatureV4{
 		Signer:    signerPubKey,
-		Signature: gstypes.MultiSignature{IsSr25519: true, AsSr25519: sig},
+		Signature: gstypes.MultiSignature{IsSr25519: true, AsSr25519: gstypes.NewSignature(sig)},
 		Era:       gstypes.ExtrinsicEra{IsMortalEra: false},
 		Nonce:     gstypes.NewUCompactFromUInt(nonce),
 		Tip:       gstypes.NewUCompactFromUInt(100),
 	}
 	ext.Signature = extSig
 
-	// ext.Version |= gstypes.ExtrinsicBitSigned
+	ext.Version |= gstypes.ExtrinsicBitSigned
 
 	// Send the extrinsic
 	t1 = time.Now()
