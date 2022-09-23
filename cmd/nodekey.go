@@ -17,8 +17,10 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package cmd
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -53,6 +55,7 @@ var (
 	inputNodeKeyUDP      *int
 	inputNodeKeyFile     *string
 	inputNodeKeySign     *bool
+	inputNodeKeySeed     *uint64
 )
 
 // nodekeyCmd represents the nodekey command
@@ -70,6 +73,10 @@ implemented devp2p because that's what we needed first.
 		if *inputNodeKeyProtocol == "libp2p" {
 			return generateLibp2pNodeKey()
 		}
+		if *inputNodeKeyProtocol == "seed-libp2p" {
+			return generateSeededLibp2pNodeKey()
+		}
+
 		return fmt.Errorf("%s is not implemented yet", *inputNodeKeyProtocol)
 	},
 }
@@ -80,6 +87,7 @@ type (
 		PrivateKey     string
 		FullPrivateKey string `json:",omitempty"`
 		ENR            string `json:",omitempty"`
+		Seed           uint64 `json:",omitempty"`
 	}
 )
 
@@ -159,6 +167,43 @@ func generateETHNodeKey() error {
 	return nil
 }
 
+func generateSeededLibp2pNodeKey() error {
+	seedValue := *inputNodeKeySeed
+	seedData := make([]byte, 32, 32)
+	binary.BigEndian.PutUint64(seedData, seedValue)
+	buf := bytes.NewBuffer(seedData)
+	rand32 := io.LimitReader(buf, 32)
+	prvKey, _, err := libp2pcrypto.GenerateEd25519Key(rand32)
+	if err != nil {
+		return err
+	}
+
+	rawPrvKey, err := prvKey.Raw()
+	if err != nil {
+		return err
+	}
+
+	id, err := libp2ppeer.IDFromPrivateKey(prvKey)
+	if err != nil {
+		return err
+	}
+	nko := nodeKeyOut{
+		PublicKey: id.String(),
+		// half of the private key is the public key. Substrate doesn't handle this well and need just the 32 byte seed/private key
+		PrivateKey:     hex.EncodeToString(rawPrvKey[0:ed25519.PublicKeySize]),
+		FullPrivateKey: hex.EncodeToString(rawPrvKey),
+		Seed:           seedValue,
+	}
+
+	out, err := json.Marshal(nko)
+	if err != nil {
+		return fmt.Errorf("could not json marshel the key data %v", err)
+	}
+
+	fmt.Println(string(out))
+
+	return nil
+}
 func init() {
 	rootCmd.AddCommand(nodekeyCmd)
 
@@ -168,6 +213,7 @@ func init() {
 	inputNodeKeyTCP = nodekeyCmd.PersistentFlags().IntP("tcp", "t", 30303, "The tcp Port to be associated with this address")
 	inputNodeKeyUDP = nodekeyCmd.PersistentFlags().IntP("udp", "u", 0, "The udp Port to be associated with this address")
 	inputNodeKeySign = nodekeyCmd.PersistentFlags().BoolP("sign", "s", false, "Should the node record be signed?")
+	inputNodeKeySeed = nodekeyCmd.PersistentFlags().Uint64P("seed", "S", 271828, "A numeric seed value")
 
 	inputNodeKeyFile = nodekeyCmd.PersistentFlags().StringP("file", "f", "", "A file with the private nodekey in hex format")
 
