@@ -993,82 +993,34 @@ func loadtestSubstrateTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce
 		return
 	}
 
-	kp, err := gssignature.KeyringPairFromSecret(*ltp.PrivateKey, 42 /*hopefully?*/)
+	// kp, err := gssignature.KeyringPairFromSecret(*ltp.PrivateKey, 42 /*hopefully?*/)
+	kp, err := gssignature.KeyringPairFromSecret("code code code code code code code code code code code quality", 42 /*hopefully?*/)
 	if err != nil {
 		return
 	}
 
-	// key, err := gstypes.CreateStorageKey(meta, "System", "Account", kp.PublicKey)
-	// if err != nil {
-	// 	return
-	// }
-
-	// var accountInfo gstypes.AccountInfo
-	// ok, err = c.RPC.State.GetStorageLatest(key, &accountInfo)
-	// if err != nil {
-	// 	return
-	// }
-	// if !ok {
-	// 	err = fmt.Errorf("GetStorageLatest failed to retrieve account information")
-	// 	return
-	// }
-
-	mb, err := gstypes.Encode(ext.Method)
-	if err != nil {
-		return
-	}
-
-	payload := gstypes.ExtrinsicPayloadV4{
-		ExtrinsicPayloadV3: gstypes.ExtrinsicPayloadV3{
-			Method:      mb,
-			Era:         gstypes.ExtrinsicEra{IsMortalEra: false},
-			Nonce:       gstypes.NewUCompactFromUInt(nonce),
-			Tip:         gstypes.NewUCompactFromUInt(100),
-			SpecVersion: rv.SpecVersion,
-			GenesisHash: genesisHash,
-			BlockHash:   genesisHash,
-		},
+	o := gstypes.SignatureOptions{
+		BlockHash:          genesisHash,
+		Era:                gstypes.ExtrinsicEra{IsMortalEra: false},
+		GenesisHash:        genesisHash,
+		Nonce:              gstypes.NewUCompactFromUInt(uint64(nonce)),
+		SpecVersion:        rv.SpecVersion,
+		Tip:                gstypes.NewUCompactFromUInt(100),
 		TransactionVersion: rv.TransactionVersion,
+		AppID:              gstypes.U32(0),
 	}
-
-	availPayload := AvailExtrinsicPayload{
-		ExtrinsicPayloadV4: payload,
-		AppId:              gstypes.U32(0),
-	}
-
-	signerPubKey := gstypes.NewMultiAddressFromAccountID(kp.PublicKey)
-
-	// sig, err := availPayload.Sign(kp)
-	// if err != nil {
-	// 	return
-	// }
-
-	b, err := gstypes.Encode(availPayload)
+	// Sign the transaction using Alice's default account
+	err = ext.Sign(kp, o)
 	if err != nil {
 		return
 	}
-
-	sig, err := gssignature.Sign(b, kp.URI)
-	if err != nil {
-		return
-	}
-
-	extSig := gstypes.ExtrinsicSignatureV4{
-		Signer:    signerPubKey,
-		Signature: gstypes.MultiSignature{IsSr25519: true, AsSr25519: gstypes.NewSignature(sig)},
-		Era:       gstypes.ExtrinsicEra{IsMortalEra: false},
-		Nonce:     gstypes.NewUCompactFromUInt(nonce),
-		Tip:       gstypes.NewUCompactFromUInt(100),
-	}
-	ext.Signature = extSig
-
-	ext.Version |= gstypes.ExtrinsicBitSigned
 
 	// Send the extrinsic
 	t1 = time.Now()
-	respHash, err := c.RPC.Author.SubmitExtrinsic(ext)
+	_, err = c.RPC.Author.SubmitExtrinsic(ext)
 	t2 = time.Now()
-
-	log.Trace().Bytes("responsehash", respHash[:]).Msg("Hash from submitted extrinsic")
+	if err != nil {
+		return
+	}
 	return
 }
