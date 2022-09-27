@@ -440,6 +440,10 @@ func runLoadTest(ctx context.Context) error {
 	}
 
 	printResults(loadTestResults)
+	if *inputLoadTestParams.IsAvail {
+		log.Trace().Msg("Finished testing avail")
+		return nil
+	}
 
 	// TODO this doesn't make sense for avail
 	ptc, err := ec.PendingTransactionCount(ctx)
@@ -937,7 +941,7 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 				// this function should probably be abstracted
 				switch localMode {
 				case loadTestModeTransaction:
-					startReq, endReq, err = loadtestSubstrateTransfer(ctx, c, myNonceValue, meta, genesisHash)
+					startReq, endReq, err = loadtestAvailTransfer(ctx, c, myNonceValue, meta, genesisHash)
 					break
 				case loadTestModeDeploy:
 					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
@@ -952,7 +956,7 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
 					break
 				case loadTestModeStore:
-					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
+					startReq, endReq, err = loadtestAvailStore(ctx, c, myNonceValue, meta, genesisHash)
 					break
 				case loadTestModeLong:
 					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
@@ -1021,7 +1025,7 @@ func initAvailTestParams(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 	return nil
 }
 
-func loadtestSubstrateTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64, meta *gstypes.Metadata, genesisHash gstypes.Hash) (t1 time.Time, t2 time.Time, err error) {
+func loadtestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64, meta *gstypes.Metadata, genesisHash gstypes.Hash) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	toAddr := *ltp.ToAvailAddress
@@ -1038,6 +1042,46 @@ func loadtestSubstrateTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce
 	}
 
 	gsCall, err := gstypes.NewCall(meta, "Balances.transfer", toAddr, gstypes.NewUCompact(ltp.SendAmount))
+	if err != nil {
+		return
+	}
+
+	ext := gstypes.NewExtrinsic(gsCall)
+	rv := ltp.AvailRuntime
+	kp := *inputLoadTestParams.FromAvailAddress
+
+	o := gstypes.SignatureOptions{
+		BlockHash:          genesisHash,
+		Era:                gstypes.ExtrinsicEra{IsMortalEra: false},
+		GenesisHash:        genesisHash,
+		Nonce:              gstypes.NewUCompactFromUInt(uint64(nonce)),
+		SpecVersion:        rv.SpecVersion,
+		Tip:                gstypes.NewUCompactFromUInt(100),
+		TransactionVersion: rv.TransactionVersion,
+		AppID:              gstypes.U32(*ltp.AvailAppID),
+	}
+
+	err = ext.Sign(kp, o)
+	if err != nil {
+		return
+	}
+
+	t1 = time.Now()
+	_, err = c.RPC.Author.SubmitExtrinsic(ext)
+	t2 = time.Now()
+	if err != nil {
+		return
+	}
+	return
+}
+
+func loadtestAvailStore(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64, meta *gstypes.Metadata, genesisHash gstypes.Hash) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+
+	inputData := make([]byte, *ltp.ByteCount, *ltp.ByteCount)
+	hexwordRead(inputData)
+
+	gsCall, err := gstypes.NewCall(meta, "DataAvailability.submit_data", gstypes.NewBytes([]byte(inputData)))
 	if err != nil {
 		return
 	}

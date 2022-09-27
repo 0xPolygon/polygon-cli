@@ -283,6 +283,13 @@ The loadtest tool works with Avail, but not with the same level of functionality
 polycli loadtest --app-id 0 --to-random=true  --data-avail --verbosity 700 --chain-id 42 --concurrency 1 --requests 10 --rate-limit 1 --mode t 'http://devnet01.dataavailability.link:8545'
 #+end_src
 
+This is a similar test but storing random nonsense hexwords
+
+#+begin_src shell
+polycli loadtest --app-id 0 --data-avail --verbosity 700 --chain-id 42 --concurrency 1 --requests 10 --rate-limit 1 --mode s --byte-count 16384 'http://devnet01.dataavailability.link:8545'
+#+end_src
+
+
 
 * Monitor
 
