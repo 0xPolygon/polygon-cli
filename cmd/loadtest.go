@@ -230,6 +230,9 @@ type (
 		FromETHAddress  *ethcommon.Address
 		ToETHAddress    *ethcommon.Address
 		SendAmount      *big.Int
+
+		ToAvailAddress   *gstypes.MultiAddress
+		FromAvailAddress *gssignature.KeyringPair
 	}
 )
 
@@ -387,10 +390,12 @@ func runLoadTest(ctx context.Context) error {
 	if *inputLoadTestParams.IsAvail {
 		log.Info().Msg("Running in Avail mode")
 		loopFunc = func() error {
+
 			api, err := gsrpc.NewSubstrateAPI(inputLoadTestParams.URL.String())
 			if err != nil {
 				return err
 			}
+			err = initAvailTestParams(ctx, api)
 			return availLoop(ctx, api)
 		}
 
@@ -866,6 +871,19 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 		return err
 	}
 
+	key, err := gstypes.CreateStorageKey(meta, "System", "Account", ltp.FromAvailAddress.PublicKey, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	var accountInfo gstypes.AccountInfo
+	ok, err := c.RPC.State.GetStorageLatest(key, &accountInfo)
+	if err != nil || !ok {
+		panic(err)
+	}
+
+	currentNonce = uint64(accountInfo.Nonce)
+
 	rl := rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
 	if *ltp.RateLimit <= 0.0 {
 		rl = nil
@@ -952,15 +970,22 @@ func loadtestNotImplemented(ctx context.Context, c *gsrpc.SubstrateAPI, nonce ui
 	return
 }
 
-type AvailExtrinsicPayload struct {
-	gstypes.ExtrinsicPayloadV4
-	AppId gstypes.U32
-}
-type AvailExtrinsicSignature struct {
-	gstypes.ExtrinsicSignatureV4
-	AppId gstypes.U32
-}
+func initAvailTestParams(ctx context.Context, c *gsrpc.SubstrateAPI) error {
+	toAddr, err := gstypes.NewMultiAddressFromHexAccountID(*inputLoadTestParams.ToAddress)
+	if err != nil {
+		return err
+	}
 
+	// kp, err := gssignature.KeyringPairFromSecret(*ltp.PrivateKey, 42 /*hopefully?*/)
+	kp, err := gssignature.KeyringPairFromSecret("code code code code code code code code code code code quality", 42 /*hopefully?*/)
+	if err != nil {
+		return err
+	}
+
+	inputLoadTestParams.FromAvailAddress = &kp
+	inputLoadTestParams.ToAvailAddress = &toAddr
+	return nil
+}
 func loadtestSubstrateTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64, meta *gstypes.Metadata, genesisHash gstypes.Hash) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 	if *ltp.ToRandom {
