@@ -275,6 +275,14 @@ transaction.
 polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 50 --rate-limit 0.5  --mode f --function 164 --iterations 25078 http://private.validator-001.devnet02.pos-v3.polygon.private:8545
 #+end_src
 
+** Avail / Substrate
+
+The loadtest tool works with Avail, but not with the same level of functionality. There's no EVM so the functional calls will not work. This is a basic example which would transfer value in a loop 10 times
+
+#+begin_src shell
+polycli loadtest --app-id 0 --to-random=true  --data-avail --verbosity 700 --chain-id 42 --concurrency 1 --requests 10 --rate-limit 1 --mode t 'http://devnet01.dataavailability.link:8545'
+#+end_src
+
 
 * Monitor
 

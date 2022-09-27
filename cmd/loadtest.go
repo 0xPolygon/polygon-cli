@@ -225,6 +225,7 @@ type (
 		ByteCount     *uint64
 		Seed          *int64
 		IsAvail       *bool
+		AvailAppID    *uint32
 
 		// Computed
 		CurrentGas      *big.Int
@@ -265,6 +266,8 @@ func init() {
 	ltp.ByteCount = loadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.Seed = loadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
 	ltp.IsAvail = loadtestCmd.PersistentFlags().Bool("data-avail", false, "Is this a test of avail rather than an EVM / Geth Chain")
+	ltp.AvailAppID = loadtestCmd.PersistentFlags().Uint32("app-id", 0, "The AppID used for avail")
+
 	inputLoadTestParams = *ltp
 
 	// TODO batch size
@@ -993,7 +996,7 @@ func initAvailTestParams(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 		*inputLoadTestParams.PrivateKey = codeQualitySeed
 	}
 
-	kp, err := gssignature.KeyringPairFromSecret(*inputLoadTestParams.PrivateKey, 42 /*hopefully?*/)
+	kp, err := gssignature.KeyringPairFromSecret(*inputLoadTestParams.PrivateKey, uint8(*inputLoadTestParams.ChainID))
 	if err != nil {
 		log.Error().Err(err).Msg("could not create key pair")
 		return err
@@ -1054,7 +1057,7 @@ func loadtestSubstrateTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce
 		SpecVersion:        rv.SpecVersion,
 		Tip:                gstypes.NewUCompactFromUInt(100),
 		TransactionVersion: rv.TransactionVersion,
-		AppID:              gstypes.U32(0),
+		AppID:              gstypes.U32(*ltp.AvailAppID),
 	}
 	// Sign the transaction using Alice's default account
 	err = ext.Sign(kp, o)
