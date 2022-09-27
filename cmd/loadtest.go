@@ -236,6 +236,7 @@ type (
 
 		ToAvailAddress   *gstypes.MultiAddress
 		FromAvailAddress *gssignature.KeyringPair
+		AvailRuntime     *gstypes.RuntimeVersion
 	}
 )
 
@@ -1004,8 +1005,14 @@ func initAvailTestParams(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 		return err
 	}
 
-	inputLoadTestParams.SendAmount = amt
+	rv, err := c.RPC.State.GetRuntimeVersionLatest()
+	if err != nil {
+		log.Error().Err(err).Msg("couldn't get runtime version")
+		return err
+	}
 
+	inputLoadTestParams.AvailRuntime = rv
+	inputLoadTestParams.SendAmount = amt
 	inputLoadTestParams.FromAvailAddress = &kp
 	inputLoadTestParams.ToAvailAddress = &toAddr
 	return nil
@@ -1035,10 +1042,7 @@ func loadtestSubstrateTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce
 	// Create the extrinsic
 	ext := gstypes.NewExtrinsic(gsCall)
 
-	rv, err := c.RPC.State.GetRuntimeVersionLatest()
-	if err != nil {
-		return
-	}
+	rv := ltp.AvailRuntime
 
 	kp := *inputLoadTestParams.FromAvailAddress
 
