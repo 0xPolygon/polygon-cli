@@ -59,6 +59,9 @@ const (
 	loadTestModeRandom      = "r"
 	loadTestModeStore       = "s"
 	loadTestModeLong        = "l"
+
+	codeQualitySeed       = "code code code code code code code code code code code quality"
+	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
 )
 
 var (
@@ -249,7 +252,7 @@ func init() {
 
 	// extended parameters
 	ltp.PrettyLogs = loadtestCmd.PersistentFlags().Bool("pretty-logs", true, "Should we log in pretty format or JSON")
-	ltp.PrivateKey = loadtestCmd.PersistentFlags().String("private-key", "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa", "The hex encoded private key that we'll use to sending transactions")
+	ltp.PrivateKey = loadtestCmd.PersistentFlags().String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
 	ltp.ChainID = loadtestCmd.PersistentFlags().Uint64("chain-id", 1256, "The chain id for the transactions that we're going to send")
 	ltp.ToAddress = loadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
 	ltp.ToRandom = loadtestCmd.PersistentFlags().Bool("to-random", true, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
@@ -873,13 +876,20 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 
 	key, err := gstypes.CreateStorageKey(meta, "System", "Account", ltp.FromAvailAddress.PublicKey, nil)
 	if err != nil {
-		panic(err)
+		log.Error().Err(err).Msg("could not create storage key")
+		return err
 	}
 
 	var accountInfo gstypes.AccountInfo
 	ok, err := c.RPC.State.GetStorageLatest(key, &accountInfo)
-	if err != nil || !ok {
-		panic(err)
+	if err != nil {
+		log.Error().Err(err).Msg("could not load storage")
+		return err
+	}
+	if !ok {
+		err = fmt.Errorf("loaded storage is not okay")
+		log.Error().Err(err).Msg("loaded storage is not okay")
+		return err
 	}
 
 	currentNonce = uint64(accountInfo.Nonce)
@@ -973,39 +983,51 @@ func loadtestNotImplemented(ctx context.Context, c *gsrpc.SubstrateAPI, nonce ui
 func initAvailTestParams(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 	toAddr, err := gstypes.NewMultiAddressFromHexAccountID(*inputLoadTestParams.ToAddress)
 	if err != nil {
+		log.Error().Err(err).Msg("unable to create new multi address")
 		return err
 	}
 
-	// kp, err := gssignature.KeyringPairFromSecret(*ltp.PrivateKey, 42 /*hopefully?*/)
-	kp, err := gssignature.KeyringPairFromSecret("code code code code code code code code code code code quality", 42 /*hopefully?*/)
+	if *inputLoadTestParams.PrivateKey == codeQualityPrivateKey {
+		// Avail keys can use the same seed but the way the key is derived is different
+		*inputLoadTestParams.PrivateKey = codeQualitySeed
+	}
+
+	kp, err := gssignature.KeyringPairFromSecret(*inputLoadTestParams.PrivateKey, 42 /*hopefully?*/)
 	if err != nil {
+		log.Error().Err(err).Msg("could not create key pair")
 		return err
 	}
+
+	amt, err := hexToBigInt(*inputLoadTestParams.HexSendAmount)
+	if err != nil {
+		log.Error().Err(err).Msg("couldn't parse send amount")
+		return err
+	}
+
+	inputLoadTestParams.SendAmount = amt
 
 	inputLoadTestParams.FromAvailAddress = &kp
 	inputLoadTestParams.ToAvailAddress = &toAddr
 	return nil
 }
+
 func loadtestSubstrateTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64, meta *gstypes.Metadata, genesisHash gstypes.Hash) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
+
+	toAddr := *ltp.ToAvailAddress
 	if *ltp.ToRandom {
-		log.Error().Msg("Sending to random is not implemented for substrate yet")
+		pk := make([]byte, 32)
+		_, err = rand.Read(pk)
+		if err != nil {
+			// For some reason weren't able to read the random data
+			log.Error().Msg("Sending to random is not implemented for substrate yet")
+		} else {
+			toAddr = gstypes.NewMultiAddressFromAccountID(pk)
+		}
+
 	}
 
-	// Create a call, transferring 12345 units to Bob
-	bob, err := gstypes.NewMultiAddressFromHexAccountID(*ltp.ToAddress)
-	if err != nil {
-		return
-	}
-
-	// 1 unit of transfer
-	bal, ok := new(big.Int).SetString("100000000000000", 10)
-	if !ok {
-		err = fmt.Errorf("failed to convert balance")
-		return
-	}
-
-	gsCall, err := gstypes.NewCall(meta, "Balances.transfer", bob, gstypes.NewUCompact(bal))
+	gsCall, err := gstypes.NewCall(meta, "Balances.transfer", toAddr, gstypes.NewUCompact(ltp.SendAmount))
 	if err != nil {
 		return
 	}
@@ -1018,11 +1040,7 @@ func loadtestSubstrateTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce
 		return
 	}
 
-	// kp, err := gssignature.KeyringPairFromSecret(*ltp.PrivateKey, 42 /*hopefully?*/)
-	kp, err := gssignature.KeyringPairFromSecret("code code code code code code code code code code code quality", 42 /*hopefully?*/)
-	if err != nil {
-		return
-	}
+	kp := *inputLoadTestParams.FromAvailAddress
 
 	o := gstypes.SignatureOptions{
 		BlockHash:          genesisHash,
