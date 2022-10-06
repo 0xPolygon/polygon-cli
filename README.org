@@ -204,6 +204,8 @@ Usage:
 Flags:
       --chain-id uint        The chain id for the transactions that we're going to send (default 1256)
   -c, --concurrency int      Number of multiple requests to perform at a time. Default is one request at a time. (default 1)
+      --del-address string   A pre-deployed delegator contract address
+      --lt-address string    A pre-deployed load test contract address
   -f, --function --mode f    A specific function to be called if running with --mode f  (default 1)
   -h, --help                 help for loadtest
   -i, --iterations uint      If we're making contract calls, this controls how many times the contract will execute the instruction in a loop (default 100)
