@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -153,7 +154,11 @@ var loadtestCmd = &cobra.Command{
 			return fmt.Errorf("The scheme %s is not supported", url.Scheme)
 		}
 		inputLoadTestParams.URL = url
-		if !contains(validLoadTestModes, *inputLoadTestParams.Mode) {
+		r, err := regexp.Compile(fmt.Sprintf("^[%s]+$", strings.Join(validLoadTestModes, "")))
+		if err != nil {
+			return err
+		}
+		if !r.MatchString(*inputLoadTestParams.Mode) {
 			return fmt.Errorf("The mode %s is not recognized", *inputLoadTestParams.Mode)
 		}
 		return nil
@@ -624,6 +629,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 				currentNonceMutex.Unlock()
 
 				localMode := mode
+				// if there are multiple modes, iterate through them, 'r' mode is supported here
+				if len(localMode) > 1 {
+					localMode = string(mode[int(i+j)%(len(mode)-1)])
+				}
 				// if we're doing random, we'll just pick one based on the current index
 				if localMode == loadTestModeRandom {
 					localMode = validLoadTestModes[int(i+j)%(len(validLoadTestModes)-1)]
