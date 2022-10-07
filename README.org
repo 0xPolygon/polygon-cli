@@ -461,7 +461,7 @@ INFO [08-14|16:09:31.452] Generated ephemeral JWT secret           secret=0xdfa5
 I'll usually then use that line to attach
 
 #+begin_src shell
-./build/bin/geth attach /var/folders/zs/k8swqskj1t79cgnjh6yt0fqm0000gn/T/geth.ip
+./build/bin/geth attach /var/folders/zs/k8swqskj1t79cgnjh6yt0fqm0000gn/T/geth.ipc
 #+end_src
 
 After attaching to geth, we can fund the default load testing account
