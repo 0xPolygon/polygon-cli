@@ -407,7 +407,7 @@ we'll startup geth.
 
 
 # v3
-go run cmd/borv3/main.go server --dev \
+go run main.go server --dev \
     --dev.period 2 \
     --ws --ws.port 8546 \
     --http --http.port 8545 \
