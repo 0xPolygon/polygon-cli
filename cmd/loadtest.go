@@ -154,10 +154,7 @@ var loadtestCmd = &cobra.Command{
 			return fmt.Errorf("The scheme %s is not supported", url.Scheme)
 		}
 		inputLoadTestParams.URL = url
-		r, err := regexp.Compile(fmt.Sprintf("^[%s]+$", strings.Join(validLoadTestModes, "")))
-		if err != nil {
-			return err
-		}
+		r := regexp.MustCompile(fmt.Sprintf("^[%s]+$", strings.Join(validLoadTestModes, "")))
 		if !r.MatchString(*inputLoadTestParams.Mode) {
 			return fmt.Errorf("The mode %s is not recognized", *inputLoadTestParams.Mode)
 		}
