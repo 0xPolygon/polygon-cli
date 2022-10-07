@@ -226,6 +226,8 @@ type (
 		Seed          *int64
 		IsAvail       *bool
 		AvailAppID    *uint32
+		LtAddress     *string
+		DelAddress    *string
 
 		// Computed
 		CurrentGas      *big.Int
@@ -267,6 +269,8 @@ func init() {
 	ltp.Seed = loadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
 	ltp.IsAvail = loadtestCmd.PersistentFlags().Bool("data-avail", false, "Is this a test of avail rather than an EVM / Geth Chain")
 	ltp.AvailAppID = loadtestCmd.PersistentFlags().Uint32("app-id", 0, "The AppID used for avail")
+	ltp.LtAddress = loadtestCmd.PersistentFlags().String("lt-address", "", "A pre-deployed load test contract address")
+	ltp.DelAddress = loadtestCmd.PersistentFlags().String("del-address", "", "A pre-deployed delegator contract address")
 
 	inputLoadTestParams = *ltp
 
@@ -507,16 +511,30 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 	}
 	cops := new(bind.CallOpts)
 
-	ltAddr, _, _, err := contracts.DeployLoadTester(tops, c)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create the load testing contract. Do you have the right chain id? Do you have enough funds?")
-		return err
+	var ltAddr ethcommon.Address
+	if *inputLoadTestParams.ToAddress == "" {
+		ltAddr, _, _, err = contracts.DeployLoadTester(tops, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to create the load testing contract. Do you have the right chain id? Do you have enough funds?")
+			return err
+		}
+	} else {
+		ltAddr = ethcommon.HexToAddress(*inputLoadTestParams.LtAddress)
 	}
 	log.Trace().Interface("contractaddress", ltAddr).Msg("Load test contract address")
 	// bump the nonce since deploying a contract should cause it to increase
 	currentNonce = currentNonce + 1
 
-	delegatorAddr, _, _, err := contracts.DeployDelegator(tops, c)
+	var delegatorAddr ethcommon.Address
+	if *inputLoadTestParams.ToAddress == "" {
+		delegatorAddr, _, _, err = contracts.DeployDelegator(tops, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to create the load testing contract. Do you have the right chain id? Do you have enough funds?")
+			return err
+		}
+	} else {
+		delegatorAddr = ethcommon.HexToAddress(*inputLoadTestParams.DelAddress)
+	}
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create the delegator contract. Do you have the right chain id? Do you have enough funds?")
 		return err
@@ -540,6 +558,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 	waitCounter := 30
 	for {
 		ltCounter, err := ltContract.GetCallCounter(cops)
+
 		if err != nil {
 			log.Trace().Msg("Waiting for contract to deploy")
 			time.Sleep(time.Second)
