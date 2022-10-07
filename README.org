@@ -202,32 +202,39 @@ Usage:
   polycli loadtest rpc-endpoint [flags]
 
 Flags:
-      --chain-id uint        The chain id for the transactions that we're going to send (default 1256)
-  -c, --concurrency int      Number of multiple requests to perform at a time. Default is one request at a time. (default 1)
-      --del-address string   A pre-deployed delegator contract address
-      --lt-address string    A pre-deployed load test contract address
-  -f, --function --mode f    A specific function to be called if running with --mode f  (default 1)
-  -h, --help                 help for loadtest
-  -i, --iterations uint      If we're making contract calls, this controls how many times the contract will execute the instruction in a loop (default 100)
-  -m, --mode string          t - sending transactions
-                             d - deploy contract
-                             c - call random contract functions
-                             f - call specific contract function (default "t")
-      --pretty-logs          Should we log in pretty format or JSON (default true)
-      --private-key string   The hex encoded private key that we'll use to sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
-      --rate-limit float     An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together (default 4)
-  -n, --requests int         Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
-      --send-amount string   The amount of wei that we'll send every transaction (default "0x38D7EA4C68000")
-  -t, --time-limit int       Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no timelimit. (default -1)
-      --to-address string    The address that we're going to send to (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
-  -v, --verbosity int        0 - Silent
-                             100 Fatals
-                             200 Errors
-                             300 Warnings
-                             400 INFO
-                             500 Debug
-                             600 Trace (default 200)
-
+      --app-id uint32           The AppID used for avail
+  -b, --byte-count uint         If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
+      --chain-id uint           The chain id for the transactions that we're going to send (default 1256)
+  -c, --concurrency int         Number of multiple requests to perform at a time. Default is one request at a time. (default 1)
+      --data-avail              Is this a test of avail rather than an EVM / Geth Chain
+      --del-address string      A pre-deployed delegator contract address
+      --force-contract-deploy   Some loadtest modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --del-address and --il-address flags.
+  -f, --function --mode f       A specific function to be called if running with --mode f  (default 1)
+  -h, --help                    help for loadtest
+  -i, --iterations uint         If we're making contract calls, this controls how many times the contract will execute the instruction in a loop (default 100)
+      --lt-address string       A pre-deployed load test contract address
+  -m, --mode string             t - sending transactions
+                                d - deploy contract
+                                c - call random contract functions
+                                f - call specific contract function
+                                s - store mode
+                                l - long running mode (default "t")
+      --pretty-logs             Should we log in pretty format or JSON (default true)
+      --private-key string      The hex encoded private key that we'll use to sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
+      --rate-limit float        An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together (default 4)
+  -n, --requests int            Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
+      --seed int                A seed for generating random values and addresses (default 123456)
+      --send-amount string      The amount of wei that we'll send every transaction (default "0x38D7EA4C68000")
+  -t, --time-limit int          Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no timelimit. (default -1)
+      --to-address string       The address that we're going to send to (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
+      --to-random               When doing a transfer test, should we send to random addresses rather than DEADBEEFx5 (default true)
+  -v, --verbosity int           0 - Silent
+                                100 Fatals
+                                200 Errors
+                                300 Warnings
+                                400 INFO
+                                500 Debug
+                                600 Trace (default 200)
 Global Flags:
       --config string   config file (default is $HOME/.polygon-cli.yaml)
 #+end_example
