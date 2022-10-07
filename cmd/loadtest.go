@@ -207,27 +207,28 @@ type (
 	}
 	loadTestParams struct {
 		// inputs
-		Requests      *int64
-		Concurrency   *int64
-		TimeLimit     *int64
-		Verbosity     *int64
-		PrettyLogs    *bool
-		ToRandom      *bool
-		URL           *url.URL
-		ChainID       *uint64
-		PrivateKey    *string
-		ToAddress     *string
-		HexSendAmount *string
-		RateLimit     *float64
-		Mode          *string
-		Function      *uint64
-		Iterations    *uint64
-		ByteCount     *uint64
-		Seed          *int64
-		IsAvail       *bool
-		AvailAppID    *uint32
-		LtAddress     *string
-		DelAddress    *string
+		Requests            *int64
+		Concurrency         *int64
+		TimeLimit           *int64
+		Verbosity           *int64
+		PrettyLogs          *bool
+		ToRandom            *bool
+		URL                 *url.URL
+		ChainID             *uint64
+		PrivateKey          *string
+		ToAddress           *string
+		HexSendAmount       *string
+		RateLimit           *float64
+		Mode                *string
+		Function            *uint64
+		Iterations          *uint64
+		ByteCount           *uint64
+		Seed                *int64
+		IsAvail             *bool
+		AvailAppID          *uint32
+		LtAddress           *string
+		DelAddress          *string
+		ForceContractDeploy *bool
 
 		// Computed
 		CurrentGas      *big.Int
@@ -271,6 +272,7 @@ func init() {
 	ltp.AvailAppID = loadtestCmd.PersistentFlags().Uint32("app-id", 0, "The AppID used for avail")
 	ltp.LtAddress = loadtestCmd.PersistentFlags().String("lt-address", "", "A pre-deployed load test contract address")
 	ltp.DelAddress = loadtestCmd.PersistentFlags().String("del-address", "", "A pre-deployed delegator contract address")
+	ltp.ForceContractDeploy = loadtestCmd.PersistentFlags().Bool("force-contract-deploy", false, "Some loadtest modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --del-address and --il-address flags.")
 
 	inputLoadTestParams = *ltp
 
@@ -511,74 +513,90 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 	}
 	cops := new(bind.CallOpts)
 
+	// deploy and instantiate the load tester contract
 	var ltAddr ethcommon.Address
-	if *inputLoadTestParams.ToAddress == "" {
-		ltAddr, _, _, err = contracts.DeployLoadTester(tops, c)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to create the load testing contract. Do you have the right chain id? Do you have enough funds?")
-			return err
-		}
-	} else {
-		ltAddr = ethcommon.HexToAddress(*inputLoadTestParams.LtAddress)
-	}
-	log.Trace().Interface("contractaddress", ltAddr).Msg("Load test contract address")
-	// bump the nonce since deploying a contract should cause it to increase
-	currentNonce = currentNonce + 1
-
-	var delegatorAddr ethcommon.Address
-	if *inputLoadTestParams.ToAddress == "" {
-		delegatorAddr, _, _, err = contracts.DeployDelegator(tops, c)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to create the load testing contract. Do you have the right chain id? Do you have enough funds?")
-			return err
-		}
-	} else {
-		delegatorAddr = ethcommon.HexToAddress(*inputLoadTestParams.DelAddress)
-	}
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create the delegator contract. Do you have the right chain id? Do you have enough funds?")
-		return err
-	}
-	log.Trace().Interface("contractaddress", delegatorAddr).Msg("Delegator contract address")
-	currentNonce = currentNonce + 1
-
-	ltContract, err := contracts.NewLoadTester(ltAddr, c)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to instantiate new contract")
-		return err
-	}
-
-	delegatorContract, err := contracts.NewDelegator(delegatorAddr, c)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to instantiate new contract")
-		return err
-	}
-
-	// block while the contract is pending
-	waitCounter := 30
-	for {
-		ltCounter, err := ltContract.GetCallCounter(cops)
-
-		if err != nil {
-			log.Trace().Msg("Waiting for contract to deploy")
-			time.Sleep(time.Second)
-			if waitCounter < 1 {
-				log.Error().Err(err).Msg("Exhausted waiting period for contract deployment")
+	var ltContract *contracts.LoadTester
+	if strings.ContainsAny(mode, "rcfisl") || *inputLoadTestParams.ForceContractDeploy {
+		if *inputLoadTestParams.LtAddress == "" {
+			ltAddr, _, _, err = contracts.DeployLoadTester(tops, c)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to create the load testing contract. Do you have the right chain id? Do you have enough funds?")
 				return err
 			}
-			waitCounter = waitCounter - 1
-			continue
+		} else {
+			ltAddr = ethcommon.HexToAddress(*inputLoadTestParams.LtAddress)
 		}
-		log.Trace().Interface("counter", ltCounter).Msg("Number of contract calls")
-		break
+		log.Trace().Interface("contractaddress", ltAddr).Msg("Load test contract address")
+		// bump the nonce since deploying a contract should cause it to increase
+		currentNonce = currentNonce + 1
+
+		ltContract, err = contracts.NewLoadTester(ltAddr, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to instantiate new contract")
+			return err
+		}
+
+		// block while the contract is pending
+		waitCounter := 30
+		for {
+			ltCounter, err := ltContract.GetCallCounter(cops)
+
+			if err != nil {
+				log.Trace().Msg("Waiting for Load Test contract to deploy")
+				time.Sleep(time.Second)
+				if waitCounter < 1 {
+					log.Error().Err(err).Msg("Exhausted waiting period for contract deployment")
+					return err
+				}
+				waitCounter = waitCounter - 1
+				continue
+			}
+			log.Trace().Interface("counter", ltCounter).Msg("Number of contract calls")
+			break
+		}
 	}
 
-	_, err = delegatorContract.Call(tops, ltAddr, []byte{0x12, 0x87, 0xa6, 0x8c})
-	if err != nil {
-		log.Error().Err(err).Msg("Load Test contract deployed successfully, but delegator contract failed.")
-		return err
+	// deploy and instantiate the delegator contract
+	var delegatorContract *contracts.Delegator
+	if strings.ContainsAny(mode, "rl") || *inputLoadTestParams.ForceContractDeploy {
+		var delegatorAddr ethcommon.Address
+		if *inputLoadTestParams.DelAddress == "" {
+			delegatorAddr, _, _, err = contracts.DeployDelegator(tops, c)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to create the load testing contract. Do you have the right chain id? Do you have enough funds?")
+				return err
+			}
+		} else {
+			delegatorAddr = ethcommon.HexToAddress(*inputLoadTestParams.DelAddress)
+		}
+		log.Trace().Interface("contractaddress", delegatorAddr).Msg("Delegator contract address")
+		currentNonce = currentNonce + 1
+
+		delegatorContract, err = contracts.NewDelegator(delegatorAddr, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to instantiate new contract")
+			return err
+		}
+
+		// block while the contract is pending
+		waitCounter := 30
+		for {
+			_, err = delegatorContract.Call(tops, ltAddr, []byte{0x12, 0x87, 0xa6, 0x8c})
+			if err != nil {
+				log.Trace().Msg("Waiting for Delegator contract to deploy")
+				time.Sleep(time.Second)
+				if waitCounter < 1 {
+					log.Error().Err(err).Msg("Exhausted waiting period for contract deployment")
+					return err
+				}
+				waitCounter = waitCounter - 1
+				continue
+			}
+			break
+		}
+
+		currentNonce = currentNonce + 1
 	}
-	currentNonce = currentNonce + 1
 
 	var currentNonceMutex sync.Mutex
 	var i int64
