@@ -634,8 +634,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 
 				localMode := mode
 				// if there are multiple modes, iterate through them, 'r' mode is supported here
-				if len(localMode) > 1 {
-					localMode = string(mode[int(i+j)%(len(mode)-1)])
+				if len(mode) > 1 {
+					localMode = string(mode[int(i+j)%(len(mode))])
 				}
 				// if we're doing random, we'll just pick one based on the current index
 				if localMode == loadTestModeRandom {
@@ -984,6 +984,10 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 				currentNonceMutex.Unlock()
 
 				localMode := mode
+				// if there are multiple modes, iterate through them, 'r' mode is supported here
+				if len(mode) > 1 {
+					localMode = string(mode[int(i+j)%(len(mode))])
+				}
 				// if we're doing random, we'll just pick one based on the current index
 				if localMode == loadTestModeRandom {
 					localMode = validLoadTestModes[int(i+j)%(len(validLoadTestModes)-1)]
