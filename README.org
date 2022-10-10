@@ -213,12 +213,14 @@ Flags:
   -h, --help                    help for loadtest
   -i, --iterations uint         If we're making contract calls, this controls how many times the contract will execute the instruction in a loop (default 100)
       --lt-address string       A pre-deployed load test contract address
-  -m, --mode string             t - sending transactions
+  -m, --mode string             The testing mode to use. It can be multiple like: "tcdf"
+                                t - sending transactions
                                 d - deploy contract
                                 c - call random contract functions
                                 f - call specific contract function
                                 s - store mode
-                                l - long running mode (default "t")
+                                l - long running mode
+                                r - random modes (default "t")
       --pretty-logs             Should we log in pretty format or JSON (default true)
       --private-key string      The hex encoded private key that we'll use to sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
       --rate-limit float        An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together (default 4)
@@ -235,6 +237,7 @@ Flags:
                                 400 INFO
                                 500 Debug
                                 600 Trace (default 200)
+
 Global Flags:
       --config string   config file (default is $HOME/.polygon-cli.yaml)
 #+end_example
