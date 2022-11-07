@@ -47,6 +47,8 @@ import (
 // pex - https://github.com/tendermint/tendermint/blob/f2a8f5e054cf99ebe246818bb6d71f41f9a30faa/types/node_id.go
 //
 
+const KEYPAIR_BITE_SIZE = 256
+
 var (
 	inputNodeKeyProtocol *string
 	inputNodeKeyType     *string
@@ -71,10 +73,34 @@ implemented devp2p because that's what we needed first.
 			return generateETHNodeKey()
 		}
 		if *inputNodeKeyProtocol == "libp2p" {
-			return generateLibp2pNodeKey()
+			switch *inputNodeKeyType {
+			// https://pkg.go.dev/github.com/libp2p/go-libp2p/core/crypto#pkg-constants
+			case "rsa":
+				return generateLibp2pNodeKey(libp2pcrypto.RSA)
+			case "ed25519":
+				return generateLibp2pNodeKey(libp2pcrypto.Ed25519)
+			case "secp256k1":
+				return generateLibp2pNodeKey(libp2pcrypto.Secp256k1)
+			case "ecdsa":
+				return generateLibp2pNodeKey(libp2pcrypto.ECDSA)
+			default:
+				return fmt.Errorf("key type not implemented %v", *inputNodeKeyType)
+			}
 		}
 		if *inputNodeKeyProtocol == "seed-libp2p" {
-			return generateSeededLibp2pNodeKey()
+			switch *inputNodeKeyType {
+			// https://pkg.go.dev/github.com/libp2p/go-libp2p/core/crypto#pkg-constants
+			case "rsa":
+				return generateSeededLibp2pNodeKey(libp2pcrypto.RSA)
+			case "ed25519":
+				return generateSeededLibp2pNodeKey(libp2pcrypto.Ed25519)
+			case "secp256k1":
+				return generateSeededLibp2pNodeKey(libp2pcrypto.Secp256k1)
+			case "ecdsa":
+				return generateSeededLibp2pNodeKey(libp2pcrypto.ECDSA)
+			default:
+				return fmt.Errorf("key type not implemented %v", *inputNodeKeyType)
+			}
 		}
 
 		return fmt.Errorf("%s is not implemented yet", *inputNodeKeyProtocol)
@@ -91,26 +117,27 @@ type (
 	}
 )
 
-func generateLibp2pNodeKey() error {
-	// TODO use the function that allows for key type to be specified
+func generateLibp2pNodeKey(keyType int) error {
 	rand32 := io.LimitReader(rand.Reader, 32)
-	prvKey, _, err := libp2pcrypto.GenerateEd25519Key(rand32)
+	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, KEYPAIR_BITE_SIZE, rand32)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to generate key pair, %v", err)
 	}
 
-	rawPrvKey, err := prvKey.Raw()
+	rawPrvKey, err := libp2pcrypto.MarshalPrivateKey(prvKey)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to convert the private key to a byte array, %v", err)
 	}
 
 	id, err := libp2ppeer.IDFromPrivateKey(prvKey)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to retrieve the node ID from the private key, %v", err)
 	}
+
 	nko := nodeKeyOut{
 		PublicKey: id.String(),
 		// half of the private key is the public key. Substrate doesn't handle this well and need just the 32 byte seed/private key
+		// TODO: should we keep private key to 32 bytes length for all types?
 		PrivateKey:     hex.EncodeToString(rawPrvKey[0:ed25519.PublicKeySize]),
 		FullPrivateKey: hex.EncodeToString(rawPrvKey),
 	}
@@ -167,20 +194,21 @@ func generateETHNodeKey() error {
 	return nil
 }
 
-func generateSeededLibp2pNodeKey() error {
+func generateSeededLibp2pNodeKey(keyType int) error {
 	seedValue := *inputNodeKeySeed
 	seedData := make([]byte, 32, 32)
 	binary.BigEndian.PutUint64(seedData, seedValue)
 	buf := bytes.NewBuffer(seedData)
 	rand32 := io.LimitReader(buf, 32)
-	prvKey, _, err := libp2pcrypto.GenerateEd25519Key(rand32)
+
+	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, KEYPAIR_BITE_SIZE, rand32)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to generate key pair, %v", err)
 	}
 
-	rawPrvKey, err := prvKey.Raw()
+	rawPrvKey, err := libp2pcrypto.MarshalPrivateKey(prvKey)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to convert the private key to a byte array, %v", err)
 	}
 
 	id, err := libp2ppeer.IDFromPrivateKey(prvKey)
@@ -190,6 +218,7 @@ func generateSeededLibp2pNodeKey() error {
 	nko := nodeKeyOut{
 		PublicKey: id.String(),
 		// half of the private key is the public key. Substrate doesn't handle this well and need just the 32 byte seed/private key
+		// TODO: should we keep private key to 32 bytes length for all types?
 		PrivateKey:     hex.EncodeToString(rawPrvKey[0:ed25519.PublicKeySize]),
 		FullPrivateKey: hex.EncodeToString(rawPrvKey),
 		Seed:           seedValue,
@@ -208,7 +237,7 @@ func init() {
 	rootCmd.AddCommand(nodekeyCmd)
 
 	inputNodeKeyProtocol = nodekeyCmd.PersistentFlags().String("protocol", "devp2p", "devp2p|libp2p|pex")
-	inputNodeKeyType = nodekeyCmd.PersistentFlags().String("key-type", "ed25519", "The type of key")
+	inputNodeKeyType = nodekeyCmd.PersistentFlags().String("key-type", "ed25519", "rsa|ed25519|secp256k1|ecdsa")
 	inputNodeKeyIP = nodekeyCmd.PersistentFlags().StringP("ip", "i", "0.0.0.0", "The IP to be associated with this address")
 	inputNodeKeyTCP = nodekeyCmd.PersistentFlags().IntP("tcp", "t", 30303, "The tcp Port to be associated with this address")
 	inputNodeKeyUDP = nodekeyCmd.PersistentFlags().IntP("udp", "u", 0, "The udp Port to be associated with this address")
