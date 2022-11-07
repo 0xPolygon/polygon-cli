@@ -1,22 +1,7 @@
-#+TITLE: Testing Functions
-#+DATE:
-#+AUTHOR: John Hilliard
-#+EMAIL: jhilliard@polygon.technology
-#+CREATOR: John Hilliard
-#+DESCRIPTION:
+These are lower level contract implementations meant to push the limits
+of the EVM and network
 
-
-#+OPTIONS: toc:nil
-#+LATEX_HEADER: \usepackage{geometry}
-#+LATEX_HEADER: \usepackage{lmodern}
-#+LATEX_HEADER: \geometry{left=1in,right=1in,top=1in,bottom=1in}
-#+LaTeX_CLASS_OPTIONS: [letterpaper]
-
-These are lower level contract implementations meant to push the
-limits of the EVM and network
-
-
-#+begin_src shell
+``` shell
 ./build/bin/evm compile ~/code/polygon-cli/contracts/asm/noop-loop.easm > noop-loop.bin
 ./build/bin/evm --codefile noop-loop.bin --gas 100000 --debug --json --dump run
 
@@ -37,10 +22,9 @@ limits of the EVM and network
 
 cat noop-loop.bin | tr -d "\n" | wc
 ./build/bin/evm compile ~/code/polygon-cli/contracts/asm/deploy-header.easm
-#+end_src
+```
 
-
-#+begin_src javascript
+``` javascript
 eth.coinbase=eth.accounts[0]
 eth.sendTransaction({from: eth.coinbase, to: "0x85da99c8a7c2c95964c8efd687e95e632fc533d6", value: web3.toWei(5000, "ether")})
 
@@ -69,4 +53,4 @@ debug.traceCall({from: eth.coinbase, to: delegateCodeReceipt.contractAddress}, "
 
 
 debug.traceCall({from: eth.coinbase, to: delegateCodeReceipt.contractAddress, gas:100000}, "latest");
-#+end_src
+```
