@@ -22,6 +22,8 @@ jobs:
       - name: perform cross build and compress binaries
         shell: bash
         run: |
+          apt-get install -y gcc-aarch64-linux-gnu
+
           pwd
           make cross
           pushd out
