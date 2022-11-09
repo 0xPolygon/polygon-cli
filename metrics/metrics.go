@@ -256,7 +256,6 @@ func ecrecover(block *rpctypes.PolyBlock) ([]byte, error) {
 	header := new(ethtypes.Header)
 	err = header.UnmarshalJSON(input)
 	if err != nil {
-		panic(err)
 		return nil, err
 	}
 	sigStart := len(header.Extra) - ethcrypto.SignatureLength
