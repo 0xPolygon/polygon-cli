@@ -116,17 +116,17 @@ func generateLibp2pNodeKey(keyType int) error {
 	rand32 := io.LimitReader(rand.Reader, 32)
 	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, RSAKeypairBits, rand32)
 	if err != nil {
-		return fmt.Errorf("unable to generate key pair, %v", err)
+		return fmt.Errorf("unable to generate key pair, %w", err)
 	}
 
 	rawPrvKey, err := libp2pcrypto.MarshalPrivateKey(prvKey)
 	if err != nil {
-		return fmt.Errorf("unable to convert the private key to a byte array, %v", err)
+		return fmt.Errorf("unable to convert the private key to a byte array, %w", err)
 	}
 
 	id, err := libp2ppeer.IDFromPrivateKey(prvKey)
 	if err != nil {
-		return fmt.Errorf("unable to retrieve the node ID from the private key, %v", err)
+		return fmt.Errorf("unable to retrieve the node ID from the private key, %w", err)
 	}
 
 	nko := nodeKeyOut{
@@ -139,7 +139,7 @@ func generateLibp2pNodeKey(keyType int) error {
 
 	out, err := json.Marshal(nko)
 	if err != nil {
-		return fmt.Errorf("could not json marshel the key data %v", err)
+		return fmt.Errorf("could not json marshel the key data %w", err)
 	}
 
 	fmt.Println(string(out))
@@ -154,7 +154,7 @@ func generateETHNodeKey() error {
 		nodeKey, err = gethcrypto.LoadECDSA(*inputNodeKeyFile)
 	}
 	if err != nil {
-		return fmt.Errorf("could not generate key: %v", err)
+		return fmt.Errorf("could not generate key: %w", err)
 	}
 
 	ko := nodeKeyOut{}
@@ -182,7 +182,7 @@ func generateETHNodeKey() error {
 
 	out, err := json.Marshal(ko)
 	if err != nil {
-		return fmt.Errorf("could not json marshel the key data %v", err)
+		return fmt.Errorf("could not json marshel the key data %w", err)
 	}
 
 	fmt.Println(string(out))
@@ -198,12 +198,12 @@ func generateSeededLibp2pNodeKey(keyType int) error {
 
 	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, RSAKeypairBits, rand32)
 	if err != nil {
-		return fmt.Errorf("unable to generate key pair, %v", err)
+		return fmt.Errorf("unable to generate key pair, %w", err)
 	}
 
 	rawPrvKey, err := libp2pcrypto.MarshalPrivateKey(prvKey)
 	if err != nil {
-		return fmt.Errorf("unable to convert the private key to a byte array, %v", err)
+		return fmt.Errorf("unable to convert the private key to a byte array, %w", err)
 	}
 
 	id, err := libp2ppeer.IDFromPrivateKey(prvKey)
@@ -221,7 +221,7 @@ func generateSeededLibp2pNodeKey(keyType int) error {
 
 	out, err := json.Marshal(nko)
 	if err != nil {
-		return fmt.Errorf("could not json marshel the key data %v", err)
+		return fmt.Errorf("could not json marshel the key data %w", err)
 	}
 
 	fmt.Println(string(out))

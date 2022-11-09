@@ -113,11 +113,11 @@ func GenPrivKeyFromSecret(seed []byte, c PolySignature) (interface{}, error) {
 	if c == SignatureBls {
 		_, sk, err := blsPop.KeygenWithSeed(seed[0:32])
 		if err != nil {
-			return nil, fmt.Errorf("unable to generate a new BLS key %v", err)
+			return nil, fmt.Errorf("unable to generate a new BLS key %w", err)
 		}
 		skBytes, err := sk.MarshalBinary()
 		if err != nil {
-			return nil, fmt.Errorf("unable to execute the private key to byte array conversion %v", err)
+			return nil, fmt.Errorf("unable to execute the private key to byte array conversion %w", err)
 		}
 		return skBytes, nil
 	}
@@ -147,11 +147,11 @@ func GetPublicKeyFromSeed(seed []byte, c PolySignature, compressed bool) ([]byte
 	if c == SignatureBls {
 		pubKey, _, err := blsPop.KeygenWithSeed(seed[0:32])
 		if err != nil {
-			return nil, fmt.Errorf("unable to generate a new BLS key %v", err)
+			return nil, fmt.Errorf("unable to generate a new BLS key %w", err)
 		}
 		pubKeyBytes, err := pubKey.MarshalBinary()
 		if err != nil {
-			return nil, fmt.Errorf("unable to execute the public key to byte array conversion %v", err)
+			return nil, fmt.Errorf("unable to execute the public key to byte array conversion %w", err)
 		}
 		return pubKeyBytes, nil
 	}
