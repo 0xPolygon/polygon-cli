@@ -64,7 +64,7 @@ type (
 		BLS                struct {
 			HexPublicKey  string `json:",omitempty"`
 			HexPrivateKey string `json:",omitempty"`
-		}
+		} `json:",omitempty"`
 	}
 	PolyAddressExport struct {
 		Path string `json:",omitempty"`
