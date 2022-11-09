@@ -120,7 +120,12 @@ func generateLibp2pNodeKey(keyType int) error {
 		return fmt.Errorf("unable to generate key pair, %w", err)
 	}
 
-	rawPrvKey, err := libp2pcrypto.MarshalPrivateKey(prvKey)
+	var rawPrvKey []byte
+	if keyType == libp2pcrypto.Secp256k1 {
+		rawPrvKey, err = libp2pcrypto.MarshalPrivateKey(prvKey)
+	} else {
+		rawPrvKey, err = prvKey.Raw()
+	}
 	if err != nil {
 		return fmt.Errorf("unable to convert the private key to a byte array, %w", err)
 	}
@@ -202,7 +207,12 @@ func generateSeededLibp2pNodeKey(keyType int) error {
 		return fmt.Errorf("unable to generate key pair, %w", err)
 	}
 
-	rawPrvKey, err := libp2pcrypto.MarshalPrivateKey(prvKey)
+	var rawPrvKey []byte
+	if keyType == libp2pcrypto.Secp256k1 {
+		rawPrvKey, err = libp2pcrypto.MarshalPrivateKey(prvKey)
+	} else {
+		rawPrvKey, err = prvKey.Raw()
+	}
 	if err != nil {
 		return fmt.Errorf("unable to convert the private key to a byte array, %w", err)
 	}
