@@ -12,28 +12,47 @@ permissions:
   # issues: write
 
 jobs:
-  goreleaser:
+  manual-release:
     runs-on: ubuntu-latest
     steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
         with:
-          fetch-depth: 0
-      -
-        name: Fetch all tags
-        run: git fetch --force --tags
-      -
-        name: Set up Go
-        uses: actions/setup-go@v2
+          go-version: '>=1.18.0'
+      - name: perform cross build and compress binaries
+        shell: bash
+        run: |
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+          pwd
+          make cross
+          pushd out
+          echo -n "${{github.ref_name}}" | sed 's/^v//' | tee ref_name.txt
+          readonly tag_name="$(cat ref_name.txt)"
+          echo "$tag_name"
+
+          mkdir polycli_${tag_name}_darwin_amd64/
+          mv darwin-amd64-polycli polycli_${tag_name}_darwin_amd64/polycli
+          tar czf polycli_${tag_name}_darwin_amd64.tar.gz polycli_${tag_name}_darwin_amd64/
+
+          mkdir polycli_${tag_name}_darwin_arm64/
+          mv darwin-arm64-polycli polycli_${tag_name}_darwin_arm64/polycli
+          tar czf polycli_${tag_name}_darwin_arm64.tar.gz polycli_${tag_name}_darwin_arm64/
+
+          mkdir polycli_${tag_name}_linux_amd64/
+          mv linux-amd64-polycli polycli_${tag_name}_linux_amd64/polycli
+          tar czf polycli_${tag_name}_linux_amd64.tar.gz polycli_${tag_name}_linux_amd64/
+
+          mkdir polycli_${tag_name}_linux_arm64/
+          mv linux-arm64-polycli polycli_${tag_name}_linux_arm64/polycli
+          tar czf polycli_${tag_name}_linux_arm64.tar.gz polycli_${tag_name}_linux_arm64/
+
+          popd
+      - name: publish binaries
+        uses: svenstaro/upload-release-action@v2
         with:
-          go-version: 1.18
-      -
-        name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v2
-        with:
-          distribution: goreleaser
-          version: latest
-          args: release --rm-dist
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: out/*.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true
