@@ -73,38 +73,33 @@ implemented devp2p because that's what we needed first.
 			return generateETHNodeKey()
 		}
 		if *inputNodeKeyProtocol == "libp2p" {
-			switch *inputNodeKeyType {
-			// https://pkg.go.dev/github.com/libp2p/go-libp2p/core/crypto#pkg-constants
-			case "rsa":
-				return generateLibp2pNodeKey(libp2pcrypto.RSA)
-			case "ed25519":
-				return generateLibp2pNodeKey(libp2pcrypto.Ed25519)
-			case "secp256k1":
-				return generateLibp2pNodeKey(libp2pcrypto.Secp256k1)
-			case "ecdsa":
-				return generateLibp2pNodeKey(libp2pcrypto.ECDSA)
-			default:
-				return fmt.Errorf("key type not implemented %v", *inputNodeKeyType)
-			}
+			keyType := keyTypeToInt(*inputNodeKeyType)
+			return generateLibp2pNodeKey(keyType)
 		}
 		if *inputNodeKeyProtocol == "seed-libp2p" {
-			switch *inputNodeKeyType {
-			// https://pkg.go.dev/github.com/libp2p/go-libp2p/core/crypto#pkg-constants
-			case "rsa":
-				return generateSeededLibp2pNodeKey(libp2pcrypto.RSA)
-			case "ed25519":
-				return generateSeededLibp2pNodeKey(libp2pcrypto.Ed25519)
-			case "secp256k1":
-				return generateSeededLibp2pNodeKey(libp2pcrypto.Secp256k1)
-			case "ecdsa":
-				return generateSeededLibp2pNodeKey(libp2pcrypto.ECDSA)
-			default:
-				return fmt.Errorf("key type not implemented %v", *inputNodeKeyType)
-			}
+			keyType := keyTypeToInt(*inputNodeKeyType)
+			return generateSeededLibp2pNodeKey(keyType)
 		}
 
 		return fmt.Errorf("%s is not implemented yet", *inputNodeKeyProtocol)
 	},
+}
+
+func keyTypeToInt(keyType string) int {
+	// https://pkg.go.dev/github.com/libp2p/go-libp2p/core/crypto#pkg-constants
+	switch keyType {
+	case "rsa":
+		return libp2pcrypto.RSA
+	case "ed25519":
+		return libp2pcrypto.Ed25519
+	case "secp256k1":
+		return libp2pcrypto.Secp256k1
+	case "ecdsa":
+		return libp2pcrypto.ECDSA
+	default:
+		fmt.Printf("key type %v not implemented yet so ed25519 key type will be used by default", *inputNodeKeyType)
+		return libp2pcrypto.Ed25519
+	}
 }
 
 type (
