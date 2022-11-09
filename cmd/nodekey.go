@@ -88,14 +88,16 @@ implemented devp2p because that's what we needed first.
 func keyTypeToInt(keyType string) int {
 	// https://pkg.go.dev/github.com/libp2p/go-libp2p/core/crypto#pkg-constants
 	switch keyType {
-	case "rsa":
-		return libp2pcrypto.RSA
+	case "":
+		fallthrough
 	case "ed25519":
 		return libp2pcrypto.Ed25519
 	case "secp256k1":
 		return libp2pcrypto.Secp256k1
 	case "ecdsa":
 		return libp2pcrypto.ECDSA
+	case "rsa":
+		return libp2pcrypto.RSA
 	default:
 		fmt.Printf("key type %v not implemented yet so ed25519 key type will be used by default", *inputNodeKeyType)
 		return libp2pcrypto.Ed25519
@@ -232,7 +234,7 @@ func init() {
 	rootCmd.AddCommand(nodekeyCmd)
 
 	inputNodeKeyProtocol = nodekeyCmd.PersistentFlags().String("protocol", "devp2p", "devp2p|libp2p|pex")
-	inputNodeKeyType = nodekeyCmd.PersistentFlags().String("key-type", "ed25519", "rsa|ed25519|secp256k1|ecdsa")
+	inputNodeKeyType = nodekeyCmd.PersistentFlags().String("key-type", "ed25519", "ed25519|secp256k1|ecdsa|rsa")
 	inputNodeKeyIP = nodekeyCmd.PersistentFlags().StringP("ip", "i", "0.0.0.0", "The IP to be associated with this address")
 	inputNodeKeyTCP = nodekeyCmd.PersistentFlags().IntP("tcp", "t", 30303, "The tcp Port to be associated with this address")
 	inputNodeKeyUDP = nodekeyCmd.PersistentFlags().IntP("udp", "u", 0, "The udp Port to be associated with this address")
