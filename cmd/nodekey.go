@@ -47,7 +47,7 @@ import (
 // pex - https://github.com/tendermint/tendermint/blob/f2a8f5e054cf99ebe246818bb6d71f41f9a30faa/types/node_id.go
 //
 
-const KEYPAIR_BITE_SIZE = 256
+const RSAKeypairBits = 256
 
 var (
 	inputNodeKeyProtocol *string
@@ -119,7 +119,7 @@ type (
 
 func generateLibp2pNodeKey(keyType int) error {
 	rand32 := io.LimitReader(rand.Reader, 32)
-	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, KEYPAIR_BITE_SIZE, rand32)
+	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, RSAKeypairBits, rand32)
 	if err != nil {
 		return fmt.Errorf("unable to generate key pair, %v", err)
 	}
@@ -201,7 +201,7 @@ func generateSeededLibp2pNodeKey(keyType int) error {
 	buf := bytes.NewBuffer(seedData)
 	rand32 := io.LimitReader(buf, 32)
 
-	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, KEYPAIR_BITE_SIZE, rand32)
+	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, RSAKeypairBits, rand32)
 	if err != nil {
 		return fmt.Errorf("unable to generate key pair, %v", err)
 	}
