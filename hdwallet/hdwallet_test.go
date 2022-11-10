@@ -3,6 +3,8 @@ package hdwallet
 import (
 	"encoding/hex"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
@@ -150,4 +152,165 @@ func TestBIP32Vec4(t *testing.T) {
 			t.Fatalf("Public key for path %s was mismatched. Expected %s got %s", k, v[0], pubData)
 		}
 	}
+}
+
+func TestPolyWalletSetters(t *testing.T) {
+	seed := "9C9B913EB1B6254F4737CE947EFD16F16E916F9D6EE5C1102A2002E48D4C88BD"
+	rawSeed, err := hex.DecodeString(seed)
+	if err != nil {
+		t.Fatalf("Failed to parse seed hex: %v", err)
+	}
+	pw, _ := NewPolyWalletFromSeed(rawSeed)
+	pw.rawSeed = rawSeed
+
+	err = pw.SetPath("invalid path")
+	if err == nil {
+		t.Fatal("This path should fail")
+	}
+	newPath := "m/44'/60'/0'"
+	err = pw.SetPath(newPath)
+	assert.Equal(t, pw.derivationPath, newPath, "Paths should be equal")
+	if err != nil {
+		t.Fatalf("Failed to set path: %v", err)
+	}
+}
+
+func TestNewPolyWalletSetIterations(t *testing.T) {
+	seed := "9C9B913EB1B6254F4737CE947EFD16F16E916F9D6EE5C1102A2002E48D4C88BD"
+	rawSeed, err := hex.DecodeString(seed)
+	if err != nil {
+		t.Fatalf("Failed to parse seed hex: %v", err)
+	}
+	pw, _ := NewPolyWalletFromSeed(rawSeed)
+	pw.rawSeed = rawSeed
+
+	err = pw.SetUseRawEntropy(true)
+	err = pw.SetIterations(1)
+	if err == nil {
+		t.Fatalf("Set iteration should fail")
+	}
+
+	err = pw.SetUseRawEntropy(false)
+	err = pw.SetIterations(1)
+	if err != nil {
+		t.Fatalf("Failed to set iteration: %v", err)
+	}
+}
+
+func TestNewPolyWalletFail(t *testing.T) {
+	mnemonic := "invalid mnemonic"
+	_, err := NewPolyWallet(mnemonic, "password")
+
+	if err == nil {
+		t.Fatalf("Should fail with invalid mnemonic.")
+	}
+}
+
+func TestPolyWalletParseMnemonic(t *testing.T) {
+	mnemonic := "bottom drive obey lake curtain smoke basket hold race lonely fit walk"
+	pw, err := NewPolyWallet(mnemonic, "password")
+	if err != nil {
+		t.Fatalf("Failed to create new poly wallet: %v", err)
+	}
+
+	pw.SetUseRawEntropy(false)
+	err = pw.parseMnemonic()
+	if err != nil {
+		t.Fatalf("Failed to parse mnemonic %v", err)
+	}
+
+	pw.SetUseRawEntropy(true)
+	err = pw.parseMnemonic()
+	if err != nil {
+		t.Fatalf("Failed to parse mnemonic %v", err)
+	}
+}
+
+func TestPolyWalletExportRootAddress(t *testing.T) {
+	mnemonic := "bottom drive obey lake curtain smoke basket hold race lonely fit walk"
+	pw, _ := NewPolyWallet(mnemonic, "password")
+
+	_, err := pw.ExportRootAddress()
+	if err != nil {
+		t.Fatalf("Failed to export root address %v", err)
+	}
+}
+
+func TestPolyWalletExportHDAddresses(t *testing.T) {
+	mnemonic := "bottom drive obey lake curtain smoke basket hold race lonely fit walk"
+	pw, _ := NewPolyWallet(mnemonic, "password")
+
+	_, err := pw.ExportHDAddresses(2)
+	if err != nil {
+		t.Fatalf("Failed to export HD address %v", err)
+	}
+}
+
+func TestPolyWalletGetKey(t *testing.T) {
+	mnemonic := "bottom drive obey lake curtain smoke basket hold race lonely fit walk"
+	pw, _ := NewPolyWallet(mnemonic, "password")
+
+	_, err := pw.GetKey()
+	if err != nil {
+		t.Fatalf("Failed to getKey %v", err)
+	}
+
+	pw.derivationPath = "invalid derivation path"
+	_, err2 := pw.GetKey()
+	if err2 == nil {
+		t.Fatalf("should fail with invalid path")
+	}
+
+}
+
+func TestPolyWalletGetKeyForPath(t *testing.T) {
+	mnemonic := "bottom drive obey lake curtain smoke basket hold race lonely fit walk"
+	pw, _ := NewPolyWallet(mnemonic, "password")
+
+	_, err := pw.GetKeyForPath("invalid path")
+	if err == nil {
+		t.Fatalf("should fail with invalid path")
+	}
+}
+
+func TestNewMnemonic(t *testing.T) {
+	_, err := NewMnemonic(12, "fake language")
+	if err == nil {
+		t.Fatalf("should not create mnemonic - unrecognized language")
+	}
+
+	_, err1 := NewMnemonic(0, "")
+	if err1 == nil {
+		t.Fatalf("should not create mnemonic - invalid word count")
+	}
+
+	_, err2 := NewMnemonic(12, "english")
+	if err2 != nil {
+		t.Fatalf("Failed to create new mnemonic%v", err)
+	}
+}
+
+func TestGetPublicKeyFromSeed(t *testing.T) {
+	seed := "fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a8784817e7b7875726f6c696663605d5a5754514e4b484542"
+	rawSeed, err := hex.DecodeString(seed)
+	if err != nil {
+		t.Fatalf("Failed to parse seed hex: %v", err)
+	}
+
+	pw, _ := NewPolyWalletFromSeed(rawSeed)
+	pw.rawSeed = rawSeed
+
+	_, err2 := GetPublicKeyFromSeed(rawSeed, SignatureSecp256k1, false)
+	if err2 != nil {
+		t.Fatalf("Failed to get public key from seed SignatureSecp256k1: %v", err)
+	}
+	_, err3 := GetPublicKeyFromSeed(rawSeed, SignatureEd25519, false)
+	if err3 != nil {
+		t.Fatalf("Failed to get public key from seed SignatureSecp256k1: %v", err)
+	}
+	_, err4 := GetPublicKeyFromSeed(rawSeed, SignatureSr25519, false)
+	if err4 != nil {
+		t.Fatalf("Failed to get public key from seed SignatureSecp256k1: %v", err)
+	}
+
 }
