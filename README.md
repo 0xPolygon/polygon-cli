@@ -1,3 +1,5 @@
+[![codecov](https://codecov.io/gh/maticnetwork/polygon-cli/branch/DVT-178-wallet-testing/graph/badge.svg?token=VH3KG7DQ3A)](https://codecov.io/gh/maticnetwork/polygon-cli)
+
 We run a lot of different blockchain technologies. Different tools often
 have inconsistent tooling and this makes automation and operations
 painful. The goal of this codebase is to standardize some of our

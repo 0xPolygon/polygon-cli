@@ -43,4 +43,4 @@ clean:
 	$(RM) -r $(BUILD_DIR)
 
 test:
-	go test github.com/maticnetwork/polygon-cli/...
+	go test -v ./... -covermode=atomic -coverprofile=coverage.out && go tool cover -func coverage.out
