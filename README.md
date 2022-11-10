@@ -194,8 +194,17 @@ this on the fly, but if we want to store the key pair during an
 automated provisioning process, it's helpful to have the output be
 structured
 
+By default, the generated keys are `ed25519` keys intended to be used in the `devp2p` protocol.
+
 ``` shell
 polycli nodekey
+polycli nodekey --protocol devp2p --key-type ed25519 --seed 271828 --tcp 30303 # equivalent to above
+
+# generate a networking keypair for avail
+polycli nodekey --protocol libp2p
+
+# generate a networking keypair for edge
+polycli nodekey --protocol libp2p --key-type secp256k1
 ```
 
 # RPC

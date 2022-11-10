@@ -65,8 +65,7 @@ var nodekeyCmd = &cobra.Command{
 	Use:   "nodekey",
 	Short: "Generate Node Keys",
 	Long: `This is meant to be a simple utility for generating node keys for
-different block chain clients and protocols. Right now we've only
-implemented devp2p because that's what we needed first.
+different block chain clients and protocols.
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if *inputNodeKeyProtocol == "devp2p" {
