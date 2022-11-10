@@ -90,22 +90,22 @@ const (
 	SignatureSr25519
 )
 
-// func GenPrivKeyFromSecret(seed []byte, c PolySignature) (interface{}, error) {
-// 	if c == SignatureEd25519 {
-// 		return ed25519.NewKeyFromSeed(seed[0:32]), nil
-// 	}
-// 	if c == SignatureSr25519 {
-// 		msk, err := sr25519.NewMiniSecretKeyFromBytes(seed[0:32])
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		sk := msk.ExpandEd25519()
-// 		return sk, nil
-// 	}
-// 	// https://pkg.go.dev/crypto/ed25519
+func GenPrivKeyFromSecret(seed []byte, c PolySignature) (interface{}, error) {
+	if c == SignatureEd25519 {
+		return ed25519.NewKeyFromSeed(seed[0:32]), nil
+	}
+	if c == SignatureSr25519 {
+		msk, err := sr25519.NewMiniSecretKeyFromBytes(seed[0:32])
+		if err != nil {
+			return nil, err
+		}
+		sk := msk.ExpandEd25519()
+		return sk, nil
+	}
+	// https://pkg.go.dev/crypto/ed25519
 
-// 	return nil, fmt.Errorf("Unable to generate private key from secret")
-// }
+	return nil, fmt.Errorf("Unable to generate private key from secret")
+}
 
 func GetPublicKeyFromSeed(seed []byte, c PolySignature, compressed bool) ([]byte, error) {
 	if c == SignatureEd25519 {
