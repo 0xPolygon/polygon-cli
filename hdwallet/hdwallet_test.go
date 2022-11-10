@@ -130,6 +130,7 @@ func TestBIP32Vec4(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse seed hex: %v", err)
 	}
+
 	pw, _ := NewPolyWalletFromSeed(rawSeed)
 	pw.rawSeed = rawSeed
 
