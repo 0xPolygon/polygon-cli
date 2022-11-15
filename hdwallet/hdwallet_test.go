@@ -185,13 +185,13 @@ func TestNewPolyWalletSetIterations(t *testing.T) {
 	pw, _ := NewPolyWalletFromSeed(rawSeed)
 	pw.rawSeed = rawSeed
 
-	err = pw.SetUseRawEntropy(true)
+	_ = pw.SetUseRawEntropy(true)
 	err = pw.SetIterations(1)
 	if err == nil {
 		t.Fatalf("Set iteration should fail")
 	}
 
-	err = pw.SetUseRawEntropy(false)
+	_ = pw.SetUseRawEntropy(false)
 	err = pw.SetIterations(1)
 	if err != nil {
 		t.Fatalf("Failed to set iteration: %v", err)

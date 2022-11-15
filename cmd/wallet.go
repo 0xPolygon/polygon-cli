@@ -66,6 +66,9 @@ child accounts or generate new accmounts along with a seed phrase`,
 		// mnemonic = "crop cash unable insane eight faith inflict route frame loud box vibrant"
 		// mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 		password, err := getFileOrFlag(inputPasswordFile, inputPassword)
+		if err != nil {
+			return err
+		}
 		pw, err := hdwallet.NewPolyWallet(mnemonic, password)
 		if err != nil {
 			return err

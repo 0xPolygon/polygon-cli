@@ -388,6 +388,9 @@ func runLoadTest(ctx context.Context) error {
 				return err
 			}
 			err = initAvailTestParams(ctx, api)
+			if err != nil {
+				return err
+			}
 			return availLoop(ctx, api)
 		}
 
