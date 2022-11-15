@@ -483,6 +483,4 @@ func renderMonitorUI(ms *monitorStatus) error {
 			}
 		}
 	}
-
-	return nil
 }
