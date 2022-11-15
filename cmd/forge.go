@@ -58,7 +58,7 @@ func (f *fakeBlockReader) Init() {
 
 func (f *fakeBlockReader) GetFakeBlock() (*ethtypes.Header, []*ethtypes.Transaction, error) {
 	if !f.scanner.Scan() {
-		return nil, nil, fmt.Errorf("No more fake blocks left")
+		return nil, nil, fmt.Errorf("no more fake blocks left")
 	}
 
 	blockText := f.scanner.Bytes()

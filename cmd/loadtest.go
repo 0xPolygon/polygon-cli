@@ -143,7 +143,7 @@ var loadtestCmd = &cobra.Command{
 	Args: func(cmd *cobra.Command, args []string) error {
 		setLogLevel(inputLoadTestParams)
 		if len(args) != 1 {
-			return fmt.Errorf("Expected exactly one argument")
+			return fmt.Errorf("expected exactly one argument")
 		}
 		url, err := url.Parse(args[0])
 		if err != nil {
@@ -151,12 +151,12 @@ var loadtestCmd = &cobra.Command{
 			return err
 		}
 		if url.Scheme != "http" && url.Scheme != "https" && url.Scheme != "ws" && url.Scheme != "wss" {
-			return fmt.Errorf("The scheme %s is not supported", url.Scheme)
+			return fmt.Errorf("the scheme %s is not supported", url.Scheme)
 		}
 		inputLoadTestParams.URL = url
 		r := regexp.MustCompile(fmt.Sprintf("^[%s]+$", strings.Join(validLoadTestModes, "")))
 		if !r.MatchString(*inputLoadTestParams.Mode) {
-			return fmt.Errorf("The mode %s is not recognized", *inputLoadTestParams.Mode)
+			return fmt.Errorf("the mode %s is not recognized", *inputLoadTestParams.Mode)
 		}
 		return nil
 	},
@@ -351,7 +351,7 @@ func hexToBigInt(raw any) (bi *big.Int, err error) {
 	bi = big.NewInt(0)
 	hexString, ok := raw.(string)
 	if !ok {
-		err = fmt.Errorf("Could not assert value %v as a string", raw)
+		err = fmt.Errorf("could not assert value %v as a string", raw)
 		return
 	}
 	hexString = strings.Replace(hexString, "0x", "", -1)
@@ -372,7 +372,7 @@ func hexToBigInt(raw any) (bi *big.Int, err error) {
 func hexToUint64(raw any) (uint64, error) {
 	hexString, ok := raw.(string)
 	if !ok {
-		return 0, fmt.Errorf("Could not assert %v as a string", hexString)
+		return 0, fmt.Errorf("could not assert %v as a string", hexString)
 	}
 
 	hexString = strings.Replace(hexString, "0x", "", -1)
@@ -875,7 +875,7 @@ func createLoadTesterContract(ctx context.Context, c *ethclient.Client, nonce ui
 		wait = time.Duration(float64(wait) * 1.5)
 	}
 
-	return nil, fmt.Errorf("Unable to get tx receipt")
+	return nil, fmt.Errorf("unable to get tx receipt")
 }
 
 func hexwordRead(b []byte) (int, error) {
@@ -1038,7 +1038,7 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 func loadtestNotImplemented(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	t1 = time.Now()
 	t2 = time.Now()
-	err = fmt.Errorf("This method is not implemented")
+	err = fmt.Errorf("this method is not implemented")
 	return
 }
 

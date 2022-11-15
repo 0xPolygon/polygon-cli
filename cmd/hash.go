@@ -101,7 +101,7 @@ will be hashed. Otherwise, we'll attempted to read the standard input.
 			}
 		}
 
-		return fmt.Errorf("The name %s is not recognized. Please use one of the following: %s", args[0], strings.Join(supportedHashFunctions, ","))
+		return fmt.Errorf("the name %s is not recognized. Please use one of the following: %s", args[0], strings.Join(supportedHashFunctions, ","))
 	},
 }
 
@@ -155,7 +155,7 @@ func getHash(name string) (hash.Hash, error) {
 		return sha3.NewLegacyKeccak512(), nil
 	}
 	var h hash.Hash
-	return h, fmt.Errorf("Unable to create a hash function for %s", name)
+	return h, fmt.Errorf("unable to create a hash function for %s", name)
 }
 
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
