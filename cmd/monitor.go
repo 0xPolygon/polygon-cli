@@ -356,7 +356,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 		sort.Sort(recentBlocks)
 		// 25 needs to be a variable / parameter
 		if len(recentBlocks) > 25 {
-			recentBlocks = recentBlocks[len(recentBlocks)-25 : len(recentBlocks)]
+			recentBlocks = recentBlocks[len(recentBlocks)-25:]
 		}
 
 		h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
