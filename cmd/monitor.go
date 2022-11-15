@@ -480,7 +480,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 			if currentBn != ms.HeadBlock {
 				currentBn = ms.HeadBlock
 				redraw(ms)
-				break
 			}
 		}
 	}
