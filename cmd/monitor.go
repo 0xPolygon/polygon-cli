@@ -379,7 +379,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 		}
 		if len(columnWidths) != len(blockTable.Rows[0]) {
 			// i've messed up
-			panic(fmt.Sprintf("Mis matched between columns and specified widths"))
+			panic("Mis matched between columns and specified widths")
 		}
 
 		for i := 0; i < len(blockTable.Rows); i = i + 1 {
