@@ -769,7 +769,7 @@ func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
 
-	inputData := make([]byte, *ltp.ByteCount, *ltp.ByteCount)
+	inputData := make([]byte, *ltp.ByteCount)
 	hexwordRead(inputData)
 	t1 = time.Now()
 	_, err = ltContract.Store(tops, inputData)
@@ -866,7 +866,7 @@ func (hw *hexwordReader) Read(p []byte) (n int, err error) {
 }
 
 func getRandomAddress() *ethcommon.Address {
-	addr := make([]byte, 20, 20)
+	addr := make([]byte, 20)
 	n, err := rand.Read(addr)
 	if err != nil {
 		log.Error().Err(err).Msg("There was an issue getting random bytes for the address")
@@ -1105,7 +1105,7 @@ func loadtestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uin
 func loadtestAvailStore(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64, meta *gstypes.Metadata, genesisHash gstypes.Hash) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
-	inputData := make([]byte, *ltp.ByteCount, *ltp.ByteCount)
+	inputData := make([]byte, *ltp.ByteCount)
 	hexwordRead(inputData)
 
 	gsCall, err := gstypes.NewCall(meta, "DataAvailability.submit_data", gstypes.NewBytes([]byte(inputData)))
