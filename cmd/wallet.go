@@ -19,7 +19,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/maticnetwork/polygon-cli/hdwallet"
 	"github.com/spf13/cobra"
@@ -117,7 +117,7 @@ func getFileOrFlag(filename *string, flag *string) (string, error) {
 		return "", fmt.Errorf("both the filename and the flag pointers are nil")
 	}
 	if filename != nil && *filename != "" {
-		filedata, err := ioutil.ReadFile(*filename)
+		filedata, err := os.ReadFile(*filename)
 		if err != nil {
 			return "", fmt.Errorf("could not open the specified file %s. Got error %s", *filename, err.Error())
 		}

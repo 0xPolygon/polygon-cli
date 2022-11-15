@@ -20,7 +20,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"hash"
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
 
@@ -164,7 +164,7 @@ func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
 		// If we get here, we're going to assume the user
 		// wants to hash a file and we're not going to look
 		// for other input sources
-		return ioutil.ReadFile(*inputFileName)
+		return os.ReadFile(*inputFileName)
 	}
 
 	// This is a little tricky. If a user provdes multiple args that aren't quoted, it could be confusing
@@ -173,5 +173,5 @@ func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
 		return []byte(concat), nil
 	}
 
-	return ioutil.ReadAll(os.Stdin)
+	return io.ReadAll(os.Stdin)
 }
