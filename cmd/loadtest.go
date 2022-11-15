@@ -28,7 +28,6 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -160,15 +159,6 @@ var loadtestCmd = &cobra.Command{
 		}
 		return nil
 	},
-}
-
-func contains[T comparable](haystack []T, needle T) bool {
-	for _, s := range haystack {
-		if needle == s {
-			return true
-		}
-	}
-	return false
 }
 
 func setLogLevel(ltp loadTestParams) {
@@ -367,26 +357,6 @@ func hexToBigInt(raw any) (bi *big.Int, err error) {
 	}
 	bi.SetBytes(rawGas)
 	return
-}
-
-func hexToUint64(raw any) (uint64, error) {
-	hexString, ok := raw.(string)
-	if !ok {
-		return 0, fmt.Errorf("could not assert %v as a string", hexString)
-	}
-
-	hexString = strings.Replace(hexString, "0x", "", -1)
-	if len(hexString)%2 != 0 {
-		log.Trace().Str("original", hexString).Msg("Hex of odd length")
-		hexString = "0" + hexString
-	}
-
-	result, err := strconv.ParseUint(hexString, 16, 64)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to decode hex string")
-		return 0, err
-	}
-	return uint64(result), nil
 }
 
 func runLoadTest(ctx context.Context) error {
@@ -842,6 +812,8 @@ func recordSample(goRoutineID, requestID int64, err error, start, end time.Time)
 	loadTestResults = append(loadTestResults, s)
 }
 
+/*
+// This function is unused
 func createLoadTesterContract(ctx context.Context, c *ethclient.Client, nonce uint64, gasPrice *big.Int) (*ethtypes.Receipt, error) {
 	var gasLimit uint64 = 0x192f64
 	contract, err := contracts.GetLoadTesterBytes()
@@ -877,6 +849,7 @@ func createLoadTesterContract(ctx context.Context, c *ethclient.Client, nonce ui
 
 	return nil, fmt.Errorf("unable to get tx receipt")
 }
+*/
 
 func hexwordRead(b []byte) (int, error) {
 	hw := hexwordReader{}

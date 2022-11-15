@@ -171,6 +171,8 @@ func genBlock(blockNum int, bg *ethcore.BlockGen, fbr *fakeBlockReader) {
 	}
 }
 
+/*
+// This function is unused.
 func readBlocks(bc *ethcore.BlockChain, gblock *ethtypes.Block) error {
 	scanner := bufio.NewScanner(os.Stdin)
 	parentHash := gblock.Hash()
@@ -200,6 +202,7 @@ func readBlocks(bc *ethcore.BlockChain, gblock *ethtypes.Block) error {
 	}
 	return nil
 }
+*/
 
 type rpcBlock struct {
 	Hash         ethcommon.Hash   `json:"hash"`
@@ -216,6 +219,8 @@ type txExtraInfo struct {
 	From        *ethcommon.Address `json:"from,omitempty"`
 }
 
+/*
+// This function is unused
 // https://github.com/ethereum/go-ethereum/blob/d901d85377c2c2f05f09f423c7d739c0feecd90a/ethclient/ethclient.go#L110
 func readBlock(raw json.RawMessage, parentHash ethcommon.Hash, parentNumber *big.Int) (*ethtypes.Block, error) {
 	// Decode header and transactions.
@@ -254,6 +259,7 @@ func readBlock(raw json.RawMessage, parentHash ethcommon.Hash, parentNumber *big
 	head.Time = uint64(time.Now().Unix())
 	return ethtypes.NewBlockWithHeader(head).WithBody(txs, nil), nil
 }
+*/
 
 func init() {
 	rootCmd.AddCommand(forgeCmd)
