@@ -617,25 +617,18 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 				switch localMode {
 				case loadTestModeTransaction:
 					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue)
-					break
 				case loadTestModeDeploy:
 					startReq, endReq, err = loadtestDeploy(ctx, c, myNonceValue)
-					break
 				case loadTestModeCall:
 					startReq, endReq, err = loadtestCall(ctx, c, myNonceValue, ltContract)
-					break
 				case loadTestModeFunction:
 					startReq, endReq, err = loadtestFunction(ctx, c, myNonceValue, ltContract)
-					break
 				case loadTestModeInc:
 					startReq, endReq, err = loadtestInc(ctx, c, myNonceValue, ltContract)
-					break
 				case loadTestModeStore:
 					startReq, endReq, err = loadtestStore(ctx, c, myNonceValue, ltContract)
-					break
 				case loadTestModeLong:
 					startReq, endReq, err = loadtestLong(ctx, c, myNonceValue, delegatorContract, ltAddr)
-					break
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -972,25 +965,18 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 				switch localMode {
 				case loadTestModeTransaction:
 					startReq, endReq, err = loadtestAvailTransfer(ctx, c, myNonceValue, meta, genesisHash)
-					break
 				case loadTestModeDeploy:
 					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
-					break
 				case loadTestModeCall:
 					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
-					break
 				case loadTestModeFunction:
 					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
-					break
 				case loadTestModeInc:
 					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
-					break
 				case loadTestModeStore:
 					startReq, endReq, err = loadtestAvailStore(ctx, c, myNonceValue, meta, genesisHash)
-					break
 				case loadTestModeLong:
 					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
-					break
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}

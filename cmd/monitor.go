@@ -418,21 +418,18 @@ func renderMonitorUI(ms *monitorStatus) error {
 				selectedBlockIdx = nil
 				currentMode = monitorModeExplorer
 				redraw(ms)
-				break
 			case "<Enter>":
 				// TODO
 				if selectedBlockIdx != nil {
 					currentMode = monitorModeBlock
 				}
 				redraw(ms)
-				break
 			case "<Resize>":
 				payload := e.Payload.(ui.Resize)
 				grid.SetRect(0, 0, payload.Width, payload.Height)
 				blockGrid.SetRect(0, 0, payload.Width, payload.Height)
 				ui.Clear()
 				redraw(ms)
-				break
 			case "<PageDown>", "<PageUp>":
 				if currentMode == monitorModeBlock {
 					if e.ID == "<PageDown>" {
@@ -443,8 +440,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 					redraw(ms)
 					break
 				}
-
-				break
 			case "<Up>", "<Down>", "<Left>", "<Right>":
 				if currentMode == monitorModeBlock {
 					if e.ID == "<Down>" {
@@ -476,7 +471,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 				}
 
 				redraw(ms)
-				break
 			case "<MouseLeft>", "<MouseRight>", "<MouseRelease>", "<MouseWheelUp>", "<MouseWheelDown>":
 				break
 			default:
