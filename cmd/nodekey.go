@@ -202,12 +202,12 @@ func generateLibp2pNodeKey(keyType int) (nodeKeyOut, error) {
 
 func generateSeededLibp2pNodeKey(keyType int) (nodeKeyOut, error) {
 	seedValue := *inputNodeKeySeed
-	seedData := make([]byte, 32)
+	seedData := make([]byte, 64)
 	binary.BigEndian.PutUint64(seedData, seedValue)
 	buf := bytes.NewBuffer(seedData)
-	rand32 := io.LimitReader(buf, 32)
+	rand64 := io.LimitReader(buf, 64)
 
-	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, RSAKeypairBits, rand32)
+	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, RSAKeypairBits, rand64)
 	if err != nil {
 		return nodeKeyOut{}, fmt.Errorf("unable to generate key pair, %w", err)
 	}
