@@ -60,6 +60,16 @@ var (
 	inputNodeKeySeed     *uint64
 )
 
+type (
+	nodeKeyOut struct {
+		PublicKey      string
+		PrivateKey     string
+		FullPrivateKey string `json:",omitempty"`
+		ENR            string `json:",omitempty"`
+		Seed           uint64 `json:",omitempty"`
+	}
+)
+
 // nodekeyCmd represents the nodekey command
 var nodekeyCmd = &cobra.Command{
 	Use:   "nodekey",
@@ -125,46 +135,6 @@ func keyTypeToInt(keyType string) (int, error) {
 	}
 }
 
-type (
-	nodeKeyOut struct {
-		PublicKey      string
-		PrivateKey     string
-		FullPrivateKey string `json:",omitempty"`
-		ENR            string `json:",omitempty"`
-		Seed           uint64 `json:",omitempty"`
-	}
-)
-
-func generateLibp2pNodeKey(keyType int) (nodeKeyOut, error) {
-	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, RSAKeypairBits, rand.Reader)
-	if err != nil {
-		return nodeKeyOut{}, fmt.Errorf("unable to generate key pair, %w", err)
-	}
-
-	var rawPrvKey []byte
-	if keyType == libp2pcrypto.Secp256k1 {
-		rawPrvKey, err = libp2pcrypto.MarshalPrivateKey(prvKey)
-	} else {
-		rawPrvKey, err = prvKey.Raw()
-	}
-	if err != nil {
-		return nodeKeyOut{}, fmt.Errorf("unable to convert the private key to a byte array, %w", err)
-	}
-
-	id, err := libp2ppeer.IDFromPrivateKey(prvKey)
-	if err != nil {
-		return nodeKeyOut{}, fmt.Errorf("unable to retrieve the node ID from the private key, %w", err)
-	}
-
-	return nodeKeyOut{
-		PublicKey: id.String(),
-		// half of the private key is the public key. Substrate doesn't handle this well and need just the 32 byte seed/private key
-		// TODO: should we keep private key to 32 bytes length for all types?
-		PrivateKey:     hex.EncodeToString(rawPrvKey[0:ed25519.PublicKeySize]),
-		FullPrivateKey: hex.EncodeToString(rawPrvKey),
-	}, nil
-}
-
 func generateETHNodeKey() (nodeKeyOut, error) {
 	nodeKey, err := gethcrypto.GenerateKey()
 
@@ -198,6 +168,36 @@ func generateETHNodeKey() (nodeKeyOut, error) {
 	// ko.ENR = n.URLv4()
 	nko.ENR = n.String()
 	return nko, nil
+}
+
+func generateLibp2pNodeKey(keyType int) (nodeKeyOut, error) {
+	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, RSAKeypairBits, rand.Reader)
+	if err != nil {
+		return nodeKeyOut{}, fmt.Errorf("unable to generate key pair, %w", err)
+	}
+
+	var rawPrvKey []byte
+	if keyType == libp2pcrypto.Secp256k1 {
+		rawPrvKey, err = libp2pcrypto.MarshalPrivateKey(prvKey)
+	} else {
+		rawPrvKey, err = prvKey.Raw()
+	}
+	if err != nil {
+		return nodeKeyOut{}, fmt.Errorf("unable to convert the private key to a byte array, %w", err)
+	}
+
+	id, err := libp2ppeer.IDFromPrivateKey(prvKey)
+	if err != nil {
+		return nodeKeyOut{}, fmt.Errorf("unable to retrieve the node ID from the private key, %w", err)
+	}
+
+	return nodeKeyOut{
+		PublicKey: id.String(),
+		// half of the private key is the public key. Substrate doesn't handle this well and need just the 32 byte seed/private key
+		// TODO: should we keep private key to 32 bytes length for all types?
+		PrivateKey:     hex.EncodeToString(rawPrvKey[0:ed25519.PublicKeySize]),
+		FullPrivateKey: hex.EncodeToString(rawPrvKey),
+	}, nil
 }
 
 func generateSeededLibp2pNodeKey(keyType int) (nodeKeyOut, error) {
