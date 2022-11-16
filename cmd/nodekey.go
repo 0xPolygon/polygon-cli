@@ -68,25 +68,42 @@ var nodekeyCmd = &cobra.Command{
 different block chain clients and protocols.
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		var nko nodeKeyOut
 		if *inputNodeKeyProtocol == "devp2p" {
-			return generateETHNodeKey()
-		}
-		if *inputNodeKeyProtocol == "libp2p" {
+			var err error
+			nko, err = generateETHNodeKey()
+			if err != nil {
+				return err
+			}
+		} else if *inputNodeKeyProtocol == "libp2p" {
 			keyType, err := keyTypeToInt(*inputNodeKeyType)
 			if err != nil {
 				return err
 			}
-			return generateLibp2pNodeKey(keyType)
-		}
-		if *inputNodeKeyProtocol == "seed-libp2p" {
+			nko, err = generateLibp2pNodeKey(keyType)
+			if err != nil {
+				return err
+			}
+		} else if *inputNodeKeyProtocol == "seed-libp2p" {
 			keyType, err := keyTypeToInt(*inputNodeKeyType)
 			if err != nil {
 				return err
 			}
-			return generateSeededLibp2pNodeKey(keyType)
+			nko, err = generateSeededLibp2pNodeKey(keyType)
+			if err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("%s is not implemented yet", *inputNodeKeyProtocol)
 		}
 
-		return fmt.Errorf("%s is not implemented yet", *inputNodeKeyProtocol)
+		out, err := json.Marshal(nko)
+		if err != nil {
+			return fmt.Errorf("could not json marshal the key data %w", err)
+		}
+		fmt.Println(string(out))
+
+		return nil
 	},
 }
 
@@ -118,10 +135,10 @@ type (
 	}
 )
 
-func generateLibp2pNodeKey(keyType int) error {
+func generateLibp2pNodeKey(keyType int) (nodeKeyOut, error) {
 	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, RSAKeypairBits, rand.Reader)
 	if err != nil {
-		return fmt.Errorf("unable to generate key pair, %w", err)
+		return nodeKeyOut{}, fmt.Errorf("unable to generate key pair, %w", err)
 	}
 
 	var rawPrvKey []byte
@@ -131,46 +148,37 @@ func generateLibp2pNodeKey(keyType int) error {
 		rawPrvKey, err = prvKey.Raw()
 	}
 	if err != nil {
-		return fmt.Errorf("unable to convert the private key to a byte array, %w", err)
+		return nodeKeyOut{}, fmt.Errorf("unable to convert the private key to a byte array, %w", err)
 	}
 
 	id, err := libp2ppeer.IDFromPrivateKey(prvKey)
 	if err != nil {
-		return fmt.Errorf("unable to retrieve the node ID from the private key, %w", err)
+		return nodeKeyOut{}, fmt.Errorf("unable to retrieve the node ID from the private key, %w", err)
 	}
 
-	nko := nodeKeyOut{
+	return nodeKeyOut{
 		PublicKey: id.String(),
 		// half of the private key is the public key. Substrate doesn't handle this well and need just the 32 byte seed/private key
 		// TODO: should we keep private key to 32 bytes length for all types?
 		PrivateKey:     hex.EncodeToString(rawPrvKey[0:ed25519.PublicKeySize]),
 		FullPrivateKey: hex.EncodeToString(rawPrvKey),
-	}
-
-	out, err := json.Marshal(nko)
-	if err != nil {
-		return fmt.Errorf("could not json marshel the key data %w", err)
-	}
-
-	fmt.Println(string(out))
-
-	return nil
+	}, nil
 }
 
-func generateETHNodeKey() error {
+func generateETHNodeKey() (nodeKeyOut, error) {
 	nodeKey, err := gethcrypto.GenerateKey()
 
 	if *inputNodeKeyFile != "" {
 		nodeKey, err = gethcrypto.LoadECDSA(*inputNodeKeyFile)
 	}
 	if err != nil {
-		return fmt.Errorf("could not generate key: %w", err)
+		return nodeKeyOut{}, fmt.Errorf("could not generate key: %w", err)
 	}
 
-	ko := nodeKeyOut{}
-	ko.PublicKey = fmt.Sprintf("%x", gethcrypto.FromECDSAPub(&nodeKey.PublicKey)[1:])
+	nko := nodeKeyOut{}
+	nko.PublicKey = fmt.Sprintf("%x", gethcrypto.FromECDSAPub(&nodeKey.PublicKey)[1:])
 	prvKeyBytes := gethcrypto.FromECDSA(nodeKey)
-	ko.PrivateKey = hex.EncodeToString(prvKeyBytes)
+	nko.PrivateKey = hex.EncodeToString(prvKeyBytes)
 
 	ip := net.ParseIP(*inputNodeKeyIP)
 	n := gethenode.NewV4(&nodeKey.PublicKey, ip, *inputNodeKeyTCP, *inputNodeKeyUDP)
@@ -179,27 +187,20 @@ func generateETHNodeKey() error {
 		r := n.Record()
 		err = gethenode.SignV4(r, nodeKey)
 		if err != nil {
-			return err
+			return nodeKeyOut{}, err
 		}
 		n, err = gethenode.New(gethenode.ValidSchemes, r)
 		if err != nil {
-			return err
+			return nodeKeyOut{}, err
 		}
 	}
 
 	// ko.ENR = n.URLv4()
-	ko.ENR = n.String()
-
-	out, err := json.Marshal(ko)
-	if err != nil {
-		return fmt.Errorf("could not json marshel the key data %w", err)
-	}
-
-	fmt.Println(string(out))
-	return nil
+	nko.ENR = n.String()
+	return nko, nil
 }
 
-func generateSeededLibp2pNodeKey(keyType int) error {
+func generateSeededLibp2pNodeKey(keyType int) (nodeKeyOut, error) {
 	seedValue := *inputNodeKeySeed
 	seedData := make([]byte, 32)
 	binary.BigEndian.PutUint64(seedData, seedValue)
@@ -208,7 +209,7 @@ func generateSeededLibp2pNodeKey(keyType int) error {
 
 	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, RSAKeypairBits, rand32)
 	if err != nil {
-		return fmt.Errorf("unable to generate key pair, %w", err)
+		return nodeKeyOut{}, fmt.Errorf("unable to generate key pair, %w", err)
 	}
 
 	var rawPrvKey []byte
@@ -218,31 +219,23 @@ func generateSeededLibp2pNodeKey(keyType int) error {
 		rawPrvKey, err = prvKey.Raw()
 	}
 	if err != nil {
-		return fmt.Errorf("unable to convert the private key to a byte array, %w", err)
+		return nodeKeyOut{}, fmt.Errorf("unable to convert the private key to a byte array, %w", err)
 	}
 
 	id, err := libp2ppeer.IDFromPrivateKey(prvKey)
 	if err != nil {
-		return err
+		return nodeKeyOut{}, err
 	}
-	nko := nodeKeyOut{
+	return nodeKeyOut{
 		PublicKey: id.String(),
 		// half of the private key is the public key. Substrate doesn't handle this well and need just the 32 byte seed/private key
 		// TODO: should we keep private key to 32 bytes length for all types?
 		PrivateKey:     hex.EncodeToString(rawPrvKey[0:ed25519.PublicKeySize]),
 		FullPrivateKey: hex.EncodeToString(rawPrvKey),
 		Seed:           seedValue,
-	}
-
-	out, err := json.Marshal(nko)
-	if err != nil {
-		return fmt.Errorf("could not json marshel the key data %w", err)
-	}
-
-	fmt.Println(string(out))
-
-	return nil
+	}, nil
 }
+
 func init() {
 	rootCmd.AddCommand(nodekeyCmd)
 
