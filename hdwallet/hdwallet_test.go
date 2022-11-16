@@ -214,13 +214,13 @@ func TestPolyWalletParseMnemonic(t *testing.T) {
 		t.Fatalf("Failed to create new poly wallet: %v", err)
 	}
 
-	pw.SetUseRawEntropy(false)
+	_ = pw.SetUseRawEntropy(false)
 	err = pw.parseMnemonic()
 	if err != nil {
 		t.Fatalf("Failed to parse mnemonic %v", err)
 	}
 
-	pw.SetUseRawEntropy(true)
+	_ = pw.SetUseRawEntropy(true)
 	err = pw.parseMnemonic()
 	if err != nil {
 		t.Fatalf("Failed to parse mnemonic %v", err)

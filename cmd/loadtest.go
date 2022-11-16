@@ -766,7 +766,7 @@ func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 	tops.Nonce = new(big.Int).SetUint64(nonce)
 
 	inputData := make([]byte, *ltp.ByteCount)
-	hexwordRead(inputData)
+	_, _ = hexwordRead(inputData)
 	t1 = time.Now()
 	_, err = ltContract.Store(tops, inputData)
 	t2 = time.Now()
@@ -1095,7 +1095,7 @@ func loadtestAvailStore(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64
 	ltp := inputLoadTestParams
 
 	inputData := make([]byte, *ltp.ByteCount)
-	hexwordRead(inputData)
+	_, _ = hexwordRead(inputData)
 
 	gsCall, err := gstypes.NewCall(meta, "DataAvailability.submit_data", gstypes.NewBytes([]byte(inputData)))
 	if err != nil {

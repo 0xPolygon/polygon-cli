@@ -142,7 +142,7 @@ var monitorCmd = &cobra.Command{
 				if from.Cmp(zero) < 0 {
 					from.SetInt64(0)
 				}
-				ms.getBlockRange(ctx, from, ms.HeadBlock, rpc, args[0])
+				_ = ms.getBlockRange(ctx, from, ms.HeadBlock, rpc, args[0])
 				if !isUiRendered {
 					go func() {
 						errChan <- renderMonitorUI(ms)
