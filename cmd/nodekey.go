@@ -29,13 +29,10 @@ import (
 
 	gethcrypto "github.com/ethereum/go-ethereum/crypto"
 	gethenode "github.com/ethereum/go-ethereum/p2p/enode"
-
 	libp2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
-
-	//	p2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
-
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // libp2p (substrate/avail) - https://github.com/libp2p/specs/blob/master/peer-ids/peer-ids.md
@@ -50,14 +47,15 @@ import (
 const RSAKeypairBits = 2048
 
 var (
-	inputNodeKeyProtocol *string
-	inputNodeKeyType     *string
-	inputNodeKeyIP       *string
-	inputNodeKeyTCP      *int
-	inputNodeKeyUDP      *int
-	inputNodeKeyFile     *string
-	inputNodeKeySign     *bool
-	inputNodeKeySeed     *uint64
+	inputNodeKeyProtocol        *string
+	inputNodeKeyType            *string
+	inputNodeKeyIP              *string
+	inputNodeKeyTCP             *int
+	inputNodeKeyUDP             *int
+	inputNodeKeyFile            *string
+	inputNodeKeySign            *bool
+	inputNodeKeySeed            *uint64
+	inputNodeKeyMarshalProtobuf *bool
 )
 
 type (
@@ -81,7 +79,7 @@ different block chain clients and protocols.
 		var nko nodeKeyOut
 		if *inputNodeKeyProtocol == "devp2p" {
 			var err error
-			nko, err = generateETHNodeKey()
+			nko, err = generateDevp2pNodeKey()
 			if err != nil {
 				return err
 			}
@@ -115,6 +113,64 @@ different block chain clients and protocols.
 
 		return nil
 	},
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 0 {
+			return fmt.Errorf("this command expects no arguments")
+		}
+		validProtocols := []string{"devp2p", "libp2p", "seed-libp2p"}
+		isValidProtocol := false
+		for _, p := range validProtocols {
+			if p == *inputNodeKeyProtocol {
+				isValidProtocol = true
+			}
+		}
+		if !isValidProtocol {
+			return fmt.Errorf("the protocol %s is not implemented", *inputNodeKeyProtocol)
+		}
+		if *inputNodeKeyProtocol == "devp2p" {
+			invalidFlags := []string{"key-type", "seed", "marshal-protobuf"}
+			err := validateNodeKeyFlags(cmd, invalidFlags)
+			if err != nil {
+				return err
+			}
+		}
+		if *inputNodeKeyProtocol == "libp2p" {
+			invalidFlags := []string{"file", "ip", "tcp", "udp", "sign", "seed"}
+			err := validateNodeKeyFlags(cmd, invalidFlags)
+			if err != nil {
+				return err
+			}
+		}
+		if *inputNodeKeyProtocol == "seed-libp2p" {
+			invalidFlags := []string{"file", "ip", "tcp", "udp", "sign"}
+			err := validateNodeKeyFlags(cmd, invalidFlags)
+			if err != nil {
+				return err
+			}
+			if *inputNodeKeyType == "rsa" {
+				return fmt.Errorf("the RSA key type doesn't support manual key seeding")
+			}
+			if *inputNodeKeyType == "secp256k1" {
+				return fmt.Errorf("the secp256k1 key type doesn't support manual key seeding")
+			}
+		}
+		return nil
+	},
+}
+
+func validateNodeKeyFlags(cmd *cobra.Command, invalidFlags []string) error {
+	invalidFlagName := ""
+	cmd.Flags().Visit(func(f *pflag.Flag) {
+		for _, i := range invalidFlags {
+			if f.Name == i {
+				invalidFlagName = i
+			}
+		}
+	})
+	if invalidFlagName != "" {
+		return fmt.Errorf("the flag %s is not valid with the %s protocol", invalidFlagName, *inputNodeKeyProtocol)
+	}
+	return nil
 }
 
 func keyTypeToInt(keyType string) (int, error) {
@@ -135,7 +191,7 @@ func keyTypeToInt(keyType string) (int, error) {
 	}
 }
 
-func generateETHNodeKey() (nodeKeyOut, error) {
+func generateDevp2pNodeKey() (nodeKeyOut, error) {
 	nodeKey, err := gethcrypto.GenerateKey()
 
 	if *inputNodeKeyFile != "" {
@@ -177,7 +233,7 @@ func generateLibp2pNodeKey(keyType int) (nodeKeyOut, error) {
 	}
 
 	var rawPrvKey []byte
-	if keyType == libp2pcrypto.Secp256k1 {
+	if *inputNodeKeyMarshalProtobuf {
 		rawPrvKey, err = libp2pcrypto.MarshalPrivateKey(prvKey)
 	} else {
 		rawPrvKey, err = prvKey.Raw()
@@ -213,7 +269,7 @@ func generateSeededLibp2pNodeKey(keyType int) (nodeKeyOut, error) {
 	}
 
 	var rawPrvKey []byte
-	if keyType == libp2pcrypto.Secp256k1 {
+	if *inputNodeKeyMarshalProtobuf {
 		rawPrvKey, err = libp2pcrypto.MarshalPrivateKey(prvKey)
 	} else {
 		rawPrvKey, err = prvKey.Raw()
@@ -239,23 +295,14 @@ func generateSeededLibp2pNodeKey(keyType int) (nodeKeyOut, error) {
 func init() {
 	rootCmd.AddCommand(nodekeyCmd)
 
-	inputNodeKeyProtocol = nodekeyCmd.PersistentFlags().String("protocol", "devp2p", "devp2p|libp2p|pex")
+	inputNodeKeyProtocol = nodekeyCmd.PersistentFlags().String("protocol", "devp2p", "devp2p|libp2p|pex|seed-libp2p")
 	inputNodeKeyType = nodekeyCmd.PersistentFlags().String("key-type", "ed25519", "ed25519|secp256k1|ecdsa|rsa")
 	inputNodeKeyIP = nodekeyCmd.PersistentFlags().StringP("ip", "i", "0.0.0.0", "The IP to be associated with this address")
 	inputNodeKeyTCP = nodekeyCmd.PersistentFlags().IntP("tcp", "t", 30303, "The tcp Port to be associated with this address")
 	inputNodeKeyUDP = nodekeyCmd.PersistentFlags().IntP("udp", "u", 0, "The udp Port to be associated with this address")
 	inputNodeKeySign = nodekeyCmd.PersistentFlags().BoolP("sign", "s", false, "Should the node record be signed?")
 	inputNodeKeySeed = nodekeyCmd.PersistentFlags().Uint64P("seed", "S", 271828, "A numeric seed value")
+	inputNodeKeyMarshalProtobuf = nodekeyCmd.PersistentFlags().BoolP("marshal-protobuf", "m", false, "If true the libp2p key will be marshaled to protobuf format rather than raw")
 
 	inputNodeKeyFile = nodekeyCmd.PersistentFlags().StringP("file", "f", "", "A file with the private nodekey in hex format")
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// nodekeyCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// nodekeyCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
