@@ -72,11 +72,17 @@ different block chain clients and protocols.
 			return generateETHNodeKey()
 		}
 		if *inputNodeKeyProtocol == "libp2p" {
-			keyType := keyTypeToInt(*inputNodeKeyType)
+			keyType, err := keyTypeToInt(*inputNodeKeyType)
+			if err != nil {
+				return err
+			}
 			return generateLibp2pNodeKey(keyType)
 		}
 		if *inputNodeKeyProtocol == "seed-libp2p" {
-			keyType := keyTypeToInt(*inputNodeKeyType)
+			keyType, err := keyTypeToInt(*inputNodeKeyType)
+			if err != nil {
+				return err
+			}
 			return generateSeededLibp2pNodeKey(keyType)
 		}
 
@@ -84,22 +90,21 @@ different block chain clients and protocols.
 	},
 }
 
-func keyTypeToInt(keyType string) int {
+func keyTypeToInt(keyType string) (int, error) {
 	// https://pkg.go.dev/github.com/libp2p/go-libp2p/core/crypto#pkg-constants
 	switch keyType {
 	case "":
 		fallthrough
 	case "ed25519":
-		return libp2pcrypto.Ed25519
+		return libp2pcrypto.Ed25519, nil
 	case "secp256k1":
-		return libp2pcrypto.Secp256k1
+		return libp2pcrypto.Secp256k1, nil
 	case "ecdsa":
-		return libp2pcrypto.ECDSA
+		return libp2pcrypto.ECDSA, nil
 	case "rsa":
-		return libp2pcrypto.RSA
+		return libp2pcrypto.RSA, nil
 	default:
-		fmt.Printf("key type %v not implemented yet so ed25519 key type will be used by default", *inputNodeKeyType)
-		return libp2pcrypto.Ed25519
+		return 0, fmt.Errorf("key type not implemented: %v", keyType)
 	}
 }
 
