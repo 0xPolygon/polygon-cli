@@ -28,7 +28,6 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -143,7 +142,7 @@ var loadtestCmd = &cobra.Command{
 	Args: func(cmd *cobra.Command, args []string) error {
 		setLogLevel(inputLoadTestParams)
 		if len(args) != 1 {
-			return fmt.Errorf("Expected exactly one argument")
+			return fmt.Errorf("expected exactly one argument")
 		}
 		url, err := url.Parse(args[0])
 		if err != nil {
@@ -151,24 +150,15 @@ var loadtestCmd = &cobra.Command{
 			return err
 		}
 		if url.Scheme != "http" && url.Scheme != "https" && url.Scheme != "ws" && url.Scheme != "wss" {
-			return fmt.Errorf("The scheme %s is not supported", url.Scheme)
+			return fmt.Errorf("the scheme %s is not supported", url.Scheme)
 		}
 		inputLoadTestParams.URL = url
 		r := regexp.MustCompile(fmt.Sprintf("^[%s]+$", strings.Join(validLoadTestModes, "")))
 		if !r.MatchString(*inputLoadTestParams.Mode) {
-			return fmt.Errorf("The mode %s is not recognized", *inputLoadTestParams.Mode)
+			return fmt.Errorf("the mode %s is not recognized", *inputLoadTestParams.Mode)
 		}
 		return nil
 	},
-}
-
-func contains[T comparable](haystack []T, needle T) bool {
-	for _, s := range haystack {
-		if needle == s {
-			return true
-		}
-	}
-	return false
 }
 
 func setLogLevel(ltp loadTestParams) {
@@ -351,7 +341,7 @@ func hexToBigInt(raw any) (bi *big.Int, err error) {
 	bi = big.NewInt(0)
 	hexString, ok := raw.(string)
 	if !ok {
-		err = fmt.Errorf("Could not assert value %v as a string", raw)
+		err = fmt.Errorf("could not assert value %v as a string", raw)
 		return
 	}
 	hexString = strings.Replace(hexString, "0x", "", -1)
@@ -367,26 +357,6 @@ func hexToBigInt(raw any) (bi *big.Int, err error) {
 	}
 	bi.SetBytes(rawGas)
 	return
-}
-
-func hexToUint64(raw any) (uint64, error) {
-	hexString, ok := raw.(string)
-	if !ok {
-		return 0, fmt.Errorf("Could not assert %v as a string", hexString)
-	}
-
-	hexString = strings.Replace(hexString, "0x", "", -1)
-	if len(hexString)%2 != 0 {
-		log.Trace().Str("original", hexString).Msg("Hex of odd length")
-		hexString = "0" + hexString
-	}
-
-	result, err := strconv.ParseUint(hexString, 16, 64)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to decode hex string")
-		return 0, err
-	}
-	return uint64(result), nil
 }
 
 func runLoadTest(ctx context.Context) error {
@@ -418,6 +388,9 @@ func runLoadTest(ctx context.Context) error {
 				return err
 			}
 			err = initAvailTestParams(ctx, api)
+			if err != nil {
+				return err
+			}
 			return availLoop(ctx, api)
 		}
 
@@ -644,25 +617,18 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 				switch localMode {
 				case loadTestModeTransaction:
 					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue)
-					break
 				case loadTestModeDeploy:
 					startReq, endReq, err = loadtestDeploy(ctx, c, myNonceValue)
-					break
 				case loadTestModeCall:
 					startReq, endReq, err = loadtestCall(ctx, c, myNonceValue, ltContract)
-					break
 				case loadTestModeFunction:
 					startReq, endReq, err = loadtestFunction(ctx, c, myNonceValue, ltContract)
-					break
 				case loadTestModeInc:
 					startReq, endReq, err = loadtestInc(ctx, c, myNonceValue, ltContract)
-					break
 				case loadTestModeStore:
 					startReq, endReq, err = loadtestStore(ctx, c, myNonceValue, ltContract)
-					break
 				case loadTestModeLong:
 					startReq, endReq, err = loadtestLong(ctx, c, myNonceValue, delegatorContract, ltAddr)
-					break
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -799,8 +765,8 @@ func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
 
-	inputData := make([]byte, *ltp.ByteCount, *ltp.ByteCount)
-	hexwordRead(inputData)
+	inputData := make([]byte, *ltp.ByteCount)
+	_, _ = hexwordRead(inputData)
 	t1 = time.Now()
 	_, err = ltContract.Store(tops, inputData)
 	t2 = time.Now()
@@ -842,6 +808,8 @@ func recordSample(goRoutineID, requestID int64, err error, start, end time.Time)
 	loadTestResults = append(loadTestResults, s)
 }
 
+/*
+// This function is unused
 func createLoadTesterContract(ctx context.Context, c *ethclient.Client, nonce uint64, gasPrice *big.Int) (*ethtypes.Receipt, error) {
 	var gasLimit uint64 = 0x192f64
 	contract, err := contracts.GetLoadTesterBytes()
@@ -875,8 +843,9 @@ func createLoadTesterContract(ctx context.Context, c *ethclient.Client, nonce ui
 		wait = time.Duration(float64(wait) * 1.5)
 	}
 
-	return nil, fmt.Errorf("Unable to get tx receipt")
+	return nil, fmt.Errorf("unable to get tx receipt")
 }
+*/
 
 func hexwordRead(b []byte) (int, error) {
 	hw := hexwordReader{}
@@ -893,7 +862,7 @@ func (hw *hexwordReader) Read(p []byte) (n int, err error) {
 }
 
 func getRandomAddress() *ethcommon.Address {
-	addr := make([]byte, 20, 20)
+	addr := make([]byte, 20)
 	n, err := rand.Read(addr)
 	if err != nil {
 		log.Error().Err(err).Msg("There was an issue getting random bytes for the address")
@@ -996,25 +965,18 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 				switch localMode {
 				case loadTestModeTransaction:
 					startReq, endReq, err = loadtestAvailTransfer(ctx, c, myNonceValue, meta, genesisHash)
-					break
 				case loadTestModeDeploy:
 					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
-					break
 				case loadTestModeCall:
 					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
-					break
 				case loadTestModeFunction:
 					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
-					break
 				case loadTestModeInc:
 					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
-					break
 				case loadTestModeStore:
 					startReq, endReq, err = loadtestAvailStore(ctx, c, myNonceValue, meta, genesisHash)
-					break
 				case loadTestModeLong:
 					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
-					break
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -1038,7 +1000,7 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 func loadtestNotImplemented(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	t1 = time.Now()
 	t2 = time.Now()
-	err = fmt.Errorf("This method is not implemented")
+	err = fmt.Errorf("this method is not implemented")
 	return
 }
 
@@ -1132,8 +1094,8 @@ func loadtestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uin
 func loadtestAvailStore(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64, meta *gstypes.Metadata, genesisHash gstypes.Hash) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
-	inputData := make([]byte, *ltp.ByteCount, *ltp.ByteCount)
-	hexwordRead(inputData)
+	inputData := make([]byte, *ltp.ByteCount)
+	_, _ = hexwordRead(inputData)
 
 	gsCall, err := gstypes.NewCall(meta, "DataAvailability.submit_data", gstypes.NewBytes([]byte(inputData)))
 	if err != nil {

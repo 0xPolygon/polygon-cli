@@ -143,7 +143,7 @@ var dumpblocksCmd = &cobra.Command{
 			return err
 		}
 		if start < 0 || end < 0 {
-			return fmt.Errorf("The start and end parameters need to be positive")
+			return fmt.Errorf("the start and end parameters need to be positive")
 		}
 		if end < start {
 			start, end = end, start

@@ -67,12 +67,12 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 	cs := new(chainState)
 	cs.HeadBlock, err = ec.BlockNumber(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("Couldn't fetch block number: %s", err.Error())
+		return nil, fmt.Errorf("couldn't fetch block number: %s", err.Error())
 	}
 
 	cs.ChainID, err = ec.ChainID(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("Couldn't fetch chain id: %s", err.Error())
+		return nil, fmt.Errorf("couldn't fetch chain id: %s", err.Error())
 	}
 
 	cs.PeerCount, err = ec.PeerCount(ctx)
@@ -83,7 +83,7 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 
 	cs.GasPrice, err = ec.SuggestGasPrice(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("Couldn't estimate gas: %s", err.Error())
+		return nil, fmt.Errorf("couldn't estimate gas: %s", err.Error())
 	}
 
 	return cs, nil
@@ -142,7 +142,7 @@ var monitorCmd = &cobra.Command{
 				if from.Cmp(zero) < 0 {
 					from.SetInt64(0)
 				}
-				ms.getBlockRange(ctx, from, ms.HeadBlock, rpc, args[0])
+				_ = ms.getBlockRange(ctx, from, ms.HeadBlock, rpc, args[0])
 				if !isUiRendered {
 					go func() {
 						errChan <- renderMonitorUI(ms)
@@ -160,7 +160,7 @@ var monitorCmd = &cobra.Command{
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
-			return fmt.Errorf("Expected exactly one argument")
+			return fmt.Errorf("expected exactly one argument")
 		}
 		_, err := url.Parse(args[0])
 		if err != nil {
@@ -356,7 +356,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 		sort.Sort(recentBlocks)
 		// 25 needs to be a variable / parameter
 		if len(recentBlocks) > 25 {
-			recentBlocks = recentBlocks[len(recentBlocks)-25 : len(recentBlocks)]
+			recentBlocks = recentBlocks[len(recentBlocks)-25:]
 		}
 
 		h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
@@ -379,7 +379,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 		}
 		if len(columnWidths) != len(blockTable.Rows[0]) {
 			// i've messed up
-			panic(fmt.Sprintf("Mis matched between columns and specified widths"))
+			panic("Mis matched between columns and specified widths")
 		}
 
 		for i := 0; i < len(blockTable.Rows); i = i + 1 {
@@ -418,21 +418,18 @@ func renderMonitorUI(ms *monitorStatus) error {
 				selectedBlockIdx = nil
 				currentMode = monitorModeExplorer
 				redraw(ms)
-				break
 			case "<Enter>":
 				// TODO
 				if selectedBlockIdx != nil {
 					currentMode = monitorModeBlock
 				}
 				redraw(ms)
-				break
 			case "<Resize>":
 				payload := e.Payload.(ui.Resize)
 				grid.SetRect(0, 0, payload.Width, payload.Height)
 				blockGrid.SetRect(0, 0, payload.Width, payload.Height)
 				ui.Clear()
 				redraw(ms)
-				break
 			case "<PageDown>", "<PageUp>":
 				if currentMode == monitorModeBlock {
 					if e.ID == "<PageDown>" {
@@ -443,8 +440,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 					redraw(ms)
 					break
 				}
-
-				break
 			case "<Up>", "<Down>", "<Left>", "<Right>":
 				if currentMode == monitorModeBlock {
 					if e.ID == "<Down>" {
@@ -476,7 +471,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 				}
 
 				redraw(ms)
-				break
 			case "<MouseLeft>", "<MouseRight>", "<MouseRelease>", "<MouseWheelUp>", "<MouseWheelDown>":
 				break
 			default:
@@ -486,10 +480,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 			if currentBn != ms.HeadBlock {
 				currentBn = ms.HeadBlock
 				redraw(ms)
-				break
 			}
 		}
 	}
-
-	return nil
 }

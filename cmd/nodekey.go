@@ -169,7 +169,7 @@ func generateETHNodeKey() error {
 
 func generateSeededLibp2pNodeKey() error {
 	seedValue := *inputNodeKeySeed
-	seedData := make([]byte, 32, 32)
+	seedData := make([]byte, 32)
 	binary.BigEndian.PutUint64(seedData, seedValue)
 	buf := bytes.NewBuffer(seedData)
 	rand32 := io.LimitReader(buf, 32)

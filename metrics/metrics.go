@@ -260,7 +260,7 @@ func ecrecover(block *rpctypes.PolyBlock) ([]byte, error) {
 	}
 	sigStart := len(header.Extra) - ethcrypto.SignatureLength
 	if sigStart < 0 || sigStart > len(header.Extra) {
-		return nil, fmt.Errorf("Unable to recover signature")
+		return nil, fmt.Errorf("unable to recover signature")
 	}
 	signature := header.Extra[sigStart:]
 	pubkey, err := ethcrypto.Ecrecover(clique.SealHash(header).Bytes(), signature)

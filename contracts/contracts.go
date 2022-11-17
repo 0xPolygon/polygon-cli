@@ -279,7 +279,7 @@ func CallLoadTestFunctionByOpCode(shortCode uint64, lt *LoadTester, opts *bind.T
 		return lt.TestLOG4(opts, x)
 
 	}
-	return nil, fmt.Errorf("The tx code %d was unrecognized", shortCode)
+	return nil, fmt.Errorf("the tx code %d was unrecognized", shortCode)
 }
 
 func GetRandomOPCode() uint64 {

@@ -20,7 +20,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"hash"
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
 
@@ -101,7 +101,7 @@ will be hashed. Otherwise, we'll attempted to read the standard input.
 			}
 		}
 
-		return fmt.Errorf("The name %s is not recognized. Please use one of the following: %s", args[0], strings.Join(supportedHashFunctions, ","))
+		return fmt.Errorf("the name %s is not recognized. Please use one of the following: %s", args[0], strings.Join(supportedHashFunctions, ","))
 	},
 }
 
@@ -155,7 +155,7 @@ func getHash(name string) (hash.Hash, error) {
 		return sha3.NewLegacyKeccak512(), nil
 	}
 	var h hash.Hash
-	return h, fmt.Errorf("Unable to create a hash function for %s", name)
+	return h, fmt.Errorf("unable to create a hash function for %s", name)
 }
 
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
@@ -164,7 +164,7 @@ func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
 		// If we get here, we're going to assume the user
 		// wants to hash a file and we're not going to look
 		// for other input sources
-		return ioutil.ReadFile(*inputFileName)
+		return os.ReadFile(*inputFileName)
 	}
 
 	// This is a little tricky. If a user provdes multiple args that aren't quoted, it could be confusing
@@ -173,5 +173,5 @@ func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
 		return []byte(concat), nil
 	}
 
-	return ioutil.ReadAll(os.Stdin)
+	return io.ReadAll(os.Stdin)
 }

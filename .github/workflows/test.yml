@@ -13,6 +13,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    # source: https://github.com/golangci/golangci-lint-action
+    name: Lint
+    runs-on: ubuntu-latest
+    if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
+    steps:
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+      - uses: actions/checkout@v3
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+        continue-on-error: true
   test:
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     runs-on: ubuntu-latest

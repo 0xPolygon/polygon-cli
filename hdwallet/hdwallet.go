@@ -104,7 +104,7 @@ func GenPrivKeyFromSecret(seed []byte, c PolySignature) (interface{}, error) {
 	}
 	// https://pkg.go.dev/crypto/ed25519
 
-	return nil, fmt.Errorf("Unable to generate private key from secret")
+	return nil, fmt.Errorf("unable to generate private key from secret")
 }
 
 func GetPublicKeyFromSeed(seed []byte, c PolySignature, compressed bool) ([]byte, error) {
@@ -141,7 +141,7 @@ func GetPublicKeyFromSeed(seed []byte, c PolySignature, compressed bool) ([]byte
 
 func NewPolyWallet(mnemonic, password string) (*PolyWallet, error) {
 	if !bip39.IsMnemonicValid(mnemonic) {
-		return nil, fmt.Errorf("The given mnemonic is invalid: %s", mnemonic)
+		return nil, fmt.Errorf("the given mnemonic is invalid: %s", mnemonic)
 	}
 	pw := new(PolyWallet)
 	pw.Mnemonic = mnemonic
@@ -168,7 +168,7 @@ func NewPolyWalletFromSeed(seed []byte) (*PolyWallet, error) {
 func (p *PolyWallet) SetPath(path string) error {
 	// TODO validate the path more carefully
 	if !rePathValidator.MatchString(path) {
-		return fmt.Errorf("The path %s doesn't seem to make sense", path)
+		return fmt.Errorf("the path %s doesn't seem to make sense", path)
 	}
 	p.derivationPath = path
 	return nil
@@ -406,7 +406,7 @@ func parseDerivationPath(inputPath string) ([]uint32, error) {
 		// m
 		if idx == 0 {
 			if piece != "m" {
-				return nil, fmt.Errorf("Expected derivation path to start with \"m\" but got \"%s\" instead", piece)
+				return nil, fmt.Errorf("expected derivation path to start with \"m\" but got \"%s\" instead", piece)
 			}
 			continue
 		}
@@ -421,7 +421,7 @@ func parseDerivationPath(inputPath string) ([]uint32, error) {
 		}
 
 		if idx > 5 {
-			return nil, fmt.Errorf("Length of derivation path exceeded 5")
+			return nil, fmt.Errorf("length of derivation path exceeded 5")
 		}
 	}
 	return path, nil
@@ -445,23 +445,23 @@ func parsePathElement(element string) (uint32, error) {
 func NewMnemonic(wordCount int, lang string) (string, error) {
 	bits, hasKey := wordsToBits[wordCount]
 	if !hasKey {
-		return "", fmt.Errorf("The word count needs to be 12, 15, 18, 21, or 24. Got %d", wordCount)
+		return "", fmt.Errorf("the word count needs to be 12, 15, 18, 21, or 24. Got %d", wordCount)
 	}
 	wordList, hasKey := langToWordlist[strings.ToLower(lang)]
 	if !hasKey {
-		return "", fmt.Errorf("The language %s is not recognized.", lang)
+		return "", fmt.Errorf("the language %s is not recognized", lang)
 	}
 
 	bip39.SetWordList(wordList)
 
 	entropy, err := bip39.NewEntropy(bits)
 	if err != nil {
-		return "", fmt.Errorf("There was an error getting entropy: %s", err.Error())
+		return "", fmt.Errorf("there was an error getting entropy: %s", err.Error())
 	}
 
 	mnemonic, err := bip39.NewMnemonic(entropy)
 	if err != nil {
-		return "", fmt.Errorf("There was an error creating the mnemonic: %s", err.Error())
+		return "", fmt.Errorf("there was an error creating the mnemonic: %s", err.Error())
 	}
 
 	return mnemonic, nil

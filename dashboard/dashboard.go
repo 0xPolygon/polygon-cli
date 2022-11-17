@@ -110,7 +110,7 @@ func (a DataDogWidgets) Less(i, j int) bool { return a[i].Definition.Title < a[j
 
 func ConvertMetricsToDashboard(input *DashboardOptions) ([]byte, error) {
 	if len(input.TemplateVars) != len(input.TemplateVarDefaults) && len(input.TemplateVarDefaults) > 0 {
-		return nil, fmt.Errorf("The length of the template vars and template var defaults arguents do not match")
+		return nil, fmt.Errorf("the length of the template vars and template var defaults arguents do not match")
 	}
 	metrics, err := ParseMetricsFile(input.File)
 	if err != nil {

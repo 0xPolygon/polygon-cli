@@ -19,7 +19,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/maticnetwork/polygon-cli/hdwallet"
 	"github.com/spf13/cobra"
@@ -66,6 +66,9 @@ child accounts or generate new accmounts along with a seed phrase`,
 		// mnemonic = "crop cash unable insane eight faith inflict route frame loud box vibrant"
 		// mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 		password, err := getFileOrFlag(inputPasswordFile, inputPassword)
+		if err != nil {
+			return err
+		}
 		pw, err := hdwallet.NewPolyWallet(mnemonic, password)
 		if err != nil {
 			return err
@@ -103,10 +106,10 @@ child accounts or generate new accmounts along with a seed phrase`,
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
-			return fmt.Errorf("Expected exactly one argument: create or inspect.")
+			return fmt.Errorf("expected exactly one argument: create or inspect")
 		}
 		if args[0] != "create" && args[0] != "inspect" {
-			return fmt.Errorf("Expected argument to be create or inspect. Got: %s", args[0])
+			return fmt.Errorf("expected argument to be create or inspect. Got: %s", args[0])
 		}
 		return nil
 	},
@@ -114,19 +117,19 @@ child accounts or generate new accmounts along with a seed phrase`,
 
 func getFileOrFlag(filename *string, flag *string) (string, error) {
 	if filename == nil && flag == nil {
-		return "", fmt.Errorf("Both the filename and the flag pointers are nil")
+		return "", fmt.Errorf("both the filename and the flag pointers are nil")
 	}
 	if filename != nil && *filename != "" {
-		filedata, err := ioutil.ReadFile(*filename)
+		filedata, err := os.ReadFile(*filename)
 		if err != nil {
-			return "", fmt.Errorf("Could not open the specified file %s. Got error %s", *filename, err.Error())
+			return "", fmt.Errorf("could not open the specified file %s. Got error %s", *filename, err.Error())
 		}
 		return string(filedata), nil
 	}
 	if flag != nil {
 		return *flag, nil
 	}
-	return "", fmt.Errorf("Unable to determine flat or filename")
+	return "", fmt.Errorf("unable to determine flat or filename")
 }
 
 func init() {

@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+
 	// ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 
@@ -367,7 +368,7 @@ func rawRespToString(raw any) (string, error) {
 	case string:
 		hexString = v
 	default:
-		return "", fmt.Errorf("Could not assert %v as a string", raw)
+		return "", fmt.Errorf("could not assert %v as a string", raw)
 	}
 	return hexString, nil
 }
@@ -395,7 +396,7 @@ func ConvHexToUint64(raw any) (uint64, error) {
 func MustConvHexToUint64(raw any) uint64 {
 	num, err := ConvHexToUint64(raw)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to covert Hex to uint64: %v", err))
+		panic(fmt.Sprintf("failed to covert Hex to uint64: %v", err))
 	}
 	return num
 }
@@ -403,7 +404,7 @@ func MustConvHexToUint64(raw any) uint64 {
 func NewRawBlockResponseFromAny(raw any) (*RawBlockResponse, error) {
 	topMap, ok := raw.(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("Unable to map raw response")
+		return nil, fmt.Errorf("unable to map raw response")
 	}
 	_ = topMap
 	return nil, nil
