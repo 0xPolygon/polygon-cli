@@ -42,5 +42,9 @@ install: build
 clean:
 	$(RM) -r $(BUILD_DIR)
 
+# https://golangci-lint.run/usage/install/#local-installation
+lint:
+	golangci-lint run
+
 test:
 	go test -v ./... -covermode=atomic -coverprofile=coverage.out && go tool cover -func coverage.out
