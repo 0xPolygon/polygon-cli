@@ -6,8 +6,8 @@ import (
 	libp2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 )
 
-func TestGenerateETHNodeKey(t *testing.T) {
-	res, err := generateETHNodeKey()
+func TestGenerateDevp2pNodeKey(t *testing.T) {
+	res, err := generateDevp2pNodeKey()
 	if err != nil {
 		t.Errorf("could not generate eth key: %v", err)
 	} else {
