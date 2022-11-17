@@ -256,8 +256,11 @@ func generateLibp2pNodeKey(keyType int) (nodeKeyOut, error) {
 	}, nil
 }
 
-// Bug 1: trying to generate a seeded secp256k1 key does not return the same key even though we use the same seed
-// Bug 2: it's not possible to generate a seeded rsa key, it returns an "unexpected EOF" error
+// That function shouldn't be used for production environments.
+// It was created to allow us to create keys that work with the avail light client's method of generating keys
+// User shouldn't encounter these problems but devs, be aware of:
+// - generating a seeded secp256k1 key does not return the same key even though you use the same seed
+// - it's not possible to generate a seeded rsa key, it returns an "unexpected EOF" error
 func generateSeededLibp2pNodeKey(keyType int) (nodeKeyOut, error) {
 	seedValue := *inputNodeKeySeed
 	seedData := make([]byte, 64)
