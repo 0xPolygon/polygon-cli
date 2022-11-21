@@ -169,9 +169,7 @@ func validateNodeKeyFlags(cmd *cobra.Command, invalidFlags []string) error {
 func keyTypeToInt(keyType string) (int, error) {
 	// https://pkg.go.dev/github.com/libp2p/go-libp2p/core/crypto#pkg-constants
 	switch keyType {
-	case "":
-		fallthrough
-	case "ed25519":
+	case "", "ed25519":
 		return libp2pcrypto.Ed25519, nil
 	case "secp256k1":
 		return libp2pcrypto.Secp256k1, nil
