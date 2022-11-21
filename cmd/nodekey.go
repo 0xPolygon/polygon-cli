@@ -33,6 +33,7 @@ import (
 	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"golang.org/x/exp/slices"
 )
 
 // libp2p (substrate/avail) - https://github.com/libp2p/specs/blob/master/peer-ids/peer-ids.md
@@ -77,31 +78,27 @@ different block chain clients and protocols.
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var nko nodeKeyOut
-		if *inputNodeKeyProtocol == "devp2p" {
+		var withSeed bool
+		switch *inputNodeKeyProtocol {
+		case "devp2p":
 			var err error
 			nko, err = generateDevp2pNodeKey()
 			if err != nil {
 				return err
 			}
-		} else if *inputNodeKeyProtocol == "libp2p" {
+		case "seed-libp2p":
+			withSeed = true
+			fallthrough
+		case "libp2p":
 			keyType, err := keyTypeToInt(*inputNodeKeyType)
 			if err != nil {
 				return err
 			}
-			nko, err = generateLibp2pNodeKey(keyType)
+			nko, err = generateLibp2pNodeKey(keyType, withSeed)
 			if err != nil {
 				return err
 			}
-		} else if *inputNodeKeyProtocol == "seed-libp2p" {
-			keyType, err := keyTypeToInt(*inputNodeKeyType)
-			if err != nil {
-				return err
-			}
-			nko, err = generateSeededLibp2pNodeKey(keyType)
-			if err != nil {
-				return err
-			}
-		} else {
+		default:
 			return fmt.Errorf("%s is not implemented yet", *inputNodeKeyProtocol)
 		}
 
@@ -118,15 +115,11 @@ different block chain clients and protocols.
 			return fmt.Errorf("this command expects no arguments")
 		}
 		validProtocols := []string{"devp2p", "libp2p", "seed-libp2p"}
-		isValidProtocol := false
-		for _, p := range validProtocols {
-			if p == *inputNodeKeyProtocol {
-				isValidProtocol = true
-			}
-		}
-		if !isValidProtocol {
+		ok := slices.Contains(validProtocols, *inputNodeKeyProtocol)
+		if !ok {
 			return fmt.Errorf("the protocol %s is not implemented", *inputNodeKeyProtocol)
 		}
+
 		if *inputNodeKeyProtocol == "devp2p" {
 			invalidFlags := []string{"key-type", "seed", "marshal-protobuf"}
 			err := validateNodeKeyFlags(cmd, invalidFlags)
@@ -226,8 +219,24 @@ func generateDevp2pNodeKey() (nodeKeyOut, error) {
 	return nko, nil
 }
 
-func generateLibp2pNodeKey(keyType int) (nodeKeyOut, error) {
-	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, RSAKeypairBits, rand.Reader)
+// That function can generate seeded keys but it shouldn't be used for production environments.
+// It was created to allow us to create keys that work with the avail light client's method of generating keys
+// User shouldn't encounter these problems but devs, be aware of:
+// - generating a seeded secp256k1 key does not return the same key even though you use the same seed
+// - it's not possible to generate a seeded rsa key, it returns an "unexpected EOF" error
+func generateLibp2pNodeKey(keyType int, seed bool) (nodeKeyOut, error) {
+	var nko nodeKeyOut
+	reader := rand.Reader
+	if seed {
+		seedValue := *inputNodeKeySeed
+		seedData := make([]byte, 64)
+		binary.BigEndian.PutUint64(seedData, seedValue)
+		buf := bytes.NewBuffer(seedData)
+		reader = io.LimitReader(buf, 64)
+		nko.Seed = seedValue
+	}
+
+	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, RSAKeypairBits, reader)
 	if err != nil {
 		return nodeKeyOut{}, fmt.Errorf("unable to generate key pair, %w", err)
 	}
@@ -247,54 +256,12 @@ func generateLibp2pNodeKey(keyType int) (nodeKeyOut, error) {
 		return nodeKeyOut{}, fmt.Errorf("unable to retrieve the node ID from the private key, %w", err)
 	}
 
-	return nodeKeyOut{
-		PublicKey: id.String(),
-		// half of the private key is the public key. Substrate doesn't handle this well and need just the 32 byte seed/private key
-		// TODO: should we keep private key to 32 bytes length for all types?
-		PrivateKey:     hex.EncodeToString(rawPrvKey[0:ed25519.PublicKeySize]),
-		FullPrivateKey: hex.EncodeToString(rawPrvKey),
-	}, nil
-}
-
-// That function shouldn't be used for production environments.
-// It was created to allow us to create keys that work with the avail light client's method of generating keys
-// User shouldn't encounter these problems but devs, be aware of:
-// - generating a seeded secp256k1 key does not return the same key even though you use the same seed
-// - it's not possible to generate a seeded rsa key, it returns an "unexpected EOF" error
-func generateSeededLibp2pNodeKey(keyType int) (nodeKeyOut, error) {
-	seedValue := *inputNodeKeySeed
-	seedData := make([]byte, 64)
-	binary.BigEndian.PutUint64(seedData, seedValue)
-	buf := bytes.NewBuffer(seedData)
-	rand64 := io.LimitReader(buf, 64)
-
-	prvKey, _, err := libp2pcrypto.GenerateKeyPairWithReader(keyType, RSAKeypairBits, rand64)
-	if err != nil {
-		return nodeKeyOut{}, fmt.Errorf("unable to generate key pair, %w", err)
-	}
-
-	var rawPrvKey []byte
-	if *inputNodeKeyMarshalProtobuf {
-		rawPrvKey, err = libp2pcrypto.MarshalPrivateKey(prvKey)
-	} else {
-		rawPrvKey, err = prvKey.Raw()
-	}
-	if err != nil {
-		return nodeKeyOut{}, fmt.Errorf("unable to convert the private key to a byte array, %w", err)
-	}
-
-	id, err := libp2ppeer.IDFromPrivateKey(prvKey)
-	if err != nil {
-		return nodeKeyOut{}, err
-	}
-	return nodeKeyOut{
-		PublicKey: id.String(),
-		// half of the private key is the public key. Substrate doesn't handle this well and need just the 32 byte seed/private key
-		// TODO: should we keep private key to 32 bytes length for all types?
-		PrivateKey:     hex.EncodeToString(rawPrvKey[0:ed25519.PublicKeySize]),
-		FullPrivateKey: hex.EncodeToString(rawPrvKey),
-		Seed:           seedValue,
-	}, nil
+	nko.PublicKey = id.String()
+	// half of the private key is the public key. Substrate doesn't handle this well and need just the 32 byte seed/private key
+	// TODO: should we keep private key to 32 bytes length for all types?
+	nko.PrivateKey = hex.EncodeToString(rawPrvKey[0:ed25519.PublicKeySize])
+	nko.FullPrivateKey = hex.EncodeToString(rawPrvKey)
+	return nko, nil
 }
 
 func init() {
