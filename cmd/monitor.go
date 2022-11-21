@@ -142,7 +142,10 @@ var monitorCmd = &cobra.Command{
 				if from.Cmp(zero) < 0 {
 					from.SetInt64(0)
 				}
-				_ = ms.getBlockRange(ctx, from, ms.HeadBlock, rpc, args[0])
+				err = ms.getBlockRange(ctx, from, ms.HeadBlock, rpc, args[0])
+				if err != nil {
+					log.Error().Err(err).Msg("there was an issue fetching the block range")
+				}
 				if !isUiRendered {
 					go func() {
 						errChan <- renderMonitorUI(ms)
@@ -190,7 +193,7 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 	}
 	for _, b := range blms {
 		if b.Error != nil {
-			return err
+			return b.Error
 		}
 		pb := rpctypes.NewPolyBlock(b.Result.(*rpctypes.RawBlockResponse))
 

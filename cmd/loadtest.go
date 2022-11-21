@@ -221,6 +221,8 @@ type (
 		LtAddress           *string
 		DelAddress          *string
 		ForceContractDeploy *bool
+		ForceGasLimit       *uint64
+		ForceGasPrice       *uint64
 
 		// Computed
 		CurrentGas      *big.Int
@@ -272,7 +274,8 @@ r - random modes`)
 	ltp.LtAddress = loadtestCmd.PersistentFlags().String("lt-address", "", "A pre-deployed load test contract address")
 	ltp.DelAddress = loadtestCmd.PersistentFlags().String("del-address", "", "A pre-deployed delegator contract address")
 	ltp.ForceContractDeploy = loadtestCmd.PersistentFlags().Bool("force-contract-deploy", false, "Some loadtest modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --del-address and --il-address flags.")
-
+	ltp.ForceGasLimit = loadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually")
+	ltp.ForceGasPrice = loadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be estimated, we can specify it manually")
 	inputLoadTestParams = *ltp
 
 	// TODO batch size
@@ -489,6 +492,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	tops = configureTransactOpts(tops)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return err
@@ -687,6 +691,7 @@ func loadtestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
+	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
 	_, _, _, err = contracts.DeployLoadTester(tops, c)
@@ -708,6 +713,7 @@ func loadtestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, lt
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
+	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
 	_, err = contracts.CallLoadTestFunctionByOpCode(*f, ltContract, tops, *iterations)
@@ -728,6 +734,7 @@ func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltCont
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
+	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
 	_, err = contracts.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
@@ -746,6 +753,7 @@ func loadtestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContr
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
+	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
 	_, err = ltContract.Inc(tops)
@@ -764,6 +772,7 @@ func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
+	tops = configureTransactOpts(tops)
 
 	inputData := make([]byte, *ltp.ByteCount)
 	_, _ = hexwordRead(inputData)
@@ -785,6 +794,7 @@ func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delega
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
 	tops.GasLimit = 10000000
+	tops = configureTransactOpts(tops)
 
 	// TODO the deletgated call should be a parameter
 	t1 = time.Now()
@@ -1133,4 +1143,15 @@ func loadtestAvailStore(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64
 		return
 	}
 	return
+}
+
+func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
+	ltp := inputLoadTestParams
+	if ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
+		tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
+	}
+	if ltp.ForceGasLimit != nil && *ltp.ForceGasLimit != 0 {
+		tops.GasLimit = *ltp.ForceGasLimit
+	}
+	return tops
 }
