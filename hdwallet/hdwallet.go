@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btcutil/base58"
+	"github.com/coinbase/kryptology/pkg/signatures/bls/bls_sig"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/oasisprotocol/curve25519-voi/primitives/sr25519"
 	"github.com/tyler-smith/go-bip32"
@@ -60,6 +61,10 @@ type (
 		ECDSAAddressSS58   string `json:",omitempty"`
 		Sr25519AddressSS58 string `json:",omitempty"`
 		Ed25519AddressSS58 string `json:",omitempty"`
+		BLS                struct {
+			HexPublicKey  string `json:",omitempty"`
+			HexPrivateKey string `json:",omitempty"`
+		} `json:",omitempty"`
 	}
 	PolyAddressExport struct {
 		Path string `json:",omitempty"`
@@ -82,12 +87,14 @@ var (
 	}
 	pathValidator   = `^m[\/0-9']*[0-9']$`
 	rePathValidator *regexp.Regexp
+	blsPop          = bls_sig.NewSigPop()
 )
 
 const (
 	SignatureSecp256k1 PolySignature = iota
 	SignatureEd25519
 	SignatureSr25519
+	SignatureBls
 )
 
 func GenPrivKeyFromSecret(seed []byte, c PolySignature) (interface{}, error) {
@@ -103,6 +110,17 @@ func GenPrivKeyFromSecret(seed []byte, c PolySignature) (interface{}, error) {
 		return sk, nil
 	}
 	// https://pkg.go.dev/crypto/ed25519
+	if c == SignatureBls {
+		_, sk, err := blsPop.KeygenWithSeed(seed[0:32])
+		if err != nil {
+			return nil, fmt.Errorf("unable to generate a new BLS key %w", err)
+		}
+		skBytes, err := sk.MarshalBinary()
+		if err != nil {
+			return nil, fmt.Errorf("unable to execute the private key to byte array conversion %w", err)
+		}
+		return skBytes, nil
+	}
 
 	return nil, fmt.Errorf("unable to generate private key from secret")
 }
@@ -125,6 +143,17 @@ func GetPublicKeyFromSeed(seed []byte, c PolySignature, compressed bool) ([]byte
 			return nil, err
 		}
 		return pubData, nil
+	}
+	if c == SignatureBls {
+		pubKey, _, err := blsPop.KeygenWithSeed(seed[0:32])
+		if err != nil {
+			return nil, fmt.Errorf("unable to generate a new BLS key %w", err)
+		}
+		pubKeyBytes, err := pubKey.MarshalBinary()
+		if err != nil {
+			return nil, fmt.Errorf("unable to execute the public key to byte array conversion %w", err)
+		}
+		return pubKeyBytes, nil
 	}
 
 	// default to ecdsa
@@ -251,10 +280,21 @@ func (p *PolyWallet) ExportRootAddress() (*PolyWalletExport, error) {
 	}
 	pwe.Sr25519Address = hex.EncodeToString(addr)
 	pwe.Sr25519AddressSS58 = substrateSS58(addr)
+	addr, err = GetPublicKeyFromSeed(p.rawSeed, SignatureBls, true)
+	if err != nil {
+		return nil, err
+	}
+	pwe.BLS.HexPublicKey = hex.EncodeToString(addr)
+	prvKey, err := GenPrivKeyFromSecret(p.rawSeed, SignatureBls)
+	if err != nil {
+		return nil, err
+	}
+	prvKeyBuf := prvKey.([]byte)
+	pwe.BLS.HexPrivateKey = hex.EncodeToString(prvKeyBuf)
 
 	return pwe, nil
-
 }
+
 func (p *PolyWallet) ExportHDAddresses(count int) (*PolyWalletExport, error) {
 	pwe := new(PolyWalletExport)
 	pwe.Mnemonic = p.Mnemonic

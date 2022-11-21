@@ -195,7 +195,14 @@ automated provisioning process, it's helpful to have the output be
 structured
 
 ``` shell
+# this will generate a secp256k1 key for devp2p protocol
 polycli nodekey
+
+# generate a networking keypair for avail
+polycli nodekey --protocol libp2p
+
+# generate a networking keypair for edge
+polycli nodekey --protocol libp2p --key-type secp256k1 --marshal-protobuf
 ```
 
 # RPC
