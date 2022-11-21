@@ -111,4 +111,6 @@ require (
 	lukechampine.com/blake3 v1.1.7 // indirect
 )
 
-replace github.com/centrifuge/go-substrate-rpc-client/v4 => github.com/prabal-banerjee/go-substrate-rpc-client/v4 v4.0.0-avail-alpha
+// replace github.com/centrifuge/go-substrate-rpc-client/v4 => github.com/prabal-banerjee/go-substrate-rpc-client/v4 v4.0.0-avail-alpha
+// replace github.com/centrifuge/go-substrate-rpc-client/v4 => /Users/john/code/prabal-go-substrate
+replace github.com/centrifuge/go-substrate-rpc-client/v4 => github.com/prabal-banerjee/go-substrate-rpc-client/v4 v4.0.1-0.20221121161007-6f2ae8fdd74e

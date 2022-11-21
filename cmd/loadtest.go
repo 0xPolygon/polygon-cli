@@ -1078,13 +1078,13 @@ func loadtestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uin
 
 	o := gstypes.SignatureOptions{
 		BlockHash:          genesisHash,
-		Era:                gstypes.ExtrinsicEra{IsMortalEra: false},
+		Era:                gstypes.ExtrinsicEra{IsMortalEra: false, IsImmortalEra: true},
 		GenesisHash:        genesisHash,
 		Nonce:              gstypes.NewUCompactFromUInt(uint64(nonce)),
 		SpecVersion:        rv.SpecVersion,
-		Tip:                gstypes.NewUCompactFromUInt(100),
+		Tip:                gstypes.NewUCompactFromUInt(0),
 		TransactionVersion: rv.TransactionVersion,
-		AppID:              gstypes.U32(*ltp.AvailAppID),
+		AppID:              gstypes.NewUCompactFromUInt(uint64(*ltp.AvailAppID)),
 	}
 
 	err = ext.Sign(kp, o)
@@ -1121,13 +1121,13 @@ func loadtestAvailStore(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64
 
 	o := gstypes.SignatureOptions{
 		BlockHash:          genesisHash,
-		Era:                gstypes.ExtrinsicEra{IsMortalEra: false},
+		Era:                gstypes.ExtrinsicEra{IsMortalEra: false, IsImmortalEra: true},
 		GenesisHash:        genesisHash,
 		Nonce:              gstypes.NewUCompactFromUInt(uint64(nonce)),
 		SpecVersion:        rv.SpecVersion,
 		Tip:                gstypes.NewUCompactFromUInt(100),
 		TransactionVersion: rv.TransactionVersion,
-		AppID:              gstypes.U32(*ltp.AvailAppID),
+		AppID:              gstypes.NewUCompactFromUInt(uint64(*ltp.AvailAppID)),
 	}
 	// Sign the transaction using Alice's default account
 	err = ext.Sign(kp, o)
