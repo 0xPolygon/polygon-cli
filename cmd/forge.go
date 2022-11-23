@@ -18,256 +18,299 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"math/big"
+	edgedummy "github.com/0xPolygon/polygon-edge/consensus/dummy"
+	"github.com/hashicorp/go-hclog"
+	"github.com/maticnetwork/polygon-cli/rpctypes"
+	"io"
 	"os"
-	"time"
+	"path/filepath"
 
-	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	ethcore "github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	ethparams "github.com/ethereum/go-ethereum/params"
-	"github.com/rs/zerolog/log"
+	edgeblockchain "github.com/0xPolygon/polygon-edge/blockchain"
+	edgechain "github.com/0xPolygon/polygon-edge/chain"
+	edgeconsensus "github.com/0xPolygon/polygon-edge/consensus"
+	edgecrypto "github.com/0xPolygon/polygon-edge/crypto"
+	edgestate "github.com/0xPolygon/polygon-edge/state"
+	edgeitrie "github.com/0xPolygon/polygon-edge/state/immutable-trie"
+	edgeevm "github.com/0xPolygon/polygon-edge/state/runtime/evm"
+	edgeprecompiled "github.com/0xPolygon/polygon-edge/state/runtime/precompiled"
+	edgetxpool "github.com/0xPolygon/polygon-edge/txpool"
+	edgetypes "github.com/0xPolygon/polygon-edge/types"
+
 	"github.com/spf13/cobra"
 )
 
-var (
-	inputForgeFile      *string
-	inputForgeCache     *int
-	inputForgeHandles   *int
-	inputForgeAncient   *string
-	inputForgeNamespace *string
-	inputForgeEngine    *string
-	inputForgeChainID   *int
-)
-
 type (
-	fakeBlockReader struct {
-		isInitialized bool
-		scanner       *bufio.Scanner
+	forgeParams struct {
+		Client         *string
+		DataDir        *string
+		GenesisFile    *string
+		Verifier       *string
+		Mode           *string
+		Count          *uint64
+		JSONBlocksFile *string
+
+		GenesisData []byte
+	}
+	BlockReader struct {
+		scanner *bufio.Scanner
 	}
 )
 
-func (f *fakeBlockReader) Init() {
-	f.scanner = bufio.NewScanner(os.Stdin)
-	f.isInitialized = true
-}
-
-func (f *fakeBlockReader) GetFakeBlock() (*ethtypes.Header, []*ethtypes.Transaction, error) {
-	if !f.scanner.Scan() {
-		return nil, nil, fmt.Errorf("no more fake blocks left")
-	}
-
-	blockText := f.scanner.Bytes()
-	var raw json.RawMessage
-	err := json.Unmarshal(blockText, &raw)
-	if err != nil {
-		return nil, nil, err
-	}
-	// Decode header and transactions.
-	var head *ethtypes.Header
-	var body rpcBlock
-	if err := json.Unmarshal(raw, &head); err != nil {
-		return nil, nil, err
-	}
-	if err := json.Unmarshal(raw, &body); err != nil {
-		return nil, nil, err
-	}
-
-	txs := make([]*ethtypes.Transaction, len(body.Transactions))
-	for i, tx := range body.Transactions {
-		txs[i] = tx.tx
-	}
-	return head, txs, nil
-
-}
+var (
+	inputForgeParams forgeParams
+	BlockReadEOF     = errors.New("no more blocks to read")
+)
 
 // forgeCmd represents the forge command
 var forgeCmd = &cobra.Command{
 	Use:   "forge",
-	Short: "Forge a fake state",
+	Short: "A utility for generating blockchain data either for testing or migration",
 	Long: `
-This command expects input to be a stream of json encoded block
-objects. The goal is to take those blocks and write them into a
-database in order to forge a long and complicated history for new
-block chain clients and tests.
-
-`,
+go run main.go dumpblocks http://172.26.26.12:8545/ 0 50000 > eth.50k
+cat eth.50k | grep '"difficulty"' > eth.50k.blocks
+go run main.go forge --genesis ../polygon-edge/genesis.json --mode json --json-blocks eth.50k.blocks --count 50000`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		db, err := rawdb.NewLevelDBDatabaseWithFreezer(*inputForgeFile, *inputForgeCache, *inputForgeHandles, *inputForgeAncient, *inputForgeNamespace, false)
+		fmt.Println("forge called")
+		bc, err := NewEdgeBlockchain()
 		if err != nil {
 			return err
 		}
 
-		fbr := new(fakeBlockReader)
-		fbr.Init()
-		// Idea here is that different engines could be used
-		// to forge the blocks. We'll read the input and
-		// decide which engin to instantiate
-		switch *inputForgeEngine {
-		case "ethhash":
-			config := ethparams.ChainConfig{ChainID: big.NewInt(int64(*inputForgeChainID))}
-			gen := &ethcore.Genesis{
-				Config:     &config,
-				Nonce:      0,
-				Timestamp:  uint64(time.Unix(0, 0).Unix()),
-				ParentHash: ethcommon.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
-				ExtraData:  nil,
-				GasLimit:   20_000_000,
-				GasUsed:    0,
-				Difficulty: big.NewInt(0),
-				Mixhash:    ethcommon.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
-				Coinbase:   ethcommon.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000000"),
-				Alloc:      make(map[ethcommon.Address]ethcore.GenesisAccount, 0),
-				BaseFee:    big.NewInt(0),
-			}
-
-			jsonData, err := gen.MarshalJSON()
-			if err != nil {
-				return err
-			}
-
-			err = os.WriteFile(*inputForgeFile+"/genesis.json", jsonData, 0777)
-			if err != nil {
-				return err
-			}
-
-			gblock, err := gen.Commit(db)
-			if err != nil {
-				return err
-			}
-
-			engine := ethash.NewFaker()
-
-			blocks, receipts := ethcore.GenerateChain(&config, gblock, engine, db, 100000, func(i int, gen *ethcore.BlockGen) {
-				genBlock(i, gen, fbr)
-			})
-			_ = blocks
-			_ = receipts
-
+		br, err := OpenJSONBlockReader(*inputForgeParams.JSONBlocksFile)
+		if err != nil {
+			return err
 		}
+		// in the future add a different type of reader potentially?
+
+		err = readAllBlocksToChain(bc, br)
 
 		return err
 	},
+	Args: func(cmd *cobra.Command, args []string) error {
+		if *inputForgeParams.Client != "edge" {
+			return fmt.Errorf("the client %s is not supported. Only Edge is supported", *inputForgeParams.Client)
+		}
+		if *inputForgeParams.Mode != "json" {
+			return fmt.Errorf("the mode %s is not suported yet. Only json is supported", *inputForgeParams.Mode)
+		}
+		f, err := os.Open(*inputForgeParams.GenesisFile)
+		if err != nil {
+			return fmt.Errorf("unable to open genesis file: %w", err)
+		}
+		genesisData, err := io.ReadAll(f)
+		if err != nil {
+			return fmt.Errorf("unable to read genesis file data: %w", err)
+		}
+		inputForgeParams.GenesisData = genesisData
+		return nil
+	},
 }
 
-func genBlock(blockNum int, bg *ethcore.BlockGen, fbr *fakeBlockReader) {
-	log.Trace().Int("blocknumber", blockNum).Msg("Forging")
-	_, txs, err := fbr.GetFakeBlock()
+type edgeTxpoolHub struct {
+	state edgestate.State
+	*edgeblockchain.Blockchain
+}
 
+type edgeBlockchainHandle struct {
+	Blockchain   *edgeblockchain.Blockchain
+	Executor     *edgestate.Executor
+	StateStorage *edgeitrie.Storage
+}
+
+func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
+
+	var chainConfig edgechain.Chain
+	err := json.Unmarshal(inputForgeParams.GenesisData, &chainConfig)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get a fake block")
-		return
+		return nil, fmt.Errorf("unable to parse genesis data: %w", err)
 	}
+	logger := hclog.Default()
 
-	for _, v := range txs {
-		if v == nil {
-			continue
-		}
-		bg.AddTx(v)
+	stateStorage, err := edgeitrie.NewLevelDBStorage(filepath.Join(*inputForgeParams.DataDir, "trie"), logger)
+	if err != nil {
+		return nil, fmt.Errorf("unable to open leveldb storage: %w")
 	}
+	state := edgeitrie.NewState(stateStorage)
+
+	// consensus := edgedummy.Dummy{}
+	executor := edgestate.NewExecutor(chainConfig.Params, state, logger)
+	executor.SetRuntime(edgeprecompiled.NewPrecompiled())
+	executor.SetRuntime(edgeevm.NewEVM())
+
+	genesisRoot := executor.WriteGenesis(chainConfig.Genesis.Alloc)
+	// should I override the state root here?
+	chainConfig.Genesis.StateRoot = genesisRoot
+	signer := edgecrypto.NewEIP155Signer(uint64(chainConfig.Params.ChainID))
+	bc, err := edgeblockchain.NewBlockchain(logger, *inputForgeParams.DataDir, &chainConfig, nil, executor, signer)
+	if err != nil {
+		return nil, fmt.Errorf("unable to setup blockchain: %w", err)
+	}
+	executor.GetHash = bc.GetHashHelper
+	//hub := &edgeTxpoolHub{
+	//	state:      state,
+	//	Blockchain: bc,
+	//}
+	txpool, err := edgetxpool.NewTxPool(
+		logger,
+		chainConfig.Params.Forks.At(0),
+		nil,
+		nil,
+		nil,
+		nil,
+		&edgetxpool.Config{
+			MaxSlots:            1000,
+			PriceLimit:          1000,
+			MaxAccountEnqueued:  1000,
+			DeploymentWhitelist: nil,
+		},
+	)
+	txpool.SetSigner(signer)
+	dummyConsensus, err := edgedummy.Factory(&edgeconsensus.Params{
+		TxPool:     txpool,
+		Blockchain: bc,
+		Executor:   executor,
+		Logger:     logger,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to create dummy consensus: %w", err)
+	}
+	bc.SetConsensus(dummyConsensus)
+	if err := bc.ComputeGenesis(); err != nil {
+		return nil, err
+	}
+	if err := dummyConsensus.Initialize(); err != nil {
+		return nil, err
+	}
+	bh := &edgeBlockchainHandle{
+		Blockchain:   bc,
+		Executor:     executor,
+		StateStorage: &stateStorage,
+	}
+	return bh, nil
 }
 
-/*
-// This function is unused.
-func readBlocks(bc *ethcore.BlockChain, gblock *ethtypes.Block) error {
-	scanner := bufio.NewScanner(os.Stdin)
-	parentHash := gblock.Hash()
-	parentNumber := gblock.Number()
-	for scanner.Scan() {
-		blockText := scanner.Bytes()
-		var raw json.RawMessage
-		err := json.Unmarshal(blockText, &raw)
-		if err != nil {
-			fmt.Println(err.Error())
-		}
-		b, err := readBlock(raw, parentHash, parentNumber)
-		if err != nil {
-			fmt.Println(err.Error())
-		}
+func OpenJSONBlockReader(file string) (*BlockReader, error) {
+	blockFile, err := os.Open(file)
+	if err != nil {
+		return nil, fmt.Errorf("unable to open json block file: %w", err)
+	}
+	scanner := bufio.NewScanner(blockFile)
 
-		parentHash = b.Hash()
-		parentNumber = b.Number()
-		fmt.Printf("Forging block: %d\n", b.Number())
-		fmt.Println(b)
+	br := BlockReader{
+		scanner: scanner,
+	}
 
-		_, err = bc.InsertChain(ethtypes.Blocks{b})
+	return &br, nil
+}
+
+func (b *BlockReader) ReadBlock() (rpctypes.PolyBlock, error) {
+	if !b.scanner.Scan() {
+		return nil, BlockReadEOF
+	}
+	rawBlockBytes := b.scanner.Bytes()
+	var raw rpctypes.RawBlockResponse
+	err := json.Unmarshal(rawBlockBytes, &raw)
+	if err != nil {
+		return nil, fmt.Errorf("unable to unmarshal block: %w - %s", err, string(rawBlockBytes))
+	}
+	return rpctypes.NewPolyBlock(&raw), nil
+}
+func readAllBlocksToChain(bh *edgeBlockchainHandle, br *BlockReader) error {
+	bc := bh.Blockchain
+	blocksToRead := *inputForgeParams.Count
+	parentHash := bc.Genesis()
+	fmt.Println(bc.Header().StateRoot)
+	var i uint64
+	for i = 0; i < blocksToRead; i = i + 1 {
+		b, err := br.ReadBlock()
 		if err != nil {
-			fmt.Println(err.Error())
-			return err
+			return fmt.Errorf("could not read block %d due to error: %w", i, err)
+		}
+		edgeBlock := PolyblockToEdge(b)
+		edgeBlock.Header.Number = i + 1
+		edgeBlock.Header.ParentHash = parentHash
+		edgeBlock.Header.Hash = edgeBlock.Header.ComputeHash().Hash
+		// edgeBlock.Header.StateRoot = bh.StateStorage.
+		parentHash = edgeBlock.Header.Hash
+
+		// fmt.Println(edgeBlock.Header().Number)
+		// h := edgeBlock.Header()
+		// fmt.Println(h.Number)
+		err = bc.WriteBlock(edgeBlock, "polycli")
+		if err != nil {
+			return fmt.Errorf("unable to write block: %w", err)
 		}
 	}
 	return nil
 }
-*/
+func PolyblockToEdge(pb rpctypes.PolyBlock) *edgetypes.Block {
+	h := new(edgetypes.Header)
+	h.ParentHash = edgetypes.Hash(pb.ParentHash())
+	h.Sha3Uncles = edgetypes.Hash(pb.UncleHash())
+	h.Miner = pb.Miner().Bytes()
+	h.StateRoot = edgetypes.Hash(pb.Root())
+	h.TxRoot = edgetypes.Hash(pb.TxHash())
+	h.ReceiptsRoot = edgetypes.Hash(pb.ReceiptsRoot())
+	lb := pb.LogsBloom()
+	l := edgetypes.Bloom{}
+	copy(l[:], lb)
+	h.LogsBloom = l
+	h.Difficulty = pb.Difficulty().Uint64()
+	h.Number = pb.Number().Uint64()
+	h.GasLimit = pb.GasLimit()
+	h.GasUsed = pb.GasUsed()
+	h.Timestamp = pb.Time()
+	h.ExtraData = pb.Extra()
+	h.MixHash = edgetypes.Hash{}
+	var nonce [8]byte
+	binary.LittleEndian.PutUint64(nonce[:], pb.Nonce())
+	h.Nonce = edgetypes.Nonce(nonce)
+	h.Hash = edgetypes.Hash(pb.Hash())
 
-type rpcBlock struct {
-	Hash         ethcommon.Hash   `json:"hash"`
-	Transactions []rpcTransaction `json:"transactions"`
-	UncleHashes  []ethcommon.Hash `json:"uncles"`
-}
-type rpcTransaction struct {
-	tx *ethtypes.Transaction
-	txExtraInfo
-}
-type txExtraInfo struct {
-	BlockNumber *string            `json:"blockNumber,omitempty"`
-	BlockHash   *ethcommon.Hash    `json:"blockHash,omitempty"`
-	From        *ethcommon.Address `json:"from,omitempty"`
+	txs := pb.Transactions()
+	etxs := make([]*edgetypes.Transaction, 0)
+	for _, tx := range txs {
+		etx := edgetypes.Transaction{}
+		etx.Nonce = tx.Nonce()
+		etx.GasPrice = tx.GasPrice()
+		etx.Gas = tx.Gas()
+		addr := edgetypes.Address(tx.To())
+		etx.To = &addr
+		etx.Value = tx.Value()
+		etx.Input = tx.Data()
+		etx.V = tx.V()
+		etx.R = tx.R()
+		etx.S = tx.S()
+		etx.Hash = edgetypes.Hash(tx.Hash())
+		etx.From = edgetypes.Address(tx.From())
+		etxs = append(etxs, &etx)
+	}
+
+	b := edgetypes.Block{
+		Header:       h,
+		Transactions: etxs,
+		// At some point we might want to include uncles?
+	}
+	return &b
 }
 
-/*
-// This function is unused
-// https://github.com/ethereum/go-ethereum/blob/d901d85377c2c2f05f09f423c7d739c0feecd90a/ethclient/ethclient.go#L110
-func readBlock(raw json.RawMessage, parentHash ethcommon.Hash, parentNumber *big.Int) (*ethtypes.Block, error) {
-	// Decode header and transactions.
-	var head *ethtypes.Header
-	var body rpcBlock
-	if err := json.Unmarshal(raw, &head); err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(raw, &body); err != nil {
-		return nil, err
-	}
-	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
-	if head.UncleHash == ethtypes.EmptyUncleHash && len(body.UncleHashes) > 0 {
-		return nil, fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
-	}
-	if head.UncleHash != ethtypes.EmptyUncleHash && len(body.UncleHashes) == 0 {
-		return nil, fmt.Errorf("server returned empty uncle list but block header indicates uncles")
-	}
-	if head.TxHash == ethtypes.EmptyRootHash && len(body.Transactions) > 0 {
-		return nil, fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
-	}
-	if head.TxHash != ethtypes.EmptyRootHash && len(body.Transactions) == 0 {
-		return nil, fmt.Errorf("server returned empty transaction list but block header indicates transactions")
-	}
-	txs := make([]*ethtypes.Transaction, len(body.Transactions))
-	for i, tx := range body.Transactions {
-		txs[i] = tx.tx
-	}
-	head.ParentHash = parentHash
-	parentNumber.Add(parentNumber, big.NewInt(1))
-	head.Number = parentNumber
-	head.Difficulty = big.NewInt(131072)
-	head.GasLimit = 20000000
-	head.MixDigest = ethcommon.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
-
-	head.Time = uint64(time.Now().Unix())
-	return ethtypes.NewBlockWithHeader(head).WithBody(txs, nil), nil
+func GenerateRandomBlock(number uint64) *edgetypes.Block {
+	return nil
 }
-*/
 
 func init() {
 	rootCmd.AddCommand(forgeCmd)
-	inputForgeFile = forgeCmd.PersistentFlags().StringP("datadir", "f", "./chaindata", "")
-	inputForgeCache = forgeCmd.PersistentFlags().IntP("cache", "c", 512, "")
-	inputForgeHandles = forgeCmd.PersistentFlags().Int("handles", 5120, "")
-	inputForgeAncient = forgeCmd.PersistentFlags().StringP("datadir.ancient", "a", "./chaindata/ancient", "")
-	inputForgeNamespace = forgeCmd.PersistentFlags().StringP("namespace", "n", "eth/db/chaindata/", "")
-	inputForgeChainID = forgeCmd.PersistentFlags().IntP("chain-id", "i", 1337, "The chain id to use when configuring the blockchain")
-	inputForgeEngine = forgeCmd.PersistentFlags().StringP("engine", "e", "ethhash", "The engine to use for the blockchain")
+
+	inputForgeParams.Client = forgeCmd.PersistentFlags().StringP("client", "c", "edge", "Specify which blockchain client should be use to forge the data")
+	inputForgeParams.DataDir = forgeCmd.PersistentFlags().StringP("data-dir", "d", "./forged-data", "Specify a folder to be used to store the chain data")
+	inputForgeParams.GenesisFile = forgeCmd.PersistentFlags().StringP("genesis", "g", "genesis.json", "Specify a file to be used for genesis configuration")
+	inputForgeParams.Verifier = forgeCmd.PersistentFlags().StringP("verifier", "v", "dummy", "Specify a consensus engin to use for forging")
+	inputForgeParams.Mode = forgeCmd.PersistentFlags().StringP("mode", "m", "json", "The forge mode indicates how we should get the transactions for our blocks")
+	inputForgeParams.Count = forgeCmd.PersistentFlags().Uint64P("count", "C", 100, "The number of blocks to try to forge")
+	inputForgeParams.JSONBlocksFile = forgeCmd.PersistentFlags().String("json-blocks", "", "a file of json encoded blocks")
+
 }
