@@ -69,7 +69,7 @@ fmt: ## Run go fmt against code.
 
 # shadow reports shadowed variables
 # https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/shadow
-# go install golang.org/x/tools/cmd/goimports@latest
+# go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@latest
 .PHONY: vet
 vet: ## Run go vet and shadow against code.
 	go vet ./...
