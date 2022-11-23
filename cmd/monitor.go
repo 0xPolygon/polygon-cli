@@ -118,7 +118,8 @@ var monitorCmd = &cobra.Command{
 		errChan := make(chan error)
 		go func() {
 			for {
-				cs, err := getChainState(ctx, ec)
+				var cs *chainState
+				cs, err = getChainState(ctx, ec)
 				if err != nil {
 					log.Error().Err(err).Msg("Encountered issue fetching network information")
 					time.Sleep(5 * time.Second)
