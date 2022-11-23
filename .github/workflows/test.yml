@@ -14,7 +14,6 @@ concurrency:
 
 jobs:
   lint:
-    # source: https://github.com/golangci/golangci-lint-action
     name: Lint
     runs-on: ubuntu-latest
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
@@ -27,6 +26,10 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           version: latest
+      - name: Install shadow
+        run: go install golang.org/x/tools/cmd/goimports@latest
+      - name: Run shadow
+        run: shadow ./...
   test:
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
