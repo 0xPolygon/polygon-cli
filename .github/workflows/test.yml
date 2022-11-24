@@ -26,6 +26,7 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           version: latest
+          args: --timeout 3m --verbose
       - name: Install shadow
         run: go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@latest
       - name: Run shadow
