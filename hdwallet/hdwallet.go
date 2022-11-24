@@ -20,7 +20,7 @@ import (
 	"github.com/tyler-smith/go-bip39/wordlists"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/pbkdf2"
-	"golang.org/x/crypto/ripemd160"
+	"golang.org/x/crypto/ripemd160" //nolint:staticcheck
 	"golang.org/x/crypto/sha3"
 )
 

@@ -125,7 +125,8 @@ block chain clients and tests.
 				BaseFee:    big.NewInt(0),
 			}
 
-			jsonData, err := gen.MarshalJSON()
+			var jsonData []byte
+			jsonData, err = gen.MarshalJSON()
 			if err != nil {
 				return err
 			}
@@ -135,7 +136,8 @@ block chain clients and tests.
 				return err
 			}
 
-			gblock, err := gen.Commit(db)
+			var gblock *ethtypes.Block
+			gblock, err = gen.Commit(db)
 			if err != nil {
 				return err
 			}
