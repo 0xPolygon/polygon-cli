@@ -26,6 +26,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"io"
+	"math/big"
 	"os"
 	"path/filepath"
 
@@ -39,7 +40,10 @@ import (
 	edgeprecompiled "github.com/0xPolygon/polygon-edge/state/runtime/precompiled"
 	edgetxpool "github.com/0xPolygon/polygon-edge/txpool"
 	edgetypes "github.com/0xPolygon/polygon-edge/types"
+	edgebuildroot "github.com/0xPolygon/polygon-edge/types/buildroot"
 
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -106,6 +110,11 @@ go run main.go forge --genesis ../polygon-edge/genesis.json --mode json --json-b
 			return fmt.Errorf("unable to read genesis file data: %w", err)
 		}
 		inputForgeParams.GenesisData = genesisData
+
+		zerolog.SetGlobalLevel(zerolog.TraceLevel)
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+		log.Debug().Msg("Starting logger in console mode")
+
 		return nil
 	},
 }
@@ -119,6 +128,8 @@ type edgeBlockchainHandle struct {
 	Blockchain   *edgeblockchain.Blockchain
 	Executor     *edgestate.Executor
 	StateStorage *edgeitrie.Storage
+	State        *edgeitrie.State
+	Consensus    *edgeconsensus.Consensus
 }
 
 func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
@@ -189,6 +200,8 @@ func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 		Blockchain:   bc,
 		Executor:     executor,
 		StateStorage: &stateStorage,
+		State:        state,
+		Consensus:    &dummyConsensus,
 	}
 	return bh, nil
 }
@@ -198,7 +211,10 @@ func OpenJSONBlockReader(file string) (*BlockReader, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to open json block file: %w", err)
 	}
+	maxCapacity := 5 * 1024 * 1024
+	buf := make([]byte, maxCapacity)
 	scanner := bufio.NewScanner(blockFile)
+	scanner.Buffer(buf, maxCapacity)
 
 	br := BlockReader{
 		scanner: scanner,
@@ -222,28 +238,67 @@ func (b *BlockReader) ReadBlock() (rpctypes.PolyBlock, error) {
 func readAllBlocksToChain(bh *edgeBlockchainHandle, br *BlockReader) error {
 	bc := bh.Blockchain
 	blocksToRead := *inputForgeParams.Count
-	parentHash := bc.Genesis()
+	genesisBlock, _ := bc.GetBlockByHash(bc.Genesis(), true)
+	blockReward := big.NewInt(2_000_000_000_000_000_000)
+	parentBlock := genesisBlock
+	polyCliAuthor := edgetypes.Address{0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD}
+	_ = polyCliAuthor
+
 	fmt.Println(bc.Header().StateRoot)
 	var i uint64
-	for i = 0; i < blocksToRead; i = i + 1 {
+	for i = 1; i < blocksToRead; i = i + 1 {
 		b, err := br.ReadBlock()
 		if err != nil {
 			return fmt.Errorf("could not read block %d due to error: %w", i, err)
 		}
 		edgeBlock := PolyblockToEdge(b)
-		edgeBlock.Header.Number = i + 1
-		edgeBlock.Header.ParentHash = parentHash
-		edgeBlock.Header.Hash = edgeBlock.Header.ComputeHash().Hash
-		// edgeBlock.Header.StateRoot = bh.StateStorage.
-		parentHash = edgeBlock.Header.Hash
+		edgeBlock.Header.Number = i
+		edgeBlock.Header.ParentHash = parentBlock.Header.ComputeHash().Hash
 
-		// fmt.Println(edgeBlock.Header().Number)
-		// h := edgeBlock.Header()
-		// fmt.Println(h.Number)
+		trans, err := bh.Executor.ProcessBlock(parentBlock.Header.StateRoot, edgeBlock, edgetypes.BytesToAddress(edgeBlock.Header.Miner))
+		if err != nil {
+			return fmt.Errorf("unable to process block %d %s: %w", i, edgeBlock.Hash().String(), err)
+		}
+		minerBalance := trans.GetBalance(edgetypes.BytesToAddress(edgeBlock.Header.Miner))
+		minerBalance = minerBalance.Add(minerBalance, blockReward)
+		trans.Txn().SetBalance(edgetypes.BytesToAddress(edgeBlock.Header.Miner), minerBalance)
+		_, newRoot := trans.Commit()
+		edgeBlock.Header.StateRoot = newRoot
+
+		blockCreator, err := bh.Blockchain.GetConsensus().GetBlockCreator(edgeBlock.Header)
+		if err != nil {
+			return err
+		}
+
+		txn, err := bh.Executor.ProcessBlock(parentBlock.Header.StateRoot, edgeBlock, blockCreator)
+		if err != nil {
+			return fmt.Errorf("unable to process block %d %s: %w", i, edgeBlock.Hash().String(), err)
+		}
+
+		if err := bh.Blockchain.GetConsensus().PreCommitState(edgeBlock.Header, txn); err != nil {
+			return fmt.Errorf("could not pre commit state: %w", err)
+		}
+
+		_, newRoot = txn.Commit()
+		edgeBlock.Header.TxRoot = edgebuildroot.CalculateTransactionsRoot(edgeBlock.Transactions)
+		edgeBlock.Header.GasUsed = trans.TotalGas()
+		edgeBlock.Header.ReceiptsRoot = edgebuildroot.CalculateReceiptsRoot(trans.Receipts())
+		edgeBlock.Header.StateRoot = newRoot
+
+		edgeBlock.Header.Hash = edgeBlock.Header.ComputeHash().Hash
+		if i == 56 {
+			fmt.Println("garply")
+		}
+		err = bc.VerifyFinalizedBlock(edgeBlock)
+		if err != nil {
+			return fmt.Errorf("unable to verify finalized block: %w", err)
+		}
 		err = bc.WriteBlock(edgeBlock, "polycli")
 		if err != nil {
 			return fmt.Errorf("unable to write block: %w", err)
 		}
+		parentBlock = edgeBlock
+		log.Info().Str("newroot", newRoot.String()).Msg("Updated state root")
 	}
 	return nil
 }
