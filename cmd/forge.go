@@ -75,9 +75,11 @@ var forgeCmd = &cobra.Command{
 	Use:   "forge",
 	Short: "A utility for generating blockchain data either for testing or migration",
 	Long: `
-go run main.go dumpblocks http://172.26.26.12:8545/ 0 50000 > eth.50k
-cat eth.50k | grep '"difficulty"' > eth.50k.blocks
-go run main.go forge --genesis ../polygon-edge/genesis.json --mode json --json-blocks eth.50k.blocks --count 50000`,
+# # in this case local host is running a POA Core Archive node
+# polycli dumpblocks http://127.0.0.1:8545 0 100000 > poa-core.0.to.100k
+# # strip out the receipts
+# cat poa-core.0.to.100k | grep '"difficulty"' > poa-core.0.to.100k.blocks
+# polycli forge --genesis genesis.json --mode json --json-blocks poa-core.0.to.100k.blocks --count 99999`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println("forge called")
 		bc, err := NewEdgeBlockchain()
