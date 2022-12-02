@@ -148,13 +148,12 @@ func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 	}
 	state := edgeitrie.NewState(stateStorage)
 
-	// consensus := edgedummy.Dummy{}
 	executor := edgestate.NewExecutor(chainConfig.Params, state, logger)
 	executor.SetRuntime(edgeprecompiled.NewPrecompiled())
 	executor.SetRuntime(edgeevm.NewEVM())
 
 	genesisRoot := executor.WriteGenesis(chainConfig.Genesis.Alloc)
-	// should I override the state root here?
+
 	chainConfig.Genesis.StateRoot = genesisRoot
 	signer := edgecrypto.NewEIP155Signer(uint64(chainConfig.Params.ChainID))
 	bc, err := edgeblockchain.NewBlockchain(logger, *inputForgeParams.DataDir, &chainConfig, nil, executor, signer)
@@ -162,10 +161,6 @@ func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 		return nil, fmt.Errorf("unable to setup blockchain: %w", err)
 	}
 	executor.GetHash = bc.GetHashHelper
-	//hub := &edgeTxpoolHub{
-	//	state:      state,
-	//	Blockchain: bc,
-	//}
 	txpool, err := edgetxpool.NewTxPool(
 		logger,
 		chainConfig.Params.Forks.At(0),
@@ -181,6 +176,8 @@ func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 		},
 	)
 	txpool.SetSigner(signer)
+	// eventually we should allow for different consensus. It would be better to use some private PoA consensus for all
+	// of the forged blocks then switch to PoS or something like that at the last block
 	dummyConsensus, err := edgedummy.Factory(&edgeconsensus.Params{
 		TxPool:     txpool,
 		Blockchain: bc,
@@ -240,24 +237,34 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, br *BlockReader) error {
 	bc := bh.Blockchain
 	blocksToRead := *inputForgeParams.Count
 	genesisBlock, _ := bc.GetBlockByHash(bc.Genesis(), true)
+
+	// the block reward should probably be configurable depending on the needs
 	blockReward := big.NewInt(2_000_000_000_000_000_000)
 	parentBlock := genesisBlock
-	polyCliAuthor := edgetypes.Address{0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD}
-	_ = polyCliAuthor
-	_ = blockReward
 
+	// this should probably be based on a flag, but in our current use case, we're going to assume the 0th block is
+	// a copy of the genesis block, so there's no point inserting it again
 	_, err := br.ReadBlock()
 	if err != nil {
 		return fmt.Errorf("could not read off the genesis block from input: %w", err)
 	}
+
+	// in practice, I ran into some issues where the dumps that I created had duplicate blocks, This map is used to
+	// detect and skip any kind of duplicates
 	blockHashSet := make(map[ethcommon.Hash]struct{}, 0)
+
+	// insertion into the chain will fail if blocks are numbered non-sequnetially. This is used to throw an error if we
+	// encounter blocks out of order. In the future, we should have a flag if we want to use original numbering or if
+	// we want to create new numbering
 	var lastNumber uint64 = 0
 	var i uint64
 	for i = 1; i < blocksToRead; i = i + 1 {
+		// read a polyblock which is a generic interface that can be marshalled into different formats
 		b, err := br.ReadBlock()
 		if err != nil {
 			return fmt.Errorf("could not read block %d due to error: %w", i, err)
 		}
+
 		if _, hasKey := blockHashSet[b.Hash()]; hasKey {
 			log.Trace().Str("blockhash", b.Hash().String()).Msg("skipping duplicate block")
 			continue
@@ -269,19 +276,22 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, br *BlockReader) error {
 		}
 		lastNumber = b.Number().Uint64()
 
-		// log.Trace().Str("blockhash", b.Hash().String()).Uint64("loop", i).Uint64("blocknumber", b.Number().Uint64()).Msg("Forging new block")
-		// This is going to read a raw block that is going to need to have all of its headers forged
+		// convert the generic rpc block into a block for edge. I suppose we'll need to think about other blockchain
+		// forging at somet poing, but for now edge & supernets seem to be the real use case
 		edgeBlock := PolyblockToEdge(b)
+
 		// The parent hash value will not make sense, so we'll overwrite this when the value from our local parent block.
 		edgeBlock.Header.ParentHash = parentBlock.Header.ComputeHash().Hash
-		// The Transactions Root should be the same, but we'll set it
+
+		// The Transactions Root should be the same (i think?), but we'll set it
 		edgeBlock.Header.TxRoot = edgebuildroot.CalculateTransactionsRoot(edgeBlock.Transactions)
-		
+
 		blockCreator, err := bh.Blockchain.GetConsensus().GetBlockCreator(edgeBlock.Header)
 		if err != nil {
 			return err
 		}
 
+		// This will execute the block and apply the transaction to the state
 		txn, err := bh.Executor.ProcessBlock(parentBlock.Header.StateRoot, edgeBlock, blockCreator)
 		if err != nil {
 			return fmt.Errorf("unable to process block %d %s: %w", i, edgeBlock.Hash().String(), err)
@@ -291,25 +301,32 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, br *BlockReader) error {
 			return fmt.Errorf("could not pre commit state: %w", err)
 		}
 
+		// many of the headers are going to be different, so we'll get all of the headers and recompute the hash
 		_, newRoot := txn.Commit()
 		edgeBlock.Header.GasUsed = txn.TotalGas()
 		edgeBlock.Header.ReceiptsRoot = edgebuildroot.CalculateReceiptsRoot(txn.Receipts())
 		edgeBlock.Header.StateRoot = newRoot
-
 		edgeBlock.Header.Hash = edgeBlock.Header.ComputeHash().Hash
+
+		// This is an optional step but helpful to catch some mistakes in implementation
 		err = bc.VerifyFinalizedBlock(edgeBlock)
 		if err != nil {
 			return fmt.Errorf("unable to verify finalized block: %w", err)
 		}
 
+		// This might be worth putting behind a flag at somet point, but we need some way to distribute native token
+		// from mining. This is a hacky way to do it and right now, I'm not including transaction fees
 		minerBalance := txn.GetBalance(edgetypes.BytesToAddress(edgeBlock.Header.Miner))
 		minerBalance = minerBalance.Add(minerBalance, blockReward)
 		txn.Txn().SetBalance(edgetypes.BytesToAddress(edgeBlock.Header.Miner), minerBalance)
 
+		// after doing the irregular state change, i need to update the block headers again with the new root hash and
+		// block hash
 		_, newRoot = txn.Commit()
 		edgeBlock.Header.StateRoot = newRoot
 		edgeBlock.Header.Hash = edgeBlock.Header.ComputeHash().Hash
 
+		// at this point the block should be OK to write to the local database?
 		err = bc.WriteBlock(edgeBlock, "polycli")
 		if err != nil {
 			return fmt.Errorf("unable to write block: %w", err)
@@ -318,6 +335,8 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, br *BlockReader) error {
 	}
 	return nil
 }
+
+// PolyblockToEdge will take the generic PolyBlock interface and convert it into a edge compatible block
 func PolyblockToEdge(pb rpctypes.PolyBlock) *edgetypes.Block {
 	h := new(edgetypes.Header)
 	h.ParentHash = edgetypes.Hash(pb.ParentHash())
@@ -377,6 +396,7 @@ func PolyblockToEdge(pb rpctypes.PolyBlock) *edgetypes.Block {
 	return &b
 }
 
+// IsEmptyAddress will just check a slice of bytes to check if it's all zeros or not
 func IsEmptyAddress(addr []byte) bool {
 	for _, v := range addr {
 		if v != 0 {
@@ -386,6 +406,9 @@ func IsEmptyAddress(addr []byte) bool {
 	return true
 }
 
+// GenerateRandomBlock in most cases we can use existing blocks and transactions for forgeries and testing, but at some
+// point we might want to generate complete random blocks especially if we want to model state size after 10 - 20 years
+// of operation
 func GenerateRandomBlock(number uint64) *edgetypes.Block {
 	return nil
 }
