@@ -121,11 +121,6 @@ var forgeCmd = &cobra.Command{
 	},
 }
 
-type edgeTxpoolHub struct {
-	state edgestate.State
-	*edgeblockchain.Blockchain
-}
-
 type edgeBlockchainHandle struct {
 	Blockchain   *edgeblockchain.Blockchain
 	Executor     *edgestate.Executor
@@ -145,7 +140,7 @@ func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 
 	stateStorage, err := edgeitrie.NewLevelDBStorage(filepath.Join(*inputForgeParams.DataDir, "trie"), logger)
 	if err != nil {
-		return nil, fmt.Errorf("unable to open leveldb storage: %w")
+		return nil, fmt.Errorf("unable to open leveldb storage: %w", err)
 	}
 	state := edgeitrie.NewState(stateStorage)
 
@@ -176,6 +171,9 @@ func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 			DeploymentWhitelist: nil,
 		},
 	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create new edge tx pool: %w", err)
+	}
 	txpool.SetSigner(signer)
 	// eventually we should allow for different consensus. It would be better to use some private PoA consensus for all
 	// of the forged blocks then switch to PoS or something like that at the last block
