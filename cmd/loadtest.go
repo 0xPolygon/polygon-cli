@@ -385,8 +385,8 @@ func runLoadTest(ctx context.Context) error {
 	if *inputLoadTestParams.IsAvail {
 		log.Info().Msg("Running in Avail mode")
 		loopFunc = func() error {
-
-			api, err := gsrpc.NewSubstrateAPI(inputLoadTestParams.URL.String())
+			var api *gsrpc.SubstrateAPI
+			api, err = gsrpc.NewSubstrateAPI(inputLoadTestParams.URL.String())
 			if err != nil {
 				return err
 			}
@@ -424,7 +424,7 @@ func runLoadTest(ctx context.Context) error {
 		log.Info().Msg("Time's up")
 	case <-sigCh:
 		log.Info().Msg("Interrupted.. Stopping load test")
-	case err := <-errCh:
+	case err = <-errCh:
 		if err != nil {
 			log.Fatal().Err(err).Msg("Received critical error while running load test")
 		}
@@ -525,7 +525,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 		// block while the contract is pending
 		waitCounter := 30
 		for {
-			ltCounter, err := ltContract.GetCallCounter(cops)
+			var ltCounter *big.Int
+			ltCounter, err = ltContract.GetCallCounter(cops)
 
 			if err != nil {
 				log.Trace().Msg("Waiting for Load Test contract to deploy")
@@ -597,9 +598,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 			var endReq time.Time
 
 			for j = 0; j < requests; j = j + 1 {
-
 				if rl != nil {
-					err := rl.Wait(ctx)
+					err = rl.Wait(ctx)
 					if err != nil {
 						log.Error().Err(err).Msg("Encountered a rate limiting error")
 					}
@@ -952,7 +952,7 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 			for j = 0; j < requests; j = j + 1 {
 
 				if rl != nil {
-					err := rl.Wait(ctx)
+					err = rl.Wait(ctx)
 					if err != nil {
 						log.Error().Err(err).Msg("Encountered a rate limiting error")
 					}

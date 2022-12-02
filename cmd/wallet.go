@@ -87,7 +87,8 @@ child accounts or generate new accmounts along with a seed phrase`,
 		}
 
 		if *inputRootOnly {
-			key, err := pw.ExportRootAddress()
+			var key *hdwallet.PolyWalletExport
+			key, err = pw.ExportRootAddress()
 			if err != nil {
 				return err
 			}
