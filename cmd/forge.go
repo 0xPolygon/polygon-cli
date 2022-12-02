@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	edgedummy "github.com/0xPolygon/polygon-edge/consensus/dummy"
+	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/hashicorp/go-hclog"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"io"
@@ -243,28 +244,39 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, br *BlockReader) error {
 	parentBlock := genesisBlock
 	polyCliAuthor := edgetypes.Address{0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD}
 	_ = polyCliAuthor
+	_ = blockReward
 
-	fmt.Println(bc.Header().StateRoot)
+	_, err := br.ReadBlock()
+	if err != nil {
+		return fmt.Errorf("could not read off the genesis block from input: %w", err)
+	}
+	blockHashSet := make(map[ethcommon.Hash]struct{}, 0)
+	var lastNumber uint64 = 0
 	var i uint64
 	for i = 1; i < blocksToRead; i = i + 1 {
 		b, err := br.ReadBlock()
 		if err != nil {
 			return fmt.Errorf("could not read block %d due to error: %w", i, err)
 		}
-		edgeBlock := PolyblockToEdge(b)
-		edgeBlock.Header.Number = i
-		edgeBlock.Header.ParentHash = parentBlock.Header.ComputeHash().Hash
-
-		trans, err := bh.Executor.ProcessBlock(parentBlock.Header.StateRoot, edgeBlock, edgetypes.BytesToAddress(edgeBlock.Header.Miner))
-		if err != nil {
-			return fmt.Errorf("unable to process block %d %s: %w", i, edgeBlock.Hash().String(), err)
+		if _, hasKey := blockHashSet[b.Hash()]; hasKey {
+			log.Trace().Str("blockhash", b.Hash().String()).Msg("skipping duplicate block")
+			continue
 		}
-		minerBalance := trans.GetBalance(edgetypes.BytesToAddress(edgeBlock.Header.Miner))
-		minerBalance = minerBalance.Add(minerBalance, blockReward)
-		trans.Txn().SetBalance(edgetypes.BytesToAddress(edgeBlock.Header.Miner), minerBalance)
-		_, newRoot := trans.Commit()
-		edgeBlock.Header.StateRoot = newRoot
+		blockHashSet[b.Hash()] = struct{}{}
 
+		if b.Number().Uint64()-1 != lastNumber {
+			return fmt.Errorf("encountered non consecutive block numbers on input. Got %s and expected %d", b.Number().String(), lastNumber+1)
+		}
+		lastNumber = b.Number().Uint64()
+
+		// log.Trace().Str("blockhash", b.Hash().String()).Uint64("loop", i).Uint64("blocknumber", b.Number().Uint64()).Msg("Forging new block")
+		// This is going to read a raw block that is going to need to have all of its headers forged
+		edgeBlock := PolyblockToEdge(b)
+		// The parent hash value will not make sense, so we'll overwrite this when the value from our local parent block.
+		edgeBlock.Header.ParentHash = parentBlock.Header.ComputeHash().Hash
+		// The Transactions Root should be the same, but we'll set it
+		edgeBlock.Header.TxRoot = edgebuildroot.CalculateTransactionsRoot(edgeBlock.Transactions)
+		
 		blockCreator, err := bh.Blockchain.GetConsensus().GetBlockCreator(edgeBlock.Header)
 		if err != nil {
 			return err
@@ -279,26 +291,30 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, br *BlockReader) error {
 			return fmt.Errorf("could not pre commit state: %w", err)
 		}
 
-		_, newRoot = txn.Commit()
-		edgeBlock.Header.TxRoot = edgebuildroot.CalculateTransactionsRoot(edgeBlock.Transactions)
-		edgeBlock.Header.GasUsed = trans.TotalGas()
-		edgeBlock.Header.ReceiptsRoot = edgebuildroot.CalculateReceiptsRoot(trans.Receipts())
+		_, newRoot := txn.Commit()
+		edgeBlock.Header.GasUsed = txn.TotalGas()
+		edgeBlock.Header.ReceiptsRoot = edgebuildroot.CalculateReceiptsRoot(txn.Receipts())
 		edgeBlock.Header.StateRoot = newRoot
 
 		edgeBlock.Header.Hash = edgeBlock.Header.ComputeHash().Hash
-		if i == 56 {
-			fmt.Println("garply")
-		}
 		err = bc.VerifyFinalizedBlock(edgeBlock)
 		if err != nil {
 			return fmt.Errorf("unable to verify finalized block: %w", err)
 		}
+
+		minerBalance := txn.GetBalance(edgetypes.BytesToAddress(edgeBlock.Header.Miner))
+		minerBalance = minerBalance.Add(minerBalance, blockReward)
+		txn.Txn().SetBalance(edgetypes.BytesToAddress(edgeBlock.Header.Miner), minerBalance)
+
+		_, newRoot = txn.Commit()
+		edgeBlock.Header.StateRoot = newRoot
+		edgeBlock.Header.Hash = edgeBlock.Header.ComputeHash().Hash
+
 		err = bc.WriteBlock(edgeBlock, "polycli")
 		if err != nil {
 			return fmt.Errorf("unable to write block: %w", err)
 		}
 		parentBlock = edgeBlock
-		log.Info().Str("newroot", newRoot.String()).Msg("Updated state root")
 	}
 	return nil
 }
@@ -334,7 +350,15 @@ func PolyblockToEdge(pb rpctypes.PolyBlock) *edgetypes.Block {
 		etx.GasPrice = tx.GasPrice()
 		etx.Gas = tx.Gas()
 		addr := edgetypes.Address(tx.To())
-		etx.To = &addr
+
+		if IsEmptyAddress(addr.Bytes()) {
+			// The edge code that determines if a contract call is a contract creation checks for a nil address rather
+			// than an address that's all zeros
+			etx.To = nil
+		} else {
+			etx.To = &addr
+		}
+
 		etx.Value = tx.Value()
 		etx.Input = tx.Data()
 		etx.V = tx.V()
@@ -351,6 +375,15 @@ func PolyblockToEdge(pb rpctypes.PolyBlock) *edgetypes.Block {
 		// At some point we might want to include uncles?
 	}
 	return &b
+}
+
+func IsEmptyAddress(addr []byte) bool {
+	for _, v := range addr {
+		if v != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func GenerateRandomBlock(number uint64) *edgetypes.Block {
