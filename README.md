@@ -186,6 +186,12 @@ point.
 If you're using the terminal UI and you'd like to be able to select text
 for copying, you might need to use a modifier key.
 
+```sh
+polycli monitor --help
+
+polycli monitor https://polygon-rpc.com
+```
+
 # Nodekey
 
 The `nodekey` command is still in progress, but the idea is to have a
