@@ -121,7 +121,7 @@ var monitorCmd = &cobra.Command{
 				var cs *chainState
 				cs, err = getChainState(ctx, ec)
 				if err != nil {
-					log.Error().Err(err).Msg("Encountered issue fetching network information")
+					log.Error().Err(err).Msg("encountered issue fetching network information")
 					time.Sleep(5 * time.Second)
 					continue
 				}
@@ -133,9 +133,12 @@ var monitorCmd = &cobra.Command{
 
 				from := big.NewInt(0)
 
-				// if the max block is 0, meaning we haven't fetched any blocks, we're going to start with head - 25
+				// Fetching 20 blocks or more gives an error when using BatchCallContext
+				maxBlocksToFetchAtOnce := 19
+
+				// if the max block is 0, meaning we haven't fetched any blocks, we're going to start with head - maxBlocksToFetchAtOnce
 				if ms.MaxBlockRetrieved.Cmp(from) == 0 {
-					from.Sub(ms.HeadBlock, big.NewInt(25))
+					from.Sub(ms.HeadBlock, big.NewInt(int64(maxBlocksToFetchAtOnce)))
 				} else {
 					from = ms.MaxBlockRetrieved
 				}
@@ -188,9 +191,9 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 			Error:  err,
 		})
 	}
-	err := c.BatchCallContext(ctx, blms)
-	if err != nil {
-		return err
+
+	if err := c.BatchCallContext(ctx, blms); err != nil {
+		return fmt.Errorf("batchCallContext: %v", err)
 	}
 	for _, b := range blms {
 		if b.Error != nil {
