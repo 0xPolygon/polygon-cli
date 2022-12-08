@@ -168,7 +168,7 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) [][]string {
 			ut.Format("02 Jan 06 15:04:05 MST"),
 			bs[j].Hash().String(),
 			author.String(),
-			fmt.Sprintf("%d", 123),
+			fmt.Sprintf("%d", bs[j].Time()),
 			fmt.Sprintf("%d", len(bs[j].Transactions())),
 			fmt.Sprintf("%d", bs[j].GasUsed()),
 		}
