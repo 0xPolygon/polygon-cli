@@ -247,16 +247,17 @@ func renderMonitorUI(ms *monitorStatus) error {
 	blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
 	blockTable.RowSeparator = true
 
-	columnWidths := make([]int, 6)
+	columnWidths := make([]int, 7)
 
 	blockTable.ColumnResizer = func() {
-		defaultWidth := (blockTable.Inner.Dx() - (12 + 22 + 42 + 12 + 14)) / 1
+		defaultWidth := (blockTable.Inner.Dx() - (12 + 26 + 46 + 12 + 14)) / 1
 		columnWidths[0] = 12
-		columnWidths[1] = 22
+		columnWidths[1] = 26
 		columnWidths[2] = defaultWidth
-		columnWidths[3] = 42
+		columnWidths[3] = 46
 		columnWidths[4] = 12
-		columnWidths[5] = 14
+		columnWidths[5] = 12
+		columnWidths[6] = 14
 	}
 
 	blockTable.ColumnWidths = columnWidths
