@@ -465,6 +465,27 @@ func renderMonitorUI(ms *monitorStatus) error {
 					redraw(ms)
 					break
 				}
+				if selectedBlockIdx == nil {
+					currIdx = 1
+					selectedBlockIdx = &currIdx
+					setBlock = true
+					redraw(ms)
+					break
+				}
+				currIdx = *selectedBlockIdx
+
+				if e.ID == "<PageDown>" {
+					currIdx = currIdx + 1
+					setBlock = true
+				} else if e.ID == "<PageUp>" {
+					currIdx = currIdx - 1
+					setBlock = true
+				}
+				if currIdx > 0 && currIdx < 25 { // need a better way to understand how many rows are visble
+					selectedBlockIdx = &currIdx
+				}
+
+				redraw(ms)
 			case "<Up>", "<Down>", "<Left>", "<Right>":
 				if currentMode == monitorModeBlock {
 					if e.ID == "<Down>" {
