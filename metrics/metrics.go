@@ -163,12 +163,16 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) [][]string {
 				author = ethcommon.HexToAddress("0x" + hex.EncodeToString(signer))
 			}
 		}
+		blockTime := uint64(0)
+		if j > 0 {
+			blockTime = bs[j].Time() - bs[j-1].Time()
+		}
 		record := []string{
 			fmt.Sprintf("%d", bs[j].Number()),
 			ut.Format("02 Jan 06 15:04:05 MST"),
 			bs[j].Hash().String(),
 			author.String(),
-			fmt.Sprintf("%d", bs[j].Time()),
+			fmt.Sprintf("%d", blockTime),
 			fmt.Sprintf("%d", len(bs[j].Transactions())),
 			fmt.Sprintf("%d", bs[j].GasUsed()),
 		}
