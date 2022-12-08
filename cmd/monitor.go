@@ -36,6 +36,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var inputBatchSize *uint64
+
 type (
 	monitorStatus struct {
 		ChainID   *big.Int
@@ -60,6 +62,8 @@ const (
 	monitorModeHelp     monitorMode = iota
 	monitorModeExplorer monitorMode = iota
 	monitorModeBlock    monitorMode = iota
+
+	defaultBatchSize uint64 = 25
 )
 
 func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, error) {
@@ -133,9 +137,15 @@ var monitorCmd = &cobra.Command{
 
 				from := big.NewInt(0)
 
-				// if the max block is 0, meaning we haven't fetched any blocks, we're going to start with head - 25
+				batchSize := defaultBatchSize
+				if *inputBatchSize > 0 {
+					batchSize = *inputBatchSize
+				}
+
+				// if the max block is 0, meaning we haven't fetched any blocks, we're going to start with head - batchSize
 				if ms.MaxBlockRetrieved.Cmp(from) == 0 {
-					from.Sub(ms.HeadBlock, big.NewInt(25))
+					headBlockMinusBatchSize := new(big.Int).SetUint64(batchSize - 1)
+					from.Sub(ms.HeadBlock, headBlockMinusBatchSize)
 				} else {
 					from = ms.MaxBlockRetrieved
 				}
@@ -166,11 +176,19 @@ var monitorCmd = &cobra.Command{
 		if len(args) != 1 {
 			return fmt.Errorf("expected exactly one argument")
 		}
+
+		// validate url argument
 		_, err := url.Parse(args[0])
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to parse url input error")
 			return err
 		}
+
+		// validate batch-size flag
+		if *inputBatchSize == 0 {
+			return fmt.Errorf("batch-size can't be equal to zero")
+		}
+
 		return nil
 	},
 }
@@ -212,6 +230,8 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 
 func init() {
 	rootCmd.AddCommand(monitorCmd)
+
+	inputBatchSize = monitorCmd.PersistentFlags().Uint64P("batch-size", "b", 25, "Number of requests per batch")
 }
 
 func renderMonitorUI(ms *monitorStatus) error {
