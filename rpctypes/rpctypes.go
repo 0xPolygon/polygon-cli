@@ -160,7 +160,7 @@ type (
 		ContractAddress RawData20Response `json:"contractAddress"`
 
 		// logs: Array - Array of log objects, which this transaction generated.
-		Logs []RawDataResponse `json:"logs"`
+		Logs []any `json:"logs"`
 
 		// logsBloom: DATA, 256 Bytes - Bloom filter for light clients to quickly retrieve related logs. It also returns either :
 		LogsBloom RawData256Response `json:"logsBloom"`
