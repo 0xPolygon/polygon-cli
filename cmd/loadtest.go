@@ -59,6 +59,8 @@ const (
 	loadTestModeRandom      = "r"
 	loadTestModeStore       = "s"
 	loadTestModeLong        = "l"
+	loadTestModeERC20       = "2"
+	loadTestModeERC721      = "7"
 
 	codeQualitySeed       = "code code code code code code code code code code code quality"
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
@@ -75,6 +77,8 @@ var (
 		loadTestModeInc,
 		loadTestModeStore,
 		loadTestModeLong,
+		loadTestModeERC20,
+		loadTestModeERC721,
 		// r should be last to exclude it from random mode selection
 		loadTestModeRandom,
 	}
@@ -264,7 +268,9 @@ c - call random contract functions
 f - call specific contract function
 s - store mode
 l - long running mode
-r - random modes`)
+r - random modes
+2 - ERC20 Transfers
+7 - ERC721 Mints`)
 	ltp.Function = loadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` ")
 	ltp.Iterations = loadtestCmd.PersistentFlags().Uint64P("iterations", "i", 100, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop")
 	ltp.ByteCount = loadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
@@ -522,25 +528,77 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 			return err
 		}
 
-		// block while the contract is pending
-		waitCounter := 30
-		for {
-			var ltCounter *big.Int
-			ltCounter, err = ltContract.GetCallCounter(cops)
+		err = blockUntilSuccessful(func() error {
+			_, err = ltContract.GetCallCounter(cops)
+			return err
+		}, 30)
 
-			if err != nil {
-				log.Trace().Msg("Waiting for Load Test contract to deploy")
-				time.Sleep(time.Second)
-				if waitCounter < 1 {
-					log.Error().Err(err).Msg("Exhausted waiting period for contract deployment")
-					return err
-				}
-				waitCounter = waitCounter - 1
-				continue
-			}
-			log.Trace().Interface("counter", ltCounter).Msg("Number of contract calls")
-			break
+		if err != nil {
+			return err
 		}
+	}
+
+	var erc20Addr ethcommon.Address
+	var erc20Contract *contracts.ERC20
+	if mode == loadTestModeERC20 || mode == loadTestModeRandom {
+		erc20Addr, _, _, err = contracts.DeployERC20(tops, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to deploy ERC20 contract")
+			return err
+		}
+		log.Trace().Interface("contractaddress", erc20Addr).Msg("ERC20 contract address")
+
+		erc20Contract, err = contracts.NewERC20(erc20Addr, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
+			return err
+		}
+		currentNonce = currentNonce + 1
+
+		tops.Nonce = new(big.Int).SetUint64(currentNonce)
+		tops.GasLimit = 10000000
+		tops = configureTransactOpts(tops)
+
+		err = blockUntilSuccessful(func() error {
+			_, err = erc20Contract.Mint(tops, new(big.Int).SetUint64(1_000_000_000_000))
+			return err
+		}, 30)
+		if err != nil {
+			return err
+		}
+		currentNonce = currentNonce + 1
+	}
+
+	var erc721Addr ethcommon.Address
+	var erc721Contract *contracts.ERC721
+	if mode == loadTestModeERC721 || mode == loadTestModeRandom {
+		erc721Addr, _, _, err = contracts.DeployERC721(tops, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to deploy ERC721 contract")
+			return err
+		}
+		log.Trace().Interface("contractaddress", erc721Addr).Msg("ERC721 contract address")
+
+		erc721Contract, err = contracts.NewERC721(erc721Addr, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
+			return err
+		}
+
+		currentNonce = currentNonce + 1
+
+		tops.Nonce = new(big.Int).SetUint64(currentNonce)
+		tops.GasLimit = 10000000
+		tops = configureTransactOpts(tops)
+
+		err = blockUntilSuccessful(func() error {
+			_, err = erc721Contract.Mint(tops, *ltp.FromETHAddress, new(big.Int).SetUint64(1))
+			return err
+		}, 30)
+		if err != nil {
+			return err
+		}
+		currentNonce = currentNonce + 1
 	}
 
 	// deploy and instantiate the delegator contract
@@ -565,23 +623,13 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 			return err
 		}
 
-		// block while the contract is pending
-		waitCounter := 30
-		for {
-			_, err = delegatorContract.Call(tops, ltAddr, []byte{0x12, 0x87, 0xa6, 0x8c})
-			if err != nil {
-				log.Trace().Msg("Waiting for Delegator contract to deploy")
-				time.Sleep(time.Second)
-				if waitCounter < 1 {
-					log.Error().Err(err).Msg("Exhausted waiting period for contract deployment")
-					return err
-				}
-				waitCounter = waitCounter - 1
-				continue
-			}
-			break
+		err = blockUntilSuccessful(func() error {
+			_, err := delegatorContract.Call(tops, ltAddr, []byte{0x12, 0x87, 0xa6, 0x8c})
+			return err
+		}, 30)
+		if err != nil {
+			return err
 		}
-
 		currentNonce = currentNonce + 1
 	}
 
@@ -633,6 +681,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 					startReq, endReq, err = loadtestStore(ctx, c, myNonceValue, ltContract)
 				case loadTestModeLong:
 					startReq, endReq, err = loadtestLong(ctx, c, myNonceValue, delegatorContract, ltAddr)
+				case loadTestModeERC20:
+					startReq, endReq, err = loadtestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
+				case loadTestModeERC721:
+					startReq, endReq, err = loadtestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -649,6 +701,26 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 	}
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
+	return nil
+}
+
+func blockUntilSuccessful(f func() error, tries int) error {
+	log.Trace().Int("tries", tries).Msg("Starting blocking loop")
+	waitCounter := tries
+	for {
+		err := f()
+		if err != nil {
+			if waitCounter < 1 {
+				log.Error().Err(err).Int("tries", waitCounter).Msg("Exhausted waiting period")
+				return err
+			}
+			log.Trace().Msg("Waiting to deploy")
+			time.Sleep(time.Second)
+			waitCounter = waitCounter - 1
+			continue
+		}
+		break
+	}
 	return nil
 }
 
@@ -806,6 +878,60 @@ func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delega
 	return
 }
 
+func loadtestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20Contract *contracts.ERC20, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+
+	to := ltp.ToETHAddress
+	if *ltp.ToRandom {
+		to = getRandomAddress()
+	}
+	amount := ltp.SendAmount
+
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+	tops.Nonce = new(big.Int).SetUint64(nonce)
+	tops.GasLimit = 10000000
+	tops = configureTransactOpts(tops)
+
+	t1 = time.Now()
+	_, err = erc20Contract.Transfer(tops, *to, amount)
+	t2 = time.Now()
+	return
+}
+
+func loadtestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc721Contract *contracts.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+
+	to := ltp.ToETHAddress
+	if *ltp.ToRandom {
+		to = getRandomAddress()
+	}
+
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+	tops.Nonce = new(big.Int).SetUint64(nonce)
+	tops.GasLimit = 10000000
+	tops = configureTransactOpts(tops)
+	nftID := new(big.Int).SetUint64(rand.Uint64())
+
+	t1 = time.Now()
+	_, err = erc721Contract.Mint(tops, *to, nftID)
+	t2 = time.Now()
+	return
+}
+
 func recordSample(goRoutineID, requestID int64, err error, start, end time.Time) {
 	s := loadTestSample{}
 	s.GoRoutineID = goRoutineID
@@ -882,7 +1008,6 @@ func getRandomAddress() *ethcommon.Address {
 	}
 	realAddr := ethcommon.BytesToAddress(addr)
 	return &realAddr
-
 }
 
 func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
