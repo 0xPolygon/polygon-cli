@@ -20,7 +20,9 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"io"
 	"math/big"
 	"math/rand"
@@ -82,6 +84,7 @@ var (
 		// r should be last to exclude it from random mode selection
 		loadTestModeRandom,
 	}
+
 	hexwords = []byte{
 		0x00, 0x0F, 0xF1, 0xCE,
 		0x00, 0xBA, 0xB1, 0x0C,
@@ -191,6 +194,10 @@ func setLogLevel(ltp loadTestParams) {
 }
 
 type (
+	blockSummary struct {
+		Block    *rpctypes.RawBlockResponse
+		Reciepts []rpctypes.RawTxReceipt
+	}
 	hexwordReader struct {
 	}
 	loadTestSample struct {
@@ -411,7 +418,7 @@ func runLoadTest(ctx context.Context) error {
 				return err
 			}
 
-			return mainLoop(ctx, ec)
+			return mainLoop(ctx, ec, rpc)
 		}
 	}
 
@@ -421,7 +428,6 @@ func runLoadTest(ctx context.Context) error {
 	loadTestResults = make([]loadTestSample, 0)
 	errCh := make(chan error)
 	go func() {
-		// errCh <- mainLoop(ctx, ec)
 		errCh <- loopFunc()
 	}()
 
@@ -480,7 +486,7 @@ func printResults(lts []loadTestSample) {
 	fmt.Printf("Num errors: %d\n", numErrors)
 }
 
-func mainLoop(ctx context.Context, c *ethclient.Client) error {
+func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
 
 	ltp := inputLoadTestParams
 	log.Trace().Interface("Input Params", ltp).Msg("Params")
@@ -635,7 +641,13 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 
 	var currentNonceMutex sync.Mutex
 	var i int64
-
+	startBlockNumber, err := c.BlockNumber(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get current block number")
+		return err
+	}
+	startNonce := currentNonce
+	log.Debug().Uint64("currenNonce", currentNonce).Msg("Starting main loadtest loop")
 	var wg sync.WaitGroup
 	for i = 0; i < routines; i = i + 1 {
 		log.Trace().Int64("routine", i).Msg("Starting Thread")
@@ -701,7 +713,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 	}
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
-	return nil
+	log.Debug().Uint64("currenNonce", currentNonce).Msg("Finished main loadtest loop")
+	return summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
 }
 
 func blockUntilSuccessful(f func() error, tries int) error {
@@ -943,45 +956,6 @@ func recordSample(goRoutineID, requestID int64, err error, start, end time.Time)
 	}
 	loadTestResults = append(loadTestResults, s)
 }
-
-/*
-// This function is unused
-func createLoadTesterContract(ctx context.Context, c *ethclient.Client, nonce uint64, gasPrice *big.Int) (*ethtypes.Receipt, error) {
-	var gasLimit uint64 = 0x192f64
-	contract, err := contracts.GetLoadTesterBytes()
-	if err != nil {
-		return nil, err
-	}
-
-	ltp := inputLoadTestParams
-	chainID := new(big.Int).SetUint64(*ltp.ChainID)
-	privateKey := ltp.ECDSAPrivateKey
-
-	tx := ethtypes.NewContractCreation(nonce, big.NewInt(0), gasLimit, gasPrice, contract)
-	stx, err := ethtypes.SignTx(tx, ethtypes.NewEIP155Signer(chainID), privateKey)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to sign transaction")
-		return nil, err
-	}
-
-	err = c.SendTransaction(ctx, stx)
-	if err != nil {
-		return nil, err
-	}
-
-	wait := time.Millisecond * 500
-	for i := 0; i < 5; i = i + 1 {
-		receipt, err := c.TransactionReceipt(ctx, stx.Hash())
-		if err == nil {
-			return receipt, nil
-		}
-		time.Sleep(wait)
-		wait = time.Duration(float64(wait) * 1.5)
-	}
-
-	return nil, fmt.Errorf("unable to get tx receipt")
-}
-*/
 
 func hexwordRead(b []byte) (int, error) {
 	hw := hexwordReader{}
@@ -1279,4 +1253,76 @@ func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 		tops.GasLimit = *ltp.ForceGasLimit
 	}
 	return tops
+}
+func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endNonce uint64) error {
+	ltp := inputLoadTestParams
+	var err error
+	var lastBlockNumber uint64
+	for {
+		lastBlockNumber, err = c.BlockNumber(ctx)
+		if err != nil {
+			return err
+		}
+
+		currentNonce, err := c.NonceAt(ctx, *ltp.FromETHAddress, new(big.Int).SetUint64(lastBlockNumber))
+		if err != nil {
+			return err
+		}
+		if currentNonce < endNonce {
+			log.Trace().Uint64("endNonce", endNonce).Uint64("currentNonce", currentNonce).Msg("Not all transactions have been mined. Waiting")
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		break
+	}
+
+	rawBlocks, err := getBlockRange(ctx, startBlockNumber, lastBlockNumber, rpc)
+	if err != nil {
+		return err
+	}
+	// FIXME: This code shouldn't really work like this. getBlockRange and getReceipts need to be move to a package
+	inputDumpblocks.BatchSize = 150
+	rawTxReceipts, err := getReceipts(ctx, rawBlocks, rpc)
+	if err != nil {
+		return err
+	}
+
+	blocks := make([]rpctypes.RawBlockResponse, 0)
+	for _, b := range rawBlocks {
+		var block rpctypes.RawBlockResponse
+		err := json.Unmarshal(*b, &block)
+		if err != nil {
+			log.Error().Err(err).Msg("error decoding block response")
+			return err
+		}
+		blocks = append(blocks, block)
+	}
+	log.Info().Int("len", len(blocks)).Msg("block summary")
+
+	txReceipts := make([]rpctypes.RawTxReceipt, 0)
+	for _, r := range rawTxReceipts {
+		if isEmptyJSONResponse(r) {
+			continue
+		}
+		var receipt rpctypes.RawTxReceipt
+		err := json.Unmarshal(*r, &receipt)
+		if err != nil {
+			log.Error().Err(err).Msg("error decoding tx receipt response")
+			return err
+		}
+		txReceipts = append(txReceipts, receipt)
+	}
+	log.Info().Int("len", len(txReceipts)).Msg("receipt summary")
+
+	// blockData := make(map[uint64]blockSummary)
+	return nil
+
+}
+
+func isEmptyJSONResponse(r *json.RawMessage) bool {
+	rawJson := []byte(*r)
+	if len(rawJson) == 0 {
+		return true
+	}
+	return false
 }

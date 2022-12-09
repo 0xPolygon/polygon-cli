@@ -33,8 +33,8 @@ import (
 type (
 	dumpblocksArgs struct {
 		URL       string
-		Start     int64
-		End       int64
+		Start     uint64
+		End       uint64
 		BatchSize uint64
 		Threads   *uint
 	}
@@ -67,7 +67,7 @@ var dumpblocksCmd = &cobra.Command{
 
 		for start < end {
 			rangeStart := start
-			rangeEnd := rangeStart + int64(inputDumpblocks.BatchSize)
+			rangeEnd := rangeStart + inputDumpblocks.BatchSize
 
 			if rangeEnd > end {
 				rangeEnd = end
@@ -75,16 +75,16 @@ var dumpblocksCmd = &cobra.Command{
 
 			pool <- true
 			wg.Add(1)
-			log.Info().Int64("start", rangeStart).Int64("end", rangeEnd).Msg("getting range")
+			log.Info().Uint64("start", rangeStart).Uint64("end", rangeEnd).Msg("getting range")
 			go func() {
 				defer wg.Done()
 				for {
 					failCount := 0
-					blocks, err := getBlockRange(ctx, rangeStart, rangeEnd, ec, inputDumpblocks.URL)
+					blocks, err := getBlockRange(ctx, rangeStart, rangeEnd, ec)
 					if err != nil {
 						failCount = failCount + 1
 						if failCount > 5 {
-							log.Error().Int64("rangeStart", rangeStart).Int64("rangeEnd", rangeEnd).Msg("unable to fetch blocks")
+							log.Error().Uint64("rangeStart", rangeStart).Uint64("rangeEnd", rangeEnd).Msg("unable to fetch blocks")
 							break
 						}
 						time.Sleep(5 * time.Second)
@@ -92,11 +92,11 @@ var dumpblocksCmd = &cobra.Command{
 					}
 
 					failCount = 0
-					receipts, err := getReceipts(ctx, blocks, ec, inputDumpblocks.URL)
+					receipts, err := getReceipts(ctx, blocks, ec)
 					if err != nil {
 						failCount = failCount + 1
 						if failCount > 5 {
-							log.Error().Int64("rangeStart", rangeStart).Int64("rangeEnd", rangeEnd).Msg("unable to fetch receipts")
+							log.Error().Uint64("rangeStart", rangeStart).Uint64("rangeEnd", rangeEnd).Msg("unable to fetch receipts")
 							break
 						}
 						time.Sleep(5 * time.Second)
@@ -149,8 +149,8 @@ var dumpblocksCmd = &cobra.Command{
 			start, end = end, start
 		}
 		inputDumpblocks.URL = args[0]
-		inputDumpblocks.Start = start
-		inputDumpblocks.End = end
+		inputDumpblocks.Start = uint64(start)
+		inputDumpblocks.End = uint64(end)
 		// realistically, this probably shoudln't be bigger than 999. Most Providers seem to cap at 1000
 		inputDumpblocks.BatchSize = 150
 
@@ -165,14 +165,14 @@ func init() {
 
 }
 
-func getBlockRange(ctx context.Context, from, to int64, c *ethrpc.Client, url string) ([]*json.RawMessage, error) {
+func getBlockRange(ctx context.Context, from, to uint64, c *ethrpc.Client) ([]*json.RawMessage, error) {
 	blms := make([]ethrpc.BatchElem, 0)
 	for i := from; i <= to; i = i + 1 {
 		r := new(json.RawMessage)
 		var err error
 		blms = append(blms, ethrpc.BatchElem{
 			Method: "eth_getBlockByNumber",
-			Args:   []interface{}{"0x" + strconv.FormatInt(i, 16), true},
+			Args:   []interface{}{"0x" + strconv.FormatUint(i, 16), true},
 			Result: r,
 			Error:  err,
 		})
@@ -203,7 +203,7 @@ type (
 	}
 )
 
-func getReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Client, url string) ([]*json.RawMessage, error) {
+func getReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Client) ([]*json.RawMessage, error) {
 	txHashes := make([]string, 0)
 	for _, rb := range rawBlocks {
 		var sb simpleRPCBlock
