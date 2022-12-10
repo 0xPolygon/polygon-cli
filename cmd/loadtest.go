@@ -1300,12 +1300,32 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		return err
 	}
 	// FIXME: This code shouldn't really work like this. getBlockRange and getReceipts need to be moved to a package
-	inputDumpblocks.BatchSize = 150
+	inputDumpblocks.BatchSize = 999
 	cpuCount := uint(runtime.NumCPU())
-	inputDumpblocks.Threads = &cpuCount
+	var txGroup sync.WaitGroup
+	threadPool := make(chan bool, cpuCount)
 	log.Trace().Msg("Starting tx receipt capture")
-	rawTxReceipts, err := getReceipts(ctx, rawBlocks, rpc)
-	if err != nil {
+	rawTxReceipts := make([]*json.RawMessage, 0)
+	var rawTxReceiptsLock sync.Mutex
+	var txGroupErr error
+	for k := range rawBlocks {
+		threadPool <- true
+		txGroup.Add(1)
+		go func(b *json.RawMessage) {
+			receipt, err := getReceipts(ctx, []*json.RawMessage{b}, rpc)
+			if err != nil {
+				txGroupErr = err
+			}
+			rawTxReceiptsLock.Lock()
+			rawTxReceipts = append(rawTxReceipts, receipt...)
+			rawTxReceiptsLock.Unlock()
+			<-threadPool
+			txGroup.Done()
+		}(rawBlocks[k])
+	}
+	txGroup.Wait()
+	if txGroupErr != nil {
+		log.Error().Err(err).Msg("one of the threads fetching tx receipts failed")
 		return err
 	}
 
