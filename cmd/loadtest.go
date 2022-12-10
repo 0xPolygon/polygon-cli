@@ -1312,7 +1312,8 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		threadPool <- true
 		txGroup.Add(1)
 		go func(b *json.RawMessage) {
-			receipt, err := getReceipts(ctx, []*json.RawMessage{b}, rpc)
+			var receipt []*json.RawMessage
+			receipt, err = getReceipts(ctx, []*json.RawMessage{b}, rpc)
 			if err != nil {
 				txGroupErr = err
 			}
