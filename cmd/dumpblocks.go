@@ -177,6 +177,8 @@ func getBlockRange(ctx context.Context, from, to uint64, c *ethrpc.Client) ([]*j
 			Error:  err,
 		})
 	}
+	log.Trace().Uint64("start", from).Uint64("end", to).Msg("Fetching block range")
+
 	err := c.BatchCallContext(ctx, blms)
 	if err != nil {
 		log.Error().Err(err).Msg("rpc issue fetching blocks")
@@ -242,6 +244,7 @@ func getReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 			end = uint64(len(blms) - 1)
 		}
 
+		log.Trace().Uint64("start", start).Uint64("end", end).Msg("Fetching tx receipt range")
 		// json: cannot unmarshal object into Go value of type []rpc.jsonrpcMessage
 		// The error occurs when we call batchcallcontext with a single transaction for some reason.
 		// polycli dumpblocks -c 1 http://127.0.0.1:9209/ 34457958 34458108

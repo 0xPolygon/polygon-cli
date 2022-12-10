@@ -35,6 +35,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -216,30 +217,31 @@ type (
 	}
 	loadTestParams struct {
 		// inputs
-		Requests            *int64
-		Concurrency         *int64
-		TimeLimit           *int64
-		Verbosity           *int64
-		PrettyLogs          *bool
-		ToRandom            *bool
-		URL                 *url.URL
-		ChainID             *uint64
-		PrivateKey          *string
-		ToAddress           *string
-		HexSendAmount       *string
-		RateLimit           *float64
-		Mode                *string
-		Function            *uint64
-		Iterations          *uint64
-		ByteCount           *uint64
-		Seed                *int64
-		IsAvail             *bool
-		AvailAppID          *uint32
-		LtAddress           *string
-		DelAddress          *string
-		ForceContractDeploy *bool
-		ForceGasLimit       *uint64
-		ForceGasPrice       *uint64
+		Requests             *int64
+		Concurrency          *int64
+		TimeLimit            *int64
+		Verbosity            *int64
+		PrettyLogs           *bool
+		ToRandom             *bool
+		URL                  *url.URL
+		ChainID              *uint64
+		PrivateKey           *string
+		ToAddress            *string
+		HexSendAmount        *string
+		RateLimit            *float64
+		Mode                 *string
+		Function             *uint64
+		Iterations           *uint64
+		ByteCount            *uint64
+		Seed                 *int64
+		IsAvail              *bool
+		AvailAppID           *uint32
+		LtAddress            *string
+		DelAddress           *string
+		ForceContractDeploy  *bool
+		ForceGasLimit        *uint64
+		ForceGasPrice        *uint64
+		ShouldProduceSummary *bool
 
 		// Computed
 		CurrentGas      *big.Int
@@ -295,6 +297,7 @@ r - random modes
 	ltp.ForceContractDeploy = loadtestCmd.PersistentFlags().Bool("force-contract-deploy", false, "Some loadtest modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --del-address and --il-address flags.")
 	ltp.ForceGasLimit = loadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually")
 	ltp.ForceGasPrice = loadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be estimated, we can specify it manually")
+	ltp.ShouldProduceSummary = loadtestCmd.PersistentFlags().Bool("summarize", false, "Should we produce an execution summary after the load test has finished. If you're running a large loadtest, this can take a long time")
 	inputLoadTestParams = *ltp
 
 	// TODO batch size
@@ -461,6 +464,7 @@ func runLoadTest(ctx context.Context) error {
 	} else if ptc > 0 {
 		log.Info().Uint("pending", ptc).Msg("there are still oustanding transactions. There might be issues restarting with the same sending key until those transactions clear")
 	}
+	log.Info().Msg("Finished")
 	return nil
 }
 
@@ -720,7 +724,13 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
 	log.Debug().Uint64("currenNonce", currentNonce).Msg("Finished main loadtest loop")
-	return summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
+	if *ltp.ShouldProduceSummary {
+		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
+		if err != nil {
+			log.Error().Err(err).Msg("There was an issue creating the load test summary")
+		}
+	}
+	return nil
 }
 
 func blockUntilSuccessful(f func() error, tries int) error {
@@ -1283,12 +1293,17 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		break
 	}
 
+	log.Trace().Uint64("currentNonce", currentNonce).Uint64("startblock", startBlockNumber).Uint64("endblock", lastBlockNumber).Msg("It looks like all transactions have been mined")
+	log.Trace().Msg("Starting block range capture")
 	rawBlocks, err := getBlockRange(ctx, startBlockNumber, lastBlockNumber, rpc)
 	if err != nil {
 		return err
 	}
-	// FIXME: This code shouldn't really work like this. getBlockRange and getReceipts need to be move to a package
+	// FIXME: This code shouldn't really work like this. getBlockRange and getReceipts need to be moved to a package
 	inputDumpblocks.BatchSize = 150
+	cpuCount := uint(runtime.NumCPU())
+	inputDumpblocks.Threads = &cpuCount
+	log.Trace().Msg("Starting tx receipt capture")
 	rawTxReceipts, err := getReceipts(ctx, rawBlocks, rpc)
 	if err != nil {
 		return err
