@@ -23,13 +23,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
+	"golang.org/x/exp/constraints"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
+	"golang.org/x/text/number"
 	"io"
+	"math"
 	"math/big"
 	"math/rand"
 	"net/url"
 	"os"
 	"os/signal"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -196,7 +202,7 @@ func setLogLevel(ltp loadTestParams) {
 type (
 	blockSummary struct {
 		Block    *rpctypes.RawBlockResponse
-		Reciepts []rpctypes.RawTxReceipt
+		Receipts map[ethcommon.Hash]rpctypes.RawTxReceipt
 	}
 	hexwordReader struct {
 	}
@@ -1314,7 +1320,22 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	}
 	log.Info().Int("len", len(txReceipts)).Msg("receipt summary")
 
-	// blockData := make(map[uint64]blockSummary)
+	blockData := make(map[uint64]blockSummary, 0)
+	for k, b := range blocks {
+		bs := blockSummary{}
+		bs.Block = &blocks[k]
+		bs.Receipts = make(map[ethcommon.Hash]rpctypes.RawTxReceipt, 0)
+		blockData[b.Number.ToUint64()] = bs
+	}
+
+	for _, r := range txReceipts {
+		bn := r.BlockNumber.ToUint64()
+		bs := blockData[bn]
+		bs.Receipts[r.TransactionHash.ToHash()] = r
+		blockData[bn] = bs
+	}
+
+	printBlockSummary(blockData, startNonce, endNonce)
 	return nil
 
 }
@@ -1325,4 +1346,112 @@ func isEmptyJSONResponse(r *json.RawMessage) bool {
 		return true
 	}
 	return false
+}
+
+func printBlockSummary(bs map[uint64]blockSummary, startNonce, endNonce uint64) {
+	filterBlockSummary(bs, startNonce, endNonce)
+	mapKeys := getSortedMapKeys(bs)
+	if len(mapKeys) == 0 {
+		return
+	}
+
+	fmt.Println("Block level summary of load test")
+	var totalTransactions uint64 = 0
+	var totalGasUsed uint64 = 0
+	p := message.NewPrinter(language.English)
+
+	for _, v := range mapKeys {
+		summary := bs[v]
+		gasUsed := getTotalGasUsed(summary.Receipts)
+		blockUtilization := float64(gasUsed) / summary.Block.GasLimit.ToFloat64()
+		if gasUsed == 0 {
+			blockUtilization = 0
+		}
+		_, _ = p.Printf("Block number: %v\tTime: %s\tGas Limit: %v\tGas Used: %v\tNum Tx: %v\tUtilization %v\n",
+			number.Decimal(summary.Block.Number.ToUint64()),
+			time.Unix(summary.Block.Timestamp.ToInt64(), 0),
+			number.Decimal(summary.Block.GasLimit.ToUint64()),
+			number.Decimal(gasUsed),
+			number.Decimal(len(summary.Block.Transactions)),
+			number.Percent(blockUtilization))
+		totalTransactions += uint64(len(summary.Block.Transactions))
+		totalGasUsed += gasUsed
+	}
+	firstBlock := bs[mapKeys[0]].Block
+	lastBlock := bs[mapKeys[len(mapKeys)-1]].Block
+	totalMiningTime := time.Duration(lastBlock.Timestamp.ToInt64()-firstBlock.Timestamp.ToInt64()) * time.Second
+	tps := float64(totalTransactions) / totalMiningTime.Seconds()
+	gaspersec := float64(totalGasUsed) / totalMiningTime.Seconds()
+	p.Printf("Total Mining Time: %s\n", totalMiningTime)
+	p.Printf("Total Transactions: %v\n", number.Decimal(totalTransactions))
+	p.Printf("Total Gas Used: %v\n", number.Decimal(totalGasUsed))
+	p.Printf("Transactions per sec: %v\n", number.Decimal(tps))
+	p.Printf("Gas Per Second: %v\n", number.Decimal(gaspersec))
+}
+func getTotalGasUsed(receipts map[ethcommon.Hash]rpctypes.RawTxReceipt) uint64 {
+	var totalGasUsed uint64 = 0
+	for _, receipt := range receipts {
+		totalGasUsed += receipt.GasUsed.ToUint64()
+	}
+	return totalGasUsed
+}
+
+func filterBlockSummary(blockSummaries map[uint64]blockSummary, startNonce, endNonce uint64) {
+	validTx := make(map[ethcommon.Hash]struct{}, 0)
+	var minBlock uint64 = math.MaxUint64
+	var maxBlock uint64 = 0
+	for _, bs := range blockSummaries {
+		for _, tx := range bs.Block.Transactions {
+			if tx.Nonce.ToUint64() >= startNonce && tx.Nonce.ToUint64() <= endNonce {
+				validTx[tx.Hash.ToHash()] = struct{}{}
+				if tx.BlockNumber.ToUint64() < minBlock {
+					minBlock = tx.BlockNumber.ToUint64()
+				}
+				if tx.BlockNumber.ToUint64() > maxBlock {
+					maxBlock = tx.BlockNumber.ToUint64()
+				}
+			}
+		}
+	}
+	keys := getSortedMapKeys(blockSummaries)
+	for _, k := range keys {
+		if k < minBlock {
+			delete(blockSummaries, k)
+		}
+		if k > maxBlock {
+			delete(blockSummaries, k)
+		}
+	}
+
+	for _, bs := range blockSummaries {
+		filteredTransactions := make([]rpctypes.RawTransactionResponse, 0)
+		for txKey, tx := range bs.Block.Transactions {
+			if _, hasKey := validTx[tx.Hash.ToHash()]; hasKey {
+				filteredTransactions = append(filteredTransactions, bs.Block.Transactions[txKey])
+			}
+		}
+		bs.Block.Transactions = filteredTransactions
+		filteredReceipts := make(map[ethcommon.Hash]rpctypes.RawTxReceipt, 0)
+		for receiptKey, receipt := range bs.Receipts {
+			if _, hasKey := validTx[receipt.TransactionHash.ToHash()]; hasKey {
+				filteredReceipts[receipt.TransactionHash.ToHash()] = bs.Receipts[receiptKey]
+			}
+		}
+		bs.Receipts = filteredReceipts
+
+	}
+}
+
+func getSortedMapKeys[V any, K constraints.Ordered](m map[K]V) []K {
+	keys := make([]K, 0)
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i] < keys[j] {
+			return true
+		}
+		return false
+	})
+	return keys
 }

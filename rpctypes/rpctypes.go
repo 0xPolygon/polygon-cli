@@ -436,12 +436,7 @@ func (r RawQuantityResponse) ToUint64() uint64 {
 	return uint64(result)
 }
 func (r RawQuantityResponse) ToFloat64() float64 {
-	hexString := normalizeHexString(string(r))
-	result, err := strconv.ParseFloat(hexString, 64)
-	if err != nil {
-		return 0
-	}
-	return result
+	return float64(r.ToInt64())
 }
 
 func (r RawQuantityResponse) ToInt64() int64 {
