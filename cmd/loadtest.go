@@ -1300,6 +1300,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		return err
 	}
 	// FIXME: This code shouldn't really work like this. getBlockRange and getReceipts need to be moved to a package
+	// TODO: Add some kind of decimation to avoid summarizing for 10 minutes?
 	inputDumpblocks.BatchSize = 999
 	cpuCount := uint(runtime.NumCPU())
 	var txGroup sync.WaitGroup
@@ -1421,6 +1422,7 @@ func printBlockSummary(bs map[uint64]blockSummary, startNonce, endNonce uint64) 
 	p.Printf("Total Gas Used: %v\n", number.Decimal(totalGasUsed))
 	p.Printf("Transactions per sec: %v\n", number.Decimal(tps))
 	p.Printf("Gas Per Second: %v\n", number.Decimal(gaspersec))
+	// TODO: Add some kind of indicatin of block time variance
 }
 func getTotalGasUsed(receipts map[ethcommon.Hash]rpctypes.RawTxReceipt) uint64 {
 	var totalGasUsed uint64 = 0
