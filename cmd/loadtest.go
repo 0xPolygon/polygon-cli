@@ -636,7 +636,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 
 		err = blockUntilSuccessful(func() error {
-			_, err := delegatorContract.Call(tops, ltAddr, []byte{0x12, 0x87, 0xa6, 0x8c})
+			_, err = delegatorContract.Call(tops, ltAddr, []byte{0x12, 0x87, 0xa6, 0x8c})
 			return err
 		}, 30)
 		if err != nil {
@@ -1264,13 +1264,14 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	ltp := inputLoadTestParams
 	var err error
 	var lastBlockNumber uint64
+	var currentNonce uint64
 	for {
 		lastBlockNumber, err = c.BlockNumber(ctx)
 		if err != nil {
 			return err
 		}
 
-		currentNonce, err := c.NonceAt(ctx, *ltp.FromETHAddress, new(big.Int).SetUint64(lastBlockNumber))
+		currentNonce, err = c.NonceAt(ctx, *ltp.FromETHAddress, new(big.Int).SetUint64(lastBlockNumber))
 		if err != nil {
 			return err
 		}
@@ -1342,10 +1343,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 
 func isEmptyJSONResponse(r *json.RawMessage) bool {
 	rawJson := []byte(*r)
-	if len(rawJson) == 0 {
-		return true
-	}
-	return false
+	return len(rawJson) == 0
 }
 
 func printBlockSummary(bs map[uint64]blockSummary, startNonce, endNonce uint64) {
@@ -1448,10 +1446,7 @@ func getSortedMapKeys[V any, K constraints.Ordered](m map[K]V) []K {
 		keys = append(keys, k)
 	}
 	sort.Slice(keys, func(i, j int) bool {
-		if keys[i] < keys[j] {
-			return true
-		}
-		return false
+		return keys[i] < keys[j]
 	})
 	return keys
 }
