@@ -201,12 +201,14 @@ type (
 		Hash string `json:"hash"`
 	}
 	simpleRPCBlock struct {
+		Number       string                 `json:"number"`
 		Transactions []simpleRPCTransaction `json:"transactions"`
 	}
 )
 
 func getReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Client) ([]*json.RawMessage, error) {
 	txHashes := make([]string, 0)
+	txHashMap := make(map[string]string, 0)
 	for _, rb := range rawBlocks {
 		var sb simpleRPCBlock
 		err := json.Unmarshal(*rb, &sb)
@@ -216,6 +218,7 @@ func getReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 		}
 		for _, tx := range sb.Transactions {
 			txHashes = append(txHashes, tx.Hash)
+			txHashMap[tx.Hash] = sb.Number
 		}
 
 	}
@@ -224,7 +227,8 @@ func getReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 	}
 
 	blms := make([]ethrpc.BatchElem, 0)
-	for _, tx := range txHashes {
+	blmsBlockMap := make(map[int]string, 0)
+	for i, tx := range txHashes {
 		r := new(json.RawMessage)
 		var err error
 		blms = append(blms, ethrpc.BatchElem{
@@ -233,6 +237,7 @@ func getReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 			Result: r,
 			Error:  err,
 		})
+		blmsBlockMap[i] = txHashMap[tx]
 	}
 
 	var start uint64 = 0
@@ -244,7 +249,7 @@ func getReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 			end = uint64(len(blms) - 1)
 		}
 
-		log.Trace().Uint64("start", start).Uint64("end", end).Msg("Fetching tx receipt range")
+		log.Trace().Str("startblock", blmsBlockMap[int(start)]).Uint64("start", start).Uint64("end", end).Msg("Fetching tx receipt range")
 		// json: cannot unmarshal object into Go value of type []rpc.jsonrpcMessage
 		// The error occurs when we call batchcallcontext with a single transaction for some reason.
 		// polycli dumpblocks -c 1 http://127.0.0.1:9209/ 34457958 34458108

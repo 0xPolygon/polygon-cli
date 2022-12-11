@@ -202,8 +202,9 @@ func setLogLevel(ltp loadTestParams) {
 
 type (
 	blockSummary struct {
-		Block    *rpctypes.RawBlockResponse
-		Receipts map[ethcommon.Hash]rpctypes.RawTxReceipt
+		Block     *rpctypes.RawBlockResponse
+		Receipts  map[ethcommon.Hash]rpctypes.RawTxReceipt
+		Latencies map[uint64]time.Duration
 	}
 	hexwordReader struct {
 	}
@@ -214,6 +215,7 @@ type (
 		WaitTime    time.Duration
 		Receipt     string
 		IsError     bool
+		Nonce       uint64
 	}
 	loadTestParams struct {
 		// inputs
@@ -710,7 +712,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
-				recordSample(i, j, err, startReq, endReq)
+				recordSample(i, j, err, startReq, endReq, myNonceValue)
 				if err != nil {
 					log.Trace().Err(err).Msg("Recorded an error while sending transactions")
 				}
@@ -961,12 +963,13 @@ func loadtestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 	return
 }
 
-func recordSample(goRoutineID, requestID int64, err error, start, end time.Time) {
+func recordSample(goRoutineID, requestID int64, err error, start, end time.Time, nonce uint64) {
 	s := loadTestSample{}
 	s.GoRoutineID = goRoutineID
 	s.RequestID = requestID
 	s.RequestTime = start
 	s.WaitTime = end.Sub(start)
+	s.Nonce = nonce
 	if err != nil {
 		s.IsError = true
 	}
@@ -1105,7 +1108,7 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
-				recordSample(i, j, err, startReq, endReq)
+				recordSample(i, j, err, startReq, endReq, myNonceValue)
 				if err != nil {
 					log.Trace().Err(err).Msg("Recorded an error while sending transactions")
 				}
@@ -1363,6 +1366,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		bs := blockSummary{}
 		bs.Block = &blocks[k]
 		bs.Receipts = make(map[ethcommon.Hash]rpctypes.RawTxReceipt, 0)
+		bs.Latencies = make(map[uint64]time.Duration, 0)
 		blockData[b.Number.ToUint64()] = bs
 	}
 
@@ -1371,6 +1375,21 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		bs := blockData[bn]
 		bs.Receipts[r.TransactionHash.ToHash()] = r
 		blockData[bn] = bs
+	}
+
+	nonceTimes := make(map[uint64]time.Time, 0)
+	for _, ltr := range loadTestResults {
+		nonceTimes[ltr.Nonce] = ltr.RequestTime
+	}
+
+	for _, bs := range blockData {
+		for _, tx := range bs.Block.Transactions {
+			// TODO: What happens when the system clock of the load tester isn't in sync with the system clock of the miner?
+			mineTime := time.Unix(bs.Block.Timestamp.ToInt64(), 0)
+			requestTime := nonceTimes[tx.Nonce.ToUint64()]
+			txLatency := mineTime.Sub(requestTime)
+			bs.Latencies[tx.Nonce.ToUint64()] = txLatency
+		}
 	}
 
 	printBlockSummary(blockData, startNonce, endNonce)
@@ -1395,20 +1414,27 @@ func printBlockSummary(bs map[uint64]blockSummary, startNonce, endNonce uint64) 
 	var totalGasUsed uint64 = 0
 	p := message.NewPrinter(language.English)
 
+	allLatencies := make([]time.Duration, 0)
 	for _, v := range mapKeys {
 		summary := bs[v]
 		gasUsed := getTotalGasUsed(summary.Receipts)
+		blockLatencies := getMapValues(summary.Latencies)
+		minLatency, medianLatency, maxLatency := getMinMedianMax(blockLatencies)
+		allLatencies = append(allLatencies, blockLatencies...)
 		blockUtilization := float64(gasUsed) / summary.Block.GasLimit.ToFloat64()
 		if gasUsed == 0 {
 			blockUtilization = 0
 		}
-		_, _ = p.Printf("Block number: %v\tTime: %s\tGas Limit: %v\tGas Used: %v\tNum Tx: %v\tUtilization %v\n",
+		_, _ = p.Printf("Block number: %v\tTime: %s\tGas Limit: %v\tGas Used: %v\tNum Tx: %v\tUtilization %v\tLatencies: %v\t%v\t%v\n",
 			number.Decimal(summary.Block.Number.ToUint64()),
 			time.Unix(summary.Block.Timestamp.ToInt64(), 0),
 			number.Decimal(summary.Block.GasLimit.ToUint64()),
 			number.Decimal(gasUsed),
 			number.Decimal(len(summary.Block.Transactions)),
-			number.Percent(blockUtilization))
+			number.Percent(blockUtilization),
+			number.Decimal(minLatency.Seconds()),
+			number.Decimal(medianLatency.Seconds()),
+			number.Decimal(maxLatency.Seconds()))
 		totalTransactions += uint64(len(summary.Block.Transactions))
 		totalGasUsed += gasUsed
 	}
@@ -1417,11 +1443,14 @@ func printBlockSummary(bs map[uint64]blockSummary, startNonce, endNonce uint64) 
 	totalMiningTime := time.Duration(lastBlock.Timestamp.ToInt64()-firstBlock.Timestamp.ToInt64()) * time.Second
 	tps := float64(totalTransactions) / totalMiningTime.Seconds()
 	gaspersec := float64(totalGasUsed) / totalMiningTime.Seconds()
+	minLatency, medianLatency, maxLatency := getMinMedianMax(allLatencies)
+
 	p.Printf("Total Mining Time: %s\n", totalMiningTime)
 	p.Printf("Total Transactions: %v\n", number.Decimal(totalTransactions))
 	p.Printf("Total Gas Used: %v\n", number.Decimal(totalGasUsed))
 	p.Printf("Transactions per sec: %v\n", number.Decimal(tps))
 	p.Printf("Gas Per Second: %v\n", number.Decimal(gaspersec))
+	p.Printf("Latencies - Min: %v\tMedian: %v\tMax: %v\n", number.Decimal(minLatency.Seconds()), number.Decimal(medianLatency.Seconds()), number.Decimal(maxLatency.Seconds()))
 	// TODO: Add some kind of indicatin of block time variance
 }
 func getTotalGasUsed(receipts map[ethcommon.Hash]rpctypes.RawTxReceipt) uint64 {
@@ -1430,6 +1459,39 @@ func getTotalGasUsed(receipts map[ethcommon.Hash]rpctypes.RawTxReceipt) uint64 {
 		totalGasUsed += receipt.GasUsed.ToUint64()
 	}
 	return totalGasUsed
+}
+func getMapValues[K constraints.Ordered, V any](m map[K]V) []V {
+	newSlice := make([]V, 0)
+	for _, val := range m {
+		newSlice = append(newSlice, val)
+	}
+	return newSlice
+}
+func getMinMedianMax[V constraints.Float | constraints.Integer](values []V) (V, V, V) {
+	sort.Slice(values, func(i, j int) bool {
+		return values[i] < values[j]
+	})
+	half := len(values) / 2
+	median := values[half]
+	if len(values)%2 == 0 {
+		median = (median + values[half-1]) / V(2)
+	}
+	var min V
+	var max V
+	for k, v := range values {
+		if k == 0 {
+			min = v
+			max = v
+			continue
+		}
+		if v < min {
+			min = v
+		}
+		if v > max {
+			max = v
+		}
+	}
+	return min, median, max
 }
 
 func filterBlockSummary(blockSummaries map[uint64]blockSummary, startNonce, endNonce uint64) {
