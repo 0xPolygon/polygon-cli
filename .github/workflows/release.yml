@@ -1,4 +1,4 @@
-name: goreleaser
+name: polycli-releaser
 
 on:
   push:
@@ -27,7 +27,7 @@ jobs:
 
           go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@latest
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.50.1
-          
+
           pwd
           make cross
           pushd out
