@@ -78,6 +78,7 @@ const (
 var (
 	inputLoadTestParams loadTestParams
 	loadTestResults     []loadTestSample
+	loadTestResutsMutex sync.RWMutex
 	validLoadTestModes  = []string{
 		loadTestModeTransaction,
 		loadTestModeDeploy,
@@ -973,7 +974,9 @@ func recordSample(goRoutineID, requestID int64, err error, start, end time.Time,
 	if err != nil {
 		s.IsError = true
 	}
+	loadTestResutsMutex.Lock()
 	loadTestResults = append(loadTestResults, s)
+	loadTestResutsMutex.Unlock()
 }
 
 func hexwordRead(b []byte) (int, error) {
@@ -1387,9 +1390,16 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		for _, tx := range bs.Block.Transactions {
 			// TODO: What happens when the system clock of the load tester isn't in sync with the system clock of the miner?
 			// TODO: the timestamp in the chain only has granularity down to the second. How to deal with this
+			// the + 1 here is to deal with pretty obvious error margins due to the way block timestamp works. Not sure
+			// what the best way to account for this is. In the future we might want to determine what the min reasonable
+			// latency is... E.g. it's not possible to have a latency lower than the latency between our servers. Then we
+			// can find the min observed latency and shift all of the other latencies accordingly
 			mineTime := time.Unix(bs.Block.Timestamp.ToInt64()+1, 0)
 			requestTime := nonceTimes[tx.Nonce.ToUint64()]
 			txLatency := mineTime.Sub(requestTime)
+			if txLatency.Hours() > 2 {
+				log.Debug().Float64("txHours", txLatency.Hours()).Uint64("nonce", tx.Nonce.ToUint64()).Uint64("blockNumber", bs.Block.Number.ToUint64()).Time("mineTime", mineTime).Time("requestTime", requestTime).Msg("Encountered transaction with more than 2 hours latency")
+			}
 			bs.Latencies[tx.Nonce.ToUint64()] = txLatency
 		}
 	}
