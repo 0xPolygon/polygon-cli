@@ -1347,6 +1347,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	log.Info().Int("len", len(blocks)).Msg("block summary")
 
 	txReceipts := make([]rpctypes.RawTxReceipt, 0)
+	log.Trace().Int("len", len(rawTxReceipts)).Msg("raw receipts")
 	for _, r := range rawTxReceipts {
 		if isEmptyJSONResponse(r) {
 			continue
@@ -1385,7 +1386,8 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	for _, bs := range blockData {
 		for _, tx := range bs.Block.Transactions {
 			// TODO: What happens when the system clock of the load tester isn't in sync with the system clock of the miner?
-			mineTime := time.Unix(bs.Block.Timestamp.ToInt64(), 0)
+			// TODO: the timestamp in the chain only has granularity down to the second. How to deal with this
+			mineTime := time.Unix(bs.Block.Timestamp.ToInt64()+1, 0)
 			requestTime := nonceTimes[tx.Nonce.ToUint64()]
 			txLatency := mineTime.Sub(requestTime)
 			bs.Latencies[tx.Nonce.ToUint64()] = txLatency
@@ -1444,14 +1446,29 @@ func printBlockSummary(bs map[uint64]blockSummary, startNonce, endNonce uint64) 
 	tps := float64(totalTransactions) / totalMiningTime.Seconds()
 	gaspersec := float64(totalGasUsed) / totalMiningTime.Seconds()
 	minLatency, medianLatency, maxLatency := getMinMedianMax(allLatencies)
+	sucessfulTx, totalTx := getSuccessfulTransactionCount(bs)
 
+	p.Printf("Successful Tx: %v\tTotal Tx: %v\n", number.Decimal(sucessfulTx), number.Decimal(totalTx))
 	p.Printf("Total Mining Time: %s\n", totalMiningTime)
 	p.Printf("Total Transactions: %v\n", number.Decimal(totalTransactions))
 	p.Printf("Total Gas Used: %v\n", number.Decimal(totalGasUsed))
 	p.Printf("Transactions per sec: %v\n", number.Decimal(tps))
 	p.Printf("Gas Per Second: %v\n", number.Decimal(gaspersec))
 	p.Printf("Latencies - Min: %v\tMedian: %v\tMax: %v\n", number.Decimal(minLatency.Seconds()), number.Decimal(medianLatency.Seconds()), number.Decimal(maxLatency.Seconds()))
-	// TODO: Add some kind of indicatin of block time variance
+	// TODO: Add some kind of indication of block time variance
+}
+func getSuccessfulTransactionCount(bs map[uint64]blockSummary) (successful, total int64) {
+	total = 0
+	successful = 0
+	for _, block := range bs {
+		for _, receipt := range block.Receipts {
+			total += 1
+			if receipt.Status.ToInt64() == 1 {
+				successful += 1
+			}
+		}
+	}
+	return
 }
 func getTotalGasUsed(receipts map[ethcommon.Hash]rpctypes.RawTxReceipt) uint64 {
 	var totalGasUsed uint64 = 0
@@ -1468,6 +1485,9 @@ func getMapValues[K constraints.Ordered, V any](m map[K]V) []V {
 	return newSlice
 }
 func getMinMedianMax[V constraints.Float | constraints.Integer](values []V) (V, V, V) {
+	if len(values) == 0 {
+		return 0, 0, 0
+	}
 	sort.Slice(values, func(i, j int) bool {
 		return values[i] < values[j]
 	})

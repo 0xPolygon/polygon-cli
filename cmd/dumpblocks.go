@@ -244,9 +244,9 @@ func getReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 	for {
 		last := false
 		end := start + inputDumpblocks.BatchSize
-		if int(end) >= len(blms) {
+		if int(end) > len(blms) {
 			last = true
-			end = uint64(len(blms) - 1)
+			end = uint64(len(blms))
 		}
 
 		log.Trace().Str("startblock", blmsBlockMap[int(start)]).Uint64("start", start).Uint64("end", end).Msg("Fetching tx receipt range")
