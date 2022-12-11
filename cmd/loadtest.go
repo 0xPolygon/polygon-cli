@@ -573,19 +573,39 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			return err
 		}
 		currentNonce = currentNonce + 1
-
-		tops.Nonce = new(big.Int).SetUint64(currentNonce)
-		tops.GasLimit = 10000000
-		tops = configureTransactOpts(tops)
-
 		err = blockUntilSuccessful(func() error {
-			_, err = erc20Contract.Mint(tops, new(big.Int).SetUint64(1_000_000_000_000))
+			_, err = erc20Contract.BalanceOf(cops, *ltp.FromETHAddress)
 			return err
 		}, 30)
 		if err != nil {
 			return err
 		}
+
+		tops.Nonce = new(big.Int).SetUint64(currentNonce)
+		tops.GasLimit = 10000000
+		tops = configureTransactOpts(tops)
+		_, err = erc20Contract.Mint(tops, new(big.Int).SetUint64(1_000_000_000_000))
+		if err != nil {
+			log.Error().Err(err).Msg("There was an error minting ERC20")
+			return err
+		}
+
 		currentNonce = currentNonce + 1
+		err = blockUntilSuccessful(func() error {
+			var balance *big.Int
+			balance, err = erc20Contract.BalanceOf(cops, *ltp.FromETHAddress)
+			if err != nil {
+				return err
+			}
+			if balance.Uint64() == 0 {
+				err = fmt.Errorf("ERC20 Balance is Zero")
+				return err
+			}
+			return nil
+		}, 30)
+		if err != nil {
+			return err
+		}
 	}
 
 	var erc721Addr ethcommon.Address
@@ -603,8 +623,15 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
 			return err
 		}
-
 		currentNonce = currentNonce + 1
+
+		err = blockUntilSuccessful(func() error {
+			_, err = erc721Contract.BalanceOf(cops, *ltp.FromETHAddress)
+			return err
+		}, 30)
+		if err != nil {
+			return err
+		}
 
 		tops.Nonce = new(big.Int).SetUint64(currentNonce)
 		tops.GasLimit = 10000000
@@ -746,7 +773,7 @@ func blockUntilSuccessful(f func() error, tries int) error {
 				log.Error().Err(err).Int("tries", waitCounter).Msg("Exhausted waiting period")
 				return err
 			}
-			log.Trace().Msg("Waiting to deploy")
+			log.Trace().Err(err).Msg("waiting for successful function execution")
 			time.Sleep(time.Second)
 			waitCounter = waitCounter - 1
 			continue
@@ -1386,21 +1413,31 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		nonceTimes[ltr.Nonce] = ltr.RequestTime
 	}
 
+	minLatency := time.Millisecond * 100
 	for _, bs := range blockData {
 		for _, tx := range bs.Block.Transactions {
 			// TODO: What happens when the system clock of the load tester isn't in sync with the system clock of the miner?
 			// TODO: the timestamp in the chain only has granularity down to the second. How to deal with this
-			// the + 1 here is to deal with pretty obvious error margins due to the way block timestamp works. Not sure
-			// what the best way to account for this is. In the future we might want to determine what the min reasonable
-			// latency is... E.g. it's not possible to have a latency lower than the latency between our servers. Then we
-			// can find the min observed latency and shift all of the other latencies accordingly
-			mineTime := time.Unix(bs.Block.Timestamp.ToInt64()+1, 0)
+			mineTime := time.Unix(bs.Block.Timestamp.ToInt64(), 0)
 			requestTime := nonceTimes[tx.Nonce.ToUint64()]
 			txLatency := mineTime.Sub(requestTime)
 			if txLatency.Hours() > 2 {
 				log.Debug().Float64("txHours", txLatency.Hours()).Uint64("nonce", tx.Nonce.ToUint64()).Uint64("blockNumber", bs.Block.Number.ToUint64()).Time("mineTime", mineTime).Time("requestTime", requestTime).Msg("Encountered transaction with more than 2 hours latency")
 			}
 			bs.Latencies[tx.Nonce.ToUint64()] = txLatency
+			if txLatency < minLatency {
+				minLatency = txLatency
+			}
+		}
+	}
+	// TODO this might be a hack, but not sure what's a better way to deal with time discrepancies
+	if minLatency < time.Millisecond*100 {
+		log.Trace().Str("minLatency", minLatency.String()).Msg("minimum latency is below expected threshold")
+		shiftSize := ((time.Millisecond * 100) - minLatency) + time.Millisecond + 100
+		for _, bs := range blockData {
+			for _, tx := range bs.Block.Transactions {
+				bs.Latencies[tx.Nonce.ToUint64()] += shiftSize
+			}
 		}
 	}
 
