@@ -63,7 +63,7 @@ const (
 	monitorModeExplorer monitorMode = iota
 	monitorModeBlock    monitorMode = iota
 
-	defaultBatchSize uint64 = 25
+	defaultBatchSize uint64 = 100
 )
 
 func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, error) {
@@ -231,7 +231,7 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 func init() {
 	rootCmd.AddCommand(monitorCmd)
 
-	inputBatchSize = monitorCmd.PersistentFlags().Uint64P("batch-size", "b", 25, "Number of requests per batch")
+	inputBatchSize = monitorCmd.PersistentFlags().Uint64P("batch-size", "b", defaultBatchSize, "Number of requests per batch")
 }
 
 func renderMonitorUI(ms *monitorStatus) error {
@@ -242,25 +242,25 @@ func renderMonitorUI(ms *monitorStatus) error {
 
 	currentMode := monitorModeExplorer
 
-	blockTable := widgets.NewTable()
+	blockTable := widgets.NewList()
 
 	blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
-	blockTable.RowSeparator = true
+	// blockTable.RowSeparator = true
 
-	columnWidths := make([]int, 7)
+	// columnWidths := make([]int, 7)
 
-	blockTable.ColumnResizer = func() {
-		defaultWidth := (blockTable.Inner.Dx() - (12 + 26 + 46 + 14 + 12 + 14)) / 1
-		columnWidths[0] = 12
-		columnWidths[1] = 26
-		columnWidths[2] = defaultWidth
-		columnWidths[3] = 46
-		columnWidths[4] = 14
-		columnWidths[5] = 12
-		columnWidths[6] = 14
-	}
+	// blockTable.ColumnResizer = func() {
+	// 	defaultWidth := (blockTable.Inner.Dx() - (12 + 26 + 46 + 14 + 12 + 14)) / 1
+	// 	columnWidths[0] = 12
+	// 	columnWidths[1] = 26
+	// 	columnWidths[2] = defaultWidth
+	// 	columnWidths[3] = 46
+	// 	columnWidths[4] = 14
+	// 	columnWidths[5] = 12
+	// 	columnWidths[6] = 14
+	// }
 
-	blockTable.ColumnWidths = columnWidths
+	// blockTable.ColumnWidths = columnWidths
 
 	h0 := widgets.NewParagraph()
 	h0.Title = "Current"
@@ -379,9 +379,9 @@ func renderMonitorUI(ms *monitorStatus) error {
 
 		recentBlocks := metrics.SortableBlocks(blocks)
 		sort.Sort(recentBlocks)
-		// 25 needs to be a variable / parameter
-		if len(recentBlocks) > 25 {
-			recentBlocks = recentBlocks[len(recentBlocks)-25:]
+		// defaultBatchSize needs to be a variable / parameter
+		if uint64(len(recentBlocks)) > defaultBatchSize {
+			recentBlocks = recentBlocks[uint64(len(recentBlocks))-defaultBatchSize:]
 		}
 
 		h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
@@ -402,17 +402,19 @@ func renderMonitorUI(ms *monitorStatus) error {
 		if selectedBlockIdx == nil {
 			blockTable.Rows = metrics.GetSimpleBlockRecords(recentBlocks)
 		}
-		if len(columnWidths) != len(blockTable.Rows[0]) {
-			// i've messed up
-			panic("Mis matched between columns and specified widths")
-		}
+		// if len(columnWidths) != len(blockTable.Rows[0]) {
+		// 	// i've messed up
+		// 	panic("Mis matched between columns and specified widths")
+		// }
 
+		blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
 		for i := 0; i < len(blockTable.Rows); i = i + 1 {
-			blockTable.RowStyles[i] = ui.NewStyle(ui.ColorWhite)
+			// blockTable.RowStyles[i] = ui.NewStyle(ui.ColorWhite)
 		}
+		blockTable.SelectedRowStyle = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
 		if selectedBlockIdx != nil && *selectedBlockIdx > 0 && *selectedBlockIdx < len(blockTable.Rows) {
 
-			blockTable.RowStyles[*selectedBlockIdx] = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
+			// blockTable.[*selectedBlockIdx] = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
 			// the block table is reversed and has an extra row for the header
 
 			// only changed the selected block when the user presses the up down keys. Otherwise this will adjust when the table is updated automatically
@@ -468,6 +470,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 				if selectedBlockIdx == nil {
 					currIdx = 1
 					selectedBlockIdx = &currIdx
+					blockTable.SelectedRow = currIdx
 					setBlock = true
 					redraw(ms)
 					break
@@ -481,8 +484,9 @@ func renderMonitorUI(ms *monitorStatus) error {
 					currIdx = currIdx - 1
 					setBlock = true
 				}
-				if currIdx > 0 && currIdx < 25 { // need a better way to understand how many rows are visble
+				if currIdx > 0 && uint64(currIdx) < defaultBatchSize { // need a better way to understand how many rows are visble
 					selectedBlockIdx = &currIdx
+					blockTable.SelectedRow = currIdx
 				}
 
 				redraw(ms)
@@ -499,6 +503,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 				if selectedBlockIdx == nil {
 					currIdx = 1
 					selectedBlockIdx = &currIdx
+					blockTable.SelectedRow = currIdx
 					setBlock = true
 					redraw(ms)
 					break
@@ -512,8 +517,9 @@ func renderMonitorUI(ms *monitorStatus) error {
 					currIdx = currIdx - 1
 					setBlock = true
 				}
-				if currIdx > 0 && currIdx < 25 { // need a better way to understand how many rows are visble
+				if currIdx > 0 && uint64(currIdx) < defaultBatchSize { // need a better way to understand how many rows are visble
 					selectedBlockIdx = &currIdx
+					blockTable.SelectedRow = currIdx
 				}
 
 				redraw(ms)

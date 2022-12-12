@@ -123,22 +123,29 @@ func GetMeanGasPricePerBlock(blocks []rpctypes.PolyBlock) []float64 {
 	return gasPrices
 }
 
-func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) [][]string {
+func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) []string {
 	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
-	header := []string{
-		"Block #",
-		"Timestamp",
-		"Block Hash",
-		"Author",
-		"Block Time",
-		"Tx Count",
-		"Gas Used",
-	}
+	// header := []string{
+	// 	"Block #",
+	// 	"Timestamp",
+	// 	"Block Hash",
+	// 	"Author",
+	// 	"Block Time",
+	// 	"Tx Count",
+	// 	"Gas Used",
+	// }
+	header := "Block #" +
+		"Timestamp" +
+		"Block Hash" +
+		"Author" +
+		"Block Time" +
+		"Tx Count" +
+		"Gas Used"
 
 	if len(blocks) < 1 {
-		return [][]string{header}
+		return []string{header}
 	}
 
 	isMined := true
@@ -147,11 +154,11 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) [][]string {
 		isMined = false
 	}
 
-	if !isMined {
-		header[3] = "Signer"
+	if !isMined { // TODO put back
+		// header[3] = "Signer"
 	}
 
-	records := make([][]string, 0)
+	records := make([]string, 0)
 	records = append(records, header)
 	for j := len(bs) - 1; j >= 0; j = j - 1 {
 		author := bs[j].Miner()
@@ -167,15 +174,15 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) [][]string {
 		if j > 0 {
 			blockTime = bs[j].Time() - bs[j-1].Time()
 		}
-		record := []string{
-			fmt.Sprintf("%d", bs[j].Number()),
-			ut.Format("02 Jan 06 15:04:05 MST"),
-			bs[j].Hash().String(),
-			author.String(),
-			fmt.Sprintf("%d", blockTime),
-			fmt.Sprintf("%d", len(bs[j].Transactions())),
-			fmt.Sprintf("%d", bs[j].GasUsed()),
-		}
+		record :=
+			fmt.Sprintf("%d", bs[j].Number()) +
+				ut.Format("02 Jan 06 15:04:05 MST") +
+				bs[j].Hash().String() +
+				author.String() +
+				fmt.Sprintf("%d", blockTime) +
+				fmt.Sprintf("%d", len(bs[j].Transactions())) +
+				fmt.Sprintf("%d", bs[j].GasUsed())
+
 		records = append(records, record)
 	}
 	return records
