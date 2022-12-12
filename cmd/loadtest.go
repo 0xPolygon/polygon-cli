@@ -927,9 +927,9 @@ func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delega
 	tops.GasLimit = 10000000
 	tops = configureTransactOpts(tops)
 
-	// TODO the deletgated call should be a parameter
+	// TODO the delegated call should be a parameter
 	t1 = time.Now()
-	// loopBlockHashUntilLimit
+	// loopBlockHashUntilLimit (verify here https://abi.hashex.org/)
 	_, err = delegatorContract.LoopDelegateCall(tops, ltAddress, []byte{0xa2, 0x71, 0xb7, 0x21})
 	// loopUntilLimit
 	// _, err = delegatorContract.LoopDelegateCall(tops, ltAddress, []byte{0x65, 0x9b, 0xbb, 0x4f})

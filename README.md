@@ -141,6 +141,18 @@ The `--mode` flag is important for this command:
 - `c` Will call random functions in our load test contract
 - `f` will call a specific function on the load test contract. The
   function is specified using the `-f` flag
+- `2` Will run an ERC20 transfer test. It starts out by minting 
+  a large amount of an ERC20 contract then transferring it in small
+  amounts
+- `7` Will run an ERC721 test which will mint an NFT over and over
+  again
+- `i` Will call the increment function repeatedly on the load test 
+  contract. It's a minimal example of a contract call that will 
+  require an update to a contract's storage.
+- `r` Will call any of th eother modes randomly
+- `s` Is used for Avail / Eth to store random data in large amounts
+- `l` Will call a smart contract function that runs as long as it can
+  (based on the block limit)
 
 This example is very simple. It runs 1000 requests at a max rate of 1
 request per second against the http rpc endpoint on localhost. t's
