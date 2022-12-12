@@ -25,9 +25,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
 
-          go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@latest
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.50.1
-
           pwd
           make cross
           pushd out
