@@ -1474,16 +1474,19 @@ func printBlockSummary(bs map[uint64]blockSummary, startNonce, endNonce uint64) 
 		if gasUsed == 0 {
 			blockUtilization = 0
 		}
-		_, _ = p.Printf("Block number: %v\tTime: %s\tGas Limit: %v\tGas Used: %v\tNum Tx: %v\tUtilization %v\tLatencies: %v\t%v\t%v\n",
-			number.Decimal(summary.Block.Number.ToUint64()),
-			time.Unix(summary.Block.Timestamp.ToInt64(), 0),
-			number.Decimal(summary.Block.GasLimit.ToUint64()),
-			number.Decimal(gasUsed),
-			number.Decimal(len(summary.Block.Transactions)),
-			number.Percent(blockUtilization),
-			number.Decimal(minLatency.Seconds()),
-			number.Decimal(medianLatency.Seconds()),
-			number.Decimal(maxLatency.Seconds()))
+		// if we're at trace, debug, or info level we'll output the block level metrics
+		if zerolog.GlobalLevel() <= zerolog.InfoLevel {
+			_, _ = p.Printf("Block number: %v\tTime: %s\tGas Limit: %v\tGas Used: %v\tNum Tx: %v\tUtilization %v\tLatencies: %v\t%v\t%v\n",
+				number.Decimal(summary.Block.Number.ToUint64()),
+				time.Unix(summary.Block.Timestamp.ToInt64(), 0),
+				number.Decimal(summary.Block.GasLimit.ToUint64()),
+				number.Decimal(gasUsed),
+				number.Decimal(len(summary.Block.Transactions)),
+				number.Percent(blockUtilization),
+				number.Decimal(minLatency.Seconds()),
+				number.Decimal(medianLatency.Seconds()),
+				number.Decimal(maxLatency.Seconds()))
+		}
 		totalTransactions += uint64(len(summary.Block.Transactions))
 		totalGasUsed += gasUsed
 	}
