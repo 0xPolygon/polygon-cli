@@ -160,7 +160,7 @@ type (
 		ContractAddress RawData20Response `json:"contractAddress"`
 
 		// logs: Array - Array of log objects, which this transaction generated.
-		Logs []RawDataResponse `json:"logs"`
+		Logs []any `json:"logs"`
 
 		// logsBloom: DATA, 256 Bytes - Bloom filter for light clients to quickly retrieve related logs. It also returns either :
 		LogsBloom RawData256Response `json:"logsBloom"`
@@ -436,12 +436,7 @@ func (r RawQuantityResponse) ToUint64() uint64 {
 	return uint64(result)
 }
 func (r RawQuantityResponse) ToFloat64() float64 {
-	hexString := normalizeHexString(string(r))
-	result, err := strconv.ParseFloat(hexString, 64)
-	if err != nil {
-		return 0
-	}
-	return result
+	return float64(r.ToInt64())
 }
 
 func (r RawQuantityResponse) ToInt64() int64 {
