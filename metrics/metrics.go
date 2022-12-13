@@ -131,15 +131,6 @@ func GetSimpleBlockRecords(blockTable *widgets.List, blocks []rpctypes.PolyBlock
 	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
-	// header := []string{
-	// 	"Block #",
-	// 	"Timestamp",
-	// 	"Block Hash",
-	// 	"Author",
-	// 	"Block Time",
-	// 	"Tx Count",
-	// 	"Gas Used",
-	// }
 	width, _, err := term.GetSize(0)
 	if err != nil {
 		return []string{}
@@ -152,8 +143,7 @@ func GetSimpleBlockRecords(blockTable *widgets.List, blocks []rpctypes.PolyBlock
 	for i := 0; i < len(proportion); i++ {              // for each repetition...
 		calculatedBuffer = append(calculatedBuffer, proportion[i]*width/100) // append, append, ....
 	}
-	// fmt.Sprint(width) + " " +
-	// fmt.Sprint(height) + " " +
+
 	header :=
 		headerVariables[0] + strings.Repeat(" ", proportion[0]) +
 			headerVariables[1] + strings.Repeat(" ", proportion[1]) +
@@ -173,14 +163,13 @@ func GetSimpleBlockRecords(blockTable *widgets.List, blocks []rpctypes.PolyBlock
 		isMined = false
 	}
 
-	if !isMined { // TODO put back
-		// header[3] = "Signer"
+	if !isMined {
+		header = strings.Replace(header, "Author", "Signer", 1)
 	}
 
 	blockTable.Title = header
 
 	records := make([]string, 0)
-	// records = append(records, header)
 	for j := len(bs) - 1; j >= 0; j = j - 1 {
 		author := bs[j].Miner()
 		ts := bs[j].Time()
