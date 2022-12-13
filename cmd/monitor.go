@@ -345,7 +345,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 	grid.SetRect(0, 0, termWidth, termHeight)
 	blockGrid.SetRect(0, 0, termWidth, termHeight)
 
-	var selectedBlockIdx *int
 	var selectedBlock rpctypes.PolyBlock
 	var setBlock = false
 
@@ -393,23 +392,16 @@ func renderMonitorUI(ms *monitorStatus) error {
 		sl4.Data = metrics.GetGasPerBlock(recentBlocks)
 
 		// assuming we haven't selected a particular row... we should get new blocks
-		if selectedBlockIdx == nil {
+		if blockTable.SelectedRow == 0 {
 			blockTable.Rows = metrics.GetSimpleBlockRecords(blockTable, recentBlocks)
 		}
 
 		blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
-		for i := 0; i < len(blockTable.Rows); i = i + 1 {
-			// blockTable.RowStyles[i] = ui.NewStyle(ui.ColorWhite)
-		}
 		blockTable.SelectedRowStyle = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
-		if selectedBlockIdx != nil && *selectedBlockIdx > 0 && *selectedBlockIdx < len(blockTable.Rows) {
-
-			// blockTable.RowStyles[*selectedBlockIdx] = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
-			// the block table is reversed and has an extra row for the header
-
+		if blockTable.SelectedRow > 0 && blockTable.SelectedRow < len(blockTable.Rows) {
 			// only changed the selected block when the user presses the up down keys. Otherwise this will adjust when the table is updated automatically
 			if setBlock {
-				selectedBlock = recentBlocks[len(recentBlocks)-*selectedBlockIdx]
+				selectedBlock = recentBlocks[len(recentBlocks)-blockTable.SelectedRow]
 				setBlock = false
 			}
 
@@ -432,12 +424,12 @@ func renderMonitorUI(ms *monitorStatus) error {
 			case "q", "<C-c>":
 				return nil
 			case "<Escape>":
-				selectedBlockIdx = nil
+				blockTable.SelectedRow = 0
 				currentMode = monitorModeExplorer
 				redraw(ms)
 			case "<Enter>":
 				// TODO
-				if selectedBlockIdx != nil {
+				if blockTable.SelectedRow > 0 {
 					currentMode = monitorModeBlock
 				}
 				redraw(ms)
@@ -457,15 +449,14 @@ func renderMonitorUI(ms *monitorStatus) error {
 					redraw(ms)
 					break
 				}
-				if selectedBlockIdx == nil {
+				if blockTable.SelectedRow == 0 {
 					currIdx = 1
-					selectedBlockIdx = &currIdx
 					blockTable.SelectedRow = currIdx
 					setBlock = true
 					redraw(ms)
 					break
 				}
-				currIdx = *selectedBlockIdx
+				currIdx = blockTable.SelectedRow
 
 				if e.ID == "<PageDown>" {
 					currIdx = currIdx + 1
@@ -474,8 +465,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 					currIdx = currIdx - 1
 					setBlock = true
 				}
-				if currIdx >= 0 && uint64(currIdx) < defaultBatchSize { // need a better way to understand how many rows are visble
-					selectedBlockIdx = &currIdx
+				if currIdx >= 0 && uint64(currIdx) < defaultBatchSize { // need a better way to understand how many rows are visible
 					blockTable.SelectedRow = currIdx
 				}
 
@@ -490,15 +480,14 @@ func renderMonitorUI(ms *monitorStatus) error {
 					redraw(ms)
 					break
 				}
-				if selectedBlockIdx == nil {
+				if blockTable.SelectedRow == 0 {
 					currIdx = 1
-					selectedBlockIdx = &currIdx
 					blockTable.SelectedRow = currIdx
 					setBlock = true
 					redraw(ms)
 					break
 				}
-				currIdx = *selectedBlockIdx
+				currIdx = blockTable.SelectedRow
 
 				if e.ID == "<Down>" {
 					currIdx = currIdx + 1
@@ -508,7 +497,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 					setBlock = true
 				}
 				if currIdx >= 0 && uint64(currIdx) < defaultBatchSize { // need a better way to understand how many rows are visble
-					selectedBlockIdx = &currIdx
 					blockTable.SelectedRow = currIdx
 				}
 

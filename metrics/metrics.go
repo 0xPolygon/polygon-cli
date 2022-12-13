@@ -170,6 +170,7 @@ func GetSimpleBlockRecords(blockTable *widgets.List, blocks []rpctypes.PolyBlock
 	blockTable.Title = header
 
 	records := make([]string, 0)
+	records = append(records, "")
 	for j := len(bs) - 1; j >= 0; j = j - 1 {
 		author := bs[j].Miner()
 		ts := bs[j].Time()
