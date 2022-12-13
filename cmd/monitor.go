@@ -160,7 +160,9 @@ var monitorCmd = &cobra.Command{
 				}
 				err = ms.getBlockRange(ctx, from, ms.HeadBlock, rpc, args[0])
 				if err != nil {
-					log.Error().Err(err).Msg("there was an issue fetching the block range")
+					if *logs {
+						log.Error().Err(err).Msg("there was an issue fetching the block range")
+					}
 				}
 				if !isUiRendered {
 					go func() {
