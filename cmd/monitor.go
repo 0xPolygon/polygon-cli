@@ -37,6 +37,7 @@ import (
 )
 
 var inputBatchSize *uint64
+var logs *bool
 
 type (
 	monitorStatus struct {
@@ -104,7 +105,9 @@ var monitorCmd = &cobra.Command{
 
 		rpc, err := ethrpc.DialContext(ctx, args[0])
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to dial rpc")
+			if *logs {
+				log.Error().Err(err).Msg("Unable to dial rpc")
+			}
 			return err
 		}
 		ec := ethclient.NewClient(rpc)
@@ -125,7 +128,9 @@ var monitorCmd = &cobra.Command{
 				var cs *chainState
 				cs, err = getChainState(ctx, ec)
 				if err != nil {
-					log.Error().Err(err).Msg("Encountered issue fetching network information")
+					if *logs {
+						log.Error().Err(err).Msg("Encountered issue fetching network information")
+					}
 					time.Sleep(5 * time.Second)
 					continue
 				}
@@ -173,14 +178,16 @@ var monitorCmd = &cobra.Command{
 		return err
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) != 1 {
-			return fmt.Errorf("expected exactly one argument")
+		if len(args) > 2 {
+			return fmt.Errorf("too many arguments")
 		}
 
 		// validate url argument
 		_, err := url.Parse(args[0])
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to parse url input error")
+			if *logs {
+				log.Error().Err(err).Msg("Unable to parse url input error")
+			}
 			return err
 		}
 
@@ -232,6 +239,7 @@ func init() {
 	rootCmd.AddCommand(monitorCmd)
 
 	inputBatchSize = monitorCmd.PersistentFlags().Uint64P("batch-size", "b", defaultBatchSize, "Number of requests per batch")
+	logs = monitorCmd.PersistentFlags().Bool("logs", false, "Toggle logs")
 }
 
 func renderMonitorUI(ms *monitorStatus) error {
@@ -245,22 +253,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 	blockTable := widgets.NewList()
 
 	blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
-	// blockTable.RowSeparator = true
-
-	// columnWidths := make([]int, 7)
-
-	// blockTable.ColumnResizer = func() {
-	// 	defaultWidth := (blockTable.Inner.Dx() - (12 + 26 + 46 + 14 + 12 + 14)) / 1
-	// 	columnWidths[0] = 12
-	// 	columnWidths[1] = 26
-	// 	columnWidths[2] = defaultWidth
-	// 	columnWidths[3] = 46
-	// 	columnWidths[4] = 14
-	// 	columnWidths[5] = 12
-	// 	columnWidths[6] = 14
-	// }
-
-	// blockTable.ColumnWidths = columnWidths
 
 	h0 := widgets.NewParagraph()
 	h0.Title = "Current"
@@ -344,7 +336,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 			ui.NewCol(1.0/5, slg3),
 			ui.NewCol(1.0/5, slg4),
 		),
-		ui.NewRow(3.0/5, blockTable),
+		ui.NewRow(2.5/5, blockTable),
 	)
 
 	termWidth, termHeight := ui.TerminalDimensions()
@@ -400,12 +392,8 @@ func renderMonitorUI(ms *monitorStatus) error {
 
 		// assuming we haven't selected a particular row... we should get new blocks
 		if selectedBlockIdx == nil {
-			blockTable.Rows = metrics.GetSimpleBlockRecords(recentBlocks)
+			blockTable.Rows = metrics.GetSimpleBlockRecords(blockTable, recentBlocks)
 		}
-		// if len(columnWidths) != len(blockTable.Rows[0]) {
-		// 	// i've messed up
-		// 	panic("Mis matched between columns and specified widths")
-		// }
 
 		blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
 		for i := 0; i < len(blockTable.Rows); i = i + 1 {
@@ -414,7 +402,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 		blockTable.SelectedRowStyle = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
 		if selectedBlockIdx != nil && *selectedBlockIdx > 0 && *selectedBlockIdx < len(blockTable.Rows) {
 
-			// blockTable.[*selectedBlockIdx] = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
+			// blockTable.RowStyles[*selectedBlockIdx] = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
 			// the block table is reversed and has an extra row for the header
 
 			// only changed the selected block when the user presses the up down keys. Otherwise this will adjust when the table is updated automatically
@@ -484,7 +472,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 					currIdx = currIdx - 1
 					setBlock = true
 				}
-				if currIdx > 0 && uint64(currIdx) < defaultBatchSize { // need a better way to understand how many rows are visble
+				if currIdx >= 0 && uint64(currIdx) < defaultBatchSize { // need a better way to understand how many rows are visble
 					selectedBlockIdx = &currIdx
 					blockTable.SelectedRow = currIdx
 				}
@@ -517,7 +505,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 					currIdx = currIdx - 1
 					setBlock = true
 				}
-				if currIdx > 0 && uint64(currIdx) < defaultBatchSize { // need a better way to understand how many rows are visble
+				if currIdx >= 0 && uint64(currIdx) < defaultBatchSize { // need a better way to understand how many rows are visble
 					selectedBlockIdx = &currIdx
 					blockTable.SelectedRow = currIdx
 				}
@@ -526,7 +514,9 @@ func renderMonitorUI(ms *monitorStatus) error {
 			case "<MouseLeft>", "<MouseRight>", "<MouseRelease>", "<MouseWheelUp>", "<MouseWheelDown>":
 				break
 			default:
-				log.Trace().Str("id", e.ID).Msg("Unknown ui event")
+				if *logs {
+					log.Trace().Str("id", e.ID).Msg("Unknown ui event")
+				}
 			}
 		case <-ticker:
 			if currentBn != ms.HeadBlock {

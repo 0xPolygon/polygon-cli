@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/gizak/termui/v3/widgets"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 )
 
@@ -126,7 +127,7 @@ func GetMeanGasPricePerBlock(blocks []rpctypes.PolyBlock) []float64 {
 	return gasPrices
 }
 
-func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) []string {
+func GetSimpleBlockRecords(blockTable *widgets.List, blocks []rpctypes.PolyBlock) []string {
 	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
@@ -146,7 +147,7 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) []string {
 
 	headerVariables := []string{"Block #", "Timestamp", "Block Hash", "Author", "Block Time", "Tx Count", "Gas Used"}
 
-	proportion := []int{5, 13, 35, 25, 7, 5}
+	proportion := []int{10, 20, 60, 40, 5, 5}
 	calculatedBuffer := make([]int, 0, len(proportion)) // allocate space for the entire result
 	for i := 0; i < len(proportion); i++ {              // for each repetition...
 		calculatedBuffer = append(calculatedBuffer, proportion[i]*width/100) // append, append, ....
@@ -154,12 +155,12 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) []string {
 	// fmt.Sprint(width) + " " +
 	// fmt.Sprint(height) + " " +
 	header :=
-		headerVariables[0] + strings.Repeat(" ", calculatedBuffer[0]-len(headerVariables[0])) +
-			headerVariables[1] + strings.Repeat(" ", calculatedBuffer[1]-len(headerVariables[1])) +
-			headerVariables[2] + strings.Repeat(" ", calculatedBuffer[2]-len(headerVariables[2])) +
-			headerVariables[3] + strings.Repeat(" ", calculatedBuffer[3]-len(headerVariables[3])) +
-			headerVariables[4] + strings.Repeat(" ", calculatedBuffer[4]-len(headerVariables[4])) +
-			headerVariables[5] + strings.Repeat(" ", calculatedBuffer[5]-len(headerVariables[5])) +
+		headerVariables[0] + strings.Repeat(" ", proportion[0]) +
+			headerVariables[1] + strings.Repeat(" ", proportion[1]) +
+			headerVariables[2] + strings.Repeat(" ", proportion[2]) +
+			headerVariables[3] + strings.Repeat(" ", proportion[3]) +
+			headerVariables[4] + strings.Repeat(" ", proportion[4]) +
+			headerVariables[5] + strings.Repeat(" ", proportion[5]) +
 			headerVariables[6]
 
 	if len(blocks) < 1 {
@@ -176,8 +177,10 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) []string {
 		// header[3] = "Signer"
 	}
 
+	blockTable.Title = header
+
 	records := make([]string, 0)
-	records = append(records, header)
+	// records = append(records, header)
 	for j := len(bs) - 1; j >= 0; j = j - 1 {
 		author := bs[j].Miner()
 		ts := bs[j].Time()
@@ -194,14 +197,14 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) []string {
 		}
 
 		recordVariables := []string{fmt.Sprintf("%d", bs[j].Number()), ut.Format("02 Jan 06 15:04:05 MST"), bs[j].Hash().String(), author.String(), fmt.Sprintf("%d", blockTime), fmt.Sprintf("%d", len(bs[j].Transactions())), fmt.Sprintf("%d", bs[j].GasUsed())}
-		record :=
-			recordVariables[0] + strings.Repeat(" ", calculatedBuffer[0]-len(recordVariables[0])) +
-				recordVariables[1] + strings.Repeat(" ", calculatedBuffer[1]-len(recordVariables[1])) +
-				recordVariables[2] + strings.Repeat(" ", calculatedBuffer[2]-len(recordVariables[2])) +
-				recordVariables[3] + strings.Repeat(" ", calculatedBuffer[3]-len(recordVariables[3])) +
-				recordVariables[4] + strings.Repeat(" ", calculatedBuffer[4]-len(recordVariables[4])) +
-				recordVariables[5] + strings.Repeat(" ", calculatedBuffer[5]-len(recordVariables[5])) +
-				recordVariables[6] + strings.Repeat(" ", calculatedBuffer[5]-len(recordVariables[6]))
+		record := " " +
+			recordVariables[0] + strings.Repeat(" ", len(headerVariables[0])+proportion[0]-len(recordVariables[0])) +
+			recordVariables[1] + strings.Repeat(" ", len(headerVariables[1])+proportion[1]-len(recordVariables[1])) +
+			recordVariables[2] + strings.Repeat(" ", len(headerVariables[2])+proportion[2]-len(recordVariables[2])) +
+			recordVariables[3] + strings.Repeat(" ", len(headerVariables[3])+proportion[3]-len(recordVariables[3])) +
+			recordVariables[4] + strings.Repeat(" ", len(headerVariables[4])+proportion[4]-len(recordVariables[4])) +
+			recordVariables[5] + strings.Repeat(" ", len(headerVariables[5])+proportion[5]-len(recordVariables[5])) +
+			recordVariables[6]
 
 		records = append(records, record)
 	}
