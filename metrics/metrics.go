@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/term"
-
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -131,18 +129,15 @@ func GetSimpleBlockRecords(blockTable *widgets.List, blocks []rpctypes.PolyBlock
 	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
-	width, _, err := term.GetSize(0)
-	if err != nil {
-		return []string{}
-	}
+	// if we ever choose to utilize terminal width for colume resizing
+	// width, _, err := term.GetSize(0)
+	// if err != nil {
+	// 	return []string{}
+	// }
 
 	headerVariables := []string{"Block #", "Timestamp", "Block Hash", "Author", "Block Time", "Tx Count", "Gas Used"}
 
 	proportion := []int{10, 20, 60, 40, 5, 5}
-	calculatedBuffer := make([]int, 0, len(proportion)) // allocate space for the entire result
-	for i := 0; i < len(proportion); i++ {              // for each repetition...
-		calculatedBuffer = append(calculatedBuffer, proportion[i]*width/100) // append, append, ....
-	}
 
 	header :=
 		headerVariables[0] + strings.Repeat(" ", proportion[0]) +
