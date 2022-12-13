@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"strings"
 	"time"
+
+	"golang.org/x/term"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/clique"
@@ -136,13 +139,28 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) []string {
 	// 	"Tx Count",
 	// 	"Gas Used",
 	// }
-	header := "Block #" +
-		"Timestamp" +
-		"Block Hash" +
-		"Author" +
-		"Block Time" +
-		"Tx Count" +
-		"Gas Used"
+	width, _, err := term.GetSize(0)
+	if err != nil {
+		return []string{}
+	}
+
+	headerVariables := []string{"Block #", "Timestamp", "Block Hash", "Author", "Block Time", "Tx Count", "Gas Used"}
+
+	proportion := []int{5, 13, 35, 25, 7, 5}
+	calculatedBuffer := make([]int, 0, len(proportion)) // allocate space for the entire result
+	for i := 0; i < len(proportion); i++ {              // for each repetition...
+		calculatedBuffer = append(calculatedBuffer, proportion[i]*width/100) // append, append, ....
+	}
+	// fmt.Sprint(width) + " " +
+	// fmt.Sprint(height) + " " +
+	header :=
+		headerVariables[0] + strings.Repeat(" ", calculatedBuffer[0]-len(headerVariables[0])) +
+			headerVariables[1] + strings.Repeat(" ", calculatedBuffer[1]-len(headerVariables[1])) +
+			headerVariables[2] + strings.Repeat(" ", calculatedBuffer[2]-len(headerVariables[2])) +
+			headerVariables[3] + strings.Repeat(" ", calculatedBuffer[3]-len(headerVariables[3])) +
+			headerVariables[4] + strings.Repeat(" ", calculatedBuffer[4]-len(headerVariables[4])) +
+			headerVariables[5] + strings.Repeat(" ", calculatedBuffer[5]-len(headerVariables[5])) +
+			headerVariables[6]
 
 	if len(blocks) < 1 {
 		return []string{header}
@@ -174,14 +192,16 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) []string {
 		if j > 0 {
 			blockTime = bs[j].Time() - bs[j-1].Time()
 		}
+
+		recordVariables := []string{fmt.Sprintf("%d", bs[j].Number()), ut.Format("02 Jan 06 15:04:05 MST"), bs[j].Hash().String(), author.String(), fmt.Sprintf("%d", blockTime), fmt.Sprintf("%d", len(bs[j].Transactions())), fmt.Sprintf("%d", bs[j].GasUsed())}
 		record :=
-			fmt.Sprintf("%d", bs[j].Number()) +
-				ut.Format("02 Jan 06 15:04:05 MST") +
-				bs[j].Hash().String() +
-				author.String() +
-				fmt.Sprintf("%d", blockTime) +
-				fmt.Sprintf("%d", len(bs[j].Transactions())) +
-				fmt.Sprintf("%d", bs[j].GasUsed())
+			recordVariables[0] + strings.Repeat(" ", calculatedBuffer[0]-len(recordVariables[0])) +
+				recordVariables[1] + strings.Repeat(" ", calculatedBuffer[1]-len(recordVariables[1])) +
+				recordVariables[2] + strings.Repeat(" ", calculatedBuffer[2]-len(recordVariables[2])) +
+				recordVariables[3] + strings.Repeat(" ", calculatedBuffer[3]-len(recordVariables[3])) +
+				recordVariables[4] + strings.Repeat(" ", calculatedBuffer[4]-len(recordVariables[4])) +
+				recordVariables[5] + strings.Repeat(" ", calculatedBuffer[5]-len(recordVariables[5])) +
+				recordVariables[6] + strings.Repeat(" ", calculatedBuffer[5]-len(recordVariables[6]))
 
 		records = append(records, record)
 	}
