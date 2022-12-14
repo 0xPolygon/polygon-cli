@@ -20,14 +20,23 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"github.com/maticnetwork/polygon-cli/rpctypes"
+	"golang.org/x/exp/constraints"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
+	"golang.org/x/text/number"
 	"io"
+	"math"
 	"math/big"
 	"math/rand"
 	"net/url"
 	"os"
 	"os/signal"
 	"regexp"
+	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -59,6 +68,8 @@ const (
 	loadTestModeRandom      = "r"
 	loadTestModeStore       = "s"
 	loadTestModeLong        = "l"
+	loadTestModeERC20       = "2"
+	loadTestModeERC721      = "7"
 
 	codeQualitySeed       = "code code code code code code code code code code code quality"
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
@@ -67,6 +78,7 @@ const (
 var (
 	inputLoadTestParams loadTestParams
 	loadTestResults     []loadTestSample
+	loadTestResutsMutex sync.RWMutex
 	validLoadTestModes  = []string{
 		loadTestModeTransaction,
 		loadTestModeDeploy,
@@ -75,9 +87,12 @@ var (
 		loadTestModeInc,
 		loadTestModeStore,
 		loadTestModeLong,
+		loadTestModeERC20,
+		loadTestModeERC721,
 		// r should be last to exclude it from random mode selection
 		loadTestModeRandom,
 	}
+
 	hexwords = []byte{
 		0x00, 0x0F, 0xF1, 0xCE,
 		0x00, 0xBA, 0xB1, 0x0C,
@@ -187,6 +202,11 @@ func setLogLevel(ltp loadTestParams) {
 }
 
 type (
+	blockSummary struct {
+		Block     *rpctypes.RawBlockResponse
+		Receipts  map[ethcommon.Hash]rpctypes.RawTxReceipt
+		Latencies map[uint64]time.Duration
+	}
 	hexwordReader struct {
 	}
 	loadTestSample struct {
@@ -196,33 +216,35 @@ type (
 		WaitTime    time.Duration
 		Receipt     string
 		IsError     bool
+		Nonce       uint64
 	}
 	loadTestParams struct {
 		// inputs
-		Requests            *int64
-		Concurrency         *int64
-		TimeLimit           *int64
-		Verbosity           *int64
-		PrettyLogs          *bool
-		ToRandom            *bool
-		URL                 *url.URL
-		ChainID             *uint64
-		PrivateKey          *string
-		ToAddress           *string
-		HexSendAmount       *string
-		RateLimit           *float64
-		Mode                *string
-		Function            *uint64
-		Iterations          *uint64
-		ByteCount           *uint64
-		Seed                *int64
-		IsAvail             *bool
-		AvailAppID          *uint32
-		LtAddress           *string
-		DelAddress          *string
-		ForceContractDeploy *bool
-		ForceGasLimit       *uint64
-		ForceGasPrice       *uint64
+		Requests             *int64
+		Concurrency          *int64
+		TimeLimit            *int64
+		Verbosity            *int64
+		PrettyLogs           *bool
+		ToRandom             *bool
+		URL                  *url.URL
+		ChainID              *uint64
+		PrivateKey           *string
+		ToAddress            *string
+		HexSendAmount        *string
+		RateLimit            *float64
+		Mode                 *string
+		Function             *uint64
+		Iterations           *uint64
+		ByteCount            *uint64
+		Seed                 *int64
+		IsAvail              *bool
+		AvailAppID           *uint32
+		LtAddress            *string
+		DelAddress           *string
+		ForceContractDeploy  *bool
+		ForceGasLimit        *uint64
+		ForceGasPrice        *uint64
+		ShouldProduceSummary *bool
 
 		// Computed
 		CurrentGas      *big.Int
@@ -264,7 +286,9 @@ c - call random contract functions
 f - call specific contract function
 s - store mode
 l - long running mode
-r - random modes`)
+r - random modes
+2 - ERC20 Transfers
+7 - ERC721 Mints`)
 	ltp.Function = loadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` ")
 	ltp.Iterations = loadtestCmd.PersistentFlags().Uint64P("iterations", "i", 100, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop")
 	ltp.ByteCount = loadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
@@ -276,6 +300,7 @@ r - random modes`)
 	ltp.ForceContractDeploy = loadtestCmd.PersistentFlags().Bool("force-contract-deploy", false, "Some loadtest modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --del-address and --il-address flags.")
 	ltp.ForceGasLimit = loadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually")
 	ltp.ForceGasPrice = loadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be estimated, we can specify it manually")
+	ltp.ShouldProduceSummary = loadtestCmd.PersistentFlags().Bool("summarize", false, "Should we produce an execution summary after the load test has finished. If you're running a large loadtest, this can take a long time")
 	inputLoadTestParams = *ltp
 
 	// TODO batch size
@@ -405,7 +430,7 @@ func runLoadTest(ctx context.Context) error {
 				return err
 			}
 
-			return mainLoop(ctx, ec)
+			return mainLoop(ctx, ec, rpc)
 		}
 	}
 
@@ -415,7 +440,6 @@ func runLoadTest(ctx context.Context) error {
 	loadTestResults = make([]loadTestSample, 0)
 	errCh := make(chan error)
 	go func() {
-		// errCh <- mainLoop(ctx, ec)
 		errCh <- loopFunc()
 	}()
 
@@ -443,6 +467,7 @@ func runLoadTest(ctx context.Context) error {
 	} else if ptc > 0 {
 		log.Info().Uint("pending", ptc).Msg("there are still oustanding transactions. There might be issues restarting with the same sending key until those transactions clear")
 	}
+	log.Info().Msg("Finished")
 	return nil
 }
 
@@ -474,7 +499,7 @@ func printResults(lts []loadTestSample) {
 	fmt.Printf("Num errors: %d\n", numErrors)
 }
 
-func mainLoop(ctx context.Context, c *ethclient.Client) error {
+func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
 
 	ltp := inputLoadTestParams
 	log.Trace().Interface("Input Params", ltp).Msg("Params")
@@ -522,25 +547,104 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 			return err
 		}
 
-		// block while the contract is pending
-		waitCounter := 30
-		for {
-			var ltCounter *big.Int
-			ltCounter, err = ltContract.GetCallCounter(cops)
+		err = blockUntilSuccessful(func() error {
+			_, err = ltContract.GetCallCounter(cops)
+			return err
+		}, 30)
 
-			if err != nil {
-				log.Trace().Msg("Waiting for Load Test contract to deploy")
-				time.Sleep(time.Second)
-				if waitCounter < 1 {
-					log.Error().Err(err).Msg("Exhausted waiting period for contract deployment")
-					return err
-				}
-				waitCounter = waitCounter - 1
-				continue
-			}
-			log.Trace().Interface("counter", ltCounter).Msg("Number of contract calls")
-			break
+		if err != nil {
+			return err
 		}
+	}
+
+	var erc20Addr ethcommon.Address
+	var erc20Contract *contracts.ERC20
+	if mode == loadTestModeERC20 || mode == loadTestModeRandom {
+		erc20Addr, _, _, err = contracts.DeployERC20(tops, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to deploy ERC20 contract")
+			return err
+		}
+		log.Trace().Interface("contractaddress", erc20Addr).Msg("ERC20 contract address")
+
+		erc20Contract, err = contracts.NewERC20(erc20Addr, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
+			return err
+		}
+		currentNonce = currentNonce + 1
+		err = blockUntilSuccessful(func() error {
+			_, err = erc20Contract.BalanceOf(cops, *ltp.FromETHAddress)
+			return err
+		}, 30)
+		if err != nil {
+			return err
+		}
+
+		tops.Nonce = new(big.Int).SetUint64(currentNonce)
+		tops.GasLimit = 10000000
+		tops = configureTransactOpts(tops)
+		_, err = erc20Contract.Mint(tops, new(big.Int).SetUint64(1_000_000_000_000))
+		if err != nil {
+			log.Error().Err(err).Msg("There was an error minting ERC20")
+			return err
+		}
+
+		currentNonce = currentNonce + 1
+		err = blockUntilSuccessful(func() error {
+			var balance *big.Int
+			balance, err = erc20Contract.BalanceOf(cops, *ltp.FromETHAddress)
+			if err != nil {
+				return err
+			}
+			if balance.Uint64() == 0 {
+				err = fmt.Errorf("ERC20 Balance is Zero")
+				return err
+			}
+			return nil
+		}, 30)
+		if err != nil {
+			return err
+		}
+	}
+
+	var erc721Addr ethcommon.Address
+	var erc721Contract *contracts.ERC721
+	if mode == loadTestModeERC721 || mode == loadTestModeRandom {
+		erc721Addr, _, _, err = contracts.DeployERC721(tops, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to deploy ERC721 contract")
+			return err
+		}
+		log.Trace().Interface("contractaddress", erc721Addr).Msg("ERC721 contract address")
+
+		erc721Contract, err = contracts.NewERC721(erc721Addr, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
+			return err
+		}
+		currentNonce = currentNonce + 1
+
+		err = blockUntilSuccessful(func() error {
+			_, err = erc721Contract.BalanceOf(cops, *ltp.FromETHAddress)
+			return err
+		}, 30)
+		if err != nil {
+			return err
+		}
+
+		tops.Nonce = new(big.Int).SetUint64(currentNonce)
+		tops.GasLimit = 10000000
+		tops = configureTransactOpts(tops)
+
+		err = blockUntilSuccessful(func() error {
+			_, err = erc721Contract.Mint(tops, *ltp.FromETHAddress, new(big.Int).SetUint64(1))
+			return err
+		}, 30)
+		if err != nil {
+			return err
+		}
+		currentNonce = currentNonce + 1
 	}
 
 	// deploy and instantiate the delegator contract
@@ -565,29 +669,25 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 			return err
 		}
 
-		// block while the contract is pending
-		waitCounter := 30
-		for {
+		err = blockUntilSuccessful(func() error {
 			_, err = delegatorContract.Call(tops, ltAddr, []byte{0x12, 0x87, 0xa6, 0x8c})
-			if err != nil {
-				log.Trace().Msg("Waiting for Delegator contract to deploy")
-				time.Sleep(time.Second)
-				if waitCounter < 1 {
-					log.Error().Err(err).Msg("Exhausted waiting period for contract deployment")
-					return err
-				}
-				waitCounter = waitCounter - 1
-				continue
-			}
-			break
+			return err
+		}, 30)
+		if err != nil {
+			return err
 		}
-
 		currentNonce = currentNonce + 1
 	}
 
 	var currentNonceMutex sync.Mutex
 	var i int64
-
+	startBlockNumber, err := c.BlockNumber(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get current block number")
+		return err
+	}
+	startNonce := currentNonce
+	log.Debug().Uint64("currenNonce", currentNonce).Msg("Starting main loadtest loop")
 	var wg sync.WaitGroup
 	for i = 0; i < routines; i = i + 1 {
 		log.Trace().Int64("routine", i).Msg("Starting Thread")
@@ -633,10 +733,14 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 					startReq, endReq, err = loadtestStore(ctx, c, myNonceValue, ltContract)
 				case loadTestModeLong:
 					startReq, endReq, err = loadtestLong(ctx, c, myNonceValue, delegatorContract, ltAddr)
+				case loadTestModeERC20:
+					startReq, endReq, err = loadtestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
+				case loadTestModeERC721:
+					startReq, endReq, err = loadtestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
-				recordSample(i, j, err, startReq, endReq)
+				recordSample(i, j, err, startReq, endReq, myNonceValue)
 				if err != nil {
 					log.Trace().Err(err).Msg("Recorded an error while sending transactions")
 				}
@@ -649,6 +753,33 @@ func mainLoop(ctx context.Context, c *ethclient.Client) error {
 	}
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
+	log.Debug().Uint64("currenNonce", currentNonce).Msg("Finished main loadtest loop")
+	if *ltp.ShouldProduceSummary {
+		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
+		if err != nil {
+			log.Error().Err(err).Msg("There was an issue creating the load test summary")
+		}
+	}
+	return nil
+}
+
+func blockUntilSuccessful(f func() error, tries int) error {
+	log.Trace().Int("tries", tries).Msg("Starting blocking loop")
+	waitCounter := tries
+	for {
+		err := f()
+		if err != nil {
+			if waitCounter < 1 {
+				log.Error().Err(err).Int("tries", waitCounter).Msg("Exhausted waiting period")
+				return err
+			}
+			log.Trace().Err(err).Msg("waiting for successful function execution")
+			time.Sleep(time.Second)
+			waitCounter = waitCounter - 1
+			continue
+		}
+		break
+	}
 	return nil
 }
 
@@ -796,9 +927,9 @@ func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delega
 	tops.GasLimit = 10000000
 	tops = configureTransactOpts(tops)
 
-	// TODO the deletgated call should be a parameter
+	// TODO the delegated call should be a parameter
 	t1 = time.Now()
-	// loopBlockHashUntilLimit
+	// loopBlockHashUntilLimit (verify here https://abi.hashex.org/)
 	_, err = delegatorContract.LoopDelegateCall(tops, ltAddress, []byte{0xa2, 0x71, 0xb7, 0x21})
 	// loopUntilLimit
 	// _, err = delegatorContract.LoopDelegateCall(tops, ltAddress, []byte{0x65, 0x9b, 0xbb, 0x4f})
@@ -806,56 +937,74 @@ func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delega
 	return
 }
 
-func recordSample(goRoutineID, requestID int64, err error, start, end time.Time) {
+func loadtestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20Contract *contracts.ERC20, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+
+	to := ltp.ToETHAddress
+	if *ltp.ToRandom {
+		to = getRandomAddress()
+	}
+	amount := ltp.SendAmount
+
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+	tops.Nonce = new(big.Int).SetUint64(nonce)
+	tops.GasLimit = 10000000
+	tops = configureTransactOpts(tops)
+
+	t1 = time.Now()
+	_, err = erc20Contract.Transfer(tops, *to, amount)
+	t2 = time.Now()
+	return
+}
+
+func loadtestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc721Contract *contracts.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+
+	to := ltp.ToETHAddress
+	if *ltp.ToRandom {
+		to = getRandomAddress()
+	}
+
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+	tops.Nonce = new(big.Int).SetUint64(nonce)
+	tops.GasLimit = 10000000
+	tops = configureTransactOpts(tops)
+	nftID := new(big.Int).SetUint64(rand.Uint64())
+
+	t1 = time.Now()
+	_, err = erc721Contract.Mint(tops, *to, nftID)
+	t2 = time.Now()
+	return
+}
+
+func recordSample(goRoutineID, requestID int64, err error, start, end time.Time, nonce uint64) {
 	s := loadTestSample{}
 	s.GoRoutineID = goRoutineID
 	s.RequestID = requestID
 	s.RequestTime = start
 	s.WaitTime = end.Sub(start)
+	s.Nonce = nonce
 	if err != nil {
 		s.IsError = true
 	}
+	loadTestResutsMutex.Lock()
 	loadTestResults = append(loadTestResults, s)
+	loadTestResutsMutex.Unlock()
 }
-
-/*
-// This function is unused
-func createLoadTesterContract(ctx context.Context, c *ethclient.Client, nonce uint64, gasPrice *big.Int) (*ethtypes.Receipt, error) {
-	var gasLimit uint64 = 0x192f64
-	contract, err := contracts.GetLoadTesterBytes()
-	if err != nil {
-		return nil, err
-	}
-
-	ltp := inputLoadTestParams
-	chainID := new(big.Int).SetUint64(*ltp.ChainID)
-	privateKey := ltp.ECDSAPrivateKey
-
-	tx := ethtypes.NewContractCreation(nonce, big.NewInt(0), gasLimit, gasPrice, contract)
-	stx, err := ethtypes.SignTx(tx, ethtypes.NewEIP155Signer(chainID), privateKey)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to sign transaction")
-		return nil, err
-	}
-
-	err = c.SendTransaction(ctx, stx)
-	if err != nil {
-		return nil, err
-	}
-
-	wait := time.Millisecond * 500
-	for i := 0; i < 5; i = i + 1 {
-		receipt, err := c.TransactionReceipt(ctx, stx.Hash())
-		if err == nil {
-			return receipt, nil
-		}
-		time.Sleep(wait)
-		wait = time.Duration(float64(wait) * 1.5)
-	}
-
-	return nil, fmt.Errorf("unable to get tx receipt")
-}
-*/
 
 func hexwordRead(b []byte) (int, error) {
 	hw := hexwordReader{}
@@ -882,7 +1031,6 @@ func getRandomAddress() *ethcommon.Address {
 	}
 	realAddr := ethcommon.BytesToAddress(addr)
 	return &realAddr
-
 }
 
 func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
@@ -990,7 +1138,7 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
-				recordSample(i, j, err, startReq, endReq)
+				recordSample(i, j, err, startReq, endReq, myNonceValue)
 				if err != nil {
 					log.Trace().Err(err).Msg("Recorded an error while sending transactions")
 				}
@@ -1154,4 +1302,321 @@ func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 		tops.GasLimit = *ltp.ForceGasLimit
 	}
 	return tops
+}
+func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endNonce uint64) error {
+	ltp := inputLoadTestParams
+	var err error
+	var lastBlockNumber uint64
+	var currentNonce uint64
+	for {
+		lastBlockNumber, err = c.BlockNumber(ctx)
+		if err != nil {
+			return err
+		}
+
+		currentNonce, err = c.NonceAt(ctx, *ltp.FromETHAddress, new(big.Int).SetUint64(lastBlockNumber))
+		if err != nil {
+			return err
+		}
+		if currentNonce < endNonce {
+			log.Trace().Uint64("endNonce", endNonce).Uint64("currentNonce", currentNonce).Msg("Not all transactions have been mined. Waiting")
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		break
+	}
+
+	log.Trace().Uint64("currentNonce", currentNonce).Uint64("startblock", startBlockNumber).Uint64("endblock", lastBlockNumber).Msg("It looks like all transactions have been mined")
+	log.Trace().Msg("Starting block range capture")
+	rawBlocks, err := getBlockRange(ctx, startBlockNumber, lastBlockNumber, rpc)
+	if err != nil {
+		return err
+	}
+	// FIXME: This code shouldn't really work like this. getBlockRange and getReceipts need to be moved to a package
+	// TODO: Add some kind of decimation to avoid summarizing for 10 minutes?
+	inputDumpblocks.BatchSize = 999
+	cpuCount := uint(runtime.NumCPU())
+	var txGroup sync.WaitGroup
+	threadPool := make(chan bool, cpuCount)
+	log.Trace().Msg("Starting tx receipt capture")
+	rawTxReceipts := make([]*json.RawMessage, 0)
+	var rawTxReceiptsLock sync.Mutex
+	var txGroupErr error
+	for k := range rawBlocks {
+		threadPool <- true
+		txGroup.Add(1)
+		go func(b *json.RawMessage) {
+			var receipt []*json.RawMessage
+			receipt, err = getReceipts(ctx, []*json.RawMessage{b}, rpc)
+			if err != nil {
+				txGroupErr = err
+			}
+			rawTxReceiptsLock.Lock()
+			rawTxReceipts = append(rawTxReceipts, receipt...)
+			rawTxReceiptsLock.Unlock()
+			<-threadPool
+			txGroup.Done()
+		}(rawBlocks[k])
+	}
+	txGroup.Wait()
+	if txGroupErr != nil {
+		log.Error().Err(err).Msg("one of the threads fetching tx receipts failed")
+		return err
+	}
+
+	blocks := make([]rpctypes.RawBlockResponse, 0)
+	for _, b := range rawBlocks {
+		var block rpctypes.RawBlockResponse
+		err := json.Unmarshal(*b, &block)
+		if err != nil {
+			log.Error().Err(err).Msg("error decoding block response")
+			return err
+		}
+		blocks = append(blocks, block)
+	}
+	log.Info().Int("len", len(blocks)).Msg("block summary")
+
+	txReceipts := make([]rpctypes.RawTxReceipt, 0)
+	log.Trace().Int("len", len(rawTxReceipts)).Msg("raw receipts")
+	for _, r := range rawTxReceipts {
+		if isEmptyJSONResponse(r) {
+			continue
+		}
+		var receipt rpctypes.RawTxReceipt
+		err := json.Unmarshal(*r, &receipt)
+		if err != nil {
+			log.Error().Err(err).Msg("error decoding tx receipt response")
+			return err
+		}
+		txReceipts = append(txReceipts, receipt)
+	}
+	log.Info().Int("len", len(txReceipts)).Msg("receipt summary")
+
+	blockData := make(map[uint64]blockSummary, 0)
+	for k, b := range blocks {
+		bs := blockSummary{}
+		bs.Block = &blocks[k]
+		bs.Receipts = make(map[ethcommon.Hash]rpctypes.RawTxReceipt, 0)
+		bs.Latencies = make(map[uint64]time.Duration, 0)
+		blockData[b.Number.ToUint64()] = bs
+	}
+
+	for _, r := range txReceipts {
+		bn := r.BlockNumber.ToUint64()
+		bs := blockData[bn]
+		bs.Receipts[r.TransactionHash.ToHash()] = r
+		blockData[bn] = bs
+	}
+
+	nonceTimes := make(map[uint64]time.Time, 0)
+	for _, ltr := range loadTestResults {
+		nonceTimes[ltr.Nonce] = ltr.RequestTime
+	}
+
+	minLatency := time.Millisecond * 100
+	for _, bs := range blockData {
+		for _, tx := range bs.Block.Transactions {
+			// TODO: What happens when the system clock of the load tester isn't in sync with the system clock of the miner?
+			// TODO: the timestamp in the chain only has granularity down to the second. How to deal with this
+			mineTime := time.Unix(bs.Block.Timestamp.ToInt64(), 0)
+			requestTime := nonceTimes[tx.Nonce.ToUint64()]
+			txLatency := mineTime.Sub(requestTime)
+			if txLatency.Hours() > 2 {
+				log.Debug().Float64("txHours", txLatency.Hours()).Uint64("nonce", tx.Nonce.ToUint64()).Uint64("blockNumber", bs.Block.Number.ToUint64()).Time("mineTime", mineTime).Time("requestTime", requestTime).Msg("Encountered transaction with more than 2 hours latency")
+			}
+			bs.Latencies[tx.Nonce.ToUint64()] = txLatency
+			if txLatency < minLatency {
+				minLatency = txLatency
+			}
+		}
+	}
+	// TODO this might be a hack, but not sure what's a better way to deal with time discrepancies
+	if minLatency < time.Millisecond*100 {
+		log.Trace().Str("minLatency", minLatency.String()).Msg("minimum latency is below expected threshold")
+		shiftSize := ((time.Millisecond * 100) - minLatency) + time.Millisecond + 100
+		for _, bs := range blockData {
+			for _, tx := range bs.Block.Transactions {
+				bs.Latencies[tx.Nonce.ToUint64()] += shiftSize
+			}
+		}
+	}
+
+	printBlockSummary(blockData, startNonce, endNonce)
+	return nil
+
+}
+
+func isEmptyJSONResponse(r *json.RawMessage) bool {
+	rawJson := []byte(*r)
+	return len(rawJson) == 0
+}
+
+func printBlockSummary(bs map[uint64]blockSummary, startNonce, endNonce uint64) {
+	filterBlockSummary(bs, startNonce, endNonce)
+	mapKeys := getSortedMapKeys(bs)
+	if len(mapKeys) == 0 {
+		return
+	}
+
+	fmt.Println("Block level summary of load test")
+	var totalTransactions uint64 = 0
+	var totalGasUsed uint64 = 0
+	p := message.NewPrinter(language.English)
+
+	allLatencies := make([]time.Duration, 0)
+	for _, v := range mapKeys {
+		summary := bs[v]
+		gasUsed := getTotalGasUsed(summary.Receipts)
+		blockLatencies := getMapValues(summary.Latencies)
+		minLatency, medianLatency, maxLatency := getMinMedianMax(blockLatencies)
+		allLatencies = append(allLatencies, blockLatencies...)
+		blockUtilization := float64(gasUsed) / summary.Block.GasLimit.ToFloat64()
+		if gasUsed == 0 {
+			blockUtilization = 0
+		}
+		// if we're at trace, debug, or info level we'll output the block level metrics
+		if zerolog.GlobalLevel() <= zerolog.InfoLevel {
+			_, _ = p.Printf("Block number: %v\tTime: %s\tGas Limit: %v\tGas Used: %v\tNum Tx: %v\tUtilization %v\tLatencies: %v\t%v\t%v\n",
+				number.Decimal(summary.Block.Number.ToUint64()),
+				time.Unix(summary.Block.Timestamp.ToInt64(), 0),
+				number.Decimal(summary.Block.GasLimit.ToUint64()),
+				number.Decimal(gasUsed),
+				number.Decimal(len(summary.Block.Transactions)),
+				number.Percent(blockUtilization),
+				number.Decimal(minLatency.Seconds()),
+				number.Decimal(medianLatency.Seconds()),
+				number.Decimal(maxLatency.Seconds()))
+		}
+		totalTransactions += uint64(len(summary.Block.Transactions))
+		totalGasUsed += gasUsed
+	}
+	firstBlock := bs[mapKeys[0]].Block
+	lastBlock := bs[mapKeys[len(mapKeys)-1]].Block
+	totalMiningTime := time.Duration(lastBlock.Timestamp.ToInt64()-firstBlock.Timestamp.ToInt64()) * time.Second
+	tps := float64(totalTransactions) / totalMiningTime.Seconds()
+	gaspersec := float64(totalGasUsed) / totalMiningTime.Seconds()
+	minLatency, medianLatency, maxLatency := getMinMedianMax(allLatencies)
+	sucessfulTx, totalTx := getSuccessfulTransactionCount(bs)
+
+	p.Printf("Successful Tx: %v\tTotal Tx: %v\n", number.Decimal(sucessfulTx), number.Decimal(totalTx))
+	p.Printf("Total Mining Time: %s\n", totalMiningTime)
+	p.Printf("Total Transactions: %v\n", number.Decimal(totalTransactions))
+	p.Printf("Total Gas Used: %v\n", number.Decimal(totalGasUsed))
+	p.Printf("Transactions per sec: %v\n", number.Decimal(tps))
+	p.Printf("Gas Per Second: %v\n", number.Decimal(gaspersec))
+	p.Printf("Latencies - Min: %v\tMedian: %v\tMax: %v\n", number.Decimal(minLatency.Seconds()), number.Decimal(medianLatency.Seconds()), number.Decimal(maxLatency.Seconds()))
+	// TODO: Add some kind of indication of block time variance
+}
+func getSuccessfulTransactionCount(bs map[uint64]blockSummary) (successful, total int64) {
+	total = 0
+	successful = 0
+	for _, block := range bs {
+		for _, receipt := range block.Receipts {
+			total += 1
+			if receipt.Status.ToInt64() == 1 {
+				successful += 1
+			}
+		}
+	}
+	return
+}
+func getTotalGasUsed(receipts map[ethcommon.Hash]rpctypes.RawTxReceipt) uint64 {
+	var totalGasUsed uint64 = 0
+	for _, receipt := range receipts {
+		totalGasUsed += receipt.GasUsed.ToUint64()
+	}
+	return totalGasUsed
+}
+func getMapValues[K constraints.Ordered, V any](m map[K]V) []V {
+	newSlice := make([]V, 0)
+	for _, val := range m {
+		newSlice = append(newSlice, val)
+	}
+	return newSlice
+}
+func getMinMedianMax[V constraints.Float | constraints.Integer](values []V) (V, V, V) {
+	if len(values) == 0 {
+		return 0, 0, 0
+	}
+	sort.Slice(values, func(i, j int) bool {
+		return values[i] < values[j]
+	})
+	half := len(values) / 2
+	median := values[half]
+	if len(values)%2 == 0 {
+		median = (median + values[half-1]) / V(2)
+	}
+	var min V
+	var max V
+	for k, v := range values {
+		if k == 0 {
+			min = v
+			max = v
+			continue
+		}
+		if v < min {
+			min = v
+		}
+		if v > max {
+			max = v
+		}
+	}
+	return min, median, max
+}
+
+func filterBlockSummary(blockSummaries map[uint64]blockSummary, startNonce, endNonce uint64) {
+	validTx := make(map[ethcommon.Hash]struct{}, 0)
+	var minBlock uint64 = math.MaxUint64
+	var maxBlock uint64 = 0
+	for _, bs := range blockSummaries {
+		for _, tx := range bs.Block.Transactions {
+			if tx.Nonce.ToUint64() >= startNonce && tx.Nonce.ToUint64() <= endNonce {
+				validTx[tx.Hash.ToHash()] = struct{}{}
+				if tx.BlockNumber.ToUint64() < minBlock {
+					minBlock = tx.BlockNumber.ToUint64()
+				}
+				if tx.BlockNumber.ToUint64() > maxBlock {
+					maxBlock = tx.BlockNumber.ToUint64()
+				}
+			}
+		}
+	}
+	keys := getSortedMapKeys(blockSummaries)
+	for _, k := range keys {
+		if k < minBlock {
+			delete(blockSummaries, k)
+		}
+		if k > maxBlock {
+			delete(blockSummaries, k)
+		}
+	}
+
+	for _, bs := range blockSummaries {
+		filteredTransactions := make([]rpctypes.RawTransactionResponse, 0)
+		for txKey, tx := range bs.Block.Transactions {
+			if _, hasKey := validTx[tx.Hash.ToHash()]; hasKey {
+				filteredTransactions = append(filteredTransactions, bs.Block.Transactions[txKey])
+			}
+		}
+		bs.Block.Transactions = filteredTransactions
+		filteredReceipts := make(map[ethcommon.Hash]rpctypes.RawTxReceipt, 0)
+		for receiptKey, receipt := range bs.Receipts {
+			if _, hasKey := validTx[receipt.TransactionHash.ToHash()]; hasKey {
+				filteredReceipts[receipt.TransactionHash.ToHash()] = bs.Receipts[receiptKey]
+			}
+		}
+		bs.Receipts = filteredReceipts
+
+	}
+}
+
+func getSortedMapKeys[V any, K constraints.Ordered](m map[K]V) []K {
+	keys := make([]K, 0)
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i] < keys[j]
+	})
+	return keys
 }
