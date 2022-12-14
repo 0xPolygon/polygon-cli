@@ -218,7 +218,6 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 	for _, s := range blms {
 		err := c.CallContext(ctx, s.Result, s.Method, s.Args...)
 		if err != nil {
-			fmt.Println(123, err)
 			return err
 		}
 	}
@@ -350,6 +349,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 
 	var selectedBlock rpctypes.PolyBlock
 	var setBlock = false
+	var recentBlocks metrics.SortableBlocks
 
 	redraw := func(ms *monitorStatus) {
 		if currentMode == monitorModeHelp {
@@ -364,38 +364,39 @@ func renderMonitorUI(ms *monitorStatus) error {
 			return
 		}
 
-		//default
-		blocks := make([]rpctypes.PolyBlock, 0)
-
-		ms.BlocksLock.RLock()
-		for _, b := range ms.Blocks {
-			blocks = append(blocks, b)
-		}
-		ms.BlocksLock.RUnlock()
-
-		recentBlocks := metrics.SortableBlocks(blocks)
-		sort.Sort(recentBlocks)
-		// defaultBatchSize needs to be a variable / parameter
-		if uint64(len(recentBlocks)) > defaultBatchSize {
-			recentBlocks = recentBlocks[uint64(len(recentBlocks))-defaultBatchSize:]
-		}
-
-		h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
-		gasGwei := new(big.Int)
-		gasGwei.Div(ms.GasPrice, metrics.UnitShannon)
-		h1.Text = fmt.Sprintf("%s gwei", gasGwei.String())
-		h2.Text = fmt.Sprintf("%d", ms.PeerCount)
-		h3.Text = ms.ChainID.String()
-		h4.Text = fmt.Sprintf("%0.2f", metrics.GetMeanBlockTime(recentBlocks))
-
-		sl0.Data = metrics.GetTxsPerBlock(recentBlocks)
-		sl1.Data = metrics.GetMeanGasPricePerBlock(recentBlocks)
-		sl2.Data = metrics.GetSizePerBlock(recentBlocks)
-		sl3.Data = metrics.GetUnclesPerBlock(recentBlocks)
-		sl4.Data = metrics.GetGasPerBlock(recentBlocks)
-
-		// assuming we haven't selected a particular row... we should get new blocks
 		if blockTable.SelectedRow == 0 {
+			//default
+			blocks := make([]rpctypes.PolyBlock, 0)
+
+			ms.BlocksLock.RLock()
+			for _, b := range ms.Blocks {
+				blocks = append(blocks, b)
+			}
+			ms.BlocksLock.RUnlock()
+
+			recentBlocks = metrics.SortableBlocks(blocks)
+			sort.Sort(recentBlocks)
+
+			// defaultBatchSize needs to be a variable / parameter
+			if uint64(len(recentBlocks)) > defaultBatchSize {
+				recentBlocks = recentBlocks[uint64(len(recentBlocks))-defaultBatchSize:]
+			}
+
+			h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
+			gasGwei := new(big.Int)
+			gasGwei.Div(ms.GasPrice, metrics.UnitShannon)
+			h1.Text = fmt.Sprintf("%s gwei", gasGwei.String())
+			h2.Text = fmt.Sprintf("%d", ms.PeerCount)
+			h3.Text = ms.ChainID.String()
+			h4.Text = fmt.Sprintf("%0.2f", metrics.GetMeanBlockTime(recentBlocks))
+
+			sl0.Data = metrics.GetTxsPerBlock(recentBlocks)
+			sl1.Data = metrics.GetMeanGasPricePerBlock(recentBlocks)
+			sl2.Data = metrics.GetSizePerBlock(recentBlocks)
+			sl3.Data = metrics.GetUnclesPerBlock(recentBlocks)
+			sl4.Data = metrics.GetGasPerBlock(recentBlocks)
+
+			// assuming we haven't selected a particular row... we should get new blocks
 			blockTable.Rows = metrics.GetSimpleBlockRecords(blockTable, recentBlocks)
 		}
 
