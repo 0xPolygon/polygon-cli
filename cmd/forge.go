@@ -296,7 +296,7 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, br *BlockReader) error {
 			return fmt.Errorf("unable to process block %d %s: %w", i, edgeBlock.Hash().String(), err)
 		}
 
-		if err := bh.Blockchain.GetConsensus().PreCommitState(edgeBlock.Header, txn); err != nil {
+		if err = bh.Blockchain.GetConsensus().PreCommitState(edgeBlock.Header, txn); err != nil {
 			return fmt.Errorf("could not pre commit state: %w", err)
 		}
 
