@@ -215,9 +215,12 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 			Error:  err,
 		})
 	}
-	err := c.BatchCallContext(ctx, blms)
-	if err != nil {
-		return err
+	for _, s := range blms {
+		err := c.CallContext(ctx, s.Result, s.Method, s.Args...)
+		if err != nil {
+			fmt.Println(123, err)
+			return err
+		}
 	}
 	for _, b := range blms {
 		if b.Error != nil {
