@@ -258,11 +258,30 @@ import them on top of a different genesis. This allows for testing with
 faked state (depending on the consensus). Ideally we can use this to
 support migrating clients other chains to supernets.
 
+- Generate `genesis.json` if one doesn't exist. Full guide [here](https://wiki.polygon.technology/docs/edge/get-started/set-up-ibft-locally),
+  but an abridged version:
+
+  ```shell
+  go install github.com/0xPolygon/polygon-edge@develop
+
+  polygon-edge secrets init --data-dir test-chain-1
+  # record the node id
+  NODE_ID=$(polygon-edge secrets output --node-id --data-dir test-chain-1)
+
+  # generate the genesis.json file
+  # note: you may have to add some fields to the alloc property there may be an insuffcient funds error
+  polygon-edge genesis --ibft-validators-prefix-path test-chain- --bootnode /ip4/127.0.0.1/tcp/10001/p2p/$NODE_ID --block-gas-limit 6706541
+
+  ```
+
 ```shell
 # in this case local host is running a POA Core Archive node
 polycli dumpblocks http://127.0.0.1:8545 0 100000 > poa-core.0.to.100k
+
 # strip out the receipts
 cat poa-core.0.to.100k | grep '"difficulty"' > poa-core.0.to.100k.blocks
+
+# forge the blocks
 polycli forge --genesis genesis.json --mode json --json-blocks poa-core.0.to.100k.blocks --count 99999
 ```
 
