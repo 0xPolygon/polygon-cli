@@ -13,7 +13,7 @@ Requirements:
 
 To install, clone this repo and run:
 
-``` bash
+```bash
 $ make install
 ```
 
@@ -21,7 +21,7 @@ By default, the commands will be in `$HOME/go/bin/`, so for ease, we
 recommend adding that path to your shell's startup file by adding the
 following line:
 
-``` bash
+```bash
 export PATH="$HOME/go/bin:$PATH"
 ```
 
@@ -31,7 +31,7 @@ The `hash` command provides a simple mechanism to perform hashes on
 files, standard input, and arguments. Below shows various ways to
 provide input.
 
-``` bash
+```bash
 $ echo -n "hello" > hello.txt
 $ polycli hash sha1 --file hello.txt
 aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d
@@ -43,7 +43,7 @@ aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d
 
 We've provided many standard hashing functions
 
-``` shell
+```shell
 echo -n "hello" | polycli hash md4
 echo -n "hello" | polycli hash md5
 echo -n "hello" | polycli hash sha1
@@ -72,7 +72,7 @@ The `mnemonic` command is a simple way to generate
 [BIP-0039](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki)
 mnemonics.
 
-``` shell
+```shell
 polycli mnemonic
 polycli mnemonic --language spanish
 polycli mnemonic --language spanish --words 12
@@ -87,7 +87,7 @@ In the example, we're generating a wallet with a few flags that are used
 to configure how many wallets are generated and how the seed phrase is
 used to generate the wallets.
 
-``` shell
+```shell
 polycli wallet create --raw-entropy --root-only --words 15 --language english
 ```
 
@@ -100,14 +100,14 @@ Substrate
 where the expected seed is
 `44e9d125f037ac1d51f0a7d3649689d422c2af8b1ec8e00d71db4d7bf6d127e33f50c3d5c84fa3e5399c72d6cbbbbc4a49bf76f76d952f479d74655a2ef2d453`
 
-``` shell
+```shell
 polycli wallet inspect --raw-entropy --root-only --language english --password "Substrate" --mnemonic "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 ```
 
 This command also leverages the BIP-0032 library for hierarchically
 derived wallets.
 
-``` shell
+```shell
 polycli wallet create --path "m/44'/0'/0'" --addresses 5
 ```
 
@@ -118,7 +118,7 @@ RPC end points. It leverages the
 [`ethclient`](https://pkg.go.dev/github.com/ethereum/go-ethereum/ethclient)
 library Go Ethereum to interact with the blockchain.
 
-``` shell
+```shell
 polycli loadtest --help
 ```
 
@@ -129,7 +129,7 @@ can use `wallet inspect` to get more information about this address, in
 particular its `ETHAddress` if you want to check balance or pre-mine
 value for this particular account.
 
-``` shell
+```shell
 polycli wallet inspect  --mnemonic "code code code code code code code code code code code quality" --addresses 1
 ```
 
@@ -141,13 +141,13 @@ The `--mode` flag is important for this command:
 - `c` Will call random functions in our load test contract
 - `f` will call a specific function on the load test contract. The
   function is specified using the `-f` flag
-- `2` Will run an ERC20 transfer test. It starts out by minting 
+- `2` Will run an ERC20 transfer test. It starts out by minting
   a large amount of an ERC20 contract then transferring it in small
   amounts
 - `7` Will run an ERC721 test which will mint an NFT over and over
   again
-- `i` Will call the increment function repeatedly on the load test 
-  contract. It's a minimal example of a contract call that will 
+- `i` Will call the increment function repeatedly on the load test
+  contract. It's a minimal example of a contract call that will
   require an update to a contract's storage.
 - `r` Will call any of th eother modes randomly
 - `s` Is used for Avail / Eth to store random data in large amounts
@@ -159,7 +159,7 @@ request per second against the http rpc endpoint on localhost. t's
 running in transaction mode so it will perform simple transactions send
 to the default address.
 
-``` shell
+```shell
 polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 1000 --rate-limit 1 --mode t http://localhost:8888
 ```
 
@@ -168,7 +168,7 @@ This example runs slower and specifically calls the
 a loop for 25,078 iterations. That number was picked specifically to
 require almost all of the gas for a single transaction.
 
-``` shell
+```shell
 polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 50 --rate-limit 0.5  --mode f --function 164 --iterations 25078 http://private.validator-001.devnet02.pos-v3.polygon.private:8545
 ```
 
@@ -178,13 +178,13 @@ The loadtest tool works with Avail, but not with the same level of
 functionality. There's no EVM so the functional calls will not work.
 This is a basic example which would transfer value in a loop 10 times
 
-``` shell
+```shell
 polycli loadtest --app-id 0 --to-random=true  --data-avail --verbosity 700 --chain-id 42 --concurrency 1 --requests 10 --rate-limit 1 --mode t 'http://devnet01.dataavailability.link:8545'
 ```
 
 This is a similar test but storing random nonsense hexwords
 
-``` shell
+```shell
 polycli loadtest --app-id 0 --data-avail --verbosity 700 --chain-id 42 --concurrency 1 --requests 10 --rate-limit 1 --mode s --byte-count 16384 'http://devnet01.dataavailability.link:8545'
 ```
 
@@ -212,7 +212,7 @@ this on the fly, but if we want to store the key pair during an
 automated provisioning process, it's helpful to have the output be
 structured
 
-``` shell
+```shell
 # this will generate a secp256k1 key for devp2p protocol
 polycli nodekey
 
@@ -229,7 +229,7 @@ This is a simple tool to avoid typing JSON on the command line while
 making RPC calls. The implementation is generic and this is meant to be
 a complete generic RPC tool.
 
-``` shell
+```shell
 
 polycli rpc https://polygon-rpc.com eth_blockNumber
 
@@ -245,7 +245,7 @@ range of blocks.
 This would download the first 500K blocks and zip them and then look for
 blocks with transactions that create an account.
 
-``` shell
+```shell
 polycli dumpblocks http://172.26.26.12:8545/ 0 500000 | gzip > foo.gz
 
 zcat < foo.gz | jq '. | select(.transactions | length > 0) | select(.transactions[].to == null)'
@@ -271,7 +271,7 @@ polycli forge --genesis genesis.json --mode json --json-blocks poa-core.0.to.100
 Given an openmetrics / prometheus response, create a json file that can
 be used to create a dashboard with all of the metrics in one view
 
-``` shell
+```shell
 go run main.go metrics-to-dash -i avail-metrics.txt -p avail. -t "Avail Devnet Dashboard" -T basedn -D devnet01.avail.polygon.private -T host -D validator-001 -s substrate_ -s sub_ -P true -S true
 go run main.go metrics-to-dash -i avail-light-metrics.txt -p avail_light. -t "Avail Light Devnet Dashboard" -T basedn -D devnet01.avail.polygon.private -T host -D validator-001 -s substrate_ -s sub_ -P true -S true
 
@@ -281,7 +281,7 @@ go run main.go metrics-to-dash -i avail-light-metrics.txt -p avail_light. -t "Av
 
 Script to setup this repo
 
-``` bash
+```bash
 cobra-cli init
 cobra-cli add version
 cobra-cli add hash
@@ -290,7 +290,7 @@ cobra-cli add mnemonic
 
 This is the content of my `~/.cobra.yaml` file
 
-``` yaml
+```yaml
 ---
 author: Polygon <engineering@polygon.technology>
 license: lgpl-3.0
@@ -303,7 +303,7 @@ While working on some of the Polygon CLI tools, we'll run geth in dev
 mode in order to make sure the various functions work properly. First,
 we'll startup geth.
 
-``` shell
+```shell
 # Geth
 ./build/bin/geth --dev --dev.period 2 --http --http.addr localhost --http.port 8545 --http.api admin,debug,web3,eth,txpool,personal,miner,net --verbosity 5 --rpc.gascap 50000000  --rpc.txfeecap 0 --miner.gaslimit  10 --miner.gasprice 1 --gpo.blocks 1 --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2 --dev.gaslimit 50000000
 
@@ -326,9 +326,28 @@ go run main.go server --dev \
     --gpo.ignoreprice 2
 ```
 
+If you don't have `v3` make sure you grab it.
+
+- Build the binaries
+
+  ```sh
+  git clone https://github.com/maticnetwork/v3.git
+  cd v3
+  make all
+  ```
+
+- Generate the contracts as `borv3 init-genesis` requires them
+
+  ```sh
+  git submodule update --init --recursive
+  cd v3-contracts
+  npm i
+  npx hardhat compile --show-stack-traces
+  ```
+
 Simple startup script for borv3 from our testing
 
-``` bash
+```bash
 #!/bin/bash
 
 num=4
@@ -352,7 +371,7 @@ done
 
 In the logs, we'll see a line that says IPC endpoint opened:
 
-``` example
+```example
 INFO [08-14|16:09:31.451] Starting peer-to-peer node               instance=Geth/v1.10.21-stable-67109427/darwin-arm64/go1.18.1
 WARN [08-14|16:09:31.451] P2P server will be useless, neither dialing nor listening
 DEBUG[08-14|16:09:31.452] IPCs registered                          namespaces=admin,debug,web3,eth,txpool,personal,clique,miner,net,engine
@@ -362,14 +381,14 @@ INFO [08-14|16:09:31.452] Generated ephemeral JWT secret           secret=0xdfa5
 
 I'll usually then use that line to attach
 
-``` shell
+```shell
 ./build/bin/geth attach /var/folders/zs/k8swqskj1t79cgnjh6yt0fqm0000gn/T/geth.ipc
 ```
 
 After attaching to geth, we can fund the default load testing account
 with some currency.
 
-``` shell
+```shell
 eth.coinbase==eth.accounts[0]
 eth.sendTransaction({from: eth.coinbase, to: "0x85da99c8a7c2c95964c8efd687e95e632fc533d6", value: web3.toWei(5000, "ether")})
 ```
@@ -378,7 +397,7 @@ Then we can generate some load to make sure that there are some blocks
 with transactions being created. `1337` is the chain id that's used in
 local geth.
 
-``` shell
+```shell
 polycli loadtest --verbosity 700 --chain-id 1337 --concurrency 1 --requests 1000 --rate-limit 5 --mode c http://127.0.0.1:8545
 ```
 
@@ -390,14 +409,14 @@ Sending some value to the default load testing account
 
 Listening for re-orgs
 
-``` shell
+```shell
 socat - UNIX-CONNECT:/var/folders/zs/k8swqskj1t79cgnjh6yt0fqm0000gn/T/geth.ipc
 {"id": 1, "method": "eth_subscribe", "params": ["newHeads"]}
 ```
 
 Useful RPCs when testing
 
-``` shell
+```shell
 curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "net_version", "params": []}' https://polygon-rpc.com
 curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_blockNumber", "params": []}' https://polygon-rpc.com
 curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "eth_getBlockByNumber", "params": ["0x1DE8531", true]}' https://polygon-rpc.com
@@ -412,7 +431,7 @@ curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "meth
 curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "admin_peers", "params": []}' http://localhost:8545
 ```
 
-``` shell
+```shell
 websocat ws://34.208.176.205:9944
 {"jsonrpc":"2.0", "id": 1, "method": "chain_subscribeNewHead", "params": []}
 ```
