@@ -32,12 +32,13 @@ import (
 	"github.com/gizak/termui/v3/widgets"
 	"github.com/maticnetwork/polygon-cli/metrics"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
 var inputBatchSize *uint64
-var logs *bool
+var verbosity *int64
 
 type (
 	monitorStatus struct {
@@ -105,9 +106,7 @@ var monitorCmd = &cobra.Command{
 
 		rpc, err := ethrpc.DialContext(ctx, args[0])
 		if err != nil {
-			if *logs {
-				log.Error().Err(err).Msg("Unable to dial rpc")
-			}
+			log.Error().Err(err).Msg("Unable to dial rpc")
 			return err
 		}
 		ec := ethclient.NewClient(rpc)
@@ -128,9 +127,7 @@ var monitorCmd = &cobra.Command{
 				var cs *chainState
 				cs, err = getChainState(ctx, ec)
 				if err != nil {
-					if *logs {
-						log.Error().Err(err).Msg("Encountered issue fetching network information")
-					}
+					log.Error().Err(err).Msg("Encountered issue fetching network information")
 					time.Sleep(5 * time.Second)
 					continue
 				}
@@ -160,9 +157,7 @@ var monitorCmd = &cobra.Command{
 				}
 				err = ms.getBlockRange(ctx, from, ms.HeadBlock, rpc, args[0])
 				if err != nil {
-					if *logs {
-						log.Error().Err(err).Msg("there was an issue fetching the block range")
-					}
+					log.Error().Err(err).Msg("there was an issue fetching the block range")
 				}
 				if !isUiRendered {
 					go func() {
@@ -180,16 +175,14 @@ var monitorCmd = &cobra.Command{
 		return err
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) > 2 {
+		if len(args) != 1 {
 			return fmt.Errorf("too many arguments")
 		}
 
 		// validate url argument
 		_, err := url.Parse(args[0])
 		if err != nil {
-			if *logs {
-				log.Error().Err(err).Msg("Unable to parse url input error")
-			}
+			log.Error().Err(err).Msg("Unable to parse url input error")
 			return err
 		}
 
@@ -197,6 +190,8 @@ var monitorCmd = &cobra.Command{
 		if *inputBatchSize == 0 {
 			return fmt.Errorf("batch-size can't be equal to zero")
 		}
+
+		setMonitorLogLevel(*verbosity)
 
 		return nil
 	},
@@ -244,7 +239,7 @@ func init() {
 	rootCmd.AddCommand(monitorCmd)
 
 	inputBatchSize = monitorCmd.PersistentFlags().Uint64P("batch-size", "b", defaultBatchSize, "Number of requests per batch")
-	logs = monitorCmd.PersistentFlags().Bool("logs", true, "Toggle logs")
+	verbosity = monitorCmd.PersistentFlags().Int64P("verbosity", "v", 200, "0 - Silent\n100 Fatals\n200 Errors\n300 Warnings\n400 INFO\n500 Debug\n600 Trace")
 }
 
 func renderMonitorUI(ms *monitorStatus) error {
@@ -510,9 +505,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 			case "<MouseLeft>", "<MouseRight>", "<MouseRelease>", "<MouseWheelUp>", "<MouseWheelDown>":
 				break
 			default:
-				if *logs {
-					log.Trace().Str("id", e.ID).Msg("Unknown ui event")
-				}
+				log.Trace().Str("id", e.ID).Msg("Unknown ui event")
 			}
 		case <-ticker:
 			if currentBn != ms.HeadBlock {
@@ -520,5 +513,23 @@ func renderMonitorUI(ms *monitorStatus) error {
 				redraw(ms)
 			}
 		}
+	}
+}
+
+func setMonitorLogLevel(verbosity int64) {
+	if verbosity < 100 {
+		zerolog.SetGlobalLevel(zerolog.PanicLevel)
+	} else if verbosity < 200 {
+		zerolog.SetGlobalLevel(zerolog.FatalLevel)
+	} else if verbosity < 300 {
+		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	} else if verbosity < 400 {
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	} else if verbosity < 500 {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	} else if verbosity < 600 {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	} else {
+		zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	}
 }
