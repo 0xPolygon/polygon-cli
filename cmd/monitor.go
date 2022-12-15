@@ -39,6 +39,7 @@ import (
 )
 
 var inputBatchSize *uint64
+var actualBatchSize *uint64
 var verbosity *int64
 
 type (
@@ -140,14 +141,14 @@ var monitorCmd = &cobra.Command{
 
 				from := big.NewInt(0)
 
-				batchSize := *inputBatchSize
-				if *inputBatchSize > 0 {
-					batchSize = *inputBatchSize
-				}
+				// batchSize := *inputBatchSize
+				// if *inputBatchSize > 0 {
+				// 	batchSize = *inputBatchSize
+				// }
 
 				// if the max block is 0, meaning we haven't fetched any blocks, we're going to start with head - batchSize
 				if ms.MaxBlockRetrieved.Cmp(from) == 0 {
-					headBlockMinusBatchSize := new(big.Int).SetUint64(batchSize - 1)
+					headBlockMinusBatchSize := new(big.Int).SetUint64(50 - 1)
 					from.Sub(ms.HeadBlock, headBlockMinusBatchSize)
 				} else {
 					from = ms.MaxBlockRetrieved
@@ -349,6 +350,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 
 	var selectedBlock rpctypes.PolyBlock
 	var setBlock = false
+	var allBlocks metrics.SortableBlocks
 	var recentBlocks metrics.SortableBlocks
 
 	redraw := func(ms *monitorStatus) {
@@ -374,32 +376,32 @@ func renderMonitorUI(ms *monitorStatus) error {
 			}
 			ms.BlocksLock.RUnlock()
 
-			recentBlocks = metrics.SortableBlocks(blocks)
-			sort.Sort(recentBlocks)
-
-			if uint64(len(recentBlocks)) > *inputBatchSize {
-				recentBlocks = recentBlocks[uint64(len(recentBlocks))-*inputBatchSize:]
-			}
-
-			h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
-			gasGwei := new(big.Int)
-			gasGwei.Div(ms.GasPrice, metrics.UnitShannon)
-			h1.Text = fmt.Sprintf("%s gwei", gasGwei.String())
-			h2.Text = fmt.Sprintf("%d", ms.PeerCount)
-			h3.Text = ms.ChainID.String()
-			h4.Text = fmt.Sprintf("%0.2f", metrics.GetMeanBlockTime(recentBlocks))
-
-			sl0.Data = metrics.GetTxsPerBlock(recentBlocks)
-			sl1.Data = metrics.GetMeanGasPricePerBlock(recentBlocks)
-			sl2.Data = metrics.GetSizePerBlock(recentBlocks)
-			sl3.Data = metrics.GetUnclesPerBlock(recentBlocks)
-			sl4.Data = metrics.GetGasPerBlock(recentBlocks)
-
-			// assuming we haven't selected a particular row... we should get new blocks
-			rows, title := metrics.GetSimpleBlockRecords(recentBlocks)
-			blockTable.Rows = rows
-			blockTable.Title = title
+			allBlocks = metrics.SortableBlocks(blocks)
+			sort.Sort(allBlocks)
 		}
+
+		if uint64(len(allBlocks)) > *inputBatchSize {
+			recentBlocks = allBlocks[uint64(len(allBlocks))-*inputBatchSize:]
+		}
+
+		h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
+		gasGwei := new(big.Int)
+		gasGwei.Div(ms.GasPrice, metrics.UnitShannon)
+		h1.Text = fmt.Sprintf("%s gwei", gasGwei.String())
+		h2.Text = fmt.Sprintf("%d", ms.PeerCount)
+		h3.Text = ms.ChainID.String()
+		h4.Text = fmt.Sprintf("%0.2f", metrics.GetMeanBlockTime(recentBlocks))
+
+		sl0.Data = metrics.GetTxsPerBlock(recentBlocks)
+		sl1.Data = metrics.GetMeanGasPricePerBlock(recentBlocks)
+		sl2.Data = metrics.GetSizePerBlock(recentBlocks)
+		sl3.Data = metrics.GetUnclesPerBlock(recentBlocks)
+		sl4.Data = metrics.GetGasPerBlock(recentBlocks)
+
+		// assuming we haven't selected a particular row... we should get new blocks
+		rows, title := metrics.GetSimpleBlockRecords(recentBlocks)
+		blockTable.Rows = rows
+		blockTable.Title = title
 
 		blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
 		blockTable.SelectedRowStyle = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
@@ -495,6 +497,14 @@ func renderMonitorUI(ms *monitorStatus) error {
 				currIdx = blockTable.SelectedRow
 
 				if e.ID == "<Down>" {
+					if currIdx > int(*inputBatchSize)-1 {
+						if int(*inputBatchSize)+10 < len(allBlocks) {
+							*inputBatchSize = *inputBatchSize + 10
+						} else {
+							*inputBatchSize = uint64(len(allBlocks)) - 1
+							break
+						}
+					}
 					currIdx = currIdx + 1
 					setBlock = true
 				} else if e.ID == "<Up>" {
