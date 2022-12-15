@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
+	"github.com/cenkalti/backoff"
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
 	"github.com/maticnetwork/polygon-cli/metrics"
@@ -139,7 +140,7 @@ var monitorCmd = &cobra.Command{
 
 				from := big.NewInt(0)
 
-				batchSize := defaultBatchSize
+				batchSize := *inputBatchSize
 				if *inputBatchSize > 0 {
 					batchSize = *inputBatchSize
 				}
@@ -210,12 +211,15 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 			Error:  err,
 		})
 	}
-	for _, s := range blms {
-		err := c.CallContext(ctx, s.Result, s.Method, s.Args...)
-		if err != nil {
-			fmt.Println(err)
-			return err
-		}
+	b := backoff.NewExponentialBackOff()
+	b.MaxElapsedTime = 3 * time.Minute
+	retryable := func() error {
+		err := c.BatchCallContext(ctx, blms)
+		return err
+	}
+	err := backoff.Retry(retryable, b)
+	if err != nil {
+		return err
 	}
 	for _, b := range blms {
 		if b.Error != nil {
@@ -373,8 +377,8 @@ func renderMonitorUI(ms *monitorStatus) error {
 			recentBlocks = metrics.SortableBlocks(blocks)
 			sort.Sort(recentBlocks)
 
-			if uint64(len(recentBlocks)) > defaultBatchSize {
-				recentBlocks = recentBlocks[uint64(len(recentBlocks))-defaultBatchSize:]
+			if uint64(len(recentBlocks)) > *inputBatchSize {
+				recentBlocks = recentBlocks[uint64(len(recentBlocks))-*inputBatchSize:]
 			}
 
 			h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
@@ -466,7 +470,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 					currIdx = currIdx - 1
 					setBlock = true
 				}
-				if currIdx >= 0 && uint64(currIdx) <= defaultBatchSize { // need a better way to understand how many rows are visible
+				if currIdx >= 0 && uint64(currIdx) <= *inputBatchSize { // need a better way to understand how many rows are visible
 					blockTable.SelectedRow = currIdx
 				}
 
@@ -497,7 +501,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 					currIdx = currIdx - 1
 					setBlock = true
 				}
-				if currIdx >= 0 && uint64(currIdx) <= defaultBatchSize { // need a better way to understand how many rows are visble
+				if currIdx >= 0 && uint64(currIdx) <= *inputBatchSize { // need a better way to understand how many rows are visble
 					blockTable.SelectedRow = currIdx
 				}
 

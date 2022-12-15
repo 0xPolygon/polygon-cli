@@ -24,6 +24,8 @@ require (
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
 )
 
+require github.com/cenkalti/backoff v2.2.1+incompatible // indirect
+
 require (
 	filippo.io/edwards25519 v1.0.0-rc.1 // indirect
 	github.com/ChainSafe/go-schnorrkel v1.0.0 // indirect
