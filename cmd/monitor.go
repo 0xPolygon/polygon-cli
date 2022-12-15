@@ -28,15 +28,18 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
+	"github.com/cenkalti/backoff"
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
 	"github.com/maticnetwork/polygon-cli/metrics"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
 var inputBatchSize *uint64
+var verbosity *int64
 
 type (
 	monitorStatus struct {
@@ -137,14 +140,14 @@ var monitorCmd = &cobra.Command{
 
 				from := big.NewInt(0)
 
-				batchSize := defaultBatchSize
-				if *inputBatchSize > 0 {
-					batchSize = *inputBatchSize
-				}
+				// batchSize := *inputBatchSize
+				// if *inputBatchSize > 0 {
+				// 	batchSize = *inputBatchSize
+				// }
 
 				// if the max block is 0, meaning we haven't fetched any blocks, we're going to start with head - batchSize
 				if ms.MaxBlockRetrieved.Cmp(from) == 0 {
-					headBlockMinusBatchSize := new(big.Int).SetUint64(batchSize - 1)
+					headBlockMinusBatchSize := new(big.Int).SetUint64(50 - 1)
 					from.Sub(ms.HeadBlock, headBlockMinusBatchSize)
 				} else {
 					from = ms.MaxBlockRetrieved
@@ -174,7 +177,7 @@ var monitorCmd = &cobra.Command{
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
-			return fmt.Errorf("expected exactly one argument")
+			return fmt.Errorf("too many arguments")
 		}
 
 		// validate url argument
@@ -188,6 +191,8 @@ var monitorCmd = &cobra.Command{
 		if *inputBatchSize == 0 {
 			return fmt.Errorf("batch-size can't be equal to zero")
 		}
+
+		setMonitorLogLevel(*verbosity)
 
 		return nil
 	},
@@ -206,7 +211,13 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 			Error:  err,
 		})
 	}
-	err := c.BatchCallContext(ctx, blms)
+	b := backoff.NewExponentialBackOff()
+	b.MaxElapsedTime = 3 * time.Minute
+	retryable := func() error {
+		err := c.BatchCallContext(ctx, blms)
+		return err
+	}
+	err := backoff.Retry(retryable, b)
 	if err != nil {
 		return err
 	}
@@ -231,7 +242,8 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 func init() {
 	rootCmd.AddCommand(monitorCmd)
 
-	inputBatchSize = monitorCmd.PersistentFlags().Uint64P("batch-size", "b", 25, "Number of requests per batch")
+	inputBatchSize = monitorCmd.PersistentFlags().Uint64P("batch-size", "b", defaultBatchSize, "Number of requests per batch")
+	verbosity = monitorCmd.PersistentFlags().Int64P("verbosity", "v", 200, "0 - Silent\n100 Fatals\n200 Errors\n300 Warnings\n400 INFO\n500 Debug\n600 Trace")
 }
 
 func renderMonitorUI(ms *monitorStatus) error {
@@ -242,24 +254,9 @@ func renderMonitorUI(ms *monitorStatus) error {
 
 	currentMode := monitorModeExplorer
 
-	blockTable := widgets.NewTable()
+	blockTable := widgets.NewList()
 
 	blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
-	blockTable.RowSeparator = true
-
-	columnWidths := make([]int, 6)
-
-	blockTable.ColumnResizer = func() {
-		defaultWidth := (blockTable.Inner.Dx() - (12 + 22 + 42 + 12 + 14)) / 1
-		columnWidths[0] = 12
-		columnWidths[1] = 22
-		columnWidths[2] = defaultWidth
-		columnWidths[3] = 42
-		columnWidths[4] = 12
-		columnWidths[5] = 14
-	}
-
-	blockTable.ColumnWidths = columnWidths
 
 	h0 := widgets.NewParagraph()
 	h0.Title = "Current"
@@ -343,16 +340,17 @@ func renderMonitorUI(ms *monitorStatus) error {
 			ui.NewCol(1.0/5, slg3),
 			ui.NewCol(1.0/5, slg4),
 		),
-		ui.NewRow(3.0/5, blockTable),
+		ui.NewRow(2.5/5, blockTable),
 	)
 
 	termWidth, termHeight := ui.TerminalDimensions()
 	grid.SetRect(0, 0, termWidth, termHeight)
 	blockGrid.SetRect(0, 0, termWidth, termHeight)
 
-	var selectedBlockIdx *int
 	var selectedBlock rpctypes.PolyBlock
 	var setBlock = false
+	var allBlocks metrics.SortableBlocks
+	var recentBlocks metrics.SortableBlocks
 
 	redraw := func(ms *monitorStatus) {
 		if currentMode == monitorModeHelp {
@@ -367,20 +365,22 @@ func renderMonitorUI(ms *monitorStatus) error {
 			return
 		}
 
-		//default
-		blocks := make([]rpctypes.PolyBlock, 0)
+		if blockTable.SelectedRow == 0 {
+			//default
+			blocks := make([]rpctypes.PolyBlock, 0)
 
-		ms.BlocksLock.RLock()
-		for _, b := range ms.Blocks {
-			blocks = append(blocks, b)
+			ms.BlocksLock.RLock()
+			for _, b := range ms.Blocks {
+				blocks = append(blocks, b)
+			}
+			ms.BlocksLock.RUnlock()
+
+			allBlocks = metrics.SortableBlocks(blocks)
+			sort.Sort(allBlocks)
 		}
-		ms.BlocksLock.RUnlock()
 
-		recentBlocks := metrics.SortableBlocks(blocks)
-		sort.Sort(recentBlocks)
-		// 25 needs to be a variable / parameter
-		if len(recentBlocks) > 25 {
-			recentBlocks = recentBlocks[len(recentBlocks)-25:]
+		if uint64(len(allBlocks)) > *inputBatchSize {
+			recentBlocks = allBlocks[uint64(len(allBlocks))-*inputBatchSize:]
 		}
 
 		h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
@@ -398,25 +398,16 @@ func renderMonitorUI(ms *monitorStatus) error {
 		sl4.Data = metrics.GetGasPerBlock(recentBlocks)
 
 		// assuming we haven't selected a particular row... we should get new blocks
-		if selectedBlockIdx == nil {
-			blockTable.Rows = metrics.GetSimpleBlockRecords(recentBlocks)
-		}
-		if len(columnWidths) != len(blockTable.Rows[0]) {
-			// i've messed up
-			panic("Mis matched between columns and specified widths")
-		}
+		rows, title := metrics.GetSimpleBlockRecords(recentBlocks)
+		blockTable.Rows = rows
+		blockTable.Title = title
 
-		for i := 0; i < len(blockTable.Rows); i = i + 1 {
-			blockTable.RowStyles[i] = ui.NewStyle(ui.ColorWhite)
-		}
-		if selectedBlockIdx != nil && *selectedBlockIdx > 0 && *selectedBlockIdx < len(blockTable.Rows) {
-
-			blockTable.RowStyles[*selectedBlockIdx] = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
-			// the block table is reversed and has an extra row for the header
-
+		blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
+		blockTable.SelectedRowStyle = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
+		if blockTable.SelectedRow > 0 && blockTable.SelectedRow <= len(blockTable.Rows) {
 			// only changed the selected block when the user presses the up down keys. Otherwise this will adjust when the table is updated automatically
 			if setBlock {
-				selectedBlock = recentBlocks[len(recentBlocks)-*selectedBlockIdx]
+				selectedBlock = recentBlocks[len(recentBlocks)-blockTable.SelectedRow]
 				setBlock = false
 			}
 
@@ -439,12 +430,12 @@ func renderMonitorUI(ms *monitorStatus) error {
 			case "q", "<C-c>":
 				return nil
 			case "<Escape>":
-				selectedBlockIdx = nil
+				blockTable.SelectedRow = 0
 				currentMode = monitorModeExplorer
 				redraw(ms)
 			case "<Enter>":
 				// TODO
-				if selectedBlockIdx != nil {
+				if blockTable.SelectedRow > 0 {
 					currentMode = monitorModeBlock
 				}
 				redraw(ms)
@@ -464,6 +455,27 @@ func renderMonitorUI(ms *monitorStatus) error {
 					redraw(ms)
 					break
 				}
+				if blockTable.SelectedRow == 0 {
+					currIdx = 1
+					blockTable.SelectedRow = currIdx
+					setBlock = true
+					redraw(ms)
+					break
+				}
+				currIdx = blockTable.SelectedRow
+
+				if e.ID == "<PageDown>" {
+					currIdx = currIdx + 1
+					setBlock = true
+				} else if e.ID == "<PageUp>" {
+					currIdx = currIdx - 1
+					setBlock = true
+				}
+				if currIdx >= 0 && uint64(currIdx) <= *inputBatchSize { // need a better way to understand how many rows are visible
+					blockTable.SelectedRow = currIdx
+				}
+
+				redraw(ms)
 			case "<Up>", "<Down>", "<Left>", "<Right>":
 				if currentMode == monitorModeBlock {
 					if e.ID == "<Down>" {
@@ -474,24 +486,32 @@ func renderMonitorUI(ms *monitorStatus) error {
 					redraw(ms)
 					break
 				}
-				if selectedBlockIdx == nil {
+				if blockTable.SelectedRow == 0 {
 					currIdx = 1
-					selectedBlockIdx = &currIdx
+					blockTable.SelectedRow = currIdx
 					setBlock = true
 					redraw(ms)
 					break
 				}
-				currIdx = *selectedBlockIdx
+				currIdx = blockTable.SelectedRow
 
 				if e.ID == "<Down>" {
+					if currIdx > int(*inputBatchSize)-1 {
+						if int(*inputBatchSize)+10 < len(allBlocks) {
+							*inputBatchSize = *inputBatchSize + 10
+						} else {
+							*inputBatchSize = uint64(len(allBlocks)) - 1
+							break
+						}
+					}
 					currIdx = currIdx + 1
 					setBlock = true
 				} else if e.ID == "<Up>" {
 					currIdx = currIdx - 1
 					setBlock = true
 				}
-				if currIdx > 0 && currIdx < 25 { // need a better way to understand how many rows are visble
-					selectedBlockIdx = &currIdx
+				if currIdx >= 0 && uint64(currIdx) <= *inputBatchSize { // need a better way to understand how many rows are visble
+					blockTable.SelectedRow = currIdx
 				}
 
 				redraw(ms)
@@ -506,5 +526,23 @@ func renderMonitorUI(ms *monitorStatus) error {
 				redraw(ms)
 			}
 		}
+	}
+}
+
+func setMonitorLogLevel(verbosity int64) {
+	if verbosity < 100 {
+		zerolog.SetGlobalLevel(zerolog.PanicLevel)
+	} else if verbosity < 200 {
+		zerolog.SetGlobalLevel(zerolog.FatalLevel)
+	} else if verbosity < 300 {
+		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	} else if verbosity < 400 {
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	} else if verbosity < 500 {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	} else if verbosity < 600 {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	} else {
+		zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	}
 }
