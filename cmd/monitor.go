@@ -64,7 +64,7 @@ const (
 	monitorModeExplorer monitorMode = iota
 	monitorModeBlock    monitorMode = iota
 
-	defaultBatchSize uint64 = 100
+	defaultBatchSize uint64 = 25
 )
 
 func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, error) {
@@ -218,6 +218,7 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 	for _, s := range blms {
 		err := c.CallContext(ctx, s.Result, s.Method, s.Args...)
 		if err != nil {
+			fmt.Println(err)
 			return err
 		}
 	}
@@ -243,7 +244,7 @@ func init() {
 	rootCmd.AddCommand(monitorCmd)
 
 	inputBatchSize = monitorCmd.PersistentFlags().Uint64P("batch-size", "b", defaultBatchSize, "Number of requests per batch")
-	logs = monitorCmd.PersistentFlags().Bool("logs", false, "Toggle logs")
+	logs = monitorCmd.PersistentFlags().Bool("logs", true, "Toggle logs")
 }
 
 func renderMonitorUI(ms *monitorStatus) error {
@@ -377,7 +378,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 			recentBlocks = metrics.SortableBlocks(blocks)
 			sort.Sort(recentBlocks)
 
-			// defaultBatchSize needs to be a variable / parameter
 			if uint64(len(recentBlocks)) > defaultBatchSize {
 				recentBlocks = recentBlocks[uint64(len(recentBlocks))-defaultBatchSize:]
 			}
@@ -397,7 +397,9 @@ func renderMonitorUI(ms *monitorStatus) error {
 			sl4.Data = metrics.GetGasPerBlock(recentBlocks)
 
 			// assuming we haven't selected a particular row... we should get new blocks
-			blockTable.Rows = metrics.GetSimpleBlockRecords(blockTable, recentBlocks)
+			rows, title := metrics.GetSimpleBlockRecords(recentBlocks)
+			blockTable.Rows = rows
+			blockTable.Title = title
 		}
 
 		blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)

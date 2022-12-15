@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
-	"github.com/gizak/termui/v3/widgets"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 )
 
@@ -125,7 +124,7 @@ func GetMeanGasPricePerBlock(blocks []rpctypes.PolyBlock) []float64 {
 	return gasPrices
 }
 
-func GetSimpleBlockRecords(blockTable *widgets.List, blocks []rpctypes.PolyBlock) []string {
+func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
@@ -149,7 +148,7 @@ func GetSimpleBlockRecords(blockTable *widgets.List, blocks []rpctypes.PolyBlock
 			headerVariables[6]
 
 	if len(blocks) < 1 {
-		return []string{header}
+		return nil, header
 	}
 
 	isMined := true
@@ -161,8 +160,6 @@ func GetSimpleBlockRecords(blockTable *widgets.List, blocks []rpctypes.PolyBlock
 	if !isMined {
 		header = strings.Replace(header, "Author", "Signer", 1)
 	}
-
-	blockTable.Title = header
 
 	records := make([]string, 0)
 	records = append(records, "")
@@ -193,7 +190,7 @@ func GetSimpleBlockRecords(blockTable *widgets.List, blocks []rpctypes.PolyBlock
 
 		records = append(records, record)
 	}
-	return records
+	return records, header
 }
 
 func GetSimpleBlockFields(block rpctypes.PolyBlock) []string {
