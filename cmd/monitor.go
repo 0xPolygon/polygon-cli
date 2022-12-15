@@ -39,7 +39,6 @@ import (
 )
 
 var inputBatchSize *uint64
-var actualBatchSize *uint64
 var verbosity *int64
 
 type (
