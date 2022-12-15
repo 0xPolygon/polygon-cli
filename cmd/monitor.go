@@ -399,7 +399,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 
 		blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
 		blockTable.SelectedRowStyle = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
-		if blockTable.SelectedRow > 0 && blockTable.SelectedRow < len(blockTable.Rows) {
+		if blockTable.SelectedRow > 0 && blockTable.SelectedRow <= len(blockTable.Rows) {
 			// only changed the selected block when the user presses the up down keys. Otherwise this will adjust when the table is updated automatically
 			if setBlock {
 				selectedBlock = recentBlocks[len(recentBlocks)-blockTable.SelectedRow]
@@ -466,7 +466,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 					currIdx = currIdx - 1
 					setBlock = true
 				}
-				if currIdx >= 0 && uint64(currIdx) < defaultBatchSize { // need a better way to understand how many rows are visible
+				if currIdx >= 0 && uint64(currIdx) <= defaultBatchSize { // need a better way to understand how many rows are visible
 					blockTable.SelectedRow = currIdx
 				}
 
@@ -497,7 +497,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 					currIdx = currIdx - 1
 					setBlock = true
 				}
-				if currIdx >= 0 && uint64(currIdx) < defaultBatchSize { // need a better way to understand how many rows are visble
+				if currIdx >= 0 && uint64(currIdx) <= defaultBatchSize { // need a better way to understand how many rows are visble
 					blockTable.SelectedRow = currIdx
 				}
 
