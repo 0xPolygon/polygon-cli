@@ -447,9 +447,10 @@ func renderMonitorUI(ms *monitorStatus) error {
 				redraw(ms)
 			case "<PageDown>", "<PageUp>":
 				if currentMode == monitorModeBlock {
-					if e.ID == "<PageDown>" {
+					fmt.Println(123123, b2.Rows)
+					if len(b2.Rows) != 0 && e.ID == "<PageDown>" {
 						b2.ScrollPageDown()
-					} else if e.ID == "<PageUp>" {
+					} else if len(b2.Rows) != 0 && e.ID == "<PageUp>" {
 						b2.ScrollPageUp()
 					}
 					redraw(ms)
@@ -465,6 +466,14 @@ func renderMonitorUI(ms *monitorStatus) error {
 				currIdx = blockTable.SelectedRow
 
 				if e.ID == "<PageDown>" {
+					if currIdx > int(*inputBatchSize)-1 {
+						if int(*inputBatchSize)+10 < len(allBlocks) {
+							*inputBatchSize = *inputBatchSize + 10
+						} else {
+							*inputBatchSize = uint64(len(allBlocks)) - 1
+							break
+						}
+					}
 					currIdx = currIdx + 1
 					setBlock = true
 				} else if e.ID == "<PageUp>" {
@@ -478,9 +487,9 @@ func renderMonitorUI(ms *monitorStatus) error {
 				redraw(ms)
 			case "<Up>", "<Down>", "<Left>", "<Right>":
 				if currentMode == monitorModeBlock {
-					if e.ID == "<Down>" {
+					if len(b2.Rows) != 0 && e.ID == "<Down>" {
 						b2.ScrollDown()
-					} else if e.ID == "<Up>" {
+					} else if len(b2.Rows) != 0 && e.ID == "<Up>" {
 						b2.ScrollUp()
 					}
 					redraw(ms)
