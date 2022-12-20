@@ -47,13 +47,13 @@ the mnemonic phrase rather than a full set of wallets and addresses
 		return nil
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if *inputWords < 12 {
-			return fmt.Errorf("the number of words in the mnemonic must be 12 or more. Given: %d", *inputWords)
+		if *inputMnemonicWords < 12 {
+			return fmt.Errorf("the number of words in the mnemonic must be 12 or more. Given: %d", *inputMnemonicWords)
 		}
-		if *inputWords > 24 {
-			return fmt.Errorf("the number of words in the mnemonic must be 24 or less. Given: %d", *inputWords)
+		if *inputMnemonicWords > 24 {
+			return fmt.Errorf("the number of words in the mnemonic must be 24 or less. Given: %d", *inputMnemonicWords)
 		}
-		if *inputWords%3 != 0 {
+		if *inputMnemonicWords%3 != 0 {
 			return fmt.Errorf("the number of words in the mnemonic must be a multiple of 3")
 		}
 		return nil
