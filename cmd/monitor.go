@@ -147,7 +147,7 @@ var monitorCmd = &cobra.Command{
 
 				// if the max block is 0, meaning we haven't fetched any blocks, we're going to start with head - batchSize
 				if ms.MaxBlockRetrieved.Cmp(from) == 0 {
-					headBlockMinusBatchSize := new(big.Int).SetUint64(50 - 1)
+					headBlockMinusBatchSize := new(big.Int).SetUint64(*inputBatchSize + 100 - 1)
 					from.Sub(ms.HeadBlock, headBlockMinusBatchSize)
 				} else {
 					from = ms.MaxBlockRetrieved
@@ -447,9 +447,9 @@ func renderMonitorUI(ms *monitorStatus) error {
 				redraw(ms)
 			case "<PageDown>", "<PageUp>":
 				if currentMode == monitorModeBlock {
-					if e.ID == "<PageDown>" {
+					if len(b2.Rows) != 0 && e.ID == "<PageDown>" {
 						b2.ScrollPageDown()
-					} else if e.ID == "<PageUp>" {
+					} else if len(b2.Rows) != 0 && e.ID == "<PageUp>" {
 						b2.ScrollPageUp()
 					}
 					redraw(ms)
@@ -465,6 +465,14 @@ func renderMonitorUI(ms *monitorStatus) error {
 				currIdx = blockTable.SelectedRow
 
 				if e.ID == "<PageDown>" {
+					if currIdx > int(*inputBatchSize)-1 {
+						if int(*inputBatchSize)+10 < len(allBlocks) {
+							*inputBatchSize = *inputBatchSize + 10
+						} else {
+							*inputBatchSize = uint64(len(allBlocks)) - 1
+							break
+						}
+					}
 					currIdx = currIdx + 1
 					setBlock = true
 				} else if e.ID == "<PageUp>" {
@@ -478,9 +486,9 @@ func renderMonitorUI(ms *monitorStatus) error {
 				redraw(ms)
 			case "<Up>", "<Down>", "<Left>", "<Right>":
 				if currentMode == monitorModeBlock {
-					if e.ID == "<Down>" {
+					if len(b2.Rows) != 0 && e.ID == "<Down>" {
 						b2.ScrollDown()
-					} else if e.ID == "<Up>" {
+					} else if len(b2.Rows) != 0 && e.ID == "<Up>" {
 						b2.ScrollUp()
 					}
 					redraw(ms)
