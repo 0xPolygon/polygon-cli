@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"strings"
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -123,21 +124,31 @@ func GetMeanGasPricePerBlock(blocks []rpctypes.PolyBlock) []float64 {
 	return gasPrices
 }
 
-func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) [][]string {
+func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
-	header := []string{
-		"Block #",
-		"Timestamp",
-		"Block Hash",
-		"Author",
-		"Tx Count",
-		"Gas Used",
-	}
+	// if we ever choose to utilize terminal width for colume resizing
+	// width, _, err := term.GetSize(0)
+	// if err != nil {
+	// 	return []string{}
+	// }
+
+	headerVariables := []string{"Block #", "Timestamp", "Block Hash", "Author", "Block Time", "Tx Count", "Gas Used"}
+
+	proportion := []int{10, 20, 60, 40, 5, 5}
+
+	header :=
+		headerVariables[0] + strings.Repeat(" ", proportion[0]) +
+			headerVariables[1] + strings.Repeat(" ", proportion[1]) +
+			headerVariables[2] + strings.Repeat(" ", proportion[2]) +
+			headerVariables[3] + strings.Repeat(" ", proportion[3]) +
+			headerVariables[4] + strings.Repeat(" ", proportion[4]) +
+			headerVariables[5] + strings.Repeat(" ", proportion[5]) +
+			headerVariables[6]
 
 	if len(blocks) < 1 {
-		return [][]string{header}
+		return nil, header
 	}
 
 	isMined := true
@@ -147,11 +158,11 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) [][]string {
 	}
 
 	if !isMined {
-		header[3] = "Signer"
+		header = strings.Replace(header, "Author", "Signer", 1)
 	}
 
-	records := make([][]string, 0)
-	records = append(records, header)
+	records := make([]string, 0)
+	records = append(records, "")
 	for j := len(bs) - 1; j >= 0; j = j - 1 {
 		author := bs[j].Miner()
 		ts := bs[j].Time()
@@ -162,17 +173,24 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) [][]string {
 				author = ethcommon.HexToAddress("0x" + hex.EncodeToString(signer))
 			}
 		}
-		record := []string{
-			fmt.Sprintf("%d", bs[j].Number()),
-			ut.Format("02 Jan 06 15:04:05 MST"),
-			bs[j].Hash().String(),
-			author.String(),
-			fmt.Sprintf("%d", len(bs[j].Transactions())),
-			fmt.Sprintf("%d", bs[j].GasUsed()),
+		blockTime := uint64(0)
+		if j > 0 {
+			blockTime = bs[j].Time() - bs[j-1].Time()
 		}
+
+		recordVariables := []string{fmt.Sprintf("%d", bs[j].Number()), ut.Format("02 Jan 06 15:04:05 MST"), bs[j].Hash().String(), author.String(), fmt.Sprintf("%d", blockTime), fmt.Sprintf("%d", len(bs[j].Transactions())), fmt.Sprintf("%d", bs[j].GasUsed())}
+		record := " " +
+			recordVariables[0] + strings.Repeat(" ", len(headerVariables[0])+proportion[0]-len(recordVariables[0])) +
+			recordVariables[1] + strings.Repeat(" ", len(headerVariables[1])+proportion[1]-len(recordVariables[1])) +
+			recordVariables[2] + strings.Repeat(" ", len(headerVariables[2])+proportion[2]-len(recordVariables[2])) +
+			recordVariables[3] + strings.Repeat(" ", len(headerVariables[3])+proportion[3]-len(recordVariables[3])) +
+			recordVariables[4] + strings.Repeat(" ", len(headerVariables[4])+proportion[4]-len(recordVariables[4])) +
+			recordVariables[5] + strings.Repeat(" ", len(headerVariables[5])+proportion[5]-len(recordVariables[5])) +
+			recordVariables[6]
+
 		records = append(records, record)
 	}
-	return records
+	return records, header
 }
 
 func GetSimpleBlockFields(block rpctypes.PolyBlock) []string {
