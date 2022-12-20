@@ -9,10 +9,10 @@ CUR_DATE:=$(shell date +%s)
 
 # strip debug and supress warnings
 LD_FLAGS=-s -w
-LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/version.Version=$(GIT_TAG)\"
-LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/version.Commit=$(GIT_SHA)\"
-LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/version.Date=$(CUR_DATE)\"
-LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/version.BuiltBy=makefile\"
+LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/cmd/version.Version=$(GIT_TAG)\"
+LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/cmd/version.Commit=$(GIT_SHA)\"
+LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/cmd/version.Date=$(CUR_DATE)\"
+LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/cmd/version.BuiltBy=makefile\"
 STATIC_LD_FLAGS=$(LD_FLAGS) -extldflags=-static
 
 .PHONY: help
