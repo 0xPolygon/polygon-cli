@@ -240,8 +240,6 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 }
 
 func init() {
-	// rootCmd.AddCommand(monitorCmd)
-
 	inputBatchSize = MonitorCmd.PersistentFlags().Uint64P("batch-size", "b", defaultBatchSize, "Number of requests per batch")
 	verbosity = MonitorCmd.PersistentFlags().Int64P("verbosity", "v", 200, "0 - Silent\n100 Fatals\n200 Errors\n300 Warnings\n400 INFO\n500 Debug\n600 Trace")
 }

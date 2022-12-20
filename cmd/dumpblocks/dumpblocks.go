@@ -159,8 +159,6 @@ var DumpblocksCmd = &cobra.Command{
 }
 
 func init() {
-	// rootCmd.AddCommand(dumpblocksCmd)
-
 	inputDumpblocks.Threads = DumpblocksCmd.PersistentFlags().UintP("concurrency", "c", 1, "how many go routines to leverage")
 
 }

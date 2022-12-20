@@ -263,8 +263,6 @@ func generateLibp2pNodeKey(keyType int, seed bool) (nodeKeyOut, error) {
 }
 
 func init() {
-	// rootCmd.AddCommand(NodekeyCmd)
-
 	inputNodeKeyProtocol = NodekeyCmd.PersistentFlags().String("protocol", "devp2p", "devp2p|libp2p|pex|seed-libp2p")
 	inputNodeKeyType = NodekeyCmd.PersistentFlags().String("key-type", "ed25519", "ed25519|secp256k1|ecdsa|rsa")
 	inputNodeKeyIP = NodekeyCmd.PersistentFlags().StringP("ip", "i", "0.0.0.0", "The IP to be associated with this address")

@@ -134,7 +134,6 @@ func getFileOrFlag(filename *string, flag *string) (string, error) {
 }
 
 func init() {
-	// rootCmd.AddCommand(WalletCmd)
 	inputKDFIterations = WalletCmd.PersistentFlags().Uint("iterations", 2048, "Number of pbkdf2 iterations to perform")
 	inputWords = WalletCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
 	inputAddressesToGenerate = WalletCmd.PersistentFlags().Uint("addresses", 10, "The number of addresses to generate")

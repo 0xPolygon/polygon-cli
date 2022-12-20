@@ -106,7 +106,6 @@ will be hashed. Otherwise, we'll attempted to read the standard input.
 }
 
 func init() {
-	// rootCmd.AddCommand(hashCmd)
 	flagSet := HashCmd.PersistentFlags()
 	inputFileName = flagSet.String("file", "", "Provide a filename to read and hash")
 }

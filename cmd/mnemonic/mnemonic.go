@@ -62,7 +62,6 @@ the mnemonic phrase rather than a full set of wallets and addresses
 }
 
 func init() {
-	// rootCmd.AddCommand(mnemonicCmd)
 	inputMnemonicWords = MnemonicCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
 	inputMnemonicLang = MnemonicCmd.PersistentFlags().String("language", "english", "Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
 	// Here you will define your flags and configuration settings.
