@@ -14,26 +14,32 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-package cmd
+
+package version
 
 import (
-	"github.com/maticnetwork/polygon-cli/version"
-
 	"github.com/spf13/cobra"
 )
 
+var (
+	Version = "dev"
+	Commit  = "none"
+	Date    = "unknown"
+	BuiltBy = "unknown"
+)
+
 // versionCmd represents the version command
-var versionCmd = &cobra.Command{
+var VersionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Get the current version of this application",
 	Long:  `Nothing fancy. Print the version of this application`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Printf("Polygon CLI Version %s\n", version.Version)
+		cmd.Printf("Polygon CLI Version %s\n", Version)
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(versionCmd)
+	// rootCmd.AddCommand(versionCmd)
 
 	// Here you will define your flags and configuration settings.
 

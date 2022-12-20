@@ -14,7 +14,7 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-package cmd
+package loadtest
 
 import (
 	"context"
@@ -22,11 +22,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/maticnetwork/polygon-cli/rpctypes"
-	"golang.org/x/exp/constraints"
-	"golang.org/x/text/language"
-	"golang.org/x/text/message"
-	"golang.org/x/text/number"
 	"io"
 	"math"
 	"math/big"
@@ -40,6 +35,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/maticnetwork/polygon-cli/rpctypes"
+	"github.com/maticnetwork/polygon-cli/util"
+	"golang.org/x/exp/constraints"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
+	"golang.org/x/text/number"
 
 	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
 	gssignature "github.com/centrifuge/go-substrate-rpc-client/v4/signature"
@@ -140,8 +142,8 @@ var (
 	}
 )
 
-// loadtestCmd represents the loadtest command
-var loadtestCmd = &cobra.Command{
+// LoadtestCmd represents the loadtest command
+var LoadtestCmd = &cobra.Command{
 	Use:   "loadtest rpc-endpoint",
 	Short: "A simple script for quickly running a load test",
 	Long:  `Loadtest gives us a simple way to run a generic load test against an eth/EVM style json RPC endpoint`,
@@ -261,25 +263,23 @@ type (
 )
 
 func init() {
-	rootCmd.AddCommand(loadtestCmd)
-
 	ltp := new(loadTestParams)
 	// Apache Bench Parameters
-	ltp.Requests = loadtestCmd.PersistentFlags().Int64P("requests", "n", 1, "Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results.")
-	ltp.Concurrency = loadtestCmd.PersistentFlags().Int64P("concurrency", "c", 1, "Number of multiple requests to perform at a time. Default is one request at a time.")
-	ltp.TimeLimit = loadtestCmd.PersistentFlags().Int64P("time-limit", "t", -1, "Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no timelimit.")
+	ltp.Requests = LoadtestCmd.PersistentFlags().Int64P("requests", "n", 1, "Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results.")
+	ltp.Concurrency = LoadtestCmd.PersistentFlags().Int64P("concurrency", "c", 1, "Number of multiple requests to perform at a time. Default is one request at a time.")
+	ltp.TimeLimit = LoadtestCmd.PersistentFlags().Int64P("time-limit", "t", -1, "Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no timelimit.")
 	// https://logging.apache.org/log4j/2.x/manual/customloglevels.html
-	ltp.Verbosity = loadtestCmd.PersistentFlags().Int64P("verbosity", "v", 200, "0 - Silent\n100 Fatals\n200 Errors\n300 Warnings\n400 INFO\n500 Debug\n600 Trace")
+	ltp.Verbosity = LoadtestCmd.PersistentFlags().Int64P("verbosity", "v", 200, "0 - Silent\n100 Fatals\n200 Errors\n300 Warnings\n400 INFO\n500 Debug\n600 Trace")
 
 	// extended parameters
-	ltp.PrettyLogs = loadtestCmd.PersistentFlags().Bool("pretty-logs", true, "Should we log in pretty format or JSON")
-	ltp.PrivateKey = loadtestCmd.PersistentFlags().String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
-	ltp.ChainID = loadtestCmd.PersistentFlags().Uint64("chain-id", 1256, "The chain id for the transactions that we're going to send")
-	ltp.ToAddress = loadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
-	ltp.ToRandom = loadtestCmd.PersistentFlags().Bool("to-random", true, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
-	ltp.HexSendAmount = loadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
-	ltp.RateLimit = loadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
-	ltp.Mode = loadtestCmd.PersistentFlags().StringP("mode", "m", "t", `The testing mode to use. It can be multiple like: "tcdf"
+	ltp.PrettyLogs = LoadtestCmd.PersistentFlags().Bool("pretty-logs", true, "Should we log in pretty format or JSON")
+	ltp.PrivateKey = LoadtestCmd.PersistentFlags().String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
+	ltp.ChainID = LoadtestCmd.PersistentFlags().Uint64("chain-id", 1256, "The chain id for the transactions that we're going to send")
+	ltp.ToAddress = LoadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
+	ltp.ToRandom = LoadtestCmd.PersistentFlags().Bool("to-random", true, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
+	ltp.HexSendAmount = LoadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
+	ltp.RateLimit = LoadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
+	ltp.Mode = LoadtestCmd.PersistentFlags().StringP("mode", "m", "t", `The testing mode to use. It can be multiple like: "tcdf"
 t - sending transactions
 d - deploy contract
 c - call random contract functions
@@ -289,18 +289,18 @@ l - long running mode
 r - random modes
 2 - ERC20 Transfers
 7 - ERC721 Mints`)
-	ltp.Function = loadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` ")
-	ltp.Iterations = loadtestCmd.PersistentFlags().Uint64P("iterations", "i", 100, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop")
-	ltp.ByteCount = loadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
-	ltp.Seed = loadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
-	ltp.IsAvail = loadtestCmd.PersistentFlags().Bool("data-avail", false, "Is this a test of avail rather than an EVM / Geth Chain")
-	ltp.AvailAppID = loadtestCmd.PersistentFlags().Uint32("app-id", 0, "The AppID used for avail")
-	ltp.LtAddress = loadtestCmd.PersistentFlags().String("lt-address", "", "A pre-deployed load test contract address")
-	ltp.DelAddress = loadtestCmd.PersistentFlags().String("del-address", "", "A pre-deployed delegator contract address")
-	ltp.ForceContractDeploy = loadtestCmd.PersistentFlags().Bool("force-contract-deploy", false, "Some loadtest modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --del-address and --il-address flags.")
-	ltp.ForceGasLimit = loadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually")
-	ltp.ForceGasPrice = loadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be estimated, we can specify it manually")
-	ltp.ShouldProduceSummary = loadtestCmd.PersistentFlags().Bool("summarize", false, "Should we produce an execution summary after the load test has finished. If you're running a large loadtest, this can take a long time")
+	ltp.Function = LoadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` ")
+	ltp.Iterations = LoadtestCmd.PersistentFlags().Uint64P("iterations", "i", 100, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop")
+	ltp.ByteCount = LoadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
+	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
+	ltp.IsAvail = LoadtestCmd.PersistentFlags().Bool("data-avail", false, "Is this a test of avail rather than an EVM / Geth Chain")
+	ltp.AvailAppID = LoadtestCmd.PersistentFlags().Uint32("app-id", 0, "The AppID used for avail")
+	ltp.LtAddress = LoadtestCmd.PersistentFlags().String("lt-address", "", "A pre-deployed load test contract address")
+	ltp.DelAddress = LoadtestCmd.PersistentFlags().String("del-address", "", "A pre-deployed delegator contract address")
+	ltp.ForceContractDeploy = LoadtestCmd.PersistentFlags().Bool("force-contract-deploy", false, "Some loadtest modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --del-address and --il-address flags.")
+	ltp.ForceGasLimit = LoadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually")
+	ltp.ForceGasPrice = LoadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be estimated, we can specify it manually")
+	ltp.ShouldProduceSummary = LoadtestCmd.PersistentFlags().Bool("summarize", false, "Should we produce an execution summary after the load test has finished. If you're running a large loadtest, this can take a long time")
 	inputLoadTestParams = *ltp
 
 	// TODO batch size
@@ -1328,13 +1328,12 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 
 	log.Trace().Uint64("currentNonce", currentNonce).Uint64("startblock", startBlockNumber).Uint64("endblock", lastBlockNumber).Msg("It looks like all transactions have been mined")
 	log.Trace().Msg("Starting block range capture")
-	rawBlocks, err := getBlockRange(ctx, startBlockNumber, lastBlockNumber, rpc)
+	rawBlocks, err := util.GetBlockRange(ctx, startBlockNumber, lastBlockNumber, rpc)
 	if err != nil {
 		return err
 	}
-	// FIXME: This code shouldn't really work like this. getBlockRange and getReceipts need to be moved to a package
 	// TODO: Add some kind of decimation to avoid summarizing for 10 minutes?
-	inputDumpblocks.BatchSize = 999
+	batchSize := uint64(999)
 	cpuCount := uint(runtime.NumCPU())
 	var txGroup sync.WaitGroup
 	threadPool := make(chan bool, cpuCount)
@@ -1347,7 +1346,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		txGroup.Add(1)
 		go func(b *json.RawMessage) {
 			var receipt []*json.RawMessage
-			receipt, err = getReceipts(ctx, []*json.RawMessage{b}, rpc)
+			receipt, err = util.GetReceipts(ctx, []*json.RawMessage{b}, rpc, batchSize)
 			if err != nil {
 				txGroupErr = err
 			}

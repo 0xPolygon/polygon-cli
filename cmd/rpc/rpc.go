@@ -14,7 +14,7 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-package cmd
+package rpc
 
 import (
 	"encoding/json"
@@ -28,7 +28,7 @@ import (
 )
 
 // rpcCmd represents the rpc command
-var rpcCmd = &cobra.Command{
+var RpcCmd = &cobra.Command{
 	Use:   "rpc URL method param_0 param_1 ... param_n",
 	Short: "A simple wrapper for making RPC requests",
 	Long: `
@@ -101,7 +101,7 @@ func convertStringTypes(param string) any {
 }
 
 func init() {
-	rootCmd.AddCommand(rpcCmd)
+	// rootCmd.AddCommand(rpcCmd)
 
 	// Here you will define your flags and configuration settings.
 

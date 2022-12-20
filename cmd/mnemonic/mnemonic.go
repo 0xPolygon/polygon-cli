@@ -14,7 +14,7 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-package cmd
+package mnemonic
 
 import (
 	"fmt"
@@ -29,7 +29,7 @@ var (
 )
 
 // mnemonicCmd represents the mnemonic command
-var mnemonicCmd = &cobra.Command{
+var MnemonicCmd = &cobra.Command{
 	Use:   "mnemonic",
 	Short: "Generate a bip39 mnemonic seed",
 	Long: `This is a basic function to generate a random seed phrase.
@@ -62,9 +62,9 @@ the mnemonic phrase rather than a full set of wallets and addresses
 }
 
 func init() {
-	rootCmd.AddCommand(mnemonicCmd)
-	inputMnemonicWords = mnemonicCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
-	inputMnemonicLang = mnemonicCmd.PersistentFlags().String("language", "english", "Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
+	// rootCmd.AddCommand(mnemonicCmd)
+	inputMnemonicWords = MnemonicCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
+	inputMnemonicLang = MnemonicCmd.PersistentFlags().String("language", "english", "Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command
