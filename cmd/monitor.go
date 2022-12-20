@@ -447,7 +447,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 				redraw(ms)
 			case "<PageDown>", "<PageUp>":
 				if currentMode == monitorModeBlock {
-					fmt.Println(123123, b2.Rows)
 					if len(b2.Rows) != 0 && e.ID == "<PageDown>" {
 						b2.ScrollPageDown()
 					} else if len(b2.Rows) != 0 && e.ID == "<PageUp>" {
