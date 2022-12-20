@@ -183,6 +183,9 @@ type (
 		Nonce() uint64
 		String() string
 		MarshalJSON() ([]byte, error)
+		V() *big.Int
+		R() *big.Int
+		S() *big.Int
 	}
 	PolyTransactions []PolyTransaction
 	PolyBlock        interface {
@@ -205,6 +208,8 @@ type (
 		Nonce() uint64
 		String() string
 		MarshalJSON() ([]byte, error)
+		ReceiptsRoot() ethcommon.Hash
+		LogsBloom() []byte
 	}
 
 	implPolyBlock struct {
@@ -282,6 +287,12 @@ func (i *implPolyBlock) TxHash() ethcommon.Hash {
 func (i *implPolyBlock) Extra() []byte {
 	return i.inner.ExtraData.ToBytes()
 }
+func (i *implPolyBlock) ReceiptsRoot() ethcommon.Hash {
+	return i.inner.ReceiptsRoot.ToHash()
+}
+func (i *implPolyBlock) LogsBloom() []byte {
+	return i.inner.LogsBloom.ToBytes()
+}
 func (i *implPolyBlock) String() string {
 	d, err := json.Marshal(i)
 	if err != nil {
@@ -304,6 +315,15 @@ func (i *implPolyTransaction) Nonce() uint64 {
 }
 func (i *implPolyTransaction) Value() *big.Int {
 	return i.inner.Value.ToBigInt()
+}
+func (i *implPolyTransaction) V() *big.Int {
+	return i.inner.V.ToBigInt()
+}
+func (i *implPolyTransaction) R() *big.Int {
+	return i.inner.R.ToBigInt()
+}
+func (i *implPolyTransaction) S() *big.Int {
+	return i.inner.S.ToBigInt()
 }
 func (i *implPolyTransaction) Hash() ethcommon.Hash {
 	return i.inner.Hash.ToHash()
@@ -466,6 +486,16 @@ func (r *RawData32Response) ToHash() ethcommon.Hash {
 	return ethcommon.HexToHash(string(*r))
 }
 func (r *RawDataResponse) ToBytes() []byte {
+	hexString := normalizeHexString(string(*r))
+	data, err := hex.DecodeString(hexString)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to covert raw data to bytes")
+		return nil
+	}
+	return data
+}
+
+func (r *RawData256Response) ToBytes() []byte {
 	hexString := normalizeHexString(string(*r))
 	data, err := hex.DecodeString(hexString)
 	if err != nil {
