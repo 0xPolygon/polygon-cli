@@ -14,7 +14,7 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-package cmd
+package nodekey
 
 import (
 	"bytes"
@@ -69,8 +69,8 @@ type (
 	}
 )
 
-// nodekeyCmd represents the nodekey command
-var nodekeyCmd = &cobra.Command{
+// NodekeyCmd represents the nodekey command
+var NodekeyCmd = &cobra.Command{
 	Use:   "nodekey",
 	Short: "Generate Node Keys",
 	Long: `This is meant to be a simple utility for generating node keys for
@@ -263,16 +263,14 @@ func generateLibp2pNodeKey(keyType int, seed bool) (nodeKeyOut, error) {
 }
 
 func init() {
-	rootCmd.AddCommand(nodekeyCmd)
+	inputNodeKeyProtocol = NodekeyCmd.PersistentFlags().String("protocol", "devp2p", "devp2p|libp2p|pex|seed-libp2p")
+	inputNodeKeyType = NodekeyCmd.PersistentFlags().String("key-type", "ed25519", "ed25519|secp256k1|ecdsa|rsa")
+	inputNodeKeyIP = NodekeyCmd.PersistentFlags().StringP("ip", "i", "0.0.0.0", "The IP to be associated with this address")
+	inputNodeKeyTCP = NodekeyCmd.PersistentFlags().IntP("tcp", "t", 30303, "The tcp Port to be associated with this address")
+	inputNodeKeyUDP = NodekeyCmd.PersistentFlags().IntP("udp", "u", 0, "The udp Port to be associated with this address")
+	inputNodeKeySign = NodekeyCmd.PersistentFlags().BoolP("sign", "s", false, "Should the node record be signed?")
+	inputNodeKeySeed = NodekeyCmd.PersistentFlags().Uint64P("seed", "S", 271828, "A numeric seed value")
+	inputNodeKeyMarshalProtobuf = NodekeyCmd.PersistentFlags().BoolP("marshal-protobuf", "m", false, "If true the libp2p key will be marshaled to protobuf format rather than raw")
 
-	inputNodeKeyProtocol = nodekeyCmd.PersistentFlags().String("protocol", "devp2p", "devp2p|libp2p|pex|seed-libp2p")
-	inputNodeKeyType = nodekeyCmd.PersistentFlags().String("key-type", "ed25519", "ed25519|secp256k1|ecdsa|rsa")
-	inputNodeKeyIP = nodekeyCmd.PersistentFlags().StringP("ip", "i", "0.0.0.0", "The IP to be associated with this address")
-	inputNodeKeyTCP = nodekeyCmd.PersistentFlags().IntP("tcp", "t", 30303, "The tcp Port to be associated with this address")
-	inputNodeKeyUDP = nodekeyCmd.PersistentFlags().IntP("udp", "u", 0, "The udp Port to be associated with this address")
-	inputNodeKeySign = nodekeyCmd.PersistentFlags().BoolP("sign", "s", false, "Should the node record be signed?")
-	inputNodeKeySeed = nodekeyCmd.PersistentFlags().Uint64P("seed", "S", 271828, "A numeric seed value")
-	inputNodeKeyMarshalProtobuf = nodekeyCmd.PersistentFlags().BoolP("marshal-protobuf", "m", false, "If true the libp2p key will be marshaled to protobuf format rather than raw")
-
-	inputNodeKeyFile = nodekeyCmd.PersistentFlags().StringP("file", "f", "", "A file with the private nodekey in hex format")
+	inputNodeKeyFile = NodekeyCmd.PersistentFlags().StringP("file", "f", "", "A file with the private nodekey in hex format")
 }

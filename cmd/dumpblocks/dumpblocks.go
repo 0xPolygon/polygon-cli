@@ -14,10 +14,9 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-package cmd
+package dumpblocks
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -26,6 +25,7 @@ import (
 	"time"
 
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
+	"github.com/maticnetwork/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -43,7 +43,7 @@ type (
 var inputDumpblocks dumpblocksArgs = dumpblocksArgs{}
 
 // dumpblocksCmd represents the dumpblocks command
-var dumpblocksCmd = &cobra.Command{
+var DumpblocksCmd = &cobra.Command{
 	Use:   "dumpblocks URL start end",
 	Short: "Export a range of blocks from an RPC endpoint",
 	Long:  `This is a simple function to export a range of blocks from a JSON RPC endpoint.`,
@@ -80,7 +80,7 @@ var dumpblocksCmd = &cobra.Command{
 				defer wg.Done()
 				for {
 					failCount := 0
-					blocks, err := getBlockRange(ctx, rangeStart, rangeEnd, ec)
+					blocks, err := util.GetBlockRange(ctx, rangeStart, rangeEnd, ec)
 					if err != nil {
 						failCount = failCount + 1
 						if failCount > 5 {
@@ -92,7 +92,7 @@ var dumpblocksCmd = &cobra.Command{
 					}
 
 					failCount = 0
-					receipts, err := getReceipts(ctx, blocks, ec)
+					receipts, err := util.GetReceipts(ctx, blocks, ec, inputDumpblocks.BatchSize)
 					if err != nil {
 						failCount = failCount + 1
 						if failCount > 5 {
@@ -159,132 +159,8 @@ var dumpblocksCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(dumpblocksCmd)
+	inputDumpblocks.Threads = DumpblocksCmd.PersistentFlags().UintP("concurrency", "c", 1, "how many go routines to leverage")
 
-	inputDumpblocks.Threads = dumpblocksCmd.PersistentFlags().UintP("concurrency", "c", 1, "how many go routines to leverage")
-
-}
-
-func getBlockRange(ctx context.Context, from, to uint64, c *ethrpc.Client) ([]*json.RawMessage, error) {
-	blms := make([]ethrpc.BatchElem, 0)
-	for i := from; i <= to; i = i + 1 {
-		r := new(json.RawMessage)
-		var err error
-		blms = append(blms, ethrpc.BatchElem{
-			Method: "eth_getBlockByNumber",
-			Args:   []interface{}{"0x" + strconv.FormatUint(i, 16), true},
-			Result: r,
-			Error:  err,
-		})
-	}
-	log.Trace().Uint64("start", from).Uint64("end", to).Msg("Fetching block range")
-
-	err := c.BatchCallContext(ctx, blms)
-	if err != nil {
-		log.Error().Err(err).Msg("rpc issue fetching blocks")
-		return nil, err
-	}
-	blocks := make([]*json.RawMessage, 0)
-
-	for _, b := range blms {
-		if b.Error != nil {
-			return nil, b.Error
-		}
-		blocks = append(blocks, b.Result.(*json.RawMessage))
-
-	}
-	return blocks, nil
-}
-
-type (
-	simpleRPCTransaction struct {
-		Hash string `json:"hash"`
-	}
-	simpleRPCBlock struct {
-		Number       string                 `json:"number"`
-		Transactions []simpleRPCTransaction `json:"transactions"`
-	}
-)
-
-func getReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Client) ([]*json.RawMessage, error) {
-	txHashes := make([]string, 0)
-	txHashMap := make(map[string]string, 0)
-	for _, rb := range rawBlocks {
-		var sb simpleRPCBlock
-		err := json.Unmarshal(*rb, &sb)
-		if err != nil {
-			return nil, err
-
-		}
-		for _, tx := range sb.Transactions {
-			txHashes = append(txHashes, tx.Hash)
-			txHashMap[tx.Hash] = sb.Number
-		}
-
-	}
-	if len(txHashes) == 0 {
-		return nil, nil
-	}
-
-	blms := make([]ethrpc.BatchElem, 0)
-	blmsBlockMap := make(map[int]string, 0)
-	for i, tx := range txHashes {
-		r := new(json.RawMessage)
-		var err error
-		blms = append(blms, ethrpc.BatchElem{
-			Method: "eth_getTransactionReceipt",
-			Args:   []interface{}{tx},
-			Result: r,
-			Error:  err,
-		})
-		blmsBlockMap[i] = txHashMap[tx]
-	}
-
-	var start uint64 = 0
-	for {
-		last := false
-		end := start + inputDumpblocks.BatchSize
-		if int(end) > len(blms) {
-			last = true
-			end = uint64(len(blms))
-		}
-
-		log.Trace().Str("startblock", blmsBlockMap[int(start)]).Uint64("start", start).Uint64("end", end).Msg("Fetching tx receipt range")
-		// json: cannot unmarshal object into Go value of type []rpc.jsonrpcMessage
-		// The error occurs when we call batchcallcontext with a single transaction for some reason.
-		// polycli dumpblocks -c 1 http://127.0.0.1:9209/ 34457958 34458108
-		// To handle this i'm making an exception when start and end are equal to make a single call
-		if start == end {
-			err := c.CallContext(ctx, &blms[start].Result, "eth_getTransactionReceipt", blms[start].Args[0])
-			if err != nil {
-				log.Error().Err(err).Uint64("start", start).Uint64("end", end).Msg("rpc issue fetching single receipt")
-				return nil, err
-			}
-			break
-		}
-
-		err := c.BatchCallContext(ctx, blms[start:end])
-		if err != nil {
-			log.Error().Err(err).Str("randtx", txHashes[0]).Uint64("start", start).Uint64("end", end).Msg("rpc issue fetching receipts")
-			return nil, err
-		}
-		start = end
-		if last {
-			break
-		}
-	}
-
-	receipts := make([]*json.RawMessage, 0)
-
-	for _, b := range blms {
-		if b.Error != nil {
-			log.Error().Err(b.Error).Msg("block resp err")
-			return nil, b.Error
-		}
-		receipts = append(receipts, b.Result.(*json.RawMessage))
-	}
-	log.Info().Int("hashes", len(txHashes)).Int("receipts", len(receipts)).Msg("fetched tx receipts")
-	return receipts, nil
 }
 
 func writeResponses(blocks []*json.RawMessage) error {

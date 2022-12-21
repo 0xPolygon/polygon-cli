@@ -14,7 +14,7 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-package cmd
+package mnemonic
 
 import (
 	"fmt"
@@ -29,7 +29,7 @@ var (
 )
 
 // mnemonicCmd represents the mnemonic command
-var mnemonicCmd = &cobra.Command{
+var MnemonicCmd = &cobra.Command{
 	Use:   "mnemonic",
 	Short: "Generate a bip39 mnemonic seed",
 	Long: `This is a basic function to generate a random seed phrase.
@@ -47,13 +47,13 @@ the mnemonic phrase rather than a full set of wallets and addresses
 		return nil
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if *inputWords < 12 {
-			return fmt.Errorf("the number of words in the mnemonic must be 12 or more. Given: %d", *inputWords)
+		if *inputMnemonicWords < 12 {
+			return fmt.Errorf("the number of words in the mnemonic must be 12 or more. Given: %d", *inputMnemonicWords)
 		}
-		if *inputWords > 24 {
-			return fmt.Errorf("the number of words in the mnemonic must be 24 or less. Given: %d", *inputWords)
+		if *inputMnemonicWords > 24 {
+			return fmt.Errorf("the number of words in the mnemonic must be 24 or less. Given: %d", *inputMnemonicWords)
 		}
-		if *inputWords%3 != 0 {
+		if *inputMnemonicWords%3 != 0 {
 			return fmt.Errorf("the number of words in the mnemonic must be a multiple of 3")
 		}
 		return nil
@@ -62,9 +62,8 @@ the mnemonic phrase rather than a full set of wallets and addresses
 }
 
 func init() {
-	rootCmd.AddCommand(mnemonicCmd)
-	inputMnemonicWords = mnemonicCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
-	inputMnemonicLang = mnemonicCmd.PersistentFlags().String("language", "english", "Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
+	inputMnemonicWords = MnemonicCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
+	inputMnemonicLang = MnemonicCmd.PersistentFlags().String("language", "english", "Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command

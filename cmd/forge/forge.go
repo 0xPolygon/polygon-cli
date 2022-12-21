@@ -14,7 +14,7 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-package cmd
+package forge
 
 import (
 	"bufio"
@@ -22,6 +22,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"math/big"
+	"os"
+	"path/filepath"
+
 	edgeblockchain "github.com/0xPolygon/polygon-edge/blockchain"
 	edgechain "github.com/0xPolygon/polygon-edge/chain"
 	edgeconsensus "github.com/0xPolygon/polygon-edge/consensus"
@@ -37,10 +42,6 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/hashicorp/go-hclog"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
-	"io"
-	"math/big"
-	"os"
-	"path/filepath"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -70,7 +71,7 @@ var (
 )
 
 // forgeCmd represents the forge command
-var forgeCmd = &cobra.Command{
+var ForgeCmd = &cobra.Command{
 	Use:   "forge",
 	Short: "A utility for generating blockchain data either for testing or migration",
 	Long: `
@@ -413,14 +414,11 @@ func GenerateRandomBlock(number uint64) *edgetypes.Block {
 }
 
 func init() {
-	rootCmd.AddCommand(forgeCmd)
-
-	inputForgeParams.Client = forgeCmd.PersistentFlags().StringP("client", "c", "edge", "Specify which blockchain client should be use to forge the data")
-	inputForgeParams.DataDir = forgeCmd.PersistentFlags().StringP("data-dir", "d", "./forged-data", "Specify a folder to be used to store the chain data")
-	inputForgeParams.GenesisFile = forgeCmd.PersistentFlags().StringP("genesis", "g", "genesis.json", "Specify a file to be used for genesis configuration")
-	inputForgeParams.Verifier = forgeCmd.PersistentFlags().StringP("verifier", "v", "dummy", "Specify a consensus engin to use for forging")
-	inputForgeParams.Mode = forgeCmd.PersistentFlags().StringP("mode", "m", "json", "The forge mode indicates how we should get the transactions for our blocks")
-	inputForgeParams.Count = forgeCmd.PersistentFlags().Uint64P("count", "C", 100, "The number of blocks to try to forge")
-	inputForgeParams.JSONBlocksFile = forgeCmd.PersistentFlags().String("json-blocks", "", "a file of json encoded blocks")
-
+	inputForgeParams.Client = ForgeCmd.PersistentFlags().StringP("client", "c", "edge", "Specify which blockchain client should be use to forge the data")
+	inputForgeParams.DataDir = ForgeCmd.PersistentFlags().StringP("data-dir", "d", "./forged-data", "Specify a folder to be used to store the chain data")
+	inputForgeParams.GenesisFile = ForgeCmd.PersistentFlags().StringP("genesis", "g", "genesis.json", "Specify a file to be used for genesis configuration")
+	inputForgeParams.Verifier = ForgeCmd.PersistentFlags().StringP("verifier", "v", "dummy", "Specify a consensus engin to use for forging")
+	inputForgeParams.Mode = ForgeCmd.PersistentFlags().StringP("mode", "m", "json", "The forge mode indicates how we should get the transactions for our blocks")
+	inputForgeParams.Count = ForgeCmd.PersistentFlags().Uint64P("count", "C", 100, "The number of blocks to try to forge")
+	inputForgeParams.JSONBlocksFile = ForgeCmd.PersistentFlags().String("json-blocks", "", "a file of json encoded blocks")
 }

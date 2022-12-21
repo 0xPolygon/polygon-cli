@@ -22,6 +22,18 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/maticnetwork/polygon-cli/cmd/dumpblocks"
+	"github.com/maticnetwork/polygon-cli/cmd/forge"
+	"github.com/maticnetwork/polygon-cli/cmd/hash"
+	"github.com/maticnetwork/polygon-cli/cmd/loadtest"
+	"github.com/maticnetwork/polygon-cli/cmd/metricsToDash"
+	"github.com/maticnetwork/polygon-cli/cmd/mnemonic"
+	"github.com/maticnetwork/polygon-cli/cmd/monitor"
+	"github.com/maticnetwork/polygon-cli/cmd/nodekey"
+	"github.com/maticnetwork/polygon-cli/cmd/rpc"
+	"github.com/maticnetwork/polygon-cli/cmd/version"
+	"github.com/maticnetwork/polygon-cli/cmd/wallet"
 )
 
 var cfgFile string
@@ -57,6 +69,18 @@ func init() {
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	rootCmd.SetOut(os.Stdout)
+
+	rootCmd.AddCommand(dumpblocks.DumpblocksCmd)
+	rootCmd.AddCommand(forge.ForgeCmd)
+	rootCmd.AddCommand(hash.HashCmd)
+	rootCmd.AddCommand(loadtest.LoadtestCmd)
+	rootCmd.AddCommand(metricsToDash.MetricsToDashCmd)
+	rootCmd.AddCommand(monitor.MonitorCmd)
+	rootCmd.AddCommand(mnemonic.MnemonicCmd)
+	rootCmd.AddCommand(nodekey.NodekeyCmd)
+	rootCmd.AddCommand(rpc.RpcCmd)
+	rootCmd.AddCommand(version.VersionCmd)
+	rootCmd.AddCommand(wallet.WalletCmd)
 }
 
 // initConfig reads in config file and ENV variables if set.

@@ -14,7 +14,7 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-package cmd
+package wallet
 
 import (
 	"encoding/json"
@@ -39,8 +39,8 @@ var (
 	inputRootOnly            *bool
 )
 
-// walletCmd represents the wallet command
-var walletCmd = &cobra.Command{
+// WalletCmd represents the wallet command
+var WalletCmd = &cobra.Command{
 	Use:   "wallet [create|inspect]",
 	Short: "Create or inspect a bip39(ish) wallet",
 	Long: `This command is meant to simplify the operations of creating wallets
@@ -134,20 +134,19 @@ func getFileOrFlag(filename *string, flag *string) (string, error) {
 }
 
 func init() {
-	rootCmd.AddCommand(walletCmd)
-	inputKDFIterations = walletCmd.PersistentFlags().Uint("iterations", 2048, "Number of pbkdf2 iterations to perform")
-	inputWords = walletCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
-	inputAddressesToGenerate = walletCmd.PersistentFlags().Uint("addresses", 10, "The number of addresses to generate")
-	inputLang = walletCmd.PersistentFlags().String("language", "english", "Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
+	inputKDFIterations = WalletCmd.PersistentFlags().Uint("iterations", 2048, "Number of pbkdf2 iterations to perform")
+	inputWords = WalletCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
+	inputAddressesToGenerate = WalletCmd.PersistentFlags().Uint("addresses", 10, "The number of addresses to generate")
+	inputLang = WalletCmd.PersistentFlags().String("language", "english", "Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
 	// https://github.com/satoshilabs/slips/blob/master/slip-0044.md
 	// 0 - bitcoin
 	// 60 - ether
 	// 966 - matic
-	inputPath = walletCmd.PersistentFlags().String("path", "m/44'/60'/0'", "What would you like the derivation path to be")
-	inputPassword = walletCmd.PersistentFlags().String("password", "", "Password used along with the mnemonic")
-	inputPasswordFile = walletCmd.PersistentFlags().String("password-file", "", "Password stored in a file used along with the mnemonic")
-	inputMnemonic = walletCmd.PersistentFlags().String("mnemonic", "", "A mnemonic phrase used to generate entropy")
-	inputMnemonicFile = walletCmd.PersistentFlags().String("mnemonic-file", "", "A mneomonic phrase written in a file used to generate entropy")
-	inputUseRawEntropy = walletCmd.PersistentFlags().Bool("raw-entropy", false, "substrate and polkda dot don't follow strict bip39 and use raw entropy")
-	inputRootOnly = walletCmd.PersistentFlags().Bool("root-only", false, "don't produce HD accounts. Just produce a single wallet")
+	inputPath = WalletCmd.PersistentFlags().String("path", "m/44'/60'/0'", "What would you like the derivation path to be")
+	inputPassword = WalletCmd.PersistentFlags().String("password", "", "Password used along with the mnemonic")
+	inputPasswordFile = WalletCmd.PersistentFlags().String("password-file", "", "Password stored in a file used along with the mnemonic")
+	inputMnemonic = WalletCmd.PersistentFlags().String("mnemonic", "", "A mnemonic phrase used to generate entropy")
+	inputMnemonicFile = WalletCmd.PersistentFlags().String("mnemonic-file", "", "A mneomonic phrase written in a file used to generate entropy")
+	inputUseRawEntropy = WalletCmd.PersistentFlags().Bool("raw-entropy", false, "substrate and polkda dot don't follow strict bip39 and use raw entropy")
+	inputRootOnly = WalletCmd.PersistentFlags().Bool("root-only", false, "don't produce HD accounts. Just produce a single wallet")
 }

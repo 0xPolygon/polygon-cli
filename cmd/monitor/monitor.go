@@ -14,7 +14,7 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-package cmd
+package monitor
 
 import (
 	"context"
@@ -98,7 +98,7 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 }
 
 // monitorCmd represents the monitor command
-var monitorCmd = &cobra.Command{
+var MonitorCmd = &cobra.Command{
 	Use:   "monitor [rpc-url]",
 	Short: "A simple terminal monitor for a blockchain",
 	Long:  ``,
@@ -240,10 +240,8 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 }
 
 func init() {
-	rootCmd.AddCommand(monitorCmd)
-
-	inputBatchSize = monitorCmd.PersistentFlags().Uint64P("batch-size", "b", defaultBatchSize, "Number of requests per batch")
-	verbosity = monitorCmd.PersistentFlags().Int64P("verbosity", "v", 200, "0 - Silent\n100 Fatals\n200 Errors\n300 Warnings\n400 INFO\n500 Debug\n600 Trace")
+	inputBatchSize = MonitorCmd.PersistentFlags().Uint64P("batch-size", "b", defaultBatchSize, "Number of requests per batch")
+	verbosity = MonitorCmd.PersistentFlags().Int64P("verbosity", "v", 200, "0 - Silent\n100 Fatals\n200 Errors\n300 Warnings\n400 INFO\n500 Debug\n600 Trace")
 }
 
 func renderMonitorUI(ms *monitorStatus) error {

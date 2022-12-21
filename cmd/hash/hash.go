@@ -14,7 +14,7 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-package cmd
+package hash
 
 import (
 	"encoding/hex"
@@ -65,7 +65,7 @@ var (
 )
 
 // hashCmd represents the hash command
-var hashCmd = &cobra.Command{
+var HashCmd = &cobra.Command{
 	Use:   fmt.Sprintf("hash [%s]", strings.Join(supportedHashFunctions, "|")),
 	Short: "Simple command line tools for common crypto hashing functions",
 	Long: `Hash Functions
@@ -106,8 +106,7 @@ will be hashed. Otherwise, we'll attempted to read the standard input.
 }
 
 func init() {
-	rootCmd.AddCommand(hashCmd)
-	flagSet := hashCmd.PersistentFlags()
+	flagSet := HashCmd.PersistentFlags()
 	inputFileName = flagSet.String("file", "", "Provide a filename to read and hash")
 }
 
