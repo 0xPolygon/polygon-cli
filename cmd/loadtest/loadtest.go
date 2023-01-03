@@ -1308,6 +1308,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	var err error
 	var lastBlockNumber uint64
 	var currentNonce uint64
+	var maxWaitCount = 20
 	for {
 		lastBlockNumber, err = c.BlockNumber(ctx)
 		if err != nil {
@@ -1318,9 +1319,10 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		if err != nil {
 			return err
 		}
-		if currentNonce < endNonce {
+		if currentNonce < endNonce && maxWaitCount < 0 {
 			log.Trace().Uint64("endNonce", endNonce).Uint64("currentNonce", currentNonce).Msg("Not all transactions have been mined. Waiting")
 			time.Sleep(5 * time.Second)
+			maxWaitCount--
 			continue
 		}
 		break
