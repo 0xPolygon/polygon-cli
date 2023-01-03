@@ -1328,6 +1328,11 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 
 	log.Trace().Uint64("currentNonce", currentNonce).Uint64("startblock", startBlockNumber).Uint64("endblock", lastBlockNumber).Msg("It looks like all transactions have been mined")
 	log.Trace().Msg("Starting block range capture")
+	// confirm start block number is ok
+	_, err = c.BlockByNumber(ctx, new(big.Int).SetUint64(startBlockNumber))
+	if err != nil {
+		return err
+	}
 	rawBlocks, err := util.GetBlockRange(ctx, startBlockNumber, lastBlockNumber, rpc)
 	if err != nil {
 		return err
