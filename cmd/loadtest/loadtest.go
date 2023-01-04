@@ -1411,6 +1411,9 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	for _, r := range txReceipts {
 		bn := r.BlockNumber.ToUint64()
 		bs := blockData[bn]
+		if bs.Receipts == nil {
+			log.Error().Err(err).Msg("block number from receipts does not exist in block data")
+		}
 		bs.Receipts[r.TransactionHash.ToHash()] = r
 		blockData[bn] = bs
 	}
