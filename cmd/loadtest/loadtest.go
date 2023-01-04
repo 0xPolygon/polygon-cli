@@ -1374,7 +1374,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	blocks := make([]rpctypes.RawBlockResponse, 0)
 	for _, b := range rawBlocks {
 		var block rpctypes.RawBlockResponse
-		err := json.Unmarshal(*b, &block)
+		err = json.Unmarshal(*b, &block)
 		if err != nil {
 			log.Error().Err(err).Msg("error decoding block response")
 			return err
@@ -1390,7 +1390,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 			continue
 		}
 		var receipt rpctypes.RawTxReceipt
-		err := json.Unmarshal(*r, &receipt)
+		err = json.Unmarshal(*r, &receipt)
 		if err != nil {
 			log.Error().Err(err).Msg("error decoding tx receipt response")
 			return err
@@ -1413,6 +1413,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		bs := blockData[bn]
 		if bs.Receipts == nil {
 			log.Error().Err(err).Msg("block number from receipts does not exist in block data")
+			continue
 		}
 		bs.Receipts[r.TransactionHash.ToHash()] = r
 		blockData[bn] = bs
