@@ -1322,7 +1322,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		if currentNonce < endNonce && maxWaitCount < 0 {
 			log.Trace().Uint64("endNonce", endNonce).Uint64("currentNonce", currentNonce).Msg("Not all transactions have been mined. Waiting")
 			time.Sleep(5 * time.Second)
-			maxWaitCount--
+			maxWaitCount = maxWaitCount - 1
 			continue
 		}
 		break
@@ -1412,7 +1412,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		bn := r.BlockNumber.ToUint64()
 		bs := blockData[bn]
 		if bs.Receipts == nil {
-			log.Error().Err(err).Msg("block number from receipts does not exist in block data")
+			log.Error().Err(err).Uint64("blocknumber", bn).Msg("block number from receipts does not exist in block data")
 			continue
 		}
 		bs.Receipts[r.TransactionHash.ToHash()] = r
