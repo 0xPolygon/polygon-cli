@@ -1440,7 +1440,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		}
 	}
 
-	printBlockSummary(blockData, startNonce, endNonce)
+	printBlockSummary(c, blockData, startNonce, endNonce)
 	return nil
 
 }
@@ -1450,7 +1450,7 @@ func isEmptyJSONResponse(r *json.RawMessage) bool {
 	return len(rawJson) == 0
 }
 
-func printBlockSummary(bs map[uint64]blockSummary, startNonce, endNonce uint64) {
+func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNonce, endNonce uint64) {
 	filterBlockSummary(bs, startNonce, endNonce)
 	mapKeys := getSortedMapKeys(bs)
 	if len(mapKeys) == 0 {
@@ -1489,9 +1489,9 @@ func printBlockSummary(bs map[uint64]blockSummary, startNonce, endNonce uint64) 
 		totalTransactions += uint64(len(summary.Block.Transactions))
 		totalGasUsed += gasUsed
 	}
-	firstBlock := bs[mapKeys[0]].Block
+	parentOfFirstBlock, _ := c.BlockByNumber(context.Background(), big.NewInt(bs[mapKeys[0]].Block.Number.ToInt64()-1))
 	lastBlock := bs[mapKeys[len(mapKeys)-1]].Block
-	totalMiningTime := time.Duration(lastBlock.Timestamp.ToInt64()-firstBlock.Timestamp.ToInt64()) * time.Second
+	totalMiningTime := time.Duration(lastBlock.Timestamp.ToUint64()-parentOfFirstBlock.Time()) * time.Second
 	tps := float64(totalTransactions) / totalMiningTime.Seconds()
 	gaspersec := float64(totalGasUsed) / totalMiningTime.Seconds()
 	minLatency, medianLatency, maxLatency := getMinMedianMax(allLatencies)
