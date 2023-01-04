@@ -1356,6 +1356,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 			receipt, err = util.GetReceipts(ctx, []*json.RawMessage{b}, rpc, batchSize)
 			if err != nil {
 				txGroupErr = err
+				return
 			}
 			rawTxReceiptsLock.Lock()
 			rawTxReceipts = append(rawTxReceipts, receipt...)
