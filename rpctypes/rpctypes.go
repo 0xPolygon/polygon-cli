@@ -131,6 +131,35 @@ type (
 		BaseFeePerGas RawQuantityResponse `json:"baseFeePerGas"`
 	}
 
+	RawTxLogs struct {
+		// blockHash: DATA, 32 Bytes - hash of the block where this transaction was in.
+		BlockHash RawData32Response `json:"blockHash"`
+
+		// blockNumber: QUANTITY - block number where this transaction was in.
+		BlockNumber RawQuantityResponse `json:"blockNumber"`
+
+		// transactionIndex: QUANTITY - integer of the transactions index position in the block.
+		TransactionIndex RawQuantityResponse `json:"transactionIndex"`
+
+		// address: DATA, 20 Bytes - address from which this log originated.
+		Address RawData20Response `json:"address"`
+
+		// logIndex: QUANTITY - integer of the log index position in the block. null when its pending log.
+		LogIndex RawQuantityResponse `json:"logIndex"`
+
+		// data: DATA - contains one or more 32 Bytes non-indexed arguments of the log.
+		Data RawDataResponse `json:"data"`
+
+		// removed: boolean - true when the log was removed, due to a chain reorganization. false if its a valid log.
+		Removed bool `json:"removed"`
+
+		// topics: Array, 32 Bytes - array of zero to four 32 Bytes DATA of indexed log arguments. In solidity: The first topic is the hash of the signature of the event (e.g. Deposit(address,bytes32,uint256)), except you declare the event with the anonymous specifier.
+		Topics []RawData32Response `json:"topics"`
+
+		// transactionHash: DATA, 32 Bytes - hash of the transaction.
+		TransactionHash RawData32Response `json:"transactionHash"`
+	}
+
 	RawTxReceipt struct {
 		// transactionHash: DATA, 32 Bytes - hash of the transaction.
 		TransactionHash RawData32Response `json:"transactionHash"`
@@ -160,7 +189,7 @@ type (
 		ContractAddress RawData20Response `json:"contractAddress"`
 
 		// logs: Array - Array of log objects, which this transaction generated.
-		Logs []any `json:"logs"`
+		Logs []RawTxLogs `json:"logs"`
 
 		// logsBloom: DATA, 256 Bytes - Bloom filter for light clients to quickly retrieve related logs. It also returns either :
 		LogsBloom RawData256Response `json:"logsBloom"`

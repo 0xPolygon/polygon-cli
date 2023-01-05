@@ -1308,6 +1308,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	var err error
 	var lastBlockNumber uint64
 	var currentNonce uint64
+	var maxWaitCount = 20
 	for {
 		lastBlockNumber, err = c.BlockNumber(ctx)
 		if err != nil {
@@ -1318,9 +1319,10 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		if err != nil {
 			return err
 		}
-		if currentNonce < endNonce {
+		if currentNonce < endNonce && maxWaitCount < 0 {
 			log.Trace().Uint64("endNonce", endNonce).Uint64("currentNonce", currentNonce).Msg("Not all transactions have been mined. Waiting")
 			time.Sleep(5 * time.Second)
+			maxWaitCount = maxWaitCount - 1
 			continue
 		}
 		break
@@ -1328,6 +1330,11 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 
 	log.Trace().Uint64("currentNonce", currentNonce).Uint64("startblock", startBlockNumber).Uint64("endblock", lastBlockNumber).Msg("It looks like all transactions have been mined")
 	log.Trace().Msg("Starting block range capture")
+	// confirm start block number is ok
+	_, err = c.BlockByNumber(ctx, new(big.Int).SetUint64(startBlockNumber))
+	if err != nil {
+		return err
+	}
 	rawBlocks, err := util.GetBlockRange(ctx, startBlockNumber, lastBlockNumber, rpc)
 	if err != nil {
 		return err
@@ -1349,6 +1356,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 			receipt, err = util.GetReceipts(ctx, []*json.RawMessage{b}, rpc, batchSize)
 			if err != nil {
 				txGroupErr = err
+				return
 			}
 			rawTxReceiptsLock.Lock()
 			rawTxReceipts = append(rawTxReceipts, receipt...)
@@ -1366,7 +1374,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	blocks := make([]rpctypes.RawBlockResponse, 0)
 	for _, b := range rawBlocks {
 		var block rpctypes.RawBlockResponse
-		err := json.Unmarshal(*b, &block)
+		err = json.Unmarshal(*b, &block)
 		if err != nil {
 			log.Error().Err(err).Msg("error decoding block response")
 			return err
@@ -1382,7 +1390,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 			continue
 		}
 		var receipt rpctypes.RawTxReceipt
-		err := json.Unmarshal(*r, &receipt)
+		err = json.Unmarshal(*r, &receipt)
 		if err != nil {
 			log.Error().Err(err).Msg("error decoding tx receipt response")
 			return err
@@ -1403,6 +1411,10 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	for _, r := range txReceipts {
 		bn := r.BlockNumber.ToUint64()
 		bs := blockData[bn]
+		if bs.Receipts == nil {
+			log.Error().Uint64("blocknumber", bn).Msg("block number from receipts does not exist in block data")
+			continue
+		}
 		bs.Receipts[r.TransactionHash.ToHash()] = r
 		blockData[bn] = bs
 	}
