@@ -1453,12 +1453,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		}
 	}
 
-<<<<<<< Updated upstream
 	printBlockSummary(c, blockData, startNonce, endNonce)
-=======
-	printBlockSummary(blockData, startNonce, endNonce)
-
->>>>>>> Stashed changes
 	return nil
 
 }
