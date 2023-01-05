@@ -1303,6 +1303,7 @@ func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 	}
 	return tops
 }
+
 func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endNonce uint64) error {
 	ltp := inputLoadTestParams
 	var err error
@@ -1348,9 +1349,9 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	rawTxReceipts := make([]*json.RawMessage, 0)
 	var rawTxReceiptsLock sync.Mutex
 	var txGroupErr error
+	txGroup.Add(len(rawBlocks))
 	for k := range rawBlocks {
 		threadPool <- true
-		txGroup.Add(1)
 		go func(b *json.RawMessage) {
 			var receipt []*json.RawMessage
 			receipt, err = util.GetReceipts(ctx, []*json.RawMessage{b}, rpc, batchSize)
@@ -1362,7 +1363,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 			rawTxReceipts = append(rawTxReceipts, receipt...)
 			rawTxReceiptsLock.Unlock()
 			<-threadPool
-			txGroup.Done()
+			defer txGroup.Done()
 		}(rawBlocks[k])
 	}
 	txGroup.Wait()
@@ -1452,7 +1453,12 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		}
 	}
 
+<<<<<<< Updated upstream
 	printBlockSummary(c, blockData, startNonce, endNonce)
+=======
+	printBlockSummary(blockData, startNonce, endNonce)
+
+>>>>>>> Stashed changes
 	return nil
 
 }
