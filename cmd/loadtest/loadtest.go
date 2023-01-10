@@ -1459,7 +1459,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	}
 
 	printBlockSummary(c, blockData, startNonce, endNonce)
-	fmt.Println("Total Summary Time", (endReceipt.Sub(startReceipt)).String())
+	log.Trace().Str("summaryTime", (endReceipt.Sub(startReceipt)).String()).Msg("Total Summary Time")
 	return nil
 
 }
