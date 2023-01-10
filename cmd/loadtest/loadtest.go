@@ -1343,9 +1343,9 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	}
 	// TODO: Add some kind of decimation to avoid summarizing for 10 minutes?
 	batchSize := *ltp.BatchSize
-	cpuCount := *ltp.Concurrency
+	goRoutineLimit := *ltp.Concurrency
 	var txGroup sync.WaitGroup
-	threadPool := make(chan bool, cpuCount)
+	threadPool := make(chan bool, goRoutineLimit)
 	log.Trace().Msg("Starting tx receipt capture")
 	rawTxReceipts := make([]*json.RawMessage, 0)
 	var rawTxReceiptsLock sync.Mutex
