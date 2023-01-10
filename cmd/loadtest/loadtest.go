@@ -1352,7 +1352,6 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	var txGroupErr error
 
 	startReceipt := time.Now()
-	fmt.Println("1 Current date and time is: ", startReceipt.String())
 	for k := range rawBlocks {
 		threadPool <- true
 		txGroup.Add(1)
@@ -1372,7 +1371,6 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	}
 
 	endReceipt := time.Now()
-	fmt.Println("2 Current date and time is: ", endReceipt.String())
 	txGroup.Wait()
 	if txGroupErr != nil {
 		log.Error().Err(err).Msg("one of the threads fetching tx receipts failed")
