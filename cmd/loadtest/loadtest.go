@@ -247,6 +247,7 @@ type (
 		ForceGasLimit        *uint64
 		ForceGasPrice        *uint64
 		ShouldProduceSummary *bool
+		SummaryOutputMode    *string
 
 		// Computed
 		CurrentGas      *big.Int
@@ -302,6 +303,7 @@ r - random modes
 	ltp.ForceGasPrice = LoadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be estimated, we can specify it manually")
 	ltp.ShouldProduceSummary = LoadtestCmd.PersistentFlags().Bool("summarize", false, "Should we produce an execution summary after the load test has finished. If you're running a large loadtest, this can take a long time")
 	ltp.BatchSize = LoadtestCmd.PersistentFlags().Uint64("batch-size", 999, "Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time.")
+	ltp.SummaryOutputMode = LoadtestCmd.PersistentFlags().String("output-mode", "text", "Format mode for summary output (json | text)")
 	inputLoadTestParams = *ltp
 
 	// TODO batch size
@@ -1344,6 +1346,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	// TODO: Add some kind of decimation to avoid summarizing for 10 minutes?
 	batchSize := *ltp.BatchSize
 	goRoutineLimit := *ltp.Concurrency
+	summaryOutputMode := *ltp.SummaryOutputMode
 	var txGroup sync.WaitGroup
 	threadPool := make(chan bool, goRoutineLimit)
 	log.Trace().Msg("Starting tx receipt capture")
@@ -1458,7 +1461,8 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		}
 	}
 
-	printBlockSummary(c, blockData, startNonce, endNonce)
+	printBlockSummary(c, blockData, startNonce, endNonce, summaryOutputMode)
+
 	log.Trace().Str("summaryTime", (endReceipt.Sub(startReceipt)).String()).Msg("Total Summary Time")
 	return nil
 
@@ -1469,7 +1473,23 @@ func isEmptyJSONResponse(r *json.RawMessage) bool {
 	return len(rawJson) == 0
 }
 
-func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNonce, endNonce uint64) {
+type Latency struct {
+	Min    float64
+	Median float64
+	Max    float64
+}
+
+type Summary struct {
+	BlockNumber uint64
+	Time        time.Time
+	GasLimit    uint64
+	GasUsed     uint64
+	NumTx       int
+	Utilization float64
+	Latencies   Latency
+}
+
+func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNonce, endNonce uint64, mode string) {
 	filterBlockSummary(bs, startNonce, endNonce)
 	mapKeys := getSortedMapKeys(bs)
 	if len(mapKeys) == 0 {
@@ -1494,16 +1514,32 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 		}
 		// if we're at trace, debug, or info level we'll output the block level metrics
 		if zerolog.GlobalLevel() <= zerolog.InfoLevel {
-			_, _ = p.Printf("Block number: %v\tTime: %s\tGas Limit: %v\tGas Used: %v\tNum Tx: %v\tUtilization %v\tLatencies: %v\t%v\t%v\n",
-				number.Decimal(summary.Block.Number.ToUint64()),
-				time.Unix(summary.Block.Timestamp.ToInt64(), 0),
-				number.Decimal(summary.Block.GasLimit.ToUint64()),
-				number.Decimal(gasUsed),
-				number.Decimal(len(summary.Block.Transactions)),
-				number.Percent(blockUtilization),
-				number.Decimal(minLatency.Seconds()),
-				number.Decimal(medianLatency.Seconds()),
-				number.Decimal(maxLatency.Seconds()))
+			if mode == "text" {
+				_, _ = p.Printf("Block number: %v\tTime: %s\tGas Limit: %v\tGas Used: %v\tNum Tx: %v\tUtilization %v\tLatencies: %v\t%v\t%v\n",
+					number.Decimal(summary.Block.Number.ToUint64()),
+					time.Unix(summary.Block.Timestamp.ToInt64(), 0),
+					number.Decimal(summary.Block.GasLimit.ToUint64()),
+					number.Decimal(gasUsed),
+					number.Decimal(len(summary.Block.Transactions)),
+					number.Percent(blockUtilization),
+					number.Decimal(minLatency.Seconds()),
+					number.Decimal(medianLatency.Seconds()),
+					number.Decimal(maxLatency.Seconds()))
+			} else if mode == "json" {
+				jsonSummary := Summary{}
+				jsonSummary.BlockNumber = summary.Block.Number.ToUint64()
+				jsonSummary.Time = time.Unix(summary.Block.Timestamp.ToInt64(), 0)
+				jsonSummary.GasLimit = summary.Block.GasLimit.ToUint64()
+				jsonSummary.GasUsed = gasUsed
+				jsonSummary.NumTx = len(summary.Block.Transactions)
+				jsonSummary.Utilization = blockUtilization
+				latencies := Latency{}
+				latencies.Min = minLatency.Seconds()
+				latencies.Median = medianLatency.Seconds()
+				latencies.Max = maxLatency.Seconds()
+				jsonSummary.Latencies = latencies
+				_, _ = p.Println(json.MarshalIndent(jsonSummary, "", "    "))
+			}
 		}
 		totalTransactions += uint64(len(summary.Block.Transactions))
 		totalGasUsed += gasUsed
