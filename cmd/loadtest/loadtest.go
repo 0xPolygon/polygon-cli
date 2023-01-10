@@ -30,7 +30,6 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -224,6 +223,7 @@ type (
 		// inputs
 		Requests             *int64
 		Concurrency          *int64
+		BatchSize            *uint64
 		TimeLimit            *int64
 		Verbosity            *int64
 		PrettyLogs           *bool
@@ -301,6 +301,7 @@ r - random modes
 	ltp.ForceGasLimit = LoadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually")
 	ltp.ForceGasPrice = LoadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be estimated, we can specify it manually")
 	ltp.ShouldProduceSummary = LoadtestCmd.PersistentFlags().Bool("summarize", false, "Should we produce an execution summary after the load test has finished. If you're running a large loadtest, this can take a long time")
+	ltp.BatchSize = LoadtestCmd.PersistentFlags().Uint64("batch-size", 999, "Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time.")
 	inputLoadTestParams = *ltp
 
 	// TODO batch size
@@ -1341,17 +1342,20 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		return err
 	}
 	// TODO: Add some kind of decimation to avoid summarizing for 10 minutes?
-	batchSize := uint64(999)
-	cpuCount := uint(runtime.NumCPU())
+	batchSize := *ltp.BatchSize
+	cpuCount := *ltp.Concurrency
 	var txGroup sync.WaitGroup
 	threadPool := make(chan bool, cpuCount)
 	log.Trace().Msg("Starting tx receipt capture")
 	rawTxReceipts := make([]*json.RawMessage, 0)
 	var rawTxReceiptsLock sync.Mutex
 	var txGroupErr error
-	txGroup.Add(len(rawBlocks))
+
+	startReceipt := time.Now()
+	fmt.Println("1 Current date and time is: ", startReceipt.String())
 	for k := range rawBlocks {
 		threadPool <- true
+		txGroup.Add(1)
 		go func(b *json.RawMessage) {
 			var receipt []*json.RawMessage
 			receipt, err = util.GetReceipts(ctx, []*json.RawMessage{b}, rpc, batchSize)
@@ -1363,9 +1367,12 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 			rawTxReceipts = append(rawTxReceipts, receipt...)
 			rawTxReceiptsLock.Unlock()
 			<-threadPool
-			defer txGroup.Done()
+			txGroup.Done()
 		}(rawBlocks[k])
 	}
+
+	endReceipt := time.Now()
+	fmt.Println("2 Current date and time is: ", endReceipt.String())
 	txGroup.Wait()
 	if txGroupErr != nil {
 		log.Error().Err(err).Msg("one of the threads fetching tx receipts failed")
@@ -1454,6 +1461,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	}
 
 	printBlockSummary(c, blockData, startNonce, endNonce)
+	fmt.Println("Total Summary Time", (endReceipt.Sub(startReceipt)).String())
 	return nil
 
 }
