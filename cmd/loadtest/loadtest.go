@@ -1538,7 +1538,10 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 				latencies.Median = medianLatency.Seconds()
 				latencies.Max = maxLatency.Seconds()
 				jsonSummary.Latencies = latencies
-				_, _ = p.Println(json.MarshalIndent(jsonSummary, "", "    "))
+				val, _ := json.MarshalIndent(jsonSummary, "", "    ")
+				p.Println(string(val))
+			} else {
+				log.Error().Str("mode", mode).Msg("invalid mode for summary output")
 			}
 		}
 		totalTransactions += uint64(len(summary.Block.Transactions))
