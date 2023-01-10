@@ -99,6 +99,10 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 		// polycli dumpblocks -c 1 http://127.0.0.1:9209/ 34457958 34458108
 		// To handle this i'm making an exception when start and end are equal to make a single call
 		if start == end {
+			log.Trace().Int("length", len(blmsBlockMap)).Msg("Test Jesse")
+			if len(blmsBlockMap) == int(start) {
+				start = start - 1
+			}
 			err := c.CallContext(ctx, &blms[start].Result, "eth_getTransactionReceipt", blms[start].Args[0])
 			if err != nil {
 				log.Error().Err(err).Uint64("start", start).Uint64("end", end).Msg("rpc issue fetching single receipt")
