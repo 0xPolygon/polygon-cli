@@ -480,8 +480,8 @@ func printResults(lts []loadTestSample) {
 		return
 	}
 
-	fmt.Println("* Results")
-	fmt.Printf("Samples: %d\n", len(lts))
+	log.Info().Msg("* Results")
+	log.Info().Int("samples", len(lts)).Msg("Samples")
 
 	var startTime = lts[0].RequestTime
 	var endTime = lts[len(lts)-1].RequestTime
@@ -496,10 +496,11 @@ func printResults(lts []loadTestSample) {
 		totalWait = float64(s.WaitTime.Seconds()) + totalWait
 	}
 	meanWait = totalWait / float64(len(lts))
-	fmt.Printf("Start: %s\n", startTime)
-	fmt.Printf("End: %s\n", endTime)
-	fmt.Printf("Mean Wait: %0.4f\n", meanWait)
-	fmt.Printf("Num errors: %d\n", numErrors)
+
+	log.Info().Time("startTime", startTime).Msg("Start")
+	log.Info().Time("endTime", endTime).Msg("End")
+	log.Info().Float64("meanWait", meanWait).Msg("Mean Wait")
+	log.Info().Uint64("numErrors", numErrors).Msg("Num errors")
 }
 
 func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
@@ -1346,7 +1347,6 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	// TODO: Add some kind of decimation to avoid summarizing for 10 minutes?
 	batchSize := *ltp.BatchSize
 	goRoutineLimit := *ltp.Concurrency
-	summaryOutputMode := *ltp.SummaryOutputMode
 	var txGroup sync.WaitGroup
 	threadPool := make(chan bool, goRoutineLimit)
 	log.Trace().Msg("Starting tx receipt capture")
@@ -1461,7 +1461,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		}
 	}
 
-	printBlockSummary(c, blockData, startNonce, endNonce, summaryOutputMode)
+	printBlockSummary(c, blockData, startNonce, endNonce)
 
 	log.Trace().Str("summaryTime", (endReceipt.Sub(startReceipt)).String()).Msg("Total Summary Time")
 	return nil
@@ -1489,19 +1489,31 @@ type Summary struct {
 	Latencies   Latency
 }
 
-func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNonce, endNonce uint64, mode string) {
+type SummaryOutput struct {
+	Summaries          []Summary
+	SuccessfulTx       int64
+	TotalTx            int64
+	TotalMiningTime    time.Duration
+	TotalGasUsed       uint64
+	TransactionsPerSec float64
+	GasPerSecond       float64
+	Latencies          Latency
+}
+
+func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNonce, endNonce uint64) {
 	filterBlockSummary(bs, startNonce, endNonce)
 	mapKeys := getSortedMapKeys(bs)
 	if len(mapKeys) == 0 {
 		return
 	}
 
-	fmt.Println("Block level summary of load test")
 	var totalTransactions uint64 = 0
 	var totalGasUsed uint64 = 0
 	p := message.NewPrinter(language.English)
 
 	allLatencies := make([]time.Duration, 0)
+	summaryOutputMode := *inputLoadTestParams.SummaryOutputMode
+	jsonSummaryList := []Summary{}
 	for _, v := range mapKeys {
 		summary := bs[v]
 		gasUsed := getTotalGasUsed(summary.Receipts)
@@ -1514,7 +1526,7 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 		}
 		// if we're at trace, debug, or info level we'll output the block level metrics
 		if zerolog.GlobalLevel() <= zerolog.InfoLevel {
-			if mode == "text" {
+			if summaryOutputMode == "text" {
 				_, _ = p.Printf("Block number: %v\tTime: %s\tGas Limit: %v\tGas Used: %v\tNum Tx: %v\tUtilization %v\tLatencies: %v\t%v\t%v\n",
 					number.Decimal(summary.Block.Number.ToUint64()),
 					time.Unix(summary.Block.Timestamp.ToInt64(), 0),
@@ -1525,7 +1537,7 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 					number.Decimal(minLatency.Seconds()),
 					number.Decimal(medianLatency.Seconds()),
 					number.Decimal(maxLatency.Seconds()))
-			} else if mode == "json" {
+			} else if summaryOutputMode == "json" {
 				jsonSummary := Summary{}
 				jsonSummary.BlockNumber = summary.Block.Number.ToUint64()
 				jsonSummary.Time = time.Unix(summary.Block.Timestamp.ToInt64(), 0)
@@ -1538,10 +1550,9 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 				latencies.Median = medianLatency.Seconds()
 				latencies.Max = maxLatency.Seconds()
 				jsonSummary.Latencies = latencies
-				val, _ := json.MarshalIndent(jsonSummary, "", "    ")
-				p.Println(string(val))
+				jsonSummaryList = append(jsonSummaryList, jsonSummary)
 			} else {
-				log.Error().Str("mode", mode).Msg("invalid mode for summary output")
+				log.Error().Str("mode", summaryOutputMode).Msg("invalid mode for summary output")
 			}
 		}
 		totalTransactions += uint64(len(summary.Block.Transactions))
@@ -1553,16 +1564,38 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 	tps := float64(totalTransactions) / totalMiningTime.Seconds()
 	gaspersec := float64(totalGasUsed) / totalMiningTime.Seconds()
 	minLatency, medianLatency, maxLatency := getMinMedianMax(allLatencies)
-	sucessfulTx, totalTx := getSuccessfulTransactionCount(bs)
+	successfulTx, totalTx := getSuccessfulTransactionCount(bs)
 
-	p.Printf("Successful Tx: %v\tTotal Tx: %v\n", number.Decimal(sucessfulTx), number.Decimal(totalTx))
-	p.Printf("Total Mining Time: %s\n", totalMiningTime)
-	p.Printf("Total Transactions: %v\n", number.Decimal(totalTransactions))
-	p.Printf("Total Gas Used: %v\n", number.Decimal(totalGasUsed))
-	p.Printf("Transactions per sec: %v\n", number.Decimal(tps))
-	p.Printf("Gas Per Second: %v\n", number.Decimal(gaspersec))
-	p.Printf("Latencies - Min: %v\tMedian: %v\tMax: %v\n", number.Decimal(minLatency.Seconds()), number.Decimal(medianLatency.Seconds()), number.Decimal(maxLatency.Seconds()))
-	// TODO: Add some kind of indication of block time variance
+	if summaryOutputMode == "text" {
+		p.Printf("Successful Tx: %v\tTotal Tx: %v\n", number.Decimal(successfulTx), number.Decimal(totalTx))
+		p.Printf("Total Mining Time: %s\n", totalMiningTime)
+		p.Printf("Total Transactions: %v\n", number.Decimal(totalTransactions))
+		p.Printf("Total Gas Used: %v\n", number.Decimal(totalGasUsed))
+		p.Printf("Transactions per sec: %v\n", number.Decimal(tps))
+		p.Printf("Gas Per Second: %v\n", number.Decimal(gaspersec))
+		p.Printf("Latencies - Min: %v\tMedian: %v\tMax: %v\n", number.Decimal(minLatency.Seconds()), number.Decimal(medianLatency.Seconds()), number.Decimal(maxLatency.Seconds()))
+		// TODO: Add some kind of indication of block time variance
+	} else if summaryOutputMode == "json" {
+		summaryOutput := SummaryOutput{}
+		summaryOutput.Summaries = jsonSummaryList
+		summaryOutput.SuccessfulTx = successfulTx
+		summaryOutput.TotalTx = totalTx
+		summaryOutput.TotalMiningTime = totalMiningTime
+		summaryOutput.TotalGasUsed = totalGasUsed
+		summaryOutput.TransactionsPerSec = tps
+		summaryOutput.GasPerSecond = gaspersec
+
+		latencies := Latency{}
+		latencies.Min = minLatency.Seconds()
+		latencies.Median = medianLatency.Seconds()
+		latencies.Max = maxLatency.Seconds()
+		summaryOutput.Latencies = latencies
+
+		val, _ := json.MarshalIndent(summaryOutput, "", "    ")
+		p.Println(string(val))
+	} else {
+		log.Error().Str("mode", summaryOutputMode).Msg("invalid mode for summary output")
+	}
 }
 func getSuccessfulTransactionCount(bs map[uint64]blockSummary) (successful, total int64) {
 	total = 0
