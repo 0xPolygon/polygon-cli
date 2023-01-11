@@ -251,6 +251,28 @@ polycli dumpblocks http://172.26.26.12:8545/ 0 500000 | gzip > foo.gz
 zcat < foo.gz | jq '. | select(.transactions | length > 0) | select(.transactions[].to == null)'
 ```
 
+## Protobuf
+
+Dumpblocks can also output to Protobuf format. If you wish to make changes to the protobuf:
+
+1. Install the protobuf compiler
+
+   ```bash
+   brew install protobuf
+   ```
+
+2. Install the protobuf plugin
+
+   ```bash
+   go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+   ```
+
+3. Compile the proto file
+
+   ```bash
+   protoc --proto_path=util --go_out=util/gen --go_opt=paths=source_relative block.proto
+   ```
+
 # Forge
 
 The forge tool is meant to take blocks from the `dumpblocks` command and
