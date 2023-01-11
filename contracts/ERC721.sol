@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.4;
 
+import "./Address.sol";
+
 interface IERC165 {
     function supportsInterface(bytes4 interfaceID) external view returns (bool);
 }
 
 interface IERC721 is IERC165 {
+
     function balanceOf(address owner) external view returns (uint balance);
 
     function ownerOf(uint tokenId) external view returns (address owner);
@@ -51,6 +54,8 @@ interface IERC721Receiver {
 }
 
 contract ERC721 is IERC721 {
+    using Address for address;
+
     event Transfer(address indexed from, address indexed to, uint indexed id);
     event Approval(address indexed owner, address indexed spender, uint indexed id);
     event ApprovalForAll(
@@ -70,6 +75,9 @@ contract ERC721 is IERC721 {
 
     // Mapping from owner to operator approvals
     mapping(address => mapping(address => bool)) public isApprovedForAll;
+    
+    uint256 private currentIndex = 0;
+    uint256 internal immutable maxBatchSize = 100;
 
     function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
         return
@@ -169,6 +177,41 @@ contract ERC721 is IERC721 {
         );
     }
 
+      /**
+    * @dev Internal function to invoke {IERC721Receiver-onERC721Received} on a target address.
+    * The call is not executed if the target address is not a contract.
+    *
+    * @param from address representing the previous owner of the given token ID
+    * @param to target address that will receive the tokens
+    * @param tokenId uint256 ID of the token to be transferred
+    * @param _data bytes optional data to send along with the call
+    * @return bool whether the call correctly returned the expected magic value
+    */
+    function _checkOnERC721Received(
+        address from,
+        address to,
+        uint256 tokenId,
+        bytes memory _data
+    ) private returns (bool) {
+        if (to.isContract()) {
+        try
+            IERC721Receiver(to).onERC721Received(msg.sender, from, tokenId, _data)
+        returns (bytes4 retval) {
+            return retval == IERC721Receiver(to).onERC721Received.selector;
+        } catch (bytes memory reason) {
+            if (reason.length == 0) {
+            revert("ERC721A: transfer to non ERC721Receiver implementer");
+            } else {
+            assembly {
+                revert(add(32, reason), mload(reason))
+            }
+            }
+        }
+        } else {
+            return true;
+        }
+    }
+
     function _mint(address to, uint id) internal {
         require(to != address(0), "mint to zero address");
         require(_ownerOf[id] == address(0), "already minted");
@@ -181,6 +224,32 @@ contract ERC721 is IERC721 {
 
     function mint(address to, uint id) external {
         _mint(to, id);
+    }
+
+    function _mintBatch(address to, uint quantity) internal {
+        uint256 startTokenId = currentIndex;
+        require(to != address(0), "mint to zero address");
+        require(_ownerOf[startTokenId] == address(0), "already minted");
+        require(quantity <= maxBatchSize, "ERC721A: quantity to mint too high");
+
+        _balanceOf[to]++;
+        _ownerOf[startTokenId] = to;
+
+        uint256 updatedIndex = startTokenId;
+        for (uint256 i = 0; i < quantity; i++) {
+            emit Transfer(address(0), to, updatedIndex);
+            require(
+                _checkOnERC721Received(address(0), to, updatedIndex, ""),
+                "ERC721A: transfer to non ERC721Receiver implementer"
+            );
+            updatedIndex++;
+        }
+
+        currentIndex = updatedIndex;
+    }
+
+    function mintBatch(address to, uint id) external {
+        _mintBatch(to, id);
     }
 
     function _burn(uint id) internal {
