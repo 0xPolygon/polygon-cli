@@ -180,20 +180,6 @@ contract ERC721 is IERC721 {
         );
     }
 
-    function _mint(address to, uint id) internal {
-        require(to != address(0), "mint to zero address");
-        require(_ownerOf[id] == address(0), "already minted");
-
-        _addressData[to].balance += 1;
-        _ownerOf[id] = to;
-
-        emit Transfer(address(0), to, id);
-    }
-
-    function mint(address to, uint id) external {
-        _mint(to, id);
-    }
-
     function _mintBatch(address to, uint quantity) internal {
         uint256 startTokenId = currentIndex;
         require(to != address(0), "mint to zero address");

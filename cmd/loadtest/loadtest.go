@@ -639,7 +639,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		tops = configureTransactOpts(tops)
 
 		err = blockUntilSuccessful(func() error {
-			_, err = erc721Contract.Mint(tops, *ltp.FromETHAddress, new(big.Int).SetUint64(1))
+			_, err = erc721Contract.MintBatch(tops, *ltp.FromETHAddress, new(big.Int).SetUint64(1))
 			return err
 		}, 30)
 		if err != nil {
@@ -984,10 +984,9 @@ func loadtestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 	tops.Nonce = new(big.Int).SetUint64(nonce)
 	tops.GasLimit = 10000000
 	tops = configureTransactOpts(tops)
-	nftID := new(big.Int).SetUint64(rand.Uint64())
 
 	t1 = time.Now()
-	_, err = erc721Contract.Mint(tops, *to, nftID)
+	_, err = erc721Contract.MintBatch(tops, *to, new(big.Int).SetUint64(1))
 	t2 = time.Now()
 	return
 }
