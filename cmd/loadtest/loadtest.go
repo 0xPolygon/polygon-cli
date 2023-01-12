@@ -352,7 +352,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	amt, err := hexToBigInt(*inputLoadTestParams.HexSendAmount)
 	if err != nil {
-		log.Error().Err(err).Msg("couldn't parse send amount")
+		log.Error().Err(err).Msg("Couldn't parse send amount")
 		return err
 	}
 
@@ -468,7 +468,7 @@ func runLoadTest(ctx context.Context) error {
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get the number of pending transactions before closing")
 	} else if ptc > 0 {
-		log.Info().Uint("pending", ptc).Msg("there are still oustanding transactions. There might be issues restarting with the same sending key until those transactions clear")
+		log.Info().Uint("pending", ptc).Msg("There are still oustanding transactions. There might be issues restarting with the same sending key until those transactions clear")
 	}
 	log.Info().Msg("Finished")
 	return nil
@@ -777,7 +777,7 @@ func blockUntilSuccessful(f func() error, tries int) error {
 				log.Error().Err(err).Int("tries", waitCounter).Msg("Exhausted waiting period")
 				return err
 			}
-			log.Trace().Err(err).Msg("waiting for successful function execution")
+			log.Trace().Err(err).Msg("Waiting for successful function execution")
 			time.Sleep(time.Second)
 			waitCounter = waitCounter - 1
 			continue
@@ -1065,19 +1065,19 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 
 	key, err := gstypes.CreateStorageKey(meta, "System", "Account", ltp.FromAvailAddress.PublicKey, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("could not create storage key")
+		log.Error().Err(err).Msg("Could not create storage key")
 		return err
 	}
 
 	var accountInfo gstypes.AccountInfo
 	ok, err := c.RPC.State.GetStorageLatest(key, &accountInfo)
 	if err != nil {
-		log.Error().Err(err).Msg("could not load storage")
+		log.Error().Err(err).Msg("Could not load storage")
 		return err
 	}
 	if !ok {
 		err = fmt.Errorf("loaded storage is not okay")
-		log.Error().Err(err).Msg("loaded storage is not okay")
+		log.Error().Err(err).Msg("Loaded storage is not okay")
 		return err
 	}
 
@@ -1169,7 +1169,7 @@ func loadtestNotImplemented(ctx context.Context, c *gsrpc.SubstrateAPI, nonce ui
 func initAvailTestParams(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 	toAddr, err := gstypes.NewMultiAddressFromHexAccountID(*inputLoadTestParams.ToAddress)
 	if err != nil {
-		log.Error().Err(err).Msg("unable to create new multi address")
+		log.Error().Err(err).Msg("Unable to create new multi address")
 		return err
 	}
 
@@ -1180,19 +1180,19 @@ func initAvailTestParams(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 
 	kp, err := gssignature.KeyringPairFromSecret(*inputLoadTestParams.PrivateKey, uint8(*inputLoadTestParams.ChainID))
 	if err != nil {
-		log.Error().Err(err).Msg("could not create key pair")
+		log.Error().Err(err).Msg("Could not create key pair")
 		return err
 	}
 
 	amt, err := hexToBigInt(*inputLoadTestParams.HexSendAmount)
 	if err != nil {
-		log.Error().Err(err).Msg("couldn't parse send amount")
+		log.Error().Err(err).Msg("Couldn't parse send amount")
 		return err
 	}
 
 	rv, err := c.RPC.State.GetRuntimeVersionLatest()
 	if err != nil {
-		log.Error().Err(err).Msg("couldn't get runtime version")
+		log.Error().Err(err).Msg("Couldn't get runtime version")
 		return err
 	}
 
@@ -1376,7 +1376,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	endReceipt := time.Now()
 	txGroup.Wait()
 	if txGroupErr != nil {
-		log.Error().Err(err).Msg("one of the threads fetching tx receipts failed")
+		log.Error().Err(err).Msg("One of the threads fetching tx receipts failed")
 		return err
 	}
 
@@ -1385,15 +1385,15 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		var block rpctypes.RawBlockResponse
 		err = json.Unmarshal(*b, &block)
 		if err != nil {
-			log.Error().Err(err).Msg("error decoding block response")
+			log.Error().Err(err).Msg("Error decoding block response")
 			return err
 		}
 		blocks = append(blocks, block)
 	}
-	log.Info().Int("len", len(blocks)).Msg("block summary")
+	log.Info().Int("len", len(blocks)).Msg("Block summary")
 
 	txReceipts := make([]rpctypes.RawTxReceipt, 0)
-	log.Trace().Int("len", len(rawTxReceipts)).Msg("raw receipts")
+	log.Trace().Int("len", len(rawTxReceipts)).Msg("Raw receipts")
 	for _, r := range rawTxReceipts {
 		if isEmptyJSONResponse(r) {
 			continue
@@ -1401,12 +1401,12 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		var receipt rpctypes.RawTxReceipt
 		err = json.Unmarshal(*r, &receipt)
 		if err != nil {
-			log.Error().Err(err).Msg("error decoding tx receipt response")
+			log.Error().Err(err).Msg("Error decoding tx receipt response")
 			return err
 		}
 		txReceipts = append(txReceipts, receipt)
 	}
-	log.Info().Int("len", len(txReceipts)).Msg("receipt summary")
+	log.Info().Int("len", len(txReceipts)).Msg("Receipt summary")
 
 	blockData := make(map[uint64]blockSummary, 0)
 	for k, b := range blocks {
@@ -1421,7 +1421,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		bn := r.BlockNumber.ToUint64()
 		bs := blockData[bn]
 		if bs.Receipts == nil {
-			log.Error().Uint64("blocknumber", bn).Msg("block number from receipts does not exist in block data")
+			log.Error().Uint64("blocknumber", bn).Msg("Block number from receipts does not exist in block data")
 			continue
 		}
 		bs.Receipts[r.TransactionHash.ToHash()] = r
@@ -1452,7 +1452,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	}
 	// TODO this might be a hack, but not sure what's a better way to deal with time discrepancies
 	if minLatency < time.Millisecond*100 {
-		log.Trace().Str("minLatency", minLatency.String()).Msg("minimum latency is below expected threshold")
+		log.Trace().Str("minLatency", minLatency.String()).Msg("Minimum latency is below expected threshold")
 		shiftSize := ((time.Millisecond * 100) - minLatency) + time.Millisecond + 100
 		for _, bs := range blockData {
 			for _, tx := range bs.Block.Transactions {
@@ -1552,7 +1552,7 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 				jsonSummary.Latencies = latencies
 				jsonSummaryList = append(jsonSummaryList, jsonSummary)
 			} else {
-				log.Error().Str("mode", summaryOutputMode).Msg("invalid mode for summary output")
+				log.Error().Str("mode", summaryOutputMode).Msg("Invalid mode for summary output")
 			}
 		}
 		totalTransactions += uint64(len(summary.Block.Transactions))
@@ -1594,7 +1594,7 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 		val, _ := json.MarshalIndent(summaryOutput, "", "    ")
 		p.Println(string(val))
 	} else {
-		log.Error().Str("mode", summaryOutputMode).Msg("invalid mode for summary output")
+		log.Error().Str("mode", summaryOutputMode).Msg("Invalid mode for summary output")
 	}
 }
 func getSuccessfulTransactionCount(bs map[uint64]blockSummary) (successful, total int64) {

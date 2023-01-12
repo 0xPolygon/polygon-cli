@@ -58,7 +58,7 @@ var DumpblocksCmd = &cobra.Command{
 		}
 
 		var wg sync.WaitGroup
-		log.Info().Uint("thread", *inputDumpblocks.Threads).Msg("thread count")
+		log.Info().Uint("thread", *inputDumpblocks.Threads).Msg("Thread count")
 		var pool = make(chan bool, *inputDumpblocks.Threads)
 		// TODO Support parallel execution
 		// TODO Support retries when there is a failure
@@ -75,7 +75,7 @@ var DumpblocksCmd = &cobra.Command{
 
 			pool <- true
 			wg.Add(1)
-			log.Info().Uint64("start", rangeStart).Uint64("end", rangeEnd).Msg("getting range")
+			log.Info().Uint64("start", rangeStart).Uint64("end", rangeEnd).Msg("Getting range")
 			go func() {
 				defer wg.Done()
 				for {
@@ -84,7 +84,7 @@ var DumpblocksCmd = &cobra.Command{
 					if err != nil {
 						failCount = failCount + 1
 						if failCount > 5 {
-							log.Error().Uint64("rangeStart", rangeStart).Uint64("rangeEnd", rangeEnd).Msg("unable to fetch blocks")
+							log.Error().Uint64("rangeStart", rangeStart).Uint64("rangeEnd", rangeEnd).Msg("Unable to fetch blocks")
 							break
 						}
 						time.Sleep(5 * time.Second)
@@ -96,7 +96,7 @@ var DumpblocksCmd = &cobra.Command{
 					if err != nil {
 						failCount = failCount + 1
 						if failCount > 5 {
-							log.Error().Uint64("rangeStart", rangeStart).Uint64("rangeEnd", rangeEnd).Msg("unable to fetch receipts")
+							log.Error().Uint64("rangeStart", rangeStart).Uint64("rangeEnd", rangeEnd).Msg("Unable to fetch receipts")
 							break
 						}
 						time.Sleep(5 * time.Second)
@@ -105,11 +105,11 @@ var DumpblocksCmd = &cobra.Command{
 
 					err = writeResponses(blocks)
 					if err != nil {
-						log.Error().Err(err).Msg("error writing blocks")
+						log.Error().Err(err).Msg("Error writing blocks")
 					}
 					err = writeResponses(receipts)
 					if err != nil {
-						log.Error().Err(err).Msg("error writing receipts")
+						log.Error().Err(err).Msg("Error writing receipts")
 					}
 
 					break
@@ -119,9 +119,9 @@ var DumpblocksCmd = &cobra.Command{
 			start = rangeEnd
 		}
 
-		log.Info().Msg("finished requesting data starting to wait")
+		log.Info().Msg("Finished requesting data starting to wait")
 		wg.Wait()
-		log.Info().Msg("done")
+		log.Info().Msg("Done")
 
 		return nil
 	},

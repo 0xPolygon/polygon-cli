@@ -266,7 +266,7 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, br *BlockReader) error {
 		}
 
 		if _, hasKey := blockHashSet[b.Hash()]; hasKey {
-			log.Trace().Str("blockhash", b.Hash().String()).Msg("skipping duplicate block")
+			log.Trace().Str("blockhash", b.Hash().String()).Msg("Skipping duplicate block")
 			continue
 		}
 		blockHashSet[b.Hash()] = struct{}{}
