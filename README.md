@@ -270,7 +270,8 @@ Dumpblocks can also output to Protobuf format. If you wish to make changes to th
 3. Compile the proto file
 
    ```bash
-   protoc --proto_path=util --go_out=util/gen --go_opt=paths=source_relative block.proto
+   cd proto
+   protoc --go_out=gen --go_opt=paths=source_relative *.proto
    ```
 
 # Forge
