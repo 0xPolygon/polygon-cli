@@ -70,8 +70,8 @@ contract ERC721 is IERC721 {
     // Mapping from token ID to owner address
     mapping(uint => address) internal _ownerOf;
 
-    // Mapping owner address to address data
-    mapping(address => AddressData) private _addressData;
+    // Mapping owner address to token count
+    mapping(address => uint) internal _balanceOf;
 
     // Mapping from token ID to approved address
     mapping(uint => address) internal _approvals;
@@ -95,7 +95,7 @@ contract ERC721 is IERC721 {
 
     function balanceOf(address owner) external view returns (uint) {
         require(owner != address(0), "owner = zero address");
-        return uint256(_addressData[owner].balance);
+        return uint256(_balanceOf[owner]);
     }
 
     function setApprovalForAll(address operator, bool approved) external {
@@ -140,8 +140,8 @@ contract ERC721 is IERC721 {
 
         require(_isApprovedOrOwner(from, msg.sender, id), "not authorized");
         
-        _addressData[from].balance -= 1;
-        _addressData[to].balance += 1;
+        _balanceOf[from] -= 1;
+        _balanceOf[to] += 1;
         _ownerOf[id] = to;
 
         delete _approvals[id];
@@ -186,11 +186,7 @@ contract ERC721 is IERC721 {
         require(_ownerOf[startTokenId] == address(0), "already minted");
         require(quantity <= maxBatchSize, "ERC721A: quantity to mint too high");
 
-        AddressData memory addressData = _addressData[to];
-        _addressData[to] = AddressData(
-        addressData.balance + uint128(quantity),
-        addressData.numberMinted + uint128(quantity)
-        );
+        _balanceOf[to] += uint128(quantity);
 
         uint256 updatedIndex = startTokenId;
         for (uint256 i = 0; i < quantity; i++) {
@@ -202,15 +198,15 @@ contract ERC721 is IERC721 {
         currentIndex = updatedIndex;
     }
 
-    function mintBatch(address to, uint id) external {
-        _mintBatch(to, id);
+    function mintBatch(address to, uint quantity) external {
+        _mintBatch(to, quantity);
     }
 
     function _burn(uint id) internal {
         address owner = _ownerOf[id];
         require(owner != address(0), "not minted");
 
-        _addressData[owner].balance -= 1;
+        _balanceOf[owner] -= 1;
 
         delete _ownerOf[id];
         delete _approvals[id];

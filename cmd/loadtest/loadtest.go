@@ -290,7 +290,7 @@ r - random modes
 2 - ERC20 Transfers
 7 - ERC721 Mints`)
 	ltp.Function = LoadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` ")
-	ltp.Iterations = LoadtestCmd.PersistentFlags().Uint64P("iterations", "i", 100, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop")
+	ltp.Iterations = LoadtestCmd.PersistentFlags().Uint64P("iterations", "i", 100, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicated the minting batch size")
 	ltp.ByteCount = LoadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
 	ltp.IsAvail = LoadtestCmd.PersistentFlags().Bool("data-avail", false, "Is this a test of avail rather than an EVM / Geth Chain")
@@ -967,6 +967,7 @@ func loadtestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 
 func loadtestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc721Contract *contracts.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
+	iterations := ltp.Iterations
 
 	to := ltp.ToETHAddress
 	if *ltp.ToRandom {
@@ -986,7 +987,7 @@ func loadtestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
-	_, err = erc721Contract.MintBatch(tops, *to, new(big.Int).SetUint64(1))
+	_, err = erc721Contract.MintBatch(tops, *to, new(big.Int).SetUint64(*iterations))
 	t2 = time.Now()
 	return
 }
