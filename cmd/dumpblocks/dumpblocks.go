@@ -32,11 +32,13 @@ import (
 
 type (
 	dumpblocksArgs struct {
-		URL       string
-		Start     uint64
-		End       uint64
-		BatchSize uint64
-		Threads   *uint
+		URL          string
+		Start        uint64
+		End          uint64
+		BatchSize    uint64
+		Threads      *uint
+		DumpBlocks   bool
+		DumpReceipts bool
 	}
 )
 
@@ -60,8 +62,6 @@ var DumpblocksCmd = &cobra.Command{
 		var wg sync.WaitGroup
 		log.Info().Uint("thread", *inputDumpblocks.Threads).Msg("Thread count")
 		var pool = make(chan bool, *inputDumpblocks.Threads)
-		// TODO Support parallel execution
-		// TODO Support retries when there is a failure
 		start := inputDumpblocks.Start
 		end := inputDumpblocks.End
 
@@ -103,13 +103,18 @@ var DumpblocksCmd = &cobra.Command{
 						continue
 					}
 
-					err = writeResponses(blocks)
-					if err != nil {
-						log.Error().Err(err).Msg("Error writing blocks")
+					if inputDumpblocks.DumpBlocks {
+						err = writeResponses(blocks)
+						if err != nil {
+							log.Error().Err(err).Msg("error writing blocks")
+						}
 					}
-					err = writeResponses(receipts)
-					if err != nil {
-						log.Error().Err(err).Msg("Error writing receipts")
+
+					if inputDumpblocks.DumpReceipts {
+						err = writeResponses(receipts)
+						if err != nil {
+							log.Error().Err(err).Msg("error writing receipts")
+						}
 					}
 
 					break
@@ -151,7 +156,7 @@ var DumpblocksCmd = &cobra.Command{
 		inputDumpblocks.URL = args[0]
 		inputDumpblocks.Start = uint64(start)
 		inputDumpblocks.End = uint64(end)
-		// realistically, this probably shoudln't be bigger than 999. Most Providers seem to cap at 1000
+		// realistically, this probably shouldn't be bigger than 999. Most Providers seem to cap at 1000
 		inputDumpblocks.BatchSize = 150
 
 		return nil
@@ -160,7 +165,8 @@ var DumpblocksCmd = &cobra.Command{
 
 func init() {
 	inputDumpblocks.Threads = DumpblocksCmd.PersistentFlags().UintP("concurrency", "c", 1, "how many go routines to leverage")
-
+	inputDumpblocks.DumpBlocks = *DumpblocksCmd.PersistentFlags().BoolP("dump-blocks", "b", true, "if the blocks will be dumped")
+	inputDumpblocks.DumpReceipts = *DumpblocksCmd.PersistentFlags().BoolP("dump-receipts", "r", true, "if the receipts will be dumped")
 }
 
 func writeResponses(blocks []*json.RawMessage) error {
