@@ -1,6 +1,6 @@
 syntax = "proto3";
 package proto;
-option go_package = "github.com/maticnetwork/polygon-cli/proto/gen;gen";
+option go_package = "github.com/maticnetwork/polygon-cli/proto/gen/pb;pb";
 
 import "transaction.proto";
 
