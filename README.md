@@ -274,6 +274,14 @@ Dumpblocks can also output to Protobuf format. If you wish to make changes to th
    protoc --go_out=gen --go_opt=paths=source_relative *.proto
    ```
 
+4. Depending on what endpoint and chain you're querying, you may be missing some fields in the proto definition.
+
+   ```
+   {"level":"error","error":"proto: (line 1:813): unknown field \"nonce\"","time":"2023-01-17T13:35:53-05:00","message":"failed to unmarshal proto message"}
+   ```
+
+   To solve this, add the unknown fields to the `.proto` files and recompile them (step 3).
+
 # Forge
 
 The forge tool is meant to take blocks from the `dumpblocks` command and
