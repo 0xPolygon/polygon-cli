@@ -28,4 +28,5 @@ message Block {
   repeated string uncles = 21;
   string baseFeePerGas = 22;
   string mixHash = 23;
+  string nonce = 24;
 }
