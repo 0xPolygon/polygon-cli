@@ -114,14 +114,14 @@ var DumpblocksCmd = &cobra.Command{
 					if inputDumpblocks.DumpBlocks {
 						err = writeBlocks(blocks)
 						if err != nil {
-							log.Error().Err(err).Msg("error writing blocks")
+							log.Error().Err(err).Msg("Error writing blocks")
 						}
 					}
 
 					if inputDumpblocks.DumpReceipts {
 						err = writeTxs(receipts)
 						if err != nil {
-							log.Error().Err(err).Msg("error writing receipts")
+							log.Error().Err(err).Msg("Error writing receipts")
 						}
 					}
 
@@ -183,29 +183,29 @@ func init() {
 }
 
 // writeBlock writes the blocks.
-func writeBlocks(msg []*json.RawMessage) error {
+func writeBlocks(msg []*json.RawMessage) Eerror {
 	switch inputDumpblocks.Format {
 	case "json":
 		if err := writeJSON(msg); err != nil {
-			log.Error().Err(err).Msg("failed to write block json")
+			log.Error().Err(err).Msg("Failed to write block json")
 		}
 	case "proto":
 		for _, b := range msg {
 			protoMsg := &pb.Block{}
 			err := protojson.Unmarshal(*b, protoMsg)
 			if err != nil {
-				log.Error().Err(err).Msg("failed to unmarshal json to block proto")
+				log.Error().Err(err).Msg("Failed to unmarshal json to block proto")
 				continue
 			}
 
 			out, err := proto.Marshal(protoMsg)
 			if err != nil {
-				log.Error().Err(err).Msg("failed to marshal block proto")
+				log.Error().Err(err).Msg("Failed to marshal block proto")
 				continue
 			}
 
 			if err = writeProto(out); err != nil {
-				log.Error().Err(err).Msg("failed to write block proto")
+				log.Error().Err(err).Msg("Failed to write block proto")
 				continue
 			}
 		}
@@ -219,25 +219,25 @@ func writeTxs(msg []*json.RawMessage) error {
 	switch inputDumpblocks.Format {
 	case "json":
 		if err := writeJSON(msg); err != nil {
-			log.Error().Err(err).Msg("failed to write tx json")
+			log.Error().Err(err).Msg("Failed to write tx json")
 		}
 	case "proto":
 		for _, b := range msg {
 			protoMsg := &pb.Transaction{}
 			err := protojson.Unmarshal(*b, protoMsg)
 			if err != nil {
-				log.Error().Err(err).Msg("failed to unmarshal json to tx proto")
+				log.Error().Err(err).Msg("Failed to unmarshal json to tx proto")
 				continue
 			}
 
 			out, err := proto.Marshal(protoMsg)
 			if err != nil {
-				log.Error().Err(err).Msg("failed to marshal tx proto")
+				log.Error().Err(err).Msg("Failed to marshal tx proto")
 				continue
 			}
 
 			if err = writeProto(out); err != nil {
-				log.Error().Err(err).Msg("failed to write tx proto")
+				log.Error().Err(err).Msg("Failed to write tx proto")
 				continue
 			}
 		}
