@@ -46,7 +46,7 @@ type (
 		DumpBlocks   bool
 		DumpReceipts bool
 		Filename     string
-		Format       string
+		Mode         string
 	}
 )
 
@@ -165,7 +165,7 @@ var DumpblocksCmd = &cobra.Command{
 		inputDumpblocks.Start = uint64(start)
 		inputDumpblocks.End = uint64(end)
 
-		if !slices.Contains([]string{"json", "proto"}, inputDumpblocks.Format) {
+		if !slices.Contains([]string{"json", "proto"}, inputDumpblocks.Mode) {
 			return fmt.Errorf("output format must one of [json, proto]")
 		}
 
@@ -178,13 +178,13 @@ func init() {
 	DumpblocksCmd.PersistentFlags().BoolVarP(&inputDumpblocks.DumpBlocks, "dump-blocks", "B", true, "if the blocks will be dumped")
 	DumpblocksCmd.PersistentFlags().BoolVarP(&inputDumpblocks.DumpReceipts, "dump-receipts", "r", true, "if the receipts will be dumped")
 	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.Filename, "filename", "f", "", "where to write the output to (default stdout)")
-	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.Format, "format", "F", "json", "the output format [json, proto]")
+	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
 	DumpblocksCmd.PersistentFlags().Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "the batch size. Realistically, this probably shouldn't be bigger than 999. Most providers seem to cap at 1000.")
 }
 
 // writeBlock writes the blocks.
 func writeBlocks(msg []*json.RawMessage) error {
-	switch inputDumpblocks.Format {
+	switch inputDumpblocks.Mode {
 	case "json":
 		if err := writeJSON(msg); err != nil {
 			log.Error().Err(err).Msg("Failed to write block json")
@@ -216,7 +216,7 @@ func writeBlocks(msg []*json.RawMessage) error {
 
 // writeTxs writes the transactions receipts.
 func writeTxs(msg []*json.RawMessage) error {
-	switch inputDumpblocks.Format {
+	switch inputDumpblocks.Mode {
 	case "json":
 		if err := writeJSON(msg); err != nil {
 			log.Error().Err(err).Msg("Failed to write tx json")
