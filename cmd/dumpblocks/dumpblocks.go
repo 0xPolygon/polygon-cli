@@ -183,7 +183,7 @@ func init() {
 }
 
 // writeBlock writes the blocks.
-func writeBlocks(msg []*json.RawMessage) Eerror {
+func writeBlocks(msg []*json.RawMessage) error {
 	switch inputDumpblocks.Format {
 	case "json":
 		if err := writeJSON(msg); err != nil {
