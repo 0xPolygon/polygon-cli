@@ -68,7 +68,7 @@ var DumpblocksCmd = &cobra.Command{
 		}
 
 		var wg sync.WaitGroup
-		log.Info().Uint("thread", inputDumpblocks.Threads).Msg("thread count")
+		log.Info().Uint("thread", inputDumpblocks.Threads).Msg("Thread count")
 		var pool = make(chan bool, inputDumpblocks.Threads)
 		start := inputDumpblocks.Start
 		end := inputDumpblocks.End
