@@ -140,8 +140,8 @@ contract ERC721 is IERC721 {
 
         require(_isApprovedOrOwner(from, msg.sender, id), "not authorized");
         
-        _balanceOf[from] -= 1;
-        _balanceOf[to] += 1;
+        _balanceOf[from]--; 
+        _balanceOf[to]++;
         _ownerOf[id] = to;
 
         delete _approvals[id];
