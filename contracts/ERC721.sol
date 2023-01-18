@@ -61,12 +61,6 @@ contract ERC721 is IERC721 {
         bool approved
     );
 
-    struct AddressData {
-         // Mapping owner address to token count
-        uint128 balance;
-        uint128 numberMinted;
-    }
-
     // Mapping from token ID to owner address
     mapping(uint => address) internal _ownerOf;
 
