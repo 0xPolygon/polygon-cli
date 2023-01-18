@@ -6,8 +6,17 @@ import (
 	"strconv"
 
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
-	"github.com/maticnetwork/polygon-cli/proto/gen/pb"
 	"github.com/rs/zerolog/log"
+)
+
+type (
+	simpleRPCTransaction struct {
+		Hash string `json:"hash"`
+	}
+	simpleRPCBlock struct {
+		Number       string                 `json:"number"`
+		Transactions []simpleRPCTransaction `json:"transactions"`
+	}
 )
 
 func GetBlockRange(ctx context.Context, from, to uint64, c *ethrpc.Client) ([]*json.RawMessage, error) {
@@ -26,7 +35,7 @@ func GetBlockRange(ctx context.Context, from, to uint64, c *ethrpc.Client) ([]*j
 
 	err := c.BatchCallContext(ctx, blms)
 	if err != nil {
-		log.Error().Err(err).Msg("RPC issue fetching blocks")
+		log.Error().Err(err).Msg("rpc issue fetching blocks")
 		return nil, err
 	}
 	blocks := make([]*json.RawMessage, 0)
@@ -46,7 +55,7 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 	txHashes := make([]string, 0)
 	txHashMap := make(map[string]string, 0)
 	for _, rb := range rawBlocks {
-		var block pb.Block
+		var block simpleRPCBlock
 		err := json.Unmarshal(*rb, &block)
 		if err != nil {
 			return nil, err
@@ -97,7 +106,7 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 			}
 			err := c.CallContext(ctx, &blms[start].Result, "eth_getTransactionReceipt", blms[start].Args[0])
 			if err != nil {
-				log.Error().Err(err).Uint64("start", start).Uint64("end", end).Msg("RPC issue fetching single receipt")
+				log.Error().Err(err).Uint64("start", start).Uint64("end", end).Msg("rpc issue fetching single receipt")
 				return nil, err
 			}
 			break
@@ -105,7 +114,7 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 
 		err := c.BatchCallContext(ctx, blms[start:end])
 		if err != nil {
-			log.Error().Err(err).Str("randtx", txHashes[0]).Uint64("start", start).Uint64("end", end).Msg("RPC issue fetching receipts")
+			log.Error().Err(err).Str("randtx", txHashes[0]).Uint64("start", start).Uint64("end", end).Msg("rpc issue fetching receipts")
 			return nil, err
 		}
 		start = end
@@ -118,11 +127,11 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 
 	for _, b := range blms {
 		if b.Error != nil {
-			log.Error().Err(b.Error).Msg("Block resp err")
+			log.Error().Err(b.Error).Msg("block resp err")
 			return nil, b.Error
 		}
 		receipts = append(receipts, b.Result.(*json.RawMessage))
 	}
-	log.Info().Int("hashes", len(txHashes)).Int("receipts", len(receipts)).Msg("Fetched tx receipts")
+	log.Info().Int("hashes", len(txHashes)).Int("receipts", len(receipts)).Msg("fetched tx receipts")
 	return receipts, nil
 }
