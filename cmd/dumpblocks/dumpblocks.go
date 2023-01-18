@@ -63,9 +63,6 @@ var DumpblocksCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if inputDumpblocks.Threads == 0 {
-			inputDumpblocks.Threads = 1
-		}
 
 		var wg sync.WaitGroup
 		log.Info().Uint("thread", inputDumpblocks.Threads).Msg("Thread count")
@@ -161,10 +158,14 @@ var DumpblocksCmd = &cobra.Command{
 		if end < start {
 			start, end = end, start
 		}
+
 		inputDumpblocks.URL = args[0]
 		inputDumpblocks.Start = uint64(start)
 		inputDumpblocks.End = uint64(end)
 
+		if inputDumpblocks.Threads == 0 {
+			inputDumpblocks.Threads = 1
+		}
 		if !slices.Contains([]string{"json", "proto"}, inputDumpblocks.Mode) {
 			return fmt.Errorf("output format must one of [json, proto]")
 		}
