@@ -37,7 +37,7 @@ import (
 )
 
 type (
-	dumpblocksArgs struct {
+	dumpblocksParams struct {
 		URL          string
 		Start        uint64
 		End          uint64
@@ -50,7 +50,7 @@ type (
 	}
 )
 
-var inputDumpblocks dumpblocksArgs = dumpblocksArgs{}
+var inputDumpblocks dumpblocksParams = dumpblocksParams{}
 
 // dumpblocksCmd represents the dumpblocks command
 var DumpblocksCmd = &cobra.Command{
@@ -99,18 +99,6 @@ var DumpblocksCmd = &cobra.Command{
 						continue
 					}
 
-					failCount = 0
-					receipts, err := util.GetReceipts(ctx, blocks, ec, inputDumpblocks.BatchSize)
-					if err != nil {
-						failCount = failCount + 1
-						if failCount > 5 {
-							log.Error().Uint64("rangeStart", rangeStart).Uint64("rangeEnd", rangeEnd).Msg("Unable to fetch receipts")
-							break
-						}
-						time.Sleep(5 * time.Second)
-						continue
-					}
-
 					if inputDumpblocks.DumpBlocks {
 						err = writeBlocks(blocks)
 						if err != nil {
@@ -119,6 +107,18 @@ var DumpblocksCmd = &cobra.Command{
 					}
 
 					if inputDumpblocks.DumpReceipts {
+						failCount = 0
+						receipts, err := util.GetReceipts(ctx, blocks, ec, inputDumpblocks.BatchSize)
+						if err != nil {
+							failCount = failCount + 1
+							if failCount > 5 {
+								log.Error().Uint64("rangeStart", rangeStart).Uint64("rangeEnd", rangeEnd).Msg("Unable to fetch receipts")
+								break
+							}
+							time.Sleep(5 * time.Second)
+							continue
+						}
+
 						err = writeTxs(receipts)
 						if err != nil {
 							log.Error().Err(err).Msg("Error writing receipts")
