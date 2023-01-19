@@ -316,6 +316,12 @@ cat poa-core.0.to.100k | grep '"difficulty"' > poa-core.0.to.100k.blocks
 polycli forge --genesis genesis.json --mode json --blocks poa-core.0.to.100k.blocks --count 99999
 ```
 
+```
+# To do the same with using proto instead of json:
+go run main.go dumpblocks http://127.0.0.1:8545 0 1000000 -f poa-core.0.to.100k.proto -r=false -m proto
+go run main.go forge --genesis genesis.json --mode proto --blocks poa-core.0.to.100k.proto --count 99999
+```
+
 # Metrics To Dash
 
 Given an openmetrics / prometheus response, create a json file that can
