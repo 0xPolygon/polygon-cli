@@ -31,7 +31,7 @@ run: ## Run the go program.
 
 .PHONY: build
 build: $(BUILD_DIR) ## Build go binary.
-	go build -o $(BUILD_DIR)/$(BIN_NAME) main.go
+	go build -ldflags "-s -w -X \"github.com/maticnetwork/polygon-cli/cmd/version.Version=dev ($(GIT_SHA))\"" -o $(BUILD_DIR)/$(BIN_NAME) main.go
 
 .PHONY: cross
 cross: $(BUILD_DIR) ## Cross-compile go binaries using CGO.
