@@ -6,6 +6,7 @@ interface IERC165 {
 }
 
 interface IERC721 is IERC165 {
+
     function balanceOf(address owner) external view returns (uint balance);
 
     function ownerOf(uint tokenId) external view returns (address owner);
@@ -51,6 +52,7 @@ interface IERC721Receiver {
 }
 
 contract ERC721 is IERC721 {
+
     event Transfer(address indexed from, address indexed to, uint indexed id);
     event Approval(address indexed owner, address indexed spender, uint indexed id);
     event ApprovalForAll(
@@ -70,6 +72,9 @@ contract ERC721 is IERC721 {
 
     // Mapping from owner to operator approvals
     mapping(address => mapping(address => bool)) public isApprovedForAll;
+    
+    uint256 private currentIndex = 0;
+    uint256 internal immutable maxBatchSize = 100;
 
     function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
         return
@@ -84,7 +89,7 @@ contract ERC721 is IERC721 {
 
     function balanceOf(address owner) external view returns (uint) {
         require(owner != address(0), "owner = zero address");
-        return _balanceOf[owner];
+        return uint256(_balanceOf[owner]);
     }
 
     function setApprovalForAll(address operator, bool approved) external {
@@ -128,8 +133,8 @@ contract ERC721 is IERC721 {
         require(to != address(0), "transfer to zero address");
 
         require(_isApprovedOrOwner(from, msg.sender, id), "not authorized");
-
-        _balanceOf[from]--;
+        
+        _balanceOf[from]--; 
         _balanceOf[to]++;
         _ownerOf[id] = to;
 
@@ -169,18 +174,26 @@ contract ERC721 is IERC721 {
         );
     }
 
-    function _mint(address to, uint id) internal {
+    function _mintBatch(address to, uint quantity) internal {
+        uint256 startTokenId = currentIndex;
         require(to != address(0), "mint to zero address");
-        require(_ownerOf[id] == address(0), "already minted");
+        require(_ownerOf[startTokenId] == address(0), "already minted");
+        require(quantity <= maxBatchSize, "ERC721A: quantity to mint too high");
 
-        _balanceOf[to]++;
-        _ownerOf[id] = to;
+        _balanceOf[to] += uint128(quantity);
 
-        emit Transfer(address(0), to, id);
+        uint256 updatedIndex = startTokenId;
+        for (uint256 i = 0; i < quantity; i++) {
+            emit Transfer(address(0), to, updatedIndex);
+            _ownerOf[updatedIndex] = to;
+            updatedIndex++;
+        }
+
+        currentIndex = updatedIndex;
     }
 
-    function mint(address to, uint id) external {
-        _mint(to, id);
+    function mintBatch(address to, uint quantity) external {
+        _mintBatch(to, quantity);
     }
 
     function _burn(uint id) internal {
