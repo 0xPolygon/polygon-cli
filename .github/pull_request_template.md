@@ -10,8 +10,8 @@ List any dependencies that are required for this change. -->
 
 # Testing
 
-<!-- Please describe the tests that you ran to verify your changes. Provide
-instructions so the tests are reproduceable. Please also list any relevant
+<!-- Please describe the tests you ran to verify your changes. Provide
+instructions so the tests are reproducible. Please also list any relevant
 details for the test configuration -->
 
 - [ ] Test A
