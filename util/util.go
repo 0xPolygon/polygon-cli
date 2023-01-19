@@ -127,7 +127,7 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 
 	for _, b := range blms {
 		if b.Error != nil {
-			log.Error().Err(b.Error).Msg("Block res err")
+			log.Error().Err(b.Error).Msg("Block response err")
 			return nil, b.Error
 		}
 		receipts = append(receipts, b.Result.(*json.RawMessage))
