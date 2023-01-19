@@ -88,11 +88,14 @@ var ForgeCmd = &cobra.Command{
 	Long: `A utility for generating blockchain data either for testing or migration.
 
 Here is an example usage:
-  # in this case local host is running a POA Core Archive node
-  polycli dumpblocks http://127.0.0.1:8545 0 100000 > poa-core.0.to.100k
-  # strip out the receipts
+  # In this case local host is running a POA Core Archive node.
+  polycli dumpblocks http://127.0.0.1:8545 0 100000 --filename poa-core.0.to.100k --dump-receipts=false
+
+  # Even with disabling receipts, edge's eth_getBlockByNumber returns transactions.
+  # This needs to be done only if using json mode. Filter them out before forging:
   cat poa-core.0.to.100k | grep '"difficulty"' > poa-core.0.to.100k.blocks
-  polycli forge --genesis genesis.json --mode json --json-blocks poa-core.0.to.100k.blocks --count 99999`,
+
+  polycli forge --genesis genesis.json --mode json --blocks poa-core.0.to.100k.blocks --count 99999`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println("forge called")
@@ -144,7 +147,9 @@ func init() {
 	ForgeCmd.PersistentFlags().Uint64VarP(&inputForge.Count, "count", "C", 100, "The number of blocks to try to forge")
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.BlocksFile, "blocks", "b", "", "A file of encoded blocks; the format of this file should match the mode")
 
-	cobra.MarkFlagRequired(ForgeCmd.PersistentFlags(), "blocks")
+	if err := cobra.MarkFlagRequired(ForgeCmd.PersistentFlags(), "blocks"); err != nil {
+		log.Error().Err(err).Msg("Unable to mark blocks flag as required")
+	}
 }
 
 type edgeBlockchainHandle struct {

@@ -310,7 +310,7 @@ support migrating clients other chains to supernets.
 polycli dumpblocks http://127.0.0.1:8545 0 100000 --filename poa-core.0.to.100k --dump-receipts=false
 
 # Even with disabling receipts, edge's eth_getBlockByNumber returns transactions.
-# Filter them out before forging:
+# This needs to be done only if using json mode. Filter them out before forging:
 cat poa-core.0.to.100k | grep '"difficulty"' > poa-core.0.to.100k.blocks
 
 polycli forge --genesis genesis.json --mode json --json-blocks poa-core.0.to.100k.blocks --count 99999
