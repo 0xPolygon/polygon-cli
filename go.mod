@@ -7,7 +7,7 @@ require (
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
 	github.com/centrifuge/go-substrate-rpc-client/v4 v4.0.6
 	github.com/coinbase/kryptology v1.8.0
-	github.com/ethereum/go-ethereum v1.10.25
+	github.com/ethereum/go-ethereum v1.10.26
 	github.com/gizak/termui/v3 v3.1.0
 	github.com/hashicorp/go-hclog v1.3.1
 	github.com/libp2p/go-libp2p v0.22.0
