@@ -38,15 +38,15 @@ import (
 
 type (
 	dumpblocksParams struct {
-		URL          string
-		Start        uint64
-		End          uint64
-		BatchSize    uint64
-		Threads      uint
-		DumpBlocks   bool
-		DumpReceipts bool
-		Filename     string
-		Mode         string
+		URL                string
+		Start              uint64
+		End                uint64
+		BatchSize          uint64
+		Threads            uint
+		ShouldDumpBlocks   bool
+		ShouldDumpReceipts bool
+		Filename           string
+		Mode               string
 	}
 )
 
@@ -96,14 +96,14 @@ var DumpblocksCmd = &cobra.Command{
 						continue
 					}
 
-					if inputDumpblocks.DumpBlocks {
+					if inputDumpblocks.ShouldDumpBlocks {
 						err = writeBlocks(blocks)
 						if err != nil {
 							log.Error().Err(err).Msg("Error writing blocks")
 						}
 					}
 
-					if inputDumpblocks.DumpReceipts {
+					if inputDumpblocks.ShouldDumpReceipts {
 						failCount = 0
 						receipts, err := util.GetReceipts(ctx, blocks, ec, inputDumpblocks.BatchSize)
 						if err != nil {
@@ -176,8 +176,8 @@ var DumpblocksCmd = &cobra.Command{
 
 func init() {
 	DumpblocksCmd.PersistentFlags().UintVarP(&inputDumpblocks.Threads, "concurrency", "c", 1, "how many go routines to leverage")
-	DumpblocksCmd.PersistentFlags().BoolVarP(&inputDumpblocks.DumpBlocks, "dump-blocks", "B", true, "if the blocks will be dumped")
-	DumpblocksCmd.PersistentFlags().BoolVarP(&inputDumpblocks.DumpReceipts, "dump-receipts", "r", true, "if the receipts will be dumped")
+	DumpblocksCmd.PersistentFlags().BoolVarP(&inputDumpblocks.ShouldDumpBlocks, "dump-blocks", "B", true, "if the blocks will be dumped")
+	DumpblocksCmd.PersistentFlags().BoolVarP(&inputDumpblocks.ShouldDumpReceipts, "dump-receipts", "r", true, "if the receipts will be dumped")
 	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.Filename, "filename", "f", "", "where to write the output to (default stdout)")
 	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
 	DumpblocksCmd.PersistentFlags().Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "the batch size. Realistically, this probably shouldn't be bigger than 999. Most providers seem to cap at 1000.")
