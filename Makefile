@@ -29,6 +29,10 @@ $(BUILD_DIR): ## Create the binary folder.
 run: ## Run the go program.
 	go run main.go
 
+.PHONY: generate
+generate: ## Generate protobuf stubs.
+	protoc --proto_path=proto --go_out=proto/gen/pb --go_opt=paths=source_relative $(wildcard proto/*.proto)
+
 .PHONY: build
 build: $(BUILD_DIR) ## Build go binary.
 	go build -ldflags "-s -w -X \"github.com/maticnetwork/polygon-cli/cmd/version.Version=dev ($(GIT_SHA))\"" -o $(BUILD_DIR)/$(BIN_NAME) main.go
