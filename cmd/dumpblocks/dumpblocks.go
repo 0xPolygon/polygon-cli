@@ -17,30 +17,40 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package dumpblocks
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
 	"strconv"
 	"sync"
 	"time"
 
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
+	"github.com/maticnetwork/polygon-cli/proto/gen/pb"
 	"github.com/maticnetwork/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"golang.org/x/exp/slices"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 type (
-	dumpblocksArgs struct {
-		URL       string
-		Start     uint64
-		End       uint64
-		BatchSize uint64
-		Threads   *uint
+	dumpblocksParams struct {
+		URL                string
+		Start              uint64
+		End                uint64
+		BatchSize          uint64
+		Threads            uint
+		ShouldDumpBlocks   bool
+		ShouldDumpReceipts bool
+		Filename           string
+		Mode               string
 	}
 )
 
-var inputDumpblocks dumpblocksArgs = dumpblocksArgs{}
+var inputDumpblocks dumpblocksParams = dumpblocksParams{}
 
 // dumpblocksCmd represents the dumpblocks command
 var DumpblocksCmd = &cobra.Command{
@@ -53,15 +63,10 @@ var DumpblocksCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if *inputDumpblocks.Threads == 0 {
-			*inputDumpblocks.Threads = 1
-		}
 
 		var wg sync.WaitGroup
-		log.Info().Uint("thread", *inputDumpblocks.Threads).Msg("Thread count")
-		var pool = make(chan bool, *inputDumpblocks.Threads)
-		// TODO Support parallel execution
-		// TODO Support retries when there is a failure
+		log.Info().Uint("thread", inputDumpblocks.Threads).Msg("Thread count")
+		var pool = make(chan bool, inputDumpblocks.Threads)
 		start := inputDumpblocks.Start
 		end := inputDumpblocks.End
 
@@ -91,25 +96,30 @@ var DumpblocksCmd = &cobra.Command{
 						continue
 					}
 
-					failCount = 0
-					receipts, err := util.GetReceipts(ctx, blocks, ec, inputDumpblocks.BatchSize)
-					if err != nil {
-						failCount = failCount + 1
-						if failCount > 5 {
-							log.Error().Uint64("rangeStart", rangeStart).Uint64("rangeEnd", rangeEnd).Msg("Unable to fetch receipts")
-							break
+					if inputDumpblocks.ShouldDumpBlocks {
+						err = writeResponses(blocks, "block")
+						if err != nil {
+							log.Error().Err(err).Msg("Error writing blocks")
 						}
-						time.Sleep(5 * time.Second)
-						continue
 					}
 
-					err = writeResponses(blocks)
-					if err != nil {
-						log.Error().Err(err).Msg("Error writing blocks")
-					}
-					err = writeResponses(receipts)
-					if err != nil {
-						log.Error().Err(err).Msg("Error writing receipts")
+					if inputDumpblocks.ShouldDumpReceipts {
+						failCount = 0
+						receipts, err := util.GetReceipts(ctx, blocks, ec, inputDumpblocks.BatchSize)
+						if err != nil {
+							failCount = failCount + 1
+							if failCount > 5 {
+								log.Error().Uint64("rangeStart", rangeStart).Uint64("rangeEnd", rangeEnd).Msg("Unable to fetch receipts")
+								break
+							}
+							time.Sleep(5 * time.Second)
+							continue
+						}
+
+						err = writeResponses(receipts, "transaction")
+						if err != nil {
+							log.Error().Err(err).Msg("Error writing receipts")
+						}
 					}
 
 					break
@@ -148,24 +158,119 @@ var DumpblocksCmd = &cobra.Command{
 		if end < start {
 			start, end = end, start
 		}
+
 		inputDumpblocks.URL = args[0]
 		inputDumpblocks.Start = uint64(start)
 		inputDumpblocks.End = uint64(end)
-		// realistically, this probably shoudln't be bigger than 999. Most Providers seem to cap at 1000
-		inputDumpblocks.BatchSize = 150
+
+		if inputDumpblocks.Threads == 0 {
+			inputDumpblocks.Threads = 1
+		}
+		if !slices.Contains([]string{"json", "proto"}, inputDumpblocks.Mode) {
+			return fmt.Errorf("output format must one of [json, proto]")
+		}
 
 		return nil
 	},
 }
 
 func init() {
-	inputDumpblocks.Threads = DumpblocksCmd.PersistentFlags().UintP("concurrency", "c", 1, "how many go routines to leverage")
-
+	DumpblocksCmd.PersistentFlags().UintVarP(&inputDumpblocks.Threads, "concurrency", "c", 1, "how many go routines to leverage")
+	DumpblocksCmd.PersistentFlags().BoolVarP(&inputDumpblocks.ShouldDumpBlocks, "dump-blocks", "B", true, "if the blocks will be dumped")
+	DumpblocksCmd.PersistentFlags().BoolVarP(&inputDumpblocks.ShouldDumpReceipts, "dump-receipts", "r", true, "if the receipts will be dumped")
+	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.Filename, "filename", "f", "", "where to write the output to (default stdout)")
+	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
+	DumpblocksCmd.PersistentFlags().Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "the batch size. Realistically, this probably shouldn't be bigger than 999. Most providers seem to cap at 1000.")
 }
 
-func writeResponses(blocks []*json.RawMessage) error {
-	for _, b := range blocks {
-		fmt.Println(string(*b))
+// writeResponses writes the data to either stdout or a file if one is provided.
+// The message type can be either "block" or "transaction". The format of the
+// output is either "json" or "proto" depending on the mode.
+func writeResponses(msg []*json.RawMessage, msgType string) error {
+	switch inputDumpblocks.Mode {
+	case "json":
+		if err := writeJSON(msg); err != nil {
+			log.Error().Err(err).Msgf("Failed to write %s json", msgType)
+		}
+	case "proto":
+		for _, b := range msg {
+			var protoMsg proto.Message
+			switch msgType {
+			case "block":
+				protoMsg = &pb.Block{}
+			case "transaction":
+				protoMsg = &pb.Transaction{}
+			}
+
+			err := protojson.Unmarshal(*b, protoMsg)
+			if err != nil {
+				log.Error().Err(err).RawJSON("msg", *b).Msgf("Failed to unmarshal json to %s proto", msgType)
+				continue
+			}
+
+			out, err := proto.Marshal(protoMsg)
+			if err != nil {
+				log.Error().Err(err).Msgf("Failed to marshal %s proto", msgType)
+				continue
+			}
+
+			if err = writeProto(out); err != nil {
+				log.Error().Err(err).Msgf("Failed to write %s proto", msgType)
+				continue
+			}
+		}
 	}
+
+	return nil
+}
+
+// writeJSON writes the json raw messages to stdout by default and to a file if
+// provided.
+func writeJSON(msg []*json.RawMessage) error {
+	f := os.Stdout
+	if inputDumpblocks.Filename != "" {
+		var err error
+		f, err = os.OpenFile(inputDumpblocks.Filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0644)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, b := range msg {
+		fmt.Fprintln(f, string(*b))
+	}
+
+	return nil
+}
+
+// writeProto writes the buffer data to stdout by default and to a file if
+// provided.
+//
+// It will write first the length of the buffer and then the buffer.
+func writeProto(out []byte) error {
+	f := os.Stdout
+	// Open the file for writing if the filename is provided.
+	if inputDumpblocks.Filename != "" {
+		var err error
+		f, err = os.OpenFile(inputDumpblocks.Filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0644)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Because protobuf isn't a self delimiting format, we write the length of the
+	// bytes to the file as a header. This allows us to correctly read back in the
+	// file.
+	buf := make([]byte, 4)
+	binary.LittleEndian.PutUint32(buf, uint32(len(out)))
+
+	if _, err := f.Write(buf); err != nil {
+		return err
+	}
+
+	if _, err := f.Write(out); err != nil {
+		return err
+	}
+
 	return nil
 }

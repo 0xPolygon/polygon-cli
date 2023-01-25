@@ -9,6 +9,16 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+type (
+	simpleRPCTransaction struct {
+		Hash string `json:"hash"`
+	}
+	simpleRPCBlock struct {
+		Number       string                 `json:"number"`
+		Transactions []simpleRPCTransaction `json:"transactions"`
+	}
+)
+
 func GetBlockRange(ctx context.Context, from, to uint64, c *ethrpc.Client) ([]*json.RawMessage, error) {
 	blms := make([]ethrpc.BatchElem, 0)
 	for i := from; i <= to; i = i + 1 {
@@ -37,32 +47,23 @@ func GetBlockRange(ctx context.Context, from, to uint64, c *ethrpc.Client) ([]*j
 		blocks = append(blocks, b.Result.(*json.RawMessage))
 
 	}
+
 	return blocks, nil
 }
-
-type (
-	simpleRPCTransaction struct {
-		Hash string `json:"hash"`
-	}
-	simpleRPCBlock struct {
-		Number       string                 `json:"number"`
-		Transactions []simpleRPCTransaction `json:"transactions"`
-	}
-)
 
 func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Client, batchSize uint64) ([]*json.RawMessage, error) {
 	txHashes := make([]string, 0)
 	txHashMap := make(map[string]string, 0)
 	for _, rb := range rawBlocks {
-		var sb simpleRPCBlock
-		err := json.Unmarshal(*rb, &sb)
+		var block simpleRPCBlock
+		err := json.Unmarshal(*rb, &block)
 		if err != nil {
 			return nil, err
 
 		}
-		for _, tx := range sb.Transactions {
+		for _, tx := range block.Transactions {
 			txHashes = append(txHashes, tx.Hash)
-			txHashMap[tx.Hash] = sb.Number
+			txHashMap[tx.Hash] = block.Number
 		}
 
 	}
@@ -97,7 +98,7 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 		// json: cannot unmarshal object into Go value of type []rpc.jsonrpcMessage
 		// The error occurs when we call batchcallcontext with a single transaction for some reason.
 		// polycli dumpblocks -c 1 http://127.0.0.1:9209/ 34457958 34458108
-		// To handle this i'm making an exception when start and end are equal to make a single call
+		// To handle this I'm making an exception when start and end are equal to make a single call.
 		if start == end {
 			log.Trace().Int("length", len(blmsBlockMap)).Msg("Test Jesse")
 			if len(blmsBlockMap) == int(start) {
@@ -126,7 +127,7 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 
 	for _, b := range blms {
 		if b.Error != nil {
-			log.Error().Err(b.Error).Msg("Block resp err")
+			log.Error().Err(b.Error).Msg("Block response err")
 			return nil, b.Error
 		}
 		receipts = append(receipts, b.Result.(*json.RawMessage))

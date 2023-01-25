@@ -1,0 +1,33 @@
+// If you make changes, recompile protos with `make generate`
+syntax = "proto3";
+package proto;
+option go_package = "github.com/maticnetwork/polygon-cli/proto/gen/pb;pb";
+
+import "transaction.proto";
+
+message Block {
+  string author = 1;
+  string difficulty = 2;
+  string extraData = 3;
+  string gasLimit = 4;
+  string gasUsed = 5;
+  string hash = 6;
+  string logsBloom = 7;
+  string miner = 8;
+  string number = 9;
+  string parentHash = 10;
+  string receiptsRoot = 11;
+  string sha3Uncles = 12;
+  string signature = 13;
+  string size = 14;
+  string stateRoot = 15;
+  uint32 step = 16;
+  string totalDifficulty = 17;
+  string timestamp = 18;
+  repeated Transaction transactions = 19;
+  string transactionsRoot = 20;
+  repeated string uncles = 21;
+  string baseFeePerGas = 22;
+  string mixHash = 23;
+  string nonce = 24;
+}

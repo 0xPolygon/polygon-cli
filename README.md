@@ -251,6 +251,36 @@ polycli dumpblocks http://172.26.26.12:8545/ 0 500000 | gzip > foo.gz
 zcat < foo.gz | jq '. | select(.transactions | length > 0) | select(.transactions[].to == null)'
 ```
 
+## Protobuf
+
+Dumpblocks can also output to protobuf format. If you wish to make changes to the protobuf:
+
+1. Install the protobuf compiler
+
+   ```bash
+   brew install protobuf
+   ```
+
+2. Install the protobuf plugin
+
+   ```bash
+   go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+   ```
+
+3. Compile the proto file
+
+   ```bash
+   make generate
+   ```
+
+4. Depending on what endpoint and chain you're querying, you may be missing some fields in the proto definition.
+
+   ```
+   {"level":"error","error":"proto: (line 1:813): unknown field \"nonce\"","time":"2023-01-17T13:35:53-05:00","message":"failed to unmarshal proto message"}
+   ```
+
+   To solve this, add the unknown fields to the `.proto` files and recompile them (step 3).
+
 # Forge
 
 The forge tool is meant to take blocks from the `dumpblocks` command and
@@ -275,14 +305,20 @@ support migrating clients other chains to supernets.
   ```
 
 ```shell
-# in this case local host is running a POA Core Archive node
-polycli dumpblocks http://127.0.0.1:8545 0 100000 > poa-core.0.to.100k
+# In this case local host is running a POA Core Archive node.
+polycli dumpblocks http://127.0.0.1:8545 0 100000 --filename poa-core.0.to.100k --dump-receipts=false
 
-# strip out the receipts
+# Even with disabling receipts, edge's eth_getBlockByNumber returns transactions.
+# This needs to be done only if using json mode. Filter them out before forging:
 cat poa-core.0.to.100k | grep '"difficulty"' > poa-core.0.to.100k.blocks
 
-# forge the blocks
-polycli forge --genesis genesis.json --mode json --json-blocks poa-core.0.to.100k.blocks --count 99999
+polycli forge --genesis genesis.json --mode json --blocks poa-core.0.to.100k.blocks --count 99999
+```
+
+```
+# To do the same with using proto instead of json:
+go run main.go dumpblocks http://127.0.0.1:8545 0 1000000 -f poa-core.0.to.100k.proto -r=false -m proto
+go run main.go forge --genesis genesis.json --mode proto --blocks poa-core.0.to.100k.proto --count 99999
 ```
 
 # Metrics To Dash
