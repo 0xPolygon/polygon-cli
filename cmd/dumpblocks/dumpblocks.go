@@ -97,7 +97,7 @@ var DumpblocksCmd = &cobra.Command{
 					}
 
 					if inputDumpblocks.ShouldDumpBlocks {
-						err = writeBlocks(blocks)
+						err = writeResponses(blocks, "block")
 						if err != nil {
 							log.Error().Err(err).Msg("Error writing blocks")
 						}
@@ -116,7 +116,7 @@ var DumpblocksCmd = &cobra.Command{
 							continue
 						}
 
-						err = writeTxs(receipts)
+						err = writeResponses(receipts, "transaction")
 						if err != nil {
 							log.Error().Err(err).Msg("Error writing receipts")
 						}
@@ -183,62 +183,39 @@ func init() {
 	DumpblocksCmd.PersistentFlags().Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "the batch size. Realistically, this probably shouldn't be bigger than 999. Most providers seem to cap at 1000.")
 }
 
-// writeBlock writes the blocks.
-func writeBlocks(msg []*json.RawMessage) error {
+// writeResponses writes the data to either stdout or a file if one is provided.
+// The message type can be either "block" or "transaction". The format of the
+// output is either "json" or "proto" depending on the mode.
+func writeResponses(msg []*json.RawMessage, msgType string) error {
 	switch inputDumpblocks.Mode {
 	case "json":
 		if err := writeJSON(msg); err != nil {
-			log.Error().Err(err).Msg("Failed to write block json")
+			log.Error().Err(err).Msgf("Failed to write %s json", msgType)
 		}
 	case "proto":
 		for _, b := range msg {
-			protoMsg := &pb.Block{}
+			var protoMsg proto.Message
+			switch msgType {
+			case "block":
+				protoMsg = &pb.Block{}
+			case "transaction":
+				protoMsg = &pb.Transaction{}
+			}
+
 			err := protojson.Unmarshal(*b, protoMsg)
 			if err != nil {
-				log.Error().Err(err).Msg("Failed to unmarshal json to block proto")
+				log.Error().Err(err).RawJSON("msg", *b).Msgf("Failed to unmarshal json to %s proto", msgType)
 				continue
 			}
 
 			out, err := proto.Marshal(protoMsg)
 			if err != nil {
-				log.Error().Err(err).Msg("Failed to marshal block proto")
+				log.Error().Err(err).Msgf("Failed to marshal %s proto", msgType)
 				continue
 			}
 
 			if err = writeProto(out); err != nil {
-				log.Error().Err(err).Msg("Failed to write block proto")
-				continue
-			}
-		}
-	}
-
-	return nil
-}
-
-// writeTxs writes the transactions receipts.
-func writeTxs(msg []*json.RawMessage) error {
-	switch inputDumpblocks.Mode {
-	case "json":
-		if err := writeJSON(msg); err != nil {
-			log.Error().Err(err).Msg("Failed to write tx json")
-		}
-	case "proto":
-		for _, b := range msg {
-			protoMsg := &pb.Transaction{}
-			err := protojson.Unmarshal(*b, protoMsg)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to unmarshal json to tx proto")
-				continue
-			}
-
-			out, err := proto.Marshal(protoMsg)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to marshal tx proto")
-				continue
-			}
-
-			if err = writeProto(out); err != nil {
-				log.Error().Err(err).Msg("Failed to write tx proto")
+				log.Error().Err(err).Msgf("Failed to write %s proto", msgType)
 				continue
 			}
 		}
