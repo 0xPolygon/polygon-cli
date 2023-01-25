@@ -270,8 +270,7 @@ Dumpblocks can also output to protobuf format. If you wish to make changes to th
 3. Compile the proto file
 
    ```bash
-   cd proto
-   protoc --go_out=gen --go_opt=paths=source_relative *.proto
+   make generate
    ```
 
 4. Depending on what endpoint and chain you're querying, you may be missing some fields in the proto definition.
