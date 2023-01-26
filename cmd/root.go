@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/maticnetwork/polygon-cli/cmd/crawl"
 	"github.com/maticnetwork/polygon-cli/cmd/dumpblocks"
 	"github.com/maticnetwork/polygon-cli/cmd/forge"
 	"github.com/maticnetwork/polygon-cli/cmd/hash"
@@ -81,6 +82,7 @@ func init() {
 	rootCmd.AddCommand(rpc.RpcCmd)
 	rootCmd.AddCommand(version.VersionCmd)
 	rootCmd.AddCommand(wallet.WalletCmd)
+	rootCmd.AddCommand(crawl.CrawlCmd)
 }
 
 // initConfig reads in config file and ENV variables if set.
