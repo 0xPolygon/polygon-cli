@@ -24,7 +24,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
+	// "github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -35,8 +35,7 @@ import (
 	// "github.com/ethereum/go-ethereum/p2p/enr"
 	// "github.com/maticnetwork/polygon-cli/hdwallet"
 	"github.com/spf13/cobra"
-
-	ethrpc "github.com/ethereum/go-ethereum/rpc"
+	// ethrpc "github.com/ethereum/go-ethereum/rpc"
 )
 
 type (
@@ -68,16 +67,17 @@ var CrawlCmd = &cobra.Command{
 		// cmd.Println(mnemonic)
 		// return nil
 
-		rpc, err := ethrpc.DialContext(cmd.Context(), inputCrawlParams.URL.String())
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to dial rpc")
-			return err
-		}
-		rpc.SetHeader("Accept-Encoding", "identity")
-		ec := ethclient.NewClient(rpc)
+		// rpc, err := ethrpc.DialContext(cmd.Context(), inputCrawlParams.URL.String())
+		// if err != nil {
+		// 	log.Error().Err(err).Msg("Unable to dial rpc")
+		// 	return err
+		// }
+		// rpc.SetHeader("Accept-Encoding", "identity")
+		// ec := ethclient.NewClient(rpc)
 
 		log.Info().Msg("Starting crawl")
 
+		return nil
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if strings.HasPrefix(*inputCrawlParams.Bootnodes, "enr:") {

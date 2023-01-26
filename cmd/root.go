@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/maticnetwork/polygon-cli/cmd/abi"
+	"github.com/maticnetwork/polygon-cli/cmd/crawl"
 	"github.com/maticnetwork/polygon-cli/cmd/dumpblocks"
 	"github.com/maticnetwork/polygon-cli/cmd/forge"
 	"github.com/maticnetwork/polygon-cli/cmd/hash"
@@ -87,6 +88,7 @@ func init() {
 	rootCmd.AddCommand(wallet.WalletCmd)
 	rootCmd.AddCommand(fork.ForkCmd)
 	rootCmd.AddCommand(parseethwallet.ParseETHWalletCmd)
+	rootCmd.AddCommand(crawl.CrawlCmd)
 }
 
 // initConfig reads in config file and ENV variables if set.
