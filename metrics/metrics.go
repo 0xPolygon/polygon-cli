@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -173,12 +174,12 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 				author = ethcommon.HexToAddress("0x" + hex.EncodeToString(signer))
 			}
 		}
-		blockTime := uint64(0)
+		blockTime := "-"
 		if j > 0 {
-			blockTime = bs[j].Time() - bs[j-1].Time()
+			blockTime = strconv.FormatUint(bs[j].Time()-bs[j-1].Time(), 10)
 		}
 
-		recordVariables := []string{fmt.Sprintf("%d", bs[j].Number()), ut.Format("02 Jan 06 15:04:05 MST"), bs[j].Hash().String(), author.String(), fmt.Sprintf("%d", blockTime), fmt.Sprintf("%d", len(bs[j].Transactions())), fmt.Sprintf("%d", bs[j].GasUsed())}
+		recordVariables := []string{fmt.Sprintf("%d", bs[j].Number()), ut.Format("02 Jan 06 15:04:05 MST"), bs[j].Hash().String(), author.String(), fmt.Sprintf("%s", blockTime), fmt.Sprintf("%d", len(bs[j].Transactions())), fmt.Sprintf("%d", bs[j].GasUsed())}
 		record := " " +
 			recordVariables[0] + strings.Repeat(" ", len(headerVariables[0])+proportion[0]-len(recordVariables[0])) +
 			recordVariables[1] + strings.Repeat(" ", len(headerVariables[1])+proportion[1]-len(recordVariables[1])) +
