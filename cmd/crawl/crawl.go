@@ -21,10 +21,14 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"net"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	// "github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -41,6 +45,7 @@ import (
 type (
 	crawlParams struct {
 		Bootnodes *string
+		Timeout   *string
 		FileName  *string
 		// ParsedBootnodes []*enode.Node
 		// PrivateKey      *ecdsa.PrivateKey
@@ -104,8 +109,68 @@ var CrawlCmd = &cobra.Command{
 			return err
 		}
 		cfg.Bootnodes = bn
+
+		db, err := enode.OpenDB("")
+		if err != nil {
+			exit(err)
+		}
+
+		ln := enode.NewLocalNode(db, cfg.PrivateKey)
+		socket := listen(ln)
+
+		disc, err := discover.ListenV4(socket, ln, cfg)
+		defer disc.Close()
+		if err != nil {
+			exit(err)
+		}
+
+		var inputSet nodeSet
+		if common.FileExist(*inputCrawlParams.FileName) {
+			inputSet = loadNodesJSON(*inputCrawlParams.FileName)
+		}
+
+		c := newCrawler(inputSet, disc, disc.RandomNodes())
+		c.revalidateInterval = 10 * time.Minute
+
+		timeout, err := time.ParseDuration(*inputCrawlParams.Timeout)
+		if err != nil {
+			exit(err)
+		}
+
+		output := c.run(timeout)
+		writeNodesJSON(*inputCrawlParams.FileName, output)
+
 		return nil
 	},
+}
+
+func exit(err interface{}) {
+	if err == nil {
+		os.Exit(0)
+	}
+	fmt.Fprintln(os.Stderr, err)
+	os.Exit(1)
+}
+
+func listen(ln *enode.LocalNode) *net.UDPConn {
+	addr := "0.0.0.0:0"
+
+	socket, err := net.ListenPacket("udp4", addr)
+	if err != nil {
+		exit(err)
+	}
+
+	// Configure UDP endpoint in ENR from listener address.
+	usocket := socket.(*net.UDPConn)
+	uaddr := socket.LocalAddr().(*net.UDPAddr)
+	if uaddr.IP.IsUnspecified() {
+		ln.SetFallbackIP(net.IP{127, 0, 0, 1})
+	} else {
+		ln.SetFallbackIP(uaddr.IP)
+	}
+	ln.SetFallbackUDP(uaddr.Port)
+
+	return usocket
 }
 
 func decodeRecordHex(b []byte) ([]byte, bool) {
@@ -170,6 +235,7 @@ func parseBootnodes(bootnodes *string) ([]*enode.Node, error) {
 func init() {
 	cp := new(crawlParams)
 	cp.Bootnodes = CrawlCmd.PersistentFlags().String("bootnodes", "", "Comma separated nodes used for bootstrapping. At least one bootnode is required, so other nodes in the network can discover each other.")
+	cp.Timeout = CrawlCmd.PersistentFlags().String("timeout", "30m0s", "Time limit for the crawl.")
 
 	inputCrawlParams = *cp
 
