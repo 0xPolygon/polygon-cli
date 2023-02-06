@@ -1,3 +1,6 @@
 out/
 .DS_Store
 coverage.out
+
+.vscode
+*.json

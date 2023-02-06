@@ -17,10 +17,12 @@
 package crawl
 
 import (
+	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/rs/zerolog/log"
 )
 
 type crawler struct {
@@ -79,7 +81,7 @@ loop:
 		case it := <-doneCh:
 			if it == c.inputIter {
 				// Enable timeout when we're done revalidating the input nodes.
-				log.Info("Revalidation of input set is done", "len", len(c.input))
+				log.Info().Msgf("Revalidation of input set is done %d", len(c.input))
 				if timeout > 0 {
 					timeoutCh = timeoutTimer.C
 				}
@@ -114,41 +116,62 @@ func (c *crawler) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
 }
 
 func (c *crawler) updateNode(n *enode.Node) {
-	node, ok := c.output[n.ID()]
+	nodeItem, ok := c.output[n.ID()]
 
 	// Skip validation of recently-seen nodes.
-	if ok && time.Since(node.LastCheck) < c.revalidateInterval {
+	if ok && time.Since(nodeItem.LastCheck) < c.revalidateInterval {
 		return
 	}
 
 	// Request the node record.
 	nn, err := c.disc.RequestENR(n)
-	node.LastCheck = truncNow()
+
+	log.Info().Msg(n.String())
+	log.Info().Msg(nn.String())
+
+	// set up the service node
+	cfg := &node.DefaultConfig
+	cfg.P2P.ListenAddr = fmt.Sprintf(":%d", p2pPort)
+	cfg.IPCPath = ipcpath
+	cfg.DataDir = fmt.Sprintf("%s%d", datadirPrefix, p2pPort)
+
+	// create the node instance with the config
+	stack, err := node.New(cfg)
 	if err != nil {
-		if node.Score == 0 {
+		// demo.Log.Crit("ServiceNode create fail", "err", err)
+		return
+	}
+
+	p2pserver := stack.Server()
+	localnodeinfo := p2pserver.NodeInfo()
+
+	nodeItem.LastCheck = truncNow()
+	if err != nil {
+		if nodeItem.Score == 0 {
 			// Node doesn't implement EIP-868.
-			log.Debug("Skipping node", "id", n.ID())
+			log.Debug().Msgf("Skipping node: id %s", n.ID())
 			return
 		}
-		node.Score /= 2
+		nodeItem.Score /= 2
 	} else {
-		node.N = nn
-		node.Seq = nn.Seq()
-		node.Score++
-		if node.FirstResponse.IsZero() {
-			node.FirstResponse = node.LastCheck
+		nodeItem.N = nn
+		nodeItem.Seq = nn.Seq()
+		nodeItem.Score++
+		if nodeItem.FirstResponse.IsZero() {
+			nodeItem.FirstResponse = nodeItem.LastCheck
 		}
-		node.LastResponse = node.LastCheck
+		nodeItem.LastResponse = nodeItem.LastCheck
 	}
 
 	// Store/update node in output set.
-	if node.Score <= 0 {
-		log.Info("Removing node", "id", n.ID())
+	if nodeItem.Score <= 0 {
+		log.Info().Msgf("Removing node id %s", n.ID())
 		delete(c.output, n.ID())
 	} else {
-		log.Info("Updating node", "id", n.ID(), "seq", n.Seq(), "score", node.Score)
-		c.output[n.ID()] = node
+		log.Info().Msgf("Updating node id %s seq %d score %d", n.ID(), n.Seq(), node.Score)
+		c.output[n.ID()] = nodeItem
 	}
+
 }
 
 func truncNow() time.Time {
