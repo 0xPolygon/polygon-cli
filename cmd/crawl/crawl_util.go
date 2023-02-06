@@ -17,11 +17,12 @@
 package crawl
 
 import (
-	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+
+	"github.com/ethereum/go-ethereum/p2p"
+
 	"github.com/rs/zerolog/log"
 )
 
@@ -61,7 +62,7 @@ func newCrawler(input nodeSet, disc resolver, iters ...enode.Iterator) *crawler 
 	return c
 }
 
-func (c *crawler) run(timeout time.Duration) nodeSet {
+func (c *crawler) run(timeout time.Duration, server *p2p.Server) nodeSet {
 	var (
 		timeoutTimer = time.NewTimer(timeout)
 		timeoutCh    <-chan time.Time
@@ -77,7 +78,7 @@ loop:
 	for {
 		select {
 		case n := <-c.ch:
-			c.updateNode(n)
+			c.updateNode(n, server)
 		case it := <-doneCh:
 			if it == c.inputIter {
 				// Enable timeout when we're done revalidating the input nodes.
@@ -115,7 +116,7 @@ func (c *crawler) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
 	}
 }
 
-func (c *crawler) updateNode(n *enode.Node) {
+func (c *crawler) updateNode(n *enode.Node, server *p2p.Server) {
 	nodeItem, ok := c.output[n.ID()]
 
 	// Skip validation of recently-seen nodes.
@@ -126,24 +127,12 @@ func (c *crawler) updateNode(n *enode.Node) {
 	// Request the node record.
 	nn, err := c.disc.RequestENR(n)
 
-	log.Info().Msg(n.String())
-	log.Info().Msg(nn.String())
+	log.Info().Msgf("NODE PEER COUNT 1: %d", server.PeerCount())
+	log.Info().Msgf("NODE PEER COUNT 2: %d", server.PeerCount())
+	server.AddPeer(n)
 
-	// set up the service node
-	cfg := &node.DefaultConfig
-	cfg.P2P.ListenAddr = fmt.Sprintf(":%d", p2pPort)
-	cfg.IPCPath = ipcpath
-	cfg.DataDir = fmt.Sprintf("%s%d", datadirPrefix, p2pPort)
-
-	// create the node instance with the config
-	stack, err := node.New(cfg)
-	if err != nil {
-		// demo.Log.Crit("ServiceNode create fail", "err", err)
-		return
-	}
-
-	p2pserver := stack.Server()
-	localnodeinfo := p2pserver.NodeInfo()
+	log.Info().Msgf("NODE INFO: %s", server.PeersInfo())
+	log.Info().Msgf("NODE PEER: %s", server.Peers())
 
 	nodeItem.LastCheck = truncNow()
 	if err != nil {
@@ -168,7 +157,7 @@ func (c *crawler) updateNode(n *enode.Node) {
 		log.Info().Msgf("Removing node id %s", n.ID())
 		delete(c.output, n.ID())
 	} else {
-		log.Info().Msgf("Updating node id %s seq %d score %d", n.ID(), n.Seq(), node.Score)
+		log.Info().Msgf("Updating node id %s seq %d", n.ID(), n.Seq())
 		c.output[n.ID()] = nodeItem
 	}
 

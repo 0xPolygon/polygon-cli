@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	// "github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -110,19 +111,82 @@ var CrawlCmd = &cobra.Command{
 		}
 		cfg.Bootnodes = bn
 
+		const NodeNameProtocolID uint64 = 0x101
+
+		type NodeNameExchangeMsg struct {
+			Name string
+		}
+
+		// Define the ping-pong protocol
+		// NodeNameExchangeHandler := p2p.Protocol{
+		// 	Name:    "nodeNameExchange",
+		// 	Version: 1,
+		// 	Length:  2,
+		// 	Run: func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+		// 		log.Info().Msg("ACBDSFAJSFNO")
+		// 		// Send the node name to the remote peer
+		// 		if err := p2p.Send(rw, NodeNameProtocolID, &NodeNameExchangeMsg{Name: "MyNode"}); err != nil {
+		// 			return err
+		// 		}
+
+		// 		// Receive the node name from the remote peer
+		// 		msg, err := rw.ReadMsg()
+		// 		if err != nil {
+		// 			return err
+		// 		}
+		// 		if msg.Code != NodeNameProtocolID {
+		// 			return fmt.Errorf("Unexpected message code: %x", msg.Code)
+		// 		}
+
+		// 		var remoteNodeName NodeNameExchangeMsg
+		// 		if err := msg.Decode(&remoteNodeName); err != nil {
+		// 			return err
+		// 		}
+
+		// 		// Store the remote node name for later use
+		// 		// nodeID := peer.ID()
+
+		// 		// peer.NodeName = remoteNodeName.Name
+		// 		log.Info().Msgf("NODE NAME: %s", remoteNodeName.Name)
+
+		// 		return nil
+		// 	},
+		// }
+
+		// Create a config for the devp2p client
+		clientConfig := &p2p.Config{
+			PrivateKey: cfg.PrivateKey,
+			MaxPeers:   10,
+			Name:       "myClient",
+			// Protocols:   []p2p.Protocol{NodeNameExchangeHandler},
+			ListenAddr:  ":0", // Use a random port
+			DiscoveryV5: true,
+		}
+
+		// Create the devp2p client
+		server := &p2p.Server{
+			Config: *clientConfig,
+		}
+
+		// Start the devp2p client
+		if err := server.Start(); err != nil {
+			log.Error().Msgf("Error starting the client: %v", err)
+		}
+
 		db, err := enode.OpenDB("")
 		if err != nil {
 			exit(err)
 		}
 
 		ln := enode.NewLocalNode(db, cfg.PrivateKey)
+
 		socket := listen(ln)
 
 		disc, err := discover.ListenV4(socket, ln, cfg)
-		defer disc.Close()
 		if err != nil {
 			exit(err)
 		}
+		defer disc.Close()
 
 		var inputSet nodeSet
 		if common.FileExist(*inputCrawlParams.FileName) {
@@ -137,7 +201,7 @@ var CrawlCmd = &cobra.Command{
 			exit(err)
 		}
 
-		output := c.run(timeout)
+		output := c.run(timeout, server)
 		writeNodesJSON(*inputCrawlParams.FileName, output)
 
 		return nil
