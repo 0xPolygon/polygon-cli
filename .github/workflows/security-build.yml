@@ -2,7 +2,7 @@ name: Security Build
 on:
   push:
     branches:
-      - master # or the name of your main branch
+      - main
   workflow_dispatch: {}
 
 jobs:
