@@ -45,6 +45,7 @@ import (
 
 type (
 	crawlParams struct {
+		Client    *string
 		Bootnodes *string
 		Timeout   *string
 		FileName  *string
@@ -117,42 +118,6 @@ var CrawlCmd = &cobra.Command{
 			Name string
 		}
 
-		// Define the ping-pong protocol
-		// NodeNameExchangeHandler := p2p.Protocol{
-		// 	Name:    "nodeNameExchange",
-		// 	Version: 1,
-		// 	Length:  2,
-		// 	Run: func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
-		// 		log.Info().Msg("ACBDSFAJSFNO")
-		// 		// Send the node name to the remote peer
-		// 		if err := p2p.Send(rw, NodeNameProtocolID, &NodeNameExchangeMsg{Name: "MyNode"}); err != nil {
-		// 			return err
-		// 		}
-
-		// 		// Receive the node name from the remote peer
-		// 		msg, err := rw.ReadMsg()
-		// 		if err != nil {
-		// 			return err
-		// 		}
-		// 		if msg.Code != NodeNameProtocolID {
-		// 			return fmt.Errorf("Unexpected message code: %x", msg.Code)
-		// 		}
-
-		// 		var remoteNodeName NodeNameExchangeMsg
-		// 		if err := msg.Decode(&remoteNodeName); err != nil {
-		// 			return err
-		// 		}
-
-		// 		// Store the remote node name for later use
-		// 		// nodeID := peer.ID()
-
-		// 		// peer.NodeName = remoteNodeName.Name
-		// 		log.Info().Msgf("NODE NAME: %s", remoteNodeName.Name)
-
-		// 		return nil
-		// 	},
-		// }
-
 		// Create a config for the devp2p client
 		clientConfig := &p2p.Config{
 			PrivateKey: cfg.PrivateKey,
@@ -201,7 +166,7 @@ var CrawlCmd = &cobra.Command{
 			exit(err)
 		}
 
-		output := c.run(timeout, server)
+		output := c.run(timeout, *server)
 		writeNodesJSON(*inputCrawlParams.FileName, output)
 
 		return nil
@@ -300,6 +265,7 @@ func init() {
 	cp := new(crawlParams)
 	cp.Bootnodes = CrawlCmd.PersistentFlags().String("bootnodes", "", "Comma separated nodes used for bootstrapping. At least one bootnode is required, so other nodes in the network can discover each other.")
 	cp.Timeout = CrawlCmd.PersistentFlags().String("timeout", "30m0s", "Time limit for the crawl.")
+	cp.Client = CrawlCmd.PersistentFlags().String("client", "", "Name of client to filter the node information for.")
 
 	inputCrawlParams = *cp
 

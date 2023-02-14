@@ -17,11 +17,17 @@
 package crawl
 
 import (
+	"context"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"golang.org/x/net/context"
 
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/p2p"
+
+	// "github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/rs/zerolog/log"
 )
@@ -62,7 +68,7 @@ func newCrawler(input nodeSet, disc resolver, iters ...enode.Iterator) *crawler 
 	return c
 }
 
-func (c *crawler) run(timeout time.Duration, server *p2p.Server) nodeSet {
+func (c *crawler) run(timeout time.Duration, server p2p.Server) nodeSet {
 	var (
 		timeoutTimer = time.NewTimer(timeout)
 		timeoutCh    <-chan time.Time
@@ -78,7 +84,7 @@ loop:
 	for {
 		select {
 		case n := <-c.ch:
-			c.updateNode(n, server)
+			c.updateNode(n, server, inputCrawlParams.Client)
 		case it := <-doneCh:
 			if it == c.inputIter {
 				// Enable timeout when we're done revalidating the input nodes.
@@ -116,7 +122,7 @@ func (c *crawler) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
 	}
 }
 
-func (c *crawler) updateNode(n *enode.Node, server *p2p.Server) {
+func (c *crawler) updateNode(n *enode.Node, server p2p.Server, clientName *string) {
 	nodeItem, ok := c.output[n.ID()]
 
 	// Skip validation of recently-seen nodes.
@@ -124,16 +130,45 @@ func (c *crawler) updateNode(n *enode.Node, server *p2p.Server) {
 		return
 	}
 
-	// Request the node record.
-	nn, err := c.disc.RequestENR(n)
+	// log.Info().Msgf("URL: %s", fmt.Sprintf("http://%s:%d", n.IP(), n.TCP()))
 
-	log.Info().Msgf("NODE PEER COUNT 1: %d", server.PeerCount())
-	log.Info().Msgf("NODE PEER COUNT 2: %d", server.PeerCount())
+	// Connect to node via RPC
+	log.Info().Msgf("URL: %s", n.URLv4())
+	client, err := ethclient.Dial(n.URLv4())
+	if err != nil {
+		log.Error().Msgf("Error connecting to enode: %s", err)
+		return
+	}
+	// var result string
+	log.Info().Msgf("client.BlockNumber(): %d", client.BlockNumber(context.Background()))
+	// err = client.CallContext(context.Background(), &result, "web3_clientVersion")
+	// if err != nil {
+	// 	fmt.Println("Error sending version request:", err)
+	// 	// return
+	// }
+	// fmt.Println("Client Version:", result)
+
 	server.AddPeer(n)
 
-	log.Info().Msgf("NODE INFO: %s", server.PeersInfo())
-	log.Info().Msgf("NODE PEER: %s", server.Peers())
+	if len(server.PeersInfo()) == 1 && strings.HasPrefix(strings.ToLower(server.PeersInfo()[0].Name), strings.ToLower(*clientName)) {
+		log.Info().Msgf("ENR: %s", server.PeersInfo()[0].ENR)
+		log.Info().Msgf("Enode: %s", server.PeersInfo()[0].Enode)
+		log.Info().Msgf("ID: %s", server.PeersInfo()[0].ID)
+		log.Info().Msgf("Name: %s", server.PeersInfo()[0].Name)
+		log.Info().Msgf("LocalAddress: %s", server.PeersInfo()[0].Network.LocalAddress)
+		log.Info().Msgf("RemoteAddress: %s", server.PeersInfo()[0].Network.RemoteAddress)
+		log.Info().Msgf("Caps: %s", server.PeersInfo()[0].Caps)
+		// log.Info().Msgf("Protocols: %s", server.PeersInfo()[0].Protocols)
+	} else if len(server.PeersInfo()) > 1 {
+		log.Info().Msgf("HERE WE GO: %s", server.PeersInfo())
+	}
 
+	// server.RemoveTrustedPeer(n)
+
+	// log.Info().Msgf("NODE PEER: %s", server.Peers())
+
+	// Request the node record.
+	nn, err := c.disc.RequestENR(n)
 	nodeItem.LastCheck = truncNow()
 	if err != nil {
 		if nodeItem.Score == 0 {
