@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/maticnetwork/polygon-cli/cmd/abi"
 	"github.com/maticnetwork/polygon-cli/cmd/dumpblocks"
 	"github.com/maticnetwork/polygon-cli/cmd/forge"
 	"github.com/maticnetwork/polygon-cli/cmd/hash"
@@ -79,6 +80,7 @@ func init() {
 	rootCmd.AddCommand(mnemonic.MnemonicCmd)
 	rootCmd.AddCommand(nodekey.NodekeyCmd)
 	rootCmd.AddCommand(rpc.RpcCmd)
+	rootCmd.AddCommand(abi.ABICmd)
 	rootCmd.AddCommand(version.VersionCmd)
 	rootCmd.AddCommand(wallet.WalletCmd)
 }
