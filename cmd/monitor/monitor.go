@@ -140,11 +140,6 @@ var MonitorCmd = &cobra.Command{
 
 				from := big.NewInt(0)
 
-				// batchSize := *inputBatchSize
-				// if *inputBatchSize > 0 {
-				// 	batchSize = *inputBatchSize
-				// }
-
 				// if the max block is 0, meaning we haven't fetched any blocks, we're going to start with head - batchSize
 				if ms.MaxBlockRetrieved.Cmp(from) == 0 {
 					headBlockMinusBatchSize := new(big.Int).SetUint64(*inputBatchSize + 100 - 1)
