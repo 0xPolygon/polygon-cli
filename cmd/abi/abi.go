@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -34,6 +35,10 @@ go run main.go abi < ../zkevm-node/etherman/smartcontracts/abi/polygonzkevm.abi
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// it would be nice to have a generic reader
+
+		if *inputData == "" && *inputFileName == "" && len(args) == 0 {
+			return errors.New("no contract ABI provided")
+		}
 
 		rawData, err := getInputData(cmd, args)
 		if err != nil {
