@@ -17,14 +17,10 @@
 package crawl
 
 import (
-	"context"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"golang.org/x/net/context"
 
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/p2p"
 
 	// "github.com/ethereum/go-ethereum/rpc"
@@ -131,41 +127,7 @@ func (c *crawler) updateNode(n *enode.Node, server p2p.Server, clientName *strin
 	}
 
 	// log.Info().Msgf("URL: %s", fmt.Sprintf("http://%s:%d", n.IP(), n.TCP()))
-
-	// Connect to node via RPC
-	log.Info().Msgf("URL: %s", n.URLv4())
-	client, err := ethclient.Dial(n.URLv4())
-	if err != nil {
-		log.Error().Msgf("Error connecting to enode: %s", err)
-		return
-	}
-	// var result string
-	log.Info().Msgf("client.BlockNumber(): %d", client.BlockNumber(context.Background()))
-	// err = client.CallContext(context.Background(), &result, "web3_clientVersion")
-	// if err != nil {
-	// 	fmt.Println("Error sending version request:", err)
-	// 	// return
-	// }
-	// fmt.Println("Client Version:", result)
-
-	server.AddPeer(n)
-
-	if len(server.PeersInfo()) == 1 && strings.HasPrefix(strings.ToLower(server.PeersInfo()[0].Name), strings.ToLower(*clientName)) {
-		log.Info().Msgf("ENR: %s", server.PeersInfo()[0].ENR)
-		log.Info().Msgf("Enode: %s", server.PeersInfo()[0].Enode)
-		log.Info().Msgf("ID: %s", server.PeersInfo()[0].ID)
-		log.Info().Msgf("Name: %s", server.PeersInfo()[0].Name)
-		log.Info().Msgf("LocalAddress: %s", server.PeersInfo()[0].Network.LocalAddress)
-		log.Info().Msgf("RemoteAddress: %s", server.PeersInfo()[0].Network.RemoteAddress)
-		log.Info().Msgf("Caps: %s", server.PeersInfo()[0].Caps)
-		// log.Info().Msgf("Protocols: %s", server.PeersInfo()[0].Protocols)
-	} else if len(server.PeersInfo()) > 1 {
-		log.Info().Msgf("HERE WE GO: %s", server.PeersInfo())
-	}
-
-	// server.RemoveTrustedPeer(n)
-
-	// log.Info().Msgf("NODE PEER: %s", server.Peers())
+	// log.Info().Msgf("URL: %s", n.URLv4())
 
 	// Request the node record.
 	nn, err := c.disc.RequestENR(n)

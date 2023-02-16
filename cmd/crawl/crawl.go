@@ -114,10 +114,6 @@ var CrawlCmd = &cobra.Command{
 
 		const NodeNameProtocolID uint64 = 0x101
 
-		type NodeNameExchangeMsg struct {
-			Name string
-		}
-
 		// Create a config for the devp2p client
 		clientConfig := &p2p.Config{
 			PrivateKey: cfg.PrivateKey,
