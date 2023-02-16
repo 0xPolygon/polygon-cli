@@ -26,7 +26,7 @@ require (
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
 )
 
-require github.com/cenkalti/backoff v2.2.1+incompatible // indirect
+require github.com/cenkalti/backoff v2.2.1+incompatible
 
 require (
 	github.com/andybalholm/brotli v1.0.4 // indirect
@@ -183,8 +183,7 @@ require (
 	github.com/vedhavyas/go-subkey v1.0.3 // indirect
 	golang.org/x/exp v0.0.0-20221114191408-850992195362
 	golang.org/x/sys v0.3.0 // indirect
-	golang.org/x/term v0.3.0
-	google.golang.org/protobuf v1.28.1 // indirect
+	google.golang.org/protobuf v1.28.1
 	gopkg.in/ini.v1 v1.66.4 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

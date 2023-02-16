@@ -5,11 +5,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	gethabi "github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/spf13/cobra"
 	"io"
 	"os"
 	"strings"
+
+	gethabi "github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/spf13/cobra"
 )
 
 var (
