@@ -26,6 +26,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 
 	edgeblockchain "github.com/0xPolygon/polygon-edge/blockchain"
 	edgechain "github.com/0xPolygon/polygon-edge/chain"
@@ -60,6 +61,7 @@ type (
 		Mode        string
 		Count       uint64
 		BlocksFile  string
+		BlockReward string
 
 		GenesisData []byte
 	}
@@ -145,6 +147,7 @@ func init() {
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.Mode, "mode", "m", "json", "The forge mode indicates how we should get the transactions for our blocks [json, proto]")
 	ForgeCmd.PersistentFlags().Uint64VarP(&inputForge.Count, "count", "C", 100, "The number of blocks to try to forge")
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.BlocksFile, "blocks", "b", "", "A file of encoded blocks; the format of this file should match the mode")
+	ForgeCmd.PersistentFlags().StringVarP(&inputForge.BlockReward, "block-reward", "B", "2_000_000_000_000_000_000", "The amount rewarded for mining blocks")
 
 	if err := cobra.MarkFlagRequired(ForgeCmd.PersistentFlags(), "blocks"); err != nil {
 		log.Error().Err(err).Msg("Unable to mark blocks flag as required")
@@ -399,8 +402,14 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, br BlockReader) error {
 	blocksToRead := inputForge.Count
 	genesisBlock, _ := bc.GetBlockByHash(bc.Genesis(), true)
 
-	// the block reward should probably be configurable depending on the needs
-	blockReward := big.NewInt(2_000_000_000_000_000_000)
+	inputForge.BlockReward = strings.ReplaceAll(strings.TrimSpace(inputForge.BlockReward), "_", "")
+	blockReward := new(big.Int)
+	base := 10
+	if strings.HasPrefix(inputForge.BlockReward, "0x") {
+		base = 16
+	}
+	blockReward.SetString(inputForge.BlockReward, base)
+
 	parentBlock := genesisBlock
 
 	// this should probably be based on a flag, but in our current use case, we're going to assume the 0th block is
