@@ -78,7 +78,7 @@ go run main.go abi < ../zkevm-node/etherman/smartcontracts/abi/polygonzkevm.abi
 func init() {
 	flagSet := ABICmd.PersistentFlags()
 	inputFileName = flagSet.String("file", "", "Provide a filename to read and analyze")
-	inputData = flagSet.String("data", "", "Provid input data to be unpacked based on the ABI defintion")
+	inputData = flagSet.String("data", "", "Provide input data to be unpacked based on the ABI defintion")
 }
 
 func parseContractInputData(data string) ([]byte, []byte, error) {
