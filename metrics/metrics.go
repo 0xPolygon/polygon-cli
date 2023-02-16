@@ -40,7 +40,7 @@ func (a SortableBlocks) Swap(i, j int) {
 	a[i], a[j] = a[j], a[i]
 }
 func (a SortableBlocks) Less(i, j int) bool {
-	return a[i].Time() < a[j].Time()
+	return a[i].Number().Int64() < a[j].Number().Int64()
 }
 
 func GetMeanBlockTime(blocks []rpctypes.PolyBlock) float64 {
