@@ -40,6 +40,9 @@ func (a SortableBlocks) Swap(i, j int) {
 	a[i], a[j] = a[j], a[i]
 }
 func (a SortableBlocks) Less(i, j int) bool {
+	if a[i].Time() == a[j].Time() {
+		return a[i].Number().Int64() < a[j].Number().Int64()
+	}
 	return a[i].Time() < a[j].Time()
 }
 
