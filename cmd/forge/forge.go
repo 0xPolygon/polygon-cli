@@ -17,7 +17,6 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package forge
 
 import (
-	"bufio"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -42,10 +41,8 @@ import (
 	edgebuildroot "github.com/0xPolygon/polygon-edge/types/buildroot"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/hashicorp/go-hclog"
-	"github.com/maticnetwork/polygon-cli/proto/gen/pb"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"golang.org/x/exp/slices"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -54,26 +51,18 @@ import (
 
 type (
 	forgeParams struct {
-		Client      string
-		DataDir     string
-		GenesisFile string
-		Verifier    string
-		Mode        string
-		Count       uint64
-		BlocksFile  string
-		BlockReward string
+		Client        string
+		DataDir       string
+		GenesisFile   string
+		Verifier      string
+		Mode          string
+		Count         uint64
+		BlocksFile    string
+		BlockReward   string
+		ReceiptsFile  string
+		IncludeTxFees bool
 
 		GenesisData []byte
-	}
-	BlockReader interface {
-		ReadBlock() (rpctypes.PolyBlock, error)
-	}
-	JSONBlockReader struct {
-		scanner *bufio.Scanner
-	}
-	ProtoBlockReader struct {
-		file   *os.File
-		offset int64
 	}
 )
 
@@ -100,17 +89,22 @@ Here is an example usage:
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println("forge called")
-		bc, err := NewEdgeBlockchain()
+		blockchain, err := NewEdgeBlockchain()
 		if err != nil {
 			return err
 		}
 
-		br, err := OpenBlockReader(inputForge.BlocksFile, inputForge.Mode)
+		blockReader, err := OpenBlockReader(inputForge.BlocksFile, inputForge.Mode)
 		if err != nil {
 			return err
 		}
 
-		err = readAllBlocksToChain(bc, br)
+		receiptReader, err := OpenReceiptReader(inputForge.ReceiptsFile, inputForge.Mode)
+		if inputForge.IncludeTxFees && err != nil {
+			return err
+		}
+
+		err = readAllBlocksToChain(blockchain, blockReader, receiptReader)
 
 		return err
 	},
@@ -147,7 +141,9 @@ func init() {
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.Mode, "mode", "m", "json", "The forge mode indicates how we should get the transactions for our blocks [json, proto]")
 	ForgeCmd.PersistentFlags().Uint64VarP(&inputForge.Count, "count", "C", 100, "The number of blocks to try to forge")
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.BlocksFile, "blocks", "b", "", "A file of encoded blocks; the format of this file should match the mode")
-	ForgeCmd.PersistentFlags().StringVarP(&inputForge.BlockReward, "block-reward", "B", "2_000_000_000_000_000_000", "The amount rewarded for mining blocks")
+	ForgeCmd.PersistentFlags().StringVarP(&inputForge.BlockReward, "base-block-reward", "B", "2_000_000_000_000_000_000", "The amount rewarded for mining blocks")
+	ForgeCmd.PersistentFlags().StringVarP(&inputForge.ReceiptsFile, "receipts", "r", "", "A file of encoded receipts; the format of this file should match the mode")
+	ForgeCmd.PersistentFlags().BoolVarP(&inputForge.IncludeTxFees, "tx-fees", "t", false, "if the transaction fees should be included when computing block rewards")
 
 	if err := cobra.MarkFlagRequired(ForgeCmd.PersistentFlags(), "blocks"); err != nil {
 		log.Error().Err(err).Msg("Unable to mark blocks flag as required")
@@ -236,168 +232,7 @@ func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 	return bh, nil
 }
 
-// OpenBlockReader returns a block reader object which can be used to read the
-// file. It will return a mode specific block reader.
-func OpenBlockReader(file string, mode string) (BlockReader, error) {
-	blockFile, err := os.Open(file)
-	if err != nil {
-		return nil, fmt.Errorf("unable to open %s blocks file: %w", inputForge.BlocksFile, err)
-	}
-
-	switch mode {
-	case "json":
-		maxCapacity := 5 * 1024 * 1024
-		buf := make([]byte, maxCapacity)
-		scanner := bufio.NewScanner(blockFile)
-		scanner.Buffer(buf, maxCapacity)
-
-		br := JSONBlockReader{
-			scanner: scanner,
-		}
-		return &br, nil
-
-	case "proto":
-		br := ProtoBlockReader{
-			file: blockFile,
-		}
-		return &br, nil
-
-	default:
-		return nil, fmt.Errorf("invalid mode: %s", inputForge.Mode)
-	}
-}
-
-func (br *JSONBlockReader) ReadBlock() (rpctypes.PolyBlock, error) {
-	if !br.scanner.Scan() {
-		return nil, BlockReadEOF
-	}
-
-	rawBlockBytes := br.scanner.Bytes()
-	var raw rpctypes.RawBlockResponse
-	err := json.Unmarshal(rawBlockBytes, &raw)
-	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshal block: %w - %s", err, string(rawBlockBytes))
-	}
-	return rpctypes.NewPolyBlock(&raw), nil
-}
-
-func (br *ProtoBlockReader) ReadBlock() (rpctypes.PolyBlock, error) {
-	// reading the length of the encoded item before reading each item
-	buf := make([]byte, 4)
-	if _, err := br.file.ReadAt(buf, br.offset); err != nil {
-		return nil, err
-	}
-	itemSize := binary.LittleEndian.Uint32(buf)
-	br.offset += 4
-
-	// reading the actual encoded item
-	item := make([]byte, itemSize)
-	if _, err := br.file.ReadAt(item, br.offset); err != nil {
-		return nil, err
-	}
-
-	block := &pb.Block{}
-	if err := proto.Unmarshal(item, block); err != nil {
-		return nil, err
-	}
-
-	br.offset += int64(itemSize)
-
-	txs := []rpctypes.RawTransactionResponse{}
-	for _, tx := range block.Transactions {
-		to := ""
-		if tx.To != nil {
-			to = *tx.To
-		}
-
-		txs = append(txs, rpctypes.RawTransactionResponse{
-			BlockHash:        rpctypes.RawData32Response(tx.BlockHash),
-			BlockNumber:      rpctypes.RawQuantityResponse(tx.BlockNumber),
-			From:             rpctypes.RawData20Response(tx.From),
-			Gas:              rpctypes.RawQuantityResponse(tx.Gas),
-			GasPrice:         rpctypes.RawQuantityResponse(tx.GasPrice),
-			Hash:             rpctypes.RawData32Response(tx.Hash),
-			Input:            rpctypes.RawDataResponse(tx.Input),
-			Nonce:            rpctypes.RawQuantityResponse(tx.Nonce),
-			To:               rpctypes.RawData20Response(to),
-			TransactionIndex: rpctypes.RawQuantityResponse(tx.TransactionIndex),
-			Value:            rpctypes.RawQuantityResponse(tx.Value),
-			V:                rpctypes.RawQuantityResponse(tx.V),
-			R:                rpctypes.RawQuantityResponse(tx.R),
-			S:                rpctypes.RawQuantityResponse(tx.S),
-			Type:             rpctypes.RawQuantityResponse(tx.Type),
-		})
-	}
-
-	uncles := []rpctypes.RawData32Response{}
-	for _, uncle := range block.Uncles {
-		uncles = append(uncles, rpctypes.RawData32Response(uncle))
-	}
-
-	raw := rpctypes.RawBlockResponse{
-		Number:           rpctypes.RawQuantityResponse(block.Number),
-		Hash:             rpctypes.RawData32Response(block.Hash),
-		ParentHash:       rpctypes.RawData32Response(block.ParentHash),
-		Nonce:            rpctypes.RawData8Response(block.Nonce),
-		SHA3Uncles:       rpctypes.RawData32Response(block.Sha3Uncles),
-		LogsBloom:        rpctypes.RawData256Response(block.LogsBloom),
-		TransactionsRoot: rpctypes.RawData32Response(block.TransactionsRoot),
-		StateRoot:        rpctypes.RawData32Response(block.StateRoot),
-		ReceiptsRoot:     rpctypes.RawData32Response(block.ReceiptsRoot),
-		Miner:            rpctypes.RawData20Response(block.Miner),
-		Difficulty:       rpctypes.RawQuantityResponse(block.Difficulty),
-		TotalDifficulty:  rpctypes.RawQuantityResponse(block.TotalDifficulty),
-		ExtraData:        rpctypes.RawDataResponse(block.ExtraData),
-		Size:             rpctypes.RawQuantityResponse(block.Size),
-		GasLimit:         rpctypes.RawQuantityResponse(block.GasLimit),
-		GasUsed:          rpctypes.RawQuantityResponse(block.GasUsed),
-		Timestamp:        rpctypes.RawQuantityResponse(block.Timestamp),
-		Transactions:     txs,
-		Uncles:           uncles,
-		BaseFeePerGas:    rpctypes.RawQuantityResponse(block.BaseFeePerGas),
-	}
-
-	return rpctypes.NewPolyBlock(&raw), nil
-}
-
-func ReadProtoFromFile(filepath string) ([][]byte, error) {
-	file, err := os.Open(filepath)
-	if err != nil {
-		return nil, err
-	}
-
-	var offset int64
-	content := make([][]byte, 0)
-
-	for {
-		// reading the length of the encoded item before reading each item
-		buf := make([]byte, 4)
-		if _, err := file.ReadAt(buf, offset); err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, err
-		}
-		itemSize := binary.LittleEndian.Uint32(buf)
-		offset += 4
-
-		// reading the actual encoded item
-		item := make([]byte, itemSize)
-		if _, err := file.ReadAt(item, offset); err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, err
-		}
-
-		content = append(content, item)
-		offset += int64(itemSize)
-	}
-
-	return content, nil
-}
-
-func readAllBlocksToChain(bh *edgeBlockchainHandle, br BlockReader) error {
+func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, receiptReader ReceiptReader) error {
 	bc := bh.Blockchain
 	blocksToRead := inputForge.Count
 	genesisBlock, _ := bc.GetBlockByHash(bc.Genesis(), true)
@@ -414,7 +249,7 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, br BlockReader) error {
 
 	// this should probably be based on a flag, but in our current use case, we're going to assume the 0th block is
 	// a copy of the genesis block, so there's no point inserting it again
-	_, err := br.ReadBlock()
+	_, err := blockReader.ReadBlock()
 	if err != nil {
 		return fmt.Errorf("could not read off the genesis block from input: %w", err)
 	}
@@ -428,27 +263,28 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, br BlockReader) error {
 	// we want to create new numbering
 	var lastNumber uint64 = 0
 	var i uint64
+	var receipt *rpctypes.RawTransactionResponse
 	for i = 1; i < blocksToRead; i = i + 1 {
 		// read a polyblock which is a generic interface that can be marshalled into different formats
-		b, err := br.ReadBlock()
+		block, err := blockReader.ReadBlock()
 		if err != nil {
 			return fmt.Errorf("could not read block %d due to error: %w", i, err)
 		}
 
-		if _, hasKey := blockHashSet[b.Hash()]; hasKey {
-			log.Trace().Str("blockhash", b.Hash().String()).Msg("Skipping duplicate block")
+		if _, hasKey := blockHashSet[block.Hash()]; hasKey {
+			log.Trace().Str("blockhash", block.Hash().String()).Msg("Skipping duplicate block")
 			continue
 		}
-		blockHashSet[b.Hash()] = struct{}{}
+		blockHashSet[block.Hash()] = struct{}{}
 
-		if b.Number().Uint64()-1 != lastNumber {
-			return fmt.Errorf("encountered non consecutive block numbers on input. Got %s and expected %d", b.Number().String(), lastNumber+1)
+		if block.Number().Uint64()-1 != lastNumber {
+			return fmt.Errorf("encountered non consecutive block numbers on input. Got %s and expected %d", block.Number().String(), lastNumber+1)
 		}
-		lastNumber = b.Number().Uint64()
+		lastNumber = block.Number().Uint64()
 
 		// convert the generic rpc block into a block for edge. I suppose we'll need to think about other blockchain
 		// forging at somet poing, but for now edge & supernets seem to be the real use case
-		edgeBlock := PolyBlockToEdge(b)
+		edgeBlock := PolyBlockToEdge(block)
 
 		// The parent hash value will not make sense, so we'll overwrite this when the value from our local parent block.
 		edgeBlock.Header.ParentHash = parentBlock.Header.ComputeHash().Hash
@@ -484,10 +320,36 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, br BlockReader) error {
 			return fmt.Errorf("unable to verify finalized block: %w", err)
 		}
 
-		// This might be worth putting behind a flag at somet point, but we need some way to distribute native token
+		// This might be worth putting behind a flag at some point, but we need some way to distribute native token
 		// from mining. This is a hacky way to do it and right now, I'm not including transaction fees
 		minerBalance := txn.GetBalance(edgetypes.BytesToAddress(edgeBlock.Header.Miner))
 		minerBalance = minerBalance.Add(minerBalance, blockReward)
+
+		if inputForge.IncludeTxFees {
+			receipts := []*rpctypes.RawTransactionResponse{}
+			for i := range block.Transactions() {
+				receipt, err = receiptReader.ReadReceipt()
+				if err != nil {
+					return fmt.Errorf("unable to read receipt to compute transaction fees: %w", err)
+				}
+
+				if receipt.BlockNumber.ToBigInt().Cmp(block.Number()) == -1 {
+					// There are some receipts that exists which are not in the block
+					// 	transactions. Skip the receipts where receiptBlockNumber is less
+					// than blockNumber.
+					log.Trace().Str("blockNumber", block.Number().String()).Str("receiptBlockNumber", receipt.BlockNumber.String()).Msg("Skipping receipt")
+					i -= 0
+					continue
+				}
+
+				if receipt.BlockNumber.ToBigInt().Cmp(block.Number()) != 0 {
+					return fmt.Errorf("receipt block number mismatch, block numbers: %v, %v ", receipt.BlockNumber.ToBigInt(), block.Number())
+				}
+
+				receipts = append(receipts, receipt)
+			}
+		}
+
 		txn.Txn().SetBalance(edgetypes.BytesToAddress(edgeBlock.Header.Miner), minerBalance)
 
 		// after doing the irregular state change, i need to update the block headers again with the new root hash and
