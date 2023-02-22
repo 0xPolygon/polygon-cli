@@ -328,7 +328,6 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 
 		if inputForge.IncludeTxFees {
 			totalGasUsed := big.NewInt(0)
-			totalFee := big.NewInt(0)
 
 			for i := 0; i < len(block.Transactions()); i++ {
 				receipt, err = receiptReader.ReadReceipt()
@@ -349,7 +348,7 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 				}
 
 				totalGasUsed.Add(totalGasUsed, receipt.GasUsed.ToBigInt())
-				totalFee = big.NewInt(0).Mul(totalGasUsed, receipt.EffectiveGasPrice.ToBigInt())
+				totalFee := big.NewInt(0).Mul(totalGasUsed, receipt.EffectiveGasPrice.ToBigInt())
 				minerTips.Add(minerTips, totalFee)
 			}
 
