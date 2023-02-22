@@ -51,16 +51,16 @@ import (
 
 type (
 	forgeParams struct {
-		Client        string
-		DataDir       string
-		GenesisFile   string
-		Verifier      string
-		Mode          string
-		Count         uint64
-		BlocksFile    string
-		BlockReward   string
-		ReceiptsFile  string
-		IncludeTxFees bool
+		Client          string
+		DataDir         string
+		GenesisFile     string
+		Verifier        string
+		Mode            string
+		Count           uint64
+		BlocksFile      string
+		BaseBlockReward string
+		ReceiptsFile    string
+		IncludeTxFees   bool
 
 		GenesisData []byte
 	}
@@ -141,7 +141,7 @@ func init() {
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.Mode, "mode", "m", "json", "The forge mode indicates how we should get the transactions for our blocks [json, proto]")
 	ForgeCmd.PersistentFlags().Uint64VarP(&inputForge.Count, "count", "C", 100, "The number of blocks to try to forge")
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.BlocksFile, "blocks", "b", "", "A file of encoded blocks; the format of this file should match the mode")
-	ForgeCmd.PersistentFlags().StringVarP(&inputForge.BlockReward, "base-block-reward", "B", "2_000_000_000_000_000_000", "The amount rewarded for mining blocks")
+	ForgeCmd.PersistentFlags().StringVarP(&inputForge.BaseBlockReward, "base-block-reward", "B", "2_000_000_000_000_000_000", "The amount rewarded for mining blocks")
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.ReceiptsFile, "receipts", "r", "", "A file of encoded receipts; the format of this file should match the mode")
 	ForgeCmd.PersistentFlags().BoolVarP(&inputForge.IncludeTxFees, "tx-fees", "t", false, "if the transaction fees should be included when computing block rewards")
 
@@ -237,13 +237,13 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 	blocksToRead := inputForge.Count
 	genesisBlock, _ := bc.GetBlockByHash(bc.Genesis(), true)
 
-	inputForge.BlockReward = strings.ReplaceAll(strings.TrimSpace(inputForge.BlockReward), "_", "")
-	blockReward := new(big.Int)
+	inputForge.BaseBlockReward = strings.ReplaceAll(strings.TrimSpace(inputForge.BaseBlockReward), "_", "")
+	baseBlockReward := new(big.Int)
 	base := 10
-	if strings.HasPrefix(inputForge.BlockReward, "0x") {
+	if strings.HasPrefix(inputForge.BaseBlockReward, "0x") {
 		base = 16
 	}
-	blockReward.SetString(inputForge.BlockReward, base)
+	baseBlockReward.SetString(inputForge.BaseBlockReward, base)
 
 	parentBlock := genesisBlock
 
@@ -263,7 +263,7 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 	// we want to create new numbering
 	var lastNumber uint64 = 0
 	var i uint64
-	var receipt *rpctypes.RawTransactionResponse
+	var receipt *rpctypes.RawTxReceipt
 	for i = 1; i < blocksToRead; i = i + 1 {
 		// read a polyblock which is a generic interface that can be marshalled into different formats
 		block, err := blockReader.ReadBlock()
@@ -321,13 +321,16 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 		}
 
 		// This might be worth putting behind a flag at some point, but we need some way to distribute native token
-		// from mining. This is a hacky way to do it and right now, I'm not including transaction fees
+		// from mining. This is a hacky way to do it and right now.
 		minerBalance := txn.GetBalance(edgetypes.BytesToAddress(edgeBlock.Header.Miner))
-		minerBalance = minerBalance.Add(minerBalance, blockReward)
+		minerTips := big.NewInt(0)
+		burnedFee := big.NewInt(0)
 
 		if inputForge.IncludeTxFees {
-			receipts := []*rpctypes.RawTransactionResponse{}
-			for i := range block.Transactions() {
+			totalGasUsed := big.NewInt(0)
+			totalFee := big.NewInt(0)
+
+			for i := 0; i < len(block.Transactions()); i++ {
 				receipt, err = receiptReader.ReadReceipt()
 				if err != nil {
 					return fmt.Errorf("unable to read receipt to compute transaction fees: %w", err)
@@ -335,10 +338,9 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 
 				if receipt.BlockNumber.ToBigInt().Cmp(block.Number()) == -1 {
 					// There are some receipts that exists which are not in the block
-					// 	transactions. Skip the receipts where receiptBlockNumber is less
+					// transactions. Skip the receipts where receiptBlockNumber is less
 					// than blockNumber.
-					log.Trace().Str("blockNumber", block.Number().String()).Str("receiptBlockNumber", receipt.BlockNumber.String()).Msg("Skipping receipt")
-					i -= 0
+					i -= 1
 					continue
 				}
 
@@ -346,10 +348,16 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 					return fmt.Errorf("receipt block number mismatch, block numbers: %v, %v ", receipt.BlockNumber.ToBigInt(), block.Number())
 				}
 
-				receipts = append(receipts, receipt)
+				totalGasUsed.Add(totalGasUsed, receipt.GasUsed.ToBigInt())
+				totalFee = big.NewInt(0).Mul(totalGasUsed, receipt.EffectiveGasPrice.ToBigInt())
+				minerTips.Add(minerTips, totalFee)
 			}
+
+			burnedFee = burnedFee.Mul(big.NewInt(int64(block.GasUsed())), block.BaseFee())
 		}
 
+		blockReward := big.NewInt(0).Add(baseBlockReward, big.NewInt(0).Sub(minerTips, burnedFee))
+		minerBalance = minerBalance.Add(minerBalance, blockReward)
 		txn.Txn().SetBalance(edgetypes.BytesToAddress(edgeBlock.Header.Miner), minerBalance)
 
 		// after doing the irregular state change, i need to update the block headers again with the new root hash and

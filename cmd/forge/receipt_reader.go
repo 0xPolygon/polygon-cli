@@ -11,7 +11,7 @@ import (
 
 type (
 	ReceiptReader interface {
-		ReadReceipt() (*rpctypes.RawTransactionResponse, error)
+		ReadReceipt() (*rpctypes.RawTxReceipt, error)
 	}
 	JSONReceiptReader struct {
 		scanner *bufio.Scanner
@@ -38,21 +38,18 @@ func OpenReceiptReader(file string, mode string) (ReceiptReader, error) {
 		}
 		return &receiptsReader, nil
 
-	case "proto":
-		return nil, nil
-
 	default:
 		return nil, fmt.Errorf("invalid mode: %s", mode)
 	}
 }
 
-func (receiptsReader *JSONReceiptReader) ReadReceipt() (*rpctypes.RawTransactionResponse, error) {
+func (receiptsReader *JSONReceiptReader) ReadReceipt() (*rpctypes.RawTxReceipt, error) {
 	if !receiptsReader.scanner.Scan() {
 		return nil, BlockReadEOF
 	}
 
 	rawTxBytes := receiptsReader.scanner.Bytes()
-	var raw rpctypes.RawTransactionResponse
+	var raw rpctypes.RawTxReceipt
 	err := json.Unmarshal(rawTxBytes, &raw)
 	if err != nil {
 		return nil, fmt.Errorf("unable to unmarshal file receipt: %w - %s", err, string(rawTxBytes))

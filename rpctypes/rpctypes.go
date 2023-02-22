@@ -182,6 +182,9 @@ type (
 		// cumulativeGasUsed : QUANTITY - The total amount of gas used when this transaction was executed in the block.
 		CumulativeGasUsed RawQuantityResponse `json:"cumulativeGasUsed"`
 
+		// effectiveGasPrice : QUANTITY - The total base charge plus tip paid for each unit of gas.
+		EffectiveGasPrice RawQuantityResponse `json:"effectiveGasPrice"`
+
 		// gasUsed : QUANTITY - The amount of gas used by this specific transaction alone.
 		GasUsed RawQuantityResponse `json:"gasUsed"`
 
