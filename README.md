@@ -330,25 +330,44 @@ go run main.go metrics-to-dash -i avail-light-metrics.txt -p avail_light. -t "Av
 
 ```
 
-# Adding Commands
+# ABI
 
-Script to setup this repo
-
-```bash
-cobra-cli init
-cobra-cli add version
-cobra-cli add hash
-cobra-cli add mnemonic
+This command is useful for analyzing Solidity ABIs and decoding function selectors and input data. Most commonly, we need
+this capability while analyzing raw blocks when we don't know which method is being called, but we know the smart contract.
+We can the command like this to get the function signatures and selectors:
+```shell
+go run main.go abi --file contract.abi
 ```
 
-This is the content of my `~/.cobra.yaml` file
-
-```yaml
----
-author: Polygon <engineering@polygon.technology>
-license: lgpl-3.0
-useViper: true
+This would output some information that woudl let us know the various function selectors for this contract:
+```txt
+Selector:19d8ac61	Signature:function lastTimestamp() view returns(uint64)
+Selector:a066215c	Signature:function setVerifyBatchTimeTarget(uint64 newVerifyBatchTimeTarget) returns()
+Selector:715018a6	Signature:function renounceOwnership() returns()
+Selector:cfa8ed47	Signature:function trustedSequencer() view returns(address)
 ```
+
+If we want to break down input data we can run something like this:
+
+```shell
+go run main.go abi --data 0x3c158267000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000063ed0f8f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006eec03843b9aca0082520894d2f852ec7b4e457f6e7ff8b243c49ff5692926ea87038d7ea4c68000808204c58080642dfe2cca094f2419aad1322ec68e3b37974bd9c918e0686b9bbf02b8bd1145622a3dd64202da71549c010494fd1475d3bf232aa9028204a872fd2e531abfd31c000000000000000000000000000000000000 < contract.abi
+```
+
+In addition to the function selector data, we'll also get a breakdown of input data:
+
+```json
+{
+  "batches": [
+    {
+      "transactions": "7AOEO5rKAIJSCJTS+FLse05Ff25/+LJDxJ/1aSkm6ocDjX6kxoAAgIIExYCAZC3+LMoJTyQZqtEyLsaOOzeXS9nJGOBoa5u/Ari9EUViKj3WQgLacVScAQSU/RR1078jKqkCggSocv0uUxq/0xw=",
+      "globalExitRoot": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "timestamp": 1676480399,
+      "minForcedTimestamp": 0
+    }
+  ]
+}
+```
+
 
 # Testing with Geth
 
@@ -359,68 +378,6 @@ we'll startup geth.
 ```shell
 # Geth
 ./build/bin/geth --dev --dev.period 2 --http --http.addr localhost --http.port 8545 --http.api admin,debug,web3,eth,txpool,personal,miner,net --verbosity 5 --rpc.gascap 50000000  --rpc.txfeecap 0 --miner.gaslimit  10 --miner.gasprice 1 --gpo.blocks 1 --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2 --dev.gaslimit 50000000
-
-
-# v3
-go run main.go server --dev \
-    --dev.period 2 \
-    --ws --ws.port 8546 \
-    --http --http.port 8545 \
-    --jsonrpc.modules eth,web3,personal,net \
-    --log-level debug \
-    --ipcpath ./borv3ipc \
-    --rpc.gascap 18446744073709551615 \
-    --rpc.txfeecap 0 \
-    --miner.gaslimit  10 \
-    --miner.gasprice 1 \
-    --gpo.blocks 1 \
-    --gpo.percentile 1 \
-    --gpo.maxprice 10 \
-    --gpo.ignoreprice 2
-```
-
-If you don't have `v3` make sure you grab it.
-
-- Build the binaries
-
-  ```sh
-  git clone https://github.com/maticnetwork/v3.git
-  cd v3
-  make all
-  ```
-
-- Generate the contracts as `borv3 init-genesis` requires them
-
-  ```sh
-  git submodule update --init --recursive
-  cd v3-contracts
-  npm i
-  npx hardhat compile --show-stack-traces
-  ```
-
-Simple startup script for borv3 from our testing
-
-```bash
-#!/bin/bash
-
-num=4
-
-rm -rf test-dir-*
-rm genesis.json
-
-# rm borv3
-# go build -o borv3 cmd/borv3/main.go
-
-./borv3 init-account --datadir test-dir --num $num
-./borv3 init-genesis --premine 0x85da99c8a7c2c95964c8efd687e95e632fc533d6
-
-seq 1 $num | while read -r line
-do
-    ./borv3 server --chain genesis.json --datadir test-dir-$line --port 3030$line --mine --http --http.port 854$line --jsonrpc.modules eth --rpc.gascap 18446744073709551615 &
-done
-
-# ps aux | grep borv3 | grep -v grep | awk '{print $2}' | xargs kill -9
-```
 
 In the logs, we'll see a line that says IPC endpoint opened:
 
@@ -471,7 +428,7 @@ Useful RPCs when testing
 
 ```shell
 curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "net_version", "params": []}' https://polygon-rpc.com
-curl -v -H 'Content-Type: application/json' -d '{"id": 1, "method": "eth_blockNumber", "params": []}' https://polygon-rpc.com
+curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "eth_blockNumber", "params": []}' https://polygon-rpc.com
 curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "eth_getBlockByNumber", "params": ["0x1DE8531", true]}' https://polygon-rpc.com
 curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "clique_getSigner", "params": ["0x1DE8531", true]}' https://polygon-rpc.com
 curl -v -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "id": 1, "method": "eth_getBalance", "params": ["0x85da99c8a7c2c95964c8efd687e95e632fc533d6", "latest"]}' https://polygon-rpc.com
