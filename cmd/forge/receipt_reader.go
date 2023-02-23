@@ -28,9 +28,9 @@ func OpenReceiptReader(file string, mode string) (ReceiptReader, error) {
 
 	switch mode {
 	case "json":
-		buf := make([]byte, maxCapacity)
+		buf := make([]byte, maxBufferCapacity)
 		scanner := bufio.NewScanner(receiptsFile)
-		scanner.Buffer(buf, maxCapacity)
+		scanner.Buffer(buf, maxBufferCapacity)
 
 		receiptsReader := JSONReceiptReader{
 			scanner: scanner,
