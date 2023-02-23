@@ -13,6 +13,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const maxBufferCapacity = 5 * 1024 * 1024
+
 type (
 	BlockReader interface {
 		ReadBlock() (rpctypes.PolyBlock, error)
@@ -36,10 +38,9 @@ func OpenBlockReader(file string, mode string) (BlockReader, error) {
 
 	switch mode {
 	case "json":
-		maxCapacity := 5 * 1024 * 1024
-		buf := make([]byte, maxCapacity)
+		buf := make([]byte, maxBufferCapacity)
 		scanner := bufio.NewScanner(blockFile)
-		scanner.Buffer(buf, maxCapacity)
+		scanner.Buffer(buf, maxBufferCapacity)
 
 		br := JSONBlockReader{
 			scanner: scanner,
