@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/maticnetwork/polygon-cli/cmd/fork"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -83,6 +84,7 @@ func init() {
 	rootCmd.AddCommand(abi.ABICmd)
 	rootCmd.AddCommand(version.VersionCmd)
 	rootCmd.AddCommand(wallet.WalletCmd)
+	rootCmd.AddCommand(fork.ForkCmd)
 }
 
 // initConfig reads in config file and ENV variables if set.
