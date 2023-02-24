@@ -17,13 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-type (
-	jsonBlock struct {
-		json.RawMessage
-		Transactions types.Transactions `json:"transactions"`
-	}
-)
-
 var (
 	rpcURL     string
 	blockHash  ethcommon.Hash
@@ -46,8 +39,7 @@ TODO
 			log.Error().Err(err).Str("rpc", rpcURL).Msg("Could not rpc dial connection")
 			return err
 		}
-		walkTheBlocks(blockHash, c)
-		return nil
+		return walkTheBlocks(blockHash, c)
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 2 {
