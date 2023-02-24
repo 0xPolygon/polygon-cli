@@ -32,7 +32,6 @@ var ForkCmd = &cobra.Command{
 TODO
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		log.Info().Msg("Hi there")
 		log.Info().Str("rpc", rpcURL).Str("blockHash", blockHash.String()).Msg("Starting Analysis")
 		c, err := ethclient.Dial(rpcURL)
 		if err != nil {
