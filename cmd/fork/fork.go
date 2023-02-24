@@ -2,6 +2,7 @@ package fork
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -14,6 +15,13 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
+type (
+	jsonBlock struct {
+		json.RawMessage
+		Transactions types.Transactions `json:"transactions"`
+	}
+)
+
 var (
 	rpcURL     string
 	blockHash  ethcommon.Hash
@@ -21,6 +29,7 @@ var (
 
 	errRetryLimitExceeded = fmt.Errorf("Unable to process request after hitting retry limit")
 )
+
 var ForkCmd = &cobra.Command{
 	Use:   "fork blockhash http://polygon-rpc.com",
 	Short: "Take a forked block and walk up the chain to do analysis",
@@ -58,6 +67,12 @@ func walkTheBlocks(inputBlockHash ethcommon.Hash, client *ethclient.Client) erro
 	}
 	log.Info().Uint64("headBlock", bn).Msg("retrieved current head of the chain")
 
+	folderName := fmt.Sprintf("fork-analysis-%d", time.Now().Unix())
+	if err := os.Mkdir(folderName, os.ModePerm); err != nil {
+		log.Error().Err(err).Msg("Unable to create output folder")
+		return err
+	}
+
 	for {
 		potentialForkedBlock, err := getBlockByHash(ctx, inputBlockHash, client)
 		if err != nil {
@@ -69,22 +84,65 @@ func walkTheBlocks(inputBlockHash ethcommon.Hash, client *ethclient.Client) erro
 		canonicalBlock, err := client.BlockByNumber(ctx, potentialForkedBlock.Number())
 		if err != nil {
 			log.Error().Err(err).Uint64("number", potentialForkedBlock.NumberU64()).Msg("unable to retrieve block by number")
+
 			return err
 		}
 		if potentialForkedBlock.Hash().String() == canonicalBlock.Hash().String() {
+			err = writeBlock(folderName, canonicalBlock, true)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to save final canonical block")
+			}
 			log.Info().Uint64("number", canonicalBlock.NumberU64()).Str("blockHash", canonicalBlock.Hash().String()).Msg("the current block seems to be canonical in the chain. Stopping analysis")
 			break
-		} else {
-			log.Info().
-				Uint64("number", potentialForkedBlock.NumberU64()).
-				Str("forkedBlockHash", potentialForkedBlock.Hash().String()).
-				Str("canonicalBlockHash", canonicalBlock.Hash().String()).
-				Msg("Identified forked block. Continuing traversal")
+		}
+		log.Info().
+			Uint64("number", potentialForkedBlock.NumberU64()).
+			Str("forkedBlockHash", potentialForkedBlock.Hash().String()).
+			Str("canonicalBlockHash", canonicalBlock.Hash().String()).
+			Msg("Identified forked block. Continuing traversal")
+
+		err = writeBlock(folderName, potentialForkedBlock, false)
+		if err != nil {
+			log.Error().Err(err).Msg("unable to save forked block")
+			return err
+		}
+		err = writeBlock(folderName, canonicalBlock, true)
+		if err != nil {
+			log.Error().Err(err).Msg("unable to save canonical block")
+			return err
 		}
 		// Ever higher
 		inputBlockHash = potentialForkedBlock.ParentHash()
 	}
 	return nil
+}
+
+func writeBlock(folderName string, block *types.Block, isCanonical bool) error {
+	rawHeader, err := block.Header().MarshalJSON()
+	if err != nil {
+		log.Error().Err(err).Msg("unable to json marshal the header")
+		return err
+	}
+	fields := make(map[string]interface{}, 0)
+	err = json.Unmarshal(rawHeader, &fields)
+	if err != nil {
+		log.Error().Err(err).Msg("unable to convert header to map type")
+		return err
+	}
+	fields["transactions"] = block.Transactions()
+
+	jsonData, err := json.Marshal(fields)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to marshal block to json")
+		return err
+	}
+	blockType := "c"
+	if !isCanonical {
+		blockType = "f"
+	}
+	fileName := fmt.Sprintf("%s/%d-%s-%s.json", folderName, block.NumberU64(), blockType, block.Hash().String())
+	err = os.WriteFile(fileName, jsonData, 0744)
+	return err
 }
 
 // getBlockByHash will try to get a block by hash in a loop. Unless we have a dedicated node that we know has the forked blocks it's going to be tricky to consistently get results from a fork. So it requires some brute force
