@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core/types"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -130,6 +132,13 @@ func writeBlock(folderName string, block *types.Block, isCanonical bool) error {
 		return err
 	}
 	fields["transactions"] = block.Transactions()
+	// TODO in the future if this is used in other chains or with different types of consensus this would need to be revised
+	signer, err := ecrecover(block)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to recover signature")
+		return err
+	}
+	fields["_signer"] = ethcommon.BytesToAddress(signer)
 
 	jsonData, err := json.Marshal(fields)
 	if err != nil {
@@ -158,6 +167,22 @@ func getBlockByHash(ctx context.Context, bh ethcommon.Hash, client *ethclient.Cl
 	}
 	log.Error().Err(errRetryLimitExceeded).Str("blockhash", bh.String()).Int("retryLimit", retryLimit).Msg("unable to fetch block after retrying")
 	return nil, errRetryLimitExceeded
+}
+
+func ecrecover(block *types.Block) ([]byte, error) {
+	header := block.Header()
+	sigStart := len(header.Extra) - ethcrypto.SignatureLength
+	if sigStart < 0 || sigStart > len(header.Extra) {
+		return nil, fmt.Errorf("unable to recover signature")
+	}
+	signature := header.Extra[sigStart:]
+	pubkey, err := ethcrypto.Ecrecover(clique.SealHash(header).Bytes(), signature)
+	if err != nil {
+		return nil, err
+	}
+	signer := ethcrypto.Keccak256(pubkey[1:])[12:]
+
+	return signer, nil
 }
 
 func init() {
