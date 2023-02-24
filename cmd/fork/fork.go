@@ -26,7 +26,7 @@ var (
 )
 
 var ForkCmd = &cobra.Command{
-	Use:   "fork blockhash http://polygon-rpc.com",
+	Use:   "fork 0x053d84d5215684c8ae810a4729f7c9b54d65a80b128a27aeddcd7dc295a0cebd https://polygon-rpc.com",
 	Short: "Take a forked block and walk up the chain to do analysis",
 	Long: `
 TODO
