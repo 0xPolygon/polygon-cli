@@ -22,7 +22,7 @@ require (
 	github.com/tyler-smith/go-bip32 v1.0.0
 	github.com/tyler-smith/go-bip39 v1.1.0
 	golang.org/x/crypto v0.1.0
-	golang.org/x/text v0.4.0
+	golang.org/x/text v0.7.0
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
 )
 
@@ -100,7 +100,7 @@ require (
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.22.0 // indirect
 	golang.org/x/mod v0.6.0 // indirect
-	golang.org/x/net v0.1.0 // indirect
+	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 // indirect
 	golang.org/x/tools v0.2.0 // indirect
 	google.golang.org/genproto v0.0.0-20220920201722-2b89144ce006 // indirect
@@ -184,7 +184,7 @@ require (
 	github.com/tklauser/numcpus v0.2.2 // indirect
 	github.com/vedhavyas/go-subkey v1.0.3 // indirect
 	golang.org/x/exp v0.0.0-20221114191408-850992195362
-	golang.org/x/sys v0.3.0 // indirect
+	golang.org/x/sys v0.5.0 // indirect
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/ini.v1 v1.66.4 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
