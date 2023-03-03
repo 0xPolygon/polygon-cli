@@ -37,7 +37,7 @@ go run main.go abi < ../zkevm-node/etherman/smartcontracts/abi/polygonzkevm.abi
 
 		rawData, err := getInputData(cmd, args)
 		if err != nil {
-			return nil
+			return err
 		}
 		buf := bytes.NewReader(rawData)
 		abi, err := gethabi.JSON(buf)
