@@ -51,16 +51,21 @@ import (
 
 type (
 	forgeParams struct {
-		Client          string
-		DataDir         string
-		GenesisFile     string
-		Verifier        string
-		Mode            string
-		Count           uint64
-		BlocksFile      string
-		BaseBlockReward string
-		ReceiptsFile    string
-		IncludeTxFees   bool
+		Client                string
+		DataDir               string
+		GenesisFile           string
+		Verifier              string
+		Mode                  string
+		Count                 uint64
+		BlocksFile            string
+		BaseBlockReward       string
+		ReceiptsFile          string
+		IncludeTxFees         bool
+		ShouldReadFirstBlock  bool
+		ShouldVerifyBlocks    bool
+		ShouldRewriteTxNonces bool
+		HasConsecutiveBlocks  bool
+		ShouldProcessBlocks   bool
 
 		GenesisData []byte
 	}
@@ -144,6 +149,11 @@ func init() {
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.BaseBlockReward, "base-block-reward", "B", "2_000_000_000_000_000_000", "The amount rewarded for mining blocks")
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.ReceiptsFile, "receipts", "r", "", "A file of encoded receipts; the format of this file should match the mode")
 	ForgeCmd.PersistentFlags().BoolVarP(&inputForge.IncludeTxFees, "tx-fees", "t", false, "if the transaction fees should be included when computing block rewards")
+	ForgeCmd.PersistentFlags().BoolVarP(&inputForge.ShouldReadFirstBlock, "read-first-block", "R", false, "whether to read the first block, leave false if first block is genesis")
+	ForgeCmd.PersistentFlags().BoolVarP(&inputForge.ShouldVerifyBlocks, "verify-blocks", "V", true, "whether to verify blocks, set false if forging nonconsecutive blocks")
+	ForgeCmd.PersistentFlags().BoolVarP(&inputForge.ShouldRewriteTxNonces, "rewrite-tx-nonces", "", false, "whether to rewrite transaction nonces, set true if forging nonconsecutive blocks")
+	ForgeCmd.PersistentFlags().BoolVarP(&inputForge.HasConsecutiveBlocks, "consecutive-blocks", "", true, "whether the blocks file has consecutive blocks")
+	ForgeCmd.PersistentFlags().BoolVarP(&inputForge.ShouldProcessBlocks, "process-blocks", "p", true, "whether the transactions in blocks should be processed applied to the state")
 
 	if err := cobra.MarkFlagRequired(ForgeCmd.PersistentFlags(), "blocks"); err != nil {
 		log.Error().Err(err).Msg("Unable to mark blocks flag as required")
@@ -159,7 +169,6 @@ type edgeBlockchainHandle struct {
 }
 
 func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
-
 	var chainConfig edgechain.Chain
 	err := json.Unmarshal(inputForge.GenesisData, &chainConfig)
 	if err != nil {
@@ -247,24 +256,26 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 
 	parentBlock := genesisBlock
 
-	// this should probably be based on a flag, but in our current use case, we're going to assume the 0th block is
-	// a copy of the genesis block, so there's no point inserting it again
-	_, err := blockReader.ReadBlock()
-	if err != nil {
-		return fmt.Errorf("could not read off the genesis block from input: %w", err)
+	// Usually, the first block is the genesis block so it will skip it based on the flag.
+	var i uint64 = 0
+	if !inputForge.ShouldReadFirstBlock {
+		_, err := blockReader.ReadBlock()
+		if err != nil {
+			return fmt.Errorf("could not read off the genesis block from input: %w", err)
+		}
+		i++
 	}
 
 	// in practice, I ran into some issues where the dumps that I created had duplicate blocks, This map is used to
 	// detect and skip any kind of duplicates
 	blockHashSet := make(map[ethcommon.Hash]struct{}, 0)
 
-	// insertion into the chain will fail if blocks are numbered non-sequnetially. This is used to throw an error if we
+	// insertion into the chain will fail if blocks are numbered non-sequentially. This is used to throw an error if we
 	// encounter blocks out of order. In the future, we should have a flag if we want to use original numbering or if
 	// we want to create new numbering
 	var lastNumber uint64 = 0
-	var i uint64
 	var receipt *rpctypes.RawTxReceipt
-	for i = 1; i < blocksToRead; i = i + 1 {
+	for ; i < blocksToRead; i++ {
 		// read a polyblock which is a generic interface that can be marshalled into different formats
 		block, err := blockReader.ReadBlock()
 		if err != nil {
@@ -277,14 +288,24 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 		}
 		blockHashSet[block.Hash()] = struct{}{}
 
-		if block.Number().Uint64()-1 != lastNumber {
+		// There are instances where we can import nonconsecutive blocks, skip this
+		// error on those instances.
+		if inputForge.HasConsecutiveBlocks && block.Number().Uint64()-1 != lastNumber {
 			return fmt.Errorf("encountered non consecutive block numbers on input. Got %s and expected %d", block.Number().String(), lastNumber+1)
 		}
 		lastNumber = block.Number().Uint64()
 
 		// convert the generic rpc block into a block for edge. I suppose we'll need to think about other blockchain
-		// forging at somet poing, but for now edge & supernets seem to be the real use case
+		// forging at some point, but for now edge & supernets seem to be the real use case
 		edgeBlock := PolyBlockToEdge(block)
+
+		// The transactions nonces need to be rewritten or else there will be an error.
+		if inputForge.ShouldRewriteTxNonces {
+			for nonce, tx := range edgeBlock.Transactions {
+				tx.Nonce = uint64(nonce)
+				log.Logger.Debug().Int64("old nonce", int64(tx.Nonce)).Int64("new nonce", int64(nonce)).Str("tx hash", tx.Hash.String()).Msg("Rewrote tx nonce")
+			}
+		}
 
 		// The parent hash value will not make sense, so we'll overwrite this when the value from our local parent block.
 		edgeBlock.Header.ParentHash = parentBlock.Header.ComputeHash().Hash
@@ -297,10 +318,15 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 			return err
 		}
 
-		// This will execute the block and apply the transaction to the state
-		txn, err := bh.Executor.ProcessBlock(parentBlock.Header.StateRoot, edgeBlock, blockCreator)
+		var txn *edgestate.Transition
+		if inputForge.ShouldProcessBlocks {
+			// This will execute the block and apply the transaction to the state.
+			txn, err = bh.Executor.ProcessBlock(parentBlock.Header.StateRoot, edgeBlock, blockCreator)
+		} else {
+			txn, err = bh.Executor.BeginTxn(parentBlock.Header.StateRoot, edgeBlock.Header, blockCreator)
+		}
 		if err != nil {
-			return fmt.Errorf("unable to process block %d %s: %w", i, edgeBlock.Hash().String(), err)
+			return fmt.Errorf("unable to process block %d with hash %s at index %d: %w", block.Number().Int64(), edgeBlock.Hash().String(), i, err)
 		}
 
 		if err = bh.Blockchain.GetConsensus().PreCommitState(edgeBlock.Header, txn); err != nil {
@@ -314,10 +340,12 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 		edgeBlock.Header.StateRoot = newRoot
 		edgeBlock.Header.Hash = edgeBlock.Header.ComputeHash().Hash
 
-		// This is an optional step but helpful to catch some mistakes in implementation
-		err = bc.VerifyFinalizedBlock(edgeBlock)
-		if err != nil {
-			return fmt.Errorf("unable to verify finalized block: %w", err)
+		// This is an optional step but helpful to catch some mistakes in implementation.
+		if inputForge.ShouldVerifyBlocks {
+			err = bc.VerifyFinalizedBlock(edgeBlock)
+			if err != nil {
+				return fmt.Errorf("unable to verify finalized block: %w", err)
+			}
 		}
 
 		// This might be worth putting behind a flag at some point, but we need some way to distribute native token
