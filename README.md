@@ -313,7 +313,7 @@ cat poa-core.0.to.100k | grep '"difficulty"' > poa-core.0.to.100k.blocks
 polycli forge --genesis genesis.json --mode json --blocks poa-core.0.to.100k.blocks --count 99999
 ```
 
-```
+```bash
 # To do the same with using proto instead of json:
 polycli dumpblocks http://127.0.0.1:8545 0 1000000 -f poa-core.0.to.100k.proto -r=false -m proto
 polycli forge --genesis genesis.json --mode proto --blocks poa-core.0.to.100k.proto --count 99999
@@ -324,7 +324,7 @@ polycli forge --genesis genesis.json --mode proto --blocks poa-core.0.to.100k.pr
 Sometimes, it can be helpful to only import the blocks and transactions that are
 relevant. This can be done with `dumpblocks` by providing a `--filter` flag.
 
-```
+```bash
 polycli dumpblocks http://127.0.0.1:8545/ 0 100000 \
   --filename poa-core.0.to.100k.test \
   --dump-blocks=true \
@@ -337,7 +337,7 @@ import only the blocks that are listed in the blocks file. This can be
 non-consecutive blocks. If you receive a `not enough funds to cover gas costs` 
 error, be sure to fund those addresses in in the `genesis.json`.
 
-```
+```bash
 polycli forge \
   --genesis genesis.json \
   --mode json \
@@ -354,11 +354,11 @@ polycli forge \
 ```
 
 Start the server with:
-```
+```bash
 polygon-edge server --data-dir ./forged-data --chain genesis.json --grpc-address :10000 --libp2p :10001 --jsonrpc :10002
 ```
 and query it with:
-```
+```bash
 polycli rpc http://localhost:10002 eth_getBlockByNumber 2743 false | jq
 ```
 You will notice that block numbers that have been skipped will return `null`. 
