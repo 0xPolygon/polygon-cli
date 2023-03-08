@@ -23,11 +23,13 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/maticnetwork/polygon-cli/proto/gen/pb"
+	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -47,6 +49,12 @@ type (
 		ShouldDumpReceipts bool
 		Filename           string
 		Mode               string
+		FilterStr          string
+		filter             Filter
+	}
+	Filter struct {
+		To   []string `json:"to"`
+		From []string `json:"from"`
 	}
 )
 
@@ -95,6 +103,8 @@ var DumpblocksCmd = &cobra.Command{
 						time.Sleep(5 * time.Second)
 						continue
 					}
+
+					blocks = filterBlocks(blocks)
 
 					if inputDumpblocks.ShouldDumpBlocks {
 						err = writeResponses(blocks, "block")
@@ -170,6 +180,18 @@ var DumpblocksCmd = &cobra.Command{
 			return fmt.Errorf("output format must one of [json, proto]")
 		}
 
+		if err := json.Unmarshal([]byte(inputDumpblocks.FilterStr), &inputDumpblocks.filter); err != nil {
+			return fmt.Errorf("could not unmarshal filter string")
+		}
+
+		// Make sure the filters are all lowercase.
+		for i := 0; i < len(inputDumpblocks.filter.To); i++ {
+			inputDumpblocks.filter.To[i] = strings.ToLower(inputDumpblocks.filter.To[i])
+		}
+		for i := 0; i < len(inputDumpblocks.filter.From); i++ {
+			inputDumpblocks.filter.From[i] = strings.ToLower(inputDumpblocks.filter.From[i])
+		}
+
 		return nil
 	},
 }
@@ -181,6 +203,7 @@ func init() {
 	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.Filename, "filename", "f", "", "where to write the output to (default stdout)")
 	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
 	DumpblocksCmd.PersistentFlags().Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "the batch size. Realistically, this probably shouldn't be bigger than 999. Most providers seem to cap at 1000.")
+	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from, not setting a filter means all are allowed")
 }
 
 // writeResponses writes the data to either stdout or a file if one is provided.
@@ -273,4 +296,31 @@ func writeProto(out []byte) error {
 	}
 
 	return nil
+}
+
+// filterBlocks will filter blocks that having transactions with a matching to or
+// from field. If the to or from is an empty slice, then it will match all.
+func filterBlocks(blocks []*json.RawMessage) []*json.RawMessage {
+	// No filtering is done if there filters are not set.
+	if len(inputDumpblocks.filter.To) == 0 && len(inputDumpblocks.filter.From) == 0 {
+		return blocks
+	}
+
+	filtered := []*json.RawMessage{}
+	for _, msg := range blocks {
+		var block rpctypes.RawBlockResponse
+		if err := json.Unmarshal(*msg, &block); err != nil {
+			log.Error().Bytes("block", *msg).Msg("Unable to unmarshal block")
+			continue
+		}
+
+		for _, tx := range block.Transactions {
+			if (len(inputDumpblocks.filter.To) > 0 && slices.Contains(inputDumpblocks.filter.To, strings.ToLower(string(tx.To)))) ||
+				(len(inputDumpblocks.filter.From) > 0 && slices.Contains(inputDumpblocks.filter.From, strings.ToLower(string(tx.From)))) {
+				filtered = append(filtered, msg)
+			}
+		}
+	}
+
+	return filtered
 }
