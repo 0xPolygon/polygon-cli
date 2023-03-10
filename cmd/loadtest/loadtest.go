@@ -711,13 +711,13 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					}
 				}
 
-				if !retryForNonce {
+				if retryForNonce {
+					retryForNonce = false
+				} else {
 					currentNonceMutex.Lock()
 					myNonceValue = currentNonce
 					currentNonce = currentNonce + 1
 					currentNonceMutex.Unlock()
-				} else {
-					retryForNonce = false
 				}
 
 				localMode := mode
@@ -757,7 +757,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					retryForNonce = true
 				}
 
-				log.Trace().Int64("routine", i).Str("mode", localMode).Int64("request", j).Msg("Request")
+				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode).Int64("request", j).Msg("Request")
 			}
 			wg.Done()
 		}(i)
