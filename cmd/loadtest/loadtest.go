@@ -757,7 +757,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				// this is a special case specific for zkevm. In this case the nonce itself hasn't been used so if we increment we'll cause a gap
 				// https://github.com/0xPolygonHermez/zkevm-node/blob/v0.0.3-RC14/state/runtime/runtime.go#L41
-				if err.Error() == "nonce intrinsic error" {
+				if err != nil && err.Error() == "nonce intrinsic error" {
 					retryForNonce = true
 					log.Trace().Err(err).Uint64("nonce", myNonceValue).Msg("Encountered nonce intrinsic error. Trying again with same nonce")
 				}
