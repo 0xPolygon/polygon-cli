@@ -767,18 +767,44 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	wg.Wait()
 	log.Debug().Uint64("currenNonce", currentNonce).Msg("Finished main loadtest loop")
 	log.Debug().Msg("Waiting for transactions to actually be mined")
-	err = waitForFinalNonce(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
+	finalBlockNumber, err := waitForFinalBlock(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
 	if err != nil {
 		log.Error().Err(err).Msg("there was an issue waiting for all transactions to be mined")
 	}
 
+	lightSummary(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
 	if *ltp.ShouldProduceSummary {
-		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
+		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
 		if err != nil {
 			log.Error().Err(err).Msg("There was an issue creating the load test summary")
 		}
 	}
 	return nil
+}
+
+func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endBlockNumber, endNonce uint64) {
+	startBlock, err := c.BlockByNumber(ctx, new(big.Int).SetUint64(startBlockNumber))
+	if err != nil {
+		log.Error().Err(err).Msg("unable to get start block for light summary")
+		return
+	}
+	endBlock, err := c.BlockByNumber(ctx, new(big.Int).SetUint64(endBlockNumber))
+	if err != nil {
+		log.Error().Err(err).Msg("unable to get end block for light summary")
+		return
+	}
+	endTime := time.Unix(int64(endBlock.Time()), 0)
+	startTime := time.Unix(int64(startBlock.Time()), 0)
+
+	testDuration := endTime.Sub(startTime)
+	tps := float64(len(loadTestResults)) / float64(testDuration.Seconds())
+
+	log.Info().
+		Time("firstBlockTime", startTime).
+		Time("lastBlockTime", endTime).
+		Dur("testDuration", testDuration).
+		Float64("tps", tps).
+		Msg("rough test summary (ignores errors)")
 }
 
 func blockUntilSuccessful(f func() error, tries int) error {
@@ -1322,7 +1348,7 @@ func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 	return tops
 }
 
-func waitForFinalNonce(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endNonce uint64) error {
+func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endNonce uint64) (uint64, error) {
 	ltp := inputLoadTestParams
 	var err error
 	var lastBlockNumber uint64
@@ -1332,11 +1358,11 @@ func waitForFinalNonce(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 	for {
 		lastBlockNumber, err = c.BlockNumber(ctx)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		currentNonce, err = c.NonceAt(ctx, *ltp.FromETHAddress, new(big.Int).SetUint64(lastBlockNumber))
 		if err != nil {
-			return err
+			return 0, err
 		}
 		if currentNonce < endNonce && maxWaitCount > 0 {
 			log.Trace().Uint64("endNonce", endNonce).Uint64("currentNonce", currentNonce).Msg("Not all transactions have been mined. Waiting")
@@ -1345,15 +1371,15 @@ func waitForFinalNonce(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 			continue
 		}
 		if maxWaitCount <= 0 {
-			return fmt.Errorf("waited for %d attempts for the transactions to be mined", initialWaitCount)
+			return 0, fmt.Errorf("waited for %d attempts for the transactions to be mined", initialWaitCount)
 		}
 		break
 	}
 
 	log.Trace().Uint64("currentNonce", currentNonce).Uint64("startblock", startBlockNumber).Uint64("endblock", lastBlockNumber).Msg("It looks like all transactions have been mined")
-	return nil
+	return lastBlockNumber, nil
 }
-func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endNonce uint64) error {
+func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, lastBlockNumber, endNonce uint64) error {
 	ltp := inputLoadTestParams
 	var err error
 
