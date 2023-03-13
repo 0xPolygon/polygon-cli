@@ -766,6 +766,12 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
 	log.Debug().Uint64("currenNonce", currentNonce).Msg("Finished main loadtest loop")
+	log.Debug().Msg("Waiting for transactions to actually be mined")
+	err = waitForFinalNonce(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
+	if err != nil {
+		log.Error().Err(err).Msg("there was an issue waiting for all transactions to be mined")
+	}
+
 	if *ltp.ShouldProduceSummary {
 		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
 		if err != nil {
@@ -1316,32 +1322,41 @@ func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 	return tops
 }
 
-func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endNonce uint64) error {
+func waitForFinalNonce(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endNonce uint64) error {
 	ltp := inputLoadTestParams
 	var err error
 	var lastBlockNumber uint64
 	var currentNonce uint64
-	var maxWaitCount = 20
+	var initialWaitCount = 50
+	var maxWaitCount = initialWaitCount
 	for {
 		lastBlockNumber, err = c.BlockNumber(ctx)
 		if err != nil {
 			return err
 		}
-
 		currentNonce, err = c.NonceAt(ctx, *ltp.FromETHAddress, new(big.Int).SetUint64(lastBlockNumber))
 		if err != nil {
 			return err
 		}
-		if currentNonce < endNonce && maxWaitCount < 0 {
+		if currentNonce < endNonce && maxWaitCount > 0 {
 			log.Trace().Uint64("endNonce", endNonce).Uint64("currentNonce", currentNonce).Msg("Not all transactions have been mined. Waiting")
 			time.Sleep(5 * time.Second)
 			maxWaitCount = maxWaitCount - 1
 			continue
 		}
+		if maxWaitCount <= 0 {
+			return fmt.Errorf("waited for %d attempts for the transactions to be mined", initialWaitCount)
+		}
 		break
 	}
 
 	log.Trace().Uint64("currentNonce", currentNonce).Uint64("startblock", startBlockNumber).Uint64("endblock", lastBlockNumber).Msg("It looks like all transactions have been mined")
+	return nil
+}
+func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endNonce uint64) error {
+	ltp := inputLoadTestParams
+	var err error
+
 	log.Trace().Msg("Starting block range capture")
 	// confirm start block number is ok
 	_, err = c.BlockByNumber(ctx, new(big.Int).SetUint64(startBlockNumber))
