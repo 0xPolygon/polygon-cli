@@ -802,6 +802,7 @@ func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, 
 	log.Info().
 		Time("firstBlockTime", startTime).
 		Time("lastBlockTime", endTime).
+		Int("transactionCount", len(loadTestResults)).
 		Float64("testDuration", testDuration.Seconds()).
 		Float64("tps", tps).
 		Msg("rough test summary (ignores errors)")
