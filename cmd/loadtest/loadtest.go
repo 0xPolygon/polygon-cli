@@ -797,12 +797,12 @@ func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, 
 	startTime := time.Unix(int64(startBlock.Time()), 0)
 
 	testDuration := endTime.Sub(startTime)
-	tps := float64(len(loadTestResults)) / float64(testDuration.Seconds())
+	tps := float64(len(loadTestResults)) / testDuration.Seconds()
 
 	log.Info().
 		Time("firstBlockTime", startTime).
 		Time("lastBlockTime", endTime).
-		Dur("testDuration", testDuration).
+		Float64("testDuration", testDuration.Seconds()).
 		Float64("tps", tps).
 		Msg("rough test summary (ignores errors)")
 }
