@@ -313,11 +313,56 @@ cat poa-core.0.to.100k | grep '"difficulty"' > poa-core.0.to.100k.blocks
 polycli forge --genesis genesis.json --mode json --blocks poa-core.0.to.100k.blocks --count 99999
 ```
 
-```
+```bash
 # To do the same with using proto instead of json:
-go run main.go dumpblocks http://127.0.0.1:8545 0 1000000 -f poa-core.0.to.100k.proto -r=false -m proto
-go run main.go forge --genesis genesis.json --mode proto --blocks poa-core.0.to.100k.proto --count 99999
+polycli dumpblocks http://127.0.0.1:8545 0 1000000 -f poa-core.0.to.100k.proto -r=false -m proto
+polycli forge --genesis genesis.json --mode proto --blocks poa-core.0.to.100k.proto --count 99999
 ```
+
+## Forging Filtered Blocks
+
+Sometimes, it can be helpful to only import the blocks and transactions that are
+relevant. This can be done with `dumpblocks` by providing a `--filter` flag.
+
+```bash
+polycli dumpblocks http://127.0.0.1:8545/ 0 100000 \
+  --filename poa-core.0.to.100k.test \
+  --dump-blocks=true \
+  --dump-receipts=true \
+  --filter '{"to":["0xaf93ff8c6070c4880ca5abc4051f309aa19ec385","0x2d68f0161fcd778db31c7080f6c914657f4d240"],"from":["0xcf260ea317555637c55f70e55dba8d5ad8414cb0","0xaf93ff8c6070c4880ca5abc4051f309aa19ec385","0x2d68f0161fcd778db31c7080f6c914657f4d240"]}'
+```
+
+To load the pruned blocks into Edge, a couple of flags need to be set. This will
+import only the blocks that are listed in the blocks file. This can be 
+non-consecutive blocks. If you receive a `not enough funds to cover gas costs` 
+error, be sure to fund those addresses in in the `genesis.json`.
+
+```bash
+polycli forge \
+  --genesis genesis.json \
+  --mode json \
+  --blocks poa-core.0.to.100k.test.blocks \
+  --receipts poa-core.0.to.100k.test.receipts \
+  --count 2 \
+  --tx-fees=true \
+  --base-block-reward 1000000000000000000 \
+  --read-first-block=true \
+  --rewrite-tx-nonces=true \
+  --verify-blocks=false \
+  --consecutive-blocks=false \
+  --process-blocks=false
+```
+
+Start the server with:
+```bash
+polygon-edge server --data-dir ./forged-data --chain genesis.json --grpc-address :10000 --libp2p :10001 --jsonrpc :10002
+```
+and query it with:
+```bash
+polycli rpc http://localhost:10002 eth_getBlockByNumber 2743 false | jq
+```
+You will notice that block numbers that have been skipped will return `null`. 
+
 
 # Metrics To Dash
 
