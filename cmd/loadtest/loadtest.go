@@ -35,6 +35,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/maticnetwork/polygon-cli/metrics"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
 	"golang.org/x/exp/constraints"
@@ -588,7 +589,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		tops.Nonce = new(big.Int).SetUint64(currentNonce)
 		tops.GasLimit = 10000000
 		tops = configureTransactOpts(tops)
-		_, err = erc20Contract.Mint(tops, new(big.Int).SetUint64(1_000_000_000_000))
+		_, err = erc20Contract.Mint(tops, metrics.UnitMegaether)
 		if err != nil {
 			log.Error().Err(err).Msg("There was an error minting ERC20")
 			return err
