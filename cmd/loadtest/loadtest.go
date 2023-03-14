@@ -35,6 +35,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/maticnetwork/polygon-cli/metrics"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
 	"golang.org/x/exp/constraints"
@@ -588,7 +589,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		tops.Nonce = new(big.Int).SetUint64(currentNonce)
 		tops.GasLimit = 10000000
 		tops = configureTransactOpts(tops)
-		_, err = erc20Contract.Mint(tops, new(big.Int).SetUint64(1_000_000_000_000))
+		_, err = erc20Contract.Mint(tops, metrics.UnitMegaether)
 		if err != nil {
 			log.Error().Err(err).Msg("There was an error minting ERC20")
 			return err
@@ -700,6 +701,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			var j int64
 			var startReq time.Time
 			var endReq time.Time
+			var retryForNonce bool = false
+			var myNonceValue uint64
 
 			for j = 0; j < requests; j = j + 1 {
 				if rl != nil {
@@ -708,10 +711,15 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 						log.Error().Err(err).Msg("Encountered a rate limiting error")
 					}
 				}
-				currentNonceMutex.Lock()
-				myNonceValue := currentNonce
-				currentNonce = currentNonce + 1
-				currentNonceMutex.Unlock()
+
+				if retryForNonce {
+					retryForNonce = false
+				} else {
+					currentNonceMutex.Lock()
+					myNonceValue = currentNonce
+					currentNonce = currentNonce + 1
+					currentNonceMutex.Unlock()
+				}
 
 				localMode := mode
 				// if there are multiple modes, iterate through them, 'r' mode is supported here
@@ -746,10 +754,11 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				recordSample(i, j, err, startReq, endReq, myNonceValue)
 				if err != nil {
-					log.Trace().Err(err).Msg("Recorded an error while sending transactions")
+					log.Trace().Err(err).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
+					retryForNonce = true
 				}
 
-				log.Trace().Int64("routine", i).Str("mode", localMode).Int64("request", j).Msg("Request")
+				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode).Int64("request", j).Msg("Request")
 			}
 			wg.Done()
 		}(i)
@@ -758,13 +767,46 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
 	log.Debug().Uint64("currenNonce", currentNonce).Msg("Finished main loadtest loop")
+	log.Debug().Msg("Waiting for transactions to actually be mined")
+	finalBlockNumber, err := waitForFinalBlock(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
+	if err != nil {
+		log.Error().Err(err).Msg("there was an issue waiting for all transactions to be mined")
+	}
+
+	lightSummary(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
 	if *ltp.ShouldProduceSummary {
-		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
+		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
 		if err != nil {
 			log.Error().Err(err).Msg("There was an issue creating the load test summary")
 		}
 	}
 	return nil
+}
+
+func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endBlockNumber, endNonce uint64) {
+	startBlock, err := c.BlockByNumber(ctx, new(big.Int).SetUint64(startBlockNumber))
+	if err != nil {
+		log.Error().Err(err).Msg("unable to get start block for light summary")
+		return
+	}
+	endBlock, err := c.BlockByNumber(ctx, new(big.Int).SetUint64(endBlockNumber))
+	if err != nil {
+		log.Error().Err(err).Msg("unable to get end block for light summary")
+		return
+	}
+	endTime := time.Unix(int64(endBlock.Time()), 0)
+	startTime := time.Unix(int64(startBlock.Time()), 0)
+
+	testDuration := endTime.Sub(startTime)
+	tps := float64(len(loadTestResults)) / testDuration.Seconds()
+
+	log.Info().
+		Time("firstBlockTime", startTime).
+		Time("lastBlockTime", endTime).
+		Int("transactionCount", len(loadTestResults)).
+		Float64("testDuration", testDuration.Seconds()).
+		Float64("tps", tps).
+		Msg("rough test summary (ignores errors)")
 }
 
 func blockUntilSuccessful(f func() error, tries int) error {
@@ -1308,32 +1350,41 @@ func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 	return tops
 }
 
-func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endNonce uint64) error {
+func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endNonce uint64) (uint64, error) {
 	ltp := inputLoadTestParams
 	var err error
 	var lastBlockNumber uint64
 	var currentNonce uint64
-	var maxWaitCount = 20
+	var initialWaitCount = 50
+	var maxWaitCount = initialWaitCount
 	for {
 		lastBlockNumber, err = c.BlockNumber(ctx)
 		if err != nil {
-			return err
+			return 0, err
 		}
-
 		currentNonce, err = c.NonceAt(ctx, *ltp.FromETHAddress, new(big.Int).SetUint64(lastBlockNumber))
 		if err != nil {
-			return err
+			return 0, err
 		}
-		if currentNonce < endNonce && maxWaitCount < 0 {
+		if currentNonce < endNonce && maxWaitCount > 0 {
 			log.Trace().Uint64("endNonce", endNonce).Uint64("currentNonce", currentNonce).Msg("Not all transactions have been mined. Waiting")
 			time.Sleep(5 * time.Second)
 			maxWaitCount = maxWaitCount - 1
 			continue
 		}
+		if maxWaitCount <= 0 {
+			return 0, fmt.Errorf("waited for %d attempts for the transactions to be mined", initialWaitCount)
+		}
 		break
 	}
 
 	log.Trace().Uint64("currentNonce", currentNonce).Uint64("startblock", startBlockNumber).Uint64("endblock", lastBlockNumber).Msg("It looks like all transactions have been mined")
+	return lastBlockNumber, nil
+}
+func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, lastBlockNumber, endNonce uint64) error {
+	ltp := inputLoadTestParams
+	var err error
+
 	log.Trace().Msg("Starting block range capture")
 	// confirm start block number is ok
 	_, err = c.BlockByNumber(ctx, new(big.Int).SetUint64(startBlockNumber))
