@@ -349,7 +349,7 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 
 		// This is an optional step but helpful to catch some mistakes in implementation.
 		if inputForge.ShouldVerifyBlocks {
-			_, err := bc.VerifyFinalizedBlock(edgeBlock)
+			_, err = bc.VerifyFinalizedBlock(edgeBlock)
 			if err != nil {
 				return fmt.Errorf("unable to verify finalized block: %w", err)
 			}
