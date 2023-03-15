@@ -31,11 +31,11 @@ import (
 	edgechain "github.com/0xPolygon/polygon-edge/chain"
 	edgeconsensus "github.com/0xPolygon/polygon-edge/consensus"
 	edgedummy "github.com/0xPolygon/polygon-edge/consensus/dummy"
+	edgepolybft "github.com/0xPolygon/polygon-edge/consensus/polybft"
 	edgecrypto "github.com/0xPolygon/polygon-edge/crypto"
+	edgeserver "github.com/0xPolygon/polygon-edge/server"
 	edgestate "github.com/0xPolygon/polygon-edge/state"
 	edgeitrie "github.com/0xPolygon/polygon-edge/state/immutable-trie"
-	edgeevm "github.com/0xPolygon/polygon-edge/state/runtime/evm"
-	edgeprecompiled "github.com/0xPolygon/polygon-edge/state/runtime/precompiled"
 	edgetxpool "github.com/0xPolygon/polygon-edge/txpool"
 	edgetypes "github.com/0xPolygon/polygon-edge/types"
 	edgebuildroot "github.com/0xPolygon/polygon-edge/types/buildroot"
@@ -183,13 +183,21 @@ func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 	state := edgeitrie.NewState(stateStorage)
 
 	executor := edgestate.NewExecutor(chainConfig.Params, state, logger)
-	executor.SetRuntime(edgeprecompiled.NewPrecompiled())
-	executor.SetRuntime(edgeevm.NewEVM())
+
+	// custom write genesis hook per consensus engine
+	genesisCreationFactory := map[edgeserver.ConsensusType]edgeserver.GenesisFactoryHook{
+		edgeserver.PolyBFTConsensus: edgepolybft.GenesisPostHookFactory,
+	}
+
+	engineName := chainConfig.Params.GetEngine()
+	if factory, exists := genesisCreationFactory[edgeserver.ConsensusType(engineName)]; exists {
+		executor.GenesisPostHook = factory(&chainConfig, engineName)
+	}
 
 	genesisRoot := executor.WriteGenesis(chainConfig.Genesis.Alloc)
 
 	chainConfig.Genesis.StateRoot = genesisRoot
-	signer := edgecrypto.NewEIP155Signer(uint64(chainConfig.Params.ChainID))
+	signer := edgecrypto.NewEIP155Signer(edgechain.AllForksEnabled.At(0), uint64(chainConfig.Params.ChainID))
 	bc, err := edgeblockchain.NewBlockchain(logger, inputForge.DataDir, &chainConfig, nil, executor, signer)
 	if err != nil {
 		return nil, fmt.Errorf("unable to setup blockchain: %w", err)
@@ -198,7 +206,6 @@ func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 	txpool, err := edgetxpool.NewTxPool(
 		logger,
 		chainConfig.Params.Forks.At(0),
-		nil,
 		nil,
 		nil,
 		nil,
@@ -342,7 +349,7 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 
 		// This is an optional step but helpful to catch some mistakes in implementation.
 		if inputForge.ShouldVerifyBlocks {
-			err = bc.VerifyFinalizedBlock(edgeBlock)
+			_, err := bc.VerifyFinalizedBlock(edgeBlock)
 			if err != nil {
 				return fmt.Errorf("unable to verify finalized block: %w", err)
 			}
