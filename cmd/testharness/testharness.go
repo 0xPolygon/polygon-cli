@@ -24,12 +24,14 @@ const (
 	HarnessMode500    HarnessMode = "500"
 	HarnessMode400    HarnessMode = "400"
 	HarnessModeClosed HarnessMode = "closed"
+	HarnessModeHang   HarnessMode = "hang"
 )
 
 var modeList = []HarnessMode{
 	HarnessMode500,
 	HarnessMode400,
 	HarnessModeClosed,
+	HarnessModeHang,
 }
 
 type (
@@ -40,6 +42,7 @@ type (
 	Handler500    struct{}
 	Handler400    struct{}
 	HandlerClosed struct{}
+	HandlerHang   struct{}
 )
 
 func ListenerFactory(mode HarnessMode) (HarnessHandler, error) {
@@ -50,6 +53,8 @@ func ListenerFactory(mode HarnessMode) (HarnessHandler, error) {
 		return Handler400{}, nil
 	case HarnessModeClosed:
 		return HandlerClosed{}, nil
+	case HarnessModeHang:
+		return HandlerHang{}, nil
 	default:
 		return nil, fmt.Errorf("the mode %s isn't supported yet", mode)
 	}
@@ -170,4 +175,26 @@ func (m HandlerClosed) StartListener(port uint16) error {
 		//conn.Close()
 	}
 
+}
+func (m HandlerHang) StartListener(port uint16) error {
+	addr, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", *listenAddr, port))
+	if err != nil {
+		log.Error().Err(err).Msg("unable to resolve address")
+		return err
+	}
+	listener, err := net.ListenTCP("tcp4", addr)
+	if err != nil {
+		log.Error().Err(err).Msg("unable to start listening")
+		return err
+	}
+	for {
+		conn, err := listener.AcceptTCP()
+		if err != nil {
+			log.Error().Err(err).Msg("error accepting")
+			continue
+		}
+		log.Debug().
+			Str("RemoteAddr", conn.RemoteAddr().String()).
+			Msg("accepted connection")
+	}
 }
