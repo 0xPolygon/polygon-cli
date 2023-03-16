@@ -5,9 +5,11 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
+	"time"
 )
 
 var (
@@ -25,6 +27,7 @@ const (
 	HarnessMode400    HarnessMode = "400"
 	HarnessModeClosed HarnessMode = "closed"
 	HarnessModeHang   HarnessMode = "hang"
+	HarnessModeSlow   HarnessMode = "slow"
 )
 
 var modeList = []HarnessMode{
@@ -32,6 +35,7 @@ var modeList = []HarnessMode{
 	HarnessMode400,
 	HarnessModeClosed,
 	HarnessModeHang,
+	HarnessModeSlow,
 }
 
 type (
@@ -43,6 +47,7 @@ type (
 	Handler400    struct{}
 	HandlerClosed struct{}
 	HandlerHang   struct{}
+	HandlerSlow   struct{}
 )
 
 func ListenerFactory(mode HarnessMode) (HarnessHandler, error) {
@@ -55,10 +60,11 @@ func ListenerFactory(mode HarnessMode) (HarnessHandler, error) {
 		return HandlerClosed{}, nil
 	case HarnessModeHang:
 		return HandlerHang{}, nil
+	case HarnessModeSlow:
+		return HandlerSlow{}, nil
 	default:
 		return nil, fmt.Errorf("the mode %s isn't supported yet", mode)
 	}
-
 }
 
 var TestHarnessCmd = &cobra.Command{
@@ -193,6 +199,42 @@ func (m HandlerHang) StartListener(port uint16) error {
 			log.Error().Err(err).Msg("error accepting")
 			continue
 		}
+		log.Debug().
+			Str("RemoteAddr", conn.RemoteAddr().String()).
+			Msg("accepted connection")
+	}
+}
+
+func (m HandlerSlow) StartListener(port uint16) error {
+	addr, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", *listenAddr, port))
+	if err != nil {
+		log.Error().Err(err).Msg("unable to resolve address")
+		return err
+	}
+	listener, err := net.ListenTCP("tcp4", addr)
+	if err != nil {
+		log.Error().Err(err).Msg("unable to start listening")
+		return err
+	}
+	for {
+		conn, err := listener.AcceptTCP()
+		if err != nil {
+			log.Error().Err(err).Msg("error accepting")
+			continue
+		}
+		go func(slowConn *net.TCPConn) {
+			buff := make([]byte, 1, 1)
+			for {
+				_, _ = rand.Read(buff)
+				_, err := slowConn.Write(buff)
+				if err != nil {
+					log.Error().Err(err).Msg("error slow writing")
+					break
+				}
+				time.Sleep(time.Second * 5)
+			}
+		}(conn)
+
 		log.Debug().
 			Str("RemoteAddr", conn.RemoteAddr().String()).
 			Msg("accepted connection")
