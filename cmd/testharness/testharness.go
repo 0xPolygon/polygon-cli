@@ -23,11 +23,12 @@ const (
 	packetSize        = 2<<15 - 1
 	HarnessIdentifier = "Test Harness"
 
-	HarnessMode500    HarnessMode = "500"
-	HarnessMode400    HarnessMode = "400"
-	HarnessModeClosed HarnessMode = "closed"
-	HarnessModeHang   HarnessMode = "hang"
-	HarnessModeSlow   HarnessMode = "slow"
+	HarnessMode500      HarnessMode = "500"
+	HarnessMode400      HarnessMode = "400"
+	HarnessModeClosed   HarnessMode = "closed"
+	HarnessModeHang     HarnessMode = "hang"
+	HarnessModeSlow     HarnessMode = "slow"
+	HarnessModeSlowHTTP HarnessMode = "slow-http"
 )
 
 var modeList = []HarnessMode{
@@ -36,18 +37,20 @@ var modeList = []HarnessMode{
 	HarnessModeClosed,
 	HarnessModeHang,
 	HarnessModeSlow,
+	HarnessModeSlowHTTP,
 }
 
 type (
 	HarnessHandler interface {
 		StartListener(port uint16) error
 	}
-	HarnessMode   string
-	Handler500    struct{}
-	Handler400    struct{}
-	HandlerClosed struct{}
-	HandlerHang   struct{}
-	HandlerSlow   struct{}
+	HarnessMode     string
+	Handler500      struct{}
+	Handler400      struct{}
+	HandlerClosed   struct{}
+	HandlerHang     struct{}
+	HandlerSlow     struct{}
+	HandlerSlowHTTP struct{}
 )
 
 func ListenerFactory(mode HarnessMode) (HarnessHandler, error) {
@@ -62,6 +65,8 @@ func ListenerFactory(mode HarnessMode) (HarnessHandler, error) {
 		return HandlerHang{}, nil
 	case HarnessModeSlow:
 		return HandlerSlow{}, nil
+	case HarnessModeSlowHTTP:
+		return HandlerSlowHTTP{}, nil
 	default:
 		return nil, fmt.Errorf("the mode %s isn't supported yet", mode)
 	}
@@ -239,4 +244,19 @@ func (m HandlerSlow) StartListener(port uint16) error {
 			Str("RemoteAddr", conn.RemoteAddr().String()).
 			Msg("accepted connection")
 	}
+}
+
+func (m HandlerSlowHTTP) StartListener(port uint16) error {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		log.Debug().Msg("handling request")
+		w.WriteHeader(200)
+		for {
+			_, err := w.Write([]byte(HarnessIdentifier))
+			if err != nil {
+				break
+			}
+			time.Sleep(time.Second * 1)
+		}
+	})
+	return http.ListenAndServe(fmt.Sprintf("%s:%d", *listenAddr, port), nil)
 }
