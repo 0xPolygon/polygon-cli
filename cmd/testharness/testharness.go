@@ -29,6 +29,7 @@ const (
 	HarnessModeHang     HarnessMode = "hang"
 	HarnessModeSlow     HarnessMode = "slow"
 	HarnessModeSlowHTTP HarnessMode = "slow-http"
+	HarnessModeHugeHTTP HarnessMode = "huge-http"
 )
 
 var modeList = []HarnessMode{
@@ -38,6 +39,7 @@ var modeList = []HarnessMode{
 	HarnessModeHang,
 	HarnessModeSlow,
 	HarnessModeSlowHTTP,
+	HarnessModeHugeHTTP,
 }
 
 type (
@@ -51,6 +53,7 @@ type (
 	HandlerHang     struct{}
 	HandlerSlow     struct{}
 	HandlerSlowHTTP struct{}
+	HandlerHugeHTTP struct{}
 )
 
 func ListenerFactory(mode HarnessMode) (HarnessHandler, error) {
@@ -67,6 +70,8 @@ func ListenerFactory(mode HarnessMode) (HarnessHandler, error) {
 		return HandlerSlow{}, nil
 	case HarnessModeSlowHTTP:
 		return HandlerSlowHTTP{}, nil
+	case HarnessModeHugeHTTP:
+		return HandlerHugeHTTP{}, nil
 	default:
 		return nil, fmt.Errorf("the mode %s isn't supported yet", mode)
 	}
@@ -256,6 +261,26 @@ func (m HandlerSlowHTTP) StartListener(port uint16) error {
 				break
 			}
 			time.Sleep(time.Second * 1)
+		}
+	})
+	return http.ListenAndServe(fmt.Sprintf("%s:%d", *listenAddr, port), nil)
+}
+
+func (m HandlerHugeHTTP) StartListener(port uint16) error {
+	hugeResponse := make([]byte, 1024*1024)
+	for i := 0; i+len(HarnessIdentifier) < len(hugeResponse); i = i + len(HarnessIdentifier) {
+		for j := 0; j < len(HarnessIdentifier); j = j + 1 {
+			hugeResponse[i+j] = HarnessIdentifier[j]
+		}
+	}
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		log.Debug().Msg("handling request")
+		w.WriteHeader(200)
+		for {
+			_, err := w.Write(hugeResponse)
+			if err != nil {
+				break
+			}
 		}
 	})
 	return http.ListenAndServe(fmt.Sprintf("%s:%d", *listenAddr, port), nil)
