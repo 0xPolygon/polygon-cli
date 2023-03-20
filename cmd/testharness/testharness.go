@@ -9,95 +9,35 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"time"
+	"strconv"
 )
 
 var (
 	harnessPort *uint16
-	harnessMode *string
-	activeMode  HarnessMode
 	listenAddr  *string
 )
 
 const (
 	packetSize        = 2<<15 - 1
 	HarnessIdentifier = "Test Harness"
-
-	HarnessMode500      HarnessMode = "500"
-	HarnessMode400      HarnessMode = "400"
-	HarnessModeClosed   HarnessMode = "closed"
-	HarnessModeHang     HarnessMode = "hang"
-	HarnessModeSlow     HarnessMode = "slow"
-	HarnessModeSlowHTTP HarnessMode = "slow-http"
-	HarnessModeHugeHTTP HarnessMode = "huge-http"
 )
-
-var modeList = []HarnessMode{
-	HarnessMode500,
-	HarnessMode400,
-	HarnessModeClosed,
-	HarnessModeHang,
-	HarnessModeSlow,
-	HarnessModeSlowHTTP,
-	HarnessModeHugeHTTP,
-}
 
 type (
-	HarnessHandler interface {
-		StartListener(port uint16) error
-	}
-	HarnessMode     string
-	Handler500      struct{}
-	Handler400      struct{}
-	HandlerClosed   struct{}
-	HandlerHang     struct{}
-	HandlerSlow     struct{}
-	HandlerSlowHTTP struct{}
-	HandlerHugeHTTP struct{}
+	Handler500  struct{}
+	Handler400  struct{}
+	HandlerHuge struct{}
+	HandlerJunk struct{}
 )
-
-func ListenerFactory(mode HarnessMode) (HarnessHandler, error) {
-	switch mode {
-	case HarnessMode500:
-		return Handler500{}, nil
-	case HarnessMode400:
-		return Handler400{}, nil
-	case HarnessModeClosed:
-		return HandlerClosed{}, nil
-	case HarnessModeHang:
-		return HandlerHang{}, nil
-	case HarnessModeSlow:
-		return HandlerSlow{}, nil
-	case HarnessModeSlowHTTP:
-		return HandlerSlowHTTP{}, nil
-	case HarnessModeHugeHTTP:
-		return HandlerHugeHTTP{}, nil
-	default:
-		return nil, fmt.Errorf("the mode %s isn't supported yet", mode)
-	}
-}
 
 var TestHarnessCmd = &cobra.Command{
 	Use:   "testharness --mode [mode] --port [portnumber]",
 	Short: "Run a simple test harness on the given port",
 	Long:  ``,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		log.Info().Uint16("port", *harnessPort).Str("mode", *harnessMode).Msg("Starting server")
-
-		l, err := ListenerFactory(activeMode)
-		if err != nil {
-			log.Error().Err(err).Msg("Could not start listener")
-			return err
-		}
-		return l.StartListener(*harnessPort)
+		log.Info().Uint16("port", *harnessPort).Str("ip", *listenAddr).Msg("Starting server")
+		return startHarness()
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		parsedMode, err := stringToHarnessMode(*harnessMode)
-		if err != nil {
-			log.Error().Err(err).Msg("unable to parse mode")
-			return err
-		}
-		activeMode = parsedMode
 		parsedIp := net.ParseIP(*listenAddr)
 		if parsedIp == nil {
 			return fmt.Errorf("the ip %s could not be parsed", *listenAddr)
@@ -106,182 +46,76 @@ var TestHarnessCmd = &cobra.Command{
 	},
 }
 
-func stringToHarnessMode(inputMode string) (HarnessMode, error) {
-	for _, m := range modeList {
-		if inputMode == string(m) {
-			return m, nil
-		}
-	}
-	return "", fmt.Errorf("the mode %s is unrecognized", inputMode)
+func startHarness() error {
+	http.Handle("/500", new(Handler500))
+	http.Handle("/400", new(Handler400))
+	http.Handle("/huge", new(HandlerHuge))
+	http.Handle("/junk", new(HandlerJunk))
+
+	return http.ListenAndServe(fmt.Sprintf("%s:%d", *listenAddr, *harnessPort), nil)
 }
 
 func init() {
 	zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	harnessPort = TestHarnessCmd.PersistentFlags().Uint16("port", 11235, "If the mode is tcp level or higher this will set the port that the server listens on ")
-	harnessMode = TestHarnessCmd.PersistentFlags().String("mode", "500", "The mode type that will be used for the harness")
 	listenAddr = TestHarnessCmd.PersistentFlags().String("listen-ip", "127.0.0.1", "The IP that we'll use to listen")
-
 }
 
-func (m Handler500) StartListener(port uint16) error {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		log.Debug().Msg("handling request")
-		w.WriteHeader(500)
-		_, _ = w.Write([]byte(HarnessIdentifier))
-	})
-	return http.ListenAndServe(fmt.Sprintf("%s:%d", *listenAddr, port), nil)
-}
-func (m Handler400) StartListener(port uint16) error {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		log.Debug().Msg("handling request")
-		w.WriteHeader(400)
-		_, _ = w.Write([]byte(HarnessIdentifier))
-	})
-	return http.ListenAndServe(fmt.Sprintf("%s:%d", *listenAddr, port), nil)
+func (m Handler500) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Debug().Msg("handling request")
+	w.WriteHeader(500)
+	_, _ = w.Write([]byte(HarnessIdentifier))
 }
 
-func (m HandlerClosed) StartListener(port uint16) error {
-	addr, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", *listenAddr, port))
+func (m Handler400) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Debug().Msg("handling request")
+	w.WriteHeader(400)
+	_, _ = w.Write([]byte(HarnessIdentifier))
+}
+
+func (m HandlerJunk) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	idxS := r.URL.Query().Get("idx")
+	idx, err := strconv.Atoi(idxS)
 	if err != nil {
-		log.Error().Err(err).Msg("unable to resolve address")
-		return err
-	}
-	listener, err := net.ListenTCP("tcp4", addr)
-	if err != nil {
-		log.Error().Err(err).Msg("unable to start listening")
-		return err
-	}
-	for {
-		conn, err := listener.AcceptTCP()
-		if err != nil {
-			log.Error().Err(err).Msg("error accepting")
-			continue
-		}
-		log.Debug().
-			Str("RemoteAddr", conn.RemoteAddr().String()).
-			Msg("accepted connection")
-		err = conn.Close()
-		if err != nil {
-			log.Error().Err(err).Msg("Error closing connection")
-		}
-		//sysConn, err := conn.SyscallConn()
-		//if err != nil {
-		//	log.Error().Err(err).Msg("unable to open sysconn")
-		//	conn.Close()
-		//	continue
-		//}
-		//err = sysConn.Read(func(fd uintptr) (done bool) {
-		//	log.Debug().Uint("fd", uint(fd)).Msg("reading?")
-		//	rawConnFile := os.NewFile(uintptr(fd), "test file")
-		//
-		//	data := make([]byte, packetSize)
-		//	var dataAt int64 = 0
-		//	n, err := rawConnFile.ReadAt(data, dataAt)
-		//	if err != nil {
-		//		log.Error().Err(err).Msg("unable to read!?")
-		//		return false
-		//	}
-		//	log.Debug().Int("n", n).Msg("reading")
-		//	return false
-		//})
-		//if err != nil {
-		//	log.Error().Err(err).Msg("error reading sysconn")
-		//}
-		//conn.Close()
+		idx = rand.Intn(len(junkJSONRPC))
 	}
 
-}
-func (m HandlerHang) StartListener(port uint16) error {
-	addr, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", *listenAddr, port))
-	if err != nil {
-		log.Error().Err(err).Msg("unable to resolve address")
-		return err
-	}
-	listener, err := net.ListenTCP("tcp4", addr)
-	if err != nil {
-		log.Error().Err(err).Msg("unable to start listening")
-		return err
-	}
-	for {
-		conn, err := listener.AcceptTCP()
-		if err != nil {
-			log.Error().Err(err).Msg("error accepting")
-			continue
-		}
-		log.Debug().
-			Str("RemoteAddr", conn.RemoteAddr().String()).
-			Msg("accepted connection")
-	}
+	w.Header().Set("Content-Type", junkContentTypeHeader[rand.Intn(len(junkContentTypeHeader))])
+
+	log.Debug().Int("idx", idx).Msg("handling request")
+
+	junkResponse := junkJSONRPC[idx%len(junkJSONRPC)]
+	w.WriteHeader(200)
+	_, _ = w.Write([]byte(junkResponse))
 }
 
-func (m HandlerSlow) StartListener(port uint16) error {
-	addr, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", *listenAddr, port))
+func (m HandlerHuge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	b := r.URL.Query().Get("bytes")
+	bc, err := strconv.Atoi(b)
 	if err != nil {
-		log.Error().Err(err).Msg("unable to resolve address")
-		return err
+		bc = 1024 * 1024
 	}
-	listener, err := net.ListenTCP("tcp4", addr)
-	if err != nil {
-		log.Error().Err(err).Msg("unable to start listening")
-		return err
-	}
-	for {
-		conn, err := listener.AcceptTCP()
-		if err != nil {
-			log.Error().Err(err).Msg("error accepting")
-			continue
-		}
-		go func(slowConn *net.TCPConn) {
-			buff := make([]byte, 1, 1)
-			for {
-				_, _ = rand.Read(buff)
-				_, err := slowConn.Write(buff)
-				if err != nil {
-					log.Error().Err(err).Msg("error slow writing")
-					break
-				}
-				time.Sleep(time.Second * 5)
-			}
-		}(conn)
-
-		log.Debug().
-			Str("RemoteAddr", conn.RemoteAddr().String()).
-			Msg("accepted connection")
-	}
-}
-
-func (m HandlerSlowHTTP) StartListener(port uint16) error {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		log.Debug().Msg("handling request")
-		w.WriteHeader(200)
-		for {
-			_, err := w.Write([]byte(HarnessIdentifier))
-			if err != nil {
-				break
-			}
-			time.Sleep(time.Second * 1)
-		}
-	})
-	return http.ListenAndServe(fmt.Sprintf("%s:%d", *listenAddr, port), nil)
-}
-
-func (m HandlerHugeHTTP) StartListener(port uint16) error {
-	hugeResponse := make([]byte, 1024*1024)
+	hugeResponse := make([]byte, bc)
 	for i := 0; i+len(HarnessIdentifier) < len(hugeResponse); i = i + len(HarnessIdentifier) {
 		for j := 0; j < len(HarnessIdentifier); j = j + 1 {
 			hugeResponse[i+j] = HarnessIdentifier[j]
 		}
 	}
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		log.Debug().Msg("handling request")
-		w.WriteHeader(200)
-		for {
-			_, err := w.Write(hugeResponse)
-			if err != nil {
-				break
-			}
-		}
-	})
-	return http.ListenAndServe(fmt.Sprintf("%s:%d", *listenAddr, port), nil)
+	hugeResponseStr := `{"jsonrpc": "2.0", "result": ` + string(hugeResponse) + `, "id": 1}`
+	log.Debug().Msg("handling request")
+	w.WriteHeader(200)
+	_, _ = w.Write([]byte(hugeResponseStr))
 }
+
+//A server that's listening on UDP rather tha TCP
+//A server that responds with valid data but with a delay (e.g. a 2-second delay)
+//A server that returns data with invalid or malformed JSON syntax
+//A server that returns data in a different character encoding than expected (e.g. ISO-8859-1 instead of UTF-8)
+//A server that responds with a different HTTP status code than expected (e.g. 301 instead of 200)
+//A server that sends back a response that exceeds the content-length specified in the response header
+//A server that sends back a response with missing headers
+//A server that sends back a response with extra headers
+//A server that requires an authentication header, but fails if it is not provided or if it is incorrect
+//A server that requires a specific content type header, and fails if it is not provided or if it is incorrect
+//A server that has a firewall that blocks certain IP addresses, causing the request to fail.
