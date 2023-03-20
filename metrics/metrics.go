@@ -129,15 +129,15 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 	bs := SortableBlocks(blocks)
 	sort.Sort(bs)
 
-	// if we ever choose to utilize terminal width for colume resizing
+	// if we ever choose to utilize terminal width for column resizing
 	// width, _, err := term.GetSize(0)
 	// if err != nil {
 	// 	return []string{}
 	// }
 
-	headerVariables := []string{"Block #", "Timestamp", "Block Hash", "Author", "Block Time", "Tx Count", "Gas Used"}
+	headerVariables := []string{"Block #", "Timestamp", "Block Time", "Tx Count", "Gas Used", "Block Hash", "Author"}
 
-	proportion := []int{10, 20, 60, 40, 5, 5}
+	proportion := []int{10, 20, 5, 5, 5, 60}
 
 	header :=
 		headerVariables[0] + strings.Repeat(" ", proportion[0]) +
@@ -179,7 +179,16 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 			blockTime = strconv.FormatUint(bs[j].Time()-bs[j-1].Time(), 10)
 		}
 
-		recordVariables := []string{fmt.Sprintf("%d", bs[j].Number()), ut.Format("02 Jan 06 15:04:05 MST"), bs[j].Hash().String(), author.String(), blockTime, fmt.Sprintf("%d", len(bs[j].Transactions())), fmt.Sprintf("%d", bs[j].GasUsed())}
+		recordVariables := []string{
+			fmt.Sprintf("%d", bs[j].Number()),
+			ut.Format("02 Jan 06 15:04:05 MST"),
+			blockTime,
+			fmt.Sprintf("%d", len(bs[j].Transactions())),
+			fmt.Sprintf("%d", bs[j].GasUsed()),
+			bs[j].Hash().String(),
+			author.String(),
+		}
+
 		record := " " +
 			recordVariables[0] + strings.Repeat(" ", len(headerVariables[0])+proportion[0]-len(recordVariables[0])) +
 			recordVariables[1] + strings.Repeat(" ", len(headerVariables[1])+proportion[1]-len(recordVariables[1])) +
