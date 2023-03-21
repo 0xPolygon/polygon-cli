@@ -203,7 +203,7 @@ func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 			chainConfig.Params.ContractDeployerAllowList)
 	}
 
-	var initialStateRoot = edgetypes.ZeroHash
+	initialStateRoot := edgetypes.ZeroHash
 
 	if edgeserver.ConsensusType(engineName) == edgeserver.PolyBFTConsensus {
 		polyBFTConfig, err := edgepolybft.GetPolyBFTConfig(&chainConfig)
