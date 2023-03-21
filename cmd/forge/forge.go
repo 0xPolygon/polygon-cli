@@ -173,8 +173,7 @@ type edgeBlockchainHandle struct {
 
 func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 	var chainConfig edgechain.Chain
-	err := json.Unmarshal(inputForge.GenesisData, &chainConfig)
-	if err != nil {
+	if err := json.Unmarshal(inputForge.GenesisData, &chainConfig); err != nil {
 		return nil, fmt.Errorf("unable to parse genesis data: %w", err)
 	}
 	logger := hclog.Default()
