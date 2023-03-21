@@ -205,15 +205,15 @@ func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 	initialStateRoot := edgetypes.ZeroHash
 
 	if edgeserver.ConsensusType(engineName) == edgeserver.PolyBFTConsensus {
-		polyBFTConfig, err := edgepolybft.GetPolyBFTConfig(&chainConfig)
-		if err != nil {
-			return nil, err
+		polyBFTConfig, configErr := edgepolybft.GetPolyBFTConfig(&chainConfig)
+		if configErr != nil {
+			return nil, configErr
 		}
 
 		if polyBFTConfig.InitialTrieRoot != edgetypes.ZeroHash {
-			checkedInitialTrieRoot, err := edgeitrie.HashChecker(polyBFTConfig.InitialTrieRoot.Bytes(), stateStorage)
-			if err != nil {
-				return nil, fmt.Errorf("error on state root verification %w", err)
+			checkedInitialTrieRoot, hashErr := edgeitrie.HashChecker(polyBFTConfig.InitialTrieRoot.Bytes(), stateStorage)
+			if hashErr != nil {
+				return nil, fmt.Errorf("error on state root verification %w", hashErr)
 			}
 
 			if checkedInitialTrieRoot != polyBFTConfig.InitialTrieRoot {
