@@ -34,9 +34,10 @@ var junkJSONRPC = []string{
 	`{"jsonrpc": "2.0", "error": true, "id": null}`,                                         // error is wrong type
 
 	// these should break something
-	`{"jsonrpc": "2.0", "result": , "id": 1}`,                   // missing result ... broken json
-	`{"jsonrpc": "2.0", "result": nil, "id": 1}`,                // nil instead of null
-	`{"jsonrpc": "2.0", "result": 123, "result": 456, "id": 1}`, // result specified twice? might work
+	`{"jsonrpc": "2.0", "result": , "id": 1}`,                            // missing result ... broken json
+	`{"jsonrpc": "2.0", "result": "` + string([]byte{0}) + `", "id": 1}`, // null byte in result
+	`{"jsonrpc": "2.0", "result": nil, "id": 1}`,                         // nil instead of null
+	`{"jsonrpc": "2.0", "result": 123, "result": 456, "id": 1}`,          // result specified twice? might work
 	``,                      // valid json but probably will break
 	`null`,                  // valid but should break
 	`0`,                     // valid but should break rp

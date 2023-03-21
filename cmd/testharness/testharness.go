@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -96,13 +97,8 @@ func (m HandlerHuge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		bc = 1024 * 1024
 	}
-	hugeResponse := make([]byte, bc)
-	for i := 0; i+len(HarnessIdentifier) < len(hugeResponse); i = i + len(HarnessIdentifier) {
-		for j := 0; j < len(HarnessIdentifier); j = j + 1 {
-			hugeResponse[i+j] = HarnessIdentifier[j]
-		}
-	}
-	hugeResponseStr := `{"jsonrpc": "2.0", "result": ` + string(hugeResponse) + `, "id": 1}`
+	hugeResponse := strings.Repeat("J", bc)
+	hugeResponseStr := `{"jsonrpc": "2.0", "result": "` + hugeResponse + `", "id": 1}`
 	log.Debug().Msg("handling request")
 	w.WriteHeader(200)
 	_, _ = w.Write([]byte(hugeResponseStr))
