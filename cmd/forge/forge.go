@@ -32,14 +32,17 @@ import (
 	edgeconsensus "github.com/0xPolygon/polygon-edge/consensus"
 	edgedummy "github.com/0xPolygon/polygon-edge/consensus/dummy"
 	edgepolybft "github.com/0xPolygon/polygon-edge/consensus/polybft"
+	edgecontracts "github.com/0xPolygon/polygon-edge/contracts"
 	edgecrypto "github.com/0xPolygon/polygon-edge/crypto"
 	edgeserver "github.com/0xPolygon/polygon-edge/server"
 	edgestate "github.com/0xPolygon/polygon-edge/state"
 	edgeitrie "github.com/0xPolygon/polygon-edge/state/immutable-trie"
+	edgeallowlist "github.com/0xPolygon/polygon-edge/state/runtime/allowlist"
 	edgetxpool "github.com/0xPolygon/polygon-edge/txpool"
 	edgetypes "github.com/0xPolygon/polygon-edge/types"
 	edgebuildroot "github.com/0xPolygon/polygon-edge/types/buildroot"
 	ethcommon "github.com/ethereum/go-ethereum/common"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"golang.org/x/exp/slices"
@@ -170,8 +173,7 @@ type edgeBlockchainHandle struct {
 
 func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 	var chainConfig edgechain.Chain
-	err := json.Unmarshal(inputForge.GenesisData, &chainConfig)
-	if err != nil {
+	if err := json.Unmarshal(inputForge.GenesisData, &chainConfig); err != nil {
 		return nil, fmt.Errorf("unable to parse genesis data: %w", err)
 	}
 	logger := hclog.Default()
@@ -194,7 +196,40 @@ func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 		executor.GenesisPostHook = factory(&chainConfig, engineName)
 	}
 
-	genesisRoot := executor.WriteGenesis(chainConfig.Genesis.Alloc)
+	// apply allow list genesis data
+	if chainConfig.Params.ContractDeployerAllowList != nil {
+		edgeallowlist.ApplyGenesisAllocs(chainConfig.Genesis, edgecontracts.AllowListContractsAddr,
+			chainConfig.Params.ContractDeployerAllowList)
+	}
+
+	initialStateRoot := edgetypes.ZeroHash
+
+	if edgeserver.ConsensusType(engineName) == edgeserver.PolyBFTConsensus {
+		polyBFTConfig, configErr := edgepolybft.GetPolyBFTConfig(&chainConfig)
+		if configErr != nil {
+			return nil, configErr
+		}
+
+		if polyBFTConfig.InitialTrieRoot != edgetypes.ZeroHash {
+			checkedInitialTrieRoot, hashErr := edgeitrie.HashChecker(polyBFTConfig.InitialTrieRoot.Bytes(), stateStorage)
+			if hashErr != nil {
+				return nil, fmt.Errorf("error on state root verification %w", hashErr)
+			}
+
+			if checkedInitialTrieRoot != polyBFTConfig.InitialTrieRoot {
+				return nil, errors.New("invalid initial state root")
+			}
+
+			logger.Info("Initial state root checked and correct")
+
+			initialStateRoot = polyBFTConfig.InitialTrieRoot
+		}
+	}
+
+	genesisRoot, err := executor.WriteGenesis(chainConfig.Genesis.Alloc, initialStateRoot)
+	if err != nil {
+		return nil, err
+	}
 
 	chainConfig.Genesis.StateRoot = genesisRoot
 	signer := edgecrypto.NewEIP155Signer(edgechain.AllForksEnabled.At(0), uint64(chainConfig.Params.ChainID))
