@@ -53,7 +53,7 @@ func rlpxPing(n *enode.Node) (*Hello, error) {
 
 	case 1:
 		var msg []p2p.DiscReason
-		if rlp.DecodeBytes(data, &msg); len(msg) == 0 {
+		if err := rlp.DecodeBytes(data, &msg); err != nil || len(msg) == 0 {
 			return nil, fmt.Errorf("invalid disconnect message")
 		}
 
@@ -62,6 +62,4 @@ func rlpxPing(n *enode.Node) (*Hello, error) {
 	default:
 		return nil, fmt.Errorf("invalid message code %d, expected handshake (code zero)", code)
 	}
-
-	return nil, nil
 }

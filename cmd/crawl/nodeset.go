@@ -84,6 +84,8 @@ func (ns nodeSet) nodes() []*enode.Node {
 }
 
 // add ensures the given nodes are present in the set.
+//
+//nolint:unused
 func (ns nodeSet) add(nodes ...*enode.Node) {
 	for _, n := range nodes {
 		v := ns[n.ID()]
@@ -94,6 +96,8 @@ func (ns nodeSet) add(nodes ...*enode.Node) {
 }
 
 // topN returns the top n nodes by score as a new set.
+//
+//nolint:unused
 func (ns nodeSet) topN(n int) nodeSet {
 	if n >= len(ns) {
 		return ns
@@ -114,6 +118,8 @@ func (ns nodeSet) topN(n int) nodeSet {
 }
 
 // verify performs integrity checks on the node set.
+//
+//nolint:unused
 func (ns nodeSet) verify() error {
 	for id, n := range ns {
 		if n.N.ID() != id {
