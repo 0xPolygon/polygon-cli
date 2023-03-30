@@ -523,6 +523,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	tops = configureTransactOpts(tops)
+	tops.GasLimit = 10000000
+
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return err
@@ -588,6 +590,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 		tops.Nonce = new(big.Int).SetUint64(currentNonce)
 		tops = configureTransactOpts(tops)
+		tops.GasLimit = 10000000
+
 		_, err = erc20Contract.Mint(tops, metrics.UnitMegaether)
 		if err != nil {
 			log.Error().Err(err).Msg("There was an error minting ERC20")
@@ -639,6 +643,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 		tops.Nonce = new(big.Int).SetUint64(currentNonce)
 		tops = configureTransactOpts(tops)
+		tops.GasLimit = 10000000
 
 		err = blockUntilSuccessful(func() error {
 			_, err = erc721Contract.MintBatch(tops, *ltp.FromETHAddress, new(big.Int).SetUint64(1))
@@ -752,7 +757,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				recordSample(i, j, err, startReq, endReq, myNonceValue)
 				if err != nil {
-					log.Trace().Err(err).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
+					log.Error().Err(err).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
 					retryForNonce = true
 				}
 
