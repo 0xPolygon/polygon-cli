@@ -38,6 +38,18 @@ func GenerateSHA256Input() []byte {
 	return paddedInput
 }
 
+func GenerateRIPEMD160Input() []byte {
+	inputData := []byte("Test")
+
+	return inputData
+}
+
+func GenerateIdentityInput() []byte {
+	inputData := []byte("Test")
+
+	return inputData
+}
+
 func CallPrecompiledContracts(address int, lt *LoadTester, opts *bind.TransactOpts, iterations uint64, privateKey *ecdsa.PrivateKey) (*ethtypes.Transaction, error) {
 	var inputData []byte
 
@@ -50,7 +62,14 @@ func CallPrecompiledContracts(address int, lt *LoadTester, opts *bind.TransactOp
 		log.Trace().Str("method", "TestSHA256").Msg("Executing contract method")
 		inputData = GenerateSHA256Input()
 		return lt.TestSHA256(opts, inputData)
-		// case 3:
+	case 3:
+		log.Trace().Str("method", "TestRipemd160").Msg("Executing contract method")
+		inputData = GenerateRIPEMD160Input()
+		return lt.TestRipemd160(opts, inputData)
+	case 4:
+		log.Trace().Str("method", "TestIdentity").Msg("Executing contract method")
+		inputData = GenerateIdentityInput()
+		return lt.TestIdentity(opts, inputData)
 		// case 4:
 		// case 5:
 		// case 6:
@@ -71,7 +90,7 @@ func CallPrecompiledContracts(address int, lt *LoadTester, opts *bind.TransactOp
 }
 
 func GetRandomPrecompiledContractAddress() int {
-	n := 2
+	n := 4
 	return rand.Intn(n) + 1 // [1, n + 1)
 	// return rand.Intn(17) + 1
 }
