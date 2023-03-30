@@ -1473,7 +1473,6 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		bs := blockData[bn]
 		if bs.Receipts == nil {
 			log.Error().Uint64("blocknumber", bn).Msg("Block number from receipts does not exist in block data")
-			continue
 		}
 		bs.Receipts[r.TransactionHash.ToHash()] = r
 		blockData[bn] = bs
@@ -1649,14 +1648,10 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 	}
 }
 func getSuccessfulTransactionCount(bs map[uint64]blockSummary) (successful, total int64) {
-	total = 0
-	successful = 0
 	for _, block := range bs {
+		total += int64(len(block.Receipts))
 		for _, receipt := range block.Receipts {
-			total += 1
-			if receipt.Status.ToInt64() == 1 {
-				successful += 1
-			}
+			successful += receipt.Status.ToInt64()
 		}
 	}
 	return
