@@ -18,19 +18,12 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package crawl
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/hex"
-	"fmt"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
@@ -42,9 +35,9 @@ type (
 		Bootnodes string
 		Timeout   string
 		Threads   int
-		Client    string
 		NetworkID int
 		NodesFile string
+		Database  string
 	}
 )
 
@@ -70,14 +63,14 @@ var CrawlCmd = &cobra.Command{
 
 		var cfg discover.Config
 		cfg.PrivateKey, _ = crypto.GenerateKey()
-		bn, err := parseBootnodes(inputCrawlParams.Bootnodes)
+		bn, err := p2p.ParseBootnodes(inputCrawlParams.Bootnodes)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to parse bootnodes")
 			return err
 		}
 		cfg.Bootnodes = bn
 
-		db, err := enode.OpenDB("")
+		db, err := enode.OpenDB(inputCrawlParams.Database)
 		if err != nil {
 			return err
 		}
@@ -113,9 +106,9 @@ func init() {
 	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Bootnodes, "bootnodes", "b", "", "Comma separated nodes used for bootstrapping. At least one bootnode is required, so other nodes in the network can discover each other.")
 	CrawlCmd.MarkPersistentFlagRequired("bootnodes")
 	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "Time limit for the crawl.")
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Client, "client", "c", "", "Name of client to filter the node information for.")
 	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt.")
 	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id.")
+	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Database, "database", "d", "", "Node database for updating and storing client information.")
 }
 
 func listen(ln *enode.LocalNode) (*net.UDPConn, error) {
@@ -139,72 +132,4 @@ func listen(ln *enode.LocalNode) (*net.UDPConn, error) {
 	ln.SetFallbackUDP(uaddr.Port)
 
 	return usocket, nil
-}
-
-func decodeRecordHex(b []byte) ([]byte, bool) {
-	if bytes.HasPrefix(b, []byte("0x")) {
-		b = b[2:]
-	}
-
-	dec := make([]byte, hex.DecodedLen(len(b)))
-	_, err := hex.Decode(dec, b)
-
-	return dec, err == nil
-}
-
-func decodeRecordBase64(b []byte) ([]byte, bool) {
-	if bytes.HasPrefix(b, []byte("enr:")) {
-		b = b[4:]
-	}
-
-	dec := make([]byte, base64.RawURLEncoding.DecodedLen(len(b)))
-	n, err := base64.RawURLEncoding.Decode(dec, b)
-
-	return dec[:n], err == nil
-}
-
-// parseRecord parses a node record from hex, base64, or raw binary input.
-func parseRecord(source string) (*enr.Record, error) {
-	bin := []byte(source)
-
-	if d, ok := decodeRecordHex(bytes.TrimSpace(bin)); ok {
-		bin = d
-	} else if d, ok := decodeRecordBase64(bytes.TrimSpace(bin)); ok {
-		bin = d
-	}
-
-	var r enr.Record
-	err := rlp.DecodeBytes(bin, &r)
-
-	return &r, err
-}
-
-// parseNode parses a node record and verifies its signature.
-func parseNode(source string) (*enode.Node, error) {
-	if strings.HasPrefix(source, "enode://") {
-		return enode.ParseV4(source)
-	}
-
-	r, err := parseRecord(source)
-	if err != nil {
-		return nil, err
-	}
-
-	return enode.New(enode.ValidSchemes, r)
-}
-
-// parseBootnodes parses the bootnodes string and returns a node slice.
-func parseBootnodes(bootnodes string) ([]*enode.Node, error) {
-	s := strings.Split(bootnodes, ",")
-
-	nodes := make([]*enode.Node, len(s))
-	var err error
-	for i, record := range s {
-		nodes[i], err = parseNode(record)
-		if err != nil {
-			return nil, fmt.Errorf("invalid bootstrap node: %v", err)
-		}
-	}
-
-	return nodes, nil
 }

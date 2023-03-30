@@ -171,8 +171,33 @@ func (c *crawler) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
 	}
 }
 
-// updateNode updates the info about the given node, and returns a status
-// about what changed
+// shouldSkipNode filters out nodes by their network id. If there is a status
+// message, skip nodes that don't have the correct network id. Otherwise, skip
+// nodes that are unable to peer.
+func shouldSkipNode(n *enode.Node) bool {
+	if inputCrawlParams.NetworkID <= 0 {
+		return false
+	}
+
+	conn, err := p2p.Dial(n)
+	if err != nil {
+		log.Error().Err(err).Msg("Dial failed")
+		return true
+	}
+	defer conn.Close()
+
+	hello, message, err := conn.Peer(nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Peer failed")
+		return true
+	}
+
+	log.Debug().Interface("hello", hello).Interface("status", message).Msg("Message received")
+	return inputCrawlParams.NetworkID != int(message.NetworkID)
+}
+
+// updateNode updates the info about the given node, and returns a status about
+// what changed.
 func (c *crawler) updateNode(n *enode.Node) int {
 	c.mu.RLock()
 	node, ok := c.output[n.ID()]
@@ -184,17 +209,10 @@ func (c *crawler) updateNode(n *enode.Node) int {
 		return nodeSkipRecent
 	}
 
-	conn, err := p2p.Dial(n)
-	defer conn.Close()
-	if err != nil {
-		log.Error().Err(err).Msg("Dial failed")
+	// Filter out incompatible nodes.
+	if shouldSkipNode(n) {
+		return nodeSkipIncompat
 	}
-
-	hello, message, err := conn.Peer(nil)
-	if err != nil {
-		log.Error().Err(err).Msg("Peer failed")
-	}
-	log.Debug().Interface("hello", hello).Interface("status", message).Msg("Message received")
 
 	// Request the node record.
 	status := nodeUpdated

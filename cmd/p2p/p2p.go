@@ -4,7 +4,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/maticnetwork/polygon-cli/cmd/p2p/crawl"
-	"github.com/maticnetwork/polygon-cli/cmd/p2p/filter"
 	"github.com/maticnetwork/polygon-cli/cmd/p2p/ping"
 )
 
@@ -15,6 +14,5 @@ var P2pCmd = &cobra.Command{
 
 func init() {
 	P2pCmd.AddCommand(crawl.CrawlCmd)
-	P2pCmd.AddCommand(filter.FilterCmd)
 	P2pCmd.AddCommand(ping.PingCmd)
 }

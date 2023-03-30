@@ -67,7 +67,7 @@ func (c *Conn) Peer(chain *Chain) (*Hello, *Status, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("handshake failed: %v", err)
 	}
-	status, err := c.status(chain)
+	status, err := c.status()
 	if err != nil {
 		return hello, nil, fmt.Errorf("status exchange failed: %v", err)
 	}
@@ -106,8 +106,8 @@ func (c *Conn) handshake() (*Hello, error) {
 	}
 }
 
-// status gets the `Status` message from the given node.
-func (c *Conn) status(chain *Chain) (*Status, error) {
+// status gets the `status` message from the given node.
+func (c *Conn) status() (*Status, error) {
 	defer c.SetDeadline(time.Time{})
 	c.SetDeadline(time.Now().Add(20 * time.Second))
 
@@ -123,10 +123,6 @@ func (c *Conn) status(chain *Chain) (*Status, error) {
 			c.Write(&Pong{})
 		default:
 			return nil, fmt.Errorf("bad status message: %v", msg)
-		}
-
-		if err := c.Write(Disconnect{}); err != nil {
-			return nil, fmt.Errorf("write to connection failed: %v", err)
 		}
 	}
 }

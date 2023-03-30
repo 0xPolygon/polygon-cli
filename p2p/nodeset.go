@@ -19,7 +19,6 @@ package p2p
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
 	"sort"
 	"time"
@@ -32,9 +31,9 @@ const jsonIndent = "    "
 
 // NodeSet is the nodes.json file format. It holds a set of node records
 // as a JSON object.
-type NodeSet map[enode.ID]nodeJSON
+type NodeSet map[enode.ID]NodeJSON
 
-type nodeJSON struct {
+type NodeJSON struct {
 	Seq uint64      `json:"seq"`
 	N   *enode.Node `json:"record"`
 
@@ -82,53 +81,4 @@ func (ns NodeSet) Nodes() []*enode.Node {
 		return bytes.Compare(result[i].ID().Bytes(), result[j].ID().Bytes()) < 0
 	})
 	return result
-}
-
-// add ensures the given nodes are present in the set.
-//
-//nolint:unused
-func (ns NodeSet) add(nodes ...*enode.Node) {
-	for _, n := range nodes {
-		v := ns[n.ID()]
-		v.N = n
-		v.Seq = n.Seq()
-		ns[n.ID()] = v
-	}
-}
-
-// topN returns the top n nodes by score as a new set.
-//
-//nolint:unused
-func (ns NodeSet) topN(n int) NodeSet {
-	if n >= len(ns) {
-		return ns
-	}
-
-	byscore := make([]nodeJSON, 0, len(ns))
-	for _, v := range ns {
-		byscore = append(byscore, v)
-	}
-	sort.Slice(byscore, func(i, j int) bool {
-		return byscore[i].Score >= byscore[j].Score
-	})
-	result := make(NodeSet, n)
-	for _, v := range byscore[:n] {
-		result[v.N.ID()] = v
-	}
-	return result
-}
-
-// verify performs integrity checks on the node set.
-//
-//nolint:unused
-func (ns NodeSet) verify() error {
-	for id, n := range ns {
-		if n.N.ID() != id {
-			return fmt.Errorf("invalid node %v: ID does not match ID %v in record", id, n.N.ID())
-		}
-		if n.N.Seq() != n.Seq {
-			return fmt.Errorf("invalid node %v: 'seq' does not match seq %d from record", id, n.N.Seq())
-		}
-	}
-	return nil
 }
