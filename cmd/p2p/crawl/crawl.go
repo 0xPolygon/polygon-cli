@@ -14,6 +14,7 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
+
 package crawl
 
 import (
@@ -22,32 +23,28 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	// "github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/common"
-	// "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/rs/zerolog/log"
-
 	"github.com/spf13/cobra"
+
+	"github.com/maticnetwork/polygon-cli/p2p"
 )
 
 type (
 	crawlParams struct {
-		Client    string
 		Bootnodes string
 		Timeout   string
-		FileName  string
 		Threads   int
-		// ParsedBootnodes []*enode.Node
-		// PrivateKey      *ecdsa.PrivateKey
+		Client    string
+		NetworkID int
+		NodesFile string
 	}
 )
 
@@ -57,13 +54,18 @@ var (
 
 // crawlCmd represents the crawl command
 var CrawlCmd = &cobra.Command{
-	Use:   "crawl",
+	Use:   "crawl [nodes file]",
 	Short: "Crawl a network",
 	Long:  `This is a basic function to crawl a network.`,
+	Args:  cobra.MinimumNArgs(1),
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		inputCrawlParams.NodesFile = args[0]
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var inputSet nodeSet
-		if common.FileExist(inputCrawlParams.FileName) {
-			inputSet = loadNodesJSON(inputCrawlParams.FileName)
+		inputSet, err := p2p.LoadNodesJSON(inputCrawlParams.NodesFile)
+		if err != nil {
+			return err
 		}
 
 		var cfg discover.Config
@@ -77,15 +79,18 @@ var CrawlCmd = &cobra.Command{
 
 		db, err := enode.OpenDB("")
 		if err != nil {
-			exit(err)
+			return err
 		}
 
 		ln := enode.NewLocalNode(db, cfg.PrivateKey)
-		socket := listen(ln)
+		socket, err := listen(ln)
+		if err != nil {
+			return err
+		}
 
 		disc, err := discover.ListenV4(socket, ln, cfg)
 		if err != nil {
-			exit(err)
+			return err
 		}
 		defer disc.Close()
 
@@ -94,54 +99,31 @@ var CrawlCmd = &cobra.Command{
 
 		timeout, err := time.ParseDuration(inputCrawlParams.Timeout)
 		if err != nil {
-			exit(err)
+			return err
 		}
 
 		log.Info().Msg("Starting crawl")
+
 		output := c.run(timeout, inputCrawlParams.Threads)
-		writeNodesJSON(inputCrawlParams.FileName, output)
-
-		return nil
-	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if strings.HasPrefix(inputCrawlParams.Bootnodes, "enr:") {
-			return fmt.Errorf("the bootnode address should start with `enr:`. Given: %s", inputCrawlParams.Bootnodes)
-		}
-
-		return nil
-	},
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) < 1 {
-			return fmt.Errorf("need nodes file as argument")
-		}
-
-		inputCrawlParams.FileName = args[0]
-
-		return nil
+		return p2p.WriteNodesJSON(inputCrawlParams.NodesFile, output)
 	},
 }
 
 func init() {
 	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Bootnodes, "bootnodes", "b", "", "Comma separated nodes used for bootstrapping. At least one bootnode is required, so other nodes in the network can discover each other.")
+	CrawlCmd.MarkPersistentFlagRequired("bootnodes")
 	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "Time limit for the crawl.")
 	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Client, "client", "c", "", "Name of client to filter the node information for.")
 	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt.")
+	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id.")
 }
 
-func exit(err interface{}) {
-	if err == nil {
-		os.Exit(0)
-	}
-	fmt.Fprintln(os.Stderr, err)
-	os.Exit(1)
-}
-
-func listen(ln *enode.LocalNode) *net.UDPConn {
+func listen(ln *enode.LocalNode) (*net.UDPConn, error) {
 	addr := "0.0.0.0:0"
 
 	socket, err := net.ListenPacket("udp4", addr)
 	if err != nil {
-		exit(err)
+		return nil, err
 	}
 
 	// Configure UDP endpoint in ENR from listener address.
@@ -156,7 +138,7 @@ func listen(ln *enode.LocalNode) *net.UDPConn {
 
 	ln.SetFallbackUDP(uaddr.Port)
 
-	return usocket
+	return usocket, nil
 }
 
 func decodeRecordHex(b []byte) ([]byte, bool) {
@@ -211,6 +193,7 @@ func parseNode(source string) (*enode.Node, error) {
 	return enode.New(enode.ValidSchemes, r)
 }
 
+// parseBootnodes parses the bootnodes string and returns a node slice.
 func parseBootnodes(bootnodes string) ([]*enode.Node, error) {
 	s := strings.Split(bootnodes, ",")
 

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-package crawl
+package p2p
 
 import (
 	"bytes"
@@ -30,9 +30,9 @@ import (
 
 const jsonIndent = "    "
 
-// nodeSet is the nodes.json file format. It holds a set of node records
+// NodeSet is the nodes.json file format. It holds a set of node records
 // as a JSON object.
-type nodeSet map[enode.ID]nodeJSON
+type NodeSet map[enode.ID]nodeJSON
 
 type nodeJSON struct {
 	Seq uint64      `json:"seq"`
@@ -48,30 +48,31 @@ type nodeJSON struct {
 	LastCheck time.Time `json:"lastCheck,omitempty"`
 }
 
-func loadNodesJSON(file string) nodeSet {
-	var nodes nodeSet
+func LoadNodesJSON(file string) (NodeSet, error) {
+	var nodes NodeSet
 	if err := common.LoadJSON(file, &nodes); err != nil {
-		exit(err)
+		return nil, err
 	}
-	return nodes
+	return nodes, nil
 }
 
-func writeNodesJSON(file string, nodes nodeSet) {
+func WriteNodesJSON(file string, nodes NodeSet) error {
 	nodesJSON, err := json.MarshalIndent(nodes, "", jsonIndent)
 	if err != nil {
-		exit(err)
+		return err
 	}
 	if file == "-" {
 		os.Stdout.Write(nodesJSON)
-		return
+		return nil
 	}
 	if err := os.WriteFile(file, nodesJSON, 0644); err != nil {
-		exit(err)
+		return err
 	}
+	return nil
 }
 
-// nodes returns the node records contained in the set.
-func (ns nodeSet) nodes() []*enode.Node {
+// Nodes returns the node records contained in the set.
+func (ns NodeSet) Nodes() []*enode.Node {
 	result := make([]*enode.Node, 0, len(ns))
 	for _, n := range ns {
 		result = append(result, n.N)
@@ -86,7 +87,7 @@ func (ns nodeSet) nodes() []*enode.Node {
 // add ensures the given nodes are present in the set.
 //
 //nolint:unused
-func (ns nodeSet) add(nodes ...*enode.Node) {
+func (ns NodeSet) add(nodes ...*enode.Node) {
 	for _, n := range nodes {
 		v := ns[n.ID()]
 		v.N = n
@@ -98,7 +99,7 @@ func (ns nodeSet) add(nodes ...*enode.Node) {
 // topN returns the top n nodes by score as a new set.
 //
 //nolint:unused
-func (ns nodeSet) topN(n int) nodeSet {
+func (ns NodeSet) topN(n int) NodeSet {
 	if n >= len(ns) {
 		return ns
 	}
@@ -110,7 +111,7 @@ func (ns nodeSet) topN(n int) nodeSet {
 	sort.Slice(byscore, func(i, j int) bool {
 		return byscore[i].Score >= byscore[j].Score
 	})
-	result := make(nodeSet, n)
+	result := make(NodeSet, n)
 	for _, v := range byscore[:n] {
 		result[v.N.ID()] = v
 	}
@@ -120,7 +121,7 @@ func (ns nodeSet) topN(n int) nodeSet {
 // verify performs integrity checks on the node set.
 //
 //nolint:unused
-func (ns nodeSet) verify() error {
+func (ns NodeSet) verify() error {
 	for id, n := range ns {
 		if n.N.ID() != id {
 			return fmt.Errorf("invalid node %v: ID does not match ID %v in record", id, n.N.ID())

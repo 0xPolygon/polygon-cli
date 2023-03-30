@@ -17,18 +17,19 @@
 package crawl
 
 import (
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
+
+	"github.com/maticnetwork/polygon-cli/p2p"
 )
 
 type crawler struct {
-	input     nodeSet
-	output    nodeSet
+	input     p2p.NodeSet
+	output    p2p.NodeSet
 	disc      resolver
 	iters     []enode.Iterator
 	inputIter enode.Iterator
@@ -52,13 +53,13 @@ type resolver interface {
 	RequestENR(*enode.Node) (*enode.Node, error)
 }
 
-func newCrawler(input nodeSet, disc resolver, iters ...enode.Iterator) *crawler {
+func newCrawler(input p2p.NodeSet, disc resolver, iters ...enode.Iterator) *crawler {
 	c := &crawler{
 		input:     input,
-		output:    make(nodeSet, len(input)),
+		output:    make(p2p.NodeSet, len(input)),
 		disc:      disc,
 		iters:     iters,
-		inputIter: enode.IterNodes(input.nodes()),
+		inputIter: enode.IterNodes(input.Nodes()),
 		ch:        make(chan *enode.Node),
 		closed:    make(chan struct{}),
 	}
@@ -71,7 +72,7 @@ func newCrawler(input nodeSet, disc resolver, iters ...enode.Iterator) *crawler 
 	return c
 }
 
-func (c *crawler) run(timeout time.Duration, nthreads int) nodeSet {
+func (c *crawler) run(timeout time.Duration, nthreads int) p2p.NodeSet {
 	var (
 		timeoutTimer = time.NewTimer(timeout)
 		timeoutCh    <-chan time.Time
@@ -183,15 +184,21 @@ func (c *crawler) updateNode(n *enode.Node) int {
 		return nodeSkipRecent
 	}
 
+	conn, err := p2p.Dial(n)
+	defer conn.Close()
+	if err != nil {
+		log.Error().Err(err).Msg("Dial failed")
+	}
+
+	hello, message, err := conn.Peer(nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Peer failed")
+	}
+	log.Debug().Interface("hello", hello).Interface("status", message).Msg("Message received")
+
 	// Request the node record.
 	status := nodeUpdated
 	node.LastCheck = truncNow()
-
-	hello, err := rlpxPing(n)
-	if err != nil || !strings.Contains(hello.Name, inputCrawlParams.Client) {
-		log.Debug().Str("id", n.ID().String()).Msg("Skipping node")
-		return nodeSkipIncompat
-	}
 
 	if nn, err := c.disc.RequestENR(n); err != nil {
 		if node.Score == 0 {
