@@ -538,7 +538,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	// deploy and instantiate the load tester contract
 	var ltAddr ethcommon.Address
 	var ltContract *contracts.LoadTester
-	if strings.ContainsAny(mode, "rcfisl") || *inputLoadTestParams.ForceContractDeploy {
+	if strings.ContainsAny(mode, "rcfislps") || *inputLoadTestParams.ForceContractDeploy {
 		if *inputLoadTestParams.LtAddress == "" {
 			ltAddr, _, _, err = contracts.DeployLoadTester(tops, c)
 			if err != nil {
@@ -756,7 +756,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				case loadTestModeERC721:
 					startReq, endReq, err = loadtestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
 				case loadTestModePrecompiledContracts:
-					startReq, endReq, err = loadtestCallPrecompiledContracts(ctx, c, myNonceValue)
+					startReq, endReq, err = loadtestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract)
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -929,7 +929,7 @@ func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltCont
 	return
 }
 
-func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -946,7 +946,7 @@ func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, 
 	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
-	err = contracts.CallPrecompiledContracts(ctx, c, f, tops, *iterations, *ltp.FromETHAddress, privateKey)
+	_, err = contracts.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
 	t2 = time.Now()
 	return
 }

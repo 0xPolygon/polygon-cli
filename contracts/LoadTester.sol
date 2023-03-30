@@ -561,6 +561,7 @@ contract LoadTester {
         }
         return result;
     }
+
     function testDIFFICULTY(uint x) public returns(uint) {
         inc();
         uint result = 0xDEADBEEF0044;
@@ -568,11 +569,15 @@ contract LoadTester {
             let v := 0
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
             {
-                v := difficulty()
+                // NOTE: Post Paris, the difficulty() instruction has been supplanted for prevrandao() 
+                // Source: https://eips.ethereum.org/EIPS/eip-4399
+                // v := difficulty()
+                v := prevrandao()
             }
         }
         return result;
     }
+
     function testGASLIMIT(uint x) public returns(uint) {
         inc();
         uint result = 0xDEADBEEF0045;
@@ -764,5 +769,41 @@ contract LoadTester {
             }
         }
         return result;
+    }
+
+    // Precompiled Contracts
+    function testSHA256(bytes memory inputData) public returns (bytes32 result) {
+        address SHA256_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000002;
+        
+        assembly {
+            let inputPtr := add(inputData, 0x20)
+            let inputLength := mload(inputData)
+            let outputPtr := result
+            let success := call(gas(), SHA256_PRECOMPILED_CONTRACT, 0, inputPtr, inputLength, outputPtr, 0x20)
+            if iszero(success) {
+                revert(0, 0)
+            }
+        }
+    }
+
+    function testECRecover(bytes memory inputData) public returns (address result) {
+        require(inputData.length == 128, "Invalid input data length.");
+
+        address EC_RECOVER_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000001;
+
+        assembly {
+            let inputPtr := add(inputData, 0x20) // Skip the length prefix of the inputData bytes array
+
+            // Set the correct 1-byte v value from the 32-byte v component
+            mstore(add(inputPtr, 0x20), byte(31, mload(add(inputPtr, 0x20))))
+
+            let success := call(gas(), EC_RECOVER_PRECOMPILED_CONTRACT, 0, inputPtr, 0x80, mload(0x40), 0x20)
+            if iszero(success) {
+                revert(0, 0)
+            }
+
+            // Load the result from the memory
+            result := mload(mload(0x40))
+        }
     }
 }
