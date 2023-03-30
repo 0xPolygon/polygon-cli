@@ -107,7 +107,7 @@ func GenerateECMulInput() []byte {
 	y1Bytes := math.PaddedBigBytes(y1, 32)
 	sBytes := math.PaddedBigBytes(s, 32)
 
-	inputData := append(append(append(x1Bytes, y1Bytes...), sBytes...))
+	inputData := append(append(x1Bytes, y1Bytes...), sBytes...)
 	return inputData
 }
 
