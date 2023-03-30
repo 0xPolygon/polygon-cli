@@ -221,8 +221,4 @@ func GetRandomPrecompiledContractAddress() int {
 	}
 
 	return codes[rand.Intn(len(codes))]
-	/**
-	n := 9
-	return rand.Intn(n) + 1 // [1, n + 1)
-	*/
 }

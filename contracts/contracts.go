@@ -10,7 +10,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	// "github.com/ethereum/go-ethereum/core/vm"
 	"github.com/rs/zerolog/log"
 )
 
