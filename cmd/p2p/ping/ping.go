@@ -74,7 +74,7 @@ var PingCmd = &cobra.Command{
 				if err != nil {
 					log.Error().Err(err).Msg("dial failed")
 				} else {
-					if hello, status, err = conn.Peer(nil); err != nil {
+					if hello, status, err = conn.Peer(); err != nil {
 						log.Error().Err(err).Msg("peer failed")
 					}
 

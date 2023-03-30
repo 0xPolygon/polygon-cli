@@ -51,9 +51,8 @@ var CrawlCmd = &cobra.Command{
 	Short: "Crawl a network",
 	Long:  `This is a basic function to crawl a network.`,
 	Args:  cobra.MinimumNArgs(1),
-	PreRunE: func(cmd *cobra.Command, args []string) error {
+	PreRun: func(cmd *cobra.Command, args []string) {
 		inputCrawlParams.NodesFile = args[0]
-		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		inputSet, err := p2p.LoadNodesJSON(inputCrawlParams.NodesFile)
@@ -104,7 +103,9 @@ var CrawlCmd = &cobra.Command{
 
 func init() {
 	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Bootnodes, "bootnodes", "b", "", "Comma separated nodes used for bootstrapping. At least one bootnode is required, so other nodes in the network can discover each other.")
-	CrawlCmd.MarkPersistentFlagRequired("bootnodes")
+	if err := CrawlCmd.MarkPersistentFlagRequired("bootnodes"); err != nil {
+		log.Error().Err(err).Msg("Failed to mark bootnodes as required persistent flag")
+	}
 	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "Time limit for the crawl.")
 	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt.")
 	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id.")

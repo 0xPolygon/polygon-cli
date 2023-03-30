@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
+	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -55,14 +56,13 @@ func Dial(n *enode.Node) (*Conn, error) {
 		{Name: "eth", Version: 67},
 		{Name: "eth", Version: 68},
 	}
-	conn.ourHighestProtoVersion = 68
 
 	return &conn, nil
 }
 
 // Peer performs both the protocol handshake and the status message
 // exchange with the node in order to Peer with it.
-func (c *Conn) Peer(chain *Chain) (*Hello, *Status, error) {
+func (c *Conn) Peer() (*Hello, *Status, error) {
 	hello, err := c.handshake()
 	if err != nil {
 		return nil, nil, fmt.Errorf("handshake failed: %v", err)
@@ -76,8 +76,10 @@ func (c *Conn) Peer(chain *Chain) (*Hello, *Status, error) {
 
 // handshake performs a protocol handshake with the node.
 func (c *Conn) handshake() (*Hello, error) {
-	defer c.SetDeadline(time.Time{})
-	c.SetDeadline(time.Now().Add(10 * time.Second))
+	defer func() { _ = c.SetDeadline(time.Time{}) }()
+	if err := c.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		return nil, err
+	}
 
 	// write hello to client
 	pub0 := crypto.FromECDSAPub(&c.ourKey.PublicKey)[1:]
@@ -108,8 +110,10 @@ func (c *Conn) handshake() (*Hello, error) {
 
 // status gets the `status` message from the given node.
 func (c *Conn) status() (*Status, error) {
-	defer c.SetDeadline(time.Time{})
-	c.SetDeadline(time.Now().Add(20 * time.Second))
+	defer func() { _ = c.SetDeadline(time.Time{}) }()
+	if err := c.SetDeadline(time.Now().Add(20 * time.Second)); err != nil {
+		return nil, err
+	}
 
 	for {
 		switch msg := c.Read().(type) {
@@ -120,7 +124,9 @@ func (c *Conn) status() (*Status, error) {
 		case *Disconnects:
 			return nil, fmt.Errorf("disconnect received: %v", msg)
 		case *Ping:
-			c.Write(&Pong{})
+			if err := c.Write(&Pong{}); err != nil {
+				log.Error().Err(err).Msg("Write pong failed")
+			}
 		default:
 			return nil, fmt.Errorf("bad status message: %v", msg)
 		}

@@ -186,7 +186,7 @@ func shouldSkipNode(n *enode.Node) bool {
 	}
 	defer conn.Close()
 
-	hello, message, err := conn.Peer(nil)
+	hello, message, err := conn.Peer()
 	if err != nil {
 		log.Error().Err(err).Msg("Peer failed")
 		return true

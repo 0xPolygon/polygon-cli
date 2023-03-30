@@ -158,12 +158,8 @@ func (msg PooledTransactions) ReqID() uint64 { return msg.RequestId }
 // Conn represents an individual connection with a peer
 type Conn struct {
 	*rlpx.Conn
-	ourKey                     *ecdsa.PrivateKey
-	negotiatedProtoVersion     uint
-	negotiatedSnapProtoVersion uint
-	ourHighestProtoVersion     uint
-	ourHighestSnapProtoVersion uint
-	caps                       []p2p.Cap
+	ourKey *ecdsa.PrivateKey
+	caps   []p2p.Cap
 }
 
 // Read reads an eth66 packet from the connection.
