@@ -290,8 +290,8 @@ t - sending transactions
 d - deploy contract
 c - call random contract functions
 f - call specific contract function
-p - call random precompiled contracts // TODO: Added
-a - call a specific precompiled contract address // TODO: Add this feature
+p - call random precompiled contracts
+a - call a specific precompiled contract address
 s - store mode
 l - long running mode
 r - random modes
@@ -538,7 +538,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	// deploy and instantiate the load tester contract
 	var ltAddr ethcommon.Address
 	var ltContract *contracts.LoadTester
-	if strings.ContainsAny(mode, "rcfislps") || *inputLoadTestParams.ForceContractDeploy {
+	if strings.ContainsAny(mode, "rcfislpas") || *inputLoadTestParams.ForceContractDeploy {
 		if *inputLoadTestParams.LtAddress == "" {
 			ltAddr, _, _, err = contracts.DeployLoadTester(tops, c)
 			if err != nil {
@@ -755,8 +755,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					startReq, endReq, err = loadtestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
 				case loadTestModeERC721:
 					startReq, endReq, err = loadtestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
+				case loadTestModePrecompiledContract:
+					startReq, endReq, err = loadtestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, true)
 				case loadTestModePrecompiledContracts:
-					startReq, endReq, err = loadtestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract)
+					startReq, endReq, err = loadtestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false)
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -929,13 +931,18 @@ func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltCont
 	return
 }
 
-func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester, useSelectedAddress bool) (t1 time.Time, t2 time.Time, err error) {
+	var f int
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 	iterations := ltp.Iterations
-	f := contracts.GetRandomPrecompiledContractAddress()
+	if useSelectedAddress {
+		f = int(*ltp.Function)
+	} else {
+		f = contracts.GetRandomPrecompiledContractAddress()
+	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {

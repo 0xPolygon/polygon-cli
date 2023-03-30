@@ -875,4 +875,58 @@ contract LoadTester {
             }
         }
     }
+
+    function testECMul(bytes memory inputData) public returns (bytes memory result) {
+        require(inputData.length == 96, "Invalid input length");
+        address EC_MUL_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000007;
+
+        assembly {
+            let inputPtr := add(inputData, 0x20) // Ignore the length prefix of the inputData bytes array
+            let inputLength := mload(inputData)
+
+            let success := call(gas(), EC_MUL_PRECOMPILED_CONTRACT, 0, inputPtr, inputLength, result, 0x40)
+            if iszero(success) {
+                revert(0, 0)
+            }
+        }
+    }
+
+    function testECPairing(bytes memory inputData) public returns (bytes memory result) {
+        address EC_PAIRING_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000008;
+
+        assembly {
+            let success := call(
+                gas(),
+                EC_PAIRING_PRECOMPILED_CONTRACT,
+                0,                       // no ether transfer
+                add(inputData, 32),      // inputData offset
+                mload(inputData),        // inputData length
+                result,                  // output area
+                64                       // output area size (2 * 32 bytes)
+            )
+
+            if iszero(success) {
+                revert(0, 0)
+            }
+        }
+    }
+
+    function testBlake2f(bytes memory inputData) public returns (bytes memory result) {
+        address BLAKE_2F_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000008;
+
+        assembly {
+            let success := call(
+                gas(),
+                BLAKE_2F_PRECOMPILED_CONTRACT,
+                0,                       // no ether transfer
+                add(inputData, 32),      // inputData offset
+                mload(inputData),        // inputData length
+                result,                  // output area
+                64                       // output area size (2 * 32 bytes)
+            )
+            if iszero(success) {
+                revert(0, 0)
+            }
+        }
+    }
 }
