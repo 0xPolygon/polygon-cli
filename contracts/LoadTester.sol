@@ -842,4 +842,37 @@ contract LoadTester {
             result := outputPtr
         }
     }
+
+    function testModExp(bytes memory inputData) public returns (bytes memory result) {
+        address MOD_EXP_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000005;
+
+        assembly {
+            let inputPtr := add(inputData, 0x20) // Ignore the length prefix of the inputData bytes array
+            let inputLength := mload(inputData)
+
+            let outputPtr := mload(0x40)
+
+            let success := call(gas(), MOD_EXP_PRECOMPILED_CONTRACT, 0, inputPtr, inputLength, outputPtr, 0x20)
+            if iszero(success) {
+                revert(0, 0)
+            }
+
+            result := outputPtr
+        }
+    }
+
+    function testECAdd(bytes memory inputData) public returns (bytes memory result) {
+        require(inputData.length == 128, "Invalid input length");
+        address EC_ADD_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000006;
+
+        assembly {
+            let inputPtr := add(inputData, 0x20) // Ignore the length prefix of the inputData bytes array
+            let inputLength := mload(inputData)
+
+            let success := call(gas(), EC_ADD_PRECOMPILED_CONTRACT, 0, inputPtr, inputLength, result, 0x40)
+            if iszero(success) {
+                revert(0, 0)
+            }
+        }
+    }
 }
