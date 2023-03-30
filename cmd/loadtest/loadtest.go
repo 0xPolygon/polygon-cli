@@ -587,7 +587,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 
 		tops.Nonce = new(big.Int).SetUint64(currentNonce)
-		tops.GasLimit = 10000000
 		tops = configureTransactOpts(tops)
 		_, err = erc20Contract.Mint(tops, metrics.UnitMegaether)
 		if err != nil {
@@ -639,7 +638,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 
 		tops.Nonce = new(big.Int).SetUint64(currentNonce)
-		tops.GasLimit = 10000000
 		tops = configureTransactOpts(tops)
 
 		err = blockUntilSuccessful(func() error {
@@ -970,7 +968,6 @@ func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delega
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops.GasLimit = 10000000
 	tops = configureTransactOpts(tops)
 
 	// TODO the delegated call should be a parameter
@@ -1001,7 +998,6 @@ func loadtestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops.GasLimit = 10000000
 	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
@@ -1028,7 +1024,6 @@ func loadtestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops.GasLimit = 10000000
 	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
