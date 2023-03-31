@@ -56,9 +56,9 @@ var PingCmd = &cobra.Command{
 		wg.Add(len(nodes))
 		sem := make(chan bool, inputPingParams.Threads)
 		// Ping each node in the slice.
-		for i, n := range nodes {
+		for _, n := range nodes {
 			sem <- true
-			go func(node *enode.Node, i int) {
+			go func(node *enode.Node) {
 				defer func() {
 					<-sem
 					wg.Done()
@@ -90,7 +90,7 @@ var PingCmd = &cobra.Command{
 				mutex.Lock()
 				output[node.ID()] = pingNodeJSON{node, hello, status, errStr}
 				mutex.Unlock()
-			}(n, i)
+			}(n)
 		}
 		wg.Wait()
 

@@ -47,7 +47,7 @@ func Dial(n *enode.Node) (*Conn, error) {
 	}
 
 	defer func() { _ = conn.SetDeadline(time.Time{}) }()
-	if err := conn.SetDeadline(time.Now().Add(20 * time.Second)); err != nil {
+	if err = conn.SetDeadline(time.Now().Add(20 * time.Second)); err != nil {
 		return nil, err
 	}
 	if _, err = conn.Handshake(conn.ourKey); err != nil {
