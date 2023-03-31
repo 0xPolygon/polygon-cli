@@ -56,9 +56,9 @@ var PingCmd = &cobra.Command{
 		wg.Add(len(nodes))
 		sem := make(chan bool, inputPingParams.Threads)
 		// Ping each node in the slice.
-		for _, n := range nodes {
+		for i, n := range nodes {
 			sem <- true
-			go func(node *enode.Node) {
+			go func(node *enode.Node, i int) {
 				defer func() {
 					<-sem
 					wg.Done()
@@ -72,10 +72,11 @@ var PingCmd = &cobra.Command{
 
 				conn, err := p2p.Dial(node)
 				if err != nil {
-					log.Error().Err(err).Msg("dial failed")
+					log.Error().Err(err).Msg("Dial failed")
 				} else {
+					defer conn.Close()
 					if hello, status, err = conn.Peer(); err != nil {
-						log.Error().Err(err).Msg("peer failed")
+						log.Error().Err(err).Msg("Peer failed")
 					}
 
 					log.Debug().Interface("hello", hello).Interface("status", status).Msg("Message received")
@@ -89,7 +90,7 @@ var PingCmd = &cobra.Command{
 				mutex.Lock()
 				output[node.ID()] = pingNodeJSON{node, hello, status, errStr}
 				mutex.Unlock()
-			}(n)
+			}(n, i)
 		}
 		wg.Wait()
 
