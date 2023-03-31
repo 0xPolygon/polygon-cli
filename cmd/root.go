@@ -18,9 +18,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/maticnetwork/polygon-cli/cmd/fork"
-	"github.com/maticnetwork/polygon-cli/cmd/parseethwallet"
 	"os"
+
+	"github.com/maticnetwork/polygon-cli/cmd/fork"
+	"github.com/maticnetwork/polygon-cli/cmd/p2p"
+	"github.com/maticnetwork/polygon-cli/cmd/parseethwallet"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -87,6 +89,7 @@ func init() {
 	rootCmd.AddCommand(wallet.WalletCmd)
 	rootCmd.AddCommand(fork.ForkCmd)
 	rootCmd.AddCommand(parseethwallet.ParseETHWalletCmd)
+	rootCmd.AddCommand(p2p.P2pCmd)
 }
 
 // initConfig reads in config file and ENV variables if set.
