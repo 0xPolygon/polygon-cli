@@ -561,6 +561,7 @@ contract LoadTester {
         }
         return result;
     }
+
     function testDIFFICULTY(uint x) public returns(uint) {
         inc();
         uint result = 0xDEADBEEF0044;
@@ -568,11 +569,15 @@ contract LoadTester {
             let v := 0
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
             {
-                v := difficulty()
+                // NOTE: Post Paris, the difficulty() instruction has been supplanted for prevrandao() 
+                // Source: https://eips.ethereum.org/EIPS/eip-4399
+                // v := difficulty()
+                v := prevrandao()
             }
         }
         return result;
     }
+
     function testGASLIMIT(uint x) public returns(uint) {
         inc();
         uint result = 0xDEADBEEF0045;
@@ -764,5 +769,164 @@ contract LoadTester {
             }
         }
         return result;
+    }
+
+    // Precompiled Contracts
+    function testECRecover(bytes memory inputData) public returns (address result) {
+        require(inputData.length == 128, "Invalid input data length.");
+
+        address EC_RECOVER_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000001;
+
+        assembly {
+            let inputPtr := add(inputData, 0x20) // Ignore the length prefix of the inputData bytes array
+
+            // Set the correct 1-byte v value from the 32-byte v component
+            mstore(add(inputPtr, 0x20), byte(31, mload(add(inputPtr, 0x20))))
+
+            let success := call(gas(), EC_RECOVER_PRECOMPILED_CONTRACT, 0, inputPtr, 0x80, mload(0x40), 0x20)
+            if iszero(success) {
+                revert(0, 0)
+            }
+
+            // Load the result from the memory
+            result := mload(mload(0x40))
+        }
+    }
+
+    function testSHA256(bytes memory inputData) public returns (bytes32 result) {
+        address SHA256_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000002;
+        
+        assembly {
+            let inputPtr := add(inputData, 0x20) // Ignore the length prefix of the inputData bytes array
+            let inputLength := mload(inputData)
+            let outputPtr := result
+            let success := call(gas(), SHA256_PRECOMPILED_CONTRACT, 0, inputPtr, inputLength, outputPtr, 0x20)
+            if iszero(success) {
+                revert(0, 0)
+            }
+        }
+    }
+
+    function testRipemd160(bytes memory inputData) public returns (bytes20 result) {
+        address RIPEMD160_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000003;
+
+        assembly {
+            let inputPtr := add(inputData, 0x20) // Ignore the length prefix of the inputData bytes array
+            let inputLength := mload(inputData) // Load the length of the inputData
+
+            let outputPtr := mload(0x40)
+
+            let success := call(gas(), RIPEMD160_PRECOMPILED_CONTRACT, 0, inputPtr, inputLength, outputPtr, 0x14)
+            if iszero(success) {
+                revert(0, 0)
+            }
+
+            result := mload(outputPtr)
+        }
+    }
+
+    function testIdentity(bytes memory inputData) public returns (bytes memory result) {
+        address IDENTITY_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000004;
+
+        assembly {
+            let inputPtr := add(inputData, 0x20) // Ignore the length prefix of the inputData bytes array
+            let inputLength := mload(inputData)
+
+            let outputPtr := mload(0x40)
+
+            let success := call(gas(), IDENTITY_PRECOMPILED_CONTRACT, 0, inputPtr, inputLength, outputPtr, inputLength)
+            if iszero(success) {
+                revert(0, 0)
+            }
+
+            result := outputPtr
+        }
+    }
+
+    function testModExp(bytes memory inputData) public returns (bytes memory result) {
+        address MOD_EXP_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000005;
+
+        assembly {
+            let inputPtr := add(inputData, 0x20) // Ignore the length prefix of the inputData bytes array
+            let inputLength := mload(inputData)
+
+            let outputPtr := mload(0x40)
+
+            let success := call(gas(), MOD_EXP_PRECOMPILED_CONTRACT, 0, inputPtr, inputLength, outputPtr, 0x20)
+            if iszero(success) {
+                revert(0, 0)
+            }
+
+            result := outputPtr
+        }
+    }
+
+    function testECAdd(bytes memory inputData) public returns (bytes memory result) {
+        require(inputData.length == 128, "Invalid input length");
+        address EC_ADD_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000006;
+
+        assembly {
+            let inputPtr := add(inputData, 0x20) // Ignore the length prefix of the inputData bytes array
+            let inputLength := mload(inputData)
+
+            let success := call(gas(), EC_ADD_PRECOMPILED_CONTRACT, 0, inputPtr, inputLength, result, 0x40)
+            if iszero(success) {
+                revert(0, 0)
+            }
+        }
+    }
+
+    function testECMul(bytes memory inputData) public returns (bytes memory result) {
+        require(inputData.length == 96, "Invalid input length");
+        address EC_MUL_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000007;
+
+        assembly {
+            let inputPtr := add(inputData, 0x20) // Ignore the length prefix of the inputData bytes array
+            let inputLength := mload(inputData)
+
+            let success := call(gas(), EC_MUL_PRECOMPILED_CONTRACT, 0, inputPtr, inputLength, result, 0x40)
+            if iszero(success) {
+                revert(0, 0)
+            }
+        }
+    }
+
+    function testECPairing(bytes memory inputData) public returns (bytes memory result) {
+        address EC_PAIRING_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000008;
+
+        assembly {
+            let success := call(
+                gas(),
+                EC_PAIRING_PRECOMPILED_CONTRACT,
+                0,                       // no ether transfer
+                add(inputData, 32),      // inputData offset
+                mload(inputData),        // inputData length
+                result,                  // output area
+                64                       // output area size (2 * 32 bytes)
+            )
+
+            if iszero(success) {
+                revert(0, 0)
+            }
+        }
+    }
+
+    function testBlake2f(bytes memory inputData) public returns (bytes memory result) {
+        address BLAKE_2F_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000008;
+
+        assembly {
+            let success := call(
+                gas(),
+                BLAKE_2F_PRECOMPILED_CONTRACT,
+                0,                       // no ether transfer
+                add(inputData, 32),      // inputData offset
+                mload(inputData),        // inputData length
+                result,                  // output area
+                64                       // output area size (2 * 32 bytes)
+            )
+            if iszero(success) {
+                revert(0, 0)
+            }
+        }
     }
 }

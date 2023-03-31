@@ -62,16 +62,18 @@ import (
 )
 
 const (
-	loadTestModeTransaction = "t"
-	loadTestModeDeploy      = "d"
-	loadTestModeCall        = "c"
-	loadTestModeFunction    = "f"
-	loadTestModeInc         = "i"
-	loadTestModeRandom      = "r"
-	loadTestModeStore       = "s"
-	loadTestModeLong        = "l"
-	loadTestModeERC20       = "2"
-	loadTestModeERC721      = "7"
+	loadTestModeTransaction          = "t"
+	loadTestModeDeploy               = "d"
+	loadTestModeCall                 = "c"
+	loadTestModeFunction             = "f"
+	loadTestModeInc                  = "i"
+	loadTestModeRandom               = "r"
+	loadTestModeStore                = "s"
+	loadTestModeLong                 = "l"
+	loadTestModeERC20                = "2"
+	loadTestModeERC721               = "7"
+	loadTestModePrecompiledContracts = "p"
+	loadTestModePrecompiledContract  = "a"
 
 	codeQualitySeed       = "code code code code code code code code code code code quality"
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
@@ -91,6 +93,8 @@ var (
 		loadTestModeLong,
 		loadTestModeERC20,
 		loadTestModeERC721,
+		loadTestModePrecompiledContracts,
+		loadTestModePrecompiledContract,
 		// r should be last to exclude it from random mode selection
 		loadTestModeRandom,
 	}
@@ -286,12 +290,14 @@ t - sending transactions
 d - deploy contract
 c - call random contract functions
 f - call specific contract function
+p - call random precompiled contracts
+a - call a specific precompiled contract address
 s - store mode
 l - long running mode
 r - random modes
 2 - ERC20 Transfers
 7 - ERC721 Mints`)
-	ltp.Function = LoadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` ")
+	ltp.Function = LoadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` or a specific precompiled contract when running with `--mode a`")
 	ltp.Iterations = LoadtestCmd.PersistentFlags().Uint64P("iterations", "i", 100, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicated the minting batch size")
 	ltp.ByteCount = LoadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
@@ -532,7 +538,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	// deploy and instantiate the load tester contract
 	var ltAddr ethcommon.Address
 	var ltContract *contracts.LoadTester
-	if strings.ContainsAny(mode, "rcfisl") || *inputLoadTestParams.ForceContractDeploy {
+	if strings.ContainsAny(mode, "rcfislpas") || *inputLoadTestParams.ForceContractDeploy {
 		if *inputLoadTestParams.LtAddress == "" {
 			ltAddr, _, _, err = contracts.DeployLoadTester(tops, c)
 			if err != nil {
@@ -692,7 +698,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		return err
 	}
 	startNonce := currentNonce
-	log.Debug().Uint64("currenNonce", currentNonce).Msg("Starting main loadtest loop")
+	log.Debug().Uint64("currentNonce", currentNonce).Msg("Starting main loadtest loop")
 	var wg sync.WaitGroup
 	for i = 0; i < routines; i = i + 1 {
 		log.Trace().Int64("routine", i).Msg("Starting Thread")
@@ -749,6 +755,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					startReq, endReq, err = loadtestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
 				case loadTestModeERC721:
 					startReq, endReq, err = loadtestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
+				case loadTestModePrecompiledContract:
+					startReq, endReq, err = loadtestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, true)
+				case loadTestModePrecompiledContracts:
+					startReq, endReq, err = loadtestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false)
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -766,7 +776,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
-	log.Debug().Uint64("currenNonce", currentNonce).Msg("Finished main loadtest loop")
+	log.Debug().Uint64("currentNonce", currentNonce).Msg("Finished main loadtest loop")
 	log.Debug().Msg("Waiting for transactions to actually be mined")
 	finalBlockNumber, err := waitForFinalBlock(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
 	if err != nil {
@@ -856,6 +866,7 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 	t2 = time.Now()
 	return
 }
+
 func loadtestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
@@ -897,6 +908,7 @@ func loadtestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, lt
 	t2 = time.Now()
 	return
 }
+
 func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
@@ -918,6 +930,34 @@ func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltCont
 	t2 = time.Now()
 	return
 }
+
+func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester, useSelectedAddress bool) (t1 time.Time, t2 time.Time, err error) {
+	var f int
+	ltp := inputLoadTestParams
+
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+	iterations := ltp.Iterations
+	if useSelectedAddress {
+		f = int(*ltp.Function)
+	} else {
+		f = contracts.GetRandomPrecompiledContractAddress()
+	}
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+	tops.Nonce = new(big.Int).SetUint64(nonce)
+	tops = configureTransactOpts(tops)
+
+	t1 = time.Now()
+	_, err = contracts.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
+	t2 = time.Now()
+	return
+}
+
 func loadtestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
@@ -937,6 +977,7 @@ func loadtestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContr
 	t2 = time.Now()
 	return
 }
+
 func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
@@ -958,6 +999,7 @@ func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 	t2 = time.Now()
 	return
 }
+
 func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delegatorContract *contracts.Delegator, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
@@ -1381,6 +1423,7 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 	log.Trace().Uint64("currentNonce", currentNonce).Uint64("startblock", startBlockNumber).Uint64("endblock", lastBlockNumber).Msg("It looks like all transactions have been mined")
 	return lastBlockNumber, nil
 }
+
 func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, lastBlockNumber, endNonce uint64) error {
 	ltp := inputLoadTestParams
 	var err error
@@ -1647,6 +1690,7 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 		log.Error().Str("mode", summaryOutputMode).Msg("Invalid mode for summary output")
 	}
 }
+
 func getSuccessfulTransactionCount(bs map[uint64]blockSummary) (successful, total int64) {
 	for _, block := range bs {
 		total += int64(len(block.Receipts))
@@ -1656,6 +1700,7 @@ func getSuccessfulTransactionCount(bs map[uint64]blockSummary) (successful, tota
 	}
 	return
 }
+
 func getTotalGasUsed(receipts map[ethcommon.Hash]rpctypes.RawTxReceipt) uint64 {
 	var totalGasUsed uint64 = 0
 	for _, receipt := range receipts {
@@ -1663,6 +1708,7 @@ func getTotalGasUsed(receipts map[ethcommon.Hash]rpctypes.RawTxReceipt) uint64 {
 	}
 	return totalGasUsed
 }
+
 func getMapValues[K constraints.Ordered, V any](m map[K]V) []V {
 	newSlice := make([]V, 0)
 	for _, val := range m {
@@ -1670,6 +1716,7 @@ func getMapValues[K constraints.Ordered, V any](m map[K]V) []V {
 	}
 	return newSlice
 }
+
 func getMinMedianMax[V constraints.Float | constraints.Integer](values []V) (V, V, V) {
 	if len(values) == 0 {
 		return 0, 0, 0
