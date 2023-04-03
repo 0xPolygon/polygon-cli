@@ -239,6 +239,7 @@ type (
 		ToAddress            *string
 		HexSendAmount        *string
 		RateLimit            *float64
+		AdaptiveRateLimit    *bool
 		Mode                 *string
 		Function             *uint64
 		Iterations           *uint64
@@ -285,6 +286,7 @@ func init() {
 	ltp.ToRandom = LoadtestCmd.PersistentFlags().Bool("to-random", true, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
 	ltp.HexSendAmount = LoadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
 	ltp.RateLimit = LoadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
+	ltp.AdaptiveRateLimit = LoadtestCmd.PersistentFlags().Bool("adaptive-rate-limit", true, "Loadtest automatically adjusts request rate to maximize utilization but prevent congestion")
 	ltp.Mode = LoadtestCmd.PersistentFlags().StringP("mode", "m", "t", `The testing mode to use. It can be multiple like: "tcdf"
 t - sending transactions
 d - deploy contract
@@ -510,6 +512,30 @@ func printResults(lts []loadTestSample) {
 	log.Info().Uint64("numErrors", numErrors).Msg("Num errors")
 }
 
+func updateRateLimit(rl *rate.Limiter, errChan chan error, cycleDuration time.Duration) {
+    ticker := time.NewTicker(cycleDuration)
+    defer ticker.Stop()
+
+    for {
+        select {
+        case <-ticker.C:
+            if len(errChan) == 0 {
+								// double rate limit if no errors encountered last cycle
+                rl.SetLimit(rl.Limit() * 2)
+								fmt.Println("doubled rate limit to:", rl)
+            } else {
+								// halve rate limit if errors encountered last cycle
+                rl.SetLimit(rl.Limit() / 2)
+								fmt.Println("halved rate limit to:", rl)
+                // Clear the error channel each cycle
+                for len(errChan) > 0 {
+                    <-errChan
+                }
+            }
+        }
+    }
+}
+
 func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
 
 	ltp := inputLoadTestParams
@@ -521,10 +547,24 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 	mode := *ltp.Mode
-
-	rl := rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
+	adaptiveRateLimit := 1
+	adaptiveRateLimitCycle := 20 // in seconds
+	var rl *rate.Limiter
+	
+	if *ltp.AdaptiveRateLimit {
+		// slow-start to begin and increase rate limit as loadtest progresses via updateRateLimit
+		rl = rate.NewLimiter(rate.Limit(adaptiveRateLimit), 1)
+	} else {
+		rl = rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
+	}
 	if *ltp.RateLimit <= 0.0 {
 		rl = nil
+	}
+	
+	// run updateRateLimit in background to dynamically adjust limit per feedback loop
+	errChan := make(chan error, routines*requests)
+	if rl != nil && *ltp.AdaptiveRateLimit {
+			go updateRateLimit(rl, errChan, time.Duration(adaptiveRateLimitCycle)*time.Second)
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
@@ -715,6 +755,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					err = rl.Wait(ctx)
 					if err != nil {
 						log.Error().Err(err).Msg("Encountered a rate limiting error")
+						// activate backoff logic for adaptive rate limiter
+						errChan <- err
 					}
 				}
 
