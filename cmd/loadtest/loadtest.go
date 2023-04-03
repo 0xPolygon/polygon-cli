@@ -513,27 +513,27 @@ func printResults(lts []loadTestSample) {
 }
 
 func updateRateLimit(rl *rate.Limiter, errChan chan error, cycleDuration time.Duration) {
-    ticker := time.NewTicker(cycleDuration)
-    defer ticker.Stop()
+	ticker := time.NewTicker(cycleDuration)
+	defer ticker.Stop()
 
-    for {
-        select {
-        case <-ticker.C:
-            if len(errChan) == 0 {
-								// double rate limit if no errors encountered last cycle
-                rl.SetLimit(rl.Limit() * 2)
-								fmt.Println("doubled rate limit to:", rl)
-            } else {
-								// halve rate limit if errors encountered last cycle
-                rl.SetLimit(rl.Limit() / 2)
-								fmt.Println("halved rate limit to:", rl)
-                // Clear the error channel each cycle
-                for len(errChan) > 0 {
-                    <-errChan
-                }
-            }
-        }
-    }
+	for {
+		select {
+		case <-ticker.C:
+			if len(errChan) == 0 {
+				// double rate limit if no errors encountered last cycle
+				rl.SetLimit(rl.Limit() * 2)
+				fmt.Println("doubled rate limit to:", rl)
+			} else {
+				// halve rate limit if errors encountered last cycle
+				rl.SetLimit(rl.Limit() / 2)
+				fmt.Println("halved rate limit to:", rl)
+				// Clear the error channel each cycle
+				for len(errChan) > 0 {
+					<-errChan
+				}
+			}
+		}
+	}
 }
 
 func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
@@ -550,7 +550,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	adaptiveRateLimit := 1
 	adaptiveRateLimitCycle := 20 // in seconds
 	var rl *rate.Limiter
-	
+
 	if *ltp.AdaptiveRateLimit {
 		// slow-start to begin and increase rate limit as loadtest progresses via updateRateLimit
 		rl = rate.NewLimiter(rate.Limit(adaptiveRateLimit), 1)
@@ -560,11 +560,11 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	if *ltp.RateLimit <= 0.0 {
 		rl = nil
 	}
-	
+
 	// run updateRateLimit in background to dynamically adjust limit per feedback loop
 	errChan := make(chan error, routines*requests)
 	if rl != nil && *ltp.AdaptiveRateLimit {
-			go updateRateLimit(rl, errChan, time.Duration(adaptiveRateLimitCycle)*time.Second)
+		go updateRateLimit(rl, errChan, time.Duration(adaptiveRateLimitCycle)*time.Second)
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
