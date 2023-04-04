@@ -522,8 +522,8 @@ func printResults(lts []loadTestSample) {
 }
 
 func cleanHex(hexStr string) string {
-	// remove 0x suffix if found in the input string
-	return strings.Replace(hexStr, "0x", "", -1)
+	// remove 0x prefix if found in the input string
+	return strings.TrimPrefix(hexStr, "0x")
 }
 
 func getTxPoolSize(rpc *ethrpc.Client) (uint64, error) {
@@ -568,11 +568,11 @@ func updateRateLimit(rl *rate.Limiter, rpc *ethrpc.Client, steadyStateQueueSize 
 			// additively increment requests per second if txpool less than queue steady state
 			newRateLimit := rate.Limit(float64(rl.Limit()) + float64(rateLimitIncrement))
 			rl.SetLimit(newRateLimit)
-			log.Trace().Interface("New Rate Limit (RPS)", rl.Limit()).Interface("Current Tx Pool Size", txPoolSize).Interface("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Increased rate limit")
+			log.Trace().Float64("New Rate Limit (RPS)", float64(rl.Limit())).Uint64("Current Tx Pool Size", txPoolSize).Uint64("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Increased rate limit")
 		} else if txPoolSize > steadyStateQueueSize {
 			// halve rate limit requests per second if txpool greater than queue steady state
 			rl.SetLimit(rl.Limit() / 2)
-			log.Trace().Interface("New Rate Limit (RPS)", rl.Limit()).Interface("Current Tx Pool Size", txPoolSize).Interface("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Backed off rate limit")
+			log.Trace().Float64("New Rate Limit (RPS)", float64(rl.Limit())).Uint64("Current Tx Pool Size", txPoolSize).Uint64("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Backed off rate limit")
 		}
 	}
 }
