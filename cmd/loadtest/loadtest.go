@@ -272,6 +272,11 @@ type (
 		FromAvailAddress *gssignature.KeyringPair
 		AvailRuntime     *gstypes.RuntimeVersion
 	}
+
+	txpoolStatus struct {
+		Pending any `json:"pending"`
+		Queued  any `json:"queued"`
+	}
 )
 
 func init() {
@@ -526,31 +531,47 @@ func cleanHex(hexStr string) string {
 	return strings.TrimPrefix(hexStr, "0x")
 }
 
-func getTxPoolSize(rpc *ethrpc.Client) (uint64, error) {
-	var status map[string]interface{}
-	err := rpc.Call(&status, "txpool_status")
+func convHexToUint64(hexString string) (uint64, error) {
+	hexString = strings.TrimPrefix(hexString, "0x")
+	if len(hexString)%2 != 0 {
+		hexString = "0" + hexString
+	}
+
+	result, err := strconv.ParseUint(hexString, 16, 64)
 	if err != nil {
 		return 0, err
 	}
-	pendingHex, ok := status["pending"].(string)
-	if !ok {
-		return 0, fmt.Errorf("unable to read pending txpool size")
+	return uint64(result), nil
+}
+
+func tryCastToUint64(val any) (uint64, error) {
+	switch t := val.(type) {
+	case float64:
+		return uint64(t), nil
+	case string:
+		return convHexToUint64(t)
+	default:
+		return 0, fmt.Errorf("the value %v couldn't be marshalled to uint64", t)
+
 	}
-	queuedHex, ok := status["queued"].(string)
-	if !ok {
-		return 0, fmt.Errorf("unable to read queued txpool size")
+}
+
+func getTxPoolSize(rpc *ethrpc.Client) (uint64, error) {
+	var status = new(txpoolStatus)
+	err := rpc.Call(status, "txpool_status")
+	if err != nil {
+		return 0, err
+	}
+	pendingCount, err := tryCastToUint64(status.Pending)
+	if err != nil {
+		return 0, err
+	}
+	queuedCount, err := tryCastToUint64(status.Queued)
+	if err != nil {
+		return 0, err
 	}
 
-	pendingTxPoolSize, err := strconv.ParseUint(cleanHex(pendingHex), 16, 64)
-	if err != nil {
-		return 0, fmt.Errorf("unable to parse pending txpool size: %v", err)
-	}
-	queuedTxPoolSize, err := strconv.ParseUint(cleanHex(queuedHex), 16, 64)
-	if err != nil {
-		return 0, fmt.Errorf("unable to parse queued txpool size: %v", err)
-	}
-
-	return (pendingTxPoolSize + queuedTxPoolSize), nil
+	return pendingCount + queuedCount, nil
 }
 
 func updateRateLimit(rl *rate.Limiter, rpc *ethrpc.Client, steadyStateQueueSize uint64, rateLimitIncrement uint64, cycleDuration time.Duration) {
