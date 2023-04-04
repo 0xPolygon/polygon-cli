@@ -572,7 +572,7 @@ func updateRateLimit(rl *rate.Limiter, rpc *ethrpc.Client, steadyStateQueueSize 
 		} else if txPoolSize > steadyStateQueueSize {
 			// halve rate limit requests per second if txpool greater than queue steady state
 			rl.SetLimit(rl.Limit() / 2)
-			log.Trace().Interface("New rate limit", rl.Limit()).Interface("Current Tx Pool Size", txPoolSize).Interface("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Backed off rate limit")
+			log.Trace().Interface("New Rate Limit (RPS)", rl.Limit()).Interface("Current Tx Pool Size", txPoolSize).Interface("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Backed off rate limit")
 		}
 	}
 }
