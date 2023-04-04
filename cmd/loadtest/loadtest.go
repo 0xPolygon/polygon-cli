@@ -31,6 +31,7 @@ import (
 	"os/signal"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -62,16 +63,18 @@ import (
 )
 
 const (
-	loadTestModeTransaction = "t"
-	loadTestModeDeploy      = "d"
-	loadTestModeCall        = "c"
-	loadTestModeFunction    = "f"
-	loadTestModeInc         = "i"
-	loadTestModeRandom      = "r"
-	loadTestModeStore       = "s"
-	loadTestModeLong        = "l"
-	loadTestModeERC20       = "2"
-	loadTestModeERC721      = "7"
+	loadTestModeTransaction          = "t"
+	loadTestModeDeploy               = "d"
+	loadTestModeCall                 = "c"
+	loadTestModeFunction             = "f"
+	loadTestModeInc                  = "i"
+	loadTestModeRandom               = "r"
+	loadTestModeStore                = "s"
+	loadTestModeLong                 = "l"
+	loadTestModeERC20                = "2"
+	loadTestModeERC721               = "7"
+	loadTestModePrecompiledContracts = "p"
+	loadTestModePrecompiledContract  = "a"
 
 	codeQualitySeed       = "code code code code code code code code code code code quality"
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
@@ -91,6 +94,8 @@ var (
 		loadTestModeLong,
 		loadTestModeERC20,
 		loadTestModeERC721,
+		loadTestModePrecompiledContracts,
+		loadTestModePrecompiledContract,
 		// r should be last to exclude it from random mode selection
 		loadTestModeRandom,
 	}
@@ -222,33 +227,38 @@ type (
 	}
 	loadTestParams struct {
 		// inputs
-		Requests             *int64
-		Concurrency          *int64
-		BatchSize            *uint64
-		TimeLimit            *int64
-		Verbosity            *int64
-		PrettyLogs           *bool
-		ToRandom             *bool
-		URL                  *url.URL
-		ChainID              *uint64
-		PrivateKey           *string
-		ToAddress            *string
-		HexSendAmount        *string
-		RateLimit            *float64
-		Mode                 *string
-		Function             *uint64
-		Iterations           *uint64
-		ByteCount            *uint64
-		Seed                 *int64
-		IsAvail              *bool
-		AvailAppID           *uint32
-		LtAddress            *string
-		DelAddress           *string
-		ForceContractDeploy  *bool
-		ForceGasLimit        *uint64
-		ForceGasPrice        *uint64
-		ShouldProduceSummary *bool
-		SummaryOutputMode    *string
+		Requests                   *int64
+		Concurrency                *int64
+		BatchSize                  *uint64
+		TimeLimit                  *int64
+		Verbosity                  *int64
+		PrettyLogs                 *bool
+		ToRandom                   *bool
+		URL                        *url.URL
+		ChainID                    *uint64
+		PrivateKey                 *string
+		ToAddress                  *string
+		HexSendAmount              *string
+		RateLimit                  *float64
+		AdaptiveRateLimit          *bool
+		SteadyStateTxPoolSize      *uint64
+		AdaptiveRateLimitStart     *uint64
+		AdaptiveRateLimitIncrement *uint64
+		AdaptiveCycleDuration      *uint64
+		Mode                       *string
+		Function                   *uint64
+		Iterations                 *uint64
+		ByteCount                  *uint64
+		Seed                       *int64
+		IsAvail                    *bool
+		AvailAppID                 *uint32
+		LtAddress                  *string
+		DelAddress                 *string
+		ForceContractDeploy        *bool
+		ForceGasLimit              *uint64
+		ForceGasPrice              *uint64
+		ShouldProduceSummary       *bool
+		SummaryOutputMode          *string
 
 		// Computed
 		CurrentGas      *big.Int
@@ -281,17 +291,24 @@ func init() {
 	ltp.ToRandom = LoadtestCmd.PersistentFlags().Bool("to-random", true, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
 	ltp.HexSendAmount = LoadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
 	ltp.RateLimit = LoadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
+	ltp.AdaptiveRateLimit = LoadtestCmd.PersistentFlags().Bool("adaptive-rate-limit", true, "Loadtest automatically adjusts request rate to maximize utilization but prevent congestion")
+	ltp.SteadyStateTxPoolSize = LoadtestCmd.PersistentFlags().Uint64("steady-state-tx-pool-size", 1000, "Transaction Pool queue size which we use to either increase/decrease requests per second")
+	ltp.AdaptiveRateLimitStart = LoadtestCmd.PersistentFlags().Uint64("adaptive-rate-limit-start", 2, "Initial rate of requests per second following the slow-start approach of adaptive rate limiting")
+	ltp.AdaptiveRateLimitIncrement = LoadtestCmd.PersistentFlags().Uint64("adaptive-rate-limit-increment", 10, "Additive increment to rate of requests if txpool below steady state size")
+	ltp.AdaptiveCycleDuration = LoadtestCmd.PersistentFlags().Uint64("adaptive-cycle-duration-seconds", 20, "Duration in seconeds that adaptive load test will review txpool and determine whether to increase/decrease rate limit")
 	ltp.Mode = LoadtestCmd.PersistentFlags().StringP("mode", "m", "t", `The testing mode to use. It can be multiple like: "tcdf"
 t - sending transactions
 d - deploy contract
 c - call random contract functions
 f - call specific contract function
+p - call random precompiled contracts
+a - call a specific precompiled contract address
 s - store mode
 l - long running mode
 r - random modes
 2 - ERC20 Transfers
 7 - ERC721 Mints`)
-	ltp.Function = LoadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` ")
+	ltp.Function = LoadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` or a specific precompiled contract when running with `--mode a`")
 	ltp.Iterations = LoadtestCmd.PersistentFlags().Uint64P("iterations", "i", 100, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicated the minting batch size")
 	ltp.ByteCount = LoadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
@@ -504,6 +521,62 @@ func printResults(lts []loadTestSample) {
 	log.Info().Uint64("numErrors", numErrors).Msg("Num errors")
 }
 
+func cleanHex(hexStr string) string {
+	// remove 0x prefix if found in the input string
+	return strings.TrimPrefix(hexStr, "0x")
+}
+
+func getTxPoolSize(rpc *ethrpc.Client) (uint64, error) {
+	var status map[string]interface{}
+	err := rpc.Call(&status, "txpool_status")
+	if err != nil {
+		return 0, err
+	}
+	pendingHex, ok := status["pending"].(string)
+	if !ok {
+		return 0, fmt.Errorf("unable to read pending txpool size")
+	}
+	queuedHex, ok := status["queued"].(string)
+	if !ok {
+		return 0, fmt.Errorf("unable to read queued txpool size")
+	}
+
+	pendingTxPoolSize, err := strconv.ParseUint(cleanHex(pendingHex), 16, 64)
+	if err != nil {
+		return 0, fmt.Errorf("unable to parse pending txpool size: %v", err)
+	}
+	queuedTxPoolSize, err := strconv.ParseUint(cleanHex(queuedHex), 16, 64)
+	if err != nil {
+		return 0, fmt.Errorf("unable to parse queued txpool size: %v", err)
+	}
+
+	return (pendingTxPoolSize + queuedTxPoolSize), nil
+}
+
+func updateRateLimit(rl *rate.Limiter, rpc *ethrpc.Client, steadyStateQueueSize uint64, rateLimitIncrement uint64, cycleDuration time.Duration) {
+	ticker := time.NewTicker(cycleDuration)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		txPoolSize, err := getTxPoolSize(rpc)
+		if err != nil {
+			log.Error().Err(err).Msg("Error getting txpool size")
+			return
+		}
+
+		if txPoolSize < steadyStateQueueSize {
+			// additively increment requests per second if txpool less than queue steady state
+			newRateLimit := rate.Limit(float64(rl.Limit()) + float64(rateLimitIncrement))
+			rl.SetLimit(newRateLimit)
+			log.Trace().Float64("New Rate Limit (RPS)", float64(rl.Limit())).Uint64("Current Tx Pool Size", txPoolSize).Uint64("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Increased rate limit")
+		} else if txPoolSize > steadyStateQueueSize {
+			// halve rate limit requests per second if txpool greater than queue steady state
+			rl.SetLimit(rl.Limit() / 2)
+			log.Trace().Float64("New Rate Limit (RPS)", float64(rl.Limit())).Uint64("Current Tx Pool Size", txPoolSize).Uint64("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Backed off rate limit")
+		}
+	}
+}
+
 func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
 
 	ltp := inputLoadTestParams
@@ -515,10 +588,23 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 	mode := *ltp.Mode
+	steadyStateTxPoolSize := *ltp.SteadyStateTxPoolSize
+	adaptiveRateLimitIncrement := *ltp.AdaptiveRateLimitIncrement
+	var rl *rate.Limiter
 
-	rl := rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
-	if *ltp.RateLimit <= 0.0 {
+	if *ltp.AdaptiveRateLimit {
+		// start slow with adaptive rate limiting and we'll increase limit per feedback loop
+		rl = rate.NewLimiter(rate.Limit(*ltp.AdaptiveRateLimitStart), 1)
+	} else {
+		rl = rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
+	}
+
+	if *ltp.RateLimit <= 0.0 || *ltp.AdaptiveRateLimitStart <= 0.0 {
 		rl = nil
+	}
+
+	if rl != nil && *ltp.AdaptiveRateLimit {
+		go updateRateLimit(rl, rpc, steadyStateTxPoolSize, adaptiveRateLimitIncrement, time.Duration(*ltp.AdaptiveCycleDuration)*time.Second)
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
@@ -534,7 +620,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	// deploy and instantiate the load tester contract
 	var ltAddr ethcommon.Address
 	var ltContract *contracts.LoadTester
-	if strings.ContainsAny(mode, "rcfisl") || *inputLoadTestParams.ForceContractDeploy {
+	if strings.ContainsAny(mode, "rcfislpas") || *inputLoadTestParams.ForceContractDeploy {
 		if *inputLoadTestParams.LtAddress == "" {
 			ltAddr, _, _, err = contracts.DeployLoadTester(tops, c)
 			if err != nil {
@@ -695,7 +781,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		return err
 	}
 	startNonce := currentNonce
-	log.Debug().Uint64("currenNonce", currentNonce).Msg("Starting main loadtest loop")
+	log.Debug().Uint64("currentNonce", currentNonce).Msg("Starting main loadtest loop")
 	var wg sync.WaitGroup
 	for i = 0; i < routines; i = i + 1 {
 		log.Trace().Int64("routine", i).Msg("Starting Thread")
@@ -752,6 +838,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					startReq, endReq, err = loadtestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
 				case loadTestModeERC721:
 					startReq, endReq, err = loadtestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
+				case loadTestModePrecompiledContract:
+					startReq, endReq, err = loadtestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, true)
+				case loadTestModePrecompiledContracts:
+					startReq, endReq, err = loadtestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false)
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -769,14 +859,14 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
-	log.Debug().Uint64("currenNonce", currentNonce).Msg("Finished main loadtest loop")
+	log.Debug().Uint64("currentNonce", currentNonce).Msg("Finished main loadtest loop")
 	log.Debug().Msg("Waiting for transactions to actually be mined")
 	finalBlockNumber, err := waitForFinalBlock(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
 	if err != nil {
 		log.Error().Err(err).Msg("there was an issue waiting for all transactions to be mined")
 	}
 
-	lightSummary(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
+	lightSummary(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce, rl)
 	if *ltp.ShouldProduceSummary {
 		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
 		if err != nil {
@@ -786,7 +876,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	return nil
 }
 
-func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endBlockNumber, endNonce uint64) {
+func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endBlockNumber, endNonce uint64, rl *rate.Limiter) {
 	startBlock, err := c.BlockByNumber(ctx, new(big.Int).SetUint64(startBlockNumber))
 	if err != nil {
 		log.Error().Err(err).Msg("unable to get start block for light summary")
@@ -809,6 +899,7 @@ func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, 
 		Int("transactionCount", len(loadTestResults)).
 		Float64("testDuration", testDuration.Seconds()).
 		Float64("tps", tps).
+		Float64("final rate limit", float64(rl.Limit())).
 		Msg("rough test summary (ignores errors)")
 }
 
@@ -859,6 +950,7 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 	t2 = time.Now()
 	return
 }
+
 func loadtestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
@@ -900,6 +992,7 @@ func loadtestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, lt
 	t2 = time.Now()
 	return
 }
+
 func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
@@ -921,6 +1014,34 @@ func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltCont
 	t2 = time.Now()
 	return
 }
+
+func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester, useSelectedAddress bool) (t1 time.Time, t2 time.Time, err error) {
+	var f int
+	ltp := inputLoadTestParams
+
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+	iterations := ltp.Iterations
+	if useSelectedAddress {
+		f = int(*ltp.Function)
+	} else {
+		f = contracts.GetRandomPrecompiledContractAddress()
+	}
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+	tops.Nonce = new(big.Int).SetUint64(nonce)
+	tops = configureTransactOpts(tops)
+
+	t1 = time.Now()
+	_, err = contracts.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
+	t2 = time.Now()
+	return
+}
+
 func loadtestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
@@ -940,6 +1061,7 @@ func loadtestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContr
 	t2 = time.Now()
 	return
 }
+
 func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
@@ -961,6 +1083,7 @@ func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 	t2 = time.Now()
 	return
 }
+
 func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delegatorContract *contracts.Delegator, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
@@ -1381,6 +1504,7 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 	log.Trace().Uint64("currentNonce", currentNonce).Uint64("startblock", startBlockNumber).Uint64("endblock", lastBlockNumber).Msg("It looks like all transactions have been mined")
 	return lastBlockNumber, nil
 }
+
 func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, lastBlockNumber, endNonce uint64) error {
 	ltp := inputLoadTestParams
 	var err error
@@ -1647,6 +1771,7 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 		log.Error().Str("mode", summaryOutputMode).Msg("Invalid mode for summary output")
 	}
 }
+
 func getSuccessfulTransactionCount(bs map[uint64]blockSummary) (successful, total int64) {
 	for _, block := range bs {
 		total += int64(len(block.Receipts))
@@ -1656,6 +1781,7 @@ func getSuccessfulTransactionCount(bs map[uint64]blockSummary) (successful, tota
 	}
 	return
 }
+
 func getTotalGasUsed(receipts map[ethcommon.Hash]rpctypes.RawTxReceipt) uint64 {
 	var totalGasUsed uint64 = 0
 	for _, receipt := range receipts {
@@ -1663,6 +1789,7 @@ func getTotalGasUsed(receipts map[ethcommon.Hash]rpctypes.RawTxReceipt) uint64 {
 	}
 	return totalGasUsed
 }
+
 func getMapValues[K constraints.Ordered, V any](m map[K]V) []V {
 	newSlice := make([]V, 0)
 	for _, val := range m {
@@ -1670,6 +1797,7 @@ func getMapValues[K constraints.Ordered, V any](m map[K]V) []V {
 	}
 	return newSlice
 }
+
 func getMinMedianMax[V constraints.Float | constraints.Integer](values []V) (V, V, V) {
 	if len(values) == 0 {
 		return 0, 0, 0

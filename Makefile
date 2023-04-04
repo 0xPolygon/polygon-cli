@@ -1,5 +1,5 @@
 
-INSTALL_DIR:=~/go/bin/
+INSTALL_DIR:=~/go/bin
 BIN_NAME:=polycli
 BUILD_DIR:=./out
 
