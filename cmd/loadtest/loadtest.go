@@ -557,25 +557,22 @@ func updateRateLimit(rl *rate.Limiter, rpc *ethrpc.Client, steadyStateQueueSize 
 	ticker := time.NewTicker(cycleDuration)
 	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			txPoolSize, err := getTxPoolSize(rpc)
-			if err != nil {
-				log.Error().Err(err).Msg("Error getting txpool size")
-				return
-			}
+	for range ticker.C {
+		txPoolSize, err := getTxPoolSize(rpc)
+		if err != nil {
+			log.Error().Err(err).Msg("Error getting txpool size")
+			return
+		}
 
-			if txPoolSize < steadyStateQueueSize {
-				// additively increment requests per second if txpool less than queue steady state
-				newRateLimit := rate.Limit(float64(rl.Limit()) + float64(rateLimitIncrement))
-				rl.SetLimit(newRateLimit)
-				log.Trace().Interface("New Rate Limit (RPS)", rl.Limit()).Interface("Current Tx Pool Size", txPoolSize).Interface("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Increased rate limit")
-			} else if txPoolSize > steadyStateQueueSize {
-				// halve rate limit requests per second if txpool greater than queue steady state
-				rl.SetLimit(rl.Limit() / 2)
-				log.Trace().Interface("New rate limit", rl.Limit()).Interface("Current Tx Pool Size", txPoolSize).Interface("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Backed off rate limit")
-			}
+		if txPoolSize < steadyStateQueueSize {
+			// additively increment requests per second if txpool less than queue steady state
+			newRateLimit := rate.Limit(float64(rl.Limit()) + float64(rateLimitIncrement))
+			rl.SetLimit(newRateLimit)
+			log.Trace().Interface("New Rate Limit (RPS)", rl.Limit()).Interface("Current Tx Pool Size", txPoolSize).Interface("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Increased rate limit")
+		} else if txPoolSize > steadyStateQueueSize {
+			// halve rate limit requests per second if txpool greater than queue steady state
+			rl.SetLimit(rl.Limit() / 2)
+			log.Trace().Interface("New rate limit", rl.Limit()).Interface("Current Tx Pool Size", txPoolSize).Interface("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Backed off rate limit")
 		}
 	}
 }
