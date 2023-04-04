@@ -5,6 +5,8 @@ import (
 	"os"
 	"sync"
 
+	// "github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -17,6 +19,7 @@ type (
 		Threads    int
 		OutputFile string
 		NodesFile  string
+		Listen     bool
 	}
 	pingNodeJSON struct {
 		Record *enode.Node `json:"record"`
@@ -33,13 +36,19 @@ var (
 
 var PingCmd = &cobra.Command{
 	Use:   "ping [enode/enr or nodes file]",
-	Short: "Ping node(s) and return the Hello and Status messages",
-	Long:  `Ping nodes by either giving a single enode/enr or an entire nodes file. This command will establish a handshake and status exchange to get the Hello and Status messages and output JSON.`,
-	Args:  cobra.MinimumNArgs(1),
+	Short: "Ping node(s) and return the output",
+	Long: `Ping nodes by either giving a single enode/enr or an entire nodes file.
+
+This command will establish a handshake and status exchange to get the Hello and
+Status messages and output JSON. If providing a enode/enr rather than a node file,
+then the connection will remain open by default (--listen=true), and you can see
+other messages the peer sends (e.g. blocks, transactions, etc.).`,
+	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		nodes := []*enode.Node{}
 		if inputSet, err := p2p.LoadNodesJSON(args[0]); err == nil {
 			nodes = inputSet.Nodes()
+			inputPingParams.Listen = false
 		} else if node, err := p2p.ParseNode(args[0]); err == nil {
 			nodes = append(nodes, node)
 		} else {
@@ -79,11 +88,25 @@ var PingCmd = &cobra.Command{
 						log.Error().Err(err).Msg("Peer failed")
 					}
 
-					log.Debug().Interface("hello", hello).Interface("status", status).Msg("Message received")
+					log.Info().Interface("hello", hello).Interface("status", status).Msg("Peering messages received")
 				}
 
 				if err != nil {
 					errStr = err.Error()
+				} else if inputPingParams.Listen {
+					req := &p2p.GetBlockHeaders{
+						GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+							Origin:  eth.HashOrNumber{Hash: status.Head},
+							Amount:  2,
+							Reverse: false,
+						},
+					}
+					conn.HeadersRequest(req, 33)
+
+					// If the dial and peering were successful, listen to the peer for messages.
+					if err := conn.ReadAndServe(); err != nil {
+						log.Error().Err(err.Unwrap()).Msg("Error received")
+					}
 				}
 
 				// Save the results to the output map.
@@ -113,4 +136,5 @@ var PingCmd = &cobra.Command{
 func init() {
 	PingCmd.PersistentFlags().StringVarP(&inputPingParams.OutputFile, "output", "o", "", "Write ping results to output file. (default stdout)")
 	PingCmd.PersistentFlags().IntVarP(&inputPingParams.Threads, "parallel", "p", 16, "How many parallel pings to attempt.")
+	PingCmd.PersistentFlags().BoolVarP(&inputPingParams.Listen, "listen", "l", true, "Keep the connection open and listen to the peer. This only works if the first argument is an enode/enr, not a nodes file.")
 }

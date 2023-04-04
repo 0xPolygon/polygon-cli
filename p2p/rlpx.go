@@ -19,9 +19,13 @@ package p2p
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	// "github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
@@ -57,8 +61,8 @@ func Dial(n *enode.Node) (*Conn, error) {
 
 	conn.caps = []p2p.Cap{
 		{Name: "eth", Version: 66},
-		{Name: "eth", Version: 67},
-		{Name: "eth", Version: 68},
+		// {Name: "eth", Version: 67},
+		// {Name: "eth", Version: 68},
 	}
 
 	return &conn, nil
@@ -71,7 +75,7 @@ func (c *Conn) Peer() (*Hello, *Status, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("handshake failed: %v", err)
 	}
-	status, err := c.status()
+	status, err := c.statusExchange()
 	if err != nil {
 		return hello, nil, fmt.Errorf("status exchange failed: %v", err)
 	}
@@ -112,17 +116,20 @@ func (c *Conn) handshake() (*Hello, error) {
 	}
 }
 
-// status gets the `status` message from the given node.
-func (c *Conn) status() (*Status, error) {
+// statusExchange gets the Status message from the given node.
+func (c *Conn) statusExchange() (*Status, error) {
 	defer func() { _ = c.SetDeadline(time.Time{}) }()
 	if err := c.SetDeadline(time.Now().Add(20 * time.Second)); err != nil {
 		return nil, err
 	}
 
+	var status *Status
+loop:
 	for {
 		switch msg := c.Read().(type) {
 		case *Status:
-			return msg, nil
+			status = msg
+			break loop
 		case *Disconnect:
 			return nil, fmt.Errorf("disconnect received: %v", msg)
 		case *Disconnects:
@@ -135,4 +142,67 @@ func (c *Conn) status() (*Status, error) {
 			return nil, fmt.Errorf("bad status message: %v", msg)
 		}
 	}
+
+	// status.Head = common.Hash{}
+	// log.Debug().Interface("status", status).Msg("Sending status")
+	if err := c.Write(status); err != nil {
+		return nil, fmt.Errorf("write to connection failed: %v", err)
+	}
+
+	return status, nil
+}
+
+// ReadAndServe reads messages from peers.
+func (c *Conn) ReadAndServe() *Error {
+	headers := make(map[common.Hash]*types.Header)
+	for {
+		start := time.Now()
+		for time.Since(start) < timeout {
+			c.SetReadDeadline(time.Now().Add(10 * time.Second))
+
+			msg := c.Read()
+			switch msg := msg.(type) {
+			case *Ping:
+				c.Write(&Pong{})
+			case *BlockHeaders:
+				log.Info().Interface("headers", msg).Msg("Received block headers")
+				for _, header := range msg.BlockHeadersPacket {
+					headers[header.Hash()] = header
+				}
+			case *GetBlockHeaders:
+				// if header, ok := headers[msg.GetBlockHeadersPacket.Origin.Hash]; ok {
+				// 	header.RequestId = msg.ReqID()
+				// 	if err := c.Write(header); err != nil {
+				// 		return errorf("could not write to connection: %v", err)
+				// 	}
+				// }
+			case *NewBlock:
+				log.Info().Interface("block", msg).Msg("Received block")
+			case *Error:
+				log.Error().Err(msg.err).Msg("Received error")
+				if !strings.Contains(msg.Error(), "timeout") {
+					return msg
+				}
+			case *Disconnect:
+				log.Error().Msgf("Disconnect received: %v", msg)
+			case *Disconnects:
+				log.Error().Msgf("Disconnect received: %v", msg)
+			default:
+				log.Debug().Interface("msg", msg).Int("code", msg.Code()).Int("reqID", int(msg.ReqID())).Msg("Received message")
+			}
+		}
+	}
+}
+
+func (c *Conn) HeadersRequest(request *GetBlockHeaders, reqID uint64) ([]*types.Header, error) {
+	defer c.SetReadDeadline(time.Time{})
+	c.SetReadDeadline(time.Now().Add(20 * time.Second))
+
+	// write request
+	request.RequestId = reqID
+	if err := c.Write(request); err != nil {
+		return nil, fmt.Errorf("could not write to connection: %v", err)
+	}
+
+	return nil, nil
 }

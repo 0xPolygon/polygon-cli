@@ -49,8 +49,10 @@ var (
 var CrawlCmd = &cobra.Command{
 	Use:   "crawl [nodes file]",
 	Short: "Crawl a network",
-	Long:  `This is a basic function to crawl a network.`,
-	Args:  cobra.MinimumNArgs(1),
+	Long: `This is a basic function to crawl a network.
+
+If you don't have a nodes.json file, then do echo "{}" >> nodes.json to get started.`,
+	Args: cobra.MinimumNArgs(1),
 	PreRun: func(cmd *cobra.Command, args []string) {
 		inputCrawlParams.NodesFile = args[0]
 	},
