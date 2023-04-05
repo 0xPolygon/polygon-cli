@@ -179,6 +179,9 @@ var LoadtestCmd = &cobra.Command{
 		if !r.MatchString(*inputLoadTestParams.Mode) {
 			return fmt.Errorf("the mode %s is not recognized", *inputLoadTestParams.Mode)
 		}
+		if *inputLoadTestParams.AdaptiveBackoffFactor <= 0.0 {
+			return fmt.Errorf("The backoff factor needs to be non-zero positive")
+		}
 		return nil
 	},
 }
@@ -242,9 +245,9 @@ type (
 		RateLimit                  *float64
 		AdaptiveRateLimit          *bool
 		SteadyStateTxPoolSize      *uint64
-		AdaptiveRateLimitStart     *uint64
 		AdaptiveRateLimitIncrement *uint64
 		AdaptiveCycleDuration      *uint64
+		AdaptiveBackoffFactor      *float64
 		Mode                       *string
 		Function                   *uint64
 		Iterations                 *uint64
@@ -272,6 +275,11 @@ type (
 		FromAvailAddress *gssignature.KeyringPair
 		AvailRuntime     *gstypes.RuntimeVersion
 	}
+
+	txpoolStatus struct {
+		Pending any `json:"pending"`
+		Queued  any `json:"queued"`
+	}
 )
 
 func init() {
@@ -288,14 +296,14 @@ func init() {
 	ltp.PrivateKey = LoadtestCmd.PersistentFlags().String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
 	ltp.ChainID = LoadtestCmd.PersistentFlags().Uint64("chain-id", 1256, "The chain id for the transactions that we're going to send")
 	ltp.ToAddress = LoadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
-	ltp.ToRandom = LoadtestCmd.PersistentFlags().Bool("to-random", true, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
+	ltp.ToRandom = LoadtestCmd.PersistentFlags().Bool("to-random", false, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
 	ltp.HexSendAmount = LoadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
 	ltp.RateLimit = LoadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
-	ltp.AdaptiveRateLimit = LoadtestCmd.PersistentFlags().Bool("adaptive-rate-limit", true, "Loadtest automatically adjusts request rate to maximize utilization but prevent congestion")
+	ltp.AdaptiveRateLimit = LoadtestCmd.PersistentFlags().Bool("adaptive-rate-limit", false, "Loadtest automatically adjusts request rate to maximize utilization but prevent congestion")
 	ltp.SteadyStateTxPoolSize = LoadtestCmd.PersistentFlags().Uint64("steady-state-tx-pool-size", 1000, "Transaction Pool queue size which we use to either increase/decrease requests per second")
-	ltp.AdaptiveRateLimitStart = LoadtestCmd.PersistentFlags().Uint64("adaptive-rate-limit-start", 2, "Initial rate of requests per second following the slow-start approach of adaptive rate limiting")
-	ltp.AdaptiveRateLimitIncrement = LoadtestCmd.PersistentFlags().Uint64("adaptive-rate-limit-increment", 10, "Additive increment to rate of requests if txpool below steady state size")
-	ltp.AdaptiveCycleDuration = LoadtestCmd.PersistentFlags().Uint64("adaptive-cycle-duration-seconds", 20, "Duration in seconeds that adaptive load test will review txpool and determine whether to increase/decrease rate limit")
+	ltp.AdaptiveRateLimitIncrement = LoadtestCmd.PersistentFlags().Uint64("adaptive-rate-limit-increment", 50, "Additive increment to rate of requests if txpool below steady state size")
+	ltp.AdaptiveCycleDuration = LoadtestCmd.PersistentFlags().Uint64("adaptive-cycle-duration-seconds", 10, "Duration in seconds that adaptive load test will review txpool and determine whether to increase/decrease rate limit")
+	ltp.AdaptiveBackoffFactor = LoadtestCmd.PersistentFlags().Float64("adaptive-backoff-factor", 2, "When we detect congestion we will use this factor to determine how much we slow down")
 	ltp.Mode = LoadtestCmd.PersistentFlags().StringP("mode", "m", "t", `The testing mode to use. It can be multiple like: "tcdf"
 t - sending transactions
 d - deploy contract
@@ -521,39 +529,50 @@ func printResults(lts []loadTestSample) {
 	log.Info().Uint64("numErrors", numErrors).Msg("Num errors")
 }
 
-func cleanHex(hexStr string) string {
-	// remove 0x prefix if found in the input string
-	return strings.TrimPrefix(hexStr, "0x")
-}
+func convHexToUint64(hexString string) (uint64, error) {
+	hexString = strings.TrimPrefix(hexString, "0x")
+	if len(hexString)%2 != 0 {
+		hexString = "0" + hexString
+	}
 
-func getTxPoolSize(rpc *ethrpc.Client) (uint64, error) {
-	var status map[string]interface{}
-	err := rpc.Call(&status, "txpool_status")
+	result, err := strconv.ParseUint(hexString, 16, 64)
 	if err != nil {
 		return 0, err
 	}
-	pendingHex, ok := status["pending"].(string)
-	if !ok {
-		return 0, fmt.Errorf("unable to read pending txpool size")
-	}
-	queuedHex, ok := status["queued"].(string)
-	if !ok {
-		return 0, fmt.Errorf("unable to read queued txpool size")
-	}
-
-	pendingTxPoolSize, err := strconv.ParseUint(cleanHex(pendingHex), 16, 64)
-	if err != nil {
-		return 0, fmt.Errorf("unable to parse pending txpool size: %v", err)
-	}
-	queuedTxPoolSize, err := strconv.ParseUint(cleanHex(queuedHex), 16, 64)
-	if err != nil {
-		return 0, fmt.Errorf("unable to parse queued txpool size: %v", err)
-	}
-
-	return (pendingTxPoolSize + queuedTxPoolSize), nil
+	return uint64(result), nil
 }
 
-func updateRateLimit(rl *rate.Limiter, rpc *ethrpc.Client, steadyStateQueueSize uint64, rateLimitIncrement uint64, cycleDuration time.Duration) {
+func tryCastToUint64(val any) (uint64, error) {
+	switch t := val.(type) {
+	case float64:
+		return uint64(t), nil
+	case string:
+		return convHexToUint64(t)
+	default:
+		return 0, fmt.Errorf("the value %v couldn't be marshalled to uint64", t)
+
+	}
+}
+
+func getTxPoolSize(rpc *ethrpc.Client) (uint64, error) {
+	var status = new(txpoolStatus)
+	err := rpc.Call(status, "txpool_status")
+	if err != nil {
+		return 0, err
+	}
+	pendingCount, err := tryCastToUint64(status.Pending)
+	if err != nil {
+		return 0, err
+	}
+	queuedCount, err := tryCastToUint64(status.Queued)
+	if err != nil {
+		return 0, err
+	}
+
+	return pendingCount + queuedCount, nil
+}
+
+func updateRateLimit(rl *rate.Limiter, rpc *ethrpc.Client, steadyStateQueueSize uint64, rateLimitIncrement uint64, cycleDuration time.Duration, backoff float64) {
 	ticker := time.NewTicker(cycleDuration)
 	defer ticker.Stop()
 
@@ -568,11 +587,11 @@ func updateRateLimit(rl *rate.Limiter, rpc *ethrpc.Client, steadyStateQueueSize 
 			// additively increment requests per second if txpool less than queue steady state
 			newRateLimit := rate.Limit(float64(rl.Limit()) + float64(rateLimitIncrement))
 			rl.SetLimit(newRateLimit)
-			log.Trace().Float64("New Rate Limit (RPS)", float64(rl.Limit())).Uint64("Current Tx Pool Size", txPoolSize).Uint64("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Increased rate limit")
+			log.Info().Float64("New Rate Limit (RPS)", float64(rl.Limit())).Uint64("Current Tx Pool Size", txPoolSize).Uint64("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Increased rate limit")
 		} else if txPoolSize > steadyStateQueueSize {
 			// halve rate limit requests per second if txpool greater than queue steady state
-			rl.SetLimit(rl.Limit() / 2)
-			log.Trace().Float64("New Rate Limit (RPS)", float64(rl.Limit())).Uint64("Current Tx Pool Size", txPoolSize).Uint64("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Backed off rate limit")
+			rl.SetLimit(rl.Limit() / rate.Limit(backoff))
+			log.Info().Float64("New Rate Limit (RPS)", float64(rl.Limit())).Uint64("Current Tx Pool Size", txPoolSize).Uint64("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Backed off rate limit")
 		}
 	}
 }
@@ -591,24 +610,18 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	steadyStateTxPoolSize := *ltp.SteadyStateTxPoolSize
 	adaptiveRateLimitIncrement := *ltp.AdaptiveRateLimitIncrement
 	var rl *rate.Limiter
-
-	if *ltp.AdaptiveRateLimit {
-		// start slow with adaptive rate limiting and we'll increase limit per feedback loop
-		rl = rate.NewLimiter(rate.Limit(*ltp.AdaptiveRateLimitStart), 1)
-	} else {
-		rl = rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
-	}
-
-	if *ltp.RateLimit <= 0.0 || *ltp.AdaptiveRateLimitStart <= 0.0 {
+	rl = rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
+	if *ltp.RateLimit <= 0.0 {
 		rl = nil
 	}
-
-	if rl != nil && *ltp.AdaptiveRateLimit {
-		go updateRateLimit(rl, rpc, steadyStateTxPoolSize, adaptiveRateLimitIncrement, time.Duration(*ltp.AdaptiveCycleDuration)*time.Second)
+	if *ltp.AdaptiveRateLimit && rl != nil {
+		go updateRateLimit(rl, rpc, steadyStateTxPoolSize, adaptiveRateLimitIncrement, time.Duration(*ltp.AdaptiveCycleDuration)*time.Second, *ltp.AdaptiveBackoffFactor)
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	tops = configureTransactOpts(tops)
+	tops.GasLimit = 10000000
+
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return err
@@ -673,8 +686,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 
 		tops.Nonce = new(big.Int).SetUint64(currentNonce)
-		tops.GasLimit = 10000000
 		tops = configureTransactOpts(tops)
+		tops.GasLimit = 10000000
+
 		_, err = erc20Contract.Mint(tops, metrics.UnitMegaether)
 		if err != nil {
 			log.Error().Err(err).Msg("There was an error minting ERC20")
@@ -725,8 +739,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 
 		tops.Nonce = new(big.Int).SetUint64(currentNonce)
-		tops.GasLimit = 10000000
 		tops = configureTransactOpts(tops)
+		tops.GasLimit = 10000000
 
 		err = blockUntilSuccessful(func() error {
 			_, err = erc721Contract.MintBatch(tops, *ltp.FromETHAddress, new(big.Int).SetUint64(1))
@@ -844,7 +858,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				recordSample(i, j, err, startReq, endReq, myNonceValue)
 				if err != nil {
-					log.Trace().Err(err).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
+					log.Error().Err(err).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
 					retryForNonce = true
 				}
 
@@ -1093,7 +1107,6 @@ func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delega
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops.GasLimit = 10000000
 	tops = configureTransactOpts(tops)
 
 	// TODO the delegated call should be a parameter
@@ -1124,7 +1137,6 @@ func loadtestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops.GasLimit = 10000000
 	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
@@ -1151,7 +1163,6 @@ func loadtestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops.GasLimit = 10000000
 	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
