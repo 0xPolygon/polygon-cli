@@ -529,11 +529,6 @@ func printResults(lts []loadTestSample) {
 	log.Info().Uint64("numErrors", numErrors).Msg("Num errors")
 }
 
-func cleanHex(hexStr string) string {
-	// remove 0x prefix if found in the input string
-	return strings.TrimPrefix(hexStr, "0x")
-}
-
 func convHexToUint64(hexString string) (uint64, error) {
 	hexString = strings.TrimPrefix(hexString, "0x")
 	if len(hexString)%2 != 0 {
