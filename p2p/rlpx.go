@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	// "github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
@@ -143,8 +143,6 @@ loop:
 		}
 	}
 
-	// status.Head = common.Hash{}
-	// log.Debug().Interface("status", status).Msg("Sending status")
 	if err := c.Write(status); err != nil {
 		return nil, fmt.Errorf("write to connection failed: %v", err)
 	}
@@ -169,13 +167,32 @@ func (c *Conn) ReadAndServe() *Error {
 				for _, header := range msg.BlockHeadersPacket {
 					headers[header.Hash()] = header
 				}
-			case *GetBlockHeaders:
-				// if header, ok := headers[msg.GetBlockHeadersPacket.Origin.Hash]; ok {
-				// 	header.RequestId = msg.ReqID()
-				// 	if err := c.Write(header); err != nil {
-				// 		return errorf("could not write to connection: %v", err)
-				// 	}
-				// }
+			case *NewBlockHashes:
+				log.Info().Interface("hashes", msg).Msg("Received new block hashes")
+
+				hashes := []common.Hash{}
+				for _, hash := range *msg {
+					hashes = append(hashes, hash.Hash)
+
+					req := &GetBlockHeaders{
+						GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+							// Providing both the hash and number will result in a `both origin
+							// hash and number` error.
+							Origin: eth.HashOrNumber{Hash: hash.Hash},
+							Amount: 1,
+						},
+					}
+					if err := c.Write(req); err != nil {
+						log.Error().Err(err).Msg("Failed to write GetBlockHeaders request")
+					}
+				}
+
+				req := &GetBlockBodies{
+					GetBlockBodiesPacket: hashes,
+				}
+				if err := c.Write(req); err != nil {
+					log.Error().Err(err).Msg("Failed to write GetBlockBodies request")
+				}
 			case *NewBlock:
 				log.Info().Interface("block", msg).Msg("Received block")
 			case *Error:
@@ -192,17 +209,4 @@ func (c *Conn) ReadAndServe() *Error {
 			}
 		}
 	}
-}
-
-func (c *Conn) HeadersRequest(request *GetBlockHeaders, reqID uint64) ([]*types.Header, error) {
-	defer c.SetReadDeadline(time.Time{})
-	c.SetReadDeadline(time.Now().Add(20 * time.Second))
-
-	// write request
-	request.RequestId = reqID
-	if err := c.Write(request); err != nil {
-		return nil, fmt.Errorf("could not write to connection: %v", err)
-	}
-
-	return nil, nil
 }

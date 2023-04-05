@@ -5,8 +5,6 @@ import (
 	"os"
 	"sync"
 
-	// "github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -94,15 +92,6 @@ other messages the peer sends (e.g. blocks, transactions, etc.).`,
 				if err != nil {
 					errStr = err.Error()
 				} else if inputPingParams.Listen {
-					req := &p2p.GetBlockHeaders{
-						GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
-							Origin:  eth.HashOrNumber{Hash: status.Head},
-							Amount:  2,
-							Reverse: false,
-						},
-					}
-					conn.HeadersRequest(req, 33)
-
 					// If the dial and peering were successful, listen to the peer for messages.
 					if err := conn.ReadAndServe(); err != nil {
 						log.Error().Err(err.Unwrap()).Msg("Error received")
