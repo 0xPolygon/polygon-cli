@@ -179,9 +179,6 @@ var LoadtestCmd = &cobra.Command{
 		if !r.MatchString(*inputLoadTestParams.Mode) {
 			return fmt.Errorf("the mode %s is not recognized", *inputLoadTestParams.Mode)
 		}
-		if *inputLoadTestParams.RateLimit <= 0.0 {
-			return fmt.Errorf("The rate limit of %d does not make sense", *inputLoadTestParams.RateLimit)
-		}
 		return nil
 	},
 }
@@ -614,7 +611,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	adaptiveRateLimitIncrement := *ltp.AdaptiveRateLimitIncrement
 	var rl *rate.Limiter
 	rl = rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
-	if *ltp.AdaptiveRateLimit {
+	if *ltp.RateLimit <= 0.0 {
+		rl = nil
+	}
+	if *ltp.AdaptiveRateLimit && rl != nil {
 		go updateRateLimit(rl, rpc, steadyStateTxPoolSize, adaptiveRateLimitIncrement, time.Duration(*ltp.AdaptiveCycleDuration)*time.Second)
 	}
 
@@ -1260,6 +1260,9 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 	currentNonce = uint64(accountInfo.Nonce)
 
 	rl := rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
+	if *ltp.RateLimit <= 0.0 {
+		rl = nil
+	}
 
 	var currentNonceMutex sync.Mutex
 
