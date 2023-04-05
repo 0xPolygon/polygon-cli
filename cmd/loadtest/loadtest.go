@@ -179,6 +179,9 @@ var LoadtestCmd = &cobra.Command{
 		if !r.MatchString(*inputLoadTestParams.Mode) {
 			return fmt.Errorf("the mode %s is not recognized", *inputLoadTestParams.Mode)
 		}
+		if *inputLoadTestParams.AdaptiveBackoffFactor <= 0.0 {
+			return fmt.Errorf("The backoff factor needs to be non-zero positive")
+		}
 		return nil
 	},
 }
@@ -244,6 +247,7 @@ type (
 		SteadyStateTxPoolSize      *uint64
 		AdaptiveRateLimitIncrement *uint64
 		AdaptiveCycleDuration      *uint64
+		AdaptiveBackoffFactor      *float64
 		Mode                       *string
 		Function                   *uint64
 		Iterations                 *uint64
@@ -299,6 +303,7 @@ func init() {
 	ltp.SteadyStateTxPoolSize = LoadtestCmd.PersistentFlags().Uint64("steady-state-tx-pool-size", 1000, "Transaction Pool queue size which we use to either increase/decrease requests per second")
 	ltp.AdaptiveRateLimitIncrement = LoadtestCmd.PersistentFlags().Uint64("adaptive-rate-limit-increment", 50, "Additive increment to rate of requests if txpool below steady state size")
 	ltp.AdaptiveCycleDuration = LoadtestCmd.PersistentFlags().Uint64("adaptive-cycle-duration-seconds", 10, "Duration in seconds that adaptive load test will review txpool and determine whether to increase/decrease rate limit")
+	ltp.AdaptiveBackoffFactor = LoadtestCmd.PersistentFlags().Float64("adaptive-backoff-factor", 2, "When we detect congestion we will use this factor to determine how much we slow down")
 	ltp.Mode = LoadtestCmd.PersistentFlags().StringP("mode", "m", "t", `The testing mode to use. It can be multiple like: "tcdf"
 t - sending transactions
 d - deploy contract
@@ -572,7 +577,7 @@ func getTxPoolSize(rpc *ethrpc.Client) (uint64, error) {
 	return pendingCount + queuedCount, nil
 }
 
-func updateRateLimit(rl *rate.Limiter, rpc *ethrpc.Client, steadyStateQueueSize uint64, rateLimitIncrement uint64, cycleDuration time.Duration) {
+func updateRateLimit(rl *rate.Limiter, rpc *ethrpc.Client, steadyStateQueueSize uint64, rateLimitIncrement uint64, cycleDuration time.Duration, backoff float64) {
 	ticker := time.NewTicker(cycleDuration)
 	defer ticker.Stop()
 
@@ -590,7 +595,7 @@ func updateRateLimit(rl *rate.Limiter, rpc *ethrpc.Client, steadyStateQueueSize 
 			log.Info().Float64("New Rate Limit (RPS)", float64(rl.Limit())).Uint64("Current Tx Pool Size", txPoolSize).Uint64("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Increased rate limit")
 		} else if txPoolSize > steadyStateQueueSize {
 			// halve rate limit requests per second if txpool greater than queue steady state
-			rl.SetLimit(rl.Limit() / 2)
+			rl.SetLimit(rl.Limit() / rate.Limit(backoff))
 			log.Info().Float64("New Rate Limit (RPS)", float64(rl.Limit())).Uint64("Current Tx Pool Size", txPoolSize).Uint64("Steady State Tx Pool Size", steadyStateQueueSize).Msg("Backed off rate limit")
 		}
 	}
@@ -615,7 +620,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		rl = nil
 	}
 	if *ltp.AdaptiveRateLimit && rl != nil {
-		go updateRateLimit(rl, rpc, steadyStateTxPoolSize, adaptiveRateLimitIncrement, time.Duration(*ltp.AdaptiveCycleDuration)*time.Second)
+		go updateRateLimit(rl, rpc, steadyStateTxPoolSize, adaptiveRateLimitIncrement, time.Duration(*ltp.AdaptiveCycleDuration)*time.Second, *ltp.AdaptiveBackoffFactor)
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
