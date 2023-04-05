@@ -179,6 +179,9 @@ var LoadtestCmd = &cobra.Command{
 		if !r.MatchString(*inputLoadTestParams.Mode) {
 			return fmt.Errorf("the mode %s is not recognized", *inputLoadTestParams.Mode)
 		}
+		if *inputLoadTestParams.RateLimit <= 0.0 {
+			return fmt.Errorf("The rate limit of %d does not make sense", *inputLoadTestParams.RateLimit)
+		}
 		return nil
 	},
 }
@@ -242,7 +245,6 @@ type (
 		RateLimit                  *float64
 		AdaptiveRateLimit          *bool
 		SteadyStateTxPoolSize      *uint64
-		AdaptiveRateLimitStart     *uint64
 		AdaptiveRateLimitIncrement *uint64
 		AdaptiveCycleDuration      *uint64
 		Mode                       *string
@@ -296,11 +298,10 @@ func init() {
 	ltp.ToRandom = LoadtestCmd.PersistentFlags().Bool("to-random", true, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
 	ltp.HexSendAmount = LoadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
 	ltp.RateLimit = LoadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
-	ltp.AdaptiveRateLimit = LoadtestCmd.PersistentFlags().Bool("adaptive-rate-limit", true, "Loadtest automatically adjusts request rate to maximize utilization but prevent congestion")
+	ltp.AdaptiveRateLimit = LoadtestCmd.PersistentFlags().Bool("adaptive-rate-limit", false, "Loadtest automatically adjusts request rate to maximize utilization but prevent congestion")
 	ltp.SteadyStateTxPoolSize = LoadtestCmd.PersistentFlags().Uint64("steady-state-tx-pool-size", 1000, "Transaction Pool queue size which we use to either increase/decrease requests per second")
-	ltp.AdaptiveRateLimitStart = LoadtestCmd.PersistentFlags().Uint64("adaptive-rate-limit-start", 2, "Initial rate of requests per second following the slow-start approach of adaptive rate limiting")
 	ltp.AdaptiveRateLimitIncrement = LoadtestCmd.PersistentFlags().Uint64("adaptive-rate-limit-increment", 10, "Additive increment to rate of requests if txpool below steady state size")
-	ltp.AdaptiveCycleDuration = LoadtestCmd.PersistentFlags().Uint64("adaptive-cycle-duration-seconds", 20, "Duration in seconeds that adaptive load test will review txpool and determine whether to increase/decrease rate limit")
+	ltp.AdaptiveCycleDuration = LoadtestCmd.PersistentFlags().Uint64("adaptive-cycle-duration-seconds", 20, "Duration in seconds that adaptive load test will review txpool and determine whether to increase/decrease rate limit")
 	ltp.Mode = LoadtestCmd.PersistentFlags().StringP("mode", "m", "t", `The testing mode to use. It can be multiple like: "tcdf"
 t - sending transactions
 d - deploy contract
@@ -612,19 +613,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	steadyStateTxPoolSize := *ltp.SteadyStateTxPoolSize
 	adaptiveRateLimitIncrement := *ltp.AdaptiveRateLimitIncrement
 	var rl *rate.Limiter
-
+	rl = rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
 	if *ltp.AdaptiveRateLimit {
-		// start slow with adaptive rate limiting and we'll increase limit per feedback loop
-		rl = rate.NewLimiter(rate.Limit(*ltp.AdaptiveRateLimitStart), 1)
-	} else {
-		rl = rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
-	}
-
-	if *ltp.RateLimit <= 0.0 || *ltp.AdaptiveRateLimitStart <= 0.0 {
-		rl = nil
-	}
-
-	if rl != nil && *ltp.AdaptiveRateLimit {
 		go updateRateLimit(rl, rpc, steadyStateTxPoolSize, adaptiveRateLimitIncrement, time.Duration(*ltp.AdaptiveCycleDuration)*time.Second)
 	}
 
@@ -1270,9 +1260,6 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 	currentNonce = uint64(accountInfo.Nonce)
 
 	rl := rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
-	if *ltp.RateLimit <= 0.0 {
-		rl = nil
-	}
 
 	var currentNonceMutex sync.Mutex
 
