@@ -38,8 +38,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var inputBatchSize *uint64
-var verbosity *int64
+var (
+	inputBatchSize *uint64
+	verbosity      *int64
+)
 
 type (
 	monitorStatus struct {
@@ -62,11 +64,9 @@ type (
 )
 
 const (
-	monitorModeHelp     monitorMode = iota
-	monitorModeExplorer monitorMode = iota
-	monitorModeBlock    monitorMode = iota
-
-	defaultBatchSize uint64 = 25
+	monitorModeHelp monitorMode = iota
+	monitorModeExplorer
+	monitorModeBlock
 )
 
 func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, error) {
@@ -235,8 +235,8 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 }
 
 func init() {
-	inputBatchSize = MonitorCmd.PersistentFlags().Uint64P("batch-size", "b", defaultBatchSize, "Number of requests per batch")
-	verbosity = MonitorCmd.PersistentFlags().Int64P("verbosity", "v", 200, "0 - Silent\n100 Fatals\n200 Errors\n300 Warnings\n400 INFO\n500 Debug\n600 Trace")
+	inputBatchSize = MonitorCmd.PersistentFlags().Uint64P("batch-size", "b", 25, "Number of requests per batch")
+	verbosity = MonitorCmd.PersistentFlags().Int64P("verbosity", "v", 200, "0 - Silent\n100 Fatal\n200 Error\n300 Warning\n400 Info\n500 Debug\n600 Trace")
 }
 
 func renderMonitorUI(ms *monitorStatus) error {
@@ -511,7 +511,8 @@ func renderMonitorUI(ms *monitorStatus) error {
 					currIdx = currIdx - 1
 					setBlock = true
 				}
-				if currIdx >= 0 && uint64(currIdx) <= *inputBatchSize { // need a better way to understand how many rows are visble
+				// need a better way to understand how many rows are visible
+				if currIdx >= 0 && uint64(currIdx) <= *inputBatchSize {
 					blockTable.SelectedRow = currIdx
 				}
 

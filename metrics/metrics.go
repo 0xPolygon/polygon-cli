@@ -139,14 +139,11 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 
 	proportion := []int{10, 20, 5, 5, 5, 60}
 
-	header :=
-		headerVariables[0] + strings.Repeat(" ", proportion[0]) +
-			headerVariables[1] + strings.Repeat(" ", proportion[1]) +
-			headerVariables[2] + strings.Repeat(" ", proportion[2]) +
-			headerVariables[3] + strings.Repeat(" ", proportion[3]) +
-			headerVariables[4] + strings.Repeat(" ", proportion[4]) +
-			headerVariables[5] + strings.Repeat(" ", proportion[5]) +
-			headerVariables[6]
+	header := ""
+	for i, prop := range proportion {
+		header += headerVariables[i] + strings.Repeat("─", prop)
+	}
+	header += headerVariables[len(headerVariables)-1]
 
 	if len(blocks) < 1 {
 		return nil, header
