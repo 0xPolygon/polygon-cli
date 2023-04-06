@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/url"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -38,8 +39,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var inputBatchSize *uint64
-var verbosity *int64
+var (
+	batchSize   uint64
+	windowSize  int
+	verbosity   int64
+	intervalStr string
+	interval    time.Duration
+	logFile     string
+)
 
 type (
 	monitorStatus struct {
@@ -48,8 +55,8 @@ type (
 		PeerCount uint64
 		GasPrice  *big.Int
 
-		Blocks            map[string]rpctypes.PolyBlock
-		BlocksLock        sync.RWMutex
+		Blocks            map[string]rpctypes.PolyBlock `json:"-"`
+		BlocksLock        sync.RWMutex                  `json:"-"`
 		MaxBlockRetrieved *big.Int
 	}
 	chainState struct {
@@ -62,11 +69,9 @@ type (
 )
 
 const (
-	monitorModeHelp     monitorMode = iota
-	monitorModeExplorer monitorMode = iota
-	monitorModeBlock    monitorMode = iota
-
-	defaultBatchSize uint64 = 25
+	monitorModeHelp monitorMode = iota
+	monitorModeExplorer
+	monitorModeBlock
 )
 
 func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, error) {
@@ -84,7 +89,7 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 
 	cs.PeerCount, err = ec.PeerCount(ctx)
 	if err != nil {
-		// log.Info().Err(err).Msg("Using fake peer count")
+		log.Debug().Err(err).Msg("Using fake peer count")
 		cs.PeerCount = 0
 	}
 
@@ -101,7 +106,30 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 var MonitorCmd = &cobra.Command{
 	Use:   "monitor [rpc-url]",
 	Short: "A simple terminal monitor for a blockchain",
-	Long:  ``,
+	Args:  cobra.MinimumNArgs(1),
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		// validate url argument
+		_, err := url.Parse(args[0])
+		if err != nil {
+			return err
+		}
+
+		// validate batch-size flag
+		if batchSize == 0 {
+			return fmt.Errorf("batch-size can't be equal to zero")
+		}
+
+		if windowSize <= 0 {
+			return fmt.Errorf("window-size must be greater than zero")
+		}
+
+		// validate interval duration
+		if interval, err = time.ParseDuration(intervalStr); err != nil {
+			return err
+		}
+
+		return setMonitorLogLevel(verbosity)
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
@@ -129,7 +157,7 @@ var MonitorCmd = &cobra.Command{
 				cs, err = getChainState(ctx, ec)
 				if err != nil {
 					log.Error().Err(err).Msg("Encountered issue fetching network information")
-					time.Sleep(5 * time.Second)
+					time.Sleep(interval)
 					continue
 				}
 
@@ -138,62 +166,48 @@ var MonitorCmd = &cobra.Command{
 				ms.PeerCount = cs.PeerCount
 				ms.GasPrice = cs.GasPrice
 
-				from := big.NewInt(0)
-
-				// if the max block is 0, meaning we haven't fetched any blocks, we're going to start with head - batchSize
-				if ms.MaxBlockRetrieved.Cmp(from) == 0 {
-					headBlockMinusBatchSize := new(big.Int).SetUint64(*inputBatchSize + 100 - 1)
-					from.Sub(ms.HeadBlock, headBlockMinusBatchSize)
-				} else {
-					from = ms.MaxBlockRetrieved
+				from := new(big.Int).Sub(ms.HeadBlock, new(big.Int).SetUint64(batchSize))
+				// Prevent getBlockRange from fetching duplicate blocks.
+				if ms.MaxBlockRetrieved.Cmp(from) == 1 {
+					from.Add(ms.MaxBlockRetrieved, big.NewInt(1))
+				}
+				// Skip next poll if the latest block is already at the head.
+				if from.Cmp(ms.HeadBlock) >= 0 {
+					continue
 				}
 
 				if from.Cmp(zero) < 0 {
 					from.SetInt64(0)
 				}
-				err = ms.getBlockRange(ctx, from, ms.HeadBlock, rpc, args[0])
+
+				log.Debug().
+					Int64("from", from.Int64()).
+					Int64("to", ms.HeadBlock.Int64()).
+					Int64("max", ms.MaxBlockRetrieved.Int64()).
+					Msg("Getting block range")
+
+				err = ms.getBlockRange(ctx, from, ms.HeadBlock, rpc)
 				if err != nil {
 					log.Error().Err(err).Msg("There was an issue fetching the block range")
 				}
+
 				if !isUiRendered {
 					go func() {
 						errChan <- renderMonitorUI(ms)
 					}()
 					isUiRendered = true
-
 				}
-				time.Sleep(5 * time.Second)
-			}
 
+				time.Sleep(interval)
+			}
 		}()
 
 		err = <-errChan
 		return err
 	},
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) != 1 {
-			return fmt.Errorf("too many arguments")
-		}
-
-		// validate url argument
-		_, err := url.Parse(args[0])
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to parse url input error")
-			return err
-		}
-
-		// validate batch-size flag
-		if *inputBatchSize == 0 {
-			return fmt.Errorf("batch-size can't be equal to zero")
-		}
-
-		setMonitorLogLevel(*verbosity)
-
-		return nil
-	},
 }
 
-func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c *ethrpc.Client, url string) error {
+func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c *ethrpc.Client) error {
 	one := big.NewInt(1)
 	blms := make([]ethrpc.BatchElem, 0)
 	for i := from; i.Cmp(to) != 1; i.Add(i, one) {
@@ -229,14 +243,17 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 		if ms.MaxBlockRetrieved.Cmp(pb.Number()) == -1 {
 			ms.MaxBlockRetrieved = pb.Number()
 		}
-
 	}
+
 	return nil
 }
 
 func init() {
-	inputBatchSize = MonitorCmd.PersistentFlags().Uint64P("batch-size", "b", defaultBatchSize, "Number of requests per batch")
-	verbosity = MonitorCmd.PersistentFlags().Int64P("verbosity", "v", 200, "0 - Silent\n100 Fatals\n200 Errors\n300 Warnings\n400 INFO\n500 Debug\n600 Trace")
+	MonitorCmd.PersistentFlags().Uint64VarP(&batchSize, "batch-size", "b", 25, "Number of requests per batch")
+	MonitorCmd.PersistentFlags().IntVarP(&windowSize, "window-size", "w", 25, "Number of blocks visible in the window")
+	MonitorCmd.PersistentFlags().Int64VarP(&verbosity, "verbosity", "v", 200, "0 - Silent\n100 Fatal\n200 Error\n300 Warning\n400 Info\n500 Debug\n600 Trace")
+	MonitorCmd.PersistentFlags().StringVarP(&intervalStr, "interval", "i", "5s", "Amount of time between batch block rpc calls")
+	MonitorCmd.PersistentFlags().StringVarP(&logFile, "log-file", "l", "", "Write logs to a file (default stderr)")
 }
 
 func renderMonitorUI(ms *monitorStatus) error {
@@ -248,7 +265,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 	currentMode := monitorModeExplorer
 
 	blockTable := widgets.NewList()
-
 	blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
 
 	h0 := widgets.NewParagraph()
@@ -333,7 +349,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 			ui.NewCol(1.0/5, slg3),
 			ui.NewCol(1.0/5, slg4),
 		),
-		ui.NewRow(2.5/5, blockTable),
+		ui.NewRow(5.0/10, blockTable),
 	)
 
 	termWidth, termHeight := ui.TerminalDimensions()
@@ -343,9 +359,12 @@ func renderMonitorUI(ms *monitorStatus) error {
 	var selectedBlock rpctypes.PolyBlock
 	var setBlock = false
 	var allBlocks metrics.SortableBlocks
-	var recentBlocks metrics.SortableBlocks
+	var renderedBlocks metrics.SortableBlocks
+	windowOffset := 0
 
 	redraw := func(ms *monitorStatus) {
+		log.Debug().Interface("ms", ms).Msg("Redrawing")
+
 		if currentMode == monitorModeHelp {
 			// TODO add some help context?
 		} else if currentMode == monitorModeBlock {
@@ -359,7 +378,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 		}
 
 		if blockTable.SelectedRow == 0 {
-			//default
+			// default
 			blocks := make([]rpctypes.PolyBlock, 0)
 
 			ms.BlocksLock.RLock()
@@ -372,38 +391,40 @@ func renderMonitorUI(ms *monitorStatus) error {
 			sort.Sort(allBlocks)
 		}
 
-		if uint64(len(allBlocks)) > *inputBatchSize {
-			recentBlocks = allBlocks[uint64(len(allBlocks))-*inputBatchSize:]
+		start := len(allBlocks) - windowSize - windowOffset
+		if start < 0 {
+			start = 0
 		}
+		end := len(allBlocks) - windowOffset
+		renderedBlocks = allBlocks[start:end]
 
 		h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
-		gasGwei := new(big.Int)
-		gasGwei.Div(ms.GasPrice, metrics.UnitShannon)
+		gasGwei := new(big.Int).Div(ms.GasPrice, metrics.UnitShannon)
 		h1.Text = fmt.Sprintf("%s gwei", gasGwei.String())
 		h2.Text = fmt.Sprintf("%d", ms.PeerCount)
 		h3.Text = ms.ChainID.String()
-		h4.Text = fmt.Sprintf("%0.2f", metrics.GetMeanBlockTime(recentBlocks))
+		h4.Text = fmt.Sprintf("%0.2f", metrics.GetMeanBlockTime(renderedBlocks))
 
-		sl0.Data = metrics.GetTxsPerBlock(recentBlocks)
-		sl1.Data = metrics.GetMeanGasPricePerBlock(recentBlocks)
-		sl2.Data = metrics.GetSizePerBlock(recentBlocks)
-		sl3.Data = metrics.GetUnclesPerBlock(recentBlocks)
-		sl4.Data = metrics.GetGasPerBlock(recentBlocks)
+		sl0.Data = metrics.GetTxsPerBlock(renderedBlocks)
+		sl1.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
+		sl2.Data = metrics.GetSizePerBlock(renderedBlocks)
+		sl3.Data = metrics.GetUnclesPerBlock(renderedBlocks)
+		sl4.Data = metrics.GetGasPerBlock(renderedBlocks)
 
-		// assuming we haven't selected a particular row... we should get new blocks
-		rows, title := metrics.GetSimpleBlockRecords(recentBlocks)
+		// If a row has not been selected, continue to update the list with new blocks.
+		rows, title := metrics.GetSimpleBlockRecords(renderedBlocks)
 		blockTable.Rows = rows
 		blockTable.Title = title
 
 		blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
 		blockTable.SelectedRowStyle = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
 		if blockTable.SelectedRow > 0 && blockTable.SelectedRow <= len(blockTable.Rows) {
-			// only changed the selected block when the user presses the up down keys. Otherwise this will adjust when the table is updated automatically
+			// Only changed the selected block when the user presses the up down keys.
+			// Otherwise this will adjust when the table is updated automatically.
 			if setBlock {
-				selectedBlock = recentBlocks[len(recentBlocks)-blockTable.SelectedRow]
+				selectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
 				setBlock = false
 			}
-
 		}
 
 		ui.Render(grid)
@@ -425,9 +446,9 @@ func renderMonitorUI(ms *monitorStatus) error {
 			case "<Escape>":
 				blockTable.SelectedRow = 0
 				currentMode = monitorModeExplorer
+				windowOffset = 0
 				redraw(ms)
 			case "<Enter>":
-				// TODO
 				if blockTable.SelectedRow > 0 {
 					currentMode = monitorModeBlock
 				}
@@ -438,46 +459,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 				blockGrid.SetRect(0, 0, payload.Width, payload.Height)
 				ui.Clear()
 				redraw(ms)
-			case "<PageDown>", "<PageUp>":
-				if currentMode == monitorModeBlock {
-					if len(b2.Rows) != 0 && e.ID == "<PageDown>" {
-						b2.ScrollPageDown()
-					} else if len(b2.Rows) != 0 && e.ID == "<PageUp>" {
-						b2.ScrollPageUp()
-					}
-					redraw(ms)
-					break
-				}
-				if blockTable.SelectedRow == 0 {
-					currIdx = 1
-					blockTable.SelectedRow = currIdx
-					setBlock = true
-					redraw(ms)
-					break
-				}
-				currIdx = blockTable.SelectedRow
-
-				if e.ID == "<PageDown>" {
-					if currIdx > int(*inputBatchSize)-1 {
-						if int(*inputBatchSize)+10 < len(allBlocks) {
-							*inputBatchSize = *inputBatchSize + 10
-						} else {
-							*inputBatchSize = uint64(len(allBlocks)) - 1
-							break
-						}
-					}
-					currIdx = currIdx + 1
-					setBlock = true
-				} else if e.ID == "<PageUp>" {
-					currIdx = currIdx - 1
-					setBlock = true
-				}
-				if currIdx >= 0 && uint64(currIdx) <= *inputBatchSize { // need a better way to understand how many rows are visible
-					blockTable.SelectedRow = currIdx
-				}
-
-				redraw(ms)
-			case "<Up>", "<Down>", "<Left>", "<Right>":
+			case "<Up>", "<Down>":
 				if currentMode == monitorModeBlock {
 					if len(b2.Rows) != 0 && e.ID == "<Down>" {
 						b2.ScrollDown()
@@ -487,6 +469,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 					redraw(ms)
 					break
 				}
+
 				if blockTable.SelectedRow == 0 {
 					currIdx = 1
 					blockTable.SelectedRow = currIdx
@@ -497,21 +480,26 @@ func renderMonitorUI(ms *monitorStatus) error {
 				currIdx = blockTable.SelectedRow
 
 				if e.ID == "<Down>" {
-					if currIdx > int(*inputBatchSize)-1 {
-						if int(*inputBatchSize)+10 < len(allBlocks) {
-							*inputBatchSize = *inputBatchSize + 10
-						} else {
-							*inputBatchSize = uint64(len(allBlocks)) - 1
-							break
-						}
+					log.Debug().Int("currIdx", currIdx).Int("windowSize", windowSize).Int("renderedBlocks", len(renderedBlocks)).Msg("Down")
+					if currIdx > windowSize-1 && windowOffset < len(allBlocks)-windowSize {
+						windowOffset += 1
+						redraw(ms)
+						break
 					}
-					currIdx = currIdx + 1
+					currIdx += 1
 					setBlock = true
 				} else if e.ID == "<Up>" {
-					currIdx = currIdx - 1
+					log.Debug().Int("currIdx", currIdx).Int("windowSize", windowSize).Msg("Up")
+					if currIdx <= 1 && windowOffset > 0 {
+						windowOffset -= 1
+						redraw(ms)
+						break
+					}
+					currIdx -= 1
 					setBlock = true
 				}
-				if currIdx >= 0 && uint64(currIdx) <= *inputBatchSize { // need a better way to understand how many rows are visble
+				// need a better way to understand how many rows are visible
+				if currIdx > 0 && currIdx <= windowSize && currIdx <= len(renderedBlocks) {
 					blockTable.SelectedRow = currIdx
 				}
 
@@ -530,7 +518,18 @@ func renderMonitorUI(ms *monitorStatus) error {
 	}
 }
 
-func setMonitorLogLevel(verbosity int64) {
+// setMonitorLogLevel sets the log level based on the flags. If the log file flag
+// is set, then output will be written to the file instead of stdout. Use
+// `tail -f <log file>` to see the log output in real time.
+func setMonitorLogLevel(verbosity int64) error {
+	if len(logFile) > 0 {
+		file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0664)
+		if err != nil {
+			return err
+		}
+		log.Logger = zerolog.New(file).With().Logger()
+	}
+
 	if verbosity < 100 {
 		zerolog.SetGlobalLevel(zerolog.PanicLevel)
 	} else if verbosity < 200 {
@@ -546,4 +545,6 @@ func setMonitorLogLevel(verbosity int64) {
 	} else {
 		zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	}
+
+	return nil
 }
