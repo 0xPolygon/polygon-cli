@@ -483,7 +483,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 					log.Debug().Int("currIdx", currIdx).Int("windowSize", windowSize).Int("renderedBlocks", len(renderedBlocks)).Msg("Down")
 					if currIdx > windowSize-1 && windowOffset < len(allBlocks)-windowSize {
 						windowOffset += 1
-						currIdx -= 1
 						redraw(ms)
 						break
 					}
@@ -493,7 +492,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 					log.Debug().Int("currIdx", currIdx).Int("windowSize", windowSize).Msg("Up")
 					if currIdx <= 1 && windowOffset > 0 {
 						windowOffset -= 1
-						currIdx += 1
 						redraw(ms)
 						break
 					}
