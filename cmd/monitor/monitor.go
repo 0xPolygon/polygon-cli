@@ -391,6 +391,9 @@ func renderMonitorUI(ms *monitorStatus) error {
 		}
 
 		start := len(allBlocks) - windowSize - ms.WindowOffset
+		if start < 0 {
+			start = 0
+		}
 		end := len(allBlocks) - ms.WindowOffset
 		renderedBlocks = allBlocks[start:end]
 
@@ -476,7 +479,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 				currIdx = blockTable.SelectedRow
 
 				if e.ID == "<Down>" {
-					log.Debug().Int("currIdx", currIdx).Int("windowSize", windowSize).Msg("Down")
+					log.Debug().Int("currIdx", currIdx).Int("windowSize", windowSize).Int("renderedBlocks", len(renderedBlocks)).Msg("Down")
 					if currIdx > windowSize-1 && ms.WindowOffset < len(allBlocks)-windowSize {
 						ms.WindowOffset += 1
 						currIdx -= 1
@@ -497,7 +500,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 					setBlock = true
 				}
 				// need a better way to understand how many rows are visible
-				if currIdx > 0 && currIdx <= windowSize {
+				if currIdx > 0 && currIdx <= windowSize && currIdx <= len(renderedBlocks) {
 					blockTable.SelectedRow = currIdx
 				}
 
