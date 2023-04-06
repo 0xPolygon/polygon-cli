@@ -159,8 +159,10 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 		header = strings.Replace(header, "Author", "Signer", 1)
 	}
 
-	records := make([]string, 0)
-	records = append(records, "")
+	// Set the first row to blank so that there is some space between the blocks
+	// and the title.
+	records := []string{""}
+
 	for j := len(bs) - 1; j >= 0; j = j - 1 {
 		author := bs[j].Miner()
 		ts := bs[j].Time()
@@ -186,14 +188,11 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 			author.String(),
 		}
 
-		record := " " +
-			recordVariables[0] + strings.Repeat(" ", len(headerVariables[0])+proportion[0]-len(recordVariables[0])) +
-			recordVariables[1] + strings.Repeat(" ", len(headerVariables[1])+proportion[1]-len(recordVariables[1])) +
-			recordVariables[2] + strings.Repeat(" ", len(headerVariables[2])+proportion[2]-len(recordVariables[2])) +
-			recordVariables[3] + strings.Repeat(" ", len(headerVariables[3])+proportion[3]-len(recordVariables[3])) +
-			recordVariables[4] + strings.Repeat(" ", len(headerVariables[4])+proportion[4]-len(recordVariables[4])) +
-			recordVariables[5] + strings.Repeat(" ", len(headerVariables[5])+proportion[5]-len(recordVariables[5])) +
-			recordVariables[6]
+		record := " "
+		for i := 0; i < len(recordVariables)-1; i++ {
+			record += recordVariables[i] + strings.Repeat(" ", len(headerVariables[i])+proportion[i]-len(recordVariables[i]))
+		}
+		record += recordVariables[len(recordVariables)-1]
 
 		records = append(records, record)
 	}
