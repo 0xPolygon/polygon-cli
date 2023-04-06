@@ -89,7 +89,7 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 
 	cs.PeerCount, err = ec.PeerCount(ctx)
 	if err != nil {
-		log.Info().Err(err).Msg("Using fake peer count")
+		log.Debug().Err(err).Msg("Using fake peer count")
 		cs.PeerCount = 0
 	}
 
@@ -253,7 +253,7 @@ func init() {
 	MonitorCmd.PersistentFlags().IntVarP(&windowSize, "window-size", "w", 25, "Number of blocks visible in the window")
 	MonitorCmd.PersistentFlags().Int64VarP(&verbosity, "verbosity", "v", 200, "0 - Silent\n100 Fatal\n200 Error\n300 Warning\n400 Info\n500 Debug\n600 Trace")
 	MonitorCmd.PersistentFlags().StringVarP(&intervalStr, "interval", "i", "5s", "Amount of time between batch block rpc calls")
-	MonitorCmd.PersistentFlags().StringVarP(&logFile, "log-file", "l", "", "Write logs to a file (default stdout)")
+	MonitorCmd.PersistentFlags().StringVarP(&logFile, "log-file", "l", "", "Write logs to a file (default stderr)")
 }
 
 func renderMonitorUI(ms *monitorStatus) error {

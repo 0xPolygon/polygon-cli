@@ -440,9 +440,10 @@ While working on some of the Polygon CLI tools, we'll run geth in dev
 mode in order to make sure the various functions work properly. First,
 we'll startup geth.
 
-````shell
+```shell
 # Geth
 ./build/bin/geth --dev --dev.period 2 --http --http.addr localhost --http.port 8545 --http.api admin,debug,web3,eth,txpool,personal,miner,net --verbosity 5 --rpc.gascap 50000000  --rpc.txfeecap 0 --miner.gaslimit  10 --miner.gasprice 1 --gpo.blocks 1 --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2 --dev.gaslimit 50000000
+```
 
 In the logs, we'll see a line that says IPC endpoint opened:
 
@@ -452,7 +453,7 @@ WARN [08-14|16:09:31.451] P2P server will be useless, neither dialing nor listen
 DEBUG[08-14|16:09:31.452] IPCs registered                          namespaces=admin,debug,web3,eth,txpool,personal,clique,miner,net,engine
 INFO [08-14|16:09:31.452] IPC endpoint opened                      url=/var/folders/zs/k8swqskj1t79cgnjh6yt0fqm0000gn/T/geth.ipc
 INFO [08-14|16:09:31.452] Generated ephemeral JWT secret           secret=0xdfa5c30e07ef1041d15a2dbf0865386305330128b792d4a461cddb9bf38e416e
-````
+```
 
 I'll usually then use that line to attach
 
