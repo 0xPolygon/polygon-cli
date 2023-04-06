@@ -43,7 +43,6 @@ var (
 	batchSize   uint64
 	windowSize  int
 	verbosity   int64
-	recentOnly  bool
 	intervalStr string
 	interval    time.Duration
 	logFile     string
@@ -59,8 +58,6 @@ type (
 		Blocks            map[string]rpctypes.PolyBlock `json:"-"`
 		BlocksLock        sync.RWMutex                  `json:"-"`
 		MaxBlockRetrieved *big.Int
-
-		WindowOffset int
 	}
 	chainState struct {
 		HeadBlock uint64
@@ -120,6 +117,10 @@ var MonitorCmd = &cobra.Command{
 		// validate batch-size flag
 		if batchSize == 0 {
 			return fmt.Errorf("batch-size can't be equal to zero")
+		}
+
+		if windowSize <= 0 {
+			return fmt.Errorf("window-size must be greater than zero")
 		}
 
 		// validate interval duration
@@ -251,7 +252,6 @@ func init() {
 	MonitorCmd.PersistentFlags().Uint64VarP(&batchSize, "batch-size", "b", 25, "Number of requests per batch")
 	MonitorCmd.PersistentFlags().IntVarP(&windowSize, "window-size", "w", 25, "Number of blocks visible in the window")
 	MonitorCmd.PersistentFlags().Int64VarP(&verbosity, "verbosity", "v", 200, "0 - Silent\n100 Fatal\n200 Error\n300 Warning\n400 Info\n500 Debug\n600 Trace")
-	MonitorCmd.PersistentFlags().BoolVarP(&recentOnly, "recent-only", "r", false, "Only show blocks from latest batch")
 	MonitorCmd.PersistentFlags().StringVarP(&intervalStr, "interval", "i", "5s", "Amount of time between batch block rpc calls")
 	MonitorCmd.PersistentFlags().StringVarP(&logFile, "log-file", "l", "", "Write logs to a file (default stdout)")
 }
@@ -360,6 +360,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 	var setBlock = false
 	var allBlocks metrics.SortableBlocks
 	var renderedBlocks metrics.SortableBlocks
+	windowOffset := 0
 
 	redraw := func(ms *monitorStatus) {
 		log.Debug().Interface("ms", ms).Msg("Redrawing")
@@ -390,11 +391,11 @@ func renderMonitorUI(ms *monitorStatus) error {
 			sort.Sort(allBlocks)
 		}
 
-		start := len(allBlocks) - windowSize - ms.WindowOffset
+		start := len(allBlocks) - windowSize - windowOffset
 		if start < 0 {
 			start = 0
 		}
-		end := len(allBlocks) - ms.WindowOffset
+		end := len(allBlocks) - windowOffset
 		renderedBlocks = allBlocks[start:end]
 
 		h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
@@ -445,7 +446,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 			case "<Escape>":
 				blockTable.SelectedRow = 0
 				currentMode = monitorModeExplorer
-				ms.WindowOffset = 0
+				windowOffset = 0
 				redraw(ms)
 			case "<Enter>":
 				if blockTable.SelectedRow > 0 {
@@ -480,8 +481,8 @@ func renderMonitorUI(ms *monitorStatus) error {
 
 				if e.ID == "<Down>" {
 					log.Debug().Int("currIdx", currIdx).Int("windowSize", windowSize).Int("renderedBlocks", len(renderedBlocks)).Msg("Down")
-					if currIdx > windowSize-1 && ms.WindowOffset < len(allBlocks)-windowSize {
-						ms.WindowOffset += 1
+					if currIdx > windowSize-1 && windowOffset < len(allBlocks)-windowSize {
+						windowOffset += 1
 						currIdx -= 1
 						redraw(ms)
 						break
@@ -490,8 +491,8 @@ func renderMonitorUI(ms *monitorStatus) error {
 					setBlock = true
 				} else if e.ID == "<Up>" {
 					log.Debug().Int("currIdx", currIdx).Int("windowSize", windowSize).Msg("Up")
-					if currIdx <= 1 && ms.WindowOffset > 0 {
-						ms.WindowOffset -= 1
+					if currIdx <= 1 && windowOffset > 0 {
+						windowOffset -= 1
 						currIdx += 1
 						redraw(ms)
 						break

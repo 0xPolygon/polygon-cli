@@ -202,6 +202,9 @@ polycli monitor --help
 polycli monitor https://polygon-rpc.com
 ```
 
+If you're experiencing missing blocks, try adjusting the `--batch-size` and
+`--interval` flags so that you poll for more blocks or more frequently.
+
 # Nodekey
 
 The `nodekey` command is still in progress, but the idea is to have a
@@ -333,8 +336,8 @@ polycli dumpblocks http://127.0.0.1:8545/ 0 100000 \
 ```
 
 To load the pruned blocks into Edge, a couple of flags need to be set. This will
-import only the blocks that are listed in the blocks file. This can be 
-non-consecutive blocks. If you receive a `not enough funds to cover gas costs` 
+import only the blocks that are listed in the blocks file. This can be
+non-consecutive blocks. If you receive a `not enough funds to cover gas costs`
 error, be sure to fund those addresses in in the `genesis.json`.
 
 ```bash
@@ -354,15 +357,18 @@ polycli forge \
 ```
 
 Start the server with:
+
 ```bash
 polygon-edge server --data-dir ./forged-data --chain genesis.json --grpc-address :10000 --libp2p :10001 --jsonrpc :10002
 ```
+
 and query it with:
+
 ```bash
 polycli rpc http://localhost:10002 eth_getBlockByNumber 2743 false | jq
 ```
-You will notice that block numbers that have been skipped will return `null`. 
 
+You will notice that block numbers that have been skipped will return `null`.
 
 # Metrics To Dash
 
@@ -380,11 +386,13 @@ go run main.go metrics-to-dash -i avail-light-metrics.txt -p avail_light. -t "Av
 This command is useful for analyzing Solidity ABIs and decoding function selectors and input data. Most commonly, we need
 this capability while analyzing raw blocks when we don't know which method is being called, but we know the smart contract.
 We can the command like this to get the function signatures and selectors:
+
 ```shell
 go run main.go abi --file contract.abi
 ```
 
 This would output some information that woudl let us know the various function selectors for this contract:
+
 ```txt
 Selector:19d8ac61	Signature:function lastTimestamp() view returns(uint64)
 Selector:a066215c	Signature:function setVerifyBatchTimeTarget(uint64 newVerifyBatchTimeTarget) returns()
@@ -405,7 +413,10 @@ In addition to the function selector data, we'll also get a breakdown of input d
   "batches": [
     {
       "transactions": "7AOEO5rKAIJSCJTS+FLse05Ff25/+LJDxJ/1aSkm6ocDjX6kxoAAgIIExYCAZC3+LMoJTyQZqtEyLsaOOzeXS9nJGOBoa5u/Ari9EUViKj3WQgLacVScAQSU/RR1078jKqkCggSocv0uUxq/0xw=",
-      "globalExitRoot": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "globalExitRoot": [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0
+      ],
       "timestamp": 1676480399,
       "minForcedTimestamp": 0
     }
@@ -429,7 +440,7 @@ While working on some of the Polygon CLI tools, we'll run geth in dev
 mode in order to make sure the various functions work properly. First,
 we'll startup geth.
 
-```shell
+````shell
 # Geth
 ./build/bin/geth --dev --dev.period 2 --http --http.addr localhost --http.port 8545 --http.api admin,debug,web3,eth,txpool,personal,miner,net --verbosity 5 --rpc.gascap 50000000  --rpc.txfeecap 0 --miner.gaslimit  10 --miner.gasprice 1 --gpo.blocks 1 --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2 --dev.gaslimit 50000000
 
@@ -441,7 +452,7 @@ WARN [08-14|16:09:31.451] P2P server will be useless, neither dialing nor listen
 DEBUG[08-14|16:09:31.452] IPCs registered                          namespaces=admin,debug,web3,eth,txpool,personal,clique,miner,net,engine
 INFO [08-14|16:09:31.452] IPC endpoint opened                      url=/var/folders/zs/k8swqskj1t79cgnjh6yt0fqm0000gn/T/geth.ipc
 INFO [08-14|16:09:31.452] Generated ephemeral JWT secret           secret=0xdfa5c30e07ef1041d15a2dbf0865386305330128b792d4a461cddb9bf38e416e
-```
+````
 
 I'll usually then use that line to attach
 
@@ -466,6 +477,10 @@ polycli loadtest --verbosity 700 --chain-id 1337 --concurrency 1 --requests 1000
 ```
 
 Then we can monitor the chain:
+
+```bash
+polycli monitor http://127.0.0.1:8545
+```
 
 # Reference
 
