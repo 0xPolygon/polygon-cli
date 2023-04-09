@@ -46,6 +46,9 @@ var (
 	intervalStr string
 	interval    time.Duration
 	logFile     string
+
+	one  = big.NewInt(1)
+	zero = big.NewInt(0)
 )
 
 type (
@@ -58,6 +61,7 @@ type (
 		Blocks            map[string]rpctypes.PolyBlock `json:"-"`
 		BlocksLock        sync.RWMutex                  `json:"-"`
 		MaxBlockRetrieved *big.Int
+		MinBlockRetrieved *big.Int
 	}
 	chainState struct {
 		HeadBlock uint64
@@ -147,7 +151,6 @@ var MonitorCmd = &cobra.Command{
 		ms.Blocks = make(map[string]rpctypes.PolyBlock, 0)
 		ms.BlocksLock.Unlock()
 		ms.ChainID = big.NewInt(0)
-		zero := big.NewInt(0)
 
 		isUiRendered := false
 		errChan := make(chan error)
@@ -165,8 +168,8 @@ var MonitorCmd = &cobra.Command{
 				ms.ChainID = cs.ChainID
 				ms.PeerCount = cs.PeerCount
 				ms.GasPrice = cs.GasPrice
-
-				from := new(big.Int).Sub(ms.HeadBlock, new(big.Int).SetUint64(batchSize))
+				batchSize := new(big.Int).SetUint64(batchSize)
+				from := new(big.Int).Sub(ms.HeadBlock, batchSize)
 				// Prevent getBlockRange from fetching duplicate blocks.
 				if ms.MaxBlockRetrieved.Cmp(from) == 1 {
 					from.Add(ms.MaxBlockRetrieved, big.NewInt(1))
@@ -184,9 +187,25 @@ var MonitorCmd = &cobra.Command{
 					Int64("from", from.Int64()).
 					Int64("to", ms.HeadBlock.Int64()).
 					Int64("max", ms.MaxBlockRetrieved.Int64()).
-					Msg("Getting block range")
+					Msg("Fetching latest blocks")
 
 				err = ms.getBlockRange(ctx, from, ms.HeadBlock, rpc)
+				if err != nil {
+					log.Error().Err(err).Msg("There was an issue fetching the block range")
+				}
+
+				to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
+				if from = new(big.Int).Sub(to, batchSize); from.Cmp(zero) < 0 {
+					from.SetInt64(0)
+				}
+
+				log.Debug().
+					Int64("from", from.Int64()).
+					Int64("to", to.Int64()).
+					Int64("min", ms.MinBlockRetrieved.Int64()).
+					Msg("Fetching older blocks")
+
+				err = ms.getBlockRange(ctx, from, to, rpc)
 				if err != nil {
 					log.Error().Err(err).Msg("There was an issue fetching the block range")
 				}
@@ -208,7 +227,6 @@ var MonitorCmd = &cobra.Command{
 }
 
 func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c *ethrpc.Client) error {
-	one := big.NewInt(1)
 	blms := make([]ethrpc.BatchElem, 0)
 	for i := from; i.Cmp(to) != 1; i.Add(i, one) {
 		r := new(rpctypes.RawBlockResponse)
@@ -242,6 +260,9 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 
 		if ms.MaxBlockRetrieved.Cmp(pb.Number()) == -1 {
 			ms.MaxBlockRetrieved = pb.Number()
+		}
+		if ms.MinBlockRetrieved == nil || (ms.MinBlockRetrieved.Cmp(pb.Number()) == 1 && pb.Number().Cmp(zero) == 1) {
+			ms.MinBlockRetrieved = pb.Number()
 		}
 	}
 
@@ -437,6 +458,7 @@ func renderMonitorUI(ms *monitorStatus) error {
 	redraw(ms)
 
 	currIdx := 0
+	previousKey := ""
 	for {
 		select {
 		case e := <-uiEvents:
@@ -447,18 +469,15 @@ func renderMonitorUI(ms *monitorStatus) error {
 				blockTable.SelectedRow = 0
 				currentMode = monitorModeExplorer
 				windowOffset = 0
-				redraw(ms)
 			case "<Enter>":
 				if blockTable.SelectedRow > 0 {
 					currentMode = monitorModeBlock
 				}
-				redraw(ms)
 			case "<Resize>":
 				payload := e.Payload.(ui.Resize)
 				grid.SetRect(0, 0, payload.Width, payload.Height)
 				blockGrid.SetRect(0, 0, payload.Width, payload.Height)
 				ui.Clear()
-				redraw(ms)
 			case "<Up>", "<Down>":
 				if currentMode == monitorModeBlock {
 					if len(b2.Rows) != 0 && e.ID == "<Down>" {
@@ -466,7 +485,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 					} else if len(b2.Rows) != 0 && e.ID == "<Up>" {
 						b2.ScrollUp()
 					}
-					redraw(ms)
 					break
 				}
 
@@ -474,16 +492,21 @@ func renderMonitorUI(ms *monitorStatus) error {
 					currIdx = 1
 					blockTable.SelectedRow = currIdx
 					setBlock = true
-					redraw(ms)
 					break
 				}
 				currIdx = blockTable.SelectedRow
 
 				if e.ID == "<Down>" {
-					log.Debug().Int("currIdx", currIdx).Int("windowSize", windowSize).Int("renderedBlocks", len(renderedBlocks)).Msg("Down")
+					log.Debug().
+						Int("currIdx", currIdx).
+						Int("windowSize", windowSize).
+						Int("renderedBlocks", len(renderedBlocks)).
+						Int("dy", blockTable.Dy()).
+						Int("windowOffset", windowOffset).
+						Msg("Down")
+
 					if currIdx > windowSize-1 && windowOffset < len(allBlocks)-windowSize {
 						windowOffset += 1
-						redraw(ms)
 						break
 					}
 					currIdx += 1
@@ -492,7 +515,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 					log.Debug().Int("currIdx", currIdx).Int("windowSize", windowSize).Msg("Up")
 					if currIdx <= 1 && windowOffset > 0 {
 						windowOffset -= 1
-						redraw(ms)
 						break
 					}
 					currIdx -= 1
@@ -502,13 +524,54 @@ func renderMonitorUI(ms *monitorStatus) error {
 				if currIdx > 0 && currIdx <= windowSize && currIdx <= len(renderedBlocks) {
 					blockTable.SelectedRow = currIdx
 				}
+			case "<Home>":
+				windowOffset = 0
+				blockTable.SelectedRow = 1
+				setBlock = true
+			case "g":
+				if previousKey == "g" {
+					windowOffset = 0
+					blockTable.SelectedRow = 1
+					setBlock = true
+				}
+			case "G", "<End>":
+				if len(renderedBlocks) < windowSize {
+					windowOffset = 0
+					blockTable.SelectedRow = len(renderedBlocks)
+				} else {
+					windowOffset = len(allBlocks) - windowSize
+					blockTable.SelectedRow = max(windowSize, len(renderedBlocks))
+				}
+				setBlock = true
+			case "<C-f>", "<PageDown>":
+				if len(renderedBlocks) < windowSize {
+					windowOffset = 0
+					blockTable.SelectedRow = len(renderedBlocks)
+					break
+				}
 
-				redraw(ms)
-			case "<MouseLeft>", "<MouseRight>", "<MouseRelease>", "<MouseWheelUp>", "<MouseWheelDown>":
-				break
+				windowOffset += windowSize
+				if windowOffset > len(allBlocks)-windowSize {
+					windowOffset = len(allBlocks) - windowSize
+					blockTable.SelectedRow = windowSize
+				}
+			case "<C-b>", "<PageUp>":
+				windowOffset -= windowSize
+				if windowOffset < 0 {
+					windowOffset = 0
+					blockTable.SelectedRow = 1
+				}
 			default:
 				log.Trace().Str("id", e.ID).Msg("Unknown ui event")
 			}
+
+			if previousKey == "g" {
+				previousKey = ""
+			} else {
+				previousKey = e.ID
+			}
+
+			redraw(ms)
 		case <-ticker:
 			if currentBn != ms.HeadBlock {
 				currentBn = ms.HeadBlock
@@ -516,6 +579,16 @@ func renderMonitorUI(ms *monitorStatus) error {
 			}
 		}
 	}
+}
+
+func max(nums ...int) int {
+	m := nums[0]
+	for _, n := range nums {
+		if m < n {
+			m = n
+		}
+	}
+	return m
 }
 
 // setMonitorLogLevel sets the log level based on the flags. If the log file flag
