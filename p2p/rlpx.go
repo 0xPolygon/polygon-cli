@@ -47,7 +47,7 @@ func Dial(n *enode.Node) (*Conn, error) {
 	conn := Conn{
 		Conn:   rlpx.NewConn(fd, n.Pubkey()),
 		node:   n,
-		logger: log.With().Interface("node", n).Logger(),
+		logger: log.With().Str("node", n.String()).Logger(),
 	}
 
 	if conn.ourKey, err = crypto.GenerateKey(); err != nil {
@@ -175,6 +175,8 @@ func (c *Conn) ReadAndServe() *Error {
 				}
 			case *GetBlockHeaders:
 				c.logger.Info().Interface("msg", msg).Msg("Received GetBlockHeaders request")
+			case *BlockBodies:
+				c.logger.Info().Msgf("Received %v block bodies", len(msg.BlockBodiesPacket))
 			case *GetBlockBodies:
 				c.logger.Info().Msg("Received GetBlockBodies request")
 			case *NewBlockHashes:
@@ -206,11 +208,11 @@ func (c *Conn) ReadAndServe() *Error {
 			case *NewBlock:
 				c.logger.Info().Interface("block", msg).Msg("Received new block")
 			case *Transactions:
-				c.logger.Info().Msgf("Received %v transaction(s)", len(*msg))
+				c.logger.Info().Msgf("Received %v transactions", len(*msg))
 			case *NewPooledTransactionHashes:
-				c.logger.Info().Msgf("Received %v pooled transaction(s)", len(msg.Hashes))
+				c.logger.Info().Msgf("Received %v pooled transactions", len(msg.Hashes))
 			case *NewPooledTransactionHashes66:
-				c.logger.Info().Msgf("Received %v pooled transaction(s)", len(*msg))
+				c.logger.Info().Msgf("Received %v pooled transactions", len(*msg))
 			case *Error:
 				c.logger.Debug().Err(msg.err).Msg("Received error")
 				if !strings.Contains(msg.Error(), "timeout") {

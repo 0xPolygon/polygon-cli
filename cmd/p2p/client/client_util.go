@@ -177,7 +177,8 @@ func (c *client) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
 // is not in crawler mode, then a goroutine will be spawned and read messages
 // from the new peer.
 func shouldSkipNode(n *enode.Node) bool {
-	if inputClientParams.NetworkID <= 0 {
+	// Exit early since crawling doesn't need to dial and peer.
+	if inputClientParams.NetworkID <= 0 && inputClientParams.IsCrawler {
 		return false
 	}
 
@@ -219,7 +220,7 @@ func (c *client) updateNode(n *enode.Node) int {
 
 	// Skip validation of recently-seen nodes.
 	if ok && time.Since(node.LastCheck) < c.revalidateInterval {
-		log.Debug().Str("id", n.ID().String()).Msg("Skipping node")
+		log.Debug().Str("node", n.String()).Msg("Skipping node")
 		return nodeSkipRecent
 	}
 
@@ -235,7 +236,7 @@ func (c *client) updateNode(n *enode.Node) int {
 	if nn, err := c.disc.RequestENR(n); err != nil {
 		if node.Score == 0 {
 			// Node doesn't implement EIP-868.
-			log.Debug().Str("id", n.ID().String()).Msg("Skipping node")
+			log.Debug().Str("node", n.String()).Msg("Skipping node")
 			return nodeSkipIncompat
 		}
 		node.Score /= 2
@@ -255,12 +256,12 @@ func (c *client) updateNode(n *enode.Node) int {
 	defer c.mu.Unlock()
 
 	if node.Score <= 0 {
-		log.Debug().Str("id", n.ID().String()).Msg("Removing node")
+		log.Debug().Str("node", n.String()).Msg("Removing node")
 		delete(c.output, n.ID())
 		return nodeRemoved
 	}
 
-	log.Debug().Str("id", n.ID().String()).Uint64("seq", n.Seq()).Int("score", node.Score).Msg("Updating node")
+	log.Debug().Str("node", n.String()).Uint64("seq", n.Seq()).Int("score", node.Score).Msg("Updating node")
 	c.output[n.ID()] = node
 
 	if err := p2p.WriteNodesJSON(inputClientParams.NodesFile, c.output); err != nil {
