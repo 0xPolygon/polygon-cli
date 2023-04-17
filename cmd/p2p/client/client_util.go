@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-package crawl
+package client
 
 import (
 	"sync"
@@ -27,7 +27,7 @@ import (
 	"github.com/maticnetwork/polygon-cli/p2p"
 )
 
-type crawler struct {
+type client struct {
 	input     p2p.NodeSet
 	output    p2p.NodeSet
 	disc      resolver
@@ -53,8 +53,8 @@ type resolver interface {
 	RequestENR(*enode.Node) (*enode.Node, error)
 }
 
-func newCrawler(input p2p.NodeSet, disc resolver, iters ...enode.Iterator) *crawler {
-	c := &crawler{
+func newClient(input p2p.NodeSet, disc resolver, iters ...enode.Iterator) *client {
+	c := &client{
 		input:     input,
 		output:    make(p2p.NodeSet, len(input)),
 		disc:      disc,
@@ -72,7 +72,7 @@ func newCrawler(input p2p.NodeSet, disc resolver, iters ...enode.Iterator) *craw
 	return c
 }
 
-func (c *crawler) run(timeout time.Duration, nthreads int) p2p.NodeSet {
+func (c *client) run(timeout time.Duration, nthreads int) p2p.NodeSet {
 	var (
 		timeoutTimer = time.NewTimer(timeout)
 		timeoutCh    <-chan time.Time
@@ -145,7 +145,7 @@ loop:
 				Uint64("removed", atomic.LoadUint64(&removed)).
 				Uint64("ignored(recent)", atomic.LoadUint64(&removed)).
 				Uint64("ignored(incompatible)", atomic.LoadUint64(&skipped)).
-				Msg("Crawling in progress")
+				Msg("Discovery in progress")
 		}
 	}
 
@@ -160,7 +160,7 @@ loop:
 	return c.output
 }
 
-func (c *crawler) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
+func (c *client) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
 	defer func() { done <- it }()
 	for it.Next() {
 		select {
@@ -173,32 +173,46 @@ func (c *crawler) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
 
 // shouldSkipNode filters out nodes by their network id. If there is a status
 // message, skip nodes that don't have the correct network id. Otherwise, skip
-// nodes that are unable to peer.
+// nodes that are unable to peer. If a peer is not being skipped and the client
+// is not in crawler mode, then a goroutine will be spawned and read messages
+// from the new peer.
 func shouldSkipNode(n *enode.Node) bool {
-	if inputCrawlParams.NetworkID <= 0 {
+	if inputClientParams.NetworkID <= 0 {
 		return false
 	}
 
 	conn, err := p2p.Dial(n)
 	if err != nil {
-		log.Error().Err(err).Msg("Dial failed")
+		log.Debug().Err(err).Msg("Dial failed")
 		return true
 	}
-	defer conn.Close()
 
 	hello, message, err := conn.Peer()
 	if err != nil {
-		log.Error().Err(err).Msg("Peer failed")
+		log.Debug().Err(err).Msg("Peer failed")
+		conn.Close()
 		return true
 	}
 
-	log.Debug().Interface("hello", hello).Interface("status", message).Msg("Message received")
-	return inputCrawlParams.NetworkID != int(message.NetworkID)
+	log.Debug().Interface("hello", hello).Interface("status", message).Msg("Peering messages received")
+
+	skip := inputClientParams.NetworkID != int(message.NetworkID)
+	if !skip && !inputClientParams.IsCrawler {
+		go func() {
+			if err := conn.ReadAndServe(); err != nil {
+				log.Debug().Err(err.Unwrap()).Msg("Error received")
+			}
+		}()
+	} else {
+		conn.Close()
+	}
+
+	return skip
 }
 
 // updateNode updates the info about the given node, and returns a status about
 // what changed.
-func (c *crawler) updateNode(n *enode.Node) int {
+func (c *client) updateNode(n *enode.Node) int {
 	c.mu.RLock()
 	node, ok := c.output[n.ID()]
 	c.mu.RUnlock()
@@ -248,6 +262,11 @@ func (c *crawler) updateNode(n *enode.Node) int {
 
 	log.Debug().Str("id", n.ID().String()).Uint64("seq", n.Seq()).Int("score", node.Score).Msg("Updating node")
 	c.output[n.ID()] = node
+
+	if err := p2p.WriteNodesJSON(inputClientParams.NodesFile, c.output); err != nil {
+		log.Error().Err(err).Msg("Failed to write nodes json")
+	}
+
 	return status
 }
 

@@ -440,7 +440,7 @@ While working on some of the Polygon CLI tools, we'll run geth in dev
 mode in order to make sure the various functions work properly. First,
 we'll startup geth.
 
-```shell
+````shell
 # Geth
 ./build/bin/geth --dev --dev.period 2 --http --http.addr localhost --http.port 8545 --http.api admin,debug,web3,eth,txpool,personal,miner,net --verbosity 5 --rpc.gascap 50000000  --rpc.txfeecap 0 --miner.gaslimit  10 --miner.gasprice 1 --gpo.blocks 1 --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2 --dev.gaslimit 50000000
 ```
@@ -453,7 +453,7 @@ WARN [08-14|16:09:31.451] P2P server will be useless, neither dialing nor listen
 DEBUG[08-14|16:09:31.452] IPCs registered                          namespaces=admin,debug,web3,eth,txpool,personal,clique,miner,net,engine
 INFO [08-14|16:09:31.452] IPC endpoint opened                      url=/var/folders/zs/k8swqskj1t79cgnjh6yt0fqm0000gn/T/geth.ipc
 INFO [08-14|16:09:31.452] Generated ephemeral JWT secret           secret=0xdfa5c30e07ef1041d15a2dbf0865386305330128b792d4a461cddb9bf38e416e
-```
+````
 
 I'll usually then use that line to attach
 
@@ -528,3 +528,31 @@ Yul and Solidity. The workflow for modifying this contract is.
     - `abigen --abi LoadTester.abi --pkg contracts --type LoadTester --bin LoadTester.bin --out loadtester.go`
 4.  Run the loadtester to enure it deploys and runs sucessfully
     - `go run main.go loadtest --verbosity 700 http://127.0.0.1:8541`
+
+# P2P Client
+
+Pinging a peer is useful to determine information about the peer and retrieving
+the `Hello` and `Status` messages. By default, it will listen to the peer after
+the status exchange for blocks and transactions. To disable this behavior, set
+the `--listen` flag.
+
+```bash
+polycli p2p ping <enode/enr or nodes.json file>
+```
+
+Running the client will do peer discovery and continue to watch for blocks and
+transactions from those peers. This is useful for observing the network for forks
+and reorgs without the need to fun entire full node infrastructure.
+
+```bash
+go run main.go p2p client nodes.json --bootnodes enode://0cb82b395094ee4a2915e9714894627de9ed8498fb881cec6db7c65e8b9a5bd7f2f25cc84e71e89d0947e51c76e85d0847de848c7782b13c0255247a6758178c@44.232.55.71:30303,enode://88116f4295f5a31538ae409e4d44ad40d22e44ee9342869e7d68bdec55b0f83c1530355ce8b41fbec0928a7d75a5745d528450d30aec92066ab6ba1ee351d710@159.203.9.164:30303,enode://4be7248c3a12c5f95d4ef5fff37f7c44ad1072fdb59701b2e5987c5f3846ef448ce7eabc941c5575b13db0fb016552c1fa5cca0dda1a8008cf6d63874c0f3eb7@3.93.224.197:30303,enode://32dd20eaf75513cf84ffc9940972ab17a62e88ea753b0780ea5eca9f40f9254064dacb99508337043d944c2a41b561a17deaad45c53ea0be02663e55e6a302b2@3.212.183.151:30303 -n 137
+```
+
+If discovery is all that is needed and not propagation, set the `--crawl` flag to
+only crawl for peers. The supplied `nodes.json` file will be updated after each
+iteration, so you can choose to stop the crawl at anytime or set the `--timeout`
+flag.
+
+```bash
+go run main.go p2p client nodes.json --crawl --bootnodes enode://0cb82b395094ee4a2915e9714894627de9ed8498fb881cec6db7c65e8b9a5bd7f2f25cc84e71e89d0947e51c76e85d0847de848c7782b13c0255247a6758178c@44.232.55.71:30303,enode://88116f4295f5a31538ae409e4d44ad40d22e44ee9342869e7d68bdec55b0f83c1530355ce8b41fbec0928a7d75a5745d528450d30aec92066ab6ba1ee351d710@159.203.9.164:30303,enode://4be7248c3a12c5f95d4ef5fff37f7c44ad1072fdb59701b2e5987c5f3846ef448ce7eabc941c5575b13db0fb016552c1fa5cca0dda1a8008cf6d63874c0f3eb7@3.93.224.197:30303,enode://32dd20eaf75513cf84ffc9940972ab17a62e88ea753b0780ea5eca9f40f9254064dacb99508337043d944c2a41b561a17deaad45c53ea0be02663e55e6a302b2@3.212.183.151:30303 -n 137
+```

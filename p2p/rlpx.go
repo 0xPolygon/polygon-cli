@@ -44,7 +44,11 @@ func Dial(n *enode.Node) (*Conn, error) {
 		return nil, err
 	}
 
-	conn := Conn{Conn: rlpx.NewConn(fd, n.Pubkey())}
+	conn := Conn{
+		Conn:   rlpx.NewConn(fd, n.Pubkey()),
+		node:   n,
+		logger: log.With().Interface("node", n).Logger(),
+	}
 
 	if conn.ourKey, err = crypto.GenerateKey(); err != nil {
 		return nil, err
@@ -136,7 +140,7 @@ loop:
 			return nil, fmt.Errorf("disconnect received: %v", msg)
 		case *Ping:
 			if err := c.Write(&Pong{}); err != nil {
-				log.Error().Err(err).Msg("Write pong failed")
+				c.logger.Error().Err(err).Msg("Write pong failed")
 			}
 		default:
 			return nil, fmt.Errorf("bad status message: %v", msg)
@@ -163,12 +167,16 @@ func (c *Conn) ReadAndServe() *Error {
 			case *Ping:
 				c.Write(&Pong{})
 			case *BlockHeaders:
-				log.Info().Interface("headers", msg).Msg("Received block headers")
+				c.logger.Info().Msgf("Received %v block headers", len(msg.BlockHeadersPacket))
 				for _, header := range msg.BlockHeadersPacket {
 					headers[header.Hash()] = header
 				}
+			case *GetBlockHeaders:
+				c.logger.Info().Interface("msg", msg).Msg("Received GetBlockHeaders request")
+			case *GetBlockBodies:
+				c.logger.Info().Msg("Received GetBlockBodies request")
 			case *NewBlockHashes:
-				log.Info().Interface("hashes", msg).Msg("Received new block hashes")
+				c.logger.Info().Msgf("Received %v new block hashes", len(*msg))
 
 				hashes := []common.Hash{}
 				for _, hash := range *msg {
@@ -183,7 +191,7 @@ func (c *Conn) ReadAndServe() *Error {
 						},
 					}
 					if err := c.Write(req); err != nil {
-						log.Error().Err(err).Msg("Failed to write GetBlockHeaders request")
+						c.logger.Error().Err(err).Msg("Failed to write GetBlockHeaders request")
 					}
 				}
 
@@ -191,21 +199,27 @@ func (c *Conn) ReadAndServe() *Error {
 					GetBlockBodiesPacket: hashes,
 				}
 				if err := c.Write(req); err != nil {
-					log.Error().Err(err).Msg("Failed to write GetBlockBodies request")
+					c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
 				}
 			case *NewBlock:
-				log.Info().Interface("block", msg).Msg("Received block")
+				c.logger.Info().Interface("block", msg).Msg("Received new block")
+			case *Transactions:
+				c.logger.Info().Msgf("Received %v transaction(s)", len(*msg))
+			case *NewPooledTransactionHashes:
+				c.logger.Info().Msgf("Received %v pooled transaction(s)", len(msg.Hashes))
+			case *NewPooledTransactionHashes66:
+				c.logger.Info().Msgf("Received %v pooled transaction(s)", len(*msg))
 			case *Error:
-				log.Error().Err(msg.err).Msg("Received error")
+				c.logger.Debug().Err(msg.err).Msg("Received error")
 				if !strings.Contains(msg.Error(), "timeout") {
 					return msg
 				}
 			case *Disconnect:
-				log.Error().Msgf("Disconnect received: %v", msg)
+				c.logger.Debug().Msgf("Disconnect received: %v", msg)
 			case *Disconnects:
-				log.Error().Msgf("Disconnect received: %v", msg)
+				c.logger.Debug().Msgf("Disconnect received: %v", msg)
 			default:
-				log.Debug().Interface("msg", msg).Int("code", msg.Code()).Int("reqID", int(msg.ReqID())).Msg("Received message")
+				c.logger.Info().Interface("msg", msg).Int("code", msg.Code()).Msg("Received message")
 			}
 		}
 	}

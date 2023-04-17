@@ -15,7 +15,7 @@ You should have received a copy of the GNU Lesser General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-package crawl
+package client
 
 import (
 	"net"
@@ -31,47 +31,48 @@ import (
 )
 
 type (
-	crawlParams struct {
+	clientParams struct {
 		Bootnodes string
 		Timeout   string
 		Threads   int
 		NetworkID int
 		NodesFile string
 		Database  string
+		IsCrawler bool
 	}
 )
 
 var (
-	inputCrawlParams crawlParams
+	inputClientParams clientParams
 )
 
-// crawlCmd represents the crawl command
-var CrawlCmd = &cobra.Command{
-	Use:   "crawl [nodes file]",
-	Short: "Crawl a network",
-	Long: `This is a basic function to crawl a network.
-
-If you don't have a nodes.json file, then do echo "{}" >> nodes.json to get started.`,
+// ClientCmd represents the client command. The
+var ClientCmd = &cobra.Command{
+	Use:   "client [nodes file]",
+	Short: "devp2p client that does peer discovery and block/transaction propagation.",
+	Long: `Starts a devp2p client that discovers other peers and will receive blocks and
+transactions. If only peer discovery is wanted, set the --crawl and the --timeout
+flags. If no nodes.json file exists, run echo "{}" >> nodes.json to get started.`,
 	Args: cobra.MinimumNArgs(1),
 	PreRun: func(cmd *cobra.Command, args []string) {
-		inputCrawlParams.NodesFile = args[0]
+		inputClientParams.NodesFile = args[0]
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		inputSet, err := p2p.LoadNodesJSON(inputCrawlParams.NodesFile)
+		inputSet, err := p2p.LoadNodesJSON(inputClientParams.NodesFile)
 		if err != nil {
 			return err
 		}
 
 		var cfg discover.Config
 		cfg.PrivateKey, _ = crypto.GenerateKey()
-		bn, err := p2p.ParseBootnodes(inputCrawlParams.Bootnodes)
+		bn, err := p2p.ParseBootnodes(inputClientParams.Bootnodes)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to parse bootnodes")
 			return err
 		}
 		cfg.Bootnodes = bn
 
-		db, err := enode.OpenDB(inputCrawlParams.Database)
+		db, err := enode.OpenDB(inputClientParams.Database)
 		if err != nil {
 			return err
 		}
@@ -88,30 +89,31 @@ If you don't have a nodes.json file, then do echo "{}" >> nodes.json to get star
 		}
 		defer disc.Close()
 
-		c := newCrawler(inputSet, disc, disc.RandomNodes())
+		c := newClient(inputSet, disc, disc.RandomNodes())
 		c.revalidateInterval = 10 * time.Minute
 
-		timeout, err := time.ParseDuration(inputCrawlParams.Timeout)
+		timeout, err := time.ParseDuration(inputClientParams.Timeout)
 		if err != nil {
 			return err
 		}
 
-		log.Info().Msg("Starting crawl")
+		log.Info().Msg("Starting client")
 
-		output := c.run(timeout, inputCrawlParams.Threads)
-		return p2p.WriteNodesJSON(inputCrawlParams.NodesFile, output)
+		output := c.run(timeout, inputClientParams.Threads)
+		return p2p.WriteNodesJSON(inputClientParams.NodesFile, output)
 	},
 }
 
 func init() {
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Bootnodes, "bootnodes", "b", "", "Comma separated nodes used for bootstrapping. At least one bootnode is required, so other nodes in the network can discover each other.")
-	if err := CrawlCmd.MarkPersistentFlagRequired("bootnodes"); err != nil {
+	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.Bootnodes, "bootnodes", "b", "", "Comma separated nodes used for bootstrapping. At least one bootnode is required, so other nodes in the network can discover each other.")
+	if err := ClientCmd.MarkPersistentFlagRequired("bootnodes"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark bootnodes as required persistent flag")
 	}
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "Time limit for the crawl.")
-	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt.")
-	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id.")
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Database, "database", "d", "", "Node database for updating and storing client information.")
+	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.Timeout, "timeout", "t", "0", "Time limit for node discovery.")
+	ClientCmd.PersistentFlags().IntVarP(&inputClientParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt.")
+	ClientCmd.PersistentFlags().IntVarP(&inputClientParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id.")
+	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.Database, "database", "d", "", "Node database for updating and storing client information.")
+	ClientCmd.PersistentFlags().BoolVarP(&inputClientParams.IsCrawler, "crawl", "c", false, "Run the client in crawl only mode.")
 }
 
 func listen(ln *enode.LocalNode) (*net.UDPConn, error) {
