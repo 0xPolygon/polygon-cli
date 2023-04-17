@@ -160,12 +160,16 @@ func (c *Conn) ReadAndServe() *Error {
 	for {
 		start := time.Now()
 		for time.Since(start) < timeout {
-			c.SetReadDeadline(time.Now().Add(10 * time.Second))
+			if err := c.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				c.logger.Error().Err(err).Msg("Failed to set read deadline")
+			}
 
 			msg := c.Read()
 			switch msg := msg.(type) {
 			case *Ping:
-				c.Write(&Pong{})
+				if err := c.Write(&Pong{}); err != nil {
+					c.logger.Error().Err(err).Msg("Failed to write Pong response")
+				}
 			case *BlockHeaders:
 				c.logger.Info().Msgf("Received %v block headers", len(msg.BlockHeadersPacket))
 				for _, header := range msg.BlockHeadersPacket {
