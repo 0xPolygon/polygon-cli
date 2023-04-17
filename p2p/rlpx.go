@@ -65,8 +65,6 @@ func Dial(n *enode.Node) (*Conn, error) {
 
 	conn.caps = []p2p.Cap{
 		{Name: "eth", Version: 66},
-		// {Name: "eth", Version: 67},
-		// {Name: "eth", Version: 68},
 	}
 
 	return &conn, nil
