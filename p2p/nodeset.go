@@ -61,13 +61,10 @@ func WriteNodesJSON(file string, nodes NodeSet) error {
 		return err
 	}
 	if file == "-" {
-		os.Stdout.Write(nodesJSON)
-		return nil
-	}
-	if err := os.WriteFile(file, nodesJSON, 0644); err != nil {
+		_, err = os.Stdout.Write(nodesJSON)
 		return err
 	}
-	return nil
+	return os.WriteFile(file, nodesJSON, 0644)
 }
 
 // Nodes returns the node records contained in the set.

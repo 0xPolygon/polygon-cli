@@ -19,9 +19,13 @@ package p2p
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
@@ -40,7 +44,11 @@ func Dial(n *enode.Node) (*Conn, error) {
 		return nil, err
 	}
 
-	conn := Conn{Conn: rlpx.NewConn(fd, n.Pubkey())}
+	conn := Conn{
+		Conn:   rlpx.NewConn(fd, n.Pubkey()),
+		node:   n,
+		logger: log.With().Str("node", n.String()).Logger(),
+	}
 
 	if conn.ourKey, err = crypto.GenerateKey(); err != nil {
 		return nil, err
@@ -57,8 +65,6 @@ func Dial(n *enode.Node) (*Conn, error) {
 
 	conn.caps = []p2p.Cap{
 		{Name: "eth", Version: 66},
-		{Name: "eth", Version: 67},
-		{Name: "eth", Version: 68},
 	}
 
 	return &conn, nil
@@ -71,7 +77,7 @@ func (c *Conn) Peer() (*Hello, *Status, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("handshake failed: %v", err)
 	}
-	status, err := c.status()
+	status, err := c.statusExchange()
 	if err != nil {
 		return hello, nil, fmt.Errorf("status exchange failed: %v", err)
 	}
@@ -112,27 +118,113 @@ func (c *Conn) handshake() (*Hello, error) {
 	}
 }
 
-// status gets the `status` message from the given node.
-func (c *Conn) status() (*Status, error) {
+// statusExchange gets the Status message from the given node.
+func (c *Conn) statusExchange() (*Status, error) {
 	defer func() { _ = c.SetDeadline(time.Time{}) }()
 	if err := c.SetDeadline(time.Now().Add(20 * time.Second)); err != nil {
 		return nil, err
 	}
 
+	var status *Status
+loop:
 	for {
 		switch msg := c.Read().(type) {
 		case *Status:
-			return msg, nil
+			status = msg
+			break loop
 		case *Disconnect:
 			return nil, fmt.Errorf("disconnect received: %v", msg)
 		case *Disconnects:
 			return nil, fmt.Errorf("disconnect received: %v", msg)
 		case *Ping:
 			if err := c.Write(&Pong{}); err != nil {
-				log.Error().Err(err).Msg("Write pong failed")
+				c.logger.Error().Err(err).Msg("Write pong failed")
 			}
 		default:
 			return nil, fmt.Errorf("bad status message: %v", msg)
+		}
+	}
+
+	if err := c.Write(status); err != nil {
+		return nil, fmt.Errorf("write to connection failed: %v", err)
+	}
+
+	return status, nil
+}
+
+// ReadAndServe reads messages from peers.
+func (c *Conn) ReadAndServe() *Error {
+	headers := make(map[common.Hash]*types.Header)
+	for {
+		start := time.Now()
+		for time.Since(start) < timeout {
+			if err := c.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				c.logger.Error().Err(err).Msg("Failed to set read deadline")
+			}
+
+			msg := c.Read()
+			switch msg := msg.(type) {
+			case *Ping:
+				if err := c.Write(&Pong{}); err != nil {
+					c.logger.Error().Err(err).Msg("Failed to write Pong response")
+				}
+			case *BlockHeaders:
+				c.logger.Info().Msgf("Received %v block headers", len(msg.BlockHeadersPacket))
+				for _, header := range msg.BlockHeadersPacket {
+					headers[header.Hash()] = header
+				}
+			case *GetBlockHeaders:
+				c.logger.Info().Interface("msg", msg).Msg("Received GetBlockHeaders request")
+			case *BlockBodies:
+				c.logger.Info().Msgf("Received %v block bodies", len(msg.BlockBodiesPacket))
+			case *GetBlockBodies:
+				c.logger.Info().Msg("Received GetBlockBodies request")
+			case *NewBlockHashes:
+				c.logger.Info().Msgf("Received %v new block hashes", len(*msg))
+
+				hashes := []common.Hash{}
+				for _, hash := range *msg {
+					hashes = append(hashes, hash.Hash)
+
+					req := &GetBlockHeaders{
+						GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+							// Providing both the hash and number will result in a `both origin
+							// hash and number` error.
+							Origin: eth.HashOrNumber{Hash: hash.Hash},
+							Amount: 1,
+						},
+					}
+					if err := c.Write(req); err != nil {
+						c.logger.Error().Err(err).Msg("Failed to write GetBlockHeaders request")
+					}
+				}
+
+				req := &GetBlockBodies{
+					GetBlockBodiesPacket: hashes,
+				}
+				if err := c.Write(req); err != nil {
+					c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
+				}
+			case *NewBlock:
+				c.logger.Info().Interface("block", msg).Msg("Received new block")
+			case *Transactions:
+				c.logger.Info().Msgf("Received %v transactions", len(*msg))
+			case *NewPooledTransactionHashes:
+				c.logger.Info().Msgf("Received %v pooled transactions", len(msg.Hashes))
+			case *NewPooledTransactionHashes66:
+				c.logger.Info().Msgf("Received %v pooled transactions", len(*msg))
+			case *Error:
+				c.logger.Debug().Err(msg.err).Msg("Received error")
+				if !strings.Contains(msg.Error(), "timeout") {
+					return msg
+				}
+			case *Disconnect:
+				c.logger.Debug().Msgf("Disconnect received: %v", msg)
+			case *Disconnects:
+				c.logger.Debug().Msgf("Disconnect received: %v", msg)
+			default:
+				c.logger.Info().Interface("msg", msg).Int("code", msg.Code()).Msg("Received message")
+			}
 		}
 	}
 }
