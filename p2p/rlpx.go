@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -154,7 +153,6 @@ loop:
 
 // ReadAndServe reads messages from peers.
 func (c *Conn) ReadAndServe() *Error {
-	headers := make(map[common.Hash]*types.Header)
 	for {
 		start := time.Now()
 		for time.Since(start) < timeout {
@@ -170,15 +168,24 @@ func (c *Conn) ReadAndServe() *Error {
 				}
 			case *BlockHeaders:
 				c.logger.Info().Msgf("Received %v block headers", len(msg.BlockHeadersPacket))
-				for _, header := range msg.BlockHeadersPacket {
-					headers[header.Hash()] = header
-				}
 			case *GetBlockHeaders:
 				c.logger.Info().Interface("msg", msg).Msg("Received GetBlockHeaders request")
+				res := &BlockHeaders{
+					RequestId: msg.RequestId,
+				}
+				if err := c.Write(res); err != nil {
+					c.logger.Error().Err(err).Msg("Failed to write BlockHeaders response")
+				}
 			case *BlockBodies:
 				c.logger.Info().Msgf("Received %v block bodies", len(msg.BlockBodiesPacket))
 			case *GetBlockBodies:
-				c.logger.Info().Msg("Received GetBlockBodies request")
+				c.logger.Info().Interface("msg", msg).Msg("Received GetBlockBodies request")
+				res := &BlockBodies{
+					RequestId: msg.RequestId,
+				}
+				if err := c.Write(res); err != nil {
+					c.logger.Error().Err(err).Msg("Failed to write BlockBodies response")
+				}
 			case *NewBlockHashes:
 				c.logger.Info().Msgf("Received %v new block hashes", len(*msg))
 
@@ -209,10 +216,20 @@ func (c *Conn) ReadAndServe() *Error {
 				c.logger.Info().Interface("block", msg).Msg("Received new block")
 			case *Transactions:
 				c.logger.Info().Msgf("Received %v transactions", len(*msg))
+			case *PooledTransactions:
+				c.logger.Info().Msgf("Received %v pooled transactions", len(msg.PooledTransactionsPacket))
 			case *NewPooledTransactionHashes:
-				c.logger.Info().Msgf("Received %v pooled transactions", len(msg.Hashes))
+				c.logger.Info().Msgf("Received %v new pooled transactions", len(msg.Hashes))
 			case *NewPooledTransactionHashes66:
-				c.logger.Info().Msgf("Received %v pooled transactions", len(*msg))
+				c.logger.Info().Msgf("Received %v new pooled transactions", len(*msg))
+			case *GetPooledTransactions:
+				c.logger.Info().Interface("msg", msg).Msg("Received GetPooledTransactions request")
+				res := &PooledTransactions{
+					RequestId: msg.RequestId,
+				}
+				if err := c.Write(res); err != nil {
+					c.logger.Error().Err(err).Msg("Failed to write PooledTransactions response")
+				}
 			case *Error:
 				c.logger.Debug().Err(msg.err).Msg("Received error")
 				if !strings.Contains(msg.Error(), "timeout") {
