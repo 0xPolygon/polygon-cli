@@ -657,7 +657,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			return err
 		}
 
-		err = blockUntilSuccessful(func() error {
+		err = blockUntilSuccessful(ctx, func() error {
 			_, err = ltContract.GetCallCounter(cops)
 			return err
 		}, waitingTime, interval)
@@ -683,7 +683,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			return err
 		}
 		currentNonce = currentNonce + 1
-		err = blockUntilSuccessful(func() error {
+		err = blockUntilSuccessful(ctx, func() error {
 			_, err = erc20Contract.BalanceOf(cops, *ltp.FromETHAddress)
 			return err
 		}, waitingTime, interval)
@@ -702,7 +702,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 
 		currentNonce = currentNonce + 1
-		err = blockUntilSuccessful(func() error {
+		err = blockUntilSuccessful(ctx, func() error {
 			var balance *big.Int
 			balance, err = erc20Contract.BalanceOf(cops, *ltp.FromETHAddress)
 			if err != nil {
@@ -736,7 +736,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 		currentNonce = currentNonce + 1
 
-		err = blockUntilSuccessful(func() error {
+		err = blockUntilSuccessful(ctx, func() error {
 			_, err = erc721Contract.BalanceOf(cops, *ltp.FromETHAddress)
 			return err
 		}, waitingTime, interval)
@@ -748,7 +748,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		tops = configureTransactOpts(tops)
 		tops.GasLimit = 10000000
 
-		err = blockUntilSuccessful(func() error {
+		err = blockUntilSuccessful(ctx, func() error {
 			_, err = erc721Contract.MintBatch(tops, *ltp.FromETHAddress, new(big.Int).SetUint64(1))
 			return err
 		}, waitingTime, interval)
@@ -780,7 +780,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			return err
 		}
 
-		err = blockUntilSuccessful(func() error {
+		err = blockUntilSuccessful(ctx, func() error {
 			_, err = delegatorContract.Call(tops, ltAddr, []byte{0x12, 0x87, 0xa6, 0x8c})
 			return err
 		}, waitingTime, interval)
@@ -920,23 +920,30 @@ func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, 
 		Msg("rough test summary (ignores errors)")
 }
 
-func blockUntilSuccessful(f func() error, waitingTime, interval time.Duration) error {
+func blockUntilSuccessful(ctx context.Context, f func() error, waitingTime, interval time.Duration) error {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
 	log.Trace().Dur("waitingTime", waitingTime).Msg("Starting blocking loop")
 	start := time.Now()
 	for {
-		err := f()
-		if err == nil {
-			return nil
-		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			err := f()
+			if err == nil {
+				return nil
+			}
 
-		elapsed := time.Since(start)
-		if elapsed >= waitingTime {
-			log.Error().Err(err).Dur("elapsedTime", elapsed).Msg("Exhausted waiting period")
-			return err
-		}
+			elapsed := time.Since(start)
+			if elapsed >= waitingTime {
+				log.Error().Err(err).Dur("elapsedTime", elapsed).Msg("Exhausted waiting period")
+				return err
+			}
 
-		log.Trace().Err(err).Dur("elapsedTime", elapsed).Msg("Waiting for successful function execution...")
-		time.Sleep(interval)
+			log.Trace().Err(err).Dur("elapsedTime", elapsed).Msg("Waiting for successful function execution...")
+		}
 	}
 }
 
