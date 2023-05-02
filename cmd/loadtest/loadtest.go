@@ -920,7 +920,7 @@ func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, 
 		Msg("rough test summary (ignores errors)")
 }
 
-func blockUntilSuccessful(f func() error, waitingTime time.Duration, interval time.Duration) error {
+func blockUntilSuccessful(f func() error, waitingTime, interval time.Duration) error {
 	log.Trace().Dur("waitingTime", waitingTime).Msg("Starting blocking loop")
 	start := time.Now()
 	for {
