@@ -17,10 +17,13 @@
 package client
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"cloud.google.com/go/datastore"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
 
@@ -30,11 +33,12 @@ import (
 type client struct {
 	input     p2p.NodeSet
 	output    p2p.NodeSet
-	disc      resolver
+	disc      *discover.UDPv4
 	iters     []enode.Iterator
 	inputIter enode.Iterator
 	ch        chan *enode.Node
 	closed    chan struct{}
+	db        *datastore.Client
 
 	// settings
 	revalidateInterval time.Duration
@@ -53,7 +57,13 @@ type resolver interface {
 	RequestENR(*enode.Node) (*enode.Node, error)
 }
 
-func newClient(input p2p.NodeSet, disc resolver, iters ...enode.Iterator) *client {
+func newClient(input p2p.NodeSet, disc *discover.UDPv4, iters ...enode.Iterator) *client {
+	db, err := datastore.NewClient(context.Background(), inputClientParams.ProjectID)
+	if err != nil {
+		db.Close()
+		log.Fatal().Err(err).Msg("Could not connect to Datastore")
+	}
+
 	c := &client{
 		input:     input,
 		output:    make(p2p.NodeSet, len(input)),
@@ -62,6 +72,7 @@ func newClient(input p2p.NodeSet, disc resolver, iters ...enode.Iterator) *clien
 		inputIter: enode.IterNodes(input.Nodes()),
 		ch:        make(chan *enode.Node),
 		closed:    make(chan struct{}),
+		db:        db,
 	}
 	c.iters = append(c.iters, c.inputIter)
 	// Copy input to output initially. Any nodes that fail validation
@@ -176,7 +187,7 @@ func (c *client) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
 // nodes that are unable to peer. If a peer is not being skipped and the client
 // is not in crawler mode, then a goroutine will be spawned and read messages
 // from the new peer.
-func shouldSkipNode(n *enode.Node) bool {
+func (c *client) shouldSkipNode(n *enode.Node) bool {
 	// Exit early since crawling doesn't need to dial and peer.
 	if inputClientParams.NetworkID <= 0 && inputClientParams.IsCrawler {
 		return false
@@ -200,7 +211,7 @@ func shouldSkipNode(n *enode.Node) bool {
 	skip := inputClientParams.NetworkID != int(message.NetworkID)
 	if !skip && !inputClientParams.IsCrawler {
 		go func() {
-			if err := conn.ReadAndServe(); err != nil {
+			if err := conn.ReadAndServe(c.db); err != nil {
 				log.Debug().Err(err.Unwrap()).Msg("Error received")
 			}
 		}()
@@ -225,7 +236,7 @@ func (c *client) updateNode(n *enode.Node) int {
 	}
 
 	// Filter out incompatible nodes.
-	if shouldSkipNode(n) {
+	if c.shouldSkipNode(n) {
 		return nodeSkipIncompat
 	}
 

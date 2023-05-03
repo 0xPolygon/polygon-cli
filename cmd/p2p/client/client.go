@@ -39,6 +39,7 @@ type (
 		NodesFile string
 		Database  string
 		IsCrawler bool
+		ProjectID string
 	}
 )
 
@@ -83,6 +84,8 @@ flags. If no nodes.json file exists, run echo "{}" >> nodes.json to get started.
 			return err
 		}
 
+		log.Info().Msg(ln.Node().URLv4())
+
 		disc, err := discover.ListenV4(socket, ln, cfg)
 		if err != nil {
 			return err
@@ -114,6 +117,7 @@ func init() {
 	ClientCmd.PersistentFlags().IntVarP(&inputClientParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id.")
 	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.Database, "database", "d", "", "Node database for updating and storing client information.")
 	ClientCmd.PersistentFlags().BoolVarP(&inputClientParams.IsCrawler, "crawl", "c", false, "Run the client in crawl only mode.")
+	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.ProjectID, "project-id", "P", "devtools-sandbox", "GCP project id")
 }
 
 func listen(ln *enode.LocalNode) (*net.UDPConn, error) {

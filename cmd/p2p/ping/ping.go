@@ -93,7 +93,7 @@ other messages the peer sends (e.g. blocks, transactions, etc.).`,
 					errStr = err.Error()
 				} else if inputPingParams.Listen {
 					// If the dial and peering were successful, listen to the peer for messages.
-					if err := conn.ReadAndServe(); err != nil {
+					if err := conn.ReadAndServe(nil); err != nil {
 						log.Error().Err(err.Unwrap()).Msg("Error received")
 					}
 				}

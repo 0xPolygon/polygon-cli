@@ -17,11 +17,13 @@
 package p2p
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
 	"time"
 
+	"cloud.google.com/go/datastore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
@@ -29,6 +31,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	MaxRequestSize = 10_000
 )
 
 var (
@@ -152,7 +158,11 @@ loop:
 }
 
 // ReadAndServe reads messages from peers.
-func (c *Conn) ReadAndServe() *Error {
+func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
+	ctx := context.Background()
+	requests := make(map[uint64][]common.Hash)
+	var count uint64 = 0
+
 	for {
 		start := time.Now()
 		for time.Since(start) < timeout {
@@ -168,6 +178,7 @@ func (c *Conn) ReadAndServe() *Error {
 				}
 			case *BlockHeaders:
 				c.logger.Info().Msgf("Received %v block headers", len(msg.BlockHeadersPacket))
+				c.writeBlockHeaders(ctx, client, msg.BlockHeadersPacket)
 			case *GetBlockHeaders:
 				c.logger.Info().Interface("msg", msg).Msg("Received GetBlockHeaders request")
 				res := &BlockHeaders{
@@ -178,6 +189,9 @@ func (c *Conn) ReadAndServe() *Error {
 				}
 			case *BlockBodies:
 				c.logger.Info().Msgf("Received %v block bodies", len(msg.BlockBodiesPacket))
+				if _, ok := requests[msg.RequestId]; ok {
+					c.writeBlockBodies(ctx, client, requests[msg.RequestId], msg.BlockBodiesPacket)
+				}
 			case *GetBlockBodies:
 				c.logger.Info().Interface("msg", msg).Msg("Received GetBlockBodies request")
 				res := &BlockBodies{
@@ -191,6 +205,7 @@ func (c *Conn) ReadAndServe() *Error {
 
 				hashes := []common.Hash{}
 				for _, hash := range *msg {
+					c.writeEvent(ctx, client, "block_events", hash.Hash, "blocks")
 					hashes = append(hashes, hash.Hash)
 
 					req := &GetBlockHeaders{
@@ -206,22 +221,50 @@ func (c *Conn) ReadAndServe() *Error {
 					}
 				}
 
+				count++
+				if count > MaxRequestSize {
+					count = 0
+				}
+				requests[count] = hashes
+
 				req := &GetBlockBodies{
+					RequestId:            count,
 					GetBlockBodiesPacket: hashes,
 				}
 				if err := c.Write(req); err != nil {
 					c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
 				}
 			case *NewBlock:
-				c.logger.Info().Interface("block", msg).Msg("Received new block")
+				c.logger.Info().Interface("block", msg).Interface("header", msg.Block.Header()).Msg("Received new block")
 			case *Transactions:
 				c.logger.Info().Msgf("Received %v transactions", len(*msg))
+				c.writeTransactions(ctx, client, *msg)
 			case *PooledTransactions:
 				c.logger.Info().Msgf("Received %v pooled transactions", len(msg.PooledTransactionsPacket))
+				c.writeTransactions(ctx, client, msg.PooledTransactionsPacket)
 			case *NewPooledTransactionHashes:
 				c.logger.Info().Msgf("Received %v new pooled transactions", len(msg.Hashes))
+				req := &GetPooledTransactions{
+					RequestId:                   0,
+					GetPooledTransactionsPacket: msg.Hashes,
+				}
+				if err := c.Write(req); err != nil {
+					c.logger.Error().Err(err).Msg("Failed to write GetPoolTransactions request")
+				}
 			case *NewPooledTransactionHashes66:
 				c.logger.Info().Msgf("Received %v new pooled transactions", len(*msg))
+				hashes := make([]common.Hash, 0, len(*msg))
+				for _, hash := range *msg {
+					hashes = append(hashes, hash)
+				}
+
+				req := &GetPooledTransactions{
+					RequestId:                   0,
+					GetPooledTransactionsPacket: hashes,
+				}
+				if err := c.Write(req); err != nil {
+					c.logger.Error().Err(err).Msg("Failed to write GetPoolTransactions request")
+				}
 			case *GetPooledTransactions:
 				c.logger.Info().Interface("msg", msg).Msg("Received GetPooledTransactions request")
 				res := &PooledTransactions{
