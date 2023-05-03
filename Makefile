@@ -57,13 +57,6 @@ simplecross: $(BUILD_DIR) ## Cross-compile go binaries without using CGO.
 clean: ## Clean the binary folder.
 	$(RM) -r $(BUILD_DIR)
 
-##@ Run
-
-.PHONY: run
-run: ## Run the go program.
-	go run main.go
-
-
 ##@ Lint
 
 .PHONY: tidy
