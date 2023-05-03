@@ -927,7 +927,7 @@ func blockUntilSuccessful(ctx context.Context, f func() error, waitingTime, inte
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	log.Trace().Dur("waitingTime", waitingTime).Msg("Starting blocking loop")
+	log.Trace().Dur("waitingTimeSeconds", waitingTime).Msg("Starting blocking loop")
 	start := time.Now()
 	for {
 		select {
@@ -941,11 +941,11 @@ func blockUntilSuccessful(ctx context.Context, f func() error, waitingTime, inte
 
 			elapsed := time.Since(start)
 			if elapsed >= waitingTime {
-				log.Error().Err(err).Dur("elapsedTime", elapsed).Msg("Exhausted waiting period")
+				log.Error().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Exhausted waiting period")
 				return err
 			}
 
-			log.Trace().Err(err).Dur("elapsedTime", elapsed).Msg("Waiting for successful function execution...")
+			log.Trace().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Waiting for successful function execution...")
 		}
 	}
 }
