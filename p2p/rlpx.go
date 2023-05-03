@@ -178,7 +178,10 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 				}
 			case *BlockHeaders:
 				c.logger.Info().Msgf("Received %v block headers", len(msg.BlockHeadersPacket))
-				c.writeBlockHeaders(ctx, client, msg.BlockHeadersPacket)
+
+				if client != nil {
+					c.writeBlockHeaders(ctx, client, msg.BlockHeadersPacket)
+				}
 			case *GetBlockHeaders:
 				c.logger.Info().Interface("msg", msg).Msg("Received GetBlockHeaders request")
 				res := &BlockHeaders{
@@ -189,7 +192,7 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 				}
 			case *BlockBodies:
 				c.logger.Info().Msgf("Received %v block bodies", len(msg.BlockBodiesPacket))
-				if _, ok := requests[msg.RequestId]; ok {
+				if _, ok := requests[msg.RequestId]; ok && client != nil {
 					c.writeBlockBodies(ctx, client, requests[msg.RequestId], msg.BlockBodiesPacket)
 				}
 			case *GetBlockBodies:
@@ -205,7 +208,9 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 
 				hashes := []common.Hash{}
 				for _, hash := range *msg {
-					c.writeEvent(ctx, client, "block_events", hash.Hash, "blocks")
+					if client != nil {
+						c.writeEvent(ctx, client, "block_events", hash.Hash, "blocks")
+					}
 					hashes = append(hashes, hash.Hash)
 
 					req := &GetBlockHeaders{
@@ -238,10 +243,14 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 				c.logger.Info().Interface("block", msg).Interface("header", msg.Block.Header()).Msg("Received new block")
 			case *Transactions:
 				c.logger.Info().Msgf("Received %v transactions", len(*msg))
-				c.writeTransactions(ctx, client, *msg)
+				if client != nil {
+					c.writeTransactions(ctx, client, *msg)
+				}
 			case *PooledTransactions:
 				c.logger.Info().Msgf("Received %v pooled transactions", len(msg.PooledTransactionsPacket))
-				c.writeTransactions(ctx, client, msg.PooledTransactionsPacket)
+				if client != nil {
+					c.writeTransactions(ctx, client, msg.PooledTransactionsPacket)
+				}
 			case *NewPooledTransactionHashes:
 				c.logger.Info().Msgf("Received %v new pooled transactions", len(msg.Hashes))
 				req := &GetPooledTransactions{
