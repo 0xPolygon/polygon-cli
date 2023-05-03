@@ -163,6 +163,9 @@ var LoadtestCmd = &cobra.Command{
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
 		setLogLevel(inputLoadTestParams)
+		zerolog.DurationFieldUnit = time.Second
+		zerolog.DurationFieldInteger = true
+
 		if len(args) != 1 {
 			return fmt.Errorf("expected exactly one argument")
 		}
