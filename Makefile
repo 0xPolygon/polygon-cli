@@ -25,10 +25,6 @@ help: ## Display this help.
 $(BUILD_DIR): ## Create the binary folder.
 	mkdir -p $(BUILD_DIR)
 
-.PHONY: run
-run: ## Run the go program.
-	go run main.go
-
 .PHONY: generate
 generate: ## Generate protobuf stubs.
 	protoc --proto_path=proto --go_out=proto/gen/pb --go_opt=paths=source_relative $(wildcard proto/*.proto)
@@ -36,6 +32,11 @@ generate: ## Generate protobuf stubs.
 .PHONY: build
 build: $(BUILD_DIR) ## Build go binary.
 	go build -ldflags "-s -w -X \"github.com/maticnetwork/polygon-cli/cmd/version.Version=dev ($(GIT_SHA))\"" -o $(BUILD_DIR)/$(BIN_NAME) main.go
+
+.PHONY: install
+install: build ## Install the go binary.
+	$(RM) $(INSTALL_DIR)/$(BIN_NAME)
+	cp $(BUILD_DIR)/$(BIN_NAME) $(INSTALL_DIR)
 
 .PHONY: cross
 cross: $(BUILD_DIR) ## Cross-compile go binaries using CGO.
@@ -51,11 +52,6 @@ simplecross: $(BUILD_DIR) ## Cross-compile go binaries without using CGO.
 	env GOOS=darwin GOARCH=arm64 go build -o $(BUILD_DIR)/darwin-arm64-$(BIN_NAME) main.go
 	env GOOS=linux GOARCH=amd64 go build -o $(BUILD_DIR)/linux-amd64-$(BIN_NAME) main.go
 	env GOOS=darwin GOARCH=amd64 go build -o $(BUILD_DIR)/darwin-amd64-$(BIN_NAME) main.go
-
-.PHONY: install
-install: build ## Install the go binary.
-	$(RM) $(INSTALL_DIR)/$(BIN_NAME)
-	cp $(BUILD_DIR)/$(BIN_NAME) $(INSTALL_DIR)
 
 .PHONY: clean
 clean: ## Clean the binary folder.
@@ -91,7 +87,7 @@ lint: tidy vet golangci-lint ## Run all the linter tools against code.
 ##@ Test
 
 .PHONY: test
-test: lint ## Run tests.
+test: ## Run tests.
 	go test ./... -coverprofile=coverage.out
 	go tool cover -func coverage.out
 
