@@ -127,20 +127,54 @@ func (c *Conn) writeEvent(ctx context.Context, client *datastore.Client, eventKi
 	}
 }
 
+func (c *Conn) writeBlockHeader(ctx context.Context, client *datastore.Client, header *types.Header) {
+	key := datastore.NameKey("blocks", header.Hash().String(), nil)
+	var block DatastoreBlock
+
+	if err := client.Get(ctx, key, &block); err == nil && block.DatastoreHeader != nil {
+		return
+	}
+
+	block.DatastoreHeader = NewDatastoreHeader(header)
+
+	if _, err := client.Put(ctx, key, &block); err != nil {
+		c.logger.Error().Err(err).Msg("Failed to write block header")
+	}
+}
+
 func (c *Conn) writeBlockHeaders(ctx context.Context, client *datastore.Client, headers []*types.Header) {
 	for _, header := range headers {
-		key := datastore.NameKey("blocks", header.Hash().String(), nil)
-		var block DatastoreBlock
+		c.writeBlockHeader(ctx, client, header)
+	}
+}
 
-		if err := client.Get(ctx, key, &block); err == nil && block.DatastoreHeader != nil {
-			continue
+func (c *Conn) writeBlockBody(ctx context.Context, client *datastore.Client, hash string, body *eth.BlockBody) {
+	key := datastore.NameKey("blocks", hash, nil)
+	var block DatastoreBlock
+
+	if err := client.Get(ctx, key, &block); err != nil {
+		c.logger.Warn().Err(err).Str("hash", hash).Msg("Failed to fetch block when writing block body")
+	}
+
+	if block.Transactions == nil {
+		block.Transactions = make([]*datastore.Key, 0, len(body.Transactions))
+		for _, tx := range body.Transactions {
+			c.writeTransaction(ctx, client, tx, hash)
+			block.Transactions = append(block.Transactions, datastore.NameKey("transactions", tx.Hash().Hex(), nil))
 		}
+	}
 
-		block.DatastoreHeader = NewDatastoreHeader(header)
+	if block.Uncles == nil {
+		c.writeBlockHeaders(ctx, client, body.Uncles)
 
-		if _, err := client.Put(ctx, key, &block); err != nil {
-			c.logger.Error().Err(err).Msg("Failed to write block header")
+		block.Uncles = make([]*datastore.Key, 0, len(body.Uncles))
+		for _, uncle := range body.Uncles {
+			block.Uncles = append(block.Uncles, datastore.NameKey("blocks", uncle.Hash().Hex(), nil))
 		}
+	}
+
+	if _, err := client.Put(ctx, key, &block); err != nil {
+		c.logger.Error().Err(err).Msg("Failed to write block header")
 	}
 }
 
@@ -152,38 +186,13 @@ func (c *Conn) writeBlockBodies(ctx context.Context, client *datastore.Client, h
 
 	for i, body := range bodies {
 		hash := hashes[i].Hex()
-		key := datastore.NameKey("blocks", hash, nil)
-		var block DatastoreBlock
-
-		if err := client.Get(ctx, key, &block); err != nil {
-			c.logger.Warn().Err(err).Str("hash", hash).Msg("Failed to fetch block when writing block body")
-		}
-
-		if block.Transactions == nil {
-			block.Transactions = make([]*datastore.Key, 0, len(body.Transactions))
-			for _, tx := range body.Transactions {
-				c.writeTransaction(ctx, client, tx, hash)
-				block.Transactions = append(block.Transactions, datastore.NameKey("transactions", tx.Hash().Hex(), nil))
-			}
-		}
-
-		if block.Uncles == nil {
-			c.writeBlockHeaders(ctx, client, body.Uncles)
-
-			block.Uncles = make([]*datastore.Key, 0, len(body.Uncles))
-			for _, uncle := range body.Uncles {
-				block.Uncles = append(block.Uncles, datastore.NameKey("blocks", uncle.Hash().Hex(), nil))
-			}
-		}
-
-		if _, err := client.Put(ctx, key, &block); err != nil {
-			c.logger.Error().Err(err).Msg("Failed to write block header")
-		}
+		c.writeBlockBody(ctx, client, hash, body)
 	}
 }
 
 func (c *Conn) writeTransactions(ctx context.Context, client *datastore.Client, txs []*types.Transaction) {
 	for _, tx := range txs {
+		c.writeEvent(ctx, client, "transaction_events", tx.Hash(), "transactions")
 		key := datastore.NameKey("transactions", tx.Hash().Hex(), nil)
 
 		var transaction *DatastoreTransaction
@@ -204,7 +213,6 @@ func (c *Conn) writeTransaction(ctx context.Context, client *datastore.Client, t
 
 	var transaction *DatastoreTransaction
 	if err := client.Get(ctx, txKey, transaction); err != nil {
-		c.logger.Debug().Interface("tx", *tx).Send()
 		transaction = NewDatastoreTransaction(tx)
 	}
 
@@ -216,4 +224,19 @@ func (c *Conn) writeTransaction(ctx context.Context, client *datastore.Client, t
 	if _, err := client.Put(ctx, txKey, transaction); err != nil {
 		c.logger.Error().Err(err).Msg("Failed to write transaction")
 	}
+}
+
+func unseenTransactions(ctx context.Context, client *datastore.Client, hashes []common.Hash) []common.Hash {
+	unseen := make([]common.Hash, 0, len(hashes))
+
+	for _, hash := range hashes {
+		key := datastore.NameKey("transactions", hash.Hex(), nil)
+
+		var transaction *DatastoreTransaction
+		if err := client.Get(ctx, key, transaction); err != nil {
+			unseen = append(unseen, hash)
+		}
+	}
+
+	return unseen
 }

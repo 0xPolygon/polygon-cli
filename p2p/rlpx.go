@@ -183,7 +183,7 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 					c.writeBlockHeaders(ctx, client, msg.BlockHeadersPacket)
 				}
 			case *GetBlockHeaders:
-				c.logger.Info().Interface("msg", msg).Msg("Received GetBlockHeaders request")
+				c.logger.Info().Msg("Received GetBlockHeaders request")
 				res := &BlockHeaders{
 					RequestId: msg.RequestId,
 				}
@@ -196,7 +196,7 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 					c.writeBlockBodies(ctx, client, requests[msg.RequestId], msg.BlockBodiesPacket)
 				}
 			case *GetBlockBodies:
-				c.logger.Info().Interface("msg", msg).Msg("Received GetBlockBodies request")
+				c.logger.Info().Msg("Received GetBlockBodies request")
 				res := &BlockBodies{
 					RequestId: msg.RequestId,
 				}
@@ -241,6 +241,16 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 				}
 			case *NewBlock:
 				c.logger.Info().Interface("block", msg).Interface("header", msg.Block.Header()).Msg("Received new block")
+				if client != nil {
+					c.writeEvent(ctx, client, "block_events", msg.Block.Hash(), "blocks")
+					c.writeBlockHeader(ctx, client, msg.Block.Header())
+					c.writeBlockBody(ctx, client, msg.Block.Hash().Hex(),
+						&eth.BlockBody{
+							Transactions: msg.Block.Transactions(),
+							Uncles:       msg.Block.Uncles(),
+						},
+					)
+				}
 			case *Transactions:
 				c.logger.Info().Msgf("Received %v transactions", len(*msg))
 				if client != nil {
@@ -252,28 +262,9 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 					c.writeTransactions(ctx, client, msg.PooledTransactionsPacket)
 				}
 			case *NewPooledTransactionHashes:
-				c.logger.Info().Msgf("Received %v new pooled transactions", len(msg.Hashes))
-				req := &GetPooledTransactions{
-					RequestId:                   0,
-					GetPooledTransactionsPacket: msg.Hashes,
-				}
-				if err := c.Write(req); err != nil {
-					c.logger.Error().Err(err).Msg("Failed to write GetPoolTransactions request")
-				}
+				c.processNewPooledTransactions(ctx, client, msg.Hashes)
 			case *NewPooledTransactionHashes66:
-				c.logger.Info().Msgf("Received %v new pooled transactions", len(*msg))
-				hashes := make([]common.Hash, 0, len(*msg))
-				for _, hash := range *msg {
-					hashes = append(hashes, hash)
-				}
-
-				req := &GetPooledTransactions{
-					RequestId:                   0,
-					GetPooledTransactionsPacket: hashes,
-				}
-				if err := c.Write(req); err != nil {
-					c.logger.Error().Err(err).Msg("Failed to write GetPoolTransactions request")
-				}
+				c.processNewPooledTransactions(ctx, client, *msg)
 			case *GetPooledTransactions:
 				c.logger.Info().Interface("msg", msg).Msg("Received GetPooledTransactions request")
 				res := &PooledTransactions{
@@ -295,5 +286,22 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 				c.logger.Info().Interface("msg", msg).Int("code", msg.Code()).Msg("Received message")
 			}
 		}
+	}
+}
+
+func (c *Conn) processNewPooledTransactions(ctx context.Context, client *datastore.Client, hashes []common.Hash) {
+	c.logger.Info().Msgf("Received %v new pooled transactions", len(hashes))
+
+	unseen := hashes
+	if client != nil {
+		unseen = unseenTransactions(ctx, client, hashes)
+	}
+
+	req := &GetPooledTransactions{
+		RequestId:                   0,
+		GetPooledTransactionsPacket: unseen,
+	}
+	if err := c.Write(req); err != nil {
+		c.logger.Error().Err(err).Msg("Failed to write GetPoolTransactions request")
 	}
 }
