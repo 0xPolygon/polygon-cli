@@ -923,18 +923,17 @@ func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, 
 }
 
 func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() error, numberOfBlocksToWaitFor, blockInterval uint64) error {
+	start := time.Now()
 	startBlockNumber, err := c.BlockNumber(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting block number")
 		return err
 	}
-
 	log.Trace().
 		Uint64("startBlockNumber", startBlockNumber).
 		Uint64("numberOfBlocksToWaitFor", numberOfBlocksToWaitFor).
 		Uint64("blockInterval", blockInterval).
 		Msg("Starting blocking loop")
-	start := time.Now()
 	var lastBlockNumber, currentBlockNumber uint64
 	var lock bool
 	for {
