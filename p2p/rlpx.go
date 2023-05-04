@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	MaxRequestSize = 10_000
+	MaxRequestSize = 100
 )
 
 var (
@@ -160,7 +160,7 @@ loop:
 // ReadAndServe reads messages from peers.
 func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 	ctx := context.Background()
-	requests := make(map[uint64][]common.Hash)
+	requests := make(map[uint64]common.Hash, MaxRequestSize)
 	var count uint64 = 0
 
 	for {
@@ -178,9 +178,8 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 				}
 			case *BlockHeaders:
 				c.logger.Info().Msgf("Received %v block headers", len(msg.BlockHeadersPacket))
-
 				if client != nil {
-					c.writeBlockHeaders(ctx, client, msg.BlockHeadersPacket)
+					go c.writeBlockHeaders(ctx, client, msg.BlockHeadersPacket)
 				}
 			case *GetBlockHeaders:
 				c.logger.Info().Msg("Received GetBlockHeaders request")
@@ -192,8 +191,8 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 				}
 			case *BlockBodies:
 				c.logger.Info().Msgf("Received %v block bodies", len(msg.BlockBodiesPacket))
-				if _, ok := requests[msg.RequestId]; ok && client != nil {
-					c.writeBlockBodies(ctx, client, requests[msg.RequestId], msg.BlockBodiesPacket)
+				if hash, ok := requests[msg.RequestId]; ok && client != nil && len(msg.BlockBodiesPacket) > 0 {
+					go c.writeBlockBody(ctx, client, hash.Hex(), msg.BlockBodiesPacket[0])
 				}
 			case *GetBlockBodies:
 				c.logger.Info().Msg("Received GetBlockBodies request")
@@ -206,14 +205,12 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 			case *NewBlockHashes:
 				c.logger.Info().Msgf("Received %v new block hashes", len(*msg))
 
-				hashes := []common.Hash{}
 				for _, hash := range *msg {
 					if client != nil {
-						c.writeEvent(ctx, client, "block_events", hash.Hash, "blocks")
+						go c.writeEvent(ctx, client, "block_events", hash.Hash, "blocks")
 					}
-					hashes = append(hashes, hash.Hash)
 
-					req := &GetBlockHeaders{
+					headersRequest := &GetBlockHeaders{
 						GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
 							// Providing both the hash and number will result in a `both origin
 							// hash and number` error.
@@ -221,45 +218,46 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 							Amount: 1,
 						},
 					}
-					if err := c.Write(req); err != nil {
+					if err := c.Write(headersRequest); err != nil {
 						c.logger.Error().Err(err).Msg("Failed to write GetBlockHeaders request")
 					}
-				}
 
-				count++
-				if count > MaxRequestSize {
-					count = 0
-				}
-				requests[count] = hashes
-
-				req := &GetBlockBodies{
-					RequestId:            count,
-					GetBlockBodiesPacket: hashes,
-				}
-				if err := c.Write(req); err != nil {
-					c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
+					count++
+					if count > MaxRequestSize {
+						count = 0
+					}
+					requests[count] = hash.Hash
+					bodiesRequest := &GetBlockBodies{
+						RequestId:            count,
+						GetBlockBodiesPacket: []common.Hash{hash.Hash},
+					}
+					if err := c.Write(bodiesRequest); err != nil {
+						c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
+					}
 				}
 			case *NewBlock:
 				c.logger.Info().Interface("block", msg).Interface("header", msg.Block.Header()).Msg("Received new block")
 				if client != nil {
-					c.writeEvent(ctx, client, "block_events", msg.Block.Hash(), "blocks")
-					c.writeBlockHeader(ctx, client, msg.Block.Header())
-					c.writeBlockBody(ctx, client, msg.Block.Hash().Hex(),
-						&eth.BlockBody{
-							Transactions: msg.Block.Transactions(),
-							Uncles:       msg.Block.Uncles(),
-						},
-					)
+					go c.writeEvent(ctx, client, "block_events", msg.Block.Hash(), "blocks")
+					go func() {
+						c.writeBlockHeader(ctx, client, msg.Block.Header())
+						c.writeBlockBody(ctx, client, msg.Block.Hash().Hex(),
+							&eth.BlockBody{
+								Transactions: msg.Block.Transactions(),
+								Uncles:       msg.Block.Uncles(),
+							},
+						)
+					}()
 				}
 			case *Transactions:
 				c.logger.Info().Msgf("Received %v transactions", len(*msg))
 				if client != nil {
-					c.writeTransactions(ctx, client, *msg)
+					go c.writeTransactions(ctx, client, *msg)
 				}
 			case *PooledTransactions:
 				c.logger.Info().Msgf("Received %v pooled transactions", len(msg.PooledTransactionsPacket))
 				if client != nil {
-					c.writeTransactions(ctx, client, msg.PooledTransactionsPacket)
+					go c.writeTransactions(ctx, client, msg.PooledTransactionsPacket)
 				}
 			case *NewPooledTransactionHashes:
 				c.processNewPooledTransactions(ctx, client, msg.Hashes)
@@ -293,9 +291,9 @@ func (c *Conn) processNewPooledTransactions(ctx context.Context, client *datasto
 	c.logger.Info().Msgf("Received %v new pooled transactions", len(hashes))
 
 	unseen := hashes
-	if client != nil {
-		unseen = unseenTransactions(ctx, client, hashes)
-	}
+	// if client != nil {
+	// 	unseen = unseenTransactions(ctx, client, hashes)
+	// }
 
 	req := &GetPooledTransactions{
 		RequestId:                   0,
