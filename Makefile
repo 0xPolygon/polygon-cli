@@ -95,3 +95,11 @@ test: lint ## Run tests.
 	go test ./... -coverprofile=coverage.out
 	go tool cover -func coverage.out
 
+.PHONY: geth
+geth: ## Start geth.
+	geth --dev --dev.period 2 --http --http.addr localhost --http.port 8545 --http.api admin,debug,web3,eth,txpool,personal,miner,net --verbosity 5 --rpc.gascap 50000000  --rpc.txfeecap 0 --miner.gaslimit  10 --miner.gasprice 1 --gpo.blocks 1 --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2 --dev.gaslimit 50000000
+
+.PHONY: loadtest
+loadtest: build ## Run simple loadtest.
+	./out/polycli loadtest --verbosity 700 --chain-id 1337 --concurrency 1 --requests 1000 --rate-limit 5 --mode c http://127.0.0.1:8545
+
