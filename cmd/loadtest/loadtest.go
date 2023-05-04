@@ -233,40 +233,40 @@ type (
 	}
 	loadTestParams struct {
 		// inputs
-		Requests                     *int64
-		Concurrency                  *int64
-		BatchSize                    *uint64
-		TimeLimit                    *int64
-		Verbosity                    *int64
-		PrettyLogs                   *bool
-		ToRandom                     *bool
-		URL                          *url.URL
-		ChainID                      *uint64
-		PrivateKey                   *string
-		ToAddress                    *string
-		HexSendAmount                *string
-		RateLimit                    *float64
-		AdaptiveRateLimit            *bool
-		SteadyStateTxPoolSize        *uint64
-		AdaptiveRateLimitIncrement   *uint64
-		AdaptiveCycleDuration        *uint64
-		AdaptiveBackoffFactor        *float64
-		Mode                         *string
-		Function                     *uint64
-		Iterations                   *uint64
-		ByteCount                    *uint64
-		Seed                         *int64
-		IsAvail                      *bool
-		AvailAppID                   *uint32
-		LtAddress                    *string
-		DelAddress                   *string
-		ContractCallWaitingDuration  *uint64
-		ContractCallIntervalDuration *uint64
-		ForceContractDeploy          *bool
-		ForceGasLimit                *uint64
-		ForceGasPrice                *uint64
-		ShouldProduceSummary         *bool
-		SummaryOutputMode            *string
+		Requests                            *int64
+		Concurrency                         *int64
+		BatchSize                           *uint64
+		TimeLimit                           *int64
+		Verbosity                           *int64
+		PrettyLogs                          *bool
+		ToRandom                            *bool
+		URL                                 *url.URL
+		ChainID                             *uint64
+		PrivateKey                          *string
+		ToAddress                           *string
+		HexSendAmount                       *string
+		RateLimit                           *float64
+		AdaptiveRateLimit                   *bool
+		SteadyStateTxPoolSize               *uint64
+		AdaptiveRateLimitIncrement          *uint64
+		AdaptiveCycleDuration               *uint64
+		AdaptiveBackoffFactor               *float64
+		Mode                                *string
+		Function                            *uint64
+		Iterations                          *uint64
+		ByteCount                           *uint64
+		Seed                                *int64
+		IsAvail                             *bool
+		AvailAppID                          *uint32
+		LtAddress                           *string
+		DelAddress                          *string
+		ContractCallNumberOfBlocksToWaitFor *uint64
+		ContractCallBlockInterval           *uint64
+		ForceContractDeploy                 *bool
+		ForceGasLimit                       *uint64
+		ForceGasPrice                       *uint64
+		ShouldProduceSummary                *bool
+		SummaryOutputMode                   *string
 
 		// Computed
 		CurrentGas      *big.Int
@@ -329,8 +329,8 @@ r - random modes
 	ltp.AvailAppID = LoadtestCmd.PersistentFlags().Uint32("app-id", 0, "The AppID used for avail")
 	ltp.LtAddress = LoadtestCmd.PersistentFlags().String("lt-address", "", "A pre-deployed load test contract address")
 	ltp.DelAddress = LoadtestCmd.PersistentFlags().String("del-address", "", "A pre-deployed delegator contract address")
-	ltp.ContractCallWaitingDuration = LoadtestCmd.PersistentFlags().Uint64("contract-call-waiting-duration", 30, "The number of seconds to wait before giving up on a contract call")
-	ltp.ContractCallIntervalDuration = LoadtestCmd.PersistentFlags().Uint64("contract-call-interval-duration", 1, "The number of seconds to wait between contract calls")
+	ltp.ContractCallNumberOfBlocksToWaitFor = LoadtestCmd.PersistentFlags().Uint64("contract-call-nb-blocks-to-wait-for", 30, "The number of blocks to wait for before giving up on a contract call")
+	ltp.ContractCallBlockInterval = LoadtestCmd.PersistentFlags().Uint64("contract-call-block-interval", 1, "The number of blocks to wait between contract calls")
 	ltp.ForceContractDeploy = LoadtestCmd.PersistentFlags().Bool("force-contract-deploy", false, "Some loadtest modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --del-address and --il-address flags.")
 	ltp.ForceGasLimit = LoadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually")
 	ltp.ForceGasPrice = LoadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be estimated, we can specify it manually")
@@ -638,8 +638,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	// deploy and instantiate the load tester contract
 	var ltAddr ethcommon.Address
 	var ltContract *contracts.LoadTester
-	waitingTime := time.Duration(*inputLoadTestParams.ContractCallWaitingDuration) * time.Second
-	interval := time.Duration(*inputLoadTestParams.ContractCallIntervalDuration) * time.Second
+	numberOfBlocksToWaitFor := *inputLoadTestParams.ContractCallNumberOfBlocksToWaitFor
+	blockInterval := *inputLoadTestParams.ContractCallBlockInterval
 	if strings.ContainsAny(mode, "rcfislpas") || *inputLoadTestParams.ForceContractDeploy {
 		if *inputLoadTestParams.LtAddress == "" {
 			ltAddr, _, _, err = contracts.DeployLoadTester(tops, c)
@@ -659,11 +659,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			log.Error().Err(err).Msg("Unable to instantiate new contract")
 			return err
 		}
-
-		err = blockUntilSuccessful(ctx, func() error {
+		err = blockUntilSuccessful(ctx, c, func() error {
 			_, err = ltContract.GetCallCounter(cops)
 			return err
-		}, waitingTime, interval)
+		}, numberOfBlocksToWaitFor, blockInterval)
 
 		if err != nil {
 			return err
@@ -686,10 +685,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			return err
 		}
 		currentNonce = currentNonce + 1
-		err = blockUntilSuccessful(ctx, func() error {
+		err = blockUntilSuccessful(ctx, c, func() error {
 			_, err = erc20Contract.BalanceOf(cops, *ltp.FromETHAddress)
 			return err
-		}, waitingTime, interval)
+		}, numberOfBlocksToWaitFor, blockInterval)
 		if err != nil {
 			return err
 		}
@@ -705,7 +704,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 
 		currentNonce = currentNonce + 1
-		err = blockUntilSuccessful(ctx, func() error {
+		err = blockUntilSuccessful(ctx, c, func() error {
 			var balance *big.Int
 			balance, err = erc20Contract.BalanceOf(cops, *ltp.FromETHAddress)
 			if err != nil {
@@ -716,7 +715,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				return err
 			}
 			return nil
-		}, waitingTime, interval)
+		}, numberOfBlocksToWaitFor, blockInterval)
 		if err != nil {
 			return err
 		}
@@ -739,10 +738,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 		currentNonce = currentNonce + 1
 
-		err = blockUntilSuccessful(ctx, func() error {
+		err = blockUntilSuccessful(ctx, c, func() error {
 			_, err = erc721Contract.BalanceOf(cops, *ltp.FromETHAddress)
 			return err
-		}, waitingTime, interval)
+		}, numberOfBlocksToWaitFor, blockInterval)
 		if err != nil {
 			return err
 		}
@@ -751,10 +750,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		tops = configureTransactOpts(tops)
 		tops.GasLimit = 10000000
 
-		err = blockUntilSuccessful(ctx, func() error {
+		err = blockUntilSuccessful(ctx, c, func() error {
 			_, err = erc721Contract.MintBatch(tops, *ltp.FromETHAddress, new(big.Int).SetUint64(1))
 			return err
-		}, waitingTime, interval)
+		}, numberOfBlocksToWaitFor, blockInterval)
 		if err != nil {
 			return err
 		}
@@ -783,10 +782,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			return err
 		}
 
-		err = blockUntilSuccessful(ctx, func() error {
+		err = blockUntilSuccessful(ctx, c, func() error {
 			_, err = delegatorContract.Call(tops, ltAddr, []byte{0x12, 0x87, 0xa6, 0x8c})
 			return err
-		}, waitingTime, interval)
+		}, numberOfBlocksToWaitFor, blockInterval)
 		if err != nil {
 			return err
 		}
@@ -923,29 +922,57 @@ func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, 
 		Msg("rough test summary (ignores errors)")
 }
 
-func blockUntilSuccessful(ctx context.Context, f func() error, waitingTime, interval time.Duration) error {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() error, numberOfBlocksToWaitFor, blockInterval uint64) error {
+	startBlockNumber, err := c.BlockNumber(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Error getting block number")
+		return err
+	}
 
-	log.Trace().Dur("waitingTimeSeconds", waitingTime).Msg("Starting blocking loop")
+	log.Trace().
+		Uint64("startBlockNumber", startBlockNumber).
+		Uint64("numberOfBlocksToWaitFor", numberOfBlocksToWaitFor).
+		Uint64("blockInterval", blockInterval).
+		Msg("Starting blocking loop")
 	start := time.Now()
+	var lastBlockNumber, currentBlockNumber uint64
+	var lock bool
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-ticker.C:
-			err := f()
-			if err == nil {
-				return nil
-			}
-
+		default:
 			elapsed := time.Since(start)
-			if elapsed >= waitingTime {
+			blockDiff := currentBlockNumber % startBlockNumber
+			if blockDiff > numberOfBlocksToWaitFor {
 				log.Error().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Exhausted waiting period")
 				return err
 			}
 
-			log.Trace().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Waiting for successful function execution...")
+			currentBlockNumber, err = c.BlockNumber(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Error getting block number")
+				return err
+			} else {
+				log.Trace().Uint64("newBlock", currentBlockNumber).Msg("New block")
+			}
+
+			if currentBlockNumber != lastBlockNumber {
+				lock = false
+			}
+			if (currentBlockNumber%startBlockNumber)%blockInterval == 0 {
+				if !lock {
+					lock = true
+					err := f()
+					if err == nil {
+						log.Trace().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Function executed successfuly")
+						return nil
+					}
+					log.Trace().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Unable to execute function")
+				}
+			}
+			lastBlockNumber = currentBlockNumber
+			time.Sleep(time.Second)
 		}
 	}
 }
