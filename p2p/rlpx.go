@@ -34,12 +34,27 @@ import (
 )
 
 const (
-	MaxRequestSize = 100
+	MaxNumRequests = 1000
 )
 
 var (
 	timeout = 20 * time.Second
 )
+
+type MessageCounter struct {
+	BlockHeaders        int `json:",omitempty"`
+	BlockBodies         int `json:",omitempty"`
+	Blocks              int `json:",omitempty"`
+	BlockHashes         int `json:",omitempty"`
+	BlockHeaderRequest  int `json:",omitempty"`
+	BlockBodiesRequests int `json:",omitempty"`
+	Transactions        int `json:",omitempty"`
+	TransactionHashes   int `json:",omitempty"`
+	TransactionRequests int `json:",omitempty"`
+	Pings               int `json:",omitempty"`
+	Errors              int `json:",omitempty"`
+	Disconnects         int `json:",omitempty"`
+}
 
 // Dial attempts to Dial the given node and perform a handshake,
 // returning the created Conn if successful.
@@ -160,29 +175,45 @@ loop:
 // ReadAndServe reads messages from peers.
 func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 	ctx := context.Background()
-	requests := make(map[uint64]common.Hash, MaxRequestSize)
+	requests := make(map[uint64]common.Hash, MaxNumRequests)
 	var count uint64 = 0
+
+	counter := MessageCounter{}
+	ticker := time.NewTicker(10 * time.Second)
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				c.logger.Info().Interface("messages", counter).Send()
+				counter = MessageCounter{}
+			case <-done:
+				return
+			}
+		}
+	}()
 
 	for {
 		start := time.Now()
+
 		for time.Since(start) < timeout {
 			if err := c.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
 				c.logger.Error().Err(err).Msg("Failed to set read deadline")
 			}
 
-			msg := c.Read()
-			switch msg := msg.(type) {
+			switch msg := c.Read().(type) {
 			case *Ping:
+				counter.Pings++
 				if err := c.Write(&Pong{}); err != nil {
 					c.logger.Error().Err(err).Msg("Failed to write Pong response")
 				}
 			case *BlockHeaders:
-				c.logger.Info().Msgf("Received %v block headers", len(msg.BlockHeadersPacket))
+				counter.BlockHeaders++
 				if client != nil {
 					go c.writeBlockHeaders(ctx, client, msg.BlockHeadersPacket)
 				}
 			case *GetBlockHeaders:
-				c.logger.Info().Msg("Received GetBlockHeaders request")
+				counter.BlockHeaderRequest++
 				res := &BlockHeaders{
 					RequestId: msg.RequestId,
 				}
@@ -190,12 +221,13 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 					c.logger.Error().Err(err).Msg("Failed to write BlockHeaders response")
 				}
 			case *BlockBodies:
-				c.logger.Info().Msgf("Received %v block bodies", len(msg.BlockBodiesPacket))
+				counter.BlockBodies += len(msg.BlockBodiesPacket)
 				if hash, ok := requests[msg.RequestId]; ok && client != nil && len(msg.BlockBodiesPacket) > 0 {
 					go c.writeBlockBody(ctx, client, hash.Hex(), msg.BlockBodiesPacket[0])
+					delete(requests, msg.RequestId)
 				}
 			case *GetBlockBodies:
-				c.logger.Info().Msg("Received GetBlockBodies request")
+				counter.BlockBodiesRequests++
 				res := &BlockBodies{
 					RequestId: msg.RequestId,
 				}
@@ -203,7 +235,7 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 					c.logger.Error().Err(err).Msg("Failed to write BlockBodies response")
 				}
 			case *NewBlockHashes:
-				c.logger.Info().Msgf("Received %v new block hashes", len(*msg))
+				counter.BlockHashes += len(*msg)
 
 				for _, hash := range *msg {
 					if client != nil {
@@ -223,7 +255,7 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 					}
 
 					count++
-					if count > MaxRequestSize {
+					if count > MaxNumRequests {
 						count = 0
 					}
 					requests[count] = hash.Hash
@@ -236,7 +268,8 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 					}
 				}
 			case *NewBlock:
-				c.logger.Info().Interface("block", msg).Interface("header", msg.Block.Header()).Msg("Received new block")
+				counter.Blocks++
+
 				if client != nil {
 					go c.writeEvent(ctx, client, "block_events", msg.Block.Hash(), "blocks")
 					go func() {
@@ -250,19 +283,19 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 					}()
 				}
 			case *Transactions:
-				c.logger.Info().Msgf("Received %v transactions", len(*msg))
+				counter.Transactions += len(*msg)
 				if client != nil {
 					go c.writeTransactions(ctx, client, *msg)
 				}
 			case *PooledTransactions:
-				c.logger.Info().Msgf("Received %v pooled transactions", len(msg.PooledTransactionsPacket))
+				counter.Transactions += len(msg.PooledTransactionsPacket)
 				if client != nil {
 					go c.writeTransactions(ctx, client, msg.PooledTransactionsPacket)
 				}
 			case *NewPooledTransactionHashes:
-				c.processNewPooledTransactions(ctx, client, msg.Hashes)
+				c.processNewPooledTransactions(ctx, client, &counter, msg.Hashes)
 			case *NewPooledTransactionHashes66:
-				c.processNewPooledTransactions(ctx, client, *msg)
+				c.processNewPooledTransactions(ctx, client, &counter, *msg)
 			case *GetPooledTransactions:
 				c.logger.Info().Interface("msg", msg).Msg("Received GetPooledTransactions request")
 				res := &PooledTransactions{
@@ -272,13 +305,17 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 					c.logger.Error().Err(err).Msg("Failed to write PooledTransactions response")
 				}
 			case *Error:
-				c.logger.Debug().Err(msg.err).Msg("Received error")
+				counter.Errors++
 				if !strings.Contains(msg.Error(), "timeout") {
+					ticker.Stop()
+					close(done)
 					return msg
 				}
 			case *Disconnect:
+				counter.Disconnects++
 				c.logger.Debug().Msgf("Disconnect received: %v", msg)
 			case *Disconnects:
+				counter.Disconnects++
 				c.logger.Debug().Msgf("Disconnect received: %v", msg)
 			default:
 				c.logger.Info().Interface("msg", msg).Int("code", msg.Code()).Msg("Received message")
@@ -287,17 +324,11 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 	}
 }
 
-func (c *Conn) processNewPooledTransactions(ctx context.Context, client *datastore.Client, hashes []common.Hash) {
-	c.logger.Info().Msgf("Received %v new pooled transactions", len(hashes))
-
-	unseen := hashes
-	// if client != nil {
-	// 	unseen = unseenTransactions(ctx, client, hashes)
-	// }
-
+func (c *Conn) processNewPooledTransactions(ctx context.Context, client *datastore.Client, counter *MessageCounter, hashes []common.Hash) {
+	counter.TransactionHashes += len(hashes)
 	req := &GetPooledTransactions{
 		RequestId:                   0,
-		GetPooledTransactionsPacket: unseen,
+		GetPooledTransactionsPacket: hashes,
 	}
 	if err := c.Write(req); err != nil {
 		c.logger.Error().Err(err).Msg("Failed to write GetPoolTransactions request")
