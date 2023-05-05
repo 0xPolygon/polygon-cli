@@ -175,7 +175,7 @@ loop:
 // ReadAndServe reads messages from peers.
 func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 	ctx := context.Background()
-	requests := make(map[uint64]common.Hash, MaxNumRequests)
+	requests := make(map[uint64]common.Hash)
 	var count uint64 = 0
 
 	counter := MessageCounter{}
