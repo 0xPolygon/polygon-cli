@@ -19,6 +19,7 @@ package client
 
 import (
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -30,6 +31,8 @@ import (
 	"github.com/maticnetwork/polygon-cli/p2p"
 )
 
+import _ "net/http/pprof"
+
 type (
 	clientParams struct {
 		Bootnodes string
@@ -40,6 +43,7 @@ type (
 		Database  string
 		IsCrawler bool
 		ProjectID string
+		SensorID  string
 	}
 )
 
@@ -57,6 +61,9 @@ flags. If no nodes.json file exists, run echo "{}" >> nodes.json to get started.
 	Args: cobra.MinimumNArgs(1),
 	PreRun: func(cmd *cobra.Command, args []string) {
 		inputClientParams.NodesFile = args[0]
+		go func() {
+			log.Error().Err(http.ListenAndServe("localhost:6060", nil))
+		}()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		inputSet, err := p2p.LoadNodesJSON(inputClientParams.NodesFile)
@@ -84,7 +91,7 @@ flags. If no nodes.json file exists, run echo "{}" >> nodes.json to get started.
 			return err
 		}
 
-		log.Info().Msg(ln.Node().URLv4())
+		inputClientParams.SensorID = ln.Node().URLv4()
 
 		disc, err := discover.ListenV4(socket, ln, cfg)
 		if err != nil {

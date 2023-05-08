@@ -117,7 +117,7 @@ func NewDatastoreTransaction(tx *types.Transaction) *DatastoreTransaction {
 func (c *Conn) writeEvent(ctx context.Context, client *datastore.Client, eventKind string, hash common.Hash, hashKind string) {
 	key := datastore.IncompleteKey(eventKind, nil)
 	event := DatastoreEvent{
-		SensorId: "sensor1",
+		SensorId: c.Sensor,
 		PeerId:   c.node.URLv4(),
 		Hash:     datastore.NameKey(hashKind, hash.Hex(), nil),
 		Time:     time.Now(),
@@ -127,8 +127,31 @@ func (c *Conn) writeEvent(ctx context.Context, client *datastore.Client, eventKi
 	}
 }
 
+func (c *Conn) writeEvents(ctx context.Context, client *datastore.Client, eventKind string, hashes []common.Hash, hashKind string) {
+	keys := make([]*datastore.Key, 0, len(hashes))
+	events := make([]*DatastoreEvent, 0, len(hashes))
+	now := time.Now()
+
+	for _, hash := range hashes {
+		key := datastore.IncompleteKey(eventKind, nil)
+		keys = append(keys, key)
+
+		event := DatastoreEvent{
+			SensorId: c.Sensor,
+			PeerId:   c.node.URLv4(),
+			Hash:     datastore.NameKey(hashKind, hash.Hex(), nil),
+			Time:     now,
+		}
+		events = append(events, &event)
+	}
+
+	if _, err := client.PutMulti(ctx, keys, events); err != nil {
+		c.logger.Error().Err(err).Msgf("Failed to write to %v", eventKind)
+	}
+}
+
 func (c *Conn) writeBlockHeader(ctx context.Context, client *datastore.Client, header *types.Header) {
-	key := datastore.NameKey("blocks", header.Hash().String(), nil)
+	key := datastore.NameKey("blocks", header.Hash().Hex(), nil)
 	var block DatastoreBlock
 
 	if err := client.Get(ctx, key, &block); err == nil && block.DatastoreHeader != nil {
@@ -191,21 +214,27 @@ func (c *Conn) writeBlockBodies(ctx context.Context, client *datastore.Client, h
 }
 
 func (c *Conn) writeTransactions(ctx context.Context, client *datastore.Client, txs []*types.Transaction) {
+	hashes := make([]common.Hash, 0, len(txs))
 	for _, tx := range txs {
-		c.writeEvent(ctx, client, "transaction_events", tx.Hash(), "transactions")
-		key := datastore.NameKey("transactions", tx.Hash().Hex(), nil)
+		hashes = append(hashes, tx.Hash())
 
-		var transaction *DatastoreTransaction
-		if err := client.Get(ctx, key, transaction); err == nil {
-			continue
-		}
+		go func(tx *types.Transaction) {
+			key := datastore.NameKey("transactions", tx.Hash().Hex(), nil)
 
-		transaction = NewDatastoreTransaction(tx)
+			var transaction *DatastoreTransaction
+			if err := client.Get(ctx, key, transaction); err == nil {
+				return
+			}
 
-		if _, err := client.Put(ctx, key, transaction); err != nil {
-			c.logger.Error().Err(err).Msg("Failed to write transaction")
-		}
+			transaction = NewDatastoreTransaction(tx)
+
+			if _, err := client.Put(ctx, key, transaction); err != nil {
+				c.logger.Error().Err(err).Msg("Failed to write transaction")
+			}
+		}(tx)
 	}
+
+	c.writeEvents(ctx, client, "transaction_events", hashes, "transactions")
 }
 
 func (c *Conn) writeTransaction(ctx context.Context, client *datastore.Client, tx *types.Transaction, blockHash string) {

@@ -197,6 +197,7 @@ func (c *client) shouldSkipNode(n *enode.Node) bool {
 		log.Debug().Err(err).Msg("Dial failed")
 		return true
 	}
+	conn.Sensor = inputClientParams.SensorID
 
 	hello, message, err := conn.Peer()
 	if err != nil {

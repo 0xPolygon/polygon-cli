@@ -237,10 +237,9 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 			case *NewBlockHashes:
 				counter.BlockHashes += len(*msg)
 
+				hashes := make([]common.Hash, 0, len(*msg))
 				for _, hash := range *msg {
-					if client != nil {
-						go c.writeEvent(ctx, client, "block_events", hash.Hash, "blocks")
-					}
+					hashes = append(hashes, hash.Hash)
 
 					headersRequest := &GetBlockHeaders{
 						GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
@@ -266,6 +265,10 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 					if err := c.Write(bodiesRequest); err != nil {
 						c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
 					}
+				}
+
+				if client != nil {
+					go c.writeEvents(ctx, client, "block_events", hashes, "blocks")
 				}
 			case *NewBlock:
 				counter.Blocks++
