@@ -288,12 +288,12 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 			case *Transactions:
 				counter.Transactions += len(*msg)
 				if client != nil {
-					go c.writeTransactions(ctx, client, *msg)
+					// go c.writeTransactions(ctx, client, *msg)
 				}
 			case *PooledTransactions:
 				counter.Transactions += len(msg.PooledTransactionsPacket)
 				if client != nil {
-					go c.writeTransactions(ctx, client, msg.PooledTransactionsPacket)
+					// go c.writeTransactions(ctx, client, msg.PooledTransactionsPacket)
 				}
 			case *NewPooledTransactionHashes:
 				c.processNewPooledTransactions(ctx, client, &counter, msg.Hashes)
