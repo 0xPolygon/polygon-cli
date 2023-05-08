@@ -60,8 +60,7 @@ type resolver interface {
 func newClient(input p2p.NodeSet, disc *discover.UDPv4, iters ...enode.Iterator) *client {
 	db, err := datastore.NewClient(context.Background(), inputClientParams.ProjectID)
 	if err != nil {
-		db.Close()
-		log.Fatal().Err(err).Msg("Could not connect to Datastore")
+		log.Error().Err(err).Msg("Could not connect to Datastore")
 	}
 
 	c := &client{
