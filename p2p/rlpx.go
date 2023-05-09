@@ -25,6 +25,7 @@ import (
 
 	"cloud.google.com/go/datastore"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -178,9 +179,10 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 	requests := make(map[uint64]common.Hash)
 	var count uint64 = 0
 
+	done := make(chan struct{})
+
 	counter := MessageCounter{}
 	ticker := time.NewTicker(10 * time.Second)
-	done := make(chan struct{})
 	go func() {
 		for {
 			select {
@@ -193,9 +195,47 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 		}
 	}()
 
+	type BodyMessage struct {
+		body *eth.BlockBody
+		hash common.Hash
+	}
+	blockChan := make(chan *types.Block)
+	blockHeaderChan := make(chan *types.Header)
+	blockBodyChan := make(chan BodyMessage)
+	blockHashesChan := make(chan []common.Hash)
+	transactionsChan := make(chan []*types.Transaction)
+	if client != nil {
+		go func() {
+			for {
+				select {
+				case block := <-blockChan:
+					c.writeEvent(ctx, client, "block_events", block.Hash(), "blocks")
+					c.writeBlockHeader(ctx, client, block.Header())
+					c.writeBlockBody(ctx, client, block.Hash().Hex(),
+						&eth.BlockBody{
+							Transactions: block.Transactions(),
+							Uncles:       block.Uncles(),
+						},
+					)
+				case header := <-blockHeaderChan:
+					c.writeBlockHeader(ctx, client, header)
+				case blockBody := <-blockBodyChan:
+					c.writeBlockBody(ctx, client, blockBody.hash.Hex(), blockBody.body)
+				case hashes := <-blockHashesChan:
+					c.writeEvents(ctx, client, "block_events", hashes, "blocks")
+				case transactions := <-transactionsChan:
+					c.writeTransactions(ctx, client, transactions)
+				case <-done:
+					return
+				}
+			}
+		}()
+	}
+
 	for {
 		start := time.Now()
 
+	loop:
 		for time.Since(start) < timeout {
 			if err := c.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
 				c.logger.Error().Err(err).Msg("Failed to set read deadline")
@@ -209,8 +249,8 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 				}
 			case *BlockHeaders:
 				counter.BlockHeaders++
-				if client != nil {
-					go c.writeBlockHeaders(ctx, client, msg.BlockHeadersPacket)
+				for _, header := range msg.BlockHeadersPacket {
+					blockHeaderChan <- header
 				}
 			case *GetBlockHeaders:
 				counter.BlockHeaderRequest++
@@ -222,8 +262,13 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 				}
 			case *BlockBodies:
 				counter.BlockBodies += len(msg.BlockBodiesPacket)
-				if hash, ok := requests[msg.RequestId]; ok && client != nil && len(msg.BlockBodiesPacket) > 0 {
-					go c.writeBlockBody(ctx, client, hash.Hex(), msg.BlockBodiesPacket[0])
+				if hash, ok := requests[msg.RequestId]; ok {
+					if len(msg.BlockBodiesPacket) > 0 {
+						blockBodyChan <- BodyMessage{
+							hash: hash,
+							body: msg.BlockBodiesPacket[0],
+						}
+					}
 					delete(requests, msg.RequestId)
 				}
 			case *GetBlockBodies:
@@ -251,6 +296,7 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 					}
 					if err := c.Write(headersRequest); err != nil {
 						c.logger.Error().Err(err).Msg("Failed to write GetBlockHeaders request")
+						break loop
 					}
 
 					count++
@@ -264,37 +310,20 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 					}
 					if err := c.Write(bodiesRequest); err != nil {
 						c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
+						break loop
 					}
 				}
 
-				if client != nil {
-					go c.writeEvents(ctx, client, "block_events", hashes, "blocks")
-				}
+				blockHashesChan <- hashes
 			case *NewBlock:
 				counter.Blocks++
-
-				if client != nil {
-					go c.writeEvent(ctx, client, "block_events", msg.Block.Hash(), "blocks")
-					go func() {
-						c.writeBlockHeader(ctx, client, msg.Block.Header())
-						c.writeBlockBody(ctx, client, msg.Block.Hash().Hex(),
-							&eth.BlockBody{
-								Transactions: msg.Block.Transactions(),
-								Uncles:       msg.Block.Uncles(),
-							},
-						)
-					}()
-				}
+				blockChan <- msg.Block
 			case *Transactions:
 				counter.Transactions += len(*msg)
-				if client != nil {
-					// go c.writeTransactions(ctx, client, *msg)
-				}
+				transactionsChan <- *msg
 			case *PooledTransactions:
 				counter.Transactions += len(msg.PooledTransactionsPacket)
-				if client != nil {
-					// go c.writeTransactions(ctx, client, msg.PooledTransactionsPacket)
-				}
+				transactionsChan <- msg.PooledTransactionsPacket
 			case *NewPooledTransactionHashes:
 				c.processNewPooledTransactions(ctx, client, &counter, msg.Hashes)
 			case *NewPooledTransactionHashes66:
@@ -334,6 +363,6 @@ func (c *Conn) processNewPooledTransactions(ctx context.Context, client *datasto
 		GetPooledTransactionsPacket: hashes,
 	}
 	if err := c.Write(req); err != nil {
-		c.logger.Error().Err(err).Msg("Failed to write GetPoolTransactions request")
+		c.logger.Error().Err(err).Msg("Failed to write GetPooledTransactions request")
 	}
 }

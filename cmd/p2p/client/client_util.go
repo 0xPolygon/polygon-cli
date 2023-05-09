@@ -39,6 +39,7 @@ type client struct {
 	ch        chan *enode.Node
 	closed    chan struct{}
 	db        *datastore.Client
+	peers     uint32
 
 	// settings
 	revalidateInterval time.Duration
@@ -155,6 +156,7 @@ loop:
 				Uint64("removed", atomic.LoadUint64(&removed)).
 				Uint64("ignored(recent)", atomic.LoadUint64(&removed)).
 				Uint64("ignored(incompatible)", atomic.LoadUint64(&skipped)).
+				Uint32("peers", atomic.LoadUint32(&c.peers)).
 				Msg("Discovery in progress")
 		}
 	}
@@ -211,9 +213,12 @@ func (c *client) shouldSkipNode(n *enode.Node) bool {
 	skip := inputClientParams.NetworkID != int(message.NetworkID)
 	if !skip && !inputClientParams.IsCrawler {
 		go func() {
+			defer conn.Close()
+			atomic.AddUint32(&c.peers, 1)
 			if err := conn.ReadAndServe(c.db); err != nil {
 				log.Debug().Err(err.Unwrap()).Msg("Error received")
 			}
+			atomic.AddUint32(&c.peers, ^uint32(0))
 		}()
 	} else {
 		conn.Close()

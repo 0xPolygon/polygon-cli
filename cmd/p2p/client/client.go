@@ -25,13 +25,14 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
 	"github.com/maticnetwork/polygon-cli/p2p"
-)
 
-import _ "net/http/pprof"
+	_ "net/http/pprof"
+)
 
 type (
 	clientParams struct {
@@ -61,6 +62,7 @@ flags. If no nodes.json file exists, run echo "{}" >> nodes.json to get started.
 	Args: cobra.MinimumNArgs(1),
 	PreRun: func(cmd *cobra.Command, args []string) {
 		inputClientParams.NodesFile = args[0]
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 		go func() {
 			log.Error().Err(http.ListenAndServe("localhost:6060", nil))
 		}()
@@ -90,8 +92,6 @@ flags. If no nodes.json file exists, run echo "{}" >> nodes.json to get started.
 		if err != nil {
 			return err
 		}
-
-		inputClientParams.SensorID = ln.Node().URLv4()
 
 		disc, err := discover.ListenV4(socket, ln, cfg)
 		if err != nil {
@@ -124,7 +124,11 @@ func init() {
 	ClientCmd.PersistentFlags().IntVarP(&inputClientParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id.")
 	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.Database, "database", "d", "", "Node database for updating and storing client information.")
 	ClientCmd.PersistentFlags().BoolVarP(&inputClientParams.IsCrawler, "crawl", "c", false, "Run the client in crawl only mode.")
-	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.ProjectID, "project-id", "P", "devtools-sandbox", "GCP project id")
+	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.ProjectID, "project-id", "P", "devtools-sandbox", "GCP project id.")
+	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.SensorID, "sensor-id", "s", "", "Sensor id.")
+	if err := ClientCmd.MarkPersistentFlagRequired("sensor-id"); err != nil {
+		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")
+	}
 }
 
 func listen(ln *enode.LocalNode) (*net.UDPConn, error) {
