@@ -39,7 +39,10 @@ type client struct {
 	ch        chan *enode.Node
 	closed    chan struct{}
 	db        *datastore.Client
-	peers     uint32
+
+	peers      uint32
+	peersMap   map[*enode.Node]struct{}
+	peersMutex sync.RWMutex
 
 	// settings
 	revalidateInterval time.Duration
@@ -73,6 +76,7 @@ func newClient(input p2p.NodeSet, disc *discover.UDPv4, iters ...enode.Iterator)
 		ch:        make(chan *enode.Node),
 		closed:    make(chan struct{}),
 		db:        db,
+		peersMap:  make(map[*enode.Node]struct{}),
 	}
 	c.iters = append(c.iters, c.inputIter)
 	// Copy input to output initially. Any nodes that fail validation
@@ -212,14 +216,23 @@ func (c *client) shouldSkipNode(n *enode.Node) bool {
 
 	skip := inputClientParams.NetworkID != int(message.NetworkID)
 	if !skip && !inputClientParams.IsCrawler {
-		go func() {
-			defer conn.Close()
-			atomic.AddUint32(&c.peers, 1)
-			if err := conn.ReadAndServe(c.db); err != nil {
-				log.Debug().Err(err.Unwrap()).Msg("Error received")
-			}
-			atomic.AddUint32(&c.peers, ^uint32(0))
-		}()
+		c.peersMutex.Lock()
+		if _, ok := c.peersMap[n]; !ok {
+			c.peersMap[n] = struct{}{}
+			go func() {
+				atomic.AddUint32(&c.peers, 1)
+				if err := conn.ReadAndServe(c.db); err != nil {
+					log.Debug().Err(err.Unwrap()).Msg("Error received")
+				}
+				atomic.AddUint32(&c.peers, ^uint32(0))
+
+				conn.Close()
+				c.peersMutex.Lock()
+				delete(c.peersMap, n)
+				c.peersMutex.Unlock()
+			}()
+		}
+		c.peersMutex.Unlock()
 	} else {
 		conn.Close()
 	}
