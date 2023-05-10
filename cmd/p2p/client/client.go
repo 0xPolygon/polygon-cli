@@ -18,7 +18,6 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package client
 
 import (
-	"net"
 	"net/http"
 	"time"
 
@@ -37,12 +36,10 @@ import (
 type (
 	clientParams struct {
 		Bootnodes string
-		Timeout   string
 		Threads   int
 		NetworkID int
 		NodesFile string
 		Database  string
-		IsCrawler bool
 		ProjectID string
 		SensorID  string
 	}
@@ -57,8 +54,7 @@ var ClientCmd = &cobra.Command{
 	Use:   "client [nodes file]",
 	Short: "devp2p client that does peer discovery and block/transaction propagation.",
 	Long: `Starts a devp2p client that discovers other peers and will receive blocks and
-transactions. If only peer discovery is wanted, set the --crawl and the --timeout
-flags. If no nodes.json file exists, run echo "{}" >> nodes.json to get started.`,
+transactions. If no nodes.json file exists, run echo "{}" >> nodes.json to get started.`,
 	Args: cobra.MinimumNArgs(1),
 	PreRun: func(cmd *cobra.Command, args []string) {
 		inputClientParams.NodesFile = args[0]
@@ -88,7 +84,7 @@ flags. If no nodes.json file exists, run echo "{}" >> nodes.json to get started.
 		}
 
 		ln := enode.NewLocalNode(db, cfg.PrivateKey)
-		socket, err := listen(ln)
+		socket, err := p2p.Listen(ln)
 		if err != nil {
 			return err
 		}
@@ -102,15 +98,10 @@ flags. If no nodes.json file exists, run echo "{}" >> nodes.json to get started.
 		c := newClient(inputSet, disc, disc.RandomNodes())
 		c.revalidateInterval = 10 * time.Minute
 
-		timeout, err := time.ParseDuration(inputClientParams.Timeout)
-		if err != nil {
-			return err
-		}
-
 		log.Info().Msg("Starting client")
 
-		output := c.run(timeout, inputClientParams.Threads)
-		return p2p.WriteNodesJSON(inputClientParams.NodesFile, output)
+		c.run(inputClientParams.Threads)
+		return nil
 	},
 }
 
@@ -119,37 +110,12 @@ func init() {
 	if err := ClientCmd.MarkPersistentFlagRequired("bootnodes"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark bootnodes as required persistent flag")
 	}
-	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.Timeout, "timeout", "t", "0", "Time limit for node discovery.")
 	ClientCmd.PersistentFlags().IntVarP(&inputClientParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt.")
 	ClientCmd.PersistentFlags().IntVarP(&inputClientParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id.")
 	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.Database, "database", "d", "", "Node database for updating and storing client information.")
-	ClientCmd.PersistentFlags().BoolVarP(&inputClientParams.IsCrawler, "crawl", "c", false, "Run the client in crawl only mode.")
 	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.ProjectID, "project-id", "P", "devtools-sandbox", "GCP project id.")
 	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.SensorID, "sensor-id", "s", "", "Sensor id.")
 	if err := ClientCmd.MarkPersistentFlagRequired("sensor-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")
 	}
-}
-
-func listen(ln *enode.LocalNode) (*net.UDPConn, error) {
-	addr := "0.0.0.0:0"
-
-	socket, err := net.ListenPacket("udp4", addr)
-	if err != nil {
-		return nil, err
-	}
-
-	// Configure UDP endpoint in ENR from listener address.
-	usocket := socket.(*net.UDPConn)
-	uaddr := socket.LocalAddr().(*net.UDPAddr)
-
-	if uaddr.IP.IsUnspecified() {
-		ln.SetFallbackIP(net.IP{127, 0, 0, 1})
-	} else {
-		ln.SetFallbackIP(uaddr.IP)
-	}
-
-	ln.SetFallbackUDP(uaddr.Port)
-
-	return usocket, nil
 }
