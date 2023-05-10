@@ -19,18 +19,16 @@ package client
 
 import (
 	"net/http"
+	_ "net/http/pprof"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
 	"github.com/maticnetwork/polygon-cli/p2p"
-
-	_ "net/http/pprof"
 )
 
 type (
@@ -58,7 +56,6 @@ transactions. If no nodes.json file exists, run echo "{}" >> nodes.json to get s
 	Args: cobra.MinimumNArgs(1),
 	PreRun: func(cmd *cobra.Command, args []string) {
 		inputClientParams.NodesFile = args[0]
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 		go func() {
 			log.Error().Err(http.ListenAndServe("localhost:6060", nil))
 		}()
