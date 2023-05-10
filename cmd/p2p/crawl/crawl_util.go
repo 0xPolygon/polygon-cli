@@ -186,14 +186,14 @@ func shouldSkipNode(n *enode.Node) bool {
 	}
 	defer conn.Close()
 
-	hello, message, err := conn.Peer()
+	hello, status, err := conn.Peer()
 	if err != nil {
 		log.Error().Err(err).Msg("Peer failed")
 		return true
 	}
 
-	log.Debug().Interface("hello", hello).Interface("status", message).Msg("Message received")
-	return inputCrawlParams.NetworkID != int(message.NetworkID)
+	log.Debug().Interface("hello", hello).Interface("status", status).Msg("Message received")
+	return inputCrawlParams.NetworkID != int(status.NetworkID)
 }
 
 // updateNode updates the info about the given node, and returns a status about

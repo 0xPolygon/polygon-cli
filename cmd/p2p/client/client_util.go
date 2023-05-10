@@ -37,16 +37,13 @@ type client struct {
 	iters     []enode.Iterator
 	inputIter enode.Iterator
 	ch        chan *enode.Node
-	closed    chan struct{}
 	db        *datastore.Client
-
-	peers      uint32
-	peersMap   map[*enode.Node]struct{}
-	peersMutex sync.RWMutex
+	peers     map[*enode.Node]struct{}
 
 	// settings
 	revalidateInterval time.Duration
-	mu                 sync.RWMutex
+	outputMutex        sync.RWMutex
+	peersMutex         sync.RWMutex
 }
 
 const (
@@ -74,9 +71,8 @@ func newClient(input p2p.NodeSet, disc *discover.UDPv4, iters ...enode.Iterator)
 		iters:     iters,
 		inputIter: enode.IterNodes(input.Nodes()),
 		ch:        make(chan *enode.Node),
-		closed:    make(chan struct{}),
 		db:        db,
-		peersMap:  make(map[*enode.Node]struct{}),
+		peers:     make(map[*enode.Node]struct{}),
 	}
 	c.iters = append(c.iters, c.inputIter)
 	// Copy input to output initially. Any nodes that fail validation
@@ -91,14 +87,12 @@ func (c *client) run(nthreads int) {
 	statusTicker := time.NewTicker(time.Second * 8)
 	defer statusTicker.Stop()
 
-	doneCh := make(chan enode.Iterator, len(c.iters))
-
 	if nthreads < 1 {
 		nthreads = 1
 	}
 
 	for _, it := range c.iters {
-		go c.runIterator(doneCh, it)
+		go c.runIterator(it)
 	}
 
 	var (
@@ -107,13 +101,10 @@ func (c *client) run(nthreads int) {
 		skipped uint64
 		recent  uint64
 		removed uint64
-		wg      sync.WaitGroup
 	)
 
-	wg.Add(nthreads)
 	for i := 0; i < nthreads; i++ {
 		go func() {
-			defer wg.Done()
 			for {
 				select {
 				case n := <-c.ch:
@@ -129,8 +120,6 @@ func (c *client) run(nthreads int) {
 					default:
 						atomic.AddUint64(&updated, 1)
 					}
-				case <-c.closed:
-					return
 				}
 			}
 		}()
@@ -139,40 +128,34 @@ func (c *client) run(nthreads int) {
 	for {
 		select {
 		case <-statusTicker.C:
+			c.peersMutex.RLock()
 			log.Info().
 				Uint64("added", atomic.LoadUint64(&added)).
 				Uint64("updated", atomic.LoadUint64(&updated)).
 				Uint64("removed", atomic.LoadUint64(&removed)).
 				Uint64("ignored(recent)", atomic.LoadUint64(&removed)).
 				Uint64("ignored(incompatible)", atomic.LoadUint64(&skipped)).
-				Uint32("peers", atomic.LoadUint32(&c.peers)).
+				Int("peers", len(c.peers)).
 				Msg("Discovery in progress")
+			c.peersMutex.RUnlock()
 		}
 	}
 }
 
-func (c *client) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
-	defer func() { done <- it }()
+func (c *client) runIterator(it enode.Iterator) {
 	for it.Next() {
 		select {
 		case c.ch <- it.Node():
-		case <-c.closed:
-			return
 		}
 	}
 }
 
-// shouldSkipNode filters out nodes by their network id. If there is a status
-// message, skip nodes that don't have the correct network id. Otherwise, skip
-// nodes that are unable to peer. If a peer is not being skipped and the client
-// is not in crawler mode, then a goroutine will be spawned and read messages
-// from the new peer.
-func (c *client) shouldSkipNode(n *enode.Node) bool {
-	// Exit early since crawling doesn't need to dial and peer.
-	if inputClientParams.NetworkID <= 0 {
-		return false
-	}
-
+// peerNode peers with nodes with matching network IDs.
+//
+// Nodes will exchange hello and status messages to determine the network ID.
+// If the network IDs match then a connection will be opened with the node to
+// receive blocks and transactions.
+func (c *client) peerNode(n *enode.Node) bool {
 	conn, err := p2p.Dial(n)
 	if err != nil {
 		log.Debug().Err(err).Msg("Dial failed")
@@ -180,36 +163,35 @@ func (c *client) shouldSkipNode(n *enode.Node) bool {
 	}
 	conn.Sensor = inputClientParams.SensorID
 
-	hello, message, err := conn.Peer()
+	hello, status, err := conn.Peer()
 	if err != nil {
 		log.Debug().Err(err).Msg("Peer failed")
 		conn.Close()
 		return true
 	}
 
-	log.Debug().Interface("hello", hello).Interface("status", message).Msg("Peering messages received")
+	log.Debug().Interface("hello", hello).Interface("status", status).Msg("Peering messages received")
 
-	skip := inputClientParams.NetworkID != int(message.NetworkID)
+	skip := inputClientParams.NetworkID != int(status.NetworkID)
 	if !skip {
 		c.peersMutex.Lock()
-		if _, ok := c.peersMap[n]; !ok {
-			c.peersMap[n] = struct{}{}
+		defer c.peersMutex.Unlock()
+
+		// Don't open duplicate connections.
+		if _, ok := c.peers[n]; !ok {
+			c.peers[n] = struct{}{}
+
 			go func() {
-				atomic.AddUint32(&c.peers, 1)
+				defer conn.Close()
 				if err := conn.ReadAndServe(c.db); err != nil {
 					log.Debug().Err(err.Unwrap()).Msg("Error received")
 				}
-				atomic.AddUint32(&c.peers, ^uint32(0))
 
-				conn.Close()
 				c.peersMutex.Lock()
-				delete(c.peersMap, n)
-				c.peersMutex.Unlock()
+				defer c.peersMutex.Unlock()
+				delete(c.peers, n)
 			}()
 		}
-		c.peersMutex.Unlock()
-	} else {
-		conn.Close()
 	}
 
 	return skip
@@ -218,9 +200,9 @@ func (c *client) shouldSkipNode(n *enode.Node) bool {
 // updateNode updates the info about the given node, and returns a status about
 // what changed.
 func (c *client) updateNode(n *enode.Node) int {
-	c.mu.RLock()
+	c.outputMutex.RLock()
 	node, ok := c.output[n.ID()]
-	c.mu.RUnlock()
+	c.outputMutex.RUnlock()
 
 	// Skip validation of recently-seen nodes.
 	if ok && time.Since(node.LastCheck) < c.revalidateInterval {
@@ -228,8 +210,8 @@ func (c *client) updateNode(n *enode.Node) int {
 		return nodeSkipRecent
 	}
 
-	// Filter out incompatible nodes.
-	if c.shouldSkipNode(n) {
+	// Skip the node if unable to peer.
+	if c.peerNode(n) {
 		return nodeSkipIncompat
 	}
 
@@ -256,8 +238,8 @@ func (c *client) updateNode(n *enode.Node) int {
 	}
 
 	// Store/update node in output set.
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.outputMutex.Lock()
+	defer c.outputMutex.Unlock()
 
 	if node.Score <= 0 {
 		log.Debug().Str("node", n.String()).Msg("Removing node")

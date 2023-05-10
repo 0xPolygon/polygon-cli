@@ -182,7 +182,7 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 	done := make(chan struct{})
 
 	counter := MessageCounter{}
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(8 * time.Second)
 	go func() {
 		for {
 			select {
@@ -325,9 +325,9 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 				counter.Transactions += len(msg.PooledTransactionsPacket)
 				transactionsChan <- msg.PooledTransactionsPacket
 			case *NewPooledTransactionHashes:
-				c.processNewPooledTransactions(ctx, client, &counter, msg.Hashes)
+				c.processNewPooledTransactionHashes(ctx, client, &counter, msg.Hashes)
 			case *NewPooledTransactionHashes66:
-				c.processNewPooledTransactions(ctx, client, &counter, *msg)
+				c.processNewPooledTransactionHashes(ctx, client, &counter, *msg)
 			case *GetPooledTransactions:
 				c.logger.Info().Interface("msg", msg).Msg("Received GetPooledTransactions request")
 				res := &PooledTransactions{
@@ -356,7 +356,7 @@ func (c *Conn) ReadAndServe(client *datastore.Client) *Error {
 	}
 }
 
-func (c *Conn) processNewPooledTransactions(ctx context.Context, client *datastore.Client, counter *MessageCounter, hashes []common.Hash) {
+func (c *Conn) processNewPooledTransactionHashes(ctx context.Context, client *datastore.Client, counter *MessageCounter, hashes []common.Hash) {
 	counter.TransactionHashes += len(hashes)
 	req := &GetPooledTransactions{
 		RequestId:                   0,

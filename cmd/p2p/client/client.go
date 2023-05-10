@@ -18,8 +18,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package client
 
 import (
-	"net/http"
-	_ "net/http/pprof"
+	"errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -54,11 +53,12 @@ var ClientCmd = &cobra.Command{
 	Long: `Starts a devp2p client that discovers other peers and will receive blocks and
 transactions. If no nodes.json file exists, run echo "{}" >> nodes.json to get started.`,
 	Args: cobra.MinimumNArgs(1),
-	PreRun: func(cmd *cobra.Command, args []string) {
+	PreRunE: func(cmd *cobra.Command, args []string) error {
 		inputClientParams.NodesFile = args[0]
-		go func() {
-			log.Error().Err(http.ListenAndServe("localhost:6060", nil))
-		}()
+		if inputClientParams.NetworkID <= 0 {
+			return errors.New("network ID must be greater than zero")
+		}
+		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		inputSet, err := p2p.LoadNodesJSON(inputClientParams.NodesFile)
@@ -108,10 +108,13 @@ func init() {
 		log.Error().Err(err).Msg("Failed to mark bootnodes as required persistent flag")
 	}
 	ClientCmd.PersistentFlags().IntVarP(&inputClientParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt.")
-	ClientCmd.PersistentFlags().IntVarP(&inputClientParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id.")
+	ClientCmd.PersistentFlags().IntVarP(&inputClientParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network ID.")
+	if err := ClientCmd.MarkPersistentFlagRequired("network-id"); err != nil {
+		log.Error().Err(err).Msg("Failed to mark network-id as required persistent flag")
+	}
 	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.Database, "database", "d", "", "Node database for updating and storing client information.")
-	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.ProjectID, "project-id", "P", "devtools-sandbox", "GCP project id.")
-	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.SensorID, "sensor-id", "s", "", "Sensor id.")
+	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.ProjectID, "project-id", "P", "devtools-sandbox", "GCP project ID.")
+	ClientCmd.PersistentFlags().StringVarP(&inputClientParams.SensorID, "sensor-id", "s", "", "Sensor ID.")
 	if err := ClientCmd.MarkPersistentFlagRequired("sensor-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")
 	}
