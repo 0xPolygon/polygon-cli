@@ -1458,7 +1458,7 @@ func loadtestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uin
 		SpecVersion:        rv.SpecVersion,
 		Tip:                gstypes.NewUCompactFromUInt(0),
 		TransactionVersion: rv.TransactionVersion,
-		AppID:              gstypes.NewUCompactFromUInt(uint64(*ltp.AvailAppID)),
+		//AppID:              gstypes.NewUCompactFromUInt(uint64(*ltp.AvailAppID)),
 	}
 
 	err = ext.Sign(kp, o)
@@ -1501,7 +1501,7 @@ func loadtestAvailStore(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64
 		SpecVersion:        rv.SpecVersion,
 		Tip:                gstypes.NewUCompactFromUInt(100),
 		TransactionVersion: rv.TransactionVersion,
-		AppID:              gstypes.NewUCompactFromUInt(uint64(*ltp.AvailAppID)),
+		//AppID:              gstypes.NewUCompactFromUInt(uint64(*ltp.AvailAppID)),
 	}
 	// Sign the transaction using Alice's default account
 	err = ext.Sign(kp, o)
