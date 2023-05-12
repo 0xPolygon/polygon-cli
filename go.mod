@@ -1,6 +1,6 @@
 module github.com/maticnetwork/polygon-cli
 
-go 1.18
+go 1.19
 
 require (
 	github.com/0xPolygon/polygon-edge v0.8.0
