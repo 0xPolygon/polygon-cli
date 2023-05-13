@@ -14,31 +14,31 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-package client
+package sensor
 
 import (
-	"context"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"cloud.google.com/go/datastore"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
 
 	"github.com/maticnetwork/polygon-cli/p2p"
+	"github.com/maticnetwork/polygon-cli/p2p/database"
 )
 
-type client struct {
+type sensor struct {
 	input     p2p.NodeSet
 	output    p2p.NodeSet
 	disc      *discover.UDPv4
 	iters     []enode.Iterator
 	inputIter enode.Iterator
-	ch        chan *enode.Node
-	db        *datastore.Client
-	peers     map[*enode.Node]struct{}
+	nodeCh    chan *enode.Node
+	db        database.Database
+	peers     map[string]struct{}
+	count     *p2p.MessageCount
 
 	// settings
 	revalidateInterval time.Duration
@@ -58,41 +58,40 @@ type resolver interface {
 	RequestENR(*enode.Node) (*enode.Node, error)
 }
 
-func newClient(input p2p.NodeSet, disc *discover.UDPv4, iters ...enode.Iterator) *client {
-	db, err := datastore.NewClient(context.Background(), inputClientParams.ProjectID)
-	if err != nil {
-		log.Error().Err(err).Msg("Could not connect to Datastore")
-	}
-
-	c := &client{
+// newSensor creates the new sensor and establishes the connection. If you want
+// to change the database, this is where you should do it.
+func newSensor(input p2p.NodeSet, disc *discover.UDPv4, iters ...enode.Iterator) *sensor {
+	s := &sensor{
 		input:     input,
 		output:    make(p2p.NodeSet, len(input)),
 		disc:      disc,
 		iters:     iters,
 		inputIter: enode.IterNodes(input.Nodes()),
-		ch:        make(chan *enode.Node),
-		db:        db,
-		peers:     make(map[*enode.Node]struct{}),
+		nodeCh:    make(chan *enode.Node),
+		db:        database.NewDatastore(inputSensorParams.ProjectID, inputSensorParams.SensorID),
+		peers:     make(map[string]struct{}),
+		count:     &p2p.MessageCount{},
 	}
-	c.iters = append(c.iters, c.inputIter)
+	s.iters = append(s.iters, s.inputIter)
 	// Copy input to output initially. Any nodes that fail validation
 	// will be dropped from output during the run.
 	for id, n := range input {
-		c.output[id] = n
+		s.output[id] = n
 	}
-	return c
+	return s
 }
 
-func (c *client) run(nthreads int) {
+// run will start nthreads number of goroutines for discovery and a goroutine
+// for logging.
+func (s *sensor) run(nthreads int) {
 	statusTicker := time.NewTicker(time.Second * 8)
-	defer statusTicker.Stop()
 
 	if nthreads < 1 {
 		nthreads = 1
 	}
 
-	for _, it := range c.iters {
-		go c.runIterator(it)
+	for _, it := range s.iters {
+		go s.runIterator(it)
 	}
 
 	var (
@@ -103,65 +102,61 @@ func (c *client) run(nthreads int) {
 		removed uint64
 	)
 
+	// This will start the goroutines responsible for discovery.
 	for i := 0; i < nthreads; i++ {
 		go func() {
 			for {
-				select {
-				case n := <-c.ch:
-					switch c.updateNode(n) {
-					case nodeSkipIncompat:
-						atomic.AddUint64(&skipped, 1)
-					case nodeSkipRecent:
-						atomic.AddUint64(&recent, 1)
-					case nodeRemoved:
-						atomic.AddUint64(&removed, 1)
-					case nodeAdded:
-						atomic.AddUint64(&added, 1)
-					default:
-						atomic.AddUint64(&updated, 1)
-					}
+				switch s.updateNode(<-s.nodeCh) {
+				case nodeSkipIncompat:
+					atomic.AddUint64(&skipped, 1)
+				case nodeSkipRecent:
+					atomic.AddUint64(&recent, 1)
+				case nodeRemoved:
+					atomic.AddUint64(&removed, 1)
+				case nodeAdded:
+					atomic.AddUint64(&added, 1)
+				default:
+					atomic.AddUint64(&updated, 1)
 				}
 			}
 		}()
 	}
 
+	// Start logging message counts and peer status.
+	go p2p.LogMessageCount(s.count, time.NewTicker(time.Second))
+
 	for {
-		select {
-		case <-statusTicker.C:
-			c.peersMutex.RLock()
-			log.Info().
-				Uint64("added", atomic.LoadUint64(&added)).
-				Uint64("updated", atomic.LoadUint64(&updated)).
-				Uint64("removed", atomic.LoadUint64(&removed)).
-				Uint64("ignored(recent)", atomic.LoadUint64(&removed)).
-				Uint64("ignored(incompatible)", atomic.LoadUint64(&skipped)).
-				Int("peers", len(c.peers)).
-				Msg("Discovery in progress")
-			c.peersMutex.RUnlock()
-		}
+		<-statusTicker.C
+		s.peersMutex.RLock()
+		log.Info().
+			Uint64("added", atomic.LoadUint64(&added)).
+			Uint64("updated", atomic.LoadUint64(&updated)).
+			Uint64("removed", atomic.LoadUint64(&removed)).
+			Uint64("ignored(recent)", atomic.LoadUint64(&removed)).
+			Uint64("ignored(incompatible)", atomic.LoadUint64(&skipped)).
+			Int("peers", len(s.peers)).
+			Msg("Discovery in progress")
+		s.peersMutex.RUnlock()
 	}
 }
 
-func (c *client) runIterator(it enode.Iterator) {
+func (s *sensor) runIterator(it enode.Iterator) {
 	for it.Next() {
-		select {
-		case c.ch <- it.Node():
-		}
+		s.nodeCh <- it.Node()
 	}
 }
 
-// peerNode peers with nodes with matching network IDs.
-//
-// Nodes will exchange hello and status messages to determine the network ID.
-// If the network IDs match then a connection will be opened with the node to
-// receive blocks and transactions.
-func (c *client) peerNode(n *enode.Node) bool {
+// peerNode peers with nodes with matching network IDs. Nodes will exchange
+// hello and status messages to determine the network ID. If the network IDs
+// match then a connection will be opened with the node to receive blocks and
+// transactions.
+func (s *sensor) peerNode(n *enode.Node) bool {
 	conn, err := p2p.Dial(n)
 	if err != nil {
 		log.Debug().Err(err).Msg("Dial failed")
 		return true
 	}
-	conn.Sensor = inputClientParams.SensorID
+	conn.SensorID = inputSensorParams.SensorID
 
 	hello, status, err := conn.Peer()
 	if err != nil {
@@ -172,24 +167,27 @@ func (c *client) peerNode(n *enode.Node) bool {
 
 	log.Debug().Interface("hello", hello).Interface("status", status).Msg("Peering messages received")
 
-	skip := inputClientParams.NetworkID != int(status.NetworkID)
+	skip := inputSensorParams.NetworkID != int(status.NetworkID)
 	if !skip {
-		c.peersMutex.Lock()
-		defer c.peersMutex.Unlock()
+		s.peersMutex.Lock()
+		defer s.peersMutex.Unlock()
 
-		// Don't open duplicate connections.
-		if _, ok := c.peers[n]; !ok {
-			c.peers[n] = struct{}{}
+		// Don't open duplicate connections with peers. The enode is used here
+		// rather than the enr because the enr can change. Ensure the maximum
+		// number of peers is not exceeded to prevent memory overuse.
+		peer := n.URLv4()
+		if _, ok := s.peers[peer]; !ok && len(s.peers) < inputSensorParams.MaxPeers {
+			s.peers[peer] = struct{}{}
 
 			go func() {
 				defer conn.Close()
-				if err := conn.ReadAndServe(c.db); err != nil {
-					log.Debug().Err(err.Unwrap()).Msg("Error received")
+				if err := conn.ReadAndServe(s.db, s.count); err != nil {
+					log.Debug().Err(err).Msg("Received error")
 				}
 
-				c.peersMutex.Lock()
-				defer c.peersMutex.Unlock()
-				delete(c.peers, n)
+				s.peersMutex.Lock()
+				defer s.peersMutex.Unlock()
+				delete(s.peers, peer)
 			}()
 		}
 	}
@@ -198,20 +196,21 @@ func (c *client) peerNode(n *enode.Node) bool {
 }
 
 // updateNode updates the info about the given node, and returns a status about
-// what changed.
-func (c *client) updateNode(n *enode.Node) int {
-	c.outputMutex.RLock()
-	node, ok := c.output[n.ID()]
-	c.outputMutex.RUnlock()
+// what changed. If the node is compatible, then it will peer with the node and
+// start receiving block and transaction data.
+func (s *sensor) updateNode(n *enode.Node) int {
+	s.outputMutex.RLock()
+	node, ok := s.output[n.ID()]
+	s.outputMutex.RUnlock()
 
 	// Skip validation of recently-seen nodes.
-	if ok && time.Since(node.LastCheck) < c.revalidateInterval {
+	if ok && time.Since(node.LastCheck) < s.revalidateInterval {
 		log.Debug().Str("node", n.String()).Msg("Skipping node")
 		return nodeSkipRecent
 	}
 
 	// Skip the node if unable to peer.
-	if c.peerNode(n) {
+	if s.peerNode(n) {
 		return nodeSkipIncompat
 	}
 
@@ -219,7 +218,7 @@ func (c *client) updateNode(n *enode.Node) int {
 	status := nodeUpdated
 	node.LastCheck = truncNow()
 
-	if nn, err := c.disc.RequestENR(n); err != nil {
+	if nn, err := s.disc.RequestENR(n); err != nil {
 		if node.Score == 0 {
 			// Node doesn't implement EIP-868.
 			log.Debug().Str("node", n.String()).Msg("Skipping node")
@@ -238,19 +237,20 @@ func (c *client) updateNode(n *enode.Node) int {
 	}
 
 	// Store/update node in output set.
-	c.outputMutex.Lock()
-	defer c.outputMutex.Unlock()
+	s.outputMutex.Lock()
+	defer s.outputMutex.Unlock()
 
 	if node.Score <= 0 {
 		log.Debug().Str("node", n.String()).Msg("Removing node")
-		delete(c.output, n.ID())
+		delete(s.output, n.ID())
 		return nodeRemoved
 	}
 
 	log.Debug().Str("node", n.String()).Uint64("seq", n.Seq()).Int("score", node.Score).Msg("Updating node")
-	c.output[n.ID()] = node
+	s.output[n.ID()] = node
 
-	if err := p2p.WriteNodesJSON(inputClientParams.NodesFile, c.output); err != nil {
+	// Update the nodes file at the end of each iteration.
+	if err := p2p.WriteNodesJSON(inputSensorParams.NodesFile, s.output); err != nil {
 		log.Error().Err(err).Msg("Failed to write nodes json")
 	}
 

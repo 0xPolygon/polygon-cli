@@ -4,9 +4,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
-	"github.com/maticnetwork/polygon-cli/cmd/p2p/client"
 	"github.com/maticnetwork/polygon-cli/cmd/p2p/crawl"
 	"github.com/maticnetwork/polygon-cli/cmd/p2p/ping"
+	"github.com/maticnetwork/polygon-cli/cmd/p2p/sensor"
 )
 
 var verbosity int
@@ -22,7 +22,7 @@ var P2pCmd = &cobra.Command{
 func init() {
 	P2pCmd.PersistentFlags().IntVarP(&verbosity, "verbosity", "v", 400, "0 - Silent\n100 Fatal\n200 Error\n300 Warning\n400 Info\n500 Debug\n600 Trace")
 
-	P2pCmd.AddCommand(client.ClientCmd)
+	P2pCmd.AddCommand(sensor.SensorCmd)
 	P2pCmd.AddCommand(crawl.CrawlCmd)
 	P2pCmd.AddCommand(ping.PingCmd)
 }

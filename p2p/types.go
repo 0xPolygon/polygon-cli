@@ -165,7 +165,7 @@ func (msg PooledTransactions) ReqID() uint64 { return msg.RequestId }
 // Conn represents an individual connection with a peer
 type Conn struct {
 	*rlpx.Conn
-	Sensor string
+	SensorID string
 
 	ourKey *ecdsa.PrivateKey
 	caps   []p2p.Cap
@@ -189,8 +189,8 @@ func (c *Conn) Read() Message {
 	case (Pong{}).Code():
 		msg = new(Pong)
 	case (Disconnect{}).Code():
-		// Because disconnects have different formats, check the multiple one first
-		// then try the other.
+		// Because disconnects have different formats, check the slice of
+		// disconnects first then try the other.
 		msg = new(Disconnects)
 		if err := rlp.DecodeBytes(rawData, msg); err != nil {
 			msg = new(Disconnect)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
@@ -18,6 +19,7 @@ type (
 		OutputFile string
 		NodesFile  string
 		Listen     bool
+		Verbosity  int
 	}
 	pingNodeJSON struct {
 		Record *enode.Node `json:"record"`
@@ -62,6 +64,10 @@ other messages the peer sends (e.g. blocks, transactions, etc.).`,
 
 		wg.Add(len(nodes))
 		sem := make(chan bool, inputPingParams.Threads)
+
+		count := &p2p.MessageCount{}
+		go p2p.LogMessageCount(count, time.NewTicker(time.Second))
+
 		// Ping each node in the slice.
 		for _, n := range nodes {
 			sem <- true
@@ -93,8 +99,8 @@ other messages the peer sends (e.g. blocks, transactions, etc.).`,
 					errStr = err.Error()
 				} else if inputPingParams.Listen {
 					// If the dial and peering were successful, listen to the peer for messages.
-					if err := conn.ReadAndServe(nil); err != nil {
-						log.Error().Err(err.Unwrap()).Msg("Error received")
+					if err := conn.ReadAndServe(nil, count); err != nil {
+						log.Error().Err(err).Msg("Received error")
 					}
 				}
 
