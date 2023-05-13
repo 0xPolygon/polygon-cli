@@ -218,7 +218,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 					if db != nil && len(msg.BlockBodiesPacket) > 0 {
 						dbCh <- struct{}{}
 						go func() {
-							go db.WriteBlockBody(msg.BlockBodiesPacket[0], hash)
+							db.WriteBlockBody(msg.BlockBodiesPacket[0], hash)
 							<-dbCh
 						}()
 					}
@@ -282,7 +282,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				if db != nil {
 					dbCh <- struct{}{}
 					go func() {
-						go db.WriteBlock(c.node, msg.Block)
+						db.WriteBlock(c.node, msg.Block)
 						<-dbCh
 					}()
 				}
@@ -293,7 +293,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				if db != nil {
 					dbCh <- struct{}{}
 					go func() {
-						go db.WriteTransactions(c.node, *msg)
+						db.WriteTransactions(c.node, *msg)
 						<-dbCh
 					}()
 				}
@@ -304,7 +304,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				if db != nil {
 					dbCh <- struct{}{}
 					go func() {
-						go db.WriteTransactions(c.node, msg.PooledTransactionsPacket)
+						db.WriteTransactions(c.node, msg.PooledTransactionsPacket)
 						<-dbCh
 					}()
 				}
