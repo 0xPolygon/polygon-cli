@@ -209,6 +209,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				}
 				if err := c.Write(res); err != nil {
 					c.logger.Error().Err(err).Msg("Failed to write BlockHeaders response")
+					return err
 				}
 			case *BlockBodies:
 				atomic.AddInt32(&count.BlockBodies, int32(len(msg.BlockBodiesPacket)))
@@ -250,8 +251,10 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 							Amount: 1,
 						},
 					}
+
 					if err := c.Write(headersRequest); err != nil {
 						c.logger.Error().Err(err).Msg("Failed to write GetBlockHeaders request")
+						return err
 					}
 
 					requestNum++
@@ -265,6 +268,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 					}
 					if err := c.Write(bodiesRequest); err != nil {
 						c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
+						return err
 					}
 				}
 
@@ -309,9 +313,13 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 					}()
 				}
 			case *NewPooledTransactionHashes:
-				c.processNewPooledTransactionHashes(count, msg.Hashes)
+				if err := c.processNewPooledTransactionHashes(count, msg.Hashes); err != nil {
+					return err
+				}
 			case *NewPooledTransactionHashes66:
-				c.processNewPooledTransactionHashes(count, *msg)
+				if err := c.processNewPooledTransactionHashes(count, *msg); err != nil {
+					return err
+				}
 			case *GetPooledTransactions:
 				atomic.AddInt32(&count.TransactionRequests, int32(len(msg.GetPooledTransactionsPacket)))
 				c.logger.Trace().Msgf("Received %v GetPooledTransactions request", len(msg.GetPooledTransactionsPacket))
@@ -344,7 +352,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 
 // processNewPooledTransactionHashes processes NewPooledTransactionHashes
 // messages by requesting the transaction bodies.
-func (c *Conn) processNewPooledTransactionHashes(count *MessageCount, hashes []common.Hash) {
+func (c *Conn) processNewPooledTransactionHashes(count *MessageCount, hashes []common.Hash) error {
 	atomic.AddInt32(&count.TransactionHashes, int32(len(hashes)))
 	c.logger.Trace().Msgf("Received %v NewPooledTransactionHashes", len(hashes))
 
@@ -354,5 +362,8 @@ func (c *Conn) processNewPooledTransactionHashes(count *MessageCount, hashes []c
 	}
 	if err := c.Write(req); err != nil {
 		c.logger.Error().Err(err).Msg("Failed to write GetPooledTransactions request")
+		return err
 	}
+
+	return nil
 }
