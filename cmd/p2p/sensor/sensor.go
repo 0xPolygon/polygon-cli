@@ -64,7 +64,9 @@ transactions. If no nodes.json file exists, run echo "{}" >> nodes.json to get s
 			return errors.New("network ID must be greater than zero")
 		}
 		go func() {
-			http.ListenAndServe("localhost:6060", nil)
+			if err := http.ListenAndServe("localhost:6060", nil); err != nil {
+				log.Error().Err(err).Msg("Failed to start pprof")
+			}
 		}()
 
 		return nil

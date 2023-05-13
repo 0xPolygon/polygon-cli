@@ -21,7 +21,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
 
@@ -32,7 +31,7 @@ import (
 type sensor struct {
 	input     p2p.NodeSet
 	output    p2p.NodeSet
-	disc      *discover.UDPv4
+	disc      resolver
 	iters     []enode.Iterator
 	inputIter enode.Iterator
 	nodeCh    chan *enode.Node
@@ -60,7 +59,7 @@ type resolver interface {
 
 // newSensor creates the new sensor and establishes the connection. If you want
 // to change the database, this is where you should do it.
-func newSensor(input p2p.NodeSet, disc *discover.UDPv4, iters ...enode.Iterator) *sensor {
+func newSensor(input p2p.NodeSet, disc resolver, iters ...enode.Iterator) *sensor {
 	s := &sensor{
 		input:     input,
 		output:    make(p2p.NodeSet, len(input)),
