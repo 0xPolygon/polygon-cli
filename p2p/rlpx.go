@@ -36,7 +36,8 @@ import (
 )
 
 const (
-	maxNumRequests = 1000
+	maxRequests   = 100
+	maxGoroutines = 100
 )
 
 var (
@@ -167,6 +168,8 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 	requests := make(map[uint64]common.Hash)
 	var requestNum uint64 = 0
 
+	dbCh := make(chan struct{}, 100)
+
 	for {
 		start := time.Now()
 
@@ -188,7 +191,11 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				c.logger.Trace().Msgf("Received %v BlockHeaders", len(msg.BlockHeadersPacket))
 
 				if db != nil {
-					go db.WriteBlockHeaders(msg.BlockHeadersPacket)
+					dbCh <- struct{}{}
+					go func() {
+						db.WriteBlockHeaders(msg.BlockHeadersPacket)
+						<-dbCh
+					}()
 				}
 			case *GetBlockHeaders:
 				atomic.AddInt32(&count.BlockHeaderRequests, 1)
@@ -206,7 +213,11 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 
 				if hash, ok := requests[msg.RequestId]; ok {
 					if db != nil && len(msg.BlockBodiesPacket) > 0 {
-						go db.WriteBlockBody(msg.BlockBodiesPacket[0], hash)
+						dbCh <- struct{}{}
+						go func() {
+							go db.WriteBlockBody(msg.BlockBodiesPacket[0], hash)
+							<-dbCh
+						}()
 					}
 					delete(requests, msg.RequestId)
 				}
@@ -241,7 +252,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 					}
 
 					requestNum++
-					if requestNum > maxNumRequests {
+					if requestNum > maxRequests {
 						requestNum = 0
 					}
 					requests[requestNum] = hash.Hash
@@ -255,28 +266,44 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				}
 
 				if db != nil {
-					go db.WriteBlockHashes(c.node, hashes)
+					dbCh <- struct{}{}
+					go func() {
+						db.WriteBlockHashes(c.node, hashes)
+						<-dbCh
+					}()
 				}
 			case *NewBlock:
 				atomic.AddInt32(&count.Blocks, 1)
 				c.logger.Trace().Str("hash", msg.Block.Hash().Hex()).Msg("Received NewBlock")
 
 				if db != nil {
-					go db.WriteBlock(c.node, msg.Block)
+					dbCh <- struct{}{}
+					go func() {
+						go db.WriteBlock(c.node, msg.Block)
+						<-dbCh
+					}()
 				}
 			case *Transactions:
 				atomic.AddInt32(&count.Transactions, int32(len(*msg)))
 				c.logger.Trace().Msgf("Received %v Transactions", len(*msg))
 
 				if db != nil {
-					go db.WriteTransactions(c.node, *msg)
+					dbCh <- struct{}{}
+					go func() {
+						go db.WriteTransactions(c.node, *msg)
+						<-dbCh
+					}()
 				}
 			case *PooledTransactions:
 				atomic.AddInt32(&count.Transactions, int32(len(msg.PooledTransactionsPacket)))
 				c.logger.Trace().Msgf("Received %v PooledTransactions", len(msg.PooledTransactionsPacket))
 
 				if db != nil {
-					go db.WriteTransactions(c.node, msg.PooledTransactionsPacket)
+					dbCh <- struct{}{}
+					go func() {
+						go db.WriteTransactions(c.node, msg.PooledTransactionsPacket)
+						<-dbCh
+					}()
 				}
 			case *NewPooledTransactionHashes:
 				c.processNewPooledTransactionHashes(count, msg.Hashes)
