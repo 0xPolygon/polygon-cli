@@ -173,7 +173,10 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 	// dbCh is used to limit the number of database goroutines running at one
 	// time with a buffered channel. Without this, a large influx of messages can
 	// bog down the system and leak memory.
-	dbCh := make(chan struct{}, db.MaxConcurrentWrites())
+	var dbCh chan struct{}
+	if db != nil {
+		dbCh = make(chan struct{}, db.MaxConcurrentWrites())
+	}
 
 	for {
 		start := time.Now()
