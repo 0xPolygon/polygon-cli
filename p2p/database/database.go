@@ -16,4 +16,8 @@ type Database interface {
 	WriteBlockHashes(*enode.Node, []common.Hash)
 	WriteBlockBody(*eth.BlockBody, common.Hash)
 	WriteTransactions(*enode.Node, []*types.Transaction)
+
+	MaxConcurrentWrites() int
+	ShouldWriteBlocks() bool
+	ShouldWriteTransactions() bool
 }

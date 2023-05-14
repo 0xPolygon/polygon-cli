@@ -16,9 +16,12 @@ import (
 // datastoreWrapper wraps the datastore client and stores the sensorID so
 // writing block and transaction events possible.
 type datastoreWrapper struct {
-	client   *datastore.Client
-	sensorID string
-	ctx      context.Context
+	client                  *datastore.Client
+	sensorID                string
+	ctx                     context.Context
+	maxConcurrentWrites     int
+	shouldWriteBlocks       bool
+	shouldWriteTransactions bool
 }
 
 // DatastoreEvent can represent a peer sending the sensor a transaction hash or
@@ -78,7 +81,7 @@ type DatastoreTransaction struct {
 
 // NewDatastore connects to datastore and creates the client. This should
 // only be called once unless trying to write to different databases.
-func NewDatastore(projectID string, sensorID string) Database {
+func NewDatastore(projectID string, sensorID string, maxConcurrentWrites int, shouldWriteBlocks bool, shouldWriteTransactions bool) Database {
 	client, err := datastore.NewClient(context.Background(), projectID)
 	if err != nil {
 		log.Error().Err(err).Msg("Could not connect to Datastore")
@@ -86,9 +89,12 @@ func NewDatastore(projectID string, sensorID string) Database {
 	}
 
 	return &datastoreWrapper{
-		client:   client,
-		sensorID: sensorID,
-		ctx:      context.Background(),
+		client:                  client,
+		sensorID:                sensorID,
+		ctx:                     context.Background(),
+		maxConcurrentWrites:     maxConcurrentWrites,
+		shouldWriteBlocks:       shouldWriteBlocks,
+		shouldWriteTransactions: shouldWriteTransactions,
 	}
 }
 
@@ -180,6 +186,18 @@ func (d *datastoreWrapper) WriteBlockHashes(peer *enode.Node, hashes []common.Ha
 func (d *datastoreWrapper) WriteTransactions(peer *enode.Node, txs []*types.Transaction) {
 	hashes := d.writeTransactions(txs)
 	d.writeEvents(peer, "transaction_events", hashes, "transactions")
+}
+
+func (d *datastoreWrapper) MaxConcurrentWrites() int {
+	return d.maxConcurrentWrites
+}
+
+func (d *datastoreWrapper) ShouldWriteBlocks() bool {
+	return d.shouldWriteBlocks
+}
+
+func (d *datastoreWrapper) ShouldWriteTransactions() bool {
+	return d.shouldWriteTransactions
 }
 
 // newDatastoreHeader creates a DatastoreHeader from a types.Header. Some

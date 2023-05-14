@@ -67,9 +67,15 @@ func newSensor(input p2p.NodeSet, disc resolver, iters ...enode.Iterator) *senso
 		iters:     iters,
 		inputIter: enode.IterNodes(input.Nodes()),
 		nodeCh:    make(chan *enode.Node),
-		db:        database.NewDatastore(inputSensorParams.ProjectID, inputSensorParams.SensorID),
-		peers:     make(map[string]struct{}),
-		count:     &p2p.MessageCount{},
+		db: database.NewDatastore(
+			inputSensorParams.ProjectID,
+			inputSensorParams.SensorID,
+			inputSensorParams.MaxConcurrentDatabaseWrites,
+			inputSensorParams.ShouldWriteBlocks,
+			inputSensorParams.ShouldWriteTransactions,
+		),
+		peers: make(map[string]struct{}),
+		count: &p2p.MessageCount{},
 	}
 	s.iters = append(s.iters, s.inputIter)
 	// Copy input to output initially. Any nodes that fail validation

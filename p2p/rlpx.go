@@ -17,6 +17,7 @@
 package p2p
 
 import (
+	"container/list"
 	"fmt"
 	"math/rand"
 	"net"
@@ -33,11 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/maticnetwork/polygon-cli/p2p/database"
 	"github.com/rs/zerolog/log"
-)
-
-const (
-	maxRequests   = 100
-	maxGoroutines = 100
 )
 
 var (
@@ -160,18 +156,24 @@ loop:
 	return status, nil
 }
 
+// request stores the request ID and the block's hash.
+type request struct {
+	requestID uint64
+	hash      common.Hash
+}
+
 // ReadAndServe reads messages from peers and writes it to a database.
 func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 	// requests is used to store the request ID and the block hash. This is used
 	// when fetching block bodies because the eth protocol block bodies do not
 	// contain information about the block hash.
-	requests := make(map[uint64]common.Hash)
+	requests := list.New()
 	var requestNum uint64 = 0
 
 	// dbCh is used to limit the number of database goroutines running at one
 	// time with a buffered channel. Without this, a large influx of messages can
 	// bog down the system and leak memory.
-	dbCh := make(chan struct{}, maxGoroutines)
+	dbCh := make(chan struct{}, db.MaxConcurrentWrites())
 
 	for {
 		start := time.Now()
@@ -215,15 +217,32 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				atomic.AddInt32(&count.BlockBodies, int32(len(msg.BlockBodiesPacket)))
 				c.logger.Trace().Msgf("Received %v BlockBodies", len(msg.BlockBodiesPacket))
 
-				if hash, ok := requests[msg.RequestId]; ok {
-					if db != nil && len(msg.BlockBodiesPacket) > 0 {
-						dbCh <- struct{}{}
-						go func() {
-							db.WriteBlockBody(msg.BlockBodiesPacket[0], hash)
-							<-dbCh
-						}()
+				var hash *common.Hash
+				for e := requests.Front(); e != nil; e = e.Next() {
+					r, ok := e.Value.(request)
+					if !ok {
+						log.Error().Msg("Request type assertion failed")
+						continue
 					}
-					delete(requests, msg.RequestId)
+
+					if r.requestID == msg.ReqID() {
+						hash = &r.hash
+						requests.Remove(e)
+						break
+					}
+				}
+
+				if hash == nil {
+					c.logger.Warn().Msg("No block hash found for block body")
+					break
+				}
+
+				if db != nil && len(msg.BlockBodiesPacket) > 0 && db.ShouldWriteBlocks() {
+					dbCh <- struct{}{}
+					go func() {
+						db.WriteBlockBody(msg.BlockBodiesPacket[0], *hash)
+						<-dbCh
+					}()
 				}
 			case *GetBlockBodies:
 				atomic.AddInt32(&count.BlockBodiesRequests, int32(len(msg.GetBlockBodiesPacket)))
@@ -258,10 +277,10 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 					}
 
 					requestNum++
-					if requestNum > maxRequests {
-						requestNum = 0
-					}
-					requests[requestNum] = hash.Hash
+					requests.PushBack(request{
+						requestID: requestNum,
+						hash:      hash.Hash,
+					})
 					bodiesRequest := &GetBlockBodies{
 						RequestId:            requestNum,
 						GetBlockBodiesPacket: []common.Hash{hash.Hash},
@@ -272,7 +291,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 					}
 				}
 
-				if db != nil {
+				if db != nil && db.ShouldWriteBlocks() {
 					dbCh <- struct{}{}
 					go func() {
 						db.WriteBlockHashes(c.node, hashes)
@@ -283,7 +302,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				atomic.AddInt32(&count.Blocks, 1)
 				c.logger.Trace().Str("hash", msg.Block.Hash().Hex()).Msg("Received NewBlock")
 
-				if db != nil {
+				if db != nil && db.ShouldWriteBlocks() {
 					dbCh <- struct{}{}
 					go func() {
 						db.WriteBlock(c.node, msg.Block)
@@ -294,7 +313,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				atomic.AddInt32(&count.Transactions, int32(len(*msg)))
 				c.logger.Trace().Msgf("Received %v Transactions", len(*msg))
 
-				if db != nil {
+				if db != nil && db.ShouldWriteTransactions() {
 					dbCh <- struct{}{}
 					go func() {
 						db.WriteTransactions(c.node, *msg)
@@ -305,7 +324,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				atomic.AddInt32(&count.Transactions, int32(len(msg.PooledTransactionsPacket)))
 				c.logger.Trace().Msgf("Received %v PooledTransactions", len(msg.PooledTransactionsPacket))
 
-				if db != nil {
+				if db != nil && db.ShouldWriteTransactions() {
 					dbCh <- struct{}{}
 					go func() {
 						db.WriteTransactions(c.node, msg.PooledTransactionsPacket)

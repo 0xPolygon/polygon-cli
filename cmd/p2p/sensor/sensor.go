@@ -35,14 +35,17 @@ import (
 
 type (
 	sensorParams struct {
-		Bootnodes string
-		Threads   int
-		NetworkID int
-		NodesFile string
-		Database  string
-		ProjectID string
-		SensorID  string
-		MaxPeers  int
+		Bootnodes                   string
+		Threads                     int
+		NetworkID                   int
+		NodesFile                   string
+		Database                    string
+		ProjectID                   string
+		SensorID                    string
+		MaxPeers                    int
+		MaxConcurrentDatabaseWrites int
+		ShouldWriteBlocks           bool
+		ShouldWriteTransactions     bool
 	}
 )
 
@@ -130,4 +133,7 @@ func init() {
 		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")
 	}
 	SensorCmd.PersistentFlags().IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 200, "Maximum number of peers to connect to.")
+	SensorCmd.PersistentFlags().IntVarP(&inputSensorParams.MaxConcurrentDatabaseWrites, "max-db-writes", "D", 100, "The maximum number of concurrent database writes to perform. Increasing this will result in less chance of missing data (i.e. broken pipes) but can significantly increase memory usage.")
+	SensorCmd.PersistentFlags().BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "Whether to write blocks to the database.")
+	SensorCmd.PersistentFlags().BoolVarP(&inputSensorParams.ShouldWriteTransactions, "write-txs", "t", true, "Whether to write transactions to the database. This option could significantly increase CPU and memory usage.")
 }
