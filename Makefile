@@ -79,7 +79,7 @@ vet: ## Run go vet and shadow against code.
 # https://golangci-lint.run/usage/install/#local-installation
 .PHONY: golangci-lint
 golangci-lint: ## Run golangci-lint against code.
-	golangci-lint run --fix
+	golangci-lint run --fix --timeout 5m
 
 .PHONY: lint
 lint: tidy vet golangci-lint ## Run all the linter tools against code.
