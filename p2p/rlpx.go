@@ -1,25 +1,13 @@
-// Copyright 2021 The go-ethereum Authors
-// This file is part of go-ethereum.
-//
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// go-ethereum is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
-
 package p2p
 
 import (
+	"container/list"
+	"context"
 	"fmt"
+	"math/rand"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -28,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
+	"github.com/maticnetwork/polygon-cli/p2p/database"
 	"github.com/rs/zerolog/log"
 )
 
@@ -46,7 +35,7 @@ func Dial(n *enode.Node) (*Conn, error) {
 	conn := Conn{
 		Conn:   rlpx.NewConn(fd, n.Pubkey()),
 		node:   n,
-		logger: log.With().Str("node", n.String()).Logger(),
+		logger: log.With().Str("peer", n.URLv4()).Logger(),
 	}
 
 	if conn.ourKey, err = crypto.GenerateKey(); err != nil {
@@ -151,35 +140,103 @@ loop:
 	return status, nil
 }
 
-// ReadAndServe reads messages from peers.
-func (c *Conn) ReadAndServe() *Error {
+// request stores the request ID and the block's hash.
+type request struct {
+	requestID uint64
+	hash      common.Hash
+}
+
+// ReadAndServe reads messages from peers and writes it to a database.
+func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
+	// requests is used to store the request ID and the block hash. This is used
+	// when fetching block bodies because the eth protocol block bodies do not
+	// contain information about the block hash.
+	requests := list.New()
+	var requestNum uint64 = 0
+
+	// dbCh is used to limit the number of database goroutines running at one
+	// time with a buffered channel. Without this, a large influx of messages can
+	// bog down the system and leak memory.
+	var dbCh chan struct{}
+	if db != nil {
+		dbCh = make(chan struct{}, db.MaxConcurrentWrites())
+	}
+
+	ctx := context.Background()
+
 	for {
 		start := time.Now()
+
 		for time.Since(start) < timeout {
 			if err := c.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
 				c.logger.Error().Err(err).Msg("Failed to set read deadline")
 			}
 
-			msg := c.Read()
-			switch msg := msg.(type) {
+			switch msg := c.Read().(type) {
 			case *Ping:
+				atomic.AddInt32(&count.Pings, 1)
+				c.logger.Trace().Msg("Received Ping")
+
 				if err := c.Write(&Pong{}); err != nil {
 					c.logger.Error().Err(err).Msg("Failed to write Pong response")
 				}
 			case *BlockHeaders:
-				c.logger.Info().Msgf("Received %v block headers", len(msg.BlockHeadersPacket))
+				atomic.AddInt32(&count.BlockHeaders, int32(len(msg.BlockHeadersPacket)))
+				c.logger.Trace().Msgf("Received %v BlockHeaders", len(msg.BlockHeadersPacket))
+
+				if db != nil {
+					dbCh <- struct{}{}
+					go func() {
+						db.WriteBlockHeaders(ctx, msg.BlockHeadersPacket)
+						<-dbCh
+					}()
+				}
 			case *GetBlockHeaders:
-				c.logger.Info().Interface("msg", msg).Msg("Received GetBlockHeaders request")
+				atomic.AddInt32(&count.BlockHeaderRequests, 1)
+				c.logger.Trace().Msgf("Received GetBlockHeaders request")
+
 				res := &BlockHeaders{
 					RequestId: msg.RequestId,
 				}
 				if err := c.Write(res); err != nil {
 					c.logger.Error().Err(err).Msg("Failed to write BlockHeaders response")
+					return err
 				}
 			case *BlockBodies:
-				c.logger.Info().Msgf("Received %v block bodies", len(msg.BlockBodiesPacket))
+				atomic.AddInt32(&count.BlockBodies, int32(len(msg.BlockBodiesPacket)))
+				c.logger.Trace().Msgf("Received %v BlockBodies", len(msg.BlockBodiesPacket))
+
+				var hash *common.Hash
+				for e := requests.Front(); e != nil; e = e.Next() {
+					r, ok := e.Value.(request)
+					if !ok {
+						log.Error().Msg("Request type assertion failed")
+						continue
+					}
+
+					if r.requestID == msg.ReqID() {
+						hash = &r.hash
+						requests.Remove(e)
+						break
+					}
+				}
+
+				if hash == nil {
+					c.logger.Warn().Msg("No block hash found for block body")
+					break
+				}
+
+				if db != nil && len(msg.BlockBodiesPacket) > 0 && db.ShouldWriteBlocks() {
+					dbCh <- struct{}{}
+					go func() {
+						db.WriteBlockBody(ctx, msg.BlockBodiesPacket[0], *hash)
+						<-dbCh
+					}()
+				}
 			case *GetBlockBodies:
-				c.logger.Info().Interface("msg", msg).Msg("Received GetBlockBodies request")
+				atomic.AddInt32(&count.BlockBodiesRequests, int32(len(msg.GetBlockBodiesPacket)))
+				c.logger.Trace().Msgf("Received %v GetBlockBodies request", len(msg.GetBlockBodiesPacket))
+
 				res := &BlockBodies{
 					RequestId: msg.RequestId,
 				}
@@ -187,13 +244,14 @@ func (c *Conn) ReadAndServe() *Error {
 					c.logger.Error().Err(err).Msg("Failed to write BlockBodies response")
 				}
 			case *NewBlockHashes:
-				c.logger.Info().Msgf("Received %v new block hashes", len(*msg))
+				atomic.AddInt32(&count.BlockHashes, int32(len(*msg)))
+				c.logger.Trace().Msgf("Received %v NewBlockHashes", len(*msg))
 
-				hashes := []common.Hash{}
+				hashes := make([]common.Hash, 0, len(*msg))
 				for _, hash := range *msg {
 					hashes = append(hashes, hash.Hash)
 
-					req := &GetBlockHeaders{
+					headersRequest := &GetBlockHeaders{
 						GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
 							// Providing both the hash and number will result in a `both origin
 							// hash and number` error.
@@ -201,29 +259,79 @@ func (c *Conn) ReadAndServe() *Error {
 							Amount: 1,
 						},
 					}
-					if err := c.Write(req); err != nil {
+
+					if err := c.Write(headersRequest); err != nil {
 						c.logger.Error().Err(err).Msg("Failed to write GetBlockHeaders request")
+						return err
+					}
+
+					requestNum++
+					requests.PushBack(request{
+						requestID: requestNum,
+						hash:      hash.Hash,
+					})
+					bodiesRequest := &GetBlockBodies{
+						RequestId:            requestNum,
+						GetBlockBodiesPacket: []common.Hash{hash.Hash},
+					}
+					if err := c.Write(bodiesRequest); err != nil {
+						c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
+						return err
 					}
 				}
 
-				req := &GetBlockBodies{
-					GetBlockBodiesPacket: hashes,
-				}
-				if err := c.Write(req); err != nil {
-					c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
+				if db != nil && db.ShouldWriteBlocks() {
+					dbCh <- struct{}{}
+					go func() {
+						db.WriteBlockHashes(ctx, c.node, hashes)
+						<-dbCh
+					}()
 				}
 			case *NewBlock:
-				c.logger.Info().Interface("block", msg).Msg("Received new block")
+				atomic.AddInt32(&count.Blocks, 1)
+				c.logger.Trace().Str("hash", msg.Block.Hash().Hex()).Msg("Received NewBlock")
+
+				if db != nil && db.ShouldWriteBlocks() {
+					dbCh <- struct{}{}
+					go func() {
+						db.WriteBlock(ctx, c.node, msg.Block)
+						<-dbCh
+					}()
+				}
 			case *Transactions:
-				c.logger.Info().Msgf("Received %v transactions", len(*msg))
+				atomic.AddInt32(&count.Transactions, int32(len(*msg)))
+				c.logger.Trace().Msgf("Received %v Transactions", len(*msg))
+
+				if db != nil && db.ShouldWriteTransactions() {
+					dbCh <- struct{}{}
+					go func() {
+						db.WriteTransactions(ctx, c.node, *msg)
+						<-dbCh
+					}()
+				}
 			case *PooledTransactions:
-				c.logger.Info().Msgf("Received %v pooled transactions", len(msg.PooledTransactionsPacket))
+				atomic.AddInt32(&count.Transactions, int32(len(msg.PooledTransactionsPacket)))
+				c.logger.Trace().Msgf("Received %v PooledTransactions", len(msg.PooledTransactionsPacket))
+
+				if db != nil && db.ShouldWriteTransactions() {
+					dbCh <- struct{}{}
+					go func() {
+						db.WriteTransactions(ctx, c.node, msg.PooledTransactionsPacket)
+						<-dbCh
+					}()
+				}
 			case *NewPooledTransactionHashes:
-				c.logger.Info().Msgf("Received %v new pooled transactions", len(msg.Hashes))
+				if err := c.processNewPooledTransactionHashes(count, msg.Hashes); err != nil {
+					return err
+				}
 			case *NewPooledTransactionHashes66:
-				c.logger.Info().Msgf("Received %v new pooled transactions", len(*msg))
+				if err := c.processNewPooledTransactionHashes(count, *msg); err != nil {
+					return err
+				}
 			case *GetPooledTransactions:
-				c.logger.Info().Interface("msg", msg).Msg("Received GetPooledTransactions request")
+				atomic.AddInt32(&count.TransactionRequests, int32(len(msg.GetPooledTransactionsPacket)))
+				c.logger.Trace().Msgf("Received %v GetPooledTransactions request", len(msg.GetPooledTransactionsPacket))
+
 				res := &PooledTransactions{
 					RequestId: msg.RequestId,
 				}
@@ -231,17 +339,39 @@ func (c *Conn) ReadAndServe() *Error {
 					c.logger.Error().Err(err).Msg("Failed to write PooledTransactions response")
 				}
 			case *Error:
-				c.logger.Debug().Err(msg.err).Msg("Received error")
+				atomic.AddInt32(&count.Errors, 1)
+				c.logger.Trace().Err(msg.Unwrap()).Msg("Received Error")
+
 				if !strings.Contains(msg.Error(), "timeout") {
-					return msg
+					return msg.Unwrap()
 				}
 			case *Disconnect:
+				atomic.AddInt32(&count.Disconnects, 1)
 				c.logger.Debug().Msgf("Disconnect received: %v", msg)
 			case *Disconnects:
+				atomic.AddInt32(&count.Disconnects, 1)
 				c.logger.Debug().Msgf("Disconnect received: %v", msg)
 			default:
 				c.logger.Info().Interface("msg", msg).Int("code", msg.Code()).Msg("Received message")
 			}
 		}
 	}
+}
+
+// processNewPooledTransactionHashes processes NewPooledTransactionHashes
+// messages by requesting the transaction bodies.
+func (c *Conn) processNewPooledTransactionHashes(count *MessageCount, hashes []common.Hash) error {
+	atomic.AddInt32(&count.TransactionHashes, int32(len(hashes)))
+	c.logger.Trace().Msgf("Received %v NewPooledTransactionHashes", len(hashes))
+
+	req := &GetPooledTransactions{
+		RequestId:                   rand.Uint64(),
+		GetPooledTransactionsPacket: hashes,
+	}
+	if err := c.Write(req); err != nil {
+		c.logger.Error().Err(err).Msg("Failed to write GetPooledTransactions request")
+		return err
+	}
+
+	return nil
 }

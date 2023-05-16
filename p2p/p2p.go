@@ -5,12 +5,36 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+func Listen(ln *enode.LocalNode) (*net.UDPConn, error) {
+	addr := "0.0.0.0:0"
+
+	socket, err := net.ListenPacket("udp4", addr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Configure UDP endpoint in ENR from listener address.
+	usocket := socket.(*net.UDPConn)
+	uaddr := socket.LocalAddr().(*net.UDPAddr)
+
+	if uaddr.IP.IsUnspecified() {
+		ln.SetFallbackIP(net.IP{127, 0, 0, 1})
+	} else {
+		ln.SetFallbackIP(uaddr.IP)
+	}
+
+	ln.SetFallbackUDP(uaddr.Port)
+
+	return usocket, nil
+}
 
 func decodeRecordHex(b []byte) ([]byte, bool) {
 	if bytes.HasPrefix(b, []byte("0x")) {

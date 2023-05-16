@@ -1,19 +1,3 @@
-// Copyright 2020 The go-ethereum Authors
-// This file is part of go-ethereum.
-//
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// go-ethereum is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
-
 package p2p
 
 import (
@@ -165,6 +149,8 @@ func (msg PooledTransactions) ReqID() uint64 { return msg.RequestId }
 // Conn represents an individual connection with a peer
 type Conn struct {
 	*rlpx.Conn
+	SensorID string
+
 	ourKey *ecdsa.PrivateKey
 	caps   []p2p.Cap
 	node   *enode.Node
@@ -187,8 +173,8 @@ func (c *Conn) Read() Message {
 	case (Pong{}).Code():
 		msg = new(Pong)
 	case (Disconnect{}).Code():
-		// Because disconnects have different formats, check the multiple one first
-		// then try the other.
+		// Because disconnects have different formats, check the slice of
+		// disconnects first then try the other.
 		msg = new(Disconnects)
 		if err := rlp.DecodeBytes(rawData, msg); err != nil {
 			msg = new(Disconnect)
