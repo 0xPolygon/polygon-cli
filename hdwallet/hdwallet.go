@@ -51,6 +51,7 @@ type (
 	}
 	multiAddress struct {
 		HexPublicKey       string `json:",omitempty"`
+		HexFullPublicKey   string `json:",omitempty"`
 		HexPrivateKey      string `json:",omitempty"`
 		ETHAddress         string `json:",omitempty"`
 		BTCAddress         string `json:",omitempty"`
@@ -262,6 +263,7 @@ func (p *PolyWallet) ExportRootAddress() (*PolyWalletExport, error) {
 	pwe.WIF = toWIF(rootKey)
 	pwe.BTCAddress = toBTCAddress(rootKey)
 	pwe.ETHAddress = toETHAddress(rootKey)
+	pwe.HexFullPublicKey = hex.EncodeToString(toUncompressedPubKey(rootKey))
 	addr, err := GetPublicKeyFromSeed(p.rawSeed, SignatureSecp256k1, true)
 	if err != nil {
 		return nil, err
@@ -338,6 +340,7 @@ func (p *PolyWallet) ExportHDAddresses(count int) (*PolyWalletExport, error) {
 		pae.WIF = toWIF(k)
 		pae.BTCAddress = toBTCAddress(k)
 		pae.ETHAddress = toETHAddress(k)
+		pae.HexFullPublicKey = hex.EncodeToString(toUncompressedPubKey(k))
 		pwe.Addresses = append(pwe.Addresses, pae)
 
 	}
@@ -357,14 +360,18 @@ func toWIF(prvKey *bip32.Key) string {
 }
 
 func toETHAddress(prvKey *bip32.Key) string {
-	// the GetPublicKey method returns a compressed key so we'll manually get the public key from the curve
-	curve := secp256k1.S256()
-	x1, y1 := curve.ScalarBaseMult(prvKey.Key)
-	concat := append(x1.Bytes(), y1.Bytes()...)
+	concat := toUncompressedPubKey(prvKey)
 	h := sha3.NewLegacyKeccak256()
 	h.Write(concat)
 	b := h.Sum(nil)
 	return fmt.Sprintf("0x%s", hex.EncodeToString(b[len(b)-20:]))
+}
+func toUncompressedPubKey(prvKey *bip32.Key) []byte {
+	// the GetPublicKey method returns a compressed key so we'll manually get the public key from the curve
+	curve := secp256k1.S256()
+	x1, y1 := curve.ScalarBaseMult(prvKey.Key)
+	concat := append(x1.Bytes(), y1.Bytes()...)
+	return concat
 }
 
 // https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses
