@@ -1,23 +1,7 @@
-/*
-Copyright © 2022 Polygon <engineering@polygon.technology>
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Lesser General Public License for more details.
-
-You should have received a copy of the GNU Lesser General Public License
-along with this program. If not, see <http://www.gnu.org/licenses/>.
-*/
-
 package crawl
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -31,12 +15,15 @@ import (
 
 type (
 	crawlParams struct {
-		Bootnodes string
-		Timeout   string
-		Threads   int
-		NetworkID int
-		NodesFile string
-		Database  string
+		Bootnodes            string
+		Timeout              string
+		timeout              time.Duration
+		Threads              int
+		NetworkID            uint64
+		NodesFile            string
+		Database             string
+		RevalidationInterval string
+		revalidationInterval time.Duration
 	}
 )
 
@@ -44,14 +31,29 @@ var (
 	inputCrawlParams crawlParams
 )
 
-// crawlCmd represents the crawl command
+// crawlCmd represents the crawl command. This is responsible for crawling the
+// devp2p layer and generating a nodes json file with peers.
 var CrawlCmd = &cobra.Command{
 	Use:   "crawl [nodes file]",
 	Short: "Crawl a network",
-	Long:  `This is a basic function to crawl a network.`,
-	Args:  cobra.MinimumNArgs(1),
-	PreRun: func(cmd *cobra.Command, args []string) {
+	Long: `This will crawl the network on the devp2p layer and generate a nodes
+json file. If no nodes.json file exists, run echo "{}" >> nodes.json to get
+started.`,
+	Args: cobra.MinimumNArgs(1),
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputCrawlParams.NodesFile = args[0]
+
+		inputCrawlParams.timeout, err = time.ParseDuration(inputCrawlParams.Timeout)
+		if err != nil {
+			return err
+		}
+
+		inputCrawlParams.revalidationInterval, err = time.ParseDuration(inputCrawlParams.RevalidationInterval)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		inputSet, err := p2p.LoadNodesJSON(inputCrawlParams.NodesFile)
@@ -63,8 +65,7 @@ var CrawlCmd = &cobra.Command{
 		cfg.PrivateKey, _ = crypto.GenerateKey()
 		bn, err := p2p.ParseBootnodes(inputCrawlParams.Bootnodes)
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to parse bootnodes")
-			return err
+			return fmt.Errorf("unable to parse bootnodes: %w", err)
 		}
 		cfg.Bootnodes = bn
 
@@ -86,27 +87,25 @@ var CrawlCmd = &cobra.Command{
 		defer disc.Close()
 
 		c := newCrawler(inputSet, disc, disc.RandomNodes())
-		c.revalidateInterval = 10 * time.Minute
-
-		timeout, err := time.ParseDuration(inputCrawlParams.Timeout)
-		if err != nil {
-			return err
-		}
+		c.revalidateInterval = inputCrawlParams.revalidationInterval
 
 		log.Info().Msg("Starting crawl")
 
-		output := c.run(timeout, inputCrawlParams.Threads)
+		output := c.run(inputCrawlParams.timeout, inputCrawlParams.Threads)
 		return p2p.WriteNodesJSON(inputCrawlParams.NodesFile, output)
 	},
 }
 
 func init() {
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Bootnodes, "bootnodes", "b", "", "Comma separated nodes used for bootstrapping. At least one bootnode is required, so other nodes in the network can discover each other.")
+	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Bootnodes, "bootnodes", "b", "",
+		`Comma separated nodes used for bootstrapping. At least one bootnode is
+required, so other nodes in the network can discover each other.`)
 	if err := CrawlCmd.MarkPersistentFlagRequired("bootnodes"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark bootnodes as required persistent flag")
 	}
 	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "Time limit for the crawl.")
 	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt.")
-	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id.")
+	CrawlCmd.PersistentFlags().Uint64VarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id.")
 	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Database, "database", "d", "", "Node database for updating and storing client information.")
+	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.RevalidationInterval, "revalidation-interval", "r", "10m", "The amount of time it takes to retry connecting to a failed peer.")
 }

@@ -1,23 +1,8 @@
-// Copyright 2021 The go-ethereum Authors
-// This file is part of go-ethereum.
-//
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// go-ethereum is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
-
 package p2p
 
 import (
 	"container/list"
+	"context"
 	"fmt"
 	"math/rand"
 	"net"
@@ -26,7 +11,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	// "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -178,6 +162,8 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 		dbCh = make(chan struct{}, db.MaxConcurrentWrites())
 	}
 
+	ctx := context.Background()
+
 	for {
 		start := time.Now()
 
@@ -201,7 +187,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				if db != nil {
 					dbCh <- struct{}{}
 					go func() {
-						db.WriteBlockHeaders(msg.BlockHeadersPacket)
+						db.WriteBlockHeaders(ctx, msg.BlockHeadersPacket)
 						<-dbCh
 					}()
 				}
@@ -243,7 +229,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				if db != nil && len(msg.BlockBodiesPacket) > 0 && db.ShouldWriteBlocks() {
 					dbCh <- struct{}{}
 					go func() {
-						db.WriteBlockBody(msg.BlockBodiesPacket[0], *hash)
+						db.WriteBlockBody(ctx, msg.BlockBodiesPacket[0], *hash)
 						<-dbCh
 					}()
 				}
@@ -297,7 +283,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				if db != nil && db.ShouldWriteBlocks() {
 					dbCh <- struct{}{}
 					go func() {
-						db.WriteBlockHashes(c.node, hashes)
+						db.WriteBlockHashes(ctx, c.node, hashes)
 						<-dbCh
 					}()
 				}
@@ -308,7 +294,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				if db != nil && db.ShouldWriteBlocks() {
 					dbCh <- struct{}{}
 					go func() {
-						db.WriteBlock(c.node, msg.Block)
+						db.WriteBlock(ctx, c.node, msg.Block)
 						<-dbCh
 					}()
 				}
@@ -319,7 +305,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				if db != nil && db.ShouldWriteTransactions() {
 					dbCh <- struct{}{}
 					go func() {
-						db.WriteTransactions(c.node, *msg)
+						db.WriteTransactions(ctx, c.node, *msg)
 						<-dbCh
 					}()
 				}
@@ -330,7 +316,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				if db != nil && db.ShouldWriteTransactions() {
 					dbCh <- struct{}{}
 					go func() {
-						db.WriteTransactions(c.node, msg.PooledTransactionsPacket)
+						db.WriteTransactions(ctx, c.node, msg.PooledTransactionsPacket)
 						<-dbCh
 					}()
 				}

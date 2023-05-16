@@ -131,5 +131,7 @@ other messages the peer sends (e.g. blocks, transactions, etc.).`,
 func init() {
 	PingCmd.PersistentFlags().StringVarP(&inputPingParams.OutputFile, "output", "o", "", "Write ping results to output file. (default stdout)")
 	PingCmd.PersistentFlags().IntVarP(&inputPingParams.Threads, "parallel", "p", 16, "How many parallel pings to attempt.")
-	PingCmd.PersistentFlags().BoolVarP(&inputPingParams.Listen, "listen", "l", true, "Keep the connection open and listen to the peer. This only works if the first argument is an enode/enr, not a nodes file.")
+	PingCmd.PersistentFlags().BoolVarP(&inputPingParams.Listen, "listen", "l", true,
+		`Keep the connection open and listen to the peer. This only works if the first
+argument is an enode/enr, not a nodes file.`)
 }

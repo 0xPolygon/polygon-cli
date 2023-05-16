@@ -1,19 +1,3 @@
-// Copyright 2019 The go-ethereum Authors
-// This file is part of go-ethereum.
-//
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// go-ethereum is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
-
 package crawl
 
 import (
@@ -175,7 +159,7 @@ func (c *crawler) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
 // message, skip nodes that don't have the correct network id. Otherwise, skip
 // nodes that are unable to peer.
 func shouldSkipNode(n *enode.Node) bool {
-	if inputCrawlParams.NetworkID <= 0 {
+	if inputCrawlParams.NetworkID == 0 {
 		return false
 	}
 
@@ -193,7 +177,7 @@ func shouldSkipNode(n *enode.Node) bool {
 	}
 
 	log.Debug().Interface("hello", hello).Interface("status", status).Msg("Message received")
-	return inputCrawlParams.NetworkID != int(status.NetworkID)
+	return inputCrawlParams.NetworkID != status.NetworkID
 }
 
 // updateNode updates the info about the given node, and returns a status about

@@ -18,7 +18,6 @@ import (
 type datastoreWrapper struct {
 	client                  *datastore.Client
 	sensorID                string
-	ctx                     context.Context
 	maxConcurrentWrites     int
 	shouldWriteBlocks       bool
 	shouldWriteTransactions bool
@@ -81,8 +80,8 @@ type DatastoreTransaction struct {
 
 // NewDatastore connects to datastore and creates the client. This should
 // only be called once unless trying to write to different databases.
-func NewDatastore(projectID string, sensorID string, maxConcurrentWrites int, shouldWriteBlocks bool, shouldWriteTransactions bool) Database {
-	client, err := datastore.NewClient(context.Background(), projectID)
+func NewDatastore(ctx context.Context, projectID string, sensorID string, maxConcurrentWrites int, shouldWriteBlocks bool, shouldWriteTransactions bool) Database {
+	client, err := datastore.NewClient(ctx, projectID)
 	if err != nil {
 		log.Error().Err(err).Msg("Could not connect to Datastore")
 		return nil
@@ -91,7 +90,6 @@ func NewDatastore(projectID string, sensorID string, maxConcurrentWrites int, sh
 	return &datastoreWrapper{
 		client:                  client,
 		sensorID:                sensorID,
-		ctx:                     context.Background(),
 		maxConcurrentWrites:     maxConcurrentWrites,
 		shouldWriteBlocks:       shouldWriteBlocks,
 		shouldWriteTransactions: shouldWriteTransactions,
@@ -99,19 +97,23 @@ func NewDatastore(projectID string, sensorID string, maxConcurrentWrites int, sh
 }
 
 // WriteBlock writes the block and the block event to datastore.
-func (d *datastoreWrapper) WriteBlock(peer *enode.Node, block *types.Block) {
+func (d *datastoreWrapper) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block) {
 	d.writeEvent(peer, "block_events", block.Hash(), "blocks")
 
 	key := datastore.NameKey("blocks", block.Hash().Hex(), nil)
 	var dsBlock DatastoreBlock
-	_ = d.client.Get(d.ctx, key, &dsBlock)
+	// Fetch the block. We don't check the error because if some of the fields
+	// are nil we will just set them.
+	_ = d.client.Get(ctx, key, &dsBlock)
 
 	if dsBlock.DatastoreHeader == nil {
 		dsBlock.DatastoreHeader = newDatastoreHeader(block.Header())
 	}
 
 	if dsBlock.Transactions == nil && len(block.Transactions()) > 0 {
-		d.writeTransactions(block.Transactions())
+		if d.shouldWriteTransactions {
+			d.writeTransactions(ctx, block.Transactions())
+		}
 
 		dsBlock.Transactions = make([]*datastore.Key, 0, len(block.Transactions()))
 		for _, tx := range block.Transactions() {
@@ -122,12 +124,12 @@ func (d *datastoreWrapper) WriteBlock(peer *enode.Node, block *types.Block) {
 	if dsBlock.Uncles == nil && len(block.Uncles()) > 0 {
 		dsBlock.Uncles = make([]*datastore.Key, 0, len(block.Uncles()))
 		for _, uncle := range block.Uncles() {
-			d.writeBlockHeader(uncle)
+			d.writeBlockHeader(ctx, uncle)
 			dsBlock.Uncles = append(dsBlock.Uncles, datastore.NameKey("blocks", uncle.Hash().Hex(), nil))
 		}
 	}
 
-	if _, err := d.client.Put(d.ctx, key, &dsBlock); err != nil {
+	if _, err := d.client.Put(ctx, key, &dsBlock); err != nil {
 		log.Error().Err(err).Msg("Failed to write new block")
 	}
 }
@@ -136,27 +138,29 @@ func (d *datastoreWrapper) WriteBlock(peer *enode.Node, block *types.Block) {
 // write block events because headers will only be sent to the sensor when
 // requested. The block events will be written when the hash is received
 // instead.
-func (d *datastoreWrapper) WriteBlockHeaders(headers []*types.Header) {
+func (d *datastoreWrapper) WriteBlockHeaders(ctx context.Context, headers []*types.Header) {
 	for _, header := range headers {
-		d.writeBlockHeader(header)
+		d.writeBlockHeader(ctx, header)
 	}
 }
 
 // WriteBlockHeaders will write the block bodies to datastore. It will not
 // write block events because bodies will only be sent to the sensor when
 // requested. The block events will be written when the hash is received
-// instead. If will also write the uncles and transactions to datastore if they
+// instead. It will write the uncles and transactions to datastore if they
 // don't already exist.
-func (d *datastoreWrapper) WriteBlockBody(body *eth.BlockBody, hash common.Hash) {
+func (d *datastoreWrapper) WriteBlockBody(ctx context.Context, body *eth.BlockBody, hash common.Hash) {
 	key := datastore.NameKey("blocks", hash.Hex(), nil)
 	var block DatastoreBlock
 
-	if err := d.client.Get(d.ctx, key, &block); err != nil {
+	if err := d.client.Get(ctx, key, &block); err != nil {
 		log.Debug().Err(err).Str("hash", hash.Hex()).Msg("Failed to fetch block when writing block body")
 	}
 
 	if block.Transactions == nil && len(body.Transactions) > 0 {
-		d.writeTransactions(body.Transactions)
+		if d.shouldWriteTransactions {
+			d.writeTransactions(ctx, body.Transactions)
+		}
 
 		block.Transactions = make([]*datastore.Key, 0, len(body.Transactions))
 		for _, tx := range body.Transactions {
@@ -167,25 +171,25 @@ func (d *datastoreWrapper) WriteBlockBody(body *eth.BlockBody, hash common.Hash)
 	if block.Uncles == nil && len(body.Uncles) > 0 {
 		block.Uncles = make([]*datastore.Key, 0, len(body.Uncles))
 		for _, uncle := range body.Uncles {
-			d.writeBlockHeader(uncle)
+			d.writeBlockHeader(ctx, uncle)
 			block.Uncles = append(block.Uncles, datastore.NameKey("blocks", uncle.Hash().Hex(), nil))
 		}
 	}
 
-	if _, err := d.client.Put(d.ctx, key, &block); err != nil {
+	if _, err := d.client.Put(ctx, key, &block); err != nil {
 		log.Error().Err(err).Msg("Failed to write block header")
 	}
 }
 
 // WriteBlockHashes will write the block events to datastore.
-func (d *datastoreWrapper) WriteBlockHashes(peer *enode.Node, hashes []common.Hash) {
-	d.writeEvents(peer, "block_events", hashes, "blocks")
+func (d *datastoreWrapper) WriteBlockHashes(ctx context.Context, peer *enode.Node, hashes []common.Hash) {
+	d.writeEvents(ctx, peer, "block_events", hashes, "blocks")
 }
 
 // WriteTransactions will write the transactions and transaction events to datastore.
-func (d *datastoreWrapper) WriteTransactions(peer *enode.Node, txs []*types.Transaction) {
-	hashes := d.writeTransactions(txs)
-	d.writeEvents(peer, "transaction_events", hashes, "transactions")
+func (d *datastoreWrapper) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction) {
+	hashes := d.writeTransactions(ctx, txs)
+	d.writeEvents(ctx, peer, "transaction_events", hashes, "transactions")
 }
 
 func (d *datastoreWrapper) MaxConcurrentWrites() int {
@@ -267,14 +271,14 @@ func (d *datastoreWrapper) writeEvent(peer *enode.Node, eventKind string, hash c
 		Time:     time.Now(),
 	}
 	if _, err := d.client.Put(context.Background(), key, &event); err != nil {
-		log.Error().Err(err).Interface("event", event).Msgf("Failed to write to %v", eventKind)
+		log.Error().Err(err).Msgf("Failed to write to %v", eventKind)
 	}
 }
 
 // writeEvents writes either block or transaction events to datastore depending
 // on the provided eventKind and hashKind. This is similar to writeEvent but
 // batches the request.
-func (d *datastoreWrapper) writeEvents(peer *enode.Node, eventKind string, hashes []common.Hash, hashKind string) {
+func (d *datastoreWrapper) writeEvents(ctx context.Context, peer *enode.Node, eventKind string, hashes []common.Hash, hashKind string) {
 	keys := make([]*datastore.Key, 0, len(hashes))
 	events := make([]*DatastoreEvent, 0, len(hashes))
 	now := time.Now()
@@ -291,31 +295,31 @@ func (d *datastoreWrapper) writeEvents(peer *enode.Node, eventKind string, hashe
 		events = append(events, &event)
 	}
 
-	if _, err := d.client.PutMulti(d.ctx, keys, events); err != nil {
-		log.Error().Err(err).Interface("events", events).Msgf("Failed to write to %v", eventKind)
+	if _, err := d.client.PutMulti(ctx, keys, events); err != nil {
+		log.Error().Err(err).Msgf("Failed to write to %v", eventKind)
 	}
 }
 
 // writeBlockHeader will write the block header to datastore if it doesn't
 // exist.
-func (d *datastoreWrapper) writeBlockHeader(header *types.Header) {
+func (d *datastoreWrapper) writeBlockHeader(ctx context.Context, header *types.Header) {
 	key := datastore.NameKey("blocks", header.Hash().Hex(), nil)
 	var block DatastoreBlock
 
-	if err := d.client.Get(d.ctx, key, &block); err == nil && block.DatastoreHeader != nil {
+	if err := d.client.Get(ctx, key, &block); err == nil && block.DatastoreHeader != nil {
 		return
 	}
 
 	block.DatastoreHeader = newDatastoreHeader(header)
 
-	if _, err := d.client.Put(d.ctx, key, &block); err != nil {
-		log.Error().Err(err).Interface("block", block).Msg("Failed to write block header")
+	if _, err := d.client.Put(ctx, key, &block); err != nil {
+		log.Error().Err(err).Msg("Failed to write block header")
 	}
 }
 
 // writeTransactions will write the transactions to datastore and return the
 // transaction hashes.
-func (d *datastoreWrapper) writeTransactions(txs []*types.Transaction) []common.Hash {
+func (d *datastoreWrapper) writeTransactions(ctx context.Context, txs []*types.Transaction) []common.Hash {
 	hashes := make([]common.Hash, 0, len(txs))
 	keys := make([]*datastore.Key, 0, len(txs))
 	transactions := make([]*DatastoreTransaction, 0, len(txs))
@@ -326,7 +330,7 @@ func (d *datastoreWrapper) writeTransactions(txs []*types.Transaction) []common.
 		transactions = append(transactions, newDatastoreTransaction(tx))
 	}
 
-	if _, err := d.client.PutMulti(d.ctx, keys, transactions); err != nil {
+	if _, err := d.client.PutMulti(ctx, keys, transactions); err != nil {
 		log.Error().Err(err).Msg("Failed to write transactions")
 	}
 

@@ -8,7 +8,9 @@ import (
 )
 
 // MessageCount is used to help the outer goroutine to receive summary of the
-// number and type of messages that were sent.
+// number and type of messages that were sent. This is used for distributed
+// logging. It can be used to count the different types of messages received
+// across all peer connections to provide a summary.
 type MessageCount struct {
 	BlockHeaders        int32 `json:",omitempty"`
 	BlockBodies         int32 `json:",omitempty"`
