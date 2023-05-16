@@ -13,6 +13,14 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	// Kinds are the datastore equivalent of tables.
+	blocksKind            = "blocks"
+	blockEventsKind       = "block_events"
+	transactionsKind      = "transactions"
+	transactionEventsKind = "transaction_events"
+)
+
 // datastoreWrapper wraps the datastore client and stores the sensorID so
 // writing block and transaction events possible.
 type datastoreWrapper struct {
@@ -24,7 +32,9 @@ type datastoreWrapper struct {
 }
 
 // DatastoreEvent can represent a peer sending the sensor a transaction hash or
-// a block hash.
+// a block hash. In this implementation, the block and transactions are written
+// to different tables by specifying a kind during key creation see writeEvents
+// for more.
 type DatastoreEvent struct {
 	SensorId string
 	PeerId   string
@@ -98,9 +108,9 @@ func NewDatastore(ctx context.Context, projectID string, sensorID string, maxCon
 
 // WriteBlock writes the block and the block event to datastore.
 func (d *datastoreWrapper) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block) {
-	d.writeEvent(peer, "block_events", block.Hash(), "blocks")
+	d.writeEvent(peer, blockEventsKind, block.Hash(), blocksKind)
 
-	key := datastore.NameKey("blocks", block.Hash().Hex(), nil)
+	key := datastore.NameKey(blocksKind, block.Hash().Hex(), nil)
 	var dsBlock DatastoreBlock
 	// Fetch the block. We don't check the error because if some of the fields
 	// are nil we will just set them.
@@ -117,7 +127,7 @@ func (d *datastoreWrapper) WriteBlock(ctx context.Context, peer *enode.Node, blo
 
 		dsBlock.Transactions = make([]*datastore.Key, 0, len(block.Transactions()))
 		for _, tx := range block.Transactions() {
-			dsBlock.Transactions = append(dsBlock.Transactions, datastore.NameKey("transactions", tx.Hash().Hex(), nil))
+			dsBlock.Transactions = append(dsBlock.Transactions, datastore.NameKey(transactionsKind, tx.Hash().Hex(), nil))
 		}
 	}
 
@@ -125,7 +135,7 @@ func (d *datastoreWrapper) WriteBlock(ctx context.Context, peer *enode.Node, blo
 		dsBlock.Uncles = make([]*datastore.Key, 0, len(block.Uncles()))
 		for _, uncle := range block.Uncles() {
 			d.writeBlockHeader(ctx, uncle)
-			dsBlock.Uncles = append(dsBlock.Uncles, datastore.NameKey("blocks", uncle.Hash().Hex(), nil))
+			dsBlock.Uncles = append(dsBlock.Uncles, datastore.NameKey(blocksKind, uncle.Hash().Hex(), nil))
 		}
 	}
 
@@ -150,7 +160,7 @@ func (d *datastoreWrapper) WriteBlockHeaders(ctx context.Context, headers []*typ
 // instead. It will write the uncles and transactions to datastore if they
 // don't already exist.
 func (d *datastoreWrapper) WriteBlockBody(ctx context.Context, body *eth.BlockBody, hash common.Hash) {
-	key := datastore.NameKey("blocks", hash.Hex(), nil)
+	key := datastore.NameKey(blocksKind, hash.Hex(), nil)
 	var block DatastoreBlock
 
 	if err := d.client.Get(ctx, key, &block); err != nil {
@@ -164,7 +174,7 @@ func (d *datastoreWrapper) WriteBlockBody(ctx context.Context, body *eth.BlockBo
 
 		block.Transactions = make([]*datastore.Key, 0, len(body.Transactions))
 		for _, tx := range body.Transactions {
-			block.Transactions = append(block.Transactions, datastore.NameKey("transactions", tx.Hash().Hex(), nil))
+			block.Transactions = append(block.Transactions, datastore.NameKey(transactionsKind, tx.Hash().Hex(), nil))
 		}
 	}
 
@@ -172,7 +182,7 @@ func (d *datastoreWrapper) WriteBlockBody(ctx context.Context, body *eth.BlockBo
 		block.Uncles = make([]*datastore.Key, 0, len(body.Uncles))
 		for _, uncle := range body.Uncles {
 			d.writeBlockHeader(ctx, uncle)
-			block.Uncles = append(block.Uncles, datastore.NameKey("blocks", uncle.Hash().Hex(), nil))
+			block.Uncles = append(block.Uncles, datastore.NameKey(blocksKind, uncle.Hash().Hex(), nil))
 		}
 	}
 
@@ -183,13 +193,13 @@ func (d *datastoreWrapper) WriteBlockBody(ctx context.Context, body *eth.BlockBo
 
 // WriteBlockHashes will write the block events to datastore.
 func (d *datastoreWrapper) WriteBlockHashes(ctx context.Context, peer *enode.Node, hashes []common.Hash) {
-	d.writeEvents(ctx, peer, "block_events", hashes, "blocks")
+	d.writeEvents(ctx, peer, blockEventsKind, hashes, blocksKind)
 }
 
 // WriteTransactions will write the transactions and transaction events to datastore.
 func (d *datastoreWrapper) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction) {
 	hashes := d.writeTransactions(ctx, txs)
-	d.writeEvents(ctx, peer, "transaction_events", hashes, "transactions")
+	d.writeEvents(ctx, peer, transactionEventsKind, hashes, transactionsKind)
 }
 
 func (d *datastoreWrapper) MaxConcurrentWrites() int {
@@ -208,7 +218,7 @@ func (d *datastoreWrapper) ShouldWriteTransactions() bool {
 // values are converted into strings to prevent a loss of precision.
 func newDatastoreHeader(header *types.Header) *DatastoreHeader {
 	return &DatastoreHeader{
-		ParentHash:  datastore.NameKey("blocks", header.ParentHash.Hex(), nil),
+		ParentHash:  datastore.NameKey(blocksKind, header.ParentHash.Hex(), nil),
 		UncleHash:   header.UncleHash.Hex(),
 		Coinbase:    header.Coinbase.Hex(),
 		Root:        header.Root.Hex(),
@@ -303,7 +313,7 @@ func (d *datastoreWrapper) writeEvents(ctx context.Context, peer *enode.Node, ev
 // writeBlockHeader will write the block header to datastore if it doesn't
 // exist.
 func (d *datastoreWrapper) writeBlockHeader(ctx context.Context, header *types.Header) {
-	key := datastore.NameKey("blocks", header.Hash().Hex(), nil)
+	key := datastore.NameKey(blocksKind, header.Hash().Hex(), nil)
 	var block DatastoreBlock
 
 	if err := d.client.Get(ctx, key, &block); err == nil && block.DatastoreHeader != nil {
@@ -326,7 +336,7 @@ func (d *datastoreWrapper) writeTransactions(ctx context.Context, txs []*types.T
 
 	for _, tx := range txs {
 		hashes = append(hashes, tx.Hash())
-		keys = append(keys, datastore.NameKey("transactions", tx.Hash().Hex(), nil))
+		keys = append(keys, datastore.NameKey(transactionsKind, tx.Hash().Hex(), nil))
 		transactions = append(transactions, newDatastoreTransaction(tx))
 	}
 
