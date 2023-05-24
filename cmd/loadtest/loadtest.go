@@ -499,7 +499,7 @@ func runLoadTest(ctx context.Context) error {
 	// TODO this doesn't make sense for avail
 	ptc, err := ec.PendingTransactionCount(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get the number of pending transactions before closing")
+		log.Debug().Err(err).Msg("Unable to get the number of pending transactions before closing")
 	} else if ptc > 0 {
 		log.Info().Uint("pending", ptc).Msg("There are still oustanding transactions. There might be issues restarting with the same sending key until those transactions clear")
 	}
