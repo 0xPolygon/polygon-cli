@@ -44,9 +44,9 @@ import (
 	"golang.org/x/text/message"
 	"golang.org/x/text/number"
 
-	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
-	gssignature "github.com/centrifuge/go-substrate-rpc-client/v4/signature"
-	gstypes "github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	gsrpc "github.com/leovct/go-substrate-rpc-client/v4"
+	gssignature "github.com/leovct/go-substrate-rpc-client/v4/signature"
+	gstypes "github.com/leovct/go-substrate-rpc-client/v4/types"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcommon "github.com/ethereum/go-ethereum/common"
