@@ -96,7 +96,6 @@ $(BIN_DIR): ## Create the binary folder.
 geth: $(BIN_DIR) ## Start a local geth node.
 	geth --dev --dev.period 2 --http --http.addr localhost --http.port $(PORT) --http.api admin,debug,web3,eth,txpool,personal,miner,net --verbosity 5 --rpc.gascap 50000000  --rpc.txfeecap 0 --miner.gaslimit  10 --miner.gasprice 1 --gpo.blocks 1 --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2 --dev.gaslimit 50000000
 
-AVAIL=$(./out)
 .PHONY: avail
 avail: $(BIN_DIR) ## Start a local avail node.
 	avail --dev --rpc-port $(PORT)
