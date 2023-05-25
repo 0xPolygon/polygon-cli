@@ -119,4 +119,4 @@ geth-loadtest: build ## Fund test account with 5k ETH and run loadtest against a
 
 .PHONY: avail-loadtest
 avail-loadtest: build ## Run loadtest against an Avail chain.
-	$(BUILD_DIR)/$(BIN_NAME) loadtest --data-avail --verbosity 700 --chain-id 1256 --concurrency 1 --requests 1000 --rate-limit 5 --mode c http://127.0.0.1:$(PORT)
+	$(BUILD_DIR)/$(BIN_NAME) loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 1000 --rate-limit 5 --mode t --data-avail http://127.0.0.1:$(PORT)
