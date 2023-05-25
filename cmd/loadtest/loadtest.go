@@ -1432,7 +1432,11 @@ func loadtestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uin
 			// For some reason weren't able to read the random data
 			log.Error().Msg("Sending to random is not implemented for substrate yet")
 		} else {
-			toAddr = gstypes.NewMultiAddressFromAccountID(pk)
+			toAddr, err = gstypes.NewMultiAddressFromAccountID(pk)
+			if err != nil {
+				log.Error().Msg("Unable to create an address from the account id")
+				return
+			}
 		}
 
 	}
