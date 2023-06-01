@@ -257,7 +257,6 @@ type (
 		ByteCount                           *uint64
 		Seed                                *int64
 		IsAvail                             *bool
-		AvailAppID                          *uint32
 		LtAddress                           *string
 		DelAddress                          *string
 		ContractCallNumberOfBlocksToWaitFor *uint64
@@ -326,7 +325,6 @@ r - random modes
 	ltp.ByteCount = LoadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
 	ltp.IsAvail = LoadtestCmd.PersistentFlags().Bool("data-avail", false, "Is this a test of avail rather than an EVM / Geth Chain")
-	ltp.AvailAppID = LoadtestCmd.PersistentFlags().Uint32("app-id", 0, "The AppID used for avail")
 	ltp.LtAddress = LoadtestCmd.PersistentFlags().String("lt-address", "", "A pre-deployed load test contract address")
 	ltp.DelAddress = LoadtestCmd.PersistentFlags().String("del-address", "", "A pre-deployed delegator contract address")
 	ltp.ContractCallNumberOfBlocksToWaitFor = LoadtestCmd.PersistentFlags().Uint64("contract-call-nb-blocks-to-wait-for", 30, "The number of blocks to wait for before giving up on a contract call")
@@ -1432,11 +1430,7 @@ func loadtestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uin
 			// For some reason weren't able to read the random data
 			log.Error().Msg("Sending to random is not implemented for substrate yet")
 		} else {
-			toAddr, err = gstypes.NewMultiAddressFromAccountID(pk)
-			if err != nil {
-				log.Error().Msg("Unable to create an address from the account id")
-				return
-			}
+			toAddr = gstypes.NewMultiAddressFromAccountID(pk)
 		}
 
 	}
@@ -1458,7 +1452,6 @@ func loadtestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uin
 		SpecVersion:        rv.SpecVersion,
 		Tip:                gstypes.NewUCompactFromUInt(0),
 		TransactionVersion: rv.TransactionVersion,
-		AppID:              gstypes.NewUCompactFromUInt(uint64(*ltp.AvailAppID)),
 	}
 
 	err = ext.Sign(kp, o)
@@ -1501,7 +1494,6 @@ func loadtestAvailStore(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64
 		SpecVersion:        rv.SpecVersion,
 		Tip:                gstypes.NewUCompactFromUInt(100),
 		TransactionVersion: rv.TransactionVersion,
-		AppID:              gstypes.NewUCompactFromUInt(uint64(*ltp.AvailAppID)),
 	}
 	// Sign the transaction using Alice's default account
 	err = ext.Sign(kp, o)

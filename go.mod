@@ -1,6 +1,6 @@
 module github.com/maticnetwork/polygon-cli
 
-go 1.18
+go 1.19
 
 require (
 	github.com/0xPolygon/polygon-edge v0.8.0
@@ -256,5 +256,3 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
 )
-
-replace github.com/centrifuge/go-substrate-rpc-client/v4 => github.com/availproject/go-substrate-rpc-client/v4 v4.0.12-avail-1.4.0-rc1-5e286e3
