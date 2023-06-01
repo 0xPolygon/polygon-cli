@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/0xPolygon/polygon-edge v0.8.0
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
+	github.com/centrifuge/go-substrate-rpc-client/v4 v4.0.6
 	github.com/coinbase/kryptology v1.8.0
 	github.com/ethereum/go-ethereum v1.10.26
 	github.com/gizak/termui/v3 v3.1.0
@@ -25,10 +26,7 @@ require (
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
 )
 
-require (
-	github.com/cenkalti/backoff v2.2.1+incompatible
-	github.com/leovct/go-substrate-rpc-client/v4 v4.0.0-20230525153913-bfb420a865c0
-)
+require github.com/cenkalti/backoff v2.2.1+incompatible
 
 require (
 	cloud.google.com/go v0.110.0 // indirect
