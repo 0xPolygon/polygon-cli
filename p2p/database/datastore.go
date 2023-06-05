@@ -214,6 +214,14 @@ func (d *datastoreWrapper) ShouldWriteTransactions() bool {
 	return d.shouldWriteTransactions
 }
 
+func (d *datastoreWrapper) HasParentBlock(ctx context.Context, hash common.Hash) bool {
+	key := datastore.NameKey(blocksKind, hash.Hex(), nil)
+	var block DatastoreBlock
+	err := d.client.Get(ctx, key, &block)
+
+	return err == nil
+}
+
 // newDatastoreHeader creates a DatastoreHeader from a types.Header. Some
 // values are converted into strings to prevent a loss of precision.
 func newDatastoreHeader(header *types.Header) *DatastoreHeader {

@@ -1,11 +1,13 @@
 package p2p
 
 import (
+	"container/list"
 	"crypto/ecdsa"
 	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -155,6 +157,16 @@ type Conn struct {
 	caps   []p2p.Cap
 	node   *enode.Node
 	logger zerolog.Logger
+
+	// requests is used to store the request ID and the block hash. This is used
+	// when fetching block bodies because the eth protocol block bodies do not
+	// contain information about the block hash.
+	requests   *list.List
+	requestNum uint64
+
+	// oldestBlock stores the first block the sensor has seen so when fetching
+	// parent blocks, it does not request blocks older than this.
+	oldestBlock *types.Header
 }
 
 // Read reads an eth66 packet from the connection.
