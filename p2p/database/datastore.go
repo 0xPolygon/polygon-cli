@@ -219,7 +219,7 @@ func (d *datastoreWrapper) HasParentBlock(ctx context.Context, hash common.Hash)
 	var block DatastoreBlock
 	err := d.client.Get(ctx, key, &block)
 
-	return err == nil
+	return err == nil && block.DatastoreHeader != nil
 }
 
 // newDatastoreHeader creates a DatastoreHeader from a types.Header. Some
