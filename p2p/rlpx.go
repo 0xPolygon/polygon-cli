@@ -184,7 +184,9 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 
 				if db != nil {
 					for _, header := range msg.BlockHeadersPacket {
-						c.getParentBlock(ctx, db, header)
+						if err := c.getParentBlock(ctx, db, header); err != nil {
+							return err
+						}
 					}
 
 					dbCh <- struct{}{}
@@ -252,7 +254,9 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				hashes := make([]common.Hash, 0, len(*msg))
 				for _, hash := range *msg {
 					hashes = append(hashes, hash.Hash)
-					c.getBlockData(hash.Hash)
+					if err := c.getBlockData(hash.Hash); err != nil {
+						return err
+					}
 				}
 
 				if db != nil && db.ShouldWriteBlocks() && len(hashes) > 0 {
@@ -267,7 +271,9 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				c.logger.Trace().Str("hash", msg.Block.Hash().Hex()).Msg("Received NewBlock")
 
 				if db != nil && db.ShouldWriteBlocks() {
-					c.getParentBlock(ctx, db, msg.Block.Header())
+					if err := c.getParentBlock(ctx, db, msg.Block.Header()); err != nil {
+						return err
+					}
 
 					dbCh <- struct{}{}
 					go func() {
@@ -389,11 +395,11 @@ func (c *Conn) getBlockData(hash common.Hash) error {
 
 // getParentBlock will send a request to the peer if the parent of the header
 // does not exist in the database.
-func (c *Conn) getParentBlock(ctx context.Context, db database.Database, header *types.Header) {
+func (c *Conn) getParentBlock(ctx context.Context, db database.Database, header *types.Header) error {
 	if c.oldestBlock == nil {
 		c.logger.Info().Interface("block", header).Msg("Setting oldest block")
 		c.oldestBlock = header
-		return
+		return nil
 	}
 
 	if !db.HasParentBlock(ctx, header.ParentHash) && header.Number.Cmp(c.oldestBlock.Number) == 1 {
@@ -402,6 +408,8 @@ func (c *Conn) getParentBlock(ctx context.Context, db database.Database, header 
 			Str("number", new(big.Int).Sub(header.Number, big.NewInt(1)).String()).
 			Msg("Fetching missing parent block")
 
-		c.getBlockData(header.ParentHash)
+		return c.getBlockData(header.ParentHash)
 	}
+
+	return nil
 }
