@@ -168,15 +168,11 @@ var MonitorCmd = &cobra.Command{
 				ms.ChainID = cs.ChainID
 				ms.PeerCount = cs.PeerCount
 				ms.GasPrice = cs.GasPrice
-				batchSize := new(big.Int).SetUint64(batchSize)
+				batchSize := new(big.Int).SetUint64(batchSize - 1)
 				from := new(big.Int).Sub(ms.HeadBlock, batchSize)
 				// Prevent getBlockRange from fetching duplicate blocks.
 				if ms.MaxBlockRetrieved.Cmp(from) == 1 {
 					from.Add(ms.MaxBlockRetrieved, big.NewInt(1))
-				}
-				// Skip next poll if the latest block is already at the head.
-				if from.Cmp(ms.HeadBlock) >= 0 {
-					continue
 				}
 
 				if from.Cmp(zero) < 0 {
