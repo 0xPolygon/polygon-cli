@@ -18,6 +18,7 @@ type Database interface {
 	WriteBlockHashes(context.Context, *enode.Node, []common.Hash)
 	WriteBlockBody(context.Context, *eth.BlockBody, common.Hash)
 	WriteTransactions(context.Context, *enode.Node, []*types.Transaction)
+	HasParentBlock(context.Context, common.Hash) bool
 
 	MaxConcurrentWrites() int
 	ShouldWriteBlocks() bool
