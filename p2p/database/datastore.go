@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"time"
 
 	"cloud.google.com/go/datastore"
@@ -66,8 +67,9 @@ type DatastoreHeader struct {
 // DatastoreBlock represents a block stored in datastore.
 type DatastoreBlock struct {
 	*DatastoreHeader
-	Transactions []*datastore.Key
-	Uncles       []*datastore.Key
+	TotalDifficulty string
+	Transactions    []*datastore.Key
+	Uncles          []*datastore.Key
 }
 
 // DatastoreTransaction represents a transaction stored in datastore. Data is
@@ -107,7 +109,7 @@ func NewDatastore(ctx context.Context, projectID string, sensorID string, maxCon
 }
 
 // WriteBlock writes the block and the block event to datastore.
-func (d *datastoreWrapper) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block) {
+func (d *datastoreWrapper) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int) {
 	d.writeEvent(peer, blockEventsKind, block.Hash(), blocksKind)
 
 	key := datastore.NameKey(blocksKind, block.Hash().Hex(), nil)
@@ -116,11 +118,20 @@ func (d *datastoreWrapper) WriteBlock(ctx context.Context, peer *enode.Node, blo
 	// are nil we will just set them.
 	_ = d.client.Get(ctx, key, &dsBlock)
 
+	shouldWrite := false
+
 	if dsBlock.DatastoreHeader == nil {
+		shouldWrite = true
 		dsBlock.DatastoreHeader = newDatastoreHeader(block.Header())
 	}
 
+	if len(dsBlock.TotalDifficulty) == 0 {
+		shouldWrite = true
+		dsBlock.TotalDifficulty = td.String()
+	}
+
 	if dsBlock.Transactions == nil && len(block.Transactions()) > 0 {
+		shouldWrite = true
 		if d.shouldWriteTransactions {
 			d.writeTransactions(ctx, block.Transactions())
 		}
@@ -132,11 +143,16 @@ func (d *datastoreWrapper) WriteBlock(ctx context.Context, peer *enode.Node, blo
 	}
 
 	if dsBlock.Uncles == nil && len(block.Uncles()) > 0 {
+		shouldWrite = true
 		dsBlock.Uncles = make([]*datastore.Key, 0, len(block.Uncles()))
 		for _, uncle := range block.Uncles() {
 			d.writeBlockHeader(ctx, uncle)
 			dsBlock.Uncles = append(dsBlock.Uncles, datastore.NameKey(blocksKind, uncle.Hash().Hex(), nil))
 		}
+	}
+
+	if !shouldWrite {
+		return
 	}
 
 	if _, err := d.client.Put(ctx, key, &dsBlock); err != nil {
