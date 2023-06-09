@@ -277,7 +277,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 
 					dbCh <- struct{}{}
 					go func() {
-						db.WriteBlock(ctx, c.node, msg.Block)
+						db.WriteBlock(ctx, c.node, msg.Block, msg.TD)
 						<-dbCh
 					}()
 				}

@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -13,7 +14,7 @@ import (
 // to. To use another database solution, just implement these methods and
 // update the sensor to use the new connection.
 type Database interface {
-	WriteBlock(context.Context, *enode.Node, *types.Block)
+	WriteBlock(context.Context, *enode.Node, *types.Block, *big.Int)
 	WriteBlockHeaders(context.Context, []*types.Header)
 	WriteBlockHashes(context.Context, *enode.Node, []common.Hash)
 	WriteBlockBody(context.Context, *eth.BlockBody, common.Hash)
