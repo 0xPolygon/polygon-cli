@@ -15,12 +15,14 @@ type (
 		GetMethod() string
 		GetArgs() []interface{}
 		Validate(result interface{}) error
+		ExpectError() bool
 	}
 
 	RPCTestGeneric struct {
 		Method    string
 		Args      []interface{}
 		Validator func(result interface{}) error
+		IsError   bool
 	}
 )
 
@@ -39,9 +41,25 @@ var (
 		Validator: ValidateRegexString(`^[[:print:]]*$`),
 	}
 
+	// cast rpc --rpc-url localhost:8545 web3_sha3 0x68656c6c6f20776f726c64
+	RPCTestWeb3SHA3 = RPCTestGeneric{
+		Method:    "web3_sha3",
+		Args:      []interface{}{"0x68656c6c6f20776f726c64"},
+		Validator: ValidateRegexString(`0x47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad`),
+	}
+
+	RPCTestWeb3SHA3Error = RPCTestGeneric{
+		IsError:   true,
+		Method:    "web3_sha3",
+		Args:      []interface{}{"68656c6c6f20776f726c64"},
+		Validator: ValidatorError(`cannot unmarshal hex string without 0x prefix`),
+	}
+
 	allTests = []RPCTest{
 		&RPCTestNetVersion,
 		&RPCTestWeb3ClientVersion,
+		&RPCTestWeb3SHA3,
+		&RPCTestWeb3SHA3Error,
 	}
 )
 
@@ -58,6 +76,19 @@ func ValidateRegexString(regEx string) func(result interface{}) error {
 		return nil
 	}
 }
+func ValidatorError(errorMessageRegex string) func(result interface{}) error {
+	r := regexp.MustCompile(errorMessageRegex)
+	return func(result interface{}) error {
+		resultError, isValid := result.(error)
+		if !isValid {
+			return fmt.Errorf("Invalid result type. Expected error but got %T", result)
+		}
+		if !r.MatchString(resultError.Error()) {
+			return fmt.Errorf("The regex %s failed to match result %s", errorMessageRegex, resultError.Error())
+		}
+		return nil
+	}
+}
 
 func (r *RPCTestGeneric) GetMethod() string {
 	return r.Method
@@ -67,6 +98,9 @@ func (r *RPCTestGeneric) GetArgs() []interface{} {
 }
 func (r *RPCTestGeneric) Validate(result interface{}) error {
 	return r.Validator(result)
+}
+func (r *RPCTestGeneric) ExpectError() bool {
+	return r.IsError
 }
 
 var RPCFuzzCmd = &cobra.Command{
@@ -86,11 +120,17 @@ beep
 			log.Trace().Str("method", t.GetMethod()).Msg("Running Test")
 			var result interface{}
 			err = rpcClient.CallContext(cxt, &result, t.GetMethod(), t.GetArgs()...)
-			if err != nil {
+			if err != nil && !t.ExpectError() {
 				log.Error().Err(err).Str("method", t.GetMethod()).Msg("Method test failed")
 				continue
 			}
-			err = t.Validate(result)
+
+			if t.ExpectError() {
+				err = t.Validate(err)
+			} else {
+				err = t.Validate(result)
+			}
+
 			if err != nil {
 				log.Error().Err(err).Str("method", t.GetMethod()).Msg("Failed to validate")
 				continue
