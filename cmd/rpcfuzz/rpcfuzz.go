@@ -111,6 +111,109 @@ var (
 		),
 	}
 
+	// I probably need to put these giant strings somewhere else
+	// cast block --rpc-url localhost:8545 0
+	RPCTestEthBlockByNumber = RPCTestGeneric{
+		Method: "eth_getBlockByNumber",
+		Args:   []interface{}{"0x0", true},
+		Validator: ValidateJSONSchema(`
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "properties": {
+    "baseFeePerGas": {
+      "type": "string"
+    },
+    "difficulty": {
+      "type": "string"
+    },
+    "extraData": {
+      "type": "string"
+    },
+    "gasLimit": {
+      "type": "string"
+    },
+    "gasUsed": {
+      "type": "string"
+    },
+    "hash": {
+      "type": "string"
+    },
+    "logsBloom": {
+      "type": "string"
+    },
+    "miner": {
+      "type": "string"
+    },
+    "mixHash": {
+      "type": "string"
+    },
+    "nonce": {
+      "type": "string"
+    },
+    "number": {
+      "type": "string"
+    },
+    "parentHash": {
+      "type": "string"
+    },
+    "receiptsRoot": {
+      "type": "string"
+    },
+    "sha3Uncles": {
+      "type": "string"
+    },
+    "size": {
+      "type": "string"
+    },
+    "stateRoot": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "totalDifficulty": {
+      "type": "string"
+    },
+    "transactions": {
+      "type": "array",
+      "items": {}
+    },
+    "transactionsRoot": {
+      "type": "string"
+    },
+    "uncles": {
+      "type": "array",
+      "items": {}
+    }
+  },
+  "required": [
+    "baseFeePerGas",
+    "difficulty",
+    "extraData",
+    "gasLimit",
+    "gasUsed",
+    "hash",
+    "logsBloom",
+    "miner",
+    "mixHash",
+    "nonce",
+    "number",
+    "parentHash",
+    "receiptsRoot",
+    "sha3Uncles",
+    "size",
+    "stateRoot",
+    "timestamp",
+    "totalDifficulty",
+    "transactions",
+    "transactionsRoot",
+    "uncles"
+  ]
+}
+`),
+	}
+
 	allTests = []RPCTest{
 		&RPCTestNetVersion,
 		&RPCTestWeb3ClientVersion,
@@ -120,6 +223,7 @@ var (
 		&RPCTestNetPeerCount,
 		&RPCTestEthProtocolVersion,
 		&RPCTestEthSyncing,
+		&RPCTestEthBlockByNumber,
 	}
 )
 
@@ -154,6 +258,7 @@ func ValidateJSONSchema(schema string) func(result interface{}) error {
 		if err != nil {
 			return fmt.Errorf("Unable to run json validation: %w", err)
 		}
+		// fmt.Println(string(jsonBytes))
 		if !validatorResult.Valid() {
 			errStr := ""
 			for _, desc := range validatorResult.Errors() {
