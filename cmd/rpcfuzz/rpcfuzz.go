@@ -1,11 +1,13 @@
 package rpcfuzz
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"github.com/xeipuuv/gojsonschema"
 	"os"
 	"regexp"
 )
@@ -77,6 +79,38 @@ var (
 		Validator: ValidatorError(`method eth_protocolVersion does not exist`),
 	}
 
+	// https://www.liquid-technologies.com/online-json-to-schema-converter
+	// cast rpc --rpc-url localhost:8545 eth_syncing
+	RPCTestEthSyncing = RPCTestGeneric{
+		Method: "eth_syncing",
+		Args:   []interface{}{},
+		Validator: ChainValidator(
+			ValidateExact(false),
+			ValidateJSONSchema(`
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "properties": {
+    "startingBlock": {
+      "type": "string"
+    },
+    "currentBlock": {
+      "type": "string"
+    },
+    "highestBlock": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "startingBlock",
+    "currentBlock",
+    "highestBlock"
+  ]
+}
+`),
+		),
+	}
+
 	allTests = []RPCTest{
 		&RPCTestNetVersion,
 		&RPCTestWeb3ClientVersion,
@@ -85,9 +119,52 @@ var (
 		&RPCTestNetListening,
 		&RPCTestNetPeerCount,
 		&RPCTestEthProtocolVersion,
+		&RPCTestEthSyncing,
 	}
 )
 
+// ChainValidator would take a list of validation functions to be
+// applied in order. The idea is that if first validator is true, then
+// the rest won't be applied.
+func ChainValidator(validators ...func(interface{}) error) func(result interface{}) error {
+	return func(result interface{}) error {
+		for _, v := range validators {
+			err := v(result)
+			if err == nil {
+				return nil
+			}
+		}
+		return fmt.Errorf("All Validation failed")
+	}
+
+}
+func ValidateJSONSchema(schema string) func(result interface{}) error {
+	return func(result interface{}) error {
+		validatorLoader := gojsonschema.NewStringLoader(schema)
+
+		// This is weird, but the current setup doesn't allow
+		// for easy access to the initial response string...
+		jsonBytes, err := json.Marshal(result)
+		if err != nil {
+			return fmt.Errorf("Unable to marshal result back to json for validation: %w", err)
+		}
+		responseLoader := gojsonschema.NewStringLoader(string(jsonBytes))
+
+		validatorResult, err := gojsonschema.Validate(validatorLoader, responseLoader)
+		if err != nil {
+			return fmt.Errorf("Unable to run json validation: %w", err)
+		}
+		if !validatorResult.Valid() {
+			errStr := ""
+			for _, desc := range validatorResult.Errors() {
+				errStr += desc.String() + "\n"
+			}
+			return fmt.Errorf("The json document is not valid: %s", errStr)
+		}
+		return nil
+
+	}
+}
 func ValidateExact(expected interface{}) func(result interface{}) error {
 	return func(result interface{}) error {
 		if expected != result {
