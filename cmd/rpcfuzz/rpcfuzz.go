@@ -55,13 +55,30 @@ var (
 		Validator: ValidatorError(`cannot unmarshal hex string without 0x prefix`),
 	}
 
+	// cast rpc --rpc-url localhost:8545 net_listening
+	RPCTestNetListening = RPCTestGeneric{
+		Method:    "net_listening",
+		Args:      []interface{}{},
+		Validator: ValidateExact(true),
+	}
+
 	allTests = []RPCTest{
 		&RPCTestNetVersion,
 		&RPCTestWeb3ClientVersion,
 		&RPCTestWeb3SHA3,
 		&RPCTestWeb3SHA3Error,
+		&RPCTestNetListening,
 	}
 )
+
+func ValidateExact(expected interface{}) func(result interface{}) error {
+	return func(result interface{}) error {
+		if expected != result {
+			return fmt.Errorf("Expected %v and got %v", expected, result)
+		}
+		return nil
+	}
+}
 
 func ValidateRegexString(regEx string) func(result interface{}) error {
 	r := regexp.MustCompile(regEx)
