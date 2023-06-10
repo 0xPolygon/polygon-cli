@@ -69,6 +69,14 @@ var (
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]*$`),
 	}
 
+	// cast rpc --rpc-url localhost:8545 eth_protocolVersion
+	RPCTestEthProtocolVersion = RPCTestGeneric{
+		IsError:   true,
+		Method:    "eth_protocolVersion",
+		Args:      []interface{}{},
+		Validator: ValidatorError(`method eth_protocolVersion does not exist`),
+	}
+
 	allTests = []RPCTest{
 		&RPCTestNetVersion,
 		&RPCTestWeb3ClientVersion,
@@ -76,6 +84,7 @@ var (
 		&RPCTestWeb3SHA3Error,
 		&RPCTestNetListening,
 		&RPCTestNetPeerCount,
+		&RPCTestEthProtocolVersion,
 	}
 )
 
