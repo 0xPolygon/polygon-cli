@@ -32,8 +32,16 @@ var (
 		Validator: ValidateRegexString(`^\d*$`),
 	}
 
+	// cast rpc --rpc-url localhost:8545 web3_clientVersion
+	RPCTestWeb3ClientVersion = RPCTestGeneric{
+		Method:    "web3_clientVersion",
+		Args:      []interface{}{},
+		Validator: ValidateRegexString(`^[[:print:]]*$`),
+	}
+
 	allTests = []RPCTest{
 		&RPCTestNetVersion,
+		&RPCTestWeb3ClientVersion,
 	}
 )
 
