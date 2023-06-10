@@ -62,12 +62,20 @@ var (
 		Validator: ValidateExact(true),
 	}
 
+	// cast rpc --rpc-url localhost:8545 net_peerCount
+	RPCTestNetPeerCount = RPCTestGeneric{
+		Method:    "net_peerCount",
+		Args:      []interface{}{},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]*$`),
+	}
+
 	allTests = []RPCTest{
 		&RPCTestNetVersion,
 		&RPCTestWeb3ClientVersion,
 		&RPCTestWeb3SHA3,
 		&RPCTestWeb3SHA3Error,
 		&RPCTestNetListening,
+		&RPCTestNetPeerCount,
 	}
 )
 
