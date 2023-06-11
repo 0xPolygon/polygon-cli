@@ -80,7 +80,6 @@ var (
 		Validator: ValidatorError(`method eth_protocolVersion does not exist`),
 	}
 
-	// https://www.liquid-technologies.com/online-json-to-schema-converter
 	// cast rpc --rpc-url localhost:8545 eth_syncing
 	RPCTestEthSyncing = RPCTestGeneric{
 		Method: "eth_syncing",
@@ -212,6 +211,7 @@ var RPCFuzzCmd = &cobra.Command{
 - https://ethereum.github.io/execution-apis/api-documentation/
 - https://ethereum.org/en/developers/docs/apis/json-rpc/
 - https://json-schema.org/
+- https://www.liquid-technologies.com/online-json-to-schema-converter
 
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {

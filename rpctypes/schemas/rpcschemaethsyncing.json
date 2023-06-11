@@ -4,13 +4,15 @@
     "properties": {
         "startingBlock": {
             "type": "string",
-            ""
+            "pattern": "^0x[0-9a-f]{1,}$"
         },
         "currentBlock": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{1,}$"
         },
         "highestBlock": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{1,}$"
         }
     },
     "required": [
