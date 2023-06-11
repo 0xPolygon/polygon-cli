@@ -3,6 +3,7 @@
 package rpcfuzz
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
@@ -35,13 +36,23 @@ type (
 		ExpectError() bool
 	}
 
-	// RPCTestGenric is the simplist implementation of the
+	// RPCTestGeneric is the simplist implementation of the
 	// RPCTest. Basically the implementation of the interface is
 	// managed by just returning hard coded values for method,
 	// args, validator, and error
 	RPCTestGeneric struct {
 		Method    string
 		Args      []interface{}
+		Validator func(result interface{}) error
+		IsError   bool
+	}
+
+	// RPCTestDynamicArgs is a simple implementation of the
+	// RPCTest that requires a function for Args which will be
+	// used to generate the args for testing.
+	RPCTestDynamicArgs struct {
+		Method    string
+		Args      func() []interface{}
 		Validator func(result interface{}) error
 		IsError   bool
 	}
@@ -59,37 +70,38 @@ var (
 )
 
 var (
-	RPCTestNetVersion                       RPCTestGeneric
-	RPCTestWeb3ClientVersion                RPCTestGeneric
-	RPCTestWeb3SHA3                         RPCTestGeneric
-	RPCTestWeb3SHA3Error                    RPCTestGeneric
-	RPCTestNetListening                     RPCTestGeneric
-	RPCTestNetPeerCount                     RPCTestGeneric
-	RPCTestEthProtocolVersion               RPCTestGeneric
-	RPCTestEthSyncing                       RPCTestGeneric
-	RPCTestEthCoinbase                      RPCTestGeneric
-	RPCTestEthChainID                       RPCTestGeneric
-	RPCTestEthMining                        RPCTestGeneric
-	RPCTestEthHashrate                      RPCTestGeneric
-	RPCTestEthGasPrice                      RPCTestGeneric
-	RPCTestEthAccounts                      RPCTestGeneric
-	RPCTestEthBlockNumber                   RPCTestGeneric
-	RPCTestEthGetBalanceLatest              RPCTestGeneric
-	RPCTestEthGetBalanceEarliest            RPCTestGeneric
-	RPCTestEthGetBalancePending             RPCTestGeneric
-	RPCTestEthGetStorageAtLatest            RPCTestGeneric
-	RPCTestEthGetStorageAtEarliest          RPCTestGeneric
-	RPCTestEthGetStorageAtPending           RPCTestGeneric
-	RPCTestEthGetTransactionCountAtLatest   RPCTestGeneric
-	RPCTestEthGetTransactionCountAtEarliest RPCTestGeneric
-	RPCTestEthGetTransactionCountAtPending  RPCTestGeneric
-
-	RPCTestEthBlockByNumber RPCTestGeneric
+	RPCTestNetVersion                               RPCTestGeneric
+	RPCTestWeb3ClientVersion                        RPCTestGeneric
+	RPCTestWeb3SHA3                                 RPCTestGeneric
+	RPCTestWeb3SHA3Error                            RPCTestGeneric
+	RPCTestNetListening                             RPCTestGeneric
+	RPCTestNetPeerCount                             RPCTestGeneric
+	RPCTestEthProtocolVersion                       RPCTestGeneric
+	RPCTestEthSyncing                               RPCTestGeneric
+	RPCTestEthCoinbase                              RPCTestGeneric
+	RPCTestEthChainID                               RPCTestGeneric
+	RPCTestEthMining                                RPCTestGeneric
+	RPCTestEthHashrate                              RPCTestGeneric
+	RPCTestEthGasPrice                              RPCTestGeneric
+	RPCTestEthAccounts                              RPCTestGeneric
+	RPCTestEthBlockNumber                           RPCTestGeneric
+	RPCTestEthGetBalanceLatest                      RPCTestGeneric
+	RPCTestEthGetBalanceEarliest                    RPCTestGeneric
+	RPCTestEthGetBalancePending                     RPCTestGeneric
+	RPCTestEthGetStorageAtLatest                    RPCTestGeneric
+	RPCTestEthGetStorageAtEarliest                  RPCTestGeneric
+	RPCTestEthGetStorageAtPending                   RPCTestGeneric
+	RPCTestEthGetTransactionCountAtLatest           RPCTestGeneric
+	RPCTestEthGetTransactionCountAtEarliest         RPCTestGeneric
+	RPCTestEthGetTransactionCountAtPending          RPCTestGeneric
+	RPCTestEthGetBlockTransactionCountByHash        RPCTestDynamicArgs
+	RPCTestEthGetBlockTransactionCountByHashMissing RPCTestGeneric
+	RPCTestEthBlockByNumber                         RPCTestGeneric
 
 	allTests = make([]RPCTest, 0)
 )
 
-func setupTests() {
+func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	// cast rpc --rpc-url localhost:8545 net_version
 	RPCTestNetVersion = RPCTestGeneric{
 		Method:    "net_version",
@@ -277,6 +289,20 @@ func setupTests() {
 	}
 	allTests = append(allTests, &RPCTestEthGetTransactionCountAtPending)
 
+	// cast rpc --rpc-url localhost:8545 eth_getTransactionCountByHash 0x9300b64619e167e7dbc1b41a6a6e7a8de7d6b99427dceefbd58014e328bd7f92
+	RPCTestEthGetBlockTransactionCountByHash = RPCTestDynamicArgs{
+		Method:    "eth_getBlockTransactionCountByHash",
+		Args:      ArgsLatestBlockHash(cxt, rpcClient),
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetBlockTransactionCountByHash)
+	RPCTestEthGetBlockTransactionCountByHashMissing = RPCTestGeneric{
+		Method:    "eth_getBlockTransactionCountByHash",
+		Args:      []interface{}{"0x0000000000000000000000000000000000000000000000000000000000000000"},
+		Validator: ValidateExact(nil),
+	}
+	allTests = append(allTests, &RPCTestEthGetBlockTransactionCountByHashMissing)
+
 	// spacing this thing out
 	// spacing this thing out
 	// spacing this thing out
@@ -379,6 +405,29 @@ func ValidateError(errorMessageRegex string) func(result interface{}) error {
 	}
 }
 
+// ArgsLatestBlockHash is meant to generate an argument with the
+// latest block hash for testing
+func ArgsLatestBlockHash(cxt context.Context, rpcClient *rpc.Client) func() []interface{} {
+	return func() []interface{} {
+		blockData := make(map[string]interface{})
+		err := rpcClient.CallContext(cxt, &blockData, "eth_getBlockByNumber", "latest", false)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to retreive latest block hash")
+			return []interface{}{"latest"}
+		}
+		rawHash := blockData["hash"]
+		strHash, ok := rawHash.(string)
+		if !ok {
+			log.Error().Interface("rawHash", rawHash).Msg("The type of raw hash was expected to be string")
+			return []interface{}{"latest"}
+		}
+		log.Trace().Str("blockHash", strHash).Msg("Got lastest blockhash")
+
+		return []interface{}{strHash}
+
+	}
+}
+
 func (r *RPCTestGeneric) GetMethod() string {
 	return r.Method
 }
@@ -389,6 +438,19 @@ func (r *RPCTestGeneric) Validate(result interface{}) error {
 	return r.Validator(result)
 }
 func (r *RPCTestGeneric) ExpectError() bool {
+	return r.IsError
+}
+
+func (r *RPCTestDynamicArgs) GetMethod() string {
+	return r.Method
+}
+func (r *RPCTestDynamicArgs) GetArgs() []interface{} {
+	return r.Args()
+}
+func (r *RPCTestDynamicArgs) Validate(result interface{}) error {
+	return r.Validator(result)
+}
+func (r *RPCTestDynamicArgs) ExpectError() bool {
 	return r.IsError
 }
 
@@ -447,7 +509,7 @@ Once this has been completed this will be the address of the contract:
 			return err
 		}
 		log.Trace().Msg("Doing test setup")
-		setupTests()
+		setupTests(cxt, rpcClient)
 
 		for _, t := range allTests {
 			log.Trace().Str("method", t.GetMethod()).Msg("Running Test")
