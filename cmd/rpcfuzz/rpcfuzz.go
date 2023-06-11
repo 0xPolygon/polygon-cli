@@ -49,22 +49,24 @@ type (
 	// managed by just returning hard coded values for method,
 	// args, validator, and error
 	RPCTestGeneric struct {
-		Name      string
-		Method    string
-		Args      []interface{}
-		Validator func(result interface{}) error
-		IsError   bool
+		Name           string
+		Method         string
+		Args           []interface{}
+		Validator      func(result interface{}) error
+		IsError        bool
+		RequiresUnlock bool
 	}
 
 	// RPCTestDynamicArgs is a simple implementation of the
 	// RPCTest that requires a function for Args which will be
 	// used to generate the args for testing.
 	RPCTestDynamicArgs struct {
-		Name      string
-		Method    string
-		Args      func() []interface{}
-		Validator func(result interface{}) error
-		IsError   bool
+		Name           string
+		Method         string
+		Args           func() []interface{}
+		Validator      func(result interface{}) error
+		IsError        bool
+		RequiresUnlock bool
 	}
 )
 
@@ -123,6 +125,7 @@ var (
 	RPCTestEthGetCodePending                           RPCTestGeneric
 	RPCTestEthGetCodeEarliest                          RPCTestGeneric
 	RPCTestEthSign                                     RPCTestDynamicArgs
+	RPCTestEthSignFail                                 RPCTestGeneric
 
 	allTests                = make([]RPCTest, 0)
 	RPCTestEthBlockByNumber RPCTestGeneric
@@ -207,10 +210,11 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_coinbase
 	RPCTestEthCoinbase = RPCTestGeneric{
-		Name:      "RPCTestEthCoinbase",
-		Method:    "eth_coinbase",
-		Args:      []interface{}{},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{40}$`),
+		Name:           "RPCTestEthCoinbase",
+		Method:         "eth_coinbase",
+		Args:           []interface{}{},
+		Validator:      ValidateRegexString(`^0x[[:xdigit:]]{40}$`),
+		RequiresUnlock: true,
 	}
 	allTests = append(allTests, &RPCTestEthCoinbase)
 
@@ -255,10 +259,11 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_accounts
 	RPCTestEthAccounts = RPCTestGeneric{
-		Name:      "RPCTestEthAccounts",
-		Method:    "eth_accounts",
-		Args:      []interface{}{},
-		Validator: ValidateJSONSchema(rpctypes.RPCSchemaAccountList),
+		Name:           "RPCTestEthAccounts",
+		Method:         "eth_accounts",
+		Args:           []interface{}{},
+		Validator:      ValidateJSONSchema(rpctypes.RPCSchemaAccountList),
+		RequiresUnlock: true,
 	}
 	allTests = append(allTests, &RPCTestEthAccounts)
 
@@ -478,12 +483,22 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_sign "0xb9b1cf51a65b50f74ed8bcb258413c02cba2ec57" "0xdeadbeaf"
 	RPCTestEthSign = RPCTestDynamicArgs{
-		Name:      "RPCTestEthSign",
-		Method:    "eth_sign",
-		Args:      ArgsCoinbase(cxt, rpcClient, "0xdeadbeaf"),
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{72,}$`),
+		Name:           "RPCTestEthSign",
+		Method:         "eth_sign",
+		Args:           ArgsCoinbase(cxt, rpcClient, "0xdeadbeef"),
+		Validator:      ValidateRegexString(`^0x[[:xdigit:]]{72,}$`),
+		RequiresUnlock: true,
 	}
 	allTests = append(allTests, &RPCTestEthSign)
+	RPCTestEthSignFail = RPCTestGeneric{
+		Name:           "RPCTestEthSignFail",
+		Method:         "eth_sign",
+		Args:           []interface{}{testEthAddress.String(), "0xdeadbeef"},
+		Validator:      ValidateError(`unknown account`),
+		IsError:        true,
+		RequiresUnlock: true,
+	}
+	allTests = append(allTests, &RPCTestEthSignFail)
 
 	// spacing this thing out
 	// spacing this thing out
