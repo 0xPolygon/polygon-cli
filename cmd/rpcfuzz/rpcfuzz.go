@@ -23,7 +23,10 @@ import (
 )
 
 type (
-	// RPCTest is the common interface for a test
+	// RPCTest is the common interface for a test.  In the future
+	// we'll need some addition methods in particular if don't
+	// want to run tests that require unlocked accounts or if we
+	// want to skip certain namepaces
 	RPCTest interface {
 		// GetName returns a more descriptive name of the test being executed
 		GetName() string
@@ -119,9 +122,10 @@ var (
 	RPCTestEthGetCodeLatest                            RPCTestGeneric
 	RPCTestEthGetCodePending                           RPCTestGeneric
 	RPCTestEthGetCodeEarliest                          RPCTestGeneric
-	RPCTestEthBlockByNumber                            RPCTestGeneric
+	RPCTestEthSign                                     RPCTestDynamicArgs
 
-	allTests = make([]RPCTest, 0)
+	allTests                = make([]RPCTest, 0)
+	RPCTestEthBlockByNumber RPCTestGeneric
 )
 
 func setupTests(cxt context.Context, rpcClient *rpc.Client) {
@@ -472,6 +476,15 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	}
 	allTests = append(allTests, &RPCTestEthGetCodeEarliest)
 
+	// cast rpc --rpc-url localhost:8545 eth_sign "0xb9b1cf51a65b50f74ed8bcb258413c02cba2ec57" "0xdeadbeaf"
+	RPCTestEthSign = RPCTestDynamicArgs{
+		Name:      "RPCTestEthSign",
+		Method:    "eth_sign",
+		Args:      ArgsCoinbase(cxt, rpcClient, "0xdeadbeaf"),
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{72,}$`),
+	}
+	allTests = append(allTests, &RPCTestEthSign)
+
 	// spacing this thing out
 	// spacing this thing out
 	// spacing this thing out
@@ -520,6 +533,9 @@ func ChainValidator(validators ...func(interface{}) error) func(result interface
 
 }
 
+// ValidateHashedResponse will take a hex encoded hash and return a
+// function that will validate that a given result has the same
+// hash. The expected has does not start with 0x
 func ValidateHashedResponse(expectedHash string) func(result interface{}) error {
 	return func(result interface{}) error {
 		resultStr, isValid := result.(string)
@@ -610,7 +626,7 @@ func ValidateError(errorMessageRegex string) func(result interface{}) error {
 
 // ArgsLatestBlockHash is meant to generate an argument with the
 // latest block hash for testing
-func ArgsLatestBlockHash(cxt context.Context, rpcClient *rpc.Client) func() []interface{} {
+func ArgsLatestBlockHash(cxt context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
 	return func() []interface{} {
 		blockData := make(map[string]interface{})
 		err := rpcClient.CallContext(cxt, &blockData, "eth_getBlockByNumber", "latest", false)
@@ -624,10 +640,31 @@ func ArgsLatestBlockHash(cxt context.Context, rpcClient *rpc.Client) func() []in
 			log.Error().Interface("rawHash", rawHash).Msg("The type of raw hash was expected to be string")
 			return []interface{}{"latest"}
 		}
-		log.Trace().Str("blockHash", strHash).Msg("Got lastest blockhash")
+		log.Trace().Str("blockHash", strHash).Msg("Got latest blockhash")
 
-		return []interface{}{strHash}
+		args := []interface{}{strHash}
+		for _, v := range extraArgs {
+			args = append(args, v)
+		}
+		return args
+	}
+}
 
+func ArgsCoinbase(cxt context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
+	return func() []interface{} {
+		var coinbase string
+		err := rpcClient.CallContext(cxt, &coinbase, "eth_coinbase")
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to retreive coinbase")
+			return []interface{}{""}
+		}
+		log.Trace().Str("coinbase", coinbase).Msg("Got coinbase")
+
+		args := []interface{}{coinbase}
+		for _, v := range extraArgs {
+			args = append(args, v)
+		}
+		return args
 	}
 }
 
