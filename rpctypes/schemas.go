@@ -9,3 +9,6 @@ var RPCSchemaEthSyncing string
 
 //go:embed schemas/rpcschemaethblock.json
 var RPCSchemaEthBlock string
+
+//go:embed schemas/rpcschemaaccountlist.json
+var RPCSchemaAccountList string

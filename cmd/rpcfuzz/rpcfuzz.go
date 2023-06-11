@@ -90,7 +90,58 @@ var (
 		),
 	}
 
-	// I probably need to put these giant strings somewhere else
+	// cast rpc --rpc-url localhost:8545 eth_coinbase
+	RPCTestEthCoinbase = RPCTestGeneric{
+		Method:    "eth_coinbase",
+		Args:      []interface{}{},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{40}$`),
+	}
+
+	// cast rpc --rpc-url localhost:8545 eth_chainId
+	RPCTestEthChainID = RPCTestGeneric{
+		Method:    "eth_chainId",
+		Args:      []interface{}{},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+
+	// cast rpc --rpc-url localhost:8545 eth_mining
+	RPCTestEthMining = RPCTestGeneric{
+		Method: "eth_mining",
+		Args:   []interface{}{},
+		Validator: ChainValidator(
+			ValidateExact(true),
+			ValidateExact(false),
+		),
+	}
+
+	// cast rpc --rpc-url localhost:8545 eth_hashrate
+	RPCTestEthHashrate = RPCTestGeneric{
+		Method:    "eth_hashrate",
+		Args:      []interface{}{},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+
+	// cast rpc --rpc-url localhost:8545 eth_gasPrice
+	RPCTestEthGasPrice = RPCTestGeneric{
+		Method:    "eth_gasPrice",
+		Args:      []interface{}{},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+
+	// cast rpc --rpc-url localhost:8545 eth_accounts
+	RPCTestEthAccounts = RPCTestGeneric{
+		Method:    "eth_accounts",
+		Args:      []interface{}{},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaAccountList),
+	}
+
+	// cast rpc --rpc-url localhost:8545 eth_blockNumber
+	RPCTestEthBlockNumber = RPCTestGeneric{
+		Method:    "eth_blockNumber",
+		Args:      []interface{}{},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+
 	// cast block --rpc-url localhost:8545 0
 	RPCTestEthBlockByNumber = RPCTestGeneric{
 		Method:    "eth_getBlockByNumber",
@@ -107,6 +158,14 @@ var (
 		&RPCTestNetPeerCount,
 		&RPCTestEthProtocolVersion,
 		&RPCTestEthSyncing,
+		&RPCTestEthCoinbase,
+		&RPCTestEthChainID,
+		&RPCTestEthMining,
+		&RPCTestEthHashrate,
+		&RPCTestEthGasPrice,
+		&RPCTestEthAccounts,
+		&RPCTestEthBlockNumber,
+
 		&RPCTestEthBlockByNumber,
 	}
 )
