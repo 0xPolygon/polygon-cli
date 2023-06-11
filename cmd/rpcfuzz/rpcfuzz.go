@@ -14,6 +14,7 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 	"os"
 	"regexp"
+	"strings"
 )
 
 type (
@@ -37,18 +38,47 @@ const (
 )
 
 var (
-	testPrivateHexKey *string
-	testPrivateKey    *ecdsa.PrivateKey
-	testEthAddress    ethcommon.Address
+	testPrivateHexKey   *string
+	testContractAddress *string
+	testPrivateKey      *ecdsa.PrivateKey
+	testEthAddress      ethcommon.Address
 )
 
 var (
+	RPCTestNetVersion              RPCTestGeneric
+	RPCTestWeb3ClientVersion       RPCTestGeneric
+	RPCTestWeb3SHA3                RPCTestGeneric
+	RPCTestWeb3SHA3Error           RPCTestGeneric
+	RPCTestNetListening            RPCTestGeneric
+	RPCTestNetPeerCount            RPCTestGeneric
+	RPCTestEthProtocolVersion      RPCTestGeneric
+	RPCTestEthSyncing              RPCTestGeneric
+	RPCTestEthCoinbase             RPCTestGeneric
+	RPCTestEthChainID              RPCTestGeneric
+	RPCTestEthMining               RPCTestGeneric
+	RPCTestEthHashrate             RPCTestGeneric
+	RPCTestEthGasPrice             RPCTestGeneric
+	RPCTestEthAccounts             RPCTestGeneric
+	RPCTestEthBlockNumber          RPCTestGeneric
+	RPCTestEthGetBalanceLatest     RPCTestGeneric
+	RPCTestEthGetBalanceEarliest   RPCTestGeneric
+	RPCTestEthGetBalancePending    RPCTestGeneric
+	RPCTestEthGetStorageAtLatest   RPCTestGeneric
+	RPCTestEthGetStorageAtEarliest RPCTestGeneric
+	RPCTestEthGetStorageAtPending  RPCTestGeneric
+	RPCTestEthBlockByNumber        RPCTestGeneric
+
+	allTests = make([]RPCTest, 0)
+)
+
+func setupTests() {
 	// cast rpc --rpc-url localhost:8545 net_version
 	RPCTestNetVersion = RPCTestGeneric{
 		Method:    "net_version",
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^\d*$`),
 	}
+	allTests = append(allTests, &RPCTestNetVersion)
 
 	// cast rpc --rpc-url localhost:8545 web3_clientVersion
 	RPCTestWeb3ClientVersion = RPCTestGeneric{
@@ -56,6 +86,7 @@ var (
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^[[:print:]]*$`),
 	}
+	allTests = append(allTests, &RPCTestWeb3ClientVersion)
 
 	// cast rpc --rpc-url localhost:8545 web3_sha3 0x68656c6c6f20776f726c64
 	RPCTestWeb3SHA3 = RPCTestGeneric{
@@ -63,6 +94,7 @@ var (
 		Args:      []interface{}{"0x68656c6c6f20776f726c64"},
 		Validator: ValidateRegexString(`0x47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad`),
 	}
+	allTests = append(allTests, &RPCTestWeb3SHA3)
 
 	RPCTestWeb3SHA3Error = RPCTestGeneric{
 		IsError:   true,
@@ -70,6 +102,7 @@ var (
 		Args:      []interface{}{"68656c6c6f20776f726c64"},
 		Validator: ValidatorError(`cannot unmarshal hex string without 0x prefix`),
 	}
+	allTests = append(allTests, &RPCTestWeb3SHA3Error)
 
 	// cast rpc --rpc-url localhost:8545 net_listening
 	RPCTestNetListening = RPCTestGeneric{
@@ -77,6 +110,7 @@ var (
 		Args:      []interface{}{},
 		Validator: ValidateExact(true),
 	}
+	allTests = append(allTests, &RPCTestNetListening)
 
 	// cast rpc --rpc-url localhost:8545 net_peerCount
 	RPCTestNetPeerCount = RPCTestGeneric{
@@ -84,6 +118,7 @@ var (
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]*$`),
 	}
+	allTests = append(allTests, &RPCTestNetPeerCount)
 
 	// cast rpc --rpc-url localhost:8545 eth_protocolVersion
 	RPCTestEthProtocolVersion = RPCTestGeneric{
@@ -92,6 +127,7 @@ var (
 		Args:      []interface{}{},
 		Validator: ValidatorError(`method eth_protocolVersion does not exist`),
 	}
+	allTests = append(allTests, &RPCTestEthProtocolVersion)
 
 	// cast rpc --rpc-url localhost:8545 eth_syncing
 	RPCTestEthSyncing = RPCTestGeneric{
@@ -102,6 +138,7 @@ var (
 			ValidateJSONSchema(rpctypes.RPCSchemaEthSyncing),
 		),
 	}
+	allTests = append(allTests, &RPCTestEthSyncing)
 
 	// cast rpc --rpc-url localhost:8545 eth_coinbase
 	RPCTestEthCoinbase = RPCTestGeneric{
@@ -109,6 +146,7 @@ var (
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{40}$`),
 	}
+	allTests = append(allTests, &RPCTestEthCoinbase)
 
 	// cast rpc --rpc-url localhost:8545 eth_chainId
 	RPCTestEthChainID = RPCTestGeneric{
@@ -116,6 +154,7 @@ var (
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
+	allTests = append(allTests, &RPCTestEthChainID)
 
 	// cast rpc --rpc-url localhost:8545 eth_mining
 	RPCTestEthMining = RPCTestGeneric{
@@ -126,6 +165,7 @@ var (
 			ValidateExact(false),
 		),
 	}
+	allTests = append(allTests, &RPCTestEthMining)
 
 	// cast rpc --rpc-url localhost:8545 eth_hashrate
 	RPCTestEthHashrate = RPCTestGeneric{
@@ -133,6 +173,7 @@ var (
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
+	allTests = append(allTests, &RPCTestEthHashrate)
 
 	// cast rpc --rpc-url localhost:8545 eth_gasPrice
 	RPCTestEthGasPrice = RPCTestGeneric{
@@ -140,6 +181,7 @@ var (
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
+	allTests = append(allTests, &RPCTestEthGasPrice)
 
 	// cast rpc --rpc-url localhost:8545 eth_accounts
 	RPCTestEthAccounts = RPCTestGeneric{
@@ -147,6 +189,7 @@ var (
 		Args:      []interface{}{},
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaAccountList),
 	}
+	allTests = append(allTests, &RPCTestEthAccounts)
 
 	// cast rpc --rpc-url localhost:8545 eth_blockNumber
 	RPCTestEthBlockNumber = RPCTestGeneric{
@@ -154,6 +197,7 @@ var (
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
+	allTests = append(allTests, &RPCTestEthBlockNumber)
 
 	// cast balance --rpc-url localhost:8545 0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6
 	RPCTestEthGetBalanceLatest = RPCTestGeneric{
@@ -161,47 +205,55 @@ var (
 		Args:      []interface{}{testEthAddress.String(), "latest"},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
+	allTests = append(allTests, &RPCTestEthGetBalanceLatest)
 	RPCTestEthGetBalanceEarliest = RPCTestGeneric{
 		Method:    "eth_getBalance",
 		Args:      []interface{}{testEthAddress.String(), "earliest"},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
+	allTests = append(allTests, &RPCTestEthGetBalanceEarliest)
 	RPCTestEthGetBalancePending = RPCTestGeneric{
 		Method:    "eth_getBalance",
 		Args:      []interface{}{testEthAddress.String(), "pending"},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
+	allTests = append(allTests, &RPCTestEthGetBalancePending)
 
+	// cast storage --rpc-url localhost:8545 0x6fda56c57b0acadb96ed5624ac500c0429d59429 3
+	RPCTestEthGetStorageAtLatest = RPCTestGeneric{
+		Method:    "eth_getStorageAt",
+		Args:      []interface{}{*testContractAddress, "0x3", "latest"},
+		Validator: ValidateRegexString(`^0x000000000000000000000000` + strings.ToLower(testEthAddress.String())[2:] + `$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetStorageAtLatest)
+	RPCTestEthGetStorageAtEarliest = RPCTestGeneric{
+		Method:    "eth_getStorageAt",
+		Args:      []interface{}{*testContractAddress, "0x3", "earliest"},
+		Validator: ValidateRegexString(`^0x0{64}`),
+	}
+	allTests = append(allTests, &RPCTestEthGetStorageAtEarliest)
+	RPCTestEthGetStorageAtPending = RPCTestGeneric{
+		Method:    "eth_getStorageAt",
+		Args:      []interface{}{*testContractAddress, "0x3", "pending"},
+		Validator: ValidateRegexString(`^0x000000000000000000000000` + strings.ToLower(testEthAddress.String())[2:] + `$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetStorageAtPending)
+
+	// spacing this thing out
+	// spacing this thing out
+	// spacing this thing out
+	// spacing this thing out
+	// spacing this thing out
+	// spacing this thing out
 	// cast block --rpc-url localhost:8545 0
 	RPCTestEthBlockByNumber = RPCTestGeneric{
 		Method:    "eth_getBlockByNumber",
 		Args:      []interface{}{"0x0", true},
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
 	}
+	allTests = append(allTests, &RPCTestEthBlockByNumber)
 
-	allTests = []RPCTest{
-		&RPCTestNetVersion,
-		&RPCTestWeb3ClientVersion,
-		&RPCTestWeb3SHA3,
-		&RPCTestWeb3SHA3Error,
-		&RPCTestNetListening,
-		&RPCTestNetPeerCount,
-		&RPCTestEthProtocolVersion,
-		&RPCTestEthSyncing,
-		&RPCTestEthCoinbase,
-		&RPCTestEthChainID,
-		&RPCTestEthMining,
-		&RPCTestEthHashrate,
-		&RPCTestEthGasPrice,
-		&RPCTestEthAccounts,
-		&RPCTestEthBlockNumber,
-		&RPCTestEthGetBalanceLatest,
-		&RPCTestEthGetBalanceEarliest,
-		&RPCTestEthGetBalancePending,
-
-		&RPCTestEthBlockByNumber,
-	}
-)
+}
 
 // ChainValidator would take a list of validation functions to be
 // applied in order. The idea is that if first validator is true, then
@@ -299,12 +351,43 @@ var RPCFuzzCmd = &cobra.Command{
 	Use:   "rpcfuzz http://localhost:8545",
 	Short: "Continually run a variety of RPC calls and fuzzers",
 	Long: `
-In order to quickly test this, you can run geth in dev mode:
 
-# ./build/bin/geth --dev --dev.period 5 --http --http.addr localhost --http.port 8545 --http.api admin,debug,web3,eth,txpool,personal,miner,net --verbosity 5 --rpc.gascap 50000000  --rpc.txfeecap 0 --miner.gaslimit  10 --miner.gasprice 1 --gpo.blocks 1 --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2 --dev.gaslimit 50000000
+This command will run a series of RPC calls against a given json rpc
+endpoint. The idea is to be able to check for various features and
+function to see if the RPC generally conforms to typical geth
+standards for the RPC
 
-Then you can use cast to fund the test account
-# cast send --from "$(cast rpc --rpc-url localhost:8545 eth_coinbase | jq -r '.')" --rpc-url localhost:8545 --unlocked --value 100ether 0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6
+Some setup might be neede depending on how you're testing. We'll
+demonstrate with geth. In order to quickly test this, you can run geth
+in dev mode:
+
+# ./build/bin/geth --dev --dev.period 5 --http --http.addr localhost \
+    --http.port 8545 \
+    --http.api admin,debug,web3,eth,txpool,personal,miner,net \
+    --verbosity 5 --rpc.gascap 50000000  --rpc.txfeecap 0 \
+    --miner.gaslimit  10 --miner.gasprice 1 --gpo.blocks 1 \
+    --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2 \
+    --dev.gaslimit 50000000
+
+Once your Eth client is running and the RPC is functional, you'll need
+to transfer some amount of ether to a known account that ca be used
+for testing
+
+# cast send --from "$(cast rpc --rpc-url localhost:8545 eth_coinbase | jq -r '.')" \
+    --rpc-url localhost:8545 --unlocked --value 100ether \
+    0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6
+
+Then we might want to deploy some test smart contracts. For the
+purposes of testing we'll use Uniswap v3 at this hash
+d8b1c635c275d2a9450bd6a78f3fa2484fef73eb
+
+# cast send --from 0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6 \
+    --private-key 0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa \
+    --rpc-url localhost:8545 --create \
+    "$(jq -r '.bytecode' ~/code/v3-core/artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json)"
+
+Once this has been completed this will be the address of the contract:
+0x6fda56c57b0acadb96ed5624ac500c0429d59429
 
 - https://ethereum.github.io/execution-apis/api-documentation/
 - https://ethereum.org/en/developers/docs/apis/json-rpc/
@@ -318,6 +401,9 @@ Then you can use cast to fund the test account
 		if err != nil {
 			return err
 		}
+		log.Trace().Msg("Doing test setup")
+		setupTests()
+
 		for _, t := range allTests {
 			log.Trace().Str("method", t.GetMethod()).Msg("Running Test")
 			var result interface{}
@@ -368,5 +454,6 @@ func init() {
 
 	flagSet := RPCFuzzCmd.PersistentFlags()
 	testPrivateHexKey = flagSet.String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
+	testContractAddress = flagSet.String("contract-address", "0x6fda56c57b0acadb96ed5624ac500c0429d59429", "The address of a contract that can be used for testing")
 
 }
