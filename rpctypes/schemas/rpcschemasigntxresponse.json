@@ -10,43 +10,55 @@
             "type": "object",
             "properties": {
                 "type": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^0x[0-9a-f]{1,}$"
                 },
                 "nonce": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^0x[0-9a-f]{1,}$"
                 },
                 "to": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^0x[0-9a-f]{1,}$"
                 },
                 "gas": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^0x[0-9a-f]{1,}$"
                 },
                 "gasPrice": {
                     "type": ["string", "null"]
                 },
                 "maxPriorityFeePerGas": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^0x[0-9a-f]{1,}$"
                 },
                 "maxFeePerGas": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^0x[0-9a-f]{1,}$"
                 },
                 "value": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^0x[0-9a-f]{1,}$"
                 },
                 "input": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^0x[0-9a-f]*$"
                 },
                 "v": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^0x[0-9a-f]{1,}$"
                 },
                 "r": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^0x[0-9a-f]{1,}$"
                 },
                 "s": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^0x[0-9a-f]{1,}$"
                 },
                 "hash": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^0x[0-9a-f]{1,}$"
                 }
             },
             "required": [
