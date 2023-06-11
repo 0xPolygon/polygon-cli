@@ -1,8 +1,11 @@
 package rpcfuzz
 
 import (
+	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
+	ethcommon "github.com/ethereum/go-ethereum/common"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/rs/zerolog"
@@ -27,6 +30,16 @@ type (
 		Validator func(result interface{}) error
 		IsError   bool
 	}
+)
+
+const (
+	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
+)
+
+var (
+	testPrivateHexKey *string
+	testPrivateKey    *ecdsa.PrivateKey
+	testEthAddress    ethcommon.Address
 )
 
 var (
@@ -142,6 +155,23 @@ var (
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
 
+	// cast balance --rpc-url localhost:8545 0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6
+	RPCTestEthGetBalanceLatest = RPCTestGeneric{
+		Method:    "eth_getBalance",
+		Args:      []interface{}{testEthAddress.String(), "latest"},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+	RPCTestEthGetBalanceEarliest = RPCTestGeneric{
+		Method:    "eth_getBalance",
+		Args:      []interface{}{testEthAddress.String(), "earliest"},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+	RPCTestEthGetBalancePending = RPCTestGeneric{
+		Method:    "eth_getBalance",
+		Args:      []interface{}{testEthAddress.String(), "pending"},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+
 	// cast block --rpc-url localhost:8545 0
 	RPCTestEthBlockByNumber = RPCTestGeneric{
 		Method:    "eth_getBlockByNumber",
@@ -165,6 +195,9 @@ var (
 		&RPCTestEthGasPrice,
 		&RPCTestEthAccounts,
 		&RPCTestEthBlockNumber,
+		&RPCTestEthGetBalanceLatest,
+		&RPCTestEthGetBalanceEarliest,
+		&RPCTestEthGetBalancePending,
 
 		&RPCTestEthBlockByNumber,
 	}
@@ -266,6 +299,12 @@ var RPCFuzzCmd = &cobra.Command{
 	Use:   "rpcfuzz http://localhost:8545",
 	Short: "Continually run a variety of RPC calls and fuzzers",
 	Long: `
+In order to quickly test this, you can run geth in dev mode:
+
+# ./build/bin/geth --dev --dev.period 5 --http --http.addr localhost --http.port 8545 --http.api admin,debug,web3,eth,txpool,personal,miner,net --verbosity 5 --rpc.gascap 50000000  --rpc.txfeecap 0 --miner.gaslimit  10 --miner.gasprice 1 --gpo.blocks 1 --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2 --dev.gaslimit 50000000
+
+Then you can use cast to fund the test account
+# cast send --from "$(cast rpc --rpc-url localhost:8545 eth_coinbase | jq -r '.')" --rpc-url localhost:8545 --unlocked --value 100ether 0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6
 
 - https://ethereum.github.io/execution-apis/api-documentation/
 - https://ethereum.org/en/developers/docs/apis/json-rpc/
@@ -306,6 +345,19 @@ var RPCFuzzCmd = &cobra.Command{
 		if len(args) != 1 {
 			return fmt.Errorf("Expected 1 argument, but got %d", len(args))
 		}
+
+		privateKey, err := ethcrypto.HexToECDSA(*testPrivateHexKey)
+		if err != nil {
+			log.Error().Err(err).Msg("Couldn't process the hex private key")
+			return err
+		}
+
+		ethAddress := ethcrypto.PubkeyToAddress(privateKey.PublicKey)
+		log.Info().Str("ethAddress", ethAddress.String()).Msg("Loaded private key")
+
+		testPrivateKey = privateKey
+		testEthAddress = ethAddress
+
 		return nil
 	},
 }
@@ -315,5 +367,6 @@ func init() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	flagSet := RPCFuzzCmd.PersistentFlags()
-	_ = flagSet
+	testPrivateHexKey = flagSet.String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
+
 }
