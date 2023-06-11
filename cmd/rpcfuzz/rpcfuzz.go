@@ -110,6 +110,10 @@ var (
 	RPCTestEthGetBlockTransactionCountByNumberZero     RPCTestGeneric
 	RPCTestEthGetUncleCountByBlockHash                 RPCTestDynamicArgs
 	RPCTestEthGetUncleCountByBlockHashMissing          RPCTestGeneric
+	RPCTestEthGetUncleCountByBlockNumberLatest         RPCTestGeneric
+	RPCTestEthGetUncleCountByBlockNumberEarliest       RPCTestGeneric
+	RPCTestEthGetUncleCountByBlockNumberPending        RPCTestGeneric
+	RPCTestEthGetUncleCountByBlockNumberZero           RPCTestGeneric
 	RPCTestEthBlockByNumber                            RPCTestGeneric
 
 	allTests = make([]RPCTest, 0)
@@ -409,6 +413,36 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateExact(nil),
 	}
 	allTests = append(allTests, &RPCTestEthGetUncleCountByBlockHashMissing)
+
+	// cast rpc --rpc-url localhost:8545 eth_getUncleCountByNumber 0x1
+	RPCTestEthGetUncleCountByBlockNumberLatest = RPCTestGeneric{
+		Name:      "RPCTestEthGetUncleCountByBlockNumberLatest",
+		Method:    "eth_getUncleCountByBlockNumber",
+		Args:      []interface{}{"latest"},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetUncleCountByBlockNumberLatest)
+	RPCTestEthGetUncleCountByBlockNumberEarliest = RPCTestGeneric{
+		Name:      "RPCTestEthGetUncleCountByBlockNumberEarliest",
+		Method:    "eth_getUncleCountByBlockNumber",
+		Args:      []interface{}{"earliest"},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetUncleCountByBlockNumberEarliest)
+	RPCTestEthGetUncleCountByBlockNumberPending = RPCTestGeneric{
+		Name:      "RPCTestEthGetUncleCountByBlockNumberPending",
+		Method:    "eth_getUncleCountByBlockNumber",
+		Args:      []interface{}{"pending"},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetUncleCountByBlockNumberPending)
+	RPCTestEthGetUncleCountByBlockNumberZero = RPCTestGeneric{
+		Name:      "RPCTestEthGetUncleCountByBlockNumberZero",
+		Method:    "eth_getUncleCountByBlockNumber",
+		Args:      []interface{}{"0x0"},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetUncleCountByBlockNumberZero)
 
 	// spacing this thing out
 	// spacing this thing out
