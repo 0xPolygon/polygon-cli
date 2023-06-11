@@ -1,3 +1,5 @@
+// Package rpcfuzz is meant to have some basic RPC fuzzing and
+// conformance tests
 package rpcfuzz
 
 import (
@@ -18,13 +20,25 @@ import (
 )
 
 type (
+	// RPCTest is the common interface for a test
 	RPCTest interface {
+		// GetMethod returns the json rpc method name
 		GetMethod() string
+
+		// GetArgs will return the list of arguments that will be used when calling the rpc
 		GetArgs() []interface{}
+
+		// Validate will return an error of the result fails validation
 		Validate(result interface{}) error
+
+		// ExpectError is used by the validation code to understand of the test typically returns an error
 		ExpectError() bool
 	}
 
+	// RPCTestGenric is the simplist implementation of the
+	// RPCTest. Basically the implementation of the interface is
+	// managed by just returning hard coded values for method,
+	// args, validator, and error
 	RPCTestGeneric struct {
 		Method    string
 		Args      []interface{}
@@ -104,7 +118,7 @@ func setupTests() {
 		IsError:   true,
 		Method:    "web3_sha3",
 		Args:      []interface{}{"68656c6c6f20776f726c64"},
-		Validator: ValidatorError(`cannot unmarshal hex string without 0x prefix`),
+		Validator: ValidateError(`cannot unmarshal hex string without 0x prefix`),
 	}
 	allTests = append(allTests, &RPCTestWeb3SHA3Error)
 
@@ -129,7 +143,7 @@ func setupTests() {
 		IsError:   true,
 		Method:    "eth_protocolVersion",
 		Args:      []interface{}{},
-		Validator: ValidatorError(`method eth_protocolVersion does not exist`),
+		Validator: ValidateError(`method eth_protocolVersion does not exist`),
 	}
 	allTests = append(allTests, &RPCTestEthProtocolVersion)
 
@@ -294,6 +308,8 @@ func ChainValidator(validators ...func(interface{}) error) func(result interface
 	}
 
 }
+
+// ValidateJSONSchema is used to validate the response against a JSON Schema
 func ValidateJSONSchema(schema string) func(result interface{}) error {
 	return func(result interface{}) error {
 		validatorLoader := gojsonschema.NewStringLoader(schema)
@@ -322,6 +338,8 @@ func ValidateJSONSchema(schema string) func(result interface{}) error {
 
 	}
 }
+
+// ValidateExact will validate against the exact value expected.
 func ValidateExact(expected interface{}) func(result interface{}) error {
 	return func(result interface{}) error {
 		if expected != result {
@@ -331,6 +349,7 @@ func ValidateExact(expected interface{}) func(result interface{}) error {
 	}
 }
 
+// ValidateRegexString will match a string from the json response against a regular expression
 func ValidateRegexString(regEx string) func(result interface{}) error {
 	r := regexp.MustCompile(regEx)
 	return func(result interface{}) error {
@@ -344,7 +363,9 @@ func ValidateRegexString(regEx string) func(result interface{}) error {
 		return nil
 	}
 }
-func ValidatorError(errorMessageRegex string) func(result interface{}) error {
+
+// ValidateError will check the error message text against the provide regular expression
+func ValidateError(errorMessageRegex string) func(result interface{}) error {
 	r := regexp.MustCompile(errorMessageRegex)
 	return func(result interface{}) error {
 		resultError, isValid := result.(error)
