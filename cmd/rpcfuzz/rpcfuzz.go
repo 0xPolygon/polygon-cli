@@ -45,28 +45,32 @@ var (
 )
 
 var (
-	RPCTestNetVersion              RPCTestGeneric
-	RPCTestWeb3ClientVersion       RPCTestGeneric
-	RPCTestWeb3SHA3                RPCTestGeneric
-	RPCTestWeb3SHA3Error           RPCTestGeneric
-	RPCTestNetListening            RPCTestGeneric
-	RPCTestNetPeerCount            RPCTestGeneric
-	RPCTestEthProtocolVersion      RPCTestGeneric
-	RPCTestEthSyncing              RPCTestGeneric
-	RPCTestEthCoinbase             RPCTestGeneric
-	RPCTestEthChainID              RPCTestGeneric
-	RPCTestEthMining               RPCTestGeneric
-	RPCTestEthHashrate             RPCTestGeneric
-	RPCTestEthGasPrice             RPCTestGeneric
-	RPCTestEthAccounts             RPCTestGeneric
-	RPCTestEthBlockNumber          RPCTestGeneric
-	RPCTestEthGetBalanceLatest     RPCTestGeneric
-	RPCTestEthGetBalanceEarliest   RPCTestGeneric
-	RPCTestEthGetBalancePending    RPCTestGeneric
-	RPCTestEthGetStorageAtLatest   RPCTestGeneric
-	RPCTestEthGetStorageAtEarliest RPCTestGeneric
-	RPCTestEthGetStorageAtPending  RPCTestGeneric
-	RPCTestEthBlockByNumber        RPCTestGeneric
+	RPCTestNetVersion                       RPCTestGeneric
+	RPCTestWeb3ClientVersion                RPCTestGeneric
+	RPCTestWeb3SHA3                         RPCTestGeneric
+	RPCTestWeb3SHA3Error                    RPCTestGeneric
+	RPCTestNetListening                     RPCTestGeneric
+	RPCTestNetPeerCount                     RPCTestGeneric
+	RPCTestEthProtocolVersion               RPCTestGeneric
+	RPCTestEthSyncing                       RPCTestGeneric
+	RPCTestEthCoinbase                      RPCTestGeneric
+	RPCTestEthChainID                       RPCTestGeneric
+	RPCTestEthMining                        RPCTestGeneric
+	RPCTestEthHashrate                      RPCTestGeneric
+	RPCTestEthGasPrice                      RPCTestGeneric
+	RPCTestEthAccounts                      RPCTestGeneric
+	RPCTestEthBlockNumber                   RPCTestGeneric
+	RPCTestEthGetBalanceLatest              RPCTestGeneric
+	RPCTestEthGetBalanceEarliest            RPCTestGeneric
+	RPCTestEthGetBalancePending             RPCTestGeneric
+	RPCTestEthGetStorageAtLatest            RPCTestGeneric
+	RPCTestEthGetStorageAtEarliest          RPCTestGeneric
+	RPCTestEthGetStorageAtPending           RPCTestGeneric
+	RPCTestEthGetTransactionCountAtLatest   RPCTestGeneric
+	RPCTestEthGetTransactionCountAtEarliest RPCTestGeneric
+	RPCTestEthGetTransactionCountAtPending  RPCTestGeneric
+
+	RPCTestEthBlockByNumber RPCTestGeneric
 
 	allTests = make([]RPCTest, 0)
 )
@@ -238,6 +242,26 @@ func setupTests() {
 		Validator: ValidateRegexString(`^0x000000000000000000000000` + strings.ToLower(testEthAddress.String())[2:] + `$`),
 	}
 	allTests = append(allTests, &RPCTestEthGetStorageAtPending)
+
+	// cast rpc --rpc-url localhost:8545 eth_getTransactionCount 0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6 latest
+	RPCTestEthGetTransactionCountAtLatest = RPCTestGeneric{
+		Method:    "eth_getTransactionCount",
+		Args:      []interface{}{testEthAddress.String(), "latest"},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetTransactionCountAtLatest)
+	RPCTestEthGetTransactionCountAtEarliest = RPCTestGeneric{
+		Method:    "eth_getTransactionCount",
+		Args:      []interface{}{testEthAddress.String(), "earliest"},
+		Validator: ValidateRegexString(`^0x0$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetTransactionCountAtEarliest)
+	RPCTestEthGetTransactionCountAtPending = RPCTestGeneric{
+		Method:    "eth_getTransactionCount",
+		Args:      []interface{}{testEthAddress.String(), "pending"},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetTransactionCountAtPending)
 
 	// spacing this thing out
 	// spacing this thing out
