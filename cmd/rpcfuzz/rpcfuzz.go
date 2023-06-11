@@ -23,6 +23,9 @@ import (
 type (
 	// RPCTest is the common interface for a test
 	RPCTest interface {
+		// GetName returns a more descriptive name of the test being executed
+		GetName() string
+
 		// GetMethod returns the json rpc method name
 		GetMethod() string
 
@@ -41,6 +44,7 @@ type (
 	// managed by just returning hard coded values for method,
 	// args, validator, and error
 	RPCTestGeneric struct {
+		Name      string
 		Method    string
 		Args      []interface{}
 		Validator func(result interface{}) error
@@ -51,6 +55,7 @@ type (
 	// RPCTest that requires a function for Args which will be
 	// used to generate the args for testing.
 	RPCTestDynamicArgs struct {
+		Name      string
 		Method    string
 		Args      func() []interface{}
 		Validator func(result interface{}) error
@@ -70,33 +75,40 @@ var (
 )
 
 var (
-	RPCTestNetVersion                               RPCTestGeneric
-	RPCTestWeb3ClientVersion                        RPCTestGeneric
-	RPCTestWeb3SHA3                                 RPCTestGeneric
-	RPCTestWeb3SHA3Error                            RPCTestGeneric
-	RPCTestNetListening                             RPCTestGeneric
-	RPCTestNetPeerCount                             RPCTestGeneric
-	RPCTestEthProtocolVersion                       RPCTestGeneric
-	RPCTestEthSyncing                               RPCTestGeneric
-	RPCTestEthCoinbase                              RPCTestGeneric
-	RPCTestEthChainID                               RPCTestGeneric
-	RPCTestEthMining                                RPCTestGeneric
-	RPCTestEthHashrate                              RPCTestGeneric
-	RPCTestEthGasPrice                              RPCTestGeneric
-	RPCTestEthAccounts                              RPCTestGeneric
-	RPCTestEthBlockNumber                           RPCTestGeneric
-	RPCTestEthGetBalanceLatest                      RPCTestGeneric
-	RPCTestEthGetBalanceEarliest                    RPCTestGeneric
-	RPCTestEthGetBalancePending                     RPCTestGeneric
-	RPCTestEthGetStorageAtLatest                    RPCTestGeneric
-	RPCTestEthGetStorageAtEarliest                  RPCTestGeneric
-	RPCTestEthGetStorageAtPending                   RPCTestGeneric
-	RPCTestEthGetTransactionCountAtLatest           RPCTestGeneric
-	RPCTestEthGetTransactionCountAtEarliest         RPCTestGeneric
-	RPCTestEthGetTransactionCountAtPending          RPCTestGeneric
-	RPCTestEthGetBlockTransactionCountByHash        RPCTestDynamicArgs
-	RPCTestEthGetBlockTransactionCountByHashMissing RPCTestGeneric
-	RPCTestEthBlockByNumber                         RPCTestGeneric
+	RPCTestNetVersion                                  RPCTestGeneric
+	RPCTestWeb3ClientVersion                           RPCTestGeneric
+	RPCTestWeb3SHA3                                    RPCTestGeneric
+	RPCTestWeb3SHA3Error                               RPCTestGeneric
+	RPCTestNetListening                                RPCTestGeneric
+	RPCTestNetPeerCount                                RPCTestGeneric
+	RPCTestEthProtocolVersion                          RPCTestGeneric
+	RPCTestEthSyncing                                  RPCTestGeneric
+	RPCTestEthCoinbase                                 RPCTestGeneric
+	RPCTestEthChainID                                  RPCTestGeneric
+	RPCTestEthMining                                   RPCTestGeneric
+	RPCTestEthHashrate                                 RPCTestGeneric
+	RPCTestEthGasPrice                                 RPCTestGeneric
+	RPCTestEthAccounts                                 RPCTestGeneric
+	RPCTestEthBlockNumber                              RPCTestGeneric
+	RPCTestEthGetBalanceLatest                         RPCTestGeneric
+	RPCTestEthGetBalanceEarliest                       RPCTestGeneric
+	RPCTestEthGetBalancePending                        RPCTestGeneric
+	RPCTestEthGetBalanceZero                           RPCTestGeneric
+	RPCTestEthGetStorageAtLatest                       RPCTestGeneric
+	RPCTestEthGetStorageAtEarliest                     RPCTestGeneric
+	RPCTestEthGetStorageAtPending                      RPCTestGeneric
+	RPCTestEthGetStorageAtZero                         RPCTestGeneric
+	RPCTestEthGetTransactionCountAtLatest              RPCTestGeneric
+	RPCTestEthGetTransactionCountAtEarliest            RPCTestGeneric
+	RPCTestEthGetTransactionCountAtPending             RPCTestGeneric
+	RPCTestEthGetTransactionCountAtZero                RPCTestGeneric
+	RPCTestEthGetBlockTransactionCountByHash           RPCTestDynamicArgs
+	RPCTestEthGetBlockTransactionCountByHashMissing    RPCTestGeneric
+	RPCTestEthGetBlockTransactionCountByNumberLatest   RPCTestGeneric
+	RPCTestEthGetBlockTransactionCountByNumberEarliest RPCTestGeneric
+	RPCTestEthGetBlockTransactionCountByNumberPending  RPCTestGeneric
+	RPCTestEthGetBlockTransactionCountByNumberZero     RPCTestGeneric
+	RPCTestEthBlockByNumber                            RPCTestGeneric
 
 	allTests = make([]RPCTest, 0)
 )
@@ -104,6 +116,7 @@ var (
 func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	// cast rpc --rpc-url localhost:8545 net_version
 	RPCTestNetVersion = RPCTestGeneric{
+		Name:      "RPCTestNetVersion",
 		Method:    "net_version",
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^\d*$`),
@@ -112,6 +125,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 web3_clientVersion
 	RPCTestWeb3ClientVersion = RPCTestGeneric{
+		Name:      "RPCTestWeb3ClientVersion",
 		Method:    "web3_clientVersion",
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^[[:print:]]*$`),
@@ -120,6 +134,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 web3_sha3 0x68656c6c6f20776f726c64
 	RPCTestWeb3SHA3 = RPCTestGeneric{
+		Name:      "RPCTestWeb3SHA3",
 		Method:    "web3_sha3",
 		Args:      []interface{}{"0x68656c6c6f20776f726c64"},
 		Validator: ValidateRegexString(`0x47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad`),
@@ -127,6 +142,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestWeb3SHA3)
 
 	RPCTestWeb3SHA3Error = RPCTestGeneric{
+		Name:      "RPCTestWeb3SHA3Error",
 		IsError:   true,
 		Method:    "web3_sha3",
 		Args:      []interface{}{"68656c6c6f20776f726c64"},
@@ -136,6 +152,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 net_listening
 	RPCTestNetListening = RPCTestGeneric{
+		Name:      "RPCTestNetListening",
 		Method:    "net_listening",
 		Args:      []interface{}{},
 		Validator: ValidateExact(true),
@@ -144,6 +161,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 net_peerCount
 	RPCTestNetPeerCount = RPCTestGeneric{
+		Name:      "RPCTestNetPeerCount",
 		Method:    "net_peerCount",
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]*$`),
@@ -152,6 +170,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_protocolVersion
 	RPCTestEthProtocolVersion = RPCTestGeneric{
+		Name:      "RPCTestEthProtocolVersion",
 		IsError:   true,
 		Method:    "eth_protocolVersion",
 		Args:      []interface{}{},
@@ -161,6 +180,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_syncing
 	RPCTestEthSyncing = RPCTestGeneric{
+		Name:   "RPCTestEthSyncing",
 		Method: "eth_syncing",
 		Args:   []interface{}{},
 		Validator: ChainValidator(
@@ -172,6 +192,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_coinbase
 	RPCTestEthCoinbase = RPCTestGeneric{
+		Name:      "RPCTestEthCoinbase",
 		Method:    "eth_coinbase",
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{40}$`),
@@ -180,6 +201,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_chainId
 	RPCTestEthChainID = RPCTestGeneric{
+		Name:      "RPCTestEthChainID",
 		Method:    "eth_chainId",
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
@@ -188,6 +210,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_mining
 	RPCTestEthMining = RPCTestGeneric{
+		Name:   "RPCTestEthMining",
 		Method: "eth_mining",
 		Args:   []interface{}{},
 		Validator: ChainValidator(
@@ -199,6 +222,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_hashrate
 	RPCTestEthHashrate = RPCTestGeneric{
+		Name:      "RPCTestEthHashrate",
 		Method:    "eth_hashrate",
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
@@ -207,6 +231,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_gasPrice
 	RPCTestEthGasPrice = RPCTestGeneric{
+		Name:      "RPCTestEthGasPrice",
 		Method:    "eth_gasPrice",
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
@@ -215,6 +240,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_accounts
 	RPCTestEthAccounts = RPCTestGeneric{
+		Name:      "RPCTestEthAccounts",
 		Method:    "eth_accounts",
 		Args:      []interface{}{},
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaAccountList),
@@ -223,6 +249,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_blockNumber
 	RPCTestEthBlockNumber = RPCTestGeneric{
+		Name:      "RPCTestEthBlockNumber",
 		Method:    "eth_blockNumber",
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
@@ -231,77 +258,139 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast balance --rpc-url localhost:8545 0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6
 	RPCTestEthGetBalanceLatest = RPCTestGeneric{
+		Name:      "RPCTestEthGetBalanceLatest",
 		Method:    "eth_getBalance",
 		Args:      []interface{}{testEthAddress.String(), "latest"},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
 	allTests = append(allTests, &RPCTestEthGetBalanceLatest)
 	RPCTestEthGetBalanceEarliest = RPCTestGeneric{
+		Name:      "RPCTestEthGetBalanceEarliest",
 		Method:    "eth_getBalance",
 		Args:      []interface{}{testEthAddress.String(), "earliest"},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
 	allTests = append(allTests, &RPCTestEthGetBalanceEarliest)
 	RPCTestEthGetBalancePending = RPCTestGeneric{
+		Name:      "RPCTestEthGetBalancePending",
 		Method:    "eth_getBalance",
 		Args:      []interface{}{testEthAddress.String(), "pending"},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
 	allTests = append(allTests, &RPCTestEthGetBalancePending)
+	RPCTestEthGetBalanceZero = RPCTestGeneric{
+		Name:      "RPCTestEthGetBalanceZero",
+		Method:    "eth_getBalance",
+		Args:      []interface{}{testEthAddress.String(), "0x0"},
+		Validator: ValidateRegexString(`^0x0$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetBalanceZero)
 
 	// cast storage --rpc-url localhost:8545 0x6fda56c57b0acadb96ed5624ac500c0429d59429 3
 	RPCTestEthGetStorageAtLatest = RPCTestGeneric{
+		Name:      "RPCTestEthGetStorageAtLatest",
 		Method:    "eth_getStorageAt",
 		Args:      []interface{}{*testContractAddress, "0x3", "latest"},
 		Validator: ValidateRegexString(`^0x000000000000000000000000` + strings.ToLower(testEthAddress.String())[2:] + `$`),
 	}
 	allTests = append(allTests, &RPCTestEthGetStorageAtLatest)
 	RPCTestEthGetStorageAtEarliest = RPCTestGeneric{
+		Name:      "RPCTestEthGetStorageAtEarliest",
 		Method:    "eth_getStorageAt",
 		Args:      []interface{}{*testContractAddress, "0x3", "earliest"},
 		Validator: ValidateRegexString(`^0x0{64}`),
 	}
 	allTests = append(allTests, &RPCTestEthGetStorageAtEarliest)
 	RPCTestEthGetStorageAtPending = RPCTestGeneric{
+		Name:      "RPCTestEthGetStorageAtPending",
 		Method:    "eth_getStorageAt",
 		Args:      []interface{}{*testContractAddress, "0x3", "pending"},
 		Validator: ValidateRegexString(`^0x000000000000000000000000` + strings.ToLower(testEthAddress.String())[2:] + `$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetStorageAtZero)
+	RPCTestEthGetStorageAtZero = RPCTestGeneric{
+		Name:      "RPCTestEthGetStorageAtZero",
+		Method:    "eth_getStorageAt",
+		Args:      []interface{}{*testContractAddress, "0x3", "0x0"},
+		Validator: ValidateRegexString(`^0x0{64}`),
 	}
 	allTests = append(allTests, &RPCTestEthGetStorageAtPending)
 
 	// cast rpc --rpc-url localhost:8545 eth_getTransactionCount 0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6 latest
 	RPCTestEthGetTransactionCountAtLatest = RPCTestGeneric{
+		Name:      "RPCTestEthGetTransactionCountAtLatest",
 		Method:    "eth_getTransactionCount",
 		Args:      []interface{}{testEthAddress.String(), "latest"},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
 	allTests = append(allTests, &RPCTestEthGetTransactionCountAtLatest)
 	RPCTestEthGetTransactionCountAtEarliest = RPCTestGeneric{
+		Name:      "RPCTestEthGetTransactionCountAtEarliest",
 		Method:    "eth_getTransactionCount",
 		Args:      []interface{}{testEthAddress.String(), "earliest"},
 		Validator: ValidateRegexString(`^0x0$`),
 	}
 	allTests = append(allTests, &RPCTestEthGetTransactionCountAtEarliest)
 	RPCTestEthGetTransactionCountAtPending = RPCTestGeneric{
+		Name:      "RPCTestEthGetTransactionCountAtPending",
 		Method:    "eth_getTransactionCount",
 		Args:      []interface{}{testEthAddress.String(), "pending"},
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
 	allTests = append(allTests, &RPCTestEthGetTransactionCountAtPending)
+	RPCTestEthGetTransactionCountAtZero = RPCTestGeneric{
+		Name:      "RPCTestEthGetTransactionCountAtZero",
+		Method:    "eth_getTransactionCount",
+		Args:      []interface{}{testEthAddress.String(), "0x0"},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetTransactionCountAtZero)
 
-	// cast rpc --rpc-url localhost:8545 eth_getTransactionCountByHash 0x9300b64619e167e7dbc1b41a6a6e7a8de7d6b99427dceefbd58014e328bd7f92
+	// cast rpc --rpc-url localhost:8545 eth_getBlockTransactionCountByHash 0x9300b64619e167e7dbc1b41a6a6e7a8de7d6b99427dceefbd58014e328bd7f92
 	RPCTestEthGetBlockTransactionCountByHash = RPCTestDynamicArgs{
+		Name:      "RPCTestEthGetBlockTransactionCountByHash",
 		Method:    "eth_getBlockTransactionCountByHash",
 		Args:      ArgsLatestBlockHash(cxt, rpcClient),
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
 	allTests = append(allTests, &RPCTestEthGetBlockTransactionCountByHash)
 	RPCTestEthGetBlockTransactionCountByHashMissing = RPCTestGeneric{
+		Name:      "RPCTestEthGetBlockTransactionCountByHashMissing",
 		Method:    "eth_getBlockTransactionCountByHash",
 		Args:      []interface{}{"0x0000000000000000000000000000000000000000000000000000000000000000"},
 		Validator: ValidateExact(nil),
 	}
 	allTests = append(allTests, &RPCTestEthGetBlockTransactionCountByHashMissing)
+
+	// cast rpc --rpc-url localhost:8545 eth_getBlockTransactionCountByNumber 0x1
+	RPCTestEthGetBlockTransactionCountByNumberLatest = RPCTestGeneric{
+		Name:      "RPCTestEthGetBlockTransactionCountByNumberLatest",
+		Method:    "eth_getBlockTransactionCountByNumber",
+		Args:      []interface{}{"latest"},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetBlockTransactionCountByNumberLatest)
+	RPCTestEthGetBlockTransactionCountByNumberEarliest = RPCTestGeneric{
+		Name:      "RPCTestEthGetBlockTransactionCountByNumberEarliest",
+		Method:    "eth_getBlockTransactionCountByNumber",
+		Args:      []interface{}{"earliest"},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetBlockTransactionCountByNumberEarliest)
+	RPCTestEthGetBlockTransactionCountByNumberPending = RPCTestGeneric{
+		Name:      "RPCTestEthGetBlockTransactionCountByNumberPending",
+		Method:    "eth_getBlockTransactionCountByNumber",
+		Args:      []interface{}{"pending"},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetBlockTransactionCountByNumberPending)
+	RPCTestEthGetBlockTransactionCountByNumberZero = RPCTestGeneric{
+		Name:      "RPCTestEthGetBlockTransactionCountByNumberZero",
+		Method:    "eth_getBlockTransactionCountByNumber",
+		Args:      []interface{}{"0x0"},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetBlockTransactionCountByNumberZero)
 
 	// spacing this thing out
 	// spacing this thing out
@@ -311,11 +400,27 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	// spacing this thing out
 	// cast block --rpc-url localhost:8545 0
 	RPCTestEthBlockByNumber = RPCTestGeneric{
+		Name:      "RPCTestEthBlockByNumber",
 		Method:    "eth_getBlockByNumber",
 		Args:      []interface{}{"0x0", true},
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
 	}
 	allTests = append(allTests, &RPCTestEthBlockByNumber)
+
+	uniqueTests := make(map[RPCTest]struct{})
+	uniqueTestNames := make(map[string]struct{})
+	for _, v := range allTests {
+		_, hasKey := uniqueTests[v]
+		if hasKey {
+			log.Fatal().Str("name", v.GetName()).Str("method", v.GetMethod()).Msg("duplicate test detected")
+		}
+		uniqueTests[v] = struct{}{}
+		_, hasKey = uniqueTestNames[v.GetName()]
+		if hasKey {
+			log.Fatal().Str("name", v.GetName()).Str("method", v.GetMethod()).Msg("duplicate test name detected")
+		}
+		uniqueTestNames[v.GetName()] = struct{}{}
+	}
 
 }
 
@@ -431,6 +536,9 @@ func ArgsLatestBlockHash(cxt context.Context, rpcClient *rpc.Client) func() []in
 func (r *RPCTestGeneric) GetMethod() string {
 	return r.Method
 }
+func (r *RPCTestGeneric) GetName() string {
+	return r.Name
+}
 func (r *RPCTestGeneric) GetArgs() []interface{} {
 	return r.Args
 }
@@ -443,6 +551,9 @@ func (r *RPCTestGeneric) ExpectError() bool {
 
 func (r *RPCTestDynamicArgs) GetMethod() string {
 	return r.Method
+}
+func (r *RPCTestDynamicArgs) GetName() string {
+	return r.Name
 }
 func (r *RPCTestDynamicArgs) GetArgs() []interface{} {
 	return r.Args()
@@ -512,7 +623,7 @@ Once this has been completed this will be the address of the contract:
 		setupTests(cxt, rpcClient)
 
 		for _, t := range allTests {
-			log.Trace().Str("method", t.GetMethod()).Msg("Running Test")
+			log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Running Test")
 			var result interface{}
 			err = rpcClient.CallContext(cxt, &result, t.GetMethod(), t.GetArgs()...)
 			if err != nil && !t.ExpectError() {
