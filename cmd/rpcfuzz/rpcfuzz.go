@@ -140,6 +140,7 @@ var (
 	RPCTestEthSign                                     RPCTestDynamicArgs
 	RPCTestEthSignFail                                 RPCTestGeneric
 	RPCTestEthSignTransaction                          RPCTestDynamicArgs
+	RPCTestEthSendTransaction                          RPCTestDynamicArgs
 
 	allTests                = make([]RPCTest, 0)
 	RPCTestEthBlockByNumber RPCTestGeneric
@@ -523,6 +524,16 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		RequiresUnlock: true,
 	}
 	allTests = append(allTests, &RPCTestEthSignTransaction)
+
+	// cast rpc --rpc-url localhost:8545 eth_sendTransaction '{"from": "0xb9b1cf51a65b50f74ed8bcb258413c02cba2ec57", "to": "0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6", "data": "0x", "gas": "0x5208", "gasPrice": "0x1", "nonce": "0x1"}'
+	RPCTestEthSendTransaction = RPCTestDynamicArgs{
+		Name:           "RPCTestEthSendTransaction",
+		Method:         "eth_sendTransaction",
+		Args:           ArgsCoinbaseTransaction(cxt, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: "0x1", MaxPriorityFeePerGas: "0x1"}),
+		Validator:      ValidateRegexString(`^0x[[:xdigit:]]{64}$`),
+		RequiresUnlock: true,
+	}
+	allTests = append(allTests, &RPCTestEthSendTransaction)
 
 	// spacing this thing out
 	// spacing this thing out
