@@ -12,3 +12,6 @@ var RPCSchemaEthBlock string
 
 //go:embed schemas/rpcschemaaccountlist.json
 var RPCSchemaAccountList string
+
+//go:embed schemas/rpcschemasigntxresponse.json
+var RPCSchemaSignTxResponse string

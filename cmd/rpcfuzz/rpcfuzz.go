@@ -68,6 +68,19 @@ type (
 		IsError        bool
 		RequiresUnlock bool
 	}
+
+	// RPCTestTransactionArgs is used to send transactions
+	RPCTestTransactionArgs struct {
+		From                 string `json:"from"`
+		To                   string `json:"to,omitempty"`
+		Gas                  string `json:"gas,omitempty"`
+		GasPrice             string `json:"gasPrice,omitempty"`
+		MaxFeePerGas         string `json:"maxFeePerGas,omitempty"`
+		MaxPriorityFeePerGas string `json:"maxPriorityFeePerGas,omitempty"`
+		Value                string `json:"value,omitempty"`
+		Nonce                string `json:"nonce,omitempty"`
+		Data                 string `json:"data"`
+	}
 )
 
 const (
@@ -126,6 +139,7 @@ var (
 	RPCTestEthGetCodeEarliest                          RPCTestGeneric
 	RPCTestEthSign                                     RPCTestDynamicArgs
 	RPCTestEthSignFail                                 RPCTestGeneric
+	RPCTestEthSignTransaction                          RPCTestDynamicArgs
 
 	allTests                = make([]RPCTest, 0)
 	RPCTestEthBlockByNumber RPCTestGeneric
@@ -500,6 +514,16 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	}
 	allTests = append(allTests, &RPCTestEthSignFail)
 
+	// cast rpc --rpc-url localhost:8545 eth_signTransaction '{"from": "0xb9b1cf51a65b50f74ed8bcb258413c02cba2ec57", "to": "0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6", "data": "0x", "gas": "0x5208", "gasPrice": "0x1", "nonce": "0x1"}'
+	RPCTestEthSignTransaction = RPCTestDynamicArgs{
+		Name:           "RPCTestEthSignTransaction",
+		Method:         "eth_signTransaction",
+		Args:           ArgsCoinbaseTransaction(cxt, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: "0x1", MaxPriorityFeePerGas: "0x1", Nonce: "0x1"}),
+		Validator:      ValidateJSONSchema(rpctypes.RPCSchemaSignTxResponse),
+		RequiresUnlock: true,
+	}
+	allTests = append(allTests, &RPCTestEthSignTransaction)
+
 	// spacing this thing out
 	// spacing this thing out
 	// spacing this thing out
@@ -534,7 +558,8 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 // ChainValidator would take a list of validation functions to be
 // applied in order. The idea is that if first validator is true, then
-// the rest won't be applied.
+// the rest won't be applied. This is needed to support responses that
+// might be different types.
 func ChainValidator(validators ...func(interface{}) error) func(result interface{}) error {
 	return func(result interface{}) error {
 		for _, v := range validators {
@@ -665,6 +690,8 @@ func ArgsLatestBlockHash(cxt context.Context, rpcClient *rpc.Client, extraArgs .
 	}
 }
 
+// ArgsCoinbase would return arguments where the first argument is now
+// the coinbase
 func ArgsCoinbase(cxt context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
 	return func() []interface{} {
 		var coinbase string
@@ -680,6 +707,21 @@ func ArgsCoinbase(cxt context.Context, rpcClient *rpc.Client, extraArgs ...inter
 			args = append(args, v)
 		}
 		return args
+	}
+}
+
+// ArgsCoinbaseTransaction will return arguments where the from is replace with the current coinbase
+func ArgsCoinbaseTransaction(cxt context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
+	return func() []interface{} {
+		var coinbase string
+		err := rpcClient.CallContext(cxt, &coinbase, "eth_coinbase")
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to retreive coinbase")
+			return []interface{}{""}
+		}
+		tx.From = coinbase
+		log.Trace().Str("coinbase", coinbase).Msg("Got coinbase")
+		return []interface{}{tx}
 	}
 }
 

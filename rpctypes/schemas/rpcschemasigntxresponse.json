@@ -1,0 +1,73 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type": "object",
+    "properties": {
+        "raw": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{1,}$"
+        },
+        "tx": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string"
+                },
+                "nonce": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                },
+                "gas": {
+                    "type": "string"
+                },
+                "gasPrice": {
+                    "type": ["string", "null"]
+                },
+                "maxPriorityFeePerGas": {
+                    "type": "string"
+                },
+                "maxFeePerGas": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                },
+                "input": {
+                    "type": "string"
+                },
+                "v": {
+                    "type": "string"
+                },
+                "r": {
+                    "type": "string"
+                },
+                "s": {
+                    "type": "string"
+                },
+                "hash": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "type",
+                "nonce",
+                "to",
+                "gas",
+                "gasPrice",
+                "maxPriorityFeePerGas",
+                "maxFeePerGas",
+                "value",
+                "input",
+                "v",
+                "r",
+                "s",
+                "hash"
+            ]
+        }
+    },
+    "required": [
+        "raw",
+        "tx"
+    ]
+}
