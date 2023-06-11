@@ -1,0 +1,113 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type": "object",
+    "properties": {
+        "baseFeePerGas": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{1,}$"
+        },
+        "difficulty": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{1,}$"
+        },
+        "extraData": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{1,}$"
+        },
+        "gasLimit": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{1,16}$"
+        },
+        "gasUsed": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{1,16}$"
+        },
+        "hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+        },
+        "logsBloom": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{512}$"
+        },
+        "miner": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-Z]{40}$"
+        },
+        "mixHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+        },
+        "nonce": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{1,16}$"
+        },
+        "number": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{1,}$"
+        },
+        "parentHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+        },
+        "receiptsRoot": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+        },
+        "sha3Uncles": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+        },
+        "size": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{1,}$"
+        },
+        "stateRoot": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+        },
+        "timestamp": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{1,}$"
+        },
+        "totalDifficulty": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{1,}$"
+        },
+        "transactions": {
+            "type": "array",
+            "items": {}
+        },
+        "transactionsRoot": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+        },
+        "uncles": {
+            "type": "array",
+            "items": {}
+        }
+    },
+    "required": [
+        "baseFeePerGas",
+        "difficulty",
+        "extraData",
+        "gasLimit",
+        "gasUsed",
+        "hash",
+        "logsBloom",
+        "miner",
+        "mixHash",
+        "nonce",
+        "number",
+        "parentHash",
+        "receiptsRoot",
+        "sha3Uncles",
+        "size",
+        "stateRoot",
+        "timestamp",
+        "totalDifficulty",
+        "transactions",
+        "transactionsRoot",
+        "uncles"
+    ]
+}

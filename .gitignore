@@ -3,4 +3,3 @@ out/
 coverage.out
 
 .vscode
-*.json

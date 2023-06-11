@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -86,132 +87,16 @@ var (
 		Args:   []interface{}{},
 		Validator: ChainValidator(
 			ValidateExact(false),
-			ValidateJSONSchema(`
-{
-  "$schema": "http://json-schema.org/draft-04/schema#",
-  "type": "object",
-  "properties": {
-    "startingBlock": {
-      "type": "string"
-    },
-    "currentBlock": {
-      "type": "string"
-    },
-    "highestBlock": {
-      "type": "string"
-    }
-  },
-  "required": [
-    "startingBlock",
-    "currentBlock",
-    "highestBlock"
-  ]
-}
-`),
+			ValidateJSONSchema(rpctypes.RPCSchemaEthSyncing),
 		),
 	}
 
 	// I probably need to put these giant strings somewhere else
 	// cast block --rpc-url localhost:8545 0
 	RPCTestEthBlockByNumber = RPCTestGeneric{
-		Method: "eth_getBlockByNumber",
-		Args:   []interface{}{"0x0", true},
-		Validator: ValidateJSONSchema(`
-{
-  "$schema": "http://json-schema.org/draft-04/schema#",
-  "type": "object",
-  "properties": {
-    "baseFeePerGas": {
-      "type": "string"
-    },
-    "difficulty": {
-      "type": "string"
-    },
-    "extraData": {
-      "type": "string"
-    },
-    "gasLimit": {
-      "type": "string"
-    },
-    "gasUsed": {
-      "type": "string"
-    },
-    "hash": {
-      "type": "string"
-    },
-    "logsBloom": {
-      "type": "string"
-    },
-    "miner": {
-      "type": "string"
-    },
-    "mixHash": {
-      "type": "string"
-    },
-    "nonce": {
-      "type": "string"
-    },
-    "number": {
-      "type": "string"
-    },
-    "parentHash": {
-      "type": "string"
-    },
-    "receiptsRoot": {
-      "type": "string"
-    },
-    "sha3Uncles": {
-      "type": "string"
-    },
-    "size": {
-      "type": "string"
-    },
-    "stateRoot": {
-      "type": "string"
-    },
-    "timestamp": {
-      "type": "string"
-    },
-    "totalDifficulty": {
-      "type": "string"
-    },
-    "transactions": {
-      "type": "array",
-      "items": {}
-    },
-    "transactionsRoot": {
-      "type": "string"
-    },
-    "uncles": {
-      "type": "array",
-      "items": {}
-    }
-  },
-  "required": [
-    "baseFeePerGas",
-    "difficulty",
-    "extraData",
-    "gasLimit",
-    "gasUsed",
-    "hash",
-    "logsBloom",
-    "miner",
-    "mixHash",
-    "nonce",
-    "number",
-    "parentHash",
-    "receiptsRoot",
-    "sha3Uncles",
-    "size",
-    "stateRoot",
-    "timestamp",
-    "totalDifficulty",
-    "transactions",
-    "transactionsRoot",
-    "uncles"
-  ]
-}
-`),
+		Method:    "eth_getBlockByNumber",
+		Args:      []interface{}{"0x0", true},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
 	}
 
 	allTests = []RPCTest{
@@ -323,7 +208,10 @@ var RPCFuzzCmd = &cobra.Command{
 	Use:   "rpcfuzz http://localhost:8545",
 	Short: "Continually run a variety of RPC calls and fuzzers",
 	Long: `
-beep
+
+- https://ethereum.github.io/execution-apis/api-documentation/
+- https://ethereum.org/en/developers/docs/apis/json-rpc/
+- https://json-schema.org/
 
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
