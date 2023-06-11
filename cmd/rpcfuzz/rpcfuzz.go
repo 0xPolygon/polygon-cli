@@ -5,6 +5,8 @@ package rpcfuzz
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -114,6 +116,9 @@ var (
 	RPCTestEthGetUncleCountByBlockNumberEarliest       RPCTestGeneric
 	RPCTestEthGetUncleCountByBlockNumberPending        RPCTestGeneric
 	RPCTestEthGetUncleCountByBlockNumberZero           RPCTestGeneric
+	RPCTestEthGetCodeLatest                            RPCTestGeneric
+	RPCTestEthGetCodePending                           RPCTestGeneric
+	RPCTestEthGetCodeEarliest                          RPCTestGeneric
 	RPCTestEthBlockByNumber                            RPCTestGeneric
 
 	allTests = make([]RPCTest, 0)
@@ -414,7 +419,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	}
 	allTests = append(allTests, &RPCTestEthGetUncleCountByBlockHashMissing)
 
-	// cast rpc --rpc-url localhost:8545 eth_getUncleCountByNumber 0x1
+	// cast rpc --rpc-url localhost:8545 eth_getUncleCountByBlockNumber 0x1
 	RPCTestEthGetUncleCountByBlockNumberLatest = RPCTestGeneric{
 		Name:      "RPCTestEthGetUncleCountByBlockNumberLatest",
 		Method:    "eth_getUncleCountByBlockNumber",
@@ -443,6 +448,29 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
 	allTests = append(allTests, &RPCTestEthGetUncleCountByBlockNumberZero)
+
+	// cast code --rpc-url localhost:8545 0x6fda56c57b0acadb96ed5624ac500c0429d59429
+	RPCTestEthGetCodeLatest = RPCTestGeneric{
+		Name:      "RPCTestEthGetCodeLatest",
+		Method:    "eth_getCode",
+		Args:      []interface{}{*testContractAddress, "latest"},
+		Validator: ValidateHashedResponse("b3f345904d7d1c34ca0d1b815edd2f33baa48b3d"),
+	}
+	allTests = append(allTests, &RPCTestEthGetCodeLatest)
+	RPCTestEthGetCodePending = RPCTestGeneric{
+		Name:      "RPCTestEthGetCodePending",
+		Method:    "eth_getCode",
+		Args:      []interface{}{*testContractAddress, "pending"},
+		Validator: ValidateHashedResponse("b3f345904d7d1c34ca0d1b815edd2f33baa48b3d"),
+	}
+	allTests = append(allTests, &RPCTestEthGetCodePending)
+	RPCTestEthGetCodeEarliest = RPCTestGeneric{
+		Name:      "RPCTestEthGetCodeEarliest",
+		Method:    "eth_getCode",
+		Args:      []interface{}{*testContractAddress, "earliest"},
+		Validator: ValidateRegexString(`^0x$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetCodeEarliest)
 
 	// spacing this thing out
 	// spacing this thing out
@@ -490,6 +518,24 @@ func ChainValidator(validators ...func(interface{}) error) func(result interface
 		return fmt.Errorf("All Validation failed")
 	}
 
+}
+
+func ValidateHashedResponse(expectedHash string) func(result interface{}) error {
+	return func(result interface{}) error {
+		resultStr, isValid := result.(string)
+		if !isValid {
+			return fmt.Errorf("Invalid result type. Expected string but got %T", result)
+		}
+		rawData, err := hex.DecodeString(resultStr[2:])
+		if err != nil {
+			return fmt.Errorf("The result string could be hex decoded: %w", err)
+		}
+		actualHash := fmt.Sprintf("%x", sha1.Sum(rawData))
+		if actualHash != expectedHash {
+			return fmt.Errorf("Hash mismatch expected: %s and got %s", expectedHash, actualHash)
+		}
+		return nil
+	}
 }
 
 // ValidateJSONSchema is used to validate the response against a JSON Schema
