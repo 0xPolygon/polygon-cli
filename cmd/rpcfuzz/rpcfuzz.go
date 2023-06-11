@@ -10,13 +10,17 @@ import (
 	"encoding/json"
 	"fmt"
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/xeipuuv/gojsonschema"
+	"math/big"
 	"os"
 	"regexp"
 	"strings"
@@ -141,6 +145,7 @@ var (
 	RPCTestEthSignFail                                 RPCTestGeneric
 	RPCTestEthSignTransaction                          RPCTestDynamicArgs
 	RPCTestEthSendTransaction                          RPCTestDynamicArgs
+	RPCTestEthSendRawTransaction                       RPCTestDynamicArgs
 
 	allTests                = make([]RPCTest, 0)
 	RPCTestEthBlockByNumber RPCTestGeneric
@@ -519,7 +524,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	RPCTestEthSignTransaction = RPCTestDynamicArgs{
 		Name:           "RPCTestEthSignTransaction",
 		Method:         "eth_signTransaction",
-		Args:           ArgsCoinbaseTransaction(cxt, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: "0x1", MaxPriorityFeePerGas: "0x1", Nonce: "0x1"}),
+		Args:           ArgsCoinbaseTransaction(cxt, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: "0x6FC23AC00", MaxPriorityFeePerGas: "0x1", Nonce: "0x1"}),
 		Validator:      ValidateJSONSchema(rpctypes.RPCSchemaSignTxResponse),
 		RequiresUnlock: true,
 	}
@@ -529,11 +534,21 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	RPCTestEthSendTransaction = RPCTestDynamicArgs{
 		Name:           "RPCTestEthSendTransaction",
 		Method:         "eth_sendTransaction",
-		Args:           ArgsCoinbaseTransaction(cxt, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: "0x1", MaxPriorityFeePerGas: "0x1"}),
+		Args:           ArgsCoinbaseTransaction(cxt, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: "0x6FC23AC00", MaxPriorityFeePerGas: "0x1"}),
 		Validator:      ValidateRegexString(`^0x[[:xdigit:]]{64}$`),
 		RequiresUnlock: true,
 	}
 	allTests = append(allTests, &RPCTestEthSendTransaction)
+
+	// cast rpc --rpc-url localhost:8545 eth_sendRawTransaction '{"from": "0xb9b1cf51a65b50f74ed8bcb258413c02cba2ec57", "to": "0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6", "data": "0x", "gas": "0x5208", "gasPrice": "0x1", "nonce": "0x1"}'
+	RPCTestEthSendRawTransaction = RPCTestDynamicArgs{
+		Name:           "RPCTestEthSendRawTransaction",
+		Method:         "eth_sendRawTransaction",
+		Args:           ArgsSignTransaction(cxt, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: "0x6FC23AC00", MaxPriorityFeePerGas: "0x1"}),
+		Validator:      ValidateRegexString(`^0x[[:xdigit:]]{64}$`),
+		RequiresUnlock: true,
+	}
+	allTests = append(allTests, &RPCTestEthSendRawTransaction)
 
 	// spacing this thing out
 	// spacing this thing out
@@ -733,6 +748,49 @@ func ArgsCoinbaseTransaction(cxt context.Context, rpcClient *rpc.Client, tx *RPC
 		tx.From = coinbase
 		log.Trace().Str("coinbase", coinbase).Msg("Got coinbase")
 		return []interface{}{tx}
+	}
+}
+
+func ArgsSignTransaction(cxt context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
+	return func() []interface{} {
+		ec := ethclient.NewClient(rpcClient)
+		curNonce, err := ec.NonceAt(cxt, testEthAddress, nil)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to retreive nonce")
+			curNonce = 0
+		}
+		log.Trace().Uint64("curNonce", curNonce).Msg("current nonce value")
+
+		chainId, err := ec.ChainID(cxt)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to get chain id")
+			chainId = big.NewInt(1)
+
+		}
+		log.Trace().Uint64("chainId", chainId.Uint64()).Msg("fetch chainid")
+
+		dft := ethtypes.DynamicFeeTx{}
+		dft.ChainID = chainId
+		dft.Nonce = curNonce
+		dft.GasTipCap = hexutil.MustDecodeBig(tx.MaxPriorityFeePerGas)
+		dft.GasFeeCap = hexutil.MustDecodeBig(tx.MaxFeePerGas)
+		dft.Gas = hexutil.MustDecodeUint64(tx.Gas)
+		toAddr := ethcommon.HexToAddress(tx.To)
+		dft.To = &toAddr
+		dft.Value = hexutil.MustDecodeBig(tx.Value)
+		dft.Data = hexutil.MustDecode(tx.Data)
+
+		londonSigner := ethtypes.NewLondonSigner(chainId)
+		signedTx, err := ethtypes.SignNewTx(testPrivateKey, londonSigner, &dft)
+		if err != nil {
+			log.Fatal().Err(err).Msg("There was an issue signing the transaction")
+		}
+		stringTx, err := signedTx.MarshalBinary()
+		if err != nil {
+			log.Fatal().Err(err).Msg("Unable to marshal binary for transaction")
+		}
+
+		return []interface{}{hexutil.Encode(stringTx)}
 	}
 }
 
