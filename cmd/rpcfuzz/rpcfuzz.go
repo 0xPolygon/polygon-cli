@@ -108,6 +108,8 @@ var (
 	RPCTestEthGetBlockTransactionCountByNumberEarliest RPCTestGeneric
 	RPCTestEthGetBlockTransactionCountByNumberPending  RPCTestGeneric
 	RPCTestEthGetBlockTransactionCountByNumberZero     RPCTestGeneric
+	RPCTestEthGetUncleCountByBlockHash                 RPCTestDynamicArgs
+	RPCTestEthGetUncleCountByBlockHashMissing          RPCTestGeneric
 	RPCTestEthBlockByNumber                            RPCTestGeneric
 
 	allTests = make([]RPCTest, 0)
@@ -391,6 +393,22 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
 	}
 	allTests = append(allTests, &RPCTestEthGetBlockTransactionCountByNumberZero)
+
+	// cast rpc --rpc-url localhost:8545 eth_getUncleCountByBlockHash 0x9300b64619e167e7dbc1b41a6a6e7a8de7d6b99427dceefbd58014e328bd7f92
+	RPCTestEthGetUncleCountByBlockHash = RPCTestDynamicArgs{
+		Name:      "RPCTestEthGetUncleCountByBlockHash",
+		Method:    "eth_getUncleCountByBlockHash",
+		Args:      ArgsLatestBlockHash(cxt, rpcClient),
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+	}
+	allTests = append(allTests, &RPCTestEthGetUncleCountByBlockHash)
+	RPCTestEthGetUncleCountByBlockHashMissing = RPCTestGeneric{
+		Name:      "RPCTestEthGetUncleCountByBlockHashMissing",
+		Method:    "eth_getUncleCountByBlockHash",
+		Args:      []interface{}{"0x0000000000000000000000000000000000000000000000000000000000000000"},
+		Validator: ValidateExact(nil),
+	}
+	allTests = append(allTests, &RPCTestEthGetUncleCountByBlockHashMissing)
 
 	// spacing this thing out
 	// spacing this thing out
