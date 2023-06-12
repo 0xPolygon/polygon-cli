@@ -2,6 +2,10 @@
 // conformance tests
 package rpcfuzz
 
+// TODO add configuration for name space
+// TODO add the open rpc schemas
+// TODO refactor to remove names
+
 import (
 	"context"
 	"crypto/ecdsa"
