@@ -23,7 +23,6 @@ import (
 	"math/big"
 	"os"
 	"regexp"
-	"strings"
 )
 
 type (
@@ -335,7 +334,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthGetStorageAtLatest",
 		Method:    "eth_getStorageAt",
 		Args:      []interface{}{*testContractAddress, "0x3", "latest"},
-		Validator: ValidateRegexString(`^0x000000000000000000000000` + strings.ToLower(testEthAddress.String())[2:] + `$`),
+		Validator: ValidateRegexString(`^0x536f6c6964697479206279204578616d706c6500000000000000000000000026$`),
 	}
 	allTests = append(allTests, &RPCTestEthGetStorageAtLatest)
 	RPCTestEthGetStorageAtEarliest = RPCTestGeneric{
@@ -349,7 +348,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthGetStorageAtPending",
 		Method:    "eth_getStorageAt",
 		Args:      []interface{}{*testContractAddress, "0x3", "pending"},
-		Validator: ValidateRegexString(`^0x000000000000000000000000` + strings.ToLower(testEthAddress.String())[2:] + `$`),
+		Validator: ValidateRegexString(`^0x536f6c6964697479206279204578616d706c6500000000000000000000000026$`),
 	}
 	allTests = append(allTests, &RPCTestEthGetStorageAtZero)
 	RPCTestEthGetStorageAtZero = RPCTestGeneric{
@@ -487,14 +486,14 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthGetCodeLatest",
 		Method:    "eth_getCode",
 		Args:      []interface{}{*testContractAddress, "latest"},
-		Validator: ValidateHashedResponse("b3f345904d7d1c34ca0d1b815edd2f33baa48b3d"),
+		Validator: ValidateHashedResponse("e39381f1654cf6a3b7eac2a789b9adf7319312cb"),
 	}
 	allTests = append(allTests, &RPCTestEthGetCodeLatest)
 	RPCTestEthGetCodePending = RPCTestGeneric{
 		Name:      "RPCTestEthGetCodePending",
 		Method:    "eth_getCode",
 		Args:      []interface{}{*testContractAddress, "pending"},
-		Validator: ValidateHashedResponse("b3f345904d7d1c34ca0d1b815edd2f33baa48b3d"),
+		Validator: ValidateHashedResponse("e39381f1654cf6a3b7eac2a789b9adf7319312cb"),
 	}
 	allTests = append(allTests, &RPCTestEthGetCodePending)
 	RPCTestEthGetCodeEarliest = RPCTestGeneric{
@@ -553,33 +552,33 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	}
 	allTests = append(allTests, &RPCTestEthSendRawTransaction)
 
-	// cat ~/code/v3-core/artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json | jq '.abi' | go run main.go abi
-	// cast call --rpc-url localhost:8545 0x6fda56c57b0acadb96ed5624ac500c0429d59429 'function owner() view returns(address)'
+	// cat contracts/ERC20.abi| go run main.go abi
+	// cast call --rpc-url localhost:8545 0x6fda56c57b0acadb96ed5624ac500c0429d59429  'function name() view returns(string)'
 	RPCTestEthCallLatest = RPCTestGeneric{
 		Name:      "RPCTestEthCallLatest",
 		Method:    "eth_call",
-		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x8da5cb5b"}, "latest"},
-		Validator: ValidateRegexString(`^0x000000000000000000000000` + strings.ToLower(testEthAddress.String())[2:] + `$`),
+		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03"}, "latest"},
+		Validator: ValidateRegexString(`536f6c6964697479206279204578616d706c65`),
 	}
 	allTests = append(allTests, &RPCTestEthCallLatest)
 	RPCTestEthCallPending = RPCTestGeneric{
 		Name:      "RPCTestEthCallPending",
 		Method:    "eth_call",
-		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x8da5cb5b"}, "pending"},
-		Validator: ValidateRegexString(`^0x000000000000000000000000` + strings.ToLower(testEthAddress.String())[2:] + `$`),
+		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03"}, "pending"},
+		Validator: ValidateRegexString(`536f6c6964697479206279204578616d706c65`),
 	}
 	allTests = append(allTests, &RPCTestEthCallPending)
 	RPCTestEthCallEarliest = RPCTestGeneric{
 		Name:      "RPCTestEthCallEarliest",
 		Method:    "eth_call",
-		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x8da5cb5b"}, "earliest"},
+		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03"}, "earliest"},
 		Validator: ValidateRegexString(`^0x$`),
 	}
 	allTests = append(allTests, &RPCTestEthCallEarliest)
 	RPCTestEthCallZero = RPCTestGeneric{
 		Name:      "RPCTestEthCallZero",
 		Method:    "eth_call",
-		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x8da5cb5b"}, "0x0"},
+		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03"}, "0x0"},
 		Validator: ValidateRegexString(`^0x$`),
 	}
 	allTests = append(allTests, &RPCTestEthCallZero)
@@ -894,16 +893,17 @@ for testing
     0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6
 
 Then we might want to deploy some test smart contracts. For the
-purposes of testing we'll use Uniswap v3 at this hash
-d8b1c635c275d2a9450bd6a78f3fa2484fef73eb
+purposes of testing we'll our ERC20 contract:
 
 # cast send --from 0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6 \
     --private-key 0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa \
     --rpc-url localhost:8545 --create \
-    "$(jq -r '.bytecode' ~/code/v3-core/artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json)"
+    "$(cat ./contracts/ERC20.bin)"
 
 Once this has been completed this will be the address of the contract:
 0x6fda56c57b0acadb96ed5624ac500c0429d59429
+
+# docker run -v $PWD/contracts:/contracts ethereum/solc:stable --storage-layout /contracts/ERC20.sol
 
 - https://ethereum.github.io/execution-apis/api-documentation/
 - https://ethereum.org/en/developers/docs/apis/json-rpc/
