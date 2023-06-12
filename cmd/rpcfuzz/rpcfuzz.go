@@ -4,7 +4,8 @@ package rpcfuzz
 
 // TODO add configuration for name space
 // TODO add the open rpc schemas
-// TODO refactor to remove names
+// TODO used the schema validator on all responses
+// TODO change the chain validator to use AND type logic
 
 import (
 	"context"
