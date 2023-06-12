@@ -149,6 +149,10 @@ var (
 	RPCTestEthCallEarliest                             RPCTestGeneric
 	RPCTestEthCallPending                              RPCTestGeneric
 	RPCTestEthCallZero                                 RPCTestGeneric
+	RPCTestEthEstimateGas                              RPCTestGeneric
+	RPCTestEthGetBlockByHash                           RPCTestDynamicArgs
+	RPCTestEthGetBlockByHashNoTx                       RPCTestDynamicArgs
+	RPCTestEthGetBlockByHashZero                       RPCTestGeneric
 
 	allTests                = make([]RPCTest, 0)
 	RPCTestEthBlockByNumber RPCTestGeneric
@@ -583,12 +587,40 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	}
 	allTests = append(allTests, &RPCTestEthCallZero)
 
-	// spacing this thing out
-	// spacing this thing out
-	// spacing this thing out
-	// spacing this thing out
-	// spacing this thing out
-	// spacing this thing out
+	// cat contracts/ERC20.abi| go run main.go abi
+	// cast estimate --rpc-url localhost:8545 0x6fda56c57b0acadb96ed5624ac500c0429d59429  'function mint(uint256 amount) returns()' 10000
+	// cast abi-encode 'function mint(uint256 amount) returns()' 10000
+	RPCTestEthEstimateGas = RPCTestGeneric{
+		Name:      "RPCTestEthEstimateGas",
+		Method:    "eth_estimateGas",
+		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710"}, "latest"},
+		Validator: ValidateRegexString(`0x10b0d`),
+	}
+	allTests = append(allTests, &RPCTestEthEstimateGas)
+
+	// cast block --rpc-url localhost:8545 latest
+	RPCTestEthGetBlockByHash = RPCTestDynamicArgs{
+		Name:      "RPCTestEthGetBlockByHash",
+		Method:    "eth_getBlockByHash",
+		Args:      ArgsLatestBlockHash(cxt, rpcClient, true),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
+	}
+	allTests = append(allTests, &RPCTestEthGetBlockByHash)
+	RPCTestEthGetBlockByHashNoTx = RPCTestDynamicArgs{
+		Name:      "RPCTestEthGetBlockByHashNoTx",
+		Method:    "eth_getBlockByHash",
+		Args:      ArgsLatestBlockHash(cxt, rpcClient, false),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
+	}
+	allTests = append(allTests, &RPCTestEthGetBlockByHashNoTx)
+	RPCTestEthGetBlockByHashZero = RPCTestGeneric{
+		Name:      "RPCTestEthGetBlockByHashZero",
+		Method:    "eth_getBlockByHash",
+		Args:      []interface{}{"0x0000000000000000000000000000000000000000000000000000000000000000", true},
+		Validator: ValidateExact(nil),
+	}
+	allTests = append(allTests, &RPCTestEthGetBlockByHashZero)
+
 	// cast block --rpc-url localhost:8545 0
 	RPCTestEthBlockByNumber = RPCTestGeneric{
 		Name:      "RPCTestEthBlockByNumber",
