@@ -75,7 +75,7 @@ type (
 
 	// RPCTestTransactionArgs is used to send transactions
 	RPCTestTransactionArgs struct {
-		From                 string `json:"from"`
+		From                 string `json:"from,omitempty"`
 		To                   string `json:"to,omitempty"`
 		Gas                  string `json:"gas,omitempty"`
 		GasPrice             string `json:"gasPrice,omitempty"`
@@ -146,6 +146,10 @@ var (
 	RPCTestEthSignTransaction                          RPCTestDynamicArgs
 	RPCTestEthSendTransaction                          RPCTestDynamicArgs
 	RPCTestEthSendRawTransaction                       RPCTestDynamicArgs
+	RPCTestEthCallLatest                               RPCTestGeneric
+	RPCTestEthCallEarliest                             RPCTestGeneric
+	RPCTestEthCallPending                              RPCTestGeneric
+	RPCTestEthCallZero                                 RPCTestGeneric
 
 	allTests                = make([]RPCTest, 0)
 	RPCTestEthBlockByNumber RPCTestGeneric
@@ -542,13 +546,43 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_sendRawTransaction '{"from": "0xb9b1cf51a65b50f74ed8bcb258413c02cba2ec57", "to": "0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6", "data": "0x", "gas": "0x5208", "gasPrice": "0x1", "nonce": "0x1"}'
 	RPCTestEthSendRawTransaction = RPCTestDynamicArgs{
-		Name:           "RPCTestEthSendRawTransaction",
-		Method:         "eth_sendRawTransaction",
-		Args:           ArgsSignTransaction(cxt, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: "0x6FC23AC00", MaxPriorityFeePerGas: "0x1"}),
-		Validator:      ValidateRegexString(`^0x[[:xdigit:]]{64}$`),
-		RequiresUnlock: true,
+		Name:      "RPCTestEthSendRawTransaction",
+		Method:    "eth_sendRawTransaction",
+		Args:      ArgsSignTransaction(cxt, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: "0x6FC23AC00", MaxPriorityFeePerGas: "0x1"}),
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{64}$`),
 	}
 	allTests = append(allTests, &RPCTestEthSendRawTransaction)
+
+	// cat ~/code/v3-core/artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json | jq '.abi' | go run main.go abi
+	// cast call --rpc-url localhost:8545 0x6fda56c57b0acadb96ed5624ac500c0429d59429 'function owner() view returns(address)'
+	RPCTestEthCallLatest = RPCTestGeneric{
+		Name:      "RPCTestEthCallLatest",
+		Method:    "eth_call",
+		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x8da5cb5b"}, "latest"},
+		Validator: ValidateRegexString(`^0x000000000000000000000000` + strings.ToLower(testEthAddress.String())[2:] + `$`),
+	}
+	allTests = append(allTests, &RPCTestEthCallLatest)
+	RPCTestEthCallPending = RPCTestGeneric{
+		Name:      "RPCTestEthCallPending",
+		Method:    "eth_call",
+		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x8da5cb5b"}, "pending"},
+		Validator: ValidateRegexString(`^0x000000000000000000000000` + strings.ToLower(testEthAddress.String())[2:] + `$`),
+	}
+	allTests = append(allTests, &RPCTestEthCallPending)
+	RPCTestEthCallEarliest = RPCTestGeneric{
+		Name:      "RPCTestEthCallEarliest",
+		Method:    "eth_call",
+		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x8da5cb5b"}, "earliest"},
+		Validator: ValidateRegexString(`^0x$`),
+	}
+	allTests = append(allTests, &RPCTestEthCallEarliest)
+	RPCTestEthCallZero = RPCTestGeneric{
+		Name:      "RPCTestEthCallZero",
+		Method:    "eth_call",
+		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x8da5cb5b"}, "0x0"},
+		Validator: ValidateRegexString(`^0x$`),
+	}
+	allTests = append(allTests, &RPCTestEthCallZero)
 
 	// spacing this thing out
 	// spacing this thing out
@@ -751,6 +785,9 @@ func ArgsCoinbaseTransaction(cxt context.Context, rpcClient *rpc.Client, tx *RPC
 	}
 }
 
+// ArgsSignTransaction will take the junk transaction type that we've
+// created, convert it to a geth style dynamic fee transaction and
+// sign it with the user provide key.
 func ArgsSignTransaction(cxt context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
 	return func() []interface{} {
 		ec := ethclient.NewClient(rpcClient)
