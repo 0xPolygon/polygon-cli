@@ -559,12 +559,20 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
 	})
 
-	// eth_getTransactionReceipt
+	// cast receipt --rpc-url localhost:8545 0x1bd4ec642302aa22906360af6493c230ecc41df10fffcdedc85caeb22cbb6b58
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestGetTransactionReceipt",
 		Method:    "eth_getTransactionReceipt",
 		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: "0x10000"}),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthReceipt),
+	})
+
+	// This RPC can be validated pretty easily, but it's not clear how to create an uncle in a reproducible away in order to test this method reliably
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestGetUncleByBlockHashAndIndex",
+		Method:    "eth_getUncleByBlockHashAndIndex",
+		Args:      ArgsLatestBlockHash(ctx, rpcClient, "0x0"),
+		Validator: RequireAny(ValidateJSONSchema(rpctypes.RPCSchemaEthBlock), ValidateExact(nil)),
 	})
 
 	uniqueTests := make(map[RPCTest]struct{})
