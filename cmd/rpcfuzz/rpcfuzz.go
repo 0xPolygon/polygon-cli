@@ -26,6 +26,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 type (
@@ -94,11 +95,14 @@ const (
 )
 
 var (
-	testPrivateHexKey   *string
-	testContractAddress *string
-	testPrivateKey      *ecdsa.PrivateKey
-	testEthAddress      ethcommon.Address
-	testNamespaces      *string
+	testPrivateHexKey     *string
+	testContractAddress   *string
+	testPrivateKey        *ecdsa.PrivateKey
+	testEthAddress        ethcommon.Address
+	testNamespaces        *string
+	testAccountNonce      uint64
+	testAccountNonceMutex sync.Mutex
+	currentChainID        *big.Int
 
 	enabledNamespaces []string
 	allTests          = make([]RPCTest, 0)
@@ -743,32 +747,15 @@ func ArgsCoinbaseTransaction(cxt context.Context, rpcClient *rpc.Client, tx *RPC
 // sign it with the user provide key.
 func ArgsSignTransaction(cxt context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
 	return func() []interface{} {
-		ec := ethclient.NewClient(rpcClient)
-		curNonce, err := ec.NonceAt(cxt, testEthAddress, nil)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to retreive nonce")
-			curNonce = 0
-		}
-		log.Trace().Uint64("curNonce", curNonce).Msg("current nonce value")
+		testAccountNonceMutex.Lock()
+		defer testAccountNonceMutex.Unlock()
+		curNonce := testAccountNonce
 
-		chainId, err := ec.ChainID(cxt)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to get chain id")
-			chainId = big.NewInt(1)
+		chainId := currentChainID
 
-		}
-		log.Trace().Uint64("chainId", chainId.Uint64()).Msg("fetch chainid")
-
-		dft := ethtypes.DynamicFeeTx{}
+		dft := GenericTransactionToDynamicFeeTx(tx)
 		dft.ChainID = chainId
 		dft.Nonce = curNonce
-		dft.GasTipCap = hexutil.MustDecodeBig(tx.MaxPriorityFeePerGas)
-		dft.GasFeeCap = hexutil.MustDecodeBig(tx.MaxFeePerGas)
-		dft.Gas = hexutil.MustDecodeUint64(tx.Gas)
-		toAddr := ethcommon.HexToAddress(tx.To)
-		dft.To = &toAddr
-		dft.Value = hexutil.MustDecodeBig(tx.Value)
-		dft.Data = hexutil.MustDecode(tx.Data)
 
 		londonSigner := ethtypes.NewLondonSigner(chainId)
 		signedTx, err := ethtypes.SignNewTx(testPrivateKey, londonSigner, &dft)
@@ -779,9 +766,50 @@ func ArgsSignTransaction(cxt context.Context, rpcClient *rpc.Client, tx *RPCTest
 		if err != nil {
 			log.Fatal().Err(err).Msg("Unable to marshal binary for transaction")
 		}
+		testAccountNonce += 1
 
 		return []interface{}{hexutil.Encode(stringTx)}
 	}
+}
+
+// GenericTransactionToDynamicFeeTx convert the simple tx
+// representation that we have into a standard eth type
+func GenericTransactionToDynamicFeeTx(tx *RPCTestTransactionArgs) ethtypes.DynamicFeeTx {
+	dft := ethtypes.DynamicFeeTx{}
+	dft.GasTipCap = hexutil.MustDecodeBig(tx.MaxPriorityFeePerGas)
+	dft.GasFeeCap = hexutil.MustDecodeBig(tx.MaxFeePerGas)
+	dft.Gas = hexutil.MustDecodeUint64(tx.Gas)
+	toAddr := ethcommon.HexToAddress(tx.To)
+	dft.To = &toAddr
+	dft.Value = hexutil.MustDecodeBig(tx.Value)
+	dft.Data = hexutil.MustDecode(tx.Data)
+	return dft
+}
+
+// GetTestAccountNonce will attempt to get the current nonce for the
+// current test account
+func GetTestAccountNonce(cxt context.Context, rpcClient *rpc.Client) (uint64, error) {
+	ec := ethclient.NewClient(rpcClient)
+	curNonce, err := ec.NonceAt(cxt, testEthAddress, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to retreive nonce")
+		curNonce = 0
+	}
+	log.Trace().Uint64("curNonce", curNonce).Msg("current nonce value")
+	return curNonce, err
+}
+
+// GetCurrentChainID will attempt to determin the chain for the current network
+func GetCurrentChainID(cxt context.Context, rpcClient *rpc.Client) (*big.Int, error) {
+	ec := ethclient.NewClient(rpcClient)
+	chainId, err := ec.ChainID(cxt)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get chain id")
+		chainId = big.NewInt(1)
+
+	}
+	log.Trace().Uint64("chainId", chainId.Uint64()).Msg("fetch chainid")
+	return chainId, err
 }
 
 func (r *RPCTestGeneric) GetMethod() string {
@@ -873,6 +901,16 @@ Once this has been completed this will be the address of the contract:
 		}
 		log.Trace().Msg("Doing test setup")
 		setupTests(cxt, rpcClient)
+		nonce, err := GetTestAccountNonce(cxt, rpcClient)
+		if err != nil {
+			return err
+		}
+		chainId, err := GetCurrentChainID(cxt, rpcClient)
+		if err != nil {
+			return err
+		}
+		testAccountNonce = nonce
+		currentChainID = chainId
 
 		for _, t := range allTests {
 			if !shouldRunTest(t) {
