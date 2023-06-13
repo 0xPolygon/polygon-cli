@@ -166,13 +166,10 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_syncing
 	allTests = append(allTests, &RPCTestGeneric{
-		Name:   "RPCTestEthSyncing",
-		Method: "eth_syncing",
-		Args:   []interface{}{},
-		Validator: ChainValidator(
-			ValidateExact(false),
-			ValidateJSONSchema(rpctypes.RPCSchemaEthSyncing),
-		),
+		Name:      "RPCTestEthSyncing",
+		Method:    "eth_syncing",
+		Args:      []interface{}{},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthSyncing),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_coinbase

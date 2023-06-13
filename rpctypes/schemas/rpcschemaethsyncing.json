@@ -1,23 +1,31 @@
 {
-    "$schema": "http://json-schema.org/draft-04/schema#",
-    "type": "object",
-    "properties": {
+  "title": "Syncing status",
+  "oneOf": [
+    {
+      "title": "Syncing progress",
+      "type": "object",
+      "properties": {
         "startingBlock": {
-            "type": "string",
-            "pattern": "^0x[0-9a-f]{1,}$"
+          "title": "Starting block",
+          "type": "string",
+          "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$"
         },
         "currentBlock": {
-            "type": "string",
-            "pattern": "^0x[0-9a-f]{1,}$"
+          "title": "Current block",
+          "type": "string",
+          "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$"
         },
         "highestBlock": {
-            "type": "string",
-            "pattern": "^0x[0-9a-f]{1,}$"
+          "title": "Highest block",
+          "type": "string",
+          "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$"
         }
+      }
     },
-    "required": [
-        "startingBlock",
-        "currentBlock",
-        "highestBlock"
-    ]
+    {
+      "title": "Not syncing",
+      "description": "Should always return false if not syncing.",
+      "type": "boolean"
+    }
+  ]
 }
