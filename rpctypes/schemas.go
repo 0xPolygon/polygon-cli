@@ -18,3 +18,6 @@ var RPCSchemaSignTxResponse string
 
 //go:embed schemas/rpcschemaethtransaction.json
 var RPCSchemaEthTransaction string
+
+//go:embed schemas/rpcschemaethreceipt.json
+var RPCSchemaEthReceipt string

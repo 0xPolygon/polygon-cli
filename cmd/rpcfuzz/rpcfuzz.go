@@ -559,6 +559,14 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
 	})
 
+	// eth_getTransactionReceipt
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestGetTransactionReceipt",
+		Method:    "eth_getTransactionReceipt",
+		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: "0x10000"}),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthReceipt),
+	})
+
 	uniqueTests := make(map[RPCTest]struct{})
 	uniqueTestNames := make(map[string]struct{})
 	for _, v := range allTests {
