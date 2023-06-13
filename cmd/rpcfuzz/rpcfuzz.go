@@ -117,7 +117,11 @@ var (
 	currentChainID        *big.Int
 
 	enabledNamespaces []string
-	allTests          = make([]RPCTest, 0)
+
+	// in the future allTests could be used to for
+	// fuzzing.. E.g. loop over the various tests, and mutate the
+	// Args before sending
+	allTests = make([]RPCTest, 0)
 )
 
 // setupTests will add all of the `RPCTests` to the `allTests` slice.
@@ -661,6 +665,22 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 			Address:   *testContractAddress,
 			Topics:    []interface{}{nil, nil, "0x000000000000000000000000" + testEthAddress.String()[2:]}},
 		},
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
+	})
+
+	// cast rpc --rpc-url localhost:8545 eth_newBlockFilter
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthNewBlockFilter",
+		Method:    "eth_newBlockFilter",
+		Args:      []interface{}{},
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
+	})
+
+	// cast rpc --rpc-url localhost:8545 eth_newPendingTransactionFilter
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthNewPendingTransactionFilter",
+		Method:    "eth_newPendingTransactionFilter",
+		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 
