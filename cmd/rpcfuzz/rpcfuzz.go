@@ -684,6 +684,20 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 
+	// cast rpc --rpc-url localhost:8545 eth_uninstallFilter 0x842bc0d4f68eba291ed5c00ef04541d3
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthUninstallFilterFail",
+		Method:    "eth_uninstallFilter",
+		Args:      []interface{}{"0xdeadbeef"},
+		Validator: ValidateExact(false),
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestEthUninstallFilterSucceed",
+		Method:    "eth_uninstallFilter",
+		Args:      ArgsBlockFilterID(ctx, rpcClient),
+		Validator: ValidateExact(true),
+	})
+
 	uniqueTests := make(map[RPCTest]struct{})
 	uniqueTestNames := make(map[string]struct{})
 	for _, v := range allTests {
@@ -883,6 +897,26 @@ func ArgsCoinbase(ctx context.Context, rpcClient *rpc.Client, extraArgs ...inter
 		log.Trace().Str("coinbase", coinbase).Msg("Got coinbase")
 
 		args := []interface{}{coinbase}
+		for _, v := range extraArgs {
+			args = append(args, v)
+		}
+		return args
+	}
+}
+
+// ArgsCoinbase would return arguments where the first argument is now
+// the coinbase
+func ArgsBlockFilterID(ctx context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
+	return func() []interface{} {
+		var filterId string
+		err := rpcClient.CallContext(ctx, &filterId, "eth_newBlockFilter")
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to create new block filter")
+			return []interface{}{"0x0"}
+		}
+		log.Trace().Str("filterid", filterId).Msg("Created filter")
+
+		args := []interface{}{filterId}
 		for _, v := range extraArgs {
 			args = append(args, v)
 		}
