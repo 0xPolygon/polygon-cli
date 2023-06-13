@@ -543,11 +543,19 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
 	})
 
-	//
+	// cast rpc --rpc-url localhost:8545 eth_getTransactionByBlockHashAndIndex 0x63f86797e33513449350d0e00ef962f172a94a60b990a096a470c1ac1df5ec06 0x0
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestEthGetTransactionByBlockHashAndIndex",
 		Method:    "eth_getTransactionByBlockHashAndIndex",
-		Args:      ArgsTransactionBlockHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: "0x10000"}),
+		Args:      ArgsTransactionBlockHashAndIndex(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: "0x10000"}),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
+	})
+
+	// cast rpc --rpc-url localhost:8545 eth_getTransactionByBlockNumberAndIndex 0xd 0x0
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestEthGetTransactionByBlockNumberAndIndex",
+		Method:    "eth_getTransactionByBlockNumberAndIndex",
+		Args:      ArgsTransactionBlockNumberAndIndex(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: "0x10000"}),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
 	})
 
@@ -816,9 +824,9 @@ func ArgsTransactionHash(ctx context.Context, rpcClient *rpc.Client, tx *RPCTest
 	}
 }
 
-// ArgsTransactionHash will execute the provided transaction and return
+// ArgsTransactionBlockHashAndIndex will execute the provided transaction and return
 // the block hash and index of the given transaction
-func ArgsTransactionBlockHash(ctx context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
+func ArgsTransactionBlockHashAndIndex(ctx context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
 	return func() []interface{} {
 		resultHash, receipt, err := prepareAndSendTransaction(ctx, rpcClient, tx)
 		if err != nil {
@@ -827,6 +835,20 @@ func ArgsTransactionBlockHash(ctx context.Context, rpcClient *rpc.Client, tx *RP
 		log.Info().Str("resultHash", resultHash).Msg("Successfully executed transaction")
 
 		return []interface{}{receipt["blockHash"], receipt["transactionIndex"]}
+	}
+}
+
+// ArgsTransactionBlockNumberAndIndex will execute the provided transaction and return
+// the block number and index of the given transaction
+func ArgsTransactionBlockNumberAndIndex(ctx context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
+	return func() []interface{} {
+		resultHash, receipt, err := prepareAndSendTransaction(ctx, rpcClient, tx)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Unable to execute transaction")
+		}
+		log.Info().Str("resultHash", resultHash).Msg("Successfully executed transaction")
+
+		return []interface{}{receipt["blockNumber"], receipt["transactionIndex"]}
 	}
 }
 
