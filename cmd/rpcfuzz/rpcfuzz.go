@@ -89,10 +89,18 @@ type (
 		Nonce                string `json:"nonce,omitempty"`
 		Data                 string `json:"data"`
 	}
+	RPCTestFilterArgs struct {
+		FromBlock string        `json:"fromBlock,omitempty"`
+		ToBlock   string        `json:"toBlock,omitempty"`
+		Address   string        `json:"address,omitempty"`
+		Topics    []interface{} `json:"topics,omitempty"`
+	}
 )
 
 const (
-	codeQualityPrivateKey       = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
+	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
+
+	defaultGas                  = "0x100000"
 	defaultGasPrice             = "0x1000000000"
 	defaultMaxFeePerGas         = "0x1000000000"
 	defaultMaxPriorityFeePerGas = "0x1000000000"
@@ -541,7 +549,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestEthGetTransactionByHash",
 		Method:    "eth_getTransactionByHash",
-		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: "0x10000"}),
+		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
 	})
 
@@ -549,7 +557,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestEthGetTransactionByBlockHashAndIndex",
 		Method:    "eth_getTransactionByBlockHashAndIndex",
-		Args:      ArgsTransactionBlockHashAndIndex(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: "0x10000"}),
+		Args:      ArgsTransactionBlockHashAndIndex(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
 	})
 
@@ -557,7 +565,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestEthGetTransactionByBlockNumberAndIndex",
 		Method:    "eth_getTransactionByBlockNumberAndIndex",
-		Args:      ArgsTransactionBlockNumberAndIndex(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: "0x10000"}),
+		Args:      ArgsTransactionBlockNumberAndIndex(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
 	})
 
@@ -565,7 +573,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestGetTransactionReceipt",
 		Method:    "eth_getTransactionReceipt",
-		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: "0x10000"}),
+		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthReceipt),
 	})
 
@@ -611,6 +619,49 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "eth_compileSerpent",
 		Args:      []interface{}{},
 		Validator: ValidateError(`method eth_compileSerpent does not exist`),
+	})
+
+	// cast rpc --rpc-url localhost:8545 eth_newFilter "{}"
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthNewFilterEmpty",
+		Method:    "eth_newFilter",
+		Args:      []interface{}{RPCTestFilterArgs{}},
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthNewFilterFromOnly",
+		Method:    "eth_newFilter",
+		Args:      []interface{}{RPCTestFilterArgs{FromBlock: "earliest"}},
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthNewFilterToOnly",
+		Method:    "eth_newFilter",
+		Args:      []interface{}{RPCTestFilterArgs{ToBlock: "latest"}},
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthNewFilterAddressOnly",
+		Method:    "eth_newFilter",
+		Args:      []interface{}{RPCTestFilterArgs{Address: *testContractAddress}},
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthNewFilterTopicsOnly",
+		Method:    "eth_newFilter",
+		Args:      []interface{}{RPCTestFilterArgs{Topics: []interface{}{nil, nil, "0x000000000000000000000000" + testEthAddress.String()[2:]}}},
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:   "RPCTestEthNewFilterAllFields",
+		Method: "eth_newFilter",
+		Args: []interface{}{RPCTestFilterArgs{
+			FromBlock: "earliest",
+			ToBlock:   "latest",
+			Address:   *testContractAddress,
+			Topics:    []interface{}{nil, nil, "0x000000000000000000000000" + testEthAddress.String()[2:]}},
+		},
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 
 	uniqueTests := make(map[RPCTest]struct{})
