@@ -1,10 +1,9 @@
 {
-    "$schema": "http://json-schema.org/draft-04/schema#",
-    "type": "array",
-    "items": [
-        {
-            "type": "string",
-            "pattern": "^0x[0-9a-fA-Z]{40}$"
-        }
-    ]
+  "title": "Accounts",
+  "type": "array",
+  "items": {
+    "title": "hex encoded address",
+    "type": "string",
+    "pattern": "^0x[0-9,a-f,A-F]{40}$"
+  }
 }

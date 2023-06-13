@@ -416,7 +416,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:           "RPCTestEthSign",
 		Method:         "eth_sign",
 		Args:           ArgsCoinbase(cxt, rpcClient, "0xdeadbeef"),
-		Validator:      ValidateRegexString(`^0x[[:xdigit:]]{72,}$`),
+		Validator:      ValidateRegexString(`^0x[[:xdigit:]]{130}$`),
 		RequiresUnlock: true,
 	})
 	allTests = append(allTests, &RPCTestGeneric{
