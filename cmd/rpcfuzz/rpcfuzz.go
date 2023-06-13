@@ -186,7 +186,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthChainID",
 		Method:    "eth_chainId",
 		Args:      []interface{}{},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_mining
@@ -205,7 +205,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthHashrate",
 		Method:    "eth_hashrate",
 		Args:      []interface{}{},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_gasPrice
@@ -213,7 +213,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthGasPrice",
 		Method:    "eth_gasPrice",
 		Args:      []interface{}{},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_accounts
@@ -230,7 +230,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthBlockNumber",
 		Method:    "eth_blockNumber",
 		Args:      []interface{}{},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 
 	// cast balance --rpc-url localhost:8545 0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6
@@ -238,19 +238,19 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthGetBalanceLatest",
 		Method:    "eth_getBalance",
 		Args:      []interface{}{testEthAddress.String(), "latest"},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetBalanceEarliest",
 		Method:    "eth_getBalance",
 		Args:      []interface{}{testEthAddress.String(), "earliest"},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetBalancePending",
 		Method:    "eth_getBalance",
 		Args:      []interface{}{testEthAddress.String(), "pending"},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetBalanceZero",
@@ -290,7 +290,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthGetTransactionCountAtLatest",
 		Method:    "eth_getTransactionCount",
 		Args:      []interface{}{testEthAddress.String(), "latest"},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetTransactionCountAtEarliest",
@@ -302,13 +302,13 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthGetTransactionCountAtPending",
 		Method:    "eth_getTransactionCount",
 		Args:      []interface{}{testEthAddress.String(), "pending"},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetTransactionCountAtZero",
 		Method:    "eth_getTransactionCount",
 		Args:      []interface{}{testEthAddress.String(), "0x0"},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_getBlockTransactionCountByHash 0x9300b64619e167e7dbc1b41a6a6e7a8de7d6b99427dceefbd58014e328bd7f92
@@ -316,7 +316,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthGetBlockTransactionCountByHash",
 		Method:    "eth_getBlockTransactionCountByHash",
 		Args:      ArgsLatestBlockHash(cxt, rpcClient),
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetBlockTransactionCountByHashMissing",
@@ -330,25 +330,25 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthGetBlockTransactionCountByNumberLatest",
 		Method:    "eth_getBlockTransactionCountByNumber",
 		Args:      []interface{}{"latest"},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetBlockTransactionCountByNumberEarliest",
 		Method:    "eth_getBlockTransactionCountByNumber",
 		Args:      []interface{}{"earliest"},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetBlockTransactionCountByNumberPending",
 		Method:    "eth_getBlockTransactionCountByNumber",
 		Args:      []interface{}{"pending"},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetBlockTransactionCountByNumberZero",
 		Method:    "eth_getBlockTransactionCountByNumber",
 		Args:      []interface{}{"0x0"},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_getUncleCountByBlockHash 0x9300b64619e167e7dbc1b41a6a6e7a8de7d6b99427dceefbd58014e328bd7f92
@@ -356,7 +356,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthGetUncleCountByBlockHash",
 		Method:    "eth_getUncleCountByBlockHash",
 		Args:      ArgsLatestBlockHash(cxt, rpcClient),
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetUncleCountByBlockHashMissing",
@@ -370,25 +370,25 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthGetUncleCountByBlockNumberLatest",
 		Method:    "eth_getUncleCountByBlockNumber",
 		Args:      []interface{}{"latest"},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetUncleCountByBlockNumberEarliest",
 		Method:    "eth_getUncleCountByBlockNumber",
 		Args:      []interface{}{"earliest"},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetUncleCountByBlockNumberPending",
 		Method:    "eth_getUncleCountByBlockNumber",
 		Args:      []interface{}{"pending"},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetUncleCountByBlockNumberZero",
 		Method:    "eth_getUncleCountByBlockNumber",
 		Args:      []interface{}{"0x0"},
-		Validator: ValidateRegexString(`^0x[[:xdigit:]]{1,}$`),
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 
 	// cast code --rpc-url localhost:8545 0x6fda56c57b0acadb96ed5624ac500c0429d59429
