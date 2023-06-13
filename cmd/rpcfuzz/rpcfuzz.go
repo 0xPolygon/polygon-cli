@@ -2,7 +2,6 @@
 // conformance tests
 package rpcfuzz
 
-// TODO add configuration for name space
 // TODO add the open rpc schemas
 // TODO used the schema validator on all responses
 // TODO change the chain validator to use AND type logic
@@ -28,6 +27,7 @@ import (
 	"math/big"
 	"os"
 	"regexp"
+	"strings"
 )
 
 type (
@@ -100,10 +100,10 @@ var (
 	testContractAddress *string
 	testPrivateKey      *ecdsa.PrivateKey
 	testEthAddress      ethcommon.Address
-)
+	testNamespaces      *string
 
-var (
-	allTests = make([]RPCTest, 0)
+	enabledNamespaces []string
+	allTests          = make([]RPCTest, 0)
 )
 
 func setupTests(cxt context.Context, rpcClient *rpc.Client) {
@@ -845,6 +845,10 @@ Once this has been completed this will be the address of the contract:
 		setupTests(cxt, rpcClient)
 
 		for _, t := range allTests {
+			if !shouldRunTest(t) {
+				log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Skipping test")
+				continue
+			}
 			log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Running Test")
 			var result interface{}
 			err = rpcClient.CallContext(cxt, &result, t.GetMethod(), t.GetArgs()...)
@@ -881,6 +885,17 @@ Once this has been completed this will be the address of the contract:
 		ethAddress := ethcrypto.PubkeyToAddress(privateKey.PublicKey)
 		log.Info().Str("ethAddress", ethAddress.String()).Msg("Loaded private key")
 
+		nsValidator := regexp.MustCompile("^[a-z0-9]*$")
+		rawNameSpaces := strings.Split(*testNamespaces, ",")
+		enabledNamespaces = make([]string, 0)
+		for _, ns := range rawNameSpaces {
+			if !nsValidator.MatchString(ns) {
+				return fmt.Errorf("The namespace %s is not valid", ns)
+			}
+			enabledNamespaces = append(enabledNamespaces, ns+"_")
+		}
+		log.Info().Strs("namespaces", enabledNamespaces).Msg("enabling namespaces")
+
 		testPrivateKey = privateKey
 		testEthAddress = ethAddress
 
@@ -888,12 +903,22 @@ Once this has been completed this will be the address of the contract:
 	},
 }
 
+func shouldRunTest(t RPCTest) bool {
+	for _, ns := range enabledNamespaces {
+		if strings.HasPrefix(t.GetMethod(), ns) {
+			return true
+		}
+	}
+	return false
+}
+
 func init() {
 	zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	flagSet := RPCFuzzCmd.PersistentFlags()
+
 	testPrivateHexKey = flagSet.String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
 	testContractAddress = flagSet.String("contract-address", "0x6fda56c57b0acadb96ed5624ac500c0429d59429", "The address of a contract that can be used for testing")
-
+	testNamespaces = flagSet.String("namespaces", "eth,web3,net", "Comma separated list of rpc namespaces to test")
 }
