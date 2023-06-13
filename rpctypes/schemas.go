@@ -15,3 +15,6 @@ var RPCSchemaAccountList string
 
 //go:embed schemas/rpcschemasigntxresponse.json
 var RPCSchemaSignTxResponse string
+
+//go:embed schemas/rpcschemaethtransaction.json
+var RPCSchemaEthTransaction string

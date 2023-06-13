@@ -27,6 +27,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 )
 
 type (
@@ -91,7 +92,10 @@ type (
 )
 
 const (
-	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
+	codeQualityPrivateKey       = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
+	defaultGasPrice             = "0x1000000000"
+	defaultMaxFeePerGas         = "0x1000000000"
+	defaultMaxPriorityFeePerGas = "0x1000000000"
 )
 
 var (
@@ -108,7 +112,7 @@ var (
 	allTests          = make([]RPCTest, 0)
 )
 
-func setupTests(cxt context.Context, rpcClient *rpc.Client) {
+func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 	// cast rpc --rpc-url localhost:8545 net_version
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestNetVersion",
@@ -196,7 +200,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Name:   "RPCTestEthMining",
 		Method: "eth_mining",
 		Args:   []interface{}{},
-		Validator: ChainValidator(
+		Validator: RequireAny(
 			ValidateExact(true),
 			ValidateExact(false),
 		),
@@ -317,7 +321,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestEthGetBlockTransactionCountByHash",
 		Method:    "eth_getBlockTransactionCountByHash",
-		Args:      ArgsLatestBlockHash(cxt, rpcClient),
+		Args:      ArgsLatestBlockHash(ctx, rpcClient),
 		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
@@ -357,7 +361,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestEthGetUncleCountByBlockHash",
 		Method:    "eth_getUncleCountByBlockHash",
-		Args:      ArgsLatestBlockHash(cxt, rpcClient),
+		Args:      ArgsLatestBlockHash(ctx, rpcClient),
 		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
@@ -417,7 +421,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:           "RPCTestEthSign",
 		Method:         "eth_sign",
-		Args:           ArgsCoinbase(cxt, rpcClient, "0xdeadbeef"),
+		Args:           ArgsCoinbase(ctx, rpcClient, "0xdeadbeef"),
 		Validator:      ValidateRegexString(`^0x[[:xdigit:]]{130}$`),
 		RequiresUnlock: true,
 	})
@@ -434,7 +438,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:           "RPCTestEthSignTransaction",
 		Method:         "eth_signTransaction",
-		Args:           ArgsCoinbaseTransaction(cxt, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: "0x6FC23AC00", MaxPriorityFeePerGas: "0x1", Nonce: "0x1"}),
+		Args:           ArgsCoinbaseTransaction(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Nonce: "0x1"}),
 		Validator:      ValidateJSONSchema(rpctypes.RPCSchemaSignTxResponse),
 		RequiresUnlock: true,
 	})
@@ -443,7 +447,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:           "RPCTestEthSendTransaction",
 		Method:         "eth_sendTransaction",
-		Args:           ArgsCoinbaseTransaction(cxt, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: "0x6FC23AC00", MaxPriorityFeePerGas: "0x1"}),
+		Args:           ArgsCoinbaseTransaction(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}),
 		Validator:      ValidateRegexString(`^0x[[:xdigit:]]{64}$`),
 		RequiresUnlock: true,
 	})
@@ -452,7 +456,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestEthSendRawTransaction",
 		Method:    "eth_sendRawTransaction",
-		Args:      ArgsSignTransaction(cxt, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: "0x6FC23AC00", MaxPriorityFeePerGas: "0x1"}),
+		Args:      ArgsSignTransaction(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}),
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{64}$`),
 	})
 
@@ -487,23 +491,26 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	// cast estimate --rpc-url localhost:8545 0x6fda56c57b0acadb96ed5624ac500c0429d59429  'function mint(uint256 amount) returns()' 10000
 	// cast abi-encode 'function mint(uint256 amount) returns()' 10000
 	allTests = append(allTests, &RPCTestGeneric{
-		Name:      "RPCTestEthEstimateGas",
-		Method:    "eth_estimateGas",
-		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710"}, "latest"},
-		Validator: ValidateRegexString(`0x10b0d`),
+		Name:   "RPCTestEthEstimateGas",
+		Method: "eth_estimateGas",
+		Args:   []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710"}, "latest"},
+		Validator: RequireAny(
+			ValidateRegexString(`^0x10b0d$`), // first run
+			ValidateRegexString(`^0xc841$`),  // subsequent run
+		),
 	})
 
 	// cast block --rpc-url localhost:8545 latest
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestEthGetBlockByHash",
 		Method:    "eth_getBlockByHash",
-		Args:      ArgsLatestBlockHash(cxt, rpcClient, true),
+		Args:      ArgsLatestBlockHash(ctx, rpcClient, true),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
 	})
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestEthGetBlockByHashNoTx",
 		Method:    "eth_getBlockByHash",
-		Args:      ArgsLatestBlockHash(cxt, rpcClient, false),
+		Args:      ArgsLatestBlockHash(ctx, rpcClient, false),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
@@ -523,8 +530,17 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestEthBlockByNumberLatest",
 		Method:    "eth_getBlockByNumber",
-		Args:      ArgsLatestBlockNumber(cxt, rpcClient, true),
+		Args:      ArgsLatestBlockNumber(ctx, rpcClient, true),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
+	})
+
+	// cast send --from 0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6 --rpc-url localhost:8545 --private-key 0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa 0x6fda56c57b0acadb96ed5624ac500c0429d59429 'function mint(uint256 amount) returns()' 10000
+	// cast rpc --rpc-url localhost:8545 eth_getTransactionByHash 0xb27bd60d706c08a80d698b951b9ec4284b342a34b885ff5ebe567b41dab16f69
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestEthGetTransactionByHash",
+		Method:    "eth_getTransactionByHash",
+		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: "0x10000"}),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
 	})
 
 	uniqueTests := make(map[RPCTest]struct{})
@@ -544,11 +560,7 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 
 }
 
-// ChainValidator would take a list of validation functions to be
-// applied in order. The idea is that if first validator is true, then
-// the rest won't be applied. This is needed to support responses that
-// might be different types.
-func ChainValidator(validators ...func(interface{}) error) func(result interface{}) error {
+func RequireAny(validators ...func(interface{}) error) func(result interface{}) error {
 	return func(result interface{}) error {
 		for _, v := range validators {
 			err := v(result)
@@ -558,7 +570,17 @@ func ChainValidator(validators ...func(interface{}) error) func(result interface
 		}
 		return fmt.Errorf("All Validation failed")
 	}
-
+}
+func RequireAll(validators ...func(interface{}) error) func(result interface{}) error {
+	return func(result interface{}) error {
+		for _, v := range validators {
+			err := v(result)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 }
 
 // ValidateHashedResponse will take a hex encoded hash and return a
@@ -654,9 +676,9 @@ func ValidateError(errorMessageRegex string) func(result interface{}) error {
 
 // ArgsLatestBlockHash is meant to generate an argument with the
 // latest block hash for testing
-func ArgsLatestBlockHash(cxt context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
+func ArgsLatestBlockHash(ctx context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
 	return func() []interface{} {
-		blockData, err := getLatestBlock(cxt, rpcClient)
+		blockData, err := getLatestBlock(ctx, rpcClient)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to retreive latest block hash")
 			return []interface{}{"latest"}
@@ -677,9 +699,9 @@ func ArgsLatestBlockHash(cxt context.Context, rpcClient *rpc.Client, extraArgs .
 	}
 }
 
-func ArgsLatestBlockNumber(cxt context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
+func ArgsLatestBlockNumber(ctx context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
 	return func() []interface{} {
-		blockData, err := getLatestBlock(cxt, rpcClient)
+		blockData, err := getLatestBlock(ctx, rpcClient)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to retreive latest block hash")
 			return []interface{}{"latest"}
@@ -701,18 +723,18 @@ func ArgsLatestBlockNumber(cxt context.Context, rpcClient *rpc.Client, extraArgs
 	}
 }
 
-func getLatestBlock(cxt context.Context, rpcClient *rpc.Client) (map[string]interface{}, error) {
+func getLatestBlock(ctx context.Context, rpcClient *rpc.Client) (map[string]interface{}, error) {
 	blockData := make(map[string]interface{})
-	err := rpcClient.CallContext(cxt, &blockData, "eth_getBlockByNumber", "latest", false)
+	err := rpcClient.CallContext(ctx, &blockData, "eth_getBlockByNumber", "latest", false)
 	return blockData, err
 }
 
 // ArgsCoinbase would return arguments where the first argument is now
 // the coinbase
-func ArgsCoinbase(cxt context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
+func ArgsCoinbase(ctx context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
 	return func() []interface{} {
 		var coinbase string
-		err := rpcClient.CallContext(cxt, &coinbase, "eth_coinbase")
+		err := rpcClient.CallContext(ctx, &coinbase, "eth_coinbase")
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to retreive coinbase")
 			return []interface{}{""}
@@ -728,10 +750,10 @@ func ArgsCoinbase(cxt context.Context, rpcClient *rpc.Client, extraArgs ...inter
 }
 
 // ArgsCoinbaseTransaction will return arguments where the from is replace with the current coinbase
-func ArgsCoinbaseTransaction(cxt context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
+func ArgsCoinbaseTransaction(ctx context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
 	return func() []interface{} {
 		var coinbase string
-		err := rpcClient.CallContext(cxt, &coinbase, "eth_coinbase")
+		err := rpcClient.CallContext(ctx, &coinbase, "eth_coinbase")
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to retreive coinbase")
 			return []interface{}{""}
@@ -745,7 +767,7 @@ func ArgsCoinbaseTransaction(cxt context.Context, rpcClient *rpc.Client, tx *RPC
 // ArgsSignTransaction will take the junk transaction type that we've
 // created, convert it to a geth style dynamic fee transaction and
 // sign it with the user provide key.
-func ArgsSignTransaction(cxt context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
+func ArgsSignTransaction(ctx context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
 	return func() []interface{} {
 		testAccountNonceMutex.Lock()
 		defer testAccountNonceMutex.Unlock()
@@ -772,6 +794,75 @@ func ArgsSignTransaction(cxt context.Context, rpcClient *rpc.Client, tx *RPCTest
 	}
 }
 
+// ArgsTransactionHash will execute the provided transaction and return
+// the transaction hash as an argument to be used in other tests.
+func ArgsTransactionHash(ctx context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
+	return func() []interface{} {
+		testAccountNonceMutex.Lock()
+		defer testAccountNonceMutex.Unlock()
+		curNonce := testAccountNonce
+
+		chainId := currentChainID
+
+		dft := GenericTransactionToDynamicFeeTx(tx)
+		dft.ChainID = chainId
+		dft.Nonce = curNonce
+
+		londonSigner := ethtypes.NewLondonSigner(chainId)
+		signedTx, err := ethtypes.SignNewTx(testPrivateKey, londonSigner, &dft)
+		if err != nil {
+			log.Fatal().Err(err).Msg("There was an issue signing the transaction")
+		}
+		stringTx, err := signedTx.MarshalBinary()
+		if err != nil {
+			log.Fatal().Err(err).Msg("Unable to marshal binary for transaction")
+		}
+		resultHash, err := executeRawTxAndWait(ctx, rpcClient, stringTx)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Unable to execute transaction")
+		}
+		log.Info().Str("resultHash", resultHash).Msg("Successfully executed transaction")
+		testAccountNonce += 1
+
+		return []interface{}{resultHash}
+	}
+}
+
+func executeRawTxAndWait(ctx context.Context, rpcClient *rpc.Client, rawTx []byte) (string, error) {
+	var result interface{}
+	err := rpcClient.CallContext(ctx, &result, "eth_sendRawTransaction", hexutil.Encode(rawTx))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to send raw transaction")
+		return "", err
+	}
+	rawHash, ok := result.(string)
+	if !ok {
+		return "", fmt.Errorf("Invalid result type. Expected string but got %T", result)
+	}
+	log.Info().Str("txHash", rawHash).Msg("Successfully sent transaction")
+	err = waitForReceipt(ctx, rpcClient, rawHash)
+	if err != nil {
+		return "", err
+	}
+	return rawHash, nil
+}
+
+func waitForReceipt(ctx context.Context, rpcClient *rpc.Client, txHash string) error {
+	var err error
+	var result interface{}
+	for i := 0; i < 30; i += 1 {
+		err = rpcClient.CallContext(ctx, &result, "eth_getTransactionReceipt", txHash)
+		txReceipt, ok := result.(map[string]interface{})
+		if err != nil || !ok {
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		log.Info().Interface("txReceipt", txReceipt).Msg("Successfully got receipt")
+		return nil
+	}
+	return err
+}
+
 // GenericTransactionToDynamicFeeTx convert the simple tx
 // representation that we have into a standard eth type
 func GenericTransactionToDynamicFeeTx(tx *RPCTestTransactionArgs) ethtypes.DynamicFeeTx {
@@ -788,9 +879,9 @@ func GenericTransactionToDynamicFeeTx(tx *RPCTestTransactionArgs) ethtypes.Dynam
 
 // GetTestAccountNonce will attempt to get the current nonce for the
 // current test account
-func GetTestAccountNonce(cxt context.Context, rpcClient *rpc.Client) (uint64, error) {
+func GetTestAccountNonce(ctx context.Context, rpcClient *rpc.Client) (uint64, error) {
 	ec := ethclient.NewClient(rpcClient)
-	curNonce, err := ec.NonceAt(cxt, testEthAddress, nil)
+	curNonce, err := ec.NonceAt(ctx, testEthAddress, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to retreive nonce")
 		curNonce = 0
@@ -800,9 +891,9 @@ func GetTestAccountNonce(cxt context.Context, rpcClient *rpc.Client) (uint64, er
 }
 
 // GetCurrentChainID will attempt to determin the chain for the current network
-func GetCurrentChainID(cxt context.Context, rpcClient *rpc.Client) (*big.Int, error) {
+func GetCurrentChainID(ctx context.Context, rpcClient *rpc.Client) (*big.Int, error) {
 	ec := ethclient.NewClient(rpcClient)
-	chainId, err := ec.ChainID(cxt)
+	chainId, err := ec.ChainID(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get chain id")
 		chainId = big.NewInt(1)
@@ -894,18 +985,18 @@ Once this has been completed this will be the address of the contract:
 
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cxt := cmd.Context()
-		rpcClient, err := rpc.DialContext(cxt, args[0])
+		ctx := cmd.Context()
+		rpcClient, err := rpc.DialContext(ctx, args[0])
 		if err != nil {
 			return err
 		}
 		log.Trace().Msg("Doing test setup")
-		setupTests(cxt, rpcClient)
-		nonce, err := GetTestAccountNonce(cxt, rpcClient)
+		setupTests(ctx, rpcClient)
+		nonce, err := GetTestAccountNonce(ctx, rpcClient)
 		if err != nil {
 			return err
 		}
-		chainId, err := GetCurrentChainID(cxt, rpcClient)
+		chainId, err := GetCurrentChainID(ctx, rpcClient)
 		if err != nil {
 			return err
 		}
@@ -919,7 +1010,7 @@ Once this has been completed this will be the address of the contract:
 			}
 			log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Running Test")
 			var result interface{}
-			err = rpcClient.CallContext(cxt, &result, t.GetMethod(), t.GetArgs()...)
+			err = rpcClient.CallContext(ctx, &result, t.GetMethod(), t.GetArgs()...)
 			if err != nil && !t.ExpectError() {
 				log.Error().Err(err).Str("method", t.GetMethod()).Msg("Method test failed")
 				continue
