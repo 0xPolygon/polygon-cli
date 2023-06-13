@@ -543,6 +543,14 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
 	})
 
+	//
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestEthGetTransactionByBlockHashAndIndex",
+		Method:    "eth_getTransactionByBlockHashAndIndex",
+		Args:      ArgsTransactionBlockHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: "0x10000"}),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
+	})
+
 	uniqueTests := make(map[RPCTest]struct{})
 	uniqueTestNames := make(map[string]struct{})
 	for _, v := range allTests {
@@ -798,56 +806,83 @@ func ArgsSignTransaction(ctx context.Context, rpcClient *rpc.Client, tx *RPCTest
 // the transaction hash as an argument to be used in other tests.
 func ArgsTransactionHash(ctx context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
 	return func() []interface{} {
-		testAccountNonceMutex.Lock()
-		defer testAccountNonceMutex.Unlock()
-		curNonce := testAccountNonce
-
-		chainId := currentChainID
-
-		dft := GenericTransactionToDynamicFeeTx(tx)
-		dft.ChainID = chainId
-		dft.Nonce = curNonce
-
-		londonSigner := ethtypes.NewLondonSigner(chainId)
-		signedTx, err := ethtypes.SignNewTx(testPrivateKey, londonSigner, &dft)
-		if err != nil {
-			log.Fatal().Err(err).Msg("There was an issue signing the transaction")
-		}
-		stringTx, err := signedTx.MarshalBinary()
-		if err != nil {
-			log.Fatal().Err(err).Msg("Unable to marshal binary for transaction")
-		}
-		resultHash, err := executeRawTxAndWait(ctx, rpcClient, stringTx)
+		resultHash, _, err := prepareAndSendTransaction(ctx, rpcClient, tx)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Unable to execute transaction")
 		}
 		log.Info().Str("resultHash", resultHash).Msg("Successfully executed transaction")
-		testAccountNonce += 1
 
 		return []interface{}{resultHash}
 	}
 }
 
-func executeRawTxAndWait(ctx context.Context, rpcClient *rpc.Client, rawTx []byte) (string, error) {
+// ArgsTransactionHash will execute the provided transaction and return
+// the block hash and index of the given transaction
+func ArgsTransactionBlockHash(ctx context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
+	return func() []interface{} {
+		resultHash, receipt, err := prepareAndSendTransaction(ctx, rpcClient, tx)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Unable to execute transaction")
+		}
+		log.Info().Str("resultHash", resultHash).Msg("Successfully executed transaction")
+
+		return []interface{}{receipt["blockHash"], receipt["transactionIndex"]}
+	}
+}
+
+func prepareAndSendTransaction(ctx context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) (string, map[string]interface{}, error) {
+	testAccountNonceMutex.Lock()
+	defer testAccountNonceMutex.Unlock()
+	curNonce := testAccountNonce
+
+	chainId := currentChainID
+
+	dft := GenericTransactionToDynamicFeeTx(tx)
+	dft.ChainID = chainId
+	dft.Nonce = curNonce
+
+	londonSigner := ethtypes.NewLondonSigner(chainId)
+	signedTx, err := ethtypes.SignNewTx(testPrivateKey, londonSigner, &dft)
+	if err != nil {
+		log.Error().Err(err).Msg("There was an issue signing the transaction")
+		return "", nil, err
+	}
+	stringTx, err := signedTx.MarshalBinary()
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to marshal binary for transaction")
+		return "", nil, err
+	}
+	resultHash, receipt, err := executeRawTxAndWait(ctx, rpcClient, stringTx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to execute transaction")
+		return "", nil, err
+	}
+
+	testAccountNonce += 1
+
+	return resultHash, receipt, nil
+}
+
+func executeRawTxAndWait(ctx context.Context, rpcClient *rpc.Client, rawTx []byte) (string, map[string]interface{}, error) {
 	var result interface{}
 	err := rpcClient.CallContext(ctx, &result, "eth_sendRawTransaction", hexutil.Encode(rawTx))
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to send raw transaction")
-		return "", err
+		return "", nil, err
 	}
 	rawHash, ok := result.(string)
 	if !ok {
-		return "", fmt.Errorf("Invalid result type. Expected string but got %T", result)
+		return "", nil, fmt.Errorf("Invalid result type. Expected string but got %T", result)
 	}
 	log.Info().Str("txHash", rawHash).Msg("Successfully sent transaction")
-	err = waitForReceipt(ctx, rpcClient, rawHash)
+	receipt, err := waitForReceipt(ctx, rpcClient, rawHash)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return rawHash, nil
+	return rawHash, receipt, nil
 }
 
-func waitForReceipt(ctx context.Context, rpcClient *rpc.Client, txHash string) error {
+func waitForReceipt(ctx context.Context, rpcClient *rpc.Client, txHash string) (map[string]interface{}, error) {
 	var err error
 	var result interface{}
 	for i := 0; i < 30; i += 1 {
@@ -858,9 +893,9 @@ func waitForReceipt(ctx context.Context, rpcClient *rpc.Client, txHash string) e
 			continue
 		}
 		log.Info().Interface("txReceipt", txReceipt).Msg("Successfully got receipt")
-		return nil
+		return txReceipt, nil
 	}
-	return err
+	return nil, err
 }
 
 // GenericTransactionToDynamicFeeTx convert the simple tx
