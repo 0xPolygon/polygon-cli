@@ -574,6 +574,12 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Args:      ArgsLatestBlockHash(ctx, rpcClient, "0x0"),
 		Validator: RequireAny(ValidateJSONSchema(rpctypes.RPCSchemaEthBlock), ValidateExact(nil)),
 	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestGetUncleByBlockNumberAndIndex",
+		Method:    "eth_getUncleByBlockNumberAndIndex",
+		Args:      ArgsLatestBlockNumber(ctx, rpcClient, "0x0"),
+		Validator: RequireAny(ValidateJSONSchema(rpctypes.RPCSchemaEthBlock), ValidateExact(nil)),
+	})
 
 	uniqueTests := make(map[RPCTest]struct{})
 	uniqueTestNames := make(map[string]struct{})
