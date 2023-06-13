@@ -112,7 +112,9 @@ var (
 	allTests          = make([]RPCTest, 0)
 )
 
+// setupTests will add all of the `RPCTests` to the `allTests` slice.
 func setupTests(ctx context.Context, rpcClient *rpc.Client) {
+
 	// cast rpc --rpc-url localhost:8545 net_version
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestNetVersion",
@@ -581,6 +583,36 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: RequireAny(ValidateJSONSchema(rpctypes.RPCSchemaEthBlock), ValidateExact(nil)),
 	})
 
+	// cast rpc --rpc-url localhost:8545 eth_getCompilers
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthGetCompilers",
+		IsError:   true,
+		Method:    "eth_getCompilers",
+		Args:      []interface{}{},
+		Validator: ValidateError(`method eth_getCompilers does not exist`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthCompileSolidity",
+		IsError:   true,
+		Method:    "eth_compileSolidity",
+		Args:      []interface{}{},
+		Validator: ValidateError(`method eth_compileSolidity does not exist`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthCompileLLL",
+		IsError:   true,
+		Method:    "eth_compileLLL",
+		Args:      []interface{}{},
+		Validator: ValidateError(`method eth_compileLLL does not exist`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthCompileSerpent",
+		IsError:   true,
+		Method:    "eth_compileSerpent",
+		Args:      []interface{}{},
+		Validator: ValidateError(`method eth_compileSerpent does not exist`),
+	})
+
 	uniqueTests := make(map[RPCTest]struct{})
 	uniqueTestNames := make(map[string]struct{})
 	for _, v := range allTests {
@@ -1030,7 +1062,7 @@ in dev mode:
 
 # ./build/bin/geth --dev --dev.period 5 --http --http.addr localhost \
     --http.port 8545 \
-    --http.api admin,debug,web3,eth,txpool,personal,miner,net \
+    --http.api 'admin,debug,web3,eth,txpool,personal,clique,miner,net' \
     --verbosity 5 --rpc.gascap 50000000  --rpc.txfeecap 0 \
     --miner.gaslimit  10 --miner.gasprice 1 --gpo.blocks 1 \
     --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2 \
