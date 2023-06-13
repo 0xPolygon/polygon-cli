@@ -2,8 +2,6 @@
 // conformance tests
 package rpcfuzz
 
-// TODO add the open rpc schemas
-// TODO used the schema validator on all responses
 // TODO change the chain validator to use AND type logic
 
 import (
@@ -518,6 +516,12 @@ func setupTests(cxt context.Context, rpcClient *rpc.Client) {
 		Args:      []interface{}{"0x0", true},
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
 	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestEthBlockByNumberLatest",
+		Method:    "eth_getBlockByNumber",
+		Args:      ArgsLatestBlockNumber(cxt, rpcClient, true),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
+	})
 
 	uniqueTests := make(map[RPCTest]struct{})
 	uniqueTestNames := make(map[string]struct{})
@@ -648,8 +652,7 @@ func ValidateError(errorMessageRegex string) func(result interface{}) error {
 // latest block hash for testing
 func ArgsLatestBlockHash(cxt context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
 	return func() []interface{} {
-		blockData := make(map[string]interface{})
-		err := rpcClient.CallContext(cxt, &blockData, "eth_getBlockByNumber", "latest", false)
+		blockData, err := getLatestBlock(cxt, rpcClient)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to retreive latest block hash")
 			return []interface{}{"latest"}
@@ -668,6 +671,36 @@ func ArgsLatestBlockHash(cxt context.Context, rpcClient *rpc.Client, extraArgs .
 		}
 		return args
 	}
+}
+
+func ArgsLatestBlockNumber(cxt context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
+	return func() []interface{} {
+		blockData, err := getLatestBlock(cxt, rpcClient)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to retreive latest block hash")
+			return []interface{}{"latest"}
+		}
+		rawNumber := blockData["number"]
+		hexNumber, ok := rawNumber.(string)
+		if !ok {
+			log.Error().Interface("rawNumber", rawNumber).Msg("The type of raw number was expected to be string")
+			return []interface{}{"latest"}
+		}
+
+		log.Trace().Str("blockNumber", hexNumber).Msg("Got latest blockNumber")
+
+		args := []interface{}{hexNumber}
+		for _, v := range extraArgs {
+			args = append(args, v)
+		}
+		return args
+	}
+}
+
+func getLatestBlock(cxt context.Context, rpcClient *rpc.Client) (map[string]interface{}, error) {
+	blockData := make(map[string]interface{})
+	err := rpcClient.CallContext(cxt, &blockData, "eth_getBlockByNumber", "latest", false)
+	return blockData, err
 }
 
 // ArgsCoinbase would return arguments where the first argument is now
