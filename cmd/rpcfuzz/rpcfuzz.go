@@ -552,17 +552,13 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 
 	// cast block --rpc-url localhost:8545 latest
 	allTests = append(allTests, &RPCTestDynamicArgs{
-		Name:      "RPCTestEthGetBlockByHash",
-		Method:    "eth_getBlockByHash",
-		Args:      ArgsLatestBlockHash(ctx, rpcClient, true),
-		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
-	})
-
-	allTests = append(allTests, &RPCTestDynamicArgs{
-		Name:      "RPCTestEthGetBlockByHashComputation",
-		Method:    "eth_getBlockByHash",
-		Args:      ArgsLatestBlockHash(ctx, rpcClient, false),
-		Validator: ValidateBlockHash(),
+		Name:   "RPCTestEthGetBlockByHash",
+		Method: "eth_getBlockByHash",
+		Args:   ArgsLatestBlockHash(ctx, rpcClient, true),
+		Validator: RequireAll(
+			ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
+			ValidateBlockHash(),
+		),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetBlockByHashZero",
@@ -573,16 +569,22 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 
 	// cast block --rpc-url localhost:8545 0
 	allTests = append(allTests, &RPCTestGeneric{
-		Name:      "RPCTestEthBlockByNumber",
-		Method:    "eth_getBlockByNumber",
-		Args:      []interface{}{"0x0", true},
-		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
+		Name:   "RPCTestEthBlockByNumber",
+		Method: "eth_getBlockByNumber",
+		Args:   []interface{}{"0x0", true},
+		Validator: RequireAll(
+			ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
+			ValidateBlockHash(),
+		),
 	})
 	allTests = append(allTests, &RPCTestDynamicArgs{
-		Name:      "RPCTestEthBlockByNumberLatest",
-		Method:    "eth_getBlockByNumber",
-		Args:      ArgsLatestBlockNumber(ctx, rpcClient, true),
-		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
+		Name:   "RPCTestEthBlockByNumberLatest",
+		Method: "eth_getBlockByNumber",
+		Args:   ArgsLatestBlockNumber(ctx, rpcClient, true),
+		Validator: RequireAll(
+			ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
+			ValidateBlockHash(),
+		),
 	})
 
 	// cast send --from 0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6 --rpc-url localhost:8545 --private-key 0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa 0x6fda56c57b0acadb96ed5624ac500c0429d59429 'function mint(uint256 amount) returns()' 10000
@@ -947,33 +949,45 @@ func ValidateError(errorMessageRegex string) func(result interface{}) error {
 	}
 }
 
+// ValidateBlockHash will convert the result into a block and compute
+// the header in order to verify that the rpc header matches the
+// computed header.
 func ValidateBlockHash() func(result interface{}) error {
 	return func(result interface{}) error {
-		underlyingBlock, ok := result.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("The underying type of the result didn't match a block header. Got %T", result)
-		}
-		genericHash, ok := underlyingBlock["hash"].(string)
-		if !ok {
-			return fmt.Errorf("Could not recover the underlying hash. Expected a string and got %T", result)
-		}
-		log.Info().Str("blockHash", genericHash)
-		jsonBlock, err := json.Marshal(underlyingBlock)
-		if err != nil {
-			return fmt.Errorf("Could not json marshal initial block result %w", err)
-		}
 
-		blockHeader := ethtypes.Header{}
-
-		err = blockHeader.UnmarshalJSON(jsonBlock)
+		blockHeader, genericHash, err := genericResultToBlockHeader(result)
 		if err != nil {
-			return fmt.Errorf("Could not unmarshal json block to geth based json block: %w", err)
+			return err
 		}
 		if blockHeader.Hash().String() != genericHash {
 			return fmt.Errorf("block hash mismatch. Computed %s and got %s in the json rpc response", blockHeader.Hash().String(), genericHash)
 		}
 		return nil
 	}
+}
+
+func genericResultToBlockHeader(result interface{}) (*ethtypes.Header, string, error) {
+	underlyingBlock, ok := result.(map[string]interface{})
+	if !ok {
+		return nil, "", fmt.Errorf("The underying type of the result didn't match a block header. Got %T", result)
+	}
+	genericHash, ok := underlyingBlock["hash"].(string)
+	if !ok {
+		return nil, "", fmt.Errorf("Could not recover the underlying hash. Expected a string and got %T", result)
+	}
+	log.Info().Str("blockHash", genericHash)
+	jsonBlock, err := json.Marshal(underlyingBlock)
+	if err != nil {
+		return nil, "", fmt.Errorf("Could not json marshal initial block result %w", err)
+	}
+
+	blockHeader := ethtypes.Header{}
+
+	err = blockHeader.UnmarshalJSON(jsonBlock)
+	if err != nil {
+		return nil, "", fmt.Errorf("Could not unmarshal json block to geth based json block: %w", err)
+	}
+	return &blockHeader, genericHash, nil
 }
 
 // ArgsLatestBlockHash is meant to generate an argument with the
@@ -999,6 +1013,8 @@ func ArgsLatestBlockHash(ctx context.Context, rpcClient *rpc.Client, extraArgs .
 	}
 }
 
+// ArgsLatestBlockNumber will inject arguments that correspond to the
+// most recent block's number
 func ArgsLatestBlockNumber(ctx context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
 	return func() []interface{} {
 		blockData, err := getLatestBlock(ctx, rpcClient)
