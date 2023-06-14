@@ -112,6 +112,7 @@ const (
 	FlagStrictValidation RPCTestFlag = 1 << iota // strict means the test is unsuitable for fuzzing / mutation because it most likely won't match
 	FlagErrorValidation                          // error validation means the result is expecte to be an error
 	FlagRequiresUnlock                           // unlock means the test depends on unlocked accounts
+	FlagEIP1559                                  // tests that would only exist with EIP-1559 enabled
 
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
 
@@ -811,6 +812,15 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Args:      []interface{}{"0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF", "0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF"},
 		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Validator: ValidateError(`method eth_submitHashrate does not exist`),
+	})
+
+	// cast rpc --rpc-url localhost:8545 eth_feeHistory 128 latest []
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestFeeHistory",
+		Method:    "eth_feeHistory",
+		Args:      []interface{}{"0xF", "latest", nil},
+		Flags:     FlagEIP1559,
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthFeeHistory),
 	})
 
 	uniqueTests := make(map[RPCTest]struct{})

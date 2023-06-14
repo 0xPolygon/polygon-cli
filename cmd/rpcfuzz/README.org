@@ -21,7 +21,7 @@ Current list of RPCs:
 - [ ] ~engine_newPayloadV1~
 - [ ] ~engine_newPayloadV2~
 - [ ] ~eth_createAccessList~
-- [ ] ~eth_feeHistory~
+- [X] ~eth_feeHistory~
 - [ ] ~eth_getProof~
 - [ ] ~eth_maxPriorityFeePerGas~
 - [X] ~eth_accounts~
