@@ -698,6 +698,20 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateExact(true),
 	})
 
+	// cast rpc --rpc-url localhost:8545 eth_newFilter '{"fromBlock": "earliest", "toBlock": "latest", "address": "0x6fda56c57b0acadb96ed5624ac500c0429d59429", "topics": [null, null, "0x00000000000000000000000085da99c8a7c2c95964c8efd687e95e632fc533d6"]}'
+	// cast rpc --rpc-url localhost:8545 eth_getFilterChanges 0xef69a30e77c9902dec23745e0bbe4586
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:   "RPCTestGetFilterChanges",
+		Method: "eth_getFilterChanges",
+		Args: ArgsFilterID(ctx, rpcClient, RPCTestFilterArgs{
+			FromBlock: "earliest",
+			ToBlock:   "latest",
+			Address:   *testContractAddress,
+			Topics:    []interface{}{nil, nil, "0x000000000000000000000000" + testEthAddress.String()[2:]},
+		}),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthFilter),
+	})
+
 	uniqueTests := make(map[RPCTest]struct{})
 	uniqueTestNames := make(map[string]struct{})
 	for _, v := range allTests {
@@ -782,6 +796,7 @@ func ValidateJSONSchema(schema string) func(result interface{}) error {
 			for _, desc := range validatorResult.Errors() {
 				errStr += desc.String() + "\n"
 			}
+			log.Trace().Str("resultJson", string(jsonBytes)).Msg("json failed to validate")
 			return fmt.Errorf("The json document is not valid: %s", errStr)
 		}
 		return nil
@@ -904,12 +919,32 @@ func ArgsCoinbase(ctx context.Context, rpcClient *rpc.Client, extraArgs ...inter
 	}
 }
 
-// ArgsCoinbase would return arguments where the first argument is now
-// the coinbase
+// ArgsBlockFilterID will inject an argument that's a filter id
+// corresponding to a block filte
 func ArgsBlockFilterID(ctx context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
 	return func() []interface{} {
 		var filterId string
 		err := rpcClient.CallContext(ctx, &filterId, "eth_newBlockFilter")
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to create new block filter")
+			return []interface{}{"0x0"}
+		}
+		log.Trace().Str("filterid", filterId).Msg("Created filter")
+
+		args := []interface{}{filterId}
+		for _, v := range extraArgs {
+			args = append(args, v)
+		}
+		return args
+	}
+}
+
+// ArgsFilterID will inject an argument that's a filter id
+// corresponding to the provide filter args
+func ArgsFilterID(ctx context.Context, rpcClient *rpc.Client, filterArgs RPCTestFilterArgs, extraArgs ...interface{}) func() []interface{} {
+	return func() []interface{} {
+		var filterId string
+		err := rpcClient.CallContext(ctx, &filterId, "eth_newFilter", filterArgs)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to create new block filter")
 			return []interface{}{"0x0"}

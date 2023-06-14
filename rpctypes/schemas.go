@@ -21,3 +21,6 @@ var RPCSchemaEthTransaction string
 
 //go:embed schemas/rpcschemaethreceipt.json
 var RPCSchemaEthReceipt string
+
+//go:embed schemas/rpcschemafilterchanges.json
+var RPCSchemaEthFilter string
