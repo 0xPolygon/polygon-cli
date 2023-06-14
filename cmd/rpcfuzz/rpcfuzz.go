@@ -590,26 +590,35 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 	// cast send --from 0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6 --rpc-url localhost:8545 --private-key 0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa 0x6fda56c57b0acadb96ed5624ac500c0429d59429 'function mint(uint256 amount) returns()' 10000
 	// cast rpc --rpc-url localhost:8545 eth_getTransactionByHash 0xb27bd60d706c08a80d698b951b9ec4284b342a34b885ff5ebe567b41dab16f69
 	allTests = append(allTests, &RPCTestDynamicArgs{
-		Name:      "RPCTestEthGetTransactionByHash",
-		Method:    "eth_getTransactionByHash",
-		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
-		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
+		Name:   "RPCTestEthGetTransactionByHash",
+		Method: "eth_getTransactionByHash",
+		Args:   ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
+		Validator: RequireAll(
+			ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
+			ValidateTransactionHash(),
+		),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_getTransactionByBlockHashAndIndex 0x63f86797e33513449350d0e00ef962f172a94a60b990a096a470c1ac1df5ec06 0x0
 	allTests = append(allTests, &RPCTestDynamicArgs{
-		Name:      "RPCTestEthGetTransactionByBlockHashAndIndex",
-		Method:    "eth_getTransactionByBlockHashAndIndex",
-		Args:      ArgsTransactionBlockHashAndIndex(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
-		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
+		Name:   "RPCTestEthGetTransactionByBlockHashAndIndex",
+		Method: "eth_getTransactionByBlockHashAndIndex",
+		Args:   ArgsTransactionBlockHashAndIndex(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
+		Validator: RequireAll(
+			ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
+			ValidateTransactionHash(),
+		),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_getTransactionByBlockNumberAndIndex 0xd 0x0
 	allTests = append(allTests, &RPCTestDynamicArgs{
-		Name:      "RPCTestEthGetTransactionByBlockNumberAndIndex",
-		Method:    "eth_getTransactionByBlockNumberAndIndex",
-		Args:      ArgsTransactionBlockNumberAndIndex(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
-		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
+		Name:   "RPCTestEthGetTransactionByBlockNumberAndIndex",
+		Method: "eth_getTransactionByBlockNumberAndIndex",
+		Args:   ArgsTransactionBlockNumberAndIndex(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
+		Validator: RequireAll(
+			ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
+			ValidateTransactionHash(),
+		),
 	})
 
 	// cast receipt --rpc-url localhost:8545 0x1bd4ec642302aa22906360af6493c230ecc41df10fffcdedc85caeb22cbb6b58
@@ -966,6 +975,21 @@ func ValidateBlockHash() func(result interface{}) error {
 	}
 }
 
+// ValidateTransactionHash will compare the rpc transaction hash to the computed transaction hash
+func ValidateTransactionHash() func(result interface{}) error {
+	return func(result interface{}) error {
+
+		tx, genericHash, err := genericResultToTransaction(result)
+		if err != nil {
+			return err
+		}
+		if tx.Hash().String() != genericHash {
+			return fmt.Errorf("tx hash mismatch. Computed %s and got %s in the json rpc response", tx.Hash().String(), genericHash)
+		}
+		return nil
+	}
+}
+
 func genericResultToBlockHeader(result interface{}) (*ethtypes.Header, string, error) {
 	underlyingBlock, ok := result.(map[string]interface{})
 	if !ok {
@@ -975,7 +999,7 @@ func genericResultToBlockHeader(result interface{}) (*ethtypes.Header, string, e
 	if !ok {
 		return nil, "", fmt.Errorf("Could not recover the underlying hash. Expected a string and got %T", result)
 	}
-	log.Info().Str("blockHash", genericHash)
+	log.Info().Str("blockHash", genericHash).Msg("Original block hash")
 	jsonBlock, err := json.Marshal(underlyingBlock)
 	if err != nil {
 		return nil, "", fmt.Errorf("Could not json marshal initial block result %w", err)
@@ -988,6 +1012,29 @@ func genericResultToBlockHeader(result interface{}) (*ethtypes.Header, string, e
 		return nil, "", fmt.Errorf("Could not unmarshal json block to geth based json block: %w", err)
 	}
 	return &blockHeader, genericHash, nil
+}
+func genericResultToTransaction(result interface{}) (*ethtypes.Transaction, string, error) {
+	underlyingTx, ok := result.(map[string]interface{})
+	if !ok {
+		return nil, "", fmt.Errorf("The underying type of the result didn't match a transaction. Got %T", result)
+	}
+	genericHash, ok := underlyingTx["hash"].(string)
+	if !ok {
+		return nil, "", fmt.Errorf("Could not recover the underlying hash. Expected a string and got %T", result)
+	}
+	log.Info().Str("txHash", genericHash).Msg("Original tx hash")
+	jsonTx, err := json.Marshal(underlyingTx)
+	if err != nil {
+		return nil, "", fmt.Errorf("Could not json marshal initial tx result %w", err)
+	}
+
+	tx := ethtypes.Transaction{}
+
+	err = tx.UnmarshalJSON(jsonTx)
+	if err != nil {
+		return nil, "", fmt.Errorf("Could not unmarshal json tx to geth based json tx: %w", err)
+	}
+	return &tx, genericHash, nil
 }
 
 // ArgsLatestBlockHash is meant to generate an argument with the
