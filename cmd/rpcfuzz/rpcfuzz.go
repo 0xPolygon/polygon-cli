@@ -59,29 +59,30 @@ type (
 		ExpectError() bool
 	}
 
+	// RPCTestFlag is meant for bitmasking various flags to understand properties of the test
+	RPCTestFlag uint64
+
 	// RPCTestGeneric is the simplist implementation of the
 	// RPCTest. Basically the implementation of the interface is
 	// managed by just returning hard coded values for method,
 	// args, validator, and error
 	RPCTestGeneric struct {
-		Name           string
-		Method         string
-		Args           []interface{}
-		Validator      func(result interface{}) error
-		IsError        bool
-		RequiresUnlock bool
+		Name      string
+		Method    string
+		Args      []interface{}
+		Validator func(result interface{}) error
+		Flags     RPCTestFlag
 	}
 
 	// RPCTestDynamicArgs is a simple implementation of the
 	// RPCTest that requires a function for Args which will be
 	// used to generate the args for testing.
 	RPCTestDynamicArgs struct {
-		Name           string
-		Method         string
-		Args           func() []interface{}
-		Validator      func(result interface{}) error
-		IsError        bool
-		RequiresUnlock bool
+		Name      string
+		Method    string
+		Args      func() []interface{}
+		Validator func(result interface{}) error
+		Flags     RPCTestFlag
 	}
 
 	// RPCTestTransactionArgs is used to send transactions
@@ -96,6 +97,9 @@ type (
 		Nonce                string `json:"nonce,omitempty"`
 		Data                 string `json:"data"`
 	}
+
+	// RPCTestFilterArgs is a simplified type to contain the flag
+	// needed to create a filter
 	RPCTestFilterArgs struct {
 		FromBlock string        `json:"fromBlock,omitempty"`
 		ToBlock   string        `json:"toBlock,omitempty"`
@@ -105,6 +109,10 @@ type (
 )
 
 const (
+	FlagStrictValidation RPCTestFlag = 1 << iota // strict means the test is unsuitable for fuzzing / mutation because it most likely won't match
+	FlagErrorValidation                          // error validation means the result is expecte to be an error
+	FlagRequiresUnlock                           // unlock means the test depends on unlocked accounts
+
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
 
 	defaultGas                  = "0x100000"
@@ -154,13 +162,14 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestWeb3SHA3",
 		Method:    "web3_sha3",
+		Flags:     FlagStrictValidation,
 		Args:      []interface{}{"0x68656c6c6f20776f726c64"},
 		Validator: ValidateRegexString(`0x47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad`),
 	})
 
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestWeb3SHA3Error",
-		IsError:   true,
+		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "web3_sha3",
 		Args:      []interface{}{"68656c6c6f20776f726c64"},
 		Validator: ValidateError(`cannot unmarshal hex string without 0x prefix`),
@@ -185,7 +194,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 	// cast rpc --rpc-url localhost:8545 eth_protocolVersion
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthProtocolVersion",
-		IsError:   true,
+		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "eth_protocolVersion",
 		Args:      []interface{}{},
 		Validator: ValidateError(`method eth_protocolVersion does not exist`),
@@ -201,11 +210,11 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_coinbase
 	allTests = append(allTests, &RPCTestGeneric{
-		Name:           "RPCTestEthCoinbase",
-		Method:         "eth_coinbase",
-		Args:           []interface{}{},
-		Validator:      ValidateRegexString(`^0x[[:xdigit:]]{40}$`),
-		RequiresUnlock: true,
+		Name:      "RPCTestEthCoinbase",
+		Method:    "eth_coinbase",
+		Args:      []interface{}{},
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{40}$`),
+		Flags:     FlagRequiresUnlock,
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_chainId
@@ -234,6 +243,13 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Args:      []interface{}{},
 		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthHashrateNoETHash",
+		Method:    "eth_hashrate",
+		Flags:     FlagStrictValidation,
+		Args:      []interface{}{},
+		Validator: ValidateRegexString(`^0x0$`), // A strict check for 0x0 is expected in EVM now ethhash has been yeeted
+	})
 
 	// cast rpc --rpc-url localhost:8545 eth_gasPrice
 	allTests = append(allTests, &RPCTestGeneric{
@@ -245,11 +261,11 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 
 	// cast rpc --rpc-url localhost:8545 eth_accounts
 	allTests = append(allTests, &RPCTestGeneric{
-		Name:           "RPCTestEthAccounts",
-		Method:         "eth_accounts",
-		Args:           []interface{}{},
-		Validator:      ValidateJSONSchema(rpctypes.RPCSchemaAccountList),
-		RequiresUnlock: true,
+		Name:      "RPCTestEthAccounts",
+		Method:    "eth_accounts",
+		Args:      []interface{}{},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaAccountList),
+		Flags:     FlagRequiresUnlock,
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_blockNumber
@@ -283,6 +299,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthGetBalanceZero",
 		Method:    "eth_getBalance",
 		Args:      []interface{}{testEthAddress.String(), "0x0"},
+		Flags:     FlagStrictValidation,
 		Validator: ValidateRegexString(`^0x0$`),
 	})
 
@@ -291,6 +308,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthGetStorageAtLatest",
 		Method:    "eth_getStorageAt",
 		Args:      []interface{}{*testContractAddress, "0x3", "latest"},
+		Flags:     FlagStrictValidation,
 		Validator: ValidateRegexString(`^0x536f6c6964697479206279204578616d706c6500000000000000000000000026$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
@@ -303,12 +321,14 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthGetStorageAtPending",
 		Method:    "eth_getStorageAt",
 		Args:      []interface{}{*testContractAddress, "0x3", "pending"},
+		Flags:     FlagStrictValidation,
 		Validator: ValidateRegexString(`^0x536f6c6964697479206279204578616d706c6500000000000000000000000026$`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetStorageAtZero",
 		Method:    "eth_getStorageAt",
 		Args:      []interface{}{*testContractAddress, "0x3", "0x0"},
+		Flags:     FlagStrictValidation,
 		Validator: ValidateRegexString(`^0x0{64}`),
 	})
 
@@ -348,6 +368,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetBlockTransactionCountByHashMissing",
 		Method:    "eth_getBlockTransactionCountByHash",
+		Flags:     FlagStrictValidation,
 		Args:      []interface{}{"0x0000000000000000000000000000000000000000000000000000000000000000"},
 		Validator: ValidateExact(nil),
 	})
@@ -388,6 +409,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetUncleCountByBlockHashMissing",
 		Method:    "eth_getUncleCountByBlockHash",
+		Flags:     FlagStrictValidation,
 		Args:      []interface{}{"0x0000000000000000000000000000000000000000000000000000000000000000"},
 		Validator: ValidateExact(nil),
 	})
@@ -423,54 +445,56 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthGetCodeLatest",
 		Method:    "eth_getCode",
 		Args:      []interface{}{*testContractAddress, "latest"},
+		Flags:     FlagStrictValidation,
 		Validator: ValidateHashedResponse("e39381f1654cf6a3b7eac2a789b9adf7319312cb"),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetCodePending",
 		Method:    "eth_getCode",
 		Args:      []interface{}{*testContractAddress, "pending"},
+		Flags:     FlagStrictValidation,
 		Validator: ValidateHashedResponse("e39381f1654cf6a3b7eac2a789b9adf7319312cb"),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetCodeEarliest",
 		Method:    "eth_getCode",
+		Flags:     FlagStrictValidation,
 		Args:      []interface{}{*testContractAddress, "earliest"},
 		Validator: ValidateRegexString(`^0x$`),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_sign "0xb9b1cf51a65b50f74ed8bcb258413c02cba2ec57" "0xdeadbeaf"
 	allTests = append(allTests, &RPCTestDynamicArgs{
-		Name:           "RPCTestEthSign",
-		Method:         "eth_sign",
-		Args:           ArgsCoinbase(ctx, rpcClient, "0xdeadbeef"),
-		Validator:      ValidateRegexString(`^0x[[:xdigit:]]{130}$`),
-		RequiresUnlock: true,
+		Name:      "RPCTestEthSign",
+		Method:    "eth_sign",
+		Args:      ArgsCoinbase(ctx, rpcClient, "0xdeadbeef"),
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{130}$`),
+		Flags:     FlagRequiresUnlock,
 	})
 	allTests = append(allTests, &RPCTestGeneric{
-		Name:           "RPCTestEthSignFail",
-		Method:         "eth_sign",
-		Args:           []interface{}{testEthAddress.String(), "0xdeadbeef"},
-		Validator:      ValidateError(`unknown account`),
-		IsError:        true,
-		RequiresUnlock: true,
+		Name:      "RPCTestEthSignFail",
+		Method:    "eth_sign",
+		Args:      []interface{}{testEthAddress.String(), "0xdeadbeef"},
+		Validator: ValidateError(`unknown account`),
+		Flags:     FlagErrorValidation | FlagStrictValidation | FlagRequiresUnlock,
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_signTransaction '{"from": "0xb9b1cf51a65b50f74ed8bcb258413c02cba2ec57", "to": "0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6", "data": "0x", "gas": "0x5208", "gasPrice": "0x1", "nonce": "0x1"}'
 	allTests = append(allTests, &RPCTestDynamicArgs{
-		Name:           "RPCTestEthSignTransaction",
-		Method:         "eth_signTransaction",
-		Args:           ArgsCoinbaseTransaction(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Nonce: "0x1"}),
-		Validator:      ValidateJSONSchema(rpctypes.RPCSchemaSignTxResponse),
-		RequiresUnlock: true,
+		Name:      "RPCTestEthSignTransaction",
+		Method:    "eth_signTransaction",
+		Args:      ArgsCoinbaseTransaction(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Nonce: "0x1"}),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaSignTxResponse),
+		Flags:     FlagRequiresUnlock,
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_sendTransaction '{"from": "0xb9b1cf51a65b50f74ed8bcb258413c02cba2ec57", "to": "0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6", "data": "0x", "gas": "0x5208", "gasPrice": "0x1", "nonce": "0x1"}'
 	allTests = append(allTests, &RPCTestDynamicArgs{
-		Name:           "RPCTestEthSendTransaction",
-		Method:         "eth_sendTransaction",
-		Args:           ArgsCoinbaseTransaction(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}),
-		Validator:      ValidateRegexString(`^0x[[:xdigit:]]{64}$`),
-		RequiresUnlock: true,
+		Name:      "RPCTestEthSendTransaction",
+		Method:    "eth_sendTransaction",
+		Args:      ArgsCoinbaseTransaction(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}),
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{64}$`),
+		Flags:     FlagRequiresUnlock,
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_sendRawTransaction '{"from": "0xb9b1cf51a65b50f74ed8bcb258413c02cba2ec57", "to": "0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6", "data": "0x", "gas": "0x5208", "gasPrice": "0x1", "nonce": "0x1"}'
@@ -488,24 +512,28 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "eth_call",
 		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03"}, "latest"},
 		Validator: ValidateRegexString(`536f6c6964697479206279204578616d706c65`),
+		Flags:     FlagStrictValidation,
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthCallPending",
 		Method:    "eth_call",
 		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03"}, "pending"},
 		Validator: ValidateRegexString(`536f6c6964697479206279204578616d706c65`),
+		Flags:     FlagStrictValidation,
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthCallEarliest",
 		Method:    "eth_call",
 		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03"}, "earliest"},
 		Validator: ValidateRegexString(`^0x$`),
+		Flags:     FlagStrictValidation,
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthCallZero",
 		Method:    "eth_call",
 		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03"}, "0x0"},
 		Validator: ValidateRegexString(`^0x$`),
+		Flags:     FlagStrictValidation,
 	})
 
 	// cat contracts/ERC20.abi| go run main.go abi
@@ -519,6 +547,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 			ValidateRegexString(`^0x10b0d$`), // first run
 			ValidateRegexString(`^0xc841$`),  // subsequent run
 		),
+		Flags: FlagStrictValidation,
 	})
 
 	// cast block --rpc-url localhost:8545 latest
@@ -605,28 +634,28 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 	// cast rpc --rpc-url localhost:8545 eth_getCompilers
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetCompilers",
-		IsError:   true,
+		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "eth_getCompilers",
 		Args:      []interface{}{},
 		Validator: ValidateError(`method eth_getCompilers does not exist`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthCompileSolidity",
-		IsError:   true,
+		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "eth_compileSolidity",
 		Args:      []interface{}{},
 		Validator: ValidateError(`method eth_compileSolidity does not exist`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthCompileLLL",
-		IsError:   true,
+		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "eth_compileLLL",
 		Args:      []interface{}{},
 		Validator: ValidateError(`method eth_compileLLL does not exist`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthCompileSerpent",
-		IsError:   true,
+		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "eth_compileSerpent",
 		Args:      []interface{}{},
 		Validator: ValidateError(`method eth_compileSerpent does not exist`),
@@ -697,12 +726,14 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "eth_uninstallFilter",
 		Args:      []interface{}{"0xdeadbeef"},
 		Validator: ValidateExact(false),
+		Flags:     FlagStrictValidation,
 	})
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestEthUninstallFilterSucceed",
 		Method:    "eth_uninstallFilter",
 		Args:      ArgsBlockFilterID(ctx, rpcClient),
 		Validator: ValidateExact(true),
+		Flags:     FlagStrictValidation,
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_newFilter '{"fromBlock": "earliest", "toBlock": "latest", "address": "0x6fda56c57b0acadb96ed5624ac500c0429d59429", "topics": [null, null, "0x00000000000000000000000085da99c8a7c2c95964c8efd687e95e632fc533d6"]}'
@@ -750,7 +781,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestGetWork",
 		Method:    "eth_getWork",
 		Args:      []interface{}{},
-		IsError:   true,
+		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Validator: ValidateError(`method eth_getWork does not exist`),
 	})
 	// cast rpc --rpc-url localhost:8545 eth_submitWork 0x0011223344556677 0x00112233445566778899AABBCCDDEEFF 0x00112233445566778899AABBCCDDEEFF
@@ -758,7 +789,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestSubmitWork",
 		Method:    "eth_submitWork",
 		Args:      []interface{}{"0x0011223344556677", "0x00112233445566778899AABBCCDDEEFF", "0x00112233445566778899AABBCCDDEEFF"},
-		IsError:   true,
+		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Validator: ValidateError(`method eth_submitWork does not exist`),
 	})
 	// cast rpc --rpc-url localhost:8545 eth_submitHashrate 0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF 0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF
@@ -766,7 +797,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestSubmitHashrate",
 		Method:    "eth_submitHashrate",
 		Args:      []interface{}{"0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF", "0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF"},
-		IsError:   true,
+		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Validator: ValidateError(`method eth_submitHashrate does not exist`),
 	})
 
@@ -1228,7 +1259,7 @@ func (r *RPCTestGeneric) Validate(result interface{}) error {
 	return r.Validator(result)
 }
 func (r *RPCTestGeneric) ExpectError() bool {
-	return r.IsError
+	return r.Flags&FlagErrorValidation != 0
 }
 
 func (r *RPCTestDynamicArgs) GetMethod() string {
@@ -1244,7 +1275,7 @@ func (r *RPCTestDynamicArgs) Validate(result interface{}) error {
 	return r.Validator(result)
 }
 func (r *RPCTestDynamicArgs) ExpectError() bool {
-	return r.IsError
+	return r.Flags&FlagErrorValidation != 0
 }
 
 var RPCFuzzCmd = &cobra.Command{
