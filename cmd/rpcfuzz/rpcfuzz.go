@@ -933,9 +933,7 @@ func ArgsLatestBlockHash(ctx context.Context, rpcClient *rpc.Client, extraArgs .
 		log.Trace().Str("blockHash", strHash).Msg("Got latest blockhash")
 
 		args := []interface{}{strHash}
-		for _, v := range extraArgs {
-			args = append(args, v)
-		}
+		args = append(args, extraArgs...)
 		return args
 	}
 }
@@ -957,9 +955,7 @@ func ArgsLatestBlockNumber(ctx context.Context, rpcClient *rpc.Client, extraArgs
 		log.Trace().Str("blockNumber", hexNumber).Msg("Got latest blockNumber")
 
 		args := []interface{}{hexNumber}
-		for _, v := range extraArgs {
-			args = append(args, v)
-		}
+		args = append(args, extraArgs...)
 		return args
 	}
 }
@@ -983,9 +979,7 @@ func ArgsCoinbase(ctx context.Context, rpcClient *rpc.Client, extraArgs ...inter
 		log.Trace().Str("coinbase", coinbase).Msg("Got coinbase")
 
 		args := []interface{}{coinbase}
-		for _, v := range extraArgs {
-			args = append(args, v)
-		}
+		args = append(args, extraArgs...)
 		return args
 	}
 }
