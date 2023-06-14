@@ -745,6 +745,31 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthFilter),
 	})
 
+	// cast rpc --rpc-url localhost:8545 eth_getWork
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestGetWork",
+		Method:    "eth_getWork",
+		Args:      []interface{}{},
+		IsError:   true,
+		Validator: ValidateError(`method eth_getWork does not exist`),
+	})
+	// cast rpc --rpc-url localhost:8545 eth_submitWork 0x0011223344556677 0x00112233445566778899AABBCCDDEEFF 0x00112233445566778899AABBCCDDEEFF
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestSubmitWork",
+		Method:    "eth_submitWork",
+		Args:      []interface{}{"0x0011223344556677", "0x00112233445566778899AABBCCDDEEFF", "0x00112233445566778899AABBCCDDEEFF"},
+		IsError:   true,
+		Validator: ValidateError(`method eth_submitWork does not exist`),
+	})
+	// cast rpc --rpc-url localhost:8545 eth_submitHashrate 0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF 0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestSubmitHashrate",
+		Method:    "eth_submitHashrate",
+		Args:      []interface{}{"0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF", "0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF"},
+		IsError:   true,
+		Validator: ValidateError(`method eth_submitHashrate does not exist`),
+	})
+
 	uniqueTests := make(map[RPCTest]struct{})
 	uniqueTestNames := make(map[string]struct{})
 	for _, v := range allTests {
