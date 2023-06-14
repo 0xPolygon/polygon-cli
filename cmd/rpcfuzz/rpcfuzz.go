@@ -732,6 +732,18 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		}),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthFilter),
 	})
+	// cast rpc --rpc-url localhost:8545 eth_getLogs '{"fromBlock": "earliest", "toBlock": "latest", "address": "0x6fda56c57b0acadb96ed5624ac500c0429d59429", "topics": [null, null, "0x00000000000000000000000085da99c8a7c2c95964c8efd687e95e632fc533d6"]}'
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:   "RPCTestGetLogs",
+		Method: "eth_getLogs",
+		Args: []interface{}{RPCTestFilterArgs{
+			FromBlock: "earliest",
+			ToBlock:   "latest",
+			Address:   *testContractAddress,
+			Topics:    []interface{}{nil, nil, "0x000000000000000000000000" + testEthAddress.String()[2:]},
+		}},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthFilter),
+	})
 
 	uniqueTests := make(map[RPCTest]struct{})
 	uniqueTestNames := make(map[string]struct{})
