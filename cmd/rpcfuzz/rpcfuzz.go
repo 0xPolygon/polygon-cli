@@ -997,9 +997,7 @@ func ArgsBlockFilterID(ctx context.Context, rpcClient *rpc.Client, extraArgs ...
 		log.Trace().Str("filterid", filterId).Msg("Created filter")
 
 		args := []interface{}{filterId}
-		for _, v := range extraArgs {
-			args = append(args, v)
-		}
+		args = append(args, extraArgs...)
 		return args
 	}
 }
@@ -1017,9 +1015,7 @@ func ArgsFilterID(ctx context.Context, rpcClient *rpc.Client, filterArgs RPCTest
 		log.Trace().Str("filterid", filterId).Msg("Created filter")
 
 		args := []interface{}{filterId}
-		for _, v := range extraArgs {
-			args = append(args, v)
-		}
+		args = append(args, extraArgs...)
 		return args
 	}
 }
