@@ -162,7 +162,6 @@ var LoadtestCmd = &cobra.Command{
 		return nil
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
-		setLogLevel(inputLoadTestParams)
 		zerolog.DurationFieldUnit = time.Second
 		zerolog.DurationFieldInteger = true
 
@@ -189,31 +188,6 @@ var LoadtestCmd = &cobra.Command{
 	},
 }
 
-func setLogLevel(ltp loadTestParams) {
-	verbosity := *ltp.Verbosity
-	if verbosity < 100 {
-		zerolog.SetGlobalLevel(zerolog.PanicLevel)
-	} else if verbosity < 200 {
-		zerolog.SetGlobalLevel(zerolog.FatalLevel)
-	} else if verbosity < 300 {
-		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
-	} else if verbosity < 400 {
-		zerolog.SetGlobalLevel(zerolog.WarnLevel)
-	} else if verbosity < 500 {
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	} else if verbosity < 600 {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	} else {
-		zerolog.SetGlobalLevel(zerolog.TraceLevel)
-	}
-	if *ltp.PrettyLogs {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-		log.Debug().Msg("Starting logger in console mode")
-	} else {
-		log.Debug().Msg("Starting logger in JSON mode")
-	}
-}
-
 type (
 	blockSummary struct {
 		Block     *rpctypes.RawBlockResponse
@@ -237,8 +211,6 @@ type (
 		Concurrency                         *int64
 		BatchSize                           *uint64
 		TimeLimit                           *int64
-		Verbosity                           *int64
-		PrettyLogs                          *bool
 		ToRandom                            *bool
 		URL                                 *url.URL
 		ChainID                             *uint64
@@ -293,10 +265,8 @@ func init() {
 	ltp.Concurrency = LoadtestCmd.PersistentFlags().Int64P("concurrency", "c", 1, "Number of multiple requests to perform at a time. Default is one request at a time.")
 	ltp.TimeLimit = LoadtestCmd.PersistentFlags().Int64P("time-limit", "t", -1, "Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no timelimit.")
 	// https://logging.apache.org/log4j/2.x/manual/customloglevels.html
-	ltp.Verbosity = LoadtestCmd.PersistentFlags().Int64P("verbosity", "v", 200, "0 - Silent\n100 Fatals\n200 Errors\n300 Warnings\n400 INFO\n500 Debug\n600 Trace")
 
 	// extended parameters
-	ltp.PrettyLogs = LoadtestCmd.PersistentFlags().Bool("pretty-logs", true, "Should we log in pretty format or JSON")
 	ltp.PrivateKey = LoadtestCmd.PersistentFlags().String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
 	ltp.ChainID = LoadtestCmd.PersistentFlags().Uint64("chain-id", 1256, "The chain id for the transactions that we're going to send")
 	ltp.ToAddress = LoadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")

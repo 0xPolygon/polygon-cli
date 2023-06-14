@@ -23,6 +23,8 @@ import (
 	"github.com/maticnetwork/polygon-cli/cmd/fork"
 	"github.com/maticnetwork/polygon-cli/cmd/p2p"
 	"github.com/maticnetwork/polygon-cli/cmd/parseethwallet"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -41,15 +43,21 @@ import (
 	"github.com/maticnetwork/polygon-cli/cmd/wallet"
 )
 
-var cfgFile string
+var (
+	cfgFile   string
+	verbosity int
+	pretty    bool
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "polycli",
 	Short: "A Swiss Army knife of blockchain tools",
 	Long: `Polycli is a collection of tools that are meant to be useful while
-building, testing, and running block chain applications.
-`,
+building, testing, and running block chain applications.`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		setLogLevel(verbosity, pretty)
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -69,6 +77,8 @@ func init() {
 	// will be global for your application.
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.polygon-cli.yaml)")
+	rootCmd.PersistentFlags().IntVarP(&verbosity, "verbosity", "v", 200, "0 - Silent\n100 Fatals\n200 Errors\n300 Warnings\n400 INFO\n500 Debug\n600 Trace")
+	rootCmd.PersistentFlags().BoolVar(&pretty, "pretty-logs", true, "Should we log in pretty format or JSON")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -113,5 +123,31 @@ func initConfig() {
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+	}
+}
+
+// setLogLevel sets the log level based on the flags.
+func setLogLevel(verbosity int, pretty bool) {
+	if verbosity < 100 {
+		zerolog.SetGlobalLevel(zerolog.PanicLevel)
+	} else if verbosity < 200 {
+		zerolog.SetGlobalLevel(zerolog.FatalLevel)
+	} else if verbosity < 300 {
+		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	} else if verbosity < 400 {
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	} else if verbosity < 500 {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	} else if verbosity < 600 {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	} else {
+		zerolog.SetGlobalLevel(zerolog.TraceLevel)
+	}
+
+	if pretty {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+		log.Debug().Msg("Starting logger in console mode")
+	} else {
+		log.Debug().Msg("Starting logger in json mode")
 	}
 }

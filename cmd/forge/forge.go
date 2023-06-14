@@ -47,7 +47,6 @@ import (
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"golang.org/x/exp/slices"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -132,10 +131,6 @@ Here is an example usage:
 			return fmt.Errorf("unable to read genesis file data: %w", err)
 		}
 		inputForge.GenesisData = genesisData
-
-		zerolog.SetGlobalLevel(zerolog.TraceLevel)
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-		log.Debug().Msg("Starting logger in console mode")
 
 		return nil
 	},
@@ -345,7 +340,7 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 		if inputForge.ShouldRewriteTxNonces {
 			for nonce, tx := range edgeBlock.Transactions {
 				tx.Nonce = uint64(nonce)
-				log.Logger.Debug().Int64("old nonce", int64(tx.Nonce)).Int64("new nonce", int64(nonce)).Str("tx hash", tx.Hash.String()).Msg("Rewrote tx nonce")
+				log.Debug().Int64("old nonce", int64(tx.Nonce)).Int64("new nonce", int64(nonce)).Str("tx hash", tx.Hash.String()).Msg("Rewrote tx nonce")
 			}
 		}
 
