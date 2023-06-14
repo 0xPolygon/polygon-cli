@@ -23,7 +23,7 @@ Current list of RPCs:
 - [ ] ~eth_createAccessList~
 - [X] ~eth_feeHistory~
 - [ ] ~eth_getProof~
-- [ ] ~eth_maxPriorityFeePerGas~
+- [X] ~eth_maxPriorityFeePerGas~
 - [X] ~eth_accounts~
 - [X] ~eth_blockNumber~
 - [X] ~eth_call~

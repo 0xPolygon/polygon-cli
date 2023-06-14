@@ -823,6 +823,15 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthFeeHistory),
 	})
 
+	// cast rpc --rpc-url localhost:8545 eth_maxPriorityFeePerGas
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestMaxPriorityFeePerGas",
+		Method:    "eth_maxPriorityFeePerGas",
+		Args:      []interface{}{},
+		Flags:     FlagEIP1559,
+		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
+	})
+
 	uniqueTests := make(map[RPCTest]struct{})
 	uniqueTestNames := make(map[string]struct{})
 	for _, v := range allTests {
