@@ -557,11 +557,12 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Args:      ArgsLatestBlockHash(ctx, rpcClient, true),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
 	})
+
 	allTests = append(allTests, &RPCTestDynamicArgs{
-		Name:      "RPCTestEthGetBlockByHashNoTx",
+		Name:      "RPCTestEthGetBlockByHashComputation",
 		Method:    "eth_getBlockByHash",
 		Args:      ArgsLatestBlockHash(ctx, rpcClient, false),
-		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthBlock),
+		Validator: ValidateBlockHash(),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetBlockByHashZero",
@@ -941,6 +942,35 @@ func ValidateError(errorMessageRegex string) func(result interface{}) error {
 		}
 		if !r.MatchString(resultError.Error()) {
 			return fmt.Errorf("The regex %s failed to match result %s", errorMessageRegex, resultError.Error())
+		}
+		return nil
+	}
+}
+
+func ValidateBlockHash() func(result interface{}) error {
+	return func(result interface{}) error {
+		underlyingBlock, ok := result.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("The underying type of the result didn't match a block header. Got %T", result)
+		}
+		genericHash, ok := underlyingBlock["hash"].(string)
+		if !ok {
+			return fmt.Errorf("Could not recover the underlying hash. Expected a string and got %T", result)
+		}
+		log.Info().Str("blockHash", genericHash)
+		jsonBlock, err := json.Marshal(underlyingBlock)
+		if err != nil {
+			return fmt.Errorf("Could not json marshal initial block result %w", err)
+		}
+
+		blockHeader := ethtypes.Header{}
+
+		err = blockHeader.UnmarshalJSON(jsonBlock)
+		if err != nil {
+			return fmt.Errorf("Could not unmarshal json block to geth based json block: %w", err)
+		}
+		if blockHeader.Hash().String() != genericHash {
+			return fmt.Errorf("block hash mismatch. Computed %s and got %s in the json rpc response", blockHeader.Hash().String(), genericHash)
 		}
 		return nil
 	}
