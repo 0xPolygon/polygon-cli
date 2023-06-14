@@ -30,3 +30,6 @@ var RPCSchemaEthFeeHistory string
 
 //go:embed schemas/rpcschemaethaccesslist.json
 var RPCSchemaEthAccessList string
+
+//go:embed schemas/rpcschemaethproof.json
+var RPCSchemaEthProof string

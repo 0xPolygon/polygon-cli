@@ -15,7 +15,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -447,14 +446,14 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "eth_getCode",
 		Args:      []interface{}{*testContractAddress, "latest"},
 		Flags:     FlagStrictValidation,
-		Validator: ValidateHashedResponse("e39381f1654cf6a3b7eac2a789b9adf7319312cb"),
+		Validator: ValidateHashedResponse("53fd13ceac858ba82dff299cb4ad45db720a6fc9"),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetCodePending",
 		Method:    "eth_getCode",
 		Args:      []interface{}{*testContractAddress, "pending"},
 		Flags:     FlagStrictValidation,
-		Validator: ValidateHashedResponse("e39381f1654cf6a3b7eac2a789b9adf7319312cb"),
+		Validator: ValidateHashedResponse("53fd13ceac858ba82dff299cb4ad45db720a6fc9"),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetCodeEarliest",
@@ -832,13 +831,21 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 
-	// cast rpc --rpc-url localhost:8545 eth_sendRawTransaction '{"from": "0xb9b1cf51a65b50f74ed8bcb258413c02cba2ec57", "to": "0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6", "data": "0x", "gas": "0x5208", "gasPrice": "0x1", "nonce": "0x1"}'
+	// don't have a handy cast call for eth_createAccessList
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestEthCreateAccessList",
 		Method:    "eth_createAccessList",
 		Args:      ArgsCoinbaseTransaction(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}, "latest"),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthAccessList),
 		Flags:     FlagRequiresUnlock,
+	})
+
+	// cast rpc --rpc-url localhost:8545 eth_getProof 0x6fda56c57b0acadb96ed5624ac500c0429d59429 '["0x3"]' latest
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthGetProof",
+		Method:    "eth_getProof",
+		Args:      []interface{}{*testContractAddress, []interface{}{"0x3"}, "latest"},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthProof),
 	})
 
 	uniqueTests := make(map[RPCTest]struct{})
@@ -883,18 +890,14 @@ func RequireAll(validators ...func(interface{}) error) func(result interface{}) 
 
 // ValidateHashedResponse will take a hex encoded hash and return a
 // function that will validate that a given result has the same
-// hash. The expected has does not start with 0x
+// hash. The expected hash does not start with 0x
 func ValidateHashedResponse(expectedHash string) func(result interface{}) error {
 	return func(result interface{}) error {
-		resultStr, isValid := result.(string)
-		if !isValid {
-			return fmt.Errorf("Invalid result type. Expected string but got %T", result)
-		}
-		rawData, err := hex.DecodeString(resultStr[2:])
+		jsonBytes, err := json.Marshal(result)
 		if err != nil {
-			return fmt.Errorf("The result string could be hex decoded: %w", err)
+			return fmt.Errorf("Unable to marshal result object to json %w", err)
 		}
-		actualHash := fmt.Sprintf("%x", sha1.Sum(rawData))
+		actualHash := fmt.Sprintf("%x", sha1.Sum(jsonBytes))
 		if actualHash != expectedHash {
 			return fmt.Errorf("Hash mismatch expected: %s and got %s", expectedHash, actualHash)
 		}
