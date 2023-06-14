@@ -1,6 +1,6 @@
 {
   "title": "Filter results",
-  "anyOf": [
+  "oneOf": [
     {
       "title": "new block hashes",
       "type": "array",

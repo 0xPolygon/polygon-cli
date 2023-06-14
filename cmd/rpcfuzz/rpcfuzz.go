@@ -1,8 +1,15 @@
 // Package rpcfuzz is meant to have some basic RPC fuzzing and
-// conformance tests
+// conformance tests. Each test is meant to be self-contained i.e. the
+// success or failure of a test should have no impact on other
+// tests. The benefit here is that each test is an object and can be
+// modified, decorated, fuzzed, etc.
+//
+// The conformance test should also run successful on a network that
+// is or isn't isolated. In some circumstances, it might be better to
+// run the conformance test in once process while there is load being
+// applied. The only consideration is that you shouldn't use the same
+// key to load test as is used to run the conformance tests.
 package rpcfuzz
-
-// TODO change the chain validator to use AND type logic
 
 import (
 	"context"
@@ -709,6 +716,20 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 			Address:   *testContractAddress,
 			Topics:    []interface{}{nil, nil, "0x000000000000000000000000" + testEthAddress.String()[2:]},
 		}),
+		Validator: RequireAny(
+			ValidateJSONSchema(rpctypes.RPCSchemaEthFilter),
+			ValidateExactJSON("[]"),
+		),
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:   "RPCTestGetFilterLogs",
+		Method: "eth_getFilterLogs",
+		Args: ArgsFilterID(ctx, rpcClient, RPCTestFilterArgs{
+			FromBlock: "earliest",
+			ToBlock:   "latest",
+			Address:   *testContractAddress,
+			Topics:    []interface{}{nil, nil, "0x000000000000000000000000" + testEthAddress.String()[2:]},
+		}),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthFilter),
 	})
 
@@ -809,6 +830,19 @@ func ValidateExact(expected interface{}) func(result interface{}) error {
 	return func(result interface{}) error {
 		if expected != result {
 			return fmt.Errorf("Expected %v and got %v", expected, result)
+		}
+		return nil
+	}
+}
+func ValidateExactJSON(expected string) func(result interface{}) error {
+	return func(result interface{}) error {
+		jsonResult, err := json.Marshal(result)
+		if err != nil {
+			return fmt.Errorf("Unable to json marshal test result: %w")
+		}
+
+		if expected != string(jsonResult) {
+			return fmt.Errorf("Expected %v and got %v", expected, string(jsonResult))
 		}
 		return nil
 	}
