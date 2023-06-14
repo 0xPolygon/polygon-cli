@@ -77,8 +77,8 @@ func init() {
 	// will be global for your application.
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.polygon-cli.yaml)")
-	rootCmd.PersistentFlags().IntVarP(&verbosity, "verbosity", "v", 200, "0 - Silent\n100 Fatals\n200 Errors\n300 Warnings\n400 INFO\n500 Debug\n600 Trace")
-	rootCmd.PersistentFlags().BoolVar(&pretty, "pretty-logs", true, "Should we log in pretty format or JSON")
+	rootCmd.PersistentFlags().IntVarP(&verbosity, "verbosity", "v", 400, "0 - Silent\n100 Fatal\n200 Error\n300 Warning\n400 Info\n500 Debug\n600 Trace")
+	rootCmd.PersistentFlags().BoolVar(&pretty, "pretty-logs", true, "Should logs be in pretty format or JSON")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -148,6 +148,6 @@ func setLogLevel(verbosity int, pretty bool) {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 		log.Debug().Msg("Starting logger in console mode")
 	} else {
-		log.Debug().Msg("Starting logger in json mode")
+		log.Debug().Msg("Starting logger in JSON mode")
 	}
 }
