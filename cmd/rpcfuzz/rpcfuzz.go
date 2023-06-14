@@ -832,6 +832,15 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
 	})
 
+	// cast rpc --rpc-url localhost:8545 eth_sendRawTransaction '{"from": "0xb9b1cf51a65b50f74ed8bcb258413c02cba2ec57", "to": "0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6", "data": "0x", "gas": "0x5208", "gasPrice": "0x1", "nonce": "0x1"}'
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestEthCreateAccessList",
+		Method:    "eth_createAccessList",
+		Args:      ArgsCoinbaseTransaction(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}, "latest"),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthAccessList),
+		Flags:     FlagRequiresUnlock,
+	})
+
 	uniqueTests := make(map[RPCTest]struct{})
 	uniqueTestNames := make(map[string]struct{})
 	for _, v := range allTests {
@@ -1164,7 +1173,7 @@ func ArgsFilterID(ctx context.Context, rpcClient *rpc.Client, filterArgs RPCTest
 }
 
 // ArgsCoinbaseTransaction will return arguments where the from is replace with the current coinbase
-func ArgsCoinbaseTransaction(ctx context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
+func ArgsCoinbaseTransaction(ctx context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs, extraArgs ...interface{}) func() []interface{} {
 	return func() []interface{} {
 		var coinbase string
 		err := rpcClient.CallContext(ctx, &coinbase, "eth_coinbase")
@@ -1174,14 +1183,16 @@ func ArgsCoinbaseTransaction(ctx context.Context, rpcClient *rpc.Client, tx *RPC
 		}
 		tx.From = coinbase
 		log.Trace().Str("coinbase", coinbase).Msg("Got coinbase")
-		return []interface{}{tx}
+		args := []interface{}{tx}
+		args = append(args, extraArgs...)
+		return args
 	}
 }
 
 // ArgsSignTransaction will take the junk transaction type that we've
 // created, convert it to a geth style dynamic fee transaction and
 // sign it with the user provide key.
-func ArgsSignTransaction(ctx context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs) func() []interface{} {
+func ArgsSignTransaction(ctx context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs, extraArgs ...interface{}) func() []interface{} {
 	return func() []interface{} {
 		testAccountNonceMutex.Lock()
 		defer testAccountNonceMutex.Unlock()
@@ -1204,7 +1215,9 @@ func ArgsSignTransaction(ctx context.Context, rpcClient *rpc.Client, tx *RPCTest
 		}
 		testAccountNonce += 1
 
-		return []interface{}{hexutil.Encode(stringTx)}
+		args := []interface{}{hexutil.Encode(stringTx)}
+		args = append(args, extraArgs...)
+		return args
 	}
 }
 

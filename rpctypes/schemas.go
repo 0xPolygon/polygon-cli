@@ -27,3 +27,6 @@ var RPCSchemaEthFilter string
 
 //go:embed schemas/rpcschemaethfeehistory.json
 var RPCSchemaEthFeeHistory string
+
+//go:embed schemas/rpcschemaethaccesslist.json
+var RPCSchemaEthAccessList string

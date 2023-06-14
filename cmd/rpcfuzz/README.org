@@ -20,7 +20,7 @@ Current list of RPCs:
 - [ ] ~engine_getPayloadV2~
 - [ ] ~engine_newPayloadV1~
 - [ ] ~engine_newPayloadV2~
-- [ ] ~eth_createAccessList~
+- [X] ~eth_createAccessList~
 - [X] ~eth_feeHistory~
 - [ ] ~eth_getProof~
 - [X] ~eth_maxPriorityFeePerGas~
