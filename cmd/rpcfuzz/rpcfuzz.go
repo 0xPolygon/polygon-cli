@@ -875,7 +875,7 @@ func ValidateExactJSON(expected string) func(result interface{}) error {
 	return func(result interface{}) error {
 		jsonResult, err := json.Marshal(result)
 		if err != nil {
-			return fmt.Errorf("Unable to json marshal test result: %w")
+			return fmt.Errorf("Unable to json marshal test result: %w", err)
 		}
 
 		if expected != string(jsonResult) {
