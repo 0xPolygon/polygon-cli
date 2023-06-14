@@ -37,6 +37,7 @@ import (
 	"github.com/maticnetwork/polygon-cli/cmd/monitor"
 	"github.com/maticnetwork/polygon-cli/cmd/nodekey"
 	"github.com/maticnetwork/polygon-cli/cmd/rpc"
+	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz"
 	"github.com/maticnetwork/polygon-cli/cmd/version"
 	"github.com/maticnetwork/polygon-cli/cmd/wallet"
 )
@@ -75,21 +76,22 @@ func init() {
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	rootCmd.SetOut(os.Stdout)
 
+	rootCmd.AddCommand(abi.ABICmd)
 	rootCmd.AddCommand(dumpblocks.DumpblocksCmd)
 	rootCmd.AddCommand(forge.ForgeCmd)
+	rootCmd.AddCommand(fork.ForkCmd)
 	rootCmd.AddCommand(hash.HashCmd)
 	rootCmd.AddCommand(loadtest.LoadtestCmd)
 	rootCmd.AddCommand(metricsToDash.MetricsToDashCmd)
-	rootCmd.AddCommand(monitor.MonitorCmd)
 	rootCmd.AddCommand(mnemonic.MnemonicCmd)
+	rootCmd.AddCommand(monitor.MonitorCmd)
 	rootCmd.AddCommand(nodekey.NodekeyCmd)
+	rootCmd.AddCommand(p2p.P2pCmd)
+	rootCmd.AddCommand(parseethwallet.ParseETHWalletCmd)
 	rootCmd.AddCommand(rpc.RpcCmd)
-	rootCmd.AddCommand(abi.ABICmd)
+	rootCmd.AddCommand(rpcfuzz.RPCFuzzCmd)
 	rootCmd.AddCommand(version.VersionCmd)
 	rootCmd.AddCommand(wallet.WalletCmd)
-	rootCmd.AddCommand(fork.ForkCmd)
-	rootCmd.AddCommand(parseethwallet.ParseETHWalletCmd)
-	rootCmd.AddCommand(p2p.P2pCmd)
 }
 
 // initConfig reads in config file and ENV variables if set.
