@@ -23,5 +23,7 @@ type Database interface {
 
 	MaxConcurrentWrites() int
 	ShouldWriteBlocks() bool
+	ShouldWriteBlockEvents() bool
 	ShouldWriteTransactions() bool
+	ShouldWriteTransactionEvents() bool
 }

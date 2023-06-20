@@ -19,21 +19,23 @@ import (
 
 type (
 	sensorParams struct {
-		Bootnodes                   string
-		Threads                     int
-		NetworkID                   uint64
-		NodesFile                   string
-		Database                    string
-		ProjectID                   string
-		SensorID                    string
-		MaxPeers                    int
-		MaxConcurrentDatabaseWrites int
-		ShouldWriteBlocks           bool
-		ShouldWriteTransactions     bool
-		RevalidationInterval        string
-		revalidationInterval        time.Duration
-		ShouldRunPprof              bool
-		PprofPort                   uint
+		Bootnodes                    string
+		Threads                      int
+		NetworkID                    uint64
+		NodesFile                    string
+		Database                     string
+		ProjectID                    string
+		SensorID                     string
+		MaxPeers                     int
+		MaxConcurrentDatabaseWrites  int
+		ShouldWriteBlocks            bool
+		ShouldWriteBlockEvents       bool
+		ShouldWriteTransactions      bool
+		ShouldWriteTransactionEvents bool
+		RevalidationInterval         string
+		revalidationInterval         time.Duration
+		ShouldRunPprof               bool
+		PprofPort                    uint
 	}
 )
 
@@ -135,8 +137,12 @@ required, so other nodes in the network can discover each other.`)
 this will result in less chance of missing data (i.e. broken pipes) but
 can significantly increase memory usage.`)
 	SensorCmd.PersistentFlags().BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "Whether to write blocks to the database.")
+	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "Whether to write block events to the database.")
 	SensorCmd.PersistentFlags().BoolVarP(&inputSensorParams.ShouldWriteTransactions, "write-txs", "t", true,
 		`Whether to write transactions to the database. This option could significantly
+increase CPU and memory usage.`)
+	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
+		`Whether to write transaction events to the database. This option could significantly
 increase CPU and memory usage.`)
 	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.RevalidationInterval, "revalidation-interval", "r", "10m", "The amount of time it takes to retry connecting to a failed peer.")
 	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "Whether to run pprof.")
