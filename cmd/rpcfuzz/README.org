@@ -1,12 +1,12 @@
 Current list of RPCs:
 
-- [ ] ~debug_getBadBlocks~
-- [ ] ~debug_getRawBlock~
-- [ ] ~debug_getRawHeader~
-- [ ] ~debug_getRawReceipts~
-- [ ] ~debug_getRawTransaction~
-- [ ] ~debug_traceBlockByHash~
-- [ ] ~debug_traceBlockByNumber~
+- [X] ~debug_getBadBlocks~
+- [X] ~debug_getRawBlock~
+- [X] ~debug_getRawHeader~
+- [X] ~debug_getRawReceipts~
+- [X] ~debug_getRawTransaction~
+- [X] ~debug_traceBlockByHash~
+- [X] ~debug_traceBlockByNumber~
 - [ ] ~debug_traceBlock~
 - [X] ~debug_traceCall~
 - [X] ~debug_traceTransaction~

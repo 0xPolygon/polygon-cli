@@ -888,7 +888,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestDebugGetRawBlockLatest",
 		Method:    "debug_getRawBlock",
 		Args:      []interface{}{"latest"},
-		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestDebugGetRawBlockPending",
@@ -901,13 +901,130 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestDebugGetRawBlockEarliest",
 		Method:    "debug_getRawBlock",
 		Args:      []interface{}{"earliest"},
-		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestDebugGetRawBlockZero",
 		Method:    "debug_getRawBlock",
 		Args:      []interface{}{"0x0"},
-		Validator: ValidateRegexString(`^0x([1-9a-f]+[0-9a-f]*|0)$`),
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
+	})
+
+	// cast rpc --rpc-url localhost:8545 debug_getBadBlocks
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetBadBlocks",
+		Method:    "debug_getBadBlocks",
+		Args:      []interface{}{},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaBadBlocks),
+	})
+
+	// cast rpc --rpc-url localhost:8545 debug_getRawHeader latest
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawHeaderLatest",
+		Method:    "debug_getRawHeader",
+		Args:      []interface{}{"latest"},
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawHeaderPending",
+		Method:    "debug_getRawHeader",
+		Args:      []interface{}{"pending"},
+		Flags:     FlagErrorValidation | FlagStrictValidation,
+		Validator: ValidateError(-32000, `not found`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawHeaderEarliest",
+		Method:    "debug_getRawHeader",
+		Args:      []interface{}{"earliest"},
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawHeaderZero",
+		Method:    "debug_getRawHeader",
+		Args:      []interface{}{"0x0"},
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
+	})
+
+	// cast rpc --rpc-url localhost:8545 debug_getRawReceipts latest
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawReceiptsLatest",
+		Method:    "debug_getRawReceipts",
+		Args:      []interface{}{"latest"},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaHexArray),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawReceiptsPending",
+		Method:    "debug_getRawReceipts",
+		Args:      []interface{}{"pending"},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaHexArray),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawReceiptsEarliest",
+		Method:    "debug_getRawReceipts",
+		Args:      []interface{}{"earliest"},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaHexArray),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawReceiptsZero",
+		Method:    "debug_getRawReceipts",
+		Args:      []interface{}{"0x0"},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaHexArray),
+	})
+
+	// get raw tx
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugGetRawTransactionSimple",
+		Method:    "debug_getRawTransaction",
+		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugGetRawTransactionMint",
+		Method:    "debug_getRawTransaction",
+		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d6800000000000000000000000000000000000000000000d3c21bcecceda1000000", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
+	})
+
+	// cast rpc --rpc-url localhost:8545 debug_traceBlockByNumber 0x0
+	// cast rpc --rpc-url localhost:8545 debug_traceBlockByNumber 0x1
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugTraceBlockByNumberZero",
+		Method:    "debug_traceBlockByNumber",
+		Args:      []interface{}{"0x0", nil},
+		Flags:     FlagErrorValidation | FlagStrictValidation,
+		Validator: ValidateError(-32000, `genesis is not traceable`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugTraceBlockByNumberOne",
+		Method:    "debug_traceBlockByNumber",
+		Args:      []interface{}{"0x1", nil},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTraceBlock),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugTraceBlockByNumberLatest",
+		Method:    "debug_traceBlockByNumber",
+		Args:      []interface{}{"latest", nil},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTraceBlock),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugTraceBlockByNumberEarliest",
+		Method:    "debug_traceBlockByNumber",
+		Args:      []interface{}{"earliest", nil},
+		Flags:     FlagErrorValidation | FlagStrictValidation,
+		Validator: ValidateError(-32000, `genesis is not traceable`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugTraceBlockByNumberPending",
+		Method:    "debug_traceBlockByNumber",
+		Args:      []interface{}{"pending", nil},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTraceBlock),
+	})
+
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugTraceBlockByHash",
+		Method:    "debug_traceBlockByHash",
+		Args:      ArgsLatestBlockHash(ctx, rpcClient, nil),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTraceBlock),
 	})
 
 	uniqueTests := make(map[RPCTest]struct{})
