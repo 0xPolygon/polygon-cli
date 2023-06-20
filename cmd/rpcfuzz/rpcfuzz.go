@@ -848,6 +848,22 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthProof),
 	})
 
+	// cat contracts/ERC20.abi| go run main.go abi
+	// cast abi-encode 'function mint(uint256 amount) returns()' 1000000000000000000000000
+	// cast rpc --rpc-url localhost:8545 debug_traceCall '{"to": "0x6fda56c57b0acadb96ed5624ac500c0429d59429", "data":"0xa0712d6800000000000000000000000000000000000000000000d3c21bcecceda1000000"}' latest | jq '.'
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugTraceCallSimple",
+		Method:    "debug_traceCall",
+		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03"}, "latest"},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTrace),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugTraceCallMint",
+		Method:    "debug_traceCall",
+		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d6800000000000000000000000000000000000000000000d3c21bcecceda1000000"}, "latest"},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTrace),
+	})
+
 	uniqueTests := make(map[RPCTest]struct{})
 	uniqueTestNames := make(map[string]struct{})
 	for _, v := range allTests {
@@ -1428,6 +1444,15 @@ in dev mode:
     --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2 \
     --dev.gaslimit 50000000
 
+If we wanted to use erigon for testing, we could do something like this as well
+
+# ./build/bin/erigon --chain dev --dev.period 5 --http --http.addr localhost \
+    --http.port 8545 \
+    --http.api 'admin,debug,web3,eth,txpool,personal,clique,miner,net' \
+    --verbosity 5 --rpc.gascap 50000000 \
+    --miner.gaslimit  10 --gpo.blocks 1 \
+    --gpo.percentile 1
+
 Once your Eth client is running and the RPC is functional, you'll need
 to transfer some amount of ether to a known account that ca be used
 for testing
@@ -1550,5 +1575,5 @@ func init() {
 
 	testPrivateHexKey = flagSet.String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
 	testContractAddress = flagSet.String("contract-address", "0x6fda56c57b0acadb96ed5624ac500c0429d59429", "The address of a contract that can be used for testing")
-	testNamespaces = flagSet.String("namespaces", "eth,web3,net", "Comma separated list of rpc namespaces to test")
+	testNamespaces = flagSet.String("namespaces", "eth,web3,net,debug", "Comma separated list of rpc namespaces to test")
 }
