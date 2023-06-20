@@ -7,7 +7,7 @@ Current list of RPCs:
 - [X] ~debug_getRawTransaction~
 - [X] ~debug_traceBlockByHash~
 - [X] ~debug_traceBlockByNumber~
-- [ ] ~debug_traceBlock~
+- [X] ~debug_traceBlock~
 - [X] ~debug_traceCall~
 - [X] ~debug_traceTransaction~
 - [ ] ~engine_exchangeCapabilities~

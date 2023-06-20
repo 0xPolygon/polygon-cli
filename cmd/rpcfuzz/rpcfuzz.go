@@ -1020,11 +1020,27 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTraceBlock),
 	})
 
+	// debug_traceBlockByHash
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestDebugTraceBlockByHash",
 		Method:    "debug_traceBlockByHash",
 		Args:      ArgsLatestBlockHash(ctx, rpcClient, nil),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTraceBlock),
+	})
+
+	// debug_traceBlock
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugTraceBlock",
+		Method:    "debug_traceBlock",
+		Args:      ArgsRawBlock(ctx, rpcClient, "latest", nil),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTraceBlock),
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugTraceBlockZero",
+		Method:    "debug_traceBlock",
+		Args:      ArgsRawBlock(ctx, rpcClient, "0x0", nil),
+		Flags:     FlagErrorValidation | FlagStrictValidation,
+		Validator: ValidateError(-32000, `genesis is not traceable`),
 	})
 
 	uniqueTests := make(map[RPCTest]struct{})
@@ -1268,7 +1284,7 @@ func genericResultToError(result interface{}) (*RPCJSONError, error) {
 // latest block hash for testing
 func ArgsLatestBlockHash(ctx context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
 	return func() []interface{} {
-		blockData, err := getLatestBlock(ctx, rpcClient)
+		blockData, err := getBlock(ctx, rpcClient, "latest")
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to retreive latest block hash")
 			return []interface{}{"latest"}
@@ -1291,7 +1307,7 @@ func ArgsLatestBlockHash(ctx context.Context, rpcClient *rpc.Client, extraArgs .
 // most recent block's number
 func ArgsLatestBlockNumber(ctx context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
 	return func() []interface{} {
-		blockData, err := getLatestBlock(ctx, rpcClient)
+		blockData, err := getBlock(ctx, rpcClient, "latest")
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to retreive latest block hash")
 			return []interface{}{"latest"}
@@ -1311,9 +1327,28 @@ func ArgsLatestBlockNumber(ctx context.Context, rpcClient *rpc.Client, extraArgs
 	}
 }
 
-func getLatestBlock(ctx context.Context, rpcClient *rpc.Client) (map[string]interface{}, error) {
+// ArgsRawBlock will inject raw block RLP data into the arguments
+func ArgsRawBlock(ctx context.Context, rpcClient *rpc.Client, blockNumOrHash string, extraArgs ...interface{}) func() []interface{} {
+	return func() []interface{} {
+		blockData, err := getRawBlock(ctx, rpcClient, blockNumOrHash)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to retreive latest raw block hash")
+			return []interface{}{"latest"}
+		}
+		args := []interface{}{blockData}
+		args = append(args, extraArgs...)
+		return args
+	}
+}
+
+func getBlock(ctx context.Context, rpcClient *rpc.Client, blockNumOrHash string) (map[string]interface{}, error) {
 	blockData := make(map[string]interface{})
-	err := rpcClient.CallContext(ctx, &blockData, "eth_getBlockByNumber", "latest", false)
+	err := rpcClient.CallContext(ctx, &blockData, "eth_getBlockByNumber", blockNumOrHash, false)
+	return blockData, err
+}
+func getRawBlock(ctx context.Context, rpcClient *rpc.Client, blockNumOrHash string) (string, error) {
+	var blockData string
+	err := rpcClient.CallContext(ctx, &blockData, "debug_getRawBlock", blockNumOrHash)
 	return blockData, err
 }
 
