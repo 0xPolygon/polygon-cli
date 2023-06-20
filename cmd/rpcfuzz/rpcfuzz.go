@@ -864,6 +864,19 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTrace),
 	})
 
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugTraceTransactionSimple",
+		Method:    "debug_traceTransaction",
+		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTrace),
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugTraceTransactionMint",
+		Method:    "debug_traceTransaction",
+		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d6800000000000000000000000000000000000000000000d3c21bcecceda1000000", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTrace),
+	})
+
 	uniqueTests := make(map[RPCTest]struct{})
 	uniqueTestNames := make(map[string]struct{})
 	for _, v := range allTests {

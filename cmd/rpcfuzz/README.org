@@ -8,8 +8,8 @@ Current list of RPCs:
 - [ ] ~debug_traceBlockByHash~
 - [ ] ~debug_traceBlockByNumber~
 - [ ] ~debug_traceBlock~
-- [ ] ~debug_traceCall~
-- [ ] ~debug_traceTransaction~
+- [X] ~debug_traceCall~
+- [X] ~debug_traceTransaction~
 - [ ] ~engine_exchangeCapabilities~
 - [ ] ~engine_exchangeTransitionConfigurationV1~
 - [ ] ~engine_forkchoiceUpdatedV1~
