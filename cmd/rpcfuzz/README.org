@@ -62,3 +62,11 @@ Current list of RPCs:
 - [X] ~eth_submitWork~
 - [X] ~eth_syncing~
 - [X] ~eth_uninstallFilter~
+
+TODO:
+- Add post merge tags
+ - latest
+ - earliest
+ - pending
+ - safe
+ - finalized
