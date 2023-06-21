@@ -25,12 +25,10 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/xeipuuv/gojsonschema"
 	"math/big"
-	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -1384,9 +1382,6 @@ func shouldRunTest(t RPCTest) bool {
 }
 
 func init() {
-	zerolog.SetGlobalLevel(zerolog.TraceLevel)
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-
 	flagSet := RPCFuzzCmd.PersistentFlags()
 
 	testPrivateHexKey = flagSet.String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
