@@ -119,6 +119,7 @@ const (
 	FlagErrorValidation                          // error validation means the result is expected to be an error
 	FlagRequiresUnlock                           // unlock means the test depends on unlocked accounts
 	FlagEIP1559                                  // tests that would only exist with EIP-1559 enabled
+	FlagOrderDependent                           // This flag indicates that the particular test might fail if shuffled
 
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
 
@@ -126,6 +127,8 @@ const (
 	defaultGasPrice             = "0x1000000000"
 	defaultMaxFeePerGas         = "0x1000000000"
 	defaultMaxPriorityFeePerGas = "0x1000000000"
+
+	defaultNonceTestOffset uint64 = 0x100000000
 )
 
 var (
@@ -510,6 +513,34 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "eth_sendRawTransaction",
 		Args:      ArgsSignTransaction(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}),
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{64}$`),
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestEthSendRawTransactionNonceTooLow",
+		Method:    "eth_sendRawTransaction",
+		Args:      ArgsSignTransactionWithNonce(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}, 0),
+		Validator: ValidateError(-32000, `nonce too low`),
+		Flags:     FlagErrorValidation | FlagStrictValidation,
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestEthSendRawTransactionNonceHigh",
+		Method:    "eth_sendRawTransaction",
+		Args:      ArgsSignTransactionWithNonce(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}, testAccountNonce|defaultNonceTestOffset),
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{64}$`),
+		Flags:     FlagOrderDependent,
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestEthSendRawTransactionNonceKnown",
+		Method:    "eth_sendRawTransaction",
+		Args:      ArgsSignTransactionWithNonce(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}, testAccountNonce|defaultNonceTestOffset),
+		Validator: ValidateError(-32000, `already known`),
+		Flags:     FlagErrorValidation | FlagStrictValidation | FlagOrderDependent,
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestEthSendRawTransactionNonceUnderpriced",
+		Method:    "eth_sendRawTransaction",
+		Args:      ArgsSignTransactionWithNonce(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x1234", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}, testAccountNonce|defaultNonceTestOffset),
+		Validator: ValidateError(-32000, `replacement`),
+		Flags:     FlagErrorValidation | FlagStrictValidation | FlagOrderDependent,
 	})
 
 	// cat contracts/ERC20.abi| go run main.go abi
@@ -1445,6 +1476,21 @@ func ArgsSignTransaction(ctx context.Context, rpcClient *rpc.Client, tx *RPCTest
 	}
 }
 
+// ArgsSignTransactionWithNonce can be used to manipulate the nonce
+// directly in order to create some error cases
+func ArgsSignTransactionWithNonce(ctx context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs, nonce uint64, extraArgs ...interface{}) func() []interface{} {
+	return func() []interface{} {
+		stringTx, err := getSignedRawTx(tx, nonce)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to sign tx")
+		}
+
+		args := []interface{}{hexutil.Encode(stringTx)}
+		args = append(args, extraArgs...)
+		return args
+	}
+}
+
 func getSignedRawTx(tx *RPCTestTransactionArgs, curNonce uint64) ([]byte, error) {
 	chainId := currentChainID
 
@@ -1530,22 +1576,30 @@ func prepareAndSendTransaction(ctx context.Context, rpcClient *rpc.Client, tx *R
 }
 
 func executeRawTxAndWait(ctx context.Context, rpcClient *rpc.Client, rawTx []byte) (string, map[string]interface{}, error) {
-	var result interface{}
-	err := rpcClient.CallContext(ctx, &result, "eth_sendRawTransaction", hexutil.Encode(rawTx))
+	rawHash, err := executeRawTx(ctx, rpcClient, rawTx)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to send raw transaction")
 		return "", nil, err
 	}
-	rawHash, ok := result.(string)
-	if !ok {
-		return "", nil, fmt.Errorf("Invalid result type. Expected string but got %T", result)
-	}
-	log.Info().Str("txHash", rawHash).Msg("Successfully sent transaction")
+
 	receipt, err := waitForReceipt(ctx, rpcClient, rawHash)
 	if err != nil {
 		return "", nil, err
 	}
 	return rawHash, receipt, nil
+}
+func executeRawTx(ctx context.Context, rpcClient *rpc.Client, rawTx []byte) (string, error) {
+	var result interface{}
+	err := rpcClient.CallContext(ctx, &result, "eth_sendRawTransaction", hexutil.Encode(rawTx))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to send raw transaction")
+		return "", err
+	}
+	rawHash, ok := result.(string)
+	if !ok {
+		return "", fmt.Errorf("Invalid result type. Expected string but got %T", result)
+	}
+	log.Info().Str("txHash", rawHash).Msg("Successfully sent transaction")
+	return rawHash, nil
 }
 
 func waitForReceipt(ctx context.Context, rpcClient *rpc.Client, txHash string) (map[string]interface{}, error) {
@@ -1704,8 +1758,6 @@ Once this has been completed this will be the address of the contract:
 		if err != nil {
 			return err
 		}
-		log.Trace().Msg("Doing test setup")
-		setupTests(ctx, rpcClient)
 		nonce, err := GetTestAccountNonce(ctx, rpcClient)
 		if err != nil {
 			return err
@@ -1717,6 +1769,9 @@ Once this has been completed this will be the address of the contract:
 		testAccountNonce = nonce
 		currentChainID = chainId
 
+		log.Trace().Uint64("nonce", nonce).Uint64("chainid", chainId.Uint64()).Msg("Doing test setup")
+		setupTests(ctx, rpcClient)
+
 		for _, t := range allTests {
 			if !shouldRunTest(t) {
 				log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Skipping test")
@@ -1727,6 +1782,10 @@ Once this has been completed this will be the address of the contract:
 			err = rpcClient.CallContext(ctx, &result, t.GetMethod(), t.GetArgs()...)
 			if err != nil && !t.ExpectError() {
 				log.Error().Err(err).Str("method", t.GetMethod()).Msg("Method test failed")
+				continue
+			}
+			if err == nil && t.ExpectError() {
+				log.Error().Str("method", t.GetMethod()).Msg("Expected an error but didn't get one")
 				continue
 			}
 
