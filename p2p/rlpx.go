@@ -304,11 +304,11 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 					}()
 				}
 			case *NewPooledTransactionHashes:
-				if err := c.processNewPooledTransactionHashes(count, msg.Hashes); err != nil {
+				if err := c.processNewPooledTransactionHashes(db, count, msg.Hashes); err != nil {
 					return err
 				}
 			case *NewPooledTransactionHashes66:
-				if err := c.processNewPooledTransactionHashes(count, *msg); err != nil {
+				if err := c.processNewPooledTransactionHashes(db, count, *msg); err != nil {
 					return err
 				}
 			case *GetPooledTransactions:
@@ -343,9 +343,13 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 
 // processNewPooledTransactionHashes processes NewPooledTransactionHashes
 // messages by requesting the transaction bodies.
-func (c *Conn) processNewPooledTransactionHashes(count *MessageCount, hashes []common.Hash) error {
+func (c *Conn) processNewPooledTransactionHashes(db database.Database, count *MessageCount, hashes []common.Hash) error {
 	atomic.AddInt32(&count.TransactionHashes, int32(len(hashes)))
 	c.logger.Trace().Msgf("Received %v NewPooledTransactionHashes", len(hashes))
+
+	if !db.ShouldWriteTransactions() {
+		return nil
+	}
 
 	req := &GetPooledTransactions{
 		RequestId:                   rand.Uint64(),
