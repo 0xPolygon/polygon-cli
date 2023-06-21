@@ -19,7 +19,6 @@ type (
 		OutputFile string
 		NodesFile  string
 		Listen     bool
-		Verbosity  int
 	}
 	pingNodeJSON struct {
 		Record *enode.Node `json:"record"`
