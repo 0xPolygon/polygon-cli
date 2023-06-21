@@ -65,8 +65,14 @@ Current list of RPCs:
 
 TODO:
 - Add post merge tags
- - latest
- - earliest
- - pending
- - safe
- - finalized
+  - latest
+  - earliest
+  - pending
+  - safe
+  - finalized
+- Add batch calls to confirm batch behaviors
+- Add nonce behavioral issues
+  - Replacement
+  - Duplicate
+  - Too low
+  - Huge gap

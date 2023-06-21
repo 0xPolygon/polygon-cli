@@ -1432,27 +1432,38 @@ func ArgsSignTransaction(ctx context.Context, rpcClient *rpc.Client, tx *RPCTest
 		defer testAccountNonceMutex.Unlock()
 		curNonce := testAccountNonce
 
-		chainId := currentChainID
-
-		dft := GenericTransactionToDynamicFeeTx(tx)
-		dft.ChainID = chainId
-		dft.Nonce = curNonce
-
-		londonSigner := ethtypes.NewLondonSigner(chainId)
-		signedTx, err := ethtypes.SignNewTx(testPrivateKey, londonSigner, &dft)
+		stringTx, err := getSignedRawTx(tx, curNonce)
 		if err != nil {
-			log.Fatal().Err(err).Msg("There was an issue signing the transaction")
+			log.Fatal().Err(err).Msg("Failed to sign tx")
 		}
-		stringTx, err := signedTx.MarshalBinary()
-		if err != nil {
-			log.Fatal().Err(err).Msg("Unable to marshal binary for transaction")
-		}
+
 		testAccountNonce += 1
 
 		args := []interface{}{hexutil.Encode(stringTx)}
 		args = append(args, extraArgs...)
 		return args
 	}
+}
+
+func getSignedRawTx(tx *RPCTestTransactionArgs, curNonce uint64) ([]byte, error) {
+	chainId := currentChainID
+
+	dft := GenericTransactionToDynamicFeeTx(tx)
+	dft.ChainID = chainId
+	dft.Nonce = curNonce
+
+	londonSigner := ethtypes.NewLondonSigner(chainId)
+	signedTx, err := ethtypes.SignNewTx(testPrivateKey, londonSigner, &dft)
+	if err != nil {
+		log.Error().Err(err).Msg("There was an issue signing the transaction")
+		return nil, err
+	}
+	stringTx, err := signedTx.MarshalBinary()
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to marshal binary for transaction")
+		return nil, err
+	}
+	return stringTx, nil
 }
 
 // ArgsTransactionHash will execute the provided transaction and return
@@ -1502,23 +1513,11 @@ func prepareAndSendTransaction(ctx context.Context, rpcClient *rpc.Client, tx *R
 	defer testAccountNonceMutex.Unlock()
 	curNonce := testAccountNonce
 
-	chainId := currentChainID
-
-	dft := GenericTransactionToDynamicFeeTx(tx)
-	dft.ChainID = chainId
-	dft.Nonce = curNonce
-
-	londonSigner := ethtypes.NewLondonSigner(chainId)
-	signedTx, err := ethtypes.SignNewTx(testPrivateKey, londonSigner, &dft)
+	stringTx, err := getSignedRawTx(tx, curNonce)
 	if err != nil {
-		log.Error().Err(err).Msg("There was an issue signing the transaction")
 		return "", nil, err
 	}
-	stringTx, err := signedTx.MarshalBinary()
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to marshal binary for transaction")
-		return "", nil, err
-	}
+
 	resultHash, receipt, err := executeRawTxAndWait(ctx, rpcClient, stringTx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to execute transaction")
