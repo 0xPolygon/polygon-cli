@@ -58,11 +58,6 @@ type (
 
 		// ExpectError is used by the validation code to understand of the test typically returns an error
 		ExpectError() bool
-
-		// GetFuzzArgs returns a slice of possible fuzzed arguments
-		GetFuzzArgs() []interface{}
-
-		IsFuzzable() bool
 	}
 
 	// RPCTestFlag is meant for bitmasking various flags to understand properties of the test
@@ -1392,11 +1387,11 @@ func GetCurrentChainID(ctx context.Context, rpcClient *rpc.Client) (*big.Int, er
 	return chainId, err
 }
 
-func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPCTest, args []interface{}) (string, error) {
-	log.Info().Str("method", currTest.GetMethod()).Msgf("Inputs: %+v", args)
+func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPCTest) (string, error) {
+	log.Info().Str("method", currTest.GetMethod()).Msgf("Inputs: %+v", currTest.GetArgs())
 
 	var result interface{}
-	err := rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
+	err := rpcClient.CallContext(ctx, &result, currTest.GetMethod(), currTest.GetArgs()...)
 
 	if err != nil && !currTest.ExpectError() {
 		return "Method test failed", err
@@ -1414,6 +1409,22 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPC
 	return "Successfully validated", nil
 }
 
+func CallRPCWithFuzzAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPCTest) (string, error) {
+	args := currTest.GetArgs()
+	fuzzer.Fuzz(&args)
+
+	log.Info().Str("method", currTest.GetMethod()).Msgf("Fuzzed Inputs: %+v", args)
+
+	var result interface{}
+	err := rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
+
+	if err != nil {
+		return "Successfully errored fuzzed args", err
+	}
+
+	return "Failed to error fuzzed args", nil
+}
+
 func (r *RPCTestGeneric) GetMethod() string {
 	return r.Method
 }
@@ -1428,14 +1439,6 @@ func (r *RPCTestGeneric) Validate(result interface{}) error {
 }
 func (r *RPCTestGeneric) ExpectError() bool {
 	return r.Flags&FlagErrorValidation != 0
-}
-func (r *RPCTestGeneric) GetFuzzArgs() []interface{} {
-	args := r.Args
-	fuzzer.Fuzz(&args)
-	return args
-}
-func (r *RPCTestGeneric) IsFuzzable() bool {
-	return r.Flags&FlagStrictValidation == 0 && *testFuzz
 }
 
 func (r *RPCTestDynamicArgs) GetMethod() string {
@@ -1452,14 +1455,6 @@ func (r *RPCTestDynamicArgs) Validate(result interface{}) error {
 }
 func (r *RPCTestDynamicArgs) ExpectError() bool {
 	return r.Flags&FlagErrorValidation != 0
-}
-func (r *RPCTestDynamicArgs) GetFuzzArgs() []interface{} {
-	args := r.Args()
-	fuzzer.Fuzz(&args)
-	return args
-}
-func (r *RPCTestDynamicArgs) IsFuzzable() bool {
-	return r.Flags&FlagStrictValidation == 0 && *testFuzz
 }
 
 var RPCFuzzCmd = &cobra.Command{
@@ -1537,21 +1532,18 @@ Once this has been completed this will be the address of the contract:
 			}
 			log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Running Test")
 
-			args := t.GetArgs()
-			msg, err := CallRPCAndValidate(ctx, rpcClient, t, args)
+			msg, err := CallRPCAndValidate(ctx, rpcClient, t)
 			if err != nil {
 				log.Error().Err(err).Str("method", t.GetMethod()).Msg(msg)
 			} else {
 				log.Info().Str("method", t.GetMethod()).Msg(msg)
 			}
 
-			if t.IsFuzzable() {
-				log.Info().Str("method", t.GetMethod()).Msg("With Args Fuzzing")
-				args := t.GetFuzzArgs()
-
-				msg, err := CallRPCAndValidate(ctx, rpcClient, t, args)
+			if *testFuzz {
+				log.Info().Str("method", t.GetMethod()).Msg("Fuzzing Args")
+				msg, err := CallRPCWithFuzzAndValidate(ctx, rpcClient, t)
 				if err != nil {
-					log.Error().Err(err).Str("method", t.GetMethod()).Msg(msg)
+					log.Info().Err(err).Str("method", t.GetMethod()).Msg(msg)
 				} else {
 					log.Info().Str("method", t.GetMethod()).Msg(msg)
 				}
