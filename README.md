@@ -8,6 +8,9 @@ commonly needed tools and provide interfaces and formats.
 Requirements:
 
 - [Go](https://go.dev/)
+- make
+- jq
+- bc
 
 To install, clone this repo and run:
 
