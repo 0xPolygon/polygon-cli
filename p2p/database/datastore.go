@@ -125,7 +125,13 @@ func NewDatastore(ctx context.Context, opts DatastoreOptions) Database {
 
 // WriteBlock writes the block and the block event to datastore.
 func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int) {
-	d.writeEvent(peer, blockEventsKind, block.Hash(), blocksKind)
+	if d.ShouldWriteBlockEvents() {
+		d.writeEvent(peer, blockEventsKind, block.Hash(), blocksKind)
+	}
+
+	if !d.ShouldWriteBlocks() {
+		return
+	}
 
 	key := datastore.NameKey(blocksKind, block.Hash().Hex(), nil)
 	var dsBlock DatastoreBlock
@@ -180,6 +186,10 @@ func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *typ
 // requested. The block events will be written when the hash is received
 // instead.
 func (d *Datastore) WriteBlockHeaders(ctx context.Context, headers []*types.Header) {
+	if !d.ShouldWriteBlocks() {
+		return
+	}
+
 	for _, header := range headers {
 		d.writeBlockHeader(ctx, header)
 	}
@@ -191,6 +201,10 @@ func (d *Datastore) WriteBlockHeaders(ctx context.Context, headers []*types.Head
 // instead. It will write the uncles and transactions to datastore if they
 // don't already exist.
 func (d *Datastore) WriteBlockBody(ctx context.Context, body *eth.BlockBody, hash common.Hash) {
+	if !d.ShouldWriteBlocks() {
+		return
+	}
+
 	key := datastore.NameKey(blocksKind, hash.Hex(), nil)
 	var block DatastoreBlock
 
@@ -224,13 +238,25 @@ func (d *Datastore) WriteBlockBody(ctx context.Context, body *eth.BlockBody, has
 
 // WriteBlockHashes will write the block events to datastore.
 func (d *Datastore) WriteBlockHashes(ctx context.Context, peer *enode.Node, hashes []common.Hash) {
-	d.writeEvents(ctx, peer, blockEventsKind, hashes, blocksKind)
+	if d.ShouldWriteBlockEvents() {
+		d.writeEvents(ctx, peer, blockEventsKind, hashes, blocksKind)
+	}
 }
 
 // WriteTransactions will write the transactions and transaction events to datastore.
 func (d *Datastore) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction) {
-	hashes := d.writeTransactions(ctx, txs)
-	d.writeEvents(ctx, peer, transactionEventsKind, hashes, transactionsKind)
+	if d.ShouldWriteTransactions() {
+		d.writeTransactions(ctx, txs)
+	}
+
+	if d.ShouldWriteTransactionEvents() {
+		hashes := make([]common.Hash, 0, len(txs))
+		for _, tx := range txs {
+			hashes = append(hashes, tx.Hash())
+		}
+
+		d.writeEvents(ctx, peer, transactionEventsKind, hashes, transactionsKind)
+	}
 }
 
 func (d *Datastore) MaxConcurrentWrites() int {
@@ -376,13 +402,11 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header) 
 
 // writeTransactions will write the transactions to datastore and return the
 // transaction hashes.
-func (d *Datastore) writeTransactions(ctx context.Context, txs []*types.Transaction) []common.Hash {
-	hashes := make([]common.Hash, 0, len(txs))
+func (d *Datastore) writeTransactions(ctx context.Context, txs []*types.Transaction) {
 	keys := make([]*datastore.Key, 0, len(txs))
 	transactions := make([]*DatastoreTransaction, 0, len(txs))
 
 	for _, tx := range txs {
-		hashes = append(hashes, tx.Hash())
 		keys = append(keys, datastore.NameKey(transactionsKind, tx.Hash().Hex(), nil))
 		transactions = append(transactions, newDatastoreTransaction(tx))
 	}
@@ -390,6 +414,4 @@ func (d *Datastore) writeTransactions(ctx context.Context, txs []*types.Transact
 	if _, err := d.client.PutMulti(ctx, keys, transactions); err != nil {
 		log.Error().Err(err).Msg("Failed to write transactions")
 	}
-
-	return hashes
 }
