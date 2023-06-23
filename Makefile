@@ -37,7 +37,7 @@ build: $(BUILD_DIR) ## Build go binary.
 .PHONY: install
 install: build ## Install the go binary.
 	$(RM) $(INSTALL_DIR)/$(BIN_NAME)
-	cp $(BUILD_DIR)/$(BIN_NAME) $(INSTALL_DIR)
+	cp $(BUILD_DIR)/$(BIN_NAME) $(INSTALL_DIR)/
 
 .PHONY: cross
 cross: $(BUILD_DIR) ## Cross-compile go binaries using CGO.
