@@ -31,6 +31,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xeipuuv/gojsonschema"
 	"math/big"
+	"math/rand"
 	"os"
 	"regexp"
 	"strings"
@@ -1593,6 +1594,7 @@ func shouldRunTest(t RPCTest) bool {
 }
 
 func init() {
+	rand.Seed(time.Now().UnixNano())
 	zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
