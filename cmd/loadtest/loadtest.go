@@ -53,7 +53,6 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/params"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/maticnetwork/polygon-cli/contracts"
@@ -242,12 +241,13 @@ type (
 		LegacyTransactionMode               *bool
 
 		// Computed
-		CurrentGas      *big.Int
-		CurrentNonce    *uint64
-		ECDSAPrivateKey *ecdsa.PrivateKey
-		FromETHAddress  *ethcommon.Address
-		ToETHAddress    *ethcommon.Address
-		SendAmount      *big.Int
+		CurrentGas       *big.Int
+		CurrentGasTipCap *big.Int
+		CurrentNonce     *uint64
+		ECDSAPrivateKey  *ecdsa.PrivateKey
+		FromETHAddress   *ethcommon.Address
+		ToETHAddress     *ethcommon.Address
+		SendAmount       *big.Int
 
 		ToAvailAddress   *gstypes.MultiAddress
 		FromAvailAddress *gssignature.KeyringPair
@@ -324,6 +324,13 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 	log.Trace().Interface("gasprice", gas).Msg("Retreived current gas price")
 
+	gasTipCap, err := c.SuggestGasTipCap(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to retrieve gas tip cap")
+		return err
+	}
+	log.Trace().Interface("gastipcap", gasTipCap).Msg("Retreived current gas tip cap")
+
 	privateKey, err := ethcrypto.HexToECDSA(*inputLoadTestParams.PrivateKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Couldn't process the hex private key")
@@ -366,6 +373,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	inputLoadTestParams.CurrentNonce = &nonce
 	inputLoadTestParams.ECDSAPrivateKey = privateKey
 	inputLoadTestParams.FromETHAddress = &ethAddress
+	inputLoadTestParams.CurrentGasTipCap = gasTipCap
 
 	rand.Seed(*inputLoadTestParams.Seed)
 
@@ -967,18 +975,26 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
+	head, err := c.HeaderByNumber(ctx, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get head")
+		return
+	}
+
 	gasLimit := uint64(21000)
 	var tx *ethtypes.Transaction
 	if legacy {
 		tx = ethtypes.NewTransaction(nonce, *to, amount, gasLimit, gasPrice, nil)
 	} else {
+		gasTipCap := ltp.CurrentGasTipCap
+		gasFeeCap := new(big.Int).Add(gasTipCap, new(big.Int).Mul(head.BaseFee, big.NewInt(2)))
 		baseTx := &ethtypes.DynamicFeeTx{
 			ChainID:   chainID,
 			Nonce:     nonce,
 			To:        to,
 			Gas:       gasLimit,
-			GasFeeCap: new(big.Int).Mul(big.NewInt(5), big.NewInt(params.GWei)),
-			GasTipCap: big.NewInt(2),
+			GasFeeCap: gasFeeCap,
+			GasTipCap: gasTipCap,
 			Data:      nil,
 			Value:     amount,
 		}
