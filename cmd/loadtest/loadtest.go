@@ -876,7 +876,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				recordSample(i, j, err, startReq, endReq, myNonceValue)
 				if err != nil {
 					log.Error().Err(err).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
-					// retryForNonce = true
+					retryForNonce = true
 				}
 
 				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode).Int64("request", j).Msg("Request")
