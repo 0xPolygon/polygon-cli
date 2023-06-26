@@ -1,6 +1,7 @@
 package sensor
 
 import (
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"time"
@@ -36,6 +37,8 @@ type (
 		revalidationInterval         time.Duration
 		ShouldRunPprof               bool
 		PprofPort                    uint
+		KeyFile                      string
+		privateKey                   *ecdsa.PrivateKey
 	}
 )
 
@@ -69,6 +72,27 @@ var SensorCmd = &cobra.Command{
 			}()
 		}
 
+		inputSensorParams.privateKey, err = crypto.GenerateKey()
+		if err != nil {
+			return err
+		}
+
+		if len(inputSensorParams.KeyFile) > 0 {
+			var privateKey *ecdsa.PrivateKey
+			privateKey, err = crypto.LoadECDSA(inputSensorParams.KeyFile)
+
+			if err != nil {
+				log.Warn().Err(err).Msg("Key file was not found, generating a new key file")
+
+				err = crypto.SaveECDSA(inputSensorParams.KeyFile, inputSensorParams.privateKey)
+				if err != nil {
+					return err
+				}
+			} else {
+				inputSensorParams.privateKey = privateKey
+			}
+		}
+
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -78,7 +102,7 @@ var SensorCmd = &cobra.Command{
 		}
 
 		var cfg discover.Config
-		cfg.PrivateKey, _ = crypto.GenerateKey()
+		cfg.PrivateKey = inputSensorParams.privateKey
 		bn, err := p2p.ParseBootnodes(inputSensorParams.Bootnodes)
 		if err != nil {
 			return fmt.Errorf("unable to parse bootnodes: %w", err)
@@ -105,7 +129,7 @@ var SensorCmd = &cobra.Command{
 		c := newSensor(inputSet, disc, disc.RandomNodes())
 		c.revalidateInterval = inputSensorParams.revalidationInterval
 
-		log.Info().Msg("Starting sensor")
+		log.Info().Str("enode", disc.Self().URLv4()).Msg("Starting sensor")
 
 		c.run(inputSensorParams.Threads)
 		return nil
@@ -146,4 +170,5 @@ increase CPU and memory usage.`)
 	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.RevalidationInterval, "revalidation-interval", "r", "10m", "The amount of time it takes to retry connecting to a failed peer.")
 	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "Whether to run pprof.")
 	SensorCmd.PersistentFlags().UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "The port to run pprof on.")
+	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "The file of the private key. If no key file is found then a key file will be generated.")
 }
