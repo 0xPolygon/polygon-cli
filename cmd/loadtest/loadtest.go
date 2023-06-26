@@ -53,6 +53,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/params"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/maticnetwork/polygon-cli/contracts"
@@ -238,6 +239,7 @@ type (
 		ForceGasPrice                       *uint64
 		ShouldProduceSummary                *bool
 		SummaryOutputMode                   *string
+		LegacyTransactionMode               *bool
 
 		// Computed
 		CurrentGas      *big.Int
@@ -305,6 +307,7 @@ r - random modes
 	ltp.ShouldProduceSummary = LoadtestCmd.PersistentFlags().Bool("summarize", false, "Should we produce an execution summary after the load test has finished. If you're running a large loadtest, this can take a long time")
 	ltp.BatchSize = LoadtestCmd.PersistentFlags().Uint64("batch-size", 999, "Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time.")
 	ltp.SummaryOutputMode = LoadtestCmd.PersistentFlags().String("output-mode", "text", "Format mode for summary output (json | text)")
+	ltp.LegacyTransactionMode = LoadtestCmd.PersistentFlags().Bool("legacy", false, "Send a legacy transaction instead of an EIP1559 transaction.")
 	inputLoadTestParams = *ltp
 
 	// TODO batch size
@@ -587,6 +590,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	mode := *ltp.Mode
 	steadyStateTxPoolSize := *ltp.SteadyStateTxPoolSize
 	adaptiveRateLimitIncrement := *ltp.AdaptiveRateLimitIncrement
+	legacyTransactionMode := *ltp.LegacyTransactionMode
 	var rl *rate.Limiter
 	rl = rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
 	if *ltp.RateLimit <= 0.0 {
@@ -813,7 +817,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				switch localMode {
 				case loadTestModeTransaction:
-					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue)
+					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue, legacyTransactionMode)
 				case loadTestModeDeploy:
 					startReq, endReq, err = loadtestDeploy(ctx, c, myNonceValue)
 				case loadTestModeCall:
@@ -840,7 +844,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				recordSample(i, j, err, startReq, endReq, myNonceValue)
 				if err != nil {
 					log.Error().Err(err).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
-					retryForNonce = true
+					// retryForNonce = true
 				}
 
 				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode).Int64("request", j).Msg("Request")
@@ -949,7 +953,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 	}
 }
 
-func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64, legacy bool) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	gasPrice := ltp.CurrentGas
@@ -964,7 +968,22 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 	privateKey := ltp.ECDSAPrivateKey
 
 	gasLimit := uint64(21000)
-	tx := ethtypes.NewTransaction(nonce, *to, amount, gasLimit, gasPrice, nil)
+	var tx *ethtypes.Transaction
+	if legacy {
+		tx = ethtypes.NewTransaction(nonce, *to, amount, gasLimit, gasPrice, nil)
+	} else {
+		baseTx := &ethtypes.DynamicFeeTx{
+			ChainID:   chainID,
+			Nonce:     nonce,
+			To:        to,
+			Gas:       gasLimit,
+			GasFeeCap: new(big.Int).Mul(big.NewInt(5), big.NewInt(params.GWei)),
+			GasTipCap: big.NewInt(2),
+			Data:      nil,
+			Value:     amount,
+		}
+		tx = ethtypes.NewTx(baseTx)
+	}
 	stx, err := ethtypes.SignTx(tx, ethtypes.NewEIP155Signer(chainID), privateKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
