@@ -1000,7 +1000,8 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 		}
 		tx = ethtypes.NewTx(baseTx)
 	}
-	stx, err := ethtypes.SignTx(tx, ethtypes.NewEIP155Signer(chainID), privateKey)
+	ethtypes.NewLondonSigner()
+	stx, err := ethtypes.SignTx(tx, ethtypes.NewLondonSigner(chainID), privateKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
