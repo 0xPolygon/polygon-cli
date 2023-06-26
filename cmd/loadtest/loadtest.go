@@ -639,7 +639,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	tops = configureTransactOpts(tops)
+	tops = configureTransactOpts(tops, legacyTransactionMode)
 	tops.GasLimit = 10000000
 
 	if err != nil {
@@ -1544,9 +1544,9 @@ func loadtestAvailStore(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64
 	return
 }
 
-func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
+func configureTransactOpts(tops *bind.TransactOpts, legacy bool) *bind.TransactOpts {
 	ltp := inputLoadTestParams
-	if ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
+	if legacy && ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
 		tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
 	} else {
 		tops.GasPrice = ltp.CurrentGas
