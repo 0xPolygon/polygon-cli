@@ -1,0 +1,78 @@
+Current list of RPCs:
+
+- [X] ~debug_getBadBlocks~
+- [X] ~debug_getRawBlock~
+- [X] ~debug_getRawHeader~
+- [X] ~debug_getRawReceipts~
+- [X] ~debug_getRawTransaction~
+- [X] ~debug_traceBlockByHash~
+- [X] ~debug_traceBlockByNumber~
+- [X] ~debug_traceBlock~
+- [X] ~debug_traceCall~
+- [X] ~debug_traceTransaction~
+- [ ] ~engine_exchangeCapabilities~
+- [ ] ~engine_exchangeTransitionConfigurationV1~
+- [ ] ~engine_forkchoiceUpdatedV1~
+- [ ] ~engine_forkchoiceUpdatedV2~
+- [ ] ~engine_getPayloadBodiesByHashV1~
+- [ ] ~engine_getPayloadBodiesByRangeV1~
+- [ ] ~engine_getPayloadV1~
+- [ ] ~engine_getPayloadV2~
+- [ ] ~engine_newPayloadV1~
+- [ ] ~engine_newPayloadV2~
+- [X] ~eth_createAccessList~
+- [X] ~eth_feeHistory~
+- [X] ~eth_getProof~
+- [X] ~eth_maxPriorityFeePerGas~
+- [X] ~eth_accounts~
+- [X] ~eth_blockNumber~
+- [X] ~eth_call~
+- [X] ~eth_chainId~
+- [X] ~eth_coinbase~
+- [X] ~eth_estimateGas~
+- [X] ~eth_gasPrice~
+- [X] ~eth_getBalance~
+- [X] ~eth_getBlockByHash~
+- [X] ~eth_getBlockByNumber~
+- [X] ~eth_getBlockTransactionCountByHash~
+- [X] ~eth_getBlockTransactionCountByNumber~
+- [X] ~eth_getCode~
+- [X] ~eth_getFilterChanges~
+- [X] ~eth_getFilterLogs~
+- [X] ~eth_getLogs~
+- [X] ~eth_getStorageAt~
+- [X] ~eth_getTransactionByBlockHashAndIndex~
+- [X] ~eth_getTransactionByBlockNumberAndIndex~
+- [X] ~eth_getTransactionByHash~
+- [X] ~eth_getTransactionCount~
+- [X] ~eth_getTransactionReceipt~
+- [X] ~eth_getUncleCountByBlockHash~
+- [X] ~eth_getUncleCountByBlockNumber~
+- [X] ~eth_getWork~
+- [X] ~eth_hashrate~
+- [X] ~eth_mining~
+- [X] ~eth_newBlockFilter~
+- [X] ~eth_newFilter~
+- [X] ~eth_newPendingTransactionFilter~
+- [X] ~eth_sendRawTransaction~
+- [X] ~eth_sendTransaction~
+- [X] ~eth_signTransaction~
+- [X] ~eth_sign~
+- [X] ~eth_submitHashrate~
+- [X] ~eth_submitWork~
+- [X] ~eth_syncing~
+- [X] ~eth_uninstallFilter~
+
+TODO:
+- Add post merge tags
+  - latest
+  - earliest
+  - pending
+  - safe
+  - finalized
+- Add batch calls to confirm batch behaviors
+- Add nonce behavioral issues
+  - Replacement
+  - Duplicate
+  - Too low
+  - Huge gap
