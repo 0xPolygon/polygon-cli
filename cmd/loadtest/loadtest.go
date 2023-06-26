@@ -399,10 +399,14 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	inputLoadTestParams.CurrentNonce = &nonce
 	inputLoadTestParams.ECDSAPrivateKey = privateKey
 	inputLoadTestParams.FromETHAddress = &ethAddress
+<<<<<<< HEAD
 	if *inputLoadTestParams.ChainID == 0 {
 		*inputLoadTestParams.ChainID = chainID.Uint64()
 	}
 	inputLoadTestParams.BaseFee = header.BaseFee
+=======
+	inputLoadTestParams.CurrentGasTipCap = gasTipCap
+>>>>>>> 6e2285f (suggest gas tip cap and calculate fee cap)
 
 	rand.Seed(*inputLoadTestParams.Seed)
 
@@ -1004,7 +1008,6 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 	}
 	tops.GasLimit = uint64(21000)
 	tops = configureTransactOpts(tops)
-
 	var tx *ethtypes.Transaction
 	if *ltp.LegacyTransactionMode {
 		tx = ethtypes.NewTransaction(nonce, *to, amount, tops.GasLimit, tops.GasPrice, nil)
