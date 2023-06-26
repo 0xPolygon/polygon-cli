@@ -182,7 +182,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				atomic.AddInt32(&count.BlockHeaders, int32(len(msg.BlockHeadersPacket)))
 				c.logger.Trace().Msgf("Received %v BlockHeaders", len(msg.BlockHeadersPacket))
 
-				if db != nil {
+				if db != nil && db.ShouldWriteBlocks() {
 					for _, header := range msg.BlockHeadersPacket {
 						if err := c.getParentBlock(ctx, db, header); err != nil {
 							return err
@@ -259,7 +259,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 					}
 				}
 
-				if db != nil && db.ShouldWriteBlocks() && len(hashes) > 0 {
+				if db != nil && db.ShouldWriteBlockEvents() && len(hashes) > 0 {
 					dbCh <- struct{}{}
 					go func() {
 						db.WriteBlockHashes(ctx, c.node, hashes)
@@ -270,7 +270,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				atomic.AddInt32(&count.Blocks, 1)
 				c.logger.Trace().Str("hash", msg.Block.Hash().Hex()).Msg("Received NewBlock")
 
-				if db != nil && db.ShouldWriteBlocks() {
+				if db != nil && (db.ShouldWriteBlocks() || db.ShouldWriteBlockEvents()) {
 					if err := c.getParentBlock(ctx, db, msg.Block.Header()); err != nil {
 						return err
 					}
@@ -285,7 +285,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				atomic.AddInt32(&count.Transactions, int32(len(*msg)))
 				c.logger.Trace().Msgf("Received %v Transactions", len(*msg))
 
-				if db != nil && db.ShouldWriteTransactions() {
+				if db != nil && (db.ShouldWriteTransactions() || db.ShouldWriteTransactionEvents()) {
 					dbCh <- struct{}{}
 					go func() {
 						db.WriteTransactions(ctx, c.node, *msg)
@@ -296,7 +296,7 @@ func (c *Conn) ReadAndServe(db database.Database, count *MessageCount) error {
 				atomic.AddInt32(&count.Transactions, int32(len(msg.PooledTransactionsPacket)))
 				c.logger.Trace().Msgf("Received %v PooledTransactions", len(msg.PooledTransactionsPacket))
 
-				if db != nil && db.ShouldWriteTransactions() {
+				if db != nil && (db.ShouldWriteTransactions() || db.ShouldWriteTransactionEvents()) {
 					dbCh <- struct{}{}
 					go func() {
 						db.WriteTransactions(ctx, c.node, msg.PooledTransactionsPacket)
