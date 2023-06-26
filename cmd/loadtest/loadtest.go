@@ -1022,13 +1022,8 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 		}
 		tx = ethtypes.NewTx(dynamicFeeTx)
 	}
-<<<<<<< HEAD
 
 	stx, err := tops.Signer(*ltp.FromETHAddress, tx)
-=======
-	ethtypes.NewLondonSigner()
-	stx, err := ethtypes.SignTx(tx, ethtypes.NewLondonSigner(chainID), privateKey)
->>>>>>> 1322373 (use london signer)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
