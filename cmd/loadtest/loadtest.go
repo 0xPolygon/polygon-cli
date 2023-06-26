@@ -626,6 +626,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	mode := *ltp.Mode
 	steadyStateTxPoolSize := *ltp.SteadyStateTxPoolSize
 	adaptiveRateLimitIncrement := *ltp.AdaptiveRateLimitIncrement
+	legacyTransactionMode := *ltp.LegacyTransactionMode
 	var rl *rate.Limiter
 	rl = rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
 	if *ltp.RateLimit <= 0.0 {
@@ -848,7 +849,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				switch localMode {
 				case loadTestModeTransaction:
-					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue)
+					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue, legacyTransactionMode)
 				case loadTestModeDeploy:
 					startReq, endReq, err = loadtestDeploy(ctx, c, myNonceValue)
 				case loadTestModeCall:
@@ -875,7 +876,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				recordSample(i, j, err, startReq, endReq, myNonceValue)
 				if err != nil {
 					log.Error().Err(err).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
-					retryForNonce = true
+					// retryForNonce = true
 				}
 
 				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode).Int64("request", j).Msg("Request")
@@ -984,7 +985,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 	}
 }
 
-func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64, legacy bool) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
