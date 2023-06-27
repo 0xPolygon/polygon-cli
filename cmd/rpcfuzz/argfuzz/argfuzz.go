@@ -58,10 +58,10 @@ func MutateRPCArgs(args *[]interface{}, c fuzz.Continue) {
 			continue
 		}
 
-		switch d.(type) {
-		case string:
+		switch dataType := reflect.TypeOf(d).Kind(); dataType {
+		case reflect.String:
 			(*args)[i] = string(ByteMutator([]byte(d.(string)), c))
-		case int:
+		case reflect.Int:
 			numString := strconv.Itoa(d.(int))
 
 			byteArrString := string(ByteMutator([]byte(numString), c))
@@ -71,7 +71,7 @@ func MutateRPCArgs(args *[]interface{}, c fuzz.Continue) {
 			} else {
 				(*args)[i] = num
 			}
-		case bool:
+		case reflect.Bool:
 			(*args)[i] = c.RandBool()
 		default:
 			if reflect.TypeOf(d).Kind() == reflect.Ptr {
