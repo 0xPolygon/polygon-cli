@@ -52,14 +52,15 @@ func newSensor(input p2p.NodeSet, disc resolver, iters ...enode.Iterator) *senso
 		iters:     iters,
 		inputIter: enode.IterNodes(input.Nodes()),
 		nodeCh:    make(chan *enode.Node),
-		db: database.NewDatastore(
-			context.Background(),
-			inputSensorParams.ProjectID,
-			inputSensorParams.SensorID,
-			inputSensorParams.MaxConcurrentDatabaseWrites,
-			inputSensorParams.ShouldWriteBlocks,
-			inputSensorParams.ShouldWriteTransactions,
-		),
+		db: database.NewDatastore(context.Background(), database.DatastoreOptions{
+			ProjectID:                    inputSensorParams.ProjectID,
+			SensorID:                     inputSensorParams.SensorID,
+			MaxConcurrentWrites:          inputSensorParams.MaxConcurrentDatabaseWrites,
+			ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
+			ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
+			ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
+			ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
+		}),
 		peers: make(map[string]struct{}),
 		count: &p2p.MessageCount{},
 	}

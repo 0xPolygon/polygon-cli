@@ -1,15 +1,15 @@
 Current list of RPCs:
 
-- [ ] ~debug_getBadBlocks~
-- [ ] ~debug_getRawBlock~
-- [ ] ~debug_getRawHeader~
-- [ ] ~debug_getRawReceipts~
-- [ ] ~debug_getRawTransaction~
-- [ ] ~debug_traceBlockByHash~
-- [ ] ~debug_traceBlockByNumber~
-- [ ] ~debug_traceBlock~
-- [ ] ~debug_traceCall~
-- [ ] ~debug_traceTransaction~
+- [X] ~debug_getBadBlocks~
+- [X] ~debug_getRawBlock~
+- [X] ~debug_getRawHeader~
+- [X] ~debug_getRawReceipts~
+- [X] ~debug_getRawTransaction~
+- [X] ~debug_traceBlockByHash~
+- [X] ~debug_traceBlockByNumber~
+- [X] ~debug_traceBlock~
+- [X] ~debug_traceCall~
+- [X] ~debug_traceTransaction~
 - [ ] ~engine_exchangeCapabilities~
 - [ ] ~engine_exchangeTransitionConfigurationV1~
 - [ ] ~engine_forkchoiceUpdatedV1~
@@ -62,3 +62,17 @@ Current list of RPCs:
 - [X] ~eth_submitWork~
 - [X] ~eth_syncing~
 - [X] ~eth_uninstallFilter~
+
+TODO:
+- Add post merge tags
+  - latest
+  - earliest
+  - pending
+  - safe
+  - finalized
+- Add batch calls to confirm batch behaviors
+- Add nonce behavioral issues
+  - Replacement
+  - Duplicate
+  - Too low
+  - Huge gap

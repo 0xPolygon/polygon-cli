@@ -33,3 +33,15 @@ var RPCSchemaEthAccessList string
 
 //go:embed schemas/rpcschemaethproof.json
 var RPCSchemaEthProof string
+
+//go:embed schemas/rpcschemadebugtrace.json
+var RPCSchemaDebugTrace string
+
+//go:embed schemas/rpcschemahexarray.json
+var RPCSchemaHexArray string
+
+//go:embed schemas/rpcschemabadblocks.json
+var RPCSchemaBadBlocks string
+
+//go:embed schemas/rpcschemadebugblock.json
+var RPCSchemaDebugTraceBlock string

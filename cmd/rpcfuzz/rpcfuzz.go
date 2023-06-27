@@ -28,7 +28,6 @@ import (
 	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz/argfuzz"
 	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz/testreporter"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/xeipuuv/gojsonschema"
@@ -110,13 +109,21 @@ type (
 		Address   string        `json:"address,omitempty"`
 		Topics    []interface{} `json:"topics,omitempty"`
 	}
+
+	// RPCJSONError can be used to unmarshal a raw error response
+	RPCJSONError struct {
+		Code    int         `json:"code"`
+		Message string      `json:"message"`
+		Data    interface{} `json:"data,omitempty"`
+	}
 )
 
 const (
 	FlagStrictValidation RPCTestFlag = 1 << iota // strict means the test is unsuitable for fuzzing / mutation because it most likely won't match
-	FlagErrorValidation                          // error validation means the result is expecte to be an error
+	FlagErrorValidation                          // error validation means the result is expected to be an error
 	FlagRequiresUnlock                           // unlock means the test depends on unlocked accounts
 	FlagEIP1559                                  // tests that would only exist with EIP-1559 enabled
+	FlagOrderDependent                           // This flag indicates that the particular test might fail if shuffled
 
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
 
@@ -124,6 +131,8 @@ const (
 	defaultGasPrice             = "0x1000000000"
 	defaultMaxFeePerGas         = "0x1000000000"
 	defaultMaxPriorityFeePerGas = "0x1000000000"
+
+	defaultNonceTestOffset uint64 = 0x100000000
 )
 
 var (
@@ -187,7 +196,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "web3_sha3",
 		Args:      []interface{}{"68656c6c6f20776f726c64"},
-		Validator: ValidateError(`cannot unmarshal hex string without 0x prefix`),
+		Validator: ValidateError(-32602, `cannot unmarshal hex string without 0x prefix`),
 	})
 
 	// cast rpc --rpc-url localhost:8545 net_listening
@@ -212,7 +221,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "eth_protocolVersion",
 		Args:      []interface{}{},
-		Validator: ValidateError(`method eth_protocolVersion does not exist`),
+		Validator: ValidateError(-32601, `method eth_protocolVersion does not exist`),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_syncing
@@ -490,7 +499,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthSignFail",
 		Method:    "eth_sign",
 		Args:      []interface{}{testEthAddress.String(), "0xdeadbeef"},
-		Validator: ValidateError(`unknown account`),
+		Validator: ValidateError(-32000, `unknown account`),
 		Flags:     FlagErrorValidation | FlagStrictValidation | FlagRequiresUnlock,
 	})
 
@@ -518,6 +527,34 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "eth_sendRawTransaction",
 		Args:      ArgsSignTransaction(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}),
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{64}$`),
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestEthSendRawTransactionNonceTooLow",
+		Method:    "eth_sendRawTransaction",
+		Args:      ArgsSignTransactionWithNonce(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}, 0),
+		Validator: ValidateError(-32000, `nonce too low`),
+		Flags:     FlagErrorValidation | FlagStrictValidation,
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestEthSendRawTransactionNonceHigh",
+		Method:    "eth_sendRawTransaction",
+		Args:      ArgsSignTransactionWithNonce(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}, testAccountNonce|defaultNonceTestOffset),
+		Validator: ValidateRegexString(`^0x[[:xdigit:]]{64}$`),
+		Flags:     FlagOrderDependent,
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestEthSendRawTransactionNonceKnown",
+		Method:    "eth_sendRawTransaction",
+		Args:      ArgsSignTransactionWithNonce(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}, testAccountNonce|defaultNonceTestOffset),
+		Validator: ValidateError(-32000, `already known`),
+		Flags:     FlagErrorValidation | FlagStrictValidation | FlagOrderDependent,
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestEthSendRawTransactionNonceUnderpriced",
+		Method:    "eth_sendRawTransaction",
+		Args:      ArgsSignTransactionWithNonce(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x1234", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}, testAccountNonce|defaultNonceTestOffset),
+		Validator: ValidateError(-32000, `replacement`),
+		Flags:     FlagErrorValidation | FlagStrictValidation | FlagOrderDependent,
 	})
 
 	// cat contracts/ERC20.abi| go run main.go abi
@@ -669,28 +706,28 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "eth_getCompilers",
 		Args:      []interface{}{},
-		Validator: ValidateError(`method eth_getCompilers does not exist`),
+		Validator: ValidateError(-32601, `method eth_getCompilers does not exist`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthCompileSolidity",
 		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "eth_compileSolidity",
 		Args:      []interface{}{},
-		Validator: ValidateError(`method eth_compileSolidity does not exist`),
+		Validator: ValidateError(-32601, `method eth_compileSolidity does not exist`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthCompileLLL",
 		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "eth_compileLLL",
 		Args:      []interface{}{},
-		Validator: ValidateError(`method eth_compileLLL does not exist`),
+		Validator: ValidateError(-32601, `method eth_compileLLL does not exist`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthCompileSerpent",
 		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "eth_compileSerpent",
 		Args:      []interface{}{},
-		Validator: ValidateError(`method eth_compileSerpent does not exist`),
+		Validator: ValidateError(-32601, `method eth_compileSerpent does not exist`),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_newFilter "{}"
@@ -814,7 +851,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "eth_getWork",
 		Args:      []interface{}{},
 		Flags:     FlagErrorValidation | FlagStrictValidation,
-		Validator: ValidateError(`method eth_getWork does not exist`),
+		Validator: ValidateError(-32601, `method eth_getWork does not exist`),
 	})
 	// cast rpc --rpc-url localhost:8545 eth_submitWork 0x0011223344556677 0x00112233445566778899AABBCCDDEEFF 0x00112233445566778899AABBCCDDEEFF
 	allTests = append(allTests, &RPCTestGeneric{
@@ -822,7 +859,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "eth_submitWork",
 		Args:      []interface{}{"0x0011223344556677", "0x00112233445566778899AABBCCDDEEFF", "0x00112233445566778899AABBCCDDEEFF"},
 		Flags:     FlagErrorValidation | FlagStrictValidation,
-		Validator: ValidateError(`method eth_submitWork does not exist`),
+		Validator: ValidateError(-32601, `method eth_submitWork does not exist`),
 	})
 	// cast rpc --rpc-url localhost:8545 eth_submitHashrate 0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF 0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF
 	allTests = append(allTests, &RPCTestGeneric{
@@ -830,7 +867,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "eth_submitHashrate",
 		Args:      []interface{}{"0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF", "0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF"},
 		Flags:     FlagErrorValidation | FlagStrictValidation,
-		Validator: ValidateError(`method eth_submitHashrate does not exist`),
+		Validator: ValidateError(-32601, `method eth_submitHashrate does not exist`),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_feeHistory 128 latest []
@@ -866,6 +903,194 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "eth_getProof",
 		Args:      []interface{}{*testContractAddress, []interface{}{"0x3"}, "latest"},
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthProof),
+	})
+
+	// cat contracts/ERC20.abi| go run main.go abi
+	// cast abi-encode 'function mint(uint256 amount) returns()' 1000000000000000000000000
+	// cast rpc --rpc-url localhost:8545 debug_traceCall '{"to": "0x6fda56c57b0acadb96ed5624ac500c0429d59429", "data":"0xa0712d6800000000000000000000000000000000000000000000d3c21bcecceda1000000"}' latest | jq '.'
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugTraceCallSimple",
+		Method:    "debug_traceCall",
+		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03"}, "latest"},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTrace),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugTraceCallMint",
+		Method:    "debug_traceCall",
+		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d6800000000000000000000000000000000000000000000d3c21bcecceda1000000"}, "latest"},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTrace),
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugTraceTransactionSimple",
+		Method:    "debug_traceTransaction",
+		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTrace),
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugTraceTransactionMint",
+		Method:    "debug_traceTransaction",
+		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d6800000000000000000000000000000000000000000000d3c21bcecceda1000000", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTrace),
+	})
+
+	// cast rpc --rpc-url localhost:8545 debug_getRawBlock latest
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawBlockLatest",
+		Method:    "debug_getRawBlock",
+		Args:      []interface{}{"latest"},
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawBlockPending",
+		Method:    "debug_getRawBlock",
+		Args:      []interface{}{"pending"},
+		Flags:     FlagErrorValidation | FlagStrictValidation,
+		Validator: ValidateError(-32000, `not found`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawBlockEarliest",
+		Method:    "debug_getRawBlock",
+		Args:      []interface{}{"earliest"},
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawBlockZero",
+		Method:    "debug_getRawBlock",
+		Args:      []interface{}{"0x0"},
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
+	})
+
+	// cast rpc --rpc-url localhost:8545 debug_getBadBlocks
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetBadBlocks",
+		Method:    "debug_getBadBlocks",
+		Args:      []interface{}{},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaBadBlocks),
+	})
+
+	// cast rpc --rpc-url localhost:8545 debug_getRawHeader latest
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawHeaderLatest",
+		Method:    "debug_getRawHeader",
+		Args:      []interface{}{"latest"},
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawHeaderPending",
+		Method:    "debug_getRawHeader",
+		Args:      []interface{}{"pending"},
+		Flags:     FlagErrorValidation | FlagStrictValidation,
+		Validator: ValidateError(-32000, `not found`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawHeaderEarliest",
+		Method:    "debug_getRawHeader",
+		Args:      []interface{}{"earliest"},
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawHeaderZero",
+		Method:    "debug_getRawHeader",
+		Args:      []interface{}{"0x0"},
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
+	})
+
+	// cast rpc --rpc-url localhost:8545 debug_getRawReceipts latest
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawReceiptsLatest",
+		Method:    "debug_getRawReceipts",
+		Args:      []interface{}{"latest"},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaHexArray),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawReceiptsPending",
+		Method:    "debug_getRawReceipts",
+		Args:      []interface{}{"pending"},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaHexArray),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawReceiptsEarliest",
+		Method:    "debug_getRawReceipts",
+		Args:      []interface{}{"earliest"},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaHexArray),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugGetRawReceiptsZero",
+		Method:    "debug_getRawReceipts",
+		Args:      []interface{}{"0x0"},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaHexArray),
+	})
+
+	// get raw tx
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugGetRawTransactionSimple",
+		Method:    "debug_getRawTransaction",
+		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugGetRawTransactionMint",
+		Method:    "debug_getRawTransaction",
+		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d6800000000000000000000000000000000000000000000d3c21bcecceda1000000", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
+	})
+
+	// cast rpc --rpc-url localhost:8545 debug_traceBlockByNumber 0x0
+	// cast rpc --rpc-url localhost:8545 debug_traceBlockByNumber 0x1
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugTraceBlockByNumberZero",
+		Method:    "debug_traceBlockByNumber",
+		Args:      []interface{}{"0x0", nil},
+		Flags:     FlagErrorValidation | FlagStrictValidation,
+		Validator: ValidateError(-32000, `genesis is not traceable`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugTraceBlockByNumberOne",
+		Method:    "debug_traceBlockByNumber",
+		Args:      []interface{}{"0x1", nil},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTraceBlock),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugTraceBlockByNumberLatest",
+		Method:    "debug_traceBlockByNumber",
+		Args:      []interface{}{"latest", nil},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTraceBlock),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugTraceBlockByNumberEarliest",
+		Method:    "debug_traceBlockByNumber",
+		Args:      []interface{}{"earliest", nil},
+		Flags:     FlagErrorValidation | FlagStrictValidation,
+		Validator: ValidateError(-32000, `genesis is not traceable`),
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestDebugTraceBlockByNumberPending",
+		Method:    "debug_traceBlockByNumber",
+		Args:      []interface{}{"pending", nil},
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTraceBlock),
+	})
+
+	// debug_traceBlockByHash
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugTraceBlockByHash",
+		Method:    "debug_traceBlockByHash",
+		Args:      ArgsLatestBlockHash(ctx, rpcClient, nil),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTraceBlock),
+	})
+
+	// debug_traceBlock
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugTraceBlock",
+		Method:    "debug_traceBlock",
+		Args:      ArgsRawBlock(ctx, rpcClient, "latest", nil),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTraceBlock),
+	})
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugTraceBlockZero",
+		Method:    "debug_traceBlock",
+		Args:      ArgsRawBlock(ctx, rpcClient, "0x0", nil),
+		Flags:     FlagErrorValidation | FlagStrictValidation,
+		Validator: ValidateError(-32000, `genesis is not traceable`),
 	})
 
 	uniqueTests := make(map[RPCTest]struct{})
@@ -995,16 +1220,20 @@ func ValidateRegexString(regEx string) func(result interface{}) error {
 }
 
 // ValidateError will check the error message text against the provide regular expression
-func ValidateError(errorMessageRegex string) func(result interface{}) error {
+func ValidateError(code int, errorMessageRegex string) func(result interface{}) error {
 	r := regexp.MustCompile(errorMessageRegex)
 	return func(result interface{}) error {
-		resultError, isValid := result.(error)
-		if !isValid {
-			return fmt.Errorf("Invalid result type. Expected error but got %T", result)
+		fullError, err := genericResultToError(result)
+		if err != nil {
+			return err
 		}
-		if !r.MatchString(resultError.Error()) {
-			return fmt.Errorf("The regex %s failed to match result %s", errorMessageRegex, resultError.Error())
+		if !r.MatchString(fullError.Error()) {
+			return fmt.Errorf("The regex %s failed to match result %s", errorMessageRegex, fullError.Error())
 		}
+		if code != fullError.Code {
+			return fmt.Errorf("Expected error code %d but got %d", code, fullError.Code)
+		}
+
 		return nil
 	}
 }
@@ -1087,12 +1316,25 @@ func genericResultToTransaction(result interface{}) (*ethtypes.Transaction, stri
 	}
 	return &tx, genericHash, nil
 }
+func genericResultToError(result interface{}) (*RPCJSONError, error) {
+	jsonErrorData, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to json marshal error result: %w", err)
+	}
+	fullError := new(RPCJSONError)
+	err = json.Unmarshal(jsonErrorData, fullError)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to unmarshal json error: %w", err)
+	}
+	return fullError, nil
+
+}
 
 // ArgsLatestBlockHash is meant to generate an argument with the
 // latest block hash for testing
 func ArgsLatestBlockHash(ctx context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
 	return func() []interface{} {
-		blockData, err := getLatestBlock(ctx, rpcClient)
+		blockData, err := getBlock(ctx, rpcClient, "latest")
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to retreive latest block hash")
 			return []interface{}{"latest"}
@@ -1115,7 +1357,7 @@ func ArgsLatestBlockHash(ctx context.Context, rpcClient *rpc.Client, extraArgs .
 // most recent block's number
 func ArgsLatestBlockNumber(ctx context.Context, rpcClient *rpc.Client, extraArgs ...interface{}) func() []interface{} {
 	return func() []interface{} {
-		blockData, err := getLatestBlock(ctx, rpcClient)
+		blockData, err := getBlock(ctx, rpcClient, "latest")
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to retreive latest block hash")
 			return []interface{}{"latest"}
@@ -1135,9 +1377,28 @@ func ArgsLatestBlockNumber(ctx context.Context, rpcClient *rpc.Client, extraArgs
 	}
 }
 
-func getLatestBlock(ctx context.Context, rpcClient *rpc.Client) (map[string]interface{}, error) {
+// ArgsRawBlock will inject raw block RLP data into the arguments
+func ArgsRawBlock(ctx context.Context, rpcClient *rpc.Client, blockNumOrHash string, extraArgs ...interface{}) func() []interface{} {
+	return func() []interface{} {
+		blockData, err := getRawBlock(ctx, rpcClient, blockNumOrHash)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to retreive latest raw block hash")
+			return []interface{}{"latest"}
+		}
+		args := []interface{}{blockData}
+		args = append(args, extraArgs...)
+		return args
+	}
+}
+
+func getBlock(ctx context.Context, rpcClient *rpc.Client, blockNumOrHash string) (map[string]interface{}, error) {
 	blockData := make(map[string]interface{})
-	err := rpcClient.CallContext(ctx, &blockData, "eth_getBlockByNumber", "latest", false)
+	err := rpcClient.CallContext(ctx, &blockData, "eth_getBlockByNumber", blockNumOrHash, false)
+	return blockData, err
+}
+func getRawBlock(ctx context.Context, rpcClient *rpc.Client, blockNumOrHash string) (string, error) {
+	var blockData string
+	err := rpcClient.CallContext(ctx, &blockData, "debug_getRawBlock", blockNumOrHash)
 	return blockData, err
 }
 
@@ -1221,27 +1482,53 @@ func ArgsSignTransaction(ctx context.Context, rpcClient *rpc.Client, tx *RPCTest
 		defer testAccountNonceMutex.Unlock()
 		curNonce := testAccountNonce
 
-		chainId := currentChainID
-
-		dft := GenericTransactionToDynamicFeeTx(tx)
-		dft.ChainID = chainId
-		dft.Nonce = curNonce
-
-		londonSigner := ethtypes.NewLondonSigner(chainId)
-		signedTx, err := ethtypes.SignNewTx(testPrivateKey, londonSigner, &dft)
+		stringTx, err := getSignedRawTx(tx, curNonce)
 		if err != nil {
-			log.Fatal().Err(err).Msg("There was an issue signing the transaction")
+			log.Fatal().Err(err).Msg("Failed to sign tx")
 		}
-		stringTx, err := signedTx.MarshalBinary()
-		if err != nil {
-			log.Fatal().Err(err).Msg("Unable to marshal binary for transaction")
-		}
+
 		testAccountNonce += 1
 
 		args := []interface{}{hexutil.Encode(stringTx)}
 		args = append(args, extraArgs...)
 		return args
 	}
+}
+
+// ArgsSignTransactionWithNonce can be used to manipulate the nonce
+// directly in order to create some error cases
+func ArgsSignTransactionWithNonce(ctx context.Context, rpcClient *rpc.Client, tx *RPCTestTransactionArgs, nonce uint64, extraArgs ...interface{}) func() []interface{} {
+	return func() []interface{} {
+		stringTx, err := getSignedRawTx(tx, nonce)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to sign tx")
+		}
+
+		args := []interface{}{hexutil.Encode(stringTx)}
+		args = append(args, extraArgs...)
+		return args
+	}
+}
+
+func getSignedRawTx(tx *RPCTestTransactionArgs, curNonce uint64) ([]byte, error) {
+	chainId := currentChainID
+
+	dft := GenericTransactionToDynamicFeeTx(tx)
+	dft.ChainID = chainId
+	dft.Nonce = curNonce
+
+	londonSigner := ethtypes.NewLondonSigner(chainId)
+	signedTx, err := ethtypes.SignNewTx(testPrivateKey, londonSigner, &dft)
+	if err != nil {
+		log.Error().Err(err).Msg("There was an issue signing the transaction")
+		return nil, err
+	}
+	stringTx, err := signedTx.MarshalBinary()
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to marshal binary for transaction")
+		return nil, err
+	}
+	return stringTx, nil
 }
 
 // ArgsTransactionHash will execute the provided transaction and return
@@ -1291,23 +1578,11 @@ func prepareAndSendTransaction(ctx context.Context, rpcClient *rpc.Client, tx *R
 	defer testAccountNonceMutex.Unlock()
 	curNonce := testAccountNonce
 
-	chainId := currentChainID
-
-	dft := GenericTransactionToDynamicFeeTx(tx)
-	dft.ChainID = chainId
-	dft.Nonce = curNonce
-
-	londonSigner := ethtypes.NewLondonSigner(chainId)
-	signedTx, err := ethtypes.SignNewTx(testPrivateKey, londonSigner, &dft)
+	stringTx, err := getSignedRawTx(tx, curNonce)
 	if err != nil {
-		log.Error().Err(err).Msg("There was an issue signing the transaction")
 		return "", nil, err
 	}
-	stringTx, err := signedTx.MarshalBinary()
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to marshal binary for transaction")
-		return "", nil, err
-	}
+
 	resultHash, receipt, err := executeRawTxAndWait(ctx, rpcClient, stringTx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to execute transaction")
@@ -1320,22 +1595,30 @@ func prepareAndSendTransaction(ctx context.Context, rpcClient *rpc.Client, tx *R
 }
 
 func executeRawTxAndWait(ctx context.Context, rpcClient *rpc.Client, rawTx []byte) (string, map[string]interface{}, error) {
-	var result interface{}
-	err := rpcClient.CallContext(ctx, &result, "eth_sendRawTransaction", hexutil.Encode(rawTx))
+	rawHash, err := executeRawTx(ctx, rpcClient, rawTx)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to send raw transaction")
 		return "", nil, err
 	}
-	rawHash, ok := result.(string)
-	if !ok {
-		return "", nil, fmt.Errorf("Invalid result type. Expected string but got %T", result)
-	}
-	log.Info().Str("txHash", rawHash).Msg("Successfully sent transaction")
+
 	receipt, err := waitForReceipt(ctx, rpcClient, rawHash)
 	if err != nil {
 		return "", nil, err
 	}
 	return rawHash, receipt, nil
+}
+func executeRawTx(ctx context.Context, rpcClient *rpc.Client, rawTx []byte) (string, error) {
+	var result interface{}
+	err := rpcClient.CallContext(ctx, &result, "eth_sendRawTransaction", hexutil.Encode(rawTx))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to send raw transaction")
+		return "", err
+	}
+	rawHash, ok := result.(string)
+	if !ok {
+		return "", fmt.Errorf("Invalid result type. Expected string but got %T", result)
+	}
+	log.Info().Str("txHash", rawHash).Msg("Successfully sent transaction")
+	return rawHash, nil
 }
 
 func waitForReceipt(ctx context.Context, rpcClient *rpc.Client, txHash string) (map[string]interface{}, error) {
@@ -1405,6 +1688,14 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPC
 		NumberOfTestsRan: n,
 	}
 	args := currTest.GetArgs()
+  
+  var result interface{}
+			err = rpcClient.CallContext(ctx, &result, t.GetMethod(), t.GetArgs()...)
+			if err != nil && !t.ExpectError() {
+				log.Error().Err(err).Str("method", t.GetMethod()).Msg("Method test failed")
+				continue
+			}
+			
 
 	idx := 0 // only one run happening
 	var result interface{}
@@ -1417,6 +1708,11 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPC
 		currTestResult.Errors[idx] = errors.New("Method test failed: " + err.Error())
 		return currTestResult
 	}
+  if err == nil && t.ExpectError() {
+    currTestResult.NumberOfTestsFailed++
+		currTestResult.Errors[idx] = errors.New("Expected an error but didn't get one: " + err.Error())
+		return currTestResult
+  }
 
 	if currTest.ExpectError() {
 		err = currTest.Validate(err)
@@ -1499,6 +1795,10 @@ func (r *RPCTestDynamicArgs) ExpectError() bool {
 	return r.Flags&FlagErrorValidation != 0
 }
 
+func (r *RPCJSONError) Error() string {
+	return r.Message
+}
+
 var RPCFuzzCmd = &cobra.Command{
 	Use:   "rpcfuzz http://localhost:8545",
 	Short: "Continually run a variety of RPC calls and fuzzers",
@@ -1520,6 +1820,15 @@ in dev mode:
     --miner.gaslimit  10 --miner.gasprice 1 --gpo.blocks 1 \
     --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2 \
     --dev.gaslimit 50000000
+
+If we wanted to use erigon for testing, we could do something like this as well
+
+# ./build/bin/erigon --chain dev --dev.period 5 --http --http.addr localhost \
+    --http.port 8545 \
+    --http.api 'admin,debug,web3,eth,txpool,personal,clique,miner,net' \
+    --verbosity 5 --rpc.gascap 50000000 \
+    --miner.gaslimit  10 --gpo.blocks 1 \
+    --gpo.percentile 1
 
 Once your Eth client is running and the RPC is functional, you'll need
 to transfer some amount of ether to a known account that ca be used
@@ -1554,8 +1863,6 @@ Once this has been completed this will be the address of the contract:
 		if err != nil {
 			return err
 		}
-		log.Trace().Msg("Doing test setup")
-		setupTests(ctx, rpcClient)
 		nonce, err := GetTestAccountNonce(ctx, rpcClient)
 		if err != nil {
 			return err
@@ -1566,6 +1873,9 @@ Once this has been completed this will be the address of the contract:
 		}
 		testAccountNonce = nonce
 		currentChainID = chainId
+
+		log.Trace().Uint64("nonce", nonce).Uint64("chainid", chainId.Uint64()).Msg("Doing test setup")
+		setupTests(ctx, rpcClient)
 
 		for _, t := range allTests {
 			if !shouldRunTest(t) {
@@ -1646,14 +1956,11 @@ func shouldRunTest(t RPCTest) bool {
 }
 
 func init() {
-	zerolog.SetGlobalLevel(zerolog.TraceLevel)
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-
 	flagSet := RPCFuzzCmd.PersistentFlags()
 
 	testPrivateHexKey = flagSet.String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
 	testContractAddress = flagSet.String("contract-address", "0x6fda56c57b0acadb96ed5624ac500c0429d59429", "The address of a contract that can be used for testing")
-	testNamespaces = flagSet.String("namespaces", "eth,web3,net", "Comma separated list of rpc namespaces to test")
+	testNamespaces = flagSet.String("namespaces", "eth,web3,net,debug", "Comma separated list of rpc namespaces to test")
 	testFuzz = flagSet.Bool("fuzz", false, "Flag to indicate whether to fuzz input or not.")
 	testFuzzNum = flagSet.Int("fuzzn", 100, "Number of times to run the fuzzer per test.")
 	seed = flagSet.Int64("seed", 123456, "A seed for generating random values within the fuzzer")

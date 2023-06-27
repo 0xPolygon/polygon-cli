@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math/big"
 	"net/url"
-	"os"
 	"sort"
 	"sync"
 	"time"
@@ -34,7 +33,6 @@ import (
 	"github.com/gizak/termui/v3/widgets"
 	"github.com/maticnetwork/polygon-cli/metrics"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -42,10 +40,8 @@ import (
 var (
 	batchSize   uint64
 	windowSize  int
-	verbosity   int64
 	intervalStr string
 	interval    time.Duration
-	logFile     string
 
 	one  = big.NewInt(1)
 	zero = big.NewInt(0)
@@ -132,7 +128,7 @@ var MonitorCmd = &cobra.Command{
 			return err
 		}
 
-		return setMonitorLogLevel(verbosity)
+		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -268,9 +264,7 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 func init() {
 	MonitorCmd.PersistentFlags().Uint64VarP(&batchSize, "batch-size", "b", 25, "Number of requests per batch")
 	MonitorCmd.PersistentFlags().IntVarP(&windowSize, "window-size", "w", 25, "Number of blocks visible in the window")
-	MonitorCmd.PersistentFlags().Int64VarP(&verbosity, "verbosity", "v", 200, "0 - Silent\n100 Fatal\n200 Error\n300 Warning\n400 Info\n500 Debug\n600 Trace")
 	MonitorCmd.PersistentFlags().StringVarP(&intervalStr, "interval", "i", "5s", "Amount of time between batch block rpc calls")
-	MonitorCmd.PersistentFlags().StringVarP(&logFile, "log-file", "l", "", "Write logs to a file (default stderr)")
 }
 
 func renderMonitorUI(ms *monitorStatus) error {
@@ -585,35 +579,4 @@ func max(nums ...int) int {
 		}
 	}
 	return m
-}
-
-// setMonitorLogLevel sets the log level based on the flags. If the log file flag
-// is set, then output will be written to the file instead of stdout. Use
-// `tail -f <log file>` to see the log output in real time.
-func setMonitorLogLevel(verbosity int64) error {
-	if len(logFile) > 0 {
-		file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0664)
-		if err != nil {
-			return err
-		}
-		log.Logger = zerolog.New(file).With().Logger()
-	}
-
-	if verbosity < 100 {
-		zerolog.SetGlobalLevel(zerolog.PanicLevel)
-	} else if verbosity < 200 {
-		zerolog.SetGlobalLevel(zerolog.FatalLevel)
-	} else if verbosity < 300 {
-		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
-	} else if verbosity < 400 {
-		zerolog.SetGlobalLevel(zerolog.WarnLevel)
-	} else if verbosity < 500 {
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	} else if verbosity < 600 {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	} else {
-		zerolog.SetGlobalLevel(zerolog.TraceLevel)
-	}
-
-	return nil
 }

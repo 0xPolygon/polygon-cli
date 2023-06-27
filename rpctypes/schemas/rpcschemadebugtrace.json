@@ -1,0 +1,68 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Generated schema for Root",
+    "type": "object",
+    "properties": {
+        "gas": {
+            "type": "number"
+        },
+        "failed": {
+            "type": "boolean"
+        },
+        "returnValue": {
+            "type": "string"
+        },
+        "structLogs": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "pc": {
+                        "type": "number"
+                    },
+                    "op": {
+                        "type": "string"
+                    },
+                    "gas": {
+                        "type": "number"
+                    },
+                    "gasCost": {
+                        "type": "number"
+                    },
+                    "depth": {
+                        "type": "number"
+                    },
+                    "stack": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "storage": {
+                        "type": "object",
+                        "patternProperties": {
+                            "^0x[0-9a-f]{64}$": {
+                                "type": "string",
+                                "pattern": "^0x[0-9a-f]{64}$"
+                            }
+                        }
+                    }
+                },
+                "required": [
+                    "pc",
+                    "op",
+                    "gas",
+                    "gasCost",
+                    "depth",
+                    "stack"
+                ]
+            }
+        }
+    },
+    "required": [
+        "gas",
+        "failed",
+        "returnValue",
+        "structLogs"
+    ]
+}

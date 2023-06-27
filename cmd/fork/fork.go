@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"os"
@@ -174,11 +173,4 @@ func ecrecover(block *types.Block) ([]byte, error) {
 	signer := ethcrypto.Keccak256(pubkey[1:])[12:]
 
 	return signer, nil
-}
-
-func init() {
-	// flagSet := ForkCmd.PersistentFlags()
-	zerolog.SetGlobalLevel(zerolog.TraceLevel)
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-
 }

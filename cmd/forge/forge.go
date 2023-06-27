@@ -47,7 +47,6 @@ import (
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"golang.org/x/exp/slices"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -133,10 +132,6 @@ Here is an example usage:
 		}
 		inputForge.GenesisData = genesisData
 
-		zerolog.SetGlobalLevel(zerolog.TraceLevel)
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-		log.Debug().Msg("Starting logger in console mode")
-
 		return nil
 	},
 }
@@ -145,7 +140,7 @@ func init() {
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.Client, "client", "c", "edge", "Specify which blockchain client should be use to forge the data")
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.DataDir, "data-dir", "d", "./forged-data", "Specify a folder to be used to store the chain data")
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.GenesisFile, "genesis", "g", "genesis.json", "Specify a file to be used for genesis configuration")
-	ForgeCmd.PersistentFlags().StringVarP(&inputForge.Verifier, "verifier", "v", "dummy", "Specify a consensus engine to use for forging")
+	ForgeCmd.PersistentFlags().StringVarP(&inputForge.Verifier, "verifier", "V", "dummy", "Specify a consensus engine to use for forging")
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.Mode, "mode", "m", "json", "The forge mode indicates how we should get the transactions for our blocks [json, proto]")
 	ForgeCmd.PersistentFlags().Uint64VarP(&inputForge.Count, "count", "C", 100, "The number of blocks to try to forge")
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.BlocksFile, "blocks", "b", "", "A file of encoded blocks; the format of this file should match the mode")
@@ -153,9 +148,9 @@ func init() {
 	ForgeCmd.PersistentFlags().StringVarP(&inputForge.ReceiptsFile, "receipts", "r", "", "A file of encoded receipts; the format of this file should match the mode")
 	ForgeCmd.PersistentFlags().BoolVarP(&inputForge.IncludeTxFees, "tx-fees", "t", false, "if the transaction fees should be included when computing block rewards")
 	ForgeCmd.PersistentFlags().BoolVarP(&inputForge.ShouldReadFirstBlock, "read-first-block", "R", false, "whether to read the first block, leave false if first block is genesis")
-	ForgeCmd.PersistentFlags().BoolVarP(&inputForge.ShouldVerifyBlocks, "verify-blocks", "V", true, "whether to verify blocks, set false if forging nonconsecutive blocks")
-	ForgeCmd.PersistentFlags().BoolVarP(&inputForge.ShouldRewriteTxNonces, "rewrite-tx-nonces", "", false, "whether to rewrite transaction nonces, set true if forging nonconsecutive blocks")
-	ForgeCmd.PersistentFlags().BoolVarP(&inputForge.HasConsecutiveBlocks, "consecutive-blocks", "", true, "whether the blocks file has consecutive blocks")
+	ForgeCmd.PersistentFlags().BoolVar(&inputForge.ShouldVerifyBlocks, "verify-blocks", true, "whether to verify blocks, set false if forging nonconsecutive blocks")
+	ForgeCmd.PersistentFlags().BoolVar(&inputForge.ShouldRewriteTxNonces, "rewrite-tx-nonces", false, "whether to rewrite transaction nonces, set true if forging nonconsecutive blocks")
+	ForgeCmd.PersistentFlags().BoolVar(&inputForge.HasConsecutiveBlocks, "consecutive-blocks", true, "whether the blocks file has consecutive blocks")
 	ForgeCmd.PersistentFlags().BoolVarP(&inputForge.ShouldProcessBlocks, "process-blocks", "p", true, "whether the transactions in blocks should be processed applied to the state")
 
 	if err := cobra.MarkFlagRequired(ForgeCmd.PersistentFlags(), "blocks"); err != nil {
@@ -345,7 +340,7 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 		if inputForge.ShouldRewriteTxNonces {
 			for nonce, tx := range edgeBlock.Transactions {
 				tx.Nonce = uint64(nonce)
-				log.Logger.Debug().Int64("old nonce", int64(tx.Nonce)).Int64("new nonce", int64(nonce)).Str("tx hash", tx.Hash.String()).Msg("Rewrote tx nonce")
+				log.Debug().Int64("old nonce", int64(tx.Nonce)).Int64("new nonce", int64(nonce)).Str("tx hash", tx.Hash.String()).Msg("Rewrote tx nonce")
 			}
 		}
 
