@@ -3,6 +3,7 @@ package argfuzz
 import (
 	"encoding/hex"
 	"math/rand"
+	"reflect"
 	"strconv"
 
 	"github.com/google/gofuzz"
@@ -65,8 +66,12 @@ func MutateRPCArgs(args *[]interface{}, c fuzz.Continue) {
 		case bool:
 			(*args)[i] = c.RandBool()
 		default:
-			c.Fuzz(d)
-			(*args)[i] = d
+			if reflect.TypeOf(d).Kind() == reflect.Ptr {
+				c.Fuzz(d)
+				(*args)[i] = d
+			} else {
+				(*args)[i] = c.RandString()
+			}
 		}
 	}
 }

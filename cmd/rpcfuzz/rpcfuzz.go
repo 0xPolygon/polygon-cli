@@ -134,6 +134,7 @@ var (
 	testNamespaces        *string
 	testFuzz              *bool
 	testFuzzNum           *int
+	seed                  *int64
 	testAccountNonce      uint64
 	testAccountNonceMutex sync.Mutex
 	currentChainID        *big.Int
@@ -1445,8 +1446,9 @@ func CallRPCWithFuzzAndValidate(ctx context.Context, rpcClient *rpc.Client, curr
 		NumberOfTestsRan: n,
 	}
 
+	originalArgs := currTest.GetArgs()
 	for i := 0; i < *testFuzzNum; i++ {
-		args := currTest.GetArgs()
+		args := originalArgs
 		fuzzer.Fuzz(&args)
 		currTestResult.Args[i] = args
 
@@ -1644,18 +1646,19 @@ func shouldRunTest(t RPCTest) bool {
 }
 
 func init() {
-	// TODO: make this flaggable
-	rand.Seed(time.Now().UnixNano())
 	zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	flagSet := RPCFuzzCmd.PersistentFlags()
-	fuzzer = fuzz.New()
-	fuzzer.Funcs(argfuzz.MutateRPCArgs)
 
 	testPrivateHexKey = flagSet.String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
 	testContractAddress = flagSet.String("contract-address", "0x6fda56c57b0acadb96ed5624ac500c0429d59429", "The address of a contract that can be used for testing")
 	testNamespaces = flagSet.String("namespaces", "eth,web3,net", "Comma separated list of rpc namespaces to test")
 	testFuzz = flagSet.Bool("fuzz", false, "Flag to indicate whether to fuzz input or not.")
 	testFuzzNum = flagSet.Int("fuzzn", 100, "Number of times to run the fuzzer per test.")
+	seed = flagSet.Int64("seed", 123456, "A seed for generating random values within the fuzzer")
+
+	rand.Seed(*seed)
+	fuzzer = fuzz.New()
+	fuzzer.Funcs(argfuzz.MutateRPCArgs)
 }
