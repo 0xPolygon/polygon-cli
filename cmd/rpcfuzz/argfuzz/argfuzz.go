@@ -1,197 +1,212 @@
 package argfuzz
 
 import (
-	cryptoRand "crypto/rand"
 	"encoding/hex"
-	"github.com/rs/zerolog/log"
 	"math/rand"
-	"strings"
+	"strconv"
 
 	"github.com/google/gofuzz"
 )
 
-type (
-	// probably don't need this for fuzzing
-	BaseType interface {
-		Mutate() string
-	}
-	Hex64String string
-	Hex42String string
-	Hex32String string
-)
-
-func RandomStringMutator(arg string, c fuzz.Continue) string {
+func MutateExecutor(arg []byte, c fuzz.Continue) []byte {
 	switch rand.Intn(10) {
 	case 0:
-		return EmptyString()
+		return AddRandomCharactersToStart(arg)
 	case 1:
-		return c.RandString()
+		return AddRandomCharactersToMiddle(arg)
 	case 2:
-		return AddRandomCharacter(arg)
+		return AddRandomCharactersToEnd(arg)
 	case 3:
-		return AddCharacters(arg, c.RandString())
+		return DeleteRandomCharactersInStart(arg)
 	case 4:
-		return RemoveRandomCharacter(arg)
+		return DeleteRandomCharactersInMiddle(arg)
 	case 5:
-		return GenerateRandomHexStringFixedSize(len(arg))
+		return DeleteRandomCharactersInEnd(arg)
 	case 6:
-		return GenerateRandomHexStringRandomSize()
+		return DuplicateBytes(arg)
 	case 7:
-		return GenerateInvalidHexString(len(arg))
+		return AddSpacesRandomly(arg)
 	case 8:
-		return TestWhitespaceControlChars(arg)
+		return []byte(c.RandString())
 	case 9:
-		return TestCaseSensitivity(arg)
+		return nil
 	default:
-		return c.RandString()
+		// Do nothing
 	}
+
+	return arg
 }
 
-func MutateStringArgs(args *string, c fuzz.Continue) {
-	*args = RandomStringMutator(*args, c)
+func ByteMutator(arg []byte, c fuzz.Continue) []byte {
+	arg = MutateExecutor(arg, c)
+	// fitty-fitty chance of more mutations
+	if rand.Intn(2) == 0 && arg != nil {
+		return ByteMutator(arg, c)
+	}
+
+	return arg
 }
 
 func MutateRPCArgs(args *[]interface{}, c fuzz.Continue) {
 	for i, d := range *args {
 		switch d.(type) {
 		case string:
-			(*args)[i] = RandomStringMutator((*args)[i].(string), c)
+			(*args)[i] = string(ByteMutator([]byte(d.(string)), c))
 		case int:
-			// use large number
-			// use float?
-			(*args)[i] = c.Intn(100)
+			numString := strconv.Itoa(d.(int))
+
+			byteArrString := string(ByteMutator([]byte(numString), c))
+			num, err := strconv.Atoi(byteArrString)
+			if err != nil {
+				(*args)[i] = byteArrString
+			} else {
+				(*args)[i] = num
+			}
 		case bool:
-			// random bool val
-			// use string bool value
-			// use 0/1
 			(*args)[i] = c.RandBool()
-		case BaseType:
-			// Mutate to valid type
-			val := (*args)[i].(BaseType)
-			(*args)[i] = val.Mutate()
 		default:
-			// No mutation for unknown types
-			log.Error().Msg("Unable to retreive type for fuzzing")
+			c.Fuzz(d)
+			(*args)[i] = d
 		}
 	}
 }
 
-func RandomHex(n int) (string, error) {
-	bytes := make([]byte, n)
-	if _, err := cryptoRand.Read(bytes); err != nil {
-		return "", err
-	}
-	return "0x" + hex.EncodeToString(bytes), nil
+func RandomByte() byte {
+	return byte(rand.Intn(256))
 }
 
-func (val Hex64String) Mutate() string {
-	return GenerateRandomHexStringFixedSize(32)
+func RandomHexByte() byte {
+	hex := []byte("0123456789abcdefABCDEF")
+	return byte(hex[rand.Intn(len(hex))])
 }
 
-func (val Hex42String) Mutate() string {
-	return GenerateRandomHexStringFixedSize(21)
-}
+func RandomBytes() ([]byte, error) {
+	length := rand.Intn(100) + 1 // for the time being, generates 1-100 characters
+	bytes := make([]byte, length)
 
-func (val Hex32String) Mutate() string {
-	return GenerateRandomHexStringFixedSize(16)
-}
-
-func EmptyString() string {
-	return ""
-}
-
-func GenerateRandomString(input string) string {
-	f := fuzz.New()
-	var fuzzedString string
-	f.Fuzz(&fuzzedString)
-	return fuzzedString
-}
-
-func AddRandomCharacter(input string) string {
-	index := rand.Intn(len(input) + 1)
-	char := string(rune(rand.Intn(128))) // a random ASCII val added
-	return input[:index] + char + input[index:]
-}
-
-func AddCharacters(input string, characters string) string {
-	index := rand.Intn(len(input) + 1)
-	return input[:index] + characters + input[index:]
-}
-
-func RemoveRandomCharacter(input string) string {
-	if len(input) == 0 {
-		return input
-	}
-	index := rand.Intn(len(input))
-	return input[:index] + input[index+1:]
-}
-
-func IsHexString(input string) bool {
-	_, err := ParseHexString(input)
-	return err == nil
-}
-func ParseHexString(input string) ([]byte, error) {
-	return hex.DecodeString(input)
-}
-
-func GenerateRandomHexStringFixedSize(length int) string {
-	buf := make([]byte, length)
-	rand.Read(buf)
-	return "0x" + hex.EncodeToString(buf)
-}
-
-func GenerateRandomHexStringRandomSize() string {
-	buf := make([]byte, rand.Intn(100)+1) // length 1 - 100
-	rand.Read(buf)
-	return "0x" + hex.EncodeToString(buf)
-}
-
-func GenerateInvalidHexString(length int) string {
-	invalidChars := []rune{'G', 'Z', '#', '$', '%', '@'}
-	result := make([]rune, length)
-	for i := 0; i < length; i++ {
-		if rand.Intn(5) == 0 {
-			result[i] = invalidChars[rand.Intn(len(invalidChars))]
-		} else {
-			result[i] = rune(rand.Intn(16)) + '0'
-		}
-	}
-	return string(result)
-}
-
-func TestWhitespaceControlChars(input string) string {
-	whitespaceChars := []rune{' ', '\t', '\n'}
-	controlChars := []rune{'\x00', '\x01', '\x02'}
-
-	// Add leading whitespace
-	if len(input) > 0 && rand.Intn(2) == 0 {
-		input = string(whitespaceChars[rand.Intn(len(whitespaceChars))]) + input
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return []byte{RandomByte()}, err
 	}
 
-	// Add trailing whitespace
-	if len(input) > 0 && rand.Intn(2) == 0 {
-		input += string(whitespaceChars[rand.Intn(len(whitespaceChars))])
-	}
-
-	// Add internal whitespace
-	if len(input) > 1 && rand.Intn(2) == 0 {
-		index := rand.Intn(len(input)-1) + 1
-		input = input[:index] + string(whitespaceChars[rand.Intn(len(whitespaceChars))]) + input[index:]
-	}
-
-	// Add control characters
-	numControlChars := rand.Intn(3) // Random number of control characters (0-2)
-	for i := 0; i < numControlChars; i++ {
-		index := rand.Intn(len(input) + 1)
-		input = input[:index] + string(controlChars[rand.Intn(len(controlChars))]) + input[index:]
-	}
-
-	return input
+	return bytes, nil
 }
 
-func TestCaseSensitivity(input string) string {
+func RandomHexBytes() ([]byte, error) {
+	length := rand.Intn(100) + 1 // for the time being, generates 1-100 characters
+	bytes := make([]byte, length)
+
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return []byte{RandomHexByte()}, err
+	}
+	resBytes := []byte(hex.EncodeToString(bytes)[:length])
+
+	return resBytes, nil
+}
+
+func RandomBytesOfCharactersOrHexBytes() ([]byte, error) {
 	if rand.Intn(2) == 0 {
-		return strings.ToUpper(input)
+		return RandomBytes()
 	}
-	return strings.ToLower(input)
+
+	return RandomHexBytes()
+}
+
+func RandomWhitespace() byte {
+	whitespaces := []byte{' ', '\n', '\t'}
+
+	whitespaceIdx := rand.Intn(len(whitespaces))
+
+	return whitespaces[whitespaceIdx]
+}
+
+func AddRandomCharactersToStart(arg []byte) []byte {
+	bytes, err := RandomBytesOfCharactersOrHexBytes()
+	if err != nil {
+		return arg
+	}
+	return append(bytes, arg...)
+}
+
+func AddRandomCharactersToMiddle(arg []byte) []byte {
+	n := len(arg)
+	if n == 0 {
+		return arg
+	}
+
+	bytes, err := RandomBytesOfCharactersOrHexBytes()
+	if err != nil {
+		return arg
+	}
+	randomMid := rand.Intn(len(arg))
+	return append(arg[:randomMid], append(bytes, arg[randomMid:]...)...)
+}
+
+func AddRandomCharactersToEnd(arg []byte) []byte {
+	bytes, err := RandomBytesOfCharactersOrHexBytes()
+	if err != nil {
+		return arg
+	}
+	return append(arg, bytes...)
+}
+
+func DeleteRandomCharactersInStart(arg []byte) []byte {
+	n := len(arg)
+	if n == 0 {
+		return arg
+	}
+
+	numberBytesToDelete := rand.Intn(n)
+	return arg[numberBytesToDelete:]
+}
+
+func DeleteRandomCharactersInMiddle(arg []byte) []byte {
+	n := len(arg)
+	if n == 0 {
+		return arg
+	}
+
+	numberBytesStart := rand.Intn(n)
+	numberBytesEnd := numberBytesStart + rand.Intn(n-numberBytesStart)
+	return append(arg[:numberBytesStart], arg[numberBytesEnd:]...)
+}
+
+func DeleteRandomCharactersInEnd(arg []byte) []byte {
+	n := len(arg)
+	if n == 0 {
+		return arg
+	}
+
+	numberBytesToDelete := rand.Intn(n)
+	return arg[:numberBytesToDelete]
+}
+
+func DuplicateBytes(arg []byte) []byte {
+	numOfDuplicates := rand.Intn(10) + 1 // for now duplicate at most 10 times
+	duplicatedArgs := arg
+	for i := 0; i < numOfDuplicates; i++ {
+		duplicatedArgs = append(duplicatedArgs, arg...)
+	}
+
+	return duplicatedArgs
+}
+
+func AddSpacesRandomly(arg []byte) []byte {
+	n := len(arg)
+	if n == 0 {
+		return arg
+	}
+
+	whitespaceByte := RandomWhitespace()
+	randomMid := rand.Intn(len(arg))
+	funcs := []func() []byte{
+		func() []byte { return append([]byte{whitespaceByte}, arg...) },
+		func() []byte {
+			return append(arg[:randomMid], append([]byte{whitespaceByte}, arg[randomMid:]...)...)
+		},
+		func() []byte { return append(arg, whitespaceByte) },
+	}
+
+	return funcs[rand.Intn(len(funcs))]()
 }
