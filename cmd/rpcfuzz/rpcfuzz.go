@@ -1688,14 +1688,13 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPC
 		NumberOfTestsRan: n,
 	}
 	args := currTest.GetArgs()
-  
-  var result interface{}
-			err = rpcClient.CallContext(ctx, &result, t.GetMethod(), t.GetArgs()...)
-			if err != nil && !t.ExpectError() {
-				log.Error().Err(err).Str("method", t.GetMethod()).Msg("Method test failed")
-				continue
-			}
-			
+
+	var result interface{}
+	err = rpcClient.CallContext(ctx, &result, t.GetMethod(), t.GetArgs()...)
+	if err != nil && !t.ExpectError() {
+		log.Error().Err(err).Str("method", t.GetMethod()).Msg("Method test failed")
+		continue
+	}
 
 	idx := 0 // only one run happening
 	var result interface{}
@@ -1708,11 +1707,11 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPC
 		currTestResult.Errors[idx] = errors.New("Method test failed: " + err.Error())
 		return currTestResult
 	}
-  if err == nil && t.ExpectError() {
-    currTestResult.NumberOfTestsFailed++
+	if err == nil && t.ExpectError() {
+		currTestResult.NumberOfTestsFailed++
 		currTestResult.Errors[idx] = errors.New("Expected an error but didn't get one: " + err.Error())
 		return currTestResult
-  }
+	}
 
 	if currTest.ExpectError() {
 		err = currTest.Validate(err)
