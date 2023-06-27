@@ -33,7 +33,6 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 	"math/big"
 	"math/rand"
-	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -1689,13 +1688,6 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPC
 	}
 	args := currTest.GetArgs()
 
-	var result interface{}
-	err = rpcClient.CallContext(ctx, &result, t.GetMethod(), t.GetArgs()...)
-	if err != nil && !t.ExpectError() {
-		log.Error().Err(err).Str("method", t.GetMethod()).Msg("Method test failed")
-		continue
-	}
-
 	idx := 0 // only one run happening
 	var result interface{}
 	err := rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
@@ -1707,7 +1699,7 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPC
 		currTestResult.Errors[idx] = errors.New("Method test failed: " + err.Error())
 		return currTestResult
 	}
-	if err == nil && t.ExpectError() {
+	if err == nil && currTest.ExpectError() {
 		currTestResult.NumberOfTestsFailed++
 		currTestResult.Errors[idx] = errors.New("Expected an error but didn't get one: " + err.Error())
 		return currTestResult
