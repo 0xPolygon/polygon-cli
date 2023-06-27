@@ -39,6 +39,10 @@ func MutateExecutor(arg []byte, c fuzz.Continue) []byte {
 }
 
 func ByteMutator(arg []byte, c fuzz.Continue) []byte {
+    if arg == nil {
+        return arg
+    }
+
 	arg = MutateExecutor(arg, c)
 	// fitty-fitty chance of more mutations
 	if rand.Intn(2) == 0 && arg != nil {
@@ -50,6 +54,10 @@ func ByteMutator(arg []byte, c fuzz.Continue) []byte {
 
 func MutateRPCArgs(args *[]interface{}, c fuzz.Continue) {
 	for i, d := range *args {
+        if d == nil {
+            continue
+        }
+
 		switch d.(type) {
 		case string:
 			(*args)[i] = string(ByteMutator([]byte(d.(string)), c))
