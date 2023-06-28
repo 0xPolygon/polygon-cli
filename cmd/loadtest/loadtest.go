@@ -792,6 +792,12 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			var retryForNonce bool = false
 			var myNonceValue uint64
 
+			header, err := c.HeaderByNumber(ctx, nil)
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to get head")
+				return
+			}
+
 			for j = 0; j < requests; j = j + 1 {
 				if rl != nil {
 					err = rl.Wait(ctx)
@@ -820,7 +826,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				switch localMode {
 				case loadTestModeTransaction:
-					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue)
+					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue, header)
 				case loadTestModeDeploy:
 					startReq, endReq, err = loadtestDeploy(ctx, c, myNonceValue)
 				case loadTestModeCall:
@@ -956,7 +962,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 	}
 }
 
-func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64, header *ethtypes.Header) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	gasPrice := ltp.CurrentGas
@@ -976,8 +982,23 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 		log.Error().Err(err).Msg("Unable to get head")
 		return
 	}
-
-	tx = ethtypes.NewTransaction(nonce, *to, amount, gasLimit, gasPrice, nil)
+	if *ltp.LegacyTransactionMode {
+		tx = ethtypes.NewTransaction(nonce, *to, amount, gasLimit, gasPrice, nil)
+	} else {
+		gasTipCap := ltp.CurrentGasTipCap
+		gasFeeCap := new(big.Int).Add(gasTipCap, header.BaseFee)
+		dynamicFeeTx := &ethtypes.DynamicFeeTx{
+			ChainID:   chainID,
+			Nonce:     nonce,
+			To:        to,
+			Gas:       gasLimit,
+			GasFeeCap: gasFeeCap,
+			GasTipCap: gasTipCap,
+			Data:      nil,
+			Value:     amount,
+		}
+		tx = ethtypes.NewTx(dynamicFeeTx)
+	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
