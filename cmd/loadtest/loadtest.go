@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -236,6 +237,7 @@ type (
 		ForceContractDeploy                 *bool
 		ForceGasLimit                       *uint64
 		ForceGasPrice                       *uint64
+		ForcePriorityGasPrice               *uint64
 		ShouldProduceSummary                *bool
 		SummaryOutputMode                   *string
 		LegacyTransactionMode               *bool
@@ -304,6 +306,7 @@ r - random modes
 	ltp.ForceContractDeploy = LoadtestCmd.PersistentFlags().Bool("force-contract-deploy", false, "Some loadtest modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --del-address and --il-address flags.")
 	ltp.ForceGasLimit = LoadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually")
 	ltp.ForceGasPrice = LoadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be estimated, we can specify it manually")
+	ltp.ForcePriorityGasPrice = LoadtestCmd.PersistentFlags().Uint64("priority-gas-price", 0, "Specify Gas Tip Price in the case of EIP-1559")
 	ltp.ShouldProduceSummary = LoadtestCmd.PersistentFlags().Bool("summarize", false, "Should we produce an execution summary after the load test has finished. If you're running a large loadtest, this can take a long time")
 	ltp.BatchSize = LoadtestCmd.PersistentFlags().Uint64("batch-size", 999, "Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time.")
 	ltp.SummaryOutputMode = LoadtestCmd.PersistentFlags().String("output-mode", "text", "Format mode for summary output (json | text)")
@@ -365,6 +368,11 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	if err != nil {
 		log.Error().Err(err).Msg("Couldn't parse send amount")
 		return err
+	}
+
+	if *inputLoadTestParams.LegacyTransactionMode && *inputLoadTestParams.ForcePriorityGasPrice > 0 {
+		log.Error().Msg("Cannot set priority gas price in legacy mode")
+		return errors.New("cannot set priority gas price in legacy mode")
 	}
 
 	inputLoadTestParams.ToETHAddress = &toAddr
@@ -1530,8 +1538,12 @@ func loadtestAvailStore(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64
 
 func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 	ltp := inputLoadTestParams
-	if *ltp.LegacyTransactionMode && ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
-		tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
+	if *ltp.LegacyTransactionMode {
+		if ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
+			tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
+		} else {
+			tops.GasPrice = ltp.CurrentGas
+		}
 	}
 	if ltp.ForceGasLimit != nil && *ltp.ForceGasLimit != 0 {
 		tops.GasLimit = *ltp.ForceGasLimit
