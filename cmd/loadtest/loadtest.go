@@ -846,9 +846,11 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				if localMode == loadTestModeRandom {
 					localMode = validLoadTestModes[int(i+j)%(len(validLoadTestModes)-1)]
 				}
+
+				header, err := c.HeaderByNumber(ctx, nil)
 				switch localMode {
 				case loadTestModeTransaction:
-					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue)
+					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue, header)
 				case loadTestModeDeploy:
 					startReq, endReq, err = loadtestDeploy(ctx, c, myNonceValue)
 				case loadTestModeCall:
@@ -984,7 +986,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 	}
 }
 
-func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64, header *ethtypes.Header) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
