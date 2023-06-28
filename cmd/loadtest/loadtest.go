@@ -958,7 +958,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 	}
 }
 
-func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64, header *ethtypes.Header) (t1 time.Time, t2 time.Time, err error) {
+func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64, head *ethtypes.Header) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	gasPrice := ltp.CurrentGas
@@ -972,12 +972,6 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
-	head, err := c.HeaderByNumber(ctx, nil)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get head")
-		return
-	}
-
 	gasLimit := uint64(21000)
 	var tx *ethtypes.Transaction
 	if *ltp.LegacyTransactionMode {
@@ -985,7 +979,7 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 	} else {
 		gasTipCap := ltp.CurrentGasTipCap
 		gasFeeCap := new(big.Int).Add(gasTipCap, head.BaseFee)
-		baseTx := &ethtypes.DynamicFeeTx{
+		dynamicFeeTx := &ethtypes.DynamicFeeTx{
 			ChainID:   chainID,
 			Nonce:     nonce,
 			To:        to,
@@ -995,7 +989,7 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 			Data:      nil,
 			Value:     amount,
 		}
-		tx = ethtypes.NewTx(baseTx)
+		tx = ethtypes.NewTx(dynamicFeeTx)
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
