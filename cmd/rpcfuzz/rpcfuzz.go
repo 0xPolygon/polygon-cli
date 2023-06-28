@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"regexp"
 	"strings"
 	"sync"
@@ -30,22 +31,13 @@ import (
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/google/gofuzz"
+	fuzz "github.com/google/gofuzz"
 	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz/argfuzz"
 	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz/testreporter"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/xeipuuv/gojsonschema"
-<<<<<<< HEAD
-	"math/big"
-	"math/rand"
-	"regexp"
-	"strings"
-	"sync"
-	"time"
-=======
->>>>>>> 2372100 (push)
 )
 
 type (
