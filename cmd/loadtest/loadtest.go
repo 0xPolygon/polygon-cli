@@ -611,8 +611,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	tops = configureTransactOpts(tops, legacyTransactionMode)
 	tops.GasLimit = 10000000
+	tops = configureTransactOpts(tops)
 
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
@@ -679,8 +679,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 
 		tops.Nonce = new(big.Int).SetUint64(currentNonce)
-		tops.GasLimit = 10000000
-		tops = configureTransactOpts(tops, legacyTransactionMode)
 
 		_, err = erc20Contract.Mint(tops, metrics.UnitMegaether)
 		if err != nil {
@@ -732,8 +730,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 
 		tops.Nonce = new(big.Int).SetUint64(currentNonce)
-		tops.GasLimit = 10000000
-		tops = configureTransactOpts(tops, legacyTransactionMode)
 
 		err = blockUntilSuccessful(ctx, c, func() error {
 			_, err = erc721Contract.MintBatch(tops, *ltp.FromETHAddress, new(big.Int).SetUint64(1))
@@ -1024,7 +1020,7 @@ func loadtestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64, lega
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops, legacyTransactionMode)
+	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
 	_, _, _, err = contracts.DeployLoadTester(tops, c)
@@ -1046,7 +1042,7 @@ func loadtestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, lt
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops, legacyTransactionMode)
+	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
 	_, err = contracts.CallLoadTestFunctionByOpCode(*f, ltContract, tops, *iterations)
@@ -1068,7 +1064,7 @@ func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltCont
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops, legacyTransactionMode)
+	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
 	_, err = contracts.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
@@ -1095,7 +1091,7 @@ func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, 
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops, legacyTransactionMode)
+	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
 	_, err = contracts.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
@@ -1115,7 +1111,7 @@ func loadtestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContr
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops, legacyTransactionMode)
+	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
 	_, err = ltContract.Inc(tops)
@@ -1135,7 +1131,7 @@ func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops, legacyTransactionMode)
+	tops = configureTransactOpts(tops)
 
 	inputData := make([]byte, *ltp.ByteCount)
 	_, _ = hexwordRead(inputData)
@@ -1157,7 +1153,7 @@ func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delega
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops, legacyTransactionMode)
+	tops = configureTransactOpts(tops)
 
 	// TODO the delegated call should be a parameter
 	t1 = time.Now()
@@ -1187,7 +1183,7 @@ func loadtestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops, legacyTransactionMode)
+	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
 	_, err = erc20Contract.Transfer(tops, *to, amount)
@@ -1213,7 +1209,7 @@ func loadtestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops, legacyTransactionMode)
+	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
 	_, err = erc721Contract.MintBatch(tops, *to, new(big.Int).SetUint64(*iterations))
@@ -1521,9 +1517,9 @@ func loadtestAvailStore(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64
 	return
 }
 
-func configureTransactOpts(tops *bind.TransactOpts, legacy bool) *bind.TransactOpts {
+func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 	ltp := inputLoadTestParams
-	if legacy && ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
+	if *ltp.LegacyTransactionMode && ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
 		tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
 	}
 	if ltp.ForceGasLimit != nil && *ltp.ForceGasLimit != 0 {
