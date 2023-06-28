@@ -821,27 +821,27 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				switch localMode {
 				case loadTestModeTransaction:
-					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue, legacyTransactionMode)
+					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue)
 				case loadTestModeDeploy:
-					startReq, endReq, err = loadtestDeploy(ctx, c, myNonceValue, legacyTransactionMode)
+					startReq, endReq, err = loadtestDeploy(ctx, c, myNonceValue)
 				case loadTestModeCall:
-					startReq, endReq, err = loadtestCall(ctx, c, myNonceValue, ltContract, legacyTransactionMode)
+					startReq, endReq, err = loadtestCall(ctx, c, myNonceValue, ltContract)
 				case loadTestModeFunction:
-					startReq, endReq, err = loadtestFunction(ctx, c, myNonceValue, ltContract, legacyTransactionMode)
+					startReq, endReq, err = loadtestFunction(ctx, c, myNonceValue, ltContract)
 				case loadTestModeInc:
-					startReq, endReq, err = loadtestInc(ctx, c, myNonceValue, ltContract, legacyTransactionMode)
+					startReq, endReq, err = loadtestInc(ctx, c, myNonceValue, ltContract)
 				case loadTestModeStore:
-					startReq, endReq, err = loadtestStore(ctx, c, myNonceValue, ltContract, legacyTransactionMode)
+					startReq, endReq, err = loadtestStore(ctx, c, myNonceValue, ltContract)
 				case loadTestModeLong:
-					startReq, endReq, err = loadtestLong(ctx, c, myNonceValue, delegatorContract, ltAddr, legacyTransactionMode)
+					startReq, endReq, err = loadtestLong(ctx, c, myNonceValue, delegatorContract, ltAddr)
 				case loadTestModeERC20:
-					startReq, endReq, err = loadtestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr, legacyTransactionMode)
+					startReq, endReq, err = loadtestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
 				case loadTestModeERC721:
-					startReq, endReq, err = loadtestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr, legacyTransactionMode)
+					startReq, endReq, err = loadtestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
 				case loadTestModePrecompiledContract:
-					startReq, endReq, err = loadtestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, true, legacyTransactionMode)
+					startReq, endReq, err = loadtestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, true)
 				case loadTestModePrecompiledContracts:
-					startReq, endReq, err = loadtestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false, legacyTransactionMode)
+					startReq, endReq, err = loadtestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false)
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -957,7 +957,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 	}
 }
 
-func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64, legacy bool) (t1 time.Time, t2 time.Time, err error) {
+func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	gasPrice := ltp.CurrentGas
@@ -979,7 +979,7 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 
 	gasLimit := uint64(21000)
 	var tx *ethtypes.Transaction
-	if legacy {
+	if *ltp.LegacyTransactionMode {
 		tx = ethtypes.NewTransaction(nonce, *to, amount, gasLimit, gasPrice, nil)
 	} else {
 		gasTipCap := ltp.CurrentGasTipCap
@@ -1008,7 +1008,7 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 	return
 }
 
-func loadtestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64, legacyTransactionMode bool) (t1 time.Time, t2 time.Time, err error) {
+func loadtestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -1028,7 +1028,7 @@ func loadtestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64, lega
 	return
 }
 
-func loadtestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester, legacyTransactionMode bool) (t1 time.Time, t2 time.Time, err error) {
+func loadtestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -1050,7 +1050,7 @@ func loadtestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, lt
 	return
 }
 
-func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester, legacyTransactionMode bool) (t1 time.Time, t2 time.Time, err error) {
+func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -1072,7 +1072,7 @@ func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltCont
 	return
 }
 
-func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester, useSelectedAddress bool, legacyTransactionMode bool) (t1 time.Time, t2 time.Time, err error) {
+func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester, useSelectedAddress bool) (t1 time.Time, t2 time.Time, err error) {
 	var f int
 	ltp := inputLoadTestParams
 
@@ -1099,7 +1099,7 @@ func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, 
 	return
 }
 
-func loadtestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester, legacyTransactionMode bool) (t1 time.Time, t2 time.Time, err error) {
+func loadtestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -1119,7 +1119,7 @@ func loadtestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContr
 	return
 }
 
-func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester, legacyTransactionMode bool) (t1 time.Time, t2 time.Time, err error) {
+func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -1141,7 +1141,7 @@ func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 	return
 }
 
-func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delegatorContract *contracts.Delegator, ltAddress ethcommon.Address, legacyTransactionMode bool) (t1 time.Time, t2 time.Time, err error) {
+func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delegatorContract *contracts.Delegator, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -1165,7 +1165,7 @@ func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delega
 	return
 }
 
-func loadtestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20Contract *contracts.ERC20, ltAddress ethcommon.Address, legacyTransactionMode bool) (t1 time.Time, t2 time.Time, err error) {
+func loadtestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20Contract *contracts.ERC20, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
@@ -1191,7 +1191,7 @@ func loadtestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 	return
 }
 
-func loadtestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc721Contract *contracts.ERC721, ltAddress ethcommon.Address, legacyTransactionMode bool) (t1 time.Time, t2 time.Time, err error) {
+func loadtestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc721Contract *contracts.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 	iterations := ltp.Iterations
 
