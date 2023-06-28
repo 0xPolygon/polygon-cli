@@ -626,7 +626,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	mode := *ltp.Mode
 	steadyStateTxPoolSize := *ltp.SteadyStateTxPoolSize
 	adaptiveRateLimitIncrement := *ltp.AdaptiveRateLimitIncrement
-	legacyTransactionMode := *ltp.LegacyTransactionMode
 	var rl *rate.Limiter
 	rl = rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
 	if *ltp.RateLimit <= 0.0 {
