@@ -986,7 +986,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 	}
 }
 
-func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64, header *ethtypes.Header) (t1 time.Time, t2 time.Time, err error) {
+func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64, head *ethtypes.Header) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
