@@ -820,8 +820,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			var retryForNonce bool = false
 			var myNonceValue uint64
 
-			header, err := c.HeaderByNumber(ctx, nil)
-			if err != nil {
+			header, _err := c.HeaderByNumber(ctx, nil)
+			if _err != nil {
 				log.Error().Err(err).Msg("Unable to get head")
 				return
 			}
