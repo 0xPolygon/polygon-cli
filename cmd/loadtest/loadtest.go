@@ -818,11 +818,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				if localMode == loadTestModeRandom {
 					localMode = validLoadTestModes[int(i+j)%(len(validLoadTestModes)-1)]
 				}
-
-				header, err := c.HeaderByNumber(ctx, nil)
 				switch localMode {
 				case loadTestModeTransaction:
-					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue, header)
+					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue)
 				case loadTestModeDeploy:
 					startReq, endReq, err = loadtestDeploy(ctx, c, myNonceValue)
 				case loadTestModeCall:
@@ -958,7 +956,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 	}
 }
 
-func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64, head *ethtypes.Header) (t1 time.Time, t2 time.Time, err error) {
+func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	gasPrice := ltp.CurrentGas
@@ -974,23 +972,12 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 
 	gasLimit := uint64(21000)
 	var tx *ethtypes.Transaction
-	if *ltp.LegacyTransactionMode {
-		tx = ethtypes.NewTransaction(nonce, *to, amount, gasLimit, gasPrice, nil)
-	} else {
-		gasTipCap := ltp.CurrentGasTipCap
-		gasFeeCap := new(big.Int).Add(gasTipCap, head.BaseFee)
-		dynamicFeeTx := &ethtypes.DynamicFeeTx{
-			ChainID:   chainID,
-			Nonce:     nonce,
-			To:        to,
-			Gas:       gasLimit,
-			GasFeeCap: gasFeeCap,
-			GasTipCap: gasTipCap,
-			Data:      nil,
-			Value:     amount,
-		}
-		tx = ethtypes.NewTx(dynamicFeeTx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get head")
+		return
 	}
+
+	tx = ethtypes.NewTransaction(nonce, *to, amount, gasLimit, gasPrice, nil)
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
@@ -999,7 +986,7 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 	}
 	tops = configureTransactOpts(tops)
 
-	stx, err := tops.Signer(*to, tx)
+	stx, err := tops.Signer(*ltp.FromETHAddress, tx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
