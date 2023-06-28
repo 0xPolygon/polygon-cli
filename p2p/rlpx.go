@@ -347,7 +347,7 @@ func (c *Conn) processNewPooledTransactionHashes(db database.Database, count *Me
 	atomic.AddInt32(&count.TransactionHashes, int32(len(hashes)))
 	c.logger.Trace().Msgf("Received %v NewPooledTransactionHashes", len(hashes))
 
-	if !db.ShouldWriteTransactions() {
+	if db == nil || !db.ShouldWriteTransactions() {
 		return nil
 	}
 
