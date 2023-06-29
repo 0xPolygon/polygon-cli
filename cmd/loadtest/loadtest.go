@@ -399,18 +399,10 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	inputLoadTestParams.CurrentNonce = &nonce
 	inputLoadTestParams.ECDSAPrivateKey = privateKey
 	inputLoadTestParams.FromETHAddress = &ethAddress
-<<<<<<< HEAD
 	if *inputLoadTestParams.ChainID == 0 {
 		*inputLoadTestParams.ChainID = chainID.Uint64()
 	}
 	inputLoadTestParams.BaseFee = header.BaseFee
-=======
-<<<<<<< Updated upstream
-=======
-	inputLoadTestParams.ChainID = chainID
-	inputLoadTestParams.BaseFee = header.BaseFee
->>>>>>> Stashed changes
->>>>>>> 8f1a55e (real gucci)
 
 	rand.Seed(*inputLoadTestParams.Seed)
 
@@ -1011,16 +1003,9 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 	}
 	tops.GasLimit = uint64(21000)
 	tops = configureTransactOpts(tops)
-<<<<<<< HEAD
 	var tx *ethtypes.Transaction
 	if *ltp.LegacyTransactionMode {
 		tx = ethtypes.NewTransaction(nonce, *to, amount, tops.GasLimit, tops.GasPrice, nil)
-=======
-
-	var tx *ethtypes.Transaction
-	if *ltp.LegacyTransactionMode {
-		tx = ethtypes.NewTransaction(nonce, *to, amount, tops.GasLimit, gasPrice, nil)
->>>>>>> 8f1a55e (real gucci)
 	} else {
 		gasTipCap := tops.GasTipCap
 		gasFeeCap := new(big.Int).Add(gasTipCap, ltp.BaseFee)
@@ -1036,10 +1021,7 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 		}
 		tx = ethtypes.NewTx(dynamicFeeTx)
 	}
-<<<<<<< HEAD
-=======
 
->>>>>>> 8f1a55e (real gucci)
 	stx, err := tops.Signer(*ltp.FromETHAddress, tx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
