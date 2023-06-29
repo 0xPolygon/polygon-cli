@@ -986,10 +986,6 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 
 	gasLimit := uint64(21000)
 	var tx *ethtypes.Transaction
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get head")
-		return
-	}
 	if *ltp.LegacyTransactionMode {
 		tx = ethtypes.NewTransaction(nonce, *to, amount, gasLimit, gasPrice, nil)
 	} else {
