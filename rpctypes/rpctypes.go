@@ -218,6 +218,7 @@ type (
 		V() *big.Int
 		R() *big.Int
 		S() *big.Int
+		Type() uint64
 	}
 	PolyTransactions []PolyTransaction
 	PolyBlock        interface {
@@ -344,6 +345,9 @@ func (i *implPolyTransaction) Gas() uint64 {
 }
 func (i *implPolyTransaction) Nonce() uint64 {
 	return i.inner.Nonce.ToUint64()
+}
+func (i *implPolyTransaction) Type() uint64 {
+	return i.inner.Type.ToUint64()
 }
 func (i *implPolyTransaction) Value() *big.Int {
 	return i.inner.Value.ToBigInt()
