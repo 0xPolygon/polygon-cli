@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"net/http"
@@ -39,6 +40,8 @@ type (
 		PprofPort                    uint
 		KeyFile                      string
 		privateKey                   *ecdsa.PrivateKey
+		IP                           net.IP
+		Port                         int
 	}
 )
 
@@ -115,7 +118,8 @@ var SensorCmd = &cobra.Command{
 		}
 
 		ln := enode.NewLocalNode(db, cfg.PrivateKey)
-		socket, err := p2p.Listen(ln)
+		ln.SetStaticIP(inputSensorParams.IP)
+		socket, err := p2p.Listen(ln, inputSensorParams.Port)
 		if err != nil {
 			return err
 		}
@@ -171,4 +175,6 @@ increase CPU and memory usage.`)
 	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "Whether to run pprof.")
 	SensorCmd.PersistentFlags().UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "The port to run pprof on.")
 	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "The file of the private key. If no key file is found then a key file will be generated.")
+	SensorCmd.PersistentFlags().IPVarP(&inputSensorParams.IP, "ip", "i", net.IP{127, 0, 0, 1}, "The sensor's IP address.")
+	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.Port, "port", 30303, "The sensor's discovery port.")
 }

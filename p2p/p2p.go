@@ -13,8 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-func Listen(ln *enode.LocalNode) (*net.UDPConn, error) {
-	addr := "0.0.0.0:0"
+func Listen(ln *enode.LocalNode, port int) (*net.UDPConn, error) {
+	addr := fmt.Sprintf("0.0.0.0:%v", port)
 
 	socket, err := net.ListenPacket("udp4", addr)
 	if err != nil {
