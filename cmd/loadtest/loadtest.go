@@ -154,8 +154,6 @@ var LoadtestCmd = &cobra.Command{
 	Short: "A simple script for quickly running a load test",
 	Long:  `Loadtest gives us a simple way to run a generic load test against an eth/EVM style json RPC endpoint`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		log.Debug().Msg("Starting Loadtest")
-
 		err := runLoadTest(cmd.Context())
 		if err != nil {
 			return err
@@ -466,7 +464,6 @@ func runLoadTest(ctx context.Context) error {
 		}
 
 	} else {
-		log.Info().Msg("Starting Load Test")
 		loopFunc = func() error {
 			err = initializeLoadTestParams(ctx, ec)
 			if err != nil {
