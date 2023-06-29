@@ -1,3 +1,6 @@
+// Package argfuzz implements the randomizers, mutators, and fuzzers
+// that can be utilized by gofuzz. It extends on gofuzz default mutation with functionality for manipulating and
+// mutating the byte slices of the desired fuzzed inputs
 package argfuzz
 
 import (
@@ -7,46 +10,36 @@ import (
 	"strconv"
 
 	"github.com/google/gofuzz"
+	"github.com/rs/zerolog/log"
 )
 
-func MutateExecutor(arg []byte, c fuzz.Continue) []byte {
-	switch rand.Intn(10) {
-	case 0:
-		return AddRandomCharactersToStart(arg)
-	case 1:
-		return AddRandomCharactersToMiddle(arg)
-	case 2:
-		return AddRandomCharactersToEnd(arg)
-	case 3:
-		return DeleteRandomCharactersInStart(arg)
-	case 4:
-		return DeleteRandomCharactersInMiddle(arg)
-	case 5:
-		return DeleteRandomCharactersInEnd(arg)
-	case 6:
-		return DuplicateBytes(arg)
-	case 7:
-		return AddSpacesRandomly(arg)
-	case 8:
-		return []byte(c.RandString())
-	case 9:
-		return nil
-	default:
-		// Do nothing
-	}
+type MutateFunc func(arg []byte) []byte
 
-	return arg
+var mutateFunctions = []MutateFunc{
+	AddRandomCharactersToStart,
+	AddRandomCharactersToMiddle,
+	AddRandomCharactersToEnd,
+	DeleteRandomCharactersInStart,
+	DeleteRandomCharactersInMiddle,
+	DeleteRandomCharactersInEnd,
+	DuplicateBytes,
+	AddSpacesRandomly,
+	ReplaceWithRandomCharacters,
+	func(arg []byte) []byte {
+		return nil
+	},
 }
 
-func ByteMutator(arg []byte, c fuzz.Continue) []byte {
-	if arg == nil {
-		return arg
-	}
+func MutateExecutor(arg []byte) []byte {
+	selectedFunc := mutateFunctions[rand.Intn(len(mutateFunctions))]
+	return selectedFunc(arg)
+}
 
-	arg = MutateExecutor(arg, c)
+func ByteMutator(arg []byte) []byte {
+	arg = MutateExecutor(arg)
 	// fitty-fitty chance of more mutations
-	if rand.Intn(2) == 0 && arg != nil {
-		return ByteMutator(arg, c)
+	if rand.Intn(2) == 0 {
+		return ByteMutator(arg)
 	}
 
 	return arg
@@ -55,16 +48,16 @@ func ByteMutator(arg []byte, c fuzz.Continue) []byte {
 func MutateRPCArgs(args *[]interface{}, c fuzz.Continue) {
 	for i, d := range *args {
 		if d == nil {
-			continue
+			d = c.RandString()
 		}
 
 		switch dataType := reflect.TypeOf(d).Kind(); dataType {
 		case reflect.String:
-			(*args)[i] = string(ByteMutator([]byte(d.(string)), c))
+			(*args)[i] = string(ByteMutator([]byte(d.(string))))
 		case reflect.Int:
 			numString := strconv.Itoa(d.(int))
 
-			byteArrString := string(ByteMutator([]byte(numString), c))
+			byteArrString := string(ByteMutator([]byte(numString)))
 			num, err := strconv.Atoi(byteArrString)
 			if err != nil {
 				(*args)[i] = byteArrString
@@ -73,13 +66,15 @@ func MutateRPCArgs(args *[]interface{}, c fuzz.Continue) {
 			}
 		case reflect.Bool:
 			(*args)[i] = c.RandBool()
+		case reflect.Float32:
+			(*args)[i] = c.Float32()
+		case reflect.Float64:
+			(*args)[i] = c.Float64()
+		case reflect.Ptr:
+			c.Fuzz(d)
+			(*args)[i] = d
 		default:
-			if reflect.TypeOf(d).Kind() == reflect.Ptr {
-				c.Fuzz(d)
-				(*args)[i] = d
-			} else {
-				(*args)[i] = c.RandString()
-			}
+			(*args)[i] = c.RandString()
 		}
 	}
 }
@@ -88,37 +83,30 @@ func RandomByte() byte {
 	return byte(rand.Intn(256))
 }
 
-func RandomHexByte() byte {
-	hex := []byte("0123456789abcdefABCDEF")
-	return byte(hex[rand.Intn(len(hex))])
-}
-
-func RandomBytes() ([]byte, error) {
-	length := rand.Intn(100) + 1 // for the time being, generates 1-100 characters
-	bytes := make([]byte, length)
+func RandomBytesSize(size int) []byte {
+	bytes := make([]byte, size)
 
 	_, err := rand.Read(bytes)
 	if err != nil {
-		return []byte{RandomByte()}, err
+		log.Error().Err(err).Msg("Failed to generate random bytes from default Source.")
+		return []byte{RandomByte()}
 	}
 
-	return bytes, nil
+	return bytes
 }
 
-func RandomHexBytes() ([]byte, error) {
-	length := rand.Intn(100) + 1 // for the time being, generates 1-100 characters
-	bytes := make([]byte, length)
-
-	_, err := rand.Read(bytes)
-	if err != nil {
-		return []byte{RandomHexByte()}, err
-	}
-	resBytes := []byte(hex.EncodeToString(bytes)[:length])
-
-	return resBytes, nil
+func RandomBytes() []byte {
+	length := rand.Intn(100) + 1 // for the time being, generates 1-100 bytes
+	return RandomBytesSize(length)
 }
 
-func RandomBytesOfCharactersOrHexBytes() ([]byte, error) {
+func RandomHexBytes() []byte {
+	length := rand.Intn(100) + 1 // for the time being, generates 1-100 bytes
+	bytes := RandomBytesSize(length)
+	return []byte(hex.EncodeToString(bytes))
+}
+
+func RandomBytesOfCharactersOrHexBytes() []byte {
 	if rand.Intn(2) == 0 {
 		return RandomBytes()
 	}
@@ -135,32 +123,24 @@ func RandomWhitespace() byte {
 }
 
 func AddRandomCharactersToStart(arg []byte) []byte {
-	bytes, err := RandomBytesOfCharactersOrHexBytes()
-	if err != nil {
-		return arg
-	}
+	bytes := RandomBytesOfCharactersOrHexBytes()
 	return append(bytes, arg...)
 }
 
 func AddRandomCharactersToMiddle(arg []byte) []byte {
 	n := len(arg)
+	bytes := RandomBytesOfCharactersOrHexBytes()
+
 	if n == 0 {
-		return arg
+		return bytes
 	}
 
-	bytes, err := RandomBytesOfCharactersOrHexBytes()
-	if err != nil {
-		return arg
-	}
 	randomMid := rand.Intn(len(arg))
 	return append(arg[:randomMid], append(bytes, arg[randomMid:]...)...)
 }
 
 func AddRandomCharactersToEnd(arg []byte) []byte {
-	bytes, err := RandomBytesOfCharactersOrHexBytes()
-	if err != nil {
-		return arg
-	}
+	bytes := RandomBytesOfCharactersOrHexBytes()
 	return append(arg, bytes...)
 }
 
@@ -207,11 +187,13 @@ func DuplicateBytes(arg []byte) []byte {
 
 func AddSpacesRandomly(arg []byte) []byte {
 	n := len(arg)
-	if n == 0 {
-		return arg
-	}
 
 	whitespaceByte := RandomWhitespace()
+
+	if n == 0 {
+		return []byte{whitespaceByte}
+	}
+
 	randomMid := rand.Intn(len(arg))
 	funcs := []func() []byte{
 		func() []byte { return append([]byte{whitespaceByte}, arg...) },
@@ -222,4 +204,9 @@ func AddSpacesRandomly(arg []byte) []byte {
 	}
 
 	return funcs[rand.Intn(len(funcs))]()
+}
+
+func ReplaceWithRandomCharacters(arg []byte) []byte {
+	n := len(arg)
+	return RandomBytesSize(n)
 }

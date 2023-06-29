@@ -158,8 +158,8 @@ var (
 	testResults   testreporter.TestResults
 	testResultsCh = make(chan testreporter.TestResult)
 
-	wg    sync.WaitGroup
-	mutex sync.Mutex
+	fuzzedTestsGroup sync.WaitGroup
+	testResultMutex  sync.Mutex
 )
 
 // setupTests will add all of the `RPCTests` to the `allTests` slice.
@@ -1677,31 +1677,18 @@ func GetCurrentChainID(ctx context.Context, rpcClient *rpc.Client) (*big.Int, er
 }
 
 func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPCTest) testreporter.TestResult {
-	n := 1
-	currTestResult := testreporter.TestResult{
-		Name:             currTest.GetName(),
-		Method:           currTest.GetMethod(),
-		Args:             make([][]interface{}, n),
-		Result:           make([]interface{}, n),
-		Errors:           make([]error, n),
-		NumberOfTestsRan: n,
-	}
+	currTestResult := testreporter.New(currTest.GetName(), currTest.GetMethod(), 1)
 	args := currTest.GetArgs()
 
-	idx := 0 // only one run happening
 	var result interface{}
 	err := rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
-	currTestResult.Args[idx] = args
-	currTestResult.Result[idx] = result
 
 	if err != nil && !currTest.ExpectError() {
-		currTestResult.NumberOfTestsFailed++
-		currTestResult.Errors[idx] = errors.New("Method test failed: " + err.Error())
+		currTestResult.Fail(args, result, errors.New("Method test failed: "+err.Error()))
 		return currTestResult
 	}
 	if err == nil && currTest.ExpectError() {
-		currTestResult.NumberOfTestsFailed++
-		currTestResult.Errors[idx] = errors.New("Expected an error but didn't get one: " + err.Error())
+		currTestResult.Fail(args, result, errors.New("Expected an error but didn't get one: "+err.Error()))
 		return currTestResult
 	}
 
@@ -1712,42 +1699,30 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPC
 	}
 
 	if err != nil {
-		currTestResult.NumberOfTestsFailed++
-		currTestResult.Errors[idx] = errors.New("Failed to validate: " + err.Error())
+		currTestResult.Fail(args, result, errors.New("Failed to validate: "+err.Error()))
 		return currTestResult
 	}
 
-	currTestResult.NumberOfTestsPassed++ // Successfully validated
+	currTestResult.Pass(args, result, err)
 
 	return currTestResult
 }
 
 func CallRPCWithFuzzAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPCTest) testreporter.TestResult {
-	n := *testFuzzNum
-	currTestResult := testreporter.TestResult{
-		Name:             "Fuzzed" + currTest.GetName(),
-		Method:           "fuzzed-" + currTest.GetMethod(),
-		Args:             make([][]interface{}, n),
-		Result:           make([]interface{}, n),
-		Errors:           make([]error, n),
-		NumberOfTestsRan: n,
-	}
+	currTestResult := testreporter.New("FUzzed"+currTest.GetName(), "fuzzed-"+currTest.GetMethod(), *testFuzzNum)
 
 	originalArgs := currTest.GetArgs()
 	for i := 0; i < *testFuzzNum; i++ {
 		args := originalArgs
 		fuzzer.Fuzz(&args)
-		currTestResult.Args[i] = args
 
 		var result interface{}
 		err := rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
-		currTestResult.Result[i] = result
 
 		if err != nil {
-			currTestResult.NumberOfTestsFailed++
-			currTestResult.Errors[i] = err
+			currTestResult.Fail(args, result, err)
 		} else {
-			currTestResult.NumberOfTestsPassed++
+			currTestResult.Pass(args, result, err)
 		}
 	}
 
@@ -1879,11 +1854,11 @@ Once this has been completed this will be the address of the contract:
 			testResults = append(testResults, currTestResult)
 
 			if *testFuzz {
-				wg.Add(1)
+				fuzzedTestsGroup.Add(1)
 
 				log.Info().Str("method", t.GetMethod()).Msg("Running with fuzzed args")
 				go func(t RPCTest) {
-					defer wg.Done()
+					defer fuzzedTestsGroup.Done()
 					currTestResult := CallRPCWithFuzzAndValidate(ctx, rpcClient, t)
 					testResultsCh <- currTestResult
 				}(t)
@@ -1892,13 +1867,13 @@ Once this has been completed this will be the address of the contract:
 
 		go func() {
 			for currTestResult := range testResultsCh {
-				mutex.Lock()
+				testResultMutex.Lock()
 				testResults = append(testResults, currTestResult)
-				mutex.Unlock()
+				testResultMutex.Unlock()
 			}
 		}()
 
-		wg.Wait()
+		fuzzedTestsGroup.Wait()
 		close(testResultsCh)
 
 		testResults.PrintSummary()
