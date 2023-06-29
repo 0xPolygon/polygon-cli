@@ -154,8 +154,6 @@ var LoadtestCmd = &cobra.Command{
 	Short: "A simple script for quickly running a load test",
 	Long:  `Loadtest gives us a simple way to run a generic load test against an eth/EVM style json RPC endpoint`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		log.Debug().Msg("Starting Loadtest")
-
 		err := runLoadTest(cmd.Context())
 		if err != nil {
 			return err
@@ -273,7 +271,7 @@ func init() {
 
 	// extended parameters
 	ltp.PrivateKey = LoadtestCmd.PersistentFlags().String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
-	ltp.ChainID = LoadtestCmd.PersistentFlags().Uint64("chain-id", 1256, "The chain id for the transactions that we're going to send")
+	ltp.ChainID = LoadtestCmd.PersistentFlags().Uint64("chain-id", 0, "The chain id for the transactions that we're going to send")
 	ltp.ToAddress = LoadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
 	ltp.ToRandom = LoadtestCmd.PersistentFlags().Bool("to-random", false, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
 	ltp.HexSendAmount = LoadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
@@ -380,6 +378,13 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return err
 	}
 
+	chainID, err := c.ChainID(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to fetch chain ID")
+		return err
+	}
+	log.Trace().Uint64("chainID", chainID.Uint64()).Msg("Detected Chain ID")
+
 	if *inputLoadTestParams.LegacyTransactionMode && *inputLoadTestParams.ForcePriorityGasPrice > 0 {
 		log.Error().Msg("Cannot set priority gas price in legacy mode")
 		return errors.New("cannot set priority gas price in legacy mode")
@@ -391,6 +396,9 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	inputLoadTestParams.CurrentNonce = &nonce
 	inputLoadTestParams.ECDSAPrivateKey = privateKey
 	inputLoadTestParams.FromETHAddress = &ethAddress
+	if *inputLoadTestParams.ChainID == 0 {
+		*inputLoadTestParams.ChainID = chainID.Uint64()
+	}
 	inputLoadTestParams.BaseFee = header.BaseFee
 
 	rand.Seed(*inputLoadTestParams.Seed)
@@ -456,7 +464,6 @@ func runLoadTest(ctx context.Context) error {
 		}
 
 	} else {
-		log.Info().Msg("Starting Load Test")
 		loopFunc = func() error {
 			err = initializeLoadTestParams(ctx, ec)
 			if err != nil {
