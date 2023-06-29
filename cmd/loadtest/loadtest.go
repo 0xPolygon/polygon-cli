@@ -250,11 +250,7 @@ type (
 		FromETHAddress   *ethcommon.Address
 		ToETHAddress     *ethcommon.Address
 		SendAmount       *big.Int
-<<<<<<< Updated upstream
-=======
 		BaseFee          *big.Int
-		ChainID          *big.Int
->>>>>>> Stashed changes
 
 		ToAvailAddress   *gstypes.MultiAddress
 		FromAvailAddress *gssignature.KeyringPair
@@ -378,21 +374,12 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return err
 	}
 
-<<<<<<< Updated upstream
-=======
-	chainID, err := c.ChainID(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to fetch chain ID")
-		return err
-	}
-
 	header, err := c.HeaderByNumber(ctx, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get header")
 		return err
 	}
 
->>>>>>> Stashed changes
 	if *inputLoadTestParams.LegacyTransactionMode && *inputLoadTestParams.ForcePriorityGasPrice > 0 {
 		log.Error().Msg("Cannot set priority gas price in legacy mode")
 		return errors.New("cannot set priority gas price in legacy mode")
@@ -404,11 +391,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	inputLoadTestParams.CurrentNonce = &nonce
 	inputLoadTestParams.ECDSAPrivateKey = privateKey
 	inputLoadTestParams.FromETHAddress = &ethAddress
-<<<<<<< Updated upstream
-=======
-	inputLoadTestParams.ChainID = chainID
 	inputLoadTestParams.BaseFee = header.BaseFee
->>>>>>> Stashed changes
 
 	rand.Seed(*inputLoadTestParams.Seed)
 
