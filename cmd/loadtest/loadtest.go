@@ -638,8 +638,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	tops.GasLimit = 10000000
 	tops = configureTransactOpts(tops)
+	tops.GasLimit = 10000000
 
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
