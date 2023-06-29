@@ -1562,6 +1562,11 @@ func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 			tops.GasTipCap = ltp.CurrentGasTipCap
 		}
 	} else {
+		if *ltp.ForceGasPrice > ltp.BaseFee.Uint64() {
+			tops.GasPrice = big.NewInt(0).SetUint64(ltp.BaseFee.Uint64())
+		} else {
+			tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
+		}
 		if ltp.ForcePriorityGasPrice != nil && *ltp.ForcePriorityGasPrice != 0 {
 			tops.GasTipCap = big.NewInt(0).SetUint64(*ltp.ForcePriorityGasPrice)
 		} else {
