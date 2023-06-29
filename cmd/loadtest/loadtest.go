@@ -330,8 +330,8 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	if !*inputLoadTestParams.LegacyTransactionMode {
 		gasTipCap, _err := c.SuggestGasTipCap(ctx)
 		if _err != nil {
-			log.Error().Err(err).Msg("Unable to retrieve gas tip cap")
-			return err
+			log.Error().Err(_err).Msg("Unable to retrieve gas tip cap")
+			return _err
 		}
 		log.Trace().Interface("gastipcap", gasTipCap).Msg("Retreived current gas tip cap")
 		inputLoadTestParams.CurrentGasTipCap = gasTipCap
