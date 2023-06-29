@@ -386,8 +386,11 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	log.Trace().Uint64("chainID", chainID.Uint64()).Msg("Detected Chain ID")
 
 	if *inputLoadTestParams.LegacyTransactionMode && *inputLoadTestParams.ForcePriorityGasPrice > 0 {
-		log.Error().Msg("Cannot set priority gas price in legacy mode")
-		return errors.New("cannot set priority gas price in legacy mode")
+		log.Warn().Msg("Cannot set priority gas price in legacy mode")
+	}
+	if *inputLoadTestParams.ForceGasPrice < *inputLoadTestParams.ForcePriorityGasPrice {
+		log.Error().Msg("Max priority fee per gas higher than max fee per gas")
+		return errors.New("max priority fee per gas higher than max fee per gas")
 	}
 
 	inputLoadTestParams.ToETHAddress = &toAddr
@@ -1552,6 +1555,11 @@ func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 			tops.GasPrice = ltp.CurrentGas
 		}
 	} else {
+		if *ltp.ForceGasPrice > ltp.BaseFee.Uint64() {
+			tops.GasPrice = big.NewInt(0).SetUint64(ltp.BaseFee.Uint64())
+		} else {
+			tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
+		}
 		if ltp.ForcePriorityGasPrice != nil && *ltp.ForcePriorityGasPrice != 0 {
 			tops.GasTipCap = big.NewInt(0).SetUint64(*ltp.ForcePriorityGasPrice)
 		} else {
