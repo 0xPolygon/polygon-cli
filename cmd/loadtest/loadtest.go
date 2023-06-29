@@ -385,6 +385,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		log.Error().Err(err).Msg("Unable to fetch chain ID")
 		return err
 	}
+	log.Trace().Uint64("chainID", chainID.Uint64()).Msg("Detected Chain ID")
 
 	if *inputLoadTestParams.LegacyTransactionMode && *inputLoadTestParams.ForcePriorityGasPrice > 0 {
 		log.Error().Msg("Cannot set priority gas price in legacy mode")
