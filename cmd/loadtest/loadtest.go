@@ -987,8 +987,6 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
-	gasPrice := ltp.CurrentGas
-
 	to := ltp.ToETHAddress
 	if *ltp.ToRandom {
 		to = getRandomAddress()
@@ -1008,7 +1006,7 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 
 	var tx *ethtypes.Transaction
 	if *ltp.LegacyTransactionMode {
-		tx = ethtypes.NewTransaction(nonce, *to, amount, tops.GasLimit, gasPrice, nil)
+		tx = ethtypes.NewTransaction(nonce, *to, amount, tops.GasLimit, tops.GasPrice, nil)
 	} else {
 		gasTipCap := tops.GasTipCap
 		gasFeeCap := new(big.Int).Add(gasTipCap, ltp.BaseFee)
@@ -1548,17 +1546,17 @@ func loadtestAvailStore(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64
 
 func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 	ltp := inputLoadTestParams
+	if ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
+		tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
+	} else {
+		tops.GasPrice = ltp.CurrentGas
+	}
 	if *ltp.LegacyTransactionMode {
+	} else {
 		if ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
 			tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
 		} else {
-			tops.GasPrice = ltp.CurrentGas
-		}
-	} else {
-		if *ltp.ForceGasPrice > ltp.BaseFee.Uint64() {
-			tops.GasPrice = big.NewInt(0).SetUint64(ltp.BaseFee.Uint64())
-		} else {
-			tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
+			tops.GasPrice = big.NewInt(0).Add(ltp.BaseFee, ltp.CurrentGasTipCap)
 		}
 		if ltp.ForcePriorityGasPrice != nil && *ltp.ForcePriorityGasPrice != 0 {
 			tops.GasTipCap = big.NewInt(0).SetUint64(*ltp.ForcePriorityGasPrice)
