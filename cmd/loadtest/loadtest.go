@@ -250,6 +250,11 @@ type (
 		FromETHAddress   *ethcommon.Address
 		ToETHAddress     *ethcommon.Address
 		SendAmount       *big.Int
+<<<<<<< Updated upstream
+=======
+		BaseFee          *big.Int
+		ChainID          *big.Int
+>>>>>>> Stashed changes
 
 		ToAvailAddress   *gstypes.MultiAddress
 		FromAvailAddress *gssignature.KeyringPair
@@ -373,6 +378,21 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return err
 	}
 
+<<<<<<< Updated upstream
+=======
+	chainID, err := c.ChainID(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to fetch chain ID")
+		return err
+	}
+
+	header, err := c.HeaderByNumber(ctx, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get header")
+		return err
+	}
+
+>>>>>>> Stashed changes
 	if *inputLoadTestParams.LegacyTransactionMode && *inputLoadTestParams.ForcePriorityGasPrice > 0 {
 		log.Error().Msg("Cannot set priority gas price in legacy mode")
 		return errors.New("cannot set priority gas price in legacy mode")
@@ -384,6 +404,11 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	inputLoadTestParams.CurrentNonce = &nonce
 	inputLoadTestParams.ECDSAPrivateKey = privateKey
 	inputLoadTestParams.FromETHAddress = &ethAddress
+<<<<<<< Updated upstream
+=======
+	inputLoadTestParams.ChainID = chainID
+	inputLoadTestParams.BaseFee = header.BaseFee
+>>>>>>> Stashed changes
 
 	rand.Seed(*inputLoadTestParams.Seed)
 
@@ -802,12 +827,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			var retryForNonce bool = false
 			var myNonceValue uint64
 
-			header, _err := c.HeaderByNumber(ctx, nil)
-			if _err != nil {
-				log.Error().Err(err).Msg("Unable to get head")
-				return
-			}
-
 			for j = 0; j < requests; j = j + 1 {
 				if rl != nil {
 					err = rl.Wait(ctx)
@@ -836,7 +855,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				switch localMode {
 				case loadTestModeTransaction:
-					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue, header)
+					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue)
 				case loadTestModeDeploy:
 					startReq, endReq, err = loadtestDeploy(ctx, c, myNonceValue)
 				case loadTestModeCall:
@@ -972,7 +991,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 	}
 }
 
-func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64, header *ethtypes.Header) (t1 time.Time, t2 time.Time, err error) {
+func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	gasPrice := ltp.CurrentGas
@@ -986,18 +1005,25 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
-	gasLimit := uint64(21000)
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+	tops.GasLimit = uint64(21000)
+	tops = configureTransactOpts(tops)
+
 	var tx *ethtypes.Transaction
 	if *ltp.LegacyTransactionMode {
-		tx = ethtypes.NewTransaction(nonce, *to, amount, gasLimit, gasPrice, nil)
+		tx = ethtypes.NewTransaction(nonce, *to, amount, tops.GasLimit, gasPrice, nil)
 	} else {
-		gasTipCap := ltp.CurrentGasTipCap
-		gasFeeCap := new(big.Int).Add(gasTipCap, header.BaseFee)
+		gasTipCap := tops.GasTipCap
+		gasFeeCap := new(big.Int).Add(gasTipCap, ltp.BaseFee)
 		dynamicFeeTx := &ethtypes.DynamicFeeTx{
 			ChainID:   chainID,
 			Nonce:     nonce,
 			To:        to,
-			Gas:       gasLimit,
+			Gas:       tops.GasLimit,
 			GasFeeCap: gasFeeCap,
 			GasTipCap: gasTipCap,
 			Data:      nil,
@@ -1005,13 +1031,6 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 		}
 		tx = ethtypes.NewTx(dynamicFeeTx)
 	}
-
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable create transaction signer")
-		return
-	}
-	tops = configureTransactOpts(tops)
 
 	stx, err := tops.Signer(*ltp.FromETHAddress, tx)
 	if err != nil {
@@ -1541,6 +1560,12 @@ func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 			tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
 		} else {
 			tops.GasPrice = ltp.CurrentGas
+		}
+	} else {
+		if ltp.ForcePriorityGasPrice != nil && *ltp.ForcePriorityGasPrice != 0 {
+			tops.GasTipCap = big.NewInt(0).SetUint64(*ltp.ForcePriorityGasPrice)
+		} else {
+			tops.GasTipCap = ltp.CurrentGasTipCap
 		}
 	}
 	if ltp.ForceGasLimit != nil && *ltp.ForceGasLimit != 0 {
