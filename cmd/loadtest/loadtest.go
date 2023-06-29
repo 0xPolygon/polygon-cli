@@ -327,12 +327,15 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 	log.Trace().Interface("gasprice", gas).Msg("Retreived current gas price")
 
-	gasTipCap, err := c.SuggestGasTipCap(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to retrieve gas tip cap")
-		return err
+	if !*inputLoadTestParams.LegacyTransactionMode {
+		gasTipCap, err := c.SuggestGasTipCap(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to retrieve gas tip cap")
+			return err
+		}
+		log.Trace().Interface("gastipcap", gasTipCap).Msg("Retreived current gas tip cap")
+		inputLoadTestParams.CurrentGasTipCap = gasTipCap
 	}
-	log.Trace().Interface("gastipcap", gasTipCap).Msg("Retreived current gas tip cap")
 
 	privateKey, err := ethcrypto.HexToECDSA(*inputLoadTestParams.PrivateKey)
 	if err != nil {
@@ -381,7 +384,6 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	inputLoadTestParams.CurrentNonce = &nonce
 	inputLoadTestParams.ECDSAPrivateKey = privateKey
 	inputLoadTestParams.FromETHAddress = &ethAddress
-	inputLoadTestParams.CurrentGasTipCap = gasTipCap
 
 	rand.Seed(*inputLoadTestParams.Seed)
 
