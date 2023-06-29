@@ -328,8 +328,8 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	log.Trace().Interface("gasprice", gas).Msg("Retreived current gas price")
 
 	if !*inputLoadTestParams.LegacyTransactionMode {
-		gasTipCap, err := c.SuggestGasTipCap(ctx)
-		if err != nil {
+		gasTipCap, _err := c.SuggestGasTipCap(ctx)
+		if _err != nil {
 			log.Error().Err(err).Msg("Unable to retrieve gas tip cap")
 			return err
 		}
