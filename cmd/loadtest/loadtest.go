@@ -229,6 +229,7 @@ type (
 		ByteCount                           *uint64
 		Seed                                *int64
 		IsAvail                             *bool
+		RPCLoadTest                         *bool
 		LtAddress                           *string
 		DelAddress                          *string
 		ContractCallNumberOfBlocksToWaitFor *uint64
@@ -255,6 +256,16 @@ type (
 	txpoolStatus struct {
 		Pending any `json:"pending"`
 		Queued  any `json:"queued"`
+	}
+	
+	RPCRequest struct {
+		To   string `json:"to"`
+		Data string `json:"data"`
+	}
+
+	RPCResponse struct {
+		ID     int         `json:"id"`
+		Result interface{} `json:"result"`
 	}
 )
 
@@ -295,6 +306,7 @@ r - random modes
 	ltp.ByteCount = LoadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
 	ltp.IsAvail = LoadtestCmd.PersistentFlags().Bool("data-avail", false, "Is this a test of avail rather than an EVM / Geth Chain")
+	ltp.RPCLoadTest = LoadtestCmd.PersistentFlags().Bool("rpc-load-test", false, "Perform an RPC style load test (no tx submission) on a specified node")
 	ltp.LtAddress = LoadtestCmd.PersistentFlags().String("lt-address", "", "A pre-deployed load test contract address")
 	ltp.DelAddress = LoadtestCmd.PersistentFlags().String("del-address", "", "A pre-deployed delegator contract address")
 	ltp.ContractCallNumberOfBlocksToWaitFor = LoadtestCmd.PersistentFlags().Uint64("contract-call-nb-blocks-to-wait-for", 30, "The number of blocks to wait for before giving up on a contract call")
@@ -426,6 +438,8 @@ func runLoadTest(ctx context.Context) error {
 			return availLoop(ctx, api)
 		}
 
+	} else if *inputLoadTestParams.RPCLoadTest {
+		return rpcLoadTestLoop(ctx, rpc)
 	} else {
 		log.Info().Msg("Starting Load Test")
 		loopFunc = func() error {
@@ -472,6 +486,64 @@ func runLoadTest(ctx context.Context) error {
 		log.Info().Uint("pending", ptc).Msg("There are still oustanding transactions. There might be issues restarting with the same sending key until those transactions clear")
 	}
 	log.Info().Msg("Finished")
+	return nil
+}
+
+func rpcLoadTestLoop(ctx context.Context, rpc *ethrpc.Client) error {
+	ltp := inputLoadTestParams
+	log.Trace().Interface("Input Params", ltp).Msg("Params")
+	requestCount := int(*ltp.Requests)
+	
+	// Create wg that waits for all reqs to finish
+	var wg sync.WaitGroup
+	wg.Add(requestCount)
+
+	// Create channel that collects all responses
+	responseChan := make(chan RPCResponse)
+
+	// Start goroutine that collects responses from channel
+	go func() {
+		for response := range responseChan {
+			// Handle the response
+			fmt.Println("Received response:", response.Result)
+			wg.Done()
+		}
+	}()
+
+	startTime := time.Now()
+	// Send multiple concurrent requests
+	for i := 0; i < requestCount; i++ {
+		go func() {
+			// Create RPC payload
+			payload := RPCRequest{
+				To: "0xeb34a95f699323d211db407d2eb520550a62ef04",
+				Data: "0x0fb5a6b4",
+			}
+
+			// Send RPC request
+			var result interface{}
+			err := rpc.Call(&result, "eth_call", payload, "latest")
+			if err != nil {
+				fmt.Println("Request error:", err)
+				wg.Done()
+				return
+			}
+
+			// Send the response to the channel
+			responseChan <- RPCResponse{
+				ID:     i,
+				Result: result,
+			}
+		}()
+	}
+
+	// Wait for all requests to finish
+	wg.Wait()
+	close(responseChan)
+
+	elapsedTime := time.Since(startTime)
+	fmt.Printf("Completed %d requests in %s\n", requestCount, elapsedTime)
+	fmt.Printf("Requests per second: %.2f\n", float64(requestCount)/elapsedTime.Seconds())
 	return nil
 }
 
