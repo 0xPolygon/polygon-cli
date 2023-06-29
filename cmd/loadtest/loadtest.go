@@ -327,10 +327,10 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	log.Trace().Interface("gasprice", gas).Msg("Retreived current gas price")
 
 	if !*inputLoadTestParams.LegacyTransactionMode {
-		gasTipCap, err := c.SuggestGasTipCap(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to retrieve gas tip cap")
-			return err
+		gasTipCap, _err := c.SuggestGasTipCap(ctx)
+		if _err != nil {
+			log.Error().Err(_err).Msg("Unable to retrieve gas tip cap")
+			return _err
 		}
 		log.Trace().Interface("gastipcap", gasTipCap).Msg("Retreived current gas tip cap")
 		inputLoadTestParams.CurrentGasTipCap = gasTipCap
@@ -626,8 +626,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	tops.GasLimit = 10000000
 	tops = configureTransactOpts(tops)
+	tops.GasLimit = 10000000
 
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
