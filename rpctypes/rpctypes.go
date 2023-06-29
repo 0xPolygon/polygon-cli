@@ -227,6 +227,7 @@ type (
 		V() *big.Int
 		R() *big.Int
 		S() *big.Int
+		Type() uint64
 	}
 	PolyTransactions []PolyTransaction
 	PolyBlock        interface {
