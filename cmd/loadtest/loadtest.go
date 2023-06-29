@@ -214,6 +214,7 @@ type (
 		TimeLimit                           *int64
 		ToRandom                            *bool
 		URL                                 *url.URL
+		ChainID                             *uint64
 		PrivateKey                          *string
 		ToAddress                           *string
 		HexSendAmount                       *string
@@ -249,7 +250,7 @@ type (
 		FromETHAddress   *ethcommon.Address
 		ToETHAddress     *ethcommon.Address
 		SendAmount       *big.Int
-		ChainID          *big.Int
+		BaseFee          *big.Int
 
 		ToAvailAddress   *gstypes.MultiAddress
 		FromAvailAddress *gssignature.KeyringPair
@@ -272,6 +273,7 @@ func init() {
 
 	// extended parameters
 	ltp.PrivateKey = LoadtestCmd.PersistentFlags().String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
+	ltp.ChainID = LoadtestCmd.PersistentFlags().Uint64("chain-id", 0, "The chain id for the transactions that we're going to send")
 	ltp.ToAddress = LoadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
 	ltp.ToRandom = LoadtestCmd.PersistentFlags().Bool("to-random", false, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
 	ltp.HexSendAmount = LoadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
@@ -372,6 +374,12 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return err
 	}
 
+	header, err := c.HeaderByNumber(ctx, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get header")
+		return err
+	}
+
 	chainID, err := c.ChainID(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to fetch chain ID")
@@ -389,7 +397,10 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	inputLoadTestParams.CurrentNonce = &nonce
 	inputLoadTestParams.ECDSAPrivateKey = privateKey
 	inputLoadTestParams.FromETHAddress = &ethAddress
-	inputLoadTestParams.ChainID = chainID
+	if inputLoadTestParams.ChainID == nil {
+		*inputLoadTestParams.ChainID = chainID.Uint64()
+	}
+	inputLoadTestParams.BaseFee = header.BaseFee
 
 	rand.Seed(*inputLoadTestParams.Seed)
 
@@ -609,7 +620,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	routines := *ltp.Concurrency
 	requests := *ltp.Requests
 	currentNonce := *ltp.CurrentNonce
-	chainID := ltp.ChainID
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 	mode := *ltp.Mode
 	steadyStateTxPoolSize := *ltp.SteadyStateTxPoolSize
@@ -808,12 +819,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			var retryForNonce bool = false
 			var myNonceValue uint64
 
-			header, _err := c.HeaderByNumber(ctx, nil)
-			if _err != nil {
-				log.Error().Err(err).Msg("Unable to get head")
-				return
-			}
-
 			for j = 0; j < requests; j = j + 1 {
 				if rl != nil {
 					err = rl.Wait(ctx)
@@ -842,7 +847,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				switch localMode {
 				case loadTestModeTransaction:
-					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue, header)
+					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue)
 				case loadTestModeDeploy:
 					startReq, endReq, err = loadtestDeploy(ctx, c, myNonceValue)
 				case loadTestModeCall:
@@ -978,7 +983,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 	}
 }
 
-func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64, header *ethtypes.Header) (t1 time.Time, t2 time.Time, err error) {
+func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	gasPrice := ltp.CurrentGas
@@ -989,21 +994,28 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 	}
 
 	amount := ltp.SendAmount
-	chainID := ltp.ChainID
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
-	gasLimit := uint64(21000)
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+	tops.GasLimit = uint64(21000)
+	tops = configureTransactOpts(tops)
+
 	var tx *ethtypes.Transaction
 	if *ltp.LegacyTransactionMode {
-		tx = ethtypes.NewTransaction(nonce, *to, amount, gasLimit, gasPrice, nil)
+		tx = ethtypes.NewTransaction(nonce, *to, amount, tops.GasLimit, gasPrice, nil)
 	} else {
-		gasTipCap := ltp.CurrentGasTipCap
-		gasFeeCap := new(big.Int).Add(gasTipCap, header.BaseFee)
+		gasTipCap := tops.GasTipCap
+		gasFeeCap := new(big.Int).Add(gasTipCap, ltp.BaseFee)
 		dynamicFeeTx := &ethtypes.DynamicFeeTx{
 			ChainID:   chainID,
 			Nonce:     nonce,
 			To:        to,
-			Gas:       gasLimit,
+			Gas:       tops.GasLimit,
 			GasFeeCap: gasFeeCap,
 			GasTipCap: gasTipCap,
 			Data:      nil,
@@ -1011,13 +1023,6 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 		}
 		tx = ethtypes.NewTx(dynamicFeeTx)
 	}
-
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable create transaction signer")
-		return
-	}
-	tops = configureTransactOpts(tops)
 
 	stx, err := tops.Signer(*ltp.FromETHAddress, tx)
 	if err != nil {
@@ -1034,7 +1039,7 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64,
 func loadtestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
-	chainID := ltp.ChainID
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
@@ -1054,7 +1059,7 @@ func loadtestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 
 func loadtestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
-	chainID := ltp.ChainID
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 	iterations := ltp.Iterations
 	f := ltp.Function
@@ -1076,7 +1081,7 @@ func loadtestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, lt
 func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
-	chainID := ltp.ChainID
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 	iterations := ltp.Iterations
 	f := contracts.GetRandomOPCode()
@@ -1099,7 +1104,7 @@ func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, 
 	var f int
 	ltp := inputLoadTestParams
 
-	chainID := ltp.ChainID
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 	iterations := ltp.Iterations
 	if useSelectedAddress {
@@ -1125,7 +1130,7 @@ func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, 
 func loadtestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
-	chainID := ltp.ChainID
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
@@ -1145,7 +1150,7 @@ func loadtestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContr
 func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
-	chainID := ltp.ChainID
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
@@ -1167,7 +1172,7 @@ func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delegatorContract *contracts.Delegator, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
-	chainID := ltp.ChainID
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
@@ -1197,7 +1202,7 @@ func loadtestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 	}
 	amount := ltp.SendAmount
 
-	chainID := ltp.ChainID
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
@@ -1223,7 +1228,7 @@ func loadtestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 		to = getRandomAddress()
 	}
 
-	chainID := ltp.ChainID
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
@@ -1291,7 +1296,7 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 	routines := *ltp.Concurrency
 	requests := *ltp.Requests
 	currentNonce := uint64(0) // *ltp.CurrentNonce
-	chainID := ltp.ChainID
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 	mode := *ltp.Mode
 
@@ -1423,11 +1428,7 @@ func initAvailTestParams(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 		*inputLoadTestParams.PrivateKey = codeQualitySeed
 	}
 
-	if inputLoadTestParams.ChainID.BitLen() > 8 {
-		log.Error().Err(err).Msg("Chain ID is too large for uint8")
-		return errors.New("chain ID is too large for uint8")
-	}
-	kp, err := gssignature.KeyringPairFromSecret(*inputLoadTestParams.PrivateKey, uint8(inputLoadTestParams.ChainID.Uint64()))
+	kp, err := gssignature.KeyringPairFromSecret(*inputLoadTestParams.PrivateKey, uint8(*inputLoadTestParams.ChainID))
 	if err != nil {
 		log.Error().Err(err).Msg("Could not create key pair")
 		return err
@@ -1551,6 +1552,12 @@ func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 			tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
 		} else {
 			tops.GasPrice = ltp.CurrentGas
+		}
+	} else {
+		if ltp.ForcePriorityGasPrice != nil && *ltp.ForcePriorityGasPrice != 0 {
+			tops.GasTipCap = big.NewInt(0).SetUint64(*ltp.ForcePriorityGasPrice)
+		} else {
+			tops.GasTipCap = ltp.CurrentGasTipCap
 		}
 	}
 	if ltp.ForceGasLimit != nil && *ltp.ForceGasLimit != 0 {
