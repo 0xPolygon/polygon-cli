@@ -1551,8 +1551,7 @@ func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 	} else {
 		tops.GasPrice = ltp.CurrentGas
 	}
-	if *ltp.LegacyTransactionMode {
-	} else {
+	if !*ltp.LegacyTransactionMode {
 		if ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
 			tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
 		} else {
