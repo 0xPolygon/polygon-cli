@@ -215,10 +215,12 @@ type (
 		Nonce() uint64
 		String() string
 		MarshalJSON() ([]byte, error)
+		Type() uint64
+		MaxPriorityFeePerGas() uint64
+		MaxFeePerGas() uint64
 		V() *big.Int
 		R() *big.Int
 		S() *big.Int
-		Type() uint64
 	}
 	PolyTransactions []PolyTransaction
 	PolyBlock        interface {
@@ -341,6 +343,12 @@ func (i *implPolyTransaction) GasPrice() *big.Int {
 	return i.inner.GasPrice.ToBigInt()
 }
 func (i *implPolyTransaction) Gas() uint64 {
+	return i.inner.Gas.ToUint64()
+}
+func (i *implPolyTransaction) MaxPriorityFeePerGas() uint64 {
+	return i.inner.Gas.ToUint64()
+}
+func (i *implPolyTransaction) MaxFeePerGas() uint64 {
 	return i.inner.Gas.ToUint64()
 }
 func (i *implPolyTransaction) Nonce() uint64 {
