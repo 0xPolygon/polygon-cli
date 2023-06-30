@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -153,8 +154,6 @@ var LoadtestCmd = &cobra.Command{
 	Short: "A simple script for quickly running a load test",
 	Long:  `Loadtest gives us a simple way to run a generic load test against an eth/EVM style json RPC endpoint`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		log.Debug().Msg("Starting Loadtest")
-
 		err := runLoadTest(cmd.Context())
 		if err != nil {
 			return err
@@ -236,16 +235,20 @@ type (
 		ForceContractDeploy                 *bool
 		ForceGasLimit                       *uint64
 		ForceGasPrice                       *uint64
+		ForcePriorityGasPrice               *uint64
 		ShouldProduceSummary                *bool
 		SummaryOutputMode                   *string
+		LegacyTransactionMode               *bool
 
 		// Computed
-		CurrentGas      *big.Int
-		CurrentNonce    *uint64
-		ECDSAPrivateKey *ecdsa.PrivateKey
-		FromETHAddress  *ethcommon.Address
-		ToETHAddress    *ethcommon.Address
-		SendAmount      *big.Int
+		CurrentGas       *big.Int
+		CurrentGasTipCap *big.Int
+		CurrentNonce     *uint64
+		ECDSAPrivateKey  *ecdsa.PrivateKey
+		FromETHAddress   *ethcommon.Address
+		ToETHAddress     *ethcommon.Address
+		SendAmount       *big.Int
+		BaseFee          *big.Int
 
 		ToAvailAddress   *gstypes.MultiAddress
 		FromAvailAddress *gssignature.KeyringPair
@@ -268,7 +271,7 @@ func init() {
 
 	// extended parameters
 	ltp.PrivateKey = LoadtestCmd.PersistentFlags().String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
-	ltp.ChainID = LoadtestCmd.PersistentFlags().Uint64("chain-id", 1256, "The chain id for the transactions that we're going to send")
+	ltp.ChainID = LoadtestCmd.PersistentFlags().Uint64("chain-id", 0, "The chain id for the transactions that we're going to send")
 	ltp.ToAddress = LoadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
 	ltp.ToRandom = LoadtestCmd.PersistentFlags().Bool("to-random", false, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
 	ltp.HexSendAmount = LoadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
@@ -302,9 +305,11 @@ r - random modes
 	ltp.ForceContractDeploy = LoadtestCmd.PersistentFlags().Bool("force-contract-deploy", false, "Some loadtest modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --del-address and --il-address flags.")
 	ltp.ForceGasLimit = LoadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually")
 	ltp.ForceGasPrice = LoadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be estimated, we can specify it manually")
+	ltp.ForcePriorityGasPrice = LoadtestCmd.PersistentFlags().Uint64("priority-gas-price", 0, "Specify Gas Tip Price in the case of EIP-1559")
 	ltp.ShouldProduceSummary = LoadtestCmd.PersistentFlags().Bool("summarize", false, "Should we produce an execution summary after the load test has finished. If you're running a large loadtest, this can take a long time")
 	ltp.BatchSize = LoadtestCmd.PersistentFlags().Uint64("batch-size", 999, "Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time.")
 	ltp.SummaryOutputMode = LoadtestCmd.PersistentFlags().String("output-mode", "text", "Format mode for summary output (json | text)")
+	ltp.LegacyTransactionMode = LoadtestCmd.PersistentFlags().Bool("legacy", false, "Send a legacy transaction instead of an EIP1559 transaction.")
 	inputLoadTestParams = *ltp
 
 	// TODO batch size
@@ -320,6 +325,16 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return err
 	}
 	log.Trace().Interface("gasprice", gas).Msg("Retreived current gas price")
+
+	if !*inputLoadTestParams.LegacyTransactionMode {
+		gasTipCap, _err := c.SuggestGasTipCap(ctx)
+		if _err != nil {
+			log.Error().Err(_err).Msg("Unable to retrieve gas tip cap")
+			return _err
+		}
+		log.Trace().Interface("gastipcap", gasTipCap).Msg("Retreived current gas tip cap")
+		inputLoadTestParams.CurrentGasTipCap = gasTipCap
+	}
 
 	privateKey, err := ethcrypto.HexToECDSA(*inputLoadTestParams.PrivateKey)
 	if err != nil {
@@ -357,12 +372,37 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return err
 	}
 
+	header, err := c.HeaderByNumber(ctx, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get header")
+		return err
+	}
+
+	chainID, err := c.ChainID(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to fetch chain ID")
+		return err
+	}
+	log.Trace().Uint64("chainID", chainID.Uint64()).Msg("Detected Chain ID")
+
+	if *inputLoadTestParams.LegacyTransactionMode && *inputLoadTestParams.ForcePriorityGasPrice > 0 {
+		log.Warn().Msg("Cannot set priority gas price in legacy mode")
+	}
+	if *inputLoadTestParams.ForceGasPrice < *inputLoadTestParams.ForcePriorityGasPrice {
+		log.Error().Msg("Max priority fee per gas higher than max fee per gas")
+		return errors.New("max priority fee per gas higher than max fee per gas")
+	}
+
 	inputLoadTestParams.ToETHAddress = &toAddr
 	inputLoadTestParams.SendAmount = amt
 	inputLoadTestParams.CurrentGas = gas
 	inputLoadTestParams.CurrentNonce = &nonce
 	inputLoadTestParams.ECDSAPrivateKey = privateKey
 	inputLoadTestParams.FromETHAddress = &ethAddress
+	if *inputLoadTestParams.ChainID == 0 {
+		*inputLoadTestParams.ChainID = chainID.Uint64()
+	}
+	inputLoadTestParams.BaseFee = header.BaseFee
 
 	rand.Seed(*inputLoadTestParams.Seed)
 
@@ -427,7 +467,6 @@ func runLoadTest(ctx context.Context) error {
 		}
 
 	} else {
-		log.Info().Msg("Starting Load Test")
 		loopFunc = func() error {
 			err = initializeLoadTestParams(ctx, ec)
 			if err != nil {
@@ -667,8 +706,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 
 		tops.Nonce = new(big.Int).SetUint64(currentNonce)
-		tops = configureTransactOpts(tops)
-		tops.GasLimit = 10000000
 
 		_, err = erc20Contract.Mint(tops, metrics.UnitMegaether)
 		if err != nil {
@@ -720,8 +757,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 
 		tops.Nonce = new(big.Int).SetUint64(currentNonce)
-		tops = configureTransactOpts(tops)
-		tops.GasLimit = 10000000
 
 		err = blockUntilSuccessful(ctx, c, func() error {
 			_, err = erc721Contract.MintBatch(tops, *ltp.FromETHAddress, new(big.Int).SetUint64(1))
@@ -952,8 +987,6 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
-	gasPrice := ltp.CurrentGas
-
 	to := ltp.ToETHAddress
 	if *ltp.ToRandom {
 		to = getRandomAddress()
@@ -963,9 +996,34 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
-	gasLimit := uint64(21000)
-	tx := ethtypes.NewTransaction(nonce, *to, amount, gasLimit, gasPrice, nil)
-	stx, err := ethtypes.SignTx(tx, ethtypes.NewEIP155Signer(chainID), privateKey)
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+	tops.GasLimit = uint64(21000)
+	tops = configureTransactOpts(tops)
+
+	var tx *ethtypes.Transaction
+	if *ltp.LegacyTransactionMode {
+		tx = ethtypes.NewTransaction(nonce, *to, amount, tops.GasLimit, tops.GasPrice, nil)
+	} else {
+		gasTipCap := tops.GasTipCap
+		gasFeeCap := new(big.Int).Add(gasTipCap, ltp.BaseFee)
+		dynamicFeeTx := &ethtypes.DynamicFeeTx{
+			ChainID:   chainID,
+			Nonce:     nonce,
+			To:        to,
+			Gas:       tops.GasLimit,
+			GasFeeCap: gasFeeCap,
+			GasTipCap: gasTipCap,
+			Data:      nil,
+			Value:     amount,
+		}
+		tx = ethtypes.NewTx(dynamicFeeTx)
+	}
+
+	stx, err := tops.Signer(*ltp.FromETHAddress, tx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
@@ -1490,6 +1548,20 @@ func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 	ltp := inputLoadTestParams
 	if ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
 		tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
+	} else {
+		tops.GasPrice = ltp.CurrentGas
+	}
+	if !*ltp.LegacyTransactionMode {
+		if ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
+			tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
+		} else {
+			tops.GasPrice = big.NewInt(0).Add(ltp.BaseFee, ltp.CurrentGasTipCap)
+		}
+		if ltp.ForcePriorityGasPrice != nil && *ltp.ForcePriorityGasPrice != 0 {
+			tops.GasTipCap = big.NewInt(0).SetUint64(*ltp.ForcePriorityGasPrice)
+		} else {
+			tops.GasTipCap = ltp.CurrentGasTipCap
+		}
 	}
 	if ltp.ForceGasLimit != nil && *ltp.ForceGasLimit != 0 {
 		tops.GasLimit = *ltp.ForceGasLimit

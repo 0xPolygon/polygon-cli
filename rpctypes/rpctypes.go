@@ -38,6 +38,12 @@ type (
 		// gasPrice: QUANTITY - gas price provided by the sender in Wei.
 		GasPrice RawQuantityResponse `json:"gasPrice"`
 
+		// gas: QUANTITY - gas provided by the sender.
+		MaxPriorityFeePerGas RawQuantityResponse `json:"maxPriorityFeePerGas"`
+
+		// gas: QUANTITY - gas provided by the sender.
+		MaxFeePerGas RawQuantityResponse `json:"maxFeePerGas"`
+
 		// hash: DATA, 32 Bytes - hash of the transaction.
 		Hash RawData32Response `json:"hash"`
 
@@ -215,6 +221,9 @@ type (
 		Nonce() uint64
 		String() string
 		MarshalJSON() ([]byte, error)
+		Type() uint64
+		MaxPriorityFeePerGas() uint64
+		MaxFeePerGas() uint64
 		V() *big.Int
 		R() *big.Int
 		S() *big.Int
@@ -342,8 +351,17 @@ func (i *implPolyTransaction) GasPrice() *big.Int {
 func (i *implPolyTransaction) Gas() uint64 {
 	return i.inner.Gas.ToUint64()
 }
+func (i *implPolyTransaction) MaxPriorityFeePerGas() uint64 {
+	return i.inner.MaxPriorityFeePerGas.ToUint64()
+}
+func (i *implPolyTransaction) MaxFeePerGas() uint64 {
+	return i.inner.MaxFeePerGas.ToUint64()
+}
 func (i *implPolyTransaction) Nonce() uint64 {
 	return i.inner.Nonce.ToUint64()
+}
+func (i *implPolyTransaction) Type() uint64 {
+	return i.inner.Type.ToUint64()
 }
 func (i *implPolyTransaction) Value() *big.Int {
 	return i.inner.Value.ToBigInt()
