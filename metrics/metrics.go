@@ -270,6 +270,7 @@ func GetSimpleTxFields(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) [
 	fields = append(fields, fmt.Sprintf("Nonce: %d", tx.Nonce()))
 	fields = append(fields, fmt.Sprintf("Type: %d", tx.Type()))
 	fields = append(fields, fmt.Sprintf("Data Len: %d", len(tx.Data())))
+	fields = append(fields, fmt.Sprintf("Data: %s", hex.EncodeToString(tx.Data())))
 
 	return fields
 }
