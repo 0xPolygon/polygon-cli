@@ -16,6 +16,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/sha1"
 	"encoding/json"
+	"errors"
 	"fmt"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -23,11 +24,15 @@ import (
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/google/gofuzz"
+	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz/argfuzz"
+	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz/testreporter"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/xeipuuv/gojsonschema"
 	"math/big"
+	"math/rand"
 	"regexp"
 	"strings"
 	"sync"
@@ -135,9 +140,13 @@ var (
 	testPrivateKey        *ecdsa.PrivateKey
 	testEthAddress        ethcommon.Address
 	testNamespaces        *string
+	testFuzz              *bool
+	testFuzzNum           *int
+	seed                  *int64
 	testAccountNonce      uint64
 	testAccountNonceMutex sync.Mutex
 	currentChainID        *big.Int
+	fuzzer                *fuzz.Fuzzer
 
 	enabledNamespaces []string
 
@@ -145,6 +154,12 @@ var (
 	// fuzzing.. E.g. loop over the various tests, and mutate the
 	// Args before sending
 	allTests = make([]RPCTest, 0)
+
+	testResults   testreporter.TestResults
+	testResultsCh = make(chan testreporter.TestResult)
+
+	fuzzedTestsGroup sync.WaitGroup
+	testResultMutex  sync.Mutex
 )
 
 // setupTests will add all of the `RPCTests` to the `allTests` slice.
@@ -596,10 +611,14 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 			ValidateBlockHash(),
 		),
 	})
+
 	allTests = append(allTests, &RPCTestGeneric{
-		Name:      "RPCTestEthGetBlockByHashZero",
-		Method:    "eth_getBlockByHash",
-		Args:      []interface{}{"0x0000000000000000000000000000000000000000000000000000000000000000", true},
+		Name:   "RPCTestEthGetBlockByHashZero",
+		Method: "eth_getBlockByHash",
+		Args: []interface{}{
+			"0x0000000000000000000000000000000000000000000000000000000000000000",
+			true,
+		},
 		Validator: ValidateExact(nil),
 	})
 
@@ -613,6 +632,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 			ValidateBlockHash(),
 		),
 	})
+
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:   "RPCTestEthBlockByNumberLatest",
 		Method: "eth_getBlockByNumber",
@@ -1656,6 +1676,59 @@ func GetCurrentChainID(ctx context.Context, rpcClient *rpc.Client) (*big.Int, er
 	return chainId, err
 }
 
+func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPCTest) testreporter.TestResult {
+	currTestResult := testreporter.New(currTest.GetName(), currTest.GetMethod(), 1)
+	args := currTest.GetArgs()
+
+	var result interface{}
+	err := rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
+
+	if err != nil && !currTest.ExpectError() {
+		currTestResult.Fail(args, result, errors.New("Method test failed: "+err.Error()))
+		return currTestResult
+	}
+	if err == nil && currTest.ExpectError() {
+		currTestResult.Fail(args, result, errors.New("Expected an error but didn't get one: "+err.Error()))
+		return currTestResult
+	}
+
+	if currTest.ExpectError() {
+		err = currTest.Validate(err)
+	} else {
+		err = currTest.Validate(result)
+	}
+
+	if err != nil {
+		currTestResult.Fail(args, result, errors.New("Failed to validate: "+err.Error()))
+		return currTestResult
+	}
+
+	currTestResult.Pass(args, result, err)
+
+	return currTestResult
+}
+
+func CallRPCWithFuzzAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPCTest) testreporter.TestResult {
+	currTestResult := testreporter.New("FUzzed"+currTest.GetName(), "fuzzed-"+currTest.GetMethod(), *testFuzzNum)
+
+	originalArgs := currTest.GetArgs()
+	for i := 0; i < *testFuzzNum; i++ {
+		args := originalArgs
+		fuzzer.Fuzz(&args)
+
+		var result interface{}
+		err := rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
+
+		if err != nil {
+			currTestResult.Fail(args, result, err)
+		} else {
+			currTestResult.Pass(args, result, err)
+		}
+	}
+
+	return currTestResult
+}
+
 func (r *RPCTestGeneric) GetMethod() string {
 	return r.Method
 }
@@ -1776,29 +1849,35 @@ Once this has been completed this will be the address of the contract:
 				continue
 			}
 			log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Running Test")
-			var result interface{}
-			err = rpcClient.CallContext(ctx, &result, t.GetMethod(), t.GetArgs()...)
-			if err != nil && !t.ExpectError() {
-				log.Error().Err(err).Str("method", t.GetMethod()).Msg("Method test failed")
-				continue
-			}
-			if err == nil && t.ExpectError() {
-				log.Error().Str("method", t.GetMethod()).Msg("Expected an error but didn't get one")
-				continue
-			}
 
-			if t.ExpectError() {
-				err = t.Validate(err)
-			} else {
-				err = t.Validate(result)
-			}
+			currTestResult := CallRPCAndValidate(ctx, rpcClient, t)
+			testResults = append(testResults, currTestResult)
 
-			if err != nil {
-				log.Error().Err(err).Str("method", t.GetMethod()).Msg("Failed to validate")
-				continue
+			if *testFuzz {
+				fuzzedTestsGroup.Add(1)
+
+				log.Info().Str("method", t.GetMethod()).Msg("Running with fuzzed args")
+				go func(t RPCTest) {
+					defer fuzzedTestsGroup.Done()
+					currTestResult := CallRPCWithFuzzAndValidate(ctx, rpcClient, t)
+					testResultsCh <- currTestResult
+				}(t)
 			}
-			log.Info().Str("method", t.GetMethod()).Msg("Successfully validated")
 		}
+
+		go func() {
+			for currTestResult := range testResultsCh {
+				testResultMutex.Lock()
+				testResults = append(testResults, currTestResult)
+				testResultMutex.Unlock()
+			}
+		}()
+
+		fuzzedTestsGroup.Wait()
+		close(testResultsCh)
+
+		testResults.PrintSummary()
+
 		return nil
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
@@ -1848,4 +1927,11 @@ func init() {
 	testPrivateHexKey = flagSet.String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
 	testContractAddress = flagSet.String("contract-address", "0x6fda56c57b0acadb96ed5624ac500c0429d59429", "The address of a contract that can be used for testing")
 	testNamespaces = flagSet.String("namespaces", "eth,web3,net,debug", "Comma separated list of rpc namespaces to test")
+	testFuzz = flagSet.Bool("fuzz", false, "Flag to indicate whether to fuzz input or not.")
+	testFuzzNum = flagSet.Int("fuzzn", 100, "Number of times to run the fuzzer per test.")
+	seed = flagSet.Int64("seed", 123456, "A seed for generating random values within the fuzzer")
+
+	rand.Seed(*seed)
+	fuzzer = fuzz.New()
+	fuzzer.Funcs(argfuzz.MutateRPCArgs)
 }
