@@ -17,6 +17,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package loadtest
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
@@ -55,6 +57,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
+	_ "embed"
 	"github.com/maticnetwork/polygon-cli/contracts"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -188,6 +191,9 @@ var LoadtestCmd = &cobra.Command{
 	},
 }
 
+//go:embed payloads.txt
+var payloadData []byte
+
 type (
 	blockSummary struct {
 		Block     *rpctypes.RawBlockResponse
@@ -257,14 +263,15 @@ type (
 		Pending any `json:"pending"`
 		Queued  any `json:"queued"`
 	}
-	
+
 	RPCRequest struct {
-		To   string `json:"to"`
-		Data string `json:"data"`
+		ID     interface{}   `json:"id"`
+		Method string        `json:"method"`
+		Params []interface{} `json:"params"`
 	}
 
 	RPCResponse struct {
-		ID     int         `json:"id"`
+		ID     interface{} `json:"id"`
 		Result interface{} `json:"result"`
 	}
 )
@@ -489,11 +496,35 @@ func runLoadTest(ctx context.Context) error {
 	return nil
 }
 
+func readPayloadsFromEmbeddedData(data []byte) ([]string, error) {
+	payloads := make([]string, 0)
+
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		payloads = append(payloads, scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return payloads, nil
+}
+
 func rpcLoadTestLoop(ctx context.Context, rpc *ethrpc.Client) error {
 	ltp := inputLoadTestParams
-	log.Trace().Interface("Input Params", ltp).Msg("Params")
 	requestCount := int(*ltp.Requests)
-	
+
+	// Add a timeout of 500 milliseconds to the existing context
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// Keep track of key stats
+	successfulRespCount := 0
+	invalidJSONCount := 0
+	archiveNodeRequiredCount := 0
+	miscErrorCount := 0
+
 	// Create wg that waits for all reqs to finish
 	var wg sync.WaitGroup
 	wg.Add(requestCount)
@@ -503,38 +534,59 @@ func rpcLoadTestLoop(ctx context.Context, rpc *ethrpc.Client) error {
 
 	// Start goroutine that collects responses from channel
 	go func() {
-		for response := range responseChan {
-			// Handle the response
-			fmt.Println("Received response:", response.Result)
+		for range responseChan {
+			successfulRespCount++
 			wg.Done()
 		}
 	}()
 
+	// Read the payloads from the file
+	payloads, err := readPayloadsFromEmbeddedData(payloadData)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Unable to read sample payloads file")
+	}
+
 	startTime := time.Now()
 	// Send multiple concurrent requests
 	for i := 0; i < requestCount; i++ {
-		go func() {
-			// Create RPC payload
-			payload := RPCRequest{
-				To: "0xeb34a95f699323d211db407d2eb520550a62ef04",
-				Data: "0x0fb5a6b4",
+		go func(index int) {
+			jsonPayload := payloads[index%len(payloads)]
+			sanitizedPayload := jsonPayload[strings.Index(jsonPayload, `{"`):]
+
+			// Define and replace the regular expression pattern
+			pattern := `{"blockHash":"[^"]+"}`
+			regex := regexp.MustCompile(pattern)
+			sanitizedPayload = regex.ReplaceAllString(sanitizedPayload, `"latest"`)
+
+			// Unmarshal the JSON payload into the RPCRequest struct
+			var rpcRequest RPCRequest
+			unmarshalErr := json.Unmarshal([]byte(sanitizedPayload), &rpcRequest)
+			if unmarshalErr != nil {
+				invalidJSONCount++
+				wg.Done()
+				return
 			}
 
 			// Send RPC request
 			var result interface{}
-			err := rpc.Call(&result, "eth_call", payload, "latest")
+			err := rpc.CallContext(ctxWithTimeout, &result, rpcRequest.Method, rpcRequest.Params...)
 			if err != nil {
-				fmt.Println("Request error:", err)
+				errMsg := err.Error()
+				if strings.Contains(errMsg, "missing trie node") {
+					archiveNodeRequiredCount++
+				} else {
+					miscErrorCount++
+				}
 				wg.Done()
 				return
 			}
 
 			// Send the response to the channel
 			responseChan <- RPCResponse{
-				ID:     i,
+				ID:     rpcRequest.ID,
 				Result: result,
 			}
-		}()
+		}(i)
 	}
 
 	// Wait for all requests to finish
@@ -544,6 +596,7 @@ func rpcLoadTestLoop(ctx context.Context, rpc *ethrpc.Client) error {
 	elapsedTime := time.Since(startTime)
 	fmt.Printf("Completed %d requests in %s\n", requestCount, elapsedTime)
 	fmt.Printf("Requests per second: %.2f\n", float64(requestCount)/elapsedTime.Seconds())
+	fmt.Printf("Successes: %d, Invalid Req: %d, Archive Node Required: %d, Misc Errors: %d", successfulRespCount, invalidJSONCount, archiveNodeRequiredCount, miscErrorCount)
 	return nil
 }
 
