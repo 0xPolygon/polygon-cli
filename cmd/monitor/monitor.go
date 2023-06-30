@@ -119,9 +119,9 @@ var MonitorCmd = &cobra.Command{
 			return fmt.Errorf("batch-size can't be equal to zero")
 		}
 
-		if windowSize <= 0 {
-			return fmt.Errorf("window-size must be greater than zero")
-		}
+		// if windowSize <= 0 {
+		// 	return fmt.Errorf("window-size must be greater than zero")
+		// }
 
 		// validate interval duration
 		if interval, err = time.ParseDuration(intervalStr); err != nil {
@@ -263,7 +263,7 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 
 func init() {
 	MonitorCmd.PersistentFlags().Uint64VarP(&batchSize, "batch-size", "b", 25, "Number of requests per batch")
-	MonitorCmd.PersistentFlags().IntVarP(&windowSize, "window-size", "w", 25, "Number of blocks visible in the window")
+	// MonitorCmd.PersistentFlags().IntVarP(&windowSize, "window-size", "w", 25, "Number of blocks visible in the window")
 	MonitorCmd.PersistentFlags().StringVarP(&intervalStr, "interval", "i", "5s", "Amount of time between batch block rpc calls")
 }
 
@@ -364,6 +364,8 @@ func renderMonitorUI(ms *monitorStatus) error {
 	)
 
 	termWidth, termHeight := ui.TerminalDimensions()
+	windowSize = termHeight/2 - 4
+	log.Info().Msg(fmt.Sprintln(windowSize))
 	grid.SetRect(0, 0, termWidth, termHeight)
 	blockGrid.SetRect(0, 0, termWidth, termHeight)
 
@@ -402,6 +404,9 @@ func renderMonitorUI(ms *monitorStatus) error {
 			sort.Sort(allBlocks)
 		}
 
+		_, termHeight := ui.TerminalDimensions()
+		// log.Info().Msg(fmt.Sprintln(termHeight/2 - 4))
+		windowSize = termHeight/2 - 4
 		start := len(allBlocks) - windowSize - windowOffset
 		if start < 0 {
 			start = 0
