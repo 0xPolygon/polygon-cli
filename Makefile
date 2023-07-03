@@ -1,15 +1,15 @@
 include scripts/clients.mk
 .DEFAULT_GOAL := help
 
-INSTALL_DIR:=~/go/bin
-BIN_NAME:=polycli
-BUILD_DIR:=./out
+INSTALL_DIR := ~/go/bin
+BIN_NAME := polycli
+BUILD_DIR := ./out
 
-GIT_SHA:=$(shell git rev-parse HEAD | cut -c 1-8)
-GIT_TAG:=$(shell git describe --tags)
-CUR_DATE:=$(shell date +%s)
+GIT_SHA := $(shell git rev-parse HEAD | cut -c 1-8)
+GIT_TAG := $(shell git describe --tags)
+CUR_DATE := $(shell date +%s)
 
-# strip debug and suppress warnings
+# Strip debug and supress warnings.
 LD_FLAGS=-s -w
 LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/cmd/version.Version=$(GIT_TAG)\"
 LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/cmd/version.Commit=$(GIT_SHA)\"
@@ -45,7 +45,7 @@ install: build ## Install the go binary.
 cross: $(BUILD_DIR) ## Cross-compile go binaries using CGO.
 	env CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -ldflags "$(STATIC_LD_FLAGS)" -tags netgo -o $(BUILD_DIR)/linux-arm64-$(BIN_NAME) main.go
 	env                          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags "$(STATIC_LD_FLAGS)" -tags netgo -o $(BUILD_DIR)/linux-amd64-$(BIN_NAME) main.go
-  # mac builds - this will be functional but will still have secp issues
+  # MAC builds - this will be functional but will still have secp issues.
 	env GOOS=darwin GOARCH=arm64 go build -ldflags "$(LD_FLAGS)" -tags netgo -o $(BUILD_DIR)/darwin-arm64-$(BIN_NAME) main.go
 	env GOOS=darwin GOARCH=amd64 go build -ldflags "$(LD_FLAGS)" -tags netgo -o $(BUILD_DIR)/darwin-amd64-$(BIN_NAME) main.go
 
@@ -62,30 +62,33 @@ clean: ## Clean the binary folder.
 
 ##@ Lint
 
+# Add missing and remove unused modules.
 .PHONY: tidy
-tidy: ## Add missing and remove unused modules.
+tidy:
 	go mod tidy
 
+# Run `go fmt` against code.
 .PHONY: fmt
-fmt: ## Run go fmt against code.
+fmt:
 	go fmt ./...
 
-# shadow reports shadowed variables
+# Run `go vet` and `shadow` (which reports shadowed variables) against code.
 # https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/shadow
-# go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@latest
+# `go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@latest`
 .PHONY: vet
-vet: ## Run go vet and shadow against code.
+vet:
 	go vet ./...
 	shadow ./...
 
-# golangci-lint runs gofmt, govet, staticcheck and other linters
+# Run `golangci-lint` against code.
+# `golangci-lint` runs `gofmt`, `govet`, `staticcheck` and other linters.
 # https://golangci-lint.run/usage/install/#local-installation
 .PHONY: golangci-lint
-golangci-lint: ## Run golangci-lint against code.
+golangci-lint:
 	golangci-lint run --fix --timeout 5m
 
 .PHONY: lint
-lint: tidy vet golangci-lint ## Run all the linter tools against code.
+lint: tidy vet golangci-lint ## Run linters.
 
 ##@ Test
 
