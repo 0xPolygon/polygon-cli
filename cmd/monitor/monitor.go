@@ -106,6 +106,61 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 
 }
 
+func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) (err error) {
+	var cs *chainState
+	cs, err = getChainState(ctx, ec)
+	if err != nil {
+		log.Error().Err(err).Msg("Encountered issue fetching network information")
+		time.Sleep(interval)
+		// continue
+		return
+	}
+
+	ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
+	ms.ChainID = cs.ChainID
+	ms.PeerCount = cs.PeerCount
+	ms.GasPrice = cs.GasPrice
+	batchSize := new(big.Int).SetUint64(batchSize - 1)
+	from := new(big.Int).Sub(ms.HeadBlock, batchSize)
+	// Prevent getBlockRange from fetching duplicate blocks.
+	if ms.MaxBlockRetrieved.Cmp(from) == 1 {
+		from.Add(ms.MaxBlockRetrieved, big.NewInt(1))
+	}
+
+	if from.Cmp(zero) < 0 {
+		from.SetInt64(0)
+	}
+
+	log.Debug().
+		Int64("from", from.Int64()).
+		Int64("to", ms.HeadBlock.Int64()).
+		Int64("max", ms.MaxBlockRetrieved.Int64()).
+		Msg("Fetching latest blocks")
+
+	err = ms.getBlockRange(ctx, from, ms.HeadBlock, rpc)
+	if err != nil {
+		log.Error().Err(err).Msg("There was an issue fetching the block range")
+	}
+
+	to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
+	if from = new(big.Int).Sub(to, batchSize); from.Cmp(zero) < 0 {
+		from.SetInt64(0)
+	}
+
+	log.Debug().
+		Int64("from", from.Int64()).
+		Int64("to", to.Int64()).
+		Int64("min", ms.MinBlockRetrieved.Int64()).
+		Msg("Fetching older blocks")
+
+	err = ms.getBlockRange(ctx, from, to, rpc)
+	if err != nil {
+		log.Error().Err(err).Msg("There was an issue fetching the block range")
+	}
+
+	return
+}
+
 // monitorCmd represents the monitor command
 var MonitorCmd = &cobra.Command{
 	Use:   "monitor url",
@@ -153,59 +208,11 @@ var MonitorCmd = &cobra.Command{
 		errChan := make(chan error)
 		go func() {
 			for {
-				var cs *chainState
-				cs, err = getChainState(ctx, ec)
-				if err != nil {
-					log.Error().Err(err).Msg("Encountered issue fetching network information")
-					time.Sleep(interval)
-					continue
-				}
-
-				ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
-				ms.ChainID = cs.ChainID
-				ms.PeerCount = cs.PeerCount
-				ms.GasPrice = cs.GasPrice
-				batchSize := new(big.Int).SetUint64(batchSize - 1)
-				from := new(big.Int).Sub(ms.HeadBlock, batchSize)
-				// Prevent getBlockRange from fetching duplicate blocks.
-				if ms.MaxBlockRetrieved.Cmp(from) == 1 {
-					from.Add(ms.MaxBlockRetrieved, big.NewInt(1))
-				}
-
-				if from.Cmp(zero) < 0 {
-					from.SetInt64(0)
-				}
-
-				log.Debug().
-					Int64("from", from.Int64()).
-					Int64("to", ms.HeadBlock.Int64()).
-					Int64("max", ms.MaxBlockRetrieved.Int64()).
-					Msg("Fetching latest blocks")
-
-				err = ms.getBlockRange(ctx, from, ms.HeadBlock, rpc)
-				if err != nil {
-					log.Error().Err(err).Msg("There was an issue fetching the block range")
-				}
-
-				to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
-				if from = new(big.Int).Sub(to, batchSize); from.Cmp(zero) < 0 {
-					from.SetInt64(0)
-				}
-
-				log.Debug().
-					Int64("from", from.Int64()).
-					Int64("to", to.Int64()).
-					Int64("min", ms.MinBlockRetrieved.Int64()).
-					Msg("Fetching older blocks")
-
-				err = ms.getBlockRange(ctx, from, to, rpc)
-				if err != nil {
-					log.Error().Err(err).Msg("There was an issue fetching the block range")
-				}
+				err = fetchBlocks(ctx, ec, ms, rpc)
 
 				if !isUiRendered {
 					go func() {
-						errChan <- renderMonitorUI(ms)
+						errChan <- renderMonitorUI(ctx, ec, ms, rpc)
 					}()
 					isUiRendered = true
 				}
@@ -219,7 +226,7 @@ var MonitorCmd = &cobra.Command{
 	},
 }
 
-func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c *ethrpc.Client) error {
+func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, rpc *ethrpc.Client) error {
 	blms := make([]ethrpc.BatchElem, 0)
 	for i := from; i.Cmp(to) != 1; i.Add(i, one) {
 		r := new(rpctypes.RawBlockResponse)
@@ -234,7 +241,7 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, c
 	b := backoff.NewExponentialBackOff()
 	b.MaxElapsedTime = 3 * time.Minute
 	retryable := func() error {
-		err := c.BatchCallContext(ctx, blms)
+		err := rpc.BatchCallContext(ctx, blms)
 		return err
 	}
 	err := backoff.Retry(retryable, b)
@@ -267,7 +274,7 @@ func init() {
 	MonitorCmd.PersistentFlags().StringVarP(&intervalStr, "interval", "i", "5s", "Amount of time between batch block rpc calls")
 }
 
-func renderMonitorUI(ms *monitorStatus) error {
+func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) error {
 	if err := ui.Init(); err != nil {
 		return err
 	}
@@ -365,7 +372,6 @@ func renderMonitorUI(ms *monitorStatus) error {
 
 	termWidth, termHeight := ui.TerminalDimensions()
 	windowSize = termHeight/2 - 4
-	log.Info().Msg(fmt.Sprintln(windowSize))
 	grid.SetRect(0, 0, termWidth, termHeight)
 	blockGrid.SetRect(0, 0, termWidth, termHeight)
 
@@ -404,9 +410,8 @@ func renderMonitorUI(ms *monitorStatus) error {
 			sort.Sort(allBlocks)
 		}
 
-		_, termHeight := ui.TerminalDimensions()
-		// log.Info().Msg(fmt.Sprintln(termHeight/2 - 4))
-		windowSize = termHeight/2 - 4
+		// _, termHeight := ui.TerminalDimensions()
+		// windowSize = termHeight/2 - 4
 		start := len(allBlocks) - windowSize - windowOffset
 		if start < 0 {
 			start = 0
@@ -472,6 +477,8 @@ func renderMonitorUI(ms *monitorStatus) error {
 				payload := e.Payload.(ui.Resize)
 				grid.SetRect(0, 0, payload.Width, payload.Height)
 				blockGrid.SetRect(0, 0, payload.Width, payload.Height)
+				_, termHeight := ui.TerminalDimensions()
+				windowSize = termHeight/2 - 4
 				ui.Clear()
 			case "<Up>", "<Down>":
 				if currentMode == monitorModeBlock {
@@ -545,10 +552,33 @@ func renderMonitorUI(ms *monitorStatus) error {
 					break
 				}
 
+				// log.Info().Msg(fmt.Sprintf("\n%d %d %d %d", windowOffset, len(renderedBlocks), len(allBlocks), windowSize))
+
+				// err := fetchBlocks(ctx, ec, ms, rpc)
+				// if err != nil {
+				// 	log.Info().Msg("HELLO")
+				// 	return err
+				// }
 				windowOffset += windowSize
 				if windowOffset > len(allBlocks)-windowSize {
-					windowOffset = len(allBlocks) - windowSize
-					blockTable.SelectedRow = windowSize
+					to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
+					var from *big.Int
+					if from = new(big.Int).Sub(to, big.NewInt(int64(windowSize))); from.Cmp(zero) < 0 {
+						from.SetInt64(0)
+					}
+
+					log.Debug().
+						Int64("from", from.Int64()).
+						Int64("to", to.Int64()).
+						Int64("min", ms.MinBlockRetrieved.Int64()).
+						Msg("Fetching older blocks")
+
+					err := ms.getBlockRange(ctx, from, to, rpc)
+					if err != nil {
+						log.Error().Err(err).Msg("There was an issue fetching the block range")
+					}
+					// windowOffset = len(allBlocks) - windowSize
+					// blockTable.SelectedRow = windowSize
 				}
 			case "<C-b>", "<PageUp>":
 				windowOffset -= windowSize
