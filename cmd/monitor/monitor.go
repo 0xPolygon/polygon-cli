@@ -515,6 +515,16 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					if currIdx > windowSize-1 && windowOffset < len(allBlocks)-windowSize {
 						windowOffset += 1
 						break
+					} else {
+						to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
+						var from *big.Int
+						if from = new(big.Int).Sub(to, big.NewInt(int64(windowSize))); from.Cmp(zero) < 0 {
+							from.SetInt64(0)
+						}
+						err := ms.getBlockRange(ctx, from, to, rpc)
+						if err != nil {
+							log.Error().Err(err).Msg("There was an issue fetching the block range")
+						}
 					}
 					currIdx += 1
 					setBlock = true
