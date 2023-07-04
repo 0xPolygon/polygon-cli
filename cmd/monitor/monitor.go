@@ -116,10 +116,10 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 		return
 	}
 
-	batchSize = 100
+	batchSize := 100
 	if isUiRendered {
 		_, termHeight := ui.TerminalDimensions()
-		batchSize = uint64(termHeight/2 - 4)
+		batchSize = termHeight/2 - 4
 	}
 
 	ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
@@ -178,11 +178,6 @@ var MonitorCmd = &cobra.Command{
 		_, err := url.Parse(args[0])
 		if err != nil {
 			return err
-		}
-
-		// validate batch-size flag
-		if batchSize == 0 {
-			return fmt.Errorf("batch-size can't be equal to zero")
 		}
 
 		// validate interval duration
@@ -276,7 +271,6 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 }
 
 func init() {
-	MonitorCmd.PersistentFlags().Uint64VarP(&batchSize, "batch-size", "b", 25, "Number of requests per batch")
 	MonitorCmd.PersistentFlags().StringVarP(&intervalStr, "interval", "i", "5s", "Amount of time between batch block rpc calls")
 }
 
