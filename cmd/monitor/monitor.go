@@ -568,6 +568,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				}
 				windowOffset += windowSize
 				if windowOffset > len(allBlocks)-windowSize {
+					windowOffset = len(allBlocks) - windowSize
 					to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
 					var from *big.Int
 					if from = new(big.Int).Sub(to, big.NewInt(int64(windowSize))); from.Cmp(zero) < 0 {
@@ -577,8 +578,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					if err != nil {
 						log.Error().Err(err).Msg("There was an issue fetching the block range")
 					}
-					// windowOffset = len(allBlocks) - windowSize
-					// blockTable.SelectedRow = windowSize
 				}
 			case "<C-b>", "<PageUp>":
 				windowOffset -= windowSize
