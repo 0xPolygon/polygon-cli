@@ -126,8 +126,7 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 	ms.ChainID = cs.ChainID
 	ms.PeerCount = cs.PeerCount
 	ms.GasPrice = cs.GasPrice
-	// batchSize := new(big.Int).SetUint64(batchSize - 1)
-	from := new(big.Int).Sub(ms.HeadBlock, big.NewInt(int64(batchSize)))
+	from := new(big.Int).Sub(ms.HeadBlock, big.NewInt(int64(batchSize-1)))
 	// Prevent getBlockRange from fetching duplicate blocks.
 	if ms.MaxBlockRetrieved.Cmp(from) == 1 {
 		from.Add(ms.MaxBlockRetrieved, big.NewInt(1))
@@ -149,7 +148,7 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 	}
 
 	to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
-	if from = new(big.Int).Sub(to, big.NewInt(int64(batchSize))); from.Cmp(zero) < 0 {
+	if from = new(big.Int).Sub(to, big.NewInt(int64(batchSize-1))); from.Cmp(zero) < 0 {
 		from.SetInt64(0)
 	}
 
@@ -508,7 +507,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 					if currIdx > windowSize-1 && windowOffset < len(allBlocks)-windowSize {
 						windowOffset += 1
-						break
 					} else {
 						to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
 						var from *big.Int
