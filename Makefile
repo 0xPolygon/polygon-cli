@@ -8,7 +8,7 @@ GIT_SHA:=$(shell git rev-parse HEAD | cut -c 1-8)
 GIT_TAG:=$(shell git describe --tags)
 CUR_DATE:=$(shell date +%s)
 
-# strip debug and supress warnings
+# strip debug and suppress warnings
 LD_FLAGS=-s -w
 LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/cmd/version.Version=$(GIT_TAG)\"
 LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/cmd/version.Commit=$(GIT_SHA)\"

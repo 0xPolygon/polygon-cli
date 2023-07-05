@@ -324,7 +324,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		log.Error().Err(err).Msg("Unable to retrieve gas price")
 		return err
 	}
-	log.Trace().Interface("gasprice", gas).Msg("Retreived current gas price")
+	log.Trace().Interface("gasprice", gas).Msg("Retrieved current gas price")
 
 	if !*inputLoadTestParams.LegacyTransactionMode {
 		gasTipCap, _err := c.SuggestGasTipCap(ctx)
@@ -332,7 +332,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 			log.Error().Err(_err).Msg("Unable to retrieve gas tip cap")
 			return _err
 		}
-		log.Trace().Interface("gastipcap", gasTipCap).Msg("Retreived current gas tip cap")
+		log.Trace().Interface("gastipcap", gasTipCap).Msg("Retrieved current gas tip cap")
 		inputLoadTestParams.CurrentGasTipCap = gasTipCap
 	}
 
@@ -508,7 +508,7 @@ func runLoadTest(ctx context.Context) error {
 	if err != nil {
 		log.Debug().Err(err).Msg("Unable to get the number of pending transactions before closing")
 	} else if ptc > 0 {
-		log.Info().Uint("pending", ptc).Msg("There are still oustanding transactions. There might be issues restarting with the same sending key until those transactions clear")
+		log.Info().Uint("pending", ptc).Msg("There are still outstanding transactions. There might be issues restarting with the same sending key until those transactions clear")
 	}
 	log.Info().Msg("Finished")
 	return nil
@@ -972,7 +972,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 					lock = true
 					err := f()
 					if err == nil {
-						log.Trace().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Function executed successfuly")
+						log.Trace().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Function executed successfully")
 						return nil
 					}
 					log.Trace().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Unable to execute function")

@@ -78,7 +78,7 @@ go run main.go abi --data 0x3c15826700000000000000000000000000000000000000000000
 func init() {
 	flagSet := ABICmd.PersistentFlags()
 	inputFileName = flagSet.String("file", "", "Provide a filename to read and analyze")
-	inputData = flagSet.String("data", "", "Provide input data to be unpacked based on the ABI defintion")
+	inputData = flagSet.String("data", "", "Provide input data to be unpacked based on the ABI definition")
 }
 
 func parseContractInputData(data string) ([]byte, []byte, error) {
