@@ -515,10 +515,6 @@ func rpcLoadTestLoop(ctx context.Context, rpc *ethrpc.Client) error {
 	ltp := inputLoadTestParams
 	requestCount := int(*ltp.Requests)
 
-	// Add a timeout of 500 milliseconds to the existing context
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
 	// Keep track of key stats
 	successfulRespCount := 0
 	invalidJSONCount := 0
@@ -550,6 +546,10 @@ func rpcLoadTestLoop(ctx context.Context, rpc *ethrpc.Client) error {
 	// Send multiple concurrent requests
 	for i := 0; i < requestCount; i++ {
 		go func(index int) {
+			// Create a new context with a timeout for each request
+			ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+
 			jsonPayload := payloads[index%len(payloads)]
 			sanitizedPayload := jsonPayload[strings.Index(jsonPayload, `{"`):]
 
@@ -595,7 +595,7 @@ func rpcLoadTestLoop(ctx context.Context, rpc *ethrpc.Client) error {
 
 	elapsedTime := time.Since(startTime)
 	fmt.Printf("Completed %d requests in %s\n", requestCount, elapsedTime)
-	fmt.Printf("Requests per second: %.2f\n", float64(requestCount)/elapsedTime.Seconds())
+	fmt.Printf("Successful requests per second: %.2f\n", float64(successfulRespCount)/elapsedTime.Seconds())
 	fmt.Printf("Successes: %d, Invalid Req: %d, Archive Node Required: %d, Misc Errors: %d", successfulRespCount, invalidJSONCount, archiveNodeRequiredCount, miscErrorCount)
 	return nil
 }
