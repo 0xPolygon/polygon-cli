@@ -520,6 +520,7 @@ func rpcLoadTestLoop(ctx context.Context, rpc *ethrpc.Client) error {
 	invalidJSONCount := 0
 	archiveNodeRequiredCount := 0
 	miscErrorCount := 0
+	reqTimeoutCount := 0
 
 	// Create wg that waits for all reqs to finish
 	var wg sync.WaitGroup
@@ -527,6 +528,9 @@ func rpcLoadTestLoop(ctx context.Context, rpc *ethrpc.Client) error {
 
 	// Create channel that collects all responses
 	responseChan := make(chan RPCResponse)
+
+	// Create a semaphore to limit the number of concurrent goroutines
+	sem := make(chan struct{}, int(*ltp.Concurrency))
 
 	// Start goroutine that collects responses from channel
 	go func() {
@@ -545,7 +549,12 @@ func rpcLoadTestLoop(ctx context.Context, rpc *ethrpc.Client) error {
 	startTime := time.Now()
 	// Send multiple concurrent requests
 	for i := 0; i < requestCount; i++ {
+		sem <- struct{}{} // Acquire a slot from the semaphore, limiting the concurrency
 		go func(index int) {
+			defer func() {
+				<-sem // Release the slot when the goroutine is finished
+			}()
+
 			// Create a new context with a timeout for each request
 			ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
@@ -574,6 +583,8 @@ func rpcLoadTestLoop(ctx context.Context, rpc *ethrpc.Client) error {
 				errMsg := err.Error()
 				if strings.Contains(errMsg, "missing trie node") {
 					archiveNodeRequiredCount++
+				} else if strings.Contains(errMsg, "EOF") || strings.Contains(errMsg, "context deadline exceeded") {
+					reqTimeoutCount++
 				} else {
 					miscErrorCount++
 				}
@@ -595,8 +606,8 @@ func rpcLoadTestLoop(ctx context.Context, rpc *ethrpc.Client) error {
 
 	elapsedTime := time.Since(startTime)
 	fmt.Printf("Completed %d requests in %s\n", requestCount, elapsedTime)
-	fmt.Printf("Successful requests per second: %.2f\n", float64(successfulRespCount)/elapsedTime.Seconds())
-	fmt.Printf("Successes: %d, Invalid Req: %d, Archive Node Required: %d, Misc Errors: %d", successfulRespCount, invalidJSONCount, archiveNodeRequiredCount, miscErrorCount)
+	fmt.Printf("Requests per second: %.2f\n", float64(successfulRespCount+miscErrorCount)/elapsedTime.Seconds())
+	fmt.Printf("Successes: %d, Invalid Req: %d, Archive Node Required: %d, Misc Errors: %d, Req Timeouts: %d", successfulRespCount, invalidJSONCount, archiveNodeRequiredCount, miscErrorCount, reqTimeoutCount)
 	return nil
 }
 
