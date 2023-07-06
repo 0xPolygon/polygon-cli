@@ -155,38 +155,42 @@ import them on top of a different genesis. This allows for testing with
 faked state (depending on the consensus). Ideally we can use this to
 support migrating clients other chains to supernets.
 
-- Generate `genesis.json` if one doesn't exist. Full guide [here](https://wiki.polygon.technology/docs/edge/get-started/set-up-ibft-locally),
+- Generate `genesis.json` if one doesn't exist. Full guide [here](https://wiki.polygon.technology/docs/category/deploy-a-supernet),
   but an abridged version:
 
-  ```shell
-  go install github.com/0xPolygon/polygon-edge@develop
+  ```bash
+  # Install the `polygon-edge` binary.
+  $ go install github.com/0xPolygon/polygon-edge@v1.0.0
 
-  polygon-edge secrets init --data-dir test-chain-1
-  # record the node id
-  NODE_ID=$(polygon-edge secrets output --node-id --data-dir test-chain-1)
+  ## New way
+  # Generate new PolyBFT secrets.
+  $ polygon-edge polybft-secrets --data-dir test-chain-1 --insecure
 
-  # generate the genesis.json file
-  # note: you may have to add some fields to the alloc property there may be an insufficient funds error
-  polygon-edge genesis --ibft-validators-prefix-path test-chain- --bootnode /ip4/127.0.0.1/tcp/10001/p2p/$NODE_ID --block-gas-limit 6706541
+  # Generate the `genesis.json` file
+  $ polygon-edge genesis \
+    --block-gas-limit 10000000 \
+    --epoch-size 10 \
+    --validators-path ./ \
+    --validators-prefix test-chain- \
+    --consensus polybft \
+    --premine 0x0 \
+    --reward-wallet 0x61324166B0202DB1E7502924326262274Fa4358F:1000000 \
+    --transactions-allow-list-admin 0x61324166B0202DB1E7502924326262274Fa4358F,0xFE5E166BA5EA50c04fCa00b07b59966E6C2E9570 \
+    --transactions-allow-list-enabled 0x61324166B0202DB1E7502924326262274Fa4358F,0xFE5E166BA5EA50c04fCa00b07b59966E6C2E9570
 
+  ## 0ld way
+  # Generate new IBFT secrets.
+  $ polygon-edge secrets init --data-dir test-chain-1 --insecure
+  $ NODE_ID=$(polygon-edge secrets output --node-id --data-dir test-chain-1)
+
+  # Generate the `genesis.json` file.
+  # Note: you may have to add some fields to the alloc property there may be an insufficient funds error.
+  $ polygon-edge genesis \
+      --consensus ibft \
+      --block-gas-limit 6706541 \
+      --ibft-validators-prefix-path test-chain- \
+      --bootnode /ip4/127.0.0.1/tcp/10001/p2p/$NODE_ID
   ```
-
-```shell
-# In this case local host is running a POA Core Archive node.
-polycli dumpblocks http://127.0.0.1:8545 0 100000 --filename poa-core.0.to.100k --dump-receipts=false
-
-# Even with disabling receipts, edge's eth_getBlockByNumber returns transactions.
-# This needs to be done only if using json mode. Filter them out before forging:
-cat poa-core.0.to.100k | grep '"difficulty"' > poa-core.0.to.100k.blocks
-
-polycli forge --genesis genesis.json --mode json --blocks poa-core.0.to.100k.blocks --count 99999
-```
-
-```bash
-# To do the same with using proto instead of json:
-polycli dumpblocks http://127.0.0.1:8545 0 1000000 -f poa-core.0.to.100k.proto -r=false -m proto
-polycli forge --genesis genesis.json --mode proto --blocks poa-core.0.to.100k.proto --count 99999
-```
 
 ### Forging Filtered Blocks
 
