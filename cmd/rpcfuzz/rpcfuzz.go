@@ -64,7 +64,7 @@ type (
 	// RPCTestFlag is meant for bitmasking various flags to understand properties of the test
 	RPCTestFlag uint64
 
-	// RPCTestGeneric is the simplist implementation of the
+	// RPCTestGeneric is the simplest implementation of the
 	// RPCTest. Basically the implementation of the interface is
 	// managed by just returning hard coded values for method,
 	// args, validator, and error
@@ -1272,7 +1272,7 @@ func ValidateTransactionHash() func(result interface{}) error {
 func genericResultToBlockHeader(result interface{}) (*ethtypes.Header, string, error) {
 	underlyingBlock, ok := result.(map[string]interface{})
 	if !ok {
-		return nil, "", fmt.Errorf("The underying type of the result didn't match a block header. Got %T", result)
+		return nil, "", fmt.Errorf("The underlying type of the result didn't match a block header. Got %T", result)
 	}
 	genericHash, ok := underlyingBlock["hash"].(string)
 	if !ok {
@@ -1295,7 +1295,7 @@ func genericResultToBlockHeader(result interface{}) (*ethtypes.Header, string, e
 func genericResultToTransaction(result interface{}) (*ethtypes.Transaction, string, error) {
 	underlyingTx, ok := result.(map[string]interface{})
 	if !ok {
-		return nil, "", fmt.Errorf("The underying type of the result didn't match a transaction. Got %T", result)
+		return nil, "", fmt.Errorf("The underlying type of the result didn't match a transaction. Got %T", result)
 	}
 	genericHash, ok := underlyingTx["hash"].(string)
 	if !ok {
@@ -1335,7 +1335,7 @@ func ArgsLatestBlockHash(ctx context.Context, rpcClient *rpc.Client, extraArgs .
 	return func() []interface{} {
 		blockData, err := getBlock(ctx, rpcClient, "latest")
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to retreive latest block hash")
+			log.Error().Err(err).Msg("Unable to retrieve latest block hash")
 			return []interface{}{"latest"}
 		}
 		rawHash := blockData["hash"]
@@ -1358,7 +1358,7 @@ func ArgsLatestBlockNumber(ctx context.Context, rpcClient *rpc.Client, extraArgs
 	return func() []interface{} {
 		blockData, err := getBlock(ctx, rpcClient, "latest")
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to retreive latest block hash")
+			log.Error().Err(err).Msg("Unable to retrieve latest block hash")
 			return []interface{}{"latest"}
 		}
 		rawNumber := blockData["number"]
@@ -1381,7 +1381,7 @@ func ArgsRawBlock(ctx context.Context, rpcClient *rpc.Client, blockNumOrHash str
 	return func() []interface{} {
 		blockData, err := getRawBlock(ctx, rpcClient, blockNumOrHash)
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to retreive latest raw block hash")
+			log.Error().Err(err).Msg("Unable to retrieve latest raw block hash")
 			return []interface{}{"latest"}
 		}
 		args := []interface{}{blockData}
@@ -1408,7 +1408,7 @@ func ArgsCoinbase(ctx context.Context, rpcClient *rpc.Client, extraArgs ...inter
 		var coinbase string
 		err := rpcClient.CallContext(ctx, &coinbase, "eth_coinbase")
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to retreive coinbase")
+			log.Error().Err(err).Msg("Unable to retrieve coinbase")
 			return []interface{}{""}
 		}
 		log.Trace().Str("coinbase", coinbase).Msg("Got coinbase")
@@ -1461,7 +1461,7 @@ func ArgsCoinbaseTransaction(ctx context.Context, rpcClient *rpc.Client, tx *RPC
 		var coinbase string
 		err := rpcClient.CallContext(ctx, &coinbase, "eth_coinbase")
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to retreive coinbase")
+			log.Error().Err(err).Msg("Unable to retrieve coinbase")
 			return []interface{}{""}
 		}
 		tx.From = coinbase
@@ -1656,14 +1656,14 @@ func GetTestAccountNonce(ctx context.Context, rpcClient *rpc.Client) (uint64, er
 	ec := ethclient.NewClient(rpcClient)
 	curNonce, err := ec.NonceAt(ctx, testEthAddress, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to retreive nonce")
+		log.Error().Err(err).Msg("Unable to retrieve nonce")
 		curNonce = 0
 	}
 	log.Trace().Uint64("curNonce", curNonce).Msg("current nonce value")
 	return curNonce, err
 }
 
-// GetCurrentChainID will attempt to determin the chain for the current network
+// GetCurrentChainID will attempt to determine the chain for the current network
 func GetCurrentChainID(ctx context.Context, rpcClient *rpc.Client) (*big.Int, error) {
 	ec := ethclient.NewClient(rpcClient)
 	chainId, err := ec.ChainID(ctx)
@@ -1775,7 +1775,7 @@ endpoint. The idea is to be able to check for various features and
 function to see if the RPC generally conforms to typical geth
 standards for the RPC
 
-Some setup might be neede depending on how you're testing. We'll
+Some setup might be needed depending on how you're testing. We'll
 demonstrate with geth. In order to quickly test this, you can run geth
 in dev mode:
 

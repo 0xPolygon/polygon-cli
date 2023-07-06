@@ -310,7 +310,7 @@ support migrating clients other chains to supernets.
   NODE_ID=$(polygon-edge secrets output --node-id --data-dir test-chain-1)
 
   # generate the genesis.json file
-  # note: you may have to add some fields to the alloc property there may be an insuffcient funds error
+  # note: you may have to add some fields to the alloc property there may be an insufficient funds error
   polygon-edge genesis --ibft-validators-prefix-path test-chain- --bootnode /ip4/127.0.0.1/tcp/10001/p2p/$NODE_ID --block-gas-limit 6706541
 
   ```
@@ -401,7 +401,7 @@ We can the command like this to get the function signatures and selectors:
 go run main.go abi --file contract.abi
 ```
 
-This would output some information that woudl let us know the various function selectors for this contract:
+This would output some information that would let us know the various function selectors for this contract:
 
 ```txt
 Selector:19d8ac61	Signature:function lastTimestamp() view returns(uint64)
@@ -436,7 +436,7 @@ In addition to the function selector data, we'll also get a breakdown of input d
 
 # Fork
 
-Occasionally, we'll want to analyze the details of a side chain to understand in detail who was proposing the blocks, what was the difficultly, and just generally get better understanding of block propogation.
+Occasionally, we'll want to analyze the details of a side chain to understand in detail who was proposing the blocks, what was the difficultly, and just generally get better understanding of block propagation.
 
 ```shell
 go run main.go fork 0x053d84d5215684c8ae810a4729f7c9b54d65a80b128a27aeddcd7dc295a0cebd https://polygon-rpc.com
@@ -536,7 +536,7 @@ Yul and Solidity. The workflow for modifying this contract is.
     - `solc LoadTester.sol --bin --abi -o . --overwrite`
 3.  Run `abigen`
     - `abigen --abi LoadTester.abi --pkg contracts --type LoadTester --bin LoadTester.bin --out loadtester.go`
-4.  Run the loadtester to enure it deploys and runs sucessfully
+4.  Run the loadtester to enure it deploys and runs successfully
     - `go run main.go loadtest --verbosity 700 http://127.0.0.1:8541`
 
 # P2P
