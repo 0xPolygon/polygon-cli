@@ -192,6 +192,23 @@ support migrating clients other chains to supernets.
       --bootnode /ip4/127.0.0.1/tcp/10001/p2p/$NODE_ID
   ```
 
+```shell
+# In this case local host is running a POA Core Archive node.
+polycli dumpblocks http://127.0.0.1:8545 0 100000 --filename poa-core.0.to.100k --dump-receipts=false
+
+# Even with disabling receipts, edge's eth_getBlockByNumber returns transactions.
+# This needs to be done only if using json mode. Filter them out before forging:
+cat poa-core.0.to.100k | grep '"difficulty"' > poa-core.0.to.100k.blocks
+
+polycli forge --genesis genesis.json --mode json --blocks poa-core.0.to.100k.blocks --count 99999
+```
+
+```bash
+# To do the same with using proto instead of json:
+polycli dumpblocks http://127.0.0.1:8545 0 1000000 -f poa-core.0.to.100k.proto -r=false -m proto
+polycli forge --genesis genesis.json --mode proto --blocks poa-core.0.to.100k.proto --count 99999
+```
+
 ### Forging Filtered Blocks
 
 Sometimes, it can be helpful to only import the blocks and transactions that are
