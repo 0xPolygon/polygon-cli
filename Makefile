@@ -67,3 +67,9 @@ clean: ## Clean the binary folder.
 test: ## Run tests.
 	go test ./... -coverprofile=coverage.out
 	go tool cover -func coverage.out
+
+##@ Documentation
+
+.PHONY: gen-doc
+gen-doc: ## Generate documentation for `polycli`.
+	go run docutil/*.go

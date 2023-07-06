@@ -1,0 +1,82 @@
+# `polycli hash`
+
+> Auto-generated documentation.
+
+## Table of Contents
+
+- [Description](#description)
+- [Usage](#usage)
+- [Flags](#flags)
+- [See Also](#see-also)
+
+## Description
+
+Provide common crypto hashing functions.
+
+```bash
+polycli hash [md4|md5|sha1|sha224|sha256|sha384|sha512|ripemd160|sha3_224|sha3_256|sha3_384|sha3_512|sha512_224|sha512_256|blake2s_256|blake2b_256|blake2b_384|blake2b_512|keccak256|keccak512] [flags]
+```
+
+## Usage
+
+The `hash` command provides a simple mechanism to perform hashes on files, standard input, and arguments. Below shows various ways to provide input.
+
+```bash
+$ echo -n "hello" > hello.txt
+$ polycli hash sha1 --file hello.txt
+aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d
+$ echo -n "hello" | polycli hash sha1
+aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d
+$ polycli hash sha1 hello
+aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d
+```
+
+We've provided many standard hashing functions.
+
+```bash
+echo -n "hello" | polycli hash md4
+echo -n "hello" | polycli hash md5
+echo -n "hello" | polycli hash sha1
+echo -n "hello" | polycli hash sha224
+echo -n "hello" | polycli hash sha256
+echo -n "hello" | polycli hash sha384
+echo -n "hello" | polycli hash sha512
+echo -n "hello" | polycli hash ripemd160
+echo -n "hello" | polycli hash sha3_224
+echo -n "hello" | polycli hash sha3_256
+echo -n "hello" | polycli hash sha3_384
+echo -n "hello" | polycli hash sha3_512
+echo -n "hello" | polycli hash sha512_224
+echo -n "hello" | polycli hash sha512_256
+echo -n "hello" | polycli hash blake2s_256
+echo -n "hello" | polycli hash blake2b_256
+echo -n "hello" | polycli hash blake2b_384
+echo -n "hello" | polycli hash blake2b_512
+echo -n "hello" | polycli hash keccak256
+echo -n "hello" | polycli hash keccak512
+```
+
+## Flags
+
+```bash
+      --file string   Provide a filename to read and hash
+  -h, --help          help for hash
+```
+
+The command also inherits flags from parent commands.
+
+```bash
+      --config string   config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs     Should logs be in pretty format or JSON (default true)
+  -v, --verbosity int   0 - Silent
+                        100 Fatal
+                        200 Error
+                        300 Warning
+                        400 Info
+                        500 Debug
+                        600 Trace (default 400)
+```
+
+## See also
+
+- [polycli](polycli.md) - A Swiss Army knife of blockchain tools.

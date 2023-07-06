@@ -35,7 +35,7 @@ var (
 // devp2p layer and generating a nodes json file with peers.
 var CrawlCmd = &cobra.Command{
 	Use:   "crawl [nodes file]",
-	Short: "Crawl a network",
+	Short: "Crawl a network.",
 	Long: `This will crawl the network on the devp2p layer and generate a nodes
 json file. If no nodes.json file exists, run echo "{}" >> nodes.json to get
 started.`,

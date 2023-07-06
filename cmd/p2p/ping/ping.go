@@ -35,7 +35,7 @@ var (
 
 var PingCmd = &cobra.Command{
 	Use:   "ping [enode/enr or nodes file]",
-	Short: "Ping node(s) and return the output",
+	Short: "Ping node(s) and return the output.",
 	Long: `Ping nodes by either giving a single enode/enr or an entire nodes file.
 
 This command will establish a handshake and status exchange to get the Hello and

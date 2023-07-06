@@ -27,6 +27,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	_ "embed"
+
 	edgeblockchain "github.com/0xPolygon/polygon-edge/blockchain"
 	edgechain "github.com/0xPolygon/polygon-edge/chain"
 	edgeconsensus "github.com/0xPolygon/polygon-edge/consensus"
@@ -74,6 +76,8 @@ type (
 )
 
 var (
+	//go:embed usage.md
+	usage        string
 	inputForge   forgeParams
 	BlockReadEOF = errors.New("no more blocks to read")
 )
@@ -81,18 +85,8 @@ var (
 // forgeCmd represents the forge command
 var ForgeCmd = &cobra.Command{
 	Use:   "forge",
-	Short: "A utility for generating blockchain data either for testing or migration",
-	Long: `A utility for generating blockchain data either for testing or migration.
-
-Here is an example usage:
-  # In this case local host is running a POA Core Archive node.
-  polycli dumpblocks http://127.0.0.1:8545 0 100000 --filename poa-core.0.to.100k --dump-receipts=false
-
-  # Even with disabling receipts, edge's eth_getBlockByNumber returns transactions.
-  # This needs to be done only if using json mode. Filter them out before forging:
-  cat poa-core.0.to.100k | grep '"difficulty"' > poa-core.0.to.100k.blocks
-
-  polycli forge --genesis genesis.json --mode json --blocks poa-core.0.to.100k.blocks --count 99999`,
+	Short: "Forge dumped blocks on top of a genesis file.",
+	Long:  usage,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println("forge called")

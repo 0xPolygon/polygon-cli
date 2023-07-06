@@ -45,6 +45,8 @@ import (
 	"golang.org/x/text/message"
 	"golang.org/x/text/number"
 
+	_ "embed"
+
 	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
 	gssignature "github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	gstypes "github.com/centrifuge/go-substrate-rpc-client/v4/types"
@@ -82,6 +84,8 @@ const (
 )
 
 var (
+	//go:embed usage.md
+	usage               string
 	inputLoadTestParams loadTestParams
 	loadTestResults     []loadTestSample
 	loadTestResutsMutex sync.RWMutex
@@ -150,9 +154,9 @@ var (
 
 // LoadtestCmd represents the loadtest command
 var LoadtestCmd = &cobra.Command{
-	Use:   "loadtest rpc-endpoint",
-	Short: "A simple script for quickly running a load test",
-	Long:  `Loadtest gives us a simple way to run a generic load test against an eth/EVM style json RPC endpoint`,
+	Use:   "loadtest url",
+	Short: "Run a generic load test against an Eth/EVM style JSON-RPC endpoint.",
+	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		err := runLoadTest(cmd.Context())
 		if err != nil {

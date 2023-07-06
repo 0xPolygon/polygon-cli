@@ -51,15 +51,7 @@ var (
 )
 
 // rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "polycli",
-	Short: "A Swiss Army knife of blockchain tools",
-	Long: `Polycli is a collection of tools that are meant to be useful while
-building, testing, and running block chain applications.`,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		setLogLevel(verbosity, pretty)
-	},
-}
+var rootCmd *cobra.Command
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
@@ -72,36 +64,7 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
-
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.polygon-cli.yaml)")
-	rootCmd.PersistentFlags().IntVarP(&verbosity, "verbosity", "v", 400, "0 - Silent\n100 Fatal\n200 Error\n300 Warning\n400 Info\n500 Debug\n600 Trace")
-	rootCmd.PersistentFlags().BoolVar(&pretty, "pretty-logs", true, "Should logs be in pretty format or JSON")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-	rootCmd.SetOut(os.Stdout)
-
-	rootCmd.AddCommand(abi.ABICmd)
-	rootCmd.AddCommand(dumpblocks.DumpblocksCmd)
-	rootCmd.AddCommand(forge.ForgeCmd)
-	rootCmd.AddCommand(fork.ForkCmd)
-	rootCmd.AddCommand(hash.HashCmd)
-	rootCmd.AddCommand(loadtest.LoadtestCmd)
-	rootCmd.AddCommand(metricsToDash.MetricsToDashCmd)
-	rootCmd.AddCommand(mnemonic.MnemonicCmd)
-	rootCmd.AddCommand(monitor.MonitorCmd)
-	rootCmd.AddCommand(nodekey.NodekeyCmd)
-	rootCmd.AddCommand(p2p.P2pCmd)
-	rootCmd.AddCommand(parseethwallet.ParseETHWalletCmd)
-	rootCmd.AddCommand(rpc.RpcCmd)
-	rootCmd.AddCommand(rpcfuzz.RPCFuzzCmd)
-	rootCmd.AddCommand(version.VersionCmd)
-	rootCmd.AddCommand(wallet.WalletCmd)
+	rootCmd = NewPolycliCommand()
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -126,6 +89,49 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 	}
+}
+
+// NewPolycliCommand creates the `polycli` command.
+func NewPolycliCommand() *cobra.Command {
+	// Parent command to which all subcommands are added.
+	cmd := &cobra.Command{
+		Use:   "polycli",
+		Short: "A Swiss Army knife of blockchain tools.",
+		Long:  "Polycli is a collection of tools that are meant to be useful while building, testing, and running block chain applications.",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			setLogLevel(verbosity, pretty)
+		},
+	}
+
+	// Define flags and configuration settings.
+	cmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.polygon-cli.yaml)")
+	cmd.PersistentFlags().IntVarP(&verbosity, "verbosity", "v", 400, "0 - Silent\n100 Fatal\n200 Error\n300 Warning\n400 Info\n500 Debug\n600 Trace")
+	cmd.PersistentFlags().BoolVar(&pretty, "pretty-logs", true, "Should logs be in pretty format or JSON")
+
+	// Define local flags which will only run when this action is called directly.
+	cmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	cmd.SetOut(os.Stdout)
+
+	// Define commands.
+	cmd.AddCommand(
+		abi.ABICmd,
+		dumpblocks.DumpblocksCmd,
+		forge.ForgeCmd,
+		fork.ForkCmd,
+		hash.HashCmd,
+		loadtest.LoadtestCmd,
+		metricsToDash.MetricsToDashCmd,
+		mnemonic.MnemonicCmd,
+		monitor.MonitorCmd,
+		nodekey.NodekeyCmd,
+		p2p.P2pCmd,
+		parseethwallet.ParseETHWalletCmd,
+		rpc.RpcCmd,
+		rpcfuzz.RPCFuzzCmd,
+		version.VersionCmd,
+		wallet.WalletCmd,
+	)
+	return cmd
 }
 
 // setLogLevel sets the log level based on the flags.

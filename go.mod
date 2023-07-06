@@ -28,6 +28,7 @@ require (
 
 require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
+	github.com/google/gofuzz v1.2.0
 	github.com/xeipuuv/gojsonschema v1.2.0
 )
 
@@ -70,7 +71,6 @@ require (
 	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
-	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect

@@ -72,10 +72,7 @@ type (
 // NodekeyCmd represents the nodekey command
 var NodekeyCmd = &cobra.Command{
 	Use:   "nodekey",
-	Short: "Generate Node Keys",
-	Long: `This is meant to be a simple utility for generating node keys for
-different block chain clients and protocols.
-`,
+	Short: "Generate node keys for different blockchain clients and protocols.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var nko nodeKeyOut
 		var withSeed bool
