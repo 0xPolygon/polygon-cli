@@ -115,13 +115,15 @@ zcat < foo.gz | jq '. | select(.transactions | length > 0) | select(.transaction
 Dumpblocks can also output to protobuf format. If you wish to make changes to the protobuf:
 
 1. Install the protobuf compiler
-   
+
    On GNU/Linux:
+
    ```bash
    sudo apt install protoc-gen-go
    ```
-   
+
    On a MAC:
+
    ```bash
    brew install protobuf
    ```
