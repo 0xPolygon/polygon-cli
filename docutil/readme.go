@@ -11,7 +11,7 @@ import (
 
 // updateReadme will update the list of `polycli` commands.
 // The section is identified by the HTML tags `<startTag></endTag>“.
-func updateReadmeCommands(cmd *cobra.Command, startTag, endTag string) error {
+func updateReadmeCommands(cmd *cobra.Command, delimiter, docDir string) error {
 	// Generate the list of commands.
 	buf := new(bytes.Buffer)
 	name := cmd.CommandPath()
@@ -24,7 +24,7 @@ func updateReadmeCommands(cmd *cobra.Command, startTag, endTag string) error {
 		return err
 	}
 	var newData string
-	newData, err = updateContent(string(data), startTag, endTag, buf)
+	newData, err = updateContent(string(data), delimiter, buf)
 	if err != nil {
 		return err
 	}
@@ -36,7 +36,9 @@ func updateReadmeCommands(cmd *cobra.Command, startTag, endTag string) error {
 }
 
 // Take a piece of data and update the content between the start and end tags with new content.
-func updateContent(originalContent, startTag, endTag string, newContent *bytes.Buffer) (string, error) {
+func updateContent(originalContent, delimiter string, newContent *bytes.Buffer) (string, error) {
+	startTag := fmt.Sprintf("<%s>", delimiter)
+	endTag := fmt.Sprintf("</%s>", delimiter)
 	startIndex := strings.Index(originalContent, startTag)
 	endIndex := strings.Index(originalContent, endTag)
 	if startIndex == -1 || endIndex == -1 || endIndex <= startIndex {

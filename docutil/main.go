@@ -7,11 +7,12 @@ import (
 	"github.com/maticnetwork/polygon-cli/cmd"
 )
 
-// Directory in which the documentation will be generated.
 var (
-	docDir   = "doc"
-	startTag = "<generated>"
-	endTag   = "</generated>"
+	// Directory in which the documentation will be generated.
+	docDir = "doc"
+
+	// Tag used to delimitate the section of the README which is generated.
+	delimiter = "generated"
 )
 
 func main() {
@@ -24,8 +25,8 @@ func main() {
 	}
 	fmt.Println("Documentation generated!")
 
-	// Update the summary of commands in the `README.md`
-	if err := updateReadmeCommands(polycli, startTag, endTag); err != nil {
+	// Update the summary of commands in the `README.md` (located inside <tag></tag>)
+	if err := updateReadmeCommands(polycli, delimiter, docDir); err != nil {
 		fmt.Println("Unable to update `README.md`.")
 		log.Fatal(err)
 	}
