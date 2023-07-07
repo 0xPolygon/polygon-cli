@@ -50,9 +50,8 @@ jobs:
       - uses: actions/setup-go@v4
         with:
           go-version: 1.19
-      - name: Try to update `polycli` documentation
+      - name: Try to update polycli documentation
         run: make gen-doc
-
       - name: Check if the documentation is up to date
         run: |
           if [[ -n $(git status --porcelain) ]]; then
