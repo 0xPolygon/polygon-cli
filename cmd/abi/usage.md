@@ -1,7 +1,5 @@
 When looking at raw contract calls, sometimes we have an ABI and we just want to quickly figure out which method is being called. This is a quick way to get all of the function selectors for an ABI.
 
-This is a simple test.
-
 We can the command like this to get the function signatures and selectors.
 
 ```bash
