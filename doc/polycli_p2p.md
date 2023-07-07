@@ -56,9 +56,9 @@ The command also inherits flags from parent commands.
 ## See also
 
 - [polycli](polycli.md) - A Swiss Army knife of blockchain tools.
-- [polycli p2p crawl](polycli_p2p_crawl.md)	 - Crawl a network.
+- [polycli p2p crawl](polycli_p2p_crawl.md) - Crawl a network.
 
-- [polycli p2p ping](polycli_p2p_ping.md)	 - Ping node(s) and return the output.
+- [polycli p2p ping](polycli_p2p_ping.md) - Ping node(s) and return the output.
 
-- [polycli p2p sensor](polycli_p2p_sensor.md)	 - devp2p sensor that does peer discovery and block/transaction propagation.
+- [polycli p2p sensor](polycli_p2p_sensor.md) - devp2p sensor that does peer discovery and block/transaction propagation.
 

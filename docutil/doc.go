@@ -83,32 +83,8 @@ func genMarkdownPage(cmd *cobra.Command, w io.Writer) error {
 
 	if hasSeeAlso(cmd) {
 		buf.WriteString("## See also\n")
-		if cmd.HasParent() {
-			parent := cmd.Parent()
-			pname := parent.CommandPath()
-			link := pname + ".md"
-			link = strings.Replace(link, " ", "_", -1)
-			buf.WriteString(fmt.Sprintf("\n- [%s](%s) - %s", pname, link, parent.Short))
-			cmd.VisitParents(func(c *cobra.Command) {
-				if c.DisableAutoGenTag {
-					cmd.DisableAutoGenTag = c.DisableAutoGenTag
-				}
-			})
-		}
-
-		children := cmd.Commands()
-		sort.Sort(byName(children))
-
-		for _, child := range children {
-			if !child.IsAvailableCommand() || child.IsAdditionalHelpTopicCommand() {
-				continue
-			}
-			cname := name + " " + child.Name()
-			link := cname + ".md"
-			link = strings.Replace(link, " ", "_", -1)
-			buf.WriteString(fmt.Sprintf("\n- [%s](%s)\t - %s\n", cname, link, child.Short))
-		}
-		buf.WriteString("\n")
+		identity := func(s string) string { return s }
+		printSeeAlso(buf, cmd, name, identity)
 	}
 
 	_, err := buf.WriteTo(w)
@@ -171,6 +147,36 @@ func hasSeeAlso(cmd *cobra.Command) bool {
 		return true
 	}
 	return false
+}
+
+// Print See Also section.
+func printSeeAlso(buf *bytes.Buffer, cmd *cobra.Command, name string, linkHandler func(s string) string) {
+	if cmd.HasParent() {
+		parent := cmd.Parent()
+		pname := parent.CommandPath()
+		link := pname + ".md"
+		link = strings.Replace(link, " ", "_", -1)
+		buf.WriteString(fmt.Sprintf("\n- [%s](%s) - %s", pname, linkHandler(link), parent.Short))
+		cmd.VisitParents(func(c *cobra.Command) {
+			if c.DisableAutoGenTag {
+				cmd.DisableAutoGenTag = c.DisableAutoGenTag
+			}
+		})
+	}
+
+	children := cmd.Commands()
+	sort.Sort(byName(children))
+
+	for _, child := range children {
+		if !child.IsAvailableCommand() || child.IsAdditionalHelpTopicCommand() {
+			continue
+		}
+		cname := name + " " + child.Name()
+		link := cname + ".md"
+		link = strings.Replace(link, " ", "_", -1)
+		buf.WriteString(fmt.Sprintf("\n- [%s](%s) - %s\n", cname, linkHandler(link), child.Short))
+	}
+	buf.WriteString("\n")
 }
 
 type byName []*cobra.Command
