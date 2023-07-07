@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -19,7 +19,7 @@ func updateReadmeCommands(cmd *cobra.Command, delimiter, docDir string) error {
 	printSeeAlso(buf, cmd, name, addDocPrefix)
 
 	// Update the `README.md``
-	data, err := ioutil.ReadFile("README.md")
+	data, err := os.ReadFile("README.md")
 	if err != nil {
 		return err
 	}
@@ -28,7 +28,7 @@ func updateReadmeCommands(cmd *cobra.Command, delimiter, docDir string) error {
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile("README.md", []byte(newData), 0644)
+	err = os.WriteFile("README.md", []byte(newData), 0644)
 	if err != nil {
 		return err
 	}
