@@ -11,7 +11,7 @@
 
 ## Description
 
-devp2p sensor that does peer discovery and block/transaction propagation.
+Start a devp2p sensor that discovers other peers and will receive blocks and transactions. 
 
 ```bash
 polycli p2p sensor [nodes file] [flags]
@@ -19,8 +19,7 @@ polycli p2p sensor [nodes file] [flags]
 
 ## Usage
 
-Starts a devp2p sensor that discovers other peers and will receive blocks and
-transactions. If no nodes.json file exists, run echo "{}" >> nodes.json to get started.
+If no nodes.json file exists, run `echo "{}" >> nodes.json` to get started.
 ## Flags
 
 ```bash

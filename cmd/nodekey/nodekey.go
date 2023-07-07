@@ -27,6 +27,8 @@ import (
 	"io"
 	"net"
 
+	_ "embed"
+
 	gethcrypto "github.com/ethereum/go-ethereum/crypto"
 	gethenode "github.com/ethereum/go-ethereum/p2p/enode"
 	libp2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
@@ -48,6 +50,8 @@ import (
 const RSAKeypairBits = 2048
 
 var (
+	//go:embed usage.md
+	usage                       string
 	inputNodeKeyProtocol        *string
 	inputNodeKeyType            *string
 	inputNodeKeyIP              *string
@@ -73,6 +77,7 @@ type (
 var NodekeyCmd = &cobra.Command{
 	Use:   "nodekey",
 	Short: "Generate node keys for different blockchain clients and protocols.",
+	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var nko nodeKeyOut
 		var withSeed bool

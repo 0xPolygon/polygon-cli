@@ -50,10 +50,6 @@ func genMarkdownPage(cmd *cobra.Command, w io.Writer) error {
 	name := cmd.CommandPath()
 
 	short := cmd.Short
-	long := cmd.Long
-	if len(long) == 0 {
-		long = short
-	}
 
 	buf.WriteString("# `" + name + "`\n\n")
 
@@ -69,8 +65,10 @@ func genMarkdownPage(cmd *cobra.Command, w io.Writer) error {
 		buf.WriteString(fmt.Sprintf("```bash\n%s\n```\n\n", cmd.UseLine()))
 	}
 
-	buf.WriteString("## Usage\n\n")
-	buf.WriteString(long + "\n")
+	if len(cmd.Long) != 0 {
+		buf.WriteString("## Usage\n\n")
+		buf.WriteString(cmd.Long + "\n")
+	}
 
 	if err := printFlags(buf, cmd, name); err != nil {
 		return err

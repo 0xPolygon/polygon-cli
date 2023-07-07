@@ -14,14 +14,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	_ "embed"
-
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 var (
-	//go:embed usage.md
-	usage                 string
 	rpcURL                string
 	blockHash             ethcommon.Hash
 	retryLimit            = 30
@@ -31,7 +27,7 @@ var (
 var ForkCmd = &cobra.Command{
 	Use:   "fork blockhash url",
 	Short: "Take a forked block and walk up the chain to do analysis.",
-	Long:  usage,
+	Long:  "",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Info().Str("rpc", rpcURL).Str("blockHash", blockHash.String()).Msg("Starting Analysis")
 		c, err := ethclient.Dial(rpcURL)

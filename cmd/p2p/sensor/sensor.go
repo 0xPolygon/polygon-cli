@@ -47,10 +47,9 @@ var (
 // sensor and transmitting blocks and transactions to a database.
 var SensorCmd = &cobra.Command{
 	Use:   "sensor [nodes file]",
-	Short: "devp2p sensor that does peer discovery and block/transaction propagation.",
-	Long: `Starts a devp2p sensor that discovers other peers and will receive blocks and
-transactions. If no nodes.json file exists, run echo "{}" >> nodes.json to get started.`,
-	Args: cobra.MinimumNArgs(1),
+	Short: "Start a devp2p sensor that discovers other peers and will receive blocks and transactions. ",
+	Long:  "If no nodes.json file exists, run `echo \"{}\" >> nodes.json` to get started.",
+	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputSensorParams.NodesFile = args[0]
 		if inputSensorParams.NetworkID == 0 {

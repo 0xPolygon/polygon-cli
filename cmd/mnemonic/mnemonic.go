@@ -17,7 +17,6 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package mnemonic
 
 import (
-	_ "embed"
 	"fmt"
 
 	"github.com/maticnetwork/polygon-cli/hdwallet"
@@ -25,8 +24,6 @@ import (
 )
 
 var (
-	//go:embed usage.md
-	usage              string
 	inputMnemonicWords *int
 	inputMnemonicLang  *string
 )
@@ -35,7 +32,7 @@ var (
 var MnemonicCmd = &cobra.Command{
 	Use:   "mnemonic",
 	Short: "Generate a BIP39 mnemonic seed.",
-	Long:  usage,
+	Long:  "",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		mnemonic, err := hdwallet.NewMnemonic(*inputMnemonicWords, *inputMnemonicLang)
 		if err != nil {

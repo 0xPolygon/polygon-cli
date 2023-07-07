@@ -17,14 +17,6 @@ Generate a BIP39 mnemonic seed.
 polycli mnemonic [flags]
 ```
 
-## Usage
-
-```bash
-polycli mnemonic
-polycli mnemonic --language spanish
-polycli mnemonic --language spanish --words 12
-```
-
 ## Flags
 
 ```bash

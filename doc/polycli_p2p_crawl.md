@@ -11,7 +11,7 @@
 
 ## Description
 
-Crawl a network.
+Crawl a network on the devp2p layer and generate a nodes JSON file.
 
 ```bash
 polycli p2p crawl [nodes file] [flags]
@@ -19,9 +19,7 @@ polycli p2p crawl [nodes file] [flags]
 
 ## Usage
 
-This will crawl the network on the devp2p layer and generate a nodes
-json file. If no nodes.json file exists, run echo "{}" >> nodes.json to get
-started.
+If no nodes.json file exists, run `echo "{}" >> nodes.json` to get started.
 ## Flags
 
 ```bash
