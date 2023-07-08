@@ -110,7 +110,7 @@ func (a DataDogWidgets) Less(i, j int) bool { return a[i].Definition.Title < a[j
 
 func ConvertMetricsToDashboard(input *DashboardOptions) ([]byte, error) {
 	if len(input.TemplateVars) != len(input.TemplateVarDefaults) && len(input.TemplateVarDefaults) > 0 {
-		return nil, fmt.Errorf("the length of the template vars and template var defaults arguents do not match")
+		return nil, fmt.Errorf("the length of the template vars and template var defaults arguments do not match")
 	}
 	metrics, err := ParseMetricsFile(input.File)
 	if err != nil {
@@ -153,13 +153,13 @@ func MetricsToDataDog(dopts *DashboardOptions, metrics map[string]*dto.MetricFam
 		switch *v.Type {
 
 		case dto.MetricType_COUNTER:
-			// Monotonically increasing counter. By default we probalby want to show the derivative
+			// Monotonically increasing counter. By default we probably want to show the derivative
 			w = NewDataDogCounterWidget(dopts, v)
 		case dto.MetricType_GAUGE:
 			// Numerical value that can go up and down
 			w = NewDataDogGaugeWidget(dopts, v)
 		case dto.MetricType_SUMMARY:
-			// Samples of obervations
+			// Samples of observations
 			continue
 		case dto.MetricType_UNTYPED:
 			continue
