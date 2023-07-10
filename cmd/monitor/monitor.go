@@ -135,6 +135,8 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 	if isUiRendered && batchSize < 0 {
 		_, termHeight := ui.TerminalDimensions()
 		batchSize = termHeight/2 - 4
+	} else {
+		batchSize = 125
 	}
 
 	ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
