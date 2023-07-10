@@ -11,10 +11,10 @@ $ polycli dumpblocks http://127.0.0.1:8545 0 100000 --filename poa-core.0.to.100
 $ cat poa-core.0.to.100k | grep '"difficulty"' > poa-core.0.to.100k.blocks
 ```
 
-Second, generate `genesis.json` if one doesn't exist. Full guide [here](https://wiki.polygon.technology/docs/edge/get-started/set-up-ibft-locally), but an abridged version.
+Second, generate `genesis.json` if one doesn't exist. Here's how you can generate one with `polygon-edge@v0.8.0`.
 
 ```bash
-$ go install github.com/0xPolygon/polygon-edge@develop
+$ go install github.com/0xPolygon/polygon-edge@v0.8.0
 
 $ polygon-edge secrets init --data-dir test-chain-1
 $ NODE_ID=$(polygon-edge secrets output --node-id --data-dir test-chain-1)
