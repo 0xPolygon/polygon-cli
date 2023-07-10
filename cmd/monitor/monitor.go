@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"net/url"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -41,11 +42,12 @@ import (
 
 var (
 	//go:embed usage.md
-	usage       string
-	batchSize   uint64
-	windowSize  int
-	intervalStr string
-	interval    time.Duration
+	usage          string
+	windowSize     int
+	batchSizeValue string
+	batchSize      int
+	intervalStr    string
+	interval       time.Duration
 
 	one  = big.NewInt(1)
 	zero = big.NewInt(0)
@@ -68,6 +70,20 @@ type (
 		ChainID   *big.Int
 		PeerCount uint64
 		GasPrice  *big.Int
+	}
+	uiSkeleton struct {
+		h0  *widgets.Paragraph
+		h1  *widgets.Paragraph
+		h2  *widgets.Paragraph
+		h3  *widgets.Paragraph
+		h4  *widgets.Paragraph
+		sl0 *widgets.Sparkline
+		sl1 *widgets.Sparkline
+		sl2 *widgets.Sparkline
+		sl3 *widgets.Sparkline
+		sl4 *widgets.Sparkline
+		b1  *widgets.List
+		b2  *widgets.List
 	}
 	monitorMode int
 )
@@ -116,10 +132,11 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 		return
 	}
 
-	batchSize := 100
-	if isUiRendered {
+	if isUiRendered && batchSize < 0 {
 		_, termHeight := ui.TerminalDimensions()
 		batchSize = termHeight/2 - 4
+	} else {
+		batchSize = 25
 	}
 
 	ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
@@ -182,6 +199,17 @@ var MonitorCmd = &cobra.Command{
 		// validate interval duration
 		if interval, err = time.ParseDuration(intervalStr); err != nil {
 			return err
+		}
+
+		// validate batch-size flag
+		if batchSizeValue == "auto" {
+			batchSize = -1
+		} else {
+			batchSize, err = strconv.Atoi(batchSizeValue)
+			if err != nil {
+				// Failed to convert to int, handle the error
+				return fmt.Errorf("batch-size needs to be an integer")
+			}
 		}
 
 		return nil
@@ -270,93 +298,88 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 }
 
 func init() {
+	MonitorCmd.PersistentFlags().StringVarP(&batchSizeValue, "batch-size", "b", "auto", "Number of requests per batch")
 	MonitorCmd.PersistentFlags().StringVarP(&intervalStr, "interval", "i", "5s", "Amount of time between batch block rpc calls")
 }
 
-func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) error {
-	if err := ui.Init(); err != nil {
-		return err
-	}
-	defer ui.Close()
-
-	currentMode := monitorModeExplorer
-
-	blockTable := widgets.NewList()
+func setUISkeleton() (blockTable *widgets.List, grid *ui.Grid, blockGrid *ui.Grid, termUi uiSkeleton) {
+	blockTable = widgets.NewList()
 	blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
+	termUi = uiSkeleton{}
 
-	h0 := widgets.NewParagraph()
-	h0.Title = "Current"
+	termUi.h0 = widgets.NewParagraph()
+	termUi.h0.Title = "Current"
 
-	h1 := widgets.NewParagraph()
-	h1.Title = "Gas Price"
+	termUi.h1 = widgets.NewParagraph()
+	termUi.h1.Title = "Gas Price"
 
-	h2 := widgets.NewParagraph()
-	h2.Title = "Current Peers"
+	termUi.h2 = widgets.NewParagraph()
+	termUi.h2.Title = "Current Peers"
 
-	h3 := widgets.NewParagraph()
-	h3.Title = "Chain ID"
+	termUi.h3 = widgets.NewParagraph()
+	termUi.h3.Title = "Chain ID"
 
-	h4 := widgets.NewParagraph()
-	h4.Title = "Avg Block Time"
+	termUi.h4 = widgets.NewParagraph()
+	termUi.h4.Title = "Avg Block Time"
 
-	sl0 := widgets.NewSparkline()
-	sl0.LineColor = ui.ColorRed
-	slg0 := widgets.NewSparklineGroup(sl0)
+	termUi.sl0 = widgets.NewSparkline()
+	termUi.sl0.LineColor = ui.ColorRed
+	slg0 := widgets.NewSparklineGroup(termUi.sl0)
 	slg0.Title = "TXs / Block"
 
-	sl1 := widgets.NewSparkline()
-	sl1.LineColor = ui.ColorGreen
-	slg1 := widgets.NewSparklineGroup(sl1)
+	termUi.sl1 = widgets.NewSparkline()
+	termUi.sl1.LineColor = ui.ColorGreen
+	slg1 := widgets.NewSparklineGroup(termUi.sl1)
 	slg1.Title = "Gas Price"
 
-	sl2 := widgets.NewSparkline()
-	sl2.LineColor = ui.ColorYellow
-	slg2 := widgets.NewSparklineGroup(sl2)
+	termUi.sl2 = widgets.NewSparkline()
+	termUi.sl2.LineColor = ui.ColorYellow
+	slg2 := widgets.NewSparklineGroup(termUi.sl2)
 	slg2.Title = "Block Size"
 
-	sl3 := widgets.NewSparkline()
-	sl3.LineColor = ui.ColorBlue
-	slg3 := widgets.NewSparklineGroup(sl3)
+	termUi.sl3 = widgets.NewSparkline()
+	termUi.sl3.LineColor = ui.ColorBlue
+	slg3 := widgets.NewSparklineGroup(termUi.sl3)
 	slg3.Title = "Uncles"
 
-	sl4 := widgets.NewSparkline()
-	sl4.LineColor = ui.ColorMagenta
-	slg4 := widgets.NewSparklineGroup(sl4)
+	termUi.sl4 = widgets.NewSparkline()
+	termUi.sl4.LineColor = ui.ColorMagenta
+	slg4 := widgets.NewSparklineGroup(termUi.sl4)
 	slg4.Title = "Gas Used"
 
-	grid := ui.NewGrid()
-	blockGrid := ui.NewGrid()
+	grid = ui.NewGrid()
+	blockGrid = ui.NewGrid()
 
 	b0 := widgets.NewParagraph()
 	b0.Title = "Block Headers"
 	b0.Text = "Use the arrow keys to scroll through the transactions. Press <Esc> to go back to the explorer view"
 
-	b1 := widgets.NewList()
-	b1.Title = "Block Info"
-	b1.TextStyle = ui.NewStyle(ui.ColorYellow)
-	b1.WrapText = false
+	termUi.b1 = widgets.NewList()
+	termUi.b1.Title = "Block Info"
+	termUi.b1.TextStyle = ui.NewStyle(ui.ColorYellow)
+	termUi.b1.WrapText = false
 
-	b2 := widgets.NewList()
-	b2.Title = "Transactions"
-	b2.TextStyle = ui.NewStyle(ui.ColorGreen)
-	b2.WrapText = true
+	termUi.b2 = widgets.NewList()
+	termUi.b2.Title = "Transactions"
+	termUi.b2.TextStyle = ui.NewStyle(ui.ColorGreen)
+	termUi.b2.WrapText = true
 
 	blockGrid.Set(
 		ui.NewRow(1.0/10, b0),
 
 		ui.NewRow(9.0/10,
-			ui.NewCol(1.0/2, b1),
-			ui.NewCol(1.0/2, b2),
+			ui.NewCol(1.0/2, termUi.b1),
+			ui.NewCol(1.0/2, termUi.b2),
 		),
 	)
 
 	grid.Set(
 		ui.NewRow(1.0/10,
-			ui.NewCol(1.0/5, h0),
-			ui.NewCol(1.0/5, h1),
-			ui.NewCol(1.0/5, h2),
-			ui.NewCol(1.0/5, h3),
-			ui.NewCol(1.0/5, h4),
+			ui.NewCol(1.0/5, termUi.h0),
+			ui.NewCol(1.0/5, termUi.h1),
+			ui.NewCol(1.0/5, termUi.h2),
+			ui.NewCol(1.0/5, termUi.h3),
+			ui.NewCol(1.0/5, termUi.h4),
 		),
 
 		ui.NewRow(4.0/10,
@@ -369,6 +392,19 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		ui.NewRow(5.0/10, blockTable),
 	)
 
+	return
+}
+
+func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) error {
+	if err := ui.Init(); err != nil {
+		return err
+	}
+	defer ui.Close()
+
+	currentMode := monitorModeExplorer
+
+	blockTable, grid, blockGrid, termUi := setUISkeleton()
+
 	termWidth, termHeight := ui.TerminalDimensions()
 	grid.SetRect(0, 0, termWidth, termHeight)
 	blockGrid.SetRect(0, 0, termWidth, termHeight)
@@ -379,7 +415,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	var renderedBlocks metrics.SortableBlocks
 	windowOffset := 0
 
-	redraw := func(ms *monitorStatus) {
+	redraw := func(ms *monitorStatus, force ...bool) {
 		log.Debug().Interface("ms", ms).Msg("Redrawing")
 
 		termWidth, termHeight = ui.TerminalDimensions()
@@ -389,15 +425,15 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			// TODO add some help context?
 		} else if currentMode == monitorModeBlock {
 			// render a block
-			b1.Rows = metrics.GetSimpleBlockFields(selectedBlock)
-			b2.Rows = metrics.GetSimpleBlockTxFields(selectedBlock, ms.ChainID)
+			termUi.b1.Rows = metrics.GetSimpleBlockFields(selectedBlock)
+			termUi.b2.Rows = metrics.GetSimpleBlockTxFields(selectedBlock, ms.ChainID)
 
 			ui.Clear()
 			ui.Render(blockGrid)
 			return
 		}
 
-		if blockTable.SelectedRow == 0 {
+		if blockTable.SelectedRow == 0 || len(force) > 0 && force[0] {
 			// default
 			blocks := make([]rpctypes.PolyBlock, 0)
 
@@ -417,18 +453,18 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		end := len(allBlocks) - windowOffset
 		renderedBlocks = allBlocks[start:end]
 
-		h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
+		termUi.h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
 		gasGwei := new(big.Int).Div(ms.GasPrice, metrics.UnitShannon)
-		h1.Text = fmt.Sprintf("%s gwei", gasGwei.String())
-		h2.Text = fmt.Sprintf("%d", ms.PeerCount)
-		h3.Text = ms.ChainID.String()
-		h4.Text = fmt.Sprintf("%0.2f", metrics.GetMeanBlockTime(renderedBlocks))
+		termUi.h1.Text = fmt.Sprintf("%s gwei", gasGwei.String())
+		termUi.h2.Text = fmt.Sprintf("%d", ms.PeerCount)
+		termUi.h3.Text = ms.ChainID.String()
+		termUi.h4.Text = fmt.Sprintf("%0.2f", metrics.GetMeanBlockTime(renderedBlocks))
 
-		sl0.Data = metrics.GetTxsPerBlock(renderedBlocks)
-		sl1.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
-		sl2.Data = metrics.GetSizePerBlock(renderedBlocks)
-		sl3.Data = metrics.GetUnclesPerBlock(renderedBlocks)
-		sl4.Data = metrics.GetGasPerBlock(renderedBlocks)
+		termUi.sl0.Data = metrics.GetTxsPerBlock(renderedBlocks)
+		termUi.sl1.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
+		termUi.sl2.Data = metrics.GetSizePerBlock(renderedBlocks)
+		termUi.sl3.Data = metrics.GetUnclesPerBlock(renderedBlocks)
+		termUi.sl4.Data = metrics.GetGasPerBlock(renderedBlocks)
 
 		// If a row has not been selected, continue to update the list with new blocks.
 		rows, title := metrics.GetSimpleBlockRecords(renderedBlocks)
@@ -480,10 +516,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				ui.Clear()
 			case "<Up>", "<Down>":
 				if currentMode == monitorModeBlock {
-					if len(b2.Rows) != 0 && e.ID == "<Down>" {
-						b2.ScrollDown()
-					} else if len(b2.Rows) != 0 && e.ID == "<Up>" {
-						b2.ScrollUp()
+					if len(termUi.b2.Rows) != 0 && e.ID == "<Down>" {
+						termUi.b2.ScrollDown()
+					} else if len(termUi.b2.Rows) != 0 && e.ID == "<Up>" {
+						termUi.b2.ScrollUp()
 					}
 					break
 				}
@@ -503,19 +539,29 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 						Int("renderedBlocks", len(renderedBlocks)).
 						Int("dy", blockTable.Dy()).
 						Int("windowOffset", windowOffset).
+						Int("allBlocks", len(allBlocks)).
 						Msg("Down")
 
-					if currIdx > windowSize-1 && windowOffset < len(allBlocks)-windowSize {
-						windowOffset += 1
-					} else {
-						to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
-						var from *big.Int
-						if from = new(big.Int).Sub(to, big.NewInt(int64(windowSize))); from.Cmp(zero) < 0 {
-							from.SetInt64(0)
-						}
-						err := ms.getBlockRange(ctx, from, to, rpc)
-						if err != nil {
-							log.Error().Err(err).Msg("There was an issue fetching the block range")
+					// the last row of current window size
+					if currIdx > windowSize-1 {
+						if windowOffset+windowSize < len(allBlocks) {
+							windowOffset += 1
+							// windowOffset += windowSize
+							break
+						} else {
+							to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
+							var from *big.Int
+							if from = new(big.Int).Sub(to, big.NewInt(int64(batchSize))); from.Cmp(zero) < 0 {
+								from.SetInt64(0)
+							}
+							err := ms.getBlockRange(ctx, from, to, rpc)
+							if err != nil {
+								log.Error().Err(err).Msg("There was an issue fetching the block range")
+							}
+							redraw(ms, true)
+							windowOffset += 1
+							currIdx += 1
+							break
 						}
 					}
 					currIdx += 1
