@@ -135,8 +135,6 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 	if isUiRendered && batchSize < 0 {
 		_, termHeight := ui.TerminalDimensions()
 		batchSize = termHeight/2 - 4
-	} else {
-		batchSize = 25
 	}
 
 	ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
@@ -546,7 +544,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					if currIdx > windowSize-1 {
 						if windowOffset+windowSize < len(allBlocks) {
 							windowOffset += 1
-							// windowOffset += windowSize
 							break
 						} else {
 							to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
@@ -561,6 +558,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 							redraw(ms, true)
 							windowOffset += 1
 							currIdx += 1
+							setBlock = true
 							break
 						}
 					}
