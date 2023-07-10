@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	_ "embed"
+
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
@@ -38,6 +40,8 @@ import (
 )
 
 var (
+	//go:embed usage.md
+	usage       string
 	batchSize   uint64
 	windowSize  int
 	intervalStr string
@@ -104,8 +108,9 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 
 // monitorCmd represents the monitor command
 var MonitorCmd = &cobra.Command{
-	Use:   "monitor [rpc-url]",
-	Short: "A simple terminal monitor for a blockchain",
+	Use:   "monitor url",
+	Short: "Monitor blocks using a JSON-RPC endpoint.",
+	Long:  usage,
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		// validate url argument

@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	_ "embed"
+
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/maticnetwork/polygon-cli/proto/gen/pb"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
@@ -58,13 +60,17 @@ type (
 	}
 )
 
-var inputDumpblocks dumpblocksParams = dumpblocksParams{}
+var (
+	//go:embed usage.md
+	usage           string
+	inputDumpblocks dumpblocksParams = dumpblocksParams{}
+)
 
 // dumpblocksCmd represents the dumpblocks command
 var DumpblocksCmd = &cobra.Command{
-	Use:   "dumpblocks URL start end",
-	Short: "Export a range of blocks from an RPC endpoint",
-	Long:  `This is a simple function to export a range of blocks from a JSON RPC endpoint.`,
+	Use:   "dumpblocks url start end",
+	Short: "Export a range of blocks from a JSON-RPC endpoint.",
+	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		ec, err := ethrpc.DialContext(ctx, args[0])
