@@ -17,7 +17,7 @@ hex_funding_amount := $(shell echo "obase=16; ${LOADTEST_FUNDING_AMOUNT_ETH}*10^
 geth-loadtest: build ## Fund test account with 5k ETH and run loadtest against an EVM/Geth chain.
 	curl -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "${eth_coinbase}","to": "${LOADTEST_ACCOUNT}","value": "0x${hex_funding_amount}"}], "id":1}' http://127.0.0.1:${PORT}
 	sleep 5
-	$(BUILD_DIR)/$(BIN_NAME) loadtest --verbosity 700 --chain-id 1337 --concurrency 1 --requests 1000 --rate-limit 5 --mode c http://127.0.0.1:$(PORT)
+	$(BUILD_DIR)/$(BIN_NAME) loadtest --verbosity 700 --chain-id 1337 --concurrency 1 --requests 1000 --rate-limit 100 --mode c --legacy http://127.0.0.1:$(PORT)
 
 .PHONY: avail-loadtest
 avail-loadtest: build ## Run loadtest against an Avail chain.
