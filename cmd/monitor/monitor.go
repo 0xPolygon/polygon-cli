@@ -214,6 +214,9 @@ var MonitorCmd = &cobra.Command{
 			batchSize = -1
 		} else {
 			batchSize, err = strconv.Atoi(batchSizeValue)
+			if batchSize == 0 {
+				return fmt.Errorf("batch-size can't be equal to zero")
+			}
 			if err != nil {
 				// Failed to convert to int, handle the error
 				return fmt.Errorf("batch-size needs to be an integer")
@@ -432,6 +435,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	blockTable, grid, blockGrid, termUi := setUISkeleton()
 
 	termWidth, termHeight := ui.TerminalDimensions()
+	windowSize = termHeight/2 - 4
 	grid.SetRect(0, 0, termWidth, termHeight)
 	blockGrid.SetRect(0, 0, termWidth, termHeight)
 
@@ -443,9 +447,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 	redraw := func(ms *monitorStatus, force ...bool) {
 		log.Debug().Interface("ms", ms).Msg("Redrawing")
-
-		termWidth, termHeight = ui.TerminalDimensions()
-		windowSize = termHeight/2 - 4
 
 		if currentMode == monitorModeHelp {
 			// TODO add some help context?
@@ -511,6 +512,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	currIdx := 0
 	previousKey := ""
 	for {
+		forceRedraw := false
 		select {
 		case e := <-uiEvents:
 			switch e.ID {
@@ -528,7 +530,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				payload := e.Payload.(ui.Resize)
 				grid.SetRect(0, 0, payload.Width, payload.Height)
 				blockGrid.SetRect(0, 0, payload.Width, payload.Height)
-				_, termHeight := ui.TerminalDimensions()
+				_, termHeight = ui.TerminalDimensions()
 				windowSize = termHeight/2 - 4
 				ui.Clear()
 			case "<Up>", "<Down>":
@@ -563,13 +565,12 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					if currIdx > windowSize-1 {
 						if windowOffset+windowSize < len(allBlocks) {
 							windowOffset += 1
+						} else if windowOffset+len(renderedBlocks) == len(allBlocks) {
 							break
 						} else {
 							appendOlderBlocks(ctx, ms, rpc)
+							forceRedraw = true
 							redraw(ms, true)
-							windowOffset += 1
-							currIdx += 1
-							setBlock = true
 							break
 						}
 					}
@@ -608,8 +609,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				}
 				setBlock = true
 			case "<C-f>", "<PageDown>":
-				// reset to top
-
 				if len(renderedBlocks) < windowSize {
 					windowOffset = 0
 					blockTable.SelectedRow = len(renderedBlocks)
@@ -619,12 +618,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				// good to go to next page but not enough blocks to fill page
 				if windowOffset > len(allBlocks)-windowSize {
 					appendOlderBlocks(ctx, ms, rpc)
+					forceRedraw = true
 					redraw(ms, true)
-					if windowOffset > len(allBlocks)-windowSize {
-						windowOffset = len(allBlocks) - windowSize
-					}
 				}
-				blockTable.SelectedRow = max(windowSize, len(renderedBlocks))
+				blockTable.SelectedRow = len(renderedBlocks)
 				setBlock = true
 			case "<C-b>", "<PageUp>":
 				windowOffset -= windowSize
@@ -642,7 +639,9 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				previousKey = e.ID
 			}
 
-			redraw(ms)
+			if !forceRedraw {
+				redraw(ms)
+			}
 		case <-ticker:
 			if currentBn != ms.HeadBlock {
 				currentBn = ms.HeadBlock
@@ -656,6 +655,16 @@ func max(nums ...int) int {
 	m := nums[0]
 	for _, n := range nums {
 		if m < n {
+			m = n
+		}
+	}
+	return m
+}
+
+func min(nums ...int) int {
+	m := nums[0]
+	for _, n := range nums {
+		if m > n {
 			m = n
 		}
 	}
