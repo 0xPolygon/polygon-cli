@@ -122,27 +122,7 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 
 }
 
-func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client, isUiRendered bool) (err error) {
-	var cs *chainState
-	cs, err = getChainState(ctx, ec)
-	if err != nil {
-		log.Error().Err(err).Msg("Encountered issue fetching network information")
-		time.Sleep(interval)
-		// continue
-		return
-	}
-
-	if isUiRendered && batchSize < 0 {
-		_, termHeight := ui.TerminalDimensions()
-		batchSize = termHeight/2 - 4
-	} else {
-		batchSize = 125
-	}
-
-	ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
-	ms.ChainID = cs.ChainID
-	ms.PeerCount = cs.PeerCount
-	ms.GasPrice = cs.GasPrice
+func prependLatestBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Client) {
 	from := new(big.Int).Sub(ms.HeadBlock, big.NewInt(int64(batchSize-1)))
 	// Prevent getBlockRange from fetching duplicate blocks.
 	if ms.MaxBlockRetrieved.Cmp(from) == 1 {
@@ -159,13 +139,16 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 		Int64("max", ms.MaxBlockRetrieved.Int64()).
 		Msg("Fetching latest blocks")
 
-	err = ms.getBlockRange(ctx, from, ms.HeadBlock, rpc)
+	err := ms.getBlockRange(ctx, from, ms.HeadBlock, rpc)
 	if err != nil {
 		log.Error().Err(err).Msg("There was an issue fetching the block range")
 	}
+}
 
+func appendOlderBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Client) {
 	to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
-	if from = new(big.Int).Sub(to, big.NewInt(int64(batchSize-1))); from.Cmp(zero) < 0 {
+	from := new(big.Int).Sub(to, big.NewInt(int64(batchSize-1)))
+	if from.Cmp(zero) < 0 {
 		from.SetInt64(0)
 	}
 
@@ -175,10 +158,35 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 		Int64("min", ms.MinBlockRetrieved.Int64()).
 		Msg("Fetching older blocks")
 
-	err = ms.getBlockRange(ctx, from, to, rpc)
+	err := ms.getBlockRange(ctx, from, to, rpc)
 	if err != nil {
 		log.Error().Err(err).Msg("There was an issue fetching the block range")
 	}
+}
+
+func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client, isUiRendered bool) (err error) {
+	var cs *chainState
+	cs, err = getChainState(ctx, ec)
+	if err != nil {
+		log.Error().Err(err).Msg("Encountered issue fetching network information")
+		time.Sleep(interval)
+		return err
+	}
+
+	if isUiRendered && batchSize < 0 {
+		_, termHeight := ui.TerminalDimensions()
+		batchSize = termHeight/2 - 4
+	} else {
+		batchSize = 50
+	}
+
+	ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
+	ms.ChainID = cs.ChainID
+	ms.PeerCount = cs.PeerCount
+	ms.GasPrice = cs.GasPrice
+
+	prependLatestBlocks(ctx, ms, rpc)
+	appendOlderBlocks(ctx, ms, rpc)
 
 	return
 }
@@ -237,6 +245,9 @@ var MonitorCmd = &cobra.Command{
 		go func() {
 			for {
 				err = fetchBlocks(ctx, ec, ms, rpc, isUiRendered)
+				if err != nil {
+					continue
+				}
 
 				if !isUiRendered {
 					go func() {
@@ -395,6 +406,21 @@ func setUISkeleton() (blockTable *widgets.List, grid *ui.Grid, blockGrid *ui.Gri
 	return
 }
 
+func updateAllBlocks(ms *monitorStatus) []rpctypes.PolyBlock {
+	// default
+	blocks := make([]rpctypes.PolyBlock, 0)
+
+	ms.BlocksLock.RLock()
+	for _, b := range ms.Blocks {
+		blocks = append(blocks, b)
+	}
+	ms.BlocksLock.RUnlock()
+
+	allBlocks := metrics.SortableBlocks(blocks)
+
+	return allBlocks
+}
+
 func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) error {
 	if err := ui.Init(); err != nil {
 		return err
@@ -434,16 +460,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		}
 
 		if blockTable.SelectedRow == 0 || len(force) > 0 && force[0] {
-			// default
-			blocks := make([]rpctypes.PolyBlock, 0)
-
-			ms.BlocksLock.RLock()
-			for _, b := range ms.Blocks {
-				blocks = append(blocks, b)
-			}
-			ms.BlocksLock.RUnlock()
-
-			allBlocks = metrics.SortableBlocks(blocks)
+			allBlocks = updateAllBlocks(ms)
 			sort.Sort(allBlocks)
 		}
 		start := len(allBlocks) - windowSize - windowOffset
@@ -548,15 +565,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 							windowOffset += 1
 							break
 						} else {
-							to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
-							var from *big.Int
-							if from = new(big.Int).Sub(to, big.NewInt(int64(batchSize))); from.Cmp(zero) < 0 {
-								from.SetInt64(0)
-							}
-							err := ms.getBlockRange(ctx, from, to, rpc)
-							if err != nil {
-								log.Error().Err(err).Msg("There was an issue fetching the block range")
-							}
+							appendOlderBlocks(ctx, ms, rpc)
 							redraw(ms, true)
 							windowOffset += 1
 							currIdx += 1
@@ -599,6 +608,8 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				}
 				setBlock = true
 			case "<C-f>", "<PageDown>":
+				// reset to top
+
 				if len(renderedBlocks) < windowSize {
 					windowOffset = 0
 					blockTable.SelectedRow = len(renderedBlocks)
@@ -607,21 +618,14 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				windowOffset += windowSize
 				// good to go to next page but not enough blocks to fill page
 				if windowOffset > len(allBlocks)-windowSize {
-					windowOffset = len(allBlocks) - windowSize
-					to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
-					var from *big.Int
-					if from = new(big.Int).Sub(to, big.NewInt(int64(windowSize))); from.Cmp(zero) < 0 {
-						from.SetInt64(0)
-					}
-					err := ms.getBlockRange(ctx, from, to, rpc)
-					if err != nil {
-						log.Error().Err(err).Msg("There was an issue fetching the block range")
-					}
+					appendOlderBlocks(ctx, ms, rpc)
 					redraw(ms, true)
-					blockTable.SelectedRow = windowSize
-					break
+					if windowOffset > len(allBlocks)-windowSize {
+						windowOffset = len(allBlocks) - windowSize
+					}
 				}
-				blockTable.SelectedRow = windowSize
+				blockTable.SelectedRow = max(windowSize, len(renderedBlocks))
+				setBlock = true
 			case "<C-b>", "<PageUp>":
 				windowOffset -= windowSize
 				if windowOffset < 0 {
