@@ -605,6 +605,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					break
 				}
 				windowOffset += windowSize
+				// good to go to next page but not enough blocks to fill page
 				if windowOffset > len(allBlocks)-windowSize {
 					windowOffset = len(allBlocks) - windowSize
 					to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
@@ -616,7 +617,11 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					if err != nil {
 						log.Error().Err(err).Msg("There was an issue fetching the block range")
 					}
+					redraw(ms, true)
+					blockTable.SelectedRow = windowSize
+					break
 				}
+				blockTable.SelectedRow = windowSize
 			case "<C-b>", "<PageUp>":
 				windowOffset -= windowSize
 				if windowOffset < 0 {
