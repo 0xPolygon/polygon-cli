@@ -1559,7 +1559,11 @@ func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 		if ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
 			tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
 		} else {
-			tops.GasPrice = big.NewInt(0).Add(ltp.BaseFee, ltp.CurrentGasTipCap)
+			if ltp.BaseFee != nil {
+				tops.GasPrice = big.NewInt(0).Add(ltp.BaseFee, ltp.CurrentGasTipCap)
+			} else {
+				log.Fatal().Msg("EIP-1559 not activated. Please use --legacy")
+			}
 		}
 		if ltp.ForcePriorityGasPrice != nil && *ltp.ForcePriorityGasPrice != 0 {
 			tops.GasTipCap = big.NewInt(0).SetUint64(*ltp.ForcePriorityGasPrice)
