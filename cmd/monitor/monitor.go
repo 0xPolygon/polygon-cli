@@ -660,13 +660,3 @@ func max(nums ...int) int {
 	}
 	return m
 }
-
-func min(nums ...int) int {
-	m := nums[0]
-	for _, n := range nums {
-		if m > n {
-			m = n
-		}
-	}
-	return m
-}
