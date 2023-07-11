@@ -15,6 +15,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/sha1"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,8 +25,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	_ "embed"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -1693,7 +1692,7 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPC
 		return currTestResult
 	}
 	if err == nil && currTest.ExpectError() {
-		currTestResult.Fail(args, result, errors.New("Expected an error but didn't get one: "+err.Error()))
+		currTestResult.Fail(args, result, errors.New("Expected an error but didn't get one"))
 		return currTestResult
 	}
 
