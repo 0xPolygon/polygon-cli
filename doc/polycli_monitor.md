@@ -28,10 +28,9 @@ If you're experiencing missing blocks, try adjusting the `--batch-size` and `--i
 ## Flags
 
 ```bash
-  -b, --batch-size uint   Number of requests per batch (default 25)
-  -h, --help              help for monitor
-  -i, --interval string   Amount of time between batch block rpc calls (default "5s")
-  -w, --window-size int   Number of blocks visible in the window (default 25)
+  -b, --batch-size string   Number of requests per batch (default "auto")
+  -h, --help                help for monitor
+  -i, --interval string     Amount of time between batch block rpc calls (default "5s")
 ```
 
 The command also inherits flags from parent commands.
