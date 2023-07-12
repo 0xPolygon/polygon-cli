@@ -19,7 +19,7 @@ package loadtest
 import (
 	"context"
 	"crypto/ecdsa"
-	cryptorand "crypto/rand"
+	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -27,7 +27,6 @@ import (
 	"io"
 	"math"
 	"math/big"
-	"math/rand"
 	"net/url"
 	"os"
 	"os/signal"
@@ -151,8 +150,6 @@ var (
 		0xFF, 0xBA, 0xDD, 0x11,
 		0xF0, 0x0D, 0xBA, 0xBE,
 	}
-
-	random *rand.Rand
 )
 
 // LoadtestCmd represents the loadtest command
@@ -233,7 +230,6 @@ type (
 		Function                            *uint64
 		Iterations                          *uint64
 		ByteCount                           *uint64
-		Seed                                *int64
 		IsAvail                             *bool
 		LtAddress                           *string
 		DelAddress                          *string
@@ -303,7 +299,6 @@ r - random modes
 	ltp.Function = LoadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` or a specific precompiled contract when running with `--mode a`")
 	ltp.Iterations = LoadtestCmd.PersistentFlags().Uint64P("iterations", "i", 100, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicated the minting batch size")
 	ltp.ByteCount = LoadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
-	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
 	ltp.IsAvail = LoadtestCmd.PersistentFlags().Bool("data-avail", false, "Is this a test of avail rather than an EVM / Geth Chain")
 	ltp.LtAddress = LoadtestCmd.PersistentFlags().String("lt-address", "", "A pre-deployed load test contract address")
 	ltp.DelAddress = LoadtestCmd.PersistentFlags().String("del-address", "", "A pre-deployed delegator contract address")
@@ -410,8 +405,6 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		*inputLoadTestParams.ChainID = chainID.Uint64()
 	}
 	inputLoadTestParams.BaseFee = header.BaseFee
-
-	random = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
 	return nil
 }
@@ -1090,7 +1083,11 @@ func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltCont
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 	iterations := ltp.Iterations
-	f := contracts.GetRandomOPCode()
+	f, err := contracts.GetRandomOPCode()
+	if err != nil {
+		log.Error().Err(err).Msg("error creating random op code")
+		return
+	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
@@ -1282,7 +1279,7 @@ func (hw *hexwordReader) Read(p []byte) (n int, err error) {
 
 func getRandomAddress() *ethcommon.Address {
 	addr := make([]byte, 20)
-	n, err := cryptorand.Read(addr)
+	n, err := rand.Read(addr)
 	if err != nil {
 		log.Error().Err(err).Msg("There was an issue getting random bytes for the address")
 	}
@@ -1465,7 +1462,7 @@ func loadtestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uin
 	toAddr := *ltp.ToAvailAddress
 	if *ltp.ToRandom {
 		pk := make([]byte, 32)
-		_, err = cryptorand.Read(pk)
+		_, err = rand.Read(pk)
 		if err != nil {
 			// For some reason weren't able to read the random data
 			log.Error().Msg("Sending to random is not implemented for substrate yet")

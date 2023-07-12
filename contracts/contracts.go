@@ -1,12 +1,11 @@
 package contracts
 
 import (
+	"crypto/rand"
 	_ "embed"
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"math/rand"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -24,8 +23,6 @@ var RawLoadTesterBin string
 
 //go:embed LoadTester.abi
 var RawLoadTesterABI string
-
-var random *rand.Rand
 
 func GetLoadTesterBytes() ([]byte, error) {
 	return hex.DecodeString(RawLoadTesterBin)
@@ -284,7 +281,7 @@ func CallLoadTestFunctionByOpCode(shortCode uint64, lt *LoadTester, opts *bind.T
 	return nil, fmt.Errorf("the tx code %d was unrecognized", shortCode)
 }
 
-func GetRandomOPCode() uint64 {
+func GetRandomOPCode() (uint64, error) {
 	codes := []uint64{
 		0x01,
 		0x02,
@@ -349,8 +346,10 @@ func GetRandomOPCode() uint64 {
 		0xA4,
 	}
 
-	return codes[random.Intn(len(codes))]
-}
-func init() {
-	random = rand.New(rand.NewSource(time.Now().Unix()))
+	randomIndex, err := rand.Int(rand.Reader, big.NewInt(int64(len(codes))))
+	if err != nil {
+		return 0, err
+	}
+
+	return codes[randomIndex.Int64()], nil
 }
