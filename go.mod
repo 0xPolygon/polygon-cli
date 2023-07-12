@@ -29,6 +29,7 @@ require (
 require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/google/gofuzz v1.2.0
+	github.com/jedib0t/go-pretty/v6 v6.4.6
 	github.com/xeipuuv/gojsonschema v1.2.0
 )
 
@@ -142,6 +143,7 @@ require (
 	github.com/prometheus/client_golang v1.13.1 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
+	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/tinylib/msgp v1.1.2 // indirect
 	github.com/umbracle/ethgo v0.1.4-0.20230126112511-6a4d02533af6 // indirect
@@ -217,7 +219,7 @@ require (
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/mattn/go-pointer v0.0.1 // indirect
-	github.com/mattn/go-runewidth v0.0.9 // indirect
+	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mimoo/StrobeGo v0.0.0-20210601165009-122bf33a46e0 // indirect
 	github.com/minio/sha256-simd v1.0.0 // indirect

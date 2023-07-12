@@ -139,19 +139,23 @@ const (
 
 var (
 	//go:embed usage.md
-	usage                 string
-	testPrivateHexKey     *string
-	testContractAddress   *string
-	testPrivateKey        *ecdsa.PrivateKey
-	testEthAddress        ethcommon.Address
-	testNamespaces        *string
-	testFuzz              *bool
-	testFuzzNum           *int
-	seed                  *int64
-	testAccountNonce      uint64
-	testAccountNonceMutex sync.Mutex
-	currentChainID        *big.Int
-	fuzzer                *fuzz.Fuzzer
+	usage                  string
+	testPrivateHexKey      *string
+	testContractAddress    *string
+	testPrivateKey         *ecdsa.PrivateKey
+	testEthAddress         ethcommon.Address
+	testNamespaces         *string
+	testFuzz               *bool
+	testFuzzNum            *int
+	seed                   *int64
+	testJSONExportPath     *string
+	testCSVExportPath      *string
+	testMarkdownExportPath *string
+	testHTMLExportPath     *string
+	testAccountNonce       uint64
+	testAccountNonceMutex  sync.Mutex
+	currentChainID         *big.Int
+	fuzzer                 *fuzz.Fuzzer
 
 	enabledNamespaces []string
 
@@ -1714,7 +1718,7 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPC
 }
 
 func CallRPCWithFuzzAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPCTest) testreporter.TestResult {
-	currTestResult := testreporter.New("FUzzed"+currTest.GetName(), "fuzzed-"+currTest.GetMethod(), *testFuzzNum)
+	currTestResult := testreporter.New(currTest.GetName()+"-FUZZED", currTest.GetMethod(), *testFuzzNum)
 
 	originalArgs := currTest.GetArgs()
 	for i := 0; i < *testFuzzNum; i++ {
@@ -1802,7 +1806,7 @@ var RPCFuzzCmd = &cobra.Command{
 			log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Running Test")
 
 			currTestResult := CallRPCAndValidate(ctx, rpcClient, t)
-			testResults = append(testResults, currTestResult)
+			testResults.AddTestResult(currTestResult)
 
 			if *testFuzz {
 				fuzzedTestsGroup.Add(1)
@@ -1819,7 +1823,7 @@ var RPCFuzzCmd = &cobra.Command{
 		go func() {
 			for currTestResult := range testResultsCh {
 				testResultMutex.Lock()
-				testResults = append(testResults, currTestResult)
+				testResults.AddTestResult(currTestResult)
 				testResultMutex.Unlock()
 			}
 		}()
@@ -1827,7 +1831,20 @@ var RPCFuzzCmd = &cobra.Command{
 		fuzzedTestsGroup.Wait()
 		close(testResultsCh)
 
-		testResults.PrintSummary()
+		testResults.GenerateTabularResult()
+		if *testJSONExportPath != "" {
+			testResults.ExportResultToJSON(*testJSONExportPath)
+		}
+		if *testCSVExportPath != "" {
+			testResults.ExportResultToCSV(*testCSVExportPath)
+		}
+		if *testMarkdownExportPath != "" {
+			testResults.ExportResultToMarkdown(*testMarkdownExportPath)
+		}
+		if *testHTMLExportPath != "" {
+			testResults.ExportResultToHTML(*testHTMLExportPath)
+		}
+		testResults.PrintTabularResult()
 
 		return nil
 	},
@@ -1881,6 +1898,10 @@ func init() {
 	testFuzz = flagSet.Bool("fuzz", false, "Flag to indicate whether to fuzz input or not.")
 	testFuzzNum = flagSet.Int("fuzzn", 100, "Number of times to run the fuzzer per test.")
 	seed = flagSet.Int64("seed", 123456, "A seed for generating random values within the fuzzer")
+	testJSONExportPath = flagSet.String("json-export-path", "", "The JSON file export path of the output of the tests")
+	testCSVExportPath = flagSet.String("csv-export-path", "", "The CSV file export path of the output of the tests")
+	testMarkdownExportPath = flagSet.String("markdown-export-path", "", "The markdown file export path of the output of the tests")
+	testHTMLExportPath = flagSet.String("html-export-path", "", "The HTML file export path of the output of the tests")
 
 	rand.Seed(*seed)
 	fuzzer = fuzz.New()
