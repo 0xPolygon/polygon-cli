@@ -100,13 +100,13 @@ func TestGenerateSeededLibp2pNodeKey(t *testing.T) {
 			t.Errorf("test %v: %v", test.name, err)
 		} else {
 			if res.PublicKey != test.expected.PublicKey {
-				t.Errorf("test %s: public keys do not match", res.PublicKey)
+				t.Errorf("test %v: public keys do not match", test.name)
 			}
 			if res.PrivateKey != test.expected.PrivateKey {
-				t.Errorf("test %s: private keys do not match", res.PrivateKey)
+				t.Errorf("test %v: private keys do not match", test.name)
 			}
 			if res.FullPrivateKey != test.expected.FullPrivateKey {
-				t.Errorf("test %s: full private keys do not match", res.FullPrivateKey)
+				t.Errorf("test %v: full private keys do not match", test.name)
 			}
 		}
 	}
