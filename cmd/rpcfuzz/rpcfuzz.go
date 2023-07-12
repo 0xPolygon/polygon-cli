@@ -1905,5 +1905,5 @@ func init() {
 
 	rand.Seed(*seed)
 	fuzzer = fuzz.New()
-	fuzzer.Funcs(argfuzz.MutateRPCArgs)
+	fuzzer.Funcs(argfuzz.FuzzRPCArgs)
 }
