@@ -25,6 +25,8 @@ var RawLoadTesterBin string
 //go:embed LoadTester.abi
 var RawLoadTesterABI string
 
+var random *rand.Rand
+
 func GetLoadTesterBytes() ([]byte, error) {
 	return hex.DecodeString(RawLoadTesterBin)
 }
@@ -347,8 +349,8 @@ func GetRandomOPCode() uint64 {
 		0xA4,
 	}
 
-	return codes[rand.Intn(len(codes))]
+	return codes[random.Intn(len(codes))]
 }
 func init() {
-	rand.Seed(time.Now().Unix())
+	random = rand.New(rand.NewSource(time.Now().Unix()))
 }

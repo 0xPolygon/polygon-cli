@@ -4,12 +4,13 @@
 package argfuzz
 
 import (
+	cryptorand "crypto/rand"
 	"encoding/hex"
 	"math/rand"
 	"reflect"
 	"strconv"
 
-	"github.com/google/gofuzz"
+	fuzz "github.com/google/gofuzz"
 	"github.com/rs/zerolog/log"
 )
 
@@ -86,7 +87,7 @@ func RandomByte() byte {
 func RandomBytesSize(size int) []byte {
 	bytes := make([]byte, size)
 
-	_, err := rand.Read(bytes)
+	_, err := cryptorand.Read(bytes)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate random bytes from default Source.")
 		return []byte{RandomByte()}

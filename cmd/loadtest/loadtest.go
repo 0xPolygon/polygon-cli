@@ -19,6 +19,7 @@ package loadtest
 import (
 	"context"
 	"crypto/ecdsa"
+	cryptorand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -150,6 +151,8 @@ var (
 		0xFF, 0xBA, 0xDD, 0x11,
 		0xF0, 0x0D, 0xBA, 0xBE,
 	}
+
+	random *rand.Rand
 )
 
 // LoadtestCmd represents the loadtest command
@@ -408,7 +411,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 	inputLoadTestParams.BaseFee = header.BaseFee
 
-	rand.Seed(*inputLoadTestParams.Seed)
+	random = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
 	return nil
 }
@@ -1279,7 +1282,7 @@ func (hw *hexwordReader) Read(p []byte) (n int, err error) {
 
 func getRandomAddress() *ethcommon.Address {
 	addr := make([]byte, 20)
-	n, err := rand.Read(addr)
+	n, err := cryptorand.Read(addr)
 	if err != nil {
 		log.Error().Err(err).Msg("There was an issue getting random bytes for the address")
 	}
@@ -1462,7 +1465,7 @@ func loadtestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uin
 	toAddr := *ltp.ToAvailAddress
 	if *ltp.ToRandom {
 		pk := make([]byte, 32)
-		_, err = rand.Read(pk)
+		_, err = cryptorand.Read(pk)
 		if err != nil {
 			// For some reason weren't able to read the random data
 			log.Error().Msg("Sending to random is not implemented for substrate yet")
