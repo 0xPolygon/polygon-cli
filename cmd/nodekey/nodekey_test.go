@@ -81,15 +81,15 @@ func TestGenerateSeededLibp2pNodeKey(t *testing.T) {
 				PublicKey:      "12D3KooWMQMaVofHvQgjffhQGy3RmBRERFJxSJy59BgwTFnYASqX",
 				PrivateKey:     "00000000000425d4000000000000000000000000000000000000000000000000",
 				FullPrivateKey: "00000000000425d4000000000000000000000000000000000000000000000000ac25a2d49f6266b0a513cf0caf9ea45a9d74d74a1131d5530ac3291d70e81d7a",
-			},
+			}, // QmTN9mkNhtUfQ37ZJ1RaepMNBnTQUFFm38fCZgvv6gWzCe
 		},
 		{
 			name:    "ecdsa key with default seed",
 			keyType: libp2pcrypto.ECDSA,
 			expected: nodeKeyOut{
-				PublicKey:      "Qme51zsx66xx4zAo7KZoRKf45hQNEX3jC9Wb3ghUi5GduZ",
-				PrivateKey:     "30770201010420000425d3fffbda2c000000000001164e43c6b2acbc73b3c524",
-				FullPrivateKey: "30770201010420000425d3fffbda2c000000000001164e43c6b2acbc73b3c524c9f680144089c1a00a06082a8648ce3d030107a144034200047f2634af6d55f95d23b41e6f65e46e5f604977d0610df0b1bb9078a4a512f8bcaefadd9bdded533bca2c5c300d838ca894cced1d1006045f51025109fda29688",
+				PublicKey:      "QmTN9mkNhtUfQ37ZJ1RaepMNBnTQUFFm38fCZgvv6gWzCe",
+				PrivateKey:     "3077020101042000000000000425d40000000000000000000000000000000000",
+				FullPrivateKey: "3077020101042000000000000425d4000000000000000000000000000000000000000000000000a00a06082a8648ce3d030107a144034200049bf184b4df263c28f0d3fd5a81c368cc3a717cbc45132709f91f0b0049a04e93948ef588d2c4c09ecf0174e39722b5edd4e088ba633ef4ae405c529d418c7abb",
 			},
 		},
 	}
@@ -100,13 +100,13 @@ func TestGenerateSeededLibp2pNodeKey(t *testing.T) {
 			t.Errorf("test %v: %v", test.name, err)
 		} else {
 			if res.PublicKey != test.expected.PublicKey {
-				t.Errorf("test %v: public keys do not match", test.name)
+				t.Errorf("test %s: public keys do not match", res.PublicKey)
 			}
 			if res.PrivateKey != test.expected.PrivateKey {
-				t.Errorf("test %v: private keys do not match", test.name)
+				t.Errorf("test %s: private keys do not match", res.PrivateKey)
 			}
 			if res.FullPrivateKey != test.expected.FullPrivateKey {
-				t.Errorf("test %v: full private keys do not match", test.name)
+				t.Errorf("test %s: full private keys do not match", res.FullPrivateKey)
 			}
 		}
 	}

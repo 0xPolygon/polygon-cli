@@ -85,7 +85,6 @@ $  docker run -v $PWD/contracts:/contracts ethereum/solc:stable --storage-layout
   -h, --help                      help for rpcfuzz
       --namespaces string         Comma separated list of rpc namespaces to test (default "eth,web3,net,debug")
       --private-key string        The hex encoded private key that we'll use to sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
-      --seed int                  A seed for generating random values within the fuzzer (default 123456)
 ```
 
 The command also inherits flags from parent commands.
