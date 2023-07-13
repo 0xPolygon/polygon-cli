@@ -29,6 +29,7 @@ require (
 require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/google/gofuzz v1.2.0
+	github.com/schollz/progressbar/v3 v3.13.1
 	github.com/xeipuuv/gojsonschema v1.2.0
 )
 
@@ -122,6 +123,7 @@ require (
 	github.com/miekg/dns v1.1.50 // indirect
 	github.com/mikioh/tcpinfo v0.0.0-20190314235526-30a79bb1804b // indirect
 	github.com/mikioh/tcpopt v0.0.0-20190314235656-172688c1accc // indirect
+	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
@@ -142,6 +144,7 @@ require (
 	github.com/prometheus/client_golang v1.13.1 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
+	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/tinylib/msgp v1.1.2 // indirect
 	github.com/umbracle/ethgo v0.1.4-0.20230126112511-6a4d02533af6 // indirect
@@ -164,6 +167,7 @@ require (
 	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/oauth2 v0.6.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
+	golang.org/x/term v0.6.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/api v0.114.0 // indirect
@@ -215,9 +219,9 @@ require (
 	github.com/libp2p/go-openssl v0.1.0 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
-	github.com/mattn/go-isatty v0.0.16 // indirect
+	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mattn/go-pointer v0.0.1 // indirect
-	github.com/mattn/go-runewidth v0.0.9 // indirect
+	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mimoo/StrobeGo v0.0.0-20210601165009-122bf33a46e0 // indirect
 	github.com/minio/sha256-simd v1.0.0 // indirect
@@ -248,7 +252,7 @@ require (
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/subosito/gotenv v1.3.0 // indirect
-	github.com/syndtr/goleveldb v1.0.1-0.20220614013038-64ee5596c38a // indirect
+	github.com/syndtr/goleveldb v1.0.1-0.20220614013038-64ee5596c38a
 	github.com/tklauser/go-sysconf v0.3.5 // indirect
 	github.com/tklauser/numcpus v0.2.2 // indirect
 	github.com/vedhavyas/go-subkey v1.0.3 // indirect
