@@ -410,7 +410,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 	inputLoadTestParams.BaseFee = header.BaseFee
 
-	randSrc = rand.New(rand.NewSource(time.Now().Unix()))
+	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
 	return nil
 }
