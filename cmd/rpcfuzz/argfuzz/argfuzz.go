@@ -30,10 +30,11 @@ var mutateFunctions = []MutateFunc{
 	},
 }
 
-var seed *int64
+var randSrc *rand.Rand
 
 func SetSeed(seedValue *int64) {
-	seed = seedValue
+	seed := seedValue
+	randSrc = rand.New(rand.NewSource(*seed))
 }
 
 func MutateExecutor(arg []byte) []byte {
@@ -92,7 +93,6 @@ func RandomByte() byte {
 func RandomBytesSize(size int) []byte {
 	bytes := make([]byte, size)
 
-	randSrc := rand.New(rand.NewSource(*seed))
 	_, err := randSrc.Read(bytes)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate random bytes from default Source.")
