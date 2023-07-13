@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"math/rand"
 	"regexp"
 	"strings"
 	"sync"
@@ -165,8 +164,6 @@ var (
 
 	fuzzedTestsGroup sync.WaitGroup
 	testResultMutex  sync.Mutex
-
-	randSrc *rand.Rand
 )
 
 // setupTests will add all of the `RPCTests` to the `allTests` slice.
