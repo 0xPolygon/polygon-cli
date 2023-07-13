@@ -222,6 +222,7 @@ func generateDevp2pNodeKey() (nodeKeyOut, error) {
 // That function can generate seeded keys but it shouldn't be used for production environments.
 // It was created to allow us to create keys that work with the avail light client's method of generating keys
 // User shouldn't encounter these problems but devs, be aware of:
+// - generating a seeded ECDSA key does not return the same key even though you use the same seed
 // - generating a seeded secp256k1 key does not return the same key even though you use the same seed
 // - it's not possible to generate a seeded rsa key, it returns an "unexpected EOF" error
 func generateLibp2pNodeKey(keyType int, seed bool) (nodeKeyOut, error) {

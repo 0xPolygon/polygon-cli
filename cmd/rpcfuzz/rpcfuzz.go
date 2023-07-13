@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"math/rand"
 	"regexp"
 	"strings"
 	"sync"
@@ -1881,7 +1880,8 @@ func init() {
 	testFuzzNum = flagSet.Int("fuzzn", 100, "Number of times to run the fuzzer per test.")
 	seed = flagSet.Int64("seed", 123456, "A seed for generating random values within the fuzzer")
 
-	rand.Seed(*seed)
+	argfuzz.SetSeed(seed)
+
 	fuzzer = fuzz.New()
 	fuzzer.Funcs(argfuzz.MutateRPCArgs)
 }
