@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"regexp"
 	"strings"
 	"sync"
@@ -146,6 +147,7 @@ var (
 	testNamespaces        *string
 	testFuzz              *bool
 	testFuzzNum           *int
+	seed                  *int64
 	testAccountNonce      uint64
 	testAccountNonceMutex sync.Mutex
 	currentChainID        *big.Int
@@ -163,6 +165,8 @@ var (
 
 	fuzzedTestsGroup sync.WaitGroup
 	testResultMutex  sync.Mutex
+
+	randSrc *rand.Rand
 )
 
 // setupTests will add all of the `RPCTests` to the `allTests` slice.
@@ -1878,6 +1882,9 @@ func init() {
 	testNamespaces = flagSet.String("namespaces", "eth,web3,net,debug", "Comma separated list of rpc namespaces to test")
 	testFuzz = flagSet.Bool("fuzz", false, "Flag to indicate whether to fuzz input or not.")
 	testFuzzNum = flagSet.Int("fuzzn", 100, "Number of times to run the fuzzer per test.")
+	seed = flagSet.Int64("seed", 123456, "A seed for generating random values within the fuzzer")
+
+	argfuzz.SetSeed(seed)
 
 	fuzzer = fuzz.New()
 	fuzzer.Funcs(argfuzz.MutateRPCArgs)

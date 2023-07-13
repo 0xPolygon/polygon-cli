@@ -19,7 +19,7 @@ package loadtest
 import (
 	"context"
 	"crypto/ecdsa"
-	"crypto/rand"
+	cryptorand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -1083,11 +1083,7 @@ func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltCont
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 	iterations := ltp.Iterations
-	f, err := contracts.GetRandomOPCode()
-	if err != nil {
-		log.Error().Err(err).Msg("error creating random op code")
-		return
-	}
+	f := contracts.GetRandomOPCode()
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
@@ -1279,7 +1275,7 @@ func (hw *hexwordReader) Read(p []byte) (n int, err error) {
 
 func getRandomAddress() *ethcommon.Address {
 	addr := make([]byte, 20)
-	n, err := rand.Read(addr)
+	n, err := cryptorand.Read(addr)
 	if err != nil {
 		log.Error().Err(err).Msg("There was an issue getting random bytes for the address")
 	}
@@ -1462,7 +1458,7 @@ func loadtestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uin
 	toAddr := *ltp.ToAvailAddress
 	if *ltp.ToRandom {
 		pk := make([]byte, 32)
-		_, err = rand.Read(pk)
+		_, err = cryptorand.Read(pk)
 		if err != nil {
 			// For some reason weren't able to read the random data
 			log.Error().Msg("Sending to random is not implemented for substrate yet")

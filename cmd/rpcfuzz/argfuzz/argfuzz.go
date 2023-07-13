@@ -4,7 +4,6 @@
 package argfuzz
 
 import (
-	cryptorand "crypto/rand"
 	"encoding/hex"
 	"math/rand"
 	"reflect"
@@ -29,6 +28,12 @@ var mutateFunctions = []MutateFunc{
 	func(arg []byte) []byte {
 		return nil
 	},
+}
+
+var seed *int64
+
+func SetSeed(seedValue *int64) {
+	seed = seedValue
 }
 
 func MutateExecutor(arg []byte) []byte {
@@ -87,7 +92,8 @@ func RandomByte() byte {
 func RandomBytesSize(size int) []byte {
 	bytes := make([]byte, size)
 
-	_, err := cryptorand.Read(bytes)
+	randSrc := rand.New(rand.NewSource(*seed))
+	_, err := randSrc.Read(bytes)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate random bytes from default Source.")
 		return []byte{RandomByte()}
