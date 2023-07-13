@@ -32,8 +32,7 @@ var mutateFunctions = []MutateFunc{
 
 var randSrc *rand.Rand
 
-func SetSeed(seedValue *int64) {
-	seed := seedValue
+func SetSeed(seed *int64) {
 	randSrc = rand.New(rand.NewSource(*seed))
 }
 
