@@ -44,6 +44,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli hash](polycli_hash.md) - Provide common crypto hashing functions.
 
+- [polycli leveldbbench](polycli_leveldbbench.md) - Perform a level db benchmark
+
 - [polycli loadtest](polycli_loadtest.md) - Run a generic load test against an Eth/EVM style JSON-RPC endpoint.
 
 - [polycli metrics-to-dash](polycli_metrics-to-dash.md) - Create a dashboard from an Openmetrics / Prometheus response.
