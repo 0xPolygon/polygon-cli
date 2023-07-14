@@ -864,6 +864,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	cancel()
 	log.Debug().Uint64("currentNonce", currentNonce).Msg("Finished main loadtest loop")
 	log.Debug().Msg("Waiting for transactions to actually be mined")
+	if *ltp.CallOnly {
+		return nil
+	}
 	finalBlockNumber, err := waitForFinalBlock(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
 	if err != nil {
 		log.Error().Err(err).Msg("there was an issue waiting for all transactions to be mined")
