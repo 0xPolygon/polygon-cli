@@ -335,9 +335,9 @@ func newDatastoreTransaction(tx *types.Transaction) *DatastoreTransaction {
 	v, r, s := tx.RawSignatureValues()
 	var from, to string
 
-	msg, err := tx.AsMessage(types.LatestSignerForChainID(tx.ChainId()), nil)
+	address, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
 	if err == nil {
-		from = msg.From().Hex()
+		from = address.String()
 	}
 
 	if tx.To() != nil {

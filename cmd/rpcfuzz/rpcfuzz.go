@@ -15,18 +15,16 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/sha1"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
-	"math/rand"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
-
-	_ "embed"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -1699,7 +1697,7 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPC
 		return currTestResult
 	}
 	if err == nil && currTest.ExpectError() {
-		currTestResult.Fail(args, result, errors.New("Expected an error but didn't get one: "+err.Error()))
+		currTestResult.Fail(args, result, errors.New("Expected an error but didn't get one"))
 		return currTestResult
 	}
 
@@ -1906,7 +1904,8 @@ func init() {
 	testExportMarkdown = flagSet.Bool("md", false, "Flag to indicate that output will be exported as a Markdown.")
 	testExportHTML = flagSet.Bool("html", false, "Flag to indicate that output will be exported as a HTML.")
 
-	rand.Seed(*seed)
+	argfuzz.SetSeed(seed)
+
 	fuzzer = fuzz.New()
 	fuzzer.Funcs(argfuzz.FuzzRPCArgs)
 }
