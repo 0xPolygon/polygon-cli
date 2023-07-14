@@ -51,6 +51,7 @@ import (
 	gssignature "github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	gstypes "github.com/centrifuge/go-substrate-rpc-client/v4/types"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -217,6 +218,7 @@ type (
 		BatchSize                           *uint64
 		TimeLimit                           *int64
 		ToRandom                            *bool
+		CallOnly                            *bool
 		URL                                 *url.URL
 		ChainID                             *uint64
 		PrivateKey                          *string
@@ -280,6 +282,7 @@ func init() {
 	ltp.ChainID = LoadtestCmd.PersistentFlags().Uint64("chain-id", 0, "The chain id for the transactions that we're going to send")
 	ltp.ToAddress = LoadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
 	ltp.ToRandom = LoadtestCmd.PersistentFlags().Bool("to-random", false, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
+	ltp.CallOnly = LoadtestCmd.PersistentFlags().Bool("call-only", false, "When using this mode rather than transacting, we'll just call. This mode is incompatible with adaptive rate limiting and a few other features.")
 	ltp.HexSendAmount = LoadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
 	ltp.RateLimit = LoadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
 	ltp.AdaptiveRateLimit = LoadtestCmd.PersistentFlags().Bool("adaptive-rate-limit", false, "Loadtest automatically adjusts request rate to maximize utilization but prevent congestion")
@@ -1036,11 +1039,16 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 	}
 
 	t1 = time.Now()
-	err = c.SendTransaction(ctx, stx)
+	if *ltp.CallOnly {
+		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
+	} else {
+		err = c.SendTransaction(ctx, stx)
+	}
 	t2 = time.Now()
 	return
 }
 
+// TODO - in the future it might be more interesting if this mode takes input or random contracts to be deployed
 func loadtestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
@@ -1056,7 +1064,13 @@ func loadtestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 
 	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
-	_, _, _, err = contracts.DeployLoadTester(tops, c)
+	if *ltp.CallOnly {
+		msg := transactOptsToCallMsg(tops)
+		msg.Data = ethcommon.FromHex(contracts.LoadTesterBin)
+		_, err = c.CallContract(ctx, msg, nil)
+	} else {
+		_, _, _, err = contracts.DeployLoadTester(tops, c)
+	}
 	t2 = time.Now()
 	return
 }
@@ -1989,4 +2003,30 @@ func getSortedMapKeys[V any, K constraints.Ordered](m map[K]V) []K {
 		return keys[i] < keys[j]
 	})
 	return keys
+}
+func transactOptsToCallMsg(tops *bind.TransactOpts) ethereum.CallMsg {
+	cm := new(ethereum.CallMsg)
+	cm.From = *inputLoadTestParams.FromETHAddress
+
+	cm.Gas = tops.GasLimit
+	cm.GasPrice = tops.GasPrice
+	cm.GasFeeCap = tops.GasFeeCap
+	cm.GasTipCap = tops.GasTipCap
+	cm.Value = tops.Value
+	return *cm
+}
+
+func txToCallMsg(tx *ethtypes.Transaction) ethereum.CallMsg {
+	cm := new(ethereum.CallMsg)
+	cm.From = *inputLoadTestParams.FromETHAddress
+	cm.To = tx.To()
+	cm.Gas = tx.Gas()
+	cm.GasPrice = tx.GasPrice()
+	cm.GasFeeCap = tx.GasFeeCap()
+	cm.GasTipCap = tx.GasTipCap()
+	cm.Value = tx.Value()
+	cm.Data = tx.Data()
+
+	cm.AccessList = tx.AccessList()
+	return *cm
 }
