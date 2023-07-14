@@ -466,7 +466,7 @@ func ConvHexToUint64(raw any) (uint64, error) {
 func MustConvHexToUint64(raw any) uint64 {
 	num, err := ConvHexToUint64(raw)
 	if err != nil {
-		panic(fmt.Sprintf("failed to covert Hex to uint64: %v", err))
+		panic(fmt.Sprintf("failed to convert Hex to uint64: %v", err))
 	}
 	return num
 }
@@ -539,7 +539,7 @@ func (r *RawDataResponse) ToBytes() []byte {
 	hexString := normalizeHexString(string(*r))
 	data, err := hex.DecodeString(hexString)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to covert raw data to bytes")
+		log.Error().Err(err).Msg("Unable to convert raw data to bytes")
 		return nil
 	}
 	return data
@@ -549,7 +549,7 @@ func (r *RawData256Response) ToBytes() []byte {
 	hexString := normalizeHexString(string(*r))
 	data, err := hex.DecodeString(hexString)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to covert raw data to bytes")
+		log.Error().Err(err).Msg("Unable to convert raw data to bytes")
 		return nil
 	}
 	return data

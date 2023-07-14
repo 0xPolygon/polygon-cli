@@ -327,7 +327,7 @@ func (p *PolyWallet) ExportHDAddresses(count int) (*PolyWalletExport, error) {
 	pwe.Addresses = make([]*PolyAddressExport, 0)
 
 	for i := 0; i < count; i = i + 1 {
-		// TODO if we want to provide support for hardened addresses it would need to be accomodated here
+		// TODO if we want to provide support for hardened addresses it would need to be accommodated here
 		currentPath := p.derivationPath + "/0/" + fmt.Sprintf("%d", i)
 		k, err := p.GetKeyForPath(currentPath)
 		if err != nil {

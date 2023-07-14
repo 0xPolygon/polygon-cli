@@ -27,7 +27,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	_ "embed"
+
 	edgeblockchain "github.com/0xPolygon/polygon-edge/blockchain"
+	edgeleveldb "github.com/0xPolygon/polygon-edge/blockchain/storage/leveldb"
 	edgechain "github.com/0xPolygon/polygon-edge/chain"
 	edgeconsensus "github.com/0xPolygon/polygon-edge/consensus"
 	edgedummy "github.com/0xPolygon/polygon-edge/consensus/dummy"
@@ -37,7 +40,7 @@ import (
 	edgeserver "github.com/0xPolygon/polygon-edge/server"
 	edgestate "github.com/0xPolygon/polygon-edge/state"
 	edgeitrie "github.com/0xPolygon/polygon-edge/state/immutable-trie"
-	edgeallowlist "github.com/0xPolygon/polygon-edge/state/runtime/allowlist"
+	edgeallowlist "github.com/0xPolygon/polygon-edge/state/runtime/addresslist"
 	edgetxpool "github.com/0xPolygon/polygon-edge/txpool"
 	edgetypes "github.com/0xPolygon/polygon-edge/types"
 	edgebuildroot "github.com/0xPolygon/polygon-edge/types/buildroot"
@@ -74,6 +77,8 @@ type (
 )
 
 var (
+	//go:embed usage.md
+	usage        string
 	inputForge   forgeParams
 	BlockReadEOF = errors.New("no more blocks to read")
 )
@@ -81,18 +86,8 @@ var (
 // forgeCmd represents the forge command
 var ForgeCmd = &cobra.Command{
 	Use:   "forge",
-	Short: "A utility for generating blockchain data either for testing or migration",
-	Long: `A utility for generating blockchain data either for testing or migration.
-
-Here is an example usage:
-  # In this case local host is running a POA Core Archive node.
-  polycli dumpblocks http://127.0.0.1:8545 0 100000 --filename poa-core.0.to.100k --dump-receipts=false
-
-  # Even with disabling receipts, edge's eth_getBlockByNumber returns transactions.
-  # This needs to be done only if using json mode. Filter them out before forging:
-  cat poa-core.0.to.100k | grep '"difficulty"' > poa-core.0.to.100k.blocks
-
-  polycli forge --genesis genesis.json --mode json --blocks poa-core.0.to.100k.blocks --count 99999`,
+	Short: "Forge dumped blocks on top of a genesis file.",
+	Long:  usage,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println("forge called")
@@ -226,9 +221,16 @@ func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 		return nil, err
 	}
 
+	db, err := edgeleveldb.NewLevelDBStorage(
+		filepath.Join(inputForge.DataDir, "blockchain"),
+		logger,
+	)
+	if err != nil {
+		return nil, err
+	}
 	chainConfig.Genesis.StateRoot = genesisRoot
-	signer := edgecrypto.NewEIP155Signer(edgechain.AllForksEnabled.At(0), uint64(chainConfig.Params.ChainID))
-	bc, err := edgeblockchain.NewBlockchain(logger, inputForge.DataDir, &chainConfig, nil, executor, signer)
+	signer := edgecrypto.NewEIP155Signer(uint64(chainConfig.Params.ChainID), true)
+	bc, err := edgeblockchain.NewBlockchain(logger, db, &chainConfig, nil, executor, signer)
 	if err != nil {
 		return nil, fmt.Errorf("unable to setup blockchain: %w", err)
 	}
@@ -240,10 +242,9 @@ func NewEdgeBlockchain() (*edgeBlockchainHandle, error) {
 		nil,
 		nil,
 		&edgetxpool.Config{
-			MaxSlots:            1000,
-			PriceLimit:          1000,
-			MaxAccountEnqueued:  1000,
-			DeploymentWhitelist: nil,
+			MaxSlots:           1000,
+			PriceLimit:         1000,
+			MaxAccountEnqueued: 1000,
 		},
 	)
 	if err != nil {
@@ -366,12 +367,15 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 			return fmt.Errorf("unable to process block %d with hash %s at index %d: %w", block.Number().Int64(), edgeBlock.Hash().String(), i, err)
 		}
 
-		if err = bh.Blockchain.GetConsensus().PreCommitState(edgeBlock.Header, txn); err != nil {
+		if err = bh.Blockchain.GetConsensus().PreCommitState(edgeBlock, txn); err != nil {
 			return fmt.Errorf("could not pre commit state: %w", err)
 		}
 
 		// many of the headers are going to be different, so we'll get all of the headers and recompute the hash
-		_, newRoot := txn.Commit()
+		_, newRoot, err := txn.Commit()
+		if err != nil {
+			return fmt.Errorf("unable to commit the final result: %w", err)
+		}
 		edgeBlock.Header.GasUsed = txn.TotalGas()
 		edgeBlock.Header.ReceiptsRoot = edgebuildroot.CalculateReceiptsRoot(txn.Receipts())
 		edgeBlock.Header.StateRoot = newRoot
@@ -426,7 +430,10 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 
 		// after doing the irregular state change, i need to update the block headers again with the new root hash and
 		// block hash
-		_, newRoot = txn.Commit()
+		_, newRoot, err = txn.Commit()
+		if err != nil {
+			return fmt.Errorf("unable to commit the final result: %w", err)
+		}
 		edgeBlock.Header.StateRoot = newRoot
 		edgeBlock.Header.Hash = edgeBlock.Header.ComputeHash().Hash
 

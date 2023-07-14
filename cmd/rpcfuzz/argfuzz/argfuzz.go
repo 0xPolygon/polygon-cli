@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/google/gofuzz"
+	fuzz "github.com/google/gofuzz"
 	"github.com/rs/zerolog/log"
 )
 
@@ -28,6 +28,12 @@ var mutateFunctions = []MutateFunc{
 	func(arg []byte) []byte {
 		return nil
 	},
+}
+
+var randSrc *rand.Rand
+
+func SetSeed(seed *int64) {
+	randSrc = rand.New(rand.NewSource(*seed))
 }
 
 func MutateExecutor(arg []byte) []byte {
@@ -86,7 +92,7 @@ func RandomByte() byte {
 func RandomBytesSize(size int) []byte {
 	bytes := make([]byte, size)
 
-	_, err := rand.Read(bytes)
+	_, err := randSrc.Read(bytes)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate random bytes from default Source.")
 		return []byte{RandomByte()}

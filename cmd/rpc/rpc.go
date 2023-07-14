@@ -22,25 +22,21 @@ import (
 	"net/url"
 	"strings"
 
+	_ "embed"
+
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/spf13/cobra"
 )
 
+//go:embed usage.md
+var usage string
+
 // rpcCmd represents the rpc command
 var RpcCmd = &cobra.Command{
 	Use:   "rpc URL method param_0 param_1 ... param_n",
-	Short: "A simple wrapper for making RPC requests",
-	Long: `
-Use this function to make JSON-RPC calls.
-
-## ETH Examples
-rpc http://127.0.0.1:8541 eth_getBlockByNumber 0x10E true
-
-rpc http://127.0.0.1:8541 eth_getBlockByHash 0x15206ab0a5b408214127f5c445a86b7cfe6ae48fdcd9172b14e013dae7a7f470 true
-
-rpc http://127.0.0.1:8541 eth_getTransactionByHash 0x97c070cb07bfac783ca73f08fb5999ae1ab509bf644197ef4a2c4e4f4a3c1516
-`,
+	Short: "Wrapper for making RPC requests.",
+	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		ec, err := ethrpc.DialContext(ctx, args[0])

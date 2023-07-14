@@ -45,6 +45,8 @@ import (
 	"golang.org/x/text/message"
 	"golang.org/x/text/number"
 
+	_ "embed"
+
 	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
 	gssignature "github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	gstypes "github.com/centrifuge/go-substrate-rpc-client/v4/types"
@@ -83,6 +85,8 @@ const (
 )
 
 var (
+	//go:embed usage.md
+	usage               string
 	inputLoadTestParams loadTestParams
 	loadTestResults     []loadTestSample
 	loadTestResutsMutex sync.RWMutex
@@ -147,13 +151,15 @@ var (
 		0xFF, 0xBA, 0xDD, 0x11,
 		0xF0, 0x0D, 0xBA, 0xBE,
 	}
+
+	randSrc *rand.Rand
 )
 
 // LoadtestCmd represents the loadtest command
 var LoadtestCmd = &cobra.Command{
-	Use:   "loadtest rpc-endpoint",
-	Short: "A simple script for quickly running a load test",
-	Long:  `Loadtest gives us a simple way to run a generic load test against an eth/EVM style json RPC endpoint`,
+	Use:   "loadtest url",
+	Short: "Run a generic load test against an Eth/EVM style JSON-RPC endpoint.",
+	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		err := runLoadTest(cmd.Context())
 		if err != nil {
@@ -327,7 +333,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		log.Error().Err(err).Msg("Unable to retrieve gas price")
 		return err
 	}
-	log.Trace().Interface("gasprice", gas).Msg("Retreived current gas price")
+	log.Trace().Interface("gasprice", gas).Msg("Retrieved current gas price")
 
 	if !*inputLoadTestParams.LegacyTransactionMode {
 		gasTipCap, _err := c.SuggestGasTipCap(ctx)
@@ -335,7 +341,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 			log.Error().Err(_err).Msg("Unable to retrieve gas tip cap")
 			return _err
 		}
-		log.Trace().Interface("gastipcap", gasTipCap).Msg("Retreived current gas tip cap")
+		log.Trace().Interface("gastipcap", gasTipCap).Msg("Retrieved current gas tip cap")
 		inputLoadTestParams.CurrentGasTipCap = gasTipCap
 	}
 
@@ -407,7 +413,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 	inputLoadTestParams.BaseFee = header.BaseFee
 
-	rand.Seed(*inputLoadTestParams.Seed)
+	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
 	return nil
 }
@@ -511,7 +517,7 @@ func runLoadTest(ctx context.Context) error {
 	if err != nil {
 		log.Debug().Err(err).Msg("Unable to get the number of pending transactions before closing")
 	} else if ptc > 0 {
-		log.Info().Uint("pending", ptc).Msg("There are still oustanding transactions. There might be issues restarting with the same sending key until those transactions clear")
+		log.Info().Uint("pending", ptc).Msg("There are still outstanding transactions. There might be issues restarting with the same sending key until those transactions clear")
 	}
 	log.Info().Msg("Finished")
 	return nil
@@ -975,7 +981,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 					lock = true
 					err := f()
 					if err == nil {
-						log.Trace().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Function executed successfuly")
+						log.Trace().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Function executed successfully")
 						return nil
 					}
 					log.Trace().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Unable to execute function")
@@ -1289,7 +1295,7 @@ func (hw *hexwordReader) Read(p []byte) (n int, err error) {
 
 func getRandomAddress() *ethcommon.Address {
 	addr := make([]byte, 20)
-	n, err := rand.Read(addr)
+	n, err := randSrc.Read(addr)
 	if err != nil {
 		log.Error().Err(err).Msg("There was an issue getting random bytes for the address")
 	}
@@ -1472,7 +1478,7 @@ func loadtestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uin
 	toAddr := *ltp.ToAvailAddress
 	if *ltp.ToRandom {
 		pk := make([]byte, 32)
-		_, err = rand.Read(pk)
+		_, err = randSrc.Read(pk)
 		if err != nil {
 			// For some reason weren't able to read the random data
 			log.Error().Msg("Sending to random is not implemented for substrate yet")
@@ -1569,7 +1575,11 @@ func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 		if ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
 			tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
 		} else {
-			tops.GasPrice = big.NewInt(0).Add(ltp.BaseFee, ltp.CurrentGasTipCap)
+			if ltp.BaseFee != nil {
+				tops.GasPrice = big.NewInt(0).Add(ltp.BaseFee, ltp.CurrentGasTipCap)
+			} else {
+				log.Fatal().Msg("EIP-1559 not activated. Please use --legacy")
+			}
 		}
 		if ltp.ForcePriorityGasPrice != nil && *ltp.ForcePriorityGasPrice != 0 {
 			tops.GasTipCap = big.NewInt(0).SetUint64(*ltp.ForcePriorityGasPrice)

@@ -21,11 +21,15 @@ import (
 	"fmt"
 	"os"
 
+	_ "embed"
+
 	"github.com/maticnetwork/polygon-cli/hdwallet"
 	"github.com/spf13/cobra"
 )
 
 var (
+	//go:embed usage.md
+	usage                    string
 	inputWords               *int
 	inputLang                *string
 	inputKDFIterations       *uint
@@ -42,10 +46,8 @@ var (
 // WalletCmd represents the wallet command
 var WalletCmd = &cobra.Command{
 	Use:   "wallet [create|inspect]",
-	Short: "Create or inspect a bip39(ish) wallet",
-	Long: `This command is meant to simplify the operations of creating wallets
-across v1 and avail. This command can take a seed phrase and spit out
-child accounts or generate new accmounts along with a seed phrase`,
+	Short: "Create or inspect BIP39(ish) wallets.",
+	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		mode := args[0]
 		var err error

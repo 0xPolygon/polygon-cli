@@ -26,6 +26,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	_ "embed"
+
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -39,6 +41,8 @@ import (
 )
 
 var (
+	//go:embed usage.md
+	usage                  string
 	supportedHashFunctions = []string{
 		"md4",
 		"md5",
@@ -67,14 +71,8 @@ var (
 // hashCmd represents the hash command
 var HashCmd = &cobra.Command{
 	Use:   fmt.Sprintf("hash [%s]", strings.Join(supportedHashFunctions, "|")),
-	Short: "Simple command line tools for common crypto hashing functions",
-	Long: `Hash Functions
-
-This is a simple command line tool to run common hash functions. If
-the --file argument is provided, we'll attempt to read the file and
-hash it. If additionall data is provided on the command line, that
-will be hashed. Otherwise, we'll attempted to read the standard input.
-`,
+	Short: "Provide common crypto hashing functions.",
+	Long:  usage,
 	Run: func(cmd *cobra.Command, args []string) {
 		data, err := getInputData(cmd, args)
 		if err != nil {

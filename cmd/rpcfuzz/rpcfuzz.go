@@ -15,28 +15,29 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/sha1"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
+
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/google/gofuzz"
+	fuzz "github.com/google/gofuzz"
 	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz/argfuzz"
 	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz/testreporter"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/xeipuuv/gojsonschema"
-	"math/big"
-	"math/rand"
-	"regexp"
-	"strings"
-	"sync"
-	"time"
 )
 
 type (
@@ -64,7 +65,7 @@ type (
 	// RPCTestFlag is meant for bitmasking various flags to understand properties of the test
 	RPCTestFlag uint64
 
-	// RPCTestGeneric is the simplist implementation of the
+	// RPCTestGeneric is the simplest implementation of the
 	// RPCTest. Basically the implementation of the interface is
 	// managed by just returning hard coded values for method,
 	// args, validator, and error
@@ -135,6 +136,8 @@ const (
 )
 
 var (
+	//go:embed usage.md
+	usage                 string
 	testPrivateHexKey     *string
 	testContractAddress   *string
 	testPrivateKey        *ecdsa.PrivateKey
@@ -1272,7 +1275,7 @@ func ValidateTransactionHash() func(result interface{}) error {
 func genericResultToBlockHeader(result interface{}) (*ethtypes.Header, string, error) {
 	underlyingBlock, ok := result.(map[string]interface{})
 	if !ok {
-		return nil, "", fmt.Errorf("The underying type of the result didn't match a block header. Got %T", result)
+		return nil, "", fmt.Errorf("The underlying type of the result didn't match a block header. Got %T", result)
 	}
 	genericHash, ok := underlyingBlock["hash"].(string)
 	if !ok {
@@ -1295,7 +1298,7 @@ func genericResultToBlockHeader(result interface{}) (*ethtypes.Header, string, e
 func genericResultToTransaction(result interface{}) (*ethtypes.Transaction, string, error) {
 	underlyingTx, ok := result.(map[string]interface{})
 	if !ok {
-		return nil, "", fmt.Errorf("The underying type of the result didn't match a transaction. Got %T", result)
+		return nil, "", fmt.Errorf("The underlying type of the result didn't match a transaction. Got %T", result)
 	}
 	genericHash, ok := underlyingTx["hash"].(string)
 	if !ok {
@@ -1335,7 +1338,7 @@ func ArgsLatestBlockHash(ctx context.Context, rpcClient *rpc.Client, extraArgs .
 	return func() []interface{} {
 		blockData, err := getBlock(ctx, rpcClient, "latest")
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to retreive latest block hash")
+			log.Error().Err(err).Msg("Unable to retrieve latest block hash")
 			return []interface{}{"latest"}
 		}
 		rawHash := blockData["hash"]
@@ -1358,7 +1361,7 @@ func ArgsLatestBlockNumber(ctx context.Context, rpcClient *rpc.Client, extraArgs
 	return func() []interface{} {
 		blockData, err := getBlock(ctx, rpcClient, "latest")
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to retreive latest block hash")
+			log.Error().Err(err).Msg("Unable to retrieve latest block hash")
 			return []interface{}{"latest"}
 		}
 		rawNumber := blockData["number"]
@@ -1381,7 +1384,7 @@ func ArgsRawBlock(ctx context.Context, rpcClient *rpc.Client, blockNumOrHash str
 	return func() []interface{} {
 		blockData, err := getRawBlock(ctx, rpcClient, blockNumOrHash)
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to retreive latest raw block hash")
+			log.Error().Err(err).Msg("Unable to retrieve latest raw block hash")
 			return []interface{}{"latest"}
 		}
 		args := []interface{}{blockData}
@@ -1408,7 +1411,7 @@ func ArgsCoinbase(ctx context.Context, rpcClient *rpc.Client, extraArgs ...inter
 		var coinbase string
 		err := rpcClient.CallContext(ctx, &coinbase, "eth_coinbase")
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to retreive coinbase")
+			log.Error().Err(err).Msg("Unable to retrieve coinbase")
 			return []interface{}{""}
 		}
 		log.Trace().Str("coinbase", coinbase).Msg("Got coinbase")
@@ -1461,7 +1464,7 @@ func ArgsCoinbaseTransaction(ctx context.Context, rpcClient *rpc.Client, tx *RPC
 		var coinbase string
 		err := rpcClient.CallContext(ctx, &coinbase, "eth_coinbase")
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to retreive coinbase")
+			log.Error().Err(err).Msg("Unable to retrieve coinbase")
 			return []interface{}{""}
 		}
 		tx.From = coinbase
@@ -1656,14 +1659,14 @@ func GetTestAccountNonce(ctx context.Context, rpcClient *rpc.Client) (uint64, er
 	ec := ethclient.NewClient(rpcClient)
 	curNonce, err := ec.NonceAt(ctx, testEthAddress, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to retreive nonce")
+		log.Error().Err(err).Msg("Unable to retrieve nonce")
 		curNonce = 0
 	}
 	log.Trace().Uint64("curNonce", curNonce).Msg("current nonce value")
 	return curNonce, err
 }
 
-// GetCurrentChainID will attempt to determin the chain for the current network
+// GetCurrentChainID will attempt to determine the chain for the current network
 func GetCurrentChainID(ctx context.Context, rpcClient *rpc.Client) (*big.Int, error) {
 	ec := ethclient.NewClient(rpcClient)
 	chainId, err := ec.ChainID(ctx)
@@ -1688,7 +1691,7 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPC
 		return currTestResult
 	}
 	if err == nil && currTest.ExpectError() {
-		currTestResult.Fail(args, result, errors.New("Expected an error but didn't get one: "+err.Error()))
+		currTestResult.Fail(args, result, errors.New("Expected an error but didn't get one"))
 		return currTestResult
 	}
 
@@ -1767,62 +1770,8 @@ func (r *RPCJSONError) Error() string {
 
 var RPCFuzzCmd = &cobra.Command{
 	Use:   "rpcfuzz http://localhost:8545",
-	Short: "Continually run a variety of RPC calls and fuzzers",
-	Long: `
-
-This command will run a series of RPC calls against a given json rpc
-endpoint. The idea is to be able to check for various features and
-function to see if the RPC generally conforms to typical geth
-standards for the RPC
-
-Some setup might be neede depending on how you're testing. We'll
-demonstrate with geth. In order to quickly test this, you can run geth
-in dev mode:
-
-# ./build/bin/geth --dev --dev.period 5 --http --http.addr localhost \
-    --http.port 8545 \
-    --http.api 'admin,debug,web3,eth,txpool,personal,clique,miner,net' \
-    --verbosity 5 --rpc.gascap 50000000  --rpc.txfeecap 0 \
-    --miner.gaslimit  10 --miner.gasprice 1 --gpo.blocks 1 \
-    --gpo.percentile 1 --gpo.maxprice 10 --gpo.ignoreprice 2 \
-    --dev.gaslimit 50000000
-
-If we wanted to use erigon for testing, we could do something like this as well
-
-# ./build/bin/erigon --chain dev --dev.period 5 --http --http.addr localhost \
-    --http.port 8545 \
-    --http.api 'admin,debug,web3,eth,txpool,personal,clique,miner,net' \
-    --verbosity 5 --rpc.gascap 50000000 \
-    --miner.gaslimit  10 --gpo.blocks 1 \
-    --gpo.percentile 1
-
-Once your Eth client is running and the RPC is functional, you'll need
-to transfer some amount of ether to a known account that ca be used
-for testing
-
-# cast send --from "$(cast rpc --rpc-url localhost:8545 eth_coinbase | jq -r '.')" \
-    --rpc-url localhost:8545 --unlocked --value 100ether \
-    0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6
-
-Then we might want to deploy some test smart contracts. For the
-purposes of testing we'll our ERC20 contract:
-
-# cast send --from 0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6 \
-    --private-key 0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa \
-    --rpc-url localhost:8545 --create \
-    "$(cat ./contracts/ERC20.bin)"
-
-Once this has been completed this will be the address of the contract:
-0x6fda56c57b0acadb96ed5624ac500c0429d59429
-
-# docker run -v $PWD/contracts:/contracts ethereum/solc:stable --storage-layout /contracts/ERC20.sol
-
-- https://ethereum.github.io/execution-apis/api-documentation/
-- https://ethereum.org/en/developers/docs/apis/json-rpc/
-- https://json-schema.org/
-- https://www.liquid-technologies.com/online-json-to-schema-converter
-
-`,
+	Short: "Continually run a variety of RPC calls and fuzzers.",
+	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		rpcClient, err := rpc.DialContext(ctx, args[0])
@@ -1931,7 +1880,8 @@ func init() {
 	testFuzzNum = flagSet.Int("fuzzn", 100, "Number of times to run the fuzzer per test.")
 	seed = flagSet.Int64("seed", 123456, "A seed for generating random values within the fuzzer")
 
-	rand.Seed(*seed)
+	argfuzz.SetSeed(seed)
+
 	fuzzer = fuzz.New()
 	fuzzer.Funcs(argfuzz.MutateRPCArgs)
 }
