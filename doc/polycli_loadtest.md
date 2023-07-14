@@ -81,26 +81,26 @@ $ polycli loadtest --app-id 0 --data-avail --verbosity 700 --chain-id 42 --concu
 ## Flags
 
 ```bash
-      --adaptive-backoff-factor float              When we detect congestion we will use this factor to determine how much we slow down (default 2)
-      --adaptive-cycle-duration-seconds uint       Duration in seconds that adaptive load test will review txpool and determine whether to increase/decrease rate limit (default 10)
-      --adaptive-rate-limit                        Loadtest automatically adjusts request rate to maximize utilization but prevent congestion
-      --adaptive-rate-limit-increment uint         Additive increment to rate of requests if txpool below steady state size (default 50)
+      --adaptive-backoff-factor float              When using adaptive rate limiting, this flag controls our multiplicative decrease value. (default 2)
+      --adaptive-cycle-duration-seconds uint       When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates (default 10)
+      --adaptive-rate-limit                        Enable AIMD-style congestion control to automatically adjust request rate
+      --adaptive-rate-limit-increment uint         When using adaptive rate limiting, this flag controls the size of the additive increases. (default 50)
       --batch-size uint                            Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time. (default 999)
   -b, --byte-count uint                            If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
-      --chain-id uint                              The chain id for the transactions that we're going to send
-  -c, --concurrency int                            Number of multiple requests to perform at a time. Default is one request at a time. (default 1)
-      --contract-call-block-interval uint          The number of blocks to wait between contract calls (default 1)
-      --contract-call-nb-blocks-to-wait-for uint   The number of blocks to wait for before giving up on a contract call (default 30)
-      --data-avail                                 Is this a test of avail rather than an EVM / Geth Chain
-      --del-address string                         A pre-deployed delegator contract address
-      --force-contract-deploy                      Some loadtest modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --del-address and --il-address flags.
+      --call-only                                  When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.
+      --chain-id uint                              The chain id for the transactions.
+  -c, --concurrency int                            Number of requests to perform concurrently. Default is one request at a time. (default 1)
+      --contract-call-block-interval uint          During deployment, this flag controls if we should check every block, every other block, or every nth block to determine that the contract has been deployed (default 1)
+      --contract-call-nb-blocks-to-wait-for uint   The number of blocks to wait for before giving up on a contract deployment (default 30)
+      --data-avail                                 [DEPRECATED] Enables Avail load testing
+      --force-contract-deploy                      Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.
   -f, --function --mode f                          A specific function to be called if running with --mode f or a specific precompiled contract when running with `--mode a` (default 1)
-      --gas-limit uint                             In environments where the gas limit can't be computed on the fly, we can specify it manually
-      --gas-price uint                             In environments where the gas price can't be estimated, we can specify it manually
+      --gas-limit uint                             In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
+      --gas-price uint                             In environments where the gas price can't be determined automatically, we can specify it manually
   -h, --help                                       help for loadtest
-  -i, --iterations uint                            If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicated the minting batch size (default 100)
+  -i, --iterations uint                            If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size (default 1)
       --legacy                                     Send a legacy transaction instead of an EIP1559 transaction.
-      --lt-address string                          A pre-deployed load test contract address
+      --lt-address string                          The address of a pre-deployed load test contract
   -m, --mode string                                The testing mode to use. It can be multiple like: "tcdf"
                                                    t - sending transactions
                                                    d - deploy contract
@@ -109,20 +109,19 @@ $ polycli loadtest --app-id 0 --data-avail --verbosity 700 --chain-id 42 --concu
                                                    p - call random precompiled contracts
                                                    a - call a specific precompiled contract address
                                                    s - store mode
-                                                   l - long running mode
                                                    r - random modes
                                                    2 - ERC20 Transfers
                                                    7 - ERC721 Mints (default "t")
       --output-mode string                         Format mode for summary output (json | text) (default "text")
       --priority-gas-price uint                    Specify Gas Tip Price in the case of EIP-1559
-      --private-key string                         The hex encoded private key that we'll use to sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
+      --private-key string                         The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
       --rate-limit float                           An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together (default 4)
   -n, --requests int                               Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
       --seed int                                   A seed for generating random values and addresses (default 123456)
       --send-amount string                         The amount of wei that we'll send every transaction (default "0x38D7EA4C68000")
-      --steady-state-tx-pool-size uint             Transaction Pool queue size which we use to either increase/decrease requests per second (default 1000)
-      --summarize                                  Should we produce an execution summary after the load test has finished. If you're running a large loadtest, this can take a long time
-  -t, --time-limit int                             Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no timelimit. (default -1)
+      --steady-state-tx-pool-size uint             When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off. (default 1000)
+      --summarize                                  Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time
+  -t, --time-limit int                             Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit. (default -1)
       --to-address string                          The address that we're going to send to (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
       --to-random                                  When doing a transfer test, should we send to random addresses rather than DEADBEEFx5
 ```

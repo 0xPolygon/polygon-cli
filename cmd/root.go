@@ -137,6 +137,7 @@ func NewPolycliCommand() *cobra.Command {
 }
 
 // setLogLevel sets the log level based on the flags.
+// https://logging.apache.org/log4j/2.x/manual/customloglevels.html
 func setLogLevel(verbosity int, pretty bool) {
 	if verbosity < 100 {
 		zerolog.SetGlobalLevel(zerolog.PanicLevel)
