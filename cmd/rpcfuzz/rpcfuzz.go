@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -139,23 +140,24 @@ const (
 
 var (
 	//go:embed usage.md
-	usage                  string
-	testPrivateHexKey      *string
-	testContractAddress    *string
-	testPrivateKey         *ecdsa.PrivateKey
-	testEthAddress         ethcommon.Address
-	testNamespaces         *string
-	testFuzz               *bool
-	testFuzzNum            *int
-	seed                   *int64
-	testJSONExportPath     *string
-	testCSVExportPath      *string
-	testMarkdownExportPath *string
-	testHTMLExportPath     *string
-	testAccountNonce       uint64
-	testAccountNonceMutex  sync.Mutex
-	currentChainID         *big.Int
-	fuzzer                 *fuzz.Fuzzer
+	usage                 string
+	testPrivateHexKey     *string
+	testContractAddress   *string
+	testPrivateKey        *ecdsa.PrivateKey
+	testEthAddress        ethcommon.Address
+	testNamespaces        *string
+	testFuzz              *bool
+	testFuzzNum           *int
+	seed                  *int64
+	testOutputExportPath  *string
+	testExportJson        *bool
+	testExportCSV         *bool
+	testExportMarkdown    *bool
+	testExportHTML        *bool
+	testAccountNonce      uint64
+	testAccountNonceMutex sync.Mutex
+	currentChainID        *big.Int
+	fuzzer                *fuzz.Fuzzer
 
 	enabledNamespaces []string
 
@@ -1832,17 +1834,17 @@ var RPCFuzzCmd = &cobra.Command{
 		close(testResultsCh)
 
 		testResults.GenerateTabularResult()
-		if *testJSONExportPath != "" {
-			testResults.ExportResultToJSON(*testJSONExportPath)
+		if *testExportJson {
+			testResults.ExportResultToJSON(filepath.Join(*testOutputExportPath, "output.json"))
 		}
-		if *testCSVExportPath != "" {
-			testResults.ExportResultToCSV(*testCSVExportPath)
+		if *testExportCSV {
+			testResults.ExportResultToCSV(filepath.Join(*testOutputExportPath, "output.csv"))
 		}
-		if *testMarkdownExportPath != "" {
-			testResults.ExportResultToMarkdown(*testMarkdownExportPath)
+		if *testExportMarkdown {
+			testResults.ExportResultToMarkdown(filepath.Join(*testOutputExportPath, "output.md"))
 		}
-		if *testHTMLExportPath != "" {
-			testResults.ExportResultToHTML(*testHTMLExportPath)
+		if *testExportHTML {
+			testResults.ExportResultToHTML(filepath.Join(*testOutputExportPath, "output.html"))
 		}
 		testResults.PrintTabularResult()
 
@@ -1898,10 +1900,11 @@ func init() {
 	testFuzz = flagSet.Bool("fuzz", false, "Flag to indicate whether to fuzz input or not.")
 	testFuzzNum = flagSet.Int("fuzzn", 100, "Number of times to run the fuzzer per test.")
 	seed = flagSet.Int64("seed", 123456, "A seed for generating random values within the fuzzer")
-	testJSONExportPath = flagSet.String("json-export-path", "", "The JSON file export path of the output of the tests")
-	testCSVExportPath = flagSet.String("csv-export-path", "", "The CSV file export path of the output of the tests")
-	testMarkdownExportPath = flagSet.String("markdown-export-path", "", "The markdown file export path of the output of the tests")
-	testHTMLExportPath = flagSet.String("html-export-path", "", "The HTML file export path of the output of the tests")
+	testOutputExportPath = flagSet.String("export-path", "", "The directory export path of the output of the tests. Must pair this with either --json, --csv, --md, or --html")
+	testExportJson = flagSet.Bool("json", false, "Flag to indicate that output will be exported as a JSON.")
+	testExportCSV = flagSet.Bool("csv", false, "Flag to indicate that output will be exported as a CSV.")
+	testExportMarkdown = flagSet.Bool("md", false, "Flag to indicate that output will be exported as a Markdown.")
+	testExportHTML = flagSet.Bool("html", false, "Flag to indicate that output will be exported as a HTML.")
 
 	rand.Seed(*seed)
 	fuzzer = fuzz.New()
