@@ -32,7 +32,7 @@ go run main.go leveldbbench --degree-of-parallelism 2 | jq '.' > result.json
 ```bash
       --degree-of-parallelism uint8   The number of concurrent iops we'll perform (default 1)
   -h, --help                          help for leveldbbench
-      --key-size uint                 The byte length of the keys that we'll use (default 16)
+      --key-size uint                 The byte length of the keys that we'll use (default 8)
       --large-fill-limit uint         The number of large entries to write in the db (default 2000)
       --large-value-size uint         the number of random bytes to store for large tests (default 102400)
       --no-merge-write                allows disabling write merge

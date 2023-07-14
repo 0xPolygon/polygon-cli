@@ -69,6 +69,7 @@ func NewTestResult(startTime, endTime time.Time, desc string, opCount uint64, db
 	tr.OpCount = opCount
 	tr.OpRate = float64(opCount) / tr.TestDuration.Seconds()
 
+	log.Info().Dur("testDuration", tr.TestDuration).Str("desc", tr.Description).Msg("recorded result")
 	log.Debug().Interface("result", tr).Msg("recorded result")
 	return tr
 }
@@ -258,17 +259,19 @@ benchLoop:
 func getNewProgessBar(max int64, description string) *progressbar.ProgressBar {
 	pb := progressbar.NewOptions64(max,
 		progressbar.OptionEnableColorCodes(false),
-		progressbar.OptionFullWidth(),
 		progressbar.OptionSetDescription(description),
 		progressbar.OptionSetElapsedTime(true),
 		progressbar.OptionSetItsString("iop"),
-		progressbar.OptionSetRenderBlankState(false),
+		progressbar.OptionSetRenderBlankState(true),
 		progressbar.OptionShowCount(),
 		progressbar.OptionShowIts(),
 		progressbar.OptionShowElapsedTimeOnFinish(),
 		progressbar.OptionUseANSICodes(true),
 		progressbar.OptionThrottle(1*time.Second),
 		progressbar.OptionSetWriter(os.Stderr),
+		progressbar.OptionOnCompletion(func() {
+			fmt.Fprintln(os.Stderr)
+		}),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "=",
 			SaucerHead:    ">",
@@ -276,6 +279,8 @@ func getNewProgessBar(max int64, description string) *progressbar.ProgressBar {
 			BarStart:      "[",
 			BarEnd:        "]",
 		}),
+		progressbar.OptionSetWidth(10),
+		progressbar.OptionFullWidth(),
 	)
 	//return progressbar.Default(max, description)
 	return pb
