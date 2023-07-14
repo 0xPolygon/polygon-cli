@@ -74,7 +74,6 @@ const (
 	loadTestModeInc                  = "i"
 	loadTestModeRandom               = "r"
 	loadTestModeStore                = "s"
-	loadTestModeLong                 = "l"
 	loadTestModeERC20                = "2"
 	loadTestModeERC721               = "7"
 	loadTestModePrecompiledContracts = "p"
@@ -97,7 +96,6 @@ var (
 		loadTestModeFunction,
 		loadTestModeInc,
 		loadTestModeStore,
-		loadTestModeLong,
 		loadTestModeERC20,
 		loadTestModeERC721,
 		loadTestModePrecompiledContracts,
@@ -249,14 +247,14 @@ type (
 		LegacyTransactionMode               *bool
 
 		// Computed
-		CurrentGas       *big.Int
+		CurrentGasPrice  *big.Int
 		CurrentGasTipCap *big.Int
 		CurrentNonce     *uint64
 		ECDSAPrivateKey  *ecdsa.PrivateKey
 		FromETHAddress   *ethcommon.Address
 		ToETHAddress     *ethcommon.Address
 		SendAmount       *big.Int
-		BaseFee          *big.Int
+		CurrentBaseFee   *big.Int
 
 		ToAvailAddress   *gstypes.MultiAddress
 		FromAvailAddress *gssignature.KeyringPair
@@ -298,17 +296,15 @@ f - call specific contract function
 p - call random precompiled contracts
 a - call a specific precompiled contract address
 s - store mode
-l - long running mode
 r - random modes
 2 - ERC20 Transfers
 7 - ERC721 Mints`)
 	ltp.Function = LoadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` or a specific precompiled contract when running with `--mode a`")
-	ltp.Iterations = LoadtestCmd.PersistentFlags().Uint64P("iterations", "i", 100, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicated the minting batch size")
+	ltp.Iterations = LoadtestCmd.PersistentFlags().Uint64P("iterations", "i", 1, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicated the minting batch size")
 	ltp.ByteCount = LoadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
 	ltp.IsAvail = LoadtestCmd.PersistentFlags().Bool("data-avail", false, "Is this a test of avail rather than an EVM / Geth Chain")
 	ltp.LtAddress = LoadtestCmd.PersistentFlags().String("lt-address", "", "A pre-deployed load test contract address")
-	ltp.DelAddress = LoadtestCmd.PersistentFlags().String("del-address", "", "A pre-deployed delegator contract address")
 	ltp.ContractCallNumberOfBlocksToWaitFor = LoadtestCmd.PersistentFlags().Uint64("contract-call-nb-blocks-to-wait-for", 30, "The number of blocks to wait for before giving up on a contract call")
 	ltp.ContractCallBlockInterval = LoadtestCmd.PersistentFlags().Uint64("contract-call-block-interval", 1, "The number of blocks to wait between contract calls")
 	ltp.ForceContractDeploy = LoadtestCmd.PersistentFlags().Bool("force-contract-deploy", false, "Some loadtest modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --del-address and --il-address flags.")
@@ -398,20 +394,23 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		log.Warn().Msg("Cannot set priority gas price in legacy mode")
 	}
 	if *inputLoadTestParams.ForceGasPrice < *inputLoadTestParams.ForcePriorityGasPrice {
-		log.Error().Msg("Max priority fee per gas higher than max fee per gas")
 		return errors.New("max priority fee per gas higher than max fee per gas")
+	}
+
+	if *inputLoadTestParams.AdaptiveRateLimit && *inputLoadTestParams.CallOnly {
+		return errors.New("the adaptive rate limit is based on the pending transaction pool. It doesn't use this feature while also using call only")
 	}
 
 	inputLoadTestParams.ToETHAddress = &toAddr
 	inputLoadTestParams.SendAmount = amt
-	inputLoadTestParams.CurrentGas = gas
+	inputLoadTestParams.CurrentGasPrice = gas
 	inputLoadTestParams.CurrentNonce = &nonce
 	inputLoadTestParams.ECDSAPrivateKey = privateKey
 	inputLoadTestParams.FromETHAddress = &ethAddress
 	if *inputLoadTestParams.ChainID == 0 {
 		*inputLoadTestParams.ChainID = chainID.Uint64()
 	}
-	inputLoadTestParams.BaseFee = header.BaseFee
+	inputLoadTestParams.CurrentBaseFee = header.BaseFee
 
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
@@ -629,7 +628,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 	routines := *ltp.Concurrency
 	requests := *ltp.Requests
-	currentNonce := *ltp.CurrentNonce
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 	mode := *ltp.Mode
@@ -648,7 +646,11 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	tops = configureTransactOpts(tops)
-	tops.GasLimit = 10000000
+	// configureTransactOpts will set some paramters meant for load testing that could interfere with the deployment of our contracts
+	tops.GasLimit = 0
+	tops.GasPrice = nil
+	tops.GasFeeCap = nil
+	tops.GasTipCap = nil
 
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
@@ -661,7 +663,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	var ltContract *contracts.LoadTester
 	numberOfBlocksToWaitFor := *inputLoadTestParams.ContractCallNumberOfBlocksToWaitFor
 	blockInterval := *inputLoadTestParams.ContractCallBlockInterval
-	if strings.ContainsAny(mode, "rcfislpas") || *inputLoadTestParams.ForceContractDeploy {
+	if strings.ContainsAny(mode, "rcfispas") || *inputLoadTestParams.ForceContractDeploy {
 		if *inputLoadTestParams.LtAddress == "" {
 			ltAddr, _, _, err = contracts.DeployLoadTester(tops, c)
 			if err != nil {
@@ -672,8 +674,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			ltAddr = ethcommon.HexToAddress(*inputLoadTestParams.LtAddress)
 		}
 		log.Trace().Interface("contractaddress", ltAddr).Msg("Load test contract address")
-		// bump the nonce since deploying a contract should cause it to increase
-		currentNonce = currentNonce + 1
 
 		ltContract, err = contracts.NewLoadTester(ltAddr, c)
 		if err != nil {
@@ -705,7 +705,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
 			return err
 		}
-		currentNonce = currentNonce + 1
 		err = blockUntilSuccessful(ctx, c, func() error {
 			_, err = erc20Contract.BalanceOf(cops, *ltp.FromETHAddress)
 			return err
@@ -714,15 +713,12 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			return err
 		}
 
-		tops.Nonce = new(big.Int).SetUint64(currentNonce)
-
 		_, err = erc20Contract.Mint(tops, metrics.UnitMegaether)
 		if err != nil {
 			log.Error().Err(err).Msg("There was an error minting ERC20")
 			return err
 		}
 
-		currentNonce = currentNonce + 1
 		err = blockUntilSuccessful(ctx, c, func() error {
 			var balance *big.Int
 			balance, err = erc20Contract.BalanceOf(cops, *ltp.FromETHAddress)
@@ -755,7 +751,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
 			return err
 		}
-		currentNonce = currentNonce + 1
 
 		err = blockUntilSuccessful(ctx, c, func() error {
 			_, err = erc721Contract.BalanceOf(cops, *ltp.FromETHAddress)
@@ -765,8 +760,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			return err
 		}
 
-		tops.Nonce = new(big.Int).SetUint64(currentNonce)
-
 		err = blockUntilSuccessful(ctx, c, func() error {
 			_, err = erc721Contract.MintBatch(tops, *ltp.FromETHAddress, new(big.Int).SetUint64(1))
 			return err
@@ -774,39 +767,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		if err != nil {
 			return err
 		}
-		currentNonce = currentNonce + 1
-	}
-
-	// deploy and instantiate the delegator contract
-	var delegatorContract *contracts.Delegator
-	if strings.ContainsAny(mode, "rl") || *inputLoadTestParams.ForceContractDeploy {
-		var delegatorAddr ethcommon.Address
-		if *inputLoadTestParams.DelAddress == "" {
-			delegatorAddr, _, _, err = contracts.DeployDelegator(tops, c)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to create the load testing contract. Do you have the right chain id? Do you have enough funds?")
-				return err
-			}
-		} else {
-			delegatorAddr = ethcommon.HexToAddress(*inputLoadTestParams.DelAddress)
-		}
-		log.Trace().Interface("contractaddress", delegatorAddr).Msg("Delegator contract address")
-		currentNonce = currentNonce + 1
-
-		delegatorContract, err = contracts.NewDelegator(delegatorAddr, c)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to instantiate new contract")
-			return err
-		}
-
-		err = blockUntilSuccessful(ctx, c, func() error {
-			_, err = delegatorContract.Call(tops, ltAddr, []byte{0x12, 0x87, 0xa6, 0x8c})
-			return err
-		}, numberOfBlocksToWaitFor, blockInterval)
-		if err != nil {
-			return err
-		}
-		currentNonce = currentNonce + 1
 	}
 
 	var currentNonceMutex sync.Mutex
@@ -816,6 +776,17 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Error().Err(err).Msg("Failed to get current block number")
 		return err
 	}
+
+	currentNonce, err := c.NonceAt(ctx, *ltp.FromETHAddress, new(big.Int).SetUint64(startBlockNumber))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get account nonce")
+		return err
+	}
+
+	currentNonceMutex.Lock()
+	currentNonce += 1
+	currentNonceMutex.Unlock()
+
 	startNonce := currentNonce
 	log.Debug().Uint64("currentNonce", currentNonce).Msg("Starting main loadtest loop")
 	var wg sync.WaitGroup
@@ -860,16 +831,12 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue)
 				case loadTestModeDeploy:
 					startReq, endReq, err = loadtestDeploy(ctx, c, myNonceValue)
-				case loadTestModeCall:
-					startReq, endReq, err = loadtestCall(ctx, c, myNonceValue, ltContract)
-				case loadTestModeFunction:
+				case loadTestModeFunction, loadTestModeCall:
 					startReq, endReq, err = loadtestFunction(ctx, c, myNonceValue, ltContract)
 				case loadTestModeInc:
 					startReq, endReq, err = loadtestInc(ctx, c, myNonceValue, ltContract)
 				case loadTestModeStore:
 					startReq, endReq, err = loadtestStore(ctx, c, myNonceValue, ltContract)
-				case loadTestModeLong:
-					startReq, endReq, err = loadtestLong(ctx, c, myNonceValue, delegatorContract, ltAddr)
 				case loadTestModeERC20:
 					startReq, endReq, err = loadtestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
 				case loadTestModeERC721:
@@ -1015,17 +982,22 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 
 	var tx *ethtypes.Transaction
 	if *ltp.LegacyTransactionMode {
-		tx = ethtypes.NewTransaction(nonce, *to, amount, tops.GasLimit, tops.GasPrice, nil)
+		tx = ethtypes.NewTx(&ethtypes.LegacyTx{
+			Nonce:    nonce,
+			To:       to,
+			Value:    amount,
+			Gas:      tops.GasLimit,
+			GasPrice: tops.GasPrice,
+			Data:     nil,
+		})
 	} else {
-		gasTipCap := tops.GasTipCap
-		gasFeeCap := new(big.Int).Add(gasTipCap, ltp.BaseFee)
 		dynamicFeeTx := &ethtypes.DynamicFeeTx{
 			ChainID:   chainID,
 			Nonce:     nonce,
 			To:        to,
 			Gas:       tops.GasLimit,
-			GasFeeCap: gasFeeCap,
-			GasTipCap: gasTipCap,
+			GasFeeCap: tops.GasFeeCap,
+			GasTipCap: tops.GasTipCap,
 			Data:      nil,
 			Value:     amount,
 		}
@@ -1039,12 +1011,12 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 	}
 
 	t1 = time.Now()
+	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
 		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
 	} else {
 		err = c.SendTransaction(ctx, stx)
 	}
-	t2 = time.Now()
 	return
 }
 
@@ -1064,24 +1036,34 @@ func loadtestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 
 	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
+	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
 		msg := transactOptsToCallMsg(tops)
-		msg.Data = ethcommon.FromHex(contracts.LoadTesterBin)
+		msg.Data = ethcommon.FromHex(contracts.LoadTesterMetaData.Bin)
 		_, err = c.CallContract(ctx, msg, nil)
 	} else {
 		_, _, _, err = contracts.DeployLoadTester(tops, c)
 	}
-	t2 = time.Now()
 	return
 }
 
+// getCurrentLoadTestFunction is meant to handle the business logic
+// around deciding which function to execute. When we're in function
+// mode where the user has provided a specific function to execute, we
+// should use that function. Otherwise, we'll select random functions.
+func getCurrentLoadTestFunction() uint64 {
+	if loadTestModeFunction == *inputLoadTestParams.Mode {
+		return *inputLoadTestParams.Function
+	}
+	return contracts.GetRandomOPCode()
+}
 func loadtestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 	iterations := ltp.Iterations
-	f := ltp.Function
+	f := getCurrentLoadTestFunction()
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
@@ -1092,30 +1074,19 @@ func loadtestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, lt
 	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
-	_, err = contracts.CallLoadTestFunctionByOpCode(*f, ltContract, tops, *iterations)
-	t2 = time.Now()
-	return
-}
-
-func loadtestCall(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
-	ltp := inputLoadTestParams
-
-	chainID := new(big.Int).SetUint64(*ltp.ChainID)
-	privateKey := ltp.ECDSAPrivateKey
-	iterations := ltp.Iterations
-	f := contracts.GetRandomOPCode()
-
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable create transaction signer")
-		return
+	defer func() { t2 = time.Now() }()
+	if *ltp.CallOnly {
+		tops.NoSend = true
+		var tx *ethtypes.Transaction
+		tx, err = contracts.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
+		if err != nil {
+			return
+		}
+		msg := txToCallMsg(tx)
+		_, err = c.CallContract(ctx, msg, nil)
+	} else {
+		_, err = contracts.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
 	}
-	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops)
-
-	t1 = time.Now()
-	_, err = contracts.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
-	t2 = time.Now()
 	return
 }
 
@@ -1141,8 +1112,19 @@ func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, 
 	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
-	_, err = contracts.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
-	t2 = time.Now()
+	defer func() { t2 = time.Now() }()
+	if *ltp.CallOnly {
+		tops.NoSend = true
+		var tx *ethtypes.Transaction
+		tx, err = contracts.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
+		if err != nil {
+			return
+		}
+		msg := txToCallMsg(tx)
+		_, err = c.CallContract(ctx, msg, nil)
+	} else {
+		_, err = contracts.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
+	}
 	return
 }
 
@@ -1161,8 +1143,19 @@ func loadtestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContr
 	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
-	_, err = ltContract.Inc(tops)
-	t2 = time.Now()
+	defer func() { t2 = time.Now() }()
+	if *ltp.CallOnly {
+		tops.NoSend = true
+		var tx *ethtypes.Transaction
+		tx, err = ltContract.Inc(tops)
+		if err != nil {
+			return
+		}
+		msg := txToCallMsg(tx)
+		_, err = c.CallContract(ctx, msg, nil)
+	} else {
+		_, err = ltContract.Inc(tops)
+	}
 	return
 }
 
@@ -1183,32 +1176,19 @@ func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 	inputData := make([]byte, *ltp.ByteCount)
 	_, _ = hexwordRead(inputData)
 	t1 = time.Now()
-	_, err = ltContract.Store(tops, inputData)
-	t2 = time.Now()
-	return
-}
-
-func loadtestLong(ctx context.Context, c *ethclient.Client, nonce uint64, delegatorContract *contracts.Delegator, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
-	ltp := inputLoadTestParams
-
-	chainID := new(big.Int).SetUint64(*ltp.ChainID)
-	privateKey := ltp.ECDSAPrivateKey
-
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable create transaction signer")
-		return
+	defer func() { t2 = time.Now() }()
+	if *ltp.CallOnly {
+		tops.NoSend = true
+		var tx *ethtypes.Transaction
+		tx, err = ltContract.Store(tops, inputData)
+		if err != nil {
+			return
+		}
+		msg := txToCallMsg(tx)
+		_, err = c.CallContract(ctx, msg, nil)
+	} else {
+		_, err = ltContract.Store(tops, inputData)
 	}
-	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops)
-
-	// TODO the delegated call should be a parameter
-	t1 = time.Now()
-	// loopBlockHashUntilLimit (verify here https://abi.hashex.org/)
-	_, err = delegatorContract.LoopDelegateCall(tops, ltAddress, []byte{0xa2, 0x71, 0xb7, 0x21})
-	// loopUntilLimit
-	// _, err = delegatorContract.LoopDelegateCall(tops, ltAddress, []byte{0x65, 0x9b, 0xbb, 0x4f})
-	t2 = time.Now()
 	return
 }
 
@@ -1233,8 +1213,20 @@ func loadtestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
-	_, err = erc20Contract.Transfer(tops, *to, amount)
-	t2 = time.Now()
+	defer func() { t2 = time.Now() }()
+	if *ltp.CallOnly {
+		tops.NoSend = true
+		var tx *ethtypes.Transaction
+		tx, err = erc20Contract.Transfer(tops, *to, amount)
+		if err != nil {
+			return
+		}
+		msg := txToCallMsg(tx)
+		_, err = c.CallContract(ctx, msg, nil)
+	} else {
+		_, err = erc20Contract.Transfer(tops, *to, amount)
+	}
+
 	return
 }
 
@@ -1259,8 +1251,20 @@ func loadtestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 	tops = configureTransactOpts(tops)
 
 	t1 = time.Now()
-	_, err = erc721Contract.MintBatch(tops, *to, new(big.Int).SetUint64(*iterations))
-	t2 = time.Now()
+	defer func() { t2 = time.Now() }()
+	if *ltp.CallOnly {
+		tops.NoSend = true
+		var tx *ethtypes.Transaction
+		tx, err = erc721Contract.MintBatch(tops, *to, new(big.Int).SetUint64(*iterations))
+		if err != nil {
+			return
+		}
+		msg := txToCallMsg(tx)
+		_, err = c.CallContract(ctx, msg, nil)
+	} else {
+		_, err = erc721Contract.MintBatch(tops, *to, new(big.Int).SetUint64(*iterations))
+	}
+
 	return
 }
 
@@ -1406,8 +1410,6 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
 				case loadTestModeStore:
 					startReq, endReq, err = loadtestAvailStore(ctx, c, myNonceValue, meta, genesisHash)
-				case loadTestModeLong:
-					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -1513,11 +1515,8 @@ func loadtestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uin
 	}
 
 	t1 = time.Now()
+	defer func() { t2 = time.Now() }()
 	_, err = c.RPC.Author.SubmitExtrinsic(ext)
-	t2 = time.Now()
-	if err != nil {
-		return
-	}
 	return
 }
 
@@ -1556,40 +1555,37 @@ func loadtestAvailStore(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64
 
 	// Send the extrinsic
 	t1 = time.Now()
+	defer func() { t2 = time.Now() }()
 	_, err = c.RPC.Author.SubmitExtrinsic(ext)
-	t2 = time.Now()
-	if err != nil {
-		return
-	}
 	return
 }
 
 func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 	ltp := inputLoadTestParams
+
 	if ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
 		tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
-	} else {
-		tops.GasPrice = ltp.CurrentGas
-	}
-	if !*ltp.LegacyTransactionMode {
-		if ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
-			tops.GasPrice = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
-		} else {
-			if ltp.BaseFee != nil {
-				tops.GasPrice = big.NewInt(0).Add(ltp.BaseFee, ltp.CurrentGasTipCap)
-			} else {
-				log.Fatal().Msg("EIP-1559 not activated. Please use --legacy")
-			}
-		}
-		if ltp.ForcePriorityGasPrice != nil && *ltp.ForcePriorityGasPrice != 0 {
-			tops.GasTipCap = big.NewInt(0).SetUint64(*ltp.ForcePriorityGasPrice)
-		} else {
-			tops.GasTipCap = ltp.CurrentGasTipCap
-		}
 	}
 	if ltp.ForceGasLimit != nil && *ltp.ForceGasLimit != 0 {
 		tops.GasLimit = *ltp.ForceGasLimit
 	}
+
+	// if we're in legacy mode, there's no point doing anything else in this function
+	if *ltp.LegacyTransactionMode {
+		return tops
+	}
+
+	if ltp.ForcePriorityGasPrice != nil && *ltp.ForcePriorityGasPrice != 0 {
+		tops.GasTipCap = big.NewInt(0).SetUint64(*ltp.ForcePriorityGasPrice)
+	}
+
+	if ltp.CurrentBaseFee == nil {
+		log.Fatal().Msg("EIP-1559 not activated. Please use --legacy")
+	}
+
+	tops.GasPrice = nil
+	tops.GasFeeCap = big.NewInt(0).Add(ltp.CurrentBaseFee, ltp.CurrentGasTipCap)
+
 	return tops
 }
 
@@ -2004,6 +2000,7 @@ func getSortedMapKeys[V any, K constraints.Ordered](m map[K]V) []K {
 	})
 	return keys
 }
+
 func transactOptsToCallMsg(tops *bind.TransactOpts) ethereum.CallMsg {
 	cm := new(ethereum.CallMsg)
 	cm.From = *inputLoadTestParams.FromETHAddress
