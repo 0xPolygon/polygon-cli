@@ -165,7 +165,7 @@ var LevelDBBenchCmd = &cobra.Command{
 }
 
 func runFullCompact(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions) {
-	err := db.CompactRange(util.Range{nil, nil})
+	err := db.CompactRange(util.Range{Start: nil, Limit: nil})
 	if err != nil {
 		log.Fatal().Err(err).Msg("error compacting data")
 	}
@@ -180,7 +180,7 @@ func writeData(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, valueS
 	for ; i < lim; i = i + 1 {
 		pool <- true
 		wg.Add(1)
-		go func() {
+		go func(i uint64) {
 			bar.Add(1)
 			k, v := makeKV(i, valueSize, sequential)
 			err := db.Put(k, v, wo)
@@ -189,7 +189,7 @@ func writeData(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, valueS
 			}
 			wg.Done()
 			<-pool
-		}()
+		}(i)
 	}
 	wg.Wait()
 }
