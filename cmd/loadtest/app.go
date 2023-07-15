@@ -1,0 +1,191 @@
+package loadtest
+
+import (
+	"crypto/ecdsa"
+	"github.com/maticnetwork/polygon-cli/rpctypes"
+	"github.com/spf13/cobra"
+	"net/url"
+	"regexp"
+)
+
+import (
+	"fmt"
+	"math/big"
+	"strings"
+	"time"
+
+	_ "embed"
+
+	gssignature "github.com/centrifuge/go-substrate-rpc-client/v4/signature"
+	gstypes "github.com/centrifuge/go-substrate-rpc-client/v4/types"
+
+	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+)
+
+type (
+	blockSummary struct {
+		Block     *rpctypes.RawBlockResponse
+		Receipts  map[ethcommon.Hash]rpctypes.RawTxReceipt
+		Latencies map[uint64]time.Duration
+	}
+	hexwordReader struct {
+	}
+	loadTestSample struct {
+		GoRoutineID int64
+		RequestID   int64
+		RequestTime time.Time
+		WaitTime    time.Duration
+		Receipt     string
+		IsError     bool
+		Nonce       uint64
+	}
+	loadTestParams struct {
+		// inputs
+		Requests                            *int64
+		Concurrency                         *int64
+		BatchSize                           *uint64
+		TimeLimit                           *int64
+		ToRandom                            *bool
+		CallOnly                            *bool
+		URL                                 *url.URL
+		ChainID                             *uint64
+		PrivateKey                          *string
+		ToAddress                           *string
+		HexSendAmount                       *string
+		RateLimit                           *float64
+		AdaptiveRateLimit                   *bool
+		SteadyStateTxPoolSize               *uint64
+		AdaptiveRateLimitIncrement          *uint64
+		AdaptiveCycleDuration               *uint64
+		AdaptiveBackoffFactor               *float64
+		Mode                                *string
+		Function                            *uint64
+		Iterations                          *uint64
+		ByteCount                           *uint64
+		Seed                                *int64
+		IsAvail                             *bool
+		LtAddress                           *string
+		DelAddress                          *string
+		ContractCallNumberOfBlocksToWaitFor *uint64
+		ContractCallBlockInterval           *uint64
+		ForceContractDeploy                 *bool
+		ForceGasLimit                       *uint64
+		ForceGasPrice                       *uint64
+		ForcePriorityGasPrice               *uint64
+		ShouldProduceSummary                *bool
+		SummaryOutputMode                   *string
+		LegacyTransactionMode               *bool
+
+		// Computed
+		CurrentGasPrice  *big.Int
+		CurrentGasTipCap *big.Int
+		CurrentNonce     *uint64
+		ECDSAPrivateKey  *ecdsa.PrivateKey
+		FromETHAddress   *ethcommon.Address
+		ToETHAddress     *ethcommon.Address
+		SendAmount       *big.Int
+		CurrentBaseFee   *big.Int
+
+		ToAvailAddress   *gstypes.MultiAddress
+		FromAvailAddress *gssignature.KeyringPair
+		AvailRuntime     *gstypes.RuntimeVersion
+	}
+
+	txpoolStatus struct {
+		Pending any `json:"pending"`
+		Queued  any `json:"queued"`
+	}
+)
+
+// LoadtestCmd represents the loadtest command
+var LoadtestCmd = &cobra.Command{
+	Use:   "loadtest url",
+	Short: "Run a generic load test against an Eth/EVM style JSON-RPC endpoint.",
+	Long:  usage,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		err := runLoadTest(cmd.Context())
+		if err != nil {
+			return err
+		}
+		return nil
+	},
+	Args: func(cmd *cobra.Command, args []string) error {
+		zerolog.DurationFieldUnit = time.Second
+		zerolog.DurationFieldInteger = true
+
+		if len(args) != 1 {
+			return fmt.Errorf("expected exactly one argument")
+		}
+		url, err := url.Parse(args[0])
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to parse url input error")
+			return err
+		}
+		if url.Scheme != "http" && url.Scheme != "https" && url.Scheme != "ws" && url.Scheme != "wss" {
+			return fmt.Errorf("the scheme %s is not supported", url.Scheme)
+		}
+		inputLoadTestParams.URL = url
+		r := regexp.MustCompile(fmt.Sprintf("^[%s]+$", strings.Join(validLoadTestModes, "")))
+		if !r.MatchString(*inputLoadTestParams.Mode) {
+			return fmt.Errorf("the mode %s is not recognized", *inputLoadTestParams.Mode)
+		}
+		if *inputLoadTestParams.AdaptiveBackoffFactor <= 0.0 {
+			return fmt.Errorf("the backoff factor needs to be non-zero positive")
+		}
+		return nil
+	},
+}
+
+func init() {
+	ltp := new(loadTestParams)
+
+	ltp.Requests = LoadtestCmd.PersistentFlags().Int64P("requests", "n", 1, "Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results.")
+	ltp.Concurrency = LoadtestCmd.PersistentFlags().Int64P("concurrency", "c", 1, "Number of requests to perform concurrently. Default is one request at a time.")
+	ltp.TimeLimit = LoadtestCmd.PersistentFlags().Int64P("time-limit", "t", -1, "Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit.")
+	ltp.PrivateKey = LoadtestCmd.PersistentFlags().String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to send transactions")
+	ltp.ChainID = LoadtestCmd.PersistentFlags().Uint64("chain-id", 0, "The chain id for the transactions.")
+	ltp.ToAddress = LoadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
+	ltp.ToRandom = LoadtestCmd.PersistentFlags().Bool("to-random", false, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
+	ltp.CallOnly = LoadtestCmd.PersistentFlags().Bool("call-only", false, "When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.")
+	ltp.HexSendAmount = LoadtestCmd.PersistentFlags().String("send-amount", "0x38D7EA4C68000", "The amount of wei that we'll send every transaction")
+	ltp.RateLimit = LoadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
+	ltp.AdaptiveRateLimit = LoadtestCmd.PersistentFlags().Bool("adaptive-rate-limit", false, "Enable AIMD-style congestion control to automatically adjust request rate")
+	ltp.SteadyStateTxPoolSize = LoadtestCmd.PersistentFlags().Uint64("steady-state-tx-pool-size", 1000, "When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off.")
+	ltp.AdaptiveRateLimitIncrement = LoadtestCmd.PersistentFlags().Uint64("adaptive-rate-limit-increment", 50, "When using adaptive rate limiting, this flag controls the size of the additive increases.")
+	ltp.AdaptiveCycleDuration = LoadtestCmd.PersistentFlags().Uint64("adaptive-cycle-duration-seconds", 10, "When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates")
+	ltp.AdaptiveBackoffFactor = LoadtestCmd.PersistentFlags().Float64("adaptive-backoff-factor", 2, "When using adaptive rate limiting, this flag controls our multiplicative decrease value.")
+	ltp.Mode = LoadtestCmd.PersistentFlags().StringP("mode", "m", "t", `The testing mode to use. It can be multiple like: "tcdf"
+t - sending transactions
+d - deploy contract
+c - call random contract functions
+f - call specific contract function
+p - call random precompiled contracts
+a - call a specific precompiled contract address
+s - store mode
+r - random modes
+2 - ERC20 Transfers
+7 - ERC721 Mints`)
+	ltp.Function = LoadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` or a specific precompiled contract when running with `--mode a`")
+	ltp.Iterations = LoadtestCmd.PersistentFlags().Uint64P("iterations", "i", 1, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size")
+	ltp.ByteCount = LoadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
+	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
+	ltp.IsAvail = LoadtestCmd.PersistentFlags().Bool("data-avail", false, "[DEPRECATED] Enables Avail load testing")
+	ltp.LtAddress = LoadtestCmd.PersistentFlags().String("lt-address", "", "The address of a pre-deployed load test contract")
+	ltp.ContractCallNumberOfBlocksToWaitFor = LoadtestCmd.PersistentFlags().Uint64("contract-call-nb-blocks-to-wait-for", 30, "The number of blocks to wait for before giving up on a contract deployment")
+	ltp.ContractCallBlockInterval = LoadtestCmd.PersistentFlags().Uint64("contract-call-block-interval", 1, "During deployment, this flag controls if we should check every block, every other block, or every nth block to determine that the contract has been deployed")
+	ltp.ForceContractDeploy = LoadtestCmd.PersistentFlags().Bool("force-contract-deploy", false, "Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.")
+	ltp.ForceGasLimit = LoadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas")
+	ltp.ForceGasPrice = LoadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be determined automatically, we can specify it manually")
+	ltp.ForcePriorityGasPrice = LoadtestCmd.PersistentFlags().Uint64("priority-gas-price", 0, "Specify Gas Tip Price in the case of EIP-1559")
+	ltp.ShouldProduceSummary = LoadtestCmd.PersistentFlags().Bool("summarize", false, "Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time")
+	ltp.BatchSize = LoadtestCmd.PersistentFlags().Uint64("batch-size", 999, "Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time.")
+	ltp.SummaryOutputMode = LoadtestCmd.PersistentFlags().String("output-mode", "text", "Format mode for summary output (json | text)")
+	ltp.LegacyTransactionMode = LoadtestCmd.PersistentFlags().Bool("legacy", false, "Send a legacy transaction instead of an EIP1559 transaction.")
+	inputLoadTestParams = *ltp
+
+	// TODO batch size
+	// TODO Compression
+	// TODO array of RPC endpoints to round robin?
+}
