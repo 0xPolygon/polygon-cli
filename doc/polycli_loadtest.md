@@ -93,6 +93,8 @@ $ polycli loadtest --app-id 0 --data-avail --verbosity 700 --chain-id 42 --concu
       --contract-call-block-interval uint          During deployment, this flag controls if we should check every block, every other block, or every nth block to determine that the contract has been deployed (default 1)
       --contract-call-nb-blocks-to-wait-for uint   The number of blocks to wait for before giving up on a contract deployment (default 30)
       --data-avail                                 [DEPRECATED] Enables Avail load testing
+      --erc20-address string                       The address of a pre-deployed erc 20 contract
+      --erc721-address string                      The address of a pre-deployed erc 721 contract
       --force-contract-deploy                      Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.
   -f, --function --mode f                          A specific function to be called if running with --mode f or a specific precompiled contract when running with `--mode a` (default 1)
       --gas-limit uint                             In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
@@ -111,11 +113,13 @@ $ polycli loadtest --app-id 0 --data-avail --verbosity 700 --chain-id 42 --concu
                                                    s - store mode
                                                    r - random modes
                                                    2 - ERC20 Transfers
-                                                   7 - ERC721 Mints (default "t")
+                                                   7 - ERC721 Mints
+                                                   R - total recall (default "t")
       --output-mode string                         Format mode for summary output (json | text) (default "text")
       --priority-gas-price uint                    Specify Gas Tip Price in the case of EIP-1559
       --private-key string                         The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
       --rate-limit float                           An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together (default 4)
+      --recall-blocks uint                         The number of blocks that we'll attempt to fetch for recall (default 50)
   -n, --requests int                               Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
       --seed int                                   A seed for generating random values and addresses (default 123456)
       --send-amount string                         The amount of wei that we'll send every transaction (default "0x38D7EA4C68000")

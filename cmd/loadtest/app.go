@@ -76,16 +76,18 @@ type (
 		ShouldProduceSummary                *bool
 		SummaryOutputMode                   *string
 		LegacyTransactionMode               *bool
+		RecallLength                        *uint64
 
 		// Computed
-		CurrentGasPrice  *big.Int
-		CurrentGasTipCap *big.Int
-		CurrentNonce     *uint64
-		ECDSAPrivateKey  *ecdsa.PrivateKey
-		FromETHAddress   *ethcommon.Address
-		ToETHAddress     *ethcommon.Address
-		SendAmount       *big.Int
-		CurrentBaseFee   *big.Int
+		CurrentGasPrice     *big.Int
+		CurrentGasTipCap    *big.Int
+		CurrentNonce        *uint64
+		ECDSAPrivateKey     *ecdsa.PrivateKey
+		FromETHAddress      *ethcommon.Address
+		ToETHAddress        *ethcommon.Address
+		SendAmount          *big.Int
+		CurrentBaseFee      *big.Int
+		ChainSupportBaseFee bool
 
 		ToAvailAddress   *gstypes.MultiAddress
 		FromAvailAddress *gssignature.KeyringPair
@@ -104,20 +106,6 @@ var (
 	inputLoadTestParams loadTestParams
 	loadTestResults     []loadTestSample
 	loadTestResutsMutex sync.RWMutex
-	validLoadTestModes  = []string{
-		loadTestModeTransaction,
-		loadTestModeDeploy,
-		loadTestModeCall,
-		loadTestModeFunction,
-		loadTestModeInc,
-		loadTestModeStore,
-		loadTestModeERC20,
-		loadTestModeERC721,
-		loadTestModePrecompiledContracts,
-		loadTestModePrecompiledContract,
-		// r should be last to exclude it from random mode selection
-		loadTestModeRandom,
-	}
 
 	hexwords = []byte{
 		0x00, 0x0F, 0xF1, 0xCE,
@@ -235,7 +223,8 @@ a - call a specific precompiled contract address
 s - store mode
 r - random modes
 2 - ERC20 Transfers
-7 - ERC721 Mints`)
+7 - ERC721 Mints
+R - total recall`)
 	ltp.Function = LoadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` or a specific precompiled contract when running with `--mode a`")
 	ltp.Iterations = LoadtestCmd.PersistentFlags().Uint64P("iterations", "i", 1, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size")
 	ltp.ByteCount = LoadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
@@ -254,6 +243,7 @@ r - random modes
 	ltp.BatchSize = LoadtestCmd.PersistentFlags().Uint64("batch-size", 999, "Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time.")
 	ltp.SummaryOutputMode = LoadtestCmd.PersistentFlags().String("output-mode", "text", "Format mode for summary output (json | text)")
 	ltp.LegacyTransactionMode = LoadtestCmd.PersistentFlags().Bool("legacy", false, "Send a legacy transaction instead of an EIP1559 transaction.")
+	ltp.RecallLength = LoadtestCmd.PersistentFlags().Uint64("recall-blocks", 50, "The number of blocks that we'll attempt to fetch for recall")
 	inputLoadTestParams = *ltp
 
 	// TODO batch size

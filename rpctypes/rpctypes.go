@@ -73,6 +73,10 @@ type (
 
 		// EIP 2718 Type field?
 		Type RawQuantityResponse `json:"type"`
+
+		ChainID RawQuantityResponse `json:"chainId"`
+
+		AccessList []any `json:"accessList"`
 	}
 
 	RawBlockResponse struct {
@@ -224,6 +228,7 @@ type (
 		Type() uint64
 		MaxPriorityFeePerGas() uint64
 		MaxFeePerGas() uint64
+		ChainID() uint64
 		V() *big.Int
 		R() *big.Int
 		S() *big.Int
@@ -359,6 +364,9 @@ func (i *implPolyTransaction) MaxFeePerGas() uint64 {
 }
 func (i *implPolyTransaction) Nonce() uint64 {
 	return i.inner.Nonce.ToUint64()
+}
+func (i *implPolyTransaction) ChainID() uint64 {
+	return i.inner.ChainID.ToUint64()
 }
 func (i *implPolyTransaction) Type() uint64 {
 	return i.inner.Type.ToUint64()

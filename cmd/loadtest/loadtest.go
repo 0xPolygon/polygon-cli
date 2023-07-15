@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"io"
 	"math/big"
 	"math/rand"
@@ -44,9 +45,28 @@ const (
 	loadTestModeERC721               = "7"
 	loadTestModePrecompiledContracts = "p"
 	loadTestModePrecompiledContract  = "a"
+	loadTestModeRecall               = "R"
 
 	codeQualitySeed       = "code code code code code code code code code code code quality"
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
+)
+
+var (
+	validLoadTestModes = []string{
+		loadTestModeTransaction,
+		loadTestModeDeploy,
+		loadTestModeCall,
+		loadTestModeFunction,
+		loadTestModeInc,
+		loadTestModeStore,
+		loadTestModeERC20,
+		loadTestModeERC721,
+		loadTestModePrecompiledContracts,
+		loadTestModePrecompiledContract,
+		loadTestModeRecall,
+		// r should be last to exclude it from random mode selection
+		loadTestModeRandom,
+	}
 )
 
 func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
@@ -108,6 +128,10 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get header")
 		return err
+	}
+	if header.BaseFee != nil {
+		inputLoadTestParams.ChainSupportBaseFee = true
+		log.Debug().Msg("eip-1559 support detected")
 	}
 
 	chainID, err := c.ChainID(ctx)
@@ -387,6 +411,18 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Debug().Str("erc721Addr", erc721Addr.String()).Msg("Obtained erc 721 contract address")
 	}
 
+	var recallTransactions []rpctypes.PolyTransaction
+	if mode == loadTestModeRecall || mode == loadTestModeRandom {
+		recallTransactions, err = getRecallTransactions(ctx, c, rpc)
+		if err != nil {
+			return err
+		}
+		if len(recallTransactions) == 0 {
+			return fmt.Errorf("We weren't able to fetch any recall transactions")
+		}
+		log.Debug().Int("txs", len(recallTransactions)).Msg("retreived transactions for total recall")
+	}
+
 	var currentNonceMutex sync.Mutex
 	var i int64
 	startBlockNumber, err := c.BlockNumber(ctx)
@@ -400,10 +436,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Error().Err(err).Msg("Unable to get account nonce")
 		return err
 	}
-
-	currentNonceMutex.Lock()
-	currentNonce += 1
-	currentNonceMutex.Unlock()
 
 	startNonce := currentNonce
 	log.Debug().Uint64("currentNonce", currentNonce).Msg("Starting main load test loop")
@@ -463,6 +495,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					startReq, endReq, err = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, true)
 				case loadTestModePrecompiledContracts:
 					startReq, endReq, err = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false)
+				case loadTestModeRecall:
+					startReq, endReq, err = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -678,6 +712,7 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 	}
 	tops.GasLimit = uint64(21000)
 	tops = configureTransactOpts(tops)
+	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
 
 	var tx *ethtypes.Transaction
 	if *ltp.LegacyTransactionMode {
@@ -686,7 +721,7 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 			To:       to,
 			Value:    amount,
 			Gas:      tops.GasLimit,
-			GasPrice: tops.GasPrice,
+			GasPrice: gasPrice,
 			Data:     nil,
 		})
 	} else {
@@ -695,8 +730,8 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 			Nonce:     nonce,
 			To:        to,
 			Gas:       tops.GasLimit,
-			GasFeeCap: tops.GasFeeCap,
-			GasTipCap: tops.GasTipCap,
+			GasFeeCap: gasPrice,
+			GasTipCap: gasTipCap,
 			Data:      nil,
 			Value:     amount,
 		}
@@ -717,6 +752,59 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 		err = c.SendTransaction(ctx, stx)
 	}
 	return
+}
+
+var (
+	cachedBlockNumber  uint64
+	cachedGasPriceLock sync.Mutex
+	cachedGasPrice     *big.Int
+	cachedGasTipCap    *big.Int
+)
+
+func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, *big.Int) {
+	// this should be one of the fastest RPC calls, so hopefully there isn't too much overhead calling this
+	bn, err := c.BlockNumber(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get block number while checking gas prices")
+		return nil, nil
+	}
+	isDynamic := inputLoadTestParams.ChainSupportBaseFee
+
+	cachedGasPriceLock.Lock()
+	defer cachedGasPriceLock.Unlock()
+	if bn <= cachedBlockNumber {
+		return cachedGasPrice, cachedGasTipCap
+	}
+	gp, pErr := c.SuggestGasPrice(ctx)
+	gt, tErr := c.SuggestGasTipCap(ctx)
+	if pErr == nil && (tErr == nil || !isDynamic) {
+		cachedBlockNumber = bn
+		cachedGasPrice = gp
+		cachedGasTipCap = gt
+		if inputLoadTestParams.ForceGasPrice != nil && *inputLoadTestParams.ForcePriorityGasPrice != 0 {
+			cachedGasPrice = new(big.Int).SetUint64(*inputLoadTestParams.ForcePriorityGasPrice)
+		}
+		if inputLoadTestParams.ForcePriorityGasPrice != nil && *inputLoadTestParams.ForcePriorityGasPrice != 0 {
+			cachedGasTipCap = new(big.Int).SetUint64(*inputLoadTestParams.ForcePriorityGasPrice)
+		}
+		log.Debug().Uint64("cachedBlockNumber", bn).
+			Uint64("cachedgasPrice", cachedGasPrice.Uint64()).
+			Uint64("cachedGasTipCap", cachedGasTipCap.Uint64()).Msg("Updating gas prices")
+		return cachedGasPrice, cachedGasTipCap
+	}
+
+	// Something went wrong
+	if pErr != nil {
+		log.Error().Err(pErr).Msg("Unable to suggest gas price")
+		return cachedGasPrice, cachedGasTipCap
+	}
+	if tErr != nil && isDynamic {
+		log.Error().Err(tErr).Msg("Unable to suggest gas tip cap")
+		return cachedGasPrice, cachedGasTipCap
+	}
+	log.Error().Err(tErr).Msg("This error should not have happened. We got a gas tip price error in an environment that is not dynamic")
+	return cachedGasPrice, cachedGasTipCap
+
 }
 
 // TODO - in the future it might be more interesting if this mode takes input or random contracts to be deployed
@@ -964,6 +1052,37 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 		_, err = erc721Contract.MintBatch(tops, *to, new(big.Int).SetUint64(*iterations))
 	}
 
+	return
+}
+
+func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, originalTx rpctypes.PolyTransaction) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
+	tx := rawTransactionToNewTx(originalTx, nonce, gasPrice, gasTipCap)
+	tops = configureTransactOpts(tops)
+
+	stx, err := tops.Signer(*ltp.FromETHAddress, tx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to sign transaction")
+		return
+	}
+
+	t1 = time.Now()
+	defer func() { t2 = time.Now() }()
+	if *ltp.CallOnly {
+		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
+	} else {
+		err = c.SendTransaction(ctx, stx)
+	}
 	return
 }
 func loadTestNotImplemented(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
