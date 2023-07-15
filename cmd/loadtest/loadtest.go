@@ -406,7 +406,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	currentNonceMutex.Unlock()
 
 	startNonce := currentNonce
-	log.Debug().Uint64("currentNonce", currentNonce).Msg("Starting main loadtest loop")
+	log.Debug().Uint64("currentNonce", currentNonce).Msg("Starting main load test loop")
 	var wg sync.WaitGroup
 	for i = 0; i < routines; i = i + 1 {
 		log.Trace().Int64("routine", i).Msg("Starting Thread")
@@ -446,23 +446,23 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				switch localMode {
 				case loadTestModeTransaction:
-					startReq, endReq, err = loadtestTransaction(ctx, c, myNonceValue)
+					startReq, endReq, err = loadTestTransaction(ctx, c, myNonceValue)
 				case loadTestModeDeploy:
-					startReq, endReq, err = loadtestDeploy(ctx, c, myNonceValue)
+					startReq, endReq, err = loadTestDeploy(ctx, c, myNonceValue)
 				case loadTestModeFunction, loadTestModeCall:
-					startReq, endReq, err = loadtestFunction(ctx, c, myNonceValue, ltContract)
+					startReq, endReq, err = loadTestFunction(ctx, c, myNonceValue, ltContract)
 				case loadTestModeInc:
-					startReq, endReq, err = loadtestInc(ctx, c, myNonceValue, ltContract)
+					startReq, endReq, err = loadTestInc(ctx, c, myNonceValue, ltContract)
 				case loadTestModeStore:
-					startReq, endReq, err = loadtestStore(ctx, c, myNonceValue, ltContract)
+					startReq, endReq, err = loadTestStore(ctx, c, myNonceValue, ltContract)
 				case loadTestModeERC20:
-					startReq, endReq, err = loadtestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
+					startReq, endReq, err = loadTestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
 				case loadTestModeERC721:
-					startReq, endReq, err = loadtestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
+					startReq, endReq, err = loadTestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
 				case loadTestModePrecompiledContract:
-					startReq, endReq, err = loadtestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, true)
+					startReq, endReq, err = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, true)
 				case loadTestModePrecompiledContracts:
-					startReq, endReq, err = loadtestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false)
+					startReq, endReq, err = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false)
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -480,7 +480,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
 	cancel()
-	log.Debug().Uint64("currentNonce", currentNonce).Msg("Finished main loadtest loop")
+	log.Debug().Uint64("currentNonce", currentNonce).Msg("Finished main load test loop")
 	log.Debug().Msg("Waiting for transactions to actually be mined")
 	if *ltp.CallOnly {
 		return nil
@@ -659,7 +659,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 	}
 }
 
-func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
@@ -720,7 +720,7 @@ func loadtestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 }
 
 // TODO - in the future it might be more interesting if this mode takes input or random contracts to be deployed
-func loadtestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+func loadTestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -756,7 +756,7 @@ func getCurrentLoadTestFunction() uint64 {
 	}
 	return contracts.GetRandomOPCode()
 }
-func loadtestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+func loadTestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -789,7 +789,7 @@ func loadtestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, lt
 	return
 }
 
-func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester, useSelectedAddress bool) (t1 time.Time, t2 time.Time, err error) {
+func loadTestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester, useSelectedAddress bool) (t1 time.Time, t2 time.Time, err error) {
 	var f int
 	ltp := inputLoadTestParams
 
@@ -827,7 +827,7 @@ func loadtestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, 
 	return
 }
 
-func loadtestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+func loadTestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -858,7 +858,7 @@ func loadtestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContr
 	return
 }
 
-func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+func loadTestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -891,7 +891,7 @@ func loadtestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 	return
 }
 
-func loadtestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20Contract *contracts.ERC20, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
+func loadTestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20Contract *contracts.ERC20, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
@@ -929,7 +929,7 @@ func loadtestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 	return
 }
 
-func loadtestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc721Contract *contracts.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
+func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc721Contract *contracts.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 	iterations := ltp.Iterations
 
@@ -966,7 +966,7 @@ func loadtestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 
 	return
 }
-func loadtestNotImplemented(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+func loadTestNotImplemented(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	t1 = time.Now()
 	t2 = time.Now()
 	err = fmt.Errorf("this method is not implemented")

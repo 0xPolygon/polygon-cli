@@ -104,17 +104,17 @@ func availLoop(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 				// this function should probably be abstracted
 				switch localMode {
 				case loadTestModeTransaction:
-					startReq, endReq, err = loadtestAvailTransfer(ctx, c, myNonceValue, meta, genesisHash)
+					startReq, endReq, err = loadTestAvailTransfer(ctx, c, myNonceValue, meta, genesisHash)
 				case loadTestModeDeploy:
-					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
+					startReq, endReq, err = loadTestNotImplemented(ctx, c, myNonceValue)
 				case loadTestModeCall:
-					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
+					startReq, endReq, err = loadTestNotImplemented(ctx, c, myNonceValue)
 				case loadTestModeFunction:
-					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
+					startReq, endReq, err = loadTestNotImplemented(ctx, c, myNonceValue)
 				case loadTestModeInc:
-					startReq, endReq, err = loadtestNotImplemented(ctx, c, myNonceValue)
+					startReq, endReq, err = loadTestNotImplemented(ctx, c, myNonceValue)
 				case loadTestModeStore:
-					startReq, endReq, err = loadtestAvailStore(ctx, c, myNonceValue, meta, genesisHash)
+					startReq, endReq, err = loadTestAvailStore(ctx, c, myNonceValue, meta, genesisHash)
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -172,7 +172,7 @@ func initAvailTestParams(ctx context.Context, c *gsrpc.SubstrateAPI) error {
 	return nil
 }
 
-func loadtestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64, meta *gstypes.Metadata, genesisHash gstypes.Hash) (t1 time.Time, t2 time.Time, err error) {
+func loadTestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64, meta *gstypes.Metadata, genesisHash gstypes.Hash) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	toAddr := *ltp.ToAvailAddress
@@ -218,7 +218,7 @@ func loadtestAvailTransfer(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uin
 	return
 }
 
-func loadtestAvailStore(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64, meta *gstypes.Metadata, genesisHash gstypes.Hash) (t1 time.Time, t2 time.Time, err error) {
+func loadTestAvailStore(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64, meta *gstypes.Metadata, genesisHash gstypes.Hash) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	inputData := make([]byte, *ltp.ByteCount)
