@@ -359,112 +359,32 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	// deploy and instantiate the load tester contract
 	var ltAddr ethcommon.Address
 	var ltContract *contracts.LoadTester
-	numberOfBlocksToWaitFor := *inputLoadTestParams.ContractCallNumberOfBlocksToWaitFor
-	blockInterval := *inputLoadTestParams.ContractCallBlockInterval
 	if strings.ContainsAny(mode, "rcfispas") || *inputLoadTestParams.ForceContractDeploy {
-		if *inputLoadTestParams.LtAddress == "" {
-			ltAddr, _, _, err = contracts.DeployLoadTester(tops, c)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to create the load testing contract. Do you have the right chain id? Do you have enough funds?")
-				return err
-			}
-		} else {
-			ltAddr = ethcommon.HexToAddress(*inputLoadTestParams.LtAddress)
-		}
-		log.Trace().Interface("contractaddress", ltAddr).Msg("Load test contract address")
-
-		ltContract, err = contracts.NewLoadTester(ltAddr, c)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to instantiate new contract")
-			return err
-		}
-		err = blockUntilSuccessful(ctx, c, func() error {
-			_, err = ltContract.GetCallCounter(cops)
-			return err
-		}, numberOfBlocksToWaitFor, blockInterval)
-
+		ltAddr, ltContract, err = getLoadTestContract(ctx, c, tops, cops)
 		if err != nil {
 			return err
 		}
+		log.Debug().Str("ltAddr", ltAddr.String()).Msg("Obtained load test contract address")
 	}
 
 	var erc20Addr ethcommon.Address
 	var erc20Contract *contracts.ERC20
 	if mode == loadTestModeERC20 || mode == loadTestModeRandom {
-		erc20Addr, _, _, err = contracts.DeployERC20(tops, c)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to deploy ERC20 contract")
-			return err
-		}
-		log.Trace().Interface("contractaddress", erc20Addr).Msg("ERC20 contract address")
-
-		erc20Contract, err = contracts.NewERC20(erc20Addr, c)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
-			return err
-		}
-		err = blockUntilSuccessful(ctx, c, func() error {
-			_, err = erc20Contract.BalanceOf(cops, *ltp.FromETHAddress)
-			return err
-		}, numberOfBlocksToWaitFor, blockInterval)
+		erc20Addr, erc20Contract, err = getERC20Contract(ctx, c, tops, cops)
 		if err != nil {
 			return err
 		}
-
-		_, err = erc20Contract.Mint(tops, metrics.UnitMegaether)
-		if err != nil {
-			log.Error().Err(err).Msg("There was an error minting ERC20")
-			return err
-		}
-
-		err = blockUntilSuccessful(ctx, c, func() error {
-			var balance *big.Int
-			balance, err = erc20Contract.BalanceOf(cops, *ltp.FromETHAddress)
-			if err != nil {
-				return err
-			}
-			if balance.Uint64() == 0 {
-				err = fmt.Errorf("ERC20 Balance is Zero")
-				return err
-			}
-			return nil
-		}, numberOfBlocksToWaitFor, blockInterval)
-		if err != nil {
-			return err
-		}
+		log.Debug().Str("erc20Addr", erc20Addr.String()).Msg("Obtained erc 20 contract address")
 	}
 
 	var erc721Addr ethcommon.Address
 	var erc721Contract *contracts.ERC721
 	if mode == loadTestModeERC721 || mode == loadTestModeRandom {
-		erc721Addr, _, _, err = contracts.DeployERC721(tops, c)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to deploy ERC721 contract")
-			return err
-		}
-		log.Trace().Interface("contractaddress", erc721Addr).Msg("ERC721 contract address")
-
-		erc721Contract, err = contracts.NewERC721(erc721Addr, c)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
-			return err
-		}
-
-		err = blockUntilSuccessful(ctx, c, func() error {
-			_, err = erc721Contract.BalanceOf(cops, *ltp.FromETHAddress)
-			return err
-		}, numberOfBlocksToWaitFor, blockInterval)
+		erc721Addr, erc721Contract, err = getERC721Contract(ctx, c, tops, cops)
 		if err != nil {
 			return err
 		}
-
-		err = blockUntilSuccessful(ctx, c, func() error {
-			_, err = erc721Contract.MintBatch(tops, *ltp.FromETHAddress, new(big.Int).SetUint64(1))
-			return err
-		}, numberOfBlocksToWaitFor, blockInterval)
-		if err != nil {
-			return err
-		}
+		log.Debug().Str("erc721Addr", erc721Addr.String()).Msg("Obtained erc 721 contract address")
 	}
 
 	var currentNonceMutex sync.Mutex
@@ -580,7 +500,112 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	return nil
 }
 
-func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() error, numberOfBlocksToWaitFor, blockInterval uint64) error {
+func getLoadTestContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (ltAddr ethcommon.Address, ltContract *contracts.LoadTester, err error) {
+	ltAddr = ethcommon.HexToAddress(*inputLoadTestParams.LtAddress)
+
+	if *inputLoadTestParams.LtAddress == "" {
+		ltAddr, _, _, err = contracts.DeployLoadTester(tops, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to create the load testing contract. Do you have the right chain id? Do you have enough funds?")
+			return
+		}
+	}
+	log.Trace().Interface("contractaddress", ltAddr).Msg("Load test contract address")
+
+	ltContract, err = contracts.NewLoadTester(ltAddr, c)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to instantiate new contract")
+		return
+	}
+	err = blockUntilSuccessful(ctx, c, func() error {
+		_, err = ltContract.GetCallCounter(cops)
+		return err
+	})
+
+	return
+}
+func getERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (erc20Addr ethcommon.Address, erc20Contract *contracts.ERC20, err error) {
+	erc20Addr = ethcommon.HexToAddress(*inputLoadTestParams.ERC20Address)
+
+	if *inputLoadTestParams.ERC20Address == "" {
+		erc20Addr, _, _, err = contracts.DeployERC20(tops, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to deploy ERC20 contract")
+			return
+		}
+	}
+	log.Trace().Interface("contractaddress", erc20Addr).Msg("ERC20 contract address")
+
+	erc20Contract, err = contracts.NewERC20(erc20Addr, c)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
+		return
+	}
+	err = blockUntilSuccessful(ctx, c, func() error {
+		_, err = erc20Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
+		return err
+	})
+	if err != nil {
+		return
+	}
+
+	_, err = erc20Contract.Mint(tops, metrics.UnitMegaether)
+	if err != nil {
+		log.Error().Err(err).Msg("There was an error minting ERC20")
+		return
+	}
+
+	err = blockUntilSuccessful(ctx, c, func() error {
+		var balance *big.Int
+		balance, err = erc20Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
+		if err != nil {
+			return err
+		}
+		if balance.Uint64() == 0 {
+			err = fmt.Errorf("ERC20 Balance is Zero")
+			return err
+		}
+		return nil
+	})
+
+	return
+}
+func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (erc721Addr ethcommon.Address, erc721Contract *contracts.ERC721, err error) {
+	erc721Addr = ethcommon.HexToAddress(*inputLoadTestParams.ERC721Address)
+
+	if *inputLoadTestParams.ERC721Address == "" {
+		erc721Addr, _, _, err = contracts.DeployERC721(tops, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to deploy ERC721 contract")
+			return
+		}
+	}
+	log.Trace().Interface("contractaddress", erc721Addr).Msg("ERC721 contract address")
+
+	erc721Contract, err = contracts.NewERC721(erc721Addr, c)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
+		return
+	}
+
+	err = blockUntilSuccessful(ctx, c, func() error {
+		_, err = erc721Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
+		return err
+	})
+	if err != nil {
+		return
+	}
+
+	err = blockUntilSuccessful(ctx, c, func() error {
+		_, err = erc721Contract.MintBatch(tops, *inputLoadTestParams.FromETHAddress, new(big.Int).SetUint64(1))
+		return err
+	})
+	return
+}
+
+func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() error) error {
+	numberOfBlocksToWaitFor := *inputLoadTestParams.ContractCallNumberOfBlocksToWaitFor
+	blockInterval := *inputLoadTestParams.ContractCallBlockInterval
 	start := time.Now()
 	startBlockNumber, err := c.BlockNumber(ctx)
 	if err != nil {

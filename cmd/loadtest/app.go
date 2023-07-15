@@ -64,6 +64,8 @@ type (
 		Seed                                *int64
 		IsAvail                             *bool
 		LtAddress                           *string
+		ERC20Address                        *string
+		ERC721Address                       *string
 		DelAddress                          *string
 		ContractCallNumberOfBlocksToWaitFor *uint64
 		ContractCallBlockInterval           *uint64
@@ -240,6 +242,8 @@ r - random modes
 	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
 	ltp.IsAvail = LoadtestCmd.PersistentFlags().Bool("data-avail", false, "[DEPRECATED] Enables Avail load testing")
 	ltp.LtAddress = LoadtestCmd.PersistentFlags().String("lt-address", "", "The address of a pre-deployed load test contract")
+	ltp.ERC20Address = LoadtestCmd.PersistentFlags().String("erc20-address", "", "The address of a pre-deployed erc 20 contract")
+	ltp.ERC721Address = LoadtestCmd.PersistentFlags().String("erc721-address", "", "The address of a pre-deployed erc 721 contract")
 	ltp.ContractCallNumberOfBlocksToWaitFor = LoadtestCmd.PersistentFlags().Uint64("contract-call-nb-blocks-to-wait-for", 30, "The number of blocks to wait for before giving up on a contract deployment")
 	ltp.ContractCallBlockInterval = LoadtestCmd.PersistentFlags().Uint64("contract-call-block-interval", 1, "During deployment, this flag controls if we should check every block, every other block, or every nth block to determine that the contract has been deployed")
 	ltp.ForceContractDeploy = LoadtestCmd.PersistentFlags().Bool("force-contract-deploy", false, "Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.")
