@@ -43,11 +43,11 @@ func getRecallTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 
 func rawTransactionToNewTx(pt rpctypes.PolyTransaction, nonce uint64, price, tipCap *big.Int) *ethtypes.Transaction {
 	if pt.MaxFeePerGas() != 0 || pt.ChainID() != 0 {
-		return rawTransactionToDyanmicFeeTx(pt, nonce, price, tipCap)
+		return rawTransactionToDynamicFeeTx(pt, nonce, price, tipCap)
 	}
 	return rawTransactionToLegacyTx(pt, nonce, price)
 }
-func rawTransactionToDyanmicFeeTx(pt rpctypes.PolyTransaction, nonce uint64, price, tipCap *big.Int) *ethtypes.Transaction {
+func rawTransactionToDynamicFeeTx(pt rpctypes.PolyTransaction, nonce uint64, price, tipCap *big.Int) *ethtypes.Transaction {
 	toAddr := pt.To()
 	chainId := new(big.Int).SetUint64(pt.ChainID())
 	dynamicFeeTx := &ethtypes.DynamicFeeTx{
