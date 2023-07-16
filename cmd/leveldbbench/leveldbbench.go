@@ -19,6 +19,9 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"math/rand"
 	"os"
+	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -42,6 +45,8 @@ var (
 	largeValueSize      *uint64
 	degreeOfParallelism *uint8
 	readLimit           *uint64
+	rawSizeDistribution *string
+	sizeDistribution    *IODistribution
 )
 
 type (
@@ -166,6 +171,11 @@ var LevelDBBenchCmd = &cobra.Command{
 		return nil
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
+		var err error
+		sizeDistribution, err = parseRawSizeDistribution(*rawSizeDistribution)
+		if err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -315,6 +325,108 @@ func makeKV(seed, valueSize uint64, sequential bool) ([]byte, []byte) {
 	return tmpKey, tmpValue
 }
 
+type (
+	IORange struct {
+		StartRange int
+		EndRange   int
+		Frequency  int
+	}
+	IODistribution struct {
+		ranges         []IORange
+		totalFrequency int
+	}
+)
+
+func (i *IORange) Validate() error {
+	if i.EndRange < i.StartRange {
+		return fmt.Errorf("the end of the range %d  is less than the start of the range %d", i.EndRange, i.StartRange)
+	}
+	if i.EndRange <= 0 {
+		return fmt.Errorf("the provided end range %d is less than 0", i.EndRange)
+	}
+	if i.StartRange < 0 {
+		return fmt.Errorf("the provided start range %d is less than 0", i.StartRange)
+	}
+	if i.Frequency <= 0 {
+		return fmt.Errorf("the relative frequency must be greater than 0, but got %d", i.Frequency)
+	}
+	return nil
+}
+func NewIODistribution(ranges []IORange) *IODistribution {
+	iod := new(IODistribution)
+	iod.ranges = ranges
+	f := 0
+	for _, v := range ranges {
+		f += v.Frequency
+	}
+	iod.totalFrequency = f
+	return iod
+}
+func (i *IODistribution) GetSizeSample() int {
+	randSrcMutex.Lock()
+	randFreq := randSrc.Intn(i.totalFrequency)
+	randSrcMutex.Unlock()
+
+	var selectedRange *IORange
+	currentFreq := 0
+	for _, v := range i.ranges {
+		currentFreq += v.Frequency
+		if currentFreq <= randFreq {
+			selectedRange = &v
+		}
+	}
+	if selectedRange == nil {
+		log.Fatal().Int("randFreq", randFreq).Int("totalFreq", i.totalFrequency).Msg("Potential off by 1 error in random sample")
+	}
+	randRange := selectedRange.EndRange - selectedRange.StartRange
+	randSrcMutex.Lock()
+	randSize := randSrc.Intn(randRange)
+	randSrcMutex.Unlock()
+	return randSize + selectedRange.StartRange
+}
+
+func parseRawSizeDistribution(dist string) (*IODistribution, error) {
+	buckets := strings.Split(dist, ",")
+	if len(buckets) == 0 {
+		return nil, fmt.Errorf("at least one size bucket must be provided")
+	}
+	ioDist := make([]IORange, 0)
+	bucketRegEx := regexp.MustCompile(`^(\d*)-(\d*):(\d*)$`)
+	for _, r := range buckets {
+		matches := bucketRegEx.FindAllStringSubmatch(r, -1)
+		if len(matches) != 1 {
+			return nil, fmt.Errorf("the bucket %s did not match expected format of start-end:ratio", r)
+		}
+		if len(matches[0]) != 4 {
+			return nil, fmt.Errorf("the bucket %s didn't match expected number of sub groups", r)
+		}
+		startRange, err := strconv.Atoi(matches[0][1])
+		if err != nil {
+			return nil, err
+		}
+		endRange, err := strconv.Atoi(matches[0][2])
+		if err != nil {
+			return nil, err
+		}
+		frequency, err := strconv.Atoi(matches[0][3])
+		if err != nil {
+			return nil, err
+		}
+		ioRange := new(IORange)
+		ioRange.StartRange = startRange
+		ioRange.EndRange = endRange
+		ioRange.Frequency = frequency
+		err = ioRange.Validate()
+		if err != nil {
+			return nil, err
+		}
+		ioDist = append(ioDist, *ioRange)
+	}
+	iod := NewIODistribution(ioDist)
+
+	return iod, nil
+}
+
 func init() {
 	flagSet := LevelDBBenchCmd.PersistentFlags()
 	smallFillLimit = flagSet.Uint64("small-fill-limit", 1000000, "The number of small entries to write in the db")
@@ -328,6 +440,7 @@ func init() {
 	degreeOfParallelism = flagSet.Uint8("degree-of-parallelism", 1, "The number of concurrent iops we'll perform")
 	noWriteMerge = flagSet.Bool("no-merge-write", false, "allows disabling write merge")
 	syncWrites = flagSet.Bool("sync-writes", false, "sync each write")
+	rawSizeDistribution = flagSet.String("size-kb-distribution", "4-7:23,8-15:57,16-61:16,32-63:4", "the size distribution to use while testing")
 
 	randSrc = rand.New(rand.NewSource(1))
 }
