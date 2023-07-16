@@ -20,6 +20,7 @@ import (
 	"math/rand"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,8 +42,6 @@ var (
 	dontFillCache       *bool
 	readStrict          *bool
 	keySize             *uint64
-	smallValueSize      *uint64
-	largeValueSize      *uint64
 	degreeOfParallelism *uint8
 	readLimit           *uint64
 	rawSizeDistribution *string
@@ -110,27 +109,27 @@ var LevelDBBenchCmd = &cobra.Command{
 		trs := make([]*TestResult, 0)
 
 		start = time.Now()
-		writeData(ctx, db, &wo, *smallValueSize, 0, *smallFillLimit, true)
+		writeData(ctx, db, &wo, 0, *smallFillLimit, true)
 		trs = append(trs, NewTestResult(start, time.Now(), "small seq fill", *smallFillLimit, db))
 
 		start = time.Now()
-		writeData(ctx, db, &wo, *smallValueSize, 0, *smallFillLimit, true)
+		writeData(ctx, db, &wo, 0, *smallFillLimit, true)
 		trs = append(trs, NewTestResult(start, time.Now(), "small seq overwrite", *smallFillLimit, db))
 
 		start = time.Now()
-		writeData(ctx, db, &wo, *smallValueSize, 0, *smallFillLimit, false)
+		writeData(ctx, db, &wo, 0, *smallFillLimit, false)
 		trs = append(trs, NewTestResult(start, time.Now(), "small rand fill", *smallFillLimit, db))
 
 		start = time.Now()
-		writeData(ctx, db, &wo, *smallValueSize, 0, *smallFillLimit, false)
+		writeData(ctx, db, &wo, 0, *smallFillLimit, false)
 		trs = append(trs, NewTestResult(start, time.Now(), "small rand overwrite", *smallFillLimit, db))
 
 		start = time.Now()
-		writeData(ctx, db, &wo, *smallValueSize, 0, *smallFillLimit, false)
+		writeData(ctx, db, &wo, 0, *smallFillLimit, false)
 		trs = append(trs, NewTestResult(start, time.Now(), "small rand overwrite", *smallFillLimit, db))
 
 		start = time.Now()
-		writeData(ctx, db, &wo, *smallValueSize, 0, *smallFillLimit, false)
+		writeData(ctx, db, &wo, 0, *smallFillLimit, false)
 		trs = append(trs, NewTestResult(start, time.Now(), "small rand overwrite", *smallFillLimit, db))
 
 		start = time.Now()
@@ -138,11 +137,11 @@ var LevelDBBenchCmd = &cobra.Command{
 		trs = append(trs, NewTestResult(start, time.Now(), "sequential read", *readLimit, db))
 
 		start = time.Now()
-		writeData(ctx, db, &wo, *largeValueSize, *smallFillLimit*2, *largeFillLimit, false)
+		writeData(ctx, db, &wo, *smallFillLimit*2, *largeFillLimit, false)
 		trs = append(trs, NewTestResult(start, time.Now(), "large rand fill", *largeFillLimit, db))
 
 		start = time.Now()
-		writeData(ctx, db, &wo, *largeValueSize, *smallFillLimit*2, *largeFillLimit, false)
+		writeData(ctx, db, &wo, *smallFillLimit*2, *largeFillLimit, false)
 		trs = append(trs, NewTestResult(start, time.Now(), "large rand overwrite", *largeFillLimit, db))
 
 		start = time.Now()
@@ -186,18 +185,18 @@ func runFullCompact(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions) {
 		log.Fatal().Err(err).Msg("error compacting data")
 	}
 }
-func writeData(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, valueSize, startIndex, writeLimit uint64, sequential bool) {
+func writeData(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, startIndex, writeLimit uint64, sequential bool) {
 	var i uint64 = startIndex
 	var wg sync.WaitGroup
 	pool := make(chan bool, *degreeOfParallelism)
-	bar := getNewProgressBar(int64(writeLimit), fmt.Sprintf("Write: %d", valueSize))
+	bar := getNewProgressBar(int64(writeLimit), fmt.Sprintf("Writing data"))
 	lim := writeLimit + startIndex
 	for ; i < lim; i = i + 1 {
 		pool <- true
 		wg.Add(1)
 		go func(i uint64) {
 			_ = bar.Add(1)
-			k, v := makeKV(i, valueSize, sequential)
+			k, v := makeKV(i, sizeDistribution.GetSizeSample(), sequential)
 			err := db.Put(k, v, wo)
 			if err != nil {
 				log.Fatal().Err(err).Msg("Failed to put value")
@@ -352,27 +351,41 @@ func (i *IORange) Validate() error {
 	}
 	return nil
 }
-func NewIODistribution(ranges []IORange) *IODistribution {
+func NewIODistribution(ranges []IORange) (*IODistribution, error) {
 	iod := new(IODistribution)
+	sort.Slice(ranges, func(i, j int) bool {
+		return ranges[i].StartRange < ranges[j].StartRange
+	})
+
+	for i := 0; i < len(ranges)-1; i++ {
+		if ranges[i].EndRange >= ranges[i+1].StartRange {
+			return nil, fmt.Errorf("overlap found between ranges: %v and %v", ranges[i], ranges[i+1])
+		}
+	}
+
 	iod.ranges = ranges
 	f := 0
 	for _, v := range ranges {
 		f += v.Frequency
 	}
 	iod.totalFrequency = f
-	return iod
+	return iod, nil
 }
-func (i *IODistribution) GetSizeSample() int {
+
+// GetSizeSample will return an IO size in accordance with the probability distribution
+func (i *IODistribution) GetSizeSample() uint64 {
 	randSrcMutex.Lock()
 	randFreq := randSrc.Intn(i.totalFrequency)
 	randSrcMutex.Unlock()
 
+	log.Trace().Int("randFreq", randFreq).Int("totalFreq", i.totalFrequency).Msg("Getting Size Sample")
 	var selectedRange *IORange
 	currentFreq := 0
-	for _, v := range i.ranges {
+	for k, v := range i.ranges {
 		currentFreq += v.Frequency
-		if currentFreq <= randFreq {
-			selectedRange = &v
+		if randFreq <= currentFreq {
+			selectedRange = &i.ranges[k]
+			break
 		}
 	}
 	if selectedRange == nil {
@@ -382,7 +395,7 @@ func (i *IODistribution) GetSizeSample() int {
 	randSrcMutex.Lock()
 	randSize := randSrc.Intn(randRange)
 	randSrcMutex.Unlock()
-	return randSize + selectedRange.StartRange
+	return uint64(randSize + selectedRange.StartRange)
 }
 
 func parseRawSizeDistribution(dist string) (*IODistribution, error) {
@@ -422,9 +435,7 @@ func parseRawSizeDistribution(dist string) (*IODistribution, error) {
 		}
 		ioDist = append(ioDist, *ioRange)
 	}
-	iod := NewIODistribution(ioDist)
-
-	return iod, nil
+	return NewIODistribution(ioDist)
 }
 
 func init() {
@@ -432,15 +443,13 @@ func init() {
 	smallFillLimit = flagSet.Uint64("small-fill-limit", 1000000, "The number of small entries to write in the db")
 	largeFillLimit = flagSet.Uint64("large-fill-limit", 2000, "The number of large entries to write in the db")
 	readLimit = flagSet.Uint64("read-limit", 10000000, "the number of reads will attempt to complete in a given test")
-	smallValueSize = flagSet.Uint64("small-value-size", 32, "the number of random bytes to store")
-	largeValueSize = flagSet.Uint64("large-value-size", 102400, "the number of random bytes to store for large tests")
 	dontFillCache = flag.Bool("dont-fill-read-cache", false, "if false, then random reads will be cached")
 	readStrict = flag.Bool("read-strict", false, "if true the rand reads will be made in strict mode")
 	keySize = flagSet.Uint64("key-size", 8, "The byte length of the keys that we'll use")
 	degreeOfParallelism = flagSet.Uint8("degree-of-parallelism", 1, "The number of concurrent iops we'll perform")
 	noWriteMerge = flagSet.Bool("no-merge-write", false, "allows disabling write merge")
 	syncWrites = flagSet.Bool("sync-writes", false, "sync each write")
-	rawSizeDistribution = flagSet.String("size-kb-distribution", "4-7:23,8-15:57,16-61:16,32-63:4", "the size distribution to use while testing")
+	rawSizeDistribution = flagSet.String("size-kb-distribution", "4-7:23,8-15:57,16-31:16,32-63:4", "the size distribution to use while testing")
 
 	randSrc = rand.New(rand.NewSource(1))
 }
