@@ -51,6 +51,7 @@ var (
 	nilReadOptions         *bool
 	cacheSize              *int
 	openFilesCacheCapacity *int
+	writeZero              *bool
 )
 
 type (
@@ -320,9 +321,12 @@ func makeKV(seed, valueSize uint64, sequential bool) ([]byte, []byte) {
 	log.Trace().Str("tmpKey", hex.EncodeToString(tmpKey)).Msg("Generated key")
 
 	tmpValue := make([]byte, valueSize)
-	randSrcMutex.Lock()
-	randSrc.Read(tmpValue)
-	randSrcMutex.Unlock()
+	if !*writeZero {
+		// Assuming we're not in zero mode, we'll fill the data with random data
+		randSrcMutex.Lock()
+		randSrc.Read(tmpValue)
+		randSrcMutex.Unlock()
+	}
 	return tmpKey, tmpValue
 }
 
@@ -460,6 +464,7 @@ func init() {
 	// https://github.com/maticnetwork/bor/blob/eedeaed1fb17d73dd46d8999644d5035e176e22a/eth/ethconfig/config.go#L86C2-L86C15
 	cacheSize = flagSet.Int("cache-size", 512, "the number of megabytes to use as our internal cache size")
 	openFilesCacheCapacity = flagSet.Int("handles", 500, "defines the capacity of the open files caching. Use -1 for zero, this has same effect as specifying NoCacher to OpenFilesCacher.")
+	writeZero = flagSet.Bool("write-zero", false, "if true, we'll write 0s rather than random data")
 
 	randSrc = rand.New(rand.NewSource(1))
 }

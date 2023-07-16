@@ -136,6 +136,7 @@ as well.
       --size-kb-distribution string   the size distribution to use while testing (default "4-7:23089,8-15:70350,16-31:11790,32-63:1193,64-127:204,128-255:271,256-511:1381")
       --sync-writes                   sync each write
       --write-limit uint              The number of entries to write in the db (default 1000000)
+      --write-zero                    if true, we'll write 0s rather than random data
 ```
 
 The command also inherits flags from parent commands.
