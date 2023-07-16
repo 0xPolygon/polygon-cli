@@ -177,7 +177,7 @@ func writeData(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, startI
 	var i uint64 = startIndex
 	var wg sync.WaitGroup
 	pool := make(chan bool, *degreeOfParallelism)
-	bar := getNewProgressBar(int64(writeLimit), fmt.Sprintf("Writing data"))
+	bar := getNewProgressBar(int64(writeLimit), "Writing data")
 	lim := writeLimit + startIndex
 	for ; i < lim; i = i + 1 {
 		pool <- true
@@ -207,7 +207,7 @@ benchLoop:
 		iter := db.NewIterator(nil, nil)
 		for iter.Next() {
 			rCount += 1
-			pb.Add(1)
+			_ = pb.Add(1)
 			pool <- true
 			wg.Add(1)
 			go func(i iterator.Iterator) {
@@ -244,9 +244,10 @@ benchLoop:
 			wg.Add(1)
 			go func() {
 				rCount += 1
-				pb.Add(1)
+				_ = pb.Add(1)
 
-				db.Get(randKey, ro)
+				_, err := db.Get(randKey, ro)
+				log.Error().Err(err).Msg("level db random read error")
 				wg.Done()
 				<-pool
 			}()
@@ -289,7 +290,7 @@ func getNewProgressBar(max int64, description string) *progressbar.ProgressBar {
 }
 
 func makeKV(seed, valueSize uint64, sequential bool) ([]byte, []byte) {
-	tmpKey := make([]byte, *keySize, *keySize)
+	tmpKey := make([]byte, *keySize)
 	if sequential {
 		// We're going to hack sequential by counting in reverse
 		binary.BigEndian.PutUint64(tmpKey, math.MaxUint64-seed)
@@ -305,7 +306,7 @@ func makeKV(seed, valueSize uint64, sequential bool) ([]byte, []byte) {
 
 	log.Trace().Str("tmpKey", hex.EncodeToString(tmpKey)).Msg("Generated key")
 
-	tmpValue := make([]byte, valueSize, valueSize)
+	tmpValue := make([]byte, valueSize)
 	randSrcMutex.Lock()
 	randSrc.Read(tmpValue)
 	randSrcMutex.Unlock()
@@ -378,6 +379,7 @@ func (i *IODistribution) GetSizeSample() uint64 {
 	}
 	if selectedRange == nil {
 		log.Fatal().Int("randFreq", randFreq).Int("totalFreq", i.totalFrequency).Msg("Potential off by 1 error in random sample")
+		return 0 // lint
 	}
 	randRange := selectedRange.EndRange - selectedRange.StartRange
 	randSrcMutex.Lock()
