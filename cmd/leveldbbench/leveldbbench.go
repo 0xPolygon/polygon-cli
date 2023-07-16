@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/rs/zerolog/log"
@@ -440,8 +439,8 @@ func init() {
 	degreeOfParallelism = flagSet.Uint8("degree-of-parallelism", 1, "The number of concurrent iops we'll perform")
 	rawSizeDistribution = flagSet.String("size-kb-distribution", "4-7:23089,8-15:70350,16-31:11790,32-63:1193,64-127:204,128-255:271,256-511:1381", "the size distribution to use while testing")
 
-	dontFillCache = flag.Bool("dont-fill-read-cache", false, "if false, then random reads will be cached")
-	readStrict = flag.Bool("read-strict", false, "if true the rand reads will be made in strict mode")
+	dontFillCache = flagSet.Bool("dont-fill-read-cache", false, "if false, then random reads will be cached")
+	readStrict = flagSet.Bool("read-strict", false, "if true the rand reads will be made in strict mode")
 	noWriteMerge = flagSet.Bool("no-merge-write", false, "allows disabling write merge")
 	syncWrites = flagSet.Bool("sync-writes", false, "sync each write")
 
