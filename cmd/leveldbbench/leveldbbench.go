@@ -35,8 +35,7 @@ var (
 	knownKeysMutex      sync.RWMutex
 	randSrc             *rand.Rand
 	randSrcMutex        sync.Mutex
-	smallFillLimit      *uint64
-	largeFillLimit      *uint64
+	writeLimit          *uint64
 	noWriteMerge        *bool
 	syncWrites          *bool
 	dontFillCache       *bool
@@ -46,6 +45,9 @@ var (
 	readLimit           *uint64
 	rawSizeDistribution *string
 	sizeDistribution    *IODistribution
+	overwriteCount      *uint64
+	sequentialReads     *bool
+	sequentialWrites    *bool
 )
 
 type (
@@ -108,49 +110,35 @@ var LevelDBBenchCmd = &cobra.Command{
 		var start time.Time
 		trs := make([]*TestResult, 0)
 
-		start = time.Now()
-		writeData(ctx, db, &wo, 0, *smallFillLimit, true)
-		trs = append(trs, NewTestResult(start, time.Now(), "small seq fill", *smallFillLimit, db))
+		sequentialWritesDesc := "random"
+		if *sequentialWrites {
+			sequentialWritesDesc = "sequential"
+		}
+		sequentialReadsDesc := "random"
+		if *sequentialReads {
+			sequentialReadsDesc = "sequential"
+		}
 
 		start = time.Now()
-		writeData(ctx, db, &wo, 0, *smallFillLimit, true)
-		trs = append(trs, NewTestResult(start, time.Now(), "small seq overwrite", *smallFillLimit, db))
+		writeData(ctx, db, &wo, 0, *writeLimit, *sequentialWrites)
+		trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("initial %s write", sequentialWritesDesc), *writeLimit, db))
 
-		start = time.Now()
-		writeData(ctx, db, &wo, 0, *smallFillLimit, false)
-		trs = append(trs, NewTestResult(start, time.Now(), "small rand fill", *smallFillLimit, db))
+		for i := 0; i < int(*overwriteCount); i += 1 {
+			start = time.Now()
+			writeData(ctx, db, &wo, 0, *writeLimit, *sequentialWrites)
+			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s overwrite %d", sequentialWritesDesc, i), *writeLimit, db))
+		}
 
-		start = time.Now()
-		writeData(ctx, db, &wo, 0, *smallFillLimit, false)
-		trs = append(trs, NewTestResult(start, time.Now(), "small rand overwrite", *smallFillLimit, db))
+		if *sequentialReads {
+			start = time.Now()
+			readSeq(ctx, db, &wo, *readLimit)
+			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s read", sequentialReadsDesc), *readLimit, db))
 
-		start = time.Now()
-		writeData(ctx, db, &wo, 0, *smallFillLimit, false)
-		trs = append(trs, NewTestResult(start, time.Now(), "small rand overwrite", *smallFillLimit, db))
-
-		start = time.Now()
-		writeData(ctx, db, &wo, 0, *smallFillLimit, false)
-		trs = append(trs, NewTestResult(start, time.Now(), "small rand overwrite", *smallFillLimit, db))
-
-		start = time.Now()
-		readSeq(ctx, db, &wo, *readLimit)
-		trs = append(trs, NewTestResult(start, time.Now(), "sequential read", *readLimit, db))
-
-		start = time.Now()
-		writeData(ctx, db, &wo, *smallFillLimit*2, *largeFillLimit, false)
-		trs = append(trs, NewTestResult(start, time.Now(), "large rand fill", *largeFillLimit, db))
-
-		start = time.Now()
-		writeData(ctx, db, &wo, *smallFillLimit*2, *largeFillLimit, false)
-		trs = append(trs, NewTestResult(start, time.Now(), "large rand overwrite", *largeFillLimit, db))
-
-		start = time.Now()
-		readSeq(ctx, db, &wo, *readLimit)
-		trs = append(trs, NewTestResult(start, time.Now(), "sequential read", *readLimit, db))
-
-		start = time.Now()
-		readRandom(ctx, db, &ro, *readLimit)
-		trs = append(trs, NewTestResult(start, time.Now(), "random read", *readLimit, db))
+		} else {
+			start = time.Now()
+			readRandom(ctx, db, &ro, *readLimit)
+			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s read", sequentialWritesDesc), *readLimit, db))
+		}
 
 		start = time.Now()
 		runFullCompact(ctx, db, &wo)
@@ -395,7 +383,7 @@ func (i *IODistribution) GetSizeSample() uint64 {
 	randSrcMutex.Lock()
 	randSize := randSrc.Intn(randRange)
 	randSrcMutex.Unlock()
-	return uint64(randSize + selectedRange.StartRange)
+	return uint64(randSize+selectedRange.StartRange) * 1024
 }
 
 func parseRawSizeDistribution(dist string) (*IODistribution, error) {
@@ -440,16 +428,19 @@ func parseRawSizeDistribution(dist string) (*IODistribution, error) {
 
 func init() {
 	flagSet := LevelDBBenchCmd.PersistentFlags()
-	smallFillLimit = flagSet.Uint64("small-fill-limit", 1000000, "The number of small entries to write in the db")
-	largeFillLimit = flagSet.Uint64("large-fill-limit", 2000, "The number of large entries to write in the db")
+	writeLimit = flagSet.Uint64("write-limit", 1000000, "The number of entries to write in the db")
 	readLimit = flagSet.Uint64("read-limit", 10000000, "the number of reads will attempt to complete in a given test")
-	dontFillCache = flag.Bool("dont-fill-read-cache", false, "if false, then random reads will be cached")
-	readStrict = flag.Bool("read-strict", false, "if true the rand reads will be made in strict mode")
+	overwriteCount = flagSet.Uint64("overwrite-count", 5, "the number of times to overwrite the data")
+	sequentialReads = flagSet.Bool("sequential-reads", false, "if true we'll perform reads sequentially")
+	sequentialWrites = flagSet.Bool("sequential-writes", false, "if true we'll perform writes in somewhat sequential manner")
 	keySize = flagSet.Uint64("key-size", 8, "The byte length of the keys that we'll use")
 	degreeOfParallelism = flagSet.Uint8("degree-of-parallelism", 1, "The number of concurrent iops we'll perform")
+	rawSizeDistribution = flagSet.String("size-kb-distribution", "4-7:23089,8-15:70350,16-31:11790,32-63:1193,64-127:204,128-255:271,256-511:1381", "the size distribution to use while testing")
+
+	dontFillCache = flag.Bool("dont-fill-read-cache", false, "if false, then random reads will be cached")
+	readStrict = flag.Bool("read-strict", false, "if true the rand reads will be made in strict mode")
 	noWriteMerge = flagSet.Bool("no-merge-write", false, "allows disabling write merge")
 	syncWrites = flagSet.Bool("sync-writes", false, "sync each write")
-	rawSizeDistribution = flagSet.String("size-kb-distribution", "4-7:23,8-15:57,16-31:16,32-63:4", "the size distribution to use while testing")
 
 	randSrc = rand.New(rand.NewSource(1))
 }
