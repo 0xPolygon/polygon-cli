@@ -133,7 +133,6 @@ var LevelDBBenchCmd = &cobra.Command{
 			start = time.Now()
 			readSeq(ctx, db, &wo, *readLimit)
 			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s read", sequentialReadsDesc), *readLimit, db))
-
 		} else {
 			start = time.Now()
 			readRandom(ctx, db, &ro, *readLimit)
@@ -247,7 +246,9 @@ benchLoop:
 				_ = pb.Add(1)
 
 				_, err := db.Get(randKey, ro)
-				log.Error().Err(err).Msg("level db random read error")
+				if err != nil {
+					log.Error().Err(err).Msg("level db random read error")
+				}
 				wg.Done()
 				<-pool
 			}()
