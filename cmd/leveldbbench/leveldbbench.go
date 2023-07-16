@@ -60,7 +60,10 @@ type (
 func NewTestResult(startTime, endTime time.Time, desc string, opCount uint64, db *leveldb.DB) *TestResult {
 	tr := new(TestResult)
 	s := new(leveldb.DBStats)
-	db.Stats(s)
+	err := db.Stats(s)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to retrieve db stats")
+	}
 	tr.Stats = s
 	tr.StartTime = startTime
 	tr.EndTime = endTime
@@ -150,7 +153,10 @@ var LevelDBBenchCmd = &cobra.Command{
 		trs = append(trs, NewTestResult(start, time.Now(), "compaction", 1, db))
 
 		log.Info().Msg("Close DB")
-		defer db.Close()
+		err = db.Close()
+		if err != nil {
+			log.Error().Err(err).Msg("error while closing db")
+		}
 
 		jsonResults, err := json.Marshal(trs)
 		if err != nil {
@@ -174,14 +180,13 @@ func writeData(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, valueS
 	var i uint64 = startIndex
 	var wg sync.WaitGroup
 	pool := make(chan bool, *degreeOfParallelism)
-	bar := getNewProgessBar(int64(writeLimit), fmt.Sprintf("Write: %d", valueSize))
-	defer bar.Finish()
+	bar := getNewProgressBar(int64(writeLimit), fmt.Sprintf("Write: %d", valueSize))
 	lim := writeLimit + startIndex
 	for ; i < lim; i = i + 1 {
 		pool <- true
 		wg.Add(1)
 		go func(i uint64) {
-			bar.Add(1)
+			_ = bar.Add(1)
 			k, v := makeKV(i, valueSize, sequential)
 			err := db.Put(k, v, wo)
 			if err != nil {
@@ -192,11 +197,11 @@ func writeData(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, valueS
 		}(i)
 	}
 	wg.Wait()
+	_ = bar.Finish()
 }
 
 func readSeq(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, limit uint64) {
-	pb := getNewProgessBar(int64(limit), "sequential reads")
-	defer pb.Finish()
+	pb := getNewProgressBar(int64(limit), "sequential reads")
 	var rCount uint64 = 0
 	pool := make(chan bool, *degreeOfParallelism)
 	var wg sync.WaitGroup
@@ -227,10 +232,10 @@ benchLoop:
 		}
 	}
 	wg.Wait()
+	_ = pb.Finish()
 }
 func readRandom(ctx context.Context, db *leveldb.DB, ro *opt.ReadOptions, limit uint64) {
-	pb := getNewProgessBar(int64(limit), "random reads")
-	defer pb.Finish()
+	pb := getNewProgressBar(int64(limit), "random reads")
 	var rCount uint64 = 0
 	pool := make(chan bool, *degreeOfParallelism)
 	var wg sync.WaitGroup
@@ -254,9 +259,10 @@ benchLoop:
 		}
 	}
 	wg.Wait()
+	_ = pb.Finish()
 }
 
-func getNewProgessBar(max int64, description string) *progressbar.ProgressBar {
+func getNewProgressBar(max int64, description string) *progressbar.ProgressBar {
 	pb := progressbar.NewOptions64(max,
 		progressbar.OptionEnableColorCodes(false),
 		progressbar.OptionSetDescription(description),
@@ -270,7 +276,7 @@ func getNewProgessBar(max int64, description string) *progressbar.ProgressBar {
 		progressbar.OptionThrottle(1*time.Second),
 		progressbar.OptionSetWriter(os.Stderr),
 		progressbar.OptionOnCompletion(func() {
-			fmt.Fprintln(os.Stderr)
+			_, _ = fmt.Fprintln(os.Stderr)
 		}),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "=",
@@ -282,7 +288,6 @@ func getNewProgessBar(max int64, description string) *progressbar.ProgressBar {
 		progressbar.OptionSetWidth(10),
 		progressbar.OptionFullWidth(),
 	)
-	//return progressbar.Default(max, description)
 	return pb
 }
 
