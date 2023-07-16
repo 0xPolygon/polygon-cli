@@ -31,24 +31,26 @@ var (
 	//go:embed usage.md
 	usage string
 	// memory leak?
-	knownKeys           map[string][]byte
-	knownKeysMutex      sync.RWMutex
-	randSrc             *rand.Rand
-	randSrcMutex        sync.Mutex
-	writeLimit          *uint64
-	noWriteMerge        *bool
-	syncWrites          *bool
-	dontFillCache       *bool
-	readStrict          *bool
-	keySize             *uint64
-	degreeOfParallelism *uint8
-	readLimit           *uint64
-	rawSizeDistribution *string
-	sizeDistribution    *IODistribution
-	overwriteCount      *uint64
-	sequentialReads     *bool
-	sequentialWrites    *bool
-	nilReadOptions      *bool
+	knownKeys              map[string][]byte
+	knownKeysMutex         sync.RWMutex
+	randSrc                *rand.Rand
+	randSrcMutex           sync.Mutex
+	writeLimit             *uint64
+	noWriteMerge           *bool
+	syncWrites             *bool
+	dontFillCache          *bool
+	readStrict             *bool
+	keySize                *uint64
+	degreeOfParallelism    *uint8
+	readLimit              *uint64
+	rawSizeDistribution    *string
+	sizeDistribution       *IODistribution
+	overwriteCount         *uint64
+	sequentialReads        *bool
+	sequentialWrites       *bool
+	nilReadOptions         *bool
+	cacheSize              *int
+	openFilesCacheCapacity *int
 )
 
 type (
@@ -94,6 +96,9 @@ var LevelDBBenchCmd = &cobra.Command{
 		db, err := leveldb.OpenFile("_benchmark_db", &opt.Options{
 			Filter:                 filter.NewBloomFilter(10),
 			DisableSeeksCompaction: true,
+			OpenFilesCacheCapacity: *openFilesCacheCapacity,
+			BlockCacheCapacity:     *cacheSize / 2 * opt.MiB,
+			WriteBuffer:            *cacheSize / 4 * opt.MiB,
 		})
 		if err != nil {
 			return err
@@ -393,7 +398,7 @@ func (i *IODistribution) GetSizeSample() uint64 {
 	randSrcMutex.Lock()
 	randSize := randSrc.Intn(randRange)
 	randSrcMutex.Unlock()
-	return uint64(randSize+selectedRange.StartRange) * 1024
+	return uint64(randSize+selectedRange.StartRange) * opt.KiB
 }
 
 func parseRawSizeDistribution(dist string) (*IODistribution, error) {
@@ -451,6 +456,10 @@ func init() {
 	readStrict = flagSet.Bool("read-strict", false, "if true the rand reads will be made in strict mode")
 	noWriteMerge = flagSet.Bool("no-merge-write", false, "allows disabling write merge")
 	syncWrites = flagSet.Bool("sync-writes", false, "sync each write")
+	// https://github.com/maticnetwork/bor/blob/eedeaed1fb17d73dd46d8999644d5035e176e22a/eth/backend.go#L141
+	// https://github.com/maticnetwork/bor/blob/eedeaed1fb17d73dd46d8999644d5035e176e22a/eth/ethconfig/config.go#L86C2-L86C15
+	cacheSize = flagSet.Int("cache-size", 512, "the number of megabytes to use as our internal cache size")
+	openFilesCacheCapacity = flagSet.Int("handles", 500, "defines the capacity of the open files caching. Use -1 for zero, this has same effect as specifying NoCacher to OpenFilesCacher.")
 
 	randSrc = rand.New(rand.NewSource(1))
 }
