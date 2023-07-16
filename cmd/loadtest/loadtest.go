@@ -262,13 +262,6 @@ func runLoadTest(ctx context.Context) error {
 		return nil
 	}
 
-	// TODO this doesn't make sense for avail
-	ptc, err := ec.PendingTransactionCount(ctx)
-	if err != nil {
-		log.Debug().Err(err).Msg("Unable to get the number of pending transactions before closing")
-	} else if ptc > 0 {
-		log.Info().Uint("pending", ptc).Msg("There are still outstanding transactions. There might be issues restarting with the same sending key until those transactions clear")
-	}
 	log.Info().Msg("Finished")
 	return nil
 }
@@ -420,7 +413,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		if len(recallTransactions) == 0 {
 			return fmt.Errorf("We weren't able to fetch any recall transactions")
 		}
-		log.Debug().Int("txs", len(recallTransactions)).Msg("retreived transactions for total recall")
+		log.Debug().Int("txs", len(recallTransactions)).Msg("retrieved transactions for total recall")
 	}
 
 	var currentNonceMutex sync.Mutex
@@ -503,7 +496,11 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				recordSample(i, j, err, startReq, endReq, myNonceValue)
 				if err != nil {
 					log.Error().Err(err).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
-					retryForNonce = true
+					// The nonce is used to index the recalled transactions in call-only mode. We don't want to retry a transaction if it legit failed on the chain
+					if !*ltp.CallOnly {
+						retryForNonce = true
+					}
+
 				}
 
 				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode).Int64("request", j).Msg("Request")
@@ -1079,12 +1076,16 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, orig
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
-		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
+		callMsg := txToCallMsg(stx)
+		callMsg.From = originalTx.From()
+		callMsg.Gas = originalTx.Gas()
+		_, err = c.CallContract(ctx, callMsg, originalTx.BlockNumber())
 	} else {
 		err = c.SendTransaction(ctx, stx)
 	}
 	return
 }
+
 func loadTestNotImplemented(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	t1 = time.Now()
 	t2 = time.Now()

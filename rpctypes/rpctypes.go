@@ -229,6 +229,7 @@ type (
 		MaxPriorityFeePerGas() uint64
 		MaxFeePerGas() uint64
 		ChainID() uint64
+		BlockNumber() *big.Int
 		V() *big.Int
 		R() *big.Int
 		S() *big.Int
@@ -352,6 +353,9 @@ func (i *implPolyBlock) MarshalJSON() ([]byte, error) {
 
 func (i *implPolyTransaction) GasPrice() *big.Int {
 	return i.inner.GasPrice.ToBigInt()
+}
+func (i *implPolyTransaction) BlockNumber() *big.Int {
+	return i.inner.BlockNumber.ToBigInt()
 }
 func (i *implPolyTransaction) Gas() uint64 {
 	return i.inner.Gas.ToUint64()
