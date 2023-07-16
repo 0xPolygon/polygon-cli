@@ -96,7 +96,7 @@ configure the leveldb benchmark tool.
 
 
 | Syncing | Reads   | Writes | Read (kb) | Write (kb) | RW Ratio | kb/r | kb/w |
-|---------+---------+--------+-----------+------------+----------+------+------|
+|---------|---------|--------|-----------|------------|----------|------|------|
 | TRUE    | 307,558 |  1,277 | 4,339,783 | 30,488     |      241 | 14.1 | 23.9 |
 | TRUE    | 309,904 |    946 | 7,399,349 | 26,051     |      328 | 23.9 | 27.5 |
 | FALSE   | 124,530 |    488 | 1,437,436 | 12,165     |      255 | 11.5 | 24.9 |
@@ -123,13 +123,14 @@ as well.
       --degree-of-parallelism uint8   The number of concurrent iops we'll perform (default 1)
   -h, --help                          help for leveldbbench
       --key-size uint                 The byte length of the keys that we'll use (default 8)
-      --large-fill-limit uint         The number of large entries to write in the db (default 2000)
-      --large-value-size uint         the number of random bytes to store for large tests (default 102400)
       --no-merge-write                allows disabling write merge
+      --overwrite-count uint          the number of times to overwrite the data (default 5)
       --read-limit uint               the number of reads will attempt to complete in a given test (default 10000000)
-      --small-fill-limit uint         The number of small entries to write in the db (default 1000000)
-      --small-value-size uint         the number of random bytes to store (default 32)
+      --sequential-reads              if true we'll perform reads sequentially
+      --sequential-writes             if true we'll perform writes in somewhat sequential manner
+      --size-kb-distribution string   the size distribution to use while testing (default "4-7:23089,8-15:70350,16-31:11790,32-63:1193,64-127:204,128-255:271,256-511:1381")
       --sync-writes                   sync each write
+      --write-limit uint              The number of entries to write in the db (default 1000000)
 ```
 
 The command also inherits flags from parent commands.
