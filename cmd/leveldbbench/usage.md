@@ -95,3 +95,21 @@ as well.
   - Small IOp - 10kb
   - Larg IOp - 32kb
   - Small Large Ratio - 10:1
+
+```text
+7:58PM DBG buckets bucket=0 count=9559791821 end=1 start=0
+7:58PM DBG buckets bucket=1 count=141033 end=3 start=2
+7:58PM DBG buckets bucket=2 count=92899 end=7 start=4
+7:58PM DBG buckets bucket=3 count=256655 end=15 start=8
+7:58PM DBG buckets bucket=4 count=262589 end=31 start=16
+7:58PM DBG buckets bucket=5 count=191353 end=63 start=32
+7:58PM DBG buckets bucket=6 count=99519 end=127 start=64
+7:58PM DBG buckets bucket=7 count=74161 end=255 start=128
+7:58PM DBG buckets bucket=8 count=17426 end=511 start=256
+7:58PM DBG buckets bucket=9 count=692 end=1023 start=512
+7:58PM DBG buckets bucket=10 count=989 end=2047 start=1024
+7:58PM DBG buckets bucket=13 count=1 end=16383 start=8192
+7:58PM INF recorded result desc="full scan" testDuration=10381196.479925
+7:58PM DBG recorded result result={"Description":"full scan","EndTime":"2023-07-17T19:58:05.396257711Z","OpCount":9557081144,"OpRate":920614.609547304,"StartTime":"2023-07-17T17:05:04.199777776Z","Stats":{"AliveIterators":0,"AliveSnapshots":0,"BlockCache":{"Buckets":2048,"DelCount":259134854,"GrowCount":9,"HitCount":4,"MissCount":262147633,"Nodes":33294,"SetCount":259168148,"ShrinkCount":2,"Size":268427343},"BlockCacheSize":268427343,"FileCache":{"Buckets":16,"DelCount":536037,"GrowCount":0,"HitCount":2,"MissCount":536537,"Nodes":500,"SetCount":536537,"ShrinkCount":0,"Size":500},"IORead":1092651461848,"IOWrite":13032122717,"Level0Comp":0,"LevelDurations":[0,0,546151937,15675194130,100457643600,40581548153,0],"LevelRead":[0,0,45189458,1233235440,8351239571,3376108236,0],"LevelSizes":[0,103263963,1048356844,10484866671,104856767171,180600915234,797187827055],"LevelTablesCounts":[0,51,665,7066,53522,95777,371946],"LevelWrite":[0,0,45159786,1230799439,8328970986,3371359447,0],"MemComp":0,"NonLevel0Comp":1433,"OpenedTablesCount":500,"SeekComp":0,"WriteDelayCount":0,"WriteDelayDuration":0,"WritePaused":false},"TestDuration":10381196479925,"ValueDist":null}
+
+```

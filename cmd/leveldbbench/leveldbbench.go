@@ -68,7 +68,7 @@ type (
 		OpCount      uint64
 		Stats        *leveldb.DBStats
 		OpRate       float64
-		ValueDist    []int
+		ValueDist    []uint64
 	}
 )
 
@@ -207,11 +207,11 @@ func runFullCompact(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions) {
 		log.Fatal().Err(err).Msg("error compacting data")
 	}
 }
-func runFullScan(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, ro *opt.ReadOptions) (uint64, []int) {
+func runFullScan(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, ro *opt.ReadOptions) (uint64, []uint64) {
 	pool := make(chan bool, *degreeOfParallelism)
 	var wg sync.WaitGroup
-	// 16 should be safe here. That would correspond to a single value that's 67 GB
-	buckets := make([]int, 16)
+	// 32 should be safe here. That would correspond to a single value that's 4.2 GB
+	buckets := make([]uint64, 32)
 	var bucketsMutex sync.Mutex
 	iter := db.NewIterator(nil, nil)
 	var opCount uint64 = 0
@@ -223,12 +223,16 @@ func runFullScan(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, ro *
 			k := i.Key()
 			v := i.Value()
 
-			bucket := bits.Len(uint(len(v) / opt.KiB))
+			bucket := bits.Len(uint(len(v)))
 			bucketsMutex.Lock()
 			buckets[bucket] += 1
 			bucketsMutex.Unlock()
 
-			if opCount%10000 == 0 {
+			if bucket >= 22 {
+				log.Info().Str("currentKey", hex.EncodeToString(k)).Msg("encountered giant value")
+			}
+
+			if opCount%1000000 == 0 {
 				log.Debug().Uint64("opCount", opCount).Str("currentKey", hex.EncodeToString(k)).Msg("continuing full scan")
 			}
 			wg.Done()
@@ -256,7 +260,7 @@ func runFullScan(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, ro *
 			Int("bucket", k).
 			Float64("start", start).
 			Float64("end", end).
-			Int("count", v).Msg("buckets")
+			Uint64("count", v).Msg("buckets")
 	}
 	return opCount, buckets
 }
