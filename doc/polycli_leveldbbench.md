@@ -121,13 +121,16 @@ as well.
 
 ```bash
       --cache-size int                the number of megabytes to use as our internal cache size (default 512)
-      --degree-of-parallelism uint8   The number of concurrent iops we'll perform (default 1)
+      --db-path string                the path of the database that we'll use for testing (default "_benchmark_db")
+      --degree-of-parallelism uint8   The number of concurrent goroutines we'll use (default 2)
       --dont-fill-read-cache          if false, then random reads will be cached
+      --full-scan-mode                if true, the application will scan the full database as fast as possible and print a summary
       --handles int                   defines the capacity of the open files caching. Use -1 for zero, this has same effect as specifying NoCacher to OpenFilesCacher. (default 500)
   -h, --help                          help for leveldbbench
       --key-size uint                 The byte length of the keys that we'll use (default 8)
       --nil-read-opts                 if true we'll use nil read opt (this is what geth/bor does)
       --no-merge-write                allows disabling write merge
+      --no-write                      if true, we'll skip all the write operations
       --overwrite-count uint          the number of times to overwrite the data (default 5)
       --read-limit uint               the number of reads will attempt to complete in a given test (default 10000000)
       --read-strict                   if true the rand reads will be made in strict mode

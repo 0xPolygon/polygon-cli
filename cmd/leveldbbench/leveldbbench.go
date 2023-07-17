@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/rs/zerolog/log"
 	progressbar "github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
@@ -17,6 +16,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"math"
+	"math/bits"
 	"math/rand"
 	"os"
 	"regexp"
@@ -54,6 +55,7 @@ var (
 	writeZero              *bool
 	noWrite                *bool
 	dbPath                 *string
+	fullScan               *bool
 )
 
 type (
@@ -66,6 +68,7 @@ type (
 		OpCount      uint64
 		Stats        *leveldb.DBStats
 		OpRate       float64
+		ValueDist    []int
 	}
 )
 
@@ -106,6 +109,7 @@ var LevelDBBenchCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+
 		ctx := context.Background()
 		wo := opt.WriteOptions{
 			NoWriteMerge: *noWriteMerge,
@@ -132,6 +136,15 @@ var LevelDBBenchCmd = &cobra.Command{
 		sequentialReadsDesc := "random"
 		if *sequentialReads {
 			sequentialReadsDesc = "sequential"
+		}
+
+		if *fullScan {
+			start = time.Now()
+			opCount, valueDist := runFullScan(ctx, db, &wo, ro)
+			tr := NewTestResult(start, time.Now(), "full scan", opCount, db)
+			tr.ValueDist = valueDist
+			trs = append(trs, tr)
+			return printSummary(trs)
 		}
 
 		// in no write mode, we assume the database as already been populated in a previous run or we're using some other database
@@ -167,12 +180,7 @@ var LevelDBBenchCmd = &cobra.Command{
 			log.Error().Err(err).Msg("error while closing db")
 		}
 
-		jsonResults, err := json.Marshal(trs)
-		if err != nil {
-			return err
-		}
-		fmt.Println(string(jsonResults))
-		return nil
+		return printSummary(trs)
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
 		var err error
@@ -184,11 +192,73 @@ var LevelDBBenchCmd = &cobra.Command{
 	},
 }
 
+func printSummary(trs []*TestResult) error {
+	jsonResults, err := json.Marshal(trs)
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(jsonResults))
+	return nil
+}
+
 func runFullCompact(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions) {
 	err := db.CompactRange(util.Range{Start: nil, Limit: nil})
 	if err != nil {
 		log.Fatal().Err(err).Msg("error compacting data")
 	}
+}
+func runFullScan(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, ro *opt.ReadOptions) (uint64, []int) {
+	pool := make(chan bool, *degreeOfParallelism)
+	var wg sync.WaitGroup
+	// 16 should be safe here. That would correspond to a single value that's 67 GB
+	buckets := make([]int, 16)
+	var bucketsMutex sync.Mutex
+	iter := db.NewIterator(nil, nil)
+	var opCount uint64 = 0
+	for iter.Next() {
+		pool <- true
+		wg.Add(1)
+		go func(i iterator.Iterator) {
+			opCount += 1
+			k := i.Key()
+			v := i.Value()
+
+			bucket := bits.Len(uint(len(v) / opt.KiB))
+			bucketsMutex.Lock()
+			buckets[bucket] += 1
+			bucketsMutex.Unlock()
+
+			if opCount%10000 == 0 {
+				log.Debug().Uint64("opCount", opCount).Str("currentKey", hex.EncodeToString(k)).Msg("continuing full scan")
+			}
+			wg.Done()
+			<-pool
+		}(iter)
+	}
+	iter.Release()
+	err := iter.Error()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Error running full scan")
+	}
+
+	wg.Wait()
+
+	for k, v := range buckets {
+		if v == 0 {
+			continue
+		}
+		start := math.Exp2(float64(k))
+		end := math.Exp2(float64(k+1)) - 1
+		if k == 0 {
+			start = 0
+		}
+		log.Debug().
+			Int("bucket", k).
+			Float64("start", start).
+			Float64("end", end).
+			Int("count", v).Msg("buckets")
+	}
+	return opCount, buckets
 }
 func writeData(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, startIndex, writeLimit uint64, sequential bool) {
 	var i uint64 = startIndex
@@ -462,7 +532,7 @@ func init() {
 	sequentialReads = flagSet.Bool("sequential-reads", false, "if true we'll perform reads sequentially")
 	sequentialWrites = flagSet.Bool("sequential-writes", false, "if true we'll perform writes in somewhat sequential manner")
 	keySize = flagSet.Uint64("key-size", 8, "The byte length of the keys that we'll use")
-	degreeOfParallelism = flagSet.Uint8("degree-of-parallelism", 1, "The number of concurrent iops we'll perform")
+	degreeOfParallelism = flagSet.Uint8("degree-of-parallelism", 2, "The number of concurrent goroutines we'll use")
 	rawSizeDistribution = flagSet.String("size-kb-distribution", "4-7:23089,8-15:70350,16-31:11790,32-63:1193,64-127:204,128-255:271,256-511:1381", "the size distribution to use while testing")
 	nilReadOptions = flagSet.Bool("nil-read-opts", false, "if true we'll use nil read opt (this is what geth/bor does)")
 	dontFillCache = flagSet.Bool("dont-fill-read-cache", false, "if false, then random reads will be cached")
@@ -476,6 +546,7 @@ func init() {
 	writeZero = flagSet.Bool("write-zero", false, "if true, we'll write 0s rather than random data")
 	noWrite = flagSet.Bool("no-write", false, "if true, we'll skip all the write operations")
 	dbPath = flagSet.String("db-path", "_benchmark_db", "the path of the database that we'll use for testing")
+	fullScan = flagSet.Bool("full-scan-mode", false, "if true, the application will scan the full database as fast as possible and print a summary")
 
 	randSrc = rand.New(rand.NewSource(1))
 }
