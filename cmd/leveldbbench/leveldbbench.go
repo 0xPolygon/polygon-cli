@@ -52,6 +52,8 @@ var (
 	cacheSize              *int
 	openFilesCacheCapacity *int
 	writeZero              *bool
+	noWrite                *bool
+	dbPath                 *string
 )
 
 type (
@@ -94,7 +96,7 @@ var LevelDBBenchCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Info().Msg("Starting level db test")
 		knownKeys = make(map[string][]byte, 0)
-		db, err := leveldb.OpenFile("_benchmark_db", &opt.Options{
+		db, err := leveldb.OpenFile(*dbPath, &opt.Options{
 			Filter:                 filter.NewBloomFilter(10),
 			DisableSeeksCompaction: true,
 			OpenFilesCacheCapacity: *openFilesCacheCapacity,
@@ -132,14 +134,17 @@ var LevelDBBenchCmd = &cobra.Command{
 			sequentialReadsDesc = "sequential"
 		}
 
-		start = time.Now()
-		writeData(ctx, db, &wo, 0, *writeLimit, *sequentialWrites)
-		trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("initial %s write", sequentialWritesDesc), *writeLimit, db))
-
-		for i := 0; i < int(*overwriteCount); i += 1 {
+		// in no write mode, we assume the database as already been populated in a previous run or we're using some other database
+		if !*noWrite {
 			start = time.Now()
 			writeData(ctx, db, &wo, 0, *writeLimit, *sequentialWrites)
-			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s overwrite %d", sequentialWritesDesc, i), *writeLimit, db))
+			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("initial %s write", sequentialWritesDesc), *writeLimit, db))
+
+			for i := 0; i < int(*overwriteCount); i += 1 {
+				start = time.Now()
+				writeData(ctx, db, &wo, 0, *writeLimit, *sequentialWrites)
+				trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s overwrite %d", sequentialWritesDesc, i), *writeLimit, db))
+			}
 		}
 
 		if *sequentialReads {
@@ -244,6 +249,10 @@ benchLoop:
 	_ = pb.Finish()
 }
 func readRandom(ctx context.Context, db *leveldb.DB, ro *opt.ReadOptions, limit uint64) {
+	if *noWrite && len(knownKeys) == 0 {
+		log.Error().Msg("Random reads aren't supported in read only mode")
+		return
+	}
 	pb := getNewProgressBar(int64(limit), "random reads")
 	var rCount uint64 = 0
 	pool := make(chan bool, *degreeOfParallelism)
@@ -465,6 +474,8 @@ func init() {
 	cacheSize = flagSet.Int("cache-size", 512, "the number of megabytes to use as our internal cache size")
 	openFilesCacheCapacity = flagSet.Int("handles", 500, "defines the capacity of the open files caching. Use -1 for zero, this has same effect as specifying NoCacher to OpenFilesCacher.")
 	writeZero = flagSet.Bool("write-zero", false, "if true, we'll write 0s rather than random data")
+	noWrite = flagSet.Bool("no-write", false, "if true, we'll skip all the write operations")
+	dbPath = flagSet.String("db-path", "_benchmark_db", "the path of the database that we'll use for testing")
 
 	randSrc = rand.New(rand.NewSource(1))
 }
