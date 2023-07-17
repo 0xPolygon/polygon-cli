@@ -485,7 +485,7 @@ func (i *IODistribution) GetSizeSample() uint64 {
 	randSrcMutex.Lock()
 	randSize := randSrc.Intn(randRange)
 	randSrcMutex.Unlock()
-	return uint64(randSize+selectedRange.StartRange) * opt.KiB
+	return uint64(randSize + selectedRange.StartRange)
 }
 
 func parseRawSizeDistribution(dist string) (*IODistribution, error) {
@@ -537,7 +537,7 @@ func init() {
 	sequentialWrites = flagSet.Bool("sequential-writes", false, "if true we'll perform writes in somewhat sequential manner")
 	keySize = flagSet.Uint64("key-size", 8, "The byte length of the keys that we'll use")
 	degreeOfParallelism = flagSet.Uint8("degree-of-parallelism", 2, "The number of concurrent goroutines we'll use")
-	rawSizeDistribution = flagSet.String("size-kb-distribution", "4-7:23089,8-15:70350,16-31:11790,32-63:1193,64-127:204,128-255:271,256-511:1381", "the size distribution to use while testing")
+	rawSizeDistribution = flagSet.String("size-distribution", "4-7:23089,8-15:70350,16-31:11790,32-63:1193,64-127:204,128-255:271,256-511:1381", "the size distribution to use while testing")
 	nilReadOptions = flagSet.Bool("nil-read-opts", false, "if true we'll use nil read opt (this is what geth/bor does)")
 	dontFillCache = flagSet.Bool("dont-fill-read-cache", false, "if false, then random reads will be cached")
 	readStrict = flagSet.Bool("read-strict", false, "if true the rand reads will be made in strict mode")
