@@ -30,6 +30,7 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/google/gofuzz v1.2.0
 	github.com/schollz/progressbar/v3 v3.13.1
+	github.com/jedib0t/go-pretty/v6 v6.4.6
 	github.com/xeipuuv/gojsonschema v1.2.0
 )
 

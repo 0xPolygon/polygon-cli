@@ -13,9 +13,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type MutateFunc func(arg []byte) []byte
+type FuzzFunc func(arg []byte) []byte
 
-var mutateFunctions = []MutateFunc{
+var fuzzFunctions = []FuzzFunc{
 	AddRandomCharactersToStart,
 	AddRandomCharactersToMiddle,
 	AddRandomCharactersToEnd,
@@ -36,13 +36,13 @@ func SetSeed(seed *int64) {
 	randSrc = rand.New(rand.NewSource(*seed))
 }
 
-func MutateExecutor(arg []byte) []byte {
-	selectedFunc := mutateFunctions[rand.Intn(len(mutateFunctions))]
+func FuzzExecutor(arg []byte) []byte {
+	selectedFunc := fuzzFunctions[rand.Intn(len(fuzzFunctions))]
 	return selectedFunc(arg)
 }
 
 func ByteMutator(arg []byte) []byte {
-	arg = MutateExecutor(arg)
+	arg = FuzzExecutor(arg)
 	// fitty-fitty chance of more mutations
 	if rand.Intn(2) == 0 {
 		return ByteMutator(arg)
@@ -51,7 +51,7 @@ func ByteMutator(arg []byte) []byte {
 	return arg
 }
 
-func MutateRPCArgs(args *[]interface{}, c fuzz.Continue) {
+func FuzzRPCArgs(args *[]interface{}, c fuzz.Continue) {
 	for i, d := range *args {
 		if d == nil {
 			d = c.RandString()
