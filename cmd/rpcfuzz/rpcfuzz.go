@@ -1780,6 +1780,11 @@ var RPCFuzzCmd = &cobra.Command{
 	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
+
+		if *testOutputExportPath != "" && !*testExportJson && !*testExportCSV && !*testExportMarkdown && !*testExportHTML {
+			log.Warn().Msg("Setting --export-path must pair with a export type: --json, --csv, --md, or --html")
+		}
+
 		rpcClient, err := rpc.DialContext(ctx, args[0])
 		if err != nil {
 			return err
