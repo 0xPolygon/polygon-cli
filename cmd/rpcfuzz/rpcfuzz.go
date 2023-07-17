@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -146,6 +147,11 @@ var (
 	testFuzz              *bool
 	testFuzzNum           *int
 	seed                  *int64
+	testOutputExportPath  *string
+	testExportJson        *bool
+	testExportCSV         *bool
+	testExportMarkdown    *bool
+	testExportHTML        *bool
 	testAccountNonce      uint64
 	testAccountNonceMutex sync.Mutex
 	currentChainID        *big.Int
@@ -1712,7 +1718,7 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPC
 }
 
 func CallRPCWithFuzzAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPCTest) testreporter.TestResult {
-	currTestResult := testreporter.New("FUzzed"+currTest.GetName(), "fuzzed-"+currTest.GetMethod(), *testFuzzNum)
+	currTestResult := testreporter.New(currTest.GetName()+"-FUZZED", currTest.GetMethod(), *testFuzzNum)
 
 	originalArgs := currTest.GetArgs()
 	for i := 0; i < *testFuzzNum; i++ {
@@ -1774,6 +1780,11 @@ var RPCFuzzCmd = &cobra.Command{
 	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
+
+		if *testOutputExportPath != "" && !*testExportJson && !*testExportCSV && !*testExportMarkdown && !*testExportHTML {
+			log.Warn().Msg("Setting --export-path must pair with a export type: --json, --csv, --md, or --html")
+		}
+
 		rpcClient, err := rpc.DialContext(ctx, args[0])
 		if err != nil {
 			return err
@@ -1800,7 +1811,7 @@ var RPCFuzzCmd = &cobra.Command{
 			log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Running Test")
 
 			currTestResult := CallRPCAndValidate(ctx, rpcClient, t)
-			testResults = append(testResults, currTestResult)
+			testResults.AddTestResult(currTestResult)
 
 			if *testFuzz {
 				fuzzedTestsGroup.Add(1)
@@ -1817,7 +1828,7 @@ var RPCFuzzCmd = &cobra.Command{
 		go func() {
 			for currTestResult := range testResultsCh {
 				testResultMutex.Lock()
-				testResults = append(testResults, currTestResult)
+				testResults.AddTestResult(currTestResult)
 				testResultMutex.Unlock()
 			}
 		}()
@@ -1825,7 +1836,20 @@ var RPCFuzzCmd = &cobra.Command{
 		fuzzedTestsGroup.Wait()
 		close(testResultsCh)
 
-		testResults.PrintSummary()
+		testResults.GenerateTabularResult()
+		if *testExportJson {
+			testResults.ExportResultToJSON(filepath.Join(*testOutputExportPath, "output.json"))
+		}
+		if *testExportCSV {
+			testResults.ExportResultToCSV(filepath.Join(*testOutputExportPath, "output.csv"))
+		}
+		if *testExportMarkdown {
+			testResults.ExportResultToMarkdown(filepath.Join(*testOutputExportPath, "output.md"))
+		}
+		if *testExportHTML {
+			testResults.ExportResultToHTML(filepath.Join(*testOutputExportPath, "output.html"))
+		}
+		testResults.PrintTabularResult()
 
 		return nil
 	},
@@ -1879,9 +1903,14 @@ func init() {
 	testFuzz = flagSet.Bool("fuzz", false, "Flag to indicate whether to fuzz input or not.")
 	testFuzzNum = flagSet.Int("fuzzn", 100, "Number of times to run the fuzzer per test.")
 	seed = flagSet.Int64("seed", 123456, "A seed for generating random values within the fuzzer")
+	testOutputExportPath = flagSet.String("export-path", "", "The directory export path of the output of the tests. Must pair this with either --json, --csv, --md, or --html")
+	testExportJson = flagSet.Bool("json", false, "Flag to indicate that output will be exported as a JSON.")
+	testExportCSV = flagSet.Bool("csv", false, "Flag to indicate that output will be exported as a CSV.")
+	testExportMarkdown = flagSet.Bool("md", false, "Flag to indicate that output will be exported as a Markdown.")
+	testExportHTML = flagSet.Bool("html", false, "Flag to indicate that output will be exported as a HTML.")
 
 	argfuzz.SetSeed(seed)
 
 	fuzzer = fuzz.New()
-	fuzzer.Funcs(argfuzz.MutateRPCArgs)
+	fuzzer.Funcs(argfuzz.FuzzRPCArgs)
 }
