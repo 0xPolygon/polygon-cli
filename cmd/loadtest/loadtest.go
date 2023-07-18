@@ -783,9 +783,12 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 		if inputLoadTestParams.ForcePriorityGasPrice != nil && *inputLoadTestParams.ForcePriorityGasPrice != 0 {
 			cachedGasTipCap = new(big.Int).SetUint64(*inputLoadTestParams.ForcePriorityGasPrice)
 		}
-		log.Debug().Uint64("cachedBlockNumber", bn).
-			Uint64("cachedgasPrice", cachedGasPrice.Uint64()).
-			Uint64("cachedGasTipCap", cachedGasTipCap.Uint64()).Msg("Updating gas prices")
+		l := log.Debug().Uint64("cachedBlockNumber", bn).Uint64("cachedgasPrice", cachedGasPrice.Uint64())
+		if cachedGasTipCap != nil {
+			l = l.Uint64("cachedGasTipCap", cachedGasTipCap.Uint64())
+		}
+		l.Msg("Updating gas prices")
+
 		return cachedGasPrice, cachedGasTipCap
 	}
 
