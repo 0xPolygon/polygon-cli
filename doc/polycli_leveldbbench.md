@@ -148,9 +148,9 @@ as well.
       --key-size uint                 The byte length of the keys that we'll use (default 32)
       --nil-read-opts                 if true we'll use nil read opt (this is what geth/bor does)
       --no-merge-write                allows disabling write merge
-      --no-write                      if true, we'll skip all the write operations
       --overwrite-count uint          the number of times to overwrite the data (default 5)
       --read-limit uint               the number of reads will attempt to complete in a given test (default 10000000)
+      --read-only                     if true, we'll skip all the write operations and open the DB in read only mode
       --read-strict                   if true the rand reads will be made in strict mode
       --sequential-reads              if true we'll perform reads sequentially
       --sequential-writes             if true we'll perform writes in somewhat sequential manner

@@ -51,7 +51,7 @@ var (
 	cacheSize              *int
 	openFilesCacheCapacity *int
 	writeZero              *bool
-	noWrite                *bool
+	readOnly               *bool
 	dbPath                 *string
 	fullScan               *bool
 )
@@ -148,6 +148,8 @@ var LevelDBBenchCmd = &cobra.Command{
 			OpenFilesCacheCapacity: *openFilesCacheCapacity,
 			BlockCacheCapacity:     *cacheSize / 2 * opt.MiB,
 			WriteBuffer:            *cacheSize / 4 * opt.MiB,
+			// if we've disabled writes, or we're doing a full scan, we should open the database in read only mode
+			ReadOnly: *readOnly || *fullScan,
 		})
 		if err != nil {
 			return err
@@ -191,7 +193,7 @@ var LevelDBBenchCmd = &cobra.Command{
 		}
 
 		// in no write mode, we assume the database as already been populated in a previous run or we're using some other database
-		if !*noWrite {
+		if !*readOnly {
 			start = time.Now()
 			writeData(ctx, db, &wo, 0, *writeLimit, *sequentialWrites)
 			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("initial %s write", sequentialWritesDesc), *writeLimit, db))
@@ -201,6 +203,10 @@ var LevelDBBenchCmd = &cobra.Command{
 				writeData(ctx, db, &wo, 0, *writeLimit, *sequentialWrites)
 				trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s overwrite %d", sequentialWritesDesc, i), *writeLimit, db))
 			}
+
+			start = time.Now()
+			runFullCompact(ctx, db, &wo)
+			trs = append(trs, NewTestResult(start, time.Now(), "compaction", 1, db))
 		}
 
 		if *sequentialReads {
@@ -212,10 +218,6 @@ var LevelDBBenchCmd = &cobra.Command{
 			readRandom(ctx, db, ro, *readLimit)
 			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s read", sequentialWritesDesc), *readLimit, db))
 		}
-
-		start = time.Now()
-		runFullCompact(ctx, db, &wo)
-		trs = append(trs, NewTestResult(start, time.Now(), "compaction", 1, db))
 
 		log.Info().Msg("Close DB")
 		err = db.Close()
@@ -612,7 +614,7 @@ func init() {
 	cacheSize = flagSet.Int("cache-size", 512, "the number of megabytes to use as our internal cache size")
 	openFilesCacheCapacity = flagSet.Int("handles", 500, "defines the capacity of the open files caching. Use -1 for zero, this has same effect as specifying NoCacher to OpenFilesCacher.")
 	writeZero = flagSet.Bool("write-zero", false, "if true, we'll write 0s rather than random data")
-	noWrite = flagSet.Bool("no-write", false, "if true, we'll skip all the write operations")
+	readOnly = flagSet.Bool("read-only", false, "if true, we'll skip all the write operations and open the DB in read only mode")
 	dbPath = flagSet.String("db-path", "_benchmark_db", "the path of the database that we'll use for testing")
 	fullScan = flagSet.Bool("full-scan-mode", false, "if true, the application will scan the full database as fast as possible and print a summary")
 
