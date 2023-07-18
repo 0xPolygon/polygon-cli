@@ -2,7 +2,7 @@ package leveldbbench
 
 import (
 	"context"
-	"crypto/sha1"
+	"crypto/sha512"
 	_ "embed"
 	"encoding/binary"
 	"encoding/hex"
@@ -56,6 +56,37 @@ var (
 	noWrite                *bool
 	dbPath                 *string
 	fullScan               *bool
+)
+
+const (
+	// This data was obtained by running a full scan on bor level db to get a sense how the key values are distributed
+	// | Bucket | Min Size  | Max        | Count         |
+	// |--------+-----------+------------+---------------|
+	// |      0 | 0         | 1          | 2,347,864     |
+	// |      1 | 2         | 3          | 804,394,856   |
+	// |      2 | 4         | 7          | 541,267,689   |
+	// |      3 | 8         | 15         | 738,828,593   |
+	// |      4 | 16        | 31         | 261,122,372   |
+	// |      5 | 32        | 63         | 1,063,470,933 |
+	// |      6 | 64        | 127        | 3,584,745,195 |
+	// |      7 | 128       | 255        | 1,605,760,137 |
+	// |      8 | 256       | 511        | 316,074,206   |
+	// |      9 | 512       | 1,023      | 312,887,514   |
+	// |     10 | 1,024     | 2,047      | 328,894,149   |
+	// |     11 | 2,048     | 4,095      | 141,180       |
+	// |     12 | 4,096     | 8,191      | 92,789        |
+	// |     13 | 8,192     | 16,383     | 256,060       |
+	// |     14 | 16,384    | 32,767     | 261,806       |
+	// |     15 | 32,768    | 65,535     | 191,032       |
+	// |     16 | 65,536    | 131,071    | 99,715        |
+	// |     17 | 131,072   | 262,143    | 73,782        |
+	// |     18 | 262,144   | 524,287    | 17,552        |
+	// |     19 | 524,288   | 1,048,575  | 717           |
+	// |     20 | 1,048,576 | 2,097,151  | 995           |
+	// |     21 | 2,097,152 | 4,194,303  | 1             |
+	// |     22 | 4,194,304 | 8,388,607  | 0             |
+	// |     23 | 8,388,608 | 16,777,215 | 1             |
+	borDistribution = "0-1:2347864,2-3:804394856,4-7:541267689,8-15:738828593,16-31:261122372,32-63:1063470933,64-127:3584745195,128-255:1605760137,256-511:316074206,512-1023:312887514,1024-2047:328894149,2048-4095:141180,4096-8191:92789,8192-16383:256060,16384-32767:261806,32768-65535:191032,65536-131071:99715,131072-262143:73782,262144-524287:17552,524288-1048575:717,1048576-2097151:995,2097152-4194303:1,8388608-16777215:1"
 )
 
 type (
@@ -188,6 +219,9 @@ var LevelDBBenchCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		if *keySize > 64 {
+			return fmt.Errorf(" max supported key size is 64 bytes. %d is too big", *keySize)
+		}
 		return nil
 	},
 }
@@ -229,7 +263,8 @@ func runFullScan(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, ro *
 			bucketsMutex.Unlock()
 
 			if bucket >= 22 {
-				log.Info().Str("currentKey", hex.EncodeToString(k)).Msg("encountered giant value")
+				// 9:19PM INF encountered giant value currentKey=536e617073686f744a6f75726e616c
+				log.Info().Str("currentKey", hex.EncodeToString(k)).Int("bytes", len(v)).Msg("encountered giant value")
 			}
 
 			if opCount%1000000 == 0 {
@@ -388,20 +423,19 @@ func getNewProgressBar(max int64, description string) *progressbar.ProgressBar {
 
 func makeKV(seed, valueSize uint64, sequential bool) ([]byte, []byte) {
 	tmpKey := make([]byte, *keySize)
+	binary.LittleEndian.PutUint64(tmpKey, seed)
+	hashedKey := sha512.Sum512(tmpKey)
+	tmpKey = hashedKey[0:*keySize]
 	if sequential {
-		// We're going to hack sequential by counting in reverse
-		binary.BigEndian.PutUint64(tmpKey, math.MaxUint64-seed)
-	} else {
-		// For random (non-sequential) we'll just hash the number so it's still deterministic
-		binary.LittleEndian.PutUint64(tmpKey, seed)
-		hashedKey := sha1.Sum(tmpKey)
-		tmpKey = hashedKey[0:*keySize]
+		// binary.BigEndian.PutUint64(tmpKey, seed)
+		binary.BigEndian.PutUint64(tmpKey, seed)
 	}
+
 	knownKeysMutex.Lock()
 	knownKeys[string(tmpKey)] = tmpKey
 	knownKeysMutex.Unlock()
 
-	log.Trace().Str("tmpKey", hex.EncodeToString(tmpKey)).Msg("Generated key")
+	log.Trace().Str("tmpKey", hex.EncodeToString(tmpKey)).Uint64("valueSize", valueSize).Uint64("seed", seed).Msg("Generated key")
 
 	tmpValue := make([]byte, valueSize)
 	if !*writeZero {
@@ -483,7 +517,7 @@ func (i *IODistribution) GetSizeSample() uint64 {
 	}
 	randRange := selectedRange.EndRange - selectedRange.StartRange
 	randSrcMutex.Lock()
-	randSize := randSrc.Intn(randRange)
+	randSize := randSrc.Intn(randRange + 1)
 	randSrcMutex.Unlock()
 	return uint64(randSize + selectedRange.StartRange)
 }
@@ -535,9 +569,9 @@ func init() {
 	overwriteCount = flagSet.Uint64("overwrite-count", 5, "the number of times to overwrite the data")
 	sequentialReads = flagSet.Bool("sequential-reads", false, "if true we'll perform reads sequentially")
 	sequentialWrites = flagSet.Bool("sequential-writes", false, "if true we'll perform writes in somewhat sequential manner")
-	keySize = flagSet.Uint64("key-size", 8, "The byte length of the keys that we'll use")
+	keySize = flagSet.Uint64("key-size", 32, "The byte length of the keys that we'll use")
 	degreeOfParallelism = flagSet.Uint8("degree-of-parallelism", 2, "The number of concurrent goroutines we'll use")
-	rawSizeDistribution = flagSet.String("size-distribution", "4-7:23089,8-15:70350,16-31:11790,32-63:1193,64-127:204,128-255:271,256-511:1381", "the size distribution to use while testing")
+	rawSizeDistribution = flagSet.String("size-distribution", borDistribution, "the size distribution to use while testing")
 	nilReadOptions = flagSet.Bool("nil-read-opts", false, "if true we'll use nil read opt (this is what geth/bor does)")
 	dontFillCache = flagSet.Bool("dont-fill-read-cache", false, "if false, then random reads will be cached")
 	readStrict = flagSet.Bool("read-strict", false, "if true the rand reads will be made in strict mode")
