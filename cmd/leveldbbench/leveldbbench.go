@@ -31,9 +31,7 @@ import (
 var (
 	//go:embed usage.md
 	usage string
-	// memory leak?
-	knownKeys              map[string][]byte
-	knownKeysMutex         sync.RWMutex
+
 	randSrc                *rand.Rand
 	randSrcMutex           sync.Mutex
 	writeLimit             *uint64
@@ -101,6 +99,21 @@ type (
 		OpRate       float64
 		ValueDist    []uint64
 	}
+	RandomKeySeeker struct {
+		db            *leveldb.DB
+		iterator      iterator.Iterator
+		iteratorMutex sync.Mutex
+		firstKey      []byte
+	}
+	IORange struct {
+		StartRange int
+		EndRange   int
+		Frequency  int
+	}
+	IODistribution struct {
+		ranges         []IORange
+		totalFrequency int
+	}
 )
 
 func NewTestResult(startTime, endTime time.Time, desc string, opCount uint64, db *leveldb.DB) *TestResult {
@@ -129,7 +142,6 @@ var LevelDBBenchCmd = &cobra.Command{
 	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Info().Msg("Starting level db test")
-		knownKeys = make(map[string][]byte, 0)
 		db, err := leveldb.OpenFile(*dbPath, &opt.Options{
 			Filter:                 filter.NewBloomFilter(10),
 			DisableSeeksCompaction: true,
@@ -358,25 +370,22 @@ benchLoop:
 	_ = pb.Finish()
 }
 func readRandom(ctx context.Context, db *leveldb.DB, ro *opt.ReadOptions, limit uint64) {
-	if *noWrite && len(knownKeys) == 0 {
-		log.Error().Msg("Random reads aren't supported in read only mode")
-		return
-	}
 	pb := getNewProgressBar(int64(limit), "random reads")
 	var rCount uint64 = 0
 	pool := make(chan bool, *degreeOfParallelism)
 	var wg sync.WaitGroup
+	rks := NewRandomKeySeeker(db)
 
 benchLoop:
 	for {
-		for _, randKey := range knownKeys {
+		for {
 			pool <- true
 			wg.Add(1)
 			go func() {
 				rCount += 1
 				_ = pb.Add(1)
 
-				_, err := db.Get(randKey, ro)
+				_, err := db.Get(rks.Key(), ro)
 				if err != nil {
 					log.Error().Err(err).Msg("level db random read error")
 				}
@@ -390,6 +399,43 @@ benchLoop:
 	}
 	wg.Wait()
 	_ = pb.Finish()
+}
+
+func NewRandomKeySeeker(db *leveldb.DB) *RandomKeySeeker {
+	rks := new(RandomKeySeeker)
+	rks.db = db
+	rks.iterator = db.NewIterator(nil, nil)
+	rks.firstKey = rks.iterator.Key()
+	return rks
+}
+func (r *RandomKeySeeker) Key() []byte {
+	seekKey := make([]byte, 8)
+	randSrcMutex.Lock()
+	randSrc.Read(seekKey)
+	randSrcMutex.Unlock()
+
+	log.Trace().Str("seekKey", hex.EncodeToString(seekKey)).Msg("searching for key")
+
+	r.iteratorMutex.Lock()
+	defer r.iteratorMutex.Unlock()
+	// first try to just get a random key
+	exists := r.iterator.Seek(seekKey)
+
+	// if that key doesn't exist exactly advance to the next key
+	if !exists {
+		exists = r.iterator.Next()
+	}
+	// if there is no next key, to back to the beginning
+	if !exists {
+		r.iterator.First()
+		r.iterator.Next()
+	}
+	if err := r.iterator.Error(); err != nil {
+		log.Error().Err(err).Msg("issue getting random key")
+	}
+	resultKey := r.iterator.Key()
+	log.Trace().Str("seekKey", hex.EncodeToString(seekKey)).Str("resultKey", hex.EncodeToString(resultKey)).Msg("found random key")
+	return resultKey
 }
 
 func getNewProgressBar(max int64, description string) *progressbar.ProgressBar {
@@ -431,10 +477,6 @@ func makeKV(seed, valueSize uint64, sequential bool) ([]byte, []byte) {
 		binary.BigEndian.PutUint64(tmpKey, seed)
 	}
 
-	knownKeysMutex.Lock()
-	knownKeys[string(tmpKey)] = tmpKey
-	knownKeysMutex.Unlock()
-
 	log.Trace().Str("tmpKey", hex.EncodeToString(tmpKey)).Uint64("valueSize", valueSize).Uint64("seed", seed).Msg("Generated key")
 
 	tmpValue := make([]byte, valueSize)
@@ -446,18 +488,6 @@ func makeKV(seed, valueSize uint64, sequential bool) ([]byte, []byte) {
 	}
 	return tmpKey, tmpValue
 }
-
-type (
-	IORange struct {
-		StartRange int
-		EndRange   int
-		Frequency  int
-	}
-	IODistribution struct {
-		ranges         []IORange
-		totalFrequency int
-	}
-)
 
 func (i *IORange) Validate() error {
 	if i.EndRange < i.StartRange {
