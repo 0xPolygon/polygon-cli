@@ -145,7 +145,7 @@ as well.
       --full-scan-mode                if true, the application will scan the full database as fast as possible and print a summary
       --handles int                   defines the capacity of the open files caching. Use -1 for zero, this has same effect as specifying NoCacher to OpenFilesCacher. (default 500)
   -h, --help                          help for leveldbbench
-      --key-size uint                 The byte length of the keys that we'll use (default 8)
+      --key-size uint                 The byte length of the keys that we'll use (default 32)
       --nil-read-opts                 if true we'll use nil read opt (this is what geth/bor does)
       --no-merge-write                allows disabling write merge
       --no-write                      if true, we'll skip all the write operations
@@ -154,7 +154,7 @@ as well.
       --read-strict                   if true the rand reads will be made in strict mode
       --sequential-reads              if true we'll perform reads sequentially
       --sequential-writes             if true we'll perform writes in somewhat sequential manner
-      --size-distribution string      the size distribution to use while testing (default "4-7:23089,8-15:70350,16-31:11790,32-63:1193,64-127:204,128-255:271,256-511:1381")
+      --size-distribution string      the size distribution to use while testing (default "0-1:2347864,2-3:804394856,4-7:541267689,8-15:738828593,16-31:261122372,32-63:1063470933,64-127:3584745195,128-255:1605760137,256-511:316074206,512-1023:312887514,1024-2047:328894149,2048-4095:141180,4096-8191:92789,8192-16383:256060,16384-32767:261806,32768-65535:191032,65536-131071:99715,131072-262143:73782,262144-524287:17552,524288-1048575:717,1048576-2097151:995,2097152-4194303:1,8388608-16777215:1")
       --sync-writes                   sync each write
       --write-limit uint              The number of entries to write in the db (default 1000000)
       --write-zero                    if true, we'll write 0s rather than random data
