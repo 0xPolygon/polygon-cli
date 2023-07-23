@@ -556,13 +556,14 @@ func getLoadTestContract(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 }
 func getERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (erc20Addr ethcommon.Address, erc20Contract *contracts.ERC20, err error) {
 	erc20Addr = ethcommon.HexToAddress(*inputLoadTestParams.ERC20Address)
-
+	shouldMint := true
 	if *inputLoadTestParams.ERC20Address == "" {
 		erc20Addr, _, _, err = contracts.DeployERC20(tops, c)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to deploy ERC20 contract")
 			return
 		}
+		shouldMint = false
 	}
 	log.Trace().Interface("contractaddress", erc20Addr).Msg("ERC20 contract address")
 
@@ -571,6 +572,7 @@ func getERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 		log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
 		return
 	}
+
 	err = blockUntilSuccessful(ctx, c, func() error {
 		_, err = erc20Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
 		return err
@@ -579,6 +581,9 @@ func getERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 		return
 	}
 
+	if !shouldMint {
+		return
+	}
 	_, err = erc20Contract.Mint(tops, metrics.UnitMegaether)
 	if err != nil {
 		log.Error().Err(err).Msg("There was an error minting ERC20")
@@ -602,13 +607,14 @@ func getERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 }
 func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (erc721Addr ethcommon.Address, erc721Contract *contracts.ERC721, err error) {
 	erc721Addr = ethcommon.HexToAddress(*inputLoadTestParams.ERC721Address)
-
+	shouldMint := true
 	if *inputLoadTestParams.ERC721Address == "" {
 		erc721Addr, _, _, err = contracts.DeployERC721(tops, c)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to deploy ERC721 contract")
 			return
 		}
+		shouldMint = false
 	}
 	log.Trace().Interface("contractaddress", erc721Addr).Msg("ERC721 contract address")
 
@@ -623,6 +629,9 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 		return err
 	})
 	if err != nil {
+		return
+	}
+	if !shouldMint {
 		return
 	}
 
