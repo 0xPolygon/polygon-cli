@@ -18,15 +18,19 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
+
+	// "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
 	"github.com/maticnetwork/polygon-cli/p2p"
+	"github.com/maticnetwork/polygon-cli/rpctypes"
 )
 
 type (
@@ -109,6 +113,7 @@ var SensorCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+
 		eth66 := ethp2p.Protocol{
 			Name:    "eth",
 			Version: 66,
@@ -119,14 +124,29 @@ var SensorCmd = &cobra.Command{
 				genesis, _ := loadGenesis("genesis.json")
 				genesisHash := common.HexToHash("0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
 
-				err := ethp2p.Send(rw, 0, &eth.StatusPacket{
+				client, err := rpc.Dial("https://polygon-rpc.com")
+				defer client.Close()
+				if err != nil {
+					return err
+				}
+
+				var block rpctypes.RawBlockResponse
+				err = client.Call(&block, "eth_getBlockByNumber", "latest", true)
+				if err != nil {
+					return err
+				}
+				log.Info().Interface("block", block).Send()
+
+				err = ethp2p.Send(rw, 0, &eth.StatusPacket{
 					ProtocolVersion: 66,
 					NetworkID:       137,
 					Genesis:         genesisHash,
-					ForkID:          forkid.NewID(genesis.Config, genesisHash, 45629536),
+					ForkID:          forkid.NewID(genesis.Config, genesisHash, block.Number.ToUint64()),
+					Head:            block.Hash.ToHash(),
+					TD:              block.TotalDifficulty.ToBigInt(),
 				})
 				if err != nil {
-					log.Error().Err(err).Send()
+					return err
 				}
 
 				msg, err := rw.ReadMsg()
