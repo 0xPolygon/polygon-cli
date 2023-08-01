@@ -137,7 +137,7 @@ var SensorCmd = &cobra.Command{
 				}
 				log.Info().Interface("block", block).Send()
 
-				err = ethp2p.Send(rw, 0, &eth.StatusPacket{
+				err = ethp2p.Send(rw, eth.StatusMsg, &eth.StatusPacket{
 					ProtocolVersion: 66,
 					NetworkID:       137,
 					Genesis:         genesisHash,
@@ -160,19 +160,19 @@ var SensorCmd = &cobra.Command{
 						return err
 					}
 					switch msg.Code {
-					case 2:
+					case eth.TransactionsMsg:
 						var txs eth.TransactionsPacket
 						err = msg.Decode(&txs)
 						log.Info().Interface("txs", txs).Err(err).Send()
-					case 3:
+					case eth.BlockHeadersMsg:
 						var request eth.GetBlockHeadersPacket66
 						err = msg.Decode(&request)
 						log.Info().Interface("request", request).Err(err).Send()
-					case 7:
+					case eth.NewBlockMsg:
 						var block eth.NewBlockPacket
 						err = msg.Decode(&block)
 						log.Info().Interface("block", block.Block.Header()).Err(err).Send()
-					case 8:
+					case eth.NewPooledTransactionHashesMsg:
 						var txs eth.NewPooledTransactionHashesPacket
 						err = msg.Decode(&txs)
 						log.Info().Interface("txs", txs).Err(err).Send()
