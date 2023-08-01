@@ -2,15 +2,25 @@ package sensor
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"net/http"
 	_ "net/http/pprof"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
@@ -99,6 +109,60 @@ var SensorCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		eth66 := ethp2p.Protocol{
+			Name:    "eth",
+			Version: 66,
+			Length:  17,
+			Run: func(p *ethp2p.Peer, rw ethp2p.MsgReadWriter) error {
+				log.Info().Interface("peer", p.Info().Enode).Send()
+
+				genesis, _ := loadGenesis("genesis.json")
+				genesisHash := common.HexToHash("0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
+
+				err := ethp2p.Send(rw, 0, &eth.StatusPacket{
+					ProtocolVersion: 66,
+					NetworkID:       137,
+					Genesis:         genesisHash,
+					ForkID:          forkid.NewID(genesis.Config, genesisHash, 45629536),
+				})
+				if err != nil {
+					log.Error().Err(err).Send()
+				}
+
+				msg, err := rw.ReadMsg()
+				var status eth.StatusPacket
+				err = msg.Decode(&status)
+				log.Info().Interface("status", status).Err(err).Send()
+
+				for {
+					msg, err := rw.ReadMsg()
+					if err != nil {
+						return err
+					}
+					switch msg.Code {
+					case 2:
+						var txs eth.TransactionsPacket
+						err = msg.Decode(&txs)
+						log.Info().Interface("txs", txs).Err(err).Send()
+					case 3:
+						var request eth.GetBlockHeadersPacket66
+						err = msg.Decode(&request)
+						log.Info().Interface("request", request).Err(err).Send()
+					case 7:
+						var block eth.NewBlockPacket
+						err = msg.Decode(&block)
+						log.Info().Interface("block", block.Block.Header()).Err(err).Send()
+					case 8:
+						var txs eth.NewPooledTransactionHashesPacket
+						err = msg.Decode(&txs)
+						log.Info().Interface("txs", txs).Err(err).Send()
+					default:
+						log.Info().Interface("msg", msg).Send()
+					}
+				}
+			},
+		}
+
 		inputSet, err := p2p.LoadNodesJSON(inputSensorParams.NodesFile)
 		if err != nil {
 			return err
@@ -111,6 +175,28 @@ var SensorCmd = &cobra.Command{
 			return fmt.Errorf("unable to parse bootnodes: %w", err)
 		}
 		cfg.Bootnodes = bn
+
+		server := ethp2p.Server{
+			Config: ethp2p.Config{
+				PrivateKey:      inputSensorParams.privateKey,
+				NoDial:          true,
+				NoDiscovery:     true,
+				MaxPeers:        inputSensorParams.MaxPeers,
+				ListenAddr:      fmt.Sprintf("%v:%v", inputSensorParams.IP.String(), inputSensorParams.Port),
+				Protocols:       []ethp2p.Protocol{eth66},
+				EnableMsgEvents: true,
+			},
+		}
+		if err = server.Start(); err != nil {
+			return err
+		}
+
+		log.Info().Str("enode", server.Self().URLv4()).Msg("Starting sensor")
+
+		done := make(chan os.Signal, 1)
+		signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
+		<-done
+		return nil
 
 		db, err := enode.OpenDB(inputSensorParams.Database)
 		if err != nil {
@@ -177,4 +263,16 @@ increase CPU and memory usage.`)
 	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "The file of the private key. If no key file is found then a key file will be generated.")
 	SensorCmd.PersistentFlags().IPVarP(&inputSensorParams.IP, "ip", "i", net.IP{127, 0, 0, 1}, "The sensor's IP address.")
 	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.Port, "port", 30303, "The sensor's discovery port.")
+}
+
+func loadGenesis(genesisFile string) (core.Genesis, error) {
+	chainConfig, err := ioutil.ReadFile(genesisFile)
+	if err != nil {
+		return core.Genesis{}, err
+	}
+	var gen core.Genesis
+	if err := json.Unmarshal(chainConfig, &gen); err != nil {
+		return core.Genesis{}, err
+	}
+	return gen, nil
 }
