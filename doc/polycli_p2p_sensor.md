@@ -25,18 +25,22 @@ If no nodes.json file exists, run `echo "{}" >> nodes.json` to get started.
 ```bash
   -b, --bootnodes string               Comma separated nodes used for bootstrapping. At least one bootnode is
                                        required, so other nodes in the network can discover each other.
-  -d, --database string                Node database for updating and storing client information.
+      --genesis string                 The genesis file. (default "genesis.json")
+      --genesis-hash string            The genesis block hash. (default "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
   -h, --help                           help for sensor
+  -k, --key-file string                The file of the private key. If no key file is found then a key file will be generated.
   -D, --max-db-writes int              The maximum number of concurrent database writes to perform. Increasing
                                        this will result in less chance of missing data (i.e. broken pipes) but
                                        can significantly increase memory usage. (default 100)
   -m, --max-peers int                  Maximum number of peers to connect to. (default 200)
   -n, --network-id uint                Filter discovered nodes by this network ID.
   -p, --parallel int                   How many parallel discoveries to attempt. (default 16)
+      --port int                       The sensor's TCP and discovery port. (default 30303)
       --pprof                          Whether to run pprof.
       --pprof-port uint                The port to run pprof on. (default 6060)
   -P, --project-id string              GCP project ID.
   -r, --revalidation-interval string   The amount of time it takes to retry connecting to a failed peer. (default "10m")
+      --rpc string                     The RPC endpoint. (default "https://polygon-rpc.com")
   -s, --sensor-id string               Sensor ID.
       --write-block-events             Whether to write block events to the database. (default true)
   -B, --write-blocks                   Whether to write blocks to the database. (default true)

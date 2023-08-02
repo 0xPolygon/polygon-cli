@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
 	"net/http"
@@ -125,10 +125,10 @@ var SensorCmd = &cobra.Command{
 				genesisHash := common.HexToHash(inputSensorParams.GenesisHash)
 
 				client, err := rpc.Dial(inputSensorParams.RPC)
-				defer client.Close()
 				if err != nil {
 					return err
 				}
+				defer client.Close()
 
 				var block rpctypes.RawBlockResponse
 				err = client.Call(&block, "eth_getBlockByNumber", "latest", true)
@@ -153,9 +153,17 @@ var SensorCmd = &cobra.Command{
 				}
 
 				msg, err := rw.ReadMsg()
+				if err != nil {
+					return err
+				}
+
 				var status eth.StatusPacket
 				err = msg.Decode(&status)
-				log.Info().Interface("status", status).Err(err).Msg("New peer")
+				if err != nil {
+					return err
+				}
+
+				log.Info().Interface("status", status).Msg("New peer")
 
 				for {
 					msg, err := rw.ReadMsg()
@@ -243,7 +251,8 @@ var SensorCmd = &cobra.Command{
 }
 
 func loadGenesis(genesisFile string) (core.Genesis, error) {
-	chainConfig, err := ioutil.ReadFile(genesisFile)
+	chainConfig, err := os.ReadFile(genesisFile)
+
 	if err != nil {
 		return core.Genesis{}, err
 	}
