@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"time"
 
 	"net/http"
@@ -48,7 +47,6 @@ type (
 		PprofPort                    uint
 		KeyFile                      string
 		privateKey                   *ecdsa.PrivateKey
-		IP                           net.IP
 		Port                         int
 		RPC                          string
 		genesis                      core.Genesis
@@ -200,6 +198,7 @@ var SensorCmd = &cobra.Command{
 			return fmt.Errorf("unable to parse bootnodes: %w", err)
 		}
 		cfg.Bootnodes = bn
+
 		ip, err := nat.Parse("any")
 		if err != nil {
 			return err
@@ -289,7 +288,6 @@ increase CPU and memory usage.`)
 	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "Whether to run pprof.")
 	SensorCmd.PersistentFlags().UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "The port to run pprof on.")
 	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "The file of the private key. If no key file is found then a key file will be generated.")
-	SensorCmd.PersistentFlags().IPVarP(&inputSensorParams.IP, "ip", "i", net.IP{127, 0, 0, 1}, "The sensor's IP address.")
 	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.Port, "port", 30303, "The sensor's TCP and discovery port.")
 	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "The RPC endpoint.")
 	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.GenesisFile, "genesis", "genesis.json", "The genesis file.")
