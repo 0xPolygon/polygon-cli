@@ -15,13 +15,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
-
-	// "github.com/ethereum/go-ethereum/p2p/nat"
-
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -36,7 +34,6 @@ type (
 		Threads                      int
 		NetworkID                    uint64
 		NodesFile                    string
-		Database                     string
 		ProjectID                    string
 		SensorID                     string
 		MaxPeers                     int
@@ -140,11 +137,10 @@ var SensorCmd = &cobra.Command{
 				if err != nil {
 					return err
 				}
-				log.Info().Interface("block", block).Send()
 
 				err = ethp2p.Send(rw, eth.StatusMsg, &eth.StatusPacket{
 					ProtocolVersion: 66,
-					NetworkID:       137,
+					NetworkID:       inputSensorParams.NetworkID,
 					Genesis:         genesisHash,
 					ForkID: forkid.NewID(
 						inputSensorParams.genesis.Config,
@@ -161,7 +157,7 @@ var SensorCmd = &cobra.Command{
 				msg, err := rw.ReadMsg()
 				var status eth.StatusPacket
 				err = msg.Decode(&status)
-				log.Info().Interface("status", status).Err(err).Send()
+				log.Info().Interface("status", status).Err(err).Msg("New peer")
 
 				for {
 					msg, err := rw.ReadMsg()
@@ -204,14 +200,20 @@ var SensorCmd = &cobra.Command{
 			return fmt.Errorf("unable to parse bootnodes: %w", err)
 		}
 		cfg.Bootnodes = bn
+		ip, err := nat.Parse("any")
+		if err != nil {
+			return err
+		}
 
 		server := ethp2p.Server{
 			Config: ethp2p.Config{
 				PrivateKey:  inputSensorParams.privateKey,
 				MaxPeers:    inputSensorParams.MaxPeers,
-				ListenAddr:  fmt.Sprintf("%v:%v", inputSensorParams.IP.String(), inputSensorParams.Port),
+				ListenAddr:  fmt.Sprintf(":%v", inputSensorParams.Port),
 				Protocols:   []ethp2p.Protocol{eth66},
+				NoDial:      true,
 				NoDiscovery: true,
+				NAT:         ip,
 			},
 		}
 		if err = server.Start(); err != nil {
@@ -234,7 +236,7 @@ var SensorCmd = &cobra.Command{
 		c := newSensor(inputSet, disc, disc.RandomNodes())
 		c.revalidateInterval = inputSensorParams.revalidationInterval
 
-		log.Info().Str("enode", disc.Self().URLv4()).Msg("Starting sensor")
+		log.Info().Str("enode", server.Self().URLv4()).Msg("Starting sensor")
 
 		c.run(inputSensorParams.Threads)
 		return nil
@@ -265,7 +267,6 @@ required, so other nodes in the network can discover each other.`)
 	if err := SensorCmd.MarkPersistentFlagRequired("network-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark network-id as required persistent flag")
 	}
-	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.Database, "database", "d", "", "Node database for updating and storing client information.")
 	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.ProjectID, "project-id", "P", "", "GCP project ID.")
 	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "Sensor ID.")
 	if err := SensorCmd.MarkPersistentFlagRequired("sensor-id"); err != nil {
