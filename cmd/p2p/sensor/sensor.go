@@ -13,18 +13,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
 	"github.com/maticnetwork/polygon-cli/p2p"
-	"github.com/maticnetwork/polygon-cli/rpctypes"
 )
 
 type (
@@ -115,85 +111,6 @@ var SensorCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		eth66 := ethp2p.Protocol{
-			Name:    "eth",
-			Version: 66,
-			Length:  17,
-			Run: func(p *ethp2p.Peer, rw ethp2p.MsgReadWriter) error {
-				log.Info().Interface("peer", p.Info().Enode).Send()
-
-				genesisHash := common.HexToHash(inputSensorParams.GenesisHash)
-
-				client, err := rpc.Dial(inputSensorParams.RPC)
-				if err != nil {
-					return err
-				}
-				defer client.Close()
-
-				var block rpctypes.RawBlockResponse
-				err = client.Call(&block, "eth_getBlockByNumber", "latest", true)
-				if err != nil {
-					return err
-				}
-
-				err = ethp2p.Send(rw, eth.StatusMsg, &eth.StatusPacket{
-					ProtocolVersion: 66,
-					NetworkID:       inputSensorParams.NetworkID,
-					Genesis:         genesisHash,
-					ForkID: forkid.NewID(
-						inputSensorParams.genesis.Config,
-						genesisHash,
-						block.Number.ToUint64(),
-					),
-					Head: block.Hash.ToHash(),
-					TD:   block.TotalDifficulty.ToBigInt(),
-				})
-				if err != nil {
-					return err
-				}
-
-				msg, err := rw.ReadMsg()
-				if err != nil {
-					return err
-				}
-
-				var status eth.StatusPacket
-				err = msg.Decode(&status)
-				if err != nil {
-					return err
-				}
-
-				log.Info().Interface("status", status).Msg("New peer")
-
-				for {
-					msg, err := rw.ReadMsg()
-					if err != nil {
-						return err
-					}
-					switch msg.Code {
-					case eth.TransactionsMsg:
-						var txs eth.TransactionsPacket
-						err = msg.Decode(&txs)
-						log.Info().Interface("txs", txs).Err(err).Send()
-					case eth.BlockHeadersMsg:
-						var request eth.GetBlockHeadersPacket66
-						err = msg.Decode(&request)
-						log.Info().Interface("request", request).Err(err).Send()
-					case eth.NewBlockMsg:
-						var block eth.NewBlockPacket
-						err = msg.Decode(&block)
-						log.Info().Interface("block", block.Block.Number()).Err(err).Send()
-					case eth.NewPooledTransactionHashesMsg:
-						var txs eth.NewPooledTransactionHashesPacket
-						err = msg.Decode(&txs)
-						log.Info().Interface("txs", txs).Err(err).Send()
-					default:
-						log.Info().Interface("msg", msg).Send()
-					}
-				}
-			},
-		}
-
 		inputSet, err := p2p.LoadNodesJSON(inputSensorParams.NodesFile)
 		if err != nil {
 			return err
@@ -214,10 +131,15 @@ var SensorCmd = &cobra.Command{
 
 		server := ethp2p.Server{
 			Config: ethp2p.Config{
-				PrivateKey:  inputSensorParams.privateKey,
-				MaxPeers:    inputSensorParams.MaxPeers,
-				ListenAddr:  fmt.Sprintf(":%v", inputSensorParams.Port),
-				Protocols:   []ethp2p.Protocol{eth66},
+				PrivateKey: inputSensorParams.privateKey,
+				MaxPeers:   inputSensorParams.MaxPeers,
+				ListenAddr: fmt.Sprintf(":%v", inputSensorParams.Port),
+				Protocols: []ethp2p.Protocol{p2p.NewEth66Protocol(
+					&inputSensorParams.genesis,
+					common.HexToHash(inputSensorParams.GenesisHash),
+					inputSensorParams.RPC,
+					inputSensorParams.NetworkID,
+				)},
 				NoDial:      true,
 				NoDiscovery: true,
 				NAT:         ip,
