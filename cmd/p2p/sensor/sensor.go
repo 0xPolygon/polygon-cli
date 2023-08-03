@@ -124,11 +124,6 @@ var SensorCmd = &cobra.Command{
 		}
 		cfg.Bootnodes = bn
 
-		ip, err := nat.Parse("any")
-		if err != nil {
-			return err
-		}
-
 		server := ethp2p.Server{
 			Config: ethp2p.Config{
 				PrivateKey: inputSensorParams.privateKey,
@@ -142,7 +137,7 @@ var SensorCmd = &cobra.Command{
 				)},
 				NoDial:      true,
 				NoDiscovery: true,
-				NAT:         ip,
+				NAT:         nat.Any(),
 			},
 		}
 		if err = server.Start(); err != nil {
