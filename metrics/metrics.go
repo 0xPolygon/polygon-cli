@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"math/big"
 	"sort"
 	"strconv"
@@ -190,7 +191,12 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 
 		record := " "
 		for i := 0; i < len(recordVariables)-1; i++ {
-			record += recordVariables[i] + strings.Repeat(" ", len(headerVariables[i])+proportion[i]-len(recordVariables[i]))
+			spaceOffset := len(headerVariables[i]) + proportion[i] - len(recordVariables[i])
+			if spaceOffset < 0 {
+				spaceOffset = 0
+				log.Error().Str("record", recordVariables[i]).Str("column", headerVariables[i]).Msg("column width exceed header width")
+			}
+			record += recordVariables[i] + strings.Repeat(" ", spaceOffset)
 		}
 		record += recordVariables[len(recordVariables)-1]
 
@@ -290,11 +296,11 @@ func ecrecover(block *rpctypes.PolyBlock) ([]byte, error) {
 		return nil, fmt.Errorf("unable to recover signature")
 	}
 	signature := header.Extra[sigStart:]
-	pubkey, err := ethcrypto.Ecrecover(clique.SealHash(header).Bytes(), signature)
+	pubKey, err := ethcrypto.Ecrecover(clique.SealHash(header).Bytes(), signature)
 	if err != nil {
 		return nil, err
 	}
-	signer := ethcrypto.Keccak256(pubkey[1:])[12:]
+	signer := ethcrypto.Keccak256(pubKey[1:])[12:]
 
 	return signer, nil
 }
