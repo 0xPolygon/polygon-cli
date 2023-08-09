@@ -33,7 +33,6 @@ type Datastore struct {
 	shouldWriteTransactions      bool
 	shouldWriteTransactionEvents bool
 	writes                       chan struct{}
-	oldestBlock                  *types.Header
 }
 
 // DatastoreEvent can represent a peer sending the sensor a transaction hash or

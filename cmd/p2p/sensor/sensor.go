@@ -180,7 +180,10 @@ var SensorCmd = &cobra.Command{
 			case <-ticker.C:
 				log.Info().Interface("peers", server.PeerCount()).Send()
 
-				p2p.WriteStaticNodes(inputSensorParams.NodesFile, peers)
+				err = p2p.WriteStaticNodes(inputSensorParams.NodesFile, peers)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to write static nodes to file")
+				}
 			case peer := <-opts.Peers:
 				if _, ok := peers[peer.ID()]; !ok {
 					peers[peer.ID()] = peer.URLv4()

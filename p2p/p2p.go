@@ -14,9 +14,7 @@ import (
 )
 
 func Listen(ln *enode.LocalNode) (*net.UDPConn, error) {
-	addr := fmt.Sprintf("0.0.0.0:0")
-
-	socket, err := net.ListenPacket("udp4", addr)
+	socket, err := net.ListenPacket("udp4", "0.0.0.0:0")
 	if err != nil {
 		return nil, err
 	}

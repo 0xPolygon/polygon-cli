@@ -12,8 +12,8 @@ import (
 )
 
 type crawler struct {
-	input     p2p.NodeSet
-	output    p2p.NodeSet
+	input     p2p.CrawlNodeSet
+	output    p2p.CrawlNodeSet
 	disc      resolver
 	iters     []enode.Iterator
 	inputIter enode.Iterator
@@ -37,10 +37,10 @@ type resolver interface {
 	RequestENR(*enode.Node) (*enode.Node, error)
 }
 
-func newCrawler(input p2p.NodeSet, disc resolver, iters ...enode.Iterator) *crawler {
+func newCrawler(input p2p.CrawlNodeSet, disc resolver, iters ...enode.Iterator) *crawler {
 	c := &crawler{
 		input:     input,
-		output:    make(p2p.NodeSet, len(input)),
+		output:    make(p2p.CrawlNodeSet, len(input)),
 		disc:      disc,
 		iters:     iters,
 		inputIter: enode.IterNodes(input.Nodes()),
@@ -56,7 +56,7 @@ func newCrawler(input p2p.NodeSet, disc resolver, iters ...enode.Iterator) *craw
 	return c
 }
 
-func (c *crawler) run(timeout time.Duration, nthreads int) p2p.NodeSet {
+func (c *crawler) run(timeout time.Duration, nthreads int) p2p.CrawlNodeSet {
 	var (
 		timeoutTimer = time.NewTimer(timeout)
 		timeoutCh    <-chan time.Time

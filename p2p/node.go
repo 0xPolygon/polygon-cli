@@ -15,12 +15,10 @@ import (
 
 const jsonIndent = "    "
 
-// NodeSet is the nodes.json file format. It holds a set of node records
+// CrawlNodeSet is the nodes.json file format. It holds a set of node records
 // as a JSON object.
-type NodeSet map[enode.ID]NodeJSON
-type StaticNodes map[enode.ID]string
-
-type NodeJSON struct {
+type CrawlNodeSet map[enode.ID]CrawlNode
+type CrawlNode struct {
 	Seq uint64      `json:"seq"`
 	N   *enode.Node `json:"record"`
 	URL string      `json:"url"`
@@ -35,15 +33,17 @@ type NodeJSON struct {
 	LastCheck time.Time `json:"lastCheck,omitempty"`
 }
 
-func ReadNodeSet(file string) (NodeSet, error) {
-	var nodes NodeSet
+type StaticNodes map[enode.ID]string
+
+func ReadNodeSet(file string) (CrawlNodeSet, error) {
+	var nodes CrawlNodeSet
 	if err := common.LoadJSON(file, &nodes); err != nil {
 		return nil, err
 	}
 	return nodes, nil
 }
 
-func WriteNodeSet(file string, nodes NodeSet) error {
+func WriteNodeSet(file string, nodes CrawlNodeSet) error {
 	nodesJSON, err := json.MarshalIndent(nodes, "", jsonIndent)
 	if err != nil {
 		return err
@@ -56,7 +56,7 @@ func WriteNodeSet(file string, nodes NodeSet) error {
 }
 
 // Nodes returns the node records contained in the set.
-func (ns NodeSet) Nodes() []*enode.Node {
+func (ns CrawlNodeSet) Nodes() []*enode.Node {
 	result := make([]*enode.Node, 0, len(ns))
 	for _, n := range ns {
 		result = append(result, n.N)
