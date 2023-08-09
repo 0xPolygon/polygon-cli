@@ -15,6 +15,7 @@ import (
 
 	"github.com/maticnetwork/polygon-cli/cmd/abi"
 	"github.com/maticnetwork/polygon-cli/cmd/dumpblocks"
+	"github.com/maticnetwork/polygon-cli/cmd/enr"
 	"github.com/maticnetwork/polygon-cli/cmd/forge"
 	"github.com/maticnetwork/polygon-cli/cmd/hash"
 	"github.com/maticnetwork/polygon-cli/cmd/leveldbbench"
@@ -104,6 +105,7 @@ func NewPolycliCommand() *cobra.Command {
 		forge.ForgeCmd,
 		fork.ForkCmd,
 		hash.HashCmd,
+		enr.ENRCmd,
 		leveldbbench.LevelDBBenchCmd,
 		loadtest.LoadtestCmd,
 		metricsToDash.MetricsToDashCmd,
