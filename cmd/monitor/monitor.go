@@ -130,6 +130,10 @@ func prependLatestBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Cli
 }
 
 func appendOlderBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Client) {
+	if ms.MinBlockRetrieved == nil {
+		log.Warn().Msg("Nil min block")
+		return
+	}
 	to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
 	from := new(big.Int).Sub(to, big.NewInt(int64(batchSize-1)))
 	if from.Cmp(zero) < 0 {
@@ -156,6 +160,8 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 		time.Sleep(interval)
 		return err
 	}
+
+	log.Debug().Uint64("PeerCount", cs.PeerCount).Uint64("ChainID", cs.ChainID.Uint64()).Uint64("HeadBlock", cs.HeadBlock).Uint64("GasPrice", cs.GasPrice.Uint64()).Msg("fetching blocks")
 
 	if isUiRendered && batchSize < 0 {
 		_, termHeight := ui.TerminalDimensions()
