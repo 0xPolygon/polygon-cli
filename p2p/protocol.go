@@ -122,9 +122,12 @@ func NewEth66Protocol(opts Eth66ProtocolOptions) ethp2p.Protocol {
 					log.Trace().Interface("msg", msg).Send()
 				}
 
-				msg.Discard()
 				if err != nil {
 					c.logger.Error().Err(err).Send()
+					return err
+				}
+
+				if err = msg.Discard(); err != nil {
 					return err
 				}
 			}
