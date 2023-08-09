@@ -218,6 +218,7 @@ func (c *crawler) updateNode(n *enode.Node) int {
 			status = nodeAdded
 		}
 		node.LastResponse = node.LastCheck
+		node.URL = n.URLv4()
 	}
 
 	// Store/update node in output set.

@@ -45,7 +45,7 @@ other messages the peer sends (e.g. blocks, transactions, etc.).`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		nodes := []*enode.Node{}
-		if inputSet, err := p2p.LoadNodesJSON(args[0]); err == nil {
+		if inputSet, err := p2p.ReadNodeSet(args[0]); err == nil {
 			nodes = inputSet.Nodes()
 			inputPingParams.Listen = false
 		} else if node, err := p2p.ParseNode(args[0]); err == nil {
@@ -98,7 +98,7 @@ other messages the peer sends (e.g. blocks, transactions, etc.).`,
 					errStr = err.Error()
 				} else if inputPingParams.Listen {
 					// If the dial and peering were successful, listen to the peer for messages.
-					if err := conn.ReadAndServe(nil, count); err != nil {
+					if err := conn.ReadAndServe(count); err != nil {
 						log.Error().Err(err).Msg("Received error")
 					}
 				}

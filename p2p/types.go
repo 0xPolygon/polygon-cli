@@ -1,13 +1,11 @@
 package p2p
 
 import (
-	"container/list"
 	"crypto/ecdsa"
 	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -148,29 +146,18 @@ type PooledTransactions eth.PooledTransactionsPacket66
 func (msg PooledTransactions) Code() int     { return 26 }
 func (msg PooledTransactions) ReqID() uint64 { return msg.RequestId }
 
-// Conn represents an individual connection with a peer
-type Conn struct {
+// rlpxConn represents an individual connection with a peer.
+type rlpxConn struct {
 	*rlpx.Conn
-	SensorID string
 
 	ourKey *ecdsa.PrivateKey
 	caps   []p2p.Cap
 	node   *enode.Node
 	logger zerolog.Logger
-
-	// requests is used to store the request ID and the block hash. This is used
-	// when fetching block bodies because the eth protocol block bodies do not
-	// contain information about the block hash.
-	requests   *list.List
-	requestNum uint64
-
-	// oldestBlock stores the first block the sensor has seen so when fetching
-	// parent blocks, it does not request blocks older than this.
-	oldestBlock *types.Header
 }
 
 // Read reads an eth66 packet from the connection.
-func (c *Conn) Read() Message {
+func (c *rlpxConn) Read() Message {
 	code, rawData, _, err := c.Conn.Read()
 	if err != nil {
 		return errorf("could not read from connection: %v", err)
@@ -256,7 +243,7 @@ func (c *Conn) Read() Message {
 }
 
 // Write writes a eth packet to the connection.
-func (c *Conn) Write(msg Message) error {
+func (c *rlpxConn) Write(msg Message) error {
 	payload, err := rlp.EncodeToBytes(msg)
 	if err != nil {
 		return err
@@ -266,7 +253,7 @@ func (c *Conn) Write(msg Message) error {
 }
 
 // ReadSnap reads a snap/1 response with the given id from the connection.
-func (c *Conn) ReadSnap(id uint64) (Message, error) {
+func (c *rlpxConn) ReadSnap(id uint64) (Message, error) {
 	respId := id + 1
 	start := time.Now()
 	for respId != id && time.Since(start) < timeout {

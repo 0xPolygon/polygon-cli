@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"net/http"
@@ -15,18 +17,18 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
 	"github.com/maticnetwork/polygon-cli/p2p"
+	"github.com/maticnetwork/polygon-cli/p2p/database"
 )
 
 type (
 	sensorParams struct {
 		Bootnodes                    string
-		Threads                      int
 		NetworkID                    uint64
 		NodesFile                    string
 		ProjectID                    string
@@ -37,17 +39,21 @@ type (
 		ShouldWriteBlockEvents       bool
 		ShouldWriteTransactions      bool
 		ShouldWriteTransactionEvents bool
-		RevalidationInterval         string
-		revalidationInterval         time.Duration
 		ShouldRunPprof               bool
 		PprofPort                    uint
 		KeyFile                      string
-		privateKey                   *ecdsa.PrivateKey
 		Port                         int
+		DiscoveryPort                int
 		RPC                          string
-		genesis                      core.Genesis
 		GenesisFile                  string
 		GenesisHash                  string
+		DialRatio                    int
+		NAT                          string
+
+		nodes      []*enode.Node
+		privateKey *ecdsa.PrivateKey
+		genesis    core.Genesis
+		nat        nat.Interface
 	}
 )
 
@@ -59,18 +65,18 @@ var (
 // sensor and transmitting blocks and transactions to a database.
 var SensorCmd = &cobra.Command{
 	Use:   "sensor [nodes file]",
-	Short: "Start a devp2p sensor that discovers other peers and will receive blocks and transactions. ",
+	Short: "Start a devp2p sensor that discovers other peers and will receive blocks and transactions.",
 	Long:  "If no nodes.json file exists, run `echo \"{}\" >> nodes.json` to get started.",
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputSensorParams.NodesFile = args[0]
-		if inputSensorParams.NetworkID == 0 {
-			return errors.New("network ID must be greater than zero")
-		}
-
-		inputSensorParams.revalidationInterval, err = time.ParseDuration(inputSensorParams.RevalidationInterval)
+		inputSensorParams.nodes, err = p2p.ReadStaticNodes(inputSensorParams.NodesFile)
 		if err != nil {
 			return err
+		}
+
+		if inputSensorParams.NetworkID == 0 {
+			return errors.New("network ID must be greater than zero")
 		}
 
 		if inputSensorParams.ShouldRunPprof {
@@ -108,62 +114,83 @@ var SensorCmd = &cobra.Command{
 			return err
 		}
 
-		return nil
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		inputSet, err := p2p.LoadNodesJSON(inputSensorParams.NodesFile)
+		inputSensorParams.nat, err = nat.Parse(inputSensorParams.NAT)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to parse NAT")
 			return err
 		}
 
-		var cfg discover.Config
-		cfg.PrivateKey = inputSensorParams.privateKey
-		bn, err := p2p.ParseBootnodes(inputSensorParams.Bootnodes)
+		return nil
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		db := database.NewDatastore(cmd.Context(), database.DatastoreOptions{
+			ProjectID:                    inputSensorParams.ProjectID,
+			SensorID:                     inputSensorParams.SensorID,
+			MaxConcurrentWrites:          inputSensorParams.MaxConcurrentDatabaseWrites,
+			ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
+			ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
+			ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
+			ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
+		})
+
+		bootnodes, err := p2p.ParseBootnodes(inputSensorParams.Bootnodes)
 		if err != nil {
 			return fmt.Errorf("unable to parse bootnodes: %w", err)
 		}
-		cfg.Bootnodes = bn
+
+		opts := p2p.Eth66ProtocolOptions{
+			Context:     cmd.Context(),
+			Database:    db,
+			Genesis:     &inputSensorParams.genesis,
+			GenesisHash: common.HexToHash(inputSensorParams.GenesisHash),
+			RPC:         inputSensorParams.RPC,
+			SensorID:    inputSensorParams.SensorID,
+			NetworkID:   inputSensorParams.NetworkID,
+			Peers:       make(chan *enode.Node),
+		}
 
 		server := ethp2p.Server{
 			Config: ethp2p.Config{
-				PrivateKey: inputSensorParams.privateKey,
-				MaxPeers:   inputSensorParams.MaxPeers,
-				ListenAddr: fmt.Sprintf(":%v", inputSensorParams.Port),
-				Protocols: []ethp2p.Protocol{p2p.NewEth66Protocol(
-					&inputSensorParams.genesis,
-					common.HexToHash(inputSensorParams.GenesisHash),
-					inputSensorParams.RPC,
-					inputSensorParams.NetworkID,
-				)},
-				NoDial:      true,
-				NoDiscovery: true,
-				NAT:         nat.Any(),
+				PrivateKey:     inputSensorParams.privateKey,
+				BootstrapNodes: bootnodes,
+				StaticNodes:    inputSensorParams.nodes,
+				MaxPeers:       inputSensorParams.MaxPeers,
+				ListenAddr:     fmt.Sprintf(":%d", inputSensorParams.Port),
+				DiscAddr:       fmt.Sprintf(":%d", inputSensorParams.DiscoveryPort),
+				Protocols:      []ethp2p.Protocol{p2p.NewEth66Protocol(opts)},
+				DialRatio:      inputSensorParams.DialRatio,
+				NAT:            inputSensorParams.nat,
 			},
 		}
+
+		log.Info().Str("enode", server.Self().URLv4()).Msg("Starting sensor")
 		if err = server.Start(); err != nil {
 			return err
 		}
 		defer server.Stop()
 
-		ln := server.LocalNode()
-		socket, err := p2p.Listen(ln, inputSensorParams.Port)
-		if err != nil {
-			return err
+		ticker := time.NewTicker(2 * time.Second)
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+
+		peers := make(p2p.StaticNodes)
+
+		for {
+			select {
+			case <-ticker.C:
+				log.Info().Interface("peers", server.PeerCount()).Send()
+
+				p2p.WriteStaticNodes(inputSensorParams.NodesFile, peers)
+			case peer := <-opts.Peers:
+				if _, ok := peers[peer.ID()]; !ok {
+					peers[peer.ID()] = peer.URLv4()
+				}
+			case <-signals:
+				ticker.Stop()
+				log.Info().Msg("Stopping sever...")
+				return nil
+			}
 		}
-
-		disc, err := discover.ListenV4(socket, ln, cfg)
-		if err != nil {
-			return err
-		}
-		defer disc.Close()
-
-		c := newSensor(inputSet, disc, disc.RandomNodes())
-		c.revalidateInterval = inputSensorParams.revalidationInterval
-
-		log.Info().Str("enode", server.Self().URLv4()).Msg("Starting sensor")
-
-		c.run(inputSensorParams.Threads)
-		return nil
 	},
 }
 
@@ -187,7 +214,6 @@ required, so other nodes in the network can discover each other.`)
 	if err := SensorCmd.MarkPersistentFlagRequired("bootnodes"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark bootnodes as required persistent flag")
 	}
-	SensorCmd.PersistentFlags().IntVarP(&inputSensorParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt.")
 	SensorCmd.PersistentFlags().Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network ID.")
 	if err := SensorCmd.MarkPersistentFlagRequired("network-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark network-id as required persistent flag")
@@ -198,7 +224,7 @@ required, so other nodes in the network can discover each other.`)
 		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")
 	}
 	SensorCmd.PersistentFlags().IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 200, "Maximum number of peers to connect to.")
-	SensorCmd.PersistentFlags().IntVarP(&inputSensorParams.MaxConcurrentDatabaseWrites, "max-db-writes", "D", 100,
+	SensorCmd.PersistentFlags().IntVarP(&inputSensorParams.MaxConcurrentDatabaseWrites, "max-db-writes", "D", 10000,
 		`The maximum number of concurrent database writes to perform. Increasing
 this will result in less chance of missing data (i.e. broken pipes) but
 can significantly increase memory usage.`)
@@ -210,12 +236,16 @@ increase CPU and memory usage.`)
 	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
 		`Whether to write transaction events to the database. This option could significantly
 increase CPU and memory usage.`)
-	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.RevalidationInterval, "revalidation-interval", "r", "10m", "The amount of time it takes to retry connecting to a failed peer.")
 	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "Whether to run pprof.")
 	SensorCmd.PersistentFlags().UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "The port to run pprof on.")
 	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "The file of the private key. If no key file is found then a key file will be generated.")
-	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.Port, "port", 30303, "The sensor's TCP and discovery port.")
-	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "The RPC endpoint.")
+	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.Port, "port", 30303, "The TCP network listening port.")
+	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "The UDP P2P discovery port.")
+	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "The RPC endpoint used to fetch the latest block.")
 	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.GenesisFile, "genesis", "genesis.json", "The genesis file.")
 	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "The genesis block hash.")
+	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
+		`The ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
+connections to be dialed. Setting this to 0 defaults it to 3.`)
+	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.NAT, "nat", "any", "The NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>).")
 }

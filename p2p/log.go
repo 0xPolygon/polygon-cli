@@ -50,10 +50,19 @@ func LogMessageCount(count *MessageCount, ticker *time.Ticker) {
 			Disconnects:         atomic.LoadInt32(&count.Disconnects),
 		}
 
-		if c.BlockHeaders+c.BlockBodies+c.Blocks+c.BlockHashes+
-			c.BlockHeaderRequests+c.BlockBodiesRequests+c.Transactions+
-			c.TransactionHashes+c.TransactionRequests+c.Pings+c.Errors+
-			c.Disconnects == 0 {
+		if sum(
+			c.BlockHeaders,
+			c.BlockBodies,
+			c.BlockHashes,
+			c.BlockHeaderRequests,
+			c.BlockBodiesRequests,
+			c.Transactions,
+			c.TransactionHashes,
+			c.TransactionRequests,
+			c.Pings,
+			c.Errors,
+			c.Disconnects,
+		) == 0 {
 			continue
 		}
 
@@ -72,4 +81,13 @@ func LogMessageCount(count *MessageCount, ticker *time.Ticker) {
 		atomic.StoreInt32(&count.Errors, 0)
 		atomic.StoreInt32(&count.Disconnects, 0)
 	}
+}
+
+func sum(ints ...int32) int32 {
+	var sum int32 = 0
+	for _, i := range ints {
+		sum += i
+	}
+
+	return sum
 }

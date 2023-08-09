@@ -54,7 +54,7 @@ var CrawlCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		inputSet, err := p2p.LoadNodesJSON(inputCrawlParams.NodesFile)
+		nodes, err := p2p.ReadNodeSet(inputCrawlParams.NodesFile)
 		if err != nil {
 			return err
 		}
@@ -84,13 +84,13 @@ var CrawlCmd = &cobra.Command{
 		}
 		defer disc.Close()
 
-		c := newCrawler(inputSet, disc, disc.RandomNodes())
+		c := newCrawler(nodes, disc, disc.RandomNodes())
 		c.revalidateInterval = inputCrawlParams.revalidationInterval
 
 		log.Info().Msg("Starting crawl")
 
 		output := c.run(inputCrawlParams.timeout, inputCrawlParams.Threads)
-		return p2p.WriteNodesJSON(inputCrawlParams.NodesFile, output)
+		return p2p.WriteNodeSet(inputCrawlParams.NodesFile, output)
 	},
 }
 

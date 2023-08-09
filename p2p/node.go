@@ -3,12 +3,14 @@ package p2p
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/rs/zerolog/log"
 )
 
 const jsonIndent = "    "
@@ -16,10 +18,12 @@ const jsonIndent = "    "
 // NodeSet is the nodes.json file format. It holds a set of node records
 // as a JSON object.
 type NodeSet map[enode.ID]NodeJSON
+type StaticNodes map[enode.ID]string
 
 type NodeJSON struct {
 	Seq uint64      `json:"seq"`
 	N   *enode.Node `json:"record"`
+	URL string      `json:"url"`
 
 	// The score tracks how many liveness checks were performed. It is incremented by one
 	// every time the node passes a check, and halved every time it doesn't.
@@ -31,7 +35,7 @@ type NodeJSON struct {
 	LastCheck time.Time `json:"lastCheck,omitempty"`
 }
 
-func LoadNodesJSON(file string) (NodeSet, error) {
+func ReadNodeSet(file string) (NodeSet, error) {
 	var nodes NodeSet
 	if err := common.LoadJSON(file, &nodes); err != nil {
 		return nil, err
@@ -39,7 +43,7 @@ func LoadNodesJSON(file string) (NodeSet, error) {
 	return nodes, nil
 }
 
-func WriteNodesJSON(file string, nodes NodeSet) error {
+func WriteNodeSet(file string, nodes NodeSet) error {
 	nodesJSON, err := json.MarshalIndent(nodes, "", jsonIndent)
 	if err != nil {
 		return err
@@ -62,4 +66,47 @@ func (ns NodeSet) Nodes() []*enode.Node {
 		return bytes.Compare(result[i].ID().Bytes(), result[j].ID().Bytes()) < 0
 	})
 	return result
+}
+
+// ReadStaticNodes parses a list of discovery node URLs loaded from a JSON file
+// from within the data directory.
+func ReadStaticNodes(file string) ([]*enode.Node, error) {
+	// Load the nodes from the config file.
+	var nodelist []string
+	if err := common.LoadJSON(file, &nodelist); err != nil {
+		return nil, fmt.Errorf("failed to load node list file: %w", err)
+	}
+
+	// Interpret the list as a discovery node array
+	var nodes []*enode.Node
+	for _, url := range nodelist {
+		if url == "" {
+			continue
+		}
+		node, err := enode.Parse(enode.ValidSchemes, url)
+		if err != nil {
+			log.Warn().Err(err).Str("url", url).Msg("Failed to parse enode")
+			continue
+		}
+		nodes = append(nodes, node)
+	}
+
+	return nodes, nil
+}
+
+func WriteStaticNodes(file string, nodes StaticNodes) error {
+	urls := make([]string, 0, len(nodes))
+	for _, url := range nodes {
+		urls = append(urls, url)
+	}
+
+	bytes, err := json.MarshalIndent(urls, "", jsonIndent)
+	if err != nil {
+		return err
+	}
+	if file == "-" {
+		_, err = os.Stdout.Write(bytes)
+		return err
+	}
+	return os.WriteFile(file, bytes, 0644)
 }
