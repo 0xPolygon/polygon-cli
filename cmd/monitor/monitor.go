@@ -210,7 +210,10 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 
 	prependLatestBlocks(ctx, ms, rpc)
 	if shouldLoadMoreHistory(ctx, ms) {
-		appendOlderBlocks(ctx, ms, rpc)
+		err = appendOlderBlocks(ctx, ms, rpc)
+		if err != nil {
+			log.Warn().Err(err).Msg("unable to append more history")
+		}
 	}
 
 	return
@@ -666,7 +669,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				windowOffset += windowSize
 				// good to go to next page but not enough blocks to fill page
 				if windowOffset > len(allBlocks)-windowSize {
-					appendOlderBlocks(ctx, ms, rpc)
+					err := appendOlderBlocks(ctx, ms, rpc)
+					if err != nil {
+						log.Warn().Err(err).Msg("unable to append more history")
+					}
 					forceRedraw = true
 					redraw(ms, true)
 				}
