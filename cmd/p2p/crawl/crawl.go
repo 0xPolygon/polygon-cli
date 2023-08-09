@@ -73,7 +73,7 @@ var CrawlCmd = &cobra.Command{
 		}
 
 		ln := enode.NewLocalNode(db, cfg.PrivateKey)
-		socket, err := p2p.Listen(ln, 0)
+		socket, err := p2p.Listen(ln)
 		if err != nil {
 			return err
 		}
