@@ -59,6 +59,17 @@ simplecross: $(BUILD_DIR) ## Cross-compile go binaries without using CGO.
 
 .PHONY: clean
 clean: ## Clean the binary folder.
+## To avoid misconfiguration mistakes that could delete important files, it will run 2 checks before deleting.
+## Check if $(BUILD_DIR) is empty. If it is, prints an error message and exits
+	@if [ -z "$(BUILD_DIR)" ]; then \
+		echo "BUILD_DIR is not set. Aborting clean."; \
+		exit 1; \
+	fi
+## Check if $(BUILD_DIR) is a critical path. If it is prints an error  message and exists.
+	@if [ "$(BUILD_DIR)" = "/" ] || [ "$(BUILD_DIR)" = "/usr" ] || [ "$(BUILD_DIR)" = "/usr/local" ]; then \
+		echo "Refusing to clean critical directory $(BUILD_DIR). Aborting."; \
+		exit 1; \
+	fi
 	$(RM) -r $(BUILD_DIR)
 
 ##@ Test
