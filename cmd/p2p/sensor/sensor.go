@@ -66,11 +66,11 @@ var (
 var SensorCmd = &cobra.Command{
 	Use:   "sensor [nodes file]",
 	Short: "Start a devp2p sensor that discovers other peers and will receive blocks and transactions.",
-	Long:  "If no nodes.json file exists, run `echo \"{}\" >> nodes.json` to get started.",
+	Long:  "If no nodes.json file exists, run `echo \"[]\" >> nodes.json` to get started.",
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputSensorParams.NodesFile = args[0]
-		inputSensorParams.nodes, err = p2p.ReadStaticNodes(inputSensorParams.NodesFile)
+		inputSensorParams.nodes, err = p2p.ReadNodeSet(inputSensorParams.NodesFile)
 		if err != nil {
 			return err
 		}
@@ -173,16 +173,19 @@ var SensorCmd = &cobra.Command{
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-		peers := make(p2p.StaticNodes)
+		peers := make(p2p.NodeSet)
+		for _, node := range inputSensorParams.nodes {
+			peers[node.ID()] = node.URLv4()
+		}
 
 		for {
 			select {
 			case <-ticker.C:
 				log.Info().Interface("peers", server.PeerCount()).Send()
 
-				err = p2p.WriteStaticNodes(inputSensorParams.NodesFile, peers)
+				err = p2p.WriteNodeSet(inputSensorParams.NodesFile, peers)
 				if err != nil {
-					log.Error().Err(err).Msg("Failed to write static nodes to file")
+					log.Error().Err(err).Msg("Failed to write nodes to file")
 				}
 			case peer := <-opts.Peers:
 				if _, ok := peers[peer.ID()]; !ok {

@@ -12,8 +12,8 @@ import (
 )
 
 type crawler struct {
-	input     p2p.CrawlNodeSet
-	output    p2p.CrawlNodeSet
+	input     []*enode.Node
+	output    p2p.NodeSet
 	disc      resolver
 	iters     []enode.Iterator
 	inputIter enode.Iterator
@@ -37,26 +37,26 @@ type resolver interface {
 	RequestENR(*enode.Node) (*enode.Node, error)
 }
 
-func newCrawler(input p2p.CrawlNodeSet, disc resolver, iters ...enode.Iterator) *crawler {
+func newCrawler(input []*enode.Node, disc resolver, iters ...enode.Iterator) *crawler {
 	c := &crawler{
 		input:     input,
-		output:    make(p2p.CrawlNodeSet, len(input)),
+		output:    make(p2p.NodeSet, len(input)),
 		disc:      disc,
 		iters:     iters,
-		inputIter: enode.IterNodes(input.Nodes()),
+		inputIter: enode.IterNodes(input),
 		ch:        make(chan *enode.Node),
 		closed:    make(chan struct{}),
 	}
 	c.iters = append(c.iters, c.inputIter)
 	// Copy input to output initially. Any nodes that fail validation
 	// will be dropped from output during the run.
-	for id, n := range input {
-		c.output[id] = n
+	for _, n := range input {
+		c.output[n.ID()] = n.URLv4()
 	}
 	return c
 }
 
-func (c *crawler) run(timeout time.Duration, nthreads int) p2p.CrawlNodeSet {
+func (c *crawler) run(timeout time.Duration, nthreads int) p2p.NodeSet {
 	var (
 		timeoutTimer = time.NewTimer(timeout)
 		timeoutCh    <-chan time.Time
@@ -74,10 +74,8 @@ func (c *crawler) run(timeout time.Duration, nthreads int) p2p.CrawlNodeSet {
 	}
 	var (
 		added   uint64
-		updated uint64
 		skipped uint64
 		recent  uint64
-		removed uint64
 		wg      sync.WaitGroup
 	)
 	wg.Add(nthreads)
@@ -92,12 +90,8 @@ func (c *crawler) run(timeout time.Duration, nthreads int) p2p.CrawlNodeSet {
 						atomic.AddUint64(&skipped, 1)
 					case nodeSkipRecent:
 						atomic.AddUint64(&recent, 1)
-					case nodeRemoved:
-						atomic.AddUint64(&removed, 1)
 					case nodeAdded:
 						atomic.AddUint64(&added, 1)
-					default:
-						atomic.AddUint64(&updated, 1)
 					}
 				case <-c.closed:
 					return
@@ -125,9 +119,7 @@ loop:
 		case <-statusTicker.C:
 			log.Info().
 				Uint64("added", atomic.LoadUint64(&added)).
-				Uint64("updated", atomic.LoadUint64(&updated)).
-				Uint64("removed", atomic.LoadUint64(&removed)).
-				Uint64("ignored(recent)", atomic.LoadUint64(&removed)).
+				Uint64("ignored(recent)", atomic.LoadUint64(&recent)).
 				Uint64("ignored(incompatible)", atomic.LoadUint64(&skipped)).
 				Msg("Crawling in progress")
 		}
@@ -184,12 +176,10 @@ func shouldSkipNode(n *enode.Node) bool {
 // what changed.
 func (c *crawler) updateNode(n *enode.Node) int {
 	c.mu.RLock()
-	node, ok := c.output[n.ID()]
+	_, ok := c.output[n.ID()]
 	c.mu.RUnlock()
 
-	// Skip validation of recently-seen nodes.
-	if ok && time.Since(node.LastCheck) < c.revalidateInterval {
-		log.Debug().Str("id", n.ID().String()).Msg("Skipping node")
+	if ok {
 		return nodeSkipRecent
 	}
 
@@ -198,42 +188,17 @@ func (c *crawler) updateNode(n *enode.Node) int {
 		return nodeSkipIncompat
 	}
 
-	// Request the node record.
-	status := nodeUpdated
-	node.LastCheck = truncNow()
-
-	if nn, err := c.disc.RequestENR(n); err != nil {
-		if node.Score == 0 {
-			// Node doesn't implement EIP-868.
-			log.Debug().Str("id", n.ID().String()).Msg("Skipping node")
-			return nodeSkipIncompat
-		}
-		node.Score /= 2
-	} else {
-		node.N = nn
-		node.Seq = nn.Seq()
-		node.Score++
-		if node.FirstResponse.IsZero() {
-			node.FirstResponse = node.LastCheck
-			status = nodeAdded
-		}
-		node.LastResponse = node.LastCheck
-		node.URL = n.URLv4()
+	nn, err := c.disc.RequestENR(n)
+	if err != nil {
+		return nodeSkipIncompat
 	}
 
 	// Store/update node in output set.
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.output[nn.ID()] = nn.URLv4()
+	c.mu.Unlock()
 
-	if node.Score <= 0 {
-		log.Debug().Str("id", n.ID().String()).Msg("Removing node")
-		delete(c.output, n.ID())
-		return nodeRemoved
-	}
-
-	log.Debug().Str("id", n.ID().String()).Uint64("seq", n.Seq()).Int("score", node.Score).Msg("Updating node")
-	c.output[n.ID()] = node
-	return status
+	return nodeAdded
 }
 
 func truncNow() time.Time {

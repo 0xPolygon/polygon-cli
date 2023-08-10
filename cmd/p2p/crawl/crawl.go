@@ -23,6 +23,7 @@ type (
 		NodesFile            string
 		Database             string
 		RevalidationInterval string
+
 		revalidationInterval time.Duration
 	}
 )
@@ -36,7 +37,7 @@ var (
 var CrawlCmd = &cobra.Command{
 	Use:   "crawl [nodes file]",
 	Short: "Crawl a network on the devp2p layer and generate a nodes JSON file.",
-	Long:  "If no nodes.json file exists, run `echo \"{}\" >> nodes.json` to get started.",
+	Long:  "If no nodes.json file exists, run `echo \"[]\" >> nodes.json` to get started.",
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputCrawlParams.NodesFile = args[0]

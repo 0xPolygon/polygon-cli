@@ -39,14 +39,13 @@ var PingCmd = &cobra.Command{
 	Long: `Ping nodes by either giving a single enode/enr or an entire nodes file.
 
 This command will establish a handshake and status exchange to get the Hello and
-Status messages and output JSON. If providing a enode/enr rather than a node file,
-then the connection will remain open by default (--listen=true), and you can see
-other messages the peer sends (e.g. blocks, transactions, etc.).`,
+Status messages and output JSON. If providing a enode/enr rather than a nodes
+file, then the connection will remain open by default (--listen=true), and you
+can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		nodes := []*enode.Node{}
-		if inputSet, err := p2p.ReadNodeSet(args[0]); err == nil {
-			nodes = inputSet.Nodes()
+		nodes, err := p2p.ReadNodeSet(args[0])
+		if err == nil {
 			inputPingParams.Listen = false
 		} else if node, err := p2p.ParseNode(args[0]); err == nil {
 			nodes = append(nodes, node)
@@ -105,7 +104,12 @@ other messages the peer sends (e.g. blocks, transactions, etc.).`,
 
 				// Save the results to the output map.
 				mutex.Lock()
-				output[node.ID()] = pingNodeJSON{node, hello, status, errStr}
+				output[node.ID()] = pingNodeJSON{
+					Record: node,
+					Hello:  hello,
+					Status: status,
+					Error:  errStr,
+				}
 				mutex.Unlock()
 			}(n)
 		}
