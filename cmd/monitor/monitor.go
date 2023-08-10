@@ -547,7 +547,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			if setBlock {
 				selectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
 				setBlock = false
-				log.Info().Uint64("blockNumber", selectedBlock.Number().Uint64()).Msg("Selected block changed")
+				log.Debug().Uint64("blockNumber", selectedBlock.Number().Uint64()).Msg("Selected block changed")
 			}
 		}
 
