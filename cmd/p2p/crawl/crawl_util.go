@@ -200,7 +200,3 @@ func (c *crawler) updateNode(n *enode.Node) int {
 
 	return nodeAdded
 }
-
-func truncNow() time.Time {
-	return time.Now().UTC().Truncate(1 * time.Second)
-}
