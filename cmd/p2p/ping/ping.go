@@ -44,8 +44,9 @@ file, then the connection will remain open by default (--listen=true), and you
 can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		nodes, err := p2p.ReadNodeSet(args[0])
-		if err == nil {
+		nodes := []*enode.Node{}
+		if input, err := p2p.ReadNodeSet(args[0]); err == nil {
+			nodes = input
 			inputPingParams.Listen = false
 		} else if node, err := p2p.ParseNode(args[0]); err == nil {
 			nodes = append(nodes, node)
