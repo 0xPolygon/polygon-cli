@@ -10,7 +10,7 @@ require (
 	github.com/ethereum/go-ethereum v1.10.26
 	github.com/gizak/termui/v3 v3.1.0
 	github.com/hashicorp/go-hclog v1.5.0
-	github.com/libp2p/go-libp2p v0.27.7
+	github.com/libp2p/go-libp2p v0.27.8
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20220708102147-0a8a51822cae
 	github.com/prometheus/client_model v0.3.0
 	github.com/prometheus/common v0.42.0
@@ -29,8 +29,8 @@ require (
 require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/google/gofuzz v1.2.0
-	github.com/schollz/progressbar/v3 v3.13.1
 	github.com/jedib0t/go-pretty/v6 v6.4.6
+	github.com/schollz/progressbar/v3 v3.13.1
 	github.com/xeipuuv/gojsonschema v1.2.0
 )
 
@@ -127,8 +127,8 @@ require (
 	github.com/prometheus/client_golang v1.16.0 // indirect
 	github.com/prometheus/procfs v0.10.1 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
-	github.com/quic-go/qtls-go1-19 v0.3.2 // indirect
-	github.com/quic-go/qtls-go1-20 v0.2.2 // indirect
+	github.com/quic-go/qtls-go1-19 v0.3.3 // indirect
+	github.com/quic-go/qtls-go1-20 v0.2.3 // indirect
 	github.com/quic-go/quic-go v0.33.0 // indirect
 	github.com/quic-go/webtransport-go v0.5.2 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
