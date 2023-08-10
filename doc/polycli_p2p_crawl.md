@@ -19,7 +19,7 @@ polycli p2p crawl [nodes file] [flags]
 
 ## Usage
 
-If no nodes.json file exists, run `echo "{}" >> nodes.json` to get started.
+If no nodes.json file exists, run `echo "[]" >> nodes.json` to get started.
 ## Flags
 
 ```bash

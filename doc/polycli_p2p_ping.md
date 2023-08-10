@@ -22,9 +22,9 @@ polycli p2p ping [enode/enr or nodes file] [flags]
 Ping nodes by either giving a single enode/enr or an entire nodes file.
 
 This command will establish a handshake and status exchange to get the Hello and
-Status messages and output JSON. If providing a enode/enr rather than a node file,
-then the connection will remain open by default (--listen=true), and you can see
-other messages the peer sends (e.g. blocks, transactions, etc.).
+Status messages and output JSON. If providing a enode/enr rather than a nodes
+file, then the connection will remain open by default (--listen=true), and you
+can see other messages the peer sends (e.g. blocks, transactions, etc.).
 ## Flags
 
 ```bash
