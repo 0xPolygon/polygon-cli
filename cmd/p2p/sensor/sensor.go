@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -19,11 +20,13 @@ import (
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
 	"github.com/maticnetwork/polygon-cli/p2p"
 	"github.com/maticnetwork/polygon-cli/p2p/database"
+	"github.com/maticnetwork/polygon-cli/rpctypes"
 )
 
 type (
@@ -50,6 +53,7 @@ type (
 		DialRatio                    int
 		NAT                          string
 
+		bootnodes  []*enode.Node
 		nodes      []*enode.Node
 		privateKey *ecdsa.PrivateKey
 		genesis    core.Genesis
@@ -66,13 +70,20 @@ var (
 var SensorCmd = &cobra.Command{
 	Use:   "sensor [nodes file]",
 	Short: "Start a devp2p sensor that discovers other peers and will receive blocks and transactions.",
-	Long:  "If no nodes.json file exists, run `echo \"[]\" >> nodes.json` to get started.",
+	Long:  "If no nodes.json file exists, it will be created.",
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputSensorParams.NodesFile = args[0]
 		inputSensorParams.nodes, err = p2p.ReadNodeSet(inputSensorParams.NodesFile)
 		if err != nil {
-			return err
+			log.Warn().Err(err).Msgf("Creating nodes file %v because it does not exist", inputSensorParams.NodesFile)
+		}
+
+		if len(inputSensorParams.Bootnodes) > 0 {
+			inputSensorParams.bootnodes, err = p2p.ParseBootnodes(inputSensorParams.Bootnodes)
+			if err != nil {
+				return fmt.Errorf("unable to parse bootnodes: %w", err)
+			}
 		}
 
 		if inputSensorParams.NetworkID == 0 {
@@ -133,9 +144,17 @@ var SensorCmd = &cobra.Command{
 			ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
 		})
 
-		bootnodes, err := p2p.ParseBootnodes(inputSensorParams.Bootnodes)
+		// Fetch the latest block which will be used later when crafting the status
+		// message. This call will only be made once and stored in the head field
+		// until the sensor receives a new block it can overwrite it with.
+		block, err := getLatestBlock(inputSensorParams.RPC)
 		if err != nil {
-			return fmt.Errorf("unable to parse bootnodes: %w", err)
+			return err
+		}
+		head := p2p.HeadBlock{
+			Hash:            block.Hash.ToHash(),
+			TotalDifficulty: block.TotalDifficulty.ToBigInt(),
+			Number:          block.Number.ToUint64(),
 		}
 
 		opts := p2p.Eth66ProtocolOptions{
@@ -147,12 +166,15 @@ var SensorCmd = &cobra.Command{
 			SensorID:    inputSensorParams.SensorID,
 			NetworkID:   inputSensorParams.NetworkID,
 			Peers:       make(chan *enode.Node),
+			Head:        &head,
+			HeadMutex:   &sync.RWMutex{},
+			Count:       &p2p.MessageCount{},
 		}
 
 		server := ethp2p.Server{
 			Config: ethp2p.Config{
 				PrivateKey:     inputSensorParams.privateKey,
-				BootstrapNodes: bootnodes,
+				BootstrapNodes: inputSensorParams.bootnodes,
 				StaticNodes:    inputSensorParams.nodes,
 				MaxPeers:       inputSensorParams.MaxPeers,
 				ListenAddr:     fmt.Sprintf(":%d", inputSensorParams.Port),
@@ -164,7 +186,11 @@ var SensorCmd = &cobra.Command{
 		}
 
 		log.Info().Str("enode", server.Self().URLv4()).Msg("Starting sensor")
-		if err = server.Start(); err != nil {
+
+		// Starting the server isn't actually a blocking call so the sensor needs to
+		// have something that waits for it. This is implemented by the for {} loop
+		// seen below.
+		if err := server.Start(); err != nil {
 			return err
 		}
 		defer server.Stop()
@@ -177,16 +203,19 @@ var SensorCmd = &cobra.Command{
 
 		peers := make(p2p.NodeSet)
 		for _, node := range inputSensorParams.nodes {
+			// Because the node URLs can change, map them to the node ID to prevent
+			// duplicates.
 			peers[node.ID()] = node.URLv4()
 		}
 
 		for {
 			select {
 			case <-ticker.C:
-				log.Info().Interface("peers", server.PeerCount()).Send()
+				count := opts.Count.Load()
+				opts.Count.Clear()
+				log.Info().Interface("peers", server.PeerCount()).Interface("counts", count).Send()
 
-				err = p2p.WriteNodeSet(inputSensorParams.NodesFile, peers)
-				if err != nil {
+				if err := p2p.WriteNodeSet(inputSensorParams.NodesFile, peers); err != nil {
 					log.Error().Err(err).Msg("Failed to write nodes to file")
 				}
 			case peer := <-opts.Peers:
@@ -194,13 +223,16 @@ var SensorCmd = &cobra.Command{
 					peers[peer.ID()] = peer.URLv4()
 				}
 			case <-signals:
-				log.Info().Msg("Stopping sever...")
+				// This gracefully stops the sensor so that the peers can be written to
+				// the nodes file.
+				log.Info().Msg("Stopping sensor...")
 				return nil
 			}
 		}
 	},
 }
 
+// loadGenesis unmarshals the genesis file into the core.Genesis struct.
 func loadGenesis(genesisFile string) (core.Genesis, error) {
 	chainConfig, err := os.ReadFile(genesisFile)
 
@@ -214,45 +246,57 @@ func loadGenesis(genesisFile string) (core.Genesis, error) {
 	return gen, nil
 }
 
-func init() {
-	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "",
-		`Comma separated nodes used for bootstrapping. At least one bootnode is
-required, so other nodes in the network can discover each other.`)
-	if err := SensorCmd.MarkPersistentFlagRequired("bootnodes"); err != nil {
-		log.Error().Err(err).Msg("Failed to mark bootnodes as required persistent flag")
+// getLatestBlock will get the latest block from an RPC provider.
+func getLatestBlock(url string) (*rpctypes.RawBlockResponse, error) {
+	client, err := rpc.Dial(url)
+	if err != nil {
+		return nil, err
 	}
-	SensorCmd.PersistentFlags().Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network ID.")
+	defer client.Close()
+
+	var block rpctypes.RawBlockResponse
+	err = client.Call(&block, "eth_getBlockByNumber", "latest", true)
+	if err != nil {
+		return nil, err
+	}
+
+	return &block, nil
+}
+
+func init() {
+	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", `Comma separated nodes used for bootstrapping`)
+	SensorCmd.PersistentFlags().Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network ID")
 	if err := SensorCmd.MarkPersistentFlagRequired("network-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark network-id as required persistent flag")
 	}
-	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.ProjectID, "project-id", "P", "", "GCP project ID.")
-	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "Sensor ID.")
+	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.ProjectID, "project-id", "P", "", "GCP project ID")
+	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "Sensor ID when writing block/tx events")
 	if err := SensorCmd.MarkPersistentFlagRequired("sensor-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")
 	}
-	SensorCmd.PersistentFlags().IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 200, "Maximum number of peers to connect to.")
+	SensorCmd.PersistentFlags().IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 200, "Maximum number of peers to connect to")
 	SensorCmd.PersistentFlags().IntVarP(&inputSensorParams.MaxConcurrentDatabaseWrites, "max-db-writes", "D", 10000,
-		`The maximum number of concurrent database writes to perform. Increasing
-this will result in less chance of missing data (i.e. broken pipes) but
-can significantly increase memory usage.`)
-	SensorCmd.PersistentFlags().BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "Whether to write blocks to the database.")
-	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "Whether to write block events to the database.")
+		`Maximum number of concurrent database writes to perform. Increasing this
+will result in less chance of missing data (i.e. broken pipes) but can
+significantly increase memory usage.`)
+	SensorCmd.PersistentFlags().BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "Whether to write blocks to the database")
+	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "Whether to write block events to the database")
 	SensorCmd.PersistentFlags().BoolVarP(&inputSensorParams.ShouldWriteTransactions, "write-txs", "t", true,
 		`Whether to write transactions to the database. This option could significantly
 increase CPU and memory usage.`)
 	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
-		`Whether to write transaction events to the database. This option could significantly
-increase CPU and memory usage.`)
-	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "Whether to run pprof.")
-	SensorCmd.PersistentFlags().UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "The port to run pprof on.")
-	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "The file of the private key. If no key file is found then a key file will be generated.")
-	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.Port, "port", 30303, "The TCP network listening port.")
-	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "The UDP P2P discovery port.")
-	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "The RPC endpoint used to fetch the latest block.")
-	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.GenesisFile, "genesis", "genesis.json", "The genesis file.")
-	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "The genesis block hash.")
+		`Whether to write transaction events to the database. This option could
+significantly increase CPU and memory usage.`)
+	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "Whether to run pprof")
+	SensorCmd.PersistentFlags().UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "Port pprof runs on")
+	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "Private key file")
+	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.Port, "port", 30303, "TCP network listening port")
+	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
+	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "RPC endpoint used to fetch the latest block")
+	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.GenesisFile, "genesis", "genesis.json", "Genesis file")
+	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "The genesis block hash")
 	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
-		`The ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
+		`Ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
 connections to be dialed. Setting this to 0 defaults it to 3.`)
-	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.NAT, "nat", "any", "The NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>).")
+	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.NAT, "nat", "any", "The NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")
 }

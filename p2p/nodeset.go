@@ -12,7 +12,10 @@ import (
 
 const jsonIndent = "    "
 
-// NodeSet is the mapping of the node ID to the URL.
+// NodeSet is the mapping of the node ID to the URL. This is used in the p2p
+// ping, crawl, and sensor commands. When written this should be consistent with
+// the geth/bor static-nodes.json file format which is just an JSON string array
+// of URLs.
 type NodeSet map[enode.ID]string
 
 // ReadNodeSet parses a list of discovery node URLs loaded from a JSON file.

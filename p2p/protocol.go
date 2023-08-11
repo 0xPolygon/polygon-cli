@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
@@ -14,21 +16,22 @@ import (
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/maticnetwork/polygon-cli/p2p/database"
-	"github.com/maticnetwork/polygon-cli/rpctypes"
 )
 
 // conn represents an individual connection with a peer.
 type conn struct {
-	sensorID string
-	node     *enode.Node
-	logger   zerolog.Logger
-	rw       ethp2p.MsgReadWriter
-	db       database.Database
+	sensorID  string
+	node      *enode.Node
+	logger    zerolog.Logger
+	rw        ethp2p.MsgReadWriter
+	db        database.Database
+	head      *HeadBlock
+	headMutex *sync.RWMutex
+	count     *MessageCount
 
 	// requests is used to store the request ID and the block hash. This is used
 	// when fetching block bodies because the eth protocol block bodies do not
@@ -41,6 +44,7 @@ type conn struct {
 	oldestBlock *types.Header
 }
 
+// Eth66ProtocolOptions is the options used when creating a new eth66 protocol.
 type Eth66ProtocolOptions struct {
 	Context     context.Context
 	Database    database.Database
@@ -50,20 +54,29 @@ type Eth66ProtocolOptions struct {
 	SensorID    string
 	NetworkID   uint64
 	Peers       chan *enode.Node
+	Count       *MessageCount
+
+	// Head keeps track of the current head block of the chain. This is required
+	// when doing the status exchange.
+	Head      *HeadBlock
+	HeadMutex *sync.RWMutex
 }
 
+// HeadBlock contains the necessary head block data for the status message.
+type HeadBlock struct {
+	Hash            common.Hash
+	TotalDifficulty *big.Int
+	Number          uint64
+}
+
+// NewEth66Proctocol creates the new eth66 protocol. This will handle writing the
+// status exchange, message handling, and writing blocks/txs to the database.
 func NewEth66Protocol(opts Eth66ProtocolOptions) ethp2p.Protocol {
 	return ethp2p.Protocol{
 		Name:    "eth",
 		Version: 66,
 		Length:  17,
 		Run: func(p *ethp2p.Peer, rw ethp2p.MsgReadWriter) error {
-			block, err := getLatestBlock(opts.RPC)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to get latest block")
-				return err
-			}
-
 			c := conn{
 				sensorID:   opts.SensorID,
 				node:       p.Node(),
@@ -72,23 +85,32 @@ func NewEth66Protocol(opts Eth66ProtocolOptions) ethp2p.Protocol {
 				db:         opts.Database,
 				requests:   list.New(),
 				requestNum: 0,
+				head:       opts.Head,
+				headMutex:  opts.HeadMutex,
+				count:      opts.Count,
 			}
 
+			c.headMutex.RLock()
 			status := eth.StatusPacket{
 				ProtocolVersion: 66,
 				NetworkID:       opts.NetworkID,
 				Genesis:         opts.GenesisHash,
-				ForkID:          forkid.NewID(opts.Genesis.Config, opts.GenesisHash, block.Number.ToUint64()),
-				Head:            block.Hash.ToHash(),
-				TD:              block.TotalDifficulty.ToBigInt(),
+				ForkID:          forkid.NewID(opts.Genesis.Config, opts.GenesisHash, opts.Head.Number),
+				Head:            opts.Head.Hash,
+				TD:              opts.Head.TotalDifficulty,
 			}
-			if err = c.statusExchange(&status); err != nil {
+			err := c.statusExchange(&status)
+			c.headMutex.RUnlock()
+			if err != nil {
 				return err
 			}
 
+			// Send the node to the peers channel. This allows the peers to be captured
+			// across all connections and written to the nodes.json file.
 			opts.Peers <- p.Node()
 			ctx := opts.Context
 
+			// Handle all the of the messages here.
 			for {
 				msg, err := rw.ReadMsg()
 				if err != nil {
@@ -122,6 +144,9 @@ func NewEth66Protocol(opts Eth66ProtocolOptions) ethp2p.Protocol {
 					log.Trace().Interface("msg", msg).Send()
 				}
 
+				// All the handler functions are built in a way where returning an error
+				// should drop the connection. If the connection shouldn't be dropped,
+				// then return nil and log the error instead.
 				if err != nil {
 					c.logger.Error().Err(err).Send()
 					return err
@@ -135,22 +160,8 @@ func NewEth66Protocol(opts Eth66ProtocolOptions) ethp2p.Protocol {
 	}
 }
 
-func getLatestBlock(url string) (*rpctypes.RawBlockResponse, error) {
-	client, err := rpc.Dial(url)
-	if err != nil {
-		return nil, err
-	}
-	defer client.Close()
-
-	var block rpctypes.RawBlockResponse
-	err = client.Call(&block, "eth_getBlockByNumber", "latest", true)
-	if err != nil {
-		return nil, err
-	}
-
-	return &block, nil
-}
-
+// statusExchange will exchange status message between the nodes. It will return
+// and error if the nodes are incompatible.
 func (c *conn) statusExchange(packet *eth.StatusPacket) error {
 	err := ethp2p.Send(c.rw, eth.StatusMsg, &packet)
 	if err != nil {
@@ -160,6 +171,10 @@ func (c *conn) statusExchange(packet *eth.StatusPacket) error {
 	msg, err := c.rw.ReadMsg()
 	if err != nil {
 		return err
+	}
+
+	if msg.Code != eth.StatusMsg {
+		return errors.New("expected status message code")
 	}
 
 	var status eth.StatusPacket
@@ -237,6 +252,8 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
+	atomic.AddInt32(&c.count.BlockHashes, int32(len(packet)))
+
 	hashes := make([]common.Hash, 0, len(packet))
 	for _, hash := range packet {
 		hashes = append(hashes, hash.Hash)
@@ -256,6 +273,8 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
+	atomic.AddInt32(&c.count.Transactions, int32(len(txs)))
+
 	c.db.WriteTransactions(ctx, c.node, txs)
 
 	return nil
@@ -266,6 +285,9 @@ func (c *conn) handleGetBlockHeaders(msg ethp2p.Msg) error {
 	if err := msg.Decode(&request); err != nil {
 		return err
 	}
+
+	atomic.AddInt32(&c.count.BlockHeaderRequests, 1)
+
 	return ethp2p.Send(
 		c.rw,
 		eth.GetBlockHeadersMsg,
@@ -280,6 +302,8 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	headers := packet.BlockHeadersPacket
+	atomic.AddInt32(&c.count.BlockHeaders, int32(len(headers)))
+
 	for _, header := range headers {
 		if err := c.getParentBlock(ctx, header); err != nil {
 			return err
@@ -296,6 +320,9 @@ func (c *conn) handleGetBlockBodies(msg ethp2p.Msg) error {
 	if err := msg.Decode(&request); err != nil {
 		return err
 	}
+
+	atomic.AddInt32(&c.count.BlockBodiesRequests, int32(len(request.GetBlockBodiesPacket)))
+
 	return ethp2p.Send(
 		c.rw,
 		eth.GetBlockHeadersMsg,
@@ -312,6 +339,8 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	if len(packet.BlockBodiesPacket) == 0 {
 		return nil
 	}
+
+	atomic.AddInt32(&c.count.BlockBodies, int32(len(packet.BlockBodiesPacket)))
 
 	var hash *common.Hash
 	for e := c.requests.Front(); e != nil; e = e.Next() {
@@ -344,6 +373,18 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
+	atomic.AddInt32(&c.count.Blocks, 1)
+
+	// Set the head block if newer.
+	c.headMutex.Lock()
+	if block.Block.Number().Uint64() > c.head.Number && block.TD.Cmp(c.head.TotalDifficulty) == 1 {
+		c.head.Hash = block.Block.Hash()
+		c.head.TotalDifficulty = block.TD
+		c.head.Number = block.Block.Number().Uint64()
+		c.logger.Info().Interface("head", c.head).Msg("Setting head block")
+	}
+	c.headMutex.Unlock()
+
 	if err := c.getParentBlock(ctx, block.Block.Header()); err != nil {
 		return err
 	}
@@ -358,6 +399,9 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 	if err := msg.Decode(&request); err != nil {
 		return err
 	}
+
+	atomic.AddInt32(&c.count.TransactionRequests, int32(len(request.GetPooledTransactionsPacket)))
+
 	return ethp2p.Send(c.rw, eth.GetPooledTransactionsMsg, &eth.PooledTransactionsPacket66{
 		RequestId: request.RequestId,
 	})
@@ -368,6 +412,8 @@ func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, msg ethp2p.
 	if err := msg.Decode(&txs); err != nil {
 		return err
 	}
+
+	atomic.AddInt32(&c.count.TransactionHashes, int32(len(txs)))
 
 	if !c.db.ShouldWriteTransactions() || !c.db.ShouldWriteTransactionEvents() {
 		return nil
@@ -387,6 +433,8 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 	if err := msg.Decode(&packet); err != nil {
 		return err
 	}
+
+	atomic.AddInt32(&c.count.Transactions, int32(len(packet.PooledTransactionsPacket)))
 
 	c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsPacket)
 

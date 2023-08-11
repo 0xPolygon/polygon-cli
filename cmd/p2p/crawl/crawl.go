@@ -62,11 +62,10 @@ var CrawlCmd = &cobra.Command{
 
 		var cfg discover.Config
 		cfg.PrivateKey, _ = crypto.GenerateKey()
-		bn, err := p2p.ParseBootnodes(inputCrawlParams.Bootnodes)
+		cfg.Bootnodes, err = p2p.ParseBootnodes(inputCrawlParams.Bootnodes)
 		if err != nil {
 			return fmt.Errorf("unable to parse bootnodes: %w", err)
 		}
-		cfg.Bootnodes = bn
 
 		db, err := enode.OpenDB(inputCrawlParams.Database)
 		if err != nil {

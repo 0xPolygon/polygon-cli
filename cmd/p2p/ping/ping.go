@@ -47,7 +47,6 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 		nodes := []*enode.Node{}
 		if input, err := p2p.ReadNodeSet(args[0]); err == nil {
 			nodes = input
-			inputPingParams.Listen = false
 		} else if node, err := p2p.ParseNode(args[0]); err == nil {
 			nodes = append(nodes, node)
 		} else {
@@ -65,7 +64,17 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 		sem := make(chan bool, inputPingParams.Threads)
 
 		count := &p2p.MessageCount{}
-		go p2p.LogMessageCount(count, time.NewTicker(time.Second))
+		go func() {
+			ticker := time.NewTicker(2 * time.Second)
+			for {
+				<-ticker.C
+				c := count.Load()
+				if !c.IsEmpty() {
+					log.Info().Interface("counts", c).Send()
+					count.Clear()
+				}
+			}
+		}()
 
 		// Ping each node in the slice.
 		for _, n := range nodes {
