@@ -170,6 +170,8 @@ var SensorCmd = &cobra.Command{
 		defer server.Stop()
 
 		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
@@ -192,7 +194,6 @@ var SensorCmd = &cobra.Command{
 					peers[peer.ID()] = peer.URLv4()
 				}
 			case <-signals:
-				ticker.Stop()
 				log.Info().Msg("Stopping sever...")
 				return nil
 			}

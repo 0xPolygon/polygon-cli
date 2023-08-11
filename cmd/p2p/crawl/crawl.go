@@ -37,7 +37,7 @@ var (
 var CrawlCmd = &cobra.Command{
 	Use:   "crawl [nodes file]",
 	Short: "Crawl a network on the devp2p layer and generate a nodes JSON file.",
-	Long:  "If no nodes.json file exists, run `echo \"[]\" >> nodes.json` to get started.",
+	Long:  "If no nodes.json file exists, it will be created.",
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputCrawlParams.NodesFile = args[0]
@@ -57,7 +57,7 @@ var CrawlCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		nodes, err := p2p.ReadNodeSet(inputCrawlParams.NodesFile)
 		if err != nil {
-			return err
+			log.Warn().Err(err).Msgf("Creating nodes file %v because it does not exist", inputCrawlParams.NodesFile)
 		}
 
 		var cfg discover.Config
