@@ -24,7 +24,7 @@ type MessageCount struct {
 }
 
 // Load takes a snapshot of all the counts in a thread-safe manner. Make sure
-// you call this before reading any data from the message counter.
+// you call this and read from the returned object.
 func (count *MessageCount) Load() MessageCount {
 	return MessageCount{
 		BlockHeaders:        atomic.LoadInt32(&count.BlockHeaders),
