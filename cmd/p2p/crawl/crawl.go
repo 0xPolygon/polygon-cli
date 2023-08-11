@@ -101,9 +101,9 @@ required, so other nodes in the network can discover each other.`)
 	if err := CrawlCmd.MarkPersistentFlagRequired("bootnodes"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark bootnodes as required persistent flag")
 	}
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "Time limit for the crawl.")
-	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt.")
-	CrawlCmd.PersistentFlags().Uint64VarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id.")
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Database, "database", "d", "", "Node database for updating and storing client information.")
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.RevalidationInterval, "revalidation-interval", "r", "10m", "The amount of time it takes to retry connecting to a failed peer.")
+	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "Time limit for the crawl")
+	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt")
+	CrawlCmd.PersistentFlags().Uint64VarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id")
+	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Database, "database", "d", "", "Node database for updating and storing client information")
+	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.RevalidationInterval, "revalidation-interval", "r", "10m", "Time before retrying to connect to a failed peer")
 }

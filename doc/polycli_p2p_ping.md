@@ -31,8 +31,8 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).
   -h, --help            help for ping
   -l, --listen          Keep the connection open and listen to the peer. This only works if the first
                         argument is an enode/enr, not a nodes file. (default true)
-  -o, --output string   Write ping results to output file. (default stdout)
-  -p, --parallel int    How many parallel pings to attempt. (default 16)
+  -o, --output string   Write ping results to output file (default stdout)
+  -p, --parallel int    How many parallel pings to attempt (default 16)
 ```
 
 The command also inherits flags from parent commands.
