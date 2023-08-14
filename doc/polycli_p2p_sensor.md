@@ -23,35 +23,36 @@ If no nodes.json file exists, it will be created.
 ## Flags
 
 ```bash
-  -b, --bootnodes string      Comma separated nodes used for bootstrapping
-      --dial-ratio int        Ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
-                              connections to be dialed. Setting this to 0 defaults it to 3.
-      --discovery-port int    UDP P2P discovery port (default 30303)
-      --genesis string        Genesis file (default "genesis.json")
-      --genesis-hash string   The genesis block hash (default "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
-  -h, --help                  help for sensor
-  -k, --key-file string       Private key file
-  -D, --max-db-writes int     Maximum number of concurrent database writes to perform. Increasing this
-                              will result in less chance of missing data (i.e. broken pipes) but can
-                              significantly increase memory usage. (default 10000)
-  -m, --max-peers int         Maximum number of peers to connect to (default 200)
-      --nat string            NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
-  -n, --network-id uint       Filter discovered nodes by this network ID
-      --port int              TCP network listening port (default 30303)
-      --pprof                 Whether to run pprof
-      --pprof-port uint       Port pprof runs on (default 6060)
-  -P, --project-id string     GCP project ID
-      --quick-start           Whether to load the nodes.json as static nodes to quickly start the network.
-                              This produces faster development cycles but can prevent the sensor from being to
-                              connect to new peers if the nodes.json file is large.
-      --rpc string            RPC endpoint used to fetch the latest block (default "https://polygon-rpc.com")
-  -s, --sensor-id string      Sensor ID when writing block/tx events
-      --write-block-events    Whether to write block events to the database (default true)
-  -B, --write-blocks          Whether to write blocks to the database (default true)
-      --write-tx-events       Whether to write transaction events to the database. This option could
-                              significantly increase CPU and memory usage. (default true)
-  -t, --write-txs             Whether to write transactions to the database. This option could significantly
-                              increase CPU and memory usage. (default true)
+  -b, --bootnodes string       Comma separated nodes used for bootstrapping
+      --dial-ratio int         Ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
+                               connections to be dialed. Setting this to 0 defaults it to 3.
+      --discovery-port int     UDP P2P discovery port (default 30303)
+      --genesis string         Genesis file (default "genesis.json")
+      --genesis-hash string    The genesis block hash (default "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
+  -h, --help                   help for sensor
+  -k, --key-file string        Private key file
+  -D, --max-db-writes int      Maximum number of concurrent database writes to perform. Increasing this
+                               will result in less chance of missing data (i.e. broken pipes) but can
+                               significantly increase memory usage. (default 10000)
+  -m, --max-peers int          Maximum number of peers to connect to (default 200)
+      --nat string             NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
+  -n, --network-id uint        Filter discovered nodes by this network ID
+      --port int               TCP network listening port (default 30303)
+      --pprof                  Whether to run pprof
+      --pprof-port uint        Port pprof runs on (default 6060)
+  -P, --project-id string      GCP project ID
+      --quick-start            Whether to load the nodes.json as static nodes to quickly start the network.
+                               This produces faster development cycles but can prevent the sensor from being to
+                               connect to new peers if the nodes.json file is large.
+      --rpc string             RPC endpoint used to fetch the latest block (default "https://polygon-rpc.com")
+  -s, --sensor-id string       Sensor ID when writing block/tx events
+      --trusted-nodes string   Trusted nodes file
+      --write-block-events     Whether to write block events to the database (default true)
+  -B, --write-blocks           Whether to write blocks to the database (default true)
+      --write-tx-events        Whether to write transaction events to the database. This option could
+                               significantly increase CPU and memory usage. (default true)
+  -t, --write-txs              Whether to write transactions to the database. This option could significantly
+                               increase CPU and memory usage. (default true)
 ```
 
 The command also inherits flags from parent commands.
