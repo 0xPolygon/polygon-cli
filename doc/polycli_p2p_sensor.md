@@ -35,12 +35,15 @@ If no nodes.json file exists, it will be created.
                               will result in less chance of missing data (i.e. broken pipes) but can
                               significantly increase memory usage. (default 10000)
   -m, --max-peers int         Maximum number of peers to connect to (default 200)
-      --nat string            The NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
+      --nat string            NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
   -n, --network-id uint       Filter discovered nodes by this network ID
       --port int              TCP network listening port (default 30303)
       --pprof                 Whether to run pprof
       --pprof-port uint       Port pprof runs on (default 6060)
   -P, --project-id string     GCP project ID
+      --quick-start           Whether to load the nodes.json as static nodes to quickly start the network.
+                              This produces faster development cycles but can prevent the sensor from being to
+                              connect to new peers if the nodes.json file is large.
       --rpc string            RPC endpoint used to fetch the latest block (default "https://polygon-rpc.com")
   -s, --sensor-id string      Sensor ID when writing block/tx events
       --write-block-events    Whether to write block events to the database (default true)
