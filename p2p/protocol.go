@@ -184,7 +184,7 @@ func (c *conn) statusExchange(packet *eth.StatusPacket) error {
 	}
 
 	if status.NetworkID != packet.NetworkID {
-		return errors.New("network IDs mismatch")
+		return ethp2p.DiscUselessPeer
 	}
 
 	c.logger.Info().Interface("status", status).Msg("New peer")
@@ -290,7 +290,7 @@ func (c *conn) handleGetBlockHeaders(msg ethp2p.Msg) error {
 
 	return ethp2p.Send(
 		c.rw,
-		eth.GetBlockHeadersMsg,
+		eth.BlockHeadersMsg,
 		&eth.BlockHeadersPacket66{RequestId: request.RequestId},
 	)
 }
@@ -325,7 +325,7 @@ func (c *conn) handleGetBlockBodies(msg ethp2p.Msg) error {
 
 	return ethp2p.Send(
 		c.rw,
-		eth.GetBlockHeadersMsg,
+		eth.BlockBodiesMsg,
 		&eth.BlockBodiesPacket66{RequestId: request.RequestId},
 	)
 }
@@ -402,9 +402,10 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 
 	atomic.AddInt32(&c.count.TransactionRequests, int32(len(request.GetPooledTransactionsPacket)))
 
-	return ethp2p.Send(c.rw, eth.GetPooledTransactionsMsg, &eth.PooledTransactionsPacket66{
-		RequestId: request.RequestId,
-	})
+	return ethp2p.Send(
+		c.rw,
+		eth.PooledTransactionsMsg,
+		&eth.PooledTransactionsPacket66{RequestId: request.RequestId})
 }
 
 func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, msg ethp2p.Msg) error {
@@ -446,7 +447,9 @@ func (c *conn) handleGetReceipts(msg ethp2p.Msg) error {
 	if err := msg.Decode(&request); err != nil {
 		return err
 	}
-	return ethp2p.Send(c.rw, eth.GetBlockHeadersMsg, &eth.ReceiptsPacket66{
-		RequestId: request.RequestId,
-	})
+	return ethp2p.Send(
+		c.rw,
+		eth.ReceiptsMsg,
+		&eth.ReceiptsPacket66{RequestId: request.RequestId},
+	)
 }
