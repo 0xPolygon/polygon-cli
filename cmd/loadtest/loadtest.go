@@ -556,14 +556,15 @@ func getLoadTestContract(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 }
 func getERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (erc20Addr ethcommon.Address, erc20Contract *contracts.ERC20, err error) {
 	erc20Addr = ethcommon.HexToAddress(*inputLoadTestParams.ERC20Address)
-	shouldMint := true
+	shouldMint := false
 	if *inputLoadTestParams.ERC20Address == "" {
 		erc20Addr, _, _, err = contracts.DeployERC20(tops, c)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to deploy ERC20 contract")
 			return
 		}
-		shouldMint = false
+		// if we're deploying a new ERC 20 we should mint tokens
+		shouldMint = true
 	}
 	log.Trace().Interface("contractaddress", erc20Addr).Msg("ERC20 contract address")
 
