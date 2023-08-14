@@ -52,6 +52,7 @@ type (
 		GenesisHash                  string
 		DialRatio                    int
 		NAT                          string
+		QuickStart                   bool
 
 		bootnodes  []*enode.Node
 		nodes      []*enode.Node
@@ -171,19 +172,22 @@ var SensorCmd = &cobra.Command{
 			Count:       &p2p.MessageCount{},
 		}
 
-		server := ethp2p.Server{
-			Config: ethp2p.Config{
-				PrivateKey:     inputSensorParams.privateKey,
-				BootstrapNodes: inputSensorParams.bootnodes,
-				StaticNodes:    inputSensorParams.nodes,
-				MaxPeers:       inputSensorParams.MaxPeers,
-				ListenAddr:     fmt.Sprintf(":%d", inputSensorParams.Port),
-				DiscAddr:       fmt.Sprintf(":%d", inputSensorParams.DiscoveryPort),
-				Protocols:      []ethp2p.Protocol{p2p.NewEth66Protocol(opts)},
-				DialRatio:      inputSensorParams.DialRatio,
-				NAT:            inputSensorParams.nat,
-			},
+		config := ethp2p.Config{
+			PrivateKey:     inputSensorParams.privateKey,
+			BootstrapNodes: inputSensorParams.bootnodes,
+			MaxPeers:       inputSensorParams.MaxPeers,
+			ListenAddr:     fmt.Sprintf(":%d", inputSensorParams.Port),
+			DiscAddr:       fmt.Sprintf(":%d", inputSensorParams.DiscoveryPort),
+			Protocols:      []ethp2p.Protocol{p2p.NewEth66Protocol(opts)},
+			DialRatio:      inputSensorParams.DialRatio,
+			NAT:            inputSensorParams.nat,
 		}
+
+		if inputSensorParams.QuickStart {
+			config.StaticNodes = inputSensorParams.nodes
+		}
+
+		server := ethp2p.Server{Config: config}
 
 		log.Info().Str("enode", server.Self().URLv4()).Msg("Starting sensor")
 
@@ -299,5 +303,9 @@ significantly increase CPU and memory usage.`)
 	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
 		`Ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
 connections to be dialed. Setting this to 0 defaults it to 3.`)
-	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.NAT, "nat", "any", "The NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")
+	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.NAT, "nat", "any", "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")
+	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.QuickStart, "quick-start", false,
+		`Whether to load the nodes.json as static nodes to quickly start the network.
+This produces faster development cycles but can prevent the sensor from being to
+connect to new peers if the nodes.json file is large.`)
 }
