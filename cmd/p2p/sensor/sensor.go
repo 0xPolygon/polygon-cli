@@ -34,6 +34,7 @@ type (
 		Bootnodes                    string
 		NetworkID                    uint64
 		NodesFile                    string
+		TrustedNodesFile             string
 		ProjectID                    string
 		SensorID                     string
 		MaxPeers                     int
@@ -54,11 +55,12 @@ type (
 		NAT                          string
 		QuickStart                   bool
 
-		bootnodes  []*enode.Node
-		nodes      []*enode.Node
-		privateKey *ecdsa.PrivateKey
-		genesis    core.Genesis
-		nat        nat.Interface
+		bootnodes    []*enode.Node
+		nodes        []*enode.Node
+		trustedNodes []*enode.Node
+		privateKey   *ecdsa.PrivateKey
+		genesis      core.Genesis
+		nat          nat.Interface
 	}
 )
 
@@ -78,6 +80,13 @@ var SensorCmd = &cobra.Command{
 		inputSensorParams.nodes, err = p2p.ReadNodeSet(inputSensorParams.NodesFile)
 		if err != nil {
 			log.Warn().Err(err).Msgf("Creating nodes file %v because it does not exist", inputSensorParams.NodesFile)
+		}
+
+		if len(inputSensorParams.TrustedNodesFile) > 0 {
+			inputSensorParams.trustedNodes, err = p2p.ReadNodeSet(inputSensorParams.TrustedNodesFile)
+			if err != nil {
+				log.Warn().Err(err).Msgf("Trusted nodes file %v not found", inputSensorParams.TrustedNodesFile)
+			}
 		}
 
 		if len(inputSensorParams.Bootnodes) > 0 {
@@ -175,6 +184,7 @@ var SensorCmd = &cobra.Command{
 		config := ethp2p.Config{
 			PrivateKey:     inputSensorParams.privateKey,
 			BootstrapNodes: inputSensorParams.bootnodes,
+			TrustedNodes:   inputSensorParams.trustedNodes,
 			MaxPeers:       inputSensorParams.MaxPeers,
 			ListenAddr:     fmt.Sprintf(":%d", inputSensorParams.Port),
 			DiscAddr:       fmt.Sprintf(":%d", inputSensorParams.DiscoveryPort),
@@ -269,7 +279,7 @@ func getLatestBlock(url string) (*rpctypes.RawBlockResponse, error) {
 }
 
 func init() {
-	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", `Comma separated nodes used for bootstrapping`)
+	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", "Comma separated nodes used for bootstrapping")
 	SensorCmd.PersistentFlags().Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network ID")
 	if err := SensorCmd.MarkPersistentFlagRequired("network-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark network-id as required persistent flag")
@@ -308,4 +318,5 @@ connections to be dialed. Setting this to 0 defaults it to 3.`)
 		`Whether to load the nodes.json as static nodes to quickly start the network.
 This produces faster development cycles but can prevent the sensor from being to
 connect to new peers if the nodes.json file is large.`)
+	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.TrustedNodesFile, "trusted-nodes", "", "Trusted nodes file")
 }
