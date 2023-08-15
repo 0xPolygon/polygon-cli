@@ -378,9 +378,12 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	// Set the head block if newer.
 	c.headMutex.Lock()
 	if block.Block.Number().Uint64() > c.head.Number && block.TD.Cmp(c.head.TotalDifficulty) == 1 {
-		c.head.Hash = block.Block.Hash()
-		c.head.TotalDifficulty = block.TD
-		c.head.Number = block.Block.Number().Uint64()
+		*c.head = HeadBlock{
+			Hash:            block.Block.Hash(),
+			TotalDifficulty: block.TD,
+			Number:          block.Block.Number().Uint64(),
+		}
+
 		c.logger.Info().Interface("head", c.head).Msg("Setting head block")
 	}
 	c.headMutex.Unlock()
