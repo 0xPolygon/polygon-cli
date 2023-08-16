@@ -39,15 +39,14 @@ var PingCmd = &cobra.Command{
 	Long: `Ping nodes by either giving a single enode/enr or an entire nodes file.
 
 This command will establish a handshake and status exchange to get the Hello and
-Status messages and output JSON. If providing a enode/enr rather than a node file,
-then the connection will remain open by default (--listen=true), and you can see
-other messages the peer sends (e.g. blocks, transactions, etc.).`,
+Status messages and output JSON. If providing a enode/enr rather than a nodes
+file, then the connection will remain open by default (--listen=true), and you
+can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		nodes := []*enode.Node{}
-		if inputSet, err := p2p.LoadNodesJSON(args[0]); err == nil {
-			nodes = inputSet.Nodes()
-			inputPingParams.Listen = false
+		if input, err := p2p.ReadNodeSet(args[0]); err == nil {
+			nodes = input
 		} else if node, err := p2p.ParseNode(args[0]); err == nil {
 			nodes = append(nodes, node)
 		} else {
@@ -65,7 +64,17 @@ other messages the peer sends (e.g. blocks, transactions, etc.).`,
 		sem := make(chan bool, inputPingParams.Threads)
 
 		count := &p2p.MessageCount{}
-		go p2p.LogMessageCount(count, time.NewTicker(time.Second))
+		go func() {
+			ticker := time.NewTicker(2 * time.Second)
+			for {
+				<-ticker.C
+				c := count.Load()
+				if !c.IsEmpty() {
+					log.Info().Interface("counts", c).Send()
+					count.Clear()
+				}
+			}
+		}()
 
 		// Ping each node in the slice.
 		for _, n := range nodes {
@@ -98,14 +107,19 @@ other messages the peer sends (e.g. blocks, transactions, etc.).`,
 					errStr = err.Error()
 				} else if inputPingParams.Listen {
 					// If the dial and peering were successful, listen to the peer for messages.
-					if err := conn.ReadAndServe(nil, count); err != nil {
+					if err := conn.ReadAndServe(count); err != nil {
 						log.Error().Err(err).Msg("Received error")
 					}
 				}
 
 				// Save the results to the output map.
 				mutex.Lock()
-				output[node.ID()] = pingNodeJSON{node, hello, status, errStr}
+				output[node.ID()] = pingNodeJSON{
+					Record: node,
+					Hello:  hello,
+					Status: status,
+					Error:  errStr,
+				}
 				mutex.Unlock()
 			}(n)
 		}
@@ -128,8 +142,8 @@ other messages the peer sends (e.g. blocks, transactions, etc.).`,
 }
 
 func init() {
-	PingCmd.PersistentFlags().StringVarP(&inputPingParams.OutputFile, "output", "o", "", "Write ping results to output file. (default stdout)")
-	PingCmd.PersistentFlags().IntVarP(&inputPingParams.Threads, "parallel", "p", 16, "How many parallel pings to attempt.")
+	PingCmd.PersistentFlags().StringVarP(&inputPingParams.OutputFile, "output", "o", "", "Write ping results to output file (default stdout)")
+	PingCmd.PersistentFlags().IntVarP(&inputPingParams.Threads, "parallel", "p", 16, "How many parallel pings to attempt")
 	PingCmd.PersistentFlags().BoolVarP(&inputPingParams.Listen, "listen", "l", true,
 		`Keep the connection open and listen to the peer. This only works if the first
 argument is an enode/enr, not a nodes file.`)

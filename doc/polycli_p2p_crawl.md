@@ -19,18 +19,18 @@ polycli p2p crawl [nodes file] [flags]
 
 ## Usage
 
-If no nodes.json file exists, run `echo "{}" >> nodes.json` to get started.
+If no nodes.json file exists, it will be created.
 ## Flags
 
 ```bash
   -b, --bootnodes string               Comma separated nodes used for bootstrapping. At least one bootnode is
                                        required, so other nodes in the network can discover each other.
-  -d, --database string                Node database for updating and storing client information.
+  -d, --database string                Node database for updating and storing client information
   -h, --help                           help for crawl
-  -n, --network-id uint                Filter discovered nodes by this network id.
-  -p, --parallel int                   How many parallel discoveries to attempt. (default 16)
-  -r, --revalidation-interval string   The amount of time it takes to retry connecting to a failed peer. (default "10m")
-  -t, --timeout string                 Time limit for the crawl. (default "30m0s")
+  -n, --network-id uint                Filter discovered nodes by this network id
+  -p, --parallel int                   How many parallel discoveries to attempt (default 16)
+  -r, --revalidation-interval string   Time before retrying to connect to a failed peer (default "10m")
+  -t, --timeout string                 Time limit for the crawl (default "30m0s")
 ```
 
 The command also inherits flags from parent commands.

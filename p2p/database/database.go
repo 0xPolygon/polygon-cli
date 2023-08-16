@@ -35,7 +35,9 @@ type Database interface {
 	// ShouldWriteTransactionEvents return true, respectively.
 	WriteTransactions(context.Context, *enode.Node, []*types.Transaction)
 
-	HasParentBlock(context.Context, common.Hash) bool
+	// HasBlock will return whether the block is in the database. If the database
+	// client has not been initialized this will always return true.
+	HasBlock(context.Context, common.Hash) bool
 
 	MaxConcurrentWrites() int
 	ShouldWriteBlocks() bool

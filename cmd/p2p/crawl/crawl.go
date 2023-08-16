@@ -23,6 +23,7 @@ type (
 		NodesFile            string
 		Database             string
 		RevalidationInterval string
+
 		revalidationInterval time.Duration
 	}
 )
@@ -36,7 +37,7 @@ var (
 var CrawlCmd = &cobra.Command{
 	Use:   "crawl [nodes file]",
 	Short: "Crawl a network on the devp2p layer and generate a nodes JSON file.",
-	Long:  "If no nodes.json file exists, run `echo \"{}\" >> nodes.json` to get started.",
+	Long:  "If no nodes.json file exists, it will be created.",
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputCrawlParams.NodesFile = args[0]
@@ -54,18 +55,17 @@ var CrawlCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		inputSet, err := p2p.LoadNodesJSON(inputCrawlParams.NodesFile)
+		nodes, err := p2p.ReadNodeSet(inputCrawlParams.NodesFile)
 		if err != nil {
-			return err
+			log.Warn().Err(err).Msgf("Creating nodes file %v because it does not exist", inputCrawlParams.NodesFile)
 		}
 
 		var cfg discover.Config
 		cfg.PrivateKey, _ = crypto.GenerateKey()
-		bn, err := p2p.ParseBootnodes(inputCrawlParams.Bootnodes)
+		cfg.Bootnodes, err = p2p.ParseBootnodes(inputCrawlParams.Bootnodes)
 		if err != nil {
 			return fmt.Errorf("unable to parse bootnodes: %w", err)
 		}
-		cfg.Bootnodes = bn
 
 		db, err := enode.OpenDB(inputCrawlParams.Database)
 		if err != nil {
@@ -84,13 +84,13 @@ var CrawlCmd = &cobra.Command{
 		}
 		defer disc.Close()
 
-		c := newCrawler(inputSet, disc, disc.RandomNodes())
+		c := newCrawler(nodes, disc, disc.RandomNodes())
 		c.revalidateInterval = inputCrawlParams.revalidationInterval
 
 		log.Info().Msg("Starting crawl")
 
 		output := c.run(inputCrawlParams.timeout, inputCrawlParams.Threads)
-		return p2p.WriteNodesJSON(inputCrawlParams.NodesFile, output)
+		return p2p.WriteNodeSet(inputCrawlParams.NodesFile, output)
 	},
 }
 
@@ -101,9 +101,9 @@ required, so other nodes in the network can discover each other.`)
 	if err := CrawlCmd.MarkPersistentFlagRequired("bootnodes"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark bootnodes as required persistent flag")
 	}
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "Time limit for the crawl.")
-	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt.")
-	CrawlCmd.PersistentFlags().Uint64VarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id.")
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Database, "database", "d", "", "Node database for updating and storing client information.")
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.RevalidationInterval, "revalidation-interval", "r", "10m", "The amount of time it takes to retry connecting to a failed peer.")
+	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "Time limit for the crawl")
+	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt")
+	CrawlCmd.PersistentFlags().Uint64VarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id")
+	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Database, "database", "d", "", "Node database for updating and storing client information")
+	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.RevalidationInterval, "revalidation-interval", "r", "10m", "Time before retrying to connect to a failed peer")
 }
