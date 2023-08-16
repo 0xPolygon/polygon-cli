@@ -44,4 +44,7 @@ type Database interface {
 	ShouldWriteBlockEvents() bool
 	ShouldWriteTransactions() bool
 	ShouldWriteTransactionEvents() bool
+
+	// NodeList will return a list of enode URLs.
+	NodeList(ctx context.Context, limit int) ([]string, error)
 }

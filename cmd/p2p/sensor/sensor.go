@@ -38,7 +38,7 @@ type (
 		ProjectID                    string
 		SensorID                     string
 		MaxPeers                     int
-		MaxConcurrentDatabaseWrites  int
+		MaxDatabaseConcurrency       int
 		ShouldWriteBlocks            bool
 		ShouldWriteBlockEvents       bool
 		ShouldWriteTransactions      bool
@@ -147,7 +147,7 @@ var SensorCmd = &cobra.Command{
 		db := database.NewDatastore(cmd.Context(), database.DatastoreOptions{
 			ProjectID:                    inputSensorParams.ProjectID,
 			SensorID:                     inputSensorParams.SensorID,
-			MaxConcurrentWrites:          inputSensorParams.MaxConcurrentDatabaseWrites,
+			MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
 			ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
 			ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
 			ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
@@ -290,8 +290,8 @@ func init() {
 		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")
 	}
 	SensorCmd.PersistentFlags().IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 200, "Maximum number of peers to connect to")
-	SensorCmd.PersistentFlags().IntVarP(&inputSensorParams.MaxConcurrentDatabaseWrites, "max-db-writes", "D", 10000,
-		`Maximum number of concurrent database writes to perform. Increasing this
+	SensorCmd.PersistentFlags().IntVarP(&inputSensorParams.MaxDatabaseConcurrency, "max-db-concurrency", "D", 10000,
+		`Maximum number of concurrent database operations to perform. Increasing this
 will result in less chance of missing data (i.e. broken pipes) but can
 significantly increase memory usage.`)
 	SensorCmd.PersistentFlags().BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "Whether to write blocks to the database")
