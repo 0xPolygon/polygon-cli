@@ -60,5 +60,3 @@ The command also inherits flags from parent commands.
 
 - [polycli p2p ping](polycli_p2p_ping.md) - Ping node(s) and return the output.
 
-- [polycli p2p sensor](polycli_p2p_sensor.md) - Start a devp2p sensor that discovers other peers and will receive blocks and transactions.
-
