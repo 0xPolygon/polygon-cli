@@ -26,7 +26,7 @@ var NodeListCmd = &cobra.Command{
 	Use:   "nodelist [nodes.json]",
 	Short: "Generate a node list to seed a node",
 	Args:  cobra.MinimumNArgs(1),
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputNodeListParams.OutputFile = args[0]
 		inputNodeListParams.ProjectID, err = cmd.Flags().GetString("project-id")
 		return err
