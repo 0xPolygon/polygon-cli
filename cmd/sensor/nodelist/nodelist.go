@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/maticnetwork/polygon-cli/p2p/database"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -27,8 +26,10 @@ var NodeListCmd = &cobra.Command{
 	Use:   "nodelist [nodes.json]",
 	Short: "Generate a node list to seed a node",
 	Args:  cobra.MinimumNArgs(1),
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputNodeListParams.OutputFile = args[0]
+		inputNodeListParams.ProjectID, err = cmd.Flags().GetString("project-id")
+		return err
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -57,8 +58,4 @@ var NodeListCmd = &cobra.Command{
 
 func init() {
 	NodeListCmd.PersistentFlags().IntVarP(&inputNodeListParams.Limit, "limit", "l", 100, "Number of unique nodes to return")
-	NodeListCmd.PersistentFlags().StringVarP(&inputNodeListParams.ProjectID, "project-id", "p", "", "GCP project ID")
-	if err := NodeListCmd.MarkPersistentFlagRequired("project-id"); err != nil {
-		log.Error().Err(err).Msg("Failed to mark project-id as required persistent flag")
-	}
 }
