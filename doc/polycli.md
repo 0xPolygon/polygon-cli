@@ -58,6 +58,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli nodekey](polycli_nodekey.md) - Generate node keys for different blockchain clients and protocols.
 
+- [polycli nodelist](polycli_nodelist.md) - Generate a node list to seed a node
+
 - [polycli p2p](polycli_p2p.md) - Set of commands related to devp2p.
 
 - [polycli parseethwallet](polycli_parseethwallet.md) - Extract the private key from an eth wallet.
