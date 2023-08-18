@@ -40,7 +40,7 @@ If no nodes.json file exists, it will be created.
       --port int                 TCP network listening port (default 30303)
       --pprof                    Whether to run pprof
       --pprof-port uint          Port pprof runs on (default 6060)
-  -P, --project-id string        GCP project ID
+  -p, --project-id string        GCP project ID
       --quick-start              Whether to load the nodes.json as static nodes to quickly start the network.
                                  This produces faster development cycles but can prevent the sensor from being to
                                  connect to new peers if the nodes.json file is large.
