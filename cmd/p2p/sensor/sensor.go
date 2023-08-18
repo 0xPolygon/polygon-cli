@@ -38,7 +38,7 @@ type (
 		ProjectID                    string
 		SensorID                     string
 		MaxPeers                     int
-		MaxConcurrentDatabaseWrites  int
+		MaxDatabaseConcurrency       int
 		ShouldWriteBlocks            bool
 		ShouldWriteBlockEvents       bool
 		ShouldWriteTransactions      bool
@@ -147,7 +147,7 @@ var SensorCmd = &cobra.Command{
 		db := database.NewDatastore(cmd.Context(), database.DatastoreOptions{
 			ProjectID:                    inputSensorParams.ProjectID,
 			SensorID:                     inputSensorParams.SensorID,
-			MaxConcurrentWrites:          inputSensorParams.MaxConcurrentDatabaseWrites,
+			MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
 			ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
 			ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
 			ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
@@ -279,44 +279,44 @@ func getLatestBlock(url string) (*rpctypes.RawBlockResponse, error) {
 }
 
 func init() {
-	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", "Comma separated nodes used for bootstrapping")
-	SensorCmd.PersistentFlags().Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network ID")
-	if err := SensorCmd.MarkPersistentFlagRequired("network-id"); err != nil {
+	SensorCmd.Flags().StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", "Comma separated nodes used for bootstrapping")
+	SensorCmd.Flags().Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network ID")
+	if err := SensorCmd.MarkFlagRequired("network-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark network-id as required persistent flag")
 	}
-	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.ProjectID, "project-id", "P", "", "GCP project ID")
-	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "Sensor ID when writing block/tx events")
-	if err := SensorCmd.MarkPersistentFlagRequired("sensor-id"); err != nil {
+	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.ProjectID, "project-id", "p", "", "GCP project ID")
+	SensorCmd.Flags().StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "Sensor ID when writing block/tx events")
+	if err := SensorCmd.MarkFlagRequired("sensor-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")
 	}
-	SensorCmd.PersistentFlags().IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 200, "Maximum number of peers to connect to")
-	SensorCmd.PersistentFlags().IntVarP(&inputSensorParams.MaxConcurrentDatabaseWrites, "max-db-writes", "D", 10000,
-		`Maximum number of concurrent database writes to perform. Increasing this
+	SensorCmd.Flags().IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 200, "Maximum number of peers to connect to")
+	SensorCmd.Flags().IntVarP(&inputSensorParams.MaxDatabaseConcurrency, "max-db-concurrency", "D", 10000,
+		`Maximum number of concurrent database operations to perform. Increasing this
 will result in less chance of missing data (i.e. broken pipes) but can
 significantly increase memory usage.`)
-	SensorCmd.PersistentFlags().BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "Whether to write blocks to the database")
-	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "Whether to write block events to the database")
-	SensorCmd.PersistentFlags().BoolVarP(&inputSensorParams.ShouldWriteTransactions, "write-txs", "t", true,
+	SensorCmd.Flags().BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "Whether to write blocks to the database")
+	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "Whether to write block events to the database")
+	SensorCmd.Flags().BoolVarP(&inputSensorParams.ShouldWriteTransactions, "write-txs", "t", true,
 		`Whether to write transactions to the database. This option could significantly
 increase CPU and memory usage.`)
-	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
+	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
 		`Whether to write transaction events to the database. This option could
 significantly increase CPU and memory usage.`)
-	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "Whether to run pprof")
-	SensorCmd.PersistentFlags().UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "Port pprof runs on")
-	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "Private key file")
-	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.Port, "port", 30303, "TCP network listening port")
-	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
-	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "RPC endpoint used to fetch the latest block")
-	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.GenesisFile, "genesis", "genesis.json", "Genesis file")
-	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "The genesis block hash")
-	SensorCmd.PersistentFlags().IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
+	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "Whether to run pprof")
+	SensorCmd.Flags().UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "Port pprof runs on")
+	SensorCmd.Flags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "Private key file")
+	SensorCmd.Flags().IntVar(&inputSensorParams.Port, "port", 30303, "TCP network listening port")
+	SensorCmd.Flags().IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
+	SensorCmd.Flags().StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "RPC endpoint used to fetch the latest block")
+	SensorCmd.Flags().StringVar(&inputSensorParams.GenesisFile, "genesis", "genesis.json", "Genesis file")
+	SensorCmd.Flags().StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "The genesis block hash")
+	SensorCmd.Flags().IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
 		`Ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
 connections to be dialed. Setting this to 0 defaults it to 3.`)
-	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.NAT, "nat", "any", "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")
-	SensorCmd.PersistentFlags().BoolVar(&inputSensorParams.QuickStart, "quick-start", false,
+	SensorCmd.Flags().StringVar(&inputSensorParams.NAT, "nat", "any", "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")
+	SensorCmd.Flags().BoolVar(&inputSensorParams.QuickStart, "quick-start", false,
 		`Whether to load the nodes.json as static nodes to quickly start the network.
 This produces faster development cycles but can prevent the sensor from being to
 connect to new peers if the nodes.json file is large.`)
-	SensorCmd.PersistentFlags().StringVar(&inputSensorParams.TrustedNodesFile, "trusted-nodes", "", "Trusted nodes file")
+	SensorCmd.Flags().StringVar(&inputSensorParams.TrustedNodesFile, "trusted-nodes", "", "Trusted nodes file")
 }

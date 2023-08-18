@@ -6,6 +6,7 @@ import (
 	_ "embed"
 
 	"github.com/maticnetwork/polygon-cli/cmd/p2p/crawl"
+	"github.com/maticnetwork/polygon-cli/cmd/p2p/nodelist"
 	"github.com/maticnetwork/polygon-cli/cmd/p2p/ping"
 	"github.com/maticnetwork/polygon-cli/cmd/p2p/sensor"
 )
@@ -20,7 +21,8 @@ var P2pCmd = &cobra.Command{
 }
 
 func init() {
-	P2pCmd.AddCommand(sensor.SensorCmd)
 	P2pCmd.AddCommand(crawl.CrawlCmd)
+	P2pCmd.AddCommand(nodelist.NodeListCmd)
 	P2pCmd.AddCommand(ping.PingCmd)
+	P2pCmd.AddCommand(sensor.SensorCmd)
 }
