@@ -24,7 +24,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	"github.com/maticnetwork/polygon-cli/cmd/sensor/nodelist"
 	"github.com/maticnetwork/polygon-cli/p2p"
 	"github.com/maticnetwork/polygon-cli/p2p/database"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
@@ -280,14 +279,12 @@ func getLatestBlock(url string) (*rpctypes.RawBlockResponse, error) {
 }
 
 func init() {
-	SensorCmd.AddCommand(nodelist.NodeListCmd)
-
 	SensorCmd.Flags().StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", "Comma separated nodes used for bootstrapping")
 	SensorCmd.Flags().Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network ID")
 	if err := SensorCmd.MarkFlagRequired("network-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark network-id as required persistent flag")
 	}
-	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.ProjectID, "project-id", "P", "", "GCP project ID")
+	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.ProjectID, "project-id", "p", "", "GCP project ID")
 	SensorCmd.Flags().StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "Sensor ID when writing block/tx events")
 	if err := SensorCmd.MarkFlagRequired("sensor-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")
