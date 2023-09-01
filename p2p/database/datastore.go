@@ -97,6 +97,7 @@ type DatastoreTransaction struct {
 // DatastoreOptions is used when creating a NewDatastore.
 type DatastoreOptions struct {
 	ProjectID                    string
+	DatabaseID                   string
 	SensorID                     string
 	MaxConcurrency               int
 	ShouldWriteBlocks            bool
@@ -108,7 +109,7 @@ type DatastoreOptions struct {
 // NewDatastore connects to datastore and creates the client. This should
 // only be called once unless trying to write to different databases.
 func NewDatastore(ctx context.Context, opts DatastoreOptions) Database {
-	client, err := datastore.NewClient(ctx, opts.ProjectID)
+	client, err := datastore.NewClientWithDatabase(ctx, opts.ProjectID, opts.DatabaseID)
 	if err != nil {
 		log.Error().Err(err).Msg("Could not connect to Datastore")
 	}
