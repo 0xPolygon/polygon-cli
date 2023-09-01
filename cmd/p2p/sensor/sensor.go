@@ -36,6 +36,7 @@ type (
 		NodesFile                    string
 		TrustedNodesFile             string
 		ProjectID                    string
+		DatabaseID                   string
 		SensorID                     string
 		MaxPeers                     int
 		MaxDatabaseConcurrency       int
@@ -146,6 +147,7 @@ var SensorCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		db := database.NewDatastore(cmd.Context(), database.DatastoreOptions{
 			ProjectID:                    inputSensorParams.ProjectID,
+			DatabaseID:                   inputSensorParams.DatabaseID,
 			SensorID:                     inputSensorParams.SensorID,
 			MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
 			ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
@@ -285,6 +287,7 @@ func init() {
 		log.Error().Err(err).Msg("Failed to mark network-id as required persistent flag")
 	}
 	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.ProjectID, "project-id", "p", "", "GCP project ID")
+	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.DatabaseID, "database-id", "d", "", "Datastore database ID")
 	SensorCmd.Flags().StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "Sensor ID when writing block/tx events")
 	if err := SensorCmd.MarkFlagRequired("sensor-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")

@@ -24,6 +24,7 @@ If no nodes.json file exists, it will be created.
 
 ```bash
   -b, --bootnodes string         Comma separated nodes used for bootstrapping
+  -d, --database-id string       Datastore database ID
       --dial-ratio int           Ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
                                  connections to be dialed. Setting this to 0 defaults it to 3.
       --discovery-port int       UDP P2P discovery port (default 30303)
