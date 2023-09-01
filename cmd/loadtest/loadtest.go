@@ -500,6 +500,15 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					if !*ltp.CallOnly {
 						retryForNonce = true
 					}
+					if strings.Contains(err.Error(), "replacement transaction underpriced") && retryForNonce {
+						retryForNonce = false
+					}
+					if strings.Contains(err.Error(), "transaction underpriced") && retryForNonce {
+						retryForNonce = false
+					}
+					if strings.Contains(err.Error(), "nonce too low") && retryForNonce {
+						retryForNonce = false
+					}
 				}
 
 				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode).Int64("request", j).Msg("Request")
