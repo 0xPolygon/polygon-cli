@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
@@ -91,11 +92,12 @@ func NewEth66Protocol(opts Eth66ProtocolOptions) ethp2p.Protocol {
 			}
 
 			c.headMutex.RLock()
+			currentTime := time.Now().Unix()
 			status := eth.StatusPacket{
 				ProtocolVersion: 66,
 				NetworkID:       opts.NetworkID,
 				Genesis:         opts.GenesisHash,
-				ForkID:          forkid.NewID(opts.Genesis.Config, opts.GenesisHash, opts.Head.Number),
+				ForkID:          forkid.NewID(opts.Genesis.Config, opts.GenesisHash, opts.Head.Number, uint64(currentTime)),
 				Head:            opts.Head.Hash,
 				TD:              opts.Head.TotalDifficulty,
 			}
@@ -412,7 +414,7 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 }
 
 func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, msg ethp2p.Msg) error {
-	var txs eth.NewPooledTransactionHashesPacket
+	var txs eth.NewPooledTransactionHashesPacket66
 	if err := msg.Decode(&txs); err != nil {
 		return err
 	}
