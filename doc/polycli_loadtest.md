@@ -88,6 +88,7 @@ $ polycli loadtest --app-id 0 --data-avail --verbosity 700 --chain-id 42 --concu
       --batch-size uint                            Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time. (default 999)
   -b, --byte-count uint                            If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
       --call-only                                  When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.
+      --call-only-latest                           When using call only mode with recall, should we execute on the latest block or on the original block
       --chain-id uint                              The chain id for the transactions.
   -c, --concurrency int                            Number of requests to perform concurrently. Default is one request at a time. (default 1)
       --contract-call-block-interval uint          During deployment, this flag controls if we should check every block, every other block, or every nth block to determine that the contract has been deployed (default 1)

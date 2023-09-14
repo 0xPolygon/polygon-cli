@@ -1104,7 +1104,11 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, orig
 		callMsg.GasPrice = originalTx.GasPrice()
 		callMsg.GasFeeCap = new(big.Int).SetUint64(originalTx.MaxFeePerGas())
 		callMsg.GasTipCap = new(big.Int).SetUint64(originalTx.MaxPriorityFeePerGas())
-		_, err = c.CallContract(ctx, callMsg, originalTx.BlockNumber())
+		if *ltp.CallOnlyLatestBlock {
+			_, err = c.CallContract(ctx, callMsg, nil)
+		} else {
+			_, err = c.CallContract(ctx, callMsg, originalTx.BlockNumber())
+		}
 		if err != nil {
 			log.Warn().Err(err).Msg("Recall failure")
 		}
