@@ -21,12 +21,12 @@ func getRecentBlocks(ctx context.Context, ec *ethclient.Client, c *ethrpc.Client
 	return rawBlocks, err
 }
 
-func getRecallTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) ([]rpctypes.PolyTransaction, error) {
+func getRecallTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) ([]*rpctypes.PolyTransaction, error) {
 	rb, err := getRecentBlocks(ctx, c, rpc)
 	if err != nil {
 		return nil, err
 	}
-	txs := make([]rpctypes.PolyTransaction, 0)
+	txs := make([]*rpctypes.PolyTransaction, 0)
 	for _, v := range rb {
 		pb := new(rpctypes.RawBlockResponse)
 		err := json.Unmarshal(*v, pb)
@@ -35,7 +35,7 @@ func getRecallTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		}
 		for _, t := range pb.Transactions {
 			pt := rpctypes.NewPolyTransaction(&t)
-			txs = append(txs, pt)
+			txs = append(txs, &pt)
 		}
 	}
 	return txs, nil

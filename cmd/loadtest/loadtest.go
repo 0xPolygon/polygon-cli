@@ -404,7 +404,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Debug().Str("erc721Addr", erc721Addr.String()).Msg("Obtained erc 721 contract address")
 	}
 
-	var recallTransactions []rpctypes.PolyTransaction
+	var recallTransactions []*rpctypes.PolyTransaction
 	if mode == loadTestModeRecall || mode == loadTestModeRandom {
 		recallTransactions, err = getRecallTransactions(ctx, c, rpc)
 		if err != nil {
@@ -489,7 +489,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				case loadTestModePrecompiledContracts:
 					startReq, endReq, err = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false)
 				case loadTestModeRecall:
-					startReq, endReq, err = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
+					startReq, endReq, err = loadTestRecall(ctx, c, myNonceValue, *recallTransactions[int(currentNonce)%len(recallTransactions)])
 				default:
 					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
 				}
