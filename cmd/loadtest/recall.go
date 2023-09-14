@@ -17,7 +17,9 @@ func getRecentBlocks(ctx context.Context, ec *ethclient.Client, c *ethrpc.Client
 	if err != nil {
 		return nil, err
 	}
-	rawBlocks, err := util.GetBlockRange(ctx, bn-*inputLoadTestParams.RecallLength, bn, c)
+
+	// FIXME the batch size of 25 is hard coded and probably should at least be a constant or a parameter
+	rawBlocks, err := util.GetBlockRangeInPages(ctx, bn-*inputLoadTestParams.RecallLength, bn, 25, c)
 	return rawBlocks, err
 }
 
