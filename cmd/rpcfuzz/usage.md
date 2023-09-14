@@ -22,7 +22,7 @@ $ erigon --chain dev --dev.period 5 --http --http.addr localhost \
     --http.api 'admin,debug,web3,eth,txpool,personal,clique,miner,net' \
     --verbosity 5 --rpc.gascap 50000000 \
     --miner.gaslimit  10 --gpo.blocks 1 \
-    --gpo.percentile 1
+    --gpo.percentile 1 --mine
 ```
 
 Once your Eth client is running and the RPC is functional, you'll need to transfer some amount of ether to a known account that ca be used for testing.

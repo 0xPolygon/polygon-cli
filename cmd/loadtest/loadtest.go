@@ -1093,6 +1093,7 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, orig
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
 	}
+	log.Trace().Str("txId", originalTx.Hash().String()).Bool("callOnly", *ltp.CallOnly).Msg("Attempting to replay transaction")
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
