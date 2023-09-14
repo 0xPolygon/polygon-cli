@@ -1101,6 +1101,11 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, orig
 		callMsg.From = originalTx.From()
 		callMsg.Gas = originalTx.Gas()
 		_, err = c.CallContract(ctx, callMsg, originalTx.BlockNumber())
+		if err != nil {
+			log.Warn().Err(err).Msg("Recall failure")
+		}
+		// we're not going to return the error in the case because there is no point retrying
+		err = nil
 	} else {
 		err = c.SendTransaction(ctx, stx)
 	}
