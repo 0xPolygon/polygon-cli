@@ -7,8 +7,6 @@ import (
 	"math/big"
 	"math/rand"
 	"net/url"
-	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -58,7 +56,7 @@ type (
 		AdaptiveRateLimitIncrement          *uint64
 		AdaptiveCycleDuration               *uint64
 		AdaptiveBackoffFactor               *float64
-		Mode                                *string
+		Modes                               *[]string
 		Function                            *uint64
 		Iterations                          *uint64
 		ByteCount                           *uint64
@@ -89,6 +87,9 @@ type (
 		SendAmount          *big.Int
 		CurrentBaseFee      *big.Int
 		ChainSupportBaseFee bool
+		Mode                loadTestMode
+		ParsedModes         []loadTestMode
+		MultiMode           bool
 
 		ToAvailAddress   *gstypes.MultiAddress
 		FromAvailAddress *gssignature.KeyringPair
@@ -185,10 +186,7 @@ var LoadtestCmd = &cobra.Command{
 			return fmt.Errorf("the scheme %s is not supported", url.Scheme)
 		}
 		inputLoadTestParams.URL = url
-		r := regexp.MustCompile(fmt.Sprintf("^[%s]+$", strings.Join(validLoadTestModes, "")))
-		if !r.MatchString(*inputLoadTestParams.Mode) {
-			return fmt.Errorf("the mode %s is not recognized", *inputLoadTestParams.Mode)
-		}
+
 		if *inputLoadTestParams.AdaptiveBackoffFactor <= 0.0 {
 			return fmt.Errorf("the backoff factor needs to be non-zero positive")
 		}
@@ -215,7 +213,7 @@ func init() {
 	ltp.AdaptiveRateLimitIncrement = LoadtestCmd.PersistentFlags().Uint64("adaptive-rate-limit-increment", 50, "When using adaptive rate limiting, this flag controls the size of the additive increases.")
 	ltp.AdaptiveCycleDuration = LoadtestCmd.PersistentFlags().Uint64("adaptive-cycle-duration-seconds", 10, "When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates")
 	ltp.AdaptiveBackoffFactor = LoadtestCmd.PersistentFlags().Float64("adaptive-backoff-factor", 2, "When using adaptive rate limiting, this flag controls our multiplicative decrease value.")
-	ltp.Mode = LoadtestCmd.PersistentFlags().StringP("mode", "m", "t", `The testing mode to use. It can be multiple like: "tcdf"
+	ltp.Modes = LoadtestCmd.PersistentFlags().StringSliceP("mode", "m", []string{"t"}, `The testing mode to use. It can be multiple like: "tcdf"
 t - sending transactions
 d - deploy contract
 c - call random contract functions

@@ -33,41 +33,84 @@ import (
 	"golang.org/x/time/rate"
 )
 
+//go:generate stringer -type=loadTestMode
+type (
+	loadTestMode int
+)
+
 const (
-	loadTestModeTransaction          = "t"
-	loadTestModeDeploy               = "d"
-	loadTestModeCall                 = "c"
-	loadTestModeFunction             = "f"
-	loadTestModeInc                  = "i"
-	loadTestModeRandom               = "r"
-	loadTestModeStore                = "s"
-	loadTestModeERC20                = "2"
-	loadTestModeERC721               = "7"
-	loadTestModePrecompiledContracts = "p"
-	loadTestModePrecompiledContract  = "a"
-	loadTestModeRecall               = "R"
+	loadTestModeTransaction loadTestMode = iota
+	loadTestModeDeploy
+	loadTestModeCall
+	loadTestModeFunction
+	loadTestModeInc
+	loadTestModeStore
+	loadTestModeERC20
+	loadTestModeERC721
+	loadTestModePrecompiledContracts
+	loadTestModePrecompiledContract
+	loadTestModeRecall
+	// Keep the random mode last for simplicity in `getRandomMode`
+	loadTestModeRandom
 
 	codeQualitySeed       = "code code code code code code code code code code code quality"
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
 )
 
-var (
-	validLoadTestModes = []string{
-		loadTestModeTransaction,
-		loadTestModeDeploy,
-		loadTestModeCall,
-		loadTestModeFunction,
-		loadTestModeInc,
-		loadTestModeStore,
-		loadTestModeERC20,
-		loadTestModeERC721,
-		loadTestModePrecompiledContracts,
-		loadTestModePrecompiledContract,
-		loadTestModeRecall,
-		// r should be last to exclude it from random mode selection
-		loadTestModeRandom,
+func characterToLoadTestMode(mode string) (loadTestMode, error) {
+	switch mode {
+	case "t", "transaction":
+		return loadTestModeTransaction, nil
+	case "d", "deploy":
+		return loadTestModeDeploy, nil
+	case "c", "call":
+		return loadTestModeCall, nil
+	case "f", "function":
+		return loadTestModeFunction, nil
+	case "i", "inc", "increment":
+		return loadTestModeInc, nil
+	case "r", "random":
+		return loadTestModeRandom, nil
+	case "s", "store":
+		return loadTestModeStore, nil
+	case "2", "erc20":
+		return loadTestModeERC20, nil
+	case "7", "erc721":
+		return loadTestModeERC721, nil
+	case "p", "precompile":
+		return loadTestModePrecompiledContracts, nil
+	case "a", "precompiles":
+		return loadTestModePrecompiledContract, nil
+	case "R", "recall":
+		return loadTestModeRecall, nil
+	default:
+		return 0, fmt.Errorf("Unrecognized load test mode: %s", mode)
 	}
-)
+}
+
+func getRandomMode() loadTestMode {
+	maxMode := int(loadTestModeRandom)
+	return loadTestMode(randSrc.Intn(maxMode))
+}
+
+func modeRequiresLoadTestContract(m loadTestMode) bool {
+	if m == loadTestModeCall ||
+		m == loadTestModeFunction ||
+		m == loadTestModeInc ||
+		m == loadTestModeRandom ||
+		m == loadTestModeStore {
+		return true
+	}
+	return false
+}
+func hasMode(mode loadTestMode, modes []loadTestMode) bool {
+	for _, m := range modes {
+		if m == mode {
+			return true
+		}
+	}
+	return false
+}
 
 func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	log.Info().Msg("Connecting with RPC endpoint to initialize load test parameters")
@@ -162,6 +205,31 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		*inputLoadTestParams.ChainID = chainID.Uint64()
 	}
 	inputLoadTestParams.CurrentBaseFee = header.BaseFee
+
+	modes := *inputLoadTestParams.Modes
+	if len(modes) == 0 {
+		return fmt.Errorf("expected at least one mode")
+	}
+
+	inputLoadTestParams.ParsedModes = make([]loadTestMode, 0)
+	for _, m := range modes {
+		parsedMode, err := characterToLoadTestMode(m)
+		if err != nil {
+			return err
+		}
+		inputLoadTestParams.ParsedModes = append(inputLoadTestParams.ParsedModes, parsedMode)
+	}
+
+	if len(modes) > 1 {
+		inputLoadTestParams.MultiMode = true
+	} else {
+		inputLoadTestParams.MultiMode = false
+		inputLoadTestParams.Mode, _ = characterToLoadTestMode((*inputLoadTestParams.Modes)[0])
+	}
+
+	if hasMode(loadTestModeRandom, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode {
+		return fmt.Errorf("random mode can't be used in combinations with any other modes")
+	}
 
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
@@ -325,7 +393,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	requests := *ltp.Requests
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
-	mode := *ltp.Mode
+	mode := ltp.Mode
+	modes := *ltp.Modes
 	steadyStateTxPoolSize := *ltp.SteadyStateTxPoolSize
 	adaptiveRateLimitIncrement := *ltp.AdaptiveRateLimitIncrement
 	var rl *rate.Limiter
@@ -356,7 +425,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	// deploy and instantiate the load tester contract
 	var ltAddr ethcommon.Address
 	var ltContract *contracts.LoadTester
-	if strings.ContainsAny(mode, "rcfispas") || *inputLoadTestParams.ForceContractDeploy {
+	if modeRequiresLoadTestContract(mode) || *inputLoadTestParams.ForceContractDeploy {
 		ltAddr, ltContract, err = getLoadTestContract(ctx, c, tops, cops)
 		if err != nil {
 			return err
@@ -442,12 +511,12 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 				localMode := mode
 				// if there are multiple modes, iterate through them, 'r' mode is supported here
-				if len(mode) > 1 {
-					localMode = string(mode[int(i+j)%(len(mode))])
+				if ltp.MultiMode {
+					localMode, _ = characterToLoadTestMode(modes[int(i+j)%(len(modes))])
 				}
 				// if we're doing random, we'll just pick one based on the current index
 				if localMode == loadTestModeRandom {
-					localMode = validLoadTestModes[int(i+j)%(len(validLoadTestModes)-1)]
+					localMode = getRandomMode()
 				}
 				switch localMode {
 				case loadTestModeTransaction:
@@ -471,7 +540,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				case loadTestModeRecall:
 					startReq, endReq, err = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
 				default:
-					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
+					log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
 				}
 				recordSample(i, j, err, startReq, endReq, myNonceValue)
 				if err != nil {
@@ -491,7 +560,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					}
 				}
 
-				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode).Int64("request", j).Msg("Request")
+				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode.String()).Int64("request", j).Msg("Request")
 			}
 			wg.Done()
 		}(i)
@@ -837,7 +906,7 @@ func loadTestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 
 // mode where the user has provided a specific function to execute, we
 // should use that function. Otherwise, we'll select random functions.
 func getCurrentLoadTestFunction() uint64 {
-	if loadTestModeFunction == *inputLoadTestParams.Mode {
+	if loadTestModeFunction == inputLoadTestParams.Mode {
 		return *inputLoadTestParams.Function
 	}
 	return contracts.GetRandomOPCode()
