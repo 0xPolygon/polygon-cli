@@ -210,30 +210,14 @@ func runLoadTest(ctx context.Context) error {
 	ec := ethclient.NewClient(rpc)
 
 	var loopFunc func() error
-	if *inputLoadTestParams.IsAvail {
-		log.Info().Msg("Running in Avail mode")
-		loopFunc = func() error {
-			var api *gsrpc.SubstrateAPI
-			api, err = gsrpc.NewSubstrateAPI(inputLoadTestParams.URL.String())
-			if err != nil {
-				return err
-			}
-			err = initAvailTestParams(ctx, api)
-			if err != nil {
-				return err
-			}
-			return availLoop(ctx, api)
+
+	loopFunc = func() error {
+		err = initializeLoadTestParams(ctx, ec)
+		if err != nil {
+			return err
 		}
 
-	} else {
-		loopFunc = func() error {
-			err = initializeLoadTestParams(ctx, ec)
-			if err != nil {
-				return err
-			}
-
-			return mainLoop(ctx, ec, rpc)
-		}
+		return mainLoop(ctx, ec, rpc)
 	}
 
 	sigCh := make(chan os.Signal, 1)
@@ -257,10 +241,6 @@ func runLoadTest(ctx context.Context) error {
 	}
 
 	printResults(loadTestResults)
-	if *inputLoadTestParams.IsAvail {
-		log.Trace().Msg("Finished testing avail")
-		return nil
-	}
 
 	log.Info().Msg("Finished")
 	return nil

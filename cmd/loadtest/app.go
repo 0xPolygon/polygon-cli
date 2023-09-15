@@ -231,7 +231,6 @@ R - total recall`)
 	ltp.Iterations = LoadtestCmd.PersistentFlags().Uint64P("iterations", "i", 1, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size")
 	ltp.ByteCount = LoadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
-	ltp.IsAvail = LoadtestCmd.PersistentFlags().Bool("data-avail", false, "[DEPRECATED] Enables Avail load testing")
 	ltp.LtAddress = LoadtestCmd.PersistentFlags().String("lt-address", "", "The address of a pre-deployed load test contract")
 	ltp.ERC20Address = LoadtestCmd.PersistentFlags().String("erc20-address", "", "The address of a pre-deployed erc 20 contract")
 	ltp.ERC721Address = LoadtestCmd.PersistentFlags().String("erc721-address", "", "The address of a pre-deployed erc 721 contract")
@@ -248,7 +247,6 @@ R - total recall`)
 	ltp.RecallLength = LoadtestCmd.PersistentFlags().Uint64("recall-blocks", 50, "The number of blocks that we'll attempt to fetch for recall")
 	inputLoadTestParams = *ltp
 
-	// TODO batch size
 	// TODO Compression
 	// TODO array of RPC endpoints to round robin?
 }
