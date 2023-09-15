@@ -50,8 +50,10 @@ const (
 	loadTestModePrecompiledContracts
 	loadTestModePrecompiledContract
 	loadTestModeRecall
-	// Keep the random mode last for simplicity in `getRandomMode`
+
+	// All the modes AFTER random mode will not be used when mode random is selected
 	loadTestModeRandom
+	loadTestModeRPC
 
 	codeQualitySeed       = "code code code code code code code code code code code quality"
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
@@ -83,6 +85,8 @@ func characterToLoadTestMode(mode string) (loadTestMode, error) {
 		return loadTestModePrecompiledContract, nil
 	case "R", "recall":
 		return loadTestModeRecall, nil
+	case "rpc":
+		return loadTestModeRPC, nil
 	default:
 		return 0, fmt.Errorf("Unrecognized load test mode: %s", mode)
 	}
@@ -238,6 +242,10 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	if hasMode(loadTestModeRandom, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode {
 		return fmt.Errorf("random mode can't be used in combinations with any other modes")
 	}
+	if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode && !*inputLoadTestParams.CallOnly {
+		return fmt.Errorf("rpc mode must be called with call-only when multiple modes are used")
+	}
+	// TODO check for duplicate modes?
 
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
@@ -472,6 +480,23 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Debug().Int("txs", len(recallTransactions)).Msg("retrieved transactions for total recall")
 	}
 
+	var indexedActivity *IndexedActivity
+	if mode == loadTestModeRPC || mode == loadTestModeRandom {
+		ia, err := getIndexedRecentActivity(ctx, c, rpc)
+		if err != nil {
+			return err
+		}
+		log.Debug().
+			Int("transactions", len(ia.TransactionIDs)).
+			Int("blocks", len(ia.BlockNumbers)).
+			Int("addresses", len(ia.Addresses)).
+			Int("erc20s", len(ia.ERC20Addresses)).
+			Int("erc721", len(ia.ERC721Addresses)).
+			Int("contracts", len(ia.Contracts)).
+			Msg("retrieved recent indexed activity")
+		indexedActivity = ia
+	}
+
 	var currentNonceMutex sync.Mutex
 	var i int64
 	startBlockNumber, err := c.BlockNumber(ctx)
@@ -546,6 +571,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					startReq, endReq, err = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false)
 				case loadTestModeRecall:
 					startReq, endReq, err = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
+				case loadTestModeRPC:
+					startReq, endReq, err = loadTestRPC(ctx, c, myNonceValue, indexedActivity)
 				default:
 					log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -1176,6 +1203,44 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, orig
 	return
 }
 
+func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *IndexedActivity) (t1 time.Time, t2 time.Time, err error) {
+
+	funcNum := randSrc.Intn(300)
+	t1 = time.Now()
+	defer func() { t2 = time.Now() }()
+	if funcNum < 10 {
+		// eth_gasPrice
+		_, err = c.SuggestGasPrice(ctx)
+	} else if funcNum < 21 {
+		// eth_estimateGas
+	} else if funcNum < 33 {
+		// eth_getTransactionCount
+		_, err = c.NonceAt(ctx, ethcommon.HexToAddress(ia.Addresses[randSrc.Intn(len(ia.Addresses))]), nil)
+	} else if funcNum < 47 {
+		// eth_getCode
+		_, err = c.CodeAt(ctx, ethcommon.HexToAddress(ia.Contracts[randSrc.Intn(len(ia.Contracts))]), nil)
+	} else if funcNum < 64 {
+		// eth_getBlockByNumber
+		_, err = c.BlockByNumber(ctx, big.NewInt(int64(randSrc.Intn(int(ia.BlockNumber)))))
+	} else if funcNum < 84 {
+		// eth_getTransactionByHash
+		_, _, err = c.TransactionByHash(ctx, ethcommon.HexToHash(ia.TransactionIDs[randSrc.Intn(len(ia.TransactionIDs))]))
+	} else if funcNum < 109 {
+		// eth_getBalance
+		_, err = c.BalanceAt(ctx, ethcommon.HexToAddress(ia.Addresses[randSrc.Intn(len(ia.Addresses))]), nil)
+	} else if funcNum < 142 {
+		// eth_getTransactionReceipt
+		_, err = c.TransactionReceipt(ctx, ethcommon.HexToHash(ia.TransactionIDs[randSrc.Intn(len(ia.TransactionIDs))]))
+	} else if funcNum < 192 {
+		// eth_getLogs
+		h := ethcommon.HexToHash(ia.BlockIDs[randSrc.Intn(len(ia.BlockIDs))])
+		_, err = c.FilterLogs(ctx, ethereum.FilterQuery{BlockHash: &h})
+	} else {
+		// eth_call
+	}
+
+	return
+}
 func loadTestNotImplemented(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
 	t1 = time.Now()
 	t2 = time.Now()
