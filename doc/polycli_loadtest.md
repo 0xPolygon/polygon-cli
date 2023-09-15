@@ -93,7 +93,6 @@ $ polycli loadtest --app-id 0 --data-avail --verbosity 700 --chain-id 42 --concu
   -c, --concurrency int                            Number of requests to perform concurrently. Default is one request at a time. (default 1)
       --contract-call-block-interval uint          During deployment, this flag controls if we should check every block, every other block, or every nth block to determine that the contract has been deployed (default 1)
       --contract-call-nb-blocks-to-wait-for uint   The number of blocks to wait for before giving up on a contract deployment (default 30)
-      --data-avail                                 [DEPRECATED] Enables Avail load testing
       --erc20-address string                       The address of a pre-deployed erc 20 contract
       --erc721-address string                      The address of a pre-deployed erc 721 contract
       --force-contract-deploy                      Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.
@@ -104,7 +103,7 @@ $ polycli loadtest --app-id 0 --data-avail --verbosity 700 --chain-id 42 --concu
   -i, --iterations uint                            If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size (default 1)
       --legacy                                     Send a legacy transaction instead of an EIP1559 transaction.
       --lt-address string                          The address of a pre-deployed load test contract
-  -m, --mode string                                The testing mode to use. It can be multiple like: "tcdf"
+  -m, --mode strings                               The testing mode to use. It can be multiple like: "t,c,d,f"
                                                    t - sending transactions
                                                    d - deploy contract
                                                    c - call random contract functions
@@ -115,7 +114,7 @@ $ polycli loadtest --app-id 0 --data-avail --verbosity 700 --chain-id 42 --concu
                                                    r - random modes
                                                    2 - ERC20 Transfers
                                                    7 - ERC721 Mints
-                                                   R - total recall (default "t")
+                                                   R - total recall (default [t])
       --output-mode string                         Format mode for summary output (json | text) (default "text")
       --priority-gas-price uint                    Specify Gas Tip Price in the case of EIP-1559
       --private-key string                         The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")

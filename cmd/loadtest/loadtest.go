@@ -103,6 +103,14 @@ func modeRequiresLoadTestContract(m loadTestMode) bool {
 	}
 	return false
 }
+func anyModeRequiresLoadTestContract(modes []loadTestMode) bool {
+	for _, m := range modes {
+		if modeRequiresLoadTestContract(m) {
+			return true
+		}
+	}
+	return false
+}
 func hasMode(mode loadTestMode, modes []loadTestMode) bool {
 	for _, m := range modes {
 		if m == mode {
@@ -394,7 +402,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 	mode := ltp.Mode
-	modes := *ltp.Modes
 	steadyStateTxPoolSize := *ltp.SteadyStateTxPoolSize
 	adaptiveRateLimitIncrement := *ltp.AdaptiveRateLimitIncrement
 	var rl *rate.Limiter
@@ -425,7 +432,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	// deploy and instantiate the load tester contract
 	var ltAddr ethcommon.Address
 	var ltContract *contracts.LoadTester
-	if modeRequiresLoadTestContract(mode) || *inputLoadTestParams.ForceContractDeploy {
+	if anyModeRequiresLoadTestContract(ltp.ParsedModes) || *inputLoadTestParams.ForceContractDeploy {
 		ltAddr, ltContract, err = getLoadTestContract(ctx, c, tops, cops)
 		if err != nil {
 			return err
@@ -512,7 +519,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				localMode := mode
 				// if there are multiple modes, iterate through them, 'r' mode is supported here
 				if ltp.MultiMode {
-					localMode, _ = characterToLoadTestMode(modes[int(i+j)%(len(modes))])
+					localMode = ltp.ParsedModes[int(i+j)%(len(ltp.ParsedModes))]
 				}
 				// if we're doing random, we'll just pick one based on the current index
 				if localMode == loadTestModeRandom {

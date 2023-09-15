@@ -213,7 +213,7 @@ func init() {
 	ltp.AdaptiveRateLimitIncrement = LoadtestCmd.PersistentFlags().Uint64("adaptive-rate-limit-increment", 50, "When using adaptive rate limiting, this flag controls the size of the additive increases.")
 	ltp.AdaptiveCycleDuration = LoadtestCmd.PersistentFlags().Uint64("adaptive-cycle-duration-seconds", 10, "When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates")
 	ltp.AdaptiveBackoffFactor = LoadtestCmd.PersistentFlags().Float64("adaptive-backoff-factor", 2, "When using adaptive rate limiting, this flag controls our multiplicative decrease value.")
-	ltp.Modes = LoadtestCmd.PersistentFlags().StringSliceP("mode", "m", []string{"t"}, `The testing mode to use. It can be multiple like: "tcdf"
+	ltp.Modes = LoadtestCmd.PersistentFlags().StringSliceP("mode", "m", []string{"t"}, `The testing mode to use. It can be multiple like: "t,c,d,f"
 t - sending transactions
 d - deploy contract
 c - call random contract functions
