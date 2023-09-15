@@ -17,7 +17,11 @@ func getRecentBlocks(ctx context.Context, ec *ethclient.Client, c *ethrpc.Client
 	if err != nil {
 		return nil, err
 	}
-	rawBlocks, err := util.GetBlockRange(ctx, bn-*inputLoadTestParams.RecallLength, bn, c)
+
+	// FIXME the batch size of 25 is hard coded and probably should at least be a constant or a parameter. This limit is
+	// different than the actual json RPC batch size of 999. Because we're fetching blocks, its' more likely that we hit
+	// a response size limit rather than a batch length limit
+	rawBlocks, err := util.GetBlockRangeInPages(ctx, bn-*inputLoadTestParams.RecallLength, bn, 25, c)
 	return rawBlocks, err
 }
 
@@ -33,8 +37,8 @@ func getRecallTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		if err != nil {
 			return nil, err
 		}
-		for _, t := range pb.Transactions {
-			pt := rpctypes.NewPolyTransaction(&t)
+		for k := range pb.Transactions {
+			pt := rpctypes.NewPolyTransaction(&pb.Transactions[k])
 			txs = append(txs, pt)
 		}
 	}

@@ -51,6 +51,26 @@ func GetBlockRange(ctx context.Context, from, to uint64, c *ethrpc.Client) ([]*j
 	return blocks, nil
 }
 
+func GetBlockRangeInPages(ctx context.Context, from, to, pageSize uint64, c *ethrpc.Client) ([]*json.RawMessage, error) {
+	var allBlocks []*json.RawMessage
+
+	for i := from; i <= to; i += pageSize {
+		end := i + pageSize - 1
+		if end > to {
+			end = to
+		}
+
+		blocks, err := GetBlockRange(ctx, i, end, c)
+		if err != nil {
+			return nil, err
+		}
+
+		allBlocks = append(allBlocks, blocks...)
+	}
+
+	return allBlocks, nil
+}
+
 func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Client, batchSize uint64) ([]*json.RawMessage, error) {
 	txHashes := make([]string, 0)
 	txHashMap := make(map[string]string, 0)

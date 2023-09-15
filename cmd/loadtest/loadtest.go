@@ -1093,6 +1093,7 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, orig
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
 	}
+	log.Trace().Str("txId", originalTx.Hash().String()).Bool("callOnly", *ltp.CallOnly).Msg("Attempting to replay transaction")
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
@@ -1100,7 +1101,19 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, orig
 		callMsg := txToCallMsg(stx)
 		callMsg.From = originalTx.From()
 		callMsg.Gas = originalTx.Gas()
-		_, err = c.CallContract(ctx, callMsg, originalTx.BlockNumber())
+		if *ltp.CallOnlyLatestBlock {
+			_, err = c.CallContract(ctx, callMsg, nil)
+		} else {
+			callMsg.GasPrice = originalTx.GasPrice()
+			callMsg.GasFeeCap = new(big.Int).SetUint64(originalTx.MaxFeePerGas())
+			callMsg.GasTipCap = new(big.Int).SetUint64(originalTx.MaxPriorityFeePerGas())
+			_, err = c.CallContract(ctx, callMsg, originalTx.BlockNumber())
+		}
+		if err != nil {
+			log.Warn().Err(err).Msg("Recall failure")
+		}
+		// we're not going to return the error in the case because there is no point retrying
+		err = nil
 	} else {
 		err = c.SendTransaction(ctx, stx)
 	}
