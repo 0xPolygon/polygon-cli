@@ -244,6 +244,9 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 	if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode && !*inputLoadTestParams.CallOnly {
 		return fmt.Errorf("rpc mode must be called with call-only when multiple modes are used")
+	} else if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) {
+		log.Trace().Msg("setting call only mode since we're doing RPC testing")
+		*inputLoadTestParams.CallOnly = true
 	}
 	// TODO check for duplicate modes?
 
@@ -578,7 +581,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				recordSample(i, j, err, startReq, endReq, myNonceValue)
 				if err != nil {
-					log.Error().Err(err).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
 					// The nonce is used to index the recalled transactions in call-only mode. We don't want to retry a transaction if it legit failed on the chain
 					if !*ltp.CallOnly {
 						retryForNonce = true
@@ -592,6 +594,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					if strings.Contains(err.Error(), "nonce too low") && retryForNonce {
 						retryForNonce = false
 					}
+					log.Error().Err(err).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
 				}
 
 				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode.String()).Int64("request", j).Msg("Request")
@@ -713,7 +716,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 
 	erc721Contract, err = contracts.NewERC721(erc721Addr, c)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
+		log.Error().Err(err).Msg("Unable to instantiate new erc721 contract")
 		return
 	}
 
@@ -1209,34 +1212,71 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *Ind
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
 	if funcNum < 10 {
-		// eth_gasPrice
+		log.Trace().Msg("eth_gasPrice")
 		_, err = c.SuggestGasPrice(ctx)
 	} else if funcNum < 21 {
-		// eth_estimateGas
+		log.Trace().Msg("eth_estimateGas")
 	} else if funcNum < 33 {
-		// eth_getTransactionCount
+		log.Trace().Msg("eth_getTransactionCount")
 		_, err = c.NonceAt(ctx, ethcommon.HexToAddress(ia.Addresses[randSrc.Intn(len(ia.Addresses))]), nil)
 	} else if funcNum < 47 {
-		// eth_getCode
+		log.Trace().Msg("eth_getCode")
 		_, err = c.CodeAt(ctx, ethcommon.HexToAddress(ia.Contracts[randSrc.Intn(len(ia.Contracts))]), nil)
 	} else if funcNum < 64 {
-		// eth_getBlockByNumber
+		log.Trace().Msg("eth_getBlockByNumber")
 		_, err = c.BlockByNumber(ctx, big.NewInt(int64(randSrc.Intn(int(ia.BlockNumber)))))
 	} else if funcNum < 84 {
-		// eth_getTransactionByHash
+		log.Trace().Msg("eth_getTransactionByHash")
 		_, _, err = c.TransactionByHash(ctx, ethcommon.HexToHash(ia.TransactionIDs[randSrc.Intn(len(ia.TransactionIDs))]))
 	} else if funcNum < 109 {
-		// eth_getBalance
+		log.Trace().Msg("eth_getBalance")
 		_, err = c.BalanceAt(ctx, ethcommon.HexToAddress(ia.Addresses[randSrc.Intn(len(ia.Addresses))]), nil)
 	} else if funcNum < 142 {
-		// eth_getTransactionReceipt
+		log.Trace().Msg("eth_getTransactionReceipt")
 		_, err = c.TransactionReceipt(ctx, ethcommon.HexToHash(ia.TransactionIDs[randSrc.Intn(len(ia.TransactionIDs))]))
 	} else if funcNum < 192 {
-		// eth_getLogs
+		log.Trace().Msg("eth_getLogs")
 		h := ethcommon.HexToHash(ia.BlockIDs[randSrc.Intn(len(ia.BlockIDs))])
 		_, err = c.FilterLogs(ctx, ethereum.FilterQuery{BlockHash: &h})
 	} else {
-		// eth_call
+		log.Trace().Msg("eth_call")
+		erc20Str := string(ia.ERC20Addresses[randSrc.Intn(len(ia.ERC20Addresses))])
+		erc721Str := string(ia.ERC721Addresses[randSrc.Intn(len(ia.ERC721Addresses))])
+		erc20Addr := ethcommon.HexToAddress(erc20Str)
+		erc721Addr := ethcommon.HexToAddress(erc721Str)
+		log.Trace().
+			Str("erc20str", erc20Str).
+			Str("erc721str", erc721Str).
+			Str("erc20addr", erc20Addr.String()).
+			Str("erc721addr", erc721Addr.String()).
+			Msg("retrieve contract addresses")
+		cops := new(bind.CallOpts)
+		cops.Context = ctx
+		var erc721Contract *contracts.ERC721
+		var erc20Contract *contracts.ERC20
+
+		erc721Contract, err = contracts.NewERC721(erc721Addr, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to instantiate new erc721 contract")
+			return
+		}
+		erc20Contract, err = contracts.NewERC20(erc20Addr, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
+			return
+		}
+		t1 = time.Now()
+
+		_, err = erc721Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
+		if err != nil && err == bind.ErrNoCode {
+			err = nil
+		}
+		_, err = erc20Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
+		if err != nil && err == bind.ErrNoCode {
+			err = nil
+		}
+		// tokenURI would be the next most popular call, but it's not very complex
+
 	}
 
 	return
