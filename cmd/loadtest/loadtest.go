@@ -530,12 +530,13 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			var endReq time.Time
 			var retryForNonce bool = false
 			var myNonceValue uint64
+			var tErr error
 
 			for j = 0; j < requests; j = j + 1 {
 				if rl != nil {
-					err = rl.Wait(ctx)
-					if err != nil {
-						log.Error().Err(err).Msg("Encountered a rate limiting error")
+					tErr = rl.Wait(ctx)
+					if tErr != nil {
+						log.Error().Err(tErr).Msg("Encountered a rate limiting error")
 					}
 				}
 
@@ -559,45 +560,44 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				switch localMode {
 				case loadTestModeTransaction:
-					startReq, endReq, err = loadTestTransaction(ctx, c, myNonceValue)
+					startReq, endReq, tErr = loadTestTransaction(ctx, c, myNonceValue)
 				case loadTestModeDeploy:
-					startReq, endReq, err = loadTestDeploy(ctx, c, myNonceValue)
+					startReq, endReq, tErr = loadTestDeploy(ctx, c, myNonceValue)
 				case loadTestModeFunction, loadTestModeCall:
-					startReq, endReq, err = loadTestFunction(ctx, c, myNonceValue, ltContract)
+					startReq, endReq, tErr = loadTestFunction(ctx, c, myNonceValue, ltContract)
 				case loadTestModeInc:
-					startReq, endReq, err = loadTestInc(ctx, c, myNonceValue, ltContract)
+					startReq, endReq, tErr = loadTestInc(ctx, c, myNonceValue, ltContract)
 				case loadTestModeStore:
-					startReq, endReq, err = loadTestStore(ctx, c, myNonceValue, ltContract)
+					startReq, endReq, tErr = loadTestStore(ctx, c, myNonceValue, ltContract)
 				case loadTestModeERC20:
-					startReq, endReq, err = loadTestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
+					startReq, endReq, tErr = loadTestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
 				case loadTestModeERC721:
-					startReq, endReq, err = loadTestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
+					startReq, endReq, tErr = loadTestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
 				case loadTestModePrecompiledContract:
-					startReq, endReq, err = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, true)
+					startReq, endReq, tErr = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, true)
 				case loadTestModePrecompiledContracts:
-					startReq, endReq, err = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false)
+					startReq, endReq, tErr = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false)
 				case loadTestModeRecall:
-					startReq, endReq, err = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
+					startReq, endReq, tErr = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
 				case loadTestModeRPC:
-					startReq, endReq, err = loadTestRPC(ctx, c, myNonceValue, indexedActivity)
+					startReq, endReq, tErr = loadTestRPC(ctx, c, myNonceValue, indexedActivity)
 				default:
 					log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
 				}
-				recordSample(i, j, err, startReq, endReq, myNonceValue)
-				if err != nil {
-					log.Error().Err(err).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
-					errMsg := err.Error()
+				recordSample(i, j, tErr, startReq, endReq, myNonceValue)
+				if tErr != nil {
+					log.Error().Err(tErr).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
 					// The nonce is used to index the recalled transactions in call-only mode. We don't want to retry a transaction if it legit failed on the chain
 					if !*ltp.CallOnly {
 						retryForNonce = true
 					}
-					if strings.Contains(errMsg, "replacement transaction underpriced") && retryForNonce {
+					if strings.Contains(tErr.Error(), "replacement transaction underpriced") && retryForNonce {
 						retryForNonce = false
 					}
-					if strings.Contains(errMsg, "transaction underpriced") && retryForNonce {
+					if strings.Contains(tErr.Error(), "transaction underpriced") && retryForNonce {
 						retryForNonce = false
 					}
-					if strings.Contains(errMsg, "nonce too low") && retryForNonce {
+					if strings.Contains(tErr.Error(), "nonce too low") && retryForNonce {
 						retryForNonce = false
 					}
 				}
