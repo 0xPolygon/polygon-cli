@@ -250,6 +250,10 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 	// TODO check for duplicate modes?
 
+	if *inputLoadTestParams.CallOnly && *inputLoadTestParams.AdaptiveRateLimit {
+		return fmt.Errorf("using call only with adaptive rate limit doesn't make sense")
+	}
+
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
 	return nil
@@ -581,20 +585,21 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				recordSample(i, j, err, startReq, endReq, myNonceValue)
 				if err != nil {
+					log.Error().Err(err).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
+					errMsg := err.Error()
 					// The nonce is used to index the recalled transactions in call-only mode. We don't want to retry a transaction if it legit failed on the chain
 					if !*ltp.CallOnly {
 						retryForNonce = true
 					}
-					if strings.Contains(err.Error(), "replacement transaction underpriced") && retryForNonce {
+					if strings.Contains(errMsg, "replacement transaction underpriced") && retryForNonce {
 						retryForNonce = false
 					}
-					if strings.Contains(err.Error(), "transaction underpriced") && retryForNonce {
+					if strings.Contains(errMsg, "transaction underpriced") && retryForNonce {
 						retryForNonce = false
 					}
-					if strings.Contains(err.Error(), "nonce too low") && retryForNonce {
+					if strings.Contains(errMsg, "nonce too low") && retryForNonce {
 						retryForNonce = false
 					}
-					log.Error().Err(err).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
 				}
 
 				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode.String()).Int64("request", j).Msg("Request")
