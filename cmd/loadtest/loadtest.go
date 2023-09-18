@@ -489,19 +489,18 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 	var indexedActivity *IndexedActivity
 	if mode == loadTestModeRPC || mode == loadTestModeRandom {
-		ia, err := getIndexedRecentActivity(ctx, c, rpc)
+		indexedActivity, err = getIndexedRecentActivity(ctx, c, rpc)
 		if err != nil {
 			return err
 		}
 		log.Debug().
-			Int("transactions", len(ia.TransactionIDs)).
-			Int("blocks", len(ia.BlockNumbers)).
-			Int("addresses", len(ia.Addresses)).
-			Int("erc20s", len(ia.ERC20Addresses)).
-			Int("erc721", len(ia.ERC721Addresses)).
-			Int("contracts", len(ia.Contracts)).
+			Int("transactions", len(indexedActivity.TransactionIDs)).
+			Int("blocks", len(indexedActivity.BlockNumbers)).
+			Int("addresses", len(indexedActivity.Addresses)).
+			Int("erc20s", len(indexedActivity.ERC20Addresses)).
+			Int("erc721", len(indexedActivity.ERC721Addresses)).
+			Int("contracts", len(indexedActivity.Contracts)).
 			Msg("retrieved recent indexed activity")
-		indexedActivity = ia
 	}
 
 	var currentNonceMutex sync.Mutex

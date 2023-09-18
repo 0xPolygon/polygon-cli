@@ -247,5 +247,4 @@ rpc - call random rpc methods`)
 	inputLoadTestParams = *ltp
 
 	// TODO Compression
-	// TODO array of RPC endpoints to round robin?
 }

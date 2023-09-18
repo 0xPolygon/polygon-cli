@@ -74,7 +74,7 @@ func getIndexedRecentActivity(ctx context.Context, ec *ethclient.Client, c *ethr
 	ia.Contracts = make([]string, 0)
 	for _, block := range blockData {
 		pb := new(rpctypes.RawBlockResponse)
-		err := json.Unmarshal(*block, pb)
+		err = json.Unmarshal(*block, pb)
 		if err != nil {
 			return nil, err
 		}
