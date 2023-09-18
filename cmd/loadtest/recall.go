@@ -9,6 +9,7 @@ import (
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
 	"math/big"
+	"strings"
 )
 
 // TODO allow this to be pre-specified with an input file
@@ -45,12 +46,93 @@ func getRecallTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	return txs, nil
 }
 
+// IndexedActivity is used to hold a bunch of values for testing an RPC
+type IndexedActivity struct {
+	BlockNumbers    []string
+	TransactionIDs  []string
+	BlockIDs        []string
+	Addresses       []string
+	ERC20Addresses  []string
+	ERC721Addresses []string
+	Contracts       []string
+	BlockNumber     uint64
+}
+
+func getIndexedRecentActivity(ctx context.Context, ec *ethclient.Client, c *ethrpc.Client) (*IndexedActivity, error) {
+	blockData, err := getRecentBlocks(ctx, ec, c)
+	if err != nil {
+		return nil, err
+	}
+
+	ia := new(IndexedActivity)
+	ia.BlockNumbers = make([]string, 0)
+	ia.TransactionIDs = make([]string, 0)
+	ia.BlockIDs = make([]string, 0)
+	ia.Addresses = make([]string, 0)
+	ia.ERC20Addresses = make([]string, 0)
+	ia.ERC721Addresses = make([]string, 0)
+	ia.Contracts = make([]string, 0)
+	for _, block := range blockData {
+		pb := new(rpctypes.RawBlockResponse)
+		err = json.Unmarshal(*block, pb)
+		if err != nil {
+			return nil, err
+		}
+		ia.BlockIDs = append(ia.BlockIDs, string(pb.Hash))
+		ia.BlockNumbers = append(ia.BlockNumbers, string(pb.Number))
+		for k := range pb.Transactions {
+			pt := rpctypes.NewPolyTransaction(&pb.Transactions[k])
+			ia.TransactionIDs = append(ia.TransactionIDs, pt.Hash().String())
+			ia.Addresses = append(ia.Addresses, pt.From().String(), pt.To().String())
+
+			// balanceOf(address)
+			if strings.HasPrefix("0x70a08231", string(pt.Data())) {
+				ia.ERC20Addresses = append(ia.ERC20Addresses, pt.To().String())
+			}
+			if strings.HasPrefix("0xc87b56dd", string(pt.Data())) {
+				ia.ERC721Addresses = append(ia.ERC721Addresses, pt.To().String())
+			}
+			if len(string(pt.Data())) > 10 {
+				ia.Contracts = append(ia.Contracts, pt.To().String())
+			}
+		}
+	}
+	ia.BlockNumbers = deduplicate(ia.BlockNumbers)
+	ia.TransactionIDs = deduplicate(ia.TransactionIDs)
+	ia.BlockIDs = deduplicate(ia.BlockIDs)
+	ia.Addresses = deduplicate(ia.Addresses)
+	ia.ERC20Addresses = deduplicate(ia.ERC20Addresses)
+	ia.ERC721Addresses = deduplicate(ia.ERC721Addresses)
+	ia.Contracts = deduplicate(ia.Contracts)
+
+	ia.BlockNumber, err = ec.BlockNumber(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return ia, nil
+}
+
+func deduplicate(slice []string) []string {
+	seen := make(map[string]struct{}) // struct{} takes no memory
+	var result []string
+
+	for _, item := range slice {
+		if _, exists := seen[item]; !exists {
+			seen[item] = struct{}{}
+			result = append(result, item)
+		}
+	}
+
+	return result
+}
+
 func rawTransactionToNewTx(pt rpctypes.PolyTransaction, nonce uint64, price, tipCap *big.Int) *ethtypes.Transaction {
 	if pt.MaxFeePerGas() != 0 || pt.ChainID() != 0 {
 		return rawTransactionToDynamicFeeTx(pt, nonce, price, tipCap)
 	}
 	return rawTransactionToLegacyTx(pt, nonce, price)
 }
+
 func rawTransactionToDynamicFeeTx(pt rpctypes.PolyTransaction, nonce uint64, price, tipCap *big.Int) *ethtypes.Transaction {
 	toAddr := pt.To()
 	chainId := new(big.Int).SetUint64(pt.ChainID())
@@ -67,6 +149,7 @@ func rawTransactionToDynamicFeeTx(pt rpctypes.PolyTransaction, nonce uint64, pri
 	tx := ethtypes.NewTx(dynamicFeeTx)
 	return tx
 }
+
 func rawTransactionToLegacyTx(pt rpctypes.PolyTransaction, nonce uint64, price *big.Int) *ethtypes.Transaction {
 	toAddr := pt.To()
 	tx := ethtypes.NewTx(&ethtypes.LegacyTx{

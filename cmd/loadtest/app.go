@@ -7,8 +7,6 @@ import (
 	"math/big"
 	"math/rand"
 	"net/url"
-	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -58,7 +56,7 @@ type (
 		AdaptiveRateLimitIncrement          *uint64
 		AdaptiveCycleDuration               *uint64
 		AdaptiveBackoffFactor               *float64
-		Mode                                *string
+		Modes                               *[]string
 		Function                            *uint64
 		Iterations                          *uint64
 		ByteCount                           *uint64
@@ -89,6 +87,9 @@ type (
 		SendAmount          *big.Int
 		CurrentBaseFee      *big.Int
 		ChainSupportBaseFee bool
+		Mode                loadTestMode
+		ParsedModes         []loadTestMode
+		MultiMode           bool
 
 		ToAvailAddress   *gstypes.MultiAddress
 		FromAvailAddress *gssignature.KeyringPair
@@ -185,10 +186,7 @@ var LoadtestCmd = &cobra.Command{
 			return fmt.Errorf("the scheme %s is not supported", url.Scheme)
 		}
 		inputLoadTestParams.URL = url
-		r := regexp.MustCompile(fmt.Sprintf("^[%s]+$", strings.Join(validLoadTestModes, "")))
-		if !r.MatchString(*inputLoadTestParams.Mode) {
-			return fmt.Errorf("the mode %s is not recognized", *inputLoadTestParams.Mode)
-		}
+
 		if *inputLoadTestParams.AdaptiveBackoffFactor <= 0.0 {
 			return fmt.Errorf("the backoff factor needs to be non-zero positive")
 		}
@@ -215,7 +213,7 @@ func init() {
 	ltp.AdaptiveRateLimitIncrement = LoadtestCmd.PersistentFlags().Uint64("adaptive-rate-limit-increment", 50, "When using adaptive rate limiting, this flag controls the size of the additive increases.")
 	ltp.AdaptiveCycleDuration = LoadtestCmd.PersistentFlags().Uint64("adaptive-cycle-duration-seconds", 10, "When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates")
 	ltp.AdaptiveBackoffFactor = LoadtestCmd.PersistentFlags().Float64("adaptive-backoff-factor", 2, "When using adaptive rate limiting, this flag controls our multiplicative decrease value.")
-	ltp.Mode = LoadtestCmd.PersistentFlags().StringP("mode", "m", "t", `The testing mode to use. It can be multiple like: "tcdf"
+	ltp.Modes = LoadtestCmd.PersistentFlags().StringSliceP("mode", "m", []string{"t"}, `The testing mode to use. It can be multiple like: "t,c,d,f"
 t - sending transactions
 d - deploy contract
 c - call random contract functions
@@ -226,12 +224,12 @@ s - store mode
 r - random modes
 2 - ERC20 Transfers
 7 - ERC721 Mints
-R - total recall`)
+R - total recall
+rpc - call random rpc methods`)
 	ltp.Function = LoadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` or a specific precompiled contract when running with `--mode a`")
 	ltp.Iterations = LoadtestCmd.PersistentFlags().Uint64P("iterations", "i", 1, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size")
 	ltp.ByteCount = LoadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
-	ltp.IsAvail = LoadtestCmd.PersistentFlags().Bool("data-avail", false, "[DEPRECATED] Enables Avail load testing")
 	ltp.LtAddress = LoadtestCmd.PersistentFlags().String("lt-address", "", "The address of a pre-deployed load test contract")
 	ltp.ERC20Address = LoadtestCmd.PersistentFlags().String("erc20-address", "", "The address of a pre-deployed erc 20 contract")
 	ltp.ERC721Address = LoadtestCmd.PersistentFlags().String("erc721-address", "", "The address of a pre-deployed erc 721 contract")
@@ -248,7 +246,5 @@ R - total recall`)
 	ltp.RecallLength = LoadtestCmd.PersistentFlags().Uint64("recall-blocks", 50, "The number of blocks that we'll attempt to fetch for recall")
 	inputLoadTestParams = *ltp
 
-	// TODO batch size
 	// TODO Compression
-	// TODO array of RPC endpoints to round robin?
 }

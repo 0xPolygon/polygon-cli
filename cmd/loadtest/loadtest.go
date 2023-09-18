@@ -17,7 +17,6 @@ import (
 	"time"
 
 	_ "embed"
-	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
 	"github.com/maticnetwork/polygon-cli/metrics"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -33,41 +32,96 @@ import (
 	"golang.org/x/time/rate"
 )
 
+//go:generate stringer -type=loadTestMode
+type (
+	loadTestMode int
+)
+
 const (
-	loadTestModeTransaction          = "t"
-	loadTestModeDeploy               = "d"
-	loadTestModeCall                 = "c"
-	loadTestModeFunction             = "f"
-	loadTestModeInc                  = "i"
-	loadTestModeRandom               = "r"
-	loadTestModeStore                = "s"
-	loadTestModeERC20                = "2"
-	loadTestModeERC721               = "7"
-	loadTestModePrecompiledContracts = "p"
-	loadTestModePrecompiledContract  = "a"
-	loadTestModeRecall               = "R"
+	loadTestModeTransaction loadTestMode = iota
+	loadTestModeDeploy
+	loadTestModeCall
+	loadTestModeFunction
+	loadTestModeInc
+	loadTestModeStore
+	loadTestModeERC20
+	loadTestModeERC721
+	loadTestModePrecompiledContracts
+	loadTestModePrecompiledContract
+	loadTestModeRecall
+
+	// All the modes AFTER random mode will not be used when mode random is selected
+	loadTestModeRandom
+	loadTestModeRPC
 
 	codeQualitySeed       = "code code code code code code code code code code code quality"
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
 )
 
-var (
-	validLoadTestModes = []string{
-		loadTestModeTransaction,
-		loadTestModeDeploy,
-		loadTestModeCall,
-		loadTestModeFunction,
-		loadTestModeInc,
-		loadTestModeStore,
-		loadTestModeERC20,
-		loadTestModeERC721,
-		loadTestModePrecompiledContracts,
-		loadTestModePrecompiledContract,
-		loadTestModeRecall,
-		// r should be last to exclude it from random mode selection
-		loadTestModeRandom,
+func characterToLoadTestMode(mode string) (loadTestMode, error) {
+	switch mode {
+	case "t", "transaction":
+		return loadTestModeTransaction, nil
+	case "d", "deploy":
+		return loadTestModeDeploy, nil
+	case "c", "call":
+		return loadTestModeCall, nil
+	case "f", "function":
+		return loadTestModeFunction, nil
+	case "i", "inc", "increment":
+		return loadTestModeInc, nil
+	case "r", "random":
+		return loadTestModeRandom, nil
+	case "s", "store":
+		return loadTestModeStore, nil
+	case "2", "erc20":
+		return loadTestModeERC20, nil
+	case "7", "erc721":
+		return loadTestModeERC721, nil
+	case "p", "precompile":
+		return loadTestModePrecompiledContracts, nil
+	case "a", "precompiles":
+		return loadTestModePrecompiledContract, nil
+	case "R", "recall":
+		return loadTestModeRecall, nil
+	case "rpc":
+		return loadTestModeRPC, nil
+	default:
+		return 0, fmt.Errorf("Unrecognized load test mode: %s", mode)
 	}
-)
+}
+
+func getRandomMode() loadTestMode {
+	maxMode := int(loadTestModeRandom)
+	return loadTestMode(randSrc.Intn(maxMode))
+}
+
+func modeRequiresLoadTestContract(m loadTestMode) bool {
+	if m == loadTestModeCall ||
+		m == loadTestModeFunction ||
+		m == loadTestModeInc ||
+		m == loadTestModeRandom ||
+		m == loadTestModeStore {
+		return true
+	}
+	return false
+}
+func anyModeRequiresLoadTestContract(modes []loadTestMode) bool {
+	for _, m := range modes {
+		if modeRequiresLoadTestContract(m) {
+			return true
+		}
+	}
+	return false
+}
+func hasMode(mode loadTestMode, modes []loadTestMode) bool {
+	for _, m := range modes {
+		if m == mode {
+			return true
+		}
+	}
+	return false
+}
 
 func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	log.Info().Msg("Connecting with RPC endpoint to initialize load test parameters")
@@ -163,6 +217,42 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 	inputLoadTestParams.CurrentBaseFee = header.BaseFee
 
+	modes := *inputLoadTestParams.Modes
+	if len(modes) == 0 {
+		return fmt.Errorf("expected at least one mode")
+	}
+
+	inputLoadTestParams.ParsedModes = make([]loadTestMode, 0)
+	for _, m := range modes {
+		parsedMode, err := characterToLoadTestMode(m)
+		if err != nil {
+			return err
+		}
+		inputLoadTestParams.ParsedModes = append(inputLoadTestParams.ParsedModes, parsedMode)
+	}
+
+	if len(modes) > 1 {
+		inputLoadTestParams.MultiMode = true
+	} else {
+		inputLoadTestParams.MultiMode = false
+		inputLoadTestParams.Mode, _ = characterToLoadTestMode((*inputLoadTestParams.Modes)[0])
+	}
+
+	if hasMode(loadTestModeRandom, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode {
+		return fmt.Errorf("random mode can't be used in combinations with any other modes")
+	}
+	if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode && !*inputLoadTestParams.CallOnly {
+		return fmt.Errorf("rpc mode must be called with call-only when multiple modes are used")
+	} else if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) {
+		log.Trace().Msg("setting call only mode since we're doing RPC testing")
+		*inputLoadTestParams.CallOnly = true
+	}
+	// TODO check for duplicate modes?
+
+	if *inputLoadTestParams.CallOnly && *inputLoadTestParams.AdaptiveRateLimit {
+		return fmt.Errorf("using call only with adaptive rate limit doesn't make sense")
+	}
+
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
 	return nil
@@ -209,31 +299,13 @@ func runLoadTest(ctx context.Context) error {
 	rpc.SetHeader("Accept-Encoding", "identity")
 	ec := ethclient.NewClient(rpc)
 
-	var loopFunc func() error
-	if *inputLoadTestParams.IsAvail {
-		log.Info().Msg("Running in Avail mode")
-		loopFunc = func() error {
-			var api *gsrpc.SubstrateAPI
-			api, err = gsrpc.NewSubstrateAPI(inputLoadTestParams.URL.String())
-			if err != nil {
-				return err
-			}
-			err = initAvailTestParams(ctx, api)
-			if err != nil {
-				return err
-			}
-			return availLoop(ctx, api)
+	loopFunc := func() error {
+		err = initializeLoadTestParams(ctx, ec)
+		if err != nil {
+			return err
 		}
 
-	} else {
-		loopFunc = func() error {
-			err = initializeLoadTestParams(ctx, ec)
-			if err != nil {
-				return err
-			}
-
-			return mainLoop(ctx, ec, rpc)
-		}
+		return mainLoop(ctx, ec, rpc)
 	}
 
 	sigCh := make(chan os.Signal, 1)
@@ -257,10 +329,6 @@ func runLoadTest(ctx context.Context) error {
 	}
 
 	printResults(loadTestResults)
-	if *inputLoadTestParams.IsAvail {
-		log.Trace().Msg("Finished testing avail")
-		return nil
-	}
 
 	log.Info().Msg("Finished")
 	return nil
@@ -345,7 +413,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	requests := *ltp.Requests
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
-	mode := *ltp.Mode
+	mode := ltp.Mode
 	steadyStateTxPoolSize := *ltp.SteadyStateTxPoolSize
 	adaptiveRateLimitIncrement := *ltp.AdaptiveRateLimitIncrement
 	var rl *rate.Limiter
@@ -376,7 +444,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	// deploy and instantiate the load tester contract
 	var ltAddr ethcommon.Address
 	var ltContract *contracts.LoadTester
-	if strings.ContainsAny(mode, "rcfispas") || *inputLoadTestParams.ForceContractDeploy {
+	if anyModeRequiresLoadTestContract(ltp.ParsedModes) || *inputLoadTestParams.ForceContractDeploy {
 		ltAddr, ltContract, err = getLoadTestContract(ctx, c, tops, cops)
 		if err != nil {
 			return err
@@ -416,6 +484,22 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Debug().Int("txs", len(recallTransactions)).Msg("retrieved transactions for total recall")
 	}
 
+	var indexedActivity *IndexedActivity
+	if mode == loadTestModeRPC || mode == loadTestModeRandom {
+		indexedActivity, err = getIndexedRecentActivity(ctx, c, rpc)
+		if err != nil {
+			return err
+		}
+		log.Debug().
+			Int("transactions", len(indexedActivity.TransactionIDs)).
+			Int("blocks", len(indexedActivity.BlockNumbers)).
+			Int("addresses", len(indexedActivity.Addresses)).
+			Int("erc20s", len(indexedActivity.ERC20Addresses)).
+			Int("erc721", len(indexedActivity.ERC721Addresses)).
+			Int("contracts", len(indexedActivity.Contracts)).
+			Msg("retrieved recent indexed activity")
+	}
+
 	var currentNonceMutex sync.Mutex
 	var i int64
 	startBlockNumber, err := c.BlockNumber(ctx)
@@ -442,12 +526,13 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			var endReq time.Time
 			var retryForNonce bool = false
 			var myNonceValue uint64
+			var tErr error
 
 			for j = 0; j < requests; j = j + 1 {
 				if rl != nil {
-					err = rl.Wait(ctx)
-					if err != nil {
-						log.Error().Err(err).Msg("Encountered a rate limiting error")
+					tErr = rl.Wait(ctx)
+					if tErr != nil {
+						log.Error().Err(tErr).Msg("Encountered a rate limiting error")
 					}
 				}
 
@@ -462,56 +547,58 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 				localMode := mode
 				// if there are multiple modes, iterate through them, 'r' mode is supported here
-				if len(mode) > 1 {
-					localMode = string(mode[int(i+j)%(len(mode))])
+				if ltp.MultiMode {
+					localMode = ltp.ParsedModes[int(i+j)%(len(ltp.ParsedModes))]
 				}
 				// if we're doing random, we'll just pick one based on the current index
 				if localMode == loadTestModeRandom {
-					localMode = validLoadTestModes[int(i+j)%(len(validLoadTestModes)-1)]
+					localMode = getRandomMode()
 				}
 				switch localMode {
 				case loadTestModeTransaction:
-					startReq, endReq, err = loadTestTransaction(ctx, c, myNonceValue)
+					startReq, endReq, tErr = loadTestTransaction(ctx, c, myNonceValue)
 				case loadTestModeDeploy:
-					startReq, endReq, err = loadTestDeploy(ctx, c, myNonceValue)
+					startReq, endReq, tErr = loadTestDeploy(ctx, c, myNonceValue)
 				case loadTestModeFunction, loadTestModeCall:
-					startReq, endReq, err = loadTestFunction(ctx, c, myNonceValue, ltContract)
+					startReq, endReq, tErr = loadTestFunction(ctx, c, myNonceValue, ltContract)
 				case loadTestModeInc:
-					startReq, endReq, err = loadTestInc(ctx, c, myNonceValue, ltContract)
+					startReq, endReq, tErr = loadTestInc(ctx, c, myNonceValue, ltContract)
 				case loadTestModeStore:
-					startReq, endReq, err = loadTestStore(ctx, c, myNonceValue, ltContract)
+					startReq, endReq, tErr = loadTestStore(ctx, c, myNonceValue, ltContract)
 				case loadTestModeERC20:
-					startReq, endReq, err = loadTestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
+					startReq, endReq, tErr = loadTestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
 				case loadTestModeERC721:
-					startReq, endReq, err = loadTestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
+					startReq, endReq, tErr = loadTestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
 				case loadTestModePrecompiledContract:
-					startReq, endReq, err = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, true)
+					startReq, endReq, tErr = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, true)
 				case loadTestModePrecompiledContracts:
-					startReq, endReq, err = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false)
+					startReq, endReq, tErr = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false)
 				case loadTestModeRecall:
-					startReq, endReq, err = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
+					startReq, endReq, tErr = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
+				case loadTestModeRPC:
+					startReq, endReq, tErr = loadTestRPC(ctx, c, myNonceValue, indexedActivity)
 				default:
-					log.Error().Str("mode", mode).Msg("We've arrived at a load test mode that we don't recognize")
+					log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
 				}
-				recordSample(i, j, err, startReq, endReq, myNonceValue)
-				if err != nil {
-					log.Error().Err(err).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
+				recordSample(i, j, tErr, startReq, endReq, myNonceValue)
+				if tErr != nil {
+					log.Error().Err(tErr).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
 					// The nonce is used to index the recalled transactions in call-only mode. We don't want to retry a transaction if it legit failed on the chain
 					if !*ltp.CallOnly {
 						retryForNonce = true
 					}
-					if strings.Contains(err.Error(), "replacement transaction underpriced") && retryForNonce {
+					if strings.Contains(tErr.Error(), "replacement transaction underpriced") && retryForNonce {
 						retryForNonce = false
 					}
-					if strings.Contains(err.Error(), "transaction underpriced") && retryForNonce {
+					if strings.Contains(tErr.Error(), "transaction underpriced") && retryForNonce {
 						retryForNonce = false
 					}
-					if strings.Contains(err.Error(), "nonce too low") && retryForNonce {
+					if strings.Contains(tErr.Error(), "nonce too low") && retryForNonce {
 						retryForNonce = false
 					}
 				}
 
-				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode).Int64("request", j).Msg("Request")
+				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode.String()).Int64("request", j).Msg("Request")
 			}
 			wg.Done()
 		}(i)
@@ -630,7 +717,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 
 	erc721Contract, err = contracts.NewERC721(erc721Addr, c)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
+		log.Error().Err(err).Msg("Unable to instantiate new erc721 contract")
 		return
 	}
 
@@ -857,7 +944,7 @@ func loadTestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 
 // mode where the user has provided a specific function to execute, we
 // should use that function. Otherwise, we'll select random functions.
 func getCurrentLoadTestFunction() uint64 {
-	if loadTestModeFunction == *inputLoadTestParams.Mode {
+	if loadTestModeFunction == inputLoadTestParams.Mode {
 		return *inputLoadTestParams.Function
 	}
 	return contracts.GetRandomOPCode()
@@ -1120,10 +1207,79 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, orig
 	return
 }
 
-func loadTestNotImplemented(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *IndexedActivity) (t1 time.Time, t2 time.Time, err error) {
+
+	funcNum := randSrc.Intn(300)
 	t1 = time.Now()
-	t2 = time.Now()
-	err = fmt.Errorf("this method is not implemented")
+	defer func() { t2 = time.Now() }()
+	if funcNum < 10 {
+		log.Trace().Msg("eth_gasPrice")
+		_, err = c.SuggestGasPrice(ctx)
+	} else if funcNum < 21 {
+		log.Trace().Msg("eth_estimateGas")
+	} else if funcNum < 33 {
+		log.Trace().Msg("eth_getTransactionCount")
+		_, err = c.NonceAt(ctx, ethcommon.HexToAddress(ia.Addresses[randSrc.Intn(len(ia.Addresses))]), nil)
+	} else if funcNum < 47 {
+		log.Trace().Msg("eth_getCode")
+		_, err = c.CodeAt(ctx, ethcommon.HexToAddress(ia.Contracts[randSrc.Intn(len(ia.Contracts))]), nil)
+	} else if funcNum < 64 {
+		log.Trace().Msg("eth_getBlockByNumber")
+		_, err = c.BlockByNumber(ctx, big.NewInt(int64(randSrc.Intn(int(ia.BlockNumber)))))
+	} else if funcNum < 84 {
+		log.Trace().Msg("eth_getTransactionByHash")
+		_, _, err = c.TransactionByHash(ctx, ethcommon.HexToHash(ia.TransactionIDs[randSrc.Intn(len(ia.TransactionIDs))]))
+	} else if funcNum < 109 {
+		log.Trace().Msg("eth_getBalance")
+		_, err = c.BalanceAt(ctx, ethcommon.HexToAddress(ia.Addresses[randSrc.Intn(len(ia.Addresses))]), nil)
+	} else if funcNum < 142 {
+		log.Trace().Msg("eth_getTransactionReceipt")
+		_, err = c.TransactionReceipt(ctx, ethcommon.HexToHash(ia.TransactionIDs[randSrc.Intn(len(ia.TransactionIDs))]))
+	} else if funcNum < 192 {
+		log.Trace().Msg("eth_getLogs")
+		h := ethcommon.HexToHash(ia.BlockIDs[randSrc.Intn(len(ia.BlockIDs))])
+		_, err = c.FilterLogs(ctx, ethereum.FilterQuery{BlockHash: &h})
+	} else {
+		log.Trace().Msg("eth_call")
+		erc20Str := string(ia.ERC20Addresses[randSrc.Intn(len(ia.ERC20Addresses))])
+		erc721Str := string(ia.ERC721Addresses[randSrc.Intn(len(ia.ERC721Addresses))])
+		erc20Addr := ethcommon.HexToAddress(erc20Str)
+		erc721Addr := ethcommon.HexToAddress(erc721Str)
+		log.Trace().
+			Str("erc20str", erc20Str).
+			Str("erc721str", erc721Str).
+			Str("erc20addr", erc20Addr.String()).
+			Str("erc721addr", erc721Addr.String()).
+			Msg("retrieve contract addresses")
+		cops := new(bind.CallOpts)
+		cops.Context = ctx
+		var erc721Contract *contracts.ERC721
+		var erc20Contract *contracts.ERC20
+
+		erc721Contract, err = contracts.NewERC721(erc721Addr, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to instantiate new erc721 contract")
+			return
+		}
+		erc20Contract, err = contracts.NewERC20(erc20Addr, c)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
+			return
+		}
+		t1 = time.Now()
+
+		_, err = erc721Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
+		if err != nil && err == bind.ErrNoCode {
+			err = nil
+		}
+		_, err = erc20Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
+		if err != nil && err == bind.ErrNoCode {
+			err = nil
+		}
+		// tokenURI would be the next most popular call, but it's not very complex
+
+	}
+
 	return
 }
 
