@@ -17,7 +17,6 @@ import (
 	"time"
 
 	_ "embed"
-	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
 	"github.com/maticnetwork/polygon-cli/metrics"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -300,9 +299,7 @@ func runLoadTest(ctx context.Context) error {
 	rpc.SetHeader("Accept-Encoding", "identity")
 	ec := ethclient.NewClient(rpc)
 
-	var loopFunc func() error
-
-	loopFunc = func() error {
+	loopFunc := func() error {
 		err = initializeLoadTestParams(ctx, ec)
 		if err != nil {
 			return err
@@ -1283,12 +1280,6 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *Ind
 
 	}
 
-	return
-}
-func loadTestNotImplemented(ctx context.Context, c *gsrpc.SubstrateAPI, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
-	t1 = time.Now()
-	t2 = time.Now()
-	err = fmt.Errorf("this method is not implemented")
 	return
 }
 

@@ -106,6 +106,9 @@ func getIndexedRecentActivity(ctx context.Context, ec *ethclient.Client, c *ethr
 	ia.Contracts = deduplicate(ia.Contracts)
 
 	ia.BlockNumber, err = ec.BlockNumber(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return ia, nil
 }
 
