@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"io"
 	"math/big"
 	"math/rand"
@@ -16,7 +15,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/maticnetwork/polygon-cli/rpctypes"
+
 	_ "embed"
+
 	"github.com/maticnetwork/polygon-cli/metrics"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -49,6 +51,7 @@ const (
 	loadTestModePrecompiledContracts
 	loadTestModePrecompiledContract
 	loadTestModeRecall
+	loadTestModeUniswapV3
 
 	// All the modes AFTER random mode will not be used when mode random is selected
 	loadTestModeRandom
@@ -84,6 +87,8 @@ func characterToLoadTestMode(mode string) (loadTestMode, error) {
 		return loadTestModePrecompiledContract, nil
 	case "R", "recall":
 		return loadTestModeRecall, nil
+	case "v3", "uniswapv3":
+		return loadTestModeUniswapV3, nil
 	case "rpc":
 		return loadTestModeRPC, nil
 	default:
@@ -472,6 +477,16 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Debug().Str("erc721Addr", erc721Addr.String()).Msg("Obtained erc 721 contract address")
 	}
 
+	var uniswapv3FactoryAddr ethcommon.Address
+	//var uniswapv3FactoryContract *uniswapv3.Uniswapv3
+	if mode == loadTestModeUniswapV3 || mode == loadTestModeRandom {
+		uniswapv3FactoryAddr, _, err = deployUniswapV3Factory(c, tops)
+		if err != nil {
+			return nil
+		}
+		log.Debug().Str("address", uniswapv3FactoryAddr.String()).Msg("Obtained UniswapV3Factory contract address")
+	}
+
 	var recallTransactions []rpctypes.PolyTransaction
 	if mode == loadTestModeRecall || mode == loadTestModeRandom {
 		recallTransactions, err = getRecallTransactions(ctx, c, rpc)
@@ -575,6 +590,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					startReq, endReq, tErr = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false)
 				case loadTestModeRecall:
 					startReq, endReq, tErr = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
+				case loadTestModeUniswapV3:
+					log.Info().Msg("TODO")
 				case loadTestModeRPC:
 					startReq, endReq, tErr = loadTestRPC(ctx, c, myNonceValue, indexedActivity)
 				default:

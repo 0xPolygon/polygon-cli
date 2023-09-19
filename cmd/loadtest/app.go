@@ -224,6 +224,7 @@ s - store mode
 r - random modes
 2 - ERC20 Transfers
 7 - ERC721 Mints
+v3 - UniswapV3 swaps
 R - total recall
 rpc - call random rpc methods`)
 	ltp.Function = LoadtestCmd.PersistentFlags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` or a specific precompiled contract when running with `--mode a`")
