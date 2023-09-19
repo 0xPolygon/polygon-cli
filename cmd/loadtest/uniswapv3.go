@@ -25,6 +25,7 @@ type UniswapV3Config struct {
 	Factory    uniswapV3ContractDeployment[uniswapv3.UniswapV3Factory]
 	Multicall  uniswapV3ContractDeployment[uniswapv3.UniswapInterfaceMulticall]
 	ProxyAdmin uniswapV3ContractDeployment[uniswapv3.ProxyAdmin]
+	TickLens   uniswapV3ContractDeployment[uniswapv3.TickLens]
 }
 
 type uniswapV3ContractDeployment[T uniswapV3Contract] struct {
@@ -33,7 +34,7 @@ type uniswapV3ContractDeployment[T uniswapV3Contract] struct {
 }
 
 type uniswapV3Contract interface {
-	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin
+	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens
 }
 
 func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (UniswapV3Config, error) {
@@ -65,6 +66,13 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return UniswapV3Config{}, err
 	}
 	log.Trace().Interface("address", config.ProxyAdmin.Address).Msg("ProxyAdmin contract deployed")
+
+	config.TickLens.Address, _, config.TickLens.Contract, err = uniswapv3.DeployTickLens(tops, c)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to deploy TickLens contract")
+		return UniswapV3Config{}, err
+	}
+	log.Trace().Interface("address", config.TickLens.Address).Msg("TickLens contract deployed")
 
 	return config, nil
 }
