@@ -8,8 +8,27 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+type UniswapV3Config struct {
+	Factory struct {
+		Address  ethcommon.Address
+		Contract *uniswapv3.Uniswapv3
+	}
+}
+
+func deployUniswapV3(c *ethclient.Client, tops *bind.TransactOpts) (UniswapV3Config, error) {
+	var config UniswapV3Config
+	var err error
+
+	// 1. Deploy UniswapV3Factory.
+	config.Factory.Address, config.Factory.Contract, err = deployUniswapV3Factory(c, tops)
+	if err != nil {
+		return UniswapV3Config{}, err
+	}
+
+	return config, nil
+}
+
 func deployUniswapV3Factory(c *ethclient.Client, tops *bind.TransactOpts) (ethcommon.Address, *uniswapv3.Uniswapv3, error) {
-	// Deploy the UniswapV3Factory contract.
 	address, _, _, err := uniswapv3.DeployUniswapv3(tops, c)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to deploy UniswapV3Factory contract")
@@ -17,7 +36,6 @@ func deployUniswapV3Factory(c *ethclient.Client, tops *bind.TransactOpts) (ethco
 	}
 	log.Trace().Interface("address", address).Msg("UniswapV3Factory contract address")
 
-	// Create a new instance of the contract.
 	contract, err := uniswapv3.NewUniswapv3(address, c)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to instantiate UniswapV3Factory contract")

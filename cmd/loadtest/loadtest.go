@@ -477,14 +477,13 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Debug().Str("erc721Addr", erc721Addr.String()).Msg("Obtained erc 721 contract address")
 	}
 
-	var uniswapv3FactoryAddr ethcommon.Address
-	//var uniswapv3FactoryContract *uniswapv3.Uniswapv3
+	var uniswapV3Config UniswapV3Config
 	if mode == loadTestModeUniswapV3 || mode == loadTestModeRandom {
-		uniswapv3FactoryAddr, _, err = deployUniswapV3Factory(c, tops)
+		uniswapV3Config, err = deployUniswapV3(c, tops)
 		if err != nil {
 			return nil
 		}
-		log.Debug().Str("address", uniswapv3FactoryAddr.String()).Msg("Obtained UniswapV3Factory contract address")
+		log.Debug().Interface("config", uniswapV3Config).Msg("Obtained UniswapV3 deployment config")
 	}
 
 	var recallTransactions []rpctypes.PolyTransaction
