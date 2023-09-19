@@ -9,11 +9,11 @@ gen_go_binding() {
     --abi $repository/$contract.abi \
     --bin $repository/$contract.bin \
     --pkg uniswapv3 \
+    --type $contract \
     --out $contract.go
   echo ✅ $contract bindings generated.
 }
 
 abigen --version
-gen_go_binding tmp/v3-core UniswapV3Factory
-#gen_go_binding v3-periphery NFTDescriptor
-#gen_go_binding v3-periphery NonfungibleTokenPositionDescriptor
+gen_go_binding v3-core UniswapV3Factory
+gen_go_binding v3-periphery UniswapInterfaceMulticall
