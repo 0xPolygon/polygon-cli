@@ -42,3 +42,19 @@ mkdir v3-periphery
 mv tmp/v3-periphery/* v3-periphery
 rm -rf tmp
 echo "✅ Successfully built v3-periphery contracts..."
+
+# Build openzeppelin contracts.
+echo "\n🏗️  Building openzeppelin contracts..."
+rm -rf openzeppelin-contracts
+git clone https://github.com/OpenZeppelin/openzeppelin-contracts.git --branch v3.4.1-solc-0.7-2
+solc \
+	../access=$current_dir/openzeppelin-contracts/contracts/access \
+	../utils=$current_dir/openzeppelin-contracts/contracts/utils \
+  --abi openzeppelin-contracts/contracts/proxy/ProxyAdmin.sol \
+  --bin openzeppelin-contracts/contracts/proxy/ProxyAdmin.sol \
+  --output-dir tmp/openzeppelin-contracts
+rm -rf openzeppelin-contracts
+mkdir openzeppelin-contracts
+mv tmp/openzeppelin-contracts/* openzeppelin-contracts
+rm -rf tmp
+echo "✅ Successfully built openzeppelin contracts..."

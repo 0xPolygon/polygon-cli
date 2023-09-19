@@ -17,3 +17,4 @@ gen_go_binding() {
 abigen --version
 gen_go_binding v3-core UniswapV3Factory
 gen_go_binding v3-periphery UniswapInterfaceMulticall
+gen_go_binding openzeppelin-contracts ProxyAdmin
