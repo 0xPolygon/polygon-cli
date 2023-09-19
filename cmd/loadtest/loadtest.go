@@ -38,6 +38,9 @@ type (
 )
 
 const (
+	// these constants are stringered. If you add a new constant it fill fail to compile until you regenerate the strings. There are two steps needed.
+	// 1. Install stringer with something like `go install golang.org/x/tools/cmd/stringer`
+	// 2. now that its installed (make sure your GOBIN is on the PATH) you can run `go generate github.com/maticnetwork/polygon-cli/cmd/loadtest`
 	loadTestModeTransaction loadTestMode = iota
 	loadTestModeDeploy
 	loadTestModeCall
