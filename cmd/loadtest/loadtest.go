@@ -92,7 +92,7 @@ func characterToLoadTestMode(mode string) (loadTestMode, error) {
 	case "rpc":
 		return loadTestModeRPC, nil
 	default:
-		return 0, fmt.Errorf("Unrecognized load test mode: %s", mode)
+		return 0, fmt.Errorf("unrecognized load test mode: %s", mode)
 	}
 }
 
@@ -479,7 +479,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 	var uniswapV3Config UniswapV3Config
 	if mode == loadTestModeUniswapV3 || mode == loadTestModeRandom {
-		uniswapV3Config, err = deployUniswapV3(c, tops)
+		uniswapV3Config, err = deployUniswapV3(ctx, c, tops)
 		if err != nil {
 			return nil
 		}
@@ -493,7 +493,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			return err
 		}
 		if len(recallTransactions) == 0 {
-			return fmt.Errorf("We weren't able to fetch any recall transactions")
+			return fmt.Errorf("we weren't able to fetch any recall transactions")
 		}
 		log.Debug().Int("txs", len(recallTransactions)).Msg("retrieved transactions for total recall")
 	}
