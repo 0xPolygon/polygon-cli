@@ -1,4 +1,6 @@
-# Requirements
+# 🦄 UniswapV3 contracts
+
+Simple steps to build UniswapV3 contracts and generate go bindings.
 
 1. Make sure you have `solc@0.7.6` installed. This is required to build UniswapV3 contracts. A handy way to manage `solc` versions is to use [crytic/solc-select](https://github.com/crytic/solc-select).
 
