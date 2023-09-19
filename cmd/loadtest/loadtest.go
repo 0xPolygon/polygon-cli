@@ -483,7 +483,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		if err != nil {
 			return nil
 		}
-		log.Debug().Interface("config", uniswapV3Config).Msg("Obtained UniswapV3 deployment config")
+		log.Debug().Interface("config", uniswapV3Config).Msg("UniswapV3 deployment config")
 	}
 
 	var recallTransactions []rpctypes.PolyTransaction
