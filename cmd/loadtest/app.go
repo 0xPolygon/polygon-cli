@@ -10,8 +10,6 @@ import (
 	"sync"
 	"time"
 
-	gssignature "github.com/centrifuge/go-substrate-rpc-client/v4/signature"
-	gstypes "github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/rs/zerolog"
@@ -61,7 +59,6 @@ type (
 		Iterations                          *uint64
 		ByteCount                           *uint64
 		Seed                                *int64
-		IsAvail                             *bool
 		LtAddress                           *string
 		ERC20Address                        *string
 		ERC721Address                       *string
@@ -90,10 +87,6 @@ type (
 		Mode                loadTestMode
 		ParsedModes         []loadTestMode
 		MultiMode           bool
-
-		ToAvailAddress   *gstypes.MultiAddress
-		FromAvailAddress *gssignature.KeyringPair
-		AvailRuntime     *gstypes.RuntimeVersion
 	}
 
 	txpoolStatus struct {

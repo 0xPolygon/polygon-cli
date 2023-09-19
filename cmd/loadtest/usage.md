@@ -14,7 +14,7 @@ The `--mode` flag is important for this command.
 - `7` will run an ERC721 test which will mint an NFT over and over again.
 - `i` will call the increment function repeatedly on the load test contract. It's a minimal example of a contract call that will require an update to a contract's storage.
 - `r` will call any of th eother modes randomly.
-- `s` is used for Avail / Eth to store random data in large amounts.
+- `s` is used to store random data in large amounts.
 - `l` will call a smart contract function that runs as long as it can, based on the block limit.
 
 The default private key is: `42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa`. We can use `wallet inspect` to get more information about this address, in particular its `ETHAddress` if you want to check balance or pre-mine value for this particular account.
@@ -43,16 +43,4 @@ The codebase has a contract that used for load testing. It's written in Yul and 
 4. Run the loadtester to enure it deploys and runs successfully
    - `$ polycli loadtest --verbosity 700 http://127.0.0.1:8541`
 
-### Avail / Substrate
-
-The loadtest tool works with Avail, but not with the same level of functionality. There's no EVM so the functional calls will not work. This is a basic example which would transfer value in a loop 10 times.
-
-```bash
-$ polycli loadtest --app-id 0 --to-random=true  --data-avail --verbosity 700 --chain-id 42 --concurrency 1 --requests 10 --rate-limit 1 --mode t 'http://devnet01.dataavailability.link:8545'
-```
-
-This is a similar test but storing random nonsense hexwords.
-
-```bash
-$ polycli loadtest --app-id 0 --data-avail --verbosity 700 --chain-id 42 --concurrency 1 --requests 10 --rate-limit 1 --mode s --byte-count 16384 'http://devnet01.dataavailability.link:8545'
 ```

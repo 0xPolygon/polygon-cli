@@ -1,12 +1,21 @@
-This command is meant to simplify the operations of creating wallets across v1 and avail. This command can take a seed phrase and spit out child accounts or generate new accmounts along with a seed phrase. It can generate portable wallets to be used across ETH, BTC, Polygon, Avail, etc.
+This command is meant to simplify the operations of creating
+wallets. This command can take a seed phrase and spit out child
+accounts or generate new accmounts along with a seed phrase. It can
+generate portable wallets to be used across ETH, BTC, PoS, Substrate,
+etc.
 
-In the example, we're generating a wallet with a few flags that are used to configure how many wallets are generated and how the seed phrase is used to generate the wallets.
+In the example, we're generating a wallet with a few flags that are
+used to configure how many wallets are generated and how the seed
+phrase is used to generate the wallets.
 
 ```bash
 $ polycli wallet create --raw-entropy --root-only --words 15 --language english
 ```
 
-In addition to generating wallets with new mnemonics, you can use a known mnemonic to generate wallets. **Caution** entering your seed phrase in the command line should only be done for test mnemonics. Never do this with a real seed phrase.
+In addition to generating wallets with new mnemonics, you can use a
+known mnemonic to generate wallets. **Caution** entering your seed
+phrase in the command line should only be done for test
+mnemonics. Never do this with a real seed phrase.
 
 The example below is a test vector from Substrate.
 
