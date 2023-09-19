@@ -82,9 +82,9 @@ func characterToLoadTestMode(mode string) (loadTestMode, error) {
 	case "7", "erc721":
 		return loadTestModeERC721, nil
 	case "p", "precompile":
-		return loadTestModePrecompiledContracts, nil
-	case "a", "precompiles":
 		return loadTestModePrecompiledContract, nil
+	case "P", "precompiles":
+		return loadTestModePrecompiledContracts, nil
 	case "R", "recall":
 		return loadTestModeRecall, nil
 	case "rpc":
