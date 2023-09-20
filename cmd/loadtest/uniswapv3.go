@@ -75,6 +75,7 @@ type uniswapV3Contract interface {
 	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.WETH9 | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker | uniswapv3.QuoterV2 | uniswapv3.SwapRouter02 | uniswapv3.ERC20
 }
 
+// Source: https://github.com/Uniswap/deploy-v3
 func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses, ownerAddress common.Address) (UniswapV3Config, error) {
 	config := UniswapV3Config{}
 	var err error
@@ -361,54 +362,35 @@ func transferProxyAdminOwnership(contract *uniswapv3.ProxyAdmin, tops *bind.Tran
 	return nil
 }
 
-func deployERC20Pair(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, config UniswapV3Config, tokenAKnownAddress, tokenBKnownAddress common.Address) (contractConfig[uniswapv3.ERC20], contractConfig[uniswapv3.ERC20], error) {
-	tokensToMint := big.NewInt(1_000_000_000_000_000_000)
-
-	var token0, token1 contractConfig[uniswapv3.ERC20]
+func deployERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, config UniswapV3Config, tokenName, tokenSymbol string, tokenKnownAddress common.Address, tokensToMint *big.Int) (contractConfig[uniswapv3.ERC20], error) {
+	var token contractConfig[uniswapv3.ERC20]
 	var err error
-	token0.Address, token0.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "TokenA", tokenAKnownAddress,
+	addressesToApprove := []common.Address{config.NonfungiblePositionManager.Address, config.SwapRouter02.Address}
+	token.Address, token.contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, tokenName, tokenKnownAddress,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.ERC20, error) {
-			return uniswapv3.DeployERC20(tops, c, "TokenA", "A")
+			return uniswapv3.DeployERC20(tops, c, tokenName, tokenSymbol)
 		},
 		uniswapv3.NewERC20,
 		func(contract *uniswapv3.ERC20) error {
-			return approveERC20SpendingsByUniswap(contract, tops, config.NonfungiblePositionManager.Address, config.SwapRouter02.Address, tokensToMint)
+			return approveERC20SpendingsByUniswap(contract, tops, addressesToApprove, tokensToMint)
 		},
 	)
 	if err != nil {
-		return token0, token1, err
+		return token, err
 	}
-	token1.Address, token1.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "TokenB", tokenBKnownAddress,
-		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.ERC20, error) {
-			return uniswapv3.DeployERC20(tops, c, "TokenB", "B")
-		},
-		uniswapv3.NewERC20,
-		func(contract *uniswapv3.ERC20) (err error) {
-			return approveERC20SpendingsByUniswap(contract, tops, config.NonfungiblePositionManager.Address, config.SwapRouter02.Address, tokensToMint)
-		},
-	)
-	if err != nil {
-		return token0, token1, err
-	}
-	return token0, token1, nil
+	return token, nil
 }
 
-func approveERC20SpendingsByUniswap(contract *uniswapv3.ERC20, tops *bind.TransactOpts, NonfungiblePositionManagerAddress, SwapRouter02Address common.Address, amount *big.Int) error {
-	_, err := contract.Approve(tops, NonfungiblePositionManagerAddress, amount)
-	if err != nil {
-		log.Trace().Msg("Unable to approve NonfungiblePositionManagerAddress spendings")
-		return err
+func approveERC20SpendingsByUniswap(contract *uniswapv3.ERC20, tops *bind.TransactOpts, addresses []common.Address, amount *big.Int) error {
+	for _, address := range addresses {
+		_, err := contract.Approve(tops, address, amount)
+		if err != nil {
+			log.Trace().Msg(fmt.Sprintf("Unable to approve %v spendings", address))
+			return err
+		}
 	}
-
-	_, err = contract.Approve(tops, SwapRouter02Address, amount)
-	if err != nil {
-		log.Trace().Msg("Unable to approve SwapRouter02Address spendings")
-		return err
-	}
-
-	log.Trace().Msg("Spendings approved for both NonfungiblePositionManagerAddress and SwapRouter02Address")
+	log.Trace().Msg("Spendings approved for all the addresses")
 	return nil
 }
 
