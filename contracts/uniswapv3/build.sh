@@ -96,6 +96,7 @@ fi
 ## Build v3-staker contracts.
 if [ "$1" -eq 3 ] || [ "$1" -eq 0 ]; then
 	echo -e "\n🏗️  Building v3-staker contracts..."
+	rm -rf v3-staker
 	git clone https://github.com/Uniswap/v3-staker.git
 	pushd v3-staker
 	yarn install
