@@ -129,9 +129,13 @@ if [ "$1" -eq 4 ] || [ "$1" -eq 0 ]; then
 	popd
 	solc \
 		v3-swap-router/contracts/lens/QuoterV2.sol \
+		v3-swap-router/contracts/SwapRouter02.sol \
 		@uniswap=$current_dir/v3-swap-router/node_modules/@uniswap \
+		@openzeppelin=$current_dir/v3-swap-router/node_modules/@openzeppelin \
 		../interfaces=$current_dir/v3-swap-router/contracts/interfaces \
 		../libraries=$current_dir/v3-swap-router/contracts/libraries \
+		--optimize \
+		--optimize-runs 200 \
 		--abi \
 		--bin \
 		--output-dir tmp/v3-swap-router \
