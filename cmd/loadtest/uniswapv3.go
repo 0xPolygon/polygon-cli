@@ -514,20 +514,3 @@ func swapTokenBForTokenA(tops *bind.TransactOpts, config UniswapV3Config, tokenA
 	log.Trace().Msg("Swapped TokenB for TokenA")
 	return nil
 }
-
-func swapTokenAForTokenB(tops *bind.TransactOpts, config UniswapV3Config, tokenA, tokenB contractConfig[uniswapv3.ERC20], fees *big.Int, recipient common.Address) error {
-	if _, err := config.SwapRouter02.contract.ExactInputSingle(tops, uniswapv3.IV3SwapRouterExactInputSingleParams{
-		TokenIn:           tokenA.Address,
-		TokenOut:          tokenB.Address,
-		Fee:               fees,
-		Recipient:         recipient,
-		AmountIn:          big.NewInt(1),
-		AmountOutMinimum:  big.NewInt(0),
-		SqrtPriceLimitX96: big.NewInt(0),
-	}); err != nil {
-		log.Error().Err(err).Msg("Unable to swap TokenA for TokenB")
-		return err
-	}
-	log.Trace().Msg("Swapped TokenA into TokenB")
-	return nil
-}
