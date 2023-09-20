@@ -28,21 +28,28 @@ build_contracts() {
 	branch=$3
 	contracts=$4
 	echo -e "\n🏗️  Building $repository contracts..."
-	rm -rf ./$repository/*
+
+	# Clone repository.
 	git clone --branch $branch $url ./tmp/$repository
+
+	# Install dependencies.
 	pushd tmp/$repository
 	yarn install
 	popd
 
+	# Update contract's array path.
 	new_array=()
 	for contract in "${contracts[@]}"; do
 		new_array+=("tmp/$repository/contracts/$contract.sol")
 	done
 
+	# Remove old artefacts.
+	rm -rf ./$repository/*
+
+	# Compile contracts.
 	for element in "${new_array[@]}"; do
     echo "$element"
 	done
-
 	solc "${new_array[@]}" \
 		@uniswap=$current_dir/tmp/$repository/node_modules/@uniswap \
 		@openzeppelin=$current_dir/tmp/$repository/node_modules/@openzeppelin \
@@ -57,6 +64,7 @@ build_contracts() {
 		--output-dir ./$repository \
 		--overwrite
 
+	# Clean up.
 	rm -rf ./tmp/$repository
 	echo "✅ Successfully built $repository contracts..."
 }
