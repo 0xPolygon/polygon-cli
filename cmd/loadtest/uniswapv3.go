@@ -28,16 +28,16 @@ type UniswapV3Addresses struct {
 }
 
 type UniswapV3Config struct {
-	Factory           uniswapV3ContractDeployment[uniswapv3.UniswapV3Factory]
-	Multicall         uniswapV3ContractDeployment[uniswapv3.UniswapInterfaceMulticall]
-	ProxyAdmin        uniswapV3ContractDeployment[uniswapv3.ProxyAdmin]
-	TickLens          uniswapV3ContractDeployment[uniswapv3.TickLens]
-	NFTDescriptionLib uniswapV3ContractDeployment[uniswapv3.NFTDescriptor]
+	Factory           contractConfig[uniswapv3.UniswapV3Factory]
+	Multicall         contractConfig[uniswapv3.UniswapInterfaceMulticall]
+	ProxyAdmin        contractConfig[uniswapv3.ProxyAdmin]
+	TickLens          contractConfig[uniswapv3.TickLens]
+	NFTDescriptionLib contractConfig[uniswapv3.NFTDescriptor]
 }
 
-type uniswapV3ContractDeployment[T uniswapV3Contract] struct {
+type contractConfig[T uniswapV3Contract] struct {
 	Address  common.Address
-	Contract *T
+	contract *T
 }
 
 type uniswapV3Contract interface {
@@ -49,7 +49,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	var err error
 
 	// 1. Deploy UniswapV3Factory.
-	config.Factory.Address, config.Factory.Contract, err = deployOrInstantiateContract(
+	config.Factory.Address, config.Factory.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "Factory", knownAddresses.Factory,
 		uniswapv3.DeployUniswapV3Factory,
 		uniswapv3.NewUniswapV3Factory,
@@ -63,13 +63,13 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	}
 
 	// 2. Enable one basic point fee tier.
-	err = enableOneBPFeeTier(config.Factory.Contract, tops, ONE_BP_FEE, ONE_BP_TICK_SPACING)
+	err = enableOneBPFeeTier(config.Factory.contract, tops, ONE_BP_FEE, ONE_BP_TICK_SPACING)
 	if err != nil {
 		return UniswapV3Config{}, err
 	}
 
 	// 3. Deploy UniswapInterfaceMulticall.
-	config.Multicall.Address, config.Multicall.Contract, err = deployOrInstantiateContract(
+	config.Multicall.Address, config.Multicall.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "Multicall", knownAddresses.Multicall,
 		uniswapv3.DeployUniswapInterfaceMulticall,
 		uniswapv3.NewUniswapInterfaceMulticall,
@@ -83,7 +83,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	}
 
 	// 4. Deploy ProxyAdmin.
-	config.ProxyAdmin.Address, config.ProxyAdmin.Contract, err = deployOrInstantiateContract(
+	config.ProxyAdmin.Address, config.ProxyAdmin.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "ProxyAdmin", knownAddresses.ProxyAdmin,
 		uniswapv3.DeployProxyAdmin,
 		uniswapv3.NewProxyAdmin,
@@ -97,7 +97,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	}
 
 	// 5. Deploy TickLens.
-	config.TickLens.Address, config.TickLens.Contract, err = deployOrInstantiateContract(
+	config.TickLens.Address, config.TickLens.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "TickLens", knownAddresses.TickLens,
 		uniswapv3.DeployTickLens,
 		uniswapv3.NewTickLens,
@@ -116,7 +116,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	}
 
 	// 6. Deploy NFTDescriptionLib.
-	config.NFTDescriptionLib.Address, config.NFTDescriptionLib.Contract, err = deployOrInstantiateContract(
+	config.NFTDescriptionLib.Address, config.NFTDescriptionLib.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "NFTDescriptionLib", knownAddresses.NFTDescriptionLib,
 		uniswapv3.DeployNFTDescriptor,
 		uniswapv3.NewNFTDescriptor,
