@@ -1,6 +1,8 @@
 #!/bin/bash
 # This script builds UniswapV3 contracts.
 
+mode=$1
+
 # Make sure the local chain is started.
 wait_for_service() {
 	ip=$1
@@ -12,65 +14,66 @@ wait_for_service() {
 			sleep 5
 		done
 	} 2>/dev/null
-	>&2 echo "$name port is now open."
+	>&2 echo "✅ $name port is now open."
 }
 
 >&2 echo "Starting status checking"
 wait_for_service "127.0.0.1" 8545 "Local RPC"
+echo
 
 # Build contracts.
-solc --version
-current_dir=$(pwd)
-
-## Build v3-core contracts.
-if [ "$1" -eq 1 ] || [ "$1" -eq 0 ]; then
-	echo -e "\n🏗️  Building v3-core contracts..."
-	rm -rf v3-core
-	git clone https://github.com/Uniswap/v3-core.git
-	pushd v3-core
+build_contracts() {
+	repository=$1
+	url=$2
+	branch=$3
+	contracts=$4
+	echo -e "\n🏗️  Building $repository contracts..."
+	rm -rf ./$repository/*
+	git clone --branch $branch $url ./tmp/$repository
+	pushd tmp/$repository
 	yarn install
 	popd
-	solc \
-		v3-core/contracts/UniswapV3Factory.sol \
-		--optimize \
-		--optimize-runs 200 \
-		--abi \
-		--bin \
-		--output-dir tmp/v3-core \
-		--overwrite
-	rm -rf v3-core
-	mkdir v3-core
-	mv tmp/v3-core/* v3-core
-	rm -rf tmp
-	echo "✅ Successfully built v3-core contracts..."
-fi
 
-## Build v3-periphery contracts.
-if [ "$1" -eq 2 ] || [ "$1" -eq 0 ]; then
-	echo -e "\n🏗️  Building v3-periphery contracts..."
-	rm -rf v3-periphery
-	git clone https://github.com/Uniswap/v3-periphery.git
-	pushd v3-periphery
-	yarn install
-	popd
-	solc \
-		v3-periphery/contracts/lens/UniswapInterfaceMulticall.sol \
-		v3-periphery/contracts/lens/TickLens.sol \
-		v3-periphery/contracts/libraries/NFTDescriptor.sol \
-		v3-periphery/contracts/NonfungibleTokenPositionDescriptor.sol \
-		v3-periphery/contracts/NonfungiblePositionManager.sol \
-		v3-periphery/contracts/V3Migrator.sol \
-		@uniswap=$current_dir/v3-periphery/node_modules/@uniswap \
-		@openzeppelin=$current_dir/v3-periphery/node_modules/@openzeppelin \
-		base64-sol=$current_dir/v3-periphery/node_modules/base64-sol \
-		../interfaces=$current_dir/v3-periphery/contracts/interfaces \
+	new_array=()
+	for contract in "${contracts[@]}"; do
+		new_array+=("tmp/$repository/contracts/$contract")
+	done
+
+	for element in "${new_array[@]}"; do
+    echo "$element"
+	done
+
+	solc "${new_array[@]}" \
+		@uniswap=$current_dir/tmp/$repository/node_modules/@uniswap \
+		@openzeppelin=$current_dir/tmp/$repository/node_modules/@openzeppelin \
+		base64-sol=$current_dir/tmp/$repository/node_modules/base64-sol \
+		../interfaces=$current_dir/tmp/$repository/contracts/interfaces \
+		../libraries=$current_dir/tmp/$repository/contracts/libraries \
 		--evm-version istanbul \
 		--optimize \
 		--optimize-runs 200 \
 		--abi \
 		--bin \
-		--output-dir tmp/v3-periphery \
+		--output-dir ./$repository \
 		--overwrite
+
+	rm -rf ./tmp/$repository
+	echo "✅ Successfully built $repository contracts..."
+}
+
+solc --version
+current_dir=$(pwd)
+
+## Build v3-core contracts.
+if [ "$mode" -eq 1 ] || [ "$mode" -eq 0 ]; then
+	contracts=("UniswapV3Factory.sol")
+	build_contracts v3-core https://github.com/Uniswap/v3-core.git v1.0.0 $contracts
+fi
+
+## Build v3-periphery contracts.
+if [ "$mode" -eq 2 ] || [ "$mode" -eq 0 ]; then
+	contracts=("lens/UniswapInterfaceMulticall.sol" "lens/TickLens.sol" "libraries/NFTDescriptor.sol" "NonfungibleTokenPositionDescriptor.sol" "NonfungiblePositionManager.sol" "V3Migrator.sol")
+	build_contracts v3-periphery https://github.com/Uniswap/v3-periphery.git v1.3.0 $contracts
 
 	# We need to deloy the NFTDescriptor library, retrieve its address and link it inside
 	# NonfungibleTokenPositionDescriptor bytecode. This is required to generate the Go binding.
@@ -81,94 +84,34 @@ if [ "$1" -eq 2 ] || [ "$1" -eq 0 ]; then
 		--private-key 0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa \
 		--json \
 		--create \
-		"$(cat tmp/v3-periphery/NFTDescriptor.bin)" \
+		"$(cat v3-periphery/NFTDescriptor.bin)" \
 		| jq -r .contractAddress)
 	solc \
 		--link \
-		--libraries v3-periphery/contracts/libraries/NFTDescriptor.sol:NFTDescriptor:$nft_descriptor_lib_address \
-		tmp/v3-periphery/NonfungibleTokenPositionDescriptor.bin
-
-	rm -rf v3-periphery
-	mkdir v3-periphery
-	mv tmp/v3-periphery/* v3-periphery
-	rm -rf tmp
-	echo "✅ Successfully built v3-periphery contracts..."
+		--libraries tmp/v3-periphery/contracts/libraries/NFTDescriptor.sol:NFTDescriptor:$nft_descriptor_lib_address \
+		v3-periphery/NonfungibleTokenPositionDescriptor.bin
 fi
 
 ## Build v3-staker contracts.
-if [ "$1" -eq 3 ] || [ "$1" -eq 0 ]; then
-	echo -e "\n🏗️  Building v3-staker contracts..."
-	rm -rf v3-staker
-	git clone https://github.com/Uniswap/v3-staker.git
-	pushd v3-staker
-	yarn install
-	popd
-	solc \
-		v3-staker/contracts/UniswapV3Staker.sol \
-		@uniswap=$current_dir/v3-staker/node_modules/@uniswap \
-		@openzeppelin=$current_dir/v3-staker/node_modules/@openzeppelin \
-		--optimize \
-		--optimize-runs 200 \
-		--abi \
-		--bin \
-		--output-dir tmp/v3-staker \
-		--overwrite
-	rm -rf v3-staker
-	mkdir v3-staker
-	mv tmp/v3-staker/* v3-staker
-	rm -rf tmp
+if [ "$mode" -eq 3 ] || [ "$mode" -eq 0 ]; then
+	contracts=("UniswapV3Staker.sol")
+	build_contracts v3-staker https://github.com/Uniswap/v3-staker.git v1.0.2 $contracts
 fi
 
 ## Build v3-swap-router contracts.
-if [ "$1" -eq 4 ] || [ "$1" -eq 0 ]; then
-	echo -e "\n🏗️  Building v3-swap-router contracts..."
-	rm -rf v3-swap-router
-	git clone https://github.com/Uniswap/swap-router-contracts.git v3-swap-router
-	pushd v3-swap-router
-	yarn install
-	popd
-	solc \
-		v3-swap-router/contracts/lens/QuoterV2.sol \
-		v3-swap-router/contracts/SwapRouter02.sol \
-		@uniswap=$current_dir/v3-swap-router/node_modules/@uniswap \
-		@openzeppelin=$current_dir/v3-swap-router/node_modules/@openzeppelin \
-		../interfaces=$current_dir/v3-swap-router/contracts/interfaces \
-		../libraries=$current_dir/v3-swap-router/contracts/libraries \
-		--optimize \
-		--optimize-runs 200 \
-		--abi \
-		--bin \
-		--output-dir tmp/v3-swap-router \
-		--overwrite
-	rm -rf v3-swap-router
-	mkdir v3-swap-router
-	mv tmp/v3-swap-router/* v3-swap-router
-	rm -rf tmp
+if [ "$mode" -eq 4 ] || [ "$mode" -eq 0 ]; then
+	contracts=("lens/QuoterV2.sol" "SwapRouter02.sol")
+	build_contracts v3-swap-router https://github.com/Uniswap/swap-router-contracts.git v1.3.0 $contracts
 fi
 
 ## Build openzeppelin contracts.
-if [ "$1" -eq 5 ] || [ "$1" -eq 0 ]; then
-	echo -e "\n🏗️  Building openzeppelin contracts..."
-	rm -rf openzeppelin-contracts
-	git clone https://github.com/OpenZeppelin/openzeppelin-contracts.git --branch v3.4.1-solc-0.7-2
-	solc \
-		openzeppelin-contracts/contracts/proxy/ProxyAdmin.sol \
-		openzeppelin-contracts/contracts/proxy/TransparentUpgradeableProxy.sol \
-		../access=$current_dir/openzeppelin-contracts/contracts/access \
-		../utils=$current_dir/openzeppelin-contracts/contracts/utils \
-		--abi \
-		--bin \
-		--output-dir tmp/openzeppelin-contracts \
-		--overwrite
-	rm -rf openzeppelin-contracts
-	mkdir openzeppelin-contracts
-	mv tmp/openzeppelin-contracts/* openzeppelin-contracts
-	rm -rf tmp
-	echo "✅ Successfully built openzeppelin contracts..."
+if [ "$mode" -eq 5 ] || [ "$mode" -eq 0 ]; then
+	contracts=("proxy/ProxyAdmin.sol" "proxy/TransparentUpgradeableProxy.sol")
+	build_contracts openzeppelin https://github.com/OpenZeppelin/openzeppelin-contracts.git v3.4.1-solc-0.7-2 $contracts
 fi
 
 ## Build WETH9 contract.
-if [ "$1" -eq 6 ] || [ "$1" -eq 0 ]; then
+if [ "$mode" -eq 6 ] || [ "$mode" -eq 0 ]; then
 	echo -e "\n🏗️  Building WETH9 contract..."
 	git clone https://github.com/gnosis/canonical-weth.git
 	rm -rf weth9
