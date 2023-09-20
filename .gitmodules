@@ -1,0 +1,3 @@
+[submodule "contracts/uniswapv3/erc20/lib/forge-std"]
+	path = contracts/uniswapv3/erc20/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
