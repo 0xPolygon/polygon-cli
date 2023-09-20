@@ -50,7 +50,7 @@ type uniswapV3Contract interface {
 	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.WETH9 | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator
 }
 
-func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses) (UniswapV3Config, error) {
+func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses, ownerAddress common.Address) (UniswapV3Config, error) {
 	var config UniswapV3Config
 	var err error
 
@@ -69,8 +69,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	}
 
 	// 2. Enable one basic point fee tier.
-	err = enableOneBPFeeTier(config.Factory.contract, tops, ONE_BP_FEE, ONE_BP_TICK_SPACING)
-	if err != nil {
+	if err = enableOneBPFeeTier(config.Factory.contract, tops, ONE_BP_FEE, ONE_BP_TICK_SPACING); err != nil {
 		return UniswapV3Config{}, err
 	}
 
@@ -204,6 +203,11 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return UniswapV3Config{}, err
 	}
 
+	// 11. Transfer Factory ownership.
+	if err = transferFactoryOwnership(config.Factory.contract, tops, cops, ownerAddress); err != nil {
+		return UniswapV3Config{}, err
+	}
+
 	return config, nil
 }
 
@@ -252,6 +256,21 @@ func enableOneBPFeeTier(contract *uniswapv3.UniswapV3Factory, tops *bind.Transac
 		return err
 	}
 	log.Trace().Msg("Enable a one basic point fee tier")
+	return nil
+}
+
+func transferFactoryOwnership(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOpts, cops *bind.CallOpts, newOwner common.Address) error {
+	currentOwner, err := contract.Owner(cops)
+	if err != nil {
+		return err
+	}
+	if currentOwner == newOwner {
+		return fmt.Errorf("Factory already owned by %s", currentOwner)
+	}
+
+	if _, err = contract.SetOwner(tops, newOwner); err != nil {
+		return err
+	}
 	return nil
 }
 

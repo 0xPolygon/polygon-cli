@@ -480,7 +480,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	uniswapAddresses := UniswapV3Addresses{}
 	var uniswapV3Config UniswapV3Config
 	if mode == loadTestModeUniswapV3 || mode == loadTestModeRandom {
-		uniswapV3Config, err = deployUniswapV3(ctx, c, tops, cops, uniswapAddresses)
+		uniswapV3Config, err = deployUniswapV3(ctx, c, tops, cops, uniswapAddresses, ltAddr)
 		if err != nil {
 			return nil
 		}
