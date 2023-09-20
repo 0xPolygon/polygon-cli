@@ -21,11 +21,26 @@ const (
 	// The spacing between ticks to be enforced for all pools with the given fee amount.
 	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/add-1bp-fee-tier.ts#L6
 	ONE_BP_TICK_SPACING int64 = 1
+
+	// Time units.
+	ONE_MINUTE_SECONDS = 60
+	ONE_HOUR_SECONDS   = ONE_MINUTE_SECONDS * 60
+	ONE_DAY_SECONDS    = ONE_HOUR_SECONDS * 24
+	ONE_MONTH_SECONDS  = ONE_DAY_SECONDS * 30
+	ONE_YEAR_SECONDS   = ONE_DAY_SECONDS * 365
+
+	// The max amount of seconds into the future the incentive startTime can be set.
+	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/deploy-v3-staker.ts#L11
+	MAX_INCENTIVE_START_LEAD_TIME = ONE_MONTH_SECONDS
+
+	// The max duration of an incentive in seconds.
+	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/deploy-v3-staker.ts#L13
+	MAX_INCENTIVE_DURATION = ONE_YEAR_SECONDS * 2
 )
 
 type UniswapV3Addresses struct {
-	Factory, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib, NFTDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, V3Migrator common.Address
-	WETH9                                                                                                                                          common.Address
+	Factory, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib, NFTDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker common.Address
+	WETH9                                                                                                                                                common.Address
 }
 
 type UniswapV3Config struct {
@@ -36,9 +51,9 @@ type UniswapV3Config struct {
 	NFTDescriptor               contractConfig[uniswapv3.NonfungibleTokenPositionDescriptor]
 	TransparentUpgradeableProxy contractConfig[uniswapv3.TransparentUpgradeableProxy]
 	NonfungiblePositionManager  contractConfig[uniswapv3.NonfungiblePositionManager]
-	V3Migrator                  contractConfig[uniswapv3.V3Migrator]
-
-	WETH9 contractConfig[uniswapv3.WETH9]
+	Migrator                    contractConfig[uniswapv3.V3Migrator]
+	Staker                      contractConfig[uniswapv3.UniswapV3Staker]
+	WETH9                       contractConfig[uniswapv3.WETH9]
 }
 
 type contractConfig[T uniswapV3Contract] struct {
@@ -47,7 +62,7 @@ type contractConfig[T uniswapV3Contract] struct {
 }
 
 type uniswapV3Contract interface {
-	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.WETH9 | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator
+	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.WETH9 | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker
 }
 
 func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses, ownerAddress common.Address) (UniswapV3Config, error) {
@@ -187,9 +202,9 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return UniswapV3Config{}, err
 	}
 
-	// 10. Deploy V3Migrator.
-	config.V3Migrator.Address, config.V3Migrator.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "V3Migrator", knownAddresses.V3Migrator,
+	// 10. Deploy Migrator.
+	config.Migrator.Address, config.Migrator.contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, "V3Migrator", knownAddresses.Migrator,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.V3Migrator, error) {
 			return uniswapv3.DeployV3Migrator(tops, c, config.Factory.Address, config.WETH9.Address, config.NonfungiblePositionManager.Address)
 		},
@@ -205,6 +220,22 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 11. Transfer Factory ownership.
 	if err = transferFactoryOwnership(config.Factory.contract, tops, cops, ownerAddress); err != nil {
+		return UniswapV3Config{}, err
+	}
+
+	// 12. Deploy Staker.
+	config.Staker.Address, config.Staker.contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, "Staker", knownAddresses.Staker,
+		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.UniswapV3Staker, error) {
+			return uniswapv3.DeployUniswapV3Staker(tops, c, config.Factory.Address, config.NonfungiblePositionManager.Address, big.NewInt(MAX_INCENTIVE_START_LEAD_TIME), big.NewInt(MAX_INCENTIVE_DURATION))
+		},
+		uniswapv3.NewUniswapV3Staker,
+		func(contract *uniswapv3.UniswapV3Staker) (err error) {
+			_, err = contract.Factory(cops)
+			return
+		},
+	)
+	if err != nil {
 		return UniswapV3Config{}, err
 	}
 
