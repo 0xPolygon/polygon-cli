@@ -319,7 +319,7 @@ func deployOrInstantiateContract[T uniswapV3Contract](
 
 	// Check that the contract is deployed and ready.
 	if err = blockUntilSuccessful(ctx, c, func() error {
-		log.Trace().Interface("error", err).Msg(fmt.Sprintf("%s contract is not deployed yet", name))
+		log.Trace().Msg(fmt.Sprintf("%s contract is not deployed yet", name))
 		return callFunc(contract)
 	}); err != nil {
 		return
