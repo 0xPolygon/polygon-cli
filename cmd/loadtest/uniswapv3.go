@@ -312,6 +312,14 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return UniswapV3Config{}, err
 	}
 
+	// 17. Create and initialize a Pool between the ERC20 contracts.
+	_, err = config.FactoryV3.contract.CreatePool(tops, config.TokenA.Address, config.TokenB.Address, big.NewInt(3000))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to create a Pool between TokenA and TokenB")
+		return UniswapV3Config{}, err
+	}
+	log.Trace().Msg("New Pool between TokenA and TokenB created")
+
 	return config, nil
 }
 
