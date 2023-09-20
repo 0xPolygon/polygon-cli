@@ -289,9 +289,8 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			return uniswapv3.DeployERC20(tops, c, "TokenA", "A")
 		},
 		uniswapv3.NewERC20,
-		func(contract *uniswapv3.ERC20) (err error) {
-			_, err = contract.Name(cops)
-			return
+		func(contract *uniswapv3.ERC20) error {
+			return approveERC20SpendingsByUniswap(contract, tops, config.NonfungiblePositionManager.Address, config.SwapRouter02.Address, 1_000_000_000_000_000_000)
 		},
 	)
 	if err != nil {
@@ -305,7 +304,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 		uniswapv3.NewERC20,
 		func(contract *uniswapv3.ERC20) (err error) {
-			_, err = contract.Name(cops)
+			_, err = contract.Approve(tops, config.NonfungiblePositionManager.Address, big.NewInt(1_000_000_000_000_000_000))
 			return
 		},
 	)
@@ -383,6 +382,23 @@ func transferProxyAdminOwnership(contract *uniswapv3.ProxyAdmin, tops *bind.Tran
 		return err
 	}
 	log.Trace().Msg("Transfer ProxyAdmin ownership")
+	return nil
+}
+
+func approveERC20SpendingsByUniswap(contract *uniswapv3.ERC20, tops *bind.TransactOpts, NonfungiblePositionManagerAddress, SwapRouter02Address common.Address, amount int64) error {
+	_, err := contract.Approve(tops, NonfungiblePositionManagerAddress, big.NewInt(amount))
+	if err != nil {
+		log.Trace().Msg("Unable to approve NonfungiblePositionManagerAddress spendings")
+		return err
+	}
+
+	_, err = contract.Approve(tops, SwapRouter02Address, big.NewInt(amount))
+	if err != nil {
+		log.Trace().Msg("Unable to approve SwapRouter02Address spendings")
+		return err
+	}
+
+	log.Trace().Msg("Spendings approved for both NonfungiblePositionManagerAddress and SwapRouter02Address")
 	return nil
 }
 
