@@ -24,15 +24,15 @@ const (
 )
 
 type UniswapV3Addresses struct {
-	Factory, Multicall, ProxyAdmin, TickLens, NFTDescriptionLib common.Address
+	Factory, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib common.Address
 }
 
 type UniswapV3Config struct {
-	Factory           contractConfig[uniswapv3.UniswapV3Factory]
-	Multicall         contractConfig[uniswapv3.UniswapInterfaceMulticall]
-	ProxyAdmin        contractConfig[uniswapv3.ProxyAdmin]
-	TickLens          contractConfig[uniswapv3.TickLens]
-	NFTDescriptionLib contractConfig[uniswapv3.NFTDescriptor]
+	Factory          contractConfig[uniswapv3.UniswapV3Factory]
+	Multicall        contractConfig[uniswapv3.UniswapInterfaceMulticall]
+	ProxyAdmin       contractConfig[uniswapv3.ProxyAdmin]
+	TickLens         contractConfig[uniswapv3.TickLens]
+	NFTDescriptorLib contractConfig[uniswapv3.NFTDescriptor]
 }
 
 type contractConfig[T uniswapV3Contract] struct {
@@ -115,9 +115,9 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return UniswapV3Config{}, err
 	}
 
-	// 6. Deploy NFTDescriptionLib.
-	config.NFTDescriptionLib.Address, config.NFTDescriptionLib.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "NFTDescriptionLib", knownAddresses.NFTDescriptionLib,
+	// 6. Deploy NFTDescriptorLib.
+	config.NFTDescriptorLib.Address, config.NFTDescriptorLib.contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, "NFTDescriptorLib", knownAddresses.NFTDescriptorLib,
 		uniswapv3.DeployNFTDescriptor,
 		uniswapv3.NewNFTDescriptor,
 		func(contract *uniswapv3.NFTDescriptor) (err error) {
