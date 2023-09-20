@@ -417,14 +417,15 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	}
 	log.Trace().Interface("address", poolAddress).Msg("New TokenA-TokenB pool created")
 
-	// Initialize the pool.
+	// Instantiate the pool contract.
 	var poolContract *uniswapv3.UniswapV3Pool
 	poolContract, err = uniswapv3.NewUniswapV3Pool(poolAddress, c)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to initialize the TokenA-TokenB pool contract")
+		log.Error().Err(err).Msg("Unable to instantiate the TokenA-TokenB pool contract")
 		return err
 	}
 
+	// Initialize the pool.
 	// To compute this value, we set that 1 TokenB is worth 500 TokenA.
 	// Then we use the handy script under `contracts/uniswapv3/helper.py`.
 	// $ python3 helper.py 1 500
@@ -443,7 +444,7 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	}
 	log.Trace().Msg("TokenA-TokenB pool initialized")
 
-	// Provide liquidity.
+	// Get the last block timestamp.
 	var blockNumber uint64
 	blockNumber, err = c.BlockNumber(ctx)
 	if err != nil {
@@ -459,6 +460,7 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	}
 	timestamp := int64(block.Time())
 
+	// Provide liquidity.
 	// TODO: Understand why this call reverts.
 	if _, err = config.NonfungiblePositionManager.contract.Mint(tops, uniswapv3.INonfungiblePositionManagerMintParams{
 		Token0:         tokenA.Address,
