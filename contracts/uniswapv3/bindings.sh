@@ -11,11 +11,12 @@ gen_go_binding() {
     --pkg uniswapv3 \
     --type $contract \
     --out $contract.go \
-  && echo ✅ $contract bindings generated.
+  && echo "* $contract bindings generated."
 }
 
 abigen --version
 
+echo -e "\n🏗️  Generating go bindings..."
 gen_go_binding v3-core UniswapV3Factory
 
 gen_go_binding v3-periphery UniswapInterfaceMulticall
@@ -30,7 +31,9 @@ gen_go_binding v3-staker UniswapV3Staker
 gen_go_binding v3-swap-router QuoterV2
 gen_go_binding v3-swap-router SwapRouter02
 
-gen_go_binding openzeppelin-contracts ProxyAdmin
-gen_go_binding openzeppelin-contracts TransparentUpgradeableProxy
+gen_go_binding openzeppelin ProxyAdmin
+gen_go_binding openzeppelin TransparentUpgradeableProxy
 
 gen_go_binding weth9 WETH9
+
+echo "✅ Done"
