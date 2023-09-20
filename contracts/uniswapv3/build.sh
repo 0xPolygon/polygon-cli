@@ -1,7 +1,7 @@
 #!/bin/bash
 # This script builds UniswapV3 contracts.
 
-mode=$1
+mode="${1:-0}"
 
 # Make sure the local chain is started.
 wait_for_service() {
