@@ -24,15 +24,18 @@ const (
 )
 
 type UniswapV3Addresses struct {
-	Factory, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib common.Address
+	Factory, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib, NFTDescriptor common.Address
+	WETH9                                                                     common.Address
 }
 
 type UniswapV3Config struct {
-	Factory          contractConfig[uniswapv3.UniswapV3Factory]
-	Multicall        contractConfig[uniswapv3.UniswapInterfaceMulticall]
-	ProxyAdmin       contractConfig[uniswapv3.ProxyAdmin]
-	TickLens         contractConfig[uniswapv3.TickLens]
-	NFTDescriptorLib contractConfig[uniswapv3.NFTDescriptor]
+	Factory       contractConfig[uniswapv3.UniswapV3Factory]
+	Multicall     contractConfig[uniswapv3.UniswapInterfaceMulticall]
+	ProxyAdmin    contractConfig[uniswapv3.ProxyAdmin]
+	TickLens      contractConfig[uniswapv3.TickLens]
+	NFTDescriptor contractConfig[uniswapv3.NonfungibleTokenPositionDescriptor]
+
+	WETH9 contractConfig[uniswapv3.WETH9]
 }
 
 type contractConfig[T uniswapV3Contract] struct {
@@ -41,7 +44,7 @@ type contractConfig[T uniswapV3Contract] struct {
 }
 
 type uniswapV3Contract interface {
-	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.NFTDescriptor
+	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.WETH9
 }
 
 func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses) (UniswapV3Config, error) {
@@ -115,14 +118,32 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return UniswapV3Config{}, err
 	}
 
-	// 6. Deploy NFTDescriptorLib.
-	config.NFTDescriptorLib.Address, config.NFTDescriptorLib.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "NFTDescriptorLib", knownAddresses.NFTDescriptorLib,
-		uniswapv3.DeployNFTDescriptor,
-		uniswapv3.NewNFTDescriptor,
-		func(contract *uniswapv3.NFTDescriptor) (err error) {
-			// FIXME: This call will cause a panic.
-			//_, err = contract.ConstructTokenURI(cops, uniswapv3.NFTDescriptorConstructTokenURIParams{})
+	// 6. Deploy WETH9.
+	config.WETH9.Address, config.WETH9.contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, "WETH9", knownAddresses.WETH9,
+		uniswapv3.DeployWETH9,
+		uniswapv3.NewWETH9,
+		func(contract *uniswapv3.WETH9) (err error) {
+			_, err = contract.BalanceOf(cops, common.Address{})
+			return
+		},
+	)
+	if err != nil {
+		return UniswapV3Config{}, err
+	}
+
+	// 7. Deploy NonfungibleTokenPositionDescriptor.
+	// Note that we previously deployed the NFTDescriptor library during the build process.
+	config.NFTDescriptor.Address, config.NFTDescriptor.contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, "NFTDescriptor", knownAddresses.NFTDescriptor,
+		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.NonfungibleTokenPositionDescriptor, error) {
+			var nativeCurrencyLabelBytes [32]byte
+			copy(nativeCurrencyLabelBytes[:], "ETH")
+			return uniswapv3.DeployNonfungibleTokenPositionDescriptor(tops, c, config.WETH9.Address, nativeCurrencyLabelBytes)
+		},
+		uniswapv3.NewNonfungibleTokenPositionDescriptor,
+		func(contract *uniswapv3.NonfungibleTokenPositionDescriptor) (err error) {
+			_, err = contract.WETH9(cops)
 			return
 		},
 	)
