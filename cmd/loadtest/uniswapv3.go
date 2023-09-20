@@ -24,8 +24,8 @@ const (
 )
 
 type UniswapV3Addresses struct {
-	Factory, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib, NFTDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager common.Address
-	WETH9                                                                                                                              common.Address
+	Factory, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib, NFTDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, V3Migrator common.Address
+	WETH9                                                                                                                                          common.Address
 }
 
 type UniswapV3Config struct {
@@ -36,6 +36,7 @@ type UniswapV3Config struct {
 	NFTDescriptor               contractConfig[uniswapv3.NonfungibleTokenPositionDescriptor]
 	TransparentUpgradeableProxy contractConfig[uniswapv3.TransparentUpgradeableProxy]
 	NonfungiblePositionManager  contractConfig[uniswapv3.NonfungiblePositionManager]
+	V3Migrator                  contractConfig[uniswapv3.V3Migrator]
 
 	WETH9 contractConfig[uniswapv3.WETH9]
 }
@@ -46,7 +47,7 @@ type contractConfig[T uniswapV3Contract] struct {
 }
 
 type uniswapV3Contract interface {
-	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.WETH9 | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager
+	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.WETH9 | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator
 }
 
 func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses) (UniswapV3Config, error) {
@@ -180,6 +181,22 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		uniswapv3.NewNonfungiblePositionManager,
 		func(contract *uniswapv3.NonfungiblePositionManager) (err error) {
 			_, err = contract.BaseURI(cops)
+			return
+		},
+	)
+	if err != nil {
+		return UniswapV3Config{}, err
+	}
+
+	// 10. Deploy V3Migrator.
+	config.V3Migrator.Address, config.V3Migrator.contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, "V3Migrator", knownAddresses.V3Migrator,
+		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.V3Migrator, error) {
+			return uniswapv3.DeployV3Migrator(tops, c, config.Factory.Address, config.WETH9.Address, config.NonfungiblePositionManager.Address)
+		},
+		uniswapv3.NewV3Migrator,
+		func(contract *uniswapv3.V3Migrator) (err error) {
+			_, err = contract.WETH9(cops)
 			return
 		},
 	)
