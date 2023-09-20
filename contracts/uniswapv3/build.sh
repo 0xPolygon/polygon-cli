@@ -66,6 +66,7 @@ build_contracts() {
 
 	# Clean up.
 	rm -rf ./tmp/$repository
+
 	echo "✅ Successfully built $repository contracts..."
 }
 
