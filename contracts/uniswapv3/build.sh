@@ -114,6 +114,7 @@ if [ "$1" -eq 4 ]; then
 	git clone https://github.com/OpenZeppelin/openzeppelin-contracts.git --branch v3.4.1-solc-0.7-2
 	solc \
 		openzeppelin-contracts/contracts/proxy/ProxyAdmin.sol \
+		openzeppelin-contracts/contracts/proxy/TransparentUpgradeableProxy.sol \
 		../access=$current_dir/openzeppelin-contracts/contracts/access \
 		../utils=$current_dir/openzeppelin-contracts/contracts/utils \
 		--abi \

@@ -24,16 +24,17 @@ const (
 )
 
 type UniswapV3Addresses struct {
-	Factory, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib, NFTDescriptor common.Address
-	WETH9                                                                     common.Address
+	Factory, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib, NFTDescriptor, TransparentUpgradeableProxy common.Address
+	WETH9                                                                                                  common.Address
 }
 
 type UniswapV3Config struct {
-	Factory       contractConfig[uniswapv3.UniswapV3Factory]
-	Multicall     contractConfig[uniswapv3.UniswapInterfaceMulticall]
-	ProxyAdmin    contractConfig[uniswapv3.ProxyAdmin]
-	TickLens      contractConfig[uniswapv3.TickLens]
-	NFTDescriptor contractConfig[uniswapv3.NonfungibleTokenPositionDescriptor]
+	Factory                     contractConfig[uniswapv3.UniswapV3Factory]
+	Multicall                   contractConfig[uniswapv3.UniswapInterfaceMulticall]
+	ProxyAdmin                  contractConfig[uniswapv3.ProxyAdmin]
+	TickLens                    contractConfig[uniswapv3.TickLens]
+	NFTDescriptor               contractConfig[uniswapv3.NonfungibleTokenPositionDescriptor]
+	TransparentUpgradeableProxy contractConfig[uniswapv3.TransparentUpgradeableProxy]
 
 	WETH9 contractConfig[uniswapv3.WETH9]
 }
@@ -44,7 +45,7 @@ type contractConfig[T uniswapV3Contract] struct {
 }
 
 type uniswapV3Contract interface {
-	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.WETH9
+	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.WETH9 | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy
 }
 
 func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses) (UniswapV3Config, error) {
@@ -144,6 +145,24 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		uniswapv3.NewNonfungibleTokenPositionDescriptor,
 		func(contract *uniswapv3.NonfungibleTokenPositionDescriptor) (err error) {
 			_, err = contract.WETH9(cops)
+			return
+		},
+	)
+	if err != nil {
+		return UniswapV3Config{}, err
+	}
+
+	// 8. Deploy TransparentUpgradeableProxy.
+	config.TransparentUpgradeableProxy.Address, config.TransparentUpgradeableProxy.contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, "TransparentUpgradeableProxy", knownAddresses.TransparentUpgradeableProxy,
+		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.TransparentUpgradeableProxy, error) {
+			var data []byte
+			copy(data[:], "0x")
+			return uniswapv3.DeployTransparentUpgradeableProxy(tops, c, config.NFTDescriptor.Address, config.ProxyAdmin.Address, data)
+		},
+		uniswapv3.NewTransparentUpgradeableProxy,
+		func(contract *uniswapv3.TransparentUpgradeableProxy) (err error) {
+			_, err = contract.Admin(tops)
 			return
 		},
 	)
