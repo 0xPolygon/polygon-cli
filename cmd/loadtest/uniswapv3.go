@@ -46,8 +46,8 @@ const (
 )
 
 type UniswapV3Addresses struct {
-	FactoryV3, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib, NFTDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker, QuoterV2, SwapRouter02 common.Address
-	WETH9, TokenA, TokenB                                                                                                                                                          common.Address
+	FactoryV3, Multicall, ProxyAdmin, TickLens, NFTDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker, QuoterV2, SwapRouter02 common.Address
+	WETH9, TokenA, TokenB                                                                                                                                        common.Address
 }
 
 type UniswapV3Config struct {
