@@ -39,8 +39,8 @@ const (
 )
 
 type UniswapV3Addresses struct {
-	Factory, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib, NFTDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker common.Address
-	WETH9                                                                                                                                                common.Address
+	Factory, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib, NFTDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker, QuoterV2 common.Address
+	WETH9                                                                                                                                                          common.Address
 }
 
 type UniswapV3Config struct {
@@ -53,6 +53,7 @@ type UniswapV3Config struct {
 	NonfungiblePositionManager  contractConfig[uniswapv3.NonfungiblePositionManager]
 	Migrator                    contractConfig[uniswapv3.V3Migrator]
 	Staker                      contractConfig[uniswapv3.UniswapV3Staker]
+	QuoterV2                    contractConfig[uniswapv3.QuoterV2]
 	WETH9                       contractConfig[uniswapv3.WETH9]
 }
 
@@ -62,7 +63,7 @@ type contractConfig[T uniswapV3Contract] struct {
 }
 
 type uniswapV3Contract interface {
-	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.WETH9 | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker
+	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.WETH9 | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker | uniswapv3.QuoterV2
 }
 
 func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses, ownerAddress common.Address) (UniswapV3Config, error) {
@@ -231,6 +232,22 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 		uniswapv3.NewUniswapV3Staker,
 		func(contract *uniswapv3.UniswapV3Staker) (err error) {
+			_, err = contract.Factory(cops)
+			return
+		},
+	)
+	if err != nil {
+		return UniswapV3Config{}, err
+	}
+
+	// 13. Deploy QuoterV2.
+	config.QuoterV2.Address, config.QuoterV2.contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, "QuoterV2", knownAddresses.QuoterV2,
+		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.QuoterV2, error) {
+			return uniswapv3.DeployQuoterV2(tops, c, config.Factory.Address, config.WETH9.Address)
+		},
+		uniswapv3.NewQuoterV2,
+		func(contract *uniswapv3.QuoterV2) (err error) {
 			_, err = contract.Factory(cops)
 			return
 		},
