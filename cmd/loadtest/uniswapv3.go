@@ -349,7 +349,19 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	if _, err = poolContract.Initialize(tops, big.NewInt(7923212382335979911)); err != nil {
+	// To compute this value, we set that 1 TokenB is worth 500 TokenA.
+	// Then we use the handy script under `contracts/uniswapv3/helper.py`.
+	// $ python3 helper.py 1 500
+	// Current price: 500
+	// Current price (Q64.96): 1771595571142957189036318392320
+	// Tick index: 62149
+	// Source: https://uniswapv3book.com/docs/milestone_1/calculating-liquidity/
+	sqrtPriceX96 := new(big.Int)
+	sqrtPriceX96.SetString("1771595571142957189036318392320", 10)
+	if err = blockUntilSuccessful(ctx, c, func() (err error) {
+		_, err = poolContract.Initialize(tops, sqrtPriceX96)
+		return
+	}); err != nil {
 		log.Error().Err(err).Msg("Unable to initialize the TokenA-TokenB pool")
 		return config, err
 	}
@@ -371,18 +383,19 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	}
 	timestamp := int64(block.Time())
 
+	// TODO: Understand why this call reverts.
 	if _, err = config.NonfungiblePositionManager.contract.Mint(tops, uniswapv3.INonfungiblePositionManagerMintParams{
 		Token0:         config.TokenA.Address,
 		Token1:         config.TokenB.Address,
 		Fee:            poolFees,
-		TickLower:      big.NewInt(MIN_TICK),
+		TickLower:      big.NewInt(MIN_TICK), // We provide liquidity across the whole possible range.
 		TickUpper:      big.NewInt(MAX_TICK),
-		Amount0Desired: big.NewInt(500_000),
+		Amount0Desired: big.NewInt(1_000),
 		Amount1Desired: big.NewInt(500_000),
-		Amount0Min:     big.NewInt(0),
-		Amount1Min:     big.NewInt(0),
+		Amount0Min:     big.NewInt(0), // We mint without any slippage protection. Don't do this in production!
+		Amount1Min:     big.NewInt(0), // Same thing here.
 		Recipient:      ownerAddress,
-		Deadline:       big.NewInt(timestamp + 20), // 20 seconds
+		Deadline:       big.NewInt(timestamp + 10), // 10 seconds
 	}); err != nil {
 		log.Error().Err(err).Msg("Unable to create liquidity for the TokenA-TokenB pool")
 		return config, err
