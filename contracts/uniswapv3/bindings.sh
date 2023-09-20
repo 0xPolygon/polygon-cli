@@ -24,3 +24,4 @@ gen_go_binding v3-periphery TickLens
 gen_go_binding v3-periphery NFTDescriptor
 gen_go_binding v3-periphery NonfungibleTokenPositionDescriptor
 gen_go_binding v3-periphery NonfungiblePositionManager
+gen_go_binding v3-periphery V3Migrator

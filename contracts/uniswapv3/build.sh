@@ -69,6 +69,7 @@ if [ "$1" -eq 3 ]; then
 		v3-periphery/contracts/libraries/NFTDescriptor.sol \
 		v3-periphery/contracts/NonfungibleTokenPositionDescriptor.sol \
 		v3-periphery/contracts/NonfungiblePositionManager.sol \
+		v3-periphery/contracts/V3Migrator.sol \
 		@uniswap=$current_dir/v3-periphery/node_modules/@uniswap \
 		@openzeppelin=$current_dir/v3-periphery/node_modules/@openzeppelin \
 		base64-sol=$current_dir/v3-periphery/node_modules/base64-sol \
