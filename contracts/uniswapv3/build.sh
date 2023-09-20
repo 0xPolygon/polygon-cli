@@ -23,20 +23,8 @@ wait_for_service "127.0.0.1" 8545 "Local RPC"
 solc --version
 current_dir=$(pwd)
 
-## Build WETH9 contract.
-if [ "$1" -eq 1 ] || [ "$1" -eq 0 ]; then
-	echo -e "\n🏗️  Building WETH9 contract..."
-	git clone https://github.com/gnosis/canonical-weth.git
-	rm -rf utils
-	mkdir utils
-	cat canonical-weth/build/contracts/WETH9.json | jq .abi > utils/WETH9.abi
-	cat canonical-weth/build/contracts/WETH9.json | jq -r .bytecode > utils/WETH9.bin
-	rm -rf canonical-weth
-	echo "✅ Successfully built WETH9 contract..."
-fi
-
 ## Build v3-core contracts.
-if [ "$1" -eq 2 ] || [ "$1" -eq 0 ]; then
+if [ "$1" -eq 1 ] || [ "$1" -eq 0 ]; then
 	echo -e "\n🏗️  Building v3-core contracts..."
 	rm -rf v3-core
 	git clone https://github.com/Uniswap/v3-core.git
@@ -56,7 +44,7 @@ if [ "$1" -eq 2 ] || [ "$1" -eq 0 ]; then
 fi
 
 ## Build v3-periphery contracts.
-if [ "$1" -eq 3 ] || [ "$1" -eq 0 ]; then
+if [ "$1" -eq 2 ] || [ "$1" -eq 0 ]; then
 	echo -e "\n🏗️  Building v3-periphery contracts..."
 	rm -rf v3-periphery
 	git clone https://github.com/Uniswap/v3-periphery.git
@@ -106,7 +94,7 @@ if [ "$1" -eq 3 ] || [ "$1" -eq 0 ]; then
 fi
 
 ## Build v3-staker contracts.
-if [ "$1" -eq 4 ] || [ "$1" -eq 0 ]; then
+if [ "$1" -eq 3 ] || [ "$1" -eq 0 ]; then
 	echo -e "\n🏗️  Building v3-staker contracts..."
 	git clone https://github.com/Uniswap/v3-staker.git
 	pushd v3-staker
@@ -129,7 +117,7 @@ if [ "$1" -eq 4 ] || [ "$1" -eq 0 ]; then
 fi
 
 ## Build openzeppelin contracts.
-if [ "$1" -eq 5 ] || [ "$1" -eq 0 ]; then
+if [ "$1" -eq 4 ] || [ "$1" -eq 0 ]; then
 	echo -e "\n🏗️  Building openzeppelin contracts..."
 	rm -rf openzeppelin-contracts
 	git clone https://github.com/OpenZeppelin/openzeppelin-contracts.git --branch v3.4.1-solc-0.7-2
@@ -147,4 +135,16 @@ if [ "$1" -eq 5 ] || [ "$1" -eq 0 ]; then
 	mv tmp/openzeppelin-contracts/* openzeppelin-contracts
 	rm -rf tmp
 	echo "✅ Successfully built openzeppelin contracts..."
+fi
+
+## Build WETH9 contract.
+if [ "$1" -eq 5 ] || [ "$1" -eq 0 ]; then
+	echo -e "\n🏗️  Building WETH9 contract..."
+	git clone https://github.com/gnosis/canonical-weth.git
+	rm -rf weth9
+	mkdir weth9
+	cat canonical-weth/build/contracts/WETH9.json | jq .abi > weth9/WETH9.abi
+	cat canonical-weth/build/contracts/WETH9.json | jq -r .bytecode > weth9/WETH9.bin
+	rm -rf canonical-weth
+	echo "✅ Successfully built WETH9 contract..."
 fi
