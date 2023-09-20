@@ -35,5 +35,6 @@ gen_go_binding openzeppelin ProxyAdmin
 gen_go_binding openzeppelin TransparentUpgradeableProxy
 
 gen_go_binding weth9 WETH9
+gen_go_binding erc20 ERC20
 
 echo "✅ Done"
