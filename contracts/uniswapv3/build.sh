@@ -57,32 +57,29 @@ fi
 
 ## Build v3-periphery contracts.
 if [ "$1" -eq 3 ]; then
-	build_v3_periphery_contract() {
-		contract_path=$1
-		solc \
-			v3-periphery/contracts/$contract_path \
-			@uniswap=$current_dir/v3-periphery/node_modules/@uniswap \
-			@openzeppelin=$current_dir/v3-periphery/node_modules/@openzeppelin \
-			base64-sol=$current_dir/v3-periphery/node_modules/base64-sol \
-			../interfaces=$current_dir/v3-periphery/contracts/interfaces \
-			--evm-version istanbul \
-			--optimize \
-			--optimize-runs 200 \
-			--abi \
-			--bin \
-			--output-dir tmp/v3-periphery \
-			--overwrite
-	}
 	echo -e "\n🏗️  Building v3-periphery contracts..."
 	rm -rf v3-periphery
 	git clone https://github.com/Uniswap/v3-periphery.git
 	pushd v3-periphery
 	yarn install
 	popd
-	build_v3_periphery_contract lens/UniswapInterfaceMulticall.sol
-	build_v3_periphery_contract lens/TickLens.sol
-	build_v3_periphery_contract libraries/NFTDescriptor.sol
-	build_v3_periphery_contract NonfungibleTokenPositionDescriptor.sol
+	solc \
+		v3-periphery/contracts/lens/UniswapInterfaceMulticall.sol \
+		v3-periphery/contracts/lens/TickLens.sol \
+		v3-periphery/contracts/libraries/NFTDescriptor.sol \
+		v3-periphery/contracts/NonfungibleTokenPositionDescriptor.sol \
+		v3-periphery/contracts/NonfungiblePositionManager.sol \
+		@uniswap=$current_dir/v3-periphery/node_modules/@uniswap \
+		@openzeppelin=$current_dir/v3-periphery/node_modules/@openzeppelin \
+		base64-sol=$current_dir/v3-periphery/node_modules/base64-sol \
+		../interfaces=$current_dir/v3-periphery/contracts/interfaces \
+		--evm-version istanbul \
+		--optimize \
+		--optimize-runs 200 \
+		--abi \
+		--bin \
+		--output-dir tmp/v3-periphery \
+		--overwrite
 
 	# We need to deloy the NFTDescriptor library, retrieve its address and link it inside
 	# NonfungibleTokenPositionDescriptor bytecode. This is required to generate the Go binding.
