@@ -114,6 +114,7 @@ $ polycli loadtest --app-id 0 --data-avail --verbosity 700 --chain-id 42 --concu
                                                    r - random modes
                                                    2 - ERC20 Transfers
                                                    7 - ERC721 Mints
+                                                   v3 - UniswapV3 swaps
                                                    R - total recall
                                                    rpc - call random rpc methods (default [t])
       --output-mode string                         Format mode for summary output (json | text) (default "text")
