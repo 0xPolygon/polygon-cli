@@ -4,31 +4,41 @@ Simple steps to build UniswapV3 contracts and generate go bindings.
 
 1. Make sure you have `solc@0.7.6` installed. This is required to build UniswapV3 contracts. A handy way to manage `solc` versions is to use [crytic/solc-select](https://github.com/crytic/solc-select).
 
-2. Build the core, periphery and swap-router contracts using the `build.sh`script.
+2. Make sure you have a local RPC running. Some contract require their libraries to be deployed in order to link them directly in the bytecode.
+
+3. Build UniswapV3 contracts using `build.sh`.
 
 ```sh
-$ sh build.sh
+$ ./build.sh
+Starting status checking
+✅ Local RPC port is now open.
+
 solc, the solidity compiler commandline interface
 Version: 0.7.6+commit.7338295f.Darwin.appleclang
 
 🏗️  Building v3-core contracts...
-Cloning into 'v3-core'...
-remote: Enumerating objects: 8244, done.
-remote: Counting objects: 100% (4/4), done.
-remote: Compressing objects: 100% (4/4), done.
-remote: Total 8244 (delta 0), reused 2 (delta 0), pack-reused 8240
-Receiving objects: 100% (8244/8244), 6.37 MiB | 13.20 MiB/s, done.
-Resolving deltas: 100% (6276/6276), done.
-Compiler run successful. Artifact(s) can be found in directory tmp/v3-core.
-✅ Successfully built v3-core contracts...
 ...
 ```
 
-3. Generate Go bindings for Uniswap contracts using the `bindings.sh` script.
+3. Generate Go bindings for those contracts using `bindings.sh`.
 
 ```sh
-$ sh bindings.sh
+$ ./bindings.sh
 abigen version 1.13.1-stable
-✅ UniswapV3Factory bindings generated.
-...
+
+🏗️  Generating go bindings...
+* UniswapV3Factory bindings generated.
+* UniswapInterfaceMulticall bindings generated.
+* TickLens bindings generated.
+* NFTDescriptor bindings generated.
+* NonfungibleTokenPositionDescriptor bindings generated.
+* NonfungiblePositionManager bindings generated.
+* V3Migrator bindings generated.
+* UniswapV3Staker bindings generated.
+* QuoterV2 bindings generated.
+* SwapRouter02 bindings generated.
+* ProxyAdmin bindings generated.
+* TransparentUpgradeableProxy bindings generated.
+* WETH9 bindings generated.
+✅ Done
 ```
