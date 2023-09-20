@@ -36,7 +36,7 @@ build_contracts() {
 
 	new_array=()
 	for contract in "${contracts[@]}"; do
-		new_array+=("tmp/$repository/contracts/$contract")
+		new_array+=("tmp/$repository/contracts/$contract.sol")
 	done
 
 	for element in "${new_array[@]}"; do
@@ -66,13 +66,13 @@ current_dir=$(pwd)
 
 ## Build v3-core contracts.
 if [ "$mode" -eq 1 ] || [ "$mode" -eq 0 ]; then
-	contracts=("UniswapV3Factory.sol" "UniswapV3Pool.sol")
+	contracts=("UniswapV3Factory" "UniswapV3Pool")
 	build_contracts v3-core https://github.com/Uniswap/v3-core.git v1.0.0 $contracts
 fi
 
 ## Build v3-periphery contracts.
 if [ "$mode" -eq 2 ] || [ "$mode" -eq 0 ]; then
-	contracts=("lens/UniswapInterfaceMulticall.sol" "lens/TickLens.sol" "libraries/NFTDescriptor.sol" "NonfungibleTokenPositionDescriptor.sol" "NonfungiblePositionManager.sol" "V3Migrator.sol")
+	contracts=("lens/UniswapInterfaceMulticall" "lens/TickLens" "libraries/NFTDescriptor" "NonfungibleTokenPositionDescriptor" "NonfungiblePositionManager" "V3Migrator")
 	build_contracts v3-periphery https://github.com/Uniswap/v3-periphery.git v1.3.0 $contracts
 
 	# We need to deloy the NFTDescriptor library, retrieve its address and link it inside
@@ -94,19 +94,19 @@ fi
 
 ## Build v3-staker contracts.
 if [ "$mode" -eq 3 ] || [ "$mode" -eq 0 ]; then
-	contracts=("UniswapV3Staker.sol")
+	contracts=("UniswapV3Staker")
 	build_contracts v3-staker https://github.com/Uniswap/v3-staker.git v1.0.2 $contracts
 fi
 
 ## Build v3-swap-router contracts.
 if [ "$mode" -eq 4 ] || [ "$mode" -eq 0 ]; then
-	contracts=("lens/QuoterV2.sol" "SwapRouter02.sol")
+	contracts=("lens/QuoterV2" "SwapRouter02")
 	build_contracts v3-swap-router https://github.com/Uniswap/swap-router-contracts.git v1.3.0 $contracts
 fi
 
 ## Build openzeppelin contracts.
 if [ "$mode" -eq 5 ] || [ "$mode" -eq 0 ]; then
-	contracts=("proxy/ProxyAdmin.sol" "proxy/TransparentUpgradeableProxy.sol")
+	contracts=("proxy/ProxyAdmin" "proxy/TransparentUpgradeableProxy")
 	build_contracts openzeppelin https://github.com/OpenZeppelin/openzeppelin-contracts.git v3.4.1-solc-0.7-2 $contracts
 fi
 
