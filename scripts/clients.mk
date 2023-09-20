@@ -27,9 +27,20 @@ geth: ## Start a local geth node.
 
 .PHONY: fund
 fund: ## Fund the loadtest account with 100k ETH.
-	curl -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "${eth_coinbase}","to": "${LOADTEST_ACCOUNT}","value": "0x${hex_funding_amount}"}], "id":1}' http://127.0.0.1:${PORT}
+	curl \
+		-H "Content-Type: application/json" \
+		-d '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "${eth_coinbase}","to": "${LOADTEST_ACCOUNT}","value": "0x${hex_funding_amount}"}], "id":1}' \
+		http://127.0.0.1:${PORT}
 
 .PHONY: geth-loadtest
 geth-loadtest: build fund ## Run loadtest against an EVM/Geth chain.
 	sleep 5
-	$(BUILD_DIR)/$(BIN_NAME) loadtest --verbosity 700 --chain-id 1337 --concurrency 1 --requests 1000 --rate-limit 100 --mode c --legacy http://127.0.0.1:$(PORT)
+	$(BUILD_DIR)/$(BIN_NAME) loadtest \
+		--verbosity 700 \
+		--chain-id 1337 \
+		--concurrency 1 \
+		--requests 1000 \
+		--rate-limit 100 \
+		--mode c \
+		--legacy \
+		http://127.0.0.1:$(PORT)
