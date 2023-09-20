@@ -318,7 +318,10 @@ func deployOrInstantiateContract[T uniswapV3Contract](
 	}
 
 	// Check that the contract is deployed and ready.
-	if err = blockUntilSuccessful(ctx, c, func() error { return callFunc(contract) }); err != nil {
+	if err = blockUntilSuccessful(ctx, c, func() error {
+		log.Trace().Interface("error", err).Msg(fmt.Sprintf("%s contract is not deployed yet", name))
+		return callFunc(contract)
+	}); err != nil {
 		return
 	}
 	return
@@ -326,23 +329,28 @@ func deployOrInstantiateContract[T uniswapV3Contract](
 
 func enableOneBPFeeTier(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOpts, fee, tickSpacing int64) error {
 	if _, err := contract.EnableFeeAmount(tops, big.NewInt(fee), big.NewInt(tickSpacing)); err != nil {
+		log.Error().Err(err).Msg("Unable to enable one basic point fee tier")
 		return err
 	}
-	log.Trace().Msg("Enable a one basic point fee tier")
+	log.Trace().Msg("Enable one basic point fee tier")
 	return nil
 }
 
 func setFactoryOwner(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOpts, newOwner common.Address) error {
 	if _, err := contract.SetOwner(tops, newOwner); err != nil {
+		log.Error().Err(err).Msg("Unable to set new owner for Factory contract")
 		return err
 	}
+	log.Trace().Msg("Set new owner for Factory contract")
 	return nil
 }
 
 func transferProxyAdminOwnership(contract *uniswapv3.ProxyAdmin, tops *bind.TransactOpts, newOwner common.Address) error {
 	if _, err := contract.TransferOwnership(tops, newOwner); err != nil {
+		log.Error().Err(err).Msg("Unable to transfer ProxyAdmin ownership")
 		return err
 	}
+	log.Trace().Msg("Transfer ProxyAdmin ownership")
 	return nil
 }
 
