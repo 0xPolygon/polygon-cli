@@ -496,11 +496,11 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 
 		fees := big.NewInt(3000)
-		if err := createPool(ctx, c, tops, cops, uniswapV3Config, tokenA, tokenB, fees, *ltp.FromETHAddress); err != nil {
+		if err = createPool(ctx, c, tops, cops, uniswapV3Config, tokenA, tokenB, fees, *ltp.FromETHAddress); err != nil {
 			return nil
 		}
 
-		if err := swapTokenBForTokenA(tops, uniswapV3Config, tokenA, tokenB, fees, *ltp.FromETHAddress); err != nil {
+		if err = swapTokenBForTokenA(tops, uniswapV3Config, tokenA, tokenB, fees, *ltp.FromETHAddress); err != nil {
 			return nil
 		}
 	}
