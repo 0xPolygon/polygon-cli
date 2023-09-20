@@ -221,8 +221,8 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return UniswapV3Config{}, err
 	}
 
-	// 11. Transfer Factory ownership.
-	if err = transferFactoryOwnership(config.FactoryV3.contract, tops, cops, ownerAddress); err != nil {
+	// 11. Set Factory owner.
+	if err = setFactoryOwner(config.FactoryV3.contract, tops, ownerAddress); err != nil {
 		return UniswapV3Config{}, err
 	}
 
@@ -273,6 +273,11 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 	)
 	if err != nil {
+		return UniswapV3Config{}, err
+	}
+
+	// 15. Transfer ProxyAdmin ownership.
+	if err = transferProxyAdminOwnership(config.ProxyAdmin.contract, tops, ownerAddress); err != nil {
 		return UniswapV3Config{}, err
 	}
 
@@ -327,16 +332,15 @@ func enableOneBPFeeTier(contract *uniswapv3.UniswapV3Factory, tops *bind.Transac
 	return nil
 }
 
-func transferFactoryOwnership(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOpts, cops *bind.CallOpts, newOwner common.Address) error {
-	currentOwner, err := contract.Owner(cops)
-	if err != nil {
+func setFactoryOwner(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOpts, newOwner common.Address) error {
+	if _, err := contract.SetOwner(tops, newOwner); err != nil {
 		return err
 	}
-	if currentOwner == newOwner {
-		return fmt.Errorf("Factory already owned by %s", currentOwner)
-	}
+	return nil
+}
 
-	if _, err = contract.SetOwner(tops, newOwner); err != nil {
+func transferProxyAdminOwnership(contract *uniswapv3.ProxyAdmin, tops *bind.TransactOpts, newOwner common.Address) error {
+	if _, err := contract.TransferOwnership(tops, newOwner); err != nil {
 		return err
 	}
 	return nil
