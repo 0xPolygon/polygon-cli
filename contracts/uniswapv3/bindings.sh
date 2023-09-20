@@ -10,8 +10,8 @@ gen_go_binding() {
     --bin $repository/$contract.bin \
     --pkg uniswapv3 \
     --type $contract \
-    --out $contract.go \
-  && echo "* $contract bindings generated."
+    --out $contract.go
+  echo "* $contract bindings generated."
 }
 
 abigen --version
