@@ -33,4 +33,4 @@ gen_go_binding v3-swap-router SwapRouter02
 gen_go_binding openzeppelin-contracts ProxyAdmin
 gen_go_binding openzeppelin-contracts TransparentUpgradeableProxy
 
-gen_go_binding utils WETH9
+gen_go_binding weth9 WETH9
