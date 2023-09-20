@@ -1,5 +1,5 @@
 #!/bin/bash
-# This script builds UniswapV3 core, periphery and swap-router contracts.
+# This script builds UniswapV3 contracts.
 
 # Make sure the local chain is started.
 wait_for_service() {
@@ -19,7 +19,6 @@ wait_for_service() {
 wait_for_service "127.0.0.1" 8545 "Local RPC"
 
 # Build contracts.
-
 solc --version
 current_dir=$(pwd)
 
@@ -28,6 +27,9 @@ if [ "$1" -eq 1 ] || [ "$1" -eq 0 ]; then
 	echo -e "\n🏗️  Building v3-core contracts..."
 	rm -rf v3-core
 	git clone https://github.com/Uniswap/v3-core.git
+	pushd v3-core
+	yarn install
+	popd
 	solc \
 		v3-core/contracts/UniswapV3Factory.sol \
 		--optimize \
@@ -117,8 +119,31 @@ if [ "$1" -eq 3 ] || [ "$1" -eq 0 ]; then
 	rm -rf tmp
 fi
 
-## Build openzeppelin contracts.
+## Build v3-swap-router contracts.
 if [ "$1" -eq 4 ] || [ "$1" -eq 0 ]; then
+	echo -e "\n🏗️  Building v3-swap-router contracts..."
+	rm -rf v3-swap-router
+	git clone https://github.com/Uniswap/swap-router-contracts.git v3-swap-router
+	pushd v3-swap-router
+	yarn install
+	popd
+	solc \
+		v3-swap-router/contracts/lens/QuoterV2.sol \
+		@uniswap=$current_dir/v3-swap-router/node_modules/@uniswap \
+		../interfaces=$current_dir/v3-swap-router/contracts/interfaces \
+		../libraries=$current_dir/v3-swap-router/contracts/libraries \
+		--abi \
+		--bin \
+		--output-dir tmp/v3-swap-router \
+		--overwrite
+	rm -rf v3-swap-router
+	mkdir v3-swap-router
+	mv tmp/v3-swap-router/* v3-swap-router
+	rm -rf tmp
+fi
+
+## Build openzeppelin contracts.
+if [ "$1" -eq 5 ] || [ "$1" -eq 0 ]; then
 	echo -e "\n🏗️  Building openzeppelin contracts..."
 	rm -rf openzeppelin-contracts
 	git clone https://github.com/OpenZeppelin/openzeppelin-contracts.git --branch v3.4.1-solc-0.7-2
@@ -139,7 +164,7 @@ if [ "$1" -eq 4 ] || [ "$1" -eq 0 ]; then
 fi
 
 ## Build WETH9 contract.
-if [ "$1" -eq 5 ] || [ "$1" -eq 0 ]; then
+if [ "$1" -eq 6 ] || [ "$1" -eq 0 ]; then
 	echo -e "\n🏗️  Building WETH9 contract..."
 	git clone https://github.com/gnosis/canonical-weth.git
 	rm -rf weth9

@@ -27,6 +27,8 @@ gen_go_binding v3-periphery V3Migrator
 
 gen_go_binding v3-staker UniswapV3Staker
 
+gen_go_binding v3-swap-router QuoterV2
+
 gen_go_binding openzeppelin-contracts ProxyAdmin
 gen_go_binding openzeppelin-contracts TransparentUpgradeableProxy
 
