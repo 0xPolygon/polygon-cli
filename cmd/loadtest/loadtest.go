@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/maticnetwork/polygon-cli/contracts/uniswapv3"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 
 	_ "embed"
@@ -485,6 +486,23 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			return nil
 		}
 		log.Debug().Interface("config", uniswapV3Config).Msg("UniswapV3 deployment config")
+
+		tokenAAddress := ethcommon.Address{}
+		tokenBAddress := ethcommon.Address{}
+		var tokenA, tokenB contractConfig[uniswapv3.ERC20]
+		tokenA, tokenB, err = deployERC20Pair(ctx, c, tops, cops, uniswapV3Config, tokenAAddress, tokenBAddress)
+		if err != nil {
+			return nil
+		}
+
+		fees := big.NewInt(3000)
+		if err := createPool(ctx, c, tops, cops, uniswapV3Config, tokenA, tokenB, fees, *ltp.FromETHAddress); err != nil {
+			return nil
+		}
+
+		if err := swapTokenBForTokenA(tops, uniswapV3Config, tokenA, tokenB, fees, *ltp.FromETHAddress); err != nil {
+			return nil
+		}
 	}
 
 	var recallTransactions []rpctypes.PolyTransaction

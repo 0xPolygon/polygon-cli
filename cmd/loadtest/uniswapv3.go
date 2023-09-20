@@ -63,8 +63,7 @@ type UniswapV3Config struct {
 	QuoterV2                    contractConfig[uniswapv3.QuoterV2]
 	SwapRouter02                contractConfig[uniswapv3.SwapRouter02]
 
-	WETH9          contractConfig[uniswapv3.WETH9]
-	TokenA, TokenB contractConfig[uniswapv3.ERC20]
+	WETH9 contractConfig[uniswapv3.WETH9]
 }
 
 type contractConfig[T uniswapV3Contract] struct {
@@ -289,148 +288,6 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 16. Deploy two ERC20 contracts.
-	config.TokenA.Address, config.TokenA.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "TokenA", knownAddresses.TokenA,
-		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.ERC20, error) {
-			return uniswapv3.DeployERC20(tops, c, "TokenA", "A")
-		},
-		uniswapv3.NewERC20,
-		func(contract *uniswapv3.ERC20) error {
-			return approveERC20SpendingsByUniswap(contract, tops, config.NonfungiblePositionManager.Address, config.SwapRouter02.Address, 1_000_000_000_000_000_000)
-		},
-	)
-	if err != nil {
-		return config, err
-	}
-
-	config.TokenB.Address, config.TokenB.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "TokenB", knownAddresses.TokenB,
-		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.ERC20, error) {
-			return uniswapv3.DeployERC20(tops, c, "TokenB", "B")
-		},
-		uniswapv3.NewERC20,
-		func(contract *uniswapv3.ERC20) (err error) {
-			_, err = contract.Approve(tops, config.NonfungiblePositionManager.Address, big.NewInt(1_000_000_000_000_000_000))
-			return
-		},
-	)
-	if err != nil {
-		return config, err
-	}
-
-	// 17. Create a pool between the ERC20 contracts.
-	poolFees := big.NewInt(3000)
-	_, err = config.FactoryV3.contract.CreatePool(tops, config.TokenA.Address, config.TokenB.Address, poolFees)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to create a TokenA-TokenB pool")
-		return config, err
-	}
-
-	var poolAddress common.Address
-	if err = blockUntilSuccessful(ctx, c, func() (err error) {
-		poolAddress, err = config.FactoryV3.contract.GetPool(cops, config.TokenA.Address, config.TokenB.Address, poolFees)
-		if poolAddress == (common.Address{}) {
-			return fmt.Errorf("the TokenA-TokenB pool address is not deployed yet")
-		}
-
-		return
-	}); err != nil {
-		log.Error().Err(err).Msg("Unable to get the address of the TokenA-TokenB pool")
-		return config, err
-	}
-	log.Trace().Interface("address", poolAddress).Msg("New TokenA-TokenB pool created")
-
-	// 18. Initialize the pool.
-	var poolContract *uniswapv3.UniswapV3Pool
-	poolContract, err = uniswapv3.NewUniswapV3Pool(poolAddress, c)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to instantiate the TokenA-TokenB pool contract")
-		return config, err
-	}
-
-	// To compute this value, we set that 1 TokenB is worth 500 TokenA.
-	// Then we use the handy script under `contracts/uniswapv3/helper.py`.
-	// $ python3 helper.py 1 500
-	// Current price: 500
-	// Current price (Q64.96): 1771595571142957189036318392320
-	// Tick index: 62149
-	// Source: https://uniswapv3book.com/docs/milestone_1/calculating-liquidity/
-	sqrtPriceX96 := new(big.Int)
-	sqrtPriceX96.SetString("1771595571142957189036318392320", 10)
-	if err = blockUntilSuccessful(ctx, c, func() (err error) {
-		_, err = poolContract.Initialize(tops, sqrtPriceX96)
-		return
-	}); err != nil {
-		log.Error().Err(err).Msg("Unable to initialize the TokenA-TokenB pool")
-		return config, err
-	}
-	log.Trace().Msg("TokenA-TokenB pool initialized")
-
-	// 19. Provide liquidity.
-	var blockNumber uint64
-	blockNumber, err = c.BlockNumber(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get the latest block number")
-		return config, err
-	}
-
-	var block *types.Block
-	block, err = c.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get the latest block")
-		return config, err
-	}
-	timestamp := int64(block.Time())
-
-	// TODO: Understand why this call reverts.
-	if _, err = config.NonfungiblePositionManager.contract.Mint(tops, uniswapv3.INonfungiblePositionManagerMintParams{
-		Token0:         config.TokenA.Address,
-		Token1:         config.TokenB.Address,
-		Fee:            poolFees,
-		TickLower:      big.NewInt(MIN_TICK), // We provide liquidity across the whole possible range.
-		TickUpper:      big.NewInt(MAX_TICK),
-		Amount0Desired: big.NewInt(1_000),
-		Amount1Desired: big.NewInt(500_000),
-		Amount0Min:     big.NewInt(0), // We mint without any slippage protection. Don't do this in production!
-		Amount1Min:     big.NewInt(0), // Same thing here.
-		Recipient:      ownerAddress,
-		Deadline:       big.NewInt(timestamp + 10), // 10 seconds
-	}); err != nil {
-		log.Error().Err(err).Msg("Unable to create liquidity for the TokenA-TokenB pool")
-		return config, err
-	}
-	log.Trace().Msg("Liquidity provided to the TokenA-TokenB pool")
-
-	// 20. Swap TokenA and TokenB
-	if _, err = config.SwapRouter02.contract.ExactInputSingle(tops, uniswapv3.IV3SwapRouterExactInputSingleParams{
-		TokenIn:           config.TokenA.Address,
-		TokenOut:          config.TokenB.Address,
-		Fee:               poolFees,
-		Recipient:         ownerAddress,
-		AmountIn:          big.NewInt(1000),
-		AmountOutMinimum:  big.NewInt(0),
-		SqrtPriceLimitX96: big.NewInt(0),
-	}); err != nil {
-		log.Error().Err(err).Msg("Unable to swap TokenA into TokenB")
-		return config, err
-	}
-	log.Trace().Msg("Swapped TokenA into TokenB")
-
-	if _, err = config.SwapRouter02.contract.ExactInputSingle(tops, uniswapv3.IV3SwapRouterExactInputSingleParams{
-		TokenIn:           config.TokenB.Address,
-		TokenOut:          config.TokenA.Address,
-		Fee:               poolFees,
-		Recipient:         ownerAddress,
-		AmountIn:          big.NewInt(1000),
-		AmountOutMinimum:  big.NewInt(0),
-		SqrtPriceLimitX96: big.NewInt(0),
-	}); err != nil {
-		log.Error().Err(err).Msg("Unable to swap TokenB into TokenA")
-		return config, err
-	}
-	log.Trace().Msg("Swapped TokenB into TokenA")
-
 	return config, nil
 }
 
@@ -504,19 +361,173 @@ func transferProxyAdminOwnership(contract *uniswapv3.ProxyAdmin, tops *bind.Tran
 	return nil
 }
 
-func approveERC20SpendingsByUniswap(contract *uniswapv3.ERC20, tops *bind.TransactOpts, NonfungiblePositionManagerAddress, SwapRouter02Address common.Address, amount int64) error {
-	_, err := contract.Approve(tops, NonfungiblePositionManagerAddress, big.NewInt(amount))
+func deployERC20Pair(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, config UniswapV3Config, tokenAKnownAddress, tokenBKnownAddress common.Address) (contractConfig[uniswapv3.ERC20], contractConfig[uniswapv3.ERC20], error) {
+	tokensToMint := big.NewInt(1_000_000_000_000_000_000)
+
+	var token0, token1 contractConfig[uniswapv3.ERC20]
+	var err error
+	token0.Address, token0.contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, "TokenA", tokenAKnownAddress,
+		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.ERC20, error) {
+			return uniswapv3.DeployERC20(tops, c, "TokenA", "A")
+		},
+		uniswapv3.NewERC20,
+		func(contract *uniswapv3.ERC20) error {
+			return approveERC20SpendingsByUniswap(contract, tops, config.NonfungiblePositionManager.Address, config.SwapRouter02.Address, tokensToMint)
+		},
+	)
+	if err != nil {
+		return token0, token1, err
+	}
+	token1.Address, token1.contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, "TokenB", tokenBKnownAddress,
+		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.ERC20, error) {
+			return uniswapv3.DeployERC20(tops, c, "TokenB", "B")
+		},
+		uniswapv3.NewERC20,
+		func(contract *uniswapv3.ERC20) (err error) {
+			return approveERC20SpendingsByUniswap(contract, tops, config.NonfungiblePositionManager.Address, config.SwapRouter02.Address, tokensToMint)
+		},
+	)
+	if err != nil {
+		return token0, token1, err
+	}
+	return token0, token1, nil
+}
+
+func approveERC20SpendingsByUniswap(contract *uniswapv3.ERC20, tops *bind.TransactOpts, NonfungiblePositionManagerAddress, SwapRouter02Address common.Address, amount *big.Int) error {
+	_, err := contract.Approve(tops, NonfungiblePositionManagerAddress, amount)
 	if err != nil {
 		log.Trace().Msg("Unable to approve NonfungiblePositionManagerAddress spendings")
 		return err
 	}
 
-	_, err = contract.Approve(tops, SwapRouter02Address, big.NewInt(amount))
+	_, err = contract.Approve(tops, SwapRouter02Address, amount)
 	if err != nil {
 		log.Trace().Msg("Unable to approve SwapRouter02Address spendings")
 		return err
 	}
 
 	log.Trace().Msg("Spendings approved for both NonfungiblePositionManagerAddress and SwapRouter02Address")
+	return nil
+}
+
+func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, config UniswapV3Config, tokenA, tokenB contractConfig[uniswapv3.ERC20], fees *big.Int, recipient common.Address) error {
+	// Create a pool between the ERC20 contracts.
+	_, err := config.FactoryV3.contract.CreatePool(tops, tokenA.Address, tokenB.Address, fees)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to create a TokenA-TokenB pool")
+		return err
+	}
+
+	// Retrieve the pool address.
+	var poolAddress common.Address
+	if err = blockUntilSuccessful(ctx, c, func() (err error) {
+		poolAddress, err = config.FactoryV3.contract.GetPool(cops, tokenA.Address, tokenB.Address, fees)
+		if poolAddress == (common.Address{}) {
+			return fmt.Errorf("the TokenA-TokenB pool address is not deployed yet")
+		}
+
+		return
+	}); err != nil {
+		log.Error().Err(err).Msg("Unable to get the address of the TokenA-TokenB pool")
+		return err
+	}
+	log.Trace().Interface("address", poolAddress).Msg("New TokenA-TokenB pool created")
+
+	// Initialize the pool.
+	var poolContract *uniswapv3.UniswapV3Pool
+	poolContract, err = uniswapv3.NewUniswapV3Pool(poolAddress, c)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to initialize the TokenA-TokenB pool contract")
+		return err
+	}
+
+	// To compute this value, we set that 1 TokenB is worth 500 TokenA.
+	// Then we use the handy script under `contracts/uniswapv3/helper.py`.
+	// $ python3 helper.py 1 500
+	// Current price: 500
+	// Current price (Q64.96): 1771595571142957189036318392320
+	// Tick index: 62149
+	// Source: https://uniswapv3book.com/docs/milestone_1/calculating-liquidity/
+	sqrtPriceX96 := new(big.Int)
+	sqrtPriceX96.SetString("1771595571142957189036318392320", 10)
+	if err = blockUntilSuccessful(ctx, c, func() (err error) {
+		_, err = poolContract.Initialize(tops, sqrtPriceX96)
+		return
+	}); err != nil {
+		log.Error().Err(err).Msg("Unable to initialize the TokenA-TokenB pool")
+		return err
+	}
+	log.Trace().Msg("TokenA-TokenB pool initialized")
+
+	// Provide liquidity.
+	var blockNumber uint64
+	blockNumber, err = c.BlockNumber(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get the latest block number")
+		return err
+	}
+
+	var block *types.Block
+	block, err = c.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get the latest block")
+		return err
+	}
+	timestamp := int64(block.Time())
+
+	// TODO: Understand why this call reverts.
+	if _, err = config.NonfungiblePositionManager.contract.Mint(tops, uniswapv3.INonfungiblePositionManagerMintParams{
+		Token0:         tokenA.Address,
+		Token1:         tokenB.Address,
+		Fee:            fees,
+		TickLower:      big.NewInt(MIN_TICK), // We provide liquidity across the whole possible range.
+		TickUpper:      big.NewInt(MAX_TICK),
+		Amount0Desired: big.NewInt(1_000),
+		Amount1Desired: big.NewInt(500_000),
+		Amount0Min:     big.NewInt(0), // We mint without any slippage protection. Don't do this in production!
+		Amount1Min:     big.NewInt(0), // Same thing here.
+		Recipient:      recipient,
+		Deadline:       big.NewInt(timestamp + 10), // 10 seconds
+	}); err != nil {
+		log.Error().Err(err).Msg("Unable to create liquidity for the TokenA-TokenB pool")
+		return err
+	}
+	log.Trace().Msg("Liquidity provided to the TokenA-TokenB pool")
+	return nil
+}
+
+func swapTokenBForTokenA(tops *bind.TransactOpts, config UniswapV3Config, tokenA, tokenB contractConfig[uniswapv3.ERC20], fees *big.Int, recipient common.Address) error {
+	if _, err := config.SwapRouter02.contract.ExactInputSingle(tops, uniswapv3.IV3SwapRouterExactInputSingleParams{
+		TokenIn:           tokenB.Address,
+		TokenOut:          tokenA.Address,
+		Fee:               fees,
+		Recipient:         recipient,
+		AmountIn:          big.NewInt(1000),
+		AmountOutMinimum:  big.NewInt(0),
+		SqrtPriceLimitX96: big.NewInt(0),
+	}); err != nil {
+		log.Error().Err(err).Msg("Unable to swap TokenB for TokenA")
+		return err
+	}
+	log.Trace().Msg("Swapped TokenB for TokenA")
+	return nil
+}
+
+func swapTokenAForTokenB(tops *bind.TransactOpts, config UniswapV3Config, tokenA, tokenB contractConfig[uniswapv3.ERC20], fees *big.Int, recipient common.Address) error {
+	if _, err := config.SwapRouter02.contract.ExactInputSingle(tops, uniswapv3.IV3SwapRouterExactInputSingleParams{
+		TokenIn:           tokenA.Address,
+		TokenOut:          tokenB.Address,
+		Fee:               fees,
+		Recipient:         recipient,
+		AmountIn:          big.NewInt(1),
+		AmountOutMinimum:  big.NewInt(0),
+		SqrtPriceLimitX96: big.NewInt(0),
+	}); err != nil {
+		log.Error().Err(err).Msg("Unable to swap TokenA for TokenB")
+		return err
+	}
+	log.Trace().Msg("Swapped TokenA into TokenB")
 	return nil
 }
