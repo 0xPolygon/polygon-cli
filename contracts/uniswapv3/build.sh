@@ -66,7 +66,7 @@ current_dir=$(pwd)
 
 ## Build v3-core contracts.
 if [ "$mode" -eq 1 ] || [ "$mode" -eq 0 ]; then
-	contracts=("UniswapV3Factory.sol")
+	contracts=("UniswapV3Factory.sol" "UniswapV3Pool.sol")
 	build_contracts v3-core https://github.com/Uniswap/v3-core.git v1.0.0 $contracts
 fi
 
