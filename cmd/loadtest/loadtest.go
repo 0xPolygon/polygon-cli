@@ -477,9 +477,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Debug().Str("erc721Addr", erc721Addr.String()).Msg("Obtained erc 721 contract address")
 	}
 
+	uniswapAddresses := UniswapV3Addresses{}
 	var uniswapV3Config UniswapV3Config
 	if mode == loadTestModeUniswapV3 || mode == loadTestModeRandom {
-		uniswapV3Config, err = deployUniswapV3(ctx, c, tops)
+		uniswapV3Config, err = deployUniswapV3(ctx, c, tops, cops, uniswapAddresses)
 		if err != nil {
 			return nil
 		}
