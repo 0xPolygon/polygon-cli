@@ -40,7 +40,7 @@ const (
 
 type UniswapV3Addresses struct {
 	FactoryV3, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib, NFTDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker, QuoterV2, SwapRouter02 common.Address
-	WETH9                                                                                                                                                                          common.Address
+	WETH9, TokenA, TokenB                                                                                                                                                          common.Address
 }
 
 type UniswapV3Config struct {
@@ -56,7 +56,8 @@ type UniswapV3Config struct {
 	QuoterV2                    contractConfig[uniswapv3.QuoterV2]
 	SwapRouter02                contractConfig[uniswapv3.SwapRouter02]
 
-	WETH9 contractConfig[uniswapv3.WETH9]
+	WETH9          contractConfig[uniswapv3.WETH9]
+	TokenA, TokenB contractConfig[uniswapv3.ERC20]
 }
 
 type contractConfig[T uniswapV3Contract] struct {
@@ -65,7 +66,7 @@ type contractConfig[T uniswapV3Contract] struct {
 }
 
 type uniswapV3Contract interface {
-	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.WETH9 | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker | uniswapv3.QuoterV2 | uniswapv3.SwapRouter02
+	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.WETH9 | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker | uniswapv3.QuoterV2 | uniswapv3.SwapRouter02 | uniswapv3.ERC20
 }
 
 func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses, ownerAddress common.Address) (UniswapV3Config, error) {
@@ -278,6 +279,37 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 15. Transfer ProxyAdmin ownership.
 	if err = transferProxyAdminOwnership(config.ProxyAdmin.contract, tops, ownerAddress); err != nil {
+		return UniswapV3Config{}, err
+	}
+
+	// 16. Deploy two ERC20 contracts.
+	config.TokenA.Address, config.TokenA.contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, "TokenA", knownAddresses.TokenA,
+		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.ERC20, error) {
+			return uniswapv3.DeployERC20(tops, c, "TokenA", "A")
+		},
+		uniswapv3.NewERC20,
+		func(contract *uniswapv3.ERC20) (err error) {
+			_, err = contract.Name(cops)
+			return
+		},
+	)
+	if err != nil {
+		return UniswapV3Config{}, err
+	}
+
+	config.TokenB.Address, config.TokenB.contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, "TokenB", knownAddresses.TokenB,
+		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.ERC20, error) {
+			return uniswapv3.DeployERC20(tops, c, "TokenB", "B")
+		},
+		uniswapv3.NewERC20,
+		func(contract *uniswapv3.ERC20) (err error) {
+			_, err = contract.Name(cops)
+			return
+		},
+	)
+	if err != nil {
 		return UniswapV3Config{}, err
 	}
 
