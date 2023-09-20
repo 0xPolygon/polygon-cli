@@ -24,7 +24,7 @@ solc --version
 current_dir=$(pwd)
 
 ## Build WETH9 contract.
-if [ "$1" -eq 1 ]; then
+if [ "$1" -eq 1 ] || [ "$1" -eq 0 ]; then
 	echo -e "\n🏗️  Building WETH9 contract..."
 	git clone https://github.com/gnosis/canonical-weth.git
 	rm -rf utils
@@ -36,7 +36,7 @@ if [ "$1" -eq 1 ]; then
 fi
 
 ## Build v3-core contracts.
-if [ "$1" -eq 2 ]; then
+if [ "$1" -eq 2 ] || [ "$1" -eq 0 ]; then
 	echo -e "\n🏗️  Building v3-core contracts..."
 	rm -rf v3-core
 	git clone https://github.com/Uniswap/v3-core.git
@@ -56,7 +56,7 @@ if [ "$1" -eq 2 ]; then
 fi
 
 ## Build v3-periphery contracts.
-if [ "$1" -eq 3 ]; then
+if [ "$1" -eq 3 ] || [ "$1" -eq 0 ]; then
 	echo -e "\n🏗️  Building v3-periphery contracts..."
 	rm -rf v3-periphery
 	git clone https://github.com/Uniswap/v3-periphery.git
@@ -106,7 +106,7 @@ if [ "$1" -eq 3 ]; then
 fi
 
 ## Build openzeppelin contracts.
-if [ "$1" -eq 4 ]; then
+if [ "$1" -eq 4 ] || [ "$1" -eq 0 ]; then
 	echo -e "\n🏗️  Building openzeppelin contracts..."
 	rm -rf openzeppelin-contracts
 	git clone https://github.com/OpenZeppelin/openzeppelin-contracts.git --branch v3.4.1-solc-0.7-2
