@@ -15,13 +15,19 @@ gen_go_binding() {
 }
 
 abigen --version
-gen_go_binding utils WETH9
+
 gen_go_binding v3-core UniswapV3Factory
+
 gen_go_binding v3-periphery UniswapInterfaceMulticall
-gen_go_binding openzeppelin-contracts ProxyAdmin
-gen_go_binding openzeppelin-contracts TransparentUpgradeableProxy
 gen_go_binding v3-periphery TickLens
 gen_go_binding v3-periphery NFTDescriptor
 gen_go_binding v3-periphery NonfungibleTokenPositionDescriptor
 gen_go_binding v3-periphery NonfungiblePositionManager
 gen_go_binding v3-periphery V3Migrator
+
+gen_go_binding v3-staker UniswapV3Staker
+
+gen_go_binding openzeppelin-contracts ProxyAdmin
+gen_go_binding openzeppelin-contracts TransparentUpgradeableProxy
+
+gen_go_binding utils WETH9

@@ -105,8 +105,31 @@ if [ "$1" -eq 3 ] || [ "$1" -eq 0 ]; then
 	echo "✅ Successfully built v3-periphery contracts..."
 fi
 
-## Build openzeppelin contracts.
+## Build v3-staker contracts.
 if [ "$1" -eq 4 ] || [ "$1" -eq 0 ]; then
+	echo -e "\n🏗️  Building v3-staker contracts..."
+	git clone https://github.com/Uniswap/v3-staker.git
+	pushd v3-staker
+	yarn install
+	popd
+	solc \
+		v3-staker/contracts/UniswapV3Staker.sol \
+		@uniswap=$current_dir/v3-staker/node_modules/@uniswap \
+		@openzeppelin=$current_dir/v3-staker/node_modules/@openzeppelin \
+		--optimize \
+		--optimize-runs 200 \
+		--abi \
+		--bin \
+		--output-dir tmp/v3-staker \
+		--overwrite
+	rm -rf v3-staker
+	mkdir v3-staker
+	mv tmp/v3-staker/* v3-staker
+	rm -rf tmp
+fi
+
+## Build openzeppelin contracts.
+if [ "$1" -eq 5 ] || [ "$1" -eq 0 ]; then
 	echo -e "\n🏗️  Building openzeppelin contracts..."
 	rm -rf openzeppelin-contracts
 	git clone https://github.com/OpenZeppelin/openzeppelin-contracts.git --branch v3.4.1-solc-0.7-2
