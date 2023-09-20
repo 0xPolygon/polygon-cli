@@ -1,7 +1,6 @@
 #!/bin/bash
 # This script builds UniswapV3 contracts.
-
-mode="${1:-0}"
+mode="${1:-all}"
 
 # Make sure the local chain is started.
 wait_for_service() {
@@ -74,13 +73,13 @@ solc --version
 current_dir=$(pwd)
 
 ## Build v3-core contracts.
-if [ "$mode" -eq 1 ] || [ "$mode" -eq 0 ]; then
+if [ "$mode" == "v3-core" ] || [ "$mode" == "all" ]; then
 	contracts=("UniswapV3Factory" "UniswapV3Pool")
 	build_contracts v3-core https://github.com/Uniswap/v3-core.git v1.0.0 $contracts
 fi
 
 ## Build v3-periphery contracts.
-if [ "$mode" -eq 2 ] || [ "$mode" -eq 0 ]; then
+if [ "$mode" == "v3-periphery" ] || [ "$mode" == "all" ]; then
 	contracts=("lens/UniswapInterfaceMulticall" "lens/TickLens" "libraries/NFTDescriptor" "NonfungibleTokenPositionDescriptor" "NonfungiblePositionManager" "V3Migrator")
 	build_contracts v3-periphery https://github.com/Uniswap/v3-periphery.git v1.3.0 $contracts
 
@@ -102,25 +101,25 @@ if [ "$mode" -eq 2 ] || [ "$mode" -eq 0 ]; then
 fi
 
 ## Build v3-staker contracts.
-if [ "$mode" -eq 3 ] || [ "$mode" -eq 0 ]; then
+if [ "$mode" == "v3-staker" ] || [ "$mode" == "all" ]; then
 	contracts=("UniswapV3Staker")
 	build_contracts v3-staker https://github.com/Uniswap/v3-staker.git v1.0.2 $contracts
 fi
 
 ## Build v3-swap-router contracts.
-if [ "$mode" -eq 4 ] || [ "$mode" -eq 0 ]; then
+if [ "$mode" == "v3-swap-router" ] || [ "$mode" == "v3" ]; then
 	contracts=("lens/QuoterV2" "SwapRouter02")
 	build_contracts v3-swap-router https://github.com/Uniswap/swap-router-contracts.git v1.3.0 $contracts
 fi
 
 ## Build openzeppelin contracts.
-if [ "$mode" -eq 5 ] || [ "$mode" -eq 0 ]; then
+if [ "$mode" == "openzeppelin" ] || [ "$mode" == "all" ]; then
 	contracts=("proxy/ProxyAdmin" "proxy/TransparentUpgradeableProxy")
 	build_contracts openzeppelin https://github.com/OpenZeppelin/openzeppelin-contracts.git v3.4.1-solc-0.7-2 $contracts
 fi
 
 ## Build WETH9 contract.
-if [ "$mode" -eq 6 ] || [ "$mode" -eq 0 ]; then
+if [ "$mode" == "weth9" ] || [ "$mode" == "all" ]; then
 	echo -e "\n🏗️  Building WETH9 contract..."
 	git clone https://github.com/gnosis/canonical-weth.git
 	rm -rf weth9
