@@ -70,7 +70,7 @@ type uniswapV3Contract interface {
 }
 
 func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses, ownerAddress common.Address) (UniswapV3Config, error) {
-	var config UniswapV3Config
+	config := UniswapV3Config{}
 	var err error
 
 	// 1. Deploy UniswapV3Factory.
@@ -84,12 +84,12 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 	)
 	if err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 2. Enable one basic point fee tier.
 	if err = enableOneBPFeeTier(config.FactoryV3.contract, tops, ONE_BP_FEE, ONE_BP_TICK_SPACING); err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 3. Deploy UniswapInterfaceMulticall.
@@ -103,7 +103,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 	)
 	if err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 4. Deploy ProxyAdmin.
@@ -117,7 +117,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 	)
 	if err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 5. Deploy TickLens.
@@ -136,7 +136,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 	)
 	if err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 6. Deploy WETH9.
@@ -150,7 +150,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 	)
 	if err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 7. Deploy NonfungibleTokenPositionDescriptor.
@@ -169,7 +169,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 	)
 	if err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 8. Deploy TransparentUpgradeableProxy.
@@ -187,7 +187,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 	)
 	if err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 9. Deploy NonfungiblePositionManager.
@@ -203,7 +203,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 	)
 	if err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 10. Deploy Migrator.
@@ -219,12 +219,12 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 	)
 	if err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 11. Set Factory owner.
 	if err = setFactoryOwner(config.FactoryV3.contract, tops, ownerAddress); err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 12. Deploy Staker.
@@ -240,7 +240,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 	)
 	if err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 13. Deploy QuoterV2.
@@ -256,7 +256,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 	)
 	if err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 14. Deploy SwapRouter02.
@@ -274,12 +274,12 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 	)
 	if err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 15. Transfer ProxyAdmin ownership.
 	if err = transferProxyAdminOwnership(config.ProxyAdmin.contract, tops, ownerAddress); err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 16. Deploy two ERC20 contracts.
@@ -294,7 +294,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 	)
 	if err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	config.TokenB.Address, config.TokenB.contract, err = deployOrInstantiateContract(
@@ -309,16 +309,28 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 	)
 	if err != nil {
-		return UniswapV3Config{}, err
+		return config, err
 	}
 
 	// 17. Create and initialize a Pool between the ERC20 contracts.
-	_, err = config.FactoryV3.contract.CreatePool(tops, config.TokenA.Address, config.TokenB.Address, big.NewInt(3000))
+	poolFees := big.NewInt(3000)
+	_, err = config.FactoryV3.contract.CreatePool(tops, config.TokenA.Address, config.TokenB.Address, poolFees)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to create a Pool between TokenA and TokenB")
-		return UniswapV3Config{}, err
+		return config, err
 	}
-	log.Trace().Msg("New Pool between TokenA and TokenB created")
+
+	var poolAddress common.Address
+	if err = blockUntilSuccessful(ctx, c, func() (err error) {
+		poolAddress, err = config.FactoryV3.contract.GetPool(cops, config.TokenA.Address, config.TokenB.Address, poolFees)
+		if poolAddress == (common.Address{}) {
+			return fmt.Errorf("pool address is equal to 0x0")
+		}
+
+		return
+	}); err != nil {
+		return config, err
+	}
+	log.Trace().Interface("address", poolAddress).Msg("New Pool between TokenA and TokenB created")
 
 	return config, nil
 }
@@ -408,18 +420,4 @@ func approveERC20SpendingsByUniswap(contract *uniswapv3.ERC20, tops *bind.Transa
 
 	log.Trace().Msg("Spendings approved for both NonfungiblePositionManagerAddress and SwapRouter02Address")
 	return nil
-}
-
-// Create and initialise an ERC20 pool between two ERC20 contracts.
-// Note that this will also deploy both ERC20 contracts.
-func createPool() {
-	// TODO
-}
-
-func swapTokenAForTokenB() {
-	// TODO
-}
-
-func swapTokenBForTokenA() {
-	// TODO
 }
