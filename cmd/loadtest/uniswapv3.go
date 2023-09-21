@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -81,6 +82,11 @@ func (c *UniswapV3Config) ToAddresses() UniswapV3Addresses {
 		SwapRouter02:                c.SwapRouter02.Address,
 		WETH9:                       c.WETH9.Address,
 	}
+}
+
+type PoolConfig struct {
+	TokenA, TokenB contractConfig[uniswapv3.ERC20]
+	Fees           *big.Int
 }
 
 type contractConfig[T uniswapV3Contract] struct {
@@ -324,6 +330,25 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	return config, nil
 }
 
+func loadTestUniswapV3(ctx context.Context, c *ethclient.Client, nonce uint64, uniswapV3Config UniswapV3Config, poolConfig PoolConfig) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+	tops.Nonce = new(big.Int).SetUint64(nonce)
+	tops = configureTransactOpts(tops)
+
+	t1 = time.Now()
+	defer func() { t2 = time.Now() }()
+	err = swapTokenBForTokenA(tops, uniswapV3Config.SwapRouter02.contract, poolConfig, *ltp.FromETHAddress)
+	return
+}
+
 // Deploy or instantiate any UniswapV3 contract.
 // This method will either deploy a contract if the known address is empty (equal to `common.Address{}` or `0x0“)
 // or instantiate the contract if the known address is specified.
@@ -460,14 +485,14 @@ func approveERC20SpendingsByUniswap(contract *uniswapv3.ERC20, tops *bind.Transa
 	return nil
 }
 
-func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, config UniswapV3Config, tokenA, tokenB contractConfig[uniswapv3.ERC20], fees *big.Int, recipient common.Address) error {
-	poolAddress, err := config.FactoryV3.contract.GetPool(cops, tokenA.Address, tokenB.Address, fees)
+func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, poolConfig PoolConfig, recipient common.Address) error {
+	poolAddress, err := uniswapV3Config.FactoryV3.contract.GetPool(cops, poolConfig.TokenA.Address, poolConfig.TokenB.Address, poolConfig.Fees)
 	if err != nil {
 		return err
 	}
 	if poolAddress == (common.Address{}) {
 		// The TokenA-TokenB pool is not deployed yet.
-		_, err := config.FactoryV3.contract.CreatePool(tops, tokenA.Address, tokenB.Address, fees)
+		_, err := uniswapV3Config.FactoryV3.contract.CreatePool(tops, poolConfig.TokenA.Address, poolConfig.TokenB.Address, poolConfig.Fees)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to create the TokenA-TokenB pool")
 			return err
@@ -475,7 +500,7 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 
 		// Retrieve the pool address.
 		if err = blockUntilSuccessful(ctx, c, func() (err error) {
-			poolAddress, err = config.FactoryV3.contract.GetPool(cops, tokenA.Address, tokenB.Address, fees)
+			poolAddress, err = uniswapV3Config.FactoryV3.contract.GetPool(cops, poolConfig.TokenA.Address, poolConfig.TokenB.Address, poolConfig.Fees)
 			if poolAddress == (common.Address{}) {
 				return fmt.Errorf("TokenA-TokenB pool not deployed yet")
 			}
@@ -544,10 +569,10 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 
 	// Provide liquidity.
 	// TODO: Understand why this call reverts.
-	if _, err = config.NonfungiblePositionManager.contract.Mint(tops, uniswapv3.INonfungiblePositionManagerMintParams{
-		Token0:         tokenA.Address,
-		Token1:         tokenB.Address,
-		Fee:            fees,
+	if _, err = uniswapV3Config.NonfungiblePositionManager.contract.Mint(tops, uniswapv3.INonfungiblePositionManagerMintParams{
+		Token0:         poolConfig.TokenA.Address,
+		Token1:         poolConfig.TokenB.Address,
+		Fee:            poolConfig.Fees,
 		TickLower:      big.NewInt(MIN_TICK), // We provide liquidity across the whole possible range.
 		TickUpper:      big.NewInt(MAX_TICK),
 		Amount0Desired: big.NewInt(1_000),
@@ -564,11 +589,11 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	return nil
 }
 
-func swapTokenBForTokenA(tops *bind.TransactOpts, config UniswapV3Config, tokenA, tokenB contractConfig[uniswapv3.ERC20], fees *big.Int, recipient common.Address) error {
-	if _, err := config.SwapRouter02.contract.ExactInputSingle(tops, uniswapv3.IV3SwapRouterExactInputSingleParams{
-		TokenIn:           tokenB.Address,
-		TokenOut:          tokenA.Address,
-		Fee:               fees,
+func swapTokenBForTokenA(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRouter02, poolConfig PoolConfig, recipient common.Address) error {
+	if _, err := swapRouter.ExactInputSingle(tops, uniswapv3.IV3SwapRouterExactInputSingleParams{
+		TokenIn:           poolConfig.TokenA.Address,
+		TokenOut:          poolConfig.TokenA.Address,
+		Fee:               poolConfig.Fees,
 		Recipient:         recipient,
 		AmountIn:          big.NewInt(1000),
 		AmountOutMinimum:  big.NewInt(0),

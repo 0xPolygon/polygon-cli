@@ -493,6 +493,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		WETH9:                       ethcommon.HexToAddress(*ltp.WETH9),
 	}
 	var uniswapV3Config UniswapV3Config
+	var poolConfig PoolConfig
 	if mode == loadTestModeUniswapV3 || mode == loadTestModeRandom {
 		uniswapV3Config, err = deployUniswapV3(ctx, c, tops, cops, uniswapAddresses, *ltp.FromETHAddress)
 		if err != nil {
@@ -513,12 +514,12 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			return nil
 		}
 
-		fees := big.NewInt(3000)
-		if err = createPool(ctx, c, tops, cops, uniswapV3Config, tokenAConfig, tokenBConfig, fees, *ltp.FromETHAddress); err != nil {
-			return nil
+		poolConfig = PoolConfig{
+			TokenA: tokenAConfig,
+			TokenB: tokenBConfig,
+			Fees:   big.NewInt(3000),
 		}
-
-		if err = swapTokenBForTokenA(tops, uniswapV3Config, tokenAConfig, tokenBConfig, fees, *ltp.FromETHAddress); err != nil {
+		if err = createPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, *ltp.FromETHAddress); err != nil {
 			return nil
 		}
 	}
@@ -627,7 +628,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				case loadTestModeRecall:
 					startReq, endReq, tErr = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
 				case loadTestModeUniswapV3:
-					log.Info().Msg("TODO")
+					startReq, endReq, tErr = loadTestUniswapV3(ctx, c, myNonceValue, uniswapV3Config, poolConfig)
 				case loadTestModeRPC:
 					startReq, endReq, tErr = loadTestRPC(ctx, c, myNonceValue, indexedActivity)
 				default:
