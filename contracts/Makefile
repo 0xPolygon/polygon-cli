@@ -9,8 +9,8 @@ define gen_go_binding
 endef
 
 
-.PHONY: gen
-gen: ## Generate go bindings
+.PHONY: gen-go-bindings
+gen-go-bindings: ## Generate go bindings
 	$(call gen_go_binding,tokens/ERC20,ERC20,tokens,tokens)
 	$(call gen_go_binding,tokens/ERC721,ERC721,tokens,tokens)
 	$(call gen_go_binding,loadtester,LoadTester,contracts,.)
