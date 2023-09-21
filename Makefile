@@ -68,8 +68,32 @@ test: ## Run tests.
 	go test ./... -coverprofile=coverage.out
 	go tool cover -func coverage.out
 
-##@ Documentation
+##@ Generation
+
+.PHONY: gen-go-bindings
+gen-go-bindings: ## Generate go bindings for smart contracts.
+	$(call gen_go_binding,contracts/tokens/ERC20,ERC20,tokens,contracts/tokens)
+	$(call gen_go_binding,contracts/tokens/ERC721,ERC721,tokens,contracts/tokens)
+	$(call gen_go_binding,contracts/loadtester,LoadTester,contracts,contracts)
 
 .PHONY: gen-doc
 gen-doc: ## Generate documentation for `polycli`.
 	go run docutil/*.go
+
+# Generate go binding.
+# - $1: input_dir
+# - $2: name
+# - $3: pkg
+# - $4: output_dir
+define gen_go_binding
+	solc $1/$2.sol --abi --bin --output-dir $1 --overwrite
+	abigen --abi $1/$2.abi --bin $1/$2.bin --pkg $3 --type $2 --out $4/$2.go
+endef
+
+# Example for the ERC20 contract.
+# solc contracts/tokens/ERC20/ERC20.sol --abi --bin --output-dir contracts/tokens/ERC20 --overwrite
+# abigen --abi contracts/tokens/ERC20/ERC20.abi --bin contracts/tokens/ERC20/ERC20.bin --pkg tokens --type ERC20 --out contracts/tokens/ERC20.go
+
+# Example for the LoadTester contract.
+# solc contracts/loadtester/LoadTester.sol --abi --bin --output-dir contracts/loadtester --overwrite
+# abigen --abi contracts/loadtester/LoadTester.abi --bin contracts/loadtester/LoadTester.bin --pkg contracts --type LoadTester --out contracts/LoadTester.go

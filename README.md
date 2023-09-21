@@ -5,6 +5,7 @@ We run a lot of different blockchain technologies. Different tools often have in
 - [Install](#install)
 - [Features](#features)
 - [Testing](#testing)
+- [Contributing](#contributing)
 - [Reference](#reference)
 
 # Install
@@ -81,7 +82,7 @@ To test the features of `polycli`, we'll run geth in `dev` mode but you can run 
 
 ```bash
 $ make geth
-INFO [07-10|10:43:12.499] Starting Geth in ephemeral dev mode... 
+INFO [07-10|10:43:12.499] Starting Geth in ephemeral dev mode...
 ...
 ```
 
@@ -108,7 +109,7 @@ First, wait for the IPC endpoint to open.
 
 ```bash
 INFO [07-10|10:44:29.250] Starting peer-to-peer node               instance=Geth/v1.12.0-stable/darwin-amd64/go1.20.4
-WARN [07-10|10:44:29.250] P2P server will be useless, neither dialing nor listening 
+WARN [07-10|10:44:29.250] P2P server will be useless, neither dialing nor listening
 INFO [07-10|10:44:29.255] Stored checkpoint snapshot to disk       number=0 hash=039839..dcb5c1
 DEBUG[07-10|10:44:29.255] IPCs registered                          namespaces=admin,debug,web3,eth,txpool,clique,miner,net,engine
 INFO [07-10|10:44:29.256] IPC endpoint opened                      url=/var/folders/7m/3_x4ns7557x52hb6vncqkx8h0000gn/T/geth.ipc
@@ -124,11 +125,11 @@ Welcome to the Geth JavaScript console!
 instance: Geth/v1.12.0-stable/darwin-amd64/go1.20.4
 coinbase: 0x760f66cae63cb561ed0ef29d5e005f44215e2ba2
 at block: 8 (Mon Jul 10 2023 10:49:07 GMT+0200 (CEST))
- datadir: 
+ datadir:
  modules: admin:1.0 clique:1.0 debug:1.0 engine:1.0 eth:1.0 miner:1.0 net:1.0 rpc:1.0 txpool:1.0 web3:1.0
 
 To exit, press ctrl-d or type exit
-> 
+>
 ```
 
 From there, you can do anything such as funding the default load testing account with some currency.
@@ -145,6 +146,41 @@ You can then generate some load to make sure that blocks with transactions are b
 
 ```bash
 $ polycli loadtest --verbosity 700 --chain-id 1337 --concurrency 1 --requests 1000 --rate-limit 5 --mode c http://127.0.0.1:8545
+```
+
+# Contributing
+
+The `Makefile` is here to assist you to build the project, run tests, generate documentation or go bindings, etc.
+
+```sh
+$ make
+Usage:
+  make <target>
+  help             Display this help.
+
+Build
+  generate         Generate protobuf stubs.
+  build            Build go binary.
+  install          Install the go binary.
+  cross            Cross-compile go binaries using CGO.
+  simplecross      Cross-compile go binaries without using CGO.
+  clean            Clean the binary folder.
+
+Test
+  test             Run tests.
+
+Generation
+  gen-go-bindings  Generate go bindings for smart contracts.
+  gen-doc          Generate documentation for `polycli`.
+
+Lint
+  lint             Run linters.
+
+Clients
+  geth             Start a local geth node.
+  avail            Start a local avail node.
+  geth-loadtest    Fund test account with 5k ETH and run loadtest against an EVM/Geth chain.
+  avail-loadtest   Run loadtest against an Avail chain.
 ```
 
 # Reference
