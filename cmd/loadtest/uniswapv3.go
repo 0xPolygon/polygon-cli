@@ -92,6 +92,16 @@ type uniswapV3Contract interface {
 	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.WETH9 | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker | uniswapv3.QuoterV2 | uniswapv3.SwapRouter02 | uniswapv3.ERC20
 }
 
+type slot struct {
+	SqrtPriceX96               *big.Int
+	Tick                       *big.Int
+	ObservationIndex           uint16
+	ObservationCardinality     uint16
+	ObservationCardinalityNext uint16
+	FeeProtocol                uint8
+	Unlocked                   bool
+}
+
 // Source: https://github.com/Uniswap/deploy-v3
 func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses, ownerAddress common.Address) (UniswapV3Config, error) {
 	config := UniswapV3Config{}
@@ -497,14 +507,24 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	// Source: https://uniswapv3book.com/docs/milestone_1/calculating-liquidity/
 	sqrtPriceX96 := new(big.Int)
 	sqrtPriceX96.SetString("1771595571142957189036318392320", 10)
-	if err = blockUntilSuccessful(ctx, c, func() (err error) {
-		_, err = poolContract.Initialize(tops, sqrtPriceX96)
-		return
-	}); err != nil {
-		log.Error().Err(err).Msg("Unable to initialize the TokenA-TokenB pool")
+	var slot0 slot
+	slot0, err = poolContract.Slot0(cops)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get slot0")
 		return err
 	}
-	log.Debug().Msg("TokenA-TokenB pool initialized")
+	if slot0.SqrtPriceX96.Cmp(sqrtPriceX96) == 0 {
+		log.Debug().Msg("Pool already initialized")
+	} else {
+		if err = blockUntilSuccessful(ctx, c, func() (err error) {
+			_, err = poolContract.Initialize(tops, sqrtPriceX96)
+			return
+		}); err != nil {
+			log.Error().Err(err).Msg("Unable to initialize the TokenA-TokenB pool")
+			return err
+		}
+		log.Debug().Msg("TokenA-TokenB pool initialized")
+	}
 
 	// Get the last block timestamp.
 	var blockNumber uint64
