@@ -492,8 +492,7 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	}
 	if poolAddress == (common.Address{}) {
 		// The TokenA-TokenB pool is not deployed yet.
-		_, err := uniswapV3Config.FactoryV3.contract.CreatePool(tops, poolConfig.TokenA.Address, poolConfig.TokenB.Address, poolConfig.Fees)
-		if err != nil {
+		if _, err = uniswapV3Config.FactoryV3.contract.CreatePool(tops, poolConfig.TokenA.Address, poolConfig.TokenB.Address, poolConfig.Fees); err != nil {
 			log.Error().Err(err).Msg("Unable to create the TokenA-TokenB pool")
 			return err
 		}
