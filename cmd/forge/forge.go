@@ -62,9 +62,9 @@ type (
 
 var (
 	//go:embed usage.md
-	usage        string
-	inputForge   forgeParams
-	BlockReadEOF = errors.New("no more blocks to read")
+	usage           string
+	inputForge      forgeParams
+	ErrBlockReadEOF = errors.New("no more blocks to read")
 )
 
 // forgeCmd represents the forge command
@@ -333,7 +333,7 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 		edgeBlock.Header.ParentHash = parentBlock.Header.ComputeHash().Hash
 
 		// The Transactions Root should be the same (i think?), but we'll set it
-		edgeBlock.Header.TxRoot = edgebuildroot.CalculateTransactionsRoot(edgeBlock.Transactions)
+		edgeBlock.Header.TxRoot = edgebuildroot.CalculateTransactionsRoot(edgeBlock.Transactions, lastNumber)
 
 		blockCreator, err := bh.Blockchain.GetConsensus().GetBlockCreator(edgeBlock.Header)
 		if err != nil {
