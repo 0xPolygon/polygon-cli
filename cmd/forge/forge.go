@@ -62,9 +62,9 @@ type (
 
 var (
 	//go:embed usage.md
-	usage        string
-	inputForge   forgeParams
-	BlockReadEOF = errors.New("no more blocks to read")
+	usage           string
+	inputForge      forgeParams
+	ErrBlockReadEOF = errors.New("no more blocks to read")
 )
 
 // forgeCmd represents the forge command
