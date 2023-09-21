@@ -451,35 +451,41 @@ func approveERC20SpendingsByUniswap(contract *uniswapv3.ERC20, tops *bind.Transa
 }
 
 func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, config UniswapV3Config, tokenA, tokenB contractConfig[uniswapv3.ERC20], fees *big.Int, recipient common.Address) error {
-	// Create a pool between the ERC20 contracts.
-	_, err := config.FactoryV3.contract.CreatePool(tops, tokenA.Address, tokenB.Address, fees)
+	poolAddress, err := config.FactoryV3.contract.GetPool(cops, tokenA.Address, tokenB.Address, fees)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to create a TokenA-TokenB pool")
 		return err
 	}
-
-	// Retrieve the pool address.
-	var poolAddress common.Address
-	if err = blockUntilSuccessful(ctx, c, func() (err error) {
-		poolAddress, err = config.FactoryV3.contract.GetPool(cops, tokenA.Address, tokenB.Address, fees)
-		if poolAddress == (common.Address{}) {
-			return fmt.Errorf("the TokenA-TokenB pool address is not deployed yet")
+	if poolAddress == (common.Address{}) {
+		// The TokenA-TokenB pool is not deployed yet.
+		_, err := config.FactoryV3.contract.CreatePool(tops, tokenA.Address, tokenB.Address, fees)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to create the TokenA-TokenB pool")
+			return err
 		}
 
-		return
-	}); err != nil {
-		log.Error().Err(err).Msg("Unable to get the address of the TokenA-TokenB pool")
-		return err
+		// Retrieve the pool address.
+		if err = blockUntilSuccessful(ctx, c, func() (err error) {
+			poolAddress, err = config.FactoryV3.contract.GetPool(cops, tokenA.Address, tokenB.Address, fees)
+			if poolAddress == (common.Address{}) {
+				return fmt.Errorf("TokenA-TokenB pool not deployed yet")
+			}
+
+			return
+		}); err != nil {
+			log.Error().Err(err).Msg("Unable to get the address of the TokenA-TokenB pool")
+			return err
+		}
+		log.Debug().Interface("address", poolAddress).Msg("New TokenA-TokenB pool created")
 	}
-	log.Trace().Interface("address", poolAddress).Msg("New TokenA-TokenB pool created")
 
 	// Instantiate the pool contract.
 	var poolContract *uniswapv3.UniswapV3Pool
 	poolContract, err = uniswapv3.NewUniswapV3Pool(poolAddress, c)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to instantiate the TokenA-TokenB pool contract")
+		log.Error().Err(err).Msg("Unable to instantiate the TokenA-TokenB pool")
 		return err
 	}
+	log.Debug().Msg("TokenA-TokenB pool instantiated")
 
 	// Initialize the pool.
 	// To compute this value, we set that 1 TokenB is worth 500 TokenA.
