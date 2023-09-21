@@ -25,22 +25,34 @@ interface IERC20 {
 }
 
 contract ERC20 is IERC20 {
-    uint public totalSupply;
-    mapping(address => uint) public balanceOf;
-    mapping(address => mapping(address => uint)) public allowance;
-    string public name = "Solidity by Example";
-    string public symbol = "SOLBYEX";
+    uint override public totalSupply;
+    mapping(address => uint) public balances;
+    mapping(address => mapping(address => uint)) public allowances;
+    string public name;
+    string public symbol;
     uint8 public decimals = 18;
 
-    function transfer(address recipient, uint amount) external returns (bool) {
-        balanceOf[msg.sender] -= amount;
-        balanceOf[recipient] += amount;
+    constructor(string memory _name, string memory _symbol) {
+        name = _name;
+        symbol = _symbol;
+    }
+
+    function balanceOf(address account) override external view returns (uint) {
+        return balances[account];
+    }
+
+    function transfer(address recipient, uint amount) override external returns (bool) {
+        balances[msg.sender] -= amount;
+        balances[recipient] += amount;
         emit Transfer(msg.sender, recipient, amount);
         return true;
     }
+    function allowance(address owner, address spender) override external view returns (uint) {
+        return allowances[owner][spender];
+    }
 
-    function approve(address spender, uint amount) external returns (bool) {
-        allowance[msg.sender][spender] = amount;
+    function approve(address spender, uint amount) override external returns (bool) {
+        allowances[msg.sender][spender] = amount;
         emit Approval(msg.sender, spender, amount);
         return true;
     }
@@ -49,22 +61,22 @@ contract ERC20 is IERC20 {
         address sender,
         address recipient,
         uint amount
-    ) external returns (bool) {
-        allowance[sender][msg.sender] -= amount;
-        balanceOf[sender] -= amount;
-        balanceOf[recipient] += amount;
+    ) override external returns (bool) {
+        allowances[sender][msg.sender] -= amount;
+        balances[sender] -= amount;
+        balances[recipient] += amount;
         emit Transfer(sender, recipient, amount);
         return true;
     }
 
     function mint(uint amount) external {
-        balanceOf[msg.sender] += amount;
+        balances[msg.sender] += amount;
         totalSupply += amount;
         emit Transfer(address(0), msg.sender, amount);
     }
 
     function burn(uint amount) external {
-        balanceOf[msg.sender] -= amount;
+        balances[msg.sender] -= amount;
         totalSupply -= amount;
         emit Transfer(msg.sender, address(0), amount);
     }
