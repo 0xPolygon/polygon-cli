@@ -15,8 +15,10 @@ gen-go-bindings: ## Generate go bindings
 	$(call gen_go_binding,tokens/ERC721,ERC721,tokens,tokens)
 	$(call gen_go_binding,loadtester,LoadTester,contracts,.)
 
+# Example for the ERC20 contract.
 # solc tokens/ERC20/ERC20.sol --abi --bin --output-dir tokens/ERC20 --overwrite
 # abigen --abi tokens/ERC20/ERC20.abi --bin tokens/ERC20/ERC20.bin --pkg tokens --type ERC20 --out tokens/ERC20.go
 
+# Example for the LoadTester contract.
 # solc loadtester/LoadTester.sol --abi --bin --output-dir loadtester --overwrite
 # abigen --abi loadtester/LoadTester.abi --bin loadtester/LoadTester.bin --pkg contracts --type LoadTester --out LoadTester.go
