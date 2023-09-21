@@ -3,7 +3,7 @@ module github.com/maticnetwork/polygon-cli
 go 1.21
 
 require (
-	github.com/0xPolygon/polygon-edge v1.0.1
+	github.com/0xPolygon/polygon-edge v1.1.0
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
 	github.com/centrifuge/go-substrate-rpc-client/v4 v4.0.6
 	github.com/coinbase/kryptology v1.8.0
@@ -41,7 +41,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.1 // indirect
 	cloud.google.com/go/secretmanager v1.11.1 // indirect
-	github.com/0xPolygon/go-ibft v0.4.1-0.20230612114712-fa4235351cbc // indirect
+	github.com/0xPolygon/go-ibft v0.4.1-0.20230717081138-628065cf23b6 // indirect
 	github.com/DataDog/appsec-internal-go v1.0.0 // indirect
 	github.com/DataDog/datadog-agent/pkg/obfuscate v0.45.0-rc.1 // indirect
 	github.com/DataDog/datadog-agent/pkg/remoteconfig/state v0.45.0 // indirect
@@ -93,7 +93,7 @@ require (
 	github.com/hashicorp/vault/api v1.9.2 // indirect
 	github.com/holiman/uint256 v1.2.0 // indirect
 	github.com/huin/goupnp v1.2.0 // indirect
-	github.com/ipfs/go-ipfs-util v0.0.2 // indirect
+	github.com/ipfs/boxo v0.8.1 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
@@ -104,7 +104,7 @@ require (
 	github.com/libp2p/go-cidranger v1.1.0 // indirect
 	github.com/libp2p/go-flow-metrics v0.1.0 // indirect
 	github.com/libp2p/go-libp2p-asn-util v0.3.0 // indirect
-	github.com/libp2p/go-libp2p-kbucket v0.6.0 // indirect
+	github.com/libp2p/go-libp2p-kbucket v0.6.3 // indirect
 	github.com/libp2p/go-libp2p-pubsub v0.9.3 // indirect
 	github.com/libp2p/go-msgio v0.3.0 // indirect
 	github.com/libp2p/go-nat v0.2.0 // indirect
@@ -139,7 +139,7 @@ require (
 	github.com/secure-systems-lab/go-securesystemslib v0.6.0 // indirect
 	github.com/sethvargo/go-retry v0.2.4 // indirect
 	github.com/tinylib/msgp v1.1.6 // indirect
-	github.com/umbracle/ethgo v0.1.4-0.20230622091706-8230f57578b2 // indirect
+	github.com/umbracle/ethgo v0.1.4-0.20230712173909-df37dddf16f0 // indirect
 	github.com/umbracle/fastrlp v0.1.1-0.20230504065717-58a1b8a9929d // indirect
 	github.com/umbracle/go-eth-bn256 v0.0.0-20230125114011-47cb310d9b0b // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
@@ -168,7 +168,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/grpc v1.57.0 // indirect
-	gopkg.in/DataDog/dd-trace-go.v1 v1.51.0 // indirect
+	gopkg.in/DataDog/dd-trace-go.v1 v1.52.0 // indirect
 	inet.af/netaddr v0.0.0-20220811202034-502d2d690317 // indirect
 )
 
@@ -228,7 +228,7 @@ require (
 	github.com/nsf/termbox-go v0.0.0-20190121233118-02980233997d // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
-	github.com/pelletier/go-toml/v2 v2.0.1 // indirect
+	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
 	github.com/pierrec/xxHash v0.1.5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

@@ -333,7 +333,7 @@ func readAllBlocksToChain(bh *edgeBlockchainHandle, blockReader BlockReader, rec
 		edgeBlock.Header.ParentHash = parentBlock.Header.ComputeHash().Hash
 
 		// The Transactions Root should be the same (i think?), but we'll set it
-		edgeBlock.Header.TxRoot = edgebuildroot.CalculateTransactionsRoot(edgeBlock.Transactions)
+		edgeBlock.Header.TxRoot = edgebuildroot.CalculateTransactionsRoot(edgeBlock.Transactions, lastNumber)
 
 		blockCreator, err := bh.Blockchain.GetConsensus().GetBlockCreator(edgeBlock.Header)
 		if err != nil {
