@@ -478,25 +478,37 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Debug().Str("erc721Addr", erc721Addr.String()).Msg("Obtained erc 721 contract address")
 	}
 
-	uniswapAddresses := UniswapV3Addresses{}
+	uniswapAddresses := UniswapV3Addresses{
+		FactoryV3:                   ethcommon.HexToAddress(*ltp.UniswapFactoryV3),
+		Multicall:                   ethcommon.HexToAddress(*ltp.UniswapMulticall),
+		ProxyAdmin:                  ethcommon.HexToAddress(*ltp.UniswapProxyAdmin),
+		TickLens:                    ethcommon.HexToAddress(*ltp.UniswapTickLens),
+		NFTDescriptor:               ethcommon.HexToAddress(*ltp.UniswapNFTDescriptor),
+		TransparentUpgradeableProxy: ethcommon.HexToAddress(*ltp.UniswapUpgradeableProxy),
+		NonfungiblePositionManager:  ethcommon.HexToAddress(*ltp.UniswapNonfungiblePositionManager),
+		Migrator:                    ethcommon.HexToAddress(*ltp.UniswapMigrator),
+		Staker:                      ethcommon.HexToAddress(*ltp.UniswapStaker),
+		QuoterV2:                    ethcommon.HexToAddress(*ltp.UniswapQuoterV2),
+		SwapRouter02:                ethcommon.HexToAddress(*ltp.UniswapSwapRouter),
+		WETH9:                       ethcommon.HexToAddress(*ltp.WETH9),
+	}
 	var uniswapV3Config UniswapV3Config
-	var tokenAAddress, tokenBAddress ethcommon.Address
 	if mode == loadTestModeUniswapV3 || mode == loadTestModeRandom {
 		uniswapV3Config, err = deployUniswapV3(ctx, c, tops, cops, uniswapAddresses, *ltp.FromETHAddress)
 		if err != nil {
 			return nil
 		}
-		log.Debug().Interface("config", uniswapV3Config).Msg("UniswapV3 deployment config")
+		log.Debug().Interface("config", uniswapV3Config.ToAddresses()).Msg("UniswapV3 deployment config")
 
 		tokensToMint := big.NewInt(1_000_000_000_000_000_000)
 		var tokenAConfig contractConfig[uniswapv3.ERC20]
-		tokenAConfig, err = deployERC20Contract(ctx, c, tops, cops, uniswapV3Config, "TokenA", "A", tokenAAddress, tokensToMint)
+		tokenAConfig, err = deployERC20Contract(ctx, c, tops, cops, uniswapV3Config, "TokenA", "A", ethcommon.HexToAddress(*ltp.UniswapPoolTokenA), tokensToMint)
 		if err != nil {
 			return nil
 		}
 
 		var tokenBConfig contractConfig[uniswapv3.ERC20]
-		tokenBConfig, err = deployERC20Contract(ctx, c, tops, cops, uniswapV3Config, "TokenB", "B", tokenBAddress, tokensToMint)
+		tokenBConfig, err = deployERC20Contract(ctx, c, tops, cops, uniswapV3Config, "TokenB", "B", ethcommon.HexToAddress(*ltp.UniswapPoolTokenB), tokensToMint)
 		if err != nil {
 			return nil
 		}

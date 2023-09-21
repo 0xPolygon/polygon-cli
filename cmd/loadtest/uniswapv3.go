@@ -47,7 +47,7 @@ const (
 
 type UniswapV3Addresses struct {
 	FactoryV3, Multicall, ProxyAdmin, TickLens, NFTDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker, QuoterV2, SwapRouter02 common.Address
-	WETH9, TokenA, TokenB                                                                                                                                        common.Address
+	WETH9                                                                                                                                                        common.Address
 }
 
 type UniswapV3Config struct {
@@ -64,6 +64,23 @@ type UniswapV3Config struct {
 	SwapRouter02                contractConfig[uniswapv3.SwapRouter02]
 
 	WETH9 contractConfig[uniswapv3.WETH9]
+}
+
+func (c *UniswapV3Config) ToAddresses() UniswapV3Addresses {
+	return UniswapV3Addresses{
+		FactoryV3:                   c.FactoryV3.Address,
+		Multicall:                   c.Multicall.Address,
+		ProxyAdmin:                  c.ProxyAdmin.Address,
+		TickLens:                    c.TickLens.Address,
+		NFTDescriptor:               c.NFTDescriptor.Address,
+		TransparentUpgradeableProxy: c.TransparentUpgradeableProxy.Address,
+		NonfungiblePositionManager:  c.NonfungiblePositionManager.Address,
+		Migrator:                    c.Migrator.Address,
+		Staker:                      c.Staker.Address,
+		QuoterV2:                    c.QuoterV2.Address,
+		SwapRouter02:                c.SwapRouter02.Address,
+		WETH9:                       c.WETH9.Address,
+	}
 }
 
 type contractConfig[T uniswapV3Contract] struct {
@@ -95,7 +112,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	}
 
 	// 2. Enable one basic point fee tier.
-	if err = enableOneBPFeeTier(config.FactoryV3.contract, tops, ONE_BP_FEE, ONE_BP_TICK_SPACING); err != nil {
+	if err = enableOneBPFeeTier(config.FactoryV3.contract, tops, cops, ONE_BP_FEE, ONE_BP_TICK_SPACING); err != nil {
 		return config, err
 	}
 
@@ -133,12 +150,9 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		uniswapv3.DeployTickLens,
 		uniswapv3.NewTickLens,
 		func(contract *uniswapv3.TickLens) (err error) {
-			// This call will revert because no ticks are populated yet.
-			_, err = contract.GetPopulatedTicksInWord(cops, common.Address{}, int16(1))
-			// TODO: Compare with error instead of string.
-			if err.Error() == "execution reverted" {
-				err = nil
-			}
+			// The only function we can call to check the contract is deployed is `GetPopulatedTicksInWord`.
+			// Unfortunately, such call will revert because no pools are deployed yet.
+			// That's why we only return a nil value here.
 			return
 		},
 	)
@@ -189,7 +203,15 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		},
 		uniswapv3.NewTransparentUpgradeableProxy,
 		func(contract *uniswapv3.TransparentUpgradeableProxy) (err error) {
-			_, err = contract.Admin(tops)
+			// The TransparentUpgradeableProxy contract methods can only be called by the admin.
+			// This is not a problem when we first deploy the contract because the deployer is set to be
+			// the admin by default. Thus we can call any method of the contract to check it has been deployed.
+			// But when we use pre-deployed contracts, since the TransparentUpgradeableProxy ownership
+			// has been transfered, we get "execution reverted" errors when trying to call any method.
+			// That's why we don't call any method in the pre-deployed contract mode.
+			if knownAddresses.TransparentUpgradeableProxy == (common.Address{}) {
+				_, err = contract.Admin(tops)
+			}
 			return
 		},
 	)
@@ -230,7 +252,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	}
 
 	// 11. Set Factory owner.
-	if err = setFactoryOwner(config.FactoryV3.contract, tops, ownerAddress); err != nil {
+	if err = setFactoryOwner(config.FactoryV3.contract, tops, cops, ownerAddress); err != nil {
 		return config, err
 	}
 
@@ -285,7 +307,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	}
 
 	// 15. Transfer ProxyAdmin ownership.
-	if err = transferProxyAdminOwnership(config.ProxyAdmin.contract, tops, ownerAddress); err != nil {
+	if err = transferProxyAdminOwnership(config.ProxyAdmin.contract, tops, cops, ownerAddress); err != nil {
 		return config, err
 	}
 
@@ -313,7 +335,7 @@ func deployOrInstantiateContract[T uniswapV3Contract](
 			log.Error().Err(err).Msg(fmt.Sprintf("Unable to deploy %s contract", name))
 			return
 		}
-		log.Trace().Interface("address", address).Msg(fmt.Sprintf("%s contract deployed", name))
+		log.Debug().Interface("address", address).Msg(fmt.Sprintf("%s contract deployed", name))
 	} else {
 		// Otherwise, instantiate the contract.
 		address = knownAddress
@@ -322,12 +344,12 @@ func deployOrInstantiateContract[T uniswapV3Contract](
 			log.Error().Err(err).Msg(fmt.Sprintf("Unable to instantiate %s contract", name))
 			return
 		}
-		log.Trace().Msg(fmt.Sprintf("%s contract instantiated", name))
+		log.Debug().Msg(fmt.Sprintf("%s contract instantiated", name))
 	}
 
 	// Check that the contract is deployed and ready.
 	if err = blockUntilSuccessful(ctx, c, func() error {
-		log.Trace().Msg(fmt.Sprintf("%s contract is not deployed yet", name))
+		log.Trace().Msg(fmt.Sprintf("%s contract is not available yet", name))
 		return callFunc(contract)
 	}); err != nil {
 		return
@@ -335,30 +357,59 @@ func deployOrInstantiateContract[T uniswapV3Contract](
 	return
 }
 
-func enableOneBPFeeTier(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOpts, fee, tickSpacing int64) error {
-	if _, err := contract.EnableFeeAmount(tops, big.NewInt(fee), big.NewInt(tickSpacing)); err != nil {
-		log.Error().Err(err).Msg("Unable to enable one basic point fee tier")
+func enableOneBPFeeTier(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOpts, cops *bind.CallOpts, fee, tickSpacing int64) error {
+	// Check the current tick spacing for this fee amount.
+	currentTickSpacing, err := contract.FeeAmountTickSpacing(cops, big.NewInt(fee))
+	if err != nil {
 		return err
 	}
-	log.Trace().Msg("Enable one basic point fee tier")
+
+	newTickSpacing := big.NewInt(tickSpacing)
+	if currentTickSpacing.Cmp(newTickSpacing) == 0 {
+		// If those are the same, it means it has already been enabled.
+		log.Debug().Msg("One basic point fee tier already enabled")
+	} else {
+		// If those are not the same, it means it should be enabled.
+		if _, err := contract.EnableFeeAmount(tops, big.NewInt(fee), big.NewInt(tickSpacing)); err != nil {
+			log.Error().Err(err).Msg("Unable to enable one basic point fee tier")
+			return err
+		}
+		log.Debug().Msg("Enable one basic point fee tier")
+	}
 	return nil
 }
 
-func setFactoryOwner(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOpts, newOwner common.Address) error {
-	if _, err := contract.SetOwner(tops, newOwner); err != nil {
-		log.Error().Err(err).Msg("Unable to set new owner for Factory contract")
+func setFactoryOwner(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOpts, cops *bind.CallOpts, newOwner common.Address) error {
+	currentOwner, err := contract.Owner(cops)
+	if err != nil {
 		return err
 	}
-	log.Trace().Msg("Set new owner for Factory contract")
+	if currentOwner == newOwner {
+		log.Debug().Msg("Factory contract already owned by this address")
+	} else {
+		if _, err := contract.SetOwner(tops, newOwner); err != nil {
+			log.Error().Err(err).Msg("Unable to set a new owner for the Factory contract")
+			return err
+		}
+		log.Debug().Msg("Set new owner for Factory contract")
+	}
 	return nil
 }
 
-func transferProxyAdminOwnership(contract *uniswapv3.ProxyAdmin, tops *bind.TransactOpts, newOwner common.Address) error {
-	if _, err := contract.TransferOwnership(tops, newOwner); err != nil {
-		log.Error().Err(err).Msg("Unable to transfer ProxyAdmin ownership")
+func transferProxyAdminOwnership(contract *uniswapv3.ProxyAdmin, tops *bind.TransactOpts, cops *bind.CallOpts, newOwner common.Address) error {
+	currentOwner, err := contract.Owner(cops)
+	if err != nil {
 		return err
 	}
-	log.Trace().Msg("Transfer ProxyAdmin ownership")
+	if currentOwner == newOwner {
+		log.Debug().Msg("ProxyAdmin contract already owned by this address")
+	} else {
+		if _, err := contract.TransferOwnership(tops, newOwner); err != nil {
+			log.Error().Err(err).Msg("Unable to transfer ProxyAdmin ownership")
+			return err
+		}
+		log.Debug().Msg("Transfer ProxyAdmin ownership")
+	}
 	return nil
 }
 
@@ -373,7 +424,7 @@ func deployERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 		},
 		uniswapv3.NewERC20,
 		func(contract *uniswapv3.ERC20) error {
-			return approveERC20SpendingsByUniswap(contract, tops, addressesToApprove, tokensToMint)
+			return approveERC20SpendingsByUniswap(contract, tops, cops, addressesToApprove, tokensToMint)
 		},
 	)
 	if err != nil {
@@ -382,15 +433,20 @@ func deployERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 	return token, nil
 }
 
-func approveERC20SpendingsByUniswap(contract *uniswapv3.ERC20, tops *bind.TransactOpts, addresses []common.Address, amount *big.Int) error {
+func approveERC20SpendingsByUniswap(contract *uniswapv3.ERC20, tops *bind.TransactOpts, cops *bind.CallOpts, addresses []common.Address, amount *big.Int) error {
+	name, err := contract.Name(cops)
+	if err != nil {
+		return err
+
+	}
 	for _, address := range addresses {
 		_, err := contract.Approve(tops, address, amount)
 		if err != nil {
-			log.Trace().Msg(fmt.Sprintf("Unable to approve %v spendings", address))
+			log.Error().Err(err).Msg(fmt.Sprintf("Unable to approve %v spendings", address))
 			return err
 		}
+		log.Debug().Str("ERC20", name).Str("spender", address.String()).Int64("amount", amount.Int64()).Msg("Spending approved")
 	}
-	log.Trace().Msg("Spendings approved for all the addresses")
 	return nil
 }
 
@@ -442,7 +498,7 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 		log.Error().Err(err).Msg("Unable to initialize the TokenA-TokenB pool")
 		return err
 	}
-	log.Trace().Msg("TokenA-TokenB pool initialized")
+	log.Debug().Msg("TokenA-TokenB pool initialized")
 
 	// Get the last block timestamp.
 	var blockNumber uint64
@@ -478,7 +534,7 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 		log.Error().Err(err).Msg("Unable to create liquidity for the TokenA-TokenB pool")
 		return err
 	}
-	log.Trace().Msg("Liquidity provided to the TokenA-TokenB pool")
+	log.Debug().Msg("Liquidity provided to the TokenA-TokenB pool")
 	return nil
 }
 
@@ -495,6 +551,6 @@ func swapTokenBForTokenA(tops *bind.TransactOpts, config UniswapV3Config, tokenA
 		log.Error().Err(err).Msg("Unable to swap TokenB for TokenA")
 		return err
 	}
-	log.Trace().Msg("Swapped TokenB for TokenA")
+	log.Debug().Msg("Swapped TokenB for TokenA")
 	return nil
 }

@@ -38,44 +38,46 @@ type (
 	}
 	loadTestParams struct {
 		// inputs
-		Requests                            *int64
-		Concurrency                         *int64
-		BatchSize                           *uint64
-		TimeLimit                           *int64
-		ToRandom                            *bool
-		CallOnly                            *bool
-		CallOnlyLatestBlock                 *bool
-		URL                                 *url.URL
-		ChainID                             *uint64
-		PrivateKey                          *string
-		ToAddress                           *string
-		HexSendAmount                       *string
-		RateLimit                           *float64
-		AdaptiveRateLimit                   *bool
-		SteadyStateTxPoolSize               *uint64
-		AdaptiveRateLimitIncrement          *uint64
-		AdaptiveCycleDuration               *uint64
-		AdaptiveBackoffFactor               *float64
-		Modes                               *[]string
-		Function                            *uint64
-		Iterations                          *uint64
-		ByteCount                           *uint64
-		Seed                                *int64
-		IsAvail                             *bool
-		LtAddress                           *string
-		ERC20Address                        *string
-		ERC721Address                       *string
-		DelAddress                          *string
-		ContractCallNumberOfBlocksToWaitFor *uint64
-		ContractCallBlockInterval           *uint64
-		ForceContractDeploy                 *bool
-		ForceGasLimit                       *uint64
-		ForceGasPrice                       *uint64
-		ForcePriorityGasPrice               *uint64
-		ShouldProduceSummary                *bool
-		SummaryOutputMode                   *string
-		LegacyTransactionMode               *bool
-		RecallLength                        *uint64
+		Requests                                                                                                                                                                                                                     *int64
+		Concurrency                                                                                                                                                                                                                  *int64
+		BatchSize                                                                                                                                                                                                                    *uint64
+		TimeLimit                                                                                                                                                                                                                    *int64
+		ToRandom                                                                                                                                                                                                                     *bool
+		CallOnly                                                                                                                                                                                                                     *bool
+		CallOnlyLatestBlock                                                                                                                                                                                                          *bool
+		URL                                                                                                                                                                                                                          *url.URL
+		ChainID                                                                                                                                                                                                                      *uint64
+		PrivateKey                                                                                                                                                                                                                   *string
+		ToAddress                                                                                                                                                                                                                    *string
+		HexSendAmount                                                                                                                                                                                                                *string
+		RateLimit                                                                                                                                                                                                                    *float64
+		AdaptiveRateLimit                                                                                                                                                                                                            *bool
+		SteadyStateTxPoolSize                                                                                                                                                                                                        *uint64
+		AdaptiveRateLimitIncrement                                                                                                                                                                                                   *uint64
+		AdaptiveCycleDuration                                                                                                                                                                                                        *uint64
+		AdaptiveBackoffFactor                                                                                                                                                                                                        *float64
+		Modes                                                                                                                                                                                                                        *[]string
+		Function                                                                                                                                                                                                                     *uint64
+		Iterations                                                                                                                                                                                                                   *uint64
+		ByteCount                                                                                                                                                                                                                    *uint64
+		Seed                                                                                                                                                                                                                         *int64
+		IsAvail                                                                                                                                                                                                                      *bool
+		LtAddress                                                                                                                                                                                                                    *string
+		ERC20Address                                                                                                                                                                                                                 *string
+		ERC721Address                                                                                                                                                                                                                *string
+		UniswapFactoryV3, UniswapMulticall, UniswapProxyAdmin, UniswapTickLens, UniswapNFTDescriptor, UniswapUpgradeableProxy, UniswapNonfungiblePositionManager, UniswapMigrator, UniswapStaker, UniswapQuoterV2, UniswapSwapRouter *string
+		WETH9, UniswapPoolTokenA, UniswapPoolTokenB                                                                                                                                                                                  *string
+		DelAddress                                                                                                                                                                                                                   *string
+		ContractCallNumberOfBlocksToWaitFor                                                                                                                                                                                          *uint64
+		ContractCallBlockInterval                                                                                                                                                                                                    *uint64
+		ForceContractDeploy                                                                                                                                                                                                          *bool
+		ForceGasLimit                                                                                                                                                                                                                *uint64
+		ForceGasPrice                                                                                                                                                                                                                *uint64
+		ForcePriorityGasPrice                                                                                                                                                                                                        *uint64
+		ShouldProduceSummary                                                                                                                                                                                                         *bool
+		SummaryOutputMode                                                                                                                                                                                                            *string
+		LegacyTransactionMode                                                                                                                                                                                                        *bool
+		RecallLength                                                                                                                                                                                                                 *uint64
 
 		// Computed
 		CurrentGasPrice     *big.Int
@@ -232,8 +234,24 @@ rpc - call random rpc methods`)
 	ltp.ByteCount = LoadtestCmd.PersistentFlags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
 	ltp.LtAddress = LoadtestCmd.PersistentFlags().String("lt-address", "", "The address of a pre-deployed load test contract")
-	ltp.ERC20Address = LoadtestCmd.PersistentFlags().String("erc20-address", "", "The address of a pre-deployed erc 20 contract")
-	ltp.ERC721Address = LoadtestCmd.PersistentFlags().String("erc721-address", "", "The address of a pre-deployed erc 721 contract")
+	ltp.ERC20Address = LoadtestCmd.PersistentFlags().String("erc20-address", "", "The address of a pre-deployed ERC20 contract")
+	ltp.ERC721Address = LoadtestCmd.PersistentFlags().String("erc721-address", "", "The address of a pre-deployed ERC721 contract")
+	// Uniswap flags
+	ltp.UniswapFactoryV3 = LoadtestCmd.PersistentFlags().String("uniswap-factory-v3-address", "", "The address of a pre-deployed UniswapFactoryV3 contract")
+	ltp.UniswapMulticall = LoadtestCmd.PersistentFlags().String("uniswap-multicall-address", "", "The address of a pre-deployed Multicall contract")
+	ltp.UniswapProxyAdmin = LoadtestCmd.PersistentFlags().String("uniswap-proxy-admin-address", "", "The address of a pre-deployed ProxyAdmin contract")
+	ltp.UniswapTickLens = LoadtestCmd.PersistentFlags().String("uniswap-tick-lens-address", "", "The address of a pre-deployed TickLens contract")
+	ltp.UniswapNFTDescriptor = LoadtestCmd.PersistentFlags().String("uniswap-nft-descriptor-address", "", "The address of a pre-deployed NFTDescriptor contract")
+	ltp.UniswapUpgradeableProxy = LoadtestCmd.PersistentFlags().String("uniswap-upgradeable-proxy-address", "", "The address of a pre-deployed TransparentUpgradeableProxy contract")
+	ltp.UniswapNonfungiblePositionManager = LoadtestCmd.PersistentFlags().String("uniswap-non-fungible-position-manager-address", "", "The address of a pre-deployed NonfungiblePositionManager contract")
+	ltp.UniswapMigrator = LoadtestCmd.PersistentFlags().String("uniswap-migrator-address", "", "The address of a pre-deployed Migrator contract")
+	ltp.UniswapStaker = LoadtestCmd.PersistentFlags().String("uniswap-staker-address", "", "The address of a pre-deployed Staker contract")
+	ltp.UniswapQuoterV2 = LoadtestCmd.PersistentFlags().String("uniswap-quoter-v2-address", "", "The address of a pre-deployed QuoterV2 contract")
+	ltp.UniswapSwapRouter = LoadtestCmd.PersistentFlags().String("uniswap-swap-router-address", "", "The address of a pre-deployed SwapRouter contract")
+	ltp.WETH9 = LoadtestCmd.PersistentFlags().String("weth9-address", "", "The address of a pre-deployed WETH9 contract")
+	ltp.UniswapPoolTokenA = LoadtestCmd.PersistentFlags().String("uniswap-pool-token-a-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool TokenA // TokenB")
+	ltp.UniswapPoolTokenB = LoadtestCmd.PersistentFlags().String("uniswap-pool-token-b-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool TokenA // TokenB")
+
 	ltp.ContractCallNumberOfBlocksToWaitFor = LoadtestCmd.PersistentFlags().Uint64("contract-call-nb-blocks-to-wait-for", 30, "The number of blocks to wait for before giving up on a contract deployment")
 	ltp.ContractCallBlockInterval = LoadtestCmd.PersistentFlags().Uint64("contract-call-block-interval", 1, "During deployment, this flag controls if we should check every block, every other block, or every nth block to determine that the contract has been deployed")
 	ltp.ForceContractDeploy = LoadtestCmd.PersistentFlags().Bool("force-contract-deploy", false, "Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.")
