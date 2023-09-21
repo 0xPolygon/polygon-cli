@@ -86,7 +86,7 @@ gen-doc: ## Generate documentation for `polycli`.
 # - $3: pkg
 # - $4: output_dir
 define gen_go_binding
-	solc $1/$2.sol --abi --bin --output-dir $1 --overwrite
+	solc $1/$2.sol --abi --bin --output-dir $1 --overwrite --evm-version paris
 	abigen --abi $1/$2.abi --bin $1/$2.bin --pkg $3 --type $2 --out $4/$2.go
 endef
 
