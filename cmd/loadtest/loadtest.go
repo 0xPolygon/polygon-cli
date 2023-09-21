@@ -465,7 +465,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	var erc721Addr ethcommon.Address
-	var erc721Contract *contracts.ERC721
+	var erc721Contract *tokens.ERC721
 	if mode == loadTestModeERC721 || mode == loadTestModeRandom {
 		erc721Addr, erc721Contract, err = getERC721Contract(ctx, c, tops, cops)
 		if err != nil {
@@ -704,11 +704,11 @@ func getERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 
 	return
 }
-func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (erc721Addr ethcommon.Address, erc721Contract *contracts.ERC721, err error) {
+func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (erc721Addr ethcommon.Address, erc721Contract *tokens.ERC721, err error) {
 	erc721Addr = ethcommon.HexToAddress(*inputLoadTestParams.ERC721Address)
 	shouldMint := true
 	if *inputLoadTestParams.ERC721Address == "" {
-		erc721Addr, _, _, err = contracts.DeployERC721(tops, c)
+		erc721Addr, _, _, err = tokens.DeployERC721(tops, c)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to deploy ERC721 contract")
 			return
@@ -717,7 +717,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 	}
 	log.Trace().Interface("contractaddress", erc721Addr).Msg("ERC721 contract address")
 
-	erc721Contract, err = contracts.NewERC721(erc721Addr, c)
+	erc721Contract, err = tokens.NewERC721(erc721Addr, c)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to instantiate new erc721 contract")
 		return
@@ -1124,7 +1124,7 @@ func loadTestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 	return
 }
 
-func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc721Contract *contracts.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
+func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc721Contract *tokens.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 	iterations := ltp.Iterations
 
@@ -1255,10 +1255,10 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *Ind
 			Msg("retrieve contract addresses")
 		cops := new(bind.CallOpts)
 		cops.Context = ctx
-		var erc721Contract *contracts.ERC721
+		var erc721Contract *tokens.ERC721
 		var erc20Contract *tokens.ERC20
 
-		erc721Contract, err = contracts.NewERC721(erc721Addr, c)
+		erc721Contract, err = tokens.NewERC721(erc721Addr, c)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to instantiate new erc721 contract")
 			return
