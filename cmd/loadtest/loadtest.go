@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/maticnetwork/polygon-cli/contracts/tokens"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 
 	_ "embed"
