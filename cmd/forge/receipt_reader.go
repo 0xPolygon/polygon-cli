@@ -44,7 +44,7 @@ func OpenReceiptReader(file string, mode string) (ReceiptReader, error) {
 
 func (receiptsReader *JSONReceiptReader) ReadReceipt() (*rpctypes.RawTxReceipt, error) {
 	if !receiptsReader.scanner.Scan() {
-		return nil, BlockReadEOF
+		return nil, ErrBlockReadEOF
 	}
 
 	rawTxBytes := receiptsReader.scanner.Bytes()

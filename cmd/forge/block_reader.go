@@ -60,7 +60,7 @@ func OpenBlockReader(file string, mode string) (BlockReader, error) {
 
 func (blockReader *JSONBlockReader) ReadBlock() (rpctypes.PolyBlock, error) {
 	if !blockReader.scanner.Scan() {
-		return nil, BlockReadEOF
+		return nil, ErrBlockReadEOF
 	}
 
 	rawBlockBytes := blockReader.scanner.Bytes()
