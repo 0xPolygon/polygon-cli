@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"io"
 	"math/big"
 	"math/rand"
@@ -16,7 +15,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/maticnetwork/polygon-cli/rpctypes"
+
 	_ "embed"
+
 	"github.com/maticnetwork/polygon-cli/metrics"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -51,10 +53,10 @@ const (
 	loadTestModeERC721
 	loadTestModePrecompiledContracts
 	loadTestModePrecompiledContract
-	loadTestModeRecall
 
 	// All the modes AFTER random mode will not be used when mode random is selected
 	loadTestModeRandom
+	loadTestModeRecall
 	loadTestModeRPC
 
 	codeQualitySeed       = "code code code code code code code code code code code quality"
@@ -476,7 +478,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	var recallTransactions []rpctypes.PolyTransaction
-	if mode == loadTestModeRecall || mode == loadTestModeRandom {
+	if mode == loadTestModeRecall {
 		recallTransactions, err = getRecallTransactions(ctx, c, rpc)
 		if err != nil {
 			return err

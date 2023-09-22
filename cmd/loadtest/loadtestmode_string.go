@@ -18,12 +18,12 @@ func _() {
 	_ = x[loadTestModeERC721-7]
 	_ = x[loadTestModePrecompiledContracts-8]
 	_ = x[loadTestModePrecompiledContract-9]
-	_ = x[loadTestModeRecall-10]
-	_ = x[loadTestModeRandom-11]
+	_ = x[loadTestModeRandom-10]
+	_ = x[loadTestModeRecall-11]
 	_ = x[loadTestModeRPC-12]
 }
 
-const _loadTestMode_name = "loadTestModeTransactionloadTestModeDeployloadTestModeCallloadTestModeFunctionloadTestModeIncloadTestModeStoreloadTestModeERC20loadTestModeERC721loadTestModePrecompiledContractsloadTestModePrecompiledContractloadTestModeRecallloadTestModeRandomloadTestModeRPC"
+const _loadTestMode_name = "loadTestModeTransactionloadTestModeDeployloadTestModeCallloadTestModeFunctionloadTestModeIncloadTestModeStoreloadTestModeERC20loadTestModeERC721loadTestModePrecompiledContractsloadTestModePrecompiledContractloadTestModeRandomloadTestModeRecallloadTestModeRPC"
 
 var _loadTestMode_index = [...]uint16{0, 23, 41, 57, 77, 92, 109, 126, 144, 176, 207, 225, 243, 258}
 
