@@ -70,15 +70,19 @@ test: ## Run tests.
 
 ##@ Generation
 
+.PHONY: gen-doc
+gen-doc: ## Generate documentation for `polycli`.
+	go run docutil/*.go
+
+.PHONY: gen-loadtest-modes
+gen-loadtest-modes: ## Generate loadtest modes strings.
+	cd cmd/loadtest && stringer -type=loadTestMode
+
 .PHONY: gen-go-bindings
 gen-go-bindings: ## Generate go bindings for smart contracts.
 	$(call gen_go_binding,contracts/tokens/ERC20,ERC20,tokens,contracts/tokens)
 	$(call gen_go_binding,contracts/tokens/ERC721,ERC721,tokens,contracts/tokens)
 	$(call gen_go_binding,contracts/loadtester,LoadTester,contracts,contracts)
-
-.PHONY: gen-doc
-gen-doc: ## Generate documentation for `polycli`.
-	go run docutil/*.go
 
 # Generate go binding.
 # - $1: input_dir

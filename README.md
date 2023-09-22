@@ -172,8 +172,9 @@ Test
   test             Run tests.
 
 Generation
-  gen-go-bindings  Generate go bindings for smart contracts.
   gen-doc          Generate documentation for `polycli`.
+  gen-loadtest-modes  Generate loadtest modes strings.
+  gen-go-bindings  Generate go bindings for smart contracts.
 
 Lint
   lint             Run linters.
