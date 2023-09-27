@@ -27,16 +27,49 @@ $ polycli wallet inspect  --mnemonic "code code code code code code code code co
 
 The `--mode` flag is important for this command.
 
-- `t` will only perform transfers to the `--to-address`. This is a fast and common operation.
-- `d` will deploy the load testing contract over and over again.
-- `c` will call random functions in our load test contract.
-- `f` will call a specific function on the load test contract. The function is specified using the `-f` flag
-- `2` will run an ERC20 transfer test. It starts out by minting a large amount of an ERC20 contract then transferring it in small amounts.
-- `7` will run an ERC721 test which will mint an NFT over and over again.
-- `i` will call the increment function repeatedly on the load test contract. It's a minimal example of a contract call that will require an update to a contract's storage.
-- `r` will call any of th eother modes randomly.
-- `s` is used for Avail / Eth to store random data in large amounts.
-- `l` will call a smart contract function that runs as long as it can, based on the block limit.
+- `t`/`transaction` will perform ETH transfers. This is the simplest
+  and cheapest transaction that can be performed.
+- `d`/`deploy` will deploy the load testing contract over and over
+  again.
+- `c`/`call` will call random opcodes in our load test contract. The
+  random function that is called will be repeatedly called in a loop
+  based on the number of iterations from the `iterations` flag
+- `f`/`function` works the same way as `call` mode but instead of
+  calling random op codes, the opcode can be specified with the `-f`
+  flag. If you want to call `LOG4` you would pass `-f 164` which is
+  the opcode for `LOG4`.
+- `2`/`erc20` will run an ERC20 transfer test. The process initializes
+  by minting a large amount of tokens then transferring it in small
+  amounts. Each transaction is a single transfer.
+- `7`/`erc721` will run an ERC721 mint test which will mint an NFT
+  over and over again. The `iterations` flag here can be used to
+  control if we are mint 1 NFT or many.
+- `i`/`inc`/`increment` will call the increment function repeatedly on
+  the load test contract. It's a minimal example of a contract call
+  that will require an update to a contract's storage.
+- `s`/`store` is used to store random data in the smart contract
+  storage. The amount of data stored per transaction is controlled
+  with the `byte-count` flag.
+- `P`/`precompiles` will randomly call the commonly implemented
+  precompiled functions. This functions the same way as `call` mode
+  except it's hitting precompiles rather than opcodes.
+- `p`/`precompile` will call a specific precompile in a loop. This
+  works the same way as `function` mode except rather than specifying
+  an opcode, you're specifying a precompile. E.g to call `ECRECOVER`
+  you would pass `-f 1` because it's the contract at address `0x01`
+- `R`/`recall` will attempt to replay all of the transactions from the
+  previous blocks. You can use `--recall-blocks` to specify how many
+  previous blocks should be used to seed transaction history. It's
+  expected that many of the transactions in this mode would fail.
+- `r`/`random` will call any of the other modes randomly. This mode
+  shouldn't be used in combination with other modes. Ideally this is a
+  good way to generate a lot of random activity on a test network.
+- `rpc` is a unique mode that won't just simulate transactions, it
+  will simulate RPC traffic (e.g. calls to get transaction receipt or
+  filter logs). This is meant to stress test RPC servers rather than
+  full blockchain networks. The approach is similar to `recall` mode
+  where we'll fetch some recent blocks and then use that data to
+  generate a variety of calls to the RPC server.
 
 The default private key is: `42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa`. We can use `wallet inspect` to get more information about this address, in particular its `ETHAddress` if you want to check balance or pre-mine value for this particular account.
 
@@ -64,18 +97,6 @@ The codebase has a contract that used for load testing. It's written in Yul and 
 4. Run the loadtester to enure it deploys and runs successfully
    - `$ polycli loadtest --verbosity 700 http://127.0.0.1:8541`
 
-### Avail / Substrate
-
-The loadtest tool works with Avail, but not with the same level of functionality. There's no EVM so the functional calls will not work. This is a basic example which would transfer value in a loop 10 times.
-
-```bash
-$ polycli loadtest --app-id 0 --to-random=true  --data-avail --verbosity 700 --chain-id 42 --concurrency 1 --requests 10 --rate-limit 1 --mode t 'http://devnet01.dataavailability.link:8545'
-```
-
-This is a similar test but storing random nonsense hexwords.
-
-```bash
-$ polycli loadtest --app-id 0 --data-avail --verbosity 700 --chain-id 42 --concurrency 1 --requests 10 --rate-limit 1 --mode s --byte-count 16384 'http://devnet01.dataavailability.link:8545'
 ```
 
 ## Flags
