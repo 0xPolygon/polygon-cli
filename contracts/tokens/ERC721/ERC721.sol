@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.21;
 
 interface IERC165 {
     function supportsInterface(bytes4 interfaceID) external view returns (bool);
@@ -71,33 +71,33 @@ contract ERC721 is IERC721 {
     mapping(uint => address) internal _approvals;
 
     // Mapping from owner to operator approvals
-    mapping(address => mapping(address => bool)) public isApprovedForAll;
-    
+    mapping(address => mapping(address => bool)) override public isApprovedForAll;
+
     uint256 private currentIndex = 0;
     uint256 internal immutable maxBatchSize = 100;
 
-    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+    function supportsInterface(bytes4 interfaceId) override external pure returns (bool) {
         return
         interfaceId == type(IERC721).interfaceId ||
         interfaceId == type(IERC165).interfaceId;
     }
 
-    function ownerOf(uint id) external view returns (address owner) {
+    function ownerOf(uint id) override external view returns (address owner) {
         owner = _ownerOf[id];
         require(owner != address(0), "token doesn't exist");
     }
 
-    function balanceOf(address owner) external view returns (uint) {
+    function balanceOf(address owner) override external view returns (uint) {
         require(owner != address(0), "owner = zero address");
         return uint256(_balanceOf[owner]);
     }
 
-    function setApprovalForAll(address operator, bool approved) external {
+    function setApprovalForAll(address operator, bool approved) override external {
         isApprovedForAll[msg.sender][operator] = approved;
         emit ApprovalForAll(msg.sender, operator, approved);
     }
 
-    function approve(address spender, uint id) external {
+    function approve(address spender, uint id) override external {
         address owner = _ownerOf[id];
         require(
             msg.sender == owner || isApprovedForAll[owner][msg.sender],
@@ -109,7 +109,7 @@ contract ERC721 is IERC721 {
         emit Approval(owner, spender, id);
     }
 
-    function getApproved(uint id) external view returns (address) {
+    function getApproved(uint id) override external view returns (address) {
         require(_ownerOf[id] != address(0), "token doesn't exist");
         return _approvals[id];
     }
@@ -128,13 +128,13 @@ contract ERC721 is IERC721 {
         address from,
         address to,
         uint id
-    ) public {
+    ) override public {
         require(from == _ownerOf[id], "from != owner");
         require(to != address(0), "transfer to zero address");
 
         require(_isApprovedOrOwner(from, msg.sender, id), "not authorized");
-        
-        _balanceOf[from]--; 
+
+        _balanceOf[from]--;
         _balanceOf[to]++;
         _ownerOf[id] = to;
 
@@ -147,7 +147,7 @@ contract ERC721 is IERC721 {
         address from,
         address to,
         uint id
-    ) external {
+    ) override external {
         transferFrom(from, to, id);
 
         require(
@@ -163,7 +163,7 @@ contract ERC721 is IERC721 {
         address to,
         uint id,
         bytes calldata data
-    ) external {
+    ) override external {
         transferFrom(from, to, id);
 
         require(

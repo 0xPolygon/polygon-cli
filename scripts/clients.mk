@@ -41,6 +41,6 @@ geth-loadtest: build fund ## Run loadtest against an EVM/Geth chain.
 		--concurrency 1 \
 		--requests 1000 \
 		--rate-limit 100 \
-		--mode c \
+		--mode r \
 		--legacy \
 		http://127.0.0.1:$(PORT)
