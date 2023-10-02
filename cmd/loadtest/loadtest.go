@@ -895,7 +895,7 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 		if inputLoadTestParams.ForcePriorityGasPrice != nil && *inputLoadTestParams.ForcePriorityGasPrice != 0 {
 			cachedGasTipCap = new(big.Int).SetUint64(*inputLoadTestParams.ForcePriorityGasPrice)
 		}
-		if cachedGasTipCap > cachedGasPrice {
+		if cachedGasTipCap.Cmp(cachedGasPrice) == 1 {
 			cachedGasTipCap = cachedGasPrice
 		}
 		l := log.Debug().Uint64("cachedBlockNumber", bn).Uint64("cachedgasPrice", cachedGasPrice.Uint64())
