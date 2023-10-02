@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.21;
 
 contract LoadTester {
     uint256 callCounter;
@@ -237,7 +237,7 @@ contract LoadTester {
             }
         }
         return result;
-    }    
+    }
     function testAND(uint x) public returns(uint) {
         inc();
         uint result = 0xDEADBEEF0016;
@@ -569,7 +569,7 @@ contract LoadTester {
             let v := 0
             for { let i := 0 } lt(i, x) { i := add(i, 1) }
             {
-                // NOTE: Post Paris, the difficulty() instruction has been supplanted for prevrandao() 
+                // NOTE: Post Paris, the difficulty() instruction has been supplanted for prevrandao()
                 // Source: https://eips.ethereum.org/EIPS/eip-4399
                 // v := difficulty()
                 v := prevrandao()
@@ -795,7 +795,7 @@ contract LoadTester {
 
     function testSHA256(bytes memory inputData) public returns (bytes32 result) {
         address SHA256_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000002;
-        
+
         assembly {
             let inputPtr := add(inputData, 0x20) // Ignore the length prefix of the inputData bytes array
             let inputLength := mload(inputData)

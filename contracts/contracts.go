@@ -19,10 +19,10 @@ import (
 // solc LoadTester.sol --bin --abi -o . --overwrite
 // ~/code/go-ethereum/build/bin/abigen --abi LoadTester.abi --pkg contracts --type LoadTester --bin LoadTester.bin --out loadtester.go
 
-//go:embed LoadTester.bin
+//go:embed loadtester/LoadTester.bin
 var RawLoadTesterBin string
 
-//go:embed LoadTester.abi
+//go:embed loadtester/LoadTester.abi
 var RawLoadTesterABI string
 
 var randSrc *rand.Rand
