@@ -505,23 +505,32 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 		log.Debug().Interface("config", uniswapV3Config.ToAddresses()).Msg("UniswapV3 deployment config")
 
-		tokensToMint := big.NewInt(1_000_000_000_000_000_000)
-		var tokenAConfig contractConfig[uniswapv3.ERC20]
-		tokenAConfig, err = deployERC20Contract(ctx, c, tops, cops, uniswapV3Config, "TokenA", "A", ethcommon.HexToAddress(*ltp.UniswapPoolTokenA), tokensToMint)
+		tokensAToMint := big.NewInt(1_000_000_000_000_000_000)
+		var tokenAConfig contractConfig[uniswapv3.Swapper]
+		tokenAConfig, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "TokenA", "A", ethcommon.HexToAddress(*ltp.UniswapPoolTokenA), tokensAToMint, *ltp.FromETHAddress)
 		if err != nil {
 			return nil
 		}
 
-		var tokenBConfig contractConfig[uniswapv3.ERC20]
-		tokenBConfig, err = deployERC20Contract(ctx, c, tops, cops, uniswapV3Config, "TokenB", "B", ethcommon.HexToAddress(*ltp.UniswapPoolTokenB), tokensToMint)
+		tokensBToMint := big.NewInt(1_000_000_000_000_000_000)
+		var tokenBConfig contractConfig[uniswapv3.Swapper]
+		tokenBConfig, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "TokenB", "B", ethcommon.HexToAddress(*ltp.UniswapPoolTokenB), tokensBToMint, *ltp.FromETHAddress)
 		if err != nil {
 			return nil
 		}
 
-		poolConfig = PoolConfig{
-			TokenA: tokenAConfig,
-			TokenB: tokenBConfig,
-			Fees:   big.NewInt(3000),
+		fees := big.NewInt(3_000)
+		poolConfig := PoolConfig{Fees: fees}
+		if tokenAConfig.Address.Hex() < tokenBConfig.Address.Hex() {
+			poolConfig.TokenA = tokenAConfig
+			poolConfig.ReserveA = tokensAToMint
+			poolConfig.TokenB = tokenBConfig
+			poolConfig.ReserveB = tokensBToMint
+		} else {
+			poolConfig.TokenA = tokenBConfig
+			poolConfig.ReserveA = tokensBToMint
+			poolConfig.TokenB = tokenAConfig
+			poolConfig.ReserveB = tokensAToMint
 		}
 		if err = createPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, *ltp.FromETHAddress); err != nil {
 			return nil
