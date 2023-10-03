@@ -135,8 +135,11 @@ if [ "$mode" == "erc20" ] || [ "$mode" == "all" ]; then
 	echo -e "\n🏗️  Building ERC20 contract..."
 	rm -rf ./openzeppelin-contracts
 	git clone https://github.com/OpenZeppelin/openzeppelin-contracts.git
-	solc erc20/ERC20.sol \
+	solc erc20/Swapper.sol \
 		@openzeppelin=openzeppelin-contracts/contracts \
+		--evm-version istanbul \
+		--optimize \
+		--optimize-runs 200 \
 		--abi \
 		--bin \
 		--output-dir erc20 \
