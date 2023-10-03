@@ -123,10 +123,13 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 
 }
 
-func (h historicalRange) getValues() []float64 {
+func (h historicalRange) getValues(limit int) []float64 {
 	values := make([]float64, len(h))
 	for idx, v := range h {
 		values[idx] = v.SampleValue
+	}
+	if limit < len(values) {
+		values = values[len(values) - limit:]
 	}
 	return values
 }
@@ -531,7 +534,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		termUi.sl1.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
 		termUi.sl2.Data = metrics.GetSizePerBlock(renderedBlocks)
 		// termUi.sl3.Data = metrics.GetUnclesPerBlock(renderedBlocks)
-		termUi.sl3.Data = observedPendingTxs.getValues()
+		termUi.sl3.Data = observedPendingTxs.getValues(25)
 		termUi.sl4.Data = metrics.GetGasPerBlock(renderedBlocks)
 
 		// If a row has not been selected, continue to update the list with new blocks.
