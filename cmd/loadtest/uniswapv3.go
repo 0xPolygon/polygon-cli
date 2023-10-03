@@ -47,8 +47,8 @@ const (
 )
 
 type UniswapV3Addresses struct {
-	FactoryV3, Multicall, ProxyAdmin, TickLens, NFTDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker, QuoterV2, SwapRouter02 common.Address
-	WETH9                                                                                                                                                        common.Address
+	FactoryV3, Multicall, ProxyAdmin, TickLens, NFPositionDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker, QuoterV2, SwapRouter02 common.Address
+	WETH9                                                                                                                                                               common.Address
 }
 
 type UniswapV3Config struct {
@@ -56,7 +56,7 @@ type UniswapV3Config struct {
 	Multicall                   contractConfig[uniswapv3.UniswapInterfaceMulticall]
 	ProxyAdmin                  contractConfig[uniswapv3.ProxyAdmin]
 	TickLens                    contractConfig[uniswapv3.TickLens]
-	NFTDescriptor               contractConfig[uniswapv3.NonfungibleTokenPositionDescriptor]
+	NFPositionDescriptor        contractConfig[uniswapv3.NonfungibleTokenPositionDescriptor]
 	TransparentUpgradeableProxy contractConfig[uniswapv3.TransparentUpgradeableProxy]
 	NonfungiblePositionManager  contractConfig[uniswapv3.NonfungiblePositionManager]
 	Migrator                    contractConfig[uniswapv3.V3Migrator]
@@ -73,7 +73,7 @@ func (c *UniswapV3Config) ToAddresses() UniswapV3Addresses {
 		Multicall:                   c.Multicall.Address,
 		ProxyAdmin:                  c.ProxyAdmin.Address,
 		TickLens:                    c.TickLens.Address,
-		NFTDescriptor:               c.NFTDescriptor.Address,
+		NFPositionDescriptor:        c.NFPositionDescriptor.Address,
 		TransparentUpgradeableProxy: c.TransparentUpgradeableProxy.Address,
 		NonfungiblePositionManager:  c.NonfungiblePositionManager.Address,
 		Migrator:                    c.Migrator.Address,
@@ -193,9 +193,9 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 7. Deploy NonfungibleTokenPositionDescriptor.
 	// Note that we previously deployed the NFTDescriptor library during the build process.
-	// TODO: Deploy NFTDescriptor?
-	config.NFTDescriptor.Address, config.NFTDescriptor.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "NFTDescriptor", knownAddresses.NFTDescriptor,
+	// TODO: Deploy NFTDescriptorLib?
+	config.NFPositionDescriptor.Address, config.NFPositionDescriptor.contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, "NFPositionDescriptor", knownAddresses.NFPositionDescriptor,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.NonfungibleTokenPositionDescriptor, error) {
 			var nativeCurrencyLabelBytes [32]byte
 			copy(nativeCurrencyLabelBytes[:], "ETH")
@@ -217,7 +217,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.TransparentUpgradeableProxy, error) {
 			var data []byte
 			copy(data[:], "0x")
-			return uniswapv3.DeployTransparentUpgradeableProxy(tops, c, config.NFTDescriptor.Address, config.ProxyAdmin.Address, data)
+			return uniswapv3.DeployTransparentUpgradeableProxy(tops, c, config.NFPositionDescriptor.Address, config.ProxyAdmin.Address, data)
 		},
 		uniswapv3.NewTransparentUpgradeableProxy,
 		func(contract *uniswapv3.TransparentUpgradeableProxy) (err error) {
@@ -548,6 +548,7 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 		log.Error().Err(err).Msg("Unable to get tick spacing")
 		return err
 	}
+	log.Debug().Interface("tickSpacing", tickSpacing).Msg("DEBUG")
 
 	// tickUpper = (MAX_TICK / tickSpacing) * tickSpacing
 	// tickLower = - tickUpper
@@ -652,15 +653,16 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 		Token0: poolConfig.TokenA.Address,
 		Token1: poolConfig.TokenB.Address,
 		Fee:    poolConfig.Fees,
-		//TickLower:      tickLower, // We provide liquidity across the whole possible range (divisible by tick spacing).
-		TickLower: big.NewInt(MIN_TICK),
-		//TickUpper:      tickUpper,
-		TickUpper:      big.NewInt(MAX_TICK),
-		Amount0Desired: big.NewInt(5_000_000_000),
-		Amount1Desired: big.NewInt(5_000_000_000),
-		Amount0Min:     big.NewInt(0), // We mint without any slippage protection. Don't do this in production!
-		Amount1Min:     big.NewInt(0), // Same thing here.
-		Recipient:      recipient,
+		// We provide liquidity across the whole possible range (divisible by tick spacing).
+		// Otherwise, the call will revert.
+		TickLower:      tickLower,
+		TickUpper:      tickUpper,
+		Amount0Desired: big.NewInt(5_000),
+		Amount1Desired: big.NewInt(5_000),
+		// We mint without any slippage protection. Don't do this in production!
+		Amount0Min: big.NewInt(0),
+		Amount1Min: big.NewInt(0),
+		Recipient:  recipient,
 		//Deadline:       big.NewInt(timestamp + 10 * 60), // 10 minutes to execute the swap.
 		Deadline: big.NewInt(1759474606), // in 2 years (2025-10-03)
 	}
