@@ -129,3 +129,18 @@ if [ "$mode" == "weth9" ] || [ "$mode" == "all" ]; then
 	rm -rf canonical-weth
 	echo "✅ Successfully built WETH9 contract..."
 fi
+
+## Build ERC20 contract.
+if [ "$mode" == "erc20" ] || [ "$mode" == "all" ]; then
+	echo -e "\n🏗️  Building ERC20 contract..."
+	rm -rf ./openzeppelin-contracts
+	git clone https://github.com/OpenZeppelin/openzeppelin-contracts.git
+	solc erc20/ERC20.sol \
+		@openzeppelin=openzeppelin-contracts/contracts \
+		--abi \
+		--bin \
+		--output-dir erc20 \
+		--overwrite
+	rm -rf ./openzeppelin-contracts
+	echo "✅ Successfully built ERC20 contract..."
+fi
