@@ -507,14 +507,14 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 		tokensAToMint := big.NewInt(1_000_000_000_000_000_000)
 		var tokenAConfig contractConfig[uniswapv3.Swapper]
-		tokenAConfig, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "TokenA", "A", ethcommon.HexToAddress(*ltp.UniswapPoolTokenA), tokensAToMint, *ltp.FromETHAddress)
+		tokenAConfig, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "TokenA", "A", tokensAToMint, *ltp.FromETHAddress, ethcommon.HexToAddress(*ltp.UniswapPoolTokenA))
 		if err != nil {
 			return nil
 		}
 
 		tokensBToMint := big.NewInt(1_000_000_000_000_000_000)
 		var tokenBConfig contractConfig[uniswapv3.Swapper]
-		tokenBConfig, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "TokenB", "B", ethcommon.HexToAddress(*ltp.UniswapPoolTokenB), tokensBToMint, *ltp.FromETHAddress)
+		tokenBConfig, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "TokenB", "B", tokensBToMint, *ltp.FromETHAddress, ethcommon.HexToAddress(*ltp.UniswapPoolTokenB))
 		if err != nil {
 			return nil
 		}

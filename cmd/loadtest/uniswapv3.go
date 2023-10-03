@@ -450,14 +450,14 @@ func transferProxyAdminOwnership(contract *uniswapv3.ProxyAdmin, tops *bind.Tran
 	return nil
 }
 
-func deploySwapperContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, config UniswapV3Config, tokenName, tokenSymbol string, tokenKnownAddress common.Address, tokensToMint *big.Int, recipient common.Address) (contractConfig[uniswapv3.Swapper], error) {
+func deploySwapperContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, config UniswapV3Config, tokenName, tokenSymbol string, tokensToMint *big.Int, recipient common.Address, tokenKnownAddress common.Address) (contractConfig[uniswapv3.Swapper], error) {
 	var token contractConfig[uniswapv3.Swapper]
 	var err error
 	addressesToApprove := []common.Address{config.NonfungiblePositionManager.Address, config.SwapRouter02.Address}
 	token.Address, token.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, tokenName, tokenKnownAddress,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.Swapper, error) {
-			return uniswapv3.DeploySwapper(tops, c, tokenName, tokenSymbol, recipient)
+			return uniswapv3.DeploySwapper(tops, c, tokenName, tokenSymbol, tokensToMint, recipient)
 		},
 		uniswapv3.NewSwapper,
 		func(contract *uniswapv3.Swapper) error {
@@ -492,7 +492,7 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	// No need to check if the pool was already created or initialized, the contract handles every scenario.
 	// https://uniswapv3book.com/docs/milestone_1/calculating-liquidity/
 	sqrtPriceX96 := computeSqrtPriceX96(poolConfig.ReserveA, poolConfig.ReserveB)
-	sqrtPriceX96.SetString("79232123823359799118286999568", 10) // DEBUG
+	//sqrtPriceX96.SetString("79232123823359799118286999568", 10) // DEBUG with John's value
 	if _, err := uniswapV3Config.NonfungiblePositionManager.contract.CreateAndInitializePoolIfNecessary(tops, poolConfig.TokenA.Address, poolConfig.TokenB.Address, poolConfig.Fees, sqrtPriceX96); err != nil {
 		log.Error().Err(err).Msg("Unable to create and initialize the TokenA-TokenB pool")
 		return err
@@ -556,17 +556,108 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	tickLower := new(big.Int).Neg(tickUpper)
 	log.Debug().Interface("tickLower", tickLower).Interface("tickUpper", tickUpper).Msg("DEBUG")
 
+	// DEBUG: start
+	var senderTokenABalance *big.Int
+	senderTokenABalance, err = poolConfig.TokenA.contract.BalanceOf(cops, recipient)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get sender's TokenA balance")
+		return err
+	}
+	log.Debug().Interface("address", recipient).Interface("balance", senderTokenABalance).Msg("DEBUG")
+
+	var senderTokenBBalance *big.Int
+	senderTokenBBalance, err = poolConfig.TokenB.contract.BalanceOf(cops, recipient)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get sender's TokenB balance")
+		return err
+	}
+	log.Debug().Interface("address", recipient).Interface("balance", senderTokenBBalance).Msg("DEBUG")
+
+	var nonfungiblePositionManagerTokenAAllowance *big.Int
+	nonfungiblePositionManagerTokenAAllowance, err = poolConfig.TokenA.contract.Allowance(cops, recipient, uniswapV3Config.NonfungiblePositionManager.Address)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get NonfungiblePositionManager's TokenA allowance")
+		return err
+	}
+	log.Debug().Interface("address", uniswapV3Config.NonfungiblePositionManager.Address).Interface("allowance", nonfungiblePositionManagerTokenAAllowance).Msg("DEBUG")
+
+	var nonfungiblePositionManagerTokenBAllowance *big.Int
+	nonfungiblePositionManagerTokenBAllowance, err = poolConfig.TokenB.contract.Allowance(cops, recipient, uniswapV3Config.NonfungiblePositionManager.Address)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get NonfungiblePositionManager's TokenB allowance")
+		return err
+	}
+	log.Debug().Interface("address", uniswapV3Config.NonfungiblePositionManager.Address).Interface("allowance", nonfungiblePositionManagerTokenBAllowance).Msg("DEBUG")
+
+	var maxLiquidityPerTick *big.Int
+	maxLiquidityPerTick, err = poolContract.MaxLiquidityPerTick(cops)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get the max liquidity per tick")
+		return err
+	}
+	log.Debug().Interface("maxLiquidityPerTick", maxLiquidityPerTick).Msg("DEBUG")
+
+	var slot0 slot
+	slot0, err = poolContract.Slot0(cops)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get slot0")
+		return err
+	}
+	log.Debug().Interface("slot0", slot0).Msg("DEBUG")
+
+	tick0, err := poolContract.Ticks(cops, slot0.Tick)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get tick0")
+		return err
+	}
+	log.Debug().Interface("tick0", tick0).Msg("DEBUG")
+
+	var liquidity *big.Int
+	liquidity, err = poolContract.Liquidity(cops)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get liquidity")
+		return err
+	}
+	log.Debug().Interface("liquidity", liquidity).Msg("DEBUG")
+
+	var token0 common.Address
+	token0, err = poolContract.Token0(cops)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get token0")
+		return err
+	}
+	log.Debug().Interface("token0", token0).Msg("DEBUG")
+
+	var token1 common.Address
+	token1, err = poolContract.Token1(cops)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get token1")
+		return err
+	}
+	log.Debug().Interface("token1", token1).Msg("DEBUG")
+
+	var fee *big.Int
+	fee, err = poolContract.Fee(cops)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get fee")
+		return err
+	}
+	log.Debug().Interface("fee", fee).Msg("DEBUG")
+	// DEBUG: end
+
 	// Provide liquidity.
 	// TODO: Understand why this call reverts.
 	// Tx example on mainnet: https://etherscan.io/tx/0x413049d98ebc1853c09f3d7b08692a17f3950b3384634b3010c22930df1a71b4
 	mintParams := uniswapv3.INonfungiblePositionManagerMintParams{
-		Token0:         poolConfig.TokenA.Address,
-		Token1:         poolConfig.TokenB.Address,
-		Fee:            poolConfig.Fees,
-		TickLower:      tickLower, // We provide liquidity across the whole possible range (divisible by tick spacing).
-		TickUpper:      tickUpper,
-		Amount0Desired: big.NewInt(1000),
-		Amount1Desired: big.NewInt(1000),
+		Token0: poolConfig.TokenA.Address,
+		Token1: poolConfig.TokenB.Address,
+		Fee:    poolConfig.Fees,
+		//TickLower:      tickLower, // We provide liquidity across the whole possible range (divisible by tick spacing).
+		TickLower: big.NewInt(MIN_TICK),
+		//TickUpper:      tickUpper,
+		TickUpper:      big.NewInt(MAX_TICK),
+		Amount0Desired: big.NewInt(5_000_000_000),
+		Amount1Desired: big.NewInt(5_000_000_000),
 		Amount0Min:     big.NewInt(0), // We mint without any slippage protection. Don't do this in production!
 		Amount1Min:     big.NewInt(0), // Same thing here.
 		Recipient:      recipient,
