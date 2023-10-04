@@ -84,6 +84,10 @@ fi
 if [ "$mode" == "v3-periphery" ] || [ "$mode" == "all" ]; then
 	contracts=("lens/UniswapInterfaceMulticall" "lens/TickLens" "libraries/NFTDescriptor" "NonfungibleTokenPositionDescriptor" "NonfungiblePositionManager" "V3Migrator")
 	build_contracts v3-periphery https://github.com/Uniswap/v3-periphery.git v1.3.0 $contracts
+	mv v3-periphery/NonfungibleTokenPositionDescriptor.abi v3-periphery/NFTPositionDescriptor.abi
+	mv v3-periphery/NonfungibleTokenPositionDescriptor.bin v3-periphery/NFTPositionDescriptor.bin
+	mv v3-periphery/NonfungiblePositionManager.abi v3-periphery/NFPositionManager.abi
+	mv v3-periphery/NonfungiblePositionManager.bin v3-periphery/NFPositionManager.bin
 
 	# We need to deloy the NFTDescriptor library, retrieve its address and link it inside
 	# NonfungibleTokenPositionDescriptor bytecode. This is required to generate the Go binding.

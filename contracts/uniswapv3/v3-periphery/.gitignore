@@ -3,6 +3,6 @@
 !UniswapInterfaceMulticall.*
 !TickLens.*
 !NFTDescriptor.*
-!NonfungibleTokenPositionDescriptor.*
-!NonfungiblePositionManager.*
+!NFTPositionDescriptor.*
+!NFPositionManager.*
 !V3Migrator.*

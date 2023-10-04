@@ -23,7 +23,7 @@ Version: 0.7.6+commit.7338295f.Darwin.appleclang
 ❗️ Make sure to note the address of NFTDescriptor library, this is very important.
 
 ```sh
-✍️ NFTDescriptor library address: 0x3212215ccbeb5e3a808373b805f5324cebe992af
+✍️ NFTDescriptor library address: 0xf7012159bf761b312153e8c8d176932fe9aaa7ea
 ```
 
 3. Generate Go bindings for those contracts using `bindings.sh`.
@@ -56,9 +56,9 @@ abigen version 1.13.1-stable
 This is the old function.
 
 ```go
-// contracts/uniswapv3/NonfungibleTokenPositionDescriptor.sol#L47
-func DeployNonfungibleTokenPositionDescriptor(auth *bind.TransactOpts, backend bind.ContractBackend, _WETH9 common.Address, _nativeCurrencyLabelBytes [32]byte) (common.Address, *types.Transaction, *NonfungibleTokenPositionDescriptor, error) {
-	parsed, err := NonfungibleTokenPositionDescriptorMetaData.GetAbi()
+// contracts/uniswapv3/NFTPositionDescriptor.sol#L47
+func DeployNFTPositionDescriptor(auth *bind.TransactOpts, backend bind.ContractBackend, _WETH9 common.Address, _nativeCurrencyLabelBytes [32]byte) (common.Address, *types.Transaction, *NFTPositionDescriptor, error) {
+	parsed, err := NFTPositionDescriptorMetaData.GetAbi()
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
@@ -66,20 +66,20 @@ func DeployNonfungibleTokenPositionDescriptor(auth *bind.TransactOpts, backend b
 		return common.Address{}, nil, nil, errors.New("GetABI returned nil")
 	}
 
-	address, tx, contract, err := bind.DeployContract(auth, *parsed, common.FromHex(NonfungibleTokenPositionDescriptorBin), backend, _WETH9, _nativeCurrencyLabelBytes)
+	address, tx, contract, err := bind.DeployContract(auth, *parsed, common.FromHex(NFTPositionDescriptorBin), backend, _WETH9, _nativeCurrencyLabelBytes)
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
-	return address, tx, &NonfungibleTokenPositionDescriptor{NonfungibleTokenPositionDescriptorCaller: NonfungibleTokenPositionDescriptorCaller{contract: contract}, NonfungibleTokenPositionDescriptorTransactor: NonfungibleTokenPositionDescriptorTransactor{contract: contract}, NonfungibleTokenPositionDescriptorFilterer: NonfungibleTokenPositionDescriptorFilterer{contract: contract}}, nil
+	return address, tx, &NFTPositionDescriptor{NFTPositionDescriptorCaller: NFTPositionDescriptorCaller{contract: contract}, NFTPositionDescriptorTransactor: NFTPositionDescriptorTransactor{contract: contract}, NFTPositionDescriptorFilterer: NFTPositionDescriptorFilterer{contract: contract}}, nil
 }
 ```
 
 We'd like to be able to specify the new binary so here's the new function.
 
 ```go
-// contracts/uniswapv3/NonfungibleTokenPositionDescriptor.sol#L47
-func DeployNonfungibleTokenPositionDescriptor(auth *bind.TransactOpts, backend bind.ContractBackend, _WETH9 common.Address, _nativeCurrencyLabelBytes [32]byte, nonfungibleTokenPositionDescriptorNewBin string) (common.Address, *types.Transaction, *NonfungibleTokenPositionDescriptor, error) {
-	parsed, err := NonfungibleTokenPositionDescriptorMetaData.GetAbi()
+// contracts/uniswapv3/NFTPositionDescriptor.sol#L47
+func DeployNFTPositionDescriptor(auth *bind.TransactOpts, backend bind.ContractBackend, _WETH9 common.Address, _nativeCurrencyLabelBytes [32]byte, nonfungibleTokenPositionDescriptorNewBin string) (common.Address, *types.Transaction, *NFTPositionDescriptor, error) {
+	parsed, err := NFTPositionDescriptorMetaData.GetAbi()
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
@@ -91,7 +91,7 @@ func DeployNonfungibleTokenPositionDescriptor(auth *bind.TransactOpts, backend b
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
-	return address, tx, &NonfungibleTokenPositionDescriptor{NonfungibleTokenPositionDescriptorCaller: NonfungibleTokenPositionDescriptorCaller{contract: contract}, NonfungibleTokenPositionDescriptorTransactor: NonfungibleTokenPositionDescriptorTransactor{contract: contract}, NonfungibleTokenPositionDescriptorFilterer: NonfungibleTokenPositionDescriptorFilterer{contract: contract}}, nil
+	return address, tx, &NFTPositionDescriptor{NFTPositionDescriptorCaller: NFTPositionDescriptorCaller{contract: contract}, NFTPositionDescriptorTransactor: NFTPositionDescriptorTransactor{contract: contract}, NFTPositionDescriptorFilterer: NFTPositionDescriptorFilterer{contract: contract}}, nil
 }
 ```
 

@@ -24,8 +24,8 @@ gen_go_binding v3-core UniswapV3Pool
 gen_go_binding v3-periphery UniswapInterfaceMulticall
 gen_go_binding v3-periphery TickLens
 gen_go_binding v3-periphery NFTDescriptor
-gen_go_binding v3-periphery NonfungibleTokenPositionDescriptor
-gen_go_binding v3-periphery NonfungiblePositionManager
+gen_go_binding v3-periphery NFTPositionDescriptor
+gen_go_binding v3-periphery NFPositionManager
 gen_go_binding v3-periphery V3Migrator
 
 gen_go_binding v3-staker UniswapV3Staker
@@ -41,4 +41,4 @@ gen_go_binding erc20 Swapper
 
 echo "✅ Done"
 
-echo -e "\n❗️ Make sure to read contracts/uniswapv3/README.md to update the deploy function of NonfungibleTokenPositionDescriptor.go and the address of the NFTDescriptor library."
+echo -e "\n❗️ Make sure to read contracts/uniswapv3/README.md to update the deploy function of NFTPositionDescriptor.go and the address of the NFTDescriptor library."

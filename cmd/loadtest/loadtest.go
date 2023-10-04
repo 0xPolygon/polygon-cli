@@ -490,7 +490,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		NFTDescriptorLib:            ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNFTLibDescriptor),
 		NFTPositionDescriptor:       ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNFTPositionDescriptor),
 		TransparentUpgradeableProxy: ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapUpgradeableProxy),
-		NonfungiblePositionManager:  ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNonfungiblePositionManager),
+		NFPositionManager:           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNFPositionManager),
 		Migrator:                    ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMigrator),
 		Staker:                      ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapStaker),
 		QuoterV2:                    ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapQuoterV2),
