@@ -474,24 +474,24 @@ func deployOrInstantiateContract[T uniswapV3Contract](
 		// Deploy the contract if known address is empty.
 		address, _, contract, err = deployFunc(tops, c)
 		if err != nil {
-			log.Error().Err(err).Msg(fmt.Sprintf("Unable to deploy %s contract", name))
+			log.Error().Err(err).Str("name", name).Msg("Unable to deploy contract")
 			return
 		}
-		log.Debug().Interface("address", address).Msg(fmt.Sprintf("%s contract deployed", name))
+		log.Debug().Str("name", name).Interface("address", address).Msg("contract deployed")
 	} else {
 		// Otherwise, instantiate the contract.
 		address = knownAddress
 		contract, err = instantiateFunc(address, c)
 		if err != nil {
-			log.Error().Err(err).Msg(fmt.Sprintf("Unable to instantiate %s contract", name))
+			log.Error().Err(err).Str("name", name).Msg("Unable to instantiate contract")
 			return
 		}
-		log.Debug().Msg(fmt.Sprintf("%s contract instantiated", name))
+		log.Debug().Str("name", name).Msg("contract instantiated")
 	}
 
 	// Check that the contract is deployed and ready.
 	if err = blockUntilSuccessful(ctx, c, func() error {
-		log.Trace().Msg(fmt.Sprintf("%s contract is not available yet", name))
+		log.Trace().Str("contract", name).Msg("contract is not available yet")
 		return callFunc(contract)
 	}); err != nil {
 		return
@@ -584,7 +584,7 @@ func approveSwapperSpendingsByUniswap(contract *uniswapv3.Swapper, tops *bind.Tr
 	for _, address := range addresses {
 		_, err := contract.Approve(tops, address, amount)
 		if err != nil {
-			log.Error().Err(err).Msg(fmt.Sprintf("Unable to approve %v spendings", address))
+			log.Error().Err(err).Interface("address", address).Msg("Unable to approve spendings")
 			return err
 		}
 		log.Debug().Str("Swapper", name).Str("spender", address.String()).Int64("amount", amount.Int64()).Msg("Spending approved")
