@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"net/url"
 	"strings"
 	"time"
 
@@ -12,8 +13,77 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/maticnetwork/polygon-cli/contracts/uniswapv3"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 )
+
+var uniswapV3LoadTestCmd = &cobra.Command{
+	Use:   "uniswapv3 url",
+	Short: "Run Uniswapv3-like load test against an Eth/EVm style JSON-RPC endpoint.",
+	Long:  usage,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		inputLoadTestParams.Mode = loadTestModeUniswapV3
+
+		log.Trace().Interface("subcmd params", inputLoadTestParams).Msg("Params")
+		err := runLoadTest(cmd.Context())
+		if err != nil {
+			return err
+		}
+		return nil
+	},
+	Args: func(cmd *cobra.Command, args []string) error {
+		zerolog.DurationFieldUnit = time.Second
+		zerolog.DurationFieldInteger = true
+
+		if len(args) != 1 {
+			return fmt.Errorf("expected exactly one argument")
+		}
+		url, err := url.Parse(args[0])
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to parse url input error")
+			return err
+		}
+		if url.Scheme != "http" && url.Scheme != "https" && url.Scheme != "ws" && url.Scheme != "wss" {
+			return fmt.Errorf("the scheme %s is not supported", url.Scheme)
+		}
+		inputLoadTestParams.URL = url
+
+		return nil
+	},
+}
+
+var uniswapv3LoadTestParams params
+
+type params struct {
+	UniswapFactoryV3, UniswapMulticall, UniswapProxyAdmin, UniswapTickLens, UniswapNFTDescriptor, UniswapUpgradeableProxy, UniswapNonfungiblePositionManager, UniswapMigrator, UniswapStaker, UniswapQuoterV2, UniswapSwapRouter *string
+	WETH9, UniswapPoolToken0, UniswapPoolToken1                                                                                                                                                                                  *string
+}
+
+func init() {
+	// Override root command `mode` flag.
+	inputLoadTestParams.Modes = &[]string{"v3"}
+
+	// Specify subcommand flags.
+	params := new(params)
+	params.UniswapFactoryV3 = uniswapV3LoadTestCmd.Flags().String("uniswap-factory-v3-address", "", "The address of a pre-deployed UniswapFactoryV3 contract")
+	params.UniswapMulticall = uniswapV3LoadTestCmd.Flags().String("uniswap-multicall-address", "", "The address of a pre-deployed Multicall contract")
+	params.UniswapProxyAdmin = uniswapV3LoadTestCmd.Flags().String("uniswap-proxy-admin-address", "", "The address of a pre-deployed ProxyAdmin contract")
+	params.UniswapTickLens = uniswapV3LoadTestCmd.Flags().String("uniswap-tick-lens-address", "", "The address of a pre-deployed TickLens contract")
+	params.UniswapNFTDescriptor = uniswapV3LoadTestCmd.Flags().String("uniswap-nft-descriptor-address", "", "The address of a pre-deployed NFTDescriptor contract")
+	params.UniswapUpgradeableProxy = uniswapV3LoadTestCmd.Flags().String("uniswap-upgradeable-proxy-address", "", "The address of a pre-deployed TransparentUpgradeableProxy contract")
+	params.UniswapNonfungiblePositionManager = uniswapV3LoadTestCmd.Flags().String("uniswap-non-fungible-position-manager-address", "", "The address of a pre-deployed NonfungiblePositionManager contract")
+	params.UniswapMigrator = uniswapV3LoadTestCmd.Flags().String("uniswap-migrator-address", "", "The address of a pre-deployed Migrator contract")
+	params.UniswapStaker = uniswapV3LoadTestCmd.Flags().String("uniswap-staker-address", "", "The address of a pre-deployed Staker contract")
+	params.UniswapQuoterV2 = uniswapV3LoadTestCmd.Flags().String("uniswap-quoter-v2-address", "", "The address of a pre-deployed QuoterV2 contract")
+	params.UniswapSwapRouter = uniswapV3LoadTestCmd.Flags().String("uniswap-swap-router-address", "", "The address of a pre-deployed SwapRouter contract")
+	params.WETH9 = uniswapV3LoadTestCmd.Flags().String("weth9-address", "", "The address of a pre-deployed WETH9 contract")
+	params.UniswapPoolToken0 = uniswapV3LoadTestCmd.Flags().String("uniswap-pool-token-a-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
+	params.UniswapPoolToken1 = uniswapV3LoadTestCmd.Flags().String("uniswap-pool-token-b-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
+	uniswapv3LoadTestParams = *params
+
+	log.Trace().Interface("params", inputLoadTestParams).Msg("Subcmd flags set")
+}
 
 const (
 	// The fee amount to enable for one basic point.
@@ -260,9 +330,10 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			// But when we use pre-deployed contracts, since the TransparentUpgradeableProxy ownership
 			// has been transfered, we get "execution reverted" errors when trying to call any method.
 			// That's why we don't call any method in the pre-deployed contract mode.
-			if knownAddresses.TransparentUpgradeableProxy == (common.Address{}) {
-				_, err = contract.Admin(tops)
-			}
+			// TODO: this call fails on edge.
+			//if knownAddresses.TransparentUpgradeableProxy == (common.Address{}) {
+			//	_, err = contract.Admin(tops)
+			//}
 			return
 		},
 	)
