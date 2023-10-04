@@ -1,4 +1,4 @@
-# `polycli loadtest`
+# `polycli loadtest uniswapv3`
 
 > Auto-generated documentation.
 
@@ -11,10 +11,10 @@
 
 ## Description
 
-Run a generic load test against an Eth/EVM style JSON-RPC endpoint.
+Run Uniswapv3-like load test against an Eth/EVm style JSON-RPC endpoint.
 
 ```bash
-polycli loadtest url [flags]
+polycli loadtest uniswapv3 url [flags]
 ```
 
 ## Usage
@@ -102,6 +102,27 @@ The codebase has a contract that used for load testing. It's written in Yul and 
 ## Flags
 
 ```bash
+  -h, --help                                                   help for uniswapv3
+      --uniswap-factory-v3-address string                      The address of a pre-deployed UniswapFactoryV3 contract
+      --uniswap-migrator-address string                        The address of a pre-deployed Migrator contract
+      --uniswap-multicall-address string                       The address of a pre-deployed Multicall contract
+      --uniswap-nft-descriptor-lib-address string              The address of a pre-deployed NFTDescriptor library contract
+      --uniswap-nft-position-descriptor-address string         The address of a pre-deployed NFTPositionDescriptor contract
+      --uniswap-non-fungible-position-manager-address string   The address of a pre-deployed NonfungiblePositionManager contract
+      --uniswap-pool-token-0-address string                    The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1
+      --uniswap-pool-token-1-address string                    The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1
+      --uniswap-proxy-admin-address string                     The address of a pre-deployed ProxyAdmin contract
+      --uniswap-quoter-v2-address string                       The address of a pre-deployed QuoterV2 contract
+      --uniswap-staker-address string                          The address of a pre-deployed Staker contract
+      --uniswap-swap-router-address string                     The address of a pre-deployed SwapRouter contract
+      --uniswap-tick-lens-address string                       The address of a pre-deployed TickLens contract
+      --uniswap-upgradeable-proxy-address string               The address of a pre-deployed TransparentUpgradeableProxy contract
+      --weth9-address string                                   The address of a pre-deployed WETH9 contract
+```
+
+The command also inherits flags from parent commands.
+
+```bash
       --adaptive-backoff-factor float              When using adaptive rate limiting, this flag controls our multiplicative decrease value. (default 2)
       --adaptive-cycle-duration-seconds uint       When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates (default 10)
       --adaptive-rate-limit                        Enable AIMD-style congestion control to automatically adjust request rate
@@ -112,6 +133,7 @@ The codebase has a contract that used for load testing. It's written in Yul and 
       --call-only-latest                           When using call only mode with recall, should we execute on the latest block or on the original block
       --chain-id uint                              The chain id for the transactions.
   -c, --concurrency int                            Number of requests to perform concurrently. Default is one request at a time. (default 1)
+      --config string                              config file (default is $HOME/.polygon-cli.yaml)
       --contract-call-block-interval uint          During deployment, this flag controls if we should check every block, every other block, or every nth block to determine that the contract has been deployed (default 1)
       --contract-call-nb-blocks-to-wait-for uint   The number of blocks to wait for before giving up on a contract deployment (default 30)
       --erc20-address string                       The address of a pre-deployed ERC20 contract
@@ -120,25 +142,11 @@ The codebase has a contract that used for load testing. It's written in Yul and 
   -f, --function --mode f                          A specific function to be called if running with --mode f or a specific precompiled contract when running with `--mode a` (default 1)
       --gas-limit uint                             In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
       --gas-price uint                             In environments where the gas price can't be determined automatically, we can specify it manually
-  -h, --help                                       help for loadtest
   -i, --iterations uint                            If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size (default 1)
       --legacy                                     Send a legacy transaction instead of an EIP1559 transaction.
       --lt-address string                          The address of a pre-deployed load test contract
-  -m, --mode strings                               The testing mode to use. It can be multiple like: "t,c,d,f"
-                                                   t - sending transactions
-                                                   d - deploy contract
-                                                   c - call random contract functions
-                                                   f - call specific contract function
-                                                   p - call random precompiled contracts
-                                                   a - call a specific precompiled contract address
-                                                   s - store mode
-                                                   r - random modes
-                                                   2 - ERC20 Transfers
-                                                   7 - ERC721 Mints
-                                                   v3 - UniswapV3 swaps
-                                                   R - total recall
-                                                   rpc - call random rpc methods (default [t])
       --output-mode string                         Format mode for summary output (json | text) (default "text")
+      --pretty-logs                                Should logs be in pretty format or JSON (default true)
       --priority-gas-price uint                    Specify Gas Tip Price in the case of EIP-1559
       --private-key string                         The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
       --rate-limit float                           An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together (default 4)
@@ -151,24 +159,15 @@ The codebase has a contract that used for load testing. It's written in Yul and 
   -t, --time-limit int                             Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit. (default -1)
       --to-address string                          The address that we're going to send to (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
       --to-random                                  When doing a transfer test, should we send to random addresses rather than DEADBEEFx5
-```
-
-The command also inherits flags from parent commands.
-
-```bash
-      --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Fatal
-                        200 Error
-                        300 Warning
-                        400 Info
-                        500 Debug
-                        600 Trace (default 400)
+  -v, --verbosity int                              0 - Silent
+                                                   100 Fatal
+                                                   200 Error
+                                                   300 Warning
+                                                   400 Info
+                                                   500 Debug
+                                                   600 Trace (default 400)
 ```
 
 ## See also
 
-- [polycli](polycli.md) - A Swiss Army knife of blockchain tools.
-- [polycli loadtest uniswapv3](polycli_loadtest_uniswapv3.md) - Run Uniswapv3-like load test against an Eth/EVm style JSON-RPC endpoint.
-
+- [polycli loadtest](polycli_loadtest.md) - Run a generic load test against an Eth/EVM style JSON-RPC endpoint.

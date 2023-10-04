@@ -56,8 +56,8 @@ var uniswapV3LoadTestCmd = &cobra.Command{
 var uniswapv3LoadTestParams params
 
 type params struct {
-	UniswapFactoryV3, UniswapMulticall, UniswapProxyAdmin, UniswapTickLens, UniswapNFTDescriptor, UniswapUpgradeableProxy, UniswapNonfungiblePositionManager, UniswapMigrator, UniswapStaker, UniswapQuoterV2, UniswapSwapRouter *string
-	WETH9, UniswapPoolToken0, UniswapPoolToken1                                                                                                                                                                                  *string
+	UniswapFactoryV3, UniswapMulticall, UniswapProxyAdmin, UniswapTickLens, UniswapNFTLibDescriptor, UniswapNFTPositionDescriptor, UniswapUpgradeableProxy, UniswapNonfungiblePositionManager, UniswapMigrator, UniswapStaker, UniswapQuoterV2, UniswapSwapRouter *string
+	WETH9, UniswapPoolToken0, UniswapPoolToken1                                                                                                                                                                                                                   *string
 }
 
 func init() {
@@ -70,7 +70,8 @@ func init() {
 	params.UniswapMulticall = uniswapV3LoadTestCmd.Flags().String("uniswap-multicall-address", "", "The address of a pre-deployed Multicall contract")
 	params.UniswapProxyAdmin = uniswapV3LoadTestCmd.Flags().String("uniswap-proxy-admin-address", "", "The address of a pre-deployed ProxyAdmin contract")
 	params.UniswapTickLens = uniswapV3LoadTestCmd.Flags().String("uniswap-tick-lens-address", "", "The address of a pre-deployed TickLens contract")
-	params.UniswapNFTDescriptor = uniswapV3LoadTestCmd.Flags().String("uniswap-nft-descriptor-address", "", "The address of a pre-deployed NFTDescriptor contract")
+	params.UniswapNFTLibDescriptor = uniswapV3LoadTestCmd.Flags().String("uniswap-nft-descriptor-lib-address", "", "The address of a pre-deployed NFTDescriptor library contract")
+	params.UniswapNFTPositionDescriptor = uniswapV3LoadTestCmd.Flags().String("uniswap-nft-position-descriptor-address", "", "The address of a pre-deployed NFTPositionDescriptor contract")
 	params.UniswapUpgradeableProxy = uniswapV3LoadTestCmd.Flags().String("uniswap-upgradeable-proxy-address", "", "The address of a pre-deployed TransparentUpgradeableProxy contract")
 	params.UniswapNonfungiblePositionManager = uniswapV3LoadTestCmd.Flags().String("uniswap-non-fungible-position-manager-address", "", "The address of a pre-deployed NonfungiblePositionManager contract")
 	params.UniswapMigrator = uniswapV3LoadTestCmd.Flags().String("uniswap-migrator-address", "", "The address of a pre-deployed Migrator contract")
@@ -78,8 +79,8 @@ func init() {
 	params.UniswapQuoterV2 = uniswapV3LoadTestCmd.Flags().String("uniswap-quoter-v2-address", "", "The address of a pre-deployed QuoterV2 contract")
 	params.UniswapSwapRouter = uniswapV3LoadTestCmd.Flags().String("uniswap-swap-router-address", "", "The address of a pre-deployed SwapRouter contract")
 	params.WETH9 = uniswapV3LoadTestCmd.Flags().String("weth9-address", "", "The address of a pre-deployed WETH9 contract")
-	params.UniswapPoolToken0 = uniswapV3LoadTestCmd.Flags().String("uniswap-pool-token-a-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
-	params.UniswapPoolToken1 = uniswapV3LoadTestCmd.Flags().String("uniswap-pool-token-b-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
+	params.UniswapPoolToken0 = uniswapV3LoadTestCmd.Flags().String("uniswap-pool-token-0-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
+	params.UniswapPoolToken1 = uniswapV3LoadTestCmd.Flags().String("uniswap-pool-token-1-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
 	uniswapv3LoadTestParams = *params
 
 	log.Trace().Interface("params", inputLoadTestParams).Msg("Subcmd flags set")
@@ -120,8 +121,8 @@ const (
 var oldNFTPositionLibraryAddress = common.HexToAddress("0x3212215ccbeb5e3a808373b805f5324cebe992af")
 
 type UniswapV3Addresses struct {
-	FactoryV3, Multicall, ProxyAdmin, TickLens, NFTDescriptor, NFTPositionDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker, QuoterV2, SwapRouter02 common.Address
-	WETH9                                                                                                                                                                               common.Address
+	FactoryV3, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib, NFTPositionDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker, QuoterV2, SwapRouter02 common.Address
+	WETH9                                                                                                                                                                                  common.Address
 }
 
 type UniswapV3Config struct {
@@ -147,7 +148,7 @@ func (c *UniswapV3Config) ToAddresses() UniswapV3Addresses {
 		Multicall:                   c.Multicall.Address,
 		ProxyAdmin:                  c.ProxyAdmin.Address,
 		TickLens:                    c.TickLens.Address,
-		NFTDescriptor:               c.NFTDescriptorLib.Address,
+		NFTDescriptorLib:            c.NFTDescriptorLib.Address,
 		NFTPositionDescriptor:       c.NFTPositionDescriptor.Address,
 		TransparentUpgradeableProxy: c.TransparentUpgradeableProxy.Address,
 		NonfungiblePositionManager:  c.NonfungiblePositionManager.Address,
@@ -268,7 +269,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 7. Deploy NFTDescriptor library.
 	config.NFTDescriptorLib.Address, _, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "NFTDescriptor", knownAddresses.NFTDescriptor,
+		ctx, c, tops, cops, "NFTDescriptorLib", knownAddresses.NFTDescriptorLib,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.NFTDescriptor, error) {
 			return uniswapv3.DeployNFTDescriptor(tops, c)
 		},
@@ -638,11 +639,6 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 		return err
 	}
 	log.Debug().Interface("slot0", slot0).Interface("liquidity", liquidity).Msg("Token0-Token1 pool state")
-
-	// DEBUG: Wait for 5 blocks.
-	log.Debug().Msg("Waiting for 5 blocks to be mined...")
-	time.Sleep(5 * 2 * time.Second)
-	log.Debug().Msg("Waiting over")
 
 	// Get the block timestamp.
 	var blockNumber uint64
