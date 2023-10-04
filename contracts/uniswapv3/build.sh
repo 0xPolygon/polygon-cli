@@ -69,6 +69,8 @@ build_contracts() {
 	echo "✅ Successfully built $repository contracts..."
 }
 
+# Use solc 0.7.6.
+solc-select use 0.7.6
 solc --version
 current_dir=$(pwd)
 
@@ -98,6 +100,7 @@ if [ "$mode" == "v3-periphery" ] || [ "$mode" == "all" ]; then
 		--link \
 		--libraries tmp/v3-periphery/contracts/libraries/NFTDescriptor.sol:NFTDescriptor:$nft_descriptor_lib_address \
 		v3-periphery/NonfungibleTokenPositionDescriptor.bin
+	echo "✍️ NFTDescriptor library address: $nft_descriptor_lib_address"
 fi
 
 ## Build v3-staker contracts.
@@ -133,10 +136,18 @@ fi
 ## Build ERC20 contract.
 if [ "$mode" == "erc20" ] || [ "$mode" == "all" ]; then
 	echo -e "\n🏗️  Building ERC20 contract..."
-	rm -rf ./openzeppelin-contracts
-	git clone https://github.com/OpenZeppelin/openzeppelin-contracts.git
+
+	# Clone repository
+	git clone --branch v3.4.1-solc-0.7-2 https://github.com/OpenZeppelin/openzeppelin-contracts.git ./tmp/openzeppelin-contracts
+
+	# Install dependencies.
+	pushd tmp/openzeppelin-contracts
+	yarn install
+	popd
+
+	# Compile contract.
 	solc erc20/Swapper.sol \
-		@openzeppelin=openzeppelin-contracts/contracts \
+		@openzeppelin=$current_dir/tmp/openzeppelin-contracts/contracts \
 		--evm-version istanbul \
 		--optimize \
 		--optimize-runs 200 \
@@ -144,6 +155,9 @@ if [ "$mode" == "erc20" ] || [ "$mode" == "all" ]; then
 		--bin \
 		--output-dir erc20 \
 		--overwrite
-	rm -rf ./openzeppelin-contracts
+
+	# Clean up.
+	#rm -rf ./tmp/openzeppelin-contracts
+
 	echo "✅ Successfully built ERC20 contract..."
 fi
