@@ -20,6 +20,12 @@ Version: 0.7.6+commit.7338295f.Darwin.appleclang
 ...
 ```
 
+❗️ Make sure to note the address of NFTDescriptor library, this is very important.
+
+```sh
+✍️ NFTDescriptor library address: 0x3212215ccbeb5e3a808373b805f5324cebe992af
+```
+
 3. Generate Go bindings for those contracts using `bindings.sh`.
 
 ```sh
@@ -41,4 +47,57 @@ abigen version 1.13.1-stable
 * TransparentUpgradeableProxy bindings generated.
 * WETH9 bindings generated.
 ✅ Done
+
+🪄 Update NonfungibleTokenPositionDescriptor deploy function to be able to update its bytecode
+```
+
+4. Update the `NonfungibleTokenPositionDescriptor` deploy function.
+
+This is the old function.
+
+```go
+// contracts/uniswapv3/NonfungibleTokenPositionDescriptor.sol#L47
+func DeployNonfungibleTokenPositionDescriptor(auth *bind.TransactOpts, backend bind.ContractBackend, _WETH9 common.Address, _nativeCurrencyLabelBytes [32]byte) (common.Address, *types.Transaction, *NonfungibleTokenPositionDescriptor, error) {
+	parsed, err := NonfungibleTokenPositionDescriptorMetaData.GetAbi()
+	if err != nil {
+		return common.Address{}, nil, nil, err
+	}
+	if parsed == nil {
+		return common.Address{}, nil, nil, errors.New("GetABI returned nil")
+	}
+
+	address, tx, contract, err := bind.DeployContract(auth, *parsed, common.FromHex(NonfungibleTokenPositionDescriptorBin), backend, _WETH9, _nativeCurrencyLabelBytes)
+	if err != nil {
+		return common.Address{}, nil, nil, err
+	}
+	return address, tx, &NonfungibleTokenPositionDescriptor{NonfungibleTokenPositionDescriptorCaller: NonfungibleTokenPositionDescriptorCaller{contract: contract}, NonfungibleTokenPositionDescriptorTransactor: NonfungibleTokenPositionDescriptorTransactor{contract: contract}, NonfungibleTokenPositionDescriptorFilterer: NonfungibleTokenPositionDescriptorFilterer{contract: contract}}, nil
+}
+```
+
+We'd like to be able to specify the new binary so here's the new function.
+
+```go
+// contracts/uniswapv3/NonfungibleTokenPositionDescriptor.sol#L47
+func DeployNonfungibleTokenPositionDescriptor(auth *bind.TransactOpts, backend bind.ContractBackend, _WETH9 common.Address, _nativeCurrencyLabelBytes [32]byte, nonfungibleTokenPositionDescriptorNewBin string) (common.Address, *types.Transaction, *NonfungibleTokenPositionDescriptor, error) {
+	parsed, err := NonfungibleTokenPositionDescriptorMetaData.GetAbi()
+	if err != nil {
+		return common.Address{}, nil, nil, err
+	}
+	if parsed == nil {
+		return common.Address{}, nil, nil, errors.New("GetABI returned nil")
+	}
+
+	address, tx, contract, err := bind.DeployContract(auth, *parsed, common.FromHex(nonfungibleTokenPositionDescriptorNewBin), backend, _WETH9, _nativeCurrencyLabelBytes)
+	if err != nil {
+		return common.Address{}, nil, nil, err
+	}
+	return address, tx, &NonfungibleTokenPositionDescriptor{NonfungibleTokenPositionDescriptorCaller: NonfungibleTokenPositionDescriptorCaller{contract: contract}, NonfungibleTokenPositionDescriptorTransactor: NonfungibleTokenPositionDescriptorTransactor{contract: contract}, NonfungibleTokenPositionDescriptorFilterer: NonfungibleTokenPositionDescriptorFilterer{contract: contract}}, nil
+}
+```
+
+5. Update the `NFTDescriptor` library address inside the Uniswap v3 load test module.
+
+```go
+// cmd/loadtest/uniswapv3.go#L50
+var oldNFTPositionLibraryAddress = common.HexToAddress("0x3212215ccbeb5e3a808373b805f5324cebe992af")
 ```

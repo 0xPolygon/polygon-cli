@@ -47,6 +47,8 @@ const (
 	MAX_TICK = -MIN_TICK
 )
 
+var oldNFTPositionLibraryAddress = common.HexToAddress("0x3212215ccbeb5e3a808373b805f5324cebe992af")
+
 type UniswapV3Addresses struct {
 	FactoryV3, Multicall, ProxyAdmin, TickLens, NFTDescriptor, NFTPositionDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker, QuoterV2, SwapRouter02 common.Address
 	WETH9                                                                                                                                                                               common.Address
@@ -216,11 +218,10 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	// bytecode. The problem is that we shut down this temporary chain so we redeploy the library
 	// when running the tests but the address has changed. This hack enables us to modify the
 	// bytecode of NonfungibleTokenPositionDescriptor to point to the new address of the library.
-	oldAddress := common.HexToAddress("0x3212215ccbeb5e3a808373b805f5324cebe992af")
-	oldAddressFmt := strings.TrimPrefix(strings.ToLower(oldAddress.String()), "0x")
+	oldAddressFmt := strings.TrimPrefix(strings.ToLower(oldNFTPositionLibraryAddress.String()), "0x")
 	newAddressFmt := strings.TrimPrefix(strings.ToLower(config.NFTDescriptorLib.Address.String()), "0x")
 	newNFTPositionDescriptorBin := strings.ReplaceAll(uniswapv3.NonfungibleTokenPositionDescriptorMetaData.Bin, oldAddressFmt, newAddressFmt)
-	log.Debug().Interface("oldAddress", oldAddress).Interface("newAddress", config.NFTDescriptorLib.Address).Msg("NFTPositionDescriptor bytecode updated with the new NFTDescriptor library address")
+	log.Debug().Interface("oldAddress", oldNFTPositionLibraryAddress).Interface("newAddress", config.NFTDescriptorLib.Address).Msg("NFTPositionDescriptor bytecode updated with the new NFTDescriptor library address")
 	if uniswapv3.NonfungibleTokenPositionDescriptorMetaData.Bin == newNFTPositionDescriptorBin {
 		return config, fmt.Errorf("the NFTPositionDescriptor bytecode has not been updated")
 	}
