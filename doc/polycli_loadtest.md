@@ -156,8 +156,8 @@ The codebase has a contract that used for load testing. It's written in Yul and 
       --uniswap-multicall-address string                       The address of a pre-deployed Multicall contract
       --uniswap-nft-descriptor-address string                  The address of a pre-deployed NFTDescriptor contract
       --uniswap-non-fungible-position-manager-address string   The address of a pre-deployed NonfungiblePositionManager contract
-      --uniswap-pool-token-a-address string                    The address of a pre-deployed ERC20 contract used in the Uniswap pool TokenA // TokenB
-      --uniswap-pool-token-b-address string                    The address of a pre-deployed ERC20 contract used in the Uniswap pool TokenA // TokenB
+      --uniswap-pool-token-a-address string                    The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1
+      --uniswap-pool-token-b-address string                    The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1
       --uniswap-proxy-admin-address string                     The address of a pre-deployed ProxyAdmin contract
       --uniswap-quoter-v2-address string                       The address of a pre-deployed QuoterV2 contract
       --uniswap-staker-address string                          The address of a pre-deployed Staker contract

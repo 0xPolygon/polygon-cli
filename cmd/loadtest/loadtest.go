@@ -506,30 +506,30 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Debug().Interface("config", uniswapV3Config.ToAddresses()).Msg("UniswapV3 deployment config")
 
 		tokensAToMint := big.NewInt(1_000_000_000_000_000_000)
-		var tokenAConfig contractConfig[uniswapv3.Swapper]
-		tokenAConfig, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "TokenA", "A", tokensAToMint, *ltp.FromETHAddress, ethcommon.HexToAddress(*ltp.UniswapPoolTokenA))
+		var token0Config contractConfig[uniswapv3.Swapper]
+		token0Config, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token0", "A", tokensAToMint, *ltp.FromETHAddress, ethcommon.HexToAddress(*ltp.UniswapPoolToken0))
 		if err != nil {
 			return nil
 		}
 
 		tokensBToMint := big.NewInt(1_000_000_000_000_000_000)
-		var tokenBConfig contractConfig[uniswapv3.Swapper]
-		tokenBConfig, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "TokenB", "B", tokensBToMint, *ltp.FromETHAddress, ethcommon.HexToAddress(*ltp.UniswapPoolTokenB))
+		var token1Config contractConfig[uniswapv3.Swapper]
+		token1Config, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token1", "B", tokensBToMint, *ltp.FromETHAddress, ethcommon.HexToAddress(*ltp.UniswapPoolToken1))
 		if err != nil {
 			return nil
 		}
 
 		fees := big.NewInt(3_000)
 		poolConfig := PoolConfig{Fees: fees}
-		if tokenAConfig.Address.Hex() < tokenBConfig.Address.Hex() {
-			poolConfig.TokenA = tokenAConfig
+		if token0Config.Address.Hex() < token1Config.Address.Hex() {
+			poolConfig.Token0 = token0Config
 			poolConfig.ReserveA = tokensAToMint
-			poolConfig.TokenB = tokenBConfig
+			poolConfig.Token1 = token1Config
 			poolConfig.ReserveB = tokensBToMint
 		} else {
-			poolConfig.TokenA = tokenBConfig
+			poolConfig.Token0 = token1Config
 			poolConfig.ReserveA = tokensBToMint
-			poolConfig.TokenB = tokenAConfig
+			poolConfig.Token1 = token0Config
 			poolConfig.ReserveB = tokensAToMint
 		}
 		if err = createPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, *ltp.FromETHAddress); err != nil {

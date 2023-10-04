@@ -90,7 +90,7 @@ func (c *UniswapV3Config) ToAddresses() UniswapV3Addresses {
 }
 
 type PoolConfig struct {
-	TokenA, TokenB     contractConfig[uniswapv3.Swapper]
+	Token0, Token1     contractConfig[uniswapv3.Swapper]
 	ReserveA, ReserveB *big.Int
 	Fees               *big.Int
 }
@@ -380,7 +380,7 @@ func loadTestUniswapV3(ctx context.Context, c *ethclient.Client, nonce uint64, u
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
-	err = swapTokenBForTokenA(tops, uniswapV3Config.SwapRouter02.contract, poolConfig, *ltp.FromETHAddress)
+	err = swapToken1ForToken0(tops, uniswapV3Config.SwapRouter02.contract, poolConfig, *ltp.FromETHAddress)
 	return
 }
 
@@ -526,8 +526,8 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	// https://uniswapv3book.com/docs/milestone_1/calculating-liquidity/
 	sqrtPriceX96 := computeSqrtPriceX96(poolConfig.ReserveA, poolConfig.ReserveB)
 	//sqrtPriceX96.SetString("79232123823359799118286999568", 10) // DEBUG with John's value
-	if _, err := uniswapV3Config.NonfungiblePositionManager.contract.CreateAndInitializePoolIfNecessary(tops, poolConfig.TokenA.Address, poolConfig.TokenB.Address, poolConfig.Fees, sqrtPriceX96); err != nil {
-		log.Error().Err(err).Msg("Unable to create and initialize the TokenA-TokenB pool")
+	if _, err := uniswapV3Config.NonfungiblePositionManager.contract.CreateAndInitializePoolIfNecessary(tops, poolConfig.Token0.Address, poolConfig.Token1.Address, poolConfig.Fees, sqrtPriceX96); err != nil {
+		log.Error().Err(err).Msg("Unable to create and initialize the Token0-Token1 pool")
 		return err
 	}
 	log.Debug().Msg("Pool created and initialized")
@@ -535,13 +535,13 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	// Retrieve the pool address.
 	var poolAddress common.Address
 	if err := blockUntilSuccessful(ctx, c, func() (err error) {
-		poolAddress, err = uniswapV3Config.FactoryV3.contract.GetPool(cops, poolConfig.TokenA.Address, poolConfig.TokenB.Address, poolConfig.Fees)
+		poolAddress, err = uniswapV3Config.FactoryV3.contract.GetPool(cops, poolConfig.Token0.Address, poolConfig.Token1.Address, poolConfig.Fees)
 		if poolAddress == (common.Address{}) {
-			return fmt.Errorf("TokenA-TokenB pool not deployed yet")
+			return fmt.Errorf("Token0-Token1 pool not deployed yet")
 		}
 		return
 	}); err != nil {
-		log.Error().Err(err).Msg("Unable to retrieve the address of the TokenA-TokenB pool")
+		log.Error().Err(err).Msg("Unable to retrieve the address of the Token0-Token1 pool")
 		return err
 	}
 
@@ -549,10 +549,10 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	var poolContract *uniswapv3.UniswapV3Pool
 	poolContract, err := uniswapv3.NewUniswapV3Pool(poolAddress, c)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to instantiate the TokenA-TokenB pool")
+		log.Error().Err(err).Msg("Unable to instantiate the Token0-Token1 pool")
 		return err
 	}
-	log.Debug().Interface("address", poolAddress).Msg("TokenA-TokenB pool instantiated")
+	log.Debug().Interface("address", poolAddress).Msg("Token0-Token1 pool instantiated")
 
 	// Get the block timestamp.
 	var blockNumber uint64
@@ -591,53 +591,53 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	log.Debug().Interface("tickLower", tickLower).Interface("tickUpper", tickUpper).Msg("DEBUG")
 
 	// DEBUG: start
-	var senderTokenABalance *big.Int
-	senderTokenABalance, err = poolConfig.TokenA.contract.BalanceOf(cops, recipient)
+	var senderToken0Balance *big.Int
+	senderToken0Balance, err = poolConfig.Token0.contract.BalanceOf(cops, recipient)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get sender's TokenA balance")
+		log.Error().Err(err).Msg("Unable to get sender's Token0 balance")
 		return err
 	}
-	log.Debug().Interface("address", recipient).Interface("balance", senderTokenABalance).Msg("DEBUG")
+	log.Debug().Interface("address", recipient).Interface("balance", senderToken0Balance).Msg("DEBUG")
 
-	var senderTokenBBalance *big.Int
-	senderTokenBBalance, err = poolConfig.TokenB.contract.BalanceOf(cops, recipient)
+	var senderToken1Balance *big.Int
+	senderToken1Balance, err = poolConfig.Token1.contract.BalanceOf(cops, recipient)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get sender's TokenB balance")
+		log.Error().Err(err).Msg("Unable to get sender's Token1 balance")
 		return err
 	}
-	log.Debug().Interface("address", recipient).Interface("balance", senderTokenBBalance).Msg("DEBUG")
+	log.Debug().Interface("address", recipient).Interface("balance", senderToken1Balance).Msg("DEBUG")
 
-	var nonfungiblePositionManagerTokenAAllowance *big.Int
-	nonfungiblePositionManagerTokenAAllowance, err = poolConfig.TokenA.contract.Allowance(cops, recipient, uniswapV3Config.NonfungiblePositionManager.Address)
+	var nonfungiblePositionManagerToken0Allowance *big.Int
+	nonfungiblePositionManagerToken0Allowance, err = poolConfig.Token0.contract.Allowance(cops, recipient, uniswapV3Config.NonfungiblePositionManager.Address)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get NonfungiblePositionManager's TokenA allowance")
+		log.Error().Err(err).Msg("Unable to get NonfungiblePositionManager's Token0 allowance")
 		return err
 	}
-	log.Debug().Interface("address", uniswapV3Config.NonfungiblePositionManager.Address).Interface("allowance", nonfungiblePositionManagerTokenAAllowance).Msg("DEBUG")
+	log.Debug().Interface("address", uniswapV3Config.NonfungiblePositionManager.Address).Interface("allowance", nonfungiblePositionManagerToken0Allowance).Msg("DEBUG")
 
-	var nonfungiblePositionManagerTokenBAllowance *big.Int
-	nonfungiblePositionManagerTokenBAllowance, err = poolConfig.TokenB.contract.Allowance(cops, recipient, uniswapV3Config.NonfungiblePositionManager.Address)
+	var nonfungiblePositionManagerToken1Allowance *big.Int
+	nonfungiblePositionManagerToken1Allowance, err = poolConfig.Token1.contract.Allowance(cops, recipient, uniswapV3Config.NonfungiblePositionManager.Address)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get NonfungiblePositionManager's TokenB allowance")
+		log.Error().Err(err).Msg("Unable to get NonfungiblePositionManager's Token1 allowance")
 		return err
 	}
-	log.Debug().Interface("address", uniswapV3Config.NonfungiblePositionManager.Address).Interface("allowance", nonfungiblePositionManagerTokenBAllowance).Msg("DEBUG")
+	log.Debug().Interface("address", uniswapV3Config.NonfungiblePositionManager.Address).Interface("allowance", nonfungiblePositionManagerToken1Allowance).Msg("DEBUG")
 
-	var swapRouterTokenAAllowance *big.Int
-	swapRouterTokenAAllowance, err = poolConfig.TokenA.contract.Allowance(cops, recipient, uniswapV3Config.SwapRouter02.Address)
+	var swapRouterToken0Allowance *big.Int
+	swapRouterToken0Allowance, err = poolConfig.Token0.contract.Allowance(cops, recipient, uniswapV3Config.SwapRouter02.Address)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get SwapRouter's TokenA allowance")
+		log.Error().Err(err).Msg("Unable to get SwapRouter's Token0 allowance")
 		return err
 	}
-	log.Debug().Interface("address", uniswapV3Config.SwapRouter02.Address).Interface("allowance", swapRouterTokenAAllowance).Msg("DEBUG")
+	log.Debug().Interface("address", uniswapV3Config.SwapRouter02.Address).Interface("allowance", swapRouterToken0Allowance).Msg("DEBUG")
 
-	var swapRouterTokenBAllowance *big.Int
-	swapRouterTokenBAllowance, err = poolConfig.TokenB.contract.Allowance(cops, recipient, uniswapV3Config.SwapRouter02.Address)
+	var swapRouterToken1Allowance *big.Int
+	swapRouterToken1Allowance, err = poolConfig.Token1.contract.Allowance(cops, recipient, uniswapV3Config.SwapRouter02.Address)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get SwapRouter's TokenB allowance")
+		log.Error().Err(err).Msg("Unable to get SwapRouter's Token1 allowance")
 		return err
 	}
-	log.Debug().Interface("address", uniswapV3Config.SwapRouter02.Address).Interface("allowance", swapRouterTokenBAllowance).Msg("DEBUG")
+	log.Debug().Interface("address", uniswapV3Config.SwapRouter02.Address).Interface("allowance", swapRouterToken1Allowance).Msg("DEBUG")
 
 	var maxLiquidityPerTick *big.Int
 	maxLiquidityPerTick, err = poolContract.MaxLiquidityPerTick(cops)
@@ -699,8 +699,8 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	// TODO: Understand why this call reverts.
 	// Tx example on mainnet: https://etherscan.io/tx/0x413049d98ebc1853c09f3d7b08692a17f3950b3384634b3010c22930df1a71b4
 	mintParams := uniswapv3.INonfungiblePositionManagerMintParams{
-		Token0: poolConfig.TokenA.Address,
-		Token1: poolConfig.TokenB.Address,
+		Token0: poolConfig.Token0.Address,
+		Token1: poolConfig.Token1.Address,
 		Fee:    poolConfig.Fees,
 		// We provide liquidity across the whole possible range (divisible by tick spacing).
 		// Otherwise, the call will revert.
@@ -717,10 +717,10 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	}
 	log.Debug().Interface("mintParams", mintParams).Msg("DEBUG")
 	if _, err = uniswapV3Config.NonfungiblePositionManager.contract.Mint(tops, mintParams); err != nil {
-		log.Error().Err(err).Msg("Unable to create liquidity for the TokenA-TokenB pool")
+		log.Error().Err(err).Msg("Unable to create liquidity for the Token0-Token1 pool")
 		return err
 	}
-	log.Debug().Msg("Liquidity provided to the TokenA-TokenB pool")
+	log.Debug().Msg("Liquidity provided to the Token0-Token1 pool")
 	return nil
 }
 
@@ -733,19 +733,19 @@ func computeSqrtPriceX96(reserveA, reserveB *big.Int) *big.Int {
 	return sqrtPriceX96
 }
 
-func swapTokenBForTokenA(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRouter02, poolConfig PoolConfig, recipient common.Address) error {
+func swapToken1ForToken0(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRouter02, poolConfig PoolConfig, recipient common.Address) error {
 	if _, err := swapRouter.ExactInputSingle(tops, uniswapv3.IV3SwapRouterExactInputSingleParams{
-		TokenIn:           poolConfig.TokenA.Address,
-		TokenOut:          poolConfig.TokenA.Address,
+		TokenIn:           poolConfig.Token0.Address,
+		TokenOut:          poolConfig.Token0.Address,
 		Fee:               poolConfig.Fees,
 		Recipient:         recipient,
 		AmountIn:          big.NewInt(1000),
 		AmountOutMinimum:  big.NewInt(0),
 		SqrtPriceLimitX96: big.NewInt(0),
 	}); err != nil {
-		log.Error().Err(err).Msg("Unable to swap TokenB for TokenA")
+		log.Error().Err(err).Msg("Unable to swap Token1 for Token0")
 		return err
 	}
-	log.Debug().Msg("Swapped TokenB for TokenA")
+	log.Debug().Msg("Swapped Token1 for Token0")
 	return nil
 }

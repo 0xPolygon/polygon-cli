@@ -63,7 +63,7 @@ type (
 		ERC20Address                                                                                                                                                                                                                 *string
 		ERC721Address                                                                                                                                                                                                                *string
 		UniswapFactoryV3, UniswapMulticall, UniswapProxyAdmin, UniswapTickLens, UniswapNFTDescriptor, UniswapUpgradeableProxy, UniswapNonfungiblePositionManager, UniswapMigrator, UniswapStaker, UniswapQuoterV2, UniswapSwapRouter *string
-		WETH9, UniswapPoolTokenA, UniswapPoolTokenB                                                                                                                                                                                  *string
+		WETH9, UniswapPoolToken0, UniswapPoolToken1                                                                                                                                                                                  *string
 		DelAddress                                                                                                                                                                                                                   *string
 		ContractCallNumberOfBlocksToWaitFor                                                                                                                                                                                          *uint64
 		ContractCallBlockInterval                                                                                                                                                                                                    *uint64
@@ -242,8 +242,8 @@ rpc - call random rpc methods`)
 	ltp.UniswapQuoterV2 = LoadtestCmd.PersistentFlags().String("uniswap-quoter-v2-address", "", "The address of a pre-deployed QuoterV2 contract")
 	ltp.UniswapSwapRouter = LoadtestCmd.PersistentFlags().String("uniswap-swap-router-address", "", "The address of a pre-deployed SwapRouter contract")
 	ltp.WETH9 = LoadtestCmd.PersistentFlags().String("weth9-address", "", "The address of a pre-deployed WETH9 contract")
-	ltp.UniswapPoolTokenA = LoadtestCmd.PersistentFlags().String("uniswap-pool-token-a-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool TokenA // TokenB")
-	ltp.UniswapPoolTokenB = LoadtestCmd.PersistentFlags().String("uniswap-pool-token-b-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool TokenA // TokenB")
+	ltp.UniswapPoolToken0 = LoadtestCmd.PersistentFlags().String("uniswap-pool-token-a-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
+	ltp.UniswapPoolToken1 = LoadtestCmd.PersistentFlags().String("uniswap-pool-token-b-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
 
 	ltp.ContractCallNumberOfBlocksToWaitFor = LoadtestCmd.PersistentFlags().Uint64("contract-call-nb-blocks-to-wait-for", 30, "The number of blocks to wait for before giving up on a contract deployment")
 	ltp.ContractCallBlockInterval = LoadtestCmd.PersistentFlags().Uint64("contract-call-block-interval", 1, "During deployment, this flag controls if we should check every block, every other block, or every nth block to determine that the contract has been deployed")
