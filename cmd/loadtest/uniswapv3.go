@@ -23,9 +23,10 @@ var uniswapV3LoadTestCmd = &cobra.Command{
 	Short: "Run Uniswapv3-like load test against an Eth/EVm style JSON-RPC endpoint.",
 	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		inputLoadTestParams.Mode = loadTestModeUniswapV3
+		// Override root command `mode` flag.
+		inputLoadTestParams.Modes = &[]string{"v3"}
 
-		log.Trace().Interface("subcmd params", inputLoadTestParams).Msg("Params")
+		// Run load test.
 		err := runLoadTest(cmd.Context())
 		if err != nil {
 			return err
@@ -61,9 +62,6 @@ type params struct {
 }
 
 func init() {
-	// Override root command `mode` flag.
-	inputLoadTestParams.Modes = &[]string{"v3"}
-
 	// Specify subcommand flags.
 	params := new(params)
 	params.UniswapFactoryV3 = uniswapV3LoadTestCmd.Flags().String("uniswap-factory-v3-address", "", "The address of a pre-deployed UniswapFactoryV3 contract")
@@ -82,18 +80,16 @@ func init() {
 	params.UniswapPoolToken0 = uniswapV3LoadTestCmd.Flags().String("uniswap-pool-token-0-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
 	params.UniswapPoolToken1 = uniswapV3LoadTestCmd.Flags().String("uniswap-pool-token-1-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
 	uniswapv3LoadTestParams = *params
-
-	log.Trace().Interface("params", inputLoadTestParams).Msg("Subcmd flags set")
 }
 
 const (
 	// The fee amount to enable for one basic point.
 	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/add-1bp-fee-tier.ts#L5
-	ONE_BP_FEE int64 = 100
+	ONE_BP_FEE = 100
 
 	// The spacing between ticks to be enforced for all pools with the given fee amount.
 	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/add-1bp-fee-tier.ts#L6
-	ONE_BP_TICK_SPACING int64 = 1
+	ONE_BP_TICK_SPACING = 1
 
 	// Time units.
 	ONE_MINUTE_SECONDS = 60
@@ -477,7 +473,7 @@ func deployOrInstantiateContract[T uniswapV3Contract](
 			log.Error().Err(err).Str("name", name).Msg("Unable to deploy contract")
 			return
 		}
-		log.Debug().Str("name", name).Interface("address", address).Msg("contract deployed")
+		log.Debug().Str("name", name).Interface("address", address).Msg("Contract deployed")
 	} else {
 		// Otherwise, instantiate the contract.
 		address = knownAddress
@@ -486,12 +482,12 @@ func deployOrInstantiateContract[T uniswapV3Contract](
 			log.Error().Err(err).Str("name", name).Msg("Unable to instantiate contract")
 			return
 		}
-		log.Debug().Str("name", name).Msg("contract instantiated")
+		log.Debug().Str("name", name).Msg("Contract instantiated")
 	}
 
 	// Check that the contract is deployed and ready.
 	if err = blockUntilSuccessful(ctx, c, func() error {
-		log.Trace().Str("contract", name).Msg("contract is not available yet")
+		log.Trace().Str("contract", name).Msg("Contract is not available yet")
 		return callFunc(contract)
 	}); err != nil {
 		return
@@ -655,7 +651,6 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 		return err
 	}
 	timestamp := int64(block.Time())
-	log.Debug().Interface("timestamp", timestamp).Msg("DEBUG")
 
 	// Compute the tick lower and upper for providing liquidity.
 	// The default tick spacing is set to 60 for the 0.3% fee tier and unfortunately,
@@ -667,102 +662,12 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 		log.Error().Err(err).Msg("Unable to get tick spacing")
 		return err
 	}
-	log.Debug().Interface("tickSpacing", tickSpacing).Msg("DEBUG")
 
 	// tickUpper = (MAX_TICK / tickSpacing) * tickSpacing
 	// tickLower = - tickUpper
 	tickUpper := new(big.Int).Div(big.NewInt(MAX_TICK), tickSpacing)
 	tickUpper.Mul(tickUpper, tickSpacing)
 	tickLower := new(big.Int).Neg(tickUpper)
-
-	// DEBUG: start
-	var senderToken0Balance *big.Int
-	senderToken0Balance, err = poolConfig.Token0.contract.BalanceOf(cops, recipient)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get sender's Token0 balance")
-		return err
-	}
-	log.Debug().Interface("address", recipient).Interface("balance", senderToken0Balance).Msg("DEBUG")
-
-	var senderToken1Balance *big.Int
-	senderToken1Balance, err = poolConfig.Token1.contract.BalanceOf(cops, recipient)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get sender's Token1 balance")
-		return err
-	}
-	log.Debug().Interface("address", recipient).Interface("balance", senderToken1Balance).Msg("DEBUG")
-
-	var nonfungiblePositionManagerToken0Allowance *big.Int
-	nonfungiblePositionManagerToken0Allowance, err = poolConfig.Token0.contract.Allowance(cops, recipient, uniswapV3Config.NonfungiblePositionManager.Address)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get NonfungiblePositionManager's Token0 allowance")
-		return err
-	}
-	log.Debug().Interface("address", uniswapV3Config.NonfungiblePositionManager.Address).Interface("allowance", nonfungiblePositionManagerToken0Allowance).Msg("DEBUG")
-
-	var nonfungiblePositionManagerToken1Allowance *big.Int
-	nonfungiblePositionManagerToken1Allowance, err = poolConfig.Token1.contract.Allowance(cops, recipient, uniswapV3Config.NonfungiblePositionManager.Address)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get NonfungiblePositionManager's Token1 allowance")
-		return err
-	}
-	log.Debug().Interface("address", uniswapV3Config.NonfungiblePositionManager.Address).Interface("allowance", nonfungiblePositionManagerToken1Allowance).Msg("DEBUG")
-
-	var swapRouterToken0Allowance *big.Int
-	swapRouterToken0Allowance, err = poolConfig.Token0.contract.Allowance(cops, recipient, uniswapV3Config.SwapRouter02.Address)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get SwapRouter's Token0 allowance")
-		return err
-	}
-	log.Debug().Interface("address", uniswapV3Config.SwapRouter02.Address).Interface("allowance", swapRouterToken0Allowance).Msg("DEBUG")
-
-	var swapRouterToken1Allowance *big.Int
-	swapRouterToken1Allowance, err = poolConfig.Token1.contract.Allowance(cops, recipient, uniswapV3Config.SwapRouter02.Address)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get SwapRouter's Token1 allowance")
-		return err
-	}
-	log.Debug().Interface("address", uniswapV3Config.SwapRouter02.Address).Interface("allowance", swapRouterToken1Allowance).Msg("DEBUG")
-
-	var maxLiquidityPerTick *big.Int
-	maxLiquidityPerTick, err = poolContract.MaxLiquidityPerTick(cops)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get the max liquidity per tick")
-		return err
-	}
-	log.Debug().Interface("maxLiquidityPerTick", maxLiquidityPerTick).Msg("DEBUG")
-
-	tick0, err := poolContract.Ticks(cops, slot0.Tick)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get tick0")
-		return err
-	}
-	log.Debug().Interface("tick0", tick0).Msg("DEBUG")
-
-	var token0 common.Address
-	token0, err = poolContract.Token0(cops)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get token0")
-		return err
-	}
-	log.Debug().Interface("token0", token0).Msg("DEBUG")
-
-	var token1 common.Address
-	token1, err = poolContract.Token1(cops)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get token1")
-		return err
-	}
-	log.Debug().Interface("token1", token1).Msg("DEBUG")
-
-	var fee *big.Int
-	fee, err = poolContract.Fee(cops)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get fee")
-		return err
-	}
-	log.Debug().Interface("fee", fee).Msg("DEBUG")
-	// DEBUG: end
 
 	// Provide liquidity.
 	// TODO: Understand why this call reverts.
