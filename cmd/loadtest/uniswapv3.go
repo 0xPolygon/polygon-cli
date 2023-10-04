@@ -525,7 +525,6 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	// No need to check if the pool was already created or initialized, the contract handles every scenario.
 	// https://uniswapv3book.com/docs/milestone_1/calculating-liquidity/
 	sqrtPriceX96 := computeSqrtPriceX96(poolConfig.ReserveA, poolConfig.ReserveB)
-	//sqrtPriceX96.SetString("79232123823359799118286999568", 10) // DEBUG with John's value
 	if _, err := uniswapV3Config.NonfungiblePositionManager.contract.CreateAndInitializePoolIfNecessary(tops, poolConfig.Token0.Address, poolConfig.Token1.Address, poolConfig.Fees, sqrtPriceX96); err != nil {
 		log.Error().Err(err).Msg("Unable to create and initialize the Token0-Token1 pool")
 		return err
@@ -553,6 +552,26 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 		return err
 	}
 	log.Debug().Interface("address", poolAddress).Msg("Token0-Token1 pool instantiated")
+
+	// Get pool state.
+	var slot0 slot
+	slot0, err = poolContract.Slot0(cops)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get Token0-Token1's slot0")
+		return err
+	}
+	var liquidity *big.Int
+	liquidity, err = poolContract.Liquidity(cops)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get Token0-Token1's liquidity")
+		return err
+	}
+	log.Debug().Interface("slot0", slot0).Interface("liquidity", liquidity).Msg("Token0-Token1 pool state")
+
+	// DEBUG: Wait for 5 blocks.
+	log.Debug().Msg("Waiting for 5 blocks to be mined...")
+	time.Sleep(5 * 2 * time.Second)
+	log.Debug().Msg("Waiting over")
 
 	// Get the block timestamp.
 	var blockNumber uint64
@@ -588,7 +607,6 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	tickUpper := new(big.Int).Div(big.NewInt(MAX_TICK), tickSpacing)
 	tickUpper.Mul(tickUpper, tickSpacing)
 	tickLower := new(big.Int).Neg(tickUpper)
-	log.Debug().Interface("tickLower", tickLower).Interface("tickUpper", tickUpper).Msg("DEBUG")
 
 	// DEBUG: start
 	var senderToken0Balance *big.Int
@@ -647,28 +665,12 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	}
 	log.Debug().Interface("maxLiquidityPerTick", maxLiquidityPerTick).Msg("DEBUG")
 
-	var slot0 slot
-	slot0, err = poolContract.Slot0(cops)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get slot0")
-		return err
-	}
-	log.Debug().Interface("slot0", slot0).Msg("DEBUG")
-
 	tick0, err := poolContract.Ticks(cops, slot0.Tick)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get tick0")
 		return err
 	}
 	log.Debug().Interface("tick0", tick0).Msg("DEBUG")
-
-	var liquidity *big.Int
-	liquidity, err = poolContract.Liquidity(cops)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get liquidity")
-		return err
-	}
-	log.Debug().Interface("liquidity", liquidity).Msg("DEBUG")
 
 	var token0 common.Address
 	token0, err = poolContract.Token0(cops)
@@ -712,11 +714,14 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 		Amount0Min: big.NewInt(0),
 		Amount1Min: big.NewInt(0),
 		Recipient:  recipient,
-		//Deadline:       big.NewInt(timestamp + 10 * 60), // 10 minutes to execute the swap.
-		Deadline: big.NewInt(1759474606), // in 2 years (2025-10-03)
+		Deadline:   big.NewInt(timestamp + 10*60), // 10 minutes to execute the swap.
+		//Deadline: big.NewInt(1759474606), // in 2 years (2025-10-03)
 	}
-	log.Debug().Interface("mintParams", mintParams).Msg("DEBUG")
-	if _, err = uniswapV3Config.NonfungiblePositionManager.contract.Mint(tops, mintParams); err != nil {
+	log.Debug().Interface("params", mintParams).Msg("DEBUG")
+	if err := blockUntilSuccessful(ctx, c, func() (err error) {
+		_, err = uniswapV3Config.NonfungiblePositionManager.contract.Mint(tops, mintParams)
+		return
+	}); err != nil {
 		log.Error().Err(err).Msg("Unable to create liquidity for the Token0-Token1 pool")
 		return err
 	}
