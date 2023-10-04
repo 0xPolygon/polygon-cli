@@ -2,6 +2,7 @@ package loadtest
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"math/big"
 	"net/url"
@@ -53,12 +54,14 @@ const (
 var (
 	oldNFTPositionLibraryAddress = common.HexToAddress("0xf7012159bf761b312153e8c8d176932fe9aaa7ea")
 	uniswapv3LoadTestParams      params
+	//go:embed uniswapv3Usage.md
+	uniswapv3Usage string
 )
 
 var uniswapV3LoadTestCmd = &cobra.Command{
 	Use:   "uniswapv3 url",
 	Short: "Run Uniswapv3-like load test against an Eth/EVm style JSON-RPC endpoint.",
-	Long:  usage,
+	Long:  uniswapv3Usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Override root command `mode` flag.
 		inputLoadTestParams.Modes = &[]string{"v3"}

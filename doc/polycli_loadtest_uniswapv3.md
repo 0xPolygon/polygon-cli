@@ -19,85 +19,35 @@ polycli loadtest uniswapv3 url [flags]
 
 ## Usage
 
-The `loadtest` tool is meant to generate various types of load against RPC end points. It leverages the [`ethclient`](https://pkg.go.dev/github.com/ethereum/go-ethereum/ethclient) library Go Ethereum to interact with the blockchain.x
+The `uniswapv3` command is a subcommand of the `loadtest` tool. It is meant to generate UniswapV3-like load against RPC endpoints. You can either chose to deploy the full UniswapV3 contract suite or use pre-deployed contract to speed up the process.
 
 ```bash
-$ polycli wallet inspect  --mnemonic "code code code code code code code code code code code quality" --addresses 1
+# Deploy the UniswapV3 contracts and run some swaps.
+$ polycli loadtest uniswapv3 http://localhost:8545
+...
+
+# Same thing with pre-deployed contracts.
+$ polycli loadtest uniswapv3 http://localhost:8545 \
+  --uniswap-factory-v3-address 0xc5f46e00822c828e1edcc12cf98b5a7b50c9e81b \
+  --uniswap-migrator-address 0x24951726c5d22a3569d5474a1e74734a09046cd9 \
+  --uniswap-multicall-address 0x0e695f36ade2a12abea51622e80f105e125d1d6e \
+  --uniswap-nft-descriptor-lib-address 0x23050ec03bb24308c788300428a8f9c247f28b25 \
+  --uniswap-nft-position-descriptor-address 0xea43847a98b671211b0e412849b69bbd7d53fd00 \
+  --uniswap-non-fungible-position-manager-address 0x58eabc23408fb7896b7ce943828cc00044786449 \
+  --uniswap-proxy-admin-address 0xdba55eb96288eac85974376b25b3c3f3d67399b7 \
+  --uniswap-quoter-v2-address 0x91464a00c4aae9dca6d503a2c24b1dfb8c279e50 \
+  --uniswap-staker-address 0xc87383ece9ee3ad3f5158998c4fc04833ba1336e \
+  --uniswap-swap-router-address 0x46096eb627d30125f9eaaeefeecaa4e237a04a97 \
+  --uniswap-tick-lens-address 0xc73dfb5055874cc7b1cf06ae83f7fe8f6facdb19 \
+  --uniswap-upgradeable-proxy-address 0x28656635b0ecd600801600475d61e3ec1534de6e \
+  --weth9-address 0x5570d4fd7cce73f0135536d83b8d49e6b77bb76c \
+  --uniswap-pool-token-0-address 0x1ce270d0380fbbead12371286aff578a1227d1d7 \
+  --uniswap-pool-token-1-address 0x060f7db3146f3d6748822fb4c69489a04b5f3278
 ```
 
-The `--mode` flag is important for this command.
+### UniswapV3 contracts
 
-- `t`/`transaction` will perform ETH transfers. This is the simplest
-  and cheapest transaction that can be performed.
-- `d`/`deploy` will deploy the load testing contract over and over
-  again.
-- `c`/`call` will call random opcodes in our load test contract. The
-  random function that is called will be repeatedly called in a loop
-  based on the number of iterations from the `iterations` flag
-- `f`/`function` works the same way as `call` mode but instead of
-  calling random op codes, the opcode can be specified with the `-f`
-  flag. If you want to call `LOG4` you would pass `-f 164` which is
-  the opcode for `LOG4`.
-- `2`/`erc20` will run an ERC20 transfer test. The process initializes
-  by minting a large amount of tokens then transferring it in small
-  amounts. Each transaction is a single transfer.
-- `7`/`erc721` will run an ERC721 mint test which will mint an NFT
-  over and over again. The `iterations` flag here can be used to
-  control if we are mint 1 NFT or many.
-- `i`/`inc`/`increment` will call the increment function repeatedly on
-  the load test contract. It's a minimal example of a contract call
-  that will require an update to a contract's storage.
-- `s`/`store` is used to store random data in the smart contract
-  storage. The amount of data stored per transaction is controlled
-  with the `byte-count` flag.
-- `P`/`precompiles` will randomly call the commonly implemented
-  precompiled functions. This functions the same way as `call` mode
-  except it's hitting precompiles rather than opcodes.
-- `p`/`precompile` will call a specific precompile in a loop. This
-  works the same way as `function` mode except rather than specifying
-  an opcode, you're specifying a precompile. E.g to call `ECRECOVER`
-  you would pass `-f 1` because it's the contract at address `0x01`
-- `R`/`recall` will attempt to replay all of the transactions from the
-  previous blocks. You can use `--recall-blocks` to specify how many
-  previous blocks should be used to seed transaction history. It's
-  expected that many of the transactions in this mode would fail.
-- `r`/`random` will call any of the other modes randomly. This mode
-  shouldn't be used in combination with other modes. Ideally this is a
-  good way to generate a lot of random activity on a test network.
-- `rpc` is a unique mode that won't just simulate transactions, it
-  will simulate RPC traffic (e.g. calls to get transaction receipt or
-  filter logs). This is meant to stress test RPC servers rather than
-  full blockchain networks. The approach is similar to `recall` mode
-  where we'll fetch some recent blocks and then use that data to
-  generate a variety of calls to the RPC server.
-
-The default private key is: `42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa`. We can use `wallet inspect` to get more information about this address, in particular its `ETHAddress` if you want to check balance or pre-mine value for this particular account.
-
-Here is a simple example that runs 1000 requests at a max rate of 1 request per second against the http rpc endpoint on localhost. It's running in transaction mode so it will perform simple transactions send to the default address.
-
-```bash
-$ polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 1000 --rate-limit 1 --mode t http://localhost:8888
-```
-
-Another example, a bit slower, and that specifically calls the [LOG4](https://www.evm.codes/#a4) function in the load test contract in a loop for 25,078 iterations. That number was picked specifically to require almost all of the gas for a single transaction.
-
-```bash
-$ polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 50 --rate-limit 0.5  --mode f --function 164 --iterations 25078 http://private.validator-001.devnet02.pos-v3.polygon.private:8545
-```
-
-### Load Test Contract
-
-The codebase has a contract that used for load testing. It's written in Yul and Solidity. The workflow for modifying this contract is.
-
-1. Make changes to <file:contracts/LoadTester.sol>
-2. Compile the contracts:
-   - `$ solc LoadTester.sol --bin --abi -o . --overwrite`
-3. Run `abigen`
-   - `$ abigen --abi LoadTester.abi --pkg contracts --type LoadTester --bin LoadTester.bin --out loadtester.go`
-4. Run the loadtester to enure it deploys and runs successfully
-   - `$ polycli loadtest --verbosity 700 http://127.0.0.1:8541`
-
-```
+Contracts are cloned from the different Uniswap repositories, compiled with a specific version of `solc` and go bindings are generated using `abigen`. To learn more about this process, make sure to check out `contracts/uniswapv3/README.md`.
 
 ## Flags
 
@@ -108,7 +58,7 @@ The codebase has a contract that used for load testing. It's written in Yul and 
       --uniswap-multicall-address string                       The address of a pre-deployed Multicall contract
       --uniswap-nft-descriptor-lib-address string              The address of a pre-deployed NFTDescriptor library contract
       --uniswap-nft-position-descriptor-address string         The address of a pre-deployed NFTPositionDescriptor contract
-      --uniswap-non-fungible-position-manager-address string   The address of a pre-deployed NonfungiblePositionManager contract
+      --uniswap-non-fungible-position-manager-address string   The address of a pre-deployed NFPositionManager contract
       --uniswap-pool-token-0-address string                    The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1
       --uniswap-pool-token-1-address string                    The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1
       --uniswap-proxy-admin-address string                     The address of a pre-deployed ProxyAdmin contract
