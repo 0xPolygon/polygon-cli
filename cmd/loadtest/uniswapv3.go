@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -47,8 +48,8 @@ const (
 )
 
 type UniswapV3Addresses struct {
-	FactoryV3, Multicall, ProxyAdmin, TickLens, NFPositionDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker, QuoterV2, SwapRouter02 common.Address
-	WETH9                                                                                                                                                               common.Address
+	FactoryV3, Multicall, ProxyAdmin, TickLens, NFTDescriptor, NFTPositionDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker, QuoterV2, SwapRouter02 common.Address
+	WETH9                                                                                                                                                                               common.Address
 }
 
 type UniswapV3Config struct {
@@ -56,7 +57,8 @@ type UniswapV3Config struct {
 	Multicall                   contractConfig[uniswapv3.UniswapInterfaceMulticall]
 	ProxyAdmin                  contractConfig[uniswapv3.ProxyAdmin]
 	TickLens                    contractConfig[uniswapv3.TickLens]
-	NFPositionDescriptor        contractConfig[uniswapv3.NonfungibleTokenPositionDescriptor]
+	NFTDescriptorLib            contractConfig[uniswapv3.NFTDescriptor]
+	NFTPositionDescriptor       contractConfig[uniswapv3.NonfungibleTokenPositionDescriptor]
 	TransparentUpgradeableProxy contractConfig[uniswapv3.TransparentUpgradeableProxy]
 	NonfungiblePositionManager  contractConfig[uniswapv3.NonfungiblePositionManager]
 	Migrator                    contractConfig[uniswapv3.V3Migrator]
@@ -73,7 +75,8 @@ func (c *UniswapV3Config) ToAddresses() UniswapV3Addresses {
 		Multicall:                   c.Multicall.Address,
 		ProxyAdmin:                  c.ProxyAdmin.Address,
 		TickLens:                    c.TickLens.Address,
-		NFPositionDescriptor:        c.NFPositionDescriptor.Address,
+		NFTDescriptor:               c.NFTDescriptorLib.Address,
+		NFTPositionDescriptor:       c.NFTPositionDescriptor.Address,
 		TransparentUpgradeableProxy: c.TransparentUpgradeableProxy.Address,
 		NonfungiblePositionManager:  c.NonfungiblePositionManager.Address,
 		Migrator:                    c.Migrator.Address,
@@ -96,7 +99,7 @@ type contractConfig[T uniswapV3Contract] struct {
 }
 
 type uniswapV3Contract interface {
-	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.WETH9 | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker | uniswapv3.QuoterV2 | uniswapv3.SwapRouter02 | uniswapv3.Swapper
+	uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.WETH9 | uniswapv3.NFTDescriptor | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker | uniswapv3.QuoterV2 | uniswapv3.SwapRouter02 | uniswapv3.Swapper
 }
 
 type slot struct {
@@ -191,15 +194,44 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 7. Deploy NonfungibleTokenPositionDescriptor.
-	// Note that we previously deployed the NFTDescriptor library during the build process.
-	// TODO: Deploy NFTDescriptorLib?
-	config.NFPositionDescriptor.Address, config.NFPositionDescriptor.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "NFPositionDescriptor", knownAddresses.NFPositionDescriptor,
+	// 7. Deploy NFTDescriptor library.
+	config.NFTDescriptorLib.Address, _, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, "NFTDescriptor", knownAddresses.NFTDescriptor,
+		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.NFTDescriptor, error) {
+			return uniswapv3.DeployNFTDescriptor(tops, c)
+		},
+		uniswapv3.NewNFTDescriptor,
+		func(contract *uniswapv3.NFTDescriptor) (err error) {
+			return nil
+		},
+	)
+	if err != nil {
+		return config, err
+	}
+
+	// TODO: This is a hack, it should be done differently.
+	// The NonfungibleTokenPositionDescriptor contract relies on the NFTDescriptor library.
+	// When compiling NonfungibleTokenPositionDescriptor, we need to deploy the NFTDescriptor
+	// library to a temporary chain first and link its address in NonfungibleTokenPositionDescriptor
+	// bytecode. The problem is that we shut down this temporary chain so we redeploy the library
+	// when running the tests but the address has changed. This hack enables us to modify the
+	// bytecode of NonfungibleTokenPositionDescriptor to point to the new address of the library.
+	oldAddress := common.HexToAddress("0x3212215ccbeb5e3a808373b805f5324cebe992af")
+	oldAddressFmt := strings.TrimPrefix(strings.ToLower(oldAddress.String()), "0x")
+	newAddressFmt := strings.TrimPrefix(strings.ToLower(config.NFTDescriptorLib.Address.String()), "0x")
+	newNFTPositionDescriptorBin := strings.ReplaceAll(uniswapv3.NonfungibleTokenPositionDescriptorMetaData.Bin, oldAddressFmt, newAddressFmt)
+	log.Debug().Interface("oldAddress", oldAddress).Interface("newAddress", config.NFTDescriptorLib.Address).Msg("NFTPositionDescriptor bytecode updated with the new NFTDescriptor library address")
+	if uniswapv3.NonfungibleTokenPositionDescriptorMetaData.Bin == newNFTPositionDescriptorBin {
+		return config, fmt.Errorf("the NFTPositionDescriptor bytecode has not been updated")
+	}
+
+	// 8. Deploy NonfungibleTokenPositionDescriptor.
+	config.NFTPositionDescriptor.Address, config.NFTPositionDescriptor.contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops, "NFTPositionDescriptor", knownAddresses.NFTPositionDescriptor,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.NonfungibleTokenPositionDescriptor, error) {
 			var nativeCurrencyLabelBytes [32]byte
 			copy(nativeCurrencyLabelBytes[:], "ETH")
-			return uniswapv3.DeployNonfungibleTokenPositionDescriptor(tops, c, config.WETH9.Address, nativeCurrencyLabelBytes)
+			return uniswapv3.DeployNonfungibleTokenPositionDescriptor(tops, c, config.WETH9.Address, nativeCurrencyLabelBytes, newNFTPositionDescriptorBin)
 		},
 		uniswapv3.NewNonfungibleTokenPositionDescriptor,
 		func(contract *uniswapv3.NonfungibleTokenPositionDescriptor) (err error) {
@@ -211,13 +243,13 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 8. Deploy TransparentUpgradeableProxy.
+	// 9. Deploy TransparentUpgradeableProxy.
 	config.TransparentUpgradeableProxy.Address, config.TransparentUpgradeableProxy.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "TransparentUpgradeableProxy", knownAddresses.TransparentUpgradeableProxy,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.TransparentUpgradeableProxy, error) {
 			var data []byte
 			copy(data[:], "0x")
-			return uniswapv3.DeployTransparentUpgradeableProxy(tops, c, config.NFPositionDescriptor.Address, config.ProxyAdmin.Address, data)
+			return uniswapv3.DeployTransparentUpgradeableProxy(tops, c, config.NFTPositionDescriptor.Address, config.ProxyAdmin.Address, data)
 		},
 		uniswapv3.NewTransparentUpgradeableProxy,
 		func(contract *uniswapv3.TransparentUpgradeableProxy) (err error) {
@@ -237,7 +269,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 9. Deploy NonfungiblePositionManager.
+	// 10. Deploy NonfungiblePositionManager.
 	config.NonfungiblePositionManager.Address, config.NonfungiblePositionManager.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "NonfungiblePositionManager", knownAddresses.NonfungiblePositionManager,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.NonfungiblePositionManager, error) {
@@ -253,7 +285,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 10. Deploy Migrator.
+	// 11. Deploy Migrator.
 	config.Migrator.Address, config.Migrator.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "V3Migrator", knownAddresses.Migrator,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.V3Migrator, error) {
@@ -269,12 +301,12 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 11. Set Factory owner.
+	// 12. Set Factory owner.
 	if err = setFactoryOwner(config.FactoryV3.contract, tops, cops, ownerAddress); err != nil {
 		return config, err
 	}
 
-	// 12. Deploy Staker.
+	// 13. Deploy Staker.
 	config.Staker.Address, config.Staker.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "Staker", knownAddresses.Staker,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.UniswapV3Staker, error) {
@@ -290,7 +322,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 13. Deploy QuoterV2.
+	// 14. Deploy QuoterV2.
 	config.QuoterV2.Address, config.QuoterV2.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "QuoterV2", knownAddresses.QuoterV2,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.QuoterV2, error) {
@@ -306,7 +338,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 14. Deploy SwapRouter02.
+	// 15. Deploy SwapRouter02.
 	config.SwapRouter02.Address, config.SwapRouter02.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "SwapRouter02", knownAddresses.SwapRouter02,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.SwapRouter02, error) {
@@ -324,7 +356,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 15. Transfer ProxyAdmin ownership.
+	// 16. Transfer ProxyAdmin ownership.
 	if err = transferProxyAdminOwnership(config.ProxyAdmin.contract, tops, cops, ownerAddress); err != nil {
 		return config, err
 	}

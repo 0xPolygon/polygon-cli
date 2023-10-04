@@ -487,7 +487,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		Multicall:                   ethcommon.HexToAddress(*ltp.UniswapMulticall),
 		ProxyAdmin:                  ethcommon.HexToAddress(*ltp.UniswapProxyAdmin),
 		TickLens:                    ethcommon.HexToAddress(*ltp.UniswapTickLens),
-		NFPositionDescriptor:        ethcommon.HexToAddress(*ltp.UniswapNFTDescriptor),
+		NFTPositionDescriptor:       ethcommon.HexToAddress(*ltp.UniswapNFTDescriptor),
 		TransparentUpgradeableProxy: ethcommon.HexToAddress(*ltp.UniswapUpgradeableProxy),
 		NonfungiblePositionManager:  ethcommon.HexToAddress(*ltp.UniswapNonfungiblePositionManager),
 		Migrator:                    ethcommon.HexToAddress(*ltp.UniswapMigrator),
