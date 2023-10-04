@@ -623,6 +623,22 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	}
 	log.Debug().Interface("address", uniswapV3Config.NonfungiblePositionManager.Address).Interface("allowance", nonfungiblePositionManagerTokenBAllowance).Msg("DEBUG")
 
+	var swapRouterTokenAAllowance *big.Int
+	swapRouterTokenAAllowance, err = poolConfig.TokenA.contract.Allowance(cops, recipient, uniswapV3Config.SwapRouter02.Address)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get SwapRouter's TokenA allowance")
+		return err
+	}
+	log.Debug().Interface("address", uniswapV3Config.SwapRouter02.Address).Interface("allowance", swapRouterTokenAAllowance).Msg("DEBUG")
+
+	var swapRouterTokenBAllowance *big.Int
+	swapRouterTokenBAllowance, err = poolConfig.TokenB.contract.Allowance(cops, recipient, uniswapV3Config.SwapRouter02.Address)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get SwapRouter's TokenB allowance")
+		return err
+	}
+	log.Debug().Interface("address", uniswapV3Config.SwapRouter02.Address).Interface("allowance", swapRouterTokenBAllowance).Msg("DEBUG")
+
 	var maxLiquidityPerTick *big.Int
 	maxLiquidityPerTick, err = poolContract.MaxLiquidityPerTick(cops)
 	if err != nil {
