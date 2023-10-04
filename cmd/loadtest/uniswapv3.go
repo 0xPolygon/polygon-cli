@@ -315,11 +315,11 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 9. Deploy TransparentUpgradeableProxy.
+	// 8. Deploy TransparentUpgradeableProxy.
 	config.TransparentUpgradeableProxy.Address, config.TransparentUpgradeableProxy.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "TransparentUpgradeableProxy", knownAddresses.TransparentUpgradeableProxy,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.TransparentUpgradeableProxy, error) {
-			data := []byte("0x")
+			var data []byte // TODO: does the deployment issue comes from there??
 			return uniswapv3.DeployTransparentUpgradeableProxy(tops, c, config.NFTPositionDescriptor.Address, config.ProxyAdmin.Address, data)
 		},
 		uniswapv3.NewTransparentUpgradeableProxy,
@@ -340,7 +340,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 10. Deploy NFPositionManager.
+	// 9. Deploy NFPositionManager.
 	config.NFPositionManager.Address, config.NFPositionManager.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "NFPositionManager", knownAddresses.NFPositionManager,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.NFPositionManager, error) {
@@ -356,7 +356,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 11. Deploy Migrator.
+	// 10. Deploy Migrator.
 	config.Migrator.Address, config.Migrator.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "V3Migrator", knownAddresses.Migrator,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.V3Migrator, error) {
@@ -372,12 +372,12 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 12. Set Factory owner.
+	// 11. Set Factory owner.
 	if err = setFactoryOwner(config.FactoryV3.contract, tops, cops, ownerAddress); err != nil {
 		return config, err
 	}
 
-	// 13. Deploy Staker.
+	// 12. Deploy Staker.
 	config.Staker.Address, config.Staker.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "Staker", knownAddresses.Staker,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.UniswapV3Staker, error) {
@@ -393,7 +393,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 14. Deploy QuoterV2.
+	// 13. Deploy QuoterV2.
 	config.QuoterV2.Address, config.QuoterV2.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "QuoterV2", knownAddresses.QuoterV2,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.QuoterV2, error) {
@@ -409,7 +409,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 15. Deploy SwapRouter02.
+	// 14. Deploy SwapRouter02.
 	config.SwapRouter02.Address, config.SwapRouter02.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "SwapRouter02", knownAddresses.SwapRouter02,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.SwapRouter02, error) {
@@ -427,7 +427,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// 16. Transfer ProxyAdmin ownership.
+	// 15. Transfer ProxyAdmin ownership.
 	if err = transferProxyAdminOwnership(config.ProxyAdmin.contract, tops, cops, ownerAddress); err != nil {
 		return config, err
 	}
