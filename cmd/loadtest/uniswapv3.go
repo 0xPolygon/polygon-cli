@@ -279,31 +279,33 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return config, err
 	}
 
-	// TODO: This is a hack, it should be done differently.
-	// The NFTPositionDescriptor contract relies on the NFTDescriptor library.
-	// When compiling NFTPositionDescriptor, we need to deploy the NFTDescriptor
-	// library to a temporary chain first and link its address in NFTPositionDescriptor
-	// bytecode. The problem is that we shut down this temporary chain so we redeploy the library
-	// when running the load tests but the address of the library has changed. This hack enables us
-	// to modify the bytecode of NFTPositionDescriptor to point to the new address of
-	// the library.
-	oldAddressFmt := strings.TrimPrefix(strings.ToLower(oldNFTPositionLibraryAddress.String()), "0x")
-	newAddressFmt := strings.TrimPrefix(strings.ToLower(config.NFTDescriptorLib.Address.String()), "0x")
-	newNFTPositionDescriptorBin := strings.ReplaceAll(uniswapv3.NFTPositionDescriptorMetaData.Bin, oldAddressFmt, newAddressFmt)
-	if uniswapv3.NFTPositionDescriptorMetaData.Bin == newNFTPositionDescriptorBin {
-		err = fmt.Errorf("the NFTPositionDescriptor bytecode has not been updated")
-		log.Error().Err(err).Msg("NFTPositionDescriptor bytecode has not been updated")
-		return config, err
-	}
-	log.Debug().Interface("oldAddress", oldNFTPositionLibraryAddress).Interface("newAddress", config.NFTDescriptorLib.Address).Msg("NFTPositionDescriptor bytecode updated with the new NFTDescriptor library address")
-
 	// 7. Deploy NFTPositionDescriptor.
 	config.NFTPositionDescriptor.Address, config.NFTPositionDescriptor.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "NFTPositionDescriptor", knownAddresses.NFTPositionDescriptor,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.NFTPositionDescriptor, error) {
+			// Update NFTPositionDescriptor bytecode.
+			// TODO: This is a hack, it should be done differently.
+			// The NFTPositionDescriptor contract relies on the NFTDescriptor library.
+			// When compiling NFTPositionDescriptor, we need to deploy the NFTDescriptor
+			// library to a temporary chain first and link its address in NFTPositionDescriptor
+			// bytecode. The problem is that we shut down this temporary chain so we redeploy the library
+			// when running the load tests but the address of the library has changed. This hack enables us
+			// to modify the bytecode of NFTPositionDescriptor to point to the new address of
+			// the library.
+			oldAddressFmt := strings.TrimPrefix(strings.ToLower(oldNFTPositionLibraryAddress.String()), "0x")
+			newAddressFmt := strings.TrimPrefix(strings.ToLower(config.NFTDescriptorLib.Address.String()), "0x")
+			newNFTPositionDescriptorBytecode := strings.ReplaceAll(uniswapv3.NFTPositionDescriptorMetaData.Bin, oldAddressFmt, newAddressFmt)
+			if uniswapv3.NFTPositionDescriptorMetaData.Bin == newNFTPositionDescriptorBytecode {
+				err = fmt.Errorf("the NFTPositionDescriptor bytecode has not been updated")
+				log.Error().Err(err).Msg("NFTPositionDescriptor bytecode has not been updated")
+				return common.Address{}, nil, nil, err
+			}
+			log.Debug().Interface("oldAddress", oldNFTPositionLibraryAddress).Interface("newAddress", config.NFTDescriptorLib.Address).Msg("NFTPositionDescriptor bytecode updated with the new NFTDescriptor library address")
+
+			// Deploy contract.
 			var nativeCurrencyLabelBytes [32]byte
 			copy(nativeCurrencyLabelBytes[:], "ETH")
-			return uniswapv3.DeployNFTPositionDescriptor(tops, c, config.WETH9.Address, nativeCurrencyLabelBytes, newNFTPositionDescriptorBin)
+			return uniswapv3.DeployNFTPositionDescriptor(tops, c, config.WETH9.Address, nativeCurrencyLabelBytes, newNFTPositionDescriptorBytecode)
 		},
 		uniswapv3.NewNFTPositionDescriptor,
 		func(contract *uniswapv3.NFTPositionDescriptor) (err error) {

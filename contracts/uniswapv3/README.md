@@ -78,7 +78,7 @@ We'd like to be able to specify the new binary so here's the new function.
 
 ```go
 // contracts/uniswapv3/NFTPositionDescriptor.sol#L47
-func DeployNFTPositionDescriptor(auth *bind.TransactOpts, backend bind.ContractBackend, _WETH9 common.Address, _nativeCurrencyLabelBytes [32]byte, nonfungibleTokenPositionDescriptorNewBin string) (common.Address, *types.Transaction, *NFTPositionDescriptor, error) {
+func DeployNFTPositionDescriptor(auth *bind.TransactOpts, backend bind.ContractBackend, _WETH9 common.Address, _nativeCurrencyLabelBytes [32]byte, nonfungibleTokenPositionDescriptorNewBytecode string) (common.Address, *types.Transaction, *NFTPositionDescriptor, error) {
 	parsed, err := NFTPositionDescriptorMetaData.GetAbi()
 	if err != nil {
 		return common.Address{}, nil, nil, err
@@ -87,7 +87,7 @@ func DeployNFTPositionDescriptor(auth *bind.TransactOpts, backend bind.ContractB
 		return common.Address{}, nil, nil, errors.New("GetABI returned nil")
 	}
 
-	address, tx, contract, err := bind.DeployContract(auth, *parsed, common.FromHex(nonfungibleTokenPositionDescriptorNewBin), backend, _WETH9, _nativeCurrencyLabelBytes)
+	address, tx, contract, err := bind.DeployContract(auth, *parsed, common.FromHex(nonfungibleTokenPositionDescriptorNewBytecode), backend, _WETH9, _nativeCurrencyLabelBytes)
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
