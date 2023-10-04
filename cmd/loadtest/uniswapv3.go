@@ -18,6 +18,43 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	// The fee amount to enable for one basic point.
+	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/add-1bp-fee-tier.ts#L5
+	ONE_BP_FEE = 100
+
+	// The spacing between ticks to be enforced for all pools with the given fee amount.
+	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/add-1bp-fee-tier.ts#L6
+	ONE_BP_TICK_SPACING = 1
+
+	// Time units.
+	ONE_MINUTE_SECONDS = 60
+	ONE_HOUR_SECONDS   = ONE_MINUTE_SECONDS * 60
+	ONE_DAY_SECONDS    = ONE_HOUR_SECONDS * 24
+	ONE_MONTH_SECONDS  = ONE_DAY_SECONDS * 30
+	ONE_YEAR_SECONDS   = ONE_DAY_SECONDS * 365
+
+	// The max amount of seconds into the future the incentive startTime can be set.
+	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/deploy-v3-staker.ts#L11
+	MAX_INCENTIVE_START_LEAD_TIME = ONE_MONTH_SECONDS
+
+	// The max duration of an incentive in seconds.
+	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/deploy-v3-staker.ts#L13
+	MAX_INCENTIVE_DURATION = ONE_YEAR_SECONDS * 2
+
+	// The minimum tick that may be passed to `getSqrtRatioAtTick` computed from log base 1.0001 of 2**-128.
+	// https://github.com/Uniswap/v3-core/blob/d8b1c635c275d2a9450bd6a78f3fa2484fef73eb/contracts/libraries/TickMath.sol#L9
+	MIN_TICK = -887272
+	// The maximum tick that may be passed to `getSqrtRatioAtTick` computed from log base 1.0001 of 2**128.
+	// https://github.com/Uniswap/v3-core/blob/d8b1c635c275d2a9450bd6a78f3fa2484fef73eb/contracts/libraries/TickMath.sol#L11
+	MAX_TICK = -MIN_TICK
+)
+
+var (
+	oldNFTPositionLibraryAddress = common.HexToAddress("0xf7012159bf761b312153e8c8d176932fe9aaa7ea")
+	uniswapv3LoadTestParams      params
+)
+
 var uniswapV3LoadTestCmd = &cobra.Command{
 	Use:   "uniswapv3 url",
 	Short: "Run Uniswapv3-like load test against an Eth/EVm style JSON-RPC endpoint.",
@@ -54,8 +91,6 @@ var uniswapV3LoadTestCmd = &cobra.Command{
 	},
 }
 
-var uniswapv3LoadTestParams params
-
 type params struct {
 	UniswapFactoryV3, UniswapMulticall, UniswapProxyAdmin, UniswapTickLens, UniswapNFTLibDescriptor, UniswapNFTPositionDescriptor, UniswapUpgradeableProxy, UniswapNFPositionManager, UniswapMigrator, UniswapStaker, UniswapQuoterV2, UniswapSwapRouter *string
 	WETH9, UniswapPoolToken0, UniswapPoolToken1                                                                                                                                                                                                          *string
@@ -81,40 +116,6 @@ func init() {
 	params.UniswapPoolToken1 = uniswapV3LoadTestCmd.Flags().String("uniswap-pool-token-1-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
 	uniswapv3LoadTestParams = *params
 }
-
-const (
-	// The fee amount to enable for one basic point.
-	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/add-1bp-fee-tier.ts#L5
-	ONE_BP_FEE = 100
-
-	// The spacing between ticks to be enforced for all pools with the given fee amount.
-	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/add-1bp-fee-tier.ts#L6
-	ONE_BP_TICK_SPACING = 1
-
-	// Time units.
-	ONE_MINUTE_SECONDS = 60
-	ONE_HOUR_SECONDS   = ONE_MINUTE_SECONDS * 60
-	ONE_DAY_SECONDS    = ONE_HOUR_SECONDS * 24
-	ONE_MONTH_SECONDS  = ONE_DAY_SECONDS * 30
-	ONE_YEAR_SECONDS   = ONE_DAY_SECONDS * 365
-
-	// The max amount of seconds into the future the incentive startTime can be set.
-	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/deploy-v3-staker.ts#L11
-	MAX_INCENTIVE_START_LEAD_TIME = ONE_MONTH_SECONDS
-
-	// The max duration of an incentive in seconds.
-	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/deploy-v3-staker.ts#L13
-	MAX_INCENTIVE_DURATION = ONE_YEAR_SECONDS * 2
-
-	// The minimum tick that may be passed to `getSqrtRatioAtTick` computed from log base 1.0001 of 2**-128.
-	// https://github.com/Uniswap/v3-core/blob/d8b1c635c275d2a9450bd6a78f3fa2484fef73eb/contracts/libraries/TickMath.sol#L9
-	MIN_TICK = -887272
-	// The maximum tick that may be passed to `getSqrtRatioAtTick` computed from log base 1.0001 of 2**128.
-	// https://github.com/Uniswap/v3-core/blob/d8b1c635c275d2a9450bd6a78f3fa2484fef73eb/contracts/libraries/TickMath.sol#L11
-	MAX_TICK = -MIN_TICK
-)
-
-var oldNFTPositionLibraryAddress = common.HexToAddress("0xf7012159bf761b312153e8c8d176932fe9aaa7ea")
 
 type UniswapV3Addresses struct {
 	FactoryV3, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib, NFTPositionDescriptor, TransparentUpgradeableProxy, NFPositionManager, Migrator, Staker, QuoterV2, SwapRouter02 common.Address
