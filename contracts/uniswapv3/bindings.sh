@@ -40,3 +40,5 @@ gen_go_binding weth9 WETH9
 gen_go_binding erc20 Swapper
 
 echo "✅ Done"
+
+echo -e "\n❗️ Make sure to read contracts/uniswapv3/README.md to update the deploy function of NonfungibleTokenPositionDescriptor.go and the address of the NFTDescriptor library."
