@@ -2,7 +2,5 @@
 !.gitignore
 !UniswapInterfaceMulticall.*
 !TickLens.*
-!NFTDescriptor.*
-!NFTPositionDescriptor.*
 !NFPositionManager.*
 !V3Migrator.*
