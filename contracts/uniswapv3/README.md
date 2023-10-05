@@ -4,7 +4,7 @@ Simple steps to build UniswapV3 contracts and generate go bindings.
 
 1. Make sure you have `solc@0.7.6` installed. This is required to build UniswapV3 contracts. A handy way to manage `solc` versions is to use [crytic/solc-select](https://github.com/crytic/solc-select).
 
-2. Make sure you have a local RPC running. Some contract require their libraries to be deployed in order to link them directly in the bytecode.
+2. Make sure you have a local RPC running. Some contracts require their libraries to be deployed in order to link them directly in the bytecode.
 
 3. Build UniswapV3 contracts using `build.sh`.
 
@@ -20,13 +20,7 @@ Version: 0.7.6+commit.7338295f.Darwin.appleclang
 ...
 ```
 
-❗️ Make sure to note the address of NFTDescriptor library, this is very important.
-
-```sh
-✍️ NFTDescriptor library address: 0xf7012159bf761b312153e8c8d176932fe9aaa7ea
-```
-
-3. Generate Go bindings for those contracts using `bindings.sh`.
+4. Generate Go bindings for those contracts using `bindings.sh`.
 
 ```sh
 $ ./bindings.sh
@@ -51,7 +45,7 @@ abigen version 1.13.1-stable
 🪄 Update NonfungibleTokenPositionDescriptor deploy function to be able to update its bytecode
 ```
 
-4. Update the `NonfungibleTokenPositionDescriptor` deploy function.
+5. Update the `NonfungibleTokenPositionDescriptor` deploy function.
 
 This is the old function.
 
@@ -95,9 +89,13 @@ func DeployNFTPositionDescriptor(auth *bind.TransactOpts, backend bind.ContractB
 }
 ```
 
-5. Update the `NFTDescriptor` library address inside the Uniswap v3 load test module.
+6. Update the `NFTDescriptor` library address inside the Uniswap v3 load test module.
+
+To retrieve the previous address of the library, you can use `cat nft_descriptor_lib_address.txt`.
+
+Then modify the harcoded address in `cmd/loadtest/uniswapv3.go#L55`.
 
 ```go
-// cmd/loadtest/uniswapv3.go#L50
+// cmd/loadtest/uniswapv3.go#L55
 var oldNFTPositionLibraryAddress = common.HexToAddress("0x3212215ccbeb5e3a808373b805f5324cebe992af")
 ```
