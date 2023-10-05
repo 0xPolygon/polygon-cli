@@ -122,7 +122,7 @@ if [ "$mode" == "v3-periphery" ] || [ "$mode" == "all" ]; then
 		--link \
 		--libraries tmp/$repository-$branch/contracts/libraries/NFTDescriptor.sol:NFTDescriptor:$nft_descriptor_lib_address \
 		$repository-$branch/NFTPositionDescriptor.bin
-	echo "✍️  NFTDescriptor library address: $nft_descriptor_lib_address"
+	echo "$nft_descriptor_lib_address" > nft_descriptor_lib_address.txt
 fi
 
 ## Build v3-staker contracts.
