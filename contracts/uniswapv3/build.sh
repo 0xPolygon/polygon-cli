@@ -85,7 +85,7 @@ if [ "$mode" == "v3-core" ] || [ "$mode" == "all" ]; then
 fi
 
 ## Build v3-periphery v1.1.1 contracts
-if [ "$mode" == "v3-periphery" ] || [ "$mode" == "all" ]; then
+if [ "$mode" == "v3-periphery-v1_1" ] || [ "$mode" == "all" ]; then
 	repository=v3-periphery
 	branch=v1.1.1
 	contracts=("lens/UniswapInterfaceMulticall" "lens/TickLens" "NonfungiblePositionManager" "V3Migrator")
@@ -97,7 +97,7 @@ if [ "$mode" == "v3-periphery" ] || [ "$mode" == "all" ]; then
 fi
 
 ## Build v3-periphery v1.3.0 contracts
-if [ "$mode" == "v3-periphery" ] || [ "$mode" == "all" ]; then
+if [ "$mode" == "v3-periphery-v1_3" ] || [ "$mode" == "all" ]; then
 	repository=v3-periphery
 	branch=v1.3.0
 	contracts=("libraries/NFTDescriptor" "NonfungibleTokenPositionDescriptor")

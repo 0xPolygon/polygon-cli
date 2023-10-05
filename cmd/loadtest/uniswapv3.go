@@ -52,7 +52,7 @@ const (
 )
 
 var (
-	oldNFTPositionLibraryAddress = common.HexToAddress("0x0775aafb6dd38417581f7c583053fa3b78fd4fd1")
+	oldNFTPositionLibraryAddress = common.HexToAddress("0x73a6d49037afd585a0211a7bb4e990116025b45d")
 	uniswapv3LoadTestParams      params
 	//go:embed uniswapv3Usage.md
 	uniswapv3Usage string
