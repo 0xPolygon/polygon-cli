@@ -335,6 +335,9 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 			Error:  err,
 		})
 	}
+	if len(blms) == 0 {
+		return nil
+	}
 	b := backoff.NewExponentialBackOff()
 	b.MaxElapsedTime = 3 * time.Minute
 	retryable := func() error {
