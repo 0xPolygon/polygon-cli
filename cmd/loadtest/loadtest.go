@@ -2,6 +2,7 @@ package loadtest
 
 import (
 	"context"
+	_ "embed"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -10,17 +11,15 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/maticnetwork/polygon-cli/contracts"
 	"github.com/maticnetwork/polygon-cli/contracts/tokens"
-	"github.com/maticnetwork/polygon-cli/rpctypes"
-
-	_ "embed"
-
 	"github.com/maticnetwork/polygon-cli/metrics"
+	"github.com/maticnetwork/polygon-cli/rpctypes"
+	"github.com/maticnetwork/polygon-cli/util"
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -29,8 +28,6 @@ import (
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
-
-	"github.com/maticnetwork/polygon-cli/contracts"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/time/rate"
 )
@@ -340,56 +337,13 @@ func runLoadTest(ctx context.Context) error {
 	return nil
 }
 
-func convHexToUint64(hexString string) (uint64, error) {
-	hexString = strings.TrimPrefix(hexString, "0x")
-	if len(hexString)%2 != 0 {
-		hexString = "0" + hexString
-	}
-
-	result, err := strconv.ParseUint(hexString, 16, 64)
-	if err != nil {
-		return 0, err
-	}
-	return uint64(result), nil
-}
-
-func tryCastToUint64(val any) (uint64, error) {
-	switch t := val.(type) {
-	case float64:
-		return uint64(t), nil
-	case string:
-		return convHexToUint64(t)
-	default:
-		return 0, fmt.Errorf("the value %v couldn't be marshalled to uint64", t)
-
-	}
-}
-
-func getTxPoolSize(rpc *ethrpc.Client) (uint64, error) {
-	var status = new(txpoolStatus)
-	err := rpc.Call(status, "txpool_status")
-	if err != nil {
-		return 0, err
-	}
-	pendingCount, err := tryCastToUint64(status.Pending)
-	if err != nil {
-		return 0, err
-	}
-	queuedCount, err := tryCastToUint64(status.Queued)
-	if err != nil {
-		return 0, err
-	}
-
-	return pendingCount + queuedCount, nil
-}
-
 func updateRateLimit(ctx context.Context, rl *rate.Limiter, rpc *ethrpc.Client, steadyStateQueueSize uint64, rateLimitIncrement uint64, cycleDuration time.Duration, backoff float64) {
 	ticker := time.NewTicker(cycleDuration)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			txPoolSize, err := getTxPoolSize(rpc)
+			txPoolSize, err := util.GetTxPoolSize(rpc)
 			if err != nil {
 				log.Error().Err(err).Msg("Error getting txpool size")
 				return

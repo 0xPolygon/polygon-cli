@@ -3,7 +3,9 @@ package util
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
+	"strings"
 
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog/log"
@@ -16,6 +18,10 @@ type (
 	simpleRPCBlock struct {
 		Number       string                 `json:"number"`
 		Transactions []simpleRPCTransaction `json:"transactions"`
+	}
+	txpoolStatus struct {
+		Pending any `json:"pending"`
+		Queued  any `json:"queued"`
 	}
 )
 
@@ -154,4 +160,46 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 	}
 	log.Info().Int("hashes", len(txHashes)).Int("receipts", len(receipts)).Msg("Fetched tx receipts")
 	return receipts, nil
+}
+
+func GetTxPoolSize(rpc *ethrpc.Client) (uint64, error) {
+	var status = new(txpoolStatus)
+	err := rpc.Call(status, "txpool_status")
+	if err != nil {
+		return 0, err
+	}
+	pendingCount, err := tryCastToUint64(status.Pending)
+	if err != nil {
+		return 0, err
+	}
+	queuedCount, err := tryCastToUint64(status.Queued)
+	if err != nil {
+		return 0, err
+	}
+
+	return pendingCount + queuedCount, nil
+}
+
+func tryCastToUint64(val any) (uint64, error) {
+	switch t := val.(type) {
+	case float64:
+		return uint64(t), nil
+	case string:
+		return convHexToUint64(t)
+	default:
+		return 0, fmt.Errorf("the value %v couldn't be marshalled to uint64", t)
+
+	}
+}
+func convHexToUint64(hexString string) (uint64, error) {
+	hexString = strings.TrimPrefix(hexString, "0x")
+	if len(hexString)%2 != 0 {
+		hexString = "0" + hexString
+	}
+
+	result, err := strconv.ParseUint(hexString, 16, 64)
+	if err != nil {
+		return 0, err
+	}
+	return uint64(result), nil
 }
