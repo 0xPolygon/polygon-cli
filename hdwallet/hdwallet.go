@@ -60,10 +60,6 @@ type (
 		ECDSAAddressSS58   string `json:",omitempty"`
 		Sr25519AddressSS58 string `json:",omitempty"`
 		Ed25519AddressSS58 string `json:",omitempty"`
-		BLS                struct {
-			HexPublicKey  string `json:",omitempty"`
-			HexPrivateKey string `json:",omitempty"`
-		} `json:",omitempty"`
 	}
 	PolyAddressExport struct {
 		Path string `json:",omitempty"`
@@ -92,7 +88,6 @@ const (
 	SignatureSecp256k1 PolySignature = iota
 	SignatureEd25519
 	SignatureSr25519
-	SignatureBls
 )
 
 func GenPrivKeyFromSecret(seed []byte, c PolySignature) (interface{}, error) {
@@ -106,10 +101,6 @@ func GenPrivKeyFromSecret(seed []byte, c PolySignature) (interface{}, error) {
 		}
 		sk := msk.ExpandEd25519()
 		return sk, nil
-	}
-	// https://pkg.go.dev/crypto/ed25519
-	if c == SignatureBls {
-		return nil, fmt.Errorf("BLS is no longer implemented")
 	}
 
 	return nil, fmt.Errorf("unable to generate private key from secret")
@@ -134,10 +125,6 @@ func GetPublicKeyFromSeed(seed []byte, c PolySignature, compressed bool) ([]byte
 		}
 		return pubData, nil
 	}
-	if c == SignatureBls {
-		return nil, fmt.Errorf("BLS is no longer implemented")
-	}
-
 	// default to ecdsa
 	curve := secp256k1.S256()
 	x1, y1 := curve.ScalarBaseMult(seed[0:32])
@@ -263,17 +250,6 @@ func (p *PolyWallet) ExportRootAddress() (*PolyWalletExport, error) {
 	}
 	pwe.Sr25519Address = hex.EncodeToString(addr)
 	pwe.Sr25519AddressSS58 = substrateSS58(addr)
-	addr, err = GetPublicKeyFromSeed(p.rawSeed, SignatureBls, true)
-	if err != nil {
-		return nil, err
-	}
-	pwe.BLS.HexPublicKey = hex.EncodeToString(addr)
-	prvKey, err := GenPrivKeyFromSecret(p.rawSeed, SignatureBls)
-	if err != nil {
-		return nil, err
-	}
-	prvKeyBuf := prvKey.([]byte)
-	pwe.BLS.HexPrivateKey = hex.EncodeToString(prvKeyBuf)
 
 	return pwe, nil
 }
