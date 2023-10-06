@@ -4,7 +4,6 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"crypto/sha512"
-
 	"encoding/hex"
 	"fmt"
 	"regexp"
@@ -12,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btcutil/base58"
-	"github.com/coinbase/kryptology/pkg/signatures/bls/bls_sig"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/oasisprotocol/curve25519-voi/primitives/sr25519"
 	"github.com/tyler-smith/go-bip32"
@@ -88,7 +86,6 @@ var (
 	}
 	pathValidator   = `^m[\/0-9']*[0-9']$`
 	rePathValidator *regexp.Regexp
-	blsPop          = bls_sig.NewSigPop()
 )
 
 const (
@@ -112,15 +109,7 @@ func GenPrivKeyFromSecret(seed []byte, c PolySignature) (interface{}, error) {
 	}
 	// https://pkg.go.dev/crypto/ed25519
 	if c == SignatureBls {
-		_, sk, err := blsPop.KeygenWithSeed(seed[0:32])
-		if err != nil {
-			return nil, fmt.Errorf("unable to generate a new BLS key %w", err)
-		}
-		skBytes, err := sk.MarshalBinary()
-		if err != nil {
-			return nil, fmt.Errorf("unable to execute the private key to byte array conversion %w", err)
-		}
-		return skBytes, nil
+		return nil, fmt.Errorf("BLS is no longer implemented")
 	}
 
 	return nil, fmt.Errorf("unable to generate private key from secret")
@@ -146,15 +135,7 @@ func GetPublicKeyFromSeed(seed []byte, c PolySignature, compressed bool) ([]byte
 		return pubData, nil
 	}
 	if c == SignatureBls {
-		pubKey, _, err := blsPop.KeygenWithSeed(seed[0:32])
-		if err != nil {
-			return nil, fmt.Errorf("unable to generate a new BLS key %w", err)
-		}
-		pubKeyBytes, err := pubKey.MarshalBinary()
-		if err != nil {
-			return nil, fmt.Errorf("unable to execute the public key to byte array conversion %w", err)
-		}
-		return pubKeyBytes, nil
+		return nil, fmt.Errorf("BLS is no longer implemented")
 	}
 
 	// default to ecdsa
