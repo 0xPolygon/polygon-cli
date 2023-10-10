@@ -134,7 +134,7 @@ fi
 ## Build v3-swap-router contracts.
 if [ "$mode" == "v3-swap-router" ] || [ "$mode" == "all" ]; then
 	contracts=("lens/QuoterV2" "SwapRouter02")
-	build_contracts v3-swap-router https://github.com/Uniswap/swap-router-contracts.git v1.3.0 $contracts
+	build_contracts v3-swap-router https://github.com/Uniswap/swap-router-contracts.git v1.1.0 $contracts
 fi
 
 ## Build openzeppelin contracts.
