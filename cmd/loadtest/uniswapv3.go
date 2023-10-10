@@ -476,12 +476,14 @@ func deployOrInstantiateContract[T uniswapV3Contract](
 ) (address common.Address, contract *T, err error) {
 	if knownAddress == (common.Address{}) {
 		// Deploy the contract if known address is empty.
-		address, _, contract, err = deployFunc(tops, c)
+		var tx *types.Transaction
+		address, tx, contract, err = deployFunc(tops, c)
 		if err != nil {
 			log.Error().Err(err).Str("name", name).Msg("Unable to deploy contract")
 			return
 		}
 		log.Debug().Str("name", name).Interface("address", address).Msg("Contract deployed")
+		log.Trace().Str("name", name).Interface("hash", tx.Hash()).Msg("Transaction")
 	} else {
 		// Otherwise, instantiate the contract.
 		address = knownAddress
@@ -516,11 +518,13 @@ func enableOneBPFeeTier(contract *uniswapv3.UniswapV3Factory, tops *bind.Transac
 		log.Debug().Msg("One basic point fee tier already enabled")
 	} else {
 		// If those are not the same, it means it should be enabled.
-		if _, err := contract.EnableFeeAmount(tops, big.NewInt(fee), big.NewInt(tickSpacing)); err != nil {
+		tx, err := contract.EnableFeeAmount(tops, big.NewInt(fee), big.NewInt(tickSpacing))
+		if err != nil {
 			log.Error().Err(err).Msg("Unable to enable one basic point fee tier")
 			return err
 		}
 		log.Debug().Msg("Enable one basic point fee tier")
+		log.Trace().Interface("hash", tx.Hash()).Msg("Transaction")
 	}
 	return nil
 }
@@ -533,11 +537,13 @@ func setFactoryOwner(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOp
 	if currentOwner == newOwner {
 		log.Debug().Msg("Factory contract already owned by this address")
 	} else {
-		if _, err := contract.SetOwner(tops, newOwner); err != nil {
+		tx, err := contract.SetOwner(tops, newOwner)
+		if err != nil {
 			log.Error().Err(err).Msg("Unable to set a new owner for the Factory contract")
 			return err
 		}
 		log.Debug().Msg("Set new owner for Factory contract")
+		log.Trace().Interface("hash", tx.Hash()).Msg("Transaction")
 	}
 	return nil
 }
@@ -550,11 +556,13 @@ func transferProxyAdminOwnership(contract *uniswapv3.ProxyAdmin, tops *bind.Tran
 	if currentOwner == newOwner {
 		log.Debug().Msg("ProxyAdmin contract already owned by this address")
 	} else {
-		if _, err := contract.TransferOwnership(tops, newOwner); err != nil {
+		tx, err := contract.TransferOwnership(tops, newOwner)
+		if err != nil {
 			log.Error().Err(err).Msg("Unable to transfer ProxyAdmin ownership")
 			return err
 		}
 		log.Debug().Msg("Transfer ProxyAdmin ownership")
+		log.Trace().Interface("hash", tx.Hash()).Msg("Transaction")
 	}
 	return nil
 }
@@ -586,12 +594,13 @@ func approveSwapperSpendingsByUniswap(contract *uniswapv3.Swapper, tops *bind.Tr
 
 	}
 	for _, address := range addresses {
-		_, err := contract.Approve(tops, address, amount)
+		tx, err := contract.Approve(tops, address, amount)
 		if err != nil {
 			log.Error().Err(err).Interface("address", address).Msg("Unable to approve spendings")
 			return err
 		}
 		log.Debug().Str("Swapper", name).Str("spender", address.String()).Int64("amount", amount.Int64()).Msg("Spending approved")
+		log.Trace().Interface("hash", tx.Hash()).Msg("Transaction")
 	}
 	return nil
 }
@@ -697,15 +706,16 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 		Deadline:   big.NewInt(timestamp + 10*60), // 10 minutes to execute the swap.
 		//Deadline: big.NewInt(1759474606), // in 2 years (2025-10-03)
 	}
-	log.Debug().Interface("params", mintParams).Msg("DEBUG")
+	var tx *types.Transaction
 	if err := blockUntilSuccessful(ctx, c, func() (err error) {
-		_, err = uniswapV3Config.NFPositionManager.contract.Mint(tops, mintParams)
+		tx, err = uniswapV3Config.NFPositionManager.contract.Mint(tops, mintParams)
 		return
 	}); err != nil {
 		log.Error().Err(err).Msg("Unable to create liquidity for the Token0-Token1 pool")
 		return err
 	}
 	log.Debug().Msg("Liquidity provided to the Token0-Token1 pool")
+	log.Trace().Interface("hash", tx.Hash()).Msg("Transaction")
 	return nil
 }
 
@@ -719,7 +729,7 @@ func computeSqrtPriceX96(reserveA, reserveB *big.Int) *big.Int {
 }
 
 func swapToken1ForToken0(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRouter02, poolConfig PoolConfig, recipient common.Address) error {
-	if _, err := swapRouter.ExactInputSingle(tops, uniswapv3.IV3SwapRouterExactInputSingleParams{
+	tx, err := swapRouter.ExactInputSingle(tops, uniswapv3.IV3SwapRouterExactInputSingleParams{
 		TokenIn:           poolConfig.Token0.Address,
 		TokenOut:          poolConfig.Token0.Address,
 		Fee:               poolConfig.Fees,
@@ -727,10 +737,12 @@ func swapToken1ForToken0(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRout
 		AmountIn:          big.NewInt(1000),
 		AmountOutMinimum:  big.NewInt(0),
 		SqrtPriceLimitX96: big.NewInt(0),
-	}); err != nil {
+	})
+	if err != nil {
 		log.Error().Err(err).Msg("Unable to swap Token1 for Token0")
 		return err
 	}
 	log.Debug().Msg("Swapped Token1 for Token0")
+	log.Trace().Interface("hash", tx.Hash()).Msg("Transaction")
 	return nil
 }
