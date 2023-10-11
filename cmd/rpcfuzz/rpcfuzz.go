@@ -610,6 +610,15 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Flags: FlagStrictValidation,
 	})
 
+	// $ curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc": "2.0", "method": "eth_estimateGas", "params": [], "id":1}' localhost:8545
+	// {"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"missing value for required argument 0"}}
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthEstimateGasEmpty",
+		Method:    "eth_estimateGas",
+		Args:      []interface{}{},
+		Validator: ValidateError(-32602, `missing value for required argument 0`),
+	})
+
 	// cast block --rpc-url localhost:8545 latest
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:   "RPCTestEthGetBlockByHash",
