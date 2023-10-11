@@ -173,7 +173,6 @@ var (
 
 // setupTests will add all of the `RPCTests` to the `allTests` slice.
 func setupTests(ctx context.Context, rpcClient *rpc.Client) {
-
 	// cast rpc --rpc-url localhost:8545 net_version
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestNetVersion",
@@ -527,6 +526,23 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Args:      ArgsCoinbaseTransaction(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}),
 		Validator: ValidateRegexString(`^0x[[:xdigit:]]{64}$`),
 		Flags:     FlagRequiresUnlock,
+	})
+
+	// $ curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_sendTransaction","params":[],"id":1}' http://localhost:8545
+	// {"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"missing value for required argument 0"}}
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthSendTransactionEmpty",
+		Method:    "eth_sendTransaction",
+		Args:      []interface{}{},
+		Validator: ValidateError(-32602, "missing value for required argument 0"),
+	})
+	// $ curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_sendRawTransaction","params":[],"id":1}' http://localhost:8545
+	// {"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"missing value for required argument 0"}}
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthSendRawTransactionEmpty",
+		Method:    "eth_sendRawTransaction",
+		Args:      []interface{}{},
+		Validator: ValidateError(-32602, "missing value for required argument 0"),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_sendRawTransaction '{"from": "0xb9b1cf51a65b50f74ed8bcb258413c02cba2ec57", "to": "0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6", "data": "0x", "gas": "0x5208", "gasPrice": "0x1", "nonce": "0x1"}'
