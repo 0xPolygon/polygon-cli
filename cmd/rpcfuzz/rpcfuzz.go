@@ -12,6 +12,7 @@
 package rpcfuzz
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/sha1"
@@ -19,7 +20,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
+	"net/http"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -111,11 +114,29 @@ type (
 		Topics    []interface{} `json:"topics,omitempty"`
 	}
 
-	// RPCJSONError can be used to unmarshal a raw error response
+	// RPCTestRawHTTP is a raw RPCTest performed using HTTP requests.
+	// It does not leverage advanced HTTP libraries like `github.com/ethereum/go-ethereum/rpc`.
+	RPCTestRawHTTP struct {
+		Name       string
+		HTTPMethod string
+		Args       []interface{}
+		Validator  func(result interface{}) error
+		Flags      RPCTestFlag
+	}
+
+	// RPCJSONError can be used to unmarshal a raw error response.
 	RPCJSONError struct {
 		Code    int         `json:"code"`
 		Message string      `json:"message"`
 		Data    interface{} `json:"data,omitempty"`
+	}
+
+	// RPCJSONResponse can be used to unmarshal a raw response.
+	RPCJSONResponse struct {
+		Version string        `json:"jsonrpc"`
+		Result  any           `json:"result,omitempty"`
+		Error   *RPCJSONError `json:"error,omitempty"`
+		ID      any           `json:"id"`
 	}
 )
 
@@ -134,6 +155,8 @@ const (
 	defaultMaxPriorityFeePerGas = "0x1000000000"
 
 	defaultNonceTestOffset uint64 = 0x100000000
+
+	rpcTestRawHTTPNamespace = "raw"
 
 	// JSON-RPC error codes.
 	// https://eips.ethereum.org/EIPS/eip-1474
@@ -1137,6 +1160,15 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateError(invalidRequestErr, `genesis is not traceable`),
 	})
 
+	// $ curl -X POST -H "Content-Type: application/json" --data '[]' http://localhost:8545
+	// {"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"empty batch"}}
+	allTests = append(allTests, &RPCTestRawHTTP{
+		Name:       "EmptyBatch",
+		HTTPMethod: http.MethodPost,
+		Args:       []interface{}{},
+		Validator:  ValidateError(invalidRequestErr, "empty batch"),
+	})
+
 	uniqueTests := make(map[RPCTest]struct{})
 	uniqueTestNames := make(map[string]struct{})
 	for _, v := range allTests {
@@ -1721,12 +1753,61 @@ func GetCurrentChainID(ctx context.Context, rpcClient *rpc.Client) (*big.Int, er
 	return chainId, err
 }
 
-func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPCTest) testreporter.TestResult {
+func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHttpClient wrappedHttpClient, currTest RPCTest) testreporter.TestResult {
 	currTestResult := testreporter.New(currTest.GetName(), currTest.GetMethod(), 1)
 	args := currTest.GetArgs()
 
 	var result interface{}
-	err := rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
+	var err error
+	switch currTest.(type) {
+	case *RPCTestRawHTTP:
+		// Marshal the HTTP request payload.
+		var payload []byte
+		payload, err = json.Marshal(args)
+		if err != nil {
+			currTestResult.Fail(args, nil, errors.New("unable to marshal payload: "+err.Error()))
+			return currTestResult
+		}
+
+		// Create the request.
+		var request *http.Request
+		request, err = http.NewRequest(currTest.GetMethod(), wrappedHttpClient.url, bytes.NewBuffer(payload)) // TODO: fix
+		if err != nil {
+			currTestResult.Fail(args, nil, errors.New("unable to create the HTTP request: "+err.Error()))
+			return currTestResult
+		}
+		request.Header.Set("Content-Type", "application/json")
+
+		// Send the request.
+		var response *http.Response
+		response, err = wrappedHttpClient.client.Do(request)
+		if err != nil {
+			currTestResult.Fail(args, nil, errors.New("unable to send the HTTP request: "+err.Error()))
+			return currTestResult
+		}
+		defer response.Body.Close()
+
+		// Read the response body.
+		var body []byte
+		body, err = io.ReadAll(response.Body)
+		if err != nil {
+			currTestResult.Fail(args, nil, errors.New("unable to read the HTTP response body: "+err.Error()))
+			return currTestResult
+		}
+
+		// Marshal the response and extract the error if there is any.
+		var rpcResponse RPCJSONResponse
+		err = json.Unmarshal(body, &rpcResponse)
+		if err != nil {
+			currTestResult.Fail(args, nil, errors.New("unable to unmarshal the HTTP response body error: "+err.Error()))
+			return currTestResult
+		}
+		if rpcResponse.Error != nil {
+			result = &rpcResponse.Error
+		}
+	default:
+		err = rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
+	}
 
 	if err != nil && !currTest.ExpectError() {
 		currTestResult.Fail(args, result, errors.New("Method test failed: "+err.Error()))
@@ -1806,8 +1887,29 @@ func (r *RPCTestDynamicArgs) ExpectError() bool {
 	return r.Flags&FlagErrorValidation != 0
 }
 
+func (r *RPCTestRawHTTP) GetMethod() string {
+	return r.HTTPMethod
+}
+func (r *RPCTestRawHTTP) GetName() string {
+	return r.Name
+}
+func (r *RPCTestRawHTTP) GetArgs() []interface{} {
+	return r.Args
+}
+func (r *RPCTestRawHTTP) Validate(result interface{}) error {
+	return r.Validator(result)
+}
+func (r *RPCTestRawHTTP) ExpectError() bool {
+	return r.Flags&FlagErrorValidation != 0
+}
+
 func (r *RPCJSONError) Error() string {
 	return r.Message
+}
+
+type wrappedHttpClient struct {
+	client *http.Client
+	url    string
 }
 
 var RPCFuzzCmd = &cobra.Command{
@@ -1821,7 +1923,8 @@ var RPCFuzzCmd = &cobra.Command{
 			log.Warn().Msg("Setting --export-path must pair with a export type: --json, --csv, --md, or --html")
 		}
 
-		rpcClient, err := rpc.DialContext(ctx, args[0])
+		url := args[0]
+		rpcClient, err := rpc.DialContext(ctx, url)
 		if err != nil {
 			return err
 		}
@@ -1839,6 +1942,9 @@ var RPCFuzzCmd = &cobra.Command{
 		log.Trace().Uint64("nonce", nonce).Uint64("chainid", chainId.Uint64()).Msg("Doing test setup")
 		setupTests(ctx, rpcClient)
 
+		httpClient := &http.Client{}
+		wrappedHTTPClient := wrappedHttpClient{httpClient, url}
+
 		for _, t := range allTests {
 			if !shouldRunTest(t) {
 				log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Skipping test")
@@ -1846,7 +1952,7 @@ var RPCFuzzCmd = &cobra.Command{
 			}
 			log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Running Test")
 
-			currTestResult := CallRPCAndValidate(ctx, rpcClient, t)
+			currTestResult := CallRPCAndValidate(ctx, rpcClient, wrappedHTTPClient, t)
 			testResults.AddTestResult(currTestResult)
 
 			if *testFuzz {
@@ -1922,8 +2028,16 @@ var RPCFuzzCmd = &cobra.Command{
 }
 
 func shouldRunTest(t RPCTest) bool {
+	var testNamespace string
+	switch t.(type) {
+	case *RPCTestRawHTTP:
+		testNamespace = fmt.Sprintf("%s_", rpcTestRawHTTPNamespace)
+	default:
+		testNamespace = t.GetMethod()
+	}
+
 	for _, ns := range enabledNamespaces {
-		if strings.HasPrefix(t.GetMethod(), ns) {
+		if strings.HasPrefix(testNamespace, ns) {
 			return true
 		}
 	}
@@ -1935,7 +2049,7 @@ func init() {
 
 	testPrivateHexKey = flagSet.String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
 	testContractAddress = flagSet.String("contract-address", "0x6fda56c57b0acadb96ed5624ac500c0429d59429", "The address of a contract that can be used for testing")
-	testNamespaces = flagSet.String("namespaces", "eth,web3,net,debug", "Comma separated list of rpc namespaces to test")
+	testNamespaces = flagSet.String("namespaces", fmt.Sprintf("eth,web3,net,debug,%s", rpcTestRawHTTPNamespace), "Comma separated list of rpc namespaces to test")
 	testFuzz = flagSet.Bool("fuzz", false, "Flag to indicate whether to fuzz input or not.")
 	testFuzzNum = flagSet.Int("fuzzn", 100, "Number of times to run the fuzzer per test.")
 	seed = flagSet.Int64("seed", 123456, "A seed for generating random values within the fuzzer")
