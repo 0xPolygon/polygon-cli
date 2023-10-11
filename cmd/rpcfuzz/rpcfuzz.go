@@ -542,6 +542,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthSendTransactionEmpty",
 		Method:    "eth_sendTransaction",
 		Args:      []interface{}{},
+		Flags:     FlagErrorValidation,
 		Validator: ValidateError(invalidParamsErr, "missing value for required argument 0"),
 	})
 	// $ curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_sendRawTransaction","params":[],"id":1}' http://localhost:8545
@@ -550,6 +551,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthSendRawTransactionEmpty",
 		Method:    "eth_sendRawTransaction",
 		Args:      []interface{}{},
+		Flags:     FlagErrorValidation,
 		Validator: ValidateError(invalidParamsErr, "missing value for required argument 0"),
 	})
 
@@ -640,6 +642,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthEstimateGasEmpty",
 		Method:    "eth_estimateGas",
 		Args:      []interface{}{},
+		Flags:     FlagErrorValidation,
 		Validator: ValidateError(invalidParamsErr, `missing value for required argument 0`),
 	})
 
