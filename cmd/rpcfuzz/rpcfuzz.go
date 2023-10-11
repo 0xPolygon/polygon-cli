@@ -1806,15 +1806,15 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHttpC
 		}
 	default:
 		err = rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
-	}
 
-	if err != nil && !currTest.ExpectError() {
-		currTestResult.Fail(args, result, errors.New("Method test failed: "+err.Error()))
-		return currTestResult
-	}
-	if err == nil && currTest.ExpectError() {
-		currTestResult.Fail(args, result, errors.New("Expected an error but didn't get one"))
-		return currTestResult
+		if err != nil && !currTest.ExpectError() {
+			currTestResult.Fail(args, result, errors.New("Method test failed: "+err.Error()))
+			return currTestResult
+		}
+		if err == nil && currTest.ExpectError() {
+			currTestResult.Fail(args, result, errors.New("Expected an error but didn't get one"))
+			return currTestResult
+		}
 	}
 
 	if currTest.ExpectError() {
