@@ -1765,16 +1765,15 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHttpC
 		var payload []byte
 		payload, err = json.Marshal(args)
 		if err != nil {
-			currTestResult.Fail(args, nil, errors.New("unable to marshal payload: "+err.Error()))
-			return currTestResult
+			log.Fatal().Err(err).Msg("unable to marshal HTTP request payload")
 		}
 
 		// Create the request.
 		var request *http.Request
 		request, err = http.NewRequest(currTest.GetMethod(), wrappedHttpClient.url, bytes.NewBuffer(payload)) // TODO: fix
 		if err != nil {
-			currTestResult.Fail(args, nil, errors.New("unable to create the HTTP request: "+err.Error()))
-			return currTestResult
+			log.Fatal().Err(err).Msg("unable to create HTTP request")
+
 		}
 		request.Header.Set("Content-Type", "application/json")
 
@@ -1782,8 +1781,8 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHttpC
 		var response *http.Response
 		response, err = wrappedHttpClient.client.Do(request)
 		if err != nil {
-			currTestResult.Fail(args, nil, errors.New("unable to send the HTTP request: "+err.Error()))
-			return currTestResult
+			log.Error().Err(err).Msg("unable to send HTTP request")
+			break
 		}
 		defer response.Body.Close()
 
@@ -1791,16 +1790,16 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHttpC
 		var body []byte
 		body, err = io.ReadAll(response.Body)
 		if err != nil {
-			currTestResult.Fail(args, nil, errors.New("unable to read the HTTP response body: "+err.Error()))
-			return currTestResult
+			log.Error().Err(err).Msg("unable to read HTTP body")
+			break
 		}
 
 		// Marshal the response and extract the error if there is any.
 		var rpcResponse RPCJSONResponse
 		err = json.Unmarshal(body, &rpcResponse)
 		if err != nil {
-			currTestResult.Fail(args, nil, errors.New("unable to unmarshal the HTTP response body error: "+err.Error()))
-			return currTestResult
+			log.Error().Err(err).Msg("unable to unmarshal HTTP body")
+			break
 		}
 		if rpcResponse.Error != nil {
 			result = &rpcResponse.Error
