@@ -1194,7 +1194,7 @@ func RequireAny(validators ...func(interface{}) error) func(result interface{}) 
 				return nil
 			}
 		}
-		return fmt.Errorf("All Validation failed")
+		return fmt.Errorf("all Validation failed")
 	}
 }
 func RequireAll(validators ...func(interface{}) error) func(result interface{}) error {
@@ -1216,11 +1216,11 @@ func ValidateHashedResponse(expectedHash string) func(result interface{}) error 
 	return func(result interface{}) error {
 		jsonBytes, err := json.Marshal(result)
 		if err != nil {
-			return fmt.Errorf("Unable to marshal result object to json %w", err)
+			return fmt.Errorf("unable to marshal result object to json %w", err)
 		}
 		actualHash := fmt.Sprintf("%x", sha1.Sum(jsonBytes))
 		if actualHash != expectedHash {
-			return fmt.Errorf("Hash mismatch expected: %s and got %s", expectedHash, actualHash)
+			return fmt.Errorf("hash mismatch expected: %s and got %s", expectedHash, actualHash)
 		}
 		return nil
 	}
@@ -1235,13 +1235,13 @@ func ValidateJSONSchema(schema string) func(result interface{}) error {
 		// for easy access to the initial response string...
 		jsonBytes, err := json.Marshal(result)
 		if err != nil {
-			return fmt.Errorf("Unable to marshal result back to json for validation: %w", err)
+			return fmt.Errorf("unable to marshal result back to json for validation: %w", err)
 		}
 		responseLoader := gojsonschema.NewStringLoader(string(jsonBytes))
 
 		validatorResult, err := gojsonschema.Validate(validatorLoader, responseLoader)
 		if err != nil {
-			return fmt.Errorf("Unable to run json validation: %w", err)
+			return fmt.Errorf("unable to run json validation: %w", err)
 		}
 		// fmt.Println(string(jsonBytes))
 		if !validatorResult.Valid() {
@@ -1250,7 +1250,7 @@ func ValidateJSONSchema(schema string) func(result interface{}) error {
 				errStr += desc.String() + "\n"
 			}
 			log.Trace().Str("resultJson", string(jsonBytes)).Msg("json failed to validate")
-			return fmt.Errorf("The json document is not valid: %s", errStr)
+			return fmt.Errorf("the json document is not valid: %s", errStr)
 		}
 		return nil
 
@@ -1261,7 +1261,7 @@ func ValidateJSONSchema(schema string) func(result interface{}) error {
 func ValidateExact(expected interface{}) func(result interface{}) error {
 	return func(result interface{}) error {
 		if expected != result {
-			return fmt.Errorf("Expected %v and got %v", expected, result)
+			return fmt.Errorf("expected %v and got %v", expected, result)
 		}
 		return nil
 	}
@@ -1270,11 +1270,11 @@ func ValidateExactJSON(expected string) func(result interface{}) error {
 	return func(result interface{}) error {
 		jsonResult, err := json.Marshal(result)
 		if err != nil {
-			return fmt.Errorf("Unable to json marshal test result: %w", err)
+			return fmt.Errorf("unable to json marshal test result: %w", err)
 		}
 
 		if expected != string(jsonResult) {
-			return fmt.Errorf("Expected %v and got %v", expected, string(jsonResult))
+			return fmt.Errorf("expected %v and got %v", expected, string(jsonResult))
 		}
 		return nil
 	}
@@ -1286,10 +1286,10 @@ func ValidateRegexString(regEx string) func(result interface{}) error {
 	return func(result interface{}) error {
 		resultStr, isValid := result.(string)
 		if !isValid {
-			return fmt.Errorf("Invalid result type. Expected string but got %T", result)
+			return fmt.Errorf("invalid result type. Expected string but got %T", result)
 		}
 		if !r.MatchString(resultStr) {
-			return fmt.Errorf("The regex %s failed to match result %s", regEx, resultStr)
+			return fmt.Errorf("the regex %s failed to match result %s", regEx, resultStr)
 		}
 		return nil
 	}
@@ -1304,10 +1304,10 @@ func ValidateError(code int, errorMessageRegex string) func(result interface{}) 
 			return err
 		}
 		if !r.MatchString(fullError.Error()) {
-			return fmt.Errorf("The regex %s failed to match result %s", errorMessageRegex, fullError.Error())
+			return fmt.Errorf("the regex %s failed to match result %s", errorMessageRegex, fullError.Error())
 		}
 		if code != fullError.Code {
-			return fmt.Errorf("Expected error code %d but got %d", code, fullError.Code)
+			return fmt.Errorf("expected error code %d but got %d", code, fullError.Code)
 		}
 
 		return nil
@@ -1349,58 +1349,58 @@ func ValidateTransactionHash() func(result interface{}) error {
 func genericResultToBlockHeader(result interface{}) (*ethtypes.Header, string, error) {
 	underlyingBlock, ok := result.(map[string]interface{})
 	if !ok {
-		return nil, "", fmt.Errorf("The underlying type of the result didn't match a block header. Got %T", result)
+		return nil, "", fmt.Errorf("the underlying type of the result didn't match a block header. Got %T", result)
 	}
 	genericHash, ok := underlyingBlock["hash"].(string)
 	if !ok {
-		return nil, "", fmt.Errorf("Could not recover the underlying hash. Expected a string and got %T", result)
+		return nil, "", fmt.Errorf("could not recover the underlying hash. Expected a string and got %T", result)
 	}
 	log.Info().Str("blockHash", genericHash).Msg("Original block hash")
 	jsonBlock, err := json.Marshal(underlyingBlock)
 	if err != nil {
-		return nil, "", fmt.Errorf("Could not json marshal initial block result %w", err)
+		return nil, "", fmt.Errorf("could not json marshal initial block result %w", err)
 	}
 
 	blockHeader := ethtypes.Header{}
 
 	err = blockHeader.UnmarshalJSON(jsonBlock)
 	if err != nil {
-		return nil, "", fmt.Errorf("Could not unmarshal json block to geth based json block: %w", err)
+		return nil, "", fmt.Errorf("could not unmarshal json block to geth based json block: %w", err)
 	}
 	return &blockHeader, genericHash, nil
 }
 func genericResultToTransaction(result interface{}) (*ethtypes.Transaction, string, error) {
 	underlyingTx, ok := result.(map[string]interface{})
 	if !ok {
-		return nil, "", fmt.Errorf("The underlying type of the result didn't match a transaction. Got %T", result)
+		return nil, "", fmt.Errorf("the underlying type of the result didn't match a transaction. Got %T", result)
 	}
 	genericHash, ok := underlyingTx["hash"].(string)
 	if !ok {
-		return nil, "", fmt.Errorf("Could not recover the underlying hash. Expected a string and got %T", result)
+		return nil, "", fmt.Errorf("could not recover the underlying hash. Expected a string and got %T", result)
 	}
 	log.Info().Str("txHash", genericHash).Msg("Original tx hash")
 	jsonTx, err := json.Marshal(underlyingTx)
 	if err != nil {
-		return nil, "", fmt.Errorf("Could not json marshal initial tx result %w", err)
+		return nil, "", fmt.Errorf("could not json marshal initial tx result %w", err)
 	}
 
 	tx := ethtypes.Transaction{}
 
 	err = tx.UnmarshalJSON(jsonTx)
 	if err != nil {
-		return nil, "", fmt.Errorf("Could not unmarshal json tx to geth based json tx: %w", err)
+		return nil, "", fmt.Errorf("could not unmarshal json tx to geth based json tx: %w", err)
 	}
 	return &tx, genericHash, nil
 }
 func genericResultToError(result interface{}) (*RPCJSONError, error) {
 	jsonErrorData, err := json.Marshal(result)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to json marshal error result: %w", err)
+		return nil, fmt.Errorf("unable to json marshal error result: %w", err)
 	}
 	fullError := new(RPCJSONError)
 	err = json.Unmarshal(jsonErrorData, fullError)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal json error: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal json error: %w", err)
 	}
 	return fullError, nil
 
@@ -1691,7 +1691,7 @@ func executeRawTx(ctx context.Context, rpcClient *rpc.Client, rawTx []byte) (str
 	}
 	rawHash, ok := result.(string)
 	if !ok {
-		return "", fmt.Errorf("Invalid result type. Expected string but got %T", result)
+		return "", fmt.Errorf("invalid result type. Expected string but got %T", result)
 	}
 	log.Info().Str("txHash", rawHash).Msg("Successfully sent transaction")
 	return rawHash, nil
@@ -1808,11 +1808,11 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHttpC
 		err = rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
 
 		if err != nil && !currTest.ExpectError() {
-			currTestResult.Fail(args, result, errors.New("Method test failed: "+err.Error()))
+			currTestResult.Fail(args, result, errors.New("method test failed: "+err.Error()))
 			return currTestResult
 		}
 		if err == nil && currTest.ExpectError() {
-			currTestResult.Fail(args, result, errors.New("Expected an error but didn't get one"))
+			currTestResult.Fail(args, result, errors.New("expected an error but didn't get one"))
 			return currTestResult
 		}
 	}
@@ -1996,7 +1996,7 @@ var RPCFuzzCmd = &cobra.Command{
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
-			return fmt.Errorf("Expected 1 argument, but got %d", len(args))
+			return fmt.Errorf("expected 1 argument, but got %d", len(args))
 		}
 
 		privateKey, err := ethcrypto.HexToECDSA(*testPrivateHexKey)
@@ -2013,7 +2013,7 @@ var RPCFuzzCmd = &cobra.Command{
 		enabledNamespaces = make([]string, 0)
 		for _, ns := range rawNameSpaces {
 			if !nsValidator.MatchString(ns) {
-				return fmt.Errorf("The namespace %s is not valid", ns)
+				return fmt.Errorf("the namespace %s is not valid", ns)
 			}
 			enabledNamespaces = append(enabledNamespaces, ns+"_")
 		}
