@@ -90,7 +90,7 @@ $ cast send \
 Once this has been completed this will be the address of the contract: `0x6fda56c57b0acadb96ed5624ac500c0429d59429`.
 
 ```bash
-$  docker run -v $PWD/contracts:/contracts ethereum/solc:stable --storage-layout /contracts/ERC20.sol
+$  docker run -v $PWD/contracts:/contracts ethereum/solc:stable --storage-layout /contracts/tokens/ERC20/ERC20.sol
 ```
 
 ### Links
