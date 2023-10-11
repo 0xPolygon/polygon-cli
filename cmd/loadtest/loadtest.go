@@ -1171,7 +1171,6 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, orig
 }
 
 func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *IndexedActivity) (t1 time.Time, t2 time.Time, err error) {
-
 	funcNum := randSrc.Intn(300)
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
