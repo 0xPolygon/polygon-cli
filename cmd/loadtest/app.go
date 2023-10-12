@@ -88,11 +88,6 @@ type (
 		ParsedModes         []loadTestMode
 		MultiMode           bool
 	}
-
-	txpoolStatus struct {
-		Pending any `json:"pending"`
-		Queued  any `json:"queued"`
-	}
 )
 
 var (

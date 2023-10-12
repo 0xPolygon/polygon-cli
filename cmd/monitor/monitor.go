@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"fmt"
+	"github.com/maticnetwork/polygon-cli/util"
 	"math/big"
 	"net/url"
 	"sort"
@@ -48,7 +49,7 @@ type (
 		HeadBlock    *big.Int
 		PeerCount    uint64
 		GasPrice     *big.Int
-		PendingCount uint
+		PendingCount uint64
 
 		Blocks            map[string]rpctypes.PolyBlock `json:"-"`
 		BlocksLock        sync.RWMutex                  `json:"-"`
@@ -60,7 +61,7 @@ type (
 		ChainID      *big.Int
 		PeerCount    uint64
 		GasPrice     *big.Int
-		PendingCount uint
+		PendingCount uint64
 	}
 	historicalDataPoint struct {
 		SampleTime  time.Time
@@ -113,7 +114,8 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 	if err != nil {
 		return nil, fmt.Errorf("couldn't estimate gas: %s", err.Error())
 	}
-	cs.PendingCount, err = ec.PendingTransactionCount(ctx)
+
+	cs.PendingCount, err = util.GetTxPoolSize(ec.Client())
 	if err != nil {
 		log.Debug().Err(err).Msg("Unable to get pending transaction count")
 		cs.PendingCount = 0
@@ -129,7 +131,7 @@ func (h historicalRange) getValues(limit int) []float64 {
 		values[idx] = v.SampleValue
 	}
 	if limit < len(values) {
-		values = values[len(values) - limit:]
+		values = values[len(values)-limit:]
 	}
 	return values
 }
@@ -332,6 +334,9 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 			Result: r,
 			Error:  err,
 		})
+	}
+	if len(blms) == 0 {
+		return nil
 	}
 	b := backoff.NewExponentialBackOff()
 	b.MaxElapsedTime = 3 * time.Minute
