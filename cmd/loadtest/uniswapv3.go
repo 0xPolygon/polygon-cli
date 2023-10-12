@@ -710,7 +710,7 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 		tx, err = uniswapV3Config.NFPositionManager.contract.Mint(tops, mintParams)
 		return
 	}); err != nil {
-		log.Error().Err(err).Msg("Unable to create liquidity for the Token0-Token1 pool")
+		log.Error().Err(err).Msg("Unable to provide liquidity for the Token0-Token1 pool")
 		return err
 	}
 	log.Debug().Msg("Liquidity provided to the Token0-Token1 pool")
