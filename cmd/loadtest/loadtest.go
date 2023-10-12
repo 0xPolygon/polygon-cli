@@ -480,7 +480,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 
 		fees := big.NewInt(3_000)
-		poolConfig := PoolConfig{Fees: fees}
+		poolConfig = PoolConfig{Fees: fees}
 		if token0Config.Address.Hex() < token1Config.Address.Hex() {
 			poolConfig.Token0 = token0Config
 			poolConfig.ReserveA = tokensAToMint
