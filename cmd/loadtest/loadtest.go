@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	ui "github.com/gizak/termui/v3"
 	"github.com/maticnetwork/polygon-cli/contracts"
 	"github.com/maticnetwork/polygon-cli/contracts/tokens"
 	"github.com/maticnetwork/polygon-cli/metrics"
@@ -577,6 +578,11 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	lightSummary(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce, rl)
+
+	bucketedLoadTestResults := loadTestResults.Bucketize(*ltp.BarChartNumBucket)
+	termWidth, _ := ui.TerminalDimensions()
+	bucketedLoadTestResults.PrintBucketAsBarChart(termWidth / 2)
+
 	if *ltp.ShouldProduceSummary {
 		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
 		if err != nil {
@@ -839,6 +845,12 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 	}
 	gp, pErr := c.SuggestGasPrice(ctx)
 	gt, tErr := c.SuggestGasTipCap(ctx)
+
+	// In the case of an EVM compatible system not supporting EIP-1559
+	if *inputLoadTestParams.LegacyTransactionMode {
+		gt = big.NewInt(0)
+	}
+
 	if pErr == nil && (tErr == nil || !isDynamic) {
 		cachedBlockNumber = bn
 		cachedGasPrice = gp
@@ -1258,6 +1270,9 @@ func recordSample(goRoutineID, requestID int64, err error, start, end time.Time,
 	}
 	loadTestResutsMutex.Lock()
 	loadTestResults = append(loadTestResults, s)
+	if s.WaitTime.Milliseconds() > maxLoadTestTime {
+		maxLoadTestTime = s.WaitTime.Milliseconds()
+	}
 	loadTestResutsMutex.Unlock()
 }
 

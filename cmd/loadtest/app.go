@@ -73,6 +73,7 @@ type (
 		SummaryOutputMode                   *string
 		LegacyTransactionMode               *bool
 		RecallLength                        *uint64
+		BarChartNumBucket                   *int
 
 		// Computed
 		CurrentGasPrice     *big.Int
@@ -88,13 +89,23 @@ type (
 		ParsedModes         []loadTestMode
 		MultiMode           bool
 	}
+	Bucket struct {
+		Name  string
+		Start int64
+		End   int64
+		Count int
+	}
+
+	loadTestSamples []loadTestSample
+	Buckets         []*Bucket
 )
 
 var (
 	//go:embed usage.md
 	usage               string
 	inputLoadTestParams loadTestParams
-	loadTestResults     []loadTestSample
+	maxLoadTestTime     int64
+	loadTestResults     loadTestSamples
 	loadTestResutsMutex sync.RWMutex
 
 	hexwords = []byte{
@@ -232,6 +243,7 @@ rpc - call random rpc methods`)
 	ltp.SummaryOutputMode = LoadtestCmd.PersistentFlags().String("output-mode", "text", "Format mode for summary output (json | text)")
 	ltp.LegacyTransactionMode = LoadtestCmd.PersistentFlags().Bool("legacy", false, "Send a legacy transaction instead of an EIP1559 transaction.")
 	ltp.RecallLength = LoadtestCmd.PersistentFlags().Uint64("recall-blocks", 50, "The number of blocks that we'll attempt to fetch for recall")
+	ltp.BarChartNumBucket = LoadtestCmd.PersistentFlags().Int("bar-chart-num-bucket", 10, "The number of buckets to visualize latency time distribution")
 	inputLoadTestParams = *ltp
 
 	// TODO Compression
