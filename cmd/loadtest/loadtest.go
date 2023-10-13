@@ -743,6 +743,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 			if currentBlockNumber != lastBlockNumber {
 				lock = false
 			}
+			// Note: blockInterval > 0 (enforced at the flag level).
 			if blockDiff%blockInterval == 0 {
 				if !lock {
 					lock = true
