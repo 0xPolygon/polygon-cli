@@ -12,6 +12,7 @@
 package rpcfuzz
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/sha1"
@@ -19,7 +20,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
+	"net/http"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -111,11 +114,29 @@ type (
 		Topics    []interface{} `json:"topics,omitempty"`
 	}
 
-	// RPCJSONError can be used to unmarshal a raw error response
+	// RPCTestRawHTTP is a raw RPCTest performed using HTTP requests.
+	// It does not leverage advanced HTTP libraries like `github.com/ethereum/go-ethereum/rpc`.
+	RPCTestRawHTTP struct {
+		Name       string
+		HTTPMethod string
+		Args       []interface{}
+		Validator  func(result interface{}) error
+		Flags      RPCTestFlag
+	}
+
+	// RPCJSONError can be used to unmarshal a raw error response.
 	RPCJSONError struct {
 		Code    int         `json:"code"`
 		Message string      `json:"message"`
 		Data    interface{} `json:"data,omitempty"`
+	}
+
+	// RPCJSONResponse can be used to unmarshal a raw response.
+	RPCJSONResponse struct {
+		Version string        `json:"jsonrpc"`
+		Result  any           `json:"result,omitempty"`
+		Error   *RPCJSONError `json:"error,omitempty"`
+		ID      any           `json:"id"`
 	}
 )
 
@@ -134,6 +155,8 @@ const (
 	defaultMaxPriorityFeePerGas = "0x1000000000"
 
 	defaultNonceTestOffset uint64 = 0x100000000
+
+	rpcTestRawHTTPNamespace = "raw"
 
 	// JSON-RPC error codes.
 	// https://eips.ethereum.org/EIPS/eip-1474
@@ -1137,6 +1160,15 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Validator: ValidateError(invalidRequestErr, `genesis is not traceable`),
 	})
 
+	// $ curl -X POST -H "Content-Type: application/json" --data '[]' http://localhost:8545
+	// {"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"empty batch"}}
+	allTests = append(allTests, &RPCTestRawHTTP{
+		Name:       "EmptyBatch",
+		HTTPMethod: http.MethodPost,
+		Args:       []interface{}{},
+		Validator:  ValidateError(invalidRequestErr, "empty batch"),
+	})
+
 	uniqueTests := make(map[RPCTest]struct{})
 	uniqueTestNames := make(map[string]struct{})
 	for _, v := range allTests {
@@ -1162,7 +1194,7 @@ func RequireAny(validators ...func(interface{}) error) func(result interface{}) 
 				return nil
 			}
 		}
-		return fmt.Errorf("All Validation failed")
+		return fmt.Errorf("all Validation failed")
 	}
 }
 func RequireAll(validators ...func(interface{}) error) func(result interface{}) error {
@@ -1184,11 +1216,11 @@ func ValidateHashedResponse(expectedHash string) func(result interface{}) error 
 	return func(result interface{}) error {
 		jsonBytes, err := json.Marshal(result)
 		if err != nil {
-			return fmt.Errorf("Unable to marshal result object to json %w", err)
+			return fmt.Errorf("unable to marshal result object to json %w", err)
 		}
 		actualHash := fmt.Sprintf("%x", sha1.Sum(jsonBytes))
 		if actualHash != expectedHash {
-			return fmt.Errorf("Hash mismatch expected: %s and got %s", expectedHash, actualHash)
+			return fmt.Errorf("hash mismatch expected: %s and got %s", expectedHash, actualHash)
 		}
 		return nil
 	}
@@ -1203,13 +1235,13 @@ func ValidateJSONSchema(schema string) func(result interface{}) error {
 		// for easy access to the initial response string...
 		jsonBytes, err := json.Marshal(result)
 		if err != nil {
-			return fmt.Errorf("Unable to marshal result back to json for validation: %w", err)
+			return fmt.Errorf("unable to marshal result back to json for validation: %w", err)
 		}
 		responseLoader := gojsonschema.NewStringLoader(string(jsonBytes))
 
 		validatorResult, err := gojsonschema.Validate(validatorLoader, responseLoader)
 		if err != nil {
-			return fmt.Errorf("Unable to run json validation: %w", err)
+			return fmt.Errorf("unable to run json validation: %w", err)
 		}
 		// fmt.Println(string(jsonBytes))
 		if !validatorResult.Valid() {
@@ -1218,7 +1250,7 @@ func ValidateJSONSchema(schema string) func(result interface{}) error {
 				errStr += desc.String() + "\n"
 			}
 			log.Trace().Str("resultJson", string(jsonBytes)).Msg("json failed to validate")
-			return fmt.Errorf("The json document is not valid: %s", errStr)
+			return fmt.Errorf("the json document is not valid: %s", errStr)
 		}
 		return nil
 
@@ -1229,7 +1261,7 @@ func ValidateJSONSchema(schema string) func(result interface{}) error {
 func ValidateExact(expected interface{}) func(result interface{}) error {
 	return func(result interface{}) error {
 		if expected != result {
-			return fmt.Errorf("Expected %v and got %v", expected, result)
+			return fmt.Errorf("expected %v and got %v", expected, result)
 		}
 		return nil
 	}
@@ -1238,11 +1270,11 @@ func ValidateExactJSON(expected string) func(result interface{}) error {
 	return func(result interface{}) error {
 		jsonResult, err := json.Marshal(result)
 		if err != nil {
-			return fmt.Errorf("Unable to json marshal test result: %w", err)
+			return fmt.Errorf("unable to json marshal test result: %w", err)
 		}
 
 		if expected != string(jsonResult) {
-			return fmt.Errorf("Expected %v and got %v", expected, string(jsonResult))
+			return fmt.Errorf("expected %v and got %v", expected, string(jsonResult))
 		}
 		return nil
 	}
@@ -1254,10 +1286,10 @@ func ValidateRegexString(regEx string) func(result interface{}) error {
 	return func(result interface{}) error {
 		resultStr, isValid := result.(string)
 		if !isValid {
-			return fmt.Errorf("Invalid result type. Expected string but got %T", result)
+			return fmt.Errorf("invalid result type. Expected string but got %T", result)
 		}
 		if !r.MatchString(resultStr) {
-			return fmt.Errorf("The regex %s failed to match result %s", regEx, resultStr)
+			return fmt.Errorf("the regex %s failed to match result %s", regEx, resultStr)
 		}
 		return nil
 	}
@@ -1272,10 +1304,10 @@ func ValidateError(code int, errorMessageRegex string) func(result interface{}) 
 			return err
 		}
 		if !r.MatchString(fullError.Error()) {
-			return fmt.Errorf("The regex %s failed to match result %s", errorMessageRegex, fullError.Error())
+			return fmt.Errorf("the regex %s failed to match result %s", errorMessageRegex, fullError.Error())
 		}
 		if code != fullError.Code {
-			return fmt.Errorf("Expected error code %d but got %d", code, fullError.Code)
+			return fmt.Errorf("expected error code %d but got %d", code, fullError.Code)
 		}
 
 		return nil
@@ -1317,58 +1349,58 @@ func ValidateTransactionHash() func(result interface{}) error {
 func genericResultToBlockHeader(result interface{}) (*ethtypes.Header, string, error) {
 	underlyingBlock, ok := result.(map[string]interface{})
 	if !ok {
-		return nil, "", fmt.Errorf("The underlying type of the result didn't match a block header. Got %T", result)
+		return nil, "", fmt.Errorf("the underlying type of the result didn't match a block header. Got %T", result)
 	}
 	genericHash, ok := underlyingBlock["hash"].(string)
 	if !ok {
-		return nil, "", fmt.Errorf("Could not recover the underlying hash. Expected a string and got %T", result)
+		return nil, "", fmt.Errorf("could not recover the underlying hash. Expected a string and got %T", result)
 	}
 	log.Info().Str("blockHash", genericHash).Msg("Original block hash")
 	jsonBlock, err := json.Marshal(underlyingBlock)
 	if err != nil {
-		return nil, "", fmt.Errorf("Could not json marshal initial block result %w", err)
+		return nil, "", fmt.Errorf("could not json marshal initial block result %w", err)
 	}
 
 	blockHeader := ethtypes.Header{}
 
 	err = blockHeader.UnmarshalJSON(jsonBlock)
 	if err != nil {
-		return nil, "", fmt.Errorf("Could not unmarshal json block to geth based json block: %w", err)
+		return nil, "", fmt.Errorf("could not unmarshal json block to geth based json block: %w", err)
 	}
 	return &blockHeader, genericHash, nil
 }
 func genericResultToTransaction(result interface{}) (*ethtypes.Transaction, string, error) {
 	underlyingTx, ok := result.(map[string]interface{})
 	if !ok {
-		return nil, "", fmt.Errorf("The underlying type of the result didn't match a transaction. Got %T", result)
+		return nil, "", fmt.Errorf("the underlying type of the result didn't match a transaction. Got %T", result)
 	}
 	genericHash, ok := underlyingTx["hash"].(string)
 	if !ok {
-		return nil, "", fmt.Errorf("Could not recover the underlying hash. Expected a string and got %T", result)
+		return nil, "", fmt.Errorf("could not recover the underlying hash. Expected a string and got %T", result)
 	}
 	log.Info().Str("txHash", genericHash).Msg("Original tx hash")
 	jsonTx, err := json.Marshal(underlyingTx)
 	if err != nil {
-		return nil, "", fmt.Errorf("Could not json marshal initial tx result %w", err)
+		return nil, "", fmt.Errorf("could not json marshal initial tx result %w", err)
 	}
 
 	tx := ethtypes.Transaction{}
 
 	err = tx.UnmarshalJSON(jsonTx)
 	if err != nil {
-		return nil, "", fmt.Errorf("Could not unmarshal json tx to geth based json tx: %w", err)
+		return nil, "", fmt.Errorf("could not unmarshal json tx to geth based json tx: %w", err)
 	}
 	return &tx, genericHash, nil
 }
 func genericResultToError(result interface{}) (*RPCJSONError, error) {
 	jsonErrorData, err := json.Marshal(result)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to json marshal error result: %w", err)
+		return nil, fmt.Errorf("unable to json marshal error result: %w", err)
 	}
 	fullError := new(RPCJSONError)
 	err = json.Unmarshal(jsonErrorData, fullError)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal json error: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal json error: %w", err)
 	}
 	return fullError, nil
 
@@ -1659,7 +1691,7 @@ func executeRawTx(ctx context.Context, rpcClient *rpc.Client, rawTx []byte) (str
 	}
 	rawHash, ok := result.(string)
 	if !ok {
-		return "", fmt.Errorf("Invalid result type. Expected string but got %T", result)
+		return "", fmt.Errorf("invalid result type. Expected string but got %T", result)
 	}
 	log.Info().Str("txHash", rawHash).Msg("Successfully sent transaction")
 	return rawHash, nil
@@ -1721,20 +1753,68 @@ func GetCurrentChainID(ctx context.Context, rpcClient *rpc.Client) (*big.Int, er
 	return chainId, err
 }
 
-func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPCTest) testreporter.TestResult {
+func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHttpClient wrappedHttpClient, currTest RPCTest) testreporter.TestResult {
 	currTestResult := testreporter.New(currTest.GetName(), currTest.GetMethod(), 1)
 	args := currTest.GetArgs()
 
 	var result interface{}
-	err := rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
+	var err error
+	switch currTest.(type) {
+	case *RPCTestRawHTTP:
+		// Marshal the HTTP request payload.
+		var payload []byte
+		payload, err = json.Marshal(args)
+		if err != nil {
+			log.Fatal().Err(err).Msg("unable to marshal HTTP request payload")
+		}
 
-	if err != nil && !currTest.ExpectError() {
-		currTestResult.Fail(args, result, errors.New("Method test failed: "+err.Error()))
-		return currTestResult
-	}
-	if err == nil && currTest.ExpectError() {
-		currTestResult.Fail(args, result, errors.New("Expected an error but didn't get one"))
-		return currTestResult
+		// Create the request.
+		var request *http.Request
+		request, err = http.NewRequest(currTest.GetMethod(), wrappedHttpClient.url, bytes.NewBuffer(payload)) // TODO: fix
+		if err != nil {
+			log.Fatal().Err(err).Msg("unable to create HTTP request")
+
+		}
+		request.Header.Set("Content-Type", "application/json")
+
+		// Send the request.
+		var response *http.Response
+		response, err = wrappedHttpClient.client.Do(request)
+		if err != nil {
+			log.Error().Err(err).Msg("unable to send HTTP request")
+			break
+		}
+		defer response.Body.Close()
+
+		// Read the response body.
+		var body []byte
+		body, err = io.ReadAll(response.Body)
+		if err != nil {
+			log.Error().Err(err).Msg("unable to read HTTP body")
+			break
+		}
+
+		// Marshal the response and extract the error if there is any.
+		var rpcResponse RPCJSONResponse
+		err = json.Unmarshal(body, &rpcResponse)
+		if err != nil {
+			log.Error().Err(err).Msg("unable to unmarshal HTTP body")
+			break
+		}
+		if rpcResponse.Error != nil {
+			result = &rpcResponse.Error
+		}
+	default:
+		err = rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
+
+		if err != nil && !currTest.ExpectError() {
+			currTestResult.Fail(args, result, errors.New("method test failed: "+err.Error()))
+			return currTestResult
+		}
+		if err == nil && currTest.ExpectError() {
+			currTestResult.Fail(args, result, errors.New("expected an error but didn't get one"))
+			return currTestResult
+		}
 	}
 
 	if currTest.ExpectError() {
@@ -1806,8 +1886,29 @@ func (r *RPCTestDynamicArgs) ExpectError() bool {
 	return r.Flags&FlagErrorValidation != 0
 }
 
+func (r *RPCTestRawHTTP) GetMethod() string {
+	return r.HTTPMethod
+}
+func (r *RPCTestRawHTTP) GetName() string {
+	return r.Name
+}
+func (r *RPCTestRawHTTP) GetArgs() []interface{} {
+	return r.Args
+}
+func (r *RPCTestRawHTTP) Validate(result interface{}) error {
+	return r.Validator(result)
+}
+func (r *RPCTestRawHTTP) ExpectError() bool {
+	return r.Flags&FlagErrorValidation != 0
+}
+
 func (r *RPCJSONError) Error() string {
 	return r.Message
+}
+
+type wrappedHttpClient struct {
+	client *http.Client
+	url    string
 }
 
 var RPCFuzzCmd = &cobra.Command{
@@ -1821,7 +1922,8 @@ var RPCFuzzCmd = &cobra.Command{
 			log.Warn().Msg("Setting --export-path must pair with a export type: --json, --csv, --md, or --html")
 		}
 
-		rpcClient, err := rpc.DialContext(ctx, args[0])
+		url := args[0]
+		rpcClient, err := rpc.DialContext(ctx, url)
 		if err != nil {
 			return err
 		}
@@ -1839,6 +1941,9 @@ var RPCFuzzCmd = &cobra.Command{
 		log.Trace().Uint64("nonce", nonce).Uint64("chainid", chainId.Uint64()).Msg("Doing test setup")
 		setupTests(ctx, rpcClient)
 
+		httpClient := &http.Client{}
+		wrappedHTTPClient := wrappedHttpClient{httpClient, url}
+
 		for _, t := range allTests {
 			if !shouldRunTest(t) {
 				log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Skipping test")
@@ -1846,7 +1951,7 @@ var RPCFuzzCmd = &cobra.Command{
 			}
 			log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Running Test")
 
-			currTestResult := CallRPCAndValidate(ctx, rpcClient, t)
+			currTestResult := CallRPCAndValidate(ctx, rpcClient, wrappedHTTPClient, t)
 			testResults.AddTestResult(currTestResult)
 
 			if *testFuzz {
@@ -1891,7 +1996,7 @@ var RPCFuzzCmd = &cobra.Command{
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
-			return fmt.Errorf("Expected 1 argument, but got %d", len(args))
+			return fmt.Errorf("expected 1 argument, but got %d", len(args))
 		}
 
 		privateKey, err := ethcrypto.HexToECDSA(*testPrivateHexKey)
@@ -1908,7 +2013,7 @@ var RPCFuzzCmd = &cobra.Command{
 		enabledNamespaces = make([]string, 0)
 		for _, ns := range rawNameSpaces {
 			if !nsValidator.MatchString(ns) {
-				return fmt.Errorf("The namespace %s is not valid", ns)
+				return fmt.Errorf("the namespace %s is not valid", ns)
 			}
 			enabledNamespaces = append(enabledNamespaces, ns+"_")
 		}
@@ -1922,8 +2027,16 @@ var RPCFuzzCmd = &cobra.Command{
 }
 
 func shouldRunTest(t RPCTest) bool {
+	var testNamespace string
+	switch t.(type) {
+	case *RPCTestRawHTTP:
+		testNamespace = fmt.Sprintf("%s_", rpcTestRawHTTPNamespace)
+	default:
+		testNamespace = t.GetMethod()
+	}
+
 	for _, ns := range enabledNamespaces {
-		if strings.HasPrefix(t.GetMethod(), ns) {
+		if strings.HasPrefix(testNamespace, ns) {
 			return true
 		}
 	}
@@ -1935,7 +2048,7 @@ func init() {
 
 	testPrivateHexKey = flagSet.String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
 	testContractAddress = flagSet.String("contract-address", "0x6fda56c57b0acadb96ed5624ac500c0429d59429", "The address of a contract that can be used for testing")
-	testNamespaces = flagSet.String("namespaces", "eth,web3,net,debug", "Comma separated list of rpc namespaces to test")
+	testNamespaces = flagSet.String("namespaces", fmt.Sprintf("eth,web3,net,debug,%s", rpcTestRawHTTPNamespace), "Comma separated list of rpc namespaces to test")
 	testFuzz = flagSet.Bool("fuzz", false, "Flag to indicate whether to fuzz input or not.")
 	testFuzzNum = flagSet.Int("fuzzn", 100, "Number of times to run the fuzzer per test.")
 	seed = flagSet.Int64("seed", 123456, "A seed for generating random values within the fuzzer")
