@@ -106,6 +106,7 @@ The codebase has a contract that used for load testing. It's written in Yul and 
       --adaptive-cycle-duration-seconds uint       When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates (default 10)
       --adaptive-rate-limit                        Enable AIMD-style congestion control to automatically adjust request rate
       --adaptive-rate-limit-increment uint         When using adaptive rate limiting, this flag controls the size of the additive increases. (default 50)
+      --bar-chart-num-bucket int                   The number of buckets to visualize latency time distribution (default 10)
       --batch-size uint                            Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time. (default 999)
   -b, --byte-count uint                            If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
       --call-only                                  When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.
