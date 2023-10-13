@@ -12,6 +12,7 @@
 package rpcfuzz
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/sha1"
@@ -19,7 +20,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
+	"net/http"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -111,11 +114,29 @@ type (
 		Topics    []interface{} `json:"topics,omitempty"`
 	}
 
-	// RPCJSONError can be used to unmarshal a raw error response
+	// RPCTestRawHTTP is a raw RPCTest performed using HTTP requests.
+	// It does not leverage advanced HTTP libraries like `github.com/ethereum/go-ethereum/rpc`.
+	RPCTestRawHTTP struct {
+		Name       string
+		HTTPMethod string
+		Args       []interface{}
+		Validator  func(result interface{}) error
+		Flags      RPCTestFlag
+	}
+
+	// RPCJSONError can be used to unmarshal a raw error response.
 	RPCJSONError struct {
 		Code    int         `json:"code"`
 		Message string      `json:"message"`
 		Data    interface{} `json:"data,omitempty"`
+	}
+
+	// RPCJSONResponse can be used to unmarshal a raw response.
+	RPCJSONResponse struct {
+		Version string        `json:"jsonrpc"`
+		Result  any           `json:"result,omitempty"`
+		Error   *RPCJSONError `json:"error,omitempty"`
+		ID      any           `json:"id"`
 	}
 )
 
@@ -134,6 +155,16 @@ const (
 	defaultMaxPriorityFeePerGas = "0x1000000000"
 
 	defaultNonceTestOffset uint64 = 0x100000000
+
+	rpcTestRawHTTPNamespace = "raw"
+
+	// JSON-RPC error codes.
+	// https://eips.ethereum.org/EIPS/eip-1474
+	parseErr          = -32700
+	invalidRequestErr = -32600
+	methodNotFoundErr = -32601
+	invalidParamsErr  = -32602
+	internalErr       = -32603
 )
 
 var (
@@ -173,7 +204,6 @@ var (
 
 // setupTests will add all of the `RPCTests` to the `allTests` slice.
 func setupTests(ctx context.Context, rpcClient *rpc.Client) {
-
 	// cast rpc --rpc-url localhost:8545 net_version
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestNetVersion",
@@ -204,7 +234,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "web3_sha3",
 		Args:      []interface{}{"68656c6c6f20776f726c64"},
-		Validator: ValidateError(-32602, `cannot unmarshal hex string without 0x prefix`),
+		Validator: ValidateError(invalidParamsErr, `cannot unmarshal hex string without 0x prefix`),
 	})
 
 	// cast rpc --rpc-url localhost:8545 net_listening
@@ -229,7 +259,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "eth_protocolVersion",
 		Args:      []interface{}{},
-		Validator: ValidateError(-32601, `method eth_protocolVersion does not exist`),
+		Validator: ValidateError(methodNotFoundErr, `method eth_protocolVersion does not exist`),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_syncing
@@ -507,7 +537,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthSignFail",
 		Method:    "eth_sign",
 		Args:      []interface{}{testEthAddress.String(), "0xdeadbeef"},
-		Validator: ValidateError(-32000, `unknown account`),
+		Validator: ValidateError(invalidRequestErr, `unknown account`),
 		Flags:     FlagErrorValidation | FlagStrictValidation | FlagRequiresUnlock,
 	})
 
@@ -529,6 +559,25 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Flags:     FlagRequiresUnlock,
 	})
 
+	// $ curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_sendTransaction","params":[],"id":1}' http://localhost:8545
+	// {"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"missing value for required argument 0"}}
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthSendTransactionEmpty",
+		Method:    "eth_sendTransaction",
+		Args:      []interface{}{},
+		Flags:     FlagErrorValidation,
+		Validator: ValidateError(invalidParamsErr, "missing value for required argument 0"),
+	})
+	// $ curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_sendRawTransaction","params":[],"id":1}' http://localhost:8545
+	// {"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"missing value for required argument 0"}}
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthSendRawTransactionEmpty",
+		Method:    "eth_sendRawTransaction",
+		Args:      []interface{}{},
+		Flags:     FlagErrorValidation,
+		Validator: ValidateError(invalidParamsErr, "missing value for required argument 0"),
+	})
+
 	// cast rpc --rpc-url localhost:8545 eth_sendRawTransaction '{"from": "0xb9b1cf51a65b50f74ed8bcb258413c02cba2ec57", "to": "0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6", "data": "0x", "gas": "0x5208", "gasPrice": "0x1", "nonce": "0x1"}'
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestEthSendRawTransaction",
@@ -540,7 +589,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthSendRawTransactionNonceTooLow",
 		Method:    "eth_sendRawTransaction",
 		Args:      ArgsSignTransactionWithNonce(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}, 0),
-		Validator: ValidateError(-32000, `nonce too low`),
+		Validator: ValidateError(invalidRequestErr, `nonce too low`),
 		Flags:     FlagErrorValidation | FlagStrictValidation,
 	})
 	allTests = append(allTests, &RPCTestDynamicArgs{
@@ -554,14 +603,14 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestEthSendRawTransactionNonceKnown",
 		Method:    "eth_sendRawTransaction",
 		Args:      ArgsSignTransactionWithNonce(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}, testAccountNonce|defaultNonceTestOffset),
-		Validator: ValidateError(-32000, `already known`),
+		Validator: ValidateError(invalidRequestErr, `already known`),
 		Flags:     FlagErrorValidation | FlagStrictValidation | FlagOrderDependent,
 	})
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:      "RPCTestEthSendRawTransactionNonceUnderpriced",
 		Method:    "eth_sendRawTransaction",
 		Args:      ArgsSignTransactionWithNonce(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x1234", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}, testAccountNonce|defaultNonceTestOffset),
-		Validator: ValidateError(-32000, `replacement`),
+		Validator: ValidateError(invalidRequestErr, `replacement`),
 		Flags:     FlagErrorValidation | FlagStrictValidation | FlagOrderDependent,
 	})
 
@@ -608,6 +657,16 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 			ValidateRegexString(`^0xc841$`),  // subsequent run
 		),
 		Flags: FlagStrictValidation,
+	})
+
+	// $ curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc": "2.0", "method": "eth_estimateGas", "params": [], "id":1}' localhost:8545
+	// {"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"missing value for required argument 0"}}
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:      "RPCTestEthEstimateGasEmpty",
+		Method:    "eth_estimateGas",
+		Args:      []interface{}{},
+		Flags:     FlagErrorValidation,
+		Validator: ValidateError(invalidParamsErr, `missing value for required argument 0`),
 	})
 
 	// cast block --rpc-url localhost:8545 latest
@@ -714,28 +773,28 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "eth_getCompilers",
 		Args:      []interface{}{},
-		Validator: ValidateError(-32601, `method eth_getCompilers does not exist`),
+		Validator: ValidateError(methodNotFoundErr, `method eth_getCompilers does not exist`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthCompileSolidity",
 		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "eth_compileSolidity",
 		Args:      []interface{}{},
-		Validator: ValidateError(-32601, `method eth_compileSolidity does not exist`),
+		Validator: ValidateError(methodNotFoundErr, `method eth_compileSolidity does not exist`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthCompileLLL",
 		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "eth_compileLLL",
 		Args:      []interface{}{},
-		Validator: ValidateError(-32601, `method eth_compileLLL does not exist`),
+		Validator: ValidateError(methodNotFoundErr, `method eth_compileLLL does not exist`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthCompileSerpent",
 		Flags:     FlagErrorValidation | FlagStrictValidation,
 		Method:    "eth_compileSerpent",
 		Args:      []interface{}{},
-		Validator: ValidateError(-32601, `method eth_compileSerpent does not exist`),
+		Validator: ValidateError(methodNotFoundErr, `method eth_compileSerpent does not exist`),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_newFilter "{}"
@@ -859,7 +918,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "eth_getWork",
 		Args:      []interface{}{},
 		Flags:     FlagErrorValidation | FlagStrictValidation,
-		Validator: ValidateError(-32601, `method eth_getWork does not exist`),
+		Validator: ValidateError(methodNotFoundErr, `method eth_getWork does not exist`),
 	})
 	// cast rpc --rpc-url localhost:8545 eth_submitWork 0x0011223344556677 0x00112233445566778899AABBCCDDEEFF 0x00112233445566778899AABBCCDDEEFF
 	allTests = append(allTests, &RPCTestGeneric{
@@ -867,7 +926,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "eth_submitWork",
 		Args:      []interface{}{"0x0011223344556677", "0x00112233445566778899AABBCCDDEEFF", "0x00112233445566778899AABBCCDDEEFF"},
 		Flags:     FlagErrorValidation | FlagStrictValidation,
-		Validator: ValidateError(-32601, `method eth_submitWork does not exist`),
+		Validator: ValidateError(methodNotFoundErr, `method eth_submitWork does not exist`),
 	})
 	// cast rpc --rpc-url localhost:8545 eth_submitHashrate 0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF 0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF
 	allTests = append(allTests, &RPCTestGeneric{
@@ -875,7 +934,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "eth_submitHashrate",
 		Args:      []interface{}{"0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF", "0x00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF"},
 		Flags:     FlagErrorValidation | FlagStrictValidation,
-		Validator: ValidateError(-32601, `method eth_submitHashrate does not exist`),
+		Validator: ValidateError(methodNotFoundErr, `method eth_submitHashrate does not exist`),
 	})
 
 	// cast rpc --rpc-url localhost:8545 eth_feeHistory 128 latest []
@@ -953,7 +1012,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "debug_getRawBlock",
 		Args:      []interface{}{"pending"},
 		Flags:     FlagErrorValidation | FlagStrictValidation,
-		Validator: ValidateError(-32000, `not found`),
+		Validator: ValidateError(invalidRequestErr, `not found`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestDebugGetRawBlockEarliest",
@@ -988,7 +1047,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "debug_getRawHeader",
 		Args:      []interface{}{"pending"},
 		Flags:     FlagErrorValidation | FlagStrictValidation,
-		Validator: ValidateError(-32000, `not found`),
+		Validator: ValidateError(invalidRequestErr, `not found`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestDebugGetRawHeaderEarliest",
@@ -1050,7 +1109,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "debug_traceBlockByNumber",
 		Args:      []interface{}{"0x0", nil},
 		Flags:     FlagErrorValidation | FlagStrictValidation,
-		Validator: ValidateError(-32000, `genesis is not traceable`),
+		Validator: ValidateError(invalidRequestErr, `genesis is not traceable`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestDebugTraceBlockByNumberOne",
@@ -1069,7 +1128,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "debug_traceBlockByNumber",
 		Args:      []interface{}{"earliest", nil},
 		Flags:     FlagErrorValidation | FlagStrictValidation,
-		Validator: ValidateError(-32000, `genesis is not traceable`),
+		Validator: ValidateError(invalidRequestErr, `genesis is not traceable`),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestDebugTraceBlockByNumberPending",
@@ -1098,7 +1157,16 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "debug_traceBlock",
 		Args:      ArgsRawBlock(ctx, rpcClient, "0x0", nil),
 		Flags:     FlagErrorValidation | FlagStrictValidation,
-		Validator: ValidateError(-32000, `genesis is not traceable`),
+		Validator: ValidateError(invalidRequestErr, `genesis is not traceable`),
+	})
+
+	// $ curl -X POST -H "Content-Type: application/json" --data '[]' http://localhost:8545
+	// {"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"empty batch"}}
+	allTests = append(allTests, &RPCTestRawHTTP{
+		Name:       "EmptyBatch",
+		HTTPMethod: http.MethodPost,
+		Args:       []interface{}{},
+		Validator:  ValidateError(invalidRequestErr, "empty batch"),
 	})
 
 	uniqueTests := make(map[RPCTest]struct{})
@@ -1126,7 +1194,7 @@ func RequireAny(validators ...func(interface{}) error) func(result interface{}) 
 				return nil
 			}
 		}
-		return fmt.Errorf("All Validation failed")
+		return fmt.Errorf("all Validation failed")
 	}
 }
 func RequireAll(validators ...func(interface{}) error) func(result interface{}) error {
@@ -1148,11 +1216,11 @@ func ValidateHashedResponse(expectedHash string) func(result interface{}) error 
 	return func(result interface{}) error {
 		jsonBytes, err := json.Marshal(result)
 		if err != nil {
-			return fmt.Errorf("Unable to marshal result object to json %w", err)
+			return fmt.Errorf("unable to marshal result object to json %w", err)
 		}
 		actualHash := fmt.Sprintf("%x", sha1.Sum(jsonBytes))
 		if actualHash != expectedHash {
-			return fmt.Errorf("Hash mismatch expected: %s and got %s", expectedHash, actualHash)
+			return fmt.Errorf("hash mismatch expected: %s and got %s", expectedHash, actualHash)
 		}
 		return nil
 	}
@@ -1167,13 +1235,13 @@ func ValidateJSONSchema(schema string) func(result interface{}) error {
 		// for easy access to the initial response string...
 		jsonBytes, err := json.Marshal(result)
 		if err != nil {
-			return fmt.Errorf("Unable to marshal result back to json for validation: %w", err)
+			return fmt.Errorf("unable to marshal result back to json for validation: %w", err)
 		}
 		responseLoader := gojsonschema.NewStringLoader(string(jsonBytes))
 
 		validatorResult, err := gojsonschema.Validate(validatorLoader, responseLoader)
 		if err != nil {
-			return fmt.Errorf("Unable to run json validation: %w", err)
+			return fmt.Errorf("unable to run json validation: %w", err)
 		}
 		// fmt.Println(string(jsonBytes))
 		if !validatorResult.Valid() {
@@ -1182,7 +1250,7 @@ func ValidateJSONSchema(schema string) func(result interface{}) error {
 				errStr += desc.String() + "\n"
 			}
 			log.Trace().Str("resultJson", string(jsonBytes)).Msg("json failed to validate")
-			return fmt.Errorf("The json document is not valid: %s", errStr)
+			return fmt.Errorf("the json document is not valid: %s", errStr)
 		}
 		return nil
 
@@ -1193,7 +1261,7 @@ func ValidateJSONSchema(schema string) func(result interface{}) error {
 func ValidateExact(expected interface{}) func(result interface{}) error {
 	return func(result interface{}) error {
 		if expected != result {
-			return fmt.Errorf("Expected %v and got %v", expected, result)
+			return fmt.Errorf("expected %v and got %v", expected, result)
 		}
 		return nil
 	}
@@ -1202,11 +1270,11 @@ func ValidateExactJSON(expected string) func(result interface{}) error {
 	return func(result interface{}) error {
 		jsonResult, err := json.Marshal(result)
 		if err != nil {
-			return fmt.Errorf("Unable to json marshal test result: %w", err)
+			return fmt.Errorf("unable to json marshal test result: %w", err)
 		}
 
 		if expected != string(jsonResult) {
-			return fmt.Errorf("Expected %v and got %v", expected, string(jsonResult))
+			return fmt.Errorf("expected %v and got %v", expected, string(jsonResult))
 		}
 		return nil
 	}
@@ -1218,10 +1286,10 @@ func ValidateRegexString(regEx string) func(result interface{}) error {
 	return func(result interface{}) error {
 		resultStr, isValid := result.(string)
 		if !isValid {
-			return fmt.Errorf("Invalid result type. Expected string but got %T", result)
+			return fmt.Errorf("invalid result type. Expected string but got %T", result)
 		}
 		if !r.MatchString(resultStr) {
-			return fmt.Errorf("The regex %s failed to match result %s", regEx, resultStr)
+			return fmt.Errorf("the regex %s failed to match result %s", regEx, resultStr)
 		}
 		return nil
 	}
@@ -1236,10 +1304,10 @@ func ValidateError(code int, errorMessageRegex string) func(result interface{}) 
 			return err
 		}
 		if !r.MatchString(fullError.Error()) {
-			return fmt.Errorf("The regex %s failed to match result %s", errorMessageRegex, fullError.Error())
+			return fmt.Errorf("the regex %s failed to match result %s", errorMessageRegex, fullError.Error())
 		}
 		if code != fullError.Code {
-			return fmt.Errorf("Expected error code %d but got %d", code, fullError.Code)
+			return fmt.Errorf("expected error code %d but got %d", code, fullError.Code)
 		}
 
 		return nil
@@ -1281,58 +1349,58 @@ func ValidateTransactionHash() func(result interface{}) error {
 func genericResultToBlockHeader(result interface{}) (*ethtypes.Header, string, error) {
 	underlyingBlock, ok := result.(map[string]interface{})
 	if !ok {
-		return nil, "", fmt.Errorf("The underlying type of the result didn't match a block header. Got %T", result)
+		return nil, "", fmt.Errorf("the underlying type of the result didn't match a block header. Got %T", result)
 	}
 	genericHash, ok := underlyingBlock["hash"].(string)
 	if !ok {
-		return nil, "", fmt.Errorf("Could not recover the underlying hash. Expected a string and got %T", result)
+		return nil, "", fmt.Errorf("could not recover the underlying hash. Expected a string and got %T", result)
 	}
 	log.Info().Str("blockHash", genericHash).Msg("Original block hash")
 	jsonBlock, err := json.Marshal(underlyingBlock)
 	if err != nil {
-		return nil, "", fmt.Errorf("Could not json marshal initial block result %w", err)
+		return nil, "", fmt.Errorf("could not json marshal initial block result %w", err)
 	}
 
 	blockHeader := ethtypes.Header{}
 
 	err = blockHeader.UnmarshalJSON(jsonBlock)
 	if err != nil {
-		return nil, "", fmt.Errorf("Could not unmarshal json block to geth based json block: %w", err)
+		return nil, "", fmt.Errorf("could not unmarshal json block to geth based json block: %w", err)
 	}
 	return &blockHeader, genericHash, nil
 }
 func genericResultToTransaction(result interface{}) (*ethtypes.Transaction, string, error) {
 	underlyingTx, ok := result.(map[string]interface{})
 	if !ok {
-		return nil, "", fmt.Errorf("The underlying type of the result didn't match a transaction. Got %T", result)
+		return nil, "", fmt.Errorf("the underlying type of the result didn't match a transaction. Got %T", result)
 	}
 	genericHash, ok := underlyingTx["hash"].(string)
 	if !ok {
-		return nil, "", fmt.Errorf("Could not recover the underlying hash. Expected a string and got %T", result)
+		return nil, "", fmt.Errorf("could not recover the underlying hash. Expected a string and got %T", result)
 	}
 	log.Info().Str("txHash", genericHash).Msg("Original tx hash")
 	jsonTx, err := json.Marshal(underlyingTx)
 	if err != nil {
-		return nil, "", fmt.Errorf("Could not json marshal initial tx result %w", err)
+		return nil, "", fmt.Errorf("could not json marshal initial tx result %w", err)
 	}
 
 	tx := ethtypes.Transaction{}
 
 	err = tx.UnmarshalJSON(jsonTx)
 	if err != nil {
-		return nil, "", fmt.Errorf("Could not unmarshal json tx to geth based json tx: %w", err)
+		return nil, "", fmt.Errorf("could not unmarshal json tx to geth based json tx: %w", err)
 	}
 	return &tx, genericHash, nil
 }
 func genericResultToError(result interface{}) (*RPCJSONError, error) {
 	jsonErrorData, err := json.Marshal(result)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to json marshal error result: %w", err)
+		return nil, fmt.Errorf("unable to json marshal error result: %w", err)
 	}
 	fullError := new(RPCJSONError)
 	err = json.Unmarshal(jsonErrorData, fullError)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal json error: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal json error: %w", err)
 	}
 	return fullError, nil
 
@@ -1623,7 +1691,7 @@ func executeRawTx(ctx context.Context, rpcClient *rpc.Client, rawTx []byte) (str
 	}
 	rawHash, ok := result.(string)
 	if !ok {
-		return "", fmt.Errorf("Invalid result type. Expected string but got %T", result)
+		return "", fmt.Errorf("invalid result type. Expected string but got %T", result)
 	}
 	log.Info().Str("txHash", rawHash).Msg("Successfully sent transaction")
 	return rawHash, nil
@@ -1685,20 +1753,68 @@ func GetCurrentChainID(ctx context.Context, rpcClient *rpc.Client) (*big.Int, er
 	return chainId, err
 }
 
-func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPCTest) testreporter.TestResult {
+func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHttpClient wrappedHttpClient, currTest RPCTest) testreporter.TestResult {
 	currTestResult := testreporter.New(currTest.GetName(), currTest.GetMethod(), 1)
 	args := currTest.GetArgs()
 
 	var result interface{}
-	err := rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
+	var err error
+	switch currTest.(type) {
+	case *RPCTestRawHTTP:
+		// Marshal the HTTP request payload.
+		var payload []byte
+		payload, err = json.Marshal(args)
+		if err != nil {
+			log.Fatal().Err(err).Msg("unable to marshal HTTP request payload")
+		}
 
-	if err != nil && !currTest.ExpectError() {
-		currTestResult.Fail(args, result, errors.New("Method test failed: "+err.Error()))
-		return currTestResult
-	}
-	if err == nil && currTest.ExpectError() {
-		currTestResult.Fail(args, result, errors.New("Expected an error but didn't get one"))
-		return currTestResult
+		// Create the request.
+		var request *http.Request
+		request, err = http.NewRequest(currTest.GetMethod(), wrappedHttpClient.url, bytes.NewBuffer(payload)) // TODO: fix
+		if err != nil {
+			log.Fatal().Err(err).Msg("unable to create HTTP request")
+
+		}
+		request.Header.Set("Content-Type", "application/json")
+
+		// Send the request.
+		var response *http.Response
+		response, err = wrappedHttpClient.client.Do(request)
+		if err != nil {
+			log.Error().Err(err).Msg("unable to send HTTP request")
+			break
+		}
+		defer response.Body.Close()
+
+		// Read the response body.
+		var body []byte
+		body, err = io.ReadAll(response.Body)
+		if err != nil {
+			log.Error().Err(err).Msg("unable to read HTTP body")
+			break
+		}
+
+		// Marshal the response and extract the error if there is any.
+		var rpcResponse RPCJSONResponse
+		err = json.Unmarshal(body, &rpcResponse)
+		if err != nil {
+			log.Error().Err(err).Msg("unable to unmarshal HTTP body")
+			break
+		}
+		if rpcResponse.Error != nil {
+			result = &rpcResponse.Error
+		}
+	default:
+		err = rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
+
+		if err != nil && !currTest.ExpectError() {
+			currTestResult.Fail(args, result, errors.New("method test failed: "+err.Error()))
+			return currTestResult
+		}
+		if err == nil && currTest.ExpectError() {
+			currTestResult.Fail(args, result, errors.New("expected an error but didn't get one"))
+			return currTestResult
+		}
 	}
 
 	if currTest.ExpectError() {
@@ -1770,8 +1886,29 @@ func (r *RPCTestDynamicArgs) ExpectError() bool {
 	return r.Flags&FlagErrorValidation != 0
 }
 
+func (r *RPCTestRawHTTP) GetMethod() string {
+	return r.HTTPMethod
+}
+func (r *RPCTestRawHTTP) GetName() string {
+	return r.Name
+}
+func (r *RPCTestRawHTTP) GetArgs() []interface{} {
+	return r.Args
+}
+func (r *RPCTestRawHTTP) Validate(result interface{}) error {
+	return r.Validator(result)
+}
+func (r *RPCTestRawHTTP) ExpectError() bool {
+	return r.Flags&FlagErrorValidation != 0
+}
+
 func (r *RPCJSONError) Error() string {
 	return r.Message
+}
+
+type wrappedHttpClient struct {
+	client *http.Client
+	url    string
 }
 
 var RPCFuzzCmd = &cobra.Command{
@@ -1785,7 +1922,8 @@ var RPCFuzzCmd = &cobra.Command{
 			log.Warn().Msg("Setting --export-path must pair with a export type: --json, --csv, --md, or --html")
 		}
 
-		rpcClient, err := rpc.DialContext(ctx, args[0])
+		url := args[0]
+		rpcClient, err := rpc.DialContext(ctx, url)
 		if err != nil {
 			return err
 		}
@@ -1803,6 +1941,9 @@ var RPCFuzzCmd = &cobra.Command{
 		log.Trace().Uint64("nonce", nonce).Uint64("chainid", chainId.Uint64()).Msg("Doing test setup")
 		setupTests(ctx, rpcClient)
 
+		httpClient := &http.Client{}
+		wrappedHTTPClient := wrappedHttpClient{httpClient, url}
+
 		for _, t := range allTests {
 			if !shouldRunTest(t) {
 				log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Skipping test")
@@ -1810,7 +1951,7 @@ var RPCFuzzCmd = &cobra.Command{
 			}
 			log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Running Test")
 
-			currTestResult := CallRPCAndValidate(ctx, rpcClient, t)
+			currTestResult := CallRPCAndValidate(ctx, rpcClient, wrappedHTTPClient, t)
 			testResults.AddTestResult(currTestResult)
 
 			if *testFuzz {
@@ -1855,7 +1996,7 @@ var RPCFuzzCmd = &cobra.Command{
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
-			return fmt.Errorf("Expected 1 argument, but got %d", len(args))
+			return fmt.Errorf("expected 1 argument, but got %d", len(args))
 		}
 
 		privateKey, err := ethcrypto.HexToECDSA(*testPrivateHexKey)
@@ -1872,7 +2013,7 @@ var RPCFuzzCmd = &cobra.Command{
 		enabledNamespaces = make([]string, 0)
 		for _, ns := range rawNameSpaces {
 			if !nsValidator.MatchString(ns) {
-				return fmt.Errorf("The namespace %s is not valid", ns)
+				return fmt.Errorf("the namespace %s is not valid", ns)
 			}
 			enabledNamespaces = append(enabledNamespaces, ns+"_")
 		}
@@ -1886,8 +2027,16 @@ var RPCFuzzCmd = &cobra.Command{
 }
 
 func shouldRunTest(t RPCTest) bool {
+	var testNamespace string
+	switch t.(type) {
+	case *RPCTestRawHTTP:
+		testNamespace = fmt.Sprintf("%s_", rpcTestRawHTTPNamespace)
+	default:
+		testNamespace = t.GetMethod()
+	}
+
 	for _, ns := range enabledNamespaces {
-		if strings.HasPrefix(t.GetMethod(), ns) {
+		if strings.HasPrefix(testNamespace, ns) {
 			return true
 		}
 	}
@@ -1899,7 +2048,7 @@ func init() {
 
 	testPrivateHexKey = flagSet.String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
 	testContractAddress = flagSet.String("contract-address", "0x6fda56c57b0acadb96ed5624ac500c0429d59429", "The address of a contract that can be used for testing")
-	testNamespaces = flagSet.String("namespaces", "eth,web3,net,debug", "Comma separated list of rpc namespaces to test")
+	testNamespaces = flagSet.String("namespaces", fmt.Sprintf("eth,web3,net,debug,%s", rpcTestRawHTTPNamespace), "Comma separated list of rpc namespaces to test")
 	testFuzz = flagSet.Bool("fuzz", false, "Flag to indicate whether to fuzz input or not.")
 	testFuzzNum = flagSet.Int("fuzzn", 100, "Number of times to run the fuzzer per test.")
 	seed = flagSet.Int64("seed", 123456, "A seed for generating random values within the fuzzer")
