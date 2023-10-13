@@ -15,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	ui "github.com/gizak/termui/v3"
 	"github.com/maticnetwork/polygon-cli/contracts"
 	"github.com/maticnetwork/polygon-cli/contracts/tokens"
 	"github.com/maticnetwork/polygon-cli/metrics"
@@ -580,8 +579,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	lightSummary(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce, rl)
 
 	bucketedLoadTestResults := loadTestResults.Bucketize(*ltp.BarChartNumBucket)
-	termWidth, _ := ui.TerminalDimensions()
-	bucketedLoadTestResults.PrintBucketAsBarChart(termWidth / 2)
+	bucketedLoadTestResults.PrintBucketAsBarChart(50)
 
 	if *ltp.ShouldProduceSummary {
 		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
