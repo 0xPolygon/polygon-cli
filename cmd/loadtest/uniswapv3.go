@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 
@@ -192,7 +193,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 0. Deploy WETH9.
 	config.WETH9.Address, config.WETH9.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "WETH9", knownAddresses.WETH9,
+		ctx, c, tops, cops, "Step 0: Contract WETH9 deployment", knownAddresses.WETH9,
 		uniswapv3.DeployWETH9,
 		uniswapv3.NewWETH9,
 		func(contract *uniswapv3.WETH9) (err error) {
@@ -206,7 +207,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 1. Deploy UniswapV3Factory.
 	config.FactoryV3.Address, config.FactoryV3.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "Factory", knownAddresses.FactoryV3,
+		ctx, c, tops, cops, "Step 1: Contract UniswapV3Factory deployment", knownAddresses.FactoryV3,
 		uniswapv3.DeployUniswapV3Factory,
 		uniswapv3.NewUniswapV3Factory,
 		func(contract *uniswapv3.UniswapV3Factory) (err error) {
@@ -225,7 +226,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 3. Deploy UniswapInterfaceMulticall.
 	config.Multicall.Address, config.Multicall.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "Multicall", knownAddresses.Multicall,
+		ctx, c, tops, cops, "Step 3: Contract UniswapInterfaceMulticall deployment", knownAddresses.Multicall,
 		uniswapv3.DeployUniswapInterfaceMulticall,
 		uniswapv3.NewUniswapInterfaceMulticall,
 		func(contract *uniswapv3.UniswapInterfaceMulticall) (err error) {
@@ -239,7 +240,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 4. Deploy ProxyAdmin.
 	config.ProxyAdmin.Address, config.ProxyAdmin.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "ProxyAdmin", knownAddresses.ProxyAdmin,
+		ctx, c, tops, cops, "Step 4: Contract ProxyAdmin deployment", knownAddresses.ProxyAdmin,
 		uniswapv3.DeployProxyAdmin,
 		uniswapv3.NewProxyAdmin,
 		func(contract *uniswapv3.ProxyAdmin) (err error) {
@@ -253,7 +254,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 5. Deploy TickLens.
 	config.TickLens.Address, config.TickLens.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "TickLens", knownAddresses.TickLens,
+		ctx, c, tops, cops, "Step 5: Contract TickLens deployment", knownAddresses.TickLens,
 		uniswapv3.DeployTickLens,
 		uniswapv3.NewTickLens,
 		func(contract *uniswapv3.TickLens) (err error) {
@@ -269,7 +270,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 6. Deploy NFTDescriptor library.
 	config.NFTDescriptorLib.Address, _, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "NFTDescriptorLib", knownAddresses.NFTDescriptorLib,
+		ctx, c, tops, cops, "Step 6: Library NFTDescriptor deployment", knownAddresses.NFTDescriptorLib,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.NFTDescriptor, error) {
 			return uniswapv3.DeployNFTDescriptor(tops, c)
 		},
@@ -285,7 +286,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 7. Deploy NFTPositionDescriptor.
 	config.NFTPositionDescriptor.Address, config.NFTPositionDescriptor.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "NFTPositionDescriptor", knownAddresses.NFTPositionDescriptor,
+		ctx, c, tops, cops, "Step 7: Contract NonfungibleTokenPositionDescriptor deployment", knownAddresses.NFTPositionDescriptor,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.NFTPositionDescriptor, error) {
 			// Update NFTPositionDescriptor bytecode.
 			// TODO: This is a hack, it should be done differently.
@@ -323,7 +324,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 8. Deploy TransparentUpgradeableProxy.
 	config.TransparentUpgradeableProxy.Address, config.TransparentUpgradeableProxy.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "TransparentUpgradeableProxy", knownAddresses.TransparentUpgradeableProxy,
+		ctx, c, tops, cops, "Step 8: Contract TransparentUpgradeableProxy deployment", knownAddresses.TransparentUpgradeableProxy,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.TransparentUpgradeableProxy, error) {
 			return uniswapv3.DeployTransparentUpgradeableProxy(tops, c, config.NFTPositionDescriptor.Address, config.ProxyAdmin.Address, []byte(""))
 		},
@@ -347,7 +348,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 9. Deploy NFPositionManager.
 	config.NFPositionManager.Address, config.NFPositionManager.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "NFPositionManager", knownAddresses.NFPositionManager,
+		ctx, c, tops, cops, "Step 9: Contract NonfungiblePositionManager deployment", knownAddresses.NFPositionManager,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.NFPositionManager, error) {
 			return uniswapv3.DeployNFPositionManager(tops, c, config.FactoryV3.Address, config.WETH9.Address, config.TransparentUpgradeableProxy.Address)
 		},
@@ -363,7 +364,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 10. Deploy Migrator.
 	config.Migrator.Address, config.Migrator.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "V3Migrator", knownAddresses.Migrator,
+		ctx, c, tops, cops, "Step 10: Contract V3Migrator deployment", knownAddresses.Migrator,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.V3Migrator, error) {
 			return uniswapv3.DeployV3Migrator(tops, c, config.FactoryV3.Address, config.WETH9.Address, config.NFPositionManager.Address)
 		},
@@ -384,7 +385,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 12. Deploy Staker.
 	config.Staker.Address, config.Staker.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "Staker", knownAddresses.Staker,
+		ctx, c, tops, cops, "Step 12: Contract UniswapV3Staker deployment", knownAddresses.Staker,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.UniswapV3Staker, error) {
 			return uniswapv3.DeployUniswapV3Staker(tops, c, config.FactoryV3.Address, config.NFPositionManager.Address, big.NewInt(MAX_INCENTIVE_START_LEAD_TIME), big.NewInt(MAX_INCENTIVE_DURATION))
 		},
@@ -400,7 +401,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 13. Deploy QuoterV2.
 	config.QuoterV2.Address, config.QuoterV2.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "QuoterV2", knownAddresses.QuoterV2,
+		ctx, c, tops, cops, "Step 13: Contract QuoterV2 deployment", knownAddresses.QuoterV2,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.QuoterV2, error) {
 			return uniswapv3.DeployQuoterV2(tops, c, config.FactoryV3.Address, config.WETH9.Address)
 		},
@@ -416,7 +417,7 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 
 	// 14. Deploy SwapRouter02.
 	config.SwapRouter02.Address, config.SwapRouter02.contract, err = deployOrInstantiateContract(
-		ctx, c, tops, cops, "SwapRouter02", knownAddresses.SwapRouter02,
+		ctx, c, tops, cops, "Step 14: Contract SwapRouter02 deployment", knownAddresses.SwapRouter02,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.SwapRouter02, error) {
 			// Note: we specify an empty address for UniswapV2Factory.
 			uniswapFactoryV2Address := common.Address{}
@@ -467,7 +468,7 @@ func deployOrInstantiateContract[T uniswapV3Contract](
 	c *ethclient.Client,
 	tops *bind.TransactOpts,
 	cops *bind.CallOpts,
-	name string,
+	logMessage string,
 	knownAddress common.Address,
 	deployFunc func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *T, error),
 	instantiateFunc func(common.Address, bind.ContractBackend) (*T, error),
@@ -478,25 +479,27 @@ func deployOrInstantiateContract[T uniswapV3Contract](
 		var tx *types.Transaction
 		address, tx, contract, err = deployFunc(tops, c)
 		if err != nil {
-			log.Error().Err(err).Str("name", name).Msg("Unable to deploy contract")
+			log.Error().Err(err).Str("logMessage", logMessage).Msg("Unable to deploy contract")
 			return
 		}
-		log.Debug().Str("name", name).Interface("address", address).Msg("Contract deployed")
-		log.Trace().Str("name", name).Interface("hash", tx.Hash()).Msg("Transaction")
+		reflectedContractName := reflect.TypeOf(contract).Elem().Name()
+		log.Debug().Str("name", reflectedContractName).Str("logMessage", logMessage).Str("address", address.String()).Msg("Contract deployed")
+		log.Trace().Str("name", reflectedContractName).Str("logMessage", logMessage).Str("hash", tx.Hash().String()).Msg("Transaction")
 	} else {
 		// Otherwise, instantiate the contract.
 		address = knownAddress
 		contract, err = instantiateFunc(address, c)
 		if err != nil {
-			log.Error().Err(err).Str("name", name).Msg("Unable to instantiate contract")
+			log.Error().Err(err).Str("logMessage", logMessage).Msg("Unable to instantiate contract")
 			return
 		}
-		log.Debug().Str("name", name).Msg("Contract instantiated")
+		reflectedContractName := reflect.TypeOf(contract).Elem().Name()
+		log.Debug().Str("name", reflectedContractName).Str("logMessage", logMessage).Msg("Contract instantiated")
 	}
 
 	// Check that the contract is deployed and ready.
 	if err = blockUntilSuccessful(ctx, c, func() error {
-		log.Trace().Str("contract", name).Msg("Contract is not available yet")
+		log.Trace().Str("logMessage", logMessage).Msg("Contract is not available yet")
 		return callFunc(contract)
 	}); err != nil {
 		return
