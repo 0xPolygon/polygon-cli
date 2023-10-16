@@ -788,7 +788,12 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 			return ctx.Err()
 		default:
 			elapsed := time.Since(start)
-			blockDiff := currentBlockNumber % startBlockNumber
+			var blockDiff uint64
+			if startBlockNumber == 0 {
+				blockDiff = startBlockNumber
+			} else {
+				blockDiff = currentBlockNumber % startBlockNumber
+			}
 			if blockDiff > numberOfBlocksToWaitFor {
 				log.Error().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("waiting period exhausted")
 				return waitingPeriodExhaustedErr
@@ -805,7 +810,8 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 			if currentBlockNumber != lastBlockNumber {
 				lock = false
 			}
-			if (currentBlockNumber%startBlockNumber)%blockInterval == 0 {
+			// Note: blockInterval > 0 (enforced at the flag level).
+			if blockDiff%blockInterval == 0 {
 				if !lock {
 					lock = true
 					err := f()
