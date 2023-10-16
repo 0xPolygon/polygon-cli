@@ -303,7 +303,7 @@ func initializeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cl
 }
 
 func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
-	log.Debug().Uint64("currentNonce", currentNonce).Msg("Finished main load test loop")
+	log.Debug().Uint64("startNonce", startNonce).Uint64("lastNonce", currentNonce).Msg("Finished main load test loop")
 	log.Debug().Msg("Waiting for remaining transactions to be completed and mined")
 
 	var err error
