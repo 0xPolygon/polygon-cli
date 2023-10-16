@@ -283,6 +283,48 @@ func hexToBigInt(raw any) (bi *big.Int, err error) {
 	return
 }
 
+func initializeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
+	var err error
+	startBlockNumber, err = c.BlockNumber(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get current block number")
+		return err
+	}
+
+	currentNonce, err = c.NonceAt(ctx, *inputLoadTestParams.FromETHAddress, new(big.Int).SetUint64(startBlockNumber))
+	startNonce = currentNonce
+
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get account nonce")
+		return err
+	}
+
+	return nil
+}
+
+func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
+	log.Debug().Uint64("currentNonce", currentNonce).Msg("Finished main load test loop")
+	log.Debug().Msg("Waiting for remaining transactions to be completed and mined")
+
+	finalBlockNumber, err := waitForFinalBlock(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
+	log.Debug().Uint64("currentNone", currentNonce).Uint64("final block number", finalBlockNumber).Msg("got final block number")
+	if err != nil {
+		log.Error().Err(err).Msg("there was an issue waiting for all transactions to be mined")
+	}
+
+	lightSummary(ctx, c, rpc, startBlockNumber, finalBlockNumber, rl)
+
+	if *inputLoadTestParams.ShouldProduceSummary {
+		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
+		if err != nil {
+			log.Error().Err(err).Msg("There was an issue creating the load test summary")
+		}
+	}
+	printResults(loadTestResults)
+
+	return nil
+}
+
 func runLoadTest(ctx context.Context) error {
 	log.Info().Msg("Starting Load Test")
 
@@ -304,6 +346,11 @@ func runLoadTest(ctx context.Context) error {
 
 	loopFunc := func() error {
 		err = initializeLoadTestParams(ctx, ec)
+		if err != nil {
+			return err
+		}
+
+		err = initializeLoadTest(ctx, ec, rpc)
 		if err != nil {
 			return err
 		}
@@ -331,7 +378,10 @@ func runLoadTest(ctx context.Context) error {
 		}
 	}
 
-	printResults(loadTestResults)
+	err = completeLoadTest(ctx, ec, rpc)
+	if err != nil {
+		log.Error().Err(err).Msg("Encountered error while wrapping up loadtest")
+	}
 
 	log.Info().Msg("Finished")
 	return nil
@@ -376,7 +426,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	mode := ltp.Mode
 	steadyStateTxPoolSize := *ltp.SteadyStateTxPoolSize
 	adaptiveRateLimitIncrement := *ltp.AdaptiveRateLimitIncrement
-	var rl *rate.Limiter
 	rl = rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
 	if *ltp.RateLimit <= 0.0 {
 		rl = nil
@@ -460,21 +509,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			Msg("retrieved recent indexed activity")
 	}
 
-	var currentNonceMutex sync.Mutex
 	var i int64
-	startBlockNumber, err := c.BlockNumber(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get current block number")
-		return err
-	}
-
-	currentNonce, err := c.NonceAt(ctx, *ltp.FromETHAddress, new(big.Int).SetUint64(startBlockNumber))
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get account nonce")
-		return err
-	}
-
-	startNonce := currentNonce
 	log.Debug().Uint64("currentNonce", currentNonce).Msg("Starting main load test loop")
 	var wg sync.WaitGroup
 	for i = 0; i < routines; i = i + 1 {
@@ -566,27 +601,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
 	cancel()
-	log.Debug().Uint64("currentNonce", currentNonce).Msg("Finished main load test loop")
-	log.Debug().Msg("Waiting for transactions to actually be mined")
 	if *ltp.CallOnly {
 		return nil
 	}
-	finalBlockNumber, err := waitForFinalBlock(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
-	if err != nil {
-		log.Error().Err(err).Msg("there was an issue waiting for all transactions to be mined")
-	}
 
-	lightSummary(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce, rl)
-
-	bucketedLoadTestResults := loadTestResults.Bucketize(*ltp.BarChartNumBucket)
-	bucketedLoadTestResults.PrintBucketAsBarChart(50)
-
-	if *ltp.ShouldProduceSummary {
-		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
-		if err != nil {
-			log.Error().Err(err).Msg("There was an issue creating the load test summary")
-		}
-	}
 	return nil
 }
 
@@ -1273,9 +1291,6 @@ func recordSample(goRoutineID, requestID int64, err error, start, end time.Time,
 	}
 	loadTestResutsMutex.Lock()
 	loadTestResults = append(loadTestResults, s)
-	if s.WaitTime.Milliseconds() > maxLoadTestTime {
-		maxLoadTestTime = s.WaitTime.Milliseconds()
-	}
 	loadTestResutsMutex.Unlock()
 }
 

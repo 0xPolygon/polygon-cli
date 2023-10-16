@@ -3,7 +3,6 @@ package loadtest
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"golang.org/x/time/rate"
 	"math"
 	"math/big"
@@ -378,6 +377,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 				log.Debug().Float64("txHours", txLatency.Hours()).Uint64("nonce", tx.Nonce.ToUint64()).Uint64("blockNumber", bs.Block.Number.ToUint64()).Time("mineTime", mineTime).Time("requestTime", requestTime).Msg("Encountered transaction with more than 2 hours latency")
 			}
 			bs.Latencies[tx.Nonce.ToUint64()] = txLatency
+
 			if txLatency < minLatency {
 				minLatency = txLatency
 			}
@@ -397,8 +397,8 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	printBlockSummary(c, blockData, startNonce, endNonce)
 
 	log.Trace().Str("summaryTime", (endReceipt.Sub(startReceipt)).String()).Msg("Total Summary Time")
-	return nil
 
+	return nil
 }
 
 func isEmptyJSONResponse(r *json.RawMessage) bool {
@@ -435,7 +435,7 @@ func printResults(lts []loadTestSample) {
 	log.Info().Uint64("numErrors", numErrors).Msg("Num errors")
 }
 
-func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endBlockNumber, endNonce uint64, rl *rate.Limiter) {
+func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber uint64, endBlockNumber uint64, rl *rate.Limiter) {
 	startBlock, err := c.BlockByNumber(ctx, new(big.Int).SetUint64(startBlockNumber))
 	if err != nil {
 		log.Error().Err(err).Msg("unable to get start block for light summary")
@@ -452,68 +452,17 @@ func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, 
 	testDuration := endTime.Sub(startTime)
 	tps := float64(len(loadTestResults)) / testDuration.Seconds()
 
+	var rlLimit float64
+	if rl != nil {
+		rlLimit = float64(rl.Limit())
+	}
+
 	log.Info().
 		Time("firstBlockTime", startTime).
 		Time("lastBlockTime", endTime).
 		Int("transactionCount", len(loadTestResults)).
 		Float64("testDuration", testDuration.Seconds()).
 		Float64("tps", tps).
-		Float64("final rate limit", float64(rl.Limit())).
+		Float64("final rate limit", rlLimit).
 		Msg("rough test summary (ignores errors)")
-}
-
-const FullBlock string = "\u2588"
-
-func (b Buckets) PrintBucketAsBarChart(maxBarLength int) {
-	if len(b) == 0 {
-		return
-	}
-
-	maxCount := b[0].Count
-	for _, bucket := range b {
-		// fmt.Println(bucket)
-		if bucket.Count > maxCount {
-			maxCount = bucket.Count
-		}
-	}
-
-	for _, bucket := range b {
-		barLength := (bucket.Count * maxBarLength) / maxCount
-		// fmt.Println(bucket.Count, maxCount, maxBarLength, barLength)
-		bar := ""
-		for i := 0; i < barLength; i++ {
-			bar += FullBlock
-		}
-		fmt.Printf("|%15s ms| %s (%d)\n", bucket.Name, bar, bucket.Count)
-	}
-}
-
-func (lts loadTestSamples) Bucketize(numBuckets int) Buckets {
-	buckets := []*Bucket{}
-	bucketWidth := maxLoadTestTime / int64(numBuckets)
-
-	for i := 0; i < numBuckets; i++ {
-		startRange := int64(i) * bucketWidth
-		endRange := startRange + bucketWidth
-		stringRange := fmt.Sprintf("%d - %d", startRange, endRange)
-		bucket := Bucket{
-			Name:  stringRange,
-			Start: startRange,
-			End:   endRange,
-		}
-		buckets = append(buckets, &bucket)
-	}
-
-	for _, sample := range lts {
-		for _, b := range buckets {
-			sampleWaitTime := int64(sample.WaitTime.Milliseconds())
-			// fmt.Printf("%d, %d, %d\n", sampleWaitTime, b.Start, b.End)
-			if sampleWaitTime >= b.Start && sampleWaitTime < b.End {
-				b.Count += 1
-				break
-			}
-		}
-	}
-
-	return buckets
 }

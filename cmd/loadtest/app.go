@@ -15,6 +15,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"golang.org/x/time/rate"
 )
 
 type (
@@ -29,7 +30,7 @@ type (
 		GoRoutineID int64
 		RequestID   int64
 		RequestTime time.Time
-		WaitTime    time.Duration
+		WaitTime    time.Duration // Wait time for transaction to be broadcasted
 		Receipt     string
 		IsError     bool
 		Nonce       uint64
@@ -73,7 +74,6 @@ type (
 		SummaryOutputMode                   *string
 		LegacyTransactionMode               *bool
 		RecallLength                        *uint64
-		BarChartNumBucket                   *int
 
 		// Computed
 		CurrentGasPrice     *big.Int
@@ -89,24 +89,20 @@ type (
 		ParsedModes         []loadTestMode
 		MultiMode           bool
 	}
-	Bucket struct {
-		Name  string
-		Start int64
-		End   int64
-		Count int
-	}
-
-	loadTestSamples []loadTestSample
-	Buckets         []*Bucket
 )
 
 var (
 	//go:embed usage.md
 	usage               string
 	inputLoadTestParams loadTestParams
-	maxLoadTestTime     int64
-	loadTestResults     loadTestSamples
+	loadTestResults     []loadTestSample
 	loadTestResutsMutex sync.RWMutex
+	startBlockNumber    uint64
+	finalBlockNumber    uint64
+	startNonce          uint64
+	currentNonce        uint64
+	currentNonceMutex   sync.RWMutex
+	rl                  *rate.Limiter
 
 	hexwords = []byte{
 		0x00, 0x0F, 0xF1, 0xCE,
@@ -248,7 +244,6 @@ rpc - call random rpc methods`)
 	ltp.SummaryOutputMode = LoadtestCmd.PersistentFlags().String("output-mode", "text", "Format mode for summary output (json | text)")
 	ltp.LegacyTransactionMode = LoadtestCmd.PersistentFlags().Bool("legacy", false, "Send a legacy transaction instead of an EIP1559 transaction.")
 	ltp.RecallLength = LoadtestCmd.PersistentFlags().Uint64("recall-blocks", 50, "The number of blocks that we'll attempt to fetch for recall")
-	ltp.BarChartNumBucket = LoadtestCmd.PersistentFlags().Int("bar-chart-num-bucket", 10, "The number of buckets to visualize latency time distribution")
 	inputLoadTestParams = *ltp
 
 	// TODO Compression
