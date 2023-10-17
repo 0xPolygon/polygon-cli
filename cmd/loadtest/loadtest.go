@@ -64,7 +64,7 @@ const (
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
 )
 
-var waitingPeriodExhaustedErr = fmt.Errorf("waiting period exhausted")
+var errWaitingPeriodExhausted = errors.New("waiting period exhausted")
 
 func characterToLoadTestMode(mode string) (loadTestMode, error) {
 	switch mode {
@@ -787,7 +787,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 			blockDiff := currentBlockNumber % startBlockNumber
 			if blockDiff > numberOfBlocksToWaitFor {
 				log.Error().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("waiting period exhausted")
-				return waitingPeriodExhaustedErr
+				return errWaitingPeriodExhausted
 			}
 
 			currentBlockNumber, err = c.BlockNumber(ctx)
