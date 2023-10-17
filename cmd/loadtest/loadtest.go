@@ -19,8 +19,6 @@ import (
 	"github.com/maticnetwork/polygon-cli/contracts/tokens"
 	"github.com/maticnetwork/polygon-cli/contracts/uniswapv3"
 
-	_ "embed"
-
 	"github.com/maticnetwork/polygon-cli/metrics"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
@@ -442,19 +440,19 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	uniswapAddresses := UniswapV3Addresses{
-		FactoryV3:                   ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapFactoryV3),
-		Multicall:                   ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMulticall),
-		ProxyAdmin:                  ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapProxyAdmin),
-		TickLens:                    ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapTickLens),
-		NFTDescriptorLib:            ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNFTLibDescriptor),
-		NFTPositionDescriptor:       ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNFTPositionDescriptor),
-		TransparentUpgradeableProxy: ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapUpgradeableProxy),
-		NFPositionManager:           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNFPositionManager),
-		Migrator:                    ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMigrator),
-		Staker:                      ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapStaker),
-		QuoterV2:                    ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapQuoterV2),
-		SwapRouter02:                ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapSwapRouter),
-		WETH9:                       ethcommon.HexToAddress(*uniswapv3LoadTestParams.WETH9),
+		FactoryV3:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapFactoryV3),
+		Multicall:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMulticall),
+		ProxyAdmin:                         ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapProxyAdmin),
+		TickLens:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapTickLens),
+		NFTDescriptorLib:                   ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNFTLibDescriptor),
+		NonfungibleTokenPositionDescriptor: ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNonfungibleTokenPositionDescriptor),
+		TransparentUpgradeableProxy:        ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapUpgradeableProxy),
+		NonfungiblePositionManager:         ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNonfungiblePositionManager),
+		Migrator:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMigrator),
+		Staker:                             ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapStaker),
+		QuoterV2:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapQuoterV2),
+		SwapRouter02:                       ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapSwapRouter),
+		WETH9:                              ethcommon.HexToAddress(*uniswapv3LoadTestParams.WETH9),
 	}
 	var uniswapV3Config UniswapV3Config
 	var poolConfig PoolConfig
@@ -465,16 +463,14 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 		log.Debug().Interface("config", uniswapV3Config.ToAddresses()).Msg("UniswapV3 deployment config")
 
-		tokensAToMint := big.NewInt(1_000_000_000_000_000_000)
 		var token0Config contractConfig[uniswapv3.Swapper]
-		token0Config, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token0", "A", tokensAToMint, *ltp.FromETHAddress, ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0))
+		token0Config, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token0", "A", *ltp.FromETHAddress, ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0))
 		if err != nil {
 			return nil
 		}
 
-		tokensBToMint := big.NewInt(1_000_000_000_000_000_000)
 		var token1Config contractConfig[uniswapv3.Swapper]
-		token1Config, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token1", "B", tokensBToMint, *ltp.FromETHAddress, ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1))
+		token1Config, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token1", "B", *ltp.FromETHAddress, ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1))
 		if err != nil {
 			return nil
 		}
@@ -483,14 +479,14 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		poolConfig = PoolConfig{Fees: fees}
 		if token0Config.Address.Hex() < token1Config.Address.Hex() {
 			poolConfig.Token0 = token0Config
-			poolConfig.ReserveA = tokensAToMint
+			poolConfig.ReserveA = tokenPoolSize
 			poolConfig.Token1 = token1Config
-			poolConfig.ReserveB = tokensBToMint
+			poolConfig.ReserveB = tokenPoolSize
 		} else {
 			poolConfig.Token0 = token1Config
-			poolConfig.ReserveA = tokensBToMint
+			poolConfig.ReserveA = tokenPoolSize
 			poolConfig.Token1 = token0Config
-			poolConfig.ReserveB = tokensAToMint
+			poolConfig.ReserveB = tokenPoolSize
 		}
 		if err = createPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, *ltp.FromETHAddress); err != nil {
 			return nil
