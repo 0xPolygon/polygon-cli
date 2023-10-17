@@ -3,13 +3,15 @@ package loadtest
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
-	"github.com/spf13/cobra"
 	"math/big"
 	"net/url"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/spf13/cobra"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -600,14 +602,14 @@ func approveSwapperSpendingsByUniswap(ctx context.Context, contract *uniswapv3.S
 			return err
 		}
 
-		err = backoff.Retry(func() error {
+		backoff.Retry(func() error {
 			allowance, err := contract.Allowance(cops, owner, address)
 			if err != nil {
 				return err
 			}
 			zero := big.NewInt(0)
 			if allowance.Cmp(zero) == 0 {
-				return fmt.Errorf("Allowance is zero")
+				return fmt.Errorf("allowance is zero")
 			}
 			return nil
 		}, backoff.NewConstantBackOff(time.Second*2))
@@ -627,7 +629,7 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 		log.Error().Err(err).Msg("Unable to create and initialize the Token0-Token1 pool")
 		return err
 	}
-	log.Debug().Msg("Pool created and initialized")
+	log.Debug().Msg("Pool created and initialized (if necessary)")
 
 	// Retrieve the pool address.
 	var poolAddress common.Address
@@ -656,6 +658,8 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 		log.Error().Err(err).Msg("Unable to get Token0-Token1's slot0")
 		return err
 	}
+
+	// Check pool's liquidity.
 	var liquidity *big.Int
 	liquidity, err = poolContract.Liquidity(cops)
 	if err != nil {
@@ -664,57 +668,69 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	}
 	log.Debug().Interface("slot0", slot0).Interface("liquidity", liquidity).Msg("Token0-Token1 pool state")
 
-	// Compute the tick lower and upper for providing liquidity.
-	// The default tick spacing is set to 60 for the 0.3% fee tier and unfortunately,
-	// MIN_TICK and MAX_TICK are not divisible by this amount.
-	// The solution is to use a multiple of 60 instead.
-	var tickSpacing *big.Int
-	tickSpacing, err = poolContract.TickSpacing(cops)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get tick spacing")
-		return err
-	}
-
-	// tickUpper = (MAX_TICK / tickSpacing) * tickSpacing
-	// tickLower = - tickUpper
-	tickUpper := new(big.Int).Div(big.NewInt(MAX_TICK), tickSpacing)
-	tickUpper.Mul(tickUpper, tickSpacing)
-	tickLower := new(big.Int).Neg(tickUpper)
-
-	// Provide liquidity.
-	dl, _ := big.NewInt(0).SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10)
-	amMax := tokenPoolSize
-	amMin, _ := big.NewInt(0).SetString("1", 10)
-	mintParams := uniswapv3.INonfungiblePositionManagerMintParams{
-		Token0: poolConfig.Token0.Address,
-		Token1: poolConfig.Token1.Address,
-		Fee:    poolConfig.Fees,
-		// We provide liquidity across the whole possible range (divisible by tick spacing).
-		// Otherwise, the call will revert.
-		TickLower:      tickLower,
-		TickUpper:      tickUpper,
-		Amount0Desired: amMax,
-		Amount1Desired: amMax,
-		// We mint without any slippage protection. Don't do this in production!
-		Amount0Min: amMin,
-		Amount1Min: amMin,
-		Recipient:  recipient,
-		Deadline:   dl, // 10 minutes to execute the swap.
-		// Deadline: big.NewInt(1759474606), // in 2 years (2025-10-03)
-	}
-	var tx *types.Transaction
-	if err := blockUntilSuccessful(ctx, c, func() (err error) {
-		tx, err = uniswapV3Config.NonfungiblePositionManager.contract.Mint(tops, mintParams)
+	// Provide liquidity if there's none.
+	if liquidity.Cmp(big.NewInt(0)) == 0 {
+		// Compute the tick lower and upper for providing liquidity.
+		// The default tick spacing is set to 60 for the 0.3% fee tier and unfortunately,
+		// MIN_TICK and MAX_TICK are not divisible by this amount.
+		// The solution is to use a multiple of 60 instead.
+		var tickSpacing *big.Int
+		tickSpacing, err = poolContract.TickSpacing(cops)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to mint liquidity")
+			log.Error().Err(err).Msg("Unable to get tick spacing")
+			return err
 		}
-		return
-	}); err != nil {
-		log.Error().Err(err).Msg("Unable to provide liquidity for the Token0-Token1 pool")
-		return err
+		// tickUpper = (MAX_TICK / tickSpacing) * tickSpacing
+		// tickLower = - tickUpper
+		tickUpper := new(big.Int).Div(big.NewInt(MAX_TICK), tickSpacing)
+		tickUpper.Mul(tickUpper, tickSpacing)
+		tickLower := new(big.Int).Neg(tickUpper)
+
+		// Provide liquidity.
+		dl, _ := big.NewInt(0).SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10)
+		amMax := new(big.Int).Div(tokenPoolSize, big.NewInt(2))
+		amMin, _ := big.NewInt(0).SetString("1", 10)
+		mintParams := uniswapv3.INonfungiblePositionManagerMintParams{
+			Token0: poolConfig.Token0.Address,
+			Token1: poolConfig.Token1.Address,
+			Fee:    poolConfig.Fees,
+			// We provide liquidity across the whole possible range (divisible by tick spacing).
+			// Otherwise, the call will revert.
+			TickLower:      tickLower,
+			TickUpper:      tickUpper,
+			Amount0Desired: amMax,
+			Amount1Desired: amMax,
+			// We mint without any slippage protection. Don't do this in production!
+			Amount0Min: amMin,
+			Amount1Min: amMin,
+			Recipient:  recipient,
+			Deadline:   dl, // 10 minutes to execute the swap.
+			// Deadline: big.NewInt(1759474606), // in 2 years (2025-10-03)
+		}
+		if err := blockUntilSuccessful(ctx, c, func() (err error) {
+			_, err = uniswapV3Config.NonfungiblePositionManager.contract.Mint(tops, mintParams)
+			if err != nil {
+				return err
+			}
+
+			liquidity, err = poolContract.Liquidity(cops)
+			if err != nil {
+				return err
+			}
+			if liquidity.Cmp(big.NewInt(0)) == 0 {
+				return errors.New("pool has no liquidity")
+			}
+
+			return nil
+		}); err != nil {
+			log.Error().Err(err).Msg("Unable to provide liquidity for the Token0-Token1 pool")
+			return err
+		}
+		log.Debug().Interface("liquidity", liquidity).Msg("Liquidity provided to the Token0-Token1 pool")
+	} else {
+		log.Debug().Msg("Liquidity already provided to the Token0-Token1 pool")
 	}
-	log.Debug().Msg("Liquidity provided to the Token0-Token1 pool")
-	log.Trace().Interface("hash", tx.Hash()).Msg("Transaction")
+
 	return nil
 }
 
@@ -739,8 +755,8 @@ func swapToken0and1(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRouter02,
 		TokenOut:          tOut.Address,
 		Fee:               poolConfig.Fees,
 		Recipient:         recipient,
-		AmountIn:          big.NewInt(123456),
-		AmountOutMinimum:  big.NewInt(0),
+		AmountIn:          big.NewInt(1000),
+		AmountOutMinimum:  big.NewInt(996),
 		SqrtPriceLimitX96: big.NewInt(0),
 	})
 	if err != nil {
