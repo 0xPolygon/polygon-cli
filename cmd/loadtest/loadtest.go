@@ -294,7 +294,7 @@ func runLoadTest(ctx context.Context) error {
 		overallTimer = new(time.Timer)
 	}
 
-	rpc, err := ethrpc.DialContext(ctx, inputLoadTestParams.RPCEndpoint.String())
+	rpc, err := ethrpc.DialContext(ctx, *inputLoadTestParams.RPCUrl)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to dial rpc")
 		return err

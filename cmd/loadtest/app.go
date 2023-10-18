@@ -36,7 +36,7 @@ type (
 	}
 	loadTestParams struct {
 		// inputs
-		RPCEndpoint                         *url.URL
+		RPCUrl                              *string
 		Requests                            *int64
 		Concurrency                         *int64
 		BatchSize                           *uint64
@@ -163,16 +163,7 @@ var LoadtestCmd = &cobra.Command{
 func init() {
 	ltp := new(loadTestParams)
 
-	rpcEndpoint := LoadtestCmd.PersistentFlags().StringP("rpc-endpoint", "r", "http://localhost:8545", "The RPC endpoint")
-	if rpcEndpoint == nil {
-		panic("URL is empty")
-	}
-	var err error
-	ltp.RPCEndpoint, err = validateUrl(*rpcEndpoint)
-	if err != nil {
-		panic(err)
-	}
-
+	ltp.RPCUrl = LoadtestCmd.PersistentFlags().StringP("rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
 	ltp.Requests = LoadtestCmd.PersistentFlags().Int64P("requests", "n", 1, "Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results.")
 	ltp.Concurrency = LoadtestCmd.PersistentFlags().Int64P("concurrency", "c", 1, "Number of requests to perform concurrently. Default is one request at a time.")
 	ltp.TimeLimit = LoadtestCmd.PersistentFlags().Int64P("time-limit", "t", -1, "Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit.")
@@ -225,32 +216,43 @@ rpc - call random rpc methods`)
 	// TODO Compression
 }
 
-func validateUrl(input string) (*url.URL, error) {
-	url, err := url.Parse(input)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to parse url input error")
-		return nil, err
-	}
-
-	if url.Scheme == "" {
-		return nil, errors.New("the scheme has not been specified")
-	}
-	switch url.Scheme {
-	case "http", "https", "ws", "wss":
-		return url, nil
-	default:
-		return nil, fmt.Errorf("the scheme '%s' is not supported", url.Scheme)
-	}
-}
-
 func checkFlags() error {
-	if *inputLoadTestParams.AdaptiveBackoffFactor <= 0.0 {
+	ltp := inputLoadTestParams
+
+	// Check `rpc-url` flag.
+	if ltp.RPCUrl == nil {
+		panic("RPC URL is empty")
+	}
+	if err := validateUrl(*ltp.RPCUrl); err != nil {
+		return err
+	}
+
+	if ltp.AdaptiveBackoffFactor != nil && *ltp.AdaptiveBackoffFactor <= 0.0 {
 		return fmt.Errorf("the backoff factor needs to be non-zero positive")
 	}
 
-	if *inputLoadTestParams.ContractCallBlockInterval == 0 {
+	if ltp.ContractCallBlockInterval != nil && *ltp.ContractCallBlockInterval == 0 {
 		return fmt.Errorf("the contract call block interval must be strictly positive")
 	}
 
 	return nil
+}
+
+// validateUrl checks if a string URL can be parsed and if it has a valid scheme.
+func validateUrl(input string) error {
+	url, err := url.Parse(input)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to parse url input error")
+		return err
+	}
+
+	if url.Scheme == "" {
+		return errors.New("the scheme has not been specified")
+	}
+	switch url.Scheme {
+	case "http", "https", "ws", "wss":
+		return nil
+	default:
+		return fmt.Errorf("the scheme '%s' is not supported", url.Scheme)
+	}
 }
