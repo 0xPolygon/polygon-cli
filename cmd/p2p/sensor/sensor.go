@@ -193,6 +193,8 @@ var SensorCmd = &cobra.Command{
 			Protocols:      []ethp2p.Protocol{p2p.NewEth66Protocol(opts)},
 			DialRatio:      inputSensorParams.DialRatio,
 			NAT:            inputSensorParams.nat,
+			DiscoveryV4:    true,
+			DiscoveryV5:    true,
 		}
 
 		if inputSensorParams.QuickStart {
