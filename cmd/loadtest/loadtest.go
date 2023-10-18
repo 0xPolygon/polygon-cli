@@ -283,7 +283,7 @@ func hexToBigInt(raw any) (bi *big.Int, err error) {
 	return
 }
 
-func initializeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
+func initNonce(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
 	var err error
 	startBlockNumber, err = c.BlockNumber(ctx)
 	if err != nil {
@@ -347,11 +347,6 @@ func runLoadTest(ctx context.Context) error {
 
 	loopFunc := func() error {
 		err = initializeLoadTestParams(ctx, ec)
-		if err != nil {
-			return err
-		}
-
-		err = initializeLoadTest(ctx, ec, rpc)
 		if err != nil {
 			return err
 		}
@@ -511,6 +506,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	var i int64
+	err = initNonce(ctx, c, rpc)
+	if err != nil {
+		return err
+	}
 	log.Debug().Uint64("currentNonce", currentNonce).Msg("Starting main load test loop")
 	var wg sync.WaitGroup
 	for i = 0; i < routines; i = i + 1 {
@@ -578,7 +577,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				recordSample(i, j, tErr, startReq, endReq, myNonceValue)
 				if tErr != nil {
-					log.Error().Err(tErr).Uint64("nonce", myNonceValue).Msg("Recorded an error while sending transactions")
+					log.Error().Err(tErr).Uint64("nonce", myNonceValue).Int64("request time", endReq.Sub(startReq).Milliseconds()).Msg("Recorded an error while sending transactions")
 					// The nonce is used to index the recalled transactions in call-only mode. We don't want to retry a transaction if it legit failed on the chain
 					if !*ltp.CallOnly {
 						retryForNonce = true
