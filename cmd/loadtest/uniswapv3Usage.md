@@ -1,9 +1,10 @@
-The `uniswapv3` command is a subcommand of the `loadtest` tool. It is meant to generate UniswapV3-like load against RPC endpoints. You can either chose to deploy the full UniswapV3 contract suite or use pre-deployed contract to speed up the process.
+The `uniswapv3` command is a subcommand of the `loadtest` tool. It is meant to generate UniswapV3-like load against JSON-RPC endpoints.
+
+You can either chose to deploy the full UniswapV3 contract suite or use pre-deployed contract to speed up the process.
 
 ```bash
-# Deploy the UniswapV3 contracts and run some swaps.
+# Deploy the UniswapV3 contracts and perform some swaps.
 $ polycli loadtest uniswapv3 http://localhost:8545
-...
 
 # Same thing with pre-deployed contracts.
 $ polycli loadtest uniswapv3 http://localhost:8545 \
@@ -23,7 +24,5 @@ $ polycli loadtest uniswapv3 http://localhost:8545 \
   --uniswap-pool-token-0-address 0x1ce270d0380fbbead12371286aff578a1227d1d7 \
   --uniswap-pool-token-1-address 0x060f7db3146f3d6748822fb4c69489a04b5f3278
 ```
-
-### UniswapV3 contracts
 
 Contracts are cloned from the different Uniswap repositories, compiled with a specific version of `solc` and go bindings are generated using `abigen`. To learn more about this process, make sure to check out `contracts/uniswapv3/README.org`.
