@@ -6,7 +6,6 @@ require (
 	cloud.google.com/go/datastore v1.14.0
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/cenkalti/backoff v2.2.1+incompatible
-	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/ethereum/go-ethereum v1.13.2
 	github.com/gizak/termui/v3 v3.1.0
 	github.com/google/gofuzz v1.2.0
