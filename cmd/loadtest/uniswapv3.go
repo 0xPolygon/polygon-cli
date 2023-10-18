@@ -12,8 +12,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	uniswapv3loadtest "github.com/maticnetwork/polygon-cli/cmd/loadtest/uniswapv3"
+	"github.com/maticnetwork/polygon-cli/contracts/uniswapv3"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -103,8 +105,50 @@ func init() {
 	uniswapv3LoadTestParams = *params
 }
 
-// Run UniswapV3 loadtest by performing swaps.
-func loadTestUniswapV3(ctx context.Context, c *ethclient.Client, nonce uint64, uniswapV3Config uniswapv3loadtest.UniswapV3Config, poolConfig uniswapv3loadtest.PoolConfig) (t1 time.Time, t2 time.Time, err error) {
+// Initialise UniswapV3 loadtest.
+func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapAddresses uniswapv3loadtest.Address, recipient common.Address) (uniswapv3loadtest.UniswapV3Config, uniswapv3loadtest.PoolConfig, error) {
+	// Deploy UniswapV3 contracts.
+	uniswapV3Config, err := uniswapv3loadtest.DeployUniswapV3(ctx, c, tops, cops, uniswapAddresses, recipient, blockUntilSuccessful)
+	if err != nil {
+		return uniswapv3loadtest.UniswapV3Config{}, uniswapv3loadtest.PoolConfig{}, err
+	}
+	log.Debug().Interface("config", uniswapV3Config.ToAddresses()).Msg("UniswapV3 deployment config")
+
+	// Deploy swapper tokens.
+	var token0Config uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
+	token0Config, err = uniswapv3loadtest.DeploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token0", "A", tokenPoolSize, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0), blockUntilSuccessful)
+	if err != nil {
+		return uniswapv3loadtest.UniswapV3Config{}, uniswapv3loadtest.PoolConfig{}, err
+	}
+
+	var token1Config uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
+	token1Config, err = uniswapv3loadtest.DeploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token1", "B", tokenPoolSize, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1), blockUntilSuccessful)
+	if err != nil {
+		return uniswapv3loadtest.UniswapV3Config{}, uniswapv3loadtest.PoolConfig{}, err
+	}
+
+	// Deploy pool.
+	poolConfig := uniswapv3loadtest.PoolConfig{Fees: big.NewInt(3_000)}
+	if token0Config.Address.Hex() < token1Config.Address.Hex() {
+		poolConfig.Token0 = token0Config
+		poolConfig.ReserveA = tokenPoolSize
+		poolConfig.Token1 = token1Config
+		poolConfig.ReserveB = tokenPoolSize
+	} else {
+		poolConfig.Token0 = token1Config
+		poolConfig.ReserveA = tokenPoolSize
+		poolConfig.Token1 = token0Config
+		poolConfig.ReserveB = tokenPoolSize
+	}
+	poolSize := new(big.Int).Div(tokenPoolSize, big.NewInt(2))
+	if err = uniswapv3loadtest.SetupPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, poolSize, recipient, blockUntilSuccessful); err != nil {
+		return uniswapv3loadtest.UniswapV3Config{}, uniswapv3loadtest.PoolConfig{}, err
+	}
+	return uniswapV3Config, poolConfig, nil
+}
+
+// Run UniswapV3 loadtest.
+func runUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, nonce uint64, uniswapV3Config uniswapv3loadtest.UniswapV3Config, poolConfig uniswapv3loadtest.PoolConfig) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey

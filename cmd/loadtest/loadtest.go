@@ -18,7 +18,6 @@ import (
 	uniswapv3loadtest "github.com/maticnetwork/polygon-cli/cmd/loadtest/uniswapv3"
 	"github.com/maticnetwork/polygon-cli/contracts"
 	"github.com/maticnetwork/polygon-cli/contracts/tokens"
-	"github.com/maticnetwork/polygon-cli/contracts/uniswapv3"
 
 	"github.com/maticnetwork/polygon-cli/metrics"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
@@ -458,40 +457,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	var uniswapV3Config uniswapv3loadtest.UniswapV3Config
 	var poolConfig uniswapv3loadtest.PoolConfig
 	if mode == loadTestModeUniswapV3 || mode == loadTestModeRandom {
-		uniswapV3Config, err = uniswapv3loadtest.DeployUniswapV3(ctx, c, tops, cops, uniswapAddresses, *ltp.FromETHAddress, blockUntilSuccessful)
+		uniswapV3Config, poolConfig, err = initUniswapV3Loadtest(ctx, c, tops, cops, uniswapAddresses, *ltp.FromETHAddress)
 		if err != nil {
-			return nil
-		}
-		log.Debug().Interface("config", uniswapV3Config.ToAddresses()).Msg("UniswapV3 deployment config")
-
-		var token0Config uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
-		token0Config, err = uniswapv3loadtest.DeploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token0", "A", tokenPoolSize, *ltp.FromETHAddress, ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0), blockUntilSuccessful)
-		if err != nil {
-			return nil
-		}
-
-		var token1Config uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
-		token1Config, err = uniswapv3loadtest.DeploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token1", "B", tokenPoolSize, *ltp.FromETHAddress, ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1), blockUntilSuccessful)
-		if err != nil {
-			return nil
-		}
-
-		fees := big.NewInt(3_000)
-		poolConfig = uniswapv3loadtest.PoolConfig{Fees: fees}
-		poolSize := new(big.Int).Div(tokenPoolSize, big.NewInt(2))
-		if token0Config.Address.Hex() < token1Config.Address.Hex() {
-			poolConfig.Token0 = token0Config
-			poolConfig.ReserveA = tokenPoolSize
-			poolConfig.Token1 = token1Config
-			poolConfig.ReserveB = tokenPoolSize
-		} else {
-			poolConfig.Token0 = token1Config
-			poolConfig.ReserveA = tokenPoolSize
-			poolConfig.Token1 = token0Config
-			poolConfig.ReserveB = tokenPoolSize
-		}
-		if err = uniswapv3loadtest.SetupPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, poolSize, *ltp.FromETHAddress, blockUntilSuccessful); err != nil {
-			return nil
+			return err
 		}
 	}
 
@@ -599,7 +567,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				case loadTestModeRecall:
 					startReq, endReq, tErr = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
 				case loadTestModeUniswapV3:
-					startReq, endReq, tErr = loadTestUniswapV3(ctx, c, myNonceValue, uniswapV3Config, poolConfig)
+					startReq, endReq, tErr = runUniswapV3Loadtest(ctx, c, myNonceValue, uniswapV3Config, poolConfig)
 				case loadTestModeRPC:
 					startReq, endReq, tErr = loadTestRPC(ctx, c, myNonceValue, indexedActivity)
 				default:
