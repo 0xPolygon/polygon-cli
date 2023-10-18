@@ -56,12 +56,12 @@ const (
 )
 
 var (
-	oldNFTPositionLibraryAddress = common.HexToAddress("0x73a6d49037afd585a0211a7bb4e990116025b45d")
-	uniswapv3LoadTestParams      params
 	//go:embed uniswapv3Usage.md
-	uniswapv3Usage string
+	uniswapv3Usage          string
+	uniswapv3LoadTestParams params
 
-	tokenPoolSize, _ = big.NewInt(0).SetString("100000000000000000000000000", 10)
+	oldNFTPositionLibraryAddress = common.HexToAddress("0x73a6d49037afd585a0211a7bb4e990116025b45d")
+	tokenPoolSize, _             = big.NewInt(0).SetString("100000000000000000000000000", 10)
 )
 
 var uniswapV3LoadTestCmd = &cobra.Command{
@@ -86,18 +86,33 @@ var uniswapV3LoadTestCmd = &cobra.Command{
 		if len(args) != 1 {
 			return fmt.Errorf("expected exactly one argument")
 		}
-		url, err := url.Parse(args[0])
+
+		url, err := validateUrl(args[0])
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to parse url input error")
 			return err
-		}
-		if url.Scheme != "http" && url.Scheme != "https" && url.Scheme != "ws" && url.Scheme != "wss" {
-			return fmt.Errorf("the scheme %s is not supported", url.Scheme)
 		}
 		inputLoadTestParams.URL = url
 
 		return nil
 	},
+}
+
+func validateUrl(input string) (*url.URL, error) {
+	url, err := url.Parse(input)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to parse url input error")
+		return nil, err
+	}
+
+	if url.Scheme == "" {
+		return nil, errors.New("the scheme has not been specified")
+	}
+	switch url.Scheme {
+	case "http", "https", "ws", "wss":
+		return url, nil
+	default:
+		return nil, fmt.Errorf("the scheme %s is not supported", url.Scheme)
+	}
 }
 
 type params struct {
