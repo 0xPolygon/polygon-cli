@@ -1354,8 +1354,9 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 	ltp := inputLoadTestParams
 	var err error
 	var lastBlockNumber uint64
+	var prevNonceForFinalBlock uint64
 	var currentNonceForFinalBlock uint64
-	var initialWaitCount = 50
+	var initialWaitCount = 20
 	var maxWaitCount = initialWaitCount
 	for {
 		lastBlockNumber, err = c.BlockNumber(ctx)
@@ -1367,9 +1368,12 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 			return 0, err
 		}
 		if currentNonceForFinalBlock < endNonce && maxWaitCount > 0 {
-			log.Trace().Uint64("endNonce", endNonce).Uint64("currentNonceForFinalBlock", currentNonceForFinalBlock).Msg("Not all transactions have been mined. Waiting")
+			log.Trace().Uint64("endNonce", endNonce).Uint64("currentNonceForFinalBlock", currentNonceForFinalBlock).Uint64("prevNonceForFinalBlock", currentNonceForFinalBlock).Msg("Not all transactions have been mined. Waiting")
 			time.Sleep(5 * time.Second)
-			maxWaitCount = maxWaitCount - 1
+			if currentNonceForFinalBlock == prevNonceForFinalBlock {
+				maxWaitCount = maxWaitCount - 1 // only decrement if currentNonceForFinalBlock doesn't progress
+			}
+			prevNonceForFinalBlock = currentNonceForFinalBlock
 			continue
 		}
 		if maxWaitCount <= 0 {
