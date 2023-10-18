@@ -62,7 +62,14 @@ var (
 
 	oldNFTPositionLibraryAddress = common.HexToAddress("0x73a6d49037afd585a0211a7bb4e990116025b45d")
 	tokenPoolSize, _             = big.NewInt(0).SetString("100000000000000000000000000", 10)
+	swapAmountIn                 = big.NewInt(1000)
+	swapAmountOutMinimum         = big.NewInt(996)
 )
+
+type params struct {
+	UniswapFactoryV3, UniswapMulticall, UniswapProxyAdmin, UniswapTickLens, UniswapNFTLibDescriptor, UniswapNonfungibleTokenPositionDescriptor, UniswapUpgradeableProxy, UniswapNonfungiblePositionManager, UniswapMigrator, UniswapStaker, UniswapQuoterV2, UniswapSwapRouter *string
+	WETH9, UniswapPoolToken0, UniswapPoolToken1                                                                                                                                                                                                                                *string
+}
 
 var uniswapV3LoadTestCmd = &cobra.Command{
 	Use:   "uniswapv3 url",
@@ -113,11 +120,6 @@ func validateUrl(input string) (*url.URL, error) {
 	default:
 		return nil, fmt.Errorf("the scheme %s is not supported", url.Scheme)
 	}
-}
-
-type params struct {
-	UniswapFactoryV3, UniswapMulticall, UniswapProxyAdmin, UniswapTickLens, UniswapNFTLibDescriptor, UniswapNonfungibleTokenPositionDescriptor, UniswapUpgradeableProxy, UniswapNonfungiblePositionManager, UniswapMigrator, UniswapStaker, UniswapQuoterV2, UniswapSwapRouter *string
-	WETH9, UniswapPoolToken0, UniswapPoolToken1                                                                                                                                                                                                                                *string
 }
 
 func init() {
@@ -206,8 +208,8 @@ type slot struct {
 	Unlocked                   bool
 }
 
+// Deploy the full UniswapV3 contract suite in 15 different steps.
 // Source: https://github.com/Uniswap/deploy-v3
-// TODO: backup plan is to use this repo directory
 func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses, ownerAddress common.Address) (UniswapV3Config, error) {
 	config := UniswapV3Config{}
 	var err error
@@ -306,7 +308,6 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	}
 
 	// 7. Deploy NonfungibleTokenPositionDescriptor.
-	//
 	config.NonfungibleTokenPositionDescriptor.Address, config.NonfungibleTokenPositionDescriptor.contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops, "Step 7: Contract NonfungibleTokenPositionDescriptor deployment", knownAddresses.NonfungibleTokenPositionDescriptor,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.NonfungibleTokenPositionDescriptor, error) {
@@ -454,25 +455,6 @@ func deployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	}
 
 	return config, nil
-}
-
-func loadTestUniswapV3(ctx context.Context, c *ethclient.Client, nonce uint64, uniswapV3Config UniswapV3Config, poolConfig PoolConfig) (t1 time.Time, t2 time.Time, err error) {
-	ltp := inputLoadTestParams
-	chainID := new(big.Int).SetUint64(*ltp.ChainID)
-	privateKey := ltp.ECDSAPrivateKey
-
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable create transaction signer")
-		return
-	}
-	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops)
-
-	t1 = time.Now()
-	defer func() { t2 = time.Now() }()
-	err = swapToken0and1(tops, uniswapV3Config.SwapRouter02.contract, poolConfig, *ltp.FromETHAddress, nonce)
-	return
 }
 
 // Deploy or instantiate any UniswapV3 contract.
@@ -758,27 +740,66 @@ func computeSqrtPriceX96(reserveA, reserveB *big.Int) *big.Int {
 	return sqrtPriceX96
 }
 
-func swapToken0and1(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRouter02, poolConfig PoolConfig, recipient common.Address, nonce uint64) error {
+// Run UniswapV3 loadtest by performing swaps.
+func loadTestUniswapV3(ctx context.Context, c *ethclient.Client, nonce uint64, uniswapV3Config UniswapV3Config, poolConfig PoolConfig) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+	tops.Nonce = new(big.Int).SetUint64(nonce)
+	tops = configureTransactOpts(tops)
+
+	t1 = time.Now()
+	defer func() { t2 = time.Now() }()
+	err = swap(tops, uniswapV3Config.SwapRouter02.contract, poolConfig, *ltp.FromETHAddress, nonce)
+	return
+}
+
+// swap performs a UniswapV3 swap using the `ExactInputSingle` method which swaps a fixed amount of
+// one token (`token0`) for a maximum possible amount of another token (`token1`).
+// The direction of the swap is determined by the nonce value.
+func swap(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRouter02, poolConfig PoolConfig, recipient common.Address, nonce uint64) error {
+	// Determine the direction of the swap.
 	tIn := poolConfig.Token0
+	tInName := "token0"
 	tOut := poolConfig.Token1
+	tOutName := "token1"
 	if nonce%2 == 0 {
 		tIn = poolConfig.Token1
+		tInName = "token1"
 		tOut = poolConfig.Token0
+		tOutName = "token0"
 	}
+
+	// Perform swap.
 	tx, err := swapRouter.ExactInputSingle(tops, uniswapv3.IV3SwapRouterExactInputSingleParams{
-		TokenIn:           tIn.Address,
-		TokenOut:          tOut.Address,
-		Fee:               poolConfig.Fees,
-		Recipient:         recipient,
-		AmountIn:          big.NewInt(1000),
-		AmountOutMinimum:  big.NewInt(996),
+		// The contract address of the inbound token.
+		TokenIn: tIn.Address,
+		// The contract address of the outbound token.
+		TokenOut: tOut.Address,
+		// The fee tier of the pool, used to determine the correct pool contract in which to execute the swap.
+		Fee: poolConfig.Fees,
+		// The destination address of the outbound token.
+		Recipient: recipient,
+		// The amount of inbound token given as swap input.
+		AmountIn: swapAmountIn,
+		// The minimum amount of outbound token received as swap output.
+		AmountOutMinimum: swapAmountOutMinimum,
+		// The limit for the price swap.
+		// Note: we set this to zero which makes the parameter inactive. In production, this value can
+		// be used to protect against price impact.
 		SqrtPriceLimitX96: big.NewInt(0),
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to swap Token1 for Token0")
+		log.Error().Err(err).Str("tokenIn", tInName).Str("tokenOut", tOutName).Msg("Unable to swap")
 		return err
 	}
-	log.Debug().Msg("Swapped Token1 for Token0")
+	log.Debug().Str("tokenIn", tInName).Str("tokenOut", tOutName).Msg("Successful swap")
 	log.Trace().Interface("hash", tx.Hash()).Msg("Transaction")
 	return nil
 }
