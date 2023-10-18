@@ -99,7 +99,7 @@ func (c *UniswapV3Config) ToAddresses() Address {
 
 // Deploy the full UniswapV3 contract suite in 15 different steps.
 // Source: https://github.com/Uniswap/deploy-v3
-func DeploySetup(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses Address, ownerAddress common.Address, blockblockUntilSuccessful blockUntilSuccessfulFn) (UniswapV3Config, error) {
+func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses Address, ownerAddress common.Address, blockblockUntilSuccessful blockUntilSuccessfulFn) (UniswapV3Config, error) {
 	config := UniswapV3Config{}
 	var err error
 

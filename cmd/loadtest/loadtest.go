@@ -458,20 +458,20 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	var uniswapV3Config uniswapv3loadtest.UniswapV3Config
 	var poolConfig uniswapv3loadtest.PoolConfig
 	if mode == loadTestModeUniswapV3 || mode == loadTestModeRandom {
-		uniswapV3Config, err = uniswapv3loadtest.DeploySetup(ctx, c, tops, cops, uniswapAddresses, *ltp.FromETHAddress, blockUntilSuccessful)
+		uniswapV3Config, err = uniswapv3loadtest.DeployUniswapV3(ctx, c, tops, cops, uniswapAddresses, *ltp.FromETHAddress, blockUntilSuccessful)
 		if err != nil {
 			return nil
 		}
 		log.Debug().Interface("config", uniswapV3Config.ToAddresses()).Msg("UniswapV3 deployment config")
 
 		var token0Config uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
-		token0Config, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token0", "A", *ltp.FromETHAddress, ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0))
+		token0Config, err = uniswapv3loadtest.DeploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token0", "A", tokenPoolSize, *ltp.FromETHAddress, ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0), blockUntilSuccessful)
 		if err != nil {
 			return nil
 		}
 
 		var token1Config uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
-		token1Config, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token1", "B", *ltp.FromETHAddress, ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1))
+		token1Config, err = uniswapv3loadtest.DeploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token1", "B", tokenPoolSize, *ltp.FromETHAddress, ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1), blockUntilSuccessful)
 		if err != nil {
 			return nil
 		}
