@@ -91,8 +91,8 @@ type (
 )
 
 var (
-	//go:embed genericUsage.md
-	genericUsage        string
+	//go:embed loadtestUsage.md
+	loadtestUsage       string
 	inputLoadTestParams loadTestParams
 	loadTestResults     []loadTestSample
 	loadTestResutsMutex sync.RWMutex
@@ -150,7 +150,7 @@ var (
 var LoadtestCmd = &cobra.Command{
 	Use:   "loadtest url",
 	Short: "Run a generic load test against an Eth/EVM style JSON-RPC endpoint.",
-	Long:  genericUsage,
+	Long:  loadtestUsage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		err := runLoadTest(cmd.Context())
 		if err != nil {
