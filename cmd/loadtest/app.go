@@ -219,8 +219,8 @@ p - call random precompiled contracts
 a - call a specific precompiled contract address
 s - store mode
 r - random modes
-2 - ERC20 Transfers
-7 - ERC721 Mints
+2 - ERC20 transfers
+7 - ERC721 mints
 v3 - UniswapV3 swaps
 R - total recall
 rpc - call random rpc methods`)
