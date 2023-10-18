@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	uniswapv3loadtest "github.com/maticnetwork/polygon-cli/cmd/loadtest/uniswapv3"
 	"github.com/maticnetwork/polygon-cli/contracts"
 	"github.com/maticnetwork/polygon-cli/contracts/tokens"
 	"github.com/maticnetwork/polygon-cli/contracts/uniswapv3"
@@ -439,7 +440,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Debug().Str("erc721Addr", erc721Addr.String()).Msg("Obtained erc 721 contract address")
 	}
 
-	uniswapAddresses := UniswapV3Addresses{
+	uniswapAddresses := uniswapv3loadtest.Address{
 		FactoryV3:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapFactoryV3),
 		Multicall:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMulticall),
 		ProxyAdmin:                         ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapProxyAdmin),
@@ -454,8 +455,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		SwapRouter02:                       ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapSwapRouter),
 		WETH9:                              ethcommon.HexToAddress(*uniswapv3LoadTestParams.WETH9),
 	}
-	var uniswapV3Config UniswapV3Config
-	var poolConfig PoolConfig
+	var uniswapV3Config uniswapv3loadtest.UniswapV3Config
+	var poolConfig uniswapv3loadtest.PoolConfig
 	if mode == loadTestModeUniswapV3 || mode == loadTestModeRandom {
 		uniswapV3Config, err = deployUniswapV3(ctx, c, tops, cops, uniswapAddresses, *ltp.FromETHAddress)
 		if err != nil {
@@ -463,20 +464,21 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 		log.Debug().Interface("config", uniswapV3Config.ToAddresses()).Msg("UniswapV3 deployment config")
 
-		var token0Config contractConfig[uniswapv3.Swapper]
+		var token0Config uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
 		token0Config, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token0", "A", *ltp.FromETHAddress, ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0))
 		if err != nil {
 			return nil
 		}
 
-		var token1Config contractConfig[uniswapv3.Swapper]
+		var token1Config uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
 		token1Config, err = deploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token1", "B", *ltp.FromETHAddress, ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1))
 		if err != nil {
 			return nil
 		}
 
 		fees := big.NewInt(3_000)
-		poolConfig = PoolConfig{Fees: fees}
+		poolConfig = uniswapv3loadtest.PoolConfig{Fees: fees}
+		poolSize := new(big.Int).Div(tokenPoolSize, big.NewInt(2))
 		if token0Config.Address.Hex() < token1Config.Address.Hex() {
 			poolConfig.Token0 = token0Config
 			poolConfig.ReserveA = tokenPoolSize
@@ -488,7 +490,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			poolConfig.Token1 = token0Config
 			poolConfig.ReserveB = tokenPoolSize
 		}
-		if err = createPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, *ltp.FromETHAddress); err != nil {
+		if err = uniswapv3loadtest.SetupPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, poolSize, *ltp.FromETHAddress, blockUntilSuccessful); err != nil {
 			return nil
 		}
 	}
