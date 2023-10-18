@@ -19,15 +19,18 @@ polycli loadtest uniswapv3 url [flags]
 
 ## Usage
 
-The `uniswapv3` command is a subcommand of the `loadtest` tool. It is meant to generate UniswapV3-like load against RPC endpoints. You can either chose to deploy the full UniswapV3 contract suite or use pre-deployed contract to speed up the process.
+The `uniswapv3` command is a subcommand of the `loadtest` tool. It is meant to generate UniswapV3-like load against JSON-RPC endpoints.
+
+You can either chose to deploy the full UniswapV3 contract suite.
+
+```sh
+polycli loadtest uniswapv3 http://localhost:8545
+```
+
+Or to use pre-deployed contracts to speed up the process.
 
 ```bash
-# Deploy the UniswapV3 contracts and run some swaps.
-$ polycli loadtest uniswapv3 http://localhost:8545
-...
-
-# Same thing with pre-deployed contracts.
-$ polycli loadtest uniswapv3 http://localhost:8545 \
+polycli loadtest uniswapv3 http://localhost:8545 \
   --uniswap-factory-v3-address 0xc5f46e00822c828e1edcc12cf98b5a7b50c9e81b \
   --uniswap-migrator-address 0x24951726c5d22a3569d5474a1e74734a09046cd9 \
   --uniswap-multicall-address 0x0e695f36ade2a12abea51622e80f105e125d1d6e \
@@ -45,9 +48,7 @@ $ polycli loadtest uniswapv3 http://localhost:8545 \
   --uniswap-pool-token-1-address 0x060f7db3146f3d6748822fb4c69489a04b5f3278
 ```
 
-### UniswapV3 contracts
-
-Contracts are cloned from the different Uniswap repositories, compiled with a specific version of `solc` and go bindings are generated using `abigen`. To learn more about this process, make sure to check out `contracts/uniswapv3/README.md`.
+Contracts are cloned from the different Uniswap repositories, compiled with a specific version of `solc` and go bindings are generated using `abigen`. To learn more about this process, make sure to check out `contracts/uniswapv3/README.org`.
 
 ## Flags
 
@@ -57,8 +58,8 @@ Contracts are cloned from the different Uniswap repositories, compiled with a sp
       --uniswap-migrator-address string                        The address of a pre-deployed Migrator contract
       --uniswap-multicall-address string                       The address of a pre-deployed Multicall contract
       --uniswap-nft-descriptor-lib-address string              The address of a pre-deployed NFTDescriptor library contract
-      --uniswap-nft-position-descriptor-address string         The address of a pre-deployed NFTPositionDescriptor contract
-      --uniswap-non-fungible-position-manager-address string   The address of a pre-deployed NFPositionManager contract
+      --uniswap-nft-position-descriptor-address string         The address of a pre-deployed NonfungibleTokenPositionDescriptor contract
+      --uniswap-non-fungible-position-manager-address string   The address of a pre-deployed NonfungiblePositionManager contract
       --uniswap-pool-token-0-address string                    The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1
       --uniswap-pool-token-1-address string                    The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1
       --uniswap-proxy-admin-address string                     The address of a pre-deployed ProxyAdmin contract
