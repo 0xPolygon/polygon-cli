@@ -761,8 +761,8 @@ func loadTestUniswapV3(ctx context.Context, c *ethclient.Client, nonce uint64, u
 }
 
 // swap performs a UniswapV3 swap using the `ExactInputSingle` method which swaps a fixed amount of
-// one token (`token0`) for a maximum possible amount of another token (`token1`).
-// The direction of the swap is determined by the nonce value.
+// one token for a maximum possible amount of another token. The direction of the swap is determined
+// by the nonce value.
 func swap(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRouter02, poolConfig PoolConfig, recipient common.Address, nonce uint64) error {
 	// Determine the direction of the swap.
 	tIn := poolConfig.Token0
