@@ -36,7 +36,7 @@ type (
 	}
 	loadTestParams struct {
 		// inputs
-		URL                                 *url.URL
+		RPCEndpoint                         *url.URL
 		Requests                            *int64
 		Concurrency                         *int64
 		BatchSize                           *uint64
@@ -163,12 +163,12 @@ var LoadtestCmd = &cobra.Command{
 func init() {
 	ltp := new(loadTestParams)
 
-	urlInput := LoadtestCmd.PersistentFlags().StringP("url", "u", "http://localhost:8545", "The url of the JSON-RPC")
-	if urlInput == nil {
+	rpcEndpoint := LoadtestCmd.PersistentFlags().StringP("rpc-endpoint", "r", "http://localhost:8545", "The RPC endpoint")
+	if rpcEndpoint == nil {
 		panic("URL is empty")
 	}
 	var err error
-	ltp.URL, err = validateUrl(*urlInput)
+	ltp.RPCEndpoint, err = validateUrl(*rpcEndpoint)
 	if err != nil {
 		panic(err)
 	}
