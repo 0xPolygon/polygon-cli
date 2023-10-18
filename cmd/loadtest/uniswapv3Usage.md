@@ -1,13 +1,15 @@
 The `uniswapv3` command is a subcommand of the `loadtest` tool. It is meant to generate UniswapV3-like load against JSON-RPC endpoints.
 
-You can either chose to deploy the full UniswapV3 contract suite or use pre-deployed contract to speed up the process.
+You can either chose to deploy the full UniswapV3 contract suite.
+
+```sh
+polycli loadtest uniswapv3 http://localhost:8545
+```
+
+Or to use pre-deployed contracts to speed up the process.
 
 ```bash
-# Deploy the UniswapV3 contracts and perform some swaps.
-$ polycli loadtest uniswapv3 http://localhost:8545
-
-# Same thing with pre-deployed contracts.
-$ polycli loadtest uniswapv3 http://localhost:8545 \
+polycli loadtest uniswapv3 http://localhost:8545 \
   --uniswap-factory-v3-address 0xc5f46e00822c828e1edcc12cf98b5a7b50c9e81b \
   --uniswap-migrator-address 0x24951726c5d22a3569d5474a1e74734a09046cd9 \
   --uniswap-multicall-address 0x0e695f36ade2a12abea51622e80f105e125d1d6e \
