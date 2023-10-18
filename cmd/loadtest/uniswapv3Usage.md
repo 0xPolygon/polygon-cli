@@ -26,4 +26,4 @@ $ polycli loadtest uniswapv3 http://localhost:8545 \
 
 ### UniswapV3 contracts
 
-Contracts are cloned from the different Uniswap repositories, compiled with a specific version of `solc` and go bindings are generated using `abigen`. To learn more about this process, make sure to check out `contracts/uniswapv3/README.md`.
+Contracts are cloned from the different Uniswap repositories, compiled with a specific version of `solc` and go bindings are generated using `abigen`. To learn more about this process, make sure to check out `contracts/uniswapv3/README.org`.
