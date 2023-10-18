@@ -756,14 +756,14 @@ func loadTestUniswapV3(ctx context.Context, c *ethclient.Client, nonce uint64, u
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
-	err = swap(tops, uniswapV3Config.SwapRouter02.contract, poolConfig, *ltp.FromETHAddress, nonce)
+	err = exactInputSingleSwap(tops, uniswapV3Config.SwapRouter02.contract, poolConfig, *ltp.FromETHAddress, nonce)
 	return
 }
 
 // swap performs a UniswapV3 swap using the `ExactInputSingle` method which swaps a fixed amount of
 // one token for a maximum possible amount of another token. The direction of the swap is determined
 // by the nonce value.
-func swap(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRouter02, poolConfig PoolConfig, recipient common.Address, nonce uint64) error {
+func exactInputSingleSwap(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRouter02, poolConfig PoolConfig, recipient common.Address, nonce uint64) error {
 	// Determine the direction of the swap.
 	tIn := poolConfig.Token0
 	tInName := "token0"
