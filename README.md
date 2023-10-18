@@ -145,7 +145,7 @@ true
 You can then generate some load to make sure that blocks with transactions are being created. Note that the chain id of local geth is `1337`.
 
 ```bash
-$ polycli loadtest --verbosity 700 --chain-id 1337 --concurrency 1 --requests 1000 --rate-limit 5 --mode c http://127.0.0.1:8545
+$ polycli loadtest --verbosity 700 --chain-id 1337 --concurrency 1 --requests 1000 --rate-limit 5 --mode c --rpc-endpoint http://127.0.0.1:8545
 ```
 
 ## Contributing
