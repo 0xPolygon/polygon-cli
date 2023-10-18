@@ -28,11 +28,6 @@ var (
 	tokenPoolSize, _ = big.NewInt(0).SetString("100000000000000000000000000", 10)
 )
 
-type params struct {
-	UniswapFactoryV3, UniswapMulticall, UniswapProxyAdmin, UniswapTickLens, UniswapNFTLibDescriptor, UniswapNonfungibleTokenPositionDescriptor, UniswapUpgradeableProxy, UniswapNonfungiblePositionManager, UniswapMigrator, UniswapStaker, UniswapQuoterV2, UniswapSwapRouter *string
-	WETH9, UniswapPoolToken0, UniswapPoolToken1                                                                                                                                                                                                                                *string
-}
-
 var uniswapV3LoadTestCmd = &cobra.Command{
 	Use:   "uniswapv3 url",
 	Short: "Run Uniswapv3-like load test against an Eth/EVm style JSON-RPC endpoint.",
@@ -82,6 +77,11 @@ func validateUrl(input string) (*url.URL, error) {
 	default:
 		return nil, fmt.Errorf("the scheme %s is not supported", url.Scheme)
 	}
+}
+
+type params struct {
+	UniswapFactoryV3, UniswapMulticall, UniswapProxyAdmin, UniswapTickLens, UniswapNFTLibDescriptor, UniswapNonfungibleTokenPositionDescriptor, UniswapUpgradeableProxy, UniswapNonfungiblePositionManager, UniswapMigrator, UniswapStaker, UniswapQuoterV2, UniswapSwapRouter *string
+	WETH9, UniswapPoolToken0, UniswapPoolToken1                                                                                                                                                                                                                                *string
 }
 
 func init() {
