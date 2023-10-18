@@ -58,7 +58,9 @@ func SetupPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts
 
 	// Provide liquidity if there's none.
 	if liquidity.Cmp(big.NewInt(0)) == 0 {
-		provideLiquidity(ctx, c, tops, cops, poolContract, poolConfig, size, recipient, uniswapV3Config.NonfungiblePositionManager.Contract, blockUntilSuccessful)
+		if provideLiquidity(ctx, c, tops, cops, poolContract, poolConfig, size, recipient, uniswapV3Config.NonfungiblePositionManager.Contract, blockUntilSuccessful) != nil {
+			return err
+		}
 	} else {
 		log.Debug().Msg("Liquidity already provided to the pool")
 	}

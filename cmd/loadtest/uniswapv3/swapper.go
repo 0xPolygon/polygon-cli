@@ -49,7 +49,7 @@ func approveSwapperSpendingsByUniswap(ctx context.Context, contract *uniswapv3.S
 			return err
 		}
 
-		backoff.Retry(func() error {
+		if err := backoff.Retry(func() error {
 			allowance, err := contract.Allowance(cops, owner, address)
 			if err != nil {
 				return err
@@ -59,7 +59,9 @@ func approveSwapperSpendingsByUniswap(ctx context.Context, contract *uniswapv3.S
 				return fmt.Errorf("allowance is zero")
 			}
 			return nil
-		}, backoff.NewConstantBackOff(time.Second*2))
+		}, backoff.NewConstantBackOff(time.Second*2)); err != nil {
+			return err
+		}
 
 		log.Debug().Str("Swapper", name).Str("spender", address.String()).Interface("amount", amount).Msg("Spending approved")
 		log.Trace().Interface("hash", tx.Hash()).Msg("Transaction")
