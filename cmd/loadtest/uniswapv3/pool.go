@@ -40,8 +40,6 @@ type slot struct {
 	Unlocked                   bool
 }
 
-type blockUntilSuccessfulFn func(ctx context.Context, c *ethclient.Client, f func() error) error
-
 // CreatePool sets up a Uniswap V3 pool by creating it, initializing it if necessary and providing
 // liquidity if none exists.
 func SetupPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, poolConfig PoolConfig, size *big.Int, recipient common.Address, blockUntilSuccessful blockUntilSuccessfulFn) error {
