@@ -14,17 +14,27 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// The amount of token to approve a spender to use on behalf of the token owner.
-// We use a very high amount to avoid frequent approval transactions. Don't use in production.
-var allowanceAmount = big.NewInt(999_999_999_999_999_999)
+var (
+	// The amount of token to mint when deploying the ERC20 contract.
+	MintAmount = big.NewInt(999_999_999_999_999_999)
+
+	// The amount of token to approve a spender to use on behalf of the token owner.
+	// We use a very high amount to avoid frequent approval transactions. Don't use in production.
+	allowanceAmount = big.NewInt(1_000_000_000_000_000)
+)
 
 // Deploy an ERC20 token.
-func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, tokenName string, recipient common.Address, tokenKnownAddress common.Address, blockUntilSuccessful blockUntilSuccessfulFn) (tokenConfig ContractConfig[uniswapv3.Swapper], err error) {
+func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, tokenName, tokenSymbol string, amount *big.Int, recipient common.Address, tokenKnownAddress common.Address, blockUntilSuccessful blockUntilSuccessfulFn) (tokenConfig ContractConfig[uniswapv3.Swapper], err error) {
 	tokenConfig.Address, tokenConfig.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		tokenKnownAddress,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.Swapper, error) {
-			return uniswapv3.DeploySwapper(tops, c)
+			address, tx, contract, err := uniswapv3.DeploySwapper(tops, c, tokenName, tokenSymbol, amount, recipient)
+			if err != nil {
+				return common.Address{}, nil, nil, err
+			}
+			log.Debug().Str("token", tokenName).Interface("amount", amount).Interface("recipient", recipient).Msg("Minted tokens")
+			return address, tx, contract, nil
 		},
 		uniswapv3.NewSwapper,
 		func(contract *uniswapv3.Swapper) error {

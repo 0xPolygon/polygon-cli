@@ -33,7 +33,6 @@ cp node_modules/v3-periphery-1_3_0/artifacts/contracts/interfaces/INonfungiblePo
 cp node_modules/@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json ~/code/polygon-cli/contracts/uniswapv3
 
 cp WETH9.json  ~/code/polygon-cli/contracts/uniswapv3
-cat Swapper.json | jq '{"bytecode": .data.bytecode.object, "abi": .abi}' > ~/code/polygon-cli/contracts/uniswapv3/Swapper.json
 #+end_src
 
 find . -type f -name '*.json' | sed 's:./\(.*\).json:\1:'
@@ -49,3 +48,24 @@ find . -type f -name '*.json' | grep -Pv './I[A-Z]' | sed 's:./\(.*\).json:\1:' 
 find . -type f -name '*.json' | grep -P './I[A-Z]' | sed 's:./\(.*\).json:\1:' | awk '{print "abigen --abi " $0 ".abi --pkg uniswapv3 --type " $0 " > " $0 ".go"}' | bash
 #+end_src
 
+```bash
+$ forge init test
+$ pushd test
+$ forge install OpenZeppelin/openzeppelin-contracts
+# modify foundry.toml remappings
+$ cat foundry.toml
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+remappings = [
+    '@forge-std/=lib/forge-std/src/',
+    '@openzeppelin/=lib/openzeppelin-contracts/contracts',
+]
+
+# See more config options https://github.com/foundry-rs/foundry/tree/master/config
+$ cp ~/code/polygon-cli/contracts/uniswapv3/Swapper.sol src
+$ forge build
+$ cat out/Swapper.sol/Swapper.json | jq -r .abi > ~/code/polygon-cli/contracts/uniswapv3/Swapper.abi
+$ cat out/Swapper.sol/Swapper.json | jq -r .bytecode.object > ~/code/polygon-cli/contracts/uniswapv3/Swapper.bin
+```

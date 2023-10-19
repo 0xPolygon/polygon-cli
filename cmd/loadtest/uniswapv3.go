@@ -143,14 +143,14 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 	log.Debug().Msg("🪙 Deploying ERC20 tokens...")
 	var token0 uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
 	token0, err = uniswapv3loadtest.DeployERC20(
-		ctx, c, tops, cops, uniswapV3Config, "SwapperA", recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0), blockUntilSuccessful)
+		ctx, c, tops, cops, uniswapV3Config, "SwapperA", "SA", uniswapv3loadtest.MintAmount, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0), blockUntilSuccessful)
 	if err != nil {
 		return
 	}
 
 	var token1 uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
 	token1, err = uniswapv3loadtest.DeployERC20(
-		ctx, c, tops, cops, uniswapV3Config, "SwapperB", recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1), blockUntilSuccessful)
+		ctx, c, tops, cops, uniswapV3Config, "SwapperB", "SB", uniswapv3loadtest.MintAmount, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1), blockUntilSuccessful)
 	if err != nil {
 		return
 	}
