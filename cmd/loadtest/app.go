@@ -3,17 +3,15 @@ package loadtest
 import (
 	"crypto/ecdsa"
 	_ "embed"
-	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
-	"net/url"
 	"sync"
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
-	"github.com/rs/zerolog/log"
+	"github.com/maticnetwork/polygon-cli/util"
 	"github.com/spf13/cobra"
 )
 
@@ -223,7 +221,7 @@ func checkFlags() error {
 	if ltp.RPCUrl == nil {
 		panic("RPC URL is empty")
 	}
-	if err := validateUrl(*ltp.RPCUrl); err != nil {
+	if err := util.ValidateUrl(*ltp.RPCUrl); err != nil {
 		return err
 	}
 
@@ -236,23 +234,4 @@ func checkFlags() error {
 	}
 
 	return nil
-}
-
-// validateUrl checks if a string URL can be parsed and if it has a valid scheme.
-func validateUrl(input string) error {
-	url, err := url.Parse(input)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to parse url input error")
-		return err
-	}
-
-	if url.Scheme == "" {
-		return errors.New("the scheme has not been specified")
-	}
-	switch url.Scheme {
-	case "http", "https", "ws", "wss":
-		return nil
-	default:
-		return fmt.Errorf("the scheme '%s' is not supported", url.Scheme)
-	}
 }
