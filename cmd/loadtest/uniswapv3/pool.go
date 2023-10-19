@@ -114,7 +114,7 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 		log.Error().Err(err).Msg("Unable to create and initialize the pool")
 		return nil, err
 	}
-	log.Debug().Msg("Pool created and initialized")
+	log.Debug().Interface("fees", poolConfig.Fees).Msg("Pool created and initialized")
 
 	// Retrieve the pool address.
 	var poolAddress common.Address

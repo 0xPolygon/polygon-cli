@@ -40,10 +40,10 @@ func ExactInputSingleSwap(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRou
 		SqrtPriceLimitX96: big.NewInt(0),
 	})
 	if err != nil {
-		log.Error().Err(err).Str("tokenIn", swapDirection.tokenInName).Str("tokenOut", swapDirection.tokenOutName).Msg("Unable to swap")
+		log.Error().Err(err).Str("tokenIn", swapDirection.tokenInName).Str("tokenOut", swapDirection.tokenOutName).Interface("amountIn", amountIn).Msg("Unable to swap")
 		return err
 	}
-	log.Debug().Str("tokenIn", swapDirection.tokenInName).Str("tokenOut", swapDirection.tokenOutName).Msg("Successful swap")
+	log.Debug().Str("tokenIn", swapDirection.tokenInName).Str("tokenOut", swapDirection.tokenOutName).Interface("amountIn", amountIn).Msg("Successful swap")
 	return nil
 }
 
