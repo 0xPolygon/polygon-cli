@@ -16,6 +16,7 @@ import (
 
 var (
 	// Trading fees charged on each swap or trade made within a UniswapV3 liquidity pool.
+	// https://docs.uniswap.org/concepts/protocol/fees
 	poolFees = big.NewInt(3_000)
 
 	// Reserve of a token in a UniswapV3 pool.
