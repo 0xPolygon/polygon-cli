@@ -14,20 +14,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type feeTier int64
-
-// Only a few fee tiers are possible in UniswapV3.
-// https://docs.uniswap.org/concepts/protocol/fees
 var (
-	StableTier   feeTier = 50000 // 0.05%
-	StandardTier feeTier = 3000  // 0.3%
-	ExoticTier   feeTier = 100   // 1%
-)
-
-var (
-	// Trading fees charged on each swap or trade made within a UniswapV3 liquidity pool.
-	PoolFees = big.NewInt(int64(StandardTier))
-
 	// Reserve of a token in a UniswapV3 pool.
 	poolReserveForOneToken = big.NewInt(1_000_000_000_000)
 
@@ -37,6 +24,21 @@ var (
 
 // The maximum tick that may be passed to `getSqrtRatioAtTick` computed from log base 1.0001 of 2**128.
 const maxTick = 887272
+
+type feeTier float64
+
+var (
+	// Only a few fee tiers are possible in UniswapV3. They are represented in percentage.
+	// https://uniswapv3book.com/docs/milestone_5/swap-fees/#accruing-swap-fees
+	StableTier   feeTier = 0.05 // 500
+	StandardTier feeTier = 0.3  // 3_000
+	ExoticTier   feeTier = 1    // 10_000
+)
+
+// PercentageToUniswapFeeTier takes a percentage and returns the corresponding UniswapV3 fee tier.
+func PercentageToUniswapFeeTier(p float64) *big.Int {
+	return big.NewInt(int64(p * 100000))
+}
 
 // PoolConfig represents the configuration of a UniswapV3 pool.
 type PoolConfig struct {

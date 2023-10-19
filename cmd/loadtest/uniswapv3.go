@@ -64,12 +64,12 @@ var uniswapV3LoadTestCmd = &cobra.Command{
 
 func checkFlags() error {
 	// Check pool fees.
-	switch fees := int64(*uniswapv3LoadTestParams.PoolFees); fees {
-	case int64(uniswapv3loadtest.StableTier), int64(uniswapv3loadtest.StandardTier), int64(uniswapv3loadtest.ExoticTier):
+	switch fees := *uniswapv3LoadTestParams.PoolFees; fees {
+	case float64(uniswapv3loadtest.StableTier), float64(uniswapv3loadtest.StandardTier), float64(uniswapv3loadtest.ExoticTier):
 		// Fees are correct, do nothing.
 	default:
-		return fmt.Errorf("UniswapV3 only supports a few pool tiers which are stable (0.05%%): %d, standard (0.3%%): %d, and exotic (1%%): %d",
-			int64(uniswapv3loadtest.StableTier), int64(uniswapv3loadtest.StandardTier), int64(uniswapv3loadtest.ExoticTier))
+		return fmt.Errorf("UniswapV3 only supports a few pool tiers which are stable: %f%%, standard: %f%%, and exotic: %f%%",
+			float64(uniswapv3loadtest.StableTier), float64(uniswapv3loadtest.StandardTier), float64(uniswapv3loadtest.ExoticTier))
 	}
 
 	// Check swap amount input.
@@ -99,7 +99,8 @@ func validateUrl(input string) (*url.URL, error) {
 
 type params struct {
 	UniswapFactoryV3, UniswapMulticall, UniswapProxyAdmin, UniswapTickLens, UniswapNFTLibDescriptor, UniswapNonfungibleTokenPositionDescriptor, UniswapUpgradeableProxy, UniswapNonfungiblePositionManager, UniswapMigrator, UniswapStaker, UniswapQuoterV2, UniswapSwapRouter, WETH9, UniswapPoolToken0, UniswapPoolToken1 *string
-	PoolFees, SwapAmountInput                                                                                                                                                                                                                                                                                               *uint64
+	PoolFees                                                                                                                                                                                                                                                                                                                *float64
+	SwapAmountInput                                                                                                                                                                                                                                                                                                         *uint64
 }
 
 func init() {
@@ -124,7 +125,7 @@ func init() {
 	params.UniswapPoolToken1 = uniswapV3LoadTestCmd.Flags().String("uniswap-pool-token-1-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
 
 	// Pool and swap parameters.
-	params.PoolFees = uniswapV3LoadTestCmd.Flags().Uint64P("pool-fees", "f", uniswapv3loadtest.PoolFees.Uint64(), "Trading fees charged on each swap or trade made within a UniswapV3 liquidity pool (e.g. 3000 means 0.3%)")
+	params.PoolFees = uniswapV3LoadTestCmd.Flags().Float64P("pool-fees", "f", float64(uniswapv3loadtest.StandardTier), "Trading fees charged on each swap or trade made within a UniswapV3 liquidity pool (e.g. 0.3 means 0.3%)")
 	params.SwapAmountInput = uniswapV3LoadTestCmd.Flags().Uint64P("swap-amount", "a", uniswapv3loadtest.SwapAmountInput.Uint64(), "The amount of inbound token given as swap input")
 
 	uniswapv3LoadTestParams = *params
@@ -155,7 +156,7 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 	}
 
 	log.Debug().Msg("🎱 Deploying UniswapV3 liquidity pool...")
-	fees := big.NewInt(int64(*uniswapv3LoadTestParams.PoolFees))
+	fees := uniswapv3loadtest.PercentageToUniswapFeeTier(*uniswapv3LoadTestParams.PoolFees)
 	poolConfig = *uniswapv3loadtest.NewPool(token0, token1, fees)
 	if err = uniswapv3loadtest.SetupLiquidityPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, recipient, blockUntilSuccessful); err != nil {
 		return
