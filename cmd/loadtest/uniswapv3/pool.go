@@ -37,7 +37,16 @@ var (
 
 // PercentageToUniswapFeeTier takes a percentage and returns the corresponding UniswapV3 fee tier.
 func PercentageToUniswapFeeTier(p float64) *big.Int {
-	return big.NewInt(int64(p * 100000))
+	var fees int64
+	switch p {
+	case float64(StableTier):
+		fees = 500
+	case float64(StandardTier):
+		fees = 3_000
+	case float64(ExoticTier):
+		fees = 10_000
+	}
+	return big.NewInt(fees)
 }
 
 // PoolConfig represents the configuration of a UniswapV3 pool.
