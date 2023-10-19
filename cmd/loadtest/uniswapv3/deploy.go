@@ -2,7 +2,7 @@ package uniswapv3loadtest
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"math/big"
 	"reflect"
 	"strings"
@@ -16,34 +16,23 @@ import (
 )
 
 const (
-	// The fee amount to enable for one basic point.
-	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/add-1bp-fee-tier.ts#L5
-	ONE_BP_FEE = 100
+	// The NFTPositionLib link (or address) in NFTPositionDescriptor bytecode.
+	// When recompiling the contracts and updating the go bindings, make sure to update this value.
+	oldNFTPositionLibraryAddress = "__$cea9be979eee3d87fb124d6cbb244bb0b5$__"
 
+	// The fee amount to enable for one basic point.
+	oneBPFee = 100
 	// The spacing between ticks to be enforced for all pools with the given fee amount.
-	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/add-1bp-fee-tier.ts#L6
-	ONE_BP_TICK_SPACING = 1
+	oneBPTickSpacing = 1
 
 	// The max amount of seconds into the future the incentive startTime can be set.
-	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/deploy-v3-staker.ts#L11
-	MAX_INCENTIVE_START_LEAD_TIME = ONE_MONTH_SECONDS
-
+	maxIncentiveStartLeadTime = 30 * 24 * 60 * 60 // 1 month
 	// The max duration of an incentive in seconds.
-	// https://github.com/Uniswap/deploy-v3/blob/b7aac0f1c5353b36802dc0cf95c426d2ef0c3252/src/steps/deploy-v3-staker.ts#L13
-	MAX_INCENTIVE_DURATION = ONE_YEAR_SECONDS * 2
-
-	// Time units.
-	ONE_MINUTE_SECONDS = 60
-	ONE_HOUR_SECONDS   = ONE_MINUTE_SECONDS * 60
-	ONE_DAY_SECONDS    = ONE_HOUR_SECONDS * 24
-	ONE_MONTH_SECONDS  = ONE_DAY_SECONDS * 30
-	ONE_YEAR_SECONDS   = ONE_DAY_SECONDS * 365
+	maxIncentiveDuration = 2 * 365 * 23 * 60 * 60 * 2 // 2 years
 )
 
-var oldNFTPositionLibraryAddress = common.HexToAddress("0x73a6d49037afd585a0211a7bb4e990116025b45d")
-
 type (
-	// uniswapV3Config represents the whole UniswapV3 configuration.
+	// UniswapV3Config represents the whole UniswapV3 configuration (contracts and addresses), including WETH9.
 	UniswapV3Config struct {
 		FactoryV3                          ContractConfig[uniswapv3.UniswapV3Factory]
 		Multicall                          ContractConfig[uniswapv3.UniswapInterfaceMulticall]
@@ -61,51 +50,31 @@ type (
 		WETH9 ContractConfig[uniswapv3.WETH9]
 	}
 
-	// Contract represents a UniswapV3 contract.
-	Contract interface {
-		uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.WETH9 | uniswapv3.NFTDescriptor | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker | uniswapv3.QuoterV2 | uniswapv3.SwapRouter02 | uniswapv3.Swapper
+	// UniswapV3Addresses is a subset of UniswapV3Config. It represents the addresses of the whole
+	// UniswapV3 configuration, including WETH9.
+	UniswapV3Addresses struct {
+		FactoryV3, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib, NonfungibleTokenPositionDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker, QuoterV2, SwapRouter02, WETH9 common.Address
 	}
 
-	// Address represents a UniswapV3 contract address (WETH9 also included).
-	Address struct {
-		FactoryV3, Multicall, ProxyAdmin, TickLens, NFTDescriptorLib, NonfungibleTokenPositionDescriptor, TransparentUpgradeableProxy, NonfungiblePositionManager, Migrator, Staker, QuoterV2, SwapRouter02 common.Address
-		WETH9                                                                                                                                                                                               common.Address
-	}
-
-	// contractConfig represents a specific contract configuration.
+	// ContractConfig represents a contract and its address.
 	ContractConfig[T Contract] struct {
 		Address  common.Address
 		Contract *T
 	}
-)
 
-func (c *UniswapV3Config) ToAddresses() Address {
-	return Address{
-		FactoryV3:                          c.FactoryV3.Address,
-		Multicall:                          c.Multicall.Address,
-		ProxyAdmin:                         c.ProxyAdmin.Address,
-		TickLens:                           c.TickLens.Address,
-		NFTDescriptorLib:                   c.NFTDescriptorLib.Address,
-		NonfungibleTokenPositionDescriptor: c.NonfungibleTokenPositionDescriptor.Address,
-		TransparentUpgradeableProxy:        c.TransparentUpgradeableProxy.Address,
-		NonfungiblePositionManager:         c.NonfungiblePositionManager.Address,
-		Migrator:                           c.Migrator.Address,
-		Staker:                             c.Staker.Address,
-		QuoterV2:                           c.QuoterV2.Address,
-		SwapRouter02:                       c.SwapRouter02.Address,
-		WETH9:                              c.WETH9.Address,
+	// Contract represents a UniswapV3 contract (including WETH9 and Swapper).
+	Contract interface {
+		uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.NFTDescriptor | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker | uniswapv3.QuoterV2 | uniswapv3.SwapRouter02 | uniswapv3.WETH9 | uniswapv3.Swapper
 	}
-}
+)
 
 // Deploy the full UniswapV3 contract suite in 15 different steps.
 // Source: https://github.com/Uniswap/deploy-v3
-func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses Address, ownerAddress common.Address, blockblockUntilSuccessful blockUntilSuccessfulFn) (UniswapV3Config, error) {
-	config := UniswapV3Config{}
-	var err error
-
-	// 0. Deploy WETH9.
-	config.WETH9.Address, config.WETH9.Contract, err = DeployOrInstantiateContract(
-		ctx, c, tops, cops, "Step 0: Contract WETH9 deployment", knownAddresses.WETH9,
+func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses, ownerAddress common.Address, blockblockUntilSuccessful blockUntilSuccessfulFn) (config UniswapV3Config, err error) {
+	log.Debug().Msg("Step 0: WETH9 deployment")
+	config.WETH9.Address, config.WETH9.Contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops,
+		knownAddresses.WETH9,
 		uniswapv3.DeployWETH9,
 		uniswapv3.NewWETH9,
 		func(contract *uniswapv3.WETH9) (err error) {
@@ -115,12 +84,13 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		blockblockUntilSuccessful,
 	)
 	if err != nil {
-		return config, err
+		return
 	}
 
-	// 1. Deploy UniswapV3Factory.
-	config.FactoryV3.Address, config.FactoryV3.Contract, err = DeployOrInstantiateContract(
-		ctx, c, tops, cops, "Step 1: Contract UniswapV3Factory deployment", knownAddresses.FactoryV3,
+	log.Debug().Msg("Step 1: UniswapV3Factory deployment")
+	config.FactoryV3.Address, config.FactoryV3.Contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops,
+		knownAddresses.FactoryV3,
 		uniswapv3.DeployUniswapV3Factory,
 		uniswapv3.NewUniswapV3Factory,
 		func(contract *uniswapv3.UniswapV3Factory) (err error) {
@@ -130,17 +100,18 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		blockblockUntilSuccessful,
 	)
 	if err != nil {
-		return config, err
+		return
 	}
 
-	// 2. Enable one basic point fee tier.
-	if err = enableOneBPFeeTier(config.FactoryV3.Contract, tops, cops, ONE_BP_FEE, ONE_BP_TICK_SPACING); err != nil {
-		return config, err
+	log.Debug().Msg("Step 2: Enable fee amount")
+	if err = enableFeeAmount(config.FactoryV3.Contract, tops, cops, oneBPFee, oneBPTickSpacing); err != nil {
+		return
 	}
 
-	// 3. Deploy UniswapInterfaceMulticall.
-	config.Multicall.Address, config.Multicall.Contract, err = DeployOrInstantiateContract(
-		ctx, c, tops, cops, "Step 3: Contract UniswapInterfaceMulticall deployment", knownAddresses.Multicall,
+	log.Debug().Msg("Step 3: UniswapInterfaceMulticall deployment")
+	config.Multicall.Address, config.Multicall.Contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops,
+		knownAddresses.Multicall,
 		uniswapv3.DeployUniswapInterfaceMulticall,
 		uniswapv3.NewUniswapInterfaceMulticall,
 		func(contract *uniswapv3.UniswapInterfaceMulticall) (err error) {
@@ -150,12 +121,13 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		blockblockUntilSuccessful,
 	)
 	if err != nil {
-		return config, err
+		return
 	}
 
-	// 4. Deploy ProxyAdmin.
-	config.ProxyAdmin.Address, config.ProxyAdmin.Contract, err = DeployOrInstantiateContract(
-		ctx, c, tops, cops, "Step 4: Contract ProxyAdmin deployment", knownAddresses.ProxyAdmin,
+	log.Debug().Msg("Step 4: ProxyAdmin deployment")
+	config.ProxyAdmin.Address, config.ProxyAdmin.Contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops,
+		knownAddresses.ProxyAdmin,
 		uniswapv3.DeployProxyAdmin,
 		uniswapv3.NewProxyAdmin,
 		func(contract *uniswapv3.ProxyAdmin) (err error) {
@@ -165,12 +137,13 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		blockblockUntilSuccessful,
 	)
 	if err != nil {
-		return config, err
+		return
 	}
 
-	// 5. Deploy TickLens.
-	config.TickLens.Address, config.TickLens.Contract, err = DeployOrInstantiateContract(
-		ctx, c, tops, cops, "Step 5: Contract TickLens deployment", knownAddresses.TickLens,
+	log.Debug().Msg("Step 5: TickLens deployment")
+	config.TickLens.Address, config.TickLens.Contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops,
+		knownAddresses.TickLens,
 		uniswapv3.DeployTickLens,
 		uniswapv3.NewTickLens,
 		func(contract *uniswapv3.TickLens) (err error) {
@@ -182,45 +155,44 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		blockblockUntilSuccessful,
 	)
 	if err != nil {
-		return config, err
+		return
 	}
 
-	// 6. Deploy NFTDescriptor library.
-	config.NFTDescriptorLib.Address, _, err = DeployOrInstantiateContract(
-		ctx, c, tops, cops, "Step 6: Library NFTDescriptor deployment", knownAddresses.NFTDescriptorLib,
-		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.NFTDescriptor, error) {
-			return uniswapv3.DeployNFTDescriptor(tops, c)
-		},
+	log.Debug().Msg("Step 6: NFTDescriptorLib deployment")
+	config.NFTDescriptorLib.Address, _, err = deployOrInstantiateContract(
+		ctx, c, tops, cops,
+		knownAddresses.NFTDescriptorLib,
+		uniswapv3.DeployNFTDescriptor,
 		uniswapv3.NewNFTDescriptor,
 		func(contract *uniswapv3.NFTDescriptor) (err error) {
-			// No methods to call to check if the library has been deployed.
+			// The only method we could call requires a pool to be deployed.
 			return
 		},
 		blockblockUntilSuccessful,
 	)
 	if err != nil {
-		return config, err
+		return
 	}
 
-	// 7. Deploy NonfungibleTokenPositionDescriptor.
-	config.NonfungibleTokenPositionDescriptor.Address, config.NonfungibleTokenPositionDescriptor.Contract, err = DeployOrInstantiateContract(
-		ctx, c, tops, cops, "Step 7: Contract NonfungibleTokenPositionDescriptor deployment", knownAddresses.NonfungibleTokenPositionDescriptor,
+	log.Debug().Msg("Step 7: NFTPositionDescriptor deployment")
+	config.NonfungibleTokenPositionDescriptor.Address, config.NonfungibleTokenPositionDescriptor.Contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops,
+		knownAddresses.NonfungibleTokenPositionDescriptor,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.NonfungibleTokenPositionDescriptor, error) {
-			oldAddressFmt := "__$cea9be979eee3d87fb124d6cbb244bb0b5$__"
-			newAddressFmt := strings.TrimPrefix(strings.ToLower(config.NFTDescriptorLib.Address.String()), "0x")
-			newNonfungibleTokenPositionDescriptorBytecode := strings.ReplaceAll(uniswapv3.NonfungibleTokenPositionDescriptorMetaData.Bin, oldAddressFmt, newAddressFmt)
+			// Update NFTPosition library address in NFTPositionDescriptor bytecode.
+			newNFTPositionLibraryAddress := strings.TrimPrefix(strings.ToLower(config.NFTDescriptorLib.Address.String()), "0x")
+			newNonfungibleTokenPositionDescriptorBytecode := strings.ReplaceAll(uniswapv3.NonfungibleTokenPositionDescriptorMetaData.Bin, oldNFTPositionLibraryAddress, newNFTPositionLibraryAddress)
 			if uniswapv3.NonfungibleTokenPositionDescriptorMetaData.Bin == newNonfungibleTokenPositionDescriptorBytecode {
-				err = fmt.Errorf("the NonfungibleTokenPositionDescriptor bytecode has not been updated")
-				log.Error().Err(err).Msg("NonfungibleTokenPositionDescriptor bytecode has not been updated")
-				return common.Address{}, nil, nil, err
+				return common.Address{}, nil, nil, errors.New("NFTPositionDescriptor bytecode has not been updated")
 			}
-			log.Debug().Interface("oldAddress", oldNFTPositionLibraryAddress).Interface("newAddress", config.NFTDescriptorLib.Address).Msg("NonfungibleTokenPositionDescriptor bytecode updated with the new NFTDescriptor library address")
 
-			// Deploy contract.
 			var nativeCurrencyLabelBytes [32]byte
 			copy(nativeCurrencyLabelBytes[:], "ETH")
 			uniswapv3.NonfungibleTokenPositionDescriptorMetaData.Bin = newNonfungibleTokenPositionDescriptorBytecode
 			uniswapv3.NonfungibleTokenPositionDescriptorBin = newNonfungibleTokenPositionDescriptorBytecode
+			log.Debug().Interface("oldAddress", oldNFTPositionLibraryAddress).Interface("newAddress", config.NFTDescriptorLib.Address).Msg("NFTPositionDescriptor bytecode updated with the new NFTDescriptor library address")
+
+			// Deploy NFTPositionDescriptor contract.
 			return uniswapv3.DeployNonfungibleTokenPositionDescriptor(tops, c, config.WETH9.Address, nativeCurrencyLabelBytes)
 		},
 		uniswapv3.NewNonfungibleTokenPositionDescriptor,
@@ -231,12 +203,13 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		blockblockUntilSuccessful,
 	)
 	if err != nil {
-		return config, err
+		return
 	}
 
-	// 8. Deploy TransparentUpgradeableProxy.
-	config.TransparentUpgradeableProxy.Address, config.TransparentUpgradeableProxy.Contract, err = DeployOrInstantiateContract(
-		ctx, c, tops, cops, "Step 8: Contract TransparentUpgradeableProxy deployment", knownAddresses.TransparentUpgradeableProxy,
+	log.Debug().Msg("Step 8: TransparentUpgradeableProxy deployment")
+	config.TransparentUpgradeableProxy.Address, config.TransparentUpgradeableProxy.Contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops,
+		knownAddresses.TransparentUpgradeableProxy,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.TransparentUpgradeableProxy, error) {
 			return uniswapv3.DeployTransparentUpgradeableProxy(tops, c, config.NonfungibleTokenPositionDescriptor.Address, config.ProxyAdmin.Address, []byte(""))
 		},
@@ -247,21 +220,18 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			// the admin by default. Thus, we can call any method of the contract to check it has been deployed.
 			// But when we use pre-deployed contracts, since the TransparentUpgradeableProxy ownership
 			// has been transferred, we get "execution reverted" errors when trying to call any method.
-			// That's why we don't call any method in the pre-deployed contract mode.
-			//if knownAddresses.TransparentUpgradeableProxy == (common.Address{}) {
-			//	_, err = contract.Admin(tops)
-			//}
 			return
 		},
 		blockblockUntilSuccessful,
 	)
 	if err != nil {
-		return config, err
+		return
 	}
 
-	// 9. Deploy NonfungiblePositionManager.
-	config.NonfungiblePositionManager.Address, config.NonfungiblePositionManager.Contract, err = DeployOrInstantiateContract(
-		ctx, c, tops, cops, "Step 9: Contract NonfungiblePositionManager deployment", knownAddresses.NonfungiblePositionManager,
+	log.Debug().Msg("Step 9: NonfungiblePositionManager deployment")
+	config.NonfungiblePositionManager.Address, config.NonfungiblePositionManager.Contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops,
+		knownAddresses.NonfungiblePositionManager,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.NonfungiblePositionManager, error) {
 			return uniswapv3.DeployNonfungiblePositionManager(tops, c, config.FactoryV3.Address, config.WETH9.Address, config.TransparentUpgradeableProxy.Address)
 		},
@@ -273,12 +243,13 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		blockblockUntilSuccessful,
 	)
 	if err != nil {
-		return config, err
+		return
 	}
 
-	// 10. Deploy Migrator.
-	config.Migrator.Address, config.Migrator.Contract, err = DeployOrInstantiateContract(
-		ctx, c, tops, cops, "Step 10: Contract V3Migrator deployment", knownAddresses.Migrator,
+	log.Debug().Msg("Step 10: V3Migrator deployment")
+	config.Migrator.Address, config.Migrator.Contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops,
+		knownAddresses.Migrator,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.V3Migrator, error) {
 			return uniswapv3.DeployV3Migrator(tops, c, config.FactoryV3.Address, config.WETH9.Address, config.NonfungiblePositionManager.Address)
 		},
@@ -290,19 +261,20 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		blockblockUntilSuccessful,
 	)
 	if err != nil {
-		return config, err
+		return
 	}
 
-	// 11. Set Factory owner.
-	if err = setFactoryOwner(config.FactoryV3.Contract, tops, cops, ownerAddress); err != nil {
-		return config, err
+	log.Debug().Msg("Step 11: Transfer UniswapV3Factory ownership")
+	if err = transferUniswapV3FactoryOwnership(config.FactoryV3.Contract, tops, cops, ownerAddress); err != nil {
+		return
 	}
 
-	// 12. Deploy Staker.
-	config.Staker.Address, config.Staker.Contract, err = DeployOrInstantiateContract(
-		ctx, c, tops, cops, "Step 12: Contract UniswapV3Staker deployment", knownAddresses.Staker,
+	log.Debug().Msg("Step 12: UniswapV3Staker deployment")
+	config.Staker.Address, config.Staker.Contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops,
+		knownAddresses.Staker,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.UniswapV3Staker, error) {
-			return uniswapv3.DeployUniswapV3Staker(tops, c, config.FactoryV3.Address, config.NonfungiblePositionManager.Address, big.NewInt(MAX_INCENTIVE_START_LEAD_TIME), big.NewInt(MAX_INCENTIVE_DURATION))
+			return uniswapv3.DeployUniswapV3Staker(tops, c, config.FactoryV3.Address, config.NonfungiblePositionManager.Address, big.NewInt(maxIncentiveStartLeadTime), big.NewInt(maxIncentiveDuration))
 		},
 		uniswapv3.NewUniswapV3Staker,
 		func(contract *uniswapv3.UniswapV3Staker) (err error) {
@@ -312,12 +284,13 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		blockblockUntilSuccessful,
 	)
 	if err != nil {
-		return config, err
+		return
 	}
 
-	// 13. Deploy QuoterV2.
-	config.QuoterV2.Address, config.QuoterV2.Contract, err = DeployOrInstantiateContract(
-		ctx, c, tops, cops, "Step 13: Contract QuoterV2 deployment", knownAddresses.QuoterV2,
+	log.Debug().Msg("Step 13: QuoterV2 deployment")
+	config.QuoterV2.Address, config.QuoterV2.Contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops,
+		knownAddresses.QuoterV2,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.QuoterV2, error) {
 			return uniswapv3.DeployQuoterV2(tops, c, config.FactoryV3.Address, config.WETH9.Address)
 		},
@@ -329,15 +302,15 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		blockblockUntilSuccessful,
 	)
 	if err != nil {
-		return config, err
+		return
 	}
 
-	// 14. Deploy SwapRouter02.
-	config.SwapRouter02.Address, config.SwapRouter02.Contract, err = DeployOrInstantiateContract(
-		ctx, c, tops, cops, "Step 14: Contract SwapRouter02 deployment", knownAddresses.SwapRouter02,
+	log.Debug().Msg("Step 14: SwapRouter02 deployment")
+	config.SwapRouter02.Address, config.SwapRouter02.Contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops,
+		knownAddresses.SwapRouter02,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.SwapRouter02, error) {
-			// Note: we specify an empty address for UniswapV2Factory.
-			uniswapFactoryV2Address := common.Address{}
+			uniswapFactoryV2Address := common.Address{} // Note: we specify an empty address for UniswapV2Factory since we don't deploy it.
 			return uniswapv3.DeploySwapRouter02(tops, c, uniswapFactoryV2Address, config.FactoryV3.Address, config.NonfungiblePositionManager.Address, config.WETH9.Address)
 		},
 		uniswapv3.NewSwapRouter02,
@@ -348,90 +321,87 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		blockblockUntilSuccessful,
 	)
 	if err != nil {
-		return config, err
+		return
 	}
 
-	// 15. Transfer ProxyAdmin ownership.
+	log.Debug().Msg("Step 15: Transfer ProxyAdmin ownership")
 	if err = transferProxyAdminOwnership(config.ProxyAdmin.Contract, tops, cops, ownerAddress); err != nil {
-		return config, err
+		return
 	}
 
-	return config, nil
+	return
 }
 
-// Deploy or instantiate any UniswapV3 contract.
-// This method will either deploy a contract if the known address is empty (equal to `common.Address{}` or `0x0“)
-// or instantiate the contract if the known address is specified.
-func DeployOrInstantiateContract[T Contract](
+// deployOrInstantiateContract deploys or instantiates a UniswapV3 contract.
+// If knownAddress is empty, it deploys the contract; otherwise, it instantiates it.
+func deployOrInstantiateContract[T Contract](
 	ctx context.Context,
 	c *ethclient.Client,
 	tops *bind.TransactOpts,
 	cops *bind.CallOpts,
-	logMessage string,
 	knownAddress common.Address,
-	deployFn func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *T, error),
-	instantiateFn func(common.Address, bind.ContractBackend) (*T, error),
-	callFn func(*T) error,
+	deploy func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *T, error),
+	instantiate func(common.Address, bind.ContractBackend) (*T, error),
+	call func(*T) error,
 	blockUntilSuccessful blockUntilSuccessfulFn,
 ) (address common.Address, contract *T, err error) {
 	if knownAddress == (common.Address{}) {
 		// Deploy the contract if known address is empty.
-		var tx *types.Transaction
-		address, tx, contract, err = deployFn(tops, c)
+		address, _, contract, err = deploy(tops, c)
 		if err != nil {
-			log.Error().Err(err).Str("logMessage", logMessage).Msg("Unable to deploy contract")
+			log.Error().Err(err).Msg("Unable to deploy contract")
 			return
 		}
 		reflectedContractName := reflect.TypeOf(contract).Elem().Name()
-		log.Debug().Str("name", reflectedContractName).Str("logMessage", logMessage).Str("address", address.String()).Msg("Contract deployed")
-		log.Trace().Str("name", reflectedContractName).Str("logMessage", logMessage).Str("hash", tx.Hash().String()).Msg("Transaction")
+		log.Debug().Str("name", reflectedContractName).Interface("address", address).Msg("Contract deployed")
 	} else {
 		// Otherwise, instantiate the contract.
 		address = knownAddress
-		contract, err = instantiateFn(address, c)
+		contract, err = instantiate(address, c)
 		if err != nil {
-			log.Error().Err(err).Str("logMessage", logMessage).Msg("Unable to instantiate contract")
+			log.Error().Err(err).Msg("Unable to instantiate contract")
 			return
 		}
 		reflectedContractName := reflect.TypeOf(contract).Elem().Name()
-		log.Debug().Str("name", reflectedContractName).Str("logMessage", logMessage).Msg("Contract instantiated")
+		log.Debug().Str("name", reflectedContractName).Msg("Contract instantiated")
 	}
 
-	// Check that the contract is deployed and ready.
+	// Check that the contract can be called.
 	if err = blockUntilSuccessful(ctx, c, func() error {
-		log.Trace().Str("logMessage", logMessage).Msg("Contract is not available yet")
-		return callFn(contract)
+		log.Trace().Msg("Contract is not available yet")
+		return call(contract)
 	}); err != nil {
 		return
 	}
 	return
 }
 
-func enableOneBPFeeTier(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOpts, cops *bind.CallOpts, fee, tickSpacing int64) error {
+// Ensure the UniswapV3Factory fee tier is enabled, activating it if it hasn't been enabled already.
+func enableFeeAmount(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOpts, cops *bind.CallOpts, fee, tickSpacing int64) error {
 	// Check the current tick spacing for this fee amount.
 	currentTickSpacing, err := contract.FeeAmountTickSpacing(cops, big.NewInt(fee))
 	if err != nil {
 		return err
 	}
 
+	// Enable the fee amount if needed.
 	newTickSpacing := big.NewInt(tickSpacing)
 	if currentTickSpacing.Cmp(newTickSpacing) == 0 {
-		// If those are the same, it means it has already been enabled.
-		log.Debug().Msg("One basic point fee tier already enabled")
+		log.Debug().Msg("Fee amount already enabled")
 	} else {
-		// If those are not the same, it means it should be enabled.
 		tx, err := contract.EnableFeeAmount(tops, big.NewInt(fee), big.NewInt(tickSpacing))
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to enable one basic point fee tier")
+			log.Error().Err(err).Msg("Unable to enable fee amount")
 			return err
 		}
-		log.Debug().Msg("Enable one basic point fee tier")
+		log.Debug().Msg("Fee amount enabled")
 		log.Trace().Interface("hash", tx.Hash()).Msg("Transaction")
 	}
 	return nil
 }
 
-func setFactoryOwner(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOpts, cops *bind.CallOpts, newOwner common.Address) error {
+// Transfer UniswapV3Factory ownership to a new address.
+func transferUniswapV3FactoryOwnership(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOpts, cops *bind.CallOpts, newOwner common.Address) error {
 	currentOwner, err := contract.Owner(cops)
 	if err != nil {
 		return err
@@ -450,6 +420,7 @@ func setFactoryOwner(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOp
 	return nil
 }
 
+// Transfer ProxyAdmin ownership to a new address.
 func transferProxyAdminOwnership(contract *uniswapv3.ProxyAdmin, tops *bind.TransactOpts, cops *bind.CallOpts, newOwner common.Address) error {
 	currentOwner, err := contract.Owner(cops)
 	if err != nil {
@@ -467,4 +438,23 @@ func transferProxyAdminOwnership(contract *uniswapv3.ProxyAdmin, tops *bind.Tran
 		log.Trace().Interface("hash", tx.Hash()).Msg("Transaction")
 	}
 	return nil
+}
+
+// Return contracts addresses from the UniswapV3 configuration.
+func (c *UniswapV3Config) GetAddresses() UniswapV3Addresses {
+	return UniswapV3Addresses{
+		FactoryV3:                          c.FactoryV3.Address,
+		Multicall:                          c.Multicall.Address,
+		ProxyAdmin:                         c.ProxyAdmin.Address,
+		TickLens:                           c.TickLens.Address,
+		NFTDescriptorLib:                   c.NFTDescriptorLib.Address,
+		NonfungibleTokenPositionDescriptor: c.NonfungibleTokenPositionDescriptor.Address,
+		TransparentUpgradeableProxy:        c.TransparentUpgradeableProxy.Address,
+		NonfungiblePositionManager:         c.NonfungiblePositionManager.Address,
+		Migrator:                           c.Migrator.Address,
+		Staker:                             c.Staker.Address,
+		QuoterV2:                           c.QuoterV2.Address,
+		SwapRouter02:                       c.SwapRouter02.Address,
+		WETH9:                              c.WETH9.Address,
+	}
 }

@@ -106,13 +106,13 @@ func init() {
 }
 
 // Initialise UniswapV3 loadtest.
-func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapAddresses uniswapv3loadtest.Address, recipient common.Address) (uniswapv3loadtest.UniswapV3Config, uniswapv3loadtest.PoolConfig, error) {
+func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapAddresses uniswapv3loadtest.UniswapV3Addresses, recipient common.Address) (uniswapv3loadtest.UniswapV3Config, uniswapv3loadtest.PoolConfig, error) {
 	// Deploy UniswapV3 contracts.
 	uniswapV3Config, err := uniswapv3loadtest.DeployUniswapV3(ctx, c, tops, cops, uniswapAddresses, recipient, blockUntilSuccessful)
 	if err != nil {
 		return uniswapv3loadtest.UniswapV3Config{}, uniswapv3loadtest.PoolConfig{}, err
 	}
-	log.Debug().Interface("config", uniswapV3Config.ToAddresses()).Msg("UniswapV3 deployment config")
+	log.Debug().Interface("config", uniswapV3Config.GetAddresses()).Msg("UniswapV3 deployment config")
 
 	// Deploy swapper tokens.
 	var token0Config uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]

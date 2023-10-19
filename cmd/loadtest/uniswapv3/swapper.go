@@ -19,8 +19,9 @@ func DeploySwapperContract(ctx context.Context, c *ethclient.Client, tops *bind.
 	var token ContractConfig[uniswapv3.Swapper]
 	var err error
 	addressesToApprove := []common.Address{config.NonfungiblePositionManager.Address, config.SwapRouter02.Address}
-	token.Address, token.Contract, err = DeployOrInstantiateContract(
-		ctx, c, tops, cops, tokenName, tokenKnownAddress,
+	token.Address, token.Contract, err = deployOrInstantiateContract(
+		ctx, c, tops, cops,
+		tokenKnownAddress,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.Swapper, error) {
 			return uniswapv3.DeploySwapper(tops, c)
 		},
