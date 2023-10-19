@@ -30,6 +30,9 @@ var uniswapV3LoadTestCmd = &cobra.Command{
 	Use:   "uniswapv3 url",
 	Short: "Run Uniswapv3-like load test against an Eth/EVm style JSON-RPC endpoint.",
 	Long:  uniswapv3Usage,
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		return checkFlags()
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Override root command `mode` flag.
 		inputLoadTestParams.Modes = &[]string{"v3"}
@@ -57,6 +60,23 @@ var uniswapV3LoadTestCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func checkFlags() error {
+	// Check pool fees.
+	switch fees := int64(*uniswapv3LoadTestParams.PoolFees); fees {
+	case int64(uniswapv3loadtest.StableTier), int64(uniswapv3loadtest.StandardTier), int64(uniswapv3loadtest.ExoticTier):
+		// Fees are correct, do nothing.
+	default:
+		return fmt.Errorf("UniswapV3 only supports a few pool tiers which are stable (0.05%%): %d, standard (0.3%%): %d, and exotic (1%%): %d",
+			int64(uniswapv3loadtest.StableTier), int64(uniswapv3loadtest.StandardTier), int64(uniswapv3loadtest.ExoticTier))
+	}
+
+	// Check swap amount input.
+	if *uniswapv3LoadTestParams.SwapAmountInput == 0 {
+		return errors.New("swap amount input has to be greater than zero")
+	}
+	return nil
 }
 
 func validateUrl(input string) (*url.URL, error) {

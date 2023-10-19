@@ -14,10 +14,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+type feeTier int64
+
+// Only a few fee tiers are possible in UniswapV3.
+// https://docs.uniswap.org/concepts/protocol/fees
+var (
+	StableTier   feeTier = 50000 // 0.05%
+	StandardTier feeTier = 3000  // 0.3%
+	ExoticTier   feeTier = 100   // 1%
+)
+
 var (
 	// Trading fees charged on each swap or trade made within a UniswapV3 liquidity pool.
-	// https://docs.uniswap.org/concepts/protocol/fees
-	PoolFees = big.NewInt(3000)
+	PoolFees = big.NewInt(int64(StandardTier))
 
 	// Reserve of a token in a UniswapV3 pool.
 	poolReserveForOneToken = big.NewInt(1_000_000_000_000)
