@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
-	"strconv"
 	"sync"
 	"time"
 
@@ -22,27 +21,17 @@ import (
 	"github.com/maticnetwork/polygon-cli/metrics"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/cobra"
 )
 
 var (
-	//go:embed usage.md
-	usage string
-
-	rpcUrl         string
-	windowSize     int
-	batchSizeValue string
-	batchSize      int
-	intervalStr    string
-	interval       time.Duration
-
-	one           = big.NewInt(1)
-	zero          = big.NewInt(0)
-	selectedBlock rpctypes.PolyBlock
-
+	windowSize                   int
+	batchSize                    int
+	interval                     time.Duration
+	one                          = big.NewInt(1)
+	zero                         = big.NewInt(0)
+	selectedBlock                rpctypes.PolyBlock
 	currentlyFetchingHistoryLock sync.RWMutex
-
-	observedPendingTxs historicalRange
+	observedPendingTxs           historicalRange
 )
 
 type (
@@ -92,96 +81,6 @@ const (
 	monitorModeExplorer
 	monitorModeBlock
 )
-
-// MonitorCmd represents the monitor command
-var MonitorCmd = &cobra.Command{
-	Use:   "monitor",
-	Short: "Monitor blocks using a JSON-RPC endpoint.",
-	Long:  usage,
-	Args:  cobra.NoArgs,
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		return checkFlags()
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return monitor(cmd.Context())
-	},
-}
-
-func init() {
-	MonitorCmd.PersistentFlags().StringVarP(&rpcUrl, "rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
-	MonitorCmd.PersistentFlags().StringVarP(&batchSizeValue, "batch-size", "b", "auto", "Number of requests per batch")
-	MonitorCmd.PersistentFlags().StringVarP(&intervalStr, "interval", "i", "5s", "Amount of time between batch block rpc calls")
-}
-
-func checkFlags() (err error) {
-	// Check rpc-url flag.
-	if err = util.ValidateUrl(rpcUrl); err != nil {
-		return
-	}
-
-	// Check interval duration flag.
-	interval, err = time.ParseDuration(intervalStr)
-	if err != nil {
-		return err
-	}
-
-	// Check batch-size flag.
-	if batchSizeValue == "auto" {
-		batchSize = -1
-	} else {
-		batchSize, err = strconv.Atoi(batchSizeValue)
-		if batchSize == 0 {
-			return fmt.Errorf("batch-size can't be equal to zero")
-		}
-		if err != nil {
-			// Failed to convert to int, handle the error
-			return fmt.Errorf("batch-size needs to be an integer")
-		}
-	}
-
-	return nil
-}
-
-func monitor(ctx context.Context) error {
-	rpc, err := ethrpc.DialContext(ctx, rpcUrl)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to dial rpc")
-		return err
-	}
-	ec := ethclient.NewClient(rpc)
-
-	ms := new(monitorStatus)
-	ms.MaxBlockRetrieved = big.NewInt(0)
-	ms.BlocksLock.Lock()
-	ms.Blocks = make(map[string]rpctypes.PolyBlock, 0)
-	ms.BlocksLock.Unlock()
-	ms.ChainID = big.NewInt(0)
-	ms.PendingCount = 0
-	observedPendingTxs = make(historicalRange, 0)
-
-	isUiRendered := false
-	errChan := make(chan error)
-	go func() {
-		for {
-			err = fetchBlocks(ctx, ec, ms, rpc, isUiRendered)
-			if err != nil {
-				continue
-			}
-
-			if !isUiRendered {
-				go func() {
-					errChan <- renderMonitorUI(ctx, ec, ms, rpc)
-				}()
-				isUiRendered = true
-			}
-
-			time.Sleep(interval)
-		}
-	}()
-
-	err = <-errChan
-	return err
-}
 
 func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, error) {
 	var err error
