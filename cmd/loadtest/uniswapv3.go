@@ -46,7 +46,7 @@ var uniswapV3LoadTestCmd = &cobra.Command{
 		zerolog.DurationFieldInteger = true
 
 		if len(args) != 1 {
-			return fmt.Errorf("expected exactly one argument")
+			return errors.New("expected exactly one argument")
 		}
 
 		url, err := validateUrl(args[0])

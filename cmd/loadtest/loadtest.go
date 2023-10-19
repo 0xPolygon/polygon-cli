@@ -229,7 +229,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	modes := *inputLoadTestParams.Modes
 	if len(modes) == 0 {
-		return fmt.Errorf("expected at least one mode")
+		return errors.New("expected at least one mode")
 	}
 
 	inputLoadTestParams.ParsedModes = make([]loadTestMode, 0)
@@ -249,10 +249,10 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 
 	if hasMode(loadTestModeRandom, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode {
-		return fmt.Errorf("random mode can't be used in combinations with any other modes")
+		return errors.New("random mode can't be used in combinations with any other modes")
 	}
 	if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode && !*inputLoadTestParams.CallOnly {
-		return fmt.Errorf("rpc mode must be called with call-only when multiple modes are used")
+		return errors.New("rpc mode must be called with call-only when multiple modes are used")
 	} else if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) {
 		log.Trace().Msg("setting call only mode since we're doing RPC testing")
 		*inputLoadTestParams.CallOnly = true
@@ -260,7 +260,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	// TODO check for duplicate modes?
 
 	if *inputLoadTestParams.CallOnly && *inputLoadTestParams.AdaptiveRateLimit {
-		return fmt.Errorf("using call only with adaptive rate limit doesn't make sense")
+		return errors.New("using call only with adaptive rate limit doesn't make sense")
 	}
 
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
@@ -470,7 +470,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			return err
 		}
 		if len(recallTransactions) == 0 {
-			return fmt.Errorf("we weren't able to fetch any recall transactions")
+			return errors.New("we weren't able to fetch any recall transactions")
 		}
 		log.Debug().Int("txs", len(recallTransactions)).Msg("retrieved transactions for total recall")
 	}
@@ -687,7 +687,7 @@ func getERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 			return err
 		}
 		if balance.Uint64() == 0 {
-			err = fmt.Errorf("ERC20 Balance is Zero")
+			err = errors.New("ERC20 Balance is Zero")
 			return err
 		}
 		return nil

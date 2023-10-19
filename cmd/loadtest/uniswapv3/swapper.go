@@ -2,7 +2,7 @@ package uniswapv3loadtest
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"math/big"
 	"time"
 
@@ -61,7 +61,7 @@ func approveSwapperSpendingsByUniswap(ctx context.Context, contract *uniswapv3.S
 			}
 			zero := big.NewInt(0)
 			if allowance.Cmp(zero) == 0 {
-				return fmt.Errorf("allowance is zero")
+				return errors.New("allowance is zero")
 			}
 			return nil
 		}, backoff.NewConstantBackOff(time.Second*2)); err != nil {

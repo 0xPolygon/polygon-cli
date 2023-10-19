@@ -3,6 +3,7 @@ package loadtest
 import (
 	"crypto/ecdsa"
 	_ "embed"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -163,7 +164,7 @@ var LoadtestCmd = &cobra.Command{
 		zerolog.DurationFieldInteger = true
 
 		if len(args) != 1 {
-			return fmt.Errorf("expected exactly one argument")
+			return errors.New("expected exactly one argument")
 		}
 		url, err := url.Parse(args[0])
 		if err != nil {
@@ -176,11 +177,11 @@ var LoadtestCmd = &cobra.Command{
 		inputLoadTestParams.URL = url
 
 		if *inputLoadTestParams.AdaptiveBackoffFactor <= 0.0 {
-			return fmt.Errorf("the backoff factor needs to be non-zero positive")
+			return errors.New("the backoff factor needs to be non-zero positive")
 		}
 
 		if *inputLoadTestParams.ContractCallBlockInterval == 0 {
-			return fmt.Errorf("the contract call block interval must be strictly positive")
+			return errors.New("the contract call block interval must be strictly positive")
 		}
 
 		return nil
