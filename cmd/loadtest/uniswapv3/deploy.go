@@ -367,12 +367,10 @@ func deployOrInstantiateContract[T Contract](
 	}
 
 	// Check that the contract can be called.
-	if err = blockUntilSuccessful(ctx, c, func() error {
+	err = blockUntilSuccessful(ctx, c, func() error {
 		log.Trace().Msg("Contract is not available yet")
 		return call(contract)
-	}); err != nil {
-		return
-	}
+	})
 	return
 }
 

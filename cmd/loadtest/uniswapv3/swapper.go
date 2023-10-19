@@ -54,20 +54,25 @@ func approveSwapperSpendingsByUniswap(ctx context.Context, c *ethclient.Client, 
 		}
 
 		// Check that the allowance is set.
-		if err = blockUntilSuccessful(ctx, c, func() (err error) {
+		err = blockUntilSuccessful(ctx, c, func() (err error) {
 			allowance, err := contract.Allowance(cops, owner, address)
 			if err != nil {
 				return err
 			}
-			if allowance.Cmp(approvalAmount) != 0 {
+			if allowance.Cmp(big.NewInt(0)) == 0 { // allowance == 0
+				return errors.New("allowance is set to zero")
+			}
+			if allowance.Cmp(approvalAmount) == -1 { // allowance < approvalAmount
 				return errors.New("allowance has not been set properly")
 			}
 			return nil
-		}); err != nil {
+		})
+		if err != nil {
 			log.Error().Err(err).Msg("Unable to verify that the allowance has been set")
 			return err
+		} else {
+			log.Debug().Str("tokenName", tokenName).Interface("spenderAddress", address).Str("spenderName", spenderName).Interface("amount", approvalAmount).Msg("Allowance set")
 		}
-		log.Debug().Str("tokenName", tokenName).Str("spenderAddress", address.String()).Str("spenderName", spenderName).Interface("amount", approvalAmount).Msg("Allowance set")
 	}
 	return nil
 }

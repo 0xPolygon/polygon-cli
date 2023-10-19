@@ -109,13 +109,14 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 
 	// Retrieve the pool address.
 	var poolAddress common.Address
-	if err := blockUntilSuccessful(ctx, c, func() (err error) {
+	err := blockUntilSuccessful(ctx, c, func() (err error) {
 		poolAddress, err = uniswapV3Config.FactoryV3.Contract.GetPool(cops, poolConfig.Token0.Address, poolConfig.Token1.Address, poolConfig.Fees)
 		if poolAddress == (common.Address{}) {
 			return errors.New("pool not deployed yet")
 		}
 		return
-	}); err != nil {
+	})
+	if err != nil {
 		log.Error().Err(err).Msg("Unable to retrieve the address of the pool")
 		return nil, err
 	}
@@ -223,7 +224,7 @@ func provideLiquidity(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 		Deadline: deadline,
 	}
 	var liquidity *big.Int
-	if err := blockUntilSuccessful(ctx, c, func() (err error) {
+	err = blockUntilSuccessful(ctx, c, func() (err error) {
 		// Mint tokens.
 		_, err = nftPositionManagerContract.Mint(tops, mintParams)
 		if err != nil {
@@ -239,7 +240,8 @@ func provideLiquidity(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 			return errors.New("pool has no liquidity")
 		}
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		log.Error().Err(err).Msg("Unable to provide liquidity to the pool")
 		return err
 	}
