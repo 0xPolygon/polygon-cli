@@ -16,7 +16,7 @@ import (
 
 var (
 	// Trading fees charged on each swap or trade made within a UniswapV3 liquidity pool.
-	PoolFees = big.NewInt(3_000)
+	poolFees = big.NewInt(3_000)
 
 	// Reserve of a token in a UniswapV3 pool.
 	poolReserveForOneToken = big.NewInt(1_000_000_000_000)
@@ -40,7 +40,7 @@ func NewPool(token0, token1 ContractConfig[uniswapv3.Swapper]) *PoolConfig {
 	p := PoolConfig{
 		ReserveA: poolReserveForOneToken,
 		ReserveB: poolReserveForOneToken,
-		Fees:     PoolFees,
+		Fees:     poolFees,
 	}
 
 	// Make sure the token pair is sorted.
