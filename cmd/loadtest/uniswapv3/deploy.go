@@ -408,7 +408,7 @@ func transferUniswapV3FactoryOwnership(contract *uniswapv3.UniswapV3Factory, top
 	if currentOwner == newOwner {
 		log.Debug().Msg("Factory contract already owned by this address")
 	} else {
-		tx, err = contract.SetOwner(tops, newOwner)
+		_, err = contract.SetOwner(tops, newOwner)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to set a new owner for the Factory contract")
 			return err
@@ -427,7 +427,7 @@ func transferProxyAdminOwnership(contract *uniswapv3.ProxyAdmin, tops *bind.Tran
 	if currentOwner == newOwner {
 		log.Debug().Msg("ProxyAdmin contract already owned by this address")
 	} else {
-		tx, err = contract.TransferOwnership(tops, newOwner)
+		_, err = contract.TransferOwnership(tops, newOwner)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to transfer ProxyAdmin ownership")
 			return err
