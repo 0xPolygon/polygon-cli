@@ -54,6 +54,8 @@ Contracts are cloned from the different Uniswap repositories, compiled with a sp
 
 ```bash
   -h, --help                                                   help for uniswapv3
+  -f, --pool-fees float                                        Trading fees charged on each swap or trade made within a UniswapV3 liquidity pool (e.g. 0.3 means 0.3%) (default 0.3)
+  -a, --swap-amount uint                                       The amount of inbound token given as swap input (default 1000)
       --uniswap-factory-v3-address string                      The address of a pre-deployed UniswapFactoryV3 contract
       --uniswap-migrator-address string                        The address of a pre-deployed Migrator contract
       --uniswap-multicall-address string                       The address of a pre-deployed Multicall contract
