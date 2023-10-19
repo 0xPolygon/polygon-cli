@@ -105,14 +105,14 @@ func init() {
 
 // Initialise UniswapV3 loadtest.
 func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapAddresses uniswapv3loadtest.UniswapV3Addresses, recipient common.Address) (uniswapV3Config uniswapv3loadtest.UniswapV3Config, poolConfig uniswapv3loadtest.PoolConfig, err error) {
-	log.Debug().Msg("Deploying UniswapV3 contracts...")
+	log.Debug().Msg("🦄 Deploying UniswapV3 contracts...")
 	uniswapV3Config, err = uniswapv3loadtest.DeployUniswapV3(ctx, c, tops, cops, uniswapAddresses, recipient, blockUntilSuccessful)
 	if err != nil {
 		return
 	}
-	log.Debug().Interface("addresses", uniswapV3Config.GetAddresses()).Msg("🦄 UniswapV3 deployed")
+	log.Debug().Interface("addresses", uniswapV3Config.GetAddresses()).Msg("UniswapV3 deployed")
 
-	log.Debug().Msg("Deploying ERC20 tokens...")
+	log.Debug().Msg("🪙 Deploying ERC20 tokens...")
 	var token0 uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
 	token0, err = uniswapv3loadtest.DeployERC20(
 		ctx, c, tops, cops, uniswapV3Config, "Token0", "T0", recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0), blockUntilSuccessful)
@@ -127,7 +127,7 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 		return
 	}
 
-	log.Debug().Msg("Deploying UniswapV3 liquidity pool...")
+	log.Debug().Msg("🎱 Deploying UniswapV3 liquidity pool...")
 	poolConfig = *uniswapv3loadtest.NewPool(token0, token1)
 	if err = uniswapv3loadtest.SetupLiquidityPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, recipient, blockUntilSuccessful); err != nil {
 		return
