@@ -29,7 +29,10 @@ func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOp
 		ctx, c, tops, cops,
 		tokenKnownAddress,
 		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.Swapper, error) {
-			address, tx, contract, err := uniswapv3.DeploySwapper(tops, c, tokenName, tokenSymbol, amount, recipient)
+			var address common.Address
+			var tx *types.Transaction
+			var contract *uniswapv3.Swapper
+			address, tx, contract, err = uniswapv3.DeploySwapper(tops, c, tokenName, tokenSymbol, amount, recipient)
 			if err != nil {
 				return common.Address{}, nil, nil, err
 			}
