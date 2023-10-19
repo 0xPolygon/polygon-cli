@@ -1,16 +1,12 @@
 package rpcfuzz
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
-	"net/http"
-	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rpc"
 	fuzz "github.com/google/gofuzz"
 	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz/argfuzz"
 	"github.com/maticnetwork/polygon-cli/util"
@@ -104,83 +100,6 @@ func checkFlags() (err error) {
 
 	testPrivateKey = privateKey
 	testEthAddress = ethAddress
-
-	return nil
-}
-
-func runRpcFuzz(ctx context.Context) error {
-	if *testOutputExportPath != "" && !*testExportJson && !*testExportCSV && !*testExportMarkdown && !*testExportHTML {
-		log.Warn().Msg("Setting --export-path must pair with a export type: --json, --csv, --md, or --html")
-	}
-
-	rpcClient, err := rpc.DialContext(ctx, *rpcUrl)
-	if err != nil {
-		return err
-	}
-	nonce, err := GetTestAccountNonce(ctx, rpcClient)
-	if err != nil {
-		return err
-	}
-	chainId, err := GetCurrentChainID(ctx, rpcClient)
-	if err != nil {
-		return err
-	}
-	testAccountNonce = nonce
-	currentChainID = chainId
-
-	log.Trace().Uint64("nonce", nonce).Uint64("chainid", chainId.Uint64()).Msg("Doing test setup")
-	setupTests(ctx, rpcClient)
-
-	httpClient := &http.Client{}
-	wrappedHTTPClient := wrappedHttpClient{httpClient, *rpcUrl}
-
-	for _, t := range allTests {
-		if !shouldRunTest(t) {
-			log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Skipping test")
-			continue
-		}
-		log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Running Test")
-
-		currTestResult := CallRPCAndValidate(ctx, rpcClient, wrappedHTTPClient, t)
-		testResults.AddTestResult(currTestResult)
-
-		if *testFuzz {
-			fuzzedTestsGroup.Add(1)
-
-			log.Info().Str("method", t.GetMethod()).Msg("Running with fuzzed args")
-			go func(t RPCTest) {
-				defer fuzzedTestsGroup.Done()
-				currTestResult := CallRPCWithFuzzAndValidate(ctx, rpcClient, t)
-				testResultsCh <- currTestResult
-			}(t)
-		}
-	}
-
-	go func() {
-		for currTestResult := range testResultsCh {
-			testResultMutex.Lock()
-			testResults.AddTestResult(currTestResult)
-			testResultMutex.Unlock()
-		}
-	}()
-
-	fuzzedTestsGroup.Wait()
-	close(testResultsCh)
-
-	testResults.GenerateTabularResult()
-	if *testExportJson {
-		testResults.ExportResultToJSON(filepath.Join(*testOutputExportPath, "output.json"))
-	}
-	if *testExportCSV {
-		testResults.ExportResultToCSV(filepath.Join(*testOutputExportPath, "output.csv"))
-	}
-	if *testExportMarkdown {
-		testResults.ExportResultToMarkdown(filepath.Join(*testOutputExportPath, "output.md"))
-	}
-	if *testExportHTML {
-		testResults.ExportResultToHTML(filepath.Join(*testOutputExportPath, "output.html"))
-	}
-	testResults.PrintTabularResult()
 
 	return nil
 }

@@ -1,18 +1,12 @@
 package monitor
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
-	"math/big"
 	"strconv"
 	"time"
 
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -73,45 +67,4 @@ func checkFlags() (err error) {
 	}
 
 	return nil
-}
-
-func monitor(ctx context.Context) error {
-	rpc, err := rpc.DialContext(ctx, rpcUrl)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to dial rpc")
-		return err
-	}
-	ec := ethclient.NewClient(rpc)
-
-	ms := new(monitorStatus)
-	ms.MaxBlockRetrieved = big.NewInt(0)
-	ms.BlocksLock.Lock()
-	ms.Blocks = make(map[string]rpctypes.PolyBlock, 0)
-	ms.BlocksLock.Unlock()
-	ms.ChainID = big.NewInt(0)
-	ms.PendingCount = 0
-	observedPendingTxs = make(historicalRange, 0)
-
-	isUiRendered := false
-	errChan := make(chan error)
-	go func() {
-		for {
-			err = fetchBlocks(ctx, ec, ms, rpc, isUiRendered)
-			if err != nil {
-				continue
-			}
-
-			if !isUiRendered {
-				go func() {
-					errChan <- renderMonitorUI(ctx, ec, ms, rpc)
-				}()
-				isUiRendered = true
-			}
-
-			time.Sleep(interval)
-		}
-	}()
-
-	err = <-errChan
-	return err
 }

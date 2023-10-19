@@ -82,6 +82,47 @@ const (
 	monitorModeBlock
 )
 
+func monitor(ctx context.Context) error {
+	rpc, err := ethrpc.DialContext(ctx, rpcUrl)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to dial rpc")
+		return err
+	}
+	ec := ethclient.NewClient(rpc)
+
+	ms := new(monitorStatus)
+	ms.MaxBlockRetrieved = big.NewInt(0)
+	ms.BlocksLock.Lock()
+	ms.Blocks = make(map[string]rpctypes.PolyBlock, 0)
+	ms.BlocksLock.Unlock()
+	ms.ChainID = big.NewInt(0)
+	ms.PendingCount = 0
+	observedPendingTxs = make(historicalRange, 0)
+
+	isUiRendered := false
+	errChan := make(chan error)
+	go func() {
+		for {
+			err = fetchBlocks(ctx, ec, ms, rpc, isUiRendered)
+			if err != nil {
+				continue
+			}
+
+			if !isUiRendered {
+				go func() {
+					errChan <- renderMonitorUI(ctx, ec, ms, rpc)
+				}()
+				isUiRendered = true
+			}
+
+			time.Sleep(interval)
+		}
+	}()
+
+	err = <-errChan
+	return err
+}
+
 func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, error) {
 	var err error
 	cs := new(chainState)
