@@ -98,7 +98,7 @@ $ make geth-loadtest
 You can view the state of the chain using `polycli`.
 
 ```bash
-$ polycli monitor http://127.0.0.1:8545
+$ polycli monitor --rpc-url http://127.0.0.1:8545
 ```
 
 ![polycli monitor](doc/assets/monitor.gif)

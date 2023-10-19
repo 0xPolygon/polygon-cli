@@ -14,7 +14,7 @@
 Monitor blocks using a JSON-RPC endpoint.
 
 ```bash
-polycli monitor url [flags]
+polycli monitor [flags]
 ```
 
 ## Usage
@@ -31,6 +31,7 @@ If you're experiencing missing blocks, try adjusting the `--batch-size` and `--i
   -b, --batch-size string   Number of requests per batch (default "auto")
   -h, --help                help for monitor
   -i, --interval string     Amount of time between batch block rpc calls (default "5s")
+  -r, --rpc-url string      The RPC endpoint url (default "http://localhost:8545")
 ```
 
 The command also inherits flags from parent commands.
