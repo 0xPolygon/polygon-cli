@@ -389,13 +389,12 @@ func enableFeeAmount(contract *uniswapv3.UniswapV3Factory, tops *bind.TransactOp
 	if currentTickSpacing.Cmp(newTickSpacing) == 0 {
 		log.Debug().Msg("Fee amount already enabled")
 	} else {
-		tx, err := contract.EnableFeeAmount(tops, big.NewInt(fee), big.NewInt(tickSpacing))
+		_, err = contract.EnableFeeAmount(tops, big.NewInt(fee), big.NewInt(tickSpacing))
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to enable fee amount")
 			return err
 		}
 		log.Debug().Msg("Fee amount enabled")
-		log.Trace().Interface("hash", tx.Hash()).Msg("Transaction")
 	}
 	return nil
 }
@@ -409,13 +408,12 @@ func transferUniswapV3FactoryOwnership(contract *uniswapv3.UniswapV3Factory, top
 	if currentOwner == newOwner {
 		log.Debug().Msg("Factory contract already owned by this address")
 	} else {
-		tx, err := contract.SetOwner(tops, newOwner)
+		tx, err = contract.SetOwner(tops, newOwner)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to set a new owner for the Factory contract")
 			return err
 		}
 		log.Debug().Msg("Set new owner for Factory contract")
-		log.Trace().Interface("hash", tx.Hash()).Msg("Transaction")
 	}
 	return nil
 }
@@ -429,13 +427,12 @@ func transferProxyAdminOwnership(contract *uniswapv3.ProxyAdmin, tops *bind.Tran
 	if currentOwner == newOwner {
 		log.Debug().Msg("ProxyAdmin contract already owned by this address")
 	} else {
-		tx, err := contract.TransferOwnership(tops, newOwner)
+		tx, err = contract.TransferOwnership(tops, newOwner)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to transfer ProxyAdmin ownership")
 			return err
 		}
 		log.Debug().Msg("Transfer ProxyAdmin ownership")
-		log.Trace().Interface("hash", tx.Hash()).Msg("Transaction")
 	}
 	return nil
 }

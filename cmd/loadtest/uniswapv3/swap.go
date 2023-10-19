@@ -26,7 +26,7 @@ func ExactInputSingleSwap(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRou
 	swapDirection := getSwapDirection(nonce, poolConfig)
 
 	// Perform swap.
-	tx, err := swapRouter.ExactInputSingle(tops, uniswapv3.IV3SwapRouterExactInputSingleParams{
+	_, err := swapRouter.ExactInputSingle(tops, uniswapv3.IV3SwapRouterExactInputSingleParams{
 		// The contract address of the inbound token.
 		TokenIn: swapDirection.tokenIn,
 		// The contract address of the outbound token.
@@ -49,7 +49,6 @@ func ExactInputSingleSwap(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRou
 		return err
 	}
 	log.Debug().Str("tokenIn", swapDirection.tokenInName).Str("tokenOut", swapDirection.tokenOutName).Msg("Successful swap")
-	log.Trace().Interface("hash", tx.Hash()).Msg("Transaction")
 	return nil
 }
 
