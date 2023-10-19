@@ -24,8 +24,6 @@ var (
 	//go:embed uniswapv3Usage.md
 	uniswapv3Usage          string
 	uniswapv3LoadTestParams params
-
-	tokenPoolSize, _ = big.NewInt(0).SetString("100000000000000000000000000", 10)
 )
 
 var uniswapV3LoadTestCmd = &cobra.Command{
@@ -106,45 +104,35 @@ func init() {
 }
 
 // Initialise UniswapV3 loadtest.
-func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapAddresses uniswapv3loadtest.UniswapV3Addresses, recipient common.Address) (uniswapv3loadtest.UniswapV3Config, uniswapv3loadtest.PoolConfig, error) {
-	// Deploy UniswapV3 contracts.
-	uniswapV3Config, err := uniswapv3loadtest.DeployUniswapV3(ctx, c, tops, cops, uniswapAddresses, recipient, blockUntilSuccessful)
+func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapAddresses uniswapv3loadtest.UniswapV3Addresses, recipient common.Address) (uniswapV3Config uniswapv3loadtest.UniswapV3Config, poolConfig uniswapv3loadtest.PoolConfig, err error) {
+	log.Debug().Msg("Deploying UniswapV3 contracts...")
+	uniswapV3Config, err = uniswapv3loadtest.DeployUniswapV3(ctx, c, tops, cops, uniswapAddresses, recipient, blockUntilSuccessful)
 	if err != nil {
-		return uniswapv3loadtest.UniswapV3Config{}, uniswapv3loadtest.PoolConfig{}, err
+		return
 	}
-	log.Debug().Interface("config", uniswapV3Config.GetAddresses()).Msg("UniswapV3 deployment config")
+	log.Debug().Interface("addresses", uniswapV3Config.GetAddresses()).Msg("🦄 UniswapV3 deployed")
 
-	// Deploy swapper tokens.
-	var token0Config uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
-	token0Config, err = uniswapv3loadtest.DeploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token0", "A", tokenPoolSize, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0), blockUntilSuccessful)
+	log.Debug().Msg("Deploying ERC20 tokens...")
+	var token0 uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
+	token0, err = uniswapv3loadtest.DeploySwapperContract(
+		ctx, c, tops, cops, uniswapV3Config, "Token0", "T0", recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0), blockUntilSuccessful)
 	if err != nil {
-		return uniswapv3loadtest.UniswapV3Config{}, uniswapv3loadtest.PoolConfig{}, err
-	}
-
-	var token1Config uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
-	token1Config, err = uniswapv3loadtest.DeploySwapperContract(ctx, c, tops, cops, uniswapV3Config, "Token1", "B", tokenPoolSize, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1), blockUntilSuccessful)
-	if err != nil {
-		return uniswapv3loadtest.UniswapV3Config{}, uniswapv3loadtest.PoolConfig{}, err
+		return
 	}
 
-	// Deploy pool.
-	poolConfig := uniswapv3loadtest.PoolConfig{Fees: big.NewInt(3_000)}
-	if token0Config.Address.Hex() < token1Config.Address.Hex() {
-		poolConfig.Token0 = token0Config
-		poolConfig.ReserveA = tokenPoolSize
-		poolConfig.Token1 = token1Config
-		poolConfig.ReserveB = tokenPoolSize
-	} else {
-		poolConfig.Token0 = token1Config
-		poolConfig.ReserveA = tokenPoolSize
-		poolConfig.Token1 = token0Config
-		poolConfig.ReserveB = tokenPoolSize
+	var token1 uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
+	token1, err = uniswapv3loadtest.DeploySwapperContract(
+		ctx, c, tops, cops, uniswapV3Config, "Token1", "T1", recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1), blockUntilSuccessful)
+	if err != nil {
+		return
 	}
-	poolSize := new(big.Int).Div(tokenPoolSize, big.NewInt(2))
-	if err = uniswapv3loadtest.SetupPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, poolSize, recipient, blockUntilSuccessful); err != nil {
-		return uniswapv3loadtest.UniswapV3Config{}, uniswapv3loadtest.PoolConfig{}, err
+
+	log.Debug().Msg("Deploying UniswapV3 liquidity pool...")
+	poolConfig = *uniswapv3loadtest.NewPool(token0, token1)
+	if err = uniswapv3loadtest.SetupLiquidityPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, recipient, blockUntilSuccessful); err != nil {
+		return
 	}
-	return uniswapV3Config, poolConfig, nil
+	return
 }
 
 // Run UniswapV3 loadtest.
