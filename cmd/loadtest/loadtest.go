@@ -567,7 +567,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				case loadTestModeRecall:
 					startReq, endReq, tErr = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
 				case loadTestModeUniswapV3:
-					startReq, endReq, tErr = runUniswapV3Loadtest(ctx, c, myNonceValue, uniswapV3Config, poolConfig)
+					swapAmountIn := big.NewInt(int64(*uniswapv3LoadTestParams.SwapAmountInput))
+					startReq, endReq, tErr = runUniswapV3Loadtest(ctx, c, myNonceValue, uniswapV3Config, poolConfig, swapAmountIn)
 				case loadTestModeRPC:
 					startReq, endReq, tErr = loadTestRPC(ctx, c, myNonceValue, indexedActivity)
 				default:

@@ -78,13 +78,15 @@ func validateUrl(input string) (*url.URL, error) {
 }
 
 type params struct {
-	UniswapFactoryV3, UniswapMulticall, UniswapProxyAdmin, UniswapTickLens, UniswapNFTLibDescriptor, UniswapNonfungibleTokenPositionDescriptor, UniswapUpgradeableProxy, UniswapNonfungiblePositionManager, UniswapMigrator, UniswapStaker, UniswapQuoterV2, UniswapSwapRouter *string
-	WETH9, UniswapPoolToken0, UniswapPoolToken1                                                                                                                                                                                                                                *string
+	UniswapFactoryV3, UniswapMulticall, UniswapProxyAdmin, UniswapTickLens, UniswapNFTLibDescriptor, UniswapNonfungibleTokenPositionDescriptor, UniswapUpgradeableProxy, UniswapNonfungiblePositionManager, UniswapMigrator, UniswapStaker, UniswapQuoterV2, UniswapSwapRouter, WETH9, UniswapPoolToken0, UniswapPoolToken1 *string
+	PoolFees, SwapAmountInput                                                                                                                                                                                                                                                                                               *uint64
 }
 
 func init() {
 	// Specify subcommand flags.
 	params := new(params)
+
+	// Pre-deployed addresses.
 	params.UniswapFactoryV3 = uniswapV3LoadTestCmd.Flags().String("uniswap-factory-v3-address", "", "The address of a pre-deployed UniswapFactoryV3 contract")
 	params.UniswapMulticall = uniswapV3LoadTestCmd.Flags().String("uniswap-multicall-address", "", "The address of a pre-deployed Multicall contract")
 	params.UniswapProxyAdmin = uniswapV3LoadTestCmd.Flags().String("uniswap-proxy-admin-address", "", "The address of a pre-deployed ProxyAdmin contract")
@@ -100,6 +102,11 @@ func init() {
 	params.WETH9 = uniswapV3LoadTestCmd.Flags().String("weth9-address", "", "The address of a pre-deployed WETH9 contract")
 	params.UniswapPoolToken0 = uniswapV3LoadTestCmd.Flags().String("uniswap-pool-token-0-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
 	params.UniswapPoolToken1 = uniswapV3LoadTestCmd.Flags().String("uniswap-pool-token-1-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
+
+	// Pool and swap parameters.
+	params.PoolFees = uniswapV3LoadTestCmd.Flags().Uint64P("pool-fees", "f", uniswapv3loadtest.PoolFees.Uint64(), "Trading fees charged on each swap or trade made within a UniswapV3 liquidity pool (e.g. 3000 means 0.3%)")
+	params.SwapAmountInput = uniswapV3LoadTestCmd.Flags().Uint64P("swap-amount", "a", uniswapv3loadtest.SwapAmountInput.Uint64(), "The amount of inbound token given as swap input")
+
 	uniswapv3LoadTestParams = *params
 }
 
@@ -128,7 +135,8 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 	}
 
 	log.Debug().Msg("🎱 Deploying UniswapV3 liquidity pool...")
-	poolConfig = *uniswapv3loadtest.NewPool(token0, token1)
+	fees := big.NewInt(int64(*uniswapv3LoadTestParams.PoolFees))
+	poolConfig = *uniswapv3loadtest.NewPool(token0, token1, fees)
 	if err = uniswapv3loadtest.SetupLiquidityPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, recipient, blockUntilSuccessful); err != nil {
 		return
 	}
@@ -136,7 +144,7 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 }
 
 // Run UniswapV3 loadtest.
-func runUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, nonce uint64, uniswapV3Config uniswapv3loadtest.UniswapV3Config, poolConfig uniswapv3loadtest.PoolConfig) (t1 time.Time, t2 time.Time, err error) {
+func runUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, nonce uint64, uniswapV3Config uniswapv3loadtest.UniswapV3Config, poolConfig uniswapv3loadtest.PoolConfig, swapAmountIn *big.Int) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
@@ -151,6 +159,6 @@ func runUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, nonce uint64
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
-	err = uniswapv3loadtest.ExactInputSingleSwap(tops, uniswapV3Config.SwapRouter02.Contract, poolConfig, *ltp.FromETHAddress, nonce)
+	err = uniswapv3loadtest.ExactInputSingleSwap(tops, uniswapV3Config.SwapRouter02.Contract, poolConfig, swapAmountIn, *ltp.FromETHAddress, nonce)
 	return
 }
