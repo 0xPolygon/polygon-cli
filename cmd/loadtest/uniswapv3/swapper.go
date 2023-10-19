@@ -29,7 +29,10 @@ func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOp
 		func(contract *uniswapv3.Swapper) error {
 			// After the contract has been deployed, we autorize a few UniswapV3 addresses to spend those ERC20 tokens.
 			// This is required to be able to perform swaps later.
-			addressesToApprove := []common.Address{uniswapV3Config.NonfungiblePositionManager.Address, uniswapV3Config.SwapRouter02.Address}
+			addressesToApprove := map[string]common.Address{
+				"NFTPositionManager": uniswapV3Config.NonfungiblePositionManager.Address,
+				"SwapRouter02":       uniswapV3Config.SwapRouter02.Address,
+			}
 			return approveSwapperSpendingsByUniswap(ctx, c, contract, tops, cops, addressesToApprove, recipient, blockUntilSuccessful)
 		},
 		blockUntilSuccessful,
@@ -41,16 +44,16 @@ func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOp
 }
 
 // Approve a slice of addresses to spend tokens on behalf of the token owner.
-func approveSwapperSpendingsByUniswap(ctx context.Context, c *ethclient.Client, contract *uniswapv3.Swapper, tops *bind.TransactOpts, cops *bind.CallOpts, addresses []common.Address, owner common.Address, blockUntilSuccessful blockUntilSuccessfulFn) error {
+func approveSwapperSpendingsByUniswap(ctx context.Context, c *ethclient.Client, contract *uniswapv3.Swapper, tops *bind.TransactOpts, cops *bind.CallOpts, addresses map[string]common.Address, owner common.Address, blockUntilSuccessful blockUntilSuccessfulFn) error {
 	// Get the ERC20 contract name.
-	name, err := contract.Name(cops)
+	erc20Name, err := contract.Name(cops)
 	if err != nil {
 		return err
 
 	}
 
 	// Set allowances.
-	for _, address := range addresses {
+	for spenderName, address := range addresses {
 		// Approve the spender to spend the tokens on behalf of the owner.
 		if _, err = contract.Approve(tops, address, approvalAmount); err != nil {
 			log.Error().Err(err).Interface("address", address).Msg("Unable to set the allowance")
@@ -71,7 +74,7 @@ func approveSwapperSpendingsByUniswap(ctx context.Context, c *ethclient.Client, 
 			log.Error().Err(err).Msg("Unable to verify that the allowance has been set")
 			return err
 		}
-		log.Debug().Str("name", name).Str("spender", address.String()).Interface("amount", approvalAmount).Msg("Allowance set")
+		log.Debug().Str("name", erc20Name).Str("spenderAddress", address.String()).Str("spenderName", spenderName).Interface("amount", approvalAmount).Msg("Allowance set")
 	}
 	return nil
 }
