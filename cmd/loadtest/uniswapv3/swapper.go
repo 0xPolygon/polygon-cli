@@ -18,7 +18,7 @@ import (
 var approvalAmount = big.NewInt(999_999_999_999_999_999)
 
 // Deploy an ERC20 token.
-func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, tokenName, tokenSymbol string, recipient common.Address, tokenKnownAddress common.Address, blockUntilSuccessful blockUntilSuccessfulFn) (tokenConfig ContractConfig[uniswapv3.Swapper], err error) {
+func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, tokenName string, recipient common.Address, tokenKnownAddress common.Address, blockUntilSuccessful blockUntilSuccessfulFn) (tokenConfig ContractConfig[uniswapv3.Swapper], err error) {
 	tokenConfig.Address, tokenConfig.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		tokenKnownAddress,
@@ -33,7 +33,7 @@ func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOp
 				"NFTPositionManager": uniswapV3Config.NonfungiblePositionManager.Address,
 				"SwapRouter02":       uniswapV3Config.SwapRouter02.Address,
 			}
-			return approveSwapperSpendingsByUniswap(ctx, c, contract, tops, cops, addressesToApprove, recipient, blockUntilSuccessful)
+			return approveSwapperSpendingsByUniswap(ctx, c, contract, tops, cops, tokenName, addressesToApprove, recipient, blockUntilSuccessful)
 		},
 		blockUntilSuccessful,
 	)
@@ -44,15 +44,8 @@ func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOp
 }
 
 // Approve a slice of addresses to spend tokens on behalf of the token owner.
-func approveSwapperSpendingsByUniswap(ctx context.Context, c *ethclient.Client, contract *uniswapv3.Swapper, tops *bind.TransactOpts, cops *bind.CallOpts, addresses map[string]common.Address, owner common.Address, blockUntilSuccessful blockUntilSuccessfulFn) error {
-	// Get the ERC20 contract name.
-	erc20Name, err := contract.Name(cops)
-	if err != nil {
-		return err
-
-	}
-
-	// Set allowances.
+func approveSwapperSpendingsByUniswap(ctx context.Context, c *ethclient.Client, contract *uniswapv3.Swapper, tops *bind.TransactOpts, cops *bind.CallOpts, tokenName string, addresses map[string]common.Address, owner common.Address, blockUntilSuccessful blockUntilSuccessfulFn) error {
+	var err error
 	for spenderName, address := range addresses {
 		// Approve the spender to spend the tokens on behalf of the owner.
 		if _, err = contract.Approve(tops, address, approvalAmount); err != nil {
@@ -74,7 +67,7 @@ func approveSwapperSpendingsByUniswap(ctx context.Context, c *ethclient.Client, 
 			log.Error().Err(err).Msg("Unable to verify that the allowance has been set")
 			return err
 		}
-		log.Debug().Str("name", erc20Name).Str("spenderAddress", address.String()).Str("spenderName", spenderName).Interface("amount", approvalAmount).Msg("Allowance set")
+		log.Debug().Str("tokenName", tokenName).Str("spenderAddress", address.String()).Str("spenderName", spenderName).Interface("amount", approvalAmount).Msg("Allowance set")
 	}
 	return nil
 }
