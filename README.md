@@ -8,7 +8,7 @@ We run a lot of different blockchain technologies. Different tools often have in
 - [Features](#features)
 - [Testing](#testing)
 - [Contributing](#contributing)
-- [References](#references)
+- [Reference](#reference)
 
 ## Install
 
@@ -148,43 +148,11 @@ You can then generate some load to make sure that blocks with transactions are b
 $ polycli loadtest --verbosity 700 --chain-id 1337 --concurrency 1 --requests 1000 --rate-limit 5 --mode c --rpc-url http://127.0.0.1:8545
 ```
 
-## Contributing
+# Contributing
 
-The `Makefile` is here to assist you to build the project, run tests, generate documentation or go bindings, etc.
+- If you add a new loadtest mode, don't forget to update the loadtest mode string by running the following command: `cd cmd/loadtest && stringer -type=loadTestMode`. You can install [stringer](https://pkg.go.dev/golang.org/x/tools/cmd/stringer) with `go install golang.org/x/tools/cmd/stringer@latest`.
 
-```sh
-$ make
-Usage:
-  make <target>
-  help             Display this help.
-
-Build
-  generate         Generate protobuf stubs.
-  build            Build go binary.
-  install          Install the go binary.
-  cross            Cross-compile go binaries using CGO.
-  simplecross      Cross-compile go binaries without using CGO.
-  clean            Clean the binary folder.
-
-Test
-  test             Run tests.
-
-Generation
-  gen-doc          Generate documentation for `polycli`.
-  gen-loadtest-modes  Generate loadtest modes strings.
-  gen-go-bindings  Generate go bindings for smart contracts.
-
-Lint
-  lint             Run linters.
-
-Clients
-  geth             Start a local geth node.
-  avail            Start a local avail node.
-  geth-loadtest    Fund test account with 5k ETH and run loadtest against an EVM/Geth chain.
-  avail-loadtest   Run loadtest against an Avail chain.
-```
-
-## References
+# Reference
 
 Sending some value to the default load testing account.
 

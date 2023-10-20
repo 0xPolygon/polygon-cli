@@ -15,8 +15,10 @@ import (
 	"sync"
 	"time"
 
+	uniswapv3loadtest "github.com/maticnetwork/polygon-cli/cmd/loadtest/uniswapv3"
 	"github.com/maticnetwork/polygon-cli/contracts"
 	"github.com/maticnetwork/polygon-cli/contracts/tokens"
+
 	"github.com/maticnetwork/polygon-cli/metrics"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
@@ -51,6 +53,7 @@ const (
 	loadTestModeERC721
 	loadTestModePrecompiledContracts
 	loadTestModePrecompiledContract
+	loadTestModeUniswapV3
 
 	// All the modes AFTER random mode will not be used when mode random is selected
 	loadTestModeRandom
@@ -60,6 +63,8 @@ const (
 	codeQualitySeed       = "code code code code code code code code code code code quality"
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
 )
+
+var errWaitingPeriodExhausted = errors.New("waiting period exhausted")
 
 func characterToLoadTestMode(mode string) (loadTestMode, error) {
 	switch mode {
@@ -87,6 +92,8 @@ func characterToLoadTestMode(mode string) (loadTestMode, error) {
 		return loadTestModePrecompiledContracts, nil
 	case "R", "recall":
 		return loadTestModeRecall, nil
+	case "v3", "uniswapv3":
+		return loadTestModeUniswapV3, nil
 	case "rpc":
 		return loadTestModeRPC, nil
 	default:
@@ -222,7 +229,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	modes := *inputLoadTestParams.Modes
 	if len(modes) == 0 {
-		return fmt.Errorf("expected at least one mode")
+		return errors.New("expected at least one mode")
 	}
 
 	inputLoadTestParams.ParsedModes = make([]loadTestMode, 0)
@@ -242,10 +249,10 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 
 	if hasMode(loadTestModeRandom, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode {
-		return fmt.Errorf("random mode can't be used in combinations with any other modes")
+		return errors.New("random mode can't be used in combinations with any other modes")
 	}
 	if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode && !*inputLoadTestParams.CallOnly {
-		return fmt.Errorf("rpc mode must be called with call-only when multiple modes are used")
+		return errors.New("rpc mode must be called with call-only when multiple modes are used")
 	} else if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) {
 		log.Trace().Msg("setting call only mode since we're doing RPC testing")
 		*inputLoadTestParams.CallOnly = true
@@ -253,7 +260,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	// TODO check for duplicate modes?
 
 	if *inputLoadTestParams.CallOnly && *inputLoadTestParams.AdaptiveRateLimit {
-		return fmt.Errorf("using call only with adaptive rate limit doesn't make sense")
+		return errors.New("using call only with adaptive rate limit doesn't make sense")
 	}
 
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
@@ -477,6 +484,30 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Debug().Str("erc721Addr", erc721Addr.String()).Msg("Obtained erc 721 contract address")
 	}
 
+	uniswapAddresses := uniswapv3loadtest.UniswapV3Addresses{
+		FactoryV3:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapFactoryV3),
+		Multicall:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMulticall),
+		ProxyAdmin:                         ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapProxyAdmin),
+		TickLens:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapTickLens),
+		NFTDescriptorLib:                   ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNFTLibDescriptor),
+		NonfungibleTokenPositionDescriptor: ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNonfungibleTokenPositionDescriptor),
+		TransparentUpgradeableProxy:        ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapUpgradeableProxy),
+		NonfungiblePositionManager:         ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNonfungiblePositionManager),
+		Migrator:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMigrator),
+		Staker:                             ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapStaker),
+		QuoterV2:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapQuoterV2),
+		SwapRouter02:                       ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapSwapRouter),
+		WETH9:                              ethcommon.HexToAddress(*uniswapv3LoadTestParams.WETH9),
+	}
+	var uniswapV3Config uniswapv3loadtest.UniswapV3Config
+	var poolConfig uniswapv3loadtest.PoolConfig
+	if mode == loadTestModeUniswapV3 || mode == loadTestModeRandom {
+		uniswapV3Config, poolConfig, err = initUniswapV3Loadtest(ctx, c, tops, cops, uniswapAddresses, *ltp.FromETHAddress)
+		if err != nil {
+			return err
+		}
+	}
+
 	var recallTransactions []rpctypes.PolyTransaction
 	if mode == loadTestModeRecall {
 		recallTransactions, err = getRecallTransactions(ctx, c, rpc)
@@ -484,7 +515,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			return err
 		}
 		if len(recallTransactions) == 0 {
-			return fmt.Errorf("we weren't able to fetch any recall transactions")
+			return errors.New("we weren't able to fetch any recall transactions")
 		}
 		log.Debug().Int("txs", len(recallTransactions)).Msg("retrieved transactions for total recall")
 	}
@@ -570,6 +601,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					startReq, endReq, tErr = loadTestCallPrecompiledContracts(ctx, c, myNonceValue, ltContract, false)
 				case loadTestModeRecall:
 					startReq, endReq, tErr = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
+				case loadTestModeUniswapV3:
+					swapAmountIn := big.NewInt(int64(*uniswapv3LoadTestParams.SwapAmountInput))
+					startReq, endReq, tErr = runUniswapV3Loadtest(ctx, c, myNonceValue, uniswapV3Config, poolConfig, swapAmountIn)
 				case loadTestModeRPC:
 					startReq, endReq, tErr = loadTestRPC(ctx, c, myNonceValue, indexedActivity)
 				default:
@@ -676,7 +710,7 @@ func getERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 			return err
 		}
 		if balance.Uint64() == 0 {
-			err = fmt.Errorf("ERC20 Balance is Zero")
+			err = errors.New("ERC20 Balance is Zero")
 			return err
 		}
 		return nil
@@ -750,8 +784,8 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 				blockDiff = currentBlockNumber % currStartBlockNumber
 			}
 			if blockDiff > numberOfBlocksToWaitFor {
-				log.Error().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Exhausted waiting period")
-				return err
+				log.Error().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("waiting period exhausted")
+				return errWaitingPeriodExhausted
 			}
 
 			currentBlockNumber, err = c.BlockNumber(ctx)

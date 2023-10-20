@@ -114,8 +114,8 @@ The codebase has a contract that used for load testing. It's written in Yul and 
   -c, --concurrency int                            Number of requests to perform concurrently. Default is one request at a time. (default 1)
       --contract-call-block-interval uint          During deployment, this flag controls if we should check every block, every other block, or every nth block to determine that the contract has been deployed (default 1)
       --contract-call-nb-blocks-to-wait-for uint   The number of blocks to wait for before giving up on a contract deployment (default 30)
-      --erc20-address string                       The address of a pre-deployed erc 20 contract
-      --erc721-address string                      The address of a pre-deployed erc 721 contract
+      --erc20-address string                       The address of a pre-deployed ERC20 contract
+      --erc721-address string                      The address of a pre-deployed ERC721 contract
       --force-contract-deploy                      Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.
   -f, --function --mode f                          A specific function to be called if running with --mode f or a specific precompiled contract when running with `--mode a` (default 1)
       --gas-limit uint                             In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
@@ -133,8 +133,9 @@ The codebase has a contract that used for load testing. It's written in Yul and 
                                                    a - call a specific precompiled contract address
                                                    s - store mode
                                                    r - random modes
-                                                   2 - ERC20 Transfers
-                                                   7 - ERC721 Mints
+                                                   2 - ERC20 transfers
+                                                   7 - ERC721 mints
+                                                   v3 - UniswapV3 swaps
                                                    R - total recall
                                                    rpc - call random rpc methods (default [t])
       --output-mode string                         Format mode for summary output (json | text) (default "text")
@@ -170,3 +171,5 @@ The command also inherits flags from parent commands.
 ## See also
 
 - [polycli](polycli.md) - A Swiss Army knife of blockchain tools.
+- [polycli loadtest uniswapv3](polycli_loadtest_uniswapv3.md) - Run Uniswapv3-like load test against an Eth/EVm style JSON-RPC endpoint.
+
