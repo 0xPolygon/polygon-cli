@@ -415,8 +415,6 @@ func printResults(lts []loadTestSample) {
 	log.Info().Msg("* Results")
 	log.Info().Int("samples", len(lts)).Msg("Samples")
 
-	var startTime = lts[0].RequestTime
-	var endTime = lts[len(lts)-1].RequestTime
 	var meanWait float64
 	var totalWait float64 = 0
 	var numErrors uint64 = 0
@@ -429,25 +427,30 @@ func printResults(lts []loadTestSample) {
 	}
 	meanWait = totalWait / float64(len(lts))
 
-	log.Info().Time("startTime", startTime).Msg("Start")
-	log.Info().Time("endTime", endTime).Msg("End")
-	log.Info().Float64("meanWait", meanWait).Msg("Mean Wait")
+	log.Info().Float64("meanWait between sending transactions", meanWait).Msg("Mean Wait")
 	log.Info().Uint64("numErrors", numErrors).Msg("Num errors")
 }
 
-func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber uint64, endBlockNumber uint64, rl *rate.Limiter) {
-	startBlock, err := c.BlockByNumber(ctx, new(big.Int).SetUint64(startBlockNumber))
-	if err != nil {
-		log.Error().Err(err).Msg("unable to get start block for light summary")
+func lightSummary(lts []loadTestSample, startTime, endTime time.Time, rl *rate.Limiter) {
+	if len(lts) == 0 {
+		log.Error().Msg("No results recorded")
 		return
 	}
-	endBlock, err := c.BlockByNumber(ctx, new(big.Int).SetUint64(endBlockNumber))
-	if err != nil {
-		log.Error().Err(err).Msg("unable to get end block for light summary")
-		return
+
+	log.Info().Msg("* Results")
+	log.Info().Int("samples", len(lts)).Msg("Samples")
+
+	var meanWait float64
+	var totalWait float64 = 0
+	var numErrors uint64 = 0
+
+	for _, s := range lts {
+		if s.IsError {
+			numErrors += 1
+		}
+		totalWait = float64(s.WaitTime.Seconds()) + totalWait
 	}
-	endTime := time.Unix(int64(endBlock.Time()), 0)
-	startTime := time.Unix(int64(startBlock.Time()), 0)
+	meanWait = totalWait / float64(len(lts))
 
 	testDuration := endTime.Sub(startTime)
 	tps := float64(len(loadTestResults)) / testDuration.Seconds()
@@ -457,12 +460,13 @@ func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, 
 		rlLimit = float64(rl.Limit())
 	}
 
+	log.Info().Time("startTime", startTime).Msg("Start time of loadtest (first transaction sent)")
+	log.Info().Time("endTime", endTime).Msg("End time of loadtest (final transaction mined)")
+	log.Info().Float64("tps", tps).Msg("Estimated tps")
+	log.Info().Float64("meanWait between sending transactions", meanWait).Msg("Mean Wait")
 	log.Info().
-		Time("firstBlockTime", startTime).
-		Time("lastBlockTime", endTime).
-		Int("transactionCount", len(loadTestResults)).
-		Float64("testDuration", testDuration.Seconds()).
-		Float64("tps", tps).
+		Float64("testDuration (seconds)", testDuration.Seconds()).
 		Float64("final rate limit", rlLimit).
-		Msg("rough test summary (ignores errors)")
+		Msg("rough test summary")
+	log.Info().Uint64("numErrors", numErrors).Msg("Num errors")
 }
