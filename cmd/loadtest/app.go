@@ -12,6 +12,7 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"golang.org/x/time/rate"
 )
@@ -158,6 +159,9 @@ var LoadtestCmd = &cobra.Command{
 	Long:  loadtestUsage,
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
+		zerolog.DurationFieldUnit = time.Second
+		zerolog.DurationFieldInteger = true
+
 		return checkLoadtestFlags()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
