@@ -15,6 +15,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"golang.org/x/time/rate"
 )
 
 type (
@@ -29,7 +30,7 @@ type (
 		GoRoutineID int64
 		RequestID   int64
 		RequestTime time.Time
-		WaitTime    time.Duration
+		WaitTime    time.Duration // Wait time for transaction to be broadcasted
 		Receipt     string
 		IsError     bool
 		Nonce       uint64
@@ -96,6 +97,12 @@ var (
 	inputLoadTestParams loadTestParams
 	loadTestResults     []loadTestSample
 	loadTestResutsMutex sync.RWMutex
+	startBlockNumber    uint64
+	finalBlockNumber    uint64
+	startNonce          uint64
+	currentNonce        uint64
+	currentNonceMutex   sync.RWMutex
+	rl                  *rate.Limiter
 
 	hexwords = []byte{
 		0x00, 0x0F, 0xF1, 0xCE,

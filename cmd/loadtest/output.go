@@ -377,6 +377,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 				log.Debug().Float64("txHours", txLatency.Hours()).Uint64("nonce", tx.Nonce.ToUint64()).Uint64("blockNumber", bs.Block.Number.ToUint64()).Time("mineTime", mineTime).Time("requestTime", requestTime).Msg("Encountered transaction with more than 2 hours latency")
 			}
 			bs.Latencies[tx.Nonce.ToUint64()] = txLatency
+
 			if txLatency < minLatency {
 				minLatency = txLatency
 			}
@@ -396,8 +397,8 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	printBlockSummary(c, blockData, startNonce, endNonce)
 
 	log.Trace().Str("summaryTime", (endReceipt.Sub(startReceipt)).String()).Msg("Total Summary Time")
-	return nil
 
+	return nil
 }
 
 func isEmptyJSONResponse(r *json.RawMessage) bool {
@@ -405,7 +406,7 @@ func isEmptyJSONResponse(r *json.RawMessage) bool {
 	return len(rawJson) == 0
 }
 
-func printResults(lts []loadTestSample) {
+func lightSummary(lts []loadTestSample, startTime, endTime time.Time, rl *rate.Limiter) {
 	if len(lts) == 0 {
 		log.Error().Msg("No results recorded")
 		return
@@ -414,8 +415,6 @@ func printResults(lts []loadTestSample) {
 	log.Info().Msg("* Results")
 	log.Info().Int("samples", len(lts)).Msg("Samples")
 
-	var startTime = lts[0].RequestTime
-	var endTime = lts[len(lts)-1].RequestTime
 	var meanWait float64
 	var totalWait float64 = 0
 	var numErrors uint64 = 0
@@ -428,35 +427,21 @@ func printResults(lts []loadTestSample) {
 	}
 	meanWait = totalWait / float64(len(lts))
 
-	log.Info().Time("startTime", startTime).Msg("Start")
-	log.Info().Time("endTime", endTime).Msg("End")
-	log.Info().Float64("meanWait", meanWait).Msg("Mean Wait")
-	log.Info().Uint64("numErrors", numErrors).Msg("Num errors")
-}
-
-func lightSummary(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endBlockNumber, endNonce uint64, rl *rate.Limiter) {
-	startBlock, err := c.BlockByNumber(ctx, new(big.Int).SetUint64(startBlockNumber))
-	if err != nil {
-		log.Error().Err(err).Msg("unable to get start block for light summary")
-		return
-	}
-	endBlock, err := c.BlockByNumber(ctx, new(big.Int).SetUint64(endBlockNumber))
-	if err != nil {
-		log.Error().Err(err).Msg("unable to get end block for light summary")
-		return
-	}
-	endTime := time.Unix(int64(endBlock.Time()), 0)
-	startTime := time.Unix(int64(startBlock.Time()), 0)
-
 	testDuration := endTime.Sub(startTime)
 	tps := float64(len(loadTestResults)) / testDuration.Seconds()
 
+	var rlLimit float64
+	if rl != nil {
+		rlLimit = float64(rl.Limit())
+	}
+
+	log.Info().Time("startTime", startTime).Msg("Start time of loadtest (first transaction sent)")
+	log.Info().Time("endTime", endTime).Msg("End time of loadtest (final transaction mined)")
+	log.Info().Float64("tps", tps).Msg("Estimated tps")
+	log.Info().Float64("meanWait between sending transactions", meanWait).Msg("Mean Wait")
 	log.Info().
-		Time("firstBlockTime", startTime).
-		Time("lastBlockTime", endTime).
-		Int("transactionCount", len(loadTestResults)).
-		Float64("testDuration", testDuration.Seconds()).
-		Float64("tps", tps).
-		Float64("final rate limit", float64(rl.Limit())).
-		Msg("rough test summary (ignores errors)")
+		Float64("testDuration (seconds)", testDuration.Seconds()).
+		Float64("final rate limit", rlLimit).
+		Msg("rough test summary")
+	log.Info().Uint64("numErrors", numErrors).Msg("Num errors")
 }
