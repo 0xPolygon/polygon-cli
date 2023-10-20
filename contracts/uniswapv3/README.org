@@ -1,0 +1,71 @@
+1.  @uniswap/v3-core/artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json
+2.  ~v3CoreFactory.enableFeeAmount~
+3.  @uniswap/v3-periphery/artifacts/contracts/lens/UniswapInterfaceMulticall.sol/UniswapInterfaceMulticall.json
+4.  @openzeppelin/contracts/build/contracts/ProxyAdmin.json
+5.  @uniswap/v3-periphery/artifacts/contracts/lens/TickLens.sol/TickLens.json
+6.  v3-periphery-1_3_0/artifacts/contracts/libraries/NFTDescriptor.sol/NFTDescriptor.json
+7.  v3-periphery-1_3_0/artifacts/contracts/NonfungibleTokenPositionDescriptor.sol/NonfungibleTokenPositionDescriptor.json
+8.  @openzeppelin/contracts/build/contracts/TransparentUpgradeableProxy.json
+9.  @uniswap/v3-periphery/artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json
+10. @uniswap/v3-periphery/artifacts/contracts/V3Migrator.sol/V3Migrator.json
+11. ~v3CoreFactory.setOwner~
+12. @uniswap/v3-staker/artifacts/contracts/UniswapV3Staker.sol/UniswapV3Staker.json
+13. @uniswap/swap-router-contracts/artifacts/contracts/lens/QuoterV2.sol/QuoterV2.json
+14. @uniswap/swap-router-contracts/artifacts/contracts/SwapRouter02.sol/SwapRouter02.json
+15. ~proxyAdmin.transferOwnership~
+
+
+
+#+begin_src bash
+cp node_modules/@uniswap/v3-core/artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json ~/code/polygon-cli/contracts/uniswapv3
+cp node_modules/@uniswap/v3-periphery/artifacts/contracts/lens/UniswapInterfaceMulticall.sol/UniswapInterfaceMulticall.json ~/code/polygon-cli/contracts/uniswapv3
+cp node_modules/@openzeppelin/contracts/build/contracts/ProxyAdmin.json ~/code/polygon-cli/contracts/uniswapv3
+cp node_modules/@uniswap/v3-periphery/artifacts/contracts/lens/TickLens.sol/TickLens.json ~/code/polygon-cli/contracts/uniswapv3
+cp node_modules/v3-periphery-1_3_0/artifacts/contracts/libraries/NFTDescriptor.sol/NFTDescriptor.json ~/code/polygon-cli/contracts/uniswapv3
+cp node_modules/v3-periphery-1_3_0/artifacts/contracts/NonfungibleTokenPositionDescriptor.sol/NonfungibleTokenPositionDescriptor.json ~/code/polygon-cli/contracts/uniswapv3
+cp node_modules/@openzeppelin/contracts/build/contracts/TransparentUpgradeableProxy.json ~/code/polygon-cli/contracts/uniswapv3
+cp node_modules/@uniswap/v3-periphery/artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json ~/code/polygon-cli/contracts/uniswapv3
+cp node_modules/@uniswap/v3-periphery/artifacts/contracts/V3Migrator.sol/V3Migrator.json ~/code/polygon-cli/contracts/uniswapv3
+cp node_modules/@uniswap/v3-staker/artifacts/contracts/UniswapV3Staker.sol/UniswapV3Staker.json ~/code/polygon-cli/contracts/uniswapv3
+cp node_modules/@uniswap/swap-router-contracts/artifacts/contracts/lens/QuoterV2.sol/QuoterV2.json ~/code/polygon-cli/contracts/uniswapv3
+cp node_modules/@uniswap/swap-router-contracts/artifacts/contracts/SwapRouter02.sol/SwapRouter02.json ~/code/polygon-cli/contracts/uniswapv3
+cp node_modules/v3-periphery-1_3_0/artifacts/contracts/interfaces/INonfungiblePositionManager.sol/INonfungiblePositionManager.json ~/code/polygon-cli/contracts/uniswapv3
+cp node_modules/@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json ~/code/polygon-cli/contracts/uniswapv3
+
+cp WETH9.json  ~/code/polygon-cli/contracts/uniswapv3
+#+end_src
+
+find . -type f -name '*.json' | sed 's:./\(.*\).json:\1:'
+
+#+begin_src bash
+# Extract the abi out of all of the files
+find . -type f -name '*.json' | sed 's:./\(.*\).json:\1:' | awk '{print "cat " $0 ".json | jq \".abi\" > " $0 ".abi"}' | bash
+# Extract the Bin out of all of the all of the non interface code
+find . -type f -name '*.json' | grep -Pv './I[A-Z]' | sed 's:./\(.*\).json:\1:' | awk '{print "cat " $0 ".json | jq -r \".bytecode\" > " $0 ".bin"}' | bash
+# Create go files for the full binaries
+find . -type f -name '*.json' | grep -Pv './I[A-Z]' | sed 's:./\(.*\).json:\1:' | awk '{print "abigen --abi " $0 ".abi --bin " $0 ".bin --pkg uniswapv3 --type " $0 " > " $0 ".go"}' | bash
+# Create go files for the interfaces
+find . -type f -name '*.json' | grep -P './I[A-Z]' | sed 's:./\(.*\).json:\1:' | awk '{print "abigen --abi " $0 ".abi --pkg uniswapv3 --type " $0 " > " $0 ".go"}' | bash
+#+end_src
+
+```bash
+$ forge init test
+$ pushd test
+$ forge install OpenZeppelin/openzeppelin-contracts
+# modify foundry.toml remappings
+$ cat foundry.toml
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+remappings = [
+    '@forge-std/=lib/forge-std/src/',
+    '@openzeppelin/=lib/openzeppelin-contracts/contracts',
+]
+
+# See more config options https://github.com/foundry-rs/foundry/tree/master/config
+$ cp ~/code/polygon-cli/contracts/uniswapv3/Swapper.sol src
+$ forge build
+$ cat out/Swapper.sol/Swapper.json | jq -r .abi > ~/code/polygon-cli/contracts/uniswapv3/Swapper.abi
+$ cat out/Swapper.sol/Swapper.json | jq -r .bytecode.object > ~/code/polygon-cli/contracts/uniswapv3/Swapper.bin
+```
