@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"net/url"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -16,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	uniswapv3loadtest "github.com/maticnetwork/polygon-cli/cmd/loadtest/uniswapv3"
 	"github.com/maticnetwork/polygon-cli/contracts/uniswapv3"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -30,8 +28,9 @@ var uniswapV3LoadTestCmd = &cobra.Command{
 	Use:   "uniswapv3 url",
 	Short: "Run Uniswapv3-like load test against an Eth/EVm style JSON-RPC endpoint.",
 	Long:  uniswapv3Usage,
+	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		return checkFlags()
+		return checkUniswapV3LoadtestFlags()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Override root command `mode` flag.
@@ -44,25 +43,9 @@ var uniswapV3LoadTestCmd = &cobra.Command{
 		}
 		return nil
 	},
-	Args: func(cmd *cobra.Command, args []string) error {
-		zerolog.DurationFieldUnit = time.Second
-		zerolog.DurationFieldInteger = true
-
-		if len(args) != 1 {
-			return errors.New("expected exactly one argument")
-		}
-
-		url, err := validateUrl(args[0])
-		if err != nil {
-			return err
-		}
-		inputLoadTestParams.URL = url
-
-		return nil
-	},
 }
 
-func checkFlags() error {
+func checkUniswapV3LoadtestFlags() error {
 	// Check pool fees.
 	switch fees := *uniswapv3LoadTestParams.PoolFees; fees {
 	case float64(uniswapv3loadtest.StableTier), float64(uniswapv3loadtest.StandardTier), float64(uniswapv3loadtest.ExoticTier):
@@ -77,24 +60,6 @@ func checkFlags() error {
 		return errors.New("swap amount input has to be greater than zero")
 	}
 	return nil
-}
-
-func validateUrl(input string) (*url.URL, error) {
-	url, err := url.Parse(input)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to parse url input error")
-		return nil, err
-	}
-
-	if url.Scheme == "" {
-		return nil, errors.New("the scheme has not been specified")
-	}
-	switch url.Scheme {
-	case "http", "https", "ws", "wss":
-		return url, nil
-	default:
-		return nil, fmt.Errorf("the scheme %s is not supported", url.Scheme)
-	}
 }
 
 type params struct {
