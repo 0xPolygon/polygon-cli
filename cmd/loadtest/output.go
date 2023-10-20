@@ -406,31 +406,6 @@ func isEmptyJSONResponse(r *json.RawMessage) bool {
 	return len(rawJson) == 0
 }
 
-func printResults(lts []loadTestSample) {
-	if len(lts) == 0 {
-		log.Error().Msg("No results recorded")
-		return
-	}
-
-	log.Info().Msg("* Results")
-	log.Info().Int("samples", len(lts)).Msg("Samples")
-
-	var meanWait float64
-	var totalWait float64 = 0
-	var numErrors uint64 = 0
-
-	for _, s := range lts {
-		if s.IsError {
-			numErrors += 1
-		}
-		totalWait = float64(s.WaitTime.Seconds()) + totalWait
-	}
-	meanWait = totalWait / float64(len(lts))
-
-	log.Info().Float64("meanWait between sending transactions", meanWait).Msg("Mean Wait")
-	log.Info().Uint64("numErrors", numErrors).Msg("Num errors")
-}
-
 func lightSummary(lts []loadTestSample, startTime, endTime time.Time, rl *rate.Limiter) {
 	if len(lts) == 0 {
 		log.Error().Msg("No results recorded")
