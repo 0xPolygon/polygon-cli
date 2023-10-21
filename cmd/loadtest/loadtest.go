@@ -330,8 +330,6 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 			}
 		}
 		lightSummary(loadTestResults, startTime, endTime, rl)
-	} else {
-		log.Info().Msg("Loadtest stopped before completion")
 	}
 
 	return nil
