@@ -316,12 +316,12 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 	var err error
 	finalBlockNumber, err = waitForFinalBlock(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
 	if err != nil {
-		log.Error().Err(err).Msg("there was an issue waiting for all transactions to be mined")
+		log.Error().Err(err).Msg("There was an issue waiting for all transactions to be mined")
 	}
 	if len(loadTestResults) > 0 {
 		startTime := loadTestResults[0].RequestTime
 		endTime := time.Now()
-		log.Debug().Uint64("currentNonce", currentNonce).Uint64("final block number", finalBlockNumber).Msg("got final block number")
+		log.Debug().Uint64("currentNonce", currentNonce).Uint64("final block number", finalBlockNumber).Msg("Got final block number")
 
 		if *inputLoadTestParams.ShouldProduceSummary {
 			err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
