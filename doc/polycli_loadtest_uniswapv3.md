@@ -24,13 +24,13 @@ The `uniswapv3` command is a subcommand of the `loadtest` tool. It is meant to g
 You can either chose to deploy the full UniswapV3 contract suite.
 
 ```sh
-polycli loadtest uniswapv3 http://localhost:8545
+polycli loadtest uniswapv3
 ```
 
 Or to use pre-deployed contracts to speed up the process.
 
 ```bash
-polycli loadtest uniswapv3 http://localhost:8545 \
+polycli loadtest uniswapv3 \
   --uniswap-factory-v3-address 0xc5f46e00822c828e1edcc12cf98b5a7b50c9e81b \
   --uniswap-migrator-address 0x24951726c5d22a3569d5474a1e74734a09046cd9 \
   --uniswap-multicall-address 0x0e695f36ade2a12abea51622e80f105e125d1d6e \
@@ -98,6 +98,7 @@ The command also inherits flags from parent commands.
       --private-key string                         The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
       --rate-limit float                           An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together (default 4)
   -n, --requests int                               Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
+  -r, --rpc-url string                             The RPC endpoint url (default "http://localhost:8545")
       --seed int                                   A seed for generating random values and addresses (default 123456)
       --send-amount string                         The amount of wei that we'll send every transaction (default "0x38D7EA4C68000")
       --steady-state-tx-pool-size uint             When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off. (default 1000)

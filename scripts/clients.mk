@@ -37,10 +37,10 @@ geth-loadtest: build fund ## Run loadtest against an EVM/Geth chain.
 	sleep 5
 	$(BUILD_DIR)/$(BIN_NAME) loadtest \
 		--verbosity 700 \
+		--rpc-url http://127.0.0.1:$(PORT) \
 		--chain-id 1337 \
+		--mode random \
 		--concurrency 1 \
 		--requests 1000 \
 		--rate-limit 100 \
-		--mode r \
-		--legacy \
-		http://127.0.0.1:$(PORT)
+		--legacy

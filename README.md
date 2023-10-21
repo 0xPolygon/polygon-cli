@@ -98,7 +98,7 @@ $ make geth-loadtest
 You can view the state of the chain using `polycli`.
 
 ```bash
-$ polycli monitor http://127.0.0.1:8545
+$ polycli monitor --rpc-url http://127.0.0.1:8545
 ```
 
 ![polycli monitor](doc/assets/monitor.gif)
@@ -145,7 +145,7 @@ true
 You can then generate some load to make sure that blocks with transactions are being created. Note that the chain id of local geth is `1337`.
 
 ```bash
-$ polycli loadtest --verbosity 700 --chain-id 1337 --concurrency 1 --requests 1000 --rate-limit 5 --mode c http://127.0.0.1:8545
+$ polycli loadtest --verbosity 700 --chain-id 1337 --concurrency 1 --requests 1000 --rate-limit 5 --mode c --rpc-url http://127.0.0.1:8545
 ```
 
 # Contributing

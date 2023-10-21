@@ -3,18 +3,16 @@ package loadtest
 import (
 	"crypto/ecdsa"
 	_ "embed"
-	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
-	"net/url"
 	"sync"
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
+	"github.com/maticnetwork/polygon-cli/util"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/time/rate"
 )
@@ -38,6 +36,7 @@ type (
 	}
 	loadTestParams struct {
 		// inputs
+		RPCUrl                              *string
 		Requests                            *int64
 		Concurrency                         *int64
 		BatchSize                           *uint64
@@ -45,7 +44,6 @@ type (
 		ToRandom                            *bool
 		CallOnly                            *bool
 		CallOnlyLatestBlock                 *bool
-		URL                                 *url.URL
 		ChainID                             *uint64
 		PrivateKey                          *string
 		ToAddress                           *string
@@ -156,43 +154,41 @@ var (
 
 // LoadtestCmd represents the loadtest command
 var LoadtestCmd = &cobra.Command{
-	Use:   "loadtest url",
+	Use:   "loadtest",
 	Short: "Run a generic load test against an Eth/EVM style JSON-RPC endpoint.",
 	Long:  loadtestUsage,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		err := runLoadTest(cmd.Context())
-		if err != nil {
-			return err
-		}
-		return nil
-	},
-	Args: func(cmd *cobra.Command, args []string) error {
+	Args:  cobra.NoArgs,
+	PreRunE: func(cmd *cobra.Command, args []string) error {
 		zerolog.DurationFieldUnit = time.Second
 		zerolog.DurationFieldInteger = true
 
-		if len(args) != 1 {
-			return errors.New("expected exactly one argument")
-		}
-		url, err := url.Parse(args[0])
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to parse url input error")
-			return err
-		}
-		if url.Scheme != "http" && url.Scheme != "https" && url.Scheme != "ws" && url.Scheme != "wss" {
-			return fmt.Errorf("the scheme %s is not supported", url.Scheme)
-		}
-		inputLoadTestParams.URL = url
-
-		if *inputLoadTestParams.AdaptiveBackoffFactor <= 0.0 {
-			return errors.New("the backoff factor needs to be non-zero positive")
-		}
-
-		if *inputLoadTestParams.ContractCallBlockInterval == 0 {
-			return errors.New("the contract call block interval must be strictly positive")
-		}
-
-		return nil
+		return checkLoadtestFlags()
 	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runLoadTest(cmd.Context())
+	},
+}
+
+func checkLoadtestFlags() error {
+	ltp := inputLoadTestParams
+
+	// Check `rpc-url` flag.
+	if ltp.RPCUrl == nil {
+		panic("RPC URL is empty")
+	}
+	if err := util.ValidateUrl(*ltp.RPCUrl); err != nil {
+		return err
+	}
+
+	if ltp.AdaptiveBackoffFactor != nil && *ltp.AdaptiveBackoffFactor <= 0.0 {
+		return fmt.Errorf("the backoff factor needs to be non-zero positive")
+	}
+
+	if ltp.ContractCallBlockInterval != nil && *ltp.ContractCallBlockInterval == 0 {
+		return fmt.Errorf("the contract call block interval must be strictly positive")
+	}
+
+	return nil
 }
 
 func init() {
@@ -204,6 +200,7 @@ func initFlags() {
 	ltp := new(loadTestParams)
 
 	// Persistent flags.
+	ltp.RPCUrl = LoadtestCmd.PersistentFlags().StringP("rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
 	ltp.Requests = LoadtestCmd.PersistentFlags().Int64P("requests", "n", 1, "Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results.")
 	ltp.Concurrency = LoadtestCmd.PersistentFlags().Int64P("concurrency", "c", 1, "Number of requests to perform concurrently. Default is one request at a time.")
 	ltp.TimeLimit = LoadtestCmd.PersistentFlags().Int64P("time-limit", "t", -1, "Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit.")

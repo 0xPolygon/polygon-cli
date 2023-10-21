@@ -55,13 +55,13 @@ The default private key is: `42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258
 Here is a simple example that runs 1000 requests at a max rate of 1 request per second against the http rpc endpoint on localhost. It's running in transaction mode so it will perform simple transactions send to the default address.
 
 ```bash
-$ polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 1000 --rate-limit 1 --mode t http://localhost:8888
+$ polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 1000 --rate-limit 1 --mode t --rpc-url http://localhost:8888
 ```
 
 Another example, a bit slower, and that specifically calls the [LOG4](https://www.evm.codes/#a4) function in the load test contract in a loop for 25,078 iterations. That number was picked specifically to require almost all of the gas for a single transaction.
 
 ```bash
-$ polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 50 --rate-limit 0.5  --mode f --function 164 --iterations 25078 http://private.validator-001.devnet02.pos-v3.polygon.private:8545
+$ polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 50 --rate-limit 0.5  --mode f --function 164 --iterations 25078 --rpc-url http://private.validator-001.devnet02.pos-v3.polygon.private:8545
 ```
 
 ### Load Test Contract
@@ -74,6 +74,6 @@ The codebase has a contract that used for load testing. It's written in Yul and 
 3. Run `abigen`
    - `$ abigen --abi LoadTester.abi --pkg contracts --type LoadTester --bin LoadTester.bin --out loadtester.go`
 4. Run the loadtester to enure it deploys and runs successfully
-   - `$ polycli loadtest --verbosity 700 http://127.0.0.1:8541`
+   - `$ polycli loadtest --verbosity 700 --rpc-url http://127.0.0.1:8541`
 
 ```
