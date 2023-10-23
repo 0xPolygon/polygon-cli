@@ -52,10 +52,10 @@ func walkTheBlocks(inputBlockHash ethcommon.Hash, client *ethclient.Client) erro
 	ctx := context.Background()
 	bn, err := client.BlockNumber(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("unable to get current block number from chain")
+		log.Error().Err(err).Msg("Unable to get current block number from chain")
 		return err
 	}
-	log.Info().Uint64("headBlock", bn).Msg("retrieved current head of the chain")
+	log.Info().Uint64("headBlock", bn).Msg("Retrieved current head of the chain")
 
 	folderName := fmt.Sprintf("fork-analysis-%d", time.Now().Unix())
 	if err := os.Mkdir(folderName, os.ModePerm); err != nil {
@@ -66,23 +66,23 @@ func walkTheBlocks(inputBlockHash ethcommon.Hash, client *ethclient.Client) erro
 	for {
 		potentialForkedBlock, err := getBlockByHash(ctx, inputBlockHash, client)
 		if err != nil {
-			log.Error().Err(err).Str("blockhash", inputBlockHash.String()).Msg("unable to fetch block")
+			log.Error().Err(err).Str("blockhash", inputBlockHash.String()).Msg("Unable to fetch block")
 			return err
 		}
-		log.Info().Uint64("number", potentialForkedBlock.NumberU64()).Msg("successfully retrieved starting block hash")
+		log.Info().Uint64("number", potentialForkedBlock.NumberU64()).Msg("Successfully retrieved starting block hash")
 
 		canonicalBlock, err := client.BlockByNumber(ctx, potentialForkedBlock.Number())
 		if err != nil {
-			log.Error().Err(err).Uint64("number", potentialForkedBlock.NumberU64()).Msg("unable to retrieve block by number")
+			log.Error().Err(err).Uint64("number", potentialForkedBlock.NumberU64()).Msg("Unable to retrieve block by number")
 
 			return err
 		}
 		if potentialForkedBlock.Hash().String() == canonicalBlock.Hash().String() {
 			err = writeBlock(folderName, canonicalBlock, true)
 			if err != nil {
-				log.Error().Err(err).Msg("failed to save final canonical block")
+				log.Error().Err(err).Msg("Failed to save final canonical block")
 			}
-			log.Info().Uint64("number", canonicalBlock.NumberU64()).Str("blockHash", canonicalBlock.Hash().String()).Msg("the current block seems to be canonical in the chain. Stopping analysis")
+			log.Info().Uint64("number", canonicalBlock.NumberU64()).Str("blockHash", canonicalBlock.Hash().String()).Msg("The current block seems to be canonical in the chain. Stopping analysis")
 			break
 		}
 		log.Info().
@@ -93,12 +93,12 @@ func walkTheBlocks(inputBlockHash ethcommon.Hash, client *ethclient.Client) erro
 
 		err = writeBlock(folderName, potentialForkedBlock, false)
 		if err != nil {
-			log.Error().Err(err).Msg("unable to save forked block")
+			log.Error().Err(err).Msg("Unable to save forked block")
 			return err
 		}
 		err = writeBlock(folderName, canonicalBlock, true)
 		if err != nil {
-			log.Error().Err(err).Msg("unable to save canonical block")
+			log.Error().Err(err).Msg("Unable to save canonical block")
 			return err
 		}
 		// Ever higher
@@ -110,13 +110,13 @@ func walkTheBlocks(inputBlockHash ethcommon.Hash, client *ethclient.Client) erro
 func writeBlock(folderName string, block *types.Block, isCanonical bool) error {
 	rawHeader, err := block.Header().MarshalJSON()
 	if err != nil {
-		log.Error().Err(err).Msg("unable to json marshal the header")
+		log.Error().Err(err).Msg("Unable to json marshal the header")
 		return err
 	}
 	fields := make(map[string]interface{}, 0)
 	err = json.Unmarshal(rawHeader, &fields)
 	if err != nil {
-		log.Error().Err(err).Msg("unable to convert header to map type")
+		log.Error().Err(err).Msg("Unable to convert header to map type")
 		return err
 	}
 	fields["transactions"] = block.Transactions()
@@ -147,13 +147,13 @@ func getBlockByHash(ctx context.Context, bh ethcommon.Hash, client *ethclient.Cl
 	for i := 0; i < retryLimit; i = i + 1 {
 		block, err := client.BlockByHash(ctx, bh)
 		if err != nil {
-			log.Warn().Err(err).Int("attempt", i).Str("blockhash", bh.String()).Msg("unable to fetch block")
+			log.Warn().Err(err).Int("attempt", i).Str("blockhash", bh.String()).Msg("Unable to fetch block")
 		} else {
 			return block, nil
 		}
 		time.Sleep(2 * time.Second)
 	}
-	log.Error().Err(errRetryLimitExceeded).Str("blockhash", bh.String()).Int("retryLimit", retryLimit).Msg("unable to fetch block after retrying")
+	log.Error().Err(errRetryLimitExceeded).Str("blockhash", bh.String()).Int("retryLimit", retryLimit).Msg("Unable to fetch block after retrying")
 	return nil, errRetryLimitExceeded
 }
 

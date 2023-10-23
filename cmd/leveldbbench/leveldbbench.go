@@ -8,14 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/rs/zerolog/log"
-	progressbar "github.com/schollz/progressbar/v3"
-	"github.com/spf13/cobra"
-	leveldb "github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/filter"
-	"github.com/syndtr/goleveldb/leveldb/iterator"
-	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.com/syndtr/goleveldb/leveldb/util"
 	"math"
 	"math/bits"
 	"math/rand"
@@ -26,6 +18,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
+	progressbar "github.com/schollz/progressbar/v3"
+	"github.com/spf13/cobra"
+	leveldb "github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/filter"
+	"github.com/syndtr/goleveldb/leveldb/iterator"
+	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 var (
@@ -131,8 +132,8 @@ func NewTestResult(startTime, endTime time.Time, desc string, opCount uint64, db
 	tr.OpCount = opCount
 	tr.OpRate = float64(opCount) / tr.TestDuration.Seconds()
 
-	log.Info().Dur("testDuration", tr.TestDuration).Str("desc", tr.Description).Msg("recorded result")
-	log.Debug().Interface("result", tr).Msg("recorded result")
+	log.Info().Dur("testDuration", tr.TestDuration).Str("desc", tr.Description).Msg("Recorded result")
+	log.Debug().Interface("result", tr).Msg("Recorded result")
 	return tr
 }
 
@@ -222,7 +223,7 @@ var LevelDBBenchCmd = &cobra.Command{
 		log.Info().Msg("Close DB")
 		err = db.Close()
 		if err != nil {
-			log.Error().Err(err).Msg("error while closing db")
+			log.Error().Err(err).Msg("Error while closing db")
 		}
 
 		return printSummary(trs)
@@ -252,7 +253,7 @@ func printSummary(trs []*TestResult) error {
 func runFullCompact(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions) {
 	err := db.CompactRange(util.Range{Start: nil, Limit: nil})
 	if err != nil {
-		log.Fatal().Err(err).Msg("error compacting data")
+		log.Fatal().Err(err).Msg("Error compacting data")
 	}
 }
 func runFullScan(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, ro *opt.ReadOptions) (uint64, []uint64) {
@@ -278,11 +279,11 @@ func runFullScan(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, ro *
 
 			if bucket >= 22 {
 				// 9:19PM INF encountered giant value currentKey=536e617073686f744a6f75726e616c
-				log.Info().Str("currentKey", hex.EncodeToString(k)).Int("bytes", len(v)).Msg("encountered giant value")
+				log.Info().Str("currentKey", hex.EncodeToString(k)).Int("bytes", len(v)).Msg("Encountered giant value")
 			}
 
 			if opCount%1000000 == 0 {
-				log.Debug().Uint64("opCount", opCount).Str("currentKey", hex.EncodeToString(k)).Msg("continuing full scan")
+				log.Debug().Uint64("opCount", opCount).Str("currentKey", hex.EncodeToString(k)).Msg("Continuing full scan")
 			}
 			wg.Done()
 			<-pool
@@ -309,7 +310,7 @@ func runFullScan(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, ro *
 			Int("bucket", k).
 			Float64("start", start).
 			Float64("end", end).
-			Uint64("count", v).Msg("buckets")
+			Uint64("count", v).Msg("Buckets")
 	}
 	return opCount, buckets
 }
@@ -389,7 +390,7 @@ benchLoop:
 
 				_, err := db.Get(rks.Key(), ro)
 				if err != nil {
-					log.Error().Err(err).Msg("level db random read error")
+					log.Error().Err(err).Msg("Level db random read error")
 				}
 				wg.Done()
 				<-pool
@@ -416,7 +417,7 @@ func (r *RandomKeySeeker) Key() []byte {
 	randSrc.Read(seekKey)
 	randSrcMutex.Unlock()
 
-	log.Trace().Str("seekKey", hex.EncodeToString(seekKey)).Msg("searching for key")
+	log.Trace().Str("seekKey", hex.EncodeToString(seekKey)).Msg("Searching for key")
 
 	r.iteratorMutex.Lock()
 	defer r.iteratorMutex.Unlock()
@@ -433,10 +434,10 @@ func (r *RandomKeySeeker) Key() []byte {
 		r.iterator.Next()
 	}
 	if err := r.iterator.Error(); err != nil {
-		log.Error().Err(err).Msg("issue getting random key")
+		log.Error().Err(err).Msg("Issue getting random key")
 	}
 	resultKey := r.iterator.Key()
-	log.Trace().Str("seekKey", hex.EncodeToString(seekKey)).Str("resultKey", hex.EncodeToString(resultKey)).Msg("found random key")
+	log.Trace().Str("seekKey", hex.EncodeToString(seekKey)).Str("resultKey", hex.EncodeToString(resultKey)).Msg("Found random key")
 	return resultKey
 }
 

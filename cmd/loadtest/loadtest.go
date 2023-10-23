@@ -53,12 +53,12 @@ const (
 	loadTestModeERC721
 	loadTestModePrecompiledContracts
 	loadTestModePrecompiledContract
-	loadTestModeUniswapV3
 
 	// All the modes AFTER random mode will not be used when mode random is selected
 	loadTestModeRandom
 	loadTestModeRecall
 	loadTestModeRPC
+	loadTestModeUniswapV3
 
 	codeQualitySeed       = "code code code code code code code code code code code quality"
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
@@ -195,7 +195,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 	if header.BaseFee != nil {
 		inputLoadTestParams.ChainSupportBaseFee = true
-		log.Debug().Msg("eip-1559 support detected")
+		log.Debug().Msg("Eip-1559 support detected")
 	}
 
 	chainID, err := c.ChainID(ctx)
@@ -254,7 +254,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode && !*inputLoadTestParams.CallOnly {
 		return errors.New("rpc mode must be called with call-only when multiple modes are used")
 	} else if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) {
-		log.Trace().Msg("setting call only mode since we're doing RPC testing")
+		log.Trace().Msg("Setting call only mode since we're doing RPC testing")
 		*inputLoadTestParams.CallOnly = true
 	}
 	// TODO check for duplicate modes?
@@ -488,30 +488,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Debug().Str("erc721Addr", erc721Addr.String()).Msg("Obtained erc 721 contract address")
 	}
 
-	uniswapAddresses := uniswapv3loadtest.UniswapV3Addresses{
-		FactoryV3:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapFactoryV3),
-		Multicall:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMulticall),
-		ProxyAdmin:                         ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapProxyAdmin),
-		TickLens:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapTickLens),
-		NFTDescriptorLib:                   ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNFTLibDescriptor),
-		NonfungibleTokenPositionDescriptor: ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNonfungibleTokenPositionDescriptor),
-		TransparentUpgradeableProxy:        ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapUpgradeableProxy),
-		NonfungiblePositionManager:         ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNonfungiblePositionManager),
-		Migrator:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMigrator),
-		Staker:                             ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapStaker),
-		QuoterV2:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapQuoterV2),
-		SwapRouter02:                       ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapSwapRouter),
-		WETH9:                              ethcommon.HexToAddress(*uniswapv3LoadTestParams.WETH9),
-	}
-	var uniswapV3Config uniswapv3loadtest.UniswapV3Config
-	var poolConfig uniswapv3loadtest.PoolConfig
-	if mode == loadTestModeUniswapV3 || mode == loadTestModeRandom {
-		uniswapV3Config, poolConfig, err = initUniswapV3Loadtest(ctx, c, tops, cops, uniswapAddresses, *ltp.FromETHAddress)
-		if err != nil {
-			return err
-		}
-	}
-
 	var recallTransactions []rpctypes.PolyTransaction
 	if mode == loadTestModeRecall {
 		recallTransactions, err = getRecallTransactions(ctx, c, rpc)
@@ -521,11 +497,11 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		if len(recallTransactions) == 0 {
 			return errors.New("we weren't able to fetch any recall transactions")
 		}
-		log.Debug().Int("txs", len(recallTransactions)).Msg("retrieved transactions for total recall")
+		log.Debug().Int("txs", len(recallTransactions)).Msg("Retrieved transactions for total recall")
 	}
 
 	var indexedActivity *IndexedActivity
-	if mode == loadTestModeRPC || mode == loadTestModeRandom {
+	if mode == loadTestModeRPC {
 		indexedActivity, err = getIndexedRecentActivity(ctx, c, rpc)
 		if err != nil {
 			return err
@@ -537,7 +513,31 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			Int("erc20s", len(indexedActivity.ERC20Addresses)).
 			Int("erc721", len(indexedActivity.ERC721Addresses)).
 			Int("contracts", len(indexedActivity.Contracts)).
-			Msg("retrieved recent indexed activity")
+			Msg("Retrieved recent indexed activity")
+	}
+
+	var uniswapV3Config uniswapv3loadtest.UniswapV3Config
+	var poolConfig uniswapv3loadtest.PoolConfig
+	if mode == loadTestModeUniswapV3 {
+		uniswapAddresses := uniswapv3loadtest.UniswapV3Addresses{
+			FactoryV3:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapFactoryV3),
+			Multicall:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMulticall),
+			ProxyAdmin:                         ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapProxyAdmin),
+			TickLens:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapTickLens),
+			NFTDescriptorLib:                   ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNFTLibDescriptor),
+			NonfungibleTokenPositionDescriptor: ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNonfungibleTokenPositionDescriptor),
+			TransparentUpgradeableProxy:        ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapUpgradeableProxy),
+			NonfungiblePositionManager:         ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNonfungiblePositionManager),
+			Migrator:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMigrator),
+			Staker:                             ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapStaker),
+			QuoterV2:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapQuoterV2),
+			SwapRouter02:                       ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapSwapRouter),
+			WETH9:                              ethcommon.HexToAddress(*uniswapv3LoadTestParams.WETH9),
+		}
+		uniswapV3Config, poolConfig, err = initUniswapV3Loadtest(ctx, c, tops, cops, uniswapAddresses, *ltp.FromETHAddress)
+		if err != nil {
+			return err
+		}
 	}
 
 	var i int64
@@ -788,7 +788,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 				blockDiff = currentBlockNumber % currStartBlockNumber
 			}
 			if blockDiff > numberOfBlocksToWaitFor {
-				log.Error().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("waiting period exhausted")
+				log.Error().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Waiting period exhausted")
 				return errWaitingPeriodExhausted
 			}
 
@@ -1284,7 +1284,7 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *Ind
 			Str("erc721str", erc721Str).
 			Str("erc20addr", erc20Addr.String()).
 			Str("erc721addr", erc721Addr.String()).
-			Msg("retrieve contract addresses")
+			Msg("Retrieve contract addresses")
 		cops := new(bind.CallOpts)
 		cops.Context = ctx
 		var erc721Contract *tokens.ERC721
