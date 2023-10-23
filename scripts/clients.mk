@@ -1,7 +1,12 @@
 ##@ Clients
 HOST?=127.0.0.1
 PORT?=8545
-CHAIN_ID=1337
+CHAIN_ID?=1337
+
+LOADTEST_ACCOUNT?=0x85da99c8a7c2c95964c8efd687e95e632fc533d6
+LOADTEST_FUNDING_AMOUNT_ETH?=1010000000
+eth_coinbase := $(shell curl -s -H 'Content-Type: application/json' -d '{"jsonrpc": "2.0", "id": 2, "method": "eth_accounts", "params": []}' http://${HOST}:${PORT} | jq -r ".result[0]")
+hex_funding_amount := $(shell echo "obase=16; ${LOADTEST_FUNDING_AMOUNT_ETH}*10^18" | bc)
 
 .PHONY: geth
 geth: ## Start a local geth node.
@@ -30,10 +35,6 @@ anvil: ## Start a local anvil node.
 		--chain-id ${CHAIN_ID} \
 		--balance 999999999999999
 
-LOADTEST_ACCOUNT=0x85da99c8a7c2c95964c8efd687e95e632fc533d6
-LOADTEST_FUNDING_AMOUNT_ETH=1010000000
-eth_coinbase := $(shell curl -s -H 'Content-Type: application/json' -d '{"jsonrpc": "2.0", "id": 2, "method": "eth_accounts", "params": []}' http://${HOST}:${PORT} | jq -r ".result[0]")
-hex_funding_amount := $(shell echo "obase=16; ${LOADTEST_FUNDING_AMOUNT_ETH}*10^18" | bc)
 .PHONY: fund
 fund: ## Fund the loadtest account with 100k ETH.
 	curl \
