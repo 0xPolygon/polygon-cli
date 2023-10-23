@@ -79,7 +79,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         # foundry only has nightly versions no we don't specify a version at the moment.
-      - name: Install geth
+      - name: Install Geth
         run: |
           if [ "${{ matrix.tool }}" = "geth" ]; then
             sudo add-apt-repository ppa:ethereum/ethereum
@@ -87,7 +87,7 @@ jobs:
             sudo apt-get install ethereum
             geth --version
           fi
-      - name: Run some loadtest against a geth node in dev mode
+      - name: Run loadtest againt ${{ matrix.tool }}
         run: |
           ${{ matrix.tool }} --version
           make ${{ matrix.tool }} &
