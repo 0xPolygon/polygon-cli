@@ -15,6 +15,7 @@ concurrency:
 
 env:
   GO_VERSION: "1.21"
+  GETH_VERSION: "1.13.4" # https://github.com/ethereum/go-ethereum
 
 jobs:
   lint:
@@ -68,16 +69,27 @@ jobs:
     name: Loadtest against geth
     runs-on: ubuntu-latest
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
+    strategy:
+      matrix:
+        tool: [geth, anvil]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION }}
-      - name: Install geth 1.12.0
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        # foundry only has nightly versions no we don't specify a version at the moment.
+      - name: Install geth
         run: |
-          curl -O https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.12.0-e501b3b0.tar.gz
-          tar -xvf geth-linux-amd64-1.12.0-e501b3b0.tar.gz
-          mv geth-linux-amd64-1.12.0-e501b3b0/geth /usr/local/bin/
-          geth version
+          if [ "${{ matrix.tool }}" = "geth" ]; then
+            sudo add-apt-repository ppa:ethereum/ethereum
+            sudo apt-get update
+            sudo apt-get install ethereum=${{ env.GETH_VERSION }}
+            geth --version
+          fi
       - name: Run some loadtest against a geth node in dev mode
-        run: sh scripts/geth-loadtest.sh
+        run: |
+          make ${{ matrix.tool }} &
+          sleep 5
+          make loadtest
