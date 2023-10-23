@@ -15,7 +15,6 @@ concurrency:
 
 env:
   GO_VERSION: "1.21"
-  GETH_VERSION: "1.13.4" # https://github.com/ethereum/go-ethereum
 
 jobs:
   lint:
@@ -85,7 +84,7 @@ jobs:
           if [ "${{ matrix.tool }}" = "geth" ]; then
             sudo add-apt-repository ppa:ethereum/ethereum
             sudo apt-get update
-            sudo apt-get install ethereum=${{ env.GETH_VERSION }}
+            sudo apt-get install ethereum
             geth --version
           fi
       - name: Run some loadtest against a geth node in dev mode
