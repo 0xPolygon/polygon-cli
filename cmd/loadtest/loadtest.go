@@ -497,7 +497,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	var indexedActivity *IndexedActivity
-	if mode == loadTestModeRPC || mode == loadTestModeRandom {
+	if mode == loadTestModeRPC {
 		indexedActivity, err = getIndexedRecentActivity(ctx, c, rpc)
 		if err != nil {
 			return err
