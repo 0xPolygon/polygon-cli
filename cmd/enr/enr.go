@@ -4,11 +4,12 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"github.com/rs/zerolog/log"
-	"github.com/spf13/cobra"
 	"io"
 	"os"
 	"strings"
+
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -64,7 +65,7 @@ var ENRCmd = &cobra.Command{
 			genericNode["udp"] = fmt.Sprintf("%d", node.UDP())
 			jsonOut, err := json.Marshal(genericNode)
 			if err != nil {
-				log.Error().Err(err).Msg("unable to convert node to json")
+				log.Error().Err(err).Msg("Unable to convert node to json")
 				continue
 			}
 			fmt.Println(string(jsonOut))

@@ -230,7 +230,7 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 	}
 	observedPendingTxs = append(observedPendingTxs, historicalDataPoint{SampleTime: time.Now(), SampleValue: float64(cs.PendingCount)})
 
-	log.Debug().Uint64("PeerCount", cs.PeerCount).Uint64("ChainID", cs.ChainID.Uint64()).Uint64("HeadBlock", cs.HeadBlock).Uint64("GasPrice", cs.GasPrice.Uint64()).Msg("fetching blocks")
+	log.Debug().Uint64("PeerCount", cs.PeerCount).Uint64("ChainID", cs.ChainID.Uint64()).Uint64("HeadBlock", cs.HeadBlock).Uint64("GasPrice", cs.GasPrice.Uint64()).Msg("Fetching blocks")
 
 	if isUiRendered && batchSize < 0 {
 		_, termHeight := ui.TerminalDimensions()
@@ -249,7 +249,7 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 	if shouldLoadMoreHistory(ctx, ms) {
 		err = appendOlderBlocks(ctx, ms, rpc)
 		if err != nil {
-			log.Warn().Err(err).Msg("unable to append more history")
+			log.Warn().Err(err).Msg("Unable to append more history")
 		}
 	}
 
@@ -575,7 +575,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 						} else {
 							err := appendOlderBlocks(ctx, ms, rpc)
 							if err != nil {
-								log.Warn().Err(err).Msg("unable to append more history")
+								log.Warn().Err(err).Msg("Unable to append more history")
 							}
 							forceRedraw = true
 							redraw(ms, true)
@@ -627,7 +627,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				if windowOffset > len(allBlocks)-windowSize {
 					err := appendOlderBlocks(ctx, ms, rpc)
 					if err != nil {
-						log.Warn().Err(err).Msg("unable to append more history")
+						log.Warn().Err(err).Msg("Unable to append more history")
 					}
 					forceRedraw = true
 					redraw(ms, true)

@@ -4,12 +4,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"math/big"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/clique"
@@ -194,7 +195,7 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 			spaceOffset := len(headerVariables[i]) + proportion[i] - len(recordVariables[i])
 			if spaceOffset < 0 {
 				spaceOffset = 0
-				log.Error().Str("record", recordVariables[i]).Str("column", headerVariables[i]).Msg("column width exceed header width")
+				log.Error().Str("record", recordVariables[i]).Str("column", headerVariables[i]).Msg("Column width exceed header width")
 			}
 			record += recordVariables[i] + strings.Repeat(" ", spaceOffset)
 		}
