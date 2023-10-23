@@ -8,7 +8,7 @@ geth: ## Start a local geth node.
 	geth \
 		--dev \
 		--http \
-		--http.addr localhost \
+		--http.addr ${HOST} \
 		--http.port $(PORT) \
 		--http.api admin,debug,web3,eth,txpool,personal,miner,net \
 		--verbosity 5 \
