@@ -90,6 +90,7 @@ jobs:
           fi
       - name: Run some loadtest against a geth node in dev mode
         run: |
+          ${{ matrix.tool }} --version
           make ${{ matrix.tool }} &
           sleep 5
           make loadtest
