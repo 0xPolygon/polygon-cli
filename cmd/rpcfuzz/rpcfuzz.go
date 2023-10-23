@@ -1233,12 +1233,12 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 	for _, v := range allTests {
 		_, hasKey := uniqueTests[v]
 		if hasKey {
-			log.Fatal().Str("name", v.GetName()).Str("method", v.GetMethod()).Msg("duplicate test detected")
+			log.Fatal().Str("name", v.GetName()).Str("method", v.GetMethod()).Msg("Duplicate test detected")
 		}
 		uniqueTests[v] = struct{}{}
 		_, hasKey = uniqueTestNames[v.GetName()]
 		if hasKey {
-			log.Fatal().Str("name", v.GetName()).Str("method", v.GetMethod()).Msg("duplicate test name detected")
+			log.Fatal().Str("name", v.GetName()).Str("method", v.GetMethod()).Msg("Duplicate test name detected")
 		}
 		uniqueTestNames[v.GetName()] = struct{}{}
 	}
@@ -1308,7 +1308,7 @@ func ValidateJSONSchema(schema string) func(result interface{}) error {
 			for _, desc := range validatorResult.Errors() {
 				errStr += desc.String() + "\n"
 			}
-			log.Trace().Str("resultJson", string(jsonBytes)).Msg("json failed to validate")
+			log.Trace().Str("resultJson", string(jsonBytes)).Msg("JSON failed to validate")
 			return fmt.Errorf("the json document is not valid: %s", errStr)
 		}
 		return nil
@@ -1795,7 +1795,7 @@ func GetTestAccountNonce(ctx context.Context, rpcClient *rpc.Client) (uint64, er
 		log.Error().Err(err).Msg("Unable to retrieve nonce")
 		curNonce = 0
 	}
-	log.Trace().Uint64("curNonce", curNonce).Msg("current nonce value")
+	log.Trace().Uint64("curNonce", curNonce).Msg("Current nonce value")
 	return curNonce, err
 }
 
@@ -1808,7 +1808,7 @@ func GetCurrentChainID(ctx context.Context, rpcClient *rpc.Client) (*big.Int, er
 		chainId = big.NewInt(1)
 
 	}
-	log.Trace().Uint64("chainId", chainId.Uint64()).Msg("fetch chainid")
+	log.Trace().Uint64("chainId", chainId.Uint64()).Msg("Fetch chainid")
 	return chainId, err
 }
 
@@ -1824,14 +1824,14 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHttpC
 		var payload []byte
 		payload, err = json.Marshal(args)
 		if err != nil {
-			log.Fatal().Err(err).Msg("unable to marshal HTTP request payload")
+			log.Fatal().Err(err).Msg("Unable to marshal HTTP request payload")
 		}
 
 		// Create the request.
 		var request *http.Request
 		request, err = http.NewRequest(currTest.GetMethod(), wrappedHttpClient.url, bytes.NewBuffer(payload)) // TODO: fix
 		if err != nil {
-			log.Fatal().Err(err).Msg("unable to create HTTP request")
+			log.Fatal().Err(err).Msg("Unable to create HTTP request")
 
 		}
 		request.Header.Set("Content-Type", "application/json")
@@ -1840,7 +1840,7 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHttpC
 		var response *http.Response
 		response, err = wrappedHttpClient.client.Do(request)
 		if err != nil {
-			log.Error().Err(err).Msg("unable to send HTTP request")
+			log.Error().Err(err).Msg("Unable to send HTTP request")
 			break
 		}
 		defer response.Body.Close()
@@ -1849,7 +1849,7 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHttpC
 		var body []byte
 		body, err = io.ReadAll(response.Body)
 		if err != nil {
-			log.Error().Err(err).Msg("unable to read HTTP body")
+			log.Error().Err(err).Msg("Unable to read HTTP body")
 			break
 		}
 
@@ -1857,7 +1857,7 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHttpC
 		var rpcResponse RPCJSONResponse
 		err = json.Unmarshal(body, &rpcResponse)
 		if err != nil {
-			log.Error().Err(err).Msg("unable to unmarshal HTTP body")
+			log.Error().Err(err).Msg("Unable to unmarshal HTTP body")
 			break
 		}
 		if rpcResponse.Error != nil {
