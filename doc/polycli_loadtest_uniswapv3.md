@@ -14,7 +14,7 @@
 Run Uniswapv3-like load test against an Eth/EVm style JSON-RPC endpoint.
 
 ```bash
-polycli loadtest uniswapv3 url [flags]
+polycli loadtest uniswapv3 [flags]
 ```
 
 ## Usage
