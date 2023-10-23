@@ -195,7 +195,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 	if header.BaseFee != nil {
 		inputLoadTestParams.ChainSupportBaseFee = true
-		log.Debug().Msg("eip-1559 support detected")
+		log.Debug().Msg("Eip-1559 support detected")
 	}
 
 	chainID, err := c.ChainID(ctx)
