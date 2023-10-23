@@ -53,12 +53,12 @@ const (
 	loadTestModeERC721
 	loadTestModePrecompiledContracts
 	loadTestModePrecompiledContract
-	loadTestModeUniswapV3
 
 	// All the modes AFTER random mode will not be used when mode random is selected
 	loadTestModeRandom
 	loadTestModeRecall
 	loadTestModeRPC
+	loadTestModeUniswapV3
 
 	codeQualitySeed       = "code code code code code code code code code code code quality"
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
@@ -484,30 +484,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Debug().Str("erc721Addr", erc721Addr.String()).Msg("Obtained erc 721 contract address")
 	}
 
-	uniswapAddresses := uniswapv3loadtest.UniswapV3Addresses{
-		FactoryV3:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapFactoryV3),
-		Multicall:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMulticall),
-		ProxyAdmin:                         ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapProxyAdmin),
-		TickLens:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapTickLens),
-		NFTDescriptorLib:                   ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNFTLibDescriptor),
-		NonfungibleTokenPositionDescriptor: ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNonfungibleTokenPositionDescriptor),
-		TransparentUpgradeableProxy:        ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapUpgradeableProxy),
-		NonfungiblePositionManager:         ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNonfungiblePositionManager),
-		Migrator:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMigrator),
-		Staker:                             ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapStaker),
-		QuoterV2:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapQuoterV2),
-		SwapRouter02:                       ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapSwapRouter),
-		WETH9:                              ethcommon.HexToAddress(*uniswapv3LoadTestParams.WETH9),
-	}
-	var uniswapV3Config uniswapv3loadtest.UniswapV3Config
-	var poolConfig uniswapv3loadtest.PoolConfig
-	if mode == loadTestModeUniswapV3 || mode == loadTestModeRandom {
-		uniswapV3Config, poolConfig, err = initUniswapV3Loadtest(ctx, c, tops, cops, uniswapAddresses, *ltp.FromETHAddress)
-		if err != nil {
-			return err
-		}
-	}
-
 	var recallTransactions []rpctypes.PolyTransaction
 	if mode == loadTestModeRecall {
 		recallTransactions, err = getRecallTransactions(ctx, c, rpc)
@@ -534,6 +510,30 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			Int("erc721", len(indexedActivity.ERC721Addresses)).
 			Int("contracts", len(indexedActivity.Contracts)).
 			Msg("retrieved recent indexed activity")
+	}
+
+	var uniswapV3Config uniswapv3loadtest.UniswapV3Config
+	var poolConfig uniswapv3loadtest.PoolConfig
+	if mode == loadTestModeUniswapV3 {
+		uniswapAddresses := uniswapv3loadtest.UniswapV3Addresses{
+			FactoryV3:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapFactoryV3),
+			Multicall:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMulticall),
+			ProxyAdmin:                         ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapProxyAdmin),
+			TickLens:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapTickLens),
+			NFTDescriptorLib:                   ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNFTLibDescriptor),
+			NonfungibleTokenPositionDescriptor: ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNonfungibleTokenPositionDescriptor),
+			TransparentUpgradeableProxy:        ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapUpgradeableProxy),
+			NonfungiblePositionManager:         ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapNonfungiblePositionManager),
+			Migrator:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMigrator),
+			Staker:                             ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapStaker),
+			QuoterV2:                           ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapQuoterV2),
+			SwapRouter02:                       ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapSwapRouter),
+			WETH9:                              ethcommon.HexToAddress(*uniswapv3LoadTestParams.WETH9),
+		}
+		uniswapV3Config, poolConfig, err = initUniswapV3Loadtest(ctx, c, tops, cops, uniswapAddresses, *ltp.FromETHAddress)
+		if err != nil {
+			return err
+		}
 	}
 
 	var i int64
