@@ -1,15 +1,12 @@
 ##@ Clients
+HOST?=127.0.0.1
 PORT?=8545
-LOADTEST_ACCOUNT=0x85da99c8a7c2c95964c8efd687e95e632fc533d6
-LOADTEST_FUNDING_AMOUNT_ETH=100000
-eth_coinbase := $(shell curl -s -H 'Content-Type: application/json' -d '{"jsonrpc": "2.0", "id": 2, "method": "eth_coinbase", "params": []}' http://127.0.0.1:${PORT} | jq -r ".result")
-hex_funding_amount := $(shell echo "obase=16; ${LOADTEST_FUNDING_AMOUNT_ETH}*10^18" | bc)
+CHAIN_ID=1337
 
 .PHONY: geth
 geth: ## Start a local geth node.
 	geth \
 		--dev \
-		--dev.period 2 \
 		--http \
 		--http.addr localhost \
 		--http.port $(PORT) \
@@ -25,22 +22,34 @@ geth: ## Start a local geth node.
 		--gpo.ignoreprice 2 \
 		--dev.gaslimit 100000000000
 
+.PHONY: anvil
+anvil: ## Start a local anvil node.
+	anvil \
+		--host ${HOST} \
+		--port $(PORT) \
+		--chain-id ${CHAIN_ID} \
+		--balance 999999999999999
+
+LOADTEST_ACCOUNT=0x85da99c8a7c2c95964c8efd687e95e632fc533d6
+LOADTEST_FUNDING_AMOUNT_ETH=1010000000
+eth_coinbase := $(shell curl -s -H 'Content-Type: application/json' -d '{"jsonrpc": "2.0", "id": 2, "method": "eth_accounts", "params": []}' http://${HOST}:${PORT} | jq -r ".result[0]")
+hex_funding_amount := $(shell echo "obase=16; ${LOADTEST_FUNDING_AMOUNT_ETH}*10^18" | bc)
 .PHONY: fund
 fund: ## Fund the loadtest account with 100k ETH.
 	curl \
 		-H "Content-Type: application/json" \
 		-d '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "${eth_coinbase}","to": "${LOADTEST_ACCOUNT}","value": "0x${hex_funding_amount}"}], "id":1}' \
-		http://127.0.0.1:${PORT}
+		-s \
+		http://${HOST}:${PORT} | jq
 
-.PHONY: geth-loadtest
-geth-loadtest: build fund ## Run loadtest against an EVM/Geth chain.
-	sleep 5
-	$(BUILD_DIR)/$(BIN_NAME) loadtest \
-		--verbosity 700 \
-		--rpc-url http://127.0.0.1:$(PORT) \
-		--chain-id 1337 \
+.PHONY: loadtest
+loadtest: fund ## Run random loadtest against a local RPC.
+	sleep 2
+	go run main.go loadtest \
+		--verbosity 600 \
+		--rpc-url http://${HOST}:$(PORT) \
+		--chain-id ${CHAIN_ID} \
 		--mode random \
 		--concurrency 1 \
 		--requests 1000 \
-		--rate-limit 100 \
-		--legacy
+		--rate-limit 100
