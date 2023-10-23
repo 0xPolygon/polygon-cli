@@ -254,7 +254,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode && !*inputLoadTestParams.CallOnly {
 		return errors.New("rpc mode must be called with call-only when multiple modes are used")
 	} else if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) {
-		log.Trace().Msg("setting call only mode since we're doing RPC testing")
+		log.Trace().Msg("Setting call only mode since we're doing RPC testing")
 		*inputLoadTestParams.CallOnly = true
 	}
 	// TODO check for duplicate modes?
@@ -316,11 +316,11 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 	var err error
 	finalBlockNumber, err = waitForFinalBlock(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
 	if err != nil {
-		log.Error().Err(err).Msg("there was an issue waiting for all transactions to be mined")
+		log.Error().Err(err).Msg("There was an issue waiting for all transactions to be mined")
 	}
 	endTime := time.Now()
 	startTime := loadTestResults[0].RequestTime
-	log.Debug().Uint64("currentNonce", currentNonce).Uint64("final block number", finalBlockNumber).Msg("got final block number")
+	log.Debug().Uint64("currentNonce", currentNonce).Uint64("final block number", finalBlockNumber).Msg("Got final block number")
 
 	if *inputLoadTestParams.ShouldProduceSummary {
 		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
@@ -493,7 +493,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		if len(recallTransactions) == 0 {
 			return errors.New("we weren't able to fetch any recall transactions")
 		}
-		log.Debug().Int("txs", len(recallTransactions)).Msg("retrieved transactions for total recall")
+		log.Debug().Int("txs", len(recallTransactions)).Msg("Retrieved transactions for total recall")
 	}
 
 	var indexedActivity *IndexedActivity
@@ -509,7 +509,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			Int("erc20s", len(indexedActivity.ERC20Addresses)).
 			Int("erc721", len(indexedActivity.ERC721Addresses)).
 			Int("contracts", len(indexedActivity.Contracts)).
-			Msg("retrieved recent indexed activity")
+			Msg("Retrieved recent indexed activity")
 	}
 
 	var uniswapV3Config uniswapv3loadtest.UniswapV3Config
@@ -784,7 +784,7 @@ func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() err
 				blockDiff = currentBlockNumber % currStartBlockNumber
 			}
 			if blockDiff > numberOfBlocksToWaitFor {
-				log.Error().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("waiting period exhausted")
+				log.Error().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Waiting period exhausted")
 				return errWaitingPeriodExhausted
 			}
 
@@ -1280,7 +1280,7 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *Ind
 			Str("erc721str", erc721Str).
 			Str("erc20addr", erc20Addr.String()).
 			Str("erc721addr", erc721Addr.String()).
-			Msg("retrieve contract addresses")
+			Msg("Retrieve contract addresses")
 		cops := new(bind.CallOpts)
 		cops.Context = ctx
 		var erc721Contract *tokens.ERC721

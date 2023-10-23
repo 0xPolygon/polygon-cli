@@ -3,12 +3,13 @@ package loadtest
 import (
 	"context"
 	"encoding/json"
-	"golang.org/x/time/rate"
 	"math"
 	"math/big"
 	"sort"
 	"sync"
 	"time"
+
+	"golang.org/x/time/rate"
 
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
@@ -442,6 +443,6 @@ func lightSummary(lts []loadTestSample, startTime, endTime time.Time, rl *rate.L
 	log.Info().
 		Float64("testDuration (seconds)", testDuration.Seconds()).
 		Float64("final rate limit", rlLimit).
-		Msg("rough test summary")
+		Msg("Rough test summary")
 	log.Info().Uint64("numErrors", numErrors).Msg("Num errors")
 }
