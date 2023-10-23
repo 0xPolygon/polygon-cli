@@ -51,5 +51,5 @@ loadtest: fund ## Run random loadtest against a local RPC.
 		--chain-id ${CHAIN_ID} \
 		--mode random \
 		--concurrency 1 \
-		--requests 1000 \
+		--requests 200 \
 		--rate-limit 100
