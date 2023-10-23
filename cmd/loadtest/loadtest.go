@@ -318,19 +318,21 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 	if err != nil {
 		log.Error().Err(err).Msg("There was an issue waiting for all transactions to be mined")
 	}
-	if len(loadTestResults) > 0 {
-		startTime := loadTestResults[0].RequestTime
-		endTime := time.Now()
-		log.Debug().Uint64("currentNonce", currentNonce).Uint64("final block number", finalBlockNumber).Msg("Got final block number")
-
-		if *inputLoadTestParams.ShouldProduceSummary {
-			err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
-			if err != nil {
-				log.Error().Err(err).Msg("There was an issue creating the load test summary")
-			}
-		}
-		lightSummary(loadTestResults, startTime, endTime, rl)
+	if len(loadTestResults) == 0 {
+		return errors.New("no transactions observed")
 	}
+
+	startTime := loadTestResults[0].RequestTime
+	endTime := time.Now()
+	log.Debug().Uint64("currentNonce", currentNonce).Uint64("final block number", finalBlockNumber).Msg("Got final block number")
+
+	if *inputLoadTestParams.ShouldProduceSummary {
+		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
+		if err != nil {
+			log.Error().Err(err).Msg("There was an issue creating the load test summary")
+		}
+	}
+	lightSummary(loadTestResults, startTime, endTime, rl)
 
 	return nil
 }
