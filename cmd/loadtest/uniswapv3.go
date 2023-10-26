@@ -25,7 +25,7 @@ var (
 )
 
 var uniswapV3LoadTestCmd = &cobra.Command{
-	Use:   "uniswapv3 url",
+	Use:   "uniswapv3",
 	Short: "Run Uniswapv3-like load test against an Eth/EVm style JSON-RPC endpoint.",
 	Long:  uniswapv3Usage,
 	Args:  cobra.NoArgs,
