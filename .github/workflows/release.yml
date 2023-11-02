@@ -22,13 +22,13 @@ jobs:
       - uses: actions/setup-go@v3
         with:
           go-version: ${{ env.GO_VERSION }}
-      - name: perform cross build and compress binaries
+
+      - name: Install packages
+        run: sudo apt-get update && sudo apt-get install --yes gcc-aarch64-linux-gnu
+
+      - name: Perform cross build and compress binaries
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-
-          pwd
           make cross
           pushd out
           echo -n "${{github.ref_name}}" | sed 's/^v//' | tee ref_name.txt
@@ -51,8 +51,7 @@ jobs:
           mv linux-arm64-polycli polycli_${tag_name}_linux_arm64/polycli
           tar czf polycli_${tag_name}_linux_arm64.tar.gz polycli_${tag_name}_linux_arm64/
 
-          popd
-      - name: publish binaries
+      - name: Publish binaries
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
