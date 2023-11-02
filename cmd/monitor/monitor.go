@@ -512,7 +512,8 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 	currentBn := ms.HeadBlock
 	uiEvents := ui.PollEvents()
-	ticker := time.NewTicker(time.Second).C
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 
 	redraw(ms)
 
@@ -653,7 +654,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			if !forceRedraw {
 				redraw(ms)
 			}
-		case <-ticker:
+		case <-ticker.C:
 			if currentBn != ms.HeadBlock {
 				currentBn = ms.HeadBlock
 				redraw(ms)
