@@ -30,9 +30,13 @@ func Dial(n *enode.Node) (*rlpxConn, error) {
 
 	conn := rlpxConn{
 		Conn:   rlpx.NewConn(fd, n.Pubkey()),
-		caps:   []p2p.Cap{{Name: "eth", Version: 66}},
 		node:   n,
 		logger: log.With().Str("peer", n.URLv4()).Logger(),
+		caps: []p2p.Cap{
+			{Name: "eth", Version: 66},
+			{Name: "eth", Version: 67},
+			{Name: "eth", Version: 68},
+		},
 	}
 
 	if conn.ourKey, err = crypto.GenerateKey(); err != nil {
