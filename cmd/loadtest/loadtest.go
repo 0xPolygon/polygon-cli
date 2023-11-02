@@ -23,6 +23,7 @@ import (
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
 
+	"github.com/cenkalti/backoff/v4"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -63,8 +64,6 @@ const (
 	codeQualitySeed       = "code code code code code code code code code code code quality"
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
 )
-
-var errWaitingPeriodExhausted = errors.New("waiting period exhausted")
 
 func characterToLoadTestMode(mode string) (loadTestMode, error) {
 	switch mode {
@@ -759,66 +758,10 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 	return
 }
 
-func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, f func() error) error {
-	numberOfBlocksToWaitFor := *inputLoadTestParams.ContractCallNumberOfBlocksToWaitFor
-	blockInterval := *inputLoadTestParams.ContractCallBlockInterval
-	start := time.Now()
-	currStartBlockNumber, err := c.BlockNumber(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("Error getting block number")
-		return err
-	}
-	log.Trace().
-		Uint64("currStartBlockNumber", currStartBlockNumber).
-		Uint64("numberOfBlocksToWaitFor", numberOfBlocksToWaitFor).
-		Uint64("blockInterval", blockInterval).
-		Msg("Starting blocking loop")
-	var lastBlockNumber, currentBlockNumber uint64
-	var lock bool
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			elapsed := time.Since(start)
-			var blockDiff uint64
-			if currStartBlockNumber == 0 {
-				blockDiff = currStartBlockNumber
-			} else {
-				blockDiff = currentBlockNumber % currStartBlockNumber
-			}
-			if blockDiff > numberOfBlocksToWaitFor {
-				log.Error().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Waiting period exhausted")
-				return errWaitingPeriodExhausted
-			}
-
-			currentBlockNumber, err = c.BlockNumber(ctx)
-			if err != nil {
-				log.Error().Err(err).Msg("Error getting block number")
-				return err
-			} else {
-				log.Trace().Uint64("newBlock", currentBlockNumber).Msg("New block")
-			}
-
-			if currentBlockNumber != lastBlockNumber {
-				lock = false
-			}
-			// Note: blockInterval > 0 (enforced at the flag level).
-			if blockDiff%blockInterval == 0 {
-				if !lock {
-					lock = true
-					err := f()
-					if err == nil {
-						log.Trace().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Function executed successfully")
-						return nil
-					}
-					log.Trace().Err(err).Dur("elapsedTimeSeconds", elapsed).Msg("Unable to execute function")
-				}
-			}
-			lastBlockNumber = currentBlockNumber
-			time.Sleep(time.Second)
-		}
-	}
+func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, retryable func() error) error {
+	// this function use to be very complicated (and not work). I'm dumbing this down to a basic time based retryable which should work 99% of the time
+	b := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(5*time.Second), 24), ctx)
+	return backoff.Retry(retryable, b)
 }
 
 func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
