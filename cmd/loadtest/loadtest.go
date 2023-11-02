@@ -65,8 +65,6 @@ const (
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
 )
 
-var errWaitingPeriodExhausted = errors.New("waiting period exhausted")
-
 func characterToLoadTestMode(mode string) (loadTestMode, error) {
 	switch mode {
 	case "t", "transaction":
