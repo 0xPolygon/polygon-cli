@@ -45,8 +45,8 @@ type conn struct {
 	oldestBlock *types.Header
 }
 
-// Eth66ProtocolOptions is the options used when creating a new eth66 protocol.
-type Eth66ProtocolOptions struct {
+// EthProtocolOptions is the options used when creating a new eth protocol.
+type EthProtocolOptions struct {
 	Context     context.Context
 	Database    database.Database
 	Genesis     *core.Genesis
@@ -70,12 +70,12 @@ type HeadBlock struct {
 	Number          uint64
 }
 
-// NewEth66Proctocol creates the new eth66 protocol. This will handle writing the
+// NewEthProctocol creates the new eth protocol. This will handle writing the
 // status exchange, message handling, and writing blocks/txs to the database.
-func NewEth66Protocol(opts Eth66ProtocolOptions) ethp2p.Protocol {
+func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 	return ethp2p.Protocol{
 		Name:    "eth",
-		Version: 66,
+		Version: version,
 		Length:  17,
 		Run: func(p *ethp2p.Peer, rw ethp2p.MsgReadWriter) error {
 			c := conn{
@@ -134,7 +134,7 @@ func NewEth66Protocol(opts Eth66ProtocolOptions) ethp2p.Protocol {
 				case eth.NewBlockMsg:
 					err = c.handleNewBlock(ctx, msg)
 				case eth.NewPooledTransactionHashesMsg:
-					err = c.handleNewPooledTransactionHashes(ctx, msg)
+					err = c.handleNewPooledTransactionHashes(ctx, version, msg)
 				case eth.GetPooledTransactionsMsg:
 					err = c.handleGetPooledTransactions(msg)
 				case eth.PooledTransactionsMsg:
@@ -412,19 +412,31 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 		&eth.PooledTransactionsPacket66{RequestId: request.RequestId})
 }
 
-func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, msg ethp2p.Msg) error {
-	var txs eth.NewPooledTransactionHashesPacket66
-	if err := msg.Decode(&txs); err != nil {
-		return err
+func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, version uint, msg ethp2p.Msg) error {
+	var hashes []common.Hash
+
+	switch version {
+	case 66, 67:
+		var txs eth.NewPooledTransactionHashesPacket66
+		if err := msg.Decode(&txs); err != nil {
+			return err
+		}
+		hashes = txs
+	case 68:
+		var txs eth.NewPooledTransactionHashesPacket68
+		if err := msg.Decode(&txs); err != nil {
+			return err
+		}
+		hashes = txs.Hashes
+	default:
+		return errors.New("protocol version not found")
 	}
 
-	atomic.AddInt32(&c.count.TransactionHashes, int32(len(txs)))
+	atomic.AddInt32(&c.count.TransactionHashes, int32(len(hashes)))
 
 	if !c.db.ShouldWriteTransactions() || !c.db.ShouldWriteTransactionEvents() {
 		return nil
 	}
-
-	var hashes []common.Hash = txs
 
 	return ethp2p.Send(
 		c.rw,
