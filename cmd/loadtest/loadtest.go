@@ -760,7 +760,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 
 func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, retryable func() error) error {
 	// this function use to be very complicated (and not work). I'm dumbing this down to a basic time based retryable which should work 99% of the time
-	b := backoff.WithMaxRetries(backoff.NewConstantBackOff(5*time.Second), 24)
+	b := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(5*time.Second), 24), ctx)
 	return backoff.Retry(retryable, b)
 }
 
