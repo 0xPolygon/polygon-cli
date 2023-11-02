@@ -365,17 +365,17 @@ func runLoadTest(ctx context.Context) error {
 	// Make sure to define any logic associated to the load test (initialization, main load test loop
 	// or ven completion steps) in this function in order to handle cancellation signals properly.
 	loopFunc := func() error {
-		if err := initializeLoadTestParams(ctx, ec); err != nil {
+		if initializeLoadTestParams(ctx, ec) != nil {
 			log.Error().Err(err).Msg("Error initializing load test parameters")
 			return err
 		}
 
-		if err := mainLoop(ctx, ec, rpc); err != nil {
+		if mainLoop(ctx, ec, rpc) != nil {
 			log.Error().Err(err).Msg("Error during the main load test loop")
 			return err
 		}
 
-		if err := completeLoadTest(ctx, ec, rpc); err != nil {
+		if completeLoadTest(ctx, ec, rpc) != nil {
 			log.Error().Err(err).Msg("Encountered error while wrapping up loadtest")
 		}
 		return nil
