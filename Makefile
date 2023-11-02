@@ -41,17 +41,19 @@ install: build ## Install the go binary.
 
 .PHONY: cross
 cross: $(BUILD_DIR) ## Cross-compile go binaries using CGO.
-# Note: `go build -s -w` enables to strip debug and suppress warnings.
+# Notes:
+# - `-s -w` enables to strip debug and suppress warnings.
+# - `-linkmode external -extldflags "-static-libgo"` allows dynamic linking.
 	echo "Building linux-arm64-$(BIN_NAME)..."
 	CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build \
-			-ldflags "$(VERSION_FLAGS) -s -w -linkmode external -extldflags "-static-libgo"" \
+			-ldflags '$(VERSION_FLAGS) -s -w -linkmode external -extldflags "-static-libgo"' \
 			-tags netgo \
 			-o $(BUILD_DIR)/linux-arm64-$(BIN_NAME) \
 			main.go
 
 	echo "Building linux-amd64-$(BIN_NAME)..."
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
-			-ldflags "$(VERSION_FLAGS) -s -w -linkmode external -extldflags "-static-libgo"" \
+			-ldflags '$(VERSION_FLAGS) -s -w -linkmode external -extldflags "-static-libgo"' \
 			-tags netgo \
 			-o $(BUILD_DIR)/linux-amd64-$(BIN_NAME) \
 			main.go
