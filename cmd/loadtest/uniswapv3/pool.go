@@ -19,7 +19,7 @@ var (
 	poolReserveForOneToken = big.NewInt(1_000_000_000_000)
 
 	// The timeout of the mint operation (liquidity providing).
-	mintOperationTimeout = 10 * time.Second
+	mintOperationTimeout = 1 * time.Hour
 )
 
 // The maximum tick that may be passed to `getSqrtRatioAtTick` computed from log base 1.0001 of 2**128.

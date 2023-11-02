@@ -36,43 +36,41 @@ type (
 	}
 	loadTestParams struct {
 		// inputs
-		RPCUrl                              *string
-		Requests                            *int64
-		Concurrency                         *int64
-		BatchSize                           *uint64
-		TimeLimit                           *int64
-		ToRandom                            *bool
-		CallOnly                            *bool
-		CallOnlyLatestBlock                 *bool
-		ChainID                             *uint64
-		PrivateKey                          *string
-		ToAddress                           *string
-		HexSendAmount                       *string
-		RateLimit                           *float64
-		AdaptiveRateLimit                   *bool
-		SteadyStateTxPoolSize               *uint64
-		AdaptiveRateLimitIncrement          *uint64
-		AdaptiveCycleDuration               *uint64
-		AdaptiveBackoffFactor               *float64
-		Modes                               *[]string
-		Function                            *uint64
-		Iterations                          *uint64
-		ByteCount                           *uint64
-		Seed                                *int64
-		LtAddress                           *string
-		ERC20Address                        *string
-		ERC721Address                       *string
-		DelAddress                          *string
-		ContractCallNumberOfBlocksToWaitFor *uint64
-		ContractCallBlockInterval           *uint64
-		ForceContractDeploy                 *bool
-		ForceGasLimit                       *uint64
-		ForceGasPrice                       *uint64
-		ForcePriorityGasPrice               *uint64
-		ShouldProduceSummary                *bool
-		SummaryOutputMode                   *string
-		LegacyTransactionMode               *bool
-		RecallLength                        *uint64
+		RPCUrl                     *string
+		Requests                   *int64
+		Concurrency                *int64
+		BatchSize                  *uint64
+		TimeLimit                  *int64
+		ToRandom                   *bool
+		CallOnly                   *bool
+		CallOnlyLatestBlock        *bool
+		ChainID                    *uint64
+		PrivateKey                 *string
+		ToAddress                  *string
+		HexSendAmount              *string
+		RateLimit                  *float64
+		AdaptiveRateLimit          *bool
+		SteadyStateTxPoolSize      *uint64
+		AdaptiveRateLimitIncrement *uint64
+		AdaptiveCycleDuration      *uint64
+		AdaptiveBackoffFactor      *float64
+		Modes                      *[]string
+		Function                   *uint64
+		Iterations                 *uint64
+		ByteCount                  *uint64
+		Seed                       *int64
+		LtAddress                  *string
+		ERC20Address               *string
+		ERC721Address              *string
+		DelAddress                 *string
+		ForceContractDeploy        *bool
+		ForceGasLimit              *uint64
+		ForceGasPrice              *uint64
+		ForcePriorityGasPrice      *uint64
+		ShouldProduceSummary       *bool
+		SummaryOutputMode          *string
+		LegacyTransactionMode      *bool
+		RecallLength               *uint64
 
 		// Computed
 		CurrentGasPrice     *big.Int
@@ -184,10 +182,6 @@ func checkLoadtestFlags() error {
 		return fmt.Errorf("the backoff factor needs to be non-zero positive")
 	}
 
-	if ltp.ContractCallBlockInterval != nil && *ltp.ContractCallBlockInterval == 0 {
-		return fmt.Errorf("the contract call block interval must be strictly positive")
-	}
-
 	return nil
 }
 
@@ -219,8 +213,6 @@ func initFlags() {
 	ltp.AdaptiveBackoffFactor = LoadtestCmd.PersistentFlags().Float64("adaptive-backoff-factor", 2, "When using adaptive rate limiting, this flag controls our multiplicative decrease value.")
 	ltp.Iterations = LoadtestCmd.PersistentFlags().Uint64P("iterations", "i", 1, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size")
 	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
-	ltp.ContractCallNumberOfBlocksToWaitFor = LoadtestCmd.PersistentFlags().Uint64("contract-call-nb-blocks-to-wait-for", 30, "The number of blocks to wait for before giving up on a contract deployment")
-	ltp.ContractCallBlockInterval = LoadtestCmd.PersistentFlags().Uint64("contract-call-block-interval", 1, "During deployment, this flag controls if we should check every block, every other block, or every nth block to determine that the contract has been deployed")
 	ltp.ForceGasLimit = LoadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas")
 	ltp.ForceGasPrice = LoadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be determined automatically, we can specify it manually")
 	ltp.ForcePriorityGasPrice = LoadtestCmd.PersistentFlags().Uint64("priority-gas-price", 0, "Specify Gas Tip Price in the case of EIP-1559")
