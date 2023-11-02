@@ -336,9 +336,13 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 	return nil
 }
 
+// runLoadTest initiates and runs the entire load test process, including initialization,
+// the main load test loop, and the completion steps. It takes a context for cancellation signals.
+// The function returns an error if there are issues during the load test process.
 func runLoadTest(ctx context.Context) error {
 	log.Info().Msg("Starting Load Test")
 
+	// Configure the overall time limit for the load test.
 	timeLimit := *inputLoadTestParams.TimeLimit
 	var overallTimer *time.Timer
 	if timeLimit > 0 {
@@ -347,20 +351,27 @@ func runLoadTest(ctx context.Context) error {
 		overallTimer = new(time.Timer)
 	}
 
+	// // Dial the Ethereum RPC server.
 	rpc, err := ethrpc.DialContext(ctx, *inputLoadTestParams.RPCUrl)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to dial rpc")
 		return err
 	}
+	defer rpc.Close()
 	rpc.SetHeader("Accept-Encoding", "identity")
 	ec := ethclient.NewClient(rpc)
 
+	// Define the main loop function.
+	// Make sure to define any logic associated to the load test (initialization, main load test loop
+	// or ven completion steps) in this function in order to handle cancellation signals properly.
 	loopFunc := func() error {
 		if err := initializeLoadTestParams(ctx, ec); err != nil {
+			log.Error().Err(err).Msg("Error initializing load test parameters")
 			return err
 		}
 
 		if err := mainLoop(ctx, ec, rpc); err != nil {
+			log.Error().Err(err).Msg("Error during the main load test loop")
 			return err
 		}
 
@@ -370,27 +381,28 @@ func runLoadTest(ctx context.Context) error {
 		return nil
 	}
 
+	// Set up signal handling for interrupts.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt)
 
+	// // Initialize channels for handling errors and running the main loop.
 	loadTestResults = make([]loadTestSample, 0)
 	errCh := make(chan error)
 	go func() {
 		errCh <- loopFunc()
 	}()
 
+	// // Wait for the load test to complete, either due to time limit, interrupt signal, or completion.
 	select {
 	case <-overallTimer.C:
 		log.Info().Msg("Time's up")
 	case <-sigCh:
 		log.Info().Msg("Interrupted.. Stopping load test")
-		return nil
 	case err = <-errCh:
 		if err != nil {
 			log.Fatal().Err(err).Msg("Received critical error while running load test")
 		}
 	}
-
 	log.Info().Msg("Finished")
 	return nil
 }
