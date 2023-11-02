@@ -169,7 +169,7 @@ var SensorCmd = &cobra.Command{
 			Number:          block.Number.ToUint64(),
 		}
 
-		opts := p2p.Eth66ProtocolOptions{
+		opts := p2p.EthProtocolOptions{
 			Context:     cmd.Context(),
 			Database:    db,
 			Genesis:     &inputSensorParams.genesis,
@@ -190,11 +190,15 @@ var SensorCmd = &cobra.Command{
 			MaxPeers:       inputSensorParams.MaxPeers,
 			ListenAddr:     fmt.Sprintf(":%d", inputSensorParams.Port),
 			DiscAddr:       fmt.Sprintf(":%d", inputSensorParams.DiscoveryPort),
-			Protocols:      []ethp2p.Protocol{p2p.NewEth66Protocol(opts)},
 			DialRatio:      inputSensorParams.DialRatio,
 			NAT:            inputSensorParams.nat,
 			DiscoveryV4:    true,
 			DiscoveryV5:    true,
+			Protocols: []ethp2p.Protocol{
+				p2p.NewEthProtocol(66, opts),
+				p2p.NewEthProtocol(67, opts),
+				p2p.NewEthProtocol(68, opts),
+			},
 		}
 
 		if inputSensorParams.QuickStart {

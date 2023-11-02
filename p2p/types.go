@@ -156,7 +156,7 @@ type rlpxConn struct {
 	logger zerolog.Logger
 }
 
-// Read reads an eth66 packet from the connection.
+// Read reads an eth protocol packet from the connection.
 func (c *rlpxConn) Read() Message {
 	code, rawData, _, err := c.Conn.Read()
 	if err != nil {
