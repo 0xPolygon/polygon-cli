@@ -356,12 +356,18 @@ func runLoadTest(ctx context.Context) error {
 	ec := ethclient.NewClient(rpc)
 
 	loopFunc := func() error {
-		err = initializeLoadTestParams(ctx, ec)
-		if err != nil {
+		if err := initializeLoadTestParams(ctx, ec); err != nil {
 			return err
 		}
 
-		return mainLoop(ctx, ec, rpc)
+		if err := mainLoop(ctx, ec, rpc); err != nil {
+			return err
+		}
+
+		if err := completeLoadTest(ctx, ec, rpc); err != nil {
+			log.Error().Err(err).Msg("Encountered error while wrapping up loadtest")
+		}
+		return nil
 	}
 
 	sigCh := make(chan os.Signal, 1)
@@ -383,11 +389,6 @@ func runLoadTest(ctx context.Context) error {
 		if err != nil {
 			log.Fatal().Err(err).Msg("Received critical error while running load test")
 		}
-	}
-
-	err = completeLoadTest(ctx, ec, rpc)
-	if err != nil {
-		log.Error().Err(err).Msg("Encountered error while wrapping up loadtest")
 	}
 
 	log.Info().Msg("Finished")
