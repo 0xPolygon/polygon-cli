@@ -351,7 +351,7 @@ func runLoadTest(ctx context.Context) error {
 		overallTimer = new(time.Timer)
 	}
 
-	// // Dial the Ethereum RPC server.
+	// Dial the Ethereum RPC server.
 	rpc, err := ethrpc.DialContext(ctx, *inputLoadTestParams.RPCUrl)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to dial rpc")
@@ -385,14 +385,14 @@ func runLoadTest(ctx context.Context) error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt)
 
-	// // Initialize channels for handling errors and running the main loop.
+	// Initialize channels for handling errors and running the main loop.
 	loadTestResults = make([]loadTestSample, 0)
 	errCh := make(chan error)
 	go func() {
 		errCh <- loopFunc()
 	}()
 
-	// // Wait for the load test to complete, either due to time limit, interrupt signal, or completion.
+	// Wait for the load test to complete, either due to time limit, interrupt signal, or completion.
 	select {
 	case <-overallTimer.C:
 		log.Info().Msg("Time's up")
