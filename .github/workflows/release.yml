@@ -37,15 +37,14 @@ jobs:
           tar czf polycli_${GITHUB_REF#refs/tags/}_linux_amd64.tar.gz polycli_${GITHUB_REF#refs/tags/}_linux_amd64/
 
       - name: Get git tag
-        id: get_tag
-        run: echo "::set-output name=tag::$(git describe --tags --exact-match HEAD)"
+        run: echo "tag=$(git describe --tags --exact-match HEAD)" >> $GITHUB_ENV
 
       - name: Publish binaries
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ steps.get_tag.outputs.tag }}
-          release_name: ${{ steps.get_tag.outputs.tag }}
+          tag: ${{ env.tag }}
+          release_name: ${{ env.tag }}
           file_glob: true
           file: out/*.tar.gz
           overwrite: true
