@@ -93,7 +93,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 
 			c.headMutex.RLock()
 			status := eth.StatusPacket{
-				ProtocolVersion: 66,
+				ProtocolVersion: uint32(version),
 				NetworkID:       opts.NetworkID,
 				Genesis:         opts.GenesisHash,
 				ForkID:          forkid.NewID(opts.Genesis.Config, opts.Genesis.ToBlock(), opts.Head.Number, uint64(time.Now().Unix())),
