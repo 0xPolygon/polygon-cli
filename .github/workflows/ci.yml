@@ -1,4 +1,4 @@
-name: CI
+name: ci
 
 on:
   push:
@@ -52,6 +52,7 @@ jobs:
           else
             echo "✅ The documentation is up to date."
           fi
+
   test:
     name: Test
     runs-on: ubuntu-latest
