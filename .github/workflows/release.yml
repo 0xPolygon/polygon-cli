@@ -35,21 +35,13 @@ jobs:
           readonly tag_name="$(cat ref_name.txt)"
           echo "$tag_name"
 
-          mkdir polycli_${tag_name}_darwin_amd64/
-          mv darwin-amd64-polycli polycli_${tag_name}_darwin_amd64/polycli
-          tar czf polycli_${tag_name}_darwin_amd64.tar.gz polycli_${tag_name}_darwin_amd64/
-
-          mkdir polycli_${tag_name}_darwin_arm64/
-          mv darwin-arm64-polycli polycli_${tag_name}_darwin_arm64/polycli
-          tar czf polycli_${tag_name}_darwin_arm64.tar.gz polycli_${tag_name}_darwin_arm64/
+          mkdir polycli_${tag_name}_linux_arm64/
+          mv linux-arm64-polycli polycli_${tag_name}_linux_arm64/polycli
+          tar czf polycli_${tag_name}_linux_arm64.tar.gz polycli_${tag_name}_linux_arm64/
 
           mkdir polycli_${tag_name}_linux_amd64/
           mv linux-amd64-polycli polycli_${tag_name}_linux_amd64/polycli
           tar czf polycli_${tag_name}_linux_amd64.tar.gz polycli_${tag_name}_linux_amd64/
-
-          mkdir polycli_${tag_name}_linux_arm64/
-          mv linux-arm64-polycli polycli_${tag_name}_linux_arm64/polycli
-          tar czf polycli_${tag_name}_linux_arm64.tar.gz polycli_${tag_name}_linux_arm64/
 
       - name: Publish binaries
         uses: svenstaro/upload-release-action@v2
