@@ -102,20 +102,25 @@ func monitor(ctx context.Context) error {
 	isUiRendered := false
 	errChan := make(chan error)
 	go func() {
-		for {
-			err = fetchBlocks(ctx, ec, ms, rpc, isUiRendered)
-			if err != nil {
-				continue
-			}
+		select {
+		case <-ctx.Done(): // listens for a cancellation signal
+			return // exit the goroutine when the context is done
+		default:
+			for {
+				err = fetchBlocks(ctx, ec, ms, rpc, isUiRendered)
+				if err != nil {
+					continue
+				}
 
-			if !isUiRendered {
-				go func() {
-					errChan <- renderMonitorUI(ctx, ec, ms, rpc)
-				}()
-				isUiRendered = true
-			}
+				if !isUiRendered {
+					go func() {
+						errChan <- renderMonitorUI(ctx, ec, ms, rpc)
+					}()
+					isUiRendered = true
+				}
 
-			time.Sleep(interval)
+				time.Sleep(interval)
+			}
 		}
 	}()
 
