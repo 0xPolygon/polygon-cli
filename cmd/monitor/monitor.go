@@ -80,7 +80,26 @@ const (
 	monitorModeHelp monitorMode = iota
 	monitorModeExplorer
 	monitorModeBlock
+	maxBlocksHistory = 1000
 )
+
+func cleanupOldData(ms *monitorStatus) {
+	ms.BlocksLock.Lock()
+	defer ms.BlocksLock.Unlock()
+
+	// Assuming the keys in ms.Blocks are strings that represent sorted integers
+	for len(ms.Blocks) > maxBlocksHistory {
+		var oldestKey string
+		for k := range ms.Blocks {
+			if oldestKey == "" || k < oldestKey {
+				oldestKey = k
+			}
+		}
+		if oldestKey != "" {
+			delete(ms.Blocks, oldestKey)
+		}
+	}
+}
 
 func monitor(ctx context.Context) error {
 	rpc, err := ethrpc.DialContext(ctx, rpcUrl)
@@ -93,7 +112,7 @@ func monitor(ctx context.Context) error {
 	ms := new(monitorStatus)
 	ms.MaxBlockRetrieved = big.NewInt(0)
 	ms.BlocksLock.Lock()
-	ms.Blocks = make(map[string]rpctypes.PolyBlock, 0)
+	ms.Blocks = make(map[string]rpctypes.PolyBlock, maxBlocksHistory)
 	ms.BlocksLock.Unlock()
 	ms.ChainID = big.NewInt(0)
 	ms.PendingCount = 0
@@ -192,6 +211,9 @@ func prependLatestBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Cli
 	err := ms.getBlockRange(ctx, from, ms.HeadBlock, rpc)
 	if err != nil {
 		log.Error().Err(err).Msg("There was an issue fetching the block range")
+	} else {
+		// Call cleanup after successfully fetching the latest blocks
+		cleanupOldData(ms)
 	}
 }
 
@@ -221,6 +243,9 @@ func appendOlderBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Clien
 	if err != nil {
 		log.Error().Err(err).Msg("There was an issue fetching the block range")
 		return err
+	} else {
+		// Call cleanup after successfully fetching the latest blocks
+		cleanupOldData(ms)
 	}
 	return nil
 }
