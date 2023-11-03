@@ -1,4 +1,4 @@
-name: polycli-releaser
+name: release
 
 on:
   push:
@@ -8,8 +8,6 @@ on:
 
 permissions:
   contents: write
-  # packages: write
-  # issues: write
 
 env:
   GO_VERSION: "1.21"
@@ -18,36 +16,36 @@ jobs:
   manual-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - name: Checkout sources
+        uses: actions/checkout@v3
+
+      - name: Install go
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Install packages
         run: sudo apt-get update && sudo apt-get install --yes gcc-aarch64-linux-gnu
 
-      - name: Perform cross build and compress binaries
-        shell: bash
+      - name: Perform cross builds
+        run: make cross
+
+      - name: Compress binaries
         run: |
-          make cross
-          pushd out
-          echo -n "${{github.ref_name}}" | sed 's/^v//' | tee ref_name.txt
-          readonly tag_name="$(cat ref_name.txt)"
-          echo "$tag_name"
+          cd out
+          tar czf polycli_${GITHUB_REF#refs/tags/}_linux_arm64.tar.gz polycli_${GITHUB_REF#refs/tags/}_linux_arm64/
+          tar czf polycli_${GITHUB_REF#refs/tags/}_linux_amd64.tar.gz polycli_${GITHUB_REF#refs/tags/}_linux_amd64/
 
-          mkdir polycli_${tag_name}_linux_arm64/
-          mv linux-arm64-polycli polycli_${tag_name}_linux_arm64/polycli
-          tar czf polycli_${tag_name}_linux_arm64.tar.gz polycli_${tag_name}_linux_arm64/
-
-          mkdir polycli_${tag_name}_linux_amd64/
-          mv linux-amd64-polycli polycli_${tag_name}_linux_amd64/polycli
-          tar czf polycli_${tag_name}_linux_amd64.tar.gz polycli_${tag_name}_linux_amd64/
+      - name: Get git tag
+        id: get_tag
+        run: echo "::set-output name=tag::$(git describe --tags --exact-match HEAD)"
 
       - name: Publish binaries
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: out/*.tar.gz
-          tag: ${{ github.ref }}
-          overwrite: true
+          tag: ${{ steps.get_tag.outputs.tag }}
+          release_name: ${{ steps.get_tag.outputs.tag }}
           file_glob: true
+          file: out/*.tar.gz
+          overwrite: true
