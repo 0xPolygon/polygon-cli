@@ -8,10 +8,12 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/maticnetwork/polygon-cli/util"
 
 	_ "embed"
 
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
@@ -41,6 +43,7 @@ type (
 		PeerCount    uint64
 		GasPrice     *big.Int
 		PendingCount uint64
+		BlockCache   *lru.Cache
 
 		Blocks            map[string]rpctypes.PolyBlock `json:"-"`
 		BlocksLock        sync.RWMutex                  `json:"-"`
@@ -80,26 +83,7 @@ const (
 	monitorModeHelp monitorMode = iota
 	monitorModeExplorer
 	monitorModeBlock
-	maxBlocksHistory = 1000
 )
-
-func cleanupOldData(ms *monitorStatus) {
-	ms.BlocksLock.Lock()
-	defer ms.BlocksLock.Unlock()
-
-	// Assuming the keys in ms.Blocks are strings that represent sorted integers
-	for len(ms.Blocks) > maxBlocksHistory {
-		var oldestKey string
-		for k := range ms.Blocks {
-			if oldestKey == "" || k < oldestKey {
-				oldestKey = k
-			}
-		}
-		if oldestKey != "" {
-			delete(ms.Blocks, oldestKey)
-		}
-	}
-}
 
 func monitor(ctx context.Context) error {
 	rpc, err := ethrpc.DialContext(ctx, rpcUrl)
@@ -110,9 +94,10 @@ func monitor(ctx context.Context) error {
 	ec := ethclient.NewClient(rpc)
 
 	ms := new(monitorStatus)
+	ms.BlockCache, _ = lru.New(1000)
 	ms.MaxBlockRetrieved = big.NewInt(0)
 	ms.BlocksLock.Lock()
-	ms.Blocks = make(map[string]rpctypes.PolyBlock, maxBlocksHistory)
+	ms.Blocks = make(map[string]rpctypes.PolyBlock, 0)
 	ms.BlocksLock.Unlock()
 	ms.ChainID = big.NewInt(0)
 	ms.PendingCount = 0
@@ -211,9 +196,6 @@ func prependLatestBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Cli
 	err := ms.getBlockRange(ctx, from, ms.HeadBlock, rpc)
 	if err != nil {
 		log.Error().Err(err).Msg("There was an issue fetching the block range")
-	} else {
-		// Call cleanup after successfully fetching the latest blocks
-		cleanupOldData(ms)
 	}
 }
 
@@ -244,8 +226,8 @@ func appendOlderBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Clien
 		log.Error().Err(err).Msg("There was an issue fetching the block range")
 		return err
 	} else {
-		// Call cleanup after successfully fetching the latest blocks
-		cleanupOldData(ms)
+		// call cleanup after successfully fetching the latest blocks
+		// cleanupOldData(ms)
 	}
 	return nil
 }
