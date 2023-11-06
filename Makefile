@@ -44,26 +44,26 @@ cross: $(BUILD_DIR) ## Cross-compile go binaries using CGO.
 # Notes:
 # - `-s -w` enables to strip debug and suppress warnings.
 # - `-linkmode external -extldflags "-static-libgo"` allows dynamic linking.
-	echo "Building linux-arm64-$(BIN_NAME)..."
+	echo "Building $(BIN_NAME)_$(GIT_TAG)_linux_arm64..."
 	CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build \
 			-ldflags '$(VERSION_FLAGS) -s -w -linkmode external -extldflags "-static-libgo"' \
 			-tags netgo \
-			-o $(BUILD_DIR)/linux-arm64-$(BIN_NAME) \
+			-o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_arm64 \
 			main.go
 
-	echo "Building linux-amd64-$(BIN_NAME)..."
+	echo "Building $(BIN_NAME)_$(GIT_TAG)_linux_amd64..."
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
 			-ldflags '$(VERSION_FLAGS) -s -w -linkmode external -extldflags "-static-libgo"' \
 			-tags netgo \
-			-o $(BUILD_DIR)/linux-amd64-$(BIN_NAME) \
+			-o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_amd64 \
 			main.go
 
 .PHONY: simplecross
 simplecross: $(BUILD_DIR) ## Cross-compile go binaries without using CGO.
-	GOOS=linux  GOARCH=arm64 go build -o $(BUILD_DIR)/linux-arm64-$(BIN_NAME)  main.go
-	GOOS=darwin GOARCH=arm64 go build -o $(BUILD_DIR)/darwin-arm64-$(BIN_NAME) main.go
-	GOOS=linux  GOARCH=amd64 go build -o $(BUILD_DIR)/linux-amd64-$(BIN_NAME)  main.go
-	GOOS=darwin GOARCH=amd64 go build -o $(BUILD_DIR)/darwin-amd64-$(BIN_NAME) main.go
+	GOOS=linux  GOARCH=arm64 go build -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_arm64  main.go
+	GOOS=darwin GOARCH=arm64 go build -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_darwin_arm64 main.go
+	GOOS=linux  GOARCH=amd64 go build -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_amd64  main.go
+	GOOS=darwin GOARCH=amd64 go build -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_darwin_amd64 main.go
 
 .PHONY: clean
 clean: ## Clean the binary folder.
