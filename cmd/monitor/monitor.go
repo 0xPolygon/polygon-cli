@@ -13,7 +13,6 @@ import (
 
 	_ "embed"
 
-	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
@@ -45,8 +44,8 @@ type (
 		PendingCount uint64
 		BlockCache   *lru.Cache
 
-		Blocks            map[string]rpctypes.PolyBlock `json:"-"`
-		BlocksLock        sync.RWMutex                  `json:"-"`
+		// Blocks            map[string]rpctypes.PolyBlock `json:"-"`
+		// BlocksLock        sync.RWMutex `json:"-"`
 		MaxBlockRetrieved *big.Int
 		MinBlockRetrieved *big.Int
 	}
@@ -96,9 +95,9 @@ func monitor(ctx context.Context) error {
 	ms := new(monitorStatus)
 	ms.BlockCache, _ = lru.New(1000)
 	ms.MaxBlockRetrieved = big.NewInt(0)
-	ms.BlocksLock.Lock()
-	ms.Blocks = make(map[string]rpctypes.PolyBlock, 0)
-	ms.BlocksLock.Unlock()
+	// ms.BlocksLock.Lock()
+	// ms.Blocks = make(map[string]rpctypes.PolyBlock, 0)
+	// ms.BlocksLock.Unlock()
 	ms.ChainID = big.NewInt(0)
 	ms.PendingCount = 0
 	observedPendingTxs = make(historicalRange, 0)
@@ -225,12 +224,11 @@ func appendOlderBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Clien
 	if err != nil {
 		log.Error().Err(err).Msg("There was an issue fetching the block range")
 		return err
-	} else {
-		// call cleanup after successfully fetching the latest blocks
-		// cleanupOldData(ms)
 	}
 	return nil
 }
+
+const maxHistoricalPoints = 1000 // Set a limit to the number of historical points
 
 func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client, isUiRendered bool) (err error) {
 	var cs *chainState
@@ -239,6 +237,10 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 		log.Error().Err(err).Msg("Encountered issue fetching network information")
 		time.Sleep(interval)
 		return err
+	}
+	if len(observedPendingTxs) >= maxHistoricalPoints {
+		// Remove the oldest data point
+		observedPendingTxs = observedPendingTxs[1:]
 	}
 	observedPendingTxs = append(observedPendingTxs, historicalDataPoint{SampleTime: time.Now(), SampleValue: float64(cs.PendingCount)})
 
@@ -319,9 +321,10 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 		}
 		pb := rpctypes.NewPolyBlock(b.Result.(*rpctypes.RawBlockResponse))
 
-		ms.BlocksLock.Lock()
-		ms.Blocks[pb.Number().String()] = pb
-		ms.BlocksLock.Unlock()
+		ms.BlockCache.Add(pb.Number().String(), pb) // Use Add method of LRU Cache
+		// ms.BlocksLock.Lock()
+		// ms.Blocks[pb.Number().String()] = pb
+		// ms.BlocksLock.Unlock()
 
 		if ms.MaxBlockRetrieved.Cmp(pb.Number()) == -1 {
 			ms.MaxBlockRetrieved = pb.Number()
@@ -428,18 +431,24 @@ func setUISkeleton() (blockTable *widgets.List, grid *ui.Grid, blockGrid *ui.Gri
 }
 
 func updateAllBlocks(ms *monitorStatus) []rpctypes.PolyBlock {
-	// default
-	blocks := make([]rpctypes.PolyBlock, 0)
+	var blocks []rpctypes.PolyBlock
 
-	ms.BlocksLock.RLock()
-	for _, b := range ms.Blocks {
-		blocks = append(blocks, b)
+	// Retrieve all current items from the LRU cache.
+	// Since the cache has no inherent order, we will need to sort them if necessary.
+	for _, key := range ms.BlockCache.Keys() {
+		if value, ok := ms.BlockCache.Peek(key); ok {
+			block, ok := value.(rpctypes.PolyBlock)
+			if ok {
+				blocks = append(blocks, block)
+			}
+		}
 	}
-	ms.BlocksLock.RUnlock()
 
-	allBlocks := metrics.SortableBlocks(blocks)
+	// Assuming blocks need to be sorted, you'd sort them here.
+	// This assumes that metrics.SortableBlocks is a type that can be sorted.
+	sort.Sort(metrics.SortableBlocks(blocks))
 
-	return allBlocks
+	return blocks
 }
 
 func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) error {
