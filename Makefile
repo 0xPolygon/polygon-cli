@@ -8,15 +8,12 @@ BUILD_DIR := ./out
 
 GIT_SHA := $(shell git rev-parse HEAD | cut -c 1-8)
 GIT_TAG := $(shell git describe --tags)
-CUR_DATE := $(shell date +%s)
-
-# Strip debug and suppress warnings.
-LD_FLAGS=-s -w
-LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/cmd/version.Version=$(GIT_TAG)\"
-LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/cmd/version.Commit=$(GIT_SHA)\"
-LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/cmd/version.Date=$(CUR_DATE)\"
-LD_FLAGS += -X \"github.com/maticnetwork/polygon-cli/cmd/version.BuiltBy=makefile\"
-STATIC_LD_FLAGS=$(LD_FLAGS) -extldflags=-static
+DATE := $(shell date +%s)
+VERSION_FLAGS=\
+  -X github.com/maticnetwork/polygon-cli/cmd/version.Version=$(GIT_TAG) \
+  -X github.com/maticnetwork/polygon-cli/cmd/version.Commit=$(GIT_SHA) \
+  -X github.com/maticnetwork/polygon-cli/cmd/version.Date=$(DATE) \
+  -X github.com/maticnetwork/polygon-cli/cmd/version.BuiltBy=makefile
 
 .PHONY: help
 help: ## Display this help.
@@ -34,7 +31,7 @@ generate: ## Generate protobuf stubs.
 
 .PHONY: build
 build: $(BUILD_DIR) ## Build go binary.
-	go build -ldflags "-w -X \"github.com/maticnetwork/polygon-cli/cmd/version.Version=dev ($(GIT_SHA))\"" -o $(BUILD_DIR)/$(BIN_NAME) main.go
+	go build -ldflags "$(VERSION_FLAGS)" -o $(BUILD_DIR)/$(BIN_NAME) main.go
 
 .PHONY: install
 install: build ## Install the go binary.
@@ -44,18 +41,29 @@ install: build ## Install the go binary.
 
 .PHONY: cross
 cross: $(BUILD_DIR) ## Cross-compile go binaries using CGO.
-	env CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -ldflags "$(STATIC_LD_FLAGS)" -tags netgo -o $(BUILD_DIR)/linux-arm64-$(BIN_NAME) main.go
-	env                          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags "$(STATIC_LD_FLAGS)" -tags netgo -o $(BUILD_DIR)/linux-amd64-$(BIN_NAME) main.go
-  # MAC builds - this will be functional but will still have secp issues.
-	env CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -ldflags "$(LD_FLAGS)" -tags netgo -o $(BUILD_DIR)/darwin-arm64-$(BIN_NAME) main.go
-	env CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -ldflags "$(LD_FLAGS)" -tags netgo -o $(BUILD_DIR)/darwin-amd64-$(BIN_NAME) main.go
+# Notes:
+# - `-s -w` enables to strip debug and suppress warnings.
+# - `-linkmode external -extldflags "-static-libgo"` allows dynamic linking.
+	echo "Building $(BIN_NAME)_$(GIT_TAG)_linux_arm64..."
+	CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build \
+			-ldflags '$(VERSION_FLAGS) -s -w -linkmode external -extldflags "-static-libgo"' \
+			-tags netgo \
+			-o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_arm64 \
+			main.go
+
+	echo "Building $(BIN_NAME)_$(GIT_TAG)_linux_amd64..."
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+			-ldflags '$(VERSION_FLAGS) -s -w -linkmode external -extldflags "-static-libgo"' \
+			-tags netgo \
+			-o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_amd64 \
+			main.go
 
 .PHONY: simplecross
 simplecross: $(BUILD_DIR) ## Cross-compile go binaries without using CGO.
-	env GOOS=linux GOARCH=arm64 go build -o $(BUILD_DIR)/linux-arm64-$(BIN_NAME) main.go
-	env GOOS=darwin GOARCH=arm64 go build -o $(BUILD_DIR)/darwin-arm64-$(BIN_NAME) main.go
-	env GOOS=linux GOARCH=amd64 go build -o $(BUILD_DIR)/linux-amd64-$(BIN_NAME) main.go
-	env GOOS=darwin GOARCH=amd64 go build -o $(BUILD_DIR)/darwin-amd64-$(BIN_NAME) main.go
+	GOOS=linux  GOARCH=arm64 go build -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_arm64  main.go
+	GOOS=darwin GOARCH=arm64 go build -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_darwin_arm64 main.go
+	GOOS=linux  GOARCH=amd64 go build -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_amd64  main.go
+	GOOS=darwin GOARCH=amd64 go build -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_darwin_amd64 main.go
 
 .PHONY: clean
 clean: ## Clean the binary folder.
