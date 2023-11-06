@@ -44,8 +44,6 @@ type (
 		PendingCount uint64
 		BlockCache   *lru.Cache
 
-		// Blocks            map[string]rpctypes.PolyBlock `json:"-"`
-		// BlocksLock        sync.RWMutex `json:"-"`
 		MaxBlockRetrieved *big.Int
 		MinBlockRetrieved *big.Int
 	}
@@ -95,9 +93,7 @@ func monitor(ctx context.Context) error {
 	ms := new(monitorStatus)
 	ms.BlockCache, _ = lru.New(1000)
 	ms.MaxBlockRetrieved = big.NewInt(0)
-	// ms.BlocksLock.Lock()
-	// ms.Blocks = make(map[string]rpctypes.PolyBlock, 0)
-	// ms.BlocksLock.Unlock()
+
 	ms.ChainID = big.NewInt(0)
 	ms.PendingCount = 0
 	observedPendingTxs = make(historicalRange, 0)
@@ -321,10 +317,7 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 		}
 		pb := rpctypes.NewPolyBlock(b.Result.(*rpctypes.RawBlockResponse))
 
-		ms.BlockCache.Add(pb.Number().String(), pb) // Use Add method of LRU Cache
-		// ms.BlocksLock.Lock()
-		// ms.Blocks[pb.Number().String()] = pb
-		// ms.BlocksLock.Unlock()
+		ms.BlockCache.Add(pb.Number().String(), pb)
 
 		if ms.MaxBlockRetrieved.Cmp(pb.Number()) == -1 {
 			ms.MaxBlockRetrieved = pb.Number()
