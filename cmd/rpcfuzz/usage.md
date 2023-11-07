@@ -63,7 +63,7 @@ $ cast send \
     --rpc-url localhost:8545 \
     --json \
     --create \
-    "$(cat ./contracts/tokens/ERC20/ERC20.bin)" | jq
+    "$(cat ./contracts-v2/src/tokens/ERC20/ERC20.bin)" | jq
 ```
 
 Once this has been completed this will be the address of the contract: `0x6fda56c57b0acadb96ed5624ac500c0429d59429`.
