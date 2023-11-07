@@ -37,12 +37,13 @@ var (
 
 type (
 	monitorStatus struct {
-		ChainID      *big.Int
-		HeadBlock    *big.Int
-		PeerCount    uint64
-		GasPrice     *big.Int
-		PendingCount uint64
-		BlockCache   *lru.Cache
+		TopDisplayedBlock *big.Int
+		ChainID           *big.Int
+		HeadBlock         *big.Int
+		PeerCount         uint64
+		GasPrice          *big.Int
+		PendingCount      uint64
+		BlockCache        *lru.Cache
 
 		MaxBlockRetrieved *big.Int
 		MinBlockRetrieved *big.Int
@@ -250,6 +251,9 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 	}
 
 	ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
+	if ms.TopDisplayedBlock == nil {
+		ms.TopDisplayedBlock = ms.HeadBlock
+	}
 	ms.ChainID = cs.ChainID
 	ms.PeerCount = cs.PeerCount
 	ms.GasPrice = cs.GasPrice
@@ -483,12 +487,30 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			allBlocks = updateAllBlocks(ms)
 			sort.Sort(allBlocks)
 		}
-		start := len(allBlocks) - windowSize - windowOffset
-		if start < 0 {
-			start = 0
+		toBlockNumber := ms.TopDisplayedBlock
+		fromBlockNumber := new(big.Int).Sub(toBlockNumber, big.NewInt(int64(windowSize-1)))
+		if fromBlockNumber.Cmp(zero) < 0 {
+			fromBlockNumber.SetInt64(0) // We cannot have block numbers less than 0.
 		}
-		end := len(allBlocks) - windowOffset
-		renderedBlocks = allBlocks[start:end]
+		renderedBlocksTemp := make([]rpctypes.PolyBlock, 0, windowSize)
+		for i := new(big.Int).Set(fromBlockNumber); i.Cmp(toBlockNumber) <= 0; i.Add(i, big.NewInt(1)) {
+			if block, ok := ms.BlockCache.Get(i.String()); ok {
+				// Type assert the block to its actual type (rpctypes.PolyBlock) before appending.
+				renderedBlocksTemp = append(renderedBlocksTemp, block.(rpctypes.PolyBlock))
+			} else {
+				// If for some reason the block is not in the cache after fetching, handle this case.
+				log.Warn().Str("blockNumber", i.String()).Msg("Block should be in cache but is not")
+				// Depending on how critical this case is, you might want to handle this error differently.
+			}
+		}
+		renderedBlocks = renderedBlocksTemp
+
+		// start := len(allBlocks) - windowSize - windowOffset
+		// if start < 0 {
+		// 	start = 0
+		// }
+		// end := len(allBlocks) - windowOffset
+		// renderedBlocks = allBlocks[start:end]
 
 		termUi.h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
 		gasGwei := new(big.Int).Div(ms.GasPrice, metrics.UnitShannon)
@@ -541,6 +563,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			case "q", "<C-c>":
 				return nil
 			case "<Escape>":
+				ms.TopDisplayedBlock = ms.HeadBlock
 				blockTable.SelectedRow = 0
 				currentMode = monitorModeExplorer
 				windowOffset = 0
@@ -633,33 +656,36 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				}
 				setBlock = true
 			case "<C-f>", "<PageDown>":
-				targetOffset := windowOffset + windowSize
-
-				// calculate the range of block numbers we are trying to page down to
-				fromBlockNumber := calculateBlockNumberFromOffset(targetOffset, windowSize, ms)
-				toBlockNumber := calculateBlockNumberFromOffset(targetOffset+windowSize, windowSize, ms)
-
-				// check the availability of the range in the cache
-				missingBlocks, _ := checkAndFetchMissingBlocks(ctx, ms, rpc, fromBlockNumber, toBlockNumber)
-
-				if len(missingBlocks) > 0 {
-					// If there are missing blocks, fetch and cache them
-					err := fetchAndCacheBlocks(ctx, rpc, ms, missingBlocks)
-					if err != nil {
-						log.Warn().Err(err).Msg("Failed to fetch missing blocks on page down")
-						// Handle error, perhaps by not changing the offset if blocks couldn't be fetched
-						break
-					}
+				// Calculate the range of block numbers we are trying to page down to
+				nextTopBlockNumber := new(big.Int).Sub(ms.TopDisplayedBlock, big.NewInt(int64(windowSize)))
+				if nextTopBlockNumber.Cmp(zero) < 0 {
+					// If we've gone past the earliest block, set it to the earliest block number
+					nextTopBlockNumber.SetInt64(0)
 				}
 
-				// Now that we've ensured the blocks are available, update windowOffset
-				windowOffset = targetOffset
+				// Calculate the 'to' block number based on the next top block number
+				toBlockNumber := new(big.Int).Sub(nextTopBlockNumber, big.NewInt(int64(windowSize-1)))
+				if toBlockNumber.Cmp(zero) < 0 {
+					toBlockNumber.SetInt64(0)
+				}
+
+				// Fetch the blocks in the new range if they are missing
+				_, err := checkAndFetchMissingBlocks(ctx, ms, rpc, toBlockNumber, nextTopBlockNumber)
+				if err != nil {
+					log.Warn().Err(err).Msg("Failed to fetch blocks on page down")
+					break
+				}
+
+				// Update the top displayed block number
+				ms.TopDisplayedBlock = nextTopBlockNumber
 
 				// Select the first row on the new page
 				blockTable.SelectedRow = 1
 
-				// Set a flag to indicate that the selected block should be updated based on the new offset
-				setBlock = true
+				log.Debug().
+					Int("TopDisplayedBlock", int(ms.TopDisplayedBlock.Int64())).
+					Int("toBlockNumber", int(toBlockNumber.Int64())).
+					Msg("PageDown")
 
 				// Force redraw to update the UI with the new page of blocks
 				forceRedraw = true
