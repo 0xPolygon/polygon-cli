@@ -7,7 +7,7 @@ gen-loadtester:
 
 gen-tokens:
 	solc-select use 0.8.21
-	forge build --skip LoadTester
+	forge build --contracts src/tokens
 	$(call gen_go_binding,ERC20,src/tokens/ERC20,tokens,src/tokens)
 	$(call gen_go_binding,ERC721,src/tokens/ERC721,tokens,src/tokens)
 	$(call gen_go_binding,Swapper,src/tokens/Swapper,tokens,src/tokens)
@@ -24,7 +24,7 @@ gen-uniswapv3:
 # - $3: go package name.
 # - $4: go file output path.
 define gen_go_binding
-	echo "Generating ABI, bytecode and go binding for $1..."
+	echo Generating ABI, bytecode and go binding for $1...
 	cat ./out/$1.sol/$1.json | jq -r '.abi' 						> ./$2/$1.abi
 	cat ./out/$1.sol/$1.json | jq -r '.bytecode.object' > ./$2/$1.bin
 	abigen --abi ./$2/$1.abi --bin ./$2/$1.bin --pkg $3 --type $1 --out ./$4/$1.go
@@ -37,10 +37,11 @@ endef
 # - $4: go package name.
 # - $5: go file output path.
 define gen_go_binding_from_lib
-	echo "Generating ABI, bytecode and go binding for $2..."
-	cd "./lib/$1" && forge build
+	echo Generating ABI, bytecode and go binding for $2...
+	cd ./lib/$1 && forge build
 	mkdir -p $3
-	cat "./lib/$1/out/$2.sol/$2.json" | jq -r '.abi' 						 > "./$3/$2.abi"
-	cat "./lib/$1/out/$2.sol/$2.json" | jq -r '.bytecode.object' > "./$3/$2.bin"
-	abigen --abi "./$3/$2.abi" --bin "./$3/$2.bin" --pkg $4 --type $2 --out ./$5/$2.go
+	find ./lib/$1 -type f -name $2.sol ./$3
+	cat ./lib/$1/out/$2.sol/$2.json | jq -r '.abi' 						 > ./$3/$2.abi
+	cat ./lib/$1/out/$2.sol/$2.json | jq -r '.bytecode.object' > ./$3/$2.bin
+	abigen --abi ./$3/$2.abi --bin ./$3/$2.bin --pkg $4 --type $2 --out ./$5/$2.go
 endef
