@@ -11,7 +11,7 @@ gen-tokens:
 	$(call gen_go_binding,ERC20,src/tokens/ERC20,tokens,src/tokens)
 	$(call gen_go_binding,ERC721,src/tokens/ERC721,tokens,src/tokens)
 	$(call gen_go_binding,Swapper,src/tokens/Swapper,tokens,src/tokens)
-	$(call gen_go_binding,WETH9,src/tokens/WETH9,tokens,src/tokens)
+	$(call gen_go_binding_from_lib,canonical-weth,WETH9,src/tokens/WETH9,tokens,src/tokens)
 
 gen-uniswapv3:
 	solc-select use 0.7.6
@@ -46,7 +46,7 @@ define gen_go_binding_from_lib
 
 	# Copy .sol files and add comments about code generation
 	find ./lib/$1 -type f -name $2.sol -exec sh -c ' \
-		echo "// Smart contract code copied from the source ($1). DO NOT EDIT." > ./$3/$2.sol && \
+		echo "// Smart contract code copied from the source (./lib/$1). DO NOT EDIT." > ./$3/$2.sol && \
 		echo "// Use the Makefile to generate new ABI, bytecode, and Go bindings.\n" >> ./$3/$2.sol && \
 		cat {} >> ./$3/$2.sol' \;
 

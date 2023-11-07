@@ -1,3 +1,6 @@
+// Smart contract code copied from the source (./lib/canonical-weth). DO NOT EDIT.
+// Use the Makefile to generate new ABI, bytecode, and Go bindings.
+
 // Copyright (C) 2015, 2016, 2017 Dapphub
 
 // This program is free software: you can redistribute it and/or modify

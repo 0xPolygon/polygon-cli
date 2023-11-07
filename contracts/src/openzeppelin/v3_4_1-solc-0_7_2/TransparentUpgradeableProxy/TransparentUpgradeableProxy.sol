@@ -1,4 +1,4 @@
-// Smart contract code copied from the source (openzeppelin-contracts-v3.4.1-solc-0.7-2). DO NOT EDIT.
+// Smart contract code copied from the source (./lib/openzeppelin-contracts-v3.4.1-solc-0.7-2). DO NOT EDIT.
 // Use the Makefile to generate new ABI, bytecode, and Go bindings.
 
 // SPDX-License-Identifier: MIT
