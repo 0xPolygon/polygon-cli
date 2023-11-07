@@ -1,3 +1,6 @@
+// Smart contract code copied from the source (openzeppelin-contracts-v3.4.1-solc-0.7-2). DO NOT EDIT.
+// Use the Makefile to generate new ABI, bytecode, and Go bindings.
+
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.7.0;
