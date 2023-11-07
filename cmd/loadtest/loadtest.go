@@ -16,8 +16,8 @@ import (
 	"time"
 
 	uniswapv3loadtest "github.com/maticnetwork/polygon-cli/cmd/loadtest/uniswapv3"
-	"github.com/maticnetwork/polygon-cli/contracts-v2/src/loadtester"
-	"github.com/maticnetwork/polygon-cli/contracts-v2/src/tokens"
+	"github.com/maticnetwork/polygon-cli/contracts/src/loadtester"
+	"github.com/maticnetwork/polygon-cli/contracts/src/tokens"
 
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"

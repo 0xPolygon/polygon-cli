@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	tokens "github.com/maticnetwork/polygon-cli/contracts-v2/src/tokens"
+	tokens "github.com/maticnetwork/polygon-cli/contracts/src/tokens"
 	"github.com/rs/zerolog/log"
 )
 

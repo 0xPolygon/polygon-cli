@@ -11,12 +11,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	openzeppelin "github.com/maticnetwork/polygon-cli/contracts-v2/src/openzeppelin"
-	tokens "github.com/maticnetwork/polygon-cli/contracts-v2/src/tokens"
-	v3core "github.com/maticnetwork/polygon-cli/contracts-v2/src/uniswap/v3core"
-	v3periphery "github.com/maticnetwork/polygon-cli/contracts-v2/src/uniswap/v3periphery"
-	v3router "github.com/maticnetwork/polygon-cli/contracts-v2/src/uniswap/v3router"
-	v3staker "github.com/maticnetwork/polygon-cli/contracts-v2/src/uniswap/v3staker"
+	openzeppelin "github.com/maticnetwork/polygon-cli/contracts/src/openzeppelin"
+	tokens "github.com/maticnetwork/polygon-cli/contracts/src/tokens"
+	v3core "github.com/maticnetwork/polygon-cli/contracts/src/uniswap/v3core"
+	v3periphery "github.com/maticnetwork/polygon-cli/contracts/src/uniswap/v3periphery"
+	v3router "github.com/maticnetwork/polygon-cli/contracts/src/uniswap/v3router"
+	v3staker "github.com/maticnetwork/polygon-cli/contracts/src/uniswap/v3staker"
 	"github.com/rs/zerolog/log"
 )
 

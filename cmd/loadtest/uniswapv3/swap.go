@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	v3router "github.com/maticnetwork/polygon-cli/contracts-v2/src/uniswap/v3router"
+	v3router "github.com/maticnetwork/polygon-cli/contracts/src/uniswap/v3router"
 	"github.com/rs/zerolog/log"
 )
 

@@ -10,9 +10,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	tokens "github.com/maticnetwork/polygon-cli/contracts-v2/src/tokens"
-	v3core "github.com/maticnetwork/polygon-cli/contracts-v2/src/uniswap/v3core"
-	v3periphery "github.com/maticnetwork/polygon-cli/contracts-v2/src/uniswap/v3periphery"
+	tokens "github.com/maticnetwork/polygon-cli/contracts/src/tokens"
+	v3core "github.com/maticnetwork/polygon-cli/contracts/src/uniswap/v3core"
+	v3periphery "github.com/maticnetwork/polygon-cli/contracts/src/uniswap/v3periphery"
 	"github.com/rs/zerolog/log"
 )
 
