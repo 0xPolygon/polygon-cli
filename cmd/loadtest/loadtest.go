@@ -17,9 +17,8 @@ import (
 
 	uniswapv3loadtest "github.com/maticnetwork/polygon-cli/cmd/loadtest/uniswapv3"
 	"github.com/maticnetwork/polygon-cli/contracts"
-	"github.com/maticnetwork/polygon-cli/contracts/tokens"
+	"github.com/maticnetwork/polygon-cli/contracts-v2/src/tokens"
 
-	"github.com/maticnetwork/polygon-cli/metrics"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
 
@@ -685,38 +684,19 @@ func getLoadTestContract(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 }
 func getERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (erc20Addr ethcommon.Address, erc20Contract *tokens.ERC20, err error) {
 	erc20Addr = ethcommon.HexToAddress(*inputLoadTestParams.ERC20Address)
-	shouldMint := false
 	if *inputLoadTestParams.ERC20Address == "" {
-		erc20Addr, _, _, err = tokens.DeployERC20(tops, c, "ERC20TestToken", "T20")
+		erc20Addr, _, _, err = tokens.DeployERC20(tops, c)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to deploy ERC20 contract")
 			return
 		}
-		// if we're deploying a new ERC 20 we should mint tokens
-		shouldMint = true
+		// Tokens are minted and sent to the deployer's address by default.
 	}
 	log.Trace().Interface("contractaddress", erc20Addr).Msg("ERC20 contract address")
 
 	erc20Contract, err = tokens.NewERC20(erc20Addr, c)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
-		return
-	}
-
-	err = blockUntilSuccessful(ctx, c, func() error {
-		_, err = erc20Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
-		return err
-	})
-	if err != nil {
-		return
-	}
-
-	if !shouldMint {
-		return
-	}
-	_, err = erc20Contract.Mint(tops, metrics.UnitMegaether)
-	if err != nil {
-		log.Error().Err(err).Msg("There was an error minting ERC20")
 		return
 	}
 

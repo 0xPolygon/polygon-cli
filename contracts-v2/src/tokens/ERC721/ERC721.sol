@@ -5,10 +5,10 @@ import {ERC721 as OZ_ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.s
 
 contract ERC721 is OZ_ERC721 {
     constructor() OZ_ERC721("MyNFT", "MNFT") {
-        _batchMint(msg.sender, 10000);
+        mintBatch(msg.sender, 1000);
     }
 
-    function _batchMint(address to, uint256 amount) internal {
+    function mintBatch(address to, uint256 amount) public {
         for (uint256 i = 1; i <= amount; i++) {
             _safeMint(to, i);
         }

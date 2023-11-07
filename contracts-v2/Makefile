@@ -10,5 +10,5 @@ gen:
 define gen_go_binding
 	cat ./out/$1.sol/$1.json | jq -r '.abi' 						> ./src/$2/$1/$1.abi
 	cat ./out/$1.sol/$1.json | jq -r '.bytecode.object' > ./src/$2/$1/$1.bin
-	abigen --abi ./src/$2/$1/$1.abi --bin ./src/$2/$1/$1.bin --pkg contracts --type $1 --out ./src/$2/$1/$1.go
+	abigen --abi ./src/$2/$1/$1.abi --bin ./src/$2/$1/$1.bin --pkg $2 --type $1 --out ./src/$2/$1.go
 endef
