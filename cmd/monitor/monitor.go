@@ -91,7 +91,7 @@ func monitor(ctx context.Context) error {
 	ec := ethclient.NewClient(rpc)
 
 	ms := new(monitorStatus)
-	ms.BlockCache, _ = lru.New(1000)
+	ms.BlockCache, _ = lru.New(100)
 	ms.MaxBlockRetrieved = big.NewInt(0)
 
 	ms.ChainID = big.NewInt(0)
@@ -224,7 +224,7 @@ func appendOlderBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Clien
 	return nil
 }
 
-const maxHistoricalPoints = 1000 // set a limit to the number of historical points
+const maxHistoricalPoints = 100 // set a limit to the number of historical points
 
 func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client, isUiRendered bool) (err error) {
 	var cs *chainState
@@ -588,13 +588,14 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 						if windowOffset+windowSize < len(allBlocks) {
 							windowOffset += 1
 						} else {
-							err := appendOlderBlocks(ctx, ms, rpc)
-							if err != nil {
-								log.Warn().Err(err).Msg("Unable to append more history")
-							}
-							forceRedraw = true
-							redraw(ms, true)
-							break
+							// err := appendOlderBlocks(ctx, ms, rpc)
+							// windowOffset -= batchSize
+							// if err != nil {
+							// 	log.Warn().Err(err).Msg("Unable to append more history")
+							// }
+							// forceRedraw = true
+							// redraw(ms, true)
+							// break
 						}
 					}
 					currIdx += 1
@@ -632,23 +633,56 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				}
 				setBlock = true
 			case "<C-f>", "<PageDown>":
-				if len(renderedBlocks) < windowSize {
-					windowOffset = 0
-					blockTable.SelectedRow = len(renderedBlocks)
-					break
-				}
-				windowOffset += windowSize
-				// good to go to next page but not enough blocks to fill page
-				if windowOffset > len(allBlocks)-windowSize {
-					err := appendOlderBlocks(ctx, ms, rpc)
+				targetOffset := windowOffset + windowSize
+
+				// calculate the range of block numbers we are trying to page down to
+				fromBlockNumber := calculateBlockNumberFromOffset(targetOffset, windowSize, ms)
+				toBlockNumber := calculateBlockNumberFromOffset(targetOffset+windowSize, windowSize, ms)
+
+				// check the availability of the range in the cache
+				missingBlocks, _ := checkAndFetchMissingBlocks(ctx, ms, rpc, fromBlockNumber, toBlockNumber)
+
+				if len(missingBlocks) > 0 {
+					// If there are missing blocks, fetch and cache them
+					err := fetchAndCacheBlocks(ctx, rpc, ms, missingBlocks)
 					if err != nil {
-						log.Warn().Err(err).Msg("Unable to append more history")
+						log.Warn().Err(err).Msg("Failed to fetch missing blocks on page down")
+						// Handle error, perhaps by not changing the offset if blocks couldn't be fetched
+						break
 					}
-					forceRedraw = true
-					redraw(ms, true)
 				}
-				blockTable.SelectedRow = len(renderedBlocks)
+
+				// Now that we've ensured the blocks are available, update windowOffset
+				windowOffset = targetOffset
+
+				// Select the first row on the new page
+				blockTable.SelectedRow = 1
+
+				// Set a flag to indicate that the selected block should be updated based on the new offset
 				setBlock = true
+
+				// Force redraw to update the UI with the new page of blocks
+				forceRedraw = true
+				redraw(ms, true)
+
+				// // reset to latest block when end is reached
+				// if len(renderedBlocks) < windowSize {
+				// 	windowOffset = 0
+				// 	blockTable.SelectedRow = len(renderedBlocks)
+				// 	break
+				// }
+				// windowOffset += windowSize
+				// // good to go to next page but not enough blocks to fill page
+				// if windowOffset > len(allBlocks)-windowSize {
+				// 	err := appendOlderBlocks(ctx, ms, rpc)
+				// 	if err != nil {
+				// 		log.Warn().Err(err).Msg("Unable to append more history")
+				// 	}
+				// 	forceRedraw = true
+				// 	redraw(ms, true)
+				// }
+				// blockTable.SelectedRow = len(renderedBlocks)
+				// setBlock = true
 			case "<C-b>", "<PageUp>":
 				windowOffset -= windowSize
 				if windowOffset < 0 {
@@ -675,6 +709,56 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			}
 		}
 	}
+}
+
+func calculateBlockNumberFromOffset(offset int, windowSize int, ms *monitorStatus) *big.Int {
+	// Assuming the head block (latest block) is at the top when offset is 0
+	// and the list goes back in time as the offset increases:
+
+	// Calculate the block number at the bottom of the current window.
+	latestBlockNumber := ms.HeadBlock.Int64()
+	bottomBlockNumber := latestBlockNumber - int64(offset)
+
+	// Ensure that the calculated block number is not less than zero.
+	if bottomBlockNumber < 0 {
+		bottomBlockNumber = 0
+	}
+
+	// The block number we're interested in is `windowSize` blocks before the bottom block number,
+	// because when paging down, the user wants to see the next set of blocks.
+	targetBlockNumber := bottomBlockNumber - int64(windowSize)
+
+	// Ensure the target block number is not less than zero.
+	if targetBlockNumber < 0 {
+		targetBlockNumber = 0
+	}
+
+	return big.NewInt(targetBlockNumber)
+}
+
+func checkAndFetchMissingBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Client, fromBlockNum, toBlockNum *big.Int) ([]*big.Int, error) {
+	var missingBlocks []*big.Int
+
+	// Iterate over the range and check if each block is in the cache.
+	for i := new(big.Int).Set(fromBlockNum); i.Cmp(toBlockNum) <= 0; i.Add(i, one) {
+		if _, ok := ms.BlockCache.Get(i.String()); !ok {
+			// Block is not in cache, so mark it as missing.
+			missingBlocks = append(missingBlocks, new(big.Int).Set(i))
+		}
+	}
+
+	// If there are missing blocks, fetch them using getBlockRange.
+	if len(missingBlocks) > 0 {
+		// Fetch the blocks in the range [first missing block, last missing block].
+		err := ms.getBlockRange(ctx, missingBlocks[0], missingBlocks[len(missingBlocks)-1], rpc)
+		if err != nil {
+			// Handle the error, such as logging or returning it.
+			return nil, err
+		}
+	}
+
+	// Return the list of block numbers that were missing and are now fetched.
+	return missingBlocks, nil
 }
 
 func max(nums ...int) int {
