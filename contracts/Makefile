@@ -40,7 +40,7 @@ define gen_go_binding_from_lib
 	echo Generating ABI, bytecode and go binding for $2...
 	cd ./lib/$1 && forge build
 	mkdir -p $3
-	find ./lib/$1 -type f -name $2.sol ./$3
+	find ./lib/$1 -type f -name $2.sol -exec cp {} ./$3/$2.sol \;
 	cat ./lib/$1/out/$2.sol/$2.json | jq -r '.abi' 						 > ./$3/$2.abi
 	cat ./lib/$1/out/$2.sol/$2.json | jq -r '.bytecode.object' > ./$3/$2.bin
 	abigen --abi ./$3/$2.abi --bin ./$3/$2.bin --pkg $4 --type $2 --out ./$5/$2.go
