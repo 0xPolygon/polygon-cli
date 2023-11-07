@@ -1,7 +1,7 @@
 // Code generated - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package openzeppelin
+package openzeppelin_v3_4_1_solc_0_7_2
 
 import (
 	"errors"

@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	openzeppelin "github.com/maticnetwork/polygon-cli/contracts/src/openzeppelin"
+	openzeppelin "github.com/maticnetwork/polygon-cli/contracts/src/openzeppelin/v3_4_1-solc-0_7_2"
 	tokens "github.com/maticnetwork/polygon-cli/contracts/src/tokens"
 	v3core "github.com/maticnetwork/polygon-cli/contracts/src/uniswap/v3core"
 	v3periphery "github.com/maticnetwork/polygon-cli/contracts/src/uniswap/v3periphery"
