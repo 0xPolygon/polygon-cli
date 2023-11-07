@@ -31,8 +31,8 @@ var (
 
 // ERC20MetaData contains all meta data concerning the ERC20 contract.
 var ERC20MetaData = &bind.MetaData{
-	ABI: "[{\"inputs\":[{\"internalType\":\"string\",\"name\":\"_name\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"_symbol\",\"type\":\"string\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"Approval\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"from\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"Transfer\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"}],\"name\":\"allowance\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"allowances\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"approve\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"}],\"name\":\"balanceOf\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"balances\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"burn\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"decimals\",\"outputs\":[{\"internalType\":\"uint8\",\"name\":\"\",\"type\":\"uint8\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"mint\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"name\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"symbol\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"totalSupply\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"transfer\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"sender\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"transferFrom\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
-	Bin: "0x60806040526012600560006101000a81548160ff021916908360ff1602179055503480156200002d57600080fd5b506040516200149938038062001499833981810160405281019062000053919062000212565b8160039081620000649190620004e2565b508060049081620000769190620004e2565b505050620005c9565b6000604051905090565b600080fd5b600080fd5b600080fd5b600080fd5b6000601f19601f8301169050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052604160045260246000fd5b620000e8826200009d565b810181811067ffffffffffffffff821117156200010a5762000109620000ae565b5b80604052505050565b60006200011f6200007f565b90506200012d8282620000dd565b919050565b600067ffffffffffffffff82111562000150576200014f620000ae565b5b6200015b826200009d565b9050602081019050919050565b60005b83811015620001885780820151818401526020810190506200016b565b60008484015250505050565b6000620001ab620001a58462000132565b62000113565b905082815260208101848484011115620001ca57620001c962000098565b5b620001d784828562000168565b509392505050565b600082601f830112620001f757620001f662000093565b5b81516200020984826020860162000194565b91505092915050565b600080604083850312156200022c576200022b62000089565b5b600083015167ffffffffffffffff8111156200024d576200024c6200008e565b5b6200025b85828601620001df565b925050602083015167ffffffffffffffff8111156200027f576200027e6200008e565b5b6200028d85828601620001df565b9150509250929050565b600081519050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052602260045260246000fd5b60006002820490506001821680620002ea57607f821691505b6020821081036200030057620002ff620002a2565b5b50919050565b60008190508160005260206000209050919050565b60006020601f8301049050919050565b600082821b905092915050565b6000600883026200036a7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff826200032b565b6200037686836200032b565b95508019841693508086168417925050509392505050565b6000819050919050565b6000819050919050565b6000620003c3620003bd620003b7846200038e565b62000398565b6200038e565b9050919050565b6000819050919050565b620003df83620003a2565b620003f7620003ee82620003ca565b84845462000338565b825550505050565b600090565b6200040e620003ff565b6200041b818484620003d4565b505050565b5b8181101562000443576200043760008262000404565b60018101905062000421565b5050565b601f82111562000492576200045c8162000306565b62000467846200031b565b8101602085101562000477578190505b6200048f62000486856200031b565b83018262000420565b50505b505050565b600082821c905092915050565b6000620004b76000198460080262000497565b1980831691505092915050565b6000620004d28383620004a4565b9150826002028217905092915050565b620004ed8262000297565b67ffffffffffffffff811115620005095762000508620000ae565b5b620005158254620002d1565b6200052282828562000447565b600060209050601f8311600181146200055a576000841562000545578287015190505b620005518582620004c4565b865550620005c1565b601f1984166200056a8662000306565b60005b8281101562000594578489015182556001820191506020850194506020810190506200056d565b86831015620005b45784890151620005b0601f891682620004a4565b8355505b6001600288020188555050505b505050505050565b610ec080620005d96000396000f3fe608060405234801561001057600080fd5b50600436106100cf5760003560e01c806342966c681161008c57806395d89b411161006657806395d89b411461023a578063a0712d6814610258578063a9059cbb14610274578063dd62ed3e146102a4576100cf565b806342966c68146101be57806355b6ed5c146101da57806370a082311461020a576100cf565b806306fdde03146100d4578063095ea7b3146100f257806318160ddd1461012257806323b872dd1461014057806327e235e314610170578063313ce567146101a0575b600080fd5b6100dc6102d4565b6040516100e99190610b14565b60405180910390f35b61010c60048036038101906101079190610bcf565b610362565b6040516101199190610c2a565b60405180910390f35b61012a610454565b6040516101379190610c54565b60405180910390f35b61015a60048036038101906101559190610c6f565b61045a565b6040516101679190610c2a565b60405180910390f35b61018a60048036038101906101859190610cc2565b61060b565b6040516101979190610c54565b60405180910390f35b6101a8610623565b6040516101b59190610d0b565b60405180910390f35b6101d860048036038101906101d39190610d26565b610636565b005b6101f460048036038101906101ef9190610d53565b61070d565b6040516102019190610c54565b60405180910390f35b610224600480360381019061021f9190610cc2565b610732565b6040516102319190610c54565b60405180910390f35b61024261077b565b60405161024f9190610b14565b60405180910390f35b610272600480360381019061026d9190610d26565b610809565b005b61028e60048036038101906102899190610bcf565b6108e0565b60405161029b9190610c2a565b60405180910390f35b6102be60048036038101906102b99190610d53565b6109fd565b6040516102cb9190610c54565b60405180910390f35b600380546102e190610dc2565b80601f016020809104026020016040519081016040528092919081815260200182805461030d90610dc2565b801561035a5780601f1061032f5761010080835404028352916020019161035a565b820191906000526020600020905b81548152906001019060200180831161033d57829003601f168201915b505050505081565b600081600260003373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060008573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020819055508273ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff167f8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925846040516104429190610c54565b60405180910390a36001905092915050565b60005481565b600081600260008673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060003373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060008282546104e89190610e22565b9250508190555081600160008673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020600082825461053e9190610e22565b9250508190555081600160008573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060008282546105949190610e56565b925050819055508273ffffffffffffffffffffffffffffffffffffffff168473ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040516105f89190610c54565b60405180910390a3600190509392505050565b60016020528060005260406000206000915090505481565b600560009054906101000a900460ff1681565b80600160003373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060008282546106859190610e22565b925050819055508060008082825461069d9190610e22565b92505081905550600073ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef836040516107029190610c54565b60405180910390a350565b6002602052816000526040600020602052806000526040600020600091509150505481565b6000600160008373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020549050919050565b6004805461078890610dc2565b80601f01602080910402602001604051908101604052809291908181526020018280546107b490610dc2565b80156108015780601f106107d657610100808354040283529160200191610801565b820191906000526020600020905b8154815290600101906020018083116107e457829003601f168201915b505050505081565b80600160003373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060008282546108589190610e56565b92505081905550806000808282546108709190610e56565b925050819055503373ffffffffffffffffffffffffffffffffffffffff16600073ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef836040516108d59190610c54565b60405180910390a350565b600081600160003373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060008282546109319190610e22565b9250508190555081600160008573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060008282546109879190610e56565b925050819055508273ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040516109eb9190610c54565b60405180910390a36001905092915050565b6000600260008473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060008373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002054905092915050565b600081519050919050565b600082825260208201905092915050565b60005b83811015610abe578082015181840152602081019050610aa3565b60008484015250505050565b6000601f19601f8301169050919050565b6000610ae682610a84565b610af08185610a8f565b9350610b00818560208601610aa0565b610b0981610aca565b840191505092915050565b60006020820190508181036000830152610b2e8184610adb565b905092915050565b600080fd5b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b6000610b6682610b3b565b9050919050565b610b7681610b5b565b8114610b8157600080fd5b50565b600081359050610b9381610b6d565b92915050565b6000819050919050565b610bac81610b99565b8114610bb757600080fd5b50565b600081359050610bc981610ba3565b92915050565b60008060408385031215610be657610be5610b36565b5b6000610bf485828601610b84565b9250506020610c0585828601610bba565b9150509250929050565b60008115159050919050565b610c2481610c0f565b82525050565b6000602082019050610c3f6000830184610c1b565b92915050565b610c4e81610b99565b82525050565b6000602082019050610c696000830184610c45565b92915050565b600080600060608486031215610c8857610c87610b36565b5b6000610c9686828701610b84565b9350506020610ca786828701610b84565b9250506040610cb886828701610bba565b9150509250925092565b600060208284031215610cd857610cd7610b36565b5b6000610ce684828501610b84565b91505092915050565b600060ff82169050919050565b610d0581610cef565b82525050565b6000602082019050610d206000830184610cfc565b92915050565b600060208284031215610d3c57610d3b610b36565b5b6000610d4a84828501610bba565b91505092915050565b60008060408385031215610d6a57610d69610b36565b5b6000610d7885828601610b84565b9250506020610d8985828601610b84565b9150509250929050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052602260045260246000fd5b60006002820490506001821680610dda57607f821691505b602082108103610ded57610dec610d93565b5b50919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052601160045260246000fd5b6000610e2d82610b99565b9150610e3883610b99565b9250828203905081811115610e5057610e4f610df3565b5b92915050565b6000610e6182610b99565b9150610e6c83610b99565b9250828201905080821115610e8457610e83610df3565b5b9291505056fea2646970667358221220e50dff36c097760061d643e3240fb48ba521b74057802dde5e30f1560bee7cf564736f6c63430008150033",
+	ABI: "[{\"inputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"allowance\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"needed\",\"type\":\"uint256\"}],\"name\":\"ERC20InsufficientAllowance\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"sender\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"balance\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"needed\",\"type\":\"uint256\"}],\"name\":\"ERC20InsufficientBalance\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"approver\",\"type\":\"address\"}],\"name\":\"ERC20InvalidApprover\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"receiver\",\"type\":\"address\"}],\"name\":\"ERC20InvalidReceiver\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"sender\",\"type\":\"address\"}],\"name\":\"ERC20InvalidSender\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"}],\"name\":\"ERC20InvalidSpender\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"Approval\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"from\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"Transfer\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"}],\"name\":\"allowance\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"approve\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"}],\"name\":\"balanceOf\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"decimals\",\"outputs\":[{\"internalType\":\"uint8\",\"name\":\"\",\"type\":\"uint8\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"mint\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"name\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"symbol\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"totalSupply\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"transfer\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"from\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"transferFrom\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
+	Bin: "0x60806040523480156200001157600080fd5b506040518060400160405280600781526020016626bcaa37b5b2b760c91b815250604051806040016040528060038152602001624d544b60e81b81525081600390816200005f9190620002d0565b5060046200006e8282620002d0565b505050620000ab3362000086620000b160201b60201c565b620000969060ff16600a620004b1565b620000a590620f4240620004c6565b620000b6565b620004f6565b601290565b6001600160a01b038216620000e65760405163ec442f0560e01b8152600060048201526024015b60405180910390fd5b620000f460008383620000f8565b5050565b6001600160a01b038316620001275780600260008282546200011b9190620004e0565b909155506200019b9050565b6001600160a01b038316600090815260208190526040902054818110156200017c5760405163391434e360e21b81526001600160a01b03851660048201526024810182905260448101839052606401620000dd565b6001600160a01b03841660009081526020819052604090209082900390555b6001600160a01b038216620001b957600280548290039055620001d8565b6001600160a01b03821660009081526020819052604090208054820190555b816001600160a01b0316836001600160a01b03167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef836040516200021e91815260200190565b60405180910390a3505050565b634e487b7160e01b600052604160045260246000fd5b600181811c908216806200025657607f821691505b6020821081036200027757634e487b7160e01b600052602260045260246000fd5b50919050565b601f821115620002cb57600081815260208120601f850160051c81016020861015620002a65750805b601f850160051c820191505b81811015620002c757828155600101620002b2565b5050505b505050565b81516001600160401b03811115620002ec57620002ec6200022b565b6200030481620002fd845462000241565b846200027d565b602080601f8311600181146200033c5760008415620003235750858301515b600019600386901b1c1916600185901b178555620002c7565b600085815260208120601f198616915b828110156200036d578886015182559484019460019091019084016200034c565b50858210156200038c5787850151600019600388901b60f8161c191681555b5050505050600190811b01905550565b634e487b7160e01b600052601160045260246000fd5b600181815b80851115620003f3578160001904821115620003d757620003d76200039c565b80851615620003e557918102915b93841c9390800290620003b7565b509250929050565b6000826200040c57506001620004ab565b816200041b57506000620004ab565b81600181146200043457600281146200043f576200045f565b6001915050620004ab565b60ff8411156200045357620004536200039c565b50506001821b620004ab565b5060208310610133831016604e8410600b841016171562000484575081810a620004ab565b620004908383620003b2565b8060001904821115620004a757620004a76200039c565b0290505b92915050565b6000620004bf8383620003fb565b9392505050565b8082028115828204841417620004ab57620004ab6200039c565b80820180821115620004ab57620004ab6200039c565b6107a080620005066000396000f3fe608060405234801561001057600080fd5b506004361061009e5760003560e01c806370a082311161006657806370a082311461011857806395d89b4114610141578063a0712d6814610149578063a9059cbb1461015e578063dd62ed3e1461017157600080fd5b806306fdde03146100a3578063095ea7b3146100c157806318160ddd146100e457806323b872dd146100f6578063313ce56714610109575b600080fd5b6100ab6101aa565b6040516100b891906105d1565b60405180910390f35b6100d46100cf36600461063b565b61023c565b60405190151581526020016100b8565b6002545b6040519081526020016100b8565b6100d4610104366004610665565b610256565b604051601281526020016100b8565b6100e86101263660046106a1565b6001600160a01b031660009081526020819052604090205490565b6100ab61027a565b61015c6101573660046106c3565b610289565b005b6100d461016c36600461063b565b610296565b6100e861017f3660046106dc565b6001600160a01b03918216600090815260016020908152604080832093909416825291909152205490565b6060600380546101b99061070f565b80601f01602080910402602001604051908101604052809291908181526020018280546101e59061070f565b80156102325780601f1061020757610100808354040283529160200191610232565b820191906000526020600020905b81548152906001019060200180831161021557829003601f168201915b5050505050905090565b60003361024a8185856102a4565b60019150505b92915050565b6000336102648582856102b6565b61026f858585610339565b506001949350505050565b6060600480546101b99061070f565b6102933382610398565b50565b60003361024a818585610339565b6102b183838360016103d2565b505050565b6001600160a01b038381166000908152600160209081526040808320938616835292905220546000198114610333578181101561032457604051637dc7a0d960e11b81526001600160a01b038416600482015260248101829052604481018390526064015b60405180910390fd5b610333848484840360006103d2565b50505050565b6001600160a01b03831661036357604051634b637e8f60e11b81526000600482015260240161031b565b6001600160a01b03821661038d5760405163ec442f0560e01b81526000600482015260240161031b565b6102b18383836104a7565b6001600160a01b0382166103c25760405163ec442f0560e01b81526000600482015260240161031b565b6103ce600083836104a7565b5050565b6001600160a01b0384166103fc5760405163e602df0560e01b81526000600482015260240161031b565b6001600160a01b03831661042657604051634a1406b160e11b81526000600482015260240161031b565b6001600160a01b038085166000908152600160209081526040808320938716835292905220829055801561033357826001600160a01b0316846001600160a01b03167f8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b9258460405161049991815260200190565b60405180910390a350505050565b6001600160a01b0383166104d25780600260008282546104c79190610749565b909155506105449050565b6001600160a01b038316600090815260208190526040902054818110156105255760405163391434e360e21b81526001600160a01b0385166004820152602481018290526044810183905260640161031b565b6001600160a01b03841660009081526020819052604090209082900390555b6001600160a01b0382166105605760028054829003905561057f565b6001600160a01b03821660009081526020819052604090208054820190555b816001600160a01b0316836001600160a01b03167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef836040516105c491815260200190565b60405180910390a3505050565b600060208083528351808285015260005b818110156105fe578581018301518582016040015282016105e2565b506000604082860101526040601f19601f8301168501019250505092915050565b80356001600160a01b038116811461063657600080fd5b919050565b6000806040838503121561064e57600080fd5b6106578361061f565b946020939093013593505050565b60008060006060848603121561067a57600080fd5b6106838461061f565b92506106916020850161061f565b9150604084013590509250925092565b6000602082840312156106b357600080fd5b6106bc8261061f565b9392505050565b6000602082840312156106d557600080fd5b5035919050565b600080604083850312156106ef57600080fd5b6106f88361061f565b91506107066020840161061f565b90509250929050565b600181811c9082168061072357607f821691505b60208210810361074357634e487b7160e01b600052602260045260246000fd5b50919050565b8082018082111561025057634e487b7160e01b600052601160045260246000fdfea264697066735822122025c1a35600d1764ebe6d97637a88a9097bf81e9b56b0ce1de8ab1e718ea8b2b464736f6c63430008150033",
 }
 
 // ERC20ABI is the input ABI used to generate the binding from.
@@ -44,7 +44,7 @@ var ERC20ABI = ERC20MetaData.ABI
 var ERC20Bin = ERC20MetaData.Bin
 
 // DeployERC20 deploys a new Ethereum contract, binding an instance of ERC20 to it.
-func DeployERC20(auth *bind.TransactOpts, backend bind.ContractBackend, _name string, _symbol string) (common.Address, *types.Transaction, *ERC20, error) {
+func DeployERC20(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *ERC20, error) {
 	parsed, err := ERC20MetaData.GetAbi()
 	if err != nil {
 		return common.Address{}, nil, nil, err
@@ -53,7 +53,7 @@ func DeployERC20(auth *bind.TransactOpts, backend bind.ContractBackend, _name st
 		return common.Address{}, nil, nil, errors.New("GetABI returned nil")
 	}
 
-	address, tx, contract, err := bind.DeployContract(auth, *parsed, common.FromHex(ERC20Bin), backend, _name, _symbol)
+	address, tx, contract, err := bind.DeployContract(auth, *parsed, common.FromHex(ERC20Bin), backend)
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
@@ -233,37 +233,6 @@ func (_ERC20 *ERC20CallerSession) Allowance(owner common.Address, spender common
 	return _ERC20.Contract.Allowance(&_ERC20.CallOpts, owner, spender)
 }
 
-// Allowances is a free data retrieval call binding the contract method 0x55b6ed5c.
-//
-// Solidity: function allowances(address , address ) view returns(uint256)
-func (_ERC20 *ERC20Caller) Allowances(opts *bind.CallOpts, arg0 common.Address, arg1 common.Address) (*big.Int, error) {
-	var out []interface{}
-	err := _ERC20.contract.Call(opts, &out, "allowances", arg0, arg1)
-
-	if err != nil {
-		return *new(*big.Int), err
-	}
-
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-
-	return out0, err
-
-}
-
-// Allowances is a free data retrieval call binding the contract method 0x55b6ed5c.
-//
-// Solidity: function allowances(address , address ) view returns(uint256)
-func (_ERC20 *ERC20Session) Allowances(arg0 common.Address, arg1 common.Address) (*big.Int, error) {
-	return _ERC20.Contract.Allowances(&_ERC20.CallOpts, arg0, arg1)
-}
-
-// Allowances is a free data retrieval call binding the contract method 0x55b6ed5c.
-//
-// Solidity: function allowances(address , address ) view returns(uint256)
-func (_ERC20 *ERC20CallerSession) Allowances(arg0 common.Address, arg1 common.Address) (*big.Int, error) {
-	return _ERC20.Contract.Allowances(&_ERC20.CallOpts, arg0, arg1)
-}
-
 // BalanceOf is a free data retrieval call binding the contract method 0x70a08231.
 //
 // Solidity: function balanceOf(address account) view returns(uint256)
@@ -293,37 +262,6 @@ func (_ERC20 *ERC20Session) BalanceOf(account common.Address) (*big.Int, error) 
 // Solidity: function balanceOf(address account) view returns(uint256)
 func (_ERC20 *ERC20CallerSession) BalanceOf(account common.Address) (*big.Int, error) {
 	return _ERC20.Contract.BalanceOf(&_ERC20.CallOpts, account)
-}
-
-// Balances is a free data retrieval call binding the contract method 0x27e235e3.
-//
-// Solidity: function balances(address ) view returns(uint256)
-func (_ERC20 *ERC20Caller) Balances(opts *bind.CallOpts, arg0 common.Address) (*big.Int, error) {
-	var out []interface{}
-	err := _ERC20.contract.Call(opts, &out, "balances", arg0)
-
-	if err != nil {
-		return *new(*big.Int), err
-	}
-
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-
-	return out0, err
-
-}
-
-// Balances is a free data retrieval call binding the contract method 0x27e235e3.
-//
-// Solidity: function balances(address ) view returns(uint256)
-func (_ERC20 *ERC20Session) Balances(arg0 common.Address) (*big.Int, error) {
-	return _ERC20.Contract.Balances(&_ERC20.CallOpts, arg0)
-}
-
-// Balances is a free data retrieval call binding the contract method 0x27e235e3.
-//
-// Solidity: function balances(address ) view returns(uint256)
-func (_ERC20 *ERC20CallerSession) Balances(arg0 common.Address) (*big.Int, error) {
-	return _ERC20.Contract.Balances(&_ERC20.CallOpts, arg0)
 }
 
 // Decimals is a free data retrieval call binding the contract method 0x313ce567.
@@ -452,44 +390,23 @@ func (_ERC20 *ERC20CallerSession) TotalSupply() (*big.Int, error) {
 
 // Approve is a paid mutator transaction binding the contract method 0x095ea7b3.
 //
-// Solidity: function approve(address spender, uint256 amount) returns(bool)
-func (_ERC20 *ERC20Transactor) Approve(opts *bind.TransactOpts, spender common.Address, amount *big.Int) (*types.Transaction, error) {
-	return _ERC20.contract.Transact(opts, "approve", spender, amount)
+// Solidity: function approve(address spender, uint256 value) returns(bool)
+func (_ERC20 *ERC20Transactor) Approve(opts *bind.TransactOpts, spender common.Address, value *big.Int) (*types.Transaction, error) {
+	return _ERC20.contract.Transact(opts, "approve", spender, value)
 }
 
 // Approve is a paid mutator transaction binding the contract method 0x095ea7b3.
 //
-// Solidity: function approve(address spender, uint256 amount) returns(bool)
-func (_ERC20 *ERC20Session) Approve(spender common.Address, amount *big.Int) (*types.Transaction, error) {
-	return _ERC20.Contract.Approve(&_ERC20.TransactOpts, spender, amount)
+// Solidity: function approve(address spender, uint256 value) returns(bool)
+func (_ERC20 *ERC20Session) Approve(spender common.Address, value *big.Int) (*types.Transaction, error) {
+	return _ERC20.Contract.Approve(&_ERC20.TransactOpts, spender, value)
 }
 
 // Approve is a paid mutator transaction binding the contract method 0x095ea7b3.
 //
-// Solidity: function approve(address spender, uint256 amount) returns(bool)
-func (_ERC20 *ERC20TransactorSession) Approve(spender common.Address, amount *big.Int) (*types.Transaction, error) {
-	return _ERC20.Contract.Approve(&_ERC20.TransactOpts, spender, amount)
-}
-
-// Burn is a paid mutator transaction binding the contract method 0x42966c68.
-//
-// Solidity: function burn(uint256 amount) returns()
-func (_ERC20 *ERC20Transactor) Burn(opts *bind.TransactOpts, amount *big.Int) (*types.Transaction, error) {
-	return _ERC20.contract.Transact(opts, "burn", amount)
-}
-
-// Burn is a paid mutator transaction binding the contract method 0x42966c68.
-//
-// Solidity: function burn(uint256 amount) returns()
-func (_ERC20 *ERC20Session) Burn(amount *big.Int) (*types.Transaction, error) {
-	return _ERC20.Contract.Burn(&_ERC20.TransactOpts, amount)
-}
-
-// Burn is a paid mutator transaction binding the contract method 0x42966c68.
-//
-// Solidity: function burn(uint256 amount) returns()
-func (_ERC20 *ERC20TransactorSession) Burn(amount *big.Int) (*types.Transaction, error) {
-	return _ERC20.Contract.Burn(&_ERC20.TransactOpts, amount)
+// Solidity: function approve(address spender, uint256 value) returns(bool)
+func (_ERC20 *ERC20TransactorSession) Approve(spender common.Address, value *big.Int) (*types.Transaction, error) {
+	return _ERC20.Contract.Approve(&_ERC20.TransactOpts, spender, value)
 }
 
 // Mint is a paid mutator transaction binding the contract method 0xa0712d68.
@@ -515,44 +432,44 @@ func (_ERC20 *ERC20TransactorSession) Mint(amount *big.Int) (*types.Transaction,
 
 // Transfer is a paid mutator transaction binding the contract method 0xa9059cbb.
 //
-// Solidity: function transfer(address recipient, uint256 amount) returns(bool)
-func (_ERC20 *ERC20Transactor) Transfer(opts *bind.TransactOpts, recipient common.Address, amount *big.Int) (*types.Transaction, error) {
-	return _ERC20.contract.Transact(opts, "transfer", recipient, amount)
+// Solidity: function transfer(address to, uint256 value) returns(bool)
+func (_ERC20 *ERC20Transactor) Transfer(opts *bind.TransactOpts, to common.Address, value *big.Int) (*types.Transaction, error) {
+	return _ERC20.contract.Transact(opts, "transfer", to, value)
 }
 
 // Transfer is a paid mutator transaction binding the contract method 0xa9059cbb.
 //
-// Solidity: function transfer(address recipient, uint256 amount) returns(bool)
-func (_ERC20 *ERC20Session) Transfer(recipient common.Address, amount *big.Int) (*types.Transaction, error) {
-	return _ERC20.Contract.Transfer(&_ERC20.TransactOpts, recipient, amount)
+// Solidity: function transfer(address to, uint256 value) returns(bool)
+func (_ERC20 *ERC20Session) Transfer(to common.Address, value *big.Int) (*types.Transaction, error) {
+	return _ERC20.Contract.Transfer(&_ERC20.TransactOpts, to, value)
 }
 
 // Transfer is a paid mutator transaction binding the contract method 0xa9059cbb.
 //
-// Solidity: function transfer(address recipient, uint256 amount) returns(bool)
-func (_ERC20 *ERC20TransactorSession) Transfer(recipient common.Address, amount *big.Int) (*types.Transaction, error) {
-	return _ERC20.Contract.Transfer(&_ERC20.TransactOpts, recipient, amount)
+// Solidity: function transfer(address to, uint256 value) returns(bool)
+func (_ERC20 *ERC20TransactorSession) Transfer(to common.Address, value *big.Int) (*types.Transaction, error) {
+	return _ERC20.Contract.Transfer(&_ERC20.TransactOpts, to, value)
 }
 
 // TransferFrom is a paid mutator transaction binding the contract method 0x23b872dd.
 //
-// Solidity: function transferFrom(address sender, address recipient, uint256 amount) returns(bool)
-func (_ERC20 *ERC20Transactor) TransferFrom(opts *bind.TransactOpts, sender common.Address, recipient common.Address, amount *big.Int) (*types.Transaction, error) {
-	return _ERC20.contract.Transact(opts, "transferFrom", sender, recipient, amount)
+// Solidity: function transferFrom(address from, address to, uint256 value) returns(bool)
+func (_ERC20 *ERC20Transactor) TransferFrom(opts *bind.TransactOpts, from common.Address, to common.Address, value *big.Int) (*types.Transaction, error) {
+	return _ERC20.contract.Transact(opts, "transferFrom", from, to, value)
 }
 
 // TransferFrom is a paid mutator transaction binding the contract method 0x23b872dd.
 //
-// Solidity: function transferFrom(address sender, address recipient, uint256 amount) returns(bool)
-func (_ERC20 *ERC20Session) TransferFrom(sender common.Address, recipient common.Address, amount *big.Int) (*types.Transaction, error) {
-	return _ERC20.Contract.TransferFrom(&_ERC20.TransactOpts, sender, recipient, amount)
+// Solidity: function transferFrom(address from, address to, uint256 value) returns(bool)
+func (_ERC20 *ERC20Session) TransferFrom(from common.Address, to common.Address, value *big.Int) (*types.Transaction, error) {
+	return _ERC20.Contract.TransferFrom(&_ERC20.TransactOpts, from, to, value)
 }
 
 // TransferFrom is a paid mutator transaction binding the contract method 0x23b872dd.
 //
-// Solidity: function transferFrom(address sender, address recipient, uint256 amount) returns(bool)
-func (_ERC20 *ERC20TransactorSession) TransferFrom(sender common.Address, recipient common.Address, amount *big.Int) (*types.Transaction, error) {
-	return _ERC20.Contract.TransferFrom(&_ERC20.TransactOpts, sender, recipient, amount)
+// Solidity: function transferFrom(address from, address to, uint256 value) returns(bool)
+func (_ERC20 *ERC20TransactorSession) TransferFrom(from common.Address, to common.Address, value *big.Int) (*types.Transaction, error) {
+	return _ERC20.Contract.TransferFrom(&_ERC20.TransactOpts, from, to, value)
 }
 
 // ERC20ApprovalIterator is returned from FilterApproval and is used to iterate over the raw logs and unpacked data for Approval events raised by the ERC20 contract.

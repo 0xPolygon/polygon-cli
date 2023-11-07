@@ -33,6 +33,27 @@ jobs:
       - name: Run all the linter tools against code
         run: make lint
 
+  smart-contracts:
+    name: Build Smart Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+      - name: Install dependencies
+        working-directory: contracts
+        run: forge install
+      - name: Run forge build
+        working-directory: contracts
+        run: |
+          forge --version
+          FOUNDRY_PROFILE=lite forge build --contracts ./src/loadtester/LoadTester.sol
+          forge build --skip LoadTester.sol
+
   doc:
     name: Doc
     runs-on: ubuntu-latest
