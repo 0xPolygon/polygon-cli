@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/maticnetwork/polygon-cli/contracts-v2/src/uniswapv3"
+	v3router "github.com/maticnetwork/polygon-cli/contracts-v2/src/uniswap/v3router"
 	"github.com/rs/zerolog/log"
 )
 
@@ -15,13 +15,13 @@ var SwapAmountInput = big.NewInt(1_000)
 // ExactInputSingleSwap performs a UniswapV3 swap using the `ExactInputSingle` method which swaps a fixed amount of
 // one token for a maximum possible amount of another token. The direction of the swap is determined
 // by the nonce value.
-func ExactInputSingleSwap(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRouter02, poolConfig PoolConfig, amountIn *big.Int, recipient common.Address, nonce uint64) error {
+func ExactInputSingleSwap(tops *bind.TransactOpts, swapRouter *v3router.SwapRouter02, poolConfig PoolConfig, amountIn *big.Int, recipient common.Address, nonce uint64) error {
 	// Determine the direction of the swap.
 	swapDirection := getSwapDirection(nonce, poolConfig)
 
 	// Perform swap.
 	amountOut := new(big.Int).Mul(amountIn, new(big.Int).Div(big.NewInt(98), big.NewInt(100)))
-	_, err := swapRouter.ExactInputSingle(tops, uniswapv3.IV3SwapRouterExactInputSingleParams{
+	_, err := swapRouter.ExactInputSingle(tops, v3router.IV3SwapRouterExactInputSingleParams{
 		// The contract address of the inbound token.
 		TokenIn: swapDirection.tokenIn,
 		// The contract address of the outbound token.

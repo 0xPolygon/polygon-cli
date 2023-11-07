@@ -1,7 +1,7 @@
 // Code generated - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package uniswapv3
+package v3periphery
 
 import (
 	"errors"
@@ -479,4 +479,3 @@ func (_V3Migrator *V3MigratorSession) Receive() (*types.Transaction, error) {
 func (_V3Migrator *V3MigratorTransactorSession) Receive() (*types.Transaction, error) {
 	return _V3Migrator.Contract.Receive(&_V3Migrator.TransactOpts)
 }
-

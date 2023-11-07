@@ -10,7 +10,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/maticnetwork/polygon-cli/contracts-v2/src/uniswapv3"
+	tokens "github.com/maticnetwork/polygon-cli/contracts-v2/src/tokens"
+	v3core "github.com/maticnetwork/polygon-cli/contracts-v2/src/uniswap/v3core"
+	v3periphery "github.com/maticnetwork/polygon-cli/contracts-v2/src/uniswap/v3periphery"
 	"github.com/rs/zerolog/log"
 )
 
@@ -51,13 +53,13 @@ func PercentageToUniswapFeeTier(p float64) *big.Int {
 
 // PoolConfig represents the configuration of a UniswapV3 pool.
 type PoolConfig struct {
-	Token0, Token1     ContractConfig[uniswapv3.Swapper]
+	Token0, Token1     ContractConfig[tokens.Swapper]
 	ReserveA, ReserveB *big.Int
 	Fees               *big.Int
 }
 
 // Create a new `PoolConfig` object.
-func NewPool(token0, token1 ContractConfig[uniswapv3.Swapper], fees *big.Int) *PoolConfig {
+func NewPool(token0, token1 ContractConfig[tokens.Swapper], fees *big.Int) *PoolConfig {
 	p := PoolConfig{
 		ReserveA: poolReserveForOneToken,
 		ReserveB: poolReserveForOneToken,
@@ -118,7 +120,7 @@ func SetupLiquidityPool(ctx context.Context, c *ethclient.Client, tops *bind.Tra
 }
 
 // createPool creates and initialises the UniswapV3 liquidity pool if needed.
-func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, poolConfig PoolConfig, blockUntilSuccessful blockUntilSuccessfulFn) (*uniswapv3.IUniswapV3Pool, error) {
+func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, poolConfig PoolConfig, blockUntilSuccessful blockUntilSuccessfulFn) (*v3core.IUniswapV3Pool, error) {
 	// Create and initialize the pool.
 	sqrtPriceX96 := computeSqrtPriceX96(poolConfig.ReserveA, poolConfig.ReserveB)
 	if _, err := uniswapV3Config.NonfungiblePositionManager.Contract.CreateAndInitializePoolIfNecessary(tops, poolConfig.Token0.Address, poolConfig.Token1.Address, poolConfig.Fees, sqrtPriceX96); err != nil {
@@ -142,7 +144,7 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	}
 
 	// Instantiate the pool contract.
-	contract, err := uniswapv3.NewIUniswapV3Pool(poolAddress, c)
+	contract, err := v3core.NewIUniswapV3Pool(poolAddress, c)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to instantiate the pool")
 		return nil, err
@@ -163,7 +165,7 @@ func computeSqrtPriceX96(reserveA, reserveB *big.Int) *big.Int {
 }
 
 // getPoolState returns UniswapV3 pool's slot0 and liquidity.
-func getPoolState(cops *bind.CallOpts, contract *uniswapv3.IUniswapV3Pool) (slot, *big.Int, error) {
+func getPoolState(cops *bind.CallOpts, contract *v3core.IUniswapV3Pool) (slot, *big.Int, error) {
 	// Get pool state.
 	var slot0 slot
 	var err error
@@ -185,7 +187,7 @@ func getPoolState(cops *bind.CallOpts, contract *uniswapv3.IUniswapV3Pool) (slot
 }
 
 // provideLiquidity provides liquidity to the UniswapV3 pool.
-func provideLiquidity(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, poolContract *uniswapv3.IUniswapV3Pool, poolConfig PoolConfig, recipient common.Address, nftPositionManagerContract *uniswapv3.NonfungiblePositionManager, blockUntilSuccessful blockUntilSuccessfulFn) error {
+func provideLiquidity(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, poolContract *v3core.IUniswapV3Pool, poolConfig PoolConfig, recipient common.Address, nftPositionManagerContract *v3periphery.NonfungiblePositionManager, blockUntilSuccessful blockUntilSuccessfulFn) error {
 	// Compute the tick lower and upper for providing liquidity.
 	// The default tick spacing is set to 60 for the 0.3% fee tier and unfortunately, `MIN_TICK` and
 	// `MAX_TICK` are not divisible by this amount. The solution is to use a multiple of 60 instead.
@@ -211,7 +213,7 @@ func provideLiquidity(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 
 	// Provide liquidity.
 	poolSize := new(big.Int).Add(poolConfig.ReserveA, poolConfig.ReserveB)
-	mintParams := uniswapv3.INonfungiblePositionManagerMintParams{
+	mintParams := v3periphery.INonfungiblePositionManagerMintParams{
 		// The address of the token0, first token of the pool.
 		Token0: poolConfig.Token0.Address,
 		// The address of the token1, second token of the pool.

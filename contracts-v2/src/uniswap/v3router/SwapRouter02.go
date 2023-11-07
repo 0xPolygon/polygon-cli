@@ -1,7 +1,7 @@
 // Code generated - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package uniswapv3
+package v3router
 
 import (
 	"errors"
@@ -1156,4 +1156,3 @@ func (_SwapRouter02 *SwapRouter02Session) Receive() (*types.Transaction, error) 
 func (_SwapRouter02 *SwapRouter02TransactorSession) Receive() (*types.Transaction, error) {
 	return _SwapRouter02.Contract.Receive(&_SwapRouter02.TransactOpts)
 }
-

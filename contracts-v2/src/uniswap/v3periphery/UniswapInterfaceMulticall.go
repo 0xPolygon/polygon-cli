@@ -1,7 +1,7 @@
 // Code generated - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package uniswapv3
+package v3periphery
 
 import (
 	"errors"
@@ -298,4 +298,3 @@ func (_UniswapInterfaceMulticall *UniswapInterfaceMulticallSession) Multicall(ca
 func (_UniswapInterfaceMulticall *UniswapInterfaceMulticallTransactorSession) Multicall(calls []UniswapInterfaceMulticallCall) (*types.Transaction, error) {
 	return _UniswapInterfaceMulticall.Contract.Multicall(&_UniswapInterfaceMulticall.TransactOpts, calls)
 }
-

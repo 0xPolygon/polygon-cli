@@ -14,7 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	uniswapv3loadtest "github.com/maticnetwork/polygon-cli/cmd/loadtest/uniswapv3"
-	"github.com/maticnetwork/polygon-cli/contracts-v2/src/uniswapv3"
+	tokens "github.com/maticnetwork/polygon-cli/contracts-v2/src/tokens"
 	"github.com/rs/zerolog/log"
 )
 
@@ -106,14 +106,14 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 	log.Debug().Interface("addresses", uniswapV3Config.GetAddresses()).Msg("UniswapV3 deployed")
 
 	log.Debug().Msg("🪙 Deploying ERC20 tokens...")
-	var token0 uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
+	var token0 uniswapv3loadtest.ContractConfig[tokens.Swapper]
 	token0, err = uniswapv3loadtest.DeployERC20(
 		ctx, c, tops, cops, uniswapV3Config, "SwapperA", "SA", uniswapv3loadtest.MintAmount, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0), blockUntilSuccessful)
 	if err != nil {
 		return
 	}
 
-	var token1 uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
+	var token1 uniswapv3loadtest.ContractConfig[tokens.Swapper]
 	token1, err = uniswapv3loadtest.DeployERC20(
 		ctx, c, tops, cops, uniswapV3Config, "SwapperB", "SB", uniswapv3loadtest.MintAmount, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1), blockUntilSuccessful)
 	if err != nil {

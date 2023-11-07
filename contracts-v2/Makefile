@@ -5,6 +5,8 @@ gen:
 	forge build --skip LoadTester
 	$(call gen_go_binding,ERC20,src/tokens/ERC20,tokens,src/tokens)
 	$(call gen_go_binding,ERC721,src/tokens/ERC721,tokens,src/tokens)
+	$(call gen_go_binding,Swapper,src/tokens/Swapper,tokens,src/tokens)
+	$(call gen_go_binding,WETH9,src/tokens/WETH9,tokens,src/tokens)
 
 # Generate go binding.
 # - $1: smart contract name.

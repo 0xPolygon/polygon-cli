@@ -1,7 +1,7 @@
 // Code generated - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package uniswapv3
+package v3periphery
 
 import (
 	"errors"
@@ -250,4 +250,3 @@ func (_NFTDescriptor *NFTDescriptorSession) ConstructTokenURI(params NFTDescript
 func (_NFTDescriptor *NFTDescriptorCallerSession) ConstructTokenURI(params NFTDescriptorConstructTokenURIParams) (string, error) {
 	return _NFTDescriptor.Contract.ConstructTokenURI(&_NFTDescriptor.CallOpts, params)
 }
-

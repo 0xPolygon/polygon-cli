@@ -1,7 +1,7 @@
 // Code generated - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package uniswapv3
+package v3periphery
 
 import (
 	"errors"
@@ -387,4 +387,3 @@ func (_NonfungibleTokenPositionDescriptor *NonfungibleTokenPositionDescriptorSes
 func (_NonfungibleTokenPositionDescriptor *NonfungibleTokenPositionDescriptorCallerSession) TokenURI(positionManager common.Address, tokenId *big.Int) (string, error) {
 	return _NonfungibleTokenPositionDescriptor.Contract.TokenURI(&_NonfungibleTokenPositionDescriptor.CallOpts, positionManager, tokenId)
 }
-
