@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/maticnetwork/polygon-cli/contracts/uniswapv3"
+	"github.com/maticnetwork/polygon-cli/contracts-v2/src/uniswapv3"
 	"github.com/rs/zerolog/log"
 )
 

@@ -14,7 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	uniswapv3loadtest "github.com/maticnetwork/polygon-cli/cmd/loadtest/uniswapv3"
-	"github.com/maticnetwork/polygon-cli/contracts/uniswapv3"
+	"github.com/maticnetwork/polygon-cli/contracts-v2/src/uniswapv3"
 	"github.com/rs/zerolog/log"
 )
 
