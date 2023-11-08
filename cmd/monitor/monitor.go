@@ -572,10 +572,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					log.Warn().Err(err).Msg("Failed to fetch blocks on page down")
 					break
 				}
-
-				// Force redraw to update the UI with the new page of blocks
-				forceRedraw = true
-				redraw(ms, true)
 			case "<Enter>":
 				if blockTable.SelectedRow > 0 {
 					currentMode = monitorModeBlock
