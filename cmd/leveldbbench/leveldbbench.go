@@ -55,6 +55,7 @@ var (
 	readOnly               *bool
 	dbPath                 *string
 	fullScan               *bool
+	dbMode                 *string
 )
 
 const (
@@ -96,12 +97,11 @@ type (
 		TestDuration time.Duration
 		Description  string
 		OpCount      uint64
-		Stats        *leveldb.DBStats
 		OpRate       float64
 		ValueDist    []uint64
 	}
 	RandomKeySeeker struct {
-		db            *leveldb.DB
+		db            KeyValueDB
 		iterator      iterator.Iterator
 		iteratorMutex sync.Mutex
 		firstKey      []byte
@@ -115,16 +115,77 @@ type (
 		ranges         []IORange
 		totalFrequency int
 	}
+	// KeyValueDB directly exposes the necessary methods of leveldb.DB that we need to run the test so that they can be
+	// implemented by other KV stores
+	KeyValueDB interface {
+		Close() error
+		Compact() error
+		NewIterator() iterator.Iterator
+		Get([]byte) ([]byte, error)
+		Put([]byte, []byte) error
+	}
+	LevelDBWrapper struct {
+		ro     *opt.ReadOptions
+		wo     *opt.WriteOptions
+		handle *leveldb.DB
+	}
+	PebbleDBWrapper struct {
+	}
 )
 
-func NewTestResult(startTime, endTime time.Time, desc string, opCount uint64, db *leveldb.DB) *TestResult {
-	tr := new(TestResult)
-	s := new(leveldb.DBStats)
-	err := db.Stats(s)
+func NewWrappedLevelDB() (*LevelDBWrapper, error) {
+	db, err := leveldb.OpenFile(*dbPath, &opt.Options{
+		Filter:                 filter.NewBloomFilter(10),
+		DisableSeeksCompaction: true,
+		OpenFilesCacheCapacity: *openFilesCacheCapacity,
+		BlockCacheCapacity:     *cacheSize / 2 * opt.MiB,
+		WriteBuffer:            *cacheSize / 4 * opt.MiB,
+		// if we've disabled writes, or we're doing a full scan, we should open the database in read only mode
+		ReadOnly: *readOnly || *fullScan,
+	})
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to retrieve db stats")
+		return nil, err
 	}
-	tr.Stats = s
+
+	wo := &opt.WriteOptions{
+		NoWriteMerge: *noWriteMerge,
+		Sync:         *syncWrites,
+	}
+	ro := &opt.ReadOptions{
+		DontFillCache: *dontFillCache,
+	}
+	if *readStrict {
+		ro.Strict = opt.StrictAll
+	} else {
+		ro.Strict = opt.DefaultStrict
+	}
+	if *nilReadOptions {
+		ro = nil
+	}
+	wrapper := new(LevelDBWrapper)
+	wrapper.handle = db
+	wrapper.wo = wo
+	wrapper.ro = ro
+	return wrapper, nil
+}
+func (l *LevelDBWrapper) Close() error {
+	return l.handle.Close()
+}
+func (l *LevelDBWrapper) Compact() error {
+	return l.handle.CompactRange(util.Range{Start: nil, Limit: nil})
+}
+func (l *LevelDBWrapper) NewIterator() iterator.Iterator {
+	return l.handle.NewIterator(nil, nil)
+}
+func (l *LevelDBWrapper) Get(key []byte) ([]byte, error) {
+	return l.handle.Get(key, l.ro)
+}
+func (l *LevelDBWrapper) Put(key []byte, value []byte) error {
+	return l.handle.Put(key, value, l.wo)
+}
+
+func NewTestResult(startTime, endTime time.Time, desc string, opCount uint64) *TestResult {
+	tr := new(TestResult)
 	tr.StartTime = startTime
 	tr.EndTime = endTime
 	tr.TestDuration = endTime.Sub(startTime)
@@ -143,35 +204,22 @@ var LevelDBBenchCmd = &cobra.Command{
 	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Info().Msg("Starting level db test")
-		db, err := leveldb.OpenFile(*dbPath, &opt.Options{
-			Filter:                 filter.NewBloomFilter(10),
-			DisableSeeksCompaction: true,
-			OpenFilesCacheCapacity: *openFilesCacheCapacity,
-			BlockCacheCapacity:     *cacheSize / 2 * opt.MiB,
-			WriteBuffer:            *cacheSize / 4 * opt.MiB,
-			// if we've disabled writes, or we're doing a full scan, we should open the database in read only mode
-			ReadOnly: *readOnly || *fullScan,
-		})
-		if err != nil {
-			return err
+		var kvdb KeyValueDB
+		var err error
+		switch *dbMode {
+		case "leveldb":
+			kvdb, err = NewWrappedLevelDB()
+			if err != nil {
+				return err
+			}
+		case "pebbledb":
+			return fmt.Errorf("pebble db not implemented yet")
+		default:
+			return fmt.Errorf("the mode %s is not recognized", *dbMode)
 		}
 
 		ctx := context.Background()
-		wo := opt.WriteOptions{
-			NoWriteMerge: *noWriteMerge,
-			Sync:         *syncWrites,
-		}
-		ro := &opt.ReadOptions{
-			DontFillCache: *dontFillCache,
-		}
-		if *readStrict {
-			ro.Strict = opt.StrictAll
-		} else {
-			ro.Strict = opt.DefaultStrict
-		}
-		if *nilReadOptions {
-			ro = nil
-		}
+
 		var start time.Time
 		trs := make([]*TestResult, 0)
 
@@ -186,8 +234,8 @@ var LevelDBBenchCmd = &cobra.Command{
 
 		if *fullScan {
 			start = time.Now()
-			opCount, valueDist := runFullScan(ctx, db, &wo, ro)
-			tr := NewTestResult(start, time.Now(), "full scan", opCount, db)
+			opCount, valueDist := runFullScan(ctx, kvdb)
+			tr := NewTestResult(start, time.Now(), "full scan", opCount)
 			tr.ValueDist = valueDist
 			trs = append(trs, tr)
 			return printSummary(trs)
@@ -196,32 +244,32 @@ var LevelDBBenchCmd = &cobra.Command{
 		// in no write mode, we assume the database as already been populated in a previous run or we're using some other database
 		if !*readOnly {
 			start = time.Now()
-			writeData(ctx, db, &wo, 0, *writeLimit, *sequentialWrites)
-			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("initial %s write", sequentialWritesDesc), *writeLimit, db))
+			writeData(ctx, kvdb, 0, *writeLimit, *sequentialWrites)
+			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("initial %s write", sequentialWritesDesc), *writeLimit))
 
 			for i := 0; i < int(*overwriteCount); i += 1 {
 				start = time.Now()
-				writeData(ctx, db, &wo, 0, *writeLimit, *sequentialWrites)
-				trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s overwrite %d", sequentialWritesDesc, i), *writeLimit, db))
+				writeData(ctx, kvdb, 0, *writeLimit, *sequentialWrites)
+				trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s overwrite %d", sequentialWritesDesc, i), *writeLimit))
 			}
 
 			start = time.Now()
-			runFullCompact(ctx, db, &wo)
-			trs = append(trs, NewTestResult(start, time.Now(), "compaction", 1, db))
+			runFullCompact(ctx, kvdb)
+			trs = append(trs, NewTestResult(start, time.Now(), "compaction", 1))
 		}
 
 		if *sequentialReads {
 			start = time.Now()
-			readSeq(ctx, db, &wo, *readLimit)
-			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s read", sequentialReadsDesc), *readLimit, db))
+			readSeq(ctx, kvdb, *readLimit)
+			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s read", sequentialReadsDesc), *readLimit))
 		} else {
 			start = time.Now()
-			readRandom(ctx, db, ro, *readLimit)
-			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s read", sequentialWritesDesc), *readLimit, db))
+			readRandom(ctx, kvdb, *readLimit)
+			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s read", sequentialWritesDesc), *readLimit))
 		}
 
 		log.Info().Msg("Close DB")
-		err = db.Close()
+		err = kvdb.Close()
 		if err != nil {
 			log.Error().Err(err).Msg("Error while closing db")
 		}
@@ -250,19 +298,19 @@ func printSummary(trs []*TestResult) error {
 	return nil
 }
 
-func runFullCompact(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions) {
-	err := db.CompactRange(util.Range{Start: nil, Limit: nil})
+func runFullCompact(ctx context.Context, db KeyValueDB) {
+	err := db.Compact()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error compacting data")
 	}
 }
-func runFullScan(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, ro *opt.ReadOptions) (uint64, []uint64) {
+func runFullScan(ctx context.Context, db KeyValueDB) (uint64, []uint64) {
 	pool := make(chan bool, *degreeOfParallelism)
 	var wg sync.WaitGroup
 	// 32 should be safe here. That would correspond to a single value that's 4.2 GB
 	buckets := make([]uint64, 32)
 	var bucketsMutex sync.Mutex
-	iter := db.NewIterator(nil, nil)
+	iter := db.NewIterator()
 	var opCount uint64 = 0
 	for iter.Next() {
 		pool <- true
@@ -314,7 +362,7 @@ func runFullScan(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, ro *
 	}
 	return opCount, buckets
 }
-func writeData(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, startIndex, writeLimit uint64, sequential bool) {
+func writeData(ctx context.Context, db KeyValueDB, startIndex, writeLimit uint64, sequential bool) {
 	var i uint64 = startIndex
 	var wg sync.WaitGroup
 	pool := make(chan bool, *degreeOfParallelism)
@@ -326,7 +374,7 @@ func writeData(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, startI
 		go func(i uint64) {
 			_ = bar.Add(1)
 			k, v := makeKV(i, sizeDistribution.GetSizeSample(), sequential)
-			err := db.Put(k, v, wo)
+			err := db.Put(k, v)
 			if err != nil {
 				log.Fatal().Err(err).Msg("Failed to put value")
 			}
@@ -338,14 +386,14 @@ func writeData(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, startI
 	_ = bar.Finish()
 }
 
-func readSeq(ctx context.Context, db *leveldb.DB, wo *opt.WriteOptions, limit uint64) {
+func readSeq(ctx context.Context, db KeyValueDB, limit uint64) {
 	pb := getNewProgressBar(int64(limit), "sequential reads")
 	var rCount uint64 = 0
 	pool := make(chan bool, *degreeOfParallelism)
 	var wg sync.WaitGroup
 benchLoop:
 	for {
-		iter := db.NewIterator(nil, nil)
+		iter := db.NewIterator()
 		for iter.Next() {
 			rCount += 1
 			_ = pb.Add(1)
@@ -372,7 +420,7 @@ benchLoop:
 	wg.Wait()
 	_ = pb.Finish()
 }
-func readRandom(ctx context.Context, db *leveldb.DB, ro *opt.ReadOptions, limit uint64) {
+func readRandom(ctx context.Context, db KeyValueDB, limit uint64) {
 	pb := getNewProgressBar(int64(limit), "random reads")
 	var rCount uint64 = 0
 	pool := make(chan bool, *degreeOfParallelism)
@@ -388,7 +436,7 @@ benchLoop:
 				rCount += 1
 				_ = pb.Add(1)
 
-				_, err := db.Get(rks.Key(), ro)
+				_, err := db.Get(rks.Key())
 				if err != nil {
 					log.Error().Err(err).Msg("Level db random read error")
 				}
@@ -404,10 +452,10 @@ benchLoop:
 	_ = pb.Finish()
 }
 
-func NewRandomKeySeeker(db *leveldb.DB) *RandomKeySeeker {
+func NewRandomKeySeeker(db KeyValueDB) *RandomKeySeeker {
 	rks := new(RandomKeySeeker)
 	rks.db = db
-	rks.iterator = db.NewIterator(nil, nil)
+	rks.iterator = db.NewIterator()
 	rks.firstKey = rks.iterator.Key()
 	return rks
 }
@@ -618,6 +666,7 @@ func init() {
 	readOnly = flagSet.Bool("read-only", false, "if true, we'll skip all the write operations and open the DB in read only mode")
 	dbPath = flagSet.String("db-path", "_benchmark_db", "the path of the database that we'll use for testing")
 	fullScan = flagSet.Bool("full-scan-mode", false, "if true, the application will scan the full database as fast as possible and print a summary")
+	dbMode = flagSet.String("db-mode", "leveldb", "The mode to use: leveldb or pebbledb")
 
 	randSrc = rand.New(rand.NewSource(1))
 }
