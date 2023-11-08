@@ -90,7 +90,7 @@ func monitor(ctx context.Context) error {
 	ec := ethclient.NewClient(rpc)
 
 	ms := new(monitorStatus)
-	ms.BlockCache, _ = lru.New(100)
+	ms.BlockCache, _ = lru.New(blockCacheLimit)
 	ms.MaxBlockRetrieved = big.NewInt(0)
 
 	ms.ChainID = big.NewInt(0)
@@ -193,8 +193,6 @@ func prependLatestBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Cli
 	}
 }
 
-const maxHistoricalPoints = 100 // set a limit to the number of historical points
-
 func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client, isUiRendered bool) (err error) {
 	var cs *chainState
 	cs, err = getChainState(ctx, ec)
@@ -202,10 +200,6 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 		log.Error().Err(err).Msg("Encountered issue fetching network information")
 		time.Sleep(interval)
 		return err
-	}
-	if len(observedPendingTxs) >= maxHistoricalPoints {
-		// remove the oldest data point
-		observedPendingTxs = observedPendingTxs[1:]
 	}
 	observedPendingTxs = append(observedPendingTxs, historicalDataPoint{SampleTime: time.Now(), SampleValue: float64(cs.PendingCount)})
 
