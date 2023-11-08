@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
-	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -25,14 +24,13 @@ import (
 )
 
 var (
-	windowSize                   int
-	batchSize                    int
-	interval                     time.Duration
-	one                          = big.NewInt(1)
-	zero                         = big.NewInt(0)
-	selectedBlock                rpctypes.PolyBlock
-	currentlyFetchingHistoryLock sync.RWMutex
-	observedPendingTxs           historicalRange
+	windowSize         int
+	batchSize          int
+	interval           time.Duration
+	one                = big.NewInt(1)
+	zero               = big.NewInt(0)
+	selectedBlock      rpctypes.PolyBlock
+	observedPendingTxs historicalRange
 )
 
 type (
@@ -195,36 +193,6 @@ func prependLatestBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Cli
 	}
 }
 
-func appendOlderBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Client) error {
-	if ms.MinBlockRetrieved == nil {
-		log.Warn().Msg("Nil min block")
-		return fmt.Errorf("the min block is nil")
-	}
-	if !currentlyFetchingHistoryLock.TryLock() {
-		return fmt.Errorf("the function is currently locked")
-	}
-	defer currentlyFetchingHistoryLock.Unlock()
-
-	to := new(big.Int).Sub(ms.MinBlockRetrieved, one)
-	from := new(big.Int).Sub(to, big.NewInt(int64(batchSize-1)))
-	if from.Cmp(zero) < 0 {
-		from.SetInt64(0)
-	}
-
-	log.Debug().
-		Int64("from", from.Int64()).
-		Int64("to", to.Int64()).
-		Int64("min", ms.MinBlockRetrieved.Int64()).
-		Msg("Fetching older blocks")
-
-	err := ms.getBlockRange(ctx, from, to, rpc)
-	if err != nil {
-		log.Error().Err(err).Msg("There was an issue fetching the block range")
-		return err
-	}
-	return nil
-}
-
 const maxHistoricalPoints = 100 // set a limit to the number of historical points
 
 func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client, isUiRendered bool) (err error) {
@@ -260,34 +228,8 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 	ms.PendingCount = cs.PendingCount
 
 	prependLatestBlocks(ctx, ms, rpc)
-	// if shouldLoadMoreHistory(ctx, ms) {
-	// 	err = appendOlderBlocks(ctx, ms, rpc)
-	// 	if err != nil {
-	// 		log.Warn().Err(err).Msg("Unable to append more history")
-	// 	}
-	// }
 
 	return
-}
-
-// shouldLoadMoreHistory is meant to decide if we should keep fetching more block history. The idea is that if the user
-// hasn't scrolled within a batch size of the minimum of the page, we won't  keep loading more history
-func shouldLoadMoreHistory(ctx context.Context, ms *monitorStatus) bool {
-	if ms.MinBlockRetrieved == nil {
-		return false
-	}
-	if selectedBlock == nil {
-		return false
-	}
-	minBlockNumber := ms.MinBlockRetrieved.Int64()
-	selectedBlockNumber := selectedBlock.Number().Int64()
-	if minBlockNumber == 0 {
-		return false
-	}
-	if minBlockNumber < selectedBlockNumber-(5*int64(batchSize)) {
-		return false
-	}
-	return true
 }
 
 func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, rpc *ethrpc.Client) error {
