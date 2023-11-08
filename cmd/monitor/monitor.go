@@ -660,7 +660,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 						// Calculate the range of block numbers we are trying to page down to
 						nextTopBlockNumber := new(big.Int).Add(ms.TopDisplayedBlock, one)
 						if nextTopBlockNumber.Cmp(ms.HeadBlock) > 0 {
-							nextTopBlockNumber.SetInt64(0)
+							nextTopBlockNumber.SetInt64(ms.HeadBlock.Int64())
 						}
 
 						// Calculate the 'to' block number based on the next top block number
@@ -681,7 +681,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 						// Update the top displayed block number
 						ms.TopDisplayedBlock = nextTopBlockNumber
 
-						blockTable.SelectedRow = len(renderedBlocks)
+						blockTable.SelectedRow = 1
 						setBlock = true
 
 						// Force redraw to update the UI with the new page of blocks
@@ -689,7 +689,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 						redraw(ms, true)
 						break
 					}
-					blockTable.SelectedRow += 1
+					blockTable.SelectedRow -= 1
 					setBlock = true
 				}
 			case "<Home>":
@@ -746,11 +746,38 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				forceRedraw = true
 				redraw(ms, true)
 			case "<C-b>", "<PageUp>":
-				// windowOffset -= windowSize
-				// if windowOffset < 0 {
-				// 	windowOffset = 0
-				// 	blockTable.SelectedRow = 1
-				// }
+				// Calculate the range of block numbers we are trying to page down to
+				nextTopBlockNumber := new(big.Int).Add(ms.TopDisplayedBlock, big.NewInt(int64(windowSize)))
+				if nextTopBlockNumber.Cmp(ms.HeadBlock) > 0 {
+					nextTopBlockNumber.SetInt64(ms.HeadBlock.Int64())
+				}
+
+				// Calculate the 'to' block number based on the next top block number
+				toBlockNumber := new(big.Int).Sub(nextTopBlockNumber, big.NewInt(int64(windowSize-1)))
+				if toBlockNumber.Cmp(zero) < 0 {
+					toBlockNumber.SetInt64(0)
+				}
+
+				// Fetch the blocks in the new range if they are missing
+				_, err := checkAndFetchMissingBlocks(ctx, ms, rpc, toBlockNumber, nextTopBlockNumber)
+				if err != nil {
+					log.Warn().Err(err).Msg("Failed to fetch blocks on page down")
+					break
+				}
+
+				// Update the top displayed block number
+				ms.TopDisplayedBlock = nextTopBlockNumber
+
+				blockTable.SelectedRow = 1
+
+				log.Debug().
+					Int("TopDisplayedBlock", int(ms.TopDisplayedBlock.Int64())).
+					Int("toBlockNumber", int(toBlockNumber.Int64())).
+					Msg("PageDown")
+
+				// Force redraw to update the UI with the new page of blocks
+				forceRedraw = true
+				redraw(ms, true)
 			default:
 				log.Trace().Str("id", e.ID).Msg("Unknown ui event")
 			}
