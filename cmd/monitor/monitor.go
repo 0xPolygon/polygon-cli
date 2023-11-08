@@ -109,9 +109,11 @@ func monitor(ctx context.Context) error {
 				if err != nil {
 					continue
 				}
-
 				if !isUiRendered {
 					go func() {
+						if ms.TopDisplayedBlock == nil {
+							ms.TopDisplayedBlock = ms.HeadBlock
+						}
 						errChan <- renderMonitorUI(ctx, ec, ms, rpc)
 					}()
 					isUiRendered = true
@@ -213,9 +215,6 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 	}
 
 	ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
-	if ms.TopDisplayedBlock == nil {
-		ms.TopDisplayedBlock = ms.HeadBlock
-	}
 	ms.ChainID = cs.ChainID
 	ms.PeerCount = cs.PeerCount
 	ms.GasPrice = cs.GasPrice
@@ -377,8 +376,6 @@ func updateAllBlocks(ms *monitorStatus) []rpctypes.PolyBlock {
 		}
 	}
 
-	// Assuming blocks need to be sorted, you'd sort them here.
-	// This assumes that metrics.SortableBlocks is a type that can be sorted.
 	sort.Sort(metrics.SortableBlocks(blocks))
 
 	return blocks
@@ -402,7 +399,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	var setBlock = false
 	var allBlocks metrics.SortableBlocks
 	var renderedBlocks metrics.SortableBlocks
-	// windowOffset := 0
 
 	redraw := func(ms *monitorStatus, force ...bool) {
 		log.Debug().Interface("ms", ms).Msg("Redrawing")
@@ -629,18 +625,18 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					setBlock = true
 				}
 			case "<Home>":
-				// windowOffset = 0
+				ms.TopDisplayedBlock = ms.HeadBlock
 				blockTable.SelectedRow = 1
 				setBlock = true
 			case "g":
 				if previousKey == "g" {
-					// windowOffset = 0
+					ms.TopDisplayedBlock = ms.HeadBlock
 					blockTable.SelectedRow = 1
 					setBlock = true
 				}
 			case "G", "<End>":
 				if len(renderedBlocks) < windowSize {
-					// windowOffset = 0
+					ms.TopDisplayedBlock = ms.HeadBlock
 					blockTable.SelectedRow = len(renderedBlocks)
 				} else {
 					// windowOffset = len(allBlocks) - windowSize
