@@ -484,6 +484,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		}
 
 		if blockTable.SelectedRow == 0 || len(force) > 0 && force[0] {
+			ms.TopDisplayedBlock = ms.HeadBlock
 			allBlocks = updateAllBlocks(ms)
 			sort.Sort(allBlocks)
 		}
@@ -495,12 +496,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		renderedBlocksTemp := make([]rpctypes.PolyBlock, 0, windowSize)
 		for i := new(big.Int).Set(fromBlockNumber); i.Cmp(toBlockNumber) <= 0; i.Add(i, big.NewInt(1)) {
 			if block, ok := ms.BlockCache.Get(i.String()); ok {
-				// Type assert the block to its actual type (rpctypes.PolyBlock) before appending.
 				renderedBlocksTemp = append(renderedBlocksTemp, block.(rpctypes.PolyBlock))
 			} else {
 				// If for some reason the block is not in the cache after fetching, handle this case.
 				log.Warn().Str("blockNumber", i.String()).Msg("Block should be in cache but is not")
-				// Depending on how critical this case is, you might want to handle this error differently.
 			}
 		}
 		renderedBlocks = renderedBlocksTemp
@@ -546,7 +545,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 	redraw(ms)
 
-	currIdx := 0
+	// currIdx := 0
 	previousKey := ""
 	for {
 		forceRedraw := false
@@ -594,16 +593,14 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				}
 
 				if blockTable.SelectedRow == 0 {
-					currIdx = 1
-					blockTable.SelectedRow = currIdx
+					blockTable.SelectedRow = 1
 					setBlock = true
 					break
 				}
-				currIdx = blockTable.SelectedRow
 
 				if e.ID == "<Down>" {
 					log.Debug().
-						Int("currIdx", currIdx).
+						Int("blockTable.SelectedRow", blockTable.SelectedRow).
 						Int("windowSize", windowSize).
 						Int("renderedBlocks", len(renderedBlocks)).
 						Int("dy", blockTable.Dy()).
@@ -611,7 +608,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 						Msg("Down")
 
 					// the last row of current window size
-					if currIdx > windowSize-1 {
+					if blockTable.SelectedRow > windowSize-1 {
 						// Calculate the range of block numbers we are trying to page down to
 						nextTopBlockNumber := new(big.Int).Sub(ms.TopDisplayedBlock, one)
 						if nextTopBlockNumber.Cmp(zero) < 0 {
@@ -620,39 +617,45 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 						}
 
 						// Calculate the 'to' block number based on the next top block number
-						toBlockNumber := new(big.Int).Sub(nextTopBlockNumber, one)
+						toBlockNumber := new(big.Int).Sub(nextTopBlockNumber, big.NewInt(int64(windowSize-1)))
 						if toBlockNumber.Cmp(zero) < 0 {
 							toBlockNumber.SetInt64(0)
 						}
 
 						// Fetch the blocks in the new range if they are missing
-						_, err := checkAndFetchMissingBlocks(ctx, ms, rpc, toBlockNumber, nextTopBlockNumber)
-						if err != nil {
-							log.Warn().Err(err).Msg("Failed to fetch blocks on page down")
-							break
+						if !isBlockInCache(ms.BlockCache, nextTopBlockNumber) {
+							err := appendOlderBlocks(ctx, ms, rpc)
+							if err != nil {
+								log.Warn().Err(err).Msg("Unable to append more history")
+							}
+							// _, err := checkAndFetchMissingBlocks(ctx, ms, rpc, toBlockNumber, nextTopBlockNumber)
+							// if err != nil {
+							// 	log.Warn().Err(err).Msg("Failed to fetch blocks on page down")
+							// 	break
+							// }
 						}
 
 						// Update the top displayed block number
 						ms.TopDisplayedBlock = nextTopBlockNumber
 
+						blockTable.SelectedRow += 1
+						setBlock = true
+
 						// Force redraw to update the UI with the new page of blocks
 						forceRedraw = true
 						redraw(ms, true)
+						break
 					}
-					currIdx += 1
+					blockTable.SelectedRow += 1
 					setBlock = true
 				} else if e.ID == "<Up>" {
-					log.Debug().Int("currIdx", currIdx).Int("windowSize", windowSize).Msg("Up")
+					log.Debug().Int("blockTable.SelectedRow", blockTable.SelectedRow).Int("windowSize", windowSize).Msg("Up")
 					// if currIdx <= 1 && windowOffset > 0 {
 					// 	windowOffset -= 1
 					// 	break
 					// }
-					currIdx -= 1
+					blockTable.SelectedRow -= 1
 					setBlock = true
-				}
-				// need a better way to understand how many rows are visible
-				if currIdx > 0 && currIdx <= windowSize && currIdx <= len(renderedBlocks) {
-					blockTable.SelectedRow = currIdx
 				}
 			case "<Home>":
 				// windowOffset = 0
@@ -733,6 +736,11 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			}
 		}
 	}
+}
+
+func isBlockInCache(cache *lru.Cache, blockNumber *big.Int) bool {
+	_, exists := cache.Get(blockNumber.String())
+	return exists
 }
 
 func checkAndFetchMissingBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Client, fromBlockNum, toBlockNum *big.Int) ([]*big.Int, error) {
