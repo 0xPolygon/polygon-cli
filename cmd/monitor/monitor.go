@@ -260,12 +260,12 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 	ms.PendingCount = cs.PendingCount
 
 	prependLatestBlocks(ctx, ms, rpc)
-	if shouldLoadMoreHistory(ctx, ms) {
-		err = appendOlderBlocks(ctx, ms, rpc)
-		if err != nil {
-			log.Warn().Err(err).Msg("Unable to append more history")
-		}
-	}
+	// if shouldLoadMoreHistory(ctx, ms) {
+	// 	err = appendOlderBlocks(ctx, ms, rpc)
+	// 	if err != nil {
+	// 		log.Warn().Err(err).Msg("Unable to append more history")
+	// 	}
+	// }
 
 	return
 }
@@ -483,8 +483,11 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			return
 		}
 
-		if blockTable.SelectedRow == 0 || len(force) > 0 && force[0] {
+		if blockTable.SelectedRow == 0 {
 			ms.TopDisplayedBlock = ms.HeadBlock
+		}
+
+		if blockTable.SelectedRow == 0 || len(force) > 0 && force[0] {
 			allBlocks = updateAllBlocks(ms)
 			sort.Sort(allBlocks)
 		}
@@ -529,6 +532,11 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			// Only changed the selected block when the user presses the up down keys.
 			// Otherwise this will adjust when the table is updated automatically.
 			if setBlock {
+				log.Debug().
+					Int("blockTable.SelectedRow", blockTable.SelectedRow).
+					Int("renderedBlocks", len(renderedBlocks)).
+					Msg("setBlock")
+
 				selectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
 				setBlock = false
 				log.Debug().Uint64("blockNumber", selectedBlock.Number().Uint64()).Msg("Selected block changed")
@@ -623,22 +631,18 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 						}
 
 						// Fetch the blocks in the new range if they are missing
-						if !isBlockInCache(ms.BlockCache, nextTopBlockNumber) {
-							err := appendOlderBlocks(ctx, ms, rpc)
+						if !isBlockInCache(ms.BlockCache, toBlockNumber) {
+							_, err := checkAndFetchMissingBlocks(ctx, ms, rpc, new(big.Int).Sub(toBlockNumber, big.NewInt(int64(windowSize))), toBlockNumber)
 							if err != nil {
-								log.Warn().Err(err).Msg("Unable to append more history")
+								log.Warn().Err(err).Msg("Failed to fetch blocks on page down")
+								break
 							}
-							// _, err := checkAndFetchMissingBlocks(ctx, ms, rpc, toBlockNumber, nextTopBlockNumber)
-							// if err != nil {
-							// 	log.Warn().Err(err).Msg("Failed to fetch blocks on page down")
-							// 	break
-							// }
 						}
 
 						// Update the top displayed block number
 						ms.TopDisplayedBlock = nextTopBlockNumber
 
-						blockTable.SelectedRow += 1
+						blockTable.SelectedRow = len(renderedBlocks)
 						setBlock = true
 
 						// Force redraw to update the UI with the new page of blocks
@@ -650,11 +654,42 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					setBlock = true
 				} else if e.ID == "<Up>" {
 					log.Debug().Int("blockTable.SelectedRow", blockTable.SelectedRow).Int("windowSize", windowSize).Msg("Up")
-					// if currIdx <= 1 && windowOffset > 0 {
-					// 	windowOffset -= 1
-					// 	break
-					// }
-					blockTable.SelectedRow -= 1
+
+					// the last row of current window size
+					if blockTable.SelectedRow == 1 {
+						// Calculate the range of block numbers we are trying to page down to
+						nextTopBlockNumber := new(big.Int).Add(ms.TopDisplayedBlock, one)
+						if nextTopBlockNumber.Cmp(ms.HeadBlock) > 0 {
+							nextTopBlockNumber.SetInt64(0)
+						}
+
+						// Calculate the 'to' block number based on the next top block number
+						toBlockNumber := new(big.Int).Sub(nextTopBlockNumber, big.NewInt(int64(windowSize-1)))
+						if toBlockNumber.Cmp(zero) < 0 {
+							toBlockNumber.SetInt64(0)
+						}
+
+						// Fetch the blocks in the new range if they are missing
+						if !isBlockInCache(ms.BlockCache, nextTopBlockNumber) {
+							_, err := checkAndFetchMissingBlocks(ctx, ms, rpc, nextTopBlockNumber, new(big.Int).Add(nextTopBlockNumber, big.NewInt(int64(windowSize))))
+							if err != nil {
+								log.Warn().Err(err).Msg("Failed to fetch blocks on page up")
+								break
+							}
+						}
+
+						// Update the top displayed block number
+						ms.TopDisplayedBlock = nextTopBlockNumber
+
+						blockTable.SelectedRow = len(renderedBlocks)
+						setBlock = true
+
+						// Force redraw to update the UI with the new page of blocks
+						forceRedraw = true
+						redraw(ms, true)
+						break
+					}
+					blockTable.SelectedRow += 1
 					setBlock = true
 				}
 			case "<Home>":
