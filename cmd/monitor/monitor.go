@@ -254,47 +254,6 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 	return nil
 }
 
-func (ms *monitorStatus) getBlockByBlockNumber(ctx context.Context, blockNumbers []*big.Int, rpc *ethrpc.Client) error {
-	blms := make([]ethrpc.BatchElem, 0)
-	for _, number := range blockNumbers {
-		r := new(rpctypes.RawBlockResponse)
-		var err error
-		blms = append(blms, ethrpc.BatchElem{
-			Method: "eth_getBlockByNumber",
-			Args:   []interface{}{"0x" + number.Text(16), true},
-			Result: r,
-			Error:  err,
-		})
-	}
-	if len(blms) == 0 {
-		return nil
-	}
-	b := backoff.NewExponentialBackOff()
-	b.MaxElapsedTime = 3 * time.Minute
-	retryable := func() error {
-		err := rpc.BatchCallContext(ctx, blms)
-		return err
-	}
-	err := backoff.Retry(retryable, b)
-	if err != nil {
-		return err
-	}
-	for _, b := range blms {
-		if b.Error != nil {
-			return b.Error
-		}
-		pb := rpctypes.NewPolyBlock(b.Result.(*rpctypes.RawBlockResponse))
-
-		ms.BlockCache.Add(pb.Number().String(), pb)
-
-		log.Debug().
-			Str("isBlockInCache(ms.BlockCache, toBlockNumber)", pb.Number().String()).
-			Msg("FETCHED")
-	}
-
-	return nil
-}
-
 func setUISkeleton() (blockTable *widgets.List, grid *ui.Grid, blockGrid *ui.Grid, termUi uiSkeleton) {
 	blockTable = widgets.NewList()
 	blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
@@ -773,9 +732,9 @@ func checkAndFetchMissingBlocks(ctx context.Context, ms *monitorStatus, rpc *eth
 		}
 	}
 
-	// If there are missing blocks, fetch them using getBlockByBlockNumber.
+	// If there are missing blocks, fetch them using getBlockRange.
 	if len(missingBlocks) > 0 {
-		err := ms.getBlockByBlockNumber(ctx, missingBlocks, rpc)
+		err := ms.getBlockRange(ctx, missingBlocks[0], missingBlocks[len(missingBlocks)-1], rpc)
 		if err != nil {
 			// Handle the error, such as logging or returning it.
 			return nil, err
