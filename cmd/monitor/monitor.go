@@ -42,9 +42,6 @@ type (
 		GasPrice          *big.Int
 		PendingCount      uint64
 		BlockCache        *lru.Cache
-
-		MaxBlockRetrieved *big.Int
-		MinBlockRetrieved *big.Int
 	}
 	chainState struct {
 		HeadBlock    uint64
@@ -91,7 +88,6 @@ func monitor(ctx context.Context) error {
 
 	ms := new(monitorStatus)
 	ms.BlockCache, _ = lru.New(blockCacheLimit)
-	ms.MaxBlockRetrieved = big.NewInt(0)
 
 	ms.ChainID = big.NewInt(0)
 	ms.PendingCount = 0
@@ -174,10 +170,6 @@ func (h historicalRange) getValues(limit int) []float64 {
 }
 func prependLatestBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Client) {
 	from := new(big.Int).Sub(ms.HeadBlock, big.NewInt(int64(batchSize-1)))
-	// Prevent getBlockRange from fetching duplicate blocks.
-	if ms.MaxBlockRetrieved.Cmp(from) == 1 {
-		from.Add(ms.MaxBlockRetrieved, big.NewInt(1))
-	}
 
 	if from.Cmp(zero) < 0 {
 		from.SetInt64(0)
@@ -186,7 +178,6 @@ func prependLatestBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Cli
 	log.Debug().
 		Int64("from", from.Int64()).
 		Int64("to", ms.HeadBlock.Int64()).
-		Int64("max", ms.MaxBlockRetrieved.Int64()).
 		Msg("Fetching latest blocks")
 
 	err := ms.getBlockRange(ctx, from, ms.HeadBlock, rpc)
@@ -257,13 +248,47 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 		pb := rpctypes.NewPolyBlock(b.Result.(*rpctypes.RawBlockResponse))
 
 		ms.BlockCache.Add(pb.Number().String(), pb)
+	}
 
-		if ms.MaxBlockRetrieved.Cmp(pb.Number()) == -1 {
-			ms.MaxBlockRetrieved = pb.Number()
+	return nil
+}
+
+func (ms *monitorStatus) getBlockByBlockNumber(ctx context.Context, blockNumbers []*big.Int, rpc *ethrpc.Client) error {
+	blms := make([]ethrpc.BatchElem, 0)
+	for _, number := range blockNumbers {
+		r := new(rpctypes.RawBlockResponse)
+		var err error
+		blms = append(blms, ethrpc.BatchElem{
+			Method: "eth_getBlockByNumber",
+			Args:   []interface{}{"0x" + number.Text(16), true},
+			Result: r,
+			Error:  err,
+		})
+	}
+	if len(blms) == 0 {
+		return nil
+	}
+	b := backoff.NewExponentialBackOff()
+	b.MaxElapsedTime = 3 * time.Minute
+	retryable := func() error {
+		err := rpc.BatchCallContext(ctx, blms)
+		return err
+	}
+	err := backoff.Retry(retryable, b)
+	if err != nil {
+		return err
+	}
+	for _, b := range blms {
+		if b.Error != nil {
+			return b.Error
 		}
-		if ms.MinBlockRetrieved == nil || (ms.MinBlockRetrieved.Cmp(pb.Number()) == 1 && pb.Number().Cmp(zero) == 1) {
-			ms.MinBlockRetrieved = pb.Number()
-		}
+		pb := rpctypes.NewPolyBlock(b.Result.(*rpctypes.RawBlockResponse))
+
+		ms.BlockCache.Add(pb.Number().String(), pb)
+
+		log.Debug().
+			Str("isBlockInCache(ms.BlockCache, toBlockNumber)", pb.Number().String()).
+			Msg("FETCHED")
 	}
 
 	return nil
@@ -562,9 +587,9 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 							toBlockNumber.SetInt64(0)
 						}
 
-						// Fetch the blocks in the new range if they are missing
+						// Fetch the blocks if the next block is not in cache
 						if !isBlockInCache(ms.BlockCache, toBlockNumber) {
-							_, err := checkAndFetchMissingBlocks(ctx, ms, rpc, new(big.Int).Sub(toBlockNumber, big.NewInt(int64(windowSize))), toBlockNumber)
+							_, err := checkAndFetchMissingBlocks(ctx, ms, rpc, new(big.Int).Sub(nextTopBlockNumber, big.NewInt(int64(windowSize))), toBlockNumber)
 							if err != nil {
 								log.Warn().Err(err).Msg("Failed to fetch blocks on page down")
 								break
@@ -603,7 +628,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 						// Fetch the blocks in the new range if they are missing
 						if !isBlockInCache(ms.BlockCache, nextTopBlockNumber) {
-							_, err := checkAndFetchMissingBlocks(ctx, ms, rpc, nextTopBlockNumber, new(big.Int).Add(nextTopBlockNumber, big.NewInt(int64(windowSize))))
+							_, err := checkAndFetchMissingBlocks(ctx, ms, rpc, toBlockNumber, new(big.Int).Add(nextTopBlockNumber, big.NewInt(int64(windowSize))))
 							if err != nil {
 								log.Warn().Err(err).Msg("Failed to fetch blocks on page up")
 								break
@@ -748,10 +773,9 @@ func checkAndFetchMissingBlocks(ctx context.Context, ms *monitorStatus, rpc *eth
 		}
 	}
 
-	// If there are missing blocks, fetch them using getBlockRange.
+	// If there are missing blocks, fetch them using getBlockByBlockNumber.
 	if len(missingBlocks) > 0 {
-		// Fetch the blocks in the range [first missing block, last missing block].
-		err := ms.getBlockRange(ctx, missingBlocks[0], missingBlocks[len(missingBlocks)-1], rpc)
+		err := ms.getBlockByBlockNumber(ctx, missingBlocks, rpc)
 		if err != nil {
 			// Handle the error, such as logging or returning it.
 			return nil, err
