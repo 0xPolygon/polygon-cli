@@ -168,6 +168,7 @@ func (h historicalRange) getValues(limit int) []float64 {
 	}
 	return values
 }
+
 func prependLatestBlocks(ctx context.Context, ms *monitorStatus, rpc *ethrpc.Client) {
 	from := new(big.Int).Sub(ms.HeadBlock, big.NewInt(int64(batchSize-1)))
 
@@ -510,7 +511,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 	redraw(ms)
 
-	// currIdx := 0
 	previousKey := ""
 	for {
 		forceRedraw := false
