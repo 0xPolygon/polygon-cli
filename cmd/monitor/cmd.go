@@ -26,6 +26,10 @@ var MonitorCmd = &cobra.Command{
 	Short: "Monitor blocks using a JSON-RPC endpoint.",
 	Long:  usage,
 	Args:  cobra.NoArgs,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Avoid logging error and warning messages to the screen by default.
+		util.SetLogLevel(int(util.Silent), false)
+	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return checkFlags()
 	},
