@@ -36,6 +36,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli abi](polycli_abi.md) - Parse an ABI and print the encoded signatures.
 
+- [polycli dbbench](polycli_dbbench.md) - Perform a level/pebble db benchmark
+
 - [polycli dumpblocks](polycli_dumpblocks.md) - Export a range of blocks from a JSON-RPC endpoint.
 
 - [polycli enr](polycli_enr.md) - Convert between ENR and Enode format
@@ -43,8 +45,6 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 - [polycli fork](polycli_fork.md) - Take a forked block and walk up the chain to do analysis.
 
 - [polycli hash](polycli_hash.md) - Provide common crypto hashing functions.
-
-- [polycli leveldbbench](polycli_leveldbbench.md) - Perform a level db benchmark
 
 - [polycli loadtest](polycli_loadtest.md) - Run a generic load test against an Eth/EVM style JSON-RPC endpoint.
 

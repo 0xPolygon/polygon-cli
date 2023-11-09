@@ -1,4 +1,4 @@
-package leveldbbench
+package dbbench
 
 import (
 	"context"
@@ -281,12 +281,12 @@ func NewTestResult(startTime, endTime time.Time, desc string, opCount uint64) *T
 	return tr
 }
 
-var LevelDBBenchCmd = &cobra.Command{
-	Use:   "leveldbbench [flags]",
-	Short: "Perform a level db benchmark",
+var DBBenchCmd = &cobra.Command{
+	Use:   "dbbench [flags]",
+	Short: "Perform a level/pebble db benchmark",
 	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		log.Info().Msg("Starting level db test")
+		log.Info().Msg("Starting db test")
 		var kvdb KeyValueDB
 		var err error
 		switch *dbMode {
@@ -534,7 +534,7 @@ benchLoop:
 				_, err := db.Get(tmpKey)
 				keyLock.Unlock()
 				if err != nil {
-					log.Error().Str("key", hex.EncodeToString(tmpKey)).Err(err).Msg("Level db random read error")
+					log.Error().Str("key", hex.EncodeToString(tmpKey)).Err(err).Msg("db random read error")
 				}
 				wg.Done()
 				<-pool
@@ -755,7 +755,7 @@ func parseRawSizeDistribution(dist string) (*IODistribution, error) {
 }
 
 func init() {
-	flagSet := LevelDBBenchCmd.PersistentFlags()
+	flagSet := DBBenchCmd.PersistentFlags()
 	writeLimit = flagSet.Uint64("write-limit", 1000000, "The number of entries to write in the db")
 	readLimit = flagSet.Uint64("read-limit", 10000000, "the number of reads will attempt to complete in a given test")
 	overwriteCount = flagSet.Uint64("overwrite-count", 5, "the number of times to overwrite the data")
