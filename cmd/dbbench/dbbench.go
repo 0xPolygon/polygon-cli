@@ -200,7 +200,6 @@ func (w *WrappedPebbleIterator) Seek(key []byte) bool {
 	return w.SeekGE(key)
 }
 func (w *WrappedPebbleIterator) SetReleaser(releaser util.Releaser) {
-	return
 }
 func (w *WrappedPebbleIterator) Release() {
 	w.Iterator.Close()
