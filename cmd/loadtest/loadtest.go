@@ -110,7 +110,9 @@ func modeRequiresLoadTestContract(m loadTestMode) bool {
 		m == loadTestModeFunction ||
 		m == loadTestModeInc ||
 		m == loadTestModeRandom ||
-		m == loadTestModeStore {
+		m == loadTestModeStore ||
+		m == loadTestModePrecompiledContract ||
+		m == loadTestModePrecompiledContracts {
 		return true
 	}
 	return false
@@ -657,6 +659,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	return nil
+}
+
+func DeployLoadTestContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (ltAddr ethcommon.Address, ltContract *contracts.LoadTester, err error) {
+	return getLoadTestContract(ctx, c, tops, cops)
 }
 
 func getLoadTestContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (ltAddr ethcommon.Address, ltContract *contracts.LoadTester, err error) {

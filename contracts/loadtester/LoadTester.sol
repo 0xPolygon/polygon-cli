@@ -5,6 +5,7 @@ contract LoadTester {
     uint256 callCounter;
     uint256 loopCounter;
     bytes[] public dumpster;
+    string public constant RevertErrorMessage = "RevertErrorMessage"; 
 
     function getCallCounter() public view returns (uint256){
         return callCounter;
@@ -928,5 +929,9 @@ contract LoadTester {
                 revert(0, 0)
             }
         }
+    }
+
+    function testRevert() public pure{
+        revert(RevertErrorMessage);
     }
 }

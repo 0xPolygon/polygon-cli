@@ -29,13 +29,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	fuzz "github.com/google/gofuzz"
+	"github.com/maticnetwork/polygon-cli/cmd/loadtest"
 	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz/testreporter"
+	"github.com/maticnetwork/polygon-cli/contracts"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/rs/zerolog/log"
 	"github.com/xeipuuv/gojsonschema"
@@ -167,6 +170,8 @@ const (
 var (
 	testPrivateKey        *ecdsa.PrivateKey
 	testEthAddress        ethcommon.Address
+	ltEthAddress          string
+	ltContract            *contracts.LoadTester
 	testAccountNonce      uint64
 	testAccountNonceMutex sync.Mutex
 	currentChainID        *big.Int
@@ -184,6 +189,16 @@ var (
 	testResultMutex  sync.Mutex
 )
 
+func deployLoadTesterContract(ctx context.Context, rpc *rpc.Client, chainID *big.Int) (ltAddr ethcommon.Address, loadtestContract *contracts.LoadTester, err error) {
+	log.Trace().Msg("Deploying LoadTester contract...")
+	ec := ethclient.NewClient(rpc)
+	tops, err := bind.NewKeyedTransactorWithChainID(testPrivateKey, chainID)
+	cops := new(bind.CallOpts)
+	ltAddr, loadtestContract, err = loadtest.DeployLoadTestContract(ctx, ec, tops, cops)
+	log.Trace().Msg("Finished Deploying LoadTester contract...")
+	return
+}
+
 func runRpcFuzz(ctx context.Context) error {
 	if *testOutputExportPath != "" && !*testExportJson && !*testExportCSV && !*testExportMarkdown && !*testExportHTML {
 		log.Warn().Msg("Setting --export-path must pair with a export type: --json, --csv, --md, or --html")
@@ -193,18 +208,26 @@ func runRpcFuzz(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	nonce, err := GetTestAccountNonce(ctx, rpcClient)
-	if err != nil {
-		return err
-	}
 	chainId, err := GetCurrentChainID(ctx, rpcClient)
 	if err != nil {
 		return err
 	}
-	testAccountNonce = nonce
 	currentChainID = chainId
 
-	log.Trace().Uint64("nonce", nonce).Uint64("chainid", chainId.Uint64()).Msg("Doing test setup")
+	ltAddr, loadtestContract, err := deployLoadTesterContract(ctx, rpcClient, currentChainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Load test contract deployment error")
+	}
+	ltContract = loadtestContract
+	ltEthAddress = ltAddr.String()
+
+	nonce, err := GetTestAccountNonce(ctx, rpcClient)
+	if err != nil {
+		return err
+	}
+	testAccountNonce = nonce
+
+	log.Trace().Uint64("nonce", nonce).Uint64("chainId", chainId.Uint64()).Msg("Doing test setup")
 	setupTests(ctx, rpcClient)
 
 	httpClient := &http.Client{}
@@ -702,6 +725,21 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03"}, "0x0"},
 		Validator: ValidateRegexString(`^0x$`),
 		Flags:     FlagStrictValidation,
+	})
+	allTests = append(allTests, &RPCTestGeneric{
+		Name:   "RPCTestEthCallRevertMessage",
+		Method: "eth_call",
+		Args:   []interface{}{&RPCTestTransactionArgs{To: ltEthAddress, Data: "0xa26388bb"}, "latest"},
+		Flags:  FlagErrorValidation,
+		Validator: func() func(result interface{}) error {
+			cops := new(bind.CallOpts)
+			ltRevertMsg, ltCallErr := ltContract.RevertErrorMessage(cops)
+			if ltCallErr != nil {
+				log.Error().Err(ltCallErr).Msg("Failed to get revert message from Loadtest Contract")
+			}
+
+			return ValidateErrorMsgString(ltRevertMsg)
+		}(),
 	})
 
 	// cat contracts/ERC20.abi| go run main.go abi
@@ -1354,7 +1392,23 @@ func ValidateRegexString(regEx string) func(result interface{}) error {
 	}
 }
 
-// ValidateError will check the error message text against the provide regular expression
+// ValidateErrorMsgString will check the error message text against the provide regular expression
+func ValidateErrorMsgString(errorMessageRegex string) func(result interface{}) error {
+	r := regexp.MustCompile(errorMessageRegex)
+	return func(result interface{}) error {
+		fullError, err := genericResultToError(result)
+		if err != nil {
+			return err
+		}
+		if !r.MatchString(fullError.Error()) {
+			return fmt.Errorf("the regex %s failed to match result %s", errorMessageRegex, fullError.Error())
+		}
+
+		return nil
+	}
+}
+
+// ValidateError will check the status code and error message text against the provide regular expression
 func ValidateError(code int, errorMessageRegex string) func(result interface{}) error {
 	r := regexp.MustCompile(errorMessageRegex)
 	return func(result interface{}) error {
@@ -1672,7 +1726,7 @@ func ArgsTransactionHash(ctx context.Context, rpcClient *rpc.Client, tx *RPCTest
 	return func() []interface{} {
 		resultHash, _, err := prepareAndSendTransaction(ctx, rpcClient, tx)
 		if err != nil {
-			log.Fatal().Err(err).Msg("Unable to execute transaction")
+			log.Error().Err(err).Msg("Unable to execute transaction")
 		}
 		log.Info().Str("resultHash", resultHash).Msg("Successfully executed transaction")
 
@@ -1686,7 +1740,7 @@ func ArgsTransactionBlockHashAndIndex(ctx context.Context, rpcClient *rpc.Client
 	return func() []interface{} {
 		resultHash, receipt, err := prepareAndSendTransaction(ctx, rpcClient, tx)
 		if err != nil {
-			log.Fatal().Err(err).Msg("Unable to execute transaction")
+			log.Error().Err(err).Msg("Unable to execute transaction")
 		}
 		log.Info().Str("resultHash", resultHash).Msg("Successfully executed transaction")
 
@@ -1700,7 +1754,7 @@ func ArgsTransactionBlockNumberAndIndex(ctx context.Context, rpcClient *rpc.Clie
 	return func() []interface{} {
 		resultHash, receipt, err := prepareAndSendTransaction(ctx, rpcClient, tx)
 		if err != nil {
-			log.Fatal().Err(err).Msg("Unable to execute transaction")
+			log.Error().Err(err).Msg("Unable to execute transaction")
 		}
 		log.Info().Str("resultHash", resultHash).Msg("Successfully executed transaction")
 

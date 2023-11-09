@@ -17,7 +17,8 @@ import (
 // solc, the solidity compiler commandline interface
 // Version: 0.8.15+commit.e14f2714.Darwin.appleclang
 // solc LoadTester.sol --bin --abi -o . --overwrite
-// ~/code/go-ethereum/build/bin/abigen --abi LoadTester.abi --pkg contracts --type LoadTester --bin LoadTester.bin --out loadtester.go
+// From within `polygon-cli/contracts/loadtester` directory:
+// ~/code/go-ethereum/build/bin/abigen --abi LoadTester.abi --pkg contracts --type LoadTester --bin LoadTester.bin --out ../loadtester.go
 
 //go:embed loadtester/LoadTester.bin
 var RawLoadTesterBin string
