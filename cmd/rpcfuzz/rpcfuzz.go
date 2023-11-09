@@ -193,6 +193,10 @@ func deployLoadTesterContract(ctx context.Context, rpc *rpc.Client, chainID *big
 	log.Trace().Msg("Deploying LoadTester contract...")
 	ec := ethclient.NewClient(rpc)
 	tops, err := bind.NewKeyedTransactorWithChainID(testPrivateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Error creating transaction")
+		return
+	}
 	cops := new(bind.CallOpts)
 	ltAddr, loadtestContract, err = loadtest.DeployLoadTestContract(ctx, ec, tops, cops)
 	log.Trace().Msg("Finished Deploying LoadTester contract...")
