@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"sort"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -347,25 +346,6 @@ func setUISkeleton() (blockTable *widgets.List, grid *ui.Grid, blockGrid *ui.Gri
 	return
 }
 
-func updateAllBlocks(ms *monitorStatus) []rpctypes.PolyBlock {
-	var blocks []rpctypes.PolyBlock
-
-	// Retrieve all current items from the LRU cache.
-	// Since the cache has no inherent order, we will need to sort them if necessary.
-	for _, key := range ms.BlockCache.Keys() {
-		if value, ok := ms.BlockCache.Peek(key); ok {
-			block, ok := value.(rpctypes.PolyBlock)
-			if ok {
-				blocks = append(blocks, block)
-			}
-		}
-	}
-
-	sort.Sort(metrics.SortableBlocks(blocks))
-
-	return blocks
-}
-
 func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) error {
 	if err := ui.Init(); err != nil {
 		return err
@@ -382,7 +362,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	blockGrid.SetRect(0, 0, termWidth, termHeight)
 
 	var setBlock = false
-	var allBlocks metrics.SortableBlocks
 	var renderedBlocks metrics.SortableBlocks
 
 	redraw := func(ms *monitorStatus, force ...bool) {
@@ -402,11 +381,18 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 		if blockTable.SelectedRow == 0 {
 			ms.TopDisplayedBlock = ms.HeadBlock
-		}
 
-		if blockTable.SelectedRow == 0 || len(force) > 0 && force[0] {
-			allBlocks = updateAllBlocks(ms)
-			sort.Sort(allBlocks)
+			// Calculate the 'to' block number based on the next top block number
+			toBlockNumber := new(big.Int).Sub(ms.TopDisplayedBlock, big.NewInt(int64(windowSize-1)))
+			if toBlockNumber.Cmp(zero) < 0 {
+				toBlockNumber.SetInt64(0)
+			}
+
+			// Fetch the blocks in the new range if they are missing
+			_, err := checkAndFetchMissingBlocks(ctx, ms, rpc, toBlockNumber, ms.TopDisplayedBlock)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to fetch blocks on page down")
+			}
 		}
 		toBlockNumber := ms.TopDisplayedBlock
 		fromBlockNumber := new(big.Int).Sub(toBlockNumber, big.NewInt(int64(windowSize-1)))
@@ -528,7 +514,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 						Int("windowSize", windowSize).
 						Int("renderedBlocks", len(renderedBlocks)).
 						Int("dy", blockTable.Dy()).
-						Int("allBlocks", len(allBlocks)).
 						Msg("Down")
 
 					// the last row of current window size
