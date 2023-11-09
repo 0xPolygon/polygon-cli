@@ -139,7 +139,7 @@ type (
 	}
 	WrappedPebbleIterator struct {
 		*pebble.Iterator
-		sync.Mutex
+		*sync.Mutex
 	}
 )
 
@@ -192,7 +192,7 @@ func (p *PebbleDBWrapper) NewIterator() iterator.Iterator {
 		UseL6Filters:              false,
 	}
 	iter := p.handle.NewIter(&io)
-	wrappedIter := WrappedPebbleIterator{iter, p.Mutex}
+	wrappedIter := WrappedPebbleIterator{iter, &p.Mutex}
 	return &wrappedIter
 }
 func (w *WrappedPebbleIterator) Seek(key []byte) bool {
