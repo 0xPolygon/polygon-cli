@@ -46,6 +46,7 @@ func SetLogLevel(verbosity int) {
 	}
 }
 
+// LogMode represents the logger mode.
 type LogMode string
 
 const (
