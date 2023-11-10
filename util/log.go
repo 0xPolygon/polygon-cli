@@ -25,7 +25,7 @@ const (
 
 // SetLogLevel sets the log level based on the flags.
 // https://logging.apache.org/log4j/2.x/manual/customloglevels.html
-func SetLogLevel(verbosity int) error {
+func SetLogLevel(verbosity int) {
 	switch {
 	case verbosity == int(Silent):
 		zerolog.SetGlobalLevel(zerolog.NoLevel)
@@ -41,12 +41,9 @@ func SetLogLevel(verbosity int) error {
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	case verbosity < int(Debug):
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	case verbosity < int(Trace):
-		zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	default:
-		return fmt.Errorf("unsupported log level: %d", verbosity)
+		zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	}
-	return nil
 }
 
 type LogMode string

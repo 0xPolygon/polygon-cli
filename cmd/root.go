@@ -83,10 +83,7 @@ func NewPolycliCommand() *cobra.Command {
 		Short: "A Swiss Army knife of blockchain tools.",
 		Long:  "Polycli is a collection of tools that are meant to be useful while building, testing, and running block chain applications.",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if err := util.SetLogLevel(verbosity); err != nil {
-				return err
-			}
-
+			util.SetLogLevel(verbosity)
 			logMode := util.JSON
 			if pretty {
 				logMode = util.Console
