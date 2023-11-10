@@ -23,7 +23,7 @@ This command is meant to give us a sense of the system level
 performance for leveldb:
 
 ```bash
-go run main.go dbbench --degree-of-parallelism 2 | jq '.' > result.json
+polycli dbbench --degree-of-parallelism 2 | jq '.' > result.json
 ```
 
 In many cases, we'll want to emulate the performance characteristics
