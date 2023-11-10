@@ -7,8 +7,7 @@ import (
 	"github.com/maticnetwork/polygon-cli/cmd/fork"
 	"github.com/maticnetwork/polygon-cli/cmd/p2p"
 	"github.com/maticnetwork/polygon-cli/cmd/parseethwallet"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"github.com/maticnetwork/polygon-cli/util"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -27,21 +26,6 @@ import (
 	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz"
 	"github.com/maticnetwork/polygon-cli/cmd/version"
 	"github.com/maticnetwork/polygon-cli/cmd/wallet"
-)
-
-// VerbosityLevel represents the verbosity levels.
-// https://pkg.go.dev/github.com/rs/zerolog#readme-leveled-logging
-type VerbosityLevel int
-
-const (
-	Silent VerbosityLevel = 0
-	Panic  VerbosityLevel = 100
-	Fatal  VerbosityLevel = 200
-	Error  VerbosityLevel = 300
-	Warn   VerbosityLevel = 400
-	Info   VerbosityLevel = 500
-	Debug  VerbosityLevel = 600
-	Trace  VerbosityLevel = 700
 )
 
 var (
@@ -99,10 +83,12 @@ func NewPolycliCommand() *cobra.Command {
 		Short: "A Swiss Army knife of blockchain tools.",
 		Long:  "Polycli is a collection of tools that are meant to be useful while building, testing, and running block chain applications.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			if cmd.Use == monitor.MonitorCmd.Use {
-				setLogLevel(int(Silent), pretty)
+			util.SetLogLevel(verbosity)
+
+			if pretty {
+				util.SetLogMode(util.Console)
 			} else {
-				setLogLevel(verbosity, pretty)
+				util.SetLogMode(util.JSON)
 			}
 		},
 	}
@@ -137,34 +123,4 @@ func NewPolycliCommand() *cobra.Command {
 		wallet.WalletCmd,
 	)
 	return cmd
-}
-
-// setLogLevel sets the log level based on the flags.
-// https://logging.apache.org/log4j/2.x/manual/customloglevels.html
-func setLogLevel(verbosity int, pretty bool) {
-	switch {
-	case verbosity == int(Silent):
-		zerolog.SetGlobalLevel(zerolog.NoLevel)
-	case verbosity < int(Panic):
-		zerolog.SetGlobalLevel(zerolog.PanicLevel)
-	case verbosity < int(Fatal):
-		zerolog.SetGlobalLevel(zerolog.FatalLevel)
-	case verbosity < int(Error):
-		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
-	case verbosity < int(Warn):
-		zerolog.SetGlobalLevel(zerolog.WarnLevel)
-	case verbosity < int(Info):
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	case verbosity < int(Debug):
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	default:
-		zerolog.SetGlobalLevel(zerolog.TraceLevel)
-	}
-
-	if pretty {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-		log.Debug().Msg("Starting logger in console mode")
-	} else {
-		log.Debug().Msg("Starting logger in JSON mode")
-	}
 }
