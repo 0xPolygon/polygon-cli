@@ -8,14 +8,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/cockroachdb/pebble"
-	"github.com/cockroachdb/pebble/bloom"
 	"math"
 	"math/bits"
 	"math/rand"
 	"os"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,11 +22,7 @@ import (
 	"github.com/rs/zerolog/log"
 	progressbar "github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
-	leveldb "github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
-	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 var (
@@ -127,144 +120,7 @@ type (
 		Get([]byte) ([]byte, error)
 		Put([]byte, []byte) error
 	}
-	LevelDBWrapper struct {
-		ro     *opt.ReadOptions
-		wo     *opt.WriteOptions
-		handle *leveldb.DB
-	}
-	PebbleDBWrapper struct {
-		handle *pebble.DB
-		wo     *pebble.WriteOptions
-		sync.Mutex
-	}
-	WrappedPebbleIterator struct {
-		*pebble.Iterator
-		*sync.Mutex
-	}
 )
-
-func NewWrappedPebbleDB() (*PebbleDBWrapper, error) {
-	memTableLimit := 2
-	memTableSize := *cacheSize * 1024 * 1024 / 2 / memTableLimit
-	opt := &pebble.Options{
-		Cache:                       pebble.NewCache(int64(*cacheSize * 1024 * 1024)),
-		MemTableSize:                memTableSize,
-		MemTableStopWritesThreshold: memTableLimit,
-		MaxConcurrentCompactions:    func() int { return runtime.NumCPU() },
-		Levels: []pebble.LevelOptions{
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-		},
-		ReadOnly: *readOnly || *fullScan,
-	}
-	p, err := pebble.Open(*dbPath, opt)
-	if err != nil {
-		return nil, err
-	}
-	db := new(PebbleDBWrapper)
-	db.handle = p
-	db.wo = &pebble.WriteOptions{Sync: *syncWrites}
-	return db, err
-}
-
-func (p *PebbleDBWrapper) Close() error {
-	return p.handle.Close()
-}
-func (p *PebbleDBWrapper) Compact() error {
-	// this is a hack to ideally get a key that's larger than most of the other keys
-	return p.handle.Compact([]byte{0}, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, true)
-}
-func (p *PebbleDBWrapper) NewIterator() iterator.Iterator {
-	io := pebble.IterOptions{
-		LowerBound:                nil,
-		UpperBound:                nil,
-		TableFilter:               nil,
-		PointKeyFilters:           nil,
-		RangeKeyFilters:           nil,
-		KeyTypes:                  0,
-		RangeKeyMasking:           pebble.RangeKeyMasking{},
-		OnlyReadGuaranteedDurable: false,
-		UseL6Filters:              false,
-	}
-	iter := p.handle.NewIter(&io)
-	wrappedIter := WrappedPebbleIterator{iter, &p.Mutex}
-	return &wrappedIter
-}
-func (w *WrappedPebbleIterator) Seek(key []byte) bool {
-	// SeekGE has a different name but has the same logic as the IteratorSeeker `Seek` method
-	return w.SeekGE(key)
-}
-func (w *WrappedPebbleIterator) SetReleaser(releaser util.Releaser) {
-}
-func (w *WrappedPebbleIterator) Release() {
-	w.Iterator.Close()
-}
-func (p *PebbleDBWrapper) Get(key []byte) ([]byte, error) {
-	resp, closer, err := p.handle.Get(key)
-	if err != nil {
-		return nil, err
-	}
-	closer.Close()
-	return resp, nil
-}
-func (p *PebbleDBWrapper) Put(key []byte, value []byte) error {
-	return p.handle.Set(key, value, p.wo)
-}
-func NewWrappedLevelDB() (*LevelDBWrapper, error) {
-	db, err := leveldb.OpenFile(*dbPath, &opt.Options{
-		Filter:                 filter.NewBloomFilter(10),
-		DisableSeeksCompaction: true,
-		OpenFilesCacheCapacity: *openFilesCacheCapacity,
-		BlockCacheCapacity:     *cacheSize / 2 * opt.MiB,
-		WriteBuffer:            *cacheSize / 4 * opt.MiB,
-		// if we've disabled writes, or we're doing a full scan, we should open the database in read only mode
-		ReadOnly: *readOnly || *fullScan,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	wo := &opt.WriteOptions{
-		NoWriteMerge: *noWriteMerge,
-		Sync:         *syncWrites,
-	}
-	ro := &opt.ReadOptions{
-		DontFillCache: *dontFillCache,
-	}
-	if *readStrict {
-		ro.Strict = opt.StrictAll
-	} else {
-		ro.Strict = opt.DefaultStrict
-	}
-	if *nilReadOptions {
-		ro = nil
-	}
-	wrapper := new(LevelDBWrapper)
-	wrapper.handle = db
-	wrapper.wo = wo
-	wrapper.ro = ro
-	return wrapper, nil
-}
-func (l *LevelDBWrapper) Close() error {
-	return l.handle.Close()
-}
-func (l *LevelDBWrapper) Compact() error {
-	return l.handle.CompactRange(util.Range{Start: nil, Limit: nil})
-}
-func (l *LevelDBWrapper) NewIterator() iterator.Iterator {
-	return l.handle.NewIterator(nil, nil)
-}
-func (l *LevelDBWrapper) Get(key []byte) ([]byte, error) {
-	return l.handle.Get(key, l.ro)
-}
-func (l *LevelDBWrapper) Put(key []byte, value []byte) error {
-	return l.handle.Put(key, value, l.wo)
-}
 
 func NewTestResult(startTime, endTime time.Time, desc string, opCount uint64) *TestResult {
 	tr := new(TestResult)
