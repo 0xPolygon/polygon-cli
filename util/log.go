@@ -41,6 +41,8 @@ func SetLogLevel(verbosity int) error {
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	case verbosity < int(Debug):
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	case verbosity < int(Trace):
+		zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	default:
 		return fmt.Errorf("unsupported log level: %d", verbosity)
 	}
