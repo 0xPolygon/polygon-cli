@@ -1,6 +1,7 @@
 package contracts
 
 import (
+	"context"
 	_ "embed"
 	"encoding/hex"
 	"fmt"
@@ -9,8 +10,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/maticnetwork/polygon-cli/contracts/conformancetester"
 	"github.com/rs/zerolog/log"
+
+	"github.com/cenkalti/backoff/v4"
 )
 
 // solc --version
@@ -30,6 +36,35 @@ var randSrc *rand.Rand
 
 func GetLoadTesterBytes() ([]byte, error) {
 	return hex.DecodeString(RawLoadTesterBin)
+}
+
+func BlockUntilSuccessful(ctx context.Context, c *ethclient.Client, retryable func() error) error {
+	// this function use to be very complicated (and not work). I'm dumbing this down to a basic time based retryable which should work 99% of the time
+	b := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(5*time.Second), 24), ctx)
+	return backoff.Retry(retryable, b)
+}
+
+func DeployConformanceContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (conformanceContractAddr ethcommon.Address, conformanceContract *conformancetester.ConformanceTester, err error) {
+	conformanceContractAddr, _, _, err = conformancetester.DeployConformanceTester(tops, c, "ConformanceTesterContractName")
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to deploy ConformanceTester contract")
+		return
+	}
+	log.Info().Interface("conformanceContractAddr", conformanceContractAddr).Msg("Conformance contract deployed")
+
+	conformanceContract, err = conformancetester.NewConformanceTester(conformanceContractAddr, c)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to instantiate new conformance contract")
+		return
+	}
+	log.Trace().Msg("Conformance contract instantiated")
+
+	err = BlockUntilSuccessful(ctx, c, func() error {
+		_, err := conformanceContract.Name(cops)
+		return err
+	})
+
+	return
 }
 
 func CallLoadTestFunctionByOpCode(shortCode uint64, lt *LoadTester, opts *bind.TransactOpts, iterations uint64) (*ethtypes.Transaction, error) {

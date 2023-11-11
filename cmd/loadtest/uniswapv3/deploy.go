@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/maticnetwork/polygon-cli/contracts"
 	"github.com/maticnetwork/polygon-cli/contracts/uniswapv3"
 	"github.com/rs/zerolog/log"
 )
@@ -70,7 +71,7 @@ type (
 
 // Deploy the full UniswapV3 contract suite in 15 different steps.
 // Source: https://github.com/Uniswap/deploy-v3
-func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses, ownerAddress common.Address, blockblockUntilSuccessful blockUntilSuccessfulFn) (config UniswapV3Config, err error) {
+func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses, ownerAddress common.Address, blockblockUntilSuccessful contracts.BlockUntilSuccessfulFn) (config UniswapV3Config, err error) {
 	log.Debug().Msg("Step 0: WETH9 deployment")
 	config.WETH9.Address, config.WETH9.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
@@ -343,7 +344,7 @@ func deployOrInstantiateContract[T Contract](
 	deploy func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *T, error),
 	instantiate func(common.Address, bind.ContractBackend) (*T, error),
 	call func(*T) error,
-	blockUntilSuccessful blockUntilSuccessfulFn,
+	blockUntilSuccessful contracts.BlockUntilSuccessfulFn,
 ) (address common.Address, contract *T, err error) {
 	if knownAddress == (common.Address{}) {
 		// Deploy the contract if known address is empty.
