@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/maticnetwork/polygon-cli/cmd/dbbench"
 	"os"
 
 	"github.com/maticnetwork/polygon-cli/cmd/fork"
@@ -16,7 +17,6 @@ import (
 	"github.com/maticnetwork/polygon-cli/cmd/dumpblocks"
 	"github.com/maticnetwork/polygon-cli/cmd/enr"
 	"github.com/maticnetwork/polygon-cli/cmd/hash"
-	"github.com/maticnetwork/polygon-cli/cmd/leveldbbench"
 	"github.com/maticnetwork/polygon-cli/cmd/loadtest"
 	"github.com/maticnetwork/polygon-cli/cmd/metricsToDash"
 	"github.com/maticnetwork/polygon-cli/cmd/mnemonic"
@@ -108,7 +108,7 @@ func NewPolycliCommand() *cobra.Command {
 		fork.ForkCmd,
 		hash.HashCmd,
 		enr.ENRCmd,
-		leveldbbench.LevelDBBenchCmd,
+		dbbench.DBBenchCmd,
 		loadtest.LoadtestCmd,
 		metricsToDash.MetricsToDashCmd,
 		mnemonic.MnemonicCmd,
