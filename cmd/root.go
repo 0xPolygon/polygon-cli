@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/maticnetwork/polygon-cli/cmd/dbbench"
 	"os"
 
 	"github.com/maticnetwork/polygon-cli/cmd/fork"
@@ -17,7 +18,6 @@ import (
 	"github.com/maticnetwork/polygon-cli/cmd/dumpblocks"
 	"github.com/maticnetwork/polygon-cli/cmd/enr"
 	"github.com/maticnetwork/polygon-cli/cmd/hash"
-	"github.com/maticnetwork/polygon-cli/cmd/leveldbbench"
 	"github.com/maticnetwork/polygon-cli/cmd/loadtest"
 	"github.com/maticnetwork/polygon-cli/cmd/metricsToDash"
 	"github.com/maticnetwork/polygon-cli/cmd/mnemonic"
@@ -27,6 +27,21 @@ import (
 	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz"
 	"github.com/maticnetwork/polygon-cli/cmd/version"
 	"github.com/maticnetwork/polygon-cli/cmd/wallet"
+)
+
+// VerbosityLevel represents the verbosity levels.
+// https://pkg.go.dev/github.com/rs/zerolog#readme-leveled-logging
+type VerbosityLevel int
+
+const (
+	Silent VerbosityLevel = 0
+	Panic  VerbosityLevel = 100
+	Fatal  VerbosityLevel = 200
+	Error  VerbosityLevel = 300
+	Warn   VerbosityLevel = 400
+	Info   VerbosityLevel = 500
+	Debug  VerbosityLevel = 600
+	Trace  VerbosityLevel = 700
 )
 
 var (
@@ -84,7 +99,11 @@ func NewPolycliCommand() *cobra.Command {
 		Short: "A Swiss Army knife of blockchain tools.",
 		Long:  "Polycli is a collection of tools that are meant to be useful while building, testing, and running block chain applications.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			setLogLevel(verbosity, pretty)
+			if cmd.Use == monitor.MonitorCmd.Use {
+				setLogLevel(int(Silent), pretty)
+			} else {
+				setLogLevel(verbosity, pretty)
+			}
 		},
 	}
 
@@ -104,7 +123,7 @@ func NewPolycliCommand() *cobra.Command {
 		fork.ForkCmd,
 		hash.HashCmd,
 		enr.ENRCmd,
-		leveldbbench.LevelDBBenchCmd,
+		dbbench.DBBenchCmd,
 		loadtest.LoadtestCmd,
 		metricsToDash.MetricsToDashCmd,
 		mnemonic.MnemonicCmd,
@@ -123,19 +142,22 @@ func NewPolycliCommand() *cobra.Command {
 // setLogLevel sets the log level based on the flags.
 // https://logging.apache.org/log4j/2.x/manual/customloglevels.html
 func setLogLevel(verbosity int, pretty bool) {
-	if verbosity < 100 {
+	switch {
+	case verbosity == int(Silent):
+		zerolog.SetGlobalLevel(zerolog.NoLevel)
+	case verbosity < int(Panic):
 		zerolog.SetGlobalLevel(zerolog.PanicLevel)
-	} else if verbosity < 200 {
+	case verbosity < int(Fatal):
 		zerolog.SetGlobalLevel(zerolog.FatalLevel)
-	} else if verbosity < 300 {
+	case verbosity < int(Error):
 		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
-	} else if verbosity < 400 {
+	case verbosity < int(Warn):
 		zerolog.SetGlobalLevel(zerolog.WarnLevel)
-	} else if verbosity < 500 {
+	case verbosity < int(Info):
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	} else if verbosity < 600 {
+	case verbosity < int(Debug):
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	} else {
+	default:
 		zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	}
 
