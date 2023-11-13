@@ -10,7 +10,6 @@ require (
 	github.com/ethereum/go-ethereum v1.13.2
 	github.com/gizak/termui/v3 v3.1.0
 	github.com/google/gofuzz v1.2.0
-	github.com/hashicorp/golang-lru v1.0.2
 	github.com/jedib0t/go-pretty/v6 v6.4.8
 	github.com/libp2p/go-libp2p v0.31.0
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20230904125328-1f23a7beb09a
