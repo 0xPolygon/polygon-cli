@@ -15,9 +15,10 @@ var (
 	usage string
 
 	// flags
-	rpcUrl         string
-	batchSizeValue string
-	intervalStr    string
+	rpcUrl          string
+	batchSizeValue  string
+	blockCacheLimit int
+	intervalStr     string
 )
 
 // MonitorCmd represents the monitor command
@@ -37,6 +38,7 @@ var MonitorCmd = &cobra.Command{
 func init() {
 	MonitorCmd.PersistentFlags().StringVarP(&rpcUrl, "rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
 	MonitorCmd.PersistentFlags().StringVarP(&batchSizeValue, "batch-size", "b", "auto", "Number of requests per batch")
+	MonitorCmd.PersistentFlags().IntVarP(&blockCacheLimit, "cache-limit", "c", 100, "Number of cached blocks for the LRU block data structure (Min 100)")
 	MonitorCmd.PersistentFlags().StringVarP(&intervalStr, "interval", "i", "5s", "Amount of time between batch block rpc calls")
 }
 
@@ -64,6 +66,11 @@ func checkFlags() (err error) {
 			// Failed to convert to int, handle the error
 			return fmt.Errorf("batch-size needs to be an integer")
 		}
+	}
+
+	// Check batch-size flag.
+	if blockCacheLimit < 100 {
+		return fmt.Errorf("block-cache can't be less than 100")
 	}
 
 	return nil
