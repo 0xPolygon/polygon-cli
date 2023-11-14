@@ -148,6 +148,9 @@ You can then generate some load to make sure that blocks with transactions are b
 $ polycli loadtest --verbosity 700 --chain-id 1337 --concurrency 1 --requests 1000 --rate-limit 5 --mode c --rpc-url http://127.0.0.1:8545
 ```
 
+## Monitor Debug
+`polycli monitor --rpc-url http://34.117.145.249:80 -v 700 &> log.txt`
+
 # Contributing
 
 - If you add a new loadtest mode, don't forget to update the loadtest mode string by running the following command: `cd cmd/loadtest && stringer -type=loadTestMode`. You can install [stringer](https://pkg.go.dev/golang.org/x/tools/cmd/stringer) with `go install golang.org/x/tools/cmd/stringer@latest`.
