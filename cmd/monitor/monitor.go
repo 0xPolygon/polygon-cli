@@ -31,6 +31,7 @@ var (
 	zero               = big.NewInt(0)
 	selectedBlock      rpctypes.PolyBlock
 	observedPendingTxs historicalRange
+	maxDataPoints      = 1000
 )
 
 type (
@@ -172,8 +173,6 @@ func (h historicalRange) getValues(limit int) []float64 {
 	}
 	return values
 }
-
-const maxDataPoints = 1000
 
 func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client, isUiRendered bool) (err error) {
 	var cs *chainState
