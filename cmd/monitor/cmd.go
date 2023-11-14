@@ -28,7 +28,7 @@ var MonitorCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// By default, hide logs from `polycli monitor`.
-		verbosityFlag := cmd.Flags().Lookup("verbosity")
+		verbosityFlag := cmd.Flag("verbosity")
 		if verbosityFlag != nil && !verbosityFlag.Changed {
 			util.SetLogLevel(int(util.Silent))
 		}
