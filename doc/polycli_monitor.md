@@ -29,6 +29,7 @@ If you're experiencing missing blocks, try adjusting the `--batch-size` and `--i
 
 ```bash
   -b, --batch-size string   Number of requests per batch (default "auto")
+  -c, --cache-limit int     Number of cached blocks for the LRU block data structure (Min 100) (default 100)
   -h, --help                help for monitor
   -i, --interval string     Amount of time between batch block rpc calls (default "5s")
   -r, --rpc-url string      The RPC endpoint url (default "http://localhost:8545")
