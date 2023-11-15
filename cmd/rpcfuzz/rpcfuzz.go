@@ -601,14 +601,14 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Method:    "eth_getCode",
 		Args:      []interface{}{*testContractAddress, "latest"},
 		Flags:     FlagStrictValidation,
-		Validator: ValidateHashedResponse("b0fcd1e4aaa20c969efc530a752fd177d61e1b20"),
+		Validator: ValidateHashedResponse("b9689c32bf9284029715ff8375f8996129898db9"),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetCodePending",
 		Method:    "eth_getCode",
 		Args:      []interface{}{*testContractAddress, "pending"},
 		Flags:     FlagStrictValidation,
-		Validator: ValidateHashedResponse("b0fcd1e4aaa20c969efc530a752fd177d61e1b20"),
+		Validator: ValidateHashedResponse("b9689c32bf9284029715ff8375f8996129898db9"),
 	})
 	allTests = append(allTests, &RPCTestGeneric{
 		Name:      "RPCTestEthGetCodeEarliest",
@@ -843,8 +843,7 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 	allTests = append(allTests, &RPCTestDynamicArgs{
 		Name:   "RPCTestEthGetTransactionByBlockNumberAndIndex",
 		Method: "eth_getTransactionByBlockNumberAndIndex",
-		// Args:   ArgsTransactionBlockNumberAndIndex(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
-		Args: ArgsTransactionBlockNumberAndIndex(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}),
+		Args:   ArgsTransactionBlockNumberAndIndex(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}),
 		Validator: RequireAll(
 			ValidateJSONSchema(rpctypes.RPCSchemaEthTransaction),
 			ValidateTransactionHash(),
@@ -853,9 +852,8 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 
 	// cast receipt --rpc-url localhost:8545 0x1bd4ec642302aa22906360af6493c230ecc41df10fffcdedc85caeb22cbb6b58
 	allTests = append(allTests, &RPCTestDynamicArgs{
-		Name:   "RPCTestGetTransactionReceipt",
-		Method: "eth_getTransactionReceipt",
-		// Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xa0712d680000000000000000000000000000000000000000000000000000000000002710", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
+		Name:      "RPCTestGetTransactionReceipt",
+		Method:    "eth_getTransactionReceipt",
 		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaEthReceipt),
 	})
@@ -1105,6 +1103,14 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0x06fdde03", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
 		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTrace),
 	})
+	// cast calldata "deposit(uint256)" 1
+	// 0xb6b55f250000000000000000000000000000000000000000000000000000000000000001
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugTraceTransactionDeposit",
+		Method:    "debug_traceTransaction",
+		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xb6b55f250000000000000000000000000000000000000000000000000000000000000001", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
+		Validator: ValidateJSONSchema(rpctypes.RPCSchemaDebugTrace),
+	})
 
 	// cast rpc --rpc-url localhost:8545 debug_getRawBlock latest
 	allTests = append(allTests, &RPCTestGeneric{
@@ -1199,6 +1205,14 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Name:      "RPCTestDebugGetRawTransactionSimple",
 		Method:    "debug_getRawTransaction",
 		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: testEthAddress.String(), Value: "0x123", Gas: "0x5208", Data: "0x", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas}),
+		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
+	})
+	// cast calldata "deposit(uint256)" 1
+	// 0xb6b55f250000000000000000000000000000000000000000000000000000000000000001
+	allTests = append(allTests, &RPCTestDynamicArgs{
+		Name:      "RPCTestDebugGetRawTransactionDeposit",
+		Method:    "debug_getRawTransaction",
+		Args:      ArgsTransactionHash(ctx, rpcClient, &RPCTestTransactionArgs{To: *testContractAddress, Value: "0x0", Data: "0xb6b55f250000000000000000000000000000000000000000000000000000000000000001", MaxFeePerGas: defaultMaxFeePerGas, MaxPriorityFeePerGas: defaultMaxPriorityFeePerGas, Gas: defaultGas}),
 		Validator: ValidateRegexString(`^0x[0-9a-f]*`),
 	})
 
