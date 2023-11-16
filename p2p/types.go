@@ -150,10 +150,11 @@ func (msg PooledTransactions) ReqID() uint64 { return msg.RequestId }
 type rlpxConn struct {
 	*rlpx.Conn
 
-	ourKey *ecdsa.PrivateKey
-	caps   []p2p.Cap
-	node   *enode.Node
-	logger zerolog.Logger
+	ourKey  *ecdsa.PrivateKey
+	caps    []p2p.Cap
+	node    *enode.Node
+	logger  zerolog.Logger
+	timeout time.Duration
 }
 
 // Read reads an eth protocol packet from the connection.
@@ -256,7 +257,7 @@ func (c *rlpxConn) Write(msg Message) error {
 func (c *rlpxConn) ReadSnap(id uint64) (Message, error) {
 	respId := id + 1
 	start := time.Now()
-	for respId != id && time.Since(start) < timeout {
+	for respId != id && time.Since(start) < c.timeout {
 		code, rawData, _, err := c.Conn.Read()
 		if err != nil {
 			return nil, fmt.Errorf("could not read from connection: %v", err)

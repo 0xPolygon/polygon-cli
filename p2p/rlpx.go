@@ -16,10 +16,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var (
-	timeout = 20 * time.Second
-)
-
 // Dial attempts to Dial the given node and perform a handshake,
 // returning the created Conn if successful.
 func Dial(n *enode.Node) (*rlpxConn, error) {
@@ -37,6 +33,7 @@ func Dial(n *enode.Node) (*rlpxConn, error) {
 			{Name: "eth", Version: 67},
 			{Name: "eth", Version: 68},
 		},
+		timeout: 20 * time.Second,
 	}
 
 	if conn.ourKey, err = crypto.GenerateKey(); err != nil {
@@ -148,7 +145,7 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 	for {
 		start := time.Now()
 
-		for time.Since(start) < timeout {
+		for time.Since(start) < c.timeout {
 			if err := c.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
 				c.logger.Error().Err(err).Msg("Failed to set read deadline")
 			}
