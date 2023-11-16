@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/p2p"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 
@@ -33,6 +34,12 @@ type conn struct {
 	head      *HeadBlock
 	headMutex *sync.RWMutex
 	count     *MessageCount
+
+	// messages keeps track of when a peer sends a message that the sensor cares
+	// about. If the sensor doesn't receive a message sent to this channel in a
+	// certain amount of time, it will disconnect with the peer.
+	messages chan struct{}
+	done     chan error
 
 	// requests is used to store the request ID and the block hash. This is used
 	// when fetching block bodies because the eth protocol block bodies do not
@@ -111,53 +118,80 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 			opts.Peers <- p.Node()
 			ctx := opts.Context
 
+			timeout := 10 * time.Minute
+			timer := time.NewTimer(timeout)
+
 			// Handle all the of the messages here.
+			go c.handleMessages(ctx, rw, version)
+
 			for {
-				msg, err := rw.ReadMsg()
-				if err != nil {
-					return err
-				}
-
-				switch msg.Code {
-				case eth.NewBlockHashesMsg:
-					err = c.handleNewBlockHashes(ctx, msg)
-				case eth.TransactionsMsg:
-					err = c.handleTransactions(ctx, msg)
-				case eth.GetBlockHeadersMsg:
-					err = c.handleGetBlockHeaders(msg)
-				case eth.BlockHeadersMsg:
-					err = c.handleBlockHeaders(ctx, msg)
-				case eth.GetBlockBodiesMsg:
-					err = c.handleGetBlockBodies(msg)
-				case eth.BlockBodiesMsg:
-					err = c.handleBlockBodies(ctx, msg)
-				case eth.NewBlockMsg:
-					err = c.handleNewBlock(ctx, msg)
-				case eth.NewPooledTransactionHashesMsg:
-					err = c.handleNewPooledTransactionHashes(ctx, version, msg)
-				case eth.GetPooledTransactionsMsg:
-					err = c.handleGetPooledTransactions(msg)
-				case eth.PooledTransactionsMsg:
-					err = c.handlePooledTransactions(ctx, msg)
-				case eth.GetReceiptsMsg:
-					err = c.handleGetReceipts(msg)
-				default:
-					log.Trace().Interface("msg", msg).Send()
-				}
-
-				// All the handler functions are built in a way where returning an error
-				// should drop the connection. If the connection shouldn't be dropped,
-				// then return nil and log the error instead.
-				if err != nil {
-					c.logger.Error().Err(err).Send()
-					return err
-				}
-
-				if err = msg.Discard(); err != nil {
+				select {
+				case <-c.messages:
+					timer.Reset(timeout)
+				case <-timer.C:
+					p.Disconnect(p2p.DiscUselessPeer)
+					return errors.New("useless peer")
+				case err := <-c.done:
+					p.Disconnect(p2p.DiscQuitting)
 					return err
 				}
 			}
 		},
+	}
+}
+
+func (c *conn) handleMessages(ctx context.Context, rw ethp2p.MsgReadWriter, version uint) {
+	for {
+		msg, err := rw.ReadMsg()
+		if err != nil {
+			c.done <- err
+			return
+		}
+
+		switch msg.Code {
+		case eth.NewBlockHashesMsg:
+			err = c.handleNewBlockHashes(ctx, msg)
+			c.messages <- struct{}{}
+		case eth.TransactionsMsg:
+			err = c.handleTransactions(ctx, msg)
+		case eth.GetBlockHeadersMsg:
+			err = c.handleGetBlockHeaders(msg)
+		case eth.BlockHeadersMsg:
+			err = c.handleBlockHeaders(ctx, msg)
+			c.messages <- struct{}{}
+		case eth.GetBlockBodiesMsg:
+			err = c.handleGetBlockBodies(msg)
+		case eth.BlockBodiesMsg:
+			err = c.handleBlockBodies(ctx, msg)
+			c.messages <- struct{}{}
+		case eth.NewBlockMsg:
+			err = c.handleNewBlock(ctx, msg)
+			c.messages <- struct{}{}
+		case eth.NewPooledTransactionHashesMsg:
+			err = c.handleNewPooledTransactionHashes(ctx, version, msg)
+		case eth.GetPooledTransactionsMsg:
+			err = c.handleGetPooledTransactions(msg)
+		case eth.PooledTransactionsMsg:
+			err = c.handlePooledTransactions(ctx, msg)
+		case eth.GetReceiptsMsg:
+			err = c.handleGetReceipts(msg)
+		default:
+			log.Trace().Interface("msg", msg).Send()
+		}
+
+		// All the handler functions are built in a way where returning an error
+		// should drop the connection. If the connection shouldn't be dropped,
+		// then return nil and log the error instead.
+		if err != nil {
+			c.logger.Error().Err(err).Send()
+			c.done <- err
+			return
+		}
+
+		if err = msg.Discard(); err != nil {
+			c.done <- err
+			return
+		}
 	}
 }
 
