@@ -84,18 +84,17 @@ func runFunding(cmd *cobra.Command) error {
 	}
 
 	// add pk to session for sending signed transactions
-	cmd.Println(fundingWalletPK)
 	web3Client.Eth.SetAccount(fundingWalletPK)
 	if err := web3Client.Eth.SetAccount(fundingWalletPK); err != nil {
 		cmd.PrintErrf("There was an error setting account with pk: %s", err.Error())
 		return err
 	}
 
-	// set proper chainId of chainRPC otherwise errors may occur
-	cdkChainId := int64(100) // todo: make configurable
+	// set proper chainId for corresponding chainRPC
+	cdkChainId := int64(chainID)
 	web3Client.Eth.SetChainId(cdkChainId)
 
-	// convert funding wallet address and pk formatting for downstream processing
+	// convert wallet address and pk format for downstream processing
 	fundingWalletAddressParsed := common.HexToAddress(fundingWalletAddress)
 	fundingWalletECDSA, err := crypto.HexToECDSA(fundingWalletPK)
 	if err != nil {
@@ -104,7 +103,6 @@ func runFunding(cmd *cobra.Command) error {
 	}
 
 	// generate set of new wallet addresses
-	fmt.Println("Generating new wallet addresses...")
 	addresses, err := generateWalletAddresses(walletCount)
 	if err != nil {
 		cmd.PrintErrf("There was an error generating wallet addresses: %s", err.Error())
@@ -118,7 +116,7 @@ func runFunding(cmd *cobra.Command) error {
 		cmd.PrintErrf("There was an error funding wallets: %s", err.Error())
 		return err
 	}
-	// small pause for funds to land and state to propogate across network
+	// small pause to let all funds land and state propogate across network
 	time.Sleep(10 * time.Second)
 	return nil
 }
