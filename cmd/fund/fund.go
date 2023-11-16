@@ -77,17 +77,17 @@ var FundCmd = &cobra.Command{
 
 func runFunding(cmd *cobra.Command) error {
 	// setup new web3 session with remote rpc node
-	web3Client, err := web3.NewWeb3(chainRPC)
-	if err != nil {
-		cmd.PrintErrf("There was an error creating web3 client: %s", err.Error())
-		return err
+	web3Client, clientErr := web3.NewWeb3(chainRPC)
+	if clientErr != nil {
+		cmd.PrintErrf("There was an error creating web3 client: %s", clientErr.Error())
+		return clientErr
 	}
 
 	// add pk to session for sending signed transactions
 	web3Client.Eth.SetAccount(fundingWalletPK)
-	if err := web3Client.Eth.SetAccount(fundingWalletPK); err != nil {
-		cmd.PrintErrf("There was an error setting account with pk: %s", err.Error())
-		return err
+	if setAcctErr := web3Client.Eth.SetAccount(fundingWalletPK); setAcctErr != nil {
+		cmd.PrintErrf("There was an error setting account with pk: %s", setAcctErr.Error())
+		return setAcctErr
 	}
 
 	// set proper chainId for corresponding chainRPC
@@ -96,25 +96,25 @@ func runFunding(cmd *cobra.Command) error {
 
 	// convert wallet address and pk format for downstream processing
 	fundingWalletAddressParsed := common.HexToAddress(fundingWalletAddress)
-	fundingWalletECDSA, err := crypto.HexToECDSA(fundingWalletPK)
-	if err != nil {
-		cmd.PrintErrf("There was an error getting ECDSA: %s", err.Error())
-		return err
+	fundingWalletECDSA, ecdsaErr := crypto.HexToECDSA(fundingWalletPK)
+	if ecdsaErr != nil {
+		cmd.PrintErrf("There was an error getting ECDSA: %s", ecdsaErr.Error())
+		return ecdsaErr
 	}
 
 	// generate set of new wallet addresses
-	addresses, err := generateWalletAddresses(walletCount)
-	if err != nil {
-		cmd.PrintErrf("There was an error generating wallet addresses: %s", err.Error())
-		return err
+	addresses, genWalletErr := generateWalletAddresses(walletCount)
+	if genWalletErr != nil {
+		cmd.PrintErrf("There was an error generating wallet addresses: %s", genWalletErr.Error())
+		return genWalletErr
 	}
 
 	// fund all crypto wallets
 	fmt.Println("Funding all loadtest wallets...")
-	err = fundWallets(web3Client, addresses, fundingWalletAddressParsed, fundingWalletECDSA, big.NewInt(int64(walletFundingAmt*1e18)), uint64(walletFundingGas))
-	if err != nil {
-		cmd.PrintErrf("There was an error funding wallets: %s", err.Error())
-		return err
+	fundWalletErr := fundWallets(web3Client, addresses, fundingWalletAddressParsed, fundingWalletECDSA, big.NewInt(int64(walletFundingAmt*1e18)), uint64(walletFundingGas))
+	if fundWalletErr != nil {
+		cmd.PrintErrf("There was an error funding wallets: %s", fundWalletErr.Error())
+		return fundWalletErr
 	}
 	// small pause to let all funds land and state propogate across network
 	time.Sleep(10 * time.Second)
