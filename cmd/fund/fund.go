@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"time"
 
 	_ "embed"
 
@@ -67,11 +66,14 @@ func fundWallets(web3Client *web3.Web3, wallets []*common.Address, senderAddress
 
 // fundCmd represents the fund command
 var FundCmd = &cobra.Command{
-	Use:   fmt.Sprintf("fund"),
+	Use:   "fund",
 	Short: "Bulk fund many crypto wallets automatically.",
 	Long:  usage,
 	Run: func(cmd *cobra.Command, args []string) {
-		runFunding(cmd)
+		fundingErr := runFunding(cmd)
+		if fundingErr != nil {
+			cmd.PrintErrf("Error funding wallets")
+		}
 	},
 }
 
@@ -84,7 +86,6 @@ func runFunding(cmd *cobra.Command) error {
 	}
 
 	// add pk to session for sending signed transactions
-	web3Client.Eth.SetAccount(fundingWalletPK)
 	if setAcctErr := web3Client.Eth.SetAccount(fundingWalletPK); setAcctErr != nil {
 		cmd.PrintErrf("There was an error setting account with pk: %s", setAcctErr.Error())
 		return setAcctErr
@@ -110,14 +111,13 @@ func runFunding(cmd *cobra.Command) error {
 	}
 
 	// fund all crypto wallets
-	fmt.Println("Funding all loadtest wallets...")
+	fmt.Println("Starting to fund loadtest wallets...")
 	fundWalletErr := fundWallets(web3Client, addresses, fundingWalletAddressParsed, fundingWalletECDSA, big.NewInt(int64(walletFundingAmt*1e18)), uint64(walletFundingGas))
 	if fundWalletErr != nil {
 		cmd.PrintErrf("There was an error funding wallets: %s", fundWalletErr.Error())
 		return fundWalletErr
 	}
-	// small pause to let all funds land and state propogate across network
-	time.Sleep(10 * time.Second)
+
 	return nil
 }
 
