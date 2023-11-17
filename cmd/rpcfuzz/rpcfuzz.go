@@ -225,10 +225,10 @@ func runRpcFuzz(ctx context.Context) error {
 	currentChainID = chainId
 
 	if *testContractAddress == "" {
-		conformanceContractAddr, _, err := getConformanceContract(ctx, rpcClient, currentChainID)
-		if err != nil {
-			log.Error().Err(err).Msg("Load test contract deployment error")
-			return err
+		conformanceContractAddr, _, deploymentErr := getConformanceContract(ctx, rpcClient, currentChainID)
+		if deploymentErr != nil {
+			log.Error().Err(deploymentErr).Msg("Load test contract deployment error")
+			return deploymentErr
 		}
 		testContractAddress = &conformanceContractAddr
 	}
