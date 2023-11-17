@@ -166,18 +166,19 @@ const (
 	methodNotFoundErr = -32601
 	invalidParamsErr  = -32602
 	internalErr       = -32603
+
+	// contracts/conformancetester/ConformanceTester.sol
+	revertErrorMessage = "Test Revert Error Message"
 )
 
 var (
-	testPrivateKey            *ecdsa.PrivateKey
-	testEthAddress            ethcommon.Address
-	testContractAddress       *string
-	conformanceTesterContract *conformancetester.ConformanceTester
-	testAccountNonce          uint64
-	testAccountNonceMutex     sync.Mutex
-	currentChainID            *big.Int
-	fuzzer                    *fuzz.Fuzzer
-	enabledNamespaces         []string
+	testPrivateKey        *ecdsa.PrivateKey
+	testEthAddress        ethcommon.Address
+	testAccountNonce      uint64
+	testAccountNonceMutex sync.Mutex
+	currentChainID        *big.Int
+	fuzzer                *fuzz.Fuzzer
+	enabledNamespaces     []string
 	// in the future allTests could be used to for
 	// fuzzing.. E.g. loop over the various tests, and mutate the
 	// Args before sending
@@ -223,13 +224,15 @@ func runRpcFuzz(ctx context.Context) error {
 	}
 	currentChainID = chainId
 
-	conformanceContractAddr, conformanceContract, err := getConformanceContract(ctx, rpcClient, currentChainID)
-	if err != nil {
-		log.Error().Err(err).Msg("Load test contract deployment error")
+	if *testContractAddress == "" {
+		conformanceContractAddr, _, err := getConformanceContract(ctx, rpcClient, currentChainID)
+		if err != nil {
+			log.Error().Err(err).Msg("Load test contract deployment error")
+			return err
+		}
+		testContractAddress = &conformanceContractAddr
 	}
-	conformanceTesterContract = conformanceContract
-	testContractAddress = &conformanceContractAddr
-	log.Info().Str("testContractAddress", *testContractAddress).Msg("Conformance test contract deployed...")
+	log.Info().Str("testContractAddress", *testContractAddress).Msg("Conformance test contract address")
 
 	nonce, err := GetTestAccountNonce(ctx, rpcClient)
 	if err != nil {
@@ -740,19 +743,11 @@ func setupTests(ctx context.Context, rpcClient *rpc.Client) {
 		Flags:     FlagStrictValidation,
 	})
 	allTests = append(allTests, &RPCTestGeneric{
-		Name:   "RPCTestEthCallRevertMessage",
-		Method: "eth_call",
-		Args:   []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Data: "0xa26388bb"}, "latest"},
-		Flags:  FlagErrorValidation,
-		Validator: func() func(result interface{}) error {
-			cops := new(bind.CallOpts)
-			expectedRevertMsg, ltCallErr := conformanceTesterContract.RevertErrorMessage(cops)
-			if ltCallErr != nil {
-				log.Error().Err(ltCallErr).Msg("Failed to get revert message from Conformance Contract")
-			}
-
-			return ValidateErrorMsgString(expectedRevertMsg)
-		}(),
+		Name:      "RPCTestEthCallRevertMessage",
+		Method:    "eth_call",
+		Args:      []interface{}{&RPCTestTransactionArgs{To: *testContractAddress, Data: "0xa26388bb"}, "latest"},
+		Validator: ValidateErrorMsgString(revertErrorMessage),
+		Flags:     FlagErrorValidation,
 	})
 
 	// curl http://localhost:8545 -X POST -H "Content-Type: application/json" --data '{"method":"eth_estimateGas","params":[{"to":"0x6FdA56C57B0Acadb96Ed5624aC500C0429d59429","data":"0x06fdde03"},"latest"],"id":1,"jsonrpc":"2.0"}'

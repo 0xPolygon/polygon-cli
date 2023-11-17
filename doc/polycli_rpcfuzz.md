@@ -103,18 +103,19 @@ $  docker run -v $PWD/contracts:/contracts ethereum/solc:stable --storage-layout
 ## Flags
 
 ```bash
-      --csv                  Flag to indicate that output will be exported as a CSV.
-      --export-path string   The directory export path of the output of the tests. Must pair this with either --json, --csv, --md, or --html
-      --fuzz                 Flag to indicate whether to fuzz input or not.
-      --fuzzn int            Number of times to run the fuzzer per test. (default 100)
-  -h, --help                 help for rpcfuzz
-      --html                 Flag to indicate that output will be exported as a HTML.
-      --json                 Flag to indicate that output will be exported as a JSON.
-      --md                   Flag to indicate that output will be exported as a Markdown.
-      --namespaces string    Comma separated list of rpc namespaces to test (default "eth,web3,net,debug,raw")
-      --private-key string   The hex encoded private key that we'll use to sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
-  -r, --rpc-url string       The RPC endpoint url (default "http://localhost:8545")
-      --seed int             A seed for generating random values within the fuzzer (default 123456)
+      --contract-address string   The address of a contract that can be used for testing. If not specified, a contract will be deployed automatically.
+      --csv                       Flag to indicate that output will be exported as a CSV.
+      --export-path string        The directory export path of the output of the tests. Must pair this with either --json, --csv, --md, or --html
+      --fuzz                      Flag to indicate whether to fuzz input or not.
+      --fuzzn int                 Number of times to run the fuzzer per test. (default 100)
+  -h, --help                      help for rpcfuzz
+      --html                      Flag to indicate that output will be exported as a HTML.
+      --json                      Flag to indicate that output will be exported as a JSON.
+      --md                        Flag to indicate that output will be exported as a Markdown.
+      --namespaces string         Comma separated list of rpc namespaces to test (default "eth,web3,net,debug,raw")
+      --private-key string        The hex encoded private key that we'll use to sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
+  -r, --rpc-url string            The RPC endpoint url (default "http://localhost:8545")
+      --seed int                  A seed for generating random values within the fuzzer (default 123456)
 ```
 
 The command also inherits flags from parent commands.
