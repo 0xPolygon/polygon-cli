@@ -28,6 +28,7 @@
         "required": [
           "transactionHash"
         ],
+        "additionalProperties": false,
         "properties": {
           "removed": {
             "title": "removed",

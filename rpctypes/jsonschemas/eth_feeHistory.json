@@ -7,6 +7,7 @@
     "baseFeePerGas",
     "gasUsedRatio"
   ],
+  "additionalProperties": false,
   "properties": {
     "oldestBlock": {
       "title": "oldestBlock",
@@ -22,6 +23,17 @@
         "title": "hex encoded unsigned integer",
         "type": "string",
         "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$"
+      }
+    },
+    "gasUsedRatio": {
+      "title": "gasUsedRatio",
+      "description": "An array of block gas used ratios. These are calculated as the ratio of gasUsed and gasLimit.",
+      "type": "array",
+      "items": {
+        "title": "normalized ratio",
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
       }
     },
     "reward": {

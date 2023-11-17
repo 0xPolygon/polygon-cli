@@ -1,6 +1,7 @@
 {
   "title": "Access list result",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "accessList": {
       "title": "accessList",
@@ -8,6 +9,7 @@
       "items": {
         "title": "Access list entry",
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "address": {
             "title": "hex encoded address",

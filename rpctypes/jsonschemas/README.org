@@ -15,3 +15,10 @@ into unique schemas for simplicity.
 cat openrpc.json | jq '.methods[].name' | sort
 cat openrpc.json | jq '.methods[] | select(.name == "eth_syncing") | .result.schema'
 #+END_SRC
+
+Or you can run the following from project root folder:
+
+#+BEGIN_SRC bash
+make gen-json-rpctypes
+#+END_SRC
+

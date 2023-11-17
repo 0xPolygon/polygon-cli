@@ -1,0 +1,13 @@
+{
+  "oneOf": [
+    {
+      "title": "Not Found (null)",
+      "type": "null"
+    },
+    {
+      "title": "Transaction count",
+      "type": "string",
+      "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$"
+    }
+  ]
+}

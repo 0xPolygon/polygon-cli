@@ -23,7 +23,6 @@ import (
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
 
-	"github.com/cenkalti/backoff/v4"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -110,7 +109,9 @@ func modeRequiresLoadTestContract(m loadTestMode) bool {
 		m == loadTestModeFunction ||
 		m == loadTestModeInc ||
 		m == loadTestModeRandom ||
-		m == loadTestModeStore {
+		m == loadTestModeStore ||
+		m == loadTestModePrecompiledContract ||
+		m == loadTestModePrecompiledContracts {
 		return true
 	}
 	return false
@@ -773,9 +774,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 }
 
 func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, retryable func() error) error {
-	// this function use to be very complicated (and not work). I'm dumbing this down to a basic time based retryable which should work 99% of the time
-	b := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(5*time.Second), 24), ctx)
-	return backoff.Retry(retryable, b)
+	return contracts.BlockUntilSuccessful(ctx, c, retryable)
 }
 
 func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {

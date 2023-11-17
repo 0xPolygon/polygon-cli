@@ -10,6 +10,7 @@
     "storageHash",
     "storageProof"
   ],
+  "additionalProperties": false,
   "properties": {
     "address": {
       "title": "address",
@@ -56,6 +57,7 @@
           "value",
           "proof"
         ],
+        "additionalProperties": false,
         "properties": {
           "key": {
             "title": "key",
