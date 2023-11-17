@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"strings"
@@ -50,7 +49,7 @@ func generateNonce(web3Client *web3.Web3) (uint64, error) {
 	nonceMutex.Lock()
 	defer nonceMutex.Unlock()
 
-	if nonceInitialized == true {
+	if nonceInitialized {
 		globalNonce++
 	} else {
 		// Derive the public key from the funding wallet's private key
@@ -165,9 +164,7 @@ func runFunding(cmd *cobra.Command) error {
 	startTime := time.Now()
 
 	// Remove '0x' prefix from fundingWalletPK if present
-	if strings.HasPrefix(fundingWalletPK, "0x") {
-		fundingWalletPK = fundingWalletPK[2:]
-	}
+  fundingWalletPK = strings.TrimPrefix(fundingWalletPK, "0x")
 
 	// setup new web3 session with remote rpc node
 	web3Client, clientErr := web3.NewWeb3(chainRPC)
@@ -226,11 +223,18 @@ func runFunding(cmd *cobra.Command) error {
 	}
 
 	// Write JSON data to a file
-	writeErr := ioutil.WriteFile(outputFile, walletsJSON, 0644)
-	if writeErr != nil {
-		log.Error().Err(writeErr).Msg("Error writing wallet details to file")
-		return writeErr
-	}
+  file, createErr := os.Create(outputFile)
+  if createErr != nil {
+      log.Error().Err(createErr).Msg("Error creating file")
+      return createErr
+  }
+  defer file.Close()
+
+  _, writeErr := file.Write(walletsJSON)
+  if writeErr != nil {
+      log.Error().Err(writeErr).Msg("Error writing wallet details to file")
+      return writeErr
+  }
 
 	log.Info().Msgf("Wallet details have been saved to %s", outputFile)
 
