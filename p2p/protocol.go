@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -185,7 +186,11 @@ func (c *conn) statusExchange(packet *eth.StatusPacket) error {
 	}
 
 	if status.NetworkID != packet.NetworkID {
-		return ethp2p.DiscUselessPeer
+		return fmt.Errorf("network ID mismatch: %d (!= %d)", status.NetworkID, packet.NetworkID)
+	}
+
+	if status.Genesis != packet.Genesis {
+		return fmt.Errorf("genesis mismatch: %d (!= %d)", status.Genesis, packet.Genesis)
 	}
 
 	c.logger.Info().Interface("status", status).Msg("New peer")
@@ -438,11 +443,24 @@ func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, version uin
 		return nil
 	}
 
-	return ethp2p.Send(
-		c.rw,
-		eth.GetPooledTransactionsMsg,
-		&eth.GetPooledTransactionsPacket66{GetPooledTransactionsPacket: hashes},
-	)
+	switch version {
+	case 66, 67:
+		return ethp2p.Send(
+			c.rw,
+			eth.GetPooledTransactionsMsg,
+			&eth.GetPooledTransactionsPacket66{GetPooledTransactionsPacket: hashes},
+		)
+	case 68:
+		var packet eth.GetPooledTransactionsPacket = hashes
+
+		return ethp2p.Send(
+			c.rw,
+			eth.GetPooledTransactionsMsg,
+			&packet,
+		)
+	}
+
+	return nil
 }
 
 func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) error {
