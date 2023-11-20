@@ -8,7 +8,6 @@ concurrency:
 
 env:
   GO_VERSION: "1.21"
-  SOLC_VERSION: "v0.5.16"
 
 jobs:
   lint:
