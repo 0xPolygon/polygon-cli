@@ -2,9 +2,10 @@ name: go-bindings
 
 on:
   push:
-    # Only run when files under `contracts/` folder are modified.
+    # Only run when files under `bindings/` or `contracts/` folders are modified.
     paths:
       - 'contracts/**'
+      - 'bindings/**'
 
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
