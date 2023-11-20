@@ -8,5 +8,4 @@ $ polycli fund \
   --wallet-funding-amt=0.00015 \
   --wallet-funding-gas=50000 \
   --output-file="/opt/generated_keys.json"
-  --verbosity=true
 ```

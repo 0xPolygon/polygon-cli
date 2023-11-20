@@ -31,7 +31,6 @@ var (
 	concurrencyLevel       int
 	walletFundingAmt       float64
 	walletFundingGas       uint64
-	verbosityEnabled       bool
 	nonceMutex             sync.Mutex
 	globalNonce            uint64
 	nonceInitialized       bool
@@ -255,14 +254,6 @@ func init() {
 	FundCmd.Flags().StringVar(&chainRPC, "rpc-url", "http://localhost:8545", "The RPC endpoint url")
 	FundCmd.Flags().IntVar(&concurrencyLevel, "concurrency", 5, "Concurrency level for speeding up funding wallets")
 	FundCmd.Flags().Float64Var(&walletFundingAmt, "wallet-funding-amt", 0.05, "Amount to fund each wallet with")
-	FundCmd.Flags().Uint64Var(&walletFundingGas, "wallet-funding-gas", 50000, "Gas for each wallet funding transaction")
-	FundCmd.Flags().BoolVar(&verbosityEnabled, "verbosity", true, "Global verbosity flag (true/false)")
+	FundCmd.Flags().Uint64Var(&walletFundingGas, "wallet-funding-gas", 100000, "Gas for each wallet funding transaction")
 	FundCmd.Flags().StringVar(&outputFileFlag, "output-file", "wallets.csv", "Specify the output CSV file name")
-
-	// Set the global log level based on a verbosity flag
-	if verbosityEnabled {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	} else {
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	}
 }
