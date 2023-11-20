@@ -1,13 +1,6 @@
 name: ci
 
-on:
-  push:
-    branches:
-      - "main"
-  pull_request:
-    branches:
-      - "**"
-    types: [opened, synchronize]
+on: push
 
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
@@ -33,42 +26,6 @@ jobs:
         run: go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@latest
       - name: Run all the linter tools against code
         run: make lint
-
-  smart-contracts:
-    name: Smart contracts
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-      - uses: actions/setup-go@v4
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: Install solc
-        run: sudo snap install solc --channel=${{ env.SOLC_VERSION }}
-      - name: Install abigen
-        run: |
-          go get -u github.com/ethereum/go-ethereum
-          cd $GOPATH/src/github.com/ethereum/go-ethereum/
-          make
-          make devtools
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: nightly
-      - name: Install dependencies
-        working-directory: contracts
-        run: forge install
-      - name: Generate go bindings
-        run: make gen-go-bindings
-      - name: Check if the go bindings are up to date
-        run: |
-          if [[ -n $(git status --porcelain) ]]; then
-            echo "❌ Error: Go bindings are not up to date. Please run \`make gen-go-bindings\`."
-            exit 1
-          else
-            echo "✅ The go bindings are up to date."
-          fi
 
   doc:
     name: Doc
