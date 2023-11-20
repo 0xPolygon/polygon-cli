@@ -29,7 +29,6 @@ $ polycli fund \
   --wallet-funding-amt=0.00015 \
   --wallet-funding-gas=50000 \
   --output-file="/opt/generated_keys.json"
-  --verbosity=true
 ```
 ## Flags
 
@@ -40,10 +39,9 @@ $ polycli fund \
   -h, --help                       help for fund
       --output-file string         Specify the output CSV file name (default "wallets.csv")
       --rpc-url string             The RPC endpoint url (default "http://localhost:8545")
-      --verbosity                  Global verbosity flag (true/false) (default true)
       --wallet-count int           Number of wallets to fund (default 2)
       --wallet-funding-amt float   Amount to fund each wallet with (default 0.05)
-      --wallet-funding-gas uint    Gas for each wallet funding transaction (default 50000)
+      --wallet-funding-gas uint    Gas for each wallet funding transaction (default 100000)
 ```
 
 The command also inherits flags from parent commands.
@@ -51,6 +49,13 @@ The command also inherits flags from parent commands.
 ```bash
       --config string   config file (default is $HOME/.polygon-cli.yaml)
       --pretty-logs     Should logs be in pretty format or JSON (default true)
+  -v, --verbosity int   0 - Silent
+                        100 Fatal
+                        200 Error
+                        300 Warning
+                        400 Info
+                        500 Debug
+                        600 Trace (default 400)
 ```
 
 ## See also
