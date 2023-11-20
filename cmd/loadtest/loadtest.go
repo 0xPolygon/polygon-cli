@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/maticnetwork/polygon-cli/bindings/tester"
+	"github.com/maticnetwork/polygon-cli/bindings/tokens"
 	uniswapv3loadtest "github.com/maticnetwork/polygon-cli/cmd/loadtest/uniswapv3"
-	"github.com/maticnetwork/polygon-cli/contracts/src/tester"
-	"github.com/maticnetwork/polygon-cli/contracts/src/tokens"
 
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
