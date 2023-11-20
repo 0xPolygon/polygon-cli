@@ -1,0 +1,56 @@
+{
+  "title": "feeHistoryResults",
+  "description": "Fee history results.",
+  "type": "object",
+  "required": [
+    "oldestBlock",
+    "baseFeePerGas",
+    "gasUsedRatio"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "oldestBlock": {
+      "title": "oldestBlock",
+      "type": "string",
+      "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$",
+      "description": "Lowest number block of returned range."
+    },
+    "baseFeePerGas": {
+      "title": "baseFeePerGasArray",
+      "description": "An array of block base fees per gas. This includes the next block after the newest of the returned range, because this value can be derived from the newest block. Zeroes are returned for pre-EIP-1559 blocks.",
+      "type": "array",
+      "items": {
+        "title": "hex encoded unsigned integer",
+        "type": "string",
+        "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$"
+      }
+    },
+    "gasUsedRatio": {
+      "title": "gasUsedRatio",
+      "description": "An array of block gas used ratios. These are calculated as the ratio of gasUsed and gasLimit.",
+      "type": "array",
+      "items": {
+        "title": "normalized ratio",
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      }
+    },
+    "reward": {
+      "title": "rewardArray",
+      "description": "A two-dimensional array of effective priority fees per gas at the requested block percentiles.",
+      "type": "array",
+      "items": {
+        "title": "rewardPercentile",
+        "description": "An array of effective priority fee per gas data points from a single block. All zeroes are returned if the block is empty.",
+        "type": "array",
+        "items": {
+          "title": "rewardPercentile",
+          "type": "string",
+          "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$",
+          "description": "A given percentile sample of effective priority fees per gas from a single block in ascending order, weighted by gas used. Zeroes are returned if the block is empty."
+        }
+      }
+    }
+  }
+}

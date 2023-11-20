@@ -1,0 +1,26 @@
+{
+  "title": "Transition configuration object",
+  "type": "object",
+  "required": [
+    "terminalTotalDifficulty",
+    "terminalBlockHash",
+    "terminalBlockNumber"
+  ],
+  "properties": {
+    "terminalTotalDifficulty": {
+      "title": "Terminal total difficulty",
+      "type": "string",
+      "pattern": "^0x([1-9a-f]+[0-9a-f]{0,31})|0$"
+    },
+    "terminalBlockHash": {
+      "title": "Terminal block hash",
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "terminalBlockNumber": {
+      "title": "Terminal block number",
+      "type": "string",
+      "pattern": "^0x([1-9a-f]+[0-9a-f]{0,15})|0$"
+    }
+  }
+}
