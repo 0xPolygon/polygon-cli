@@ -443,24 +443,11 @@ func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, version uin
 		return nil
 	}
 
-	switch version {
-	case 66, 67:
-		return ethp2p.Send(
-			c.rw,
-			eth.GetPooledTransactionsMsg,
-			&eth.GetPooledTransactionsPacket66{GetPooledTransactionsPacket: hashes},
-		)
-	case 68:
-		var packet eth.GetPooledTransactionsPacket = hashes
-
-		return ethp2p.Send(
-			c.rw,
-			eth.GetPooledTransactionsMsg,
-			&packet,
-		)
-	}
-
-	return nil
+	return ethp2p.Send(
+		c.rw,
+		eth.GetPooledTransactionsMsg,
+		&eth.GetPooledTransactionsPacket66{GetPooledTransactionsPacket: hashes},
+	)
 }
 
 func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) error {
