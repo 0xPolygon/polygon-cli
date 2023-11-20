@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.21;
+pragma solidity ^0.8.23;
 
 import {ERC721 as OZ_ERC721} from "@openzeppelin/token/ERC721/ERC721.sol";
 
