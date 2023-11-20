@@ -4,8 +4,12 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"math/big"
+	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -26,7 +30,6 @@ var (
 	walletCount            int
 	fundingWalletPK        string
 	fundingWalletPublicKey *ecdsa.PublicKey
-	chainID                int
 	chainRPC               string
 	concurrencyLevel       int
 	walletFundingAmt       float64
@@ -42,6 +45,56 @@ type Wallet struct {
 	PublicKey  *ecdsa.PublicKey
 	PrivateKey *ecdsa.PrivateKey
 	Address    common.Address
+}
+
+func getChainIDFromNode(chainRPC string) (int64, error) {
+	// Create an HTTP client
+	client := &http.Client{}
+
+	// Prepare the JSON-RPC request payload
+	payload := `{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}`
+
+	// Create the HTTP request
+	req, err := http.NewRequest("POST", chainRPC, strings.NewReader(payload))
+	if err != nil {
+		return 0, err
+	}
+
+	// Set the required headers
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	// Read the response body
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return 0, err
+	}
+
+	// Parse the JSON response
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return 0, err
+	}
+
+	// Extract the chain ID from the response
+	chainIDHex, ok := result["result"].(string)
+	if !ok {
+		return 0, fmt.Errorf("unable to extract chain ID from response")
+	}
+
+	// Convert the chain ID from hex to int64
+	int64ChainID, err := strconv.ParseInt(chainIDHex, 0, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return int64ChainID, nil
 }
 
 func generateNonce(web3Client *web3.Web3) (uint64, error) {
@@ -75,7 +128,7 @@ func generateNonce(web3Client *web3.Web3) (uint64, error) {
 }
 
 func generateWallets(numWallets int) ([]Wallet, error) {
-	wallets := make([]Wallet, 0, numWallets)
+	wallets := make([]Wallet, numWallets)
 
 	for i := 0; i < numWallets; i++ {
 		account, err := crypto.GenerateKey()
@@ -91,7 +144,7 @@ func generateWallets(numWallets int) ([]Wallet, error) {
 			Address:    addr,
 		}
 
-		wallets = append(wallets, wallet)
+		wallets[i] = wallet
 	}
 	return wallets, nil
 }
@@ -163,7 +216,7 @@ func runFunding(cmd *cobra.Command) error {
 	startTime := time.Now()
 
 	// Remove '0x' prefix from fundingWalletPK if present
-  fundingWalletPK = strings.TrimPrefix(fundingWalletPK, "0x")
+	fundingWalletPK = strings.TrimPrefix(fundingWalletPK, "0x")
 
 	// setup new web3 session with remote rpc node
 	web3Client, clientErr := web3.NewWeb3(chainRPC)
@@ -178,9 +231,15 @@ func runFunding(cmd *cobra.Command) error {
 		return setAcctErr
 	}
 
-	// set proper chainId for corresponding chainRPC
-	cdkChainId := int64(chainID)
-	web3Client.Eth.SetChainId(cdkChainId)
+	// Query the chain ID from the rpc node
+	chainID, chainIDErr := getChainIDFromNode(chainRPC)
+	if chainIDErr != nil {
+		log.Error().Err(chainIDErr).Msg("Error getting chain ID")
+		return chainIDErr
+	}
+
+	// Set proper chainId for corresponding chainRPC
+	web3Client.Eth.SetChainId(chainID)
 
 	// generate set of new wallet objects
 	wallets, genWalletErr := generateWallets(walletCount)
@@ -222,18 +281,18 @@ func runFunding(cmd *cobra.Command) error {
 	}
 
 	// Write JSON data to a file
-  file, createErr := os.Create(outputFile)
-  if createErr != nil {
-      log.Error().Err(createErr).Msg("Error creating file")
-      return createErr
-  }
-  defer file.Close()
+	file, createErr := os.Create(outputFile)
+	if createErr != nil {
+		log.Error().Err(createErr).Msg("Error creating file")
+		return createErr
+	}
+	defer file.Close()
 
-  _, writeErr := file.Write(walletsJSON)
-  if writeErr != nil {
-      log.Error().Err(writeErr).Msg("Error writing wallet details to file")
-      return writeErr
-  }
+	_, writeErr := file.Write(walletsJSON)
+	if writeErr != nil {
+		log.Error().Err(writeErr).Msg("Error writing wallet details to file")
+		return writeErr
+	}
 
 	log.Info().Msgf("Wallet details have been saved to %s", outputFile)
 
@@ -250,10 +309,9 @@ func init() {
 
 	FundCmd.Flags().IntVar(&walletCount, "wallet-count", 2, "Number of wallets to fund")
 	FundCmd.Flags().StringVar(&fundingWalletPK, "funding-wallet-pk", "", "Corresponding private key for funding wallet address, ensure you remove leading 0x")
-	FundCmd.Flags().IntVar(&chainID, "chain-id", 0, "The chain id for the transactions.")
 	FundCmd.Flags().StringVar(&chainRPC, "rpc-url", "http://localhost:8545", "The RPC endpoint url")
-	FundCmd.Flags().IntVar(&concurrencyLevel, "concurrency", 5, "Concurrency level for speeding up funding wallets")
+	FundCmd.Flags().IntVar(&concurrencyLevel, "concurrency", 2, "Concurrency level for speeding up funding wallets")
 	FundCmd.Flags().Float64Var(&walletFundingAmt, "wallet-funding-amt", 0.05, "Amount to fund each wallet with")
 	FundCmd.Flags().Uint64Var(&walletFundingGas, "wallet-funding-gas", 100000, "Gas for each wallet funding transaction")
-	FundCmd.Flags().StringVar(&outputFileFlag, "output-file", "wallets.csv", "Specify the output CSV file name")
+	FundCmd.Flags().StringVar(&outputFileFlag, "output-file", "funded_wallets.json", "Specify the output JSON file name")
 }

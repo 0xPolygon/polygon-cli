@@ -21,23 +21,21 @@ polycli fund [flags]
 
 ```bash
 $ polycli fund \
-  --wallet-count=5 \
-  --funding-wallet-pk="REPLACE" \
-  --chain-id=100 \
-  --concurrency=5 \
   --rpc-url="https://rootchain-devnetsub.zkevmdev.net"  \
+  --funding-wallet-pk="REPLACE" \
+  --wallet-count=5 \
   --wallet-funding-amt=0.00015 \
   --wallet-funding-gas=50000 \
-  --output-file="/opt/generated_keys.json"
+  --concurrency=5 \
+  --output-file="/opt/funded_wallets.json"
 ```
 ## Flags
 
 ```bash
-      --chain-id int               The chain id for the transactions.
-      --concurrency int            Concurrency level for speeding up funding wallets (default 5)
+      --concurrency int            Concurrency level for speeding up funding wallets (default 2)
       --funding-wallet-pk string   Corresponding private key for funding wallet address, ensure you remove leading 0x
   -h, --help                       help for fund
-      --output-file string         Specify the output CSV file name (default "wallets.csv")
+      --output-file string         Specify the output JSON file name (default "funded_wallets.json")
       --rpc-url string             The RPC endpoint url (default "http://localhost:8545")
       --wallet-count int           Number of wallets to fund (default 2)
       --wallet-funding-amt float   Amount to fund each wallet with (default 0.05)
