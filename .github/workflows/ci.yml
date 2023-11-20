@@ -34,7 +34,7 @@ jobs:
         run: make lint
 
   smart-contracts:
-    name: Build Smart Contracts
+    name: Smart contracts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -47,9 +47,16 @@ jobs:
       - name: Install dependencies
         working-directory: contracts
         run: forge install
-      - name: Run forge build
-        working-directory: contracts
-        run: forge --version && FOUNDRY_PROFILE=lite forge build
+      - name: Generate go bindings
+        run: make gen-go-bindings
+      - name: Check if the go bindings are up to date
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "❌ Error: Go bindings are not up to date. Please run \`make gen-go-bindings\`."
+            exit 1
+          else
+            echo "✅ The go bindings are up to date."
+          fi
 
   doc:
     name: Doc
