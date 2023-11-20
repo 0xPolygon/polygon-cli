@@ -1,4 +1,4 @@
-package contracts
+package tester
 
 import (
 	"context"
@@ -13,7 +13,6 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/maticnetwork/polygon-cli/contracts/conformancetester"
 	"github.com/rs/zerolog/log"
 
 	"github.com/cenkalti/backoff/v4"
@@ -26,10 +25,10 @@ import (
 // From within `polygon-cli/contracts/loadtester` directory:
 // ~/code/go-ethereum/build/bin/abigen --abi LoadTester.abi --pkg contracts --type LoadTester --bin LoadTester.bin --out ../loadtester.go
 
-//go:embed loadtester/LoadTester.bin
+//go:embed LoadTester.bin
 var RawLoadTesterBin string
 
-//go:embed loadtester/LoadTester.abi
+//go:embed LoadTester.abi
 var RawLoadTesterABI string
 
 var randSrc *rand.Rand
@@ -38,21 +37,25 @@ func GetLoadTesterBytes() ([]byte, error) {
 	return hex.DecodeString(RawLoadTesterBin)
 }
 
+// BlockUntilSuccessfulFn is designed to wait until a specified number of Ethereum blocks have been
+// mined, periodically checking for the completion of a given function within each block interval.
+type BlockUntilSuccessfulFn func(ctx context.Context, c *ethclient.Client, f func() error) error
+
 func BlockUntilSuccessful(ctx context.Context, c *ethclient.Client, retryable func() error) error {
 	// this function use to be very complicated (and not work). I'm dumbing this down to a basic time based retryable which should work 99% of the time
 	b := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(5*time.Second), 24), ctx)
 	return backoff.Retry(retryable, b)
 }
 
-func DeployConformanceContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (conformanceContractAddr ethcommon.Address, conformanceContract *conformancetester.ConformanceTester, err error) {
-	conformanceContractAddr, _, _, err = conformancetester.DeployConformanceTester(tops, c, "ConformanceTesterContractName")
+func DeployConformanceContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (conformanceContractAddr ethcommon.Address, conformanceContract *ConformanceTester, err error) {
+	conformanceContractAddr, _, _, err = DeployConformanceTester(tops, c, "ConformanceTesterContractName")
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to deploy ConformanceTester contract")
 		return
 	}
 	log.Info().Interface("conformanceContractAddr", conformanceContractAddr).Msg("Conformance contract deployed")
 
-	conformanceContract, err = conformancetester.NewConformanceTester(conformanceContractAddr, c)
+	conformanceContract, err = NewConformanceTester(conformanceContractAddr, c)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to instantiate new conformance contract")
 		return

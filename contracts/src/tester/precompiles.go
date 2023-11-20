@@ -1,4 +1,4 @@
-package contracts
+package tester
 
 import (
 	"crypto/ecdsa"
@@ -204,7 +204,7 @@ func CallPrecompiledContracts(address int, lt *LoadTester, opts *bind.TransactOp
 		return lt.TestBlake2f(opts, inputData)
 	}
 
-	return nil, fmt.Errorf("Unrecognized precompiled address %d", address)
+	return nil, fmt.Errorf("unrecognized precompiled address %d", address)
 }
 
 func GetRandomPrecompiledContractAddress() int {
