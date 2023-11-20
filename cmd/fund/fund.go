@@ -55,31 +55,31 @@ func getChainIDFromNode(chainRPC string) (int64, error) {
 	payload := `{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}`
 
 	// Create the HTTP request
-	req, err := http.NewRequest("POST", chainRPC, strings.NewReader(payload))
-	if err != nil {
-		return 0, err
+	req, ReqErr := http.NewRequest("POST", chainRPC, strings.NewReader(payload))
+	if ReqErr != nil {
+		return 0, ReqErr
 	}
 
 	// Set the required headers
 	req.Header.Set("Content-Type", "application/json")
 
 	// Send the request
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, err
+	resp, doErr := client.Do(req)
+	if doErr != nil {
+		return 0, doErr
 	}
 	defer resp.Body.Close()
 
 	// Read the response body
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return 0, err
+	body, readErr := ioutil.ReadAll(resp.Body)
+	if readErr != nil {
+		return 0, readErr
 	}
 
 	// Parse the JSON response
 	var result map[string]interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return 0, err
+	if jsonErr := json.Unmarshal(body, &result); jsonErr != nil {
+		return 0, jsonErr
 	}
 
 	// Extract the chain ID from the response
@@ -89,9 +89,9 @@ func getChainIDFromNode(chainRPC string) (int64, error) {
 	}
 
 	// Convert the chain ID from hex to int64
-	int64ChainID, err := strconv.ParseInt(chainIDHex, 0, 64)
-	if err != nil {
-		return 0, err
+	int64ChainID, parseErr := strconv.ParseInt(chainIDHex, 0, 64)
+	if parseErr != nil {
+		return 0, parseErr
 	}
 
 	return int64ChainID, nil
