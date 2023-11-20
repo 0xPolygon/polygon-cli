@@ -10,8 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/maticnetwork/polygon-cli/contracts"
-	"github.com/maticnetwork/polygon-cli/contracts/uniswapv3"
+	"github.com/maticnetwork/polygon-cli/bindings/tester"
+	"github.com/maticnetwork/polygon-cli/bindings/uniswapv3"
 	"github.com/rs/zerolog/log"
 )
 
@@ -25,7 +25,7 @@ var (
 )
 
 // Deploy an ERC20 token.
-func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, tokenName, tokenSymbol string, amount *big.Int, recipient common.Address, tokenKnownAddress common.Address, blockUntilSuccessful contracts.BlockUntilSuccessfulFn) (tokenConfig ContractConfig[uniswapv3.Swapper], err error) {
+func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, tokenName, tokenSymbol string, amount *big.Int, recipient common.Address, tokenKnownAddress common.Address, blockUntilSuccessful tester.BlockUntilSuccessfulFn) (tokenConfig ContractConfig[uniswapv3.Swapper], err error) {
 	tokenConfig.Address, tokenConfig.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		tokenKnownAddress,
@@ -59,7 +59,7 @@ func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOp
 }
 
 // Approve some UniswapV3 addresses to spend tokens on behalf of the token owner.
-func setUniswapV3Allowances(ctx context.Context, c *ethclient.Client, contract *uniswapv3.Swapper, tops *bind.TransactOpts, cops *bind.CallOpts, tokenName string, addresses map[string]common.Address, owner common.Address, blockUntilSuccessful contracts.BlockUntilSuccessfulFn) error {
+func setUniswapV3Allowances(ctx context.Context, c *ethclient.Client, contract *uniswapv3.Swapper, tops *bind.TransactOpts, cops *bind.CallOpts, tokenName string, addresses map[string]common.Address, owner common.Address, blockUntilSuccessful tester.BlockUntilSuccessfulFn) error {
 	// Get the ERC20 contract name.
 	erc20Name, err := contract.Name(cops)
 	if err != nil {

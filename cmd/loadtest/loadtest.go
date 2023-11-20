@@ -15,11 +15,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/maticnetwork/polygon-cli/bindings/tester"
+	"github.com/maticnetwork/polygon-cli/bindings/tokens"
 	uniswapv3loadtest "github.com/maticnetwork/polygon-cli/cmd/loadtest/uniswapv3"
-	"github.com/maticnetwork/polygon-cli/contracts"
-	"github.com/maticnetwork/polygon-cli/contracts/tokens"
 
-	"github.com/maticnetwork/polygon-cli/metrics"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
 
@@ -473,7 +472,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 	// deploy and instantiate the load tester contract
 	var ltAddr ethcommon.Address
-	var ltContract *contracts.LoadTester
+	var ltContract *tester.LoadTester
 	if anyModeRequiresLoadTestContract(ltp.ParsedModes) || *inputLoadTestParams.ForceContractDeploy {
 		ltAddr, ltContract, err = getLoadTestContract(ctx, c, tops, cops)
 		if err != nil {
@@ -660,11 +659,11 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	return nil
 }
 
-func getLoadTestContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (ltAddr ethcommon.Address, ltContract *contracts.LoadTester, err error) {
+func getLoadTestContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (ltAddr ethcommon.Address, ltContract *tester.LoadTester, err error) {
 	ltAddr = ethcommon.HexToAddress(*inputLoadTestParams.LtAddress)
 
 	if *inputLoadTestParams.LtAddress == "" {
-		ltAddr, _, _, err = contracts.DeployLoadTester(tops, c)
+		ltAddr, _, _, err = tester.DeployLoadTester(tops, c)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to create the load testing contract. Do you have the right chain id? Do you have enough funds?")
 			return
@@ -672,7 +671,7 @@ func getLoadTestContract(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 	}
 	log.Trace().Interface("contractaddress", ltAddr).Msg("Load test contract address")
 
-	ltContract, err = contracts.NewLoadTester(ltAddr, c)
+	ltContract, err = tester.NewLoadTester(ltAddr, c)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to instantiate new contract")
 		return
@@ -686,38 +685,19 @@ func getLoadTestContract(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 }
 func getERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (erc20Addr ethcommon.Address, erc20Contract *tokens.ERC20, err error) {
 	erc20Addr = ethcommon.HexToAddress(*inputLoadTestParams.ERC20Address)
-	shouldMint := false
 	if *inputLoadTestParams.ERC20Address == "" {
-		erc20Addr, _, _, err = tokens.DeployERC20(tops, c, "ERC20TestToken", "T20")
+		erc20Addr, _, _, err = tokens.DeployERC20(tops, c)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to deploy ERC20 contract")
 			return
 		}
-		// if we're deploying a new ERC 20 we should mint tokens
-		shouldMint = true
+		// Tokens already minted and sent to the address of the deployer.
 	}
 	log.Trace().Interface("contractaddress", erc20Addr).Msg("ERC20 contract address")
 
 	erc20Contract, err = tokens.NewERC20(erc20Addr, c)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
-		return
-	}
-
-	err = blockUntilSuccessful(ctx, c, func() error {
-		_, err = erc20Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
-		return err
-	})
-	if err != nil {
-		return
-	}
-
-	if !shouldMint {
-		return
-	}
-	_, err = erc20Contract.Mint(tops, metrics.UnitMegaether)
-	if err != nil {
-		log.Error().Err(err).Msg("There was an error minting ERC20")
 		return
 	}
 
@@ -774,7 +754,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 }
 
 func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, retryable func() error) error {
-	return contracts.BlockUntilSuccessful(ctx, c, retryable)
+	return tester.BlockUntilSuccessful(ctx, c, retryable)
 }
 
 func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
@@ -922,10 +902,10 @@ func loadTestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 
 	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
 		msg := transactOptsToCallMsg(tops)
-		msg.Data = ethcommon.FromHex(contracts.LoadTesterMetaData.Bin)
+		msg.Data = ethcommon.FromHex(tester.LoadTesterMetaData.Bin)
 		_, err = c.CallContract(ctx, msg, nil)
 	} else {
-		_, _, _, err = contracts.DeployLoadTester(tops, c)
+		_, _, _, err = tester.DeployLoadTester(tops, c)
 	}
 	return
 }
@@ -938,9 +918,9 @@ func getCurrentLoadTestFunction() uint64 {
 	if loadTestModeFunction == inputLoadTestParams.Mode {
 		return *inputLoadTestParams.Function
 	}
-	return contracts.GetRandomOPCode()
+	return tester.GetRandomOPCode()
 }
-func loadTestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+func loadTestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -961,19 +941,19 @@ func loadTestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, lt
 	if *ltp.CallOnly {
 		tops.NoSend = true
 		var tx *ethtypes.Transaction
-		tx, err = contracts.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
+		tx, err = tester.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
 		if err != nil {
 			return
 		}
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
 	} else {
-		_, err = contracts.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
+		_, err = tester.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
 	}
 	return
 }
 
-func loadTestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester, useSelectedAddress bool) (t1 time.Time, t2 time.Time, err error) {
+func loadTestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester, useSelectedAddress bool) (t1 time.Time, t2 time.Time, err error) {
 	var f int
 	ltp := inputLoadTestParams
 
@@ -983,7 +963,7 @@ func loadTestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, 
 	if useSelectedAddress {
 		f = int(*ltp.Function)
 	} else {
-		f = contracts.GetRandomPrecompiledContractAddress()
+		f = tester.GetRandomPrecompiledContractAddress()
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
@@ -999,19 +979,19 @@ func loadTestCallPrecompiledContracts(ctx context.Context, c *ethclient.Client, 
 	if *ltp.CallOnly {
 		tops.NoSend = true
 		var tx *ethtypes.Transaction
-		tx, err = contracts.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
+		tx, err = tester.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
 		if err != nil {
 			return
 		}
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
 	} else {
-		_, err = contracts.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
+		_, err = tester.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
 	}
 	return
 }
 
-func loadTestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+func loadTestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -1042,7 +1022,7 @@ func loadTestInc(ctx context.Context, c *ethclient.Client, nonce uint64, ltContr
 	return
 }
 
-func loadTestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *contracts.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+func loadTestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, err error) {
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)

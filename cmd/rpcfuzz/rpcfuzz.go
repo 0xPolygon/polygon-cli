@@ -36,9 +36,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	fuzz "github.com/google/gofuzz"
+	"github.com/maticnetwork/polygon-cli/bindings/tester"
 	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz/testreporter"
-	"github.com/maticnetwork/polygon-cli/contracts"
-	"github.com/maticnetwork/polygon-cli/contracts/conformancetester"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/rs/zerolog/log"
 	"github.com/xeipuuv/gojsonschema"
@@ -191,7 +190,7 @@ var (
 	testResultMutex  sync.Mutex
 )
 
-func getConformanceContract(ctx context.Context, rpc *rpc.Client, chainID *big.Int) (conformanceContractAddrStr string, conformanceContract *conformancetester.ConformanceTester, err error) {
+func getConformanceContract(ctx context.Context, rpc *rpc.Client, chainID *big.Int) (conformanceContractAddrStr string, conformanceContract *tester.ConformanceTester, err error) {
 	log.Trace().Msg("Deploying Conformance contract...")
 	var conformanceContractAddr ethcommon.Address
 	ec := ethclient.NewClient(rpc)
@@ -202,7 +201,7 @@ func getConformanceContract(ctx context.Context, rpc *rpc.Client, chainID *big.I
 	}
 
 	cops := new(bind.CallOpts)
-	conformanceContractAddr, conformanceContract, err = contracts.DeployConformanceContract(ctx, ec, tops, cops)
+	conformanceContractAddr, conformanceContract, err = tester.DeployConformanceContract(ctx, ec, tops, cops)
 	conformanceContractAddrStr = conformanceContractAddr.String()
 	log.Trace().Msg("Finished Deploying Conformance contract...")
 
