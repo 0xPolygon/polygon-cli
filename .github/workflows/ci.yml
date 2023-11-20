@@ -49,10 +49,7 @@ jobs:
         run: forge install
       - name: Run forge build
         working-directory: contracts
-        run: |
-          forge --version
-          FOUNDRY_PROFILE=lite forge build --contracts ./src/loadtester/LoadTester.sol
-          forge build --skip LoadTester.sol
+        run: forge --version && FOUNDRY_PROFILE=lite forge build
 
   doc:
     name: Doc
