@@ -118,7 +118,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 			opts.Peers <- p.Node()
 			ctx := opts.Context
 
-			timeout := 10 * time.Minute
+			timeout := 2 * time.Hour
 			timer := time.NewTimer(timeout)
 
 			// Handle all the of the messages here.
