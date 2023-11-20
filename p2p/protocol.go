@@ -163,13 +163,36 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 }
 
 // statusExchange will exchange status message between the nodes. It will return
-// and error if the nodes are incompatible.
+// an error if the nodes are incompatible.
 func (c *conn) statusExchange(packet *eth.StatusPacket) error {
-	err := ethp2p.Send(c.rw, eth.StatusMsg, &packet)
-	if err != nil {
-		return err
+	errc := make(chan error, 2)
+
+	go func() {
+		errc <- ethp2p.Send(c.rw, eth.StatusMsg, &packet)
+	}()
+
+	go func() {
+		errc <- c.readStatus(packet)
+	}()
+
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-errc:
+			if err != nil {
+				return err
+			}
+		case <-timeout.C:
+			return ethp2p.DiscReadTimeout
+		}
 	}
 
+	return nil
+}
+
+func (c *conn) readStatus(packet *eth.StatusPacket) error {
 	msg, err := c.rw.ReadMsg()
 	if err != nil {
 		return err
@@ -194,7 +217,6 @@ func (c *conn) statusExchange(packet *eth.StatusPacket) error {
 	}
 
 	c.logger.Info().Interface("status", status).Msg("New peer")
-
 	return nil
 }
 
