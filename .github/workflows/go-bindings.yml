@@ -18,7 +18,7 @@ env:
 
 jobs:
   go-bindings:
-    name: Go bindings
+    name: Check go bindings
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3

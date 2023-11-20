@@ -27,7 +27,7 @@ jobs:
         run: make lint
 
   doc:
-    name: Doc
+    name: Check documentation
     runs-on: ubuntu-latest
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     steps:
