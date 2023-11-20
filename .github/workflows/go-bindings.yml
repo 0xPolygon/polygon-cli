@@ -4,6 +4,7 @@ on:
   push:
     # Only run when files under `bindings/` or `contracts/` folders are modified.
     paths:
+      - '.github/workflows/go-bindings.yml'
       - 'contracts/**'
       - 'bindings/**'
 
@@ -31,7 +32,7 @@ jobs:
       - name: Install abigen
         run: |
           go get -u github.com/ethereum/go-ethereum@${{ env.GO_ETHEREUM_VERSION }}
-          cd $GOPATH/src/github.com/ethereum/go-ethereum/
+          cd ${{ github.workspace }}/$GOPATH/src/github.com/ethereum/go-ethereum/
           make
           make devtools
       - name: Install Foundry
