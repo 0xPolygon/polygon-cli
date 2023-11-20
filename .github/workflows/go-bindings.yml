@@ -12,10 +12,6 @@ concurrency:
   group: go-bindings-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-env:
-  GO_VERSION: "1.21"             # https://go.dev/dl/
-  GO_ETHEREUM_VERSION: "v1.13.5" # https://github.com/ethereum/go-ethereum/releases
-
 jobs:
   go-bindings:
     name: Check go bindings
