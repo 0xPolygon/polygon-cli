@@ -12,17 +12,29 @@ concurrency:
   group: go-bindings-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  SOLC_VERSION: "0.8.21"
+
 jobs:
   go-bindings:
     name: Check go bindings
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
 
+      - name: Install python3
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
       - name: Install solc
-        run: sudo snap install --stable solc
+        run: |
+          pip3 install solc-select
+          solc-select install ${{ env.SOLC_VERSION }}
+          solc-select use ${{ env.SOLC_VERSION }}
+          solc --version
+
       - name: Install abigen
         run: |
           sudo add-apt-repository ppa:ethereum/ethereum
@@ -34,10 +46,10 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
-
       - name: Install dependencies
         working-directory: contracts
         run: forge install
+
       - name: Generate go bindings
         run: make gen-go-bindings
       - name: Check if the go bindings are up to date
