@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"net/http"
 	"os"
@@ -70,8 +70,7 @@ func getChainIDFromNode(chainRPC string) (int64, error) {
 	}
 	defer resp.Body.Close()
 
-	// Read the response body
-	body, readErr := ioutil.ReadAll(resp.Body)
+	body, readErr := io.ReadAll(resp.Body) // Replace ioutil.ReadAll with io.ReadAll
 	if readErr != nil {
 		return 0, readErr
 	}
