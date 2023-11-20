@@ -51,5 +51,5 @@ jobs:
             git diff
             exit 1
           else
-            echo "✅ The go bindings are up to date."
+            echo "✅ Go bindings are up to date."
           fi
