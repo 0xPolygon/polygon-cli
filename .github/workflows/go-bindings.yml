@@ -48,6 +48,7 @@ jobs:
         run: |
           if [[ -n $(git status --porcelain) ]]; then
             echo "❌ Error: Go bindings are not up to date. Please run \`make gen-go-bindings\`."
+            git diff
             exit 1
           else
             echo "✅ The go bindings are up to date."

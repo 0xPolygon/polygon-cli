@@ -41,6 +41,7 @@ jobs:
         run: |
           if [[ -n $(git status --porcelain) ]]; then
             echo "❌ Error: Documentation is not up to date. Please run \`make gen-doc\`."
+            git diff
             exit 1
           else
             echo "✅ The documentation is up to date."
