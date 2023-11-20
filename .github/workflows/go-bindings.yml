@@ -9,7 +9,7 @@ on:
       - 'bindings/**'
 
 concurrency:
-  group: build-${{ github.event.pull_request.number || github.ref }}
+  group: go-bindings-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
