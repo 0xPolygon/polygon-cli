@@ -1,4 +1,5 @@
 out/
+tmp/
 .DS_Store
 coverage.out
 

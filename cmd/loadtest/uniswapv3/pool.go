@@ -10,7 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/maticnetwork/polygon-cli/contracts/uniswapv3"
+	"github.com/maticnetwork/polygon-cli/bindings/tester"
+	"github.com/maticnetwork/polygon-cli/bindings/uniswapv3"
 	"github.com/rs/zerolog/log"
 )
 
@@ -89,7 +90,7 @@ type slot struct {
 
 // SetupLiquidityPool sets up a UniswapV3 liquidity pool, creating and initializing it if needed,
 // and providing liquidity in case none exists.
-func SetupLiquidityPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, poolConfig PoolConfig, recipient common.Address, blockUntilSuccessful blockUntilSuccessfulFn) error {
+func SetupLiquidityPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, poolConfig PoolConfig, recipient common.Address, blockUntilSuccessful tester.BlockUntilSuccessfulFn) error {
 	// Create and initialise pool.
 	poolContract, err := createPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, blockUntilSuccessful)
 	if err != nil {
@@ -118,7 +119,7 @@ func SetupLiquidityPool(ctx context.Context, c *ethclient.Client, tops *bind.Tra
 }
 
 // createPool creates and initialises the UniswapV3 liquidity pool if needed.
-func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, poolConfig PoolConfig, blockUntilSuccessful blockUntilSuccessfulFn) (*uniswapv3.IUniswapV3Pool, error) {
+func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, poolConfig PoolConfig, blockUntilSuccessful tester.BlockUntilSuccessfulFn) (*uniswapv3.IUniswapV3Pool, error) {
 	// Create and initialize the pool.
 	sqrtPriceX96 := computeSqrtPriceX96(poolConfig.ReserveA, poolConfig.ReserveB)
 	if _, err := uniswapV3Config.NonfungiblePositionManager.Contract.CreateAndInitializePoolIfNecessary(tops, poolConfig.Token0.Address, poolConfig.Token1.Address, poolConfig.Fees, sqrtPriceX96); err != nil {
@@ -185,7 +186,7 @@ func getPoolState(cops *bind.CallOpts, contract *uniswapv3.IUniswapV3Pool) (slot
 }
 
 // provideLiquidity provides liquidity to the UniswapV3 pool.
-func provideLiquidity(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, poolContract *uniswapv3.IUniswapV3Pool, poolConfig PoolConfig, recipient common.Address, nftPositionManagerContract *uniswapv3.NonfungiblePositionManager, blockUntilSuccessful blockUntilSuccessfulFn) error {
+func provideLiquidity(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, poolContract *uniswapv3.IUniswapV3Pool, poolConfig PoolConfig, recipient common.Address, nftPositionManagerContract *uniswapv3.NonfungiblePositionManager, blockUntilSuccessful tester.BlockUntilSuccessfulFn) error {
 	// Compute the tick lower and upper for providing liquidity.
 	// The default tick spacing is set to 60 for the 0.3% fee tier and unfortunately, `MIN_TICK` and
 	// `MAX_TICK` are not divisible by this amount. The solution is to use a multiple of 60 instead.

@@ -1,0 +1,200 @@
+{
+  "oneOf": [
+    {
+      "title": "Not Found (null)",
+      "type": "null"
+    },
+    {
+      "title": "Receipts information",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "title": "Receipt information",
+        "required": [
+          "blockHash",
+          "blockNumber",
+          "from",
+          "cumulativeGasUsed",
+          "gasUsed",
+          "logs",
+          "logsBloom",
+          "transactionHash",
+          "transactionIndex",
+          "effectiveGasPrice"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "title": "type",
+            "type": "string",
+            "pattern": "^0x([0-9,a-f,A-F]?){1,2}$"
+          },
+          "transactionHash": {
+            "title": "transaction hash",
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "transactionIndex": {
+            "title": "transaction index",
+            "type": "string",
+            "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$"
+          },
+          "blockHash": {
+            "title": "block hash",
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "blockNumber": {
+            "title": "block number",
+            "type": "string",
+            "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$"
+          },
+          "from": {
+            "title": "from",
+            "type": "string",
+            "pattern": "^0x[0-9,a-f,A-F]{40}$"
+          },
+          "to": {
+            "title": "to",
+            "description": "Address of the receiver or null in a contract creation transaction.",
+            "oneOf": [
+              {
+                "title": "Contract Creation (null)",
+                "type": "null"
+              },
+              {
+                "title": "Recipient Address",
+                "type": "string",
+                "pattern": "^0x[0-9,a-f,A-F]{40}$"
+              }
+            ]
+          },
+          "cumulativeGasUsed": {
+            "title": "cumulative gas used",
+            "type": "string",
+            "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$",
+            "description": "The sum of gas used by this transaction and all preceding transactions in the same block."
+          },
+          "gasUsed": {
+            "title": "gas used",
+            "type": "string",
+            "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$",
+            "description": "The amount of gas used for this specific transaction alone."
+          },
+          "blobGasUsed": {
+            "title": "blob gas used",
+            "type": "string",
+            "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$",
+            "description": "The amount of blob gas used for this specific transaction. Only specified for blob transactions as defined by EIP-4844."
+          },
+          "contractAddress": {
+            "title": "contract address",
+            "description": "The contract address created, if the transaction was a contract creation, otherwise null.",
+            "oneOf": [
+              {
+                "title": "hex encoded address",
+                "type": "string",
+                "pattern": "^0x[0-9,a-f,A-F]{40}$"
+              },
+              {
+                "name": null,
+                "type": "null"
+              }
+            ]
+          },
+          "logs": {
+            "title": "logs",
+            "type": "array",
+            "items": {
+              "title": "log",
+              "type": "object",
+              "required": [
+                "transactionHash"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "removed": {
+                  "title": "removed",
+                  "type": "boolean"
+                },
+                "logIndex": {
+                  "title": "log index",
+                  "type": "string",
+                  "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$"
+                },
+                "transactionIndex": {
+                  "title": "transaction index",
+                  "type": "string",
+                  "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$"
+                },
+                "transactionHash": {
+                  "title": "transaction hash",
+                  "type": "string",
+                  "pattern": "^0x[0-9a-f]{64}$"
+                },
+                "blockHash": {
+                  "title": "block hash",
+                  "type": "string",
+                  "pattern": "^0x[0-9a-f]{64}$"
+                },
+                "blockNumber": {
+                  "title": "block number",
+                  "type": "string",
+                  "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$"
+                },
+                "address": {
+                  "title": "address",
+                  "type": "string",
+                  "pattern": "^0x[0-9,a-f,A-F]{40}$"
+                },
+                "data": {
+                  "title": "data",
+                  "type": "string",
+                  "pattern": "^0x[0-9a-f]*$"
+                },
+                "topics": {
+                  "title": "topics",
+                  "type": "array",
+                  "items": {
+                    "title": "32 hex encoded bytes",
+                    "type": "string",
+                    "pattern": "^0x[0-9a-f]{64}$"
+                  }
+                }
+              }
+            }
+          },
+          "logsBloom": {
+            "title": "logs bloom",
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{512}$"
+          },
+          "root": {
+            "title": "state root",
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$",
+            "description": "The post-transaction state root. Only specified for transactions included before the Byzantium upgrade."
+          },
+          "status": {
+            "title": "status",
+            "type": "string",
+            "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$",
+            "description": "Either 1 (success) or 0 (failure). Only specified for transactions included after the Byzantium upgrade."
+          },
+          "effectiveGasPrice": {
+            "title": "effective gas price",
+            "type": "string",
+            "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$",
+            "description": "The actual value per gas deducted from the sender's account. Before EIP-1559, this is equal to the transaction's gas price. After, it is equal to baseFeePerGas + min(maxFeePerGas - baseFeePerGas, maxPriorityFeePerGas)."
+          },
+          "blobGasPrice": {
+            "title": "blob gas price",
+            "type": "string",
+            "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$",
+            "description": "The actual value per gas deducted from the sender's account for blob gas. Only specified for blob transactions as defined by EIP-4844."
+          }
+        }
+      }
+    }
+  ]
+}

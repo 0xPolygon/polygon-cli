@@ -103,7 +103,7 @@ $  docker run -v $PWD/contracts:/contracts ethereum/solc:stable --storage-layout
 ## Flags
 
 ```bash
-      --contract-address string   The address of a contract that can be used for testing (default "0x6fda56c57b0acadb96ed5624ac500c0429d59429")
+      --contract-address string   The address of a contract that can be used for testing. If not specified, a contract will be deployed automatically.
       --csv                       Flag to indicate that output will be exported as a CSV.
       --export-path string        The directory export path of the output of the tests. Must pair this with either --json, --csv, --md, or --html
       --fuzz                      Flag to indicate whether to fuzz input or not.
