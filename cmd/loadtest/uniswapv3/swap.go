@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/maticnetwork/polygon-cli/contracts/uniswapv3"
+	"github.com/maticnetwork/polygon-cli/bindings/uniswapv3"
 	"github.com/rs/zerolog/log"
 )
 
@@ -43,7 +43,7 @@ func ExactInputSingleSwap(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRou
 		log.Error().Err(err).Str("tokenIn", swapDirection.tokenInName).Str("tokenOut", swapDirection.tokenOutName).Interface("amountIn", amountIn).Msg("Unable to swap")
 		return err
 	}
-	log.Debug().Str("tokenIn", swapDirection.tokenInName).Str("tokenOut", swapDirection.tokenOutName).Interface("amountIn", amountIn).Msg("Successful swap")
+	log.Trace().Str("tokenIn", swapDirection.tokenInName).Str("tokenOut", swapDirection.tokenOutName).Interface("amountIn", amountIn).Msg("Successful swap")
 	return nil
 }
 

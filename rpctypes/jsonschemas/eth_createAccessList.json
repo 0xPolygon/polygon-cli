@@ -1,0 +1,40 @@
+{
+  "title": "Access list result",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "accessList": {
+      "title": "accessList",
+      "type": "array",
+      "items": {
+        "title": "Access list entry",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "title": "hex encoded address",
+            "type": "string",
+            "pattern": "^0x[0-9,a-f,A-F]{40}$"
+          },
+          "storageKeys": {
+            "type": "array",
+            "items": {
+              "title": "32 byte hex value",
+              "type": "string",
+              "pattern": "^0x[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "title": "error",
+      "type": "string"
+    },
+    "gasUsed": {
+      "title": "Gas used",
+      "type": "string",
+      "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$"
+    }
+  }
+}

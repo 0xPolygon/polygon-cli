@@ -88,9 +88,11 @@ gen-loadtest-modes: ## Generate loadtest modes strings.
 
 .PHONY: gen-go-bindings
 gen-go-bindings: ## Generate go bindings for smart contracts.
-	$(call gen_go_binding,contracts/tokens/ERC20,ERC20,tokens,contracts/tokens)
-	$(call gen_go_binding,contracts/tokens/ERC721,ERC721,tokens,contracts/tokens)
-	$(call gen_go_binding,contracts/loadtester,LoadTester,contracts,contracts)
+	cd contracts && make gen-go-bindings
+
+.PHONY: gen-json-rpctypes
+gen-json-rpctypes: ## Generate go bindings for smart contracts.
+	./scripts/rpctypes.sh rpctypes/jsonschemas/
 
 # Generate go binding.
 # - $1: input_dir

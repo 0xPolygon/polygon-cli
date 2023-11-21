@@ -1,0 +1,28 @@
+{
+  "title": "Payload status object deprecating INVALID_BLOCK_HASH status",
+  "type": "object",
+  "required": [
+    "status"
+  ],
+  "properties": {
+    "status": {
+      "title": "Payload validation status",
+      "type": "string",
+      "enum": [
+        "VALID",
+        "INVALID",
+        "SYNCING",
+        "ACCEPTED"
+      ]
+    },
+    "latestValidHash": {
+      "title": "The hash of the most recent valid block",
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "validationError": {
+      "title": "Validation error message",
+      "type": "string"
+    }
+  }
+}

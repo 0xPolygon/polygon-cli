@@ -1,0 +1,24 @@
+The openrpc.json file comes from this repo:
+https://github.com/ethereum/execution-apis
+
+In order to build it, we run:
+
+#+BEGIN_SRC bash
+npm install
+npm run build
+#+END_SRC
+
+Rather than keeping a unique schema per method, we'll try to decompose
+into unique schemas for simplicity.
+
+#+BEGIN_SRC bash
+cat openrpc.json | jq '.methods[].name' | sort
+cat openrpc.json | jq '.methods[] | select(.name == "eth_syncing") | .result.schema'
+#+END_SRC
+
+Or you can run the following from project root folder:
+
+#+BEGIN_SRC bash
+make gen-json-rpctypes
+#+END_SRC
+

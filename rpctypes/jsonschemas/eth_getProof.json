@@ -1,0 +1,85 @@
+{
+  "title": "Account proof",
+  "type": "object",
+  "required": [
+    "address",
+    "accountProof",
+    "balance",
+    "codeHash",
+    "nonce",
+    "storageHash",
+    "storageProof"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "address": {
+      "title": "address",
+      "type": "string",
+      "pattern": "^0x[0-9,a-f,A-F]{40}$"
+    },
+    "accountProof": {
+      "title": "accountProof",
+      "type": "array",
+      "items": {
+        "title": "hex encoded bytes",
+        "type": "string",
+        "pattern": "^0x[0-9a-f]*$"
+      }
+    },
+    "balance": {
+      "title": "balance",
+      "type": "string",
+      "pattern": "^0x([1-9a-f]+[0-9a-f]{0,31})|0$"
+    },
+    "codeHash": {
+      "title": "codeHash",
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "nonce": {
+      "title": "nonce",
+      "type": "string",
+      "pattern": "^0x([1-9a-f]+[0-9a-f]{0,15})|0$"
+    },
+    "storageHash": {
+      "title": "storageHash",
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "storageProof": {
+      "title": "Storage proofs",
+      "type": "array",
+      "items": {
+        "title": "Storage proof",
+        "type": "object",
+        "required": [
+          "key",
+          "value",
+          "proof"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "title": "key",
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{0,64}$"
+          },
+          "value": {
+            "title": "value",
+            "type": "string",
+            "pattern": "^0x([1-9a-f]+[0-9a-f]{0,31})|0$"
+          },
+          "proof": {
+            "title": "proof",
+            "type": "array",
+            "items": {
+              "title": "hex encoded bytes",
+              "type": "string",
+              "pattern": "^0x[0-9a-f]*$"
+            }
+          }
+        }
+      }
+    }
+  }
+}
