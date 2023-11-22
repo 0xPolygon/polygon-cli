@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/datastore v1.14.0
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/cenkalti/backoff/v4 v4.2.1
+	github.com/chenzhijie/go-web3 v0.0.0-20230921142927-cd8f05f8d203
 	github.com/cockroachdb/pebble v0.0.0-20230906160148-46873a6a7a06
 	github.com/ethereum/go-ethereum v1.13.2
 	github.com/gizak/termui/v3 v3.1.0
@@ -50,7 +51,6 @@ require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.2 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/chenzhijie/go-web3 v0.0.0-20230921142927-cd8f05f8d203 // indirect
 	github.com/cockroachdb/errors v1.11.1 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
 	github.com/cockroachdb/redact v1.1.5 // indirect
