@@ -19,7 +19,6 @@ import (
 	"github.com/chenzhijie/go-web3"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -303,9 +302,6 @@ func runFunding(cmd *cobra.Command) error {
 }
 
 func init() {
-	// Configure zerolog to output to os.Stdout
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
-
 	FundCmd.Flags().IntVar(&walletCount, "wallet-count", 2, "Number of wallets to fund")
 	FundCmd.Flags().StringVar(&fundingWalletPK, "funding-wallet-pk", "", "Corresponding private key for funding wallet address, ensure you remove leading 0x")
 	FundCmd.Flags().StringVar(&chainRPC, "rpc-url", "http://localhost:8545", "The RPC endpoint url")
