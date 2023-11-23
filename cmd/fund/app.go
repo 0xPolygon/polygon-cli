@@ -3,6 +3,8 @@ package fund
 import (
 	"errors"
 
+	_ "embed"
+
 	"github.com/maticnetwork/polygon-cli/util"
 	"github.com/spf13/cobra"
 )
@@ -22,7 +24,11 @@ type cmdFundParams struct {
 	OutputFile          *string
 }
 
-var params cmdFundParams
+var (
+	//go:embed usage.md
+	usage  string
+	params cmdFundParams
+)
 
 // FundCmd represents the fund command.
 var FundCmd = &cobra.Command{

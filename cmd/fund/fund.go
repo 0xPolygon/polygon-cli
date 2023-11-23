@@ -15,8 +15,6 @@ import (
 	"sync"
 	"time"
 
-	_ "embed"
-
 	"github.com/chenzhijie/go-web3"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -24,9 +22,6 @@ import (
 )
 
 var (
-	//go:embed usage.md
-	usage string
-
 	nonceMutex       sync.Mutex
 	globalNonce      uint64
 	nonceInitialized bool
