@@ -25,18 +25,11 @@ import (
 
 var (
 	//go:embed usage.md
-	usage                  string
-	walletCount            int
-	fundingWalletPK        string
-	fundingWalletPublicKey *ecdsa.PublicKey
-	chainRPC               string
-	concurrencyLevel       int
-	walletFundingAmt       float64
-	walletFundingGas       uint64
-	nonceMutex             sync.Mutex
-	globalNonce            uint64
-	nonceInitialized       bool
-	outputFileFlag         string
+	usage string
+
+	nonceMutex       sync.Mutex
+	globalNonce      uint64
+	nonceInitialized bool
 )
 
 // Wallet struct to hold public key, private key, and address
@@ -103,13 +96,13 @@ func generateNonce(web3Client *web3.Web3) (uint64, error) {
 		globalNonce++
 	} else {
 		// Derive the public key from the funding wallet's private key
-		fundingWalletECDSA, ecdsaErr := crypto.HexToECDSA(fundingWalletPK)
+		fundingWalletECDSA, ecdsaErr := crypto.HexToECDSA(*params.PrivateKey)
 		if ecdsaErr != nil {
 			log.Error().Err(ecdsaErr).Msg("Error getting ECDSA from funding wallet private key")
 			return 0, ecdsaErr
 		}
 
-		fundingWalletPublicKey = &fundingWalletECDSA.PublicKey
+		fundingWalletPublicKey := &fundingWalletECDSA.PublicKey
 		// Convert ecdsa.PublicKey to common.Address
 		fundingAddress := crypto.PubkeyToAddress(*fundingWalletPublicKey)
 
@@ -210,27 +203,27 @@ var FundCmd = &cobra.Command{
 }
 
 func runFunding(cmd *cobra.Command) error {
+	log.Debug().Interface("params", params).Msg("Input parameters")
+
 	// Capture the start time
 	startTime := time.Now()
 
-	// Remove '0x' prefix from fundingWalletPK if present
-	fundingWalletPK = strings.TrimPrefix(fundingWalletPK, "0x")
-
 	// setup new web3 session with remote rpc node
-	web3Client, clientErr := web3.NewWeb3(chainRPC)
+	web3Client, clientErr := web3.NewWeb3(*params.RpcUrl)
 	if clientErr != nil {
 		cmd.PrintErrf("There was an error creating web3 client: %s", clientErr.Error())
 		return clientErr
 	}
 
 	// add pk to session for sending signed transactions
-	if setAcctErr := web3Client.Eth.SetAccount(fundingWalletPK); setAcctErr != nil {
+	privateKey := strings.TrimPrefix(*params.PrivateKey, "0x")
+	if setAcctErr := web3Client.Eth.SetAccount(privateKey); setAcctErr != nil {
 		cmd.PrintErrf("There was an error setting account with pk: %s", setAcctErr.Error())
 		return setAcctErr
 	}
 
 	// Query the chain ID from the rpc node
-	chainID, chainIDErr := getChainIDFromNode(chainRPC)
+	chainID, chainIDErr := getChainIDFromNode(*params.RpcUrl)
 	if chainIDErr != nil {
 		log.Error().Err(chainIDErr).Msg("Error getting chain ID")
 		return chainIDErr
@@ -240,7 +233,7 @@ func runFunding(cmd *cobra.Command) error {
 	web3Client.Eth.SetChainId(chainID)
 
 	// generate set of new wallet objects
-	wallets, genWalletErr := generateWallets(walletCount)
+	wallets, genWalletErr := generateWallets(int(*params.WalletCount))
 	if genWalletErr != nil {
 		cmd.PrintErrf("There was an error generating wallet objects: %s", genWalletErr.Error())
 		return genWalletErr
@@ -248,15 +241,13 @@ func runFunding(cmd *cobra.Command) error {
 
 	// fund all crypto wallets
 	log.Info().Msg("Starting to fund loadtest wallets...")
-	fundWalletErr := fundWallets(web3Client, wallets, big.NewInt(int64(walletFundingAmt*1e18)), uint64(walletFundingGas), concurrencyLevel)
+	fundWalletErr := fundWallets(web3Client, wallets, big.NewInt(int64(*params.WalletFundingAmount*1e18)), uint64(*params.WalletFundingGas), int(*params.ConcurrencyLevel))
 	if fundWalletErr != nil {
 		log.Error().Err(fundWalletErr).Msg("Error funding wallets")
 		return fundWalletErr
 	}
 
 	// Save wallet details to a file
-	outputFile := outputFileFlag // You can modify the file format or name as needed
-
 	type WalletDetails struct {
 		Address    string `json:"Address"`
 		PrivateKey string `json:"PrivateKey"`
@@ -279,7 +270,7 @@ func runFunding(cmd *cobra.Command) error {
 	}
 
 	// Write JSON data to a file
-	file, createErr := os.Create(outputFile)
+	file, createErr := os.Create(*params.OutputFile)
 	if createErr != nil {
 		log.Error().Err(createErr).Msg("Error creating file")
 		return createErr
@@ -292,21 +283,11 @@ func runFunding(cmd *cobra.Command) error {
 		return writeErr
 	}
 
-	log.Info().Msgf("Wallet details have been saved to %s", outputFile)
+	log.Info().Msgf("Wallet details have been saved to %s", *params.OutputFile)
 
 	// Calculate the duration
 	duration := time.Since(startTime)
 	log.Info().Msgf("Total execution time: %s", duration)
 
 	return nil
-}
-
-func init() {
-	FundCmd.Flags().IntVar(&walletCount, "wallet-count", 2, "Number of wallets to fund")
-	FundCmd.Flags().StringVar(&fundingWalletPK, "funding-wallet-pk", "", "Corresponding private key for funding wallet address, ensure you remove leading 0x")
-	FundCmd.Flags().StringVar(&chainRPC, "rpc-url", "http://localhost:8545", "The RPC endpoint url")
-	FundCmd.Flags().IntVar(&concurrencyLevel, "concurrency", 2, "Concurrency level for speeding up funding wallets")
-	FundCmd.Flags().Float64Var(&walletFundingAmt, "wallet-funding-amt", 0.05, "Amount to fund each wallet with")
-	FundCmd.Flags().Uint64Var(&walletFundingGas, "wallet-funding-gas", 100000, "Gas for each wallet funding transaction")
-	FundCmd.Flags().StringVar(&outputFileFlag, "output-file", "funded_wallets.json", "Specify the output JSON file name")
 }

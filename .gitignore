@@ -7,3 +7,5 @@ coverage.out
 .idea
 *.swp
 *.swo
+
+wallets.json
