@@ -92,7 +92,7 @@ func monitor(ctx context.Context) error {
 	ec := ethclient.NewClient(rpc)
 
 	// Check if batch requests are supported.
-	if err := checkBatchRequestsSupport(ctx, ec.Client()); err != nil {
+	if err = checkBatchRequestsSupport(ctx, ec.Client()); err != nil {
 		return errBatchRequestsNotSupported
 	}
 
