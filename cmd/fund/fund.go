@@ -1,6 +1,7 @@
 package fund
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
@@ -20,7 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/cobra"
 )
 
 var (
@@ -190,19 +190,7 @@ func fundWallets(web3Client *web3.Web3, wallets []Wallet, amountWei *big.Int, wa
 	return nil
 }
 
-// fundCmd represents the fund command
-var FundCmd = &cobra.Command{
-	Use:   "fund",
-	Short: "Bulk fund many crypto wallets automatically.",
-	Long:  usage,
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runFunding(cmd); err != nil {
-			log.Error().Err(err).Msg("Error funding wallets")
-		}
-	},
-}
-
-func runFunding(cmd *cobra.Command) error {
+func runFunding(ctx context.Context) error {
 	log.Debug().Interface("params", params).Msg("Input parameters")
 
 	// Capture the start time
@@ -211,14 +199,14 @@ func runFunding(cmd *cobra.Command) error {
 	// setup new web3 session with remote rpc node
 	web3Client, clientErr := web3.NewWeb3(*params.RpcUrl)
 	if clientErr != nil {
-		cmd.PrintErrf("There was an error creating web3 client: %s", clientErr.Error())
+		log.Error().Err(clientErr).Msg("There was an error creating web3 client")
 		return clientErr
 	}
 
 	// add pk to session for sending signed transactions
 	privateKey := strings.TrimPrefix(*params.PrivateKey, "0x")
 	if setAcctErr := web3Client.Eth.SetAccount(privateKey); setAcctErr != nil {
-		cmd.PrintErrf("There was an error setting account with pk: %s", setAcctErr.Error())
+		log.Error().Err(setAcctErr).Msg("There was an error setting account with pk")
 		return setAcctErr
 	}
 
@@ -235,7 +223,7 @@ func runFunding(cmd *cobra.Command) error {
 	// generate set of new wallet objects
 	wallets, genWalletErr := generateWallets(int(*params.WalletCount))
 	if genWalletErr != nil {
-		cmd.PrintErrf("There was an error generating wallet objects: %s", genWalletErr.Error())
+		log.Error().Err(genWalletErr).Msg("There was an error generating wallet objects")
 		return genWalletErr
 	}
 
