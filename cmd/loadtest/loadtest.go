@@ -1191,6 +1191,7 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *Ind
 		tx, _, err = c.TransactionByHash(ctx, ethcommon.HexToHash(ia.TransactionIDs[randSrc.Intn(len(ia.TransactionIDs))]))
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to get the transaction hash")
+			return
 		}
 		_, err = c.EstimateGas(ctx, txToCallMsg(tx))
 	} else if funcNum < 33 {
