@@ -14,8 +14,8 @@ build: ## Build the smart contracts
 
 .PHONY: gen-funder-go-bindings
 gen-funder-go-bindings: ## Generatego go bindings for the funder contract.
-	cat ./out/Funder.sol/Funder.json | jq -r '.abi' 							> ../bindings/funder/Funder.abi
-	cat ./out/Funder.sol/Funder.json | jq -r '.bytecode.object' 	> ../bindings/funder/Funder.bin
+	cat ./out/Funder.sol/Funder.json | jq -r '.abi'             > ../bindings/funder/Funder.abi
+	cat ./out/Funder.sol/Funder.json | jq -r '.bytecode.object' > ../bindings/funder/Funder.bin
 	abigen --abi ../bindings/funder/Funder.abi --bin ../bindings/funder/Funder.bin --pkg funder --type funder --out ../bindings/funder/funder.go
 	@echo "✅ funder/funder.go generated"
 
