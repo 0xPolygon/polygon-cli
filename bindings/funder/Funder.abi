@@ -27,7 +27,7 @@
     "inputs": [
       {
         "internalType": "address[]",
-        "name": "_accounts",
+        "name": "_addresses",
         "type": "address[]"
       }
     ],
@@ -40,7 +40,7 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "_account",
+        "name": "_address",
         "type": "address"
       }
     ],

@@ -17,11 +17,11 @@ type cmdFundParams struct {
 	RpcUrl     *string
 	PrivateKey *string
 
-	WalletCount         *uint64
-	WalletFundingAmount *float64
-	WalletFundingGas    *uint64
-	ConcurrencyLevel    *uint64
-	OutputFile          *string
+	WalletCount            *uint64
+	WalletFundingHexAmount *string
+	OutputFile             *string
+
+	FunderAddress *string
 }
 
 var (
@@ -51,11 +51,12 @@ func init() {
 	p.PrivateKey = flagSet.String("private-key", defaultPrivateKey, "The hex encoded private key that we'll use to send transactions")
 
 	// Wallet parameters.
-	p.WalletCount = flagSet.Uint64P("wallets", "w", 2, "The number of wallets to fund")
-	p.WalletFundingAmount = flagSet.Float64P("amount", "a", 0.05, "The amount of eth to send to each wallet")
-	p.WalletFundingGas = flagSet.Uint64P("gas", "g", 21000, "The cost of funding a wallet")
-	p.ConcurrencyLevel = flagSet.Uint64P("concurrency", "c", 2, "The concurrency level for speeding up funding wallets")
+	p.WalletCount = flagSet.Uint64P("wallets", "w", 10, "The number of wallets to fund")
+	p.WalletFundingHexAmount = flagSet.StringP("amount", "a", "0xb1a2bc2ec50000", "The amount of wei to send to each wallet") // 0xb1a2bc2ec50000 represensts 0.05 ether.
 	p.OutputFile = flagSet.StringP("file", "f", "wallets.json", "The output JSON file path for storing the addresses and private keys of funded wallets")
+
+	// Funder contract parameters.
+	p.FunderAddress = flagSet.String("funder-address", "", "The address of a pre-deployed Funder contract")
 
 	params = *p
 }
@@ -78,11 +79,9 @@ func checkFlags() error {
 	if params.WalletCount != nil && *params.WalletCount == 0 {
 		return errors.New("the number of wallets to fund is set to zero")
 	}
-	if params.WalletFundingAmount != nil && *params.WalletFundingAmount == 0 {
+	if params.WalletFundingHexAmount != nil && *params.WalletFundingHexAmount == "" {
 		return errors.New("the amount of eth to send to each wallet is set to zero")
 	}
-	if params.ConcurrencyLevel != nil && *params.ConcurrencyLevel == 0 {
-		return errors.New("the concurrency level is set to zero")
-	}
+
 	return nil
 }
