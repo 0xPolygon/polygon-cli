@@ -26,6 +26,41 @@ jobs:
       - name: Run all the linter tools against code
         run: make lint
 
+  go-bindings:
+    name: Check go bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install abigen
+        run: |
+          sudo add-apt-repository ppa:ethereum/ethereum
+          sudo apt-get update
+          sudo apt-get install ethereum
+          abigen --version
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+      - name: Install dependencies
+        working-directory: contracts
+        run: forge install
+
+      - name: Generate go bindings
+        run: make gen-go-bindings
+      - name: Check if the go bindings are up to date
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "❌ Error: Go bindings are not up to date. Please run \`make gen-go-bindings\`."
+            git diff
+            exit 1
+          else
+            echo "✅ Go bindings are up to date."
+          fi
+
   doc:
     name: Check documentation
     runs-on: ubuntu-latest
