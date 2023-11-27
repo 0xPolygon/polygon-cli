@@ -8,6 +8,7 @@ concurrency:
 
 env:
   GO_VERSION: "1.21"                  # https://go.dev/dl/
+  GO_ETHEREUM_VERSION: "v1.13.5"      # https://github.com/ethereum/go-ethereum/releases
   STRINGER_VERSION: "0.15.0"          # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
 
   # Protoc dependencies.
@@ -64,15 +65,18 @@ jobs:
       # Dependencies to generate go bindings.
       - name: Install abigen
         run: |
-          sudo add-apt-repository ppa:ethereum/ethereum
-          sudo apt-get update
-          sudo apt-get install ethereum
+          git clone --branch ${{ env.GO_ETHEREUM_VERSION }} https://github.com/ethereum/go-ethereum.git
+          make
+          make devtools
+          export PATH=$(pwd)//build/bin:$PATH
           abigen --version
-      - name: Install Foundry
+      - name: Install foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
-      - name: Install dependencies
+      - name: Get forge version
+        run: forge --version
+      - name: Install contract dependencies
         working-directory: contracts
         run: forge install
 
