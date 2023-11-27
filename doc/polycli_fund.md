@@ -11,7 +11,7 @@
 
 ## Description
 
-Bulk fund many crypto wallets automatically.
+Bulk fund crypto wallets automatically.
 
 ```bash
 polycli fund [flags]
@@ -32,14 +32,14 @@ $ polycli fund \
 ## Flags
 
 ```bash
-      --concurrency int            Concurrency level for speeding up funding wallets (default 2)
-      --funding-wallet-pk string   Corresponding private key for funding wallet address, ensure you remove leading 0x
-  -h, --help                       help for fund
-      --output-file string         Specify the output JSON file name (default "funded_wallets.json")
-      --rpc-url string             The RPC endpoint url (default "http://localhost:8545")
-      --wallet-count int           Number of wallets to fund (default 2)
-      --wallet-funding-amt float   Amount to fund each wallet with (default 0.05)
-      --wallet-funding-gas uint    Gas for each wallet funding transaction (default 100000)
+  -a, --amount float         The amount of eth to send to each wallet (default 0.05)
+  -c, --concurrency uint     The concurrency level for speeding up funding wallets (default 2)
+  -f, --file string          The output JSON file path for storing the addresses and private keys of funded wallets (default "wallets.json")
+  -g, --gas uint             The cost of funding a wallet (default 21000)
+  -h, --help                 help for fund
+      --private-key string   The hex encoded private key that we'll use to send transactions (default "0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
+  -r, --rpc-url string       The RPC endpoint url (default "http://localhost:8545")
+  -w, --wallets uint         The number of wallets to fund (default 2)
 ```
 
 The command also inherits flags from parent commands.
