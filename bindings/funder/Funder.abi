@@ -26,12 +26,12 @@
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
+        "internalType": "address[]",
+        "name": "_accounts",
+        "type": "address[]"
       }
     ],
-    "name": "fundAccount",
+    "name": "bulkFund",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -39,12 +39,12 @@
   {
     "inputs": [
       {
-        "internalType": "address[]",
-        "name": "accounts",
-        "type": "address[]"
+        "internalType": "address",
+        "name": "_account",
+        "type": "address"
       }
     ],
-    "name": "fundAccounts",
+    "name": "fund",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
