@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -22,6 +23,8 @@ import (
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/rs/zerolog/log"
 )
+
+var errBatchRequestsNotSupported = errors.New("batch requests are not supported")
 
 var (
 	windowSize         int
@@ -87,6 +90,11 @@ func monitor(ctx context.Context) error {
 		return err
 	}
 	ec := ethclient.NewClient(rpc)
+
+	// Check if batch requests are supported.
+	if err = checkBatchRequestsSupport(ctx, ec.Client()); err != nil {
+		return errBatchRequestsNotSupported
+	}
 
 	ms := new(monitorStatus)
 	ms.BlocksLock.Lock()
@@ -240,11 +248,9 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 	b := backoff.NewExponentialBackOff()
 	b.MaxElapsedTime = 3 * time.Minute
 	retryable := func() error {
-		err := rpc.BatchCallContext(ctx, blms)
-		return err
+		return rpc.BatchCallContext(ctx, blms)
 	}
-	err := backoff.Retry(retryable, b)
-	if err != nil {
+	if err := backoff.Retry(retryable, b); err != nil {
 		return err
 	}
 
@@ -702,4 +708,14 @@ func max(nums ...int) int {
 		}
 	}
 	return m
+}
+
+// checkBatchRequestsSupport checks if batch requests are supported by making a sample batch request.
+// https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_blocknumber
+func checkBatchRequestsSupport(ctx context.Context, ec *ethrpc.Client) error {
+	batchRequest := []ethrpc.BatchElem{
+		{Method: "eth_blockNumber"},
+		{Method: "eth_blockNumber"},
+	}
+	return ec.BatchCallContext(ctx, batchRequest)
 }

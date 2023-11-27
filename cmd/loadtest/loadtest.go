@@ -1187,6 +1187,13 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *Ind
 		_, err = c.SuggestGasPrice(ctx)
 	} else if funcNum < 21 {
 		log.Trace().Msg("eth_estimateGas")
+		var tx *ethtypes.Transaction
+		tx, _, err = c.TransactionByHash(ctx, ethcommon.HexToHash(ia.TransactionIDs[randSrc.Intn(len(ia.TransactionIDs))]))
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to get the transaction hash")
+			return
+		}
+		_, err = c.EstimateGas(ctx, txToCallMsg(tx))
 	} else if funcNum < 33 {
 		log.Trace().Msg("eth_getTransactionCount")
 		_, err = c.NonceAt(ctx, ethcommon.HexToAddress(ia.Addresses[randSrc.Intn(len(ia.Addresses))]), nil)
