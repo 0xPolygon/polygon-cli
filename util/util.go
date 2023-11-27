@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/cenkalti/backoff"
+	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog/log"
 )
@@ -202,4 +205,14 @@ func convHexToUint64(hexString string) (uint64, error) {
 		return 0, err
 	}
 	return uint64(result), nil
+}
+
+// BlockUntilSuccessfulFn is designed to wait until a specified number of Ethereum blocks have been
+// mined, periodically checking for the completion of a given function within each block interval.
+type BlockUntilSuccessfulFn func(ctx context.Context, c *ethclient.Client, f func() error) error
+
+func BlockUntilSuccessful(ctx context.Context, c *ethclient.Client, retryable func() error) error {
+	// this function use to be very complicated (and not work). I'm dumbing this down to a basic time based retryable which should work 99% of the time
+	b := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(5*time.Second), 24), ctx)
+	return backoff.Retry(retryable, b)
 }

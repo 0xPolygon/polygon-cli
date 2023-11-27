@@ -99,7 +99,7 @@ func init() {
 // Initialise UniswapV3 loadtest.
 func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapAddresses uniswapv3loadtest.UniswapV3Addresses, recipient common.Address) (uniswapV3Config uniswapv3loadtest.UniswapV3Config, poolConfig uniswapv3loadtest.PoolConfig, err error) {
 	log.Debug().Msg("🦄 Deploying UniswapV3 contracts...")
-	uniswapV3Config, err = uniswapv3loadtest.DeployUniswapV3(ctx, c, tops, cops, uniswapAddresses, recipient, blockUntilSuccessful)
+	uniswapV3Config, err = uniswapv3loadtest.DeployUniswapV3(ctx, c, tops, cops, uniswapAddresses, recipient)
 	if err != nil {
 		return
 	}
@@ -108,14 +108,14 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 	log.Debug().Msg("🪙 Deploying ERC20 tokens...")
 	var token0 uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
 	token0, err = uniswapv3loadtest.DeployERC20(
-		ctx, c, tops, cops, uniswapV3Config, "SwapperA", "SA", uniswapv3loadtest.MintAmount, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0), blockUntilSuccessful)
+		ctx, c, tops, cops, uniswapV3Config, "SwapperA", "SA", uniswapv3loadtest.MintAmount, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0))
 	if err != nil {
 		return
 	}
 
 	var token1 uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
 	token1, err = uniswapv3loadtest.DeployERC20(
-		ctx, c, tops, cops, uniswapV3Config, "SwapperB", "SB", uniswapv3loadtest.MintAmount, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1), blockUntilSuccessful)
+		ctx, c, tops, cops, uniswapV3Config, "SwapperB", "SB", uniswapv3loadtest.MintAmount, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1))
 	if err != nil {
 		return
 	}
@@ -123,7 +123,7 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 	log.Debug().Msg("🎱 Deploying UniswapV3 liquidity pool...")
 	fees := uniswapv3loadtest.PercentageToUniswapFeeTier(*uniswapv3LoadTestParams.PoolFees)
 	poolConfig = *uniswapv3loadtest.NewPool(token0, token1, fees)
-	if err = uniswapv3loadtest.SetupLiquidityPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, recipient, blockUntilSuccessful); err != nil {
+	if err = uniswapv3loadtest.SetupLiquidityPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, recipient); err != nil {
 		return
 	}
 	return

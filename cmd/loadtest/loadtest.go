@@ -653,7 +653,7 @@ func getLoadTestContract(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 		log.Error().Err(err).Msg("Unable to instantiate new contract")
 		return
 	}
-	err = blockUntilSuccessful(ctx, c, func() error {
+	err = util.BlockUntilSuccessful(ctx, c, func() error {
 		_, err = ltContract.GetCallCounter(cops)
 		return err
 	})
@@ -678,7 +678,7 @@ func getERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 		return
 	}
 
-	err = blockUntilSuccessful(ctx, c, func() error {
+	err = util.BlockUntilSuccessful(ctx, c, func() error {
 		var balance *big.Int
 		balance, err = erc20Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
 		if err != nil {
@@ -712,7 +712,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 		return
 	}
 
-	err = blockUntilSuccessful(ctx, c, func() error {
+	err = util.BlockUntilSuccessful(ctx, c, func() error {
 		_, err = erc721Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
 		return err
 	})
@@ -723,15 +723,11 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 		return
 	}
 
-	err = blockUntilSuccessful(ctx, c, func() error {
+	err = util.BlockUntilSuccessful(ctx, c, func() error {
 		_, err = erc721Contract.MintBatch(tops, *inputLoadTestParams.FromETHAddress, new(big.Int).SetUint64(1))
 		return err
 	})
 	return
-}
-
-func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, retryable func() error) error {
-	return tester.BlockUntilSuccessful(ctx, c, retryable)
 }
 
 func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
