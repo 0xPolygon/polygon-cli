@@ -66,6 +66,7 @@ jobs:
       - name: Install abigen
         run: |
           git clone --branch ${{ env.GO_ETHEREUM_VERSION }} https://github.com/ethereum/go-ethereum.git
+          cd go-ethereum
           make
           make devtools
           export PATH=$(pwd)//build/bin:$PATH
