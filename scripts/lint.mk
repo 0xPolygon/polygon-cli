@@ -1,5 +1,3 @@
-.SHELLFLAGS = -e
-
 ##@ Lint
 
 # Add missing and remove unused modules.
