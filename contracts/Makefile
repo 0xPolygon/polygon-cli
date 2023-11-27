@@ -44,4 +44,4 @@ gen-tokens-go-bindings: ## Generate go bindings for the tokens contracts.
 	@echo "✅ tokens/ERC721.go generated"
 
 .PHONY: gen-go-bindings
-gen-go-bindings: build versions gen-funder-go-bindings gen-tester-go-bindings gen-tokens-go-bindings ## Generate go bindings.
+gen-go-bindings: build gen-funder-go-bindings gen-tester-go-bindings gen-tokens-go-bindings ## Generate go bindings.
