@@ -1,4 +1,4 @@
-Bulk fund 30 wallets using a pre-deployed contract address.
+Bulk fund 20 wallets.
 
 ```bash
 $ polycli fund --wallets 20 --verbosity 500
@@ -9,7 +9,11 @@ $ polycli fund --wallets 20 --verbosity 500
 7:08PM INF Wallet address(es) and private key(s) saved to file fileName=wallets.json
 7:08PM INF Wallet(s) funded! 💸
 7:08PM INF Total execution time: 1.042139709s
+```
 
+Bulk fund 20 wallets using a pre-deployed contract address.
+
+```bash
 $ polycli fund --wallets 20 --verbosity 500 --funder-address 0x0b589e1cb2457f0ba5a5eef2800d47a4d6fa9fab
 7:09PM INF Starting bulk funding wallets
 7:09PM DBG Funder contract funded balance=1000000000000000000
