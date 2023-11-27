@@ -59,9 +59,9 @@ func SetLogMode(mode LogMode) error {
 	switch mode {
 	case Console:
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-		log.Debug().Msg("Starting logger in console mode")
+		log.Trace().Msg("Starting logger in console mode")
 	case JSON:
-		log.Debug().Msg("Starting logger in JSON mode")
+		log.Trace().Msg("Starting logger in JSON mode")
 	default:
 		return fmt.Errorf("unsupported log mode: %s", mode)
 	}
