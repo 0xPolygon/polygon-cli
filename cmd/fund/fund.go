@@ -72,8 +72,7 @@ func runFunding(ctx context.Context) error {
 	// Fund the Funder contract.
 	amount, ok := new(big.Int).SetString(funderContractFundingAmount, 10)
 	if !ok {
-		err := errors.New("unable to format the amount to send to the Funder contract")
-		return err
+		return errors.New("unable to format the amount to send to the Funder contract")
 	}
 	if err = fundContract(ctx, c, contractAddress, amount); err != nil {
 		return err
@@ -142,27 +141,27 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 	}
 
 	// Deploy the contract if no pre-deployed address flag is provided.
-	var address common.Address
+	var contractAddress common.Address
 	if *params.FunderAddress == "" {
 		// Deploy the Funder contract.
-		address, _, _, err = funder.DeployFunder(tops, c, fundingAmount)
+		contractAddress, _, _, err = funder.DeployFunder(tops, c, fundingAmount)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to deploy Funder contract")
 			return common.Address{}, nil, err
 		}
-		log.Debug().Interface("address", address).Msg("Funder contract deployed")
+		log.Debug().Interface("address", contractAddress).Msg("Funder contract deployed")
 	} else {
 		// Use the pre-deployed address.
-		address = common.HexToAddress(*params.FunderAddress)
+		contractAddress = common.HexToAddress(*params.FunderAddress)
 	}
 
 	// Instantiate the contract.
-	contract, err := funder.NewFunder(address, c)
+	contract, err := funder.NewFunder(contractAddress, c)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to instantiate Funder contract")
 		return common.Address{}, nil, err
 	}
-	return address, contract, nil
+	return contractAddress, contract, nil
 }
 
 func fundContract(ctx context.Context, c *ethclient.Client, contractAddress common.Address, amount *big.Int) error {
