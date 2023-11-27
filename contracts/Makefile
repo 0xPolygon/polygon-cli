@@ -1,3 +1,6 @@
+.DEFAULT_GOAL := help
+.SHELLFLAGS = -e
+
 ##@ Help
 
 .PHONY: help
@@ -15,8 +18,8 @@ build: ## Build the smart contracts
 .PHONY: gen-funder-go-bindings
 gen-funder-go-bindings: ## Generate go bindings for the funder contract.
 	cat ./out/Funder.sol/Funder.json | jq -r '.abi' 							> ../bindings/funder/Funder.abi
-	cat ./out/funder.sol/Funder.json | jq -r '.bytecode.object' > ../bindings/funder/Funder.bin
-	abigen --abi ../bindings/funder/funder.abi --bin ../bindings/funder/funder.bin --pkg funder --type funder --out ../bindings/funder/funder.go
+	cat ./out/Funder.sol/Funder.json | jq -r '.bytecode.object' > ../bindings/funder/Funder.bin
+	abigen --abi ../bindings/funder/Funder.abi --bin ../bindings/funder/Funder.bin --pkg funder --type funder --out ../bindings/funder/funder.go
 	@echo "✅ funder/funder.go generated"
 
 .PHONY: gen-tester-go-bindings

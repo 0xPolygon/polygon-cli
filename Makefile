@@ -1,6 +1,7 @@
 include scripts/lint.mk
 include scripts/clients.mk
 .DEFAULT_GOAL := help
+.SHELLFLAGS = -e
 
 INSTALL_DIR := ~/go/bin
 BIN_NAME := polycli
