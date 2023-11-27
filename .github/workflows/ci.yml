@@ -7,15 +7,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.21"                  # https://go.dev/dl/
-  GO_ETHEREUM_VERSION: "v1.13.5"      # https://github.com/ethereum/go-ethereum/releases
-  STRINGER_VERSION: "0.15.0"          # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
-
-  # Protoc dependencies.
-  PROTOC_VERSION: "25.1"              # https://github.com/protocolbuffers/protobuf/releases
-  PROTOC_GEN_GO_VERSION: "1.31.0"     # https://pkg.go.dev/google.golang.org/protobuf/cmd/protoc-gen-go?tab=versions
-  PROTOC_GEN_GO_GRPC_VERSION: "1.3.0" # https://pkg.go.dev/google.golang.org/grpc/cmd/protoc-gen-go-grpc?tab=versions
-  ARCH: "linux-x86_64"
+  GO_VERSION: "1.21"
 
 jobs:
   lint:
@@ -23,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -34,67 +26,25 @@ jobs:
       - name: Run all the linter tools against code
         run: make lint
 
-  gen:
-    name: Check generated files
+  doc:
+    name: Check documentation
     runs-on: ubuntu-latest
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     steps:
-      # Dependencies to generate doc, protobuf stubs and go bindings.
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
+      - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION }}
-
-      # Dependencies to generate protobuf stubs.
-      - name: Install protoc
-        run: |
-          wget https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.ARCH }}.zip
-          unzip protoc-${{ env.PROTOC_VERSION }}-${{ env.ARCH }}.zip
-          sudo mv bin/protoc /usr/local/bin/
-          sudo mv include/google /usr/local/include
-          protoc --version
-      - name: Install protoc plugins for go
-        run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@v${{ env.PROTOC_GEN_GO_VERSION }}
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v${{ env.PROTOC_GEN_GO_GRPC_VERSION }}
-          protoc-gen-go --version
-          protoc-gen-go-grpc --version
-
-      # Dependencies to generate go bindings.
-      - name: Install abigen
-        run: |
-          git clone --branch ${{ env.GO_ETHEREUM_VERSION }} https://github.com/ethereum/go-ethereum.git
-          cd go-ethereum
-          make
-          make devtools
-          export PATH=$(pwd)//build/bin:$PATH
-          abigen --version
-      - name: Install foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: nightly
-      - name: Get forge version
-        run: forge --version
-      - name: Install contract dependencies
-        working-directory: contracts
-        run: forge install
-
-      # Dependencies to generate loadtest modes strings.
-      - name: Install stringer
-        run: go install golang.org/x/tools/cmd/stringer@v${{ env.STRINGER_VERSION }}
-
-      - name: Try to generate new files
-        run: make gen
-      - name: Check if files are up to date
+      - name: Try to update polycli documentation
+        run: make gen-doc
+      - name: Check if the documentation is up to date
         run: |
           if [[ -n $(git status --porcelain) ]]; then
-            echo "❌ Error: File are not up to date. Please run \`make gen\`."
+            echo "❌ Error: Documentation is not up to date. Please run \`make gen-doc\`."
             git diff
             exit 1
           else
-            echo "✅ Files are up to date."
+            echo "✅ The documentation is up to date."
           fi
 
   test:
@@ -102,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -117,7 +67,7 @@ jobs:
       matrix:
         tool: [geth, anvil]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION }}
