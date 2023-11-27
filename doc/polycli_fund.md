@@ -22,14 +22,22 @@ polycli fund [flags]
 Bulk fund 30 wallets using a pre-deployed contract address.
 
 ```bash
-$ polycli fund --verbosity 700 --wallets 30 --funder-address 0x311981b16534238422d301e95a42f6c27a24f346
-4:51PM DBG Starting logger in console mode
-4:51PM DBG Input parameters params={"FunderAddress":"0x311981b16534238422d301e95a42f6c27a24f346","OutputFile":"wallets.json","PrivateKey":"0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa","RpcUrl":"http://localhost:8545","WalletCount":30,"WalletFundingHexAmount":"0xb1a2bc2ec50000"}
-4:51PM TRC Detected chain ID chainID=1337
-4:51PM DBG List of wallets to be funded addresses=["0x8098e0092875a89d8db66708ec1dd248d2dd4dac","0x27f93e701cf7e278687fb1fa1cc9a30932e17587","0x9174d0b938c10f89787ebbd37905593cb76a26e4","0x50280161aa7656f57c18be4ef558786e2c5510c1","0xf62947ecacd778d888b3a2d01a80a5608257afd2","0x964ffc8352ce1883fe740b02af1ccefbbba31e0f","0x03ccadd9aededaed3f7d0df934914f36a91a3063","0xa1138efc9f93f709a0a01fe0480b6d0a7088a488","0xac1cd574d98d3b6cb11a2628af49e2d0dc0292ef","0xc6b7a7f0b6a8e15f44e75f8c5d84457968bf540e","0x25d9964b6e05c6741d99f25131b734cc6383e6db","0x3960b01c6d4058ebfb61599e7d366af747a78683","0x2a77bc0048442970878cf81ff65654ac42fc8675","0x805309b6f9dc0d4c90a68d66938c00a8538de856","0x08f574385a01e8ac136ee281ee9f8ed01219a50f","0x5440214ab31969f3dbb6b41c1dcdbfee2ccc46e2","0x610f98ba071eea9e76a2d7ea4fd3db28770da77b","0x562a606458dfce441db4f89c2eee8d06da407442","0x6d39a81d0e63ba4749e49fedd05504a2c1b538e7","0x537a338c6be9fffceb2bfe45b320f14d36311c2f","0x410165c205fccf40ef4a78a80542ce69a71630c1","0x3d0fe3f63bf613a22dac5c0c4c7fb686358d64c2","0x67f7dbd3f1942a783c6ec69968d63985f7d3bee4","0xeba6d5c38cba411978dd979fa83b9a757136b328","0xce6a59a028d26149c1c2d93b09fab3725f96196c","0x48a70f9bb831a14b928a17691a16cec5d3e40bc3","0x68a3bd96c015297f560d6e3319742630ab0e17bc","0x5e1c242b5bfea09c5156e7fb978840388ebe2eeb","0xf94c08fe881a0ea565f4642558eb59f3d2df09c8","0x93d1acff7cfffbe390f4e18797b49404500ac123"]
-4:51PM INF Wallet addresses and private keys saved to file fileName=wallets.json
-4:51PM INF Accounts funded! 💸
-4:51PM INF Total execution time: 20.9145ms
+$ polycli fund --wallets 20 --verbosity 500
+7:08PM INF Starting bulk funding wallets
+7:08PM DBG Funder contract deployed address=0x0b589e1cb2457f0ba5a5eef2800d47a4d6fa9fab
+7:08PM DBG Funder contract funded balance=1000000000000000000
+7:08PM DBG Address(es) of newly generated wallet(s) addresses=["0xc549575af9cebd9940fd0319d2f9a68c157498f5","0x4db281de067d5473fd529530b9da124e558c1ab2","0xe6ebaca5ecb2dba2a03778f934fae6cbe42a6912","0x09cd5e5a6657b4b4f0dc48b63204254d7ded9db6","0xb38cc256482cb84351df5d9da210d726c5b8dd97","0xe66b857f0fceadd5cd015491cce1aa34432c23d3","0x52492c0f89ce6dbac9a92ac2b78d70c82585508d","0xee108e2c179069730977ee4452c4e9ab29d679bf","0xe7846734c489ec26f31a21d1778e8afc8147d329","0xdef6e1ba71a87b26a383a7f7f48aad92d9a3efcc","0x97d4f694dc1c7c99f636e49dd4aa78a486adf174","0x7059775929e96b338765175cdaf5d39ae61c8bd9","0x0cb26d04628b78bd3e7d94056edf1fa775227585","0x195bade7f0f8237e7d8ef314106cecea04f05ed6","0xcd0af0d53bdbdf2a182d3ea8f71dec4bd19378d5","0x6073a6bc815f3a0153a55a4fed3d7fa3f61d48ea","0x97cbc714a5c60c070ca36f4d8b4368c0e9266d20","0xe94ab41b7e0afcf705b68f51e92a31ef70cda280","0x335240977531ba7d1addb252d5b57cb4294e6961","0x4ed675c89cd45e341fd9e74cd7054e22cc02306a"]
+7:08PM INF Wallet address(es) and private key(s) saved to file fileName=wallets.json
+7:08PM INF Wallet(s) funded! 💸
+7:08PM INF Total execution time: 1.042139709s
+
+$ polycli fund --wallets 20 --verbosity 500 --funder-address 0x0b589e1cb2457f0ba5a5eef2800d47a4d6fa9fab
+7:09PM INF Starting bulk funding wallets
+7:09PM DBG Funder contract funded balance=1000000000000000000
+7:09PM DBG Address(es) of newly generated wallet(s) addresses=["0x61568e9430118ee1439a030c28be95403d0b8aec","0x561f610ab2ae4c593def5b8df57829c846a5b493","0xadbb4860895ae926d88742b27233155280eec1c6","0x02c4ee076e5f17626c0c4434273390342134b457","0x3cc6305a743c141c90371861c97c2773a5a2707a","0xfd09346c31782f5ae152ce87ab3534129ecbc25c","0xe9c69be670e243cedcac079386c5733214176b22","0xbe3842385566d6c535af15c9a9b90a627c9e8d27","0x3fd74086309a7ade88f83a53bcd1ff970fc7525a","0x38d84b89d72a1ffa21b12ecb1540fb742148aa1c","0x03508d2cc56dfd7ca82685c4015b1babfb4abcc6","0x127c21979944504a3186cbf52985986b778769f4","0x96661b653ad1dbb1db80e4ce3a842432edf5c5f1","0xc1b85e0986e9200c2d72d42eba347c6f5899607f","0x2e4aad24a103dfb90d0e4b2f55ee343a19c8814a","0xa7fb7da023160a1fd7cc615ea42ea60121a113fc","0xe8dcc4e6454d1fa51beccfb8a4139b7b6d35c08c","0x0cdc66afb63966d4dab6bc0e4782b645839705ae","0xb4b9484609bf36e94860f63e0504c846bb14f3ff","0xeba4f939954a3710e8f3693cbc10bef40a9a6779"]
+7:09PM INF Wallet address(es) and private key(s) saved to file fileName=wallets.json
+7:09PM INF Wallet(s) funded! 💸
+7:09PM INF Total execution time: 1.03648425s
 ```
 
 Extract from `wallets.json`.
