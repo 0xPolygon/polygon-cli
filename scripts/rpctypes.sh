@@ -27,5 +27,5 @@ if [ ! -d $1 ] ; then
 fi
 
 echo "copying schemas to $1..."
-cp -r $dest/$schema_dest $1
+cp $dest/$schema_dest/* $1
 rm -r $dest
