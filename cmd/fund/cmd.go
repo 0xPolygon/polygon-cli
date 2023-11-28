@@ -18,9 +18,10 @@ type cmdFundParams struct {
 	RpcUrl     *string
 	PrivateKey *string
 
-	WalletCount        *uint64
-	FundingAmountInEth *float64
+	WalletsNumber      *uint64
 	UseHDDerivation    *bool
+	WalletAddresses    *[]string
+	FundingAmountInEth *float64
 	OutputFile         *string
 
 	FunderAddress *string
@@ -53,10 +54,15 @@ func init() {
 	p.PrivateKey = flagSet.String("private-key", defaultPrivateKey, "The hex encoded private key that we'll use to send transactions")
 
 	// Wallet parameters.
-	p.WalletCount = flagSet.Uint64P("wallets", "w", 10, "The number of wallets to fund")
-	p.FundingAmountInEth = flagSet.Float64P("eth-amount", "a", 0.05, "The amount of ether to send to each wallet")
+	p.WalletsNumber = flagSet.Uint64P("number", "n", 10, "The number of wallets to fund")
 	p.UseHDDerivation = flagSet.Bool("hd-derivation", false, "Derive wallets to fund from the private key in a deterministic way")
+	p.WalletAddresses = flagSet.StringSlice("addresses", nil, "Comma-separated list of wallet addresses to fund")
+	p.FundingAmountInEth = flagSet.Float64P("eth-amount", "a", 0.05, "The amount of ether to send to each wallet")
 	p.OutputFile = flagSet.StringP("file", "f", "wallets.json", "The output JSON file path for storing the addresses and private keys of funded wallets")
+
+	// Marking flags as mutually exclusive
+	FundCmd.MarkFlagsMutuallyExclusive("addresses", "number")
+	FundCmd.MarkFlagsMutuallyExclusive("addresses", "hd-derivation")
 
 	// Funder contract parameters.
 	p.FunderAddress = flagSet.String("funder-address", "", "The address of a pre-deployed Funder contract")
@@ -79,7 +85,7 @@ func checkFlags() error {
 	}
 
 	// Check wallet flags.
-	if params.WalletCount != nil && *params.WalletCount == 0 {
+	if params.WalletsNumber != nil && *params.WalletsNumber == 0 {
 		return errors.New("the number of wallets to fund is set to zero")
 	}
 	if params.FundingAmountInEth != nil && math.Abs(*params.FundingAmountInEth) <= 1e-9 {

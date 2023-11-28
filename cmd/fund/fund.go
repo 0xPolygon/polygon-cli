@@ -60,15 +60,23 @@ func runFunding(ctx context.Context) error {
 
 	// Derive or generate a set of wallets.
 	var addresses []common.Address
-	if *params.UseHDDerivation {
-		addresses, err = deriveHDWallets(int(*params.WalletCount))
+	if params.WalletAddresses != nil && *params.WalletAddresses != nil {
+		log.Debug().Msg("Using addresses provided by the user")
+		addresses = make([]common.Address, len(*params.WalletAddresses))
+		for i, address := range *params.WalletAddresses {
+			addresses[i] = common.HexToAddress(address)
+		}
+	} else if *params.UseHDDerivation {
+		log.Debug().Msg("Deriving addresses from the default mnemonic")
+		addresses, err = deriveHDWallets(int(*params.WalletsNumber))
 	} else {
-		addresses, err = generateWallets(int(*params.WalletCount))
+		log.Debug().Msg("Generating random addresses")
+		addresses, err = generateWallets(int(*params.WalletsNumber))
 	}
 	if err != nil {
 		return err
 	}
-	log.Debug().Interface("addresses", addresses).Msg("Address(es) of newly generated wallet(s)")
+	log.Trace().Interface("addresses", addresses).Msg("Wallet addresses")
 
 	// Fund wallets.
 	if err = fundWallets(ctx, c, tops, contract, addresses); err != nil {

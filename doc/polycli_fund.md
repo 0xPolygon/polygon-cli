@@ -73,14 +73,15 @@ $ cast balance 0x5D8121cf716B70d3e345adB58157752304eED5C3
 ## Flags
 
 ```bash
+      --addresses strings       Comma-separated list of wallet addresses to fund
   -a, --eth-amount float        The amount of ether to send to each wallet (default 0.05)
   -f, --file string             The output JSON file path for storing the addresses and private keys of funded wallets (default "wallets.json")
       --funder-address string   The address of a pre-deployed Funder contract
       --hd-derivation           Derive wallets to fund from the private key in a deterministic way
   -h, --help                    help for fund
+  -n, --number uint             The number of wallets to fund (default 10)
       --private-key string      The hex encoded private key that we'll use to send transactions (default "0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
   -r, --rpc-url string          The RPC endpoint url (default "http://localhost:8545")
-  -w, --wallets uint            The number of wallets to fund (default 10)
 ```
 
 The command also inherits flags from parent commands.
