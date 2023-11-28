@@ -23,8 +23,8 @@ import (
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 )
 
-// The amount in Wei to send to the Funder contract.
-const funderContractFundingAmount = "1000000000000000000" // 10 ether.
+// The initial balance of Ether to send to the Funder contract.
+const funderContractBalanceInEth = 1_000.0
 
 var (
 	// The current chain ID for transaction replay protection.
@@ -62,19 +62,9 @@ func runFunding(ctx context.Context) error {
 	}
 
 	// Deploy or instantiate the Funder contract.
-	var contractAddress common.Address
 	var contract *funder.Funder
-	contractAddress, contract, err = deployOrInstantiateFunderContract(ctx, c, tops, &bind.CallOpts{})
+	contract, err = deployOrInstantiateFunderContract(ctx, c, tops, &bind.CallOpts{})
 	if err != nil {
-		return err
-	}
-
-	// Fund the Funder contract.
-	amount, ok := new(big.Int).SetString(funderContractFundingAmount, 10)
-	if !ok {
-		return errors.New("unable to format the amount to send to the Funder contract")
-	}
-	if err = fundContract(ctx, c, contractAddress, amount); err != nil {
 		return err
 	}
 
@@ -132,24 +122,28 @@ func initializeParams(ctx context.Context, c *ethclient.Client) error {
 
 // deployOrInstantiateFunderContract deploys or instantiates a Funder contract.
 // If the pre-deployed address is specified, the contract will not be deployed.
-func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (common.Address, *funder.Funder, error) {
-	// Format the funding amount.
-	fundingAmount, err := util.HexToBigInt(*params.WalletFundingHexAmount)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to parse funding amount")
-		return common.Address{}, nil, err
-	}
-
+func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (*funder.Funder, error) {
 	// Deploy the contract if no pre-deployed address flag is provided.
 	var contractAddress common.Address
+	var err error
 	if *params.FunderAddress == "" {
 		// Deploy the Funder contract.
-		contractAddress, _, _, err = funder.DeployFunder(tops, c, fundingAmount)
+		// Note: `fundingAmountInWei` reprensents the amount the Funder contract will send to each newly generated wallets.
+		fundingAmountInWei := util.EthToWei(*params.FundingAmountInEth)
+		contractAddress, _, _, err = funder.DeployFunder(tops, c, fundingAmountInWei)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to deploy Funder contract")
-			return common.Address{}, nil, err
+			return nil, err
 		}
 		log.Debug().Interface("address", contractAddress).Msg("Funder contract deployed")
+
+		// Fund the Funder contract.
+		// Note: `funderContractBalanceInWei` reprensents the initial balance of the Funder contract.
+		// The contract needs initial funds to be able to fund wallets.
+		funderContractBalanceInWei := util.EthToWei(funderContractBalanceInEth)
+		if err = fundContract(ctx, c, contractAddress, funderContractBalanceInWei); err != nil {
+			return nil, err
+		}
 	} else {
 		// Use the pre-deployed address.
 		contractAddress = common.HexToAddress(*params.FunderAddress)
@@ -159,9 +153,9 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 	contract, err := funder.NewFunder(contractAddress, c)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to instantiate Funder contract")
-		return common.Address{}, nil, err
+		return nil, err
 	}
-	return contractAddress, contract, nil
+	return contract, nil
 }
 
 func fundContract(ctx context.Context, c *ethclient.Client, contractAddress common.Address, amount *big.Int) error {
@@ -202,12 +196,12 @@ func fundContract(ctx context.Context, c *ethclient.Client, contractAddress comm
 	}
 
 	// Get contract balance.
-	var balance *big.Int
-	balance, err = c.BalanceAt(ctx, contractAddress, nil)
+	var weiBalance *big.Int
+	weiBalance, err = c.BalanceAt(ctx, contractAddress, nil)
 	if err != nil {
 		return err
 	}
-	log.Debug().Interface("balance", balance).Msg("Funder contract funded")
+	log.Debug().Interface("weiBalance", weiBalance).Msg("Funder contract funded")
 	return nil
 }
 

@@ -29,3 +29,11 @@ func HexToBigInt(hexString string) (*big.Int, error) {
 	bigInt.SetBytes(rawGas)
 	return bigInt, nil
 }
+
+// EthToWei converts a given amount of Ether to Wei.
+func EthToWei(ethAmount float64) *big.Int {
+	weiBigFloat := new(big.Float).SetFloat64(ethAmount)
+	weiBigFloat.Mul(weiBigFloat, new(big.Float).SetInt64(1e18))
+	weiBigInt, _ := weiBigFloat.Int(nil)
+	return weiBigInt
+}

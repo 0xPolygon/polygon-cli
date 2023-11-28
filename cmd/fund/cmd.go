@@ -2,6 +2,7 @@ package fund
 
 import (
 	"errors"
+	"math"
 
 	_ "embed"
 
@@ -17,11 +18,10 @@ type cmdFundParams struct {
 	RpcUrl     *string
 	PrivateKey *string
 
-	WalletCount            *uint64
-	WalletFundingHexAmount *string
-	OutputFile             *string
-
-	FunderAddress *string
+	WalletCount        *uint64
+	FundingAmountInEth *float64
+	FunderAddress      *string
+	OutputFile         *string
 }
 
 var (
@@ -52,7 +52,7 @@ func init() {
 
 	// Wallet parameters.
 	p.WalletCount = flagSet.Uint64P("wallets", "w", 10, "The number of wallets to fund")
-	p.WalletFundingHexAmount = flagSet.StringP("amount", "a", "0xb1a2bc2ec50000", "The amount of wei to send to each wallet") // 0xb1a2bc2ec50000 represensts 0.05 ether.
+	p.FundingAmountInEth = flagSet.Float64P("eth-amount", "a", 0.05, "The amount of ether to send to each wallet")
 	p.OutputFile = flagSet.StringP("file", "f", "wallets.json", "The output JSON file path for storing the addresses and private keys of funded wallets")
 
 	// Funder contract parameters.
@@ -79,7 +79,7 @@ func checkFlags() error {
 	if params.WalletCount != nil && *params.WalletCount == 0 {
 		return errors.New("the number of wallets to fund is set to zero")
 	}
-	if params.WalletFundingHexAmount != nil && *params.WalletFundingHexAmount == "" {
+	if params.FundingAmountInEth != nil && math.Abs(*params.FundingAmountInEth) <= 1e-9 {
 		return errors.New("the amount of eth to send to each wallet is set to zero")
 	}
 
