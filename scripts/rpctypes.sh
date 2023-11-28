@@ -28,3 +28,4 @@ fi
 
 echo "copying schemas to $1..."
 cp -r $dest/$schema_dest/ $1
+rm -r $dest
