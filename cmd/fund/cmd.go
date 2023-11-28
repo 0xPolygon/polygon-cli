@@ -20,8 +20,9 @@ type cmdFundParams struct {
 
 	WalletCount        *uint64
 	FundingAmountInEth *float64
-	FunderAddress      *string
 	OutputFile         *string
+
+	FunderAddress *string
 }
 
 var (
@@ -81,6 +82,9 @@ func checkFlags() error {
 	}
 	if params.FundingAmountInEth != nil && math.Abs(*params.FundingAmountInEth) <= 1e-9 {
 		return errors.New("the amount of eth to send to each wallet is set to zero")
+	}
+	if params.OutputFile != nil && *params.OutputFile == "" {
+		return errors.New("the output file is not specified")
 	}
 
 	return nil
