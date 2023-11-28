@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/maticnetwork/polygon-cli/bindings/funder"
+	"github.com/maticnetwork/polygon-cli/hdwallet"
 	"github.com/maticnetwork/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 )
@@ -161,7 +162,23 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 
 // deriveWallets generates and exports a specified number of HD wallet addresses.
 func deriveHDWallets(n int) ([]common.Address, error) {
-	return nil, errors.New("todo: implement this mode")
+	wallet, err := hdwallet.NewPolyWallet(defaultMnemonic, defaultPassword)
+	if err != nil {
+		return nil, err
+	}
+
+	var derivedWallets *hdwallet.PolyWalletExport
+	derivedWallets, err = wallet.ExportHDAddresses(n)
+	if err != nil {
+		return nil, err
+	}
+
+	addresses := make([]common.Address, n)
+	for i, wallet := range derivedWallets.Addresses {
+		addresses[i] = wallet.CommonAddress
+		log.Trace().Str("test", wallet.ETHAddress).Str("address", wallet.CommonAddress.Hex()).Str("privateKey", wallet.HexPrivateKey).Str("path", wallet.Path).Msg("New wallet derived")
+	}
+	return addresses, nil
 }
 
 // generateWallets generates a specified number of Ethereum wallets with random private keys.

@@ -23,25 +23,26 @@ Bulk fund crypto wallets automatically.
 
 ```bash
 # Fund wallets specified by the user.
-$ polycli fund --addresses 0x5eD3BE7a1cDafd558F88a673345889dC75837aA2,0x1Ec6efdBd371D6444779eAE7B7e16907e0c8eC27
-3:43PM INF Starting bulk funding wallets
-3:43PM INF Using addresses provided by the user
-3:43PM INF Wallet(s) funded! 💸
-3:43PM INF Total execution time: 1.020693583s
-
-# Fund 20 wallets, derived from the default private key.
-$ polycli fund --number 20 --hd-derivation true
-3:44PM INF Starting bulk funding wallets
-3:44PM INF Deriving addresses from the default mnemonic
-Error: todo: implement this mode
+$ polycli fund --addresses=0x5eD3BE7a1cDafd558F88a673345889dC75837aA2,0x1Ec6efdBd371D6444779eAE7B7e16907e0c8eC27
+3:58PM INF Starting bulk funding wallets
+3:58PM INF Using addresses provided by the user
+3:58PM INF Wallet(s) funded! 💸
+3:58PM INF Total execution time: 1.020693583s
 
 # Fund 20 random wallets using a pre-deployed contract address.
-$ polycli fund --number 20 --contract-address 0xf5a73e7cfcc83b7e8ce2e17eb44f050e8071ee60
-3:47PM INF Starting bulk funding wallets
-3:47PM INF Generating random addresses
-3:47PM INF Wallets' address(es) and private key(s) saved to file fileName=wallets.json
-3:47PM INF Wallet(s) funded! 💸
-3:47PM INF Total execution time: 15.251625ms
+$ polycli fund --number=20 --contract-address=0xf5a73e7cfcc83b7e8ce2e17eb44f050e8071ee60
+3:58PM INF Starting bulk funding wallets
+3:58PM INF Deriving addresses from the default mnemonic
+3:58PM INF Wallet(s) funded! 💸
+3:58PM INF Total execution time: 396.814917ms
+
+# Fund 20 random wallets.
+$ polycli fund --number 20 --hd-derivation=false
+3:58PM INF Starting bulk funding wallets
+3:58PM INF Generating random addresses
+3:58PM INF Wallets' address(es) and private key(s) saved to file fileName=wallets.json
+3:58PM INF Wallet(s) funded! 💸
+3:58PM INF Total execution time: 1.027506s
 ```
 
 Extract from `wallets.json`.
@@ -78,7 +79,7 @@ $ cast balance 0x5D8121cf716B70d3e345adB58157752304eED5C3
       --contract-address string   The address of a pre-deployed Funder contract
   -a, --eth-amount float          The amount of ether to send to each wallet (default 0.05)
   -f, --file string               The output JSON file path for storing the addresses and private keys of funded wallets (default "wallets.json")
-      --hd-derivation             Derive wallets to fund from the private key in a deterministic way
+      --hd-derivation             Derive wallets to fund from the private key in a deterministic way (default true)
   -h, --help                      help for fund
   -n, --number uint               The number of wallets to fund (default 10)
       --private-key string        The hex encoded private key that we'll use to send transactions (default "0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")

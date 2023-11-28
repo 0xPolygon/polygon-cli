@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btcutil/base58"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/oasisprotocol/curve25519-voi/primitives/sr25519"
 	"github.com/tyler-smith/go-bip32"
@@ -48,18 +49,19 @@ type (
 		multiAddress
 	}
 	multiAddress struct {
-		HexPublicKey       string `json:",omitempty"`
-		HexFullPublicKey   string `json:",omitempty"`
-		HexPrivateKey      string `json:",omitempty"`
-		ETHAddress         string `json:",omitempty"`
-		BTCAddress         string `json:",omitempty"`
-		WIF                string `json:",omitempty"`
-		ECDSAAddress       string `json:",omitempty"`
-		Sr25519Address     string `json:",omitempty"`
-		Ed25519Address     string `json:",omitempty"`
-		ECDSAAddressSS58   string `json:",omitempty"`
-		Sr25519AddressSS58 string `json:",omitempty"`
-		Ed25519AddressSS58 string `json:",omitempty"`
+		HexPublicKey       string         `json:",omitempty"`
+		HexFullPublicKey   string         `json:",omitempty"`
+		CommonAddress      common.Address `json:",omitempty"`
+		HexPrivateKey      string         `json:",omitempty"`
+		ETHAddress         string         `json:",omitempty"`
+		BTCAddress         string         `json:",omitempty"`
+		WIF                string         `json:",omitempty"`
+		ECDSAAddress       string         `json:",omitempty"`
+		Sr25519Address     string         `json:",omitempty"`
+		Ed25519Address     string         `json:",omitempty"`
+		ECDSAAddressSS58   string         `json:",omitempty"`
+		Sr25519AddressSS58 string         `json:",omitempty"`
+		Ed25519AddressSS58 string         `json:",omitempty"`
 	}
 	PolyAddressExport struct {
 		Path string `json:",omitempty"`
@@ -228,6 +230,7 @@ func (p *PolyWallet) ExportRootAddress() (*PolyWalletExport, error) {
 	pwe.RootKey = rootKey.String()
 	pwe.HexPublicKey = hex.EncodeToString(rootKey.PublicKey().Key)
 	pwe.HexPrivateKey = hex.EncodeToString(rootKey.Key)
+	pwe.CommonAddress = toCommonAddress(rootKey)
 	pwe.WIF = toWIF(rootKey)
 	pwe.BTCAddress = toBTCAddress(rootKey)
 	pwe.ETHAddress = toETHAddress(rootKey)
@@ -294,12 +297,12 @@ func (p *PolyWallet) ExportHDAddresses(count int) (*PolyWalletExport, error) {
 		pae.Path = currentPath
 		pae.HexPublicKey = hex.EncodeToString(k.PublicKey().Key)
 		pae.HexPrivateKey = hex.EncodeToString(k.Key)
+		pae.CommonAddress = toCommonAddress(k)
 		pae.WIF = toWIF(k)
 		pae.BTCAddress = toBTCAddress(k)
 		pae.ETHAddress = toETHAddress(k)
 		pae.HexFullPublicKey = hex.EncodeToString(toUncompressedPubKey(k))
 		pwe.Addresses = append(pwe.Addresses, pae)
-
 	}
 	return pwe, nil
 }
@@ -314,6 +317,14 @@ func toWIF(prvKey *bip32.Key) string {
 	cksum := h2[0:4]
 	h3 := append(h0, cksum...)
 	return base58.Encode(h3)
+}
+
+func toCommonAddress(prvKey *bip32.Key) common.Address {
+	concat := toUncompressedPubKey(prvKey)
+	h := sha3.NewLegacyKeccak256()
+	h.Write(concat)
+	b := h.Sum(nil)
+	return common.BytesToAddress(b)
 }
 
 func toETHAddress(prvKey *bip32.Key) string {
