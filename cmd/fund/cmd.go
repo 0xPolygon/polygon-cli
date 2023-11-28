@@ -65,7 +65,7 @@ func init() {
 	FundCmd.MarkFlagsMutuallyExclusive("addresses", "hd-derivation")
 
 	// Funder contract parameters.
-	p.FunderAddress = flagSet.String("funder-address", "", "The address of a pre-deployed Funder contract")
+	p.FunderAddress = flagSet.String("contract-address", "", "The address of a pre-deployed Funder contract")
 
 	params = *p
 }

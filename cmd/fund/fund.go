@@ -61,16 +61,16 @@ func runFunding(ctx context.Context) error {
 	// Derive or generate a set of wallets.
 	var addresses []common.Address
 	if params.WalletAddresses != nil && *params.WalletAddresses != nil {
-		log.Debug().Msg("Using addresses provided by the user")
+		log.Info().Msg("Using addresses provided by the user")
 		addresses = make([]common.Address, len(*params.WalletAddresses))
 		for i, address := range *params.WalletAddresses {
 			addresses[i] = common.HexToAddress(address)
 		}
 	} else if *params.UseHDDerivation {
-		log.Debug().Msg("Deriving addresses from the default mnemonic")
+		log.Info().Msg("Deriving addresses from the default mnemonic")
 		addresses, err = deriveHDWallets(int(*params.WalletsNumber))
 	} else {
-		log.Debug().Msg("Generating random addresses")
+		log.Info().Msg("Generating random addresses")
 		addresses, err = generateWallets(int(*params.WalletsNumber))
 	}
 	if err != nil {
@@ -186,7 +186,7 @@ func generateWallets(n int) ([]common.Address, error) {
 			log.Error().Err(err).Msg("Unable to save keys to file")
 			panic(err)
 		}
-		log.Info().Str("fileName", *params.OutputFile).Msg("Wallet address(es) and private key(s) saved to file")
+		log.Info().Str("fileName", *params.OutputFile).Msg("Wallets' address(es) and private key(s) saved to file")
 	}()
 
 	return addresses, nil
