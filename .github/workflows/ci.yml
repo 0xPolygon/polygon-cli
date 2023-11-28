@@ -100,7 +100,7 @@ jobs:
         run: make test
 
   loadtest:
-    name: Loadtest against geth
+    name: Run loadtest
     runs-on: ubuntu-latest
     strategy:
       matrix:
