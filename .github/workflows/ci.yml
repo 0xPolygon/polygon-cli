@@ -82,6 +82,7 @@ jobs:
         run: |
           if [[ -n $(git status --porcelain) ]]; then
             echo "❌ Error: Generated files are not up to date. Please run \`make gen\`."
+            git status --porcelain
             git diff
             exit 1
           else
