@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// defaultPrivateKey is the default private key used to fund wallets.
+// The default private key used to send transactions.
 const defaultPrivateKey = "0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
 
 // cmdParams holds the command-line parameters for the fund command.
@@ -20,6 +20,7 @@ type cmdFundParams struct {
 
 	WalletCount        *uint64
 	FundingAmountInEth *float64
+	UseHDDerivation    *bool
 	OutputFile         *string
 
 	FunderAddress *string
@@ -54,6 +55,7 @@ func init() {
 	// Wallet parameters.
 	p.WalletCount = flagSet.Uint64P("wallets", "w", 10, "The number of wallets to fund")
 	p.FundingAmountInEth = flagSet.Float64P("eth-amount", "a", 0.05, "The amount of ether to send to each wallet")
+	p.UseHDDerivation = flagSet.Bool("hd-derivation", false, "Derive wallets to fund from the private key in a deterministic way")
 	p.OutputFile = flagSet.StringP("file", "f", "wallets.json", "The output JSON file path for storing the addresses and private keys of funded wallets")
 
 	// Funder contract parameters.

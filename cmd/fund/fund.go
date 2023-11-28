@@ -13,29 +13,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/maticnetwork/polygon-cli/bindings/funder"
 	"github.com/maticnetwork/polygon-cli/util"
 	"github.com/rs/zerolog/log"
-
-	ethrpc "github.com/ethereum/go-ethereum/rpc"
 )
 
 // The initial balance of Ether to send to the Funder contract.
 const funderContractBalanceInEth = 1_000.0
-
-var (
-	// The current chain ID for transaction replay protection.
-	chainID *big.Int
-
-	// The ECDSA private key used to send transactions.
-	privateKey *ecdsa.PrivateKey
-
-	// The address of the wallet used to send transactions.
-	address common.Address
-)
 
 // runFunding deploys or instantiates a `Funder` contract to bulk fund randomly generated wallets.
 // Wallets' addresses and private keys are saved to a file.
@@ -50,7 +37,10 @@ func runFunding(ctx context.Context) error {
 		return err
 	}
 
-	if err = initializeParams(ctx, c); err != nil {
+	var privateKey *ecdsa.PrivateKey
+	var chainID *big.Int
+	privateKey, chainID, err = initializeParams(ctx, c)
+	if err != nil {
 		return err
 	}
 
@@ -63,21 +53,25 @@ func runFunding(ctx context.Context) error {
 
 	// Deploy or instantiate the Funder contract.
 	var contract *funder.Funder
-	contract, err = deployOrInstantiateFunderContract(ctx, c, tops, &bind.CallOpts{})
+	contract, err = deployOrInstantiateFunderContract(ctx, c, tops, privateKey)
 	if err != nil {
 		return err
 	}
 
-	// Generate a set of wallets.
+	// Derive or generate a set of wallets.
 	var addresses []common.Address
-	addresses, err = generateWallets(int(*params.WalletCount))
+	if *params.UseHDDerivation {
+		addresses, err = deriveHDWallets(int(*params.WalletCount))
+	} else {
+		addresses, err = generateWallets(int(*params.WalletCount))
+	}
 	if err != nil {
 		return err
 	}
 	log.Debug().Interface("addresses", addresses).Msg("Address(es) of newly generated wallet(s)")
 
 	// Fund wallets.
-	if err = fundWallets(ctx, c, contract, addresses); err != nil {
+	if err = fundWallets(ctx, c, tops, contract, addresses); err != nil {
 		return err
 	}
 	log.Info().Msg("Wallet(s) funded! 💸")
@@ -88,7 +82,7 @@ func runFunding(ctx context.Context) error {
 
 // dialRpc dials the Ethereum RPC server and return an Ethereum client.
 func dialRpc(ctx context.Context) (*ethclient.Client, error) {
-	rpc, err := ethrpc.DialContext(ctx, *params.RpcUrl)
+	rpc, err := rpc.DialContext(ctx, *params.RpcUrl)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to dial")
 		return nil, err
@@ -100,29 +94,28 @@ func dialRpc(ctx context.Context) (*ethclient.Client, error) {
 }
 
 // Initialize  parameters.
-func initializeParams(ctx context.Context, c *ethclient.Client) error {
+func initializeParams(ctx context.Context, c *ethclient.Client) (*ecdsa.PrivateKey, *big.Int, error) {
+	// Parse the private key.
+	privateKey, err := crypto.HexToECDSA(strings.TrimPrefix(*params.PrivateKey, "0x"))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to process the private key")
+		return nil, nil, err
+	}
+
 	// Get the chaind id.
-	var err error
+	var chainID *big.Int
 	chainID, err = c.ChainID(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to fetch chain ID")
-		return err
+		return nil, nil, err
 	}
 	log.Trace().Uint64("chainID", chainID.Uint64()).Msg("Detected chain ID")
-
-	// Parse the private key.
-	privateKey, err = ethcrypto.HexToECDSA(strings.TrimPrefix(*params.PrivateKey, "0x"))
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to process the private key")
-		return err
-	}
-	address = ethcrypto.PubkeyToAddress(privateKey.PublicKey)
-	return nil
+	return privateKey, chainID, nil
 }
 
 // deployOrInstantiateFunderContract deploys or instantiates a Funder contract.
 // If the pre-deployed address is specified, the contract will not be deployed.
-func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (*funder.Funder, error) {
+func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, privateKey *ecdsa.PrivateKey) (*funder.Funder, error) {
 	// Deploy the contract if no pre-deployed address flag is provided.
 	var contractAddress common.Address
 	var err error
@@ -141,7 +134,7 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 		// Note: `funderContractBalanceInWei` reprensents the initial balance of the Funder contract.
 		// The contract needs initial funds to be able to fund wallets.
 		funderContractBalanceInWei := util.EthToWei(funderContractBalanceInEth)
-		if err = fundContract(ctx, c, contractAddress, funderContractBalanceInWei); err != nil {
+		if err = util.SendTx(ctx, c, privateKey, &contractAddress, funderContractBalanceInWei, nil, uint64(30000)); err != nil {
 			return nil, err
 		}
 	} else {
@@ -158,51 +151,9 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 	return contract, nil
 }
 
-func fundContract(ctx context.Context, c *ethclient.Client, contractAddress common.Address, amount *big.Int) error {
-	// Get the nonce.
-	nonce, err := c.PendingNonceAt(ctx, address)
-	if err != nil {
-		return err
-	}
-
-	// Get suggested gas price.
-	var gasPrice *big.Int
-	gasPrice, err = c.SuggestGasPrice(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Create and sign the transaction.
-	tx := ethtypes.NewTx(&ethtypes.LegacyTx{
-		Nonce:    nonce,
-		Gas:      uint64(30000),
-		GasPrice: gasPrice,
-		To:       &contractAddress,
-		Value:    amount,
-		Data:     nil,
-	})
-	var signedTx *ethtypes.Transaction
-	signedTx, err = ethtypes.SignTx(tx, ethtypes.NewEIP155Signer(chainID), privateKey)
-	if err != nil {
-		return err
-	}
-
-	// Send the transaction.
-	if err = c.SendTransaction(ctx, signedTx); err != nil {
-		return err
-	}
-	if _, err = bind.WaitMined(ctx, c, signedTx); err != nil {
-		return err
-	}
-
-	// Get contract balance.
-	var weiBalance *big.Int
-	weiBalance, err = c.BalanceAt(ctx, contractAddress, nil)
-	if err != nil {
-		return err
-	}
-	log.Debug().Interface("weiBalance", weiBalance).Msg("Funder contract funded")
-	return nil
+// deriveWallets generates and exports a specified number of HD wallet addresses.
+func deriveHDWallets(n int) ([]common.Address, error) {
+	return nil, errors.New("todo: implement this mode")
 }
 
 // generateWallets generates a specified number of Ethereum wallets with random private keys.
@@ -212,13 +163,13 @@ func generateWallets(n int) ([]common.Address, error) {
 	privateKeys := make([]*ecdsa.PrivateKey, n)
 	addresses := make([]common.Address, n)
 	for i := 0; i < n; i++ {
-		pk, err := ethcrypto.GenerateKey()
+		pk, err := crypto.GenerateKey()
 		if err != nil {
 			log.Error().Err(err).Msg("Error generating key")
 			return nil, err
 		}
 		privateKeys[i] = pk
-		addresses[i] = ethcrypto.PubkeyToAddress(pk.PublicKey)
+		addresses[i] = crypto.PubkeyToAddress(pk.PublicKey)
 	}
 
 	// Save private and public keys to a file.
@@ -243,7 +194,7 @@ func saveToFile(fileName string, privateKeys []*ecdsa.PrivateKey) error {
 	// Populate the struct with addresses and private keys.
 	data := make([]wallet, len(privateKeys))
 	for i, privateKey := range privateKeys {
-		address := ethcrypto.PubkeyToAddress(privateKey.PublicKey)
+		address := crypto.PubkeyToAddress(privateKey.PublicKey)
 		data[i] = wallet{
 			Address:    address.String(),
 			PrivateKey: hex.EncodeToString(privateKey.D.Bytes()),
@@ -262,27 +213,20 @@ func saveToFile(fileName string, privateKeys []*ecdsa.PrivateKey) error {
 }
 
 // fundWallets funds multiple wallets using the provided Funder contract.
-func fundWallets(ctx context.Context, c *ethclient.Client, contract *funder.Funder, wallets []common.Address) error {
-	// Configure transaction options.
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable create transaction signer")
-		return err
-	}
-
+func fundWallets(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, contract *funder.Funder, wallets []common.Address) error {
 	// Fund wallets.
 	switch len(wallets) {
 	case 0:
 		return errors.New("no wallet to fund")
 	case 1:
 		// Fund a single account.
-		if _, err = contract.Fund(tops, wallets[0]); err != nil {
+		if _, err := contract.Fund(tops, wallets[0]); err != nil {
 			log.Error().Err(err).Msg("Unable to fund wallet")
 			return err
 		}
 	default:
 		// Fund multiple wallets in bulk.
-		if _, err = contract.BulkFund(tops, wallets); err != nil {
+		if _, err := contract.BulkFund(tops, wallets); err != nil {
 			log.Error().Err(err).Msg("Unable to bulk fund wallets")
 			return err
 		}
