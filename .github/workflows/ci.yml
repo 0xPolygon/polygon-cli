@@ -13,7 +13,6 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
@@ -29,7 +28,6 @@ jobs:
   doc:
     name: Check documentation
     runs-on: ubuntu-latest
-    if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
@@ -50,7 +48,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
@@ -62,7 +59,6 @@ jobs:
   loadtest:
     name: Loadtest against geth
     runs-on: ubuntu-latest
-    if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     strategy:
       matrix:
         tool: [geth, anvil]
