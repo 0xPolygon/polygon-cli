@@ -180,11 +180,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	toAddr := ethcommon.HexToAddress(*inputLoadTestParams.ToAddress)
 
-	amt, err := util.HexToBigInt(*inputLoadTestParams.HexSendAmount)
-	if err != nil {
-		log.Error().Err(err).Msg("Couldn't parse send amount")
-		return err
-	}
+	amt := util.EthToWei(*inputLoadTestParams.SendAmountInEth)
 
 	header, err := c.HeaderByNumber(ctx, nil)
 	if err != nil {
