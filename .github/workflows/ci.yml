@@ -46,6 +46,8 @@ jobs:
         run: |
           wget https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.ARCH }}.zip
           unzip protoc-${{ env.PROTOC_VERSION }}-${{ env.ARCH }}.zip
+          rm protoc-${{ env.PROTOC_VERSION }}-${{ env.ARCH }}.zip
+          rm readme.txt
           sudo mv bin/protoc /usr/local/bin/
           sudo mv include/google /usr/local/include
           protoc --version
