@@ -86,7 +86,7 @@ The command also inherits flags from parent commands.
       --chain-id uint                          The chain id for the transactions.
   -c, --concurrency int                        Number of requests to perform concurrently. Default is one request at a time. (default 1)
       --config string                          config file (default is $HOME/.polygon-cli.yaml)
-      --eth-send-amount float                  The amount of wei that we'll send every transaction (default 0.001)
+      --eth-amount float                       The amount of ether to send on every transaction (default 0.001)
       --gas-limit uint                         In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
       --gas-price uint                         In environments where the gas price can't be determined automatically, we can specify it manually
   -i, --iterations uint                        If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size (default 1)

@@ -180,7 +180,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	toAddr := ethcommon.HexToAddress(*inputLoadTestParams.ToAddress)
 
-	amt := util.EthToWei(*inputLoadTestParams.SendAmountInEth)
+	amt := util.EthToWei(*inputLoadTestParams.EthAmountInWei)
 
 	header, err := c.HeaderByNumber(ctx, nil)
 	if err != nil {

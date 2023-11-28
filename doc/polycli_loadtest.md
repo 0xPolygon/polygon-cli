@@ -114,7 +114,7 @@ The codebase has a contract that used for load testing. It's written in Yul and 
   -c, --concurrency int                        Number of requests to perform concurrently. Default is one request at a time. (default 1)
       --erc20-address string                   The address of a pre-deployed ERC20 contract
       --erc721-address string                  The address of a pre-deployed ERC721 contract
-      --eth-send-amount float                  The amount of wei that we'll send every transaction (default 0.001)
+      --eth-amount float                       The amount of ether to send on every transaction (default 0.001)
       --force-contract-deploy                  Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.
   -f, --function --mode f                      A specific function to be called if running with --mode f or a specific precompiled contract when running with `--mode a` (default 1)
       --gas-limit uint                         In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
