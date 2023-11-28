@@ -8,7 +8,7 @@ help: ## Display this help.
 
 .PHONY: build
 build: ## Build the smart contracts
-	FOUNDRY_PROFILE=lite forge build
+	FOUNDRY_PROFILE=lite forge build --force
 
 ##@ Gen go bindings
 
