@@ -328,11 +328,7 @@ func toCommonAddress(prvKey *bip32.Key) common.Address {
 }
 
 func toETHAddress(prvKey *bip32.Key) string {
-	concat := toUncompressedPubKey(prvKey)
-	h := sha3.NewLegacyKeccak256()
-	h.Write(concat)
-	b := h.Sum(nil)
-	addr := common.BytesToAddress(b)
+	addr := toCommonAddress(prvKey)
 	return addr.String()
 }
 func toUncompressedPubKey(prvKey *bip32.Key) []byte {
