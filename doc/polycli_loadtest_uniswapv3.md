@@ -99,7 +99,6 @@ The command also inherits flags from parent commands.
   -n, --requests int                           Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
   -r, --rpc-url string                         The RPC endpoint url (default "http://localhost:8545")
       --seed int                               A seed for generating random values and addresses (default 123456)
-      --send-amount string                     The amount of wei that we'll send every transaction (default "0x38D7EA4C68000")
       --send-only                              Send transactions and load without waiting for it to be mined.
       --steady-state-tx-pool-size uint         When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off. (default 1000)
       --summarize                              Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time
