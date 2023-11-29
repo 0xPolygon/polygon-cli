@@ -26,6 +26,6 @@ if [ ! -d $1 ] ; then
   mkdir $1
 fi
 
-echo "copying schemas to $1..."
+echo "Copying schemas to $1..."
 cp $dest/$schema_dest/* $1
 rm -r $dest

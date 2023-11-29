@@ -68,16 +68,15 @@ func runFunding(ctx context.Context) error {
 			addresses[i] = common.HexToAddress(address)
 		}
 	} else if *params.UseHDDerivation {
-		log.Info().Msg("Deriving addresses from the default mnemonic")
+		log.Info().Msg("Deriving wallets from the default mnemonic")
 		addresses, err = deriveHDWallets(int(*params.WalletsNumber))
 	} else {
-		log.Info().Msg("Generating random addresses")
+		log.Info().Msg("Generating random wallets")
 		addresses, err = generateWallets(int(*params.WalletsNumber))
 	}
 	if err != nil {
 		return err
 	}
-	log.Trace().Interface("addresses", addresses).Msg("Wallet addresses")
 
 	// Fund wallets.
 	if err = fundWallets(ctx, c, tops, contract, addresses); err != nil {
@@ -175,9 +174,10 @@ func deriveHDWallets(n int) ([]common.Address, error) {
 
 	addresses := make([]common.Address, n)
 	for i, wallet := range derivedWallets.Addresses {
-		addresses[i] = wallet.CommonAddress
-		log.Trace().Interface("address", wallet.CommonAddress).Str("privateKey", wallet.HexPrivateKey).Str("path", wallet.Path).Msg("New wallet derived")
+		addresses[i] = wallet.ETHCommonAddress
+		log.Trace().Interface("address", addresses[i]).Str("privateKey", wallet.HexPrivateKey).Str("path", wallet.Path).Msg("New wallet derived")
 	}
+	log.Info().Int("count", n).Msg("Wallet(s) derived")
 	return addresses, nil
 }
 
@@ -195,7 +195,9 @@ func generateWallets(n int) ([]common.Address, error) {
 		}
 		privateKeys[i] = pk
 		addresses[i] = crypto.PubkeyToAddress(pk.PublicKey)
+		log.Trace().Interface("address", addresses[i]).Str("privateKey", hex.EncodeToString(pk.D.Bytes())).Msg("New wallet generated")
 	}
+	log.Info().Int("count", n).Msg("Wallet(s) generated")
 
 	// Save private and public keys to a file.
 	go func() {
