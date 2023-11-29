@@ -332,7 +332,8 @@ func toETHAddress(prvKey *bip32.Key) string {
 	h := sha3.NewLegacyKeccak256()
 	h.Write(concat)
 	b := h.Sum(nil)
-	return fmt.Sprintf("0x%s", hex.EncodeToString(b[len(b)-20:]))
+	addr := common.BytesToAddress(b)
+	return addr.String()
 }
 func toUncompressedPubKey(prvKey *bip32.Key) []byte {
 	// the GetPublicKey method returns a compressed key so we'll manually get the public key from the curve
