@@ -44,7 +44,7 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli fork](polycli_fork.md) - Take a forked block and walk up the chain to do analysis.
 
-- [polycli fund](polycli_fund.md) - Bulk fund many crypto wallets automatically.
+- [polycli fund](polycli_fund.md) - Bulk fund crypto wallets automatically.
 
 - [polycli hash](polycli_hash.md) - Provide common crypto hashing functions.
 

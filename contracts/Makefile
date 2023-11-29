@@ -12,6 +12,13 @@ build: ## Build the smart contracts
 
 ##@ Gen go bindings
 
+.PHONY: gen-funder-go-bindings
+gen-funder-go-bindings: ## Generatego go bindings for the funder contract.
+	cat ./out/Funder.sol/Funder.json | jq -r '.abi'             > ../bindings/funder/Funder.abi
+	cat ./out/Funder.sol/Funder.json | jq -r '.bytecode.object' > ../bindings/funder/Funder.bin
+	abigen --abi ../bindings/funder/Funder.abi --bin ../bindings/funder/Funder.bin --pkg funder --type funder --out ../bindings/funder/funder.go
+	@echo "✅ funder/funder.go generated"
+
 .PHONY: gen-tester-go-bindings
 gen-tester-go-bindings: ## Generate go bindings for the tester contracts.
 	cat ./out/LoadTester.sol/LoadTester.json | jq -r '.abi'             > ../bindings/tester/LoadTester.abi
@@ -37,4 +44,4 @@ gen-tokens-go-bindings: ## Generate go bindings for the tokens contracts.
 	@echo "✅ tokens/ERC721.go generated"
 
 .PHONY: gen-go-bindings
-gen-go-bindings: build gen-tester-go-bindings gen-tokens-go-bindings ## Generate go bindings.
+gen-go-bindings: build gen-funder-go-bindings gen-tester-go-bindings gen-tokens-go-bindings ## Generate go bindings.

@@ -11,8 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/maticnetwork/polygon-cli/bindings/tester"
 	"github.com/maticnetwork/polygon-cli/bindings/uniswapv3"
+	"github.com/maticnetwork/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 )
 
@@ -71,7 +71,7 @@ type (
 
 // Deploy the full UniswapV3 contract suite in 15 different steps.
 // Source: https://github.com/Uniswap/deploy-v3
-func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses, ownerAddress common.Address, blockblockUntilSuccessful tester.BlockUntilSuccessfulFn) (config UniswapV3Config, err error) {
+func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses, ownerAddress common.Address) (config UniswapV3Config, err error) {
 	log.Debug().Msg("Step 0: WETH9 deployment")
 	config.WETH9.Address, config.WETH9.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
@@ -82,7 +82,6 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			_, err = contract.BalanceOf(cops, common.Address{})
 			return
 		},
-		blockblockUntilSuccessful,
 	)
 	if err != nil {
 		return
@@ -98,7 +97,6 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			_, err = contract.Owner(cops)
 			return
 		},
-		blockblockUntilSuccessful,
 	)
 	if err != nil {
 		return
@@ -119,7 +117,6 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			_, err = contract.GetEthBalance(cops, common.Address{})
 			return
 		},
-		blockblockUntilSuccessful,
 	)
 	if err != nil {
 		return
@@ -135,7 +132,6 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			_, err = contract.Owner(cops)
 			return
 		},
-		blockblockUntilSuccessful,
 	)
 	if err != nil {
 		return
@@ -153,7 +149,6 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			// That's why we only return a nil value here.
 			return nil
 		},
-		blockblockUntilSuccessful,
 	)
 	if err != nil {
 		return
@@ -169,7 +164,6 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			// The only method we could call requires a pool to be deployed.
 			return
 		},
-		blockblockUntilSuccessful,
 	)
 	if err != nil {
 		return
@@ -201,7 +195,6 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			_, err = contract.WETH9(cops)
 			return
 		},
-		blockblockUntilSuccessful,
 	)
 	if err != nil {
 		return
@@ -223,7 +216,6 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			// has been transferred, we get "execution reverted" errors when trying to call any method.
 			return
 		},
-		blockblockUntilSuccessful,
 	)
 	if err != nil {
 		return
@@ -241,7 +233,6 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			_, err = contract.BaseURI(cops)
 			return
 		},
-		blockblockUntilSuccessful,
 	)
 	if err != nil {
 		return
@@ -259,7 +250,6 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			_, err = contract.WETH9(cops)
 			return
 		},
-		blockblockUntilSuccessful,
 	)
 	if err != nil {
 		return
@@ -282,7 +272,6 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			_, err = contract.Factory(cops)
 			return
 		},
-		blockblockUntilSuccessful,
 	)
 	if err != nil {
 		return
@@ -300,7 +289,6 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			_, err = contract.Factory(cops)
 			return
 		},
-		blockblockUntilSuccessful,
 	)
 	if err != nil {
 		return
@@ -319,7 +307,6 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 			_, err = contract.Factory(cops)
 			return
 		},
-		blockblockUntilSuccessful,
 	)
 	if err != nil {
 		return
@@ -344,7 +331,6 @@ func deployOrInstantiateContract[T Contract](
 	deploy func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *T, error),
 	instantiate func(common.Address, bind.ContractBackend) (*T, error),
 	call func(*T) error,
-	blockUntilSuccessful tester.BlockUntilSuccessfulFn,
 ) (address common.Address, contract *T, err error) {
 	if knownAddress == (common.Address{}) {
 		// Deploy the contract if known address is empty.
@@ -368,7 +354,7 @@ func deployOrInstantiateContract[T Contract](
 	}
 
 	// Check that the contract can be called.
-	err = blockUntilSuccessful(ctx, c, func() error {
+	err = util.BlockUntilSuccessful(ctx, c, func() error {
 		log.Trace().Msg("Contract is not available yet")
 		return call(contract)
 	})

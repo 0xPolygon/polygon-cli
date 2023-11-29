@@ -3,7 +3,6 @@ package loadtest
 import (
 	"context"
 	_ "embed"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -181,11 +180,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	toAddr := ethcommon.HexToAddress(*inputLoadTestParams.ToAddress)
 
-	amt, err := hexToBigInt(*inputLoadTestParams.HexSendAmount)
-	if err != nil {
-		log.Error().Err(err).Msg("Couldn't parse send amount")
-		return err
-	}
+	amt := util.EthToWei(*inputLoadTestParams.EthAmountInWei)
 
 	header, err := c.HeaderByNumber(ctx, nil)
 	if err != nil {
@@ -265,28 +260,6 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
 	return nil
-}
-
-func hexToBigInt(raw any) (bi *big.Int, err error) {
-	bi = big.NewInt(0)
-	hexString, ok := raw.(string)
-	if !ok {
-		err = fmt.Errorf("could not assert value %v as a string", raw)
-		return
-	}
-	hexString = strings.Replace(hexString, "0x", "", -1)
-	if len(hexString)%2 != 0 {
-		log.Trace().Str("original", hexString).Msg("Hex of odd length")
-		hexString = "0" + hexString
-	}
-
-	rawGas, err := hex.DecodeString(hexString)
-	if err != nil {
-		log.Error().Err(err).Str("hex", hexString).Msg("Unable to decode hex string")
-		return
-	}
-	bi.SetBytes(rawGas)
-	return
 }
 
 func initNonce(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
@@ -680,7 +653,7 @@ func getLoadTestContract(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 		log.Error().Err(err).Msg("Unable to instantiate new contract")
 		return
 	}
-	err = blockUntilSuccessful(ctx, c, func() error {
+	err = util.BlockUntilSuccessful(ctx, c, func() error {
 		_, err = ltContract.GetCallCounter(cops)
 		return err
 	})
@@ -705,7 +678,7 @@ func getERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 		return
 	}
 
-	err = blockUntilSuccessful(ctx, c, func() error {
+	err = util.BlockUntilSuccessful(ctx, c, func() error {
 		var balance *big.Int
 		balance, err = erc20Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
 		if err != nil {
@@ -739,7 +712,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 		return
 	}
 
-	err = blockUntilSuccessful(ctx, c, func() error {
+	err = util.BlockUntilSuccessful(ctx, c, func() error {
 		_, err = erc721Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
 		return err
 	})
@@ -750,15 +723,11 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 		return
 	}
 
-	err = blockUntilSuccessful(ctx, c, func() error {
+	err = util.BlockUntilSuccessful(ctx, c, func() error {
 		_, err = erc721Contract.MintBatch(tops, *inputLoadTestParams.FromETHAddress, new(big.Int).SetUint64(1))
 		return err
 	})
 	return
-}
-
-func blockUntilSuccessful(ctx context.Context, c *ethclient.Client, retryable func() error) error {
-	return tester.BlockUntilSuccessful(ctx, c, retryable)
 }
 
 func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {

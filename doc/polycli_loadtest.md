@@ -114,6 +114,7 @@ The codebase has a contract that used for load testing. It's written in Yul and 
   -c, --concurrency int                        Number of requests to perform concurrently. Default is one request at a time. (default 1)
       --erc20-address string                   The address of a pre-deployed ERC20 contract
       --erc721-address string                  The address of a pre-deployed ERC721 contract
+      --eth-amount float                       The amount of ether to send on every transaction (default 0.001)
       --force-contract-deploy                  Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.
   -f, --function --mode f                      A specific function to be called if running with --mode f or a specific precompiled contract when running with `--mode a` (default 1)
       --gas-limit uint                         In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
@@ -144,7 +145,6 @@ The codebase has a contract that used for load testing. It's written in Yul and 
   -n, --requests int                           Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
   -r, --rpc-url string                         The RPC endpoint url (default "http://localhost:8545")
       --seed int                               A seed for generating random values and addresses (default 123456)
-      --send-amount string                     The amount of wei that we'll send every transaction (default "0x38D7EA4C68000")
       --send-only                              Send transactions and load without waiting for it to be mined.
       --steady-state-tx-pool-size uint         When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off. (default 1000)
       --summarize                              Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time

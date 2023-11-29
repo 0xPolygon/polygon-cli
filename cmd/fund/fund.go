@@ -1,312 +1,262 @@
 package fund
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"io"
+	"errors"
 	"math/big"
-	"net/http"
 	"os"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
-	_ "embed"
-
-	"github.com/chenzhijie/go-web3"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/maticnetwork/polygon-cli/bindings/funder"
+	"github.com/maticnetwork/polygon-cli/hdwallet"
+	"github.com/maticnetwork/polygon-cli/util"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/cobra"
 )
 
-var (
-	//go:embed usage.md
-	usage                  string
-	walletCount            int
-	fundingWalletPK        string
-	fundingWalletPublicKey *ecdsa.PublicKey
-	chainRPC               string
-	concurrencyLevel       int
-	walletFundingAmt       float64
-	walletFundingGas       uint64
-	nonceMutex             sync.Mutex
-	globalNonce            uint64
-	nonceInitialized       bool
-	outputFileFlag         string
-)
+// The initial balance of Ether to send to the Funder contract.
+const funderContractBalanceInEth = 1_000.0
 
-// Wallet struct to hold public key, private key, and address
-type Wallet struct {
-	PublicKey  *ecdsa.PublicKey
-	PrivateKey *ecdsa.PrivateKey
-	Address    common.Address
-}
+// runFunding deploys or instantiates a `Funder` contract to bulk fund randomly generated wallets.
+// Wallets' addresses and private keys are saved to a file.
+func runFunding(ctx context.Context) error {
+	log.Info().Msg("Starting bulk funding wallets")
+	log.Trace().Interface("params", params).Msg("Input parameters")
+	startTime := time.Now()
 
-func getChainIDFromNode(chainRPC string) (int64, error) {
-	// Create an HTTP client
-	client := &http.Client{}
-
-	// Prepare the JSON-RPC request payload
-	payload := `{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}`
-
-	// Create the HTTP request
-	req, ReqErr := http.NewRequest("POST", chainRPC, strings.NewReader(payload))
-	if ReqErr != nil {
-		return 0, ReqErr
+	// Set up the environment.
+	c, err := dialRpc(ctx)
+	if err != nil {
+		return err
 	}
 
-	// Set the required headers
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send the request
-	resp, doErr := client.Do(req)
-	if doErr != nil {
-		return 0, doErr
-	}
-	defer resp.Body.Close()
-
-	body, readErr := io.ReadAll(resp.Body) // Replace ioutil.ReadAll with io.ReadAll
-	if readErr != nil {
-		return 0, readErr
+	var privateKey *ecdsa.PrivateKey
+	var chainID *big.Int
+	privateKey, chainID, err = initializeParams(ctx, c)
+	if err != nil {
+		return err
 	}
 
-	// Parse the JSON response
-	var result map[string]interface{}
-	if jsonErr := json.Unmarshal(body, &result); jsonErr != nil {
-		return 0, jsonErr
+	var tops *bind.TransactOpts
+	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return err
 	}
 
-	// Extract the chain ID from the response
-	chainIDHex, ok := result["result"].(string)
-	if !ok {
-		return 0, fmt.Errorf("unable to extract chain ID from response")
+	// Deploy or instantiate the Funder contract.
+	var contract *funder.Funder
+	contract, err = deployOrInstantiateFunderContract(ctx, c, tops, privateKey)
+	if err != nil {
+		return err
 	}
 
-	// Convert the chain ID from hex to int64
-	int64ChainID, parseErr := strconv.ParseInt(chainIDHex, 0, 64)
-	if parseErr != nil {
-		return 0, parseErr
-	}
-
-	return int64ChainID, nil
-}
-
-func generateNonce(web3Client *web3.Web3) (uint64, error) {
-	nonceMutex.Lock()
-	defer nonceMutex.Unlock()
-
-	if nonceInitialized {
-		globalNonce++
+	// Derive or generate a set of wallets.
+	var addresses []common.Address
+	if params.WalletAddresses != nil && *params.WalletAddresses != nil {
+		log.Info().Msg("Using addresses provided by the user")
+		addresses = make([]common.Address, len(*params.WalletAddresses))
+		for i, address := range *params.WalletAddresses {
+			addresses[i] = common.HexToAddress(address)
+		}
+	} else if *params.UseHDDerivation {
+		log.Info().Msg("Deriving wallets from the default mnemonic")
+		addresses, err = deriveHDWallets(int(*params.WalletsNumber))
 	} else {
-		// Derive the public key from the funding wallet's private key
-		fundingWalletECDSA, ecdsaErr := crypto.HexToECDSA(fundingWalletPK)
-		if ecdsaErr != nil {
-			log.Error().Err(ecdsaErr).Msg("Error getting ECDSA from funding wallet private key")
-			return 0, ecdsaErr
-		}
-
-		fundingWalletPublicKey = &fundingWalletECDSA.PublicKey
-		// Convert ecdsa.PublicKey to common.Address
-		fundingAddress := crypto.PubkeyToAddress(*fundingWalletPublicKey)
-
-		nonce, err := web3Client.Eth.GetNonce(fundingAddress, nil)
-		if err != nil {
-			log.Error().Err(err).Msg("Error getting nonce")
-			return 0, err
-		}
-		globalNonce = nonce
-		nonceInitialized = true
+		log.Info().Msg("Generating random wallets")
+		addresses, err = generateWallets(int(*params.WalletsNumber))
+	}
+	if err != nil {
+		return err
 	}
 
-	return globalNonce, nil
+	// Fund wallets.
+	if err = fundWallets(ctx, c, tops, contract, addresses); err != nil {
+		return err
+	}
+	log.Info().Msg("Wallet(s) funded! 💸")
+
+	log.Info().Msgf("Total execution time: %s", time.Since(startTime))
+	return nil
 }
 
-func generateWallets(numWallets int) ([]Wallet, error) {
-	wallets := make([]Wallet, numWallets)
+// dialRpc dials the Ethereum RPC server and return an Ethereum client.
+func dialRpc(ctx context.Context) (*ethclient.Client, error) {
+	rpc, err := rpc.DialContext(ctx, *params.RpcUrl)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to dial")
+		return nil, err
+	}
+	defer rpc.Close()
 
-	for i := 0; i < numWallets; i++ {
-		account, err := crypto.GenerateKey()
+	rpc.SetHeader("Accept-Encoding", "identity")
+	return ethclient.NewClient(rpc), nil
+}
+
+// Initialize  parameters.
+func initializeParams(ctx context.Context, c *ethclient.Client) (*ecdsa.PrivateKey, *big.Int, error) {
+	// Parse the private key.
+	privateKey, err := crypto.HexToECDSA(strings.TrimPrefix(*params.PrivateKey, "0x"))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to process the private key")
+		return nil, nil, err
+	}
+
+	// Get the chaind id.
+	var chainID *big.Int
+	chainID, err = c.ChainID(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to fetch chain ID")
+		return nil, nil, err
+	}
+	log.Trace().Uint64("chainID", chainID.Uint64()).Msg("Detected chain ID")
+	return privateKey, chainID, nil
+}
+
+// deployOrInstantiateFunderContract deploys or instantiates a Funder contract.
+// If the pre-deployed address is specified, the contract will not be deployed.
+func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, privateKey *ecdsa.PrivateKey) (*funder.Funder, error) {
+	// Deploy the contract if no pre-deployed address flag is provided.
+	var contractAddress common.Address
+	var err error
+	if *params.FunderAddress == "" {
+		// Deploy the Funder contract.
+		// Note: `fundingAmountInWei` reprensents the amount the Funder contract will send to each newly generated wallets.
+		fundingAmountInWei := util.EthToWei(*params.FundingAmountInEth)
+		contractAddress, _, _, err = funder.DeployFunder(tops, c, fundingAmountInWei)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to deploy Funder contract")
+			return nil, err
+		}
+		log.Debug().Interface("address", contractAddress).Msg("Funder contract deployed")
+
+		// Fund the Funder contract.
+		// Note: `funderContractBalanceInWei` reprensents the initial balance of the Funder contract.
+		// The contract needs initial funds to be able to fund wallets.
+		funderContractBalanceInWei := util.EthToWei(funderContractBalanceInEth)
+		if err = util.SendTx(ctx, c, privateKey, &contractAddress, funderContractBalanceInWei, nil, uint64(30000)); err != nil {
+			return nil, err
+		}
+	} else {
+		// Use the pre-deployed address.
+		contractAddress = common.HexToAddress(*params.FunderAddress)
+	}
+
+	// Instantiate the contract.
+	contract, err := funder.NewFunder(contractAddress, c)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to instantiate Funder contract")
+		return nil, err
+	}
+	return contract, nil
+}
+
+// deriveWallets generates and exports a specified number of HD wallet addresses.
+func deriveHDWallets(n int) ([]common.Address, error) {
+	wallet, err := hdwallet.NewPolyWallet(defaultMnemonic, defaultPassword)
+	if err != nil {
+		return nil, err
+	}
+
+	var derivedWallets *hdwallet.PolyWalletExport
+	derivedWallets, err = wallet.ExportHDAddresses(n)
+	if err != nil {
+		return nil, err
+	}
+
+	addresses := make([]common.Address, n)
+	for i, wallet := range derivedWallets.Addresses {
+		addresses[i] = wallet.ETHCommonAddress
+		log.Trace().Interface("address", addresses[i]).Str("privateKey", wallet.HexPrivateKey).Str("path", wallet.Path).Msg("New wallet derived")
+	}
+	log.Info().Int("count", n).Msg("Wallet(s) derived")
+	return addresses, nil
+}
+
+// generateWallets generates a specified number of Ethereum wallets with random private keys.
+// It returns a slice of common.Address representing the Ethereum addresses of the generated wallets.
+func generateWallets(n int) ([]common.Address, error) {
+	// Generate private keys.
+	privateKeys := make([]*ecdsa.PrivateKey, n)
+	addresses := make([]common.Address, n)
+	for i := 0; i < n; i++ {
+		pk, err := crypto.GenerateKey()
 		if err != nil {
 			log.Error().Err(err).Msg("Error generating key")
 			return nil, err
 		}
-
-		addr := crypto.PubkeyToAddress(account.PublicKey)
-		wallet := Wallet{
-			PublicKey:  &account.PublicKey,
-			PrivateKey: account,
-			Address:    addr,
-		}
-
-		wallets[i] = wallet
+		privateKeys[i] = pk
+		addresses[i] = crypto.PubkeyToAddress(pk.PublicKey)
+		log.Trace().Interface("address", addresses[i]).Str("privateKey", hex.EncodeToString(pk.D.Bytes())).Msg("New wallet generated")
 	}
-	return wallets, nil
+	log.Info().Int("count", n).Msg("Wallet(s) generated")
+
+	// Save private and public keys to a file.
+	go func() {
+		if err := saveToFile(*params.OutputFile, privateKeys); err != nil {
+			log.Error().Err(err).Msg("Unable to save keys to file")
+			panic(err)
+		}
+		log.Info().Str("fileName", *params.OutputFile).Msg("Wallets' address(es) and private key(s) saved to file")
+	}()
+
+	return addresses, nil
 }
 
-func fundWallets(web3Client *web3.Web3, wallets []Wallet, amountWei *big.Int, walletFundingGas uint64, concurrency int) error {
-	// Create a channel to control concurrency
-	walletChan := make(chan Wallet, len(wallets))
-	for _, wallet := range wallets {
-		walletChan <- wallet
-	}
-	close(walletChan)
-
-	// Wait group to ensure all goroutines finish before returning
-	var wg sync.WaitGroup
-	wg.Add(concurrency)
-
-	// Function to fund wallets
-	fundWallet := func() {
-		defer wg.Done()
-		for wallet := range walletChan {
-			nonce, err := generateNonce(web3Client)
-			if err != nil {
-				log.Error().Err(err).Msg("Error getting nonce")
-				return
-			}
-
-			// Fund the wallet using the obtained nonce
-			_, err = web3Client.Eth.SyncSendRawTransaction(
-				wallet.Address,
-				amountWei,
-				nonce,
-				walletFundingGas,
-				web3Client.Utils.ToGWei(1),
-				nil,
-			)
-			if err != nil {
-				log.Error().Err(err).Str("wallet", wallet.Address.Hex()).Msg("Error funding wallet")
-				return
-			}
-
-			log.Info().Str("wallet", wallet.Address.Hex()).Msgf("Funded with %s wei", amountWei.String())
-		}
-	}
-
-	// Start funding the wallets concurrently
-	for i := 0; i < concurrency; i++ {
-		go fundWallet()
-	}
-
-	// Wait for all goroutines to finish
-	wg.Wait()
-	return nil
-}
-
-// fundCmd represents the fund command
-var FundCmd = &cobra.Command{
-	Use:   "fund",
-	Short: "Bulk fund many crypto wallets automatically.",
-	Long:  usage,
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runFunding(cmd); err != nil {
-			log.Error().Err(err).Msg("Error funding wallets")
-		}
-	},
-}
-
-func runFunding(cmd *cobra.Command) error {
-	// Capture the start time
-	startTime := time.Now()
-
-	// Remove '0x' prefix from fundingWalletPK if present
-	fundingWalletPK = strings.TrimPrefix(fundingWalletPK, "0x")
-
-	// setup new web3 session with remote rpc node
-	web3Client, clientErr := web3.NewWeb3(chainRPC)
-	if clientErr != nil {
-		cmd.PrintErrf("There was an error creating web3 client: %s", clientErr.Error())
-		return clientErr
-	}
-
-	// add pk to session for sending signed transactions
-	if setAcctErr := web3Client.Eth.SetAccount(fundingWalletPK); setAcctErr != nil {
-		cmd.PrintErrf("There was an error setting account with pk: %s", setAcctErr.Error())
-		return setAcctErr
-	}
-
-	// Query the chain ID from the rpc node
-	chainID, chainIDErr := getChainIDFromNode(chainRPC)
-	if chainIDErr != nil {
-		log.Error().Err(chainIDErr).Msg("Error getting chain ID")
-		return chainIDErr
-	}
-
-	// Set proper chainId for corresponding chainRPC
-	web3Client.Eth.SetChainId(chainID)
-
-	// generate set of new wallet objects
-	wallets, genWalletErr := generateWallets(walletCount)
-	if genWalletErr != nil {
-		cmd.PrintErrf("There was an error generating wallet objects: %s", genWalletErr.Error())
-		return genWalletErr
-	}
-
-	// fund all crypto wallets
-	log.Info().Msg("Starting to fund loadtest wallets...")
-	fundWalletErr := fundWallets(web3Client, wallets, big.NewInt(int64(walletFundingAmt*1e18)), uint64(walletFundingGas), concurrencyLevel)
-	if fundWalletErr != nil {
-		log.Error().Err(fundWalletErr).Msg("Error funding wallets")
-		return fundWalletErr
-	}
-
-	// Save wallet details to a file
-	outputFile := outputFileFlag // You can modify the file format or name as needed
-
-	type WalletDetails struct {
+// saveToFile serializes wallet data into the specified JSON format and writes it to the designated file.
+func saveToFile(fileName string, privateKeys []*ecdsa.PrivateKey) error {
+	type wallet struct {
 		Address    string `json:"Address"`
 		PrivateKey string `json:"PrivateKey"`
 	}
 
-	walletDetails := make([]WalletDetails, len(wallets))
-	for i, w := range wallets {
-		privateKey := hex.EncodeToString(w.PrivateKey.D.Bytes()) // Convert private key to hex
-		walletDetails[i] = WalletDetails{
-			Address:    w.Address.Hex(),
-			PrivateKey: privateKey,
+	// Populate the struct with addresses and private keys.
+	data := make([]wallet, len(privateKeys))
+	for i, privateKey := range privateKeys {
+		address := crypto.PubkeyToAddress(privateKey.PublicKey)
+		data[i] = wallet{
+			Address:    address.String(),
+			PrivateKey: hex.EncodeToString(privateKey.D.Bytes()),
 		}
 	}
 
-	// Convert walletDetails to JSON
-	walletsJSON, jsonErr := json.MarshalIndent(walletDetails, "", "  ")
-	if jsonErr != nil {
-		log.Error().Err(jsonErr).Msg("Error converting wallet details to JSON")
-		return jsonErr
+	// Save data to file.
+	jsonData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
 	}
-
-	// Write JSON data to a file
-	file, createErr := os.Create(outputFile)
-	if createErr != nil {
-		log.Error().Err(createErr).Msg("Error creating file")
-		return createErr
+	if err = os.WriteFile(fileName, jsonData, 0644); err != nil {
+		return err
 	}
-	defer file.Close()
-
-	_, writeErr := file.Write(walletsJSON)
-	if writeErr != nil {
-		log.Error().Err(writeErr).Msg("Error writing wallet details to file")
-		return writeErr
-	}
-
-	log.Info().Msgf("Wallet details have been saved to %s", outputFile)
-
-	// Calculate the duration
-	duration := time.Since(startTime)
-	log.Info().Msgf("Total execution time: %s", duration)
-
 	return nil
 }
 
-func init() {
-	FundCmd.Flags().IntVar(&walletCount, "wallet-count", 2, "Number of wallets to fund")
-	FundCmd.Flags().StringVar(&fundingWalletPK, "funding-wallet-pk", "", "Corresponding private key for funding wallet address, ensure you remove leading 0x")
-	FundCmd.Flags().StringVar(&chainRPC, "rpc-url", "http://localhost:8545", "The RPC endpoint url")
-	FundCmd.Flags().IntVar(&concurrencyLevel, "concurrency", 2, "Concurrency level for speeding up funding wallets")
-	FundCmd.Flags().Float64Var(&walletFundingAmt, "wallet-funding-amt", 0.05, "Amount to fund each wallet with")
-	FundCmd.Flags().Uint64Var(&walletFundingGas, "wallet-funding-gas", 100000, "Gas for each wallet funding transaction")
-	FundCmd.Flags().StringVar(&outputFileFlag, "output-file", "funded_wallets.json", "Specify the output JSON file name")
+// fundWallets funds multiple wallets using the provided Funder contract.
+func fundWallets(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, contract *funder.Funder, wallets []common.Address) error {
+	// Fund wallets.
+	switch len(wallets) {
+	case 0:
+		return errors.New("no wallet to fund")
+	case 1:
+		// Fund a single account.
+		if _, err := contract.Fund(tops, wallets[0]); err != nil {
+			log.Error().Err(err).Msg("Unable to fund wallet")
+			return err
+		}
+	default:
+		// Fund multiple wallets in bulk.
+		if _, err := contract.BulkFund(tops, wallets); err != nil {
+			log.Error().Err(err).Msg("Unable to bulk fund wallets")
+			return err
+		}
+	}
+	return nil
 }

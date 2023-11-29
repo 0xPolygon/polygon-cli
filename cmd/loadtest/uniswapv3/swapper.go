@@ -10,8 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/maticnetwork/polygon-cli/bindings/tester"
 	"github.com/maticnetwork/polygon-cli/bindings/uniswapv3"
+	"github.com/maticnetwork/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 )
 
@@ -25,7 +25,7 @@ var (
 )
 
 // Deploy an ERC20 token.
-func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, tokenName, tokenSymbol string, amount *big.Int, recipient common.Address, tokenKnownAddress common.Address, blockUntilSuccessful tester.BlockUntilSuccessfulFn) (tokenConfig ContractConfig[uniswapv3.Swapper], err error) {
+func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, tokenName, tokenSymbol string, amount *big.Int, recipient common.Address, tokenKnownAddress common.Address) (tokenConfig ContractConfig[uniswapv3.Swapper], err error) {
 	tokenConfig.Address, tokenConfig.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		tokenKnownAddress,
@@ -48,9 +48,8 @@ func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOp
 				"NFTPositionManager": uniswapV3Config.NonfungiblePositionManager.Address,
 				"SwapRouter02":       uniswapV3Config.SwapRouter02.Address,
 			}
-			return setUniswapV3Allowances(ctx, c, contract, tops, cops, tokenName, uniswapV3Addresses, recipient, blockUntilSuccessful)
+			return setUniswapV3Allowances(ctx, c, contract, tops, cops, tokenName, uniswapV3Addresses, recipient)
 		},
-		blockUntilSuccessful,
 	)
 	if err != nil {
 		return
@@ -59,7 +58,7 @@ func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOp
 }
 
 // Approve some UniswapV3 addresses to spend tokens on behalf of the token owner.
-func setUniswapV3Allowances(ctx context.Context, c *ethclient.Client, contract *uniswapv3.Swapper, tops *bind.TransactOpts, cops *bind.CallOpts, tokenName string, addresses map[string]common.Address, owner common.Address, blockUntilSuccessful tester.BlockUntilSuccessfulFn) error {
+func setUniswapV3Allowances(ctx context.Context, c *ethclient.Client, contract *uniswapv3.Swapper, tops *bind.TransactOpts, cops *bind.CallOpts, tokenName string, addresses map[string]common.Address, owner common.Address) error {
 	// Get the ERC20 contract name.
 	erc20Name, err := contract.Name(cops)
 	if err != nil {
@@ -79,7 +78,7 @@ func setUniswapV3Allowances(ctx context.Context, c *ethclient.Client, contract *
 		}
 
 		// Check that the allowance is set.
-		err = blockUntilSuccessful(ctx, c, func() (err error) {
+		err = util.BlockUntilSuccessful(ctx, c, func() (err error) {
 			allowance, err := contract.Allowance(cops, owner, spenderAddress)
 			if err != nil {
 				return err
