@@ -25,10 +25,6 @@ help: ## Display this help.
 $(BUILD_DIR): ## Create the build folder.
 	mkdir -p $(BUILD_DIR)
 
-.PHONY: generate
-generate: ## Generate protobuf stubs.
-	protoc --proto_path=proto --go_out=proto/gen/pb --go_opt=paths=source_relative $(wildcard proto/*.proto)
-
 .PHONY: build
 build: $(BUILD_DIR) ## Build go binary.
 	go build -ldflags "$(VERSION_FLAGS)" -o $(BUILD_DIR)/$(BIN_NAME) main.go
@@ -78,36 +74,25 @@ test: ## Run tests.
 
 ##@ Generation
 
+.PHONY: gen
+gen: gen-doc gen-proto gen-go-bindings  gen-loadtest-modes gen-json-rpctypes ## Generate everything.
+
 .PHONY: gen-doc
 gen-doc: ## Generate documentation for `polycli`.
 	go run docutil/*.go
 
-.PHONY: gen-loadtest-modes
-gen-loadtest-modes: ## Generate loadtest modes strings.
-	cd cmd/loadtest && stringer -type=loadTestMode
+.PHONY: gen-proto
+gen-proto: ## Generate protobuf stubs.
+	protoc --proto_path=proto --go_out=proto/gen/pb --go_opt=paths=source_relative $(wildcard proto/*.proto)
 
 .PHONY: gen-go-bindings
 gen-go-bindings: ## Generate go bindings for smart contracts.
 	cd contracts && make gen-go-bindings
 
+.PHONY: gen-loadtest-modes
+gen-loadtest-modes: ## Generate loadtest modes strings.
+	cd cmd/loadtest && stringer -type=loadTestMode
+
 .PHONY: gen-json-rpctypes
-gen-json-rpctypes: ## Generate go bindings for smart contracts.
+gen-json-rpctypes: ## Generate JSON rpc types.
 	./scripts/rpctypes.sh rpctypes/jsonschemas/
-
-# Generate go binding.
-# - $1: input_dir
-# - $2: name
-# - $3: pkg
-# - $4: output_dir
-define gen_go_binding
-	solc $1/$2.sol --abi --bin --output-dir $1 --overwrite --evm-version paris
-	abigen --abi $1/$2.abi --bin $1/$2.bin --pkg $3 --type $2 --out $4/$2.go
-endef
-
-# Example for the ERC20 contract.
-# solc contracts/tokens/ERC20/ERC20.sol --abi --bin --output-dir contracts/tokens/ERC20 --overwrite
-# abigen --abi contracts/tokens/ERC20/ERC20.abi --bin contracts/tokens/ERC20/ERC20.bin --pkg tokens --type ERC20 --out contracts/tokens/ERC20.go
-
-# Example for the LoadTester contract.
-# solc contracts/loadtester/LoadTester.sol --abi --bin --output-dir contracts/loadtester --overwrite
-# abigen --abi contracts/loadtester/LoadTester.abi --bin contracts/loadtester/LoadTester.bin --pkg contracts --type LoadTester --out contracts/LoadTester.go
