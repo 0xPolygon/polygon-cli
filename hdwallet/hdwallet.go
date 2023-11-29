@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btcutil/base58"
+	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/oasisprotocol/curve25519-voi/primitives/sr25519"
 	"github.com/tyler-smith/go-bip32"
@@ -321,7 +322,8 @@ func toETHAddress(prvKey *bip32.Key) string {
 	h := sha3.NewLegacyKeccak256()
 	h.Write(concat)
 	b := h.Sum(nil)
-	return fmt.Sprintf("0x%s", hex.EncodeToString(b[len(b)-20:]))
+	addr := ethcommon.BytesToAddress(b)
+	return addr.String()
 }
 func toUncompressedPubKey(prvKey *bip32.Key) []byte {
 	// the GetPublicKey method returns a compressed key so we'll manually get the public key from the curve
