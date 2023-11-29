@@ -70,6 +70,7 @@ type (
 		ShouldProduceSummary       *bool
 		SummaryOutputMode          *string
 		LegacyTransactionMode      *bool
+		SendOnly                   *bool
 		RecallLength               *uint64
 
 		// Computed
@@ -220,6 +221,7 @@ func initFlags() {
 	ltp.BatchSize = LoadtestCmd.PersistentFlags().Uint64("batch-size", 999, "Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time.")
 	ltp.SummaryOutputMode = LoadtestCmd.PersistentFlags().String("output-mode", "text", "Format mode for summary output (json | text)")
 	ltp.LegacyTransactionMode = LoadtestCmd.PersistentFlags().Bool("legacy", false, "Send a legacy transaction instead of an EIP1559 transaction.")
+	ltp.SendOnly = LoadtestCmd.PersistentFlags().Bool("send-only", false, "Send transactions and load without waiting for it to be mined.")
 
 	// Local flags.
 	ltp.Modes = LoadtestCmd.Flags().StringSliceP("mode", "m", []string{"t"}, `The testing mode to use. It can be multiple like: "t,c,d,f"
