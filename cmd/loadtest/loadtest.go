@@ -311,7 +311,7 @@ func initNonce(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) err
 func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
 	log.Debug().Uint64("startNonce", startNonce).Uint64("lastNonce", currentNonce).Msg("Finished main load test loop")
 	if *inputLoadTestParams.SendOnly {
-		log.Info().Msgf("Send only mode enabled: finished sending %d transactions.", currentNonce-startNonce)
+		log.Info().Uint64("transactionsSent", currentNonce-startNonce).Msg("SendOnly mode enabled - skipping wait period and summarization")
 		return nil
 	}
 	log.Debug().Msg("Waiting for remaining transactions to be completed and mined")
