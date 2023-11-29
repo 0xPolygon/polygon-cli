@@ -145,6 +145,7 @@ The codebase has a contract that used for load testing. It's written in Yul and 
   -r, --rpc-url string                         The RPC endpoint url (default "http://localhost:8545")
       --seed int                               A seed for generating random values and addresses (default 123456)
       --send-amount string                     The amount of wei that we'll send every transaction (default "0x38D7EA4C68000")
+      --send-only                              Send transactions and load without waiting for it to be mined.
       --steady-state-tx-pool-size uint         When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off. (default 1000)
       --summarize                              Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time
   -t, --time-limit int                         Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit. (default -1)

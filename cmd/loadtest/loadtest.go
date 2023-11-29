@@ -151,6 +151,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		inputLoadTestParams.CurrentGasTipCap = gasTipCap
 	}
 
+	*inputLoadTestParams.PrivateKey = strings.TrimPrefix(*inputLoadTestParams.PrivateKey, "0x")
 	privateKey, err := ethcrypto.HexToECDSA(*inputLoadTestParams.PrivateKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Couldn't process the hex private key")
@@ -164,7 +165,6 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return err
 	}
 	log.Trace().Uint64("blocknumber", blockNumber).Msg("Current Block Number")
-
 	ethAddress := ethcrypto.PubkeyToAddress(privateKey.PublicKey)
 
 	nonce, err := c.NonceAt(ctx, ethAddress, bigBlockNumber)
@@ -310,6 +310,10 @@ func initNonce(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) err
 
 func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
 	log.Debug().Uint64("startNonce", startNonce).Uint64("lastNonce", currentNonce).Msg("Finished main load test loop")
+	if *inputLoadTestParams.SendOnly {
+		log.Info().Uint64("transactionsSent", currentNonce-startNonce).Msg("SendOnly mode enabled - skipping wait period and summarization")
+		return nil
+	}
 	log.Debug().Msg("Waiting for remaining transactions to be completed and mined")
 
 	var err error
