@@ -72,6 +72,9 @@ type (
 		LegacyTransactionMode      *bool
 		SendOnly                   *bool
 		RecallLength               *uint64
+		ContractAddress            *string
+		ContractCallData           *string
+		ContractCallPayable        *bool
 
 		// Computed
 		CurrentGasPrice     *big.Int
@@ -80,6 +83,7 @@ type (
 		ECDSAPrivateKey     *ecdsa.PrivateKey
 		FromETHAddress      *ethcommon.Address
 		ToETHAddress        *ethcommon.Address
+		ContractETHAddress  *ethcommon.Address
 		SendAmount          *big.Int
 		CurrentBaseFee      *big.Int
 		ChainSupportBaseFee bool
@@ -237,7 +241,8 @@ r - random modes
 7 - ERC721 mints
 v3 - UniswapV3 swaps
 R - total recall
-rpc - call random rpc methods`)
+rpc - call random rpc methods
+cc, contract-call - call a contract method`)
 	ltp.Function = LoadtestCmd.Flags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` or a specific precompiled contract when running with `--mode a`")
 	ltp.ByteCount = LoadtestCmd.Flags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.LtAddress = LoadtestCmd.Flags().String("lt-address", "", "The address of a pre-deployed load test contract")
@@ -245,6 +250,9 @@ rpc - call random rpc methods`)
 	ltp.ERC721Address = LoadtestCmd.Flags().String("erc721-address", "", "The address of a pre-deployed ERC721 contract")
 	ltp.ForceContractDeploy = LoadtestCmd.Flags().Bool("force-contract-deploy", false, "Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.")
 	ltp.RecallLength = LoadtestCmd.Flags().Uint64("recall-blocks", 50, "The number of blocks that we'll attempt to fetch for recall")
+	ltp.ContractAddress = LoadtestCmd.Flags().String("contract-address", "", "The address of the contract that will be used in `--mode contract-call`. This must be paired up with `--mode contract-call` and `--calldata`")
+	ltp.ContractCallData = LoadtestCmd.Flags().String("calldata", "", "The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with `--mode contract-call` and `--contract-address`")
+	ltp.ContractCallPayable = LoadtestCmd.Flags().Bool("contract-call-payable", false, "Use this flag if the `--function-sig` is a `payable` function, the value amount passed will be from `--eth-amount`. This must be paired up with `--mode contract-call` and `--contract-address`")
 
 	inputLoadTestParams = *ltp
 
