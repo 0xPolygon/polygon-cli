@@ -1270,6 +1270,10 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
 
 	calldata, err := hex.DecodeString(strings.TrimPrefix(*ltp.ContractCallData, "0x"))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to decode calldata string")
+		return
+	}
 	estimateInput := ethereum.CallMsg{
 		To:    to,
 		Value: amount,
