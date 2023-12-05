@@ -243,7 +243,6 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 
 	if len(modes) > 1 {
-		log.Debug().Msgf("FOUND MORE THAN 1 MODE %+v", modes)
 		inputLoadTestParams.MultiMode = true
 	} else {
 		inputLoadTestParams.MultiMode = false
@@ -306,8 +305,11 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 		log.Error().Err(err).Msg("There was an issue waiting for all transactions to be mined")
 	}
 	if len(loadTestResults) == 0 {
-		log.Info().Msg("CallOnly mode enabled - blocks aren't mined")
 		return errors.New("no transactions observed")
+	}
+	if *inputLoadTestParams.CallOnly {
+		log.Info().Msg("CallOnly mode enabled - blocks aren't mined")
+		return nil
 	}
 
 	startTime := loadTestResults[0].RequestTime
