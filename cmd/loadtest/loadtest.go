@@ -1277,6 +1277,7 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 		return
 	}
 	estimateInput := ethereum.CallMsg{
+		From:  *ltp.FromETHAddress,
 		To:    to,
 		Value: amount,
 		Data:  calldata,
