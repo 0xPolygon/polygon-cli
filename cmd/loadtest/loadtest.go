@@ -3,6 +3,7 @@ package loadtest
 import (
 	"context"
 	_ "embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -56,6 +57,7 @@ const (
 	loadTestModeRandom
 	loadTestModeRecall
 	loadTestModeRPC
+	loadTestModeContractCall
 	loadTestModeUniswapV3
 
 	codeQualitySeed       = "code code code code code code code code code code code quality"
@@ -92,6 +94,8 @@ func characterToLoadTestMode(mode string) (loadTestMode, error) {
 		return loadTestModeUniswapV3, nil
 	case "rpc":
 		return loadTestModeRPC, nil
+	case "cc", "contract-call":
+		return loadTestModeContractCall, nil
 	default:
 		return 0, fmt.Errorf("unrecognized load test mode: %s", mode)
 	}
@@ -210,6 +214,9 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return errors.New("the adaptive rate limit is based on the pending transaction pool. It doesn't use this feature while also using call only")
 	}
 
+	contractAddr := ethcommon.HexToAddress(*inputLoadTestParams.ContractAddress)
+	inputLoadTestParams.ContractETHAddress = &contractAddr
+
 	inputLoadTestParams.ToETHAddress = &toAddr
 	inputLoadTestParams.SendAmount = amt
 	inputLoadTestParams.CurrentGasPrice = gas
@@ -250,6 +257,9 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	} else if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) {
 		log.Trace().Msg("Setting call only mode since we're doing RPC testing")
 		*inputLoadTestParams.CallOnly = true
+	}
+	if hasMode(loadTestModeContractCall, inputLoadTestParams.ParsedModes) && (*inputLoadTestParams.ContractAddress == "" || *inputLoadTestParams.ContractCallData == "") {
+		return errors.New("`--contract-call` and `--contract-send` requires both `--contract-address` and `--calldata` args.")
 	}
 	// TODO check for duplicate modes?
 
@@ -296,6 +306,10 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 	}
 	if len(loadTestResults) == 0 {
 		return errors.New("no transactions observed")
+	}
+	if *inputLoadTestParams.CallOnly {
+		log.Info().Msg("CallOnly mode enabled - blocks aren't mined")
+		return nil
 	}
 
 	startTime := loadTestResults[0].RequestTime
@@ -600,6 +614,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					startReq, endReq, tErr = runUniswapV3Loadtest(ctx, c, myNonceValue, uniswapV3Config, poolConfig, swapAmountIn)
 				case loadTestModeRPC:
 					startReq, endReq, tErr = loadTestRPC(ctx, c, myNonceValue, indexedActivity)
+				case loadTestModeContractCall:
+					startReq, endReq, tErr = loadTestContractCall(ctx, c, myNonceValue)
 				default:
 					log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -1233,6 +1249,85 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *Ind
 	return
 }
 
+func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+
+	to := ltp.ContractETHAddress
+
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+
+	amount := big.NewInt(0)
+	if *ltp.ContractCallPayable {
+		amount = ltp.SendAmount
+	}
+
+	tops = configureTransactOpts(tops)
+	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
+
+	calldata, err := hex.DecodeString(strings.TrimPrefix(*ltp.ContractCallData, "0x"))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to decode calldata string")
+		return
+	}
+	estimateInput := ethereum.CallMsg{
+		From:  *ltp.FromETHAddress,
+		To:    to,
+		Value: amount,
+		Data:  calldata,
+	}
+	tops.GasLimit, err = c.EstimateGas(ctx, estimateInput)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to estimate gas for transaction")
+		return
+	}
+
+	var tx *ethtypes.Transaction
+	if *ltp.LegacyTransactionMode {
+		tx = ethtypes.NewTx(&ethtypes.LegacyTx{
+			Nonce:    nonce,
+			To:       to,
+			Value:    amount,
+			Gas:      tops.GasLimit,
+			GasPrice: gasPrice,
+			Data:     calldata,
+		})
+	} else {
+		tx = ethtypes.NewTx(&ethtypes.DynamicFeeTx{
+			ChainID:   chainID,
+			Nonce:     nonce,
+			To:        to,
+			Gas:       tops.GasLimit,
+			GasFeeCap: gasPrice,
+			GasTipCap: gasTipCap,
+			Data:      calldata,
+			Value:     amount,
+		})
+	}
+	log.Trace().Interface("tx", tx).Msg("Contract call data")
+
+	stx, err := tops.Signer(*ltp.FromETHAddress, tx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to sign transaction")
+		return
+	}
+
+	t1 = time.Now()
+	defer func() { t2 = time.Now() }()
+	if *ltp.CallOnly {
+		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
+	} else {
+		err = c.SendTransaction(ctx, stx)
+	}
+	return
+}
+
 func recordSample(goRoutineID, requestID int64, err error, start, end time.Time, nonce uint64) {
 	s := loadTestSample{}
 	s.GoRoutineID = goRoutineID
@@ -1317,6 +1412,9 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 		if err != nil {
 			return 0, err
 		}
+		if *ltp.CallOnly {
+			return lastBlockNumber, nil
+		}
 		currentNonceForFinalBlock, err = c.NonceAt(ctx, *ltp.FromETHAddress, new(big.Int).SetUint64(lastBlockNumber))
 		if err != nil {
 			return 0, err
@@ -1328,6 +1426,7 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 				maxWaitCount = maxWaitCount - 1 // only decrement if currentNonceForFinalBlock doesn't progress
 			}
 			prevNonceForFinalBlock = currentNonceForFinalBlock
+			log.Trace().Int("Remaining Attempts", maxWaitCount).Msg("Retrying...")
 			continue
 		}
 		if maxWaitCount <= 0 {
