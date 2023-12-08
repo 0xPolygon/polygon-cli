@@ -39,10 +39,11 @@ var ABICmd = &cobra.Command{
 			return err
 		}
 		for _, meth := range abi.Methods {
-			fmt.Printf("Selector:%s\tSignature:%s\n", hex.EncodeToString(meth.ID), meth)
+			fmt.Printf("Selector:%s\tSignature:%s%s\n", hex.EncodeToString(meth.ID), meth.Sig, getReturnSignature(meth.Outputs))
 		}
 		if *inputData != "" {
 			id, callData, err := parseContractInputData(*inputData)
+			fmt.Printf("id: %x, %x\n", id, callData)
 			if err != nil {
 				return err
 			}
@@ -61,6 +62,18 @@ var ABICmd = &cobra.Command{
 			fmt.Println("Input data:")
 			prettyInput, _ := json.MarshalIndent(inputVals, "", "  ")
 			fmt.Println(string(prettyInput))
+
+			unpackedCallData, err := meth.Inputs.UnpackValues(callData)
+			if err != nil {
+				return err
+			}
+
+			fmt.Println("Signature and Input")
+			fmt.Printf("%s%s", meth.Sig, getReturnSignature(meth.Outputs))
+			for _, unpackedCallDataArg := range unpackedCallData {
+				fmt.Printf(" %v", unpackedCallDataArg)
+			}
+			fmt.Println()
 		}
 		return nil
 	},
@@ -77,19 +90,18 @@ func init() {
 
 func parseContractInputData(data string) ([]byte, []byte, error) {
 	// "0x11223344"
-	if len(data) < 10 {
+	selectorLength := 8
+	data = strings.TrimPrefix(data, "0x")
+	if len(data) < selectorLength {
 		return nil, nil, fmt.Errorf("the input %s is too short for a function call. It should start with 0x and needs at least 4 bytes for a function selector", data)
 	}
-	if data[0:2] != "0x" {
-		return nil, nil, fmt.Errorf("the input data must start with 0x")
-	}
-	// drop the 0x and select the next bytes to represent the selector
-	stringId := data[2:10]
-	rawId, err := hex.DecodeString(stringId)
+
+	selectorId := data[:selectorLength]
+	rawId, err := hex.DecodeString(selectorId)
 	if err != nil {
 		return nil, nil, err
 	}
-	rawCallData, err := hex.DecodeString(data[10:])
+	rawCallData, err := hex.DecodeString(data[selectorLength:])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -107,4 +119,13 @@ func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
 	}
 
 	return io.ReadAll(os.Stdin)
+}
+
+func getReturnSignature(funcReturns gethabi.Arguments) string {
+	returnSig := ""
+	for _, ret := range funcReturns {
+		returnSig += fmt.Sprintf("(%s)", ret.Type)
+	}
+
+	return returnSig
 }
