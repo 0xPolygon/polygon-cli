@@ -114,7 +114,7 @@ The codebase has a contract that used for load testing. It's written in Yul and 
       --chain-id uint                           The chain id for the transactions.
   -c, --concurrency int                         Number of requests to perform concurrently. Default is one request at a time. (default 1)
       --contract-address --mode contract-call   The address of the contract that will be used in --mode contract-call. This must be paired up with `--mode contract-call` and `--calldata`
-      --contract-call-payable --function-sig    Use this flag if the --function-sig is a `payable` function, the value amount passed will be from `--eth-amount`. This must be paired up with `--mode contract-call` and `--contract-address`
+      --contract-call-payable --eth-amount      Use this flag if the function is payable, the value amount passed will be from --eth-amount. This must be paired up with `--mode contract-call` and `--contract-address`
       --erc20-address string                    The address of a pre-deployed ERC20 contract
       --erc721-address string                   The address of a pre-deployed ERC721 contract
       --eth-amount float                        The amount of ether to send on every transaction (default 0.001)
