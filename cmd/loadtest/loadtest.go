@@ -1276,18 +1276,6 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 		log.Error().Err(err).Msg("Unable to decode calldata string")
 		return
 	}
-	estimateInput := ethereum.CallMsg{
-		From:  *ltp.FromETHAddress,
-		To:    to,
-		Value: amount,
-		Data:  calldata,
-	}
-	tops.GasLimit, err = c.EstimateGas(ctx, estimateInput)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to estimate gas for transaction")
-		return
-	}
-
 	var tx *ethtypes.Transaction
 	if *ltp.LegacyTransactionMode {
 		tx = ethtypes.NewTx(&ethtypes.LegacyTx{
