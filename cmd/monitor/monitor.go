@@ -98,7 +98,11 @@ func monitor(ctx context.Context) error {
 
 	ms := new(monitorStatus)
 	ms.BlocksLock.Lock()
-	ms.BlockCache, _ = lru.New(blockCacheLimit)
+	ms.BlockCache, err = lru.New(blockCacheLimit)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create new LRU cache")
+		return err
+	}
 	ms.BlocksLock.Unlock()
 
 	ms.ChainID = big.NewInt(0)
@@ -192,7 +196,7 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 	}
 	observedPendingTxs = append(observedPendingTxs, historicalDataPoint{SampleTime: time.Now(), SampleValue: float64(cs.PendingCount)})
 	if len(observedPendingTxs) > maxDataPoints {
-		observedPendingTxs = observedPendingTxs[1:]
+		observedPendingTxs = observedPendingTxs[len(observedPendingTxs)-maxDataPoints:]
 	}
 
 	log.Debug().Uint64("PeerCount", cs.PeerCount).Uint64("ChainID", cs.ChainID.Uint64()).Uint64("HeadBlock", cs.HeadBlock).Uint64("GasPrice", cs.GasPrice.Uint64()).Msg("Fetching blocks")
