@@ -98,7 +98,11 @@ func monitor(ctx context.Context) error {
 
 	ms := new(monitorStatus)
 	ms.BlocksLock.Lock()
-	ms.BlockCache, _ = lru.New(blockCacheLimit)
+	ms.BlockCache, err = lru.New(blockCacheLimit)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create new LRU cache")
+		return err
+	}
 	ms.BlocksLock.Unlock()
 
 	ms.ChainID = big.NewInt(0)
@@ -109,6 +113,11 @@ func monitor(ctx context.Context) error {
 	isUiRendered := false
 	errChan := make(chan error)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().Msg(fmt.Sprintf("Recovered in f: %v", r))
+			}
+		}()
 		select {
 		case <-ctx.Done(): // listens for a cancellation signal
 			return // exit the goroutine when the context is done
@@ -192,7 +201,7 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 	}
 	observedPendingTxs = append(observedPendingTxs, historicalDataPoint{SampleTime: time.Now(), SampleValue: float64(cs.PendingCount)})
 	if len(observedPendingTxs) > maxDataPoints {
-		observedPendingTxs = observedPendingTxs[1:]
+		observedPendingTxs = observedPendingTxs[len(observedPendingTxs)-maxDataPoints:]
 	}
 
 	log.Debug().Uint64("PeerCount", cs.PeerCount).Uint64("ChainID", cs.ChainID.Uint64()).Uint64("HeadBlock", cs.HeadBlock).Uint64("GasPrice", cs.GasPrice.Uint64()).Msg("Fetching blocks")
@@ -225,10 +234,13 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 }
 
 func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, rpc *ethrpc.Client) error {
-	ms.BlocksLock.Lock()
 	blms := make([]ethrpc.BatchElem, 0)
-	for i := new(big.Int).Set(from); i.Cmp(to) <= 0; i.Add(i, big.NewInt(1)) {
-		if _, found := ms.BlockCache.Get(i.String()); found {
+
+	for i := new(big.Int).Set(from); i.Cmp(to) <= 0; i.Add(i, one) {
+		ms.BlocksLock.RLock()
+		_, found := ms.BlockCache.Get(i.String())
+		ms.BlocksLock.RUnlock()
+		if found {
 			continue
 		}
 		r := new(rpctypes.RawBlockResponse)
@@ -239,7 +251,6 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 			Error:  nil,
 		})
 	}
-	ms.BlocksLock.Unlock()
 
 	if len(blms) == 0 {
 		return nil
@@ -362,6 +373,7 @@ func setUISkeleton() (blockTable *widgets.List, grid *ui.Grid, blockGrid *ui.Gri
 
 func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) error {
 	if err := ui.Init(); err != nil {
+		log.Error().Err(err).Msg("Failed to initialize UI")
 		return err
 	}
 	defer ui.Close()
@@ -412,7 +424,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			fromBlockNumber.SetInt64(0) // We cannot have block numbers less than 0.
 		}
 		renderedBlocksTemp := make([]rpctypes.PolyBlock, 0, windowSize)
-		ms.BlocksLock.Lock()
+		ms.BlocksLock.RLock()
 		for i := new(big.Int).Set(fromBlockNumber); i.Cmp(toBlockNumber) <= 0; i.Add(i, big.NewInt(1)) {
 			if block, ok := ms.BlockCache.Get(i.String()); ok {
 				renderedBlocksTemp = append(renderedBlocksTemp, block.(rpctypes.PolyBlock))
@@ -421,7 +433,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				log.Warn().Str("blockNumber", i.String()).Msg("Block should be in cache but is not")
 			}
 		}
-		ms.BlocksLock.Unlock()
+		ms.BlocksLock.RUnlock()
 		renderedBlocks = renderedBlocksTemp
 
 		termUi.h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
