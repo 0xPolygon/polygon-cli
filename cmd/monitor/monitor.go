@@ -231,7 +231,7 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, rpc *ethrpc.Client) error {
 	ms.BlocksLock.Lock()
 	blms := make([]ethrpc.BatchElem, 0)
-	for i := new(big.Int).Set(from); i.Cmp(to) <= 0; i.Add(i, big.NewInt(1)) {
+	for i := new(big.Int).Set(from); i.Cmp(to) <= 0; i.Add(i, one) {
 		if _, found := ms.BlockCache.Get(i.String()); found {
 			continue
 		}
@@ -366,6 +366,7 @@ func setUISkeleton() (blockTable *widgets.List, grid *ui.Grid, blockGrid *ui.Gri
 
 func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) error {
 	if err := ui.Init(); err != nil {
+		log.Error().Err(err).Msg("Failed to initialize UI")
 		return err
 	}
 	defer ui.Close()
