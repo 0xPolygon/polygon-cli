@@ -113,6 +113,11 @@ func monitor(ctx context.Context) error {
 	isUiRendered := false
 	errChan := make(chan error)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().Msg(fmt.Sprintf("Recovered in f: %v", r))
+			}
+		}()
 		select {
 		case <-ctx.Done(): // listens for a cancellation signal
 			return // exit the goroutine when the context is done
