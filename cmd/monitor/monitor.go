@@ -237,7 +237,10 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 	ms.BlocksLock.Lock()
 	blms := make([]ethrpc.BatchElem, 0)
 	for i := new(big.Int).Set(from); i.Cmp(to) <= 0; i.Add(i, one) {
-		if _, found := ms.BlockCache.Get(i.String()); found {
+		ms.BlocksLock.RLock()
+		_, found := ms.BlockCache.Get(i.String())
+		ms.BlocksLock.RUnlock()
+		if found {
 			continue
 		}
 		r := new(rpctypes.RawBlockResponse)
