@@ -425,7 +425,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			fromBlockNumber.SetInt64(0) // We cannot have block numbers less than 0.
 		}
 		renderedBlocksTemp := make([]rpctypes.PolyBlock, 0, windowSize)
-		ms.BlocksLock.Lock()
+		ms.BlocksLock.RLock()
 		for i := new(big.Int).Set(fromBlockNumber); i.Cmp(toBlockNumber) <= 0; i.Add(i, big.NewInt(1)) {
 			if block, ok := ms.BlockCache.Get(i.String()); ok {
 				renderedBlocksTemp = append(renderedBlocksTemp, block.(rpctypes.PolyBlock))
@@ -434,7 +434,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				log.Warn().Str("blockNumber", i.String()).Msg("Block should be in cache but is not")
 			}
 		}
-		ms.BlocksLock.Unlock()
+		ms.BlocksLock.RUnlock()
 		renderedBlocks = renderedBlocksTemp
 
 		termUi.h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
