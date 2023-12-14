@@ -84,7 +84,7 @@ const (
 )
 
 func monitor(ctx context.Context) error {
-	// Dial rpc
+	// Dial rpc.
 	rpc, err := ethrpc.DialContext(ctx, rpcUrl)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to dial rpc")
