@@ -91,7 +91,7 @@ func monitor(ctx context.Context) error {
 		return err
 	}
 	ec := ethclient.NewClient(rpc)
-	if _, err = ec.ChainID(ctx); err != nil {
+	if _, err = ec.BlockNumber(ctx); err != nil {
 		return err
 	}
 
