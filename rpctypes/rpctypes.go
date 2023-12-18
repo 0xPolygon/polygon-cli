@@ -139,6 +139,9 @@ type (
 
 		// baseFeePerGas: QUANTITY - fixed per block fee
 		BaseFeePerGas RawQuantityResponse `json:"baseFeePerGas"`
+
+		// receiptsRoot: DATA, 32 Bytes - a 256-bit hash encoded as a hexadecimal
+		MixHash RawData32Response `json:"mixHash"`
 	}
 
 	RawTxLogs struct {

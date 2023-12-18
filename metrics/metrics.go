@@ -137,9 +137,10 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 	// 	return []string{}
 	// }
 
-	headerVariables := []string{"Block #", "Timestamp", "Block Time", "Tx Count", "Gas Used", "Block Hash", "Author"}
+	zone, _ := time.Now().Zone()
+	headerVariables := []string{"#", fmt.Sprintf("TIME (%s)", zone), "BLK TIME", "TXN #", "GAS USED", "HASH", "AUTHOR"}
 
-	proportion := []int{10, 20, 5, 5, 5, 60}
+	proportion := []int{10, 20, 5, 5, 10, 20}
 
 	header := ""
 	for i, prop := range proportion {
@@ -158,7 +159,7 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 	}
 
 	if !isMined {
-		header = strings.Replace(header, "Author", "Signer", 1)
+		header = strings.Replace(header, "AUTHOR", "SIGNER", 1)
 	}
 
 	// Set the first row to blank so that there is some space between the blocks
@@ -186,8 +187,8 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 			blockTime,
 			fmt.Sprintf("%d", len(bs[j].Transactions())),
 			fmt.Sprintf("%d", bs[j].GasUsed()),
-			bs[j].Hash().String(),
-			author.String(),
+			truncateHexString(bs[j].Hash().String(), 14),
+			truncateHexString(author.String(), 14),
 		}
 
 		record := " "
@@ -204,6 +205,24 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 		records = append(records, record)
 	}
 	return records, header
+}
+
+func truncateHexString(hexStr string, totalLength int) string {
+	hexStr = strings.TrimPrefix(hexStr, "0x")
+
+	visibleLength := totalLength - 5
+	if visibleLength < 0 {
+		visibleLength = 0
+	}
+
+	if len(hexStr) <= visibleLength {
+		return "0x" + hexStr
+	}
+
+	beginning := hexStr[:visibleLength/2]
+	end := hexStr[len(hexStr)-visibleLength/2:]
+
+	return "0x" + beginning + "..." + end
 }
 
 func GetSimpleBlockFields(block rpctypes.PolyBlock) []string {
@@ -243,6 +262,7 @@ func GetSimpleBlockFields(block rpctypes.PolyBlock) []string {
 		fmt.Sprintf("Nonce:        %d", block.Nonce()),
 	}
 }
+
 func GetSimpleBlockTxFields(block rpctypes.PolyBlock, chainID *big.Int) []string {
 	fields := make([]string, 0)
 	blank := ""
@@ -253,6 +273,7 @@ func GetSimpleBlockTxFields(block rpctypes.PolyBlock, chainID *big.Int) []string
 	}
 	return fields
 }
+
 func GetSimpleTxFields(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) []string {
 	fields := make([]string, 0)
 	fields = append(fields, fmt.Sprintf("Tx Hash: %s", tx.Hash()))
@@ -307,13 +328,27 @@ func ecrecover(block *rpctypes.PolyBlock) ([]byte, error) {
 }
 
 func RawDataToASCII(data []byte) string {
-	retString := ""
+	var retString strings.Builder
+	var nonPrintableGroup strings.Builder
+
 	for _, b := range data {
 		if b >= 32 && b < 127 {
-			retString = retString + string(b)
+			// If there are non-printable bytes grouped, add them before the ASCII character
+			if nonPrintableGroup.Len() > 0 {
+				retString.WriteString(fmt.Sprintf("[%s]", nonPrintableGroup.String()))
+				nonPrintableGroup.Reset()
+			}
+			retString.WriteByte(b)
 		} else {
-			retString = retString + fmt.Sprintf("\\x%X", b)
+			// Group non-printable bytes together
+			nonPrintableGroup.WriteString(fmt.Sprintf("\\x%X", b))
 		}
 	}
-	return retString
+
+	// Append any remaining non-printable bytes at the end
+	if nonPrintableGroup.Len() > 0 {
+		retString.WriteString(fmt.Sprintf("[%s]", nonPrintableGroup.String()))
+	}
+
+	return retString.String()
 }

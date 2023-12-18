@@ -282,9 +282,13 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 	return nil
 }
 
-func setUISkeleton() (blockTable *widgets.List, grid *ui.Grid, blockGrid *ui.Grid, termUi uiSkeleton) {
-	blockTable = widgets.NewList()
-	blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
+func setUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, grid *ui.Grid, blockGrid *ui.Grid, termUi uiSkeleton) {
+	blockList = widgets.NewList()
+	blockList.TextStyle = ui.NewStyle(ui.ColorWhite)
+
+	blockInfo = widgets.NewList()
+	blockInfo.TextStyle = ui.NewStyle(ui.ColorWhite)
+
 	termUi = uiSkeleton{}
 
 	termUi.h0 = widgets.NewParagraph()
@@ -304,26 +308,31 @@ func setUISkeleton() (blockTable *widgets.List, grid *ui.Grid, blockGrid *ui.Gri
 
 	termUi.sl0 = widgets.NewSparkline()
 	termUi.sl0.LineColor = ui.ColorRed
+	termUi.sl0.MaxHeight = 1000
 	slg0 := widgets.NewSparklineGroup(termUi.sl0)
 	slg0.Title = "TXs / Block"
 
 	termUi.sl1 = widgets.NewSparkline()
 	termUi.sl1.LineColor = ui.ColorGreen
+	termUi.sl1.MaxHeight = 1000
 	slg1 := widgets.NewSparklineGroup(termUi.sl1)
 	slg1.Title = "Gas Price"
 
 	termUi.sl2 = widgets.NewSparkline()
 	termUi.sl2.LineColor = ui.ColorYellow
+	termUi.sl2.MaxHeight = 1000
 	slg2 := widgets.NewSparklineGroup(termUi.sl2)
 	slg2.Title = "Block Size"
 
 	termUi.sl3 = widgets.NewSparkline()
 	termUi.sl3.LineColor = ui.ColorBlue
+	termUi.sl3.MaxHeight = 1000
 	slg3 := widgets.NewSparklineGroup(termUi.sl3)
 	slg3.Title = "Pending Tx"
 
 	termUi.sl4 = widgets.NewSparkline()
 	termUi.sl4.LineColor = ui.ColorMagenta
+	termUi.sl4.MaxHeight = 1000
 	slg4 := widgets.NewSparklineGroup(termUi.sl4)
 	slg4.Title = "Gas Used"
 
@@ -369,7 +378,10 @@ func setUISkeleton() (blockTable *widgets.List, grid *ui.Grid, blockGrid *ui.Gri
 			ui.NewCol(1.0/5, slg3),
 			ui.NewCol(1.0/5, slg4),
 		),
-		ui.NewRow(5.0/10, blockTable),
+		ui.NewRow(5.0/10,
+			ui.NewCol(1.0/2, blockList),
+			ui.NewCol(1.0/2, blockInfo),
+		),
 	)
 
 	return
@@ -384,7 +396,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 	currentMode := monitorModeExplorer
 
-	blockTable, grid, blockGrid, termUi := setUISkeleton()
+	blockTable, blockInfo, grid, blockGrid, termUi := setUISkeleton()
 
 	termWidth, termHeight := ui.TerminalDimensions()
 	windowSize = termHeight/2 - 4
@@ -441,7 +453,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		renderedBlocks = renderedBlocksTemp
 
 		height := fmt.Sprintf("Height: %s", ms.HeadBlock.String())
-		time := fmt.Sprintf("Time: %s", time.Now().Format("02 Jan 06 15:04:05 MST"))
+		time := fmt.Sprintf("Time: %s", time.Now().Format("02 Jan 06 15:04:05"))
 		gasPrice := fmt.Sprintf("Gas Price: %s gwei", new(big.Int).Div(ms.GasPrice, metrics.UnitShannon).String())
 		peers := fmt.Sprintf("Peers: %d", ms.PeerCount)
 		pendingTx := fmt.Sprintf("Pending Tx: %d", ms.PendingCount)
@@ -473,6 +485,8 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					Msg("setBlock")
 
 				selectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
+				blockInfo.Rows = metrics.GetSimpleBlockFields(selectedBlock)
+
 				setBlock = false
 				log.Debug().Uint64("blockNumber", selectedBlock.Number().Uint64()).Msg("Selected block changed")
 			}
