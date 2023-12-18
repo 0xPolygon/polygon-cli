@@ -440,12 +440,14 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		ms.BlocksLock.RUnlock()
 		renderedBlocks = renderedBlocksTemp
 
-		termUi.h0.Text = fmt.Sprintf("Height: %s\nTime: %s", ms.HeadBlock.String(), time.Now().Format("02 Jan 06 15:04:05 MST"))
-		gasGwei := new(big.Int).Div(ms.GasPrice, metrics.UnitShannon)
-		termUi.h1.Text = fmt.Sprintf("%s gwei", gasGwei.String())
-		termUi.h2.Text = fmt.Sprintf("%d Peers\n%d Pending Tx", ms.PeerCount, ms.PendingCount)
-		termUi.h3.Text = ms.ChainID.String()
-		termUi.h4.Text = fmt.Sprintf("%0.2f", metrics.GetMeanBlockTime(renderedBlocks))
+		height := fmt.Sprintf("Height: %s", ms.HeadBlock.String())
+		time := fmt.Sprintf("Time: %s", time.Now().Format("02 Jan 06 15:04:05 MST"))
+		gasPrice := fmt.Sprintf("Gas Price: %s gwei", new(big.Int).Div(ms.GasPrice, metrics.UnitShannon).String())
+		peers := fmt.Sprintf("Peers: %d", ms.PeerCount)
+		pendingTx := fmt.Sprintf("Pending Tx: %d", ms.PendingCount)
+		chainId := fmt.Sprintf("Chain ID: %s", ms.ChainID.String())
+		blockTime := fmt.Sprintf("Avg Block Time: %0.2f", metrics.GetMeanBlockTime(renderedBlocks))
+		termUi.h0.Text = fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s\n%s", height, time, gasPrice, peers, pendingTx, chainId, blockTime)
 
 		termUi.sl0.Data = metrics.GetTxsPerBlock(renderedBlocks)
 		termUi.sl1.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)

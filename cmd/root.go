@@ -23,7 +23,6 @@ import (
 	"github.com/maticnetwork/polygon-cli/cmd/metricsToDash"
 	"github.com/maticnetwork/polygon-cli/cmd/mnemonic"
 	"github.com/maticnetwork/polygon-cli/cmd/monitor"
-	monitor2 "github.com/maticnetwork/polygon-cli/cmd/monitor2"
 	"github.com/maticnetwork/polygon-cli/cmd/nodekey"
 	"github.com/maticnetwork/polygon-cli/cmd/rpc"
 	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz"
@@ -117,7 +116,6 @@ func NewPolycliCommand() *cobra.Command {
 		metricsToDash.MetricsToDashCmd,
 		mnemonic.MnemonicCmd,
 		monitor.MonitorCmd,
-		monitor2.MonitorCmd,
 		nodekey.NodekeyCmd,
 		p2p.P2pCmd,
 		parseethwallet.ParseETHWalletCmd,
