@@ -140,7 +140,7 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 	zone, _ := time.Now().Zone()
 	headerVariables := []string{"#", fmt.Sprintf("TIME (%s)", zone), "BLK TIME", "TXN #", "GAS USED", "HASH", "AUTHOR"}
 
-	proportion := []int{10, 20, 5, 5, 10, 20}
+	proportion := []int{10, 10, 5, 5, 10, 20}
 
 	header := ""
 	for i, prop := range proportion {
@@ -183,8 +183,8 @@ func GetSimpleBlockRecords(blocks []rpctypes.PolyBlock) ([]string, string) {
 
 		recordVariables := []string{
 			fmt.Sprintf("%d", bs[j].Number()),
-			ut.Format("02 Jan 06 15:04:05 MST"),
-			blockTime,
+			ut.Format("02 Jan 06 15:04:05"),
+			fmt.Sprintf("%ss", blockTime),
 			fmt.Sprintf("%d", len(bs[j].Transactions())),
 			fmt.Sprintf("%d", bs[j].GasUsed()),
 			truncateHexString(bs[j].Hash().String(), 14),
@@ -229,7 +229,7 @@ func GetSimpleBlockFields(block rpctypes.PolyBlock) []string {
 	ts := block.Time()
 	ut := time.Unix(int64(ts), 0)
 
-	author := "Mined  by"
+	author := "Mined by"
 
 	authorAddress := block.Miner().String()
 	if authorAddress == "0x0000000000000000000000000000000000000000" {
@@ -243,23 +243,23 @@ func GetSimpleBlockFields(block rpctypes.PolyBlock) []string {
 
 	return []string{
 		"",
-		fmt.Sprintf("Block Height: %s", block.Number()),
-		fmt.Sprintf("Timestamp:    %d (%s)", ts, ut.Format(time.RFC3339)),
-		fmt.Sprintf("Transactions: %d", len(block.Transactions())),
-		fmt.Sprintf("%s:    %s", author, authorAddress),
-		fmt.Sprintf("Difficulty:   %s", block.Difficulty()),
-		fmt.Sprintf("Size:         %d", block.Size()),
-		fmt.Sprintf("Uncles:       %d", len(block.Uncles())),
-		fmt.Sprintf("Gas used:     %d", block.GasUsed()),
-		fmt.Sprintf("Gas limit:    %d", block.GasLimit()),
-		fmt.Sprintf("Base Fee:     %s", block.BaseFee()),
-		fmt.Sprintf("Extra data:   %s", RawDataToASCII(block.Extra())),
-		fmt.Sprintf("Hash:         %s", block.Hash()),
-		fmt.Sprintf("Parent Hash:  %s", block.ParentHash()),
-		fmt.Sprintf("Uncle Hash:   %s", block.UncleHash()),
-		fmt.Sprintf("State Root:   %s", block.Root()),
-		fmt.Sprintf("Tx Hash:      %s", block.TxHash()),
-		fmt.Sprintf("Nonce:        %d", block.Nonce()),
+		fmt.Sprintf("Block Height:      %s", block.Number()),
+		fmt.Sprintf("Timestamp:         %d (%s)", ts, ut.Format(time.RFC3339)),
+		fmt.Sprintf("Transactions:      %d", len(block.Transactions())),
+		fmt.Sprintf("%s:         %s", author, authorAddress),
+		fmt.Sprintf("Difficulty:        %s", block.Difficulty()),
+		fmt.Sprintf("Size:              %d", block.Size()),
+		fmt.Sprintf("Uncles:            %d", len(block.Uncles())),
+		fmt.Sprintf("Gas used:          %d", block.GasUsed()),
+		fmt.Sprintf("Gas limit:         %d", block.GasLimit()),
+		fmt.Sprintf("Base Fee per gas:  %s", block.BaseFee()),
+		fmt.Sprintf("Extra data:        %s", RawDataToASCII(block.Extra())),
+		fmt.Sprintf("Hash:              %s", block.Hash()),
+		fmt.Sprintf("Parent Hash:       %s", block.ParentHash()),
+		fmt.Sprintf("Uncle Hash:        %s", block.UncleHash()),
+		fmt.Sprintf("State Root:        %s", block.Root()),
+		fmt.Sprintf("Tx Hash:           %s", block.TxHash()),
+		fmt.Sprintf("Nonce:             %d", block.Nonce()),
 	}
 }
 
@@ -299,6 +299,49 @@ func GetSimpleTxFields(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) [
 	fields = append(fields, fmt.Sprintf("Type: %d", tx.Type()))
 	fields = append(fields, fmt.Sprintf("Data Len: %d", len(tx.Data())))
 	fields = append(fields, fmt.Sprintf("Data: %s", hex.EncodeToString(tx.Data())))
+
+	return fields
+}
+
+func GetBlockTxTable(block rpctypes.PolyBlock, chainID *big.Int) [][]string {
+	fields := make([][]string, 0)
+	header := []string{"Txn Hash", "Method", "Block", "Timestamp", "From", "To", "Value", "Gas Price"}
+	fields = append(fields, header)
+	for _, tx := range block.Transactions() {
+		txFields := GetTxTable(tx, chainID, block.BaseFee())
+		fields = append(fields, txFields)
+	}
+	return fields
+}
+
+func GetTxTable(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) []string {
+	fields := make([]string, 0)
+	fields = append(fields, fmt.Sprintf("%s", tx.Hash()))
+
+	txMethod := "Transfer"
+	if tx.To().String() == "0x0000000000000000000000000000000000000000" {
+		// Contract deployment
+		txMethod = "Contract Deployment"
+	} else if len(tx.Data()) > 4 {
+		// Contract call
+		txMethod = hex.EncodeToString(tx.Data()[0:4])
+	}
+
+	fields = append(fields, txMethod)
+	fields = append(fields, fmt.Sprintf("%s", tx.BlockNumber()))
+	fields = append(fields, "TIME")
+	fields = append(fields, fmt.Sprintf("From: %s", tx.From()))
+	fields = append(fields, fmt.Sprintf("To: %s", tx.To()))
+	fields = append(fields, fmt.Sprintf("Value: %s", tx.Value()))
+	fields = append(fields, fmt.Sprintf("Gas Price: %s", tx.GasPrice()))
+
+	// fields = append(fields, fmt.Sprintf("Gas Limit: %d", tx.Gas()))
+	// fields = append(fields, fmt.Sprintf("Gas Tip: %d", tx.MaxPriorityFeePerGas()))
+	// fields = append(fields, fmt.Sprintf("Gas Fee: %d", tx.MaxFeePerGas()))
+	// fields = append(fields, fmt.Sprintf("Nonce: %d", tx.Nonce()))
+	// fields = append(fields, fmt.Sprintf("Type: %d", tx.Type()))
+	// fields = append(fields, fmt.Sprintf("Data Len: %d", len(tx.Data())))
+	// fields = append(fields, fmt.Sprintf("Data: %s", hex.EncodeToString(tx.Data())))
 
 	return fields
 }

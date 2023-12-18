@@ -282,12 +282,18 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 	return nil
 }
 
-func setUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, grid *ui.Grid, blockGrid *ui.Grid, termUi uiSkeleton) {
+func setUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transactionInfo *widgets.Table, grid *ui.Grid, blockGrid *ui.Grid, termUi uiSkeleton) {
 	blockList = widgets.NewList()
 	blockList.TextStyle = ui.NewStyle(ui.ColorWhite)
 
 	blockInfo = widgets.NewList()
 	blockInfo.TextStyle = ui.NewStyle(ui.ColorWhite)
+	blockInfo.Title = "Block Information"
+
+	transactionInfo = widgets.NewTable()
+	transactionInfo.TextStyle = ui.NewStyle(ui.ColorWhite)
+	transactionInfo.FillRow = true
+	transactionInfo.Title = "Latest Transactions"
 
 	termUi = uiSkeleton{}
 
@@ -371,16 +377,24 @@ func setUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, grid *ui
 			ui.NewCol(1.0/5, termUi.h4),
 		),
 
-		ui.NewRow(4.0/10,
+		ui.NewRow(2.0/10,
 			ui.NewCol(1.0/5, slg0),
 			ui.NewCol(1.0/5, slg1),
 			ui.NewCol(1.0/5, slg2),
 			ui.NewCol(1.0/5, slg3),
 			ui.NewCol(1.0/5, slg4),
 		),
+
 		ui.NewRow(5.0/10,
 			ui.NewCol(1.0/2, blockList),
-			ui.NewCol(1.0/2, blockInfo),
+			ui.NewCol(1.0/2,
+				ui.NewRow(1.0/2, blockInfo),
+				ui.NewRow(1.0/2, blockInfo),
+			),
+		),
+
+		ui.NewRow(2.0/10,
+			ui.NewCol(5.0/5, transactionInfo),
 		),
 	)
 
@@ -396,7 +410,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 	currentMode := monitorModeExplorer
 
-	blockTable, blockInfo, grid, blockGrid, termUi := setUISkeleton()
+	blockTable, blockInfo, transactionInfo, grid, blockGrid, termUi := setUISkeleton()
 
 	termWidth, termHeight := ui.TerminalDimensions()
 	windowSize = termHeight/2 - 4
@@ -453,7 +467,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		renderedBlocks = renderedBlocksTemp
 
 		height := fmt.Sprintf("Height: %s", ms.HeadBlock.String())
-		time := fmt.Sprintf("Time: %s", time.Now().Format("02 Jan 06 15:04:05"))
+		time := fmt.Sprintf("Time: %s", time.Now().Format("02 Jan 06 15:04:05 MST"))
 		gasPrice := fmt.Sprintf("Gas Price: %s gwei", new(big.Int).Div(ms.GasPrice, metrics.UnitShannon).String())
 		peers := fmt.Sprintf("Peers: %d", ms.PeerCount)
 		pendingTx := fmt.Sprintf("Pending Tx: %d", ms.PendingCount)
@@ -486,10 +500,13 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 				selectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
 				blockInfo.Rows = metrics.GetSimpleBlockFields(selectedBlock)
+				transactionInfo.Rows = metrics.GetBlockTxTable(selectedBlock, ms.ChainID)
 
 				setBlock = false
 				log.Debug().Uint64("blockNumber", selectedBlock.Number().Uint64()).Msg("Selected block changed")
 			}
+		} else {
+			transactionInfo.Rows = [][]string{{"Txn Hash", "Method", "Block", "Timestamp", "From", "To", "Value", "Gas Price"}}
 		}
 
 		ui.Render(grid)
