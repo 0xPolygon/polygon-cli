@@ -102,60 +102,61 @@ The codebase has a contract that used for load testing. It's written in Yul and 
 ## Flags
 
 ```bash
-      --adaptive-backoff-factor float           When using adaptive rate limiting, this flag controls our multiplicative decrease value. (default 2)
-      --adaptive-cycle-duration-seconds uint    When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates (default 10)
-      --adaptive-rate-limit                     Enable AIMD-style congestion control to automatically adjust request rate
-      --adaptive-rate-limit-increment uint      When using adaptive rate limiting, this flag controls the size of the additive increases. (default 50)
-      --batch-size uint                         Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time. (default 999)
-  -b, --byte-count uint                         If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
-      --call-only                               When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.
-      --call-only-latest                        When using call only mode with recall, should we execute on the latest block or on the original block
-      --calldata --mode contract-call           The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with --mode contract-call and `--contract-address`
-      --chain-id uint                           The chain id for the transactions.
-  -c, --concurrency int                         Number of requests to perform concurrently. Default is one request at a time. (default 1)
-      --contract-address --mode contract-call   The address of the contract that will be used in --mode contract-call. This must be paired up with `--mode contract-call` and `--calldata`
-      --contract-call-payable --eth-amount      Use this flag if the function is payable, the value amount passed will be from --eth-amount. This must be paired up with `--mode contract-call` and `--contract-address`
-      --erc20-address string                    The address of a pre-deployed ERC20 contract
-      --erc721-address string                   The address of a pre-deployed ERC721 contract
-      --eth-amount float                        The amount of ether to send on every transaction (default 0.001)
-      --force-contract-deploy                   Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.
-  -f, --function --mode f                       A specific function to be called if running with --mode f or a specific precompiled contract when running with `--mode a` (default 1)
-      --gas-limit uint                          In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
-      --gas-price uint                          In environments where the gas price can't be determined automatically, we can specify it manually
-  -h, --help                                    help for loadtest
-  -i, --iterations uint                         If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size (default 1)
-      --json-content --mode inscription         The json content that will be encoded as calldata for an inscription. This must be paired up with --mode inscription (default "{\"p\":\"asc-20\",\"op\":\"mint\",\"tick\":\"TEST\",\"amt\":\"1\"}")
-      --legacy                                  Send a legacy transaction instead of an EIP1559 transaction.
-      --lt-address string                       The address of a pre-deployed load test contract
-  -m, --mode strings                            The testing mode to use. It can be multiple like: "t,c,d,f"
-                                                t - sending transactions
-                                                d - deploy contract
-                                                c - call random contract functions
-                                                f - call specific contract function
-                                                p - call random precompiled contracts
-                                                a - call a specific precompiled contract address
-                                                s - store mode
-                                                r - random modes
-                                                2 - ERC20 transfers
-                                                7 - ERC721 mints
-                                                v3 - UniswapV3 swaps
-                                                R - total recall
-                                                rpc - call random rpc methods
-                                                cc, contract-call - call a contract method (default [t])
-      --output-mode string                      Format mode for summary output (json | text) (default "text")
-      --priority-gas-price uint                 Specify Gas Tip Price in the case of EIP-1559
-      --private-key string                      The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
-      --rate-limit float                        An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together (default 4)
-      --recall-blocks uint                      The number of blocks that we'll attempt to fetch for recall (default 50)
-  -n, --requests int                            Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
-  -r, --rpc-url string                          The RPC endpoint url (default "http://localhost:8545")
-      --seed int                                A seed for generating random values and addresses (default 123456)
-      --send-only                               Send transactions and load without waiting for it to be mined.
-      --steady-state-tx-pool-size uint          When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off. (default 1000)
-      --summarize                               Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time
-  -t, --time-limit int                          Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit. (default -1)
-      --to-address string                       The address that we're going to send to (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
-      --to-random                               When doing a transfer test, should we send to random addresses rather than DEADBEEFx5
+      --adaptive-backoff-factor float            When using adaptive rate limiting, this flag controls our multiplicative decrease value. (default 2)
+      --adaptive-cycle-duration-seconds uint     When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates (default 10)
+      --adaptive-rate-limit                      Enable AIMD-style congestion control to automatically adjust request rate
+      --adaptive-rate-limit-increment uint       When using adaptive rate limiting, this flag controls the size of the additive increases. (default 50)
+      --batch-size uint                          Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time. (default 999)
+  -b, --byte-count uint                          If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
+      --call-only                                When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.
+      --call-only-latest                         When using call only mode with recall, should we execute on the latest block or on the original block
+      --calldata --mode contract-call            The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with --mode contract-call and `--contract-address`
+      --chain-id uint                            The chain id for the transactions.
+  -c, --concurrency int                          Number of requests to perform concurrently. Default is one request at a time. (default 1)
+      --contract-address --mode contract-call    The address of the contract that will be used in --mode contract-call. This must be paired up with `--mode contract-call` and `--calldata`
+      --contract-call-payable --eth-amount       Use this flag if the function is payable, the value amount passed will be from --eth-amount. This must be paired up with `--mode contract-call` and `--contract-address`
+      --erc20-address string                     The address of a pre-deployed ERC20 contract
+      --erc721-address string                    The address of a pre-deployed ERC721 contract
+      --eth-amount float                         The amount of ether to send on every transaction (default 0.001)
+      --force-contract-deploy                    Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.
+  -f, --function --mode f                        A specific function to be called if running with --mode f or a specific precompiled contract when running with `--mode a` (default 1)
+      --gas-limit uint                           In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
+      --gas-price uint                           In environments where the gas price can't be determined automatically, we can specify it manually
+  -h, --help                                     help for loadtest
+      --inscription-content --mode inscription   The inscription content that will be encoded as calldata. This must be paired up with --mode inscription (default "data:,{\"p\":\"erc-20\",\"op\":\"mint\",\"tick\":\"TEST\",\"amt\":\"1\"}")
+  -i, --iterations uint                          If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size (default 1)
+      --legacy                                   Send a legacy transaction instead of an EIP1559 transaction.
+      --lt-address string                        The address of a pre-deployed load test contract
+  -m, --mode strings                             The testing mode to use. It can be multiple like: "t,c,d,f"
+                                                 t - sending transactions
+                                                 d - deploy contract
+                                                 c - call random contract functions
+                                                 f - call specific contract function
+                                                 p - call random precompiled contracts
+                                                 a - call a specific precompiled contract address
+                                                 s - store mode
+                                                 r - random modes
+                                                 2 - ERC20 transfers
+                                                 7 - ERC721 mints
+                                                 v3 - UniswapV3 swaps
+                                                 R - total recall
+                                                 rpc - call random rpc methods
+                                                 cc, contract-call - call a contract method
+                                                 inscription - sending inscription transactions (default [t])
+      --output-mode string                       Format mode for summary output (json | text) (default "text")
+      --priority-gas-price uint                  Specify Gas Tip Price in the case of EIP-1559
+      --private-key string                       The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
+      --rate-limit float                         An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together (default 4)
+      --recall-blocks uint                       The number of blocks that we'll attempt to fetch for recall (default 50)
+  -n, --requests int                             Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
+  -r, --rpc-url string                           The RPC endpoint url (default "http://localhost:8545")
+      --seed int                                 A seed for generating random values and addresses (default 123456)
+      --send-only                                Send transactions and load without waiting for it to be mined.
+      --steady-state-tx-pool-size uint           When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off. (default 1000)
+      --summarize                                Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time
+  -t, --time-limit int                           Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit. (default -1)
+      --to-address string                        The address that we're going to send to (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
+      --to-random                                When doing a transfer test, should we send to random addresses rather than DEADBEEFx5
 ```
 
 The command also inherits flags from parent commands.

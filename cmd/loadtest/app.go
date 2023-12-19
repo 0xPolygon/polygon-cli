@@ -75,7 +75,7 @@ type (
 		ContractAddress            *string
 		ContractCallData           *string
 		ContractCallPayable        *bool
-		InscriptionJsonContent     *string
+		InscriptionContent         *string
 
 		// Computed
 		CurrentGasPrice     *big.Int
@@ -243,7 +243,8 @@ r - random modes
 v3 - UniswapV3 swaps
 R - total recall
 rpc - call random rpc methods
-cc, contract-call - call a contract method`)
+cc, contract-call - call a contract method
+inscription - sending inscription transactions`)
 	ltp.Function = LoadtestCmd.Flags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` or a specific precompiled contract when running with `--mode a`")
 	ltp.ByteCount = LoadtestCmd.Flags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.LtAddress = LoadtestCmd.Flags().String("lt-address", "", "The address of a pre-deployed load test contract")
@@ -254,7 +255,7 @@ cc, contract-call - call a contract method`)
 	ltp.ContractAddress = LoadtestCmd.Flags().String("contract-address", "", "The address of the contract that will be used in `--mode contract-call`. This must be paired up with `--mode contract-call` and `--calldata`")
 	ltp.ContractCallData = LoadtestCmd.Flags().String("calldata", "", "The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with `--mode contract-call` and `--contract-address`")
 	ltp.ContractCallPayable = LoadtestCmd.Flags().Bool("contract-call-payable", false, "Use this flag if the function is payable, the value amount passed will be from `--eth-amount`. This must be paired up with `--mode contract-call` and `--contract-address`")
-	ltp.InscriptionJsonContent = LoadtestCmd.Flags().String("json-content", `{"p":"asc-20","op":"mint","tick":"TEST","amt":"1"}`, "The json content that will be encoded as calldata for an inscription. This must be paired up with `--mode inscription`")
+	ltp.InscriptionContent = LoadtestCmd.Flags().String("inscription-content", `data:,{"p":"erc-20","op":"mint","tick":"TEST","amt":"1"}`, "The inscription content that will be encoded as calldata. This must be paired up with `--mode inscription`")
 
 	inputLoadTestParams = *ltp
 

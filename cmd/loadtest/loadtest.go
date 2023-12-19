@@ -1357,7 +1357,7 @@ func loadTestInscription(ctx context.Context, c *ethclient.Client, nonce uint64)
 	tops = configureTransactOpts(tops)
 	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
 
-	calldata := []byte(*ltp.InscriptionJsonContent)
+	calldata := []byte(*ltp.InscriptionContent)
 	if tops.GasLimit == 0 {
 		estimateInput := ethereum.CallMsg{
 			From:      tops.From,
