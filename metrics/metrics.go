@@ -305,7 +305,7 @@ func GetSimpleTxFields(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) [
 
 func GetBlockTxTable(block rpctypes.PolyBlock, chainID *big.Int) [][]string {
 	fields := make([][]string, 0)
-	header := []string{"Txn Hash", "Method", "Block", "Timestamp", "From", "To", "Value", "Gas Price"}
+	header := []string{"Txn Hash", "Method", "Timestamp", "From", "To", "Value", "Gas Price"}
 	fields = append(fields, header)
 	for _, tx := range block.Transactions() {
 		txFields := GetTxTable(tx, chainID, block.BaseFee())
@@ -328,20 +328,11 @@ func GetTxTable(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) []string
 	}
 
 	fields = append(fields, txMethod)
-	fields = append(fields, fmt.Sprintf("%s", tx.BlockNumber()))
 	fields = append(fields, "TIME")
-	fields = append(fields, fmt.Sprintf("From: %s", tx.From()))
-	fields = append(fields, fmt.Sprintf("To: %s", tx.To()))
-	fields = append(fields, fmt.Sprintf("Value: %s", tx.Value()))
-	fields = append(fields, fmt.Sprintf("Gas Price: %s", tx.GasPrice()))
-
-	// fields = append(fields, fmt.Sprintf("Gas Limit: %d", tx.Gas()))
-	// fields = append(fields, fmt.Sprintf("Gas Tip: %d", tx.MaxPriorityFeePerGas()))
-	// fields = append(fields, fmt.Sprintf("Gas Fee: %d", tx.MaxFeePerGas()))
-	// fields = append(fields, fmt.Sprintf("Nonce: %d", tx.Nonce()))
-	// fields = append(fields, fmt.Sprintf("Type: %d", tx.Type()))
-	// fields = append(fields, fmt.Sprintf("Data Len: %d", len(tx.Data())))
-	// fields = append(fields, fmt.Sprintf("Data: %s", hex.EncodeToString(tx.Data())))
+	fields = append(fields, fmt.Sprintf("%s", tx.From()))
+	fields = append(fields, fmt.Sprintf("%s", tx.To()))
+	fields = append(fields, fmt.Sprintf("%s", tx.Value()))
+	fields = append(fields, fmt.Sprintf("%s", tx.GasPrice()))
 
 	return fields
 }

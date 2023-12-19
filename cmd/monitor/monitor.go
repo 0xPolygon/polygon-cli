@@ -283,6 +283,10 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 }
 
 func setUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transactionInfo *widgets.Table, grid *ui.Grid, blockGrid *ui.Grid, termUi uiSkeleton) {
+	// help := widgets.NewParagraph()
+	// help.Title = "Block Headers"
+	// help.Text = "Use the arrow keys to scroll through the transactions. Press <Esc> to go back to the explorer view"
+
 	blockList = widgets.NewList()
 	blockList.TextStyle = ui.NewStyle(ui.ColorWhite)
 
@@ -345,9 +349,9 @@ func setUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 	grid = ui.NewGrid()
 	blockGrid = ui.NewGrid()
 
-	b0 := widgets.NewParagraph()
-	b0.Title = "Block Headers"
-	b0.Text = "Use the arrow keys to scroll through the transactions. Press <Esc> to go back to the explorer view"
+	// b0 := widgets.NewParagraph()
+	// b0.Title = "Block Headers"
+	// b0.Text = "Use the arrow keys to scroll through the transactions. Press <Esc> to go back to the explorer view"
 
 	termUi.b1 = widgets.NewList()
 	termUi.b1.Title = "Block Info"
@@ -360,12 +364,9 @@ func setUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 	termUi.b2.WrapText = true
 
 	blockGrid.Set(
-		ui.NewRow(1.0/10, b0),
-
-		ui.NewRow(9.0/10,
-			ui.NewCol(1.0/2, termUi.b1),
-			ui.NewCol(1.0/2, termUi.b2),
-		),
+		// ui.NewRow(1.0/10, b0),
+		ui.NewRow(2.0/10, termUi.b1),
+		ui.NewRow(8.0/10, termUi.b2),
 	)
 
 	grid.Set(
@@ -500,13 +501,19 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 				selectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
 				blockInfo.Rows = metrics.GetSimpleBlockFields(selectedBlock)
+				columnRatio := []int{30, 5, 5, 20, 20, 5, 10}
+				transactionInfo.ColumnWidths = getColumnWidths(columnRatio, transactionInfo.Dx())
 				transactionInfo.Rows = metrics.GetBlockTxTable(selectedBlock, ms.ChainID)
+				transactionInfo.Title = fmt.Sprintf("Latest Transactions for Block #%s", selectedBlock.Number().String())
 
 				setBlock = false
 				log.Debug().Uint64("blockNumber", selectedBlock.Number().Uint64()).Msg("Selected block changed")
 			}
 		} else {
-			transactionInfo.Rows = [][]string{{"Txn Hash", "Method", "Block", "Timestamp", "From", "To", "Value", "Gas Price"}}
+			columnRatio := []int{30, 5, 5, 20, 20, 5, 10}
+			transactionInfo.ColumnWidths = getColumnWidths(columnRatio, transactionInfo.Dx())
+			transactionInfo.Rows = [][]string{{"Txn Hash", "Method", "Timestamp", "From", "To", "Value", "Gas Price"}}
+			blockInfo.Rows = []string{}
 		}
 
 		ui.Render(grid)
@@ -767,4 +774,18 @@ func checkBatchRequestsSupport(ctx context.Context, ec *ethrpc.Client) error {
 		{Method: "eth_blockNumber"},
 	}
 	return ec.BatchCallContext(ctx, batchRequest)
+}
+
+func getColumnWidths(columnRatio []int, width int) (columnWidths []int) {
+	totalRatio := 0
+	for _, ratio := range columnRatio {
+		totalRatio += ratio
+	}
+
+	columnWidths = make([]int, len(columnRatio))
+	for i, ratio := range columnRatio {
+		columnWidths[i] = width * ratio / totalRatio
+	}
+
+	return
 }
