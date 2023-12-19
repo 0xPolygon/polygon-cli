@@ -58,6 +58,7 @@ const (
 	loadTestModeRecall
 	loadTestModeRPC
 	loadTestModeContractCall
+	loadTestModeInscription
 	loadTestModeUniswapV3
 
 	codeQualitySeed       = "code code code code code code code code code code code quality"
@@ -96,6 +97,8 @@ func characterToLoadTestMode(mode string) (loadTestMode, error) {
 		return loadTestModeRPC, nil
 	case "cc", "contract-call":
 		return loadTestModeContractCall, nil
+	case "inscription":
+		return loadTestModeInscription, nil
 	default:
 		return 0, fmt.Errorf("unrecognized load test mode: %s", mode)
 	}
@@ -616,6 +619,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					startReq, endReq, tErr = loadTestRPC(ctx, c, myNonceValue, indexedActivity)
 				case loadTestModeContractCall:
 					startReq, endReq, tErr = loadTestContractCall(ctx, c, myNonceValue)
+				case loadTestModeInscription:
+					startReq, endReq, tErr = loadTestInscription(ctx, c, myNonceValue)
 				default:
 					log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -1276,16 +1281,98 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 		log.Error().Err(err).Msg("Unable to decode calldata string")
 		return
 	}
-	estimateInput := ethereum.CallMsg{
-		From:  *ltp.FromETHAddress,
-		To:    to,
-		Value: amount,
-		Data:  calldata,
+
+	if tops.GasLimit == 0 {
+		estimateInput := ethereum.CallMsg{
+			From:      tops.From,
+			To:        to,
+			Value:     amount,
+			GasPrice:  tops.GasPrice,
+			GasTipCap: tops.GasTipCap,
+			GasFeeCap: tops.GasFeeCap,
+			Data:      calldata,
+		}
+		tops.GasLimit, err = c.EstimateGas(ctx, estimateInput)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to estimate gas for transaction. Manually setting gas-limit might be required")
+			return
+		}
 	}
-	tops.GasLimit, err = c.EstimateGas(ctx, estimateInput)
+
+	var tx *ethtypes.Transaction
+	if *ltp.LegacyTransactionMode {
+		tx = ethtypes.NewTx(&ethtypes.LegacyTx{
+			Nonce:    nonce,
+			To:       to,
+			Value:    amount,
+			Gas:      tops.GasLimit,
+			GasPrice: gasPrice,
+			Data:     calldata,
+		})
+	} else {
+		tx = ethtypes.NewTx(&ethtypes.DynamicFeeTx{
+			ChainID:   chainID,
+			Nonce:     nonce,
+			To:        to,
+			Gas:       tops.GasLimit,
+			GasFeeCap: gasPrice,
+			GasTipCap: gasTipCap,
+			Data:      calldata,
+			Value:     amount,
+		})
+	}
+	log.Trace().Interface("tx", tx).Msg("Contract call data")
+
+	stx, err := tops.Signer(*ltp.FromETHAddress, tx)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to estimate gas for transaction")
+		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
+	}
+
+	t1 = time.Now()
+	defer func() { t2 = time.Now() }()
+	if *ltp.CallOnly {
+		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
+	} else {
+		err = c.SendTransaction(ctx, stx)
+	}
+	return
+}
+
+func loadTestInscription(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+	ltp := inputLoadTestParams
+
+	to := ltp.FromETHAddress
+
+	chainID := new(big.Int).SetUint64(*ltp.ChainID)
+	privateKey := ltp.ECDSAPrivateKey
+
+	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return
+	}
+
+	amount := big.NewInt(0)
+	tops = configureTransactOpts(tops)
+	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
+
+	calldata := []byte(*ltp.InscriptionContent)
+	if tops.GasLimit == 0 {
+		estimateInput := ethereum.CallMsg{
+			From:      tops.From,
+			To:        to,
+			Value:     amount,
+			GasPrice:  tops.GasPrice,
+			GasTipCap: tops.GasTipCap,
+			GasFeeCap: tops.GasFeeCap,
+			Data:      calldata,
+		}
+		tops.GasLimit, err = c.EstimateGas(ctx, estimateInput)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to estimate gas for transaction. Manually setting gas-limit might be required")
+			return
+		}
 	}
 
 	var tx *ethtypes.Transaction
