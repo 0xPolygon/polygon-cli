@@ -288,7 +288,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 	currentMode := monitorModeExplorer
 
-	blockTable, blockInfo, transactionInfo, grid, blockGrid, skeleton := SetUISkeleton()
+	blockTable, blockInfo, transactionInfo, grid, blockGrid, skeleton := setUISkeleton()
 
 	termWidth, termHeight := ui.TerminalDimensions()
 	windowSize = termHeight/2 - 4
@@ -305,8 +305,8 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			// TODO add some help context?
 		} else if currentMode == monitorModeBlock {
 			// render a block
-			skeleton.blockInfo.Rows = GetSimpleBlockFields(selectedBlock)
-			rows, title := GetTransactionsList(selectedBlock, ms.ChainID)
+			skeleton.blockInfo.Rows = getSimpleBlockFields(selectedBlock)
+			rows, title := getTransactionsList(selectedBlock, ms.ChainID)
 			skeleton.transactionList.Rows = rows
 			skeleton.transactionList.Title = title
 
@@ -346,7 +346,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		ms.BlocksLock.RUnlock()
 		renderedBlocks = renderedBlocksTemp
 
-		skeleton.current.Text = GetCurrentBlockInfo(ms, renderedBlocks)
+		skeleton.current.Text = getCurrentBlockInfo(ms, renderedBlocks)
 		skeleton.txPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
 		skeleton.gasPriceChart.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
 		skeleton.blockSizeChart.Data = metrics.GetSizePerBlock(renderedBlocks)
@@ -355,7 +355,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		skeleton.gasChart.Data = metrics.GetGasPerBlock(renderedBlocks)
 
 		// If a row has not been selected, continue to update the list with new blocks.
-		rows, title := GetBlocksList(renderedBlocks)
+		rows, title := getBlocksList(renderedBlocks)
 		blockTable.Rows = rows
 		blockTable.Title = title
 
@@ -371,10 +371,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					Msg("setBlock")
 
 				selectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
-				blockInfo.Rows = GetSimpleBlockFields(selectedBlock)
+				blockInfo.Rows = getSimpleBlockFields(selectedBlock)
 				columnRatio := []int{30, 5, 5, 20, 20, 5, 10}
 				transactionInfo.ColumnWidths = getColumnWidths(columnRatio, transactionInfo.Dx())
-				transactionInfo.Rows = GetBlockTxTable(selectedBlock, ms.ChainID)
+				transactionInfo.Rows = getBlockTxTable(selectedBlock, ms.ChainID)
 				transactionInfo.Title = fmt.Sprintf("Latest Transactions for Block #%s", selectedBlock.Number().String())
 
 				setBlock = false
