@@ -17,8 +17,8 @@ import (
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/cenkalti/backoff/v4"
-	ui "github.com/gizak/termui/v3"
-	"github.com/gizak/termui/v3/widgets"
+	termui "github.com/gizak/termui/v3"
+	"github.com/maticnetwork/polygon-cli/cmd/monitor/ui"
 	"github.com/maticnetwork/polygon-cli/metrics"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/rs/zerolog/log"
@@ -60,17 +60,7 @@ type (
 		SampleValue float64
 	}
 	historicalRange []historicalDataPoint
-	uiSkeleton      struct {
-		current         *widgets.Paragraph
-		txPerBlockChart *widgets.Sparkline
-		gasPriceChart   *widgets.Sparkline
-		blockSizeChart  *widgets.Sparkline
-		pendingTxChart  *widgets.Sparkline
-		gasChart        *widgets.Sparkline
-		blockInfo       *widgets.List
-		transactionList *widgets.List
-	}
-	monitorMode int
+	monitorMode     int
 )
 
 const (
@@ -208,7 +198,7 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 	log.Debug().Uint64("PeerCount", cs.PeerCount).Uint64("ChainID", cs.ChainID.Uint64()).Uint64("HeadBlock", cs.HeadBlock).Uint64("GasPrice", cs.GasPrice.Uint64()).Msg("Fetching blocks")
 
 	if isUiRendered && batchSize < 0 {
-		_, termHeight := ui.TerminalDimensions()
+		_, termHeight := termui.TerminalDimensions()
 		batchSize = termHeight/2 - 4
 	} else {
 		batchSize = 50
@@ -280,17 +270,17 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 }
 
 func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) error {
-	if err := ui.Init(); err != nil {
+	if err := termui.Init(); err != nil {
 		log.Error().Err(err).Msg("Failed to initialize UI")
 		return err
 	}
-	defer ui.Close()
+	defer termui.Close()
 
 	currentMode := monitorModeExplorer
 
-	blockTable, blockInfo, transactionInfo, grid, blockGrid, skeleton := setUISkeleton()
+	blockTable, blockInfo, transactionInfo, grid, blockGrid, skeleton := ui.SetUISkeleton()
 
-	termWidth, termHeight := ui.TerminalDimensions()
+	termWidth, termHeight := termui.TerminalDimensions()
 	windowSize = termHeight/2 - 4
 	grid.SetRect(0, 0, termWidth, termHeight)
 	blockGrid.SetRect(0, 0, termWidth, termHeight)
@@ -305,13 +295,13 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			// TODO add some help context?
 		} else if currentMode == monitorModeBlock {
 			// render a block
-			skeleton.blockInfo.Rows = getSimpleBlockFields(selectedBlock)
-			rows, title := getTransactionsList(selectedBlock, ms.ChainID)
-			skeleton.transactionList.Rows = rows
-			skeleton.transactionList.Title = title
+			skeleton.BlockInfo.Rows = ui.GetSimpleBlockFields(selectedBlock)
+			rows, title := ui.GetTransactionsList(selectedBlock, ms.ChainID)
+			skeleton.TransactionList.Rows = rows
+			skeleton.TransactionList.Title = title
 
-			ui.Clear()
-			ui.Render(blockGrid)
+			termui.Clear()
+			termui.Render(blockGrid)
 			return
 		}
 
@@ -346,21 +336,21 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		ms.BlocksLock.RUnlock()
 		renderedBlocks = renderedBlocksTemp
 
-		skeleton.current.Text = getCurrentBlockInfo(ms, renderedBlocks)
-		skeleton.txPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
-		skeleton.gasPriceChart.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
-		skeleton.blockSizeChart.Data = metrics.GetSizePerBlock(renderedBlocks)
+		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.PendingCount, ms.ChainID, renderedBlocks)
+		skeleton.TxPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
+		skeleton.GasPriceChart.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
+		skeleton.BlockSizeChart.Data = metrics.GetSizePerBlock(renderedBlocks)
 		// skeleton.pendingTxChart.Data = metrics.GetUnclesPerBlock(renderedBlocks)
-		skeleton.pendingTxChart.Data = observedPendingTxs.getValues(25)
-		skeleton.gasChart.Data = metrics.GetGasPerBlock(renderedBlocks)
+		skeleton.PendingTxChart.Data = observedPendingTxs.getValues(25)
+		skeleton.GasChart.Data = metrics.GetGasPerBlock(renderedBlocks)
 
 		// If a row has not been selected, continue to update the list with new blocks.
-		rows, title := getBlocksList(renderedBlocks)
+		rows, title := ui.GetBlocksList(renderedBlocks)
 		blockTable.Rows = rows
 		blockTable.Title = title
 
-		blockTable.TextStyle = ui.NewStyle(ui.ColorWhite)
-		blockTable.SelectedRowStyle = ui.NewStyle(ui.ColorWhite, ui.ColorRed, ui.ModifierBold)
+		blockTable.TextStyle = termui.NewStyle(termui.ColorWhite)
+		blockTable.SelectedRowStyle = termui.NewStyle(termui.ColorWhite, termui.ColorRed, termui.ModifierBold)
 		if blockTable.SelectedRow > 0 && blockTable.SelectedRow <= len(blockTable.Rows) {
 			// Only changed the selected block when the user presses the up down keys.
 			// Otherwise this will adjust when the table is updated automatically.
@@ -371,10 +361,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					Msg("setBlock")
 
 				selectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
-				blockInfo.Rows = getSimpleBlockFields(selectedBlock)
+				blockInfo.Rows = ui.GetSimpleBlockFields(selectedBlock)
 				columnRatio := []int{30, 5, 5, 20, 20, 5, 10}
 				transactionInfo.ColumnWidths = getColumnWidths(columnRatio, transactionInfo.Dx())
-				transactionInfo.Rows = getBlockTxTable(selectedBlock, ms.ChainID)
+				transactionInfo.Rows = ui.GetBlockTxTable(selectedBlock, ms.ChainID)
 				transactionInfo.Title = fmt.Sprintf("Latest Transactions for Block #%s", selectedBlock.Number().String())
 
 				setBlock = false
@@ -386,11 +376,11 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			transactionInfo.Rows = [][]string{{""}, {""}}
 		}
 
-		ui.Render(grid)
+		termui.Render(grid)
 	}
 
 	currentBn := ms.HeadBlock
-	uiEvents := ui.PollEvents()
+	uiEvents := termui.PollEvents()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
@@ -424,18 +414,18 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					currentMode = monitorModeBlock
 				}
 			case "<Resize>":
-				payload := e.Payload.(ui.Resize)
+				payload := e.Payload.(termui.Resize)
 				grid.SetRect(0, 0, payload.Width, payload.Height)
 				blockGrid.SetRect(0, 0, payload.Width, payload.Height)
-				_, termHeight = ui.TerminalDimensions()
+				_, termHeight = termui.TerminalDimensions()
 				windowSize = termHeight/2 - 4
-				ui.Clear()
+				termui.Clear()
 			case "<Up>", "<Down>":
 				if currentMode == monitorModeBlock {
-					if len(skeleton.transactionList.Rows) != 0 && e.ID == "<Down>" {
-						skeleton.transactionList.ScrollDown()
-					} else if len(skeleton.transactionList.Rows) != 0 && e.ID == "<Up>" {
-						skeleton.transactionList.ScrollUp()
+					if len(skeleton.TransactionList.Rows) != 0 && e.ID == "<Down>" {
+						skeleton.TransactionList.ScrollDown()
+					} else if len(skeleton.TransactionList.Rows) != 0 && e.ID == "<Up>" {
+						skeleton.TransactionList.ScrollUp()
 					}
 					break
 				}
