@@ -15,6 +15,20 @@ import (
 )
 
 type (
+	SortableBlocks []PolyBlock
+)
+
+func (a SortableBlocks) Len() int {
+	return len(a)
+}
+func (a SortableBlocks) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+func (a SortableBlocks) Less(i, j int) bool {
+	return a[i].Number().Int64() < a[j].Number().Int64()
+}
+
+type (
 	RawQuantityResponse string
 	RawDataResponse     string
 	RawData8Response    string

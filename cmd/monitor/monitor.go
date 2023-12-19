@@ -61,14 +61,14 @@ type (
 	}
 	historicalRange []historicalDataPoint
 	uiSkeleton      struct {
-		h0  *widgets.Paragraph
-		sl0 *widgets.Sparkline
-		sl1 *widgets.Sparkline
-		sl2 *widgets.Sparkline
-		sl3 *widgets.Sparkline
-		sl4 *widgets.Sparkline
-		b1  *widgets.List
-		b2  *widgets.List
+		current         *widgets.Paragraph
+		txPerBlockChart *widgets.Sparkline
+		gasPriceChart   *widgets.Sparkline
+		blockSizeChart  *widgets.Sparkline
+		pendingTxChart  *widgets.Sparkline
+		gasChart        *widgets.Sparkline
+		blockInfo       *widgets.List
+		transactionList *widgets.List
 	}
 	monitorMode int
 )
@@ -77,6 +77,7 @@ const (
 	monitorModeHelp monitorMode = iota
 	monitorModeExplorer
 	monitorModeBlock
+	monitorModeTransaction
 )
 
 func monitor(ctx context.Context) error {
@@ -278,106 +279,6 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, r
 	return nil
 }
 
-func setUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transactionInfo *widgets.Table, grid *ui.Grid, blockGrid *ui.Grid, termUi uiSkeleton) {
-	// help := widgets.NewParagraph()
-	// help.Title = "Block Headers"
-	// help.Text = "Use the arrow keys to scroll through the transactions. Press <Esc> to go back to the explorer view"
-
-	blockList = widgets.NewList()
-	blockList.TextStyle = ui.NewStyle(ui.ColorWhite)
-
-	blockInfo = widgets.NewList()
-	blockInfo.TextStyle = ui.NewStyle(ui.ColorWhite)
-	blockInfo.Title = "Block Information"
-
-	transactionInfo = widgets.NewTable()
-	transactionInfo.TextStyle = ui.NewStyle(ui.ColorWhite)
-	transactionInfo.FillRow = true
-	transactionInfo.Title = "Latest Transactions"
-	transactionInfo.Rows = [][]string{{""}, {""}}
-
-	termUi = uiSkeleton{}
-
-	termUi.h0 = widgets.NewParagraph()
-	termUi.h0.Title = "Current"
-
-	termUi.sl0 = widgets.NewSparkline()
-	termUi.sl0.LineColor = ui.ColorRed
-	termUi.sl0.MaxHeight = 1000
-	slg0 := widgets.NewSparklineGroup(termUi.sl0)
-	slg0.Title = "TXs / Block"
-
-	termUi.sl1 = widgets.NewSparkline()
-	termUi.sl1.LineColor = ui.ColorGreen
-	termUi.sl1.MaxHeight = 1000
-	slg1 := widgets.NewSparklineGroup(termUi.sl1)
-	slg1.Title = "Gas Price"
-
-	termUi.sl2 = widgets.NewSparkline()
-	termUi.sl2.LineColor = ui.ColorYellow
-	termUi.sl2.MaxHeight = 1000
-	slg2 := widgets.NewSparklineGroup(termUi.sl2)
-	slg2.Title = "Block Size"
-
-	termUi.sl3 = widgets.NewSparkline()
-	termUi.sl3.LineColor = ui.ColorBlue
-	termUi.sl3.MaxHeight = 1000
-	slg3 := widgets.NewSparklineGroup(termUi.sl3)
-	slg3.Title = "Pending Tx"
-
-	termUi.sl4 = widgets.NewSparkline()
-	termUi.sl4.LineColor = ui.ColorMagenta
-	termUi.sl4.MaxHeight = 1000
-	slg4 := widgets.NewSparklineGroup(termUi.sl4)
-	slg4.Title = "Gas Used"
-
-	grid = ui.NewGrid()
-	blockGrid = ui.NewGrid()
-
-	// b0 := widgets.NewParagraph()
-	// b0.Title = "Block Headers"
-	// b0.Text = "Use the arrow keys to scroll through the transactions. Press <Esc> to go back to the explorer view"
-
-	termUi.b1 = widgets.NewList()
-	termUi.b1.Title = "Block Info"
-	termUi.b1.TextStyle = ui.NewStyle(ui.ColorYellow)
-	termUi.b1.WrapText = false
-
-	termUi.b2 = widgets.NewList()
-	termUi.b2.Title = "Transactions"
-	termUi.b2.TextStyle = ui.NewStyle(ui.ColorGreen)
-	termUi.b2.WrapText = true
-
-	blockGrid.Set(
-		// ui.NewRow(1.0/10, b0),
-		ui.NewRow(2.0/10, termUi.b1),
-		ui.NewRow(8.0/10, termUi.b2),
-	)
-
-	grid.Set(
-		ui.NewRow(1.0/10, termUi.h0),
-
-		ui.NewRow(2.0/10,
-			ui.NewCol(1.0/5, slg0),
-			ui.NewCol(1.0/5, slg1),
-			ui.NewCol(1.0/5, slg2),
-			ui.NewCol(1.0/5, slg3),
-			ui.NewCol(1.0/5, slg4),
-		),
-
-		ui.NewRow(5.0/10,
-			ui.NewCol(3.0/5, blockList),
-			ui.NewCol(2.0/5, blockInfo),
-		),
-
-		ui.NewRow(2.0/10,
-			ui.NewCol(5.0/5, transactionInfo),
-		),
-	)
-
-	return
-}
-
 func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) error {
 	if err := ui.Init(); err != nil {
 		log.Error().Err(err).Msg("Failed to initialize UI")
@@ -387,7 +288,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 	currentMode := monitorModeExplorer
 
-	blockTable, blockInfo, transactionInfo, grid, blockGrid, termUi := setUISkeleton()
+	blockTable, blockInfo, transactionInfo, grid, blockGrid, skeleton := SetUISkeleton()
 
 	termWidth, termHeight := ui.TerminalDimensions()
 	windowSize = termHeight/2 - 4
@@ -395,7 +296,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	blockGrid.SetRect(0, 0, termWidth, termHeight)
 
 	var setBlock = false
-	var renderedBlocks metrics.SortableBlocks
+	var renderedBlocks rpctypes.SortableBlocks
 
 	redraw := func(ms *monitorStatus, force ...bool) {
 		log.Debug().Interface("ms", ms).Msg("Redrawing")
@@ -404,8 +305,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			// TODO add some help context?
 		} else if currentMode == monitorModeBlock {
 			// render a block
-			termUi.b1.Rows = metrics.GetSimpleBlockFields(selectedBlock)
-			termUi.b2.Rows = metrics.GetSimpleBlockTxFields(selectedBlock, ms.ChainID)
+			skeleton.blockInfo.Rows = GetSimpleBlockFields(selectedBlock)
+			rows, title := GetTransactionsList(selectedBlock, ms.ChainID)
+			skeleton.transactionList.Rows = rows
+			skeleton.transactionList.Title = title
 
 			ui.Clear()
 			ui.Render(blockGrid)
@@ -443,24 +346,16 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		ms.BlocksLock.RUnlock()
 		renderedBlocks = renderedBlocksTemp
 
-		height := fmt.Sprintf("Height: %s", ms.HeadBlock.String())
-		time := fmt.Sprintf("Time: %s", time.Now().Format("02 Jan 06 15:04:05 MST"))
-		gasPrice := fmt.Sprintf("Gas Price: %s gwei", new(big.Int).Div(ms.GasPrice, metrics.UnitShannon).String())
-		peers := fmt.Sprintf("Peers: %d", ms.PeerCount)
-		pendingTx := fmt.Sprintf("Pending Tx: %d", ms.PendingCount)
-		chainId := fmt.Sprintf("Chain ID: %s", ms.ChainID.String())
-		blockTime := fmt.Sprintf("Avg Block Time: %0.2f", metrics.GetMeanBlockTime(renderedBlocks))
-		termUi.h0.Text = fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s\n%s", height, time, gasPrice, peers, pendingTx, chainId, blockTime)
-
-		termUi.sl0.Data = metrics.GetTxsPerBlock(renderedBlocks)
-		termUi.sl1.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
-		termUi.sl2.Data = metrics.GetSizePerBlock(renderedBlocks)
-		// termUi.sl3.Data = metrics.GetUnclesPerBlock(renderedBlocks)
-		termUi.sl3.Data = observedPendingTxs.getValues(25)
-		termUi.sl4.Data = metrics.GetGasPerBlock(renderedBlocks)
+		skeleton.current.Text = GetCurrentBlockInfo(ms, renderedBlocks)
+		skeleton.txPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
+		skeleton.gasPriceChart.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
+		skeleton.blockSizeChart.Data = metrics.GetSizePerBlock(renderedBlocks)
+		// skeleton.pendingTxChart.Data = metrics.GetUnclesPerBlock(renderedBlocks)
+		skeleton.pendingTxChart.Data = observedPendingTxs.getValues(25)
+		skeleton.gasChart.Data = metrics.GetGasPerBlock(renderedBlocks)
 
 		// If a row has not been selected, continue to update the list with new blocks.
-		rows, title := metrics.GetSimpleBlockRecords(renderedBlocks)
+		rows, title := GetBlocksList(renderedBlocks)
 		blockTable.Rows = rows
 		blockTable.Title = title
 
@@ -476,10 +371,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					Msg("setBlock")
 
 				selectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
-				blockInfo.Rows = metrics.GetSimpleBlockFields(selectedBlock)
+				blockInfo.Rows = GetSimpleBlockFields(selectedBlock)
 				columnRatio := []int{30, 5, 5, 20, 20, 5, 10}
 				transactionInfo.ColumnWidths = getColumnWidths(columnRatio, transactionInfo.Dx())
-				transactionInfo.Rows = metrics.GetBlockTxTable(selectedBlock, ms.ChainID)
+				transactionInfo.Rows = GetBlockTxTable(selectedBlock, ms.ChainID)
 				transactionInfo.Title = fmt.Sprintf("Latest Transactions for Block #%s", selectedBlock.Number().String())
 
 				setBlock = false
@@ -537,10 +432,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				ui.Clear()
 			case "<Up>", "<Down>":
 				if currentMode == monitorModeBlock {
-					if len(termUi.b2.Rows) != 0 && e.ID == "<Down>" {
-						termUi.b2.ScrollDown()
-					} else if len(termUi.b2.Rows) != 0 && e.ID == "<Up>" {
-						termUi.b2.ScrollUp()
+					if len(skeleton.transactionList.Rows) != 0 && e.ID == "<Down>" {
+						skeleton.transactionList.ScrollDown()
+					} else if len(skeleton.transactionList.Rows) != 0 && e.ID == "<Up>" {
+						skeleton.transactionList.ScrollUp()
 					}
 					break
 				}
