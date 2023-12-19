@@ -75,6 +75,7 @@ type (
 		ContractAddress            *string
 		ContractCallData           *string
 		ContractCallPayable        *bool
+		InscriptionJsonContent     *string
 
 		// Computed
 		CurrentGasPrice     *big.Int
@@ -253,6 +254,7 @@ cc, contract-call - call a contract method`)
 	ltp.ContractAddress = LoadtestCmd.Flags().String("contract-address", "", "The address of the contract that will be used in `--mode contract-call`. This must be paired up with `--mode contract-call` and `--calldata`")
 	ltp.ContractCallData = LoadtestCmd.Flags().String("calldata", "", "The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with `--mode contract-call` and `--contract-address`")
 	ltp.ContractCallPayable = LoadtestCmd.Flags().Bool("contract-call-payable", false, "Use this flag if the function is payable, the value amount passed will be from `--eth-amount`. This must be paired up with `--mode contract-call` and `--contract-address`")
+	ltp.InscriptionJsonContent = LoadtestCmd.Flags().String("json-content", `{"p":"asc-20","op":"mint","tick":"TEST","amt":"1"}`, "The json content that will be encoded as calldata for an inscription. This must be paired up with `--mode inscription`")
 
 	inputLoadTestParams = *ltp
 

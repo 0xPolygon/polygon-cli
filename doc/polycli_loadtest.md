@@ -124,6 +124,7 @@ The codebase has a contract that used for load testing. It's written in Yul and 
       --gas-price uint                          In environments where the gas price can't be determined automatically, we can specify it manually
   -h, --help                                    help for loadtest
   -i, --iterations uint                         If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size (default 1)
+      --json-content --mode inscription         The json content that will be encoded as calldata for an inscription. This must be paired up with --mode inscription (default "{\"p\":\"asc-20\",\"op\":\"mint\",\"tick\":\"TEST\",\"amt\":\"1\"}")
       --legacy                                  Send a legacy transaction instead of an EIP1559 transaction.
       --lt-address string                       The address of a pre-deployed load test contract
   -m, --mode strings                            The testing mode to use. It can be multiple like: "t,c,d,f"
