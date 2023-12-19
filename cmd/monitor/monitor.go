@@ -62,10 +62,6 @@ type (
 	historicalRange []historicalDataPoint
 	uiSkeleton      struct {
 		h0  *widgets.Paragraph
-		h1  *widgets.Paragraph
-		h2  *widgets.Paragraph
-		h3  *widgets.Paragraph
-		h4  *widgets.Paragraph
 		sl0 *widgets.Sparkline
 		sl1 *widgets.Sparkline
 		sl2 *widgets.Sparkline
@@ -298,23 +294,12 @@ func setUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 	transactionInfo.TextStyle = ui.NewStyle(ui.ColorWhite)
 	transactionInfo.FillRow = true
 	transactionInfo.Title = "Latest Transactions"
+	transactionInfo.Rows = [][]string{{""}, {""}}
 
 	termUi = uiSkeleton{}
 
 	termUi.h0 = widgets.NewParagraph()
 	termUi.h0.Title = "Current"
-
-	termUi.h1 = widgets.NewParagraph()
-	termUi.h1.Title = "Gas Price"
-
-	termUi.h2 = widgets.NewParagraph()
-	termUi.h2.Title = "Current"
-
-	termUi.h3 = widgets.NewParagraph()
-	termUi.h3.Title = "Chain ID"
-
-	termUi.h4 = widgets.NewParagraph()
-	termUi.h4.Title = "Avg Block Time"
 
 	termUi.sl0 = widgets.NewSparkline()
 	termUi.sl0.LineColor = ui.ColorRed
@@ -370,13 +355,7 @@ func setUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 	)
 
 	grid.Set(
-		ui.NewRow(1.0/10,
-			ui.NewCol(1.0/5, termUi.h0),
-			ui.NewCol(1.0/5, termUi.h1),
-			ui.NewCol(1.0/5, termUi.h2),
-			ui.NewCol(1.0/5, termUi.h3),
-			ui.NewCol(1.0/5, termUi.h4),
-		),
+		ui.NewRow(1.0/10, termUi.h0),
 
 		ui.NewRow(2.0/10,
 			ui.NewCol(1.0/5, slg0),
@@ -387,11 +366,8 @@ func setUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 		),
 
 		ui.NewRow(5.0/10,
-			ui.NewCol(1.0/2, blockList),
-			ui.NewCol(1.0/2,
-				ui.NewRow(1.0/2, blockInfo),
-				ui.NewRow(1.0/2, blockInfo),
-			),
+			ui.NewCol(3.0/5, blockList),
+			ui.NewCol(2.0/5, blockInfo),
 		),
 
 		ui.NewRow(2.0/10,
@@ -510,10 +486,9 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				log.Debug().Uint64("blockNumber", selectedBlock.Number().Uint64()).Msg("Selected block changed")
 			}
 		} else {
-			columnRatio := []int{30, 5, 5, 20, 20, 5, 10}
-			transactionInfo.ColumnWidths = getColumnWidths(columnRatio, transactionInfo.Dx())
-			transactionInfo.Rows = [][]string{{"Txn Hash", "Method", "Timestamp", "From", "To", "Value", "Gas Price"}}
+			transactionInfo.Title = "Latest Transactions"
 			blockInfo.Rows = []string{}
+			transactionInfo.Rows = [][]string{{""}, {""}}
 		}
 
 		ui.Render(grid)
