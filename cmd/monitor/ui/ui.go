@@ -35,8 +35,7 @@ func GetCurrentBlockInfo(headBlock *big.Int, gasPrice *big.Int, peerCount uint64
 	peers := fmt.Sprintf("Peers: %d", peerCount)
 	pendingTx := fmt.Sprintf("Pending Tx: %d", pendingCount)
 	chainIdString := fmt.Sprintf("Chain ID: %s", chainID.String())
-	blockTime := fmt.Sprintf("Avg Block Time: %0.2f", metrics.GetMeanBlockTime(blocks))
-	return fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s\n%s", height, time, gasPriceString, peers, pendingTx, chainIdString, blockTime)
+	return fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s", height, time, gasPriceString, peers, pendingTx, chainIdString)
 
 }
 
@@ -160,7 +159,7 @@ func GetSimpleBlockFields(block rpctypes.PolyBlock) []string {
 
 func GetBlockTxTable(block rpctypes.PolyBlock, chainID *big.Int) [][]string {
 	fields := make([][]string, 0)
-	header := []string{"Txn Hash", "Method", "Timestamp", "From", "To", "Value", "Gas Price"}
+	header := []string{"Txn Hash", "Method", "From", "To", "Value", "Gas Price"}
 	fields = append(fields, header)
 	for _, tx := range block.Transactions() {
 		txFields := getTxTable(tx, chainID, block.BaseFee())

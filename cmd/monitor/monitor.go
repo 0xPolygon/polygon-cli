@@ -32,7 +32,6 @@ var (
 	interval           time.Duration
 	one                = big.NewInt(1)
 	zero               = big.NewInt(0)
-	selectedBlock      rpctypes.PolyBlock
 	observedPendingTxs historicalRange
 	maxDataPoints      = 1000
 )
@@ -40,11 +39,14 @@ var (
 type (
 	monitorStatus struct {
 		TopDisplayedBlock *big.Int
+		UpperBlock        *big.Int
+		LowerBlock        *big.Int
 		ChainID           *big.Int
 		HeadBlock         *big.Int
 		PeerCount         uint64
 		GasPrice          *big.Int
 		PendingCount      uint64
+		SelectedBlock     rpctypes.PolyBlock
 		BlockCache        *lru.Cache   `json:"-"`
 		BlocksLock        sync.RWMutex `json:"-"`
 	}
@@ -114,7 +116,9 @@ func monitor(ctx context.Context) error {
 			return // exit the goroutine when the context is done
 		default:
 			for {
-				err = fetchBlocks(ctx, ec, ms, rpc, isUiRendered)
+				if ms.TopDisplayedBlock == nil || ms.SelectedBlock == nil {
+					err = fetchBlocks(ctx, ec, ms, rpc, isUiRendered)
+				}
 				if err != nil {
 					continue
 				}
@@ -200,8 +204,6 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 	if isUiRendered && batchSize < 0 {
 		_, termHeight := termui.TerminalDimensions()
 		batchSize = termHeight/2 - 4
-	} else {
-		batchSize = 50
 	}
 
 	ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
@@ -227,6 +229,9 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, rpc *ethrpc.Client) error {
 	blms := make([]ethrpc.BatchElem, 0)
 
+	ms.UpperBlock = to
+	ms.LowerBlock = from
+	log.Debug().Msgf("FETCH BLOCKS %d %d", ms.UpperBlock, ms.LowerBlock)
 	for i := new(big.Int).Set(from); i.Cmp(to) <= 0; i.Add(i, one) {
 		ms.BlocksLock.RLock()
 		_, found := ms.BlockCache.Get(i.String())
@@ -289,14 +294,23 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	var renderedBlocks rpctypes.SortableBlocks
 
 	redraw := func(ms *monitorStatus, force ...bool) {
-		log.Debug().Interface("ms", ms).Msg("Redrawing")
+		log.Debug().
+			Str("TopDisplayedBlock", ms.TopDisplayedBlock.String()).
+			Str("UpperBlock", ms.UpperBlock.String()).
+			Str("LowerBlock", ms.LowerBlock.String()).
+			Str("ChainID", ms.ChainID.String()).
+			Str("HeadBlock", ms.HeadBlock.String()).
+			Uint64("PeerCount", ms.PeerCount).
+			Str("GasPrice", ms.GasPrice.String()).
+			Uint64("PendingCount", ms.PendingCount).
+			Msg("Redrawing")
 
 		if currentMode == monitorModeHelp {
 			// TODO add some help context?
 		} else if currentMode == monitorModeBlock {
 			// render a block
-			skeleton.BlockInfo.Rows = ui.GetSimpleBlockFields(selectedBlock)
-			rows, title := ui.GetTransactionsList(selectedBlock, ms.ChainID)
+			skeleton.BlockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
+			rows, title := ui.GetTransactionsList(ms.SelectedBlock, ms.ChainID)
 			skeleton.TransactionList.Rows = rows
 			skeleton.TransactionList.Title = title
 
@@ -360,17 +374,18 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					Int("renderedBlocks", len(renderedBlocks)).
 					Msg("setBlock")
 
-				selectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
-				blockInfo.Rows = ui.GetSimpleBlockFields(selectedBlock)
+				ms.SelectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
+				blockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
 				columnRatio := []int{30, 5, 5, 20, 20, 5, 10}
 				transactionInfo.ColumnWidths = getColumnWidths(columnRatio, transactionInfo.Dx())
-				transactionInfo.Rows = ui.GetBlockTxTable(selectedBlock, ms.ChainID)
-				transactionInfo.Title = fmt.Sprintf("Latest Transactions for Block #%s", selectedBlock.Number().String())
+				transactionInfo.Rows = ui.GetBlockTxTable(ms.SelectedBlock, ms.ChainID)
+				transactionInfo.Title = fmt.Sprintf("Latest Transactions for Block #%s", ms.SelectedBlock.Number().String())
 
 				setBlock = false
-				log.Debug().Uint64("blockNumber", selectedBlock.Number().Uint64()).Msg("Selected block changed")
+				log.Debug().Uint64("blockNumber", ms.SelectedBlock.Number().Uint64()).Msg("Selected block changed")
 			}
 		} else {
+			ms.SelectedBlock = nil
 			transactionInfo.Title = "Latest Transactions"
 			blockInfo.Rows = []string{}
 			transactionInfo.Rows = [][]string{{""}, {""}}
@@ -472,7 +487,9 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 						redraw(ms, true)
 						break
 					}
-					blockTable.SelectedRow += 1
+					// blockTable.SelectedRow += 1
+					blockTable.ScrollDown()
+
 					setBlock = true
 				} else if e.ID == "<Up>" {
 					log.Debug().Int("blockTable.SelectedRow", blockTable.SelectedRow).Int("windowSize", windowSize).Msg("Up")
@@ -511,7 +528,8 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 						redraw(ms, true)
 						break
 					}
-					blockTable.SelectedRow -= 1
+					// blockTable.SelectedRow -= 1
+					blockTable.ScrollUp()
 					setBlock = true
 				}
 			case "<Home>":
@@ -539,15 +557,18 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					nextTopBlockNumber.SetInt64(0)
 				}
 
-				toBlockNumber := new(big.Int).Sub(nextTopBlockNumber, big.NewInt(int64(windowSize-1)))
-				if toBlockNumber.Cmp(zero) < 0 {
-					toBlockNumber.SetInt64(0)
+				bottomBlockNumber := new(big.Int).Sub(nextTopBlockNumber, big.NewInt(int64(windowSize-1)))
+				if bottomBlockNumber.Cmp(zero) < 0 {
+					bottomBlockNumber.SetInt64(0)
 				}
 
-				err := ms.getBlockRange(ctx, toBlockNumber, nextTopBlockNumber, rpc)
-				if err != nil {
-					log.Warn().Err(err).Msg("Failed to fetch blocks on page down")
-					break
+				if ms.LowerBlock.Cmp(bottomBlockNumber) > 0 {
+					log.Debug().Msgf("TEST NOT HERE %d %d", ms.LowerBlock, bottomBlockNumber)
+					err := ms.getBlockRange(ctx, bottomBlockNumber, nextTopBlockNumber, rpc)
+					if err != nil {
+						log.Warn().Err(err).Msg("Failed to fetch blocks on page down")
+						break
+					}
 				}
 
 				ms.TopDisplayedBlock = nextTopBlockNumber
@@ -557,7 +578,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 				log.Debug().
 					Int("TopDisplayedBlock", int(ms.TopDisplayedBlock.Int64())).
-					Int("toBlockNumber", int(toBlockNumber.Int64())).
+					Int("bottomBlockNumber", int(bottomBlockNumber.Int64())).
 					Msg("PageDown")
 
 				forceRedraw = true

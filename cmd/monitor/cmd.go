@@ -33,6 +33,10 @@ var MonitorCmd = &cobra.Command{
 		if verbosityFlag != nil && !verbosityFlag.Changed {
 			util.SetLogLevel(int(util.Silent))
 		}
+		prettyFlag := cmd.Flag("pretty-logs")
+		if prettyFlag != nil && prettyFlag.Value.String() == "true" {
+			util.SetLogMode(util.Console)
+		}
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return checkFlags()
