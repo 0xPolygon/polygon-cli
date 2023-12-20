@@ -553,6 +553,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				ms.TopDisplayedBlock = nextTopBlockNumber
 
 				blockTable.SelectedRow = 1
+				setBlock = true
 
 				log.Debug().
 					Int("TopDisplayedBlock", int(ms.TopDisplayedBlock.Int64())).
@@ -581,6 +582,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				ms.TopDisplayedBlock = nextTopBlockNumber
 
 				blockTable.SelectedRow = 1
+				setBlock = true
 
 				log.Debug().
 					Int("TopDisplayedBlock", int(ms.TopDisplayedBlock.Int64())).
