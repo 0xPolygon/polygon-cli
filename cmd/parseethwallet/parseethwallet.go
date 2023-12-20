@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/maticnetwork/polygon-cli/gethkeystore"
 	"io"
 	"os"
 	"strings"
@@ -27,10 +28,6 @@ var (
 	inputKeyStoreDirectory *string
 )
 
-type plainKeyJSON struct {
-	Address string              `json:"address"`
-	Crypto  keystore.CryptoJSON `json:"crypto"`
-}
 type outKey struct {
 	Address    string
 	PublicKey  string
@@ -60,7 +57,7 @@ var ParseETHWalletCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		k := new(plainKeyJSON)
+		k := new(gethkeystore.RawKeystoreData)
 		err = json.Unmarshal(rawData, &k)
 		if err != nil {
 			return err

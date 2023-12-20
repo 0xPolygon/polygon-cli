@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/maticnetwork/polygon-cli/cmd/dbbench"
+	"github.com/maticnetwork/polygon-cli/cmd/signer"
 	"os"
 
 	"github.com/maticnetwork/polygon-cli/cmd/fork"
@@ -120,6 +121,7 @@ func NewPolycliCommand() *cobra.Command {
 		parseethwallet.ParseETHWalletCmd,
 		rpc.RpcCmd,
 		rpcfuzz.RPCFuzzCmd,
+		signer.SignerCmd,
 		version.VersionCmd,
 		wallet.WalletCmd,
 	)
