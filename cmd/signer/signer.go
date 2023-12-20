@@ -2,6 +2,9 @@ package signer
 
 import (
 	"bytes"
+	kms "cloud.google.com/go/kms/apiv1"
+	"cloud.google.com/go/kms/apiv1/kmspb"
+	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
@@ -14,8 +17,11 @@ import (
 	"github.com/maticnetwork/polygon-cli/gethkeystore"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"math/big"
 	"os"
+	"strings"
+	"time"
 )
 
 type signerOpts struct {
@@ -27,6 +33,9 @@ type signerOpts struct {
 	dataFile       *string
 	signerType     *string
 	chainID        *uint64
+	gcpProjectID   *string
+	gcpRegion      *string
+	gcpKeyRingID   *string
 }
 
 type signedTx struct {
@@ -139,6 +148,10 @@ var CreateCmd = &cobra.Command{
 			log.Info().Str("address", acc.Address.String()).Msg("imported new account")
 			return nil
 		}
+		if *inputSignerOpts.kms == "GCP" {
+			foo := GCPKMS{}
+			return foo.CreateKey(cmd.Context())
+		}
 		return nil
 	},
 }
@@ -181,6 +194,83 @@ func sign(pk *ecdsa.PrivateKey) error {
 	return nil
 }
 
+type GCPKMS struct{}
+
+func (g *GCPKMS) CreateKeyRing(ctx context.Context) error {
+	parent := fmt.Sprintf("projects/%s/locations/%s", *inputSignerOpts.gcpProjectID, *inputSignerOpts.gcpRegion)
+	id := *inputSignerOpts.gcpKeyRingID
+	log.Info().Str("parent", parent).Str("id", id).Msg("Creating keyring")
+	// Create the client.
+	client, err := kms.NewKeyManagementClient(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create kms client: %w", err)
+	}
+	defer client.Close()
+
+	result, err := client.GetKeyRing(ctx, &kmspb.GetKeyRingRequest{Name: fmt.Sprintf("%s/keyRings/%s", parent, id)})
+	if err != nil {
+		nf := strings.Contains(err.Error(), "not found")
+		if !nf {
+			return err
+		}
+	}
+	if err == nil {
+		log.Info().Str("name", result.Name).Msg("key ring already exists")
+		return nil
+	}
+	log.Info().Str("id", id).Msg("key ring not found - creating")
+
+	// Build the request.
+	req := &kmspb.CreateKeyRingRequest{
+		Parent:    parent,
+		KeyRingId: id,
+	}
+
+	// Call the API.
+	result, err = client.CreateKeyRing(ctx, req)
+	if err != nil {
+		return fmt.Errorf("failed to create key ring: %w", err)
+	}
+	log.Info().Str("name", result.Name).Msg("Created key ring")
+	return nil
+}
+
+func (g *GCPKMS) CreateKey(ctx context.Context) error {
+	parent := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s", *inputSignerOpts.gcpProjectID, *inputSignerOpts.gcpRegion, *inputSignerOpts.gcpKeyRingID)
+	id := *inputSignerOpts.keyID
+
+	client, err := kms.NewKeyManagementClient(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create kms client: %w", err)
+	}
+	defer client.Close()
+
+	// Build the request.
+	req := &kmspb.CreateCryptoKeyRequest{
+		Parent:      parent,
+		CryptoKeyId: id,
+		CryptoKey: &kmspb.CryptoKey{
+			Purpose: kmspb.CryptoKey_ASYMMETRIC_SIGN,
+			VersionTemplate: &kmspb.CryptoKeyVersionTemplate{
+				Algorithm:       kmspb.CryptoKeyVersion_EC_SIGN_SECP256K1_SHA256,
+				ProtectionLevel: kmspb.ProtectionLevel_HSM,
+			},
+
+			// Optional: customize how long key versions should be kept before destroying.
+			DestroyScheduledDuration: durationpb.New(24 * time.Hour),
+		},
+	}
+
+	// Call the API.
+	result, err := client.CreateCryptoKey(ctx, req)
+	if err != nil {
+		return fmt.Errorf("failed to create key: %w", err)
+	}
+	log.Info().Str("name", result.Name).Msg("created key")
+	return nil
+
+}
+
 func getKeystorePassword() (string, error) {
 	if *inputSignerOpts.unsafePassword != "" {
 		return *inputSignerOpts.unsafePassword, nil
@@ -205,6 +295,23 @@ func sanityCheck(cmd *cobra.Command, args []string) error {
 	pwErr := passwordValidation(*inputSignerOpts.unsafePassword)
 	if *inputSignerOpts.unsafePassword != "" && pwErr != nil {
 		return pwErr
+	}
+
+	if *inputSignerOpts.kms == "GCP" {
+		if *inputSignerOpts.gcpProjectID == "" {
+			return fmt.Errorf("a GCP project id must be specified")
+		}
+
+		if *inputSignerOpts.gcpRegion == "" {
+			return fmt.Errorf("a location is required")
+		}
+
+		if *inputSignerOpts.gcpKeyRingID == "" {
+			return fmt.Errorf("a GCP Keyring ID is needed")
+		}
+		if *inputSignerOpts.keyID == "" {
+			return fmt.Errorf("a key id is required")
+		}
 	}
 	return nil
 }
@@ -250,6 +357,12 @@ func init() {
 	inputSignerOpts.dataFile = SignerCmd.PersistentFlags().String("data-file", "", "File name holding data to be signed")
 
 	inputSignerOpts.chainID = SignerCmd.PersistentFlags().Uint64("chain-id", 0, "The chain id for the transactions.")
+
+	// https://github.com/golang/oauth2/issues/241
+	inputSignerOpts.gcpProjectID = SignerCmd.PersistentFlags().String("gcp-project-id", "", "The GCP Project ID to use")
+	inputSignerOpts.gcpRegion = SignerCmd.PersistentFlags().String("gcp-location", "europe-west2", "The GCP Region to use")
+	// What is dead may never die https://cloud.google.com/kms/docs/faq#cannot_delete
+	inputSignerOpts.gcpKeyRingID = SignerCmd.PersistentFlags().String("gcp-keyring-id", "polycli-keyring", "The GCP Keyring ID to be used")
 
 	SignerCmd.AddCommand(SignCmd)
 	SignerCmd.AddCommand(CreateCmd)
