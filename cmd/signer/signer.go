@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/x509/pkix"
+	_ "embed"
 	"encoding/asn1"
 	"encoding/hex"
 	"encoding/json"
@@ -47,17 +48,20 @@ type signerOpts struct {
 
 var inputSignerOpts = signerOpts{}
 
+//go:embed usage.md
+var signerUsage string
+
 var SignerCmd = &cobra.Command{
 	Use:   "signer",
 	Short: "Utilities for security signing transactions",
-	Long:  "TODO",
+	Long:  signerUsage,
 	Args:  cobra.NoArgs,
 }
 
 var SignCmd = &cobra.Command{
 	Use:     "sign",
 	Short:   "Sign tx data",
-	Long:    "TODO",
+	Long:    signerUsage,
 	Args:    cobra.NoArgs,
 	PreRunE: sanityCheck,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -128,7 +132,7 @@ var SignCmd = &cobra.Command{
 var CreateCmd = &cobra.Command{
 	Use:     "create",
 	Short:   "Create a new key",
-	Long:    "TODO",
+	Long:    signerUsage,
 	Args:    cobra.NoArgs,
 	PreRunE: sanityCheck,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -175,6 +179,9 @@ var CreateCmd = &cobra.Command{
 }
 
 func getTxDataToSign() (*types.Transaction, error) {
+	if *inputSignerOpts.dataFile == "" {
+		return nil, fmt.Errorf("no datafile was specified to sign")
+	}
 	dataToSign, err := os.ReadFile(*inputSignerOpts.dataFile)
 	if err != nil {
 		return nil, err
