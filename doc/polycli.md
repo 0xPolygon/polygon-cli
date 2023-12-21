@@ -66,6 +66,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli rpcfuzz](polycli_rpcfuzz.md) - Continually run a variety of RPC calls and fuzzers.
 
+- [polycli signer](polycli_signer.md) - Utilities for security signing transactions
+
 - [polycli version](polycli_version.md) - Get the current version of this application
 
 - [polycli wallet](polycli_wallet.md) - Create or inspect BIP39(ish) wallets.
