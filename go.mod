@@ -71,7 +71,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
-	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/s2a-go v0.1.7 // indirect
 	github.com/google/uuid v1.5.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
@@ -150,7 +149,6 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-require (
-	cloud.google.com/go/iam v1.1.3 // indirect
-	cloud.google.com/go/kms v1.15.5 // indirect
-)
+require cloud.google.com/go/kms v1.15.5
+
+require cloud.google.com/go/iam v1.1.3 // indirect

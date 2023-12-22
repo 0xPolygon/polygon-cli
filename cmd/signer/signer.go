@@ -361,7 +361,7 @@ func (g *GCPKMS) Sign(ctx context.Context, tx *types.Transaction) error {
 	// Optional, but recommended: perform integrity verification on result.
 	// For more details on ensuring E2E in-transit integrity to and from Cloud KMS visit:
 	// https://cloud.google.com/kms/docs/data-integrity-guidelines
-	if result.VerifiedDigestCrc32C == false {
+	if !result.VerifiedDigestCrc32C {
 		return fmt.Errorf("AsymmetricSign: request corrupted in-transit")
 	}
 	if result.Name != req.Name {
@@ -378,7 +378,7 @@ func (g *GCPKMS) Sign(ctx context.Context, tx *types.Transaction) error {
 
 	block, _ := pem.Decode([]byte(pubKeyResponse.Pem))
 	var gcpPubKey publicKeyInfo
-	if _, err := asn1.Unmarshal(block.Bytes, &gcpPubKey); err != nil {
+	if _, err = asn1.Unmarshal(block.Bytes, &gcpPubKey); err != nil {
 		return err
 	}
 
