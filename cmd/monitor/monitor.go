@@ -122,22 +122,9 @@ func monitor(ctx context.Context) error {
 				}
 				if ms.TopDisplayedBlock == nil || ms.SelectedBlock == nil {
 					ms.TopDisplayedBlock = ms.HeadBlock
-					// from := new(big.Int).Sub(ms.HeadBlock, big.NewInt(int64(batchSize-1)))
-
-					// if from.Cmp(zero) < 0 {
-					// 	from.SetInt64(0)
-					// }
-
-					// err = ms.getBlockRange(ctx, from, ms.HeadBlock, rpc)
-					// if err != nil {
-					// 	continue
-					// }
 				}
 				if !isUiRendered {
 					go func() {
-						// if ms.TopDisplayedBlock == nil {
-						// 	ms.TopDisplayedBlock = ms.HeadBlock
-						// }
 						errChan <- renderMonitorUI(ctx, ec, ms, rpc)
 					}()
 					isUiRendered = true
@@ -226,13 +213,25 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 	return
 }
 
-func (ms *monitorStatus) getBlockRange(ctx context.Context, from, to *big.Int, rpc *ethrpc.Client) error {
-	blms := make([]ethrpc.BatchElem, 0)
+func (ms *monitorStatus) getBlockRange(ctx context.Context, to *big.Int, rpc *ethrpc.Client) error {
+	halfBatchSize := new(big.Int).SetInt64(int64(batchSize / 2))
 
-	ms.UpperBlock = to
-	ms.LowerBlock = from
-	log.Debug().Msgf("FETCH BLOCKS %d %d", ms.UpperBlock, ms.LowerBlock)
-	for i := new(big.Int).Set(from); i.Cmp(to) <= 0; i.Add(i, one) {
+	startBlock := new(big.Int).Sub(to, halfBatchSize)
+	endBlock := new(big.Int).Add(to, halfBatchSize)
+
+	if startBlock.Cmp(zero) < 0 {
+		startBlock.SetInt64(0)
+	}
+
+	if endBlock.Cmp(ms.HeadBlock) > 0 {
+		endBlock.Set(ms.HeadBlock)
+	}
+
+	ms.LowerBlock = startBlock
+	ms.UpperBlock = endBlock
+
+	blms := make([]ethrpc.BatchElem, 0)
+	for i := new(big.Int).Set(startBlock); i.Cmp(endBlock) <= 0; i.Add(i, one) {
 		ms.BlocksLock.RLock()
 		_, found := ms.BlockCache.Get(i.String())
 		ms.BlocksLock.RUnlock()
@@ -296,6 +295,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	redraw := func(ms *monitorStatus, force ...bool) {
 		log.Debug().
 			Str("TopDisplayedBlock", ms.TopDisplayedBlock.String()).
+			Int("BatchSize", batchSize).
 			Str("UpperBlock", ms.UpperBlock.String()).
 			Str("LowerBlock", ms.LowerBlock.String()).
 			Str("ChainID", ms.ChainID.String()).
@@ -320,20 +320,13 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		}
 
 		if blockTable.SelectedRow == 0 {
-			// ms.TopDisplayedBlock = ms.HeadBlock
-			// log.Debug().
-			// 	Str("LowerBlock", ms.LowerBlock.String()).
-			// 	Str("UpperBlock", ms.UpperBlock.String()).
-			// 	Str("ms.HeadBlock", ms.HeadBlock.String()).
-			// 	Msg("TEST TEST")
-
 			bottomBlockNumber := new(big.Int).Sub(ms.HeadBlock, big.NewInt(int64(windowSize-1)))
 			if bottomBlockNumber.Cmp(zero) < 0 {
 				bottomBlockNumber.SetInt64(0)
 			}
 
 			// if ms.LowerBlock == nil || ms.LowerBlock.Cmp(bottomBlockNumber) > 0 {
-			err := ms.getBlockRange(ctx, bottomBlockNumber, ms.TopDisplayedBlock, rpc)
+			err := ms.getBlockRange(ctx, ms.TopDisplayedBlock, rpc)
 			if err != nil {
 				log.Error().Err(err).Msg("There was an issue fetching the block range")
 			}
@@ -426,7 +419,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					toBlockNumber.SetInt64(0)
 				}
 
-				err := ms.getBlockRange(ctx, toBlockNumber, ms.TopDisplayedBlock, rpc)
+				err := ms.getBlockRange(ctx, ms.TopDisplayedBlock, rpc)
 				if err != nil {
 					log.Error().Err(err).Msg("There was an issue fetching the block range")
 					break
@@ -478,7 +471,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 						}
 
 						if !isBlockInCache(ms.BlockCache, toBlockNumber) {
-							err := ms.getBlockRange(ctx, new(big.Int).Sub(nextTopBlockNumber, big.NewInt(int64(windowSize))), toBlockNumber, rpc)
+							err := ms.getBlockRange(ctx, toBlockNumber, rpc)
 							if err != nil {
 								log.Warn().Err(err).Msg("Failed to fetch blocks on page down")
 								break
@@ -517,7 +510,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 						// Fetch the blocks in the new range if they are missing
 						if !isBlockInCache(ms.BlockCache, nextTopBlockNumber) {
-							err := ms.getBlockRange(ctx, toBlockNumber, new(big.Int).Add(nextTopBlockNumber, big.NewInt(int64(windowSize))), rpc)
+							err := ms.getBlockRange(ctx, new(big.Int).Add(nextTopBlockNumber, big.NewInt(int64(windowSize))), rpc)
 							if err != nil {
 								log.Warn().Err(err).Msg("Failed to fetch blocks on page up")
 								break
@@ -571,7 +564,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 				if ms.LowerBlock.Cmp(bottomBlockNumber) > 0 {
 					log.Debug().Msgf("TEST NOT HERE %d %d", ms.LowerBlock, bottomBlockNumber)
-					err := ms.getBlockRange(ctx, bottomBlockNumber, nextTopBlockNumber, rpc)
+					err := ms.getBlockRange(ctx, nextTopBlockNumber, rpc)
 					if err != nil {
 						log.Warn().Err(err).Msg("Failed to fetch blocks on page down")
 						break
@@ -601,7 +594,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					toBlockNumber.SetInt64(0)
 				}
 
-				err := ms.getBlockRange(ctx, toBlockNumber, nextTopBlockNumber, rpc)
+				err := ms.getBlockRange(ctx, nextTopBlockNumber, rpc)
 				if err != nil {
 					log.Warn().Err(err).Msg("Failed to fetch blocks on page up")
 					break
