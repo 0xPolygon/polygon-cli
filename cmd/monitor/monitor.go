@@ -116,17 +116,28 @@ func monitor(ctx context.Context) error {
 			return // exit the goroutine when the context is done
 		default:
 			for {
-				if ms.TopDisplayedBlock == nil || ms.SelectedBlock == nil {
-					err = fetchBlocks(ctx, ec, ms, rpc, isUiRendered)
-				}
+				err = fetchCurrentBlockData(ctx, ec, ms, rpc, isUiRendered)
 				if err != nil {
 					continue
 				}
+				if ms.TopDisplayedBlock == nil || ms.SelectedBlock == nil {
+					ms.TopDisplayedBlock = ms.HeadBlock
+					// from := new(big.Int).Sub(ms.HeadBlock, big.NewInt(int64(batchSize-1)))
+
+					// if from.Cmp(zero) < 0 {
+					// 	from.SetInt64(0)
+					// }
+
+					// err = ms.getBlockRange(ctx, from, ms.HeadBlock, rpc)
+					// if err != nil {
+					// 	continue
+					// }
+				}
 				if !isUiRendered {
 					go func() {
-						if ms.TopDisplayedBlock == nil {
-							ms.TopDisplayedBlock = ms.HeadBlock
-						}
+						// if ms.TopDisplayedBlock == nil {
+						// 	ms.TopDisplayedBlock = ms.HeadBlock
+						// }
 						errChan <- renderMonitorUI(ctx, ec, ms, rpc)
 					}()
 					isUiRendered = true
@@ -186,7 +197,7 @@ func (h historicalRange) getValues(limit int) []float64 {
 	return values
 }
 
-func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client, isUiRendered bool) (err error) {
+func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client, isUiRendered bool) (err error) {
 	var cs *chainState
 	cs, err = getChainState(ctx, ec)
 	if err != nil {
@@ -211,17 +222,6 @@ func fetchBlocks(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, r
 	ms.PeerCount = cs.PeerCount
 	ms.GasPrice = cs.GasPrice
 	ms.PendingCount = cs.PendingCount
-
-	from := new(big.Int).Sub(ms.HeadBlock, big.NewInt(int64(batchSize-1)))
-
-	if from.Cmp(zero) < 0 {
-		from.SetInt64(0)
-	}
-
-	err = ms.getBlockRange(ctx, from, ms.HeadBlock, rpc)
-	if err != nil {
-		return err
-	}
 
 	return
 }
@@ -320,17 +320,24 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		}
 
 		if blockTable.SelectedRow == 0 {
-			ms.TopDisplayedBlock = ms.HeadBlock
+			// ms.TopDisplayedBlock = ms.HeadBlock
+			// log.Debug().
+			// 	Str("LowerBlock", ms.LowerBlock.String()).
+			// 	Str("UpperBlock", ms.UpperBlock.String()).
+			// 	Str("ms.HeadBlock", ms.HeadBlock.String()).
+			// 	Msg("TEST TEST")
 
-			toBlockNumber := new(big.Int).Sub(ms.TopDisplayedBlock, big.NewInt(int64(windowSize-1)))
-			if toBlockNumber.Cmp(zero) < 0 {
-				toBlockNumber.SetInt64(0)
+			bottomBlockNumber := new(big.Int).Sub(ms.HeadBlock, big.NewInt(int64(windowSize-1)))
+			if bottomBlockNumber.Cmp(zero) < 0 {
+				bottomBlockNumber.SetInt64(0)
 			}
 
-			err := ms.getBlockRange(ctx, toBlockNumber, ms.TopDisplayedBlock, rpc)
+			// if ms.LowerBlock == nil || ms.LowerBlock.Cmp(bottomBlockNumber) > 0 {
+			err := ms.getBlockRange(ctx, bottomBlockNumber, ms.TopDisplayedBlock, rpc)
 			if err != nil {
 				log.Error().Err(err).Msg("There was an issue fetching the block range")
 			}
+			// }
 		}
 		toBlockNumber := ms.TopDisplayedBlock
 		fromBlockNumber := new(big.Int).Sub(toBlockNumber, big.NewInt(int64(windowSize-1)))
