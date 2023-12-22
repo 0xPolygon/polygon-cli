@@ -27,7 +27,7 @@ var MonitorCmd = &cobra.Command{
 	Short: "Monitor blocks using a JSON-RPC endpoint.",
 	Long:  usage,
 	Args:  cobra.NoArgs,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// By default, hide logs from `polycli monitor`.
 		verbosityFlag := cmd.Flag("verbosity")
 		if verbosityFlag != nil && !verbosityFlag.Changed {
@@ -35,8 +35,9 @@ var MonitorCmd = &cobra.Command{
 		}
 		prettyFlag := cmd.Flag("pretty-logs")
 		if prettyFlag != nil && prettyFlag.Value.String() == "true" {
-			util.SetLogMode(util.Console)
+			return util.SetLogMode(util.Console)
 		}
+		return nil
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return checkFlags()
