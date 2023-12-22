@@ -202,6 +202,8 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 	if isUiRendered && batchSize < 0 {
 		_, termHeight := termui.TerminalDimensions()
 		batchSize = termHeight/2 - 4
+	} else {
+		batchSize = 100
 	}
 
 	ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
@@ -214,17 +216,39 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 }
 
 func (ms *monitorStatus) getBlockRange(ctx context.Context, to *big.Int, rpc *ethrpc.Client) error {
-	halfBatchSize := new(big.Int).SetInt64(int64(batchSize / 2))
+	desiredBatchSize := new(big.Int).SetInt64(int64(batchSize))
 
-	startBlock := new(big.Int).Sub(to, halfBatchSize)
-	endBlock := new(big.Int).Add(to, halfBatchSize)
+	halfBatchSize := new(big.Int).Div(desiredBatchSize, big.NewInt(2))
 
+	provisionalStartBlock := new(big.Int).Sub(to, halfBatchSize)
+	provisionalEndBlock := new(big.Int).Add(to, halfBatchSize)
+
+	startBlock := big.NewInt(0).Set(provisionalStartBlock)
 	if startBlock.Cmp(zero) < 0 {
 		startBlock.SetInt64(0)
 	}
 
+	endBlock := big.NewInt(0).Set(provisionalEndBlock)
 	if endBlock.Cmp(ms.HeadBlock) > 0 {
 		endBlock.Set(ms.HeadBlock)
+	}
+
+	if new(big.Int).Sub(endBlock, startBlock).Cmp(desiredBatchSize) < 0 {
+		if startBlock.Cmp(zero) == 0 {
+			possibleEndBlock := new(big.Int).Add(startBlock, desiredBatchSize)
+			if possibleEndBlock.Cmp(ms.HeadBlock) <= 0 {
+				endBlock.Set(possibleEndBlock)
+			} else {
+				endBlock.Set(ms.HeadBlock)
+			}
+		} else if endBlock.Cmp(ms.HeadBlock) == 0 {
+			possibleStartBlock := new(big.Int).Sub(endBlock, desiredBatchSize)
+			if possibleStartBlock.Cmp(zero) >= 0 {
+				startBlock.Set(possibleStartBlock)
+			} else {
+				startBlock.SetInt64(0)
+			}
+		}
 	}
 
 	ms.LowerBlock = startBlock
