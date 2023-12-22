@@ -203,7 +203,7 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 		_, termHeight := termui.TerminalDimensions()
 		batchSize = termHeight/2 - 4
 	} else {
-		batchSize = 100
+		batchSize = 150
 	}
 
 	ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
