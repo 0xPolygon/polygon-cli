@@ -188,7 +188,6 @@ func getTxTable(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) []string
 	txMethod := GetTxMethod(tx)
 
 	fields = append(fields, txMethod)
-	fields = append(fields, "TIME")
 	fields = append(fields, fmt.Sprintf("%s", tx.From()))
 	fields = append(fields, fmt.Sprintf("%s", tx.To()))
 	fields = append(fields, fmt.Sprintf("%s", tx.Value()))
