@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/maticnetwork/polygon-cli/util"
@@ -19,9 +20,35 @@ var (
 	batchSizeValue  string
 	blockCacheLimit int
 	intervalStr     string
+
+	defaultBatchSize = 100
 )
 
-// MonitorCmd represents the monitor command
+type SafeBatchSize struct {
+	value int
+	auto  bool // true if batchSize should be set automatically based on the UI
+	mutex sync.RWMutex
+}
+
+func (s *SafeBatchSize) Set(value int, auto bool) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.value = value
+	s.auto = auto
+}
+
+func (s *SafeBatchSize) Get() int {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.value
+}
+
+func (s *SafeBatchSize) Auto() bool {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.auto
+}
+
 var MonitorCmd = &cobra.Command{
 	Use:   "monitor",
 	Short: "Monitor blocks using a JSON-RPC endpoint.",
@@ -55,29 +82,23 @@ func init() {
 }
 
 func checkFlags() (err error) {
-	// Check rpc-url flag.
 	if err = util.ValidateUrl(rpcUrl); err != nil {
 		return
 	}
 
-	// Check interval duration flag.
 	interval, err = time.ParseDuration(intervalStr)
 	if err != nil {
 		return err
 	}
 
-	// Check batch-size flag.
 	if batchSizeValue == "auto" {
-		batchSize = -1
+		batchSize.Set(defaultBatchSize, true) // -1 value and true for auto mode
 	} else {
-		batchSize, err = strconv.Atoi(batchSizeValue)
-		if batchSize == 0 {
-			return fmt.Errorf("batch-size can't be equal to zero")
+		batchSizeInt, err := strconv.Atoi(batchSizeValue)
+		if batchSizeInt == 0 || err != nil {
+			return fmt.Errorf("invalid batch-size provided")
 		}
-		if err != nil {
-			// Failed to convert to int, handle the error
-			return fmt.Errorf("batch-size needs to be an integer")
-		}
+		batchSize.Set(batchSizeInt, false) // specific value and false for auto mode
 	}
 
 	// Check batch-size flag.

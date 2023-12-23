@@ -28,7 +28,7 @@ var errBatchRequestsNotSupported = errors.New("batch requests are not supported"
 
 var (
 	windowSize         int
-	batchSize          int
+	batchSize          SafeBatchSize
 	interval           time.Duration
 	one                = big.NewInt(1)
 	zero               = big.NewInt(0)
@@ -199,11 +199,12 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 
 	log.Debug().Uint64("PeerCount", cs.PeerCount).Uint64("ChainID", cs.ChainID.Uint64()).Uint64("HeadBlock", cs.HeadBlock).Uint64("GasPrice", cs.GasPrice.Uint64()).Msg("Fetching blocks")
 
-	if isUiRendered && batchSize < 0 {
+	isAuto := batchSize.Auto()
+	if isUiRendered && isAuto {
 		_, termHeight := termui.TerminalDimensions()
-		batchSize = termHeight/2 - 4
-	} else {
-		batchSize = 150
+		newBatchSize := (termHeight/2 - 4) * 4
+		batchSize.Set(newBatchSize, true)
+		log.Debug().Msgf("Auto-adjusted batchSize to %d based on UI dimensions", newBatchSize)
 	}
 
 	ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
@@ -216,7 +217,7 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 }
 
 func (ms *monitorStatus) getBlockRange(ctx context.Context, to *big.Int, rpc *ethrpc.Client) error {
-	desiredBatchSize := new(big.Int).SetInt64(int64(batchSize))
+	desiredBatchSize := new(big.Int).SetInt64(int64(batchSize.Get()))
 
 	halfBatchSize := new(big.Int).Div(desiredBatchSize, big.NewInt(2))
 
@@ -319,7 +320,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	redraw := func(ms *monitorStatus, force ...bool) {
 		log.Debug().
 			Str("TopDisplayedBlock", ms.TopDisplayedBlock.String()).
-			Int("BatchSize", batchSize).
+			Int("BatchSize", batchSize.Get()).
 			Str("UpperBlock", ms.UpperBlock.String()).
 			Str("LowerBlock", ms.LowerBlock.String()).
 			Str("ChainID", ms.ChainID.String()).
