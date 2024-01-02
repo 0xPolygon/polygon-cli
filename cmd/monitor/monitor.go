@@ -426,7 +426,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 	redraw(ms)
 
-	previousKey := ""
 	for {
 		forceRedraw := false
 		select {
@@ -562,17 +561,13 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				blockTable.SelectedRow = 1
 				setBlock = true
 			case "g":
-				if previousKey == "g" {
-					ms.TopDisplayedBlock = ms.HeadBlock
-					blockTable.SelectedRow = 1
-					setBlock = true
-				}
+				blockTable.SelectedRow = 1
+				setBlock = true
 			case "G", "<End>":
 				if len(renderedBlocks) < windowSize {
 					ms.TopDisplayedBlock = ms.HeadBlock
 					blockTable.SelectedRow = len(renderedBlocks)
 				} else {
-					// windowOffset = len(allBlocks) - windowSize
 					blockTable.SelectedRow = max(windowSize, len(renderedBlocks))
 				}
 				setBlock = true
@@ -639,12 +634,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				redraw(ms, true)
 			default:
 				log.Trace().Str("id", e.ID).Msg("Unknown ui event")
-			}
-
-			if previousKey == "g" {
-				previousKey = ""
-			} else {
-				previousKey = e.ID
 			}
 
 			if !forceRedraw {
