@@ -18,14 +18,15 @@ import (
 )
 
 type UiSkeleton struct {
-	Current         *widgets.Paragraph
-	TxPerBlockChart *widgets.Sparkline
-	GasPriceChart   *widgets.Sparkline
-	BlockSizeChart  *widgets.Sparkline
-	PendingTxChart  *widgets.Sparkline
-	GasChart        *widgets.Sparkline
-	BlockInfo       *widgets.List
-	TransactionList *widgets.List
+	Current                    *widgets.Paragraph
+	TxPerBlockChart            *widgets.Sparkline
+	GasPriceChart              *widgets.Sparkline
+	BlockSizeChart             *widgets.Sparkline
+	PendingTxChart             *widgets.Sparkline
+	GasChart                   *widgets.Sparkline
+	BlockInfo                  *widgets.List
+	TransactionList            *widgets.List
+	TransactionInformationList *widgets.List
 }
 
 func GetCurrentBlockInfo(headBlock *big.Int, gasPrice *big.Int, peerCount uint64, pendingCount uint64, chainID *big.Int, blocks []rpctypes.PolyBlock) string {
@@ -52,7 +53,7 @@ func GetBlocksList(blocks []rpctypes.PolyBlock) ([]string, string) {
 	zone, _ := time.Now().Zone()
 	headerVariables := []string{"#", fmt.Sprintf("TIME (%s)", zone), "BLK TIME", "TXN #", "GAS USED", "HASH", "AUTHOR"}
 
-	proportion := []int{10, 10, 5, 5, 10, 20}
+	proportion := []int{10, 10, 2, 2, 10, 12}
 
 	header := ""
 	for i, prop := range proportion {
@@ -237,16 +238,16 @@ func GetTransactionsList(block rpctypes.PolyBlock, chainID *big.Int) ([]string, 
 	return records, header
 }
 
-func GetSimpleBlockTxFields(block rpctypes.PolyBlock, chainID *big.Int) []string {
-	fields := make([]string, 0)
-	blank := ""
-	for _, tx := range block.Transactions() {
-		txFields := GetSimpleTxFields(tx, chainID, block.BaseFee())
-		fields = append(fields, blank)
-		fields = append(fields, txFields...)
-	}
-	return fields
-}
+// func GetSimpleBlockTxFields(block rpctypes.PolyBlock, chainID *big.Int) []string {
+// 	fields := make([]string, 0)
+// 	blank := ""
+// 	for _, tx := range block.Transactions() {
+// 		txFields := GetSimpleTxFields(tx, chainID, block.BaseFee())
+// 		fields = append(fields, blank)
+// 		fields = append(fields, txFields...)
+// 	}
+// 	return fields
+// }
 
 func GetSimpleTxFields(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) []string {
 	fields := make([]string, 0)
@@ -347,10 +348,16 @@ func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 	termUi.TransactionList.TextStyle = ui.NewStyle(ui.ColorGreen)
 	termUi.TransactionList.WrapText = true
 
+	termUi.TransactionInformationList = widgets.NewList()
+	termUi.TransactionInformationList.Title = "Transaction Information"
+	termUi.TransactionInformationList.TextStyle = ui.NewStyle(ui.ColorWhite)
+	termUi.TransactionInformationList.WrapText = true
+
 	blockGrid.Set(
 		// ui.NewRow(1.0/10, b0),
 		ui.NewRow(2.0/10, termUi.BlockInfo),
-		ui.NewRow(8.0/10, termUi.TransactionList),
+		ui.NewRow(6.0/10, termUi.TransactionList),
+		ui.NewRow(2.0/10, termUi.TransactionInformationList),
 	)
 
 	grid.Set(

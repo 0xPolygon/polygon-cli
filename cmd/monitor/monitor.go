@@ -38,17 +38,18 @@ var (
 
 type (
 	monitorStatus struct {
-		TopDisplayedBlock *big.Int
-		UpperBlock        *big.Int
-		LowerBlock        *big.Int
-		ChainID           *big.Int
-		HeadBlock         *big.Int
-		PeerCount         uint64
-		GasPrice          *big.Int
-		PendingCount      uint64
-		SelectedBlock     rpctypes.PolyBlock
-		BlockCache        *lru.Cache   `json:"-"`
-		BlocksLock        sync.RWMutex `json:"-"`
+		TopDisplayedBlock   *big.Int
+		UpperBlock          *big.Int
+		LowerBlock          *big.Int
+		ChainID             *big.Int
+		HeadBlock           *big.Int
+		PeerCount           uint64
+		GasPrice            *big.Int
+		PendingCount        uint64
+		SelectedBlock       rpctypes.PolyBlock
+		SelectedTransaction rpctypes.PolyTransaction
+		BlockCache          *lru.Cache   `json:"-"`
+		BlocksLock          sync.RWMutex `json:"-"`
 	}
 	chainState struct {
 		HeadBlock    uint64
@@ -319,6 +320,31 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	var renderedBlocks rpctypes.SortableBlocks
 
 	redraw := func(ms *monitorStatus, force ...bool) {
+
+		if currentMode == monitorModeHelp {
+			// TODO add some help context?
+		} else if currentMode == monitorModeBlock {
+			// render a block
+			skeleton.BlockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
+			rows, title := ui.GetTransactionsList(ms.SelectedBlock, ms.ChainID)
+			skeleton.TransactionList.Rows = rows
+			skeleton.TransactionList.Title = title
+
+			baseFee := ms.SelectedBlock.BaseFee()
+			if skeleton.TransactionList.SelectedRow != 0 {
+				skeleton.TransactionInformationList.Rows = ui.GetSimpleTxFields(ms.SelectedBlock.Transactions()[skeleton.TransactionList.SelectedRow-1], ms.ChainID, baseFee)
+
+			}
+			termui.Clear()
+			termui.Render(blockGrid)
+
+			log.Debug().
+				Int("skeleton.TransactionList.SelectedRow", skeleton.TransactionList.SelectedRow).
+				Msg("Redrawing block mode")
+
+			return
+		}
+
 		log.Debug().
 			Str("TopDisplayedBlock", ms.TopDisplayedBlock.String()).
 			Int("BatchSize", batchSize.Get()).
@@ -330,20 +356,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			Str("GasPrice", ms.GasPrice.String()).
 			Uint64("PendingCount", ms.PendingCount).
 			Msg("Redrawing")
-
-		if currentMode == monitorModeHelp {
-			// TODO add some help context?
-		} else if currentMode == monitorModeBlock {
-			// render a block
-			skeleton.BlockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
-			rows, title := ui.GetTransactionsList(ms.SelectedBlock, ms.ChainID)
-			skeleton.TransactionList.Rows = rows
-			skeleton.TransactionList.Title = title
-
-			termui.Clear()
-			termui.Render(blockGrid)
-			return
-		}
 
 		if blockTable.SelectedRow == 0 {
 			bottomBlockNumber := new(big.Int).Sub(ms.HeadBlock, big.NewInt(int64(windowSize-1)))
@@ -391,6 +403,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 		blockTable.TextStyle = termui.NewStyle(termui.ColorWhite)
 		blockTable.SelectedRowStyle = termui.NewStyle(termui.ColorWhite, termui.ColorRed, termui.ModifierBold)
+		transactionColumnRatio := []int{30, 5, 20, 20, 5, 10}
 		if blockTable.SelectedRow > 0 && blockTable.SelectedRow <= len(blockTable.Rows) {
 			// Only changed the selected block when the user presses the up down keys.
 			// Otherwise this will adjust when the table is updated automatically.
@@ -402,8 +415,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 				ms.SelectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
 				blockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
-				columnRatio := []int{30, 5, 20, 20, 5, 10}
-				transactionInfo.ColumnWidths = getColumnWidths(columnRatio, transactionInfo.Dx())
+				transactionInfo.ColumnWidths = getColumnWidths(transactionColumnRatio, transactionInfo.Dx())
 				transactionInfo.Rows = ui.GetBlockTxTable(ms.SelectedBlock, ms.ChainID)
 				transactionInfo.Title = fmt.Sprintf("Latest Transactions for Block #%s", ms.SelectedBlock.Number().String())
 
@@ -412,9 +424,11 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			}
 		} else {
 			ms.SelectedBlock = nil
-			transactionInfo.Title = "Latest Transactions"
 			blockInfo.Rows = []string{}
-			transactionInfo.Rows = [][]string{{""}, {""}}
+
+			transactionInfo.ColumnWidths = getColumnWidths(transactionColumnRatio, transactionInfo.Dx())
+			transactionInfo.Rows = ui.GetBlockTxTable(renderedBlocks[len(renderedBlocks)-1], ms.ChainID)
+			transactionInfo.Title = fmt.Sprintf("Latest Transactions for Block #%s", renderedBlocks[len(renderedBlocks)-1].Number().String())
 		}
 
 		termui.Render(grid)
