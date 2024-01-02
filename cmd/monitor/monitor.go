@@ -200,11 +200,10 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 	log.Debug().Uint64("PeerCount", cs.PeerCount).Uint64("ChainID", cs.ChainID.Uint64()).Uint64("HeadBlock", cs.HeadBlock).Uint64("GasPrice", cs.GasPrice.Uint64()).Msg("Fetching blocks")
 
 	isAuto := batchSize.Auto()
-	if isUiRendered && isAuto {
-		_, termHeight := termui.TerminalDimensions()
-		newBatchSize := (termHeight/2 - 4) * 4
+	if isAuto {
+		newBatchSize := blockCacheLimit / 2
 		batchSize.Set(newBatchSize, true)
-		log.Debug().Msgf("Auto-adjusted batchSize to %d based on UI dimensions", newBatchSize)
+		log.Debug().Msgf("Auto-adjusted batchSize to %d based on cache limit", newBatchSize)
 	}
 
 	ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
@@ -223,6 +222,8 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, to *big.Int, rpc *et
 
 	provisionalStartBlock := new(big.Int).Sub(to, halfBatchSize)
 	provisionalEndBlock := new(big.Int).Add(to, halfBatchSize)
+
+	log.Debug().Int64("desiredBatchSize", int64(batchSize.Get()))
 
 	startBlock := big.NewInt(0).Set(provisionalStartBlock)
 	if startBlock.Cmp(zero) < 0 {
