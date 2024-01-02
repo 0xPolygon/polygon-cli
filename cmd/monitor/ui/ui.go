@@ -18,15 +18,15 @@ import (
 )
 
 type UiSkeleton struct {
-	Current                    *widgets.Paragraph
-	TxPerBlockChart            *widgets.Sparkline
-	GasPriceChart              *widgets.Sparkline
-	BlockSizeChart             *widgets.Sparkline
-	PendingTxChart             *widgets.Sparkline
-	GasChart                   *widgets.Sparkline
-	BlockInfo                  *widgets.List
-	TransactionList            *widgets.List
-	TransactionInformationList *widgets.List
+	Current         *widgets.Paragraph
+	TxPerBlockChart *widgets.Sparkline
+	GasPriceChart   *widgets.Sparkline
+	BlockSizeChart  *widgets.Sparkline
+	PendingTxChart  *widgets.Sparkline
+	GasChart        *widgets.Sparkline
+	BlockInfo       *widgets.List
+	TxInfo          *widgets.List
+	Receipts        *widgets.List
 }
 
 func GetCurrentBlockInfo(headBlock *big.Int, gasPrice *big.Int, peerCount uint64, pendingCount uint64, chainID *big.Int, blocks []rpctypes.PolyBlock) string {
@@ -278,7 +278,7 @@ func GetSimpleTxFields(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) [
 	return fields
 }
 
-func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transactionInfo *widgets.Table, grid *ui.Grid, blockGrid *ui.Grid, termUi UiSkeleton) {
+func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transactionList *widgets.List, transactionInformationList *widgets.List, transactionInfo *widgets.Table, grid *ui.Grid, blockGrid *ui.Grid, transactionGrid *ui.Grid, termUi UiSkeleton) {
 	// help := widgets.NewParagraph()
 	// help.Title = "Block Headers"
 	// help.Text = "Use the arrow keys to scroll through the transactions. Press <Esc> to go back to the explorer view"
@@ -333,6 +333,7 @@ func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 
 	grid = ui.NewGrid()
 	blockGrid = ui.NewGrid()
+	transactionGrid = ui.NewGrid()
 
 	// b0 := widgets.NewParagraph()
 	// b0.Title = "Block Headers"
@@ -343,22 +344,25 @@ func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 	termUi.BlockInfo.TextStyle = ui.NewStyle(ui.ColorYellow)
 	termUi.BlockInfo.WrapText = false
 
-	termUi.TransactionList = widgets.NewList()
-	termUi.TransactionList.Title = "Transactions"
-	termUi.TransactionList.TextStyle = ui.NewStyle(ui.ColorGreen)
-	termUi.TransactionList.WrapText = true
+	transactionList = widgets.NewList()
+	transactionList.Title = "Transactions"
+	transactionList.TextStyle = ui.NewStyle(ui.ColorGreen)
+	transactionList.WrapText = true
 
-	termUi.TransactionInformationList = widgets.NewList()
-	termUi.TransactionInformationList.Title = "Transaction Information"
-	termUi.TransactionInformationList.TextStyle = ui.NewStyle(ui.ColorWhite)
-	termUi.TransactionInformationList.WrapText = true
+	transactionInformationList = widgets.NewList()
+	transactionInformationList.Title = "Transaction Information"
+	transactionInformationList.TextStyle = ui.NewStyle(ui.ColorWhite)
+	transactionInformationList.WrapText = true
 
-	blockGrid.Set(
-		// ui.NewRow(1.0/10, b0),
-		ui.NewRow(2.0/10, termUi.BlockInfo),
-		ui.NewRow(6.0/10, termUi.TransactionList),
-		ui.NewRow(2.0/10, termUi.TransactionInformationList),
-	)
+	termUi.TxInfo = widgets.NewList()
+	termUi.TxInfo.Title = "Transaction Info"
+	termUi.TxInfo.TextStyle = ui.NewStyle(ui.ColorGreen)
+	termUi.TxInfo.WrapText = true
+
+	termUi.Receipts = widgets.NewList()
+	termUi.Receipts.Title = "Receipts"
+	termUi.Receipts.TextStyle = ui.NewStyle(ui.ColorWhite)
+	termUi.Receipts.WrapText = true
 
 	grid.Set(
 		ui.NewRow(1.0/10, termUi.Current),
@@ -379,6 +383,18 @@ func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 		ui.NewRow(2.0/10,
 			ui.NewCol(5.0/5, transactionInfo),
 		),
+	)
+
+	blockGrid.Set(
+		// ui.NewRow(1.0/10, b0),
+		ui.NewRow(2.0/10, termUi.BlockInfo),
+		ui.NewRow(6.0/10, transactionList),
+		ui.NewRow(2.0/10, transactionInformationList),
+	)
+
+	transactionGrid.Set(
+		ui.NewRow(1.0/10, termUi.TxInfo),
+		ui.NewRow(9.0/10, termUi.Receipts),
 	)
 
 	return

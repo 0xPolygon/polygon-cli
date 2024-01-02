@@ -200,8 +200,7 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 
 	log.Debug().Uint64("PeerCount", cs.PeerCount).Uint64("ChainID", cs.ChainID.Uint64()).Uint64("HeadBlock", cs.HeadBlock).Uint64("GasPrice", cs.GasPrice.Uint64()).Msg("Fetching blocks")
 
-	isAuto := batchSize.Auto()
-	if isAuto {
+	if batchSize.Get() == 100 && batchSize.Auto() {
 		newBatchSize := blockCacheLimit / 2
 		batchSize.Set(newBatchSize, true)
 		log.Debug().Msgf("Auto-adjusted batchSize to %d based on cache limit", newBatchSize)
@@ -309,7 +308,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 	currentMode := monitorModeExplorer
 
-	blockTable, blockInfo, transactionInfo, grid, blockGrid, skeleton := ui.SetUISkeleton()
+	blockTable, blockInfo, transactionList, transactionInformationList, transactionInfo, grid, blockGrid, transactionGrid, skeleton := ui.SetUISkeleton()
 
 	termWidth, termHeight := termui.TerminalDimensions()
 	windowSize = termHeight/2 - 4
@@ -327,21 +326,25 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			// render a block
 			skeleton.BlockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
 			rows, title := ui.GetTransactionsList(ms.SelectedBlock, ms.ChainID)
-			skeleton.TransactionList.Rows = rows
-			skeleton.TransactionList.Title = title
+			transactionList.Rows = rows
+			transactionList.Title = title
 
 			baseFee := ms.SelectedBlock.BaseFee()
-			if skeleton.TransactionList.SelectedRow != 0 {
-				skeleton.TransactionInformationList.Rows = ui.GetSimpleTxFields(ms.SelectedBlock.Transactions()[skeleton.TransactionList.SelectedRow-1], ms.ChainID, baseFee)
+			if transactionList.SelectedRow != 0 {
+				transactionInformationList.Rows = ui.GetSimpleTxFields(ms.SelectedBlock.Transactions()[transactionList.SelectedRow-1], ms.ChainID, baseFee)
 
 			}
 			termui.Clear()
 			termui.Render(blockGrid)
 
 			log.Debug().
-				Int("skeleton.TransactionList.SelectedRow", skeleton.TransactionList.SelectedRow).
+				Int("skeleton.TransactionList.SelectedRow", transactionList.SelectedRow).
 				Msg("Redrawing block mode")
 
+			return
+		} else if currentMode == monitorModeTransaction {
+			termui.Clear()
+			termui.Render(transactionGrid)
 			return
 		}
 
@@ -464,8 +467,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					break
 				}
 			case "<Enter>":
-				if blockTable.SelectedRow > 0 {
+				if currentMode == monitorModeExplorer && blockTable.SelectedRow > 0 {
 					currentMode = monitorModeBlock
+				} else if transactionList.SelectedRow > 0 {
+					currentMode = monitorModeTransaction
 				}
 			case "<Resize>":
 				payload := e.Payload.(termui.Resize)
@@ -476,10 +481,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				termui.Clear()
 			case "<Up>", "<Down>":
 				if currentMode == monitorModeBlock {
-					if len(skeleton.TransactionList.Rows) != 0 && e.ID == "<Down>" {
-						skeleton.TransactionList.ScrollDown()
-					} else if len(skeleton.TransactionList.Rows) != 0 && e.ID == "<Up>" {
-						skeleton.TransactionList.ScrollUp()
+					if len(transactionList.Rows) != 0 && e.ID == "<Down>" {
+						transactionList.ScrollDown()
+					} else if len(transactionList.Rows) != 0 && e.ID == "<Up>" {
+						transactionList.ScrollUp()
 					}
 					break
 				}
