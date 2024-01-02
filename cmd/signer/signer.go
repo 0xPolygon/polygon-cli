@@ -32,6 +32,7 @@ import (
 	"time"
 )
 
+// signerOpts are the input arguments for these commands
 type signerOpts struct {
 	keystore       *string
 	privateKey     *string
@@ -122,8 +123,8 @@ var SignCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
-			foo := GCPKMS{}
-			return foo.Sign(cmd.Context(), tx)
+			gcpKMS := GCPKMS{}
+			return gcpKMS.Sign(cmd.Context(), tx)
 		}
 		return fmt.Errorf("not implemented")
 	},
@@ -164,12 +165,12 @@ var CreateCmd = &cobra.Command{
 			return nil
 		}
 		if *inputSignerOpts.kms == "GCP" {
-			foo := GCPKMS{}
-			err := foo.CreateKeyRing(cmd.Context())
+			gcpKMS := GCPKMS{}
+			err := gcpKMS.CreateKeyRing(cmd.Context())
 			if err != nil {
 				return err
 			}
-			err = foo.CreateKey(cmd.Context())
+			err = gcpKMS.CreateKey(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -186,15 +187,13 @@ func getTxDataToSign() (*types.Transaction, error) {
 	if err != nil {
 		return nil, err
 	}
-	// var tx types.DynamicFeeTx
-	// var tx types.LegacyTx
+
+	// TODO at some point we should support signing other data types besides transactions
 	var tx apitypes.SendTxArgs
 	err = json.Unmarshal(dataToSign, &tx)
 	if err != nil {
-		// TODO in the future it might make sense to sign arbitrary data?
 		return nil, err
 	}
-	// tx.ChainID = new(big.Int).SetUint64(*inputSignerOpts.chainID)
 	return tx.ToTransaction(), nil
 
 }
