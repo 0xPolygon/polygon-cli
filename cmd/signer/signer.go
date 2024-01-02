@@ -23,6 +23,7 @@ import (
 	"github.com/maticnetwork/polygon-cli/gethkeystore"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"google.golang.org/api/iterator"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	"hash/crc32"
@@ -179,6 +180,29 @@ var CreateCmd = &cobra.Command{
 	},
 }
 
+var ListCmd = &cobra.Command{
+	Use:     "list",
+	Short:   "List the keys in the keyring / keystore",
+	Long:    signerUsage,
+	Args:    cobra.NoArgs,
+	PreRunE: sanityCheck,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if *inputSignerOpts.keystore != "" {
+			ks := keystore.NewKeyStore(*inputSignerOpts.keystore, keystore.StandardScryptN, keystore.StandardScryptP)
+			accounts := ks.Accounts()
+			for idx, a := range accounts {
+				log.Info().Str("account", a.Address.String()).Int("index", idx).Msg("Account")
+			}
+			return nil
+		}
+		if *inputSignerOpts.kms == "GCP" {
+			gcpKMS := GCPKMS{}
+			return gcpKMS.ListKeyRingKeys(cmd.Context())
+		}
+		return fmt.Errorf("unable to list accounts")
+	},
+}
+
 func getTxDataToSign() (*types.Transaction, error) {
 	if *inputSignerOpts.dataFile == "" {
 		return nil, fmt.Errorf("no datafile was specified to sign")
@@ -232,6 +256,50 @@ func outputSignedTx(signedTx *types.Transaction) error {
 
 type GCPKMS struct{}
 
+func (g *GCPKMS) ListKeyRingKeys(ctx context.Context) error {
+	// This snippet has been automatically generated and should be regarded as a code template only.
+	// It will require modifications to work:
+	// - It may require correct/in-range values for request initialization.
+	// - It may require specifying regional endpoints when creating the service client as shown in:
+	//   https://pkg.go.dev/cloud.google.com/go#hdr-Client_Options
+	c, err := kms.NewKeyManagementClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	parent := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s", *inputSignerOpts.gcpProjectID, *inputSignerOpts.gcpRegion, *inputSignerOpts.gcpKeyRingID)
+
+	req := &kmspb.ListCryptoKeysRequest{
+		Parent: parent,
+	}
+	it := c.ListCryptoKeys(ctx, req)
+	for {
+		resp, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		// TODO This is another spot where I've hard coded the version
+		pubKey, err := getPublicKeyByName(ctx, c, resp.Name+"/cryptoKeyVersions/1")
+		if err != nil {
+			return err
+		}
+		ethAddress := gcpPubKeyToEthAddress(pubKey)
+
+		log.Info().Str("CryptoKeyBackend", resp.CryptoKeyBackend).
+			Str("DestroyScheduledDuration", resp.DestroyScheduledDuration.String()).
+			Str("CreateTime", resp.CreateTime.String()).
+			Str("Purpose", resp.Purpose.String()).
+			Str("ProtectionLevel", resp.VersionTemplate.ProtectionLevel.String()).
+			Str("Algorithm", resp.VersionTemplate.Algorithm.String()).
+			Str("ETHAddress", ethAddress.String()).
+			Str("Name", resp.Name).Msg("got key")
+
+	}
+	return nil
+}
 func (g *GCPKMS) CreateKeyRing(ctx context.Context) error {
 	parent := fmt.Sprintf("projects/%s/locations/%s", *inputSignerOpts.gcpProjectID, *inputSignerOpts.gcpRegion)
 	id := *inputSignerOpts.gcpKeyRingID
@@ -370,14 +438,8 @@ func (g *GCPKMS) Sign(ctx context.Context, tx *types.Transaction) error {
 		return fmt.Errorf("AsymmetricSign: response corrupted in-transit")
 	}
 
-	pubKeyResponse, err := client.GetPublicKey(ctx, &kmspb.GetPublicKeyRequest{Name: name})
+	gcpPubKey, err := getPublicKeyByName(ctx, client, name)
 	if err != nil {
-		return fmt.Errorf("failed to get public key: %w", err)
-	}
-
-	block, _ := pem.Decode([]byte(pubKeyResponse.Pem))
-	var gcpPubKey publicKeyInfo
-	if _, err = asn1.Unmarshal(block.Bytes, &gcpPubKey); err != nil {
 		return err
 	}
 
@@ -401,7 +463,8 @@ func (g *GCPKMS) Sign(ctx context.Context, tx *types.Transaction) error {
 	if err != nil || !bytes.Equal(pubKey, gcpPubKey.PublicKey.Bytes) {
 		return fmt.Errorf("unable to determine recovery identifier value: %w", err)
 	}
-	pubKeyAddr := common.BytesToAddress(crypto.Keccak256(pubKey[1:])[12:])
+	// pubKeyAddr := common.BytesToAddress(crypto.Keccak256(pubKey[1:])[12:])
+	pubKeyAddr := gcpPubKeyToEthAddress(gcpPubKey)
 	log.Info().
 		Str("hexSignature", hex.EncodeToString(result.Signature)).
 		Str("ethSignature", hex.EncodeToString(ethSig)).
@@ -421,6 +484,23 @@ func (g *GCPKMS) Sign(ctx context.Context, tx *types.Transaction) error {
 	return outputSignedTx(signedTx)
 }
 
+func gcpPubKeyToEthAddress(gcpPubKey *publicKeyInfo) common.Address {
+	pubKeyAddr := common.BytesToAddress(crypto.Keccak256(gcpPubKey.PublicKey.Bytes[1:])[12:])
+	return pubKeyAddr
+
+}
+func getPublicKeyByName(ctx context.Context, client *kms.KeyManagementClient, name string) (*publicKeyInfo, error) {
+	pubKeyResponse, err := client.GetPublicKey(ctx, &kmspb.GetPublicKeyRequest{Name: name})
+	if err != nil {
+		return nil, err
+	}
+	block, _ := pem.Decode([]byte(pubKeyResponse.Pem))
+	var gcpPubKey publicKeyInfo
+	if _, err = asn1.Unmarshal(block.Bytes, &gcpPubKey); err != nil {
+		return nil, err
+	}
+	return &gcpPubKey, nil
+}
 func bigIntTo32Bytes(num *big.Int) []byte {
 	// Convert big.Int to a 32-byte array
 	b := num.Bytes()
@@ -468,7 +548,7 @@ func sanityCheck(cmd *cobra.Command, args []string) error {
 		if *inputSignerOpts.gcpKeyRingID == "" {
 			return fmt.Errorf("a GCP Keyring ID is needed")
 		}
-		if *inputSignerOpts.keyID == "" {
+		if *inputSignerOpts.keyID == "" && cmd.Name() != "list" {
 			return fmt.Errorf("a key id is required")
 		}
 	}
@@ -523,6 +603,11 @@ func init() {
 	// What is dead may never die https://cloud.google.com/kms/docs/faq#cannot_delete
 	inputSignerOpts.gcpKeyRingID = SignerCmd.PersistentFlags().String("gcp-keyring-id", "polycli-keyring", "The GCP Keyring ID to be used")
 
+	kmsOpt := *inputSignerOpts.kms
+	kmsOpt = strings.ToUpper(kmsOpt)
+	inputSignerOpts.kms = &kmsOpt
+
 	SignerCmd.AddCommand(SignCmd)
 	SignerCmd.AddCommand(CreateCmd)
+	SignerCmd.AddCommand(ListCmd)
 }
