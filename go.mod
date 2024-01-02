@@ -31,8 +31,10 @@ require (
 	golang.org/x/text v0.14.0
 	golang.org/x/time v0.3.0
 	google.golang.org/api v0.145.0
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.32.0
 )
+
+require github.com/alecthomas/participle/v2 v2.1.1 // indirect
 
 require (
 	cloud.google.com/go v0.110.7 // indirect
