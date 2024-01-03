@@ -2,8 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/maticnetwork/polygon-cli/cmd/dbbench"
 	"os"
+
+	"github.com/maticnetwork/polygon-cli/cmd/dbbench"
 
 	"github.com/maticnetwork/polygon-cli/cmd/fork"
 	"github.com/maticnetwork/polygon-cli/cmd/p2p"
