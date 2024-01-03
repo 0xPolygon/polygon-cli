@@ -442,18 +442,18 @@ func ConvertInt(value string) (string, error) {
 	}
 
 	var hexString string
-    bytes := bigInt.Bytes()
-    if bigInt.Sign() < 0 {
+	bytes := bigInt.Bytes()
+	if bigInt.Sign() < 0 {
 		// convert to two's complement bytes
-        twosComplement := make([]byte, len(bytes))
-        for i, b := range bytes {
-            twosComplement[i] = ^b
-        }
+		twosComplement := make([]byte, len(bytes))
+		for i, b := range bytes {
+			twosComplement[i] = ^b
+		}
 
-        bigInt.SetBytes(twosComplement)
-        bigInt.Add(bigInt, big.NewInt(1))
+		bigInt.SetBytes(twosComplement)
+		bigInt.Add(bigInt, big.NewInt(1))
 
-        bytes = bigInt.Bytes()
+		bytes = bigInt.Bytes()
 		hexValue := fmt.Sprintf("%x", bytes)
 		hexString = strings.Repeat("f", 64-len(hexValue)) + hexValue // left pad with "f" since it's the complement
 	} else {
