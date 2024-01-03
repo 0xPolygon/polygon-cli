@@ -34,6 +34,8 @@ var (
 	zero               = big.NewInt(0)
 	observedPendingTxs historicalRange
 	maxDataPoints      = 1000
+	maxConcurrency     = 10
+	semaphore          = make(chan struct{}, maxConcurrency)
 )
 
 type (
@@ -277,26 +279,60 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, to *big.Int, rpc *et
 		return nil
 	}
 
-	b := backoff.NewExponentialBackOff()
-	b.MaxElapsedTime = 3 * time.Minute
-	retryable := func() error {
-		return rpc.BatchCallContext(ctx, blms)
-	}
-	if err := backoff.Retry(retryable, b); err != nil {
+	err := ms.processBatchesConcurrently(ctx, rpc, blms)
+	if err != nil {
+		log.Error().Err(err).Msg("Error processing batches concurrently")
 		return err
 	}
 
-	ms.BlocksLock.Lock()
-	defer ms.BlocksLock.Unlock()
-	for _, b := range blms {
-		if b.Error != nil {
-			continue
-		}
-		pb := rpctypes.NewPolyBlock(b.Result.(*rpctypes.RawBlockResponse))
-		ms.BlockCache.Add(pb.Number().String(), pb)
+	return nil
+}
+
+func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *ethrpc.Client, blms []ethrpc.BatchElem) error {
+	subBatchSize := 50
+	var wg sync.WaitGroup
+	var batchErr error
+	batchErrLock := sync.Mutex{}
+
+	for i := 0; i < len(blms); i += subBatchSize {
+		wg.Add(1)
+		semaphore <- struct{}{}
+		go func(i int) {
+			defer wg.Done()
+			end := i + subBatchSize
+			if end > len(blms) {
+				end = len(blms)
+			}
+			subBatch := blms[i:end]
+
+			b := backoff.NewExponentialBackOff()
+			b.MaxElapsedTime = 3 * time.Minute
+			retryable := func() error {
+				return rpc.BatchCallContext(ctx, subBatch)
+			}
+			if err := backoff.Retry(retryable, b); err != nil {
+				batchErrLock.Lock()
+				if batchErr == nil {
+					batchErr = err
+				}
+				batchErrLock.Unlock()
+			}
+
+			for _, elem := range subBatch {
+				if elem.Error != nil {
+					log.Error().Str("Method", elem.Method).Interface("Args", elem.Args).Err(elem.Error).Msg("Failed batch element")
+				} else {
+					pb := rpctypes.NewPolyBlock(elem.Result.(*rpctypes.RawBlockResponse))
+					ms.BlockCache.Add(pb.Number().String(), pb)
+				}
+			}
+
+			<-semaphore
+		}(i)
 	}
 
-	return nil
+	wg.Wait()
+	return batchErr
 }
 
 func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) error {
