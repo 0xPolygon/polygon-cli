@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
 	"github.com/maticnetwork/polygon-cli/metrics"
@@ -238,17 +240,6 @@ func GetTransactionsList(block rpctypes.PolyBlock, chainID *big.Int) ([]string, 
 	return records, header
 }
 
-// func GetSimpleBlockTxFields(block rpctypes.PolyBlock, chainID *big.Int) []string {
-// 	fields := make([]string, 0)
-// 	blank := ""
-// 	for _, tx := range block.Transactions() {
-// 		txFields := GetSimpleTxFields(tx, chainID, block.BaseFee())
-// 		fields = append(fields, blank)
-// 		fields = append(fields, txFields...)
-// 	}
-// 	return fields
-// }
-
 func GetSimpleTxFields(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) []string {
 	fields := make([]string, 0)
 	fields = append(fields, fmt.Sprintf("Tx Hash: %s", tx.Hash()))
@@ -274,6 +265,49 @@ func GetSimpleTxFields(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) [
 	fields = append(fields, fmt.Sprintf("Type: %d", tx.Type()))
 	fields = append(fields, fmt.Sprintf("Data Len: %d", len(tx.Data())))
 	fields = append(fields, fmt.Sprintf("Data: %s", hex.EncodeToString(tx.Data())))
+
+	return fields
+}
+
+func waitForReceipt(ctx context.Context, rpcClient *ethrpc.Client, txHash string) (rpctypes.PolyReceipt, error) {
+	var err error
+	var result rpctypes.RawTxReceipt
+	for i := 0; i < 30; i += 1 {
+		err = rpcClient.CallContext(ctx, &result, "eth_getTransactionReceipt", txHash)
+		if err != nil {
+			log.Error().Err(err).Msgf("failed get receipt for hash - %s", txHash)
+			log.Debug().Interface("result.(*rpctypes.RawTxReceipt)", result).Msg("DEBUG MODE")
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		if result.TransactionHash == "" {
+			log.Info().Msg("Receipt not found, waiting more...")
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		pr := rpctypes.NewPolyReceipt(&result)
+
+		log.Info().Interface("poly receipt", pr).Msg("Successfully got receipt")
+		return pr, nil
+	}
+	return nil, err
+}
+
+func GetSimpleReceipt(ctx context.Context, rpc *ethrpc.Client, tx rpctypes.PolyTransaction) []string {
+	receipt, _ := waitForReceipt(ctx, rpc, tx.Hash().String())
+
+	fields := make([]string, 0)
+	fields = append(fields, fmt.Sprintf("Status: %d", receipt.Status()))
+	fields = append(fields, fmt.Sprintf("Tx Hash: %s", receipt.TransactionHash()))
+	fields = append(fields, fmt.Sprintf("Tx Index: %d", receipt.TransactionIndex()))
+	fields = append(fields, fmt.Sprintf("BlockHash: %s", receipt.BlockHash().String()))
+	fields = append(fields, fmt.Sprintf("CumulativeGasUsed: %d", receipt.CumulativeGasUsed().Int64()))
+	fields = append(fields, fmt.Sprintf("EffectiveGasPrice: %d", receipt.EffectiveGasPrice().Int64()))
+	fields = append(fields, fmt.Sprintf("GasUsed: %d", receipt.GasUsed().Int64()))
+	fields = append(fields, fmt.Sprintf("ContractAddress: %s", receipt.ContractAddress().String()))
+	fields = append(fields, fmt.Sprintf("Root: %s", receipt.Root().String()))
 
 	return fields
 }

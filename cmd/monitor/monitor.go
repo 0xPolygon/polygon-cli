@@ -117,7 +117,7 @@ func monitor(ctx context.Context) error {
 			return // exit the goroutine when the context is done
 		default:
 			for {
-				err = fetchCurrentBlockData(ctx, ec, ms, rpc, isUiRendered)
+				err = fetchCurrentBlockData(ctx, ec, ms, isUiRendered)
 				if err != nil {
 					continue
 				}
@@ -185,7 +185,7 @@ func (h historicalRange) getValues(limit int) []float64 {
 	return values
 }
 
-func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client, isUiRendered bool) (err error) {
+func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, isUiRendered bool) (err error) {
 	var cs *chainState
 	cs, err = getChainState(ctx, ec)
 	if err != nil {
@@ -346,6 +346,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		} else if currentMode == monitorModeTransaction {
 			baseFee := ms.SelectedBlock.BaseFee()
 			skeleton.TxInfo.Rows = ui.GetSimpleTxFields(ms.SelectedBlock.Transactions()[transactionList.SelectedRow-1], ms.ChainID, baseFee)
+			skeleton.Receipts.Rows = ui.GetSimpleReceipt(ctx, rpc, ms.SelectedTransaction)
 
 			termui.Clear()
 			termui.Render(transactionGrid)
