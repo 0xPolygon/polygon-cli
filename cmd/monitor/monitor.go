@@ -291,7 +291,7 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, to *big.Int, rpc *et
 func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *ethrpc.Client, blms []ethrpc.BatchElem) error {
 	subBatchSize := 50
 	var wg sync.WaitGroup
-	var batchErr error
+	var err error
 	batchErrLock := sync.Mutex{}
 
 	for i := 0; i < len(blms); i += subBatchSize {
@@ -312,8 +312,8 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 			}
 			if err := backoff.Retry(retryable, b); err != nil {
 				batchErrLock.Lock()
-				if batchErr == nil {
-					batchErr = err
+				if err == nil {
+					err = err
 				}
 				batchErrLock.Unlock()
 			}
@@ -332,7 +332,7 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 	}
 
 	wg.Wait()
-	return batchErr
+	return err
 }
 
 func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) error {
