@@ -36,8 +36,8 @@ const PlaceholderPointerLength = 64
 // FunctionSignature Parser
 // FunctionSignature represents the overall structure of a function signature.
 type FunctionSignature struct {
-	FunctionName string             `@Ident`
-	FunctionArgs []*FunctionArgType `"(" @@* ( "," @@ )* ")"`
+	FunctionName string             `parser:"@Ident"`
+	FunctionArgs []*FunctionArgType `parser:"'(' @@* ( ',' @@ )* ')'"`
 }
 
 // FunctionArgType represents a single argument which can be a base tyype, a tuple, or an array.
@@ -46,14 +46,14 @@ type FunctionSignature struct {
 // - @@ is a recursive call to represent each item of the tuple
 // - @Bracket indicates the nested level of the array
 type FunctionArgType struct {
-	Type  string             `(@Ident`
-	Tuple *FunctionTupleType `| @@)`
-	Array []string           `@Bracket*`
+	Type  string             `parser:"(@Ident"`
+	Tuple *FunctionTupleType `parser:"| @@)"`
+	Array []string           `parser:"@Bracket*"`
 }
 
 // FunctionTupleType represents a tuple in the signature.
 type FunctionTupleType struct {
-	Elements []*FunctionArgType `("(" @@ ( "," @@ )* ")")`
+	Elements []*FunctionArgType `parser:"('(' @@ ( ',' @@ )* ')')"`
 }
 
 var (
@@ -72,21 +72,21 @@ var (
 // Object represents one Function argument object
 // This adheres to the available inputs that Solidity functions can accept such as:
 type Object struct {
-	Val       string `@Ident`
-	Stringval string `| @String` // NOTE: Strictly string values must be around quotations: "
-	Tuple     Tuple  `| @@`
-	Array     Array  `| "[" @@* "]"`
+	Val       string `parser:"@Ident"`
+	Stringval string `parser:"| @String"` // NOTE: Strictly string values must be around quotations: "
+	Tuple     Tuple  `parser:"| @@"`
+	Array     Array  `parser:"| '[' @@* ']'"`
 }
 type Tuple struct {
-	Elements []Object `("(" @@ ("," @@)* ")")`
+	Elements []Object `parser:"('(' @@ (',' @@)* ')')"`
 }
 type Array struct {
-	Elements []Object `@@ ("," @@)*`
+	Elements []Object `parser:"@@ (',' @@)*"`
 }
 
 var (
 	objectLexer = lexer.MustSimple([]lexer.SimpleRule{
-		{Name: `Ident`, Pattern: `[a-zA-Z_\d]+`},
+		{Name: `Ident`, Pattern: `[a-zA-Z_\d-]+`},
 		{Name: `String`, Pattern: `"([^"\\]|\\.)*"`},
 		{Name: `Punct`, Pattern: `[(),\[\]]`},
 		{Name: `whitespace`, Pattern: `\s+`},
@@ -240,6 +240,7 @@ func (fat FunctionArgType) EncodeInput(object Object) (EncodedItem, error) {
 		}
 		vals = append(vals, EncodedItem{Head: lenOfArrayHex})
 
+		// TODO: For a fixed size array, type[M], validate the number of len(object.Array.Elements) == "M"
 		for _, itemObject := range object.Array.Elements {
 			encodedInput, err := subFat.EncodeInput(itemObject)
 			if err != nil {
@@ -257,6 +258,10 @@ func (fat FunctionArgType) EncodeInput(object Object) (EncodedItem, error) {
 		}
 	case fat.Tuple != nil:
 		// Tuple is less complicated than arrays since we just iterate through each items
+		if len(object.Tuple.Elements) != len(fat.Tuple.Elements) {
+			return EncodedItem{}, fmt.Errorf("Mismatched length of tuple elements. Expected: %d elements, received %d", len(fat.Tuple.Elements), len(object.Tuple.Elements))
+		}
+
 		for idx, tupleItemObject := range object.Tuple.Elements {
 			encodedInput, err := fat.Tuple.Elements[idx].EncodeInput(tupleItemObject)
 			if err != nil {
@@ -289,12 +294,14 @@ func (fat FunctionArgType) EncodeInput(object Object) (EncodedItem, error) {
 		}
 		return EncodedItem{Tail: convertedVal}, nil
 	case strings.HasPrefix(fat.Type, "int"):
+		// TODO: validate input is within int<size> limit
 		convertedVal, conversionErr = ConvertInt(object.Val)
 		if conversionErr != nil {
 			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, fat.Type, conversionErr)
 		}
 		return EncodedItem{Head: convertedVal}, nil
 	case strings.HasPrefix(fat.Type, "uint"):
+		// TODO: validate input is within uint<size> limit
 		convertedVal, conversionErr = ConvertUint(object.Val)
 		if conversionErr != nil {
 			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, fat.Type, conversionErr)
@@ -425,7 +432,7 @@ func rightPadWithZeros(value string, targetLen int) string {
 // ConvertInt converts an int input to the 32 byte hex encoding, left padded with 0s
 func ConvertInt(value string) (string, error) {
 	if len(value) < 1 {
-		return "", fmt.Errorf("Error: Invalid integer string. Failed to convert %s to big int", value)
+		return "", fmt.Errorf("Error: expected at least one digit")
 	}
 	bigInt := new(big.Int)
 
@@ -434,9 +441,26 @@ func ConvertInt(value string) (string, error) {
 		return "", fmt.Errorf("Error: Invalid integer string. Failed to convert %s to big int", value)
 	}
 
-	// Convert to hexadecimal representation
-	hexValue := bigInt.Text(16)
-	hexString := leftPadWithZeros(hexValue, 64)
+	var hexString string
+    bytes := bigInt.Bytes()
+    if bigInt.Sign() < 0 {
+		// convert to two's complement bytes
+        twosComplement := make([]byte, len(bytes))
+        for i, b := range bytes {
+            twosComplement[i] = ^b
+        }
+
+        bigInt.SetBytes(twosComplement)
+        bigInt.Add(bigInt, big.NewInt(1))
+
+        bytes = bigInt.Bytes()
+		hexValue := fmt.Sprintf("%x", bytes)
+		hexString = strings.Repeat("f", 64-len(hexValue)) + hexValue // left pad with "f" since it's the complement
+	} else {
+		// Convert to hexadecimal representation
+		hexValue := bigInt.Text(16)
+		hexString = leftPadWithZeros(hexValue, 64)
+	}
 
 	return hexString, nil
 }
@@ -444,7 +468,7 @@ func ConvertInt(value string) (string, error) {
 // ConvertUint converts a uint input to the 32 byte hex encoding, left padded with 0s
 func ConvertUint(value string) (string, error) {
 	if len(value) < 1 {
-		return "", fmt.Errorf("Error: Invalid integer string. Failed to convert %s to big int", value)
+		return "", fmt.Errorf("Error: expected at least one digit")
 	}
 	if value[0] == '-' {
 		return "", fmt.Errorf("Error: Invalid integer string. %s can't be negative", value)
@@ -503,11 +527,11 @@ func ConvertString(value string) (string, error) {
 // ConvertBytes returns bytes length + bytes hex encoding
 // NOTE: this is similar to ConvertString but `value` is expected to be a hex input already
 func ConvertBytes(value string) (string, error) {
-	valueSize := len(value) / 2 // it's hex so / 2 for actual length in bytes
-	if valueSize%2 != 0 {
+	if len(value)%2 != 0 {
 		return "", fmt.Errorf("Odd number of digits")
 	}
 
+	valueSize := len(value) / 2 // it's hex so / 2 for actual length in bytes
 	valueSizeHex, err := ConvertInt(fmt.Sprintf("%d", valueSize))
 	if err != nil {
 		return "", err
@@ -637,6 +661,9 @@ func AbiEncode(functionSig string, functionInputs []string) (string, error) {
 
 // HashFunctionSelector returns a function selectors keccak256 hashed encoding
 func HashFunctionSelector(functionSig string) (string, error) {
+	// TODO: There are some things that can be improved here, such as:
+	// - Error handling for types that don't exist
+	// - Converting exact "int" and "uint" types to "int256" and "uint256" automatically
 	shortenedFunctionSig, err := ExtractFunctionNameAndFunctionArgs(functionSig)
 	if err != nil {
 		return "", err
