@@ -252,7 +252,25 @@ type (
 		S() *big.Int
 	}
 	PolyTransactions []PolyTransaction
-	PolyBlock        interface {
+
+	PolyReceipt interface {
+		TransactionHash() string
+		TransactionIndex() string
+		BlockHash() string
+		BlockNumber() string
+		From() string
+		To() string
+		CumulativeGasUsed() string
+		EffectiveGasPrice() string
+		GasUsed() string
+		ContractAddress() string
+		Logs() string
+		LogsBloom() string
+		Root() string
+		Status() string
+	}
+	PolyReceipts []PolyReceipt
+	PolyBlock    interface {
 		Number() *big.Int
 		Time() uint64
 		Transactions() PolyTransactions
@@ -282,6 +300,9 @@ type (
 	implPolyTransaction struct {
 		inner *RawTransactionResponse
 	}
+	implPolyReceipt struct {
+		inner *RawTxReceipt
+	}
 )
 
 func NewPolyBlock(r *RawBlockResponse) PolyBlock {
@@ -291,6 +312,11 @@ func NewPolyBlock(r *RawBlockResponse) PolyBlock {
 }
 func NewPolyTransaction(r *RawTransactionResponse) PolyTransaction {
 	i := new(implPolyTransaction)
+	i.inner = r
+	return i
+}
+func NewPolyReceipt(r *RawTxReceipt) PolyReceipt {
+	i := new(implPolyReceipt)
 	i.inner = r
 	return i
 }

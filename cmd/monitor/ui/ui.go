@@ -393,8 +393,8 @@ func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 	)
 
 	transactionGrid.Set(
-		ui.NewRow(1.0/10, termUi.TxInfo),
-		ui.NewRow(9.0/10, termUi.Receipts),
+		ui.NewCol(5.0/10, termUi.TxInfo),
+		ui.NewCol(5.0/10, termUi.Receipts),
 	)
 
 	return
