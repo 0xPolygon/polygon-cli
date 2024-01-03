@@ -15,6 +15,20 @@ import (
 )
 
 type (
+	SortableBlocks []PolyBlock
+)
+
+func (a SortableBlocks) Len() int {
+	return len(a)
+}
+func (a SortableBlocks) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+func (a SortableBlocks) Less(i, j int) bool {
+	return a[i].Number().Int64() < a[j].Number().Int64()
+}
+
+type (
 	RawQuantityResponse string
 	RawDataResponse     string
 	RawData8Response    string
@@ -139,6 +153,9 @@ type (
 
 		// baseFeePerGas: QUANTITY - fixed per block fee
 		BaseFeePerGas RawQuantityResponse `json:"baseFeePerGas"`
+
+		// receiptsRoot: DATA, 32 Bytes - a 256-bit hash encoded as a hexadecimal
+		MixHash RawData32Response `json:"mixHash"`
 	}
 
 	RawTxLogs struct {
@@ -187,7 +204,7 @@ type (
 		From RawData20Response `json:"from"`
 
 		// to: DATA, 20 Bytes - address of the receiver. null when its a contract creation transaction.
-		To RawDataResponse `json:"to"`
+		To RawData20Response `json:"to"`
 
 		// cumulativeGasUsed : QUANTITY - The total amount of gas used when this transaction was executed in the block.
 		CumulativeGasUsed RawQuantityResponse `json:"cumulativeGasUsed"`
@@ -235,7 +252,25 @@ type (
 		S() *big.Int
 	}
 	PolyTransactions []PolyTransaction
-	PolyBlock        interface {
+
+	PolyReceipt interface {
+		TransactionHash() ethcommon.Hash
+		TransactionIndex() uint64
+		BlockHash() ethcommon.Hash
+		BlockNumber() *big.Int
+		From() ethcommon.Address
+		To() ethcommon.Address
+		CumulativeGasUsed() *big.Int
+		EffectiveGasPrice() *big.Int
+		GasUsed() *big.Int
+		ContractAddress() ethcommon.Address
+		Logs() []RawTxLogs
+		LogsBloom() []byte
+		Root() ethcommon.Hash
+		Status() uint64
+	}
+	PolyReceipts []PolyReceipt
+	PolyBlock    interface {
 		Number() *big.Int
 		Time() uint64
 		Transactions() PolyTransactions
@@ -265,7 +300,80 @@ type (
 	implPolyTransaction struct {
 		inner *RawTransactionResponse
 	}
+	implPolyReceipt struct {
+		inner *RawTxReceipt
+	}
 )
+
+// BlockHash implements PolyReceipt.
+func (i *implPolyReceipt) BlockHash() ethcommon.Hash {
+	return i.inner.BlockHash.ToHash()
+}
+
+// BlockNumber implements PolyReceipt.
+func (i *implPolyReceipt) BlockNumber() *big.Int {
+	return i.inner.BlockNumber.ToBigInt()
+}
+
+// ContractAddress implements PolyReceipt.
+func (i *implPolyReceipt) ContractAddress() ethcommon.Address {
+	return i.inner.ContractAddress.ToAddress()
+}
+
+// CumulativeGasUsed implements PolyReceipt.
+func (i *implPolyReceipt) CumulativeGasUsed() *big.Int {
+	return i.inner.CumulativeGasUsed.ToBigInt()
+}
+
+// EffectiveGasPrice implements PolyReceipt.
+func (i *implPolyReceipt) EffectiveGasPrice() *big.Int {
+	return i.inner.EffectiveGasPrice.ToBigInt()
+}
+
+// From implements PolyReceipt.
+func (i *implPolyReceipt) From() ethcommon.Address {
+	return i.inner.From.ToAddress()
+}
+
+// GasUsed implements PolyReceipt.
+func (i *implPolyReceipt) GasUsed() *big.Int {
+	return i.inner.GasUsed.ToBigInt()
+}
+
+// Logs implements PolyReceipt.
+func (i *implPolyReceipt) Logs() []RawTxLogs {
+	return i.inner.Logs
+}
+
+// LogsBloom implements PolyReceipt.
+func (i *implPolyReceipt) LogsBloom() []byte {
+	return i.inner.LogsBloom.ToBytes()
+}
+
+// Root implements PolyReceipt.
+func (i *implPolyReceipt) Root() ethcommon.Hash {
+	return i.inner.Root.ToHash()
+}
+
+// Status implements PolyReceipt.
+func (i *implPolyReceipt) Status() uint64 {
+	return i.inner.Status.ToUint64()
+}
+
+// To implements PolyReceipt.
+func (i *implPolyReceipt) To() ethcommon.Address {
+	return i.inner.To.ToAddress()
+}
+
+// TransactionHash implements PolyReceipt.
+func (i *implPolyReceipt) TransactionHash() ethcommon.Hash {
+	return i.inner.TransactionHash.ToHash()
+}
+
+// TransactionIndex implements PolyReceipt.
+func (i *implPolyReceipt) TransactionIndex() uint64 {
+	return i.inner.TransactionIndex.ToUint64()
+}
 
 func NewPolyBlock(r *RawBlockResponse) PolyBlock {
 	i := new(implPolyBlock)
@@ -274,6 +382,11 @@ func NewPolyBlock(r *RawBlockResponse) PolyBlock {
 }
 func NewPolyTransaction(r *RawTransactionResponse) PolyTransaction {
 	i := new(implPolyTransaction)
+	i.inner = r
+	return i
+}
+func NewPolyReceipt(r *RawTxReceipt) PolyReceipt {
+	i := new(implPolyReceipt)
 	i.inner = r
 	return i
 }
