@@ -27,15 +27,31 @@ import (
 var errBatchRequestsNotSupported = errors.New("batch requests are not supported")
 
 var (
-	windowSize         int
-	batchSize          SafeBatchSize
-	interval           time.Duration
-	one                = big.NewInt(1)
-	zero               = big.NewInt(0)
+	// windowSize determines the number of blocks to display in the monitor UI at one time.
+	windowSize int
+
+	// batchSize holds the number of blocks to fetch in one batch.
+	// It can be adjusted dynamically based on network conditions.
+	batchSize SafeBatchSize
+
+	// interval specifies the time duration to wait between each update cycle.
+	interval time.Duration
+
+	// one and zero are big.Int representations of 1 and 0, used for convenience in calculations.
+	one  = big.NewInt(1)
+	zero = big.NewInt(0)
+
+	// observedPendingTxs holds a historical record of the number of pending transactions.
 	observedPendingTxs historicalRange
-	maxDataPoints      = 1000
-	maxConcurrency     = 10
-	semaphore          = make(chan struct{}, maxConcurrency)
+
+	// maxDataPoints defines the maximum number of data points to keep in historical records.
+	maxDataPoints = 1000
+
+	// maxConcurrency defines the maximum number of goroutines that can fetch block data concurrently.
+	maxConcurrency = 10
+
+	// semaphore is a channel used to control the concurrency of block data fetch operations.
+	semaphore = make(chan struct{}, maxConcurrency)
 )
 
 type (
@@ -291,14 +307,16 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, to *big.Int, rpc *et
 func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *ethrpc.Client, blms []ethrpc.BatchElem) error {
 	subBatchSize := 50
 	var wg sync.WaitGroup
-	var batchErr error
-	batchErrLock := sync.Mutex{}
+	errChan := make(chan error, maxConcurrency)
 
 	for i := 0; i < len(blms); i += subBatchSize {
-		wg.Add(1)
 		semaphore <- struct{}{}
+		wg.Add(1)
 		go func(i int) {
-			defer wg.Done()
+			defer func() {
+				<-semaphore
+				wg.Done()
+			}()
 			end := i + subBatchSize
 			if end > len(blms) {
 				end = len(blms)
@@ -311,11 +329,7 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 				return rpc.BatchCallContext(ctx, subBatch)
 			}
 			if err := backoff.Retry(retryable, b); err != nil {
-				batchErrLock.Lock()
-				if batchErr == nil {
-					batchErr = err
-				}
-				batchErrLock.Unlock()
+				errChan <- err
 			}
 
 			for _, elem := range subBatch {
@@ -327,11 +341,19 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 				}
 			}
 
-			<-semaphore
 		}(i)
 	}
 
 	wg.Wait()
+
+	close(errChan)
+
+	var batchErr error
+	for err := range errChan {
+		if batchErr == nil {
+			batchErr = err
+		}
+	}
 	return batchErr
 }
 
