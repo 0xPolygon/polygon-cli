@@ -27,7 +27,7 @@ $(BUILD_DIR): ## Create the build folder.
 
 .PHONY: build
 build: $(BUILD_DIR) ## Build go binary.
-	go build -ldflags "$(VERSION_FLAGS)" -o $(BUILD_DIR)/$(BIN_NAME) main.go
+	go build -race -ldflags "$(VERSION_FLAGS)" -o $(BUILD_DIR)/$(BIN_NAME) main.go
 
 .PHONY: install
 install: build ## Install the go binary.
@@ -42,6 +42,7 @@ cross: $(BUILD_DIR) ## Cross-compile go binaries using CGO.
 # - `-linkmode external -extldflags "-static-libgo"` allows dynamic linking.
 	echo "Building $(BIN_NAME)_$(GIT_TAG)_linux_arm64..."
 	CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build \
+			-race \
 			-ldflags '$(VERSION_FLAGS) -s -w -linkmode external -extldflags "-static-libgo"' \
 			-tags netgo \
 			-o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_arm64 \
@@ -49,6 +50,7 @@ cross: $(BUILD_DIR) ## Cross-compile go binaries using CGO.
 
 	echo "Building $(BIN_NAME)_$(GIT_TAG)_linux_amd64..."
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+			-race \
 			-ldflags '$(VERSION_FLAGS) -s -w -linkmode external -extldflags "-static-libgo"' \
 			-tags netgo \
 			-o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_amd64 \
@@ -56,10 +58,10 @@ cross: $(BUILD_DIR) ## Cross-compile go binaries using CGO.
 
 .PHONY: simplecross
 simplecross: $(BUILD_DIR) ## Cross-compile go binaries without using CGO.
-	GOOS=linux  GOARCH=arm64 go build -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_arm64  main.go
-	GOOS=darwin GOARCH=arm64 go build -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_darwin_arm64 main.go
-	GOOS=linux  GOARCH=amd64 go build -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_amd64  main.go
-	GOOS=darwin GOARCH=amd64 go build -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_darwin_amd64 main.go
+	GOOS=linux  GOARCH=arm64 go build -race -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_arm64  main.go
+	GOOS=darwin GOARCH=arm64 go build -race -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_darwin_arm64 main.go
+	GOOS=linux  GOARCH=amd64 go build -race -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_amd64  main.go
+	GOOS=darwin GOARCH=amd64 go build -race -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_darwin_amd64 main.go
 
 .PHONY: clean
 clean: ## Clean the binary folder.
@@ -69,7 +71,7 @@ clean: ## Clean the binary folder.
 
 .PHONY: test
 test: ## Run tests.
-	go test ./... -coverprofile=coverage.out
+	go test -race -coverprofile=coverage.out ./...
 	go tool cover -func coverage.out
 
 ##@ Generation
@@ -79,7 +81,7 @@ gen: gen-doc gen-proto gen-go-bindings  gen-loadtest-modes gen-json-rpctypes ## 
 
 .PHONY: gen-doc
 gen-doc: ## Generate documentation for `polycli`.
-	go run docutil/*.go
+	go run -race docutil/*.go
 
 .PHONY: gen-proto
 gen-proto: ## Generate protobuf stubs.
