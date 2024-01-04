@@ -36,7 +36,8 @@ require (
 	google.golang.org/protobuf v1.32.0
 )
 
-require github.com/alecthomas/participle/v2 v2.1.1 // indirect
+require github.com/alecthomas/participle/v2 v2.1.1
+
 require github.com/go-errors/errors v1.5.1 // indirect
 
 require (
@@ -152,9 +153,9 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-require cloud.google.com/go/kms v1.15.5
-
 require (
-	cloud.google.com/go/iam v1.1.3 // indirect
-	github.com/google/tink/go v1.7.0 // indirect
+	cloud.google.com/go/kms v1.15.5
+	github.com/google/tink/go v1.7.0
 )
+
+require cloud.google.com/go/iam v1.1.3 // indirect

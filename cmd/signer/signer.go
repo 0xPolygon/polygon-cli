@@ -533,7 +533,9 @@ func wrapKeyForGCPKMS(ctx context.Context, client *kms.KeyManagementClient) ([]b
 		Version:       1, // This is not the GCP Cryptokey version!
 		PrivateKey:    key.D.FillBytes(privateKey),
 		NamedCurveOID: nil,
-		PublicKey:     asn1.BitString{Bytes: elliptic.Marshal(key.Curve, key.X, key.Y)},
+		// It looks like elliptic.Marshal is deprecated, but it's still being used in the core library as of go 1.21.5, so I don't want to switch to ecdh especially since it's not obvious how to do so
+		// https://cs.opensource.google/go/go/+/refs/tags/go1.21.5:src/crypto/x509/x509.go;l=106
+		PublicKey: asn1.BitString{Bytes: elliptic.Marshal(key.Curve, key.X, key.Y)}, //nolint:staticcheck
 	})
 	if err != nil {
 		return nil, fmt.Errorf("unable to marshal private key %w", err)
