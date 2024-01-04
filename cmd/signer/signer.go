@@ -328,9 +328,11 @@ func (g *GCPKMS) ListKeyRingKeys(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+
 		pubKey, err := getPublicKeyByName(ctx, c, fmt.Sprintf("%s/cryptoKeyVersions/%d", resp.Name, *inputSignerOpts.gcpKeyVersion))
 		if err != nil {
-			return err
+			log.Error().Err(err).Str("name", resp.Name).Msg("key not found")
+			continue
 		}
 		ethAddress := gcpPubKeyToEthAddress(pubKey)
 
@@ -544,7 +546,7 @@ func wrapKeyForGCPKMS(ctx context.Context, client *kms.KeyManagementClient) ([]b
 
 	// Generate a temporary 32-byte key for AES-KWP and wrap the key material.
 	kwpKey := make([]byte, 32)
-	if _, err := rand.Read(kwpKey); err != nil {
+	if _, err = rand.Read(kwpKey); err != nil {
 		return nil, fmt.Errorf("failed to generate AES-KWP key: %w", err)
 	}
 	kwp, err := subtle.NewKWP(kwpKey)
@@ -755,7 +757,7 @@ func sanityCheck(cmd *cobra.Command, args []string) error {
 		keyStoreMethods += 1
 	}
 	if keyStoreMethods > 1 {
-		return fmt.Errorf("Multiple conflicting keystore mults were specified")
+		return fmt.Errorf("Multiple conflicting keystore sources were specified")
 	}
 	pwErr := passwordValidation(*inputSignerOpts.unsafePassword)
 	if *inputSignerOpts.unsafePassword != "" && pwErr != nil {
