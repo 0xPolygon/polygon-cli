@@ -337,7 +337,9 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 					log.Error().Str("Method", elem.Method).Interface("Args", elem.Args).Err(elem.Error).Msg("Failed batch element")
 				} else {
 					pb := rpctypes.NewPolyBlock(elem.Result.(*rpctypes.RawBlockResponse))
+					ms.BlocksLock.Lock()
 					ms.BlockCache.Add(pb.Number().String(), pb)
+					ms.BlocksLock.Unlock()
 				}
 			}
 
