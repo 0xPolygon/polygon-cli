@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/maticnetwork/polygon-cli/cmd/dbbench"
-	"github.com/maticnetwork/polygon-cli/cmd/signer"
 	"os"
 
 	"github.com/maticnetwork/polygon-cli/cmd/fork"
@@ -15,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/maticnetwork/polygon-cli/cmd/abi"
+	"github.com/maticnetwork/polygon-cli/cmd/dbbench"
 	"github.com/maticnetwork/polygon-cli/cmd/dumpblocks"
 	"github.com/maticnetwork/polygon-cli/cmd/enr"
 	"github.com/maticnetwork/polygon-cli/cmd/fund"
@@ -26,6 +25,7 @@ import (
 	"github.com/maticnetwork/polygon-cli/cmd/nodekey"
 	"github.com/maticnetwork/polygon-cli/cmd/rpc"
 	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz"
+	"github.com/maticnetwork/polygon-cli/cmd/signer"
 	"github.com/maticnetwork/polygon-cli/cmd/version"
 	"github.com/maticnetwork/polygon-cli/cmd/wallet"
 )

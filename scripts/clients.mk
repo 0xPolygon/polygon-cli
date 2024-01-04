@@ -46,7 +46,7 @@ fund: ## Fund the loadtest account with 100k ETH.
 .PHONY: loadtest
 loadtest: fund ## Run random loadtest against a local RPC.
 	sleep 2
-	go run main.go loadtest \
+	go run -race main.go loadtest \
 		--verbosity 600 \
 		--rpc-url http://${HOST}:$(PORT) \
 		--chain-id ${CHAIN_ID} \

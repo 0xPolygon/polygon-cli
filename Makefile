@@ -69,7 +69,7 @@ clean: ## Clean the binary folder.
 
 .PHONY: test
 test: ## Run tests.
-	go test ./... -coverprofile=coverage.out
+	go test -race -coverprofile=coverage.out ./...
 	go tool cover -func coverage.out
 
 ##@ Generation
@@ -79,7 +79,7 @@ gen: gen-doc gen-proto gen-go-bindings gen-loadtest-modes gen-json-rpctypes ## G
 
 .PHONY: gen-doc
 gen-doc: ## Generate documentation for `polycli`.
-	go run docutil/*.go
+	go run -race docutil/*.go
 
 .PHONY: gen-proto
 gen-proto: ## Generate protobuf stubs.

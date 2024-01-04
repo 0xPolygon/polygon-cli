@@ -34,7 +34,7 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 ## See also
 
-- [polycli abi](polycli_abi.md) - Parse an ABI and print the encoded signatures.
+- [polycli abi](polycli_abi.md) - Provides encoding and decoding functionalities with contract signatures and ABI.
 
 - [polycli dbbench](polycli_dbbench.md) - Perform a level/pebble db benchmark
 
