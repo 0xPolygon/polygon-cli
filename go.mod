@@ -151,4 +151,7 @@ require (
 
 require cloud.google.com/go/kms v1.15.5
 
-require cloud.google.com/go/iam v1.1.3 // indirect
+require (
+	cloud.google.com/go/iam v1.1.3 // indirect
+	github.com/google/tink/go v1.7.0 // indirect
+)

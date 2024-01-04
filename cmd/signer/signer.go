@@ -6,6 +6,11 @@ import (
 	"cloud.google.com/go/kms/apiv1/kmspb"
 	"context"
 	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/x509"
 	"crypto/x509/pkix"
 	_ "embed"
 	"encoding/asn1"
@@ -19,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+	"github.com/google/tink/go/kwp/subtle"
 	"github.com/manifoldco/promptui"
 	"github.com/maticnetwork/polygon-cli/gethkeystore"
 	"github.com/rs/zerolog/log"
@@ -46,6 +52,8 @@ type signerOpts struct {
 	gcpProjectID   *string
 	gcpRegion      *string
 	gcpKeyRingID   *string
+	gcpImportJob   *string
+	gcpKeyVersion  *int
 }
 
 var inputSignerOpts = signerOpts{}
@@ -203,6 +211,45 @@ var ListCmd = &cobra.Command{
 	},
 }
 
+var ImportCmd = &cobra.Command{
+	Use:   "import",
+	Short: "Import a private key into the keyring / keystore",
+	Long:  signerUsage,
+	Args:  cobra.NoArgs,
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		if err := sanityCheck(cmd, args); err != nil {
+			return err
+		}
+		if err := cmd.MarkFlagRequired("private-key"); err != nil {
+			return err
+		}
+		return nil
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if *inputSignerOpts.keystore != "" {
+			ks := keystore.NewKeyStore(*inputSignerOpts.keystore, keystore.StandardScryptN, keystore.StandardScryptP)
+			pk, err := crypto.HexToECDSA(*inputSignerOpts.privateKey)
+			if err != nil {
+				return err
+			}
+			pass, err := getKeystorePassword()
+			if err != nil {
+				return err
+			}
+			_, err = ks.ImportECDSA(pk, pass)
+			return err
+		}
+		if *inputSignerOpts.kms == "GCP" {
+			gcpKMS := GCPKMS{}
+			if err := gcpKMS.CreateImportJob(cmd.Context()); err != nil {
+				return err
+			}
+			return gcpKMS.ImportKey(cmd.Context())
+		}
+		return fmt.Errorf("unable to import key")
+	},
+}
+
 func getTxDataToSign() (*types.Transaction, error) {
 	if *inputSignerOpts.dataFile == "" {
 		return nil, fmt.Errorf("no datafile was specified to sign")
@@ -281,8 +328,7 @@ func (g *GCPKMS) ListKeyRingKeys(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		// TODO This is another spot where I've hard coded the version
-		pubKey, err := getPublicKeyByName(ctx, c, resp.Name+"/cryptoKeyVersions/1")
+		pubKey, err := getPublicKeyByName(ctx, c, fmt.Sprintf("%s/cryptoKeyVersions/%d", resp.Name, *inputSignerOpts.gcpKeyVersion))
 		if err != nil {
 			return err
 		}
@@ -379,15 +425,189 @@ func (g *GCPKMS) CreateKey(ctx context.Context) error {
 
 }
 
+func (g *GCPKMS) CreateImportJob(ctx context.Context) error {
+	// parent := "projects/PROJECT_ID/locations/global/keyRings/my-key-ring"
+	// id := "my-import-job"
+	parent := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s", *inputSignerOpts.gcpProjectID, *inputSignerOpts.gcpRegion, *inputSignerOpts.gcpKeyRingID)
+	id := *inputSignerOpts.gcpImportJob
+
+	// Create the client.
+	client, err := kms.NewKeyManagementClient(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create kms client: %w", err)
+	}
+	defer client.Close()
+
+	// Build the request.
+	req := &kmspb.CreateImportJobRequest{
+		Parent:      parent,
+		ImportJobId: id,
+		ImportJob: &kmspb.ImportJob{
+			// See allowed values and their descriptions at
+			// https://cloud.google.com/kms/docs/algorithms#protection_levels
+			ProtectionLevel: kmspb.ProtectionLevel_HSM,
+			// See allowed values and their descriptions at
+			// https://cloud.google.com/kms/docs/key-wrapping#import_methods
+			ImportMethod: kmspb.ImportJob_RSA_OAEP_3072_SHA1_AES_256,
+		},
+	}
+
+	// Call the API.
+	result, err := client.CreateImportJob(ctx, req)
+	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			log.Info().Str("name", parent).Msg("import job already exists")
+			return nil
+		}
+		return fmt.Errorf("failed to create import job: %w", err)
+	}
+	log.Info().Str("name", result.Name).Msg("created import job")
+
+	return nil
+}
+
+func (g *GCPKMS) ImportKey(ctx context.Context) error {
+	name := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s/cryptoKeys/%s", *inputSignerOpts.gcpProjectID, *inputSignerOpts.gcpRegion, *inputSignerOpts.gcpKeyRingID, *inputSignerOpts.keyID)
+	importJob := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s/importJobs/%s", *inputSignerOpts.gcpProjectID, *inputSignerOpts.gcpRegion, *inputSignerOpts.gcpKeyRingID, *inputSignerOpts.gcpImportJob)
+	client, err := kms.NewKeyManagementClient(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create kms client: %w", err)
+	}
+	defer client.Close()
+
+	wrappedKey, err := wrapKeyForGCPKMS(ctx, client)
+	if err != nil {
+		return err
+	}
+	req := &kmspb.ImportCryptoKeyVersionRequest{
+		Parent:     name,
+		Algorithm:  kmspb.CryptoKeyVersion_EC_SIGN_SECP256K1_SHA256,
+		WrappedKey: wrappedKey,
+		ImportJob:  importJob,
+	}
+
+	result, err := client.ImportCryptoKeyVersion(ctx, req)
+	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			log.Info().Str("name", name).Msg("key already exists")
+			return nil
+		}
+		return fmt.Errorf("failed to import key: %w", err)
+	}
+	log.Info().Str("name", result.Name).Msg("imported key")
+	return nil
+
+}
+
+func wrapKeyForGCPKMS(ctx context.Context, client *kms.KeyManagementClient) ([]byte, error) {
+	// Generate a ECDSA keypair, and format the private key as PKCS #8 DER.
+	key, err := crypto.HexToECDSA(*inputSignerOpts.privateKey)
+	if err != nil {
+		return nil, err
+	}
+	// These are a lot of hacks because the default x509 library doesn't seem to support the secp256k1 curve
+	// START HACKS
+	// keyBytes, err := x509.MarshalPKCS8PrivateKey(key)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to format private key: %w", err)
+	// }
+
+	// https://docs.rs/k256/latest/src/k256/lib.rs.html#116
+	oidNamedCurveP256K1 := asn1.ObjectIdentifier{1, 3, 132, 0, 10}
+	oidBytes, err := asn1.Marshal(oidNamedCurveP256K1)
+	if err != nil {
+		return nil, fmt.Errorf("x509: failed to marshal curve OID: %w", err)
+	}
+	var privKey pkcs8
+	oidPublicKeyECDSA := asn1.ObjectIdentifier{1, 2, 840, 10045, 2, 1}
+	privKey.Algo = pkix.AlgorithmIdentifier{
+		Algorithm: oidPublicKeyECDSA,
+		Parameters: asn1.RawValue{
+			FullBytes: oidBytes,
+		},
+	}
+	privateKey := make([]byte, (key.Curve.Params().N.BitLen()+7)/8)
+	privKey.PrivateKey, err = asn1.Marshal(ecPrivateKey{
+		Version:       1, // This is not the GCP Cryptokey version!
+		PrivateKey:    key.D.FillBytes(privateKey),
+		NamedCurveOID: nil,
+		PublicKey:     asn1.BitString{Bytes: elliptic.Marshal(key.Curve, key.X, key.Y)},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to marshal private key %w", err)
+	}
+	keyBytes, err := asn1.Marshal(privKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to marshal full private key")
+	}
+	// END HACKS
+
+	// Generate a temporary 32-byte key for AES-KWP and wrap the key material.
+	kwpKey := make([]byte, 32)
+	if _, err := rand.Read(kwpKey); err != nil {
+		return nil, fmt.Errorf("failed to generate AES-KWP key: %w", err)
+	}
+	kwp, err := subtle.NewKWP(kwpKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create KWP cipher: %w", err)
+	}
+	wrappedTarget, err := kwp.Wrap(keyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to wrap target key with KWP: %w", err)
+	}
+
+	importJobName := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s/importJobs/%s", *inputSignerOpts.gcpProjectID, *inputSignerOpts.gcpRegion, *inputSignerOpts.gcpKeyRingID, *inputSignerOpts.gcpImportJob)
+
+	// Retrieve the public key from the import job.
+	importJob, err := client.GetImportJob(ctx, &kmspb.GetImportJobRequest{
+		Name: importJobName,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve import job: %w", err)
+	}
+	pubBlock, _ := pem.Decode([]byte(importJob.PublicKey.Pem))
+	pubAny, err := x509.ParsePKIXPublicKey(pubBlock.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse import job public key: %w", err)
+	}
+	pub, ok := pubAny.(*rsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("unexpected public key type %T, want *rsa.PublicKey", pubAny)
+	}
+
+	// Wrap the KWP key using the import job key.
+	wrappedWrappingKey, err := rsa.EncryptOAEP(sha1.New(), rand.Reader, pub, kwpKey, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to wrap KWP key: %w", err)
+	}
+
+	// Concatenate the wrapped KWP key and the wrapped target key.
+	combined := append(wrappedWrappingKey, wrappedTarget...)
+	return combined, nil
+
+}
+
+type ecPrivateKey struct {
+	Version       int
+	PrivateKey    []byte
+	NamedCurveOID asn1.ObjectIdentifier `asn1:"optional,explicit,tag:0"`
+	PublicKey     asn1.BitString        `asn1:"optional,explicit,tag:1"`
+}
+
 type publicKeyInfo struct {
 	Raw       asn1.RawContent
 	Algorithm pkix.AlgorithmIdentifier
 	PublicKey asn1.BitString
 }
+type pkcs8 struct {
+	Version    int
+	Algo       pkix.AlgorithmIdentifier
+	PrivateKey []byte
+	// optional attributes omitted.
+}
 
 func (g *GCPKMS) Sign(ctx context.Context, tx *types.Transaction) error {
-	// TODO we might need to set a version as a parameter
-	name := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s/cryptoKeys/%s/cryptoKeyVersions/%d", *inputSignerOpts.gcpProjectID, *inputSignerOpts.gcpRegion, *inputSignerOpts.gcpKeyRingID, *inputSignerOpts.keyID, 1)
+	name := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s/cryptoKeys/%s/cryptoKeyVersions/%d", *inputSignerOpts.gcpProjectID, *inputSignerOpts.gcpRegion, *inputSignerOpts.gcpKeyRingID, *inputSignerOpts.keyID, *inputSignerOpts.gcpKeyVersion)
 
 	client, err := kms.NewKeyManagementClient(ctx)
 	if err != nil {
@@ -518,11 +738,17 @@ func getKeystorePassword() (string, error) {
 }
 
 func sanityCheck(cmd *cobra.Command, args []string) error {
+	// Strip off the 0x if it's included in the private key hex
+	*inputSignerOpts.privateKey = strings.TrimPrefix(*inputSignerOpts.privateKey, "0x")
+
+	// normalize the format of the kms argument
+	*inputSignerOpts.kms = strings.ToUpper(*inputSignerOpts.kms)
+
 	keyStoreMethods := 0
 	if *inputSignerOpts.kms != "" {
 		keyStoreMethods += 1
 	}
-	if *inputSignerOpts.privateKey != "" {
+	if *inputSignerOpts.privateKey != "" && cmd.Name() != "import" {
 		keyStoreMethods += 1
 	}
 	if *inputSignerOpts.keystore != "" {
@@ -552,6 +778,7 @@ func sanityCheck(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("a key id is required")
 		}
 	}
+
 	return nil
 }
 
@@ -586,6 +813,11 @@ func getSigner() (types.Signer, error) {
 }
 
 func init() {
+	SignerCmd.AddCommand(SignCmd)
+	SignerCmd.AddCommand(CreateCmd)
+	SignerCmd.AddCommand(ListCmd)
+	SignerCmd.AddCommand(ImportCmd)
+
 	inputSignerOpts.keystore = SignerCmd.PersistentFlags().String("keystore", "", "Use the keystore in the given folder or file")
 	inputSignerOpts.privateKey = SignerCmd.PersistentFlags().String("private-key", "", "Use the provided hex encoded private key")
 	inputSignerOpts.kms = SignerCmd.PersistentFlags().String("kms", "", "AWS or GCP if the key is stored in the cloud")
@@ -602,12 +834,6 @@ func init() {
 	inputSignerOpts.gcpRegion = SignerCmd.PersistentFlags().String("gcp-location", "europe-west2", "The GCP Region to use")
 	// What is dead may never die https://cloud.google.com/kms/docs/faq#cannot_delete
 	inputSignerOpts.gcpKeyRingID = SignerCmd.PersistentFlags().String("gcp-keyring-id", "polycli-keyring", "The GCP Keyring ID to be used")
-
-	kmsOpt := *inputSignerOpts.kms
-	kmsOpt = strings.ToUpper(kmsOpt)
-	inputSignerOpts.kms = &kmsOpt
-
-	SignerCmd.AddCommand(SignCmd)
-	SignerCmd.AddCommand(CreateCmd)
-	SignerCmd.AddCommand(ListCmd)
+	inputSignerOpts.gcpImportJob = SignerCmd.PersistentFlags().String("gcp-import-job-id", "", "The GCP Import Job ID to use when importing a key")
+	inputSignerOpts.gcpKeyVersion = SignerCmd.PersistentFlags().Int("gcp-key-version", 1, "The GCP crypto key version to use")
 }
