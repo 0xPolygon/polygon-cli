@@ -2,8 +2,6 @@ package signer
 
 import (
 	"bytes"
-	kms "cloud.google.com/go/kms/apiv1"
-	"cloud.google.com/go/kms/apiv1/kmspb"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -18,6 +16,14 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"hash/crc32"
+	"math/big"
+	"os"
+	"strings"
+	"time"
+
+	kms "cloud.google.com/go/kms/apiv1"
+	"cloud.google.com/go/kms/apiv1/kmspb"
 	accounts2 "github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -32,11 +38,6 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
-	"hash/crc32"
-	"math/big"
-	"os"
-	"strings"
-	"time"
 )
 
 // signerOpts are the input arguments for these commands
@@ -61,6 +62,18 @@ var inputSignerOpts = signerOpts{}
 //go:embed usage.md
 var signerUsage string
 
+//go:embed signCmdUsage.md
+var signCmdUsage string
+
+//go:embed createCmdUsage.md
+var createCmdUsage string
+
+//go:embed listCmdUsage.md
+var listCmdUsage string
+
+//go:embed importCmdUsage.md
+var importCmdUsage string
+
 var SignerCmd = &cobra.Command{
 	Use:   "signer",
 	Short: "Utilities for security signing transactions",
@@ -71,7 +84,7 @@ var SignerCmd = &cobra.Command{
 var SignCmd = &cobra.Command{
 	Use:     "sign",
 	Short:   "Sign tx data",
-	Long:    signerUsage,
+	Long:    signCmdUsage,
 	Args:    cobra.NoArgs,
 	PreRunE: sanityCheck,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -142,7 +155,7 @@ var SignCmd = &cobra.Command{
 var CreateCmd = &cobra.Command{
 	Use:     "create",
 	Short:   "Create a new key",
-	Long:    signerUsage,
+	Long:    createCmdUsage,
 	Args:    cobra.NoArgs,
 	PreRunE: sanityCheck,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -191,7 +204,7 @@ var CreateCmd = &cobra.Command{
 var ListCmd = &cobra.Command{
 	Use:     "list",
 	Short:   "List the keys in the keyring / keystore",
-	Long:    signerUsage,
+	Long:    listCmdUsage,
 	Args:    cobra.NoArgs,
 	PreRunE: sanityCheck,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -214,7 +227,7 @@ var ListCmd = &cobra.Command{
 var ImportCmd = &cobra.Command{
 	Use:   "import",
 	Short: "Import a private key into the keyring / keystore",
-	Long:  signerUsage,
+	Long:  importCmdUsage,
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if err := sanityCheck(cmd, args); err != nil {
