@@ -329,7 +329,11 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 				return rpc.BatchCallContext(ctx, subBatch)
 			}
 			if err := backoff.Retry(retryable, b); err != nil {
-				errChan <- err
+				select {
+				case errChan <- err:
+				default:
+				  log.Error().Msg("Discarding error since error channel is full")
+				}
 			}
 
 			for _, elem := range subBatch {
