@@ -31,26 +31,54 @@ type UiSkeleton struct {
 	Receipts        *widgets.List
 }
 
-func GetCurrentBlockInfo(headBlock *big.Int, gasPrice *big.Int, peerCount uint64, pendingCount uint64, chainID *big.Int, blocks []rpctypes.PolyBlock) string {
-	// Calculate the formatted strings
+func GetCurrentBlockInfo(headBlock *big.Int, gasPrice *big.Int, peerCount uint64, pendingCount uint64, chainID *big.Int, blocks []rpctypes.PolyBlock, dx int, dy int) string {
+	// Return an appropriate message if dy is 0 or less.
+	if dy <= 0 {
+		return "Invalid display configuration."
+	}
+
 	height := fmt.Sprintf("Height: %s", headBlock.String())
-	time := fmt.Sprintf("Time: %s", time.Now().Format("02 Jan 06 15:04:05 MST"))
+	timeInfo := fmt.Sprintf("Time: %s", time.Now().Format("02 Jan 06 15:04:05 MST"))
 	gasPriceString := fmt.Sprintf("Gas Price: %s gwei", new(big.Int).Div(gasPrice, metrics.UnitShannon).String())
 	peers := fmt.Sprintf("Peers: %d", peerCount)
 	pendingTx := fmt.Sprintf("Pending Tx: %d", pendingCount)
 	chainIdString := fmt.Sprintf("Chain ID: %s", chainID.String())
 
-	maxWidthCol1 := max(len(height), len(gasPriceString), len(pendingTx))
+	info := []string{height, timeInfo, gasPriceString, peers, pendingTx, chainIdString}
+	columns := len(info) / dy
+	if len(info)%dy != 0 {
+		columns += 1 // Add an extra column for the remaining items
+	}
 
-	height = fmt.Sprintf("%-*s", maxWidthCol1, height)
-	gasPriceString = fmt.Sprintf("%-*s", maxWidthCol1, gasPriceString)
-	pendingTx = fmt.Sprintf("%-*s", maxWidthCol1, pendingTx)
+	// Calculate the width of each column based on the longest string in each column
+	columnWidths := make([]int, columns)
+	for i := 0; i < columns; i++ {
+		for j := 0; j < dy; j++ {
+			index := i*dy + j
+			if index < len(info) && len(info[index]) > columnWidths[i] {
+				columnWidths[i] = len(info[index])
+			}
+		}
+		// Add padding and ensure it doesn't exceed 'dx'
+		columnWidths[i] += 5 // Adjust padding as needed
+		if columnWidths[i] > dx {
+			columnWidths[i] = dx
+		}
+	}
 
-	line1 := fmt.Sprintf("%s  %s", height, time)
-	line2 := fmt.Sprintf("%s  %s", gasPriceString, peers)
-	line3 := fmt.Sprintf("%s  %s", pendingTx, chainIdString)
+	var formattedInfo strings.Builder
+	for i := 0; i < dy; i++ {
+		for j := 0; j < columns; j++ {
+			index := j*dy + i
+			if index < len(info) {
+				formatString := fmt.Sprintf("%%-%ds", columnWidths[j])
+				formattedInfo.WriteString(fmt.Sprintf(formatString, info[index]))
+			}
+		}
+		formattedInfo.WriteString("\n")
+	}
 
-	return fmt.Sprintf("%s\n%s\n%s", line1, line2, line3)
+	return formattedInfo.String()
 }
 
 func max(nums ...int) int {
@@ -364,6 +392,7 @@ func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 	blockInfo = widgets.NewList()
 	blockInfo.TextStyle = ui.NewStyle(ui.ColorWhite)
 	blockInfo.Title = "Block Information"
+	blockInfo.WrapText = true
 
 	transactionInfo = widgets.NewTable()
 	transactionInfo.TextStyle = ui.NewStyle(ui.ColorWhite)

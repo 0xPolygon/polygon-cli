@@ -52,6 +52,9 @@ var (
 
 	// semaphore is a channel used to control the concurrency of block data fetch operations.
 	semaphore = make(chan struct{}, maxConcurrency)
+
+	// size of the sub batches to divide and conquer the total batch size with
+	subBatchSize = 50
 )
 
 type (
@@ -305,7 +308,6 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, to *big.Int, rpc *et
 }
 
 func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *ethrpc.Client, blms []ethrpc.BatchElem) error {
-	subBatchSize := 50
 	var wg sync.WaitGroup
 	errChan := make(chan error, maxConcurrency)
 
@@ -316,6 +318,7 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 			defer func() {
 				<-semaphore
 				wg.Done()
+				close(errChan)
 			}()
 			end := i + subBatchSize
 			if end > len(blms) {
@@ -351,8 +354,6 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 	}
 
 	wg.Wait()
-
-	close(errChan)
 
 	var batchErr error
 	for err := range errChan {
@@ -465,7 +466,8 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		ms.BlocksLock.RUnlock()
 		renderedBlocks = renderedBlocksTemp
 
-		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.PendingCount, ms.ChainID, renderedBlocks)
+		log.Warn().Int("skeleton.Current.Inner.Dy()", skeleton.Current.Inner.Dy()).Int("skeleton.Current.Inner.Dx()", skeleton.Current.Inner.Dx()).Msg("the dimension of the current box")
+		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.PendingCount, ms.ChainID, renderedBlocks, skeleton.Current.Inner.Dx(), skeleton.Current.Inner.Dy())
 		skeleton.TxPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
 		skeleton.GasPriceChart.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
 		skeleton.BlockSizeChart.Data = metrics.GetSizePerBlock(renderedBlocks)
