@@ -324,6 +324,10 @@ func toWIF(prvKey *bip32.Key) string {
 
 func toETHAddress(prvKey *bip32.Key) common.Address {
 	concat := toUncompressedPubKey(prvKey)
+	return RawPubKeyToETHAddress(concat)
+
+}
+func RawPubKeyToETHAddress(concat []byte) common.Address {
 	h := sha3.NewLegacyKeccak256()
 	h.Write(concat)
 	b := h.Sum(nil)
