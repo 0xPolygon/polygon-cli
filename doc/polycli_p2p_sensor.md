@@ -28,6 +28,7 @@ If no nodes.json file exists, it will be created.
       --dial-ratio int           Ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
                                  connections to be dialed. Setting this to 0 defaults it to 3.
       --discovery-port int       UDP P2P discovery port (default 30303)
+      --fork-id bytesHex         The hex encoded fork id (omit the 0x) (default DC08865C)
       --genesis string           Genesis file (default "genesis.json")
       --genesis-hash string      The genesis block hash (default "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
   -h, --help                     help for sensor
@@ -48,6 +49,7 @@ If no nodes.json file exists, it will be created.
       --rpc string               RPC endpoint used to fetch the latest block (default "https://polygon-rpc.com")
   -s, --sensor-id string         Sensor ID when writing block/tx events
       --trusted-nodes string     Trusted nodes file
+      --ttl duration             Time to live (default 336h0m0s)
       --write-block-events       Whether to write block events to the database (default true)
   -B, --write-blocks             Whether to write blocks to the database (default true)
       --write-tx-events          Whether to write transaction events to the database. This option could
