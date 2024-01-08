@@ -156,4 +156,8 @@ require (
 	github.com/google/tink/go v1.7.0
 )
 
-require cloud.google.com/go/iam v1.1.3 // indirect
+require (
+	cloud.google.com/go/iam v1.1.3 // indirect
+	github.com/Microsoft/go-winio v0.6.1 // indirect
+	github.com/go-stack/stack v1.8.1 // indirect
+)
