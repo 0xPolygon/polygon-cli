@@ -162,8 +162,8 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 					c.logger.Error().Err(err).Msg("Failed to write Pong response")
 				}
 			case *BlockHeaders:
-				atomic.AddInt32(&count.BlockHeaders, int32(len(msg.BlockHeadersPacket)))
-				c.logger.Trace().Msgf("Received %v BlockHeaders", len(msg.BlockHeadersPacket))
+				atomic.AddInt32(&count.BlockHeaders, int32(len(msg.BlockHeadersRequest)))
+				c.logger.Trace().Msgf("Received %v BlockHeaders", len(msg.BlockHeadersRequest))
 			case *GetBlockHeaders:
 				atomic.AddInt32(&count.BlockHeaderRequests, 1)
 				c.logger.Trace().Msgf("Received GetBlockHeaders request")
@@ -176,11 +176,11 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 					return err
 				}
 			case *BlockBodies:
-				atomic.AddInt32(&count.BlockBodies, int32(len(msg.BlockBodiesPacket)))
-				c.logger.Trace().Msgf("Received %v BlockBodies", len(msg.BlockBodiesPacket))
+				atomic.AddInt32(&count.BlockBodies, int32(len(msg.BlockBodiesResponse)))
+				c.logger.Trace().Msgf("Received %v BlockBodies", len(msg.BlockBodiesResponse))
 			case *GetBlockBodies:
-				atomic.AddInt32(&count.BlockBodiesRequests, int32(len(msg.GetBlockBodiesPacket)))
-				c.logger.Trace().Msgf("Received %v GetBlockBodies request", len(msg.GetBlockBodiesPacket))
+				atomic.AddInt32(&count.BlockBodiesRequests, int32(len(msg.GetBlockBodiesRequest)))
+				c.logger.Trace().Msgf("Received %v GetBlockBodies request", len(msg.GetBlockBodiesRequest))
 
 				res := &BlockBodies{
 					RequestId: msg.RequestId,
@@ -198,8 +198,8 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 				atomic.AddInt32(&count.Transactions, int32(len(*msg)))
 				c.logger.Trace().Msgf("Received %v Transactions", len(*msg))
 			case *PooledTransactions:
-				atomic.AddInt32(&count.Transactions, int32(len(msg.PooledTransactionsPacket)))
-				c.logger.Trace().Msgf("Received %v PooledTransactions", len(msg.PooledTransactionsPacket))
+				atomic.AddInt32(&count.Transactions, int32(len(msg.PooledTransactionsResponse)))
+				c.logger.Trace().Msgf("Received %v PooledTransactions", len(msg.PooledTransactionsResponse))
 			case *NewPooledTransactionHashes:
 				if err := c.processNewPooledTransactionHashes(count, msg.Hashes); err != nil {
 					return err
@@ -209,8 +209,8 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 					return err
 				}
 			case *GetPooledTransactions:
-				atomic.AddInt32(&count.TransactionRequests, int32(len(msg.GetPooledTransactionsPacket)))
-				c.logger.Trace().Msgf("Received %v GetPooledTransactions request", len(msg.GetPooledTransactionsPacket))
+				atomic.AddInt32(&count.TransactionRequests, int32(len(msg.GetPooledTransactionsRequest)))
+				c.logger.Trace().Msgf("Received %v GetPooledTransactions request", len(msg.GetPooledTransactionsRequest))
 
 				res := &PooledTransactions{
 					RequestId: msg.RequestId,
@@ -245,8 +245,8 @@ func (c *rlpxConn) processNewPooledTransactionHashes(count *MessageCount, hashes
 	c.logger.Trace().Msgf("Received %v NewPooledTransactionHashes", len(hashes))
 
 	req := &GetPooledTransactions{
-		RequestId:                   rand.Uint64(),
-		GetPooledTransactionsPacket: hashes,
+		RequestId:                    rand.Uint64(),
+		GetPooledTransactionsRequest: hashes,
 	}
 	if err := c.Write(req); err != nil {
 		c.logger.Error().Err(err).Msg("Failed to write GetPooledTransactions request")
