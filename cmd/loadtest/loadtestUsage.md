@@ -75,5 +75,3 @@ The codebase has a contract that used for load testing. It's written in Yul and 
    - `$ abigen --abi LoadTester.abi --pkg contracts --type LoadTester --bin LoadTester.bin --out loadtester.go`
 4. Run the loadtester to enure it deploys and runs successfully
    - `$ polycli loadtest --verbosity 700 --rpc-url http://127.0.0.1:8541`
-
-```
