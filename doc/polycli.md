@@ -24,12 +24,13 @@ Polycli is a collection of tools that are meant to be useful while building, tes
       --pretty-logs     Should logs be in pretty format or JSON (default true)
   -t, --toggle          Help message for toggle
   -v, --verbosity int   0 - Silent
-                        100 Fatal
-                        200 Error
-                        300 Warning
-                        400 Info
-                        500 Debug
-                        600 Trace (default 400)
+                        100 Panic
+                        200 Fatal
+                        300 Error
+                        400 Warning
+                        500 Info
+                        600 Debug
+                        700 Trace (default 500)
 ```
 
 ## See also

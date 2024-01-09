@@ -28,7 +28,7 @@ If no nodes.json file exists, it will be created.
       --dial-ratio int           Ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
                                  connections to be dialed. Setting this to 0 defaults it to 3.
       --discovery-port int       UDP P2P discovery port (default 30303)
-      --fork-id bytesHex         The hex encoded fork id (omit the 0x) (default 4F2F71CC)
+      --fork-id bytesHex         The hex encoded fork id (omit the 0x) (default DC08865C)
       --genesis string           Genesis file (default "genesis.json")
       --genesis-hash string      The genesis block hash (default "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
   -h, --help                     help for sensor
@@ -64,12 +64,13 @@ The command also inherits flags from parent commands.
       --config string   config file (default is $HOME/.polygon-cli.yaml)
       --pretty-logs     Should logs be in pretty format or JSON (default true)
   -v, --verbosity int   0 - Silent
-                        100 Fatal
-                        200 Error
-                        300 Warning
-                        400 Info
-                        500 Debug
-                        600 Trace (default 400)
+                        100 Panic
+                        200 Fatal
+                        300 Error
+                        400 Warning
+                        500 Info
+                        600 Debug
+                        700 Trace (default 500)
 ```
 
 ## See also

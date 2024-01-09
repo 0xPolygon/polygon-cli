@@ -106,12 +106,13 @@ The command also inherits flags from parent commands.
       --to-address string                      The address that we're going to send to (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
       --to-random                              When doing a transfer test, should we send to random addresses rather than DEADBEEFx5
   -v, --verbosity int                          0 - Silent
-                                               100 Fatal
-                                               200 Error
-                                               300 Warning
-                                               400 Info
-                                               500 Debug
-                                               600 Trace (default 400)
+                                               100 Panic
+                                               200 Fatal
+                                               300 Error
+                                               400 Warning
+                                               500 Info
+                                               600 Debug
+                                               700 Trace (default 500)
 ```
 
 ## See also

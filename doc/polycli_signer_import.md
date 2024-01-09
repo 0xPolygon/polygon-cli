@@ -70,12 +70,13 @@ The command also inherits flags from parent commands.
       --type string                The type of signer to use: latest, cancun, london, eip2930, eip155 (default "london")
       --unsafe-password string     A non-interactively specified password for unlocking the keystore
   -v, --verbosity int              0 - Silent
-                                   100 Fatal
-                                   200 Error
-                                   300 Warning
-                                   400 Info
-                                   500 Debug
-                                   600 Trace (default 400)
+                                   100 Panic
+                                   200 Fatal
+                                   300 Error
+                                   400 Warning
+                                   500 Info
+                                   600 Debug
+                                   700 Trace (default 500)
 ```
 
 ## See also
