@@ -19,6 +19,7 @@ import (
 	"github.com/maticnetwork/polygon-cli/bindings/tokens"
 	uniswapv3loadtest "github.com/maticnetwork/polygon-cli/cmd/loadtest/uniswapv3"
 
+	"github.com/maticnetwork/polygon-cli/abi"
 	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
 
@@ -261,8 +262,8 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		log.Trace().Msg("Setting call only mode since we're doing RPC testing")
 		*inputLoadTestParams.CallOnly = true
 	}
-	if hasMode(loadTestModeContractCall, inputLoadTestParams.ParsedModes) && (*inputLoadTestParams.ContractAddress == "" || *inputLoadTestParams.ContractCallData == "") {
-		return errors.New("`--contract-call` and `--contract-send` requires both `--contract-address` and `--calldata` args.")
+	if hasMode(loadTestModeContractCall, inputLoadTestParams.ParsedModes) && (*inputLoadTestParams.ContractAddress == "" || (*inputLoadTestParams.ContractCallData == "" && *inputLoadTestParams.ContractCallFunctionSignature == "")) {
+		return errors.New("`--contract-call` requires both a `--contract-address` and calldata, either with `--calldata` or `--function-signature --function-arg` flags.")
 	}
 	// TODO check for duplicate modes?
 
@@ -1276,7 +1277,24 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 	tops = configureTransactOpts(tops)
 	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
 
-	calldata, err := hex.DecodeString(strings.TrimPrefix(*ltp.ContractCallData, "0x"))
+	var stringCallData string
+
+	if *inputLoadTestParams.ContractCallData == "" && *inputLoadTestParams.ContractCallFunctionSignature == "" {
+		log.Error().Err(fmt.Errorf("Missing calldata for function call"))
+		return
+	}
+
+	if *inputLoadTestParams.ContractCallData != "" {
+		stringCallData = *inputLoadTestParams.ContractCallData
+	} else {
+		stringCallData, err = abi.AbiEncode(*inputLoadTestParams.ContractCallFunctionSignature, *inputLoadTestParams.ContractCallFunctionArgs)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to encode calldata")
+			return
+		}
+	}
+
+	calldata, err := hex.DecodeString(strings.TrimPrefix(stringCallData, "0x"))
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to decode calldata string")
 		return

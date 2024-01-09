@@ -36,46 +36,48 @@ type (
 	}
 	loadTestParams struct {
 		// inputs
-		RPCUrl                     *string
-		Requests                   *int64
-		Concurrency                *int64
-		BatchSize                  *uint64
-		TimeLimit                  *int64
-		ToRandom                   *bool
-		CallOnly                   *bool
-		CallOnlyLatestBlock        *bool
-		ChainID                    *uint64
-		PrivateKey                 *string
-		ToAddress                  *string
-		EthAmountInWei             *float64
-		RateLimit                  *float64
-		AdaptiveRateLimit          *bool
-		SteadyStateTxPoolSize      *uint64
-		AdaptiveRateLimitIncrement *uint64
-		AdaptiveCycleDuration      *uint64
-		AdaptiveBackoffFactor      *float64
-		Modes                      *[]string
-		Function                   *uint64
-		Iterations                 *uint64
-		ByteCount                  *uint64
-		Seed                       *int64
-		LtAddress                  *string
-		ERC20Address               *string
-		ERC721Address              *string
-		DelAddress                 *string
-		ForceContractDeploy        *bool
-		ForceGasLimit              *uint64
-		ForceGasPrice              *uint64
-		ForcePriorityGasPrice      *uint64
-		ShouldProduceSummary       *bool
-		SummaryOutputMode          *string
-		LegacyTransactionMode      *bool
-		SendOnly                   *bool
-		RecallLength               *uint64
-		ContractAddress            *string
-		ContractCallData           *string
-		ContractCallPayable        *bool
-		InscriptionContent         *string
+		RPCUrl                        *string
+		Requests                      *int64
+		Concurrency                   *int64
+		BatchSize                     *uint64
+		TimeLimit                     *int64
+		ToRandom                      *bool
+		CallOnly                      *bool
+		CallOnlyLatestBlock           *bool
+		ChainID                       *uint64
+		PrivateKey                    *string
+		ToAddress                     *string
+		EthAmountInWei                *float64
+		RateLimit                     *float64
+		AdaptiveRateLimit             *bool
+		SteadyStateTxPoolSize         *uint64
+		AdaptiveRateLimitIncrement    *uint64
+		AdaptiveCycleDuration         *uint64
+		AdaptiveBackoffFactor         *float64
+		Modes                         *[]string
+		Function                      *uint64
+		Iterations                    *uint64
+		ByteCount                     *uint64
+		Seed                          *int64
+		LtAddress                     *string
+		ERC20Address                  *string
+		ERC721Address                 *string
+		DelAddress                    *string
+		ForceContractDeploy           *bool
+		ForceGasLimit                 *uint64
+		ForceGasPrice                 *uint64
+		ForcePriorityGasPrice         *uint64
+		ShouldProduceSummary          *bool
+		SummaryOutputMode             *string
+		LegacyTransactionMode         *bool
+		SendOnly                      *bool
+		RecallLength                  *uint64
+		ContractAddress               *string
+		ContractCallData              *string
+		ContractCallFunctionSignature *string
+		ContractCallFunctionArgs      *[]string
+		ContractCallPayable           *bool
+		InscriptionContent            *string
 
 		// Computed
 		CurrentGasPrice     *big.Int
@@ -254,6 +256,8 @@ inscription - sending inscription transactions`)
 	ltp.RecallLength = LoadtestCmd.Flags().Uint64("recall-blocks", 50, "The number of blocks that we'll attempt to fetch for recall")
 	ltp.ContractAddress = LoadtestCmd.Flags().String("contract-address", "", "The address of the contract that will be used in --mode contract-call. This must be paired up with --mode contract-call and --calldata")
 	ltp.ContractCallData = LoadtestCmd.Flags().String("calldata", "", "The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with --mode contract-call and --contract-address")
+	ltp.ContractCallFunctionSignature = LoadtestCmd.Flags().String("function-signature", "", "The contract's function signature that will be called. The format is '<function name>(<types...>)'. This must be paired up with '--mode contract-call' and '--contract-address'. If the function requires parameters you can pass them with '--function-arg <value>'.")
+	ltp.ContractCallFunctionArgs = LoadtestCmd.Flags().StringSlice("function-arg", []string{}, `The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.`)
 	ltp.ContractCallPayable = LoadtestCmd.Flags().Bool("contract-call-payable", false, "Use this flag if the function is payable, the value amount passed will be from --eth-amount. This must be paired up with --mode contract-call and --contract-address")
 	ltp.InscriptionContent = LoadtestCmd.Flags().String("inscription-content", `data:,{"p":"erc-20","op":"mint","tick":"TEST","amt":"1"}`, "The inscription content that will be encoded as calldata. This must be paired up with --mode inscription")
 
