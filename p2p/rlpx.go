@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
@@ -191,6 +192,30 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 			case *NewBlockHashes:
 				atomic.AddInt32(&count.BlockHashes, int32(len(*msg)))
 				c.logger.Trace().Msgf("Received %v NewBlockHashes", len(*msg))
+
+				for _, hash := range *msg {
+					headersRequest := &GetBlockHeaders{
+						GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+							// Providing both the hash and number will result in a `both origin
+							// hash and number` error.
+							Origin: eth.HashOrNumber{Hash: hash.Hash},
+							Amount: 1,
+						},
+					}
+
+					if err := c.Write(headersRequest); err != nil {
+						c.logger.Error().Err(err).Msg("Failed to write GetBlockHeaders request")
+					}
+
+					bodiesRequest := &GetBlockBodies{
+						GetBlockBodiesRequest: []common.Hash{hash.Hash},
+					}
+
+					if err := c.Write(bodiesRequest); err != nil {
+						c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
+					}
+				}
+
 			case *NewBlock:
 				atomic.AddInt32(&count.Blocks, 1)
 				c.logger.Trace().Str("hash", msg.Block.Hash().Hex()).Msg("Received NewBlock")
