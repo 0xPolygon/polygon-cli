@@ -29,17 +29,17 @@ func SetLogLevel(verbosity int) {
 	switch {
 	case verbosity == int(Silent):
 		zerolog.SetGlobalLevel(zerolog.NoLevel)
-	case verbosity < int(Panic):
+	case verbosity <= int(Panic):
 		zerolog.SetGlobalLevel(zerolog.PanicLevel)
-	case verbosity < int(Fatal):
+	case verbosity <= int(Fatal):
 		zerolog.SetGlobalLevel(zerolog.FatalLevel)
-	case verbosity < int(Error):
+	case verbosity <= int(Error):
 		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
-	case verbosity < int(Warn):
+	case verbosity <= int(Warn):
 		zerolog.SetGlobalLevel(zerolog.WarnLevel)
-	case verbosity < int(Info):
+	case verbosity <= int(Info):
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	case verbosity < int(Debug):
+	case verbosity <= int(Debug):
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	default:
 		zerolog.SetGlobalLevel(zerolog.TraceLevel)

@@ -96,7 +96,7 @@ func NewPolycliCommand() *cobra.Command {
 
 	// Define flags and configuration settings.
 	cmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.polygon-cli.yaml)")
-	cmd.PersistentFlags().IntVarP(&verbosity, "verbosity", "v", 400, "0 - Silent\n100 Fatal\n200 Error\n300 Warning\n400 Info\n500 Debug\n600 Trace")
+	cmd.PersistentFlags().IntVarP(&verbosity, "verbosity", "v", 500, "0 - Silent\n100 Panic\n200 Fatal\n300 Error\n400 Warning\n500 Info\n600 Debug\n700 Trace")
 	cmd.PersistentFlags().BoolVar(&pretty, "pretty-logs", true, "Should logs be in pretty format or JSON")
 
 	// Define local flags which will only run when this action is called directly.
