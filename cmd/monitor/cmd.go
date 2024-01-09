@@ -20,6 +20,7 @@ var (
 	batchSizeValue  string
 	blockCacheLimit int
 	intervalStr     string
+	authToken       string
 
 	defaultBatchSize = 100
 )
@@ -79,6 +80,8 @@ func init() {
 	MonitorCmd.PersistentFlags().StringVarP(&batchSizeValue, "batch-size", "b", "auto", "Number of requests per batch")
 	MonitorCmd.PersistentFlags().IntVarP(&blockCacheLimit, "cache-limit", "c", 200, "Number of cached blocks for the LRU block data structure (Min 100)")
 	MonitorCmd.PersistentFlags().StringVarP(&intervalStr, "interval", "i", "5s", "Amount of time between batch block rpc calls")
+	MonitorCmd.PersistentFlags().StringVarP(&authToken, "auth-token", "a", "", "An auth token to be used while making HTTP requests")
+
 }
 
 func checkFlags() (err error) {

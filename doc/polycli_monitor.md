@@ -28,6 +28,7 @@ If you're experiencing missing blocks, try adjusting the `--batch-size` and `--i
 ## Flags
 
 ```bash
+  -a, --auth-token string   An auth token to be used while making HTTP requests
   -b, --batch-size string   Number of requests per batch (default "auto")
   -c, --cache-limit int     Number of cached blocks for the LRU block data structure (Min 100) (default 200)
   -h, --help                help for monitor

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"sync"
 	"time"
 
@@ -73,9 +74,25 @@ const (
 	monitorModeTransaction
 )
 
+func addAuthToken(h http.Header) error {
+	if authToken == "" {
+		return fmt.Errorf("unable to add empty auth token")
+	}
+
+	h.Set("Authorization", fmt.Sprintf("Bearer %s", authToken))
+	return nil
+}
+
 func monitor(ctx context.Context) error {
 	// Dial rpc.
-	rpc, err := ethrpc.DialContext(ctx, rpcUrl)
+	var rpc *ethrpc.Client
+	var err error
+	if authToken == "" {
+		rpc, err = ethrpc.DialContext(ctx, rpcUrl)
+	} else {
+		rpc, err = ethrpc.DialOptions(ctx, rpcUrl, ethrpc.WithHTTPAuth(addAuthToken))
+	}
+
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to dial rpc")
 		return err
