@@ -247,19 +247,19 @@ R - total recall
 rpc - call random rpc methods
 cc, contract-call - call a contract method
 inscription - sending inscription transactions`)
-	ltp.Function = LoadtestCmd.Flags().Uint64P("function", "f", 1, "A specific function to be called if running with `--mode f` or a specific precompiled contract when running with `--mode a`")
+	ltp.Function = LoadtestCmd.Flags().Uint64P("function", "f", 1, "A specific function to be called if running with --mode f or a specific precompiled contract when running with --mode a")
 	ltp.ByteCount = LoadtestCmd.Flags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.LtAddress = LoadtestCmd.Flags().String("lt-address", "", "The address of a pre-deployed load test contract")
 	ltp.ERC20Address = LoadtestCmd.Flags().String("erc20-address", "", "The address of a pre-deployed ERC20 contract")
 	ltp.ERC721Address = LoadtestCmd.Flags().String("erc721-address", "", "The address of a pre-deployed ERC721 contract")
 	ltp.ForceContractDeploy = LoadtestCmd.Flags().Bool("force-contract-deploy", false, "Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.")
 	ltp.RecallLength = LoadtestCmd.Flags().Uint64("recall-blocks", 50, "The number of blocks that we'll attempt to fetch for recall")
-	ltp.ContractAddress = LoadtestCmd.Flags().String("contract-address", "", "The address of the contract that will be used in `--mode contract-call`. This must be paired up with `--mode contract-call` and `--calldata`")
-	ltp.ContractCallData = LoadtestCmd.Flags().String("calldata", "", "The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with `--mode contract-call` and `--contract-address`")
-	ltp.ContractCallFunctionSignature = LoadtestCmd.Flags().String("function-signature", "", "The contract's function signature that will be called. The format is '<function name>(<types...>)'. This must be paired up with `--mode contract-call` and `--contract-address`. If the function requires parameters you can pass them with `--function-arg <value>`.")
+	ltp.ContractAddress = LoadtestCmd.Flags().String("contract-address", "", "The address of the contract that will be used in --mode contract-call. This must be paired up with --mode contract-call and --calldata")
+	ltp.ContractCallData = LoadtestCmd.Flags().String("calldata", "", "The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with --mode contract-call and --contract-address")
+	ltp.ContractCallFunctionSignature = LoadtestCmd.Flags().String("function-signature", "", "The contract's function signature that will be called. The format is '<function name>(<types...>)'. This must be paired up with '--mode contract-call' and '--contract-address'. If the function requires parameters you can pass them with '--function-arg <value>'.")
 	ltp.ContractCallFunctionArgs = LoadtestCmd.Flags().StringSlice("function-arg", []string{}, `The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.`)
-	ltp.ContractCallPayable = LoadtestCmd.Flags().Bool("contract-call-payable", false, "Use this flag if the function is payable, the value amount passed will be from `--eth-amount`. This must be paired up with `--mode contract-call` and `--contract-address`")
-	ltp.InscriptionContent = LoadtestCmd.Flags().String("inscription-content", `data:,{"p":"erc-20","op":"mint","tick":"TEST","amt":"1"}`, "The inscription content that will be encoded as calldata. This must be paired up with `--mode inscription`")
+	ltp.ContractCallPayable = LoadtestCmd.Flags().Bool("contract-call-payable", false, "Use this flag if the function is payable, the value amount passed will be from --eth-amount. This must be paired up with --mode contract-call and --contract-address")
+	ltp.InscriptionContent = LoadtestCmd.Flags().String("inscription-content", `data:,{"p":"erc-20","op":"mint","tick":"TEST","amt":"1"}`, "The inscription content that will be encoded as calldata. This must be paired up with --mode inscription")
 
 	inputLoadTestParams = *ltp
 
