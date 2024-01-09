@@ -79,7 +79,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 	return ethp2p.Protocol{
 		Name:    "eth",
 		Version: version,
-		Length:  8,
+		Length:  17,
 		Run: func(p *ethp2p.Peer, rw ethp2p.MsgReadWriter) error {
 			c := conn{
 				sensorID:   opts.SensorID,
