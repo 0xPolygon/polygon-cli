@@ -129,6 +129,7 @@ func NewDatastore(ctx context.Context, opts DatastoreOptions) Database {
 		shouldWriteTransactions:      opts.ShouldWriteTransactions,
 		shouldWriteTransactionEvents: opts.ShouldWriteTransactionEvents,
 		jobs:                         make(chan struct{}, opts.MaxConcurrency),
+		ttl:                          opts.TTL,
 	}
 }
 
