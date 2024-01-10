@@ -28,9 +28,9 @@ If you're experiencing missing blocks, try adjusting the `--batch-size` and `--i
 ## Flags
 
 ```bash
-  -a, --auth-token string   An auth token to be used while making HTTP requests
   -b, --batch-size string   Number of requests per batch (default "auto")
   -c, --cache-limit int     Number of cached blocks for the LRU block data structure (Min 100) (default 200)
+  -H, --header strings      Header to be added to each HTTP request. E.g. "X-First-Name: Joe"
   -h, --help                help for monitor
   -i, --interval string     Amount of time between batch block rpc calls (default "5s")
   -r, --rpc-url string      The RPC endpoint url (default "http://localhost:8545")

@@ -74,12 +74,10 @@ const (
 	monitorModeTransaction
 )
 
-func addAuthToken(h http.Header) error {
-	if authToken == "" {
-		return fmt.Errorf("unable to add empty auth token")
+func addHttpHeaders(h http.Header) error {
+	for k, v := range parsedHttpHeaders {
+		h.Set(k, v)
 	}
-
-	h.Set("Authorization", fmt.Sprintf("Bearer %s", authToken))
 	return nil
 }
 
@@ -87,10 +85,10 @@ func monitor(ctx context.Context) error {
 	// Dial rpc.
 	var rpc *ethrpc.Client
 	var err error
-	if authToken == "" {
+	if parsedHttpHeaders == nil {
 		rpc, err = ethrpc.DialContext(ctx, rpcUrl)
 	} else {
-		rpc, err = ethrpc.DialOptions(ctx, rpcUrl, ethrpc.WithHTTPAuth(addAuthToken))
+		rpc, err = ethrpc.DialOptions(ctx, rpcUrl, ethrpc.WithHTTPAuth(addHttpHeaders))
 	}
 
 	if err != nil {

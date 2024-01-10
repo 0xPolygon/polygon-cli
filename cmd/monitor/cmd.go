@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,11 +17,12 @@ var (
 	usage string
 
 	// flags
-	rpcUrl          string
-	batchSizeValue  string
-	blockCacheLimit int
-	intervalStr     string
-	authToken       string
+	rpcUrl            string
+	batchSizeValue    string
+	blockCacheLimit   int
+	intervalStr       string
+	rawHttpHeaders    []string
+	parsedHttpHeaders map[string]string
 
 	defaultBatchSize = 100
 )
@@ -80,13 +82,24 @@ func init() {
 	MonitorCmd.PersistentFlags().StringVarP(&batchSizeValue, "batch-size", "b", "auto", "Number of requests per batch")
 	MonitorCmd.PersistentFlags().IntVarP(&blockCacheLimit, "cache-limit", "c", 200, "Number of cached blocks for the LRU block data structure (Min 100)")
 	MonitorCmd.PersistentFlags().StringVarP(&intervalStr, "interval", "i", "5s", "Amount of time between batch block rpc calls")
-	MonitorCmd.PersistentFlags().StringVarP(&authToken, "auth-token", "a", "", "An auth token to be used while making HTTP requests")
+	MonitorCmd.PersistentFlags().StringSliceVarP(&rawHttpHeaders, "header", "H", nil, "Header to be added to each HTTP request. E.g. \"X-First-Name: Joe\"")
 
 }
 
 func checkFlags() (err error) {
 	if err = util.ValidateUrl(rpcUrl); err != nil {
 		return
+	}
+
+	if rawHttpHeaders != nil {
+		parsedHttpHeaders = make(map[string]string, len(rawHttpHeaders))
+		for _, rh := range rawHttpHeaders {
+			pieces := strings.SplitN(rh, ":", 2)
+			if len(pieces) != 2 {
+				return fmt.Errorf("the header value should have been split into 2 pieces, but got %d", len(pieces))
+			}
+			parsedHttpHeaders[pieces[0]] = pieces[1]
+		}
 	}
 
 	interval, err = time.ParseDuration(intervalStr)
