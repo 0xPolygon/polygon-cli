@@ -347,7 +347,15 @@ func runLoadTest(ctx context.Context) error {
 	}
 
 	// Dial the Ethereum RPC server.
-	rpc, err := ethrpc.DialContext(ctx, *inputLoadTestParams.RPCUrl)
+	var rpc *ethrpc.Client
+	var err error
+	if inputLoadTestParams.ParsedHTTPHeaders == nil {
+		log.Trace().Msg("No HeadersAdding custom headers")
+		rpc, err = ethrpc.DialContext(ctx, *inputLoadTestParams.RPCUrl)
+	} else {
+		log.Trace().Msg("Adding custom headers")
+		rpc, err = ethrpc.DialOptions(ctx, *inputLoadTestParams.RPCUrl, ethrpc.WithHTTPAuth(util.GetHTTPAuth(inputLoadTestParams.ParsedHTTPHeaders)))
+	}
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to dial rpc")
 		return err

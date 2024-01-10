@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -215,4 +216,24 @@ func BlockUntilSuccessful(ctx context.Context, c *ethclient.Client, retryable fu
 	// this function use to be very complicated (and not work). I'm dumbing this down to a basic time based retryable which should work 99% of the time
 	b := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(5*time.Second), 24), ctx)
 	return backoff.Retry(retryable, b)
+}
+func GetHTTPAuth(parsedHttpHeaders map[string]string) func(http.Header) error {
+	return func(h http.Header) error {
+		for k, v := range parsedHttpHeaders {
+			h.Set(k, v)
+		}
+		return nil
+	}
+}
+
+func ParseHeaderStrings(rawHTTPHeaders []string) (map[string]string, error) {
+	parsedHttpHeaders := make(map[string]string, len(rawHTTPHeaders))
+	for _, rh := range rawHTTPHeaders {
+		pieces := strings.SplitN(rh, ":", 2)
+		if len(pieces) != 2 {
+			return nil, fmt.Errorf("the header value should have been split into 2 pieces, but got %d", len(pieces))
+		}
+		parsedHttpHeaders[pieces[0]] = pieces[1]
+	}
+	return parsedHttpHeaders, nil
 }

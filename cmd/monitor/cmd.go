@@ -4,7 +4,6 @@ import (
 	_ "embed"
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -92,13 +91,9 @@ func checkFlags() (err error) {
 	}
 
 	if rawHttpHeaders != nil {
-		parsedHttpHeaders = make(map[string]string, len(rawHttpHeaders))
-		for _, rh := range rawHttpHeaders {
-			pieces := strings.SplitN(rh, ":", 2)
-			if len(pieces) != 2 {
-				return fmt.Errorf("the header value should have been split into 2 pieces, but got %d", len(pieces))
-			}
-			parsedHttpHeaders[pieces[0]] = pieces[1]
+		parsedHttpHeaders, err = util.ParseHeaderStrings(rawHttpHeaders)
+		if err != nil {
+			return err
 		}
 	}
 

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"net/http"
 	"sync"
 	"time"
 
@@ -95,13 +94,6 @@ const (
 	monitorModeTransaction
 )
 
-func addHttpHeaders(h http.Header) error {
-	for k, v := range parsedHttpHeaders {
-		h.Set(k, v)
-	}
-	return nil
-}
-
 func monitor(ctx context.Context) error {
 	// Dial rpc.
 	var rpc *ethrpc.Client
@@ -109,7 +101,7 @@ func monitor(ctx context.Context) error {
 	if parsedHttpHeaders == nil {
 		rpc, err = ethrpc.DialContext(ctx, rpcUrl)
 	} else {
-		rpc, err = ethrpc.DialOptions(ctx, rpcUrl, ethrpc.WithHTTPAuth(addHttpHeaders))
+		rpc, err = ethrpc.DialOptions(ctx, rpcUrl, ethrpc.WithHTTPAuth(util.GetHTTPAuth(parsedHttpHeaders)))
 	}
 
 	if err != nil {

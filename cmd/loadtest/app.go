@@ -78,6 +78,7 @@ type (
 		ContractCallFunctionArgs      *[]string
 		ContractCallPayable           *bool
 		InscriptionContent            *string
+		RawHTTPHeaders                *[]string
 
 		// Computed
 		CurrentGasPrice     *big.Int
@@ -93,6 +94,7 @@ type (
 		Mode                loadTestMode
 		ParsedModes         []loadTestMode
 		MultiMode           bool
+		ParsedHTTPHeaders   map[string]string
 	}
 )
 
@@ -190,6 +192,14 @@ func checkLoadtestFlags() error {
 		return errors.New("the backoff factor needs to be non-zero positive")
 	}
 
+	if ltp.RawHTTPHeaders != nil {
+		var err error
+		inputLoadTestParams.ParsedHTTPHeaders, err = util.ParseHeaderStrings(*ltp.RawHTTPHeaders)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -260,6 +270,7 @@ inscription - sending inscription transactions`)
 	ltp.ContractCallFunctionArgs = LoadtestCmd.Flags().StringSlice("function-arg", []string{}, `The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.`)
 	ltp.ContractCallPayable = LoadtestCmd.Flags().Bool("contract-call-payable", false, "Use this flag if the function is payable, the value amount passed will be from --eth-amount. This must be paired up with --mode contract-call and --contract-address")
 	ltp.InscriptionContent = LoadtestCmd.Flags().String("inscription-content", `data:,{"p":"erc-20","op":"mint","tick":"TEST","amt":"1"}`, "The inscription content that will be encoded as calldata. This must be paired up with --mode inscription")
+	ltp.RawHTTPHeaders = LoadtestCmd.Flags().StringSliceP("header", "H", nil, "Header to be added to each HTTP request. E.g. \"X-First-Name: Joe\"")
 
 	inputLoadTestParams = *ltp
 
