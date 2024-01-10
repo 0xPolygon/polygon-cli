@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/maticnetwork/polygon-cli/cmd/abi"
+	"github.com/maticnetwork/polygon-cli/cmd/borfsck"
 	"github.com/maticnetwork/polygon-cli/cmd/dbbench"
 	"github.com/maticnetwork/polygon-cli/cmd/dumpblocks"
 	"github.com/maticnetwork/polygon-cli/cmd/enr"
@@ -106,6 +107,7 @@ func NewPolycliCommand() *cobra.Command {
 	// Define commands.
 	cmd.AddCommand(
 		abi.ABICmd,
+		borfsck.BorFsckCmd,
 		dumpblocks.DumpblocksCmd,
 		fork.ForkCmd,
 		fund.FundCmd,
