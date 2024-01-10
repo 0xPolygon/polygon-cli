@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -58,15 +59,15 @@ type DatastoreHeader struct {
 	TxHash        string
 	ReceiptHash   string
 	Bloom         []byte
-	Difficulty    int64
-	Number        int64
-	GasLimit      int64
-	GasUsed       int64
+	Difficulty    string
+	Number        string
+	GasLimit      string
+	GasUsed       string
 	Time          time.Time
 	Extra         []byte
 	MixDigest     string
-	Nonce         int64
-	BaseFee       int64
+	Nonce         string
+	BaseFee       string
 	TimeFirstSeen time.Time
 	TTL           time.Time
 }
@@ -85,13 +86,13 @@ type DatastoreBlock struct {
 type DatastoreTransaction struct {
 	Data          []byte `datastore:",noindex"`
 	From          string
-	Gas           int64
-	GasFeeCap     int64
-	GasPrice      int64
-	GasTipCap     int64
-	Nonce         int64
+	Gas           string
+	GasFeeCap     string
+	GasPrice      string
+	GasTipCap     string
+	Nonce         string
 	To            string
-	Value         int64
+	Value         string
 	V, R, S       string
 	Time          time.Time
 	TimeFirstSeen time.Time
@@ -277,15 +278,15 @@ func (d *Datastore) newDatastoreHeader(header *types.Header) *DatastoreHeader {
 		TxHash:        header.TxHash.Hex(),
 		ReceiptHash:   header.ReceiptHash.Hex(),
 		Bloom:         header.Bloom.Bytes(),
-		Difficulty:    header.Difficulty.Int64(),
-		Number:        header.Number.Int64(),
-		GasLimit:      int64(header.GasLimit),
-		GasUsed:       int64(header.GasUsed),
+		Difficulty:    header.Difficulty.String(),
+		Number:        header.Number.String(),
+		GasLimit:      fmt.Sprint(header.GasLimit),
+		GasUsed:       fmt.Sprint(header.GasUsed),
 		Time:          time.Unix(int64(header.Time), 0),
 		Extra:         header.Extra,
 		MixDigest:     header.MixDigest.String(),
-		Nonce:         int64(header.Nonce.Uint64()),
-		BaseFee:       header.BaseFee.Int64(),
+		Nonce:         fmt.Sprint(header.Nonce.Uint64()),
+		BaseFee:       header.BaseFee.String(),
 		TimeFirstSeen: now,
 		TTL:           now.Add(d.ttl),
 	}
@@ -311,13 +312,13 @@ func (d *Datastore) newDatastoreTransaction(tx *types.Transaction) *DatastoreTra
 	return &DatastoreTransaction{
 		Data:          tx.Data(),
 		From:          from,
-		Gas:           int64(tx.Gas()),
-		GasFeeCap:     tx.GasFeeCap().Int64(),
-		GasPrice:      tx.GasPrice().Int64(),
-		GasTipCap:     tx.GasTipCap().Int64(),
-		Nonce:         int64(tx.Nonce()),
+		Gas:           fmt.Sprint(tx.Gas()),
+		GasFeeCap:     tx.GasFeeCap().String(),
+		GasPrice:      tx.GasPrice().String(),
+		GasTipCap:     tx.GasTipCap().String(),
+		Nonce:         fmt.Sprint(tx.Nonce()),
 		To:            to,
-		Value:         tx.Value().Int64(),
+		Value:         tx.Value().String(),
 		V:             v.String(),
 		R:             r.String(),
 		S:             s.String(),
