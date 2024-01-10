@@ -27,13 +27,34 @@ import (
 var errBatchRequestsNotSupported = errors.New("batch requests are not supported")
 
 var (
-	windowSize         int
-	batchSize          SafeBatchSize
-	interval           time.Duration
-	one                = big.NewInt(1)
-	zero               = big.NewInt(0)
+	// windowSize determines the number of blocks to display in the monitor UI at one time.
+	windowSize int
+
+	// batchSize holds the number of blocks to fetch in one batch.
+	// It can be adjusted dynamically based on network conditions.
+	batchSize SafeBatchSize
+
+	// interval specifies the time duration to wait between each update cycle.
+	interval time.Duration
+
+	// one and zero are big.Int representations of 1 and 0, used for convenience in calculations.
+	one  = big.NewInt(1)
+	zero = big.NewInt(0)
+
+	// observedPendingTxs holds a historical record of the number of pending transactions.
 	observedPendingTxs historicalRange
-	maxDataPoints      = 1000
+
+	// maxDataPoints defines the maximum number of data points to keep in historical records.
+	maxDataPoints = 1000
+
+	// maxConcurrency defines the maximum number of goroutines that can fetch block data concurrently.
+	maxConcurrency = 10
+
+	// semaphore is a channel used to control the concurrency of block data fetch operations.
+	semaphore = make(chan struct{}, maxConcurrency)
+
+	// size of the sub batches to divide and conquer the total batch size with
+	subBatchSize = 50
 )
 
 type (
@@ -277,26 +298,64 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, to *big.Int, rpc *et
 		return nil
 	}
 
-	b := backoff.NewExponentialBackOff()
-	b.MaxElapsedTime = 3 * time.Minute
-	retryable := func() error {
-		return rpc.BatchCallContext(ctx, blms)
-	}
-	if err := backoff.Retry(retryable, b); err != nil {
+	err := ms.processBatchesConcurrently(ctx, rpc, blms)
+	if err != nil {
+		log.Error().Err(err).Msg("Error processing batches concurrently")
 		return err
 	}
 
-	ms.BlocksLock.Lock()
-	defer ms.BlocksLock.Unlock()
-	for _, b := range blms {
-		if b.Error != nil {
-			continue
-		}
-		pb := rpctypes.NewPolyBlock(b.Result.(*rpctypes.RawBlockResponse))
-		ms.BlockCache.Add(pb.Number().String(), pb)
+	return nil
+}
+
+func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *ethrpc.Client, blms []ethrpc.BatchElem) error {
+	var wg sync.WaitGroup
+	var errs []error = make([]error, 0)
+	var errorsMutex sync.Mutex
+
+	for i := 0; i < len(blms); i += subBatchSize {
+		semaphore <- struct{}{}
+		wg.Add(1)
+		go func(i int) {
+			defer func() {
+				<-semaphore
+				wg.Done()
+			}()
+			end := i + subBatchSize
+			if end > len(blms) {
+				end = len(blms)
+			}
+			subBatch := blms[i:end]
+
+			b := backoff.NewExponentialBackOff()
+			b.MaxElapsedTime = 3 * time.Minute
+			retryable := func() error {
+				return rpc.BatchCallContext(ctx, subBatch)
+			}
+			if err := backoff.Retry(retryable, b); err != nil {
+				log.Error().Err(err).Msg("unable to retry")
+				errorsMutex.Lock()
+				errs = append(errs, err)
+				errorsMutex.Unlock()
+				return
+			}
+
+			for _, elem := range subBatch {
+				if elem.Error != nil {
+					log.Error().Str("Method", elem.Method).Interface("Args", elem.Args).Err(elem.Error).Msg("Failed batch element")
+				} else {
+					pb := rpctypes.NewPolyBlock(elem.Result.(*rpctypes.RawBlockResponse))
+					ms.BlocksLock.Lock()
+					ms.BlockCache.Add(pb.Number().String(), pb)
+					ms.BlocksLock.Unlock()
+				}
+			}
+
+		}(i)
 	}
 
-	return nil
+	wg.Wait()
+
+	return errors.Join(errs...)
 }
 
 func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) error {
@@ -315,6 +374,8 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	grid.SetRect(0, 0, termWidth, termHeight)
 	blockGrid.SetRect(0, 0, termWidth, termHeight)
 	transactionGrid.SetRect(0, 0, termWidth, termHeight)
+	// Initial render needed I assume to avoid the first bad redraw
+	termui.Render(grid)
 
 	var setBlock = false
 	var renderedBlocks rpctypes.SortableBlocks
@@ -401,7 +462,8 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		ms.BlocksLock.RUnlock()
 		renderedBlocks = renderedBlocksTemp
 
-		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.PendingCount, ms.ChainID, renderedBlocks)
+		log.Warn().Int("skeleton.Current.Inner.Dy()", skeleton.Current.Inner.Dy()).Int("skeleton.Current.Inner.Dx()", skeleton.Current.Inner.Dx()).Msg("the dimension of the current box")
+		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.PendingCount, ms.ChainID, renderedBlocks, skeleton.Current.Inner.Dx(), skeleton.Current.Inner.Dy())
 		skeleton.TxPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
 		skeleton.GasPriceChart.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
 		skeleton.BlockSizeChart.Data = metrics.GetSizePerBlock(renderedBlocks)
