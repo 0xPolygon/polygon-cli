@@ -2,7 +2,9 @@ package borfsck
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -41,25 +43,65 @@ var BorFsckCmd = &cobra.Command{
 
 		hb := rawdb.ReadHeadBlock(db)
 		log.Info().Uint64("headBlockNumber", hb.NumberU64()).Send()
-		return nil
+		return checkBlocks(db, hb.Hash(), hb.NumberU64())
 	},
 }
 
-//func openLevelDB() (*leveldb.DB, error) {
-//	db, err := ethleveldb.New(fsckParams.dbPath, &opt.Options{
-//		Filter:                 filter.NewBloomFilter(10),
-//		DisableSeeksCompaction: true,
-//		OpenFilesCacheCapacity: *fsckParams.openFilesCacheCapacity,
-//		BlockCacheCapacity:     *fsckParams.cacheSize / 2 * opt.MiB,
-//		// This tool should not be doing writes
-//		ReadOnly: true,
-//	})
-//	if err != nil {
-//		return nil, err
-//	}
-//	return db, nil
-//
-//}
+func checkBlocks(db ethdb.Database, hash common.Hash, number uint64) error {
+	for {
+		if number == 0 {
+			log.Info().Str("hash", hash.String()).Msg("reached genesis")
+			break
+		}
+		// TODO concurrency?
+		b := rawdb.ReadBlock(db, hash, number)
+		err := checkBlock(db, b)
+		if err != nil {
+			return err
+		}
+		hash = b.ParentHash()
+		number = number - 1
+	}
+	return nil
+}
+
+func checkBlock(db ethdb.Database, block *types.Block) error {
+	if block == nil {
+		return fmt.Errorf("nil block")
+	}
+	log.Debug().Uint64("bn", block.NumberU64()).Str("hash", block.Hash().String()).Msg("checking block")
+	err := block.SanityCheck()
+	if err != nil {
+		return err
+	}
+	txs := block.Transactions()
+	for idx, tx := range txs {
+		log.Trace().Str("txHash", tx.Hash().String()).Msg("checking tx")
+		rtx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(db, tx.Hash())
+		lErr := log.Error().Str("txHash", tx.Hash().String())
+		if rtx == nil {
+			lErr.Msg("tx lookup failed")
+			continue
+		}
+		if rtx.Hash() != tx.Hash() {
+			lErr.Str("rTxHash", rtx.Hash().String()).Msg("hash mismatch")
+			continue
+		}
+		if txIndex != uint64(idx) {
+			lErr.Int("idx", idx).Uint64("txIndex", txIndex).Msg("tx indices do not match")
+			continue
+		}
+		if blockHash != block.Hash() {
+			lErr.Str("innerHash", blockHash.String()).Str("outerHash", block.Hash().String()).Msg("block hash mismatch")
+			continue
+		}
+		if blockNumber != block.NumberU64() {
+			lErr.Uint64("innerNumber", blockNumber).Uint64("outerNumber", block.NumberU64()).Msg("blokc number mismatch")
+		}
+	}
+
+	return nil
+}
 
 func openDB() (ethdb.Database, error) {
 	oo := rawdb.OpenOptions{
