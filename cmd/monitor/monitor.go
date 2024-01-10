@@ -309,7 +309,8 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, to *big.Int, rpc *et
 
 func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *ethrpc.Client, blms []ethrpc.BatchElem) error {
 	var wg sync.WaitGroup
-	errChan := make(chan error, maxConcurrency)
+	var errs []error = make([]error, 0)
+	var errorsMutex sync.Mutex
 
 	for i := 0; i < len(blms); i += subBatchSize {
 		semaphore <- struct{}{}
@@ -318,7 +319,6 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 			defer func() {
 				<-semaphore
 				wg.Done()
-				close(errChan)
 			}()
 			end := i + subBatchSize
 			if end > len(blms) {
@@ -332,11 +332,11 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 				return rpc.BatchCallContext(ctx, subBatch)
 			}
 			if err := backoff.Retry(retryable, b); err != nil {
-				select {
-				case errChan <- err:
-				default:
-				  log.Error().Msg("Discarding error since error channel is full")
-				}
+				log.Error().Err(err).Msg("unable to retry")
+				errorsMutex.Lock()
+				errs = append(errs, err)
+				errorsMutex.Unlock()
+				return
 			}
 
 			for _, elem := range subBatch {
@@ -355,13 +355,7 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 
 	wg.Wait()
 
-	var batchErr error
-	for err := range errChan {
-		if batchErr == nil {
-			batchErr = err
-		}
-	}
-	return batchErr
+	return errors.Join(errs...)
 }
 
 func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) error {
@@ -380,6 +374,8 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	grid.SetRect(0, 0, termWidth, termHeight)
 	blockGrid.SetRect(0, 0, termWidth, termHeight)
 	transactionGrid.SetRect(0, 0, termWidth, termHeight)
+	// Initial render needed I assume to avoid the first bad redraw
+	termui.Render(grid)
 
 	var setBlock = false
 	var renderedBlocks rpctypes.SortableBlocks
