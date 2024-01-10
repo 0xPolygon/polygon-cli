@@ -31,15 +31,64 @@ type UiSkeleton struct {
 	Receipts        *widgets.List
 }
 
-func GetCurrentBlockInfo(headBlock *big.Int, gasPrice *big.Int, peerCount uint64, pendingCount uint64, chainID *big.Int, blocks []rpctypes.PolyBlock) string {
+func GetCurrentBlockInfo(headBlock *big.Int, gasPrice *big.Int, peerCount uint64, pendingCount uint64, chainID *big.Int, blocks []rpctypes.PolyBlock, dx int, dy int) string {
+	// Return an appropriate message if dy is 0 or less.
+	if dy <= 0 {
+		return "Invalid display configuration."
+	}
+
 	height := fmt.Sprintf("Height: %s", headBlock.String())
-	time := fmt.Sprintf("Time: %s", time.Now().Format("02 Jan 06 15:04:05 MST"))
+	timeInfo := fmt.Sprintf("Time: %s", time.Now().Format("02 Jan 06 15:04:05 MST"))
 	gasPriceString := fmt.Sprintf("Gas Price: %s gwei", new(big.Int).Div(gasPrice, metrics.UnitShannon).String())
 	peers := fmt.Sprintf("Peers: %d", peerCount)
 	pendingTx := fmt.Sprintf("Pending Tx: %d", pendingCount)
 	chainIdString := fmt.Sprintf("Chain ID: %s", chainID.String())
-	return fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s", height, time, gasPriceString, peers, pendingTx, chainIdString)
 
+	info := []string{height, timeInfo, gasPriceString, peers, pendingTx, chainIdString}
+	columns := len(info) / dy
+	if len(info)%dy != 0 {
+		columns += 1 // Add an extra column for the remaining items
+	}
+
+	// Calculate the width of each column based on the longest string in each column
+	columnWidths := make([]int, columns)
+	for i := 0; i < columns; i++ {
+		for j := 0; j < dy; j++ {
+			index := i*dy + j
+			if index < len(info) && len(info[index]) > columnWidths[i] {
+				columnWidths[i] = len(info[index])
+			}
+		}
+		// Add padding and ensure it doesn't exceed 'dx'
+		columnWidths[i] += 5 // Adjust padding as needed
+		if columnWidths[i] > dx {
+			columnWidths[i] = dx
+		}
+	}
+
+	var formattedInfo strings.Builder
+	for i := 0; i < dy; i++ {
+		for j := 0; j < columns; j++ {
+			index := j*dy + i
+			if index < len(info) {
+				formatString := fmt.Sprintf("%%-%ds", columnWidths[j])
+				formattedInfo.WriteString(fmt.Sprintf(formatString, info[index]))
+			}
+		}
+		formattedInfo.WriteString("\n")
+	}
+
+	return formattedInfo.String()
+}
+
+func max(nums ...int) int {
+	maxNum := nums[0]
+	for _, num := range nums[1:] {
+		if num > maxNum {
+			maxNum = num
+		}
+	}
+	return maxNum
 }
 
 func GetBlocksList(blocks []rpctypes.PolyBlock) ([]string, string) {
@@ -127,7 +176,6 @@ func GetSimpleBlockFields(block rpctypes.PolyBlock) []string {
 	ut := time.Unix(int64(ts), 0)
 
 	author := "Mined by"
-
 	authorAddress := block.Miner().String()
 	if authorAddress == "0x0000000000000000000000000000000000000000" {
 		author = "Signed by"
@@ -135,29 +183,50 @@ func GetSimpleBlockFields(block rpctypes.PolyBlock) []string {
 		if err == nil {
 			authorAddress = hex.EncodeToString(signer)
 		}
-
 	}
 
-	return []string{
-		"",
-		fmt.Sprintf("Block Height:      %s", block.Number()),
-		fmt.Sprintf("Timestamp:         %d (%s)", ts, ut.Format(time.RFC3339)),
-		fmt.Sprintf("Transactions:      %d", len(block.Transactions())),
-		fmt.Sprintf("%s:         %s", author, authorAddress),
-		fmt.Sprintf("Difficulty:        %s", block.Difficulty()),
-		fmt.Sprintf("Size:              %d", block.Size()),
-		fmt.Sprintf("Uncles:            %d", len(block.Uncles())),
-		fmt.Sprintf("Gas used:          %d", block.GasUsed()),
-		fmt.Sprintf("Gas limit:         %d", block.GasLimit()),
-		fmt.Sprintf("Base Fee per gas:  %s", block.BaseFee()),
-		fmt.Sprintf("Extra data:        %s", metrics.RawDataToASCII(block.Extra())),
-		fmt.Sprintf("Hash:              %s", block.Hash()),
-		fmt.Sprintf("Parent Hash:       %s", block.ParentHash()),
-		fmt.Sprintf("Uncle Hash:        %s", block.UncleHash()),
-		fmt.Sprintf("State Root:        %s", block.Root()),
-		fmt.Sprintf("Tx Hash:           %s", block.TxHash()),
-		fmt.Sprintf("Nonce:             %d", block.Nonce()),
+	blockHeight := fmt.Sprintf("Block Height: %s", block.Number())
+	timestamp := fmt.Sprintf("Timestamp: %d (%s)", ts, ut.Format(time.RFC3339))
+	transactions := fmt.Sprintf("Transactions: %d", len(block.Transactions()))
+	authorInfo := fmt.Sprintf("%s: %s", author, authorAddress)
+	difficulty := fmt.Sprintf("Difficulty: %s", block.Difficulty())
+	size := fmt.Sprintf("Size: %d", block.Size())
+	uncles := fmt.Sprintf("Uncles: %d", len(block.Uncles()))
+	gasUsed := fmt.Sprintf("Gas used: %d", block.GasUsed())
+	gasLimit := fmt.Sprintf("Gas limit: %d", block.GasLimit())
+	baseFee := fmt.Sprintf("Base Fee per gas: %s", block.BaseFee())
+	extraData := fmt.Sprintf("Extra data: %s", metrics.RawDataToASCII(block.Extra()))
+	hash := fmt.Sprintf("Hash: %s", block.Hash())
+	parentHash := fmt.Sprintf("Parent Hash: %s", block.ParentHash())
+	uncleHash := fmt.Sprintf("Uncle Hash: %s", block.UncleHash())
+	stateRoot := fmt.Sprintf("State Root: %s", block.Root())
+	txHash := fmt.Sprintf("Tx Hash: %s", block.TxHash())
+	nonce := fmt.Sprintf("Nonce: %d", block.Nonce())
+
+	maxWidthCol1 := max(len(blockHeight), len(transactions), len(difficulty), len(size), len(gasUsed), len(baseFee), len(hash), len(stateRoot))
+
+	blockHeight = fmt.Sprintf("%-*s", maxWidthCol1, blockHeight)
+	transactions = fmt.Sprintf("%-*s", maxWidthCol1, transactions)
+	difficulty = fmt.Sprintf("%-*s", maxWidthCol1, difficulty)
+	size = fmt.Sprintf("%-*s", maxWidthCol1, size)
+	gasUsed = fmt.Sprintf("%-*s", maxWidthCol1, gasUsed)
+	baseFee = fmt.Sprintf("%-*s", maxWidthCol1, baseFee)
+	hash = fmt.Sprintf("%-*s", maxWidthCol1, hash)
+	stateRoot = fmt.Sprintf("%-*s", maxWidthCol1, stateRoot)
+
+	lines := []string{
+		fmt.Sprintf("%s  %s", blockHeight, timestamp),
+		fmt.Sprintf("%s  %s", transactions, authorInfo),
+		fmt.Sprintf("%s  %s", difficulty, uncles),
+		fmt.Sprintf("%s  %s", size, gasLimit),
+		fmt.Sprintf("%s  %s", gasUsed, extraData),
+		fmt.Sprintf("%s  %s", baseFee, parentHash),
+		fmt.Sprintf("%s  %s", hash, uncleHash),
+		fmt.Sprintf("%s  %s", stateRoot, txHash),
+		nonce,
 	}
+
+	return lines
 }
 
 func GetBlockTxTable(block rpctypes.PolyBlock, chainID *big.Int) [][]string {
@@ -323,6 +392,7 @@ func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 	blockInfo = widgets.NewList()
 	blockInfo.TextStyle = ui.NewStyle(ui.ColorWhite)
 	blockInfo.Title = "Block Information"
+	blockInfo.WrapText = true
 
 	transactionInfo = widgets.NewTable()
 	transactionInfo.TextStyle = ui.NewStyle(ui.ColorWhite)
