@@ -16,6 +16,7 @@ type fsckParamsType struct {
 	cacheSize              *int
 	openFilesCacheCapacity *int
 	startBlock             *uint64
+	txLookup               *bool
 }
 
 type blockStats struct {
@@ -69,6 +70,7 @@ var BorFsckCmd = &cobra.Command{
 			Str("stateRoot", hb.Root().String()).
 			Str("receiptRoot", hb.ReceiptHash().String()).
 			Str("transactionRoot", hb.TxHash().String()).
+			Str("unclesHash", hb.UncleHash().String()).
 			Msg("starting check")
 		return checkBlocks(db, hb.Hash(), hb.NumberU64())
 	},
@@ -118,29 +120,28 @@ func checkBlock(db ethdb.Database, block *types.Block) (*blockStats, error) {
 	txHashes := make(map[common.Hash]struct{}, 0)
 	for idx, tx := range txs {
 		log.Trace().Str("txHash", tx.Hash().String()).Msg("checking tx")
+
 		bStats.transactions += 1
-		rtx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(db, tx.Hash())
-		lErr := log.Error().Str("blockHash", block.Hash().String()).Uint64("blockNumber", block.NumberU64()).Str("txHash", tx.Hash().String())
-		if rtx == nil {
-			lErr.Msg("tx lookup failed")
-			continue
-		}
-		if rtx.Hash() != tx.Hash() {
-			lErr.Str("rTxHash", rtx.Hash().String()).Msg("hash mismatch")
-			continue
-		}
 		txHashes[tx.Hash()] = struct{}{}
-		if txIndex != uint64(idx) {
-			lErr.Int("idx", idx).Uint64("txIndex", txIndex).Msg("tx indices do not match")
-			continue
-		}
-		if blockHash != block.Hash() {
-			lErr.Str("innerHash", blockHash.String()).Str("outerHash", block.Hash().String()).Msg("block hash mismatch")
-			continue
-		}
-		if blockNumber != block.NumberU64() {
-			lErr.Uint64("innerNumber", blockNumber).Uint64("outerNumber", block.NumberU64()).Msg("blokc number mismatch")
-			continue
+		lErr := log.Error().Str("blockHash", block.Hash().String()).Uint64("blockNumber", block.NumberU64()).Str("txHash", tx.Hash().String())
+
+		if *fsckParams.txLookup {
+			rtx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(db, tx.Hash())
+			if rtx == nil {
+				lErr.Msg("tx lookup failed")
+			}
+			if rtx != nil && rtx.Hash() != tx.Hash() {
+				lErr.Str("rTxHash", rtx.Hash().String()).Msg("hash mismatch")
+			}
+			if txIndex != uint64(idx) {
+				lErr.Int("idx", idx).Uint64("txIndex", txIndex).Msg("tx indices do not match")
+			}
+			if blockHash != block.Hash() {
+				lErr.Str("innerHash", blockHash.String()).Str("outerHash", block.Hash().String()).Msg("block hash mismatch")
+			}
+			if blockNumber != block.NumberU64() {
+				lErr.Uint64("innerNumber", blockNumber).Uint64("outerNumber", block.NumberU64()).Msg("blokc number mismatch")
+			}
 		}
 	}
 
@@ -151,24 +152,11 @@ func checkBlock(db ethdb.Database, block *types.Block) (*blockStats, error) {
 			lErr := log.Error().Str("blockHash", block.Hash().String()).Uint64("blockNumber", block.NumberU64()).Int("receiptIndex", receiptIndex).Int("logIndex", logIndex)
 			if l == nil {
 				lErr.Msg("nil log entry")
-				continue
 			}
-			if l.BlockNumber != block.NumberU64() {
-				lErr.Uint64("innerBn", l.BlockNumber).Uint64("outerBn", block.NumberU64()).Msg("log block number mismatch")
-				continue
-			}
-			if l.BlockHash != block.Hash() {
-				lErr.Str("innerHash", l.BlockHash.String()).Str("outerHash", block.Hash().String()).Msg("mismatched block hashes")
-				continue
-			}
-			if l.Index != uint(logIndex) {
-				lErr.Uint("innerIndex", l.Index).Int("outerIndex", logIndex).Msg("mismatched log indices")
-				continue
-			}
-			if _, hasKey := txHashes[l.TxHash]; !hasKey {
-				lErr.Str("txHash", l.TxHash.String()).Msg("zombie transaction hash in the log")
-				continue
-			}
+			// These are the only consensus fields. I guess we Could sum the topics / data lengths but there's no easy way to validate these
+			// Address
+			// Topics
+			// Data
 		}
 	}
 
@@ -233,5 +221,6 @@ func init() {
 	fsckParams.cacheSize = flagSet.Int("cache-size", 512, "the number of megabytes to use as our internal cache size")
 	fsckParams.openFilesCacheCapacity = flagSet.Int("handles", 4096, "number of files to be open simultaneously")
 	fsckParams.startBlock = flagSet.Uint64("start-block", 0, "The block to start from")
+	fsckParams.txLookup = flagSet.Bool("tx-lookup", false, "attempt a tx lookup for each hash")
 
 }
