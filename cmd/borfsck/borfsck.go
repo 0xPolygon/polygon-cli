@@ -15,6 +15,22 @@ type fsckParamsType struct {
 	dbPath                 string
 	cacheSize              *int
 	openFilesCacheCapacity *int
+	startBlock             *uint64
+}
+
+type blockStats struct {
+	transactions uint64
+	receipts     uint64
+	logs         uint64
+	borReceipts  uint64
+}
+
+func (bs *blockStats) Add(stats *blockStats) *blockStats {
+	bs.transactions += stats.transactions
+	bs.receipts += stats.receipts
+	bs.logs += stats.logs
+	bs.borReceipts += stats.borReceipts
+	return bs
 }
 
 var fsckParams = fsckParamsType{}
@@ -43,11 +59,24 @@ var BorFsckCmd = &cobra.Command{
 
 		hb := rawdb.ReadHeadBlock(db)
 		log.Info().Uint64("headBlockNumber", hb.NumberU64()).Send()
+		if *fsckParams.startBlock != 0 {
+			startBlockHash := rawdb.ReadCanonicalHash(db, *fsckParams.startBlock)
+			hb = rawdb.ReadBlock(db, startBlockHash, *fsckParams.startBlock)
+		}
+		log.Info().
+			Uint64("blockNumber", hb.NumberU64()).
+			Str("blockHash", hb.Hash().String()).
+			Str("stateRoot", hb.Root().String()).
+			Str("receiptRoot", hb.ReceiptHash().String()).
+			Str("transactionRoot", hb.TxHash().String()).
+			Msg("starting check")
 		return checkBlocks(db, hb.Hash(), hb.NumberU64())
 	},
 }
 
 func checkBlocks(db ethdb.Database, hash common.Hash, number uint64) error {
+	totalStats := new(blockStats)
+	var blockCount uint64 = 0
 	for {
 		if number == 0 {
 			log.Info().Str("hash", hash.String()).Msg("reached genesis")
@@ -55,30 +84,43 @@ func checkBlocks(db ethdb.Database, hash common.Hash, number uint64) error {
 		}
 		// TODO concurrency?
 		b := rawdb.ReadBlock(db, hash, number)
-		err := checkBlock(db, b)
+		bs, err := checkBlock(db, b)
 		if err != nil {
 			return err
 		}
+
+		blockCount += 1
+		totalStats = totalStats.Add(bs)
 		hash = b.ParentHash()
 		number = number - 1
 	}
+	log.Info().
+		Uint64("transactions", totalStats.transactions).
+		Uint64("receipts", totalStats.receipts).
+		Uint64("logs", totalStats.logs).
+		Uint64("borReceipts", totalStats.borReceipts).
+		Uint64("blockCount", blockCount).
+		Msg("done")
 	return nil
 }
 
-func checkBlock(db ethdb.Database, block *types.Block) error {
+func checkBlock(db ethdb.Database, block *types.Block) (*blockStats, error) {
+	bStats := new(blockStats)
 	if block == nil {
-		return fmt.Errorf("nil block")
+		return bStats, fmt.Errorf("nil block")
 	}
 	log.Debug().Uint64("bn", block.NumberU64()).Str("hash", block.Hash().String()).Msg("checking block")
 	err := block.SanityCheck()
 	if err != nil {
-		return err
+		return bStats, err
 	}
 	txs := block.Transactions()
+	txHashes := make(map[common.Hash]struct{}, 0)
 	for idx, tx := range txs {
 		log.Trace().Str("txHash", tx.Hash().String()).Msg("checking tx")
+		bStats.transactions += 1
 		rtx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(db, tx.Hash())
-		lErr := log.Error().Str("txHash", tx.Hash().String())
+		lErr := log.Error().Str("blockHash", block.Hash().String()).Uint64("blockNumber", block.NumberU64()).Str("txHash", tx.Hash().String())
 		if rtx == nil {
 			lErr.Msg("tx lookup failed")
 			continue
@@ -87,6 +129,7 @@ func checkBlock(db ethdb.Database, block *types.Block) error {
 			lErr.Str("rTxHash", rtx.Hash().String()).Msg("hash mismatch")
 			continue
 		}
+		txHashes[tx.Hash()] = struct{}{}
 		if txIndex != uint64(idx) {
 			lErr.Int("idx", idx).Uint64("txIndex", txIndex).Msg("tx indices do not match")
 			continue
@@ -97,10 +140,78 @@ func checkBlock(db ethdb.Database, block *types.Block) error {
 		}
 		if blockNumber != block.NumberU64() {
 			lErr.Uint64("innerNumber", blockNumber).Uint64("outerNumber", block.NumberU64()).Msg("blokc number mismatch")
+			continue
 		}
 	}
 
-	return nil
+	blockLogs := rawdb.ReadLogs(db, block.Hash(), block.NumberU64())
+	for receiptIndex, logs := range blockLogs {
+		for logIndex, l := range logs {
+			bStats.logs += 1
+			lErr := log.Error().Str("blockHash", block.Hash().String()).Uint64("blockNumber", block.NumberU64()).Int("receiptIndex", receiptIndex).Int("logIndex", logIndex)
+			if l == nil {
+				lErr.Msg("nil log entry")
+				continue
+			}
+			if l.BlockNumber != block.NumberU64() {
+				lErr.Uint64("innerBn", l.BlockNumber).Uint64("outerBn", block.NumberU64()).Msg("log block number mismatch")
+				continue
+			}
+			if l.BlockHash != block.Hash() {
+				lErr.Str("innerHash", l.BlockHash.String()).Str("outerHash", block.Hash().String()).Msg("mismatched block hashes")
+				continue
+			}
+			if l.Index != uint(logIndex) {
+				lErr.Uint("innerIndex", l.Index).Int("outerIndex", logIndex).Msg("mismatched log indices")
+				continue
+			}
+			if _, hasKey := txHashes[l.TxHash]; !hasKey {
+				lErr.Str("txHash", l.TxHash.String()).Msg("zombie transaction hash in the log")
+				continue
+			}
+		}
+	}
+
+	// Reading the derived fields will be complicated, so for now we'll avoid that
+	receipts := rawdb.ReadRawReceipts(db, block.Hash(), block.NumberU64())
+	var gasDiff uint64 = 0
+	for rIdx, receipt := range receipts {
+		bStats.receipts += 1
+		// These fields are derived, so there is no point checking them
+		// Type
+		// TxHash
+		// EffectiveGasPrice
+		// BlobGasUsed
+		// BlobGasPrice
+		// BlockHash
+		// BlockNumber
+		// TransactionIndex
+		// ContractAddress
+		// GasUsed
+		// Logs
+
+		// I guess we could check these? but I'm not exactly sure how to sanity check them?
+		// receipt.PostState
+		// receipt.Status
+		// receipt.CumulativeGasUsed
+		// receipt.Bloom
+
+		if receipt.CumulativeGasUsed-gasDiff < 21000 {
+			log.Error().Uint64("blockNumber", block.NumberU64()).Int("index", rIdx).Uint64("gasUsed", receipt.CumulativeGasUsed).Msg("gas used is less than 21000")
+		}
+		gasDiff = receipt.CumulativeGasUsed
+	}
+
+	borReceipt := ReadRawBorReceipt(db, block.Hash(), block.NumberU64())
+	if borReceipt != nil {
+		bStats.borReceipts += 1
+		// It seems like this is always 0? It seems like it should actually = the CumulativeGasUsed of the last receipt... but I guess not
+		if borReceipt.CumulativeGasUsed != 0 {
+			log.Error().Uint64("blockNumber", block.NumberU64()).Uint64("gasUsed", borReceipt.CumulativeGasUsed).Msg("gas used is not 0")
+		}
+	}
+
+	return bStats, nil
 }
 
 func openDB() (ethdb.Database, error) {
@@ -121,5 +232,6 @@ func init() {
 	flagSet := BorFsckCmd.PersistentFlags()
 	fsckParams.cacheSize = flagSet.Int("cache-size", 512, "the number of megabytes to use as our internal cache size")
 	fsckParams.openFilesCacheCapacity = flagSet.Int("handles", 4096, "number of files to be open simultaneously")
+	fsckParams.startBlock = flagSet.Uint64("start-block", 0, "The block to start from")
 
 }
