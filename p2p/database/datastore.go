@@ -34,6 +34,7 @@ type Datastore struct {
 	shouldWriteTransactions      bool
 	shouldWriteTransactionEvents bool
 	jobs                         chan struct{}
+	ttl                          time.Duration
 }
 
 // DatastoreEvent can represent a peer sending the sensor a transaction hash or
@@ -45,27 +46,30 @@ type DatastoreEvent struct {
 	PeerId   string
 	Hash     *datastore.Key
 	Time     time.Time
+	TTL      time.Time
 }
 
 // DatastoreHeader stores the data in manner that can be easily written without
 // loss of precision.
 type DatastoreHeader struct {
-	ParentHash  *datastore.Key
-	UncleHash   string
-	Coinbase    string
-	Root        string
-	TxHash      string
-	ReceiptHash string
-	Bloom       []byte
-	Difficulty  string
-	Number      string
-	GasLimit    string
-	GasUsed     string
-	Time        time.Time
-	Extra       []byte
-	MixDigest   string
-	Nonce       string
-	BaseFee     string
+	ParentHash    *datastore.Key
+	UncleHash     string
+	Coinbase      string
+	Root          string
+	TxHash        string
+	ReceiptHash   string
+	Bloom         []byte
+	Difficulty    string
+	Number        string
+	GasLimit      string
+	GasUsed       string
+	Time          time.Time
+	Extra         []byte
+	MixDigest     string
+	Nonce         string
+	BaseFee       string
+	TimeFirstSeen time.Time
+	TTL           time.Time
 }
 
 // DatastoreBlock represents a block stored in datastore.
@@ -80,18 +84,20 @@ type DatastoreBlock struct {
 // not indexed because there is a max sized for indexed byte slices, which Data
 // will occasionally exceed.
 type DatastoreTransaction struct {
-	Data      []byte `datastore:",noindex"`
-	From      string
-	Gas       string
-	GasFeeCap string
-	GasPrice  string
-	GasTipCap string
-	Nonce     string
-	To        string
-	Value     string
-	V, R, S   string
-	Time      time.Time
-	Type      int16
+	Data          []byte `datastore:",noindex"`
+	From          string
+	Gas           string
+	GasFeeCap     string
+	GasPrice      string
+	GasTipCap     string
+	Nonce         string
+	To            string
+	Value         string
+	V, R, S       string
+	Time          time.Time
+	TimeFirstSeen time.Time
+	TTL           time.Time
+	Type          int16
 }
 
 // DatastoreOptions is used when creating a NewDatastore.
@@ -104,6 +110,7 @@ type DatastoreOptions struct {
 	ShouldWriteBlockEvents       bool
 	ShouldWriteTransactions      bool
 	ShouldWriteTransactionEvents bool
+	TTL                          time.Duration
 }
 
 // NewDatastore connects to datastore and creates the client. This should
@@ -123,6 +130,7 @@ func NewDatastore(ctx context.Context, opts DatastoreOptions) Database {
 		shouldWriteTransactions:      opts.ShouldWriteTransactions,
 		shouldWriteTransactionEvents: opts.ShouldWriteTransactionEvents,
 		jobs:                         make(chan struct{}, opts.MaxConcurrency),
+		ttl:                          opts.TTL,
 	}
 }
 
@@ -259,30 +267,34 @@ func (d *Datastore) HasBlock(ctx context.Context, hash common.Hash) bool {
 
 // newDatastoreHeader creates a DatastoreHeader from a types.Header. Some
 // values are converted into strings to prevent a loss of precision.
-func newDatastoreHeader(header *types.Header) *DatastoreHeader {
+func (d *Datastore) newDatastoreHeader(header *types.Header) *DatastoreHeader {
+	now := time.Now()
+
 	return &DatastoreHeader{
-		ParentHash:  datastore.NameKey(BlocksKind, header.ParentHash.Hex(), nil),
-		UncleHash:   header.UncleHash.Hex(),
-		Coinbase:    header.Coinbase.Hex(),
-		Root:        header.Root.Hex(),
-		TxHash:      header.TxHash.Hex(),
-		ReceiptHash: header.ReceiptHash.Hex(),
-		Bloom:       header.Bloom.Bytes(),
-		Difficulty:  header.Difficulty.String(),
-		Number:      header.Number.String(),
-		GasLimit:    fmt.Sprint(header.GasLimit),
-		GasUsed:     fmt.Sprint(header.GasUsed),
-		Time:        time.Unix(int64(header.Time), 0),
-		Extra:       header.Extra,
-		MixDigest:   header.MixDigest.String(),
-		Nonce:       fmt.Sprint(header.Nonce.Uint64()),
-		BaseFee:     header.BaseFee.String(),
+		ParentHash:    datastore.NameKey(BlocksKind, header.ParentHash.Hex(), nil),
+		UncleHash:     header.UncleHash.Hex(),
+		Coinbase:      header.Coinbase.Hex(),
+		Root:          header.Root.Hex(),
+		TxHash:        header.TxHash.Hex(),
+		ReceiptHash:   header.ReceiptHash.Hex(),
+		Bloom:         header.Bloom.Bytes(),
+		Difficulty:    header.Difficulty.String(),
+		Number:        header.Number.String(),
+		GasLimit:      fmt.Sprint(header.GasLimit),
+		GasUsed:       fmt.Sprint(header.GasUsed),
+		Time:          time.Unix(int64(header.Time), 0),
+		Extra:         header.Extra,
+		MixDigest:     header.MixDigest.String(),
+		Nonce:         fmt.Sprint(header.Nonce.Uint64()),
+		BaseFee:       header.BaseFee.String(),
+		TimeFirstSeen: now,
+		TTL:           now.Add(d.ttl),
 	}
 }
 
 // newDatastoreTransaction creates a DatastoreTransaction from a types.Transaction. Some
 // values are converted into strings to prevent a loss of precision.
-func newDatastoreTransaction(tx *types.Transaction) *DatastoreTransaction {
+func (d *Datastore) newDatastoreTransaction(tx *types.Transaction) *DatastoreTransaction {
 	v, r, s := tx.RawSignatureValues()
 	var from, to string
 
@@ -295,21 +307,25 @@ func newDatastoreTransaction(tx *types.Transaction) *DatastoreTransaction {
 		to = tx.To().Hex()
 	}
 
+	now := time.Now()
+
 	return &DatastoreTransaction{
-		Data:      tx.Data(),
-		From:      from,
-		Gas:       fmt.Sprint(tx.Gas()),
-		GasFeeCap: tx.GasFeeCap().String(),
-		GasPrice:  tx.GasPrice().String(),
-		GasTipCap: tx.GasTipCap().String(),
-		Nonce:     fmt.Sprint(tx.Nonce()),
-		To:        to,
-		Value:     tx.Value().String(),
-		V:         v.String(),
-		R:         r.String(),
-		S:         s.String(),
-		Time:      time.Now(),
-		Type:      int16(tx.Type()),
+		Data:          tx.Data(),
+		From:          from,
+		Gas:           fmt.Sprint(tx.Gas()),
+		GasFeeCap:     tx.GasFeeCap().String(),
+		GasPrice:      tx.GasPrice().String(),
+		GasTipCap:     tx.GasTipCap().String(),
+		Nonce:         fmt.Sprint(tx.Nonce()),
+		To:            to,
+		Value:         tx.Value().String(),
+		V:             v.String(),
+		R:             r.String(),
+		S:             s.String(),
+		Time:          tx.Time(),
+		TimeFirstSeen: now,
+		TTL:           now.Add(d.ttl),
+		Type:          int16(tx.Type()),
 	}
 }
 
@@ -326,7 +342,7 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 
 		if dsBlock.DatastoreHeader == nil {
 			shouldWrite = true
-			dsBlock.DatastoreHeader = newDatastoreHeader(block.Header())
+			dsBlock.DatastoreHeader = d.newDatastoreHeader(block.Header())
 		}
 
 		if len(dsBlock.TotalDifficulty) == 0 {
@@ -372,11 +388,14 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 // on the provided eventKind and hashKind.
 func (d *Datastore) writeEvent(peer *enode.Node, eventKind string, hash common.Hash, hashKind string) {
 	key := datastore.IncompleteKey(eventKind, nil)
+	now := time.Now()
+
 	event := DatastoreEvent{
 		SensorId: d.sensorID,
 		PeerId:   peer.URLv4(),
 		Hash:     datastore.NameKey(hashKind, hash.Hex(), nil),
-		Time:     time.Now(),
+		Time:     now,
+		TTL:      now.Add(d.ttl),
 	}
 	if _, err := d.client.Put(context.Background(), key, &event); err != nil {
 		log.Error().Err(err).Msgf("Failed to write to %v", eventKind)
@@ -399,6 +418,7 @@ func (d *Datastore) writeEvents(ctx context.Context, peer *enode.Node, eventKind
 			PeerId:   peer.URLv4(),
 			Hash:     datastore.NameKey(hashKind, hash.Hex(), nil),
 			Time:     now,
+			TTL:      now.Add(d.ttl),
 		}
 		events = append(events, &event)
 	}
@@ -419,7 +439,7 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header) 
 			return nil
 		}
 
-		block.DatastoreHeader = newDatastoreHeader(header)
+		block.DatastoreHeader = d.newDatastoreHeader(header)
 		_, err := tx.Put(key, &block)
 		return err
 	})
@@ -482,7 +502,7 @@ func (d *Datastore) writeTransactions(ctx context.Context, txs []*types.Transact
 
 	for _, tx := range txs {
 		keys = append(keys, datastore.NameKey(TransactionsKind, tx.Hash().Hex(), nil))
-		transactions = append(transactions, newDatastoreTransaction(tx))
+		transactions = append(transactions, d.newDatastoreTransaction(tx))
 	}
 
 	if _, err := d.client.PutMulti(ctx, keys, transactions); err != nil {

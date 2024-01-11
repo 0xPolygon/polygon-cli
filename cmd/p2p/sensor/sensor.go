@@ -16,6 +16,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/crypto"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -52,9 +53,11 @@ type (
 		RPC                          string
 		GenesisFile                  string
 		GenesisHash                  string
+		ForkID                       []byte
 		DialRatio                    int
 		NAT                          string
 		QuickStart                   bool
+		TTL                          time.Duration
 
 		bootnodes    []*enode.Node
 		nodes        []*enode.Node
@@ -154,6 +157,7 @@ var SensorCmd = &cobra.Command{
 			ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
 			ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
 			ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
+			TTL:                          inputSensorParams.TTL,
 		})
 
 		// Fetch the latest block which will be used later when crafting the status
@@ -181,6 +185,7 @@ var SensorCmd = &cobra.Command{
 			Head:        &head,
 			HeadMutex:   &sync.RWMutex{},
 			Count:       &p2p.MessageCount{},
+			ForkID:      forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
 		}
 
 		config := ethp2p.Config{
@@ -217,6 +222,10 @@ var SensorCmd = &cobra.Command{
 		}
 		defer server.Stop()
 
+		events := make(chan *ethp2p.PeerEvent)
+		sub := server.SubscribeEvents(events)
+		defer sub.Unsubscribe()
+
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 
@@ -250,6 +259,10 @@ var SensorCmd = &cobra.Command{
 				// the nodes file.
 				log.Info().Msg("Stopping sensor...")
 				return nil
+			case event := <-events:
+				log.Debug().Any("event", event).Send()
+			case err := <-sub.Err():
+				log.Error().Err(err).Send()
 			}
 		}
 	},
@@ -319,6 +332,7 @@ significantly increase CPU and memory usage.`)
 	SensorCmd.Flags().StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "RPC endpoint used to fetch the latest block")
 	SensorCmd.Flags().StringVar(&inputSensorParams.GenesisFile, "genesis", "genesis.json", "Genesis file")
 	SensorCmd.Flags().StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "The genesis block hash")
+	SensorCmd.Flags().BytesHexVar(&inputSensorParams.ForkID, "fork-id", []byte{220, 8, 134, 92}, "The hex encoded fork id (omit the 0x)")
 	SensorCmd.Flags().IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
 		`Ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
 connections to be dialed. Setting this to 0 defaults it to 3.`)
@@ -328,4 +342,5 @@ connections to be dialed. Setting this to 0 defaults it to 3.`)
 This produces faster development cycles but can prevent the sensor from being to
 connect to new peers if the nodes.json file is large.`)
 	SensorCmd.Flags().StringVar(&inputSensorParams.TrustedNodesFile, "trusted-nodes", "", "Trusted nodes file")
+	SensorCmd.Flags().DurationVar(&inputSensorParams.TTL, "ttl", 14*24*time.Hour, "Time to live")
 }

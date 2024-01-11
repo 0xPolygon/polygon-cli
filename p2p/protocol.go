@@ -3,6 +3,7 @@ package p2p
 import (
 	"container/list"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -11,13 +12,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	ethp2p "github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	ethp2p "github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -57,6 +57,7 @@ type EthProtocolOptions struct {
 	NetworkID   uint64
 	Peers       chan *enode.Node
 	Count       *MessageCount
+	ForkID      forkid.ID
 
 	// Head keeps track of the current head block of the chain. This is required
 	// when doing the status exchange.
@@ -69,6 +70,7 @@ type HeadBlock struct {
 	Hash            common.Hash
 	TotalDifficulty *big.Int
 	Number          uint64
+	Time            uint64
 }
 
 // NewEthProctocol creates the new eth protocol. This will handle writing the
@@ -97,7 +99,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				ProtocolVersion: uint32(version),
 				NetworkID:       opts.NetworkID,
 				Genesis:         opts.GenesisHash,
-				ForkID:          forkid.NewID(opts.Genesis.Config, opts.Genesis.ToBlock(), opts.Head.Number, uint64(time.Now().Unix())),
+				ForkID:          opts.ForkID,
 				Head:            opts.Head.Hash,
 				TD:              opts.Head.TotalDifficulty,
 			}
@@ -143,7 +145,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				case eth.GetReceiptsMsg:
 					err = c.handleGetReceipts(msg)
 				default:
-					log.Trace().Interface("msg", msg).Send()
+					c.logger.Trace().Interface("msg", msg).Send()
 				}
 
 				// All the handler functions are built in a way where returning an error
@@ -216,7 +218,11 @@ func (c *conn) readStatus(packet *eth.StatusPacket) error {
 		return fmt.Errorf("genesis mismatch: %d (!= %d)", status.Genesis, packet.Genesis)
 	}
 
-	c.logger.Info().Interface("status", status).Msg("New peer")
+	c.logger.Info().
+		Interface("status", status).
+		Str("fork_id", hex.EncodeToString(status.ForkID.Hash[:])).
+		Msg("New peer")
+
 	return nil
 }
 
@@ -224,7 +230,7 @@ func (c *conn) readStatus(packet *eth.StatusPacket) error {
 // peer. It will return an error if the sending either of the requests failed.
 func (c *conn) getBlockData(hash common.Hash) error {
 	headersRequest := &GetBlockHeaders{
-		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
 			// Providing both the hash and number will result in a `both origin
 			// hash and number` error.
 			Origin: eth.HashOrNumber{Hash: hash},
@@ -242,8 +248,8 @@ func (c *conn) getBlockData(hash common.Hash) error {
 		hash:      hash,
 	})
 	bodiesRequest := &GetBlockBodies{
-		RequestId:            c.requestNum,
-		GetBlockBodiesPacket: []common.Hash{hash},
+		RequestId:             c.requestNum,
+		GetBlockBodiesRequest: []common.Hash{hash},
 	}
 
 	return ethp2p.Send(c.rw, eth.GetBlockBodiesMsg, bodiesRequest)
@@ -309,7 +315,7 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 }
 
 func (c *conn) handleGetBlockHeaders(msg ethp2p.Msg) error {
-	var request eth.GetBlockHeadersPacket66
+	var request eth.GetBlockHeadersPacket
 	if err := msg.Decode(&request); err != nil {
 		return err
 	}
@@ -319,17 +325,17 @@ func (c *conn) handleGetBlockHeaders(msg ethp2p.Msg) error {
 	return ethp2p.Send(
 		c.rw,
 		eth.BlockHeadersMsg,
-		&eth.BlockHeadersPacket66{RequestId: request.RequestId},
+		&eth.BlockHeadersPacket{RequestId: request.RequestId},
 	)
 }
 
 func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
-	var packet eth.BlockHeadersPacket66
+	var packet eth.BlockHeadersPacket
 	if err := msg.Decode(&packet); err != nil {
 		return err
 	}
 
-	headers := packet.BlockHeadersPacket
+	headers := packet.BlockHeadersRequest
 	atomic.AddInt32(&c.count.BlockHeaders, int32(len(headers)))
 
 	for _, header := range headers {
@@ -344,37 +350,37 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 }
 
 func (c *conn) handleGetBlockBodies(msg ethp2p.Msg) error {
-	var request eth.GetBlockBodiesPacket66
+	var request eth.GetBlockBodiesPacket
 	if err := msg.Decode(&request); err != nil {
 		return err
 	}
 
-	atomic.AddInt32(&c.count.BlockBodiesRequests, int32(len(request.GetBlockBodiesPacket)))
+	atomic.AddInt32(&c.count.BlockBodiesRequests, int32(len(request.GetBlockBodiesRequest)))
 
 	return ethp2p.Send(
 		c.rw,
 		eth.BlockBodiesMsg,
-		&eth.BlockBodiesPacket66{RequestId: request.RequestId},
+		&eth.BlockBodiesPacket{RequestId: request.RequestId},
 	)
 }
 
 func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
-	var packet eth.BlockBodiesPacket66
+	var packet eth.BlockBodiesPacket
 	if err := msg.Decode(&packet); err != nil {
 		return err
 	}
 
-	if len(packet.BlockBodiesPacket) == 0 {
+	if len(packet.BlockBodiesResponse) == 0 {
 		return nil
 	}
 
-	atomic.AddInt32(&c.count.BlockBodies, int32(len(packet.BlockBodiesPacket)))
+	atomic.AddInt32(&c.count.BlockBodies, int32(len(packet.BlockBodiesResponse)))
 
 	var hash *common.Hash
 	for e := c.requests.Front(); e != nil; e = e.Next() {
 		r, ok := e.Value.(request)
 		if !ok {
-			log.Error().Msg("Request type assertion failed")
+			c.logger.Error().Msg("Request type assertion failed")
 			continue
 		}
 
@@ -390,7 +396,7 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	c.db.WriteBlockBody(ctx, packet.BlockBodiesPacket[0], *hash)
+	c.db.WriteBlockBody(ctx, packet.BlockBodiesResponse[0], *hash)
 
 	return nil
 }
@@ -410,6 +416,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 			Hash:            block.Block.Hash(),
 			TotalDifficulty: block.TD,
 			Number:          block.Block.Number().Uint64(),
+			Time:            block.Block.Time(),
 		}
 
 		c.logger.Info().Interface("head", c.head).Msg("Setting head block")
@@ -426,17 +433,17 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 }
 
 func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
-	var request eth.GetPooledTransactionsPacket66
+	var request eth.GetPooledTransactionsPacket
 	if err := msg.Decode(&request); err != nil {
 		return err
 	}
 
-	atomic.AddInt32(&c.count.TransactionRequests, int32(len(request.GetPooledTransactionsPacket)))
+	atomic.AddInt32(&c.count.TransactionRequests, int32(len(request.GetPooledTransactionsRequest)))
 
 	return ethp2p.Send(
 		c.rw,
 		eth.PooledTransactionsMsg,
-		&eth.PooledTransactionsPacket66{RequestId: request.RequestId})
+		&eth.PooledTransactionsPacket{RequestId: request.RequestId})
 }
 
 func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, version uint, msg ethp2p.Msg) error {
@@ -444,7 +451,7 @@ func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, version uin
 
 	switch version {
 	case 66, 67:
-		var txs eth.NewPooledTransactionHashesPacket66
+		var txs eth.NewPooledTransactionHashesPacket67
 		if err := msg.Decode(&txs); err != nil {
 			return err
 		}
@@ -468,31 +475,31 @@ func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, version uin
 	return ethp2p.Send(
 		c.rw,
 		eth.GetPooledTransactionsMsg,
-		&eth.GetPooledTransactionsPacket66{GetPooledTransactionsPacket: hashes},
+		&eth.GetPooledTransactionsPacket{GetPooledTransactionsRequest: hashes},
 	)
 }
 
 func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) error {
-	var packet eth.PooledTransactionsPacket66
+	var packet eth.PooledTransactionsPacket
 	if err := msg.Decode(&packet); err != nil {
 		return err
 	}
 
-	atomic.AddInt32(&c.count.Transactions, int32(len(packet.PooledTransactionsPacket)))
+	atomic.AddInt32(&c.count.Transactions, int32(len(packet.PooledTransactionsResponse)))
 
-	c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsPacket)
+	c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse)
 
 	return nil
 }
 
 func (c *conn) handleGetReceipts(msg ethp2p.Msg) error {
-	var request eth.GetReceiptsPacket66
+	var request eth.GetReceiptsPacket
 	if err := msg.Decode(&request); err != nil {
 		return err
 	}
 	return ethp2p.Send(
 		c.rw,
 		eth.ReceiptsMsg,
-		&eth.ReceiptsPacket66{RequestId: request.RequestId},
+		&eth.ReceiptsPacket{RequestId: request.RequestId},
 	)
 }

@@ -26,7 +26,7 @@ func NewWrappedPebbleDB() (*PebbleDBWrapper, error) {
 	memTableSize := *cacheSize * 1024 * 1024 / 2 / memTableLimit
 	opt := &pebble.Options{
 		Cache:                       pebble.NewCache(int64(*cacheSize * 1024 * 1024)),
-		MemTableSize:                memTableSize,
+		MemTableSize:                uint64(memTableSize),
 		MemTableStopWritesThreshold: memTableLimit,
 		MaxConcurrentCompactions:    func() int { return runtime.NumCPU() },
 		Levels: []pebble.LevelOptions{
@@ -69,7 +69,7 @@ func (p *PebbleDBWrapper) NewIterator() iterator.Iterator {
 		OnlyReadGuaranteedDurable: false,
 		UseL6Filters:              false,
 	}
-	iter := p.handle.NewIter(&io)
+	iter, _ := p.handle.NewIter(&io)
 	wrappedIter := WrappedPebbleIterator{iter, &p.Mutex}
 	return &wrappedIter
 }

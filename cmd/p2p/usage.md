@@ -42,7 +42,8 @@ polycli p2p sensor nodes.json \
   --network-id 80001 \
   --sensor-id sensor \
   --rpc "https://polygon-mumbai-bor.publicnode.com" \
-  --genesis-hash 0x7b66506a9ebdbf30d32b43c5f15a3b1216269a1ec3a75aa3182b86176a2b1ca7
+  --genesis-hash 0x7b66506a9ebdbf30d32b43c5f15a3b1216269a1ec3a75aa3182b86176a2b1ca7 \
+  --fork-id 0c015a91
 ```
 
 ### Crawl
