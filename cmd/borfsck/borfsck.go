@@ -93,6 +93,16 @@ func checkBlocks(db ethdb.Database, hash common.Hash, number uint64) error {
 
 		blockCount += 1
 		totalStats = totalStats.Add(bs)
+		if blockCount%10000 == 0 {
+			log.Info().
+				Uint64("transactions", totalStats.transactions).
+				Uint64("receipts", totalStats.receipts).
+				Uint64("logs", totalStats.logs).
+				Uint64("borReceipts", totalStats.borReceipts).
+				Uint64("blockCount", blockCount).
+				Msg("10000 blocked processed")
+		}
+
 		hash = b.ParentHash()
 		number = number - 1
 	}
@@ -185,7 +195,7 @@ func checkBlock(db ethdb.Database, block *types.Block) (*blockStats, error) {
 		// receipt.Bloom
 
 		if receipt.CumulativeGasUsed-gasDiff < 21000 {
-			log.Error().Uint64("blockNumber", block.NumberU64()).Int("index", rIdx).Uint64("gasUsed", receipt.CumulativeGasUsed).Msg("gas used is less than 21000")
+			log.Error().Uint64("blockNumber", block.NumberU64()).Int("index", rIdx).Uint64("gasUsed", receipt.CumulativeGasUsed-gasDiff).Msg("gas used is less than 21000")
 		}
 		gasDiff = receipt.CumulativeGasUsed
 	}
