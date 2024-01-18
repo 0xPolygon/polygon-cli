@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -26,7 +25,7 @@ import (
 
 type (
 	dumpblocksParams struct {
-		URL                string
+		RpcUrl             string
 		Start              uint64
 		End                uint64
 		BatchSize          uint64
@@ -52,12 +51,15 @@ var (
 
 // dumpblocksCmd represents the dumpblocks command
 var DumpblocksCmd = &cobra.Command{
-	Use:   "dumpblocks url start end",
+	Use:   "dumpblocks start end",
 	Short: "Export a range of blocks from a JSON-RPC endpoint.",
 	Long:  usage,
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		return checkFlags()
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		ec, err := ethrpc.DialContext(ctx, args[0])
+		ec, err := ethrpc.DialContext(ctx, inputDumpblocks.RpcUrl)
 		if err != nil {
 			return err
 		}
@@ -136,19 +138,15 @@ var DumpblocksCmd = &cobra.Command{
 		return nil
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) < 3 {
-			return fmt.Errorf("command needs at least three arguments. A URL a start block and an end block")
+		if len(args) < 2 {
+			return fmt.Errorf("command needs at least two arguments. A start block and an end block")
 		}
 
-		_, err := url.Parse(args[0])
+		start, err := strconv.ParseInt(args[0], 10, 64)
 		if err != nil {
 			return err
 		}
-		start, err := strconv.ParseInt(args[1], 10, 64)
-		if err != nil {
-			return err
-		}
-		end, err := strconv.ParseInt(args[2], 10, 64)
+		end, err := strconv.ParseInt(args[1], 10, 64)
 		if err != nil {
 			return err
 		}
@@ -159,7 +157,6 @@ var DumpblocksCmd = &cobra.Command{
 			start, end = end, start
 		}
 
-		inputDumpblocks.URL = args[0]
 		inputDumpblocks.Start = uint64(start)
 		inputDumpblocks.End = uint64(end)
 
@@ -187,13 +184,26 @@ var DumpblocksCmd = &cobra.Command{
 }
 
 func init() {
+	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.RpcUrl, "rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
 	DumpblocksCmd.PersistentFlags().UintVarP(&inputDumpblocks.Threads, "concurrency", "c", 1, "how many go routines to leverage")
 	DumpblocksCmd.PersistentFlags().BoolVarP(&inputDumpblocks.ShouldDumpBlocks, "dump-blocks", "B", true, "if the blocks will be dumped")
-	DumpblocksCmd.PersistentFlags().BoolVarP(&inputDumpblocks.ShouldDumpReceipts, "dump-receipts", "r", true, "if the receipts will be dumped")
+	DumpblocksCmd.PersistentFlags().BoolVar(&inputDumpblocks.ShouldDumpReceipts, "dump-receipts", true, "if the receipts will be dumped")
 	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.Filename, "filename", "f", "", "where to write the output to (default stdout)")
 	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
 	DumpblocksCmd.PersistentFlags().Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "the batch size. Realistically, this probably shouldn't be bigger than 999. Most providers seem to cap at 1000.")
 	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from, not setting a filter means all are allowed")
+}
+
+func checkFlags() error {
+	// Check rpc url flag.
+	if inputDumpblocks.RpcUrl == "" {
+		panic("RPC URL is empty")
+	}
+	if err := util.ValidateUrl(inputDumpblocks.RpcUrl); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // writeResponses writes the data to either stdout or a file if one is provided.
