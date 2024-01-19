@@ -16,10 +16,12 @@ var (
 	usage string
 
 	// flags
-	rpcUrl          string
-	batchSizeValue  string
-	blockCacheLimit int
-	intervalStr     string
+	rpcUrl            string
+	batchSizeValue    string
+	blockCacheLimit   int
+	intervalStr       string
+	rawHttpHeaders    []string
+	parsedHttpHeaders map[string]string
 
 	defaultBatchSize = 100
 )
@@ -79,11 +81,20 @@ func init() {
 	MonitorCmd.PersistentFlags().StringVarP(&batchSizeValue, "batch-size", "b", "auto", "Number of requests per batch")
 	MonitorCmd.PersistentFlags().IntVarP(&blockCacheLimit, "cache-limit", "c", 200, "Number of cached blocks for the LRU block data structure (Min 100)")
 	MonitorCmd.PersistentFlags().StringVarP(&intervalStr, "interval", "i", "5s", "Amount of time between batch block rpc calls")
+	MonitorCmd.PersistentFlags().StringSliceVarP(&rawHttpHeaders, "header", "H", nil, "Header to be added to each HTTP request. E.g. \"X-First-Name: Joe\"")
+
 }
 
 func checkFlags() (err error) {
 	if err = util.ValidateUrl(rpcUrl); err != nil {
 		return
+	}
+
+	if rawHttpHeaders != nil {
+		parsedHttpHeaders, err = util.ParseHeaderStrings(rawHttpHeaders)
+		if err != nil {
+			return err
+		}
 	}
 
 	interval, err = time.ParseDuration(intervalStr)
