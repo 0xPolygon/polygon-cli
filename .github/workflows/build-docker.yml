@@ -7,14 +7,14 @@ on:
       - main
 
 env:
-  PROJECT_ID: "prj-polygonlabs-devtools-dev"
-  GAR_LOCATION: "europe-west2"
+  PROJECT_ID: ${{ env.PROJECT_ID }}
+  GAR_LOCATION: ${{ env.GAR_LOCATION }}
   WIF_PROVIDER: ${{ secrets.WIF_PROVIDER }} # this was hard to find: WIP --> Expand pool --> Click pencil icon
   WIF_SERVICE_ACCOUNT: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-  CRITICAL_COUNT: 5
-  IMAGE_NAME: "europe-west2-docker.pkg.dev/prj-polygonlabs-devtools-dev/polygonlabs-docker-dev/jesse/polygon-cli"
+  DOCKER_REPOSITORY: ${{ secrets.DOCKER_REPOSITORY }}
+  IMAGE_NAME: "${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.DOCKER_REPOSITORY }}/polygon-cli"
 
-  ATTESTOR_PROJECT_ID: "prj-polygonlabs-devtools-dev"
+  ATTESTOR_PROJECT_ID: ${{ env.PROJECT_ID }}
   KEY_RING: "jesse-artifacts-ring"
   KEY: "jesse-artifacts-binary-auth-key"
   ATTESTOR: "jesse-artifacts-attestor"

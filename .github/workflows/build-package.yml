@@ -7,11 +7,11 @@ on:
       - main
 
 env:
-  PROJECT_ID: "prj-polygonlabs-devtools-dev"
-  GAR_LOCATION: "europe-west2"
+  PROJECT_ID: ${{ env.PROJECT_ID }}
+  GAR_LOCATION: ${{ env.GAR_LOCATION }}
   WIF_PROVIDER: ${{ secrets.WIF_PROVIDER }} # this was hard to find: WIP --> Expand pool --> Click pencil icon
   WIF_SERVICE_ACCOUNT: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-  APT_REPOSITORY: "polygonlabs-apt-dev"
+  APT_REPOSITORY: ${{ secrets.APT_REPOSITORY }}
 
 jobs:
   build-pipeline-apt:
@@ -55,7 +55,7 @@ jobs:
         env:
           ARCH: amd64
 
-      - name: Removing the bor binary
+      - name: Removing the polycli binary
         run: rm -rf packaging/deb/polycli/usr/bin/polycli
 
 #######################################
@@ -83,6 +83,6 @@ jobs:
           gcloud config set artifacts/repository ${{ env.APT_REPOSITORY }}
           gcloud config set artifacts/location ${{ env.GAR_LOCATION }}
           gcloud config set project ${{ env.PROJECT_ID }}
-          gcloud artifacts apt upload polygonlabs-apt-dev --source=packaging/deb/polycli-${{ env.GIT_TAG }}-${{ env.ARCH }}-${{ github.sha }}.deb
+          gcloud artifacts apt upload ${{ env.APT_REPOSITORY }} --source=packaging/deb/polycli-${{ env.GIT_TAG }}-${{ env.ARCH }}-${{ github.sha }}.deb
         env:
           ARCH: amd64
