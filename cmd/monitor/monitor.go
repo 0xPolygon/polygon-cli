@@ -502,8 +502,11 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			blockInfo.Rows = []string{}
 
 			transactionInfo.ColumnWidths = getColumnWidths(transactionColumnRatio, transactionInfo.Dx())
-			transactionInfo.Rows = ui.GetBlockTxTable(renderedBlocks[len(renderedBlocks)-1], ms.ChainID)
-			transactionInfo.Title = fmt.Sprintf("Latest Transactions for Block #%s", renderedBlocks[len(renderedBlocks)-1].Number().String())
+			if len(renderedBlocks) > 0 {
+				i := len(renderedBlocks) - 1
+				transactionInfo.Rows = ui.GetBlockTxTable(renderedBlocks[i], ms.ChainID)
+				transactionInfo.Title = fmt.Sprintf("Latest Transactions for Block #%s", renderedBlocks[i].Number().String())
+			}
 		}
 
 		termui.Render(grid)
@@ -592,7 +595,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 							toBlockNumber.SetInt64(0)
 						}
 
-						if !isBlockInCache(ms.BlockCache, toBlockNumber) {
+						if !ms.isBlockInCache(toBlockNumber) {
 							err := ms.getBlockRange(ctx, toBlockNumber, rpc)
 							if err != nil {
 								log.Warn().Err(err).Msg("Failed to fetch blocks on page down")
@@ -631,7 +634,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 						}
 
 						// Fetch the blocks in the new range if they are missing
-						if !isBlockInCache(ms.BlockCache, nextTopBlockNumber) {
+						if !ms.isBlockInCache(nextTopBlockNumber) {
 							err := ms.getBlockRange(ctx, new(big.Int).Add(nextTopBlockNumber, big.NewInt(int64(windowSize))), rpc)
 							if err != nil {
 								log.Warn().Err(err).Msg("Failed to fetch blocks on page up")
@@ -746,8 +749,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	}
 }
 
-func isBlockInCache(cache *lru.Cache, blockNumber *big.Int) bool {
-	_, exists := cache.Get(blockNumber.String())
+func (ms *monitorStatus) isBlockInCache(blockNumber *big.Int) bool {
+	ms.BlocksLock.RLock()
+	_, exists := ms.BlockCache.Get(blockNumber.String())
+	ms.BlocksLock.RUnlock()
 	return exists
 }
 
