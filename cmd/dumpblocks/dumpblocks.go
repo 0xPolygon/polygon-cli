@@ -196,9 +196,6 @@ func init() {
 
 func checkFlags() error {
 	// Check rpc url flag.
-	if inputDumpblocks.RpcUrl == "" {
-		panic("RPC URL is empty")
-	}
 	if err := util.ValidateUrl(inputDumpblocks.RpcUrl); err != nil {
 		return err
 	}
