@@ -52,9 +52,6 @@ var (
 
 	// semaphore is a channel used to control the concurrency of block data fetch operations.
 	semaphore = make(chan struct{}, maxConcurrency)
-
-	// size of the sub batches to divide and conquer the total batch size with
-	subBatchSize = 50
 )
 
 type (
