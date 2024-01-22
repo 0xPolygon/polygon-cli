@@ -6,13 +6,6 @@ on:
       - jesse/pipeline-deploy
       - main
 
-env:
-  PROJECT_ID: ${{ env.PROJECT_ID }}
-  GAR_LOCATION: ${{ env.GAR_LOCATION }}
-  WIF_PROVIDER: ${{ secrets.WIF_PROVIDER }} # this was hard to find: WIP --> Expand pool --> Click pencil icon
-  WIF_SERVICE_ACCOUNT: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-  APT_REPOSITORY: ${{ secrets.APT_REPOSITORY }}
-
 jobs:
   build-pipeline-apt:
     name: "Build and upload APT package"
@@ -65,8 +58,8 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           token_format: "access_token"
-          workload_identity_provider: "${{ env.WIF_PROVIDER }}"
-          service_account: "${{ env.WIF_SERVICE_ACCOUNT }}"
+          workload_identity_provider: "${{ secrets.WIF_PROVIDER }}" # this was hard to find: WIP --> Expand pool --> Click pencil icon
+          service_account: "${{ secrets.WIF_SERVICE_ACCOUNT }}"
 
       - name: "Set up Cloud SDK"
         uses: "google-github-actions/setup-gcloud@v1"
@@ -80,9 +73,9 @@ jobs:
       - id: gcloud
         name: gcloud
         run: |-
-          gcloud config set artifacts/repository ${{ env.APT_REPOSITORY }}
-          gcloud config set artifacts/location ${{ env.GAR_LOCATION }}
-          gcloud config set project ${{ env.PROJECT_ID }}
-          gcloud artifacts apt upload ${{ env.APT_REPOSITORY }} --source=packaging/deb/polycli-${{ env.GIT_TAG }}-${{ env.ARCH }}-${{ github.sha }}.deb
+          gcloud config set artifacts/repository ${{ secrets.APT_REPOSITORY }}
+          gcloud config set artifacts/location ${{ vars.GAR_LOCATION }}
+          gcloud config set project ${{ vars.PROJECT_ID }}
+          gcloud artifacts apt upload ${{ secrets.APT_REPOSITORY }} --source=packaging/deb/polycli-${{ env.GIT_TAG }}-${{ env.ARCH }}-${{ github.sha }}.deb
         env:
           ARCH: amd64
