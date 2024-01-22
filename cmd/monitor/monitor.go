@@ -502,9 +502,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			blockInfo.Rows = []string{}
 
 			transactionInfo.ColumnWidths = getColumnWidths(transactionColumnRatio, transactionInfo.Dx())
-			if len(renderedBlocks) >= 1 {
-				transactionInfo.Rows = ui.GetBlockTxTable(renderedBlocks[len(renderedBlocks)-1], ms.ChainID)
-				transactionInfo.Title = fmt.Sprintf("Latest Transactions for Block #%s", renderedBlocks[len(renderedBlocks)-1].Number().String())
+if len(renderedBlocks) > 0 {
+	i := len(renderedBlocks)-1
+	transactionInfo.Rows = ui.GetBlockTxTable(renderedBlocks[i], ms.ChainID)
+	transactionInfo.Title = fmt.Sprintf("Latest Transactions for Block #%s", renderedBlocks[i].Number().String())
 			}
 		}
 
