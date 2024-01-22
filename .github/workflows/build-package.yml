@@ -1,4 +1,4 @@
-name: "Build Pipeline"
+name: "Build Pipeline (Debian)"
 
 on:
   push:

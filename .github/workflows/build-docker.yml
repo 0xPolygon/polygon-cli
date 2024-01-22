@@ -1,12 +1,10 @@
-name: "Build Pipeline"
+name: "Build Pipeline (Docker)"
 
 on:
   push:
     branches:
       - jesse/pipeline-deploy
       - main
-    paths-ignore:
-      - 'helm-chart/**'
 
 env:
   PROJECT_ID: "prj-polygonlabs-devtools-dev"
