@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 
@@ -323,27 +324,51 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 			}
 			subBatch := blms[i:end]
 
-			b := backoff.NewExponentialBackOff()
-			b.MaxElapsedTime = 3 * time.Minute
-			retryable := func() error {
-				return rpc.BatchCallContext(ctx, subBatch)
-			}
-			if err := backoff.Retry(retryable, b); err != nil {
-				log.Error().Err(err).Msg("unable to retry")
-				errorsMutex.Lock()
-				errs = append(errs, err)
-				errorsMutex.Unlock()
-				return
-			}
+			doneCh := make(chan error, 1)
 
-			for _, elem := range subBatch {
-				if elem.Error != nil {
-					log.Error().Str("Method", elem.Method).Interface("Args", elem.Args).Err(elem.Error).Msg("Failed batch element")
-				} else {
-					pb := rpctypes.NewPolyBlock(elem.Result.(*rpctypes.RawBlockResponse))
-					ms.BlocksLock.Lock()
-					ms.BlockCache.Add(pb.Number().String(), pb)
-					ms.BlocksLock.Unlock()
+			go func() {
+				b := backoff.NewExponentialBackOff()
+				b.MaxElapsedTime = 3 * time.Minute
+				retryable := func() error {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					default:
+						err := rpc.BatchCallContext(ctx, subBatch)
+						if err != nil {
+							log.Error().Err(err).Msg("BatchCallContext error - retry loop")
+							if strings.Contains(err.Error(), "limit") {
+								return backoff.Permanent(err)
+							}
+						}
+						return err
+					}
+				}
+				err := backoff.Retry(retryable, b)
+				doneCh <- err
+			}()
+
+			select {
+			case <-ctx.Done():
+				return
+			case err := <-doneCh:
+				if err != nil {
+					log.Error().Err(err).Msg("unable to retry")
+					errorsMutex.Lock()
+					errs = append(errs, err)
+					errorsMutex.Unlock()
+					return
+				}
+
+				for _, elem := range subBatch {
+					if elem.Error != nil {
+						log.Error().Str("Method", elem.Method).Interface("Args", elem.Args).Err(elem.Error).Msg("Failed batch element")
+					} else {
+						pb := rpctypes.NewPolyBlock(elem.Result.(*rpctypes.RawBlockResponse))
+						ms.BlocksLock.Lock()
+						ms.BlockCache.Add(pb.Number().String(), pb)
+						ms.BlocksLock.Unlock()
+					}
 				}
 			}
 
@@ -434,12 +459,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				bottomBlockNumber.SetInt64(0)
 			}
 
-			// if ms.LowerBlock == nil || ms.LowerBlock.Cmp(bottomBlockNumber) > 0 {
 			err := ms.getBlockRange(ctx, ms.TopDisplayedBlock, rpc)
 			if err != nil {
 				log.Error().Err(err).Msg("There was an issue fetching the block range")
 			}
-			// }
 		}
 		toBlockNumber := ms.TopDisplayedBlock
 		fromBlockNumber := new(big.Int).Sub(toBlockNumber, big.NewInt(int64(windowSize-1)))
