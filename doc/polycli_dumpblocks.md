@@ -14,7 +14,7 @@
 Export a range of blocks from a JSON-RPC endpoint.
 
 ```bash
-polycli dumpblocks url start end [flags]
+polycli dumpblocks start end [flags]
 ```
 
 ## Usage
@@ -24,7 +24,7 @@ For various reasons, we might want to dump a large range of blocks for analytics
 The following command would download the first 500K blocks and zip them and then look for blocks with transactions that create an account.
 
 ```bash
-$ polycli dumpblocks http://172.26.26.12:8545/ 0 500000 | gzip > foo.gz
+$ polycli dumpblocks 0 500000 --rpc-url http://172.26.26.12:8545/ | gzip > foo.gz
 $ zcat < foo.gz | jq '. | select(.transactions | length > 0) | select(.transactions[].to == null)'
 ```
 
@@ -77,11 +77,12 @@ To solve this, add the unknown fields to the `.proto` files and recompile them (
   -b, --batch-size uint    the batch size. Realistically, this probably shouldn't be bigger than 999. Most providers seem to cap at 1000. (default 150)
   -c, --concurrency uint   how many go routines to leverage (default 1)
   -B, --dump-blocks        if the blocks will be dumped (default true)
-  -r, --dump-receipts      if the receipts will be dumped (default true)
+      --dump-receipts      if the receipts will be dumped (default true)
   -f, --filename string    where to write the output to (default stdout)
   -F, --filter string      filter output based on tx to and from, not setting a filter means all are allowed (default "{}")
   -h, --help               help for dumpblocks
   -m, --mode string        the output format [json, proto] (default "json")
+  -r, --rpc-url string     The RPC endpoint url (default "http://localhost:8545")
 ```
 
 The command also inherits flags from parent commands.
