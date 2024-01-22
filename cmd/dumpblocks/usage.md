@@ -3,7 +3,7 @@ For various reasons, we might want to dump a large range of blocks for analytics
 The following command would download the first 500K blocks and zip them and then look for blocks with transactions that create an account.
 
 ```bash
-$ polycli dumpblocks http://172.26.26.12:8545/ 0 500000 | gzip > foo.gz
+$ polycli dumpblocks 0 500000 --rpc-url http://172.26.26.12:8545/ | gzip > foo.gz
 $ zcat < foo.gz | jq '. | select(.transactions | length > 0) | select(.transactions[].to == null)'
 ```
 
