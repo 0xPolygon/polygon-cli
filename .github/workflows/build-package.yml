@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-pipeline-apt:
-    name: "Build and upload APT package"
+    name: Build and upload APT package
     permissions:
       contents: "write"
       id-token: "write"
