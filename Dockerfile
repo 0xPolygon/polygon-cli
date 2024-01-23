@@ -8,7 +8,7 @@ WORKDIR /go/src/app
 COPY . .
 
 # Build your Go app using the 'build' target in your Makefile
-RUN make build
+RUN CGO_ENABLED=0 make build
 
 # Use a smaller base image to create a minimal final image
 FROM scratch
@@ -20,4 +20,4 @@ WORKDIR /root/
 COPY --from=builder /go/src/app/out/polycli .
 
 # Command to run the binary
-CMD ["./polycli"]
+CMD ["./polycli"]\
