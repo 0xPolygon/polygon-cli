@@ -49,7 +49,7 @@ jobs:
           docker push "${{ env.IMAGE_NAME }}:${{ github.sha }}"
 
       - name: "Set up Cloud SDK"
-        uses: "google-github-actions/setup-gcloud@v1"
+        uses: google-github-actions/setup-gcloud@v2
 
       - name: Scan Vulnerabilities
         run: |
