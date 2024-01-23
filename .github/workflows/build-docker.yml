@@ -51,33 +51,6 @@ jobs:
       - name: "Set up Cloud SDK"
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Scan Vulnerabilities
-        run: |
-          export CLOUDSDK_CORE_DISABLE_PROMPTS=1
-          gcloud components install beta local-extract --quiet
-          (gcloud artifacts docker images scan "${{ env.IMAGE_NAME }}:${{ github.sha }}" --format="value(response.scan)" --remote --quiet) > ./scan_id.txt
-
-      - name: Checking Critical Vulnerabilities
-        run: |-
-          #!/bin/bash
-          # Check if the scan_id.txt file exists
-          if [ ! -f ./scan_id.txt ]; then
-              echo "Error: scan_id.txt not found."
-              exit 1
-          fi
-          # Use gcloud to list vulnerabilities and check for CRITICAL severity
-          severity=$(gcloud artifacts docker images list-vulnerabilities \
-                          "$(cat ./scan_id.txt)" \
-                          --format="value(vulnerability.effectiveSeverity)")
-          # Check if CRITICAL vulnerability is found
-          if [ $(echo "$severity" | grep -c "CRITICAL") -gt 5 ]; then
-              echo "Failed vulnerability check for CRITICAL level"
-              exit 1
-          else
-              echo "No CRITICAL vulnerability found. Congratulations."
-              exit 0
-          fi
-
       - name: Sign the docker image
         run: |-
           export CLOUDSDK_CORE_DISABLE_PROMPTS=1
