@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strings"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -49,7 +51,7 @@ var (
 	maxDataPoints = 1000
 
 	// maxConcurrency defines the maximum number of goroutines that can fetch block data concurrently.
-	maxConcurrency = 10
+	maxConcurrency = 1
 
 	// semaphore is a channel used to control the concurrency of block data fetch operations.
 	semaphore = make(chan struct{}, maxConcurrency)
@@ -93,7 +95,9 @@ const (
 )
 
 func monitor(ctx context.Context) error {
-	// Dial rpc.
+	ctx, cancel := setupCancelContext(ctx)
+	defer cancel()
+
 	rpc, err := ethrpc.DialContext(ctx, rpcUrl)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to dial rpc")
@@ -132,8 +136,9 @@ func monitor(ctx context.Context) error {
 			}
 		}()
 		select {
-		case <-ctx.Done(): // listens for a cancellation signal
-			return // exit the goroutine when the context is done
+		case <-ctx.Done():
+			log.Error().Err(ctx.Err()).Msg("We are here")
+			return
 		default:
 			for {
 				err = fetchCurrentBlockData(ctx, ec, ms, isUiRendered)
@@ -157,6 +162,24 @@ func monitor(ctx context.Context) error {
 
 	err = <-errChan
 	return err
+}
+
+func setupCancelContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(ctx)
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT)
+
+	go func() {
+		<-sigChan
+		log.Error().Msg("WE ARE HERE")
+		cancel()
+	}()
+
+	return ctx, cancel
 }
 
 func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, error) {
@@ -324,6 +347,61 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 			}
 			subBatch := blms[i:end]
 
+			b := backoff.NewExponentialBackOff()
+			b.MaxElapsedTime = 3 * time.Minute
+			retryable := func() error {
+				if err := rpc.BatchCallContext(ctx, subBatch); err != nil {
+					log.Error().Err(err).Msg("Error when performing batch calls")
+					return backoff.Permanent(err)
+				}
+				return nil
+			}
+			if err := backoff.Retry(retryable, b); err != nil {
+				log.Error().Err(err).Msg("unable to retry")
+				errorsMutex.Lock()
+				errs = append(errs, err)
+				errorsMutex.Unlock()
+				return
+			}
+
+			for _, elem := range subBatch {
+				if elem.Error != nil {
+					log.Error().Str("Method", elem.Method).Interface("Args", elem.Args).Err(elem.Error).Msg("Failed batch element")
+				} else {
+					pb := rpctypes.NewPolyBlock(elem.Result.(*rpctypes.RawBlockResponse))
+					ms.BlocksLock.Lock()
+					ms.BlockCache.Add(pb.Number().String(), pb)
+					ms.BlocksLock.Unlock()
+				}
+			}
+
+		}(i)
+	}
+
+	wg.Wait()
+
+	return errors.Join(errs...)
+}
+
+func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *ethrpc.Client, blms []ethrpc.BatchElem) error {
+	var wg sync.WaitGroup
+	var errs []error = make([]error, 0)
+	var errorsMutex sync.Mutex
+
+	for i := 0; i < len(blms); i += subBatchSize {
+		semaphore <- struct{}{}
+		wg.Add(1)
+		go func(i int) {
+			defer func() {
+				<-semaphore
+				wg.Done()
+			}()
+			end := i + subBatchSize
+			if end > len(blms) {
+				end = len(blms)
+			}
+			subBatch := blms[i:end]
+
 			doneCh := make(chan error, 1)
 
 			go func() {
@@ -332,14 +410,15 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 				retryable := func() error {
 					select {
 					case <-ctx.Done():
+						log.Error().Err(ctx.Err()).Msg("WE ARE HERE")
 						return ctx.Err()
 					default:
 						err := rpc.BatchCallContext(ctx, subBatch)
 						if err != nil {
 							log.Error().Err(err).Msg("BatchCallContext error - retry loop")
-							if strings.Contains(err.Error(), "limit") {
-								return backoff.Permanent(err)
-							}
+							// if strings.Contains(err.Error(), "limit") {
+							// 	return backoff.Permanent(err)
+							// }
 						}
 						return err
 					}
@@ -403,44 +482,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	var renderedBlocks rpctypes.SortableBlocks
 
 	redraw := func(ms *monitorStatus, force ...bool) {
-
-		if currentMode == monitorModeHelp {
-			// TODO add some help context?
-		} else if currentMode == monitorModeBlock {
-			// render a block
-			skeleton.BlockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
-			rows, title := ui.GetTransactionsList(ms.SelectedBlock, ms.ChainID)
-			transactionList.Rows = rows
-			transactionList.Title = title
-
-			baseFee := ms.SelectedBlock.BaseFee()
-			if transactionList.SelectedRow != 0 {
-				ms.SelectedTransaction = ms.SelectedBlock.Transactions()[transactionList.SelectedRow-1]
-				transactionInformationList.Rows = ui.GetSimpleTxFields(ms.SelectedTransaction, ms.ChainID, baseFee)
-			}
-			termui.Clear()
-			termui.Render(blockGrid)
-
-			log.Debug().
-				Int("skeleton.TransactionList.SelectedRow", transactionList.SelectedRow).
-				Msg("Redrawing block mode")
-
-			return
-		} else if currentMode == monitorModeTransaction {
-			baseFee := ms.SelectedBlock.BaseFee()
-			skeleton.TxInfo.Rows = ui.GetSimpleTxFields(ms.SelectedBlock.Transactions()[transactionList.SelectedRow-1], ms.ChainID, baseFee)
-			skeleton.Receipts.Rows = ui.GetSimpleReceipt(ctx, rpc, ms.SelectedTransaction)
-
-			termui.Clear()
-			termui.Render(transactionGrid)
-
-			log.Debug().
-				Int("skeleton.TransactionList.SelectedRow", transactionList.SelectedRow).
-				Msg("Redrawing transaction mode")
-
-			return
-		}
-
 		log.Debug().
 			Str("TopDisplayedBlock", ms.TopDisplayedBlock.String()).
 			Int("BatchSize", batchSize.Get()).
@@ -482,7 +523,44 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		ms.BlocksLock.RUnlock()
 		renderedBlocks = renderedBlocksTemp
 
-		log.Warn().Int("skeleton.Current.Inner.Dy()", skeleton.Current.Inner.Dy()).Int("skeleton.Current.Inner.Dx()", skeleton.Current.Inner.Dx()).Msg("the dimension of the current box")
+		if currentMode == monitorModeHelp {
+			// TODO add some help context?
+		} else if currentMode == monitorModeBlock {
+			// render a block
+			skeleton.BlockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
+			rows, title := ui.GetTransactionsList(ms.SelectedBlock, ms.ChainID)
+			transactionList.Rows = rows
+			transactionList.Title = title
+
+			baseFee := ms.SelectedBlock.BaseFee()
+			if transactionList.SelectedRow != 0 {
+				ms.SelectedTransaction = ms.SelectedBlock.Transactions()[transactionList.SelectedRow-1]
+				transactionInformationList.Rows = ui.GetSimpleTxFields(ms.SelectedTransaction, ms.ChainID, baseFee)
+			}
+			termui.Clear()
+			termui.Render(blockGrid)
+
+			log.Debug().
+				Int("skeleton.TransactionList.SelectedRow", transactionList.SelectedRow).
+				Msg("Redrawing block mode")
+
+			return
+		} else if currentMode == monitorModeTransaction {
+			baseFee := ms.SelectedBlock.BaseFee()
+			skeleton.TxInfo.Rows = ui.GetSimpleTxFields(ms.SelectedBlock.Transactions()[transactionList.SelectedRow-1], ms.ChainID, baseFee)
+			skeleton.Receipts.Rows = ui.GetSimpleReceipt(ctx, rpc, ms.SelectedTransaction)
+
+			termui.Clear()
+			termui.Render(transactionGrid)
+
+			log.Debug().
+				Int("skeleton.TransactionList.SelectedRow", transactionList.SelectedRow).
+				Msg("Redrawing transaction mode")
+
+			return
+		}
+
+		log.Debug().Int("skeleton.Current.Inner.Dy()", skeleton.Current.Inner.Dy()).Int("skeleton.Current.Inner.Dx()", skeleton.Current.Inner.Dx()).Msg("the dimension of the current box")
 		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.PendingCount, ms.ChainID, renderedBlocks, skeleton.Current.Inner.Dx(), skeleton.Current.Inner.Dy())
 		skeleton.TxPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
 		skeleton.GasPriceChart.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
