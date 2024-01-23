@@ -11,7 +11,7 @@ COPY . .
 RUN make build
 
 # Use a smaller base image to create a minimal final image
-FROM ubuntu:latest
+FROM scratch
 
 # Set working directory
 WORKDIR /root/
