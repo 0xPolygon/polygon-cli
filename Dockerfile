@@ -17,7 +17,7 @@ FROM scratch
 WORKDIR /root/
 
 # Copy the binary from the builder stage
-COPY --from=builder /go/src/app/out/polycli .
+COPY --from=builder /go/src/app/out/polycli /usr/bin
 
 # Command to run the binary
 CMD ["./polycli"]\
