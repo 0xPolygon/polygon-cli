@@ -8,7 +8,7 @@ For debian packages you will need to add the following layouts during the build
 
 polycli/
    DEBIAN/control
-   usr/local/bin/polycli
+   /usr/bin/polycli
 
 This will be wrapped during the build package process building
 
