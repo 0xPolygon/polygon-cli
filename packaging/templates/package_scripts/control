@@ -9,4 +9,4 @@ Rules-Requires-Root: yes
 Architecture: amd64
 Multi-Arch: foreign
 Depends:
-Description: This is the polygon-cli package from Polygon Technology.
+Description: A Swiss Army knife of blockchain tools (from Polygon Technology).
