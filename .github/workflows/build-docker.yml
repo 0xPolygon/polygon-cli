@@ -54,7 +54,7 @@ jobs:
       - name: Scan Vulnerabilities
         run: |
           export CLOUDSDK_CORE_DISABLE_PROMPTS=1
-          gcloud components install beta --quiet
+          gcloud components install beta local-extract --quiet
           (gcloud artifacts docker images scan "${{ env.IMAGE_NAME }}:${{ github.sha }}" --format="value(response.scan)" --remote --quiet) > ./scan_id.txt
 
       - name: Checking Critical Vulnerabilities
