@@ -51,19 +51,19 @@ jobs:
       - name: "Set up Cloud SDK"
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Sign the docker image
-        run: |-
-          export CLOUDSDK_CORE_DISABLE_PROMPTS=1
-          gcloud components install beta --quiet
+      # - name: Sign the docker image
+      #   run: |-
+      #     export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+      #     gcloud components install beta --quiet
           
-          DIGEST=$(gcloud container images describe ${{ env.IMAGE_NAME }}:${{ github.sha }} --format='get(image_summary.digest)')
+      #     DIGEST=$(gcloud container images describe ${{ env.IMAGE_NAME }}:${{ github.sha }} --format='get(image_summary.digest)')
           
-          gcloud beta container binauthz attestations sign-and-create \
-              --artifact-url="${{ env.IMAGE_NAME }}@${DIGEST}" \
-              --attestor="${{ env.ATTESTOR }}" \
-              --attestor-project="${{ env.ATTESTOR_PROJECT_ID }}" \
-              --keyversion-project="${{ env.ATTESTOR_PROJECT_ID }}" \
-              --keyversion-location="${{ vars.GAR_LOCATION }}" \
-              --keyversion-keyring="${{ env.KEY_RING }}" \
-              --keyversion-key="${{ env.KEY }}" \
-              --keyversion="1"
+      #     gcloud beta container binauthz attestations sign-and-create \
+      #         --artifact-url="${{ env.IMAGE_NAME }}@${DIGEST}" \
+      #         --attestor="${{ env.ATTESTOR }}" \
+      #         --attestor-project="${{ env.ATTESTOR_PROJECT_ID }}" \
+      #         --keyversion-project="${{ env.ATTESTOR_PROJECT_ID }}" \
+      #         --keyversion-location="${{ vars.GAR_LOCATION }}" \
+      #         --keyversion-keyring="${{ env.KEY_RING }}" \
+      #         --keyversion-key="${{ env.KEY }}" \
+      #         --keyversion="1"
