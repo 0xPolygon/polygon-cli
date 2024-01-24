@@ -20,4 +20,4 @@ WORKDIR /root/
 COPY --from=builder /go/src/app/out/polycli .
 
 # Command to run the binary
-CMD ["./polycli"]\
+CMD ["./polycli"]
