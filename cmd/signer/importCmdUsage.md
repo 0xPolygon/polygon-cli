@@ -19,7 +19,7 @@ There are a few things going on here:
 
 1. We're specifying a `--private-key` that's hex encoded. That's the only format that `import` accepts at this time.
 2. We're using `--kms gcp` which tell polycli that we want to use gcp kms as our backend
-3. W've specifed `--gcp-project-id` which names a test project that we're using. We've left out `--gcp-location` and `--gcp-keyring-id` which means we're using the defaults.
+3. We've specified `--gcp-project-id` which names a test project that we're using. We've left out `--gcp-location` and `--gcp-keyring-id` which means we're using the defaults.
 4. We've set `--gcp-import-job-id test-import-job` which names a job that will be used to import the key. Basically GCP will give us a public key that we use to encrypt our key for importing
 
 The `--key-id` is also important. This will set the name of the key that's going to be imported. Note, the key-id must have already been created in order for import to work. When we're doing the import, we're actually importing a new version of the key that already exists. For the time being, the `signer import` command will not create the first version of the key for you.

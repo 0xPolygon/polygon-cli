@@ -453,7 +453,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	tops = configureTransactOpts(tops)
-	// configureTransactOpts will set some paramters meant for load testing that could interfere with the deployment of our contracts
+	// configureTransactOpts will set some parameters meant for load testing that could interfere with the deployment of our contracts
 	tops.GasLimit = 0
 	tops.GasPrice = nil
 	tops.GasFeeCap = nil

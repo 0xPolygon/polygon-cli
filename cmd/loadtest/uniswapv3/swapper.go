@@ -42,7 +42,7 @@ func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOp
 		},
 		uniswapv3.NewSwapper,
 		func(contract *uniswapv3.Swapper) error {
-			// After the contract has been deployed, we autorize a few UniswapV3 addresses to spend those ERC20 tokens.
+			// After the contract has been deployed, we authorize a few UniswapV3 addresses to spend those ERC20 tokens.
 			// This is required to be able to perform swaps later.
 			uniswapV3Addresses := map[string]common.Address{
 				"NFTPositionManager": uniswapV3Config.NonfungiblePositionManager.Address,

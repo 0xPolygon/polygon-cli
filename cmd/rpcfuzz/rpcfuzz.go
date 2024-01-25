@@ -47,7 +47,7 @@ type (
 	// RPCTest is the common interface for a test.  In the future
 	// we'll need some addition methods in particular if don't
 	// want to run tests that require unlocked accounts or if we
-	// want to skip certain namepaces
+	// want to skip certain namespaces
 	RPCTest interface {
 		// GetName returns a more descriptive name of the test being executed
 		GetName() string

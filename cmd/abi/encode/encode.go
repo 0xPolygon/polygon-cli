@@ -18,7 +18,7 @@ var (
 var ABIEncodeCmd = &cobra.Command{
 	Use:   "encode [function signature] [args...]",
 	Short: "ABI encodes a function signature and the inputs",
-	Long:  "[function-signature] is required and is a fragment in the form <function name>(<types...>). If the function signature has parameteres, then those values would have to be passed as arguments after the function signature.",
+	Long:  "[function-signature] is required and is a fragment in the form <function name>(<types...>). If the function signature has parameters, then those values would have to be passed as arguments after the function signature.",
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		functionSignature = args[0]
