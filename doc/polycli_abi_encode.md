@@ -19,7 +19,7 @@ polycli abi encode [function signature] [args...] [flags]
 
 ## Usage
 
-[function-signature] is required and is a fragment in the form <function name>(<types...>). If the function signature has parameteres, then those values would have to be passed as arguments after the function signature.
+[function-signature] is required and is a fragment in the form <function name>(<types...>). If the function signature has parameters, then those values would have to be passed as arguments after the function signature.
 ## Flags
 
 ```bash

@@ -60,7 +60,7 @@ var HashCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		data, err := getInputData(cmd, args)
 		if err != nil {
-			cmd.PrintErrf("There was a nerror reading input for hashing: %s", err.Error())
+			cmd.PrintErrf("There was an error reading input for hashing: %s", err.Error())
 			return
 		}
 		h, err := getHash(args[0])
@@ -148,7 +148,7 @@ func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
 		return os.ReadFile(*inputFileName)
 	}
 
-	// This is a little tricky. If a user provdes multiple args that aren't quoted, it could be confusing
+	// This is a little tricky. If a user provides multiple args that aren't quoted, it could be confusing
 	if len(args) > 1 {
 		concat := strings.Join(args[1:], " ")
 		return []byte(concat), nil

@@ -19,7 +19,7 @@ contract Funder {
   /// @notice Fund a specific account with the predefined funding amount.
   /// @param _address The address of the wallet to be funded.
   function fund(address _address) public {
-    require(_address != address(0), "The funded address should be different thant the zero address");
+    require(_address != address(0), "The funded address should be different than the zero address");
     require(address(this).balance >= amount, "Insufficient contract balance for funding");
 
     (bool success, ) = _address.call{value: amount}("");

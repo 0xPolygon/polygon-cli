@@ -93,7 +93,7 @@ as well.
 - Synced
   - Read Write Ratio - 250:1
   - Small IOp - 10kb
-  - Larg IOp - 32kb
+  - Large IOp - 32kb
   - Small Large Ratio - 10:1
 
 ```text

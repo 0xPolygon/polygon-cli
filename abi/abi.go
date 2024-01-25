@@ -15,6 +15,7 @@ import (
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
+
 	// "github.com/alecthomas/repr"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -40,7 +41,7 @@ type FunctionSignature struct {
 	FunctionArgs []*FunctionArgType `parser:"'(' @@* ( ',' @@ )* ')'"`
 }
 
-// FunctionArgType represents a single argument which can be a base tyype, a tuple, or an array.
+// FunctionArgType represents a single argument which can be a base type, a tuple, or an array.
 // At a high level, this lexer parses all types as (@Ident | @@)@Brackets, where:
 // - @Ident is a base type
 // - @@ is a recursive call to represent each item of the tuple
@@ -127,7 +128,7 @@ var (
 //	  },
 //	}
 //
-// This is the object input type represntation of a function argument input
+// This is the object input type representation of a function argument input
 //
 //	Object{
 //	  Tuple: main.Tuple{
@@ -155,8 +156,8 @@ var (
 //	}
 //
 // From there, we traverse the function signature AST and the parsed object to encode each item, respectively.
-func (fs *FunctionSignature) Encode(functionArgumenets []string) (string, error) {
-	if len(fs.FunctionArgs) != len(functionArgumenets) {
+func (fs *FunctionSignature) Encode(functionArguments []string) (string, error) {
+	if len(fs.FunctionArgs) != len(functionArguments) {
 		return "", fmt.Errorf("# of arguments doesn't match")
 	}
 
@@ -167,10 +168,10 @@ func (fs *FunctionSignature) Encode(functionArgumenets []string) (string, error)
 		if functionArg.Type == "string" && len(functionArg.Array) == 0 {
 			// this is a little hacky but when it's a pure string type (not a string array), make sure the function argument is surrounded
 			// by quotations as that's how the lexer identifies a string.
-			// a string in an array or tuple would already be enclosed by quotatation marks.
-			functionArgumenets[idx] = ValidateStringIsQuoted(functionArgumenets[idx])
+			// a string in an array or tuple would already be enclosed by quotation marks.
+			functionArguments[idx] = ValidateStringIsQuoted(functionArguments[idx])
 		}
-		object, err := ObjectParser.ParseString("", functionArgumenets[idx])
+		object, err := ObjectParser.ParseString("", functionArguments[idx])
 		if err != nil {
 			return "", err
 		}
@@ -180,7 +181,7 @@ func (fs *FunctionSignature) Encode(functionArgumenets []string) (string, error)
 			return "", err
 		}
 		if encodedString.Tail != "" {
-			// is dyanmiic so head is none
+			// is dynamic so head is none
 			tailLoc += PlaceholderPointerLength
 		} else {
 			tailLoc += len(encodedString.Head)
@@ -195,7 +196,7 @@ func (fs *FunctionSignature) Encode(functionArgumenets []string) (string, error)
 		currHead := val.Head
 		if val.Tail != "" {
 			// i.e., dynamic
-			pointerLoc := (tailLoc + len(tail)) / 2 // converrt the hex length to bytes
+			pointerLoc := (tailLoc + len(tail)) / 2 // convert the hex length to bytes
 			pointerLocHex, err := ConvertInt(fmt.Sprintf("%d", pointerLoc))
 			if err != nil {
 				return "", err
@@ -606,8 +607,8 @@ func GetFunctionSignatureObject(functionSig string) (FunctionSignature, error) {
 	return *functionSigObject, nil
 }
 
-// ExtractFunctionNameAndFunctionArgs takes any form of fucntion input and return the first parenthesis encountered.
-// Exmaple:
+// ExtractFunctionNameAndFunctionArgs takes any form of function input and return the first parenthesis encountered.
+// Example:
 // Input: "someFuncName(uint256,(string,string)[][],(uint256,(bool,string)))(uint,string)"
 // Returns: "someFuncName(uint256,(string,string)[][],(uint256,(bool,string)))"
 func ExtractFunctionNameAndFunctionArgs(input string) (string, error) {
