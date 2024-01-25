@@ -1,0 +1,12 @@
+Source: polygon-cli
+Version: 0.3.5-beta
+Section: main
+Priority: standard
+Maintainer: Polygon <release-team@polygon.technology>
+Build-Depends: debhelper-compat (= 13)
+Package: polygon-cli
+Rules-Requires-Root: yes
+Architecture: amd64
+Multi-Arch: foreign
+Depends:
+Description: A Swiss Army knife of blockchain tools (from Polygon Technology).
