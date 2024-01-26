@@ -41,6 +41,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli dumpblocks](polycli_dumpblocks.md) - Export a range of blocks from a JSON-RPC endpoint.
 
+- [polycli ecrecover](polycli_ecrecover.md) - Recovers and returns the public key of the signature
+
 - [polycli enr](polycli_enr.md) - Convert between ENR and Enode format
 
 - [polycli fork](polycli_fork.md) - Take a forked block and walk up the chain to do analysis.
