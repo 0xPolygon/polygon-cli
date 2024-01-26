@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,9 +53,6 @@ var (
 
 	// semaphore is a channel used to control the concurrency of block data fetch operations.
 	semaphore = make(chan struct{}, maxConcurrency)
-
-	// size of the sub batches to divide and conquer the total batch size with
-	subBatchSize = 50
 )
 
 type (
@@ -95,7 +93,6 @@ const (
 )
 
 func monitor(ctx context.Context) error {
-	// Dial rpc.
 	rpc, err := ethrpc.DialContext(ctx, rpcUrl)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to dial rpc")
@@ -134,8 +131,8 @@ func monitor(ctx context.Context) error {
 			}
 		}()
 		select {
-		case <-ctx.Done(): // listens for a cancellation signal
-			return // exit the goroutine when the context is done
+		case <-ctx.Done():
+			return
 		default:
 			for {
 				err = fetchCurrentBlockData(ctx, ec, ms, isUiRendered)
@@ -329,7 +326,14 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 			b := backoff.NewExponentialBackOff()
 			b.MaxElapsedTime = 3 * time.Minute
 			retryable := func() error {
-				return rpc.BatchCallContext(ctx, subBatch)
+				err := rpc.BatchCallContext(ctx, subBatch)
+				if err != nil {
+					log.Error().Err(err).Msg("BatchCallContext error - retry loop")
+					if strings.Contains(err.Error(), "limit") {
+						return backoff.Permanent(err)
+					}
+				}
+				return nil
 			}
 			if err := backoff.Retry(retryable, b); err != nil {
 				log.Error().Err(err).Msg("unable to retry")
@@ -381,7 +385,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	var renderedBlocks rpctypes.SortableBlocks
 
 	redraw := func(ms *monitorStatus, force ...bool) {
-
 		if currentMode == monitorModeHelp {
 			// TODO add some help context?
 		} else if currentMode == monitorModeBlock {
@@ -437,12 +440,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				bottomBlockNumber.SetInt64(0)
 			}
 
-			// if ms.LowerBlock == nil || ms.LowerBlock.Cmp(bottomBlockNumber) > 0 {
 			err := ms.getBlockRange(ctx, ms.TopDisplayedBlock, rpc)
 			if err != nil {
 				log.Error().Err(err).Msg("There was an issue fetching the block range")
 			}
-			// }
 		}
 		toBlockNumber := ms.TopDisplayedBlock
 		fromBlockNumber := new(big.Int).Sub(toBlockNumber, big.NewInt(int64(windowSize-1)))
@@ -462,7 +463,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		ms.BlocksLock.RUnlock()
 		renderedBlocks = renderedBlocksTemp
 
-		log.Warn().Int("skeleton.Current.Inner.Dy()", skeleton.Current.Inner.Dy()).Int("skeleton.Current.Inner.Dx()", skeleton.Current.Inner.Dx()).Msg("the dimension of the current box")
+		log.Debug().Int("skeleton.Current.Inner.Dy()", skeleton.Current.Inner.Dy()).Int("skeleton.Current.Inner.Dx()", skeleton.Current.Inner.Dx()).Msg("the dimension of the current box")
 		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.PendingCount, ms.ChainID, renderedBlocks, skeleton.Current.Inner.Dx(), skeleton.Current.Inner.Dy())
 		skeleton.TxPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
 		skeleton.GasPriceChart.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
