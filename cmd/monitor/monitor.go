@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -350,9 +351,12 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 			b := backoff.NewExponentialBackOff()
 			b.MaxElapsedTime = 3 * time.Minute
 			retryable := func() error {
-				if err := rpc.BatchCallContext(ctx, subBatch); err != nil {
-					log.Error().Err(err).Msg("Error when performing batch calls")
-					return backoff.Permanent(err)
+				err := rpc.BatchCallContext(ctx, subBatch)
+				if err != nil {
+					log.Error().Err(err).Msg("BatchCallContext error - retry loop")
+					if strings.Contains(err.Error(), "limit") {
+						return backoff.Permanent(err)
+					}
 				}
 				return nil
 			}
@@ -372,82 +376,6 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 					ms.BlocksLock.Lock()
 					ms.BlockCache.Add(pb.Number().String(), pb)
 					ms.BlocksLock.Unlock()
-				}
-			}
-
-		}(i)
-	}
-
-	wg.Wait()
-
-	return errors.Join(errs...)
-}
-
-func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *ethrpc.Client, blms []ethrpc.BatchElem) error {
-	var wg sync.WaitGroup
-	var errs []error = make([]error, 0)
-	var errorsMutex sync.Mutex
-
-	for i := 0; i < len(blms); i += subBatchSize {
-		semaphore <- struct{}{}
-		wg.Add(1)
-		go func(i int) {
-			defer func() {
-				<-semaphore
-				wg.Done()
-			}()
-			end := i + subBatchSize
-			if end > len(blms) {
-				end = len(blms)
-			}
-			subBatch := blms[i:end]
-
-			doneCh := make(chan error, 1)
-
-			go func() {
-				b := backoff.NewExponentialBackOff()
-				b.MaxElapsedTime = 3 * time.Minute
-				retryable := func() error {
-					select {
-					case <-ctx.Done():
-						log.Error().Err(ctx.Err()).Msg("WE ARE HERE")
-						return ctx.Err()
-					default:
-						err := rpc.BatchCallContext(ctx, subBatch)
-						if err != nil {
-							log.Error().Err(err).Msg("BatchCallContext error - retry loop")
-							// if strings.Contains(err.Error(), "limit") {
-							// 	return backoff.Permanent(err)
-							// }
-						}
-						return err
-					}
-				}
-				err := backoff.Retry(retryable, b)
-				doneCh <- err
-			}()
-
-			select {
-			case <-ctx.Done():
-				return
-			case err := <-doneCh:
-				if err != nil {
-					log.Error().Err(err).Msg("unable to retry")
-					errorsMutex.Lock()
-					errs = append(errs, err)
-					errorsMutex.Unlock()
-					return
-				}
-
-				for _, elem := range subBatch {
-					if elem.Error != nil {
-						log.Error().Str("Method", elem.Method).Interface("Args", elem.Args).Err(elem.Error).Msg("Failed batch element")
-					} else {
-						pb := rpctypes.NewPolyBlock(elem.Result.(*rpctypes.RawBlockResponse))
-						ms.BlocksLock.Lock()
-						ms.BlockCache.Add(pb.Number().String(), pb)
-						ms.BlocksLock.Unlock()
-					}
 				}
 			}
 
