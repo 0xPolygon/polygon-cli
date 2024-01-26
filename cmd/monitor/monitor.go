@@ -52,7 +52,7 @@ var (
 	maxDataPoints = 1000
 
 	// maxConcurrency defines the maximum number of goroutines that can fetch block data concurrently.
-	maxConcurrency = 1
+	maxConcurrency = 10
 
 	// semaphore is a channel used to control the concurrency of block data fetch operations.
 	semaphore = make(chan struct{}, maxConcurrency)
