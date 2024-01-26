@@ -9,9 +9,13 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
+	"github.com/ethereum/go-ethereum/consensus/clique"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog/log"
+
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 type (
@@ -27,6 +31,22 @@ type (
 		Queued  any `json:"queued"`
 	}
 )
+
+func Ecrecover(block *types.Block) ([]byte, error) {
+	header := block.Header()
+	sigStart := len(header.Extra) - ethcrypto.SignatureLength
+	if sigStart < 0 || sigStart > len(header.Extra) {
+		return nil, fmt.Errorf("unable to recover signature")
+	}
+	signature := header.Extra[sigStart:]
+	pubkey, err := ethcrypto.Ecrecover(clique.SealHash(header).Bytes(), signature)
+	if err != nil {
+		return nil, err
+	}
+	signer := ethcrypto.Keccak256(pubkey[1:])[12:]
+
+	return signer, nil
+}
 
 func GetBlockRange(ctx context.Context, from, to uint64, c *ethrpc.Client) ([]*json.RawMessage, error) {
 	blms := make([]ethrpc.BatchElem, 0)
