@@ -13,7 +13,6 @@ concurrency:
 env:
   GO_VERSION: "1.21"                  # https://go.dev/dl/
   STRINGER_VERSION: "0.15.0"          # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
-  FOUNDRY_SOLC_VERSION: "0.8.24"      # https://github.com/ethereum/solidity/releases
   # Protoc dependencies.
   PROTOC_VERSION: "25.1"              # https://github.com/protocolbuffers/protobuf/releases
   PROTOC_GEN_GO_VERSION: "1.31.0"     # https://pkg.go.dev/google.golang.org/protobuf/cmd/protoc-gen-go?tab=versions

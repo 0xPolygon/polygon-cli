@@ -5,6 +5,7 @@ libs = ["lib"]
 remappings = [
   '@openzeppelin/=lib/openzeppelin-contracts/contracts',
 ]
+solc_version = "0.8.23" # https://github.com/ethereum/solidity/releases
 
 # Lite profile with Yul optimiser disabled.
 [profile.lite.optimizer_details]
