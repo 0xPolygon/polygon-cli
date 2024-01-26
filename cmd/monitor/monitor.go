@@ -5,11 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
-	"os/signal"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -96,9 +93,6 @@ const (
 )
 
 func monitor(ctx context.Context) error {
-	ctx, cancel := setupCancelContext(ctx)
-	defer cancel()
-
 	rpc, err := ethrpc.DialContext(ctx, rpcUrl)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to dial rpc")
@@ -138,7 +132,6 @@ func monitor(ctx context.Context) error {
 		}()
 		select {
 		case <-ctx.Done():
-			log.Error().Err(ctx.Err()).Msg("We are here")
 			return
 		default:
 			for {
@@ -163,24 +156,6 @@ func monitor(ctx context.Context) error {
 
 	err = <-errChan
 	return err
-}
-
-func setupCancelContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(ctx)
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-		syscall.SIGQUIT)
-
-	go func() {
-		<-sigChan
-		log.Error().Msg("WE ARE HERE")
-		cancel()
-	}()
-
-	return ctx, cancel
 }
 
 func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, error) {
@@ -410,6 +385,43 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	var renderedBlocks rpctypes.SortableBlocks
 
 	redraw := func(ms *monitorStatus, force ...bool) {
+		if currentMode == monitorModeHelp {
+			// TODO add some help context?
+		} else if currentMode == monitorModeBlock {
+			// render a block
+			skeleton.BlockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
+			rows, title := ui.GetTransactionsList(ms.SelectedBlock, ms.ChainID)
+			transactionList.Rows = rows
+			transactionList.Title = title
+
+			baseFee := ms.SelectedBlock.BaseFee()
+			if transactionList.SelectedRow != 0 {
+				ms.SelectedTransaction = ms.SelectedBlock.Transactions()[transactionList.SelectedRow-1]
+				transactionInformationList.Rows = ui.GetSimpleTxFields(ms.SelectedTransaction, ms.ChainID, baseFee)
+			}
+			termui.Clear()
+			termui.Render(blockGrid)
+
+			log.Debug().
+				Int("skeleton.TransactionList.SelectedRow", transactionList.SelectedRow).
+				Msg("Redrawing block mode")
+
+			return
+		} else if currentMode == monitorModeTransaction {
+			baseFee := ms.SelectedBlock.BaseFee()
+			skeleton.TxInfo.Rows = ui.GetSimpleTxFields(ms.SelectedBlock.Transactions()[transactionList.SelectedRow-1], ms.ChainID, baseFee)
+			skeleton.Receipts.Rows = ui.GetSimpleReceipt(ctx, rpc, ms.SelectedTransaction)
+
+			termui.Clear()
+			termui.Render(transactionGrid)
+
+			log.Debug().
+				Int("skeleton.TransactionList.SelectedRow", transactionList.SelectedRow).
+				Msg("Redrawing transaction mode")
+
+			return
+		}
+
 		log.Debug().
 			Str("TopDisplayedBlock", ms.TopDisplayedBlock.String()).
 			Int("BatchSize", batchSize.Get()).
@@ -450,43 +462,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		}
 		ms.BlocksLock.RUnlock()
 		renderedBlocks = renderedBlocksTemp
-
-		if currentMode == monitorModeHelp {
-			// TODO add some help context?
-		} else if currentMode == monitorModeBlock {
-			// render a block
-			skeleton.BlockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
-			rows, title := ui.GetTransactionsList(ms.SelectedBlock, ms.ChainID)
-			transactionList.Rows = rows
-			transactionList.Title = title
-
-			baseFee := ms.SelectedBlock.BaseFee()
-			if transactionList.SelectedRow != 0 {
-				ms.SelectedTransaction = ms.SelectedBlock.Transactions()[transactionList.SelectedRow-1]
-				transactionInformationList.Rows = ui.GetSimpleTxFields(ms.SelectedTransaction, ms.ChainID, baseFee)
-			}
-			termui.Clear()
-			termui.Render(blockGrid)
-
-			log.Debug().
-				Int("skeleton.TransactionList.SelectedRow", transactionList.SelectedRow).
-				Msg("Redrawing block mode")
-
-			return
-		} else if currentMode == monitorModeTransaction {
-			baseFee := ms.SelectedBlock.BaseFee()
-			skeleton.TxInfo.Rows = ui.GetSimpleTxFields(ms.SelectedBlock.Transactions()[transactionList.SelectedRow-1], ms.ChainID, baseFee)
-			skeleton.Receipts.Rows = ui.GetSimpleReceipt(ctx, rpc, ms.SelectedTransaction)
-
-			termui.Clear()
-			termui.Render(transactionGrid)
-
-			log.Debug().
-				Int("skeleton.TransactionList.SelectedRow", transactionList.SelectedRow).
-				Msg("Redrawing transaction mode")
-
-			return
-		}
 
 		log.Debug().Int("skeleton.Current.Inner.Dy()", skeleton.Current.Inner.Dy()).Int("skeleton.Current.Inner.Dx()", skeleton.Current.Inner.Dx()).Msg("the dimension of the current box")
 		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.PendingCount, ms.ChainID, renderedBlocks, skeleton.Current.Inner.Dx(), skeleton.Current.Inner.Dy())
