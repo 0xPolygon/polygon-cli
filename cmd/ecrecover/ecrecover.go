@@ -2,7 +2,6 @@ package ecrecover
 
 import (
 	_ "embed"
-	"fmt"
 	"math/big"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -18,8 +17,7 @@ var (
 	usage string
 
 	rpcUrl      string
-	blockNumber int
-	extraData   string
+	blockNumber uint64
 )
 
 var EcRecoverCmd = &cobra.Command{
@@ -32,6 +30,7 @@ var EcRecoverCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := cmd.Context()
+
 		rpc, err := ethrpc.DialContext(ctx, rpcUrl)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to dial rpc")
@@ -39,8 +38,13 @@ var EcRecoverCmd = &cobra.Command{
 		}
 
 		ec := ethclient.NewClient(rpc)
-		if _, err = ec.BlockNumber(ctx); err != nil {
-			return
+
+		if blockNumber == 0 {
+			blockNumber, err = ec.BlockNumber(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to retrieve latest block number")
+				return
+			}
 		}
 
 		block, err := ec.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
@@ -65,22 +69,13 @@ var EcRecoverCmd = &cobra.Command{
 
 func init() {
 	EcRecoverCmd.PersistentFlags().StringVarP(&rpcUrl, "rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
-	EcRecoverCmd.PersistentFlags().IntVarP(&blockNumber, "block-number", "b", 0, "Block number to check the extra data for")
-	EcRecoverCmd.PersistentFlags().StringVarP(&extraData, "extra-data", "e", "", "Raw extra data")
+	EcRecoverCmd.PersistentFlags().Uint64VarP(&blockNumber, "block-number", "b", 0, "Block number to check the extra data for")
 }
 
 func checkFlags() (err error) {
 	if err = util.ValidateUrl(rpcUrl); err != nil {
 		return
 	}
-
-	if blockNumber <= 0 {
-		return fmt.Errorf("block-number should be greater than 0")
-	}
-
-	// if extraData == "" {
-	// 	return fmt.Errorf("block-number should be greater than 0")
-	// }
 
 	return nil
 }
