@@ -28,8 +28,7 @@ If you're experiencing missing blocks, try adjusting the `--batch-size` and `--i
 ## Flags
 
 ```bash
-  -b, --block-number int    Block number to check the extra data for
-  -e, --extra-data string   Raw extra data
+  -b, --block-number uint   Block number to check the extra data for (default: latest)
   -h, --help                help for ecrecover
   -r, --rpc-url string      The RPC endpoint url (default "http://localhost:8545")
 ```
