@@ -84,7 +84,8 @@ var EcRecoverCmd = &cobra.Command{
 			block = types.NewBlockWithHeader(header)
 			blockNumber = header.Number.Uint64()
 		} else {
-			rpc, err := ethrpc.DialContext(ctx, rpcUrl)
+			var rpc *ethrpc.Client
+			rpc, err = ethrpc.DialContext(ctx, rpcUrl)
 			if err != nil {
 				log.Error().Err(err).Msg("Unable to dial rpc")
 				return
