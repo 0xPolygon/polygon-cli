@@ -53,11 +53,6 @@ var EcRecoverCmd = &cobra.Command{
 			return
 		}
 
-		if len(block.Transactions()) == 0 {
-			log.Error().Msg("no transaction to derive public key fromk")
-			return
-		}
-
 		signerBytes, err := util.Ecrecover(block)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to recover signature")
