@@ -19,18 +19,35 @@ polycli ecrecover [flags]
 
 ## Usage
 
-![GIF of `polycli monitor`](assets/monitor.gif)
+Recover public key from block
 
-If you're using the terminal UI and you'd like to be able to select text for copying, you might need to use a modifier key.
+```bash
+polycli ecrecover -r https://polygon-mumbai-bor.publicnode.com -b 45200775
+> Recovering signer from block #45200775
+> 0x5082F249cDb2f2c1eE035E4f423c46EA2daB3ab1
 
-If you're experiencing missing blocks, try adjusting the `--batch-size` and `--interval` flags so that you poll for more blocks or more frequently.
+polycli ecrecover -r https://polygon-rpc.com
+> Recovering signer from block #52888893
+> 0xeEDBa2484aAF940f37cd3CD21a5D7C4A7DAfbfC0
+
+polycli ecrecover -f block-52888893.json
+> Recovering signer from block #52888893
+> 0xeEDBa2484aAF940f37cd3CD21a5D7C4A7DAfbfC0
+
+cat block-52888893.json | go run main.go ecrecover
+> Recovering signer from block #52888893
+> 0xeEDBa2484aAF940f37cd3CD21a5D7C4A7DAfbfC0
+```
+
+JSON Data passed in follows object definition [here](https://www.quicknode.com/docs/ethereum/eth_getBlockByNumber)
 
 ## Flags
 
 ```bash
   -b, --block-number uint   Block number to check the extra data for (default: latest)
+  -f, --file string         Path to a file containing block information in JSON format
   -h, --help                help for ecrecover
-  -r, --rpc-url string      The RPC endpoint url (default "http://localhost:8545")
+  -r, --rpc-url string      The RPC endpoint url
 ```
 
 The command also inherits flags from parent commands.

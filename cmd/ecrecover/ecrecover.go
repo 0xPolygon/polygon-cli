@@ -2,11 +2,16 @@ package ecrecover
 
 import (
 	_ "embed"
+	"encoding/json"
+	"io"
 	"math/big"
+	"os"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
+	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -18,6 +23,7 @@ var (
 
 	rpcUrl      string
 	blockNumber uint64
+	filePath    string
 )
 
 var EcRecoverCmd = &cobra.Command{
@@ -31,26 +37,74 @@ var EcRecoverCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := cmd.Context()
 
-		rpc, err := ethrpc.DialContext(ctx, rpcUrl)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to dial rpc")
-			return
-		}
+		var block *types.Block
+		var err error
 
-		ec := ethclient.NewClient(rpc)
+		if rpcUrl == "" {
+			block = new(types.Block)
+			var blockJSON []byte
+			if filePath != "" {
+				blockJSON, err = os.ReadFile(filePath)
+				if err != nil {
+					log.Error().Err(err).Msg("Unable to read file")
+					return
+				}
+			} else {
+				blockJSON, err = io.ReadAll(os.Stdin)
+				if err != nil {
+					log.Error().Err(err).Msg("Unable to read stdin")
+					return
+				}
+			}
 
-		if blockNumber == 0 {
-			blockNumber, err = ec.BlockNumber(ctx)
-			if err != nil {
-				log.Error().Err(err).Msg("Unable to retrieve latest block number")
+			var rawBlock rpctypes.RawBlockResponse
+			if err = json.Unmarshal(blockJSON, &rawBlock); err != nil {
+				log.Error().Err(err).Msg("Unable to unmarshal JSON")
 				return
 			}
-		}
 
-		block, err := ec.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to retrieve block")
-			return
+			header := new(types.Header)
+			pb := rpctypes.NewPolyBlock(&rawBlock)
+			header.Extra = pb.Extra()
+			header.ParentHash = pb.ParentHash()
+			header.UncleHash = pb.UncleHash()
+			header.Coinbase = pb.Coinbase()
+			header.Root = pb.Root()
+			header.TxHash = pb.TxHash()
+			header.ReceiptHash = pb.ReceiptsRoot()
+			header.Bloom = types.Bloom(pb.LogsBloom())
+			header.Difficulty = pb.Difficulty()
+			header.Number = pb.Number()
+			header.GasLimit = pb.GasLimit()
+			header.GasUsed = pb.GasUsed()
+			header.Time = pb.Time()
+			header.MixDigest = pb.MixHash()
+			copy(header.Nonce[:], rawBlock.Nonce)
+
+			block = types.NewBlockWithHeader(header)
+			blockNumber = header.Number.Uint64()
+		} else {
+			rpc, err := ethrpc.DialContext(ctx, rpcUrl)
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to dial rpc")
+				return
+			}
+
+			ec := ethclient.NewClient(rpc)
+
+			if blockNumber == 0 {
+				blockNumber, err = ec.BlockNumber(ctx)
+				if err != nil {
+					log.Error().Err(err).Msg("Unable to retrieve latest block number")
+					return
+				}
+			}
+
+			block, err = ec.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to retrieve block")
+				return
+			}
 		}
 
 		signerBytes, err := util.Ecrecover(block)
@@ -64,12 +118,13 @@ var EcRecoverCmd = &cobra.Command{
 }
 
 func init() {
-	EcRecoverCmd.PersistentFlags().StringVarP(&rpcUrl, "rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
+	EcRecoverCmd.PersistentFlags().StringVarP(&rpcUrl, "rpc-url", "r", "", "The RPC endpoint url")
 	EcRecoverCmd.PersistentFlags().Uint64VarP(&blockNumber, "block-number", "b", 0, "Block number to check the extra data for (default: latest)")
+	EcRecoverCmd.PersistentFlags().StringVarP(&filePath, "file", "f", "", "Path to a file containing block information in JSON format")
 }
 
 func checkFlags() (err error) {
-	if err = util.ValidateUrl(rpcUrl); err != nil {
+	if rpcUrl != "" && util.ValidateUrl(rpcUrl) != nil {
 		return
 	}
 
