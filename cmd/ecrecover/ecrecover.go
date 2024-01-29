@@ -63,13 +63,14 @@ var EcRecoverCmd = &cobra.Command{
 			log.Error().Err(err).Msg("Unable to recover signature")
 			return
 		}
+		cmd.Printf("Recovering signer from block #%d\n", blockNumber)
 		cmd.Println(ethcommon.BytesToAddress(signerBytes))
 	},
 }
 
 func init() {
 	EcRecoverCmd.PersistentFlags().StringVarP(&rpcUrl, "rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
-	EcRecoverCmd.PersistentFlags().Uint64VarP(&blockNumber, "block-number", "b", 0, "Block number to check the extra data for")
+	EcRecoverCmd.PersistentFlags().Uint64VarP(&blockNumber, "block-number", "b", 0, "Block number to check the extra data for (default: latest)")
 }
 
 func checkFlags() (err error) {
