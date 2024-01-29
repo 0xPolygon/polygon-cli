@@ -40,7 +40,6 @@ var EcRecoverCmd = &cobra.Command{
 		var err error
 
 		if rpcUrl == "" {
-			block = new(types.Block)
 			var blockJSON []byte
 			if filePath != "" {
 				blockJSON, err = os.ReadFile(filePath)
