@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
-	"github.com/maticnetwork/polygon-cli/rpctypes"
 	"github.com/maticnetwork/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -57,31 +56,13 @@ var EcRecoverCmd = &cobra.Command{
 				}
 			}
 
-			var rawBlock rpctypes.RawBlockResponse
-			if err = json.Unmarshal(blockJSON, &rawBlock); err != nil {
+			var header types.Header
+			if err = json.Unmarshal(blockJSON, &header); err != nil {
 				log.Error().Err(err).Msg("Unable to unmarshal JSON")
 				return
 			}
 
-			header := new(types.Header)
-			pb := rpctypes.NewPolyBlock(&rawBlock)
-			header.Extra = pb.Extra()
-			header.ParentHash = pb.ParentHash()
-			header.UncleHash = pb.UncleHash()
-			header.Coinbase = pb.Coinbase()
-			header.Root = pb.Root()
-			header.TxHash = pb.TxHash()
-			header.ReceiptHash = pb.ReceiptsRoot()
-			header.Bloom = types.Bloom(pb.LogsBloom())
-			header.Difficulty = pb.Difficulty()
-			header.Number = pb.Number()
-			header.GasLimit = pb.GasLimit()
-			header.GasUsed = pb.GasUsed()
-			header.Time = pb.Time()
-			header.MixDigest = pb.MixHash()
-			copy(header.Nonce[:], rawBlock.Nonce)
-
-			block = types.NewBlockWithHeader(header)
+			block = types.NewBlockWithHeader(&header)
 			blockNumber = header.Number.Uint64()
 		} else {
 			var rpc *ethrpc.Client
