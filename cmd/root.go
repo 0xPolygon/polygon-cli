@@ -15,6 +15,7 @@ import (
 	"github.com/maticnetwork/polygon-cli/cmd/abi"
 	"github.com/maticnetwork/polygon-cli/cmd/dbbench"
 	"github.com/maticnetwork/polygon-cli/cmd/dumpblocks"
+	"github.com/maticnetwork/polygon-cli/cmd/ecrecover"
 	"github.com/maticnetwork/polygon-cli/cmd/enr"
 	"github.com/maticnetwork/polygon-cli/cmd/fund"
 	"github.com/maticnetwork/polygon-cli/cmd/hash"
@@ -107,6 +108,7 @@ func NewPolycliCommand() *cobra.Command {
 	cmd.AddCommand(
 		abi.ABICmd,
 		dumpblocks.DumpblocksCmd,
+		ecrecover.EcRecoverCmd,
 		fork.ForkCmd,
 		fund.FundCmd,
 		hash.HashCmd,

@@ -292,6 +292,8 @@ type (
 		MarshalJSON() ([]byte, error)
 		ReceiptsRoot() ethcommon.Hash
 		LogsBloom() []byte
+		Coinbase() ethcommon.Address
+		MixHash() ethcommon.Hash
 	}
 
 	implPolyBlock struct {
@@ -452,6 +454,12 @@ func (i *implPolyBlock) ReceiptsRoot() ethcommon.Hash {
 }
 func (i *implPolyBlock) LogsBloom() []byte {
 	return i.inner.LogsBloom.ToBytes()
+}
+func (i *implPolyBlock) Coinbase() ethcommon.Address {
+	return i.inner.Miner.ToAddress()
+}
+func (i *implPolyBlock) MixHash() ethcommon.Hash {
+	return i.inner.MixHash.ToHash()
 }
 func (i *implPolyBlock) String() string {
 	d, err := json.Marshal(i)
