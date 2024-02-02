@@ -2,9 +2,7 @@ name: "Build Pipeline (Docker)"
 
 on:
   push:
-    branches:
-      - jesse/pipeline-deploy
-      - main
+    branches: [main]
 
 env:
   IMAGE_NAME: "${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.PROJECT_ID }}/${{ secrets.DOCKER_REPOSITORY }}/polygon-cli"
@@ -55,9 +53,9 @@ jobs:
       #   run: |-
       #     export CLOUDSDK_CORE_DISABLE_PROMPTS=1
       #     gcloud components install beta --quiet
-          
+
       #     DIGEST=$(gcloud container images describe ${{ env.IMAGE_NAME }}:${{ github.sha }} --format='get(image_summary.digest)')
-          
+
       #     gcloud beta container binauthz attestations sign-and-create \
       #         --artifact-url="${{ env.IMAGE_NAME }}@${DIGEST}" \
       #         --attestor="${{ env.ATTESTOR }}" \

@@ -2,9 +2,7 @@ name: "Build Pipeline (Debian)"
 
 on:
   push:
-    branches:
-      - jesse/pipeline-deploy
-      - main
+    branches: [main]
 
 jobs:
   build-pipeline-apt:
