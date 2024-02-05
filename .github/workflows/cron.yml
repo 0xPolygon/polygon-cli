@@ -24,7 +24,15 @@ jobs:
 
       - name: Update Go dependencies
         run: |
+          # Attempt to update all dependencies.
           go get -u
+
+          # Match the version of cockroachdb/pebble with that used by ethereum/go-ethereum.
+          # https://github.com/ethereum/go-ethereum/blob/master/go.mod#L16C2-L16C66
+          # TODO: Remove once ethereum/go-ethereum upgrades to cockroachdb/pebble@v1.0.0.
+          go get github.com/cockroachdb/pebble@v0.0.0-20230928194634-aa077af62593
+
+          # Clean up dependencies.
           go mod tidy
 
       - name: Create Pull Request
