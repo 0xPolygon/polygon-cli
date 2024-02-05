@@ -1,12 +1,13 @@
 package dbbench
 
 import (
+	"runtime"
+	"sync"
+
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/bloom"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"runtime"
-	"sync"
 )
 
 type (
@@ -26,7 +27,7 @@ func NewWrappedPebbleDB() (*PebbleDBWrapper, error) {
 	memTableSize := *cacheSize * 1024 * 1024 / 2 / memTableLimit
 	opt := &pebble.Options{
 		Cache:                       pebble.NewCache(int64(*cacheSize * 1024 * 1024)),
-		MemTableSize:                uint64(memTableSize),
+		MemTableSize:                memTableSize,
 		MemTableStopWritesThreshold: memTableLimit,
 		MaxConcurrentCompactions:    func() int { return runtime.NumCPU() },
 		Levels: []pebble.LevelOptions{
@@ -69,7 +70,7 @@ func (p *PebbleDBWrapper) NewIterator() iterator.Iterator {
 		OnlyReadGuaranteedDurable: false,
 		UseL6Filters:              false,
 	}
-	iter, _ := p.handle.NewIter(&io)
+	iter := p.handle.NewIter(&io)
 	wrappedIter := WrappedPebbleIterator{iter, &p.Mutex}
 	return &wrappedIter
 }
