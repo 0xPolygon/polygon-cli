@@ -7,7 +7,7 @@ require (
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/chzyer/readline v1.5.1 // indirect
-	github.com/cockroachdb/pebble v1.0.0
+	github.com/cockroachdb/pebble v0.0.0-20230928194634-aa077af62593
 	github.com/ethereum/go-ethereum v1.13.11
 	github.com/gizak/termui/v3 v3.1.1-0.20231111080052-b3569a6cd52d
 	github.com/google/gofuzz v1.2.0
@@ -156,6 +156,7 @@ require (
 require (
 	cloud.google.com/go/iam v1.1.6 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
+	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/crate-crypto/go-ipa v0.0.0-20231205143816-408dbffb2041 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/gballet/go-verkle v0.1.1-0.20231031103413-a67434b50f46 // indirect
