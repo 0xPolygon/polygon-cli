@@ -22,7 +22,7 @@ env:
 jobs:
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -37,7 +37,7 @@ jobs:
 
   gen:
     name: Check generated files
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       # Dependencies to generate doc, protobuf stubs and go bindings.
       - uses: actions/checkout@v4
@@ -99,7 +99,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -110,7 +110,7 @@ jobs:
 
   loadtest:
     name: Run loadtest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         tool: [geth, anvil]
