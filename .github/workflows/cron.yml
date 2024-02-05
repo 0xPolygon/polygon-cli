@@ -1,0 +1,33 @@
+name: cron
+
+on:
+  schedule:
+    - cron: '0 5 * * 1' # Run every Monday at 6 AM (UTC+1) - Paris
+  workflow_dispatch: # To debug.
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.21" # https://go.dev/dl/
+
+jobs:
+  update-go-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Update Go dependencies
+        run: go get -u
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: 'chore/update-go-dependencies'
+          commit-message: 'chore: update go dependencies'
+          title: 'chore: update go dependencies'
