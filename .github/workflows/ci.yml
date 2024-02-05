@@ -64,11 +64,11 @@ jobs:
       # Dependencies to generate go bindings.
       - name: Install abigen
         run: |
-          sudo apt update
-          sudo apt install --yes software-properties-common
+          sudo apt-get update
+          sudo apt-get install --yes software-properties-common
           sudo add-apt-repository --yes ppa:ethereum/ethereum
-          sudo apt update
-          sudo apt install ethereum
+          sudo apt-get update
+          sudo apt-get install ethereum
           abigen --version
       - name: Install foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -125,11 +125,11 @@ jobs:
       - name: Install Geth
         run: |
           if [ "${{ matrix.tool }}" = "geth" ]; then
-            sudo apt update
-            sudo apt install --yes software-properties-common
+            sudo apt-get update
+            sudo apt-get install --yes software-properties-common
             sudo add-apt-repository --yes ppa:ethereum/ethereum
-            sudo apt update
-            sudo apt install ethereum
+            sudo apt-get update
+            sudo apt-get install ethereum
             geth --version
           fi
       - name: Run loadtest againt ${{ matrix.tool }}
