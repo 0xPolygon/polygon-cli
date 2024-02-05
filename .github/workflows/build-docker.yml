@@ -21,7 +21,7 @@ jobs:
       contents: "write"
       id-token: "write"
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
@@ -55,9 +55,9 @@ jobs:
       #   run: |-
       #     export CLOUDSDK_CORE_DISABLE_PROMPTS=1
       #     gcloud components install beta --quiet
-          
+
       #     DIGEST=$(gcloud container images describe ${{ env.IMAGE_NAME }}:${{ github.sha }} --format='get(image_summary.digest)')
-          
+
       #     gcloud beta container binauthz attestations sign-and-create \
       #         --artifact-url="${{ env.IMAGE_NAME }}@${DIGEST}" \
       #         --attestor="${{ env.ATTESTOR }}" \
