@@ -7,7 +7,7 @@ require (
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e // indirect
-	github.com/cockroachdb/pebble v0.0.0-20230928194634-aa077af62593
+	github.com/cockroachdb/pebble v1.1.0
 	github.com/ethereum/go-ethereum v1.13.11
 	github.com/gizak/termui/v3 v3.1.1-0.20231111080052-b3569a6cd52d
 	github.com/google/gofuzz v1.2.0
@@ -38,13 +38,7 @@ require (
 
 require github.com/alecthomas/participle/v2 v2.1.1
 
-require (
-	github.com/go-errors/errors v1.5.1 // indirect
-	github.com/sethvargo/go-retry v0.2.4 // indirect
-	github.com/umbracle/ethgo v0.1.4-0.20231006072852-6b068360fc97 // indirect
-	github.com/umbracle/fastrlp v0.1.1-0.20230504065717-58a1b8a9929d // indirect
-	github.com/valyala/fastjson v1.6.3 // indirect
-)
+require github.com/go-errors/errors v1.5.1 // indirect
 
 require (
 	cloud.google.com/go v0.110.8 // indirect
@@ -164,7 +158,6 @@ require (
 
 require (
 	cloud.google.com/go/iam v1.1.3 // indirect
-	github.com/0xPolygon/polygon-edge v1.3.2
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233 // indirect
