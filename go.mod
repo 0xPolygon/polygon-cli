@@ -28,7 +28,7 @@ require (
 	github.com/tyler-smith/go-bip32 v1.0.0
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/xeipuuv/gojsonschema v1.2.0
-	golang.org/x/crypto v0.17.0
+	golang.org/x/crypto v0.18.0
 	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc
 	golang.org/x/text v0.14.0
 	golang.org/x/time v0.3.0
@@ -38,13 +38,7 @@ require (
 
 require github.com/alecthomas/participle/v2 v2.1.1
 
-require (
-	github.com/go-errors/errors v1.5.1 // indirect
-	github.com/sethvargo/go-retry v0.2.4 // indirect
-	github.com/umbracle/ethgo v0.1.4-0.20231006072852-6b068360fc97 // indirect
-	github.com/umbracle/fastrlp v0.1.1-0.20230504065717-58a1b8a9929d // indirect
-	github.com/valyala/fastjson v1.6.3 // indirect
-)
+require github.com/go-errors/errors v1.5.1 // indirect
 
 require (
 	cloud.google.com/go v0.110.8 // indirect
@@ -143,7 +137,7 @@ require (
 	golang.org/x/oauth2 v0.13.0 // indirect
 	golang.org/x/sync v0.6.0 // indirect
 	golang.org/x/sys v0.16.0 // indirect
-	golang.org/x/term v0.15.0 // indirect
+	golang.org/x/term v0.16.0 // indirect
 	golang.org/x/tools v0.16.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
@@ -164,7 +158,6 @@ require (
 
 require (
 	cloud.google.com/go/iam v1.1.3 // indirect
-	github.com/0xPolygon/polygon-edge v1.3.2
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233 // indirect
