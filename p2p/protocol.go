@@ -247,6 +247,11 @@ func (c *conn) getBlockData(hash common.Hash) error {
 		requestID: c.requestNum,
 		hash:      hash,
 	})
+
+	if c.requests.Len() > 1024 {
+		c.requests.Remove(c.requests.Front())
+	}
+
 	bodiesRequest := &GetBlockBodies{
 		RequestId:             c.requestNum,
 		GetBlockBodiesRequest: []common.Hash{hash},
