@@ -106,7 +106,8 @@ var SensorCmd = &cobra.Command{
 
 		if inputSensorParams.ShouldRunPprof {
 			go func() {
-				if pprofErr := http.ListenAndServe(fmt.Sprintf("localhost:%v", inputSensorParams.PprofPort), nil); pprofErr != nil {
+				addr := fmt.Sprintf("0.0.0.0:%v", inputSensorParams.PprofPort)
+				if pprofErr := http.ListenAndServe(addr, nil); pprofErr != nil {
 					log.Error().Err(pprofErr).Msg("Failed to start pprof")
 				}
 			}()
