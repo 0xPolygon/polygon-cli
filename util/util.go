@@ -185,24 +185,6 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 	return receipts, nil
 }
 
-func GetTxPoolSize(rpc *ethrpc.Client) (uint64, error) {
-	var status = new(txpoolStatus)
-	err := rpc.Call(status, "txpool_status")
-	if err != nil {
-		return 0, err
-	}
-	pendingCount, err := tryCastToUint64(status.Pending)
-	if err != nil {
-		return 0, err
-	}
-	queuedCount, err := tryCastToUint64(status.Queued)
-	if err != nil {
-		return 0, err
-	}
-
-	return pendingCount + queuedCount, nil
-}
-
 func GetTxPoolStatus(rpc *ethrpc.Client) (uint64, uint64, error) {
 	var status = new(txpoolStatus)
 	err := rpc.Call(status, "txpool_status")

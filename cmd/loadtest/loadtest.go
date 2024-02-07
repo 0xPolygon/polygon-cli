@@ -408,12 +408,13 @@ func updateRateLimit(ctx context.Context, rl *rate.Limiter, rpc *ethrpc.Client, 
 	for {
 		select {
 		case <-ticker.C:
-			txPoolSize, err := util.GetTxPoolSize(rpc)
+			pendingTx, queuedTx, err := util.GetTxPoolStatus(rpc)
 			if err != nil {
 				log.Error().Err(err).Msg("Error getting txpool size")
 				return
 			}
 
+			txPoolSize := pendingTx + queuedTx
 			if txPoolSize < steadyStateQueueSize {
 				// additively increment requests per second if txpool less than queue steady state
 				newRateLimit := rate.Limit(float64(rl.Limit()) + float64(rateLimitIncrement))
