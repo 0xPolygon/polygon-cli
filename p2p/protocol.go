@@ -246,11 +246,8 @@ func (c *conn) getBlockData(hash common.Hash) error {
 	c.requests.PushBack(request{
 		requestID: c.requestNum,
 		hash:      hash,
+		time:      time.Now(),
 	})
-
-	if c.requests.Len() > 1024 {
-		c.requests.Remove(c.requests.Front())
-	}
 
 	bodiesRequest := &GetBlockBodies{
 		RequestId:             c.requestNum,
@@ -383,16 +380,16 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 
 	var hash *common.Hash
 	for e := c.requests.Front(); e != nil; e = e.Next() {
-		r, ok := e.Value.(request)
-		if !ok {
-			c.logger.Error().Msg("Request type assertion failed")
-			continue
-		}
+		r := e.Value.(request)
 
 		if r.requestID == packet.RequestId {
 			hash = &r.hash
 			c.requests.Remove(e)
 			break
+		}
+
+		if time.Now().Sub(r.time).Minutes() > 10 {
+			c.requests.Remove(e)
 		}
 	}
 
