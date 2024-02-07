@@ -65,6 +65,7 @@ type (
 		PeerCount           uint64
 		GasPrice            *big.Int
 		PendingCount        uint64
+		QueuedCount         uint64
 		SelectedBlock       rpctypes.PolyBlock
 		SelectedTransaction rpctypes.PolyTransaction
 		BlockCache          *lru.Cache   `json:"-"`
@@ -76,6 +77,7 @@ type (
 		PeerCount    uint64
 		GasPrice     *big.Int
 		PendingCount uint64
+		QueuedCount  uint64
 	}
 	historicalDataPoint struct {
 		SampleTime  time.Time
@@ -119,6 +121,7 @@ func monitor(ctx context.Context) error {
 
 	ms.ChainID = big.NewInt(0)
 	ms.PendingCount = 0
+	ms.QueuedCount = 0
 
 	observedPendingTxs = make(historicalRange, 0)
 
@@ -182,10 +185,9 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 		return nil, fmt.Errorf("couldn't estimate gas: %s", err.Error())
 	}
 
-	cs.PendingCount, err = util.GetTxPoolSize(ec.Client())
+	cs.PendingCount, cs.QueuedCount, err = util.GetTxPoolStatus(ec.Client())
 	if err != nil {
-		log.Debug().Err(err).Msg("Unable to get pending transaction count")
-		cs.PendingCount = 0
+		log.Debug().Err(err).Msg("Unable to get pending and queued transaction count")
 	}
 
 	return cs, nil
@@ -229,6 +231,7 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 	ms.PeerCount = cs.PeerCount
 	ms.GasPrice = cs.GasPrice
 	ms.PendingCount = cs.PendingCount
+	ms.QueuedCount = cs.QueuedCount
 
 	return
 }
@@ -432,6 +435,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			Uint64("PeerCount", ms.PeerCount).
 			Str("GasPrice", ms.GasPrice.String()).
 			Uint64("PendingCount", ms.PendingCount).
+			Uint64("QueuedCount", ms.QueuedCount).
 			Msg("Redrawing")
 
 		if blockTable.SelectedRow == 0 {
@@ -464,7 +468,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		renderedBlocks = renderedBlocksTemp
 
 		log.Debug().Int("skeleton.Current.Inner.Dy()", skeleton.Current.Inner.Dy()).Int("skeleton.Current.Inner.Dx()", skeleton.Current.Inner.Dx()).Msg("the dimension of the current box")
-		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.PendingCount, ms.ChainID, renderedBlocks, skeleton.Current.Inner.Dx(), skeleton.Current.Inner.Dy())
+		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.PendingCount, ms.QueuedCount, ms.ChainID, renderedBlocks, skeleton.Current.Inner.Dx(), skeleton.Current.Inner.Dy())
 		skeleton.TxPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
 		skeleton.GasPriceChart.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
 		skeleton.BlockSizeChart.Data = metrics.GetSizePerBlock(renderedBlocks)
