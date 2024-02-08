@@ -242,6 +242,14 @@ func (c *conn) getBlockData(hash common.Hash) error {
 		return err
 	}
 
+	for e := c.requests.Front(); e != nil; e = e.Next() {
+		r := e.Value.(request)
+
+		if time.Since(r.time).Minutes() > 10 {
+			c.requests.Remove(e)
+		}
+	}
+
 	c.requestNum++
 	c.requests.PushBack(request{
 		requestID: c.requestNum,
@@ -386,10 +394,6 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 			hash = &r.hash
 			c.requests.Remove(e)
 			break
-		}
-
-		if time.Since(r.time).Minutes() > 10 {
-			c.requests.Remove(e)
 		}
 	}
 
