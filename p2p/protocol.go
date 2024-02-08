@@ -388,7 +388,7 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 			break
 		}
 
-		if time.Now().Sub(r.time).Minutes() > 10 {
+		if time.Since(r.time).Minutes() > 10 {
 			c.requests.Remove(e)
 		}
 	}
