@@ -2,9 +2,6 @@ name: Security Build
 
 on:
   pull_request:
-    # Do not run SonarQube job on Dependabot's PRs.
-    branches-ignore:
-    - 'dependabot/**'
   merge_group:
   push:
     branches:
@@ -12,6 +9,8 @@ on:
 
 jobs:
   sonarqube:
+    # Do not run SonarQube job on Dependabot's PRs.
+    if: ${{ github.event.commits[0].author.name != 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
