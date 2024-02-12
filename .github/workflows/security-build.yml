@@ -2,6 +2,9 @@ name: Security Build
 
 on:
   pull_request:
+    branches:
+      # Do not run SonarQube job on Dependabot's PRs.
+      - '!dependabot/**'
   merge_group:
   push:
     branches: [main]
