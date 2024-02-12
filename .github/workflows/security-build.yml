@@ -10,7 +10,7 @@ jobs:
   sonarqube:
     runs-on: ubuntu-latest
     # Do not run SonarQube job on Dependabot's PRs.
-    if: "!startsWith(github.event.pull_request.head.ref, 'dependabot/')"
+    if: "!startsWith(github.ref, 'dependabot')"
     steps:
       - uses: actions/checkout@v4
         with:
