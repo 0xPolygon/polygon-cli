@@ -14,7 +14,7 @@ env:
   GO_VERSION: "1.21"                  # https://go.dev/dl/
   STRINGER_VERSION: "0.15.0"          # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
   # Protoc dependencies.
-  PROTOC_VERSION: "25.1"              # https://github.com/protocolbuffers/protobuf/releases
+  PROTOC_VERSION: "25.3"              # https://github.com/protocolbuffers/protobuf/releases
   PROTOC_GEN_GO_VERSION: "1.31.0"     # https://pkg.go.dev/google.golang.org/protobuf/cmd/protoc-gen-go?tab=versions
   PROTOC_GEN_GO_GRPC_VERSION: "1.3.0" # https://pkg.go.dev/google.golang.org/grpc/cmd/protoc-gen-go-grpc?tab=versions
   ARCH: "linux-x86_64"
