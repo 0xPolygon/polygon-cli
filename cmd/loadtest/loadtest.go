@@ -311,14 +311,16 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 	if len(loadTestResults) == 0 {
 		return errors.New("no transactions observed")
 	}
-	if *inputLoadTestParams.CallOnly {
-		log.Info().Msg("CallOnly mode enabled - blocks aren't mined")
-		return nil
-	}
 
 	startTime := loadTestResults[0].RequestTime
 	endTime := time.Now()
 	log.Debug().Uint64("currentNonce", currentNonce).Uint64("final block number", finalBlockNumber).Msg("Got final block number")
+
+	if *inputLoadTestParams.CallOnly {
+		log.Info().Msg("CallOnly mode enabled - blocks aren't mined")
+		lightSummary(loadTestResults, startTime, endTime, rl)
+		return nil
+	}
 
 	if *inputLoadTestParams.ShouldProduceSummary {
 		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
