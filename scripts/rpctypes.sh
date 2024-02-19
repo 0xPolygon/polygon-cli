@@ -5,6 +5,7 @@ readonly url=https://github.com/ethereum/execution-apis.git
 readonly dest=tmp/execution-apis
 readonly schema_dest=schemas
 
+rm -rf ./$dest
 git clone --depth=1 $url $dest
 
 pushd $dest
@@ -16,16 +17,11 @@ methods=($(cat openrpc.json | jq -r '.methods[].name' | sort))
 mkdir $schema_dest
 echo "Methods:"
 for method in "${methods[@]}"; do
-    echo "Generating schemas for: $method"
-    cat openrpc.json | jq --arg methodName $method '.methods[] | select(.name == $methodName) | .result.schema' > "$schema_dest/$method.json"
+  echo "Generating schemas for: $method"
+  cat openrpc.json | jq --arg methodName $method '.methods[] | select(.name == $methodName) | .result.schema' > "$schema_dest/$method.json"
 done
-
 popd
 
-if [ ! -d $1 ] ; then
-  mkdir $1
-fi
-
+mkdir -p ./$1
 echo "Copying schemas to $1..."
-cp $dest/$schema_dest/* $1
-rm -r $dest
+cp -f $dest/$schema_dest/* $1
