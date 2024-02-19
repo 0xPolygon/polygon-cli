@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -18,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -33,7 +33,7 @@ type conn struct {
 	db        database.Database
 	head      *HeadBlock
 	headMutex *sync.RWMutex
-	count     *MessageCount
+	counter   *prometheus.CounterVec
 
 	// requests is used to store the request ID and the block hash. This is used
 	// when fetching block bodies because the eth protocol block bodies do not
@@ -56,8 +56,8 @@ type EthProtocolOptions struct {
 	SensorID    string
 	NetworkID   uint64
 	Peers       chan *enode.Node
-	Count       *MessageCount
 	ForkID      forkid.ID
+	MsgCounter  *prometheus.CounterVec
 
 	// Head keeps track of the current head block of the chain. This is required
 	// when doing the status exchange.
@@ -91,7 +91,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				requestNum: 0,
 				head:       opts.Head,
 				headMutex:  opts.HeadMutex,
-				count:      opts.Count,
+				counter:    opts.MsgCounter,
 			}
 
 			c.headMutex.RLock()
@@ -242,11 +242,21 @@ func (c *conn) getBlockData(hash common.Hash) error {
 		return err
 	}
 
+	for e := c.requests.Front(); e != nil; e = e.Next() {
+		r := e.Value.(request)
+
+		if time.Since(r.time).Minutes() > 10 {
+			c.requests.Remove(e)
+		}
+	}
+
 	c.requestNum++
 	c.requests.PushBack(request{
 		requestID: c.requestNum,
 		hash:      hash,
+		time:      time.Now(),
 	})
+
 	bodiesRequest := &GetBlockBodies{
 		RequestId:             c.requestNum,
 		GetBlockBodiesRequest: []common.Hash{hash},
@@ -286,7 +296,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
-	atomic.AddInt32(&c.count.BlockHashes, int32(len(packet)))
+	c.counter.WithLabelValues(fmt.Sprint(msg.Code), packet.Name()).Add(float64(len(packet)))
 
 	hashes := make([]common.Hash, 0, len(packet))
 	for _, hash := range packet {
@@ -307,7 +317,7 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
-	atomic.AddInt32(&c.count.Transactions, int32(len(txs)))
+	c.counter.WithLabelValues(fmt.Sprint(msg.Code), txs.Name()).Add(float64(len(txs)))
 
 	c.db.WriteTransactions(ctx, c.node, txs)
 
@@ -320,7 +330,7 @@ func (c *conn) handleGetBlockHeaders(msg ethp2p.Msg) error {
 		return err
 	}
 
-	atomic.AddInt32(&c.count.BlockHeaderRequests, 1)
+	c.counter.WithLabelValues(fmt.Sprint(msg.Code), request.Name()).Inc()
 
 	return ethp2p.Send(
 		c.rw,
@@ -336,7 +346,7 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	headers := packet.BlockHeadersRequest
-	atomic.AddInt32(&c.count.BlockHeaders, int32(len(headers)))
+	c.counter.WithLabelValues(fmt.Sprint(msg.Code), packet.Name()).Add(float64(len(headers)))
 
 	for _, header := range headers {
 		if err := c.getParentBlock(ctx, header); err != nil {
@@ -355,7 +365,7 @@ func (c *conn) handleGetBlockBodies(msg ethp2p.Msg) error {
 		return err
 	}
 
-	atomic.AddInt32(&c.count.BlockBodiesRequests, int32(len(request.GetBlockBodiesRequest)))
+	c.counter.WithLabelValues(fmt.Sprint(msg.Code), request.Name()).Add(float64(len(request.GetBlockBodiesRequest)))
 
 	return ethp2p.Send(
 		c.rw,
@@ -374,15 +384,11 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	atomic.AddInt32(&c.count.BlockBodies, int32(len(packet.BlockBodiesResponse)))
+	c.counter.WithLabelValues(fmt.Sprint(msg.Code), packet.Name()).Add(float64(len(packet.BlockBodiesResponse)))
 
 	var hash *common.Hash
 	for e := c.requests.Front(); e != nil; e = e.Next() {
-		r, ok := e.Value.(request)
-		if !ok {
-			c.logger.Error().Msg("Request type assertion failed")
-			continue
-		}
+		r := e.Value.(request)
 
 		if r.requestID == packet.RequestId {
 			hash = &r.hash
@@ -407,7 +413,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
-	atomic.AddInt32(&c.count.Blocks, 1)
+	c.counter.WithLabelValues(fmt.Sprint(msg.Code), block.Name()).Inc()
 
 	// Set the head block if newer.
 	c.headMutex.Lock()
@@ -438,7 +444,7 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 		return err
 	}
 
-	atomic.AddInt32(&c.count.TransactionRequests, int32(len(request.GetPooledTransactionsRequest)))
+	c.counter.WithLabelValues(fmt.Sprint(msg.Code), request.Name()).Add(float64(len(request.GetPooledTransactionsRequest)))
 
 	return ethp2p.Send(
 		c.rw,
@@ -448,6 +454,7 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 
 func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, version uint, msg ethp2p.Msg) error {
 	var hashes []common.Hash
+	var name string
 
 	switch version {
 	case 66, 67:
@@ -456,17 +463,19 @@ func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, version uin
 			return err
 		}
 		hashes = txs
+		name = txs.Name()
 	case 68:
 		var txs eth.NewPooledTransactionHashesPacket68
 		if err := msg.Decode(&txs); err != nil {
 			return err
 		}
 		hashes = txs.Hashes
+		name = txs.Name()
 	default:
 		return errors.New("protocol version not found")
 	}
 
-	atomic.AddInt32(&c.count.TransactionHashes, int32(len(hashes)))
+	c.counter.WithLabelValues(fmt.Sprint(msg.Code), name).Add(float64(len(hashes)))
 
 	if !c.db.ShouldWriteTransactions() || !c.db.ShouldWriteTransactionEvents() {
 		return nil
@@ -485,7 +494,7 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 		return err
 	}
 
-	atomic.AddInt32(&c.count.Transactions, int32(len(packet.PooledTransactionsResponse)))
+	c.counter.WithLabelValues(fmt.Sprint(msg.Code), packet.Name()).Add(float64(len(packet.PooledTransactionsResponse)))
 
 	c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse)
 

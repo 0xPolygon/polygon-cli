@@ -22,6 +22,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
@@ -47,6 +50,8 @@ type (
 		ShouldWriteTransactionEvents bool
 		ShouldRunPprof               bool
 		PprofPort                    uint
+		ShouldRunPrometheus          bool
+		PrometheusPort               uint
 		KeyFile                      string
 		Port                         int
 		DiscoveryPort                int
@@ -106,8 +111,19 @@ var SensorCmd = &cobra.Command{
 
 		if inputSensorParams.ShouldRunPprof {
 			go func() {
-				if pprofErr := http.ListenAndServe(fmt.Sprintf("localhost:%v", inputSensorParams.PprofPort), nil); pprofErr != nil {
+				addr := fmt.Sprintf(":%v", inputSensorParams.PprofPort)
+				if pprofErr := http.ListenAndServe(addr, nil); pprofErr != nil {
 					log.Error().Err(pprofErr).Msg("Failed to start pprof")
+				}
+			}()
+		}
+
+		if inputSensorParams.ShouldRunPrometheus {
+			go func() {
+				http.Handle("/metrics", promhttp.Handler())
+				addr := fmt.Sprintf(":%v", inputSensorParams.PrometheusPort)
+				if promErr := http.ListenAndServe(addr, nil); promErr != nil {
+					log.Error().Err(promErr).Msg("Failed to start Prometheus handler")
 				}
 			}()
 		}
@@ -173,6 +189,18 @@ var SensorCmd = &cobra.Command{
 			Number:          block.Number.ToUint64(),
 		}
 
+		peersGauge := promauto.NewGauge(prometheus.GaugeOpts{
+			Namespace: "sensor",
+			Name:      "peers",
+			Help:      "The number of peers the sensor is connected to",
+		})
+
+		msgCounter := promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "sensor",
+			Name:      "messages",
+			Help:      "The number and type of messages the sensor has received",
+		}, []string{"code", "message"})
+
 		opts := p2p.EthProtocolOptions{
 			Context:     cmd.Context(),
 			Database:    db,
@@ -184,8 +212,8 @@ var SensorCmd = &cobra.Command{
 			Peers:       make(chan *enode.Node),
 			Head:        &head,
 			HeadMutex:   &sync.RWMutex{},
-			Count:       &p2p.MessageCount{},
 			ForkID:      forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
+			MsgCounter:  msgCounter,
 		}
 
 		config := ethp2p.Config{
@@ -242,9 +270,7 @@ var SensorCmd = &cobra.Command{
 		for {
 			select {
 			case <-ticker.C:
-				count := opts.Count.Load()
-				opts.Count.Clear()
-				log.Info().Interface("peers", server.PeerCount()).Interface("counts", count).Send()
+				peersGauge.Set(float64(server.PeerCount()))
 			case peer := <-opts.Peers:
 				// Update the peer list and the nodes file.
 				if _, ok := peers[peer.ID()]; !ok {
@@ -326,6 +352,8 @@ increase CPU and memory usage.`)
 significantly increase CPU and memory usage.`)
 	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "Whether to run pprof")
 	SensorCmd.Flags().UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "Port pprof runs on")
+	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "Whether to run Prometheus")
+	SensorCmd.Flags().UintVar(&inputSensorParams.PrometheusPort, "prom-port", 2112, "Port Prometheus runs on")
 	SensorCmd.Flags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "Private key file")
 	SensorCmd.Flags().IntVar(&inputSensorParams.Port, "port", 30303, "TCP network listening port")
 	SensorCmd.Flags().IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
