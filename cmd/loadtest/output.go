@@ -3,6 +3,7 @@ package loadtest
 import (
 	"context"
 	"encoding/json"
+	"github.com/montanaflynn/stats"
 	"math"
 	"math/big"
 	"sort"
@@ -416,17 +417,15 @@ func lightSummary(lts []loadTestSample, startTime, endTime time.Time, rl *rate.L
 	log.Info().Msg("* Results")
 	log.Info().Int("samples", len(lts)).Msg("Samples")
 
-	var meanWait float64
-	var totalWait float64 = 0
 	var numErrors uint64 = 0
 
+	latencies := make([]float64, 0)
 	for _, s := range lts {
 		if s.IsError {
-			numErrors += 1
+			numErrors++
 		}
-		totalWait = float64(s.WaitTime.Seconds()) + totalWait
+		latencies = append(latencies, s.WaitTime.Seconds())
 	}
-	meanWait = totalWait / float64(len(lts))
 
 	testDuration := endTime.Sub(startTime)
 	tps := float64(len(loadTestResults)) / testDuration.Seconds()
@@ -435,14 +434,25 @@ func lightSummary(lts []loadTestSample, startTime, endTime time.Time, rl *rate.L
 	if rl != nil {
 		rlLimit = float64(rl.Limit())
 	}
+	meanLat, _ := stats.Mean(latencies)
+	medianLat, _ := stats.Median(latencies)
+	minLat, _ := stats.Min(latencies)
+	maxLat, _ := stats.Max(latencies)
+	stddevLat, _ := stats.StandardDeviation(latencies)
 
 	log.Info().Time("startTime", startTime).Msg("Start time of loadtest (first transaction sent)")
 	log.Info().Time("endTime", endTime).Msg("End time of loadtest (final transaction mined)")
-	log.Info().Float64("tps", tps).Msg("Estimated tps")
-	log.Info().Float64("meanWait between sending transactions", meanWait).Msg("Mean Wait")
+	log.Info().Float64("tps", tps).Msg("Overall Requests Per Second")
 	log.Info().
-		Float64("testDuration (seconds)", testDuration.Seconds()).
-		Float64("final rate limit", rlLimit).
+		Float64("mean", meanLat).
+		Float64("median", medianLat).
+		Float64("min", minLat).
+		Float64("max", maxLat).
+		Float64("stddev", stddevLat).
+		Msg("Request Latency Stats")
+	log.Info().
+		Float64("testDuration", testDuration.Seconds()).
+		Float64("finalRateLimit", rlLimit).
 		Msg("Rough test summary")
 	log.Info().Uint64("numErrors", numErrors).Msg("Num errors")
 }
