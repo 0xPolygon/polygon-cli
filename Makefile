@@ -79,7 +79,7 @@ gen: gen-doc gen-proto gen-go-bindings gen-loadtest-modes gen-json-rpctypes ## G
 
 .PHONY: gen-doc
 gen-doc: ## Generate documentation for `polycli`.
-	go run -race docutil/*.go
+	go run docutil/*.go
 
 .PHONY: gen-proto
 gen-proto: ## Generate protobuf stubs.

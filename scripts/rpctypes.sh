@@ -5,6 +5,7 @@ readonly url=https://github.com/ethereum/execution-apis.git
 readonly dest=tmp/execution-apis
 readonly schema_dest=schemas
 
+rm -rf ./$dest
 git clone --depth=1 $url $dest
 
 pushd $dest
@@ -27,5 +28,5 @@ if [ ! -d $1 ] ; then
 fi
 
 echo "Copying schemas to $1..."
-cp $dest/$schema_dest/* $1
+cp -f $dest/$schema_dest/* $1
 rm -r $dest
