@@ -56,6 +56,7 @@ type IndexedActivity struct {
 	ERC721Addresses []string
 	Contracts       []string
 	BlockNumber     uint64
+	Transactions    []rpctypes.PolyTransaction
 }
 
 func getIndexedRecentActivity(ctx context.Context, ec *ethclient.Client, c *ethrpc.Client) (*IndexedActivity, error) {
@@ -67,6 +68,7 @@ func getIndexedRecentActivity(ctx context.Context, ec *ethclient.Client, c *ethr
 	ia := new(IndexedActivity)
 	ia.BlockNumbers = make([]string, 0)
 	ia.TransactionIDs = make([]string, 0)
+	ia.Transactions = make([]rpctypes.PolyTransaction, 0)
 	ia.BlockIDs = make([]string, 0)
 	ia.Addresses = make([]string, 0)
 	ia.ERC20Addresses = make([]string, 0)
@@ -83,6 +85,7 @@ func getIndexedRecentActivity(ctx context.Context, ec *ethclient.Client, c *ethr
 		for k := range pb.Transactions {
 			pt := rpctypes.NewPolyTransaction(&pb.Transactions[k])
 			ia.TransactionIDs = append(ia.TransactionIDs, pt.Hash().String())
+			ia.Transactions = append(ia.Transactions, pt)
 			ia.Addresses = append(ia.Addresses, pt.From().String(), pt.To().String())
 
 			// balanceOf(address)

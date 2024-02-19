@@ -3,7 +3,7 @@ package loadtest
 import (
 	"crypto/ecdsa"
 	_ "embed"
-	"errors"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -180,14 +180,14 @@ func checkLoadtestFlags() error {
 
 	// Check `rpc-url` flag.
 	if ltp.RPCUrl == nil {
-		panic("RPC URL is empty")
+		return fmt.Errorf("RPC URL is empty")
 	}
 	if err := util.ValidateUrl(*ltp.RPCUrl); err != nil {
 		return err
 	}
 
 	if ltp.AdaptiveBackoffFactor != nil && *ltp.AdaptiveBackoffFactor <= 0.0 {
-		return errors.New("the backoff factor needs to be non-zero positive")
+		return fmt.Errorf("the backoff factor needs to be non-zero positive. Given: %d", *ltp.AdaptiveBackoffFactor)
 	}
 
 	return nil
