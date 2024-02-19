@@ -187,7 +187,7 @@ func checkLoadtestFlags() error {
 	}
 
 	if ltp.AdaptiveBackoffFactor != nil && *ltp.AdaptiveBackoffFactor <= 0.0 {
-		return fmt.Errorf("the backoff factor needs to be non-zero positive. Given: %d", *ltp.AdaptiveBackoffFactor)
+		return fmt.Errorf("the backoff factor needs to be non-zero positive. Given: %f", *ltp.AdaptiveBackoffFactor)
 	}
 
 	return nil
