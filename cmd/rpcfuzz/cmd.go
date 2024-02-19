@@ -78,7 +78,8 @@ func checkFlags() (err error) {
 	}
 
 	// Check private key flag.
-	privateKey, err := crypto.HexToECDSA(*testPrivateHexKey)
+	trimmedHexPrivateKey := strings.TrimPrefix(*testPrivateHexKey, "0x")
+	privateKey, err := crypto.HexToECDSA(trimmedHexPrivateKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Couldn't process the hex private key")
 		return err
