@@ -4,10 +4,13 @@ on:
   pull_request:
   merge_group:
   push:
-    branches: [main]
+    branches:
+    - main
 
 jobs:
   sonarqube:
+    # Do not run SonarQube job on Dependabot's PRs.
+    if: ${{ github.event.commits[0].author.name != 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
