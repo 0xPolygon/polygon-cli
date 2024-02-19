@@ -104,7 +104,8 @@ func dialRpc(ctx context.Context) (*ethclient.Client, error) {
 // Initialize  parameters.
 func initializeParams(ctx context.Context, c *ethclient.Client) (*ecdsa.PrivateKey, *big.Int, error) {
 	// Parse the private key.
-	privateKey, err := crypto.HexToECDSA(strings.TrimPrefix(*params.PrivateKey, "0x"))
+	trimmedHexPrivateKey := strings.TrimPrefix(*params.PrivateKey, "0x")
+	privateKey, err := crypto.HexToECDSA(trimmedHexPrivateKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to process the private key")
 		return nil, nil, err

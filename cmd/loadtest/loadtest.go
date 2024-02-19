@@ -158,8 +158,8 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		inputLoadTestParams.CurrentGasTipCap = gasTipCap
 	}
 
-	*inputLoadTestParams.PrivateKey = strings.TrimPrefix(*inputLoadTestParams.PrivateKey, "0x")
-	privateKey, err := ethcrypto.HexToECDSA(*inputLoadTestParams.PrivateKey)
+	trimmedHexPrivateKey := strings.TrimPrefix(*inputLoadTestParams.PrivateKey, "0x")
+	privateKey, err := ethcrypto.HexToECDSA(trimmedHexPrivateKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Couldn't process the hex private key")
 		return err
