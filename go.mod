@@ -150,12 +150,12 @@ require (
 )
 
 require (
-	cloud.google.com/go/kms v1.15.6
+	cloud.google.com/go/kms v1.15.7
 	github.com/google/tink/go v1.7.0
 )
 
 require (
-	cloud.google.com/go/iam v1.1.5 // indirect
+	cloud.google.com/go/iam v1.1.6 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233 // indirect
