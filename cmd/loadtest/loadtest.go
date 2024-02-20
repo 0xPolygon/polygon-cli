@@ -4,8 +4,10 @@ import (
 	"context"
 	_ "embed"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"io"
 	"math/big"
 	"math/rand"
@@ -311,14 +313,16 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 	if len(loadTestResults) == 0 {
 		return errors.New("no transactions observed")
 	}
-	if *inputLoadTestParams.CallOnly {
-		log.Info().Msg("CallOnly mode enabled - blocks aren't mined")
-		return nil
-	}
 
 	startTime := loadTestResults[0].RequestTime
 	endTime := time.Now()
 	log.Debug().Uint64("currentNonce", currentNonce).Uint64("final block number", finalBlockNumber).Msg("Got final block number")
+
+	if *inputLoadTestParams.CallOnly {
+		log.Info().Msg("CallOnly mode enabled - blocks aren't mined")
+		lightSummary(loadTestResults, startTime, endTime, rl)
+		return nil
+	}
 
 	if *inputLoadTestParams.ShouldProduceSummary {
 		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
@@ -1183,13 +1187,22 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *Ind
 		_, err = c.SuggestGasPrice(ctx)
 	} else if funcNum < 21 {
 		log.Trace().Msg("eth_estimateGas")
-		var tx *ethtypes.Transaction
-		tx, _, err = c.TransactionByHash(ctx, ethcommon.HexToHash(ia.TransactionIDs[randSrc.Intn(len(ia.TransactionIDs))]))
+		var rawTxData []byte
+		pt := ia.Transactions[randSrc.Intn(len(ia.TransactionIDs))]
+		rawTxData, err = pt.MarshalJSON()
 		if err != nil {
-			log.Error().Err(err).Msg("Unable to get the transaction hash")
+			log.Error().Err(err).Str("txHash", pt.Hash().String()).Msg("issue converting poly transaction to json")
 			return
 		}
-		_, err = c.EstimateGas(ctx, txToCallMsg(tx))
+		var tx apitypes.SendTxArgs
+		err = json.Unmarshal(rawTxData, &tx)
+		if err != nil {
+			log.Error().Err(err).Str("txHash", pt.Hash().String()).Msg("unable to unmarshal poly transaction to json.")
+			return
+		}
+		cm := txToCallMsg(tx.ToTransaction())
+		cm.From = pt.From()
+		_, err = c.EstimateGas(ctx, cm)
 	} else if funcNum < 33 {
 		log.Trace().Msg("eth_getTransactionCount")
 		_, err = c.NonceAt(ctx, ethcommon.HexToAddress(ia.Addresses[randSrc.Intn(len(ia.Addresses))]), nil)
