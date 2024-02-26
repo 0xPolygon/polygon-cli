@@ -17,7 +17,7 @@ require (
 	github.com/manifoldco/promptui v0.9.0
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20230904125328-1f23a7beb09a
 	github.com/prometheus/client_model v0.6.0
-	github.com/prometheus/common v0.46.0
+	github.com/prometheus/common v0.48.0
 	github.com/rs/zerolog v1.32.0
 	github.com/schollz/progressbar/v3 v3.14.1
 	github.com/spf13/cobra v1.8.0
@@ -152,6 +152,7 @@ require (
 require (
 	cloud.google.com/go/kms v1.15.7
 	github.com/google/tink/go v1.7.0
+	github.com/montanaflynn/stats v0.7.1
 )
 
 require (
@@ -163,7 +164,6 @@ require (
 	github.com/gballet/go-verkle v0.1.1-0.20231031103413-a67434b50f46 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/montanaflynn/stats v0.7.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.47.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.47.0 // indirect
 	go.opentelemetry.io/otel v1.23.0 // indirect
