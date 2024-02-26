@@ -457,15 +457,8 @@ func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, version uin
 	var name string
 
 	switch version {
-	case 66, 67:
-		var txs eth.NewPooledTransactionHashesPacket67
-		if err := msg.Decode(&txs); err != nil {
-			return err
-		}
-		hashes = txs
-		name = txs.Name()
 	case 68:
-		var txs eth.NewPooledTransactionHashesPacket68
+		var txs eth.NewPooledTransactionHashesPacket
 		if err := msg.Decode(&txs); err != nil {
 			return err
 		}
