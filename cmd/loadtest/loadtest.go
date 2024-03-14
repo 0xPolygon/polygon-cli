@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"io"
 	"math/big"
 	"math/rand"
@@ -16,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 
 	"github.com/maticnetwork/polygon-cli/bindings/tester"
 	"github.com/maticnetwork/polygon-cli/bindings/tokens"
@@ -483,7 +484,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 	var erc20Addr ethcommon.Address
 	var erc20Contract *tokens.ERC20
-	if mode == loadTestModeERC20 || mode == loadTestModeRandom {
+	if hasMode(loadTestModeERC20, ltp.ParsedModes) || hasMode(loadTestModeRandom, ltp.ParsedModes) {
 		erc20Addr, erc20Contract, err = getERC20Contract(ctx, c, tops, cops)
 		if err != nil {
 			return err
@@ -493,7 +494,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 	var erc721Addr ethcommon.Address
 	var erc721Contract *tokens.ERC721
-	if mode == loadTestModeERC721 || mode == loadTestModeRandom {
+	if hasMode(loadTestModeERC721, ltp.ParsedModes) || hasMode(loadTestModeRandom, ltp.ParsedModes) {
 		erc721Addr, erc721Contract, err = getERC721Contract(ctx, c, tops, cops)
 		if err != nil {
 			return err
@@ -502,7 +503,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	var recallTransactions []rpctypes.PolyTransaction
-	if mode == loadTestModeRecall {
+	if hasMode(loadTestModeRecall, ltp.ParsedModes) {
 		recallTransactions, err = getRecallTransactions(ctx, c, rpc)
 		if err != nil {
 			return err
@@ -514,7 +515,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	var indexedActivity *IndexedActivity
-	if mode == loadTestModeRPC {
+	if hasMode(loadTestModeRPC, ltp.ParsedModes) {
 		indexedActivity, err = getIndexedRecentActivity(ctx, c, rpc)
 		if err != nil {
 			return err
@@ -531,7 +532,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 	var uniswapV3Config uniswapv3loadtest.UniswapV3Config
 	var poolConfig uniswapv3loadtest.PoolConfig
-	if mode == loadTestModeUniswapV3 {
+	if hasMode(loadTestModeUniswapV3, ltp.ParsedModes) {
 		uniswapAddresses := uniswapv3loadtest.UniswapV3Addresses{
 			FactoryV3:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapFactoryV3),
 			Multicall:                          ethcommon.HexToAddress(*uniswapv3LoadTestParams.UniswapMulticall),
