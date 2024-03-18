@@ -42,7 +42,7 @@ require github.com/go-errors/errors v1.5.1 // indirect
 
 require (
 	cloud.google.com/go v0.112.0 // indirect
-	cloud.google.com/go/compute v1.23.4 // indirect
+	cloud.google.com/go/compute v1.24.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect
@@ -139,10 +139,10 @@ require (
 	golang.org/x/term v0.18.0 // indirect
 	golang.org/x/tools v0.16.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/genproto v0.0.0-20240205150955-31a09d347014 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240205150955-31a09d347014 // indirect
+	google.golang.org/genproto v0.0.0-20240213162025-012b6fc9bca9 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240311132316-a219d84964c2 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240304161311-37d4d3c04a78 // indirect
-	google.golang.org/grpc v1.62.0 // indirect
+	google.golang.org/grpc v1.62.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.2.1 // indirect
@@ -150,7 +150,7 @@ require (
 )
 
 require (
-	cloud.google.com/go/kms v1.15.7
+	cloud.google.com/go/kms v1.15.8
 	github.com/google/tink/go v1.7.0
 	github.com/montanaflynn/stats v0.7.1
 )
