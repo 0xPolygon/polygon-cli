@@ -287,7 +287,8 @@ func initNonce(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) err
 		return err
 	}
 
-	currentNonce, err = c.NonceAt(ctx, *inputLoadTestParams.FromETHAddress, new(big.Int).SetUint64(startBlockNumber))
+	// Get pending nonce to be prevent nonce collision (if tx from same sender is already present)
+	currentNonce, err = c.PendingNonceAt(ctx, *inputLoadTestParams.FromETHAddress)
 	startNonce = currentNonce
 
 	if err != nil {
