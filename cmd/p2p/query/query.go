@@ -62,6 +62,7 @@ and the amount of blocks to query and print the results.`,
 		}
 
 		log.Info().Interface("hello", hello).Interface("status", status).Msg("Peering messages received")
+		log.Info().Uint64("start", start).Uint64("amount", amount).Msg("Requesting headers")
 
 		// Handshake completed, now proceed to query headers
 		if err = conn.QueryHeaders(start, amount); err != nil {
