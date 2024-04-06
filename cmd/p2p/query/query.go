@@ -23,7 +23,7 @@ var (
 
 var QueryCmd = &cobra.Command{
 	Use:   "query [enode/enr]",
-	Short: "Query block header(s) from node and return the output.",
+	Short: "Query block header(s) from node and prints the output.",
 	Long: `Query header of single block or range of blocks given a single enode/enr.
 	
 This command will initially establish a handshake and exchange status message

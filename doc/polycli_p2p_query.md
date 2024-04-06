@@ -11,7 +11,7 @@
 
 ## Description
 
-Query block header(s) from node and return the output.
+Query block header(s) from node and prints the output.
 
 ```bash
 polycli p2p query [enode/enr] [flags]
