@@ -16,7 +16,7 @@ require (
 	github.com/libp2p/go-libp2p v0.31.0
 	github.com/manifoldco/promptui v0.9.0
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20230904125328-1f23a7beb09a
-	github.com/prometheus/client_model v0.6.0
+	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common v0.51.1
 	github.com/rs/zerolog v1.32.0
 	github.com/schollz/progressbar/v3 v3.14.2
