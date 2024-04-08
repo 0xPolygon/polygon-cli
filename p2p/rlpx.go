@@ -281,3 +281,56 @@ func (c *rlpxConn) processNewPooledTransactionHashes(count *MessageCount, hashes
 
 	return nil
 }
+
+// QueryHeaders requests block headers given start and count
+func (c *rlpxConn) QueryHeaders(start, count uint64) error {
+	c.logger.Trace().Msgf("Querying headers from %v for %v blocks", start, count)
+
+	// Prepare the `GetBlockHeaders` request.
+	req := &GetBlockHeaders{
+		RequestId: rand.Uint64(),
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+			Origin: eth.HashOrNumber{Number: start},
+			Amount: count,
+		},
+	}
+	if err := c.Write(req); err != nil {
+		c.logger.Error().Err(err).Msg("Failed to write GetBlockHeaders request")
+		return err
+	}
+
+	return nil
+}
+
+// ListenHeaders keeps listening for requested headers from the p2p connection.
+func (c *rlpxConn) ListenHeaders() (eth.BlockHeadersRequest, error) {
+	for {
+		start := time.Now()
+
+		for time.Since(start) < timeout {
+			if err := c.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				c.logger.Error().Err(err).Msg("Failed to set read deadline")
+			}
+
+			switch msg := c.Read().(type) {
+			case *BlockHeaders:
+				c.logger.Trace().Msgf("Received %v BlockHeaders", len(msg.BlockHeadersRequest))
+				return msg.BlockHeadersRequest, nil
+			case *Error:
+				c.logger.Trace().Err(msg.Unwrap()).Msg("Received Error")
+
+				if !strings.Contains(msg.Error(), "timeout") {
+					return nil, msg.Unwrap()
+				}
+			case *Disconnect:
+				c.logger.Debug().Msgf("Disconnect received: %v", msg)
+				return nil, fmt.Errorf("disconnect received: %v", msg)
+			case *Disconnects:
+				c.logger.Debug().Msgf("Disconnect received: %v", msg)
+				return nil, fmt.Errorf("disconnect received: %v", msg)
+			default:
+				c.logger.Trace().Interface("msg", msg).Int("code", msg.Code()).Msg("Received message")
+			}
+		}
+	}
+}
