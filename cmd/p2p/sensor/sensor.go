@@ -14,7 +14,6 @@ import (
 	_ "net/http/pprof"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/crypto"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
