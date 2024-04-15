@@ -70,6 +70,6 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
-          branch: 'chore/update-submodules'
-          commit-message: 'chore: update submodules'
-          title: 'chore: update submodules'
+          branch: 'cron/generate-new-files'
+          commit-message: 'cron: generate new files'
+          title: 'cron: generate new files'
