@@ -39,8 +39,9 @@ jobs:
     name: Check generated files
     runs-on: ubuntu-latest
     steps:
-      # Dependencies to generate doc, protobuf stubs and go bindings.
       - uses: actions/checkout@v4
+
+      # Dependencies to generate doc, protobuf stubs and go bindings.
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -61,6 +62,7 @@ jobs:
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v${{ env.PROTOC_GEN_GO_GRPC_VERSION }}
           protoc-gen-go --version
           protoc-gen-go-grpc --version
+
       # Dependencies to generate go bindings.
       - name: Install abigen
         run: |
