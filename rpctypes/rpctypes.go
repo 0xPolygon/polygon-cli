@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	// ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 
 	"github.com/rs/zerolog/log"
