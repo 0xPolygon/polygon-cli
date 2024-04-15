@@ -202,7 +202,8 @@
             "type": "object",
             "required": [
               "sourceAddress",
-              "validatorPublicKey"
+              "validatorPublicKey",
+              "amount"
             ],
             "properties": {
               "sourceAddress": {
@@ -214,6 +215,11 @@
                 "title": "Validator public key",
                 "type": "string",
                 "pattern": "^0x[0-9a-f]{96}$"
+              },
+              "amount": {
+                "title": "Withdraw amount",
+                "type": "string",
+                "pattern": "^0x([1-9a-f]+[0-9a-f]{0,15})|0$"
               }
             }
           }
