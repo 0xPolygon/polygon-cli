@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
@@ -50,7 +49,6 @@ type conn struct {
 type EthProtocolOptions struct {
 	Context     context.Context
 	Database    database.Database
-	Genesis     *core.Genesis
 	GenesisHash common.Hash
 	RPC         string
 	SensorID    string
@@ -137,7 +135,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				case eth.NewBlockMsg:
 					err = c.handleNewBlock(ctx, msg)
 				case eth.NewPooledTransactionHashesMsg:
-					err = c.handleNewPooledTransactionHashes(ctx, version, msg)
+					err = c.handleNewPooledTransactionHashes(version, msg)
 				case eth.GetPooledTransactionsMsg:
 					err = c.handleGetPooledTransactions(msg)
 				case eth.PooledTransactionsMsg:
@@ -452,7 +450,7 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 		&eth.PooledTransactionsPacket{RequestId: request.RequestId})
 }
 
-func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, version uint, msg ethp2p.Msg) error {
+func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) error {
 	var hashes []common.Hash
 	var name string
 
