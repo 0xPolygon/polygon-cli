@@ -66,7 +66,6 @@ type (
 		nodes        []*enode.Node
 		trustedNodes []*enode.Node
 		privateKey   *ecdsa.PrivateKey
-		genesis      core.Genesis
 		nat          nat.Interface
 	}
 )
