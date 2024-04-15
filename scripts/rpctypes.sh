@@ -1,29 +1,30 @@
 #!/bin/bash
 # This script takes an argument of the dest directory for the rpc types json file
 # Usage: ./rpctypes.sh rpctypes/schemas/
-readonly url=https://github.com/ethereum/execution-apis.git
-readonly commit_id=fda7322
-readonly dest=tmp/execution-apis
-readonly schema_dest=schemas
+readonly url="https://github.com/ethereum/execution-apis.git"
+readonly commit_id="0c18fb0"
+readonly dest="tmp/execution-apis"
+readonly schema_dest="schemas"
 
-rm -rf ./$dest
-git clone $url $dest
-git checkout $commit_id
+rm -rf "./$dest"
+git clone "$url" "$dest"
+pushd "$dest" || exit
+git checkout "$commit_id"
 
-pushd $dest
 npm install
 npm run build
 
-methods=($(cat openrpc.json | jq -r '.methods[].name' | sort))
+# shellcheck disable=SC2207
+methods=($(jq -r '.methods[].name' openrpc.json | sort))
 
-mkdir $schema_dest
+mkdir "$schema_dest"
 echo "Methods:"
 for method in "${methods[@]}"; do
   echo "Generating schemas for: $method"
-  cat openrpc.json | jq --arg methodName $method '.methods[] | select(.name == $methodName) | .result.schema' > "$schema_dest/$method.json"
+  jq --arg methodName "$method" '.methods[] | select(.name == $methodName) | .result.schema' openrpc.json > "$schema_dest/$method.json"
 done
-popd
+popd || exit
 
-mkdir -p ./$1
+mkdir -p "./$1"
 echo "Copying schemas to $1..."
-cp -f $dest/$schema_dest/* $1
+cp -f $dest/$schema_dest/* "$1"
