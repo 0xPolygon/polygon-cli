@@ -2,11 +2,13 @@
 # This script takes an argument of the dest directory for the rpc types json file
 # Usage: ./rpctypes.sh rpctypes/schemas/
 readonly url=https://github.com/ethereum/execution-apis.git
+readonly commit_id=fda7322
 readonly dest=tmp/execution-apis
 readonly schema_dest=schemas
 
 rm -rf ./$dest
-git clone --depth=1 $url $dest
+git clone $url $dest
+git checkout $commit_id
 
 pushd $dest
 npm install
