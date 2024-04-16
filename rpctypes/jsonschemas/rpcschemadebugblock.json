@@ -2,14 +2,14 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Generated schema for Root",
     "type": "array",
-    "items" : {
+    "items": {
         "type": "object",
         "properties": {
             "txHash": {
                 "type": "string",
                 "pattern": "^0x[0-9a-f]{64}$"
             },
-            "result" : {
+            "result": {
                 "type": "object",
                 "properties": {
                     "gas": {
@@ -75,7 +75,6 @@
                     "structLogs"
                 ]
             }
-
         },
         "required": [
             "result",
