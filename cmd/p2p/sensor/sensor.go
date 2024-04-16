@@ -2,7 +2,6 @@ package sensor
 
 import (
 	"crypto/ecdsa"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -15,7 +14,6 @@ import (
 	_ "net/http/pprof"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/crypto"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
@@ -56,7 +54,6 @@ type (
 		Port                         int
 		DiscoveryPort                int
 		RPC                          string
-		GenesisFile                  string
 		GenesisHash                  string
 		ForkID                       []byte
 		DialRatio                    int
@@ -68,7 +65,6 @@ type (
 		nodes        []*enode.Node
 		trustedNodes []*enode.Node
 		privateKey   *ecdsa.PrivateKey
-		genesis      core.Genesis
 		nat          nat.Interface
 	}
 )
@@ -149,12 +145,6 @@ var SensorCmd = &cobra.Command{
 			}
 		}
 
-		inputSensorParams.genesis, err = loadGenesis(inputSensorParams.GenesisFile)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to load genesis file")
-			return err
-		}
-
 		inputSensorParams.nat, err = nat.Parse(inputSensorParams.NAT)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to parse NAT")
@@ -204,7 +194,6 @@ var SensorCmd = &cobra.Command{
 		opts := p2p.EthProtocolOptions{
 			Context:     cmd.Context(),
 			Database:    db,
-			Genesis:     &inputSensorParams.genesis,
 			GenesisHash: common.HexToHash(inputSensorParams.GenesisHash),
 			RPC:         inputSensorParams.RPC,
 			SensorID:    inputSensorParams.SensorID,
@@ -294,20 +283,6 @@ var SensorCmd = &cobra.Command{
 	},
 }
 
-// loadGenesis unmarshals the genesis file into the core.Genesis struct.
-func loadGenesis(genesisFile string) (core.Genesis, error) {
-	chainConfig, err := os.ReadFile(genesisFile)
-
-	if err != nil {
-		return core.Genesis{}, err
-	}
-	var gen core.Genesis
-	if err := json.Unmarshal(chainConfig, &gen); err != nil {
-		return core.Genesis{}, err
-	}
-	return gen, nil
-}
-
 // getLatestBlock will get the latest block from an RPC provider.
 func getLatestBlock(url string) (*rpctypes.RawBlockResponse, error) {
 	client, err := rpc.Dial(url)
@@ -358,7 +333,6 @@ significantly increase CPU and memory usage.`)
 	SensorCmd.Flags().IntVar(&inputSensorParams.Port, "port", 30303, "TCP network listening port")
 	SensorCmd.Flags().IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
 	SensorCmd.Flags().StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "RPC endpoint used to fetch the latest block")
-	SensorCmd.Flags().StringVar(&inputSensorParams.GenesisFile, "genesis", "genesis.json", "Genesis file")
 	SensorCmd.Flags().StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "The genesis block hash")
 	SensorCmd.Flags().BytesHexVar(&inputSensorParams.ForkID, "fork-id", []byte{240, 151, 188, 19}, "The hex encoded fork id (omit the 0x)")
 	SensorCmd.Flags().IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
