@@ -25,30 +25,9 @@
         "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$"
       }
     },
-    "baseFeePerBlobGas": {
-      "title": "baseFeePerBlobGasArray",
-      "description": "An array of block base fees per blob gas. This includes the next block after the newest of the returned range, because this value can be derived from the newest block. Zeroes are returned for pre-EIP-4844 blocks.",
-      "type": "array",
-      "items": {
-        "title": "hex encoded unsigned integer",
-        "type": "string",
-        "pattern": "^0x([1-9a-f]+[0-9a-f]*|0)$"
-      }
-    },
     "gasUsedRatio": {
       "title": "gasUsedRatio",
       "description": "An array of block gas used ratios. These are calculated as the ratio of gasUsed and gasLimit.",
-      "type": "array",
-      "items": {
-        "title": "normalized ratio",
-        "type": "number",
-        "minimum": 0,
-        "maximum": 1
-      }
-    },
-    "blobGasUsedRatio": {
-      "title": "blobGasUsedRatio",
-      "description": "An array of block blob gas used ratios. These are calculated as the ratio of blobGasUsed and the max blob gas per block.",
       "type": "array",
       "items": {
         "title": "normalized ratio",
