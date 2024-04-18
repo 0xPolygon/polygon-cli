@@ -485,7 +485,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 	var erc20Addr ethcommon.Address
 	var erc20Contract *tokens.ERC20
-	if hasMode(loadTestModeERC20, ltp.ParsedModes) || hasMode(loadTestModeRandom, ltp.ParsedModes) {
+	if hasMode(loadTestModeERC20, ltp.ParsedModes) || hasMode(loadTestModeRandom, ltp.ParsedModes) || hasMode(loadTestModeRPC, ltp.ParsedModes) {
 		erc20Addr, erc20Contract, err = getERC20Contract(ctx, c, tops, cops)
 		if err != nil {
 			return err
@@ -495,7 +495,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 	var erc721Addr ethcommon.Address
 	var erc721Contract *tokens.ERC721
-	if hasMode(loadTestModeERC721, ltp.ParsedModes) || hasMode(loadTestModeRandom, ltp.ParsedModes) {
+	if hasMode(loadTestModeERC721, ltp.ParsedModes) || hasMode(loadTestModeRandom, ltp.ParsedModes) || hasMode(loadTestModeRPC, ltp.ParsedModes) {
 		erc721Addr, erc721Contract, err = getERC721Contract(ctx, c, tops, cops)
 		if err != nil {
 			return err
@@ -521,6 +521,14 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		if err != nil {
 			return err
 		}
+		if len(indexedActivity.ERC20Addresses) == 0 {
+			indexedActivity.ERC20Addresses = append(indexedActivity.ERC20Addresses, erc20Addr.String())
+		}
+
+		if len(indexedActivity.ERC721Addresses) == 0 {
+			indexedActivity.ERC721Addresses = append(indexedActivity.ERC721Addresses, erc721Addr.String())
+		}
+
 		log.Debug().
 			Int("transactions", len(indexedActivity.TransactionIDs)).
 			Int("blocks", len(indexedActivity.BlockNumbers)).
@@ -1228,44 +1236,64 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *Ind
 		h := ethcommon.HexToHash(ia.BlockIDs[randSrc.Intn(len(ia.BlockIDs))])
 		_, err = c.FilterLogs(ctx, ethereum.FilterQuery{BlockHash: &h})
 	} else {
+
 		log.Trace().Msg("eth_call")
-		erc20Str := string(ia.ERC20Addresses[randSrc.Intn(len(ia.ERC20Addresses))])
-		erc721Str := string(ia.ERC721Addresses[randSrc.Intn(len(ia.ERC721Addresses))])
-		erc20Addr := ethcommon.HexToAddress(erc20Str)
-		erc721Addr := ethcommon.HexToAddress(erc721Str)
-		log.Trace().
-			Str("erc20str", erc20Str).
-			Str("erc721str", erc721Str).
-			Str("erc20addr", erc20Addr.String()).
-			Str("erc721addr", erc721Addr.String()).
-			Msg("Retrieve contract addresses")
-		cops := new(bind.CallOpts)
-		cops.Context = ctx
-		var erc721Contract *tokens.ERC721
-		var erc20Contract *tokens.ERC20
 
-		erc721Contract, err = tokens.NewERC721(erc721Addr, c)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to instantiate new erc721 contract")
-			return
-		}
-		erc20Contract, err = tokens.NewERC20(erc20Addr, c)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
-			return
-		}
-		t1 = time.Now()
+		if len(ia.ERC20Addresses) != 0 {
+			erc20Str := string(ia.ERC20Addresses[randSrc.Intn(len(ia.ERC20Addresses))])
+			erc20Addr := ethcommon.HexToAddress(erc20Str)
 
-		_, err = erc721Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
-		if err != nil && err == bind.ErrNoCode {
-			err = nil
-		}
-		_, err = erc20Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
-		if err != nil && err == bind.ErrNoCode {
-			err = nil
-		}
-		// tokenURI would be the next most popular call, but it's not very complex
+			log.Trace().
+				Str("erc20str", erc20Str).
+				Str("erc20addr", erc20Addr.String()).
+				Msg("Retrieve contract addresses")
+			cops := new(bind.CallOpts)
+			cops.Context = ctx
+			var erc20Contract *tokens.ERC20
 
+			erc20Contract, err = tokens.NewERC20(erc20Addr, c)
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to instantiate new erc20 contract")
+				return
+			}
+			t1 = time.Now()
+
+			_, err = erc20Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
+			if err != nil && err == bind.ErrNoCode {
+				err = nil
+			}
+			// tokenURI would be the next most popular call, but it's not very complex
+		} else {
+			log.Warn().Msg("Unable to find deployed erc20 contract, skipping making calls...")
+		}
+
+		if len(ia.ERC721Addresses) != 0 {
+			erc721Str := string(ia.ERC721Addresses[randSrc.Intn(len(ia.ERC721Addresses))])
+			erc721Addr := ethcommon.HexToAddress(erc721Str)
+
+			log.Trace().
+				Str("erc721str", erc721Str).
+				Str("erc721addr", erc721Addr.String()).
+				Msg("Retrieve contract addresses")
+			cops := new(bind.CallOpts)
+			cops.Context = ctx
+			var erc721Contract *tokens.ERC721
+
+			erc721Contract, err = tokens.NewERC721(erc721Addr, c)
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to instantiate new erc721 contract")
+				return
+			}
+			t1 = time.Now()
+
+			_, err = erc721Contract.BalanceOf(cops, *inputLoadTestParams.FromETHAddress)
+			if err != nil && err == bind.ErrNoCode {
+				err = nil
+			}
+			// tokenURI would be the next most popular call, but it's not very complex
+		} else {
+			log.Warn().Msg("Unable to find deployed erc721 contract, skipping making calls...")
+		}
 	}
 
 	return
