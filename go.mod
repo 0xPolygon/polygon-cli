@@ -3,7 +3,7 @@ module github.com/maticnetwork/polygon-cli
 go 1.21
 
 require (
-	cloud.google.com/go/datastore v1.15.0
+	cloud.google.com/go/datastore v1.16.0
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e // indirect
@@ -41,7 +41,7 @@ require github.com/alecthomas/participle/v2 v2.1.1
 require github.com/go-errors/errors v1.5.1 // indirect
 
 require (
-	cloud.google.com/go v0.112.0 // indirect
+	cloud.google.com/go v0.112.2 // indirect
 	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect
@@ -137,8 +137,8 @@ require (
 	golang.org/x/sys v0.19.0 // indirect
 	golang.org/x/term v0.19.0 // indirect
 	golang.org/x/tools v0.16.0 // indirect
-	google.golang.org/genproto v0.0.0-20240227224415-6ceb2ff114de // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240311132316-a219d84964c2 // indirect
+	google.golang.org/genproto v0.0.0-20240401170217-c3f982113cda // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240415180920-8c6c420018be // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240415180920-8c6c420018be // indirect
 	google.golang.org/grpc v1.63.2 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
@@ -156,7 +156,7 @@ require (
 require (
 	cloud.google.com/go/auth v0.3.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.2 // indirect
-	cloud.google.com/go/iam v1.1.6 // indirect
+	cloud.google.com/go/iam v1.1.7 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233 // indirect
