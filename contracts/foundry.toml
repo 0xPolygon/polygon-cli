@@ -7,15 +7,8 @@ remappings = [
 ]
 solc_version = "0.8.23" # https://github.com/ethereum/solidity/releases
 
-# Lite profile with Yul optimiser disabled.
-[profile.lite.optimizer_details]
+# default profile with Yul optimiser disabled.
+[profile.default.optimizer_details]
 yul = false
-
-[profile.yul]
-src = 'src/yul'
-out = 'out/yul'
-libs = ['lib']
-remappings = []
-auto_detect_remappings = false
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

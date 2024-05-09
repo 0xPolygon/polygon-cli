@@ -35,7 +35,7 @@ contract LoadTester {
 
     // A few op codes that aren't being tested specifically
     // 0x00 STOP - 0 Gas and doesn't do anything
-    // 0x50 POP - exists in the Yul instructions, but is so low level that an empty for loop would test it
+    // 0x50 POP
     // 0x56 JUMP
     // 0x57 JUMPI
     // 0x58 PC - Is disallowed
