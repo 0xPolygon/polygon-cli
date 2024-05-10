@@ -90,6 +90,7 @@ type (
 const (
 	monitorModeHelp monitorMode = iota
 	monitorModeExplorer
+	monitorModeSelectBlock
 	monitorModeBlock
 	monitorModeTransaction
 )
@@ -374,11 +375,12 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 	currentMode := monitorModeExplorer
 
-	blockTable, blockInfo, transactionList, transactionInformationList, transactionInfo, grid, blockGrid, transactionGrid, skeleton := ui.SetUISkeleton()
+	blockTable, blockInfo, transactionList, transactionInformationList, transactionInfo, grid, selectGrid, blockGrid, transactionGrid, skeleton := ui.SetUISkeleton()
 
 	termWidth, termHeight := termui.TerminalDimensions()
 	windowSize = termHeight/2 - 4
 	grid.SetRect(0, 0, termWidth, termHeight)
+	selectGrid.SetRect(0, 0, termWidth, termHeight)
 	blockGrid.SetRect(0, 0, termWidth, termHeight)
 	transactionGrid.SetRect(0, 0, termWidth, termHeight)
 	// Initial render needed I assume to avoid the first bad redraw
@@ -390,6 +392,28 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	redraw := func(ms *monitorStatus, force ...bool) {
 		if currentMode == monitorModeHelp {
 			// TODO add some help context?
+		} else if currentMode == monitorModeSelectBlock {
+
+			termui.Clear()
+			termui.Render(selectGrid)
+
+			log.Debug().
+				Int("skeleton.TransactionList.SelectedRow", transactionList.SelectedRow).
+				Msg("Redrawing block mode")
+
+			if setBlock {
+				log.Debug().
+					Int("blockTable.SelectedRow", blockTable.SelectedRow).
+					Int("renderedBlocks", len(renderedBlocks)).
+					Msg("setBlock")
+
+				ms.SelectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
+				blockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
+
+				setBlock = false
+				log.Debug().Uint64("blockNumber", ms.SelectedBlock.Number().Uint64()).Msg("Selected block changed")
+			}
+			return
 		} else if currentMode == monitorModeBlock {
 			// render a block
 			skeleton.BlockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
@@ -484,6 +508,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		blockTable.TextStyle = termui.NewStyle(termui.ColorWhite)
 		blockTable.SelectedRowStyle = termui.NewStyle(termui.ColorWhite, termui.ColorRed, termui.ModifierBold)
 		transactionColumnRatio := []int{30, 5, 20, 20, 5, 10}
+		// if blockTable.SelectedRow > 0 && blockTable.SelectedRow <= len(blockTable.Rows) {
 		if blockTable.SelectedRow > 0 && blockTable.SelectedRow <= len(blockTable.Rows) {
 			// Only changed the selected block when the user presses the up down keys.
 			// Otherwise this will adjust when the table is updated automatically.
@@ -514,7 +539,9 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			}
 		}
 
+		// termui.Render(selectGrid)
 		termui.Render(grid)
+
 	}
 
 	currentBn := ms.HeadBlock
@@ -548,11 +575,16 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					}
 				} else if currentMode == monitorModeBlock {
 					currentMode = monitorModeExplorer
+					blockTable.SelectedRow = 0
+				} else if currentMode == monitorModeSelectBlock {
+					currentMode = monitorModeExplorer
+					blockTable.SelectedRow = 0
 				} else if currentMode == monitorModeTransaction {
 					currentMode = monitorModeBlock
+					blockTable.SelectedRow = 0
 				}
 			case "<Enter>":
-				if currentMode == monitorModeExplorer && blockTable.SelectedRow > 0 {
+				if (currentMode == monitorModeExplorer || currentMode == monitorModeSelectBlock) && blockTable.SelectedRow > 0 {
 					currentMode = monitorModeBlock
 				} else if transactionList.SelectedRow > 0 {
 					currentMode = monitorModeTransaction
@@ -560,6 +592,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			case "<Resize>":
 				payload := e.Payload.(termui.Resize)
 				grid.SetRect(0, 0, payload.Width, payload.Height)
+				selectGrid.SetRect(0, 0, payload.Width, payload.Height)
 				blockGrid.SetRect(0, 0, payload.Width, payload.Height)
 				transactionGrid.SetRect(0, 0, payload.Width, payload.Height)
 				_, termHeight = termui.TerminalDimensions()
@@ -578,8 +611,15 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				if blockTable.SelectedRow == 0 {
 					blockTable.SelectedRow = 1
 					setBlock = true
+					currentMode = monitorModeSelectBlock
 					break
 				}
+
+				// // Dynamic UI with Block Information column only appearing when blocks selected
+				// if blockTable.SelectedRow != 0 {
+				// 	currentMode = monitorModeSelectBlock
+				// 	setBlock = true
+				// }
 
 				if e.ID == "<Down>" {
 					log.Debug().

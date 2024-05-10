@@ -105,7 +105,13 @@ func GetBlocksList(blocks []rpctypes.PolyBlock) ([]string, string) {
 	zone, _ := time.Now().Zone()
 	headerVariables := []string{"#", fmt.Sprintf("TIME (%s)", zone), "BLK TIME", "TXN #", "GAS USED", "HASH", "AUTHOR"}
 
-	proportion := []int{10, 10, 2, 2, 10, 12}
+	// Default block info row should be full width
+	proportion := []int{10, 20, 10, 10, 10, 80}
+
+	// If toggling between blocks, show Block Information section
+	// if selectBlock {
+	// 	proportion = []int{10, 10, 2, 2, 10, 12}
+	// }
 
 	header := ""
 	for i, prop := range proportion {
@@ -146,15 +152,29 @@ func GetBlocksList(blocks []rpctypes.PolyBlock) ([]string, string) {
 			blockTime = strconv.FormatUint(bs[j].Time()-bs[j-1].Time(), 10)
 		}
 
+		// Default block info row should be full width
 		recordVariables := []string{
 			fmt.Sprintf("%d", bs[j].Number()),
 			ut.Format("02 Jan 06 15:04:05"),
 			fmt.Sprintf("%ss", blockTime),
 			fmt.Sprintf("%d", len(bs[j].Transactions())),
 			fmt.Sprintf("%d", bs[j].GasUsed()),
-			metrics.TruncateHexString(bs[j].Hash().String(), 14),
-			metrics.TruncateHexString(author.String(), 14),
+			bs[j].Hash().String(),
+			author.String(),
 		}
+
+		// If toggling between blocks, show truncated Block Information section
+		// if selectBlock {
+		// 	recordVariables = []string{
+		// 		fmt.Sprintf("%d", bs[j].Number()),
+		// 		ut.Format("02 Jan 06 15:04:05"),
+		// 		fmt.Sprintf("%ss", blockTime),
+		// 		fmt.Sprintf("%d", len(bs[j].Transactions())),
+		// 		fmt.Sprintf("%d", bs[j].GasUsed()),
+		// 		metrics.TruncateHexString(bs[j].Hash().String(), 14),
+		// 		metrics.TruncateHexString(author.String(), 14),
+		// 	}
+		// }
 
 		record := " "
 		for i := 0; i < len(recordVariables)-1; i++ {
@@ -382,7 +402,7 @@ func GetSimpleReceipt(ctx context.Context, rpc *ethrpc.Client, tx rpctypes.PolyT
 	return fields
 }
 
-func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transactionList *widgets.List, transactionInformationList *widgets.List, transactionInfo *widgets.Table, grid *ui.Grid, blockGrid *ui.Grid, transactionGrid *ui.Grid, termUi UiSkeleton) {
+func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transactionList *widgets.List, transactionInformationList *widgets.List, transactionInfo *widgets.Table, grid *ui.Grid, selectGrid *ui.Grid, blockGrid *ui.Grid, transactionGrid *ui.Grid, termUi UiSkeleton) {
 	// help := widgets.NewParagraph()
 	// help.Title = "Block Headers"
 	// help.Text = "Use the arrow keys to scroll through the transactions. Press <Esc> to go back to the explorer view"
@@ -437,6 +457,7 @@ func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 	slg4.Title = "Gas Used"
 
 	grid = ui.NewGrid()
+	selectGrid = ui.NewGrid()
 	blockGrid = ui.NewGrid()
 	transactionGrid = ui.NewGrid()
 
@@ -480,9 +501,38 @@ func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 			ui.NewCol(1.0/5, slg4),
 		),
 
+		// ui.NewRow(5.0/10,
+		// 	ui.NewCol(3.0/5, blockList),
+		// 	ui.NewCol(2.0/5, blockInfo),
+		// ),
+
+		ui.NewRow(5.0/10,
+			ui.NewCol(5.0/5, blockList),
+		),
+
+		ui.NewRow(2.0/10,
+			ui.NewCol(5.0/5, transactionInfo),
+		),
+	)
+
+	selectGrid.Set(
+		ui.NewRow(1.0/10, termUi.Current),
+
+		ui.NewRow(2.0/10,
+			ui.NewCol(1.0/5, slg0),
+			ui.NewCol(1.0/5, slg1),
+			ui.NewCol(1.0/5, slg2),
+			ui.NewCol(1.0/5, slg3),
+			ui.NewCol(1.0/5, slg4),
+		),
+
 		ui.NewRow(5.0/10,
 			ui.NewCol(3.0/5, blockList),
 			ui.NewCol(2.0/5, blockInfo),
+		),
+
+		ui.NewRow(5.0/10,
+			ui.NewCol(5.0/5, blockList),
 		),
 
 		ui.NewRow(2.0/10,
