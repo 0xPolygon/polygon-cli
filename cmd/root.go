@@ -24,7 +24,6 @@ import (
 	"github.com/maticnetwork/polygon-cli/cmd/mnemonic"
 	"github.com/maticnetwork/polygon-cli/cmd/monitor"
 	"github.com/maticnetwork/polygon-cli/cmd/nodekey"
-	"github.com/maticnetwork/polygon-cli/cmd/rpc"
 	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz"
 	"github.com/maticnetwork/polygon-cli/cmd/signer"
 	"github.com/maticnetwork/polygon-cli/cmd/version"
@@ -121,7 +120,6 @@ func NewPolycliCommand() *cobra.Command {
 		nodekey.NodekeyCmd,
 		p2p.P2pCmd,
 		parseethwallet.ParseETHWalletCmd,
-		rpc.RpcCmd,
 		rpcfuzz.RPCFuzzCmd,
 		signer.SignerCmd,
 		version.VersionCmd,

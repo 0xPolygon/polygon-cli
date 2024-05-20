@@ -4,7 +4,7 @@ Smart contracts used to perform different types of tests:
 
 - `tester/` to call various opcodes, precompiles, and store random data with `LoadTester` and test revert reason string with `ConformanceTester`.
 - `tokens/` to perform ERC20 transfers or ERC721 mints for example.
-- Other: `asm/` and `yul/`, contracts written in other languages than Solidity.
+- Other: `asm/` contracts written in other languages than Solidity.
 
 ## Generate go bindings
 
