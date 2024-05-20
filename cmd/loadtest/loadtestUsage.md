@@ -66,7 +66,7 @@ $ polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 50
 
 ### Load Test Contract
 
-The codebase has a contract that used for load testing. It's written in Yul and Solidity. The workflow for modifying this contract is.
+The codebase has a contract that used for load testing. It's written in Solidity. The workflow for modifying this contract is.
 
 1. Make changes to <file:contracts/LoadTester.sol>
 2. Compile the contracts:
