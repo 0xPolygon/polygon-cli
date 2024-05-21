@@ -484,7 +484,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		blockTable.TextStyle = termui.NewStyle(termui.ColorWhite)
 		blockTable.SelectedRowStyle = termui.NewStyle(termui.ColorWhite, termui.ColorRed, termui.ModifierBold)
 		transactionColumnRatio := []int{30, 5, 20, 20, 5, 10}
-		if blockTable.SelectedRow > 0 && blockTable.SelectedRow <= len(blockTable.Rows) {
+		if blockTable.SelectedRow > 0 && blockTable.SelectedRow <= len(blockTable.Rows) && (len(renderedBlocks)-blockTable.SelectedRow) >= 0 {
 			// Only changed the selected block when the user presses the up down keys.
 			// Otherwise this will adjust when the table is updated automatically.
 			if setBlock {
