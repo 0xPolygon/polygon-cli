@@ -394,25 +394,19 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			// TODO add some help context?
 		} else if currentMode == monitorModeSelectBlock {
 
-			termui.Clear()
+			rows, title := ui.GetSelectedBlocksList(renderedBlocks)
+			blockTable.Rows = rows
+			blockTable.Title = title
+
+			// in monitorSelectModeTransaction, blocks will always be selected
+			transactionColumnRatio := []int{30, 5, 20, 20, 5, 10}
+			ms.SelectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
+			blockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
+			transactionInfo.ColumnWidths = getColumnWidths(transactionColumnRatio, transactionInfo.Dx())
+			transactionInfo.Rows = ui.GetBlockTxTable(ms.SelectedBlock, ms.ChainID)
+			transactionInfo.Title = fmt.Sprintf("Latest Transactions for Block #%s", ms.SelectedBlock.Number().String())
+
 			termui.Render(selectGrid)
-
-			log.Debug().
-				Int("skeleton.TransactionList.SelectedRow", transactionList.SelectedRow).
-				Msg("Redrawing block mode")
-
-			if setBlock {
-				log.Debug().
-					Int("blockTable.SelectedRow", blockTable.SelectedRow).
-					Int("renderedBlocks", len(renderedBlocks)).
-					Msg("setBlock")
-
-				ms.SelectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
-				blockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
-
-				setBlock = false
-				log.Debug().Uint64("blockNumber", ms.SelectedBlock.Number().Uint64()).Msg("Selected block changed")
-			}
 			return
 		} else if currentMode == monitorModeBlock {
 			// render a block
@@ -508,7 +502,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		blockTable.TextStyle = termui.NewStyle(termui.ColorWhite)
 		blockTable.SelectedRowStyle = termui.NewStyle(termui.ColorWhite, termui.ColorRed, termui.ModifierBold)
 		transactionColumnRatio := []int{30, 5, 20, 20, 5, 10}
-		// if blockTable.SelectedRow > 0 && blockTable.SelectedRow <= len(blockTable.Rows) {
 		if blockTable.SelectedRow > 0 && blockTable.SelectedRow <= len(blockTable.Rows) {
 			// Only changed the selected block when the user presses the up down keys.
 			// Otherwise this will adjust when the table is updated automatically.
@@ -539,9 +532,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			}
 		}
 
-		// termui.Render(selectGrid)
 		termui.Render(grid)
-
 	}
 
 	currentBn := ms.HeadBlock
@@ -614,12 +605,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					currentMode = monitorModeSelectBlock
 					break
 				}
-
-				// // Dynamic UI with Block Information column only appearing when blocks selected
-				// if blockTable.SelectedRow != 0 {
-				// 	currentMode = monitorModeSelectBlock
-				// 	setBlock = true
-				// }
 
 				if e.ID == "<Down>" {
 					log.Debug().
