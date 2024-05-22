@@ -277,7 +277,7 @@ func GetSimpleBlockFields(block rpctypes.PolyBlock) []string {
 	parentHash := fmt.Sprintf("Parent Hash: %s", block.ParentHash())
 	uncleHash := fmt.Sprintf("Uncle Hash: %s", block.UncleHash())
 	stateRoot := fmt.Sprintf("State Root: %s", block.Root())
-	txHash := fmt.Sprintf("Tx Hash: %s", block.TxHash())
+	txRoot := fmt.Sprintf("Tx Root: %s", block.TxRoot())
 	nonce := fmt.Sprintf("Nonce: %d", block.Nonce())
 
 	maxWidthCol1 := max(len(blockHeight), len(transactions), len(difficulty), len(size), len(gasUsed), len(baseFee), len(hash), len(stateRoot))
@@ -299,7 +299,7 @@ func GetSimpleBlockFields(block rpctypes.PolyBlock) []string {
 		fmt.Sprintf("%s  %s", gasUsed, extraData),
 		fmt.Sprintf("%s  %s", baseFee, parentHash),
 		fmt.Sprintf("%s  %s", hash, uncleHash),
-		fmt.Sprintf("%s  %s", stateRoot, txHash),
+		fmt.Sprintf("%s  %s", stateRoot, txRoot),
 		nonce,
 	}
 
