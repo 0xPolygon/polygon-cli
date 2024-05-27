@@ -1,7 +1,6 @@
 package signer
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -691,16 +690,6 @@ func (g *GCPKMS) Sign(ctx context.Context, tx *types.Transaction) error {
 	ethSig = append(ethSig, bigIntTo32Bytes(parsedSig.S)...)
 	ethSig = append(ethSig, 0)
 
-	// Feels like a hack, but I cna't figure out a better way to determine the recovery ID than this since google isn't returning it. More research is required
-	pubKey, err := crypto.Ecrecover(digest.Bytes(), ethSig)
-	if err != nil || !bytes.Equal(pubKey, gcpPubKey.PublicKey.Bytes) {
-		ethSig[64] = 1
-	}
-	pubKey, err = crypto.Ecrecover(digest.Bytes(), ethSig)
-	if err != nil || !bytes.Equal(pubKey, gcpPubKey.PublicKey.Bytes) {
-		return fmt.Errorf("unable to determine recovery identifier value: %w", err)
-	}
-	// pubKeyAddr := common.BytesToAddress(crypto.Keccak256(pubKey[1:])[12:])
 	pubKeyAddr := gcpPubKeyToEthAddress(gcpPubKey)
 	log.Info().
 		Str("hexSignature", hex.EncodeToString(result.Signature)).
@@ -708,7 +697,6 @@ func (g *GCPKMS) Sign(ctx context.Context, tx *types.Transaction) error {
 		Msg("Got signature")
 
 	log.Info().
-		Str("recoveredPub", hex.EncodeToString(pubKey)).
 		Str("gcpPub", hex.EncodeToString(gcpPubKey.PublicKey.Bytes)).
 		Str("ethAddress", pubKeyAddr.String()).
 		Msg("Recovered pub key")
