@@ -292,14 +292,23 @@ func GetSimpleBlockFields(block rpctypes.PolyBlock) []string {
 	stateRoot = fmt.Sprintf("%-*s", maxWidthCol1, stateRoot)
 
 	lines := []string{
-		fmt.Sprintf("%s  %s", blockHeight, timestamp),
-		fmt.Sprintf("%s  %s", transactions, authorInfo),
-		fmt.Sprintf("%s  %s", difficulty, uncles),
-		fmt.Sprintf("%s  %s", size, gasLimit),
-		fmt.Sprintf("%s  %s", gasUsed, extraData),
-		fmt.Sprintf("%s  %s", baseFee, parentHash),
-		fmt.Sprintf("%s  %s", hash, uncleHash),
-		fmt.Sprintf("%s  %s", stateRoot, txRoot),
+		fmt.Sprintf("%s", blockHeight),
+		fmt.Sprintf("%s", timestamp),
+		fmt.Sprintf("%s", transactions),
+		fmt.Sprintf("%s", authorInfo),
+		fmt.Sprintf("%s", difficulty),
+		fmt.Sprintf("%s", uncles),
+		fmt.Sprintf("%s", size),
+		fmt.Sprintf("%s", gasLimit),
+		fmt.Sprintf("%s", gasUsed),
+		fmt.Sprintf("%s", extraData),
+		fmt.Sprintf("%s", baseFee),
+		fmt.Sprintf("%s", parentHash),
+		fmt.Sprintf("%s", hash),
+		fmt.Sprintf("%s", uncleHash),
+		fmt.Sprintf("%s", stateRoot),
+		fmt.Sprintf("%s", txRoot),
+		fmt.Sprintf("%s", size),
 		nonce,
 	}
 
