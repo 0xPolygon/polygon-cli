@@ -393,7 +393,23 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		if currentMode == monitorModeHelp {
 			// TODO add some help context?
 		} else if currentMode == monitorModeSelectBlock {
-
+			toBlockNumber := ms.TopDisplayedBlock
+			fromBlockNumber := new(big.Int).Sub(toBlockNumber, big.NewInt(int64(windowSize-1)))
+			if fromBlockNumber.Cmp(zero) < 0 {
+				fromBlockNumber.SetInt64(0) // We cannot have block numbers less than 0.
+			}
+			renderedBlocksTemp := make([]rpctypes.PolyBlock, 0, windowSize)
+			ms.BlocksLock.RLock()
+			for i := new(big.Int).Set(fromBlockNumber); i.Cmp(toBlockNumber) <= 0; i.Add(i, big.NewInt(1)) {
+				if block, ok := ms.BlockCache.Get(i.String()); ok {
+					renderedBlocksTemp = append(renderedBlocksTemp, block.(rpctypes.PolyBlock))
+				} else {
+					// If for some reason the block is not in the cache after fetching, handle this case.
+					log.Warn().Str("blockNumber", i.String()).Msg("Block should be in cache but is not")
+				}
+			}
+			ms.BlocksLock.RUnlock()
+			renderedBlocks = renderedBlocksTemp
 			rows, title := ui.GetSelectedBlocksList(renderedBlocks)
 			blockTable.Rows = rows
 			blockTable.Title = title
@@ -406,6 +422,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			transactionInfo.Rows = ui.GetBlockTxTable(ms.SelectedBlock, ms.ChainID)
 			transactionInfo.Title = fmt.Sprintf("Latest Transactions for Block #%s", ms.SelectedBlock.Number().String())
 
+			termui.Clear()
 			termui.Render(selectGrid)
 			return
 		} else if currentMode == monitorModeBlock {
@@ -644,7 +661,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					}
 					// blockTable.SelectedRow += 1
 					blockTable.ScrollDown()
-
 					setBlock = true
 				} else if e.ID == "<Up>" {
 					log.Debug().Int("blockTable.SelectedRow", blockTable.SelectedRow).Int("windowSize", windowSize).Msg("Up")
