@@ -82,16 +82,6 @@ func GetCurrentBlockInfo(headBlock *big.Int, gasPrice *big.Int, peerCount uint64
 	return formattedInfo.String()
 }
 
-func max(nums ...int) int {
-	maxNum := nums[0]
-	for _, num := range nums[1:] {
-		if num > maxNum {
-			maxNum = num
-		}
-	}
-	return maxNum
-}
-
 func GetBlocksList(blocks []rpctypes.PolyBlock) ([]string, string) {
 	bs := rpctypes.SortableBlocks(blocks)
 	sort.Sort(bs)
@@ -280,26 +270,24 @@ func GetSimpleBlockFields(block rpctypes.PolyBlock) []string {
 	txRoot := fmt.Sprintf("Tx Root: %s", block.TxRoot())
 	nonce := fmt.Sprintf("Nonce: %d", block.Nonce())
 
-	maxWidthCol1 := max(len(blockHeight), len(transactions), len(difficulty), len(size), len(gasUsed), len(baseFee), len(hash), len(stateRoot))
-
-	blockHeight = fmt.Sprintf("%-*s", maxWidthCol1, blockHeight)
-	transactions = fmt.Sprintf("%-*s", maxWidthCol1, transactions)
-	difficulty = fmt.Sprintf("%-*s", maxWidthCol1, difficulty)
-	size = fmt.Sprintf("%-*s", maxWidthCol1, size)
-	gasUsed = fmt.Sprintf("%-*s", maxWidthCol1, gasUsed)
-	baseFee = fmt.Sprintf("%-*s", maxWidthCol1, baseFee)
-	hash = fmt.Sprintf("%-*s", maxWidthCol1, hash)
-	stateRoot = fmt.Sprintf("%-*s", maxWidthCol1, stateRoot)
-
 	lines := []string{
-		fmt.Sprintf("%s  %s", blockHeight, timestamp),
-		fmt.Sprintf("%s  %s", transactions, authorInfo),
-		fmt.Sprintf("%s  %s", difficulty, uncles),
-		fmt.Sprintf("%s  %s", size, gasLimit),
-		fmt.Sprintf("%s  %s", gasUsed, extraData),
-		fmt.Sprintf("%s  %s", baseFee, parentHash),
-		fmt.Sprintf("%s  %s", hash, uncleHash),
-		fmt.Sprintf("%s  %s", stateRoot, txRoot),
+		blockHeight,
+		timestamp,
+		transactions,
+		authorInfo,
+		difficulty,
+		uncles,
+		size,
+		gasLimit,
+		gasUsed,
+		extraData,
+		baseFee,
+		parentHash,
+		hash,
+		uncleHash,
+		stateRoot,
+		txRoot,
+		size,
 		nonce,
 	}
 
