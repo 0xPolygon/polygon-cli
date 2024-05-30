@@ -20,9 +20,6 @@ discovering peers.
 
 #### Mainnet
 
-To run a Polygon Mainnet sensor, copy the `genesis.json` from
-[here][mainnet-genesis].
-
 ```bash
 polycli p2p sensor nodes.json \
   --bootnodes "enode://b8f1cc9c5d4403703fbf377116469667d2b1823c0daf16b7250aa576bacf399e42c3930ccfcb02c5df6879565a2b8931335565f0e8d3f8e72385ecf4a4bf160a@3.36.224.80:30303,enode://8729e0c825f3d9cad382555f3e46dcff21af323e89025a0e6312df541f4a9e73abfa562d64906f5e59c51fe6f0501b3e61b07979606c56329c020ed739910759@54.194.245.5:30303" \
@@ -33,17 +30,26 @@ polycli p2p sensor nodes.json \
 
 #### Mumbai
 
-To run a Polygon Mumbai sensor, copy the `genesis.json` from
-[here][mumbai-genesis].
-
 ```bash
-polycli p2p sensor nodes.json \
+polycli p2p sensor mumbai-nodes.json \
   --bootnodes "enode://bdcd4786a616a853b8a041f53496d853c68d99d54ff305615cd91c03cd56895e0a7f6e9f35dbf89131044e2114a9a782b792b5661e3aff07faf125a98606a071@43.200.206.40:30303,enode://209aaf7ed549cf4a5700fd833da25413f80a1248bd3aa7fe2a87203e3f7b236dd729579e5c8df61c97bf508281bae4969d6de76a7393bcbd04a0af70270333b3@54.216.248.9:30303" \
   --network-id 80001 \
   --sensor-id sensor \
   --rpc "https://polygon-mumbai-bor.publicnode.com" \
   --genesis-hash 0x7b66506a9ebdbf30d32b43c5f15a3b1216269a1ec3a75aa3182b86176a2b1ca7 \
   --fork-id 0c015a91
+```
+
+#### Amoy
+
+```bash
+polycli p2p sensor amoy-nodes.json \
+  --bootnodes "enode://bce861be777e91b0a5a49d58a51e14f32f201b4c6c2d1fbea6c7a1f14756cbb3f931f3188d6b65de8b07b53ff28d03b6e366d09e56360d2124a9fc5a15a0913d@54.217.171.196:30303,enode://4a3dc0081a346d26a73d79dd88216a9402d2292318e2db9947dbc97ea9c4afb2498dc519c0af04420dc13a238c279062da0320181e7c1461216ce4513bfd40bf@13.251.184.185:30303" \
+  --network-id 80002 \
+  --sensor-id sensor \
+  --rpc "https://rpc-amoy.polygon.technology" \
+  --genesis-hash 0x7202b2b53c5a0836e773e319d18922cc756dd67432f9a1f65352b61f4406c697 \
+  --fork-id b4f6ec4f
 ```
 
 ### Crawl
@@ -58,6 +64,4 @@ polycli p2p crawl nodes.json \
   --network-id 137
 ```
 
-[mainnet-genesis]: https://github.com/maticnetwork/bor/blob/master/builder/files/genesis-mainnet-v1.json
-[mumbai-genesis]: https://github.com/maticnetwork/bor/blob/master/builder/files/genesis-testnet-v4.json
 [bootnodes]: https://wiki.polygon.technology/docs/pos/operate/node/full-node-binaries/#configure-bor-seeds-mainnet
