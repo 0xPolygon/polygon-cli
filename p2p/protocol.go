@@ -37,12 +37,13 @@ type conn struct {
 	// requests is used to store the request ID and the block hash. This is used
 	// when fetching block bodies because the eth protocol block bodies do not
 	// contain information about the block hash.
-	requests   *list.List
-	requestNum uint64
+	requests      *list.List
+	requestNum    uint64
+	requestsMutex *sync.Mutex
 
-	// oldestBlock stores the first block the sensor has seen so when fetching
+	// oldestBlock stores the first block the sensor has seen. When fetching
 	// parent blocks, it does not request blocks older than this.
-	oldestBlock *types.Header
+	oldestBlock *big.Int
 }
 
 // EthProtocolOptions is the options used when creating a new eth protocol.
@@ -80,16 +81,17 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 		Length:  17,
 		Run: func(p *ethp2p.Peer, rw ethp2p.MsgReadWriter) error {
 			c := conn{
-				sensorID:   opts.SensorID,
-				node:       p.Node(),
-				logger:     log.With().Str("peer", p.Node().URLv4()).Logger(),
-				rw:         rw,
-				db:         opts.Database,
-				requests:   list.New(),
-				requestNum: 0,
-				head:       opts.Head,
-				headMutex:  opts.HeadMutex,
-				counter:    opts.MsgCounter,
+				sensorID:      opts.SensorID,
+				node:          p.Node(),
+				logger:        log.With().Str("peer", p.Node().URLv4()).Logger(),
+				rw:            rw,
+				db:            opts.Database,
+				requests:      list.New(),
+				requestNum:    0,
+				requestsMutex: &sync.Mutex{},
+				head:          opts.Head,
+				headMutex:     opts.HeadMutex,
+				counter:       opts.MsgCounter,
 			}
 
 			c.headMutex.RLock()
@@ -111,6 +113,11 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 			// across all connections and written to the nodes.json file.
 			opts.Peers <- p.Node()
 			ctx := opts.Context
+
+			// Handle request retries and clean up.
+			done := make(chan struct{})
+			defer close(done)
+			go c.handleRequests(done)
 
 			// Handle all the of the messages here.
 			for {
@@ -159,6 +166,57 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				}
 			}
 		},
+	}
+}
+
+// handleRequests will periodically check for expired or completed requests and
+// retry requests if they haven't been completed.
+func (c *conn) handleRequests(done chan struct{}) {
+	timer := time.NewTimer(2 * time.Second)
+
+	for {
+		select {
+		case <-done:
+			return
+		case <-timer.C:
+			c.requestsMutex.Lock()
+			for e := c.requests.Front(); e != nil; e = e.Next() {
+				r := e.Value.(request)
+
+				// Remove the request if it has expired or completed.
+				if time.Since(r.time).Minutes() > 10 || (r.hasHeader && r.hasBody) {
+					c.requests.Remove(e)
+					continue
+				}
+
+				// Retry requesting the missing block header.
+				if !r.hasHeader {
+					headersRequest := &GetBlockHeaders{
+						GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+							Origin: eth.HashOrNumber{Hash: r.hash},
+							Amount: 1,
+						},
+					}
+
+					if err := ethp2p.Send(c.rw, eth.GetBlockHeadersMsg, headersRequest); err != nil {
+						c.logger.Error().Err(err).Msg("Failed to retry sending block headers request")
+					}
+				}
+
+				// Retry requesting the missing block body.
+				if !r.hasBody {
+					bodiesRequest := &GetBlockBodies{
+						RequestId:             r.requestID,
+						GetBlockBodiesRequest: []common.Hash{r.hash},
+					}
+
+					if err := ethp2p.Send(c.rw, eth.GetBlockBodiesMsg, bodiesRequest); err != nil {
+						c.logger.Error().Err(err).Msg("Failed to retry sending block bodies request")
+					}
+				}
+			}
+			c.requestsMutex.Unlock()
+		}
 	}
 }
 
@@ -227,6 +285,15 @@ func (c *conn) readStatus(packet *eth.StatusPacket) error {
 // getBlockData will send a GetBlockHeaders and GetBlockBodies request to the
 // peer. It will return an error if the sending either of the requests failed.
 func (c *conn) getBlockData(hash common.Hash) error {
+	c.requestsMutex.Lock()
+	c.requestNum++
+	c.requests.PushBack(request{
+		requestID: c.requestNum,
+		hash:      hash,
+		time:      time.Now(),
+	})
+	c.requestsMutex.Unlock()
+
 	headersRequest := &GetBlockHeaders{
 		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
 			// Providing both the hash and number will result in a `both origin
@@ -239,21 +306,6 @@ func (c *conn) getBlockData(hash common.Hash) error {
 	if err := ethp2p.Send(c.rw, eth.GetBlockHeadersMsg, headersRequest); err != nil {
 		return err
 	}
-
-	for e := c.requests.Front(); e != nil; e = e.Next() {
-		r := e.Value.(request)
-
-		if time.Since(r.time).Minutes() > 10 {
-			c.requests.Remove(e)
-		}
-	}
-
-	c.requestNum++
-	c.requests.PushBack(request{
-		requestID: c.requestNum,
-		hash:      hash,
-		time:      time.Now(),
-	})
 
 	bodiesRequest := &GetBlockBodies{
 		RequestId:             c.requestNum,
@@ -272,11 +324,11 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 
 	if c.oldestBlock == nil {
 		c.logger.Info().Interface("block", header).Msg("Setting oldest block")
-		c.oldestBlock = header
+		c.oldestBlock = header.Number
 		return nil
 	}
 
-	if c.db.HasBlock(ctx, header.ParentHash) || header.Number.Cmp(c.oldestBlock.Number) != 1 {
+	if c.db.HasBlock(ctx, header.ParentHash) || header.Number.Cmp(c.oldestBlock) != 1 {
 		return nil
 	}
 
@@ -350,6 +402,16 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 		if err := c.getParentBlock(ctx, header); err != nil {
 			return err
 		}
+
+		c.requestsMutex.Lock()
+		for e := c.requests.Front(); e != nil; e = e.Next() {
+			r := e.Value.(request)
+
+			if r.hash.Cmp(header.Hash()) == 0 {
+				r.hasHeader = true
+			}
+		}
+		c.requestsMutex.Unlock()
 	}
 
 	c.db.WriteBlockHeaders(ctx, headers)
@@ -385,15 +447,17 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	c.counter.WithLabelValues(fmt.Sprint(msg.Code), packet.Name()).Add(float64(len(packet.BlockBodiesResponse)))
 
 	var hash *common.Hash
+
+	c.requestsMutex.Lock()
 	for e := c.requests.Front(); e != nil; e = e.Next() {
 		r := e.Value.(request)
 
 		if r.requestID == packet.RequestId {
 			hash = &r.hash
-			c.requests.Remove(e)
-			break
+			r.hasBody = true
 		}
 	}
+	c.requestsMutex.Unlock()
 
 	if hash == nil {
 		c.logger.Warn().Msg("No block hash found for block body")

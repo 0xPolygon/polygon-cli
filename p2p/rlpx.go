@@ -143,6 +143,8 @@ type request struct {
 	requestID uint64
 	hash      common.Hash
 	time      time.Time
+	hasBody   bool
+	hasHeader bool
 }
 
 // ReadAndServe reads messages from peers and writes it to a database.
