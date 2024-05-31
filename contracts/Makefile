@@ -43,5 +43,13 @@ gen-tokens-go-bindings: ## Generate go bindings for the tokens contracts.
 	abigen --abi ../bindings/tokens/ERC721.abi --bin ../bindings/tokens/ERC721.bin --pkg tokens --type ERC721 --out ../bindings/tokens/ERC721.go
 	@echo "✅ tokens/ERC721.go generated"
 
+.PHONY: gen-ulxly-go-bindings
+gen-ulxly-go-bindings:
+	mkdir -p ../bindings/ulxly/
+	cat ./out/PolygonZkEVMBridgeV2.sol/PolygonZkEVMBridgeV2.json | jq -r '.abi'             > ../bindings/ulxly/PolygonZkEVMBridgeV2.abi
+	cat ./out/PolygonZkEVMBridgeV2.sol/PolygonZkEVMBridgeV2.json | jq -r '.bytecode.object' > ../bindings/ulxly/PolygonZkEVMBridgeV2.bin
+	abigen --abi ../bindings/ulxly/PolygonZkEVMBridgeV2.abi --bin ../bindings/ulxly/PolygonZkEVMBridgeV2.bin --pkg ulxly --type ulxly --out ../bindings/ulxly/PolygonZkEVMBridgeV2.go
+	@echo "✅ ulxly/PolygonZkEVMBridgeV2.go generated"
+
 .PHONY: gen-go-bindings
 gen-go-bindings: build gen-funder-go-bindings gen-tester-go-bindings gen-tokens-go-bindings ## Generate go bindings.
