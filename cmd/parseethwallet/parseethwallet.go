@@ -41,8 +41,9 @@ var ParseETHWalletCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// it would be nice to have a generic reader
 		if *inputRawHexPrivateKey != "" {
+			trimmedHexPrivateKey := strings.TrimPrefix(*inputRawHexPrivateKey, "0x")
 			ks := keystore.NewKeyStore(*inputKeyStoreDirectory, keystore.StandardScryptN, keystore.StandardScryptP)
-			pk, err := crypto.HexToECDSA(*inputRawHexPrivateKey)
+			pk, err := crypto.HexToECDSA(trimmedHexPrivateKey)
 			if err != nil {
 				return err
 			}

@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	// ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 
 	"github.com/rs/zerolog/log"
@@ -286,7 +285,7 @@ type (
 		ParentHash() ethcommon.Hash
 		UncleHash() ethcommon.Hash
 		Root() ethcommon.Hash
-		TxHash() ethcommon.Hash
+		TxRoot() ethcommon.Hash
 		Nonce() uint64
 		String() string
 		MarshalJSON() ([]byte, error)
@@ -443,7 +442,7 @@ func (i *implPolyBlock) UncleHash() ethcommon.Hash {
 func (i *implPolyBlock) Root() ethcommon.Hash {
 	return i.inner.StateRoot.ToHash()
 }
-func (i *implPolyBlock) TxHash() ethcommon.Hash {
+func (i *implPolyBlock) TxRoot() ethcommon.Hash {
 	return i.inner.TransactionsRoot.ToHash()
 }
 func (i *implPolyBlock) Extra() []byte {
