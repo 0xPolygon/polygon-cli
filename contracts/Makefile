@@ -51,5 +51,11 @@ gen-ulxly-go-bindings:
 	abigen --abi ../bindings/ulxly/PolygonZkEVMBridgeV2.abi --bin ../bindings/ulxly/PolygonZkEVMBridgeV2.bin --pkg ulxly --type ulxly --out ../bindings/ulxly/PolygonZkEVMBridgeV2.go
 	@echo "✅ ulxly/PolygonZkEVMBridgeV2.go generated"
 
+	cat ./out/PolygonZkEVMBridge.sol/PolygonZkEVMBridge.json | jq -r '.abi'             > ../bindings/ulxly/PolygonZkEVMBridge.abi
+	cat ./out/PolygonZkEVMBridge.sol/PolygonZkEVMBridge.json | jq -r '.bytecode.object' > ../bindings/ulxly/PolygonZkEVMBridge.bin
+	abigen --abi ../bindings/ulxly/PolygonZkEVMBridge.abi --bin ../bindings/ulxly/PolygonZkEVMBridge.bin --pkg ulxly --type legacy --out ../bindings/ulxly/PolygonZkEVMBridge.go
+	@echo "✅ ulxly/PolygonZkEVMBridge.go generated"
+
+
 .PHONY: gen-go-bindings
 gen-go-bindings: build gen-funder-go-bindings gen-tester-go-bindings gen-tokens-go-bindings ## Generate go bindings.

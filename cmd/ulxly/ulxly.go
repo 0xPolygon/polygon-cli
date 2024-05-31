@@ -7,16 +7,18 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
+	// note - this won't deal with the complexity of handling deposits prior to the ulxly
 	"github.com/maticnetwork/polygon-cli/bindings/ulxly"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
 type uLxLyArgs struct {
-	FromBlock     *int64
-	ToBlock       *int64
+	FromBlock     *uint64
+	ToBlock       *uint64
 	RPCURL        *string
 	BridgeAddress *string
+	FilterSize    *uint64
 }
 
 var ulxlyInputArgs uLxLyArgs
@@ -28,6 +30,7 @@ var ULxLyCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 }
 
+// polycli ulxly deposits --bridge-address 0x528e26b25a34a4A5d0dbDa1d57D318153d2ED582 --rpc-url https://sepolia-rpc.invalid --from-block 4880876 --to-block 6015235 --filter-size 9999
 var DepositsCmd = &cobra.Command{
 	Use:     "deposits",
 	Short:   "get a range of deposits",
@@ -44,31 +47,43 @@ var DepositsCmd = &cobra.Command{
 		}
 		defer rpc.Close()
 		ec := ethclient.NewClient(rpc)
-		bridge, err := ulxly.NewUlxly(common.HexToAddress(*ulxlyInputArgs.BridgeAddress), ec)
+
+		bridgeV2, err := ulxly.NewUlxly(common.HexToAddress(*ulxlyInputArgs.BridgeAddress), ec)
 		if err != nil {
 			return err
 		}
-		fromBlock := uint64(*ulxlyInputArgs.FromBlock)
-		toBlock := uint64(*ulxlyInputArgs.ToBlock)
-		opts := bind.FilterOpts{
-			Start:   fromBlock,
-			End:     &toBlock,
-			Context: ctx,
-		}
-		evtIterator, err := bridge.FilterBridgeEvent(&opts)
-		if err != nil {
-			return err
-		}
-		defer evtIterator.Close()
-		for evtIterator.Next() {
-			evt := evtIterator.Event
-			log.Info().Uint32("deposit", evt.DepositCount).Msg("Found Deposit")
-			jBytes, err := json.Marshal(evt)
+		fromBlock := *ulxlyInputArgs.FromBlock
+		toBlock := *ulxlyInputArgs.ToBlock
+		currentBlock := fromBlock
+		for currentBlock < toBlock {
+			endBlock := currentBlock + *ulxlyInputArgs.FilterSize
+			if endBlock > toBlock {
+				endBlock = toBlock
+			}
+
+			opts := bind.FilterOpts{
+				Start:   currentBlock,
+				End:     &endBlock,
+				Context: ctx,
+			}
+			evtV2Iterator, err := bridgeV2.FilterBridgeEvent(&opts)
 			if err != nil {
 				return err
 			}
-			fmt.Println(string(jBytes))
+
+			for evtV2Iterator.Next() {
+				evt := evtV2Iterator.Event
+				log.Info().Uint32("deposit", evt.DepositCount).Uint64("block-number", evt.Raw.BlockNumber).Msg("Found ulxly Deposit")
+				jBytes, err := json.Marshal(evt)
+				if err != nil {
+					return err
+				}
+				fmt.Println(string(jBytes))
+			}
+			evtV2Iterator.Close()
+			currentBlock = endBlock
 		}
+
 		return nil
 	},
 }
@@ -77,18 +92,18 @@ func checkDepositArgs(cmd *cobra.Command, args []string) error {
 	if *ulxlyInputArgs.BridgeAddress == "" {
 		return fmt.Errorf("please provide the bridge address")
 	}
+	if *ulxlyInputArgs.FromBlock > *ulxlyInputArgs.ToBlock {
+		return fmt.Errorf("the from block should be less than the to block")
+	}
 	return nil
 }
 
 func init() {
 	ULxLyCmd.AddCommand(DepositsCmd)
-	//   - When blockNr is -1 the chain pending header is returned.
-	//   - When blockNr is -2 the chain latest header is returned.
-	//   - When blockNr is -3 the chain finalized header is returned.
-	//   - When blockNr is -4 the chain safe header is returned.
-	ulxlyInputArgs.FromBlock = DepositsCmd.PersistentFlags().Int64("from-block", 0, "The block height to start query at.")
-	ulxlyInputArgs.ToBlock = DepositsCmd.PersistentFlags().Int64("to-block", -2, "The block height to start query at.")
+	ulxlyInputArgs.FromBlock = DepositsCmd.PersistentFlags().Uint64("from-block", 0, "The block height to start query at.")
+	ulxlyInputArgs.ToBlock = DepositsCmd.PersistentFlags().Uint64("to-block", 0, "The block height to start query at.")
 	ulxlyInputArgs.RPCURL = DepositsCmd.PersistentFlags().String("rpc-url", "http://127.0.0.1:8545", "The RPC to query for events")
+	ulxlyInputArgs.FilterSize = DepositsCmd.PersistentFlags().Uint64("filter-size", 1000, "The batch size for individual filter queries")
 
 	ulxlyInputArgs.BridgeAddress = DepositsCmd.Flags().String("bridge-address", "", "The address of the lxly bridge")
 
