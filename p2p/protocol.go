@@ -37,7 +37,7 @@ type conn struct {
 	// requests is used to store the request ID and the block hash. This is used
 	// when fetching block bodies because the eth protocol block bodies do not
 	// contain information about the block hash.
-	requests   chan request
+	requests   chan *request
 	requestNum uint64
 
 	receivedHeader chan common.Hash
@@ -89,7 +89,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				logger:         log.With().Str("peer", p.Node().URLv4()).Logger(),
 				rw:             rw,
 				db:             opts.Database,
-				requests:       make(chan request),
+				requests:       make(chan *request),
 				requestNum:     0,
 				receivedHeader: make(chan common.Hash),
 				receivedBody:   make(chan uint64),
@@ -188,14 +188,15 @@ func (c *conn) handleRequests(done chan struct{}) {
 			requests.PushBack(req)
 		case <-c.receivedHeader:
 			for e := requests.Front(); e != nil; e = e.Next() {
-				r := e.Value.(request)
+				r := e.Value.(*request)
 				r.hasHeader = true
+				break
 			}
 		case id := <-c.receivedBody:
 			var hash *common.Hash
 
 			for e := requests.Front(); e != nil; e = e.Next() {
-				r := e.Value.(request)
+				r := e.Value.(*request)
 
 				if r.requestID == id {
 					r.hasBody = true
@@ -206,8 +207,9 @@ func (c *conn) handleRequests(done chan struct{}) {
 
 			c.requestHash <- hash
 		case <-timer.C:
+			c.logger.Debug().Int("requests", requests.Len()).Send()
 			for e := requests.Front(); e != nil; e = e.Next() {
-				r := e.Value.(request)
+				r := e.Value.(*request)
 
 				// Remove the request if it has expired or completed.
 				if time.Since(r.time).Minutes() > 10 || (r.hasHeader && r.hasBody) {
@@ -311,7 +313,7 @@ func (c *conn) readStatus(packet *eth.StatusPacket) error {
 // peer. It will return an error if the sending either of the requests failed.
 func (c *conn) getBlockData(hash common.Hash) error {
 	c.requestNum++
-	c.requests <- request{
+	c.requests <- &request{
 		requestID: c.requestNum,
 		hash:      hash,
 		time:      time.Now(),
