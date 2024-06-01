@@ -177,7 +177,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 // handleRequests will periodically check for expired or completed requests and
 // retry requests if they haven't been completed.
 func (c *conn) handleRequests(done chan struct{}) {
-	timer := time.NewTimer(2 * time.Second)
+	ticker := time.NewTicker(2 * time.Second)
 	requests := list.New()
 
 	for {
@@ -206,8 +206,9 @@ func (c *conn) handleRequests(done chan struct{}) {
 			}
 
 			c.requestHash <- hash
-		case <-timer.C:
-			c.logger.Debug().Int("requests", requests.Len()).Send()
+		case <-ticker.C:
+			c.logger.Info().Int("requests", requests.Len()).Msg("Handling requests")
+
 			for e := requests.Front(); e != nil; e = e.Next() {
 				r := e.Value.(*request)
 
