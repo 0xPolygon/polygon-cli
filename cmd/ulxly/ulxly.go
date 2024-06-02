@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
-	"golang.org/x/crypto/sha3"
 	"io"
 	"os"
 	"strings"
@@ -41,7 +40,7 @@ type SMT struct {
 	Data     map[string]string
 	Height   uint8
 	Count    uint64
-	Siblings [][TreeDepth]byte
+	Branches [][TreeDepth]byte
 	Root     [TreeDepth]byte
 }
 
@@ -154,13 +153,14 @@ func readDeposits(rawDeposits []byte) error {
 			return err
 		}
 		if evt.DestinationNetwork == uint32(*ulxlyInputArgs.NetworkID) {
-			smt.AddLeaf(evt)
+
 			log.Info().
 				Uint64("block-number", evt.Raw.BlockNumber).
 				Uint32("deposit-count", evt.DepositCount).
 				Str("tx-hash", evt.Raw.TxHash.String()).
 				Str("root", smt.GetRoot().String()).
 				Msg("adding event to tree")
+			smt.AddLeaf(evt)
 
 		}
 	}
@@ -172,7 +172,7 @@ func readDeposits(rawDeposits []byte) error {
 // for this deposit
 // https://sepolia.etherscan.io/tx/0xf2003cf43a205bc777bc2d22fcb05b69ebb23464b39250d164cf9b09150b7833#eventlog
 // And that seems to match a call to `getLeafValue`
-func hashDeposit(deposit *ulxly.UlxlyBridgeEvent) [TreeDepth]byte {
+func hashDeposit(deposit *ulxly.UlxlyBridgeEvent) common.Hash {
 	var res [TreeDepth]byte
 	origNet := make([]byte, 4) //nolint:gomnd
 	binary.BigEndian.PutUint32(origNet, deposit.OriginNetwork)
@@ -183,20 +183,11 @@ func hashDeposit(deposit *ulxly.UlxlyBridgeEvent) [TreeDepth]byte {
 	copy(res[:], crypto.Keccak256Hash([]byte{deposit.LeafType}, origNet, deposit.OriginAddress.Bytes(), destNet, deposit.DestinationAddress[:], deposit.Amount.FillBytes(buf[:]), metaHash.Bytes()).Bytes())
 	return res
 }
-func hash(data ...[TreeDepth]byte) [TreeDepth]byte {
-	var res [TreeDepth]byte
-	hash := sha3.NewLegacyKeccak256()
-	for _, d := range data {
-		hash.Write(d[:])
-	}
-	copy(res[:], hash.Sum(nil))
-	return res
-}
 
 func (s *SMT) Init() {
-	s.Siblings = make([][TreeDepth]byte, 32)
-	for k := range s.Siblings {
-		s.Siblings[k] = [TreeDepth]byte{}
+	s.Branches = make([][TreeDepth]byte, 32)
+	for k := range s.Branches {
+		s.Branches[k] = [TreeDepth]byte{}
 	}
 	s.Height = TreeDepth
 	s.Data = nil // TODO pick a storage data structure
@@ -207,55 +198,41 @@ func (s *SMT) Init() {
 // The first mainnet exit root for cardona is
 // 0x112b077c64ed4a22dfb0ab3c2622d6ddbf3a5423afeb05878c2c21c4cb5e65da
 func (s *SMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
-	current := hashDeposit(deposit)
-	log.Info().Str("leaf-hash", common.Bytes2Hex(current[:])).Msg("Leaf hash calculated")
-	isFilledSubTree := true // TODO ?!?!
+	leaf := hashDeposit(deposit)
+	log.Info().Str("leaf-hash", common.Bytes2Hex(leaf[:])).Msg("Leaf hash calculated")
 
-	var leaves [][][]byte
-	for h := 0; h < TreeDepth; h++ {
-		if isBitSet(deposit.DepositCount+1, uint32(h)) {
-			child := current
-			parent := hash(s.Siblings[h], child)
-			current = parent
-			leaves = append(leaves, [][]byte{parent[:], s.Siblings[h][:], child[:]})
-		} else {
-			if isFilledSubTree {
-				copy(s.Siblings[h][:], current[:])
-				isFilledSubTree = false
-			}
-			child := current
-			parent := hash(child, [TreeDepth]byte{})
-			current = parent
-			zeros := [TreeDepth]byte{}
-			leaves = append(leaves, [][]byte{parent[:], child[:], zeros[:]})
-		}
-	}
+	node := leaf
 	s.Count += 1
-	s.Root = current
+	size := s.Count
+	for height := uint64(0); height < TreeDepth; height += 1 {
+		if isBitSet(size, height) {
+			s.Branches[height] = node
+			break
+		}
+		node = crypto.Keccak256Hash(s.Branches[height][:], node[:])
+	}
+	s.Root = s.GetRoot()
 }
 func (s *SMT) GetRoot() common.Hash {
 	var node common.Hash
 	size := s.Count
-	var currentZeroHashHeight common.Hash
-
-	zeros := [TreeDepth]byte{}
+	currentZeroHashHeight := common.Hash{}
 
 	for height := 0; height < TreeDepth; height++ {
 		if ((size >> height) & 1) == 1 {
-			node = crypto.Keccak256Hash(s.Siblings[height][:], node.Bytes())
+			node = crypto.Keccak256Hash(s.Branches[height][:], node.Bytes())
 		} else {
 			node = crypto.Keccak256Hash(node.Bytes(), currentZeroHashHeight.Bytes())
 		}
-
-		currentZeroHashHeight = crypto.Keccak256Hash(zeros[:], zeros[:])
+		currentZeroHashHeight = crypto.Keccak256Hash(currentZeroHashHeight[:], currentZeroHashHeight[:])
 	}
 	return node
 }
 
 // isBitSet checks if the bit at position h in number dc is set to 1
-func isBitSet(dc uint32, h uint32) bool {
-	mask := uint32(1)
-	for i := uint32(0); i < h; i++ {
+func isBitSet(dc uint64, h uint64) bool {
+	mask := uint64(1)
+	for i := uint64(0); i < h; i++ {
 		mask *= 2
 	}
 	return dc&mask > 0
