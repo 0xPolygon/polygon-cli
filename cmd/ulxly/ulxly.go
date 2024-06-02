@@ -1,16 +1,29 @@
 package ulxly
 
 import (
+	"bufio"
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
+	"golang.org/x/crypto/sha3"
+	"io"
+	"os"
+	"strings"
+
 	// note - this won't deal with the complexity of handling deposits prior to the ulxly
 	"github.com/maticnetwork/polygon-cli/bindings/ulxly"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+)
+
+const (
+	TreeDepth = 32
 )
 
 type uLxLyArgs struct {
@@ -19,6 +32,17 @@ type uLxLyArgs struct {
 	RPCURL        *string
 	BridgeAddress *string
 	FilterSize    *uint64
+
+	InputFileName *string
+	NetworkID     *uint64
+}
+
+type SMT struct {
+	Data     map[string]string
+	Height   uint8
+	Count    uint64
+	Siblings [][TreeDepth]byte
+	Root     [TreeDepth]byte
 }
 
 var ulxlyInputArgs uLxLyArgs
@@ -87,7 +111,155 @@ var DepositsCmd = &cobra.Command{
 		return nil
 	},
 }
+var ProofCmd = &cobra.Command{
+	Use:     "proof",
+	Short:   "generate a merkle proof",
+	Long:    "TODO",
+	Args:    cobra.NoArgs,
+	PreRunE: checkProofArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		rawDepositData, err := getInputData(cmd, args)
+		if err != nil {
+			return err
+		}
+		readDeposits(rawDepositData)
+		return nil
+	},
+}
 
+func checkProofArgs(cmd *cobra.Command, args []string) error {
+	return nil
+}
+func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
+	if ulxlyInputArgs.InputFileName != nil && *ulxlyInputArgs.InputFileName != "" {
+		return os.ReadFile(*ulxlyInputArgs.InputFileName)
+	}
+
+	if len(args) > 1 {
+		concat := strings.Join(args[1:], " ")
+		return []byte(concat), nil
+	}
+
+	return io.ReadAll(os.Stdin)
+}
+func readDeposits(rawDeposits []byte) error {
+	buf := bytes.NewBuffer(rawDeposits)
+	scanner := bufio.NewScanner(buf)
+	smt := new(SMT)
+	smt.Init()
+	for scanner.Scan() {
+		evt := new(ulxly.UlxlyBridgeEvent)
+		err := json.Unmarshal(scanner.Bytes(), evt)
+		if err != nil {
+			return err
+		}
+		if evt.DestinationNetwork == uint32(*ulxlyInputArgs.NetworkID) {
+			smt.AddLeaf(evt)
+			log.Info().
+				Uint64("block-number", evt.Raw.BlockNumber).
+				Uint32("deposit-count", evt.DepositCount).
+				Str("tx-hash", evt.Raw.TxHash.String()).
+				Str("root", smt.GetRoot().String()).
+				Msg("adding event to tree")
+
+		}
+	}
+	return nil
+}
+
+// This implementation looks good. We get this hash
+// 0xf8c64768317c96c6c3c0f72b5a2cd3d03e831c200bf6bf0ab4d181877d59ddab
+// for this deposit
+// https://sepolia.etherscan.io/tx/0xf2003cf43a205bc777bc2d22fcb05b69ebb23464b39250d164cf9b09150b7833#eventlog
+// And that seems to match a call to `getLeafValue`
+func hashDeposit(deposit *ulxly.UlxlyBridgeEvent) [TreeDepth]byte {
+	var res [TreeDepth]byte
+	origNet := make([]byte, 4) //nolint:gomnd
+	binary.BigEndian.PutUint32(origNet, deposit.OriginNetwork)
+	destNet := make([]byte, 4) //nolint:gomnd
+	binary.BigEndian.PutUint32(destNet, deposit.DestinationNetwork)
+	var buf [TreeDepth]byte
+	metaHash := crypto.Keccak256Hash(deposit.Metadata)
+	copy(res[:], crypto.Keccak256Hash([]byte{deposit.LeafType}, origNet, deposit.OriginAddress.Bytes(), destNet, deposit.DestinationAddress[:], deposit.Amount.FillBytes(buf[:]), metaHash.Bytes()).Bytes())
+	return res
+}
+func hash(data ...[TreeDepth]byte) [TreeDepth]byte {
+	var res [TreeDepth]byte
+	hash := sha3.NewLegacyKeccak256()
+	for _, d := range data {
+		hash.Write(d[:])
+	}
+	copy(res[:], hash.Sum(nil))
+	return res
+}
+
+func (s *SMT) Init() {
+	s.Siblings = make([][TreeDepth]byte, 32)
+	for k := range s.Siblings {
+		s.Siblings[k] = [TreeDepth]byte{}
+	}
+	s.Height = TreeDepth
+	s.Data = nil // TODO pick a storage data structure
+}
+
+// cast call --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo --block 4880875 0xad1490c248c5d3cbae399fd529b79b42984277df 'lastMainnetExitRoot()(bytes32)'
+// cast call --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo --block 4880876 0xad1490c248c5d3cbae399fd529b79b42984277df 'lastMainnetExitRoot()(bytes32)'
+// The first mainnet exit root for cardona is
+// 0x112b077c64ed4a22dfb0ab3c2622d6ddbf3a5423afeb05878c2c21c4cb5e65da
+func (s *SMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
+	current := hashDeposit(deposit)
+	log.Info().Str("leaf-hash", common.Bytes2Hex(current[:])).Msg("Leaf hash calculated")
+	isFilledSubTree := true // TODO ?!?!
+
+	var leaves [][][]byte
+	for h := 0; h < TreeDepth; h++ {
+		if isBitSet(deposit.DepositCount+1, uint32(h)) {
+			child := current
+			parent := hash(s.Siblings[h], child)
+			current = parent
+			leaves = append(leaves, [][]byte{parent[:], s.Siblings[h][:], child[:]})
+		} else {
+			if isFilledSubTree {
+				copy(s.Siblings[h][:], current[:])
+				isFilledSubTree = false
+			}
+			child := current
+			parent := hash(child, [TreeDepth]byte{})
+			current = parent
+			zeros := [TreeDepth]byte{}
+			leaves = append(leaves, [][]byte{parent[:], child[:], zeros[:]})
+		}
+	}
+	s.Count += 1
+	s.Root = current
+}
+func (s *SMT) GetRoot() common.Hash {
+	var node common.Hash
+	size := s.Count
+	var currentZeroHashHeight common.Hash
+
+	zeros := [TreeDepth]byte{}
+
+	for height := 0; height < TreeDepth; height++ {
+		if ((size >> height) & 1) == 1 {
+			node = crypto.Keccak256Hash(s.Siblings[height][:], node.Bytes())
+		} else {
+			node = crypto.Keccak256Hash(node.Bytes(), currentZeroHashHeight.Bytes())
+		}
+
+		currentZeroHashHeight = crypto.Keccak256Hash(zeros[:], zeros[:])
+	}
+	return node
+}
+
+// isBitSet checks if the bit at position h in number dc is set to 1
+func isBitSet(dc uint32, h uint32) bool {
+	mask := uint32(1)
+	for i := uint32(0); i < h; i++ {
+		mask *= 2
+	}
+	return dc&mask > 0
+}
 func checkDepositArgs(cmd *cobra.Command, args []string) error {
 	if *ulxlyInputArgs.BridgeAddress == "" {
 		return fmt.Errorf("please provide the bridge address")
@@ -100,11 +272,14 @@ func checkDepositArgs(cmd *cobra.Command, args []string) error {
 
 func init() {
 	ULxLyCmd.AddCommand(DepositsCmd)
+	ULxLyCmd.AddCommand(ProofCmd)
 	ulxlyInputArgs.FromBlock = DepositsCmd.PersistentFlags().Uint64("from-block", 0, "The block height to start query at.")
 	ulxlyInputArgs.ToBlock = DepositsCmd.PersistentFlags().Uint64("to-block", 0, "The block height to start query at.")
 	ulxlyInputArgs.RPCURL = DepositsCmd.PersistentFlags().String("rpc-url", "http://127.0.0.1:8545", "The RPC to query for events")
 	ulxlyInputArgs.FilterSize = DepositsCmd.PersistentFlags().Uint64("filter-size", 1000, "The batch size for individual filter queries")
 
 	ulxlyInputArgs.BridgeAddress = DepositsCmd.Flags().String("bridge-address", "", "The address of the lxly bridge")
+	ulxlyInputArgs.InputFileName = ProofCmd.PersistentFlags().String("file-name", "", "The filename with ndjson data of deposits")
+	ulxlyInputArgs.NetworkID = ProofCmd.PersistentFlags().Uint64("network-id", 1, "The network id to filter on")
 
 }
