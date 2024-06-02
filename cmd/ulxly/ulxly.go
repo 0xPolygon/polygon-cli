@@ -54,6 +54,7 @@ var ULxLyCmd = &cobra.Command{
 }
 
 // polycli ulxly deposits --bridge-address 0x528e26b25a34a4A5d0dbDa1d57D318153d2ED582 --rpc-url https://sepolia-rpc.invalid --from-block 4880876 --to-block 6015235 --filter-size 9999
+// polycli ulxly deposits --bridge-address 0x528e26b25a34a4A5d0dbDa1d57D318153d2ED582 --rpc-url https://sepolia-rpc.invalid --from-block 4880876 --to-block 6025854 --filter-size 999 > cardona-4880876-to-6025854.ndjson
 var DepositsCmd = &cobra.Command{
 	Use:     "deposits",
 	Short:   "get a range of deposits",
@@ -146,23 +147,32 @@ func readDeposits(rawDeposits []byte) error {
 	scanner := bufio.NewScanner(buf)
 	smt := new(SMT)
 	smt.Init()
+	seenDeposit := make(map[uint32]common.Hash, 0)
+	lastDeposit := uint32(0)
 	for scanner.Scan() {
 		evt := new(ulxly.UlxlyBridgeEvent)
 		err := json.Unmarshal(scanner.Bytes(), evt)
 		if err != nil {
 			return err
 		}
-		if evt.DestinationNetwork == uint32(*ulxlyInputArgs.NetworkID) {
-
-			log.Info().
-				Uint64("block-number", evt.Raw.BlockNumber).
-				Uint32("deposit-count", evt.DepositCount).
-				Str("tx-hash", evt.Raw.TxHash.String()).
-				Str("root", smt.GetRoot().String()).
-				Msg("adding event to tree")
-			smt.AddLeaf(evt)
-
+		if _, hasBeenSeen := seenDeposit[evt.DepositCount]; hasBeenSeen {
+			log.Warn().Uint32("deposit", evt.DepositCount).Str("tx-hash", evt.Raw.TxHash.String()).Msg("Skipping duplicate deposit")
+			continue
 		}
+		seenDeposit[evt.DepositCount] = evt.Raw.TxHash
+		if lastDeposit+1 != evt.DepositCount && lastDeposit != 0 {
+			log.Error().Uint32("missing-deposit", lastDeposit+1).Uint32("current-deposit", evt.DepositCount).Msg("Missing deposit")
+			return fmt.Errorf("missing deposit: %d", lastDeposit+1)
+		}
+		lastDeposit = evt.DepositCount
+		smt.AddLeaf(evt)
+		log.Info().
+			Uint64("block-number", evt.Raw.BlockNumber).
+			Uint32("deposit-count", evt.DepositCount).
+			Str("tx-hash", evt.Raw.TxHash.String()).
+			Str("root", smt.GetRoot().String()).
+			Msg("adding event to tree")
+
 	}
 	return nil
 }
