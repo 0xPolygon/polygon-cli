@@ -37,11 +37,12 @@ type uLxLyArgs struct {
 }
 
 type SMT struct {
-	Data     map[string]string
-	Height   uint8
-	Count    uint64
-	Branches [][TreeDepth]byte
-	Root     [TreeDepth]byte
+	Data       map[uint32][]common.Hash
+	Height     uint8
+	Count      uint64
+	Branches   [][TreeDepth]byte
+	Root       [TreeDepth]byte
+	ZeroHashes [][TreeDepth]byte
 }
 
 var ulxlyInputArgs uLxLyArgs
@@ -200,7 +201,8 @@ func (s *SMT) Init() {
 		s.Branches[k] = [TreeDepth]byte{}
 	}
 	s.Height = TreeDepth
-	s.Data = nil // TODO pick a storage data structure
+	s.Data = make(map[uint32][]common.Hash, 0)
+	s.ZeroHashes = generateZeroHashes(TreeDepth)
 }
 
 // cast call --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo --block 4880875 0xad1490c248c5d3cbae399fd529b79b42984277df 'lastMainnetExitRoot()(bytes32)'
@@ -214,29 +216,56 @@ func (s *SMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 	node := leaf
 	s.Count += 1
 	size := s.Count
+	maxHeight := 0
+
 	for height := uint64(0); height < TreeDepth; height += 1 {
+		maxHeight = int(height)
 		if isBitSet(size, height) {
-			s.Branches[height] = node
+			copy(s.Branches[height][:], node[:])
 			break
 		}
 		node = crypto.Keccak256Hash(s.Branches[height][:], node[:])
 	}
 	s.Root = s.GetRoot()
+	proof := make([]common.Hash, TreeDepth)
+	zh := s.ZeroHashes
+	for k := 0; k < TreeDepth; k += 1 {
+		if k <= maxHeight {
+			proof[k] = s.Branches[k]
+		} else {
+			proof[k] = zh[k]
+		}
+	}
+	s.Data[deposit.DepositCount] = proof
+	// https://bridge-api.cardona.zkevm-rpc.com/merkle-proof?deposit_cnt=24357&net_id=0
+	fmt.Println(proof)
 }
+
 func (s *SMT) GetRoot() common.Hash {
 	var node common.Hash
 	size := s.Count
-	currentZeroHashHeight := common.Hash{}
+	var zeroHashes = s.ZeroHashes
 
 	for height := 0; height < TreeDepth; height++ {
+		currentZeroHashHeight := zeroHashes[height]
 		if ((size >> height) & 1) == 1 {
 			node = crypto.Keccak256Hash(s.Branches[height][:], node.Bytes())
 		} else {
-			node = crypto.Keccak256Hash(node.Bytes(), currentZeroHashHeight.Bytes())
+			node = crypto.Keccak256Hash(node.Bytes(), currentZeroHashHeight[:])
 		}
 		currentZeroHashHeight = crypto.Keccak256Hash(currentZeroHashHeight[:], currentZeroHashHeight[:])
 	}
 	return node
+}
+
+// https://eth2book.info/capella/part2/deposits-withdrawals/contract/
+func generateZeroHashes(height uint8) [][TreeDepth]byte {
+	var zeroHashes = [][TreeDepth]byte{}
+	zeroHashes = append(zeroHashes, common.Hash{})
+	for i := 1; i <= int(height); i++ {
+		zeroHashes = append(zeroHashes, crypto.Keccak256Hash(zeroHashes[i-1][:], zeroHashes[i-1][:]))
+	}
+	return zeroHashes
 }
 
 // isBitSet checks if the bit at position h in number dc is set to 1
