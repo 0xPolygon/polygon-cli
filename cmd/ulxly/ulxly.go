@@ -167,11 +167,13 @@ func readDeposits(rawDeposits []byte) error {
 		}
 		lastDeposit = evt.DepositCount
 		smt.AddLeaf(evt)
+		rt, _ := smt.GetRoot()
 		log.Info().
 			Uint64("block-number", evt.Raw.BlockNumber).
 			Uint32("deposit-count", evt.DepositCount).
+			Uint64("mt-size", smt.Count).
 			Str("tx-hash", evt.Raw.TxHash.String()).
-			Str("root", smt.GetRoot().String()).
+			Str("root", rt.String()).
 			Msg("adding event to tree")
 
 	}
@@ -216,46 +218,46 @@ func (s *SMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 	node := leaf
 	s.Count += 1
 	size := s.Count
-	maxHeight := 0
 
+	// copy(node[:], s.ZeroHashes[0][:])
 	for height := uint64(0); height < TreeDepth; height += 1 {
-		maxHeight = int(height)
 		if isBitSet(size, height) {
 			copy(s.Branches[height][:], node[:])
 			break
 		}
 		node = crypto.Keccak256Hash(s.Branches[height][:], node[:])
 	}
-	s.Root = s.GetRoot()
-	proof := make([]common.Hash, TreeDepth)
-	zh := s.ZeroHashes
-	for k := 0; k < TreeDepth; k += 1 {
-		if k <= maxHeight {
-			proof[k] = s.Branches[k]
-		} else {
-			proof[k] = zh[k]
-		}
-	}
-	s.Data[deposit.DepositCount] = proof
-	// https://bridge-api.cardona.zkevm-rpc.com/merkle-proof?deposit_cnt=24357&net_id=0
-	fmt.Println(proof)
+	var sibs [TreeDepth]common.Hash
+	s.Root, sibs = s.GetRoot()
+
+	// fmt.Println(proof)
+	fmt.Println(sibs)
 }
 
-func (s *SMT) GetRoot() common.Hash {
+func (s *SMT) GetRoot() (common.Hash, [TreeDepth]common.Hash) {
 	var node common.Hash
 	size := s.Count
 	var zeroHashes = s.ZeroHashes
 
+	siblings := [TreeDepth]common.Hash{}
 	for height := 0; height < TreeDepth; height++ {
 		currentZeroHashHeight := zeroHashes[height]
+		left := crypto.Keccak256Hash(s.Branches[height][:], node.Bytes())
+		right := crypto.Keccak256Hash(node.Bytes(), currentZeroHashHeight[:])
+		log.Debug().
+			Str("sib-1", node.String()).
+			Str("sib-2", common.Hash(s.Branches[height]).String()).
+			Str("sib-3", common.Hash(currentZeroHashHeight).String()).Msg("tree values")
+
 		if ((size >> height) & 1) == 1 {
-			node = crypto.Keccak256Hash(s.Branches[height][:], node.Bytes())
+			copy(siblings[height][:], s.Branches[height][:])
+			node = left
 		} else {
-			node = crypto.Keccak256Hash(node.Bytes(), currentZeroHashHeight[:])
+			copy(siblings[height][:], currentZeroHashHeight[:])
+			node = right
 		}
-		currentZeroHashHeight = crypto.Keccak256Hash(currentZeroHashHeight[:], currentZeroHashHeight[:])
 	}
-	return node
+	return node, siblings
 }
 
 // https://eth2book.info/capella/part2/deposits-withdrawals/contract/
