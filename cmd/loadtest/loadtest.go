@@ -1503,6 +1503,7 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 ti
 	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
 	blobFeeCap := uint64(1000000000) // 1eth
 
+	// Initialize blobTx with blob transaction type
 	blobTx := ethtypes.BlobTx{
 		ChainID:    uint256.NewInt(chainID.Uint64()),
 		Nonce:      nonce,
@@ -1521,7 +1522,8 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 ti
 			Proofs:      make([]kzg4844.Proof, 0),
 		},
 	}
-	err = parseBlobRefs(&blobTx)
+	// paseBlobVariables will take in the blobTx struct and append values to blob transaction specific keys
+	err = parseBlobCommitment(&blobTx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to parse blob")
 		return

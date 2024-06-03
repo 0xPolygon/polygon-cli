@@ -38,7 +38,8 @@ func encodeBlobData(data []byte) kzg4844.Blob {
 	return blob
 }
 
-func EncodeBlob(data []byte) (*BlobCommitment, error) {
+// encodeBlob will generate the values for BlobCommitment variables
+func encodeBlob(data []byte) (*BlobCommitment, error) {
 	dataLen := len(data)
 	if dataLen > params.BlobTxFieldElementsPerBlob*(params.BlobTxBytesPerFieldElement-1) {
 		return nil, fmt.Errorf("Blob data longer than allowed (length: %v, limit: %v)", dataLen, params.BlobTxFieldElementsPerBlob*(params.BlobTxBytesPerFieldElement-1))
@@ -48,25 +49,26 @@ func EncodeBlob(data []byte) (*BlobCommitment, error) {
 	}
 	var err error
 
-	// generate blob commitment
+	// Generate blob commitment
 	blobCommitment.Commitment, err = kzg4844.BlobToCommitment(blobCommitment.Blob)
 	if err != nil {
 		return nil, fmt.Errorf("Failed generating blob commitment: %w", err)
 	}
 
-	// generate blob proof
+	// Generate blob proof
 	blobCommitment.Proof, err = kzg4844.ComputeBlobProof(blobCommitment.Blob, blobCommitment.Commitment)
 	if err != nil {
 		return nil, fmt.Errorf("Failed generating blob proof: %w", err)
 	}
 
-	// build versioned hash
+	// Build versioned hash
 	blobCommitment.VersionedHash = sha256.Sum256(blobCommitment.Commitment[:])
 	blobCommitment.VersionedHash[0] = 0x01
 	return &blobCommitment, nil
 }
 
-func parseBlobRefs(tx *types.BlobTx) error {
+// parseBlobCommitment will append the generated BlobCommitment values to blob transaction specific variables
+func parseBlobCommitment(tx *types.BlobTx) error {
 	var err error
 	var blobBytes []byte
 	var blobRefBytes []byte
@@ -78,7 +80,7 @@ func parseBlobRefs(tx *types.BlobTx) error {
 	}
 	blobBytes = append(blobBytes, blobRefBytes...)
 
-	blobCommitment, err := EncodeBlob(blobBytes)
+	blobCommitment, err := encodeBlob(blobBytes)
 	if err != nil {
 		return fmt.Errorf("Invalid blob: %w", err)
 	}
@@ -90,6 +92,7 @@ func parseBlobRefs(tx *types.BlobTx) error {
 	return nil
 }
 
+// randomBlobData will generate random blob data
 func randomBlobData(size int) ([]byte, error) {
 	data := make([]byte, size)
 	n, err := cryptorand.Read(data)
