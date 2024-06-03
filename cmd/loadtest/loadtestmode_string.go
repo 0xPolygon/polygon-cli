@@ -24,11 +24,12 @@ func _() {
 	_ = x[loadTestModeContractCall-13]
 	_ = x[loadTestModeInscription-14]
 	_ = x[loadTestModeUniswapV3-15]
+	_ = x[loadTestModeBlob-16]
 }
 
-const _loadTestMode_name = "loadTestModeTransactionloadTestModeDeployloadTestModeCallloadTestModeFunctionloadTestModeIncloadTestModeStoreloadTestModeERC20loadTestModeERC721loadTestModePrecompiledContractsloadTestModePrecompiledContractloadTestModeRandomloadTestModeRecallloadTestModeRPCloadTestModeContractCallloadTestModeInscriptionloadTestModeUniswapV3"
+const _loadTestMode_name = "loadTestModeTransactionloadTestModeDeployloadTestModeCallloadTestModeFunctionloadTestModeIncloadTestModeStoreloadTestModeERC20loadTestModeERC721loadTestModePrecompiledContractsloadTestModePrecompiledContractloadTestModeRandomloadTestModeRecallloadTestModeRPCloadTestModeContractCallloadTestModeInscriptionloadTestModeUniswapV3loadTestModeBlob"
 
-var _loadTestMode_index = [...]uint16{0, 23, 41, 57, 77, 92, 109, 126, 144, 176, 207, 225, 243, 258, 282, 305, 326}
+var _loadTestMode_index = [...]uint16{0, 23, 41, 57, 77, 92, 109, 126, 144, 176, 207, 225, 243, 258, 282, 305, 326, 342}
 
 func (i loadTestMode) String() string {
 	if i < 0 || i >= loadTestMode(len(_loadTestMode_index)-1) {
