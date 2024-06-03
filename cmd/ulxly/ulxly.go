@@ -40,7 +40,7 @@ type SMT struct {
 	Data       map[uint32][]common.Hash
 	Height     uint8
 	Count      uint64
-	Branches   [][TreeDepth]byte
+	Branches   map[uint32][][TreeDepth]byte
 	Root       [TreeDepth]byte
 	ZeroHashes [][TreeDepth]byte
 }
@@ -167,13 +167,12 @@ func readDeposits(rawDeposits []byte) error {
 		}
 		lastDeposit = evt.DepositCount
 		smt.AddLeaf(evt)
-		rt, _ := smt.GetRoot()
 		log.Info().
 			Uint64("block-number", evt.Raw.BlockNumber).
 			Uint32("deposit-count", evt.DepositCount).
 			Uint64("mt-size", smt.Count).
 			Str("tx-hash", evt.Raw.TxHash.String()).
-			Str("root", rt.String()).
+			Str("root", common.Hash(smt.Root).String()).
 			Msg("adding event to tree")
 
 	}
@@ -198,10 +197,7 @@ func hashDeposit(deposit *ulxly.UlxlyBridgeEvent) common.Hash {
 }
 
 func (s *SMT) Init() {
-	s.Branches = make([][TreeDepth]byte, 32)
-	for k := range s.Branches {
-		s.Branches[k] = [TreeDepth]byte{}
-	}
+	s.Branches = make(map[uint32][][TreeDepth]byte)
 	s.Height = TreeDepth
 	s.Data = make(map[uint32][]common.Hash, 0)
 	s.ZeroHashes = generateZeroHashes(TreeDepth)
@@ -219,45 +215,44 @@ func (s *SMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 	s.Count += 1
 	size := s.Count
 
+	branches := make([][TreeDepth]byte, TreeDepth)
+	copy(branches, s.Branches[deposit.DepositCount-1])
 	// copy(node[:], s.ZeroHashes[0][:])
 	for height := uint64(0); height < TreeDepth; height += 1 {
 		if isBitSet(size, height) {
-			copy(s.Branches[height][:], node[:])
+			copy(branches[height][:], node[:])
 			break
 		}
-		node = crypto.Keccak256Hash(s.Branches[height][:], node[:])
+		node = crypto.Keccak256Hash(branches[height][:], node[:])
 	}
-	var sibs [TreeDepth]common.Hash
-	s.Root, sibs = s.GetRoot()
-
-	// fmt.Println(proof)
-	fmt.Println(sibs)
+	s.Branches[deposit.DepositCount] = branches
+	s.Root = s.GetRoot(deposit.DepositCount)
 }
 
-func (s *SMT) GetRoot() (common.Hash, [TreeDepth]common.Hash) {
+func (s *SMT) GetRoot(depositNum uint32) common.Hash {
 	var node common.Hash
 	size := s.Count
 	var zeroHashes = s.ZeroHashes
 
-	siblings := [TreeDepth]common.Hash{}
+	// siblings := [TreeDepth]common.Hash{}
 	for height := 0; height < TreeDepth; height++ {
 		currentZeroHashHeight := zeroHashes[height]
-		left := crypto.Keccak256Hash(s.Branches[height][:], node.Bytes())
+		left := crypto.Keccak256Hash(s.Branches[depositNum][height][:], node.Bytes())
 		right := crypto.Keccak256Hash(node.Bytes(), currentZeroHashHeight[:])
 		log.Debug().
 			Str("sib-1", node.String()).
-			Str("sib-2", common.Hash(s.Branches[height]).String()).
+			Str("sib-2", common.Hash(s.Branches[depositNum][height]).String()).
 			Str("sib-3", common.Hash(currentZeroHashHeight).String()).Msg("tree values")
 
 		if ((size >> height) & 1) == 1 {
-			copy(siblings[height][:], s.Branches[height][:])
+			// copy(siblings[height][:], s.Branches[height][:])
 			node = left
 		} else {
-			copy(siblings[height][:], currentZeroHashHeight[:])
+			// copy(siblings[height][:], currentZeroHashHeight[:])
 			node = right
 		}
 	}
-	return node, siblings
+	return node
 }
 
 // https://eth2book.info/capella/part2/deposits-withdrawals/contract/
