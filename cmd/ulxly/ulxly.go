@@ -33,7 +33,7 @@ type uLxLyArgs struct {
 	FilterSize    *uint64
 
 	InputFileName *string
-	NetworkID     *uint64
+	DepositNum    *uint32
 }
 
 type SMT struct {
@@ -43,6 +43,12 @@ type SMT struct {
 	Branches   map[uint32][][TreeDepth]byte
 	Root       [TreeDepth]byte
 	ZeroHashes [][TreeDepth]byte
+	Proofs     map[uint32]Proof
+}
+type Proof struct {
+	Siblings     [TreeDepth]common.Hash
+	Root         common.Hash
+	DepositCount uint32
 }
 
 var ulxlyInputArgs uLxLyArgs
@@ -170,13 +176,26 @@ func readDeposits(rawDeposits []byte) error {
 		log.Info().
 			Uint64("block-number", evt.Raw.BlockNumber).
 			Uint32("deposit-count", evt.DepositCount).
-			Uint64("mt-size", smt.Count).
 			Str("tx-hash", evt.Raw.TxHash.String()).
 			Str("root", common.Hash(smt.Root).String()).
 			Msg("adding event to tree")
 
 	}
+
+	p := smt.Proofs[*ulxlyInputArgs.DepositNum]
+
+	fmt.Println(p.String())
 	return nil
+}
+
+func (p *Proof) String() string {
+	jsonBytes, err := json.Marshal(p)
+	if err != nil {
+		log.Error().Err(err).Msg("error marshalling proof to json")
+		return ""
+	}
+	return string(jsonBytes)
+
 }
 
 // This implementation looks good. We get this hash
@@ -201,6 +220,7 @@ func (s *SMT) Init() {
 	s.Height = TreeDepth
 	s.Data = make(map[uint32][]common.Hash, 0)
 	s.ZeroHashes = generateZeroHashes(TreeDepth)
+	s.Proofs = make(map[uint32]Proof)
 }
 
 // cast call --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo --block 4880875 0xad1490c248c5d3cbae399fd529b79b42984277df 'lastMainnetExitRoot()(bytes32)'
@@ -212,12 +232,15 @@ func (s *SMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 	log.Info().Str("leaf-hash", common.Bytes2Hex(leaf[:])).Msg("Leaf hash calculated")
 
 	node := leaf
-	s.Count += 1
+	s.Count = uint64(deposit.DepositCount) + 1
 	size := s.Count
-
 	branches := make([][TreeDepth]byte, TreeDepth)
-	copy(branches, s.Branches[deposit.DepositCount-1])
-	// copy(node[:], s.ZeroHashes[0][:])
+	if deposit.DepositCount == 0 {
+		branches = generateZeroHashes(TreeDepth)
+	} else {
+		copy(branches, s.Branches[deposit.DepositCount-1])
+	}
+
 	for height := uint64(0); height < TreeDepth; height += 1 {
 		if isBitSet(size, height) {
 			copy(branches[height][:], node[:])
@@ -234,25 +257,96 @@ func (s *SMT) GetRoot(depositNum uint32) common.Hash {
 	size := s.Count
 	var zeroHashes = s.ZeroHashes
 
-	// siblings := [TreeDepth]common.Hash{}
+	siblings := [TreeDepth]common.Hash{}
 	for height := 0; height < TreeDepth; height++ {
 		currentZeroHashHeight := zeroHashes[height]
 		left := crypto.Keccak256Hash(s.Branches[depositNum][height][:], node.Bytes())
 		right := crypto.Keccak256Hash(node.Bytes(), currentZeroHashHeight[:])
-		log.Debug().
-			Str("sib-1", node.String()).
-			Str("sib-2", common.Hash(s.Branches[depositNum][height]).String()).
-			Str("sib-3", common.Hash(currentZeroHashHeight).String()).Msg("tree values")
+		if depositNum == 24391 {
+			log.Debug().
+				Int("height", height).
+				Str("sib-1", node.String()).
+				Str("sib-2", common.Hash(s.Branches[depositNum][height]).String()).
+				Str("sib-3", common.Hash(currentZeroHashHeight).String()).
+				Str("left", left.String()).
+				Str("right", right.String()).
+				Msg("tree values")
+		}
 
 		if ((size >> height) & 1) == 1 {
-			// copy(siblings[height][:], s.Branches[height][:])
+			copy(siblings[height][:], currentZeroHashHeight[:])
 			node = left
 		} else {
-			// copy(siblings[height][:], currentZeroHashHeight[:])
+			copy(siblings[height][:], s.Branches[depositNum][height][:])
 			node = right
 		}
 	}
+	if depositNum^1 == 1 {
+		copy(siblings[0][:], zeroHashes[0][:])
+	} else {
+		copy(siblings[0][:], s.Branches[depositNum-1][0][:])
+	}
+
+	s.Proofs[depositNum] = Proof{
+		Siblings:     siblings,
+		Root:         node,
+		DepositCount: depositNum,
+	}
+	log.Info().Str("inner-root", s.Proofs[depositNum].Root.String()).Str("root", node.String()).Msg("root Check")
 	return node
+}
+
+// GetProof will try to generate the paired hashes for each level of the tree for a given deposit
+func (s *SMT) GetProof(depositNum uint32) ([][TreeDepth]byte, error) {
+	// it's possible to call this with a deposit that doesn't exist. In theory this should be fine, but it doesn't really fit the intent of the code here
+	if uint64(depositNum) > s.Count {
+		return nil, fmt.Errorf("deposit number %d is greater than the count %d of leaves", depositNum, s.Count)
+	}
+
+	// At the bottom of the path, we need to find the deposit that is paired with the despot that we're checking. We should be able to flip the last bit and get the deposit number
+	siblingDepositNum := depositNum ^ 1
+
+	var siblingLeaf [TreeDepth]byte
+	if _, hasKey := s.Branches[siblingDepositNum]; !hasKey || siblingDepositNum > depositNum {
+		siblingLeaf = [TreeDepth]byte{}
+	} else {
+		siblingLeaf = s.Branches[siblingDepositNum][0]
+	}
+	siblings := [TreeDepth][TreeDepth]byte{}
+	siblings[0] = siblingLeaf
+	siblingMask := uint32(1)
+	// Iterate through the levels of the tree
+	for height := 1; height < TreeDepth; height += 1 {
+		// At each height, we're going to flip a bit in the deposit number in order to find the complimentary node for the given height
+		siblingMask = uint32(siblingMask<<1) + 1
+		flipMask := uint32(1 << height)
+		currentSiblingDeposit := (depositNum | siblingMask) ^ flipMask
+
+		// we'll get the branches from the particular deposit that we're interested in
+		b, hasKey := s.Branches[currentSiblingDeposit]
+		if !hasKey || isEmpty(b[height]) || currentSiblingDeposit > depositNum {
+			b = generateZeroHashes(TreeDepth)
+		}
+		siblings[height] = b[height]
+		log.Info().
+			Int("height", height).
+			Uint32("current-sibling-num", currentSiblingDeposit).
+			Str("current-sibling", fmt.Sprintf("%b", currentSiblingDeposit)).
+			Str("current-mask", fmt.Sprintf("%b", siblingMask)).
+			Str("sib", common.Hash(b[height]).String()).
+			Msg("Getting Deposit")
+
+	}
+	return siblings[:], nil
+}
+
+func isEmpty(h [TreeDepth]byte) bool {
+	for i := 0; i < TreeDepth; i = i + 1 {
+		if h[i] != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // https://eth2book.info/capella/part2/deposits-withdrawals/contract/
@@ -293,6 +387,5 @@ func init() {
 
 	ulxlyInputArgs.BridgeAddress = DepositsCmd.Flags().String("bridge-address", "", "The address of the lxly bridge")
 	ulxlyInputArgs.InputFileName = ProofCmd.PersistentFlags().String("file-name", "", "The filename with ndjson data of deposits")
-	ulxlyInputArgs.NetworkID = ProofCmd.PersistentFlags().Uint64("network-id", 1, "The network id to filter on")
-
+	ulxlyInputArgs.DepositNum = ProofCmd.PersistentFlags().Uint32("deposit-number", 0, "The deposit that we would like to prove")
 }
