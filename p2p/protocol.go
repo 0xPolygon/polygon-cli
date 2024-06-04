@@ -186,11 +186,13 @@ func (c *conn) handleRequests(done chan struct{}) {
 			return
 		case req := <-c.requests:
 			requests.PushBack(req)
-		case <-c.receivedHeader:
+		case hash := <-c.receivedHeader:
 			for e := requests.Front(); e != nil; e = e.Next() {
 				r := e.Value.(*request)
-				r.hasHeader = true
-				break
+
+				if r.hash.Cmp(hash) == 0 {
+					r.hasHeader = true
+				}
 			}
 		case id := <-c.receivedBody:
 			var hash *common.Hash
