@@ -1501,7 +1501,8 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 ti
 
 	gasLimit := uint64(21000)
 	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
-	blobFeeCap := uint64(1000000000) // 1eth
+	// blobFeeCap := uint64(1000000000) // 1eth
+	blobFeeCap := ltp.BlobFeeCap
 
 	// Initialize blobTx with blob transaction type
 	blobTx := ethtypes.BlobTx{
@@ -1509,7 +1510,7 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 ti
 		Nonce:      nonce,
 		GasTipCap:  uint256.NewInt(gasTipCap.Uint64()),
 		GasFeeCap:  uint256.NewInt(gasPrice.Uint64()),
-		BlobFeeCap: uint256.NewInt(blobFeeCap),
+		BlobFeeCap: uint256.NewInt(*blobFeeCap),
 		Gas:        gasLimit,
 		To:         *to,
 		Value:      uint256.NewInt(amount.Uint64()),
