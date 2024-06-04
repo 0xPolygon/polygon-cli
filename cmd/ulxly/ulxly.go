@@ -252,42 +252,29 @@ func (s *SMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 }
 
 func (s *SMT) GetRoot(depositNum uint32) common.Hash {
-	var node common.Hash
+	var node common.Hash = s.Branches[depositNum][0]
 	size := depositNum + 1
 	var zeroHashes = s.ZeroHashes
+
+	prevDepositNum := depositNum - 1
+	if depositNum == 0 {
+		prevDepositNum = 0
+	}
 
 	siblings := [TreeDepth]common.Hash{}
 	for height := 0; height < TreeDepth; height++ {
 		currentZeroHashHeight := zeroHashes[height]
-		left := crypto.Keccak256Hash(s.Branches[depositNum][height][:], node.Bytes())
+		left := crypto.Keccak256Hash(s.Branches[prevDepositNum][height][:], node.Bytes())
 		right := crypto.Keccak256Hash(node.Bytes(), currentZeroHashHeight[:])
-		if depositNum == 24391 {
-			log.Debug().
-				Int("height", height).
-				Str("sib-1", node.String()).
-				Str("sib-2", common.Hash(s.Branches[depositNum][height]).String()).
-				Str("sib-3", common.Hash(currentZeroHashHeight).String()).
-				Str("left", left.String()).
-				Str("right", right.String()).
-				Msg("tree values")
-		}
 
 		if ((size >> height) & 1) == 1 {
-			copy(siblings[height][:], s.Branches[depositNum][height][:])
+			copy(siblings[height][:], s.Branches[prevDepositNum][height][:])
 			node = left
 		} else {
 			copy(siblings[height][:], currentZeroHashHeight[:])
 			node = right
 		}
 	}
-	if depositNum&1 == 1 {
-		// If we're odd, then the first sibling, should be the previous leafhash
-		copy(siblings[0][:], s.Branches[depositNum-1][0][:])
-	} else {
-		// If we're even, the first sibling should be empty.
-		copy(siblings[0][:], zeroHashes[0][:])
-	}
-
 	p := &Proof{
 		Siblings:     siblings,
 		Root:         node,
