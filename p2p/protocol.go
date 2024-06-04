@@ -193,6 +193,10 @@ func (c *conn) handleRequests(done chan struct{}) {
 				if r.hash.Cmp(hash) == 0 {
 					r.hasHeader = true
 				}
+
+				if r.hasHeader && r.hasBody {
+					requests.Remove(e)
+				}
 			}
 		case id := <-c.receivedBody:
 			var hash *common.Hash
@@ -203,6 +207,11 @@ func (c *conn) handleRequests(done chan struct{}) {
 				if r.requestID == id {
 					r.hasBody = true
 					hash = &r.hash
+
+					if r.hasHeader && r.hasBody {
+						requests.Remove(e)
+					}
+
 					break
 				}
 			}
@@ -215,7 +224,7 @@ func (c *conn) handleRequests(done chan struct{}) {
 				r := e.Value.(*request)
 
 				// Remove the request if it has expired or completed.
-				if time.Since(r.time).Minutes() > 10 || (r.hasHeader && r.hasBody) {
+				if time.Since(r.time).Minutes() > 10 {
 					requests.Remove(e)
 					continue
 				}
