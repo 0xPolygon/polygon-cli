@@ -243,7 +243,7 @@ func (s *SMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 	}
 
 	for height := uint64(0); height < TreeDepth; height += 1 {
-		if isBitSet(size, height) {
+		if ((size >> height) & 1) == 1 {
 			copy(branches[height][:], node[:])
 			break
 		}
@@ -344,15 +344,6 @@ func generateZeroHashes(height uint8) [][TreeDepth]byte {
 		zeroHashes = append(zeroHashes, crypto.Keccak256Hash(zeroHashes[i-1][:], zeroHashes[i-1][:]))
 	}
 	return zeroHashes
-}
-
-// isBitSet checks if the bit at position h in number dc is set to 1
-func isBitSet(dc uint64, h uint64) bool {
-	mask := uint64(1)
-	for i := uint64(0); i < h; i++ {
-		mask *= 2
-	}
-	return dc&mask > 0
 }
 func checkDepositArgs(cmd *cobra.Command, args []string) error {
 	if *ulxlyInputArgs.BridgeAddress == "" {
