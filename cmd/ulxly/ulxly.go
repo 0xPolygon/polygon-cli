@@ -39,7 +39,6 @@ type uLxLyArgs struct {
 type SMT struct {
 	Data       map[uint32][]common.Hash
 	Height     uint8
-	Count      uint64
 	Branches   map[uint32][][TreeDepth]byte
 	Root       [TreeDepth]byte
 	ZeroHashes [][TreeDepth]byte
@@ -233,8 +232,7 @@ func (s *SMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 	log.Debug().Str("leaf-hash", common.Bytes2Hex(leaf[:])).Msg("Leaf hash calculated")
 
 	node := leaf
-	s.Count = uint64(deposit.DepositCount) + 1
-	size := s.Count
+	size := uint64(deposit.DepositCount) + 1
 	branches := make([][TreeDepth]byte, TreeDepth)
 	if deposit.DepositCount == 0 {
 		branches = generateZeroHashes(TreeDepth)
@@ -255,7 +253,7 @@ func (s *SMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 
 func (s *SMT) GetRoot(depositNum uint32) common.Hash {
 	var node common.Hash
-	size := s.Count
+	size := depositNum + 1
 	var zeroHashes = s.ZeroHashes
 
 	siblings := [TreeDepth]common.Hash{}
@@ -264,7 +262,7 @@ func (s *SMT) GetRoot(depositNum uint32) common.Hash {
 		left := crypto.Keccak256Hash(s.Branches[depositNum][height][:], node.Bytes())
 		right := crypto.Keccak256Hash(node.Bytes(), currentZeroHashHeight[:])
 		if depositNum == 24391 {
-			log.Info().
+			log.Debug().
 				Int("height", height).
 				Str("sib-1", node.String()).
 				Str("sib-2", common.Hash(s.Branches[depositNum][height]).String()).
