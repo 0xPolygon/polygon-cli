@@ -49,6 +49,7 @@ type Proof struct {
 	Siblings     [TreeDepth]common.Hash
 	Root         common.Hash
 	DepositCount uint32
+	LeafHash     common.Hash
 }
 
 var ulxlyInputArgs uLxLyArgs
@@ -229,7 +230,7 @@ func (s *SMT) Init() {
 // 0x112b077c64ed4a22dfb0ab3c2622d6ddbf3a5423afeb05878c2c21c4cb5e65da
 func (s *SMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 	leaf := hashDeposit(deposit)
-	log.Info().Str("leaf-hash", common.Bytes2Hex(leaf[:])).Msg("Leaf hash calculated")
+	log.Debug().Str("leaf-hash", common.Bytes2Hex(leaf[:])).Msg("Leaf hash calculated")
 
 	node := leaf
 	s.Count = uint64(deposit.DepositCount) + 1
@@ -282,64 +283,50 @@ func (s *SMT) GetRoot(depositNum uint32) common.Hash {
 		}
 	}
 	if depositNum&1 == 1 {
+		// If we're odd, then the first sibling, should be the previous leafhash
 		copy(siblings[0][:], s.Branches[depositNum-1][0][:])
 	} else {
+		// If we're even, the first sibling should be empty.
 		copy(siblings[0][:], zeroHashes[0][:])
 	}
 
-	s.Proofs[depositNum] = Proof{
+	p := &Proof{
 		Siblings:     siblings,
 		Root:         node,
 		DepositCount: depositNum,
+		LeafHash:     s.Branches[depositNum][0],
 	}
-	log.Info().Str("inner-root", s.Proofs[depositNum].Root.String()).Str("root", node.String()).Msg("root Check")
+
+	err := p.Check()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to validate proof")
+	}
+	s.Proofs[depositNum] = *p
 	return node
 }
 
-// GetProof will try to generate the paired hashes for each level of the tree for a given deposit
-func (s *SMT) GetProof(depositNum uint32) ([][TreeDepth]byte, error) {
-	// it's possible to call this with a deposit that doesn't exist. In theory this should be fine, but it doesn't really fit the intent of the code here
-	if uint64(depositNum) > s.Count {
-		return nil, fmt.Errorf("deposit number %d is greater than the count %d of leaves", depositNum, s.Count)
-	}
-
-	// At the bottom of the path, we need to find the deposit that is paired with the despot that we're checking. We should be able to flip the last bit and get the deposit number
-	siblingDepositNum := depositNum ^ 1
-
-	var siblingLeaf [TreeDepth]byte
-	if _, hasKey := s.Branches[siblingDepositNum]; !hasKey || siblingDepositNum > depositNum {
-		siblingLeaf = [TreeDepth]byte{}
-	} else {
-		siblingLeaf = s.Branches[siblingDepositNum][0]
-	}
-	siblings := [TreeDepth][TreeDepth]byte{}
-	siblings[0] = siblingLeaf
-	siblingMask := uint32(1)
-	// Iterate through the levels of the tree
-	for height := 1; height < TreeDepth; height += 1 {
-		// At each height, we're going to flip a bit in the deposit number in order to find the complimentary node for the given height
-		siblingMask = uint32(siblingMask<<1) + 1
-		flipMask := uint32(1 << height)
-		currentSiblingDeposit := (depositNum | siblingMask) ^ flipMask
-
-		// we'll get the branches from the particular deposit that we're interested in
-		b, hasKey := s.Branches[currentSiblingDeposit]
-		if !hasKey || isEmpty(b[height]) || currentSiblingDeposit > depositNum {
-			b = generateZeroHashes(TreeDepth)
+func (p *Proof) Check() error {
+	node := p.LeafHash
+	index := p.DepositCount
+	for height := 0; height < TreeDepth; height++ {
+		if ((index >> height) & 1) == 1 {
+			node = crypto.Keccak256Hash(p.Siblings[height][:], node[:])
+		} else {
+			node = crypto.Keccak256Hash(node[:], p.Siblings[height][:])
 		}
-		siblings[height] = b[height]
-		log.Info().
-			Int("height", height).
-			Uint32("current-sibling-num", currentSiblingDeposit).
-			Str("current-sibling", fmt.Sprintf("%b", currentSiblingDeposit)).
-			Str("current-mask", fmt.Sprintf("%b", siblingMask)).
-			Str("sib", common.Hash(b[height]).String()).
-			Msg("Getting Deposit")
-
 	}
-	return siblings[:], nil
-}
+	isProofValid := p.Root.Cmp(node) == 0
+	log.Info().
+		Bool("is-proof-valid", isProofValid).
+		Uint32("deposit-count", p.DepositCount).
+		Str("expected-root", p.Root.String()).
+		Str("checked-root", node.String()).Msg("checking proof")
+	if !isProofValid {
+		return fmt.Errorf("invalid proof")
+	}
 
+	return nil
+}
 func isEmpty(h [TreeDepth]byte) bool {
 	for i := 0; i < TreeDepth; i = i + 1 {
 		if h[i] != 0 {
