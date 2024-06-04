@@ -263,7 +263,7 @@ func (s *SMT) GetRoot(depositNum uint32) common.Hash {
 		left := crypto.Keccak256Hash(s.Branches[depositNum][height][:], node.Bytes())
 		right := crypto.Keccak256Hash(node.Bytes(), currentZeroHashHeight[:])
 		if depositNum == 24391 {
-			log.Debug().
+			log.Info().
 				Int("height", height).
 				Str("sib-1", node.String()).
 				Str("sib-2", common.Hash(s.Branches[depositNum][height]).String()).
@@ -274,17 +274,17 @@ func (s *SMT) GetRoot(depositNum uint32) common.Hash {
 		}
 
 		if ((size >> height) & 1) == 1 {
-			copy(siblings[height][:], currentZeroHashHeight[:])
+			copy(siblings[height][:], s.Branches[depositNum][height][:])
 			node = left
 		} else {
-			copy(siblings[height][:], s.Branches[depositNum][height][:])
+			copy(siblings[height][:], currentZeroHashHeight[:])
 			node = right
 		}
 	}
-	if depositNum^1 == 1 {
-		copy(siblings[0][:], zeroHashes[0][:])
-	} else {
+	if depositNum&1 == 1 {
 		copy(siblings[0][:], s.Branches[depositNum-1][0][:])
+	} else {
+		copy(siblings[0][:], zeroHashes[0][:])
 	}
 
 	s.Proofs[depositNum] = Proof{
