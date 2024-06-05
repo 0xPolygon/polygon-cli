@@ -152,6 +152,24 @@ var EmptyProofCmd = &cobra.Command{
 	},
 }
 
+var ZeroProofCmd = &cobra.Command{
+	Use:     "zero-proof",
+	Short:   "print a proof structure with the zero hashes",
+	Long:    "TODO",
+	Args:    cobra.NoArgs,
+	PreRunE: checkProofArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		p := new(Proof)
+
+		e := generateZeroHashes(TreeDepth)
+		for k, v := range e {
+			p.Siblings[k] = v
+		}
+		fmt.Println(p.String())
+		return nil
+	},
+}
+
 func checkProofArgs(cmd *cobra.Command, args []string) error {
 	return nil
 }
@@ -325,12 +343,12 @@ func (s *IMT) GetProof(depositNum uint32) Proof {
 	p := &Proof{
 		Siblings:     siblings,
 		DepositCount: depositNum,
-		LeafHash:     s.Branches[depositNum][0],
+		LeafHash:     s.Leaves[depositNum],
 	}
 
 	r, err := p.Check(s.Roots)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to validate proof")
+		log.Error().Err(err).Msg("failed to validate proof")
 	}
 	p.Root = r
 	s.Proofs[depositNum] = *p
@@ -381,6 +399,7 @@ func (p *Proof) Check(roots []common.Hash) (common.Hash, error) {
 	log.Info().
 		Bool("is-proof-valid", isProofValid).
 		Uint32("deposit-count", p.DepositCount).
+		Str("leaf-hash", p.LeafHash.String()).
 		Str("checked-root", node.String()).Msg("checking proof")
 	if !isProofValid {
 		return common.Hash{}, fmt.Errorf("invalid proof")
@@ -421,6 +440,8 @@ func init() {
 	ULxLyCmd.AddCommand(DepositsCmd)
 	ULxLyCmd.AddCommand(ProofCmd)
 	ULxLyCmd.AddCommand(EmptyProofCmd)
+	ULxLyCmd.AddCommand(ZeroProofCmd)
+
 	ulxlyInputArgs.FromBlock = DepositsCmd.PersistentFlags().Uint64("from-block", 0, "The block height to start query at.")
 	ulxlyInputArgs.ToBlock = DepositsCmd.PersistentFlags().Uint64("to-block", 0, "The block height to start query at.")
 	ulxlyInputArgs.RPCURL = DepositsCmd.PersistentFlags().String("rpc-url", "http://127.0.0.1:8545", "The RPC to query for events")
