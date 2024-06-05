@@ -134,6 +134,24 @@ var ProofCmd = &cobra.Command{
 	},
 }
 
+var EmptyProofCmd = &cobra.Command{
+	Use:     "empty-proof",
+	Short:   "print an empty proof structure",
+	Long:    "TODO",
+	Args:    cobra.NoArgs,
+	PreRunE: checkProofArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		p := new(Proof)
+
+		e := generateEmptyHashes(TreeDepth)
+		for k, v := range e {
+			p.Siblings[k] = v
+		}
+		fmt.Println(p.String())
+		return nil
+	},
+}
+
 func checkProofArgs(cmd *cobra.Command, args []string) error {
 	return nil
 }
@@ -402,6 +420,7 @@ func checkDepositArgs(cmd *cobra.Command, args []string) error {
 func init() {
 	ULxLyCmd.AddCommand(DepositsCmd)
 	ULxLyCmd.AddCommand(ProofCmd)
+	ULxLyCmd.AddCommand(EmptyProofCmd)
 	ulxlyInputArgs.FromBlock = DepositsCmd.PersistentFlags().Uint64("from-block", 0, "The block height to start query at.")
 	ulxlyInputArgs.ToBlock = DepositsCmd.PersistentFlags().Uint64("to-block", 0, "The block height to start query at.")
 	ulxlyInputArgs.RPCURL = DepositsCmd.PersistentFlags().String("rpc-url", "http://127.0.0.1:8545", "The RPC to query for events")
