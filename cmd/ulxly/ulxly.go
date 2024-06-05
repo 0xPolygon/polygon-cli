@@ -37,9 +37,9 @@ type uLxLyArgs struct {
 }
 
 type SMT struct {
-	Data       map[uint32][]common.Hash
 	Height     uint8
 	Branches   map[uint32][][TreeDepth]byte
+	Leaves     map[uint32]common.Hash
 	Root       [TreeDepth]byte
 	ZeroHashes [][TreeDepth]byte
 	Proofs     map[uint32]Proof
@@ -182,9 +182,10 @@ func readDeposits(rawDeposits []byte) error {
 
 	}
 
-	p := smt.Proofs[*ulxlyInputArgs.DepositNum]
+	// p := smt.Proofs[*ulxlyInputArgs.DepositNum]
+	smt.GetProof(*ulxlyInputArgs.DepositNum)
 
-	fmt.Println(p.String())
+	// fmt.Println(p.String())
 	return nil
 }
 
@@ -218,7 +219,7 @@ func hashDeposit(deposit *ulxly.UlxlyBridgeEvent) common.Hash {
 func (s *SMT) Init() {
 	s.Branches = make(map[uint32][][TreeDepth]byte)
 	s.Height = TreeDepth
-	s.Data = make(map[uint32][]common.Hash, 0)
+	s.Leaves = make(map[uint32]common.Hash)
 	s.ZeroHashes = generateZeroHashes(TreeDepth)
 	s.Proofs = make(map[uint32]Proof)
 }
@@ -230,12 +231,16 @@ func (s *SMT) Init() {
 func (s *SMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 	leaf := hashDeposit(deposit)
 	log.Debug().Str("leaf-hash", common.Bytes2Hex(leaf[:])).Msg("Leaf hash calculated")
+	// just keep a copy of the leaf indexed by deposit count for now
+	s.Leaves[deposit.DepositCount] = leaf
 
 	node := leaf
 	size := uint64(deposit.DepositCount) + 1
+
+	// copy the previous set of branches as a starting point. We're going to make copies of the branches at each deposit
 	branches := make([][TreeDepth]byte, TreeDepth)
 	if deposit.DepositCount == 0 {
-		branches = generateZeroHashes(TreeDepth)
+		branches = generateEmptyHashes(TreeDepth)
 	} else {
 		copy(branches, s.Branches[deposit.DepositCount-1])
 	}
@@ -252,32 +257,54 @@ func (s *SMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 }
 
 func (s *SMT) GetRoot(depositNum uint32) common.Hash {
-	var node common.Hash = s.Branches[depositNum][0]
+	node := common.Hash{}
 	size := depositNum + 1
-	var zeroHashes = s.ZeroHashes
+	currentZeroHashHeight := common.Hash{}
 
-	prevDepositNum := depositNum - 1
-	if depositNum == 0 {
-		prevDepositNum = 0
-	}
-
-	siblings := [TreeDepth]common.Hash{}
 	for height := 0; height < TreeDepth; height++ {
-		currentZeroHashHeight := zeroHashes[height]
-		left := crypto.Keccak256Hash(s.Branches[prevDepositNum][height][:], node.Bytes())
-		right := crypto.Keccak256Hash(node.Bytes(), currentZeroHashHeight[:])
-
 		if ((size >> height) & 1) == 1 {
-			copy(siblings[height][:], s.Branches[prevDepositNum][height][:])
-			node = left
+			// node = keccak256(abi.encodePacked(_branch[height], node));
+			node = crypto.Keccak256Hash(s.Branches[depositNum][height][:], node.Bytes())
+
 		} else {
-			copy(siblings[height][:], currentZeroHashHeight[:])
-			node = right
+			// node = keccak256(abi.encodePacked(node, currentZeroHashHeight));
+			node = crypto.Keccak256Hash(node.Bytes(), currentZeroHashHeight.Bytes())
 		}
+		currentZeroHashHeight = crypto.Keccak256Hash(currentZeroHashHeight.Bytes(), currentZeroHashHeight.Bytes())
+	}
+	return node
+}
+
+func (s *SMT) GetProof(depositNum uint32) Proof {
+	node := common.Hash{}
+	sibling := common.Hash{}
+	size := depositNum + 1
+	currentZeroHashHeight := common.Hash{}
+
+	siblings := [32]common.Hash{}
+	for height := 0; height < TreeDepth; height++ {
+		siblingDepositNum := getSiblingDepositNumber(depositNum, uint32(height))
+
+		if _, hasKey := s.Branches[siblingDepositNum]; hasKey {
+			sibling = s.Branches[siblingDepositNum][height]
+		} else {
+			sibling = currentZeroHashHeight
+		}
+
+		log.Info().Str("sibling", sibling.String()).Msg("Proof Inputs")
+		siblings[height] = sibling
+		if ((size >> height) & 1) == 1 {
+			// node = keccak256(abi.encodePacked(_branch[height], node));
+			node = crypto.Keccak256Hash(sibling.Bytes(), node.Bytes())
+		} else {
+			// node = keccak256(abi.encodePacked(node, currentZeroHashHeight));
+			node = crypto.Keccak256Hash(node.Bytes(), sibling.Bytes())
+		}
+		currentZeroHashHeight = crypto.Keccak256Hash(currentZeroHashHeight.Bytes(), currentZeroHashHeight.Bytes())
 	}
 	p := &Proof{
 		Siblings:     siblings,
-		Root:         node,
+		Root:         s.Root,
 		DepositCount: depositNum,
 		LeafHash:     s.Branches[depositNum][0],
 	}
@@ -287,7 +314,29 @@ func (s *SMT) GetRoot(depositNum uint32) common.Hash {
 		log.Error().Err(err).Msg("failed to validate proof")
 	}
 	s.Proofs[depositNum] = *p
-	return node
+	return *p
+}
+
+// getSiblingDepositNumber returns the sibling number of a given number at a specified level in an incremental Merkle tree.
+//
+// In an incremental Merkle tree, each node has a sibling node at each level of the tree.
+// The sibling node can be determined by flipping the bit at the current level and setting all bits to the right of the current level to 1.
+// This function calculates the sibling number based on the deposit number and the specified level.
+//
+// Parameters:
+// - depositNumber: the original number for which the sibling is to be found.
+// - level: the level in the Merkle tree at which to find the sibling.
+//
+// The logic works as follows:
+// 1. `1 << level` creates a binary number with a single 1 bit at the position corresponding to the level.
+// 2. `depositNumber ^ (1 << level)` flips the bit at the position corresponding to the level in the depositNumber.
+// 3. `(1 << level) - 1` creates a binary number with all bits to the right of the current level set to 1.
+// 4. `| ((1 << level) - 1)` ensures that all bits to the right of the current level are set to 1 in the result.
+//
+// The function effectively finds the sibling deposit number at each level of the Merkle tree by manipulating the bits accordingly.
+
+func getSiblingDepositNumber(depositNumber, level uint32) uint32 {
+	return depositNumber ^ (1 << level) | ((1 << level) - 1)
 }
 
 func (p *Proof) Check() error {
@@ -327,6 +376,15 @@ func generateZeroHashes(height uint8) [][TreeDepth]byte {
 	zeroHashes = append(zeroHashes, common.Hash{})
 	for i := 1; i <= int(height); i++ {
 		zeroHashes = append(zeroHashes, crypto.Keccak256Hash(zeroHashes[i-1][:], zeroHashes[i-1][:]))
+	}
+	return zeroHashes
+}
+
+func generateEmptyHashes(height uint8) [][TreeDepth]byte {
+	var zeroHashes = [][TreeDepth]byte{}
+	zeroHashes = append(zeroHashes, common.Hash{})
+	for i := 1; i <= int(height); i++ {
+		zeroHashes = append(zeroHashes, common.Hash{})
 	}
 	return zeroHashes
 }
