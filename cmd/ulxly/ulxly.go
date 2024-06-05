@@ -36,11 +36,11 @@ type uLxLyArgs struct {
 	DepositNum    *uint32
 }
 
-type SMT struct {
+type IMT struct {
 	Height     uint8
 	Branches   map[uint32][][TreeDepth]byte
 	Leaves     map[uint32]common.Hash
-	Root       [TreeDepth]byte
+	Roots      []common.Hash
 	ZeroHashes [][TreeDepth]byte
 	Proofs     map[uint32]Proof
 }
@@ -152,8 +152,8 @@ func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
 func readDeposits(rawDeposits []byte) error {
 	buf := bytes.NewBuffer(rawDeposits)
 	scanner := bufio.NewScanner(buf)
-	smt := new(SMT)
-	smt.Init()
+	imt := new(IMT)
+	imt.Init()
 	seenDeposit := make(map[uint32]common.Hash, 0)
 	lastDeposit := uint32(0)
 	for scanner.Scan() {
@@ -172,20 +172,19 @@ func readDeposits(rawDeposits []byte) error {
 			return fmt.Errorf("missing deposit: %d", lastDeposit+1)
 		}
 		lastDeposit = evt.DepositCount
-		smt.AddLeaf(evt)
+		imt.AddLeaf(evt)
 		log.Info().
 			Uint64("block-number", evt.Raw.BlockNumber).
 			Uint32("deposit-count", evt.DepositCount).
 			Str("tx-hash", evt.Raw.TxHash.String()).
-			Str("root", common.Hash(smt.Root).String()).
+			Str("root", common.Hash(imt.Roots[len(imt.Roots)-1]).String()).
 			Msg("adding event to tree")
 
 	}
 
-	// p := smt.Proofs[*ulxlyInputArgs.DepositNum]
-	smt.GetProof(*ulxlyInputArgs.DepositNum)
+	p := imt.GetProof(*ulxlyInputArgs.DepositNum)
 
-	// fmt.Println(p.String())
+	fmt.Println(p.String())
 	return nil
 }
 
@@ -216,7 +215,7 @@ func hashDeposit(deposit *ulxly.UlxlyBridgeEvent) common.Hash {
 	return res
 }
 
-func (s *SMT) Init() {
+func (s *IMT) Init() {
 	s.Branches = make(map[uint32][][TreeDepth]byte)
 	s.Height = TreeDepth
 	s.Leaves = make(map[uint32]common.Hash)
@@ -228,7 +227,7 @@ func (s *SMT) Init() {
 // cast call --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo --block 4880876 0xad1490c248c5d3cbae399fd529b79b42984277df 'lastMainnetExitRoot()(bytes32)'
 // The first mainnet exit root for cardona is
 // 0x112b077c64ed4a22dfb0ab3c2622d6ddbf3a5423afeb05878c2c21c4cb5e65da
-func (s *SMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
+func (s *IMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 	leaf := hashDeposit(deposit)
 	log.Debug().Str("leaf-hash", common.Bytes2Hex(leaf[:])).Msg("Leaf hash calculated")
 	// just keep a copy of the leaf indexed by deposit count for now
@@ -253,10 +252,10 @@ func (s *SMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 		node = crypto.Keccak256Hash(branches[height][:], node[:])
 	}
 	s.Branches[deposit.DepositCount] = branches
-	s.Root = s.GetRoot(deposit.DepositCount)
+	s.Roots = append(s.Roots, s.GetRoot(deposit.DepositCount))
 }
 
-func (s *SMT) GetRoot(depositNum uint32) common.Hash {
+func (s *IMT) GetRoot(depositNum uint32) common.Hash {
 	node := common.Hash{}
 	size := depositNum + 1
 	currentZeroHashHeight := common.Hash{}
@@ -275,7 +274,7 @@ func (s *SMT) GetRoot(depositNum uint32) common.Hash {
 	return node
 }
 
-func (s *SMT) GetProof(depositNum uint32) Proof {
+func (s *IMT) GetProof(depositNum uint32) Proof {
 	node := common.Hash{}
 	sibling := common.Hash{}
 	size := depositNum + 1
@@ -304,15 +303,15 @@ func (s *SMT) GetProof(depositNum uint32) Proof {
 	}
 	p := &Proof{
 		Siblings:     siblings,
-		Root:         s.Root,
 		DepositCount: depositNum,
 		LeafHash:     s.Branches[depositNum][0],
 	}
 
-	err := p.Check()
+	r, err := p.Check(s.Roots)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to validate proof")
+		log.Fatal().Err(err).Msg("failed to validate proof")
 	}
+	p.Root = r
 	s.Proofs[depositNum] = *p
 	return *p
 }
@@ -339,7 +338,7 @@ func getSiblingDepositNumber(depositNumber, level uint32) uint32 {
 	return depositNumber ^ (1 << level) | ((1 << level) - 1)
 }
 
-func (p *Proof) Check() error {
+func (p *Proof) Check(roots []common.Hash) (common.Hash, error) {
 	node := p.LeafHash
 	index := p.DepositCount
 	for height := 0; height < TreeDepth; height++ {
@@ -349,25 +348,24 @@ func (p *Proof) Check() error {
 			node = crypto.Keccak256Hash(node[:], p.Siblings[height][:])
 		}
 	}
-	isProofValid := p.Root.Cmp(node) == 0
+
+	isProofValid := false
+	for i := len(roots) - 1; i >= 0; i-- {
+		if roots[i].Cmp(node) == 0 {
+			isProofValid = true
+			break
+		}
+	}
+
 	log.Info().
 		Bool("is-proof-valid", isProofValid).
 		Uint32("deposit-count", p.DepositCount).
-		Str("expected-root", p.Root.String()).
 		Str("checked-root", node.String()).Msg("checking proof")
 	if !isProofValid {
-		return fmt.Errorf("invalid proof")
+		return common.Hash{}, fmt.Errorf("invalid proof")
 	}
 
-	return nil
-}
-func isEmpty(h [TreeDepth]byte) bool {
-	for i := 0; i < TreeDepth; i = i + 1 {
-		if h[i] != 0 {
-			return false
-		}
-	}
-	return true
+	return node, nil
 }
 
 // https://eth2book.info/capella/part2/deposits-withdrawals/contract/
