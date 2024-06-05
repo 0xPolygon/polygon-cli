@@ -179,7 +179,10 @@ func readDeposits(rawDeposits []byte) error {
 			Str("tx-hash", evt.Raw.TxHash.String()).
 			Str("root", common.Hash(imt.Roots[len(imt.Roots)-1]).String()).
 			Msg("adding event to tree")
-
+		// There's no point adding more leaves if we can prove the deposit already?
+		if evt.DepositCount >= *ulxlyInputArgs.DepositNum {
+			break
+		}
 	}
 
 	p := imt.GetProof(*ulxlyInputArgs.DepositNum)
@@ -370,19 +373,19 @@ func (p *Proof) Check(roots []common.Hash) (common.Hash, error) {
 
 // https://eth2book.info/capella/part2/deposits-withdrawals/contract/
 func generateZeroHashes(height uint8) [][TreeDepth]byte {
-	var zeroHashes = [][TreeDepth]byte{}
-	zeroHashes = append(zeroHashes, common.Hash{})
-	for i := 1; i <= int(height); i++ {
-		zeroHashes = append(zeroHashes, crypto.Keccak256Hash(zeroHashes[i-1][:], zeroHashes[i-1][:]))
+	zeroHashes := make([][TreeDepth]byte, height)
+	zeroHashes[0] = common.Hash{}
+	for i := 1; i < int(height); i++ {
+		zeroHashes[i] = crypto.Keccak256Hash(zeroHashes[i-1][:], zeroHashes[i-1][:])
 	}
 	return zeroHashes
 }
 
 func generateEmptyHashes(height uint8) [][TreeDepth]byte {
-	var zeroHashes = [][TreeDepth]byte{}
-	zeroHashes = append(zeroHashes, common.Hash{})
-	for i := 1; i <= int(height); i++ {
-		zeroHashes = append(zeroHashes, common.Hash{})
+	zeroHashes := make([][TreeDepth]byte, TreeDepth)
+	zeroHashes[0] = common.Hash{}
+	for i := 1; i < int(height); i++ {
+		zeroHashes[i] = common.Hash{}
 	}
 	return zeroHashes
 }
