@@ -282,6 +282,10 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return errors.New("using call only with adaptive rate limit doesn't make sense")
 	}
 
+	if hasMode(loadTestModeBlob, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode {
+		return errors.New("Blob mode should only be used by itself. Blob mode will take significantly longer than other transactions to finalize, and the address will be reserved, preventing other transactions form being made.")
+	}
+
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
 	return nil
