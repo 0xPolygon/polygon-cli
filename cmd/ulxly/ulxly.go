@@ -156,9 +156,7 @@ can be useful when you need to submit a dummy proof.`,
 		p := new(Proof)
 
 		e := generateEmptyHashes(TreeDepth)
-		for k, v := range e {
-			p.Siblings[k] = v
-		}
+		copy(p.Siblings[:], e)
 		fmt.Println(p.String())
 		return nil
 	},
@@ -179,9 +177,7 @@ or if it's actually an intermediate hash.`,
 		p := new(Proof)
 
 		e := generateZeroHashes(TreeDepth)
-		for k, v := range e {
-			p.Siblings[k] = v
-		}
+		copy(p.Siblings[:], e)
 		fmt.Println(p.String())
 		return nil
 	},
