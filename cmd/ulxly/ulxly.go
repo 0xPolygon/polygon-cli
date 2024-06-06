@@ -37,10 +37,10 @@ type uLxLyArgs struct {
 }
 
 type IMT struct {
-	Branches   map[uint32][][TreeDepth]byte
+	Branches   map[uint32][]common.Hash
 	Leaves     map[uint32]common.Hash
 	Roots      []common.Hash
-	ZeroHashes [][TreeDepth]byte
+	ZeroHashes []common.Hash
 	Proofs     map[uint32]Proof
 }
 type Proof struct {
@@ -242,19 +242,19 @@ func (p *Proof) String() string {
 // https://sepolia.etherscan.io/tx/0xf2003cf43a205bc777bc2d22fcb05b69ebb23464b39250d164cf9b09150b7833#eventlog
 // And that seems to match a call to `getLeafValue`
 func hashDeposit(deposit *ulxly.UlxlyBridgeEvent) common.Hash {
-	var res [TreeDepth]byte
+	var res common.Hash
 	origNet := make([]byte, 4) //nolint:gomnd
 	binary.BigEndian.PutUint32(origNet, deposit.OriginNetwork)
 	destNet := make([]byte, 4) //nolint:gomnd
 	binary.BigEndian.PutUint32(destNet, deposit.DestinationNetwork)
-	var buf [TreeDepth]byte
+	var buf common.Hash
 	metaHash := crypto.Keccak256Hash(deposit.Metadata)
 	copy(res[:], crypto.Keccak256Hash([]byte{deposit.LeafType}, origNet, deposit.OriginAddress.Bytes(), destNet, deposit.DestinationAddress[:], deposit.Amount.FillBytes(buf[:]), metaHash.Bytes()).Bytes())
 	return res
 }
 
 func (s *IMT) Init() {
-	s.Branches = make(map[uint32][][TreeDepth]byte)
+	s.Branches = make(map[uint32][]common.Hash)
 	s.Leaves = make(map[uint32]common.Hash)
 	s.ZeroHashes = generateZeroHashes(TreeDepth)
 	s.Proofs = make(map[uint32]Proof)
@@ -274,7 +274,7 @@ func (s *IMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 	size := uint64(deposit.DepositCount) + 1
 
 	// copy the previous set of branches as a starting point. We're going to make copies of the branches at each deposit
-	branches := make([][TreeDepth]byte, TreeDepth)
+	branches := make([]common.Hash, TreeDepth)
 	if deposit.DepositCount == 0 {
 		branches = generateEmptyHashes(TreeDepth)
 	} else {
@@ -407,8 +407,8 @@ func (p *Proof) Check(roots []common.Hash) (common.Hash, error) {
 }
 
 // https://eth2book.info/capella/part2/deposits-withdrawals/contract/
-func generateZeroHashes(height uint8) [][TreeDepth]byte {
-	zeroHashes := make([][TreeDepth]byte, height)
+func generateZeroHashes(height uint8) []common.Hash {
+	zeroHashes := make([]common.Hash, height)
 	zeroHashes[0] = common.Hash{}
 	for i := 1; i < int(height); i++ {
 		zeroHashes[i] = crypto.Keccak256Hash(zeroHashes[i-1][:], zeroHashes[i-1][:])
@@ -416,8 +416,8 @@ func generateZeroHashes(height uint8) [][TreeDepth]byte {
 	return zeroHashes
 }
 
-func generateEmptyHashes(height uint8) [][TreeDepth]byte {
-	zeroHashes := make([][TreeDepth]byte, TreeDepth)
+func generateEmptyHashes(height uint8) []common.Hash {
+	zeroHashes := make([]common.Hash, height)
 	zeroHashes[0] = common.Hash{}
 	for i := 1; i < int(height); i++ {
 		zeroHashes[i] = common.Hash{}
