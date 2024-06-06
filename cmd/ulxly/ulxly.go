@@ -110,7 +110,10 @@ var DepositsCmd = &cobra.Command{
 				}
 				fmt.Println(string(jBytes))
 			}
-			evtV2Iterator.Close()
+			err = evtV2Iterator.Close()
+			if err != nil {
+				log.Error().Err(err).Msg("error closing event iterator")
+			}
 			currentBlock = endBlock
 		}
 
@@ -128,8 +131,7 @@ var ProofCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		readDeposits(rawDepositData)
-		return nil
+		return readDeposits(rawDepositData)
 	},
 }
 
@@ -317,7 +319,7 @@ func (s *IMT) GetProof(depositNum uint32) Proof {
 	size := depositNum + 1
 	currentZeroHashHeight := common.Hash{}
 
-	siblings := [32]common.Hash{}
+	siblings := [TreeDepth]common.Hash{}
 	for height := 0; height < TreeDepth; height++ {
 		siblingDepositNum := getSiblingDepositNumber(depositNum, uint32(height))
 
