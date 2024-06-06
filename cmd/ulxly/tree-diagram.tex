@@ -1,0 +1,218 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{tikz, pgfplots}
+\usepackage[landscape,margin=1in]{geometry}
+\usetikzlibrary{positioning,shapes,fit}
+
+% GNOME HIG Blue Palette
+\definecolor{blue1}{RGB}{153, 193, 241}
+\definecolor{blue2}{RGB}{98, 160, 234}
+\definecolor{blue3}{RGB}{53, 132, 228}
+\definecolor{blue4}{RGB}{28, 113, 216}
+\definecolor{blue5}{RGB}{26, 95, 180}
+
+% GNOME HIG Green Palette
+\definecolor{green1}{RGB}{143, 240, 164}
+\definecolor{green2}{RGB}{87, 227, 137}
+\definecolor{green3}{RGB}{51, 209, 122}
+\definecolor{green4}{RGB}{46, 194, 126}
+\definecolor{green5}{RGB}{38, 162, 105}
+
+% GNOME HIG Yellow Palette
+\definecolor{yellow1}{RGB}{249, 240, 107}
+\definecolor{yellow2}{RGB}{248, 228, 92}
+\definecolor{yellow3}{RGB}{246, 211, 45}
+\definecolor{yellow4}{RGB}{245, 194, 17}
+\definecolor{yellow5}{RGB}{229, 165, 10}
+
+% GNOME HIG Orange Palette
+\definecolor{orange1}{RGB}{255, 190, 111}
+\definecolor{orange2}{RGB}{255, 163, 72}
+\definecolor{orange3}{RGB}{255, 120, 0}
+\definecolor{orange4}{RGB}{230, 97, 0}
+\definecolor{orange5}{RGB}{198, 70, 0}
+
+% GNOME HIG Red Palette
+\definecolor{red1}{RGB}{246, 97, 81}
+\definecolor{red2}{RGB}{237, 51, 59}
+\definecolor{red3}{RGB}{224, 27, 36}
+\definecolor{red4}{RGB}{192, 28, 40}
+\definecolor{red5}{RGB}{165, 29, 45}
+
+% GNOME HIG Purple Palette
+\definecolor{purple1}{RGB}{220, 138, 221}
+\definecolor{purple2}{RGB}{192, 97, 203}
+\definecolor{purple3}{RGB}{145, 65, 172}
+\definecolor{purple4}{RGB}{129, 61, 156}
+\definecolor{purple5}{RGB}{97, 53, 131}
+
+% GNOME HIG Brown Palette
+\definecolor{brown1}{RGB}{205, 171, 143}
+\definecolor{brown2}{RGB}{181, 131, 90}
+\definecolor{brown3}{RGB}{152, 106, 68}
+\definecolor{brown4}{RGB}{134, 94, 60}
+\definecolor{brown5}{RGB}{99, 69, 44}
+
+% GNOME HIG Light Palette
+\definecolor{light1}{RGB}{255, 255, 255}
+\definecolor{light2}{RGB}{246, 245, 244}
+\definecolor{light3}{RGB}{222, 221, 218}
+\definecolor{light4}{RGB}{192, 191, 188}
+\definecolor{light5}{RGB}{154, 153, 150}
+
+% GNOME HIG Dark Palette
+\definecolor{dark1}{RGB}{119, 118, 123}
+\definecolor{dark2}{RGB}{94, 92, 100}
+\definecolor{dark3}{RGB}{61, 56, 70}
+\definecolor{dark4}{RGB}{36, 31, 49}
+\definecolor{dark5}{RGB}{0, 0, 0}
+
+
+\begin{document}
+
+\begin{center}
+  \begin{tikzpicture}[
+      intermediate-node/.style={rectangle, draw=yellow5, fill=yellow1, minimum width=0.25in, minimum height=0.25in},
+      root-node/.style={rectangle, draw=green5, fill=green1, minimum width=0.25in, minimum height=0.25in},
+      leaf-node/.style={rectangle, draw=purple5, fill=purple1, minimum width=0.25in, minimum height=0.25in},
+      bin-value/.style={rectangle},
+      level/.style={rectangle},
+    ]
+
+    \begin{scope}[transform canvas={scale=0.70}]
+
+      \node[root-node](root0){$H(H(H(H(H(0),H(1)),H(H(2),H(3))),H(H(H(4),H(5)),H(H(6),H(7)))),H(H(H(H(8),H(9)),H(H(10),H(11))),H(H(H(12),H(13)),H(H(14),H(15)))))$};
+
+      \node[intermediate-node](b-0-abcdefgh)[below left=1in and -3.75in of root0]{$H(H(H(H(0),H(1)),H(H(2),H(3))),H(H(H(4),H(5)),H(H(6),H(7))))$};
+      \node[intermediate-node](b-0-ijklmnop)[below right=1in and -3.75in of root0]{$H(H(H(H(8),H(9)),H(H(10),H(11))),H(H(H(12),H(13)),H(H(14),H(15))))$};
+
+      \node[intermediate-node](b-0-abcd)[below left=1.0in and -1.75in of b-0-abcdefgh]{$H(H(H(0),H(1)),H(H(2),H(3)))$};
+      \node[intermediate-node](b-0-efgh)[below right=1.0in and -1.75in of b-0-abcdefgh]{$H(H(H(4),H(5)),H(H(6),H(7)))$};
+      \node[intermediate-node](b-0-ijkl)[below left=1.0in and -1.75in of b-0-ijklmnop]{$H(H(H(8),H(9)),H(H(10),H(11)))$};
+      \node[intermediate-node](b-0-mnop)[below right=1.0in and -1.75in of b-0-ijklmnop]{$H(H(H(12),H(13)),H(H(14),H(15)))$};
+
+      \node[intermediate-node](b-0-ab)[below left=1.0in and -0.75in of b-0-abcd]{$H(H(0),H(1))$};
+      \node[intermediate-node](b-0-cd)[below right=1.0in and -0.75in of b-0-abcd]{$H(H(2),H(3))$};
+      \node[intermediate-node](b-0-ef)[below left=1.0in and -0.75in of b-0-efgh]{$H(H(4),H(5))$};
+      \node[intermediate-node](b-0-gh)[below right=1.0in and -0.75in of b-0-efgh]{$H(H(6),H(7))$};
+      \node[intermediate-node](b-0-ij)[below left=1.0in and -0.75in of b-0-ijkl]{$H(H(8),H(9))$};
+      \node[intermediate-node](b-0-kl)[below right=1.0in and -0.75in of b-0-ijkl]{$H(H(10),H(11))$};
+      \node[intermediate-node](b-0-mn)[below left=1.0in and -0.75in of b-0-mnop]{$H(H(12),H(13))$};
+      \node[intermediate-node](b-0-op)[below right=1.0in and -0.75in of b-0-mnop]{$H(H(14),H(15))$};
+
+      \node[intermediate-node](l-0-0)[below left=1.0in and -0.30in of b-0-ab]{$H(0)$};
+      \node[intermediate-node](l-0-1)[below right=1.0in and -0.30in of b-0-ab]{$H(1)$};
+      \node[intermediate-node](l-0-2)[below left=1.0in and -0.30in of b-0-cd]{$H(2)$};
+      \node[intermediate-node](l-0-3)[below right=1.0in and -0.30in of b-0-cd]{$H(3)$};
+      \node[intermediate-node](l-0-4)[below left=1.0in and -0.30in of b-0-ef]{$H(4)$};
+      \node[intermediate-node](l-0-5)[below right=1.0in and -0.30in of b-0-ef]{$H(5)$};
+      \node[intermediate-node](l-0-6)[below left=1.0in and -0.30in of b-0-gh]{$H(6)$};
+      \node[intermediate-node](l-0-7)[below right=1.0in and -0.30in of b-0-gh]{$H(7)$};
+      \node[intermediate-node](l-0-8)[below left=1.0in and -0.30in of b-0-ij]{$H(8)$};
+      \node[intermediate-node](l-0-9)[below right=1.0in and -0.30in of b-0-ij]{$H(9)$};
+      \node[intermediate-node](l-0-10)[below left=1.0in and -0.30in of b-0-kl]{$H(10)$};
+      \node[intermediate-node](l-0-11)[below right=1.0in and -0.30in of b-0-kl]{$H(11)$};
+      \node[intermediate-node](l-0-12)[below left=1.0in and -0.30in of b-0-mn]{$H(12)$};
+      \node[intermediate-node](l-0-13)[below right=1.0in and -0.30in of b-0-mn]{$H(13)$};
+      \node[intermediate-node](l-0-14)[below left=1.0in and -0.30in of b-0-op]{$H(14)$};
+      \node[intermediate-node](l-0-15)[below right=1.0in and -0.30in of b-0-op]{$H(15)$};
+
+      \node[leaf-node](l-1-0)[below=0.5in of l-0-0]{$0$};
+      \node[leaf-node](l-1-1)[below=0.5in of l-0-1]{$1$};
+      \node[leaf-node](l-1-2)[below=0.5in of l-0-2]{$2$};
+      \node[leaf-node](l-1-3)[below=0.5in of l-0-3]{$3$};
+      \node[leaf-node](l-1-4)[below=0.5in of l-0-4]{$4$};
+      \node[leaf-node](l-1-5)[below=0.5in of l-0-5]{$5$};
+      \node[leaf-node](l-1-6)[below=0.5in of l-0-6]{$6$};
+      \node[leaf-node](l-1-7)[below=0.5in of l-0-7]{$7$};
+      \node[leaf-node](l-1-8)[below=0.5in of l-0-8]{$8$};
+      \node[leaf-node](l-1-9)[below=0.5in of l-0-9]{$9$};
+      \node[leaf-node](l-1-10)[below=0.5in of l-0-10]{$10$};
+      \node[leaf-node](l-1-11)[below=0.5in of l-0-11]{$11$};
+      \node[leaf-node](l-1-12)[below=0.5in of l-0-12]{$12$};
+      \node[leaf-node](l-1-13)[below=0.5in of l-0-13]{$13$};
+      \node[leaf-node](l-1-14)[below=0.5in of l-0-14]{$14$};
+      \node[leaf-node](l-1-15)[below=0.5in of l-0-15]{$15$};
+
+      \node[bin-value](l-2-0)[below=0.25in of l-1-0]{\texttt{0000}};
+      \node[bin-value](l-2-1)[below=0.25in of l-1-1]{\texttt{0001}};
+      \node[bin-value](l-2-2)[below=0.25in of l-1-2]{\texttt{0010}};
+      \node[bin-value](l-2-3)[below=0.25in of l-1-3]{\texttt{0011}};
+      \node[bin-value](l-2-4)[below=0.25in of l-1-4]{\texttt{0100}};
+      \node[bin-value](l-2-5)[below=0.25in of l-1-5]{\texttt{0101}};
+      \node[bin-value](l-2-6)[below=0.25in of l-1-6]{\texttt{0110}};
+      \node[bin-value](l-2-7)[below=0.25in of l-1-7]{\texttt{0111}};
+      \node[bin-value](l-2-8)[below=0.25in of l-1-8]{\texttt{1000}};
+      \node[bin-value](l-2-9)[below=0.25in of l-1-9]{\texttt{1001}};
+      \node[bin-value](l-2-10)[below=0.25in of l-1-10]{\texttt{1010}};
+      \node[bin-value](l-2-11)[below=0.25in of l-1-11]{\texttt{1011}};
+      \node[bin-value](l-2-12)[below=0.25in of l-1-12]{\texttt{1100}};
+      \node[bin-value](l-2-13)[below=0.25in of l-1-13]{\texttt{1101}};
+      \node[bin-value](l-2-14)[below=0.25in of l-1-14]{\texttt{1110}};
+      \node[bin-value](l-2-15)[below=0.25in of l-1-15]{\texttt{1111}};
+
+      \node[level](level-0)[left=0.5in of l-0-0]{Level 0 - $2^4$};
+      \node[level](level-1)[above=1.05in of level-0]{Level 1 - $2^3$};
+      \node[level](level-2)[above=1.05in of level-1]{Level 2 - $2^2$};
+      \node[level](level-3)[above=1.05in of level-2]{Level 3 - $2^1$};
+      \node[level](level-4)[above=1.05in of level-3]{Level 4 - $2^0$};
+      \node[level](leaf-value)[below=0.6in of level-0]{Leaf};
+
+      \draw[-] (root0) to (b-0-abcdefgh);
+      \draw[-] (root0) to (b-0-ijklmnop);
+
+      \draw[-] (b-0-abcdefgh) to (b-0-abcd);
+      \draw[-] (b-0-abcdefgh) to (b-0-efgh);
+      \draw[-] (b-0-ijklmnop) to (b-0-ijkl);
+      \draw[-] (b-0-ijklmnop) to (b-0-mnop);
+
+      \draw[-] (b-0-abcd) to (b-0-ab);
+      \draw[-] (b-0-abcd) to (b-0-cd);
+      \draw[-] (b-0-efgh) to (b-0-ef);
+      \draw[-] (b-0-efgh) to (b-0-gh);
+      \draw[-] (b-0-ijkl) to (b-0-ij);
+      \draw[-] (b-0-ijkl) to (b-0-kl);
+      \draw[-] (b-0-mnop) to (b-0-mn);
+      \draw[-] (b-0-mnop) to (b-0-op);
+
+      \draw[-] (b-0-ab) to (l-0-0);
+      \draw[-] (b-0-ab) to (l-0-1);
+      \draw[-] (b-0-cd) to (l-0-2);
+      \draw[-] (b-0-cd) to (l-0-3);
+      \draw[-] (b-0-ef) to (l-0-4);
+      \draw[-] (b-0-ef) to (l-0-5);
+      \draw[-] (b-0-gh) to (l-0-6);
+      \draw[-] (b-0-gh) to (l-0-7);
+      \draw[-] (b-0-ij) to (l-0-8);
+      \draw[-] (b-0-ij) to (l-0-9);
+      \draw[-] (b-0-kl) to (l-0-10);
+      \draw[-] (b-0-kl) to (l-0-11);
+      \draw[-] (b-0-mn) to (l-0-12);
+      \draw[-] (b-0-mn) to (l-0-13);
+      \draw[-] (b-0-op) to (l-0-14);
+      \draw[-] (b-0-op) to (l-0-15);
+
+      \draw[-] (l-0-0) to (l-1-0);
+      \draw[-] (l-0-1) to (l-1-1);
+      \draw[-] (l-0-2) to (l-1-2);
+      \draw[-] (l-0-3) to (l-1-3);
+      \draw[-] (l-0-4) to (l-1-4);
+      \draw[-] (l-0-5) to (l-1-5);
+      \draw[-] (l-0-6) to (l-1-6);
+      \draw[-] (l-0-7) to (l-1-7);
+      \draw[-] (l-0-8) to (l-1-8);
+      \draw[-] (l-0-9) to (l-1-9);
+      \draw[-] (l-0-10) to (l-1-10);
+      \draw[-] (l-0-11) to (l-1-11);
+      \draw[-] (l-0-12) to (l-1-12);
+      \draw[-] (l-0-13) to (l-1-13);
+      \draw[-] (l-0-14) to (l-1-14);
+      \draw[-] (l-0-15) to (l-1-15);
+
+    \end{scope}
+
+  \end{tikzpicture}
+
+\end{center}
+
+\end{document}
