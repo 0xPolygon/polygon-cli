@@ -69,6 +69,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli signer](polycli_signer.md) - Utilities for security signing transactions
 
+- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the lxly bridge
+
 - [polycli version](polycli_version.md) - Get the current version of this application
 
 - [polycli wallet](polycli_wallet.md) - Create or inspect BIP39(ish) wallets.

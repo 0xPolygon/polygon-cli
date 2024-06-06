@@ -3,6 +3,7 @@ package ulxly
 import (
 	"bufio"
 	"bytes"
+	_ "embed"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -21,7 +22,10 @@ import (
 )
 
 const (
-	// TreeDepth of 32 is pulled directly from the _DEPOSIT_CONTRACT_TREE_DEPTH from the smart contract. We could make this a variable as well https://github.com/0xPolygonHermez/zkevm-contracts/blob/54f58c8b64806429bc4d5c52248f29cf80ba401c/contracts/v2/lib/DepositContractBase.sol#L15
+	// TreeDepth of 32 is pulled directly from the
+	// _DEPOSIT_CONTRACT_TREE_DEPTH from the smart contract. We
+	// could make this a variable as well
+	// https://github.com/0xPolygonHermez/zkevm-contracts/blob/54f58c8b64806429bc4d5c52248f29cf80ba401c/contracts/v2/lib/DepositContractBase.sol#L15
 	TreeDepth = 32
 )
 
@@ -55,14 +59,16 @@ var ulxlyInputArgs uLxLyArgs
 var ULxLyCmd = &cobra.Command{
 	Use:   "ulxly",
 	Short: "Utilities for interacting with the lxly bridge",
-	Long:  "TODO",
+	Long:  "These are low level tools for directly scanning bridge events and constructing proofs.",
 	Args:  cobra.NoArgs,
 }
 
+//go:embed depositUsage.md
+var depositUsage string
 var DepositsCmd = &cobra.Command{
 	Use:     "deposits",
 	Short:   "get a range of deposits",
-	Long:    "TODO",
+	Long:    depositUsage,
 	Args:    cobra.NoArgs,
 	PreRunE: checkDepositArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -118,10 +124,13 @@ var DepositsCmd = &cobra.Command{
 		return nil
 	},
 }
+
+//go:embed proofUsage.md
+var proofUsage string
 var ProofCmd = &cobra.Command{
 	Use:     "proof",
 	Short:   "generate a merkle proof",
-	Long:    "TODO",
+	Long:    proofUsage,
 	Args:    cobra.NoArgs,
 	PreRunE: checkProofArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -134,9 +143,12 @@ var ProofCmd = &cobra.Command{
 }
 
 var EmptyProofCmd = &cobra.Command{
-	Use:     "empty-proof",
-	Short:   "print an empty proof structure",
-	Long:    "TODO",
+	Use:   "empty-proof",
+	Short: "print an empty proof structure",
+	Long: `Use this command to print an empty proof response that's filled with
+zero-valued siblings like
+0x0000000000000000000000000000000000000000000000000000000000000000. This
+can be useful when you need to submit a dummy proof.`,
 	Args:    cobra.NoArgs,
 	PreRunE: checkProofArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -152,9 +164,14 @@ var EmptyProofCmd = &cobra.Command{
 }
 
 var ZeroProofCmd = &cobra.Command{
-	Use:     "zero-proof",
-	Short:   "print a proof structure with the zero hashes",
-	Long:    "TODO",
+	Use:   "zero-proof",
+	Short: "print a proof structure with the zero hashes",
+	Long: `Use this command to print a proof response that's filled with the zero
+hashes. This values are very helpful for debugging because it would
+tell you how populated the tree is and roughly which leaves and
+siblings are empty. It's also helpful for sanity checking a proof
+response to understand if the hashed value is part of the zero hashes
+or if it's actually an intermediate hash.`,
 	Args:    cobra.NoArgs,
 	PreRunE: checkProofArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -369,7 +386,10 @@ func getSiblingDepositNumber(depositNumber, level uint32) uint32 {
 	return depositNumber ^ (1 << level) | ((1 << level) - 1)
 }
 
-// Check is a sanity check of a proof in order to make sure that the proof that was generated creates a root that we recognize. This was useful while testing in order to avoid verifying that the proof works or doesn't work onchain
+// Check is a sanity check of a proof in order to make sure that the
+// proof that was generated creates a root that we recognize. This was
+// useful while testing in order to avoid verifying that the proof
+// works or doesn't work onchain
 func (p *Proof) Check(roots []common.Hash) (common.Hash, error) {
 	node := p.LeafHash
 	index := p.DepositCount
