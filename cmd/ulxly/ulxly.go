@@ -59,8 +59,6 @@ var ULxLyCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 }
 
-// polycli ulxly deposits --bridge-address 0x528e26b25a34a4A5d0dbDa1d57D318153d2ED582 --rpc-url https://sepolia-rpc.invalid --from-block 4880876 --to-block 6015235 --filter-size 9999
-// polycli ulxly deposits --bridge-address 0x528e26b25a34a4A5d0dbDa1d57D318153d2ED582 --rpc-url https://sepolia-rpc.invalid --from-block 4880876 --to-block 6025854 --filter-size 999 > cardona-4880876-to-6025854.ndjson
 var DepositsCmd = &cobra.Command{
 	Use:     "deposits",
 	Short:   "get a range of deposits",
@@ -228,6 +226,7 @@ func readDeposits(rawDeposits []byte) error {
 	return nil
 }
 
+// String will create the json representation of the proof
 func (p *Proof) String() string {
 	jsonBytes, err := json.Marshal(p)
 	if err != nil {
@@ -238,11 +237,7 @@ func (p *Proof) String() string {
 
 }
 
-// This implementation looks good. We get this hash
-// 0xf8c64768317c96c6c3c0f72b5a2cd3d03e831c200bf6bf0ab4d181877d59ddab
-// for this deposit
-// https://sepolia.etherscan.io/tx/0xf2003cf43a205bc777bc2d22fcb05b69ebb23464b39250d164cf9b09150b7833#eventlog
-// And that seems to match a call to `getLeafValue`
+// hashDeposit create the leaf hash value for a particular deposit
 func hashDeposit(deposit *ulxly.UlxlyBridgeEvent) common.Hash {
 	var res common.Hash
 	origNet := make([]byte, 4) //nolint:gomnd
@@ -255,6 +250,7 @@ func hashDeposit(deposit *ulxly.UlxlyBridgeEvent) common.Hash {
 	return res
 }
 
+// Init will allocate the objects in the IMT
 func (s *IMT) Init() {
 	s.Branches = make(map[uint32][]common.Hash)
 	s.Leaves = make(map[uint32]common.Hash)
@@ -262,10 +258,7 @@ func (s *IMT) Init() {
 	s.Proofs = make(map[uint32]Proof)
 }
 
-// cast call --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo --block 4880875 0xad1490c248c5d3cbae399fd529b79b42984277df 'lastMainnetExitRoot()(bytes32)'
-// cast call --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo --block 4880876 0xad1490c248c5d3cbae399fd529b79b42984277df 'lastMainnetExitRoot()(bytes32)'
-// The first mainnet exit root for cardona is
-// 0x112b077c64ed4a22dfb0ab3c2622d6ddbf3a5423afeb05878c2c21c4cb5e65da
+// AddLeaf will take a given deposit and add it to the collection of leaves. It will also update the
 func (s *IMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 	leaf := hashDeposit(deposit)
 	log.Debug().Str("leaf-hash", common.Bytes2Hex(leaf[:])).Msg("Leaf hash calculated")
@@ -294,6 +287,7 @@ func (s *IMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 	s.Roots = append(s.Roots, s.GetRoot(deposit.DepositCount))
 }
 
+// GetRoot will return the root for a particular deposit
 func (s *IMT) GetRoot(depositNum uint32) common.Hash {
 	node := common.Hash{}
 	size := depositNum + 1
@@ -301,11 +295,9 @@ func (s *IMT) GetRoot(depositNum uint32) common.Hash {
 
 	for height := 0; height < TreeDepth; height++ {
 		if ((size >> height) & 1) == 1 {
-			// node = keccak256(abi.encodePacked(_branch[height], node));
 			node = crypto.Keccak256Hash(s.Branches[depositNum][height][:], node.Bytes())
 
 		} else {
-			// node = keccak256(abi.encodePacked(node, currentZeroHashHeight));
 			node = crypto.Keccak256Hash(node.Bytes(), currentZeroHashHeight.Bytes())
 		}
 		currentZeroHashHeight = crypto.Keccak256Hash(currentZeroHashHeight.Bytes(), currentZeroHashHeight.Bytes())
@@ -313,6 +305,7 @@ func (s *IMT) GetRoot(depositNum uint32) common.Hash {
 	return node
 }
 
+// GetProof will return an object containing the proof data necessary for verification
 func (s *IMT) GetProof(depositNum uint32) Proof {
 	node := common.Hash{}
 	sibling := common.Hash{}
@@ -372,11 +365,11 @@ func (s *IMT) GetProof(depositNum uint32) Proof {
 // 4. `| ((1 << level) - 1)` ensures that all bits to the right of the current level are set to 1 in the result.
 //
 // The function effectively finds the sibling deposit number at each level of the Merkle tree by manipulating the bits accordingly.
-
 func getSiblingDepositNumber(depositNumber, level uint32) uint32 {
 	return depositNumber ^ (1 << level) | ((1 << level) - 1)
 }
 
+// Check is a sanity check of a proof in order to make sure that the proof that was generated creates a root that we recognize. This was useful while testing in order to avoid verifying that the proof works or doesn't work onchain
 func (p *Proof) Check(roots []common.Hash) (common.Hash, error) {
 	node := p.LeafHash
 	index := p.DepositCount
