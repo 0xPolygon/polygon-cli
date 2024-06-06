@@ -15,13 +15,13 @@ import (
 	"os"
 	"strings"
 
-	// note - this won't deal with the complexity of handling deposits prior to the ulxly
 	"github.com/maticnetwork/polygon-cli/bindings/ulxly"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
 const (
+	// TreeDepth of 32 is pulled directly from the _DEPOSIT_CONTRACT_TREE_DEPTH from the smart contract. We could make this a variable as well https://github.com/0xPolygonHermez/zkevm-contracts/blob/54f58c8b64806429bc4d5c52248f29cf80ba401c/contracts/v2/lib/DepositContractBase.sol#L15
 	TreeDepth = 32
 )
 
@@ -37,7 +37,6 @@ type uLxLyArgs struct {
 }
 
 type IMT struct {
-	Height     uint8
 	Branches   map[uint32][][TreeDepth]byte
 	Leaves     map[uint32]common.Hash
 	Roots      []common.Hash
@@ -256,7 +255,6 @@ func hashDeposit(deposit *ulxly.UlxlyBridgeEvent) common.Hash {
 
 func (s *IMT) Init() {
 	s.Branches = make(map[uint32][][TreeDepth]byte)
-	s.Height = TreeDepth
 	s.Leaves = make(map[uint32]common.Hash)
 	s.ZeroHashes = generateZeroHashes(TreeDepth)
 	s.Proofs = make(map[uint32]Proof)
