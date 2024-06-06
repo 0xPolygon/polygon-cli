@@ -108,7 +108,8 @@ var DepositsCmd = &cobra.Command{
 			for evtV2Iterator.Next() {
 				evt := evtV2Iterator.Event
 				log.Info().Uint32("deposit", evt.DepositCount).Uint64("block-number", evt.Raw.BlockNumber).Msg("Found ulxly Deposit")
-				jBytes, err := json.Marshal(evt)
+				var jBytes []byte
+				jBytes, err = json.Marshal(evt)
 				if err != nil {
 					return err
 				}
