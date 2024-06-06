@@ -78,6 +78,7 @@ type (
 		ContractCallFunctionArgs      *[]string
 		ContractCallPayable           *bool
 		InscriptionContent            *string
+		BlobFeeCap                    *uint64
 
 		// Computed
 		CurrentGasPrice     *big.Int
@@ -229,6 +230,7 @@ func initFlags() {
 	ltp.SummaryOutputMode = LoadtestCmd.PersistentFlags().String("output-mode", "text", "Format mode for summary output (json | text)")
 	ltp.LegacyTransactionMode = LoadtestCmd.PersistentFlags().Bool("legacy", false, "Send a legacy transaction instead of an EIP1559 transaction.")
 	ltp.SendOnly = LoadtestCmd.PersistentFlags().Bool("send-only", false, "Send transactions and load without waiting for it to be mined.")
+	ltp.BlobFeeCap = LoadtestCmd.Flags().Uint64("blob-fee-cap", 100000, "The blob fee cap, or the maximum blob fee per chunk, in Gwei.")
 
 	// Local flags.
 	ltp.Modes = LoadtestCmd.Flags().StringSliceP("mode", "m", []string{"t"}, `The testing mode to use. It can be multiple like: "t,c,d,f"
