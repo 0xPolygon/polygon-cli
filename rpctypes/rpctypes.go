@@ -228,6 +228,12 @@ type (
 
 		// status: QUANTITY either 1 (success) or 0 (failure)
 		Status RawQuantityResponse `json:"status"`
+
+		// blobGasPrice: QUANTITY - blob gas price provided by the sender in Wei.
+		BlobGasPrice RawQuantityResponse `json:"blobGasPrice"`
+
+		// blobGasUsed: QUANTITY - blob gas used by this specific transaction alone.
+		BlobGasUsed RawQuantityResponse `json:"blobGasUsed"`
 	}
 
 	PolyTransaction interface {
@@ -267,6 +273,8 @@ type (
 		LogsBloom() []byte
 		Root() ethcommon.Hash
 		Status() uint64
+		BlobGasPrice() *big.Int
+		BlobGasUsed() *big.Int
 	}
 	PolyReceipts []PolyReceipt
 	PolyBlock    interface {
@@ -374,6 +382,16 @@ func (i *implPolyReceipt) TransactionHash() ethcommon.Hash {
 // TransactionIndex implements PolyReceipt.
 func (i *implPolyReceipt) TransactionIndex() uint64 {
 	return i.inner.TransactionIndex.ToUint64()
+}
+
+// BlobGasPrice implements PolyReceipt.
+func (i *implPolyReceipt) BlobGasPrice() *big.Int {
+	return i.inner.BlobGasPrice.ToBigInt()
+}
+
+// BlobGasUsed implements PolyReceipt.
+func (i *implPolyReceipt) BlobGasUsed() *big.Int {
+	return i.inner.BlobGasUsed.ToBigInt()
 }
 
 func NewPolyBlock(r *RawBlockResponse) PolyBlock {
