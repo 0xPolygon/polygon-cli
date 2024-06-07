@@ -29,7 +29,7 @@ stdout. Example usage:
 ```bash
 polycli ulxly deposits \
         --bridge-address 0x528e26b25a34a4A5d0dbDa1d57D318153d2ED582 \
-        --rpc-url https://json-rpc.43s5xeyagx56ekle11cm0w3pj.blockchainnodeengine.com?key=AIzaSyANUaMkqy8sakCVB_mKaQYrTyYXOZouI-k \
+        --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo \
         --from-block 4880876 \
         --to-block 6028159 \
         --filter-size 9999 > cardona-4880876-to-6028159.ndjson
