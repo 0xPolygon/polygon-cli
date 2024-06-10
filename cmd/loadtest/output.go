@@ -3,12 +3,13 @@ package loadtest
 import (
 	"context"
 	"encoding/json"
-	"github.com/montanaflynn/stats"
 	"math"
 	"math/big"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/montanaflynn/stats"
 
 	"golang.org/x/time/rate"
 
