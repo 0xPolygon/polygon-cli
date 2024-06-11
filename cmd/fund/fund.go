@@ -175,7 +175,7 @@ func deriveHDWallets(n int) ([]common.Address, error) {
 
 	addresses := make([]common.Address, n)
 	for i, wallet := range derivedWallets.Addresses {
-		addresses[i] = wallet.ETHCommonAddress
+		addresses[i] = common.HexToAddress(wallet.ETHAddress)
 		log.Trace().Interface("address", addresses[i]).Str("privateKey", wallet.HexPrivateKey).Str("path", wallet.Path).Msg("New wallet derived")
 	}
 	log.Info().Int("count", n).Msg("Wallet(s) derived")
