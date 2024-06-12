@@ -7,14 +7,15 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
-	"io"
-	"os"
-	"strings"
 
 	"github.com/maticnetwork/polygon-cli/bindings/ulxly"
 	"github.com/rs/zerolog/log"
@@ -63,12 +64,12 @@ var ULxLyCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 }
 
-//go:embed depositUsage.md
-var depositUsage string
-var DepositsCmd = &cobra.Command{
-	Use:     "deposits",
-	Short:   "get a range of deposits",
-	Long:    depositUsage,
+//go:embed getDepositsUsage.md
+var getDepositsUsage string
+var getDepositsCmd = &cobra.Command{
+	Use:     "get-deposits",
+	Short:   "Get a range of deposits",
+	Long:    getDepositsUsage,
 	Args:    cobra.NoArgs,
 	PreRunE: checkDepositArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -447,17 +448,17 @@ func checkDepositArgs(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	ULxLyCmd.AddCommand(DepositsCmd)
+	ULxLyCmd.AddCommand(getDepositsCmd)
 	ULxLyCmd.AddCommand(ProofCmd)
 	ULxLyCmd.AddCommand(EmptyProofCmd)
 	ULxLyCmd.AddCommand(ZeroProofCmd)
 
-	ulxlyInputArgs.FromBlock = DepositsCmd.PersistentFlags().Uint64("from-block", 0, "The block height to start query at.")
-	ulxlyInputArgs.ToBlock = DepositsCmd.PersistentFlags().Uint64("to-block", 0, "The block height to start query at.")
-	ulxlyInputArgs.RPCURL = DepositsCmd.PersistentFlags().String("rpc-url", "http://127.0.0.1:8545", "The RPC to query for events")
-	ulxlyInputArgs.FilterSize = DepositsCmd.PersistentFlags().Uint64("filter-size", 1000, "The batch size for individual filter queries")
+	ulxlyInputArgs.FromBlock = getDepositsCmd.PersistentFlags().Uint64("from-block", 0, "The block height to start query at.")
+	ulxlyInputArgs.ToBlock = getDepositsCmd.PersistentFlags().Uint64("to-block", 0, "The block height to start query at.")
+	ulxlyInputArgs.RPCURL = getDepositsCmd.PersistentFlags().String("rpc-url", "http://127.0.0.1:8545", "The RPC to query for events")
+	ulxlyInputArgs.FilterSize = getDepositsCmd.PersistentFlags().Uint64("filter-size", 1000, "The batch size for individual filter queries")
 
-	ulxlyInputArgs.BridgeAddress = DepositsCmd.Flags().String("bridge-address", "", "The address of the lxly bridge")
+	ulxlyInputArgs.BridgeAddress = getDepositsCmd.Flags().String("bridge-address", "", "The address of the lxly bridge")
 	ulxlyInputArgs.InputFileName = ProofCmd.PersistentFlags().String("file-name", "", "The filename with ndjson data of deposits")
 	ulxlyInputArgs.DepositNum = ProofCmd.PersistentFlags().Uint32("deposit-number", 0, "The deposit that we would like to prove")
 }

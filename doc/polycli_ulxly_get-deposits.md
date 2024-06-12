@@ -1,4 +1,4 @@
-# `polycli ulxly deposits`
+# `polycli ulxly get-deposits`
 
 > Auto-generated documentation.
 
@@ -11,10 +11,10 @@
 
 ## Description
 
-get a range of deposits
+Get a range of deposits
 
 ```bash
-polycli ulxly deposits [flags]
+polycli ulxly get-deposits [flags]
 ```
 
 ## Usage
@@ -72,7 +72,7 @@ serve as the input to the proof command.
       --bridge-address string   The address of the lxly bridge
       --filter-size uint        The batch size for individual filter queries (default 1000)
       --from-block uint         The block height to start query at.
-  -h, --help                    help for deposits
+  -h, --help                    help for get-deposits
       --rpc-url string          The RPC to query for events (default "http://127.0.0.1:8545")
       --to-block uint           The block height to start query at.
 ```
