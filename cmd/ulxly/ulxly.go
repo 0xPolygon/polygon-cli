@@ -196,17 +196,32 @@ var depositCmd = &cobra.Command{
 
 		signer := types.LatestSignerForChainID(chainID)
 
-		tops := &bind.TransactOpts{
-			Signer: func(address common.Address, transaction *types.Transaction) (*types.Transaction, error) {
-				return types.SignTx(transaction, signer, privateKey)
-			},
-			Value:     value,
-			From:      fromAddress,
-			Context:   ctx,
-			GasLimit:  gasLimit,
-			GasPrice:  gasPrice,
-			GasFeeCap: nil,
-			GasTipCap: nil,
+		var tops *bind.TransactOpts
+		if tokenAddress == common.HexToAddress("0x0000000000000000000000000000000000000000") {
+			tops = &bind.TransactOpts{
+				Signer: func(address common.Address, transaction *types.Transaction) (*types.Transaction, error) {
+					return types.SignTx(transaction, signer, privateKey)
+				},
+				Value:     value,
+				From:      fromAddress,
+				Context:   ctx,
+				GasLimit:  gasLimit,
+				GasPrice:  gasPrice,
+				GasFeeCap: nil,
+				GasTipCap: nil,
+			}
+		} else {
+			tops = &bind.TransactOpts{
+				Signer: func(address common.Address, transaction *types.Transaction) (*types.Transaction, error) {
+					return types.SignTx(transaction, signer, privateKey)
+				},
+				From:      fromAddress,
+				Context:   ctx,
+				GasLimit:  gasLimit,
+				GasPrice:  gasPrice,
+				GasFeeCap: nil,
+				GasTipCap: nil,
+			}
 		}
 
 		bridgeAssetTxn, err := bridgeV2.BridgeAsset(tops, *ulxlyInputArgs.DestinationNetwork, toAddress, value, tokenAddress, *ulxlyInputArgs.IsForced, metaBytes)
