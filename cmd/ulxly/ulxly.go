@@ -428,6 +428,9 @@ var depositClaimCmd = &cobra.Command{
 				if !bridgeDeposit.Deposit[index].ReadyForClaim {
 					log.Error().Msg("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
 					return nil
+				} else if bridgeDeposit.Deposit[index].ClaimTxHash != "" {
+					fmt.Printf("The claim transaction has already been claimed at %s.", bridgeDeposit.Deposit[index].ClaimTxHash)
+					return nil
 				}
 				originAddress = common.HexToAddress(bridgeDeposit.Deposit[index].OrigAddr)
 				globalIndex.SetString(bridgeDeposit.Deposit[index].GlobalIndex, 10)
