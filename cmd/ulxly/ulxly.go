@@ -348,6 +348,7 @@ var depositClaimCmd = &cobra.Command{
 		signer := types.LatestSignerForChainID(chainID)
 
 		/////////////////////////////////////
+		// This section calls the bridge service RPC URL to get the merkle proofs and exit roots and parses them to the correct formats.
 		bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%s&net_id=%s", *ulxlyInputArgs.BridgeServiceRPCURL, *ulxlyInputArgs.ClaimIndex, *ulxlyInputArgs.ClaimNetwork)
 		reqBridgeProof, err := http.Get(bridgeServiceProofEndpoint)
 		if err != nil {
@@ -358,7 +359,8 @@ var depositClaimCmd = &cobra.Command{
 			log.Error().Err(err)
 		}
 		var bridgeProof BridgeProof
-		if err := json.Unmarshal(bodyBridgeProof, &bridgeProof); err != nil { // Parse []byte to go struct pointer
+		err = json.Unmarshal(bodyBridgeProof, &bridgeProof) // Parse []byte to go struct pointer, and shadow err variable
+		if err != nil {
 			log.Error().Err(err).Msg("Can not unmarshal JSON")
 			return err
 		}
@@ -397,6 +399,7 @@ var depositClaimCmd = &cobra.Command{
 		}
 
 		/////////////////////////////////////
+		// This section calls the bridge service RPC URL to get the deposits data and parses them to the correct formats.
 		bridgeServiceDepositsEndpoint := fmt.Sprintf("%s/bridges/%s", *ulxlyInputArgs.BridgeServiceRPCURL, *ulxlyInputArgs.ClaimAddress)
 		reqBridgeDeposits, err := http.Get(bridgeServiceDepositsEndpoint)
 		if err != nil {
@@ -407,7 +410,8 @@ var depositClaimCmd = &cobra.Command{
 			log.Error().Err(err)
 		}
 		var bridgeDeposit BridgeDeposits
-		if err := json.Unmarshal(bodyBridgeDeposit, &bridgeDeposit); err != nil { // Parse []byte to go struct pointer
+		err = json.Unmarshal(bodyBridgeDeposit, &bridgeDeposit) // Parse []byte to go struct pointer, and shadow err variable
+		if err != nil {
 			log.Error().Err(err).Msg("Can not unmarshal JSON")
 			return err
 		}
