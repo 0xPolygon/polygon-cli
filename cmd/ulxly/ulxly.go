@@ -45,7 +45,7 @@ type uLxLyArgs struct {
 	DepositNum           *uint32
 	PrivateKey           *string
 	GasLimit             *uint64
-	Value                *int64 // HACK: This should be big.Int but depositCmd.PersistentFlags() doesn't support that type.
+	Value                *int64 // HACK: This should be big.Int but depositNewCmd.PersistentFlags() doesn't support that type.
 	DestinationNetwork   *uint32
 	DestinationAddress   *string
 	DepositRPCURL        *string
@@ -78,12 +78,12 @@ var ULxLyCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 }
 
-//go:embed getDepositsUsage.md
-var getDepositsUsage string
-var getDepositsCmd = &cobra.Command{
-	Use:     "get-deposits",
+//go:embed depositGetUsage.md
+var depositGetUsage string
+var depositGetCmd = &cobra.Command{
+	Use:     "deposit-get",
 	Short:   "Get a range of deposits",
-	Long:    getDepositsUsage,
+	Long:    depositGetUsage,
 	Args:    cobra.NoArgs,
 	PreRunE: checkGetDepositArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -141,10 +141,12 @@ var getDepositsCmd = &cobra.Command{
 	},
 }
 
-var depositCmd = &cobra.Command{
-	Use:     "deposit",
+//go:embed depositNewUsage.md
+var depositNewUsage string
+var depositNewCmd = &cobra.Command{
+	Use:     "deposit-new",
 	Short:   "Make a uLxLy deposit transaction",
-	Long:    "Make a uLxLy deposit transaction",
+	Long:    depositNewUsage,
 	Args:    cobra.NoArgs,
 	PreRunE: checkDepositArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -585,29 +587,29 @@ func checkDepositArgs(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	ULxLyCmd.AddCommand(depositCmd)
-	ULxLyCmd.AddCommand(getDepositsCmd)
+	ULxLyCmd.AddCommand(depositNewCmd)
+	ULxLyCmd.AddCommand(depositGetCmd)
 	ULxLyCmd.AddCommand(ProofCmd)
 	ULxLyCmd.AddCommand(EmptyProofCmd)
 	ULxLyCmd.AddCommand(ZeroProofCmd)
 
-	ulxlyInputArgs.GasLimit = depositCmd.PersistentFlags().Uint64("gas-limit", 300000, "The gas limit for the transaction.")
-	ulxlyInputArgs.PrivateKey = depositCmd.PersistentFlags().String("private-key", "", "The private key of the sender account.")
-	ulxlyInputArgs.Value = depositCmd.PersistentFlags().Int64("value", 0, "The amount to send.")
-	ulxlyInputArgs.DepositRPCURL = depositCmd.PersistentFlags().String("rpc-url", "http://127.0.0.1:8545", "The RPC endpoint of the network")
-	ulxlyInputArgs.DepositBridgeAddress = depositCmd.PersistentFlags().String("bridge-address", "", "The address of the bridge contract.")
-	ulxlyInputArgs.DestinationNetwork = depositCmd.PersistentFlags().Uint32("destination-network", 1, "The destination network number.")
-	ulxlyInputArgs.DestinationAddress = depositCmd.PersistentFlags().String("destination-address", "", "The address of receiver in destination network.")
-	ulxlyInputArgs.TokenAddress = depositCmd.PersistentFlags().String("token-address", "0x0000000000000000000000000000000000000000", "The address of the token to send.")
-	ulxlyInputArgs.IsForced = depositCmd.PersistentFlags().Bool("forced", true, "The deposit transaction is forced.")
-	ulxlyInputArgs.MetaBytes = depositCmd.PersistentFlags().String("metabytes", "0x", "Metabytes to append.")
+	ulxlyInputArgs.GasLimit = depositNewCmd.PersistentFlags().Uint64("gas-limit", 300000, "The gas limit for the transaction.")
+	ulxlyInputArgs.PrivateKey = depositNewCmd.PersistentFlags().String("private-key", "", "The private key of the sender account.")
+	ulxlyInputArgs.Value = depositNewCmd.PersistentFlags().Int64("value", 0, "The amount to send.")
+	ulxlyInputArgs.DepositRPCURL = depositNewCmd.PersistentFlags().String("rpc-url", "http://127.0.0.1:8545", "The RPC endpoint of the network")
+	ulxlyInputArgs.DepositBridgeAddress = depositNewCmd.PersistentFlags().String("bridge-address", "", "The address of the bridge contract.")
+	ulxlyInputArgs.DestinationNetwork = depositNewCmd.PersistentFlags().Uint32("destination-network", 1, "The destination network number.")
+	ulxlyInputArgs.DestinationAddress = depositNewCmd.PersistentFlags().String("destination-address", "", "The address of receiver in destination network.")
+	ulxlyInputArgs.TokenAddress = depositNewCmd.PersistentFlags().String("token-address", "0x0000000000000000000000000000000000000000", "The address of the token to send.")
+	ulxlyInputArgs.IsForced = depositNewCmd.PersistentFlags().Bool("forced", true, "The deposit transaction is forced.")
+	ulxlyInputArgs.MetaBytes = depositNewCmd.PersistentFlags().String("metabytes", "0x", "Metabytes to append.")
 
-	ulxlyInputArgs.FromBlock = getDepositsCmd.PersistentFlags().Uint64("from-block", 0, "The block height to start query at.")
-	ulxlyInputArgs.ToBlock = getDepositsCmd.PersistentFlags().Uint64("to-block", 0, "The block height to start query at.")
-	ulxlyInputArgs.RPCURL = getDepositsCmd.PersistentFlags().String("rpc-url", "http://127.0.0.1:8545", "The RPC to query for events")
-	ulxlyInputArgs.FilterSize = getDepositsCmd.PersistentFlags().Uint64("filter-size", 1000, "The batch size for individual filter queries")
+	ulxlyInputArgs.FromBlock = depositGetCmd.PersistentFlags().Uint64("from-block", 0, "The block height to start query at.")
+	ulxlyInputArgs.ToBlock = depositGetCmd.PersistentFlags().Uint64("to-block", 0, "The block height to start query at.")
+	ulxlyInputArgs.RPCURL = depositGetCmd.PersistentFlags().String("rpc-url", "http://127.0.0.1:8545", "The RPC to query for events")
+	ulxlyInputArgs.FilterSize = depositGetCmd.PersistentFlags().Uint64("filter-size", 1000, "The batch size for individual filter queries")
 
-	ulxlyInputArgs.BridgeAddress = getDepositsCmd.Flags().String("bridge-address", "", "The address of the lxly bridge")
+	ulxlyInputArgs.BridgeAddress = depositGetCmd.Flags().String("bridge-address", "", "The address of the lxly bridge")
 	ulxlyInputArgs.InputFileName = ProofCmd.PersistentFlags().String("file-name", "", "The filename with ndjson data of deposits")
 	ulxlyInputArgs.DepositNum = ProofCmd.PersistentFlags().Uint32("deposit-number", 0, "The deposit that we would like to prove")
 }

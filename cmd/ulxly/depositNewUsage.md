@@ -29,7 +29,7 @@ This command will attempt to send a deposit transaction to the bridge contract.
 Each transaction will require manual input of parameters. Example usage:
 
 ```bash
-polycli ulxly deposit \
+polycli ulxly deposit-new \
         --private-key 12d7de8621a77640c9241b2595ba78ce443d05e94090365ab3bb5e19df82c625 \
         --gas-limit 300000 \
         --value 1000000000000000000 \
@@ -46,7 +46,7 @@ Successful deposit transaction will output logs like below:
 Deposit Transaction Successful: 0x8c9b82e8abdfb4aad5fccd91879397acfa73e4261282c8dc634734d05ad889d3
 ```
 
-Upon successful deposit, the transaction can be queried using `polycli ulxly get-deposits` command
+Upon successful deposit, the transaction can be queried using `polycli ulxly deposit-get` command
 
 
 Failed deposit transactions will output logs like below: 

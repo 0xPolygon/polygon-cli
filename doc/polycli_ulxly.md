@@ -40,11 +40,11 @@ The command also inherits flags from parent commands.
 ## See also
 
 - [polycli](polycli.md) - A Swiss Army knife of blockchain tools.
-- [polycli ulxly deposit](polycli_ulxly_deposit.md) - Make a uLxLy deposit transaction
+- [polycli ulxly deposit-get](polycli_ulxly_deposit-get.md) - Get a range of deposits
+
+- [polycli ulxly deposit-new](polycli_ulxly_deposit-new.md) - Make a uLxLy deposit transaction
 
 - [polycli ulxly empty-proof](polycli_ulxly_empty-proof.md) - print an empty proof structure
-
-- [polycli ulxly get-deposits](polycli_ulxly_get-deposits.md) - Get a range of deposits
 
 - [polycli ulxly proof](polycli_ulxly_proof.md) - generate a merkle proof
 
