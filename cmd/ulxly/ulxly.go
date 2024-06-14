@@ -425,6 +425,10 @@ var depositClaimCmd = &cobra.Command{
 		for index, deposit := range bridgeDeposit.Deposit {
 			intDepositCnt, _ := strconv.Atoi(deposit.DepositCnt) // Convert deposit_cnt to int
 			if intDepositCnt == intClaimIndex {                  // deposit_cnt must match the user's input value
+				if !bridgeDeposit.Deposit[index].ReadyForClaim {
+					log.Error().Msg("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
+					return nil
+				}
 				originAddress = common.HexToAddress(bridgeDeposit.Deposit[index].OrigAddr)
 				globalIndex.SetString(bridgeDeposit.Deposit[index].GlobalIndex, 10)
 				amount.SetString(bridgeDeposit.Deposit[index].Amount, 10)
