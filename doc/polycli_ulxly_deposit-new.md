@@ -53,7 +53,7 @@ Each transaction will require manual input of parameters. Example usage:
 polycli ulxly deposit-new \
         --private-key 12d7de8621a77640c9241b2595ba78ce443d05e94090365ab3bb5e19df82c625 \
         --gas-limit 300000 \
-        --value 1000000000000000000 \
+        --amount 1000000000000000000 \
         --rpc-url http://127.0.0.1:8545 \
         --bridge-address 0xD71f8F956AD979Cc2988381B8A743a2fE280537D \
         --destination-network 1 \
@@ -84,17 +84,19 @@ The reason for failing may likely be due to the `out of gas` error. Increasing t
 ## Flags
 
 ```bash
-      --bridge-address string        The address of the bridge contract.
-      --destination-address string   The address of receiver in destination network.
-      --destination-network uint32   The destination network number. (default 1)
-      --forced                       The deposit transaction is forced. (default true)
-      --gas-limit uint               The gas limit for the transaction. (default 300000)
-  -h, --help                         help for deposit-new
-      --metabytes string             Metabytes to append. (default "0x")
-      --private-key string           The private key of the sender account.
-      --rpc-url string               The RPC endpoint of the network (default "http://127.0.0.1:8545")
-      --token-address string         The address of the token to send. (default "0x0000000000000000000000000000000000000000")
-      --value int                    The amount to send.
+      --amount int                           The amount to send.
+      --bridge-address string                The address of the bridge contract.
+      --chain-id string                      The chainID.
+      --destination-address string           The address of receiver in destination network.
+      --destination-network uint32           The destination network number. (default 1)
+      --force-update-root                    Force the update of the Global Exit Root. (default true)
+      --gas-limit uint                       The gas limit for the transaction. (default 300000)
+  -h, --help                                 help for deposit-new
+      --permit-data permit                   Raw data of the call permit of the token. (default "0x")
+      --private-key string                   The private key of the sender account.
+      --rpc-url string                       The RPC endpoint of the network (default "http://127.0.0.1:8545")
+      --token-address string                 The address of the token to send. (default "0x0000000000000000000000000000000000000000")
+      --transaction-receipt-timeout uint32   The timeout limit to check for the transaction receipt of the deposit. (default 60)
 ```
 
 The command also inherits flags from parent commands.

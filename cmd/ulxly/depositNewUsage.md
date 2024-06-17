@@ -32,7 +32,7 @@ Each transaction will require manual input of parameters. Example usage:
 polycli ulxly deposit-new \
         --private-key 12d7de8621a77640c9241b2595ba78ce443d05e94090365ab3bb5e19df82c625 \
         --gas-limit 300000 \
-        --value 1000000000000000000 \
+        --amount 1000000000000000000 \
         --rpc-url http://127.0.0.1:8545 \
         --bridge-address 0xD71f8F956AD979Cc2988381B8A743a2fE280537D \
         --destination-network 1 \
