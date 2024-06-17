@@ -27,7 +27,7 @@ Each event that we counter will be parsed and written as JSON to
 stdout. Example usage:
 
 ```bash
-polycli ulxly deposits \
+polycli ulxly deposit-get \
         --bridge-address 0x528e26b25a34a4A5d0dbDa1d57D318153d2ED582 \
         --rpc-url https://eth-sepolia.g.alchemy.com/v2/demo \
         --from-block 4880876 \
