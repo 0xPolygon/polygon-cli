@@ -86,6 +86,7 @@ The reason for failing may likely be due to the `out of gas` error. Increasing t
 ```bash
       --amount int                           The amount to send.
       --bridge-address string                The address of the bridge contract.
+      --bridge-message                       Bridge a message instead of an asset.
       --chain-id string                      The chainID.
       --destination-address string           The address of receiver in destination network.
       --destination-network uint32           The destination network number. (default 1)
