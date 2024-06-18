@@ -58,6 +58,7 @@ type uLxLyArgs struct {
 	ClaimChainID            *string
 	ClaimTimeoutTxnReceipt  *uint32
 	ClaimMessage            *bool
+	ClaimWETH               *bool
 
 	InputFileName            *string
 	DepositNum               *uint32
@@ -71,9 +72,10 @@ type uLxLyArgs struct {
 	DepositChainID           *string
 	TokenAddress             *string
 	IsForced                 *bool
-	PermitData               *string
+	CallData                 *string
 	DepositTimeoutTxnReceipt *uint32
 	DepositMessage           *bool
+	DepositWETH              *bool
 }
 
 type IMT struct {
@@ -213,7 +215,7 @@ var depositNewCmd = &cobra.Command{
 
 		value := big.NewInt(*ulxlyInputArgs.Amount)
 		tokenAddress := common.HexToAddress(*ulxlyInputArgs.TokenAddress)
-		permitData := common.Hex2Bytes(*ulxlyInputArgs.PermitData)
+		callData := common.Hex2Bytes(*ulxlyInputArgs.CallData)
 
 		tops := &bind.TransactOpts{
 			Signer: func(address common.Address, transaction *types.Transaction) (*types.Transaction, error) {
@@ -244,13 +246,19 @@ var depositNewCmd = &cobra.Command{
 		var bridgeTxn *types.Transaction
 		switch {
 		case *ulxlyInputArgs.DepositMessage:
-			bridgeTxn, err = bridgeV2.BridgeMessage(tops, *ulxlyInputArgs.DestinationNetwork, toAddress, *ulxlyInputArgs.IsForced, permitData)
+			bridgeTxn, err = bridgeV2.BridgeMessage(tops, *ulxlyInputArgs.DestinationNetwork, toAddress, *ulxlyInputArgs.IsForced, callData)
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to interact with bridge contract")
+				return err
+			}
+		case *ulxlyInputArgs.DepositWETH:
+			bridgeTxn, err = bridgeV2.BridgeMessageWETH(tops, *ulxlyInputArgs.DestinationNetwork, toAddress, value, *ulxlyInputArgs.IsForced, callData)
 			if err != nil {
 				log.Error().Err(err).Msg("Unable to interact with bridge contract")
 				return err
 			}
 		default:
-			bridgeTxn, err = bridgeV2.BridgeAsset(tops, *ulxlyInputArgs.DestinationNetwork, toAddress, value, tokenAddress, *ulxlyInputArgs.IsForced, permitData)
+			bridgeTxn, err = bridgeV2.BridgeAsset(tops, *ulxlyInputArgs.DestinationNetwork, toAddress, value, tokenAddress, *ulxlyInputArgs.IsForced, callData)
 			if err != nil {
 				log.Error().Err(err).Msg("Unable to interact with bridge contract")
 				return err
@@ -857,12 +865,18 @@ func checkDepositArgs(cmd *cobra.Command, args []string) error {
 	if *ulxlyInputArgs.DepositGasLimit < 130000 {
 		return fmt.Errorf("the gas limit may be too low for the transaction to pass")
 	}
+	if *ulxlyInputArgs.DepositMessage && *ulxlyInputArgs.DepositWETH {
+		return fmt.Errorf("choose a single deposit mode (asset, message, or WETH)")
+	}
 	return nil
 }
 
 func checkClaimArgs(cmd *cobra.Command, args []string) error {
 	if *ulxlyInputArgs.ClaimGasLimit < 150000 {
 		return fmt.Errorf("the gas limit may be too low for the transaction to pass")
+	}
+	if *ulxlyInputArgs.ClaimMessage && *ulxlyInputArgs.ClaimWETH {
+		return fmt.Errorf("choose a single claim mode (asset, message, or WETH)")
 	}
 	return nil
 }
@@ -887,6 +901,7 @@ func init() {
 	ulxlyInputArgs.ClaimChainID = depositClaimCmd.PersistentFlags().String("chain-id", "", "The chainID.")
 	ulxlyInputArgs.ClaimTimeoutTxnReceipt = depositClaimCmd.PersistentFlags().Uint32("transaction-receipt-timeout", 60, "The timeout limit to check for the transaction receipt of the claim.")
 	ulxlyInputArgs.ClaimMessage = depositClaimCmd.PersistentFlags().Bool("claim-message", false, "Claim a message instead of an asset.")
+	ulxlyInputArgs.ClaimWETH = depositClaimCmd.PersistentFlags().Bool("claim-weth", false, "Claim a weth instead of an asset.")
 
 	ulxlyInputArgs.DepositGasLimit = depositNewCmd.PersistentFlags().Uint64("gas-limit", 300000, "The gas limit for the transaction.")
 	ulxlyInputArgs.DepositChainID = depositNewCmd.PersistentFlags().String("chain-id", "", "The chainID.")
@@ -898,9 +913,10 @@ func init() {
 	ulxlyInputArgs.DestinationAddress = depositNewCmd.PersistentFlags().String("destination-address", "", "The address of receiver in destination network.")
 	ulxlyInputArgs.TokenAddress = depositNewCmd.PersistentFlags().String("token-address", "0x0000000000000000000000000000000000000000", "The address of the token to send.")
 	ulxlyInputArgs.IsForced = depositNewCmd.PersistentFlags().Bool("force-update-root", true, "Force the update of the Global Exit Root.")
-	ulxlyInputArgs.PermitData = depositNewCmd.PersistentFlags().String("permit-data", "0x", "Raw data of the call `permit` of the token.")
+	ulxlyInputArgs.CallData = depositNewCmd.PersistentFlags().String("call-data", "0x", "For bridging assets - raw data of the call `permit` of the token. For bridging messages - the metadata.")
 	ulxlyInputArgs.DepositTimeoutTxnReceipt = depositNewCmd.PersistentFlags().Uint32("transaction-receipt-timeout", 60, "The timeout limit to check for the transaction receipt of the deposit.")
 	ulxlyInputArgs.DepositMessage = depositNewCmd.PersistentFlags().Bool("bridge-message", false, "Bridge a message instead of an asset.")
+	ulxlyInputArgs.DepositWETH = depositNewCmd.PersistentFlags().Bool("bridge-weth", false, "Bridge a weth instead of an asset.")
 
 	ulxlyInputArgs.FromBlock = depositGetCmd.PersistentFlags().Uint64("from-block", 0, "The block height to start query at.")
 	ulxlyInputArgs.ToBlock = depositGetCmd.PersistentFlags().Uint64("to-block", 0, "The block height to start query at.")

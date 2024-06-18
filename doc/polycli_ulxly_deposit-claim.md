@@ -105,6 +105,7 @@ curl http://127.0.0.1:32790 \
       --claim-address string                 The address that is receiving the bridged asset.
       --claim-index string                   The deposit count, or index to initiate a claim transaction for. (default "0")
       --claim-message                        Claim a message instead of an asset.
+      --claim-weth                           Claim a weth instead of an asset.
       --destination-network string           The network ID of the destination network. (default "1")
       --gas-limit uint                       The gas limit for the transaction. (default 300000)
   -h, --help                                 help for deposit-claim
