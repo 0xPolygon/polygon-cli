@@ -86,13 +86,15 @@ The reason for failing may likely be due to the `out of gas` error. Increasing t
 ```bash
       --amount int                           The amount to send.
       --bridge-address string                The address of the bridge contract.
+      --bridge-message                       Bridge a message instead of an asset.
+      --bridge-weth                          Bridge a weth instead of an asset.
+      --call-data permit                     For bridging assets - raw data of the call permit of the token. For bridging messages - the metadata. (default "0x")
       --chain-id string                      The chainID.
       --destination-address string           The address of receiver in destination network.
       --destination-network uint32           The destination network number. (default 1)
       --force-update-root                    Force the update of the Global Exit Root. (default true)
       --gas-limit uint                       The gas limit for the transaction. (default 300000)
   -h, --help                                 help for deposit-new
-      --permit-data permit                   Raw data of the call permit of the token. (default "0x")
       --private-key string                   The private key of the sender account.
       --rpc-url string                       The RPC endpoint of the network (default "http://127.0.0.1:8545")
       --token-address string                 The address of the token to send. (default "0x0000000000000000000000000000000000000000")
