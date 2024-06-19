@@ -93,7 +93,7 @@ The reason for failing may likely be due to the `out of gas` error. Increasing t
       --destination-address string           The address of receiver in destination network.
       --destination-network uint32           The destination network number. (default 1)
       --force-update-root                    Force the update of the Global Exit Root. (default true)
-      --gas-limit uint                       The gas limit for the transaction. (default 300000)
+      --gas-limit uint                       The gas limit for the transaction. Setting this value to 0 will estimate the gas limit.
   -h, --help                                 help for deposit-new
       --private-key string                   The private key of the sender account.
       --rpc-url string                       The RPC endpoint of the network (default "http://127.0.0.1:8545")
