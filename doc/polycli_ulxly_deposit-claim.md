@@ -107,7 +107,7 @@ curl http://127.0.0.1:32790 \
       --claim-message                        Claim a message instead of an asset.
       --claim-weth                           Claim a weth instead of an asset.
       --destination-network string           The network ID of the destination network. (default "1")
-      --gas-limit uint                       The gas limit for the transaction. (default 300000)
+      --gas-limit uint                       The gas limit for the transaction. Setting this value to 0 will estimate the gas limit.
   -h, --help                                 help for deposit-claim
       --origin-network string                The network ID of the origin network. (default "0")
       --private-key string                   The private key of the sender account.

@@ -727,7 +727,7 @@ func generateTransactionPayload(ctx context.Context, client *ethclient.Client, u
 	fromAddress = crypto.PubkeyToAddress(*publicKeyECDSA)
 
 	// value := big.NewInt(*ulxlyInputArgs.Amount)
-	gasLimit = ulxlyInputArgGasLimit // TODO: Use gas estimation
+	gasLimit = ulxlyInputArgGasLimit
 	gasPrice, err = client.SuggestGasPrice(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Cannot get suggested gas price")
@@ -862,7 +862,7 @@ func checkDepositArgs(cmd *cobra.Command, args []string) error {
 	if *ulxlyInputArgs.DepositBridgeAddress == "" {
 		return fmt.Errorf("please provide the bridge address")
 	}
-	if *ulxlyInputArgs.DepositGasLimit < 130000 {
+	if *ulxlyInputArgs.DepositGasLimit < 130000 && *ulxlyInputArgs.DepositGasLimit != 0 {
 		return fmt.Errorf("the gas limit may be too low for the transaction to pass")
 	}
 	if *ulxlyInputArgs.DepositMessage && *ulxlyInputArgs.DepositWETH {
@@ -872,7 +872,7 @@ func checkDepositArgs(cmd *cobra.Command, args []string) error {
 }
 
 func checkClaimArgs(cmd *cobra.Command, args []string) error {
-	if *ulxlyInputArgs.ClaimGasLimit < 150000 {
+	if *ulxlyInputArgs.ClaimGasLimit < 150000 && *ulxlyInputArgs.ClaimGasLimit != 0 {
 		return fmt.Errorf("the gas limit may be too low for the transaction to pass")
 	}
 	if *ulxlyInputArgs.ClaimMessage && *ulxlyInputArgs.ClaimWETH {
@@ -897,13 +897,13 @@ func init() {
 	ulxlyInputArgs.BridgeServiceRPCURL = depositClaimCmd.PersistentFlags().String("bridge-service-url", "", "The RPC endpoint of the bridge service component.")
 	ulxlyInputArgs.ClaimPrivateKey = depositClaimCmd.PersistentFlags().String("private-key", "", "The private key of the sender account.")
 	ulxlyInputArgs.ClaimBridgeAddress = depositClaimCmd.PersistentFlags().String("bridge-address", "", "The address of the bridge contract.")
-	ulxlyInputArgs.ClaimGasLimit = depositClaimCmd.PersistentFlags().Uint64("gas-limit", 300000, "The gas limit for the transaction.")
+	ulxlyInputArgs.ClaimGasLimit = depositClaimCmd.PersistentFlags().Uint64("gas-limit", 0, "The gas limit for the transaction. Setting this value to 0 will estimate the gas limit.")
 	ulxlyInputArgs.ClaimChainID = depositClaimCmd.PersistentFlags().String("chain-id", "", "The chainID.")
 	ulxlyInputArgs.ClaimTimeoutTxnReceipt = depositClaimCmd.PersistentFlags().Uint32("transaction-receipt-timeout", 60, "The timeout limit to check for the transaction receipt of the claim.")
 	ulxlyInputArgs.ClaimMessage = depositClaimCmd.PersistentFlags().Bool("claim-message", false, "Claim a message instead of an asset.")
 	ulxlyInputArgs.ClaimWETH = depositClaimCmd.PersistentFlags().Bool("claim-weth", false, "Claim a weth instead of an asset.")
 
-	ulxlyInputArgs.DepositGasLimit = depositNewCmd.PersistentFlags().Uint64("gas-limit", 300000, "The gas limit for the transaction.")
+	ulxlyInputArgs.DepositGasLimit = depositNewCmd.PersistentFlags().Uint64("gas-limit", 0, "The gas limit for the transaction. Setting this value to 0 will estimate the gas limit.")
 	ulxlyInputArgs.DepositChainID = depositNewCmd.PersistentFlags().String("chain-id", "", "The chainID.")
 	ulxlyInputArgs.DepositPrivateKey = depositNewCmd.PersistentFlags().String("private-key", "", "The private key of the sender account.")
 	ulxlyInputArgs.Amount = depositNewCmd.PersistentFlags().Int64("amount", 0, "The amount to send.")
