@@ -28,6 +28,7 @@ If no nodes.json file exists, it will be created.
   -d, --database string                Node database for updating and storing client information
   -h, --help                           help for crawl
   -n, --network-id uint                Filter discovered nodes by this network id
+  -u, --only-urls                      Only writes the enode URLs to the output (default true)
   -p, --parallel int                   How many parallel discoveries to attempt (default 16)
   -r, --revalidation-interval string   Time before retrying to connect to a failed peer (default "10m")
   -t, --timeout string                 Time limit for the crawl (default "30m0s")
