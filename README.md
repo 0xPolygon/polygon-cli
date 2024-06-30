@@ -86,6 +86,11 @@ To test the features of `polycli`, we'll run geth in `dev` mode but you can run 
 
 ```bash
 make geth
+```
+
+Output example
+
+```bash
 INFO [07-10|10:43:12.499] Starting Geth in ephemeral dev mode...
 ...
 ```
@@ -94,8 +99,11 @@ You can then fund the default load testing account and run some tests.
 
 ```bash
 make geth-loadtest
+```
 
-# Output example
+Output example
+
+```bash
 10:57AM INF Starting Load Test
 10:57AM INF Connecting with RPC endpoint to initialize load test parameters
 ...
@@ -126,8 +134,11 @@ Then, attach a console to your node.
 
 ```bash
 geth attach /var/folders/7m/3_x4ns7557x52hb6vncqkx8h0000gn/T/geth.ipc
+```
 
-# Output example
+Output example
+
+```bash
 Welcome to the Geth JavaScript console!
 
 instance: Geth/v1.12.0-stable/darwin-amd64/go1.20.4
