@@ -1,6 +1,7 @@
 package crawl
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -22,15 +23,14 @@ type crawler struct {
 
 	// settings
 	revalidateInterval time.Duration
-	mu                 sync.RWMutex
+	mu                 sync.Mutex
 }
 
 const (
-	nodeRemoved = iota
-	nodeSkipRecent
-	nodeSkipIncompat
-	nodeAdded
-	nodeUpdated
+	nodeAdded = iota
+	nodeDialErr
+	nodePeerErr
+	nodeIncompatible
 )
 
 type resolver interface {
@@ -48,11 +48,6 @@ func newCrawler(input []*enode.Node, disc resolver, iters ...enode.Iterator) *cr
 		closed:    make(chan struct{}),
 	}
 	c.iters = append(c.iters, c.inputIter)
-	// Copy input to output initially. Any nodes that fail validation
-	// will be dropped from output during the run.
-	for _, n := range input {
-		c.output[n.ID()] = n.URLv4()
-	}
 	return c
 }
 
@@ -73,10 +68,11 @@ func (c *crawler) run(timeout time.Duration, nthreads int) p2p.NodeSet {
 		go c.runIterator(doneCh, it)
 	}
 	var (
-		added   uint64
-		skipped uint64
-		recent  uint64
-		wg      sync.WaitGroup
+		added        uint64
+		dialErr      uint64
+		peerErr      uint64
+		incompatible uint64
+		wg           sync.WaitGroup
 	)
 	wg.Add(nthreads)
 	for i := 0; i < nthreads; i++ {
@@ -86,12 +82,14 @@ func (c *crawler) run(timeout time.Duration, nthreads int) p2p.NodeSet {
 				select {
 				case n := <-c.ch:
 					switch c.updateNode(n) {
-					case nodeSkipIncompat:
-						atomic.AddUint64(&skipped, 1)
-					case nodeSkipRecent:
-						atomic.AddUint64(&recent, 1)
 					case nodeAdded:
 						atomic.AddUint64(&added, 1)
+					case nodeDialErr:
+						atomic.AddUint64(&dialErr, 1)
+					case nodePeerErr:
+						atomic.AddUint64(&peerErr, 1)
+					case nodeIncompatible:
+						atomic.AddUint64(&incompatible, 1)
 					}
 				case <-c.closed:
 					return
@@ -119,8 +117,9 @@ loop:
 		case <-statusTicker.C:
 			log.Info().
 				Uint64("added", atomic.LoadUint64(&added)).
-				Uint64("ignored(recent)", atomic.LoadUint64(&recent)).
-				Uint64("ignored(incompatible)", atomic.LoadUint64(&skipped)).
+				Uint64("dial_err", atomic.LoadUint64(&dialErr)).
+				Uint64("peer_err", atomic.LoadUint64(&peerErr)).
+				Uint64("incompatible", atomic.LoadUint64(&incompatible)).
 				Msg("Crawling in progress")
 		}
 	}
@@ -147,56 +146,59 @@ func (c *crawler) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
 	}
 }
 
-// shouldSkipNode filters out nodes by their network id. If there is a status
-// message, skip nodes that don't have the correct network id. Otherwise, skip
-// nodes that are unable to peer.
-func shouldSkipNode(n *enode.Node) bool {
-	if inputCrawlParams.NetworkID == 0 {
-		return false
-	}
-
-	conn, err := p2p.Dial(n)
-	if err != nil {
-		log.Error().Err(err).Msg("Dial failed")
-		return true
-	}
-	defer conn.Close()
-
-	hello, status, err := conn.Peer()
-	if err != nil {
-		log.Error().Err(err).Msg("Peer failed")
-		return true
-	}
-
-	log.Debug().Interface("hello", hello).Interface("status", status).Msg("Message received")
-	return inputCrawlParams.NetworkID != status.NetworkID
-}
-
 // updateNode updates the info about the given node, and returns a status about
 // what changed.
 func (c *crawler) updateNode(n *enode.Node) int {
-	c.mu.RLock()
-	_, ok := c.output[n.ID()]
-	c.mu.RUnlock()
+	var (
+		hello  *p2p.Hello
+		status *p2p.Status
+		err    error
+		nodes  int
+	)
 
-	if ok {
-		return nodeSkipRecent
-	}
-
-	// Filter out incompatible nodes.
-	if shouldSkipNode(n) {
-		return nodeSkipIncompat
-	}
-
-	nn, err := c.disc.RequestENR(n)
-	if err != nil {
-		return nodeSkipIncompat
-	}
-
-	// Store/update node in output set.
 	c.mu.Lock()
-	c.output[nn.ID()] = nn.URLv4()
+	if _, ok := c.output[n.ID()]; !ok {
+		c.output[n.ID()] = []p2p.NodeJSON{}
+	}
+	nodes = len(c.output)
 	c.mu.Unlock()
+
+	// Add result to output node set.
+	defer func() {
+		c.mu.Lock()
+		result := p2p.NodeJSON{
+			URL:    n.URLv4(),
+			Hello:  hello,
+			Status: status,
+			Time:   time.Now().Unix(),
+			Nodes:  nodes,
+		}
+		if err != nil {
+			result.Error = err.Error()
+		}
+
+		c.output[n.ID()] = append(c.output[n.ID()], result)
+		c.mu.Unlock()
+	}()
+
+	conn, dialErr := p2p.Dial(n)
+	if err = dialErr; err != nil {
+		log.Error().Err(err).Msg("Dial failed")
+		return nodeDialErr
+	}
+	defer conn.Close()
+
+	hello, status, err = conn.Peer()
+	if err != nil {
+		log.Error().Err(err).Msg("Peer failed")
+		return nodePeerErr
+	}
+
+	log.Debug().Interface("hello", hello).Interface("status", status).Msg("Message received")
+	if inputCrawlParams.NetworkID != 0 && inputCrawlParams.NetworkID != status.NetworkID {
+		err = errors.New("network ID mismatch")
+		return nodeIncompatible
+	}
 
 	return nodeAdded
 }

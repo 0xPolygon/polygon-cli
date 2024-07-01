@@ -1,8 +1,6 @@
 package ping
 
 import (
-	"encoding/json"
-	"os"
 	"sync"
 	"time"
 
@@ -20,13 +18,6 @@ type (
 		NodesFile  string
 		Listen     bool
 	}
-	pingNodeJSON struct {
-		Record *enode.Node `json:"record"`
-		Hello  *p2p.Hello  `json:"hello,omitempty"`
-		Status *p2p.Status `json:"status,omitempty"`
-		Error  string      `json:"error,omitempty"`
-	}
-	pingNodeSet map[enode.ID]pingNodeJSON
 )
 
 var (
@@ -53,7 +44,7 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 			return err
 		}
 
-		output := make(pingNodeSet)
+		output := make(p2p.NodeSet)
 
 		var (
 			mutex sync.Mutex
@@ -88,7 +79,6 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 				var (
 					hello  *p2p.Hello
 					status *p2p.Status
-					errStr string
 				)
 
 				conn, err := p2p.Dial(node)
@@ -103,41 +93,36 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 					log.Info().Interface("hello", hello).Interface("status", status).Msg("Peering messages received")
 				}
 
-				if err != nil {
-					errStr = err.Error()
-				} else if inputPingParams.Listen {
+				if err == nil && inputPingParams.Listen {
 					// If the dial and peering were successful, listen to the peer for messages.
-					if err := conn.ReadAndServe(count); err != nil {
+					if err = conn.ReadAndServe(count); err != nil {
 						log.Error().Err(err).Msg("Received error")
 					}
 				}
 
 				// Save the results to the output map.
 				mutex.Lock()
-				output[node.ID()] = pingNodeJSON{
-					Record: node,
+				if _, ok := output[node.ID()]; !ok {
+					output[node.ID()] = []p2p.NodeJSON{}
+				}
+
+				result := p2p.NodeJSON{
+					URL:    node.URLv4(),
 					Hello:  hello,
 					Status: status,
-					Error:  errStr,
+					Time:   time.Now().Unix(),
 				}
+				if err != nil {
+					result.Error = err.Error()
+				}
+
+				output[node.ID()] = append(output[node.ID()], result)
 				mutex.Unlock()
 			}(n)
 		}
 		wg.Wait()
 
-		// Write the output.
-		nodesJSON, err := json.MarshalIndent(output, "", "  ")
-		if err != nil {
-			return err
-		}
-
-		if inputPingParams.OutputFile == "" {
-			os.Stdout.Write(nodesJSON)
-		} else if err := os.WriteFile(inputPingParams.OutputFile, nodesJSON, 0644); err != nil {
-			return err
-		}
-
-		return nil
+		return p2p.WriteNodeSet(inputPingParams.OutputFile, output, true)
 	},
 }
 
