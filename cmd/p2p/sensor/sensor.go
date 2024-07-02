@@ -249,7 +249,7 @@ var SensorCmd = &cobra.Command{
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-		peers := make(p2p.NodeSet)
+		peers := make(map[enode.ID]string)
 		for _, node := range inputSensorParams.nodes {
 			// Because the node URLs can change, map them to the node ID to prevent
 			// duplicates.
@@ -265,7 +265,7 @@ var SensorCmd = &cobra.Command{
 				if _, ok := peers[peer.ID()]; !ok {
 					peers[peer.ID()] = peer.URLv4()
 
-					if err := p2p.WriteNodeSet(inputSensorParams.NodesFile, peers); err != nil {
+					if err := p2p.WritePeers(inputSensorParams.NodesFile, peers); err != nil {
 						log.Error().Err(err).Msg("Failed to write nodes to file")
 					}
 				}
