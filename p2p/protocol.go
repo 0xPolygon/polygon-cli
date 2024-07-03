@@ -189,12 +189,12 @@ func (c *conn) handleRequests(done chan struct{}) {
 		case hash := <-c.receivedHeader:
 			for e := requests.Front(); e != nil; e = e.Next() {
 				r := e.Value.(*request)
-
-				if r.hash.Cmp(hash) == 0 {
-					r.hasHeader = true
+				if r.hash.Cmp(hash) != 0 {
+					continue
 				}
 
-				if r.hasHeader && r.hasBody {
+				r.hasHeader = true
+				if r.hasBody {
 					requests.Remove(e)
 				}
 			}
@@ -203,17 +203,17 @@ func (c *conn) handleRequests(done chan struct{}) {
 
 			for e := requests.Front(); e != nil; e = e.Next() {
 				r := e.Value.(*request)
-
-				if r.requestID == id {
-					r.hasBody = true
-					hash = &r.hash
-
-					if r.hasHeader && r.hasBody {
-						requests.Remove(e)
-					}
-
-					break
+				if r.requestID != id {
+					continue
 				}
+
+				hash = &r.hash
+				r.hasBody = true
+				if r.hasHeader {
+					requests.Remove(e)
+				}
+
+				break
 			}
 
 			c.requestHash <- hash
