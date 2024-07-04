@@ -59,13 +59,13 @@ type DatastoreHeader struct {
 	Root          string
 	TxHash        string
 	ReceiptHash   string
-	Bloom         []byte
+	Bloom         []byte `datastore:"noindex"`
 	Difficulty    string
 	Number        string
 	GasLimit      string
 	GasUsed       string
 	Time          time.Time
-	Extra         []byte
+	Extra         []byte `datastore:"noindex"`
 	MixDigest     string
 	Nonce         string
 	BaseFee       string
@@ -381,7 +381,7 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 	}, datastore.MaxAttempts(MaxAttempts))
 
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to write new block")
+		log.Error().Err(err).Str("hash", block.Hash().Hex()).Msg("Failed to write new block")
 	}
 }
 
@@ -446,7 +446,7 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header) 
 	}, datastore.MaxAttempts(MaxAttempts))
 
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to write block header")
+		log.Error().Err(err).Str("hash", header.Hash().Hex()).Msg("Failed to write block header")
 	}
 }
 
@@ -491,7 +491,7 @@ func (d *Datastore) writeBlockBody(ctx context.Context, body *eth.BlockBody, has
 	}, datastore.MaxAttempts(MaxAttempts))
 
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to write block body")
+		log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to write block body")
 	}
 }
 
