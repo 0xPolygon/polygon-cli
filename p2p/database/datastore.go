@@ -59,13 +59,13 @@ type DatastoreHeader struct {
 	Root          string
 	TxHash        string
 	ReceiptHash   string
-	Bloom         []byte `datastore:"noindex"`
+	Bloom         []byte `datastore:",noindex"`
 	Difficulty    string
 	Number        string
 	GasLimit      string
 	GasUsed       string
 	Time          time.Time
-	Extra         []byte `datastore:"noindex"`
+	Extra         []byte `datastore:",noindex"`
 	MixDigest     string
 	Nonce         string
 	BaseFee       string
