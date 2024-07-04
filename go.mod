@@ -148,7 +148,7 @@ require (
 )
 
 require (
-	cloud.google.com/go/kms v1.18.0
+	cloud.google.com/go/kms v1.18.2
 	github.com/google/tink/go v1.7.0
 	github.com/montanaflynn/stats v0.7.1
 )
