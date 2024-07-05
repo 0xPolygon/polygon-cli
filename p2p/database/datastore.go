@@ -21,7 +21,7 @@ const (
 	BlockEventsKind       = "block_events"
 	TransactionsKind      = "transactions"
 	TransactionEventsKind = "transaction_events"
-	MaxAttempts           = 20
+	MaxAttempts           = 10
 )
 
 // Datastore wraps the datastore client, stores the sensorID, and other
