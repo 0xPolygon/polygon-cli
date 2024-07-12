@@ -159,6 +159,10 @@ $ polycli loadtest --verbosity 700 --chain-id 1337 --concurrency 1 --requests 10
 
 - If you add a new loadtest mode, don't forget to update the loadtest mode string by running the following command: `cd cmd/loadtest && stringer -type=loadTestMode`. You can install [stringer](https://pkg.go.dev/golang.org/x/tools/cmd/stringer) with `go install golang.org/x/tools/cmd/stringer@latest`.
 
+## Contact
+
+For more discussions, please head to the [R&D Discord](https://discord.gg/0xPolygonRnD)
+
 # Reference
 
 Sending some value to the default load testing account.
