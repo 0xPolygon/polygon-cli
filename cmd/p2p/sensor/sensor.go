@@ -235,7 +235,7 @@ var SensorCmd = &cobra.Command{
 		// Starting the server isn't actually a blocking call so the sensor needs to
 		// have something that waits for it. This is implemented by the for {} loop
 		// seen below.
-		if err := server.Start(); err != nil {
+		if err = server.Start(); err != nil {
 			return err
 		}
 		defer server.Stop()
