@@ -267,7 +267,10 @@ var SensorCmd = &cobra.Command{
 					urls = append(urls, peer.Node().URLv4())
 				}
 
-				json.NewEncoder(w).Encode(urls)
+				jsonErr := json.NewEncoder(w).Encode(urls)
+				if jsonErr != nil {
+					log.Error().Err(err).Msg("Failed to encode peers")
+				}
 			})
 
 			if peersErr := http.ListenAndServe(":80", nil); peersErr != nil {
