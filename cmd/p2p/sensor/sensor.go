@@ -107,22 +107,11 @@ var SensorCmd = &cobra.Command{
 		}
 
 		if inputSensorParams.ShouldRunPprof {
-			go func() {
-				addr := fmt.Sprintf(":%v", inputSensorParams.PprofPort)
-				if pprofErr := http.ListenAndServe(addr, nil); pprofErr != nil {
-					log.Error().Err(pprofErr).Msg("Failed to start pprof")
-				}
-			}()
+			go handlePprof()
 		}
 
 		if inputSensorParams.ShouldRunPrometheus {
-			go func() {
-				http.Handle("/metrics", promhttp.Handler())
-				addr := fmt.Sprintf(":%v", inputSensorParams.PrometheusPort)
-				if promErr := http.ListenAndServe(addr, nil); promErr != nil {
-					log.Error().Err(promErr).Msg("Failed to start Prometheus handler")
-				}
-			}()
+			go handlePrometheus()
 		}
 
 		inputSensorParams.privateKey, err = crypto.GenerateKey()
@@ -257,26 +246,7 @@ var SensorCmd = &cobra.Command{
 			peers[node.ID()] = node.URLv4()
 		}
 
-		go func() {
-			http.HandleFunc("/peers", func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusOK)
-
-				urls := []string{}
-				for _, peer := range server.Peers() {
-					urls = append(urls, peer.Node().URLv4())
-				}
-
-				jsonErr := json.NewEncoder(w).Encode(urls)
-				if jsonErr != nil {
-					log.Error().Err(err).Msg("Failed to encode peers")
-				}
-			})
-
-			if peersErr := http.ListenAndServe(":80", nil); peersErr != nil {
-				log.Error().Err(peersErr).Msg("Failed to start http handler")
-			}
-		}()
+		go handlePeers(&server)
 
 		for {
 			select {
@@ -303,6 +273,42 @@ var SensorCmd = &cobra.Command{
 			}
 		}
 	},
+}
+
+func handlePprof() {
+	addr := fmt.Sprintf(":%v", inputSensorParams.PprofPort)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Error().Err(err).Msg("Failed to start pprof")
+	}
+}
+
+func handlePrometheus() {
+	http.Handle("/metrics", promhttp.Handler())
+	addr := fmt.Sprintf(":%v", inputSensorParams.PrometheusPort)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Error().Err(err).Msg("Failed to start Prometheus handler")
+	}
+}
+
+func handlePeers(server *ethp2p.Server) {
+	http.HandleFunc("/peers", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		urls := []string{}
+		for _, peer := range server.Peers() {
+			urls = append(urls, peer.Node().URLv4())
+		}
+
+		err := json.NewEncoder(w).Encode(urls)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to encode peers")
+		}
+	})
+
+	if err := http.ListenAndServe(":80", nil); err != nil {
+		log.Error().Err(err).Msg("Failed to start peers handler")
+	}
 }
 
 // getLatestBlock will get the latest block from an RPC provider.
