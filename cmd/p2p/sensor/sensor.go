@@ -2,6 +2,7 @@ package sensor
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -255,6 +256,24 @@ var SensorCmd = &cobra.Command{
 			// duplicates.
 			peers[node.ID()] = node.URLv4()
 		}
+
+		go func() {
+			http.HandleFunc("/peers", func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+
+				urls := []string{}
+				for _, peer := range server.Peers() {
+					urls = append(urls, peer.Node().URLv4())
+				}
+
+				json.NewEncoder(w).Encode(urls)
+			})
+
+			if peersErr := http.ListenAndServe(":80", nil); peersErr != nil {
+				log.Error().Err(peersErr).Msg("Failed to start http handler")
+			}
+		}()
 
 		for {
 			select {
