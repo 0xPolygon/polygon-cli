@@ -23,6 +23,7 @@ If no nodes.json file exists, it will be created.
 ## Flags
 
 ```bash
+      --api-port uint            Port the API server will listen on (default 8080)
   -b, --bootnodes string         Comma separated nodes used for bootstrapping
   -d, --database-id string       Datastore database ID
       --dial-ratio int           Ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
