@@ -51,6 +51,7 @@ type (
 		PprofPort                    uint
 		ShouldRunPrometheus          bool
 		PrometheusPort               uint
+		APIPort                      uint
 		KeyFile                      string
 		Port                         int
 		DiscoveryPort                int
@@ -246,7 +247,7 @@ var SensorCmd = &cobra.Command{
 			peers[node.ID()] = node.URLv4()
 		}
 
-		go handlePeers(&server)
+		go handleAPI(&server)
 
 		for {
 			select {
@@ -276,7 +277,7 @@ var SensorCmd = &cobra.Command{
 }
 
 func handlePprof() {
-	addr := fmt.Sprintf(":%v", inputSensorParams.PprofPort)
+	addr := fmt.Sprintf(":%d", inputSensorParams.PprofPort)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Error().Err(err).Msg("Failed to start pprof")
 	}
@@ -284,13 +285,13 @@ func handlePprof() {
 
 func handlePrometheus() {
 	http.Handle("/metrics", promhttp.Handler())
-	addr := fmt.Sprintf(":%v", inputSensorParams.PrometheusPort)
+	addr := fmt.Sprintf(":%d", inputSensorParams.PrometheusPort)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Error().Err(err).Msg("Failed to start Prometheus handler")
 	}
 }
 
-func handlePeers(server *ethp2p.Server) {
+func handleAPI(server *ethp2p.Server) {
 	http.HandleFunc("/peers", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -311,8 +312,9 @@ func handlePeers(server *ethp2p.Server) {
 		}
 	})
 
-	if err := http.ListenAndServe(":80", nil); err != nil {
-		log.Error().Err(err).Msg("Failed to start peers handler")
+	addr := fmt.Sprintf(":%d", inputSensorParams.APIPort)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Error().Err(err).Msg("Failed to start API handler")
 	}
 }
 
@@ -362,6 +364,7 @@ significantly increase CPU and memory usage.`)
 	SensorCmd.Flags().UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "Port pprof runs on")
 	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "Whether to run Prometheus")
 	SensorCmd.Flags().UintVar(&inputSensorParams.PrometheusPort, "prom-port", 2112, "Port Prometheus runs on")
+	SensorCmd.Flags().UintVar(&inputSensorParams.APIPort, "api-port", 8080, "Port to run API")
 	SensorCmd.Flags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "Private key file")
 	SensorCmd.Flags().IntVar(&inputSensorParams.Port, "port", 30303, "TCP network listening port")
 	SensorCmd.Flags().IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
