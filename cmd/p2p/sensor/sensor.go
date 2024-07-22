@@ -2,6 +2,7 @@ package sensor
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -50,6 +51,7 @@ type (
 		PprofPort                    uint
 		ShouldRunPrometheus          bool
 		PrometheusPort               uint
+		APIPort                      uint
 		KeyFile                      string
 		Port                         int
 		DiscoveryPort                int
@@ -106,22 +108,11 @@ var SensorCmd = &cobra.Command{
 		}
 
 		if inputSensorParams.ShouldRunPprof {
-			go func() {
-				addr := fmt.Sprintf(":%v", inputSensorParams.PprofPort)
-				if pprofErr := http.ListenAndServe(addr, nil); pprofErr != nil {
-					log.Error().Err(pprofErr).Msg("Failed to start pprof")
-				}
-			}()
+			go handlePprof()
 		}
 
 		if inputSensorParams.ShouldRunPrometheus {
-			go func() {
-				http.Handle("/metrics", promhttp.Handler())
-				addr := fmt.Sprintf(":%v", inputSensorParams.PrometheusPort)
-				if promErr := http.ListenAndServe(addr, nil); promErr != nil {
-					log.Error().Err(promErr).Msg("Failed to start Prometheus handler")
-				}
-			}()
+			go handlePrometheus()
 		}
 
 		inputSensorParams.privateKey, err = crypto.GenerateKey()
@@ -234,7 +225,7 @@ var SensorCmd = &cobra.Command{
 		// Starting the server isn't actually a blocking call so the sensor needs to
 		// have something that waits for it. This is implemented by the for {} loop
 		// seen below.
-		if err := server.Start(); err != nil {
+		if err = server.Start(); err != nil {
 			return err
 		}
 		defer server.Stop()
@@ -255,6 +246,8 @@ var SensorCmd = &cobra.Command{
 			// duplicates.
 			peers[node.ID()] = node.URLv4()
 		}
+
+		go handleAPI(&server)
 
 		for {
 			select {
@@ -281,6 +274,48 @@ var SensorCmd = &cobra.Command{
 			}
 		}
 	},
+}
+
+func handlePprof() {
+	addr := fmt.Sprintf(":%d", inputSensorParams.PprofPort)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Error().Err(err).Msg("Failed to start pprof")
+	}
+}
+
+func handlePrometheus() {
+	http.Handle("/metrics", promhttp.Handler())
+	addr := fmt.Sprintf(":%d", inputSensorParams.PrometheusPort)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Error().Err(err).Msg("Failed to start Prometheus handler")
+	}
+}
+
+func handleAPI(server *ethp2p.Server) {
+	http.HandleFunc("/peers", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		urls := []string{}
+		for _, peer := range server.Peers() {
+			urls = append(urls, peer.Node().URLv4())
+		}
+
+		err := json.NewEncoder(w).Encode(urls)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to encode peers")
+		}
+	})
+
+	addr := fmt.Sprintf(":%d", inputSensorParams.APIPort)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Error().Err(err).Msg("Failed to start API handler")
+	}
 }
 
 // getLatestBlock will get the latest block from an RPC provider.
@@ -329,6 +364,7 @@ significantly increase CPU and memory usage.`)
 	SensorCmd.Flags().UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "Port pprof runs on")
 	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "Whether to run Prometheus")
 	SensorCmd.Flags().UintVar(&inputSensorParams.PrometheusPort, "prom-port", 2112, "Port Prometheus runs on")
+	SensorCmd.Flags().UintVar(&inputSensorParams.APIPort, "api-port", 8080, "Port the API server will listen on")
 	SensorCmd.Flags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "Private key file")
 	SensorCmd.Flags().IntVar(&inputSensorParams.Port, "port", 30303, "TCP network listening port")
 	SensorCmd.Flags().IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
