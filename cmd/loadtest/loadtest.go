@@ -423,6 +423,18 @@ func runLoadTest(ctx context.Context) error {
 		log.Info().Msg("Time's up")
 	case <-sigCh:
 		log.Info().Msg("Interrupted.. Stopping load test")
+		if *inputLoadTestParams.ShouldProduceSummary {
+			finalBlockNumber, err = ec.BlockNumber(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to retrieve final block number")
+			}
+			err = summarizeTransactions(ctx, ec, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
+			if err != nil {
+				log.Error().Err(err).Msg("There was an issue creating the load test summary")
+			}
+		}
+		lightSummary(loadTestResults, loadTestResults[0].RequestTime, time.Now(), rl)
+		return nil
 	case err = <-errCh:
 		if err != nil {
 			log.Fatal().Err(err).Msg("Received critical error while running load test")
