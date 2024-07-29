@@ -413,9 +413,16 @@ func runLoadTest(ctx context.Context) error {
 	// Initialize channels for handling errors and running the main loop.
 	loadTestResults = make([]loadTestSample, 0)
 	errCh := make(chan error)
-	go func() {
-		errCh <- loopFunc()
-	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func(ctx context.Context) {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			errCh <- loopFunc()
+		}
+	}(ctx)
 
 	// Wait for the load test to complete, either due to time limit, interrupt signal, or completion.
 	select {
@@ -432,9 +439,10 @@ func runLoadTest(ctx context.Context) error {
 			if err != nil {
 				log.Error().Err(err).Msg("There was an issue creating the load test summary")
 			}
+		} else {
+			lightSummary(loadTestResults, loadTestResults[0].RequestTime, time.Now(), rl)
 		}
-		lightSummary(loadTestResults, loadTestResults[0].RequestTime, time.Now(), rl)
-		return nil
+		cancel()
 	case err = <-errCh:
 		if err != nil {
 			log.Fatal().Err(err).Msg("Received critical error while running load test")
@@ -616,7 +624,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			var retryForNonce bool = false
 			var myNonceValue uint64
 			var tErr error
-
 			for j = 0; j < requests; j = j + 1 {
 				if rl != nil {
 					tErr = rl.Wait(ctx)
