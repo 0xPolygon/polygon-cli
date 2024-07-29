@@ -75,7 +75,7 @@ require (
 	github.com/google/s2a-go v0.1.7 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
-	github.com/googleapis/gax-go/v2 v2.12.5 // indirect
+	github.com/googleapis/gax-go/v2 v2.13.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/hashicorp/hcl v1.0.1-vault // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
@@ -138,7 +138,7 @@ require (
 	golang.org/x/term v0.22.0 // indirect
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 	google.golang.org/genproto v0.0.0-20240722135656-d784300faade // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240701130421-f6361c86f094 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240722135656-d784300faade // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240722135656-d784300faade // indirect
 	google.golang.org/grpc v1.64.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
@@ -148,7 +148,7 @@ require (
 )
 
 require (
-	cloud.google.com/go/kms v1.18.3
+	cloud.google.com/go/kms v1.18.4
 	github.com/google/tink/go v1.7.0
 	github.com/montanaflynn/stats v0.7.1
 )
