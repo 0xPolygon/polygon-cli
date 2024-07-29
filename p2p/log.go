@@ -9,53 +9,53 @@ import (
 // logging. It can be used to count the different types of messages received
 // across all peer connections to provide a summary.
 type MessageCount struct {
-	BlockHeaders        int32 `json:",omitempty"`
-	BlockBodies         int32 `json:",omitempty"`
-	Blocks              int32 `json:",omitempty"`
-	BlockHashes         int32 `json:",omitempty"`
-	BlockHeaderRequests int32 `json:",omitempty"`
-	BlockBodiesRequests int32 `json:",omitempty"`
-	Transactions        int32 `json:",omitempty"`
-	TransactionHashes   int32 `json:",omitempty"`
-	TransactionRequests int32 `json:",omitempty"`
-	Pings               int32 `json:",omitempty"`
-	Errors              int32 `json:",omitempty"`
-	Disconnects         int32 `json:",omitempty"`
+	BlockHeaders        int64 `json:"block_headers,omitempty"`
+	BlockBodies         int64 `json:"block_bodies,omitempty"`
+	Blocks              int64 `json:"blocks,omitempty"`
+	BlockHashes         int64 `json:"block_hashes,omitempty"`
+	BlockHeaderRequests int64 `json:"block_header_requests,omitempty"`
+	BlockBodiesRequests int64 `json:"block_bodies_requests,omitempty"`
+	Transactions        int64 `json:"transactions,omitempty"`
+	TransactionHashes   int64 `json:"transaction_hashes,omitempty"`
+	TransactionRequests int64 `json:"transaction_requests,omitempty"`
+	Pings               int64 `json:"pings,omitempty"`
+	Errors              int64 `json:"errors,omitempty"`
+	Disconnects         int64 `json:"disconnects,omitempty"`
 }
 
 // Load takes a snapshot of all the counts in a thread-safe manner. Make sure
 // you call this and read from the returned object.
 func (count *MessageCount) Load() MessageCount {
 	return MessageCount{
-		BlockHeaders:        atomic.LoadInt32(&count.BlockHeaders),
-		BlockBodies:         atomic.LoadInt32(&count.BlockBodies),
-		Blocks:              atomic.LoadInt32(&count.Blocks),
-		BlockHashes:         atomic.LoadInt32(&count.BlockHashes),
-		BlockHeaderRequests: atomic.LoadInt32(&count.BlockHeaderRequests),
-		BlockBodiesRequests: atomic.LoadInt32(&count.BlockBodiesRequests),
-		Transactions:        atomic.LoadInt32(&count.Transactions),
-		TransactionHashes:   atomic.LoadInt32(&count.TransactionHashes),
-		TransactionRequests: atomic.LoadInt32(&count.TransactionRequests),
-		Pings:               atomic.LoadInt32(&count.Pings),
-		Errors:              atomic.LoadInt32(&count.Errors),
-		Disconnects:         atomic.LoadInt32(&count.Disconnects),
+		BlockHeaders:        atomic.LoadInt64(&count.BlockHeaders),
+		BlockBodies:         atomic.LoadInt64(&count.BlockBodies),
+		Blocks:              atomic.LoadInt64(&count.Blocks),
+		BlockHashes:         atomic.LoadInt64(&count.BlockHashes),
+		BlockHeaderRequests: atomic.LoadInt64(&count.BlockHeaderRequests),
+		BlockBodiesRequests: atomic.LoadInt64(&count.BlockBodiesRequests),
+		Transactions:        atomic.LoadInt64(&count.Transactions),
+		TransactionHashes:   atomic.LoadInt64(&count.TransactionHashes),
+		TransactionRequests: atomic.LoadInt64(&count.TransactionRequests),
+		Pings:               atomic.LoadInt64(&count.Pings),
+		Errors:              atomic.LoadInt64(&count.Errors),
+		Disconnects:         atomic.LoadInt64(&count.Disconnects),
 	}
 }
 
 // Clear clears all of the counts from the message counter.
 func (count *MessageCount) Clear() {
-	atomic.StoreInt32(&count.BlockHeaders, 0)
-	atomic.StoreInt32(&count.BlockBodies, 0)
-	atomic.StoreInt32(&count.Blocks, 0)
-	atomic.StoreInt32(&count.BlockHashes, 0)
-	atomic.StoreInt32(&count.BlockHeaderRequests, 0)
-	atomic.StoreInt32(&count.BlockBodiesRequests, 0)
-	atomic.StoreInt32(&count.Transactions, 0)
-	atomic.StoreInt32(&count.TransactionHashes, 0)
-	atomic.StoreInt32(&count.TransactionRequests, 0)
-	atomic.StoreInt32(&count.Pings, 0)
-	atomic.StoreInt32(&count.Errors, 0)
-	atomic.StoreInt32(&count.Disconnects, 0)
+	atomic.StoreInt64(&count.BlockHeaders, 0)
+	atomic.StoreInt64(&count.BlockBodies, 0)
+	atomic.StoreInt64(&count.Blocks, 0)
+	atomic.StoreInt64(&count.BlockHashes, 0)
+	atomic.StoreInt64(&count.BlockHeaderRequests, 0)
+	atomic.StoreInt64(&count.BlockBodiesRequests, 0)
+	atomic.StoreInt64(&count.Transactions, 0)
+	atomic.StoreInt64(&count.TransactionHashes, 0)
+	atomic.StoreInt64(&count.TransactionRequests, 0)
+	atomic.StoreInt64(&count.Pings, 0)
+	atomic.StoreInt64(&count.Errors, 0)
+	atomic.StoreInt64(&count.Disconnects, 0)
 }
 
 // IsEmpty checks whether the sum of all the counts is empty. Make sure to call
@@ -76,8 +76,8 @@ func (c *MessageCount) IsEmpty() bool {
 	) == 0
 }
 
-func sum(ints ...int32) int32 {
-	var sum int32 = 0
+func sum(ints ...int64) int64 {
+	var sum int64 = 0
 	for _, i := range ints {
 		sum += i
 	}
