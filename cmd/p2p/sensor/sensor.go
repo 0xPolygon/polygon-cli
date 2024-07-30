@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -255,6 +256,9 @@ var SensorCmd = &cobra.Command{
 			select {
 			case <-ticker.C:
 				peersGauge.Set(float64(server.PeerCount()))
+				if err := removePeerMessages(msgCounter, server.Peers()); err != nil {
+					log.Error().Err(err).Msg("Failed to clean up peer messages")
+				}
 			case peer := <-opts.Peers:
 				// Update the peer list and the nodes file.
 				if _, ok := peers[peer.ID()]; !ok {
@@ -363,6 +367,45 @@ func getCounterValue(packet eth.Packet, url string, counter *prometheus.CounterV
 	}
 
 	return int64(metric.GetCounter().GetValue())
+}
+
+// removePeerMessages removes all the counters of peers that disconnected from
+// the sensor. This prevents the metrics list from infinitely growing.
+func removePeerMessages(counter *prometheus.CounterVec, peers []*ethp2p.Peer) error {
+	urls := []string{}
+	for _, peer := range peers {
+		urls = append(urls, peer.Node().URLv4())
+	}
+
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		return err
+	}
+
+	var family *dto.MetricFamily
+	for _, f := range families {
+		if f.GetName() == "sensor_messages" {
+			family = f
+			break
+		}
+	}
+
+	if family == nil {
+		return errors.New("could not find sensor_messages metric family")
+	}
+
+	for _, metric := range family.GetMetric() {
+		for _, label := range metric.GetLabel() {
+			url := label.GetValue()
+			if label.GetName() != "url" || slices.Contains(urls, url) {
+				continue
+			}
+
+			counter.DeletePartialMatch(prometheus.Labels{"url": url})
+		}
+	}
+
+	return nil
 }
 
 // getLatestBlock will get the latest block from an RPC provider.
