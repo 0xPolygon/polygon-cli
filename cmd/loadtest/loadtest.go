@@ -150,6 +150,18 @@ func hasMode(mode loadTestMode, modes []loadTestMode) bool {
 	return false
 }
 
+func hasUniqueModes(modes []loadTestMode) bool {
+	seen := make(map[loadTestMode]bool, len(modes))
+	for _, m := range modes {
+		if !seen[m] {
+			seen[m] = true
+		} else {
+			return false
+		}
+	}
+	return true
+}
+
 func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	log.Info().Msg("Connecting with RPC endpoint to initialize load test parameters")
 	gas, err := c.SuggestGasPrice(ctx)
@@ -257,13 +269,16 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		inputLoadTestParams.ParsedModes = append(inputLoadTestParams.ParsedModes, parsedMode)
 	}
 
+	// Logic checking input parameters for specific conditions such as multiple inputs.
 	if len(modes) > 1 {
 		inputLoadTestParams.MultiMode = true
+		if !hasUniqueModes(inputLoadTestParams.ParsedModes) {
+			return errors.New("Duplicate modes detected, check input modes for duplicates")
+		}
 	} else {
 		inputLoadTestParams.MultiMode = false
 		inputLoadTestParams.Mode, _ = characterToLoadTestMode((*inputLoadTestParams.Modes)[0])
 	}
-
 	if hasMode(loadTestModeRandom, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode {
 		return errors.New("random mode can't be used in combinations with any other modes")
 	}
@@ -276,12 +291,9 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	if hasMode(loadTestModeContractCall, inputLoadTestParams.ParsedModes) && (*inputLoadTestParams.ContractAddress == "" || (*inputLoadTestParams.ContractCallData == "" && *inputLoadTestParams.ContractCallFunctionSignature == "")) {
 		return errors.New("`--contract-call` requires both a `--contract-address` and calldata, either with `--calldata` or `--function-signature --function-arg` flags.")
 	}
-	// TODO check for duplicate modes?
-
 	if *inputLoadTestParams.CallOnly && *inputLoadTestParams.AdaptiveRateLimit {
 		return errors.New("using call only with adaptive rate limit doesn't make sense")
 	}
-
 	if hasMode(loadTestModeBlob, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode {
 		return errors.New("Blob mode should only be used by itself. Blob mode will take significantly longer than other transactions to finalize, and the address will be reserved, preventing other transactions form being made.")
 	}
@@ -401,9 +413,16 @@ func runLoadTest(ctx context.Context) error {
 	// Initialize channels for handling errors and running the main loop.
 	loadTestResults = make([]loadTestSample, 0)
 	errCh := make(chan error)
-	go func() {
-		errCh <- loopFunc()
-	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func(ctx context.Context) {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			errCh <- loopFunc()
+		}
+	}(ctx)
 
 	// Wait for the load test to complete, either due to time limit, interrupt signal, or completion.
 	select {
@@ -411,6 +430,19 @@ func runLoadTest(ctx context.Context) error {
 		log.Info().Msg("Time's up")
 	case <-sigCh:
 		log.Info().Msg("Interrupted.. Stopping load test")
+		if *inputLoadTestParams.ShouldProduceSummary {
+			finalBlockNumber, err = ec.BlockNumber(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to retrieve final block number")
+			}
+			err = summarizeTransactions(ctx, ec, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
+			if err != nil {
+				log.Error().Err(err).Msg("There was an issue creating the load test summary")
+			}
+		} else {
+			lightSummary(loadTestResults, loadTestResults[0].RequestTime, time.Now(), rl)
+		}
+		cancel()
 	case err = <-errCh:
 		if err != nil {
 			log.Fatal().Err(err).Msg("Received critical error while running load test")
@@ -592,7 +624,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			var retryForNonce bool = false
 			var myNonceValue uint64
 			var tErr error
-
 			for j = 0; j < requests; j = j + 1 {
 				if rl != nil {
 					tErr = rl.Wait(ctx)

@@ -3,12 +3,13 @@ package loadtest
 import (
 	"context"
 	"encoding/json"
-	"github.com/montanaflynn/stats"
 	"math"
 	"math/big"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/montanaflynn/stats"
 
 	"golang.org/x/time/rate"
 
@@ -94,6 +95,7 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 	gaspersec := float64(totalGasUsed) / totalMiningTime.Seconds()
 	minLatency, medianLatency, maxLatency := getMinMedianMax(allLatencies)
 	successfulTx, totalTx := getSuccessfulTransactionCount(bs)
+	meanBlocktime, medianBlocktime, minBlocktime, maxBlocktime, stddevBlocktime, varianceBlocktime := getTimestampBlockSummary(bs)
 
 	if summaryOutputMode == "text" {
 		p.Printf("Successful Tx: %v\tTotal Tx: %v\n", number.Decimal(successfulTx), number.Decimal(totalTx))
@@ -103,7 +105,12 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 		p.Printf("Transactions per sec: %v\n", number.Decimal(tps))
 		p.Printf("Gas Per Second: %v\n", number.Decimal(gaspersec))
 		p.Printf("Latencies - Min: %v\tMedian: %v\tMax: %v\n", number.Decimal(minLatency.Seconds()), number.Decimal(medianLatency.Seconds()), number.Decimal(maxLatency.Seconds()))
-		// TODO: Add some kind of indication of block time variance
+		p.Printf("Mean Blocktime: %vs\n", number.Decimal(meanBlocktime))
+		p.Printf("Median Blocktime: %vs\n", number.Decimal(medianBlocktime))
+		p.Printf("Minimum Blocktime: %vs\n", number.Decimal(minBlocktime))
+		p.Printf("Maximum Blocktime: %vs\n", number.Decimal(maxBlocktime))
+		p.Printf("Blocktime Standard Deviation: %vs\n", number.Decimal(stddevBlocktime))
+		p.Printf("Blocktime Variance: %vs\n", number.Decimal(varianceBlocktime))
 	} else if summaryOutputMode == "json" {
 		summaryOutput := SummaryOutput{}
 		summaryOutput.Summaries = jsonSummaryList
@@ -228,6 +235,34 @@ func getSuccessfulTransactionCount(bs map[uint64]blockSummary) (successful, tota
 		}
 	}
 	return
+}
+
+func getTimestampBlockSummary(bs map[uint64]blockSummary) (float64, float64, float64, float64, float64, float64) {
+	blockTimestamps := make([]float64, 0)
+	var prevBlockTimestamp float64 = 0
+	// Keys for BlockSummary must be sorted, because it is not guaranteed that the keys of BlockSummary map is in order.
+	mapKeys := getSortedMapKeys(bs)
+	// Iterate through the BlockSummary elements and calculate the blocktime by comparing current and previous blocks' timestamps.
+	for _, v := range mapKeys {
+		currBlockTimestamp := bs[v].Block.Timestamp.ToFloat64()
+		// Since the first block will not have a previous block to compare, continue.
+		if prevBlockTimestamp == 0 {
+			prevBlockTimestamp = currBlockTimestamp
+			continue
+			// Sanity check to make sure that the current blocktime is always greater than the previous blocktime.
+		} else if currBlockTimestamp > prevBlockTimestamp {
+			blockTimeDiff := currBlockTimestamp - prevBlockTimestamp
+			blockTimestamps = append(blockTimestamps, float64(blockTimeDiff))
+			prevBlockTimestamp = currBlockTimestamp
+		}
+	}
+	meanBlocktime, _ := stats.Mean(blockTimestamps)
+	medianBlocktime, _ := stats.Median(blockTimestamps)
+	minBlocktime, _ := stats.Min(blockTimestamps)
+	maxBlocktime, _ := stats.Max(blockTimestamps)
+	stddevBlocktime, _ := stats.StandardDeviation(blockTimestamps)
+	varianceBlocktime, _ := stats.Variance(blockTimestamps)
+	return meanBlocktime, medianBlocktime, minBlocktime, maxBlocktime, stddevBlocktime, varianceBlocktime
 }
 
 func getTotalGasUsed(receipts map[ethcommon.Hash]rpctypes.RawTxReceipt) uint64 {
@@ -419,6 +454,7 @@ func lightSummary(lts []loadTestSample, startTime, endTime time.Time, rl *rate.L
 
 	var numErrors uint64 = 0
 
+	// latencies refers to the delay for the transactions to be relayed.
 	latencies := make([]float64, 0)
 	for _, s := range lts {
 		if s.IsError {
@@ -449,7 +485,7 @@ func lightSummary(lts []loadTestSample, startTime, endTime time.Time, rl *rate.L
 		Float64("min", minLat).
 		Float64("max", maxLat).
 		Float64("stddev", stddevLat).
-		Msg("Request Latency Stats")
+		Msg("Request Latency of Transactions Stats")
 	log.Info().
 		Float64("testDuration", testDuration.Seconds()).
 		Float64("finalRateLimit", rlLimit).

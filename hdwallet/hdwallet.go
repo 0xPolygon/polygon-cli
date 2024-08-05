@@ -49,19 +49,18 @@ type (
 		multiAddress
 	}
 	multiAddress struct {
-		HexPublicKey       string         `json:",omitempty"`
-		HexFullPublicKey   string         `json:",omitempty"`
-		ETHCommonAddress   common.Address `json:",omitempty"`
-		HexPrivateKey      string         `json:",omitempty"`
-		ETHAddress         string         `json:",omitempty"`
-		BTCAddress         string         `json:",omitempty"`
-		WIF                string         `json:",omitempty"`
-		ECDSAAddress       string         `json:",omitempty"`
-		Sr25519Address     string         `json:",omitempty"`
-		Ed25519Address     string         `json:",omitempty"`
-		ECDSAAddressSS58   string         `json:",omitempty"`
-		Sr25519AddressSS58 string         `json:",omitempty"`
-		Ed25519AddressSS58 string         `json:",omitempty"`
+		HexPublicKey       string `json:",omitempty"`
+		HexFullPublicKey   string `json:",omitempty"`
+		HexPrivateKey      string `json:",omitempty"`
+		ETHAddress         string `json:",omitempty"`
+		BTCAddress         string `json:",omitempty"`
+		WIF                string `json:",omitempty"`
+		ECDSAAddress       string `json:",omitempty"`
+		Sr25519Address     string `json:",omitempty"`
+		Ed25519Address     string `json:",omitempty"`
+		ECDSAAddressSS58   string `json:",omitempty"`
+		Sr25519AddressSS58 string `json:",omitempty"`
+		Ed25519AddressSS58 string `json:",omitempty"`
 	}
 	PolyAddressExport struct {
 		Path string `json:",omitempty"`
@@ -233,7 +232,6 @@ func (p *PolyWallet) ExportRootAddress() (*PolyWalletExport, error) {
 	pwe.WIF = toWIF(rootKey)
 	pwe.BTCAddress = toBTCAddress(rootKey)
 	rootEthAddress := toETHAddress(rootKey)
-	pwe.ETHCommonAddress = rootEthAddress
 	pwe.ETHAddress = rootEthAddress.String()
 	pwe.HexFullPublicKey = hex.EncodeToString(toUncompressedPubKey(rootKey))
 	addr, err := GetPublicKeyFromSeed(p.rawSeed, SignatureSecp256k1, true)
@@ -303,7 +301,6 @@ func (p *PolyWallet) ExportHDAddresses(count int) (*PolyWalletExport, error) {
 		pae.BTCAddress = toBTCAddress(k)
 		ethAddress := toETHAddress(k)
 		pae.ETHAddress = ethAddress.String()
-		pae.ETHCommonAddress = ethAddress
 		pae.HexFullPublicKey = hex.EncodeToString(toUncompressedPubKey(k))
 		pwe.Addresses = append(pwe.Addresses, pae)
 	}

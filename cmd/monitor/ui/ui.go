@@ -310,6 +310,8 @@ func GetTxMethod(tx rpctypes.PolyTransaction) string {
 	if tx.To().String() == "0x0000000000000000000000000000000000000000" {
 		// Contract deployment
 		txMethod = "Contract Deployment"
+	} else if tx.Type() == 3 {
+		txMethod = "Blob"
 	} else if len(tx.Data()) > 4 {
 		// Contract call
 		txMethod = hex.EncodeToString(tx.Data()[0:4])
@@ -337,7 +339,7 @@ func GetTransactionsList(block rpctypes.PolyBlock, chainID *big.Int) ([]string, 
 	txs := block.Transactions()
 
 	headerVariables := []string{"Txn Hash", "Method", "From", "To", "Value", "Gas Price"}
-	proportion := []int{60, 5, 15, 15, 30}
+	proportion := []int{60, 5, 50, 50, 20}
 
 	header := ""
 	for i, prop := range proportion {
@@ -352,8 +354,10 @@ func GetTransactionsList(block rpctypes.PolyBlock, chainID *big.Int) ([]string, 
 		recordVariables := []string{
 			fmt.Sprintf("%s", tx.Hash()),
 			txMethod,
-			metrics.TruncateHexString(fmt.Sprintf("%s", tx.From()), 14),
-			metrics.TruncateHexString(fmt.Sprintf("%s", tx.To()), 14),
+			// metrics.TruncateHexString(fmt.Sprintf("%s", tx.From()), 14),
+			// metrics.TruncateHexString(fmt.Sprintf("%s", tx.To()), 14),
+			fmt.Sprintf("%s", tx.From()),
+			fmt.Sprintf("%s", tx.To()),
 			fmt.Sprintf("%s", tx.Value()),
 			fmt.Sprintf("%s", tx.GasPrice()),
 		}
@@ -378,14 +382,7 @@ func GetSimpleTxFields(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) [
 	fields := make([]string, 0)
 	fields = append(fields, fmt.Sprintf("Tx Hash: %s", tx.Hash()))
 
-	txMethod := "Transfer"
-	if tx.To().String() == "0x0000000000000000000000000000000000000000" {
-		// Contract deployment
-		txMethod = "Contract Deployment"
-	} else if len(tx.Data()) > 4 {
-		// Contract call
-		txMethod = hex.EncodeToString(tx.Data()[0:4])
-	}
+	txMethod := GetTxMethod(tx)
 
 	fields = append(fields, fmt.Sprintf("To: %s", tx.To()))
 	fields = append(fields, fmt.Sprintf("From: %s", tx.From()))
@@ -399,6 +396,9 @@ func GetSimpleTxFields(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) [
 	fields = append(fields, fmt.Sprintf("Type: %d", tx.Type()))
 	fields = append(fields, fmt.Sprintf("Data Len: %d", len(tx.Data())))
 	fields = append(fields, fmt.Sprintf("Data: %s", hex.EncodeToString(tx.Data())))
+	fields = append(fields, fmt.Sprintf("R: %s", tx.R()))
+	fields = append(fields, fmt.Sprintf("S: %s", tx.S()))
+	fields = append(fields, fmt.Sprintf("V: %s", tx.V()))
 
 	return fields
 }
@@ -442,6 +442,8 @@ func GetSimpleReceipt(ctx context.Context, rpc *ethrpc.Client, tx rpctypes.PolyT
 	fields = append(fields, fmt.Sprintf("GasUsed: %d", receipt.GasUsed().Int64()))
 	fields = append(fields, fmt.Sprintf("ContractAddress: %s", receipt.ContractAddress().String()))
 	fields = append(fields, fmt.Sprintf("Root: %s", receipt.Root().String()))
+	fields = append(fields, fmt.Sprintf("Blob Gas Price: %s", receipt.BlobGasPrice()))
+	fields = append(fields, fmt.Sprintf("Blob Gas Used: %s", receipt.BlobGasUsed()))
 
 	return fields
 }
