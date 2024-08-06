@@ -1,0 +1,1004 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "BASE_INIT_BYTECODE_WRAPPED_TOKEN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "WETHToken",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract TokenWrapped"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "activateEmergencyState",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "bridgeAsset",
+    "inputs": [
+      {
+        "name": "destinationNetwork",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "destinationAddress",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "forceUpdateGlobalExitRoot",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "permitData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "bridgeMessage",
+    "inputs": [
+      {
+        "name": "destinationNetwork",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "destinationAddress",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "forceUpdateGlobalExitRoot",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "metadata",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "bridgeMessageWETH",
+    "inputs": [
+      {
+        "name": "destinationNetwork",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "destinationAddress",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amountWETH",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "forceUpdateGlobalExitRoot",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "metadata",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "calculateRoot",
+    "inputs": [
+      {
+        "name": "leafHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "smtProof",
+        "type": "bytes32[32]",
+        "internalType": "bytes32[32]"
+      },
+      {
+        "name": "index",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "calculateTokenWrapperAddress",
+    "inputs": [
+      {
+        "name": "originNetwork",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "originTokenAddress",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "claimAsset",
+    "inputs": [
+      {
+        "name": "smtProofLocalExitRoot",
+        "type": "bytes32[32]",
+        "internalType": "bytes32[32]"
+      },
+      {
+        "name": "smtProofRollupExitRoot",
+        "type": "bytes32[32]",
+        "internalType": "bytes32[32]"
+      },
+      {
+        "name": "globalIndex",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "mainnetExitRoot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "rollupExitRoot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "originNetwork",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "originTokenAddress",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "destinationNetwork",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "destinationAddress",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "metadata",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "claimMessage",
+    "inputs": [
+      {
+        "name": "smtProofLocalExitRoot",
+        "type": "bytes32[32]",
+        "internalType": "bytes32[32]"
+      },
+      {
+        "name": "smtProofRollupExitRoot",
+        "type": "bytes32[32]",
+        "internalType": "bytes32[32]"
+      },
+      {
+        "name": "globalIndex",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "mainnetExitRoot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "rollupExitRoot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "originNetwork",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "originAddress",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "destinationNetwork",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "destinationAddress",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "metadata",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "claimedBitMap",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "deactivateEmergencyState",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "depositCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "gasTokenAddress",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "gasTokenMetadata",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "gasTokenNetwork",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getLeafValue",
+    "inputs": [
+      {
+        "name": "leafType",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "originNetwork",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "originAddress",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "destinationNetwork",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "destinationAddress",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "metadataHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "getRoot",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getTokenMetadata",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getTokenWrappedAddress",
+    "inputs": [
+      {
+        "name": "originNetwork",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "originTokenAddress",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "globalExitRootManager",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IBasePolygonZkEVMGlobalExitRoot"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "initialize",
+    "inputs": [
+      {
+        "name": "_networkID",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "_gasTokenAddress",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_gasTokenNetwork",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "_globalExitRootManager",
+        "type": "address",
+        "internalType": "contract IBasePolygonZkEVMGlobalExitRoot"
+      },
+      {
+        "name": "_polygonRollupManager",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_gasTokenMetadata",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "isClaimed",
+    "inputs": [
+      {
+        "name": "leafIndex",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "sourceBridgeNetwork",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isEmergencyState",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lastUpdatedDepositCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "networkID",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "polygonRollupManager",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "precalculatedWrapperAddress",
+    "inputs": [
+      {
+        "name": "originNetwork",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "originTokenAddress",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "symbol",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "decimals",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "tokenInfoToWrappedToken",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "updateGlobalExitRoot",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "verifyMerkleProof",
+    "inputs": [
+      {
+        "name": "leafHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "smtProof",
+        "type": "bytes32[32]",
+        "internalType": "bytes32[32]"
+      },
+      {
+        "name": "index",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "root",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "wrappedTokenToTokenInfo",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "originNetwork",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "originTokenAddress",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "BridgeEvent",
+    "inputs": [
+      {
+        "name": "leafType",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "originNetwork",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      },
+      {
+        "name": "originAddress",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "destinationNetwork",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      },
+      {
+        "name": "destinationAddress",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "metadata",
+        "type": "bytes",
+        "indexed": false,
+        "internalType": "bytes"
+      },
+      {
+        "name": "depositCount",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ClaimEvent",
+    "inputs": [
+      {
+        "name": "globalIndex",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "originNetwork",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      },
+      {
+        "name": "originAddress",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "destinationAddress",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "EmergencyStateActivated",
+    "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "EmergencyStateDeactivated",
+    "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Initialized",
+    "inputs": [
+      {
+        "name": "version",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "NewWrappedToken",
+    "inputs": [
+      {
+        "name": "originNetwork",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      },
+      {
+        "name": "originTokenAddress",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "wrappedTokenAddress",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "metadata",
+        "type": "bytes",
+        "indexed": false,
+        "internalType": "bytes"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AlreadyClaimed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AmountDoesNotMatchMsgValue",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "DestinationNetworkInvalid",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "EtherTransferFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "FailedTokenWrappedDeployment",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "GasTokenNetworkMustBeZeroOnEther",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "GlobalExitRootInvalid",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidSmtProof",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MerkleTreeFull",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MessageFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MsgValueNotZero",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NativeTokenIsEther",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoValueInMessagesOnGasTokenNetworks",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotValidAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotValidOwner",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotValidSignature",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotValidSpender",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OnlyEmergencyState",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OnlyNotEmergencyState",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OnlyRollupManager",
+    "inputs": []
+  }
+]

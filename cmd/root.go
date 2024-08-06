@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/maticnetwork/polygon-cli/cmd/ulxly"
 	"os"
 
 	"github.com/maticnetwork/polygon-cli/cmd/fork"
@@ -122,6 +123,7 @@ func NewPolycliCommand() *cobra.Command {
 		parseethwallet.ParseETHWalletCmd,
 		rpcfuzz.RPCFuzzCmd,
 		signer.SignerCmd,
+		ulxly.ULxLyCmd,
 		version.VersionCmd,
 		wallet.WalletCmd,
 	)
