@@ -294,7 +294,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
-	c.counter.WithLabelValues(fmt.Sprint(msg.Code), packet.Name()).Add(float64(len(packet)))
+	c.counter.WithLabelValues(packet.Name(), c.node.URLv4()).Add(float64(len(packet)))
 
 	hashes := make([]common.Hash, 0, len(packet))
 	for _, hash := range packet {
@@ -315,7 +315,7 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
-	c.counter.WithLabelValues(fmt.Sprint(msg.Code), txs.Name()).Add(float64(len(txs)))
+	c.counter.WithLabelValues(txs.Name(), c.node.URLv4()).Add(float64(len(txs)))
 
 	c.db.WriteTransactions(ctx, c.node, txs)
 
@@ -328,7 +328,7 @@ func (c *conn) handleGetBlockHeaders(msg ethp2p.Msg) error {
 		return err
 	}
 
-	c.counter.WithLabelValues(fmt.Sprint(msg.Code), request.Name()).Inc()
+	c.counter.WithLabelValues(request.Name(), c.node.URLv4()).Inc()
 
 	return ethp2p.Send(
 		c.rw,
@@ -344,7 +344,7 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	headers := packet.BlockHeadersRequest
-	c.counter.WithLabelValues(fmt.Sprint(msg.Code), packet.Name()).Add(float64(len(headers)))
+	c.counter.WithLabelValues(packet.Name(), c.node.URLv4()).Add(float64(len(headers)))
 
 	for _, header := range headers {
 		if err := c.getParentBlock(ctx, header); err != nil {
@@ -363,7 +363,7 @@ func (c *conn) handleGetBlockBodies(msg ethp2p.Msg) error {
 		return err
 	}
 
-	c.counter.WithLabelValues(fmt.Sprint(msg.Code), request.Name()).Add(float64(len(request.GetBlockBodiesRequest)))
+	c.counter.WithLabelValues(request.Name(), c.node.URLv4()).Add(float64(len(request.GetBlockBodiesRequest)))
 
 	return ethp2p.Send(
 		c.rw,
@@ -382,7 +382,7 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	c.counter.WithLabelValues(fmt.Sprint(msg.Code), packet.Name()).Add(float64(len(packet.BlockBodiesResponse)))
+	c.counter.WithLabelValues(packet.Name(), c.node.URLv4()).Add(float64(len(packet.BlockBodiesResponse)))
 
 	var hash *common.Hash
 	for e := c.requests.Front(); e != nil; e = e.Next() {
@@ -411,7 +411,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
-	c.counter.WithLabelValues(fmt.Sprint(msg.Code), block.Name()).Inc()
+	c.counter.WithLabelValues(block.Name(), c.node.URLv4()).Inc()
 
 	// Set the head block if newer.
 	c.headMutex.Lock()
@@ -442,7 +442,7 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 		return err
 	}
 
-	c.counter.WithLabelValues(fmt.Sprint(msg.Code), request.Name()).Add(float64(len(request.GetPooledTransactionsRequest)))
+	c.counter.WithLabelValues(request.Name(), c.node.URLv4()).Add(float64(len(request.GetPooledTransactionsRequest)))
 
 	return ethp2p.Send(
 		c.rw,
@@ -473,7 +473,7 @@ func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) er
 		return errors.New("protocol version not found")
 	}
 
-	c.counter.WithLabelValues(fmt.Sprint(msg.Code), name).Add(float64(len(hashes)))
+	c.counter.WithLabelValues(name, c.node.URLv4()).Add(float64(len(hashes)))
 
 	if !c.db.ShouldWriteTransactions() || !c.db.ShouldWriteTransactionEvents() {
 		return nil
@@ -492,7 +492,7 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 		return err
 	}
 
-	c.counter.WithLabelValues(fmt.Sprint(msg.Code), packet.Name()).Add(float64(len(packet.PooledTransactionsResponse)))
+	c.counter.WithLabelValues(packet.Name(), c.node.URLv4()).Add(float64(len(packet.PooledTransactionsResponse)))
 
 	c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse)
 
