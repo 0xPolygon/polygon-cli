@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -24,6 +26,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
@@ -180,7 +183,7 @@ var SensorCmd = &cobra.Command{
 			Namespace: "sensor",
 			Name:      "messages",
 			Help:      "The number and type of messages the sensor has received",
-		}, []string{"code", "message"})
+		}, []string{"message", "url"})
 
 		opts := p2p.EthProtocolOptions{
 			Context:     cmd.Context(),
@@ -247,12 +250,15 @@ var SensorCmd = &cobra.Command{
 			peers[node.ID()] = node.URLv4()
 		}
 
-		go handleAPI(&server)
+		go handleAPI(&server, msgCounter)
 
 		for {
 			select {
 			case <-ticker.C:
 				peersGauge.Set(float64(server.PeerCount()))
+				if err := removePeerMessages(msgCounter, server.Peers()); err != nil {
+					log.Error().Err(err).Msg("Failed to clean up peer messages")
+				}
 			case peer := <-opts.Peers:
 				// Update the peer list and the nodes file.
 				if _, ok := peers[peer.ID()]; !ok {
@@ -276,6 +282,10 @@ var SensorCmd = &cobra.Command{
 	},
 }
 
+// handlePprof starts a server for performance profiling using pprof on the
+// specified port. This allows for real-time monitoring and analysis of the
+// sensor's performance. The port number is configured through
+// inputSensorParams.PprofPort. An error is logged if the server fails to start.
 func handlePprof() {
 	addr := fmt.Sprintf(":%d", inputSensorParams.PprofPort)
 	if err := http.ListenAndServe(addr, nil); err != nil {
@@ -283,6 +293,11 @@ func handlePprof() {
 	}
 }
 
+// handlePrometheus starts a server to expose Prometheus metrics at the /metrics
+// endpoint. This enables Prometheus to scrape and collect metrics data for
+// monitoring purposes. The port number is configured through
+// inputSensorParams.PrometheusPort. An error is logged if the server fails to
+// start.
 func handlePrometheus() {
 	http.Handle("/metrics", promhttp.Handler())
 	addr := fmt.Sprintf(":%d", inputSensorParams.PrometheusPort)
@@ -291,7 +306,10 @@ func handlePrometheus() {
 	}
 }
 
-func handleAPI(server *ethp2p.Server) {
+// handleAPI sets up the API for interacting with the sensor. The `/peers`
+// endpoint returns a list of all peers connected to the sensor, including the
+// types and counts of eth packets sent by each peer.
+func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec) {
 	http.HandleFunc("/peers", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -301,12 +319,13 @@ func handleAPI(server *ethp2p.Server) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
-		urls := []string{}
+		peers := make(map[string]p2p.MessageCount)
 		for _, peer := range server.Peers() {
-			urls = append(urls, peer.Node().URLv4())
+			url := peer.Node().URLv4()
+			peers[url] = getPeerMessages(url, counter)
 		}
 
-		err := json.NewEncoder(w).Encode(urls)
+		err := json.NewEncoder(w).Encode(peers)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to encode peers")
 		}
@@ -316,6 +335,77 @@ func handleAPI(server *ethp2p.Server) {
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Error().Err(err).Msg("Failed to start API handler")
 	}
+}
+
+// getPeerMessages retrieves the count of various types of eth packets sent by a
+// peer.
+func getPeerMessages(url string, counter *prometheus.CounterVec) p2p.MessageCount {
+	return p2p.MessageCount{
+		BlockHeaders:        getCounterValue(new(eth.BlockHeadersPacket), url, counter),
+		BlockBodies:         getCounterValue(new(eth.BlockBodiesPacket), url, counter),
+		Blocks:              getCounterValue(new(eth.NewBlockPacket), url, counter),
+		BlockHashes:         getCounterValue(new(eth.NewBlockHashesPacket), url, counter),
+		BlockHeaderRequests: getCounterValue(new(eth.GetBlockHeadersPacket), url, counter),
+		BlockBodiesRequests: getCounterValue(new(eth.GetBlockBodiesPacket), url, counter),
+		Transactions: getCounterValue(new(eth.TransactionsPacket), url, counter) +
+			getCounterValue(new(eth.PooledTransactionsPacket), url, counter),
+		TransactionHashes: getCounterValue(new(eth.NewPooledTransactionHashesPacket67), url, counter) +
+			getCounterValue(new(eth.NewPooledTransactionHashesPacket68), url, counter),
+		TransactionRequests: getCounterValue(new(eth.GetPooledTransactionsRequest), url, counter),
+	}
+}
+
+// getCounterValue retrieves the count of packets for a specific type from the
+// Prometheus counter.
+func getCounterValue(packet eth.Packet, url string, counter *prometheus.CounterVec) int64 {
+	metric := &dto.Metric{}
+
+	err := counter.WithLabelValues(packet.Name(), url).Write(metric)
+	if err != nil {
+		log.Error().Err(err).Send()
+		return 0
+	}
+
+	return int64(metric.GetCounter().GetValue())
+}
+
+// removePeerMessages removes all the counters of peers that disconnected from
+// the sensor. This prevents the metrics list from infinitely growing.
+func removePeerMessages(counter *prometheus.CounterVec, peers []*ethp2p.Peer) error {
+	urls := []string{}
+	for _, peer := range peers {
+		urls = append(urls, peer.Node().URLv4())
+	}
+
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		return err
+	}
+
+	var family *dto.MetricFamily
+	for _, f := range families {
+		if f.GetName() == "sensor_messages" {
+			family = f
+			break
+		}
+	}
+
+	if family == nil {
+		return errors.New("could not find sensor_messages metric family")
+	}
+
+	for _, metric := range family.GetMetric() {
+		for _, label := range metric.GetLabel() {
+			url := label.GetValue()
+			if label.GetName() != "url" || slices.Contains(urls, url) {
+				continue
+			}
+
+			counter.DeletePartialMatch(prometheus.Labels{"url": url})
+		}
+	}
+
+	return nil
 }
 
 // getLatestBlock will get the latest block from an RPC provider.
