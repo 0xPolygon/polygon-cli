@@ -215,7 +215,11 @@ func (c *conn) readStatus(packet *eth.StatusPacket) error {
 	}
 
 	if status.Genesis != packet.Genesis {
-		return fmt.Errorf("genesis mismatch: %d (!= %d)", status.Genesis, packet.Genesis)
+		return fmt.Errorf("genesis mismatch: %v (!= %v)", status.Genesis, packet.Genesis)
+	}
+
+	if status.ForkID.Hash != packet.ForkID.Hash {
+		return fmt.Errorf("fork ID mismatch: %v (!= %v)", status.ForkID, packet.ForkID)
 	}
 
 	c.logger.Info().
