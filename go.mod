@@ -32,7 +32,7 @@ require (
 	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc
 	golang.org/x/text v0.16.0
 	golang.org/x/time v0.6.0
-	google.golang.org/api v0.190.0
+	google.golang.org/api v0.191.0
 	google.golang.org/protobuf v1.34.2
 )
 
@@ -131,8 +131,8 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.27.0 // indirect
-	golang.org/x/oauth2 v0.21.0 // indirect
-	golang.org/x/sync v0.7.0 // indirect
+	golang.org/x/oauth2 v0.22.0 // indirect
+	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.22.0 // indirect
 	golang.org/x/term v0.22.0 // indirect
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
@@ -147,13 +147,13 @@ require (
 )
 
 require (
-	cloud.google.com/go/kms v1.18.4
+	cloud.google.com/go/kms v1.18.5
 	github.com/google/tink/go v1.7.0
 	github.com/montanaflynn/stats v0.7.1
 )
 
 require (
-	cloud.google.com/go/auth v0.7.3 // indirect
+	cloud.google.com/go/auth v0.8.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.12 // indirect
 	cloud.google.com/go/longrunning v0.5.11 // indirect
