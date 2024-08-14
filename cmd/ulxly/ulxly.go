@@ -85,6 +85,7 @@ type IMT struct {
 	ZeroHashes []common.Hash
 	Proofs     map[uint32]Proof
 }
+
 type Proof struct {
 	Siblings     [TreeDepth]common.Hash
 	Root         common.Hash
