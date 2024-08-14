@@ -183,7 +183,7 @@ var SensorCmd = &cobra.Command{
 			Namespace: "sensor",
 			Name:      "messages",
 			Help:      "The number and type of messages the sensor has received",
-		}, []string{"message", "url"})
+		}, []string{"message", "url", "name"})
 
 		opts := p2p.EthProtocolOptions{
 			Context:     cmd.Context(),
