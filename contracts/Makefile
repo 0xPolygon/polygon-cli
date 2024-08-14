@@ -58,4 +58,4 @@ gen-ulxly-go-bindings:
 
 
 .PHONY: gen-go-bindings
-gen-go-bindings: build gen-funder-go-bindings gen-tester-go-bindings gen-tokens-go-bindings gen-ulxly-go-bindings ## Generate go bindings.
+gen-go-bindings: build gen-funder-go-bindings gen-tester-go-bindings gen-tokens-go-bindings ## Generate go bindings.
