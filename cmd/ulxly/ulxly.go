@@ -592,15 +592,13 @@ func (s *IMT) GetRoot(depositNum uint32) common.Hash {
 // GetProof will return an object containing the proof data necessary for verification
 func (s *IMT) GetProof(depositNum uint32) Proof {
 	node := common.Hash{}
-	// nolint:staticcheck // SA4006 ignore this!
-	sibling := common.Hash{}
 	size := depositNum + 1
 	currentZeroHashHeight := common.Hash{}
 
 	siblings := [TreeDepth]common.Hash{}
 	for height := 0; height < TreeDepth; height++ {
 		siblingDepositNum := getSiblingDepositNumber(depositNum, uint32(height))
-
+		sibling := currentZeroHashHeight
 		if _, hasKey := s.Branches[siblingDepositNum]; hasKey {
 			sibling = s.Branches[siblingDepositNum][height]
 		} else {
