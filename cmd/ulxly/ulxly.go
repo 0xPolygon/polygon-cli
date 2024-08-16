@@ -828,10 +828,10 @@ func getDeposits(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, or
 		if intDepositCnt == intClaimIndex {                  // deposit_cnt must match the user's input value
 			if !bridgeDeposit.Deposit[index].ReadyForClaim {
 				log.Error().Msg("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
-				return nil, common.HexToAddress("0x0"), nil, nil, errors.New("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
+				return nil, common.HexToAddress("0x0"), nil, nil, errors.New("the claim transaction is not yet ready to be claimed, try again in a few blocks")
 			} else if bridgeDeposit.Deposit[index].ClaimTxHash != "" {
 				log.Info().Str("claimTxHash", bridgeDeposit.Deposit[index].ClaimTxHash).Msg("The claim transaction has already been claimed")
-				return nil, common.HexToAddress("0x0"), nil, nil, errors.New("The claim transaction has already been claimed.")
+				return nil, common.HexToAddress("0x0"), nil, nil, errors.New("the claim transaction has already been claimed")
 			}
 			originAddress = common.HexToAddress(bridgeDeposit.Deposit[index].OrigAddr)
 			globalIndex.SetString(bridgeDeposit.Deposit[index].GlobalIndex, 10)
@@ -842,7 +842,7 @@ func getDeposits(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, or
 	}
 	defer reqBridgeDeposits.Body.Close()
 
-	return nil, common.HexToAddress("0x0"), nil, nil, errors.New("Failed to correctly get deposits...")
+	return nil, common.HexToAddress("0x0"), nil, nil, errors.New("failed to correctly get deposits")
 }
 
 func checkGetDepositArgs(cmd *cobra.Command, args []string) error {
