@@ -454,7 +454,7 @@ or if it's actually an intermediate hash.`,
 func checkProofArgs(cmd *cobra.Command, args []string) error {
 	return nil
 }
-func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
+func getInputData(_ *cobra.Command, args []string) ([]byte, error) {
 	if ulxlyInputArgs.InputFileName != nil && *ulxlyInputArgs.InputFileName != "" {
 		return os.ReadFile(*ulxlyInputArgs.InputFileName)
 	}
