@@ -273,7 +273,7 @@ var depositNewCmd = &cobra.Command{
 		for {
 			select {
 			case <-txnMinedTimer.C:
-				fmt.Printf("Wait timer for transaction receipt exceeded!")
+				log.Info().Msg("Wait timer for transaction receipt exceeded!")
 				return nil
 			default:
 				r, err := client.TransactionReceipt(ctx, bridgeTxn.Hash())
@@ -286,13 +286,11 @@ var depositNewCmd = &cobra.Command{
 					continue
 				}
 				if r.Status != 0 {
-					fmt.Printf("Deposit Transaction Successful: %s\n", r.TxHash)
+					log.Info().Interface("txHash", r.TxHash).Msg("Deposit transaction successful")
 					return nil
 				} else if r.Status == 0 {
-					fmt.Printf("Deposit Transaction Failed: %s\n", r.TxHash)
-					fmt.Printf("Perhaps try increasing the gas limit:\n")
-					fmt.Printf("Current gas limit: %d\n", gasLimit)
-					fmt.Printf("Cumulative gas used for transaction: %d\n", r.CumulativeGasUsed)
+					log.Error().Interface("txHash", r.TxHash).Msg("Deposit transaction failed")
+					log.Info().Uint64("currentGasLimit", gasLimit).Uint64("cumulativeGasUsedForTx", r.CumulativeGasUsed).Msg("Perhaps try increasing the gas limit")
 					return nil
 				}
 				time.Sleep(1 * time.Second)
@@ -371,7 +369,7 @@ var depositClaimCmd = &cobra.Command{
 		for {
 			select {
 			case <-txnMinedTimer.C:
-				fmt.Printf("Wait timer for transaction receipt exceeded!")
+				log.Info().Msg("Wait timer for transaction receipt exceeded!")
 				return nil
 			default:
 				r, err := client.TransactionReceipt(ctx, claimTxn.Hash())
@@ -384,10 +382,10 @@ var depositClaimCmd = &cobra.Command{
 					continue
 				}
 				if r.Status != 0 {
-					fmt.Printf("Claim Transaction Successful: %s\n", r.TxHash)
+					log.Info().Interface("txHash", r.TxHash).Msg("Claim transaction successful")
 					return nil
 				} else if r.Status == 0 {
-					fmt.Printf("Claim Transaction Failed: %s\n", r.TxHash)
+					log.Info().Interface("txHash", r.TxHash).Msg("Claim transaction failed")
 					return nil
 				}
 				time.Sleep(1 * time.Second)
@@ -456,7 +454,7 @@ or if it's actually an intermediate hash.`,
 func checkProofArgs(cmd *cobra.Command, args []string) error {
 	return nil
 }
-func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
+func getInputData(_ *cobra.Command, args []string) ([]byte, error) {
 	if ulxlyInputArgs.InputFileName != nil && *ulxlyInputArgs.InputFileName != "" {
 		return os.ReadFile(*ulxlyInputArgs.InputFileName)
 	}
@@ -505,7 +503,6 @@ func readDeposits(rawDeposits []byte) error {
 	}
 
 	p := imt.GetProof(*ulxlyInputArgs.DepositNum)
-
 	fmt.Println(p.String())
 	return nil
 }
@@ -831,10 +828,10 @@ func getDeposits(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, or
 		if intDepositCnt == intClaimIndex {                  // deposit_cnt must match the user's input value
 			if !bridgeDeposit.Deposit[index].ReadyForClaim {
 				log.Error().Msg("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
-				return nil, common.HexToAddress("0x0"), nil, nil, errors.New("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
+				return nil, common.HexToAddress("0x0"), nil, nil, errors.New("the claim transaction is not yet ready to be claimed, try again in a few blocks")
 			} else if bridgeDeposit.Deposit[index].ClaimTxHash != "" {
-				fmt.Printf("The claim transaction has already been claimed at %s.", bridgeDeposit.Deposit[index].ClaimTxHash)
-				return nil, common.HexToAddress("0x0"), nil, nil, errors.New("The claim transaction has already been claimed.")
+				log.Info().Str("claimTxHash", bridgeDeposit.Deposit[index].ClaimTxHash).Msg("The claim transaction has already been claimed")
+				return nil, common.HexToAddress("0x0"), nil, nil, errors.New("the claim transaction has already been claimed")
 			}
 			originAddress = common.HexToAddress(bridgeDeposit.Deposit[index].OrigAddr)
 			globalIndex.SetString(bridgeDeposit.Deposit[index].GlobalIndex, 10)
@@ -845,7 +842,7 @@ func getDeposits(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, or
 	}
 	defer reqBridgeDeposits.Body.Close()
 
-	return nil, common.HexToAddress("0x0"), nil, nil, errors.New("Failed to correctly get deposits...")
+	return nil, common.HexToAddress("0x0"), nil, nil, errors.New("failed to correctly get deposits")
 }
 
 func checkGetDepositArgs(cmd *cobra.Command, args []string) error {
