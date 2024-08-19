@@ -826,9 +826,10 @@ func getDeposits(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, or
 	amount = new(big.Int)
 
 	intClaimIndex, _ := strconv.Atoi(*ulxlyInputArgs.ClaimIndex) // Convert deposit_cnt to int
+	destinationNetwork, _ := strconv.Atoi(*ulxlyInputArgs.ClaimDestinationNetwork)
 	for index, deposit := range bridgeDeposit.Deposit {
-		intDepositCnt, _ := strconv.Atoi(deposit.DepositCnt) // Convert deposit_cnt to int
-		if intDepositCnt == intClaimIndex {                  // deposit_cnt must match the user's input value
+		intDepositCnt, _ := strconv.Atoi(deposit.DepositCnt)                         // Convert deposit_cnt to int
+		if intDepositCnt == intClaimIndex && destinationNetwork == deposit.DestNet { // deposit_cnt must match the user's input value
 			if !bridgeDeposit.Deposit[index].ReadyForClaim {
 				log.Error().Msg("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
 				return nil, common.HexToAddress("0x0"), nil, nil, errors.New("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
