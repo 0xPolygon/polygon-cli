@@ -12,6 +12,7 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"os/exec"
 	"reflect"
 	"regexp"
 	"strings"
@@ -235,7 +236,7 @@ func EthTestDataToString(data EthTestData) string {
 		if !hasData || !hasAccessList {
 			log.Fatal().Msg("Got a data field with a map type that wasn't data + access list")
 		}
-		// TODO - we're losing the ability to send lots of differenth access list tests
+		// TODO - we're losing the ability to send lots of different access list tests
 		return EthTestDataToString(dataMap["data"])
 	case reflect.Slice:
 		if v.Len() == 0 {
@@ -268,19 +269,19 @@ func processTestDataString(data string) string {
 		rawType := typeIndidcator.FindStringSubmatch(data)[1]
 		switch rawType {
 		case "raw":
-			return processRawStringToBytes(data)
+			return processRawStringToString(data)
 		case "yul":
 			log.Warn().Msg("yul support is unimplemented")
-			return ""
+			return processYulToString(data)
 		case "abi":
-			return processAbiStringToBytes(data)
+			return processAbiStringToString(data)
 		default:
 			log.Fatal().Str("type", rawType).Msg("unknown type designation")
 		}
 	} else if strings.HasPrefix(data, "{") && strings.HasSuffix(data, "}") {
 		log.Warn().Msg("LLL is not implemented")
 	} else if strings.HasPrefix(data, "0x") {
-		return processRawStringToBytes(data)
+		return processRawStringToString(data)
 	} else {
 		log.Fatal().Str("data", data).Msg("unknown data format")
 	}
@@ -288,7 +289,39 @@ func processTestDataString(data string) string {
 	return ""
 }
 
-func processAbiStringToBytes(data string) string {
+func processYulToString(data string) string {
+	data = preProcessTypedString(data, true)
+	if !strings.HasPrefix(data, "berlin ") {
+		// at this point it seems like every yul contract is prefixed with berlin
+		// https://github.com/ethereum/tests/commit/fd26aad70e24f042fcd135b2f0338b1c6bf1a324
+		log.Fatal().Str("contract", data).Msg("The contract didn't have a berlin prefix")
+	}
+	data = strings.TrimPrefix(data, "berlin")
+	yulInput, err := os.CreateTemp("", "yul-")
+	if err != nil {
+		log.Fatal().Err(err).Msg("Unable to create yul file")
+	}
+	_, err = yulInput.WriteString(data)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Unable to write yul file")
+	}
+	err = yulInput.Close()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Unable to close yul file")
+	}
+	cmd := exec.Command("solc", "--strict-assembly", "--evm-version", "berlin", "--bin", "--input-file", yulInput.Name())
+	solcOut, err := cmd.Output()
+	if err != nil {
+		log.Fatal().Err(err).Str("contract", data).Msg("there was an error running solc/solidity for yul contracts")
+	}
+	lines := strings.Split(string(solcOut), "\n")
+	if len(lines) != 6 {
+		log.Fatal().Int("lines", len(lines)).Str("contract", data).Msg("YUL contract does not contain 6 lines")
+	}
+	return lines[len(lines)-2]
+}
+
+func processAbiStringToString(data string) string {
 	data = preProcessTypedString(data, true)
 	matches := abiSpec.FindAllStringSubmatch(data, -1)
 	if len(matches) != 1 {
@@ -302,7 +335,6 @@ func processAbiStringToBytes(data string) string {
 	funcInputs := matches[0][3]
 	params := strings.Split(funcParams, ",")
 	processedArgs := rawArgsToStrings(funcInputs, params)
-	fmt.Println(matches[0][0])
 	encodedArgs, err := abi.AbiEncode(fmt.Sprintf("%s(%s)", funcName, funcParams), processedArgs)
 	if err != nil {
 		log.Fatal().Err(err).Str("funcName", funcName).Str("funcParams", funcParams).Str("funcInputs", funcInputs).Msg("failed to encode args in abi")
@@ -372,7 +404,7 @@ func preProcessTypedString(data string, preserveSpace bool) string {
 	return data
 }
 
-func processRawStringToBytes(data string) string {
+func processRawStringToString(data string) string {
 	data = preProcessTypedString(data, false)
 
 	byteData, err := hex.DecodeString(data)
