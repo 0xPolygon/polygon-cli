@@ -2,6 +2,7 @@ package retest
 
 import (
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/rs/zerolog/log"
@@ -262,16 +263,41 @@ func processTestDataString(data string) []byte {
 	}
 	if typeIndidcator.MatchString(data) {
 		rawType := typeIndidcator.FindStringSubmatch(data)[1]
-		// raw
-		// abi
-		// yul
-		fmt.Println(rawType)
-	} else {
+		switch rawType {
+		case "raw":
+			return processRawStringToBytes(data)
+		case "yul":
+			log.Warn().Msg("yul support is unimplemented")
+			return nil
+		case "abi":
+			log.Warn().Msg("abi support is unimplemented")
+			return nil
+		default:
+			log.Fatal().Str("type", rawType).Msg("unknown type designation")
+		}
+	} else if strings.HasPrefix(data, "{") && strings.HasSuffix(data, "}") {
 		// LLL (I think)
 		fmt.Println(data)
+	} else if strings.HasPrefix(data, "0x") {
+		fmt.Println("raw")
+	} else {
+		log.Fatal().Str("data", data).Msg("unknown data format")
 	}
 
 	return nil
+}
+
+func processRawStringToBytes(data string) []byte {
+	data = strings.TrimSpace(data)
+	data = typeIndidcator.ReplaceAllString(data, "")
+	data = strings.TrimPrefix(data, "0x")
+	data = strings.Replace(data, " ", "", -1)
+
+	byteData, err := hex.DecodeString(data)
+	if err != nil {
+		log.Fatal().Str("data", data).Err(err).Msg("Unable to decode the raw data")
+	}
+	return byteData
 }
 
 var RetestCmd = &cobra.Command{
