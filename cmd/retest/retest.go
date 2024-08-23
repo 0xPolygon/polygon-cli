@@ -1,6 +1,7 @@
 package retest
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
@@ -23,11 +24,12 @@ var (
 	usage         string
 	inputFileName *string
 
-	validBase10    *regexp.Regexp
-	dataLabel      *regexp.Regexp
-	typeIndidcator *regexp.Regexp
-	abiSpec        *regexp.Regexp
-	normalizeWs    *regexp.Regexp
+	validBase10         *regexp.Regexp
+	dataLabel           *regexp.Regexp
+	typeIndidcator      *regexp.Regexp
+	abiSpec             *regexp.Regexp
+	normalizeWs         *regexp.Regexp
+	solidityCompileInfo *regexp.Regexp
 )
 
 type EthTestEnv struct {
@@ -271,16 +273,20 @@ func processTestDataString(data string) string {
 		case "raw":
 			return processRawStringToString(data)
 		case "yul":
-			return processYulToString(data)
+			return processSolidityToString(data, true)
 		case "abi":
 			return processAbiStringToString(data)
+		case "solidity":
+			return processSolidityToString(data, false)
 		default:
 			log.Fatal().Str("type", rawType).Msg("unknown type designation")
 		}
-	} else if strings.HasPrefix(data, "{") && strings.HasSuffix(data, "}") {
+	} else if strings.HasPrefix(data, "{") {
 		return processLLLToString(data)
 	} else if strings.HasPrefix(data, "0x") {
 		return processRawStringToString(data)
+	} else if strings.HasPrefix(data, "(asm ") {
+		return processLLLToString(data)
 	} else {
 		log.Fatal().Str("data", data).Msg("unknown data format")
 	}
@@ -288,34 +294,100 @@ func processTestDataString(data string) string {
 	return ""
 }
 
-func processYulToString(data string) string {
+func processSolidityFlags(contract string) (string, bool) {
+	shouldOptimize := false
+	solidityInfo := solidityCompileInfo.FindStringSubmatch(contract)
+	if len(solidityInfo) == 0 {
+		return "", shouldOptimize
+	}
+	compilerOptions := strings.Split(strings.TrimSpace(solidityInfo[1]), " ")
+	evmVersion := strings.TrimSpace(compilerOptions[0])
+	if evmVersion == "" {
+		return "", shouldOptimize
+	}
+	if len(compilerOptions) == 2 {
+		if strings.TrimSpace(compilerOptions[1]) != "optimise" {
+			log.Fatal().Str("setting", compilerOptions[1]).Msg("only aware of the optimise setting... what is this?")
+		}
+		shouldOptimize = true
+	}
+	if len(compilerOptions) > 2 && compilerOptions[1] != "object" {
+		fmt.Println(contract)
+
+		log.Fatal().Strs("opts", compilerOptions).Msg("There are more settings that we realized")
+	}
+	return evmVersion, shouldOptimize
+}
+
+// There are a few contracts that are structured like `london object c {`
+// the goal is to remove the london part
+func stripVersions(contract string) string {
+	stripper := regexp.MustCompile("^(london|berlin) object")
+	contract = stripper.ReplaceAllString(contract, "object")
+	return contract
+}
+
+func processSolidityToString(data string, isYul bool) string {
 	data = preProcessTypedString(data, true)
-	if !strings.HasPrefix(data, "berlin ") {
-		// at this point it seems like every yul contract is prefixed with berlin
-		// https://github.com/ethereum/tests/commit/fd26aad70e24f042fcd135b2f0338b1c6bf1a324
-		log.Fatal().Str("contract", data).Msg("The contract didn't have a berlin prefix")
+	solidityVersion, optimize := processSolidityFlags(data)
+	matches := solidityCompileInfo.FindStringSubmatch(data)
+	if len(matches) != 3 {
+		// TODO these few cases are setup where they reference a specific "solidity" properly of the outer test suite rather than embedding like the rest of the tests.
+		if data == "PerformanceTester" {
+			// src/GeneralStateTestsFiller/VMTests/vmPerformance/performanceTesterFiller.yml
+			return ""
+		}
+		if data == "ExpPerformanceTester" {
+			// src/GeneralStateTestsFiller/VMTests/vmPerformance/loopExpFiller.yml.
+			return ""
+		}
+		if data == "MulPerformanceTester" {
+			// src/GeneralStateTestsFiller/VMTests/vmPerformance/loopMulFiller.yml
+			return ""
+		}
+		if data == "Test" {
+			// src/GeneralStateTestsFiller/stRevertTest/RevertRemoteSubCallStorageOOGFiller.yml
+			// src/GeneralStateTestsFiller/stExample/solidityExampleFiller.yml
+			return ""
+		}
+		log.Fatal().Str("contractData", data).Msg("The format of this contract is unique and it's not clear what it is")
 	}
-	data = strings.TrimPrefix(data, "berlin")
-	yulInput, err := os.CreateTemp("", "yul-")
+	data = solidityCompileInfo.ReplaceAllString(data, matches[2])
+	data = stripVersions(data)
+	solInput, err := os.CreateTemp("", "sol-")
 	if err != nil {
-		log.Fatal().Err(err).Msg("Unable to create yul file")
+		log.Fatal().Err(err).Msg("Unable to create solidity file")
 	}
-	_, err = yulInput.WriteString(data)
+	_, err = solInput.WriteString(data)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Unable to write yul file")
+		log.Fatal().Err(err).Msg("Unable to write solidity file")
 	}
-	err = yulInput.Close()
+	err = solInput.Close()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Unable to close yul file")
+		log.Fatal().Err(err).Msg("Unable to close solidity file")
 	}
-	cmd := exec.Command("solc", "--strict-assembly", "--evm-version", "berlin", "--bin", "--input-file", yulInput.Name())
+	args := []string{"--bin", "--input-file", solInput.Name()}
+	if solidityVersion != "" {
+		args = append(args, "--evm-version", solidityVersion)
+	}
+	if optimize {
+		args = append(args, "--optimize")
+	}
+	if isYul {
+		args = append(args, "--strict-assembly")
+	}
+
+	cmd := exec.Command("solc", args...)
+	errOut := ""
+	bufErr := bytes.NewBufferString(errOut)
+	cmd.Stderr = bufErr
 	solcOut, err := cmd.Output()
 	if err != nil {
-		log.Fatal().Err(err).Str("contract", data).Msg("there was an error running solc/solidity for yul contracts")
+		log.Fatal().Err(err).Str("stdErr", bufErr.String()).Str("contract", data).Strs("args", args).Msg("there was an error running solc/solidity for contracts")
 	}
 	lines := strings.Split(string(solcOut), "\n")
 	if len(lines) != 6 {
-		log.Fatal().Int("lines", len(lines)).Str("contract", data).Msg("YUL contract does not contain 6 lines")
+		log.Fatal().Int("lines", len(lines)).Str("contract", data).Msg("soldity output does not contain 6 lines")
 	}
 	return lines[len(lines)-2]
 }
@@ -343,7 +415,6 @@ func processLLLToString(data string) string {
 	if len(lines) != 2 {
 		log.Fatal().Int("lines", len(lines)).Str("contract", data).Msg("LLLC output does not contain 2 lines")
 	}
-	fmt.Println(lines[0])
 	return lines[0]
 }
 
@@ -440,6 +511,29 @@ func processRawStringToString(data string) string {
 	return "0x" + hex.EncodeToString(byteData)
 }
 
+// WrapPredeployeCode will wrap a predeployed contract do it can be deployed for testing. For now we're just wrapping
+// the code so that it should match what the precondition is. In the future, this should also have a constructor that
+// would initialize the storage slots to match the predeployed state. This will never be 100% right, but useful for
+// smoke testing
+func WrapPredeployedCode(pre EthTestPre) string {
+	rawCode := WrappedData{raw: pre.Code}
+	// 0000: 63 00 00 00 00  ; PUSH4 to indicate the size of the data that should be copied into memory
+	// 0005: 63 00 00 00 15  ; PUSH4 to indicate the offset in the call data to start the copy
+	// 000a: 60 00           ; PUSH1 00 to indicate the destination offset in memory
+	// 000c: 39              ; CODECOPY
+	// 000d: 63 00 00 00 00  ; PUSH4 to indicate the size of the data to be returned from memory
+	// 0012: 60 00           ; PUSH1 00 to indicate that it starts from offset 0
+	// 0014: F3              ; RETURN
+	// 0015: CODE..........  ; CODE starts here. That's why the earlier PUSH4 has 15
+	//
+	// TODO in the future after the CODECOPY, we should loop over the storage and initialize the slots
+	code := rawCode.ToString()
+	code = strings.TrimPrefix(code, "0x")
+	codeLen := len(code) / 2
+
+	return fmt.Sprintf("63%08x630000001560003963%08x6000F3%s", codeLen, codeLen, code)
+}
+
 var RetestCmd = &cobra.Command{
 	Use:   "retest [flags]",
 	Short: "Convert the standard ETH test fillers into something to be replayed against an RPC",
@@ -455,16 +549,14 @@ var RetestCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		for k := range tests {
-			log.Debug().Str("testname", k).Msg("Parsing test")
-			n := tests[k].Transaction.GasLimit
-			wn := WrappedNumeric{raw: n}
-			if wn.ToBigInt() != nil {
-				log.Trace().Uint64("nonce", wn.ToBigInt().Uint64()).Msg("Parsing nonce")
+		// TODO in the future we might want to support various output modes. E.g. Assertoor, Foundry, web3.js, ethers, whatever
+		for _, t := range tests {
+			for addr, p := range t.Pre {
+				preDeployedCode := WrapPredeployedCode(p)
+				fmt.Println(addr)
+				fmt.Println(preDeployedCode)
 			}
-			d := tests[k].Transaction.Data
-			wd := WrappedData{raw: d}
-			wd.ToString()
+			// fmt.Println(t.Transaction.To)
 		}
 		return nil
 	},
@@ -482,6 +574,7 @@ func init() {
 	typeIndidcator = regexp.MustCompile(`^:([^ ]*) `)
 	abiSpec = regexp.MustCompile(`^([a-zA-Z0-9]*)\((.*)\)(.*)$`)
 	normalizeWs = regexp.MustCompile(` +`)
+	solidityCompileInfo = regexp.MustCompile(`^([^\n\r{]*)([\n\r{])`)
 }
 
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {

@@ -50,9 +50,9 @@ cat single-transactions.txt | jq -r '.txbytes | select( . != null)' | xargs -I x
 
 ## LLLC
 
-This project will depend on an installation of `solc` and
-`lllc`. Installing solidity is pretty easy, but LLLC can be a little
-tricky.
+This project will depend on an installation of `solc` (specifically
+0.8.20) and `lllc`. Installing solidity is pretty easy, but LLLC can
+be a little tricky.
 
 Since the version is pretty old, it might not build well on your host
 os. Building within docker might make your life easier:
