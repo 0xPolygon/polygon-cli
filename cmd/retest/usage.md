@@ -47,3 +47,34 @@ cat single-transactions.txt | jq -r '.txbytes | select( . != null)' | xargs -I x
 
 ```bash
 ```
+
+## LLLC
+
+This project will depend on an installation of `solc` and
+`lllc`. Installing solidity is pretty easy, but LLLC can be a little
+tricky.
+
+Since the version is pretty old, it might not build well on your host
+os. Building within docker might make your life easier:
+
+```bash
+docker run -it /bin/bash debian:buster
+```
+
+From within the docker shell some steps like this should get you in
+the right direction:
+
+```bash
+apt update
+apt install --yes libboost-filesystem-dev libboost-system-dev libboost-program-options-dev libboost-test-dev git cmake g++
+git clone --depth 1 -b master https://github.com/winsvega/solidity.git /solidity
+mkdir /build && cd /build
+cmake /solidity -DCMAKE_BUILD_TYPE=Release -DLLL=1 && make lllc
+```
+
+Assuming that all worked, we should be able to copy the binary out of
+docker and into our host OS:
+
+```bash
+docker cp 95511e9d0996:/build/lllc/lllc /usr/local/bin/
+```

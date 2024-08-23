@@ -271,7 +271,6 @@ func processTestDataString(data string) string {
 		case "raw":
 			return processRawStringToString(data)
 		case "yul":
-			log.Warn().Msg("yul support is unimplemented")
 			return processYulToString(data)
 		case "abi":
 			return processAbiStringToString(data)
@@ -279,7 +278,7 @@ func processTestDataString(data string) string {
 			log.Fatal().Str("type", rawType).Msg("unknown type designation")
 		}
 	} else if strings.HasPrefix(data, "{") && strings.HasSuffix(data, "}") {
-		log.Warn().Msg("LLL is not implemented")
+		return processLLLToString(data)
 	} else if strings.HasPrefix(data, "0x") {
 		return processRawStringToString(data)
 	} else {
@@ -319,6 +318,33 @@ func processYulToString(data string) string {
 		log.Fatal().Int("lines", len(lines)).Str("contract", data).Msg("YUL contract does not contain 6 lines")
 	}
 	return lines[len(lines)-2]
+}
+
+func processLLLToString(data string) string {
+	data = preProcessTypedString(data, true)
+	lllcInput, err := os.CreateTemp("", "lllc-")
+	if err != nil {
+		log.Fatal().Err(err).Msg("Unable to create LLL file")
+	}
+	_, err = lllcInput.WriteString(data)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Unable to write lll file")
+	}
+	err = lllcInput.Close()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Unable to close lll file")
+	}
+	cmd := exec.Command("lllc", lllcInput.Name())
+	lllcOut, err := cmd.Output()
+	if err != nil {
+		log.Fatal().Err(err).Str("contract", data).Msg("there was an error running solc/solidity for yul contracts")
+	}
+	lines := strings.Split(string(lllcOut), "\n")
+	if len(lines) != 2 {
+		log.Fatal().Int("lines", len(lines)).Str("contract", data).Msg("LLLC output does not contain 2 lines")
+	}
+	fmt.Println(lines[0])
+	return lines[0]
 }
 
 func processAbiStringToString(data string) string {
