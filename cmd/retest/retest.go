@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/maticnetwork/polygon-cli/abi"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"io"
@@ -24,6 +25,8 @@ var (
 	validBase10    *regexp.Regexp
 	dataLabel      *regexp.Regexp
 	typeIndidcator *regexp.Regexp
+	abiSpec        *regexp.Regexp
+	normalizeWs    *regexp.Regexp
 )
 
 type EthTestEnv struct {
@@ -127,7 +130,7 @@ type WrappedNumeric struct {
 
 type WrappedData struct {
 	raw   EthTestData
-	inner []byte
+	inner string
 }
 
 func (wr *WrappedNumeric) ToBigInt() *big.Int {
@@ -210,16 +213,16 @@ func processNumericString(s string) *big.Int {
 	return num
 }
 
-func (wd *WrappedData) ToBytes() []byte {
-	if wd.inner != nil {
+func (wd *WrappedData) ToString() string {
+	if wd.inner != "" {
 		return wd.inner
 	}
-	wd.inner = EthTestDataToBytes(wd.raw)
-	return nil
+	wd.inner = EthTestDataToString(wd.raw)
+	return wd.inner
 }
-func EthTestDataToBytes(data EthTestData) []byte {
+func EthTestDataToString(data EthTestData) string {
 	if data == nil {
-		return nil
+		return ""
 	}
 	v := reflect.ValueOf(data)
 	switch v.Kind() {
@@ -233,24 +236,24 @@ func EthTestDataToBytes(data EthTestData) []byte {
 			log.Fatal().Msg("Got a data field with a map type that wasn't data + access list")
 		}
 		// TODO - we're losing the ability to send lots of differenth access list tests
-		return EthTestDataToBytes(dataMap["data"])
+		return EthTestDataToString(dataMap["data"])
 	case reflect.Slice:
 		if v.Len() == 0 {
 			log.Warn().Msg("The slice is empty; returning nil")
-			return nil
+			return ""
 		}
 		// TODO these tests should be collected somehow
 		for i := 0; i < v.Len(); i = i + 1 {
-			EthTestDataToBytes(v.Index(i).Interface().(EthTestData))
+			EthTestDataToString(v.Index(i).Interface().(EthTestData))
 		}
-		return EthTestDataToBytes(v.Index(0).Interface().(EthTestData))
+		return EthTestDataToString(v.Index(0).Interface().(EthTestData))
 	default:
 		log.Fatal().Any("input", data).Str("kind", v.Kind().String()).Msg("Attempted to convert unknown type to raw data")
 	}
-	return nil
+	return ""
 }
 
-func processTestDataString(data string) []byte {
+func processTestDataString(data string) string {
 	data = strings.TrimSpace(data)
 	if dataLabel.MatchString(data) {
 		label := dataLabel.FindStringSubmatch(data)
@@ -259,7 +262,7 @@ func processTestDataString(data string) []byte {
 	}
 	data = strings.TrimSpace(data)
 	if data == "" {
-		return nil
+		return ""
 	}
 	if typeIndidcator.MatchString(data) {
 		rawType := typeIndidcator.FindStringSubmatch(data)[1]
@@ -268,36 +271,115 @@ func processTestDataString(data string) []byte {
 			return processRawStringToBytes(data)
 		case "yul":
 			log.Warn().Msg("yul support is unimplemented")
-			return nil
+			return ""
 		case "abi":
-			log.Warn().Msg("abi support is unimplemented")
-			return nil
+			return processAbiStringToBytes(data)
 		default:
 			log.Fatal().Str("type", rawType).Msg("unknown type designation")
 		}
 	} else if strings.HasPrefix(data, "{") && strings.HasSuffix(data, "}") {
-		// LLL (I think)
-		fmt.Println(data)
+		log.Warn().Msg("LLL is not implemented")
 	} else if strings.HasPrefix(data, "0x") {
-		fmt.Println("raw")
+		return processRawStringToBytes(data)
 	} else {
 		log.Fatal().Str("data", data).Msg("unknown data format")
 	}
 
-	return nil
+	return ""
 }
 
-func processRawStringToBytes(data string) []byte {
+func processAbiStringToBytes(data string) string {
+	data = preProcessTypedString(data, true)
+	matches := abiSpec.FindAllStringSubmatch(data, -1)
+	if len(matches) != 1 {
+		log.Fatal().Int("matches", len(matches)).Str("abi", data).Msg("unrecognized abi spec")
+	}
+	if len(matches[0]) != 4 {
+		log.Fatal().Int("matches", len(matches[0])).Str("abi", data).Msg("unrecognized abi spec")
+	}
+	funcName := matches[0][1]
+	funcParams := matches[0][2]
+	funcInputs := matches[0][3]
+	params := strings.Split(funcParams, ",")
+	processedArgs := rawArgsToStrings(funcInputs, params)
+	fmt.Println(matches[0][0])
+	encodedArgs, err := abi.AbiEncode(fmt.Sprintf("%s(%s)", funcName, funcParams), processedArgs)
+	if err != nil {
+		log.Fatal().Err(err).Str("funcName", funcName).Str("funcParams", funcParams).Str("funcInputs", funcInputs).Msg("failed to encode args in abi")
+	}
+
+	return encodedArgs
+}
+func rawArgsToStrings(rawArgs string, params []string) []string {
+	rawArgs = strings.TrimSpace(rawArgs)
+	if rawArgs == "" {
+		return []string{}
+	}
+	count := len(params)
+	rawArgs = strings.ReplaceAll(rawArgs, "0x", " 0x")
+	rawArgs = normalizeWs.ReplaceAllString(rawArgs, " ")
+	argList := strings.Split(rawArgs, " ")
+	if argList[0] == "" {
+		argList = argList[1:]
+	}
+	if len(argList) == 1 && count > 1 {
+		for k := 1; k < count; k += 1 {
+			argList = append(argList, argList[0])
+		}
+	}
+	if len(argList) != count {
+		log.Fatal().Str("rawArgs", rawArgs).Int("argListLength", len(argList)).Int("paramCount", count).Msg("arg length mismatch")
+	}
+
+	processedArgs := make([]string, count)
+	for k, arg := range argList {
+		if strings.HasPrefix(params[k], "uint") {
+			if strings.HasPrefix(arg, "0x") {
+				arg = strings.TrimPrefix(arg, "0x")
+				if len(arg) > 64 {
+					// i think this is a bug but there is a test case that's somehow longer than 32 bytes
+					// https://github.com/ethereum/tests/blob/fd26aad70e24f042fcd135b2f0338b1c6bf1a324/src/GeneralStateTestsFiller/Cancun/stEIP1153-transientStorage/transStorageOKFiller.yml#L801
+					arg = arg[len(arg)-64:]
+				}
+				n, _ := new(big.Int).SetString(arg, 16)
+				processedArgs[k] = n.String()
+			} else {
+				processedArgs[k] = arg
+			}
+		} else if params[k] == "bool" {
+			if arg == "0x01" {
+				processedArgs[k] = "true"
+			} else if arg == "0x00" {
+				processedArgs[k] = "false"
+			} else {
+				log.Fatal().Str("arg", arg).Msg("unrecognized bool type input")
+			}
+		} else {
+			log.Fatal().Str("type", params[k]).Msg("unknown type designation")
+		}
+	}
+
+	return processedArgs
+}
+
+func preProcessTypedString(data string, preserveSpace bool) string {
 	data = strings.TrimSpace(data)
 	data = typeIndidcator.ReplaceAllString(data, "")
 	data = strings.TrimPrefix(data, "0x")
-	data = strings.Replace(data, " ", "", -1)
+	if !preserveSpace {
+		data = strings.Replace(data, " ", "", -1)
+	}
+	return data
+}
+
+func processRawStringToBytes(data string) string {
+	data = preProcessTypedString(data, false)
 
 	byteData, err := hex.DecodeString(data)
 	if err != nil {
 		log.Fatal().Str("data", data).Err(err).Msg("Unable to decode the raw data")
 	}
-	return byteData
+	return "0x" + hex.EncodeToString(byteData)
 }
 
 var RetestCmd = &cobra.Command{
@@ -324,7 +406,7 @@ var RetestCmd = &cobra.Command{
 			}
 			d := tests[k].Transaction.Data
 			wd := WrappedData{raw: d}
-			wd.ToBytes()
+			wd.ToString()
 		}
 		return nil
 	},
@@ -340,6 +422,8 @@ func init() {
 	validBase10 = regexp.MustCompile(`^[0-9]*$`)
 	dataLabel = regexp.MustCompile(`^:label ([^ ]*) `)
 	typeIndidcator = regexp.MustCompile(`^:([^ ]*) `)
+	abiSpec = regexp.MustCompile(`^([a-zA-Z0-9]*)\((.*)\)(.*)$`)
+	normalizeWs = regexp.MustCompile(` +`)
 }
 
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
