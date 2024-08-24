@@ -30,6 +30,7 @@ var (
 	abiSpec             *regexp.Regexp
 	normalizeWs         *regexp.Regexp
 	solidityCompileInfo *regexp.Regexp
+	removablePreamble   *regexp.Regexp
 )
 
 type EthTestEnv struct {
@@ -287,6 +288,8 @@ func processTestDataString(data string) string {
 		return processRawStringToString(data)
 	} else if strings.HasPrefix(data, "(asm ") {
 		return processLLLToString(data)
+	} else if isStandardSolidityString(data) {
+		return processSolidityToString(data, false)
 	} else {
 		log.Fatal().Str("data", data).Msg("unknown data format")
 	}
@@ -294,7 +297,19 @@ func processTestDataString(data string) string {
 	return ""
 }
 
+// isStandardSolidityString will do a rough check to see if the string looks like a typical solidity file rather than
+// the contracts that are usually in the retest code base
+func isStandardSolidityString(contract string) bool {
+	if strings.Contains(contract, "pragma solidity") && strings.Contains(contract, "SPDX-License-Identifier") {
+		return true
+	}
+	return false
+}
+
 func processSolidityFlags(contract string) (string, bool) {
+	if isStandardSolidityString(contract) {
+		return "", true
+	}
 	shouldOptimize := false
 	solidityInfo := solidityCompileInfo.FindStringSubmatch(contract)
 	if len(solidityInfo) == 0 {
@@ -333,6 +348,7 @@ func processSolidityToString(data string, isYul bool) string {
 	matches := solidityCompileInfo.FindStringSubmatch(data)
 	if len(matches) != 3 {
 		// TODO these few cases are setup where they reference a specific "solidity" properly of the outer test suite rather than embedding like the rest of the tests.
+		// in order to implement this it looks like we'll need to compile all of the contracts within the solidity file and have all of the bins available for the test
 		if data == "PerformanceTester" {
 			// src/GeneralStateTestsFiller/VMTests/vmPerformance/performanceTesterFiller.yml
 			return ""
@@ -350,10 +366,17 @@ func processSolidityToString(data string, isYul bool) string {
 			// src/GeneralStateTestsFiller/stExample/solidityExampleFiller.yml
 			return ""
 		}
+		if data == "DoubleSelfdestructTest" || data == "DoubleSelfdestructTest2" || data == "DoubleSelfdestructTest3" || data == "DeadBoss" {
+			// src/GeneralStateTestsFiller/stSolidityTest/SelfDestructFiller.yml
+			return ""
+		}
+		fmt.Println(data)
 		log.Fatal().Str("contractData", data).Msg("The format of this contract is unique and it's not clear what it is")
 	}
-	data = solidityCompileInfo.ReplaceAllString(data, matches[2])
+
 	data = stripVersions(data)
+	data = removablePreamble.ReplaceAllString(data, "")
+	// data = solidityCompileInfo.ReplaceAllString(data, matches[2])
 	solInput, err := os.CreateTemp("", "sol-")
 	if err != nil {
 		log.Fatal().Err(err).Msg("Unable to create solidity file")
@@ -383,12 +406,14 @@ func processSolidityToString(data string, isYul bool) string {
 	cmd.Stderr = bufErr
 	solcOut, err := cmd.Output()
 	if err != nil {
-		log.Fatal().Err(err).Str("stdErr", bufErr.String()).Str("contract", data).Strs("args", args).Msg("there was an error running solc/solidity for contracts")
+		log.Fatal().Err(err).Str("filename", solInput.Name()).Str("stdErr", bufErr.String()).Str("contract", data).Strs("args", args).Msg("there was an error running solc/solidity for contracts")
 	}
 	lines := strings.Split(string(solcOut), "\n")
-	if len(lines) != 6 {
-		log.Fatal().Int("lines", len(lines)).Str("contract", data).Msg("soldity output does not contain 6 lines")
+	if len(lines) < 4 {
+		log.Warn().Strs("args", args).Str("filename", solInput.Name()).Str("stdErr", bufErr.String()).Int("lines", len(lines)).Str("contract", data).Msg("soldity output does not contain 4 lines")
 	}
+
+	os.Remove(solInput.Name())
 	return lines[len(lines)-2]
 }
 
@@ -575,6 +600,7 @@ func init() {
 	abiSpec = regexp.MustCompile(`^([a-zA-Z0-9]*)\((.*)\)(.*)$`)
 	normalizeWs = regexp.MustCompile(` +`)
 	solidityCompileInfo = regexp.MustCompile(`^([^\n\r{]*)([\n\r{])`)
+	removablePreamble = regexp.MustCompile(`^\b(london|berlin|byzantium|shanghai|optimise)\b(\s+\b(london|berlin|byzantium|shanghai|optimise)\b)*`)
 }
 
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
