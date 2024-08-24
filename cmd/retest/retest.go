@@ -556,7 +556,11 @@ func WrapPredeployedCode(pre EthTestPre) string {
 	code = strings.TrimPrefix(code, "0x")
 	codeLen := len(code) / 2
 
-	return fmt.Sprintf("63%08x630000001560003963%08x6000F3%s", codeLen, codeLen, code)
+	return fmt.Sprintf("0x63%08x630000001560003963%08x6000F3%s", codeLen, codeLen, code)
+}
+func WrapCode(inputData EthTestData) string {
+	rawCode := WrappedData{raw: inputData}
+	return rawCode.ToString()
 }
 
 var RetestCmd = &cobra.Command{
@@ -575,14 +579,30 @@ var RetestCmd = &cobra.Command{
 			return err
 		}
 		// TODO in the future we might want to support various output modes. E.g. Assertoor, Foundry, web3.js, ethers, whatever
-		for _, t := range tests {
+		simpleTests := make([]any, 0)
+		for testName, t := range tests {
+			st := make(map[string]any)
+			preDeploys := make([]map[string]string, 0)
 			for addr, p := range t.Pre {
-				preDeployedCode := WrapPredeployedCode(p)
-				fmt.Println(addr)
-				fmt.Println(preDeployedCode)
+				dep := make(map[string]string)
+				dep["label"] = fmt.Sprintf("pre:%s", addr)
+				dep["addr"] = addr
+				dep["code"] = WrapPredeployedCode(p)
+				preDeploys = append(preDeploys, dep)
 			}
-			// fmt.Println(t.Transaction.To)
+			st["dependencies"] = preDeploys
+
+			st["to"] = t.Transaction.To
+			st["code"] = WrapCode(t.Transaction.Data)
+			st["gas"] = t.Transaction.GasLimit
+			st["name"] = testName
+			simpleTests = append(simpleTests, st)
 		}
+		testOut, err := json.Marshal(simpleTests)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(testOut))
 		return nil
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
