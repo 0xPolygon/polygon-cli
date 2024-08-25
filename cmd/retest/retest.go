@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/maticnetwork/polygon-cli/abi"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -136,13 +138,79 @@ type WrappedData struct {
 	raw   EthTestData
 	inner string
 }
+type WrappedAddress struct {
+	raw   EthTestAddress
+	inner *ethcommon.Address
+}
 
+func (wr *WrappedAddress) ToString() *ethcommon.Address {
+	if wr.inner != nil {
+		return wr.inner
+	}
+	v := reflect.ValueOf(wr.raw)
+	if v.Kind() == reflect.Invalid {
+		wr.inner = new(ethcommon.Address)
+		return wr.inner
+	}
+	if v.Kind() == reflect.Float64 {
+		// FIXME this case shouldn't be necessary
+		// this is a weird case where the address is specified as a number... There are a dozen or so cases that seem
+		// like in the yml to json conversion, numbers like 095e7baea6a6c7c4c2dfeb977efac326af552d87 are prefixed with
+		// 0x and interpreted as a number rather tha a string. This seems to work fine in retest ETH but cases an issue
+		// in this workflow
+		// GeneralStateTestsFiller/Cancun/stEIP4844-blobtransactions/blobhashListBounds5Filler.yml
+		f := new(big.Float)
+		f = f.SetFloat64(v.Interface().(float64))
+		fInt, _ := f.Int(nil)
+		addr := ethcommon.BytesToAddress(fInt.Bytes())
+		wr.inner = &addr
+		return wr.inner
+	}
+
+	if v.Kind() != reflect.String {
+		log.Fatal().Any("addr", wr.raw).Str("kind", v.Kind().String()).Msg("unknown source address type")
+	}
+	addr := ethcommon.HexToAddress(v.Interface().(string))
+	wr.inner = &addr
+	return wr.inner
+}
 func (wr *WrappedNumeric) ToBigInt() *big.Int {
 	if wr.inner != nil {
 		return wr.inner
 	}
 	wr.inner = EthTestNumericToBigInt(wr.raw)
+	if wr.inner == nil {
+		wr.inner = new(big.Int)
+	}
 	return wr.inner
+}
+
+func (wr *WrappedNumeric) ToString() string {
+	bi := wr.ToBigInt()
+	return hexutil.EncodeBig(bi)
+}
+
+func (wr *WrappedData) IsSlice() bool {
+	v := reflect.ValueOf(wr.raw)
+	k := v.Kind()
+	return k == reflect.Slice
+}
+func (wr *WrappedData) ToSlice() []*WrappedData {
+	if !wr.IsSlice() {
+		return []*WrappedData{wr}
+	}
+	v := reflect.ValueOf(wr.raw)
+	if v.Len() == 0 {
+		return []*WrappedData{}
+	}
+	wrappedDatas := make([]*WrappedData, v.Len())
+	for i := 0; i < v.Len(); i = i + 1 {
+		nwd := new(WrappedData)
+		nwd.raw = v.Index(i).Interface().(EthTestData)
+		wrappedDatas[i] = nwd
+
+	}
+	return wrappedDatas
 }
 
 func EthTestNumericToBigInt(num EthTestNumeric) *big.Int {
@@ -592,10 +660,32 @@ var RetestCmd = &cobra.Command{
 			}
 			st["dependencies"] = preDeploys
 
-			st["to"] = t.Transaction.To
-			st["code"] = WrapCode(t.Transaction.Data)
-			st["gas"] = t.Transaction.GasLimit
-			st["name"] = testName
+			testCases := make([]map[string]any, 0)
+
+			wd := WrappedData{raw: t.Transaction.Data}
+			wds := wd.ToSlice()
+			for _, singleTx := range wds {
+				tc := make(map[string]any)
+				tc["name"] = testName
+
+				tc["code"] = singleTx.ToString()
+
+				wTo := WrappedAddress{raw: t.Transaction.To}
+				tc["to"] = wTo.ToString()
+				tc["originalTo"] = t.Transaction.To
+
+				wGas := WrappedNumeric{raw: t.Transaction.GasLimit}
+				tc["gas"] = wGas.ToString()
+				tc["originalGas"] = t.Transaction.GasLimit
+
+				wValue := WrappedNumeric{raw: t.Transaction.Value}
+				tc["value"] = wValue.ToString()
+				tc["originalValue"] = t.Transaction.Value
+
+				testCases = append(testCases, tc)
+			}
+			st["testCases"] = testCases
+
 			simpleTests = append(simpleTests, st)
 		}
 		testOut, err := json.Marshal(simpleTests)
