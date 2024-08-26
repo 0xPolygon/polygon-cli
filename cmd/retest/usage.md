@@ -26,26 +26,12 @@ find . -type f -name '*.json' | xargs cat | jq -r 'to_entries[].key' | uniq -c |
 find . -type f -name '*.json' | xargs cat | jq 'select((. | type) != "array")' | jq -s 'add' > merged.json
 # there are some fields like "//comment" that make parsing very difficult
 jq 'walk(if type == "object" then with_entries(select(.key | startswith("//") | not)) else . end)' merged.json  > merged.nocomment.json
-
-rm -f single-transactions.txt
-find . -type f -name '*.json'  | while read json_file ; do
-    jq --arg fname $json_file 'to_entries[].value.transaction | select(.!= null) | .fname = $fname' $json_file >> single-transactions.txt
-    jq --arg fname $json_file 'to_entries[].value.blocks | select(. != null) | .[].transactions | select(. != null) | .[] | .fname = $fname' $json_file >> single-transactions.txt
-    jq --arg fname $json_file 'to_entries[].value.txbytes | select( . != null) | {txbytes: ., fname: $fname} ' $json_file >> single-transactions.txt
-done
-cat single-transactions.txt | jq -s '.' > consolidated.json
-
 ```
 
-Now we should have a giant file filled with an array of transactions
+Now we should have a giant file filled with an array of transactions. We can take that output and process it witht the `retest` command now
 
 ```bash
-cat consolidated.json | jq '.[] | select(( .value | type) == "array") | select((.value | length) > 1)'
-cat single-transactions.txt | jq -r '.txbytes | select( . != null)' | xargs -I xxx cast publish --rpc-url http://34.175.214.161:18124 xxx
-```
-
-
-```bash
+go run . retest -v 500 --file merged.nocomment.json > simple.json
 ```
 
 ## LLLC

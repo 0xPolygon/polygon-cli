@@ -508,6 +508,7 @@ func processLLLToString(data string) string {
 	if len(lines) != 2 {
 		log.Fatal().Int("lines", len(lines)).Str("contract", data).Msg("LLLC output does not contain 2 lines")
 	}
+	os.Remove(lllcInput.Name())
 	return lines[0]
 }
 
@@ -668,7 +669,7 @@ var RetestCmd = &cobra.Command{
 				tc := make(map[string]any)
 				tc["name"] = testName
 
-				tc["code"] = singleTx.ToString()
+				tc["input"] = singleTx.ToString()
 
 				wTo := WrappedAddress{raw: t.Transaction.To}
 				tc["to"] = wTo.ToString()
