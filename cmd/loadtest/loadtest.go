@@ -10,6 +10,7 @@ import (
 	"io"
 	"math/big"
 	"math/rand"
+	"net/http"
 
 	"os"
 	"os/signal"
@@ -376,8 +377,33 @@ func runLoadTest(ctx context.Context) error {
 		overallTimer = new(time.Timer)
 	}
 
-	// Dial the Ethereum RPC server.
-	rpc, err := ethrpc.DialContext(ctx, *inputLoadTestParams.RPCUrl)
+	// connLimit is the value we'll use to configure the connection limit within the http transport
+	connLimit := 2 * int(*inputLoadTestParams.Concurrency)
+	// Most of these transport options are defaults. We might want to make this configurable from the CLI at some point.
+	// The goal here is to avoid opening a ton of connections that go idle then get closed and eventually exhausting
+	// client-side connections.
+	transport := &http.Transport{
+		DisableKeepAlives:      false,
+		DisableCompression:     false,
+		MaxIdleConns:           connLimit,
+		MaxIdleConnsPerHost:    connLimit,
+		MaxConnsPerHost:        connLimit,
+		IdleConnTimeout:        0,
+		ResponseHeaderTimeout:  0,
+		ExpectContinueTimeout:  0,
+		TLSNextProto:           nil,
+		ProxyConnectHeader:     nil,
+		GetProxyConnectHeader:  nil,
+		MaxResponseHeaderBytes: 0,
+		WriteBufferSize:        0,
+		ReadBufferSize:         0,
+		ForceAttemptHTTP2:      false,
+	}
+	goHttpClient := &http.Client{
+		Transport: transport,
+	}
+	rpcOption := ethrpc.WithHTTPClient(goHttpClient)
+	rpc, err := ethrpc.DialOptions(ctx, *inputLoadTestParams.RPCUrl, rpcOption)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to dial rpc")
 		return err
