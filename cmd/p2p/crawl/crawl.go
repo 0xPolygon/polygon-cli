@@ -23,6 +23,7 @@ type (
 		NodesFile            string
 		Database             string
 		RevalidationInterval string
+		OnlyURLs             bool
 
 		revalidationInterval time.Duration
 	}
@@ -90,7 +91,12 @@ var CrawlCmd = &cobra.Command{
 		log.Info().Msg("Starting crawl")
 
 		output := c.run(inputCrawlParams.timeout, inputCrawlParams.Threads)
-		return p2p.WriteNodeSet(inputCrawlParams.NodesFile, output)
+
+		if inputCrawlParams.OnlyURLs {
+			return p2p.WriteURLs(inputCrawlParams.NodesFile, output)
+		}
+
+		return p2p.WriteNodeSet(inputCrawlParams.NodesFile, output, false)
 	},
 }
 
@@ -106,4 +112,5 @@ required, so other nodes in the network can discover each other.`)
 	CrawlCmd.PersistentFlags().Uint64VarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id")
 	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Database, "database", "d", "", "Node database for updating and storing client information")
 	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.RevalidationInterval, "revalidation-interval", "r", "10m", "Time before retrying to connect to a failed peer")
+	CrawlCmd.PersistentFlags().BoolVarP(&inputCrawlParams.OnlyURLs, "only-urls", "u", true, "Only writes the enode URLs to the output")
 }
