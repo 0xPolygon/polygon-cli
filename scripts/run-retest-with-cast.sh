@@ -121,7 +121,7 @@ tmpfile=$(mktemp retest-jq-XXXXXXXXXXXX)
 jq -c '.[]' | while read test_item ; do
     testfile=$(mktemp -p /tmp retest-item-jq-XXXXXXXXXXXX)
     echo $test_item > $testfile
-    process_test_item $testfile
+    timeout 300 process_test_item $testfile
 done
 
 rm $tmpfile
