@@ -160,7 +160,7 @@ type rlpxConn struct {
 func (c *rlpxConn) Read() Message {
 	code, rawData, _, err := c.Conn.Read()
 	if err != nil {
-		return errorf("could not read from connection: %v", err)
+		return errorf("could not read from connection: %v, code: %d", err, code)
 	}
 
 	var msg Message
