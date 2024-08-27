@@ -56,6 +56,7 @@ type (
 		PrometheusPort               uint
 		APIPort                      uint
 		KeyFile                      string
+		PrivateKey                   string
 		Port                         int
 		DiscoveryPort                int
 		RPC                          string
@@ -136,6 +137,14 @@ var SensorCmd = &cobra.Command{
 				}
 			} else {
 				inputSensorParams.privateKey = privateKey
+			}
+		}
+
+		if len(inputSensorParams.PrivateKey) > 0 {
+			inputSensorParams.privateKey, err = crypto.HexToECDSA(inputSensorParams.PrivateKey)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to parse PrivateKey")
+				return err
 			}
 		}
 
@@ -477,7 +486,9 @@ significantly increase CPU and memory usage.`)
 	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "Whether to run Prometheus")
 	SensorCmd.Flags().UintVar(&inputSensorParams.PrometheusPort, "prom-port", 2112, "Port Prometheus runs on")
 	SensorCmd.Flags().UintVar(&inputSensorParams.APIPort, "api-port", 8080, "Port the API server will listen on")
-	SensorCmd.Flags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "Private key file")
+	SensorCmd.Flags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "Private key file (cannot be set with --key)")
+	SensorCmd.Flags().StringVar(&inputSensorParams.PrivateKey, "key", "", "Hex-encoded private key (cannot be set with --key-file)")
+	SensorCmd.MarkFlagsMutuallyExclusive("key-file", "key")
 	SensorCmd.Flags().IntVar(&inputSensorParams.Port, "port", 30303, "TCP network listening port")
 	SensorCmd.Flags().IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
 	SensorCmd.Flags().StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "RPC endpoint used to fetch the latest block")
