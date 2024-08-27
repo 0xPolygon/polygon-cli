@@ -32,7 +32,8 @@ If no nodes.json file exists, it will be created.
       --fork-id bytesHex         The hex encoded fork id (omit the 0x) (default F097BC13)
       --genesis-hash string      The genesis block hash (default "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
   -h, --help                     help for sensor
-  -k, --key-file string          Private key file
+      --key string               Hex-encoded private key (cannot be set with --key-file)
+  -k, --key-file string          Private key file (cannot be set with --key)
   -D, --max-db-concurrency int   Maximum number of concurrent database operations to perform. Increasing this
                                  will result in less chance of missing data (i.e. broken pipes) but can
                                  significantly increase memory usage. (default 10000)
