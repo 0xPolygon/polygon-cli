@@ -331,6 +331,28 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec) {
 		}
 	})
 
+	http.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		type NodeInfo struct {
+			ENR string `json:"enr"`
+			URL string `json:"enode"`
+		}
+
+		info := NodeInfo{
+			ENR: server.NodeInfo().ENR,
+			URL: server.Self().URLv4(),
+		}
+
+		err := json.NewEncoder(w).Encode(info)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to encode node info")
+		}
+	})
+
 	addr := fmt.Sprintf(":%d", inputSensorParams.APIPort)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Error().Err(err).Msg("Failed to start API handler")
