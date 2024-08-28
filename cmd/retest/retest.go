@@ -438,29 +438,6 @@ func processSolidityToString(data string, isYul bool) string {
 	solidityVersion, optimize := processSolidityFlags(data)
 	matches := solidityCompileInfo.FindStringSubmatch(data)
 	if len(matches) != 3 {
-		// TODO these few cases are setup where they reference a specific "solidity" property of the outer test suite rather than embedding like the rest of the tests.
-		// in order to implement this it looks like we'll need to compile all of the contracts within the solidity file and have all of the bins available for the test
-		if data == "PerformanceTester" {
-			// src/GeneralStateTestsFiller/VMTests/vmPerformance/performanceTesterFiller.yml
-			return ""
-		}
-		if data == "ExpPerformanceTester" {
-			// src/GeneralStateTestsFiller/VMTests/vmPerformance/loopExpFiller.yml.
-			return ""
-		}
-		if data == "MulPerformanceTester" {
-			// src/GeneralStateTestsFiller/VMTests/vmPerformance/loopMulFiller.yml
-			return ""
-		}
-		if data == "Test" {
-			// src/GeneralStateTestsFiller/stRevertTest/RevertRemoteSubCallStorageOOGFiller.yml
-			// src/GeneralStateTestsFiller/stExample/solidityExampleFiller.yml
-			return ""
-		}
-		if data == "DoubleSelfdestructTest" || data == "DoubleSelfdestructTest2" || data == "DoubleSelfdestructTest3" || data == "DeadBoss" {
-			// src/GeneralStateTestsFiller/stSolidityTest/SelfDestructFiller.yml
-			return ""
-		}
 		fmt.Println(data)
 		log.Fatal().Str("contractData", data).Msg("The format of this contract is unique and it's not clear what it is")
 	}
