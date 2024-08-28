@@ -1,7 +1,8 @@
 #!/bin/bash
+# ./scripts/run-retest-with-cast.sh < simple-test-out-new.json 2>&1 | tee -a local-test.logs
 
-private_key="0xbcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31"
-rpc_url="http://127.0.0.1:32925"
+private_key="0x12d7de8621a77640c9241b2595ba78ce443d05e94090365ab3bb5e19df82c625"
+rpc_url="http://127.0.0.1:33082"
 
 
 legacy_flag=" --legacy "
@@ -15,36 +16,66 @@ function normalize_address() {
 function hex_to_dec() {
     hex_in=$(sed 's/0x//' | tr '[:lower:]' '[:upper:]')
     dec_val=$(bc <<< "ibase=16; $hex_in")
-    echo $dec_val
+    echo "$dec_val"
+}
+function mark_progress() {
+    local bn
+    local cur_time
+    local test_name
+    local test_file
+    local test_hash
+
+    test_name=$1
+    test_file=$2
+    test_hash=$3
+
+    bn=$(cast block-number --rpc-url "$rpc_url")
+    cur_time=$(date -R)
+    2>&1 printf "\n\n"
+    2>&1 echo "################################################################################"
+    2>&1 echo "Starting $test_name at block $bn at $cur_time"
+    2>&1 echo "Test source $test_file with test lock /tmp/.retest-resume-$test_hash"
+    2>&1 echo "################################################################################"
 }
 
 function process_test_item() {
-    local testfile=$1
-    local test_hash=$(sha256sum $testfile | sed 's/ .*//')
+    local testfile
+    local test_hash
+    local test_name
+    local tmp_dir
+    local nonce
+    local count
+
+    testfile=$1
+    test_hash=$(sha256sum "$testfile" | sed 's/ .*//')
     if [[ -e "/tmp/.retest-resume-$test_hash" ]]; then
         2>&1 echo "it looks like we have already tested this case. Skipping"
         return
     fi
 
-    touch /tmp/.retest-resume-$test_hash
+    touch "/tmp/.retest-resume-$test_hash"
 
-    local test_name=$( jq -r '.testCases[0].name' $testfile)
-    2>&1 echo "processing $test_name in file at $testfile"
+    test_name=$(jq -r '.testCases[0].name' "$testfile")
+    mark_progress "$test_name" "$testfile" "$test_hash"
 
-    local tmp_dir=$(mktemp -p /tmp -d retest-work-XXXXXXXXXXXX)
-    pushd $tmp_dir
+    tmp_dir=$(mktemp -p /tmp -d retest-work-XXXXXXXXXXXX)
+    pushd "$tmp_dir" || exit 1
 
-    local nonce=$(cast nonce --rpc-url $rpc_url $wallet_address)
-    local count=0
-    jq -c '.dependencies[]' $testfile | while read pre ; do
+    nonce=$(cast nonce --rpc-url "$rpc_url" "$wallet_address")
+    count=0
+    jq -c '.dependencies[]' "$testfile" | while read -r pre ; do
+        local reference_address
+        local code_to_deploy
+
         count=$((count+1))
-        echo $pre | jq '.' > dep-$count.json
-        local code_to_deploy=$(jq -r '.code' dep-$count.json)
-        local reference_address=$(jq -r '.addr' dep-$count.json | normalize_address)
+        echo "$pre" | jq '.' > "dep-$count.json"
+        code_to_deploy=$(jq -r '.code' "dep-$count.json")
+        reference_address=$(jq -r '.addr' "dep-$count.json" | normalize_address)
         2>&1 echo "deploying dependency $count for $reference_address"
-        echo $nonce
-        cast send $legacy_flag --async --nonce $nonce --rpc-url $rpc_url --private-key $private_key --create "$code_to_deploy" | tee $reference_address.txhash
-        cast compute-address --nonce $nonce $wallet_address | sed 's/^.*0x/0x/' > $reference_address.actual
+        2>&1 echo "current nonce: $nonce"
+        # shellcheck disable=SC2086
+        cast send $legacy_flag: --async --nonce "$nonce" --rpc-url "$rpc_url" --private-key "$private_key" --create "$code_to_deploy" | tee "$reference_address.txhash"
+        cast compute-address --nonce "$nonce" "$wallet_address" | sed 's/^.*0x/0x/' > "$reference_address.actual"
 
         nonce=$((nonce+1))
         echo "$nonce" > last.nonce
@@ -52,30 +83,36 @@ function process_test_item() {
 
     if [[ -e last.nonce ]]; then
         # Random transaction to make sure all of the async deps are deployed before running the transactions
-        cast send $legacy_flag --nonce $(cat last.nonce) --rpc-url $rpc_url --private-key $private_key --value 1 $wallet_address
+        # shellcheck disable=SC2086
+        cast send $legacy_flag --nonce "$(cat last.nonce)" --rpc-url "$rpc_url" --private-key "$private_key" --value 1 "$wallet_address"
         2>&1 echo "We have finished deploying the dependencies (I think)"
         rm last.nonce
     fi
 
-    nonce=$(cast nonce --rpc-url $rpc_url $wallet_address)
+    nonce=$(cast nonce --rpc-url "$rpc_url" "$wallet_address")
     count=0
-    jq -c '.testCases[]' $testfile | while read test_case ; do
+    jq -c '.testCases[]' "$testfile" | while read -r "test_case" ; do
+        local name
+        local addr
+        local gas
+        local val
+
         count=$((count+1))
-        echo $test_case | jq '.' > test_case_$count.json
+        echo "$test_case" | jq '.' > "test_case_$count.json"
         tx_input=$(jq -r '.input' test_case_$count.json)
-        local name=$(jq -r '.name' test_case_$count.json)
-        local addr=$(jq -r '.to' test_case_$count.json | normalize_address)
-        local gas=$(jq -r '.gas' test_case_$count.json) # this value can be obscenely high in the test cases
-        local val=$(jq -r '.value' test_case_$count.json)
+        name=$(jq -r '.name' test_case_$count.json)
+        addr=$(jq -r '.to' test_case_$count.json | normalize_address)
+        gas=$(jq -r '.gas' test_case_$count.json) # this value can be obscenely high in the test cases
+        val=$(jq -r '.value' test_case_$count.json)
         val_arg=""
         if [[ $val != "0x0" ]] ; then
-            dec_val=$(echo $val | hex_to_dec)
+            dec_val=$(echo "$val" | hex_to_dec)
             val_arg=" --value $dec_val "
         fi
 
         gas_arg=""
         if [[ $gas != "" ]] ; then
-            dec_val=$(echo $gas | hex_to_dec)
+            dec_val=$(echo "$gas" | hex_to_dec)
             valid_gas=$(bc <<< "$dec_val < 30000000 && $dec_val > 0")
             if [[ $valid_gas == "1" ]] ; then
                 gas_arg=" --gas-limit $dec_val "
@@ -96,14 +133,19 @@ function process_test_item() {
                 2>&1 "the test file $addr.actual does not seem to exist... skipping"
                 continue
             fi
-            resolved_address=$(cat $addr.actual)
+            resolved_address=$(cat "$addr.actual")
             to_addr_arg=" $resolved_address "
         fi
 
+        2>&1 echo "executing tx $count for $name"
+        2>&1 echo "current nonce: $nonce"
+
         set -x
-        timeout 30 cast send $legacy_flag --async --nonce $nonce --rpc-url $rpc_url --private-key $private_key $gas_arg $val_arg $to_addr_arg $tx_input | tee tx-$count-out.json
+        # shellcheck disable=SC2086
+        timeout 30 cast send $legacy_flag --async --nonce "$nonce" --rpc-url "$rpc_url" --private-key "$private_key" $gas_arg $val_arg $to_addr_arg $tx_input | tee "tx-$count-out.json"
+        ret_code=$?
         set +x
-        if [[ $? -ne 0 ]]; then
+        if [[ $ret_code -ne 0 ]]; then
             2>&1 "it looks like this request timed out.. it might be worth checking?!"
         fi
         nonce=$((nonce+1))
@@ -112,31 +154,28 @@ function process_test_item() {
 
     if [[ -e last.nonce ]]; then
         # Random transaction to make sure all of the async deps are deployed before running the transactions
-        cast send $legacy_flag --nonce $(cat last.nonce) --rpc-url $rpc_url --private-key $private_key --value 1 $wallet_address
+        # shellcheck disable=SC2086
+        cast send $legacy_flag --nonce "$(cat last.nonce)" --rpc-url "$rpc_url" --private-key "$private_key" --value 1 "$wallet_address"
         rm last.nonce
     fi
 
-    popd
+    popd || exit 1
+
     if [[ $clean_up == "true" ]] ; then
-        rm -rf $tmp_dir
-        rm $testfile
+        rm -rf "$tmp_dir"
+        rm "$testfile"
     fi
 }
 
-wallet_address=$(cast wallet address --private-key $private_key)
-wallet_balance=$(cast balance --rpc-url $rpc_url $wallet_address)
-wallet_nonce=$(cast nonce --rpc-url $rpc_url $wallet_address)
+wallet_address=$(cast wallet address --private-key "$private_key")
+wallet_balance=$(cast balance --rpc-url $rpc_url "$wallet_address")
+wallet_nonce=$(cast nonce --rpc-url $rpc_url "$wallet_address")
 2>&1 echo "Address $wallet_address has a balance of $wallet_balance and nonce $wallet_nonce"
 
-# Create a temp file to store the output of the test cases
-tmpfile=$(mktemp retest-jq-XXXXXXXXXXXX)
-
 # Break down each test into different files
-jq -c '.[]' | while read test_item ; do
+jq -c '.[]' | while read -r test_item ; do
     testfile=$(mktemp -p /tmp retest-item-jq-XXXXXXXXXXXX)
-    echo $test_item > $testfile
-    process_test_item $testfile
+    echo "$test_item" > "$testfile"
+    process_test_item "$testfile"
 done
-
-rm $tmpfile
 
