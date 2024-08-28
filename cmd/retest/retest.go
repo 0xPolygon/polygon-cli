@@ -212,7 +212,28 @@ func (wr *WrappedData) ToSlice() []*WrappedData {
 	}
 	return wrappedDatas
 }
+func (wn *WrappedNumeric) IsSlice() bool {
+	v := reflect.ValueOf(wn.raw)
+	k := v.Kind()
+	return k == reflect.Slice
+}
+func (wn *WrappedNumeric) ToSlice() []*WrappedNumeric {
+	if !wn.IsSlice() {
+		return []*WrappedNumeric{wn}
+	}
+	v := reflect.ValueOf(wn.raw)
+	if v.Len() == 0 {
+		return []*WrappedNumeric{}
+	}
+	wrappedDatas := make([]*WrappedNumeric, v.Len())
+	for i := 0; i < v.Len(); i = i + 1 {
+		nwd := new(WrappedNumeric)
+		nwd.raw = v.Index(i).Interface().(EthTestData)
+		wrappedDatas[i] = nwd
 
+	}
+	return wrappedDatas
+}
 func EthTestNumericToBigInt(num EthTestNumeric) *big.Int {
 	if num == nil {
 		return nil
@@ -661,30 +682,40 @@ var RetestCmd = &cobra.Command{
 			}
 			st["dependencies"] = preDeploys
 
-			testCases := make([]map[string]any, 0)
-
+			gasLimit := WrappedNumeric{raw: t.Transaction.GasLimit}
+			gasLimits := gasLimit.ToSlice()
+			txValue := WrappedNumeric{raw: t.Transaction.Value}
+			txValues := txValue.ToSlice()
 			wd := WrappedData{raw: t.Transaction.Data}
 			wds := wd.ToSlice()
-			for _, singleTx := range wds {
-				tc := make(map[string]any)
-				tc["name"] = testName
 
-				tc["input"] = singleTx.ToString()
+			testCases := make([]map[string]any, 0)
 
-				wTo := WrappedAddress{raw: t.Transaction.To}
-				tc["to"] = wTo.ToString()
-				tc["originalTo"] = t.Transaction.To
+			// This is a little bit awkward, but each test can have multiple inputs, gas limits, and values. If we have
+			// 2 inputs, 2 values, and 2 gas limits, that means in total, we'll have 8 test cases
+			for _, singleGas := range gasLimits {
+				for _, singleValue := range txValues {
+					for _, singleTx := range wds {
+						tc := make(map[string]any)
+						tc["name"] = testName
 
-				wGas := WrappedNumeric{raw: t.Transaction.GasLimit}
-				tc["gas"] = wGas.ToString()
-				tc["originalGas"] = t.Transaction.GasLimit
+						tc["input"] = singleTx.ToString()
 
-				wValue := WrappedNumeric{raw: t.Transaction.Value}
-				tc["value"] = wValue.ToString()
-				tc["originalValue"] = t.Transaction.Value
+						wTo := WrappedAddress{raw: t.Transaction.To}
+						tc["to"] = wTo.ToString()
+						tc["originalTo"] = t.Transaction.To
 
-				testCases = append(testCases, tc)
+						tc["gas"] = singleGas.ToString()
+						tc["originalGas"] = t.Transaction.GasLimit
+
+						tc["value"] = singleValue.ToString()
+						tc["originalValue"] = t.Transaction.Value
+
+						testCases = append(testCases, tc)
+					}
+				}
 			}
+
 			st["testCases"] = testCases
 
 			simpleTests = append(simpleTests, st)
