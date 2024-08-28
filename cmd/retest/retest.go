@@ -250,15 +250,6 @@ func EthTestNumericToBigInt(num EthTestNumeric) *big.Int {
 		return float64ToBigInt(v.Float())
 	case reflect.String:
 		return processNumericString(v.String())
-	case reflect.Slice:
-		if v.Len() == 0 {
-			log.Warn().Msg("The slice is empty; returning nil")
-			return nil
-		}
-		first := v.Index(0)
-		// TODO this indicates this is a matrixed parameter.. WE're losing out right now
-		log.Debug().Any("first", first).Msg("A numeric field is multi-valued. This isn't currently supported and we'll use the first element")
-		return EthTestNumericToBigInt(first.Interface().(EthTestNumeric))
 	default:
 		log.Fatal().Any("input", num).Str("kind", v.Kind().String()).Msg("Attempted to convert unknown type to number")
 	}
@@ -332,16 +323,6 @@ func EthTestDataToString(data EthTestData) string {
 		}
 		// TODO - we're losing the ability to send lots of different access list tests
 		return EthTestDataToString(dataMap["data"])
-	case reflect.Slice:
-		if v.Len() == 0 {
-			log.Warn().Msg("The slice is empty; returning nil")
-			return ""
-		}
-		// TODO these tests should be collected somehow
-		for i := 0; i < v.Len(); i = i + 1 {
-			EthTestDataToString(v.Index(i).Interface().(EthTestData))
-		}
-		return EthTestDataToString(v.Index(0).Interface().(EthTestData))
 	default:
 		log.Fatal().Any("input", data).Str("kind", v.Kind().String()).Msg("Attempted to convert unknown type to raw data")
 	}
