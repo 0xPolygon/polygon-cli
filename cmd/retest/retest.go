@@ -33,6 +33,7 @@ var (
 	normalizeWs         *regexp.Regexp
 	solidityCompileInfo *regexp.Regexp
 	removablePreamble   *regexp.Regexp
+	solcCompileMultiOut *regexp.Regexp
 )
 
 type EthTestEnv struct {
@@ -120,6 +121,7 @@ type EthTest struct {
 	Result             any                   `json:"result"`             // Result are specific expected results
 	Network            any                   `json:"network"`            // Network in rare cases seems to specify ArrayGlacier, Istanbul, or GrayGlacier
 	Exceptions         any                   `json:"exceptions"`         // Exceptions specifies resulting errors
+	Solidity           string                `json:"solidity"`           // Solidity contains a standard solidity file with one or more contracts
 }
 
 type EthTestSuite map[string]EthTest
@@ -436,7 +438,7 @@ func processSolidityToString(data string, isYul bool) string {
 	solidityVersion, optimize := processSolidityFlags(data)
 	matches := solidityCompileInfo.FindStringSubmatch(data)
 	if len(matches) != 3 {
-		// TODO these few cases are setup where they reference a specific "solidity" properly of the outer test suite rather than embedding like the rest of the tests.
+		// TODO these few cases are setup where they reference a specific "solidity" property of the outer test suite rather than embedding like the rest of the tests.
 		// in order to implement this it looks like we'll need to compile all of the contracts within the solidity file and have all of the bins available for the test
 		if data == "PerformanceTester" {
 			// src/GeneralStateTestsFiller/VMTests/vmPerformance/performanceTesterFiller.yml
@@ -504,6 +506,43 @@ func processSolidityToString(data string, isYul bool) string {
 
 	os.Remove(solInput.Name())
 	return lines[len(lines)-2]
+}
+
+// solidityStringToBin is specifically meant for the solidity property at the test level rather than embedded contracts
+func solidityStringToBin(data string) map[string]string {
+	// data = solidityCompileInfo.ReplaceAllString(data, matches[2])
+	solInput, err := os.CreateTemp("", "sol-")
+	if err != nil {
+		log.Fatal().Err(err).Msg("Unable to create solidity file")
+	}
+	_, err = solInput.WriteString(data)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Unable to write solidity file")
+	}
+	err = solInput.Close()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Unable to close solidity file")
+	}
+	args := []string{"--bin", "--input-file", solInput.Name()}
+
+	cmd := exec.Command("solc", args...)
+	errOut := ""
+	bufErr := bytes.NewBufferString(errOut)
+	cmd.Stderr = bufErr
+	solcOut, err := cmd.Output()
+	if err != nil {
+		log.Fatal().Err(err).Str("filename", solInput.Name()).Str("stdErr", bufErr.String()).Str("contract", data).Strs("args", args).Msg("there was an error running solc/solidity for contracts")
+	}
+	matches := solcCompileMultiOut.FindAllStringSubmatch(string(solcOut), -1)
+	contractMap := make(map[string]string)
+	for _, contract := range matches {
+		if len(contract) != 3 {
+			log.Fatal().Int("contractLen", len(contract)).Msg("the number of matches in this compiled contract doesn't look right")
+		}
+		contractMap[contract[1]] = contract[2]
+	}
+
+	return contractMap
 }
 
 func processLLLToString(data string) string {
@@ -653,6 +692,33 @@ func WrapCode(inputData EthTestData) string {
 	return rawCode.ToString()
 }
 
+func checkContractMap(input any, contractMap map[string]string) (string, bool) {
+	if len(contractMap) == 0 {
+		return "", false
+	}
+	v := reflect.ValueOf(input)
+	k := v.Kind()
+
+	if k != reflect.String {
+		return "", false
+	}
+
+	inputString := input.(string)
+	if !strings.HasPrefix(inputString, ":solidity") {
+		return "", false
+	}
+	inputString = strings.TrimSpace(strings.TrimPrefix(inputString, ":solidity "))
+	if strings.Contains(inputString, "\n") {
+		// return "", false
+	}
+	for k, v := range contractMap {
+		if k == inputString {
+			return v, true
+		}
+	}
+	return "", false
+}
+
 var RetestCmd = &cobra.Command{
 	Use:   "retest [flags]",
 	Short: "Convert the standard ETH test fillers into something to be replayed against an RPC",
@@ -668,12 +734,24 @@ var RetestCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+
 		// TODO in the future we might want to support various output modes. E.g. Assertoor, Foundry, web3.js, ethers, whatever
 		simpleTests := make([]any, 0)
 		for testName, t := range tests {
+			// Some of the tests have a specific `solidity` field at the top level which must be compiled and then made
+			// accessible to the rest of the properties
+			contractMap := make(map[string]string)
+			if t.Solidity != "" {
+				contractMap = solidityStringToBin(t.Solidity)
+			}
+
 			st := make(map[string]any)
 			preDeploys := make([]map[string]string, 0)
 			for addr, p := range t.Pre {
+				if input, matched := checkContractMap(p.Code, contractMap); matched {
+					p.Code = ":raw 0x" + input
+				}
+
 				dep := make(map[string]string)
 				dep["label"] = fmt.Sprintf("pre:%s", addr)
 				dep["addr"] = addr
@@ -699,7 +777,12 @@ var RetestCmd = &cobra.Command{
 						tc := make(map[string]any)
 						tc["name"] = testName
 
-						tc["input"] = singleTx.ToString()
+						if input, matched := checkContractMap(singleTx.raw, contractMap); matched {
+							// as far as I can tell this isn't used yet, but i suppose it should work
+							tc["input"] = input
+						} else {
+							tc["input"] = singleTx.ToString()
+						}
 
 						wTo := WrappedAddress{raw: t.Transaction.To}
 						tc["to"] = wTo.ToString()
@@ -743,6 +826,7 @@ func init() {
 	normalizeWs = regexp.MustCompile(` +`)
 	solidityCompileInfo = regexp.MustCompile(`^([^\n\r{]*)([\n\r{])`)
 	removablePreamble = regexp.MustCompile(`^\b(london|berlin|byzantium|shanghai|optimise)\b(\s+\b(london|berlin|byzantium|shanghai|optimise)\b)*`)
+	solcCompileMultiOut = regexp.MustCompile(`======= [^=]*:([^=]*) =======\nBinary:\n([a-fA-F0-9]*)`)
 }
 
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
