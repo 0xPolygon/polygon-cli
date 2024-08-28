@@ -2,9 +2,11 @@
 
 private_key="0xbcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31"
 rpc_url="http://127.0.0.1:32925"
+
+
 legacy_flag=" --legacy "
 clean_up="true"
-gas_limit=30000000
+gas_limit=1000000
 
 function normalize_address() {
         sed 's/0x//' |
@@ -18,7 +20,17 @@ function hex_to_dec() {
 
 function process_test_item() {
     local testfile=$1
-    2>&1 echo "processing file at $testfile"
+    local test_hash=$(sha256sum $testfile | sed 's/ .*//')
+    if [[ -e "/tmp/.retest-resume-$test_hash" ]]; then
+        2>&1 echo "it looks like we have already tested this case. Skipping"
+        return
+    fi
+
+    touch /tmp/.retest-resume-$test_hash
+
+    local test_name=$( jq -r '.testCases[0].name' $testfile)
+    2>&1 echo "processing $test_name in file at $testfile"
+
     local tmp_dir=$(mktemp -p /tmp -d retest-work-XXXXXXXXXXXX)
     pushd $tmp_dir
 
@@ -89,9 +101,11 @@ function process_test_item() {
         fi
 
         set -x
-        cast send $legacy_flag --async --nonce $nonce --rpc-url $rpc_url --private-key $private_key $gas_arg $val_arg $to_addr_arg $tx_input | tee tx-$count-out.json
+        timeout 30 cast send $legacy_flag --async --nonce $nonce --rpc-url $rpc_url --private-key $private_key $gas_arg $val_arg $to_addr_arg $tx_input | tee tx-$count-out.json
         set +x
-
+        if [[ $? -ne 0 ]]; then
+            2>&1 "it looks like this request timed out.. it might be worth checking?!"
+        fi
         nonce=$((nonce+1))
         echo "$nonce" > last.nonce
     done
@@ -109,7 +123,7 @@ function process_test_item() {
     fi
 }
 
-wallet_address=$(cast wallet address --private-key 0xbcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31)
+wallet_address=$(cast wallet address --private-key $private_key)
 wallet_balance=$(cast balance --rpc-url $rpc_url $wallet_address)
 wallet_nonce=$(cast nonce --rpc-url $rpc_url $wallet_address)
 2>&1 echo "Address $wallet_address has a balance of $wallet_balance and nonce $wallet_nonce"
@@ -121,7 +135,7 @@ tmpfile=$(mktemp retest-jq-XXXXXXXXXXXX)
 jq -c '.[]' | while read test_item ; do
     testfile=$(mktemp -p /tmp retest-item-jq-XXXXXXXXXXXX)
     echo $test_item > $testfile
-    timeout 300 process_test_item $testfile
+    process_test_item $testfile
 done
 
 rm $tmpfile
