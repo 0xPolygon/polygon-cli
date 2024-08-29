@@ -1,14 +1,18 @@
 #!/bin/bash
 # ./scripts/run-retest-with-cast.sh < simple-test-out-new.json 2>&1 | tee -a local-test-aug-28-2.logs
-# find . -type f -newer /tmp/.retest-resume-61655d716706ff525e215480666beaefef3e2730af6e995820b19e4282b14200 -name '.retest-resume-*' | xargs rm
+# find /tmp -type f -newer /tmp/.retest-resume-a01b837809ca1555757ab2edebead6321eaf569c78a54fc81985b84be71eacb0 -name '.retest-resume-*' | xargs rm
 
 private_key="0x12d7de8621a77640c9241b2595ba78ce443d05e94090365ab3bb5e19df82c625"
-rpc_url="http://127.0.0.1:33162"
+rpc_url="http://127.0.0.1:33237"
 
 
 legacy_flag=" --legacy "
 clean_up="true"
 gas_limit=1000000
+
+function print_warning() {
+    2>&1 echo -e "\e[32m$1\e[0m"
+}
 
 function normalize_address() {
         sed 's/0x//' |
@@ -41,6 +45,34 @@ function mark_progress() {
     2>&1 echo "Starting test #$test_counter $test_name at block $bn at $cur_time"
     2>&1 echo "Test source $test_file with test lock /tmp/.retest-resume-$test_hash"
     2>&1 echo "################################################################################"
+}
+
+# We'll attempt to send a synchronous transaction. If that works
+# (doesn't time out), it means that the test is no longer pending. If
+# it failed, it means that we might need to clear out some pending
+# transactions. If we don't do this, it's very easy for one test to
+# intere with the excution of the next test.
+function clear_pending_txs() {
+    local last_nonce
+    local current_nonce
+
+    last_nonce=$1
+    # shellcheck disable=SC2086
+    timeout 30 cast send $legacy_flag --nonce "$(cat last.nonce)" --rpc-url "$rpc_url" --private-key "$private_key" --value 1 "$wallet_address"
+    ret_code=$?
+
+    if [[ $ret_code -eq 0 ]]; then
+        return
+    fi
+
+    print_warning "The transaction to clear pending txs is stuck.. attemping to clear all stuck transaction. This means the previous test did not execute properly"
+    current_nonce=$(cast nonce --rpc-url "$rpc_url" "$wallet_address")
+    print_warning "Attemping relacements from $current_nonce to $last_nonce"
+
+    for ((i = current_nonce ; i <= last_nonce ; i++)); do
+        # shellcheck disable=SC2086
+        cast send $legacy_flag --nonce "$i" --gas-price 100gwei --rpc-url "$rpc_url" --private-key "$private_key" --value 1 "$wallet_address"
+    done
 }
 
 function process_test_item() {
@@ -90,10 +122,7 @@ function process_test_item() {
     done
 
     if [[ -e last.nonce ]]; then
-        # Random transaction to make sure all of the async deps are deployed before running the transactions
-        # shellcheck disable=SC2086
-        timeout 30 cast send $legacy_flag --nonce "$(cat last.nonce)" --rpc-url "$rpc_url" --private-key "$private_key" --value 1 "$wallet_address"
-        2>&1 echo "We have finished deploying the dependencies (I think)"
+        clear_pending_txs "$(cat last.nonce)"
         rm last.nonce
     fi
 
@@ -132,13 +161,13 @@ function process_test_item() {
         local to_addr_arg=""
         if [[ $addr == "0x0000000000000000000000000000000000000000" || $addr == "" || $addr == "0000000000000000000000000000000000000000" ]] ; then
             if [[ $tx_input == "" ]]; then
-                2>&1 echo "The test $name case $count seems to have a create with an empty data... skiping"
+                print_warning "The test $name case $count seems to have a create with an empty data... skiping"
                 continue
             fi
             to_addr_arg=" --create "
         else
             if [[ ! -e $addr.actual ]]; then
-                2>&1 "the test file $addr.actual does not seem to exist... skipping"
+                print_warning "the test file $addr.actual does not seem to exist... skipping"
                 continue
             fi
             resolved_address=$(cat "$addr.actual")
@@ -154,16 +183,14 @@ function process_test_item() {
         ret_code=$?
         set +x
         if [[ $ret_code -ne 0 ]]; then
-            2>&1 echo "it looks like this request timed out.. it might be worth checking?!"
+            print_warning "it looks like this request timed out.. it might be worth checking?!"
         fi
         nonce=$((nonce+1))
         echo "$nonce" > last.nonce
     done
 
     if [[ -e last.nonce ]]; then
-        # Random transaction to make sure all of the async deps are deployed before running the transactions
-        # shellcheck disable=SC2086
-        timeout 30 cast send $legacy_flag --nonce "$(cat last.nonce)" --rpc-url "$rpc_url" --private-key "$private_key" --value 1 "$wallet_address"
+        clear_pending_txs "$(cat last.nonce)"
         rm last.nonce
     fi
 

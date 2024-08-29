@@ -286,15 +286,17 @@ func processNumericString(s string) *big.Int {
 	}
 
 	if validBase10.MatchString(s) {
+		// remove the separators that might be in the string like 100_000
+		s = strings.ReplaceAll(s, "_", "")
 		num, fullRead := new(big.Int).SetString(s, 10)
 		if !fullRead {
-			log.Fatal().Str("input", s).Msg("Unable to read the full numeric data")
+			log.Fatal().Str("input", s).Msg("Unable to read the full numeric data in base 10")
 		}
 		return num
 	}
 	num, fullRead := new(big.Int).SetString(s, 16)
 	if !fullRead {
-		log.Fatal().Str("input", s).Msg("Unable to read the full numeric data")
+		log.Fatal().Str("input", s).Msg("Unable to read the full numeric data in base 16")
 	}
 	return num
 }
@@ -704,6 +706,7 @@ var RetestCmd = &cobra.Command{
 			}
 
 			st := make(map[string]any)
+			st["name"] = testName
 			preDeploys := make([]map[string]string, 0)
 			for addr, p := range t.Pre {
 				if input, matched := checkContractMap(p.Code, contractMap); matched {
@@ -757,6 +760,38 @@ var RetestCmd = &cobra.Command{
 				}
 			}
 
+			// There is also a block filed of a test which might have a bunch of transactions.
+			for _, singleBlock := range t.Blocks {
+				for _, singleTx := range singleBlock.Transactions {
+					// my assumption is that the tx within a block won't be multi-valued??
+					tc := make(map[string]any)
+					tc["name"] = testName
+
+					if input, matched := checkContractMap(singleTx.ChainID, contractMap); matched {
+						// as far as I can tell this isn't used yet, but i suppose it should work
+						tc["input"] = input
+					} else {
+						wrappedTxData := WrappedData{raw: singleTx.Data}
+						tc["input"] = wrappedTxData.ToString()
+					}
+
+					wTo := WrappedAddress{raw: singleTx.To}
+					tc["to"] = wTo.ToString()
+					tc["originalTo"] = singleTx.To
+
+					wrappedGas := WrappedNumeric{raw: singleTx.GasLimit}
+					tc["gas"] = wrappedGas.ToString()
+					tc["originalGas"] = singleTx.GasLimit
+
+					wrappedVal := WrappedNumeric{raw: singleTx.Value}
+					tc["value"] = wrappedVal.ToString()
+					tc["originalValue"] = singleTx.Value
+
+					testCases = append(testCases, tc)
+				}
+
+			}
+
 			st["testCases"] = testCases
 
 			simpleTests = append(simpleTests, st)
@@ -777,7 +812,7 @@ func init() {
 	flagSet := RetestCmd.PersistentFlags()
 	inputFileName = flagSet.String("file", "", "Provide a file that's filed with test transaction fillers")
 
-	validBase10 = regexp.MustCompile(`^[0-9]*$`)
+	validBase10 = regexp.MustCompile(`^[0-9_]*$`) // the numbers can be formatted like 100_000
 	dataLabel = regexp.MustCompile(`^:label ([^ ]*) `)
 	typeIndidcator = regexp.MustCompile(`^:([^ ]*) `)
 	abiSpec = regexp.MustCompile(`^([a-zA-Z0-9]*)\((.*)\)(.*)$`)
