@@ -1,9 +1,9 @@
 #!/bin/bash
 # ./scripts/run-retest-with-cast.sh < simple-test-out-new.json 2>&1 | tee -a local-test-aug-28-2.logs
-# find /tmp -type f -newer /tmp/.retest-resume-a01b837809ca1555757ab2edebead6321eaf569c78a54fc81985b84be71eacb0 -name '.retest-resume-*' | xargs rm
+# find /tmp -type f -newer /tmp/.retest-resume-465de2ded091399032b8632153d8a568bad397718d512517993f12d1eb856c64 -name '.retest-resume-*' | xargs rm
 
 private_key="0x12d7de8621a77640c9241b2595ba78ce443d05e94090365ab3bb5e19df82c625"
-rpc_url="http://127.0.0.1:33237"
+rpc_url="http://127.0.0.1:33609"
 
 
 legacy_flag=" --legacy "
@@ -51,7 +51,7 @@ function mark_progress() {
 # (doesn't time out), it means that the test is no longer pending. If
 # it failed, it means that we might need to clear out some pending
 # transactions. If we don't do this, it's very easy for one test to
-# intere with the excution of the next test.
+# interfere with the execution of the next test.
 function clear_pending_txs() {
     local last_nonce
     local current_nonce
@@ -68,10 +68,12 @@ function clear_pending_txs() {
     print_warning "The transaction to clear pending txs is stuck.. attemping to clear all stuck transaction. This means the previous test did not execute properly"
     current_nonce=$(cast nonce --rpc-url "$rpc_url" "$wallet_address")
     print_warning "Attemping relacements from $current_nonce to $last_nonce"
+    gp=$(cast gas-price --rpc-url $rpc_url)
+    gp=$(bc <<< "2 * $gp")
 
     for ((i = current_nonce ; i <= last_nonce ; i++)); do
         # shellcheck disable=SC2086
-        cast send $legacy_flag --nonce "$i" --gas-price 100gwei --rpc-url "$rpc_url" --private-key "$private_key" --value 1 "$wallet_address"
+        cast send $legacy_flag --nonce "$i" --gas-price $gp --rpc-url "$rpc_url" --private-key "$private_key" --value 1 "$wallet_address"
     done
 }
 
