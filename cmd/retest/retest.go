@@ -28,7 +28,7 @@ var (
 
 	validBase10         *regexp.Regexp
 	dataLabel           *regexp.Regexp
-	typeIndidcator      *regexp.Regexp
+	typeIndicator       *regexp.Regexp
 	abiSpec             *regexp.Regexp
 	normalizeWs         *regexp.Regexp
 	solidityCompileInfo *regexp.Regexp
@@ -342,8 +342,8 @@ func processTestDataString(data string) string {
 	if data == "" {
 		return ""
 	}
-	if typeIndidcator.MatchString(data) {
-		rawType := typeIndidcator.FindStringSubmatch(data)[1]
+	if typeIndicator.MatchString(data) {
+		rawType := typeIndicator.FindStringSubmatch(data)[1]
 		switch rawType {
 		case "raw":
 			return processRawStringToString(data)
@@ -607,7 +607,7 @@ func rawArgsToStrings(rawArgs string, params []string) []string {
 
 func preProcessTypedString(data string, preserveSpace bool) string {
 	data = strings.TrimSpace(data)
-	data = typeIndidcator.ReplaceAllString(data, "")
+	data = typeIndicator.ReplaceAllString(data, "")
 	data = strings.TrimPrefix(data, "0x")
 	if !preserveSpace {
 		data = strings.Replace(data, " ", "", -1)
@@ -814,7 +814,7 @@ func init() {
 
 	validBase10 = regexp.MustCompile(`^[0-9_]*$`) // the numbers can be formatted like 100_000
 	dataLabel = regexp.MustCompile(`^:label ([^ ]*) `)
-	typeIndidcator = regexp.MustCompile(`^:([^ ]*) `)
+	typeIndicator = regexp.MustCompile(`^:([^ ]*) `)
 	abiSpec = regexp.MustCompile(`^([a-zA-Z0-9]*)\((.*)\)(.*)$`)
 	normalizeWs = regexp.MustCompile(` +`)
 	solidityCompileInfo = regexp.MustCompile(`^([^\n\r{]*)([\n\r{])`)
