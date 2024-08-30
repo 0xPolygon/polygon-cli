@@ -522,7 +522,7 @@ func processLLLToString(data string) string {
 	cmd := exec.Command("lllc", lllcInput.Name())
 	lllcOut, err := cmd.Output()
 	if err != nil {
-		log.Fatal().Err(err).Str("contract", data).Msg("there was an error running solc/solidity for yul contracts")
+		log.Fatal().Err(err).Stack().Str("contract", data).Msg("there was an error compiling the lll contract")
 	}
 	lines := strings.Split(string(lllcOut), "\n")
 	if len(lines) != 2 {
@@ -640,12 +640,41 @@ func WrapPredeployedCode(pre EthTestPre) string {
 	// 0014: F3              ; RETURN
 	// 0015: CODE..........  ; CODE starts here. That's why the earlier PUSH4 has 15
 	//
+
 	// TODO in the future after the CODECOPY, we should loop over the storage and initialize the slots
 	code := rawCode.ToString()
 	code = strings.TrimPrefix(code, "0x")
 	codeLen := len(code) / 2
+	storageInitCode := storageToByteCode(pre.Storage)
+	codeLen += len(storageInitCode) / 2
 
-	return fmt.Sprintf("0x63%08x630000001560003963%08x6000F3%s", codeLen, codeLen, code)
+	return fmt.Sprintf("0x%s63%08x630000001560003963%08x6000F3%s", storageInitCode, codeLen, codeLen, code)
+}
+
+// storageToByteCode
+func storageToByteCode(storage map[string]EthTestNumeric) string {
+	if len(storage) == 0 {
+		return ""
+	}
+	// We're going to use this data to produce a small smart contract
+	counter := 0
+	contract := "{"
+	for slot, value := range storage {
+		wn := WrappedNumeric{raw: value}
+		if slot == "0x" {
+			// special case that we encountered...
+			// https://github.com/ethereum/tests/blob/fd26aad70e24f042fcd135b2f0338b1c6bf1a324/src/EIPTestsFiller/InvalidRLP/bcForgedTest/bcForkBlockTestFiller.json#L222
+			log.Warn().Str("slot", slot).Msg("found a storage entry for invalid slot")
+			slot = "0"
+		}
+		contract += fmt.Sprintf(" [[%s]] %s", slot, wn.ToString())
+		counter += 1
+	}
+	contract += " }"
+
+	compiledContract := processLLLToString(contract)
+	log.Info().Str("storageInit", contract).Str("compiledContract", compiledContract).Msg("produced code to initialize storage")
+	return compiledContract
 }
 func WrapCode(inputData EthTestData) string {
 	rawCode := WrappedData{raw: inputData}
