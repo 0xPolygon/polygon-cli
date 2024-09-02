@@ -510,7 +510,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		renderedBlocks = renderedBlocksTemp
 
 		log.Debug().Int("skeleton.Current.Inner.Dy()", skeleton.Current.Inner.Dy()).Int("skeleton.Current.Inner.Dx()", skeleton.Current.Inner.Dx()).Msg("the dimension of the current box")
-		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.PendingCount, ms.QueuedCount, ms.ChainID, renderedBlocks, skeleton.Current.Inner.Dx(), skeleton.Current.Inner.Dy())
+		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.PendingCount, ms.QueuedCount, ms.ChainID, rpcUrl, renderedBlocks, skeleton.Current.Inner.Dx(), skeleton.Current.Inner.Dy())
 		skeleton.TxPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
 		skeleton.GasPriceChart.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
 		skeleton.BlockSizeChart.Data = metrics.GetSizePerBlock(renderedBlocks)

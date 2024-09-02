@@ -31,7 +31,7 @@ type UiSkeleton struct {
 	Receipts        *widgets.List
 }
 
-func GetCurrentBlockInfo(headBlock *big.Int, gasPrice *big.Int, peerCount uint64, pendingCount uint64, queuedCount uint64, chainID *big.Int, blocks []rpctypes.PolyBlock, dx int, dy int) string {
+func GetCurrentBlockInfo(headBlock *big.Int, gasPrice *big.Int, peerCount uint64, pendingCount uint64, queuedCount uint64, chainID *big.Int, rpcURL string, blocks []rpctypes.PolyBlock, dx int, dy int) string {
 	// Return an appropriate message if dy is 0 or less.
 	if dy <= 0 {
 		return "Invalid display configuration."
@@ -44,8 +44,9 @@ func GetCurrentBlockInfo(headBlock *big.Int, gasPrice *big.Int, peerCount uint64
 	pendingTx := fmt.Sprintf("Pending Tx: %d", pendingCount)
 	queuedTx := fmt.Sprintf("Queued Tx: %d", queuedCount)
 	chainIdString := fmt.Sprintf("Chain ID: %s", chainID.String())
+	rpcURLString := fmt.Sprintf("RPC URL: %s", rpcURL)
 
-	info := []string{height, timeInfo, gasPriceString, peers, pendingTx, queuedTx, chainIdString}
+	info := []string{height, timeInfo, gasPriceString, peers, pendingTx, queuedTx, chainIdString, rpcURLString}
 	columns := len(info) / dy
 	if len(info)%dy != 0 {
 		columns += 1 // Add an extra column for the remaining items
