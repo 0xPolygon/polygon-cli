@@ -416,6 +416,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 			// in monitorSelectModeTransaction, blocks will always be selected
 			transactionColumnRatio := []int{30, 5, 20, 20, 5, 10}
+			// Sanity check for renderedBlocks table to avoid panic
 			if len(renderedBlocks)-blockTable.SelectedRow < 0 {
 				return
 			} else if len(renderedBlocks) == 0 {
@@ -534,13 +535,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					Int("renderedBlocks", len(renderedBlocks)).
 					Msg("setBlock")
 
-				if len(renderedBlocks)-blockTable.SelectedRow < 0 {
-					return
-				} else if len(renderedBlocks) == 0 {
-					return
-				} else {
-					ms.SelectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
-				}
 				blockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
 				transactionInfo.ColumnWidths = getColumnWidths(transactionColumnRatio, transactionInfo.Dx())
 				transactionInfo.Rows = ui.GetBlockTxTable(ms.SelectedBlock, ms.ChainID)
@@ -736,10 +730,12 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					break
 				}
 
+				// If the length of the renderedBlocks (the visible blocks in the monitor) is less than the windowSize, select the last element of the renderedBlocks
 				if len(renderedBlocks) < windowSize {
 					blockTable.SelectedRow = len(renderedBlocks)
 				}
 
+				// PageDown key also enforces monitorModeSelectBlock in addition to the arrow Down key
 				if blockTable.SelectedRow == 0 {
 					blockTable.SelectedRow = 1
 					setBlock = true
@@ -779,6 +775,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				forceRedraw = true
 				redraw(ms, true)
 			case "<C-b>", "<PageUp>":
+				// PageUp key also enforces monitorModeSelectBlock in addition to the arrow Up key
 				if blockTable.SelectedRow == 0 {
 					blockTable.SelectedRow = 1
 					setBlock = true
