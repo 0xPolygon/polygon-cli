@@ -417,7 +417,6 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			// in monitorSelectModeTransaction, blocks will always be selected
 			transactionColumnRatio := []int{30, 5, 20, 20, 5, 10}
 			if len(renderedBlocks)-blockTable.SelectedRow < 0 {
-				// ms.SelectedBlock = renderedBlocksTemp[len(renderedBlocks)]
 				return
 			} else if len(renderedBlocks) == 0 {
 				return
@@ -536,14 +535,12 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					Msg("setBlock")
 
 				if len(renderedBlocks)-blockTable.SelectedRow < 0 {
-					// ms.SelectedBlock = renderedBlocksTemp[len(renderedBlocks)]
 					return
 				} else if len(renderedBlocks) == 0 {
 					return
 				} else {
 					ms.SelectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
 				}
-				// ms.SelectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
 				blockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
 				transactionInfo.ColumnWidths = getColumnWidths(transactionColumnRatio, transactionInfo.Dx())
 				transactionInfo.Rows = ui.GetBlockTxTable(ms.SelectedBlock, ms.ChainID)
