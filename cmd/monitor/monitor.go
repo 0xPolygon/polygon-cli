@@ -416,7 +416,14 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 			// in monitorSelectModeTransaction, blocks will always be selected
 			transactionColumnRatio := []int{30, 5, 20, 20, 5, 10}
-			ms.SelectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
+			if len(renderedBlocks)-blockTable.SelectedRow < 0 {
+				// ms.SelectedBlock = renderedBlocksTemp[len(renderedBlocks)]
+				return
+			} else if len(renderedBlocks) == 0 {
+				return
+			} else {
+				ms.SelectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
+			}
 			blockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
 			transactionInfo.ColumnWidths = getColumnWidths(transactionColumnRatio, transactionInfo.Dx())
 			transactionInfo.Rows = ui.GetBlockTxTable(ms.SelectedBlock, ms.ChainID)
@@ -528,19 +535,25 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					Int("renderedBlocks", len(renderedBlocks)).
 					Msg("setBlock")
 
-				ms.SelectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
+				if len(renderedBlocks)-blockTable.SelectedRow < 0 {
+					// ms.SelectedBlock = renderedBlocksTemp[len(renderedBlocks)]
+					return
+				} else if len(renderedBlocks) == 0 {
+					return
+				} else {
+					ms.SelectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
+				}
+				// ms.SelectedBlock = renderedBlocks[len(renderedBlocks)-blockTable.SelectedRow]
 				blockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
 				transactionInfo.ColumnWidths = getColumnWidths(transactionColumnRatio, transactionInfo.Dx())
 				transactionInfo.Rows = ui.GetBlockTxTable(ms.SelectedBlock, ms.ChainID)
 				transactionInfo.Title = fmt.Sprintf("Latest Transactions for Block #%s", ms.SelectedBlock.Number().String())
-
 				setBlock = false
 				log.Debug().Uint64("blockNumber", ms.SelectedBlock.Number().Uint64()).Msg("Selected block changed")
 			}
 		} else {
 			ms.SelectedBlock = nil
 			blockInfo.Rows = []string{}
-
 			transactionInfo.ColumnWidths = getColumnWidths(transactionColumnRatio, transactionInfo.Dx())
 			if len(renderedBlocks) > 0 {
 				i := len(renderedBlocks) - 1
@@ -712,13 +725,31 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				setBlock = true
 			case "G", "<End>":
 				if len(renderedBlocks) < windowSize {
-					ms.TopDisplayedBlock = ms.HeadBlock
 					blockTable.SelectedRow = len(renderedBlocks)
 				} else {
 					blockTable.SelectedRow = max(windowSize, len(renderedBlocks))
 				}
 				setBlock = true
 			case "<C-f>", "<PageDown>":
+				// When pressing PageDown beyond the genesis block, redraw the monitor screen to avoid freezing at the previous rendered blocks.
+				if renderedBlocks[0].Number().String() == "0" || renderedBlocks[0].Number().String() == "1" {
+					blockTable.SelectedRow = len(renderedBlocks)
+					forceRedraw = true
+					redraw(ms, true)
+					break
+				}
+
+				if len(renderedBlocks) < windowSize {
+					blockTable.SelectedRow = len(renderedBlocks)
+				}
+
+				if blockTable.SelectedRow == 0 {
+					blockTable.SelectedRow = 1
+					setBlock = true
+					currentMode = monitorModeSelectBlock
+					break
+				}
+
 				nextTopBlockNumber := new(big.Int).Sub(ms.TopDisplayedBlock, big.NewInt(int64(windowSize)))
 				if nextTopBlockNumber.Cmp(zero) < 0 {
 					nextTopBlockNumber.SetInt64(0)
@@ -751,6 +782,13 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				forceRedraw = true
 				redraw(ms, true)
 			case "<C-b>", "<PageUp>":
+				if blockTable.SelectedRow == 0 {
+					blockTable.SelectedRow = 1
+					setBlock = true
+					currentMode = monitorModeSelectBlock
+					break
+				}
+
 				nextTopBlockNumber := new(big.Int).Add(ms.TopDisplayedBlock, big.NewInt(int64(windowSize)))
 				if nextTopBlockNumber.Cmp(ms.HeadBlock) > 0 {
 					nextTopBlockNumber.SetInt64(ms.HeadBlock.Int64())
