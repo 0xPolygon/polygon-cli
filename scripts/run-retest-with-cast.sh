@@ -3,7 +3,7 @@
 # find /tmp -type f -newer /tmp/.retest-resume-465de2ded091399032b8632153d8a568bad397718d512517993f12d1eb856c64 -name '.retest-resume-*' | xargs rm
 
 private_key="0x12d7de8621a77640c9241b2595ba78ce443d05e94090365ab3bb5e19df82c625"
-rpc_url="http://127.0.0.1:33609"
+rpc_url="http://127.0.0.1:33686"
 
 
 legacy_flag=" --legacy "
@@ -11,7 +11,7 @@ clean_up="true"
 gas_limit=1000000
 
 function print_warning() {
-    2>&1 echo -e "\e[32m$1\e[0m"
+    2>&1 echo -e "\e[41m\e[97m$1\e[0m"
 }
 
 function normalize_address() {
@@ -62,7 +62,7 @@ function clear_pending_txs() {
     ret_code=$?
 
     if [[ $ret_code -eq 0 ]]; then
-        return
+        return 0
     fi
 
     print_warning "The transaction to clear pending txs is stuck.. attemping to clear all stuck transaction. This means the previous test did not execute properly"
@@ -75,6 +75,8 @@ function clear_pending_txs() {
         # shellcheck disable=SC2086
         cast send $legacy_flag --nonce "$i" --gas-price $gp --rpc-url "$rpc_url" --private-key "$private_key" --value 1 "$wallet_address"
     done
+
+    return 1
 }
 
 function process_test_item() {
@@ -193,6 +195,11 @@ function process_test_item() {
 
     if [[ -e last.nonce ]]; then
         clear_pending_txs "$(cat last.nonce)"
+        ret_code=$?
+
+        if [[ $ret_code -ne 0 ]]; then
+            print_warning "Some number of test transactions were replaced due to pool failures. Please review test number $test_counter named $test_name in $testfile"
+        fi
         rm last.nonce
     fi
 
