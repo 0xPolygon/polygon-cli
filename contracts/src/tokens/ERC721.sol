@@ -7,7 +7,7 @@ contract ERC721 is OZ_ERC721 {
     uint256 public currentTokenId = 0;
 
     constructor() OZ_ERC721("MyNFT", "MNFT") {
-        mintBatch(msg.sender, 100);
+        mintBatch(msg.sender, 10);
     }
 
     function mintBatch(address to, uint256 amount) public {
