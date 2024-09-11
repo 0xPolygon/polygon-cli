@@ -894,13 +894,17 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 	if bn <= cachedBlockNumber {
 		return cachedGasPrice, cachedGasTipCap
 	}
-	gp, pErr := c.SuggestGasPrice(ctx)
-	gt, tErr := c.SuggestGasTipCap(ctx)
-
 	// In the case of an EVM compatible system not supporting EIP-1559
+	var gt *big.Int
+	var tErr error
 	if *inputLoadTestParams.LegacyTransactionMode {
 		gt = big.NewInt(0)
+		tErr = nil
+	} else {
+		gt, tErr = c.SuggestGasTipCap(ctx)
 	}
+
+	gp, pErr := c.SuggestGasPrice(ctx)
 
 	if pErr == nil && (tErr == nil || !isDynamic) {
 		cachedBlockNumber = bn
