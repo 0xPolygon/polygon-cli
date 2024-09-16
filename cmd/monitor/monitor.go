@@ -57,27 +57,35 @@ var (
 
 type (
 	monitorStatus struct {
-		TopDisplayedBlock   *big.Int
-		UpperBlock          *big.Int
-		LowerBlock          *big.Int
-		ChainID             *big.Int
-		HeadBlock           *big.Int
-		PeerCount           uint64
-		GasPrice            *big.Int
-		PendingCount        uint64
-		QueuedCount         uint64
-		SelectedBlock       rpctypes.PolyBlock
-		SelectedTransaction rpctypes.PolyTransaction
-		BlockCache          *lru.Cache   `json:"-"`
-		BlocksLock          sync.RWMutex `json:"-"`
+		TopDisplayedBlock    *big.Int
+		UpperBlock           *big.Int
+		LowerBlock           *big.Int
+		ChainID              *big.Int
+		HeadBlock            *big.Int
+		PeerCount            uint64
+		GasPrice             *big.Int
+		TxPendingCount       uint64
+		TxQueuedCount        uint64
+		IsZkevmNetwork       bool
+		TrustedBatchesCount  uint64
+		VirtualBatchesCount  uint64
+		VerifiedBatchesCount uint64
+		SelectedBlock        rpctypes.PolyBlock
+		SelectedTransaction  rpctypes.PolyTransaction
+		BlockCache           *lru.Cache   `json:"-"`
+		BlocksLock           sync.RWMutex `json:"-"`
 	}
 	chainState struct {
-		HeadBlock    uint64
-		ChainID      *big.Int
-		PeerCount    uint64
-		GasPrice     *big.Int
-		PendingCount uint64
-		QueuedCount  uint64
+		HeadBlock            uint64
+		ChainID              *big.Int
+		PeerCount            uint64
+		GasPrice             *big.Int
+		TxPendingCount       uint64
+		TxQueuedCount        uint64
+		IsZkevmNetwork       bool
+		TrustedBatchesCount  uint64
+		VirtualBatchesCount  uint64
+		VerifiedBatchesCount uint64
 	}
 	historicalDataPoint struct {
 		SampleTime  time.Time
@@ -121,8 +129,12 @@ func monitor(ctx context.Context) error {
 	ms.BlocksLock.Unlock()
 
 	ms.ChainID = big.NewInt(0)
-	ms.PendingCount = 0
-	ms.QueuedCount = 0
+	ms.TxPendingCount = 0
+	ms.TxQueuedCount = 0
+	ms.IsZkevmNetwork = false
+	ms.TrustedBatchesCount = 0
+	ms.VerifiedBatchesCount = 0
+	ms.VerifiedBatchesCount = 0
 
 	observedPendingTxs = make(historicalRange, 0)
 
@@ -186,9 +198,16 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 		return nil, fmt.Errorf("couldn't estimate gas: %s", err.Error())
 	}
 
-	cs.PendingCount, cs.QueuedCount, err = util.GetTxPoolStatus(ec.Client())
+	cs.TxPendingCount, cs.TxQueuedCount, err = util.GetTxPoolStatus(ec.Client())
 	if err != nil {
 		log.Debug().Err(err).Msg("Unable to get pending and queued transaction count")
+	}
+
+	cs.TrustedBatchesCount, cs.VirtualBatchesCount, cs.VerifiedBatchesCount, err = util.GetBatchesStatus(ec.Client())
+	if err != nil {
+		log.Debug().Err(err).Msg("Unable to get trusted batches count")
+	} else {
+		cs.IsZkevmNetwork = true	
 	}
 
 	return cs, nil
@@ -214,7 +233,7 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 		time.Sleep(interval)
 		return err
 	}
-	observedPendingTxs = append(observedPendingTxs, historicalDataPoint{SampleTime: time.Now(), SampleValue: float64(cs.PendingCount)})
+	observedPendingTxs = append(observedPendingTxs, historicalDataPoint{SampleTime: time.Now(), SampleValue: float64(cs.TxPendingCount)})
 	if len(observedPendingTxs) > maxDataPoints {
 		observedPendingTxs = observedPendingTxs[len(observedPendingTxs)-maxDataPoints:]
 	}
@@ -231,8 +250,12 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 	ms.ChainID = cs.ChainID
 	ms.PeerCount = cs.PeerCount
 	ms.GasPrice = cs.GasPrice
-	ms.PendingCount = cs.PendingCount
-	ms.QueuedCount = cs.QueuedCount
+	ms.TxPendingCount = cs.TxPendingCount
+	ms.TxQueuedCount = cs.TxQueuedCount
+	ms.IsZkevmNetwork = cs.IsZkevmNetwork
+	ms.TrustedBatchesCount = cs.TrustedBatchesCount
+	ms.VirtualBatchesCount = cs.VirtualBatchesCount
+	ms.VerifiedBatchesCount = cs.VerifiedBatchesCount
 
 	return
 }
@@ -476,8 +499,8 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			Str("HeadBlock", ms.HeadBlock.String()).
 			Uint64("PeerCount", ms.PeerCount).
 			Str("GasPrice", ms.GasPrice.String()).
-			Uint64("PendingCount", ms.PendingCount).
-			Uint64("QueuedCount", ms.QueuedCount).
+			Uint64("PendingCount", ms.TxPendingCount).
+			Uint64("QueuedCount", ms.TxQueuedCount).
 			Msg("Redrawing")
 
 		if blockTable.SelectedRow == 0 {
@@ -509,8 +532,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		ms.BlocksLock.RUnlock()
 		renderedBlocks = renderedBlocksTemp
 
-		log.Debug().Int("skeleton.Current.Inner.Dy()", skeleton.Current.Inner.Dy()).Int("skeleton.Current.Inner.Dx()", skeleton.Current.Inner.Dx()).Msg("the dimension of the current box")
-		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.PendingCount, ms.QueuedCount, ms.ChainID, rpcUrl, renderedBlocks, skeleton.Current.Inner.Dx(), skeleton.Current.Inner.Dy())
+		currentWidgetHeight := skeleton.Current.Inner.Dx()
+		currentWidgetWidth := skeleton.Current.Inner.Dy()
+		log.Debug().Int("currentWidgetHeight", currentWidgetHeight).Int("currentWidgetWidth", currentWidgetWidth).Msg("The dimension of the current widget")
+		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.TxPendingCount, ms.TxQueuedCount, ms.ChainID, rpcUrl, ms.IsZkevmNetwork, ms.TrustedBatchesCount, ms.VirtualBatchesCount, ms.VerifiedBatchesCount, currentWidgetHeight, currentWidgetWidth)
 		skeleton.TxPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
 		skeleton.GasPriceChart.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
 		skeleton.BlockSizeChart.Data = metrics.GetSizePerBlock(renderedBlocks)

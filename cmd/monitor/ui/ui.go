@@ -31,22 +31,39 @@ type UiSkeleton struct {
 	Receipts        *widgets.List
 }
 
-func GetCurrentBlockInfo(headBlock *big.Int, gasPrice *big.Int, peerCount uint64, pendingCount uint64, queuedCount uint64, chainID *big.Int, rpcURL string, blocks []rpctypes.PolyBlock, dx int, dy int) string {
+func GetCurrentBlockInfo(headBlock, gasPrice *big.Int, peerCount, pendingTxCount, queuedTxCount uint64, chainID *big.Int, rpcURL string, isZkevmNetwork bool, trustedBatchesCount, virtualBatchesCount, verifiedBatchesCount uint64, dx int, dy int) string {
 	// Return an appropriate message if dy is 0 or less.
 	if dy <= 0 {
 		return "Invalid display configuration."
 	}
 
+	// First column
 	height := fmt.Sprintf("Height: %s", headBlock.String())
 	timeInfo := fmt.Sprintf("Time: %s", time.Now().Format("02 Jan 06 15:04:05 MST"))
 	gasPriceString := fmt.Sprintf("Gas Price: %s gwei", new(big.Int).Div(gasPrice, metrics.UnitShannon).String())
 	peers := fmt.Sprintf("Peers: %d", peerCount)
-	pendingTx := fmt.Sprintf("Pending Tx: %d", pendingCount)
-	queuedTx := fmt.Sprintf("Queued Tx: %d", queuedCount)
+
+	// Second column
+	pendingTx := fmt.Sprintf("Pending Tx: %d", pendingTxCount)
+	queuedTx := fmt.Sprintf("Queued Tx: %d", queuedTxCount)
 	chainIdString := fmt.Sprintf("Chain ID: %s", chainID.String())
 	rpcURLString := fmt.Sprintf("RPC URL: %s", rpcURL)
 
 	info := []string{height, timeInfo, gasPriceString, peers, pendingTx, queuedTx, chainIdString, rpcURLString}
+
+	// Third column (optional)
+	if isZkevmNetwork {
+		trustedBatches := fmt.Sprintf("Trusted Batches: %d", trustedBatchesCount)
+
+		trustedVirtualBatchesGap := trustedBatchesCount-virtualBatchesCount
+		virtualBatches := fmt.Sprintf("Trusted - Virtual Batches Gap: %d", trustedVirtualBatchesGap)
+
+		trustedVerifiedBatchesGap := trustedBatchesCount-verifiedBatchesCount
+		verifiedBatches := fmt.Sprintf("Trusted - Verified Batches Gap: %d", trustedVerifiedBatchesGap)
+
+		info = append(info, trustedBatches, virtualBatches, verifiedBatches)
+	}
+	
 	columns := len(info) / dy
 	if len(info)%dy != 0 {
 		columns += 1 // Add an extra column for the remaining items
