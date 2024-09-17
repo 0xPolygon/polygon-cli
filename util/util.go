@@ -204,7 +204,7 @@ func GetTxPoolStatus(rpc *ethrpc.Client) (uint64, uint64, error) {
 	return pendingCount, queuedCount, nil
 }
 
-func GetZkEVMBatchesStatus(rpc *ethrpc.Client) (uint64, uint64, uint64, error) {
+func GetZkEVMBatches(rpc *ethrpc.Client) (uint64, uint64, uint64, error) {
 	trustedBatches, err := getZkEVMBatch(rpc, trusted)
 	if err != nil {
 		return 0, 0, 0, err

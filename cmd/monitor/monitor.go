@@ -64,8 +64,7 @@ type (
 		HeadBlock           *big.Int
 		PeerCount           uint64
 		GasPrice            *big.Int
-		TxPendingCount      uint64
-		TxQueuedCount       uint64
+		TxPoolStatus        txPoolStatus
 		IsZkevmNetwork      bool
 		ZkEVMBatches        zkEVMBatches
 		SelectedBlock       rpctypes.PolyBlock
@@ -78,10 +77,13 @@ type (
 		ChainID        *big.Int
 		PeerCount      uint64
 		GasPrice       *big.Int
-		TxPendingCount uint64
-		TxQueuedCount  uint64
+		TxPoolStatus   txPoolStatus
 		IsZkevmNetwork bool
 		ZkEVMBatches   zkEVMBatches
+	}
+	txPoolStatus struct {
+		pending uint64
+		queued  uint64
 	}
 	zkEVMBatches struct {
 		trusted  uint64
@@ -130,8 +132,10 @@ func monitor(ctx context.Context) error {
 	ms.BlocksLock.Unlock()
 
 	ms.ChainID = big.NewInt(0)
-	ms.TxPendingCount = 0
-	ms.TxQueuedCount = 0
+	ms.TxPoolStatus = txPoolStatus{
+		pending: 0,
+		queued: 0,
+	}
 	ms.IsZkevmNetwork = false
 	ms.ZkEVMBatches = zkEVMBatches{
 		trusted:  0,
@@ -201,12 +205,12 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 		return nil, fmt.Errorf("couldn't estimate gas: %s", err.Error())
 	}
 
-	cs.TxPendingCount, cs.TxQueuedCount, err = util.GetTxPoolStatus(ec.Client())
+	cs.TxPoolStatus.pending, cs.TxPoolStatus.queued, err = util.GetTxPoolStatus(ec.Client())
 	if err != nil {
 		log.Debug().Err(err).Msg("Unable to get pending and queued transaction count")
 	}
 
-	cs.ZkEVMBatches.trusted, cs.ZkEVMBatches.virtual, cs.ZkEVMBatches.verified, err = util.GetZkEVMBatchesStatus(ec.Client())
+	cs.ZkEVMBatches.trusted, cs.ZkEVMBatches.virtual, cs.ZkEVMBatches.verified, err = util.GetZkEVMBatches(ec.Client())
 	if err != nil {
 		log.Debug().Err(err).Msg("Unable to get zkevm batches count")
 	} else {
@@ -236,7 +240,7 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 		time.Sleep(interval)
 		return err
 	}
-	observedPendingTxs = append(observedPendingTxs, historicalDataPoint{SampleTime: time.Now(), SampleValue: float64(cs.TxPendingCount)})
+	observedPendingTxs = append(observedPendingTxs, historicalDataPoint{SampleTime: time.Now(), SampleValue: float64(cs.TxPoolStatus.pending)})
 	if len(observedPendingTxs) > maxDataPoints {
 		observedPendingTxs = observedPendingTxs[len(observedPendingTxs)-maxDataPoints:]
 	}
@@ -253,8 +257,7 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 	ms.ChainID = cs.ChainID
 	ms.PeerCount = cs.PeerCount
 	ms.GasPrice = cs.GasPrice
-	ms.TxPendingCount = cs.TxPendingCount
-	ms.TxQueuedCount = cs.TxQueuedCount
+	ms.TxPoolStatus = cs.TxPoolStatus
 	ms.IsZkevmNetwork = cs.IsZkevmNetwork
 	ms.ZkEVMBatches = cs.ZkEVMBatches
 
@@ -500,8 +503,8 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			Str("HeadBlock", ms.HeadBlock.String()).
 			Uint64("PeerCount", ms.PeerCount).
 			Str("GasPrice", ms.GasPrice.String()).
-			Uint64("PendingCount", ms.TxPendingCount).
-			Uint64("QueuedCount", ms.TxQueuedCount).
+			Interface("TxPoolStatus", ms.TxPoolStatus).
+			Interface("ZkEVMBatches", ms.ZkEVMBatches).
 			Msg("Redrawing")
 
 		if blockTable.SelectedRow == 0 {
@@ -536,7 +539,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		currentWidgetHeight := skeleton.Current.Inner.Dx()
 		currentWidgetWidth := skeleton.Current.Inner.Dy()
 		log.Debug().Int("currentWidgetHeight", currentWidgetHeight).Int("currentWidgetWidth", currentWidgetWidth).Msg("The dimension of the current widget")
-		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.TxPendingCount, ms.TxQueuedCount, ms.ChainID, rpcUrl, ms.IsZkevmNetwork, ms.ZkEVMBatches.trusted, ms.ZkEVMBatches.virtual, ms.ZkEVMBatches.verified, currentWidgetHeight, currentWidgetWidth)
+		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.TxPoolStatus.pending, ms.TxPoolStatus.queued, ms.ChainID, rpcUrl, ms.IsZkevmNetwork, ms.ZkEVMBatches.trusted, ms.ZkEVMBatches.virtual, ms.ZkEVMBatches.verified, currentWidgetHeight, currentWidgetWidth)
 		skeleton.TxPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
 		skeleton.GasPriceChart.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
 		skeleton.BlockSizeChart.Data = metrics.GetSizePerBlock(renderedBlocks)
