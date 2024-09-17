@@ -205,7 +205,7 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 
 	cs.TrustedBatchesCount, cs.VirtualBatchesCount, cs.VerifiedBatchesCount, err = util.GetBatchesStatus(ec.Client())
 	if err != nil {
-		log.Debug().Err(err).Msg("Unable to get trusted batches count")
+		log.Debug().Err(err).Msg("Unable to get zkevm batches count")
 	} else {
 		cs.IsZkevmNetwork = true	
 	}
