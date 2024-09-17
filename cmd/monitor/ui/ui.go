@@ -53,13 +53,13 @@ func GetCurrentBlockInfo(headBlock, gasPrice *big.Int, peerCount, pendingTxCount
 
 	// Third column (optional)
 	if isZkevmNetwork {
-		trustedBatches := fmt.Sprintf("Trusted Batches: %d", trustedBatchesCount)
+		trustedBatches := fmt.Sprintf("Trusted  Batch No. %d", trustedBatchesCount)
 
 		trustedVirtualBatchesGap := trustedBatchesCount-virtualBatchesCount
-		virtualBatches := fmt.Sprintf("Trusted - Virtual Batches Gap: %d", trustedVirtualBatchesGap)
+		virtualBatches := fmt.Sprintf("Virtual  Batch No. %d (%d)", virtualBatchesCount, trustedVirtualBatchesGap)
 
 		trustedVerifiedBatchesGap := trustedBatchesCount-verifiedBatchesCount
-		verifiedBatches := fmt.Sprintf("Trusted - Verified Batches Gap: %d", trustedVerifiedBatchesGap)
+		verifiedBatches := fmt.Sprintf("Verified Batch No. %d (%d)", verifiedBatchesCount, trustedVerifiedBatchesGap)
 
 		info = append(info, trustedBatches, virtualBatches, verifiedBatches)
 	}
