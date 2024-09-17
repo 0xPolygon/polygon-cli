@@ -120,7 +120,7 @@ func monitor(ctx context.Context) error {
 		return errBatchRequestsNotSupported
 	}
 
-	// Check if tx pool is supported.
+	// Check if tx pool status is supported.
 	txPoolStatusSupported := false
 	if _, _, err = util.GetTxPoolStatus(rpc); err != nil {
 		log.Debug().Err(err).Msg("Unable to get tx pool status")
@@ -146,15 +146,8 @@ func monitor(ctx context.Context) error {
 	ms.BlocksLock.Unlock()
 
 	ms.ChainID = big.NewInt(0)
-	ms.TxPoolStatus = txPoolStatus{
-		pending: 0,
-		queued:  0,
-	}
-	ms.ZkEVMBatches = zkEVMBatches{
-		trusted:  0,
-		virtual:  0,
-		verified: 0,
-	}
+	ms.TxPoolStatus = txPoolStatus{}
+	ms.ZkEVMBatches = zkEVMBatches{}
 
 	observedPendingTxs = make(historicalRange, 0)
 
