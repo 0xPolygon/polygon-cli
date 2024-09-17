@@ -122,7 +122,7 @@ func monitor(ctx context.Context) error {
 
 	// Check if tx pool is supported.
 	txPoolStatusSupported := false
-	if _, _, err := util.GetTxPoolStatus(rpc); err != nil {
+	if _, _, err = util.GetTxPoolStatus(rpc); err != nil {
 		log.Debug().Err(err).Msg("Unable to get tx pool status")
 	} else {
 		txPoolStatusSupported = true
@@ -130,7 +130,7 @@ func monitor(ctx context.Context) error {
 
 	// Check if zkevm batches are supported.
 	zkEVMBatchesSupported := false
-	if _, _, _, err := util.GetZkEVMBatches(rpc); err != nil {
+	if _, _, _, err = util.GetZkEVMBatches(rpc); err != nil {
 		log.Debug().Err(err).Msg("Unable to get zkevm batches")
 	} else {
 		zkEVMBatchesSupported = true
