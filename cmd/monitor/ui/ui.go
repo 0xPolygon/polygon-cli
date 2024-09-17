@@ -52,12 +52,12 @@ func GetTxPoolText(widget *widgets.Paragraph, pendingTxCount, queuedTxCount uint
 }
 
 func GetZkEVMText(widget *widgets.Paragraph, trustedBatchesCount, virtualBatchesCount, verifiedBatchesCount uint64) string {
-	trustedBatches := fmt.Sprintf("Trusted  Batch No. %d", trustedBatchesCount)
+	trustedBatches := fmt.Sprintf("Trusted:  %d", trustedBatchesCount)
 	trustedVirtualBatchesGap := trustedBatchesCount - virtualBatchesCount
-	virtualBatches := fmt.Sprintf("Virtual  Batch No. %d (%d)", virtualBatchesCount, trustedVirtualBatchesGap)
+	virtualBatches := fmt.Sprintf("Virtual:  %d (%d)", virtualBatchesCount, trustedVirtualBatchesGap)
 
 	trustedVerifiedBatchesGap := trustedBatchesCount - verifiedBatchesCount
-	verifiedBatches := fmt.Sprintf("Verified Batch No. %d (%d)", verifiedBatchesCount, trustedVerifiedBatchesGap)
+	verifiedBatches := fmt.Sprintf("Verified: %d (%d)", verifiedBatchesCount, trustedVerifiedBatchesGap)
 	return formatParagraph(widget, []string{trustedBatches, virtualBatches, verifiedBatches})
 }
 
@@ -506,7 +506,7 @@ func SetUISkeleton(txPoolStatusSupported, zkEVMBatchesSupported bool) (blockList
 
 	if zkEVMBatchesSupported {
 		termUi.ZkEVM = widgets.NewParagraph()
-		termUi.ZkEVM.Title = "ZkEVM"
+		termUi.ZkEVM.Title = "ZkEVM Batch No."
 		totalWidgets++
 	}
 
