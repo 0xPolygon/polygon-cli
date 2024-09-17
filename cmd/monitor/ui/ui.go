@@ -20,23 +20,18 @@ import (
 )
 
 type UiSkeleton struct {
-	Current         *widgets.Paragraph
-	TxPerBlockChart *widgets.Sparkline
-	GasPriceChart   *widgets.Sparkline
-	BlockSizeChart  *widgets.Sparkline
-	PendingTxChart  *widgets.Sparkline
-	GasChart        *widgets.Sparkline
-	BlockInfo       *widgets.List
-	TxInfo          *widgets.List
-	Receipts        *widgets.List
+	Current, TxPool, ZkEVM *widgets.Paragraph
+	TxPerBlockChart        *widgets.Sparkline
+	GasPriceChart          *widgets.Sparkline
+	BlockSizeChart         *widgets.Sparkline
+	PendingTxChart         *widgets.Sparkline
+	GasChart               *widgets.Sparkline
+	BlockInfo              *widgets.List
+	TxInfo                 *widgets.List
+	Receipts               *widgets.List
 }
 
-func GetCurrentBlockInfo(headBlock, gasPrice *big.Int, peerCount, pendingTxCount, queuedTxCount uint64, chainID *big.Int, rpcURL string, isZkevmNetwork bool, trustedBatchesCount, virtualBatchesCount, verifiedBatchesCount uint64, dx int, dy int) string {
-	// Return an appropriate message if dy is 0 or less.
-	if dy <= 0 {
-		return "Invalid display configuration."
-	}
-
+func GetCurrentText(widget *widgets.Paragraph, headBlock, gasPrice *big.Int, peerCount uint64, chainID *big.Int, rpcURL string) string {
 	// First column
 	height := fmt.Sprintf("Height: %s", headBlock.String())
 	timeInfo := fmt.Sprintf("Time: %s", time.Now().Format("02 Jan 06 15:04:05 MST"))
@@ -44,28 +39,39 @@ func GetCurrentBlockInfo(headBlock, gasPrice *big.Int, peerCount, pendingTxCount
 	peers := fmt.Sprintf("Peers: %d", peerCount)
 
 	// Second column
+	rpcURLString := fmt.Sprintf("RPC URL: %s", rpcURL)
+	chainIdString := fmt.Sprintf("Chain ID: %s", chainID.String())
+
+	return formatParagraph(widget, []string{height, timeInfo, gasPriceString, peers, chainIdString, rpcURLString})
+}
+
+func GetTxPoolText(widget *widgets.Paragraph, pendingTxCount, queuedTxCount uint64) string {
 	pendingTx := fmt.Sprintf("Pending Tx: %d", pendingTxCount)
 	queuedTx := fmt.Sprintf("Queued Tx: %d", queuedTxCount)
-	chainIdString := fmt.Sprintf("Chain ID: %s", chainID.String())
-	rpcURLString := fmt.Sprintf("RPC URL: %s", rpcURL)
+	return formatParagraph(widget, []string{pendingTx, queuedTx})
+}
 
-	info := []string{height, timeInfo, gasPriceString, peers, pendingTx, queuedTx, chainIdString, rpcURLString}
+func GetZkEVMText(widget *widgets.Paragraph, trustedBatchesCount, virtualBatchesCount, verifiedBatchesCount uint64) string {
+	trustedBatches := fmt.Sprintf("Trusted  Batch No. %d", trustedBatchesCount)
+	trustedVirtualBatchesGap := trustedBatchesCount - virtualBatchesCount
+	virtualBatches := fmt.Sprintf("Virtual  Batch No. %d (%d)", virtualBatchesCount, trustedVirtualBatchesGap)
 
-	// Third column (optional)
-	if isZkevmNetwork {
-		trustedBatches := fmt.Sprintf("Trusted  Batch No. %d", trustedBatchesCount)
+	trustedVerifiedBatchesGap := trustedBatchesCount - verifiedBatchesCount
+	verifiedBatches := fmt.Sprintf("Verified Batch No. %d (%d)", verifiedBatchesCount, trustedVerifiedBatchesGap)
+	return formatParagraph(widget, []string{trustedBatches, virtualBatches, verifiedBatches})
+}
 
-		trustedVirtualBatchesGap := trustedBatchesCount - virtualBatchesCount
-		virtualBatches := fmt.Sprintf("Virtual  Batch No. %d (%d)", virtualBatchesCount, trustedVirtualBatchesGap)
+func formatParagraph(widget *widgets.Paragraph, content []string) string {
+	dx := widget.Inner.Dx()
+	dy := widget.Inner.Dy()
 
-		trustedVerifiedBatchesGap := trustedBatchesCount - verifiedBatchesCount
-		verifiedBatches := fmt.Sprintf("Verified Batch No. %d (%d)", verifiedBatchesCount, trustedVerifiedBatchesGap)
-
-		info = append(info, trustedBatches, virtualBatches, verifiedBatches)
+	// Return an appropriate message if dy is 0 or less.
+	if dy <= 0 {
+		return "Invalid display configuration."
 	}
 
-	columns := len(info) / dy
-	if len(info)%dy != 0 {
+	columns := len(content) / dy
+	if len(content)%dy != 0 {
 		columns += 1 // Add an extra column for the remaining items
 	}
 
@@ -74,8 +80,8 @@ func GetCurrentBlockInfo(headBlock, gasPrice *big.Int, peerCount, pendingTxCount
 	for i := 0; i < columns; i++ {
 		for j := 0; j < dy; j++ {
 			index := i*dy + j
-			if index < len(info) && len(info[index]) > columnWidths[i] {
-				columnWidths[i] = len(info[index])
+			if index < len(content) && len(content[index]) > columnWidths[i] {
+				columnWidths[i] = len(content[index])
 			}
 		}
 		// Add padding and ensure it doesn't exceed 'dx'
@@ -89,9 +95,9 @@ func GetCurrentBlockInfo(headBlock, gasPrice *big.Int, peerCount, pendingTxCount
 	for i := 0; i < dy; i++ {
 		for j := 0; j < columns; j++ {
 			index := j*dy + i
-			if index < len(info) {
+			if index < len(content) {
 				formatString := fmt.Sprintf("%%-%ds", columnWidths[j])
-				formattedInfo.WriteString(fmt.Sprintf(formatString, info[index]))
+				formattedInfo.WriteString(fmt.Sprintf(formatString, content[index]))
 			}
 		}
 		formattedInfo.WriteString("\n")
@@ -466,7 +472,7 @@ func GetSimpleReceipt(ctx context.Context, rpc *ethrpc.Client, tx rpctypes.PolyT
 	return fields
 }
 
-func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transactionList *widgets.List, transactionInformationList *widgets.List, transactionInfo *widgets.Table, grid *ui.Grid, selectGrid *ui.Grid, blockGrid *ui.Grid, transactionGrid *ui.Grid, termUi UiSkeleton) {
+func SetUISkeleton(txPoolStatusSupported, zkEVMBatchesSupported bool) (blockList *widgets.List, blockInfo *widgets.List, transactionList *widgets.List, transactionInformationList *widgets.List, transactionInfo *widgets.Table, grid *ui.Grid, selectGrid *ui.Grid, blockGrid *ui.Grid, transactionGrid *ui.Grid, termUi UiSkeleton) {
 	// help := widgets.NewParagraph()
 	// help.Title = "Block Headers"
 	// help.Text = "Use the arrow keys to scroll through the transactions. Press <Esc> to go back to the explorer view"
@@ -487,8 +493,32 @@ func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 
 	termUi = UiSkeleton{}
 
+	// Top row
 	termUi.Current = widgets.NewParagraph()
 	termUi.Current.Title = "Current"
+	totalWidgets := 1
+
+	if txPoolStatusSupported {
+		termUi.TxPool = widgets.NewParagraph()
+		termUi.TxPool.Title = "TxPool"
+		totalWidgets++
+	}
+
+	if zkEVMBatchesSupported {
+		termUi.ZkEVM = widgets.NewParagraph()
+		termUi.ZkEVM.Title = "ZkEVM"
+		totalWidgets++
+	}
+
+	topRowBlocks := []interface{}{
+		ui.NewCol((5.0-float64(totalWidgets-1))/5.0, termUi.Current),
+	}
+	if txPoolStatusSupported {
+		topRowBlocks = append(topRowBlocks, ui.NewCol(1.0/5.0, termUi.TxPool))
+	}
+	if zkEVMBatchesSupported {
+		topRowBlocks = append(topRowBlocks, ui.NewCol(1.0/5.0, termUi.ZkEVM))
+	}
 
 	termUi.TxPerBlockChart = widgets.NewSparkline()
 	termUi.TxPerBlockChart.LineColor = ui.ColorRed
@@ -555,7 +585,7 @@ func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 	termUi.Receipts.WrapText = true
 
 	grid.Set(
-		ui.NewRow(1.0/10, termUi.Current),
+		ui.NewRow(1.0/10, topRowBlocks...),
 
 		ui.NewRow(2.0/10,
 			ui.NewCol(1.0/5, slg0),
@@ -575,7 +605,7 @@ func SetUISkeleton() (blockList *widgets.List, blockInfo *widgets.List, transact
 	)
 
 	selectGrid.Set(
-		ui.NewRow(1.0/10, termUi.Current),
+		ui.NewRow(1.0/10, topRowBlocks...),
 
 		ui.NewRow(2.0/10,
 			ui.NewCol(1.0/5, slg0),
