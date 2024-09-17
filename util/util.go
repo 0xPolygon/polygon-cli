@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -201,6 +202,45 @@ func GetTxPoolStatus(rpc *ethrpc.Client) (uint64, uint64, error) {
 	}
 
 	return pendingCount, queuedCount, nil
+}
+
+func GetZkEVMBatches(rpc *ethrpc.Client) (uint64, uint64, uint64, error) {
+	trustedBatches, err := getZkEVMBatch(rpc, trusted)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	virtualBatches, err := getZkEVMBatch(rpc, virtual)
+	if err != nil {
+		return trustedBatches, 0, 0, err
+	}
+
+	verifiedBatches, err := getZkEVMBatch(rpc, verified)
+	if err != nil {
+		return trustedBatches, virtualBatches, 0, err
+	}
+
+	return trustedBatches, virtualBatches, verifiedBatches, nil
+}
+
+type batch string
+
+const (
+	trusted  batch = "zkevm_batchNumber"
+	virtual  batch = "zkevm_virtualBatchNumber"
+	verified batch = "zkevm_verifiedBatchNumber"
+)
+
+func getZkEVMBatch(rpc *ethrpc.Client, batchType batch) (uint64, error) {
+	var raw interface{}
+	if err := rpc.Call(&raw, string(batchType)); err != nil {
+		return 0, err
+	}
+	batch, err := hexutil.DecodeUint64(fmt.Sprintf("%v", raw))
+	if err != nil {
+		return 0, err
+	}
+	return batch, nil
 }
 
 func tryCastToUint64(val any) (uint64, error) {
