@@ -57,35 +57,36 @@ var (
 
 type (
 	monitorStatus struct {
-		TopDisplayedBlock    *big.Int
-		UpperBlock           *big.Int
-		LowerBlock           *big.Int
-		ChainID              *big.Int
-		HeadBlock            *big.Int
-		PeerCount            uint64
-		GasPrice             *big.Int
-		TxPendingCount       uint64
-		TxQueuedCount        uint64
-		IsZkevmNetwork       bool
-		TrustedBatchesCount  uint64
-		VirtualBatchesCount  uint64
-		VerifiedBatchesCount uint64
-		SelectedBlock        rpctypes.PolyBlock
-		SelectedTransaction  rpctypes.PolyTransaction
-		BlockCache           *lru.Cache   `json:"-"`
-		BlocksLock           sync.RWMutex `json:"-"`
+		TopDisplayedBlock   *big.Int
+		UpperBlock          *big.Int
+		LowerBlock          *big.Int
+		ChainID             *big.Int
+		HeadBlock           *big.Int
+		PeerCount           uint64
+		GasPrice            *big.Int
+		TxPendingCount      uint64
+		TxQueuedCount       uint64
+		IsZkevmNetwork      bool
+		ZkEVMBatches        zkEVMBatches
+		SelectedBlock       rpctypes.PolyBlock
+		SelectedTransaction rpctypes.PolyTransaction
+		BlockCache          *lru.Cache   `json:"-"`
+		BlocksLock          sync.RWMutex `json:"-"`
 	}
 	chainState struct {
-		HeadBlock            uint64
-		ChainID              *big.Int
-		PeerCount            uint64
-		GasPrice             *big.Int
-		TxPendingCount       uint64
-		TxQueuedCount        uint64
-		IsZkevmNetwork       bool
-		TrustedBatchesCount  uint64
-		VirtualBatchesCount  uint64
-		VerifiedBatchesCount uint64
+		HeadBlock      uint64
+		ChainID        *big.Int
+		PeerCount      uint64
+		GasPrice       *big.Int
+		TxPendingCount uint64
+		TxQueuedCount  uint64
+		IsZkevmNetwork bool
+		ZkEVMBatches   zkEVMBatches
+	}
+	zkEVMBatches struct {
+		trusted  uint64
+		virtual  uint64
+		verified uint64
 	}
 	historicalDataPoint struct {
 		SampleTime  time.Time
@@ -132,9 +133,11 @@ func monitor(ctx context.Context) error {
 	ms.TxPendingCount = 0
 	ms.TxQueuedCount = 0
 	ms.IsZkevmNetwork = false
-	ms.TrustedBatchesCount = 0
-	ms.VerifiedBatchesCount = 0
-	ms.VerifiedBatchesCount = 0
+	ms.ZkEVMBatches = zkEVMBatches{
+		trusted:  0,
+		virtual:  0,
+		verified: 0,
+	}
 
 	observedPendingTxs = make(historicalRange, 0)
 
@@ -203,11 +206,11 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 		log.Debug().Err(err).Msg("Unable to get pending and queued transaction count")
 	}
 
-	cs.TrustedBatchesCount, cs.VirtualBatchesCount, cs.VerifiedBatchesCount, err = util.GetBatchesStatus(ec.Client())
+	cs.ZkEVMBatches.trusted, cs.ZkEVMBatches.virtual, cs.ZkEVMBatches.verified, err = util.GetZkEVMBatchesStatus(ec.Client())
 	if err != nil {
 		log.Debug().Err(err).Msg("Unable to get zkevm batches count")
 	} else {
-		cs.IsZkevmNetwork = true	
+		cs.IsZkevmNetwork = true
 	}
 
 	return cs, nil
@@ -253,9 +256,7 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 	ms.TxPendingCount = cs.TxPendingCount
 	ms.TxQueuedCount = cs.TxQueuedCount
 	ms.IsZkevmNetwork = cs.IsZkevmNetwork
-	ms.TrustedBatchesCount = cs.TrustedBatchesCount
-	ms.VirtualBatchesCount = cs.VirtualBatchesCount
-	ms.VerifiedBatchesCount = cs.VerifiedBatchesCount
+	ms.ZkEVMBatches = cs.ZkEVMBatches
 
 	return
 }
@@ -535,7 +536,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		currentWidgetHeight := skeleton.Current.Inner.Dx()
 		currentWidgetWidth := skeleton.Current.Inner.Dy()
 		log.Debug().Int("currentWidgetHeight", currentWidgetHeight).Int("currentWidgetWidth", currentWidgetWidth).Msg("The dimension of the current widget")
-		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.TxPendingCount, ms.TxQueuedCount, ms.ChainID, rpcUrl, ms.IsZkevmNetwork, ms.TrustedBatchesCount, ms.VirtualBatchesCount, ms.VerifiedBatchesCount, currentWidgetHeight, currentWidgetWidth)
+		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.TxPendingCount, ms.TxQueuedCount, ms.ChainID, rpcUrl, ms.IsZkevmNetwork, ms.ZkEVMBatches.trusted, ms.ZkEVMBatches.virtual, ms.ZkEVMBatches.verified, currentWidgetHeight, currentWidgetWidth)
 		skeleton.TxPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
 		skeleton.GasPriceChart.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
 		skeleton.BlockSizeChart.Data = metrics.GetSizePerBlock(renderedBlocks)

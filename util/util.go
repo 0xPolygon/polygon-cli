@@ -204,18 +204,18 @@ func GetTxPoolStatus(rpc *ethrpc.Client) (uint64, uint64, error) {
 	return pendingCount, queuedCount, nil
 }
 
-func GetBatchesStatus(rpc *ethrpc.Client) (uint64, uint64, uint64, error) {
-	trustedBatches, err := getBatch(rpc, trusted)
+func GetZkEVMBatchesStatus(rpc *ethrpc.Client) (uint64, uint64, uint64, error) {
+	trustedBatches, err := getZkEVMBatch(rpc, trusted)
 	if err != nil {
 		return 0, 0, 0, err
 	}
 
-	virtualBatches, err := getBatch(rpc, virtual)
+	virtualBatches, err := getZkEVMBatch(rpc, virtual)
 	if err != nil {
 		return trustedBatches, 0, 0, err
 	}
 
-	verifiedBatches, err := getBatch(rpc, verified)
+	verifiedBatches, err := getZkEVMBatch(rpc, verified)
 	if err != nil {
 		return trustedBatches, virtualBatches, 0, err
 	}
@@ -231,7 +231,7 @@ const (
 	verified batch = "zkevm_verifiedBatchNumber"
 )
 
-func getBatch(rpc *ethrpc.Client, batchType batch) (uint64, error) {
+func getZkEVMBatch(rpc *ethrpc.Client, batchType batch) (uint64, error) {
 	var raw interface{}
 	if err := rpc.Call(&raw, string(batchType)); err != nil {
 		return 0, err
