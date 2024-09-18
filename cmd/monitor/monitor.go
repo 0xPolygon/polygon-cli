@@ -482,7 +482,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 							Msg("Selected row is out of range for transactions")
 					}
 				} else {
-					log.Error().
+					log.Debug().
 						Int("block", int(ms.SelectedBlock.Number().Uint64())).
 						Msg("No transactions available in the selected block")
 				}
@@ -510,7 +510,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 							Msg("Selected row is out of range for transactions")
 				}
 			} else {
-				log.Error().
+				log.Debug().
 						Int("block", int(ms.SelectedBlock.Number().Uint64())).
 						Msg("No transactions available in the selected block")
 			}
