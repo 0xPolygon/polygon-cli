@@ -471,7 +471,21 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 			baseFee := ms.SelectedBlock.BaseFee()
 			if transactionList.SelectedRow != 0 {
-				ms.SelectedTransaction = ms.SelectedBlock.Transactions()[transactionList.SelectedRow-1]
+				transactions := ms.SelectedBlock.Transactions()
+				if transactions != nil && len(transactions) > 0 {
+					index := transactionList.SelectedRow - 1
+					if index >= 0 && index < len(transactions) {
+						ms.SelectedTransaction = transactions[index]
+					} else {
+						log.Error().
+							Int("row", transactionList.SelectedRow).
+							Msg("Selected row is out of range for transactions")
+					}
+				} else {
+					log.Error().
+						Int("block", int(ms.SelectedBlock.Number().Uint64())).
+						Msg("No transactions available in the selected block")
+				}
 				transactionInformationList.Rows = ui.GetSimpleTxFields(ms.SelectedTransaction, ms.ChainID, baseFee)
 			}
 			termui.Clear()
