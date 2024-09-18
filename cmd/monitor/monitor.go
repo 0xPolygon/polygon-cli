@@ -506,13 +506,13 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					skeleton.TxInfo.Rows = ui.GetSimpleTxFields(tx, ms.ChainID, baseFee)
 				} else {
 					log.Error().
-							Int("row", transactionList.SelectedRow).
-							Msg("Selected row is out of range for transactions")
+						Int("row", transactionList.SelectedRow).
+						Msg("Selected row is out of range for transactions")
 				}
 			} else {
 				log.Debug().
-						Int("block", int(ms.SelectedBlock.Number().Uint64())).
-						Msg("No transactions available in the selected block")
+					Int("block", int(ms.SelectedBlock.Number().Uint64())).
+					Msg("No transactions available in the selected block")
 			}
 			skeleton.Receipts.Rows = ui.GetSimpleReceipt(ctx, rpc, ms.SelectedTransaction)
 
