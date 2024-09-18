@@ -472,7 +472,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			baseFee := ms.SelectedBlock.BaseFee()
 			if transactionList.SelectedRow != 0 {
 				transactions := ms.SelectedBlock.Transactions()
-				if transactions != nil && len(transactions) > 0 {
+				if len(transactions) > 0 {
 					index := transactionList.SelectedRow - 1
 					if index >= 0 && index < len(transactions) {
 						ms.SelectedTransaction = transactions[index]
@@ -498,7 +498,22 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			return
 		} else if currentMode == monitorModeTransaction {
 			baseFee := ms.SelectedBlock.BaseFee()
-			skeleton.TxInfo.Rows = ui.GetSimpleTxFields(ms.SelectedBlock.Transactions()[transactionList.SelectedRow-1], ms.ChainID, baseFee)
+			transactions := ms.SelectedBlock.Transactions()
+			if len(transactions) > 0 {
+				index := transactionList.SelectedRow - 1
+				if index > 0 && index < len(transactions) {
+					tx := transactions[index]
+					skeleton.TxInfo.Rows = ui.GetSimpleTxFields(tx, ms.ChainID, baseFee)
+				} else {
+					log.Error().
+							Int("row", transactionList.SelectedRow).
+							Msg("Selected row is out of range for transactions")
+				}
+			} else {
+				log.Error().
+						Int("block", int(ms.SelectedBlock.Number().Uint64())).
+						Msg("No transactions available in the selected block")
+			}
 			skeleton.Receipts.Rows = ui.GetSimpleReceipt(ctx, rpc, ms.SelectedTransaction)
 
 			termui.Clear()
