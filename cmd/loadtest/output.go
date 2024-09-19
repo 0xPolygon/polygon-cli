@@ -97,6 +97,11 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 	successfulTx, totalTx := getSuccessfulTransactionCount(bs)
 	meanBlocktime, medianBlocktime, minBlocktime, maxBlocktime, stddevBlocktime, varianceBlocktime := getTimestampBlockSummary(bs)
 
+	if len(bs[0].Receipts) == 0 {
+		log.Error().Msg("Transaction receipts could not be retrieved")
+		return
+	}
+
 	if summaryOutputMode == "text" {
 		p.Printf("Successful Tx: %v\tTotal Tx: %v\n", number.Decimal(successfulTx), number.Decimal(totalTx))
 		p.Printf("Total Mining Time: %s\n", totalMiningTime)
