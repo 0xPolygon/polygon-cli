@@ -727,6 +727,13 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					if strings.Contains(tErr.Error(), "nonce too low") && retryForNonce {
 						retryForNonce = false
 					}
+					if strings.Contains(tErr.Error(), "already known") && retryForNonce {
+						retryForNonce = false
+					}
+					if strings.Contains(tErr.Error(), "could not replace existing") && retryForNonce {
+						retryForNonce = false
+					}
+
 				}
 
 				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode.String()).Int64("request", j).Msg("Request")
