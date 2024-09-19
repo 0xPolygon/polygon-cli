@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
@@ -35,6 +36,9 @@ type Database interface {
 	// ShouldWriteTransactionEvents return true, respectively.
 	WriteTransactions(context.Context, *enode.Node, []*types.Transaction)
 
+	// WritePeers will write the connected peers to the database.
+	WritePeers(context.Context, []*p2p.Peer)
+
 	// HasBlock will return whether the block is in the database. If the database
 	// client has not been initialized this will always return true.
 	HasBlock(context.Context, common.Hash) bool
@@ -44,6 +48,7 @@ type Database interface {
 	ShouldWriteBlockEvents() bool
 	ShouldWriteTransactions() bool
 	ShouldWriteTransactionEvents() bool
+	ShouldWritePeers() bool
 
 	// NodeList will return a list of enode URLs.
 	NodeList(ctx context.Context, limit int) ([]string, error)
