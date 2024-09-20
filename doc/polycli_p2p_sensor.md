@@ -55,6 +55,7 @@ If no nodes.json file exists, it will be created.
       --ttl duration             Time to live (default 336h0m0s)
       --write-block-events       Whether to write block events to the database (default true)
   -B, --write-blocks             Whether to write blocks to the database (default true)
+      --write-peers              Whether to write peers to the database (default true)
       --write-tx-events          Whether to write transaction events to the database. This option could
                                  significantly increase CPU and memory usage. (default true)
   -t, --write-txs                Whether to write transactions to the database. This option could significantly
