@@ -161,14 +161,36 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 			}
 			break
 		}
-
-		err := c.BatchCallContext(ctx, blms[start:end])
-		if err != nil {
-			log.Error().Err(err).Str("randtx", txHashes[0]).Uint64("start", start).Uint64("end", end).Msg("RPC issue fetching receipts")
-			break
-		}
-		start = end
-		if last {
+		// go-ethereum's BatchCallContext fails when the number of txns are over 100, because it attempts to unmarshal a single json source object into a slice if the number of txns go over 100.
+		// A workaround could be to implement our own unmarshal function for batch calls to unmarshal the single json object into a custom type (non-slice), but the below method has been chosen.
+		// When the number of txns go over 100 and forms a slice, this logic will batch call in units of 100 txns. This will successfully unmarshal the json source object.
+		if end <= 100 {
+			err := c.BatchCallContext(ctx, blms[start:end])
+			if err != nil {
+				log.Error().Err(err).Str("randtx", txHashes[0]).Uint64("start", start).Uint64("end", end).Msg("RPC issue fetching receipts")
+				break
+			}
+			start = end
+			if last {
+				break
+			}
+		} else {
+			for index := uint64(0); index <= end; index = index + 100 {
+				// Check for the final section of the slice, and also check end is not equal to index, because this will send another already sent BatchCall otherwise.
+				if end < index+100 && end != index {
+					err := c.BatchCallContext(ctx, blms[index:end])
+					if err != nil {
+						log.Error().Err(err).Str("randtx", txHashes[0]).Uint64("start", start).Uint64("end", end).Msg("RPC issue fetching receipts")
+						break
+					}
+					break
+				}
+				err := c.BatchCallContext(ctx, blms[index:index+100])
+				if err != nil {
+					log.Error().Err(err).Str("randtx", txHashes[0]).Uint64("start", start).Uint64("end", end).Msg("RPC issue fetching receipts")
+					break
+				}
+			}
 			break
 		}
 	}
