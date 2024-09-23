@@ -103,9 +103,6 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 			log.Error().Msg("No transaction could be retrieved from the receipts")
 			return
 		}
-		if len(bs) == 0 {
-			log.Debug().Int("Length of blockSummary", len(bs)).Msg("blockSummary is empty")
-		}
 		p.Printf("Successful Tx: %v\tTotal Tx: %v\n", number.Decimal(successfulTx), number.Decimal(totalTx))
 		p.Printf("Total Mining Time: %s\n", totalMiningTime)
 		p.Printf("Total Transactions: %v\n", number.Decimal(totalTransactions))
@@ -121,6 +118,9 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 			p.Printf("Maximum Blocktime: %vs\n", number.Decimal(maxBlocktime))
 			p.Printf("Blocktime Standard Deviation: %vs\n", number.Decimal(stddevBlocktime))
 			p.Printf("Blocktime Variance: %vs\n", number.Decimal(varianceBlocktime))
+		}
+		if len(bs) == 0 {
+			log.Debug().Int("Length of blockSummary", len(bs)).Msg("blockSummary is empty")
 		}
 	} else if summaryOutputMode == "json" {
 		summaryOutput := SummaryOutput{}

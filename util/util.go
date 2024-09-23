@@ -135,12 +135,13 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 		blmsBlockMap[i] = txHashMap[tx]
 	}
 
+	if len(blms) == 0 {
+		log.Debug().Int("Length of BatchElem", len(blms)).Msg("BatchElem is empty")
+		return nil, nil
+	}
+
 	var start uint64 = 0
 	for {
-		if len(blms) == 0 {
-			log.Debug().Int("Length of BatchElem", len(blms)).Msg("BatchElem is empty")
-			return nil, nil
-		}
 		last := false
 		end := start + batchSize
 		if int(end) > len(blms) {
@@ -168,7 +169,7 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 
 		err := c.BatchCallContext(ctx, blms[start:end])
 		if err != nil {
-			log.Error().Err(err).Str("randtx", txHashes[0]).Uint64("start", start).Uint64("end", end).Msg("RPC issue fetching receipts")
+			log.Error().Err(err).Str("randtx", txHashes[0]).Uint64("start", start).Uint64("end", end).Msg("RPC issue fetching receipts, have you checked the batch size limit of the RPC endpoint and adjusted the --batch-size flag?")
 			break
 		}
 		start = end
