@@ -137,10 +137,10 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 
 	var start uint64 = 0
 	for {
-		// if len(blms) == 0 {
-		// 	log.Debug().Int("Length of BatchElem", len(blms)).Msg("BatchElem is empty")
-		// 	return nil, nil
-		// }
+		if len(blms) == 0 {
+			log.Debug().Int("Length of BatchElem", len(blms)).Msg("BatchElem is empty")
+			return nil, nil
+		}
 		last := false
 		end := start + batchSize
 		if int(end) > len(blms) {
