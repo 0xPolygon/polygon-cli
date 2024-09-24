@@ -118,8 +118,7 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 			p.Printf("Maximum Blocktime: %vs\n", number.Decimal(maxBlocktime))
 			p.Printf("Blocktime Standard Deviation: %vs\n", number.Decimal(stddevBlocktime))
 			p.Printf("Blocktime Variance: %vs\n", number.Decimal(varianceBlocktime))
-		}
-		if len(bs) == 0 {
+		} else {
 			log.Debug().Int("Length of blockSummary", len(bs)).Msg("blockSummary is empty")
 		}
 	} else if summaryOutputMode == "json" {
