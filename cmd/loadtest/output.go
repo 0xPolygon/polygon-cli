@@ -98,6 +98,11 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 	meanBlocktime, medianBlocktime, minBlocktime, maxBlocktime, stddevBlocktime, varianceBlocktime := getTimestampBlockSummary(bs)
 
 	if summaryOutputMode == "text" {
+		// In the case where no transaction receipts could be retrieved, return.
+		if successfulTx == 0 {
+			log.Error().Msg("No transaction could be retrieved from the receipts")
+			return
+		}
 		p.Printf("Successful Tx: %v\tTotal Tx: %v\n", number.Decimal(successfulTx), number.Decimal(totalTx))
 		p.Printf("Total Mining Time: %s\n", totalMiningTime)
 		p.Printf("Total Transactions: %v\n", number.Decimal(totalTransactions))
@@ -105,12 +110,17 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 		p.Printf("Transactions per sec: %v\n", number.Decimal(tps))
 		p.Printf("Gas Per Second: %v\n", number.Decimal(gaspersec))
 		p.Printf("Latencies - Min: %v\tMedian: %v\tMax: %v\n", number.Decimal(minLatency.Seconds()), number.Decimal(medianLatency.Seconds()), number.Decimal(maxLatency.Seconds()))
-		p.Printf("Mean Blocktime: %vs\n", number.Decimal(meanBlocktime))
-		p.Printf("Median Blocktime: %vs\n", number.Decimal(medianBlocktime))
-		p.Printf("Minimum Blocktime: %vs\n", number.Decimal(minBlocktime))
-		p.Printf("Maximum Blocktime: %vs\n", number.Decimal(maxBlocktime))
-		p.Printf("Blocktime Standard Deviation: %vs\n", number.Decimal(stddevBlocktime))
-		p.Printf("Blocktime Variance: %vs\n", number.Decimal(varianceBlocktime))
+		// Blocktime related metrics can only be calculated when there are at least two blocks
+		if len(bs) > 1 {
+			p.Printf("Mean Blocktime: %vs\n", number.Decimal(meanBlocktime))
+			p.Printf("Median Blocktime: %vs\n", number.Decimal(medianBlocktime))
+			p.Printf("Minimum Blocktime: %vs\n", number.Decimal(minBlocktime))
+			p.Printf("Maximum Blocktime: %vs\n", number.Decimal(maxBlocktime))
+			p.Printf("Blocktime Standard Deviation: %vs\n", number.Decimal(stddevBlocktime))
+			p.Printf("Blocktime Variance: %vs\n", number.Decimal(varianceBlocktime))
+		} else {
+			log.Debug().Int("Length of blockSummary", len(bs)).Msg("blockSummary is empty")
+		}
 	} else if summaryOutputMode == "json" {
 		summaryOutput := SummaryOutput{}
 		summaryOutput.Summaries = jsonSummaryList
