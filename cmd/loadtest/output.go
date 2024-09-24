@@ -474,7 +474,8 @@ func lightSummary(lts []loadTestSample, startTime, endTime time.Time, rl *rate.L
 	}
 
 	testDuration := endTime.Sub(startTime)
-	tps := float64(len(loadTestResults)) / testDuration.Seconds()
+	rps := float64(len(loadTestResults)) / testDuration.Seconds()
+	tps := float64(len(loadTestResults)-int(numErrors)) / testDuration.Seconds()
 
 	var rlLimit float64
 	if rl != nil {
@@ -488,7 +489,11 @@ func lightSummary(lts []loadTestSample, startTime, endTime time.Time, rl *rate.L
 
 	log.Info().Time("startTime", startTime).Msg("Start time of loadtest (first transaction sent)")
 	log.Info().Time("endTime", endTime).Msg("End time of loadtest (final transaction mined)")
-	log.Info().Float64("tps", tps).Msg("Overall Requests Per Second")
+	log.Info().Float64("tps", tps).Msg("Successful Requests Per Second")
+	// Only output total rates per second if there are failed transactions and TPS != RPS
+	if tps != rps {
+		log.Error().Float64("rps", rps).Msg("Total Requests Per Second (both successful and unsuccessful transactions)")
+	}
 	log.Info().
 		Float64("mean", meanLat).
 		Float64("median", medianLat).
