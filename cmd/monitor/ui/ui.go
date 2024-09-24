@@ -19,6 +19,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var (
+	// zero is big.Int representations of 0, used for convenience in calculations.
+	zero = big.NewInt(0)
+)
+
 type UiSkeleton struct {
 	Current, TxPool, ZkEVM *widgets.Paragraph
 	TxPerBlockChart        *widgets.Sparkline
@@ -464,11 +469,22 @@ func GetSimpleReceipt(ctx context.Context, rpc *ethrpc.Client, tx rpctypes.PolyT
 	fields = append(fields, fmt.Sprintf("CumulativeGasUsed: %d", receipt.CumulativeGasUsed().Int64()))
 	fields = append(fields, fmt.Sprintf("EffectiveGasPrice: %d", receipt.EffectiveGasPrice().Int64()))
 	fields = append(fields, fmt.Sprintf("GasUsed: %d", receipt.GasUsed().Int64()))
-	fields = append(fields, fmt.Sprintf("ContractAddress: %s", receipt.ContractAddress().String()))
-	fields = append(fields, fmt.Sprintf("Root: %s", receipt.Root().String()))
-	fields = append(fields, fmt.Sprintf("Blob Gas Price: %s", receipt.BlobGasPrice()))
-	fields = append(fields, fmt.Sprintf("Blob Gas Used: %s", receipt.BlobGasUsed()))
-
+	// Only output ContractAddress when the transaction involves a contract deployment.
+	if receipt.ContractAddress().String() != "0x0000000000000000000000000000000000000000" {
+		fields = append(fields, fmt.Sprintf("ContractAddress: %s", receipt.ContractAddress().String()))
+	}
+	// Only output Root when the transaction involves a pre-Byzantium block (returns non-zero Root field).
+	if receipt.Root().String() != "0x0000000000000000000000000000000000000000000000000000000000000000" {
+		fields = append(fields, fmt.Sprintf("Root: %s", receipt.Root().String()))
+	}
+	// Only output blob related field if the transaction is a blob transaction.
+	if receipt.BlobGasPrice().Cmp(zero) > 0 {
+		fields = append(fields, fmt.Sprintf("Blob Gas Price: %s", receipt.BlobGasPrice()))
+	}
+	// Only output blob related field if the transaction is a blob transaction.
+	if receipt.BlobGasUsed().Cmp(zero) > 0 {
+		fields = append(fields, fmt.Sprintf("Blob Gas Used: %s", receipt.BlobGasUsed()))
+	}
 	return fields
 }
 
