@@ -8,28 +8,28 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[loadTestModeTransaction-0]
-	_ = x[loadTestModeDeploy-1]
-	_ = x[loadTestModeCall-2]
-	_ = x[loadTestModeFunction-3]
-	_ = x[loadTestModeInc-4]
-	_ = x[loadTestModeStore-5]
-	_ = x[loadTestModeERC20-6]
-	_ = x[loadTestModeERC721-7]
-	_ = x[loadTestModePrecompiledContracts-8]
-	_ = x[loadTestModePrecompiledContract-9]
-	_ = x[loadTestModeRandom-10]
-	_ = x[loadTestModeRecall-11]
-	_ = x[loadTestModeRPC-12]
-	_ = x[loadTestModeContractCall-13]
-	_ = x[loadTestModeInscription-14]
-	_ = x[loadTestModeUniswapV3-15]
-	_ = x[loadTestModeBlob-16]
+	_ = x[loadTestModeERC20-0]
+	_ = x[loadTestModeERC721-1]
+	_ = x[loadTestModeBlob-2]
+	_ = x[loadTestModeCall-3]
+	_ = x[loadTestModeContractCall-4]
+	_ = x[loadTestModeDeploy-5]
+	_ = x[loadTestModeFunction-6]
+	_ = x[loadTestModeInscription-7]
+	_ = x[loadTestModeIncrement-8]
+	_ = x[loadTestModeRandomPrecompiledContract-9]
+	_ = x[loadTestModeSpecificPrecompiledContract-10]
+	_ = x[loadTestModeRandom-11]
+	_ = x[loadTestModeRecall-12]
+	_ = x[loadTestModeRPC-13]
+	_ = x[loadTestModeStore-14]
+	_ = x[loadTestModeTransaction-15]
+	_ = x[loadTestModeUniswapV3-16]
 }
 
-const _loadTestMode_name = "loadTestModeTransactionloadTestModeDeployloadTestModeCallloadTestModeFunctionloadTestModeIncloadTestModeStoreloadTestModeERC20loadTestModeERC721loadTestModePrecompiledContractsloadTestModePrecompiledContractloadTestModeRandomloadTestModeRecallloadTestModeRPCloadTestModeContractCallloadTestModeInscriptionloadTestModeUniswapV3loadTestModeBlob"
+const _loadTestMode_name = "loadTestModeERC20loadTestModeERC721loadTestModeBlobloadTestModeCallloadTestModeContractCallloadTestModeDeployloadTestModeFunctionloadTestModeInscriptionloadTestModeIncrementloadTestModeRandomPrecompiledContractloadTestModeSpecificPrecompiledContractloadTestModeRandomloadTestModeRecallloadTestModeRPCloadTestModeStoreloadTestModeTransactionloadTestModeUniswapV3"
 
-var _loadTestMode_index = [...]uint16{0, 23, 41, 57, 77, 92, 109, 126, 144, 176, 207, 225, 243, 258, 282, 305, 326, 342}
+var _loadTestMode_index = [...]uint16{0, 17, 35, 51, 67, 91, 109, 129, 152, 173, 210, 249, 267, 285, 300, 317, 340, 361}
 
 func (i loadTestMode) String() string {
 	if i < 0 || i >= loadTestMode(len(_loadTestMode_index)-1) {
