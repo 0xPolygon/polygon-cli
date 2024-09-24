@@ -482,7 +482,7 @@ func lightSummary(lts []loadTestSample, startTime, endTime time.Time, rl *rate.L
 	log.Info().Float64("tps", tps).Msg("Successful Requests Per Second")
 	// Only output total rates per second if there are failed transactions and TPS != RPS
 	if tps != rps {
-		log.Info().Float64("rps", rps).Msg("Total Requests Per Second (both successful and unsuccessful transactions)")
+		log.Error().Float64("rps", rps).Msg("Total Requests Per Second (both successful and unsuccessful transactions)")
 	}
 	log.Info().
 		Float64("mean", meanLat).
