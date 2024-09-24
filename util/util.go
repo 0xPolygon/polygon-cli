@@ -135,6 +135,11 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 		blmsBlockMap[i] = txHashMap[tx]
 	}
 
+	if len(blms) == 0 {
+		log.Debug().Int("Length of BatchElem", len(blms)).Msg("BatchElem is empty")
+		return nil, nil
+	}
+
 	var start uint64 = 0
 	for {
 		last := false
@@ -164,8 +169,8 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 
 		err := c.BatchCallContext(ctx, blms[start:end])
 		if err != nil {
-			log.Error().Err(err).Str("randtx", txHashes[0]).Uint64("start", start).Uint64("end", end).Msg("RPC issue fetching receipts")
-			return nil, err
+			log.Error().Err(err).Str("randtx", txHashes[0]).Uint64("start", start).Uint64("end", end).Msg("RPC issue fetching receipts, have you checked the batch size limit of the RPC endpoint and adjusted the --batch-size flag?")
+			break
 		}
 		start = end
 		if last {
@@ -181,6 +186,10 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 			return nil, b.Error
 		}
 		receipts = append(receipts, b.Result.(*json.RawMessage))
+	}
+	if len(receipts) == 0 {
+		log.Error().Msg("No receipts have been fetched")
+		return nil, nil
 	}
 	log.Info().Int("hashes", len(txHashes)).Int("receipts", len(receipts)).Msg("Fetched tx receipts")
 	return receipts, nil
