@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
 )
@@ -118,6 +119,25 @@ func WritePeers(file string, nodes map[enode.ID]string) error {
 	urls := []string{}
 	for _, node := range nodes {
 		urls = append(urls, node)
+	}
+
+	bytes, err := json.MarshalIndent(urls, "", jsonIndent)
+	if err != nil {
+		return err
+	}
+
+	if len(file) == 0 {
+		_, err = os.Stdout.Write(bytes)
+		return err
+	}
+
+	return os.WriteFile(file, bytes, 0644)
+}
+
+func WriteDNSTreeNodes(file string, tree *dnsdisc.Tree) error {
+	urls := []string{}
+	for _, node := range tree.Nodes() {
+		urls = append(urls, node.URLv4())
 	}
 
 	bytes, err := json.MarshalIndent(urls, "", jsonIndent)
