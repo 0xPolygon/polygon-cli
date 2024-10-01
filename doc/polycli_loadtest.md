@@ -128,22 +128,24 @@ The codebase has a contract that used for load testing. It's written in Solidity
   -i, --iterations uint                        If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size (default 1)
       --legacy                                 Send a legacy transaction instead of an EIP1559 transaction.
       --lt-address string                      The address of a pre-deployed load test contract
-  -m, --mode strings                           The testing mode to use. It can be multiple like: "t,c,d,f"
-                                               t - sending transactions
-                                               d - deploy contract
-                                               c - call random contract functions
-                                               f - call specific contract function
-                                               p - call random precompiled contracts
-                                               a - call a specific precompiled contract address
-                                               s - store mode
-                                               r - random modes
-                                               2 - ERC20 transfers
-                                               7 - ERC721 mints
-                                               v3 - UniswapV3 swaps
-                                               R - total recall
-                                               rpc - call random rpc methods
-                                               cc, contract-call - call a contract method
-                                               inscription - sending inscription transactions (default [t])
+  -m, --mode strings                           The testing mode to use. It can be multiple like: "c,d,f,t"
+                                               2, erc20 - Send ERC20 tokens
+                                               7, erc721 - Mint ERC721 tokens
+                                               b, blob - Send blob transactions
+                                               c, call - Call random contract functions
+                                               cc, contract-call - Make contract calls
+                                               d, deploy - Deploy contracts
+                                               f, function - Call random contract functions
+                                               i, inscription - Send inscription transactions
+                                               inc, increment - Increment a counter
+                                               pr, random-precompile - Call random precompiled contracts
+                                               px, specific-precompile - Call specific precompiled contracts
+                                               r, random - Random modes (does not include the following modes: blob, call, inscription, recall, rpc, uniswapv3)
+                                               R, recall - Replay or simulate transactions
+                                               rpc - Call random rpc methods
+                                               s, store - Store bytes in a dynamic byte array
+                                               t, transaction - Send transactions
+                                               v3, uniswapv3 - Perform UniswapV3 swaps (default [t])
       --output-mode string                     Format mode for summary output (json | text) (default "text")
       --priority-gas-price uint                Specify Gas Tip Price in the case of EIP-1559
       --private-key string                     The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
