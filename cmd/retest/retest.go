@@ -697,9 +697,6 @@ func checkContractMap(input any, contractMap map[string]string) (string, bool) {
 		return "", false
 	}
 	inputString = strings.TrimSpace(strings.TrimPrefix(inputString, ":solidity "))
-	if strings.Contains(inputString, "\n") {
-		// return "", false
-	}
 	for k, v := range contractMap {
 		if k == inputString {
 			return v, true

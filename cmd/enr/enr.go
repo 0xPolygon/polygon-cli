@@ -57,7 +57,7 @@ var ENRCmd = &cobra.Command{
 					ForkID forkid.ID
 					Tail   []rlp.RawValue `rlp:"tail"`
 				}
-				node.Load(enr.WithEntry("eth", &eth))
+				_ = node.Load(enr.WithEntry("eth", &eth))
 				genericNode["forkid"] = ForkIDToString(eth.ForkID)
 			} else {
 				node, err = enode.ParseV4(l)

@@ -181,7 +181,7 @@ func (p *poseidongoldWrapper) Write(toWrite []byte) (n int, err error) {
 	}
 	n, err = p.b.Write(toWrite)
 	if err != nil {
-		// log something
+		log.Error().Err(err).Msg("Unable to write to poseidon buffer")
 		return
 	}
 	return
@@ -201,7 +201,9 @@ func (p *poseidongoldWrapper) Sum(b []byte) []byte {
 		hashInput, _ := bytesToUints(buf)
 		cap, err = vectorizedposeidongold.Hash(hashInput, cap)
 		if err != nil {
-			// log something
+			log.Error().Err(err).Msg("Unable to hash input")
+			// Exit since we don't want to return a known bad hash value here
+			os.Exit(1)
 		}
 		if n < 64 {
 			log.Info().Int("n", n).Msg("done")
