@@ -158,7 +158,7 @@ func (wr *WrappedAddress) ToString() *ethcommon.Address {
 		// FIXME this case shouldn't be necessary
 		// this is a weird case where the address is specified as a number... There are a dozen or so cases that seem
 		// like in the yml to json conversion, numbers like 095e7baea6a6c7c4c2dfeb977efac326af552d87 are prefixed with
-		// 0x and interpreted as a number rather tha a string. This seems to work fine in retest ETH but cases an issue
+		// 0x and interpreted as a number rather than a string. This seems to work fine in retest ETH but cases an issue
 		// in this workflow
 		// GeneralStateTestsFiller/Cancun/stEIP4844-blobtransactions/blobhashListBounds5Filler.yml
 		f := new(big.Float)
