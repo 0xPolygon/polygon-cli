@@ -115,7 +115,7 @@ type EthTest struct {
 	SealEngine         string                `json:"sealEngine"`         // SealEngine is either Null or NoProof
 	Expect             any                   `json:"expect"`             // Expect are the success conditions. In our cases we won't be able to validate them
 	Info               any                   `json:"_info"`              // Info mostly comments
-	ExpectException    any                   `json:"expectException"`    // ExpectException also determins if errors are expected for certain levels of HF
+	ExpectException    any                   `json:"expectException"`    // ExpectException also determines if errors are expected for certain levels of HF
 	Vectors            any                   `json:"vectors"`            // Vectors are specific cases which we probably won't use
 	TxBytes            any                   `json:"txbytes"`            // TxBytes are RLP tests to send directly without manipulation
 	Result             any                   `json:"result"`             // Result are specific expected results
