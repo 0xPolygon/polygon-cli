@@ -36,11 +36,11 @@ type UiSkeleton struct {
 	Receipts               *widgets.List
 }
 
-func GetCurrentText(widget *widgets.Paragraph, headBlock, gasPrice *big.Int, peerCount uint64, chainID *big.Int, rpcURL string) string {
+func GetCurrentText(widget *widgets.Paragraph, headBlock *big.Int, gasPrice string, peerCount uint64, chainID *big.Int, rpcURL string) string {
 	// First column
 	height := fmt.Sprintf("Height: %s", headBlock.String())
 	timeInfo := fmt.Sprintf("Time: %s", time.Now().Format("02 Jan 06 15:04:05 MST"))
-	gasPriceString := fmt.Sprintf("Gas Price: %s gwei", new(big.Int).Div(gasPrice, metrics.UnitShannon).String())
+	gasPriceString := fmt.Sprintf("Gas Price: %s gwei", gasPrice)
 	peers := fmt.Sprintf("Peers: %d", peerCount)
 
 	// Second column
