@@ -91,6 +91,7 @@ The command also inherits flags from parent commands.
       --gas-price uint                         In environments where the gas price can't be determined automatically, we can specify it manually
   -i, --iterations uint                        If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size (default 1)
       --legacy                                 Send a legacy transaction instead of an EIP1559 transaction.
+      --nonce uint                             Use this flag to manually set the starting nonce
       --output-mode string                     Format mode for summary output (json | text) (default "text")
       --pretty-logs                            Should logs be in pretty format or JSON (default true)
       --priority-gas-price uint                Specify Gas Tip Price in the case of EIP-1559

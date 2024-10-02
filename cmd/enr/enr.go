@@ -2,8 +2,12 @@ package enr
 
 import (
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/rlp"
 	"io"
 	"os"
 	"strings"
@@ -40,6 +44,8 @@ var ENRCmd = &cobra.Command{
 				continue
 			}
 			isENR := false
+			genericNode := make(map[string]any, 0)
+
 			if strings.HasPrefix(l, "enr:") {
 				isENR = true
 				node, err = enode.Parse(enode.V4ID{}, l)
@@ -47,6 +53,12 @@ var ENRCmd = &cobra.Command{
 					log.Error().Err(err).Str("line", l).Msg("Unable to parse enr record")
 					continue
 				}
+				var eth struct {
+					ForkID forkid.ID
+					Tail   []rlp.RawValue `rlp:"tail"`
+				}
+				_ = node.Load(enr.WithEntry("eth", &eth))
+				genericNode["forkid"] = ForkIDToString(eth.ForkID)
 			} else {
 				node, err = enode.ParseV4(l)
 				if err != nil {
@@ -54,13 +66,14 @@ var ENRCmd = &cobra.Command{
 					continue
 				}
 			}
-			genericNode := make(map[string]string, 0)
+
 			if isENR {
 				genericNode["enr"] = node.String()
 			}
 			genericNode["enode"] = node.URLv4()
 			genericNode["id"] = node.ID().String()
 			genericNode["ip"] = node.IP().String()
+			genericNode["seq"] = node.Seq()
 			genericNode["tcp"] = fmt.Sprintf("%d", node.TCP())
 			genericNode["udp"] = fmt.Sprintf("%d", node.UDP())
 			jsonOut, err := json.Marshal(genericNode)
@@ -75,6 +88,17 @@ var ENRCmd = &cobra.Command{
 	Args: func(cmd *cobra.Command, args []string) error {
 		return nil
 	},
+}
+
+func ForkIDToString(id forkid.ID) string {
+	// Convert the Hash field to a hex string
+	hashHex := hex.EncodeToString(id.Hash[:])
+
+	// Convert the Next field to a hex string
+	nextHex := fmt.Sprintf("%016x", id.Next)
+
+	// Concatenate the two hex strings
+	return hashHex + nextHex
 }
 
 func init() {
