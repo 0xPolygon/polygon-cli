@@ -411,21 +411,9 @@ func runLoadTest(ctx context.Context) error {
 	// The goal here is to avoid opening a ton of connections that go idle then get closed and eventually exhausting
 	// client-side connections.
 	transport := &http.Transport{
-		DisableKeepAlives:      false,
-		DisableCompression:     false,
-		MaxIdleConns:           connLimit,
-		MaxIdleConnsPerHost:    connLimit,
-		MaxConnsPerHost:        connLimit,
-		IdleConnTimeout:        0,
-		ResponseHeaderTimeout:  0,
-		ExpectContinueTimeout:  0,
-		TLSNextProto:           nil,
-		ProxyConnectHeader:     nil,
-		GetProxyConnectHeader:  nil,
-		MaxResponseHeaderBytes: 0,
-		WriteBufferSize:        0,
-		ReadBufferSize:         0,
-		ForceAttemptHTTP2:      false,
+		MaxIdleConns:        connLimit,
+		MaxIdleConnsPerHost: connLimit,
+		MaxConnsPerHost:     connLimit,
 	}
 	goHttpClient := &http.Client{
 		Transport: transport,
