@@ -10,6 +10,7 @@ import (
 	"io"
 	"math/big"
 	"math/rand"
+	"net/http"
 
 	"os"
 	"os/signal"
@@ -71,7 +72,7 @@ const (
 	loadTestModeStore
 	loadTestModeTransaction
 	loadTestModeUniswapV3
-	
+
 	codeQualitySeed       = "code code code code code code code code code code code quality"
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
 )
@@ -79,39 +80,39 @@ const (
 func characterToLoadTestMode(mode string) (loadTestMode, error) {
 	switch mode {
 	case "2", "erc20":
-    return loadTestModeERC20, nil
+		return loadTestModeERC20, nil
 	case "7", "erc721":
-			return loadTestModeERC721, nil
+		return loadTestModeERC721, nil
 	case "b", "blob":
-			return loadTestModeBlob, nil
+		return loadTestModeBlob, nil
 	case "c", "call":
-			return loadTestModeCall, nil
+		return loadTestModeCall, nil
 	case "cc", "contract-call":
-			return loadTestModeContractCall, nil
+		return loadTestModeContractCall, nil
 	case "d", "deploy":
-			return loadTestModeDeploy, nil
+		return loadTestModeDeploy, nil
 	case "f", "function":
-			return loadTestModeFunction, nil
+		return loadTestModeFunction, nil
 	case "i", "inscription":
 		return loadTestModeInscription, nil
 	case "inc", "increment":
-			return loadTestModeIncrement, nil
+		return loadTestModeIncrement, nil
 	case "pr", "random-precompile":
-			return loadTestModeRandomPrecompiledContract, nil
+		return loadTestModeRandomPrecompiledContract, nil
 	case "px", "specific-precompile":
-			return loadTestModeSpecificPrecompiledContract, nil
+		return loadTestModeSpecificPrecompiledContract, nil
 	case "r", "random":
-			return loadTestModeRandom, nil
+		return loadTestModeRandom, nil
 	case "R", "recall":
-			return loadTestModeRecall, nil
+		return loadTestModeRecall, nil
 	case "rpc":
-			return loadTestModeRPC, nil
+		return loadTestModeRPC, nil
 	case "s", "store":
-			return loadTestModeStore, nil
+		return loadTestModeStore, nil
 	case "t", "transaction":
-			return loadTestModeTransaction, nil
+		return loadTestModeTransaction, nil
 	case "v3", "uniswapv3":
-			return loadTestModeUniswapV3, nil
+		return loadTestModeUniswapV3, nil
 	default:
 		return 0, fmt.Errorf("unrecognized load test mode: %s", mode)
 	}
@@ -324,6 +325,9 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 }
 
 func initNonce(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
+	currentNonceMutex.Lock()
+	defer currentNonceMutex.Unlock()
+
 	var err error
 	startBlockNumber, err = c.BlockNumber(ctx)
 	if err != nil {
@@ -333,13 +337,18 @@ func initNonce(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) err
 
 	// Get pending nonce to be prevent nonce collision (if tx from same sender is already present)
 	currentNonce, err = c.PendingNonceAt(ctx, *inputLoadTestParams.FromETHAddress)
-	startNonce = currentNonce
-
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get account nonce")
 		return err
 	}
 
+	if inputLoadTestParams.StartNonce != nil && *inputLoadTestParams.StartNonce > 0 {
+		currentNonce = *inputLoadTestParams.StartNonce
+	}
+
+	log.Info().Uint64("startNonce", startNonce).Msg("setting the starting nonce")
+
+	startNonce = currentNonce
 	return nil
 }
 
@@ -396,8 +405,21 @@ func runLoadTest(ctx context.Context) error {
 		overallTimer = new(time.Timer)
 	}
 
-	// Dial the Ethereum RPC server.
-	rpc, err := ethrpc.DialContext(ctx, *inputLoadTestParams.RPCUrl)
+	// connLimit is the value we'll use to configure the connection limit within the http transport
+	connLimit := 2 * int(*inputLoadTestParams.Concurrency)
+	// Most of these transport options are defaults. We might want to make this configurable from the CLI at some point.
+	// The goal here is to avoid opening a ton of connections that go idle then get closed and eventually exhausting
+	// client-side connections.
+	transport := &http.Transport{
+		MaxIdleConns:        connLimit,
+		MaxIdleConnsPerHost: connLimit,
+		MaxConnsPerHost:     connLimit,
+	}
+	goHttpClient := &http.Client{
+		Transport: transport,
+	}
+	rpcOption := ethrpc.WithHTTPClient(goHttpClient)
+	rpc, err := ethrpc.DialOptions(ctx, *inputLoadTestParams.RPCUrl, rpcOption)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to dial rpc")
 		return err
@@ -721,6 +743,13 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					if strings.Contains(tErr.Error(), "nonce too low") && retryForNonce {
 						retryForNonce = false
 					}
+					if strings.Contains(tErr.Error(), "already known") && retryForNonce {
+						retryForNonce = false
+					}
+					if strings.Contains(tErr.Error(), "could not replace existing") && retryForNonce {
+						retryForNonce = false
+					}
+
 				}
 
 				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode.String()).Int64("request", j).Msg("Request")

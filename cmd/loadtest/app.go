@@ -79,6 +79,7 @@ type (
 		ContractCallPayable           *bool
 		InscriptionContent            *string
 		BlobFeeCap                    *uint64
+		StartNonce                    *uint64
 
 		// Computed
 		CurrentGasPrice     *big.Int
@@ -224,6 +225,7 @@ func initFlags() {
 	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
 	ltp.ForceGasLimit = LoadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas")
 	ltp.ForceGasPrice = LoadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be determined automatically, we can specify it manually")
+	ltp.StartNonce = LoadtestCmd.PersistentFlags().Uint64("nonce", 0, "Use this flag to manually set the starting nonce")
 	ltp.ForcePriorityGasPrice = LoadtestCmd.PersistentFlags().Uint64("priority-gas-price", 0, "Specify Gas Tip Price in the case of EIP-1559")
 	ltp.ShouldProduceSummary = LoadtestCmd.PersistentFlags().Bool("summarize", false, "Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time")
 	ltp.BatchSize = LoadtestCmd.PersistentFlags().Uint64("batch-size", 999, "Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time.")

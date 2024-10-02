@@ -146,6 +146,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
                                                s, store - Store bytes in a dynamic byte array
                                                t, transaction - Send transactions
                                                v3, uniswapv3 - Perform UniswapV3 swaps (default [t])
+      --nonce uint                             Use this flag to manually set the starting nonce
       --output-mode string                     Format mode for summary output (json | text) (default "text")
       --priority-gas-price uint                Specify Gas Tip Price in the case of EIP-1559
       --private-key string                     The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
