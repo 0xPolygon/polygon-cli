@@ -625,7 +625,7 @@ func processRawStringToString(data string) string {
 	return "0x" + hex.EncodeToString(byteData)
 }
 
-// WrapPredeployeCode will wrap a predeployed contract do it can be deployed for testing. For now we're just wrapping
+// WrapPredeployeCode will wrap a predeployed contract so that it can be deployed for testing. For now we're just wrapping
 // the code so that it should match what the precondition is. In the future, this should also have a constructor that
 // would initialize the storage slots to match the predeployed state. This will never be 100% right, but useful for
 // smoke testing
