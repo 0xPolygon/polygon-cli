@@ -44,7 +44,7 @@ Since the version is pretty old, it might not build well on your host
 os. Building within docker might make your life easier:
 
 ```bash
-docker run -it /bin/bash debian:buster
+docker run -it debian:buster /bin/bash
 ```
 
 From within the docker shell some steps like this should get you in
