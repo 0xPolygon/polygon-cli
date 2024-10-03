@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -567,8 +568,16 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		}
 		ms.BlocksLock.RUnlock()
 		renderedBlocks = renderedBlocksTemp
+		renderedBlocksMeanGasPrice := metrics.GetMeanGasPricePerBlock(renderedBlocks)
+		// First initialization will render no gas price because the GasPriceChart will have no data.
+		if renderedBlocksMeanGasPrice == nil {
+			skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, "--", ms.PeerCount, ms.ChainID, rpcUrl)
+		} else {
+			// Under normal cases, the gas price will be derived from the last element of the GasPriceChart with 2 decimal places precision.
+			gasPriceStr := strconv.FormatFloat(renderedBlocksMeanGasPrice[len(renderedBlocksMeanGasPrice)-1]/1000000000, 'f', 2, 64)
+			skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, gasPriceStr, ms.PeerCount, ms.ChainID, rpcUrl)
+		}
 
-		skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.ChainID, rpcUrl)
 		if txPoolStatusSupported {
 			skeleton.TxPool.Text = ui.GetTxPoolText(skeleton.TxPool, ms.TxPoolStatus.pending, ms.TxPoolStatus.queued)
 		}
@@ -578,7 +587,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		}
 
 		skeleton.TxPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
-		skeleton.GasPriceChart.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
+		skeleton.GasPriceChart.Data = renderedBlocksMeanGasPrice // equivalent to metrics.GetMeanGasPricePerBlock(renderedBlocks)
 		skeleton.BlockSizeChart.Data = metrics.GetSizePerBlock(renderedBlocks)
 		// skeleton.pendingTxChart.Data = metrics.GetUnclesPerBlock(renderedBlocks)
 		skeleton.PendingTxChart.Data = observedPendingTxs.getValues(25)
