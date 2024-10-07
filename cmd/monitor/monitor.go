@@ -167,7 +167,7 @@ func monitor(ctx context.Context) error {
 			for {
 				err = fetchCurrentBlockData(ctx, ec, ms, isUiRendered)
 				if err != nil {
-					log.Error().Msg(fmt.Sprintf("Error: %v", err))
+					log.Error().Msg(fmt.Sprintf("Error: unable to fetch current block data: %v", err))
 					// Send the error to the errChan channel to return.
 					errChan <- err
 					return
