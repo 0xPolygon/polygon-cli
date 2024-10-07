@@ -1,6 +1,7 @@
 module github.com/maticnetwork/polygon-cli
 
 go 1.21
+toolchain go1.22.5
 
 require (
 	cloud.google.com/go/datastore v1.19.0
@@ -19,7 +20,7 @@ require (
 	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common v0.59.1
 	github.com/rs/zerolog v1.33.0
-	github.com/schollz/progressbar/v3 v3.15.0
+	github.com/schollz/progressbar/v3 v3.16.1
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
@@ -91,7 +92,7 @@ require (
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-runewidth v0.0.15 // indirect
+	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
@@ -147,8 +148,8 @@ require (
 )
 
 require (
-	github.com/gateway-fm/vectorized-poseidon-gold v1.0.0
 	cloud.google.com/go/kms v1.20.0
+	github.com/gateway-fm/vectorized-poseidon-gold v1.0.0
 	github.com/google/tink/go v1.7.0
 	github.com/iden3/go-iden3-crypto v0.0.16
 	github.com/montanaflynn/stats v0.7.1
