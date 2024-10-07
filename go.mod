@@ -147,10 +147,10 @@ require (
 )
 
 require (
-	github.com/gateway-fm/vectorized-poseidon-gold v1.0.0
 	cloud.google.com/go/kms v1.20.0
+	github.com/gateway-fm/vectorized-poseidon-gold v1.0.0
 	github.com/google/tink/go v1.7.0
-	github.com/iden3/go-iden3-crypto v0.0.16
+	github.com/iden3/go-iden3-crypto v0.0.17
 	github.com/montanaflynn/stats v0.7.1
 )
 
