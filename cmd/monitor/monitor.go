@@ -514,7 +514,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			transactions := ms.SelectedBlock.Transactions()
 			if len(transactions) > 0 {
 				index := transactionList.SelectedRow - 1
-				if index > 0 && index < len(transactions) {
+				if index >= 0 && index < len(transactions) {
 					tx := transactions[index]
 					skeleton.TxInfo.Rows = ui.GetSimpleTxFields(tx, ms.ChainID, baseFee)
 				} else {
