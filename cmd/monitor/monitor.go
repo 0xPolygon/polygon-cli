@@ -167,7 +167,10 @@ func monitor(ctx context.Context) error {
 			for {
 				err = fetchCurrentBlockData(ctx, ec, ms, isUiRendered)
 				if err != nil {
-					continue
+					log.Error().Msg(fmt.Sprintf("Error: %v", err))
+					// Send the error to the errChan channel to return.
+					errChan <- err
+					return
 				}
 				if ms.TopDisplayedBlock == nil || ms.SelectedBlock == nil {
 					ms.TopDisplayedBlock = ms.HeadBlock
@@ -184,6 +187,15 @@ func monitor(ctx context.Context) error {
 		}
 	}()
 
+	// Give time for the UI to attempt rendering.
+	time.Sleep(5 * time.Second)
+	if !isUiRendered {
+		// If UI cannot be rendered and returns, close the goroutine.
+		ctx.Done()
+	}
+	// Give time for goroutine to finish.
+	time.Sleep(1 * time.Second)
+	// Receive the errors from errChan and return to exit.
 	err = <-errChan
 	return err
 }
