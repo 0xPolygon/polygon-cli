@@ -631,8 +631,8 @@ func processRawStringToString(data string) string {
 // smoke testing
 func WrapPredeployedCode(pre EthTestPre) string {
 	rawCode := WrappedData{raw: pre.Code}
-	// 0000: 63 00 00 00 00  ; PUSH4 to indicate the size of the data that should be copied into memory
-	// 0005: 63 00 00 00 15  ; PUSH4 to indicate the offset in the call data to start the copy
+	// 0000: 63 00 00 00 00  ; PUSH4 to indicate the size of the code that should be copied into memory
+	// 0005: 63 00 00 00 00  ; PUSH4 to indicate the offset in the call data to start the copy
 	// 000a: 60 00           ; PUSH1 00 to indicate the destination offset in memory
 	// 000c: 39              ; CODECOPY
 	// 000d: 63 00 00 00 00  ; PUSH4 to indicate the size of the data to be returned from memory
@@ -641,14 +641,15 @@ func WrapPredeployedCode(pre EthTestPre) string {
 	// 0015: CODE..........  ; CODE starts here. That's why the earlier PUSH4 has 15
 	//
 
-	// TODO in the future after the CODECOPY, we should loop over the storage and initialize the slots
 	code := rawCode.ToString()
 	code = strings.TrimPrefix(code, "0x")
 	codeLen := len(code) / 2
 	storageInitCode := storageToByteCode(pre.Storage)
-	codeLen += len(storageInitCode) / 2
-
-	return fmt.Sprintf("0x%s63%08x630000001560003963%08x6000F3%s", storageInitCode, codeLen, codeLen, code)
+	storageInitLen := len(storageInitCode) / 2
+	// storageInitLen + 5 + 5 + 2 + 1 + 5  + 2  + 1
+	// storageInitLen + 21
+	codeOffset := 21 + storageInitLen
+	return fmt.Sprintf("0x%s63%08x63%08x60003963%08x6000F3%s", storageInitCode, codeLen, codeOffset, codeLen, code)
 }
 
 // storageToByteCode
@@ -673,6 +674,10 @@ func storageToByteCode(storage map[string]EthTestNumeric) string {
 	contract += " }"
 
 	compiledContract := processLLLToString(contract)
+
+	// Remove the STOP pcode that LLLC sticks on the end
+	compiledContract = strings.TrimSuffix(compiledContract, "00")
+
 	log.Info().Str("storageInit", contract).Str("compiledContract", compiledContract).Msg("produced code to initialize storage")
 	return compiledContract
 }
