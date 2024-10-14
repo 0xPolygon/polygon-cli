@@ -24,6 +24,7 @@ import (
 var (
 	//go:embed usage.md
 	usage         string
+	solcPath      string
 	inputFileName *string
 
 	validBase10         *regexp.Regexp
@@ -325,6 +326,11 @@ func EthTestDataToString(data EthTestData) string {
 		}
 		// TODO - we're losing the ability to send lots of different access list tests
 		return EthTestDataToString(dataMap["data"])
+	case reflect.Float64:
+		// We have few tests with numeric code, ex:
+		// "code": 16449,
+		return processStorageData(data.(float64))
+	
 	default:
 		log.Fatal().Any("input", data).Str("kind", v.Kind().String()).Msg("Attempted to convert unknown type to raw data")
 	}
@@ -369,6 +375,25 @@ func processTestDataString(data string) string {
 	}
 
 	return ""
+}
+
+func processStorageData(data any) string {
+	var result string
+	if reflect.TypeOf(data).Kind() == reflect.Float64 {
+		result = fmt.Sprintf("%x", int64(data.(float64)))
+	} else if reflect.TypeOf(data).Kind() == reflect.String {
+		if strings.HasPrefix(data.(string), "0x") {
+			result = strings.TrimPrefix(data.(string), "0x")
+		} else {
+			result = data.(string)
+		}
+	} else {
+		log.Fatal().Any("data", data).Msg("unknown storage data type")
+	}
+	if len(result) % 2 != 0 {
+		result = "0" + result
+	}
+	return result
 }
 
 // isStandardSolidityString will do a rough check to see if the string looks like a typical solidity file rather than
@@ -451,7 +476,7 @@ func processSolidityToString(data string, isYul bool) string {
 		args = append(args, "--strict-assembly")
 	}
 
-	cmd := exec.Command("solc", args...)
+	cmd := exec.Command(solcPath, args...)
 	errOut := ""
 	bufErr := bytes.NewBufferString(errOut)
 	cmd.Stderr = bufErr
@@ -485,7 +510,7 @@ func solidityStringToBin(data string) map[string]string {
 	}
 	args := []string{"--bin", "--input-file", solInput.Name()}
 
-	cmd := exec.Command("solc", args...)
+	cmd := exec.Command(solcPath, args...)
 	errOut := ""
 	bufErr := bytes.NewBufferString(errOut)
 	cmd.Stderr = bufErr
@@ -631,50 +656,51 @@ func processRawStringToString(data string) string {
 // smoke testing
 func WrapPredeployedCode(pre EthTestPre) string {
 	rawCode := WrappedData{raw: pre.Code}
-	// 0000: 63 00 00 00 00  ; PUSH4 to indicate the size of the data that should be copied into memory
-	// 0005: 63 00 00 00 15  ; PUSH4 to indicate the offset in the call data to start the copy
-	// 000a: 60 00           ; PUSH1 00 to indicate the destination offset in memory
-	// 000c: 39              ; CODECOPY
-	// 000d: 63 00 00 00 00  ; PUSH4 to indicate the size of the data to be returned from memory
-	// 0012: 60 00           ; PUSH1 00 to indicate that it starts from offset 0
-	// 0014: F3              ; RETURN
-	// 0015: CODE..........  ; CODE starts here. That's why the earlier PUSH4 has 15
-	//
-
-	// TODO in the future after the CODECOPY, we should loop over the storage and initialize the slots
-	code := rawCode.ToString()
-	code = strings.TrimPrefix(code, "0x")
-	codeLen := len(code) / 2
+	deployedCode := rawCode.ToString()
+	deployedCode = strings.TrimPrefix(deployedCode, "0x")
 	storageInitCode := storageToByteCode(pre.Storage)
-	codeLen += len(storageInitCode) / 2
 
-	return fmt.Sprintf("0x%s63%08x630000001560003963%08x6000F3%s", storageInitCode, codeLen, codeLen, code)
+	codeCopySize := len(deployedCode) / 2
+	codeCopyOffset := (len(storageInitCode) / 2) + 13 + 8  // 13 for CODECOPY + 8 for RETURN
+
+	return fmt.Sprintf(
+		"0x%s"+			// storage initialization code
+		"63%08x"+		// PUSH4 to indicate the size of the data that should be copied into memory
+		"63%08x"+		// PUSH4 to indicate the offset in the call data to start the copy
+		"6000"+			// PUSH1 00 to indicate the destination offset in memory
+		"39"+			// CODECOPY
+		"63%08x"+		// PUSH4 to indicate the size of the data to be returned from memory
+		"6000"+			// PUSH1 00 to indicate that it starts from offset 0
+		"F3"+			// RETURN
+		"%s",			// CODE starts here.
+		storageInitCode, codeCopySize, codeCopyOffset, codeCopySize, deployedCode)
 }
+
 
 // storageToByteCode
 func storageToByteCode(storage map[string]EthTestNumeric) string {
 	if len(storage) == 0 {
 		return ""
 	}
-	// We're going to use this data to produce a small smart contract
-	counter := 0
-	contract := "{"
+	var bytecode string
 	for slot, value := range storage {
-		wn := WrappedNumeric{raw: value}
-		if slot == "0x" {
+		if slot == "0x" || slot == "0" {
 			// special case that we encountered...
 			// https://github.com/ethereum/tests/blob/fd26aad70e24f042fcd135b2f0338b1c6bf1a324/src/EIPTestsFiller/InvalidRLP/bcForgedTest/bcForkBlockTestFiller.json#L222
 			log.Warn().Str("slot", slot).Msg("found a storage entry for invalid slot")
-			slot = "0"
 		}
-		contract += fmt.Sprintf(" [[%s]] %s", slot, wn.ToString())
-		counter += 1
-	}
-	contract += " }"
 
-	compiledContract := processLLLToString(contract)
-	log.Info().Str("storageInit", contract).Str("compiledContract", compiledContract).Msg("produced code to initialize storage")
-	return compiledContract
+		s := processStorageData(slot)
+		v := processStorageData(value)
+		sLen := len(s) / 2
+		vLen := len(v) / 2
+		sPushCode := 0x5F + sLen
+		vPushCode := 0x5F + vLen
+		bytecode += fmt.Sprintf("%02x%s%02x%s55", vPushCode, v, sPushCode, s)
+	}
+
+	log.Info().Str("storageInit", bytecode).Msg("produced code to initialize storage")
+	return bytecode
 }
 func WrapCode(inputData EthTestData) string {
 	rawCode := WrappedData{raw: inputData}
@@ -792,7 +818,6 @@ var RetestCmd = &cobra.Command{
 					// my assumption is that the tx within a block won't be multi-valued??
 					tc := make(map[string]any)
 					tc["name"] = testName
-
 					if input, matched := checkContractMap(singleTx.ChainID, contractMap); matched {
 						// as far as I can tell this isn't used yet, but i suppose it should work
 						tc["input"] = input
@@ -837,6 +862,12 @@ var RetestCmd = &cobra.Command{
 func init() {
 	flagSet := RetestCmd.PersistentFlags()
 	inputFileName = flagSet.String("file", "", "Provide a file that's filed with test transaction fillers")
+	solcPath = os.Getenv("SOLC_PATH")
+	if solcPath == "" {
+		solcPath = "solc"
+	} else {
+		log.Info().Str("path", solcPath).Msg("Setting solc path from environment")
+	}
 
 	validBase10 = regexp.MustCompile(`^[0-9_]*$`) // the numbers can be formatted like 100_000
 	dataLabel = regexp.MustCompile(`^:label ([^ ]*) `)
