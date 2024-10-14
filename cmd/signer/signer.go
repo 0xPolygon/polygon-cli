@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/google/tink/go/kwp/subtle"
@@ -273,12 +274,17 @@ func getTxDataToSign() (*types.Transaction, error) {
 	}
 
 	// TODO at some point we should support signing other data types besides transactions
-	var tx apitypes.SendTxArgs
-	err = json.Unmarshal(dataToSign, &tx)
-	if err != nil {
+	var txArgs apitypes.SendTxArgs
+	if err = json.Unmarshal(dataToSign, &txArgs); err != nil {
 		return nil, err
 	}
-	return tx.ToTransaction(), nil
+	var tx *ethtypes.Transaction
+	tx, err = txArgs.ToTransaction()
+	if err != nil {
+		log.Error().Err(err).Str("txArgs", txArgs.String()).Msg("unable to convert the arguments to a transaction")
+		return nil, err
+	}
+	return tx, nil
 
 }
 func sign(pk *ecdsa.PrivateKey) error {
