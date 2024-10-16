@@ -32,7 +32,7 @@ cd tests/src
 
 # Convert the yaml based tests to json. There will be some failures depending on the version of yq used
 find . -type f -name '*.yml'  | while read yaml_file ; do
-    yq '.' $yaml_file > $yaml_file.json
+    yq -o json '.' $yaml_file > $yaml_file.json
     retval=$?
     if [[ $retval -ne 0 ]]; then
         2>&1 echo "the file $yaml_file could not be converted to json"
@@ -52,7 +52,7 @@ jq 'walk(if type == "object" then with_entries(select(.key | startswith("//") | 
 Now we should have a giant file filled with an array of transactions. We can take that output and process it witht the `retest` command now
 
 ```bash
-go run . retest -v 500 --file merged.nocomment.json > simple.json
+polycli retest -v 500 --file merged.nocomment.json > simple.json
 ```
 
 ## LLLC
@@ -60,6 +60,7 @@ go run . retest -v 500 --file merged.nocomment.json > simple.json
 This project will depend on an installation of `solc` (specifically
 0.8.20) and `lllc`. Installing solidity is pretty easy, but LLLC can
 be a little tricky.
+If you got multiple solc versions, you can specify full patch to the right binary to use with env var ```SOLC_PATH```.
 
 Since the version is pretty old, it might not build well on your host
 os. Building within docker might make your life easier:
