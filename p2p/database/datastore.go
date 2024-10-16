@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/datastore"
@@ -105,6 +106,8 @@ type DatastoreTransaction struct {
 }
 
 type DatastorePeer struct {
+	Name         string
+	Caps         string
 	URL          string
 	LastSeenBy   string
 	TimeLastSeen time.Time
@@ -262,6 +265,8 @@ func (d *Datastore) WritePeers(ctx context.Context, peers []*p2p.Peer) {
 		for _, peer := range peers {
 			keys = append(keys, datastore.NameKey(PeersKind, peer.ID().String(), nil))
 			dsPeers = append(dsPeers, &DatastorePeer{
+				Name:         peer.Fullname(),
+				Caps:         strings.Join(peer.Info().Caps, ","),
 				URL:          peer.Node().URLv4(),
 				LastSeenBy:   d.sensorID,
 				TimeLastSeen: now,
