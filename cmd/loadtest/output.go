@@ -13,8 +13,8 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/maticnetwork/polygon-cli/rpctypes"
-	"github.com/maticnetwork/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/rpctypes"
+	"github.com/0xPolygon/polygon-cli/util"
 	"golang.org/x/exp/constraints"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"

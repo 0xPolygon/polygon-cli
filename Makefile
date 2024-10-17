@@ -10,10 +10,10 @@ GIT_SHA := $(shell git rev-parse HEAD | cut -c 1-8)
 GIT_TAG := $(shell git describe --tags)
 DATE := $(shell date +%s)
 VERSION_FLAGS=\
-  -X github.com/maticnetwork/polygon-cli/cmd/version.Version=$(GIT_TAG) \
-  -X github.com/maticnetwork/polygon-cli/cmd/version.Commit=$(GIT_SHA) \
-  -X github.com/maticnetwork/polygon-cli/cmd/version.Date=$(DATE) \
-  -X github.com/maticnetwork/polygon-cli/cmd/version.BuiltBy=makefile
+  -X github.com/0xPolygon/polygon-cli/cmd/version.Version=$(GIT_TAG) \
+  -X github.com/0xPolygon/polygon-cli/cmd/version.Commit=$(GIT_SHA) \
+  -X github.com/0xPolygon/polygon-cli/cmd/version.Date=$(DATE) \
+  -X github.com/0xPolygon/polygon-cli/cmd/version.BuiltBy=makefile
 
 .PHONY: help
 help: ## Display this help.

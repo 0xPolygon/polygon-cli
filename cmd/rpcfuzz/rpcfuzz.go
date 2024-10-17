@@ -36,9 +36,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	fuzz "github.com/google/gofuzz"
-	"github.com/maticnetwork/polygon-cli/bindings/tester"
-	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz/testreporter"
-	"github.com/maticnetwork/polygon-cli/rpctypes"
+	"github.com/0xPolygon/polygon-cli/bindings/tester"
+	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz/testreporter"
+	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/rs/zerolog/log"
 	"github.com/xeipuuv/gojsonschema"
 )

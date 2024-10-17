@@ -624,8 +624,8 @@ func init() {
 	readStrict = flagSet.Bool("read-strict", false, "if true the rand reads will be made in strict mode")
 	noWriteMerge = flagSet.Bool("no-merge-write", false, "allows disabling write merge")
 	syncWrites = flagSet.Bool("sync-writes", false, "sync each write")
-	// https://github.com/maticnetwork/bor/blob/eedeaed1fb17d73dd46d8999644d5035e176e22a/eth/backend.go#L141
-	// https://github.com/maticnetwork/bor/blob/eedeaed1fb17d73dd46d8999644d5035e176e22a/eth/ethconfig/config.go#L86C2-L86C15
+	// https://github.com/0xPolygon/bor/blob/eedeaed1fb17d73dd46d8999644d5035e176e22a/eth/backend.go#L141
+	// https://github.com/0xPolygon/bor/blob/eedeaed1fb17d73dd46d8999644d5035e176e22a/eth/ethconfig/config.go#L86C2-L86C15
 	cacheSize = flagSet.Int("cache-size", 512, "the number of megabytes to use as our internal cache size")
 	openFilesCacheCapacity = flagSet.Int("handles", 500, "defines the capacity of the open files caching. Use -1 for zero, this has same effect as specifying NoCacher to OpenFilesCacher.")
 	writeZero = flagSet.Bool("write-zero", false, "if true, we'll write 0s rather than random data")

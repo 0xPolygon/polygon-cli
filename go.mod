@@ -1,4 +1,4 @@
-module github.com/maticnetwork/polygon-cli
+module github.com/0xPolygon/polygon-cli
 
 go 1.21
 

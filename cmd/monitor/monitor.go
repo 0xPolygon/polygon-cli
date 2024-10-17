@@ -11,7 +11,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/maticnetwork/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/util"
 
 	_ "embed"
 
@@ -20,9 +20,9 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	termui "github.com/gizak/termui/v3"
-	"github.com/maticnetwork/polygon-cli/cmd/monitor/ui"
-	"github.com/maticnetwork/polygon-cli/metrics"
-	"github.com/maticnetwork/polygon-cli/rpctypes"
+	"github.com/0xPolygon/polygon-cli/cmd/monitor/ui"
+	"github.com/0xPolygon/polygon-cli/metrics"
+	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/rs/zerolog/log"
 )
 

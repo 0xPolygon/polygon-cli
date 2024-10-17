@@ -5,7 +5,7 @@ import (
 
 	_ "embed"
 
-	"github.com/maticnetwork/polygon-cli/dashboard"
+	"github.com/0xPolygon/polygon-cli/dashboard"
 	"github.com/spf13/cobra"
 )
 

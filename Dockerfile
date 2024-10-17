@@ -28,4 +28,4 @@ ENTRYPOINT ["polycli"]
 CMD ["--help"]
 
 # How to test this image?
-# https://github.com/maticnetwork/polygon-cli/pull/189#discussion_r1464486344
+# https://github.com/0xPolygon/polygon-cli/pull/189#discussion_r1464486344

@@ -20,7 +20,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"github.com/maticnetwork/polygon-cli/p2p/database"
+	"github.com/0xPolygon/polygon-cli/p2p/database"
 )
 
 // conn represents an individual connection with a peer.

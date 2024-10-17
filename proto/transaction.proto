@@ -1,7 +1,7 @@
 // If you make changes, recompile protos with `make generate`
 syntax = "proto3";
 package proto;
-option go_package = "github.com/maticnetwork/polygon-cli/proto/gen/pb;pb";
+option go_package = "github.com/0xPolygon/polygon-cli/proto/gen/pb;pb";
 
 message Transaction {
   string hash = 1;

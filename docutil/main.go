@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/maticnetwork/polygon-cli/cmd"
+	"github.com/0xPolygon/polygon-cli/cmd"
 )
 
 var (

@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/maticnetwork/polygon-cli/abi"
+	"github.com/0xPolygon/polygon-cli/abi"
 )
 
 var (

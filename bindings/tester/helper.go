@@ -13,7 +13,7 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/maticnetwork/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 )
 

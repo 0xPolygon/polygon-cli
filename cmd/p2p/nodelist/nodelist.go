@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/maticnetwork/polygon-cli/p2p/database"
+	"github.com/0xPolygon/polygon-cli/p2p/database"
 	"github.com/spf13/cobra"
 )
 
