@@ -8,7 +8,7 @@ import (
 	"fmt"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/maticnetwork/polygon-cli/abi"
+	"github.com/0xPolygon/polygon-cli/abi"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"io"

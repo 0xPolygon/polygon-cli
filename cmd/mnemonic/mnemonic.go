@@ -3,7 +3,7 @@ package mnemonic
 import (
 	"fmt"
 
-	"github.com/maticnetwork/polygon-cli/hdwallet"
+	"github.com/0xPolygon/polygon-cli/hdwallet"
 	"github.com/spf13/cobra"
 )
 
