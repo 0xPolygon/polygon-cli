@@ -144,4 +144,4 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Install polycli using go
-        run: go install github.com/0xPolygon/polygon-cli@latest
+        run: go install github.com/0xPolygon/polygon-cli@${{ github.head_ref }}
