@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	"github.com/maticnetwork/polygon-cli/p2p"
+	"github.com/0xPolygon/polygon-cli/p2p"
 )
 
 type (

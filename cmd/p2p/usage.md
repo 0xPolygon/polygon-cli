@@ -58,6 +58,6 @@ polycli p2p crawl nodes.json \
   --network-id 137
 ```
 
-[mainnet-genesis]: https://github.com/maticnetwork/bor/blob/master/builder/files/genesis-mainnet-v1.json
-[mumbai-genesis]: https://github.com/maticnetwork/bor/blob/master/builder/files/genesis-testnet-v4.json
+[mainnet-genesis]: https://github.com/0xPolygon/bor/blob/master/builder/files/genesis-mainnet-v1.json
+[mumbai-genesis]: https://github.com/0xPolygon/bor/blob/master/builder/files/genesis-testnet-v4.json
 [bootnodes]: https://wiki.polygon.technology/docs/pos/operate/node/full-node-binaries/#configure-bor-seeds-mainnet
