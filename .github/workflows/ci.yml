@@ -12,7 +12,7 @@ concurrency:
 
 env:
   GO_VERSION: "1.21"                  # https://go.dev/dl/
-  STRINGER_VERSION: "0.23.0"          # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
+  STRINGER_VERSION: "0.26.0"          # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
   # Protoc dependencies.
   PROTOC_VERSION: "27.1"              # https://github.com/protocolbuffers/protobuf/releases
   PROTOC_GEN_GO_VERSION: "1.31.0"     # https://pkg.go.dev/google.golang.org/protobuf/cmd/protoc-gen-go?tab=versions
