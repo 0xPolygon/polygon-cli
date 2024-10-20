@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/maticnetwork/polygon-cli/gethkeystore"
+	"github.com/0xPolygon/polygon-cli/gethkeystore"
 	"io"
 	"os"
 	"strings"
