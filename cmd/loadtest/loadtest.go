@@ -34,7 +34,6 @@ import (
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -324,7 +323,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	return nil
 }
 
-func initNonce(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
+func initNonce(ctx context.Context, c *ethclient.Client) error {
 	currentNonceMutex.Lock()
 	defer currentNonceMutex.Unlock()
 
@@ -650,7 +649,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	var i int64
-	err = initNonce(ctx, c, rpc)
+	err = initNonce(ctx, c)
 	if err != nil {
 		return err
 	}
@@ -1298,13 +1297,18 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *Ind
 			log.Error().Err(err).Str("txHash", pt.Hash().String()).Msg("issue converting poly transaction to json")
 			return
 		}
-		var tx apitypes.SendTxArgs
-		err = json.Unmarshal(rawTxData, &tx)
-		if err != nil {
-			log.Error().Err(err).Str("txHash", pt.Hash().String()).Msg("unable to unmarshal poly transaction to json.")
+		var txArgs apitypes.SendTxArgs
+		if err = json.Unmarshal(rawTxData, &txArgs); err != nil {
+			log.Error().Err(err).Str("txHash", pt.Hash().String()).Msg("unable to unmarshal poly transaction to json")
 			return
 		}
-		cm := txToCallMsg(tx.ToTransaction())
+		var tx *ethtypes.Transaction
+		tx, err = txArgs.ToTransaction()
+		if err != nil {
+			log.Error().Err(err).Str("txArgs", txArgs.String()).Msg("unable to convert the arguments to a transaction")
+			return
+		}
+		cm := txToCallMsg(tx)
 		cm.From = pt.From()
 		_, err = c.EstimateGas(ctx, cm)
 	} else if funcNum < 33 {
@@ -1601,7 +1605,7 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 ti
 		Data:       nil,
 		AccessList: nil,
 		BlobHashes: make([]common.Hash, 0),
-		Sidecar: &types.BlobTxSidecar{
+		Sidecar: &ethtypes.BlobTxSidecar{
 			Blobs:       make([]kzg4844.Blob, 0),
 			Commitments: make([]kzg4844.Commitment, 0),
 			Proofs:      make([]kzg4844.Proof, 0),
@@ -1618,9 +1622,9 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 ti
 		log.Error().Err(err).Msg("Unable to parse blob")
 		return
 	}
-	tx := types.NewTx(&blobTx)
+	tx := ethtypes.NewTx(&blobTx)
 
-	stx, err := types.SignTx(tx, types.LatestSignerForChainID(chainID), privateKey)
+	stx, err := ethtypes.SignTx(tx, ethtypes.LatestSignerForChainID(chainID), privateKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
