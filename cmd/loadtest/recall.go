@@ -6,8 +6,8 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
-	"github.com/maticnetwork/polygon-cli/rpctypes"
-	"github.com/maticnetwork/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/rpctypes"
+	"github.com/0xPolygon/polygon-cli/util"
 	"math/big"
 	"strings"
 )

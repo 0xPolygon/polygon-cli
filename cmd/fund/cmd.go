@@ -6,7 +6,7 @@ import (
 
 	_ "embed"
 
-	"github.com/maticnetwork/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/spf13/cobra"
 )
 

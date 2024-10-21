@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
 
-	"github.com/maticnetwork/polygon-cli/p2p"
+	"github.com/0xPolygon/polygon-cli/p2p"
 )
 
 type crawler struct {
