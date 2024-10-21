@@ -143,5 +143,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+      
+      - name: Install dependencies
+        run: go get
       - name: Install polycli using go
-        run: go install github.com/0xPolygon/polygon-cli@latest
+        run: go install
+      - name: Check that polycli has been installed
+        run: polygon-cli version
