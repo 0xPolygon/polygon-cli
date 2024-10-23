@@ -59,14 +59,6 @@ var CrawlCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		switch {
-		// Check that one and only one of --bootnodes or --discovery-dns flag is being used
-		case inputCrawlParams.Bootnodes != "" && inputCrawlParams.DiscoveryDNS != "":
-			log.Fatal().Msg("Use either --bootnodes flag or --discovery-dns flag")
-			return nil
-		// Check that at least one of --bootnodes or --discovery-dns flag is being used
-		case inputCrawlParams.Bootnodes == "" && inputCrawlParams.DiscoveryDNS == "":
-			log.Fatal().Msg("Use only one of --bootnodes flag or --discovery-dns flag")
-			return nil
 		// Discovery DNS mode
 		case inputCrawlParams.DiscoveryDNS != "":
 			dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
@@ -127,6 +119,7 @@ func init() {
 		`Comma separated nodes used for bootstrapping. At least one bootnode is
 required, so other nodes in the network can discover each other.`)
 	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.DiscoveryDNS, "discovery-dns", "", "", `Enable EIP-1459, DNS Discovery to recover node list from given ENRTree`)
+	CrawlCmd.MarkFlagsMutuallyExclusive("bootnodes", "discovery-dns")
 	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "Time limit for the crawl")
 	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt")
 	CrawlCmd.PersistentFlags().Uint64VarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id")
