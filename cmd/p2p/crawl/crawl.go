@@ -66,49 +66,50 @@ var CrawlCmd = &cobra.Command{
 				return err
 			}
 			return p2p.WriteDNSTreeNodes(inputCrawlParams.NodesFile, tree)
-		} else { // Discover V4/V5 mode
-			nodes, err := p2p.ReadNodeSet(inputCrawlParams.NodesFile)
-			if err != nil {
-				log.Warn().Err(err).Msgf("Creating nodes file %v because it does not exist", inputCrawlParams.NodesFile)
-			}
-
-			var cfg discover.Config
-			cfg.PrivateKey, _ = crypto.GenerateKey()
-			cfg.Bootnodes, err = p2p.ParseBootnodes(inputCrawlParams.Bootnodes)
-			if err != nil {
-				return fmt.Errorf("unable to parse bootnodes: %w", err)
-			}
-
-			db, err := enode.OpenDB(inputCrawlParams.Database)
-			if err != nil {
-				return err
-			}
-
-			ln := enode.NewLocalNode(db, cfg.PrivateKey)
-			socket, err := p2p.Listen(ln)
-			if err != nil {
-				return err
-			}
-
-			disc, err := discover.ListenV4(socket, ln, cfg)
-			if err != nil {
-				return err
-			}
-			defer disc.Close()
-
-			c := newCrawler(nodes, disc, disc.RandomNodes())
-			c.revalidateInterval = inputCrawlParams.revalidationInterval
-
-			log.Info().Msg("Starting crawl")
-
-			output := c.run(inputCrawlParams.timeout, inputCrawlParams.Threads)
-
-			if inputCrawlParams.OnlyURLs {
-				return p2p.WriteURLs(inputCrawlParams.NodesFile, output)
-			}
-
-			return p2p.WriteNodeSet(inputCrawlParams.NodesFile, output, false)
 		}
+		// Discover V4/V5 mode
+		nodes, err := p2p.ReadNodeSet(inputCrawlParams.NodesFile)
+		if err != nil {
+			log.Warn().Err(err).Msgf("Creating nodes file %v because it does not exist", inputCrawlParams.NodesFile)
+		}
+
+		var cfg discover.Config
+		cfg.PrivateKey, _ = crypto.GenerateKey()
+		cfg.Bootnodes, err = p2p.ParseBootnodes(inputCrawlParams.Bootnodes)
+		if err != nil {
+			return fmt.Errorf("unable to parse bootnodes: %w", err)
+		}
+
+		db, err := enode.OpenDB(inputCrawlParams.Database)
+		if err != nil {
+			return err
+		}
+
+		ln := enode.NewLocalNode(db, cfg.PrivateKey)
+		socket, err := p2p.Listen(ln)
+		if err != nil {
+			return err
+		}
+
+		disc, err := discover.ListenV4(socket, ln, cfg)
+		if err != nil {
+			return err
+		}
+		defer disc.Close()
+
+		c := newCrawler(nodes, disc, disc.RandomNodes())
+		c.revalidateInterval = inputCrawlParams.revalidationInterval
+
+		log.Info().Msg("Starting crawl")
+
+		output := c.run(inputCrawlParams.timeout, inputCrawlParams.Threads)
+
+		if inputCrawlParams.OnlyURLs {
+			return p2p.WriteURLs(inputCrawlParams.NodesFile, output)
+		}
+
+		return p2p.WriteNodeSet(inputCrawlParams.NodesFile, output, false)
+
 	},
 }
 
