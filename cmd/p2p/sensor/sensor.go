@@ -270,7 +270,7 @@ var SensorCmd = &cobra.Command{
 		go handleAPI(&server, msgCounter)
 
 		// Run DNS discovery immediately at startup
-		handleDNSDiscovery(&server, peers, &peersMutex)
+		go handleDNSDiscovery(&server, peers, &peersMutex)
 
 		for {
 			select {
@@ -484,8 +484,12 @@ func removePeerMessages(counter *prometheus.CounterVec, peers []*ethp2p.Peer) er
 		}
 	}
 
+	// During DNS-discovery or when the server is taking a while to discover
+	// peers and has yet to receive a message, the sensor_messages prometheus
+	// metric may not exist yet.
 	if family == nil {
-		return errors.New("could not find sensor_messages metric family")
+		log.Trace().Msg("Could not find sensor_messages metric family")
+		return nil
 	}
 
 	for _, metric := range family.GetMetric() {
