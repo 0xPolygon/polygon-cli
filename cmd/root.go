@@ -2,33 +2,34 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/maticnetwork/polygon-cli/cmd/ulxly"
+	"github.com/0xPolygon/polygon-cli/cmd/retest"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly"
 	"os"
 
-	"github.com/maticnetwork/polygon-cli/cmd/fork"
-	"github.com/maticnetwork/polygon-cli/cmd/p2p"
-	"github.com/maticnetwork/polygon-cli/cmd/parseethwallet"
-	"github.com/maticnetwork/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/cmd/fork"
+	"github.com/0xPolygon/polygon-cli/cmd/p2p"
+	"github.com/0xPolygon/polygon-cli/cmd/parseethwallet"
+	"github.com/0xPolygon/polygon-cli/util"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/maticnetwork/polygon-cli/cmd/abi"
-	"github.com/maticnetwork/polygon-cli/cmd/dbbench"
-	"github.com/maticnetwork/polygon-cli/cmd/dumpblocks"
-	"github.com/maticnetwork/polygon-cli/cmd/ecrecover"
-	"github.com/maticnetwork/polygon-cli/cmd/enr"
-	"github.com/maticnetwork/polygon-cli/cmd/fund"
-	"github.com/maticnetwork/polygon-cli/cmd/hash"
-	"github.com/maticnetwork/polygon-cli/cmd/loadtest"
-	"github.com/maticnetwork/polygon-cli/cmd/metricsToDash"
-	"github.com/maticnetwork/polygon-cli/cmd/mnemonic"
-	"github.com/maticnetwork/polygon-cli/cmd/monitor"
-	"github.com/maticnetwork/polygon-cli/cmd/nodekey"
-	"github.com/maticnetwork/polygon-cli/cmd/rpcfuzz"
-	"github.com/maticnetwork/polygon-cli/cmd/signer"
-	"github.com/maticnetwork/polygon-cli/cmd/version"
-	"github.com/maticnetwork/polygon-cli/cmd/wallet"
+	"github.com/0xPolygon/polygon-cli/cmd/abi"
+	"github.com/0xPolygon/polygon-cli/cmd/dbbench"
+	"github.com/0xPolygon/polygon-cli/cmd/dumpblocks"
+	"github.com/0xPolygon/polygon-cli/cmd/ecrecover"
+	"github.com/0xPolygon/polygon-cli/cmd/enr"
+	"github.com/0xPolygon/polygon-cli/cmd/fund"
+	"github.com/0xPolygon/polygon-cli/cmd/hash"
+	"github.com/0xPolygon/polygon-cli/cmd/loadtest"
+	"github.com/0xPolygon/polygon-cli/cmd/metricsToDash"
+	"github.com/0xPolygon/polygon-cli/cmd/mnemonic"
+	"github.com/0xPolygon/polygon-cli/cmd/monitor"
+	"github.com/0xPolygon/polygon-cli/cmd/nodekey"
+	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz"
+	"github.com/0xPolygon/polygon-cli/cmd/signer"
+	"github.com/0xPolygon/polygon-cli/cmd/version"
+	"github.com/0xPolygon/polygon-cli/cmd/wallet"
 )
 
 var (
@@ -121,6 +122,7 @@ func NewPolycliCommand() *cobra.Command {
 		nodekey.NodekeyCmd,
 		p2p.P2pCmd,
 		parseethwallet.ParseETHWalletCmd,
+		retest.RetestCmd,
 		rpcfuzz.RPCFuzzCmd,
 		signer.SignerCmd,
 		ulxly.ULxLyCmd,

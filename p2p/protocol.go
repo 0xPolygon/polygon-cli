@@ -20,7 +20,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"github.com/maticnetwork/polygon-cli/p2p/database"
+	"github.com/0xPolygon/polygon-cli/p2p/database"
 )
 
 // conn represents an individual connection with a peer.
@@ -461,15 +461,8 @@ func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) er
 	var name string
 
 	switch version {
-	case 66, 67:
-		var txs eth.NewPooledTransactionHashesPacket67
-		if err := msg.Decode(&txs); err != nil {
-			return err
-		}
-		hashes = txs
-		name = txs.Name()
-	case 68:
-		var txs eth.NewPooledTransactionHashesPacket68
+	case 67, 68:
+		var txs eth.NewPooledTransactionHashesPacket
 		if err := msg.Decode(&txs); err != nil {
 			return err
 		}

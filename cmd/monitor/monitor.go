@@ -5,12 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/maticnetwork/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/util"
 
 	_ "embed"
 
@@ -19,9 +20,9 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	termui "github.com/gizak/termui/v3"
-	"github.com/maticnetwork/polygon-cli/cmd/monitor/ui"
-	"github.com/maticnetwork/polygon-cli/metrics"
-	"github.com/maticnetwork/polygon-cli/rpctypes"
+	"github.com/0xPolygon/polygon-cli/cmd/monitor/ui"
+	"github.com/0xPolygon/polygon-cli/metrics"
+	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/rs/zerolog/log"
 )
 
@@ -64,8 +65,8 @@ type (
 		HeadBlock           *big.Int
 		PeerCount           uint64
 		GasPrice            *big.Int
-		PendingCount        uint64
-		QueuedCount         uint64
+		TxPoolStatus        txPoolStatus
+		ZkEVMBatches        zkEVMBatches
 		SelectedBlock       rpctypes.PolyBlock
 		SelectedTransaction rpctypes.PolyTransaction
 		BlockCache          *lru.Cache   `json:"-"`
@@ -76,8 +77,17 @@ type (
 		ChainID      *big.Int
 		PeerCount    uint64
 		GasPrice     *big.Int
-		PendingCount uint64
-		QueuedCount  uint64
+		TxPoolStatus txPoolStatus
+		ZkEVMBatches zkEVMBatches
+	}
+	txPoolStatus struct {
+		pending uint64
+		queued  uint64
+	}
+	zkEVMBatches struct {
+		trusted  uint64
+		virtual  uint64
+		verified uint64
 	}
 	historicalDataPoint struct {
 		SampleTime  time.Time
@@ -111,6 +121,22 @@ func monitor(ctx context.Context) error {
 		return errBatchRequestsNotSupported
 	}
 
+	// Check if tx pool status is supported.
+	txPoolStatusSupported := false
+	if _, _, err = util.GetTxPoolStatus(rpc); err != nil {
+		log.Debug().Err(err).Msg("Unable to get tx pool status")
+	} else {
+		txPoolStatusSupported = true
+	}
+
+	// Check if zkevm batches are supported.
+	zkEVMBatchesSupported := false
+	if _, _, _, err = util.GetZkEVMBatches(rpc); err != nil {
+		log.Debug().Err(err).Msg("Unable to get zkevm batches")
+	} else {
+		zkEVMBatchesSupported = true
+	}
+
 	ms := new(monitorStatus)
 	ms.BlocksLock.Lock()
 	ms.BlockCache, err = lru.New(blockCacheLimit)
@@ -121,8 +147,8 @@ func monitor(ctx context.Context) error {
 	ms.BlocksLock.Unlock()
 
 	ms.ChainID = big.NewInt(0)
-	ms.PendingCount = 0
-	ms.QueuedCount = 0
+	ms.TxPoolStatus = txPoolStatus{}
+	ms.ZkEVMBatches = zkEVMBatches{}
 
 	observedPendingTxs = make(historicalRange, 0)
 
@@ -141,14 +167,17 @@ func monitor(ctx context.Context) error {
 			for {
 				err = fetchCurrentBlockData(ctx, ec, ms, isUiRendered)
 				if err != nil {
-					continue
+					log.Error().Msg(fmt.Sprintf("Error: unable to fetch current block data: %v", err))
+					// Send the error to the errChan channel to return.
+					errChan <- err
+					return
 				}
 				if ms.TopDisplayedBlock == nil || ms.SelectedBlock == nil {
 					ms.TopDisplayedBlock = ms.HeadBlock
 				}
 				if !isUiRendered {
 					go func() {
-						errChan <- renderMonitorUI(ctx, ec, ms, rpc)
+						errChan <- renderMonitorUI(ctx, ec, ms, rpc, txPoolStatusSupported, zkEVMBatchesSupported)
 					}()
 					isUiRendered = true
 				}
@@ -158,6 +187,15 @@ func monitor(ctx context.Context) error {
 		}
 	}()
 
+	// Give time for the UI to attempt rendering.
+	time.Sleep(5 * time.Second)
+	if !isUiRendered {
+		// If UI cannot be rendered and returns, close the goroutine.
+		ctx.Done()
+	}
+	// Give time for goroutine to finish.
+	time.Sleep(1 * time.Second)
+	// Receive the errors from errChan and return to exit.
 	err = <-errChan
 	return err
 }
@@ -186,9 +224,14 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 		return nil, fmt.Errorf("couldn't estimate gas: %s", err.Error())
 	}
 
-	cs.PendingCount, cs.QueuedCount, err = util.GetTxPoolStatus(ec.Client())
+	cs.TxPoolStatus.pending, cs.TxPoolStatus.queued, err = util.GetTxPoolStatus(ec.Client())
 	if err != nil {
-		log.Debug().Err(err).Msg("Unable to get pending and queued transaction count")
+		log.Debug().Err(err).Msg("Unable to get tx pool status")
+	}
+
+	cs.ZkEVMBatches.trusted, cs.ZkEVMBatches.virtual, cs.ZkEVMBatches.verified, err = util.GetZkEVMBatches(ec.Client())
+	if err != nil {
+		log.Debug().Err(err).Msg("Unable to get zkevm batches")
 	}
 
 	return cs, nil
@@ -214,7 +257,7 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 		time.Sleep(interval)
 		return err
 	}
-	observedPendingTxs = append(observedPendingTxs, historicalDataPoint{SampleTime: time.Now(), SampleValue: float64(cs.PendingCount)})
+	observedPendingTxs = append(observedPendingTxs, historicalDataPoint{SampleTime: time.Now(), SampleValue: float64(cs.TxPoolStatus.pending)})
 	if len(observedPendingTxs) > maxDataPoints {
 		observedPendingTxs = observedPendingTxs[len(observedPendingTxs)-maxDataPoints:]
 	}
@@ -231,8 +274,8 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 	ms.ChainID = cs.ChainID
 	ms.PeerCount = cs.PeerCount
 	ms.GasPrice = cs.GasPrice
-	ms.PendingCount = cs.PendingCount
-	ms.QueuedCount = cs.QueuedCount
+	ms.TxPoolStatus = cs.TxPoolStatus
+	ms.ZkEVMBatches = cs.ZkEVMBatches
 
 	return
 }
@@ -366,7 +409,7 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 	return errors.Join(errs...)
 }
 
-func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client) error {
+func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client, txPoolStatusSupported, zkEVMBatchesSupported bool) error {
 	if err := termui.Init(); err != nil {
 		log.Error().Err(err).Msg("Failed to initialize UI")
 		return err
@@ -375,7 +418,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 	currentMode := monitorModeExplorer
 
-	blockTable, blockInfo, transactionList, transactionInformationList, transactionInfo, grid, selectGrid, blockGrid, transactionGrid, skeleton := ui.SetUISkeleton()
+	blockTable, blockInfo, transactionList, transactionInformationList, transactionInfo, grid, selectGrid, blockGrid, transactionGrid, skeleton := ui.SetUISkeleton(txPoolStatusSupported, zkEVMBatchesSupported)
 
 	termWidth, termHeight := termui.TerminalDimensions()
 	windowSize = termHeight/2 - 4
@@ -441,7 +484,21 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 			baseFee := ms.SelectedBlock.BaseFee()
 			if transactionList.SelectedRow != 0 {
-				ms.SelectedTransaction = ms.SelectedBlock.Transactions()[transactionList.SelectedRow-1]
+				transactions := ms.SelectedBlock.Transactions()
+				if len(transactions) > 0 {
+					index := transactionList.SelectedRow - 1
+					if index >= 0 && index < len(transactions) {
+						ms.SelectedTransaction = transactions[index]
+					} else {
+						log.Error().
+							Int("row", transactionList.SelectedRow).
+							Msg("Selected row is out of range for transactions")
+					}
+				} else {
+					log.Debug().
+						Int("block", int(ms.SelectedBlock.Number().Uint64())).
+						Msg("No transactions available in the selected block")
+				}
 				transactionInformationList.Rows = ui.GetSimpleTxFields(ms.SelectedTransaction, ms.ChainID, baseFee)
 			}
 			termui.Clear()
@@ -454,7 +511,22 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			return
 		} else if currentMode == monitorModeTransaction {
 			baseFee := ms.SelectedBlock.BaseFee()
-			skeleton.TxInfo.Rows = ui.GetSimpleTxFields(ms.SelectedBlock.Transactions()[transactionList.SelectedRow-1], ms.ChainID, baseFee)
+			transactions := ms.SelectedBlock.Transactions()
+			if len(transactions) > 0 {
+				index := transactionList.SelectedRow - 1
+				if index >= 0 && index < len(transactions) {
+					tx := transactions[index]
+					skeleton.TxInfo.Rows = ui.GetSimpleTxFields(tx, ms.ChainID, baseFee)
+				} else {
+					log.Error().
+						Int("row", transactionList.SelectedRow).
+						Msg("Selected row is out of range for transactions")
+				}
+			} else {
+				log.Debug().
+					Int("block", int(ms.SelectedBlock.Number().Uint64())).
+					Msg("No transactions available in the selected block")
+			}
 			skeleton.Receipts.Rows = ui.GetSimpleReceipt(ctx, rpc, ms.SelectedTransaction)
 
 			termui.Clear()
@@ -476,8 +548,8 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			Str("HeadBlock", ms.HeadBlock.String()).
 			Uint64("PeerCount", ms.PeerCount).
 			Str("GasPrice", ms.GasPrice.String()).
-			Uint64("PendingCount", ms.PendingCount).
-			Uint64("QueuedCount", ms.QueuedCount).
+			Interface("TxPoolStatus", ms.TxPoolStatus).
+			Interface("ZkEVMBatches", ms.ZkEVMBatches).
 			Msg("Redrawing")
 
 		if blockTable.SelectedRow == 0 {
@@ -508,11 +580,26 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		}
 		ms.BlocksLock.RUnlock()
 		renderedBlocks = renderedBlocksTemp
+		renderedBlocksMeanGasPrice := metrics.GetMeanGasPricePerBlock(renderedBlocks)
+		// First initialization will render no gas price because the GasPriceChart will have no data.
+		if renderedBlocksMeanGasPrice == nil {
+			skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, "--", ms.PeerCount, ms.ChainID, rpcUrl)
+		} else {
+			// Under normal cases, the gas price will be derived from the last element of the GasPriceChart with 2 decimal places precision.
+			gasPriceStr := strconv.FormatFloat(renderedBlocksMeanGasPrice[len(renderedBlocksMeanGasPrice)-1]/1000000000, 'f', 2, 64)
+			skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, gasPriceStr, ms.PeerCount, ms.ChainID, rpcUrl)
+		}
 
-		log.Debug().Int("skeleton.Current.Inner.Dy()", skeleton.Current.Inner.Dy()).Int("skeleton.Current.Inner.Dx()", skeleton.Current.Inner.Dx()).Msg("the dimension of the current box")
-		skeleton.Current.Text = ui.GetCurrentBlockInfo(ms.HeadBlock, ms.GasPrice, ms.PeerCount, ms.PendingCount, ms.QueuedCount, ms.ChainID, rpcUrl, renderedBlocks, skeleton.Current.Inner.Dx(), skeleton.Current.Inner.Dy())
+		if txPoolStatusSupported {
+			skeleton.TxPool.Text = ui.GetTxPoolText(skeleton.TxPool, ms.TxPoolStatus.pending, ms.TxPoolStatus.queued)
+		}
+
+		if zkEVMBatchesSupported {
+			skeleton.ZkEVM.Text = ui.GetZkEVMText(skeleton.ZkEVM, ms.ZkEVMBatches.trusted, ms.ZkEVMBatches.virtual, ms.ZkEVMBatches.verified)
+		}
+
 		skeleton.TxPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
-		skeleton.GasPriceChart.Data = metrics.GetMeanGasPricePerBlock(renderedBlocks)
+		skeleton.GasPriceChart.Data = renderedBlocksMeanGasPrice // equivalent to metrics.GetMeanGasPricePerBlock(renderedBlocks)
 		skeleton.BlockSizeChart.Data = metrics.GetSizePerBlock(renderedBlocks)
 		// skeleton.pendingTxChart.Data = metrics.GetUnclesPerBlock(renderedBlocks)
 		skeleton.PendingTxChart.Data = observedPendingTxs.getValues(25)

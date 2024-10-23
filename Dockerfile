@@ -1,4 +1,4 @@
-FROM golang:1.21 AS builder
+FROM golang:1.22 AS builder
 WORKDIR /workspace
 COPY go.mod go.sum ./
 RUN go mod download
@@ -28,4 +28,4 @@ ENTRYPOINT ["polycli"]
 CMD ["--help"]
 
 # How to test this image?
-# https://github.com/maticnetwork/polygon-cli/pull/189#discussion_r1464486344
+# https://github.com/0xPolygon/polygon-cli/pull/189#discussion_r1464486344

@@ -11,12 +11,12 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.21"                  # https://go.dev/dl/
-  STRINGER_VERSION: "0.23.0"          # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
+  GO_VERSION: "1.22" # https://go.dev/dl/
+  STRINGER_VERSION: "0.26.0" # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
   # Protoc dependencies.
-  PROTOC_VERSION: "27.1"              # https://github.com/protocolbuffers/protobuf/releases
-  PROTOC_GEN_GO_VERSION: "1.31.0"     # https://pkg.go.dev/google.golang.org/protobuf/cmd/protoc-gen-go?tab=versions
-  PROTOC_GEN_GO_GRPC_VERSION: "1.4.0" # https://pkg.go.dev/google.golang.org/grpc/cmd/protoc-gen-go-grpc?tab=versions
+  PROTOC_VERSION: "28.2" # https://github.com/protocolbuffers/protobuf/releases
+  PROTOC_GEN_GO_VERSION: "1.35.1" # https://pkg.go.dev/google.golang.org/protobuf/cmd/protoc-gen-go?tab=versions
+  PROTOC_GEN_GO_GRPC_VERSION: "1.5.1" # https://pkg.go.dev/google.golang.org/grpc/cmd/protoc-gen-go-grpc?tab=versions
   ARCH: "linux-x86_64"
 
 jobs:
@@ -134,3 +134,19 @@ jobs:
           make ${{ matrix.tool }} &
           sleep 5
           make loadtest
+
+  install:
+    name: Install go package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install dependencies
+        run: go get
+      - name: Install polycli using go
+        run: go install
+      - name: Check that polycli has been installed
+        run: polygon-cli version

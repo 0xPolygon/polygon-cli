@@ -16,14 +16,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/maticnetwork/polygon-cli/bindings/funder"
-	"github.com/maticnetwork/polygon-cli/hdwallet"
-	"github.com/maticnetwork/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/bindings/funder"
+	"github.com/0xPolygon/polygon-cli/hdwallet"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 )
-
-// The initial balance of Ether to send to the Funder contract.
-const funderContractBalanceInEth = 1_000.0
 
 // runFunding deploys or instantiates a `Funder` contract to bulk fund randomly generated wallets.
 // Wallets' addresses and private keys are saved to a file.
@@ -52,13 +49,6 @@ func runFunding(ctx context.Context) error {
 		return err
 	}
 
-	// Deploy or instantiate the Funder contract.
-	var contract *funder.Funder
-	contract, err = deployOrInstantiateFunderContract(ctx, c, tops, privateKey)
-	if err != nil {
-		return err
-	}
-
 	// Derive or generate a set of wallets.
 	var addresses []common.Address
 	if params.WalletAddresses != nil && *params.WalletAddresses != nil {
@@ -74,6 +64,13 @@ func runFunding(ctx context.Context) error {
 		log.Info().Msg("Generating random wallets")
 		addresses, err = generateWallets(int(*params.WalletsNumber))
 	}
+	if err != nil {
+		return err
+	}
+
+	// Deploy or instantiate the Funder contract.
+	var contract *funder.Funder
+	contract, err = deployOrInstantiateFunderContract(ctx, c, tops, privateKey, len(addresses))
 	if err != nil {
 		return err
 	}
@@ -124,7 +121,7 @@ func initializeParams(ctx context.Context, c *ethclient.Client) (*ecdsa.PrivateK
 
 // deployOrInstantiateFunderContract deploys or instantiates a Funder contract.
 // If the pre-deployed address is specified, the contract will not be deployed.
-func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, privateKey *ecdsa.PrivateKey) (*funder.Funder, error) {
+func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, privateKey *ecdsa.PrivateKey, numAddresses int) (*funder.Funder, error) {
 	// Deploy the contract if no pre-deployed address flag is provided.
 	var contractAddress common.Address
 	var err error
@@ -140,9 +137,10 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 		log.Debug().Interface("address", contractAddress).Msg("Funder contract deployed")
 
 		// Fund the Funder contract.
+		// Calculate the total amount needed to fund the contract based on the number of addresses.
 		// Note: `funderContractBalanceInWei` reprensents the initial balance of the Funder contract.
 		// The contract needs initial funds to be able to fund wallets.
-		funderContractBalanceInWei := util.EthToWei(funderContractBalanceInEth)
+		funderContractBalanceInWei := new(big.Int).Mul(fundingAmountInWei, big.NewInt(int64(numAddresses)))
 		if err = util.SendTx(ctx, c, privateKey, &contractAddress, funderContractBalanceInWei, nil, uint64(30000)); err != nil {
 			return nil, err
 		}

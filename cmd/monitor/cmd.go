@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maticnetwork/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/spf13/cobra"
 )
 
@@ -51,10 +51,11 @@ func (s *SafeBatchSize) Auto() bool {
 }
 
 var MonitorCmd = &cobra.Command{
-	Use:   "monitor",
-	Short: "Monitor blocks using a JSON-RPC endpoint.",
-	Long:  usage,
-	Args:  cobra.NoArgs,
+	Use:          "monitor",
+	Short:        "Monitor blocks using a JSON-RPC endpoint.",
+	Long:         usage,
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// By default, hide logs from `polycli monitor`.
 		verbosityFlag := cmd.Flag("verbosity")

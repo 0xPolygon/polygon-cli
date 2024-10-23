@@ -1,6 +1,7 @@
 package sensor
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
@@ -30,9 +31,9 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	"github.com/maticnetwork/polygon-cli/p2p"
-	"github.com/maticnetwork/polygon-cli/p2p/database"
-	"github.com/maticnetwork/polygon-cli/rpctypes"
+	"github.com/0xPolygon/polygon-cli/p2p"
+	"github.com/0xPolygon/polygon-cli/p2p/database"
+	"github.com/0xPolygon/polygon-cli/rpctypes"
 )
 
 type (
@@ -50,6 +51,7 @@ type (
 		ShouldWriteBlockEvents       bool
 		ShouldWriteTransactions      bool
 		ShouldWriteTransactionEvents bool
+		ShouldWritePeers             bool
 		ShouldRunPprof               bool
 		PprofPort                    uint
 		ShouldRunPrometheus          bool
@@ -166,6 +168,7 @@ var SensorCmd = &cobra.Command{
 			ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
 			ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
 			ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
+			ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
 			TTL:                          inputSensorParams.TTL,
 		})
 
@@ -268,6 +271,8 @@ var SensorCmd = &cobra.Command{
 				if err := removePeerMessages(msgCounter, server.Peers()); err != nil {
 					log.Error().Err(err).Msg("Failed to clean up peer messages")
 				}
+
+				db.WritePeers(context.Background(), server.Peers())
 			case peer := <-opts.Peers:
 				// Update the peer list and the nodes file.
 				if _, ok := peers[peer.ID()]; !ok {
@@ -380,8 +385,8 @@ func getPeerMessages(url string, counter *prometheus.CounterVec) p2p.MessageCoun
 		BlockBodiesRequests: getCounterValue(new(eth.GetBlockBodiesPacket), url, counter),
 		Transactions: getCounterValue(new(eth.TransactionsPacket), url, counter) +
 			getCounterValue(new(eth.PooledTransactionsPacket), url, counter),
-		TransactionHashes: getCounterValue(new(eth.NewPooledTransactionHashesPacket67), url, counter) +
-			getCounterValue(new(eth.NewPooledTransactionHashesPacket68), url, counter),
+		TransactionHashes: getCounterValue(new(eth.NewPooledTransactionHashesPacket), url, counter) +
+			getCounterValue(new(eth.NewPooledTransactionHashesPacket), url, counter),
 		TransactionRequests: getCounterValue(new(eth.GetPooledTransactionsRequest), url, counter),
 	}
 }
@@ -481,6 +486,7 @@ increase CPU and memory usage.`)
 	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
 		`Whether to write transaction events to the database. This option could
 significantly increase CPU and memory usage.`)
+	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldWritePeers, "write-peers", true, "Whether to write peers to the database")
 	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "Whether to run pprof")
 	SensorCmd.Flags().UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "Port pprof runs on")
 	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "Whether to run Prometheus")

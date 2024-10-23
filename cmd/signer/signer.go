@@ -27,12 +27,12 @@ import (
 	accounts2 "github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/google/tink/go/kwp/subtle"
 	"github.com/manifoldco/promptui"
-	"github.com/maticnetwork/polygon-cli/gethkeystore"
+	"github.com/0xPolygon/polygon-cli/gethkeystore"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/iterator"
@@ -263,7 +263,7 @@ var ImportCmd = &cobra.Command{
 	},
 }
 
-func getTxDataToSign() (*types.Transaction, error) {
+func getTxDataToSign() (*ethtypes.Transaction, error) {
 	if *inputSignerOpts.dataFile == "" {
 		return nil, fmt.Errorf("no datafile was specified to sign")
 	}
@@ -273,12 +273,17 @@ func getTxDataToSign() (*types.Transaction, error) {
 	}
 
 	// TODO at some point we should support signing other data types besides transactions
-	var tx apitypes.SendTxArgs
-	err = json.Unmarshal(dataToSign, &tx)
-	if err != nil {
+	var txArgs apitypes.SendTxArgs
+	if err = json.Unmarshal(dataToSign, &txArgs); err != nil {
 		return nil, err
 	}
-	return tx.ToTransaction(), nil
+	var tx *ethtypes.Transaction
+	tx, err = txArgs.ToTransaction()
+	if err != nil {
+		log.Error().Err(err).Str("txArgs", txArgs.String()).Msg("unable to convert the arguments to a transaction")
+		return nil, err
+	}
+	return tx, nil
 
 }
 func sign(pk *ecdsa.PrivateKey) error {
@@ -290,14 +295,14 @@ func sign(pk *ecdsa.PrivateKey) error {
 	if err != nil {
 		return err
 	}
-	signedTx, err := types.SignTx(tx, signer, pk)
+	signedTx, err := ethtypes.SignTx(tx, signer, pk)
 	if err != nil {
 		return err
 	}
 	return outputSignedTx(signedTx)
 }
 
-func outputSignedTx(signedTx *types.Transaction) error {
+func outputSignedTx(signedTx *ethtypes.Transaction) error {
 	rawTx, err := signedTx.MarshalBinary()
 	if err != nil {
 		return err
@@ -623,7 +628,7 @@ type pkcs8 struct {
 	// optional attributes omitted.
 }
 
-func (g *GCPKMS) Sign(ctx context.Context, tx *types.Transaction) error {
+func (g *GCPKMS) Sign(ctx context.Context, tx *ethtypes.Transaction) error {
 	name := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s/cryptoKeys/%s/cryptoKeyVersions/%d", *inputSignerOpts.gcpProjectID, *inputSignerOpts.gcpRegion, *inputSignerOpts.gcpKeyRingID, *inputSignerOpts.keyID, *inputSignerOpts.gcpKeyVersion)
 
 	client, err := kms.NewKeyManagementClient(ctx)
@@ -812,19 +817,19 @@ var passwordPrompt = promptui.Prompt{
 	Mask:     '*',
 }
 
-func getSigner() (types.Signer, error) {
+func getSigner() (ethtypes.Signer, error) {
 	chainID := new(big.Int).SetUint64(*inputSignerOpts.chainID)
 	switch *inputSignerOpts.signerType {
 	case "latest":
-		return types.LatestSignerForChainID(chainID), nil
+		return ethtypes.LatestSignerForChainID(chainID), nil
 	case "cancun":
-		return types.NewCancunSigner(chainID), nil
+		return ethtypes.NewCancunSigner(chainID), nil
 	case "london":
-		return types.NewLondonSigner(chainID), nil
+		return ethtypes.NewLondonSigner(chainID), nil
 	case "eip2930":
-		return types.NewEIP2930Signer(chainID), nil
+		return ethtypes.NewEIP2930Signer(chainID), nil
 	case "eip155":
-		return types.NewEIP155Signer(chainID), nil
+		return ethtypes.NewEIP155Signer(chainID), nil
 	}
 	return nil, fmt.Errorf("signer %s is not recognized", *inputSignerOpts.signerType)
 }

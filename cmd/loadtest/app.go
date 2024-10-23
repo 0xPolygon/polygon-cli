@@ -10,8 +10,8 @@ import (
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/maticnetwork/polygon-cli/rpctypes"
-	"github.com/maticnetwork/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/rpctypes"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"golang.org/x/time/rate"
@@ -79,6 +79,7 @@ type (
 		ContractCallPayable           *bool
 		InscriptionContent            *string
 		BlobFeeCap                    *uint64
+		StartNonce                    *uint64
 
 		// Computed
 		CurrentGasPrice     *big.Int
@@ -224,6 +225,7 @@ func initFlags() {
 	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
 	ltp.ForceGasLimit = LoadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas")
 	ltp.ForceGasPrice = LoadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be determined automatically, we can specify it manually")
+	ltp.StartNonce = LoadtestCmd.PersistentFlags().Uint64("nonce", 0, "Use this flag to manually set the starting nonce")
 	ltp.ForcePriorityGasPrice = LoadtestCmd.PersistentFlags().Uint64("priority-gas-price", 0, "Specify Gas Tip Price in the case of EIP-1559")
 	ltp.ShouldProduceSummary = LoadtestCmd.PersistentFlags().Bool("summarize", false, "Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time")
 	ltp.BatchSize = LoadtestCmd.PersistentFlags().Uint64("batch-size", 999, "Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time.")
@@ -233,22 +235,24 @@ func initFlags() {
 	ltp.BlobFeeCap = LoadtestCmd.Flags().Uint64("blob-fee-cap", 100000, "The blob fee cap, or the maximum blob fee per chunk, in Gwei.")
 
 	// Local flags.
-	ltp.Modes = LoadtestCmd.Flags().StringSliceP("mode", "m", []string{"t"}, `The testing mode to use. It can be multiple like: "t,c,d,f"
-t - sending transactions
-d - deploy contract
-c - call random contract functions
-f - call specific contract function
-p - call random precompiled contracts
-a - call a specific precompiled contract address
-s - store mode
-r - random modes
-2 - ERC20 transfers
-7 - ERC721 mints
-v3 - UniswapV3 swaps
-R - total recall
-rpc - call random rpc methods
-cc, contract-call - call a contract method
-inscription - sending inscription transactions`)
+	ltp.Modes = LoadtestCmd.Flags().StringSliceP("mode", "m", []string{"t"}, `The testing mode to use. It can be multiple like: "c,d,f,t"
+2, erc20 - Send ERC20 tokens
+7, erc721 - Mint ERC721 tokens
+b, blob - Send blob transactions
+c, call - Call random contract functions
+cc, contract-call - Make contract calls
+d, deploy - Deploy contracts
+f, function - Call random contract functions
+i, inscription - Send inscription transactions
+inc, increment - Increment a counter
+pr, random-precompile - Call random precompiled contracts
+px, specific-precompile - Call specific precompiled contracts
+r, random - Random modes (does not include the following modes: blob, call, inscription, recall, rpc, uniswapv3)
+R, recall - Replay or simulate transactions
+rpc - Call random rpc methods
+s, store - Store bytes in a dynamic byte array
+t, transaction - Send transactions
+v3, uniswapv3 - Perform UniswapV3 swaps`)
 	ltp.Function = LoadtestCmd.Flags().Uint64P("function", "f", 1, "A specific function to be called if running with --mode f or a specific precompiled contract when running with --mode a")
 	ltp.ByteCount = LoadtestCmd.Flags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.LtAddress = LoadtestCmd.Flags().String("lt-address", "", "The address of a pre-deployed load test contract")

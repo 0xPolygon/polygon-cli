@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/datastore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/api/iterator"
@@ -21,6 +23,7 @@ const (
 	BlockEventsKind       = "block_events"
 	TransactionsKind      = "transactions"
 	TransactionEventsKind = "transaction_events"
+	PeersKind             = "peers"
 	MaxAttempts           = 10
 )
 
@@ -34,6 +37,7 @@ type Datastore struct {
 	shouldWriteBlockEvents       bool
 	shouldWriteTransactions      bool
 	shouldWriteTransactionEvents bool
+	shouldWritePeers             bool
 	jobs                         chan struct{}
 	ttl                          time.Duration
 }
@@ -101,6 +105,15 @@ type DatastoreTransaction struct {
 	Type          int16
 }
 
+type DatastorePeer struct {
+	Name         string
+	Caps         string
+	URL          string
+	LastSeenBy   string
+	TimeLastSeen time.Time
+	TTL          time.Time
+}
+
 // DatastoreOptions is used when creating a NewDatastore.
 type DatastoreOptions struct {
 	ProjectID                    string
@@ -111,6 +124,7 @@ type DatastoreOptions struct {
 	ShouldWriteBlockEvents       bool
 	ShouldWriteTransactions      bool
 	ShouldWriteTransactionEvents bool
+	ShouldWritePeers             bool
 	TTL                          time.Duration
 }
 
@@ -130,6 +144,7 @@ func NewDatastore(ctx context.Context, opts DatastoreOptions) Database {
 		shouldWriteBlockEvents:       opts.ShouldWriteBlockEvents,
 		shouldWriteTransactions:      opts.ShouldWriteTransactions,
 		shouldWriteTransactionEvents: opts.ShouldWriteTransactionEvents,
+		shouldWritePeers:             opts.ShouldWritePeers,
 		jobs:                         make(chan struct{}, opts.MaxConcurrency),
 		ttl:                          opts.TTL,
 	}
@@ -234,6 +249,40 @@ func (d *Datastore) WriteTransactions(ctx context.Context, peer *enode.Node, txs
 	}
 }
 
+// WritePeers writes the connected peers to datastore.
+func (d *Datastore) WritePeers(ctx context.Context, peers []*p2p.Peer) {
+	if d.client == nil || !d.ShouldWritePeers() {
+		return
+	}
+
+	d.jobs <- struct{}{}
+	go func() {
+
+		keys := make([]*datastore.Key, 0, len(peers))
+		dsPeers := make([]*DatastorePeer, 0, len(peers))
+		now := time.Now()
+
+		for _, peer := range peers {
+			keys = append(keys, datastore.NameKey(PeersKind, peer.ID().String(), nil))
+			dsPeers = append(dsPeers, &DatastorePeer{
+				Name:         peer.Fullname(),
+				Caps:         strings.Join(peer.Info().Caps, ","),
+				URL:          peer.Node().URLv4(),
+				LastSeenBy:   d.sensorID,
+				TimeLastSeen: now,
+				TTL:          now.Add(d.ttl),
+			})
+		}
+
+		_, err := d.client.PutMulti(ctx, keys, dsPeers)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to write peers")
+		}
+
+		<-d.jobs
+	}()
+}
+
 func (d *Datastore) MaxConcurrentWrites() int {
 	return d.maxConcurrency
 }
@@ -252,6 +301,10 @@ func (d *Datastore) ShouldWriteTransactions() bool {
 
 func (d *Datastore) ShouldWriteTransactionEvents() bool {
 	return d.shouldWriteTransactionEvents
+}
+
+func (d *Datastore) ShouldWritePeers() bool {
+	return d.shouldWritePeers
 }
 
 func (d *Datastore) HasBlock(ctx context.Context, hash common.Hash) bool {
