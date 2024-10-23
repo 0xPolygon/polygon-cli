@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -68,6 +69,7 @@ type (
 		NAT                          string
 		QuickStart                   bool
 		TTL                          time.Duration
+		DiscoveryDNS								 string
 
 		bootnodes    []*enode.Node
 		nodes        []*enode.Node
@@ -248,21 +250,27 @@ var SensorCmd = &cobra.Command{
 		events := make(chan *ethp2p.PeerEvent)
 		sub := server.SubscribeEvents(events)
 		defer sub.Unsubscribe()
-
-		ticker := time.NewTicker(2 * time.Second)
+		
+		ticker := time.NewTicker(2 * time.Second)          // Ticker for recurring tasks every 2 seconds
+		hourlyTicker := time.NewTicker(1 * time.Hour)      // Ticker for running DNS discovery every hour
 		defer ticker.Stop()
+		defer hourlyTicker.Stop()
 
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
 		peers := make(map[enode.ID]string)
+		var peersMutex sync.Mutex
+		
 		for _, node := range inputSensorParams.nodes {
-			// Because the node URLs can change, map them to the node ID to prevent
-			// duplicates.
-			peers[node.ID()] = node.URLv4()
+		    // Map node URLs to node IDs to avoid duplicates
+		    peers[node.ID()] = node.URLv4()
 		}
 
 		go handleAPI(&server, msgCounter)
+		
+		// Run DNS discovery immediately at startup
+		runDNSDiscovery(&server, peers, &peersMutex)
 
 		for {
 			select {
@@ -274,6 +282,8 @@ var SensorCmd = &cobra.Command{
 
 				db.WritePeers(context.Background(), server.Peers())
 			case peer := <-opts.Peers:
+				// Lock the peers map before modifying it
+        peersMutex.Lock()
 				// Update the peer list and the nodes file.
 				if _, ok := peers[peer.ID()]; !ok {
 					peers[peer.ID()] = peer.URLv4()
@@ -282,6 +292,9 @@ var SensorCmd = &cobra.Command{
 						log.Error().Err(err).Msg("Failed to write nodes to file")
 					}
 				}
+				peersMutex.Unlock()
+			case <-hourlyTicker.C:
+	        go runDNSDiscovery(&server, peers, &peersMutex)
 			case <-signals:
 				// This gracefully stops the sensor so that the peers can be written to
 				// the nodes file.
@@ -371,6 +384,46 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec) {
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Error().Err(err).Msg("Failed to start API handler")
 	}
+}
+
+// Function to handle DNS discovery and peer addition
+func runDNSDiscovery(server *ethp2p.Server, peers map[enode.ID]string, peersMutex *sync.Mutex) {
+    if inputSensorParams.DiscoveryDNS != "" {
+        log.Info().Msgf("Starting DNS discovery sync from %s", inputSensorParams.DiscoveryDNS)
+        
+        dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
+        tree, err := dnsclient.SyncTree(inputSensorParams.DiscoveryDNS)
+        if err != nil {
+            log.Error().Err(err).Msg("Failed to sync DNS discovery tree")
+            return
+        }
+        
+        // Log the number of nodes in the tree
+        log.Info().Msgf("Successfully synced DNS discovery tree. Found %d unique nodes", len(tree.Nodes()))
+
+        // Lock the peers map and server operations
+        peersMutex.Lock()
+        defer peersMutex.Unlock()
+
+        // Add DNS-discovered peers
+        for _, node := range tree.Nodes() {
+            if _, ok := peers[node.ID()]; !ok {
+                peers[node.ID()] = node.URLv4()
+                
+                log.Debug().Msgf("Discovered new peer: %s", node.URLv4())
+
+                // Write peers to nodes file
+                if err := p2p.WritePeers(inputSensorParams.NodesFile, peers); err != nil {
+                    log.Error().Err(err).Msg("Failed to write DNS-discovered peers to file")
+                }
+
+                // Instruct server to connect to the new peer
+                server.AddTrustedPeer(node)
+            }
+        }
+
+        log.Info().Msg("DNS discovery peer addition complete")
+    }
 }
 
 // getPeerMessages retrieves the count of various types of eth packets sent by a
@@ -473,7 +526,7 @@ func init() {
 	if err := SensorCmd.MarkFlagRequired("sensor-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")
 	}
-	SensorCmd.Flags().IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 200, "Maximum number of peers to connect to")
+	SensorCmd.Flags().IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 2000, "Maximum number of peers to connect to")
 	SensorCmd.Flags().IntVarP(&inputSensorParams.MaxDatabaseConcurrency, "max-db-concurrency", "D", 10000,
 		`Maximum number of concurrent database operations to perform. Increasing this
 will result in less chance of missing data (i.e. broken pipes) but can
@@ -510,4 +563,5 @@ This produces faster development cycles but can prevent the sensor from being to
 connect to new peers if the nodes.json file is large.`)
 	SensorCmd.Flags().StringVar(&inputSensorParams.TrustedNodesFile, "trusted-nodes", "", "Trusted nodes file")
 	SensorCmd.Flags().DurationVar(&inputSensorParams.TTL, "ttl", 14*24*time.Hour, "Time to live")
+	SensorCmd.Flags().StringVar(&inputSensorParams.DiscoveryDNS, "discovery-dns", "", "DNS discovery ENR tree url")
 }
