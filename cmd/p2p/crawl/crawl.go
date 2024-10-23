@@ -58,17 +58,15 @@ var CrawlCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		switch {
 		// Discovery DNS mode
-		case inputCrawlParams.DiscoveryDNS != "":
+		if inputCrawlParams.DiscoveryDNS != "" {
 			dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
 			tree, err := dnsclient.SyncTree(inputCrawlParams.DiscoveryDNS)
 			if err != nil {
 				return err
 			}
 			return p2p.WriteDNSTreeNodes(inputCrawlParams.NodesFile, tree)
-		// Discover V4/V5 mode
-		default:
+		} else { // Discover V4/V5 mode
 			nodes, err := p2p.ReadNodeSet(inputCrawlParams.NodesFile)
 			if err != nil {
 				log.Warn().Err(err).Msgf("Creating nodes file %v because it does not exist", inputCrawlParams.NodesFile)
