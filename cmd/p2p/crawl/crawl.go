@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -16,6 +17,7 @@ import (
 type (
 	crawlParams struct {
 		Bootnodes            string
+		DiscoveryDNS         string
 		Timeout              string
 		timeout              time.Duration
 		Threads              int
@@ -56,6 +58,16 @@ var CrawlCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Discovery DNS mode
+		if inputCrawlParams.DiscoveryDNS != "" {
+			dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
+			tree, err := dnsclient.SyncTree(inputCrawlParams.DiscoveryDNS)
+			if err != nil {
+				return err
+			}
+			return p2p.WriteDNSTreeNodes(inputCrawlParams.NodesFile, tree)
+		}
+		// Discover V4/V5 mode
 		nodes, err := p2p.ReadNodeSet(inputCrawlParams.NodesFile)
 		if err != nil {
 			log.Warn().Err(err).Msgf("Creating nodes file %v because it does not exist", inputCrawlParams.NodesFile)
@@ -97,6 +109,7 @@ var CrawlCmd = &cobra.Command{
 		}
 
 		return p2p.WriteNodeSet(inputCrawlParams.NodesFile, output, false)
+
 	},
 }
 
@@ -104,9 +117,8 @@ func init() {
 	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Bootnodes, "bootnodes", "b", "",
 		`Comma separated nodes used for bootstrapping. At least one bootnode is
 required, so other nodes in the network can discover each other.`)
-	if err := CrawlCmd.MarkPersistentFlagRequired("bootnodes"); err != nil {
-		log.Error().Err(err).Msg("Failed to mark bootnodes as required persistent flag")
-	}
+	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.DiscoveryDNS, "discovery-dns", "", "", `Enable EIP-1459, DNS Discovery to recover node list from given ENRTree`)
+	CrawlCmd.MarkFlagsMutuallyExclusive("bootnodes", "discovery-dns")
 	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "Time limit for the crawl")
 	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt")
 	CrawlCmd.PersistentFlags().Uint64VarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id")

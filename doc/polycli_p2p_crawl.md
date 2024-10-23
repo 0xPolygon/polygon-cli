@@ -26,6 +26,7 @@ If no nodes.json file exists, it will be created.
   -b, --bootnodes string               Comma separated nodes used for bootstrapping. At least one bootnode is
                                        required, so other nodes in the network can discover each other.
   -d, --database string                Node database for updating and storing client information
+      --discovery-dns string           Enable EIP-1459, DNS Discovery to recover node list from given ENRTree
   -h, --help                           help for crawl
   -n, --network-id uint                Filter discovered nodes by this network id
   -u, --only-urls                      Only writes the enode URLs to the output (default true)

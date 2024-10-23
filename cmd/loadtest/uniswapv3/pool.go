@@ -8,7 +8,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/0xPolygon/polygon-cli/bindings/uniswapv3"
 	"github.com/0xPolygon/polygon-cli/util"
@@ -272,19 +271,10 @@ func provideLiquidity(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 
 // Get the timestamp of the latest block.
 func getLatestBlockTimestamp(ctx context.Context, c *ethclient.Client) (*big.Int, error) {
-	// Get latest block number.
-	blockNumber, err := c.BlockNumber(ctx)
+	blockHead, err := c.HeaderByNumber(ctx, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get the latest block number")
+		log.Error().Err(err).Msg("Unable to get the latest block header")
 		return big.NewInt(0), err
 	}
-
-	// Get latest block.
-	var block *types.Block
-	block, err = c.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get the latest block")
-		return big.NewInt(0), err
-	}
-	return big.NewInt(int64(block.Time())), nil
+	return big.NewInt(int64(blockHead.Time)), nil
 }
