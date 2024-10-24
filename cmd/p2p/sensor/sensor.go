@@ -414,23 +414,15 @@ func handleDNSDiscovery(server *ethp2p.Server) {
 		Int("unique_nodes", len(tree.Nodes())).
 		Msg("Successfully synced DNS discovery tree")
 
-	// Create a map of all the currently connected peers.
-	peers := make(map[enode.ID]struct{})
-	for _, peer := range server.Peers() {
-		peers[peer.ID()] = struct{}{}
-	}
-
 	// Add DNS-discovered peers.
 	for _, node := range tree.Nodes() {
-		if _, ok := peers[node.ID()]; ok {
-			continue // Skip the peer if the sensor is already connected to it.
-		}
-
 		log.Debug().
 			Str("enode", node.URLv4()).
-			Msg("Discovered new peer through DNS")
+			Msg("Discovered peer through DNS")
 
-		// Instruct server to connect to the new peer.
+		// Add the peer to the static node set. The server itself handles whether to
+		// connect to the peer if it's already connected. If a node is part of the
+		// static peer set, the server will handle reconnecting after disconnects.
 		server.AddPeer(node)
 	}
 
