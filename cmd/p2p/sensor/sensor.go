@@ -251,26 +251,30 @@ var SensorCmd = &cobra.Command{
 		sub := server.SubscribeEvents(events)
 		defer sub.Unsubscribe()
 
-		ticker := time.NewTicker(2 * time.Second) // Ticker for recurring tasks every 2 seconds
-		hourlyTicker := time.NewTicker(time.Hour) // Ticker for running DNS discovery every hour
+		ticker := time.NewTicker(2 * time.Second) // Ticker for recurring tasks every 2 seconds.
+		hourlyTicker := time.NewTicker(time.Hour) // Ticker for running DNS discovery every hour.
 		defer ticker.Stop()
 		defer hourlyTicker.Stop()
 
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
+		// peers represents the peer map that is used to write to the nodes.json
+		// file. This is helpful when restarting the node with the --quickstart flag
+		// enabled. This map does not represent the peers that are currently
+		// connected to the sensor. To do that use `server.Peers()` instead.
 		peers := make(map[enode.ID]string)
-		var peersMutex sync.RWMutex
+		var peersMutex sync.Mutex
 
 		for _, node := range inputSensorParams.nodes {
-			// Map node URLs to node IDs to avoid duplicates
+			// Map node URLs to node IDs to avoid duplicates.
 			peers[node.ID()] = node.URLv4()
 		}
 
 		go handleAPI(&server, msgCounter)
 
-		// Run DNS discovery immediately at startup
-		go handleDNSDiscovery(&server, peers, &peersMutex)
+		// Run DNS discovery immediately at startup.
+		go handleDNSDiscovery(&server)
 
 		for {
 			select {
@@ -282,9 +286,9 @@ var SensorCmd = &cobra.Command{
 
 				db.WritePeers(context.Background(), server.Peers())
 			case peer := <-opts.Peers:
-				// Lock the peers map before modifying it
+				// Lock the peers map before modifying it.
 				peersMutex.Lock()
-				// Update the peer list and the nodes file
+				// Update the peer list and the nodes file.
 				if _, ok := peers[peer.ID()]; !ok {
 					peers[peer.ID()] = peer.URLv4()
 
@@ -294,7 +298,7 @@ var SensorCmd = &cobra.Command{
 				}
 				peersMutex.Unlock()
 			case <-hourlyTicker.C:
-				go handleDNSDiscovery(&server, peers, &peersMutex)
+				go handleDNSDiscovery(&server)
 			case <-signals:
 				// This gracefully stops the sensor so that the peers can be written to
 				// the nodes file.
@@ -389,7 +393,7 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec) {
 // handleDNSDiscovery performs DNS-based peer discovery and adds new peers to
 // the p2p server. It syncs the DNS discovery tree and adds any newly discovered
 // peers not already in the peers map.
-func handleDNSDiscovery(server *ethp2p.Server, peers map[enode.ID]string, peersMutex *sync.RWMutex) {
+func handleDNSDiscovery(server *ethp2p.Server) {
 	if len(inputSensorParams.DiscoveryDNS) == 0 {
 		return
 	}
@@ -405,26 +409,28 @@ func handleDNSDiscovery(server *ethp2p.Server, peers map[enode.ID]string, peersM
 		return
 	}
 
-	// Log the number of nodes in the tree
+	// Log the number of nodes in the tree.
 	log.Info().
 		Int("unique_nodes", len(tree.Nodes())).
 		Msg("Successfully synced DNS discovery tree")
 
-	// Lock the peers map and server operations
-	peersMutex.RLock()
-	defer peersMutex.RUnlock()
+	// Create a map of all the currently connected peers.
+	peers := make(map[enode.ID]struct{})
+	for _, peer := range server.Peers() {
+		peers[peer.ID()] = struct{}{}
+	}
 
-	// Add DNS-discovered peers
+	// Add DNS-discovered peers.
 	for _, node := range tree.Nodes() {
 		if _, ok := peers[node.ID()]; ok {
-			continue
+			continue // Skip the peer if the sensor is already connected to it.
 		}
 
 		log.Debug().
 			Str("enode", node.URLv4()).
 			Msg("Discovered new peer through DNS")
 
-		// Instruct server to connect to the new peer
+		// Instruct server to connect to the new peer.
 		server.AddPeer(node)
 	}
 
