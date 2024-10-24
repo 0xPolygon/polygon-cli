@@ -260,7 +260,7 @@ var SensorCmd = &cobra.Command{
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
 		peers := make(map[enode.ID]string)
-		var peersMutex sync.Mutex
+		var peersMutex sync.RWMutex
 
 		for _, node := range inputSensorParams.nodes {
 			// Map node URLs to node IDs to avoid duplicates
@@ -389,7 +389,7 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec) {
 // handleDNSDiscovery performs DNS-based peer discovery and adds new peers to
 // the p2p server. It syncs the DNS discovery tree and adds any newly discovered
 // peers not already in the peers map.
-func handleDNSDiscovery(server *ethp2p.Server, peers map[enode.ID]string, peersMutex *sync.Mutex) {
+func handleDNSDiscovery(server *ethp2p.Server, peers map[enode.ID]string, peersMutex *sync.RWMutex) {
 	if len(inputSensorParams.DiscoveryDNS) == 0 {
 		return
 	}
@@ -411,8 +411,8 @@ func handleDNSDiscovery(server *ethp2p.Server, peers map[enode.ID]string, peersM
 		Msg("Successfully synced DNS discovery tree")
 
 	// Lock the peers map and server operations
-	peersMutex.Lock()
-	defer peersMutex.Unlock()
+	peersMutex.RLock()
+	defer peersMutex.RUnlock()
 
 	// Add DNS-discovered peers
 	for _, node := range tree.Nodes() {
