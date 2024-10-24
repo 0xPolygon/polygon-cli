@@ -69,7 +69,7 @@ type (
 		NAT                          string
 		QuickStart                   bool
 		TTL                          time.Duration
-		DiscoveryDNS								 string
+		DiscoveryDNS                 string
 
 		bootnodes    []*enode.Node
 		nodes        []*enode.Node
@@ -250,9 +250,9 @@ var SensorCmd = &cobra.Command{
 		events := make(chan *ethp2p.PeerEvent)
 		sub := server.SubscribeEvents(events)
 		defer sub.Unsubscribe()
-		
-		ticker := time.NewTicker(2 * time.Second)          // Ticker for recurring tasks every 2 seconds
-		hourlyTicker := time.NewTicker(1 * time.Hour)      // Ticker for running DNS discovery every hour
+
+		ticker := time.NewTicker(2 * time.Second) // Ticker for recurring tasks every 2 seconds
+		hourlyTicker := time.NewTicker(time.Hour) // Ticker for running DNS discovery every hour
 		defer ticker.Stop()
 		defer hourlyTicker.Stop()
 
@@ -261,16 +261,16 @@ var SensorCmd = &cobra.Command{
 
 		peers := make(map[enode.ID]string)
 		var peersMutex sync.Mutex
-		
+
 		for _, node := range inputSensorParams.nodes {
-		    // Map node URLs to node IDs to avoid duplicates
-		    peers[node.ID()] = node.URLv4()
+			// Map node URLs to node IDs to avoid duplicates
+			peers[node.ID()] = node.URLv4()
 		}
 
 		go handleAPI(&server, msgCounter)
-		
+
 		// Run DNS discovery immediately at startup
-		runDNSDiscovery(&server, peers, &peersMutex)
+		go handleDNSDiscovery(&server, peers, &peersMutex)
 
 		for {
 			select {
@@ -283,8 +283,8 @@ var SensorCmd = &cobra.Command{
 				db.WritePeers(context.Background(), server.Peers())
 			case peer := <-opts.Peers:
 				// Lock the peers map before modifying it
-        peersMutex.Lock()
-				// Update the peer list and the nodes file.
+				peersMutex.Lock()
+				// Update the peer list and the nodes file
 				if _, ok := peers[peer.ID()]; !ok {
 					peers[peer.ID()] = peer.URLv4()
 
@@ -294,7 +294,7 @@ var SensorCmd = &cobra.Command{
 				}
 				peersMutex.Unlock()
 			case <-hourlyTicker.C:
-	        go runDNSDiscovery(&server, peers, &peersMutex)
+				go handleDNSDiscovery(&server, peers, &peersMutex)
 			case <-signals:
 				// This gracefully stops the sensor so that the peers can be written to
 				// the nodes file.
@@ -386,44 +386,49 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec) {
 	}
 }
 
-// Function to handle DNS discovery and peer addition
-func runDNSDiscovery(server *ethp2p.Server, peers map[enode.ID]string, peersMutex *sync.Mutex) {
-    if inputSensorParams.DiscoveryDNS != "" {
-        log.Info().Msgf("Starting DNS discovery sync from %s", inputSensorParams.DiscoveryDNS)
-        
-        dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
-        tree, err := dnsclient.SyncTree(inputSensorParams.DiscoveryDNS)
-        if err != nil {
-            log.Error().Err(err).Msg("Failed to sync DNS discovery tree")
-            return
-        }
-        
-        // Log the number of nodes in the tree
-        log.Info().Msgf("Successfully synced DNS discovery tree. Found %d unique nodes", len(tree.Nodes()))
+// handleDNSDiscovery performs DNS-based peer discovery and adds new peers to
+// the p2p server. It syncs the DNS discovery tree and adds any newly discovered
+// peers not already in the peers map.
+func handleDNSDiscovery(server *ethp2p.Server, peers map[enode.ID]string, peersMutex *sync.Mutex) {
+	if len(inputSensorParams.DiscoveryDNS) == 0 {
+		return
+	}
 
-        // Lock the peers map and server operations
-        peersMutex.Lock()
-        defer peersMutex.Unlock()
+	log.Info().
+		Str("discover-dns", inputSensorParams.DiscoveryDNS).
+		Msg("Starting DNS discovery sync")
 
-        // Add DNS-discovered peers
-        for _, node := range tree.Nodes() {
-            if _, ok := peers[node.ID()]; !ok {
-                peers[node.ID()] = node.URLv4()
-                
-                log.Debug().Msgf("Discovered new peer: %s", node.URLv4())
+	client := dnsdisc.NewClient(dnsdisc.Config{})
+	tree, err := client.SyncTree(inputSensorParams.DiscoveryDNS)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to sync DNS discovery tree")
+		return
+	}
 
-                // Write peers to nodes file
-                if err := p2p.WritePeers(inputSensorParams.NodesFile, peers); err != nil {
-                    log.Error().Err(err).Msg("Failed to write DNS-discovered peers to file")
-                }
+	// Log the number of nodes in the tree
+	log.Info().
+		Int("unique_nodes", len(tree.Nodes())).
+		Msg("Successfully synced DNS discovery tree")
 
-                // Instruct server to connect to the new peer
-                server.AddTrustedPeer(node)
-            }
-        }
+	// Lock the peers map and server operations
+	peersMutex.Lock()
+	defer peersMutex.Unlock()
 
-        log.Info().Msg("DNS discovery peer addition complete")
-    }
+	// Add DNS-discovered peers
+	for _, node := range tree.Nodes() {
+		if _, ok := peers[node.ID()]; ok {
+			continue
+		}
+
+		log.Debug().
+			Str("enode", node.URLv4()).
+			Msg("Discovered new peer through DNS")
+
+		// Instruct server to connect to the new peer
+		server.AddPeer(node)
+	}
+
+	log.Info().Msg("Finished adding DNS discovery peers")
 }
 
 // getPeerMessages retrieves the count of various types of eth packets sent by a
@@ -479,8 +484,12 @@ func removePeerMessages(counter *prometheus.CounterVec, peers []*ethp2p.Peer) er
 		}
 	}
 
+	// During DNS-discovery or when the server is taking a while to discover
+	// peers and has yet to receive a message, the sensor_messages prometheus
+	// metric may not exist yet.
 	if family == nil {
-		return errors.New("could not find sensor_messages metric family")
+		log.Trace().Msg("Could not find sensor_messages metric family")
+		return nil
 	}
 
 	for _, metric := range family.GetMetric() {
