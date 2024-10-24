@@ -395,7 +395,7 @@ func handleDNSDiscovery(server *ethp2p.Server, peers map[enode.ID]string, peersM
 	}
 
 	log.Info().
-		Str("discover-dns", inputSensorParams.DiscoveryDNS).
+		Str("discovery-dns", inputSensorParams.DiscoveryDNS).
 		Msg("Starting DNS discovery sync")
 
 	client := dnsdisc.NewClient(dnsdisc.Config{})
