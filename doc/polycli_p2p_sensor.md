@@ -37,7 +37,7 @@ If no nodes.json file exists, it will be created.
   -k, --key-file string          Private key file (cannot be set with --key)
   -D, --max-db-concurrency int   Maximum number of concurrent database operations to perform. Increasing this
                                  will result in less chance of missing data (i.e. broken pipes) but can
-                                 significantly increase memory usage. (default 10000)
+                                 significantly increase memory usage. (default 20000)
   -m, --max-peers int            Maximum number of peers to connect to (default 2000)
       --nat string               NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
   -n, --network-id uint          Filter discovered nodes by this network ID
