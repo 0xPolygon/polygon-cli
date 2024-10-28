@@ -272,6 +272,9 @@ var SensorCmd = &cobra.Command{
 		}
 
 		go handleAPI(&server, msgCounter)
+		
+		// Periodically check the peer count
+		go checkPeerCount(&server)
 
 		// Run DNS discovery immediately at startup.
 		go handleDNSDiscovery(&server)
@@ -388,6 +391,21 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec) {
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Error().Err(err).Msg("Failed to start API handler")
 	}
+}
+
+func checkPeerCount(server *ethp2p.Server) {
+    for {
+        // Get the current number of peers
+        peerCount := server.Peers()
+
+        // Log the current peer count
+        log.Info().
+            Int("peer_count", len(peerCount)).
+            Msg("Current number of peers")
+
+        // Sleep for 30 seconds before checking again
+        time.Sleep(30 * time.Second)
+    }
 }
 
 // handleDNSDiscovery performs DNS-based peer discovery and adds new peers to
