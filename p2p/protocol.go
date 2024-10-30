@@ -300,6 +300,8 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
+	firstSeenTime := time.Now()  // Capture firstSeenTime
+
 	c.counter.WithLabelValues(packet.Name(), c.node.URLv4(), c.name).Add(float64(len(packet)))
 
 	hashes := make([]common.Hash, 0, len(packet))
@@ -310,7 +312,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		}
 	}
 
-	c.db.WriteBlockHashes(ctx, c.node, hashes)
+	c.db.WriteBlockHashes(ctx, c.node, hashes, &firstSeenTime)  // Pass firstSeenTime
 
 	return nil
 }
@@ -321,9 +323,11 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
+	firstSeenTime := time.Now() // Capture firstSeenTime
+
 	c.counter.WithLabelValues(txs.Name(), c.node.URLv4(), c.name).Add(float64(len(txs)))
 
-	c.db.WriteTransactions(ctx, c.node, txs)
+	c.db.WriteTransactions(ctx, c.node, txs, &firstSeenTime)  // Pass firstSeenTime
 
 	return nil
 }
@@ -349,6 +353,8 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
+	firstSeenTime := time.Now() // Capture the timestamp
+
 	headers := packet.BlockHeadersRequest
 	c.counter.WithLabelValues(packet.Name(), c.node.URLv4(), c.name).Add(float64(len(headers)))
 
@@ -358,8 +364,7 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 		}
 	}
 
-	c.db.WriteBlockHeaders(ctx, headers)
-
+	c.db.WriteBlockHeaders(ctx, headers, &firstSeenTime) // Pass firstSeenTime
 	return nil
 }
 
@@ -384,6 +389,8 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
+	firstSeenTime := time.Now() // Capture firstSeenTime
+
 	if len(packet.BlockBodiesResponse) == 0 {
 		return nil
 	}
@@ -406,7 +413,7 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	c.db.WriteBlockBody(ctx, packet.BlockBodiesResponse[0], *hash)
+	c.db.WriteBlockBody(ctx, packet.BlockBodiesResponse[0], *hash, &firstSeenTime) // Pass firstSeenTime
 
 	return nil
 }
@@ -416,6 +423,9 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	if err := msg.Decode(&block); err != nil {
 		return err
 	}
+
+	// Capture the exact time the block was first seen.
+	firstSeenTime := time.Now()
 
 	c.counter.WithLabelValues(block.Name(), c.node.URLv4(), c.name).Inc()
 
@@ -428,7 +438,6 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 			Number:          block.Block.Number().Uint64(),
 			Time:            block.Block.Time(),
 		}
-
 		c.logger.Info().Interface("head", c.head).Msg("Setting head block")
 	}
 	c.headMutex.Unlock()
@@ -437,7 +446,8 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
-	c.db.WriteBlock(ctx, c.node, block.Block, block.TD)
+	// Pass the firstSeenTime to WriteBlock.
+	c.db.WriteBlock(ctx, c.node, block.Block, block.TD, &firstSeenTime)
 
 	return nil
 }
@@ -491,9 +501,11 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 		return err
 	}
 
+	firstSeenTime := time.Now() // Capture firstSeenTime
+
 	c.counter.WithLabelValues(packet.Name(), c.node.URLv4(), c.name).Add(float64(len(packet.PooledTransactionsResponse)))
 
-	c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse)
+	c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse, &firstSeenTime)  // Pass firstSeenTime
 
 	return nil
 }
