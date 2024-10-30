@@ -215,7 +215,7 @@ func (d *Datastore) WriteBlockHashes(ctx context.Context, peer *enode.Node, hash
 
 	d.jobs <- struct{}{}
 	go func() {
-		d.writeEvents(ctx, peer, BlockEventsKind, hashes, BlocksKind, firstSeenTime)  // Pass firstSeenTime
+		d.writeEvents(ctx, peer, BlockEventsKind, hashes, BlocksKind, firstSeenTime) // Pass firstSeenTime
 		<-d.jobs
 	}()
 }
@@ -242,7 +242,7 @@ func (d *Datastore) WriteTransactions(ctx context.Context, peer *enode.Node, txs
 
 		d.jobs <- struct{}{}
 		go func() {
-			d.writeEvents(ctx, peer, TransactionEventsKind, hashes, TransactionsKind, firstSeenTime)  // Pass firstSeenTime
+			d.writeEvents(ctx, peer, TransactionEventsKind, hashes, TransactionsKind, firstSeenTime) // Pass firstSeenTime
 			<-d.jobs
 		}()
 	}
@@ -268,7 +268,7 @@ func (d *Datastore) WritePeers(ctx context.Context, peers []*p2p.Peer, firstSeen
 				URL:          peer.Node().URLv4(),
 				LastSeenBy:   d.sensorID,
 				TimeLastSeen: *firstSeenTime,
-		    TTL:          (*firstSeenTime).Add(d.ttl),
+				TTL:          (*firstSeenTime).Add(d.ttl),
 			})
 		}
 
@@ -339,7 +339,7 @@ func (d *Datastore) newDatastoreHeader(header *types.Header, firstSeenTime *time
 		Nonce:         fmt.Sprint(header.Nonce.Uint64()),
 		BaseFee:       header.BaseFee.String(),
 		TimeFirstSeen: *firstSeenTime,
-    TTL:          (*firstSeenTime).Add(d.ttl),
+		TTL:           (*firstSeenTime).Add(d.ttl),
 	}
 }
 
@@ -373,7 +373,7 @@ func (d *Datastore) newDatastoreTransaction(tx *types.Transaction, firstSeenTime
 		S:             s.String(),
 		Time:          tx.Time(),
 		TimeFirstSeen: *firstSeenTime,
-    TTL:          (*firstSeenTime).Add(d.ttl),
+		TTL:           (*firstSeenTime).Add(d.ttl),
 		Type:          int16(tx.Type()),
 	}
 }
@@ -442,7 +442,7 @@ func (d *Datastore) writeEvent(peer *enode.Node, eventKind string, hash common.H
 		SensorId: d.sensorID,
 		PeerId:   peer.URLv4(),
 		Hash:     datastore.NameKey(hashKind, hash.Hex(), nil),
-		Time:     *firstSeenTime,          // Use the firstSeenTime here
+		Time:     *firstSeenTime,              // Use the firstSeenTime here
 		TTL:      (*firstSeenTime).Add(d.ttl), // Use firstSeenTime for TTL as well
 	}
 	if _, err := d.client.Put(context.Background(), key, &event); err != nil {
@@ -464,7 +464,7 @@ func (d *Datastore) writeEvents(ctx context.Context, peer *enode.Node, eventKind
 			SensorId: d.sensorID,
 			PeerId:   peer.URLv4(),
 			Hash:     datastore.NameKey(hashKind, hash.Hex(), nil),
-			Time:     *firstSeenTime,          // Use the firstSeenTime here
+			Time:     *firstSeenTime,              // Use the firstSeenTime here
 			TTL:      (*firstSeenTime).Add(d.ttl), // Use firstSeenTime for TTL as well
 		}
 		events = append(events, &event)

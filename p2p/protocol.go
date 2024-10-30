@@ -300,7 +300,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
-	firstSeenTime := time.Now()  // Capture firstSeenTime
+	firstSeenTime := time.Now() // Capture firstSeenTime
 
 	c.counter.WithLabelValues(packet.Name(), c.node.URLv4(), c.name).Add(float64(len(packet)))
 
@@ -312,7 +312,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		}
 	}
 
-	c.db.WriteBlockHashes(ctx, c.node, hashes, &firstSeenTime)  // Pass firstSeenTime
+	c.db.WriteBlockHashes(ctx, c.node, hashes, &firstSeenTime) // Pass firstSeenTime
 
 	return nil
 }
@@ -327,7 +327,7 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.counter.WithLabelValues(txs.Name(), c.node.URLv4(), c.name).Add(float64(len(txs)))
 
-	c.db.WriteTransactions(ctx, c.node, txs, &firstSeenTime)  // Pass firstSeenTime
+	c.db.WriteTransactions(ctx, c.node, txs, &firstSeenTime) // Pass firstSeenTime
 
 	return nil
 }
@@ -505,7 +505,7 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 
 	c.counter.WithLabelValues(packet.Name(), c.node.URLv4(), c.name).Add(float64(len(packet.PooledTransactionsResponse)))
 
-	c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse, &firstSeenTime)  // Pass firstSeenTime
+	c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse, &firstSeenTime) // Pass firstSeenTime
 
 	return nil
 }
