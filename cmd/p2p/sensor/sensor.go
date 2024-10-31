@@ -283,8 +283,7 @@ var SensorCmd = &cobra.Command{
 				if err := removePeerMessages(msgCounter, server.Peers()); err != nil {
 					log.Error().Err(err).Msg("Failed to clean up peer messages")
 				}
-
-				db.WritePeers(context.Background(), server.Peers())
+				db.WritePeers(context.Background(), server.Peers(), time.Now())
 			case peer := <-opts.Peers:
 				// Lock the peers map before modifying it.
 				peersMutex.Lock()
