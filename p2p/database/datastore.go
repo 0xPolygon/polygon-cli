@@ -131,8 +131,8 @@ type DatastoreOptions struct {
 
 const (
 	shardCount      = 32
-	cleanupInterval = 10 * time.Minute // Interval between cleanups
-	entryTTL        = 1 * time.Hour    // TTL for each entry
+	cleanupInterval = 5 * time.Minute    // Interval between cleanups
+	entryTTL        = 20 * time.Minute   // TTL for each entry
 )
 
 var (
