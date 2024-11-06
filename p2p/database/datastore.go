@@ -173,25 +173,27 @@ func (d *Datastore) DeduplicateAndWriteEvent(peer *enode.Node, eventKind string,
 	d.writeEvent(peer, eventKind, hash, hashKind, tfs)
 }
 
-// Cleanup function that removes expired entries from each shard
 func cleanupDedupMap() {
-	for {
-		time.Sleep(cleanupInterval) // Wait for the next cleanup cycle
+    for {
+        time.Sleep(cleanupInterval) // Wait for the next cleanup cycle
 
-		expiryTime := time.Now().Add(-entryTTL)
-		for i := 0; i < shardCount; i++ {
-			mu := &mutexes[i]
-			shard := dedupMaps[i]
+        expiryTime := time.Now().Add(-entryTTL)
+        for i := 0; i < shardCount; i++ {
+            mu := &mutexes[i]
+            shard := dedupMaps[i]
 
-			mu.Lock()
-			for key, timestamp := range shard {
-				if timestamp.Before(expiryTime) {
-					delete(shard, key) // Remove stale entry
-				}
-			}
-			mu.Unlock()
-		}
-	}
+            mu.Lock()
+            newShard := make(map[string]time.Time) // New empty map for the shard
+
+            for key, timestamp := range shard {
+                if !timestamp.Before(expiryTime) {
+                    newShard[key] = timestamp // Retain only non-expired entries
+                }
+            }
+            dedupMaps[i] = newShard // Replace with the new, trimmed map
+            mu.Unlock()
+        }
+    }
 }
 
 // StartCleanupRoutine starts the cleanup routine as a goroutine
