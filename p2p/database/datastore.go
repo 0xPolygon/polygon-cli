@@ -191,6 +191,10 @@ func cleanupDedupMap() {
                 }
             }
             dedupMaps[i] = newShard // Replace with the new, trimmed map
+
+            // Log the size of the shard after cleanup for monitoring
+            log.Printf("Shard %d size after cleanup: %d entries", i, len(dedupMaps[i]))
+
             mu.Unlock()
         }
     }
