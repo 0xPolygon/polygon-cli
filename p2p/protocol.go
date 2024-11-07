@@ -81,7 +81,7 @@ type BlockHashEntry struct {
 }
 
 // DefaultTTL defines the time-to-live for block hash entries in blockHashes list.
-var DefaultTTL = 20 * time.Minute
+var DefaultTTL = 10 * time.Minute
 
 // NewEthProctocol creates the new eth protocol. This will handle writing the
 // status exchange, message handling, and writing blocks/txs to the database.
