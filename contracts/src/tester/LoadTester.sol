@@ -912,7 +912,7 @@ contract LoadTester {
     }
 
     function testBlake2f(bytes memory inputData) public returns (bytes memory result) {
-        address BLAKE_2F_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000008;
+        address BLAKE_2F_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000009;
 
         assembly {
             let success := call(
