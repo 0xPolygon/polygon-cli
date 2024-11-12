@@ -238,7 +238,7 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 
 	cs.ForkID, err = util.GetForkID(ec.Client())
 	if err != nil {
-		return nil, fmt.Errorf("Unable to get fork id", err.Error())
+		log.Debug().Err(err).Msg("Unable to get fork id")
 	}
 
 	return cs, nil
