@@ -360,26 +360,20 @@ func (c *conn) addBlockHash(hash common.Hash) {
 // Helper method to check if a block hash is already in blockHashes.
 func (c *conn) hasSeenBlockHash(hash common.Hash) bool {
 	now := time.Now()
-	found := false
-
-	for e := c.blockHashes.Front(); e != nil; {
-		next := e.Next()
+	for e := c.blockHashes.Front(); e != nil; e = e.Next() {
 		entry := e.Value.(BlockHashEntry)
-
+		// Check if the hash matches. We can short circuit here because there will
+		// be block hashes that we haven't seen before, which will make a full
+		// iteration of the blockHashes linked list.
+		if entry.hash.Cmp(hash) == 0 {
+			return true
+		}
 		// Remove entries older than blockHashTTL.
 		if now.Sub(entry.time) > blockHashTTL {
 			c.blockHashes.Remove(e)
-		} else {
-			// Check if the hash matches.
-			if entry.hash.Cmp(hash) == 0 {
-				found = true
-			}
 		}
-
-		e = next
 	}
-
-	return found
+	return false
 }
 
 func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
