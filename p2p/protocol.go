@@ -41,7 +41,7 @@ type conn struct {
 	requests   *list.List
 	requestNum uint64
 
-	// Linked list of seen block hashes with timestamps
+	// Linked list of seen block hashes with timestamps.
 	blockHashes *list.List
 
 	// oldestBlock stores the first block the sensor has seen so when fetching
@@ -321,17 +321,19 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 	for _, entry := range packet {
 		hash := entry.Hash
+
+		// Check if we've seen the hash and remove old entries
 		if c.hasSeenBlockHash(hash) {
 			c.logger.Info().Str("hash", hash.Hex()).Msg("Skipping duplicate block hash")
 			continue
 		}
 
-		// **Attempt to fetch block data first**
+		// Attempt to fetch block data first
 		if err := c.getBlockData(hash); err != nil {
 			return err
 		}
 
-		// **Now that we've successfully fetched, record the new block hash**
+		// Now that we've successfully fetched, record the new block hash
 		c.addBlockHash(hash)
 		uniqueHashes = append(uniqueHashes, hash)
 	}
@@ -348,19 +350,6 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 func (c *conn) addBlockHash(hash common.Hash) {
 	now := time.Now()
 
-	// Remove all entries older than blockHashTTL
-	for e := c.blockHashes.Front(); e != nil; {
-		next := e.Next() // Save the next element
-		entry := e.Value.(BlockHashEntry)
-
-		if now.Sub(entry.time) <= blockHashTTL {
-			break
-		}
-
-		c.blockHashes.Remove(e)
-		e = next
-	}
-
 	// Add the new block hash entry to the list.
 	c.blockHashes.PushBack(BlockHashEntry{
 		hash: hash,
@@ -370,13 +359,27 @@ func (c *conn) addBlockHash(hash common.Hash) {
 
 // Helper method to check if a block hash is already in blockHashes.
 func (c *conn) hasSeenBlockHash(hash common.Hash) bool {
-	for e := c.blockHashes.Front(); e != nil; e = e.Next() {
+	now := time.Now()
+	found := false
+
+	for e := c.blockHashes.Front(); e != nil; {
+		next := e.Next()
 		entry := e.Value.(BlockHashEntry)
-		if entry.hash.Cmp(hash) == 0 {
-			return true
+
+		// Remove entries older than blockHashTTL.
+		if now.Sub(entry.time) > blockHashTTL {
+			c.blockHashes.Remove(e)
+		} else {
+			// Check if the hash matches.
+			if entry.hash.Cmp(hash) == 0 {
+				found = true
+			}
 		}
+
+		e = next
 	}
-	return false
+
+	return found
 }
 
 func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
