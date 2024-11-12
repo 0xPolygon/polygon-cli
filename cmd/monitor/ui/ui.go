@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/0xPolygon/polygon-cli/metrics"
+	"github.com/0xPolygon/polygon-cli/rpctypes"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
-	"github.com/0xPolygon/polygon-cli/metrics"
-	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/rs/zerolog/log"
 )
 
@@ -25,15 +25,15 @@ var (
 )
 
 type UiSkeleton struct {
-	Current, TxPool, ZkEVM *widgets.Paragraph
-	TxPerBlockChart        *widgets.Sparkline
-	GasPriceChart          *widgets.Sparkline
-	BlockSizeChart         *widgets.Sparkline
-	PendingTxChart         *widgets.Sparkline
-	GasChart               *widgets.Sparkline
-	BlockInfo              *widgets.List
-	TxInfo                 *widgets.List
-	Receipts               *widgets.List
+	Current, TxPool, ZkEVM, Rollup *widgets.Paragraph
+	TxPerBlockChart                *widgets.Sparkline
+	GasPriceChart                  *widgets.Sparkline
+	BlockSizeChart                 *widgets.Sparkline
+	PendingTxChart                 *widgets.Sparkline
+	GasChart                       *widgets.Sparkline
+	BlockInfo                      *widgets.List
+	TxInfo                         *widgets.List
+	Receipts                       *widgets.List
 }
 
 func GetCurrentText(widget *widgets.Paragraph, headBlock *big.Int, gasPrice string, peerCount uint64, chainID *big.Int, rpcURL string) string {
@@ -64,6 +64,11 @@ func GetZkEVMText(widget *widgets.Paragraph, trustedBatchesCount, virtualBatches
 	trustedVerifiedBatchesGap := trustedBatchesCount - verifiedBatchesCount
 	verifiedBatches := fmt.Sprintf("Verified: %d (%d)", verifiedBatchesCount, trustedVerifiedBatchesGap)
 	return formatParagraph(widget, []string{trustedBatches, virtualBatches, verifiedBatches})
+}
+
+func GetRollupText(widget *widgets.Paragraph, forkID uint64) string {
+	forkIDString := fmt.Sprintf("ForkID:  %d", forkID)
+	return formatParagraph(widget, []string{forkIDString})
 }
 
 func formatParagraph(widget *widgets.Paragraph, content []string) string {
@@ -524,6 +529,10 @@ func SetUISkeleton(txPoolStatusSupported, zkEVMBatchesSupported bool) (blockList
 		termUi.ZkEVM = widgets.NewParagraph()
 		termUi.ZkEVM.Title = "ZkEVM Batch No."
 		totalWidgets++
+
+		termUi.Rollup = widgets.NewParagraph()
+		termUi.Rollup.Title = "Rollup Info"
+		totalWidgets++
 	}
 
 	topRowBlocks := []interface{}{
@@ -534,6 +543,8 @@ func SetUISkeleton(txPoolStatusSupported, zkEVMBatchesSupported bool) (blockList
 	}
 	if zkEVMBatchesSupported {
 		topRowBlocks = append(topRowBlocks, ui.NewCol(1.0/5.0, termUi.ZkEVM))
+
+		topRowBlocks = append(topRowBlocks, ui.NewCol(1.0/5.0, termUi.Rollup))
 	}
 
 	termUi.TxPerBlockChart = widgets.NewSparkline()
