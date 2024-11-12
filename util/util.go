@@ -232,12 +232,26 @@ func GetZkEVMBatches(rpc *ethrpc.Client) (uint64, uint64, uint64, error) {
 	return trustedBatches, virtualBatches, verifiedBatches, nil
 }
 
+func GetForkID(rpc *ethrpc.Client) (uint64, error) {
+	var raw interface{}
+	if err := rpc.Call(&raw, string(forkID)); err != nil {
+		return 0, err
+	}
+	forkID, err := hexutil.DecodeUint64(fmt.Sprintf("%v", raw))
+	if err != nil {
+		return 0, err
+	}
+	return forkID, nil
+}
+
 type batch string
 
 const (
 	trusted  batch = "zkevm_batchNumber"
 	virtual  batch = "zkevm_virtualBatchNumber"
 	verified batch = "zkevm_verifiedBatchNumber"
+
+	forkID = "zkevm_getForkId"
 )
 
 func getZkEVMBatch(rpc *ethrpc.Client, batchType batch) (uint64, error) {
