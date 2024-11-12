@@ -80,8 +80,8 @@ type BlockHashEntry struct {
 	time time.Time
 }
 
-// DefaultTTL defines the time-to-live for block hash entries in blockHashes list.
-var DefaultTTL = 10 * time.Minute
+// blockHashTTL defines the time-to-live for block hash entries in blockHashes list.
+var blockHashTTL = 10 * time.Minute
 
 // NewEthProctocol creates the new eth protocol. This will handle writing the
 // status exchange, message handling, and writing blocks/txs to the database.
@@ -103,7 +103,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				headMutex:   opts.HeadMutex,
 				counter:     opts.MsgCounter,
 				name:        p.Fullname(),
-				blockHashes: list.New(), // Initialize blockHashes
+				blockHashes: list.New(),
 			}
 
 			c.headMutex.RLock()
@@ -316,25 +316,27 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.counter.WithLabelValues(packet.Name(), c.node.URLv4(), c.name).Add(float64(len(packet)))
 
-	uniqueHashes := make([]common.Hash, 0, len(packet)) // Collect unique hashes for database write
+	// Collect unique hashes for database write.
+	uniqueHashes := make([]common.Hash, 0, len(packet))
 
-	for _, hashEntry := range packet {
-		hash := hashEntry.Hash
+	for _, entry := range packet {
+		hash := entry.Hash
 		if c.hasSeenBlockHash(hash) {
 			c.logger.Info().Str("hash", hash.Hex()).Msg("Skipping duplicate block hash")
 			continue
 		}
 
-		// Process and store new block hash in blockHashes
-		c.addBlockHash(hash)
-		uniqueHashes = append(uniqueHashes, hash) // Add to unique list
-
+		// **Attempt to fetch block data first**
 		if err := c.getBlockData(hash); err != nil {
 			return err
 		}
+
+		// **Now that we've successfully fetched, record the new block hash**
+		c.addBlockHash(hash)
+		uniqueHashes = append(uniqueHashes, hash)
 	}
 
-	// Write only unique hashes to the database
+	// Write only unique hashes to the database.
 	if len(uniqueHashes) > 0 {
 		c.db.WriteBlockHashes(ctx, c.node, uniqueHashes, tfs)
 	}
@@ -346,35 +348,31 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 func (c *conn) addBlockHash(hash common.Hash) {
 	now := time.Now()
 
-	// Remove all entries older than DefaultTTL
+	// Remove all entries older than blockHashTTL
 	for e := c.blockHashes.Front(); e != nil; {
 		next := e.Next() // Save the next element
 		entry := e.Value.(BlockHashEntry)
 
-		if now.Sub(entry.time) > DefaultTTL {
-			c.blockHashes.Remove(e)
-		} else {
-			break // Stop once we hit an entry within the TTL range
+		if now.Sub(entry.time) <= blockHashTTL {
+			break
 		}
 
-		e = next // Move to the next saved element
+		c.blockHashes.Remove(e)
+		e = next
 	}
 
-	// Add the new block hash entry to the list
+	// Add the new block hash entry to the list.
 	c.blockHashes.PushBack(BlockHashEntry{
 		hash: hash,
 		time: now,
 	})
 }
 
-// Helper method to check if a block hash is already in blockHashes
+// Helper method to check if a block hash is already in blockHashes.
 func (c *conn) hasSeenBlockHash(hash common.Hash) bool {
 	for e := c.blockHashes.Front(); e != nil; e = e.Next() {
-		entry := e.Value.(struct {
-			hash common.Hash
-			time time.Time
-		})
-		if entry.hash == hash {
+		entry := e.Value.(BlockHashEntry)
+		if entry.hash.Cmp(hash) == 0 {
 			return true
 		}
 	}
