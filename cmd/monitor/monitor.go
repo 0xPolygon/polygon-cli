@@ -10,19 +10,19 @@ import (
 	"sync"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/0xPolygon/polygon-cli/util"
+	lru "github.com/hashicorp/golang-lru"
 
 	_ "embed"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
-	"github.com/cenkalti/backoff/v4"
-	termui "github.com/gizak/termui/v3"
 	"github.com/0xPolygon/polygon-cli/cmd/monitor/ui"
 	"github.com/0xPolygon/polygon-cli/metrics"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
+	"github.com/cenkalti/backoff/v4"
+	termui "github.com/gizak/termui/v3"
 	"github.com/rs/zerolog/log"
 )
 
@@ -62,6 +62,7 @@ type (
 		UpperBlock          *big.Int
 		LowerBlock          *big.Int
 		ChainID             *big.Int
+		ForkID              uint64
 		HeadBlock           *big.Int
 		PeerCount           uint64
 		GasPrice            *big.Int
@@ -79,6 +80,7 @@ type (
 		GasPrice     *big.Int
 		TxPoolStatus txPoolStatus
 		ZkEVMBatches zkEVMBatches
+		ForkID       uint64
 	}
 	txPoolStatus struct {
 		pending uint64
@@ -234,6 +236,11 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 		log.Debug().Err(err).Msg("Unable to get zkevm batches")
 	}
 
+	cs.ForkID, err = util.GetForkID(ec.Client())
+	if err != nil {
+		log.Debug().Err(err).Msg("Unable to get fork id")
+	}
+
 	return cs, nil
 
 }
@@ -276,6 +283,7 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 	ms.GasPrice = cs.GasPrice
 	ms.TxPoolStatus = cs.TxPoolStatus
 	ms.ZkEVMBatches = cs.ZkEVMBatches
+	ms.ForkID = cs.ForkID
 
 	return
 }
@@ -594,8 +602,11 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			skeleton.TxPool.Text = ui.GetTxPoolText(skeleton.TxPool, ms.TxPoolStatus.pending, ms.TxPoolStatus.queued)
 		}
 
+		// if zkEVMBatchesSupported == true, this means the network will also support ForkIDs.
 		if zkEVMBatchesSupported {
 			skeleton.ZkEVM.Text = ui.GetZkEVMText(skeleton.ZkEVM, ms.ZkEVMBatches.trusted, ms.ZkEVMBatches.virtual, ms.ZkEVMBatches.verified)
+
+			skeleton.Rollup.Text = ui.GetRollupText(skeleton.Rollup, ms.ForkID)
 		}
 
 		skeleton.TxPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)
