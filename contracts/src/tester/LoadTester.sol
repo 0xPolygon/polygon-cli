@@ -931,8 +931,8 @@ contract LoadTester {
         bytes32[2] memory expected;
         expected[0] = hex"ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d1";
         expected[1] = hex"7d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923";
-        require(result[0] == expected[0], "First hash doesn't match");
-        require(result[1] == expected[1], "Second hash doesn't match");
+        require(result[0] == expected[0], "TestBlake2f - First hash doesn't match");
+        require(result[1] == expected[1], "TestBlake2f - Second hash doesn't match");
     }
 
     function F(uint32 rounds, bytes32[2] memory h, bytes32[4] memory m, bytes8[2] memory t, bool f) public view returns (bytes32[2] memory) {
