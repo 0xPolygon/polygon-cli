@@ -68,8 +68,9 @@ func GetZkEVMText(widget *widgets.Paragraph, trustedBatchesCount, virtualBatches
 
 func GetRollupText(widget *widgets.Paragraph, forkID uint64, rollupAddress string, rollupManagerAddress string) string {
 	forkIDString := fmt.Sprintf("ForkID:  %d", forkID)
-	rollupAddressString := "RollupAddress: " + rollupAddress
-	rollupManagerAddressString := "RollupManagerAddress: " + rollupManagerAddress
+	rollupAddressString := fmt.Sprintf("RollupAddress:  %s", rollupAddress)
+	rollupManagerAddressString := fmt.Sprintf("RollupManagerAddress:  %s", rollupManagerAddress)
+
 	return formatParagraph(widget, []string{forkIDString, rollupAddressString, rollupManagerAddressString})
 }
 
