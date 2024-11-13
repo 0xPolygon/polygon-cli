@@ -324,7 +324,6 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 		// Check if we've seen the hash and remove old entries
 		if c.hasSeenBlockHash(hash) {
-			c.logger.Info().Str("hash", hash.Hex()).Msg("Skipping duplicate block hash")
 			continue
 		}
 
