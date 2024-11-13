@@ -244,6 +244,26 @@ func GetForkID(rpc *ethrpc.Client) (uint64, error) {
 	return forkID, nil
 }
 
+func GetRollupAddress(rpc *ethrpc.Client) (string, error) {
+	var raw interface{}
+	if err := rpc.Call(&raw, "zkevm_getRollupAddress"); err != nil {
+		return "", err
+	}
+	rollupAddress := fmt.Sprintf("%v", raw)
+
+	return rollupAddress, nil
+}
+
+func GetRollupManagerAddress(rpc *ethrpc.Client) (string, error) {
+	var raw interface{}
+	if err := rpc.Call(&raw, "zkevm_getRollupManagerAddress"); err != nil {
+		return "", err
+	}
+	rollupManagerAddress := fmt.Sprintf("%v", raw)
+
+	return rollupManagerAddress, nil
+}
+
 type batch string
 
 const (
