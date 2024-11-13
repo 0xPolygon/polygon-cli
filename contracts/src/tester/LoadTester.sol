@@ -929,4 +929,14 @@ contract LoadTester {
             }
         }
     }
+
+    // RIP-7212 Precompile for secp256r1 Curve Support
+    // https://github.com/ethereum/RIPs/blob/master/RIPS/rip-7212.md
+    address constant VERIFIER = 0x0000000000000000000000000000000000000100;
+    function testP256Verify(bytes memory inputData) public returns (bool) {
+        (bool success, bytes memory ret) = VERIFIER.staticcall(inputData);
+        assert(success); // never reverts, always returns 0 or 1
+
+        return abi.decode(ret, (uint256)) == 1;
+    }
 }

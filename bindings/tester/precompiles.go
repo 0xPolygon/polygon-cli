@@ -2,6 +2,8 @@ package tester
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
+	cryptorand "crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -162,6 +164,29 @@ func GenerateBlake2FInput() []byte {
 	return inputData
 }
 
+func GenerateP256VerifyInput() []byte {
+	message := []byte("Test P256Verify")
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), cryptorand.Reader)
+	if err != nil {
+		panic(err)
+	}
+	publicKey := privateKey.PublicKey
+	messageHash := crypto.Keccak256Hash(message)
+	signature, err := crypto.Sign(messageHash.Bytes(), privateKey)
+	if err != nil {
+		panic(err)
+	}
+
+	// Prepare input data for ecRecover precompiled contract
+	inputData := make([]byte, 0, 160)
+	inputData = append(inputData, messageHash.Bytes()...)
+	inputData = append(inputData, signature...)
+	inputData = append(inputData, publicKey.X.Bytes()...)
+	inputData = append(inputData, publicKey.Y.Bytes()...)
+
+	return inputData
+}
+
 func CallPrecompiledContracts(address int, lt *LoadTester, opts *bind.TransactOpts, iterations uint64, privateKey *ecdsa.PrivateKey) (*ethtypes.Transaction, error) {
 	var inputData []byte
 
@@ -202,6 +227,10 @@ func CallPrecompiledContracts(address int, lt *LoadTester, opts *bind.TransactOp
 		log.Trace().Str("method", "TestBlake2f").Msg("Executing contract method")
 		inputData = GenerateECPairingInput()
 		return lt.TestBlake2f(opts, inputData)
+	case 100:
+		log.Trace().Str("method", "TestP256Verify").Msg("Executing contract method")
+		inputData = GenerateP256VerifyInput()
+		return lt.TestP256Verify(opts, inputData)
 	}
 
 	return nil, fmt.Errorf("unrecognized precompiled address %d", address)
@@ -218,6 +247,7 @@ func GetRandomPrecompiledContractAddress() int {
 		// 7, // NOTE: ecMul requires a lot of gas and buggy
 		8,
 		9,
+		100,
 	}
 
 	return codes[rand.Intn(len(codes))]
