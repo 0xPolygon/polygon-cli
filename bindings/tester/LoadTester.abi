@@ -1099,6 +1099,25 @@
   },
   {
     "type": "function",
+    "name": "testP256Verify",
+    "inputs": [
+      {
+        "name": "inputData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "testRETURNDATACOPY",
     "inputs": [
       {
