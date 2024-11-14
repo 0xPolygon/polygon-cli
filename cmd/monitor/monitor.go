@@ -58,29 +58,33 @@ var (
 
 type (
 	monitorStatus struct {
-		TopDisplayedBlock   *big.Int
-		UpperBlock          *big.Int
-		LowerBlock          *big.Int
-		ChainID             *big.Int
-		ForkID              uint64
-		HeadBlock           *big.Int
-		PeerCount           uint64
-		GasPrice            *big.Int
-		TxPoolStatus        txPoolStatus
-		ZkEVMBatches        zkEVMBatches
-		SelectedBlock       rpctypes.PolyBlock
-		SelectedTransaction rpctypes.PolyTransaction
-		BlockCache          *lru.Cache   `json:"-"`
-		BlocksLock          sync.RWMutex `json:"-"`
+		TopDisplayedBlock    *big.Int
+		UpperBlock           *big.Int
+		LowerBlock           *big.Int
+		ChainID              *big.Int
+		ForkID               uint64
+		HeadBlock            *big.Int
+		PeerCount            uint64
+		GasPrice             *big.Int
+		TxPoolStatus         txPoolStatus
+		ZkEVMBatches         zkEVMBatches
+		SelectedBlock        rpctypes.PolyBlock
+		SelectedTransaction  rpctypes.PolyTransaction
+		BlockCache           *lru.Cache   `json:"-"`
+		BlocksLock           sync.RWMutex `json:"-"`
+		RollupAddress        string
+		RollupManagerAddress string
 	}
 	chainState struct {
-		HeadBlock    uint64
-		ChainID      *big.Int
-		PeerCount    uint64
-		GasPrice     *big.Int
-		TxPoolStatus txPoolStatus
-		ZkEVMBatches zkEVMBatches
-		ForkID       uint64
+		HeadBlock            uint64
+		ChainID              *big.Int
+		PeerCount            uint64
+		GasPrice             *big.Int
+		TxPoolStatus         txPoolStatus
+		ZkEVMBatches         zkEVMBatches
+		ForkID               uint64
+		RollupAddress        string
+		RollupManagerAddress string
 	}
 	txPoolStatus struct {
 		pending uint64
@@ -241,6 +245,16 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 		log.Debug().Err(err).Msg("Unable to get fork id")
 	}
 
+	cs.RollupAddress, err = util.GetRollupAddress(ec.Client())
+	if err != nil {
+		log.Debug().Err(err).Msg("Unable to get rollup address")
+	}
+
+	cs.RollupManagerAddress, err = util.GetRollupManagerAddress(ec.Client())
+	if err != nil {
+		log.Debug().Err(err).Msg("Unable to get rollup manager address")
+	}
+
 	return cs, nil
 
 }
@@ -284,6 +298,8 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 	ms.TxPoolStatus = cs.TxPoolStatus
 	ms.ZkEVMBatches = cs.ZkEVMBatches
 	ms.ForkID = cs.ForkID
+	ms.RollupAddress = cs.RollupAddress
+	ms.RollupManagerAddress = cs.RollupManagerAddress
 
 	return
 }
@@ -606,7 +622,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		if zkEVMBatchesSupported {
 			skeleton.ZkEVM.Text = ui.GetZkEVMText(skeleton.ZkEVM, ms.ZkEVMBatches.trusted, ms.ZkEVMBatches.virtual, ms.ZkEVMBatches.verified)
 
-			skeleton.Rollup.Text = ui.GetRollupText(skeleton.Rollup, ms.ForkID)
+			skeleton.Rollup.Text = ui.GetRollupText(skeleton.Rollup, ms.ForkID, ms.RollupAddress, ms.RollupManagerAddress)
 		}
 
 		skeleton.TxPerBlockChart.Data = metrics.GetTxsPerBlock(renderedBlocks)

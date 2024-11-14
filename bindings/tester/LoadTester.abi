@@ -1,6 +1,45 @@
 [
   {
     "type": "function",
+    "name": "F",
+    "inputs": [
+      {
+        "name": "rounds",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "h",
+        "type": "bytes32[2]",
+        "internalType": "bytes32[2]"
+      },
+      {
+        "name": "m",
+        "type": "bytes32[4]",
+        "internalType": "bytes32[4]"
+      },
+      {
+        "name": "t",
+        "type": "bytes8[2]",
+        "internalType": "bytes8[2]"
+      },
+      {
+        "name": "f",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32[2]",
+        "internalType": "bytes32[2]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "dumpster",
     "inputs": [
       {
