@@ -932,6 +932,7 @@ contract LoadTester {
 
     // RIP-7212 Precompile for secp256r1 Curve Support
     // https://github.com/ethereum/RIPs/blob/master/RIPS/rip-7212.md
+    // Ref: https://github.com/daimo-eth/p256-verifier/blob/607d3ec8377a3f59d65eca60d87dee8485d2ebcc/src/P256.sol
     function testP256Verify(bytes memory inputData) public returns (bool) {
         address P256VERIFY_PRECOMPILED_CONTRACT = 0x0000000000000000000000000000000000000100;
         (bool success, bytes memory ret) = P256VERIFY_PRECOMPILED_CONTRACT.staticcall(inputData);

@@ -234,7 +234,7 @@ func GetRandomPrecompiledContractAddress() int {
 		// 7, // NOTE: ecMul requires a lot of gas and buggy
 		8,
 		9,
-		100,
+		// 100, // P256Verify haven't been implemented on Ethereum yet
 	}
 
 	return codes[rand.Intn(len(codes))]
