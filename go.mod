@@ -35,7 +35,7 @@ require (
 	golang.org/x/text v0.20.0
 	golang.org/x/time v0.8.0
 	google.golang.org/api v0.206.0
-	google.golang.org/protobuf v1.35.1
+	google.golang.org/protobuf v1.35.2
 )
 
 require github.com/alecthomas/participle/v2 v2.1.1
