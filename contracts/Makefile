@@ -12,6 +12,9 @@ build: ## Build the smart contracts
 
 ##@ Gen go bindings
 
+.PHONY: gen-go-bindings
+gen-go-bindings: build gen-funder-go-bindings gen-tester-go-bindings gen-tokens-go-bindings ## Generate go bindings.
+
 .PHONY: gen-funder-go-bindings
 gen-funder-go-bindings: ## Generatego go bindings for the funder contract.
 	cat ./out/Funder.sol/Funder.json | jq -r '.abi'             > ../bindings/funder/Funder.abi
@@ -55,7 +58,3 @@ gen-ulxly-go-bindings:
 	cat ./out/PolygonZkEVMBridge.sol/PolygonZkEVMBridge.json | jq -r '.bytecode.object' > ../bindings/ulxly/PolygonZkEVMBridge.bin
 	abigen --abi ../bindings/ulxly/PolygonZkEVMBridge.abi --bin ../bindings/ulxly/PolygonZkEVMBridge.bin --pkg ulxly --type legacy --out ../bindings/ulxly/PolygonZkEVMBridge.go
 	@echo "✅ ulxly/PolygonZkEVMBridge.go generated"
-
-
-.PHONY: gen-go-bindings
-gen-go-bindings: build gen-funder-go-bindings gen-tester-go-bindings gen-tokens-go-bindings ## Generate go bindings.
