@@ -593,9 +593,11 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		if renderedBlocksMeanGasPrice == nil {
 			skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, "--", ms.PeerCount, ms.ChainID, rpcUrl)
 		} else {
-			// Under normal cases, the gas price will be derived from the last element of the GasPriceChart with 2 decimal places precision.
-			gasPriceStr := strconv.FormatFloat(renderedBlocksMeanGasPrice[len(renderedBlocksMeanGasPrice)-1]/1000000000, 'f', 2, 64)
-			skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, gasPriceStr, ms.PeerCount, ms.ChainID, rpcUrl)
+			if len(renderedBlocksMeanGasPrice) >= 1 {
+				// Under normal cases, the gas price will be derived from the last element of the GasPriceChart with 2 decimal places precision.
+				gasPriceStr := strconv.FormatFloat(renderedBlocksMeanGasPrice[len(renderedBlocksMeanGasPrice)-1]/1000000000, 'f', 2, 64)
+				skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, gasPriceStr, ms.PeerCount, ms.ChainID, rpcUrl)
+			}
 		}
 
 		if txPoolStatusSupported {
@@ -627,7 +629,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		if blockTable.SelectedRow > 0 && blockTable.SelectedRow <= len(blockTable.Rows) && (len(renderedBlocks)-blockTable.SelectedRow) >= 0 {
 			// Only changed the selected block when the user presses the up down keys.
 			// Otherwise this will adjust when the table is updated automatically.
-			if setBlock {
+			if setBlock && ms.SelectedBlock != nil {
 				log.Debug().
 					Int("blockTable.SelectedRow", blockTable.SelectedRow).
 					Int("renderedBlocks", len(renderedBlocks)).
@@ -821,6 +823,12 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				setBlock = true
 			case "<C-f>", "<PageDown>":
 				// When pressing PageDown beyond the genesis block, redraw the monitor screen to avoid freezing at the previous rendered blocks.
+				if len(renderedBlocks) == 0 {
+					// forceRedraw = true
+					// redraw(ms, true)
+					break
+				}
+
 				if renderedBlocks[0].Number().String() == "0" || renderedBlocks[0].Number().String() == "1" {
 					blockTable.SelectedRow = len(renderedBlocks)
 					forceRedraw = true
