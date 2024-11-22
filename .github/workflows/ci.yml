@@ -12,10 +12,10 @@ concurrency:
 
 env:
   GO_VERSION: "1.22" # https://go.dev/dl/
-  STRINGER_VERSION: "0.26.0" # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
+  STRINGER_VERSION: "0.27.0" # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
   # Protoc dependencies.
-  PROTOC_VERSION: "28.2" # https://github.com/protocolbuffers/protobuf/releases
-  PROTOC_GEN_GO_VERSION: "1.35.1" # https://pkg.go.dev/google.golang.org/protobuf/cmd/protoc-gen-go?tab=versions
+  PROTOC_VERSION: "28.3" # https://github.com/protocolbuffers/protobuf/releases
+  PROTOC_GEN_GO_VERSION: "1.35.2" # https://pkg.go.dev/google.golang.org/protobuf/cmd/protoc-gen-go?tab=versions
   PROTOC_GEN_GO_GRPC_VERSION: "1.5.1" # https://pkg.go.dev/google.golang.org/grpc/cmd/protoc-gen-go-grpc?tab=versions
   ARCH: "linux-x86_64"
 
@@ -61,6 +61,7 @@ jobs:
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v${{ env.PROTOC_GEN_GO_GRPC_VERSION }}
           protoc-gen-go --version
           protoc-gen-go-grpc --version
+
       # Dependencies to generate go bindings.
       - name: Install abigen
         run: |
@@ -88,6 +89,7 @@ jobs:
         run: |
           if [[ -n $(git status --porcelain) ]]; then
             echo "❌ Error: Generated files are not up to date. Please run \`make gen\`."
+            echo "🚨 If \`make gen\` doesn't update the contract bytecodes and/or go bindings and this job is still failing, please take a look at the ethereum and foundry versions. We don't pin the versions of these packages in CI so this job may complain after an update of the packages!"
             git status --porcelain
             git diff
             exit 1
