@@ -709,9 +709,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				case loadTestModeIncrement:
 					startReq, endReq, tErr = loadTestIncrement(ctx, c, myNonceValue, ltContract)
 				case loadTestModeRandomPrecompiledContract:
-					startReq, endReq, tErr = loadTestCallPrecompiledContract(ctx, c, myNonceValue, ltContract, true)
-				case loadTestModeSpecificPrecompiledContract:
 					startReq, endReq, tErr = loadTestCallPrecompiledContract(ctx, c, myNonceValue, ltContract, false)
+				case loadTestModeSpecificPrecompiledContract:
+					startReq, endReq, tErr = loadTestCallPrecompiledContract(ctx, c, myNonceValue, ltContract, true)
 				case loadTestModeRecall:
 					startReq, endReq, tErr = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
 				case loadTestModeRPC:
