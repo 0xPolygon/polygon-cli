@@ -840,8 +840,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			case "<C-f>", "<PageDown>":
 				// When pressing PageDown beyond the genesis block, redraw the monitor screen to avoid freezing at the previous rendered blocks.
 				if len(renderedBlocks) == 0 {
-					// forceRedraw = true
-					// redraw(ms, true)
+					currentMode = monitorModeExplorer
+					blockTable.SelectedRow = 0
+					forceRedraw = true
+					redraw(ms, true)
 					break
 				}
 
