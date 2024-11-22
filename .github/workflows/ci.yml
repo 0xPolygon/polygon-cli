@@ -14,7 +14,7 @@ env:
   GO_VERSION: "1.22" # https://go.dev/dl/
   STRINGER_VERSION: "0.26.0" # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
   # Go bindings.
-  GO_ETHEREUM_VERSION: "1.14.11" # https://github.com/ethereum/go-ethereum/releases
+  GO_ETHEREUM_VERSION: "1.14.11+build30352+jammy" # https://github.com/ethereum/go-ethereum/releases and https://launchpad.net/~ethereum/+archive/ubuntu/ethereum
   # Protoc dependencies.
   PROTOC_VERSION: "28.2" # https://github.com/protocolbuffers/protobuf/releases
   PROTOC_GEN_GO_VERSION: "1.35.1" # https://pkg.go.dev/google.golang.org/protobuf/cmd/protoc-gen-go?tab=versions
