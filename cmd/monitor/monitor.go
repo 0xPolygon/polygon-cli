@@ -193,14 +193,10 @@ func monitor(ctx context.Context) error {
 		}
 	}()
 
-	// Give time for the UI to attempt rendering.
-	time.Sleep(5 * time.Second)
 	if !isUiRendered {
 		// If UI cannot be rendered and returns, close the goroutine.
 		ctx.Done()
 	}
-	// Give time for goroutine to finish.
-	time.Sleep(1 * time.Second)
 	// Receive the errors from errChan and return to exit.
 	err = <-errChan
 	return err
