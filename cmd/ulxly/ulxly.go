@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/ecdsa"
 	_ "embed"
 	"encoding/binary"
 	"encoding/json"
@@ -14,7 +13,6 @@ import (
 	"math/big"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -29,6 +27,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"github.com/urfave/cli/v2"
 )
 
 const (
@@ -53,6 +52,7 @@ type uLxLyArgs struct {
 	BridgeServiceRPCURL     *string
 	ClaimRPCURL             *string
 	ClaimPrivateKey         *string
+	NetworkID               *uint32
 	ClaimBridgeAddress      *string
 	ClaimGasLimit           *uint64
 	ClaimChainID            *string
@@ -102,371 +102,409 @@ type BridgeProof struct {
 	} `json:"proof"`
 }
 
-type BridgeDeposits struct {
-	Deposit []struct {
-		LeafType      int    `json:"leaf_type"`
-		OrigNet       int    `json:"orig_net"`
+type BridgeDeposit struct {
+	Deposit struct {
+		LeafType      uint8  `json:"leaf_type"`
+		OrigNet       uint32 `json:"orig_net"`
 		OrigAddr      string `json:"orig_addr"`
 		Amount        string `json:"amount"`
-		DestNet       int    `json:"dest_net"`
+		DestNet       uint32 `json:"dest_net"`
 		DestAddr      string `json:"dest_addr"`
 		BlockNum      string `json:"block_num"`
-		DepositCnt    string `json:"deposit_cnt"`
-		NetworkID     int    `json:"network_id"`
+		DepositCnt    uint32 `json:"deposit_cnt"`
+		NetworkID     uint32 `json:"network_id"`
 		TxHash        string `json:"tx_hash"`
 		ClaimTxHash   string `json:"claim_tx_hash"`
 		Metadata      string `json:"metadata"`
 		ReadyForClaim bool   `json:"ready_for_claim"`
 		GlobalIndex   string `json:"global_index"`
-	} `json:"deposits"`
-	TotalCnt string `json:"total_cnt"`
+	} `json:"deposit"`
+	Code    *int    `json:"code"`
+	Message *string `json:"message"`
 }
-
-var ulxlyInputArgs uLxLyArgs
 
 var ULxLyCmd = &cobra.Command{
-	Use:   "ulxly",
-	Short: "Utilities for interacting with the lxly bridge",
-	Long:  "These are low level tools for directly scanning bridge events and constructing proofs.",
-	Args:  cobra.NoArgs,
+	Use:                "ulxly",
+	Short:              "Utilities for interacting with the lxly bridge",
+	Long:               "These are low level tools for directly scanning bridge events and constructing proofs.",
+	DisableFlagParsing: true,
+	Run:                initCli,
 }
 
-//go:embed depositGetUsage.md
-var depositGetUsage string
-var depositGetCmd = &cobra.Command{
-	Use:     "deposit-get",
-	Short:   "Get a range of deposits",
-	Long:    depositGetUsage,
-	Args:    cobra.NoArgs,
-	PreRunE: checkGetDepositArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		// Dial the Ethereum RPC server.
-		rpc, err := ethrpc.DialContext(ctx, *ulxlyInputArgs.RPCURL)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to Dial RPC")
-			return err
-		}
-		defer rpc.Close()
-		ec := ethclient.NewClient(rpc)
+func readDeposit(ctx *cli.Context) error {
+	bridgeAddress := ctx.String(bridgeAddressFlag.Name)
+	rpcUrl := ctx.String(rpcURLFlag.Name)
+	toBlock := ctx.Uint64(toBlockFlag.Name)
+	fromBlock := ctx.Uint64(fromBlockFlag.Name)
+	filter := ctx.Uint64(filterFlag.Name)
+	// Dial the Ethereum RPC server.
+	rpc, err := ethrpc.DialContext(ctx.Context, rpcUrl)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to Dial RPC")
+		return err
+	}
+	defer rpc.Close()
+	ec := ethclient.NewClient(rpc)
 
-		bridgeV2, err := ulxly.NewUlxly(common.HexToAddress(*ulxlyInputArgs.BridgeAddress), ec)
-		if err != nil {
-			return err
-		}
-		fromBlock := *ulxlyInputArgs.FromBlock
-		toBlock := *ulxlyInputArgs.ToBlock
-		currentBlock := fromBlock
-		for currentBlock < toBlock {
-			endBlock := currentBlock + *ulxlyInputArgs.FilterSize
-			if endBlock > toBlock {
-				endBlock = toBlock
-			}
-
-			opts := bind.FilterOpts{
-				Start:   currentBlock,
-				End:     &endBlock,
-				Context: ctx,
-			}
-			evtV2Iterator, err := bridgeV2.FilterBridgeEvent(&opts)
-			if err != nil {
-				return err
-			}
-
-			for evtV2Iterator.Next() {
-				evt := evtV2Iterator.Event
-				log.Info().Uint32("deposit", evt.DepositCount).Uint64("block-number", evt.Raw.BlockNumber).Msg("Found ulxly Deposit")
-				var jBytes []byte
-				jBytes, err = json.Marshal(evt)
-				if err != nil {
-					return err
-				}
-				fmt.Println(string(jBytes))
-			}
-			err = evtV2Iterator.Close()
-			if err != nil {
-				log.Error().Err(err).Msg("error closing event iterator")
-			}
-			currentBlock = endBlock
+	bridgeV2, err := ulxly.NewUlxly(common.HexToAddress(bridgeAddress), ec)
+	if err != nil {
+		return err
+	}
+	currentBlock := fromBlock
+	for currentBlock < toBlock {
+		endBlock := currentBlock + filter
+		if endBlock > toBlock {
+			endBlock = toBlock
 		}
 
-		return nil
-	},
-}
-
-//go:embed depositNewUsage.md
-var depositNewUsage string
-var depositNewCmd = &cobra.Command{
-	Use:     "deposit-new",
-	Short:   "Make a uLxLy deposit transaction",
-	Long:    depositNewUsage,
-	Args:    cobra.NoArgs,
-	PreRunE: checkDepositArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		// Dial the Ethereum RPC server.
-		client, err := ethclient.DialContext(ctx, *ulxlyInputArgs.DepositRPCURL)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to Dial RPC")
-			return err
+		opts := bind.FilterOpts{
+			Start:   currentBlock,
+			End:     &endBlock,
+			Context: ctx.Context,
 		}
-		defer client.Close()
-		// Initialize and assign variables required to send transaction payload
-		bridgeV2, privateKey, fromAddress, gasLimit, gasPrice, toAddress, signer := generateTransactionPayload(ctx, client, *ulxlyInputArgs.DepositBridgeAddress, *ulxlyInputArgs.DepositPrivateKey, *ulxlyInputArgs.DepositGasLimit, *ulxlyInputArgs.DestinationAddress, *ulxlyInputArgs.DepositChainID)
-
-		value := big.NewInt(*ulxlyInputArgs.Amount)
-		tokenAddress := common.HexToAddress(*ulxlyInputArgs.TokenAddress)
-		callData := common.Hex2Bytes(*ulxlyInputArgs.CallData)
-
-		tops := &bind.TransactOpts{
-			Signer: func(address common.Address, transaction *types.Transaction) (*types.Transaction, error) {
-				return types.SignTx(transaction, signer, privateKey)
-			},
-			From:      fromAddress,
-			Context:   ctx,
-			GasLimit:  gasLimit,
-			GasPrice:  gasPrice,
-			GasFeeCap: nil,
-			GasTipCap: nil,
-		}
-		if tokenAddress == common.HexToAddress("0x0000000000000000000000000000000000000000") {
-			tops = &bind.TransactOpts{
-				Signer: func(address common.Address, transaction *types.Transaction) (*types.Transaction, error) {
-					return types.SignTx(transaction, signer, privateKey)
-				},
-				Value:     value,
-				From:      fromAddress,
-				Context:   ctx,
-				GasLimit:  gasLimit,
-				GasPrice:  gasPrice,
-				GasFeeCap: nil,
-				GasTipCap: nil,
-			}
-		}
-
-		var bridgeTxn *types.Transaction
-		switch {
-		case *ulxlyInputArgs.DepositMessage:
-			bridgeTxn, err = bridgeV2.BridgeMessage(tops, *ulxlyInputArgs.DestinationNetwork, toAddress, *ulxlyInputArgs.IsForced, callData)
-			if err != nil {
-				log.Error().Err(err).Msg("Unable to interact with bridge contract")
-				return err
-			}
-		case *ulxlyInputArgs.DepositWETH:
-			bridgeTxn, err = bridgeV2.BridgeMessageWETH(tops, *ulxlyInputArgs.DestinationNetwork, toAddress, value, *ulxlyInputArgs.IsForced, callData)
-			if err != nil {
-				log.Error().Err(err).Msg("Unable to interact with bridge contract")
-				return err
-			}
-		default:
-			bridgeTxn, err = bridgeV2.BridgeAsset(tops, *ulxlyInputArgs.DestinationNetwork, toAddress, value, tokenAddress, *ulxlyInputArgs.IsForced, callData)
-			if err != nil {
-				log.Error().Err(err).Msg("Unable to interact with bridge contract")
-				return err
-			}
-		}
-
-		// Wait for the transaction to be mined
-		// TODO: Consider creating a function for this section
-		txnMinedTimer := time.NewTimer(time.Duration(*ulxlyInputArgs.DepositTimeoutTxnReceipt) * time.Second)
-		defer txnMinedTimer.Stop()
-		for {
-			select {
-			case <-txnMinedTimer.C:
-				log.Info().Msg("Wait timer for transaction receipt exceeded!")
-				return nil
-			default:
-				r, err := client.TransactionReceipt(ctx, bridgeTxn.Hash())
-				if err != nil {
-					if err.Error() != "not found" {
-						log.Error().Err(err)
-						return err
-					}
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				if r.Status != 0 {
-					log.Info().Interface("txHash", r.TxHash).Msg("Deposit transaction successful")
-					return nil
-				} else if r.Status == 0 {
-					log.Error().Interface("txHash", r.TxHash).Msg("Deposit transaction failed")
-					log.Info().Uint64("currentGasLimit", gasLimit).Uint64("cumulativeGasUsedForTx", r.CumulativeGasUsed).Msg("Perhaps try increasing the gas limit")
-					return nil
-				}
-				time.Sleep(1 * time.Second)
-			}
-		}
-	},
-}
-
-//go:embed depositClaimUsage.md
-var depositClaimUsage string
-var depositClaimCmd = &cobra.Command{
-	Use:     "deposit-claim",
-	Short:   "Make a uLxLy claim transaction",
-	Long:    depositClaimUsage,
-	Args:    cobra.NoArgs,
-	PreRunE: checkClaimArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		// Dial Ethereum client
-		client, err := ethclient.DialContext(ctx, *ulxlyInputArgs.ClaimRPCURL)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to Dial RPC")
-			return err
-		}
-		defer client.Close()
-		// Initialize and assign variables required to send transaction payload
-		bridgeV2, privateKey, fromAddress, gasLimit, gasPrice, toAddress, signer := generateTransactionPayload(ctx, client, *ulxlyInputArgs.ClaimBridgeAddress, *ulxlyInputArgs.ClaimPrivateKey, *ulxlyInputArgs.ClaimGasLimit, *ulxlyInputArgs.ClaimAddress, *ulxlyInputArgs.ClaimChainID)
-
-		// Call the bridge service RPC URL to get the merkle proofs and exit roots and parses them to the correct formats.
-		bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%s&net_id=%s", *ulxlyInputArgs.BridgeServiceRPCURL, *ulxlyInputArgs.ClaimIndex, *ulxlyInputArgs.ClaimOriginNetwork)
-		merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
-
-		tops := &bind.TransactOpts{
-			Signer: func(address common.Address, transaction *types.Transaction) (*types.Transaction, error) {
-				return types.SignTx(transaction, signer, privateKey)
-			},
-			// Value:     value,
-			From:      fromAddress,
-			Context:   ctx,
-			GasLimit:  gasLimit,
-			GasPrice:  gasPrice,
-			GasFeeCap: nil,
-			GasTipCap: nil,
-		}
-
-		// Call the bridge service RPC URL to get the deposits data and parses them to the correct formats.
-		bridgeServiceDepositsEndpoint := fmt.Sprintf("%s/bridges/%s", *ulxlyInputArgs.BridgeServiceRPCURL, *ulxlyInputArgs.ClaimAddress)
-		globalIndex, originAddress, amount, metadata, err := getDeposits(bridgeServiceDepositsEndpoint)
-		if err != nil {
-			log.Error().Err(err)
-			return err
-		}
-
-		claimOriginNetwork, _ := strconv.Atoi(*ulxlyInputArgs.ClaimOriginNetwork)           // Convert ClaimOriginNetwork to int
-		claimDestinationNetwork, _ := strconv.Atoi(*ulxlyInputArgs.ClaimDestinationNetwork) // Convert ClaimDestinationNetwork to int
-		var claimTxn *types.Transaction
-		switch {
-		case *ulxlyInputArgs.ClaimMessage:
-			claimTxn, err = bridgeV2.ClaimMessage(tops, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), uint32(claimOriginNetwork), originAddress, uint32(claimDestinationNetwork), toAddress, amount, metadata)
-			if err != nil {
-				log.Error().Err(err).Msg("Unable to interact with bridge contract")
-				return err
-			}
-		default:
-			claimTxn, err = bridgeV2.ClaimAsset(tops, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), uint32(claimOriginNetwork), originAddress, uint32(claimDestinationNetwork), toAddress, amount, metadata)
-			if err != nil {
-				log.Error().Err(err).Msg("Unable to interact with bridge contract")
-				return err
-			}
-		}
-
-		// Wait for the transaction to be mined
-		// TODO: Consider creating a function for this section
-		txnMinedTimer := time.NewTimer(time.Duration(*ulxlyInputArgs.ClaimTimeoutTxnReceipt) * time.Second)
-		defer txnMinedTimer.Stop()
-		for {
-			select {
-			case <-txnMinedTimer.C:
-				log.Info().Msg("Wait timer for transaction receipt exceeded!")
-				return nil
-			default:
-				r, err := client.TransactionReceipt(ctx, claimTxn.Hash())
-				if err != nil {
-					if err.Error() != "not found" {
-						log.Error().Err(err)
-						return err
-					}
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				if r.Status != 0 {
-					log.Info().Interface("txHash", r.TxHash).Msg("Claim transaction successful")
-					return nil
-				} else if r.Status == 0 {
-					log.Info().Interface("txHash", r.TxHash).Msg("Claim transaction failed")
-					return nil
-				}
-				time.Sleep(1 * time.Second)
-			}
-		}
-	},
-}
-
-//go:embed proofUsage.md
-var proofUsage string
-var ProofCmd = &cobra.Command{
-	Use:     "proof",
-	Short:   "generate a merkle proof",
-	Long:    proofUsage,
-	Args:    cobra.NoArgs,
-	PreRunE: checkProofArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		rawDepositData, err := getInputData(cmd, args)
+		evtV2Iterator, err := bridgeV2.FilterBridgeEvent(&opts)
 		if err != nil {
 			return err
 		}
-		return readDeposits(rawDepositData)
-	},
-}
 
-var EmptyProofCmd = &cobra.Command{
-	Use:   "empty-proof",
-	Short: "print an empty proof structure",
-	Long: `Use this command to print an empty proof response that's filled with
-zero-valued siblings like
-0x0000000000000000000000000000000000000000000000000000000000000000. This
-can be useful when you need to submit a dummy proof.`,
-	Args:    cobra.NoArgs,
-	PreRunE: checkProofArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		p := new(Proof)
-
-		e := generateEmptyHashes(TreeDepth)
-		copy(p.Siblings[:], e)
-		fmt.Println(p.String())
-		return nil
-	},
-}
-
-var ZeroProofCmd = &cobra.Command{
-	Use:   "zero-proof",
-	Short: "print a proof structure with the zero hashes",
-	Long: `Use this command to print a proof response that's filled with the zero
-hashes. This values are very helpful for debugging because it would
-tell you how populated the tree is and roughly which leaves and
-siblings are empty. It's also helpful for sanity checking a proof
-response to understand if the hashed value is part of the zero hashes
-or if it's actually an intermediate hash.`,
-	Args:    cobra.NoArgs,
-	PreRunE: checkProofArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		p := new(Proof)
-
-		e := generateZeroHashes(TreeDepth)
-		copy(p.Siblings[:], e)
-		fmt.Println(p.String())
-		return nil
-	},
-}
-
-func checkProofArgs(cmd *cobra.Command, args []string) error {
-	return nil
-}
-func getInputData(_ *cobra.Command, args []string) ([]byte, error) {
-	if ulxlyInputArgs.InputFileName != nil && *ulxlyInputArgs.InputFileName != "" {
-		return os.ReadFile(*ulxlyInputArgs.InputFileName)
+		for evtV2Iterator.Next() {
+			evt := evtV2Iterator.Event
+			log.Info().Uint32("deposit", evt.DepositCount).Uint64("block-number", evt.Raw.BlockNumber).Msg("Found ulxly Deposit")
+			var jBytes []byte
+			jBytes, err = json.Marshal(evt)
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(jBytes))
+		}
+		err = evtV2Iterator.Close()
+		if err != nil {
+			log.Error().Err(err).Msg("error closing event iterator")
+		}
+		currentBlock = endBlock
 	}
 
-	if len(args) > 1 {
-		concat := strings.Join(args[1:], " ")
+	return nil
+}
+
+func proof(ctx *cli.Context) error {
+	depositNumber := ctx.Uint64(depositNumberFlag.Name)
+	rawDepositData, err := getInputData(ctx)
+	if err != nil {
+		return err
+	}
+	return readDeposits(rawDepositData, uint32(depositNumber))
+}
+
+func emptyProof(ctx *cli.Context) error {
+	p := new(Proof)
+
+	e := generateEmptyHashes(TreeDepth)
+	copy(p.Siblings[:], e)
+	fmt.Println(p.String())
+	return nil
+}
+
+func zeroProof(ctx *cli.Context) error {
+	p := new(Proof)
+
+	e := generateZeroHashes(TreeDepth)
+	copy(p.Siblings[:], e)
+	fmt.Println(p.String())
+	return nil
+}
+
+func bridgeAsset(ctx *cli.Context) error {
+	bridgeAddress := ctx.String(bridgeAddressFlag.Name)
+	privateKey := ctx.String(privKeyFlag.Name)
+	gasLimit := ctx.Uint64(gasLimitFlag.Name)
+	destinationAddress := ctx.String(destAddressFlag.Name)
+	chainID := ctx.String(chainIDFlag.Name)
+	amount := ctx.String(AmountFlag.Name)
+	tokenAddr := ctx.String(tokenAddressFlag.Name)
+	callDataString := ctx.String(callDataFlag.Name)
+	destinationNetwork := uint32(ctx.Uint(destNetworkFlag.Name))
+	isForced := ctx.Bool(forceFlag.Name)
+	timeoutTxnReceipt := ctx.Uint64(timeoutFlag.Name)
+	RPCURL := ctx.String(rpcURLFlag.Name)
+
+	// Dial the Ethereum RPC server.
+	client, err := ethclient.DialContext(ctx.Context, RPCURL)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to Dial RPC")
+		return err
+	}
+	defer client.Close()
+	// Initialize and assign variables required to send transaction payload
+	bridgeV2, toAddress, auth, err := generateTransactionPayload(ctx.Context, client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("error generating transaction payload")
+		return err
+	}
+
+	value, _ := big.NewInt(0).SetString(amount, 0)
+	tokenAddress := common.HexToAddress(tokenAddr)
+	callData := common.Hex2Bytes(callDataString)
+
+	if tokenAddress == common.HexToAddress("0x0000000000000000000000000000000000000000") {
+		auth.Value = value
+	}
+
+	bridgeTxn, err := bridgeV2.BridgeAsset(auth, destinationNetwork, toAddress, value, tokenAddress, isForced, callData)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to interact with bridge contract")
+		return err
+	}
+	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
+	return WaitMineTransaction(ctx.Context, client, bridgeTxn, timeoutTxnReceipt)
+}
+
+func bridgeMessage(ctx *cli.Context) error {
+	bridgeAddress := ctx.String(bridgeAddressFlag.Name)
+	privateKey := ctx.String(privKeyFlag.Name)
+	gasLimit := ctx.Uint64(gasLimitFlag.Name)
+	destinationAddress := ctx.String(destAddressFlag.Name)
+	chainID := ctx.String(chainIDFlag.Name)
+	amount := ctx.String(AmountFlag.Name)
+	tokenAddr := ctx.String(tokenAddressFlag.Name)
+	callDataString := ctx.String(callDataFlag.Name)
+	destinationNetwork := uint32(ctx.Uint(destNetworkFlag.Name))
+	isForced := ctx.Bool(forceFlag.Name)
+	timeoutTxnReceipt := ctx.Uint64(timeoutFlag.Name)
+	RPCURL := ctx.String(rpcURLFlag.Name)
+
+	// Dial the Ethereum RPC server.
+	client, err := ethclient.DialContext(ctx.Context, RPCURL)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to Dial RPC")
+		return err
+	}
+	defer client.Close()
+	// Initialize and assign variables required to send transaction payload
+	bridgeV2, toAddress, auth, err := generateTransactionPayload(ctx.Context, client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("error generating transaction payload")
+		return err
+	}
+
+	value, _ := big.NewInt(0).SetString(amount, 0)
+	tokenAddress := common.HexToAddress(tokenAddr)
+	callData := common.Hex2Bytes(callDataString)
+
+	if tokenAddress == common.HexToAddress("0x0000000000000000000000000000000000000000") {
+		auth.Value = value
+	}
+
+	bridgeTxn, err := bridgeV2.BridgeMessage(auth, destinationNetwork, toAddress, isForced, callData)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to interact with bridge contract")
+		return err
+	}
+	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
+	return WaitMineTransaction(ctx.Context, client, bridgeTxn, timeoutTxnReceipt)
+}
+
+func bridgeWETHMessage(ctx *cli.Context) error {
+	bridgeAddress := ctx.String(bridgeAddressFlag.Name)
+	privateKey := ctx.String(privKeyFlag.Name)
+	gasLimit := ctx.Uint64(gasLimitFlag.Name)
+	destinationAddress := ctx.String(destAddressFlag.Name)
+	chainID := ctx.String(chainIDFlag.Name)
+	amount := ctx.String(AmountFlag.Name)
+	callDataString := ctx.String(callDataFlag.Name)
+	destinationNetwork := uint32(ctx.Uint(destNetworkFlag.Name))
+	isForced := ctx.Bool(forceFlag.Name)
+	timeoutTxnReceipt := ctx.Uint64(timeoutFlag.Name)
+	RPCURL := ctx.String(rpcURLFlag.Name)
+	// Dial the Ethereum RPC server.
+	client, err := ethclient.DialContext(ctx.Context, RPCURL)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to Dial RPC")
+		return err
+	}
+	defer client.Close()
+	// Initialize and assign variables required to send transaction payload
+	bridgeV2, toAddress, auth, err := generateTransactionPayload(ctx.Context, client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("error generating transaction payload")
+		return err
+	}
+	// Check if WETH is allowed
+	wethAddress, err := bridgeV2.WETHToken(&bind.CallOpts{Pending: false})
+	if err != nil {
+		log.Error().Err(err).Msg("error getting WETH address from the bridge smc")
+		return err
+	}
+	if wethAddress == (common.Address{}) {
+		return fmt.Errorf("bridge WETH not allowed. Native ETH token configured in this network. This tx will fail")
+	}
+
+	value, _ := big.NewInt(0).SetString(amount, 0)
+	callData := common.Hex2Bytes(callDataString)
+
+	bridgeTxn, err := bridgeV2.BridgeMessageWETH(auth, destinationNetwork, toAddress, value, isForced, callData)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to interact with bridge contract")
+		return err
+	}
+	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
+	return WaitMineTransaction(ctx.Context, client, bridgeTxn, timeoutTxnReceipt)
+}
+
+func claimAsset(ctx *cli.Context) error {
+	bridgeAddress := ctx.String(bridgeAddressFlag.Name)
+	privateKey := ctx.String(privKeyFlag.Name)
+	gasLimit := ctx.Uint64(gasLimitFlag.Name)
+	destinationAddress := ctx.String(destAddressFlag.Name)
+	chainID := ctx.String(chainIDFlag.Name)
+	timeoutTxnReceipt := ctx.Uint64(timeoutFlag.Name)
+	RPCURL := ctx.String(rpcURLFlag.Name)
+	depositCount := ctx.Uint64(depositCountFlag.Name)
+	depositNetwork := ctx.Uint64(depositNetworkFlag.Name)
+	bridgeServiceUrl := ctx.String(bridgeServiceUrlFlag.Name)
+
+	// Dial Ethereum client
+	client, err := ethclient.DialContext(ctx.Context, RPCURL)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to Dial RPC")
+		return err
+	}
+	defer client.Close()
+	// Initialize and assign variables required to send transaction payload
+	bridgeV2, toAddress, auth, err := generateTransactionPayload(ctx.Context, client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("error generating transaction payload")
+		return err
+	}
+
+	///////////////////////////////////////// TODO BORRAR
+	// gasPrice, err := client.SuggestGasPrice(ctx) // This call is done automatically if it is not set
+	// if err != nil {
+	// 	log.Error().Err(err).Msg("Cannot get suggested gas price")
+	// }
+	// auth.GasPrice = big.NewInt(0).Mul(gasPrice,big.NewInt(10))
+	/////////////////////////////////////////////////////////
+
+	// Call the bridge service RPC URL to get the merkle proofs and exit roots and parses them to the correct formats.
+	bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%d&net_id=%d", bridgeServiceUrl, depositCount, depositNetwork)
+	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
+
+	// Call the bridge service RPC URL to get the deposits data and parses them to the correct formats.
+	bridgeServiceDepositsEndpoint := fmt.Sprintf("%s/bridge?net_id=%d&deposit_cnt=%d", bridgeServiceUrl, depositNetwork, depositCount)
+	globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err := getDeposit(bridgeServiceDepositsEndpoint)
+	if err != nil {
+		log.Error().Err(err)
+		return err
+	}
+	if leafType != 0 {
+		log.Warn().Msg("Deposit leafType is not asset")
+	}
+
+	claimTxn, err := bridgeV2.ClaimAsset(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to interact with bridge contract")
+		return err
+	}
+	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
+	return WaitMineTransaction(ctx.Context, client, claimTxn, timeoutTxnReceipt)
+}
+
+func claimMessage(ctx *cli.Context) error {
+	bridgeAddress := ctx.String(bridgeAddressFlag.Name)
+	privateKey := ctx.String(privKeyFlag.Name)
+	gasLimit := ctx.Uint64(gasLimitFlag.Name)
+	destinationAddress := ctx.String(destAddressFlag.Name)
+	chainID := ctx.String(chainIDFlag.Name)
+	timeoutTxnReceipt := ctx.Uint64(timeoutFlag.Name)
+	RPCURL := ctx.String(rpcURLFlag.Name)
+	depositCount := ctx.Uint64(depositCountFlag.Name)
+	depositNetwork := ctx.Uint64(depositNetworkFlag.Name)
+	bridgeServiceUrl := ctx.String(bridgeServiceUrlFlag.Name)
+
+	// Dial Ethereum client
+	client, err := ethclient.DialContext(ctx.Context, RPCURL)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to Dial RPC")
+		return err
+	}
+	defer client.Close()
+	// Initialize and assign variables required to send transaction payload
+	bridgeV2, toAddress, auth, err := generateTransactionPayload(ctx.Context, client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("error generating transaction payload")
+		return err
+	}
+
+	// Call the bridge service RPC URL to get the merkle proofs and exit roots and parses them to the correct formats.
+	bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%d&net_id=%d", bridgeServiceUrl, depositCount, depositNetwork)
+	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
+
+	// Call the bridge service RPC URL to get the deposits data and parses them to the correct formats.
+	bridgeServiceDepositsEndpoint := fmt.Sprintf("%s/bridge?net_id=%d&deposit_cnt=%d", bridgeServiceUrl, depositNetwork, depositCount)
+	globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err := getDeposit(bridgeServiceDepositsEndpoint)
+	if err != nil {
+		log.Error().Err(err)
+		return err
+	}
+	if leafType != 1 {
+		log.Warn().Msg("Deposit leafType is not message")
+	}
+
+	claimTxn, err := bridgeV2.ClaimMessage(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to interact with bridge contract")
+		return err
+	}
+	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
+	return WaitMineTransaction(ctx.Context, client, claimTxn, timeoutTxnReceipt)
+}
+
+// Wait for the transaction to be mined
+func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *types.Transaction, txTimeout uint64) error {
+	txnMinedTimer := time.NewTimer(time.Duration(txTimeout) * time.Second)
+	defer txnMinedTimer.Stop()
+	for {
+		select {
+		case <-txnMinedTimer.C:
+			log.Info().Msg("Wait timer for transaction receipt exceeded!")
+			return nil
+		default:
+			r, err := client.TransactionReceipt(ctx, tx.Hash())
+			if err != nil {
+				if err.Error() != "not found" {
+					log.Error().Err(err)
+					return err
+				}
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			if r.Status != 0 {
+				log.Info().Interface("txHash", r.TxHash).Msg("Deposit transaction successful")
+				return nil
+			} else if r.Status == 0 {
+				log.Error().Interface("txHash", r.TxHash).Msg("Deposit transaction failed")
+				log.Info().Uint64("GasUsed", tx.Gas()).Uint64("cumulativeGasUsedForTx", r.CumulativeGasUsed).Msg("Perhaps try increasing the gas limit")
+				return nil
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}
+}
+
+func getInputData(ctx *cli.Context) ([]byte, error) {
+	fileName := ctx.String(inputFileNameFlag.Name)
+	if fileName != "" {
+		return os.ReadFile(fileName)
+	}
+
+	if ctx.Args().Len() > 1 {
+		concat := strings.Join(ctx.Args().Slice()[1:], " ")
 		return []byte(concat), nil
 	}
 
 	return io.ReadAll(os.Stdin)
 }
-func readDeposits(rawDeposits []byte) error {
+func readDeposits(rawDeposits []byte, depositNumber uint32) error {
 	buf := bytes.NewBuffer(rawDeposits)
 	scanner := bufio.NewScanner(buf)
 	imt := new(IMT)
@@ -497,12 +535,12 @@ func readDeposits(rawDeposits []byte) error {
 			Str("root", common.Hash(imt.Roots[len(imt.Roots)-1]).String()).
 			Msg("adding event to tree")
 		// There's no point adding more leaves if we can prove the deposit already?
-		if evt.DepositCount >= *ulxlyInputArgs.DepositNum {
+		if evt.DepositCount >= depositNumber {
 			break
 		}
 	}
 
-	p := imt.GetProof(*ulxlyInputArgs.DepositNum)
+	p := imt.GetProof(depositNumber)
 	fmt.Println(p.String())
 	return nil
 }
@@ -703,54 +741,52 @@ func generateEmptyHashes(height uint8) []common.Hash {
 	return zeroHashes
 }
 
-func generateTransactionPayload(ctx context.Context, client *ethclient.Client, ulxlyInputArgBridge string, ulxlyInputArgPvtKey string, ulxlyInputArgGasLimit uint64, ulxlyInputArgDestAddr string, ulxlyInputArgChainID string) (bridgeV2 *ulxly.Ulxly, privateKey *ecdsa.PrivateKey, fromAddress common.Address, gasLimit uint64, gasPrice *big.Int, toAddress common.Address, signer types.Signer) {
-	var err error
+func generateTransactionPayload(ctx context.Context, client *ethclient.Client, ulxlyInputArgBridge string, ulxlyInputArgPvtKey string, ulxlyInputArgGasLimit uint64, ulxlyInputArgDestAddr string, ulxlyInputArgChainID string) (bridgeV2 *ulxly.Ulxly, toAddress common.Address, opts *bind.TransactOpts, err error) {
 	bridgeV2, err = ulxly.NewUlxly(common.HexToAddress(ulxlyInputArgBridge), client)
 	if err != nil {
 		return
 	}
 
-	privateKey, err = crypto.HexToECDSA(ulxlyInputArgPvtKey)
+	privateKey, err := crypto.HexToECDSA(ulxlyInputArgPvtKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to retrieve private key")
 	}
 
-	publicKey := privateKey.Public()
-	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
-	if !ok {
-		log.Error().Msg("Error casting public key to ECDSA")
-	}
-
-	fromAddress = crypto.PubkeyToAddress(*publicKeyECDSA)
-
 	// value := big.NewInt(*ulxlyInputArgs.Amount)
-	gasLimit = ulxlyInputArgGasLimit
-	gasPrice, err = client.SuggestGasPrice(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("Cannot get suggested gas price")
-	}
+	gasLimit := ulxlyInputArgGasLimit
+	// gasPrice, err := client.SuggestGasPrice(ctx) // This call is done automatically if it is not set
+	// if err != nil {
+	// 	log.Error().Err(err).Msg("Cannot get suggested gas price")
+	// }
 	// gasTipCap, err := client.SuggestGasTipCap(ctx)
 	// if err != nil {
 	// 	log.Error().Err(err).Msg("Cannot get suggested gas tip cap")
 	// }
-
-	toAddress = common.HexToAddress(ulxlyInputArgDestAddr)
 
 	chainID := new(big.Int)
 	// For manual input of chainID, use the user's input
 	if ulxlyInputArgChainID != "" {
 		chainID.SetString(ulxlyInputArgChainID, 10)
 	} else { // If there is no user input for chainID, infer it from context
-		chainID, err = client.NetworkID(ctx)
+		chainID, err = client.ChainID(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("Cannot get chain ID")
 			return
 		}
 	}
 
-	signer = types.LatestSignerForChainID(chainID)
-
-	return bridgeV2, privateKey, fromAddress, gasLimit, gasPrice, toAddress, signer
+	opts, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Cannot generate transactionOpts")
+		return
+	}
+	opts.Context = ctx
+	opts.GasLimit = gasLimit
+	toAddress = common.HexToAddress(ulxlyInputArgDestAddr)
+	if toAddress == (common.Address{}) {
+		toAddress = opts.From
+	}
+	return bridgeV2, toAddress, opts, err
 }
 
 func getMerkleProofsExitRoots(bridgeServiceProofEndpoint string) (merkleProofArray [32][32]byte, rollupMerkleProofArray [32][32]byte, mainExitRoot []byte, rollupExitRoot []byte) {
@@ -801,18 +837,18 @@ func getMerkleProofsExitRoots(bridgeServiceProofEndpoint string) (merkleProofArr
 	return merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot
 }
 
-func getDeposits(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, originAddress common.Address, amount *big.Int, metadata []byte, err error) {
-	reqBridgeDeposits, err := http.Get(bridgeServiceDepositsEndpoint)
+func getDeposit(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, originAddress common.Address, amount *big.Int, metadata []byte, leafType uint8, claimDestNetwork, claimOriginalNetwork uint32, err error) {
+	reqBridgeDeposit, err := http.Get(bridgeServiceDepositsEndpoint)
 	if err != nil {
 		log.Error().Err(err)
 		return
 	}
-	bodyBridgeDeposit, err := io.ReadAll(reqBridgeDeposits.Body) // Response body is []byte
+	bodyBridgeDeposit, err := io.ReadAll(reqBridgeDeposit.Body) // Response body is []byte
 	if err != nil {
 		log.Error().Err(err)
 		return
 	}
-	var bridgeDeposit BridgeDeposits
+	var bridgeDeposit BridgeDeposit
 	err = json.Unmarshal(bodyBridgeDeposit, &bridgeDeposit) // Parse []byte to go struct pointer, and shadow err variable
 	if err != nil {
 		log.Error().Err(err).Msg("Can not unmarshal JSON")
@@ -822,106 +858,335 @@ func getDeposits(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, or
 	globalIndex = new(big.Int)
 	amount = new(big.Int)
 
-	intClaimIndex, _ := strconv.Atoi(*ulxlyInputArgs.ClaimIndex) // Convert deposit_cnt to int
-	destinationNetwork, _ := strconv.Atoi(*ulxlyInputArgs.ClaimDestinationNetwork)
-	for index, deposit := range bridgeDeposit.Deposit {
-		intDepositCnt, _ := strconv.Atoi(deposit.DepositCnt)                         // Convert deposit_cnt to int
-		if intDepositCnt == intClaimIndex && destinationNetwork == deposit.DestNet { // deposit_cnt must match the user's input value
-			if !bridgeDeposit.Deposit[index].ReadyForClaim {
-				log.Error().Msg("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
-				return nil, common.HexToAddress("0x0"), nil, nil, errors.New("the claim transaction is not yet ready to be claimed, try again in a few blocks")
-			} else if bridgeDeposit.Deposit[index].ClaimTxHash != "" {
-				log.Info().Str("claimTxHash", bridgeDeposit.Deposit[index].ClaimTxHash).Msg("The claim transaction has already been claimed")
-				return nil, common.HexToAddress("0x0"), nil, nil, errors.New("the claim transaction has already been claimed")
-			}
-			originAddress = common.HexToAddress(bridgeDeposit.Deposit[index].OrigAddr)
-			globalIndex.SetString(bridgeDeposit.Deposit[index].GlobalIndex, 10)
-			amount.SetString(bridgeDeposit.Deposit[index].Amount, 10)
-			metadata = common.Hex2Bytes(bridgeDeposit.Deposit[index].Metadata)
-			return globalIndex, originAddress, amount, metadata, nil
-		}
+	defer reqBridgeDeposit.Body.Close()
+	if bridgeDeposit.Code != nil {
+		return globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, fmt.Errorf("error code received getting the deposit. Code: %d, Message: %s", *bridgeDeposit.Code, *bridgeDeposit.Message)
 	}
-	defer reqBridgeDeposits.Body.Close()
 
-	return nil, common.HexToAddress("0x0"), nil, nil, errors.New("failed to correctly get deposits")
+	if !bridgeDeposit.Deposit.ReadyForClaim {
+		log.Error().Msg("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
+		return nil, common.HexToAddress("0x0"), nil, nil, 0, 0, 0, errors.New("the claim transaction is not yet ready to be claimed, try again in a few blocks")
+	} else if bridgeDeposit.Deposit.ClaimTxHash != "" {
+		log.Info().Str("claimTxHash", bridgeDeposit.Deposit.ClaimTxHash).Msg("The claim transaction has already been claimed")
+		return nil, common.HexToAddress("0x0"), nil, nil, 0, 0, 0, errors.New("the claim transaction has already been claimed")
+	}
+	originAddress = common.HexToAddress(bridgeDeposit.Deposit.OrigAddr)
+	globalIndex.SetString(bridgeDeposit.Deposit.GlobalIndex, 10)
+	amount.SetString(bridgeDeposit.Deposit.Amount, 10)
+	metadata = common.Hex2Bytes(bridgeDeposit.Deposit.Metadata)
+	leafType = bridgeDeposit.Deposit.LeafType
+	claimDestNetwork = bridgeDeposit.Deposit.DestNet
+	claimOriginalNetwork = bridgeDeposit.Deposit.OrigNet
+	return globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, nil
 }
 
-func checkGetDepositArgs(cmd *cobra.Command, args []string) error {
-	if *ulxlyInputArgs.BridgeAddress == "" {
-		return fmt.Errorf("please provide the bridge address")
+//go:embed BridgeAssetUsage.md
+var bridgeAssetUsage string
+
+//go:embed BridgeMessageUsage.md
+var bridgeMessageUsage string
+
+//go:embed BridgeWETHMessageUsage.md
+var bridgeWETHMessageUsage string
+
+//go:embed ClaimAssetUsage.md
+var claimAssetUsage string
+
+//go:embed ClaimMessageUsage.md
+var claimMessageUsage string
+
+//go:embed proofUsage.md
+var proofUsage string
+
+//go:embed depositGetUsage.md
+var depositGetUsage string
+
+func initCli(cmd *cobra.Command, args []string) {
+	app := cli.NewApp()
+	app.Name = "uLxLy"
+	app.Version = "v0.0.1"
+	app.Commands = []*cli.Command{
+		{
+			Name:    "ulxly",
+			Aliases: []string{},
+			Usage:   "options for ulxly",
+			Subcommands: []*cli.Command{
+				{
+					Name:        "bridge-asset",
+					Aliases:     []string{},
+					Usage:       "Make a uLxLy bridge asset transaction",
+					Description: bridgeAssetUsage,
+					Action:      bridgeAsset,
+					Flags: []cli.Flag{
+						gasLimitFlag,
+						chainIDFlag,
+						privKeyFlag,
+						AmountFlag,
+						rpcURLFlag,
+						bridgeAddressFlag,
+						destNetworkFlag,
+						destAddressFlag,
+						tokenAddressFlag,
+						forceFlag,
+						callDataFlag,
+						timeoutFlag,
+					},
+				},
+				{
+					Name:        "bridge-message",
+					Aliases:     []string{},
+					Usage:       "Make a uLxLy bridge message transaction",
+					Description: bridgeMessageUsage,
+					Action:      bridgeMessage,
+					Flags: []cli.Flag{
+						gasLimitFlag,
+						chainIDFlag,
+						privKeyFlag,
+						AmountFlag,
+						rpcURLFlag,
+						bridgeAddressFlag,
+						destNetworkFlag,
+						destAddressFlag,
+						tokenAddressFlag,
+						forceFlag,
+						callDataFlag,
+						timeoutFlag,
+					},
+				},
+				{
+					Name:        "bridge-message-weth",
+					Aliases:     []string{},
+					Usage:       "Make a uLxLy bridge weth message transaction",
+					Description: bridgeWETHMessageUsage,
+					Action:      bridgeWETHMessage,
+					Flags: []cli.Flag{
+						gasLimitFlag,
+						chainIDFlag,
+						privKeyFlag,
+						AmountFlag,
+						rpcURLFlag,
+						bridgeAddressFlag,
+						destNetworkFlag,
+						destAddressFlag,
+						forceFlag,
+						callDataFlag,
+						timeoutFlag,
+					},
+				},
+				{
+					Name:        "claim-asset",
+					Aliases:     []string{},
+					Usage:       "Make a uLxLy claim asset transaction",
+					Description: claimAssetUsage,
+					Action:      claimAsset,
+					Flags: []cli.Flag{
+						depositCountFlag,
+						depositNetworkFlag,
+						bridgeServiceUrlFlag,
+						destAddressFlag,
+						rpcURLFlag,
+						privKeyFlag,
+						bridgeAddressFlag,
+						gasLimitFlag,
+						chainIDFlag,
+						timeoutFlag,
+					},
+				},
+				{
+					Name:        "claim-message",
+					Aliases:     []string{},
+					Usage:       "Make a uLxLy claim message transaction",
+					Description: claimMessageUsage,
+					Action:      claimMessage,
+					Flags: []cli.Flag{
+						depositCountFlag,
+						depositNetworkFlag,
+						bridgeServiceUrlFlag,
+						destAddressFlag,
+						rpcURLFlag,
+						privKeyFlag,
+						bridgeAddressFlag,
+						gasLimitFlag,
+						chainIDFlag,
+						timeoutFlag,
+					},
+				},
+				{
+					Name:        "empty-proof",
+					Aliases:     []string{},
+					Usage:       "Print an empty proof structure",
+					Description: "Use this command to print an empty proof response that's filled with zero-valued siblings like 0x0000000000000000000000000000000000000000000000000000000000000000. This can be useful when you need to submit a dummy proof.",
+					Action:      emptyProof,
+				},
+				{
+					Name:    "zero-proof",
+					Aliases: []string{},
+					Usage:   "Print a proof structure with the zero hashes",
+					Description: `Use this command to print a proof response that's filled with the zero
+						hashes. This values are very helpful for debugging because it would
+						tell you how populated the tree is and roughly which leaves and
+						siblings are empty. It's also helpful for sanity checking a proof
+						response to understand if the hashed value is part of the zero hashes
+						or if it's actually an intermediate hash.`,
+					Action: zeroProof,
+				},
+				{
+					Name:        "proof",
+					Aliases:     []string{},
+					Usage:       "Generate a merkle proof",
+					Description: proofUsage,
+					Action:      proof,
+					Flags:       []cli.Flag{depositNumberFlag},
+				},
+				{
+					Name:        "deposit-get",
+					Aliases:     []string{},
+					Usage:       "Get a range of deposits",
+					Description: depositGetUsage,
+					Action:      readDeposit,
+					Flags: []cli.Flag{
+						fromBlockFlag,
+						toBlockFlag,
+						filterFlag,
+						bridgeAddressFlag,
+						rpcURLFlag,
+					},
+				},
+			},
+		},
 	}
-	if *ulxlyInputArgs.FromBlock > *ulxlyInputArgs.ToBlock {
-		return fmt.Errorf("the from block should be less than the to block")
+
+	err := app.Run(os.Args)
+	if err != nil {
+		fmt.Printf("\nError: %v\n", err)
+		os.Exit(1)
 	}
-	return nil
 }
 
-func checkDepositArgs(cmd *cobra.Command, args []string) error {
-	if *ulxlyInputArgs.DepositBridgeAddress == "" {
-		return fmt.Errorf("please provide the bridge address")
-	}
-	if *ulxlyInputArgs.DepositGasLimit < 130000 && *ulxlyInputArgs.DepositGasLimit != 0 {
-		return fmt.Errorf("the gas limit may be too low for the transaction to pass")
-	}
-	if *ulxlyInputArgs.DepositMessage && *ulxlyInputArgs.DepositWETH {
-		return fmt.Errorf("choose a single deposit mode (asset, message, or WETH)")
-	}
-	return nil
+var gasLimitFlag = &cli.Uint64Flag{
+	Name:     "gas-limit",
+	Aliases:  []string{"gl"},
+	Usage:    "This param is used to force the GasLimit",
+	Required: false,
 }
-
-func checkClaimArgs(cmd *cobra.Command, args []string) error {
-	if *ulxlyInputArgs.ClaimGasLimit < 150000 && *ulxlyInputArgs.ClaimGasLimit != 0 {
-		return fmt.Errorf("the gas limit may be too low for the transaction to pass")
-	}
-	if *ulxlyInputArgs.ClaimMessage && *ulxlyInputArgs.ClaimWETH {
-		return fmt.Errorf("choose a single claim mode (asset, message, or WETH)")
-	}
-	return nil
+var chainIDFlag = &cli.StringFlag{
+	Name:     "chain-id",
+	Aliases:  []string{"id"},
+	Usage:    "This param is used to force the chainID",
+	Required: false,
 }
-
-func init() {
-	ULxLyCmd.AddCommand(depositClaimCmd)
-	ULxLyCmd.AddCommand(depositNewCmd)
-	ULxLyCmd.AddCommand(depositGetCmd)
-	ULxLyCmd.AddCommand(ProofCmd)
-	ULxLyCmd.AddCommand(EmptyProofCmd)
-	ULxLyCmd.AddCommand(ZeroProofCmd)
-
-	ulxlyInputArgs.ClaimIndex = depositClaimCmd.PersistentFlags().String("claim-index", "0", "The deposit count, or index to initiate a claim transaction for.")
-	ulxlyInputArgs.ClaimAddress = depositClaimCmd.PersistentFlags().String("claim-address", "", "The address that is receiving the bridged asset.")
-	ulxlyInputArgs.ClaimOriginNetwork = depositClaimCmd.PersistentFlags().String("origin-network", "0", "The network ID of the origin network.")
-	ulxlyInputArgs.ClaimDestinationNetwork = depositClaimCmd.PersistentFlags().String("destination-network", "1", "The network ID of the destination network.")
-	ulxlyInputArgs.ClaimRPCURL = depositClaimCmd.PersistentFlags().String("rpc-url", "http://127.0.0.1:8545", "The RPC endpoint of the destination network")
-	ulxlyInputArgs.BridgeServiceRPCURL = depositClaimCmd.PersistentFlags().String("bridge-service-url", "", "The RPC endpoint of the bridge service component.")
-	ulxlyInputArgs.ClaimPrivateKey = depositClaimCmd.PersistentFlags().String("private-key", "", "The private key of the sender account.")
-	ulxlyInputArgs.ClaimBridgeAddress = depositClaimCmd.PersistentFlags().String("bridge-address", "", "The address of the bridge contract.")
-	ulxlyInputArgs.ClaimGasLimit = depositClaimCmd.PersistentFlags().Uint64("gas-limit", 0, "The gas limit for the transaction. Setting this value to 0 will estimate the gas limit.")
-	ulxlyInputArgs.ClaimChainID = depositClaimCmd.PersistentFlags().String("chain-id", "", "The chainID.")
-	ulxlyInputArgs.ClaimTimeoutTxnReceipt = depositClaimCmd.PersistentFlags().Uint32("transaction-receipt-timeout", 60, "The timeout limit to check for the transaction receipt of the claim.")
-	ulxlyInputArgs.ClaimMessage = depositClaimCmd.PersistentFlags().Bool("claim-message", false, "Claim a message instead of an asset.")
-	ulxlyInputArgs.ClaimWETH = depositClaimCmd.PersistentFlags().Bool("claim-weth", false, "Claim a weth instead of an asset.")
-
-	ulxlyInputArgs.DepositGasLimit = depositNewCmd.PersistentFlags().Uint64("gas-limit", 0, "The gas limit for the transaction. Setting this value to 0 will estimate the gas limit.")
-	ulxlyInputArgs.DepositChainID = depositNewCmd.PersistentFlags().String("chain-id", "", "The chainID.")
-	ulxlyInputArgs.DepositPrivateKey = depositNewCmd.PersistentFlags().String("private-key", "", "The private key of the sender account.")
-	ulxlyInputArgs.Amount = depositNewCmd.PersistentFlags().Int64("amount", 0, "The amount to send.")
-	ulxlyInputArgs.DepositRPCURL = depositNewCmd.PersistentFlags().String("rpc-url", "http://127.0.0.1:8545", "The RPC endpoint of the network")
-	ulxlyInputArgs.DepositBridgeAddress = depositNewCmd.PersistentFlags().String("bridge-address", "", "The address of the bridge contract.")
-	ulxlyInputArgs.DestinationNetwork = depositNewCmd.PersistentFlags().Uint32("destination-network", 1, "The destination network number.")
-	ulxlyInputArgs.DestinationAddress = depositNewCmd.PersistentFlags().String("destination-address", "", "The address of receiver in destination network.")
-	ulxlyInputArgs.TokenAddress = depositNewCmd.PersistentFlags().String("token-address", "0x0000000000000000000000000000000000000000", "The address of the token to send.")
-	ulxlyInputArgs.IsForced = depositNewCmd.PersistentFlags().Bool("force-update-root", true, "Force the update of the Global Exit Root.")
-	ulxlyInputArgs.CallData = depositNewCmd.PersistentFlags().String("call-data", "0x", "For bridging assets - raw data of the call `permit` of the token. For bridging messages - the metadata.")
-	ulxlyInputArgs.DepositTimeoutTxnReceipt = depositNewCmd.PersistentFlags().Uint32("transaction-receipt-timeout", 60, "The timeout limit to check for the transaction receipt of the deposit.")
-	ulxlyInputArgs.DepositMessage = depositNewCmd.PersistentFlags().Bool("bridge-message", false, "Bridge a message instead of an asset.")
-	ulxlyInputArgs.DepositWETH = depositNewCmd.PersistentFlags().Bool("bridge-weth", false, "Bridge a weth instead of an asset.")
-
-	ulxlyInputArgs.FromBlock = depositGetCmd.PersistentFlags().Uint64("from-block", 0, "The block height to start query at.")
-	ulxlyInputArgs.ToBlock = depositGetCmd.PersistentFlags().Uint64("to-block", 0, "The block height to start query at.")
-	ulxlyInputArgs.RPCURL = depositGetCmd.PersistentFlags().String("rpc-url", "http://127.0.0.1:8545", "The RPC to query for events")
-	ulxlyInputArgs.FilterSize = depositGetCmd.PersistentFlags().Uint64("filter-size", 1000, "The batch size for individual filter queries")
-
-	ulxlyInputArgs.BridgeAddress = depositGetCmd.Flags().String("bridge-address", "", "The address of the lxly bridge")
-	ulxlyInputArgs.InputFileName = ProofCmd.PersistentFlags().String("file-name", "", "The filename with ndjson data of deposits")
-	ulxlyInputArgs.DepositNum = ProofCmd.PersistentFlags().Uint32("deposit-number", 0, "The deposit that we would like to prove")
+var privKeyFlag = &cli.StringFlag{
+	Name:     "private-key",
+	Aliases:  []string{"pk"},
+	Usage:    "This param is used to set the private key",
+	Required: true,
+}
+var AmountFlag = &cli.StringFlag{
+	Name:     "amount",
+	Aliases:  []string{"a"},
+	Usage:    "This param is used to set the amount",
+	Required: true,
+}
+var rpcURLFlag = &cli.StringFlag{
+	Name:     "rpc-url",
+	Aliases:  []string{"u"},
+	Usage:    "This param is used to set the rpc url",
+	Required: true,
+}
+var bridgeAddressFlag = &cli.StringFlag{
+	Name:     "bridge-address",
+	Aliases:  []string{"b"},
+	Usage:    "This param is used to set the bridge address",
+	Required: true,
+}
+var destNetworkFlag = &cli.UintFlag{
+	Name:     "destination-network",
+	Aliases:  []string{"dest-net"},
+	Usage:    "This param is used to set the destination network",
+	Required: true,
+}
+var destAddressFlag = &cli.StringFlag{
+	Name:     "destination-address",
+	Aliases:  []string{"dest-addr"},
+	Usage:    "This param is used to set the destination address",
+	Required: false,
+}
+var tokenAddressFlag = &cli.StringFlag{
+	Name:     "token-address",
+	Aliases:  []string{"token"},
+	Usage:    "This param is used to set the token address",
+	Required: false,
+}
+var forceFlag = &cli.BoolFlag{
+	Name:     "force-update-root",
+	Aliases:  []string{"f"},
+	Usage:    "This param is used to force the ger update in the smc",
+	Required: false,
+	Value:    true,
+}
+var callDataFlag = &cli.StringFlag{
+	Name:     "call-data",
+	Aliases:  []string{"data"},
+	Usage:    "This param is used to set the callData",
+	Required: false,
+	Value:    "0x",
+}
+var timeoutFlag = &cli.Uint64Flag{
+	Name:     "transaction-receipt-timeout",
+	Aliases:  []string{"timeout"},
+	Usage:    "This param is used to change the timeout interval",
+	Value:    60,
+	Required: false,
+}
+var depositCountFlag = &cli.Uint64Flag{
+	Name:     "deposit-count",
+	Aliases:  []string{"cnt"},
+	Usage:    "This param is used to specify the deposit counter",
+	Required: true,
+}
+var depositNetworkFlag = &cli.Uint64Flag{
+	Name:     "deposit-network",
+	Aliases:  []string{"net"},
+	Usage:    "This param is used to specify the deposit network",
+	Required: true,
+}
+var bridgeServiceUrlFlag = &cli.StringFlag{
+	Name:     "bridge-service-url",
+	Aliases:  []string{"bridge-url"},
+	Usage:    "This param is used to specify the bridge service url",
+	Required: true,
+}
+var inputFileNameFlag = &cli.StringFlag{
+	Name:     "file-name",
+	Aliases:  []string{"file"},
+	Usage:    "The filename with ndjson data of deposits",
+	Required: true,
+}
+var fromBlockFlag = &cli.Uint64Flag{
+	Name:     "from-block",
+	Aliases:  []string{"from"},
+	Usage:    "The block height to start query at.",
+	Value:    0,
+	Required: false,
+}
+var toBlockFlag = &cli.Uint64Flag{
+	Name:     "to-block",
+	Aliases:  []string{"to"},
+	Usage:    "The block height to start query at.",
+	Value:    0,
+	Required: false,
+}
+var filterFlag = &cli.Uint64Flag{
+	Name:     "filter-size",
+	Aliases:  []string{"filter"},
+	Usage:    "The batch size for individual filter queries.",
+	Value:    1000,
+	Required: false,
+}
+var depositNumberFlag = &cli.Uint64Flag{
+	Name:     "deposit-number",
+	Aliases:  []string{"deposit"},
+	Usage:    "The deposit that we would like to prove",
+	Value:    0,
+	Required: false,
 }
