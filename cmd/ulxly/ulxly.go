@@ -27,7 +27,6 @@ import (
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"github.com/urfave/cli/v2"
 )
 
 const (
@@ -37,46 +36,6 @@ const (
 	// https://github.com/0xPolygonHermez/zkevm-contracts/blob/54f58c8b64806429bc4d5c52248f29cf80ba401c/contracts/v2/lib/DepositContractBase.sol#L15
 	TreeDepth = 32
 )
-
-type uLxLyArgs struct {
-	FromBlock     *uint64
-	ToBlock       *uint64
-	RPCURL        *string
-	BridgeAddress *string
-	FilterSize    *uint64
-
-	ClaimIndex              *string
-	ClaimAddress            *string
-	ClaimOriginNetwork      *string
-	ClaimDestinationNetwork *string
-	BridgeServiceRPCURL     *string
-	ClaimRPCURL             *string
-	ClaimPrivateKey         *string
-	NetworkID               *uint32
-	ClaimBridgeAddress      *string
-	ClaimGasLimit           *uint64
-	ClaimChainID            *string
-	ClaimTimeoutTxnReceipt  *uint32
-	ClaimMessage            *bool
-	ClaimWETH               *bool
-
-	InputFileName            *string
-	DepositNum               *uint32
-	DepositPrivateKey        *string
-	DepositGasLimit          *uint64
-	Amount                   *int64 // HACK: This should be big.Int but depositNewCmd.PersistentFlags() doesn't support that type.
-	DestinationNetwork       *uint32
-	DestinationAddress       *string
-	DepositRPCURL            *string
-	DepositBridgeAddress     *string
-	DepositChainID           *string
-	TokenAddress             *string
-	IsForced                 *bool
-	CallData                 *string
-	DepositTimeoutTxnReceipt *uint32
-	DepositMessage           *bool
-	DepositWETH              *bool
-}
 
 type IMT struct {
 	Branches   map[uint32][]common.Hash
@@ -123,22 +82,19 @@ type BridgeDeposit struct {
 	Message *string `json:"message"`
 }
 
-var ULxLyCmd = &cobra.Command{
-	Use:                "ulxly",
-	Short:              "Utilities for interacting with the lxly bridge",
-	Long:               "These are low level tools for directly scanning bridge events and constructing proofs.",
-	DisableFlagParsing: true,
-	Run:                initCli,
-}
+func readDeposit(cmd *cobra.Command) error {
+	rpcUrl, err := cmd.Flags().GetString(ArgRPCURL)
+	if err != nil {
+		return err
+	}
 
-func readDeposit(ctx *cli.Context) error {
-	bridgeAddress := ctx.String(bridgeAddressFlag.Name)
-	rpcUrl := ctx.String(rpcURLFlag.Name)
-	toBlock := ctx.Uint64(toBlockFlag.Name)
-	fromBlock := ctx.Uint64(fromBlockFlag.Name)
-	filter := ctx.Uint64(filterFlag.Name)
+	bridgeAddress := *inputUlxlyArgs.bridgeAddress
+	toBlock := *inputUlxlyArgs.toBlock
+	fromBlock := *inputUlxlyArgs.fromBlock
+	filter := *inputUlxlyArgs.filterSize
+
 	// Dial the Ethereum RPC server.
-	rpc, err := ethrpc.DialContext(ctx.Context, rpcUrl)
+	rpc, err := ethrpc.DialContext(cmd.Context(), rpcUrl)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
@@ -160,7 +116,7 @@ func readDeposit(ctx *cli.Context) error {
 		opts := bind.FilterOpts{
 			Start:   currentBlock,
 			End:     &endBlock,
-			Context: ctx.Context,
+			Context: cmd.Context(),
 		}
 		evtV2Iterator, err := bridgeV2.FilterBridgeEvent(&opts)
 		if err != nil {
@@ -187,16 +143,16 @@ func readDeposit(ctx *cli.Context) error {
 	return nil
 }
 
-func proof(ctx *cli.Context) error {
-	depositNumber := ctx.Uint64(depositNumberFlag.Name)
-	rawDepositData, err := getInputData(ctx)
+func proof(args []string) error {
+	depositNumber := *inputUlxlyArgs.depositNumber
+	rawDepositData, err := getInputData(args)
 	if err != nil {
 		return err
 	}
 	return readDeposits(rawDepositData, uint32(depositNumber))
 }
 
-func emptyProof(ctx *cli.Context) error {
+func emptyProof() error {
 	p := new(Proof)
 
 	e := generateEmptyHashes(TreeDepth)
@@ -205,7 +161,7 @@ func emptyProof(ctx *cli.Context) error {
 	return nil
 }
 
-func zeroProof(ctx *cli.Context) error {
+func zeroProof() error {
 	p := new(Proof)
 
 	e := generateZeroHashes(TreeDepth)
@@ -214,29 +170,29 @@ func zeroProof(ctx *cli.Context) error {
 	return nil
 }
 
-func bridgeAsset(ctx *cli.Context) error {
-	bridgeAddress := ctx.String(bridgeAddressFlag.Name)
-	privateKey := ctx.String(privKeyFlag.Name)
-	gasLimit := ctx.Uint64(gasLimitFlag.Name)
-	destinationAddress := ctx.String(destAddressFlag.Name)
-	chainID := ctx.String(chainIDFlag.Name)
-	amount := ctx.String(AmountFlag.Name)
-	tokenAddr := ctx.String(tokenAddressFlag.Name)
-	callDataString := ctx.String(callDataFlag.Name)
-	destinationNetwork := uint32(ctx.Uint(destNetworkFlag.Name))
-	isForced := ctx.Bool(forceFlag.Name)
-	timeoutTxnReceipt := ctx.Uint64(timeoutFlag.Name)
-	RPCURL := ctx.String(rpcURLFlag.Name)
+func bridgeAsset(cmd *cobra.Command) error {
+	bridgeAddress := *inputUlxlyArgs.bridgeAddress
+	privateKey := *inputUlxlyArgs.privateKey
+	gasLimit := *inputUlxlyArgs.gasLimit
+	destinationAddress := *inputUlxlyArgs.destAddress
+	chainID := *inputUlxlyArgs.chainID
+	amount := *inputUlxlyArgs.value
+	tokenAddr := *inputUlxlyArgs.tokenAddress
+	callDataString := *inputUlxlyArgs.callData
+	destinationNetwork := *inputUlxlyArgs.destNetwork
+	isForced := *inputUlxlyArgs.forceUpdate
+	timeoutTxnReceipt := *inputUlxlyArgs.timeout
+	RPCURL := *inputUlxlyArgs.rpcURL
 
 	// Dial the Ethereum RPC server.
-	client, err := ethclient.DialContext(ctx.Context, RPCURL)
+	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
 	}
 	defer client.Close()
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, toAddress, auth, err := generateTransactionPayload(ctx.Context, client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -256,32 +212,32 @@ func bridgeAsset(ctx *cli.Context) error {
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
-	return WaitMineTransaction(ctx.Context, client, bridgeTxn, timeoutTxnReceipt)
+	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
 }
 
-func bridgeMessage(ctx *cli.Context) error {
-	bridgeAddress := ctx.String(bridgeAddressFlag.Name)
-	privateKey := ctx.String(privKeyFlag.Name)
-	gasLimit := ctx.Uint64(gasLimitFlag.Name)
-	destinationAddress := ctx.String(destAddressFlag.Name)
-	chainID := ctx.String(chainIDFlag.Name)
-	amount := ctx.String(AmountFlag.Name)
-	tokenAddr := ctx.String(tokenAddressFlag.Name)
-	callDataString := ctx.String(callDataFlag.Name)
-	destinationNetwork := uint32(ctx.Uint(destNetworkFlag.Name))
-	isForced := ctx.Bool(forceFlag.Name)
-	timeoutTxnReceipt := ctx.Uint64(timeoutFlag.Name)
-	RPCURL := ctx.String(rpcURLFlag.Name)
+func bridgeMessage(cmd *cobra.Command) error {
+	bridgeAddress := *inputUlxlyArgs.bridgeAddress
+	privateKey := *inputUlxlyArgs.privateKey
+	gasLimit := *inputUlxlyArgs.gasLimit
+	destinationAddress := *inputUlxlyArgs.destAddress
+	chainID := *inputUlxlyArgs.chainID
+	amount := *inputUlxlyArgs.value
+	tokenAddr := *inputUlxlyArgs.tokenAddress
+	callDataString := *inputUlxlyArgs.callData
+	destinationNetwork := *inputUlxlyArgs.destNetwork
+	isForced := *inputUlxlyArgs.forceUpdate
+	timeoutTxnReceipt := *inputUlxlyArgs.timeout
+	RPCURL := *inputUlxlyArgs.rpcURL
 
 	// Dial the Ethereum RPC server.
-	client, err := ethclient.DialContext(ctx.Context, RPCURL)
+	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
 	}
 	defer client.Close()
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, toAddress, auth, err := generateTransactionPayload(ctx.Context, client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -301,30 +257,31 @@ func bridgeMessage(ctx *cli.Context) error {
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
-	return WaitMineTransaction(ctx.Context, client, bridgeTxn, timeoutTxnReceipt)
+	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
 }
 
-func bridgeWETHMessage(ctx *cli.Context) error {
-	bridgeAddress := ctx.String(bridgeAddressFlag.Name)
-	privateKey := ctx.String(privKeyFlag.Name)
-	gasLimit := ctx.Uint64(gasLimitFlag.Name)
-	destinationAddress := ctx.String(destAddressFlag.Name)
-	chainID := ctx.String(chainIDFlag.Name)
-	amount := ctx.String(AmountFlag.Name)
-	callDataString := ctx.String(callDataFlag.Name)
-	destinationNetwork := uint32(ctx.Uint(destNetworkFlag.Name))
-	isForced := ctx.Bool(forceFlag.Name)
-	timeoutTxnReceipt := ctx.Uint64(timeoutFlag.Name)
-	RPCURL := ctx.String(rpcURLFlag.Name)
+func bridgeWETHMessage(cmd *cobra.Command) error {
+	bridgeAddress := *inputUlxlyArgs.bridgeAddress
+	privateKey := *inputUlxlyArgs.privateKey
+	gasLimit := *inputUlxlyArgs.gasLimit
+	destinationAddress := *inputUlxlyArgs.destAddress
+	chainID := *inputUlxlyArgs.chainID
+	amount := *inputUlxlyArgs.value
+	callDataString := *inputUlxlyArgs.callData
+	destinationNetwork := *inputUlxlyArgs.destNetwork
+	isForced := *inputUlxlyArgs.forceUpdate
+	timeoutTxnReceipt := *inputUlxlyArgs.timeout
+	RPCURL := *inputUlxlyArgs.rpcURL
+
 	// Dial the Ethereum RPC server.
-	client, err := ethclient.DialContext(ctx.Context, RPCURL)
+	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
 	}
 	defer client.Close()
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, toAddress, auth, err := generateTransactionPayload(ctx.Context, client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -348,30 +305,30 @@ func bridgeWETHMessage(ctx *cli.Context) error {
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
-	return WaitMineTransaction(ctx.Context, client, bridgeTxn, timeoutTxnReceipt)
+	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
 }
 
-func claimAsset(ctx *cli.Context) error {
-	bridgeAddress := ctx.String(bridgeAddressFlag.Name)
-	privateKey := ctx.String(privKeyFlag.Name)
-	gasLimit := ctx.Uint64(gasLimitFlag.Name)
-	destinationAddress := ctx.String(destAddressFlag.Name)
-	chainID := ctx.String(chainIDFlag.Name)
-	timeoutTxnReceipt := ctx.Uint64(timeoutFlag.Name)
-	RPCURL := ctx.String(rpcURLFlag.Name)
-	depositCount := ctx.Uint64(depositCountFlag.Name)
-	depositNetwork := ctx.Uint64(depositNetworkFlag.Name)
-	bridgeServiceUrl := ctx.String(bridgeServiceUrlFlag.Name)
+func claimAsset(cmd *cobra.Command) error {
+	bridgeAddress := *inputUlxlyArgs.bridgeAddress
+	privateKey := *inputUlxlyArgs.privateKey
+	gasLimit := *inputUlxlyArgs.gasLimit
+	destinationAddress := *inputUlxlyArgs.destAddress
+	chainID := *inputUlxlyArgs.chainID
+	timeoutTxnReceipt := *inputUlxlyArgs.timeout
+	RPCURL := *inputUlxlyArgs.rpcURL
+	depositCount := *inputUlxlyArgs.depositCount
+	depositNetwork := *inputUlxlyArgs.depositNetwork
+	bridgeServiceUrl := *inputUlxlyArgs.bridgeServiceURL
 
 	// Dial Ethereum client
-	client, err := ethclient.DialContext(ctx.Context, RPCURL)
+	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
 	}
 	defer client.Close()
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, toAddress, auth, err := generateTransactionPayload(ctx.Context, client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -406,30 +363,30 @@ func claimAsset(ctx *cli.Context) error {
 		return err
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
-	return WaitMineTransaction(ctx.Context, client, claimTxn, timeoutTxnReceipt)
+	return WaitMineTransaction(cmd.Context(), client, claimTxn, timeoutTxnReceipt)
 }
 
-func claimMessage(ctx *cli.Context) error {
-	bridgeAddress := ctx.String(bridgeAddressFlag.Name)
-	privateKey := ctx.String(privKeyFlag.Name)
-	gasLimit := ctx.Uint64(gasLimitFlag.Name)
-	destinationAddress := ctx.String(destAddressFlag.Name)
-	chainID := ctx.String(chainIDFlag.Name)
-	timeoutTxnReceipt := ctx.Uint64(timeoutFlag.Name)
-	RPCURL := ctx.String(rpcURLFlag.Name)
-	depositCount := ctx.Uint64(depositCountFlag.Name)
-	depositNetwork := ctx.Uint64(depositNetworkFlag.Name)
-	bridgeServiceUrl := ctx.String(bridgeServiceUrlFlag.Name)
+func claimMessage(cmd *cobra.Command) error {
+	bridgeAddress := *inputUlxlyArgs.bridgeAddress
+	privateKey := *inputUlxlyArgs.privateKey
+	gasLimit := *inputUlxlyArgs.gasLimit
+	destinationAddress := *inputUlxlyArgs.destAddress
+	chainID := *inputUlxlyArgs.chainID
+	timeoutTxnReceipt := *inputUlxlyArgs.timeout
+	RPCURL := *inputUlxlyArgs.rpcURL
+	depositCount := *inputUlxlyArgs.depositCount
+	depositNetwork := *inputUlxlyArgs.depositNetwork
+	bridgeServiceUrl := *inputUlxlyArgs.bridgeServiceURL
 
 	// Dial Ethereum client
-	client, err := ethclient.DialContext(ctx.Context, RPCURL)
+	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
 	}
 	defer client.Close()
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, toAddress, auth, err := generateTransactionPayload(ctx.Context, client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -456,7 +413,7 @@ func claimMessage(ctx *cli.Context) error {
 		return err
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
-	return WaitMineTransaction(ctx.Context, client, claimTxn, timeoutTxnReceipt)
+	return WaitMineTransaction(cmd.Context(), client, claimTxn, timeoutTxnReceipt)
 }
 
 // Wait for the transaction to be mined
@@ -491,14 +448,14 @@ func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *type
 	}
 }
 
-func getInputData(ctx *cli.Context) ([]byte, error) {
-	fileName := ctx.String(inputFileNameFlag.Name)
+func getInputData(args []string) ([]byte, error) {
+	fileName := *inputUlxlyArgs.inputFileName
 	if fileName != "" {
 		return os.ReadFile(fileName)
 	}
 
-	if ctx.Args().Len() > 1 {
-		concat := strings.Join(ctx.Args().Slice()[1:], " ")
+	if len(args) > 1 {
+		concat := strings.Join(args[1:], " ")
 		return []byte(concat), nil
 	}
 
@@ -901,292 +858,218 @@ var proofUsage string
 //go:embed depositGetUsage.md
 var depositGetUsage string
 
-func initCli(cmd *cobra.Command, args []string) {
-	app := cli.NewApp()
-	app.Name = "uLxLy"
-	app.Version = "v0.0.1"
-	app.Commands = []*cli.Command{
-		{
-			Name:    "ulxly",
-			Aliases: []string{},
-			Usage:   "options for ulxly",
-			Subcommands: []*cli.Command{
-				{
-					Name:        "bridge-asset",
-					Aliases:     []string{},
-					Usage:       "Make a uLxLy bridge asset transaction",
-					Description: bridgeAssetUsage,
-					Action:      bridgeAsset,
-					Flags: []cli.Flag{
-						gasLimitFlag,
-						chainIDFlag,
-						privKeyFlag,
-						AmountFlag,
-						rpcURLFlag,
-						bridgeAddressFlag,
-						destNetworkFlag,
-						destAddressFlag,
-						tokenAddressFlag,
-						forceFlag,
-						callDataFlag,
-						timeoutFlag,
-					},
-				},
-				{
-					Name:        "bridge-message",
-					Aliases:     []string{},
-					Usage:       "Make a uLxLy bridge message transaction",
-					Description: bridgeMessageUsage,
-					Action:      bridgeMessage,
-					Flags: []cli.Flag{
-						gasLimitFlag,
-						chainIDFlag,
-						privKeyFlag,
-						AmountFlag,
-						rpcURLFlag,
-						bridgeAddressFlag,
-						destNetworkFlag,
-						destAddressFlag,
-						tokenAddressFlag,
-						forceFlag,
-						callDataFlag,
-						timeoutFlag,
-					},
-				},
-				{
-					Name:        "bridge-message-weth",
-					Aliases:     []string{},
-					Usage:       "Make a uLxLy bridge weth message transaction",
-					Description: bridgeWETHMessageUsage,
-					Action:      bridgeWETHMessage,
-					Flags: []cli.Flag{
-						gasLimitFlag,
-						chainIDFlag,
-						privKeyFlag,
-						AmountFlag,
-						rpcURLFlag,
-						bridgeAddressFlag,
-						destNetworkFlag,
-						destAddressFlag,
-						forceFlag,
-						callDataFlag,
-						timeoutFlag,
-					},
-				},
-				{
-					Name:        "claim-asset",
-					Aliases:     []string{},
-					Usage:       "Make a uLxLy claim asset transaction",
-					Description: claimAssetUsage,
-					Action:      claimAsset,
-					Flags: []cli.Flag{
-						depositCountFlag,
-						depositNetworkFlag,
-						bridgeServiceUrlFlag,
-						destAddressFlag,
-						rpcURLFlag,
-						privKeyFlag,
-						bridgeAddressFlag,
-						gasLimitFlag,
-						chainIDFlag,
-						timeoutFlag,
-					},
-				},
-				{
-					Name:        "claim-message",
-					Aliases:     []string{},
-					Usage:       "Make a uLxLy claim message transaction",
-					Description: claimMessageUsage,
-					Action:      claimMessage,
-					Flags: []cli.Flag{
-						depositCountFlag,
-						depositNetworkFlag,
-						bridgeServiceUrlFlag,
-						destAddressFlag,
-						rpcURLFlag,
-						privKeyFlag,
-						bridgeAddressFlag,
-						gasLimitFlag,
-						chainIDFlag,
-						timeoutFlag,
-					},
-				},
-				{
-					Name:        "empty-proof",
-					Aliases:     []string{},
-					Usage:       "Print an empty proof structure",
-					Description: "Use this command to print an empty proof response that's filled with zero-valued siblings like 0x0000000000000000000000000000000000000000000000000000000000000000. This can be useful when you need to submit a dummy proof.",
-					Action:      emptyProof,
-				},
-				{
-					Name:    "zero-proof",
-					Aliases: []string{},
-					Usage:   "Print a proof structure with the zero hashes",
-					Description: `Use this command to print a proof response that's filled with the zero
-						hashes. This values are very helpful for debugging because it would
-						tell you how populated the tree is and roughly which leaves and
-						siblings are empty. It's also helpful for sanity checking a proof
-						response to understand if the hashed value is part of the zero hashes
-						or if it's actually an intermediate hash.`,
-					Action: zeroProof,
-				},
-				{
-					Name:        "proof",
-					Aliases:     []string{},
-					Usage:       "Generate a merkle proof",
-					Description: proofUsage,
-					Action:      proof,
-					Flags:       []cli.Flag{depositNumberFlag},
-				},
-				{
-					Name:        "deposit-get",
-					Aliases:     []string{},
-					Usage:       "Get a range of deposits",
-					Description: depositGetUsage,
-					Action:      readDeposit,
-					Flags: []cli.Flag{
-						fromBlockFlag,
-						toBlockFlag,
-						filterFlag,
-						bridgeAddressFlag,
-						rpcURLFlag,
-					},
-				},
-			},
+var ULxLyCmd = &cobra.Command{
+	Use:   "ulxly",
+	Short: "Utilities for interacting with the lxly bridge",
+	Long:  "These are low level tools for directly scanning bridge events and constructing proofs.",
+	Args:  cobra.NoArgs,
+}
+var ulxlyBridgeAndClaimCmd = &cobra.Command{
+	Args:   cobra.NoArgs,
+	Hidden: true,
+}
+
+var ulxlxBridgeCmd = &cobra.Command{
+	Use:   "bridge",
+	Short: "commands for making deposits to the uLxLy bridge",
+	Args:  cobra.NoArgs,
+}
+
+var ulxlyClaimCmd = &cobra.Command{
+	Use:   "claim",
+	Short: "commands for making claims of deposits from the uLxLy bridge",
+	Args:  cobra.NoArgs,
+}
+
+type ulxlyArgs struct {
+	gasLimit         *uint64
+	chainID          *string
+	privateKey       *string
+	value            *string
+	rpcURL           *string
+	bridgeAddress    *string
+	destNetwork      *uint32
+	destAddress      *string
+	tokenAddress     *string
+	forceUpdate      *bool
+	callData         *string
+	timeout          *uint64
+	depositCount     *uint64
+	depositNetwork   *uint64
+	bridgeServiceURL *string
+	inputFileName    *string
+	fromBlock        *uint64
+	toBlock          *uint64
+	filterSize       *uint64
+	depositNumber    *uint64
+}
+
+var inputUlxlyArgs = ulxlyArgs{}
+
+var (
+	bridgeAssetCommand       *cobra.Command
+	bridgeMessageCommand     *cobra.Command
+	bridgeMessageWETHCommand *cobra.Command
+	claimAssetCommand        *cobra.Command
+	claimMessageCommand      *cobra.Command
+	emptyProofCommand        *cobra.Command
+	zeroProofCommand         *cobra.Command
+	proofCommand             *cobra.Command
+	getDepositCommand        *cobra.Command
+)
+
+const (
+	ArgGasLimit         = "gas-limit"
+	ArgChainID          = "chain-id"
+	ArgPrivateKey       = "private-key"
+	ArgValue            = "value"
+	ArgRPCURL           = "rpc-url"
+	ArgBridgeAddress    = "bridge-address"
+	ArgDestNetwork      = "destination-network"
+	ArgDestAddress      = "destination-address"
+	ArgForceUpdate      = "force-update-root"
+	ArgCallData         = "call-data"
+	ArgTimeout          = "transaction-receipt-timeout"
+	ArgDepositCount     = "deposit-count"
+	ArgDepositNetwork   = "deposit-network"
+	ArgBridgeServiceURL = "bridge-service-url"
+	ArgFileName         = "file-name"
+	ArgFromBlock        = "from-block"
+	ArgToBlock          = "to-block"
+	ArgFilterSize       = "filter-size"
+)
+
+func init() {
+	bridgeAssetCommand = &cobra.Command{
+		Use:   "asset",
+		Short: "send a single deposit of value or an ERC20 into the bridge",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return bridgeAsset(cmd)
+		},
+	}
+	bridgeMessageCommand = &cobra.Command{
+		Use:   "message",
+		Short: "send some value along with call data into the bridge",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return bridgeMessage(cmd)
+		},
+	}
+	bridgeMessageWETHCommand = &cobra.Command{
+		Use:   "weth",
+		Short: "send some WETH into the bridge",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return bridgeWETHMessage(cmd)
+		},
+	}
+	claimAssetCommand = &cobra.Command{
+		Use:   "asset",
+		Short: "perform a claim of a given deposit in the bridge",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return claimAsset(cmd)
+		},
+	}
+	claimMessageCommand = &cobra.Command{
+		Use:   "message",
+		Short: "perform a claim of a given message in the birdge",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return nil
+		},
+	}
+	emptyProofCommand = &cobra.Command{
+		Use:   "empty-proof",
+		Short: "create an empty proof",
+		Long:  "Use this command to print an empty proof response that's filled with zero-valued siblings like 0x0000000000000000000000000000000000000000000000000000000000000000. This can be useful when you need to submit a dummy proof.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return emptyProof()
+		},
+	}
+	zeroProofCommand = &cobra.Command{
+		Use:   "zero-proof",
+		Short: "create a proof that's filled with zeros",
+		Long: `Use this command to print a proof response that's filled with the zero
+		hashes. This values are very helpful for debugging because it would
+		tell you how populated the tree is and roughly which leaves and
+		siblings are empty. It's also helpful for sanity checking a proof
+		response to understand if the hashed value is part of the zero hashes
+		or if it's actually an intermediate hash.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return zeroProof()
+		},
+	}
+	proofCommand = &cobra.Command{
+		Use:   "proof",
+		Short: "generate a proof for a given range of deposits",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return proof(args)
+		},
+	}
+	getDepositCommand = &cobra.Command{
+		Use:   "get-deposits",
+		Short: "generate ndjson for each bridge deposit over a particular range of blocks",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return readDeposit(cmd)
 		},
 	}
 
-	err := app.Run(os.Args)
-	if err != nil {
-		fmt.Printf("\nError: %v\n", err)
-		os.Exit(1)
-	}
-}
+	// Arguments for both bridge and claim
+	inputUlxlyArgs.gasLimit = ulxlyBridgeAndClaimCmd.PersistentFlags().Uint64(ArgGasLimit, 0, "force a gas limit when sending a transaction")
+	inputUlxlyArgs.chainID = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgChainID, "", "set the chain id to be used in the transaction")
+	inputUlxlyArgs.privateKey = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgPrivateKey, "", "the hex encoded private key to be used when sending the tx")
+	inputUlxlyArgs.rpcURL = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgRPCURL, "", "the URL of the RPC to send the transaction")
+	inputUlxlyArgs.bridgeAddress = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgBridgeAddress, "", "the address of the lxly bridge")
+	inputUlxlyArgs.destAddress = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgDestAddress, "", "the address where the bridge will be sent to")
+	inputUlxlyArgs.callData = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgCallData, "0x", "call data to be passed directly with bridge-message or as an ERC20 Permit")
+	inputUlxlyArgs.timeout = ulxlyBridgeAndClaimCmd.PersistentFlags().Uint64(ArgTimeout, 60, "the amount of time to wait while trying to confirm a transaction receipt")
+	ulxlyBridgeAndClaimCmd.MarkFlagRequired(ArgPrivateKey)
+	ulxlyBridgeAndClaimCmd.MarkFlagRequired(ArgRPCURL)
+	ulxlyBridgeAndClaimCmd.MarkFlagRequired(ArgBridgeAddress)
+	ulxlyBridgeAndClaimCmd.MarkFlagRequired(ArgDestAddress)
 
-var gasLimitFlag = &cli.Uint64Flag{
-	Name:     "gas-limit",
-	Aliases:  []string{"gl"},
-	Usage:    "This param is used to force the GasLimit",
-	Required: false,
-}
-var chainIDFlag = &cli.StringFlag{
-	Name:     "chain-id",
-	Aliases:  []string{"id"},
-	Usage:    "This param is used to force the chainID",
-	Required: false,
-}
-var privKeyFlag = &cli.StringFlag{
-	Name:     "private-key",
-	Aliases:  []string{"pk"},
-	Usage:    "This param is used to set the private key",
-	Required: true,
-}
-var AmountFlag = &cli.StringFlag{
-	Name:     "amount",
-	Aliases:  []string{"a"},
-	Usage:    "This param is used to set the amount",
-	Required: true,
-}
-var rpcURLFlag = &cli.StringFlag{
-	Name:     "rpc-url",
-	Aliases:  []string{"u"},
-	Usage:    "This param is used to set the rpc url",
-	Required: true,
-}
-var bridgeAddressFlag = &cli.StringFlag{
-	Name:     "bridge-address",
-	Aliases:  []string{"b"},
-	Usage:    "This param is used to set the bridge address",
-	Required: true,
-}
-var destNetworkFlag = &cli.UintFlag{
-	Name:     "destination-network",
-	Aliases:  []string{"dest-net"},
-	Usage:    "This param is used to set the destination network",
-	Required: true,
-}
-var destAddressFlag = &cli.StringFlag{
-	Name:     "destination-address",
-	Aliases:  []string{"dest-addr"},
-	Usage:    "This param is used to set the destination address",
-	Required: false,
-}
-var tokenAddressFlag = &cli.StringFlag{
-	Name:     "token-address",
-	Aliases:  []string{"token"},
-	Usage:    "This param is used to set the token address",
-	Required: false,
-}
-var forceFlag = &cli.BoolFlag{
-	Name:     "force-update-root",
-	Aliases:  []string{"f"},
-	Usage:    "This param is used to force the ger update in the smc",
-	Required: false,
-	Value:    true,
-}
-var callDataFlag = &cli.StringFlag{
-	Name:     "call-data",
-	Aliases:  []string{"data"},
-	Usage:    "This param is used to set the callData",
-	Required: false,
-	Value:    "0x",
-}
-var timeoutFlag = &cli.Uint64Flag{
-	Name:     "transaction-receipt-timeout",
-	Aliases:  []string{"timeout"},
-	Usage:    "This param is used to change the timeout interval",
-	Value:    60,
-	Required: false,
-}
-var depositCountFlag = &cli.Uint64Flag{
-	Name:     "deposit-count",
-	Aliases:  []string{"cnt"},
-	Usage:    "This param is used to specify the deposit counter",
-	Required: true,
-}
-var depositNetworkFlag = &cli.Uint64Flag{
-	Name:     "deposit-network",
-	Aliases:  []string{"net"},
-	Usage:    "This param is used to specify the deposit network",
-	Required: true,
-}
-var bridgeServiceUrlFlag = &cli.StringFlag{
-	Name:     "bridge-service-url",
-	Aliases:  []string{"bridge-url"},
-	Usage:    "This param is used to specify the bridge service url",
-	Required: true,
-}
-var inputFileNameFlag = &cli.StringFlag{
-	Name:     "file-name",
-	Aliases:  []string{"file"},
-	Usage:    "The filename with ndjson data of deposits",
-	Required: true,
-}
-var fromBlockFlag = &cli.Uint64Flag{
-	Name:     "from-block",
-	Aliases:  []string{"from"},
-	Usage:    "The block height to start query at.",
-	Value:    0,
-	Required: false,
-}
-var toBlockFlag = &cli.Uint64Flag{
-	Name:     "to-block",
-	Aliases:  []string{"to"},
-	Usage:    "The block height to start query at.",
-	Value:    0,
-	Required: false,
-}
-var filterFlag = &cli.Uint64Flag{
-	Name:     "filter-size",
-	Aliases:  []string{"filter"},
-	Usage:    "The batch size for individual filter queries.",
-	Value:    1000,
-	Required: false,
-}
-var depositNumberFlag = &cli.Uint64Flag{
-	Name:     "deposit-number",
-	Aliases:  []string{"deposit"},
-	Usage:    "The deposit that we would like to prove",
-	Value:    0,
-	Required: false,
+	// bridge specific args
+	inputUlxlyArgs.forceUpdate = ulxlxBridgeCmd.PersistentFlags().Bool(ArgForceUpdate, true, "indicates if the new global exit root is updated or not")
+	inputUlxlyArgs.value = ulxlxBridgeCmd.PersistentFlags().String(ArgValue, "", "the amount in wei to be sent along with the transaction")
+	inputUlxlyArgs.destNetwork = ulxlxBridgeCmd.PersistentFlags().Uint32(ArgDestNetwork, 0, "the rollup id of the destination network")
+	ulxlxBridgeCmd.MarkFlagRequired(ArgDestNetwork)
+
+	// Claim specific args
+	inputUlxlyArgs.depositCount = ulxlyClaimCmd.PersistentFlags().Uint64(ArgDepositCount, 0, "the deposit count of the bridge transaction")
+	inputUlxlyArgs.depositNetwork = ulxlyClaimCmd.PersistentFlags().Uint64(ArgDepositNetwork, 0, "the rollup id of the network where the bridge is being claimed")
+	inputUlxlyArgs.bridgeServiceURL = ulxlyClaimCmd.PersistentFlags().String(ArgBridgeServiceURL, "", "the URL of the bridge service")
+	ulxlyClaimCmd.MarkFlagRequired(ArgDepositCount)
+	ulxlyClaimCmd.MarkFlagRequired(ArgDepositNetwork)
+	ulxlyClaimCmd.MarkFlagRequired(ArgBridgeServiceURL)
+
+	// Args that are just for the get deposit command
+	inputUlxlyArgs.inputFileName = getDepositCommand.Flags().String(ArgFileName, "", "An ndjson file with deposit data")
+	inputUlxlyArgs.fromBlock = getDepositCommand.Flags().Uint64(ArgFromBlock, 0, "The start of the range of blocks to retrieve")
+	inputUlxlyArgs.toBlock = getDepositCommand.Flags().Uint64(ArgToBlock, 0, "The end of the range of blocks to retrieve")
+	inputUlxlyArgs.filterSize = getDepositCommand.Flags().Uint64(ArgFilterSize, 1000, "The batch size for individual filter queries")
+	getDepositCommand.Flags().String(ArgRPCURL, "", "The RPC URL to read deposit data")
+	getDepositCommand.MarkFlagRequired(ArgFromBlock)
+	getDepositCommand.MarkFlagRequired(ArgToBlock)
+	getDepositCommand.MarkFlagRequired(ArgRPCURL)
+	
+	// Top Level
+	ULxLyCmd.AddCommand(ulxlyBridgeAndClaimCmd)
+	ULxLyCmd.AddCommand(emptyProofCommand)
+	ULxLyCmd.AddCommand(zeroProofCommand)
+	ULxLyCmd.AddCommand(proofCommand)
+	ULxLyCmd.AddCommand(getDepositCommand)
+
+	ULxLyCmd.AddCommand(ulxlxBridgeCmd)
+	ULxLyCmd.AddCommand(ulxlyClaimCmd)
+
+	// Bridge and Claim
+	ulxlyBridgeAndClaimCmd.AddCommand(ulxlxBridgeCmd)
+	ulxlyBridgeAndClaimCmd.AddCommand(ulxlyClaimCmd)
+
+	// Bridge
+	ulxlxBridgeCmd.AddCommand(bridgeAssetCommand)
+	ulxlxBridgeCmd.AddCommand(bridgeMessageCommand)
+	ulxlxBridgeCmd.AddCommand(bridgeMessageWETHCommand)
+
+	// Claim
+	ulxlyClaimCmd.AddCommand(claimAssetCommand)
+	ulxlyClaimCmd.AddCommand(claimMessageCommand)
+
 }
