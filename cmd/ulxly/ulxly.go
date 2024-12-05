@@ -319,6 +319,7 @@ func claimAsset(cmd *cobra.Command) error {
 	depositCount := *inputUlxlyArgs.depositCount
 	depositNetwork := *inputUlxlyArgs.depositNetwork
 	bridgeServiceUrl := *inputUlxlyArgs.bridgeServiceURL
+	globalIndexOverride := *inputUlxlyArgs.globalIndex
 
 	// Dial Ethereum client
 	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
@@ -356,7 +357,9 @@ func claimAsset(cmd *cobra.Command) error {
 	if leafType != 0 {
 		log.Warn().Msg("Deposit leafType is not asset")
 	}
-
+	if globalIndexOverride != "" {
+		globalIndex.SetString(globalIndexOverride, 10)
+	}
 	claimTxn, err := bridgeV2.ClaimAsset(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to interact with bridge contract")
@@ -377,6 +380,7 @@ func claimMessage(cmd *cobra.Command) error {
 	depositCount := *inputUlxlyArgs.depositCount
 	depositNetwork := *inputUlxlyArgs.depositNetwork
 	bridgeServiceUrl := *inputUlxlyArgs.bridgeServiceURL
+	globalIndexOverride := *inputUlxlyArgs.globalIndex
 
 	// Dial Ethereum client
 	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
@@ -406,7 +410,10 @@ func claimMessage(cmd *cobra.Command) error {
 	if leafType != 1 {
 		log.Warn().Msg("Deposit leafType is not message")
 	}
-
+	if globalIndexOverride != "" {
+		globalIndex.SetString(globalIndexOverride, 10)
+	}
+	//ClaimMessage(opts *bind.TransactOpts, smtProofLocalExitRoot [32][32]byte, smtProofRollupExitRoot [32][32]byte, globalIndex *big.Int, mainnetExitRoot [32]byte, rollupExitRoot [32]byte, originNetwork uint32, originAddress common.Address, destinationNetwork uint32, destinationAddress common.Address, amount *big.Int, metadata []byte) (*types.Transaction, error) {
 	claimTxn, err := bridgeV2.ClaimMessage(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to interact with bridge contract")
@@ -903,6 +910,7 @@ type ulxlyArgs struct {
 	toBlock          *uint64
 	filterSize       *uint64
 	depositNumber    *uint64
+	globalIndex      *string
 }
 
 var inputUlxlyArgs = ulxlyArgs{}
@@ -939,6 +947,7 @@ const (
 	ArgToBlock          = "to-block"
 	ArgFilterSize       = "filter-size"
 	ArgTokenAddress     = "token-address"
+	ArgGlobalIndex      = "global-index"
 )
 
 func init() {
@@ -1038,6 +1047,8 @@ func init() {
 	inputUlxlyArgs.depositCount = ulxlyClaimCmd.PersistentFlags().Uint64(ArgDepositCount, 0, "the deposit count of the bridge transaction")
 	inputUlxlyArgs.depositNetwork = ulxlyClaimCmd.PersistentFlags().Uint64(ArgDepositNetwork, 0, "the rollup id of the network where the bridge is being claimed")
 	inputUlxlyArgs.bridgeServiceURL = ulxlyClaimCmd.PersistentFlags().String(ArgBridgeServiceURL, "", "the URL of the bridge service")
+	inputUlxlyArgs.globalIndex = ulxlyClaimCmd.PersistentFlags().String(ArgGlobalIndex, "", "an override of the global index value")
+
 	ulxlyClaimCmd.MarkFlagRequired(ArgDepositCount)
 	ulxlyClaimCmd.MarkFlagRequired(ArgDepositNetwork)
 	ulxlyClaimCmd.MarkFlagRequired(ArgBridgeServiceURL)
