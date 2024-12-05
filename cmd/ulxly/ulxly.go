@@ -70,7 +70,7 @@ type BridgeDeposit struct {
 		DestNet       uint32 `json:"dest_net"`
 		DestAddr      string `json:"dest_addr"`
 		BlockNum      string `json:"block_num"`
-		DepositCnt    uint32 `json:"deposit_cnt,string"`
+		DepositCnt    uint32 `json:"deposit_cnt"`
 		NetworkID     uint32 `json:"network_id"`
 		TxHash        string `json:"tx_hash"`
 		ClaimTxHash   string `json:"claim_tx_hash"`
