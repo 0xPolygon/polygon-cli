@@ -699,6 +699,7 @@ func generateEmptyHashes(height uint8) []common.Hash {
 }
 
 func generateTransactionPayload(ctx context.Context, client *ethclient.Client, ulxlyInputArgBridge string, ulxlyInputArgPvtKey string, ulxlyInputArgGasLimit uint64, ulxlyInputArgDestAddr string, ulxlyInputArgChainID string) (bridgeV2 *ulxly.Ulxly, toAddress common.Address, opts *bind.TransactOpts, err error) {
+	ulxlyInputArgPvtKey = strings.TrimPrefix(ulxlyInputArgPvtKey, "0x")
 	bridgeV2, err = ulxly.NewUlxly(common.HexToAddress(ulxlyInputArgBridge), client)
 	if err != nil {
 		return
@@ -937,6 +938,7 @@ const (
 	ArgFromBlock        = "from-block"
 	ArgToBlock          = "to-block"
 	ArgFilterSize       = "filter-size"
+	ArgTokenAddress     = "token-address"
 )
 
 func init() {
@@ -1029,6 +1031,7 @@ func init() {
 	inputUlxlyArgs.forceUpdate = ulxlxBridgeCmd.PersistentFlags().Bool(ArgForceUpdate, true, "indicates if the new global exit root is updated or not")
 	inputUlxlyArgs.value = ulxlxBridgeCmd.PersistentFlags().String(ArgValue, "", "the amount in wei to be sent along with the transaction")
 	inputUlxlyArgs.destNetwork = ulxlxBridgeCmd.PersistentFlags().Uint32(ArgDestNetwork, 0, "the rollup id of the destination network")
+	inputUlxlyArgs.tokenAddress = ulxlxBridgeCmd.PersistentFlags().String(ArgTokenAddress, "0x0000000000000000000000000000000000000000", "the address of an ERC20 token to be used")
 	ulxlxBridgeCmd.MarkFlagRequired(ArgDestNetwork)
 
 	// Claim specific args
@@ -1048,7 +1051,7 @@ func init() {
 	getDepositCommand.MarkFlagRequired(ArgFromBlock)
 	getDepositCommand.MarkFlagRequired(ArgToBlock)
 	getDepositCommand.MarkFlagRequired(ArgRPCURL)
-	
+
 	// Top Level
 	ULxLyCmd.AddCommand(ulxlyBridgeAndClaimCmd)
 	ULxLyCmd.AddCommand(emptyProofCommand)
