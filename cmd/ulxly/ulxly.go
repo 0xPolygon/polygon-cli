@@ -70,7 +70,7 @@ type BridgeDeposit struct {
 		DestNet       uint32 `json:"dest_net"`
 		DestAddr      string `json:"dest_addr"`
 		BlockNum      string `json:"block_num"`
-		DepositCnt    uint32 `json:"deposit_cnt"`
+		DepositCnt    uint32 `json:"deposit_cnt,string"`
 		NetworkID     uint32 `json:"network_id"`
 		TxHash        string `json:"tx_hash"`
 		ClaimTxHash   string `json:"claim_tx_hash"`
@@ -974,7 +974,7 @@ func init() {
 		Use:   "message",
 		Short: "perform a claim of a given message in the birdge",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return nil
+			return claimMessage(cmd)
 		},
 	}
 	emptyProofCommand = &cobra.Command{
@@ -1020,7 +1020,6 @@ func init() {
 	inputUlxlyArgs.rpcURL = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgRPCURL, "", "the URL of the RPC to send the transaction")
 	inputUlxlyArgs.bridgeAddress = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgBridgeAddress, "", "the address of the lxly bridge")
 	inputUlxlyArgs.destAddress = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgDestAddress, "", "the address where the bridge will be sent to")
-	inputUlxlyArgs.callData = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgCallData, "0x", "call data to be passed directly with bridge-message or as an ERC20 Permit")
 	inputUlxlyArgs.timeout = ulxlyBridgeAndClaimCmd.PersistentFlags().Uint64(ArgTimeout, 60, "the amount of time to wait while trying to confirm a transaction receipt")
 	ulxlyBridgeAndClaimCmd.MarkFlagRequired(ArgPrivateKey)
 	ulxlyBridgeAndClaimCmd.MarkFlagRequired(ArgRPCURL)
@@ -1032,6 +1031,7 @@ func init() {
 	inputUlxlyArgs.value = ulxlxBridgeCmd.PersistentFlags().String(ArgValue, "", "the amount in wei to be sent along with the transaction")
 	inputUlxlyArgs.destNetwork = ulxlxBridgeCmd.PersistentFlags().Uint32(ArgDestNetwork, 0, "the rollup id of the destination network")
 	inputUlxlyArgs.tokenAddress = ulxlxBridgeCmd.PersistentFlags().String(ArgTokenAddress, "0x0000000000000000000000000000000000000000", "the address of an ERC20 token to be used")
+	inputUlxlyArgs.callData = ulxlxBridgeCmd.PersistentFlags().String(ArgCallData, "0x", "call data to be passed directly with bridge-message or as an ERC20 Permit")
 	ulxlxBridgeCmd.MarkFlagRequired(ArgDestNetwork)
 
 	// Claim specific args
