@@ -425,6 +425,10 @@ func claimMessage(cmd *cobra.Command) error {
 
 // Wait for the transaction to be mined
 func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *types.Transaction, txTimeout uint64) error {
+	if inputUlxlyArgs.dryRun != nil && *inputUlxlyArgs.dryRun {
+		log.Info().Msg("Skipping receipt check. Dry run is enabled")
+		return nil
+	}
 	txnMinedTimer := time.NewTimer(time.Duration(txTimeout) * time.Second)
 	defer txnMinedTimer.Stop()
 	for {
@@ -745,6 +749,14 @@ func generateTransactionPayload(ctx context.Context, client *ethclient.Client, u
 		log.Error().Err(err).Msg("Cannot generate transactionOpts")
 		return
 	}
+	if inputUlxlyArgs.gasPrice != nil && *inputUlxlyArgs.gasPrice != "" {
+		gasPrice := new(big.Int)
+		gasPrice.SetString(*inputUlxlyArgs.gasPrice, 10)
+		opts.GasPrice = gasPrice
+	}
+	if inputUlxlyArgs.dryRun != nil && *inputUlxlyArgs.dryRun {
+		opts.NoSend = true
+	}
 	opts.Context = ctx
 	opts.GasLimit = gasLimit
 	toAddress = common.HexToAddress(ulxlyInputArgDestAddr)
@@ -911,6 +923,8 @@ type ulxlyArgs struct {
 	filterSize       *uint64
 	depositNumber    *uint64
 	globalIndex      *string
+	gasPrice         *string
+	dryRun           *bool
 }
 
 var inputUlxlyArgs = ulxlyArgs{}
@@ -948,6 +962,8 @@ const (
 	ArgFilterSize       = "filter-size"
 	ArgTokenAddress     = "token-address"
 	ArgGlobalIndex      = "global-index"
+	ArgDryRun           = "dry-run"
+	ArgGasPrice         = "gas-price"
 )
 
 func init() {
@@ -1030,10 +1046,12 @@ func init() {
 	inputUlxlyArgs.bridgeAddress = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgBridgeAddress, "", "the address of the lxly bridge")
 	inputUlxlyArgs.destAddress = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgDestAddress, "", "the address where the bridge will be sent to")
 	inputUlxlyArgs.timeout = ulxlyBridgeAndClaimCmd.PersistentFlags().Uint64(ArgTimeout, 60, "the amount of time to wait while trying to confirm a transaction receipt")
-	ulxlyBridgeAndClaimCmd.MarkFlagRequired(ArgPrivateKey)
-	ulxlyBridgeAndClaimCmd.MarkFlagRequired(ArgRPCURL)
-	ulxlyBridgeAndClaimCmd.MarkFlagRequired(ArgBridgeAddress)
-	ulxlyBridgeAndClaimCmd.MarkFlagRequired(ArgDestAddress)
+	inputUlxlyArgs.gasPrice = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgGasPrice, "", "the gas price to be used")
+	inputUlxlyArgs.dryRun = ulxlyBridgeAndClaimCmd.PersistentFlags().Bool(ArgDryRun, false, "do all of the transaction steps but do not send the transaction")
+	ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgPrivateKey)
+	ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgRPCURL)
+	ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgBridgeAddress)
+	ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgDestAddress)
 
 	// bridge specific args
 	inputUlxlyArgs.forceUpdate = ulxlxBridgeCmd.PersistentFlags().Bool(ArgForceUpdate, true, "indicates if the new global exit root is updated or not")
@@ -1041,7 +1059,7 @@ func init() {
 	inputUlxlyArgs.destNetwork = ulxlxBridgeCmd.PersistentFlags().Uint32(ArgDestNetwork, 0, "the rollup id of the destination network")
 	inputUlxlyArgs.tokenAddress = ulxlxBridgeCmd.PersistentFlags().String(ArgTokenAddress, "0x0000000000000000000000000000000000000000", "the address of an ERC20 token to be used")
 	inputUlxlyArgs.callData = ulxlxBridgeCmd.PersistentFlags().String(ArgCallData, "0x", "call data to be passed directly with bridge-message or as an ERC20 Permit")
-	ulxlxBridgeCmd.MarkFlagRequired(ArgDestNetwork)
+	ulxlxBridgeCmd.MarkPersistentFlagRequired(ArgDestNetwork)
 
 	// Claim specific args
 	inputUlxlyArgs.depositCount = ulxlyClaimCmd.PersistentFlags().Uint64(ArgDepositCount, 0, "the deposit count of the bridge transaction")
@@ -1049,9 +1067,9 @@ func init() {
 	inputUlxlyArgs.bridgeServiceURL = ulxlyClaimCmd.PersistentFlags().String(ArgBridgeServiceURL, "", "the URL of the bridge service")
 	inputUlxlyArgs.globalIndex = ulxlyClaimCmd.PersistentFlags().String(ArgGlobalIndex, "", "an override of the global index value")
 
-	ulxlyClaimCmd.MarkFlagRequired(ArgDepositCount)
-	ulxlyClaimCmd.MarkFlagRequired(ArgDepositNetwork)
-	ulxlyClaimCmd.MarkFlagRequired(ArgBridgeServiceURL)
+	ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositCount)
+	ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositNetwork)
+	ulxlyClaimCmd.MarkPersistentFlagRequired(ArgBridgeServiceURL)
 
 	// Args that are just for the get deposit command
 	inputUlxlyArgs.inputFileName = getDepositCommand.Flags().String(ArgFileName, "", "An ndjson file with deposit data")
