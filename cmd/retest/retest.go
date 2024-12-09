@@ -11,6 +11,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/abi"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"github.com/0xPolygon/polygon-cli/util"
 	"io"
 	"math"
 	"math/big"
@@ -657,25 +658,10 @@ func processRawStringToString(data string) string {
 func WrapPredeployedCode(pre EthTestPre) string {
 	rawCode := WrappedData{raw: pre.Code}
 	deployedCode := rawCode.ToString()
-	deployedCode = strings.TrimPrefix(deployedCode, "0x")
 	storageInitCode := storageToByteCode(pre.Storage)
 
-	codeCopySize := len(deployedCode) / 2
-	codeCopyOffset := (len(storageInitCode) / 2) + 13 + 8  // 13 for CODECOPY + 8 for RETURN
-
-	return fmt.Sprintf(
-		"0x%s"+			// storage initialization code
-		"63%08x"+		// PUSH4 to indicate the size of the data that should be copied into memory
-		"63%08x"+		// PUSH4 to indicate the offset in the call data to start the copy
-		"6000"+			// PUSH1 00 to indicate the destination offset in memory
-		"39"+			// CODECOPY
-		"63%08x"+		// PUSH4 to indicate the size of the data to be returned from memory
-		"6000"+			// PUSH1 00 to indicate that it starts from offset 0
-		"F3"+			// RETURN
-		"%s",			// CODE starts here.
-		storageInitCode, codeCopySize, codeCopyOffset, codeCopySize, deployedCode)
+	return util.WrapDeployedCode(deployedCode, storageInitCode)
 }
-
 
 // storageToByteCode
 func storageToByteCode(storage map[string]EthTestNumeric) string {
