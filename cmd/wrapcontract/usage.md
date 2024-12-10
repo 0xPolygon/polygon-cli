@@ -2,7 +2,24 @@ This command takes the runtime bytecode, the bytecode deployed on-chain, as inpu
 
 ```bash
 $ polycli wrap-contract 69602a60005260206000f3600052600a6016f3
+$ echo 69602a60005260206000f3600052600a6016f3 | polycli wrap-contract 
 
+```
+
+You can also provide a path to a file, and the bytecode while be read from there.
+
+```bash
+$ polycli wrap-contract bytecode.txt
+$ polycli wrap-contract ../bytecode.txt
+$ polycli wrap-contract /tmp/bytecode.txt
+$ echo /tmp/bytecode.txt | polycli wrap-contract
+```
+
+Additionally, you can provide storage for the contract in JSON
+```bash
+$ polycli wrap-contract 0x4455 --storage '{"0x01":"0x0034"}'
+$ polycli wrap-contract 0x4455 --storage '{"0x01":"0x0034", "0x02": "0xFF"}'
+$ echo 69602a60005260206000f3600052600a6016f3 | polycli wrap-contract --storage '{"0x01":"0x0034", "0x02": "0xFF"}'
 ```
 
 The resulting bytecode will be formatted this way:

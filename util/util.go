@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"reflect"
 
 	"github.com/cenkalti/backoff"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -336,4 +337,23 @@ func WrapDeployedCode(deployedBytecode string, storageBytecode string) string {
 		"f3"+			// RETURN
 		"%s",			// CODE starts here.
 		storageBytecode, codeCopySize, codeCopyOffset, codeCopySize, deployedBytecode)
+}
+
+func GetHexString(data any) string {
+	var result string
+	if reflect.TypeOf(data).Kind() == reflect.Float64 {
+		result = fmt.Sprintf("%x", int64(data.(float64)))
+	} else if reflect.TypeOf(data).Kind() == reflect.String {
+		if strings.HasPrefix(data.(string), "0x") {
+			result = strings.TrimPrefix(data.(string), "0x")
+		} else {
+			result = data.(string)
+		}
+	} else {
+		log.Fatal().Any("data", data).Msg("unknown storage data type")
+	}
+	if len(result) % 2 != 0 {
+		result = "0" + result
+	}
+	return strings.ToLower(result)
 }
