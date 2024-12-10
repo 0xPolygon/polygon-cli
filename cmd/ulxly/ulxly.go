@@ -507,6 +507,8 @@ func getInputData(args []string) ([]byte, error) {
 func readDeposits(rawDeposits []byte, depositNumber uint32) error {
 	buf := bytes.NewBuffer(rawDeposits)
 	scanner := bufio.NewScanner(buf)
+	scannerBuf := make([]byte, 0)
+	scanner.Buffer(scannerBuf, 1024*1024)
 	imt := new(IMT)
 	imt.Init()
 	seenDeposit := make(map[uint32]common.Hash, 0)
@@ -539,7 +541,12 @@ func readDeposits(rawDeposits []byte, depositNumber uint32) error {
 			break
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		log.Error().Err(err).Msg("there was an error reading the deposit file")
+		return err
+	}
 
+	log.Info().Msg("finished")
 	p := imt.GetProof(depositNumber)
 	fmt.Println(p.String())
 	return nil
@@ -1105,7 +1112,6 @@ func init() {
 	ulxlyClaimCmd.MarkPersistentFlagRequired(ArgBridgeServiceURL)
 
 	// Args that are just for the get deposit command
-	inputUlxlyArgs.inputFileName = getDepositCommand.Flags().String(ArgFileName, "", "An ndjson file with deposit data")
 	inputUlxlyArgs.fromBlock = getDepositCommand.Flags().Uint64(ArgFromBlock, 0, "The start of the range of blocks to retrieve")
 	inputUlxlyArgs.toBlock = getDepositCommand.Flags().Uint64(ArgToBlock, 0, "The end of the range of blocks to retrieve")
 	inputUlxlyArgs.filterSize = getDepositCommand.Flags().Uint64(ArgFilterSize, 1000, "The batch size for individual filter queries")
@@ -1114,6 +1120,10 @@ func init() {
 	getDepositCommand.MarkFlagRequired(ArgFromBlock)
 	getDepositCommand.MarkFlagRequired(ArgToBlock)
 	getDepositCommand.MarkFlagRequired(ArgRPCURL)
+
+	// Args for the proof command
+	inputUlxlyArgs.inputFileName = proofCommand.Flags().String(ArgFileName, "", "An ndjson file with deposit data")
+	inputUlxlyArgs.depositNumber = proofCommand.Flags().Uint64(ArgDepositCount, 0, "The deposit number to generate a proof for")
 
 	// Top Level
 	ULxLyCmd.AddCommand(ulxlyBridgeAndClaimCmd)
