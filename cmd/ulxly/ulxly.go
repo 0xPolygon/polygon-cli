@@ -170,6 +170,40 @@ func zeroProof() error {
 	return nil
 }
 
+type JsonError struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data"`
+}
+
+func logAndReturnJsonError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	var jsonError JsonError
+	jsonErrorBytes, jsErr := json.Marshal(err)
+	if jsErr != nil {
+		log.Error().Err(err).Msg("Unable to interact with the bridge contract")
+		return err
+	}
+
+	jsErr = json.Unmarshal(jsonErrorBytes, &jsonError)
+	if jsErr != nil {
+		log.Error().Err(err).Msg("Unable to interact with the bridge contract")
+		return err
+	}
+
+	log.Error().
+		Err(err).
+		Str("message", jsonError.Message).
+		Int("code", jsonError.Code).
+		Interface("data", jsonError.Data).
+		Msg("Unable to interact with bridge contract")
+
+	return err
+}
+
 func bridgeAsset(cmd *cobra.Command) error {
 	bridgeAddress := *inputUlxlyArgs.bridgeAddress
 	privateKey := *inputUlxlyArgs.privateKey
@@ -208,8 +242,7 @@ func bridgeAsset(cmd *cobra.Command) error {
 
 	bridgeTxn, err := bridgeV2.BridgeAsset(auth, destinationNetwork, toAddress, value, tokenAddress, isForced, callData)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to interact with bridge contract")
-		return err
+		return logAndReturnJsonError(err)
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
@@ -253,8 +286,7 @@ func bridgeMessage(cmd *cobra.Command) error {
 
 	bridgeTxn, err := bridgeV2.BridgeMessage(auth, destinationNetwork, toAddress, isForced, callData)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to interact with bridge contract")
-		return err
+		return logAndReturnJsonError(err)
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
@@ -301,8 +333,7 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 
 	bridgeTxn, err := bridgeV2.BridgeMessageWETH(auth, destinationNetwork, toAddress, value, isForced, callData)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to interact with bridge contract")
-		return err
+		return logAndReturnJsonError(err)
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
@@ -362,8 +393,7 @@ func claimAsset(cmd *cobra.Command) error {
 	}
 	claimTxn, err := bridgeV2.ClaimAsset(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to interact with bridge contract")
-		return err
+		return logAndReturnJsonError(err)
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, claimTxn, timeoutTxnReceipt)
@@ -416,8 +446,7 @@ func claimMessage(cmd *cobra.Command) error {
 	//ClaimMessage(opts *bind.TransactOpts, smtProofLocalExitRoot [32][32]byte, smtProofRollupExitRoot [32][32]byte, globalIndex *big.Int, mainnetExitRoot [32]byte, rollupExitRoot [32]byte, originNetwork uint32, originAddress common.Address, destinationNetwork uint32, destinationAddress common.Address, amount *big.Int, metadata []byte) (*types.Transaction, error) {
 	claimTxn, err := bridgeV2.ClaimMessage(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to interact with bridge contract")
-		return err
+		return logAndReturnJsonError(err)
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, claimTxn, timeoutTxnReceipt)
@@ -1051,6 +1080,7 @@ func init() {
 	ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgPrivateKey)
 	ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgRPCURL)
 	ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgBridgeAddress)
+	// TODO this should be optional and we should use the private key to determine the destination address
 	ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgDestAddress)
 
 	// bridge specific args
