@@ -237,7 +237,7 @@ func bridgeAsset(cmd *cobra.Command) error {
 
 	value, _ := big.NewInt(0).SetString(amount, 0)
 	tokenAddress := common.HexToAddress(tokenAddr)
-	callData := common.Hex2Bytes(callDataString)
+	callData := common.Hex2Bytes(strings.TrimPrefix(callDataString, "0x"))
 
 	if tokenAddress == common.HexToAddress("0x0000000000000000000000000000000000000000") {
 		auth.Value = value
@@ -281,7 +281,7 @@ func bridgeMessage(cmd *cobra.Command) error {
 
 	value, _ := big.NewInt(0).SetString(amount, 0)
 	tokenAddress := common.HexToAddress(tokenAddr)
-	callData := common.Hex2Bytes(callDataString)
+	callData := common.Hex2Bytes(strings.TrimPrefix(callDataString, "0x"))
 
 	if tokenAddress == common.HexToAddress("0x0000000000000000000000000000000000000000") {
 		auth.Value = value
@@ -332,7 +332,7 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 	}
 
 	value, _ := big.NewInt(0).SetString(amount, 0)
-	callData := common.Hex2Bytes(callDataString)
+	callData := common.Hex2Bytes(strings.TrimPrefix(callDataString, "0x"))
 
 	bridgeTxn, err := bridgeV2.BridgeMessageWETH(auth, destinationNetwork, toAddress, value, isForced, callData)
 	if err != nil {
@@ -889,10 +889,20 @@ func getDeposit(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, ori
 	originAddress = common.HexToAddress(bridgeDeposit.Deposit.OrigAddr)
 	globalIndex.SetString(bridgeDeposit.Deposit.GlobalIndex, 10)
 	amount.SetString(bridgeDeposit.Deposit.Amount, 10)
-	metadata = common.Hex2Bytes(bridgeDeposit.Deposit.Metadata)
+
+	metadata = common.Hex2Bytes(strings.TrimPrefix(bridgeDeposit.Deposit.Metadata, "0x"))
 	leafType = bridgeDeposit.Deposit.LeafType
 	claimDestNetwork = bridgeDeposit.Deposit.DestNet
 	claimOriginalNetwork = bridgeDeposit.Deposit.OrigNet
+	log.Info().
+		Stringer("globalIndex", globalIndex).
+		Stringer("originAddress", originAddress).
+		Stringer("amount", amount).
+		Str("metadata", bridgeDeposit.Deposit.Metadata).
+		Uint8("leafType", leafType).
+		Uint32("claimDestNetwork", claimDestNetwork).
+		Uint32("claimOriginalNetwork", claimOriginalNetwork).
+		Msg("Got Deposit")
 	return globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, nil
 }
 
