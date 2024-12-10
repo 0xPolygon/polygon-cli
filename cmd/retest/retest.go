@@ -330,7 +330,7 @@ func EthTestDataToString(data EthTestData) string {
 	case reflect.Float64:
 		// We have few tests with numeric code, ex:
 		// "code": 16449,
-		return processStorageData(data.(float64))
+		return util.GetHexString(data.(float64))
 	
 	default:
 		log.Fatal().Any("input", data).Str("kind", v.Kind().String()).Msg("Attempted to convert unknown type to raw data")
@@ -376,25 +376,6 @@ func processTestDataString(data string) string {
 	}
 
 	return ""
-}
-
-func processStorageData(data any) string {
-	var result string
-	if reflect.TypeOf(data).Kind() == reflect.Float64 {
-		result = fmt.Sprintf("%x", int64(data.(float64)))
-	} else if reflect.TypeOf(data).Kind() == reflect.String {
-		if strings.HasPrefix(data.(string), "0x") {
-			result = strings.TrimPrefix(data.(string), "0x")
-		} else {
-			result = data.(string)
-		}
-	} else {
-		log.Fatal().Any("data", data).Msg("unknown storage data type")
-	}
-	if len(result) % 2 != 0 {
-		result = "0" + result
-	}
-	return result
 }
 
 // isStandardSolidityString will do a rough check to see if the string looks like a typical solidity file rather than
@@ -676,8 +657,8 @@ func storageToByteCode(storage map[string]EthTestNumeric) string {
 			log.Warn().Str("slot", slot).Msg("found a storage entry for invalid slot")
 		}
 
-		s := processStorageData(slot)
-		v := processStorageData(value)
+		s := util.GetHexString(slot)
+		v := util.GetHexString(value)
 		sLen := len(s) / 2
 		vLen := len(v) / 2
 		sPushCode := 0x5F + sLen
