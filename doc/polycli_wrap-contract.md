@@ -19,7 +19,7 @@ polycli wrap-contract bytecode [flags]
 
 ## Usage
 
-This command takes the bytecode that we want to be deployed for a new contract, and wraps its into the bytecode that we can use to create the contract.
+This command takes the runtime bytecode, the bytecode deployed on-chain, as input and converts it into creation bytecode, the bytecode used to create the contract
 
 ```bash
 $ polycli wrap-contract 69602a60005260206000f3600052600a6016f3

@@ -319,8 +319,8 @@ func BlockUntilSuccessful(ctx context.Context, c *ethclient.Client, retryable fu
 }
 
 func WrapDeployedCode(deployedBytecode string, storageBytecode string) string {
-	deployedBytecode = strings.TrimPrefix(deployedBytecode, "0x")
-	storageBytecode = strings.TrimPrefix(storageBytecode, "0x")
+	deployedBytecode = strings.ToLower(strings.TrimPrefix(deployedBytecode, "0x"))
+	storageBytecode = strings.ToLower(strings.TrimPrefix(storageBytecode, "0x"))
 
 	codeCopySize := len(deployedBytecode) / 2
 	codeCopyOffset := (len(storageBytecode)/2) + 13 + 8  // 13 for CODECOPY + 8 for RETURN
