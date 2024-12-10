@@ -333,7 +333,7 @@ func WrapDeployedCode(deployedBytecode string, storageBytecode string) string {
 		"39"+			// CODECOPY
 		"63%08x"+		// PUSH4 to indicate the size of the data to be returned from memory
 		"6000"+			// PUSH1 00 to indicate that it starts from offset 0
-		"F3"+			// RETURN
+		"f3"+			// RETURN
 		"%s",			// CODE starts here.
 		storageBytecode, codeCopySize, codeCopyOffset, codeCopySize, deployedBytecode)
 }
