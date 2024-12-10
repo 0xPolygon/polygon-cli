@@ -87,8 +87,11 @@ func readDeposit(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
+	bridgeAddress, err := cmd.Flags().GetString(ArgBridgeAddress)
+	if err != nil {
+		return err
+	}
 
-	bridgeAddress := *inputUlxlyArgs.bridgeAddress
 	toBlock := *inputUlxlyArgs.toBlock
 	fromBlock := *inputUlxlyArgs.fromBlock
 	filter := *inputUlxlyArgs.filterSize
@@ -1068,11 +1071,11 @@ func init() {
 	}
 
 	// Arguments for both bridge and claim
+	inputUlxlyArgs.rpcURL = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgRPCURL, "", "the URL of the RPC to send the transaction")
+	inputUlxlyArgs.bridgeAddress = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgBridgeAddress, "", "the address of the lxly bridge")
 	inputUlxlyArgs.gasLimit = ulxlyBridgeAndClaimCmd.PersistentFlags().Uint64(ArgGasLimit, 0, "force a gas limit when sending a transaction")
 	inputUlxlyArgs.chainID = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgChainID, "", "set the chain id to be used in the transaction")
 	inputUlxlyArgs.privateKey = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgPrivateKey, "", "the hex encoded private key to be used when sending the tx")
-	inputUlxlyArgs.rpcURL = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgRPCURL, "", "the URL of the RPC to send the transaction")
-	inputUlxlyArgs.bridgeAddress = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgBridgeAddress, "", "the address of the lxly bridge")
 	inputUlxlyArgs.destAddress = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgDestAddress, "", "the address where the bridge will be sent to")
 	inputUlxlyArgs.timeout = ulxlyBridgeAndClaimCmd.PersistentFlags().Uint64(ArgTimeout, 60, "the amount of time to wait while trying to confirm a transaction receipt")
 	inputUlxlyArgs.gasPrice = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgGasPrice, "", "the gas price to be used")
@@ -1107,6 +1110,7 @@ func init() {
 	inputUlxlyArgs.toBlock = getDepositCommand.Flags().Uint64(ArgToBlock, 0, "The end of the range of blocks to retrieve")
 	inputUlxlyArgs.filterSize = getDepositCommand.Flags().Uint64(ArgFilterSize, 1000, "The batch size for individual filter queries")
 	getDepositCommand.Flags().String(ArgRPCURL, "", "The RPC URL to read deposit data")
+	getDepositCommand.Flags().String(ArgBridgeAddress, "", "The address of the ulxly bridge")
 	getDepositCommand.MarkFlagRequired(ArgFromBlock)
 	getDepositCommand.MarkFlagRequired(ArgToBlock)
 	getDepositCommand.MarkFlagRequired(ArgRPCURL)
