@@ -52,21 +52,24 @@ func init() {
 
 func getInputData(args []string) (string, error) {
 	var deployedBytecode string
+	var deployedBytecodeOrFile string
+
 	if len(args) == 0 {
-		deployedBytecodeBytes, err := io.ReadAll(os.Stdin)
+		deployedBytecodeOrFileBytes, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			return "", err
 		}
-		deployedBytecode = string(deployedBytecodeBytes)
+		deployedBytecodeOrFile = string(deployedBytecodeOrFileBytes)
 	} else {
-		deployedBytecodeOrFile := args[0]
-		// Try to open the param as a file, otherwise treat it as bytecode
-		deployedBytecodeBytes, err := os.ReadFile(deployedBytecodeOrFile)
-		if err != nil {
-			deployedBytecode = deployedBytecodeOrFile
-		} else {
-			deployedBytecode = string(deployedBytecodeBytes)
-		}
+		deployedBytecodeOrFile = args[0]
+	}
+	// Try to open the param as a file, otherwise treat it as bytecode
+	deployedBytecodeOrFile = strings.TrimSpace(deployedBytecodeOrFile)
+	deployedBytecodeBytes, err := os.ReadFile(deployedBytecodeOrFile)
+	if err != nil {
+		deployedBytecode = deployedBytecodeOrFile
+	} else {
+		deployedBytecode = string(deployedBytecodeBytes)
 	}
 
 	return strings.TrimSpace(deployedBytecode), nil
