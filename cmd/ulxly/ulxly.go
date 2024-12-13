@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -60,26 +61,27 @@ type BridgeProof struct {
 		RollupExitRoot    string   `json:"rollup_exit_root"`
 	} `json:"proof"`
 }
-
 type BridgeDeposit struct {
-	Deposit struct {
-		LeafType      uint8  `json:"leaf_type"`
-		OrigNet       uint32 `json:"orig_net"`
-		OrigAddr      string `json:"orig_addr"`
-		Amount        string `json:"amount"`
-		DestNet       uint32 `json:"dest_net"`
-		DestAddr      string `json:"dest_addr"`
-		BlockNum      string `json:"block_num"`
-		DepositCnt    uint32 `json:"deposit_cnt"`
-		NetworkID     uint32 `json:"network_id"`
-		TxHash        string `json:"tx_hash"`
-		ClaimTxHash   string `json:"claim_tx_hash"`
-		Metadata      string `json:"metadata"`
-		ReadyForClaim bool   `json:"ready_for_claim"`
-		GlobalIndex   string `json:"global_index"`
-	} `json:"deposit"`
-	Code    *int    `json:"code"`
-	Message *string `json:"message"`
+	LeafType      uint8  `json:"leaf_type"`
+	OrigNet       uint32 `json:"orig_net"`
+	OrigAddr      string `json:"orig_addr"`
+	Amount        string `json:"amount"`
+	DestNet       uint32 `json:"dest_net"`
+	DestAddr      string `json:"dest_addr"`
+	BlockNum      string `json:"block_num"`
+	DepositCnt    uint32 `json:"deposit_cnt"`
+	NetworkID     uint32 `json:"network_id"`
+	TxHash        string `json:"tx_hash"`
+	ClaimTxHash   string `json:"claim_tx_hash"`
+	Metadata      string `json:"metadata"`
+	ReadyForClaim bool   `json:"ready_for_claim"`
+	GlobalIndex   string `json:"global_index"`
+}
+
+type BridgeDepositResponse struct {
+	Deposit BridgeDeposit `json:"deposit"`
+	Code    *int          `json:"code"`
+	Message *string       `json:"message"`
 }
 
 func readDeposit(cmd *cobra.Command) error {
@@ -455,6 +457,137 @@ func claimMessage(cmd *cobra.Command) error {
 	return WaitMineTransaction(cmd.Context(), client, claimTxn, timeoutTxnReceipt)
 }
 
+func getBridgeServiceURLs() (map[uint32]string, error) {
+	bridgeServiceUrls := *inputUlxlyArgs.bridgeServiceURLs
+	urlMap := make(map[uint32]string)
+	for _, mapping := range bridgeServiceUrls {
+		pieces := strings.Split(mapping, "=")
+		if len(pieces) != 2 {
+			return nil, fmt.Errorf("bridge service url mapping should contain a networkid and url separated by an equal sign. Got: %s", mapping)
+		}
+		networkId, err := strconv.ParseInt(pieces[0], 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		urlMap[uint32(networkId)] = pieces[1]
+	}
+	return urlMap, nil
+}
+
+func claimEverything(cmd *cobra.Command) error {
+	privateKey := *inputUlxlyArgs.privateKey
+	gasLimit := *inputUlxlyArgs.gasLimit
+	chainID := *inputUlxlyArgs.chainID
+	timeoutTxnReceipt := *inputUlxlyArgs.timeout
+	bridgeAddress := *inputUlxlyArgs.bridgeAddress
+	destinationAddress := *inputUlxlyArgs.destAddress
+	RPCURL := *inputUlxlyArgs.rpcURL
+	limit := *inputUlxlyArgs.bridgeLimit
+	urls, err := getBridgeServiceURLs()
+	if err != nil {
+		return err
+	}
+
+	allDeposits := make([]BridgeDeposit, 0)
+
+	for _, bridgeServiceUrl := range urls {
+		deposits, bErr := getDepositsForAddress(fmt.Sprintf("%s/bridges/%s?limit=%d", bridgeServiceUrl, destinationAddress, limit))
+		if bErr != nil {
+			return bErr
+		}
+		allDeposits = append(allDeposits, deposits...)
+	}
+
+	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to Dial RPC")
+		return err
+	}
+	defer client.Close()
+
+	bridgeContract, _, opts, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	if err != nil {
+		return err
+	}
+
+	currentNetworkID, err := bridgeContract.NetworkID(nil)
+	if err != nil {
+		return err
+	}
+	log.Info().Uint32("networkID", currentNetworkID).Msg("detected current networkid")
+	for _, deposit := range allDeposits {
+		if deposit.DestNet != currentNetworkID {
+			log.Debug().Uint32("destination_network", deposit.DestNet).Msg("discarding deposit for different network")
+			continue
+		}
+		if deposit.ClaimTxHash != "" {
+			log.Info().Str("txhash", deposit.ClaimTxHash).Msg("It looks like this tx was already claimed")
+		}
+		claimTx, dErr := claimSingleDeposit(bridgeContract, opts, deposit, urls, currentNetworkID)
+		if dErr != nil {
+			continue
+		}
+		dErr = WaitMineTransaction(cmd.Context(), client, claimTx, timeoutTxnReceipt)
+		if dErr != nil {
+			log.Error().Err(dErr).Msg("error while waiting for tx to main")
+		}
+	}
+
+	return nil
+}
+
+func claimSingleDeposit(bridgeContract *ulxly.Ulxly, opts *bind.TransactOpts, deposit BridgeDeposit, bridgeURLs map[uint32]string, currentNetworkID uint32) (*types.Transaction, error) {
+	networkIDForBridgeService := deposit.NetworkID
+	if deposit.NetworkID == 0 {
+		networkIDForBridgeService = currentNetworkID
+	}
+	bridgeUrl, hasKey := bridgeURLs[networkIDForBridgeService]
+	if !hasKey {
+		return nil, fmt.Errorf("we don't have a bridge service url for network: %d", deposit.DestNet)
+	}
+	bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%d&net_id=%d", bridgeUrl, deposit.DepositCnt, deposit.NetworkID)
+	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
+	if len(mainExitRoot) != 32 || len(rollupExitRoot) != 32 {
+		log.Warn().
+			Uint32("DepositCnt", deposit.DepositCnt).
+			Uint32("OrigNet", deposit.OrigNet).
+			Uint32("DestNet", deposit.DestNet).
+			Uint32("NetworkID", deposit.NetworkID).
+			Str("OrigAddr", deposit.OrigAddr).
+			Str("DestAddr", deposit.DestAddr).
+			Msg("deposit can't be claimed!")
+		return nil, fmt.Errorf("the exit roots from the bridse service were empty: %s", bridgeServiceProofEndpoint)
+	}
+
+	globalIndex, isValid := new(big.Int).SetString(deposit.GlobalIndex, 10)
+	if !isValid {
+		return nil, fmt.Errorf("global index %s is not a valid integer", deposit.GlobalIndex)
+	}
+	amount, isValid := new(big.Int).SetString(deposit.Amount, 10)
+	if !isValid {
+		return nil, fmt.Errorf("amount %s is not a valid integer", deposit.Amount)
+	}
+
+	originAddress := common.HexToAddress(deposit.OrigAddr)
+	toAddress := common.HexToAddress(deposit.DestAddr)
+	metadata := common.Hex2Bytes(strings.TrimPrefix(deposit.Metadata, "0x"))
+
+	var claimTx *types.Transaction
+	var err error
+	if deposit.LeafType == 0 {
+		claimTx, err = bridgeContract.ClaimAsset(opts, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), deposit.OrigNet, originAddress, deposit.DestNet, toAddress, amount, metadata)
+	} else {
+		claimTx, err = bridgeContract.ClaimMessage(opts, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), deposit.OrigNet, originAddress, deposit.DestNet, toAddress, amount, metadata)
+	}
+
+	if err != nil {
+		return nil, logAndReturnJsonError(err)
+	}
+	log.Info().Stringer("txhash", claimTx.Hash()).Msg("sent claim")
+
+	return claimTx, nil
+}
+
 // Wait for the transaction to be mined
 func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *types.Transaction, txTimeout uint64) error {
 	if inputUlxlyArgs.dryRun != nil && *inputUlxlyArgs.dryRun {
@@ -758,6 +891,7 @@ func generateTransactionPayload(ctx context.Context, client *ethclient.Client, u
 	privateKey, err := crypto.HexToECDSA(ulxlyInputArgPvtKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to retrieve private key")
+		return
 	}
 
 	// value := big.NewInt(*ulxlyInputArgs.Amount)
@@ -831,7 +965,7 @@ func getMerkleProofsExitRoots(bridgeServiceProofEndpoint string) (merkleProofArr
 		merkleProof = append(merkleProof, [32]byte(byteMP))
 	}
 	if len(merkleProof) == 0 {
-		log.Error().Msg("The Merkle Proofs cannot be retrieved, double check the input arguments and try again.")
+		log.Error().Str("url", bridgeServiceProofEndpoint).Msg("The Merkle Proofs cannot be retrieved, double check the input arguments and try again.")
 		return
 	}
 	merkleProofArray = [32][32]byte(merkleProof)
@@ -864,7 +998,7 @@ func getDeposit(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, ori
 		log.Error().Err(err)
 		return
 	}
-	var bridgeDeposit BridgeDeposit
+	var bridgeDeposit BridgeDepositResponse
 	err = json.Unmarshal(bodyBridgeDeposit, &bridgeDeposit) // Parse []byte to go struct pointer, and shadow err variable
 	if err != nil {
 		log.Error().Err(err).Msg("Can not unmarshal JSON")
@@ -904,6 +1038,30 @@ func getDeposit(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, ori
 		Uint32("claimOriginalNetwork", claimOriginalNetwork).
 		Msg("Got Deposit")
 	return globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, nil
+}
+func getDepositsForAddress(bridgeRequestUrl string) ([]BridgeDeposit, error) {
+	var resp struct {
+		Deposits []BridgeDeposit `json:"deposits"`
+		Total    int             `json:"total_cnt,string"`
+	}
+	httpResp, err := http.Get(bridgeRequestUrl)
+	if err != nil {
+		return nil, err
+	}
+	defer httpResp.Body.Close()
+	respBytes, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(respBytes, &resp)
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.Deposits) != resp.Total {
+		log.Warn().Int("total_deposits", resp.Total).Int("retrieved_deposits", len(resp.Deposits)).Msg("not all deposits were retrieved")
+	}
+
+	return resp.Deposits, nil
 }
 
 //go:embed BridgeAssetUsage.md
@@ -951,29 +1109,31 @@ var ulxlyClaimCmd = &cobra.Command{
 }
 
 type ulxlyArgs struct {
-	gasLimit         *uint64
-	chainID          *string
-	privateKey       *string
-	value            *string
-	rpcURL           *string
-	bridgeAddress    *string
-	destNetwork      *uint32
-	destAddress      *string
-	tokenAddress     *string
-	forceUpdate      *bool
-	callData         *string
-	timeout          *uint64
-	depositCount     *uint64
-	depositNetwork   *uint64
-	bridgeServiceURL *string
-	inputFileName    *string
-	fromBlock        *uint64
-	toBlock          *uint64
-	filterSize       *uint64
-	depositNumber    *uint64
-	globalIndex      *string
-	gasPrice         *string
-	dryRun           *bool
+	gasLimit          *uint64
+	chainID           *string
+	privateKey        *string
+	value             *string
+	rpcURL            *string
+	bridgeAddress     *string
+	destNetwork       *uint32
+	destAddress       *string
+	tokenAddress      *string
+	forceUpdate       *bool
+	callData          *string
+	timeout           *uint64
+	depositCount      *uint64
+	depositNetwork    *uint64
+	bridgeServiceURL  *string
+	inputFileName     *string
+	fromBlock         *uint64
+	toBlock           *uint64
+	filterSize        *uint64
+	depositNumber     *uint64
+	globalIndex       *string
+	gasPrice          *string
+	dryRun            *bool
+	bridgeServiceURLs *[]string
+	bridgeLimit       *int
 }
 
 var inputUlxlyArgs = ulxlyArgs{}
@@ -984,6 +1144,7 @@ var (
 	bridgeMessageWETHCommand *cobra.Command
 	claimAssetCommand        *cobra.Command
 	claimMessageCommand      *cobra.Command
+	claimEverythingCommand   *cobra.Command
 	emptyProofCommand        *cobra.Command
 	zeroProofCommand         *cobra.Command
 	proofCommand             *cobra.Command
@@ -1013,6 +1174,8 @@ const (
 	ArgGlobalIndex      = "global-index"
 	ArgDryRun           = "dry-run"
 	ArgGasPrice         = "gas-price"
+	ArgBridgeMappings   = "bridge-service-map"
+	ArgBridgeLimit      = "bridge-limit"
 )
 
 func init() {
@@ -1046,9 +1209,16 @@ func init() {
 	}
 	claimMessageCommand = &cobra.Command{
 		Use:   "message",
-		Short: "perform a claim of a given message in the birdge",
+		Short: "perform a claim of a given message in the bridge",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return claimMessage(cmd)
+		},
+	}
+	claimEverythingCommand = &cobra.Command{
+		Use:   "claim-everything",
+		Short: "attempt to claim any unclaimed deposits",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return claimEverything(cmd)
 		},
 	}
 	emptyProofCommand = &cobra.Command{
@@ -1116,10 +1286,14 @@ func init() {
 	inputUlxlyArgs.depositNetwork = ulxlyClaimCmd.PersistentFlags().Uint64(ArgDepositNetwork, 0, "the rollup id of the network where the bridge is being claimed")
 	inputUlxlyArgs.bridgeServiceURL = ulxlyClaimCmd.PersistentFlags().String(ArgBridgeServiceURL, "", "the URL of the bridge service")
 	inputUlxlyArgs.globalIndex = ulxlyClaimCmd.PersistentFlags().String(ArgGlobalIndex, "", "an override of the global index value")
-
 	ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositCount)
 	ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositNetwork)
 	ulxlyClaimCmd.MarkPersistentFlagRequired(ArgBridgeServiceURL)
+
+	// Claim Everything Helper Command
+	inputUlxlyArgs.bridgeServiceURLs = claimEverythingCommand.Flags().StringSlice(ArgBridgeMappings, nil, "Mappings between network ids and bridge service urls. E.g. '1=http://network-1-bridgeurl,7=http://network-2-bridgeurl'")
+	inputUlxlyArgs.bridgeLimit = claimEverythingCommand.Flags().Int(ArgBridgeLimit, 25, "Limit the number or responses returned by the bridge service when claiming")
+	claimEverythingCommand.MarkFlagRequired(ArgBridgeMappings)
 
 	// Args that are just for the get deposit command
 	inputUlxlyArgs.fromBlock = getDepositCommand.Flags().Uint64(ArgFromBlock, 0, "The start of the range of blocks to retrieve")
@@ -1144,10 +1318,12 @@ func init() {
 
 	ULxLyCmd.AddCommand(ulxlxBridgeCmd)
 	ULxLyCmd.AddCommand(ulxlyClaimCmd)
+	ULxLyCmd.AddCommand(claimEverythingCommand)
 
 	// Bridge and Claim
 	ulxlyBridgeAndClaimCmd.AddCommand(ulxlxBridgeCmd)
 	ulxlyBridgeAndClaimCmd.AddCommand(ulxlyClaimCmd)
+	ulxlyBridgeAndClaimCmd.AddCommand(claimEverythingCommand)
 
 	// Bridge
 	ulxlxBridgeCmd.AddCommand(bridgeAssetCommand)
@@ -1157,5 +1333,4 @@ func init() {
 	// Claim
 	ulxlyClaimCmd.AddCommand(claimAssetCommand)
 	ulxlyClaimCmd.AddCommand(claimMessageCommand)
-
 }
