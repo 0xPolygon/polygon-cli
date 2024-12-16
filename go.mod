@@ -144,7 +144,7 @@ require (
 )
 
 require (
-	cloud.google.com/go/kms v1.20.1
+	cloud.google.com/go/kms v1.20.2
 	github.com/gateway-fm/vectorized-poseidon-gold v1.0.0
 	github.com/google/tink/go v1.7.0
 	github.com/iden3/go-iden3-crypto v0.0.17
