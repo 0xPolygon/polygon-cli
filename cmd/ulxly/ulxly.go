@@ -78,6 +78,11 @@ type BridgeDeposit struct {
 	GlobalIndex   string `json:"global_index"`
 }
 
+type DepositID struct {
+	DepositCnt uint32 `json:"deposit_cnt"`
+	NetworkID  uint32 `json:"network_id"`
+}
+
 type BridgeDepositResponse struct {
 	Deposit BridgeDeposit `json:"deposit"`
 	Code    *int          `json:"code"`
@@ -483,19 +488,36 @@ func claimEverything(cmd *cobra.Command) error {
 	destinationAddress := *inputUlxlyArgs.destAddress
 	RPCURL := *inputUlxlyArgs.rpcURL
 	limit := *inputUlxlyArgs.bridgeLimit
+	offset := *inputUlxlyArgs.bridgeOffset
 	urls, err := getBridgeServiceURLs()
 	if err != nil {
 		return err
 	}
 
-	allDeposits := make([]BridgeDeposit, 0)
+	depositMap := make(map[DepositID]*BridgeDeposit)
 
 	for _, bridgeServiceUrl := range urls {
-		deposits, bErr := getDepositsForAddress(fmt.Sprintf("%s/bridges/%s?limit=%d", bridgeServiceUrl, destinationAddress, limit))
+		deposits, bErr := getDepositsForAddress(fmt.Sprintf("%s/bridges/%s?offset=%d&limit=%d", bridgeServiceUrl, destinationAddress, offset, limit))
 		if bErr != nil {
 			return bErr
 		}
-		allDeposits = append(allDeposits, deposits...)
+		for idx, deposit := range deposits {
+			depId := DepositID{
+				DepositCnt: deposit.DepositCnt,
+				NetworkID:  deposit.NetworkID,
+			}
+			_, hasKey := depositMap[depId]
+			// if we haven't seen this deposit at all, we'll store it
+			if !hasKey {
+				depositMap[depId] = &deposits[idx]
+				continue
+			}
+
+			// if this new deposit is ready for claim OR it has already been claimed we should over ride the exisitng value
+			if deposit.ReadyForClaim || deposit.ClaimTxHash != "" {
+				depositMap[depId] = &deposits[idx]
+			}
+		}
 	}
 
 	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
@@ -515,16 +537,24 @@ func claimEverything(cmd *cobra.Command) error {
 		return err
 	}
 	log.Info().Uint32("networkID", currentNetworkID).Msg("detected current networkid")
-	for _, deposit := range allDeposits {
+	for _, deposit := range depositMap {
 		if deposit.DestNet != currentNetworkID {
 			log.Debug().Uint32("destination_network", deposit.DestNet).Msg("discarding deposit for different network")
 			continue
 		}
 		if deposit.ClaimTxHash != "" {
 			log.Info().Str("txhash", deposit.ClaimTxHash).Msg("It looks like this tx was already claimed")
+			continue
 		}
-		claimTx, dErr := claimSingleDeposit(bridgeContract, opts, deposit, urls, currentNetworkID)
+		claimTx, dErr := claimSingleDeposit(bridgeContract, opts, *deposit, urls, currentNetworkID)
 		if dErr != nil {
+			log.Warn().Err(dErr).Uint32("DepositCnt", deposit.DepositCnt).
+				Uint32("OrigNet", deposit.OrigNet).
+				Uint32("DestNet", deposit.DestNet).
+				Uint32("NetworkID", deposit.NetworkID).
+				Str("OrigAddr", deposit.OrigAddr).
+				Str("DestAddr", deposit.DestAddr).
+				Msg("There was an error claiming")
 			continue
 		}
 		dErr = WaitMineTransaction(cmd.Context(), client, claimTx, timeoutTxnReceipt)
@@ -581,6 +611,14 @@ func claimSingleDeposit(bridgeContract *ulxly.Ulxly, opts *bind.TransactOpts, de
 	}
 
 	if err != nil {
+		log.Warn().
+			Uint32("DepositCnt", deposit.DepositCnt).
+			Uint32("OrigNet", deposit.OrigNet).
+			Uint32("DestNet", deposit.DestNet).
+			Uint32("NetworkID", deposit.NetworkID).
+			Str("OrigAddr", deposit.OrigAddr).
+			Str("DestAddr", deposit.DestAddr).
+			Msg("attempt to claim deposit failed")
 		return nil, logAndReturnJsonError(err)
 	}
 	log.Info().Stringer("txhash", claimTx.Hash()).Msg("sent claim")
@@ -1039,6 +1077,7 @@ func getDeposit(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, ori
 		Msg("Got Deposit")
 	return globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, nil
 }
+
 func getDepositsForAddress(bridgeRequestUrl string) ([]BridgeDeposit, error) {
 	var resp struct {
 		Deposits []BridgeDeposit `json:"deposits"`
@@ -1134,6 +1173,7 @@ type ulxlyArgs struct {
 	dryRun            *bool
 	bridgeServiceURLs *[]string
 	bridgeLimit       *int
+	bridgeOffset      *int
 }
 
 var inputUlxlyArgs = ulxlyArgs{}
@@ -1176,6 +1216,7 @@ const (
 	ArgGasPrice         = "gas-price"
 	ArgBridgeMappings   = "bridge-service-map"
 	ArgBridgeLimit      = "bridge-limit"
+	ArgBridgeOffset     = "bridge-offset"
 )
 
 func init() {
@@ -1293,6 +1334,7 @@ func init() {
 	// Claim Everything Helper Command
 	inputUlxlyArgs.bridgeServiceURLs = claimEverythingCommand.Flags().StringSlice(ArgBridgeMappings, nil, "Mappings between network ids and bridge service urls. E.g. '1=http://network-1-bridgeurl,7=http://network-2-bridgeurl'")
 	inputUlxlyArgs.bridgeLimit = claimEverythingCommand.Flags().Int(ArgBridgeLimit, 25, "Limit the number or responses returned by the bridge service when claiming")
+	inputUlxlyArgs.bridgeOffset = claimEverythingCommand.Flags().Int(ArgBridgeOffset, 0, "The offset to specify for pagination of the underlying bridge service deposits")
 	claimEverythingCommand.MarkFlagRequired(ArgBridgeMappings)
 
 	// Args that are just for the get deposit command
