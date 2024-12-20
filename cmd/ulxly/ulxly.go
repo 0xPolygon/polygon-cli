@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	_ "embed"
 	"encoding/binary"
 	"encoding/json"
@@ -1187,32 +1188,33 @@ var ulxlyClaimCmd = &cobra.Command{
 }
 
 type ulxlyArgs struct {
-	gasLimit          *uint64
-	chainID           *string
-	privateKey        *string
-	value             *string
-	rpcURL            *string
-	bridgeAddress     *string
-	destNetwork       *uint32
-	destAddress       *string
-	tokenAddress      *string
-	forceUpdate       *bool
-	callData          *string
-	timeout           *uint64
-	depositCount      *uint64
-	depositNetwork    *uint64
-	bridgeServiceURL  *string
-	inputFileName     *string
-	fromBlock         *uint64
-	toBlock           *uint64
-	filterSize        *uint64
-	depositNumber     *uint64
-	globalIndex       *string
-	gasPrice          *string
-	dryRun            *bool
-	bridgeServiceURLs *[]string
-	bridgeLimit       *int
-	bridgeOffset      *int
+	gasLimit            *uint64
+	chainID             *string
+	privateKey          *string
+	addressOfPrivateKey string
+	value               *string
+	rpcURL              *string
+	bridgeAddress       *string
+	destNetwork         *uint32
+	destAddress         *string
+	tokenAddress        *string
+	forceUpdate         *bool
+	callData            *string
+	timeout             *uint64
+	depositCount        *uint64
+	depositNetwork      *uint64
+	bridgeServiceURL    *string
+	inputFileName       *string
+	fromBlock           *uint64
+	toBlock             *uint64
+	filterSize          *uint64
+	depositNumber       *uint64
+	globalIndex         *string
+	gasPrice            *string
+	dryRun              *bool
+	bridgeServiceURLs   *[]string
+	bridgeLimit         *int
+	bridgeOffset        *int
 }
 
 var inputUlxlyArgs = ulxlyArgs{}
@@ -1258,45 +1260,76 @@ const (
 	ArgBridgeOffset     = "bridge-offset"
 )
 
+func prepInputs(cmd *cobra.Command, args []string) error {
+	if *inputUlxlyArgs.dryRun && *inputUlxlyArgs.gasLimit == 0 {
+		dryRunGasLimit := uint64(10_000_000)
+		inputUlxlyArgs.gasLimit = &dryRunGasLimit
+	}
+	pvtKey := strings.TrimPrefix(*inputUlxlyArgs.privateKey, "0x")
+
+	privateKey, err := crypto.HexToECDSA(pvtKey)
+	if err != nil {
+		return err
+	}
+	publicKey := privateKey.Public()
+
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return fmt.Errorf("cannot assert type: publicKey is not of type *ecdsa.PublicKey")
+	}
+	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+	inputUlxlyArgs.addressOfPrivateKey = fromAddress.String()
+	if *inputUlxlyArgs.destAddress == "" {
+		*inputUlxlyArgs.destAddress = fromAddress.String()
+	}
+	return nil
+}
+
 func init() {
 	bridgeAssetCommand = &cobra.Command{
-		Use:   "asset",
-		Short: "send a single deposit of value or an ERC20 into the bridge",
+		Use:     "asset",
+		Short:   "send a single deposit of value or an ERC20 into the bridge",
+		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return bridgeAsset(cmd)
 		},
 	}
 	bridgeMessageCommand = &cobra.Command{
-		Use:   "message",
-		Short: "send some value along with call data into the bridge",
+		Use:     "message",
+		Short:   "send some value along with call data into the bridge",
+		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return bridgeMessage(cmd)
 		},
 	}
 	bridgeMessageWETHCommand = &cobra.Command{
-		Use:   "weth",
-		Short: "send some WETH into the bridge",
+		Use:     "weth",
+		Short:   "send some WETH into the bridge",
+		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return bridgeWETHMessage(cmd)
 		},
 	}
 	claimAssetCommand = &cobra.Command{
-		Use:   "asset",
-		Short: "perform a claim of a given deposit in the bridge",
+		Use:     "asset",
+		Short:   "perform a claim of a given deposit in the bridge",
+		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return claimAsset(cmd)
 		},
 	}
 	claimMessageCommand = &cobra.Command{
-		Use:   "message",
-		Short: "perform a claim of a given message in the bridge",
+		Use:     "message",
+		Short:   "perform a claim of a given message in the bridge",
+		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return claimMessage(cmd)
 		},
 	}
 	claimEverythingCommand = &cobra.Command{
-		Use:   "claim-everything",
-		Short: "attempt to claim any unclaimed deposits",
+		Use:     "claim-everything",
+		Short:   "attempt to claim any unclaimed deposits",
+		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return claimEverything(cmd)
 		},
