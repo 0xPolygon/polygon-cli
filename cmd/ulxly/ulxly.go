@@ -188,37 +188,42 @@ type JsonError struct {
 }
 
 func logAndReturnJsonError(cmd *cobra.Command, client *ethclient.Client, tx *types.Transaction, opts *bind.TransactOpts, err error) error {
-	// in case the error came down to gas estimation, we can sometimes get more information by doing a call
-	_, callErr := client.CallContract(cmd.Context(), ethereum.CallMsg{
-		From:          opts.From,
-		To:            tx.To(),
-		Gas:           tx.Gas(),
-		GasPrice:      tx.GasPrice(),
-		GasFeeCap:     tx.GasFeeCap(),
-		GasTipCap:     tx.GasTipCap(),
-		Value:         tx.Value(),
-		Data:          tx.Data(),
-		AccessList:    tx.AccessList(),
-		BlobGasFeeCap: tx.BlobGasFeeCap(),
-		BlobHashes:    tx.BlobHashes(),
-	}, nil)
 
-	if *inputUlxlyArgs.dryRun {
-		castCmd := "cast call"
-		castCmd += fmt.Sprintf(" --rpc-url %s", *inputUlxlyArgs.rpcURL)
-		castCmd += fmt.Sprintf(" --from %s", opts.From.String())
-		castCmd += fmt.Sprintf(" --gas-limit %d", tx.Gas())
-		if tx.Type() == types.LegacyTxType {
-			castCmd += fmt.Sprintf(" --gas-price %s", tx.GasPrice().String())
-		} else {
-			castCmd += fmt.Sprintf(" --gas-price %s", tx.GasFeeCap().String())
-			castCmd += fmt.Sprintf(" --priority-gas-price %s", tx.GasTipCap().String())
+	var callErr error
+	if tx != nil {
+		// in case the error came down to gas estimation, we can sometimes get more information by doing a call
+		_, callErr = client.CallContract(cmd.Context(), ethereum.CallMsg{
+			From:          opts.From,
+			To:            tx.To(),
+			Gas:           tx.Gas(),
+			GasPrice:      tx.GasPrice(),
+			GasFeeCap:     tx.GasFeeCap(),
+			GasTipCap:     tx.GasTipCap(),
+			Value:         tx.Value(),
+			Data:          tx.Data(),
+			AccessList:    tx.AccessList(),
+			BlobGasFeeCap: tx.BlobGasFeeCap(),
+			BlobHashes:    tx.BlobHashes(),
+		}, nil)
+
+		if *inputUlxlyArgs.dryRun {
+			castCmd := "cast call"
+			castCmd += fmt.Sprintf(" --rpc-url %s", *inputUlxlyArgs.rpcURL)
+			castCmd += fmt.Sprintf(" --from %s", opts.From.String())
+			castCmd += fmt.Sprintf(" --gas-limit %d", tx.Gas())
+			if tx.Type() == types.LegacyTxType {
+				castCmd += fmt.Sprintf(" --gas-price %s", tx.GasPrice().String())
+			} else {
+				castCmd += fmt.Sprintf(" --gas-price %s", tx.GasFeeCap().String())
+				castCmd += fmt.Sprintf(" --priority-gas-price %s", tx.GasTipCap().String())
+			}
+			castCmd += fmt.Sprintf(" --value %s", tx.Value().String())
+			castCmd += fmt.Sprintf(" %s", tx.To().String())
+			castCmd += fmt.Sprintf(" %s", common.Bytes2Hex(tx.Data()))
+			log.Info().Str("cmd", castCmd).Msg("use this command to replicate the call")
 		}
-		castCmd += fmt.Sprintf(" --value %s", tx.Value().String())
-		castCmd += fmt.Sprintf(" %s", tx.To().String())
-		castCmd += fmt.Sprintf(" %s", common.Bytes2Hex(tx.Data()))
-		log.Info().Str("cmd", castCmd).Msg("use this command to replicate the call")
 	}
+
 	if err == nil {
 		return nil
 	}
@@ -293,8 +298,8 @@ func bridgeAsset(cmd *cobra.Command) error {
 	}
 
 	bridgeTxn, err := bridgeV2.BridgeAsset(auth, destinationNetwork, toAddress, value, tokenAddress, isForced, callData)
-	if err != nil {
-		return logAndReturnJsonError(cmd, client, bridgeTxn, auth, err)
+	if err = logAndReturnJsonError(cmd, client, bridgeTxn, auth, err); err != nil {
+		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
@@ -337,8 +342,8 @@ func bridgeMessage(cmd *cobra.Command) error {
 	}
 
 	bridgeTxn, err := bridgeV2.BridgeMessage(auth, destinationNetwork, toAddress, isForced, callData)
-	if err != nil {
-		return logAndReturnJsonError(cmd, client, bridgeTxn, auth, err)
+	if err = logAndReturnJsonError(cmd, client, bridgeTxn, auth, err); err != nil {
+		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
@@ -384,8 +389,8 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 	callData := common.Hex2Bytes(strings.TrimPrefix(callDataString, "0x"))
 
 	bridgeTxn, err := bridgeV2.BridgeMessageWETH(auth, destinationNetwork, toAddress, value, isForced, callData)
-	if err != nil {
-		return logAndReturnJsonError(cmd, client, bridgeTxn, auth, err)
+	if err = logAndReturnJsonError(cmd, client, bridgeTxn, auth, err); err != nil {
+		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
@@ -444,8 +449,8 @@ func claimAsset(cmd *cobra.Command) error {
 		globalIndex.SetString(globalIndexOverride, 10)
 	}
 	claimTxn, err := bridgeV2.ClaimAsset(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
-	if err != nil {
-		return logAndReturnJsonError(cmd, client, claimTxn, auth, err)
+	if err = logAndReturnJsonError(cmd, client, claimTxn, auth, err); err != nil {
+		return err
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, claimTxn, timeoutTxnReceipt)
@@ -497,8 +502,8 @@ func claimMessage(cmd *cobra.Command) error {
 	}
 	//ClaimMessage(opts *bind.TransactOpts, smtProofLocalExitRoot [32][32]byte, smtProofRollupExitRoot [32][32]byte, globalIndex *big.Int, mainnetExitRoot [32]byte, rollupExitRoot [32]byte, originNetwork uint32, originAddress common.Address, destinationNetwork uint32, destinationAddress common.Address, amount *big.Int, metadata []byte) (*types.Transaction, error) {
 	claimTxn, err := bridgeV2.ClaimMessage(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
-	if err != nil {
-		return logAndReturnJsonError(cmd, client, claimTxn, auth, err)
+	if err = logAndReturnJsonError(cmd, client, claimTxn, auth, err); err != nil {
+		return err
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, claimTxn, timeoutTxnReceipt)
@@ -651,7 +656,7 @@ func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeCont
 		claimTx, err = bridgeContract.ClaimMessage(opts, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), deposit.OrigNet, originAddress, deposit.DestNet, toAddress, amount, metadata)
 	}
 
-	if err != nil {
+	if err = logAndReturnJsonError(cmd, client, claimTx, opts, err); err != nil {
 		log.Warn().
 			Uint32("DepositCnt", deposit.DepositCnt).
 			Uint32("OrigNet", deposit.OrigNet).
@@ -660,7 +665,7 @@ func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeCont
 			Str("OrigAddr", deposit.OrigAddr).
 			Str("DestAddr", deposit.DestAddr).
 			Msg("attempt to claim deposit failed")
-		return nil, logAndReturnJsonError(cmd, client, claimTx, opts, err)
+		return nil, err
 	}
 	log.Info().Stringer("txhash", claimTx.Hash()).Msg("sent claim")
 
