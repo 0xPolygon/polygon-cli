@@ -246,6 +246,11 @@ func logAndReturnJsonError(cmd *cobra.Command, client *ethclient.Client, tx *typ
 		errLog = errLog.Err(callErr)
 	}
 
+	if errCode, isValid := jsonError.Data.(string); isValid && errCode == "0x646cf558" {
+		// I don't want to bother with the additional error logging for previously claimed deposits
+		return err
+	}
+
 	errLog.Msg("Unable to interact with bridge contract")
 
 	return err
