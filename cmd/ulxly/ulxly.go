@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum"
 	"io"
 	"math/big"
 	"net/http"
@@ -186,7 +187,38 @@ type JsonError struct {
 	Data    interface{} `json:"data"`
 }
 
-func logAndReturnJsonError(err error) error {
+func logAndReturnJsonError(cmd *cobra.Command, client *ethclient.Client, tx *types.Transaction, opts *bind.TransactOpts, err error) error {
+	// in case the error came down to gas estimation, we can sometimes get more information by doing a call
+	_, callErr := client.CallContract(cmd.Context(), ethereum.CallMsg{
+		From:          opts.From,
+		To:            tx.To(),
+		Gas:           tx.Gas(),
+		GasPrice:      tx.GasPrice(),
+		GasFeeCap:     tx.GasFeeCap(),
+		GasTipCap:     tx.GasTipCap(),
+		Value:         tx.Value(),
+		Data:          tx.Data(),
+		AccessList:    tx.AccessList(),
+		BlobGasFeeCap: tx.BlobGasFeeCap(),
+		BlobHashes:    tx.BlobHashes(),
+	}, nil)
+
+	if *inputUlxlyArgs.dryRun {
+		castCmd := "cast call"
+		castCmd += fmt.Sprintf(" --rpc-url %s", *inputUlxlyArgs.rpcURL)
+		castCmd += fmt.Sprintf(" --from %s", opts.From.String())
+		castCmd += fmt.Sprintf(" --gas-limit %d", tx.Gas())
+		if tx.Type() == types.LegacyTxType {
+			castCmd += fmt.Sprintf(" --gas-price %s", tx.GasPrice().String())
+		} else {
+			castCmd += fmt.Sprintf(" --gas-price %s", tx.GasFeeCap().String())
+			castCmd += fmt.Sprintf(" --priority-gas-price %s", tx.GasTipCap().String())
+		}
+		castCmd += fmt.Sprintf(" --value %s", tx.Value().String())
+		castCmd += fmt.Sprintf(" %s", tx.To().String())
+		castCmd += fmt.Sprintf(" %s", common.Bytes2Hex(tx.Data()))
+		log.Info().Str("cmd", castCmd).Msg("use this command to replicate the call")
+	}
 	if err == nil {
 		return nil
 	}
@@ -204,12 +236,17 @@ func logAndReturnJsonError(err error) error {
 		return err
 	}
 
-	log.Error().
+	errLog := log.Error().
 		Err(err).
 		Str("message", jsonError.Message).
 		Int("code", jsonError.Code).
-		Interface("data", jsonError.Data).
-		Msg("Unable to interact with bridge contract")
+		Interface("data", jsonError.Data)
+
+	if callErr != nil {
+		errLog = errLog.Err(callErr)
+	}
+
+	errLog.Msg("Unable to interact with bridge contract")
 
 	return err
 }
@@ -252,7 +289,7 @@ func bridgeAsset(cmd *cobra.Command) error {
 
 	bridgeTxn, err := bridgeV2.BridgeAsset(auth, destinationNetwork, toAddress, value, tokenAddress, isForced, callData)
 	if err != nil {
-		return logAndReturnJsonError(err)
+		return logAndReturnJsonError(cmd, client, bridgeTxn, auth, err)
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
@@ -296,7 +333,7 @@ func bridgeMessage(cmd *cobra.Command) error {
 
 	bridgeTxn, err := bridgeV2.BridgeMessage(auth, destinationNetwork, toAddress, isForced, callData)
 	if err != nil {
-		return logAndReturnJsonError(err)
+		return logAndReturnJsonError(cmd, client, bridgeTxn, auth, err)
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
@@ -343,7 +380,7 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 
 	bridgeTxn, err := bridgeV2.BridgeMessageWETH(auth, destinationNetwork, toAddress, value, isForced, callData)
 	if err != nil {
-		return logAndReturnJsonError(err)
+		return logAndReturnJsonError(cmd, client, bridgeTxn, auth, err)
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
@@ -403,7 +440,7 @@ func claimAsset(cmd *cobra.Command) error {
 	}
 	claimTxn, err := bridgeV2.ClaimAsset(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
 	if err != nil {
-		return logAndReturnJsonError(err)
+		return logAndReturnJsonError(cmd, client, claimTxn, auth, err)
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, claimTxn, timeoutTxnReceipt)
@@ -456,7 +493,7 @@ func claimMessage(cmd *cobra.Command) error {
 	//ClaimMessage(opts *bind.TransactOpts, smtProofLocalExitRoot [32][32]byte, smtProofRollupExitRoot [32][32]byte, globalIndex *big.Int, mainnetExitRoot [32]byte, rollupExitRoot [32]byte, originNetwork uint32, originAddress common.Address, destinationNetwork uint32, destinationAddress common.Address, amount *big.Int, metadata []byte) (*types.Transaction, error) {
 	claimTxn, err := bridgeV2.ClaimMessage(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
 	if err != nil {
-		return logAndReturnJsonError(err)
+		return logAndReturnJsonError(cmd, client, claimTxn, auth, err)
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, claimTxn, timeoutTxnReceipt)
@@ -531,7 +568,6 @@ func claimEverything(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-
 	currentNetworkID, err := bridgeContract.NetworkID(nil)
 	if err != nil {
 		return err
@@ -546,7 +582,7 @@ func claimEverything(cmd *cobra.Command) error {
 			log.Info().Str("txhash", deposit.ClaimTxHash).Msg("It looks like this tx was already claimed")
 			continue
 		}
-		claimTx, dErr := claimSingleDeposit(bridgeContract, opts, *deposit, urls, currentNetworkID)
+		claimTx, dErr := claimSingleDeposit(cmd, client, bridgeContract, opts, *deposit, urls, currentNetworkID)
 		if dErr != nil {
 			log.Warn().Err(dErr).Uint32("DepositCnt", deposit.DepositCnt).
 				Uint32("OrigNet", deposit.OrigNet).
@@ -566,7 +602,7 @@ func claimEverything(cmd *cobra.Command) error {
 	return nil
 }
 
-func claimSingleDeposit(bridgeContract *ulxly.Ulxly, opts *bind.TransactOpts, deposit BridgeDeposit, bridgeURLs map[uint32]string, currentNetworkID uint32) (*types.Transaction, error) {
+func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeContract *ulxly.Ulxly, opts *bind.TransactOpts, deposit BridgeDeposit, bridgeURLs map[uint32]string, currentNetworkID uint32) (*types.Transaction, error) {
 	networkIDForBridgeService := deposit.NetworkID
 	if deposit.NetworkID == 0 {
 		networkIDForBridgeService = currentNetworkID
@@ -586,7 +622,7 @@ func claimSingleDeposit(bridgeContract *ulxly.Ulxly, opts *bind.TransactOpts, de
 			Str("OrigAddr", deposit.OrigAddr).
 			Str("DestAddr", deposit.DestAddr).
 			Msg("deposit can't be claimed!")
-		return nil, fmt.Errorf("the exit roots from the bridse service were empty: %s", bridgeServiceProofEndpoint)
+		return nil, fmt.Errorf("the exit roots from the bridge service were empty: %s", bridgeServiceProofEndpoint)
 	}
 
 	globalIndex, isValid := new(big.Int).SetString(deposit.GlobalIndex, 10)
@@ -619,7 +655,7 @@ func claimSingleDeposit(bridgeContract *ulxly.Ulxly, opts *bind.TransactOpts, de
 			Str("OrigAddr", deposit.OrigAddr).
 			Str("DestAddr", deposit.DestAddr).
 			Msg("attempt to claim deposit failed")
-		return nil, logAndReturnJsonError(err)
+		return nil, logAndReturnJsonError(cmd, client, claimTx, opts, err)
 	}
 	log.Info().Stringer("txhash", claimTx.Hash()).Msg("sent claim")
 
@@ -629,7 +665,8 @@ func claimSingleDeposit(bridgeContract *ulxly.Ulxly, opts *bind.TransactOpts, de
 // Wait for the transaction to be mined
 func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *types.Transaction, txTimeout uint64) error {
 	if inputUlxlyArgs.dryRun != nil && *inputUlxlyArgs.dryRun {
-		log.Info().Msg("Skipping receipt check. Dry run is enabled")
+		txJson, _ := tx.MarshalJSON()
+		log.Info().RawJSON("tx", txJson).Msg("Skipping receipt check. Dry run is enabled")
 		return nil
 	}
 	txnMinedTimer := time.NewTimer(time.Duration(txTimeout) * time.Second)
@@ -934,14 +971,6 @@ func generateTransactionPayload(ctx context.Context, client *ethclient.Client, u
 
 	// value := big.NewInt(*ulxlyInputArgs.Amount)
 	gasLimit := ulxlyInputArgGasLimit
-	// gasPrice, err := client.SuggestGasPrice(ctx) // This call is done automatically if it is not set
-	// if err != nil {
-	// 	log.Error().Err(err).Msg("Cannot get suggested gas price")
-	// }
-	// gasTipCap, err := client.SuggestGasTipCap(ctx)
-	// if err != nil {
-	// 	log.Error().Err(err).Msg("Cannot get suggested gas tip cap")
-	// }
 
 	chainID := new(big.Int)
 	// For manual input of chainID, use the user's input
