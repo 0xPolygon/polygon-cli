@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"reflect"
 
 	"github.com/cenkalti/backoff"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -316,4 +317,43 @@ func BlockUntilSuccessful(ctx context.Context, c *ethclient.Client, retryable fu
 	// this function use to be very complicated (and not work). I'm dumbing this down to a basic time based retryable which should work 99% of the time
 	b := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(5*time.Second), 24), ctx)
 	return backoff.Retry(retryable, b)
+}
+
+func WrapDeployedCode(deployedBytecode string, storageBytecode string) string {
+	deployedBytecode = strings.ToLower(strings.TrimPrefix(deployedBytecode, "0x"))
+	storageBytecode = strings.ToLower(strings.TrimPrefix(storageBytecode, "0x"))
+
+	codeCopySize := len(deployedBytecode) / 2
+	codeCopyOffset := (len(storageBytecode)/2) + 13 + 8  // 13 for CODECOPY + 8 for RETURN
+
+	return fmt.Sprintf(
+		"0x%s"+			// storage initialization code
+		"63%08x"+		// PUSH4 to indicate the size of the data that should be copied into memory
+		"63%08x"+		// PUSH4 to indicate the offset in the call data to start the copy
+		"6000"+			// PUSH1 00 to indicate the destination offset in memory
+		"39"+			// CODECOPY
+		"63%08x"+		// PUSH4 to indicate the size of the data to be returned from memory
+		"6000"+			// PUSH1 00 to indicate that it starts from offset 0
+		"f3"+			// RETURN
+		"%s",			// CODE starts here.
+		storageBytecode, codeCopySize, codeCopyOffset, codeCopySize, deployedBytecode)
+}
+
+func GetHexString(data any) string {
+	var result string
+	if reflect.TypeOf(data).Kind() == reflect.Float64 {
+		result = fmt.Sprintf("%x", int64(data.(float64)))
+	} else if reflect.TypeOf(data).Kind() == reflect.String {
+		if strings.HasPrefix(data.(string), "0x") {
+			result = strings.TrimPrefix(data.(string), "0x")
+		} else {
+			result = data.(string)
+		}
+	} else {
+		log.Fatal().Any("data", data).Msg("unknown storage data type")
+	}
+	if len(result) % 2 != 0 {
+		result = "0" + result
+	}
+	return strings.ToLower(result)
 }

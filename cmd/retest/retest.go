@@ -11,6 +11,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/abi"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"github.com/0xPolygon/polygon-cli/util"
 	"io"
 	"math"
 	"math/big"
@@ -329,7 +330,7 @@ func EthTestDataToString(data EthTestData) string {
 	case reflect.Float64:
 		// We have few tests with numeric code, ex:
 		// "code": 16449,
-		return processStorageData(data.(float64))
+		return util.GetHexString(data.(float64))
 	
 	default:
 		log.Fatal().Any("input", data).Str("kind", v.Kind().String()).Msg("Attempted to convert unknown type to raw data")
@@ -375,25 +376,6 @@ func processTestDataString(data string) string {
 	}
 
 	return ""
-}
-
-func processStorageData(data any) string {
-	var result string
-	if reflect.TypeOf(data).Kind() == reflect.Float64 {
-		result = fmt.Sprintf("%x", int64(data.(float64)))
-	} else if reflect.TypeOf(data).Kind() == reflect.String {
-		if strings.HasPrefix(data.(string), "0x") {
-			result = strings.TrimPrefix(data.(string), "0x")
-		} else {
-			result = data.(string)
-		}
-	} else {
-		log.Fatal().Any("data", data).Msg("unknown storage data type")
-	}
-	if len(result) % 2 != 0 {
-		result = "0" + result
-	}
-	return result
 }
 
 // isStandardSolidityString will do a rough check to see if the string looks like a typical solidity file rather than
@@ -657,25 +639,10 @@ func processRawStringToString(data string) string {
 func WrapPredeployedCode(pre EthTestPre) string {
 	rawCode := WrappedData{raw: pre.Code}
 	deployedCode := rawCode.ToString()
-	deployedCode = strings.TrimPrefix(deployedCode, "0x")
 	storageInitCode := storageToByteCode(pre.Storage)
 
-	codeCopySize := len(deployedCode) / 2
-	codeCopyOffset := (len(storageInitCode) / 2) + 13 + 8  // 13 for CODECOPY + 8 for RETURN
-
-	return fmt.Sprintf(
-		"0x%s"+			// storage initialization code
-		"63%08x"+		// PUSH4 to indicate the size of the data that should be copied into memory
-		"63%08x"+		// PUSH4 to indicate the offset in the call data to start the copy
-		"6000"+			// PUSH1 00 to indicate the destination offset in memory
-		"39"+			// CODECOPY
-		"63%08x"+		// PUSH4 to indicate the size of the data to be returned from memory
-		"6000"+			// PUSH1 00 to indicate that it starts from offset 0
-		"F3"+			// RETURN
-		"%s",			// CODE starts here.
-		storageInitCode, codeCopySize, codeCopyOffset, codeCopySize, deployedCode)
+	return util.WrapDeployedCode(deployedCode, storageInitCode)
 }
-
 
 // storageToByteCode
 func storageToByteCode(storage map[string]EthTestNumeric) string {
@@ -690,8 +657,8 @@ func storageToByteCode(storage map[string]EthTestNumeric) string {
 			log.Warn().Str("slot", slot).Msg("found a storage entry for invalid slot")
 		}
 
-		s := processStorageData(slot)
-		v := processStorageData(value)
+		s := util.GetHexString(slot)
+		v := util.GetHexString(value)
 		sLen := len(s) / 2
 		vLen := len(v) / 2
 		sPushCode := 0x5F + sLen

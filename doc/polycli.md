@@ -77,3 +77,5 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli wallet](polycli_wallet.md) - Create or inspect BIP39(ish) wallets.
 
+- [polycli wrap-contract](polycli_wrap-contract.md) - Wrap deployed bytecode into create bytecode.
+

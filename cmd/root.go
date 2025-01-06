@@ -30,6 +30,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/signer"
 	"github.com/0xPolygon/polygon-cli/cmd/version"
 	"github.com/0xPolygon/polygon-cli/cmd/wallet"
+	"github.com/0xPolygon/polygon-cli/cmd/wrapcontract"
 )
 
 var (
@@ -128,6 +129,7 @@ func NewPolycliCommand() *cobra.Command {
 		ulxly.ULxLyCmd,
 		version.VersionCmd,
 		wallet.WalletCmd,
+		wrapcontract.WrapContractCmd,
 	)
 	return cmd
 }
