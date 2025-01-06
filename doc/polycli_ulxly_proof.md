@@ -11,7 +11,7 @@
 
 ## Description
 
-generate a merkle proof
+generate a proof for a given range of deposits
 
 ```bash
 polycli ulxly proof [flags]
@@ -95,9 +95,9 @@ that the leaf is part of the given merkle root.
 ## Flags
 
 ```bash
-      --deposit-number uint32   The deposit that we would like to prove
-      --file-name string        The filename with ndjson data of deposits
-  -h, --help                    help for proof
+      --deposit-count uint   The deposit number to generate a proof for
+      --file-name string     An ndjson file with deposit data
+  -h, --help                 help for proof
 ```
 
 The command also inherits flags from parent commands.

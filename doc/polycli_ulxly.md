@@ -40,15 +40,17 @@ The command also inherits flags from parent commands.
 ## See also
 
 - [polycli](polycli.md) - A Swiss Army knife of blockchain tools.
-- [polycli ulxly deposit-claim](polycli_ulxly_deposit-claim.md) - Make a uLxLy claim transaction
+- [polycli ulxly bridge](polycli_ulxly_bridge.md) - commands for making deposits to the uLxLy bridge
 
-- [polycli ulxly deposit-get](polycli_ulxly_deposit-get.md) - Get a range of deposits
+- [polycli ulxly claim](polycli_ulxly_claim.md) - commands for making claims of deposits from the uLxLy bridge
 
-- [polycli ulxly deposit-new](polycli_ulxly_deposit-new.md) - Make a uLxLy deposit transaction
+- [polycli ulxly claim-everything](polycli_ulxly_claim-everything.md) - attempt to claim any unclaimed deposits
 
-- [polycli ulxly empty-proof](polycli_ulxly_empty-proof.md) - print an empty proof structure
+- [polycli ulxly empty-proof](polycli_ulxly_empty-proof.md) - create an empty proof
 
-- [polycli ulxly proof](polycli_ulxly_proof.md) - generate a merkle proof
+- [polycli ulxly get-deposits](polycli_ulxly_get-deposits.md) - generate ndjson for each bridge deposit over a particular range of blocks
 
-- [polycli ulxly zero-proof](polycli_ulxly_zero-proof.md) - print a proof structure with the zero hashes
+- [polycli ulxly proof](polycli_ulxly_proof.md) - generate a proof for a given range of deposits
+
+- [polycli ulxly zero-proof](polycli_ulxly_zero-proof.md) - create a proof that's filled with zeros
 

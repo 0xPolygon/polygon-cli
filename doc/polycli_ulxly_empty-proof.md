@@ -11,7 +11,7 @@
 
 ## Description
 
-print an empty proof structure
+create an empty proof
 
 ```bash
 polycli ulxly empty-proof [flags]
@@ -19,10 +19,7 @@ polycli ulxly empty-proof [flags]
 
 ## Usage
 
-Use this command to print an empty proof response that's filled with
-zero-valued siblings like
-0x0000000000000000000000000000000000000000000000000000000000000000. This
-can be useful when you need to submit a dummy proof.
+Use this command to print an empty proof response that's filled with zero-valued siblings like 0x0000000000000000000000000000000000000000000000000000000000000000. This can be useful when you need to submit a dummy proof.
 ## Flags
 
 ```bash

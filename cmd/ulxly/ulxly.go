@@ -1285,11 +1285,11 @@ func prepInputs(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func fatalIfError(err error) {
+func ignoreAndLogError(err error) {
 	if err != nil {
 		return
 	}
-	log.Fatal().Err(err).Msg("Unexpected error occurred")
+	log.Debug().Err(err).Msg("Unexpected error occurred")
 }
 
 func init() {
@@ -1394,9 +1394,9 @@ func init() {
 	inputUlxlyArgs.timeout = ulxlyBridgeAndClaimCmd.PersistentFlags().Uint64(ArgTimeout, 60, "the amount of time to wait while trying to confirm a transaction receipt")
 	inputUlxlyArgs.gasPrice = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgGasPrice, "", "the gas price to be used")
 	inputUlxlyArgs.dryRun = ulxlyBridgeAndClaimCmd.PersistentFlags().Bool(ArgDryRun, false, "do all of the transaction steps but do not send the transaction")
-	fatalIfError(ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgPrivateKey))
-	fatalIfError(ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgRPCURL))
-	fatalIfError(ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgBridgeAddress))
+	ignoreAndLogError(ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgPrivateKey))
+	ignoreAndLogError(ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgRPCURL))
+	ignoreAndLogError(ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgBridgeAddress))
 
 	// bridge specific args
 	inputUlxlyArgs.forceUpdate = ulxlxBridgeCmd.PersistentFlags().Bool(ArgForceUpdate, true, "indicates if the new global exit root is updated or not")
@@ -1404,22 +1404,22 @@ func init() {
 	inputUlxlyArgs.destNetwork = ulxlxBridgeCmd.PersistentFlags().Uint32(ArgDestNetwork, 0, "the rollup id of the destination network")
 	inputUlxlyArgs.tokenAddress = ulxlxBridgeCmd.PersistentFlags().String(ArgTokenAddress, "0x0000000000000000000000000000000000000000", "the address of an ERC20 token to be used")
 	inputUlxlyArgs.callData = ulxlxBridgeCmd.PersistentFlags().String(ArgCallData, "0x", "call data to be passed directly with bridge-message or as an ERC20 Permit")
-	fatalIfError(ulxlxBridgeCmd.MarkPersistentFlagRequired(ArgDestNetwork))
+	ignoreAndLogError(ulxlxBridgeCmd.MarkPersistentFlagRequired(ArgDestNetwork))
 
 	// Claim specific args
 	inputUlxlyArgs.depositCount = ulxlyClaimCmd.PersistentFlags().Uint64(ArgDepositCount, 0, "the deposit count of the bridge transaction")
 	inputUlxlyArgs.depositNetwork = ulxlyClaimCmd.PersistentFlags().Uint64(ArgDepositNetwork, 0, "the rollup id of the network where the bridge is being claimed")
 	inputUlxlyArgs.bridgeServiceURL = ulxlyClaimCmd.PersistentFlags().String(ArgBridgeServiceURL, "", "the URL of the bridge service")
 	inputUlxlyArgs.globalIndex = ulxlyClaimCmd.PersistentFlags().String(ArgGlobalIndex, "", "an override of the global index value")
-	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositCount))
-	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositNetwork))
-	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgBridgeServiceURL))
+	ignoreAndLogError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositCount))
+	ignoreAndLogError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositNetwork))
+	ignoreAndLogError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgBridgeServiceURL))
 
 	// Claim Everything Helper Command
 	inputUlxlyArgs.bridgeServiceURLs = claimEverythingCommand.Flags().StringSlice(ArgBridgeMappings, nil, "Mappings between network ids and bridge service urls. E.g. '1=http://network-1-bridgeurl,7=http://network-2-bridgeurl'")
 	inputUlxlyArgs.bridgeLimit = claimEverythingCommand.Flags().Int(ArgBridgeLimit, 25, "Limit the number or responses returned by the bridge service when claiming")
 	inputUlxlyArgs.bridgeOffset = claimEverythingCommand.Flags().Int(ArgBridgeOffset, 0, "The offset to specify for pagination of the underlying bridge service deposits")
-	fatalIfError(claimEverythingCommand.MarkFlagRequired(ArgBridgeMappings))
+	ignoreAndLogError(claimEverythingCommand.MarkFlagRequired(ArgBridgeMappings))
 
 	// Args that are just for the get deposit command
 	inputUlxlyArgs.fromBlock = getDepositCommand.Flags().Uint64(ArgFromBlock, 0, "The start of the range of blocks to retrieve")
@@ -1427,9 +1427,9 @@ func init() {
 	inputUlxlyArgs.filterSize = getDepositCommand.Flags().Uint64(ArgFilterSize, 1000, "The batch size for individual filter queries")
 	getDepositCommand.Flags().String(ArgRPCURL, "", "The RPC URL to read deposit data")
 	getDepositCommand.Flags().String(ArgBridgeAddress, "", "The address of the ulxly bridge")
-	fatalIfError(getDepositCommand.MarkFlagRequired(ArgFromBlock))
-	fatalIfError(getDepositCommand.MarkFlagRequired(ArgToBlock))
-	fatalIfError(getDepositCommand.MarkFlagRequired(ArgRPCURL))
+	ignoreAndLogError(getDepositCommand.MarkFlagRequired(ArgFromBlock))
+	ignoreAndLogError(getDepositCommand.MarkFlagRequired(ArgToBlock))
+	ignoreAndLogError(getDepositCommand.MarkFlagRequired(ArgRPCURL))
 
 	// Args for the proof command
 	inputUlxlyArgs.inputFileName = proofCommand.Flags().String(ArgFileName, "", "An ndjson file with deposit data")
