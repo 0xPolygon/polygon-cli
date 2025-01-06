@@ -1383,8 +1383,6 @@ func init() {
 	ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgPrivateKey)
 	ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgRPCURL)
 	ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgBridgeAddress)
-	// TODO this should be optional and we should use the private key to determine the destination address
-	ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgDestAddress)
 
 	// bridge specific args
 	inputUlxlyArgs.forceUpdate = ulxlxBridgeCmd.PersistentFlags().Bool(ArgForceUpdate, true, "indicates if the new global exit root is updated or not")
