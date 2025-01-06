@@ -1,61 +1,70 @@
-This command will attempt to send a deposit transaction to the bridge contract.
+This command will directly attempt to make a deposit on the uLxLy bridge. This call responds to the method defined below:
 
 ```solidity
-    /**
-     * @notice Deposit add a new leaf to the merkle tree
-     * note If this function is called with a reentrant token, it would be possible to `claimTokens` in the same call
-     * Reducing the supply of tokens on this contract, and actually locking tokens in the contract.
-     * Therefore we recommend to third parties bridges that if they do implement reentrant call of `beforeTransfer` of some reentrant tokens
-     * do not call any external address in that case
-     * note User/UI must be aware of the existing/available networks when choosing the destination network
-     * @param destinationNetwork Network destination
-     * @param destinationAddress Address destination
-     * @param amount Amount of tokens
-     * @param token Token address, 0 address is reserved for ether
-     * @param forceUpdateGlobalExitRoot Indicates if the new global exit root is updated or not
-     * @param permitData Raw data of the call `permit` of the token
-     */
-    function bridgeAsset(
-        uint32 destinationNetwork,
-        address destinationAddress,
-        uint256 amount,
-        address token,
-        bool forceUpdateGlobalExitRoot,
-        bytes calldata permitData
-    );
-
+/**
+ * @notice Deposit add a new leaf to the merkle tree
+ * note If this function is called with a reentrant token, it would be possible to `claimTokens` in the same call
+ * Reducing the supply of tokens on this contract, and actually locking tokens in the contract.
+ * Therefore we recommend to third parties bridges that if they do implement reentrant call of `beforeTransfer` of some reentrant tokens
+ * do not call any external address in that case
+ * note User/UI must be aware of the existing/available networks when choosing the destination network
+ * @param destinationNetwork Network destination
+ * @param destinationAddress Address destination
+ * @param amount Amount of tokens
+ * @param token Token address, 0 address is reserved for ether
+ * @param forceUpdateGlobalExitRoot Indicates if the new global exit root is updated or not
+ * @param permitData Raw data of the call `permit` of the token
+ */
+function bridgeAsset(
+    uint32 destinationNetwork,
+    address destinationAddress,
+    uint256 amount,
+    address token,
+    bool forceUpdateGlobalExitRoot,
+    bytes calldata permitData
+) public payable virtual ifNotEmergencyState nonReentrant {
 ```
 
-Each transaction will require manual input of parameters. Example usage:
+The source of this method is [here](https://github.com/0xPolygonHermez/zkevm-contracts/blob/c8659e6282340de7bdb8fdbf7924a9bd2996bc98/contracts/v2/PolygonZkEVMBridgeV2.sol#L198-L219).
+Below is an example of how we would make simple bridge of native ETH from Sepolia (L1) into Cardona (L2).
 
 ```bash
-polycli ulxly bridge-asset \
-        --private-key 12d7de8621a77640c9241b2595ba78ce443d05e94090365ab3bb5e19df82c625 \
-        --gas-limit 300000 \
-        --amount 1000000000000000000 \
-        --rpc-url http://127.0.0.1:8545 \
-        --bridge-address 0xD71f8F956AD979Cc2988381B8A743a2fE280537D \
-        --destination-network 1 \
-        --destination-address 0xE34aaF64b29273B7D567FCFc40544c014EEe9970
+polycli ulxly bridge asset \
+    --bridge-address 0x528e26b25a34a4A5d0dbDa1d57D318153d2ED582 \
+    --private-key 0x32430699cd4f46ab2422f1df4ad6546811be20c9725544e99253a887e971f92b \
+    --destination-network 1 \
+    --value 10000000000000000 \
+    --rpc-url https://sepolia.drpc.org
 ```
 
-This command would use the supplied private key and attempt to send a deposit transaction to the bridge contract address with the input flags.
-Successful deposit transaction will output logs like below:
+[This](https://sepolia.etherscan.io/tx/0xf57b8171b2f62dce3eedbe3e50d5ee8413d61438af64286b5017ed9d5d154816) is the transaction that was created and mined from running this command.
+
+Here is another example that will bridge a [test ERC20 token](https://sepolia.etherscan.io/address/0xC92AeF5873d058a76685140F3328B0DED79733Af) from Sepolia (L1) into Cardona (L2). In order for this to work, the token would need to have an [approval](https://sepolia.etherscan.io/tx/0x028513b13a2a7899de4db56e60d1dad66c7b7e29f91c54f385fdfdfc8f14b8b4#eventlog) for the bridge to spend tokens for that particular user.
 
 ```bash
-Deposit Transaction Successful: 0x8c9b82e8abdfb4aad5fccd91879397acfa73e4261282c8dc634734d05ad889d3
+polycli ulxly bridge asset \
+    --bridge-address 0x528e26b25a34a4A5d0dbDa1d57D318153d2ED582 \
+    --private-key 0x32430699cd4f46ab2422f1df4ad6546811be20c9725544e99253a887e971f92b \
+    --destination-network 1 \
+    --value 10000000000000000 \
+    --token-address 0xC92AeF5873d058a76685140F3328B0DED79733Af \
+    --destination-address 0x3878Cff9d621064d393EEF92bF1e12A944c5ba84 \
+    --rpc-url https://sepolia.drpc.org
 ```
 
-Upon successful deposit, the transaction can be queried using `polycli ulxly deposit-get` command
+[This](https://sepolia.etherscan.io/tx/0x8ed1c2c0f2e994c86867f401c86fea3c709a28a18629d473cf683049f176fa93) is the transaction that was created and mined from running this command.
 
-
-Failed deposit transactions will output logs like below: 
+Assuming you have funds on L2, a bridge from L2 to L1 looks pretty much the same.
+The command below will bridge `123456` of the native ETH on Cardona (L2) back to network 0 which corresponds to Sepolia (L1).
 
 ```bash
-Deposit Transaction Failed: 0x60385209b0e9db359c24c88c2fb8a5c9e4628fffe8d5fb2b5e64dfac3a2b7639
-Try increasing the gas limit:
-Current gas limit: 100000
-Cumulative gas used for transaction: 98641
+polycli ulxly bridge asset \
+    --bridge-address 0x528e26b25a34a4A5d0dbDa1d57D318153d2ED582 \
+    --private-key 0x32430699cd4f46ab2422f1df4ad6546811be20c9725544e99253a887e971f92b \
+    --destination-network 0 \
+    --value 123456 \
+    --destination-address 0x3878Cff9d621064d393EEF92bF1e12A944c5ba84 \
+    --rpc-url https://rpc.cardona.zkevm-rpc.com
 ```
 
-The reason for failing may likely be due to the `out of gas` error. Increasing the `--gas-limit` flag value will likely resolve this. 
+[This](https://cardona-zkevm.polygonscan.com/tx/0x0294dae3cfb26881e5dde9f182531aa5be0818956d029d50e9872543f020df2e) is the transaction that was created and mined from running this command.

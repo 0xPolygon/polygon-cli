@@ -11,11 +11,11 @@
 
 ## Description
 
-Utilities for interacting with the lxly bridge
+Utilities for interacting with the uLxLy bridge
 
 ## Usage
 
-These are low level tools for directly scanning bridge events and constructing proofs.
+Basic utility commands for interacting with the bridge contracts, bridge services, and generating proofs
 ## Flags
 
 ```bash
@@ -40,11 +40,11 @@ The command also inherits flags from parent commands.
 ## See also
 
 - [polycli](polycli.md) - A Swiss Army knife of blockchain tools.
-- [polycli ulxly bridge](polycli_ulxly_bridge.md) - commands for making deposits to the uLxLy bridge
+- [polycli ulxly bridge](polycli_ulxly_bridge.md) - Commands for moving funds and sending messages from one chain to another
 
-- [polycli ulxly claim](polycli_ulxly_claim.md) - commands for making claims of deposits from the uLxLy bridge
+- [polycli ulxly claim](polycli_ulxly_claim.md) - Commands for claiming deposits on a particular chain
 
-- [polycli ulxly claim-everything](polycli_ulxly_claim-everything.md) - attempt to claim any unclaimed deposits
+- [polycli ulxly claim-everything](polycli_ulxly_claim-everything.md) - Attempt to claim as many deposits and messages as possible
 
 - [polycli ulxly empty-proof](polycli_ulxly_empty-proof.md) - create an empty proof
 

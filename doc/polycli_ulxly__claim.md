@@ -11,14 +11,14 @@
 
 ## Description
 
-commands for making claims of deposits from the uLxLy bridge
+Commands for claiming deposits on a particular chain
 
 ## Flags
 
 ```bash
       --bridge-service-url string   the URL of the bridge service
       --deposit-count uint          the deposit count of the bridge transaction
-      --deposit-network uint        the rollup id of the network where the bridge is being claimed
+      --deposit-network uint        the rollup id of the network where the deposit was initially made
       --global-index string         an override of the global index value
   -h, --help                        help for claim
 ```
@@ -50,7 +50,7 @@ The command also inherits flags from parent commands.
 ## See also
 
 - [polycli ulxly ](polycli_ulxly_.md) - 
-- [polycli ulxly  claim asset](polycli_ulxly__claim_asset.md) - perform a claim of a given deposit in the bridge
+- [polycli ulxly  claim asset](polycli_ulxly__claim_asset.md) - Claim a deposit
 
-- [polycli ulxly  claim message](polycli_ulxly__claim_message.md) - perform a claim of a given message in the bridge
+- [polycli ulxly  claim message](polycli_ulxly__claim_message.md) - Claim a message
 

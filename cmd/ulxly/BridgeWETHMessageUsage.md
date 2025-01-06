@@ -1,55 +1,35 @@
-This command will attempt to send a deposit transaction to the bridge contract.
+This command is not used very often but can be used on L2 networks that have a gas token.
 
 ```solidity
-    /**
-     * @notice Bridge message and send ETH value
-     * note User/UI must be aware of the existing/available networks when choosing the destination network
-     * @param destinationNetwork Network destination
-     * @param destinationAddress Address destination
-     * @param amountWETH Amount of WETH tokens
-     * @param forceUpdateGlobalExitRoot Indicates if the new global exit root is updated or not
-     * @param metadata Message metadata
-     */
-    function bridgeMessageWETH(
-        uint32 destinationNetwork,
-        address destinationAddress,
-        uint256 amountWETH,
-        bool forceUpdateGlobalExitRoot,
-        bytes calldata metadata
-    );
+/**
+ * @notice Bridge message and send ETH value
+ * note User/UI must be aware of the existing/available networks when choosing the destination network
+ * @param destinationNetwork Network destination
+ * @param destinationAddress Address destination
+ * @param amountWETH Amount of WETH tokens
+ * @param forceUpdateGlobalExitRoot Indicates if the new global exit root is updated or not
+ * @param metadata Message metadata
+ */
+function bridgeMessageWETH(
+    uint32 destinationNetwork,
+    address destinationAddress,
+    uint256 amountWETH,
+    bool forceUpdateGlobalExitRoot,
+    bytes calldata metadata
+) external ifNotEmergencyState {
 ```
+[Here](https://github.com/0xPolygonHermez/zkevm-contracts/blob/c8659e6282340de7bdb8fdbf7924a9bd2996bc98/contracts/v2/PolygonZkEVMBridgeV2.sol#L352-L367) is the source code that corresponds to this interface.
 
-Each transaction will require manual input of parameters. Example usage:
+Assuming the network is configured with a gas token, you could call this method like this:
 
 ```bash
-polycli ulxly bridge-message-weth \
-        --private-key 12d7de8621a77640c9241b2595ba78ce443d05e94090365ab3bb5e19df82c625 \
-        --gas-limit 300000 \
-        --amount 1000000000000000000 \
-        --rpc-url http://127.0.0.1:8545 \
-        --bridge-address 0xD71f8F956AD979Cc2988381B8A743a2fE280537D \
+polycli ulxly bridge weth \
+        --bridge-address 0x528e26b25a34a4A5d0dbDa1d57D318153d2ED582 \
+        --destination-address 0x3878Cff9d621064d393EEF92bF1e12A944c5ba84 \
+        --private-key 0x32430699cd4f46ab2422f1df4ad6546811be20c9725544e99253a887e971f92b \
+        --value 123456 \
         --destination-network 1 \
-        --destination-address 0xE34aaF64b29273B7D567FCFc40544c014EEe9970
-        --call-data 0x001010109200090028979743971976836486868648629808961824738090896826764980866fac97863898ca08928fc7279643
+        --rpc-url http://l2-rpc-url.invalid \
+        --token-address $WETH_ADDRESS
 ```
 
-This command would use the supplied private key and attempt to send a deposit transaction to the bridge contract address with the input flags.
-Successful deposit transaction will output logs like below:
-
-```bash
-Deposit Transaction Successful: 0x8c9b82e8abdfb4aad5fccd91879397acfa73e4261282c8dc634734d05ad889d3
-```
-
-Upon successful deposit, the transaction can be queried using `polycli ulxly deposit-get` command
-
-
-Failed deposit transactions will output logs like below: 
-
-```bash
-Deposit Transaction Failed: 0x60385209b0e9db359c24c88c2fb8a5c9e4628fffe8d5fb2b5e64dfac3a2b7639
-Try increasing the gas limit:
-Current gas limit: 100000
-Cumulative gas used for transaction: 98641
-```
-
-The reason for failing may likely be due to the `out of gas` error. Increasing the `--gas-limit` flag value will likely resolve this. 

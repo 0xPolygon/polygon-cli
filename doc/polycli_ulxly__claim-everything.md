@@ -11,7 +11,7 @@
 
 ## Description
 
-attempt to claim any unclaimed deposits
+Attempt to claim as many deposits and messages as possible
 
 ```bash
 polycli ulxly  claim-everything [flags]
