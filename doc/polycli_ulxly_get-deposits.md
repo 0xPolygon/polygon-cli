@@ -11,7 +11,7 @@
 
 ## Description
 
-generate ndjson for each bridge deposit over a particular range of blocks
+Generate ndjson for each bridge deposit over a particular range of blocks
 
 ```bash
 polycli ulxly get-deposits [flags]

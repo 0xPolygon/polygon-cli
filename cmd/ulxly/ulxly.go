@@ -1359,18 +1359,18 @@ func init() {
 		Use:   "zero-proof",
 		Short: "create a proof that's filled with zeros",
 		Long: `Use this command to print a proof response that's filled with the zero
-		hashes. This values are very helpful for debugging because it would
-		tell you how populated the tree is and roughly which leaves and
-		siblings are empty. It's also helpful for sanity checking a proof
-		response to understand if the hashed value is part of the zero hashes
-		or if it's actually an intermediate hash.`,
+hashes. This values are very helpful for debugging because it would
+tell you how populated the tree is and roughly which leaves and
+siblings are empty. It's also helpful for sanity checking a proof
+response to understand if the hashed value is part of the zero hashes
+or if it's actually an intermediate hash.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return zeroProof()
 		},
 	}
 	proofCommand = &cobra.Command{
 		Use:   "proof",
-		Short: "generate a proof for a given range of deposits",
+		Short: "Generate a proof for a given range of deposits",
 		Long:  proofUsage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return proof(args)
@@ -1378,7 +1378,7 @@ func init() {
 	}
 	getDepositCommand = &cobra.Command{
 		Use:   "get-deposits",
-		Short: "generate ndjson for each bridge deposit over a particular range of blocks",
+		Short: "Generate ndjson for each bridge deposit over a particular range of blocks",
 		Long:  depositGetUsage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return readDeposit(cmd)

@@ -20,11 +20,11 @@ polycli ulxly zero-proof [flags]
 ## Usage
 
 Use this command to print a proof response that's filled with the zero
-		hashes. This values are very helpful for debugging because it would
-		tell you how populated the tree is and roughly which leaves and
-		siblings are empty. It's also helpful for sanity checking a proof
-		response to understand if the hashed value is part of the zero hashes
-		or if it's actually an intermediate hash.
+hashes. This values are very helpful for debugging because it would
+tell you how populated the tree is and roughly which leaves and
+siblings are empty. It's also helpful for sanity checking a proof
+response to understand if the hashed value is part of the zero hashes
+or if it's actually an intermediate hash.
 ## Flags
 
 ```bash

@@ -11,7 +11,7 @@
 
 ## Description
 
-generate a proof for a given range of deposits
+Generate a proof for a given range of deposits
 
 ```bash
 polycli ulxly proof [flags]

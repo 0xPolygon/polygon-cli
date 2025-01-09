@@ -48,9 +48,9 @@ The command also inherits flags from parent commands.
 
 - [polycli ulxly empty-proof](polycli_ulxly_empty-proof.md) - create an empty proof
 
-- [polycli ulxly get-deposits](polycli_ulxly_get-deposits.md) - generate ndjson for each bridge deposit over a particular range of blocks
+- [polycli ulxly get-deposits](polycli_ulxly_get-deposits.md) - Generate ndjson for each bridge deposit over a particular range of blocks
 
-- [polycli ulxly proof](polycli_ulxly_proof.md) - generate a proof for a given range of deposits
+- [polycli ulxly proof](polycli_ulxly_proof.md) - Generate a proof for a given range of deposits
 
 - [polycli ulxly zero-proof](polycli_ulxly_zero-proof.md) - create a proof that's filled with zeros
 
