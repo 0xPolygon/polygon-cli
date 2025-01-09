@@ -6,12 +6,12 @@ Example usage:
 ```bash
 polycli ulxly proof \
         --file-name cardona-4880876-to-6028159.ndjson \
-        --deposit-number 24386 | jq '.'
+        --deposit-count 24386 | jq '.'
 ```
 
 In this case we are assuming we have a file
 `cardona-4880876-to-6028159.ndjson` that would have been generated
-with a call to `polycli ulxly deposits`. The output will be the
+with a call to `polycli ulxly get-deposits`. The output will be the
 sibling hashes necessary to prove inclusion of deposit `24386`.
 
 This is a real verifiable deposit if you'd like to sanity check:
@@ -66,7 +66,10 @@ This is the proof response from polycli:
 
 ![Sample Tree](./tree-diagram.png)
 
-When we're creating the proof here, we're essentially storing all of
-the paths to the various leafs. When we want to generate a proof, we
-essentially find the appropriate sibling node in the tree to prove
-that the leaf is part of the given merkle root.
+When we're creating the proof here, we're essentially storing the paths to the
+various leafs. When we want to generate a proof, we find the appropriate sibling
+node in the tree to prove that the leaf is part of the given merkle root.
+
+## Full example
+
+TODO

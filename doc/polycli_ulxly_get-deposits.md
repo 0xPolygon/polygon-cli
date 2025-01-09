@@ -1,3 +1,24 @@
+# `polycli ulxly get-deposits`
+
+> Auto-generated documentation.
+
+## Table of Contents
+
+- [Description](#description)
+- [Usage](#usage)
+- [Flags](#flags)
+- [See Also](#see-also)
+
+## Description
+
+Generate ndjson for each bridge deposit over a particular range of blocks
+
+```bash
+polycli ulxly get-deposits [flags]
+```
+
+## Usage
+
 This command will attempt to scan a range of blocks and look for uLxLy
 Bridge Events. This is the specific signature that we're interested
 in:
@@ -44,3 +65,33 @@ This command is very specific for the ulxly bridge, and it's meant to
 serve as the input to the proof command.
 
 
+
+## Flags
+
+```bash
+      --bridge-address string   The address of the ulxly bridge
+      --filter-size uint        The batch size for individual filter queries (default 1000)
+      --from-block uint         The start of the range of blocks to retrieve
+  -h, --help                    help for get-deposits
+      --rpc-url string          The RPC URL to read deposit data
+      --to-block uint           The end of the range of blocks to retrieve
+```
+
+The command also inherits flags from parent commands.
+
+```bash
+      --config string   config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs     Should logs be in pretty format or JSON (default true)
+  -v, --verbosity int   0 - Silent
+                        100 Panic
+                        200 Fatal
+                        300 Error
+                        400 Warning
+                        500 Info
+                        600 Debug
+                        700 Trace (default 500)
+```
+
+## See also
+
+- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge

@@ -11,7 +11,7 @@
 
 ## Description
 
-print a proof structure with the zero hashes
+create a proof that's filled with zeros
 
 ```bash
 polycli ulxly zero-proof [flags]
@@ -48,4 +48,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the lxly bridge
+- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge

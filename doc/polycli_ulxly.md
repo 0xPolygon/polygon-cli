@@ -11,11 +11,11 @@
 
 ## Description
 
-Utilities for interacting with the lxly bridge
+Utilities for interacting with the uLxLy bridge
 
 ## Usage
 
-These are low level tools for directly scanning bridge events and constructing proofs.
+Basic utility commands for interacting with the bridge contracts, bridge services, and generating proofs
 ## Flags
 
 ```bash
@@ -40,15 +40,17 @@ The command also inherits flags from parent commands.
 ## See also
 
 - [polycli](polycli.md) - A Swiss Army knife of blockchain tools.
-- [polycli ulxly deposit-claim](polycli_ulxly_deposit-claim.md) - Make a uLxLy claim transaction
+- [polycli ulxly bridge](polycli_ulxly_bridge.md) - Commands for moving funds and sending messages from one chain to another
 
-- [polycli ulxly deposit-get](polycli_ulxly_deposit-get.md) - Get a range of deposits
+- [polycli ulxly claim](polycli_ulxly_claim.md) - Commands for claiming deposits on a particular chain
 
-- [polycli ulxly deposit-new](polycli_ulxly_deposit-new.md) - Make a uLxLy deposit transaction
+- [polycli ulxly claim-everything](polycli_ulxly_claim-everything.md) - Attempt to claim as many deposits and messages as possible
 
-- [polycli ulxly empty-proof](polycli_ulxly_empty-proof.md) - print an empty proof structure
+- [polycli ulxly empty-proof](polycli_ulxly_empty-proof.md) - create an empty proof
 
-- [polycli ulxly proof](polycli_ulxly_proof.md) - generate a merkle proof
+- [polycli ulxly get-deposits](polycli_ulxly_get-deposits.md) - Generate ndjson for each bridge deposit over a particular range of blocks
 
-- [polycli ulxly zero-proof](polycli_ulxly_zero-proof.md) - print a proof structure with the zero hashes
+- [polycli ulxly proof](polycli_ulxly_proof.md) - Generate a proof for a given range of deposits
+
+- [polycli ulxly zero-proof](polycli_ulxly_zero-proof.md) - create a proof that's filled with zeros
 
