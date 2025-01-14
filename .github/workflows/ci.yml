@@ -11,13 +11,16 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.22" # https://go.dev/dl/
-  STRINGER_VERSION: "0.27.0" # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
-  # Protoc dependencies.
-  PROTOC_VERSION: "28.3" # https://github.com/protocolbuffers/protobuf/releases
-  PROTOC_GEN_GO_VERSION: "1.35.2" # https://pkg.go.dev/google.golang.org/protobuf/cmd/protoc-gen-go?tab=versions
-  PROTOC_GEN_GO_GRPC_VERSION: "1.5.1" # https://pkg.go.dev/google.golang.org/grpc/cmd/protoc-gen-go-grpc?tab=versions
   ARCH: "linux-x86_64"
+
+  GO_VERSION: "1.22" # https://go.dev/dl/
+  STRINGER_VERSION: "0.29.0" # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
+
+  PROTOC_VERSION: "29.3" # https://github.com/protocolbuffers/protobuf/releases
+  PROTOC_GEN_GO_VERSION: "1.36.2" # https://pkg.go.dev/google.golang.org/protobuf/cmd/protoc-gen-go?tab=versions
+  PROTOC_GEN_GO_GRPC_VERSION: "1.5.1" # https://pkg.go.dev/google.golang.org/grpc/cmd/protoc-gen-go-grpc?tab=versions
+
+  FOUNDRY_VERSION: stable
 
 jobs:
   lint:
@@ -72,7 +75,7 @@ jobs:
       - name: Install foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          version: ${{ env.FOUNDRY_VERSION }}
       - name: Get forge version
         run: forge --version
       - name: Install contract dependencies
@@ -121,7 +124,8 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
-        # foundry only has nightly versions no we don't specify a version at the moment.
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
       - name: Install Geth
         run: |
           if [ "${{ matrix.tool }}" = "geth" ]; then
