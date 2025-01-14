@@ -72,7 +72,7 @@ jobs:
       - name: Install foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: stable
       - name: Get forge version
         run: forge --version
       - name: Install contract dependencies
