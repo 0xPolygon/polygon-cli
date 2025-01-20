@@ -22,5 +22,4 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifi
 COPY --from=builder /workspace/polycli /usr/bin/polycli
 
 # Default cmd for the container
-CMD ["/bin/sh", "-c", "polycli"]
 ENTRYPOINT ["polycli"]
