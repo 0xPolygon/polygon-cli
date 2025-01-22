@@ -128,7 +128,7 @@ func init() {
 
 // Generate an secp256k1 private key from a secret.
 // Most of the logic has been copy/pasted from 0xPolygon/cometbft's fork.
-// https://github.com/0xPolygon/cometbft/blob/v0.1.2-beta-polygon/crypto/secp256k1/secp256k1.go#L134
+// https://github.com/0xPolygon/cometbft/blob/v0.1.2-beta-polygon/crypto/secp256k1/secp256k1.go
 // Notes:
 // - It is not possible to import the package yet because go.mod declares its path as github.com/cometbft/cometbft instead of github.com/0xpolygon/cometbft.
 // - This logic will need to be updated to support newer versions.
