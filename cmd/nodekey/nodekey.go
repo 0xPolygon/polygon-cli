@@ -2,6 +2,7 @@ package nodekey
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/binary"
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 
 	_ "embed"
 
@@ -42,6 +44,7 @@ var (
 	inputNodeKeyTCP             *int
 	inputNodeKeyUDP             *int
 	inputNodeKeyFile            *string
+	inputNodeKeyPrivateKey      *string
 	inputNodeKeySign            *bool
 	inputNodeKeySeed            *uint64
 	inputNodeKeyMarshalProtobuf *bool
@@ -100,6 +103,7 @@ var NodekeyCmd = &cobra.Command{
 		if len(args) != 0 {
 			return fmt.Errorf("this command expects no arguments")
 		}
+
 		validProtocols := []string{"devp2p", "libp2p", "seed-libp2p"}
 		ok := slices.Contains(validProtocols, *inputNodeKeyProtocol)
 		if !ok {
@@ -169,13 +173,25 @@ func keyTypeToInt(keyType string) (int, error) {
 }
 
 func generateDevp2pNodeKey() (nodeKeyOut, error) {
-	nodeKey, err := gethcrypto.GenerateKey()
+	var nodeKey *ecdsa.PrivateKey
+	var err error
 
-	if *inputNodeKeyFile != "" {
+	switch {
+	case *inputNodeKeyPrivateKey != "":
+		nodeKey, err = gethcrypto.HexToECDSA(strings.TrimPrefix(*inputNodeKeyPrivateKey, "0x"))
+		if err != nil {
+			return nodeKeyOut{}, fmt.Errorf("could not create ECDSA private key from given value: %s: %w", *inputNodeKeyPrivateKey, err)
+		}
+	case *inputNodeKeyFile != "":
 		nodeKey, err = gethcrypto.LoadECDSA(*inputNodeKeyFile)
-	}
-	if err != nil {
-		return nodeKeyOut{}, fmt.Errorf("could not generate key: %w", err)
+		if err != nil {
+			return nodeKeyOut{}, fmt.Errorf("could not load ECDSA private key from file %s: %w", *inputNodeKeyFile, err)
+		}
+	default:
+		nodeKey, err = gethcrypto.GenerateKey()
+		if err != nil {
+			return nodeKeyOut{}, fmt.Errorf("could not generate ECDSA private key: %w", err)
+		}
 	}
 
 	nko := nodeKeyOut{}
@@ -250,6 +266,10 @@ func generateLibp2pNodeKey(keyType int, seed bool) (nodeKeyOut, error) {
 }
 
 func init() {
+	inputNodeKeyPrivateKey = NodekeyCmd.PersistentFlags().String("private-key", "", "Use the provided private key (in hex format)")
+	inputNodeKeyFile = NodekeyCmd.PersistentFlags().StringP("file", "f", "", "A file with the private nodekey (in hex format)")
+	NodekeyCmd.MarkFlagsMutuallyExclusive("private-key", "file")
+
 	inputNodeKeyProtocol = NodekeyCmd.PersistentFlags().String("protocol", "devp2p", "devp2p|libp2p|pex|seed-libp2p")
 	inputNodeKeyType = NodekeyCmd.PersistentFlags().String("key-type", "ed25519", "ed25519|secp256k1|ecdsa|rsa")
 	inputNodeKeyIP = NodekeyCmd.PersistentFlags().StringP("ip", "i", "0.0.0.0", "The IP to be associated with this address")
@@ -258,6 +278,4 @@ func init() {
 	inputNodeKeySign = NodekeyCmd.PersistentFlags().BoolP("sign", "s", false, "Should the node record be signed?")
 	inputNodeKeySeed = NodekeyCmd.PersistentFlags().Uint64P("seed", "S", 271828, "A numeric seed value")
 	inputNodeKeyMarshalProtobuf = NodekeyCmd.PersistentFlags().BoolP("marshal-protobuf", "m", false, "If true the libp2p key will be marshaled to protobuf format rather than raw")
-
-	inputNodeKeyFile = NodekeyCmd.PersistentFlags().StringP("file", "f", "", "A file with the private nodekey in hex format")
 }
