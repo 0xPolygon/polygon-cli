@@ -190,7 +190,7 @@ func (d *Datastore) WriteBlockHeaders(ctx context.Context, headers []*types.Head
 	}
 }
 
-// WriteBlockHeaders will write the block bodies to datastore. It will not
+// WriteBlockBody will write the block bodies to datastore. It will not
 // write block events because bodies will only be sent to the sensor when
 // requested. The block events will be written when the hash is received
 // instead. It will write the uncles and transactions to datastore if they
