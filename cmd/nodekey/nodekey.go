@@ -70,11 +70,22 @@ var NodekeyCmd = &cobra.Command{
 		var withSeed bool
 		switch *inputNodeKeyProtocol {
 		case "devp2p":
-			var err error
-			nko, err = generateDevp2pNodeKey()
-			if err != nil {
-				return err
+			switch *inputNodeKeyType {
+			case "ed25519":
+				var err error
+				nko, err = generateDevp2pNodeKey()
+				if err != nil {
+					return err
+				}
+			case "secp256k1":
+				secret := []byte(strings.TrimPrefix(*inputNodeKeyPrivateKey, "0x"))
+				secp256k1PrivateKey := generateSecp256k1PrivateKey(secret)
+				if err := displayHeimdallV2PrivValidatorKey(secp256k1PrivateKey); err != nil {
+					return err
+				}
+				return nil
 			}
+
 		case "seed-libp2p":
 			withSeed = true
 			fallthrough
@@ -111,7 +122,7 @@ var NodekeyCmd = &cobra.Command{
 		}
 
 		if *inputNodeKeyProtocol == "devp2p" {
-			invalidFlags := []string{"key-type", "seed", "marshal-protobuf"}
+			invalidFlags := []string{"seed", "marshal-protobuf"}
 			err := validateNodeKeyFlags(cmd, invalidFlags)
 			if err != nil {
 				return err
@@ -178,7 +189,8 @@ func generateDevp2pNodeKey() (nodeKeyOut, error) {
 
 	switch {
 	case *inputNodeKeyPrivateKey != "":
-		nodeKey, err = gethcrypto.HexToECDSA(strings.TrimPrefix(*inputNodeKeyPrivateKey, "0x"))
+		privateKey := strings.TrimPrefix(*inputNodeKeyPrivateKey, "0x")
+		nodeKey, err = gethcrypto.HexToECDSA(privateKey)
 		if err != nil {
 			return nodeKeyOut{}, fmt.Errorf("could not create ECDSA private key from given value: %s: %w", *inputNodeKeyPrivateKey, err)
 		}
