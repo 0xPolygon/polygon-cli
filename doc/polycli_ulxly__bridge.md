@@ -17,12 +17,11 @@ Commands for moving funds and sending messages from one chain to another
 
 ```bash
       --call-data string             call data to be passed directly with bridge-message or as an ERC20 Permit (default "0x")
-      --call-data-file string        a file containing hex encoded call data
       --destination-network uint32   the rollup id of the destination network
       --force-update-root            indicates if the new global exit root is updated or not (default true)
   -h, --help                         help for bridge
       --token-address string         the address of an ERC20 token to be used (default "0x0000000000000000000000000000000000000000")
-      --value string                 the amount in wei to be sent along with the transaction
+      --value string                 the amount in wei to be sent along with the transaction (default "0")
 ```
 
 The command also inherits flags from parent commands.
