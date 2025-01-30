@@ -1175,7 +1175,7 @@ var ulxlyBridgeAndClaimCmd = &cobra.Command{
 	Hidden: true,
 }
 
-var ulxlxBridgeCmd = &cobra.Command{
+var ulxlyBridgeCmd = &cobra.Command{
 	Use:   "bridge",
 	Short: "Commands for moving funds and sending messages from one chain to another",
 	Args:  cobra.NoArgs,
@@ -1200,6 +1200,7 @@ type ulxlyArgs struct {
 	tokenAddress        *string
 	forceUpdate         *bool
 	callData            *string
+	callDataFile        *string
 	timeout             *uint64
 	depositCount        *uint64
 	depositNetwork      *uint64
@@ -1243,6 +1244,7 @@ const (
 	ArgDestAddress      = "destination-address"
 	ArgForceUpdate      = "force-update-root"
 	ArgCallData         = "call-data"
+	ArgCallDataFile     = "call-data-file"
 	ArgTimeout          = "transaction-receipt-timeout"
 	ArgDepositCount     = "deposit-count"
 	ArgDepositNetwork   = "deposit-network"
@@ -1282,6 +1284,18 @@ func prepInputs(cmd *cobra.Command, args []string) error {
 	if *inputUlxlyArgs.destAddress == "" {
 		*inputUlxlyArgs.destAddress = fromAddress.String()
 		log.Info().Stringer("destAddress", fromAddress).Msg("No destination address specified. Using private key's address")
+	}
+
+	if *inputUlxlyArgs.callDataFile != "" {
+		rawCallData, err := os.ReadFile(*inputUlxlyArgs.callDataFile)
+		if err != nil {
+			return err
+		}
+		if *inputUlxlyArgs.callData != "0x" {
+			return fmt.Errorf("both %s and %s flags were provided", ArgCallData, ArgCallDataFile)
+		}
+		stringCallData := string(rawCallData)
+		inputUlxlyArgs.callData = &stringCallData
 	}
 	return nil
 }
@@ -1443,19 +1457,19 @@ or if it's actually an intermediate hash.`,
 	ULxLyCmd.AddCommand(proofCommand)
 	ULxLyCmd.AddCommand(getDepositCommand)
 
-	ULxLyCmd.AddCommand(ulxlxBridgeCmd)
+	ULxLyCmd.AddCommand(ulxlyBridgeCmd)
 	ULxLyCmd.AddCommand(ulxlyClaimCmd)
 	ULxLyCmd.AddCommand(claimEverythingCommand)
 
 	// Bridge and Claim
-	ulxlyBridgeAndClaimCmd.AddCommand(ulxlxBridgeCmd)
+	ulxlyBridgeAndClaimCmd.AddCommand(ulxlyBridgeCmd)
 	ulxlyBridgeAndClaimCmd.AddCommand(ulxlyClaimCmd)
 	ulxlyBridgeAndClaimCmd.AddCommand(claimEverythingCommand)
 
 	// Bridge
-	ulxlxBridgeCmd.AddCommand(bridgeAssetCommand)
-	ulxlxBridgeCmd.AddCommand(bridgeMessageCommand)
-	ulxlxBridgeCmd.AddCommand(bridgeMessageWETHCommand)
+	ulxlyBridgeCmd.AddCommand(bridgeAssetCommand)
+	ulxlyBridgeCmd.AddCommand(bridgeMessageCommand)
+	ulxlyBridgeCmd.AddCommand(bridgeMessageWETHCommand)
 
 	// Claim
 	ulxlyClaimCmd.AddCommand(claimAssetCommand)

@@ -29,6 +29,10 @@ $(BUILD_DIR): ## Create the build folder.
 build: $(BUILD_DIR) ## Build go binary.
 	go build -ldflags "$(VERSION_FLAGS)" -o $(BUILD_DIR)/$(BIN_NAME) main.go
 
+.PHONY: build-docker
+build-docker: ## Builds a docker image with the polycli binary
+	docker build -t polycli -f ./Dockerfile .
+
 .PHONY: install
 install: build ## Install the go binary.
 	$(RM) $(INSTALL_DIR)/$(BIN_NAME)
@@ -42,14 +46,14 @@ cross: $(BUILD_DIR) ## Cross-compile go binaries using CGO.
 # - `-linkmode external -extldflags "-static-libgo"` allows dynamic linking.
 	echo "Building $(BIN_NAME)_$(GIT_TAG)_linux_arm64..."
 	CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build \
-			-ldflags '$(VERSION_FLAGS) -s -w -linkmode external -extldflags "-static-libgo"' \
+			-ldflags '$(VERSION_FLAGS) -s -w -linkmode external -extldflags "-static"' \
 			-tags netgo \
 			-o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_arm64 \
 			main.go
 
 	echo "Building $(BIN_NAME)_$(GIT_TAG)_linux_amd64..."
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
-			-ldflags '$(VERSION_FLAGS) -s -w -linkmode external -extldflags "-static-libgo"' \
+			-ldflags '$(VERSION_FLAGS) -s -w -linkmode external -extldflags "-static"' \
 			-tags netgo \
 			-o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_amd64 \
 			main.go

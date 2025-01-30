@@ -83,7 +83,7 @@ type BlockHashEntry struct {
 // blockHashTTL defines the time-to-live for block hash entries in blockHashes list.
 var blockHashTTL = 10 * time.Minute
 
-// NewEthProctocol creates the new eth protocol. This will handle writing the
+// NewEthProtocol creates the new eth protocol. This will handle writing the
 // status exchange, message handling, and writing blocks/txs to the database.
 func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 	return ethp2p.Protocol{
