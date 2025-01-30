@@ -1401,7 +1401,7 @@ or if it's actually an intermediate hash.`,
 
 	// bridge specific args
 	inputUlxlyArgs.forceUpdate = ulxlxBridgeCmd.PersistentFlags().Bool(ArgForceUpdate, true, "indicates if the new global exit root is updated or not")
-	inputUlxlyArgs.value = ulxlxBridgeCmd.PersistentFlags().String(ArgValue, "", "the amount in wei to be sent along with the transaction")
+	inputUlxlyArgs.value = ulxlxBridgeCmd.PersistentFlags().String(ArgValue, "0", "the amount in wei to be sent along with the transaction")
 	inputUlxlyArgs.destNetwork = ulxlxBridgeCmd.PersistentFlags().Uint32(ArgDestNetwork, 0, "the rollup id of the destination network")
 	inputUlxlyArgs.tokenAddress = ulxlxBridgeCmd.PersistentFlags().String(ArgTokenAddress, "0x0000000000000000000000000000000000000000", "the address of an ERC20 token to be used")
 	inputUlxlyArgs.callData = ulxlxBridgeCmd.PersistentFlags().String(ArgCallData, "0x", "call data to be passed directly with bridge-message or as an ERC20 Permit")
