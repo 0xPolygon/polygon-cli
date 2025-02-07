@@ -100,6 +100,7 @@ The command also inherits flags from parent commands.
 ```bash
       --bridge-address string              the address of the lxly bridge
       --call-data string                   call data to be passed directly with bridge-message or as an ERC20 Permit (default "0x")
+      --call-data-file string              a file containing hex encoded call data
       --chain-id string                    set the chain id to be used in the transaction
       --config string                      config file (default is $HOME/.polygon-cli.yaml)
       --destination-address string         the address where the bridge will be sent to
