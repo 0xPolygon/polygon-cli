@@ -1419,6 +1419,7 @@ or if it's actually an intermediate hash.`,
 	inputUlxlyArgs.destNetwork = ulxlyBridgeCmd.PersistentFlags().Uint32(ArgDestNetwork, 0, "the rollup id of the destination network")
 	inputUlxlyArgs.tokenAddress = ulxlyBridgeCmd.PersistentFlags().String(ArgTokenAddress, "0x0000000000000000000000000000000000000000", "the address of an ERC20 token to be used")
 	inputUlxlyArgs.callData = ulxlyBridgeCmd.PersistentFlags().String(ArgCallData, "0x", "call data to be passed directly with bridge-message or as an ERC20 Permit")
+	inputUlxlyArgs.callDataFile = ulxlyBridgeCmd.PersistentFlags().String(ArgCallDataFile, "", "a file containing hex encoded call data")
 	fatalIfError(ulxlyBridgeCmd.MarkPersistentFlagRequired(ArgDestNetwork))
 
 	// Claim specific args
