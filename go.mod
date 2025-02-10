@@ -33,7 +33,7 @@ require (
 	golang.org/x/crypto v0.32.0
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
 	golang.org/x/text v0.21.0
-	golang.org/x/time v0.9.0
+	golang.org/x/time v0.10.0
 	google.golang.org/api v0.218.0
 	google.golang.org/protobuf v1.36.5
 )
