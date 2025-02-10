@@ -1,6 +1,7 @@
 module github.com/0xPolygon/polygon-cli
 
-go 1.22.7
+go 1.22.11
+
 toolchain go1.23.4
 
 require (
