@@ -50,6 +50,16 @@ func Ecrecover(block *types.Block) ([]byte, error) {
 	return signer, nil
 }
 
+func EcrecoverTx(tx *types.Transaction) ([]byte, error) {
+	chainID := tx.ChainId()
+	signer := types.LatestSignerForChainID(chainID)
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return nil, err
+	}
+	return from.Bytes(), nil
+}
+
 func GetBlockRange(ctx context.Context, from, to uint64, c *ethrpc.Client) ([]*json.RawMessage, error) {
 	blms := make([]ethrpc.BatchElem, 0)
 	for i := from; i <= to; i = i + 1 {

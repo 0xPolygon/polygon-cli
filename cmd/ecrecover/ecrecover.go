@@ -23,6 +23,7 @@ var (
 	rpcUrl      string
 	blockNumber uint64
 	filePath    string
+	txHash      string
 )
 
 var EcRecoverCmd = &cobra.Command{
@@ -35,10 +36,10 @@ var EcRecoverCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := cmd.Context()
-
-		var block *types.Block
-		var err error
-
+		var (
+			signerBytes []byte
+			err         error
+		)
 		if rpcUrl == "" {
 			var blockJSON []byte
 			if filePath != "" {
@@ -61,8 +62,10 @@ var EcRecoverCmd = &cobra.Command{
 				return
 			}
 
-			block = types.NewBlockWithHeader(&header)
+			block := types.NewBlockWithHeader(&header)
 			blockNumber = header.Number.Uint64()
+			signerBytes, err = util.Ecrecover(block)
+
 		} else {
 			var rpc *ethrpc.Client
 			rpc, err = ethrpc.DialContext(ctx, rpcUrl)
@@ -70,30 +73,40 @@ var EcRecoverCmd = &cobra.Command{
 				log.Error().Err(err).Msg("Unable to dial rpc")
 				return
 			}
-
 			ec := ethclient.NewClient(rpc)
 
-			if blockNumber == 0 {
-				blockNumber, err = ec.BlockNumber(ctx)
+			if txHash != "" {
+				cmd.Printf("Recovering signer from transaction %s\n", txHash)
+				var transaction *types.Transaction
+				transaction, _, err = ec.TransactionByHash(ctx, ethcommon.HexToHash(txHash))
 				if err != nil {
-					log.Error().Err(err).Msg("Unable to retrieve latest block number")
+					log.Error().Err(err).Msg("Unable to get transaction")
 					return
 				}
-			}
-
-			block, err = ec.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
-			if err != nil {
-				log.Error().Err(err).Msg("Unable to retrieve block")
-				return
+				signerBytes, err = util.EcrecoverTx(transaction)
+			} else {
+				var block *types.Block
+				if blockNumber == 0 {
+					blockNumber, err = ec.BlockNumber(ctx)
+					if err != nil {
+						log.Error().Err(err).Msg("Unable to retrieve latest block number")
+						return
+					}
+				}
+				cmd.Printf("Recovering signer from block #%d\n", blockNumber)
+				block, err = ec.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
+				if err != nil {
+					log.Error().Err(err).Msg("Unable to retrieve block")
+					return
+				}
+				signerBytes, err = util.Ecrecover(block)
 			}
 		}
 
-		signerBytes, err := util.Ecrecover(block)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to recover signature")
 			return
 		}
-		cmd.Printf("Recovering signer from block #%d\n", blockNumber)
 		cmd.Println(ethcommon.BytesToAddress(signerBytes))
 	},
 }
@@ -102,12 +115,19 @@ func init() {
 	EcRecoverCmd.PersistentFlags().StringVarP(&rpcUrl, "rpc-url", "r", "", "The RPC endpoint url")
 	EcRecoverCmd.PersistentFlags().Uint64VarP(&blockNumber, "block-number", "b", 0, "Block number to check the extra data for (default: latest)")
 	EcRecoverCmd.PersistentFlags().StringVarP(&filePath, "file", "f", "", "Path to a file containing block information in JSON format")
+	EcRecoverCmd.PersistentFlags().StringVarP(&txHash, "transaction", "t", "", "Transaction hash in hex format")
+
+	EcRecoverCmd.MarkFlagsMutuallyExclusive("block-number", "transaction")
+	EcRecoverCmd.MarkFlagsMutuallyExclusive("file", "transaction")
+
 }
 
-func checkFlags() (err error) {
-	if rpcUrl != "" && util.ValidateUrl(rpcUrl) != nil {
-		return
+func checkFlags() error {
+	var err error
+	if rpcUrl != "" {
+		if err = util.ValidateUrl(rpcUrl); err != nil {
+			return err
+		}
 	}
-
-	return nil
+	return err
 }
