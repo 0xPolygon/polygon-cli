@@ -80,7 +80,7 @@ The command also inherits flags from parent commands.
       --rpc-url string                     the URL of the RPC to send the transaction
       --token-address string               the address of an ERC20 token to be used (default "0x0000000000000000000000000000000000000000")
       --transaction-receipt-timeout uint   the amount of time to wait while trying to confirm a transaction receipt (default 60)
-      --value string                       the amount in wei to be sent along with the transaction
+      --value string                       the amount in wei to be sent along with the transaction (default "0")
   -v, --verbosity int                      0 - Silent
                                            100 Panic
                                            200 Fatal

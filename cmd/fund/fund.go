@@ -158,7 +158,7 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 	return contract, nil
 }
 
-// deriveWallets generates and exports a specified number of HD wallet addresses.
+// deriveHDWallets generates and exports a specified number of HD wallet addresses.
 func deriveHDWallets(n int) ([]common.Address, error) {
 	wallet, err := hdwallet.NewPolyWallet(defaultMnemonic, defaultPassword)
 	if err != nil {
