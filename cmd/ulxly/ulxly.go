@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum"
 	"io"
 	"math/big"
 	"net/http"
@@ -18,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ethereum/go-ethereum"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -1316,6 +1317,7 @@ func init() {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return bridgeAsset(cmd)
 		},
+		SilenceUsage: true,
 	}
 	bridgeMessageCommand = &cobra.Command{
 		Use:     "message",
@@ -1325,6 +1327,7 @@ func init() {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return bridgeMessage(cmd)
 		},
+		SilenceUsage: true,
 	}
 	bridgeMessageWETHCommand = &cobra.Command{
 		Use:     "weth",
@@ -1334,6 +1337,7 @@ func init() {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return bridgeWETHMessage(cmd)
 		},
+		SilenceUsage: true,
 	}
 	claimAssetCommand = &cobra.Command{
 		Use:     "asset",
@@ -1343,6 +1347,7 @@ func init() {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return claimAsset(cmd)
 		},
+		SilenceUsage: true,
 	}
 	claimMessageCommand = &cobra.Command{
 		Use:     "message",
@@ -1352,6 +1357,7 @@ func init() {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return claimMessage(cmd)
 		},
+		SilenceUsage: true,
 	}
 	claimEverythingCommand = &cobra.Command{
 		Use:     "claim-everything",
@@ -1360,6 +1366,7 @@ func init() {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return claimEverything(cmd)
 		},
+		SilenceUsage: true,
 	}
 	emptyProofCommand = &cobra.Command{
 		Use:   "empty-proof",
@@ -1368,6 +1375,7 @@ func init() {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return emptyProof()
 		},
+		SilenceUsage: true,
 	}
 	zeroProofCommand = &cobra.Command{
 		Use:   "zero-proof",
@@ -1381,6 +1389,7 @@ or if it's actually an intermediate hash.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return zeroProof()
 		},
+		SilenceUsage: true,
 	}
 	proofCommand = &cobra.Command{
 		Use:   "proof",
@@ -1389,6 +1398,7 @@ or if it's actually an intermediate hash.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return proof(args)
 		},
+		SilenceUsage: true,
 	}
 	getDepositCommand = &cobra.Command{
 		Use:   "get-deposits",
@@ -1397,6 +1407,7 @@ or if it's actually an intermediate hash.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return readDeposit(cmd)
 		},
+		SilenceUsage: true,
 	}
 
 	// Arguments for both bridge and claim
