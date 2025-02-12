@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
-	"reflect"
 
 	"github.com/cenkalti/backoff"
 	"github.com/ethereum/go-ethereum/common/hexutil"

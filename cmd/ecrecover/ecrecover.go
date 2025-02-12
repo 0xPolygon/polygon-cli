@@ -7,11 +7,11 @@ import (
 	"math/big"
 	"os"
 
+	"github.com/0xPolygon/polygon-cli/util"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
-	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -23,10 +23,10 @@ var (
 	rpcUrl      string
 	blockNumber uint64
 	filePath    string
-	txHash      string
+	txData      string
 )
 
-var EcRecoverCmd = &cobra.Command{
+var EcRecoverCmd = &cobra.Command {
 	Use:   "ecrecover",
 	Short: "Recovers and returns the public key of the signature",
 	Long:  usage,
@@ -40,7 +40,8 @@ var EcRecoverCmd = &cobra.Command{
 			signerBytes []byte
 			err         error
 		)
-		if rpcUrl == "" {
+
+		if filePath != "" { // block signer from file
 			var blockJSON []byte
 			if filePath != "" {
 				blockJSON, err = os.ReadFile(filePath)
@@ -66,7 +67,26 @@ var EcRecoverCmd = &cobra.Command{
 			blockNumber = header.Number.Uint64()
 			signerBytes, err = util.Ecrecover(block)
 
-		} else {
+		} else if txData != "" { // transaction signer from data
+
+			txBytes := ethcommon.FromHex(txData)
+			var tx types.Transaction
+			err = tx.UnmarshalBinary(txBytes)
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to decode transaction")
+				return
+			}
+			signerBytes, err = util.EcrecoverTx(&tx)
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to retrieve block")
+				return
+			}
+
+		} else { // block signer block-number, requires rcp-url
+			if rpcUrl == "" {
+				log.Error().Msg("No RPC URL provided")
+				return
+			}
 			var rpc *ethrpc.Client
 			rpc, err = ethrpc.DialContext(ctx, rpcUrl)
 			if err != nil {
@@ -74,33 +94,23 @@ var EcRecoverCmd = &cobra.Command{
 				return
 			}
 			ec := ethclient.NewClient(rpc)
+			defer ec.Close()
 
-			if txHash != "" {
-				cmd.Printf("Recovering signer from transaction %s\n", txHash)
-				var transaction *types.Transaction
-				transaction, _, err = ec.TransactionByHash(ctx, ethcommon.HexToHash(txHash))
+			var block *types.Block
+			if blockNumber == 0 {
+				blockNumber, err = ec.BlockNumber(ctx)
 				if err != nil {
-					log.Error().Err(err).Msg("Unable to get transaction")
+					log.Error().Err(err).Msg("Unable to retrieve latest block number")
 					return
 				}
-				signerBytes, err = util.EcrecoverTx(transaction)
-			} else {
-				var block *types.Block
-				if blockNumber == 0 {
-					blockNumber, err = ec.BlockNumber(ctx)
-					if err != nil {
-						log.Error().Err(err).Msg("Unable to retrieve latest block number")
-						return
-					}
-				}
-				cmd.Printf("Recovering signer from block #%d\n", blockNumber)
-				block, err = ec.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
-				if err != nil {
-					log.Error().Err(err).Msg("Unable to retrieve block")
-					return
-				}
-				signerBytes, err = util.Ecrecover(block)
+				cmd.Println("Using latest block number:", blockNumber)
 			}
+			block, err = ec.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to retrieve block")
+				return
+			}
+			signerBytes, err = util.Ecrecover(block)
 		}
 
 		if err != nil {
@@ -115,11 +125,10 @@ func init() {
 	EcRecoverCmd.PersistentFlags().StringVarP(&rpcUrl, "rpc-url", "r", "", "The RPC endpoint url")
 	EcRecoverCmd.PersistentFlags().Uint64VarP(&blockNumber, "block-number", "b", 0, "Block number to check the extra data for (default: latest)")
 	EcRecoverCmd.PersistentFlags().StringVarP(&filePath, "file", "f", "", "Path to a file containing block information in JSON format")
-	EcRecoverCmd.PersistentFlags().StringVarP(&txHash, "transaction", "t", "", "Transaction hash in hex format")
+	EcRecoverCmd.PersistentFlags().StringVarP(&txData, "tx", "t", "", "Transaction data in hex format")
 
-	EcRecoverCmd.MarkFlagsMutuallyExclusive("block-number", "transaction")
-	EcRecoverCmd.MarkFlagsMutuallyExclusive("file", "transaction")
-
+	// The sources of decoding are mutually exclusive
+	EcRecoverCmd.MarkFlagsMutuallyExclusive("file", "block-number", "tx")
 }
 
 func checkFlags() error {
