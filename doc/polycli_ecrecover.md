@@ -44,11 +44,11 @@ JSON Data passed in follows object definition [here](https://www.quicknode.com/d
 ## Flags
 
 ```bash
-  -b, --block-number uint    Block number to check the extra data for (default: latest)
-  -f, --file string          Path to a file containing block information in JSON format
-  -h, --help                 help for ecrecover
-  -r, --rpc-url string       The RPC endpoint url
-  -t, --transaction string   Transaction hash in hex format
+  -b, --block-number uint   Block number to check the extra data for (default: latest)
+  -f, --file string         Path to a file containing block information in JSON format
+  -h, --help                help for ecrecover
+  -r, --rpc-url string      The RPC endpoint url
+  -t, --tx string           Transaction data in hex format
 ```
 
 The command also inherits flags from parent commands.
