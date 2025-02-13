@@ -102,7 +102,8 @@ polycli ulxly claim asset \
 ## Flags
 
 ```bash
-  -h, --help   help for asset
+  -h, --help            help for asset
+      --wait duration   If specified, the command will retry in a loop for the deposit to be ready to claim up to duration. Once the deposit is ready to claim, the claim will actually be sent.
 ```
 
 The command also inherits flags from parent commands.
