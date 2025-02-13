@@ -415,6 +415,7 @@ func claimAsset(cmd *cobra.Command) error {
 	depositNetwork := *inputUlxlyArgs.depositNetwork
 	bridgeServiceUrl := *inputUlxlyArgs.bridgeServiceURL
 	globalIndexOverride := *inputUlxlyArgs.globalIndex
+	wait := *inputUlxlyArgs.wait
 
 	// Dial Ethereum client
 	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
@@ -442,13 +443,44 @@ func claimAsset(cmd *cobra.Command) error {
 	bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%d&net_id=%d", bridgeServiceUrl, depositCount, depositNetwork)
 	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
 
-	// Call the bridge service RPC URL to get the deposits data and parses them to the correct formats.
-	bridgeServiceDepositsEndpoint := fmt.Sprintf("%s/bridge?net_id=%d&deposit_cnt=%d", bridgeServiceUrl, depositNetwork, depositCount)
-	globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err := getDeposit(bridgeServiceDepositsEndpoint)
+	var globalIndex, amount *big.Int
+	var originAddress common.Address
+	var metadata []byte
+	var leafType uint8
+	var claimDestNetwork, claimOriginalNetwork uint32
+
+	waiter := time.After(wait)
+
+out:
+	for {
+		// Call the bridge service RPC URL to get the deposits data and parses them to the correct formats.
+		bridgeServiceDepositsEndpoint := fmt.Sprintf("%s/bridge?net_id=%d&deposit_cnt=%d", bridgeServiceUrl, depositNetwork, depositCount)
+		globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err = getDeposit(bridgeServiceDepositsEndpoint)
+		if err == nil {
+			log.Info().Msg("The deposit is ready to be claimed")
+			break out
+		}
+
+		select {
+		case <-waiter:
+			if wait != 0 {
+				err = fmt.Errorf("the deposit seems to be stuck after %s", wait.String())
+			}
+			break out
+		default:
+			if errors.Is(err, ErrNotReadyForClaim) {
+				log.Info().Msg("retrying...")
+				time.Sleep(10 * time.Second)
+				continue
+			}
+			break out
+		}
+	}
 	if err != nil {
 		log.Error().Err(err)
 		return err
 	}
+
 	if leafType != 0 {
 		log.Warn().Msg("Deposit leafType is not asset")
 	}
@@ -677,37 +709,6 @@ func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeCont
 	log.Info().Stringer("txhash", claimTx.Hash()).Msg("sent claim")
 
 	return claimTx, nil
-}
-
-func waitDepositReadyToBeClaimed(cmd *cobra.Command) error {
-	depositCount := *inputUlxlyArgs.depositCount
-	depositNetwork := *inputUlxlyArgs.depositNetwork
-	bridgeServiceUrl := *inputUlxlyArgs.bridgeServiceURL
-
-	attempts := 0
-	for {
-		if attempts > 20 {
-			err := fmt.Errorf("the deposit seems to be stuck after 20 attempts")
-			return err
-		}
-
-		bridgeServiceDepositsEndpoint := fmt.Sprintf("%s/bridge?net_id=%d&deposit_cnt=%d", bridgeServiceUrl, depositNetwork, depositCount)
-		_, _, _, _, _, _, _, err := getDeposit(bridgeServiceDepositsEndpoint)
-
-		if err == nil {
-			log.Info().Msg("The deposit is ready to be claimed")
-			return nil
-		} else if errors.Is(err, ErrNotReadyForClaim) {
-			attempts++
-			time.Sleep(1 * time.Second)
-			continue
-		} else if errors.Is(err, ErrDepositAlreadyClaimed) {
-			return nil
-		}
-
-		log.Error().Msgf("Failed to check if deposit is ready to be claimed: %v", err.Error())
-		return err
-	}
 }
 
 // Wait for the transaction to be mined
@@ -1195,9 +1196,6 @@ var claimAssetUsage string
 //go:embed ClaimMessageUsage.md
 var claimMessageUsage string
 
-//go:embed ClaimWaitUsage.md
-var claimWaitUsage string
-
 //go:embed proofUsage.md
 var proofUsage string
 
@@ -1256,6 +1254,7 @@ type ulxlyArgs struct {
 	bridgeServiceURLs   *[]string
 	bridgeLimit         *int
 	bridgeOffset        *int
+	wait                *time.Duration
 }
 
 var inputUlxlyArgs = ulxlyArgs{}
@@ -1267,7 +1266,6 @@ var (
 	claimAssetCommand        *cobra.Command
 	claimMessageCommand      *cobra.Command
 	claimEverythingCommand   *cobra.Command
-	claimWaitCommand         *cobra.Command
 	emptyProofCommand        *cobra.Command
 	zeroProofCommand         *cobra.Command
 	proofCommand             *cobra.Command
@@ -1301,6 +1299,7 @@ const (
 	ArgBridgeMappings   = "bridge-service-map"
 	ArgBridgeLimit      = "bridge-limit"
 	ArgBridgeOffset     = "bridge-offset"
+	ArgWait             = "wait"
 )
 
 func prepInputs(cmd *cobra.Command, args []string) error {
@@ -1408,15 +1407,6 @@ func init() {
 		},
 		SilenceUsage: true,
 	}
-	claimWaitCommand = &cobra.Command{
-		Use:   "wait",
-		Short: "Wait for a deposit to be ready to be claimed",
-		Long:  claimWaitUsage,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return waitDepositReadyToBeClaimed(cmd)
-		},
-		SilenceUsage: true,
-	}
 	emptyProofCommand = &cobra.Command{
 		Use:   "empty-proof",
 		Short: "create an empty proof",
@@ -1497,6 +1487,9 @@ or if it's actually an intermediate hash.`,
 	inputUlxlyArgs.bridgeOffset = claimEverythingCommand.Flags().Int(ArgBridgeOffset, 0, "The offset to specify for pagination of the underlying bridge service deposits")
 	fatalIfError(claimEverythingCommand.MarkFlagRequired(ArgBridgeMappings))
 
+	// Claim asset helper command
+	inputUlxlyArgs.wait = claimAssetCommand.Flags().Duration(ArgWait, time.Duration(0), "If specified, the command will retry in a loop for the deposit to be ready to claim up to duration. Once the deposit is ready to claim, the claim will actually be sent.")
+
 	// Args that are just for the get deposit command
 	inputUlxlyArgs.fromBlock = getDepositCommand.Flags().Uint64(ArgFromBlock, 0, "The start of the range of blocks to retrieve")
 	inputUlxlyArgs.toBlock = getDepositCommand.Flags().Uint64(ArgToBlock, 0, "The end of the range of blocks to retrieve")
@@ -1535,5 +1528,4 @@ or if it's actually an intermediate hash.`,
 	// Claim
 	ulxlyClaimCmd.AddCommand(claimAssetCommand)
 	ulxlyClaimCmd.AddCommand(claimMessageCommand)
-	ulxlyClaimCmd.AddCommand(claimWaitCommand)
 }
