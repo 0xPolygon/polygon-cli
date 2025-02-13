@@ -41,6 +41,11 @@ const (
 	TreeDepth = 32
 )
 
+var (
+	ErrNotReadyForClaim      = errors.New("the claim transaction is not yet ready to be claimed, try again in a few blocks")
+	ErrDepositAlreadyClaimed = errors.New("the claim transaction has already been claimed")
+)
+
 type IMT struct {
 	Branches   map[uint32][]common.Hash
 	Leaves     map[uint32]common.Hash
@@ -674,6 +679,37 @@ func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeCont
 	return claimTx, nil
 }
 
+func waitDepositReadyToBeClaimed(cmd *cobra.Command) error {
+	depositCount := *inputUlxlyArgs.depositCount
+	depositNetwork := *inputUlxlyArgs.depositNetwork
+	bridgeServiceUrl := *inputUlxlyArgs.bridgeServiceURL
+
+	attempts := 0
+	for {
+		if attempts > 20 {
+			err := fmt.Errorf("the deposit seems to be stuck after 20 attempts")
+			return err
+		}
+
+		bridgeServiceDepositsEndpoint := fmt.Sprintf("%s/bridge?net_id=%d&deposit_cnt=%d", bridgeServiceUrl, depositNetwork, depositCount)
+		_, _, _, _, _, _, _, err := getDeposit(bridgeServiceDepositsEndpoint)
+
+		if err == nil {
+			log.Info().Msg("The deposit is ready to be claimed")
+			return nil
+		} else if errors.Is(err, ErrNotReadyForClaim) {
+			attempts++
+			time.Sleep(1 * time.Second)
+			continue
+		} else if errors.Is(err, ErrDepositAlreadyClaimed) {
+			return nil
+		}
+
+		log.Error().Msgf("Failed to check if deposit is ready to be claimed: %v", err.Error())
+		return err
+	}
+}
+
 // Wait for the transaction to be mined
 func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *types.Transaction, txTimeout uint64) error {
 	if inputUlxlyArgs.dryRun != nil && *inputUlxlyArgs.dryRun {
@@ -1094,10 +1130,10 @@ func getDeposit(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, ori
 
 	if !bridgeDeposit.Deposit.ReadyForClaim {
 		log.Error().Msg("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
-		return nil, common.HexToAddress("0x0"), nil, nil, 0, 0, 0, errors.New("the claim transaction is not yet ready to be claimed, try again in a few blocks")
+		return nil, common.HexToAddress("0x0"), nil, nil, 0, 0, 0, ErrNotReadyForClaim
 	} else if bridgeDeposit.Deposit.ClaimTxHash != "" {
 		log.Info().Str("claimTxHash", bridgeDeposit.Deposit.ClaimTxHash).Msg("The claim transaction has already been claimed")
-		return nil, common.HexToAddress("0x0"), nil, nil, 0, 0, 0, errors.New("the claim transaction has already been claimed")
+		return nil, common.HexToAddress("0x0"), nil, nil, 0, 0, 0, ErrDepositAlreadyClaimed
 	}
 	originAddress = common.HexToAddress(bridgeDeposit.Deposit.OrigAddr)
 	globalIndex.SetString(bridgeDeposit.Deposit.GlobalIndex, 10)
@@ -1158,6 +1194,9 @@ var claimAssetUsage string
 
 //go:embed ClaimMessageUsage.md
 var claimMessageUsage string
+
+//go:embed ClaimWaitUsage.md
+var claimWaitUsage string
 
 //go:embed proofUsage.md
 var proofUsage string
@@ -1228,6 +1267,7 @@ var (
 	claimAssetCommand        *cobra.Command
 	claimMessageCommand      *cobra.Command
 	claimEverythingCommand   *cobra.Command
+	claimWaitCommand         *cobra.Command
 	emptyProofCommand        *cobra.Command
 	zeroProofCommand         *cobra.Command
 	proofCommand             *cobra.Command
@@ -1368,6 +1408,15 @@ func init() {
 		},
 		SilenceUsage: true,
 	}
+	claimWaitCommand = &cobra.Command{
+		Use:   "wait",
+		Short: "Wait for a deposit to be ready to be claimed",
+		Long:  claimWaitUsage,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return waitDepositReadyToBeClaimed(cmd)
+		},
+		SilenceUsage: true,
+	}
 	emptyProofCommand = &cobra.Command{
 		Use:   "empty-proof",
 		Short: "create an empty proof",
@@ -1486,4 +1535,5 @@ or if it's actually an intermediate hash.`,
 	// Claim
 	ulxlyClaimCmd.AddCommand(claimAssetCommand)
 	ulxlyClaimCmd.AddCommand(claimMessageCommand)
+	ulxlyClaimCmd.AddCommand(claimWaitCommand)
 }
