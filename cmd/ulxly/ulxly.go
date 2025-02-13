@@ -16,6 +16,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -538,6 +539,7 @@ func claimEverything(cmd *cobra.Command) error {
 	RPCURL := *inputUlxlyArgs.rpcURL
 	limit := *inputUlxlyArgs.bridgeLimit
 	offset := *inputUlxlyArgs.bridgeOffset
+	concurrency := *inputUlxlyArgs.concurrency
 	urls, err := getBridgeServiceURLs()
 	if err != nil {
 		return err
@@ -562,7 +564,7 @@ func claimEverything(cmd *cobra.Command) error {
 				continue
 			}
 
-			// if this new deposit is ready for claim OR it has already been claimed we should over ride the exisitng value
+			// if this new deposit is ready for claim OR it has already been claimed we should override the existing value
 			if deposit.ReadyForClaim || deposit.ClaimTxHash != "" {
 				depositMap[depId] = &deposits[idx]
 			}
@@ -585,31 +587,44 @@ func claimEverything(cmd *cobra.Command) error {
 		return err
 	}
 	log.Info().Uint32("networkID", currentNetworkID).Msg("detected current networkid")
-	for _, deposit := range depositMap {
-		if deposit.DestNet != currentNetworkID {
-			log.Debug().Uint32("destination_network", deposit.DestNet).Msg("discarding deposit for different network")
-			continue
-		}
-		if deposit.ClaimTxHash != "" {
-			log.Info().Str("txhash", deposit.ClaimTxHash).Msg("It looks like this tx was already claimed")
-			continue
-		}
-		claimTx, dErr := claimSingleDeposit(cmd, client, bridgeContract, opts, *deposit, urls, currentNetworkID)
-		if dErr != nil {
-			log.Warn().Err(dErr).Uint32("DepositCnt", deposit.DepositCnt).
-				Uint32("OrigNet", deposit.OrigNet).
-				Uint32("DestNet", deposit.DestNet).
-				Uint32("NetworkID", deposit.NetworkID).
-				Str("OrigAddr", deposit.OrigAddr).
-				Str("DestAddr", deposit.DestAddr).
-				Msg("There was an error claiming")
-			continue
-		}
-		dErr = WaitMineTransaction(cmd.Context(), client, claimTx, timeoutTxnReceipt)
-		if dErr != nil {
-			log.Error().Err(dErr).Msg("error while waiting for tx to main")
-		}
+
+	workQueue := make(chan *BridgeDeposit, concurrency) // A bounded queue for controlled concurrency
+	waitGroup := sync.WaitGroup{}
+	waitGroup.Add(len(depositMap))
+
+	for _, d := range depositMap {
+		workQueue <- d
+		go func(deposit *BridgeDeposit) {
+			defer waitGroup.Done()
+			defer func() {
+				<-workQueue
+			}()
+			if deposit.DestNet != currentNetworkID {
+				log.Debug().Uint32("destination_network", deposit.DestNet).Msg("discarding deposit for different network")
+				return
+			}
+			if deposit.ClaimTxHash != "" {
+				log.Info().Str("txhash", deposit.ClaimTxHash).Msg("It looks like this tx was already claimed")
+				return
+			}
+			claimTx, dErr := claimSingleDeposit(cmd, client, bridgeContract, opts, *deposit, urls, currentNetworkID)
+			if dErr != nil {
+				log.Warn().Err(dErr).Uint32("DepositCnt", deposit.DepositCnt).
+					Uint32("OrigNet", deposit.OrigNet).
+					Uint32("DestNet", deposit.DestNet).
+					Uint32("NetworkID", deposit.NetworkID).
+					Str("OrigAddr", deposit.OrigAddr).
+					Str("DestAddr", deposit.DestAddr).
+					Msg("There was an error claiming")
+				return
+			}
+			dErr = WaitMineTransaction(cmd.Context(), client, claimTx, timeoutTxnReceipt)
+			if dErr != nil {
+				log.Error().Err(dErr).Msg("error while waiting for tx to main")
+			}
+		}(d)
 	}
+	waitGroup.Wait()
 
 	return nil
 }
@@ -1217,6 +1232,7 @@ type ulxlyArgs struct {
 	bridgeServiceURLs   *[]string
 	bridgeLimit         *int
 	bridgeOffset        *int
+	concurrency         *uint
 }
 
 var inputUlxlyArgs = ulxlyArgs{}
@@ -1261,6 +1277,7 @@ const (
 	ArgBridgeMappings   = "bridge-service-map"
 	ArgBridgeLimit      = "bridge-limit"
 	ArgBridgeOffset     = "bridge-offset"
+	ArgConcurrency      = "concurrency"
 )
 
 func prepInputs(cmd *cobra.Command, args []string) error {
@@ -1446,6 +1463,7 @@ or if it's actually an intermediate hash.`,
 	inputUlxlyArgs.bridgeServiceURLs = claimEverythingCommand.Flags().StringSlice(ArgBridgeMappings, nil, "Mappings between network ids and bridge service urls. E.g. '1=http://network-1-bridgeurl,7=http://network-2-bridgeurl'")
 	inputUlxlyArgs.bridgeLimit = claimEverythingCommand.Flags().Int(ArgBridgeLimit, 25, "Limit the number or responses returned by the bridge service when claiming")
 	inputUlxlyArgs.bridgeOffset = claimEverythingCommand.Flags().Int(ArgBridgeOffset, 0, "The offset to specify for pagination of the underlying bridge service deposits")
+	inputUlxlyArgs.concurrency = claimEverythingCommand.Flags().Uint(ArgConcurrency, 1, "The concurrency for claiming deposits")
 	fatalIfError(claimEverythingCommand.MarkFlagRequired(ArgBridgeMappings))
 
 	// Args that are just for the get deposit command
