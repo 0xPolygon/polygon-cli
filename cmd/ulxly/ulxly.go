@@ -287,7 +287,7 @@ func bridgeAsset(cmd *cobra.Command) error {
 	}
 	defer client.Close()
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, privateKey, chain)
+	bridgeV2, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, chain)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get bridge contract")
 		return err
@@ -337,7 +337,7 @@ func bridgeMessage(cmd *cobra.Command) error {
 	}
 	defer client.Close()
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, privateKey, chain)
+	bridgeV2, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, chain)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get bridge contract")
 		return err
@@ -386,7 +386,7 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 	}
 	defer client.Close()
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, privateKey, chain)
+	bridgeV2, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, chain)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get bridge contract")
 		return err
@@ -439,7 +439,7 @@ func claimAsset(cmd *cobra.Command) error {
 	defer client.Close()
 
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, privateKey, chain)
+	bridgeV2, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, chain)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get bridge contract")
 		return err
@@ -505,7 +505,7 @@ func claimMessage(cmd *cobra.Command) error {
 	}
 	defer client.Close()
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, privateKey, chain)
+	bridgeV2, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, chain)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get bridge contract")
 		return err
@@ -609,7 +609,7 @@ func claimEverything(cmd *cobra.Command) error {
 	}
 	defer client.Close()
 
-	bridgeContract, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, privateKey, chain)
+	bridgeContract, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, chain)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get bridge contract")
 		return err
@@ -1030,8 +1030,7 @@ func generateEmptyHashes(height uint8) []common.Hash {
 	return zeroHashes
 }
 
-func getBridgeContract(ctx context.Context, client *ethclient.Client, ulxlyInputArgBridge string, ulxlyInputArgPvtKey string, ulxlyInputArgChainID string) (bridgeV2 *ulxly.Ulxly, chainID *big.Int, err error) {
-	ulxlyInputArgPvtKey = strings.TrimPrefix(ulxlyInputArgPvtKey, "0x")
+func getBridgeContract(ctx context.Context, client *ethclient.Client, ulxlyInputArgBridge string, ulxlyInputArgChainID string) (bridgeV2 *ulxly.Ulxly, chainID *big.Int, err error) {
 	bridgeV2, err = ulxly.NewUlxly(common.HexToAddress(ulxlyInputArgBridge), client)
 	if err != nil {
 		return
