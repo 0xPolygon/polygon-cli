@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -269,7 +270,7 @@ func bridgeAsset(cmd *cobra.Command) error {
 	privateKey := *inputUlxlyArgs.privateKey
 	gasLimit := *inputUlxlyArgs.gasLimit
 	destinationAddress := *inputUlxlyArgs.destAddress
-	chainID := *inputUlxlyArgs.chainID
+	chain := *inputUlxlyArgs.chainID
 	amount := *inputUlxlyArgs.value
 	tokenAddr := *inputUlxlyArgs.tokenAddress
 	callDataString := *inputUlxlyArgs.callData
@@ -286,7 +287,13 @@ func bridgeAsset(cmd *cobra.Command) error {
 	}
 	defer client.Close()
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	bridgeV2, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, privateKey, chain)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get bridge contract")
+		return err
+	}
+
+	toAddress, auth, err := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID,  nil)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -313,7 +320,7 @@ func bridgeMessage(cmd *cobra.Command) error {
 	privateKey := *inputUlxlyArgs.privateKey
 	gasLimit := *inputUlxlyArgs.gasLimit
 	destinationAddress := *inputUlxlyArgs.destAddress
-	chainID := *inputUlxlyArgs.chainID
+	chain := *inputUlxlyArgs.chainID
 	amount := *inputUlxlyArgs.value
 	tokenAddr := *inputUlxlyArgs.tokenAddress
 	callDataString := *inputUlxlyArgs.callData
@@ -330,7 +337,13 @@ func bridgeMessage(cmd *cobra.Command) error {
 	}
 	defer client.Close()
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	bridgeV2, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, privateKey, chain)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get bridge contract")
+		return err
+	}
+
+	toAddress, auth, err := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -357,7 +370,7 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 	privateKey := *inputUlxlyArgs.privateKey
 	gasLimit := *inputUlxlyArgs.gasLimit
 	destinationAddress := *inputUlxlyArgs.destAddress
-	chainID := *inputUlxlyArgs.chainID
+	chain := *inputUlxlyArgs.chainID
 	amount := *inputUlxlyArgs.value
 	callDataString := *inputUlxlyArgs.callData
 	destinationNetwork := *inputUlxlyArgs.destNetwork
@@ -373,7 +386,12 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 	}
 	defer client.Close()
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	bridgeV2, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, privateKey, chain)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get bridge contract")
+		return err
+	}
+	toAddress, auth, err := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -404,7 +422,7 @@ func claimAsset(cmd *cobra.Command) error {
 	privateKey := *inputUlxlyArgs.privateKey
 	gasLimit := *inputUlxlyArgs.gasLimit
 	destinationAddress := *inputUlxlyArgs.destAddress
-	chainID := *inputUlxlyArgs.chainID
+	chain := *inputUlxlyArgs.chainID
 	timeoutTxnReceipt := *inputUlxlyArgs.timeout
 	RPCURL := *inputUlxlyArgs.rpcURL
 	depositCount := *inputUlxlyArgs.depositCount
@@ -419,8 +437,15 @@ func claimAsset(cmd *cobra.Command) error {
 		return err
 	}
 	defer client.Close()
+
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	bridgeV2, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, privateKey, chain)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get bridge contract")
+		return err
+	}
+
+	toAddress, auth, err := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -464,7 +489,7 @@ func claimMessage(cmd *cobra.Command) error {
 	privateKey := *inputUlxlyArgs.privateKey
 	gasLimit := *inputUlxlyArgs.gasLimit
 	destinationAddress := *inputUlxlyArgs.destAddress
-	chainID := *inputUlxlyArgs.chainID
+	chain := *inputUlxlyArgs.chainID
 	timeoutTxnReceipt := *inputUlxlyArgs.timeout
 	RPCURL := *inputUlxlyArgs.rpcURL
 	depositCount := *inputUlxlyArgs.depositCount
@@ -480,7 +505,13 @@ func claimMessage(cmd *cobra.Command) error {
 	}
 	defer client.Close()
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	bridgeV2, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, privateKey, chain)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get bridge contract")
+		return err
+	}
+
+	toAddress, auth, err := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -532,7 +563,7 @@ func getBridgeServiceURLs() (map[uint32]string, error) {
 func claimEverything(cmd *cobra.Command) error {
 	privateKey := *inputUlxlyArgs.privateKey
 	gasLimit := *inputUlxlyArgs.gasLimit
-	chainID := *inputUlxlyArgs.chainID
+	chain := *inputUlxlyArgs.chainID
 	timeoutTxnReceipt := *inputUlxlyArgs.timeout
 	bridgeAddress := *inputUlxlyArgs.bridgeAddress
 	destinationAddress := *inputUlxlyArgs.destAddress
@@ -578,15 +609,17 @@ func claimEverything(cmd *cobra.Command) error {
 	}
 	defer client.Close()
 
-	bridgeContract, _, opts, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	bridgeContract, chainID, err := getBridgeContract(cmd.Context(), client, bridgeAddress, privateKey, chain)
 	if err != nil {
+		log.Error().Err(err).Msg("Unable to get bridge contract")
 		return err
 	}
-	currentNetworkID, err := bridgeContract.NetworkID(nil)
+
+	nonceCounter, err:= client.PendingNonceAt(cmd.Context(), common.HexToAddress(privateKey))
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to get nonce")
 		return err
 	}
-	log.Info().Uint32("networkID", currentNetworkID).Msg("detected current networkid")
 
 	workQueue := make(chan *BridgeDeposit, concurrency) // A bounded queue for controlled concurrency
 	waitGroup := sync.WaitGroup{}
@@ -594,11 +627,25 @@ func claimEverything(cmd *cobra.Command) error {
 
 	for _, d := range depositMap {
 		workQueue <- d
-		go func(deposit *BridgeDeposit) {
+		n := atomic.AddUint64(&nonceCounter, 1)
+		go func(deposit *BridgeDeposit, nonce uint64) {
 			defer waitGroup.Done()
 			defer func() {
 				<-workQueue
 			}()
+			var opts *bind.TransactOpts
+			_, opts, err = generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID, big.NewInt(int64(nonce)))
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to generate transaction")
+				return
+			}
+			currentNetworkID, err := bridgeContract.NetworkID(nil)
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to get network id")
+				return
+			}
+			log.Info().Uint32("networkID", currentNetworkID).Msg("detected current networkid")
+
 			if deposit.DestNet != currentNetworkID {
 				log.Debug().Uint32("destination_network", deposit.DestNet).Msg("discarding deposit for different network")
 				return
@@ -622,7 +669,7 @@ func claimEverything(cmd *cobra.Command) error {
 			if dErr != nil {
 				log.Error().Err(dErr).Msg("error while waiting for tx to main")
 			}
-		}(d)
+		}(d, n)
 	}
 	waitGroup.Wait()
 
@@ -983,24 +1030,14 @@ func generateEmptyHashes(height uint8) []common.Hash {
 	return zeroHashes
 }
 
-func generateTransactionPayload(ctx context.Context, client *ethclient.Client, ulxlyInputArgBridge string, ulxlyInputArgPvtKey string, ulxlyInputArgGasLimit uint64, ulxlyInputArgDestAddr string, ulxlyInputArgChainID string) (bridgeV2 *ulxly.Ulxly, toAddress common.Address, opts *bind.TransactOpts, err error) {
+func getBridgeContract(ctx context.Context, client *ethclient.Client, ulxlyInputArgBridge string, ulxlyInputArgPvtKey string, ulxlyInputArgChainID string) (bridgeV2 *ulxly.Ulxly, chainID *big.Int, err error) {
 	ulxlyInputArgPvtKey = strings.TrimPrefix(ulxlyInputArgPvtKey, "0x")
 	bridgeV2, err = ulxly.NewUlxly(common.HexToAddress(ulxlyInputArgBridge), client)
 	if err != nil {
 		return
 	}
-
-	privateKey, err := crypto.HexToECDSA(ulxlyInputArgPvtKey)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to retrieve private key")
-		return
-	}
-
-	// value := big.NewInt(*ulxlyInputArgs.Amount)
-	gasLimit := ulxlyInputArgGasLimit
-
-	chainID := new(big.Int)
 	// For manual input of chainID, use the user's input
+	chainID = new(big.Int)
 	if ulxlyInputArgChainID != "" {
 		chainID.SetString(ulxlyInputArgChainID, 10)
 	} else { // If there is no user input for chainID, infer it from context
@@ -1010,6 +1047,18 @@ func generateTransactionPayload(ctx context.Context, client *ethclient.Client, u
 			return
 		}
 	}
+	return
+}
+
+func generateTransactionPayload(ctx context.Context, ulxlyInputArgPvtKey string, ulxlyInputArgGasLimit uint64, ulxlyInputArgDestAddr string, ulxlyInputArgChainID *big.Int, nonce *big.Int) (toAddress common.Address, opts *bind.TransactOpts, err error) {
+	privateKey, err := crypto.HexToECDSA(ulxlyInputArgPvtKey)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to retrieve private key")
+		return
+	}
+
+	gasLimit := ulxlyInputArgGasLimit
+	chainID := ulxlyInputArgChainID
 
 	opts, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
@@ -1026,11 +1075,14 @@ func generateTransactionPayload(ctx context.Context, client *ethclient.Client, u
 	}
 	opts.Context = ctx
 	opts.GasLimit = gasLimit
+	if nonce != nil {
+		opts.Nonce = nonce
+	}
 	toAddress = common.HexToAddress(ulxlyInputArgDestAddr)
 	if toAddress == (common.Address{}) {
 		toAddress = opts.From
 	}
-	return bridgeV2, toAddress, opts, err
+	return toAddress, opts, err
 }
 
 func getMerkleProofsExitRoots(bridgeServiceProofEndpoint string) (merkleProofArray [32][32]byte, rollupMerkleProofArray [32][32]byte, mainExitRoot []byte, rollupExitRoot []byte) {
