@@ -614,7 +614,12 @@ func claimEverything(cmd *cobra.Command) error {
 		log.Error().Err(err).Msg("Unable to get bridge contract")
 		return err
 	}
-
+	bridgeNetworkID, err := bridgeContract.NetworkID(nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get network id")
+		return err
+	}
+	log.Info().Uint32("networkID", bridgeNetworkID).Msg("detected current networkid")
 	nonceCounter, err:= client.PendingNonceAt(cmd.Context(), common.HexToAddress(privateKey))
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get nonce")
@@ -633,20 +638,7 @@ func claimEverything(cmd *cobra.Command) error {
 			defer func() {
 				<-workQueue
 			}()
-			var opts *bind.TransactOpts
-			_, opts, err = generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID, big.NewInt(int64(nonce)))
-			if err != nil {
-				log.Error().Err(err).Msg("Unable to generate transaction")
-				return
-			}
-			currentNetworkID, err := bridgeContract.NetworkID(nil)
-			if err != nil {
-				log.Error().Err(err).Msg("Unable to get network id")
-				return
-			}
-			log.Info().Uint32("networkID", currentNetworkID).Msg("detected current networkid")
-
-			if deposit.DestNet != currentNetworkID {
+			if deposit.DestNet != bridgeNetworkID {
 				log.Debug().Uint32("destination_network", deposit.DestNet).Msg("discarding deposit for different network")
 				return
 			}
@@ -654,7 +646,13 @@ func claimEverything(cmd *cobra.Command) error {
 				log.Info().Str("txhash", deposit.ClaimTxHash).Msg("It looks like this tx was already claimed")
 				return
 			}
-			claimTx, dErr := claimSingleDeposit(cmd, client, bridgeContract, opts, *deposit, urls, currentNetworkID)
+			var opts *bind.TransactOpts
+			_, opts, dErr := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID, big.NewInt(int64(nonce)))
+			if dErr != nil {
+				log.Error().Err(dErr).Msg("Unable to generate transaction")
+				return
+			}
+			claimTx, dErr := claimSingleDeposit(cmd, client, bridgeContract, opts, *deposit, urls, bridgeNetworkID)
 			if dErr != nil {
 				log.Warn().Err(dErr).Uint32("DepositCnt", deposit.DepositCnt).
 					Uint32("OrigNet", deposit.OrigNet).
