@@ -443,7 +443,7 @@ func claimAsset(cmd *cobra.Command) error {
 	bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%d&net_id=%d", bridgeServiceUrl, depositCount, depositNetwork)
 	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
 
-	globalIndex, amount, originAddress, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err := getDepositWhenReadyForClaim(bridgeServiceUrl, depositNetwork, depositCount, wait, err)
+	globalIndex, amount, originAddress, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err := getDepositWhenReadyForClaim(bridgeServiceUrl, depositNetwork, depositCount, wait)
 	if err != nil {
 		log.Error().Err(err)
 		return err
@@ -495,7 +495,7 @@ func claimMessage(cmd *cobra.Command) error {
 	bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%d&net_id=%d", bridgeServiceUrl, depositCount, depositNetwork)
 	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
 
-	globalIndex, amount, originAddress, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err := getDepositWhenReadyForClaim(bridgeServiceUrl, depositNetwork, depositCount, wait, err)
+	globalIndex, amount, originAddress, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err := getDepositWhenReadyForClaim(bridgeServiceUrl, depositNetwork, depositCount, wait)
 	if err != nil {
 		log.Error().Err(err)
 		return err
@@ -516,12 +516,13 @@ func claimMessage(cmd *cobra.Command) error {
 	return WaitMineTransaction(cmd.Context(), client, claimTxn, timeoutTxnReceipt)
 }
 
-func getDepositWhenReadyForClaim(bridgeServiceUrl string, depositNetwork uint64, depositCount uint64, wait time.Duration, err error) (*big.Int, *big.Int, common.Address, []byte, uint8, uint32, uint32, error) {
+func getDepositWhenReadyForClaim(bridgeServiceUrl string, depositNetwork uint64, depositCount uint64, wait time.Duration) (*big.Int, *big.Int, common.Address, []byte, uint8, uint32, uint32, error) {
 	var globalIndex, amount *big.Int
 	var originAddress common.Address
 	var metadata []byte
 	var leafType uint8
 	var claimDestNetwork, claimOriginalNetwork uint32
+	var err error
 
 	waiter := time.After(wait)
 
@@ -530,7 +531,6 @@ out:
 		// Call the bridge service RPC URL to get the deposits data and parses them to the correct formats.
 		bridgeServiceDepositsEndpoint := fmt.Sprintf("%s/bridge?net_id=%d&deposit_cnt=%d", bridgeServiceUrl, depositNetwork, depositCount)
 		globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err = getDeposit(bridgeServiceDepositsEndpoint)
-
 		if err == nil {
 			log.Info().Msg("The deposit is ready to be claimed")
 			break out
