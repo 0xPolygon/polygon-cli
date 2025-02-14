@@ -92,7 +92,7 @@ jobs:
         run: |
           if [[ -n $(git status --porcelain) ]]; then
             echo "❌ Error: Generated files are not up to date. Please run \`make gen\`."
-            echo "🚨 If \`make gen\` doesn't update the contract bytecodes and/or go bindings and this job is still failing, please take a look at the ethereum version. We don't pin the version in CI so this job may complain after an update of the packages!"
+            echo "🚨 If \`make gen\` doesn't update the contract bytecodes and/or go bindings and this job is still failing, check the versions of the ethereum and foundry packages installed locally, they must be the same as in CI."
             git status --porcelain
             git diff
             exit 1
