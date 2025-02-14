@@ -1310,11 +1310,11 @@ func prepInputs(cmd *cobra.Command, args []string) error {
 		inputUlxlyArgs.gasLimit = &dryRunGasLimit
 	}
 	pvtKey := strings.TrimPrefix(*inputUlxlyArgs.privateKey, "0x")
-
 	privateKey, err := crypto.HexToECDSA(pvtKey)
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid --%s: %w", ArgPrivateKey, err)
 	}
+
 	publicKey := privateKey.Public()
 
 	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
