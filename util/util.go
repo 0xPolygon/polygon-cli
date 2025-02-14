@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
-	"reflect"
 
 	"github.com/cenkalti/backoff"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -48,6 +48,16 @@ func Ecrecover(block *types.Block) ([]byte, error) {
 	signer := ethcrypto.Keccak256(pubkey[1:])[12:]
 
 	return signer, nil
+}
+
+func EcrecoverTx(tx *types.Transaction) ([]byte, error) {
+	chainID := tx.ChainId()
+	signer := types.LatestSignerForChainID(chainID)
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return nil, err
+	}
+	return from.Bytes(), nil
 }
 
 func GetBlockRange(ctx context.Context, from, to uint64, c *ethrpc.Client) ([]*json.RawMessage, error) {
