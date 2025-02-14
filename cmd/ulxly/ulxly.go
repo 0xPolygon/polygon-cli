@@ -42,8 +42,9 @@ const (
 )
 
 var (
-	ErrNotReadyForClaim      = errors.New("the claim transaction is not yet ready to be claimed, try again in a few blocks")
-	ErrDepositAlreadyClaimed = errors.New("the claim transaction has already been claimed")
+	ErrNotReadyForClaim        = errors.New("the claim transaction is not yet ready to be claimed, try again in a few blocks")
+	ErrDepositAlreadyClaimed   = errors.New("the claim transaction has already been claimed")
+	ErrUnableToRetrieveDeposit = errors.New("the bridge deposit was not found")
 )
 
 type IMT struct {
@@ -431,18 +432,6 @@ func claimAsset(cmd *cobra.Command) error {
 		return err
 	}
 
-	///////////////////////////////////////// TODO BORRAR
-	// gasPrice, err := client.SuggestGasPrice(ctx) // This call is done automatically if it is not set
-	// if err != nil {
-	// 	log.Error().Err(err).Msg("Cannot get suggested gas price")
-	// }
-	// auth.GasPrice = big.NewInt(0).Mul(gasPrice,big.NewInt(10))
-	/////////////////////////////////////////////////////////
-
-	// Call the bridge service RPC URL to get the merkle proofs and exit roots and parses them to the correct formats.
-	bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%d&net_id=%d", bridgeServiceUrl, depositCount, depositNetwork)
-	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
-
 	globalIndex, amount, originAddress, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err := getDepositWhenReadyForClaim(bridgeServiceUrl, depositNetwork, depositCount, wait)
 	if err != nil {
 		log.Error().Err(err)
@@ -452,9 +441,15 @@ func claimAsset(cmd *cobra.Command) error {
 	if leafType != 0 {
 		log.Warn().Msg("Deposit leafType is not asset")
 	}
+
 	if globalIndexOverride != "" {
 		globalIndex.SetString(globalIndexOverride, 10)
 	}
+
+	// Call the bridge service RPC URL to get the merkle proofs and exit roots and parses them to the correct formats.
+	bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%d&net_id=%d", bridgeServiceUrl, depositCount, depositNetwork)
+	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
+
 	claimTxn, err := bridgeV2.ClaimAsset(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
 	if err = logAndReturnJsonError(cmd, client, claimTxn, auth, err); err != nil {
 		return err
@@ -491,10 +486,6 @@ func claimMessage(cmd *cobra.Command) error {
 		return err
 	}
 
-	// Call the bridge service RPC URL to get the merkle proofs and exit roots and parses them to the correct formats.
-	bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%d&net_id=%d", bridgeServiceUrl, depositCount, depositNetwork)
-	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
-
 	globalIndex, amount, originAddress, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err := getDepositWhenReadyForClaim(bridgeServiceUrl, depositNetwork, depositCount, wait)
 	if err != nil {
 		log.Error().Err(err)
@@ -507,7 +498,11 @@ func claimMessage(cmd *cobra.Command) error {
 	if globalIndexOverride != "" {
 		globalIndex.SetString(globalIndexOverride, 10)
 	}
-	//ClaimMessage(opts *bind.TransactOpts, smtProofLocalExitRoot [32][32]byte, smtProofRollupExitRoot [32][32]byte, globalIndex *big.Int, mainnetExitRoot [32]byte, rollupExitRoot [32]byte, originNetwork uint32, originAddress common.Address, destinationNetwork uint32, destinationAddress common.Address, amount *big.Int, metadata []byte) (*types.Transaction, error) {
+
+	// Call the bridge service RPC URL to get the merkle proofs and exit roots and parses them to the correct formats.
+	bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%d&net_id=%d", bridgeServiceUrl, depositCount, depositNetwork)
+	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
+
 	claimTxn, err := bridgeV2.ClaimMessage(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
 	if err = logAndReturnJsonError(cmd, client, claimTxn, auth, err); err != nil {
 		return err
@@ -543,7 +538,7 @@ out:
 			}
 			break out
 		default:
-			if errors.Is(err, ErrNotReadyForClaim) {
+			if errors.Is(err, ErrNotReadyForClaim) || errors.Is(err, ErrUnableToRetrieveDeposit) {
 				log.Info().Msg("retrying...")
 				time.Sleep(10 * time.Second)
 				continue
@@ -1132,7 +1127,8 @@ func getDeposit(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, ori
 
 	defer reqBridgeDeposit.Body.Close()
 	if bridgeDeposit.Code != nil {
-		return globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, fmt.Errorf("error code received getting the deposit. Code: %d, Message: %s", *bridgeDeposit.Code, *bridgeDeposit.Message)
+		log.Warn().Int("code", *bridgeDeposit.Code).Str("message", *bridgeDeposit.Message).Msg("unable to retrieve bridge deposit")
+		return globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, ErrUnableToRetrieveDeposit
 	}
 
 	if !bridgeDeposit.Deposit.ReadyForClaim {
