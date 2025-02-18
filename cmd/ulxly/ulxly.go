@@ -626,17 +626,18 @@ func claimEverything(cmd *cobra.Command) error {
 		return err
 	}
 
-	workQueue := make(chan *BridgeDeposit, concurrency) // A bounded queue for controlled concurrency
+	workPool := make(chan struct{}, concurrency) // Bounded chan for controlled concurrency
 	waitGroup := sync.WaitGroup{}
 	waitGroup.Add(len(depositMap))
 
 	for _, d := range depositMap {
-		workQueue <- d
+		workPool <- struct{}{}
+
 		n := atomic.AddUint64(&nonceCounter, 1)
 		go func(deposit *BridgeDeposit, nonce uint64) {
 			defer waitGroup.Done()
 			defer func() {
-				<-workQueue
+				<-workPool
 			}()
 			if deposit.DestNet != bridgeNetworkID {
 				log.Debug().Uint32("destination_network", deposit.DestNet).Msg("discarding deposit for different network")
@@ -670,6 +671,7 @@ func claimEverything(cmd *cobra.Command) error {
 		}(d, n)
 	}
 	waitGroup.Wait()
+	close(workPool)
 
 	return nil
 }
