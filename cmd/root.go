@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/0xPolygon/polygon-cli/cmd/account"
+	"github.com/0xPolygon/polygon-cli/cmd/fixnoncegap"
 	"github.com/0xPolygon/polygon-cli/cmd/retest"
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly"
 
@@ -111,11 +111,11 @@ func NewPolycliCommand() *cobra.Command {
 	// Define commands.
 	cmd.AddCommand(
 		abi.ABICmd,
-		account.AccountCmd,
 		dbbench.DBBenchCmd,
 		dumpblocks.DumpblocksCmd,
 		ecrecover.EcRecoverCmd,
 		enr.ENRCmd,
+		fixnoncegap.FixNonceGapCmd,
 		fork.ForkCmd,
 		fund.FundCmd,
 		hash.HashCmd,
