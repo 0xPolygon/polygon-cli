@@ -620,7 +620,16 @@ func claimEverything(cmd *cobra.Command) error {
 		return err
 	}
 	log.Info().Uint32("networkID", bridgeNetworkID).Msg("detected current networkid")
-	nonceCounter, err:= client.PendingNonceAt(cmd.Context(), common.HexToAddress(privateKey))
+
+	ecdsa, err := crypto.HexToECDSA(strings.TrimPrefix(privateKey, "0x"))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get private key")
+		return err
+	}
+	address := crypto.PubkeyToAddress(ecdsa.PublicKey)
+
+	// Keep track of nonces, access atomically
+	nonceCounter, err:= client.PendingNonceAt(cmd.Context(), address)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get nonce")
 		return err
@@ -631,12 +640,16 @@ func claimEverything(cmd *cobra.Command) error {
 	waitGroup.Add(len(depositMap))
 
 	for _, d := range depositMap {
+		// wait for a work slot
 		workPool <- struct{}{}
 
+		// access next nonce atomically
 		n := atomic.AddUint64(&nonceCounter, 1)
+
 		go func(deposit *BridgeDeposit, nonce uint64) {
 			defer waitGroup.Done()
 			defer func() {
+				// release work slot
 				<-workPool
 			}()
 			if deposit.DestNet != bridgeNetworkID {
@@ -1050,6 +1063,7 @@ func getBridgeContract(ctx context.Context, client *ethclient.Client, ulxlyInput
 }
 
 func generateTransactionPayload(ctx context.Context, ulxlyInputArgPvtKey string, ulxlyInputArgGasLimit uint64, ulxlyInputArgDestAddr string, ulxlyInputArgChainID *big.Int, nonce *big.Int) (toAddress common.Address, opts *bind.TransactOpts, err error) {
+	ulxlyInputArgPvtKey = strings.TrimPrefix(ulxlyInputArgPvtKey, "0x")
 	privateKey, err := crypto.HexToECDSA(ulxlyInputArgPvtKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to retrieve private key")
