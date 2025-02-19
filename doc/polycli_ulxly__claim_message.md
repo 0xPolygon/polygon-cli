@@ -136,6 +136,7 @@ The command also inherits flags from parent commands.
                                            500 Info
                                            600 Debug
                                            700 Trace (default 500)
+      --wait duration                      this flag is available for claim asset and claim message. if specified, the command will retry in a loop for the deposit to be ready to claim up to duration. Once the deposit is ready to claim, the claim will actually be sent.
 ```
 
 ## See also

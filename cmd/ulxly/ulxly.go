@@ -43,6 +43,12 @@ const (
 	TreeDepth = 32
 )
 
+var (
+	ErrNotReadyForClaim        = errors.New("the claim transaction is not yet ready to be claimed, try again in a few blocks")
+	ErrDepositAlreadyClaimed   = errors.New("the claim transaction has already been claimed")
+	ErrUnableToRetrieveDeposit = errors.New("the bridge deposit was not found")
+)
+
 type IMT struct {
 	Branches   map[uint32][]common.Hash
 	Leaves     map[uint32]common.Hash
@@ -429,6 +435,7 @@ func claimAsset(cmd *cobra.Command) error {
 	depositNetwork := *inputUlxlyArgs.depositNetwork
 	bridgeServiceUrl := *inputUlxlyArgs.bridgeServiceURL
 	globalIndexOverride := *inputUlxlyArgs.globalIndex
+	wait := *inputUlxlyArgs.wait
 
 	// Dial Ethereum client
 	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
@@ -451,31 +458,24 @@ func claimAsset(cmd *cobra.Command) error {
 		return err
 	}
 
-	///////////////////////////////////////// TODO BORRAR
-	// gasPrice, err := client.SuggestGasPrice(ctx) // This call is done automatically if it is not set
-	// if err != nil {
-	// 	log.Error().Err(err).Msg("Cannot get suggested gas price")
-	// }
-	// auth.GasPrice = big.NewInt(0).Mul(gasPrice,big.NewInt(10))
-	/////////////////////////////////////////////////////////
+	globalIndex, amount, originAddress, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err := getDepositWhenReadyForClaim(bridgeServiceUrl, depositNetwork, depositCount, wait)
+	if err != nil {
+		log.Error().Err(err)
+		return err
+	}
+
+	if leafType != 0 {
+		log.Warn().Msg("Deposit leafType is not asset")
+	}
+
+	if globalIndexOverride != "" {
+		globalIndex.SetString(globalIndexOverride, 10)
+	}
 
 	// Call the bridge service RPC URL to get the merkle proofs and exit roots and parses them to the correct formats.
 	bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%d&net_id=%d", bridgeServiceUrl, depositCount, depositNetwork)
 	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
 
-	// Call the bridge service RPC URL to get the deposits data and parses them to the correct formats.
-	bridgeServiceDepositsEndpoint := fmt.Sprintf("%s/bridge?net_id=%d&deposit_cnt=%d", bridgeServiceUrl, depositNetwork, depositCount)
-	globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err := getDeposit(bridgeServiceDepositsEndpoint)
-	if err != nil {
-		log.Error().Err(err)
-		return err
-	}
-	if leafType != 0 {
-		log.Warn().Msg("Deposit leafType is not asset")
-	}
-	if globalIndexOverride != "" {
-		globalIndex.SetString(globalIndexOverride, 10)
-	}
 	claimTxn, err := bridgeV2.ClaimAsset(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
 	if err = logAndReturnJsonError(cmd, client, claimTxn, auth, err); err != nil {
 		return err
@@ -496,6 +496,7 @@ func claimMessage(cmd *cobra.Command) error {
 	depositNetwork := *inputUlxlyArgs.depositNetwork
 	bridgeServiceUrl := *inputUlxlyArgs.bridgeServiceURL
 	globalIndexOverride := *inputUlxlyArgs.globalIndex
+	wait := *inputUlxlyArgs.wait
 
 	// Dial Ethereum client
 	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
@@ -517,30 +518,67 @@ func claimMessage(cmd *cobra.Command) error {
 		return err
 	}
 
-	// Call the bridge service RPC URL to get the merkle proofs and exit roots and parses them to the correct formats.
-	bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%d&net_id=%d", bridgeServiceUrl, depositCount, depositNetwork)
-	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
-
-	// Call the bridge service RPC URL to get the deposits data and parses them to the correct formats.
-	bridgeServiceDepositsEndpoint := fmt.Sprintf("%s/bridge?net_id=%d&deposit_cnt=%d", bridgeServiceUrl, depositNetwork, depositCount)
-	globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err := getDeposit(bridgeServiceDepositsEndpoint)
+	globalIndex, amount, originAddress, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err := getDepositWhenReadyForClaim(bridgeServiceUrl, depositNetwork, depositCount, wait)
 	if err != nil {
 		log.Error().Err(err)
 		return err
 	}
+
 	if leafType != 1 {
 		log.Warn().Msg("Deposit leafType is not message")
 	}
 	if globalIndexOverride != "" {
 		globalIndex.SetString(globalIndexOverride, 10)
 	}
-	//ClaimMessage(opts *bind.TransactOpts, smtProofLocalExitRoot [32][32]byte, smtProofRollupExitRoot [32][32]byte, globalIndex *big.Int, mainnetExitRoot [32]byte, rollupExitRoot [32]byte, originNetwork uint32, originAddress common.Address, destinationNetwork uint32, destinationAddress common.Address, amount *big.Int, metadata []byte) (*types.Transaction, error) {
+
+	// Call the bridge service RPC URL to get the merkle proofs and exit roots and parses them to the correct formats.
+	bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%d&net_id=%d", bridgeServiceUrl, depositCount, depositNetwork)
+	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
+
 	claimTxn, err := bridgeV2.ClaimMessage(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
 	if err = logAndReturnJsonError(cmd, client, claimTxn, auth, err); err != nil {
 		return err
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
 	return WaitMineTransaction(cmd.Context(), client, claimTxn, timeoutTxnReceipt)
+}
+
+func getDepositWhenReadyForClaim(bridgeServiceUrl string, depositNetwork uint64, depositCount uint64, wait time.Duration) (*big.Int, *big.Int, common.Address, []byte, uint8, uint32, uint32, error) {
+	var globalIndex, amount *big.Int
+	var originAddress common.Address
+	var metadata []byte
+	var leafType uint8
+	var claimDestNetwork, claimOriginalNetwork uint32
+	var err error
+
+	waiter := time.After(wait)
+
+out:
+	for {
+		// Call the bridge service RPC URL to get the deposits data and parses them to the correct formats.
+		bridgeServiceDepositsEndpoint := fmt.Sprintf("%s/bridge?net_id=%d&deposit_cnt=%d", bridgeServiceUrl, depositNetwork, depositCount)
+		globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err = getDeposit(bridgeServiceDepositsEndpoint)
+		if err == nil {
+			log.Info().Msg("The deposit is ready to be claimed")
+			break out
+		}
+
+		select {
+		case <-waiter:
+			if wait != 0 {
+				err = fmt.Errorf("the deposit seems to be stuck after %s", wait.String())
+			}
+			break out
+		default:
+			if errors.Is(err, ErrNotReadyForClaim) || errors.Is(err, ErrUnableToRetrieveDeposit) {
+				log.Info().Msg("retrying...")
+				time.Sleep(10 * time.Second)
+				continue
+			}
+			break out
+		}
+	}
+	return globalIndex, amount, originAddress, metadata, leafType, claimDestNetwork, claimOriginalNetwork, err
 }
 
 func getBridgeServiceURLs() (map[uint32]string, error) {
@@ -1200,15 +1238,16 @@ func getDeposit(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, ori
 
 	defer reqBridgeDeposit.Body.Close()
 	if bridgeDeposit.Code != nil {
-		return globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, fmt.Errorf("error code received getting the deposit. Code: %d, Message: %s", *bridgeDeposit.Code, *bridgeDeposit.Message)
+		log.Warn().Int("code", *bridgeDeposit.Code).Str("message", *bridgeDeposit.Message).Msg("unable to retrieve bridge deposit")
+		return globalIndex, originAddress, amount, metadata, leafType, claimDestNetwork, claimOriginalNetwork, ErrUnableToRetrieveDeposit
 	}
 
 	if !bridgeDeposit.Deposit.ReadyForClaim {
 		log.Error().Msg("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
-		return nil, common.HexToAddress("0x0"), nil, nil, 0, 0, 0, errors.New("the claim transaction is not yet ready to be claimed, try again in a few blocks")
+		return nil, common.HexToAddress("0x0"), nil, nil, 0, 0, 0, ErrNotReadyForClaim
 	} else if bridgeDeposit.Deposit.ClaimTxHash != "" {
 		log.Info().Str("claimTxHash", bridgeDeposit.Deposit.ClaimTxHash).Msg("The claim transaction has already been claimed")
-		return nil, common.HexToAddress("0x0"), nil, nil, 0, 0, 0, errors.New("the claim transaction has already been claimed")
+		return nil, common.HexToAddress("0x0"), nil, nil, 0, 0, 0, ErrDepositAlreadyClaimed
 	}
 	originAddress = common.HexToAddress(bridgeDeposit.Deposit.OrigAddr)
 	globalIndex.SetString(bridgeDeposit.Deposit.GlobalIndex, 10)
@@ -1329,6 +1368,7 @@ type ulxlyArgs struct {
 	bridgeLimit         *int
 	bridgeOffset        *int
 	concurrency         *uint
+	wait                *time.Duration
 }
 
 var inputUlxlyArgs = ulxlyArgs{}
@@ -1374,6 +1414,7 @@ const (
 	ArgBridgeLimit      = "bridge-limit"
 	ArgBridgeOffset     = "bridge-offset"
 	ArgConcurrency      = "concurrency"
+	ArgWait             = "wait"
 )
 
 func prepInputs(cmd *cobra.Command, args []string) error {
@@ -1382,11 +1423,11 @@ func prepInputs(cmd *cobra.Command, args []string) error {
 		inputUlxlyArgs.gasLimit = &dryRunGasLimit
 	}
 	pvtKey := strings.TrimPrefix(*inputUlxlyArgs.privateKey, "0x")
-
 	privateKey, err := crypto.HexToECDSA(pvtKey)
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid --%s: %w", ArgPrivateKey, err)
 	}
+
 	publicKey := privateKey.Public()
 
 	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
@@ -1551,6 +1592,7 @@ or if it's actually an intermediate hash.`,
 	inputUlxlyArgs.depositNetwork = ulxlyClaimCmd.PersistentFlags().Uint64(ArgDepositNetwork, 0, "the rollup id of the network where the deposit was initially made")
 	inputUlxlyArgs.bridgeServiceURL = ulxlyClaimCmd.PersistentFlags().String(ArgBridgeServiceURL, "", "the URL of the bridge service")
 	inputUlxlyArgs.globalIndex = ulxlyClaimCmd.PersistentFlags().String(ArgGlobalIndex, "", "an override of the global index value")
+	inputUlxlyArgs.wait = ulxlyClaimCmd.PersistentFlags().Duration(ArgWait, time.Duration(0), "this flag is available for claim asset and claim message. if specified, the command will retry in a loop for the deposit to be ready to claim up to duration. Once the deposit is ready to claim, the claim will actually be sent.")
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositCount))
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositNetwork))
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgBridgeServiceURL))
