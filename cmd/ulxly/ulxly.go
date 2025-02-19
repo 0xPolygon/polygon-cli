@@ -293,7 +293,7 @@ func bridgeAsset(cmd *cobra.Command) error {
 		return err
 	}
 
-	toAddress, auth, err := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID,  nil)
+	toAddress, auth, err := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -343,7 +343,7 @@ func bridgeMessage(cmd *cobra.Command) error {
 		return err
 	}
 
-	toAddress, auth, err := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID, nil)
+	toAddress, auth, err := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -391,7 +391,7 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 		log.Error().Err(err).Msg("Unable to get bridge contract")
 		return err
 	}
-	toAddress, auth, err := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID, nil)
+	toAddress, auth, err := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -445,7 +445,7 @@ func claimAsset(cmd *cobra.Command) error {
 		return err
 	}
 
-	toAddress, auth, err := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID, nil)
+	toAddress, auth, err := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -511,7 +511,7 @@ func claimMessage(cmd *cobra.Command) error {
 		return err
 	}
 
-	toAddress, auth, err := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID, nil)
+	toAddress, auth, err := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -629,11 +629,12 @@ func claimEverything(cmd *cobra.Command) error {
 	address := crypto.PubkeyToAddress(ecdsa.PublicKey)
 
 	// Keep track of nonces, access atomically
-	nonceCounter, err:= client.PendingNonceAt(cmd.Context(), address)
+	nonceCounter, err:= client.NonceAt(cmd.Context(), address, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get nonce")
+		log.Error().Err(err).Str("address", address.Hex()).Msg("Failed to get nonce")
 		return err
 	}
+	retryNonces := make(chan *big.Int)
 
 	workPool := make(chan struct{}, concurrency) // Bounded chan for controlled concurrency
 	waitGroup := sync.WaitGroup{}
@@ -643,17 +644,17 @@ func claimEverything(cmd *cobra.Command) error {
 		// wait for a work slot
 		workPool <- struct{}{}
 
-		// access next nonce atomically
-		n := atomic.AddUint64(&nonceCounter, 1)
-
-		go func(deposit *BridgeDeposit, nonce uint64) {
+		go func(deposit *BridgeDeposit) {
 			defer waitGroup.Done()
 			defer func() {
 				// release work slot
 				<-workPool
 			}()
+
+			// is this right? why compare destNet and not deposit.NetworkID
+
 			if deposit.DestNet != bridgeNetworkID {
-				log.Debug().Uint32("destination_network", deposit.DestNet).Msg("discarding deposit for different network")
+				log.Warn().Uint32("destination_network", deposit.DestNet).Msg("discarding deposit for different network")
 				return
 			}
 			if deposit.ClaimTxHash != "" {
@@ -661,11 +662,29 @@ func claimEverything(cmd *cobra.Command) error {
 				return
 			}
 			var opts *bind.TransactOpts
-			_, opts, dErr := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID, big.NewInt(int64(nonce)))
+			_, opts, dErr := generateTransactionPayload(cmd.Context(), privateKey, gasLimit, destinationAddress, chainID)
 			if dErr != nil {
 				log.Error().Err(dErr).Msg("Unable to generate transaction")
 				return
 			}
+
+			// nonce for this transaction
+			var nonce *big.Int
+
+			// non-blocking retry nonce check. If there is a retry nonce, use it
+			select {
+			case n := <-retryNonces:
+				nonce = n
+			default:
+			}
+			// otherwise atomically make & use the new once
+			if nonce == nil {
+				// access next nonce atomically
+				n := atomic.AddUint64(&nonceCounter, 1)
+				nonce = big.NewInt(int64(n))
+			}
+			opts.Nonce = nonce
+
 			claimTx, dErr := claimSingleDeposit(cmd, client, bridgeContract, opts, *deposit, urls, bridgeNetworkID)
 			if dErr != nil {
 				log.Warn().Err(dErr).Uint32("DepositCnt", deposit.DepositCnt).
@@ -674,14 +693,29 @@ func claimEverything(cmd *cobra.Command) error {
 					Uint32("NetworkID", deposit.NetworkID).
 					Str("OrigAddr", deposit.OrigAddr).
 					Str("DestAddr", deposit.DestAddr).
+					Int64("nonce", opts.Nonce.Int64()).
 					Msg("There was an error claiming")
+
+				// Some nonces should not be reused
+				if strings.Contains(dErr.Error(), "could not replace existing") {
+					return
+				}
+				if strings.Contains(dErr.Error(), "already known") {
+					return
+				}
+
+				// need to inspect the error for cases where the nonce should not be reused
+				log.Info().Int64("nonce", opts.Nonce.Int64()).Msg("will reuse nonce")
+				retryNonces <- nonce
+
 				return
 			}
 			dErr = WaitMineTransaction(cmd.Context(), client, claimTx, timeoutTxnReceipt)
 			if dErr != nil {
 				log.Error().Err(dErr).Msg("error while waiting for tx to main")
 			}
-		}(d, n)
+			return
+		}(d)
 	}
 	waitGroup.Wait()
 	close(workPool)
@@ -744,7 +778,7 @@ func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeCont
 			Msg("attempt to claim deposit failed")
 		return nil, err
 	}
-	log.Info().Stringer("txhash", claimTx.Hash()).Msg("sent claim")
+	log.Info().Stringer("txhash", claimTx.Hash()).Int64("nonce", opts.Nonce.Int64()).Msg("sent claim")
 
 	return claimTx, nil
 }
@@ -1062,7 +1096,7 @@ func getBridgeContract(ctx context.Context, client *ethclient.Client, ulxlyInput
 	return
 }
 
-func generateTransactionPayload(ctx context.Context, ulxlyInputArgPvtKey string, ulxlyInputArgGasLimit uint64, ulxlyInputArgDestAddr string, ulxlyInputArgChainID *big.Int, nonce *big.Int) (toAddress common.Address, opts *bind.TransactOpts, err error) {
+func generateTransactionPayload(ctx context.Context, ulxlyInputArgPvtKey string, ulxlyInputArgGasLimit uint64, ulxlyInputArgDestAddr string, ulxlyInputArgChainID *big.Int) (toAddress common.Address, opts *bind.TransactOpts, err error) {
 	ulxlyInputArgPvtKey = strings.TrimPrefix(ulxlyInputArgPvtKey, "0x")
 	privateKey, err := crypto.HexToECDSA(ulxlyInputArgPvtKey)
 	if err != nil {
@@ -1088,9 +1122,6 @@ func generateTransactionPayload(ctx context.Context, ulxlyInputArgPvtKey string,
 	}
 	opts.Context = ctx
 	opts.GasLimit = gasLimit
-	if nonce != nil {
-		opts.Nonce = nonce
-	}
 	toAddress = common.HexToAddress(ulxlyInputArgDestAddr)
 	if toAddress == (common.Address{}) {
 		toAddress = opts.From
