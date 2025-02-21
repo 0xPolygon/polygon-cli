@@ -626,26 +626,23 @@ func claimEverything(cmd *cobra.Command) error {
 	log.Info().Uint32("networkID", currentNetworkID).Msg("current network")
 
 	concurrency := 3
-	workPool := make(chan struct{}, concurrency) // Bounded chan for controlled concurrency
+	workPool := make(chan *BridgeDeposit, concurrency) // bounded chan for controlled concurrency
 
-	nonceCounter, err := currentNonce(cmd.Context(), client, privateKey)
+	nonceCounter, err := currentNonce(cmd.Context(), client, destinationAddress)
 	if err != nil {
 		return err
 	}
 	log.Info().Int64("nonce", nonceCounter.Int64()).Msg("starting nonce")
 	nonceMutex := sync.Mutex{}
 	nonceIncrement := big.NewInt(1)
-	retryNonces := make(chan *big.Int, concurrency) // bounded so can async hand off
-
+	retryNonces := make(chan *big.Int, concurrency) // bounded same as workPool
+	
 	for _, d := range depositMap {
-
-		workPool <- struct{}{} // block until a slot is available
-
+		workPool <- d // block until a slot is available
 		go func(deposit *BridgeDeposit) {
 			defer func() {
 				<-workPool // release work slot
 			}()
-
 			if deposit.DestNet != currentNetworkID {
 				log.Debug().Uint32("destination_network", deposit.DestNet).Msg("discarding deposit for different network")
 				return
@@ -654,7 +651,6 @@ func claimEverything(cmd *cobra.Command) error {
 				log.Info().Str("txhash", deposit.ClaimTxHash).Msg("It looks like this tx was already claimed")
 				return
 			}
-
 			// Either use the next retry nonce, or set and increment the next one
 			var nextNonce *big.Int
 			select {
@@ -689,7 +685,7 @@ func claimEverything(cmd *cobra.Command) error {
 				if strings.Contains(dErr.Error(), "nonce is too low") {
 					return
 				}
-
+				// are there other cases?
 				retryNonces <- nextNonce
 				return
 			}
@@ -703,17 +699,11 @@ func claimEverything(cmd *cobra.Command) error {
 	return nil
 }
 
-func currentNonce(ctx context.Context, client *ethclient.Client, privateKey string) (*big.Int, error) {
-	ecdsa, err := crypto.HexToECDSA(strings.TrimPrefix(privateKey, "0x"))
+func currentNonce(ctx context.Context, client *ethclient.Client, address string) (*big.Int, error) {
+	addr := common.HexToAddress(address)
+	nonce, err := client.NonceAt(ctx, addr, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to read private key")
-		return nil, err
-	}
-	address := crypto.PubkeyToAddress(ecdsa.PublicKey)
-
-	nonce, err := client.NonceAt(ctx, address, nil)
-	if err != nil {
-		log.Error().Err(err).Str("address", address.Hex()).Msg("Failed to get nonce")
+		log.Error().Err(err).Str("address", addr.Hex()).Msg("Failed to get nonce")
 		return nil, err
 	}
 	n := int64(nonce)
