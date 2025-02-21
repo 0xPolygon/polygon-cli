@@ -625,73 +625,77 @@ func claimEverything(cmd *cobra.Command) error {
 	}
 	log.Info().Uint32("networkID", currentNetworkID).Msg("current network")
 
+	concurrency := 1
+	workPool := make(chan struct{}, concurrency) // Bounded chan for controlled concurrency
+
 	nonceCounter, err := currentNonce(cmd.Context(), client, privateKey)
 	if err != nil {
 		return err
 	}
-
+	log.Info().Int64("nonce", nonceCounter.Int64()).Msg("starting nonce")
 	nonceMutex := sync.Mutex{}
 	nonceIncrement := big.NewInt(1)
-	retryNonces := make(chan *big.Int)
+	retryNonces := make(chan *big.Int, concurrency) // bounded so can async hand off
 
-	for _, deposit := range depositMap {
-		if deposit.DestNet != currentNetworkID {
-			log.Debug().Uint32("destination_network", deposit.DestNet).Msg("discarding deposit for different network")
-			continue
-		}
-		if deposit.ClaimTxHash != "" {
-			log.Info().Str("txhash", deposit.ClaimTxHash).Msg("It looks like this tx was already claimed")
-			continue
-		}
+	for _, d := range depositMap {
 
-		wg := sync.WaitGroup{}
-		for i := 0; i < 1; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		workPool <- struct{}{} // block until a slot is available
 
-				// Either use the next retry nonce, or set and increment the next one
-				var nextNonce *big.Int
-				select {
-				case n := <-retryNonces:
-					nextNonce = n
-				default:
-					nonceMutex.Lock()
-					nonceCounter = nonceCounter.Add(nonceCounter, nonceIncrement)
-					nextNonce = big.NewInt(nonceCounter.Int64())
-					nonceMutex.Unlock()
-				}
+		go func(deposit *BridgeDeposit) {
+			defer func() {
+				<-workPool // release work slot
+			}()
 
-				claimTx, dErr := claimSingleDeposit(cmd, client, bridgeContract, withNonce(opts, nextNonce), *deposit, urls, currentNetworkID)
-				if dErr != nil {
-					log.Warn().Err(dErr).Uint32("DepositCnt", deposit.DepositCnt).
-						Uint32("OrigNet", deposit.OrigNet).
-						Uint32("DestNet", deposit.DestNet).
-						Uint32("NetworkID", deposit.NetworkID).
-						Str("OrigAddr", deposit.OrigAddr).
-						Str("DestAddr", deposit.DestAddr).
-						Msg("There was an error claiming")
+			if deposit.DestNet != currentNetworkID {
+				log.Debug().Uint32("destination_network", deposit.DestNet).Msg("discarding deposit for different network")
+				return
+			}
+			if deposit.ClaimTxHash != "" {
+				log.Info().Str("txhash", deposit.ClaimTxHash).Msg("It looks like this tx was already claimed")
+				return
+			}
 
-					// Some nonces should not be reused
-					if strings.Contains(dErr.Error(), "could not replace existing") {
-						return
-					}
-					if strings.Contains(dErr.Error(), "already known") {
-						return
-					}
+			// Either use the next retry nonce, or set and increment the next one
+			var nextNonce *big.Int
+			select {
+			case n := <-retryNonces:
+				nextNonce = n
+			default:
+				nonceMutex.Lock()
+				nextNonce = big.NewInt(nonceCounter.Int64())
+				nonceCounter = nonceCounter.Add(nonceCounter, nonceIncrement)
+				nonceMutex.Unlock()
+			}
+			log.Info().Int64("nonce", nextNonce.Int64()).Msg("Next nonce")
 
-					retryNonces <- nextNonce
+			claimTx, dErr := claimSingleDeposit(cmd, client, bridgeContract, withNonce(opts, nextNonce), *deposit, urls, currentNetworkID)
+			if dErr != nil {
+				log.Warn().Err(dErr).Uint32("DepositCnt", deposit.DepositCnt).
+					Uint32("OrigNet", deposit.OrigNet).
+					Uint32("DestNet", deposit.DestNet).
+					Uint32("NetworkID", deposit.NetworkID).
+					Str("OrigAddr", deposit.OrigAddr).
+					Str("DestAddr", deposit.DestAddr).
+					Msg("There was an error claiming")
 
+				// Some nonces should not be reused
+				if strings.Contains(dErr.Error(), "could not replace existing") {
 					return
 				}
-				dErr = WaitMineTransaction(cmd.Context(), client, claimTx, timeoutTxnReceipt)
-				if dErr != nil {
-					log.Error().Err(dErr).Msg("error while waiting for tx to mine")
-					// if skip here, nonces will get screwed up? maybe bail everything here?
+				if strings.Contains(dErr.Error(), "already known") {
+					return
 				}
-			}()
-		}
-		wg.Wait()
+
+				retryNonces <- nextNonce
+
+				return
+			}
+			dErr = WaitMineTransaction(cmd.Context(), client, claimTx, timeoutTxnReceipt)
+			if dErr != nil {
+				log.Error().Err(dErr).Msg("error while waiting for tx to mine")
+				// if skip here, nonces will get screwed up? maybe bail everything here?
+			}
+		}(d)
 	}
 
 	return nil
@@ -705,7 +709,7 @@ func currentNonce(ctx context.Context, client *ethclient.Client, privateKey stri
 	}
 	address := crypto.PubkeyToAddress(ecdsa.PublicKey)
 
-	nonce, err:= client.NonceAt(ctx, address, nil)
+	nonce, err := client.NonceAt(ctx, address, nil)
 	if err != nil {
 		log.Error().Err(err).Str("address", address.Hex()).Msg("Failed to get nonce")
 		return nil, err
