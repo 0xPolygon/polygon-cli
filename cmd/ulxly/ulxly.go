@@ -625,7 +625,7 @@ func claimEverything(cmd *cobra.Command) error {
 	}
 	log.Info().Uint32("networkID", currentNetworkID).Msg("current network")
 
-	concurrency := 1
+	concurrency := 3
 	workPool := make(chan struct{}, concurrency) // Bounded chan for controlled concurrency
 
 	nonceCounter, err := currentNonce(cmd.Context(), client, privateKey)
