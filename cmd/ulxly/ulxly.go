@@ -676,6 +676,7 @@ func claimEverything(cmd *cobra.Command) error {
 					Uint32("NetworkID", deposit.NetworkID).
 					Str("OrigAddr", deposit.OrigAddr).
 					Str("DestAddr", deposit.DestAddr).
+					Int64("nonce", nextNonce.Int64()).
 					Msg("There was an error claiming")
 
 				// Some nonces should not be reused
@@ -683,6 +684,9 @@ func claimEverything(cmd *cobra.Command) error {
 					return
 				}
 				if strings.Contains(dErr.Error(), "already known") {
+					return
+				}
+				if strings.Contains(dErr.Error(), "nonce is too low") {
 					return
 				}
 
@@ -833,7 +837,7 @@ func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *type
 				continue
 			}
 			if r.Status != 0 {
-				log.Info().Interface("txHash", r.TxHash).Msg("Deposit transaction successful")
+				log.Info().Interface("txHash", r.TxHash).Msg("transaction successful")
 				return nil
 			} else if r.Status == 0 {
 				log.Error().Interface("txHash", r.TxHash).Msg("Deposit transaction failed")
