@@ -16,6 +16,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -600,7 +601,7 @@ func claimEverything(cmd *cobra.Command) error {
 				continue
 			}
 
-			// if this new deposit is ready for claim OR it has already been claimed we should over ride the exisitng value
+			// if this new deposit is ready for claim OR it has already been claimed we should override the existing value
 			if deposit.ReadyForClaim || deposit.ClaimTxHash != "" {
 				depositMap[depId] = &deposits[idx]
 			}
@@ -622,7 +623,17 @@ func claimEverything(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	log.Info().Uint32("networkID", currentNetworkID).Msg("detected current networkid")
+	log.Info().Uint32("networkID", currentNetworkID).Msg("current network")
+
+	nonceCounter, err := currentNonce(cmd.Context(), client, privateKey)
+	if err != nil {
+		return err
+	}
+
+	nonceMutex := sync.Mutex{}
+	nonceIncrement := big.NewInt(1)
+	retryNonces := make(chan *big.Int)
+
 	for _, deposit := range depositMap {
 		if deposit.DestNet != currentNetworkID {
 			log.Debug().Uint32("destination_network", deposit.DestNet).Msg("discarding deposit for different network")
@@ -632,24 +643,105 @@ func claimEverything(cmd *cobra.Command) error {
 			log.Info().Str("txhash", deposit.ClaimTxHash).Msg("It looks like this tx was already claimed")
 			continue
 		}
-		claimTx, dErr := claimSingleDeposit(cmd, client, bridgeContract, opts, *deposit, urls, currentNetworkID)
-		if dErr != nil {
-			log.Warn().Err(dErr).Uint32("DepositCnt", deposit.DepositCnt).
-				Uint32("OrigNet", deposit.OrigNet).
-				Uint32("DestNet", deposit.DestNet).
-				Uint32("NetworkID", deposit.NetworkID).
-				Str("OrigAddr", deposit.OrigAddr).
-				Str("DestAddr", deposit.DestAddr).
-				Msg("There was an error claiming")
-			continue
+
+		wg := sync.WaitGroup{}
+		for i := 0; i < 1; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				// Either use the next retry nonce, or set and increment the next one
+				var nextNonce *big.Int
+				select {
+				case n := <-retryNonces:
+					nextNonce = n
+				default:
+					nonceMutex.Lock()
+					nonceCounter = nonceCounter.Add(nonceCounter, nonceIncrement)
+					nextNonce = big.NewInt(nonceCounter.Int64())
+					nonceMutex.Unlock()
+				}
+
+				claimTx, dErr := claimSingleDeposit(cmd, client, bridgeContract, withNonce(opts, nextNonce), *deposit, urls, currentNetworkID)
+				if dErr != nil {
+					log.Warn().Err(dErr).Uint32("DepositCnt", deposit.DepositCnt).
+						Uint32("OrigNet", deposit.OrigNet).
+						Uint32("DestNet", deposit.DestNet).
+						Uint32("NetworkID", deposit.NetworkID).
+						Str("OrigAddr", deposit.OrigAddr).
+						Str("DestAddr", deposit.DestAddr).
+						Msg("There was an error claiming")
+
+					// Some nonces should not be reused
+					if strings.Contains(dErr.Error(), "could not replace existing") {
+						return
+					}
+					if strings.Contains(dErr.Error(), "already known") {
+						return
+					}
+
+					retryNonces <- nextNonce
+
+					return
+				}
+				dErr = WaitMineTransaction(cmd.Context(), client, claimTx, timeoutTxnReceipt)
+				if dErr != nil {
+					log.Error().Err(dErr).Msg("error while waiting for tx to mine")
+					// if skip here, nonces will get screwed up? maybe bail everything here?
+				}
+			}()
 		}
-		dErr = WaitMineTransaction(cmd.Context(), client, claimTx, timeoutTxnReceipt)
-		if dErr != nil {
-			log.Error().Err(dErr).Msg("error while waiting for tx to main")
-		}
+		wg.Wait()
 	}
 
 	return nil
+}
+
+func currentNonce(ctx context.Context, client *ethclient.Client, privateKey string) (*big.Int, error) {
+	ecdsa, err := crypto.HexToECDSA(strings.TrimPrefix(privateKey, "0x"))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to read private key")
+		return nil, err
+	}
+	address := crypto.PubkeyToAddress(ecdsa.PublicKey)
+
+	nonce, err:= client.NonceAt(ctx, address, nil)
+	if err != nil {
+		log.Error().Err(err).Str("address", address.Hex()).Msg("Failed to get nonce")
+		return nil, err
+	}
+	n := int64(nonce)
+	return big.NewInt(n), nil
+}
+
+// todo: implement for other fields in library, or find a library that does this
+func withNonce(opts *bind.TransactOpts, newNonce *big.Int) *bind.TransactOpts {
+	if opts == nil {
+		return nil
+	}
+	clone := &bind.TransactOpts{
+		From:     opts.From,
+		Signer:   opts.Signer,
+		GasLimit: opts.GasLimit,
+		Context:  opts.Context, // Usually OK to share, unless you need a separate context
+		NoSend:   opts.NoSend,
+	}
+	// Deep-copy big.Int fields
+	if opts.Value != nil {
+		clone.Value = new(big.Int).Set(opts.Value)
+	}
+	if opts.GasFeeCap != nil {
+		clone.GasFeeCap = new(big.Int).Set(opts.GasFeeCap)
+	}
+	if opts.GasTipCap != nil {
+		clone.GasTipCap = new(big.Int).Set(opts.GasTipCap)
+	}
+	// Set the new nonce
+	if newNonce != nil {
+		clone.Nonce = new(big.Int).Set(newNonce)
+	}
+
+	return clone
 }
 
 func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeContract *ulxly.Ulxly, opts *bind.TransactOpts, deposit BridgeDeposit, bridgeURLs map[uint32]string, currentNetworkID uint32) (*types.Transaction, error) {
