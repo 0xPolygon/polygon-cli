@@ -577,6 +577,7 @@ func claimEverything(cmd *cobra.Command) error {
 	RPCURL := *inputUlxlyArgs.rpcURL
 	limit := *inputUlxlyArgs.bridgeLimit
 	offset := *inputUlxlyArgs.bridgeOffset
+	concurrency := *inputUlxlyArgs.concurrency
 	urls, err := getBridgeServiceURLs()
 	if err != nil {
 		return err
@@ -625,7 +626,6 @@ func claimEverything(cmd *cobra.Command) error {
 	}
 	log.Info().Uint32("networkID", currentNetworkID).Msg("current network")
 
-	concurrency := 3
 	workPool := make(chan *BridgeDeposit, concurrency) // bounded chan for controlled concurrency
 
 	nonceCounter, err := currentNonce(cmd.Context(), client, destinationAddress)
@@ -636,7 +636,7 @@ func claimEverything(cmd *cobra.Command) error {
 	nonceMutex := sync.Mutex{}
 	nonceIncrement := big.NewInt(1)
 	retryNonces := make(chan *big.Int, concurrency) // bounded same as workPool
-	
+
 	for _, d := range depositMap {
 		workPool <- d // block until a slot is available
 		go func(deposit *BridgeDeposit) {
@@ -1345,6 +1345,7 @@ type ulxlyArgs struct {
 	bridgeLimit         *int
 	bridgeOffset        *int
 	wait                *time.Duration
+	concurrency         *uint
 }
 
 var inputUlxlyArgs = ulxlyArgs{}
@@ -1390,6 +1391,7 @@ const (
 	ArgBridgeLimit      = "bridge-limit"
 	ArgBridgeOffset     = "bridge-offset"
 	ArgWait             = "wait"
+	ArgConcurrency      = "concurrency"
 )
 
 func prepInputs(cmd *cobra.Command, args []string) error {
@@ -1576,6 +1578,8 @@ or if it's actually an intermediate hash.`,
 	inputUlxlyArgs.bridgeServiceURLs = claimEverythingCommand.Flags().StringSlice(ArgBridgeMappings, nil, "Mappings between network ids and bridge service urls. E.g. '1=http://network-1-bridgeurl,7=http://network-2-bridgeurl'")
 	inputUlxlyArgs.bridgeLimit = claimEverythingCommand.Flags().Int(ArgBridgeLimit, 25, "Limit the number or responses returned by the bridge service when claiming")
 	inputUlxlyArgs.bridgeOffset = claimEverythingCommand.Flags().Int(ArgBridgeOffset, 0, "The offset to specify for pagination of the underlying bridge service deposits")
+	inputUlxlyArgs.concurrency = claimEverythingCommand.Flags().Uint(ArgConcurrency, 1, "The worker pool size for claims")
+
 	fatalIfError(claimEverythingCommand.MarkFlagRequired(ArgBridgeMappings))
 
 	// Args that are just for the get deposit command
