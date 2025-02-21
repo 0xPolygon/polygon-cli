@@ -585,9 +585,11 @@ func claimEverything(cmd *cobra.Command) error {
 
 	depositMap := make(map[DepositID]*BridgeDeposit)
 
-	for _, bridgeServiceUrl := range urls {
-		deposits, bErr := getDepositsForAddress(fmt.Sprintf("%s/bridges/%s?offset=%d&limit=%d", bridgeServiceUrl, destinationAddress, offset, limit))
+	for bridgeServiceId, bridgeServiceUrl := range urls {
+		url := fmt.Sprintf("%s/bridges/%s?offset=%d&limit=%d", bridgeServiceUrl, destinationAddress, offset, limit)
+		deposits, bErr := getDepositsForAddress(url)
 		if bErr != nil {
+			log.Err(bErr).Uint32("id", bridgeServiceId).Str("url", url).Msgf("Error getting deposits for bridge: %s", bErr.Error())
 			return bErr
 		}
 		for idx, deposit := range deposits {
