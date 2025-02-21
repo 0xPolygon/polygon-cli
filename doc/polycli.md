@@ -45,6 +45,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli enr](polycli_enr.md) - Convert between ENR and Enode format
 
+- [polycli fix-nonce-gap](polycli_fix-nonce-gap.md) - Send txs to fix the nonce gap for a specific account
+
 - [polycli fork](polycli_fork.md) - Take a forked block and walk up the chain to do analysis.
 
 - [polycli fund](polycli_fund.md) - Bulk fund crypto wallets automatically.
