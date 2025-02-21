@@ -691,13 +691,11 @@ func claimEverything(cmd *cobra.Command) error {
 				}
 
 				retryNonces <- nextNonce
-
 				return
 			}
 			dErr = WaitMineTransaction(cmd.Context(), client, claimTx, timeoutTxnReceipt)
 			if dErr != nil {
 				log.Error().Err(dErr).Msg("error while waiting for tx to mine")
-				// if skip here, nonces will get screwed up? maybe bail everything here?
 			}
 		}(d)
 	}
