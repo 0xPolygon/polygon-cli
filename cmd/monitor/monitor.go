@@ -722,11 +722,14 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				_, termHeight = termui.TerminalDimensions()
 				windowSize = termHeight/2 - 4
 				termui.Clear()
-			case "<Up>", "<Down>":
+			case "<Up>", "<Down>", "<MouseWheelUp>", "<MouseWheelDown>":
+				up := e.ID == "<Up>" || e.ID == "<MouseWheelUp>"
+				down := e.ID == "<Down>" || e.ID == "<MouseWheelDown>"
+
 				if currentMode == monitorModeBlock {
-					if len(transactionList.Rows) != 0 && e.ID == "<Down>" {
+					if len(transactionList.Rows) != 0 && down {
 						transactionList.ScrollDown()
-					} else if len(transactionList.Rows) != 0 && e.ID == "<Up>" {
+					} else if len(transactionList.Rows) != 0 && up {
 						transactionList.ScrollUp()
 					}
 					break
@@ -739,7 +742,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					break
 				}
 
-				if e.ID == "<Down>" {
+				if down {
 					log.Debug().
 						Int("blockTable.SelectedRow", blockTable.SelectedRow).
 						Int("windowSize", windowSize).
@@ -778,7 +781,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 					// blockTable.SelectedRow += 1
 					blockTable.ScrollDown()
 					setBlock = true
-				} else if e.ID == "<Up>" {
+				} else if up {
 					log.Debug().Int("blockTable.SelectedRow", blockTable.SelectedRow).Int("windowSize", windowSize).Msg("Up")
 
 					// the last row of current window size
