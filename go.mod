@@ -1,7 +1,6 @@
 module github.com/0xPolygon/polygon-cli
 
 go 1.22.11
-
 toolchain go1.23.4
 
 require (
@@ -30,7 +29,7 @@ require (
 	github.com/tyler-smith/go-bip32 v1.0.0
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/xeipuuv/gojsonschema v1.2.0
-	golang.org/x/crypto v0.33.0
+	golang.org/x/crypto v0.34.0
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
 	golang.org/x/text v0.22.0
 	golang.org/x/time v0.10.0
