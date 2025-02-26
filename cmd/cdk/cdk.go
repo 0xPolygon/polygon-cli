@@ -179,7 +179,7 @@ func (inputArgs *inputArgs) parseRollupManagerArgs(ctx context.Context, cdkArgs 
 	return args, nil
 }
 
-func (inputArgs *inputArgs) parseRollupArgs(ctx context.Context, rollupManagerArgs parsedRollupManagerArgs) (*parsedRollupArgs, error) {
+func (inputArgs *inputArgs) parseRollupArgs(ctx context.Context, rollupManagerArgs *parsedRollupManagerArgs) (*parsedRollupArgs, error) {
 	args := &parsedRollupArgs{}
 
 	var rollupChainID uint64
@@ -256,11 +256,11 @@ func init() {
 
 	// rollup
 	cdkInputArgs.rollupID = rollupCmd.PersistentFlags().String(ArgRollupID, "", "The rollup ID")
-	cdkInputArgs.rollupID = rollupCmd.PersistentFlags().String(ArgRollupChainID, "", "The rollup chain ID")
-	cdkInputArgs.rollupID = rollupCmd.PersistentFlags().String(ArgRollupAddress, "", "The rollup Address")
+	cdkInputArgs.rollupChainID = rollupCmd.PersistentFlags().String(ArgRollupChainID, "", "The rollup chain ID")
+	cdkInputArgs.rollupAddress = rollupCmd.PersistentFlags().String(ArgRollupAddress, "", "The rollup Address")
 
 	CDKCmd.AddCommand(rollupManagerCmd)
-	CDKCmd.AddCommand(rollupCmd)
+	rollupManagerCmd.AddCommand(rollupCmd)
 
 	rollupManagerCmd.AddCommand(rollupManagerListRollupsCmd)
 	rollupManagerCmd.AddCommand(rollupManagerListRollupTypesCmd)

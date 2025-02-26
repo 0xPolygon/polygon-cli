@@ -54,31 +54,7 @@ var rollupManagerMonitorCmd = &cobra.Command{
 	},
 }
 
-type RollupData struct {
-	RollupContract                 common.Address `json:"rollupContract"`
-	ChainID                        uint64         `json:"chainID"`
-	Verifier                       common.Address `json:"verifier"`
-	ForkID                         uint64         `json:"forkID"`
-	LastLocalExitRoot              common.Hash    `json:"lastLocalExitRoot"`
-	LastBatchSequenced             uint64         `json:"lastBatchSequenced"`
-	LastVerifiedBatch              uint64         `json:"lastVerifiedBatch"`
-	LastPendingState               uint64         `json:"lastPendingState"`
-	LastPendingStateConsolidated   uint64         `json:"lastPendingStateConsolidated"`
-	LastVerifiedBatchBeforeUpgrade uint64         `json:"lastVerifiedBatchBeforeUpgrade"`
-	RollupTypeID                   uint64         `json:"rollupTypeID"`
-	RollupCompatibilityID          uint8          `json:"rollupCompatibilityID"`
-}
-
-type RollupTypeData struct {
-	ConsensusImplementation common.Address `json:"consensusImplementation"`
-	Verifier                common.Address `json:"verifier"`
-	ForkID                  uint64         `json:"forkID"`
-	RollupCompatibilityID   uint8          `json:"rollupCompatibilityID"`
-	Obsolete                bool           `json:"obsolete"`
-	Genesis                 common.Hash    `json:"genesis"`
-}
-
-type RollupManagerInfo struct {
+type RollupManagerData struct {
 	Pol                                    common.Address `json:"pol"`
 	BridgeAddress                          common.Address `json:"bridgeAddress"`
 	RollupCount                            uint32         `json:"rollupCount"`
@@ -93,7 +69,7 @@ type RollupManagerInfo struct {
 }
 
 type RollupManagerDumpData struct {
-	Info        *RollupManagerInfo `json:"info"`
+	Data        *RollupManagerData `json:"data"`
 	Rollups     []RollupData       `json:"rollups"`
 	RollupTypes []RollupTypeData   `json:"rollupTypes"`
 }
@@ -193,17 +169,19 @@ func rollupManagerListRollupTypes(cmd *cobra.Command) error {
 }
 
 func rollupManagerInspect(cmd *cobra.Command) error {
-	cdkArgs, err := cdkInputArgs.parseCDKArgs(cmd.Context())
+	ctx := cmd.Context()
+
+	cdkArgs, err := cdkInputArgs.parseCDKArgs(ctx)
 	if err != nil {
 		return err
 	}
 
-	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(cmd.Context(), *cdkArgs)
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
 	if err != nil {
 		return err
 	}
 
-	data, err := getRollupManagerInfo(rollupManagerArgs)
+	data, err := getRollupManagerData(rollupManagerArgs)
 	if err != nil {
 		return err
 	}
@@ -213,19 +191,21 @@ func rollupManagerInspect(cmd *cobra.Command) error {
 }
 
 func rollupManagerDump(cmd *cobra.Command) error {
-	cdkArgs, err := cdkInputArgs.parseCDKArgs(cmd.Context())
+	ctx := cmd.Context()
+
+	cdkArgs, err := cdkInputArgs.parseCDKArgs(ctx)
 	if err != nil {
 		return err
 	}
 
-	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(cmd.Context(), *cdkArgs)
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
 	if err != nil {
 		return err
 	}
 
 	data := &RollupManagerDumpData{}
 
-	data.Info, err = getRollupManagerInfo(rollupManagerArgs)
+	data.Data, err = getRollupManagerData(rollupManagerArgs)
 	if err != nil {
 		return err
 	}
@@ -305,8 +285,8 @@ func getRollupManagerRollupTypes(rollupManagerArgs *parsedRollupManagerArgs) ([]
 	return rollupTypes, nil
 }
 
-func getRollupManagerInfo(rollupManagerArgs *parsedRollupManagerArgs) (*RollupManagerInfo, error) {
-	data := &RollupManagerInfo{}
+func getRollupManagerData(rollupManagerArgs *parsedRollupManagerArgs) (*RollupManagerData, error) {
+	data := &RollupManagerData{}
 	var err error
 
 	data.Pol, err = rollupManagerArgs.rollupManager.Pol(nil)
