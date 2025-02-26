@@ -6,12 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/0xPolygon/polygon-cli/abi"
+	"github.com/0xPolygon/polygon-cli/util"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/0xPolygon/polygon-cli/abi"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"github.com/0xPolygon/polygon-cli/util"
 	"io"
 	"math"
 	"math/big"
@@ -331,7 +331,7 @@ func EthTestDataToString(data EthTestData) string {
 		// We have few tests with numeric code, ex:
 		// "code": 16449,
 		return util.GetHexString(data.(float64))
-	
+
 	default:
 		log.Fatal().Any("input", data).Str("kind", v.Kind().String()).Msg("Attempted to convert unknown type to raw data")
 	}

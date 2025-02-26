@@ -6,10 +6,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	fuzz "github.com/google/gofuzz"
 	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz/argfuzz"
 	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/ethereum/go-ethereum/crypto"
+	fuzz "github.com/google/gofuzz"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
