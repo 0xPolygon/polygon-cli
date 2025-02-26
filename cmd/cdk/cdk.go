@@ -350,4 +350,8 @@ func init() {
 	bridgeCmd.AddCommand(bridgeInspectCmd)
 	bridgeCmd.AddCommand(bridgeDumpCmd)
 	bridgeCmd.AddCommand(bridgeMonitorCmd)
+
+	gerCmd.AddCommand(gerInspectCmd)
+	gerCmd.AddCommand(gerDumpCmd)
+	gerCmd.AddCommand(gerMonitorCmd)
 }

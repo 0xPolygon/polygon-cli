@@ -42,6 +42,8 @@ The command also inherits flags from parent commands.
 - [polycli](polycli.md) - A Swiss Army knife of blockchain tools.
 - [polycli cdk bridge](polycli_cdk_bridge.md) - 
 
+- [polycli cdk ger](polycli_cdk_ger.md) - 
+
 - [polycli cdk rollup](polycli_cdk_rollup.md) - 
 
 - [polycli cdk rollup-manager](polycli_cdk_rollup-manager.md) - 
