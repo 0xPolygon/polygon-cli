@@ -41,6 +41,7 @@ require (
 require github.com/alecthomas/participle/v2 v2.1.1
 
 require (
+	github.com/0xPolygon/cdk-contracts-tooling v0.0.1 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/pion/dtls/v2 v2.2.12 // indirect
