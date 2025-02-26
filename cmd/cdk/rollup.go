@@ -71,17 +71,24 @@ func rollupInspect(cmd *cobra.Command) error {
 		return err
 	}
 
+	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
+
 	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
 	if err != nil {
 		return err
 	}
 
-	rollupArgs, err := cdkInputArgs.parseRollupArgs(ctx, rollupManagerArgs)
+	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs)
 	if err != nil {
 		return err
 	}
 
-	data, err := getRollupData(rollupManagerArgs, rollupArgs.rollupID)
+	rollupArgs, err := cdkInputArgs.parseRollupArgs(ctx, rollupManager)
+	if err != nil {
+		return err
+	}
+
+	data, err := getRollupData(rollupManager, rollupArgs.rollupID)
 	if err != nil {
 		return err
 	}
@@ -98,24 +105,31 @@ func rollupDump(cmd *cobra.Command) error {
 		return err
 	}
 
+	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
+
 	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
 	if err != nil {
 		return err
 	}
 
-	rollupArgs, err := cdkInputArgs.parseRollupArgs(ctx, rollupManagerArgs)
+	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs)
+	if err != nil {
+		return err
+	}
+
+	rollupArgs, err := cdkInputArgs.parseRollupArgs(ctx, rollupManager)
 	if err != nil {
 		return err
 	}
 
 	data := &RollupDumpData{}
 
-	data.Data, err = getRollupData(rollupManagerArgs, rollupArgs.rollupID)
+	data.Data, err = getRollupData(rollupManager, rollupArgs.rollupID)
 	if err != nil {
 		return err
 	}
 
-	data.Type, err = getRollupType(rollupManagerArgs, data.Data.RollupTypeID)
+	data.Type, err = getRollupType(rollupManager, data.Data.RollupTypeID)
 	if err != nil {
 		return err
 	}
@@ -129,8 +143,8 @@ func rollupMonitor(cmd *cobra.Command) error {
 	panic("not implemented")
 }
 
-func getRollupData(rollupManagerArgs *parsedRollupManagerArgs, rollupID uint32) (*RollupData, error) {
-	rollupData, err := rollupManagerArgs.rollupManager.RollupIDToRollupData(nil, rollupID)
+func getRollupData(rollupManager rollupManagerContractInterface, rollupID uint32) (*RollupData, error) {
+	rollupData, err := rollupManager.RollupIDToRollupData(nil, rollupID)
 	if err != nil {
 		return nil, err
 	}
@@ -151,8 +165,8 @@ func getRollupData(rollupManagerArgs *parsedRollupManagerArgs, rollupID uint32) 
 	}, nil
 }
 
-func getRollupType(rollupManagerArgs *parsedRollupManagerArgs, rollupTypeID uint64) (*RollupTypeData, error) {
-	rollupType, err := rollupManagerArgs.rollupManager.RollupTypeMap(nil, uint32(rollupTypeID))
+func getRollupType(rollupManager rollupManagerContractInterface, rollupTypeID uint64) (*RollupTypeData, error) {
+	rollupType, err := rollupManager.RollupTypeMap(nil, uint32(rollupTypeID))
 	if err != nil {
 		return nil, err
 	}

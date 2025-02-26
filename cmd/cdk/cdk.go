@@ -91,13 +91,11 @@ type inputArgs struct {
 }
 
 type parsedCDKArgs struct {
-	rpcURL    string
-	rpcClient *ethclient.Client
-	forkID    uint64
+	rpcURL string
+	forkID uint64
 }
 
 type parsedRollupManagerArgs struct {
-	rollupManager        rollupManagerContractInterface
 	rollupManagerAddress common.Address
 }
 
@@ -123,18 +121,11 @@ func (inputArgs *inputArgs) parseCDKArgs(ctx context.Context) (*parsedCDKArgs, e
 	args := &parsedCDKArgs{}
 
 	args.rpcURL = *inputArgs.rpcURL
-	args.rpcClient = mustGetRPCClient(ctx, args.rpcURL)
 
 	if inputArgs.forkID != nil && len(*inputArgs.forkID) > 0 {
 		_, found := knownForks[*inputArgs.forkID]
 		if !found {
-			keys := make([]string, len(knownForks))
-			for k := range knownForks {
-				keys = append(keys, k)
-			}
-			slices.Sort(keys)
-			v := strings.Join(keys, ", ")
-			return nil, fmt.Errorf("invalid forkID. supported forkIDs are %s", v)
+			return nil, invalidForkIDErr()
 		}
 		args.forkID = knownForks[*inputArgs.forkID]
 	}
@@ -155,31 +146,10 @@ func (inputArgs *inputArgs) parseRollupManagerArgs(ctx context.Context, cdkArgs 
 		args.rollupManagerAddress = common.HexToAddress(*cdkInputArgs.rollupManagerAddress)
 	}
 
-	switch cdkArgs.forkID {
-	case etrog:
-		rollupManager, err := etrog_rollup_manager.NewPolygonrollupmanager(args.rollupManagerAddress, cdkArgs.rpcClient)
-		if err != nil {
-			return nil, err
-		}
-		args.rollupManager = rollupManager
-	case elderberry:
-		rollupManager, err := elderberry_rollup_manager.NewPolygonrollupmanager(args.rollupManagerAddress, cdkArgs.rpcClient)
-		if err != nil {
-			return nil, err
-		}
-		args.rollupManager = rollupManager
-	case banana:
-		rollupManager, err := banana_rollup_manager.NewPolygonrollupmanager(args.rollupManagerAddress, cdkArgs.rpcClient)
-		if err != nil {
-			return nil, err
-		}
-		args.rollupManager = rollupManager
-	}
-
 	return args, nil
 }
 
-func (inputArgs *inputArgs) parseRollupArgs(ctx context.Context, rollupManagerArgs *parsedRollupManagerArgs) (*parsedRollupArgs, error) {
+func (inputArgs *inputArgs) parseRollupArgs(ctx context.Context, rollupManager rollupManagerContractInterface) (*parsedRollupArgs, error) {
 	args := &parsedRollupArgs{}
 
 	var rollupChainID uint64
@@ -213,13 +183,13 @@ func (inputArgs *inputArgs) parseRollupArgs(ctx context.Context, rollupManagerAr
 			return nil, fmt.Errorf("%s, %s, or %s must be provided", ArgRollupID, ArgRollupChainID, ArgRollupAddress)
 		}
 		if rollupChainID != 0 {
-			rollupID, err := rollupManagerArgs.rollupManager.ChainIDToRollupID(nil, rollupChainID)
+			rollupID, err := rollupManager.ChainIDToRollupID(nil, rollupChainID)
 			if err != nil {
 				return nil, err
 			}
 			args.rollupID = rollupID
 		} else if args.rollupAddress != (common.Address{}) {
-			rollupID, err := rollupManagerArgs.rollupManager.RollupAddressToID(nil, args.rollupAddress)
+			rollupID, err := rollupManager.RollupAddressToID(nil, args.rollupAddress)
 			if err != nil {
 				return nil, err
 			}
@@ -238,12 +208,47 @@ func mustGetRPCClient(ctx context.Context, rpcURL string) *ethclient.Client {
 	return rpcClient
 }
 
+func getRollupManager(cdkArgs *parsedCDKArgs, rpcClient *ethclient.Client, rollupManagerArgs *parsedRollupManagerArgs) (rollupManagerContractInterface, error) {
+	var rollupManager rollupManagerContractInterface
+	var err error
+	switch cdkArgs.forkID {
+	case etrog:
+		rollupManager, err = etrog_rollup_manager.NewPolygonrollupmanager(rollupManagerArgs.rollupManagerAddress, rpcClient)
+		if err != nil {
+			return nil, err
+		}
+	case elderberry:
+		rollupManager, err = elderberry_rollup_manager.NewPolygonrollupmanager(rollupManagerArgs.rollupManagerAddress, rpcClient)
+		if err != nil {
+			return nil, err
+		}
+	case banana:
+		rollupManager, err = banana_rollup_manager.NewPolygonrollupmanager(rollupManagerArgs.rollupManagerAddress, rpcClient)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, invalidForkIDErr()
+	}
+	return rollupManager, nil
+}
+
 func mustLogJSONIndent(v any) {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		panic(err)
 	}
 	log.Info().Msgf("%s", string(b))
+}
+
+func invalidForkIDErr() error {
+	forkIDs := make([]string, 0, len(knownForks))
+	for forkID := range knownForks {
+		forkIDs = append(forkIDs, forkID)
+	}
+	slices.Sort(forkIDs)
+	v := strings.Join(forkIDs, ", ")
+	return fmt.Errorf("invalid forkID. supported forkIDs are %s", v)
 }
 
 func init() {

@@ -129,17 +129,26 @@ type rollupManagerContractInterface interface {
 }
 
 func rollupManagerListRollups(cmd *cobra.Command) error {
-	cdkArgs, err := cdkInputArgs.parseCDKArgs(cmd.Context())
+	ctx := cmd.Context()
+
+	cdkArgs, err := cdkInputArgs.parseCDKArgs(ctx)
 	if err != nil {
 		return err
 	}
 
-	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(cmd.Context(), *cdkArgs)
+	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
+
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
 	if err != nil {
 		return err
 	}
 
-	rollups, err := getRollupManagerRollups(rollupManagerArgs)
+	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs)
+	if err != nil {
+		return err
+	}
+
+	rollups, err := getRollupManagerRollups(rollupManager)
 	if err != nil {
 		return err
 	}
@@ -149,17 +158,26 @@ func rollupManagerListRollups(cmd *cobra.Command) error {
 }
 
 func rollupManagerListRollupTypes(cmd *cobra.Command) error {
-	cdkArgs, err := cdkInputArgs.parseCDKArgs(cmd.Context())
+	ctx := cmd.Context()
+
+	cdkArgs, err := cdkInputArgs.parseCDKArgs(ctx)
 	if err != nil {
 		return err
 	}
 
-	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(cmd.Context(), *cdkArgs)
+	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
+
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
 	if err != nil {
 		return err
 	}
 
-	rollupTypes, err := getRollupManagerRollupTypes(rollupManagerArgs)
+	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs)
+	if err != nil {
+		return err
+	}
+
+	rollupTypes, err := getRollupManagerRollupTypes(rollupManager)
 	if err != nil {
 		return err
 	}
@@ -176,12 +194,19 @@ func rollupManagerInspect(cmd *cobra.Command) error {
 		return err
 	}
 
+	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
+
 	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
 	if err != nil {
 		return err
 	}
 
-	data, err := getRollupManagerData(rollupManagerArgs)
+	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs)
+	if err != nil {
+		return err
+	}
+
+	data, err := getRollupManagerData(rollupManager)
 	if err != nil {
 		return err
 	}
@@ -198,24 +223,31 @@ func rollupManagerDump(cmd *cobra.Command) error {
 		return err
 	}
 
+	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
+
 	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
+	if err != nil {
+		return err
+	}
+
+	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs)
 	if err != nil {
 		return err
 	}
 
 	data := &RollupManagerDumpData{}
 
-	data.Data, err = getRollupManagerData(rollupManagerArgs)
+	data.Data, err = getRollupManagerData(rollupManager)
 	if err != nil {
 		return err
 	}
 
-	data.Rollups, err = getRollupManagerRollups(rollupManagerArgs)
+	data.Rollups, err = getRollupManagerRollups(rollupManager)
 	if err != nil {
 		return err
 	}
 
-	data.RollupTypes, err = getRollupManagerRollupTypes(rollupManagerArgs)
+	data.RollupTypes, err = getRollupManagerRollupTypes(rollupManager)
 	if err != nil {
 		return err
 	}
@@ -229,15 +261,15 @@ func rollupManagerMonitor(cmd *cobra.Command) error {
 	panic("not implemented")
 }
 
-func getRollupManagerRollups(rollupManagerArgs *parsedRollupManagerArgs) ([]RollupData, error) {
-	rollupCount, err := rollupManagerArgs.rollupManager.RollupCount(nil)
+func getRollupManagerRollups(rollupManager rollupManagerContractInterface) ([]RollupData, error) {
+	rollupCount, err := rollupManager.RollupCount(nil)
 	if err != nil {
 		return nil, err
 	}
 
 	rollups := make([]RollupData, 0, rollupCount)
 	for i := uint32(1); i <= rollupCount; i++ {
-		rollupData, err := rollupManagerArgs.rollupManager.RollupIDToRollupData(nil, i)
+		rollupData, err := rollupManager.RollupIDToRollupData(nil, i)
 		if err != nil {
 			return nil, err
 		}
@@ -260,15 +292,15 @@ func getRollupManagerRollups(rollupManagerArgs *parsedRollupManagerArgs) ([]Roll
 	return rollups, nil
 }
 
-func getRollupManagerRollupTypes(rollupManagerArgs *parsedRollupManagerArgs) ([]RollupTypeData, error) {
-	rollupTypeCount, err := rollupManagerArgs.rollupManager.RollupTypeCount(nil)
+func getRollupManagerRollupTypes(rollupManager rollupManagerContractInterface) ([]RollupTypeData, error) {
+	rollupTypeCount, err := rollupManager.RollupTypeCount(nil)
 	if err != nil {
 		return nil, err
 	}
 
 	rollupTypes := make([]RollupTypeData, 0, rollupTypeCount)
 	for i := uint32(1); i <= rollupTypeCount; i++ {
-		rollupType, err := rollupManagerArgs.rollupManager.RollupTypeMap(nil, i)
+		rollupType, err := rollupManager.RollupTypeMap(nil, i)
 		if err != nil {
 			return nil, err
 		}
@@ -285,71 +317,71 @@ func getRollupManagerRollupTypes(rollupManagerArgs *parsedRollupManagerArgs) ([]
 	return rollupTypes, nil
 }
 
-func getRollupManagerData(rollupManagerArgs *parsedRollupManagerArgs) (*RollupManagerData, error) {
+func getRollupManagerData(rollupManager rollupManagerContractInterface) (*RollupManagerData, error) {
 	data := &RollupManagerData{}
 	var err error
 
-	data.Pol, err = rollupManagerArgs.rollupManager.Pol(nil)
+	data.Pol, err = rollupManager.Pol(nil)
 	if err != nil {
 		return nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
-	data.BridgeAddress, err = rollupManagerArgs.rollupManager.BridgeAddress(nil)
+	data.BridgeAddress, err = rollupManager.BridgeAddress(nil)
 	if err != nil {
 		return nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
-	data.RollupCount, err = rollupManagerArgs.rollupManager.RollupCount(nil)
+	data.RollupCount, err = rollupManager.RollupCount(nil)
 	if err != nil {
 		return nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
-	data.BatchFee, err = rollupManagerArgs.rollupManager.GetBatchFee(nil)
+	data.BatchFee, err = rollupManager.GetBatchFee(nil)
 	if err != nil {
 		return nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
-	data.TotalSequencedBatches, err = rollupManagerArgs.rollupManager.TotalSequencedBatches(nil)
+	data.TotalSequencedBatches, err = rollupManager.TotalSequencedBatches(nil)
 	if err != nil {
 		return nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
-	data.TotalVerifiedBatches, err = rollupManagerArgs.rollupManager.TotalVerifiedBatches(nil)
+	data.TotalVerifiedBatches, err = rollupManager.TotalVerifiedBatches(nil)
 	if err != nil {
 		return nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
-	data.LastAggregationTimestamp, err = rollupManagerArgs.rollupManager.LastAggregationTimestamp(nil)
+	data.LastAggregationTimestamp, err = rollupManager.LastAggregationTimestamp(nil)
 	if err != nil {
 		return nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
-	data.LastDeactivatedEmergencyStateTimestamp, err = rollupManagerArgs.rollupManager.LastDeactivatedEmergencyStateTimestamp(nil)
+	data.LastDeactivatedEmergencyStateTimestamp, err = rollupManager.LastDeactivatedEmergencyStateTimestamp(nil)
 	if err != nil {
 		return nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
-	// data.TrustedAggregatorTimeout, err = rollupManagerArgs.rollupManager.TrustedAggregatorTimeout(nil)
+	// data.TrustedAggregatorTimeout, err = rollupManager.TrustedAggregatorTimeout(nil)
 	// if err != nil {
 	// 	return err
 	// }
 	// time.Sleep(contractRequestInterval)
 
-	// data.PendingStateTimeout, err = rollupManagerArgs.rollupManager.PendingStateTimeout(nil)
+	// data.PendingStateTimeout, err = rollupManager.PendingStateTimeout(nil)
 	// if err != nil {
 	// 	return err
 	// }
 	// time.Sleep(contractRequestInterval)
 
-	// data.MultiplierBatchFee, err = rollupManagerArgs.rollupManager.MultiplierBatchFee(nil)
+	// data.MultiplierBatchFee, err = rollupManager.MultiplierBatchFee(nil)
 	// if err != nil {
 	// 	return err
 	// }
