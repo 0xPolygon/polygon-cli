@@ -4,7 +4,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cobra"
 )
@@ -63,69 +62,15 @@ type RollupManagerData struct {
 	TotalVerifiedBatches                   uint64         `json:"totalVerifiedBatches"`
 	LastAggregationTimestamp               uint64         `json:"lastAggregationTimestamp"`
 	LastDeactivatedEmergencyStateTimestamp uint64         `json:"lastDeactivatedEmergencyStateTimestamp"`
-	TrustedAggregatorTimeout               uint64         `json:"trustedAggregatorTimeout"`
-	PendingStateTimeout                    uint64         `json:"pendingStateTimeout"`
-	MultiplierBatchFee                     uint16         `json:"multiplierBatchFee"`
+	// TrustedAggregatorTimeout               uint64         `json:"trustedAggregatorTimeout"`
+	// PendingStateTimeout                    uint64         `json:"pendingStateTimeout"`
+	// MultiplierBatchFee                     uint16         `json:"multiplierBatchFee"`
 }
 
 type RollupManagerDumpData struct {
 	Data        *RollupManagerData `json:"data"`
 	Rollups     []RollupData       `json:"rollups"`
 	RollupTypes []RollupTypeData   `json:"rollupTypes"`
-}
-
-type rollupManagerContractInterface interface {
-	// rollup manager methods
-	BridgeAddress(opts *bind.CallOpts) (common.Address, error)
-	CalculateRewardPerBatch(opts *bind.CallOpts) (*big.Int, error)
-	GetBatchFee(opts *bind.CallOpts) (*big.Int, error)
-	GetForcedBatchFee(opts *bind.CallOpts) (*big.Int, error)
-	GetRoleAdmin(opts *bind.CallOpts, role [32]byte) ([32]byte, error)
-	GetRollupExitRoot(opts *bind.CallOpts) ([32]byte, error)
-	GlobalExitRootManager(opts *bind.CallOpts) (common.Address, error)
-	HasRole(opts *bind.CallOpts, role [32]byte, account common.Address) (bool, error)
-	IsEmergencyState(opts *bind.CallOpts) (bool, error)
-	LastAggregationTimestamp(opts *bind.CallOpts) (uint64, error)
-	LastDeactivatedEmergencyStateTimestamp(opts *bind.CallOpts) (uint64, error)
-	MultiplierBatchFee(opts *bind.CallOpts) (uint16, error)
-	PendingStateTimeout(opts *bind.CallOpts) (uint64, error)
-	Pol(opts *bind.CallOpts) (common.Address, error)
-	RollupCount(opts *bind.CallOpts) (uint32, error)
-	RollupTypeCount(opts *bind.CallOpts) (uint32, error)
-	TotalSequencedBatches(opts *bind.CallOpts) (uint64, error)
-	TotalVerifiedBatches(opts *bind.CallOpts) (uint64, error)
-	TrustedAggregatorTimeout(opts *bind.CallOpts) (uint64, error)
-	VerifyBatchTimeTarget(opts *bind.CallOpts) (uint64, error)
-
-	// rollup methods
-	ChainIDToRollupID(opts *bind.CallOpts, chainID uint64) (uint32, error)
-	RollupAddressToID(opts *bind.CallOpts, rollupAddress common.Address) (uint32, error)
-	GetLastVerifiedBatch(opts *bind.CallOpts, rollupID uint32) (uint64, error)
-	GetRollupBatchNumToStateRoot(opts *bind.CallOpts, rollupID uint32, batchNum uint64) ([32]byte, error)
-	GetInputSnarkBytes(opts *bind.CallOpts, rollupID uint32, initNumBatch uint64, finalNewBatch uint64, newLocalExitRoot [32]byte, oldStateRoot [32]byte, newStateRoot [32]byte) ([]byte, error)
-	IsPendingStateConsolidable(opts *bind.CallOpts, rollupID uint32, pendingStateNum uint64) (bool, error)
-	RollupIDToRollupData(opts *bind.CallOpts, rollupID uint32) (struct {
-		RollupContract                 common.Address
-		ChainID                        uint64
-		Verifier                       common.Address
-		ForkID                         uint64
-		LastLocalExitRoot              [32]byte
-		LastBatchSequenced             uint64
-		LastVerifiedBatch              uint64
-		LastPendingState               uint64
-		LastPendingStateConsolidated   uint64
-		LastVerifiedBatchBeforeUpgrade uint64
-		RollupTypeID                   uint64
-		RollupCompatibilityID          uint8
-	}, error)
-	RollupTypeMap(opts *bind.CallOpts, rollupTypeID uint32) (struct {
-		ConsensusImplementation common.Address
-		Verifier                common.Address
-		ForkID                  uint64
-		RollupCompatibilityID   uint8
-		Obsolete                bool
-		Genesis                 [32]byte
-	}, error)
 }
 
 func rollupManagerListRollups(cmd *cobra.Command) error {
@@ -143,7 +88,7 @@ func rollupManagerListRollups(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs)
+	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}
@@ -172,7 +117,7 @@ func rollupManagerListRollupTypes(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs)
+	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}
@@ -201,7 +146,7 @@ func rollupManagerInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs)
+	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}
@@ -230,7 +175,7 @@ func rollupManagerDump(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs)
+	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}

@@ -16,8 +16,16 @@ import (
 	"github.com/spf13/cobra"
 
 	banana_rollup_manager "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonrollupmanager"
+	banana_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonzkevmbridge"
+	banana_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonzkevmglobalexitroot"
+
 	elderberry_rollup_manager "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonrollupmanager"
+	elderberry_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonzkevmbridge"
+	elderberry_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonzkevmglobalexitroot"
+
 	etrog_rollup_manager "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonrollupmanager"
+	etrog_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonzkevmbridge"
+	etrog_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonzkevmglobalexitroot"
 )
 
 const (
@@ -29,6 +37,8 @@ const (
 	ArgRollupChainID = "rollup-chain-id"
 	ArgRollupID      = "rollup-id"
 	ArgRollupAddress = "rollup-address"
+	ArgBridgeAddress = "bridge-address"
+	ArgGERAddress    = "ger-address"
 
 	defaultRPCURL = "http://localhost:8545"
 	defaultForkId = "12"
@@ -88,6 +98,8 @@ type inputArgs struct {
 	rollupID      *string
 	rollupChainID *string
 	rollupAddress *string
+	bridgeAddress *string
+	gerAddress    *string
 }
 
 type parsedCDKArgs struct {
@@ -208,22 +220,22 @@ func mustGetRPCClient(ctx context.Context, rpcURL string) *ethclient.Client {
 	return rpcClient
 }
 
-func getRollupManager(cdkArgs *parsedCDKArgs, rpcClient *ethclient.Client, rollupManagerArgs *parsedRollupManagerArgs) (rollupManagerContractInterface, error) {
+func getRollupManager(cdkArgs *parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (rollupManagerContractInterface, error) {
 	var rollupManager rollupManagerContractInterface
 	var err error
 	switch cdkArgs.forkID {
 	case etrog:
-		rollupManager, err = etrog_rollup_manager.NewPolygonrollupmanager(rollupManagerArgs.rollupManagerAddress, rpcClient)
+		rollupManager, err = etrog_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
 		if err != nil {
 			return nil, err
 		}
 	case elderberry:
-		rollupManager, err = elderberry_rollup_manager.NewPolygonrollupmanager(rollupManagerArgs.rollupManagerAddress, rpcClient)
+		rollupManager, err = elderberry_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
 		if err != nil {
 			return nil, err
 		}
 	case banana:
-		rollupManager, err = banana_rollup_manager.NewPolygonrollupmanager(rollupManagerArgs.rollupManagerAddress, rpcClient)
+		rollupManager, err = banana_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
 		if err != nil {
 			return nil, err
 		}
@@ -231,6 +243,56 @@ func getRollupManager(cdkArgs *parsedCDKArgs, rpcClient *ethclient.Client, rollu
 		return nil, invalidForkIDErr()
 	}
 	return rollupManager, nil
+}
+
+func getBridge(cdkArgs *parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (bridgeContractInterface, error) {
+	var bridge bridgeContractInterface
+	var err error
+	switch cdkArgs.forkID {
+	case etrog:
+		bridge, err = etrog_bridge.NewPolygonzkevmbridge(addr, rpcClient)
+		if err != nil {
+			return nil, err
+		}
+	case elderberry:
+		bridge, err = elderberry_bridge.NewPolygonzkevmbridge(addr, rpcClient)
+		if err != nil {
+			return nil, err
+		}
+	case banana:
+		bridge, err = banana_bridge.NewPolygonzkevmbridge(addr, rpcClient)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, invalidForkIDErr()
+	}
+	return bridge, nil
+}
+
+func getGER(cdkArgs *parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (gerContractInterface, error) {
+	var ger gerContractInterface
+	var err error
+	switch cdkArgs.forkID {
+	case etrog:
+		ger, err = etrog_ger.NewPolygonzkevmglobalexitroot(addr, rpcClient)
+		if err != nil {
+			return nil, err
+		}
+	case elderberry:
+		ger, err = elderberry_ger.NewPolygonzkevmglobalexitroot(addr, rpcClient)
+		if err != nil {
+			return nil, err
+		}
+	case banana:
+		ger, err = banana_ger.NewPolygonzkevmglobalexitroot(addr, rpcClient)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, invalidForkIDErr()
+	}
+	return ger, nil
 }
 
 func mustLogJSONIndent(v any) {
@@ -255,17 +317,25 @@ func init() {
 	// cdk
 	cdkInputArgs.rpcURL = CDKCmd.PersistentFlags().String(ArgRpcURL, defaultRPCURL, "The RPC URL of the network containing the CDK contracts")
 	cdkInputArgs.forkID = CDKCmd.PersistentFlags().String(ArgForkID, defaultForkId, "The ForkID of the cdk networks")
+	cdkInputArgs.rollupManagerAddress = CDKCmd.PersistentFlags().String(ArgRollupManagerAddress, "", "The address of the rollup contract")
 
 	// rollup manager
-	cdkInputArgs.rollupManagerAddress = rollupManagerCmd.PersistentFlags().String(ArgRollupManagerAddress, "", "The address of the rollup contract")
 
 	// rollup
 	cdkInputArgs.rollupID = rollupCmd.PersistentFlags().String(ArgRollupID, "", "The rollup ID")
 	cdkInputArgs.rollupChainID = rollupCmd.PersistentFlags().String(ArgRollupChainID, "", "The rollup chain ID")
 	cdkInputArgs.rollupAddress = rollupCmd.PersistentFlags().String(ArgRollupAddress, "", "The rollup Address")
 
+	// bridge
+	cdkInputArgs.bridgeAddress = bridgeCmd.PersistentFlags().String(ArgBridgeAddress, "", "The address of the bridge contract")
+
+	// ger
+	cdkInputArgs.gerAddress = gerCmd.PersistentFlags().String(ArgGERAddress, "", "The address of the GER contract")
+
 	CDKCmd.AddCommand(rollupManagerCmd)
-	rollupManagerCmd.AddCommand(rollupCmd)
+	CDKCmd.AddCommand(rollupCmd)
+	CDKCmd.AddCommand(bridgeCmd)
+	CDKCmd.AddCommand(gerCmd)
 
 	rollupManagerCmd.AddCommand(rollupManagerListRollupsCmd)
 	rollupManagerCmd.AddCommand(rollupManagerListRollupTypesCmd)
@@ -276,4 +346,8 @@ func init() {
 	rollupCmd.AddCommand(rollupInspectCmd)
 	rollupCmd.AddCommand(rollupDumpCmd)
 	rollupCmd.AddCommand(rollupMonitorCmd)
+
+	bridgeCmd.AddCommand(bridgeInspectCmd)
+	bridgeCmd.AddCommand(bridgeDumpCmd)
+	bridgeCmd.AddCommand(bridgeMonitorCmd)
 }

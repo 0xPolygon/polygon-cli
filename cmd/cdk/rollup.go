@@ -78,7 +78,7 @@ func rollupInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs)
+	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func rollupDump(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs)
+	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}
