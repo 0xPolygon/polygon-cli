@@ -78,27 +78,24 @@ type RollupTypeData struct {
 	Genesis                 common.Hash    `json:"genesis"`
 }
 
-type RollupManagerInspectData struct {
-	Pol           common.Address `json:"pol"`
-	BridgeAddress common.Address `json:"bridgeAddress"`
-	RollupCount   uint32         `json:"rollupCount"`
-	BatchFee      *big.Int       `json:"batchFee"`
+type RollupManagerInfo struct {
+	Pol                                    common.Address `json:"pol"`
+	BridgeAddress                          common.Address `json:"bridgeAddress"`
+	RollupCount                            uint32         `json:"rollupCount"`
+	BatchFee                               *big.Int       `json:"batchFee"`
+	TotalSequencedBatches                  uint64         `json:"totalSequencedBatches"`
+	TotalVerifiedBatches                   uint64         `json:"totalVerifiedBatches"`
+	LastAggregationTimestamp               uint64         `json:"lastAggregationTimestamp"`
+	LastDeactivatedEmergencyStateTimestamp uint64         `json:"lastDeactivatedEmergencyStateTimestamp"`
+	TrustedAggregatorTimeout               uint64         `json:"trustedAggregatorTimeout"`
+	PendingStateTimeout                    uint64         `json:"pendingStateTimeout"`
+	MultiplierBatchFee                     uint16         `json:"multiplierBatchFee"`
 }
 
 type RollupManagerDumpData struct {
-	Pol                                    common.Address   `json:"pol"`
-	BridgeAddress                          common.Address   `json:"bridgeAddress"`
-	RollupCount                            uint32           `json:"rollupCount"`
-	BatchFee                               *big.Int         `json:"batchFee"`
-	TotalSequencedBatches                  uint64           `json:"totalSequencedBatches"`
-	TotalVerifiedBatches                   uint64           `json:"totalVerifiedBatches"`
-	LastAggregationTimestamp               uint64           `json:"lastAggregationTimestamp"`
-	LastDeactivatedEmergencyStateTimestamp uint64           `json:"lastDeactivatedEmergencyStateTimestamp"`
-	TrustedAggregatorTimeout               uint64           `json:"trustedAggregatorTimeout"`
-	PendingStateTimeout                    uint64           `json:"pendingStateTimeout"`
-	MultiplierBatchFee                     uint16           `json:"multiplierBatchFee"`
-	Rollups                                []RollupData     `json:"rollups"`
-	RollupTypes                            []RollupTypeData `json:"rollupTypes"`
+	Info        *RollupManagerInfo `json:"info"`
+	Rollups     []RollupData       `json:"rollups"`
+	RollupTypes []RollupTypeData   `json:"rollupTypes"`
 }
 
 type rollupManagerContractInterface interface {
@@ -195,31 +192,6 @@ func rollupManagerListRollupTypes(cmd *cobra.Command) error {
 	return nil
 }
 
-func getRollupManagerRollupTypes(rollupManagerArgs *parsedRollupManagerArgs) ([]RollupTypeData, error) {
-	rollupTypeCount, err := rollupManagerArgs.rollupManager.RollupTypeCount(nil)
-	if err != nil {
-		return nil, err
-	}
-
-	rollupTypes := make([]RollupTypeData, 0, rollupTypeCount)
-	for i := uint32(1); i <= rollupTypeCount; i++ {
-		rollupType, err := rollupManagerArgs.rollupManager.RollupTypeMap(nil, i)
-		if err != nil {
-			return nil, err
-		}
-		rollupTypes = append(rollupTypes, RollupTypeData{
-			ConsensusImplementation: rollupType.ConsensusImplementation,
-			Verifier:                rollupType.Verifier,
-			ForkID:                  rollupType.ForkID,
-			RollupCompatibilityID:   rollupType.RollupCompatibilityID,
-			Obsolete:                rollupType.Obsolete,
-			Genesis:                 rollupType.Genesis,
-		})
-		time.Sleep(contractRequestInterval)
-	}
-	return rollupTypes, nil
-}
-
 func rollupManagerInspect(cmd *cobra.Command) error {
 	cdkArgs, err := cdkInputArgs.parseCDKArgs(cmd.Context())
 	if err != nil {
@@ -231,34 +203,12 @@ func rollupManagerInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	data := RollupManagerInspectData{}
-
-	data.Pol, err = rollupManagerArgs.rollupManager.Pol(nil)
+	data, err := getRollupManagerInfo(rollupManagerArgs)
 	if err != nil {
 		return err
 	}
-	time.Sleep(contractRequestInterval)
-
-	data.BridgeAddress, err = rollupManagerArgs.rollupManager.BridgeAddress(nil)
-	if err != nil {
-		return err
-	}
-	time.Sleep(contractRequestInterval)
-
-	data.RollupCount, err = rollupManagerArgs.rollupManager.RollupCount(nil)
-	if err != nil {
-		return err
-	}
-	time.Sleep(contractRequestInterval)
-
-	data.BatchFee, err = rollupManagerArgs.rollupManager.GetBatchFee(nil)
-	if err != nil {
-		return err
-	}
-	time.Sleep(contractRequestInterval)
 
 	mustLogJSONIndent(data)
-
 	return nil
 }
 
@@ -273,73 +223,12 @@ func rollupManagerDump(cmd *cobra.Command) error {
 		return err
 	}
 
-	data := RollupManagerDumpData{}
+	data := &RollupManagerDumpData{}
 
-	data.Pol, err = rollupManagerArgs.rollupManager.Pol(nil)
+	data.Info, err = getRollupManagerInfo(rollupManagerArgs)
 	if err != nil {
 		return err
 	}
-	time.Sleep(contractRequestInterval)
-
-	data.BridgeAddress, err = rollupManagerArgs.rollupManager.BridgeAddress(nil)
-	if err != nil {
-		return err
-	}
-	time.Sleep(contractRequestInterval)
-
-	data.RollupCount, err = rollupManagerArgs.rollupManager.RollupCount(nil)
-	if err != nil {
-		return err
-	}
-	time.Sleep(contractRequestInterval)
-
-	data.BatchFee, err = rollupManagerArgs.rollupManager.GetBatchFee(nil)
-	if err != nil {
-		return err
-	}
-	time.Sleep(contractRequestInterval)
-
-	data.TotalSequencedBatches, err = rollupManagerArgs.rollupManager.TotalSequencedBatches(nil)
-	if err != nil {
-		return err
-	}
-	time.Sleep(contractRequestInterval)
-
-	data.TotalVerifiedBatches, err = rollupManagerArgs.rollupManager.TotalVerifiedBatches(nil)
-	if err != nil {
-		return err
-	}
-	time.Sleep(contractRequestInterval)
-
-	data.LastAggregationTimestamp, err = rollupManagerArgs.rollupManager.LastAggregationTimestamp(nil)
-	if err != nil {
-		return err
-	}
-	time.Sleep(contractRequestInterval)
-
-	data.LastDeactivatedEmergencyStateTimestamp, err = rollupManagerArgs.rollupManager.LastDeactivatedEmergencyStateTimestamp(nil)
-	if err != nil {
-		return err
-	}
-	time.Sleep(contractRequestInterval)
-
-	// data.TrustedAggregatorTimeout, err = rollupManagerArgs.rollupManager.TrustedAggregatorTimeout(nil)
-	// if err != nil {
-	// 	return err
-	// }
-	// time.Sleep(contractRequestInterval)
-
-	// data.PendingStateTimeout, err = rollupManagerArgs.rollupManager.PendingStateTimeout(nil)
-	// if err != nil {
-	// 	return err
-	// }
-	// time.Sleep(contractRequestInterval)
-
-	// data.MultiplierBatchFee, err = rollupManagerArgs.rollupManager.MultiplierBatchFee(nil)
-	// if err != nil {
-	// 	return err
-	// }
-	// time.Sleep(contractRequestInterval)
 
 	data.Rollups, err = getRollupManagerRollups(rollupManagerArgs)
 	if err != nil {
@@ -389,4 +278,102 @@ func getRollupManagerRollups(rollupManagerArgs *parsedRollupManagerArgs) ([]Roll
 		time.Sleep(contractRequestInterval)
 	}
 	return rollups, nil
+}
+
+func getRollupManagerRollupTypes(rollupManagerArgs *parsedRollupManagerArgs) ([]RollupTypeData, error) {
+	rollupTypeCount, err := rollupManagerArgs.rollupManager.RollupTypeCount(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	rollupTypes := make([]RollupTypeData, 0, rollupTypeCount)
+	for i := uint32(1); i <= rollupTypeCount; i++ {
+		rollupType, err := rollupManagerArgs.rollupManager.RollupTypeMap(nil, i)
+		if err != nil {
+			return nil, err
+		}
+		rollupTypes = append(rollupTypes, RollupTypeData{
+			ConsensusImplementation: rollupType.ConsensusImplementation,
+			Verifier:                rollupType.Verifier,
+			ForkID:                  rollupType.ForkID,
+			RollupCompatibilityID:   rollupType.RollupCompatibilityID,
+			Obsolete:                rollupType.Obsolete,
+			Genesis:                 rollupType.Genesis,
+		})
+		time.Sleep(contractRequestInterval)
+	}
+	return rollupTypes, nil
+}
+
+func getRollupManagerInfo(rollupManagerArgs *parsedRollupManagerArgs) (*RollupManagerInfo, error) {
+	data := &RollupManagerInfo{}
+	var err error
+
+	data.Pol, err = rollupManagerArgs.rollupManager.Pol(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	data.BridgeAddress, err = rollupManagerArgs.rollupManager.BridgeAddress(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	data.RollupCount, err = rollupManagerArgs.rollupManager.RollupCount(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	data.BatchFee, err = rollupManagerArgs.rollupManager.GetBatchFee(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	data.TotalSequencedBatches, err = rollupManagerArgs.rollupManager.TotalSequencedBatches(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	data.TotalVerifiedBatches, err = rollupManagerArgs.rollupManager.TotalVerifiedBatches(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	data.LastAggregationTimestamp, err = rollupManagerArgs.rollupManager.LastAggregationTimestamp(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	data.LastDeactivatedEmergencyStateTimestamp, err = rollupManagerArgs.rollupManager.LastDeactivatedEmergencyStateTimestamp(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	// data.TrustedAggregatorTimeout, err = rollupManagerArgs.rollupManager.TrustedAggregatorTimeout(nil)
+	// if err != nil {
+	// 	return err
+	// }
+	// time.Sleep(contractRequestInterval)
+
+	// data.PendingStateTimeout, err = rollupManagerArgs.rollupManager.PendingStateTimeout(nil)
+	// if err != nil {
+	// 	return err
+	// }
+	// time.Sleep(contractRequestInterval)
+
+	// data.MultiplierBatchFee, err = rollupManagerArgs.rollupManager.MultiplierBatchFee(nil)
+	// if err != nil {
+	// 	return err
+	// }
+	// time.Sleep(contractRequestInterval)
+
+	return data, nil
 }
