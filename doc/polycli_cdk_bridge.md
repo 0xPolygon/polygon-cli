@@ -1,4 +1,4 @@
-# `polycli cdk rollup-manager`
+# `polycli cdk bridge`
 
 > Auto-generated documentation.
 
@@ -16,7 +16,8 @@
 ## Flags
 
 ```bash
-  -h, --help   help for rollup-manager
+      --bridge-address string   The address of the bridge contract
+  -h, --help                    help for bridge
 ```
 
 The command also inherits flags from parent commands.
@@ -40,13 +41,9 @@ The command also inherits flags from parent commands.
 ## See also
 
 - [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks
-- [polycli cdk rollup-manager dump](polycli_cdk_rollup-manager_dump.md) - 
+- [polycli cdk bridge dump](polycli_cdk_bridge_dump.md) - 
 
-- [polycli cdk rollup-manager inspect](polycli_cdk_rollup-manager_inspect.md) - 
+- [polycli cdk bridge inspect](polycli_cdk_bridge_inspect.md) - 
 
-- [polycli cdk rollup-manager list-rollup-types](polycli_cdk_rollup-manager_list-rollup-types.md) - 
-
-- [polycli cdk rollup-manager list-rollups](polycli_cdk_rollup-manager_list-rollups.md) - 
-
-- [polycli cdk rollup-manager monitor](polycli_cdk_rollup-manager_monitor.md) - 
+- [polycli cdk bridge monitor](polycli_cdk_bridge_monitor.md) - 
 

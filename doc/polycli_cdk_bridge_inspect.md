@@ -1,4 +1,4 @@
-# `polycli cdk rollup-manager`
+# `polycli cdk bridge inspect`
 
 > Auto-generated documentation.
 
@@ -13,15 +13,20 @@
 
 
 
+```bash
+polycli cdk bridge inspect [flags]
+```
+
 ## Flags
 
 ```bash
-  -h, --help   help for rollup-manager
+  -h, --help   help for inspect
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
+      --bridge-address string           The address of the bridge contract
       --config string                   config file (default is $HOME/.polygon-cli.yaml)
       --fork-id string                  The ForkID of the cdk networks (default "12")
       --pretty-logs                     Should logs be in pretty format or JSON (default true)
@@ -39,14 +44,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks
-- [polycli cdk rollup-manager dump](polycli_cdk_rollup-manager_dump.md) - 
-
-- [polycli cdk rollup-manager inspect](polycli_cdk_rollup-manager_inspect.md) - 
-
-- [polycli cdk rollup-manager list-rollup-types](polycli_cdk_rollup-manager_list-rollup-types.md) - 
-
-- [polycli cdk rollup-manager list-rollups](polycli_cdk_rollup-manager_list-rollups.md) - 
-
-- [polycli cdk rollup-manager monitor](polycli_cdk_rollup-manager_monitor.md) - 
-
+- [polycli cdk bridge](polycli_cdk_bridge.md) - 

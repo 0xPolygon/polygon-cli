@@ -16,9 +16,10 @@ Utilities for interacting with CDK networks
 ## Flags
 
 ```bash
-      --fork-id string   The ForkID of the cdk networks (default "12")
-  -h, --help             help for cdk
-      --rpc-url string   The RPC URL of the network containing the CDK contracts (default "http://localhost:8545")
+      --fork-id string                  The ForkID of the cdk networks (default "12")
+  -h, --help                            help for cdk
+      --rollup-manager-address string   The address of the rollup contract
+      --rpc-url string                  The RPC URL of the network containing the CDK contracts (default "http://localhost:8545")
 ```
 
 The command also inherits flags from parent commands.
@@ -39,5 +40,9 @@ The command also inherits flags from parent commands.
 ## See also
 
 - [polycli](polycli.md) - A Swiss Army knife of blockchain tools.
+- [polycli cdk bridge](polycli_cdk_bridge.md) - 
+
+- [polycli cdk rollup](polycli_cdk_rollup.md) - 
+
 - [polycli cdk rollup-manager](polycli_cdk_rollup-manager.md) - 
 

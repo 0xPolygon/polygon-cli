@@ -1,4 +1,4 @@
-# `polycli cdk rollup-manager`
+# `polycli cdk rollup`
 
 > Auto-generated documentation.
 
@@ -16,7 +16,10 @@
 ## Flags
 
 ```bash
-  -h, --help   help for rollup-manager
+  -h, --help                     help for rollup
+      --rollup-address string    The rollup Address
+      --rollup-chain-id string   The rollup chain ID
+      --rollup-id string         The rollup ID
 ```
 
 The command also inherits flags from parent commands.
@@ -40,13 +43,9 @@ The command also inherits flags from parent commands.
 ## See also
 
 - [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks
-- [polycli cdk rollup-manager dump](polycli_cdk_rollup-manager_dump.md) - 
+- [polycli cdk rollup dump](polycli_cdk_rollup_dump.md) - 
 
-- [polycli cdk rollup-manager inspect](polycli_cdk_rollup-manager_inspect.md) - 
+- [polycli cdk rollup inspect](polycli_cdk_rollup_inspect.md) - 
 
-- [polycli cdk rollup-manager list-rollup-types](polycli_cdk_rollup-manager_list-rollup-types.md) - 
-
-- [polycli cdk rollup-manager list-rollups](polycli_cdk_rollup-manager_list-rollups.md) - 
-
-- [polycli cdk rollup-manager monitor](polycli_cdk_rollup-manager_monitor.md) - 
+- [polycli cdk rollup monitor](polycli_cdk_rollup_monitor.md) - 
 
