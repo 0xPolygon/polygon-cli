@@ -639,12 +639,17 @@ func claimEverything(cmd *cobra.Command) error {
 	nonceIncrement := big.NewInt(1)
 	retryNonces := make(chan *big.Int, concurrency) // bounded same as workPool
 
+	wg := sync.WaitGroup{} // wg so the last ones can get processed
+
 	for _, d := range depositMap {
 		workPool <- d // block until a slot is available
 		go func(deposit *BridgeDeposit) {
+			wg.Add(1)
 			defer func() {
 				<-workPool // release work slot
 			}()
+			defer wg.Done()
+
 			if deposit.DestNet != currentNetworkID {
 				log.Debug().Uint32("destination_network", deposit.DestNet).Msg("discarding deposit for different network")
 				return
@@ -698,6 +703,7 @@ func claimEverything(cmd *cobra.Command) error {
 		}(d)
 	}
 
+	wg.Wait()
 	return nil
 }
 
