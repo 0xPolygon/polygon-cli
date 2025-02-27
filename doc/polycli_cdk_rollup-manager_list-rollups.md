@@ -11,10 +11,22 @@
 
 ## Description
 
-
+List some basic information about each rollup
 
 ```bash
 polycli cdk rollup-manager list-rollups [flags]
+```
+
+## Usage
+
+This command will reach the rollup manager contract and retrieve all information about the rollups registered.
+
+Below is an example of how to use it
+
+```bash
+polycli cdk rollup-manager list-rollups
+    --rpc-url https://sepolia.drpc.org
+    --rollup-manager-address bali
 ```
 
 ## Flags
@@ -43,4 +55,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk rollup-manager](polycli_cdk_rollup-manager.md) - 
+- [polycli cdk rollup-manager](polycli_cdk_rollup-manager.md) - Utilities for interacting with CDK rollup manager contract

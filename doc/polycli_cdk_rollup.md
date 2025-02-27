@@ -11,7 +11,7 @@
 
 ## Description
 
-
+Utilities for interacting with CDK rollup manager to get rollup specific information
 
 ## Flags
 
@@ -43,9 +43,9 @@ The command also inherits flags from parent commands.
 ## See also
 
 - [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks
-- [polycli cdk rollup dump](polycli_cdk_rollup_dump.md) - 
+- [polycli cdk rollup dump](polycli_cdk_rollup_dump.md) - List detailed information about a specific rollup
 
-- [polycli cdk rollup inspect](polycli_cdk_rollup_inspect.md) - 
+- [polycli cdk rollup inspect](polycli_cdk_rollup_inspect.md) - List some basic information about a specific rollup
 
-- [polycli cdk rollup monitor](polycli_cdk_rollup_monitor.md) - 
+- [polycli cdk rollup monitor](polycli_cdk_rollup_monitor.md) - Watch for rollup events and display them on the fly
 

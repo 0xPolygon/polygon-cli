@@ -11,10 +11,22 @@
 
 ## Description
 
-
+List detailed information about the global exit root manager
 
 ```bash
 polycli cdk ger dump [flags]
+```
+
+## Usage
+
+This command will reach the global exit root contract and retrieve detailed information.
+
+Below is an example of how to use it
+
+```bash
+polycli cdk ger dump
+    --rpc-url https://sepolia.drpc.org
+    --rollup-manager-address bali
 ```
 
 ## Flags
@@ -44,4 +56,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk ger](polycli_cdk_ger.md) - 
+- [polycli cdk ger](polycli_cdk_ger.md) - Utilities for interacting with CDK global exit root manager contract

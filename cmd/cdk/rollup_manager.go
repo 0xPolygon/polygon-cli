@@ -1,6 +1,7 @@
 package cdk
 
 import (
+	_ "embed"
 	"math/big"
 	"time"
 
@@ -9,45 +10,71 @@ import (
 )
 
 var rollupManagerCmd = &cobra.Command{
-	Use:  "rollup-manager",
-	Args: cobra.NoArgs,
+	Use:   "rollup-manager",
+	Short: "Utilities for interacting with CDK rollup manager contract",
+	Args:  cobra.NoArgs,
 }
 
+//go:embed rollupManagerListRollupsUsage.md
+var rollupManagerListRollupsUsage string
+
 var rollupManagerListRollupsCmd = &cobra.Command{
-	Use:  "list-rollups",
-	Args: cobra.NoArgs,
+	Use:   "list-rollups",
+	Short: "List some basic information about each rollup",
+	Long:  rollupManagerListRollupsUsage,
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return rollupManagerListRollups(cmd)
 	},
 }
 
+//go:embed rollupManagerListRollupTypesUsage.md
+var rollupManagerListRollupTypesUsage string
+
 var rollupManagerListRollupTypesCmd = &cobra.Command{
-	Use:  "list-rollup-types",
-	Args: cobra.NoArgs,
+	Use:   "list-rollup-types",
+	Short: "List some basic information about each rollup type",
+	Long:  rollupManagerListRollupTypesUsage,
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return rollupManagerListRollupTypes(cmd)
 	},
 }
 
+//go:embed rollupManagerInspectUsage.md
+var rollupManagerInspectUsage string
+
 var rollupManagerInspectCmd = &cobra.Command{
-	Use:  "inspect",
-	Args: cobra.NoArgs,
+	Use:   "inspect",
+	Short: "List some basic information about the rollup manager",
+	Long:  rollupManagerInspectUsage,
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return rollupManagerInspect(cmd)
 	},
 }
 
+//go:embed rollupManagerDumpUsage.md
+var rollupManagerDumpUsage string
+
 var rollupManagerDumpCmd = &cobra.Command{
-	Use:  "dump",
-	Args: cobra.NoArgs,
+	Use:   "dump",
+	Short: "List detailed information about the rollup manager",
+	Long:  rollupManagerDumpUsage,
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return rollupManagerDump(cmd)
 	},
 }
 
+//go:embed rollupManagerMonitorUsage.md
+var rollupManagerMonitorUsage string
+
 var rollupManagerMonitorCmd = &cobra.Command{
-	Use:  "monitor",
-	Args: cobra.NoArgs,
+	Use:   "monitor",
+	Short: "Watch for rollup manager events and display them on the fly",
+	Long:  rollupManagerMonitorUsage,
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return rollupManagerMonitor(cmd)
 	},

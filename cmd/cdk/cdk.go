@@ -85,6 +85,7 @@ var (
 var CDKCmd = &cobra.Command{
 	Use:   "cdk",
 	Short: "Utilities for interacting with CDK networks",
+	Long:  "Basic utility commands for interacting with the cdk contracts",
 	Args:  cobra.NoArgs,
 }
 

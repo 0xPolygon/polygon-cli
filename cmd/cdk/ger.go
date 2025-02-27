@@ -1,6 +1,7 @@
 package cdk
 
 import (
+	_ "embed"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -8,29 +9,42 @@ import (
 )
 
 var gerCmd = &cobra.Command{
-	Use:  "ger",
-	Args: cobra.NoArgs,
+	Use:   "ger",
+	Short: "Utilities for interacting with CDK global exit root manager contract",
+	Args:  cobra.NoArgs,
 }
 
+//go:embed gerInspectUsage.md
+var gerInspectUsage string
 var gerInspectCmd = &cobra.Command{
-	Use:  "inspect",
-	Args: cobra.NoArgs,
+	Use:   "inspect",
+	Short: "List some basic information about the global exit root manager",
+	Long:  gerInspectUsage,
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return gerInspect(cmd)
 	},
 }
 
+//go:embed gerDumpUsage.md
+var gerDumpUsage string
 var gerDumpCmd = &cobra.Command{
-	Use:  "dump",
-	Args: cobra.NoArgs,
+	Use:   "dump",
+	Short: "List detailed information about the global exit root manager",
+	Long:  gerDumpUsage,
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return gerDump(cmd)
 	},
 }
 
+//go:embed gerMonitorUsage.md
+var gerMonitorUsage string
 var gerMonitorCmd = &cobra.Command{
-	Use:  "monitor",
-	Args: cobra.NoArgs,
+	Use:   "monitor",
+	Short: "Watch for global exit root manager events and display them on the fly",
+	Long:  gerMonitorUsage,
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return gerMonitor(cmd)
 	},

@@ -1,6 +1,7 @@
 package cdk
 
 import (
+	_ "embed"
 	"math/big"
 	"time"
 
@@ -9,29 +10,42 @@ import (
 )
 
 var bridgeCmd = &cobra.Command{
-	Use:  "bridge",
-	Args: cobra.NoArgs,
+	Use:   "bridge",
+	Short: "Utilities for interacting with CDK bridge contract",
+	Args:  cobra.NoArgs,
 }
 
+//go:embed bridgeInspectUsage.md
+var bridgeInspectUsage string
 var bridgeInspectCmd = &cobra.Command{
-	Use:  "inspect",
-	Args: cobra.NoArgs,
+	Use:   "inspect",
+	Short: "List some basic information about the bridge",
+	Long:  bridgeInspectUsage,
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return bridgeInspect(cmd)
 	},
 }
 
+//go:embed bridgeDumpUsage.md
+var bridgeDumpUsage string
 var bridgeDumpCmd = &cobra.Command{
-	Use:  "dump",
-	Args: cobra.NoArgs,
+	Use:   "dump",
+	Short: "List detailed information about the bridge",
+	Long:  bridgeDumpUsage,
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return bridgeDump(cmd)
 	},
 }
 
+//go:embed bridgeMonitorUsage.md
+var bridgeMonitorUsage string
 var bridgeMonitorCmd = &cobra.Command{
-	Use:  "monitor",
-	Args: cobra.NoArgs,
+	Use:   "monitor",
+	Short: "Watch for bridge events and display them on the fly",
+	Long:  bridgeMonitorUsage,
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return bridgeMonitor(cmd)
 	},

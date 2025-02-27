@@ -11,10 +11,22 @@
 
 ## Description
 
-
+Watch for bridge events and display them on the fly
 
 ```bash
 polycli cdk bridge monitor [flags]
+```
+
+## Usage
+
+This command will keep watching for bridge events on chain and print them on the fly.
+
+Below are some example of how to use it
+
+```bash
+polycli cdk bridge monitor
+    --rpc-url https://sepolia.drpc.org
+    --rollup-manager-address bali
 ```
 
 ## Flags
@@ -44,4 +56,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk bridge](polycli_cdk_bridge.md) - 
+- [polycli cdk bridge](polycli_cdk_bridge.md) - Utilities for interacting with CDK bridge contract

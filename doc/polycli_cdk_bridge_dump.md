@@ -11,10 +11,22 @@
 
 ## Description
 
-
+List detailed information about the bridge
 
 ```bash
 polycli cdk bridge dump [flags]
+```
+
+## Usage
+
+This command will reach the bridge contract and retrieve detailed information.
+
+Below is an example of how to use it
+
+```bash
+polycli cdk bridge dump
+    --rpc-url https://sepolia.drpc.org
+    --rollup-manager-address bali
 ```
 
 ## Flags
@@ -44,4 +56,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk bridge](polycli_cdk_bridge.md) - 
+- [polycli cdk bridge](polycli_cdk_bridge.md) - Utilities for interacting with CDK bridge contract

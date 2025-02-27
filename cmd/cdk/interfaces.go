@@ -1,6 +1,7 @@
 package cdk
 
 import (
+	_ "embed"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"

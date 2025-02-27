@@ -11,10 +11,22 @@
 
 ## Description
 
-
+Watch for rollup manager events and display them on the fly
 
 ```bash
 polycli cdk rollup-manager monitor [flags]
+```
+
+## Usage
+
+This command will keep watching for rollup manager events on chain and print them on the fly.
+
+Below is an example of how to use it
+
+```bash
+polycli cdk rollup-manager monitor
+    --rpc-url https://sepolia.drpc.org
+    --rollup-manager-address bali
 ```
 
 ## Flags
@@ -43,4 +55,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk rollup-manager](polycli_cdk_rollup-manager.md) - 
+- [polycli cdk rollup-manager](polycli_cdk_rollup-manager.md) - Utilities for interacting with CDK rollup manager contract

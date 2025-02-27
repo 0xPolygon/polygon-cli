@@ -1,34 +1,52 @@
 package cdk
 
 import (
+	_ "embed"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cobra"
 )
 
 var rollupCmd = &cobra.Command{
-	Use:  "rollup",
-	Args: cobra.NoArgs,
+	Use:   "rollup",
+	Short: "Utilities for interacting with CDK rollup manager to get rollup specific information",
+	Args:  cobra.NoArgs,
 }
 
+//go:embed rollupInspectUsage.md
+var rollupInspectUsage string
+
 var rollupInspectCmd = &cobra.Command{
-	Use:  "inspect",
-	Args: cobra.NoArgs,
+	Use:   "inspect",
+	Short: "List some basic information about a specific rollup",
+	Long:  rollupInspectUsage,
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return rollupInspect(cmd)
 	},
 }
 
+//go:embed rollupDumpUsage.md
+var rollupDumpUsage string
+
 var rollupDumpCmd = &cobra.Command{
-	Use:  "dump",
-	Args: cobra.NoArgs,
+	Use:   "dump",
+	Short: "List detailed information about a specific rollup",
+	Long:  rollupDumpUsage,
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return rollupDump(cmd)
 	},
 }
 
+//go:embed rollupMonitorUsage.md
+var rollupMonitorUsage string
+
 var rollupMonitorCmd = &cobra.Command{
-	Use:  "monitor",
-	Args: cobra.NoArgs,
+	Use:   "monitor",
+	Short: "Watch for rollup events and display them on the fly",
+	Long:  rollupMonitorUsage,
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return rollupMonitor(cmd)
 	},
