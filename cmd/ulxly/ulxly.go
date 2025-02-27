@@ -29,6 +29,7 @@ import (
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
+	"github.com/0xPolygon/polygon-cli/bindings/ulxly/polygonrollupmanager"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -99,18 +100,11 @@ type BridgeDepositResponse struct {
 }
 
 func readDeposit(cmd *cobra.Command) error {
-	rpcUrl, err := cmd.Flags().GetString(ArgRPCURL)
-	if err != nil {
-		return err
-	}
-	bridgeAddress, err := cmd.Flags().GetString(ArgBridgeAddress)
-	if err != nil {
-		return err
-	}
-
-	toBlock := *inputUlxlyArgs.toBlock
-	fromBlock := *inputUlxlyArgs.fromBlock
-	filter := *inputUlxlyArgs.filterSize
+	bridgeAddress := getDepositOptions.BridgeAddress
+	rpcUrl := getDepositsAndVerifyBatchesSharedOptions.URL
+	toBlock := getDepositsAndVerifyBatchesSharedOptions.ToBlock
+	fromBlock := getDepositsAndVerifyBatchesSharedOptions.FromBlock
+	filter := getDepositsAndVerifyBatchesSharedOptions.FilterSize
 
 	// Dial the Ethereum RPC server.
 	rpc, err := ethrpc.DialContext(cmd.Context(), rpcUrl)
@@ -155,6 +149,65 @@ func readDeposit(cmd *cobra.Command) error {
 		err = evtV2Iterator.Close()
 		if err != nil {
 			log.Error().Err(err).Msg("error closing event iterator")
+		}
+		currentBlock = endBlock
+	}
+
+	return nil
+}
+
+func readVerifyBatches(cmd *cobra.Command) error {
+	rollupManagerAddress := getVerifyBatchesOptions.RollupManagerAddress
+	rpcUrl := getDepositsAndVerifyBatchesSharedOptions.URL
+	toBlock := getDepositsAndVerifyBatchesSharedOptions.ToBlock
+	fromBlock := getDepositsAndVerifyBatchesSharedOptions.FromBlock
+	filter := getDepositsAndVerifyBatchesSharedOptions.FilterSize
+
+	// Dial the Ethereum RPC server.
+	rpc, err := ethrpc.DialContext(cmd.Context(), rpcUrl)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to Dial RPC")
+		return err
+	}
+	defer rpc.Close()
+	client := ethclient.NewClient(rpc)
+	rm := common.HexToAddress(rollupManagerAddress)
+	rollupManager, err := polygonrollupmanager.NewPolygonrollupmanager(rm, client)
+	if err != nil {
+		return err
+	}
+	verifyBatchesTrustedAggregatorSignatureHash := crypto.Keccak256Hash([]byte("VerifyBatchesTrustedAggregator(uint32,uint64,bytes32,bytes32,address)"))
+	
+	currentBlock := fromBlock
+	for currentBlock < toBlock {
+		endBlock := currentBlock + filter
+		if endBlock > toBlock {
+			endBlock = toBlock
+		}
+		// Filter 0xd1ec3a1216f08b6eff72e169ceb548b782db18a6614852618d86bb19f3f9b0d3
+		query := ethereum.FilterQuery{
+			FromBlock: new(big.Int).SetUint64(currentBlock),
+			ToBlock:  new(big.Int).SetUint64(endBlock),
+			Addresses: []common.Address{rm},
+			Topics:    [][]common.Hash{{verifyBatchesTrustedAggregatorSignatureHash}},
+		}
+		logs, err := client.FilterLogs(cmd.Context(), query)
+		if err != nil {
+			return err
+		}
+
+		for _, vLog := range logs {
+			vb, err := rollupManager.ParseVerifyBatchesTrustedAggregator(vLog)
+			if err != nil {
+				return err
+			}
+			log.Info().Uint32("RollupID", vb.RollupID).Uint64("block-number", vb.Raw.BlockNumber).Msg("Found rollupmanager VerifyBatchesTrustedAggregator event")
+			var jBytes []byte
+			jBytes, err = json.Marshal(vb)
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(jBytes))
 		}
 		currentBlock = endBlock
 	}
@@ -1204,6 +1257,9 @@ var proofUsage string
 //go:embed depositGetUsage.md
 var depositGetUsage string
 
+//go:embed verifyBatchesGetUsage.md
+var verifyBatchesGetUsage string
+
 var ULxLyCmd = &cobra.Command{
 	Use:   "ulxly",
 	Short: "Utilities for interacting with the uLxLy bridge",
@@ -1211,6 +1267,11 @@ var ULxLyCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 }
 var ulxlyBridgeAndClaimCmd = &cobra.Command{
+	Args:   cobra.NoArgs,
+	Hidden: true,
+}
+
+var ulxlyGetDepositsAndVerifyBatchesCmd = &cobra.Command{
 	Args:   cobra.NoArgs,
 	Hidden: true,
 }
@@ -1228,35 +1289,36 @@ var ulxlyClaimCmd = &cobra.Command{
 }
 
 type ulxlyArgs struct {
-	gasLimit            *uint64
-	chainID             *string
-	privateKey          *string
-	addressOfPrivateKey string
-	value               *string
-	rpcURL              *string
-	bridgeAddress       *string
-	destNetwork         *uint32
-	destAddress         *string
-	tokenAddress        *string
-	forceUpdate         *bool
-	callData            *string
-	callDataFile        *string
-	timeout             *uint64
-	depositCount        *uint64
-	depositNetwork      *uint64
-	bridgeServiceURL    *string
-	inputFileName       *string
-	fromBlock           *uint64
-	toBlock             *uint64
-	filterSize          *uint64
-	depositNumber       *uint64
-	globalIndex         *string
-	gasPrice            *string
-	dryRun              *bool
-	bridgeServiceURLs   *[]string
-	bridgeLimit         *int
-	bridgeOffset        *int
-	wait                *time.Duration
+	gasLimit             *uint64
+	chainID              *string
+	privateKey           *string
+	addressOfPrivateKey  string
+	value                *string
+	rpcURL               *string
+	bridgeAddress        *string
+	rollupManagerAddress *string
+	destNetwork          *uint32
+	destAddress          *string
+	tokenAddress         *string
+	forceUpdate          *bool
+	callData             *string
+	callDataFile         *string
+	timeout              *uint64
+	depositCount         *uint64
+	depositNetwork       *uint64
+	bridgeServiceURL     *string
+	inputFileName        *string
+	fromBlock            *uint64
+	toBlock              *uint64
+	filterSize           *uint64
+	depositNumber        *uint64
+	globalIndex          *string
+	gasPrice             *string
+	dryRun               *bool
+	bridgeServiceURLs    *[]string
+	bridgeLimit          *int
+	bridgeOffset         *int
+	wait                 *time.Duration
 }
 
 var inputUlxlyArgs = ulxlyArgs{}
@@ -1272,36 +1334,42 @@ var (
 	zeroProofCommand         *cobra.Command
 	proofCommand             *cobra.Command
 	getDepositCommand        *cobra.Command
+	getVerifyBatchesCommand  *cobra.Command
+
+	getDepositsAndVerifyBatchesSharedOptions = &GetDepositsAndVerifyBatchesSharedOptions{}
+    getDepositOptions = &GetDepositOptions{}
+    getVerifyBatchesOptions = &GetVerifyBatchesOptions{}
 )
 
 const (
-	ArgGasLimit         = "gas-limit"
-	ArgChainID          = "chain-id"
-	ArgPrivateKey       = "private-key"
-	ArgValue            = "value"
-	ArgRPCURL           = "rpc-url"
-	ArgBridgeAddress    = "bridge-address"
-	ArgDestNetwork      = "destination-network"
-	ArgDestAddress      = "destination-address"
-	ArgForceUpdate      = "force-update-root"
-	ArgCallData         = "call-data"
-	ArgCallDataFile     = "call-data-file"
-	ArgTimeout          = "transaction-receipt-timeout"
-	ArgDepositCount     = "deposit-count"
-	ArgDepositNetwork   = "deposit-network"
-	ArgBridgeServiceURL = "bridge-service-url"
-	ArgFileName         = "file-name"
-	ArgFromBlock        = "from-block"
-	ArgToBlock          = "to-block"
-	ArgFilterSize       = "filter-size"
-	ArgTokenAddress     = "token-address"
-	ArgGlobalIndex      = "global-index"
-	ArgDryRun           = "dry-run"
-	ArgGasPrice         = "gas-price"
-	ArgBridgeMappings   = "bridge-service-map"
-	ArgBridgeLimit      = "bridge-limit"
-	ArgBridgeOffset     = "bridge-offset"
-	ArgWait             = "wait"
+	ArgGasLimit             = "gas-limit"
+	ArgChainID              = "chain-id"
+	ArgPrivateKey           = "private-key"
+	ArgValue                = "value"
+	ArgRPCURL               = "rpc-url"
+	ArgBridgeAddress        = "bridge-address"
+	ArgRollupManagerAddress = "rollup-manager-address"
+	ArgDestNetwork          = "destination-network"
+	ArgDestAddress          = "destination-address"
+	ArgForceUpdate          = "force-update-root"
+	ArgCallData             = "call-data"
+	ArgCallDataFile         = "call-data-file"
+	ArgTimeout              = "transaction-receipt-timeout"
+	ArgDepositCount         = "deposit-count"
+	ArgDepositNetwork       = "deposit-network"
+	ArgBridgeServiceURL     = "bridge-service-url"
+	ArgFileName             = "file-name"
+	ArgFromBlock            = "from-block"
+	ArgToBlock              = "to-block"
+	ArgFilterSize           = "filter-size"
+	ArgTokenAddress         = "token-address"
+	ArgGlobalIndex          = "global-index"
+	ArgDryRun               = "dry-run"
+	ArgGasPrice             = "gas-price"
+	ArgBridgeMappings       = "bridge-service-map"
+	ArgBridgeLimit          = "bridge-limit"
+	ArgBridgeOffset         = "bridge-offset"
+	ArgWait                 = "wait"
 )
 
 func prepInputs(cmd *cobra.Command, args []string) error {
@@ -1347,6 +1415,36 @@ func fatalIfError(err error) {
 		return
 	}
 	log.Fatal().Err(err).Msg("Unexpected error occurred")
+}
+
+type GetDepositsAndVerifyBatchesSharedOptions struct {
+    URL string
+    FromBlock, ToBlock, FilterSize uint64
+}
+
+func (o *GetDepositsAndVerifyBatchesSharedOptions) AddFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVarP(&o.URL, ArgRPCURL, "u", "", "The RPC URL to read the events data")
+	cmd.Flags().Uint64VarP(&o.FromBlock, ArgFromBlock, "f", 0, "The start of the range of blocks to retrieve")
+	cmd.Flags().Uint64VarP(&o.ToBlock, ArgToBlock, "t", 0, "The end of the range of blocks to retrieve")
+	cmd.Flags().Uint64VarP(&o.FilterSize, ArgFilterSize, "i", 1000, "The batch size for individual filter queries")
+	fatalIfError(cmd.MarkFlagRequired(ArgFromBlock))
+	fatalIfError(cmd.MarkFlagRequired(ArgToBlock))
+	fatalIfError(cmd.MarkFlagRequired(ArgRPCURL))
+}
+
+type GetDepositOptions struct {
+    BridgeAddress string
+}
+
+func (o *GetDepositOptions) AddFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVarP(&o.BridgeAddress, ArgBridgeAddress, "a", "", "The address of the ulxly bridge")
+}
+
+type GetVerifyBatchesOptions struct {
+    RollupManagerAddress string
+}
+func (o *GetVerifyBatchesOptions) AddFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVarP(&o.RollupManagerAddress, ArgRollupManagerAddress, "a", "", "The address of the rollup manager contract")
 }
 
 func init() {
@@ -1450,6 +1548,24 @@ or if it's actually an intermediate hash.`,
 		},
 		SilenceUsage: true,
 	}
+	getDepositsAndVerifyBatchesSharedOptions.AddFlags(getDepositCommand)
+    getDepositOptions.AddFlags(getDepositCommand)
+    ulxlyGetDepositsAndVerifyBatchesCmd.AddCommand(getDepositCommand)
+    ULxLyCmd.AddCommand(getDepositCommand)
+
+	getVerifyBatchesCommand = &cobra.Command{
+		Use:   "get-verify-batches",
+		Short: "Generate ndjson for each verify batch over a particular range of blocks",
+		Long:  verifyBatchesGetUsage,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return readVerifyBatches(cmd)
+		},
+		SilenceUsage: true,
+	}
+	getDepositsAndVerifyBatchesSharedOptions.AddFlags(getVerifyBatchesCommand)
+    getVerifyBatchesOptions.AddFlags(getVerifyBatchesCommand)
+    ulxlyGetDepositsAndVerifyBatchesCmd.AddCommand(getVerifyBatchesCommand)
+    ULxLyCmd.AddCommand(getVerifyBatchesCommand)
 
 	// Arguments for both bridge and claim
 	inputUlxlyArgs.rpcURL = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgRPCURL, "", "the URL of the RPC to send the transaction")
@@ -1490,26 +1606,16 @@ or if it's actually an intermediate hash.`,
 	inputUlxlyArgs.bridgeOffset = claimEverythingCommand.Flags().Int(ArgBridgeOffset, 0, "The offset to specify for pagination of the underlying bridge service deposits")
 	fatalIfError(claimEverythingCommand.MarkFlagRequired(ArgBridgeMappings))
 
-	// Args that are just for the get deposit command
-	inputUlxlyArgs.fromBlock = getDepositCommand.Flags().Uint64(ArgFromBlock, 0, "The start of the range of blocks to retrieve")
-	inputUlxlyArgs.toBlock = getDepositCommand.Flags().Uint64(ArgToBlock, 0, "The end of the range of blocks to retrieve")
-	inputUlxlyArgs.filterSize = getDepositCommand.Flags().Uint64(ArgFilterSize, 1000, "The batch size for individual filter queries")
-	getDepositCommand.Flags().String(ArgRPCURL, "", "The RPC URL to read deposit data")
-	getDepositCommand.Flags().String(ArgBridgeAddress, "", "The address of the ulxly bridge")
-	fatalIfError(getDepositCommand.MarkFlagRequired(ArgFromBlock))
-	fatalIfError(getDepositCommand.MarkFlagRequired(ArgToBlock))
-	fatalIfError(getDepositCommand.MarkFlagRequired(ArgRPCURL))
-
 	// Args for the proof command
 	inputUlxlyArgs.inputFileName = proofCommand.Flags().String(ArgFileName, "", "An ndjson file with deposit data")
 	inputUlxlyArgs.depositNumber = proofCommand.Flags().Uint64(ArgDepositCount, 0, "The deposit number to generate a proof for")
 
 	// Top Level
 	ULxLyCmd.AddCommand(ulxlyBridgeAndClaimCmd)
+	ULxLyCmd.AddCommand(ulxlyGetDepositsAndVerifyBatchesCmd)
 	ULxLyCmd.AddCommand(emptyProofCommand)
 	ULxLyCmd.AddCommand(zeroProofCommand)
 	ULxLyCmd.AddCommand(proofCommand)
-	ULxLyCmd.AddCommand(getDepositCommand)
 
 	ULxLyCmd.AddCommand(ulxlyBridgeCmd)
 	ULxLyCmd.AddCommand(ulxlyClaimCmd)
