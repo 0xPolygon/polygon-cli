@@ -216,12 +216,21 @@ func readVerifyBatches(cmd *cobra.Command) error {
 }
 
 func proof(args []string) error {
-	depositNumber := *inputUlxlyArgs.depositNumber
+	depositNumber := proofOptions.DepositCount
 	rawDepositData, err := getInputData(args)
 	if err != nil {
 		return err
 	}
 	return readDeposits(rawDepositData, uint32(depositNumber))
+}
+
+func rollupsExitRootProof(args []string) error {
+	rollupID := rollupsProofOptions.RollupID
+	rawLeavesData, err := getInputData(args)
+	if err != nil {
+		return err
+	}
+	return readRollupsExitRootLeaves(rawLeavesData, rollupID)
 }
 
 func emptyProof() error {
@@ -803,7 +812,7 @@ func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *type
 }
 
 func getInputData(args []string) ([]byte, error) {
-	fileName := *inputUlxlyArgs.inputFileName
+	fileName := proofsSharedOptions.FileName
 	if fileName != "" {
 		return os.ReadFile(fileName)
 	}
@@ -840,7 +849,9 @@ func readDeposits(rawDeposits []byte, depositNumber uint32) error {
 			return fmt.Errorf("missing deposit: %d", lastDeposit+1)
 		}
 		lastDeposit = evt.DepositCount
-		imt.AddLeaf(evt)
+		leaf := hashDeposit(evt)
+		log.Debug().Str("leaf-hash", common.Bytes2Hex(leaf[:])).Msg("Leaf hash calculated")
+		imt.AddLeaf(leaf, evt.DepositCount)
 		log.Info().
 			Uint64("block-number", evt.Raw.BlockNumber).
 			Uint32("deposit-count", evt.DepositCount).
@@ -896,21 +907,19 @@ func (s *IMT) Init() {
 }
 
 // AddLeaf will take a given deposit and add it to the collection of leaves. It will also update the
-func (s *IMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
-	leaf := hashDeposit(deposit)
-	log.Debug().Str("leaf-hash", common.Bytes2Hex(leaf[:])).Msg("Leaf hash calculated")
+func (s *IMT) AddLeaf(leaf common.Hash, position uint32) {
 	// just keep a copy of the leaf indexed by deposit count for now
-	s.Leaves[deposit.DepositCount] = leaf
+	s.Leaves[position] = leaf
 
 	node := leaf
-	size := uint64(deposit.DepositCount) + 1
+	size := uint64(position) + 1
 
 	// copy the previous set of branches as a starting point. We're going to make copies of the branches at each deposit
 	branches := make([]common.Hash, TreeDepth)
-	if deposit.DepositCount == 0 {
+	if position == 0 {
 		branches = generateEmptyHashes(TreeDepth)
 	} else {
-		copy(branches, s.Branches[deposit.DepositCount-1])
+		copy(branches, s.Branches[position-1])
 	}
 
 	for height := uint64(0); height < TreeDepth; height += 1 {
@@ -920,8 +929,8 @@ func (s *IMT) AddLeaf(deposit *ulxly.UlxlyBridgeEvent) {
 		}
 		node = crypto.Keccak256Hash(branches[height][:], node[:])
 	}
-	s.Branches[deposit.DepositCount] = branches
-	s.Roots = append(s.Roots, s.GetRoot(deposit.DepositCount))
+	s.Branches[position] = branches
+	s.Roots = append(s.Roots, s.GetRoot(position))
 }
 
 // GetRoot will return the root for a particular deposit
@@ -1254,6 +1263,9 @@ var claimMessageUsage string
 //go:embed proofUsage.md
 var proofUsage string
 
+//go:embed rollupsProofUsage.md
+var rollupsProofUsage string
+
 //go:embed depositGetUsage.md
 var depositGetUsage string
 
@@ -1272,6 +1284,11 @@ var ulxlyBridgeAndClaimCmd = &cobra.Command{
 }
 
 var ulxlyGetDepositsAndVerifyBatchesCmd = &cobra.Command{
+	Args:   cobra.NoArgs,
+	Hidden: true,
+}
+
+var ulxlyProofsCmd = &cobra.Command{
 	Args:   cobra.NoArgs,
 	Hidden: true,
 }
@@ -1333,12 +1350,16 @@ var (
 	emptyProofCommand        *cobra.Command
 	zeroProofCommand         *cobra.Command
 	proofCommand             *cobra.Command
+	rollupsProofCommand      *cobra.Command
 	getDepositCommand        *cobra.Command
 	getVerifyBatchesCommand  *cobra.Command
 
 	getDepositsAndVerifyBatchesSharedOptions = &GetDepositsAndVerifyBatchesSharedOptions{}
     getDepositOptions = &GetDepositOptions{}
     getVerifyBatchesOptions = &GetVerifyBatchesOptions{}
+	proofsSharedOptions = &ProofsSharedOptions{}
+	proofOptions = &ProofOptions{}
+	rollupsProofOptions = &RollupsProofOptions{}
 )
 
 const (
@@ -1357,6 +1378,7 @@ const (
 	ArgTimeout              = "transaction-receipt-timeout"
 	ArgDepositCount         = "deposit-count"
 	ArgDepositNetwork       = "deposit-network"
+	ArgRollupID             = "rollup-id"
 	ArgBridgeServiceURL     = "bridge-service-url"
 	ArgFileName             = "file-name"
 	ArgFromBlock            = "from-block"
@@ -1416,6 +1438,28 @@ func fatalIfError(err error) {
 	}
 	log.Fatal().Err(err).Msg("Unexpected error occurred")
 }
+
+type ProofsSharedOptions struct {
+    FileName string
+}
+func (o *ProofsSharedOptions) AddFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVarP(&o.FileName, ArgFileName, "", "", "An ndjson file with verify batches event data")
+}
+
+type ProofOptions struct {
+    DepositCount uint32
+}
+func (o *ProofOptions) AddFlags(cmd *cobra.Command) {
+	cmd.Flags().Uint32VarP(&o.DepositCount, ArgDepositCount, "", 0, "The deposit number to generate a proof for")
+}
+
+type RollupsProofOptions struct {
+    RollupID uint32
+}
+func (o *RollupsProofOptions) AddFlags(cmd *cobra.Command) {
+	cmd.Flags().Uint32VarP(&o.RollupID, ArgRollupID, "", 0, "The rollupID number to generate a proof for")
+}
+
 
 type GetDepositsAndVerifyBatchesSharedOptions struct {
     URL string
@@ -1539,6 +1583,25 @@ or if it's actually an intermediate hash.`,
 		},
 		SilenceUsage: true,
 	}
+	proofsSharedOptions.AddFlags(proofCommand)
+    proofOptions.AddFlags(proofCommand)
+    ulxlyProofsCmd.AddCommand(proofCommand)
+    ULxLyCmd.AddCommand(proofCommand)
+
+	rollupsProofCommand = &cobra.Command{
+		Use:   "rollups-proof",
+		Short: "Generate a proof for a given range of rollups",
+		Long:  rollupsProofUsage,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return rollupsExitRootProof(args)
+		},
+		SilenceUsage: true,
+	}
+	proofsSharedOptions.AddFlags(rollupsProofCommand)
+    rollupsProofOptions.AddFlags(rollupsProofCommand)
+    ulxlyProofsCmd.AddCommand(rollupsProofCommand)
+    ULxLyCmd.AddCommand(rollupsProofCommand)
+
 	getDepositCommand = &cobra.Command{
 		Use:   "get-deposits",
 		Short: "Generate ndjson for each bridge deposit over a particular range of blocks",
@@ -1606,13 +1669,10 @@ or if it's actually an intermediate hash.`,
 	inputUlxlyArgs.bridgeOffset = claimEverythingCommand.Flags().Int(ArgBridgeOffset, 0, "The offset to specify for pagination of the underlying bridge service deposits")
 	fatalIfError(claimEverythingCommand.MarkFlagRequired(ArgBridgeMappings))
 
-	// Args for the proof command
-	inputUlxlyArgs.inputFileName = proofCommand.Flags().String(ArgFileName, "", "An ndjson file with deposit data")
-	inputUlxlyArgs.depositNumber = proofCommand.Flags().Uint64(ArgDepositCount, 0, "The deposit number to generate a proof for")
-
 	// Top Level
 	ULxLyCmd.AddCommand(ulxlyBridgeAndClaimCmd)
 	ULxLyCmd.AddCommand(ulxlyGetDepositsAndVerifyBatchesCmd)
+	ULxLyCmd.AddCommand(ulxlyProofsCmd)
 	ULxLyCmd.AddCommand(emptyProofCommand)
 	ULxLyCmd.AddCommand(zeroProofCommand)
 	ULxLyCmd.AddCommand(proofCommand)
