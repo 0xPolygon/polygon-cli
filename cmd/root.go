@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
 	"os"
 
 	"github.com/0xPolygon/polygon-cli/cmd/cdk"
@@ -135,6 +136,7 @@ func NewPolycliCommand() *cobra.Command {
 		version.VersionCmd,
 		wallet.WalletCmd,
 		wrapcontract.WrapContractCmd,
+		foldtrace.FoldTraceCmd,
 	)
 	return cmd
 }
