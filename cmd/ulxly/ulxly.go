@@ -642,9 +642,9 @@ func claimEverything(cmd *cobra.Command) error {
 	wg := sync.WaitGroup{} // wg so the last ones can get processed
 
 	for _, d := range depositMap {
+		wg.Add(1)
 		workPool <- d // block until a slot is available
 		go func(deposit *BridgeDeposit) {
-			wg.Add(1)
 			defer func() {
 				<-workPool // release work slot
 			}()
