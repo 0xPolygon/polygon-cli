@@ -7,12 +7,27 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func GetRpcUrlFlagValue(cmd *cobra.Command, required bool) (*string, error) {
-	return getFlagValue(cmd, "rpc-url", "ETH_RPC_URL", required)
+const (
+	rpcUrlFlagName, rpcUrlEnvVar         = "rpc-url", "ETH_RPC_URL"
+	privateKeyFlagName, privateKeyEnvVar = "private-key", "PRIVATE_KEY"
+)
+
+func GetRpcUrlFlagValue(cmd *cobra.Command) *string {
+	v, _ := getFlagValue(cmd, rpcUrlFlagName, rpcUrlEnvVar, false)
+	return v
 }
 
-func GetPrivateKeyFlagValue(cmd *cobra.Command, required bool) (*string, error) {
-	return getFlagValue(cmd, "private-key", "PRIVATE_KEY", required)
+func GetRequiredRpcUrlFlagValue(cmd *cobra.Command) (*string, error) {
+	return getFlagValue(cmd, rpcUrlFlagName, rpcUrlEnvVar, true)
+}
+
+func GetPrivateKeyFlagValue(cmd *cobra.Command) *string {
+	v, _ := getFlagValue(cmd, privateKeyFlagName, privateKeyEnvVar, false)
+	return v
+}
+
+func GetRequiredPrivateKeyFlagValue(cmd *cobra.Command) (*string, error) {
+	return getFlagValue(cmd, privateKeyFlagName, privateKeyEnvVar, true)
 }
 
 func getFlagValue(cmd *cobra.Command, flagName, envVarName string, required bool) (*string, error) {

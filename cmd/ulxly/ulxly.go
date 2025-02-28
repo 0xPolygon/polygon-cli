@@ -1216,12 +1216,12 @@ var ulxlyBridgeAndClaimCmd = &cobra.Command{
 	Hidden: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		var err error
-		inputUlxlyArgs.rpcURL, err = flag_loader.GetRpcUrlFlagValue(cmd, true)
+		inputUlxlyArgs.rpcURL, err = flag_loader.GetRequiredRpcUrlFlagValue(cmd)
 		if err != nil {
 			return err
 		}
 
-		inputUlxlyArgs.privateKey, err = flag_loader.GetPrivateKeyFlagValue(cmd, true)
+		inputUlxlyArgs.privateKey, err = flag_loader.GetRequiredPrivateKeyFlagValue(cmd)
 		if err != nil {
 			return err
 		}

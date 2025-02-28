@@ -168,8 +168,8 @@ var LoadtestCmd = &cobra.Command{
 	Long:  loadtestUsage,
 	Args:  cobra.NoArgs,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		inputLoadTestParams.RPCUrl, _ = flag_loader.GetRpcUrlFlagValue(cmd, false)
-		inputLoadTestParams.PrivateKey, _ = flag_loader.GetPrivateKeyFlagValue(cmd, false)
+		inputLoadTestParams.RPCUrl = flag_loader.GetRpcUrlFlagValue(cmd)
+		inputLoadTestParams.PrivateKey = flag_loader.GetPrivateKeyFlagValue(cmd)
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		zerolog.DurationFieldUnit = time.Second

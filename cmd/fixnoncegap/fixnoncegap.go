@@ -27,8 +27,8 @@ var FixNonceGapCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		var err error
-		inputFixNonceGapArgs.rpcURL, _ = flag_loader.GetRpcUrlFlagValue(cmd, false)
-		inputFixNonceGapArgs.privateKey, err = flag_loader.GetPrivateKeyFlagValue(cmd, true)
+		inputFixNonceGapArgs.rpcURL = flag_loader.GetRpcUrlFlagValue(cmd)
+		inputFixNonceGapArgs.privateKey, err = flag_loader.GetRequiredPrivateKeyFlagValue(cmd)
 		if err != nil {
 			return err
 		}

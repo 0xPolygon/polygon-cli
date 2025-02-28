@@ -33,7 +33,7 @@ var EcRecoverCmd = &cobra.Command{
 	Long:  usage,
 	Args:  cobra.NoArgs,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		rpcUrlFlagValue, _ := flag_loader.GetRpcUrlFlagValue(cmd, false)
+		rpcUrlFlagValue := flag_loader.GetRpcUrlFlagValue(cmd)
 		rpcUrl = *rpcUrlFlagValue
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {

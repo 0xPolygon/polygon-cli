@@ -46,8 +46,8 @@ var FundCmd = &cobra.Command{
 	Short: "Bulk fund crypto wallets automatically.",
 	Long:  usage,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		params.RpcUrl, _ = flag_loader.GetRpcUrlFlagValue(cmd, false)
-		params.PrivateKey, _ = flag_loader.GetPrivateKeyFlagValue(cmd, false)
+		params.RpcUrl = flag_loader.GetRpcUrlFlagValue(cmd)
+		params.PrivateKey = flag_loader.GetPrivateKeyFlagValue(cmd)
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return checkFlags()

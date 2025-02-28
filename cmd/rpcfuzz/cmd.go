@@ -40,8 +40,8 @@ var RPCFuzzCmd = &cobra.Command{
 	Long:  usage,
 	Args:  cobra.NoArgs,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		rpcUrl, _ = flag_loader.GetRpcUrlFlagValue(cmd, false)
-		testPrivateHexKey, _ = flag_loader.GetPrivateKeyFlagValue(cmd, false)
+		rpcUrl = flag_loader.GetRpcUrlFlagValue(cmd)
+		testPrivateHexKey = flag_loader.GetPrivateKeyFlagValue(cmd)
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return checkFlags()

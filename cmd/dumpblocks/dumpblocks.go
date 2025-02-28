@@ -56,7 +56,7 @@ var DumpblocksCmd = &cobra.Command{
 	Short: "Export a range of blocks from a JSON-RPC endpoint.",
 	Long:  usage,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		rpcUrlFlagValue, _ := flag_loader.GetRpcUrlFlagValue(cmd, false)
+		rpcUrlFlagValue := flag_loader.GetRpcUrlFlagValue(cmd)
 		inputDumpblocks.RpcUrl = *rpcUrlFlagValue
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
