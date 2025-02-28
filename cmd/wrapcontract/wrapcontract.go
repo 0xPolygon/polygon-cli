@@ -2,11 +2,11 @@ package wrapcontract
 
 import (
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strings"
-	"encoding/json"
 
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/spf13/cobra"
@@ -14,15 +14,15 @@ import (
 
 var (
 	//go:embed usage.md
-	usage string
+	usage       string
 	jsonStorage *string
 )
 
 var WrapContractCmd = &cobra.Command{
-	Use:   "wrap-contract bytecode|file",
+	Use:     "wrap-contract bytecode|file",
 	Aliases: []string{"wrapcontract", "wrapContract"},
-	Short: "Wrap deployed bytecode into create bytecode.",
-	Long:  usage,
+	Short:   "Wrap deployed bytecode into create bytecode.",
+	Long:    usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		deployedBytecode, err := getInputData(args)
 		if err != nil {
@@ -77,7 +77,7 @@ func getInputData(args []string) (string, error) {
 
 func getStorageBytecode() (string, error) {
 	var storageBytecode string = ""
-	
+
 	if jsonStorage != nil && *jsonStorage != "" {
 		var storage map[string]string
 		err := json.Unmarshal([]byte(*jsonStorage), &storage)

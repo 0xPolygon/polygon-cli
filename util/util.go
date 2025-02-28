@@ -334,18 +334,18 @@ func WrapDeployedCode(deployedBytecode string, storageBytecode string) string {
 	storageBytecode = strings.ToLower(strings.TrimPrefix(storageBytecode, "0x"))
 
 	codeCopySize := len(deployedBytecode) / 2
-	codeCopyOffset := (len(storageBytecode)/2) + 13 + 8  // 13 for CODECOPY + 8 for RETURN
+	codeCopyOffset := (len(storageBytecode) / 2) + 13 + 8 // 13 for CODECOPY + 8 for RETURN
 
 	return fmt.Sprintf(
-		"0x%s"+			// storage initialization code
-		"63%08x"+		// PUSH4 to indicate the size of the data that should be copied into memory
-		"63%08x"+		// PUSH4 to indicate the offset in the call data to start the copy
-		"6000"+			// PUSH1 00 to indicate the destination offset in memory
-		"39"+			// CODECOPY
-		"63%08x"+		// PUSH4 to indicate the size of the data to be returned from memory
-		"6000"+			// PUSH1 00 to indicate that it starts from offset 0
-		"f3"+			// RETURN
-		"%s",			// CODE starts here.
+		"0x%s"+ // storage initialization code
+			"63%08x"+ // PUSH4 to indicate the size of the data that should be copied into memory
+			"63%08x"+ // PUSH4 to indicate the offset in the call data to start the copy
+			"6000"+ // PUSH1 00 to indicate the destination offset in memory
+			"39"+ // CODECOPY
+			"63%08x"+ // PUSH4 to indicate the size of the data to be returned from memory
+			"6000"+ // PUSH1 00 to indicate that it starts from offset 0
+			"f3"+ // RETURN
+			"%s", // CODE starts here.
 		storageBytecode, codeCopySize, codeCopyOffset, codeCopySize, deployedBytecode)
 }
 
@@ -362,7 +362,7 @@ func GetHexString(data any) string {
 	} else {
 		log.Fatal().Any("data", data).Msg("unknown storage data type")
 	}
-	if len(result) % 2 != 0 {
+	if len(result)%2 != 0 {
 		result = "0" + result
 	}
 	return strings.ToLower(result)

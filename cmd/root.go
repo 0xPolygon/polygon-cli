@@ -5,6 +5,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
 	"os"
 
+	"github.com/0xPolygon/polygon-cli/cmd/cdk"
 	"github.com/0xPolygon/polygon-cli/cmd/fixnoncegap"
 	"github.com/0xPolygon/polygon-cli/cmd/retest"
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly"
@@ -112,6 +113,7 @@ func NewPolycliCommand() *cobra.Command {
 	// Define commands.
 	cmd.AddCommand(
 		abi.ABICmd,
+		cdk.CDKCmd,
 		dbbench.DBBenchCmd,
 		dumpblocks.DumpblocksCmd,
 		ecrecover.EcRecoverCmd,
