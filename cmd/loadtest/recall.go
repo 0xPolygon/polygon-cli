@@ -3,11 +3,11 @@ package loadtest
 import (
 	"context"
 	"encoding/json"
+	"github.com/0xPolygon/polygon-cli/rpctypes"
+	"github.com/0xPolygon/polygon-cli/util"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
-	"github.com/0xPolygon/polygon-cli/rpctypes"
-	"github.com/0xPolygon/polygon-cli/util"
 	"math/big"
 	"strings"
 )

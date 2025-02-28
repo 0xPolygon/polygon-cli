@@ -37,6 +37,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli abi](polycli_abi.md) - Provides encoding and decoding functionalities with contract signatures and ABI.
 
+- [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks
+
 - [polycli dbbench](polycli_dbbench.md) - Perform a level/pebble db benchmark
 
 - [polycli dumpblocks](polycli_dumpblocks.md) - Export a range of blocks from a JSON-RPC endpoint.
