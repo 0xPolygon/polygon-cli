@@ -69,12 +69,12 @@ serve as the input to the proof command.
 ## Flags
 
 ```bash
-      --bridge-address string   The address of the ulxly bridge
-      --filter-size uint        The batch size for individual filter queries (default 1000)
-      --from-block uint         The start of the range of blocks to retrieve
+  -a, --bridge-address string   The address of the ulxly bridge
+  -i, --filter-size uint        The batch size for individual filter queries (default 1000)
+  -f, --from-block uint         The start of the range of blocks to retrieve
   -h, --help                    help for get-deposits
-      --rpc-url string          The RPC URL to read deposit data
-      --to-block uint           The end of the range of blocks to retrieve
+  -u, --rpc-url string          The RPC URL to read the events data
+  -t, --to-block uint           The end of the range of blocks to retrieve
 ```
 
 The command also inherits flags from parent commands.

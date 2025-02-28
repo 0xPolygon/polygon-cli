@@ -1,4 +1,4 @@
-# `polycli ulxly proof`
+# `polycli ulxly rollups-proof`
 
 > Auto-generated documentation.
 
@@ -11,35 +11,29 @@
 
 ## Description
 
-Generate a proof for a given range of deposits
+Generate a proof for a given range of rollups
 
 ```bash
-polycli ulxly proof [flags]
+polycli ulxly rollups-proof [flags]
 ```
 
 ## Usage
 
-This command will attempt to create a merkle proof based on the bridge
+This command will attempt to create a merkle proof based on the verify batch
 events that are provided.
 
 Example usage:
 
 ```bash
-polycli ulxly proof \
-        --file-name cardona-4880876-to-6028159.ndjson \
-        --deposit-count 24386 | jq '.'
+polycli ulxly rollups-proof \
+        --file-name verify-batches-cardona-4880876-to-6028159.ndjson \
+        --rollup-id 1 | jq '.'
 ```
 
 In this case we are assuming we have a file
-`cardona-4880876-to-6028159.ndjson` that would have been generated
-with a call to `polycli ulxly get-deposits`. The output will be the
-sibling hashes necessary to prove inclusion of deposit `24386`.
-
-This is a real verifiable deposit if you'd like to sanity check:
-
-- Deposit Transaction: https://sepolia.etherscan.io/tx/0x1f950d076ad534fe588bd6a8f58904395c907df4738f92bd8aea513c19d1fa5f
-- Mainnet Root: `4516CA2A793B8E20F56EC6BA8CA6033A672330670A3772F76F2ADE9BC2125150`
-- Actual Claim Tx: https://cardona-zkevm.polygonscan.com/tx/0x5d4fbaca896f015801f1049b383932eaa9363d344c36b1c51e5f2e3ce20f9dc3
+`verify-batches-cardona-4880876-to-6028159.ndjson` that would have been generated
+with a call to `polycli ulxly get-verify-batches`. The output will be the
+sibling hashes necessary to prove inclusion of rollupID `1`.
 
 This is the proof response from polycli:
 
@@ -80,7 +74,7 @@ This is the proof response from polycli:
     "0x8448818bb4ae4562849e949e17ac16e0be16688e156b5cf15e098c627c0056a9"
   ],
   "Root": "0x4516ca2a793b8e20f56ec6ba8ca6033a672330670a3772f76f2ade9bc2125150",
-  "DepositCount": 24386,
+  "RollupID": 1,
   "LeafHash": "0x2c42c143213fd0e36d843d9d40866ce7be02c671beec0eae3ffd3d2638acc87c"
 }
 ```
@@ -91,15 +85,13 @@ When we're creating the proof here, we're essentially storing the paths to the
 various leafs. When we want to generate a proof, we find the appropriate sibling
 node in the tree to prove that the leaf is part of the given merkle root.
 
-## Full example
-
-TODO
 ## Flags
 
 ```bash
-      --deposit-count uint32   The deposit number to generate a proof for
+      --complete-merkle-tree   Allows to get the proof for a leave higher than the highest rollupID
       --file-name string       An ndjson file with events data
-  -h, --help                   help for proof
+  -h, --help                   help for rollups-proof
+      --rollup-id uint32       The rollupID number to generate a proof for
 ```
 
 The command also inherits flags from parent commands.
