@@ -62,6 +62,12 @@ type Proof struct {
 	DepositCount uint32
 	LeafHash     common.Hash
 }
+type RollupsProof struct {
+	Siblings [TreeDepth]common.Hash
+	Root     common.Hash
+	RollupID uint32
+	LeafHash common.Hash
+}
 
 type BridgeProof struct {
 	Proof struct {
@@ -226,11 +232,12 @@ func proof(args []string) error {
 
 func rollupsExitRootProof(args []string) error {
 	rollupID := rollupsProofOptions.RollupID
+	completeMT := rollupsProofOptions.CompleteMerkleTree
 	rawLeavesData, err := getInputData(args)
 	if err != nil {
 		return err
 	}
-	return readRollupsExitRootLeaves(rawLeavesData, rollupID)
+	return readRollupsExitRootLeaves(rawLeavesData, rollupID, completeMT)
 }
 
 func emptyProof() error {
@@ -238,7 +245,7 @@ func emptyProof() error {
 
 	e := generateEmptyHashes(TreeDepth)
 	copy(p.Siblings[:], e)
-	fmt.Println(p.String())
+	fmt.Println(String(p))
 	return nil
 }
 
@@ -247,7 +254,7 @@ func zeroProof() error {
 
 	e := generateZeroHashes(TreeDepth)
 	copy(p.Siblings[:], e)
-	fmt.Println(p.String())
+	fmt.Println(String(p))
 	return nil
 }
 
@@ -824,6 +831,141 @@ func getInputData(args []string) ([]byte, error) {
 
 	return io.ReadAll(os.Stdin)
 }
+
+func readRollupsExitRootLeaves(rawLeaves []byte, rollupID uint32, completeMT bool) error {
+	buf := bytes.NewBuffer(rawLeaves)
+	scanner := bufio.NewScanner(buf)
+	scannerBuf := make([]byte, 0)
+	scanner.Buffer(scannerBuf, 1024*1024)
+	leaves := make(map[uint32]*polygonrollupmanager.PolygonrollupmanagerVerifyBatchesTrustedAggregator, 0)
+	highestRollupID := uint32(0)
+	for scanner.Scan() {
+		evt := new(polygonrollupmanager.PolygonrollupmanagerVerifyBatchesTrustedAggregator)
+		err := json.Unmarshal(scanner.Bytes(), evt)
+		if err != nil {
+			return err
+		}
+		if highestRollupID < evt.RollupID {
+			highestRollupID = evt.RollupID
+		}
+		leaves[evt.RollupID] = evt
+	}
+	if err := scanner.Err(); err != nil {
+		log.Error().Err(err).Msg("there was an error reading the deposit file")
+		return err
+	}
+	if rollupID > highestRollupID && !completeMT{
+		return fmt.Errorf("rollupID %d required is higher than the highest rollupID %d provided in the file. Please use --complete-merkle-tree option if you know what you are doing.", rollupID, highestRollupID)
+	} else if completeMT {
+		highestRollupID = rollupID
+	}
+	var ls []common.Hash
+	var i uint32 = 0
+	for ; i <= highestRollupID; i++ {
+		var exitRoot common.Hash
+		if leaf, exists := leaves[i]; exists {
+			exitRoot = leaf.ExitRoot
+			log.Info().
+				Uint64("block-number", leaf.Raw.BlockNumber).
+				Uint32("rollupID", leaf.RollupID).
+				Str("exitRoot", exitRoot.String()).
+				Str("tx-hash", leaf.Raw.TxHash.String()).
+				Msg("latest event received for the tree")
+		} else {
+			log.Warn().Uint32("rollupID", i).Msg("No event found for this rollup")
+		}
+		ls = append(ls, exitRoot)
+	}
+	p, err := ComputeSiblings(rollupID, ls, TreeDepth)
+	if err != nil {
+		return err
+	}
+	log.Info().Str("root", p.Root.String()).Msg("finished")
+	fmt.Println(String(p))
+	return nil
+}
+
+func ComputeSiblings(rollupID uint32, leaves []common.Hash, height uint8) (*RollupsProof, error) {
+	initLeaves := leaves
+	var ns [][][]byte
+	if len(leaves) == 0 {
+		leaves = append(leaves, common.Hash{})
+	}
+	currentZeroHashHeight := common.Hash{}
+	var siblings []common.Hash
+	index := rollupID
+	for h := uint8(0); h < height; h++ {
+		if len(leaves)%2 == 1 {
+			leaves = append(leaves, currentZeroHashHeight)
+		}
+		if index%2 == 1 { //If it is odd
+			siblings = append(siblings, leaves[index-1])
+		} else { // It is even
+			if len(leaves) > 1 {
+				siblings = append(siblings, leaves[index+1])
+			}
+		}
+		var (
+			nsi    [][][]byte
+			hashes []common.Hash
+		)
+		for i := 0; i < len(leaves); i += 2 {
+			var left, right int = i, i + 1
+			hash := crypto.Keccak256Hash(leaves[left][:], leaves[right][:])
+			nsi = append(nsi, [][]byte{hash[:], leaves[left][:], leaves[right][:]})
+			hashes = append(hashes, hash)
+		}
+		// Find the index of the leave in the next level of the tree.
+		// Divide the index by 2 to find the position in the upper level
+		index = uint32(float64(index) / 2) //nolint:gomnd
+		ns = nsi
+		leaves = hashes
+		currentZeroHashHeight = crypto.Keccak256Hash(currentZeroHashHeight.Bytes(), currentZeroHashHeight.Bytes())
+	}
+	if len(ns) != 1 {
+		return nil, fmt.Errorf("error: more than one root detected: %+v", ns)
+	}
+	if len(siblings) != TreeDepth {
+		return nil, fmt.Errorf("error: invalid number of siblings: %+v", siblings)
+	}
+	if leaves[0] != common.BytesToHash(ns[0][0]) {
+		return nil, fmt.Errorf("latest leave (root of the tree) does not match with the root (ns[0][0])")
+	}
+	sb := [32]common.Hash{}
+	for i := range TreeDepth {
+		sb[i] = siblings[i]
+	}
+	p := &RollupsProof{
+		Siblings: sb,
+		RollupID: rollupID,
+		LeafHash: initLeaves[rollupID],
+		Root:     common.BytesToHash(ns[0][0]),
+	}
+
+	computedRoot := computeRoot(p.LeafHash, p.Siblings, p.RollupID, TreeDepth)
+	if computedRoot != p.Root {
+		return nil, fmt.Errorf("error: computed root does not match the expected root")
+	}
+
+	return p, nil
+}
+
+func computeRoot(leafHash common.Hash, smtProof [32]common.Hash, index uint32, height uint8) common.Hash {
+	var node common.Hash
+	copy(node[:], leafHash[:])
+
+	// Check merkle proof
+	var h uint8
+	for h = 0; h < height; h++ {
+		if ((index >> h) & 1) == 1 {
+			node = crypto.Keccak256Hash(smtProof[h].Bytes(), node.Bytes())
+		} else {
+			node = crypto.Keccak256Hash(node.Bytes(), smtProof[h].Bytes())
+		}
+	}
+	return common.BytesToHash(node[:])
+}
+
 func readDeposits(rawDeposits []byte, depositNumber uint32) error {
 	buf := bytes.NewBuffer(rawDeposits)
 	scanner := bufio.NewScanner(buf)
@@ -870,12 +1012,12 @@ func readDeposits(rawDeposits []byte, depositNumber uint32) error {
 
 	log.Info().Msg("finished")
 	p := imt.GetProof(depositNumber)
-	fmt.Println(p.String())
+	fmt.Println(String(p))
 	return nil
 }
 
 // String will create the json representation of the proof
-func (p *Proof) String() string {
+func String[T any](p T) string {
 	jsonBytes, err := json.Marshal(p)
 	if err != nil {
 		log.Error().Err(err).Msg("error marshalling proof to json")
@@ -959,7 +1101,7 @@ func (s *IMT) GetProof(depositNum uint32) Proof {
 
 	siblings := [TreeDepth]common.Hash{}
 	for height := 0; height < TreeDepth; height++ {
-		siblingDepositNum := getSiblingDepositNumber(depositNum, uint32(height))
+		siblingDepositNum := getSiblingLeafNumber(depositNum, uint32(height))
 		sibling := currentZeroHashHeight
 		if _, hasKey := s.Branches[siblingDepositNum]; hasKey {
 			sibling = s.Branches[siblingDepositNum][height]
@@ -984,7 +1126,7 @@ func (s *IMT) GetProof(depositNum uint32) Proof {
 		LeafHash:     s.Leaves[depositNum],
 	}
 
-	r, err := p.Check(s.Roots)
+	r, err := Check(s.Roots, p.LeafHash, p.DepositCount, p.Siblings)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to validate proof")
 	}
@@ -993,39 +1135,39 @@ func (s *IMT) GetProof(depositNum uint32) Proof {
 	return *p
 }
 
-// getSiblingDepositNumber returns the sibling number of a given number at a specified level in an incremental Merkle tree.
+// getSiblingLeafNumber returns the sibling number of a given number at a specified level in an incremental Merkle tree.
 //
 // In an incremental Merkle tree, each node has a sibling node at each level of the tree.
 // The sibling node can be determined by flipping the bit at the current level and setting all bits to the right of the current level to 1.
 // This function calculates the sibling number based on the deposit number and the specified level.
 //
 // Parameters:
-// - depositNumber: the original number for which the sibling is to be found.
+// - LeafNumber: the original number for which the sibling is to be found.
 // - level: the level in the Merkle tree at which to find the sibling.
 //
 // The logic works as follows:
 // 1. `1 << level` creates a binary number with a single 1 bit at the position corresponding to the level.
-// 2. `depositNumber ^ (1 << level)` flips the bit at the position corresponding to the level in the depositNumber.
+// 2. `LeafNumber ^ (1 << level)` flips the bit at the position corresponding to the level in the LeafNumber.
 // 3. `(1 << level) - 1` creates a binary number with all bits to the right of the current level set to 1.
 // 4. `| ((1 << level) - 1)` ensures that all bits to the right of the current level are set to 1 in the result.
 //
 // The function effectively finds the sibling deposit number at each level of the Merkle tree by manipulating the bits accordingly.
-func getSiblingDepositNumber(depositNumber, level uint32) uint32 {
-	return depositNumber ^ (1 << level) | ((1 << level) - 1)
+func getSiblingLeafNumber(leafNumber, level uint32) uint32 {
+	return leafNumber ^ (1 << level) | ((1 << level) - 1)
 }
 
 // Check is a sanity check of a proof in order to make sure that the
 // proof that was generated creates a root that we recognize. This was
 // useful while testing in order to avoid verifying that the proof
 // works or doesn't work onchain
-func (p *Proof) Check(roots []common.Hash) (common.Hash, error) {
-	node := p.LeafHash
-	index := p.DepositCount
+func Check(roots []common.Hash, leaf common.Hash, position uint32, siblings [32]common.Hash) (common.Hash, error) {
+	node := leaf
+	index := position
 	for height := 0; height < TreeDepth; height++ {
 		if ((index >> height) & 1) == 1 {
-			node = crypto.Keccak256Hash(p.Siblings[height][:], node[:])
+			node = crypto.Keccak256Hash(siblings[height][:], node[:])
 		} else {
-			node = crypto.Keccak256Hash(node[:], p.Siblings[height][:])
+			node = crypto.Keccak256Hash(node[:], siblings[height][:])
 		}
 	}
 
@@ -1039,8 +1181,8 @@ func (p *Proof) Check(roots []common.Hash) (common.Hash, error) {
 
 	log.Info().
 		Bool("is-proof-valid", isProofValid).
-		Uint32("deposit-count", p.DepositCount).
-		Str("leaf-hash", p.LeafHash.String()).
+		Uint32("leaf-position", position).
+		Str("leaf-hash", leaf.String()).
 		Str("checked-root", node.String()).Msg("checking proof")
 	if !isProofValid {
 		return common.Hash{}, fmt.Errorf("invalid proof")
@@ -1379,6 +1521,7 @@ const (
 	ArgDepositCount         = "deposit-count"
 	ArgDepositNetwork       = "deposit-network"
 	ArgRollupID             = "rollup-id"
+	ArgCompleteMT           = "complete-merkle-tree"
 	ArgBridgeServiceURL     = "bridge-service-url"
 	ArgFileName             = "file-name"
 	ArgFromBlock            = "from-block"
@@ -1454,10 +1597,12 @@ func (o *ProofOptions) AddFlags(cmd *cobra.Command) {
 }
 
 type RollupsProofOptions struct {
-    RollupID uint32
+    RollupID           uint32
+	CompleteMerkleTree bool
 }
 func (o *RollupsProofOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().Uint32VarP(&o.RollupID, ArgRollupID, "", 0, "The rollupID number to generate a proof for")
+	cmd.Flags().BoolVarP(&o.CompleteMerkleTree, ArgCompleteMT, "", false, "Allows to get the proof for a leave higher than the highest rollupID")
 }
 
 
