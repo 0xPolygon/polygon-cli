@@ -183,7 +183,7 @@ func readVerifyBatches(cmd *cobra.Command) error {
 		return err
 	}
 	verifyBatchesTrustedAggregatorSignatureHash := crypto.Keccak256Hash([]byte("VerifyBatchesTrustedAggregator(uint32,uint64,bytes32,bytes32,address)"))
-	
+
 	currentBlock := fromBlock
 	for currentBlock < toBlock {
 		endBlock := currentBlock + filter
@@ -193,7 +193,7 @@ func readVerifyBatches(cmd *cobra.Command) error {
 		// Filter 0xd1ec3a1216f08b6eff72e169ceb548b782db18a6614852618d86bb19f3f9b0d3
 		query := ethereum.FilterQuery{
 			FromBlock: new(big.Int).SetUint64(currentBlock),
-			ToBlock:  new(big.Int).SetUint64(endBlock),
+			ToBlock:   new(big.Int).SetUint64(endBlock),
 			Addresses: []common.Address{rm},
 			Topics:    [][]common.Hash{{verifyBatchesTrustedAggregatorSignatureHash}},
 		}
@@ -854,7 +854,7 @@ func readRollupsExitRootLeaves(rawLeaves []byte, rollupID uint32, completeMT boo
 		log.Error().Err(err).Msg("there was an error reading the deposit file")
 		return err
 	}
-	if rollupID > highestRollupID && !completeMT{
+	if rollupID > highestRollupID && !completeMT {
 		return fmt.Errorf("rollupID %d required is higher than the highest rollupID %d provided in the file. Please use --complete-merkle-tree option if you know what you are doing.", rollupID, highestRollupID)
 	} else if completeMT {
 		highestRollupID = rollupID
@@ -1497,11 +1497,11 @@ var (
 	getVerifyBatchesCommand  *cobra.Command
 
 	getDepositsAndVerifyBatchesSharedOptions = &GetDepositsAndVerifyBatchesSharedOptions{}
-    getDepositOptions = &GetDepositOptions{}
-    getVerifyBatchesOptions = &GetVerifyBatchesOptions{}
-	proofsSharedOptions = &ProofsSharedOptions{}
-	proofOptions = &ProofOptions{}
-	rollupsProofOptions = &RollupsProofOptions{}
+	getDepositOptions                        = &GetDepositOptions{}
+	getVerifyBatchesOptions                  = &GetVerifyBatchesOptions{}
+	proofsSharedOptions                      = &ProofsSharedOptions{}
+	proofOptions                             = &ProofOptions{}
+	rollupsProofOptions                      = &RollupsProofOptions{}
 )
 
 const (
@@ -1583,32 +1583,34 @@ func fatalIfError(err error) {
 }
 
 type ProofsSharedOptions struct {
-    FileName string
+	FileName string
 }
+
 func (o *ProofsSharedOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.FileName, ArgFileName, "", "", "An ndjson file with verify batches event data")
 }
 
 type ProofOptions struct {
-    DepositCount uint32
+	DepositCount uint32
 }
+
 func (o *ProofOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().Uint32VarP(&o.DepositCount, ArgDepositCount, "", 0, "The deposit number to generate a proof for")
 }
 
 type RollupsProofOptions struct {
-    RollupID           uint32
+	RollupID           uint32
 	CompleteMerkleTree bool
 }
+
 func (o *RollupsProofOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().Uint32VarP(&o.RollupID, ArgRollupID, "", 0, "The rollupID number to generate a proof for")
 	cmd.Flags().BoolVarP(&o.CompleteMerkleTree, ArgCompleteMT, "", false, "Allows to get the proof for a leave higher than the highest rollupID")
 }
 
-
 type GetDepositsAndVerifyBatchesSharedOptions struct {
-    URL string
-    FromBlock, ToBlock, FilterSize uint64
+	URL                            string
+	FromBlock, ToBlock, FilterSize uint64
 }
 
 func (o *GetDepositsAndVerifyBatchesSharedOptions) AddFlags(cmd *cobra.Command) {
@@ -1622,7 +1624,7 @@ func (o *GetDepositsAndVerifyBatchesSharedOptions) AddFlags(cmd *cobra.Command) 
 }
 
 type GetDepositOptions struct {
-    BridgeAddress string
+	BridgeAddress string
 }
 
 func (o *GetDepositOptions) AddFlags(cmd *cobra.Command) {
@@ -1630,8 +1632,9 @@ func (o *GetDepositOptions) AddFlags(cmd *cobra.Command) {
 }
 
 type GetVerifyBatchesOptions struct {
-    RollupManagerAddress string
+	RollupManagerAddress string
 }
+
 func (o *GetVerifyBatchesOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.RollupManagerAddress, ArgRollupManagerAddress, "a", "", "The address of the rollup manager contract")
 }
@@ -1729,9 +1732,9 @@ or if it's actually an intermediate hash.`,
 		SilenceUsage: true,
 	}
 	proofsSharedOptions.AddFlags(proofCommand)
-    proofOptions.AddFlags(proofCommand)
-    ulxlyProofsCmd.AddCommand(proofCommand)
-    ULxLyCmd.AddCommand(proofCommand)
+	proofOptions.AddFlags(proofCommand)
+	ulxlyProofsCmd.AddCommand(proofCommand)
+	ULxLyCmd.AddCommand(proofCommand)
 
 	rollupsProofCommand = &cobra.Command{
 		Use:   "rollups-proof",
@@ -1743,9 +1746,9 @@ or if it's actually an intermediate hash.`,
 		SilenceUsage: true,
 	}
 	proofsSharedOptions.AddFlags(rollupsProofCommand)
-    rollupsProofOptions.AddFlags(rollupsProofCommand)
-    ulxlyProofsCmd.AddCommand(rollupsProofCommand)
-    ULxLyCmd.AddCommand(rollupsProofCommand)
+	rollupsProofOptions.AddFlags(rollupsProofCommand)
+	ulxlyProofsCmd.AddCommand(rollupsProofCommand)
+	ULxLyCmd.AddCommand(rollupsProofCommand)
 
 	getDepositCommand = &cobra.Command{
 		Use:   "get-deposits",
@@ -1757,9 +1760,9 @@ or if it's actually an intermediate hash.`,
 		SilenceUsage: true,
 	}
 	getDepositsAndVerifyBatchesSharedOptions.AddFlags(getDepositCommand)
-    getDepositOptions.AddFlags(getDepositCommand)
-    ulxlyGetDepositsAndVerifyBatchesCmd.AddCommand(getDepositCommand)
-    ULxLyCmd.AddCommand(getDepositCommand)
+	getDepositOptions.AddFlags(getDepositCommand)
+	ulxlyGetDepositsAndVerifyBatchesCmd.AddCommand(getDepositCommand)
+	ULxLyCmd.AddCommand(getDepositCommand)
 
 	getVerifyBatchesCommand = &cobra.Command{
 		Use:   "get-verify-batches",
@@ -1771,9 +1774,9 @@ or if it's actually an intermediate hash.`,
 		SilenceUsage: true,
 	}
 	getDepositsAndVerifyBatchesSharedOptions.AddFlags(getVerifyBatchesCommand)
-    getVerifyBatchesOptions.AddFlags(getVerifyBatchesCommand)
-    ulxlyGetDepositsAndVerifyBatchesCmd.AddCommand(getVerifyBatchesCommand)
-    ULxLyCmd.AddCommand(getVerifyBatchesCommand)
+	getVerifyBatchesOptions.AddFlags(getVerifyBatchesCommand)
+	ulxlyGetDepositsAndVerifyBatchesCmd.AddCommand(getVerifyBatchesCommand)
+	ULxLyCmd.AddCommand(getVerifyBatchesCommand)
 
 	// Arguments for both bridge and claim
 	inputUlxlyArgs.rpcURL = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgRPCURL, "", "the URL of the RPC to send the transaction")
