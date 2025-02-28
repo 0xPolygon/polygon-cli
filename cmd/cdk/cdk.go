@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/go-errors/errors"
@@ -86,7 +87,10 @@ var CDKCmd = &cobra.Command{
 	Use:   "cdk",
 	Short: "Utilities for interacting with CDK networks",
 	Long:  "Basic utility commands for interacting with the cdk contracts",
-	Args:  cobra.NoArgs,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		cdkInputArgs.rpcURL = flag_loader.GetRpcUrlFlagValue(cmd)
+	},
+	Args: cobra.NoArgs,
 }
 
 type inputArgs struct {
