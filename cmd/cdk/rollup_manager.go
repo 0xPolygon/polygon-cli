@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/cobra"
 )
 
@@ -110,7 +111,7 @@ func rollupManagerListRollups(cmd *cobra.Command) error {
 
 	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
 
-	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, cdkArgs)
 	if err != nil {
 		return err
 	}
@@ -120,12 +121,12 @@ func rollupManagerListRollups(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollups, err := getRollupManagerRollups(rollupManager)
+	rollups, err := getRollupManagerRollups(cdkArgs, rpcClient, rollupManager)
 	if err != nil {
 		return err
 	}
 
-	mustLogJSONIndent(rollups)
+	mustPrintJSONIndent(rollups)
 	return nil
 }
 
@@ -139,7 +140,7 @@ func rollupManagerListRollupTypes(cmd *cobra.Command) error {
 
 	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
 
-	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, cdkArgs)
 	if err != nil {
 		return err
 	}
@@ -154,7 +155,7 @@ func rollupManagerListRollupTypes(cmd *cobra.Command) error {
 		return err
 	}
 
-	mustLogJSONIndent(rollupTypes)
+	mustPrintJSONIndent(rollupTypes)
 	return nil
 }
 
@@ -168,7 +169,7 @@ func rollupManagerInspect(cmd *cobra.Command) error {
 
 	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
 
-	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, cdkArgs)
 	if err != nil {
 		return err
 	}
@@ -183,7 +184,7 @@ func rollupManagerInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	mustLogJSONIndent(data)
+	mustPrintJSONIndent(data)
 	return nil
 }
 
@@ -197,7 +198,7 @@ func rollupManagerDump(cmd *cobra.Command) error {
 
 	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
 
-	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, cdkArgs)
 	if err != nil {
 		return err
 	}
@@ -214,7 +215,7 @@ func rollupManagerDump(cmd *cobra.Command) error {
 		return err
 	}
 
-	data.Rollups, err = getRollupManagerRollups(rollupManager)
+	data.Rollups, err = getRollupManagerRollups(cdkArgs, rpcClient, rollupManager)
 	if err != nil {
 		return err
 	}
@@ -224,7 +225,7 @@ func rollupManagerDump(cmd *cobra.Command) error {
 		return err
 	}
 
-	mustLogJSONIndent(data)
+	mustPrintJSONIndent(data)
 
 	return nil
 }
@@ -233,7 +234,7 @@ func rollupManagerMonitor(cmd *cobra.Command) error {
 	panic("not implemented")
 }
 
-func getRollupManagerRollups(rollupManager rollupManagerContractInterface) ([]RollupData, error) {
+func getRollupManagerRollups(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, rollupManager rollupManagerContractInterface) ([]RollupData, error) {
 	rollupCount, err := rollupManager.RollupCount(nil)
 	if err != nil {
 		return nil, err
@@ -241,24 +242,11 @@ func getRollupManagerRollups(rollupManager rollupManagerContractInterface) ([]Ro
 
 	rollups := make([]RollupData, 0, rollupCount)
 	for i := uint32(1); i <= rollupCount; i++ {
-		rollupData, err := rollupManager.RollupIDToRollupData(nil, i)
+		rollupData, err := getRollupData(cdkArgs, rpcClient, rollupManager, i)
 		if err != nil {
 			return nil, err
 		}
-		rollups = append(rollups, RollupData{
-			RollupContract:                 rollupData.RollupContract,
-			ChainID:                        rollupData.ChainID,
-			Verifier:                       rollupData.Verifier,
-			ForkID:                         rollupData.ForkID,
-			LastLocalExitRoot:              rollupData.LastLocalExitRoot,
-			LastBatchSequenced:             rollupData.LastBatchSequenced,
-			LastVerifiedBatch:              rollupData.LastVerifiedBatch,
-			LastPendingState:               rollupData.LastPendingState,
-			LastPendingStateConsolidated:   rollupData.LastPendingStateConsolidated,
-			LastVerifiedBatchBeforeUpgrade: rollupData.LastVerifiedBatchBeforeUpgrade,
-			RollupTypeID:                   rollupData.RollupTypeID,
-			RollupCompatibilityID:          rollupData.RollupCompatibilityID,
-		})
+		rollups = append(rollups, *rollupData)
 		time.Sleep(contractRequestInterval)
 	}
 	return rollups, nil
@@ -272,18 +260,11 @@ func getRollupManagerRollupTypes(rollupManager rollupManagerContractInterface) (
 
 	rollupTypes := make([]RollupTypeData, 0, rollupTypeCount)
 	for i := uint32(1); i <= rollupTypeCount; i++ {
-		rollupType, err := rollupManager.RollupTypeMap(nil, i)
+		rollupTypeData, err := getRollupTypeData(rollupManager, uint64(i))
 		if err != nil {
 			return nil, err
 		}
-		rollupTypes = append(rollupTypes, RollupTypeData{
-			ConsensusImplementation: rollupType.ConsensusImplementation,
-			Verifier:                rollupType.Verifier,
-			ForkID:                  rollupType.ForkID,
-			RollupCompatibilityID:   rollupType.RollupCompatibilityID,
-			Obsolete:                rollupType.Obsolete,
-			Genesis:                 rollupType.Genesis,
-		})
+		rollupTypes = append(rollupTypes, *rollupTypeData)
 		time.Sleep(contractRequestInterval)
 	}
 	return rollupTypes, nil

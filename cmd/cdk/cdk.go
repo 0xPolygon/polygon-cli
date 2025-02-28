@@ -16,14 +16,17 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
+	banana_rollup "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonrollupbaseetrog"
 	banana_rollup_manager "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonrollupmanager"
 	banana_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonzkevmbridge"
 	banana_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonzkevmglobalexitroot"
 
+	elderberry_rollup "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonrollupbaseetrog"
 	elderberry_rollup_manager "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonrollupmanager"
 	elderberry_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonzkevmbridge"
 	elderberry_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonzkevmglobalexitroot"
 
+	etrog_rollup "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonrollupbaseetrog"
 	etrog_rollup_manager "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonrollupmanager"
 	etrog_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonzkevmbridge"
 	etrog_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonzkevmglobalexitroot"
@@ -134,15 +137,15 @@ func checkAddressArg(argFlagName, address string) error {
 	return nil
 }
 
-func (inputArgs *inputArgs) parseCDKArgs(ctx context.Context) (*parsedCDKArgs, error) {
-	args := &parsedCDKArgs{}
+func (inputArgs *inputArgs) parseCDKArgs(ctx context.Context) (parsedCDKArgs, error) {
+	args := parsedCDKArgs{}
 
 	args.rpcURL = *inputArgs.rpcURL
 
 	if inputArgs.forkID != nil && len(*inputArgs.forkID) > 0 {
 		_, found := knownForks[*inputArgs.forkID]
 		if !found {
-			return nil, invalidForkIDErr()
+			return parsedCDKArgs{}, invalidForkIDErr()
 		}
 		args.forkID = knownForks[*inputArgs.forkID]
 	}
@@ -225,7 +228,7 @@ func mustGetRPCClient(ctx context.Context, rpcURL string) *ethclient.Client {
 	return rpcClient
 }
 
-func getRollupManager(cdkArgs *parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (rollupManagerContractInterface, error) {
+func getRollupManager(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (rollupManagerContractInterface, error) {
 	var rollupManager rollupManagerContractInterface
 	var err error
 	switch cdkArgs.forkID {
@@ -250,7 +253,32 @@ func getRollupManager(cdkArgs *parsedCDKArgs, rpcClient *ethclient.Client, addr 
 	return rollupManager, nil
 }
 
-func getBridge(cdkArgs *parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (bridgeContractInterface, error) {
+func getRollup(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (rollupContractInterface, error) {
+	var rollup rollupContractInterface
+	var err error
+	switch cdkArgs.forkID {
+	case etrog:
+		rollup, err = etrog_rollup.NewPolygonrollupbaseetrog(addr, rpcClient)
+		if err != nil {
+			return nil, err
+		}
+	case elderberry:
+		rollup, err = elderberry_rollup.NewPolygonrollupbaseetrog(addr, rpcClient)
+		if err != nil {
+			return nil, err
+		}
+	case banana:
+		rollup, err = banana_rollup.NewPolygonrollupbaseetrog(addr, rpcClient)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, invalidForkIDErr()
+	}
+	return rollup, nil
+}
+
+func getBridge(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (bridgeContractInterface, error) {
 	var bridge bridgeContractInterface
 	var err error
 	switch cdkArgs.forkID {
@@ -275,7 +303,7 @@ func getBridge(cdkArgs *parsedCDKArgs, rpcClient *ethclient.Client, addr common.
 	return bridge, nil
 }
 
-func getGER(cdkArgs *parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (gerContractInterface, error) {
+func getGER(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (gerContractInterface, error) {
 	var ger gerContractInterface
 	var err error
 	switch cdkArgs.forkID {
@@ -300,12 +328,12 @@ func getGER(cdkArgs *parsedCDKArgs, rpcClient *ethclient.Client, addr common.Add
 	return ger, nil
 }
 
-func mustLogJSONIndent(v any) {
+func mustPrintJSONIndent(v any) {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		panic(err)
 	}
-	log.Info().Msgf("%s", string(b))
+	fmt.Printf("%s\n", string(b))
 }
 
 func invalidForkIDErr() error {

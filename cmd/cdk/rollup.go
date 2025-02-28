@@ -2,8 +2,10 @@ package cdk
 
 import (
 	_ "embed"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/cobra"
 )
 
@@ -53,6 +55,7 @@ var rollupMonitorCmd = &cobra.Command{
 }
 
 type RollupData struct {
+	// from rollup manager sc
 	RollupContract                 common.Address `json:"rollupContract"`
 	ChainID                        uint64         `json:"chainID"`
 	Verifier                       common.Address `json:"verifier"`
@@ -65,6 +68,15 @@ type RollupData struct {
 	LastVerifiedBatchBeforeUpgrade uint64         `json:"lastVerifiedBatchBeforeUpgrade"`
 	RollupTypeID                   uint64         `json:"rollupTypeID"`
 	RollupCompatibilityID          uint8          `json:"rollupCompatibilityID"`
+
+	// from rollup sc
+	Admin               common.Address `json:"admin"`
+	GasTokenAddress     common.Address `json:"gasTokenAddress"`
+	GasTokenNetwork     uint32         `json:"gasTokenNetwork"`
+	LastAccInputHash    common.Hash    `json:"lastAccInputHash"`
+	NetworkName         string         `json:"networkName"`
+	TrustedSequencer    common.Address `json:"trustedSequencer"`
+	TrustedSequencerURL string         `json:"trustedSequencerURL"`
 }
 
 type RollupTypeData struct {
@@ -91,7 +103,7 @@ func rollupInspect(cmd *cobra.Command) error {
 
 	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
 
-	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, cdkArgs)
 	if err != nil {
 		return err
 	}
@@ -106,12 +118,12 @@ func rollupInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	data, err := getRollupData(rollupManager, rollupArgs.rollupID)
+	data, err := getRollupData(cdkArgs, rpcClient, rollupManager, rollupArgs.rollupID)
 	if err != nil {
 		return err
 	}
 
-	mustLogJSONIndent(data)
+	mustPrintJSONIndent(data)
 	return nil
 }
 
@@ -125,7 +137,7 @@ func rollupDump(cmd *cobra.Command) error {
 
 	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
 
-	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, cdkArgs)
 	if err != nil {
 		return err
 	}
@@ -142,17 +154,17 @@ func rollupDump(cmd *cobra.Command) error {
 
 	data := &RollupDumpData{}
 
-	data.Data, err = getRollupData(rollupManager, rollupArgs.rollupID)
+	data.Data, err = getRollupData(cdkArgs, rpcClient, rollupManager, rollupArgs.rollupID)
 	if err != nil {
 		return err
 	}
 
-	data.Type, err = getRollupType(rollupManager, data.Data.RollupTypeID)
+	data.Type, err = getRollupTypeData(rollupManager, data.Data.RollupTypeID)
 	if err != nil {
 		return err
 	}
 
-	mustLogJSONIndent(data)
+	mustPrintJSONIndent(data)
 
 	return nil
 }
@@ -161,11 +173,58 @@ func rollupMonitor(cmd *cobra.Command) error {
 	panic("not implemented")
 }
 
-func getRollupData(rollupManager rollupManagerContractInterface, rollupID uint32) (*RollupData, error) {
+func getRollupData(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, rollupManager rollupManagerContractInterface, rollupID uint32) (*RollupData, error) {
 	rollupData, err := rollupManager.RollupIDToRollupData(nil, rollupID)
 	if err != nil {
 		return nil, err
 	}
+
+	rollup, err := getRollup(cdkArgs, rpcClient, rollupData.RollupContract)
+	if err != nil {
+		return nil, err
+	}
+
+	admin, err := rollup.Admin(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	gasTokenAddress, err := rollup.GasTokenAddress(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	gasTokenNetwork, err := rollup.GasTokenNetwork(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	lastAccInputHash, err := rollup.LastAccInputHash(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	networkName, err := rollup.NetworkName(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	trustedSequencer, err := rollup.TrustedSequencer(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	trustedSequencerURL, err := rollup.TrustedSequencerURL(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
 
 	return &RollupData{
 		RollupContract:                 rollupData.RollupContract,
@@ -180,10 +239,18 @@ func getRollupData(rollupManager rollupManagerContractInterface, rollupID uint32
 		LastVerifiedBatchBeforeUpgrade: rollupData.LastVerifiedBatchBeforeUpgrade,
 		RollupTypeID:                   rollupData.RollupTypeID,
 		RollupCompatibilityID:          rollupData.RollupCompatibilityID,
+
+		Admin:               admin,
+		GasTokenAddress:     gasTokenAddress,
+		GasTokenNetwork:     gasTokenNetwork,
+		LastAccInputHash:    lastAccInputHash,
+		NetworkName:         networkName,
+		TrustedSequencer:    trustedSequencer,
+		TrustedSequencerURL: trustedSequencerURL,
 	}, nil
 }
 
-func getRollupType(rollupManager rollupManagerContractInterface, rollupTypeID uint64) (*RollupTypeData, error) {
+func getRollupTypeData(rollupManager rollupManagerContractInterface, rollupTypeID uint64) (*RollupTypeData, error) {
 	rollupType, err := rollupManager.RollupTypeMap(nil, uint32(rollupTypeID))
 	if err != nil {
 		return nil, err
