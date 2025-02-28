@@ -264,13 +264,6 @@ func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *type
 	}
 }
 
-func fatalIfError(err error) {
-	if err == nil {
-		return
-	}
-	log.Fatal().Err(err).Msg("Unexpected error occurred")
-}
-
 func getMaxNonceFromTxPool(addr common.Address) (uint64, error) {
 	var result PoolContent
 	err := rpcClient.Client().Call(&result, "txpool_content")
