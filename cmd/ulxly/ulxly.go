@@ -1581,7 +1581,7 @@ type ProofsSharedOptions struct {
 }
 
 func (o *ProofsSharedOptions) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVarP(&o.FileName, ArgFileName, "", "", "An ndjson file with verify batches event data")
+	cmd.Flags().StringVarP(&o.FileName, ArgFileName, "", "", "An ndjson file with events data")
 }
 
 type ProofOptions struct {
