@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
-	"github.com/0xPolygon/polygon-cli/rpctypes"
 )
 
 var (

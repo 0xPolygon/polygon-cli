@@ -26,7 +26,7 @@ var (
 	txData      string
 )
 
-var EcRecoverCmd = &cobra.Command {
+var EcRecoverCmd = &cobra.Command{
 	Use:   "ecrecover",
 	Short: "Recovers and returns the public key of the signature",
 	Long:  usage,
