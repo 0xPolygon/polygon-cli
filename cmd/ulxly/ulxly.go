@@ -1455,7 +1455,6 @@ type ulxlyArgs struct {
 	value                *string
 	rpcURL               *string
 	bridgeAddress        *string
-	rollupManagerAddress *string
 	destNetwork          *uint32
 	destAddress          *string
 	tokenAddress         *string
@@ -1466,11 +1465,6 @@ type ulxlyArgs struct {
 	depositCount         *uint64
 	depositNetwork       *uint64
 	bridgeServiceURL     *string
-	inputFileName        *string
-	fromBlock            *uint64
-	toBlock              *uint64
-	filterSize           *uint64
-	depositNumber        *uint64
 	globalIndex          *string
 	gasPrice             *string
 	dryRun               *bool
