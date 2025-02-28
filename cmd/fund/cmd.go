@@ -6,6 +6,7 @@ import (
 
 	_ "embed"
 
+	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/spf13/cobra"
 )
@@ -44,6 +45,10 @@ var FundCmd = &cobra.Command{
 	Use:   "fund",
 	Short: "Bulk fund crypto wallets automatically.",
 	Long:  usage,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		params.RpcUrl, _ = flag_loader.GetRpcUrlFlagValue(cmd, false)
+		params.PrivateKey, _ = flag_loader.GetPrivateKeyFlagValue(cmd, false)
+	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return checkFlags()
 	},

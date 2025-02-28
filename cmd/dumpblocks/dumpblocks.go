@@ -12,6 +12,7 @@ import (
 
 	_ "embed"
 
+	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/proto/gen/pb"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/0xPolygon/polygon-cli/util"
@@ -54,6 +55,10 @@ var DumpblocksCmd = &cobra.Command{
 	Use:   "dumpblocks start end",
 	Short: "Export a range of blocks from a JSON-RPC endpoint.",
 	Long:  usage,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		rpcUrlFlagValue, _ := flag_loader.GetRpcUrlFlagValue(cmd, false)
+		inputDumpblocks.RpcUrl = *rpcUrlFlagValue
+	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return checkFlags()
 	},

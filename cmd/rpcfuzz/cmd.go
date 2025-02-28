@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz/argfuzz"
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -38,6 +39,10 @@ var RPCFuzzCmd = &cobra.Command{
 	Short: "Continually run a variety of RPC calls and fuzzers.",
 	Long:  usage,
 	Args:  cobra.NoArgs,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		rpcUrl, _ = flag_loader.GetRpcUrlFlagValue(cmd, false)
+		testPrivateHexKey, _ = flag_loader.GetPrivateKeyFlagValue(cmd, false)
+	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return checkFlags()
 	},

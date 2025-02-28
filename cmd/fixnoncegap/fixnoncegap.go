@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -20,10 +21,19 @@ import (
 )
 
 var FixNonceGapCmd = &cobra.Command{
-	Use:          "fix-nonce-gap",
-	Short:        "Send txs to fix the nonce gap for a specific account",
-	Long:         fixNonceGapUsage,
-	Args:         cobra.NoArgs,
+	Use:   "fix-nonce-gap",
+	Short: "Send txs to fix the nonce gap for a specific account",
+	Long:  fixNonceGapUsage,
+	Args:  cobra.NoArgs,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		var err error
+		inputFixNonceGapArgs.rpcURL, _ = flag_loader.GetRpcUrlFlagValue(cmd, false)
+		inputFixNonceGapArgs.privateKey, err = flag_loader.GetPrivateKeyFlagValue(cmd, true)
+		if err != nil {
+			return err
+		}
+		return nil
+	},
 	PreRunE:      prepareRpcClient,
 	RunE:         fixNonceGap,
 	SilenceUsage: true,
@@ -221,7 +231,6 @@ func init() {
 	inputFixNonceGapArgs.privateKey = FixNonceGapCmd.PersistentFlags().String(ArgPrivateKey, "", "the private key to be used when sending the txs to fix the nonce gap")
 	inputFixNonceGapArgs.replace = FixNonceGapCmd.PersistentFlags().Bool(ArgReplace, false, "replace the existing txs in the pool")
 	inputFixNonceGapArgs.maxNonce = FixNonceGapCmd.PersistentFlags().Uint64(ArgMaxNonce, 0, "when set, the max nonce will be this value instead of trying to get it from the pool")
-	fatalIfError(FixNonceGapCmd.MarkPersistentFlagRequired(ArgPrivateKey))
 }
 
 // Wait for the transaction to be mined

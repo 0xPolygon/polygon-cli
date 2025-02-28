@@ -24,6 +24,7 @@ import (
 
 	kms "cloud.google.com/go/kms/apiv1"
 	"cloud.google.com/go/kms/apiv1/kmspb"
+	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/gethkeystore"
 	accounts2 "github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -78,7 +79,10 @@ var SignerCmd = &cobra.Command{
 	Use:   "signer",
 	Short: "Utilities for security signing transactions",
 	Long:  signerUsage,
-	Args:  cobra.NoArgs,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		inputSignerOpts.privateKey, _ = flag_loader.GetRpcUrlFlagValue(cmd, false)
+	},
+	Args: cobra.NoArgs,
 }
 
 var SignCmd = &cobra.Command{

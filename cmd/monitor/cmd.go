@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/spf13/cobra"
 )
@@ -57,6 +58,8 @@ var MonitorCmd = &cobra.Command{
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		rpcUrlFlagValue, _ := flag_loader.GetRpcUrlFlagValue(cmd, false)
+		rpcUrl = *rpcUrlFlagValue
 		// By default, hide logs from `polycli monitor`.
 		verbosityFlag := cmd.Flag("verbosity")
 		if verbosityFlag != nil && !verbosityFlag.Changed {
