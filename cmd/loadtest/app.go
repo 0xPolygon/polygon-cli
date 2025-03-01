@@ -9,9 +9,10 @@ import (
 	"sync"
 	"time"
 
-	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/0xPolygon/polygon-cli/util"
+	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"golang.org/x/time/rate"
@@ -166,6 +167,10 @@ var LoadtestCmd = &cobra.Command{
 	Short: "Run a generic load test against an Eth/EVM style JSON-RPC endpoint.",
 	Long:  loadtestUsage,
 	Args:  cobra.NoArgs,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		inputLoadTestParams.RPCUrl = flag_loader.GetRpcUrlFlagValue(cmd)
+		inputLoadTestParams.PrivateKey = flag_loader.GetPrivateKeyFlagValue(cmd)
+	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		zerolog.DurationFieldUnit = time.Second
 		zerolog.DurationFieldInteger = true

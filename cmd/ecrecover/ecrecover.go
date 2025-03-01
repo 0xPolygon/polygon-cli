@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"os"
 
+	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/util"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -26,11 +27,15 @@ var (
 	txData      string
 )
 
-var EcRecoverCmd = &cobra.Command {
+var EcRecoverCmd = &cobra.Command{
 	Use:   "ecrecover",
 	Short: "Recovers and returns the public key of the signature",
 	Long:  usage,
 	Args:  cobra.NoArgs,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		rpcUrlFlagValue := flag_loader.GetRpcUrlFlagValue(cmd)
+		rpcUrl = *rpcUrlFlagValue
+	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return checkFlags()
 	},

@@ -37,6 +37,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli abi](polycli_abi.md) - Provides encoding and decoding functionalities with contract signatures and ABI.
 
+- [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks
+
 - [polycli dbbench](polycli_dbbench.md) - Perform a level/pebble db benchmark
 
 - [polycli dumpblocks](polycli_dumpblocks.md) - Export a range of blocks from a JSON-RPC endpoint.
@@ -44,6 +46,10 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 - [polycli ecrecover](polycli_ecrecover.md) - Recovers and returns the public key of the signature
 
 - [polycli enr](polycli_enr.md) - Convert between ENR and Enode format
+
+- [polycli fix-nonce-gap](polycli_fix-nonce-gap.md) - Send txs to fix the nonce gap for a specific account
+
+- [polycli fold-trace](polycli_fold-trace.md) - Trace an execution trace and fold it for visualization
 
 - [polycli fork](polycli_fork.md) - Take a forked block and walk up the chain to do analysis.
 

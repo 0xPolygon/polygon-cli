@@ -2,9 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
+	"os"
+
+	"github.com/0xPolygon/polygon-cli/cmd/cdk"
+	"github.com/0xPolygon/polygon-cli/cmd/fixnoncegap"
 	"github.com/0xPolygon/polygon-cli/cmd/retest"
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly"
-	"os"
 
 	"github.com/0xPolygon/polygon-cli/cmd/fork"
 	"github.com/0xPolygon/polygon-cli/cmd/p2p"
@@ -109,13 +113,15 @@ func NewPolycliCommand() *cobra.Command {
 	// Define commands.
 	cmd.AddCommand(
 		abi.ABICmd,
+		cdk.CDKCmd,
+		dbbench.DBBenchCmd,
 		dumpblocks.DumpblocksCmd,
 		ecrecover.EcRecoverCmd,
+		enr.ENRCmd,
+		fixnoncegap.FixNonceGapCmd,
 		fork.ForkCmd,
 		fund.FundCmd,
 		hash.HashCmd,
-		enr.ENRCmd,
-		dbbench.DBBenchCmd,
 		loadtest.LoadtestCmd,
 		metricsToDash.MetricsToDashCmd,
 		mnemonic.MnemonicCmd,
@@ -130,6 +136,7 @@ func NewPolycliCommand() *cobra.Command {
 		version.VersionCmd,
 		wallet.WalletCmd,
 		wrapcontract.WrapContractCmd,
+		foldtrace.FoldTraceCmd,
 	)
 	return cmd
 }
