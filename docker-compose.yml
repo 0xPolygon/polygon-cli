@@ -1,0 +1,32 @@
+services:
+  polycli:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: polycli
+    volumes:
+      - .:/workspace
+    depends_on:
+      geth:
+        condition: service_healthy
+    command: ["monitor", "--rpc-url", "http://geth:8545"]
+    networks:
+      - poly-network
+
+  geth:
+    image: ethereum/client-go:stable
+    container_name: geth
+    ports:
+      - "8545:8545"
+    command: ["--dev", "--http", "--http.addr", "0.0.0.0", "--http.port", "8545", "--http.api", "eth,net,web3"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+    networks:
+      - poly-network
+
+networks:
+  poly-network:
+    driver: bridge
