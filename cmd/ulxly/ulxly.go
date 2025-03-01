@@ -30,6 +30,7 @@ import (
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
+	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -1309,6 +1310,19 @@ var ULxLyCmd = &cobra.Command{
 var ulxlyBridgeAndClaimCmd = &cobra.Command{
 	Args:   cobra.NoArgs,
 	Hidden: true,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		var err error
+		inputUlxlyArgs.rpcURL, err = flag_loader.GetRequiredRpcUrlFlagValue(cmd)
+		if err != nil {
+			return err
+		}
+
+		inputUlxlyArgs.privateKey, err = flag_loader.GetRequiredPrivateKeyFlagValue(cmd)
+		if err != nil {
+			return err
+		}
+		return nil
+	},
 }
 
 var ulxlyBridgeCmd = &cobra.Command{
@@ -1559,8 +1573,6 @@ or if it's actually an intermediate hash.`,
 	inputUlxlyArgs.timeout = ulxlyBridgeAndClaimCmd.PersistentFlags().Uint64(ArgTimeout, 60, "the amount of time to wait while trying to confirm a transaction receipt")
 	inputUlxlyArgs.gasPrice = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgGasPrice, "", "the gas price to be used")
 	inputUlxlyArgs.dryRun = ulxlyBridgeAndClaimCmd.PersistentFlags().Bool(ArgDryRun, false, "do all of the transaction steps but do not send the transaction")
-	fatalIfError(ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgPrivateKey))
-	fatalIfError(ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgRPCURL))
 	fatalIfError(ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgBridgeAddress))
 
 	// bridge specific args

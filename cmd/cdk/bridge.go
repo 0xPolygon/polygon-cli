@@ -75,7 +75,7 @@ func bridgeInspect(cmd *cobra.Command) error {
 
 	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
 
-	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, cdkArgs)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func bridgeInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	mustLogJSONIndent(data)
+	mustPrintJSONIndent(data)
 	return nil
 }
 
@@ -114,7 +114,7 @@ func bridgeDump(cmd *cobra.Command) error {
 
 	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
 
-	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, cdkArgs)
 	if err != nil {
 		return err
 	}
@@ -141,7 +141,7 @@ func bridgeDump(cmd *cobra.Command) error {
 		return err
 	}
 
-	mustLogJSONIndent(data)
+	mustPrintJSONIndent(data)
 	return nil
 }
 
