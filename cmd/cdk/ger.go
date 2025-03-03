@@ -72,7 +72,7 @@ func gerInspect(cmd *cobra.Command) error {
 
 	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
 
-	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, cdkArgs)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func gerInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	mustLogJSONIndent(data)
+	mustPrintJSONIndent(data)
 	return nil
 }
 
@@ -121,7 +121,7 @@ func gerDump(cmd *cobra.Command) error {
 
 	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
 
-	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, *cdkArgs)
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, cdkArgs)
 	if err != nil {
 		return err
 	}
@@ -158,7 +158,7 @@ func gerDump(cmd *cobra.Command) error {
 		return err
 	}
 
-	mustLogJSONIndent(data)
+	mustPrintJSONIndent(data)
 	return nil
 }
 
