@@ -50,7 +50,13 @@ The command also inherits flags from parent commands.
 
 - [polycli ulxly get-deposits](polycli_ulxly_get-deposits.md) - Generate ndjson for each bridge deposit over a particular range of blocks
 
+- [polycli ulxly get-verify-batches](polycli_ulxly_get-verify-batches.md) - Generate ndjson for each verify batch over a particular range of blocks
+
 - [polycli ulxly proof](polycli_ulxly_proof.md) - Generate a proof for a given range of deposits
+
+- [polycli ulxly proof](polycli_ulxly_proof.md) - Generate a proof for a given range of deposits
+
+- [polycli ulxly rollups-proof](polycli_ulxly_rollups-proof.md) - Generate a proof for a given range of rollups
 
 - [polycli ulxly zero-proof](polycli_ulxly_zero-proof.md) - create a proof that's filled with zeros
 
