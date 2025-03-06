@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
+	"github.com/0xPolygon/polygon-cli/util"
 	"os"
 
 	"github.com/0xPolygon/polygon-cli/cmd/cdk"
@@ -13,8 +14,6 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/fork"
 	"github.com/0xPolygon/polygon-cli/cmd/p2p"
 	"github.com/0xPolygon/polygon-cli/cmd/parseethwallet"
-	"github.com/0xPolygon/polygon-cli/util"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -49,6 +48,7 @@ var rootCmd *cobra.Command
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	cobra.EnableTraverseRunHooks = true
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
@@ -91,13 +91,13 @@ func NewPolycliCommand() *cobra.Command {
 		Use:   "polycli",
 		Short: "A Swiss Army knife of blockchain tools.",
 		Long:  "Polycli is a collection of tools that are meant to be useful while building, testing, and running block chain applications.",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			util.SetLogLevel(verbosity)
 			logMode := util.JSON
 			if pretty {
 				logMode = util.Console
 			}
-			return util.SetLogMode(logMode)
+			_ = util.SetLogMode(logMode)
 		},
 	}
 
