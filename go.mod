@@ -1,6 +1,6 @@
 module github.com/0xPolygon/polygon-cli
 
-go 1.22.11
+go 1.23.0
 
 toolchain go1.23.4
 
@@ -30,9 +30,9 @@ require (
 	github.com/tyler-smith/go-bip32 v1.0.0
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/xeipuuv/gojsonschema v1.2.0
-	golang.org/x/crypto v0.33.0
+	golang.org/x/crypto v0.36.0
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
-	golang.org/x/text v0.22.0
+	golang.org/x/text v0.23.0
 	golang.org/x/time v0.10.0
 	google.golang.org/api v0.221.0
 	google.golang.org/protobuf v1.36.5
@@ -138,9 +138,9 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/oauth2 v0.26.0 // indirect
-	golang.org/x/sync v0.11.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/term v0.29.0 // indirect
+	golang.org/x/sync v0.12.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/term v0.30.0 // indirect
 	google.golang.org/genproto v0.0.0-20241118233622-e639e219e697 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250207221924-e9438ea467c6 // indirect
