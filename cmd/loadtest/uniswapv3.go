@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 	"time"
 
@@ -130,12 +131,15 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 }
 
 // Run UniswapV3 loadtest.
-func runUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, nonce uint64, uniswapV3Config uniswapv3loadtest.UniswapV3Config, poolConfig uniswapv3loadtest.PoolConfig, swapAmountIn *big.Int) (t1 time.Time, t2 time.Time, err error) {
+func runUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, nonce uint64, uniswapV3Config uniswapv3loadtest.UniswapV3Config, poolConfig uniswapv3loadtest.PoolConfig, swapAmountIn *big.Int) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+	var tops *bind.TransactOpts
+	var tx *ethtypes.Transaction
+
 	ltp := inputLoadTestParams
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
@@ -145,6 +149,9 @@ func runUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, nonce uint64
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
-	err = uniswapv3loadtest.ExactInputSingleSwap(tops, uniswapV3Config.SwapRouter02.Contract, poolConfig, swapAmountIn, *ltp.FromETHAddress, nonce)
+	tx, err = uniswapv3loadtest.ExactInputSingleSwap(tops, uniswapV3Config.SwapRouter02.Contract, poolConfig, swapAmountIn, *ltp.FromETHAddress, nonce)
+	if err == nil && tx != nil {
+		txHash = tx.Hash()
+	}
 	return
 }
