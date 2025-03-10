@@ -133,7 +133,7 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 // Run UniswapV3 loadtest.
 func runUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, nonce uint64, uniswapV3Config uniswapv3loadtest.UniswapV3Config, poolConfig uniswapv3loadtest.PoolConfig, swapAmountIn *big.Int) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
 	var tops *bind.TransactOpts
-	var tx *ethtypes.Transaction
+	var tx *types.Transaction
 
 	ltp := inputLoadTestParams
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
