@@ -29,10 +29,6 @@ $(BUILD_DIR): ## Create the build folder.
 build: $(BUILD_DIR) ## Build go binary.
 	go build -ldflags "$(VERSION_FLAGS)" -o $(BUILD_DIR)/$(BIN_NAME) main.go
 
-.PHONY: build-docker
-build-docker: ## Builds a docker image with the polycli binary
-	docker build -t polycli -f ./Dockerfile .
-
 .PHONY: install
 install: build ## Install the go binary.
 	$(RM) $(INSTALL_DIR)/$(BIN_NAME)
