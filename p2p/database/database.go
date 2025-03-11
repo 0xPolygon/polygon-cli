@@ -28,7 +28,7 @@ type Database interface {
 	// returns true.
 	WriteBlockHashes(context.Context, *enode.Node, []common.Hash, time.Time)
 
-	// WriteBlockBodies will write the block bodies if ShouldWriteBlocks returns
+	// WriteBlockBody will write the block bodies if ShouldWriteBlocks returns
 	// true.
 	WriteBlockBody(context.Context, *eth.BlockBody, common.Hash, time.Time)
 

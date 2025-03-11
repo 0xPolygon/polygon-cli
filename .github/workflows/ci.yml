@@ -13,8 +13,8 @@ concurrency:
 env:
   ARCH: "linux-x86_64"
 
-  GO_VERSION: "1.22" # https://go.dev/dl/
-  STRINGER_VERSION: "0.29.0" # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
+  GO_VERSION: "1.23" # https://go.dev/dl/
+  STRINGER_VERSION: "0.31.0" # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
 
   PROTOC_VERSION: "29.3" # https://github.com/protocolbuffers/protobuf/releases
   PROTOC_GEN_GO_VERSION: "1.36.5" # https://pkg.go.dev/google.golang.org/protobuf/cmd/protoc-gen-go?tab=versions
