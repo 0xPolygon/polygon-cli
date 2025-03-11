@@ -376,7 +376,7 @@ func GetTransactionsList(block rpctypes.PolyBlock, chainID *big.Int) ([]string, 
 	txs := block.Transactions()
 
 	headerVariables := []string{"Txn Hash", "Method", "From", "To", "Value", "Gas Price"}
-	proportion := []int{60, 5, 50, 50, 20}
+	proportion := []int{60, 20, 50, 50, 20}
 
 	header := ""
 	for i, prop := range proportion {
