@@ -2,8 +2,11 @@ package cdk
 
 import (
 	_ "embed"
+	"math/big"
+	"reflect"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cobra"
 )
@@ -50,12 +53,19 @@ var gerMonitorCmd = &cobra.Command{
 	},
 }
 
+type ger struct {
+	gerContractInterface
+	instance reflect.Value
+}
+
 type gerData struct {
 	BridgeAddress         common.Address `json:"bridgeAddress"`
+	DepositCount          *big.Int       `json:"depositCount"`
 	GetLastGlobalExitRoot common.Hash    `json:"getLastGlobalExitRoot"`
+	Root                  common.Hash    `json:"root"`
 	LastMainnetExitRoot   common.Hash    `json:"lastMainnetExitRoot"`
 	LastRollupExitRoot    common.Hash    `json:"lastRollupExitRoot"`
-	// RollupAddress         common.Address `json:"rollupAddress"`
+	RollupManager         common.Address `json:"rollupManager"`
 }
 
 type gerDumpData struct {
@@ -87,7 +97,7 @@ func gerInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	bridge, err := getBridge(cdkArgs, rpcClient, rollupManagerData.BridgeAddress)
+	bridge, _, err := getBridge(cdkArgs, rpcClient, rollupManagerData.BridgeAddress)
 	if err != nil {
 		return err
 	}
@@ -97,7 +107,7 @@ func gerInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	ger, err := getGER(cdkArgs, rpcClient, bridgeData.GlobalExitRootManager)
+	ger, _, err := getGER(cdkArgs, rpcClient, bridgeData.GlobalExitRootManager)
 	if err != nil {
 		return err
 	}
@@ -136,7 +146,7 @@ func gerDump(cmd *cobra.Command) error {
 		return err
 	}
 
-	bridge, err := getBridge(cdkArgs, rpcClient, rollupManagerData.BridgeAddress)
+	bridge, _, err := getBridge(cdkArgs, rpcClient, rollupManagerData.BridgeAddress)
 	if err != nil {
 		return err
 	}
@@ -146,7 +156,7 @@ func gerDump(cmd *cobra.Command) error {
 		return err
 	}
 
-	ger, err := getGER(cdkArgs, rpcClient, bridgeData.GlobalExitRootManager)
+	ger, _, err := getGER(cdkArgs, rpcClient, bridgeData.GlobalExitRootManager)
 	if err != nil {
 		return err
 	}
@@ -163,7 +173,55 @@ func gerDump(cmd *cobra.Command) error {
 }
 
 func gerMonitor(cmd *cobra.Command) error {
-	panic("not implemented")
+	ctx := cmd.Context()
+
+	cdkArgs, err := cdkInputArgs.parseCDKArgs(ctx)
+	if err != nil {
+		return err
+	}
+
+	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
+
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, cdkArgs)
+	if err != nil {
+		return err
+	}
+
+	rollupManager, _, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
+	if err != nil {
+		return err
+	}
+
+	rollupManagerData, err := getRollupManagerData(rollupManager)
+	if err != nil {
+		return err
+	}
+
+	bridge, _, err := getBridge(cdkArgs, rpcClient, rollupManagerData.BridgeAddress)
+	if err != nil {
+		return err
+	}
+
+	bridgeData, err := getBridgeData(bridge)
+	if err != nil {
+		return err
+	}
+
+	ger, gerABI, err := getGER(cdkArgs, rpcClient, bridgeData.GlobalExitRootManager)
+	if err != nil {
+		return err
+	}
+
+	filter := ethereum.FilterQuery{
+		Addresses: []common.Address{bridgeData.GlobalExitRootManager},
+	}
+
+	err = watchNewLogs(ctx, rpcClient, filter, ger.instance, gerABI)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func getGERData(ger gerContractInterface) (*gerData, error) {
@@ -176,7 +234,19 @@ func getGERData(ger gerContractInterface) (*gerData, error) {
 	}
 	time.Sleep(contractRequestInterval)
 
+	data.DepositCount, err = ger.DepositCount(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
 	data.GetLastGlobalExitRoot, err = ger.GetLastGlobalExitRoot(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	data.Root, err = ger.GetRoot(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -194,11 +264,11 @@ func getGERData(ger gerContractInterface) (*gerData, error) {
 	}
 	time.Sleep(contractRequestInterval)
 
-	// data.RollupAddress, err = ger.RollupAddress(nil)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// time.Sleep(contractRequestInterval)
+	data.RollupManager, err = ger.RollupManager(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
 
 	return data, nil
 }

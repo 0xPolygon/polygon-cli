@@ -2,18 +2,13 @@ package cdk
 
 import (
 	_ "embed"
-	"encoding/json"
-	"fmt"
 	"math/big"
 	"reflect"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -88,7 +83,7 @@ var rollupManagerMonitorCmd = &cobra.Command{
 	},
 }
 
-type rollupManagerSCWrapper struct {
+type rollupManager struct {
 	rollupManagerContractInterface
 	instance reflect.Value
 }
@@ -262,52 +257,16 @@ func rollupManagerMonitor(cmd *cobra.Command) error {
 		return err
 	}
 
-	latestBlockNumber, err := rpcClient.BlockNumber(ctx)
+	filter := ethereum.FilterQuery{
+		Addresses: []common.Address{rollupManagerArgs.rollupManagerAddress},
+	}
+
+	err = watchNewLogs(ctx, rpcClient, filter, rollupManager.instance, rollupManagerABI)
 	if err != nil {
 		return err
 	}
-	time.Sleep(contractRequestInterval)
 
-	// rewind 1 block to force reading the current block
-	if latestBlockNumber > 0 {
-		latestBlockNumber--
-	}
-
-	log.Info().Msgf("Waiting for events from rollup-manager %s", rollupManagerArgs.rollupManagerAddress.Hex())
-
-	for {
-		currentBlockNumber, err := rpcClient.BlockNumber(ctx)
-		if err != nil {
-			return err
-		}
-		time.Sleep(contractRequestInterval)
-
-		if currentBlockNumber <= latestBlockNumber {
-			time.Sleep(time.Second)
-		}
-
-		for blockNumber := latestBlockNumber + 1; blockNumber <= currentBlockNumber; blockNumber++ {
-			log.Info().Msgf("New block detected %d", blockNumber)
-
-			fromBlock := big.NewInt(0).SetUint64(blockNumber)
-			toBlock := big.NewInt(0).SetUint64(blockNumber)
-
-			filter := ethereum.FilterQuery{
-				Addresses: []common.Address{rollupManagerArgs.rollupManagerAddress},
-				FromBlock: fromBlock,
-				ToBlock:   toBlock,
-			}
-
-			logs, err := rpcClient.FilterLogs(ctx, filter)
-			if err != nil {
-				return err
-			}
-			time.Sleep(contractRequestInterval)
-
-			mustPrintRollupManagerLogs(logs, rollupManager, rollupManagerABI)
-		}
-		latestBlockNumber = currentBlockNumber
-	}
+	return nil
 }
 
 func getRollupManagerRollups(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, rollupManager rollupManagerContractInterface) ([]RollupData, error) {
@@ -417,99 +376,4 @@ func getRollupManagerData(rollupManager rollupManagerContractInterface) (*Rollup
 	// time.Sleep(contractRequestInterval)
 
 	return data, nil
-}
-
-func mustPrintRollupManagerLogs(logs []types.Log, rollupManager *rollupManagerSCWrapper, rollupManagerABI *abi.ABI) {
-	eventsFound := false
-	for _, l := range logs {
-		e, _ := rollupManagerABI.EventByID(l.Topics[0])
-		if e == nil {
-			continue
-		}
-		eventsFound = true
-
-		var parsedEvent any
-		parseLogMethod, methodFound := rollupManager.instance.Type().MethodByName(fmt.Sprintf("Parse%s", e.Name))
-		if !methodFound {
-			log.Warn().Msgf("Method Parse%s not found", e.Name)
-		} else {
-			parsedLogValues := parseLogMethod.Func.Call([]reflect.Value{rollupManager.instance, reflect.ValueOf(l)})
-			parsedEventValue := parsedLogValues[0].Interface()
-			errValue := parsedLogValues[1].Interface()
-			if errValue != nil {
-				log.Warn().Err(errValue.(error)).Msgf("Error parsing log %v", l)
-			} else {
-				parsedEvent = parsedEventValue
-			}
-		}
-
-		cm := customMarshaller{parsedEvent}
-
-		mustPrintJSONIndent(struct {
-			Name      string `json:"name"`
-			Signature string `json:"signature"`
-			Event     any    `json:"event"`
-		}{
-			Name:      e.Name,
-			Signature: e.Sig,
-			Event:     cm,
-		})
-	}
-	if !eventsFound {
-		log.Info().Msg("No rollup manager events found")
-	}
-}
-
-type customMarshaller struct {
-	any
-}
-
-func (instance customMarshaller) MarshalJSON() ([]byte, error) {
-	result := map[string]any{}
-	instanceType := reflect.TypeOf(instance.any)
-	instanceValue := reflect.ValueOf(instance.any)
-
-	if instanceType.Kind() == reflect.Ptr {
-		instanceType = instanceType.Elem()
-		instanceValue = instanceValue.Elem()
-	}
-
-	for i := range instanceType.NumField() {
-		f := instanceType.Field(i)
-
-		if !f.IsExported() {
-			continue
-		}
-
-		fieldKind := f.Type.Kind()
-
-		v := instanceValue.Field(i)
-		if fieldKind == reflect.Array {
-			var fieldInterfaceValue any
-			if v.CanAddr() { // check if array is addressable
-				v = v.Slice(0, f.Type.Len())
-				fieldInterfaceValue = v.Interface()
-				if f.Type.Len() == 20 {
-					result[f.Name] = common.BytesToAddress(fieldInterfaceValue.([]byte))
-				} else {
-					result[f.Name] = common.BytesToHash(fieldInterfaceValue.([]byte))
-				}
-			} else {
-				result[f.Name] = v.Interface()
-			}
-		} else if fieldKind == reflect.Slice {
-			if f.Type.Elem().Kind() == reflect.Uint8 {
-				result[f.Name] = common.BytesToHash(v.Bytes())
-			} else {
-				result[f.Name] = v.Interface()
-			}
-		} else if fieldKind == reflect.Struct || fieldKind == reflect.Ptr {
-			result[f.Name] = customMarshaller{v.Interface()}
-		} else {
-			result[f.Name] = v.Interface()
-		}
-
-	}
-
-	return json.Marshal(result)
 }

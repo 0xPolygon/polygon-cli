@@ -119,9 +119,11 @@ type bridgeContractInterface interface {
 
 type gerContractInterface interface {
 	BridgeAddress(opts *bind.CallOpts) (common.Address, error)
+	DepositCount(opts *bind.CallOpts) (*big.Int, error)
 	GetLastGlobalExitRoot(opts *bind.CallOpts) ([32]byte, error)
+	GetRoot(opts *bind.CallOpts) ([32]byte, error)
 	GlobalExitRootMap(opts *bind.CallOpts, arg0 [32]byte) (*big.Int, error)
 	LastMainnetExitRoot(opts *bind.CallOpts) ([32]byte, error)
 	LastRollupExitRoot(opts *bind.CallOpts) ([32]byte, error)
-	RollupAddress(opts *bind.CallOpts) (common.Address, error)
+	RollupManager(opts *bind.CallOpts) (common.Address, error)
 }

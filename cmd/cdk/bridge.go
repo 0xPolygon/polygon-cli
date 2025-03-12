@@ -3,8 +3,10 @@ package cdk
 import (
 	_ "embed"
 	"math/big"
+	"reflect"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cobra"
 )
@@ -61,6 +63,11 @@ type BridgeData struct {
 	// PolygonZkEVMaddress     common.Address `json:"polygonZkEVMaddress"`
 }
 
+type bridge struct {
+	bridgeContractInterface
+	instance reflect.Value
+}
+
 type BridgeDumpData struct {
 	Data *BridgeData `json:"data"`
 }
@@ -90,7 +97,7 @@ func bridgeInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	bridge, err := getBridge(cdkArgs, rpcClient, rollupManagerData.BridgeAddress)
+	bridge, _, err := getBridge(cdkArgs, rpcClient, rollupManagerData.BridgeAddress)
 	if err != nil {
 		return err
 	}
@@ -129,7 +136,7 @@ func bridgeDump(cmd *cobra.Command) error {
 		return err
 	}
 
-	bridge, err := getBridge(cdkArgs, rpcClient, rollupManagerData.BridgeAddress)
+	bridge, _, err := getBridge(cdkArgs, rpcClient, rollupManagerData.BridgeAddress)
 	if err != nil {
 		return err
 	}
@@ -146,7 +153,45 @@ func bridgeDump(cmd *cobra.Command) error {
 }
 
 func bridgeMonitor(cmd *cobra.Command) error {
-	panic("not implemented")
+	ctx := cmd.Context()
+
+	cdkArgs, err := cdkInputArgs.parseCDKArgs(ctx)
+	if err != nil {
+		return err
+	}
+
+	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
+
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, cdkArgs)
+	if err != nil {
+		return err
+	}
+
+	rollupManager, _, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
+	if err != nil {
+		return err
+	}
+
+	rollupManagerData, err := getRollupManagerData(rollupManager)
+	if err != nil {
+		return err
+	}
+
+	bridge, bridgeABI, err := getBridge(cdkArgs, rpcClient, rollupManagerData.BridgeAddress)
+	if err != nil {
+		return err
+	}
+
+	filter := ethereum.FilterQuery{
+		Addresses: []common.Address{rollupManagerData.BridgeAddress},
+	}
+
+	err = watchNewLogs(ctx, rpcClient, filter, bridge.instance, bridgeABI)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func getBridgeData(bridge bridgeContractInterface) (*BridgeData, error) {
