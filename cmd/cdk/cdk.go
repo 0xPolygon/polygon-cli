@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/go-errors/errors"
@@ -228,29 +230,44 @@ func mustGetRPCClient(ctx context.Context, rpcURL string) *ethclient.Client {
 	return rpcClient
 }
 
-func getRollupManager(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (rollupManagerContractInterface, error) {
-	var rollupManager rollupManagerContractInterface
-	var err error
+func getRollupManager(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (*rollupManagerSCWrapper, *abi.ABI, error) {
+	var rollupManagerWrapper *rollupManagerSCWrapper
+	var rollupManagerABI *abi.ABI
 	switch cdkArgs.forkID {
 	case etrog:
-		rollupManager, err = etrog_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
+		rollupManager, err := etrog_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		rollupManagerWrapper = &rollupManagerSCWrapper{rollupManager, reflect.ValueOf(rollupManager)}
+		rollupManagerABI, err = etrog_rollup_manager.PolygonrollupmanagerMetaData.GetAbi()
+		if err != nil {
+			return nil, nil, err
 		}
 	case elderberry:
-		rollupManager, err = elderberry_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
+		rollupManager, err := elderberry_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		rollupManagerWrapper = &rollupManagerSCWrapper{rollupManager, reflect.ValueOf(rollupManager)}
+		rollupManagerABI, err = elderberry_rollup_manager.PolygonrollupmanagerMetaData.GetAbi()
+		if err != nil {
+			return nil, nil, err
 		}
 	case banana:
-		rollupManager, err = banana_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
+		rollupManager, err := banana_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		rollupManagerWrapper = &rollupManagerSCWrapper{rollupManager, reflect.ValueOf(rollupManager)}
+		rollupManagerABI, err = banana_rollup_manager.PolygonrollupmanagerMetaData.GetAbi()
+		if err != nil {
+			return nil, nil, err
 		}
 	default:
-		return nil, invalidForkIDErr()
+		return nil, nil, invalidForkIDErr()
 	}
-	return rollupManager, nil
+	return rollupManagerWrapper, rollupManagerABI, nil
 }
 
 func getRollup(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (rollupContractInterface, error) {

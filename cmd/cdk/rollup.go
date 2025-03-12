@@ -56,6 +56,7 @@ var rollupMonitorCmd = &cobra.Command{
 
 type RollupData struct {
 	// from rollup manager sc
+	RollupID                       uint32         `json:"rollupID"`
 	RollupContract                 common.Address `json:"rollupContract"`
 	ChainID                        uint64         `json:"chainID"`
 	Verifier                       common.Address `json:"verifier"`
@@ -108,7 +109,7 @@ func rollupInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
+	rollupManager, _, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}
@@ -142,7 +143,7 @@ func rollupDump(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
+	rollupManager, _, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}
@@ -227,6 +228,7 @@ func getRollupData(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, rollupMan
 	time.Sleep(contractRequestInterval)
 
 	return &RollupData{
+		RollupID:                       rollupID,
 		RollupContract:                 rollupData.RollupContract,
 		ChainID:                        rollupData.ChainID,
 		Verifier:                       rollupData.Verifier,

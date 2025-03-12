@@ -77,7 +77,7 @@ func gerInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
+	rollupManager, _, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func gerDump(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
+	rollupManager, _, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}
