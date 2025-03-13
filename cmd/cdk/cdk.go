@@ -397,6 +397,11 @@ func invalidForkIDErr() error {
 	return fmt.Errorf("invalid forkID. supported forkIDs are %s", v)
 }
 
+// watchNewLogs watches for new logs for the given filter and print them to the console
+// - rpcClient is used to fetch the logs
+// - filter is used to set which logs must be fetched
+// - contractInstance and contractABI are used to parse the logs
+// - logs are printed in JSON format
 func watchNewLogs(ctx context.Context, rpcClient *ethclient.Client, filter ethereum.FilterQuery, contractInstance reflect.Value, contractABI *abi.ABI) error {
 	log.Info().Msgf("Waiting for events")
 
@@ -441,6 +446,10 @@ func watchNewLogs(ctx context.Context, rpcClient *ethclient.Client, filter ether
 	}
 }
 
+// mustPrintLogs prints the logs in JSON format
+// - logs are parsed using the contractInstance and contractABI
+// - logs are printed in JSON format
+// - if the log cannot be parsed, the log is printed as is
 func mustPrintLogs(logs []types.Log, contractInstance reflect.Value, contractABI *abi.ABI) {
 	eventsFound := false
 	for _, l := range logs {

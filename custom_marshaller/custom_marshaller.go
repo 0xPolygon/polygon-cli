@@ -27,27 +27,40 @@ func New(i any) CustomMarshaller {
 // Example:
 //
 //	type MyStruct struct {
-//	    Field1 string
-//	    Field2 [32]byte
-//	    Field3 [20]byte
+//		Field1 string
+//		Field2 [32]byte
+//		Field3 [20]byte
+//		Field4 []byte
+//	}
+//	myStruct := MyStruct{
+//		Field1: "value",
+//		Field2: [32]byte{},
+//		Field3: [20]byte{},
+//		Field4: []byte{},
 //	}
 //
-//	func (m MyStruct) MarshalJSON() ([]byte, error) {
-//	    return json.Marshal(CustomMarshaller{m})
-//	}
+//	result, _ := json.Marshal(myStruct)
+//	fmt.Println(string(result))
 //
-//	Result returned when marshalling MyStruct directly:
+// Result returned when marshalling MyStruct directly:
+//
 //	{
 //		"Field1": "value",
-//		"Field2": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-//		"Field3": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+//		"Field2": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+//		"Field3": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+//		"Field4": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 //	}
 //
-//	Result returned when marshalling MyStruct using CustomMarshaller:
+//	result, _ = json.Marshal(custom_marshaller.New(myStruct))
+//	fmt.Println(string(result))
+//
+// Result returned when marshalling MyStruct using CustomMarshaller:
+//
 //	{
 //		"Field1": "value",
 //		"Field2": "0x0000000000000000000000000000000000000000000000000000000000000000",
-//		"Field3": "0x0000000000000000000000000000000000000000"
+//		"Field3": "0x0000000000000000000000000000000000000000",
+//		"Field4": "0x0000000000000000000000000000000000000000000000000000000000000000"
 //	}
 func (instance CustomMarshaller) MarshalJSON() ([]byte, error) {
 	result := map[string]any{}
