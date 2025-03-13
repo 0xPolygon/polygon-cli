@@ -54,13 +54,17 @@ var bridgeMonitorCmd = &cobra.Command{
 }
 
 type BridgeData struct {
-	NetworkID               uint32         `json:"networkID"`
+	WETHToken               common.Address `json:"wethToken"`
 	DepositCount            *big.Int       `json:"depositCount"`
+	GasTokenAddress         common.Address `json:"gasTokenAddress"`
+	GasTokenMetadata        common.Hash    `json:"gasTokenMetadata"`
+	GasTokenNetwork         uint32         `json:"gasTokenNetwork"`
+	GetRoot                 common.Hash    `json:"getRoot"`
+	GlobalExitRootManager   common.Address `json:"globalExitRootManager"`
 	IsEmergencyState        bool           `json:"isEmergencyState"`
 	LastUpdatedDepositCount uint32         `json:"lastUpdatedDepositCount"`
-	GlobalExitRootManager   common.Address `json:"globalExitRootManager"`
-	// GetDepositRoot          common.Hash    `json:"getDepositRoot"`
-	// PolygonZkEVMaddress     common.Address `json:"polygonZkEVMaddress"`
+	NetworkID               uint32         `json:"networkID"`
+	PolygonRollupManager    common.Address `json:"polygonRollupManager"`
 }
 
 type bridge struct {
@@ -198,13 +202,44 @@ func getBridgeData(bridge bridgeContractInterface) (*BridgeData, error) {
 	data := &BridgeData{}
 	var err error
 
-	data.NetworkID, err = bridge.NetworkID(nil)
+	data.WETHToken, err = bridge.WETHToken(nil)
 	if err != nil {
 		return nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
 	data.DepositCount, err = bridge.DepositCount(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	data.GasTokenAddress, err = bridge.GasTokenAddress(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	gasTokenMetadata, err := bridge.GasTokenMetadata(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+	data.GasTokenMetadata = common.BytesToHash(gasTokenMetadata)
+
+	data.GasTokenNetwork, err = bridge.GasTokenNetwork(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	data.GetRoot, err = bridge.GetRoot(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	data.GlobalExitRootManager, err = bridge.GlobalExitRootManager(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -222,23 +257,17 @@ func getBridgeData(bridge bridgeContractInterface) (*BridgeData, error) {
 	}
 	time.Sleep(contractRequestInterval)
 
-	data.GlobalExitRootManager, err = bridge.GlobalExitRootManager(nil)
+	data.NetworkID, err = bridge.NetworkID(nil)
 	if err != nil {
 		return nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
-	// data.GetDepositRoot, err = bridge.GetDepositRoot(nil)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// time.Sleep(contractRequestInterval)
-
-	// data.PolygonZkEVMaddress, err = bridge.PolygonZkEVMaddress(nil)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// time.Sleep(contractRequestInterval)
+	data.PolygonRollupManager, err = bridge.PolygonRollupManager(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
 
 	return data, nil
 }

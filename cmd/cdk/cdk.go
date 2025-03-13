@@ -24,17 +24,17 @@ import (
 
 	banana_rollup "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonrollupbaseetrog"
 	banana_rollup_manager "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonrollupmanager"
-	banana_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonzkevmbridge"
+	banana_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonzkevmbridgev2"
 	banana_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonzkevmglobalexitrootv2"
 
 	elderberry_rollup "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonrollupbaseetrog"
 	elderberry_rollup_manager "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonrollupmanager"
-	elderberry_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonzkevmbridge"
+	elderberry_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonzkevmbridgev2"
 	elderberry_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonzkevmglobalexitrootv2"
 
 	etrog_rollup "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonrollupbaseetrog"
 	etrog_rollup_manager "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonrollupmanager"
-	etrog_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonzkevmbridge"
+	etrog_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonzkevmbridgev2"
 	etrog_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonzkevmglobalexitrootv2"
 )
 
@@ -304,32 +304,32 @@ func getBridge(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.A
 	var contractABI *abi.ABI
 	switch cdkArgs.forkID {
 	case etrog:
-		contractInstance, err := etrog_bridge.NewPolygonzkevmbridge(addr, rpcClient)
+		contractInstance, err := etrog_bridge.NewPolygonzkevmbridgev2(addr, rpcClient)
 		if err != nil {
 			return nil, nil, err
 		}
 		contract = &bridge{contractInstance, reflect.ValueOf(contractInstance)}
-		contractABI, err = etrog_bridge.PolygonzkevmbridgeMetaData.GetAbi()
+		contractABI, err = etrog_bridge.Polygonzkevmbridgev2MetaData.GetAbi()
 		if err != nil {
 			return nil, nil, err
 		}
 	case elderberry:
-		contractInstance, err := elderberry_bridge.NewPolygonzkevmbridge(addr, rpcClient)
+		contractInstance, err := elderberry_bridge.NewPolygonzkevmbridgev2(addr, rpcClient)
 		if err != nil {
 			return nil, nil, err
 		}
 		contract = &bridge{contractInstance, reflect.ValueOf(contractInstance)}
-		contractABI, err = elderberry_bridge.PolygonzkevmbridgeMetaData.GetAbi()
+		contractABI, err = elderberry_bridge.Polygonzkevmbridgev2MetaData.GetAbi()
 		if err != nil {
 			return nil, nil, err
 		}
 	case banana:
-		contractInstance, err := banana_bridge.NewPolygonzkevmbridge(addr, rpcClient)
+		contractInstance, err := banana_bridge.NewPolygonzkevmbridgev2(addr, rpcClient)
 		if err != nil {
 			return nil, nil, err
 		}
 		contract = &bridge{contractInstance, reflect.ValueOf(contractInstance)}
-		contractABI, err = banana_bridge.PolygonzkevmbridgeMetaData.GetAbi()
+		contractABI, err = banana_bridge.Polygonzkevmbridgev2MetaData.GetAbi()
 		if err != nil {
 			return nil, nil, err
 		}
