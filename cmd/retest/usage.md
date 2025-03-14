@@ -9,6 +9,13 @@ To try this out, first checkout https://github.com/ethereum/tests/
 # Move into the filler directory
 cd tests/src
 
+# at this point, it's a good time to check if you have a good version
+# of yq installed. If you run this command or something like it and
+# the values are turned into decimals or floating point numbers, this
+# will be a problem. This particular version of yq handles this well:
+# https://github.com/mikefarah/yq
+cat ./GeneralStateTestsFiller/stPreCompiledContracts2/ecrecoverShortBuffFiller.yml | ~/go/bin/yq -o json
+
 # Convert the yaml based tests to json. There will be some failures depending on the version of yq used
 find . -type f -name '*.yml'  | while read yaml_file ; do
     yq -o json '.' $yaml_file > $yaml_file.json
@@ -18,17 +25,17 @@ find . -type f -name '*.yml'  | while read yaml_file ; do
     fi
 done
 
-
 # Check for duplicates... There are a few so we should be mindful of that
 find . -type f -name '*.json' | xargs cat | jq -r 'to_entries[].key' | uniq -c | sort
 
 # Consolidate everything.. The kzg tests seem to be a different format.. So excluding them with the array check
 find . -type f -name '*.json' | xargs cat | jq 'select((. | type) != "array")' | jq -s 'add' > merged.json
+
 # there are some fields like "//comment" that make parsing very difficult
 jq 'walk(if type == "object" then with_entries(select(.key | startswith("//") | not)) else . end)' merged.json  > merged.nocomment.json
 ```
 
-Now we should have a giant file filled with an array of transactions. We can take that output and process it witht the `retest` command now
+Now we should have a giant file filled with an array of transactions. We can take that output and process it with the `retest` command now
 
 ```bash
 polycli retest -v 500 --file merged.nocomment.json > simple.json
@@ -39,7 +46,9 @@ polycli retest -v 500 --file merged.nocomment.json > simple.json
 This project will depend on an installation of `solc` (specifically
 0.8.20) and `lllc`. Installing solidity is pretty easy, but LLLC can
 be a little tricky.
-If you got multiple solc versions, you can specify full patch to the right binary to use with env var ```SOLC_PATH```.
+
+If you've got multiple solc versions, you can specify full path to the
+right binary to use with env var ```SOLC_PATH```.
 
 Since the version is pretty old, it might not build well on your host
 os. Building within docker might make your life easier:

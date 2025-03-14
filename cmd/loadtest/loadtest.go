@@ -493,19 +493,42 @@ func runLoadTest(ctx context.Context) error {
 	return nil
 }
 
-func updateRateLimit(ctx context.Context, rl *rate.Limiter, rpc *ethrpc.Client, steadyStateQueueSize uint64, rateLimitIncrement uint64, cycleDuration time.Duration, backoff float64) {
+func updateRateLimit(ctx context.Context, rl *rate.Limiter, rpc *ethrpc.Client, nonceGetter func() (uint64, error), steadyStateQueueSize uint64, rateLimitIncrement uint64, cycleDuration time.Duration, backoff float64) {
+	tryTxPool := true
 	ticker := time.NewTicker(cycleDuration)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			pendingTx, queuedTx, err := util.GetTxPoolStatus(rpc)
-			if err != nil {
-				log.Error().Err(err).Msg("Error getting txpool size")
-				return
+			var adaptiveNonce uint64
+			var txPoolSize uint64
+			var err error
+			var pendingTx uint64
+			var queuedTx uint64
+			// TODO perhaps this should be a mode rather than a fallback
+			if tryTxPool {
+				pendingTx, queuedTx, err = util.GetTxPoolStatus(rpc)
 			}
 
-			txPoolSize := pendingTx + queuedTx
+			if err != nil {
+				tryTxPool = false
+				log.Warn().Err(err).Msg("Error getting txpool size. Falling back to latest nonce and disabling txpool check")
+				adaptiveNonce, err = nonceGetter()
+				if err != nil {
+					log.Error().Err(err).Msg("Error getting nonce from rpc")
+					return
+				}
+				currentNonceMutex.RLock()
+				if currentNonce < adaptiveNonce {
+					txPoolSize = 0
+				} else {
+					txPoolSize = currentNonce - adaptiveNonce
+				}
+				currentNonceMutex.RUnlock()
+			} else {
+				txPoolSize = pendingTx + queuedTx
+			}
+
 			if txPoolSize < steadyStateQueueSize {
 				// additively increment requests per second if txpool less than queue steady state
 				newRateLimit := rate.Limit(float64(rl.Limit()) + float64(rateLimitIncrement))
@@ -538,9 +561,15 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		rl = nil
 	}
 	rateLimitCtx, cancel := context.WithCancel(ctx)
+
+	nonceGetter := func(ec *ethclient.Client, fromAddress common.Address) func() (uint64, error) {
+		return func() (uint64, error) {
+			return ec.NonceAt(ctx, fromAddress, nil)
+		}
+	}(c, *ltp.FromETHAddress)
 	defer cancel()
 	if *ltp.AdaptiveRateLimit && rl != nil {
-		go updateRateLimit(rateLimitCtx, rl, rpc, steadyStateTxPoolSize, adaptiveRateLimitIncrement, time.Duration(*ltp.AdaptiveCycleDuration)*time.Second, *ltp.AdaptiveBackoffFactor)
+		go updateRateLimit(rateLimitCtx, rl, rpc, nonceGetter, steadyStateTxPoolSize, adaptiveRateLimitIncrement, time.Duration(*ltp.AdaptiveCycleDuration)*time.Second, *ltp.AdaptiveBackoffFactor)
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
@@ -665,6 +694,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			var retryForNonce bool = false
 			var myNonceValue uint64
 			var tErr error
+			var ltTxHash common.Hash
 			for j = 0; j < requests; j = j + 1 {
 				if rl != nil {
 					tErr = rl.Wait(ctx)
@@ -693,36 +723,36 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 				switch localMode {
 				case loadTestModeERC20:
-					startReq, endReq, tErr = loadTestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
+					startReq, endReq, ltTxHash, tErr = loadTestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
 				case loadTestModeERC721:
-					startReq, endReq, tErr = loadTestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
+					startReq, endReq, ltTxHash, tErr = loadTestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
 				case loadTestModeBlob:
-					startReq, endReq, tErr = loadTestBlob(ctx, c, myNonceValue)
+					startReq, endReq, ltTxHash, tErr = loadTestBlob(ctx, c, myNonceValue)
 				case loadTestModeContractCall:
-					startReq, endReq, tErr = loadTestContractCall(ctx, c, myNonceValue)
+					startReq, endReq, ltTxHash, tErr = loadTestContractCall(ctx, c, myNonceValue)
 				case loadTestModeDeploy:
-					startReq, endReq, tErr = loadTestDeploy(ctx, c, myNonceValue)
+					startReq, endReq, ltTxHash, tErr = loadTestDeploy(ctx, c, myNonceValue)
 				case loadTestModeFunction, loadTestModeCall:
-					startReq, endReq, tErr = loadTestFunction(ctx, c, myNonceValue, ltContract)
+					startReq, endReq, ltTxHash, tErr = loadTestFunction(ctx, c, myNonceValue, ltContract)
 				case loadTestModeInscription:
-					startReq, endReq, tErr = loadTestInscription(ctx, c, myNonceValue)
+					startReq, endReq, ltTxHash, tErr = loadTestInscription(ctx, c, myNonceValue)
 				case loadTestModeIncrement:
-					startReq, endReq, tErr = loadTestIncrement(ctx, c, myNonceValue, ltContract)
+					startReq, endReq, ltTxHash, tErr = loadTestIncrement(ctx, c, myNonceValue, ltContract)
 				case loadTestModeRandomPrecompiledContract:
-					startReq, endReq, tErr = loadTestCallPrecompiledContract(ctx, c, myNonceValue, ltContract, false)
+					startReq, endReq, ltTxHash, tErr = loadTestCallPrecompiledContract(ctx, c, myNonceValue, ltContract, false)
 				case loadTestModeSpecificPrecompiledContract:
-					startReq, endReq, tErr = loadTestCallPrecompiledContract(ctx, c, myNonceValue, ltContract, true)
+					startReq, endReq, ltTxHash, tErr = loadTestCallPrecompiledContract(ctx, c, myNonceValue, ltContract, true)
 				case loadTestModeRecall:
-					startReq, endReq, tErr = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
+					startReq, endReq, ltTxHash, tErr = loadTestRecall(ctx, c, myNonceValue, recallTransactions[int(currentNonce)%len(recallTransactions)])
 				case loadTestModeRPC:
 					startReq, endReq, tErr = loadTestRPC(ctx, c, myNonceValue, indexedActivity)
 				case loadTestModeStore:
-					startReq, endReq, tErr = loadTestStore(ctx, c, myNonceValue, ltContract)
+					startReq, endReq, ltTxHash, tErr = loadTestStore(ctx, c, myNonceValue, ltContract)
 				case loadTestModeTransaction:
-					startReq, endReq, tErr = loadTestTransaction(ctx, c, myNonceValue)
+					startReq, endReq, ltTxHash, tErr = loadTestTransaction(ctx, c, myNonceValue)
 				case loadTestModeUniswapV3:
 					swapAmountIn := big.NewInt(int64(*uniswapv3LoadTestParams.SwapAmountInput))
-					startReq, endReq, tErr = runUniswapV3Loadtest(ctx, c, myNonceValue, uniswapV3Config, poolConfig, swapAmountIn)
+					startReq, endReq, ltTxHash, tErr = runUniswapV3Loadtest(ctx, c, myNonceValue, uniswapV3Config, poolConfig, swapAmountIn)
 				default:
 					log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -751,7 +781,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 				}
 
-				log.Trace().Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode.String()).Int64("request", j).Msg("Request")
+				log.Trace().Stringer("txhash", ltTxHash).Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode.String()).Int64("request", j).Msg("Request")
 			}
 			wg.Done()
 		}(i)
@@ -860,7 +890,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 	return
 }
 
-func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
@@ -911,6 +941,8 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 		return
 	}
 
+	txHash = stx.Hash()
+
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
@@ -922,17 +954,36 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 }
 
 var (
-	cachedBlockNumber  uint64
-	cachedGasPriceLock sync.Mutex
-	cachedGasPrice     *big.Int
-	cachedGasTipCap    *big.Int
+	cachedBlockNumber           uint64
+	cachedGasPriceLock          sync.Mutex
+	cachedGasPrice              *big.Int
+	cachedGasTipCap             *big.Int
+	cachedLatestBlockNumber     uint64
+	cachedLatestBlockTime       time.Time
+	cachedLatestBlockNumberLock sync.Mutex
 )
 
-func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, *big.Int) {
-	// this should be one of the fastest RPC calls, so hopefully there isn't too much overhead calling this
+func getLatestBlockNumber(ctx context.Context, c *ethclient.Client) uint64 {
+	cachedLatestBlockNumberLock.Lock()
+	defer cachedLatestBlockNumberLock.Unlock()
+	// The case where cachedLatestBlockTime is empty should give a large Since value and cause the block to be fetched
+	if time.Since(cachedLatestBlockTime) < 1*time.Second {
+		return cachedLatestBlockNumber
+	}
 	bn, err := c.BlockNumber(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get block number while checking gas prices")
+		return 0
+	}
+	cachedLatestBlockTime = time.Now()
+	cachedLatestBlockNumber = bn
+	return bn
+}
+
+func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, *big.Int) {
+	// this should be one of the fastest RPC calls, so hopefully there isn't too much overhead calling this
+	bn := getLatestBlockNumber(ctx, c)
+	if bn == 0 {
 		return nil, nil
 	}
 	isDynamic := inputLoadTestParams.ChainSupportBaseFee
@@ -991,13 +1042,16 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 }
 
 // TODO - in the future it might be more interesting if this mode takes input or random contracts to be deployed
-func loadTestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+func loadTestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+	var tops *bind.TransactOpts
+	var tx *ethtypes.Transaction
+
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
@@ -1012,7 +1066,10 @@ func loadTestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 
 		msg.Data = ethcommon.FromHex(tester.LoadTesterMetaData.Bin)
 		_, err = c.CallContract(ctx, msg, nil)
 	} else {
-		_, _, _, err = tester.DeployLoadTester(tops, c)
+		_, tx, _, err = tester.DeployLoadTester(tops, c)
+		if err == nil && tx != nil {
+			txHash = tx.Hash()
+		}
 	}
 	return
 }
@@ -1027,7 +1084,10 @@ func getCurrentLoadTestFunction() uint64 {
 	}
 	return tester.GetRandomOPCode()
 }
-func loadTestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+func loadTestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+	var tops *bind.TransactOpts
+	var tx *ethtypes.Transaction
+
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -1035,7 +1095,7 @@ func loadTestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, lt
 	iterations := ltp.Iterations
 	f := getCurrentLoadTestFunction()
 
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
@@ -1047,7 +1107,6 @@ func loadTestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, lt
 	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
 		tops.NoSend = true
-		var tx *ethtypes.Transaction
 		tx, err = tester.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
 		if err != nil {
 			return
@@ -1055,13 +1114,18 @@ func loadTestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, lt
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
 	} else {
-		_, err = tester.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
+		tx, err = tester.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
+		if err == nil && tx != nil {
+			txHash = tx.Hash()
+		}
 	}
 	return
 }
 
-func loadTestCallPrecompiledContract(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester, useSelectedAddress bool) (t1 time.Time, t2 time.Time, err error) {
+func loadTestCallPrecompiledContract(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester, useSelectedAddress bool) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
 	var f int
+	var tops *bind.TransactOpts
+	var tx *ethtypes.Transaction
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
@@ -1073,7 +1137,7 @@ func loadTestCallPrecompiledContract(ctx context.Context, c *ethclient.Client, n
 		f = tester.GetRandomPrecompiledContractAddress()
 	}
 
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
@@ -1085,7 +1149,6 @@ func loadTestCallPrecompiledContract(ctx context.Context, c *ethclient.Client, n
 	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
 		tops.NoSend = true
-		var tx *ethtypes.Transaction
 		tx, err = tester.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
 		if err != nil {
 			return
@@ -1093,18 +1156,23 @@ func loadTestCallPrecompiledContract(ctx context.Context, c *ethclient.Client, n
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
 	} else {
-		_, err = tester.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
+		tx, err = tester.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
+		if err == nil && tx != nil {
+			txHash = tx.Hash()
+		}
 	}
 	return
 }
 
-func loadTestIncrement(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+func loadTestIncrement(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+	var tops *bind.TransactOpts
+	var tx *ethtypes.Transaction
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
@@ -1116,7 +1184,6 @@ func loadTestIncrement(ctx context.Context, c *ethclient.Client, nonce uint64, l
 	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
 		tops.NoSend = true
-		var tx *ethtypes.Transaction
 		tx, err = ltContract.Inc(tops)
 		if err != nil {
 			return
@@ -1124,18 +1191,24 @@ func loadTestIncrement(ctx context.Context, c *ethclient.Client, nonce uint64, l
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
 	} else {
-		_, err = ltContract.Inc(tops)
+		tx, err = ltContract.Inc(tops)
+		if err == nil && tx != nil {
+			txHash = tx.Hash()
+		}
 	}
 	return
 }
 
-func loadTestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, err error) {
+func loadTestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+	var tops *bind.TransactOpts
+	var tx *ethtypes.Transaction
+
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
@@ -1149,7 +1222,6 @@ func loadTestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
 		tops.NoSend = true
-		var tx *ethtypes.Transaction
 		tx, err = ltContract.Store(tops, inputData)
 		if err != nil {
 			return
@@ -1157,12 +1229,17 @@ func loadTestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
 	} else {
-		_, err = ltContract.Store(tops, inputData)
+		tx, err = ltContract.Store(tops, inputData)
+		if err == nil && tx != nil {
+			txHash = tx.Hash()
+		}
 	}
 	return
 }
 
-func loadTestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20Contract *tokens.ERC20, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
+func loadTestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20Contract *tokens.ERC20, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+	var tops *bind.TransactOpts
+	var tx *ethtypes.Transaction
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
@@ -1174,7 +1251,7 @@ func loadTestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
@@ -1186,7 +1263,6 @@ func loadTestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
 		tops.NoSend = true
-		var tx *ethtypes.Transaction
 		tx, err = erc20Contract.Transfer(tops, *to, amount)
 		if err != nil {
 			return
@@ -1194,13 +1270,19 @@ func loadTestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
 	} else {
-		_, err = erc20Contract.Transfer(tops, *to, amount)
+		tx, err = erc20Contract.Transfer(tops, *to, amount)
+		if err == nil && tx != nil {
+			txHash = tx.Hash()
+		}
 	}
 
 	return
 }
 
-func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc721Contract *tokens.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, err error) {
+func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc721Contract *tokens.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+	var tops *bind.TransactOpts
+	var tx *ethtypes.Transaction
+
 	ltp := inputLoadTestParams
 	iterations := ltp.Iterations
 
@@ -1212,7 +1294,7 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
@@ -1224,7 +1306,6 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
 		tops.NoSend = true
-		var tx *ethtypes.Transaction
 		tx, err = erc721Contract.MintBatch(tops, *to, new(big.Int).SetUint64(*iterations))
 		if err != nil {
 			return
@@ -1232,19 +1313,25 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
 	} else {
-		_, err = erc721Contract.MintBatch(tops, *to, new(big.Int).SetUint64(*iterations))
+		tx, err = erc721Contract.MintBatch(tops, *to, new(big.Int).SetUint64(*iterations))
+		if err == nil && tx != nil {
+			txHash = tx.Hash()
+		}
 	}
 
 	return
 }
 
-func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, originalTx rpctypes.PolyTransaction) (t1 time.Time, t2 time.Time, err error) {
+func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, originalTx rpctypes.PolyTransaction) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+	var tops *bind.TransactOpts
+	var stx *ethtypes.Transaction
+
 	ltp := inputLoadTestParams
 
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
@@ -1253,12 +1340,13 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, orig
 	tx := rawTransactionToNewTx(originalTx, nonce, gasPrice, gasTipCap)
 	tops = configureTransactOpts(tops)
 
-	stx, err := tops.Signer(*ltp.FromETHAddress, tx)
+	stx, err = tops.Signer(*ltp.FromETHAddress, tx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
 	}
 	log.Trace().Str("txId", originalTx.Hash().String()).Bool("callOnly", *ltp.CallOnly).Msg("Attempting to replay transaction")
+	txHash = stx.Hash()
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
@@ -1401,7 +1489,11 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *Ind
 	return
 }
 
-func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+	var tops *bind.TransactOpts
+	var calldata []byte
+	var stx *ethtypes.Transaction
+
 	ltp := inputLoadTestParams
 
 	to := ltp.ContractETHAddress
@@ -1409,7 +1501,7 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
@@ -1440,7 +1532,7 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 		}
 	}
 
-	calldata, err := hex.DecodeString(strings.TrimPrefix(stringCallData, "0x"))
+	calldata, err = hex.DecodeString(strings.TrimPrefix(stringCallData, "0x"))
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to decode calldata string")
 		return
@@ -1487,11 +1579,13 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 	}
 	log.Trace().Interface("tx", tx).Msg("Contract call data")
 
-	stx, err := tops.Signer(*ltp.FromETHAddress, tx)
+	stx, err = tops.Signer(*ltp.FromETHAddress, tx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
 	}
+
+	txHash = stx.Hash()
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
@@ -1503,7 +1597,11 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 	return
 }
 
-func loadTestInscription(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+func loadTestInscription(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+	var tops *bind.TransactOpts
+	var tx *ethtypes.Transaction
+	var stx *ethtypes.Transaction
+
 	ltp := inputLoadTestParams
 
 	to := ltp.FromETHAddress
@@ -1511,7 +1609,7 @@ func loadTestInscription(ctx context.Context, c *ethclient.Client, nonce uint64)
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
@@ -1539,7 +1637,6 @@ func loadTestInscription(ctx context.Context, c *ethclient.Client, nonce uint64)
 		}
 	}
 
-	var tx *ethtypes.Transaction
 	if *ltp.LegacyTransactionMode {
 		tx = ethtypes.NewTx(&ethtypes.LegacyTx{
 			Nonce:    nonce,
@@ -1563,11 +1660,12 @@ func loadTestInscription(ctx context.Context, c *ethclient.Client, nonce uint64)
 	}
 	log.Trace().Interface("tx", tx).Msg("Contract call data")
 
-	stx, err := tops.Signer(*ltp.FromETHAddress, tx)
+	stx, err = tops.Signer(*ltp.FromETHAddress, tx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
 	}
+	txHash = stx.Hash()
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
@@ -1579,7 +1677,9 @@ func loadTestInscription(ctx context.Context, c *ethclient.Client, nonce uint64)
 	return
 }
 
-func loadTestBlob(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, err error) {
+func loadTestBlob(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+	var stx *ethtypes.Transaction
+
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
@@ -1628,11 +1728,13 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 ti
 	}
 	tx := ethtypes.NewTx(&blobTx)
 
-	stx, err := ethtypes.SignTx(tx, ethtypes.LatestSignerForChainID(chainID), privateKey)
+	stx, err = ethtypes.SignTx(tx, ethtypes.LatestSignerForChainID(chainID), privateKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
 	}
+
+	txHash = stx.Hash()
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
