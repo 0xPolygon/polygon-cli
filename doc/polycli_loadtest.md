@@ -116,7 +116,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --contract-call-payable                  Use this flag if the function is payable, the value amount passed will be from --eth-amount. This must be paired up with --mode contract-call and --contract-address
       --erc20-address string                   The address of a pre-deployed ERC20 contract
       --erc721-address string                  The address of a pre-deployed ERC721 contract
-      --eth-amount float                       The amount of ether to send on every transaction (default 0.001)
+      --eth-amount float                       The amount of ether to send on every transaction
       --force-contract-deploy                  Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.
   -f, --function uint                          A specific function to be called if running with --mode f or a specific precompiled contract when running with --mode a (default 1)
       --function-arg strings                   The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.

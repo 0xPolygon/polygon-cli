@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
+	"github.com/0xPolygon/polygon-cli/util"
 
 	"github.com/0xPolygon/polygon-cli/cmd/cdk"
 	"github.com/0xPolygon/polygon-cli/cmd/fixnoncegap"
@@ -14,8 +15,6 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/fork"
 	"github.com/0xPolygon/polygon-cli/cmd/p2p"
 	"github.com/0xPolygon/polygon-cli/cmd/parseethwallet"
-	"github.com/0xPolygon/polygon-cli/util"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -93,13 +92,13 @@ func NewPolycliCommand() *cobra.Command {
 		Use:   "polycli",
 		Short: "A Swiss Army knife of blockchain tools.",
 		Long:  "Polycli is a collection of tools that are meant to be useful while building, testing, and running block chain applications.",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			util.SetLogLevel(verbosity)
 			logMode := util.JSON
 			if pretty {
 				logMode = util.Console
 			}
-			return util.SetLogMode(logMode)
+			_ = util.SetLogMode(logMode)
 		},
 	}
 
