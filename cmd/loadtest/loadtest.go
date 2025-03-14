@@ -1107,7 +1107,6 @@ func loadTestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, lt
 	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
 		tops.NoSend = true
-		var tx *ethtypes.Transaction
 		tx, err = tester.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
 		if err != nil {
 			return
@@ -1150,7 +1149,6 @@ func loadTestCallPrecompiledContract(ctx context.Context, c *ethclient.Client, n
 	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
 		tops.NoSend = true
-		var tx *ethtypes.Transaction
 		tx, err = tester.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
 		if err != nil {
 			return
@@ -1186,7 +1184,6 @@ func loadTestIncrement(ctx context.Context, c *ethclient.Client, nonce uint64, l
 	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
 		tops.NoSend = true
-		var tx *ethtypes.Transaction
 		tx, err = ltContract.Inc(tops)
 		if err != nil {
 			return
@@ -1266,7 +1263,6 @@ func loadTestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
 		tops.NoSend = true
-		var tx *ethtypes.Transaction
 		tx, err = erc20Contract.Transfer(tops, *to, amount)
 		if err != nil {
 			return
@@ -1310,7 +1306,6 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 	defer func() { t2 = time.Now() }()
 	if *ltp.CallOnly {
 		tops.NoSend = true
-		var tx *ethtypes.Transaction
 		tx, err = erc721Contract.MintBatch(tops, *to, new(big.Int).SetUint64(*iterations))
 		if err != nil {
 			return
