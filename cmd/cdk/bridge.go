@@ -3,8 +3,10 @@ package cdk
 import (
 	_ "embed"
 	"math/big"
+	"reflect"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cobra"
 )
@@ -52,13 +54,22 @@ var bridgeMonitorCmd = &cobra.Command{
 }
 
 type BridgeData struct {
-	NetworkID               uint32         `json:"networkID"`
+	WETHToken               common.Address `json:"wethToken"`
 	DepositCount            *big.Int       `json:"depositCount"`
+	GasTokenAddress         common.Address `json:"gasTokenAddress"`
+	GasTokenMetadata        common.Hash    `json:"gasTokenMetadata"`
+	GasTokenNetwork         uint32         `json:"gasTokenNetwork"`
+	GetRoot                 common.Hash    `json:"getRoot"`
+	GlobalExitRootManager   common.Address `json:"globalExitRootManager"`
 	IsEmergencyState        bool           `json:"isEmergencyState"`
 	LastUpdatedDepositCount uint32         `json:"lastUpdatedDepositCount"`
-	GlobalExitRootManager   common.Address `json:"globalExitRootManager"`
-	// GetDepositRoot          common.Hash    `json:"getDepositRoot"`
-	// PolygonZkEVMaddress     common.Address `json:"polygonZkEVMaddress"`
+	NetworkID               uint32         `json:"networkID"`
+	PolygonRollupManager    common.Address `json:"polygonRollupManager"`
+}
+
+type bridge struct {
+	bridgeContractInterface
+	instance reflect.Value
 }
 
 type BridgeDumpData struct {
@@ -80,7 +91,7 @@ func bridgeInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
+	rollupManager, _, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}
@@ -90,7 +101,7 @@ func bridgeInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	bridge, err := getBridge(cdkArgs, rpcClient, rollupManagerData.BridgeAddress)
+	bridge, _, err := getBridge(cdkArgs, rpcClient, rollupManagerData.BridgeAddress)
 	if err != nil {
 		return err
 	}
@@ -119,7 +130,7 @@ func bridgeDump(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
+	rollupManager, _, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}
@@ -129,7 +140,7 @@ func bridgeDump(cmd *cobra.Command) error {
 		return err
 	}
 
-	bridge, err := getBridge(cdkArgs, rpcClient, rollupManagerData.BridgeAddress)
+	bridge, _, err := getBridge(cdkArgs, rpcClient, rollupManagerData.BridgeAddress)
 	if err != nil {
 		return err
 	}
@@ -146,20 +157,89 @@ func bridgeDump(cmd *cobra.Command) error {
 }
 
 func bridgeMonitor(cmd *cobra.Command) error {
-	panic("not implemented")
+	ctx := cmd.Context()
+
+	cdkArgs, err := cdkInputArgs.parseCDKArgs(ctx)
+	if err != nil {
+		return err
+	}
+
+	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
+
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, cdkArgs)
+	if err != nil {
+		return err
+	}
+
+	rollupManager, _, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
+	if err != nil {
+		return err
+	}
+
+	rollupManagerData, err := getRollupManagerData(rollupManager)
+	if err != nil {
+		return err
+	}
+
+	bridge, bridgeABI, err := getBridge(cdkArgs, rpcClient, rollupManagerData.BridgeAddress)
+	if err != nil {
+		return err
+	}
+
+	filter := ethereum.FilterQuery{
+		Addresses: []common.Address{rollupManagerData.BridgeAddress},
+	}
+
+	err = watchNewLogs(ctx, rpcClient, filter, bridge.instance, bridgeABI)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func getBridgeData(bridge bridgeContractInterface) (*BridgeData, error) {
 	data := &BridgeData{}
 	var err error
 
-	data.NetworkID, err = bridge.NetworkID(nil)
+	data.WETHToken, err = bridge.WETHToken(nil)
 	if err != nil {
 		return nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
 	data.DepositCount, err = bridge.DepositCount(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	data.GasTokenAddress, err = bridge.GasTokenAddress(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	gasTokenMetadata, err := bridge.GasTokenMetadata(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+	data.GasTokenMetadata = common.BytesToHash(gasTokenMetadata)
+
+	data.GasTokenNetwork, err = bridge.GasTokenNetwork(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	data.GetRoot, err = bridge.GetRoot(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	data.GlobalExitRootManager, err = bridge.GlobalExitRootManager(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -177,23 +257,17 @@ func getBridgeData(bridge bridgeContractInterface) (*BridgeData, error) {
 	}
 	time.Sleep(contractRequestInterval)
 
-	data.GlobalExitRootManager, err = bridge.GlobalExitRootManager(nil)
+	data.NetworkID, err = bridge.NetworkID(nil)
 	if err != nil {
 		return nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
-	// data.GetDepositRoot, err = bridge.GetDepositRoot(nil)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// time.Sleep(contractRequestInterval)
-
-	// data.PolygonZkEVMaddress, err = bridge.PolygonZkEVMaddress(nil)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// time.Sleep(contractRequestInterval)
+	data.PolygonRollupManager, err = bridge.PolygonRollupManager(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
 
 	return data, nil
 }

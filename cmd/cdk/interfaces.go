@@ -97,31 +97,26 @@ type rollupContractInterface interface {
 }
 
 type bridgeContractInterface interface {
-	ClaimedBitMap(opts *bind.CallOpts, arg0 *big.Int) (*big.Int, error)
+	WETHToken(opts *bind.CallOpts) (common.Address, error)
 	DepositCount(opts *bind.CallOpts) (*big.Int, error)
-	GetDepositRoot(opts *bind.CallOpts) ([32]byte, error)
-	GetLeafValue(opts *bind.CallOpts, leafType uint8, originNetwork uint32, originAddress common.Address, destinationNetwork uint32, destinationAddress common.Address, amount *big.Int, metadataHash [32]byte) ([32]byte, error)
-	GetTokenWrappedAddress(opts *bind.CallOpts, originNetwork uint32, originTokenAddress common.Address) (common.Address, error)
+	GasTokenAddress(opts *bind.CallOpts) (common.Address, error)
+	GasTokenMetadata(opts *bind.CallOpts) ([]byte, error)
+	GasTokenNetwork(opts *bind.CallOpts) (uint32, error)
+	GetRoot(opts *bind.CallOpts) ([32]byte, error)
 	GlobalExitRootManager(opts *bind.CallOpts) (common.Address, error)
-	IsClaimed(opts *bind.CallOpts, index *big.Int) (bool, error)
 	IsEmergencyState(opts *bind.CallOpts) (bool, error)
 	LastUpdatedDepositCount(opts *bind.CallOpts) (uint32, error)
 	NetworkID(opts *bind.CallOpts) (uint32, error)
-	PolygonZkEVMaddress(opts *bind.CallOpts) (common.Address, error)
-	PrecalculatedWrapperAddress(opts *bind.CallOpts, originNetwork uint32, originTokenAddress common.Address, name string, symbol string, decimals uint8) (common.Address, error)
-	TokenInfoToWrappedToken(opts *bind.CallOpts, arg0 [32]byte) (common.Address, error)
-	VerifyMerkleProof(opts *bind.CallOpts, leafHash [32]byte, smtProof [32][32]byte, index uint32, root [32]byte) (bool, error)
-	WrappedTokenToTokenInfo(opts *bind.CallOpts, arg0 common.Address) (struct {
-		OriginNetwork      uint32
-		OriginTokenAddress common.Address
-	}, error)
+	PolygonRollupManager(opts *bind.CallOpts) (common.Address, error)
 }
 
 type gerContractInterface interface {
 	BridgeAddress(opts *bind.CallOpts) (common.Address, error)
+	DepositCount(opts *bind.CallOpts) (*big.Int, error)
 	GetLastGlobalExitRoot(opts *bind.CallOpts) ([32]byte, error)
+	GetRoot(opts *bind.CallOpts) ([32]byte, error)
 	GlobalExitRootMap(opts *bind.CallOpts, arg0 [32]byte) (*big.Int, error)
 	LastMainnetExitRoot(opts *bind.CallOpts) ([32]byte, error)
 	LastRollupExitRoot(opts *bind.CallOpts) ([32]byte, error)
-	RollupAddress(opts *bind.CallOpts) (common.Address, error)
+	RollupManager(opts *bind.CallOpts) (common.Address, error)
 }

@@ -3,8 +3,10 @@ package cdk
 import (
 	_ "embed"
 	"math/big"
+	"reflect"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/cobra"
@@ -81,6 +83,11 @@ var rollupManagerMonitorCmd = &cobra.Command{
 	},
 }
 
+type rollupManager struct {
+	rollupManagerContractInterface
+	instance reflect.Value
+}
+
 type RollupManagerData struct {
 	Pol                                    common.Address `json:"pol"`
 	BridgeAddress                          common.Address `json:"bridgeAddress"`
@@ -116,7 +123,7 @@ func rollupManagerListRollups(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
+	rollupManager, _, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}
@@ -145,7 +152,7 @@ func rollupManagerListRollupTypes(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
+	rollupManager, _, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}
@@ -174,7 +181,7 @@ func rollupManagerInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
+	rollupManager, _, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}
@@ -203,7 +210,7 @@ func rollupManagerDump(cmd *cobra.Command) error {
 		return err
 	}
 
-	rollupManager, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
+	rollupManager, _, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
 	if err != nil {
 		return err
 	}
@@ -231,7 +238,35 @@ func rollupManagerDump(cmd *cobra.Command) error {
 }
 
 func rollupManagerMonitor(cmd *cobra.Command) error {
-	panic("not implemented")
+	ctx := cmd.Context()
+
+	cdkArgs, err := cdkInputArgs.parseCDKArgs(ctx)
+	if err != nil {
+		return err
+	}
+
+	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
+
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, cdkArgs)
+	if err != nil {
+		return err
+	}
+
+	rollupManager, rollupManagerABI, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
+	if err != nil {
+		return err
+	}
+
+	filter := ethereum.FilterQuery{
+		Addresses: []common.Address{rollupManagerArgs.rollupManagerAddress},
+	}
+
+	err = watchNewLogs(ctx, rpcClient, filter, rollupManager.instance, rollupManagerABI)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func getRollupManagerRollups(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, rollupManager rollupManagerContractInterface) ([]RollupData, error) {

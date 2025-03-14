@@ -2,9 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
 	"github.com/0xPolygon/polygon-cli/util"
-	"os"
 
 	"github.com/0xPolygon/polygon-cli/cmd/cdk"
 	"github.com/0xPolygon/polygon-cli/cmd/fixnoncegap"

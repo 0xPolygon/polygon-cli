@@ -4,13 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
+	"github.com/0xPolygon/polygon-cli/custom_marshaller"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/go-errors/errors"
 	"github.com/rs/zerolog/log"
@@ -18,18 +24,18 @@ import (
 
 	banana_rollup "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonrollupbaseetrog"
 	banana_rollup_manager "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonrollupmanager"
-	banana_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonzkevmbridge"
-	banana_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonzkevmglobalexitroot"
+	banana_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonzkevmbridgev2"
+	banana_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonzkevmglobalexitrootv2"
 
 	elderberry_rollup "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonrollupbaseetrog"
 	elderberry_rollup_manager "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonrollupmanager"
-	elderberry_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonzkevmbridge"
-	elderberry_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonzkevmglobalexitroot"
+	elderberry_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonzkevmbridgev2"
+	elderberry_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonzkevmglobalexitrootv2"
 
 	etrog_rollup "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonrollupbaseetrog"
 	etrog_rollup_manager "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonrollupmanager"
-	etrog_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonzkevmbridge"
-	etrog_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonzkevmglobalexitroot"
+	etrog_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonzkevmbridgev2"
+	etrog_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonzkevmglobalexitrootv2"
 )
 
 const (
@@ -228,29 +234,44 @@ func mustGetRPCClient(ctx context.Context, rpcURL string) *ethclient.Client {
 	return rpcClient
 }
 
-func getRollupManager(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (rollupManagerContractInterface, error) {
-	var rollupManager rollupManagerContractInterface
-	var err error
+func getRollupManager(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (*rollupManager, *abi.ABI, error) {
+	var contract *rollupManager
+	var contractABI *abi.ABI
 	switch cdkArgs.forkID {
 	case etrog:
-		rollupManager, err = etrog_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
+		contractInstance, err := etrog_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		contract = &rollupManager{contractInstance, reflect.ValueOf(contractInstance)}
+		contractABI, err = etrog_rollup_manager.PolygonrollupmanagerMetaData.GetAbi()
+		if err != nil {
+			return nil, nil, err
 		}
 	case elderberry:
-		rollupManager, err = elderberry_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
+		contractInstance, err := elderberry_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		contract = &rollupManager{contractInstance, reflect.ValueOf(contractInstance)}
+		contractABI, err = elderberry_rollup_manager.PolygonrollupmanagerMetaData.GetAbi()
+		if err != nil {
+			return nil, nil, err
 		}
 	case banana:
-		rollupManager, err = banana_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
+		contractInstance, err := banana_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		contract = &rollupManager{contractInstance, reflect.ValueOf(contractInstance)}
+		contractABI, err = banana_rollup_manager.PolygonrollupmanagerMetaData.GetAbi()
+		if err != nil {
+			return nil, nil, err
 		}
 	default:
-		return nil, invalidForkIDErr()
+		return nil, nil, invalidForkIDErr()
 	}
-	return rollupManager, nil
+	return contract, contractABI, nil
 }
 
 func getRollup(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (rollupContractInterface, error) {
@@ -278,54 +299,84 @@ func getRollup(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.A
 	return rollup, nil
 }
 
-func getBridge(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (bridgeContractInterface, error) {
-	var bridge bridgeContractInterface
-	var err error
+func getBridge(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (*bridge, *abi.ABI, error) {
+	var contract *bridge
+	var contractABI *abi.ABI
 	switch cdkArgs.forkID {
 	case etrog:
-		bridge, err = etrog_bridge.NewPolygonzkevmbridge(addr, rpcClient)
+		contractInstance, err := etrog_bridge.NewPolygonzkevmbridgev2(addr, rpcClient)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		contract = &bridge{contractInstance, reflect.ValueOf(contractInstance)}
+		contractABI, err = etrog_bridge.Polygonzkevmbridgev2MetaData.GetAbi()
+		if err != nil {
+			return nil, nil, err
 		}
 	case elderberry:
-		bridge, err = elderberry_bridge.NewPolygonzkevmbridge(addr, rpcClient)
+		contractInstance, err := elderberry_bridge.NewPolygonzkevmbridgev2(addr, rpcClient)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		contract = &bridge{contractInstance, reflect.ValueOf(contractInstance)}
+		contractABI, err = elderberry_bridge.Polygonzkevmbridgev2MetaData.GetAbi()
+		if err != nil {
+			return nil, nil, err
 		}
 	case banana:
-		bridge, err = banana_bridge.NewPolygonzkevmbridge(addr, rpcClient)
+		contractInstance, err := banana_bridge.NewPolygonzkevmbridgev2(addr, rpcClient)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		contract = &bridge{contractInstance, reflect.ValueOf(contractInstance)}
+		contractABI, err = banana_bridge.Polygonzkevmbridgev2MetaData.GetAbi()
+		if err != nil {
+			return nil, nil, err
 		}
 	default:
-		return nil, invalidForkIDErr()
+		return nil, nil, invalidForkIDErr()
 	}
-	return bridge, nil
+	return contract, contractABI, nil
 }
 
-func getGER(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (gerContractInterface, error) {
-	var ger gerContractInterface
-	var err error
+func getGER(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (*ger, *abi.ABI, error) {
+	var contract *ger
+	var contractABI *abi.ABI
 	switch cdkArgs.forkID {
 	case etrog:
-		ger, err = etrog_ger.NewPolygonzkevmglobalexitroot(addr, rpcClient)
+		contractInstance, err := etrog_ger.NewPolygonzkevmglobalexitrootv2(addr, rpcClient)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		contract = &ger{contractInstance, reflect.ValueOf(contractInstance)}
+		contractABI, err = etrog_ger.Polygonzkevmglobalexitrootv2MetaData.GetAbi()
+		if err != nil {
+			return nil, nil, err
 		}
 	case elderberry:
-		ger, err = elderberry_ger.NewPolygonzkevmglobalexitroot(addr, rpcClient)
+		contractInstance, err := elderberry_ger.NewPolygonzkevmglobalexitrootv2(addr, rpcClient)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		contract = &ger{contractInstance, reflect.ValueOf(contractInstance)}
+		contractABI, err = elderberry_ger.Polygonzkevmglobalexitrootv2MetaData.GetAbi()
+		if err != nil {
+			return nil, nil, err
 		}
 	case banana:
-		ger, err = banana_ger.NewPolygonzkevmglobalexitroot(addr, rpcClient)
+		contractInstance, err := banana_ger.NewPolygonzkevmglobalexitrootv2(addr, rpcClient)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		contract = &ger{contractInstance, reflect.ValueOf(contractInstance)}
+		contractABI, err = banana_ger.Polygonzkevmglobalexitrootv2MetaData.GetAbi()
+		if err != nil {
+			return nil, nil, err
 		}
 	default:
-		return nil, invalidForkIDErr()
+		return nil, nil, invalidForkIDErr()
 	}
-	return ger, nil
+	return contract, contractABI, nil
 }
 
 func mustPrintJSONIndent(v any) {
@@ -344,6 +395,101 @@ func invalidForkIDErr() error {
 	slices.Sort(forkIDs)
 	v := strings.Join(forkIDs, ", ")
 	return fmt.Errorf("invalid forkID. supported forkIDs are %s", v)
+}
+
+// watchNewLogs watches for new logs for the given filter and print them to the console
+// - rpcClient is used to fetch the logs
+// - filter is used to set which logs must be fetched
+// - contractInstance and contractABI are used to parse the logs
+// - logs are printed in JSON format
+func watchNewLogs(ctx context.Context, rpcClient *ethclient.Client, filter ethereum.FilterQuery, contractInstance reflect.Value, contractABI *abi.ABI) error {
+	log.Info().Msgf("Waiting for events")
+
+	latestBlockNumber, err := rpcClient.BlockNumber(ctx)
+	if err != nil {
+		return err
+	}
+	time.Sleep(contractRequestInterval)
+
+	// rewind 1 block to force reading the current block
+	if latestBlockNumber > 0 {
+		latestBlockNumber--
+	}
+
+	for {
+		currentBlockNumber, err := rpcClient.BlockNumber(ctx)
+		if err != nil {
+			return err
+		}
+		time.Sleep(contractRequestInterval)
+
+		// wait for the new block
+		if currentBlockNumber <= latestBlockNumber {
+			time.Sleep(time.Second)
+		}
+
+		for blockNumber := latestBlockNumber + 1; blockNumber <= currentBlockNumber; blockNumber++ {
+			log.Info().Msgf("New block detected %d", blockNumber)
+
+			filter.FromBlock = big.NewInt(0).SetUint64(blockNumber)
+			filter.ToBlock = big.NewInt(0).SetUint64(blockNumber)
+
+			logs, err := rpcClient.FilterLogs(ctx, filter)
+			if err != nil {
+				return err
+			}
+			time.Sleep(contractRequestInterval)
+
+			mustPrintLogs(logs, contractInstance, contractABI)
+		}
+		latestBlockNumber = currentBlockNumber
+	}
+}
+
+// mustPrintLogs prints the logs in JSON format
+// - logs are parsed using the contractInstance and contractABI
+// - logs are printed in JSON format
+// - if the log cannot be parsed, the log is printed as is
+func mustPrintLogs(logs []types.Log, contractInstance reflect.Value, contractABI *abi.ABI) {
+	eventsFound := false
+	for _, l := range logs {
+		e, _ := contractABI.EventByID(l.Topics[0])
+		if e == nil {
+			mustPrintJSONIndent(l)
+			continue
+		}
+		eventsFound = true
+
+		var parsedEvent any
+		parseLogMethod, methodFound := contractInstance.Type().MethodByName(fmt.Sprintf("Parse%s", e.Name))
+		if !methodFound {
+			log.Warn().Msgf("Method Parse%s not found", e.Name)
+		} else {
+			parsedLogValues := parseLogMethod.Func.Call([]reflect.Value{contractInstance, reflect.ValueOf(l)})
+			parsedEventValue := parsedLogValues[0].Interface()
+			errValue := parsedLogValues[1].Interface()
+			if errValue != nil {
+				log.Warn().Err(errValue.(error)).Msgf("Error parsing log %v", l)
+			} else {
+				parsedEvent = parsedEventValue
+			}
+		}
+
+		customMarshaller := custom_marshaller.New(parsedEvent)
+
+		mustPrintJSONIndent(struct {
+			Name      string `json:"name"`
+			Signature string `json:"signature"`
+			Event     any    `json:"event"`
+		}{
+			Name:      e.Name,
+			Signature: e.Sig,
+			Event:     customMarshaller,
+		})
+	}
+	if !eventsFound {
+		log.Info().Msg("No events found")
+	}
 }
 
 func init() {
