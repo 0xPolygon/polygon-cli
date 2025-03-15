@@ -186,11 +186,15 @@ func bridgeMonitor(cmd *cobra.Command) error {
 		return err
 	}
 
-	filter := ethereum.FilterQuery{
-		Addresses: []common.Address{rollupManagerData.BridgeAddress},
+	filter := customFilter{
+		contractInstance: bridge.instance,
+		contractABI:      bridgeABI,
+		blockchainFilter: ethereum.FilterQuery{
+			Addresses: []common.Address{rollupManagerData.BridgeAddress},
+		},
 	}
 
-	err = watchNewLogs(ctx, rpcClient, filter, bridge.instance, bridgeABI)
+	err = watchNewLogs(ctx, rpcClient, filter)
 	if err != nil {
 		return err
 	}
