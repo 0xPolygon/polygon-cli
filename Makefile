@@ -80,29 +80,29 @@ gen: gen-doc gen-proto gen-go-bindings gen-load-test-modes gen-json-rpc-types ##
 .PHONY: gen-doc
 gen-doc: ## Generate documentation for `polycli`.
 	POLYGON_CLI_MAKE_GEN_DOC_ID=$$(docker build --no-cache -q . -f ./docker/Dockerfile.gen-doc -t polygon-cli-make-gen-doc) && \
-	docker run --rm -it -v $$PWD:/gen polygon-cli-make-gen-doc && \
+	docker run --rm -v $$PWD:/gen polygon-cli-make-gen-doc && \
 	docker image rm $$POLYGON_CLI_MAKE_GEN_DOC_ID
 
 .PHONY: gen-proto
 gen-proto: ## Generate protobuf stubs.
 	POLYGON_CLI_MAKE_GEN_PROTO_ID=$$(docker build --no-cache -q . -f ./docker/Dockerfile.gen-proto -t polygon-cli-make-gen-proto) && \
-	docker run --rm -it -v $$PWD:/gen polygon-cli-make-gen-proto && \
+	docker run --rm -v $$PWD:/gen polygon-cli-make-gen-proto && \
 	docker image rm $$POLYGON_CLI_MAKE_GEN_PROTO_ID
 
 .PHONY: gen-go-bindings
 gen-go-bindings: ## Generate go bindings for smart contracts.
 	POLYGON_CLI_MAKE_GEN_GO_BINDINGS_ID=$$(docker build --no-cache -q . -f ./docker/Dockerfile.gen-go-bindings -t polygon-cli-make-gen-go-bindings) && \
-	docker run --rm -it -v $$PWD:/gen polygon-cli-make-gen-go-bindings && \
+	docker run --rm -v $$PWD:/gen polygon-cli-make-gen-go-bindings && \
 	docker image rm $$POLYGON_CLI_MAKE_GEN_GO_BINDINGS_ID
 
 .PHONY: gen-load-test-modes
 gen-load-test-modes: ## Generate loadtest modes strings.
 	POLYGON_CLI_MAKE_GEN_LOAD_TEST_MODES_ID=$$(docker build --no-cache -q . -f ./docker/Dockerfile.gen-load-test-modes -t polygon-cli-make-gen-load-test-modes) && \
-	docker run --rm -it -v $$PWD:/gen polygon-cli-make-gen-load-test-modes && \
+	docker run --rm -v $$PWD:/gen polygon-cli-make-gen-load-test-modes && \
 	docker image rm $$POLYGON_CLI_MAKE_GEN_LOAD_TEST_MODES_ID
 
 .PHONY: gen-json-rpc-types
 gen-json-rpc-types: ## Generate JSON rpc types.
 	POLYGON_CLI_MAKE_GEN_JSON_RPC_TYPES_ID=$$(docker build --no-cache -q . -f ./docker/Dockerfile.gen-json-rpc-types -t polygon-cli-make-gen-json-rpc-types) && \
-	docker run --rm -it -v $$PWD:/gen polygon-cli-make-gen-json-rpc-types && \
+	docker run --rm -v $$PWD:/gen polygon-cli-make-gen-json-rpc-types && \
 	docker image rm $$POLYGON_CLI_MAKE_GEN_JSON_RPC_TYPES_ID
