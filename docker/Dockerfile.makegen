@@ -1,0 +1,59 @@
+FROM --platform=$BUILDPLATFORM golang:1.23-bookworm
+
+WORKDIR /make-gen
+
+ARG ARCH="linux-x86_64"
+# https://go.dev/dl/
+ARG GO_VERSION="1.23" 
+# https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
+ARG STRINGER_VERSION="0.31.0" 
+# https://github.com/protocolbuffers/protobuf/releases
+ARG PROTOC_VERSION="29.3" 
+# https://pkg.go.dev/google.golang.org/protobuf/cmd/protoc-gen-go?tab=versions
+ARG PROTOC_GEN_GO_VERSION="1.36.5" 
+# https://pkg.go.dev/google.golang.org/grpc/cmd/protoc-gen-go-grpc?tab=versions
+ARG PROTOC_GEN_GO_GRPC_VERSION="1.5.1" 
+
+# Core Dependencies 
+RUN apt-get update && apt-get install -y unzip
+
+# Dependencies to generate protobuf stubs.
+## Install protoc
+RUN wget https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-${ARCH}.zip
+RUN unzip protoc-${PROTOC_VERSION}-${ARCH}.zip
+RUN rm protoc-${PROTOC_VERSION}-${ARCH}.zip
+RUN rm readme.txt
+RUN mv bin/protoc /usr/local/bin/
+RUN mv include/google /usr/local/include
+RUN protoc --version
+
+## Install protoc plugins for go
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v${PROTOC_GEN_GO_VERSION}
+RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v${PROTOC_GEN_GO_GRPC_VERSION}
+RUN protoc-gen-go --version
+RUN protoc-gen-go-grpc --version
+
+## Install abigen
+RUN go install github.com/ethereum/go-ethereum/cmd/abigen@latest
+RUN abigen --version
+
+## Install foundry
+RUN echo $SHELL
+RUN curl -L https://foundry.paradigm.xyz | bash
+RUN . ~/.bashrc
+ENV PATH="/root/.foundry/bin:${PATH}"
+RUN ~/.foundry/bin/foundryup
+RUN echo $PATH
+RUN ~/.foundry/bin/forge --version
+
+## Install stringer
+RUN go install golang.org/x/tools/cmd/stringer@v${STRINGER_VERSION}
+
+## Install nodejs and npm
+RUN apt-get install -y nodejs npm
+
+## Install jq
+RUN apt-get install -y jq
+
+CMD make gen-all
+

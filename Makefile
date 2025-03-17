@@ -75,19 +75,26 @@ test: ## Run tests.
 ##@ Generation
 
 .PHONY: gen
-gen: gen-doc gen-proto gen-go-bindings gen-loadtest-modes gen-json-rpctypes ## Generate everything.
+gen: ## Generate everything.
+	POLYGON_CLI_MAKE_GEN_DOCKER_IMAGE_ID=$$(docker build --no-cache -q . -f ./docker/Dockerfile.makegen -t polygon-cli-make-gen) && \
+	docker run --rm -it -v $$PWD:/make-gen polygon-cli-make-gen && \
+	docker image rm $$POLYGON_CLI_MAKE_GEN_DOCKER_IMAGE_ID
+
+.PHONY: gen-all
+gen-all: gen-doc gen-proto gen-go-bindings gen-loadtest-modes gen-json-rpctypes ## Generate everything.
 
 .PHONY: gen-doc
 gen-doc: ## Generate documentation for `polycli`.
 	go run docutil/*.go
 
+# docker run -v $$PWD:/proto -w /proto rvolosatovs/protoc --proto_path=proto --go_out=proto/gen/pb --go_opt=paths=source_relative $$(find proto -iname "*.proto")
 .PHONY: gen-proto
 gen-proto: ## Generate protobuf stubs.
 	protoc --proto_path=proto --go_out=proto/gen/pb --go_opt=paths=source_relative $(wildcard proto/*.proto)
 
 .PHONY: gen-go-bindings
 gen-go-bindings: ## Generate go bindings for smart contracts.
-	cd contracts && make gen-go-bindings
+	cd contracts && forge install && make gen-go-bindings
 
 .PHONY: gen-loadtest-modes
 gen-loadtest-modes: ## Generate loadtest modes strings.
