@@ -75,31 +75,34 @@ test: ## Run tests.
 ##@ Generation
 
 .PHONY: gen
-gen: ## Generate everything.
-	POLYGON_CLI_MAKE_GEN_DOCKER_IMAGE_ID=$$(docker build --no-cache -q . -f ./docker/Dockerfile.makegen -t polygon-cli-make-gen) && \
-	docker run --rm -it -v $$PWD:/make-gen polygon-cli-make-gen && \
-	docker image rm $$POLYGON_CLI_MAKE_GEN_DOCKER_IMAGE_ID
-
-.PHONY: gen-all
-gen-all: gen-doc gen-proto gen-go-bindings gen-loadtest-modes gen-json-rpctypes ## Generate everything.
-
+gen: gen-doc gen-proto gen-go-bindings gen-load-test-modes gen-json-rpc-types ## Generate everything.
+	
 .PHONY: gen-doc
 gen-doc: ## Generate documentation for `polycli`.
-	go run docutil/*.go
+	POLYGON_CLI_MAKE_GEN_DOC_ID=$$(docker build --no-cache -q . -f ./docker/Dockerfile.gen-doc -t polygon-cli-make-gen-doc) && \
+	docker run --rm -it -v $$PWD:/gen polygon-cli-make-gen-doc && \
+	docker image rm $$POLYGON_CLI_MAKE_GEN_DOC_ID
 
-# docker run -v $$PWD:/proto -w /proto rvolosatovs/protoc --proto_path=proto --go_out=proto/gen/pb --go_opt=paths=source_relative $$(find proto -iname "*.proto")
 .PHONY: gen-proto
 gen-proto: ## Generate protobuf stubs.
-	protoc --proto_path=proto --go_out=proto/gen/pb --go_opt=paths=source_relative $(wildcard proto/*.proto)
+	POLYGON_CLI_MAKE_GEN_PROTO_ID=$$(docker build --no-cache -q . -f ./docker/Dockerfile.gen-proto -t polygon-cli-make-gen-proto) && \
+	docker run --rm -it -v $$PWD:/gen polygon-cli-make-gen-proto && \
+	docker image rm $$POLYGON_CLI_MAKE_GEN_PROTO_ID
 
 .PHONY: gen-go-bindings
 gen-go-bindings: ## Generate go bindings for smart contracts.
-	cd contracts && forge install && make gen-go-bindings
+	POLYGON_CLI_MAKE_GEN_GO_BINDINGS_ID=$$(docker build --no-cache -q . -f ./docker/Dockerfile.gen-go-bindings -t polygon-cli-make-gen-go-bindings) && \
+	docker run --rm -it -v $$PWD:/gen polygon-cli-make-gen-go-bindings && \
+	docker image rm $$POLYGON_CLI_MAKE_GEN_GO_BINDINGS_ID
 
-.PHONY: gen-loadtest-modes
-gen-loadtest-modes: ## Generate loadtest modes strings.
-	cd cmd/loadtest && stringer -type=loadTestMode
+.PHONY: gen-load-test-modes
+gen-load-test-modes: ## Generate loadtest modes strings.
+	POLYGON_CLI_MAKE_GEN_LOAD_TEST_MODES_ID=$$(docker build --no-cache -q . -f ./docker/Dockerfile.gen-load-test-modes -t polygon-cli-make-gen-load-test-modes) && \
+	docker run --rm -it -v $$PWD:/gen polygon-cli-make-gen-load-test-modes && \
+	docker image rm $$POLYGON_CLI_MAKE_GEN_LOAD_TEST_MODES_ID
 
-.PHONY: gen-json-rpctypes
-gen-json-rpctypes: ## Generate JSON rpc types.
-	./scripts/rpctypes.sh rpctypes/jsonschemas/
+.PHONY: gen-json-rpc-types
+gen-json-rpc-types: ## Generate JSON rpc types.
+	POLYGON_CLI_MAKE_GEN_JSON_RPC_TYPES_ID=$$(docker build --no-cache -q . -f ./docker/Dockerfile.gen-json-rpc-types -t polygon-cli-make-gen-json-rpc-types) && \
+	docker run --rm -it -v $$PWD:/gen polygon-cli-make-gen-json-rpc-types && \
+	docker image rm $$POLYGON_CLI_MAKE_GEN_JSON_RPC_TYPES_ID
