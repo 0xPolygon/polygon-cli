@@ -75,7 +75,7 @@ test: ## Run tests.
 ##@ Generation
 
 .PHONY: gen
-gen: gen-doc gen-proto gen-go-bindings gen-load-test-modes gen-json-rpc-types ## Generate everything.
+gen: gen-doc gen-proto gen-go-bindings gen-json-rpc-types ## gen-load-test-modes Generate everything.
 	
 .PHONY: gen-doc
 gen-doc: ## Generate documentation for `polycli`.
