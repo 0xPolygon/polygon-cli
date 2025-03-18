@@ -145,7 +145,7 @@ func runUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, nonce uint64
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops)
+	tops = configureTransactOpts(ctx, c, tops)
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
