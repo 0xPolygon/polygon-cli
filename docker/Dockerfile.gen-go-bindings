@@ -8,12 +8,12 @@ RUN apt-get update
 # RUN go install github.com/ethereum/go-ethereum/cmd/abigen@latest
 # RUN abigen --version
 
-# ## Install foundry
-# RUN curl -L https://foundry.paradigm.xyz | bash
-# RUN . ~/.bashrc
-# ENV PATH="/root/.foundry/bin:${PATH}"
-# RUN ~/.foundry/bin/foundryup
-# RUN ~/.foundry/bin/forge --version
+## Install foundry
+RUN curl -L https://foundry.paradigm.xyz | bash
+RUN . ~/.bashrc
+ENV PATH="/root/.foundry/bin:${PATH}"
+RUN ~/.foundry/bin/foundryup
+RUN ~/.foundry/bin/forge --version
 
 # ## Install jq
 # RUN apt-get install -y jq
