@@ -34,18 +34,28 @@ jobs:
     name: Check generated files
     runs-on: ubuntu-latest
     steps:
-      - name: git clone
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
       
-      # - name: git clone fix
-      #   run: |
+      # - run: |
       #     sudo git config --system --add safe.directory $GITHUB_WORKSPACE
       #     sudo git config --global --add safe.directory $GITHUB_WORKSPACE
       #     sudo git config --system --add safe.directory /gen
       #     sudo git config --global --add safe.directory /gen
 
-      - name: Try to update generated files
-        run: make gen
+      - name: gen-doc
+        run: make gen-doc 
+
+      - name: gen-proto
+        run: make gen-proto 
+
+      - name: gen-go-bindings
+        run: make gen-go-bindings 
+
+      - name: gen-load-test-modes
+        run: make gen-load-test-modes 
+
+      - name: gen-json-rpc-types
+        run: make gen-json-rpc-types 
         
       # - name: Check if generated files are up to date
       #   run: |
