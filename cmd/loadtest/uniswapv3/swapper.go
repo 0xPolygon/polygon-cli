@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"math/big"
 
-	"github.com/0xPolygon/polygon-cli/bindings/uniswapv3"
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -25,23 +25,23 @@ var (
 )
 
 // Deploy an ERC20 token.
-func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, tokenName, tokenSymbol string, amount *big.Int, recipient common.Address, tokenKnownAddress common.Address) (tokenConfig ContractConfig[uniswapv3.Swapper], err error) {
+func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapV3Config UniswapV3Config, tokenName, tokenSymbol string, amount *big.Int, recipient common.Address, tokenKnownAddress common.Address) (tokenConfig ContractConfig[tokens.ERC20], err error) {
 	tokenConfig.Address, tokenConfig.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		tokenKnownAddress,
-		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *uniswapv3.Swapper, error) {
+		func(*bind.TransactOpts, bind.ContractBackend) (common.Address, *types.Transaction, *tokens.ERC20, error) {
 			var address common.Address
 			var tx *types.Transaction
-			var contract *uniswapv3.Swapper
-			address, tx, contract, err = uniswapv3.DeploySwapper(tops, c, tokenName, tokenSymbol, amount, recipient)
+			var contract *tokens.ERC20
+			address, tx, contract, err = tokens.DeployERC20(tops, c)
 			if err != nil {
 				return common.Address{}, nil, nil, err
 			}
 			log.Debug().Str("token", tokenName).Interface("amount", amount).Interface("recipient", recipient).Msg("Minted tokens")
 			return address, tx, contract, nil
 		},
-		uniswapv3.NewSwapper,
-		func(contract *uniswapv3.Swapper) error {
+		tokens.NewERC20,
+		func(contract *tokens.ERC20) error {
 			// After the contract has been deployed, we authorize a few UniswapV3 addresses to spend those ERC20 tokens.
 			// This is required to be able to perform swaps later.
 			uniswapV3Addresses := map[string]common.Address{
@@ -63,7 +63,7 @@ func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOp
 }
 
 // Approve some UniswapV3 addresses to spend tokens on behalf of the token owner.
-func setUniswapV3Allowances(ctx context.Context, c *ethclient.Client, contract *uniswapv3.Swapper, tops *bind.TransactOpts, cops *bind.CallOpts, tokenName string, addresses map[string]common.Address, owner common.Address) error {
+func setUniswapV3Allowances(ctx context.Context, c *ethclient.Client, contract *tokens.ERC20, tops *bind.TransactOpts, cops *bind.CallOpts, tokenName string, addresses map[string]common.Address, owner common.Address) error {
 	// Get the ERC20 contract name.
 	erc20Name, err := contract.Name(cops)
 	if err != nil {

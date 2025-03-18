@@ -3,6 +3,7 @@ package uniswapv3loadtest
 import (
 	"context"
 	"errors"
+	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"math/big"
 	"reflect"
 	"strings"
@@ -65,7 +66,7 @@ type (
 
 	// Contract represents a UniswapV3 contract (including WETH9 and Swapper).
 	Contract interface {
-		uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.NFTDescriptor | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker | uniswapv3.QuoterV2 | uniswapv3.SwapRouter02 | uniswapv3.WETH9 | uniswapv3.Swapper
+		uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.NFTDescriptor | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker | uniswapv3.QuoterV2 | uniswapv3.SwapRouter02 | uniswapv3.WETH9 | uniswapv3.Swapper | tokens.ERC20
 	}
 )
 

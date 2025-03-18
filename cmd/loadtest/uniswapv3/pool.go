@@ -3,6 +3,7 @@ package uniswapv3loadtest
 import (
 	"context"
 	"errors"
+	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"math/big"
 	"time"
 
@@ -51,13 +52,13 @@ func PercentageToUniswapFeeTier(p float64) *big.Int {
 
 // PoolConfig represents the configuration of a UniswapV3 pool.
 type PoolConfig struct {
-	Token0, Token1     ContractConfig[uniswapv3.Swapper]
+	Token0, Token1     ContractConfig[tokens.ERC20]
 	ReserveA, ReserveB *big.Int
 	Fees               *big.Int
 }
 
 // Create a new `PoolConfig` object.
-func NewPool(token0, token1 ContractConfig[uniswapv3.Swapper], fees *big.Int) *PoolConfig {
+func NewPool(token0, token1 ContractConfig[tokens.ERC20], fees *big.Int) *PoolConfig {
 	p := PoolConfig{
 		ReserveA: poolReserveForOneToken,
 		ReserveB: poolReserveForOneToken,
