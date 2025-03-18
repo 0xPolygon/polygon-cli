@@ -48,8 +48,8 @@ jobs:
       - name: gen-proto
         run: make gen-proto 
 
-      - name: gen-go-bindings
-        run: make gen-go-bindings 
+      # - name: gen-go-bindings
+      #   run: make gen-go-bindings 
 
       - name: gen-load-test-modes
         run: make gen-load-test-modes 
