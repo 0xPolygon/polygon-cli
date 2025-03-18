@@ -60,6 +60,10 @@ func checkUniswapV3LoadtestFlags() error {
 	if *uniswapv3LoadTestParams.SwapAmountInput == 0 {
 		return errors.New("swap amount input has to be greater than zero")
 	}
+
+	if (*uniswapv3LoadTestParams.UniswapPoolToken0 != "") != (*uniswapv3LoadTestParams.UniswapPoolToken1 != "") {
+		return errors.New("both pool tokens must be empty or specified. Specifying only one token is not allowed")
+	}
 	return nil
 }
 
@@ -121,7 +125,11 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 		return
 	}
 
-	log.Debug().Msg("🎱 Deploying UniswapV3 liquidity pool...")
+	log.Debug().
+		Stringer("token0address", token0.Address).
+		Stringer("token1address", token1.Address).
+		Msg("🎱 Deploying UniswapV3 liquidity pool...")
+
 	fees := uniswapv3loadtest.PercentageToUniswapFeeTier(*uniswapv3LoadTestParams.PoolFees)
 	poolConfig = *uniswapv3loadtest.NewPool(token0, token1, fees)
 	if err = uniswapv3loadtest.SetupLiquidityPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, recipient); err != nil {
