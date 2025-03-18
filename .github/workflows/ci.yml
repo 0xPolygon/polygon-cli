@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.23" # https://go.dev/dl/
+  GO_VERSION: "1.23" # https://go.dev/dl/  
   FOUNDRY_VERSION: stable
 
 jobs:
@@ -39,8 +39,8 @@ jobs:
       
       - name: git clone fix
         run: |
-          sudo git config --system --add safe.directory $GITHUB_WORKSPACE
-          sudo git config --system --add safe.directory /gen
+          git config --global --add safe.directory $GITHUB_WORKSPACE
+          git config --global --add safe.directory /gen
 
       - name: Try to update generated files
         run: make gen
@@ -49,7 +49,7 @@ jobs:
         run: |
           if [[ -n $(git status --porcelain) ]]; then
             echo "❌ Error: Generated files are not up to date. Please run \`make gen\`."
-            echo "🚨 If \`make gen\` doesn't update the contract bytecodes and/or go bindings and this job is still failing, please take a look at the ethereum and foundry versions. We don't pin versions in our ci.yml file but you can do so in Makefile."
+            echo "🚨 If \`make gen\` doesn't update the contract bytecodes and/or go bindings and this job is still failing, please take a look at the ethereum and foundry versions. We don't pin the versions of these packages in CI so this job may complain after an update of the packages!"
             git status --porcelain
             git diff
             exit 1
@@ -79,4 +79,37 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-      ▋
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+      - name: Install Geth
+        run: |
+          if [ "${{ matrix.tool }}" = "geth" ]; then
+            sudo add-apt-repository ppa:ethereum/ethereum
+            sudo apt-get update
+            sudo apt-get install ethereum
+            geth --version
+          fi
+      - name: Run loadtest againt ${{ matrix.tool }}
+        run: |
+          ${{ matrix.tool }} --version
+          make ${{ matrix.tool }} &
+          sleep 5
+          make loadtest
+
+  install:
+    name: Install go package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install dependencies
+        run: go get
+      - name: Install polycli using go
+        run: go install
+      - name: Check that polycli has been installed
+        run: polygon-cli version
