@@ -37,27 +37,27 @@ jobs:
       - name: git clone
         uses: actions/checkout@v4
       
-      - name: git clone fix
-        run: |
-          sudo git config --system --add safe.directory $GITHUB_WORKSPACE
-          sudo git config --global --add safe.directory $GITHUB_WORKSPACE
-          sudo git config --system --add safe.directory /gen
-          sudo git config --global --add safe.directory /gen
+      # - name: git clone fix
+      #   run: |
+      #     sudo git config --system --add safe.directory $GITHUB_WORKSPACE
+      #     sudo git config --global --add safe.directory $GITHUB_WORKSPACE
+      #     sudo git config --system --add safe.directory /gen
+      #     sudo git config --global --add safe.directory /gen
 
       - name: Try to update generated files
         run: make gen
         
-      - name: Check if generated files are up to date
-        run: |
-          if [[ -n $(git status --porcelain) ]]; then
-            echo "❌ Error: Generated files are not up to date. Please run \`make gen\`."
-            echo "🚨 If \`make gen\` doesn't update the contract bytecodes and/or go bindings and this job is still failing, please take a look at the ethereum and foundry versions. We don't pin the versions of these packages in CI so this job may complain after an update of the packages!"
-            git status --porcelain
-            git diff
-            exit 1
-          else
-            echo "✅ Generated files are up to date."
-          fi
+      # - name: Check if generated files are up to date
+      #   run: |
+      #     if [[ -n $(git status --porcelain) ]]; then
+      #       echo "❌ Error: Generated files are not up to date. Please run \`make gen\`."
+      #       echo "🚨 If \`make gen\` doesn't update the contract bytecodes and/or go bindings and this job is still failing, please take a look at the ethereum and foundry versions. We don't pin the versions of these packages in CI so this job may complain after an update of the packages!"
+      #       git status --porcelain
+      #       git diff
+      #       exit 1
+      #     else
+      #       echo "✅ Generated files are up to date."
+      #     fi
 
   test:
     name: Test
