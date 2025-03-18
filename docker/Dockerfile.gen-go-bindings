@@ -12,13 +12,13 @@ RUN apt-get update
 RUN curl -L https://foundry.paradigm.xyz | bash
 RUN . ~/.bashrc
 ENV PATH="/root/.foundry/bin:${PATH}"
-RUN ~/.foundry/bin/foundryup
+# RUN ~/.foundry/bin/foundryup
 # RUN ~/.foundry/bin/forge --version
 
-# ## Install jq
-# RUN apt-get install -y jq
+## Install jq
+RUN apt-get install -y jq
 
-# WORKDIR /gen/contracts
+WORKDIR /gen/contracts
 
 CMD forge install
 #  && make gen-go-bindings
