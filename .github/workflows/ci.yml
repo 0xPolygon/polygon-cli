@@ -40,7 +40,9 @@ jobs:
       - name: git clone fix
         run: |
           sudo git config --system --add safe.directory $GITHUB_WORKSPACE
+          sudo git config --global --add safe.directory $GITHUB_WORKSPACE
           sudo git config --system --add safe.directory /gen
+          sudo git config --global --add safe.directory /gen
 
       - name: Try to update generated files
         run: make gen
