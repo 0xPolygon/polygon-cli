@@ -70,6 +70,7 @@ jobs:
             exit 1
           else
             echo "✅ Generated files are up to date."
+          fi
 
   gen-go-bindings:
     name: Check gen-go-bindings generated files
@@ -90,6 +91,7 @@ jobs:
             exit 1
           else
             echo "✅ Generated files are up to date."
+          fi
 
   gen-load-test-modes:
     name: Check gen-load-test-modes generated files
@@ -110,6 +112,7 @@ jobs:
             exit 1
           else
             echo "✅ Generated files are up to date."
+          fi
 
   gen-json-rpc-types:
     name: Check gen-json-rpc-types generated files
@@ -130,6 +133,7 @@ jobs:
             exit 1
           else
             echo "✅ Generated files are up to date."
+          fi
 
   test:
     name: Test
