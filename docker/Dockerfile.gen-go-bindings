@@ -4,21 +4,22 @@ WORKDIR /gen
 
 RUN apt-get update
 
-# ## Install abigen
-# RUN go install github.com/ethereum/go-ethereum/cmd/abigen@latest
-# RUN abigen --version
+RUN git config --global --add safe.directory '*'
+
+## Install abigen
+RUN go install github.com/ethereum/go-ethereum/cmd/abigen@latest
+RUN abigen --version
 
 ## Install foundry
 RUN curl -L https://foundry.paradigm.xyz | bash
 RUN . ~/.bashrc
 ENV PATH="/root/.foundry/bin:${PATH}"
-# RUN ~/.foundry/bin/foundryup
-# RUN ~/.foundry/bin/forge --version
+RUN ~/.foundry/bin/foundryup
+RUN ~/.foundry/bin/forge --version
 
 ## Install jq
 RUN apt-get install -y jq
 
 WORKDIR /gen/contracts
 
-CMD forge install
-#  && make gen-go-bindings
+CMD forge install && make gen-go-bindings
