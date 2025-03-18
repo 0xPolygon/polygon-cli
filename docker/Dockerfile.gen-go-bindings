@@ -20,4 +20,5 @@ RUN apt-get install -y jq
 
 WORKDIR /gen/contracts
 
-CMD forge install && make gen-go-bindings
+CMD forge install
+#  && make gen-go-bindings
