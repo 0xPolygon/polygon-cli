@@ -38,7 +38,9 @@ jobs:
         uses: actions/checkout@v4
       
       - name: git clone fix
-        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+        run: |
+          git config --global --add safe.directory $GITHUB_WORKSPACE
+          git config --global --add safe.directory /gen
 
       - name: Try to update generated files
         run: make gen
