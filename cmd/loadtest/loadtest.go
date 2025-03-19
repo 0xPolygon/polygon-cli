@@ -250,6 +250,8 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 	log.Trace().Uint64("chainID", chainID.Uint64()).Msg("Detected Chain ID")
 
+	inputLoadTestParams.BigGasPriceMultiplier = big.NewFloat(*inputLoadTestParams.GasPriceMultiplier)
+
 	if *inputLoadTestParams.LegacyTransactionMode && *inputLoadTestParams.ForcePriorityGasPrice > 0 {
 		log.Warn().Msg("Cannot set priority gas price in legacy mode")
 	}
@@ -481,7 +483,9 @@ func runLoadTest(ctx context.Context) error {
 				log.Error().Err(err).Msg("There was an issue creating the load test summary")
 			}
 		} else {
-			lightSummary(loadTestResults, loadTestResults[0].RequestTime, time.Now(), rl)
+			if len(loadTestResults) > 0 {
+				lightSummary(loadTestResults, loadTestResults[0].RequestTime, time.Now(), rl)
+			}
 		}
 		cancel()
 	case err = <-errCh:
@@ -573,7 +577,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	tops = configureTransactOpts(tops)
+	tops = configureTransactOpts(ctx, c, tops)
 	// configureTransactOpts will set some parameters meant for load testing that could interfere with the deployment of our contracts
 	tops.GasLimit = 0
 	tops.GasPrice = nil
@@ -778,6 +782,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					if strings.Contains(tErr.Error(), "could not replace existing") && retryForNonce {
 						retryForNonce = false
 					}
+					if strings.Contains(tErr.Error(), "fee cap less than block base fee") {
+						retryForNonce = true
+					}
 
 				}
 
@@ -908,8 +915,7 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 		return
 	}
 	tops.GasLimit = uint64(21000)
-	tops = configureTransactOpts(tops)
-	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
+	tops = configureTransactOpts(ctx, c, tops)
 
 	var tx *ethtypes.Transaction
 	if *ltp.LegacyTransactionMode {
@@ -918,7 +924,7 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 			To:       to,
 			Value:    amount,
 			Gas:      tops.GasLimit,
-			GasPrice: gasPrice,
+			GasPrice: tops.GasPrice,
 			Data:     nil,
 		})
 	} else {
@@ -927,8 +933,8 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 			Nonce:     nonce,
 			To:        to,
 			Gas:       tops.GasLimit,
-			GasFeeCap: gasPrice,
-			GasTipCap: gasTipCap,
+			GasFeeCap: tops.GasFeeCap,
+			GasTipCap: tops.GasTipCap,
 			Data:      nil,
 			Value:     amount,
 		}
@@ -980,6 +986,14 @@ func getLatestBlockNumber(ctx context.Context, c *ethclient.Client) uint64 {
 	return bn
 }
 
+func biasGasPrice(price *big.Int) *big.Int {
+	gasPriceFloat := new(big.Float).SetInt(price)
+	gasPriceFloat.Mul(gasPriceFloat, inputLoadTestParams.BigGasPriceMultiplier)
+	result := new(big.Int)
+	gasPriceFloat.Int(result)
+	return result
+}
+
 func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, *big.Int) {
 	// this should be one of the fastest RPC calls, so hopefully there isn't too much overhead calling this
 	bn := getLatestBlockNumber(ctx, c)
@@ -993,6 +1007,7 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 	if bn <= cachedBlockNumber {
 		return cachedGasPrice, cachedGasTipCap
 	}
+
 	// In the case of an EVM compatible system not supporting EIP-1559
 	var gt *big.Int
 	var tErr error
@@ -1001,24 +1016,31 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 		tErr = nil
 	} else {
 		gt, tErr = c.SuggestGasTipCap(ctx)
+		if tErr == nil {
+			// Bias the value up slightly
+			gt = biasGasPrice(gt)
+		}
 	}
 
 	gp, pErr := c.SuggestGasPrice(ctx)
+	if pErr == nil {
+		// Bias the value up slightly
+		gp = biasGasPrice(gp)
+	}
 
 	if pErr == nil && (tErr == nil || !isDynamic) {
 		cachedBlockNumber = bn
 		cachedGasPrice = gp
 		cachedGasTipCap = gt
+
 		if inputLoadTestParams.ForceGasPrice != nil && *inputLoadTestParams.ForceGasPrice != 0 {
 			cachedGasPrice = new(big.Int).SetUint64(*inputLoadTestParams.ForceGasPrice)
 		}
 		if inputLoadTestParams.ForcePriorityGasPrice != nil && *inputLoadTestParams.ForcePriorityGasPrice != 0 {
 			cachedGasTipCap = new(big.Int).SetUint64(*inputLoadTestParams.ForcePriorityGasPrice)
 		}
-		if cachedGasTipCap.Cmp(cachedGasPrice) == 1 {
-			cachedGasTipCap = cachedGasPrice
-		}
-		l := log.Debug().Uint64("cachedBlockNumber", bn).Uint64("cachedgasPrice", cachedGasPrice.Uint64())
+
+		l := log.Debug().Uint64("cachedBlockNumber", bn).Uint64("cachedGasPrice", cachedGasPrice.Uint64())
 		if cachedGasTipCap != nil {
 			l = l.Uint64("cachedGasTipCap", cachedGasTipCap.Uint64())
 		}
@@ -1057,7 +1079,7 @@ func loadTestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops)
+	tops = configureTransactOpts(ctx, c, tops)
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
@@ -1101,7 +1123,7 @@ func loadTestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, lt
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops)
+	tops = configureTransactOpts(ctx, c, tops)
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
@@ -1143,7 +1165,7 @@ func loadTestCallPrecompiledContract(ctx context.Context, c *ethclient.Client, n
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops)
+	tops = configureTransactOpts(ctx, c, tops)
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
@@ -1178,7 +1200,7 @@ func loadTestIncrement(ctx context.Context, c *ethclient.Client, nonce uint64, l
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops)
+	tops = configureTransactOpts(ctx, c, tops)
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
@@ -1214,7 +1236,7 @@ func loadTestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops)
+	tops = configureTransactOpts(ctx, c, tops)
 
 	inputData := make([]byte, *ltp.ByteCount)
 	_, _ = hexwordRead(inputData)
@@ -1257,7 +1279,7 @@ func loadTestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops)
+	tops = configureTransactOpts(ctx, c, tops)
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
@@ -1300,7 +1322,7 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops)
+	tops = configureTransactOpts(ctx, c, tops)
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
@@ -1336,9 +1358,9 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, orig
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return
 	}
-	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
-	tx := rawTransactionToNewTx(originalTx, nonce, gasPrice, gasTipCap)
-	tops = configureTransactOpts(tops)
+
+	tops = configureTransactOpts(ctx, c, tops)
+	tx := rawTransactionToNewTx(originalTx, nonce, tops.GasPrice, tops.GasTipCap)
 
 	stx, err = tops.Signer(*ltp.FromETHAddress, tx)
 	if err != nil {
@@ -1512,8 +1534,7 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 		amount = ltp.SendAmount
 	}
 
-	tops = configureTransactOpts(tops)
-	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
+	tops = configureTransactOpts(ctx, c, tops)
 
 	var stringCallData string
 
@@ -1562,7 +1583,7 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 			To:       to,
 			Value:    amount,
 			Gas:      tops.GasLimit,
-			GasPrice: gasPrice,
+			GasPrice: tops.GasPrice,
 			Data:     calldata,
 		})
 	} else {
@@ -1571,8 +1592,8 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 			Nonce:     nonce,
 			To:        to,
 			Gas:       tops.GasLimit,
-			GasFeeCap: gasPrice,
-			GasTipCap: gasTipCap,
+			GasFeeCap: tops.GasFeeCap,
+			GasTipCap: tops.GasTipCap,
 			Data:      calldata,
 			Value:     amount,
 		})
@@ -1616,8 +1637,7 @@ func loadTestInscription(ctx context.Context, c *ethclient.Client, nonce uint64)
 	}
 
 	amount := big.NewInt(0)
-	tops = configureTransactOpts(tops)
-	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
+	tops = configureTransactOpts(ctx, c, tops)
 
 	calldata := []byte(*ltp.InscriptionContent)
 	if tops.GasLimit == 0 {
@@ -1643,7 +1663,7 @@ func loadTestInscription(ctx context.Context, c *ethclient.Client, nonce uint64)
 			To:       to,
 			Value:    amount,
 			Gas:      tops.GasLimit,
-			GasPrice: gasPrice,
+			GasPrice: tops.GasPrice,
 			Data:     calldata,
 		})
 	} else {
@@ -1652,8 +1672,8 @@ func loadTestInscription(ctx context.Context, c *ethclient.Client, nonce uint64)
 			Nonce:     nonce,
 			To:        to,
 			Gas:       tops.GasLimit,
-			GasFeeCap: gasPrice,
-			GasTipCap: gasTipCap,
+			GasFeeCap: tops.GasFeeCap,
+			GasTipCap: tops.GasTipCap,
 			Data:      calldata,
 			Value:     amount,
 		})
@@ -1789,7 +1809,10 @@ func getRandomAddress() *ethcommon.Address {
 	return &realAddr
 }
 
-func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
+func configureTransactOpts(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) *bind.TransactOpts {
+	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
+	tops.GasPrice = gasPrice
+
 	ltp := inputLoadTestParams
 
 	if ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
@@ -1803,17 +1826,24 @@ func configureTransactOpts(tops *bind.TransactOpts) *bind.TransactOpts {
 	if *ltp.LegacyTransactionMode {
 		return tops
 	}
-
-	if ltp.ForcePriorityGasPrice != nil && *ltp.ForcePriorityGasPrice != 0 {
-		tops.GasTipCap = big.NewInt(0).SetUint64(*ltp.ForcePriorityGasPrice)
-	}
-
 	if ltp.CurrentBaseFee == nil {
 		log.Fatal().Msg("EIP-1559 not activated. Please use --legacy")
 	}
 
 	tops.GasPrice = nil
-	tops.GasFeeCap = big.NewInt(0).Add(ltp.CurrentBaseFee, ltp.CurrentGasTipCap)
+	tops.GasTipCap = gasTipCap
+	tops.GasFeeCap = gasTipCap
+
+	if ltp.ForcePriorityGasPrice != nil && *ltp.ForcePriorityGasPrice != 0 {
+		tops.GasTipCap = big.NewInt(0).SetUint64(*ltp.ForcePriorityGasPrice)
+	}
+	if ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
+		tops.GasFeeCap = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
+	}
+
+	if tops.GasTipCap.Cmp(tops.GasFeeCap) == 1 {
+		tops.GasTipCap = new(big.Int).Set(tops.GasFeeCap)
+	}
 
 	return tops
 }

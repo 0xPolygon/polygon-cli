@@ -5,13 +5,13 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/0xPolygon/polygon-cli/bindings/uniswapv3"
 	uniswapv3loadtest "github.com/0xPolygon/polygon-cli/cmd/loadtest/uniswapv3"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -60,6 +60,10 @@ func checkUniswapV3LoadtestFlags() error {
 	if *uniswapv3LoadTestParams.SwapAmountInput == 0 {
 		return errors.New("swap amount input has to be greater than zero")
 	}
+
+	if (*uniswapv3LoadTestParams.UniswapPoolToken0 != "") != (*uniswapv3LoadTestParams.UniswapPoolToken1 != "") {
+		return errors.New("both pool tokens must be empty or specified. Specifying only one token is not allowed")
+	}
 	return nil
 }
 
@@ -107,23 +111,42 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 	log.Debug().Interface("addresses", uniswapV3Config.GetAddresses()).Msg("UniswapV3 deployed")
 
 	log.Debug().Msg("🪙 Deploying ERC20 tokens...")
-	var token0 uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
+	var token0 uniswapv3loadtest.ContractConfig[tokens.ERC20]
 	token0, err = uniswapv3loadtest.DeployERC20(
 		ctx, c, tops, cops, uniswapV3Config, "SwapperA", "SA", uniswapv3loadtest.MintAmount, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0))
 	if err != nil {
 		return
 	}
 
-	var token1 uniswapv3loadtest.ContractConfig[uniswapv3.Swapper]
+	var token1 uniswapv3loadtest.ContractConfig[tokens.ERC20]
 	token1, err = uniswapv3loadtest.DeployERC20(
 		ctx, c, tops, cops, uniswapV3Config, "SwapperB", "SB", uniswapv3loadtest.MintAmount, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1))
 	if err != nil {
 		return
 	}
 
-	log.Debug().Msg("🎱 Deploying UniswapV3 liquidity pool...")
+	log.Info().
+		Stringer("--uniswap-factory-v3-address", uniswapV3Config.FactoryV3.Address).
+		Stringer("--uniswap-migrator-address", uniswapV3Config.Migrator.Address).
+		Stringer("--uniswap-multicall-address", uniswapV3Config.Multicall.Address).
+		Stringer("--uniswap-nft-descriptor-lib-address", uniswapV3Config.NFTDescriptorLib.Address).
+		Stringer("--uniswap-nft-position-descriptor-address", uniswapV3Config.NonfungibleTokenPositionDescriptor.Address).
+		Stringer("--uniswap-non-fungible-position-manager-address", uniswapV3Config.NonfungiblePositionManager.Address).
+		Stringer("--uniswap-pool-token-0-address", token0.Address).
+		Stringer("--uniswap-pool-token-1-address", token1.Address).
+		Stringer("--uniswap-proxy-admin-address", uniswapV3Config.ProxyAdmin.Address).
+		Stringer("--uniswap-quoter-v2-address", uniswapV3Config.QuoterV2.Address).
+		Stringer("--uniswap-staker-address", uniswapV3Config.Staker.Address).
+		Stringer("--uniswap-swap-router-address", uniswapV3Config.SwapRouter02.Address).
+		Stringer("--uniswap-tick-lens-address", uniswapV3Config.TickLens.Address).
+		Stringer("--uniswap-upgradeable-proxy-address", uniswapV3Config.TransparentUpgradeableProxy.Address).
+		Stringer("--weth9-address", uniswapV3Config.WETH9.Address).Msg("Parameters to re-run")
+
 	fees := uniswapv3loadtest.PercentageToUniswapFeeTier(*uniswapv3LoadTestParams.PoolFees)
 	poolConfig = *uniswapv3loadtest.NewPool(token0, token1, fees)
+	if *uniswapv3LoadTestParams.UniswapPoolToken0 != "" {
+		return
+	}
 	if err = uniswapv3loadtest.SetupLiquidityPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, recipient); err != nil {
 		return
 	}
@@ -145,7 +168,7 @@ func runUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, nonce uint64
 		return
 	}
 	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(tops)
+	tops = configureTransactOpts(ctx, c, tops)
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
