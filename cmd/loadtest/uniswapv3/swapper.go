@@ -48,10 +48,6 @@ func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOp
 				"NFTPositionManager": uniswapV3Config.NonfungiblePositionManager.Address,
 				"SwapRouter02":       uniswapV3Config.SwapRouter02.Address,
 			}
-			//if tokenKnownAddress != (common.Address{}) {
-			//	log.Info().Stringer("tokenAddress", tokenKnownAddress).Msg("Skipping allowance setup for known token contract")
-			//	return nil
-			//}
 			return setUniswapV3Allowances(ctx, c, contract, tops, cops, tokenName, uniswapV3Addresses, recipient)
 
 		},
