@@ -66,7 +66,7 @@ type (
 
 	// Contract represents a UniswapV3 contract (including WETH9 and Swapper).
 	Contract interface {
-		uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.NFTDescriptor | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker | uniswapv3.QuoterV2 | uniswapv3.SwapRouter02 | uniswapv3.WETH9 | uniswapv3.Swapper | tokens.ERC20
+		uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.NFTDescriptor | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker | uniswapv3.QuoterV2 | uniswapv3.SwapRouter02 | uniswapv3.WETH9 | tokens.ERC20
 	}
 )
 
@@ -314,7 +314,7 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	if err != nil {
 		return
 	}
-	
+
 	if knownAddresses.ProxyAdmin == (common.Address{}) {
 		log.Debug().Msg("Step 15: Transfer ProxyAdmin ownership")
 		if err = transferProxyAdminOwnership(config.ProxyAdmin.Contract, tops, cops, ownerAddress); err != nil {
