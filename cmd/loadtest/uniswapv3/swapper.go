@@ -48,10 +48,10 @@ func DeployERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOp
 				"NFTPositionManager": uniswapV3Config.NonfungiblePositionManager.Address,
 				"SwapRouter02":       uniswapV3Config.SwapRouter02.Address,
 			}
-			if tokenKnownAddress != (common.Address{}) {
-				log.Info().Stringer("tokenAddress", tokenKnownAddress).Msg("Skipping allowance setup for known token contract")
-				return nil
-			}
+			//if tokenKnownAddress != (common.Address{}) {
+			//	log.Info().Stringer("tokenAddress", tokenKnownAddress).Msg("Skipping allowance setup for known token contract")
+			//	return nil
+			//}
 			return setUniswapV3Allowances(ctx, c, contract, tops, cops, tokenName, uniswapV3Addresses, recipient)
 
 		},
@@ -72,6 +72,18 @@ func setUniswapV3Allowances(ctx context.Context, c *ethclient.Client, contract *
 	}
 
 	for spenderName, spenderAddress := range addresses {
+		var currentAllowance *big.Int
+		currentAllowance, err = contract.Allowance(cops, owner, spenderAddress)
+
+		if err == nil && currentAllowance.Cmp(new(big.Int).SetInt64(0)) == 1 {
+			log.Debug().
+				Str("tokenName", fmt.Sprintf("%s_%s", erc20Name, tokenName)).
+				Interface("spenderAddress", spenderAddress).Str("spenderName", spenderName).
+				Interface("amount", allowanceAmount).
+				Msg("Skipping allowance setting")
+			continue
+		}
+
 		// Approve the spender to spend the tokens on behalf of the owner.
 		if _, err = contract.Approve(tops, spenderAddress, allowanceAmount); err != nil {
 			log.Error().Err(err).

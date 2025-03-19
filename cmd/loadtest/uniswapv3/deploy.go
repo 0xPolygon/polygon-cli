@@ -256,9 +256,11 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return
 	}
 
-	log.Debug().Msg("Step 11: Transfer UniswapV3Factory ownership")
-	if err = transferUniswapV3FactoryOwnership(config.FactoryV3.Contract, tops, cops, ownerAddress); err != nil {
-		return
+	if knownAddresses.FactoryV3 == (common.Address{}) {
+		log.Debug().Msg("Step 11: Transfer UniswapV3Factory ownership")
+		if err = transferUniswapV3FactoryOwnership(config.FactoryV3.Contract, tops, cops, ownerAddress); err != nil {
+			return
+		}
 	}
 
 	log.Debug().Msg("Step 12: UniswapV3Staker deployment")
@@ -312,10 +314,12 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	if err != nil {
 		return
 	}
-
-	log.Debug().Msg("Step 15: Transfer ProxyAdmin ownership")
-	if err = transferProxyAdminOwnership(config.ProxyAdmin.Contract, tops, cops, ownerAddress); err != nil {
-		return
+	
+	if knownAddresses.ProxyAdmin == (common.Address{}) {
+		log.Debug().Msg("Step 15: Transfer ProxyAdmin ownership")
+		if err = transferProxyAdminOwnership(config.ProxyAdmin.Contract, tops, cops, ownerAddress); err != nil {
+			return
+		}
 	}
 
 	return
