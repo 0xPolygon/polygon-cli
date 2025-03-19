@@ -2,10 +2,15 @@ package cdk
 
 import (
 	_ "embed"
+	"math/big"
+	"reflect"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -52,6 +57,11 @@ var rollupMonitorCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return rollupMonitor(cmd)
 	},
+}
+
+type rollup struct {
+	rollupContractInterface
+	instance reflect.Value
 }
 
 type RollupData struct {
@@ -119,7 +129,7 @@ func rollupInspect(cmd *cobra.Command) error {
 		return err
 	}
 
-	data, err := getRollupData(cdkArgs, rpcClient, rollupManager, rollupArgs.rollupID)
+	data, _, _, err := getRollupData(cdkArgs, rpcClient, rollupManager, rollupArgs.rollupID)
 	if err != nil {
 		return err
 	}
@@ -155,7 +165,7 @@ func rollupDump(cmd *cobra.Command) error {
 
 	data := &RollupDumpData{}
 
-	data.Data, err = getRollupData(cdkArgs, rpcClient, rollupManager, rollupArgs.rollupID)
+	data.Data, _, _, err = getRollupData(cdkArgs, rpcClient, rollupManager, rollupArgs.rollupID)
 	if err != nil {
 		return err
 	}
@@ -171,59 +181,123 @@ func rollupDump(cmd *cobra.Command) error {
 }
 
 func rollupMonitor(cmd *cobra.Command) error {
-	panic("not implemented")
-}
+	ctx := cmd.Context()
 
-func getRollupData(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, rollupManager rollupManagerContractInterface, rollupID uint32) (*RollupData, error) {
-	rollupData, err := rollupManager.RollupIDToRollupData(nil, rollupID)
+	cdkArgs, err := cdkInputArgs.parseCDKArgs(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	rollup, err := getRollup(cdkArgs, rpcClient, rollupData.RollupContract)
+	rpcClient := mustGetRPCClient(ctx, cdkArgs.rpcURL)
+
+	rollupManagerArgs, err := cdkInputArgs.parseRollupManagerArgs(ctx, cdkArgs)
 	if err != nil {
-		return nil, err
+		return err
+	}
+
+	rollupManager, rollupManagerABI, err := getRollupManager(cdkArgs, rpcClient, rollupManagerArgs.rollupManagerAddress)
+	if err != nil {
+		return err
+	}
+
+	rollupArgs, err := cdkInputArgs.parseRollupArgs(ctx, rollupManager)
+	if err != nil {
+		return err
+	}
+
+	data, rollup, rollupABI, err := getRollupData(cdkArgs, rpcClient, rollupManager, rollupArgs.rollupID)
+	if err != nil {
+		return err
+	}
+
+	rollupManagerFilter := customFilter{
+		contractInstance: rollupManager.instance,
+		contractABI:      rollupManagerABI,
+		blockchainFilter: ethereum.FilterQuery{
+			Addresses: []common.Address{
+				rollupManagerArgs.rollupManagerAddress,
+			},
+			Topics: [][]common.Hash{
+				nil, // no filter to topic 0,
+				{common.BigToHash(big.NewInt(0).SetUint64(uint64(data.RollupID)))}, // filter topic 1 by RollupID
+			},
+		},
+	}
+
+	rollupFilter := customFilter{
+		contractInstance: rollup.instance,
+		contractABI:      rollupABI,
+		blockchainFilter: ethereum.FilterQuery{
+			Addresses: []common.Address{
+				data.RollupContract,
+			},
+		},
+	}
+
+	err = watchNewLogs(ctx, rpcClient, rollupManagerFilter, rollupFilter)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func getRollupData(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, rollupManager rollupManagerContractInterface, rollupID uint32) (*RollupData, *rollup, *abi.ABI, error) {
+	rollupData, err := rollupManager.RollupIDToRollupData(nil, rollupID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// if rollup contract is zero address, this means the rollup was not found
+	if rollupData.RollupContract.Hex() == (common.Address{}).Hex() {
+		log.Error().Msg(ErrRollupNotFound.Error())
+		return nil, nil, nil, ErrRollupNotFound
+	}
+
+	rollup, rollupABI, err := getRollup(cdkArgs, rpcClient, rollupData.RollupContract)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	admin, err := rollup.Admin(nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
 	gasTokenAddress, err := rollup.GasTokenAddress(nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
 	gasTokenNetwork, err := rollup.GasTokenNetwork(nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
 	lastAccInputHash, err := rollup.LastAccInputHash(nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
 	networkName, err := rollup.NetworkName(nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
 	trustedSequencer, err := rollup.TrustedSequencer(nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
 	trustedSequencerURL, err := rollup.TrustedSequencerURL(nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	time.Sleep(contractRequestInterval)
 
@@ -249,7 +323,7 @@ func getRollupData(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, rollupMan
 		NetworkName:         networkName,
 		TrustedSequencer:    trustedSequencer,
 		TrustedSequencerURL: trustedSequencerURL,
-	}, nil
+	}, rollup, rollupABI, nil
 }
 
 func getRollupTypeData(rollupManager rollupManagerContractInterface, rollupTypeID uint64) (*RollupTypeData, error) {

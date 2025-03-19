@@ -257,11 +257,15 @@ func rollupManagerMonitor(cmd *cobra.Command) error {
 		return err
 	}
 
-	filter := ethereum.FilterQuery{
-		Addresses: []common.Address{rollupManagerArgs.rollupManagerAddress},
+	filter := customFilter{
+		contractInstance: rollupManager.instance,
+		contractABI:      rollupManagerABI,
+		blockchainFilter: ethereum.FilterQuery{
+			Addresses: []common.Address{rollupManagerArgs.rollupManagerAddress},
+		},
 	}
 
-	err = watchNewLogs(ctx, rpcClient, filter, rollupManager.instance, rollupManagerABI)
+	err = watchNewLogs(ctx, rpcClient, filter)
 	if err != nil {
 		return err
 	}
@@ -277,7 +281,7 @@ func getRollupManagerRollups(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client,
 
 	rollups := make([]RollupData, 0, rollupCount)
 	for i := uint32(1); i <= rollupCount; i++ {
-		rollupData, err := getRollupData(cdkArgs, rpcClient, rollupManager, i)
+		rollupData, _, _, err := getRollupData(cdkArgs, rpcClient, rollupManager, i)
 		if err != nil {
 			return nil, err
 		}
