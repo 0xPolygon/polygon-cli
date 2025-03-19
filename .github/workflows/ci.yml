@@ -11,15 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ARCH: "linux-x86_64"
-
-  GO_VERSION: "1.23" # https://go.dev/dl/
-  STRINGER_VERSION: "0.31.0" # https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
-
-  PROTOC_VERSION: "29.3" # https://github.com/protocolbuffers/protobuf/releases
-  PROTOC_GEN_GO_VERSION: "1.36.5" # https://pkg.go.dev/google.golang.org/protobuf/cmd/protoc-gen-go?tab=versions
-  PROTOC_GEN_GO_GRPC_VERSION: "1.5.1" # https://pkg.go.dev/google.golang.org/grpc/cmd/protoc-gen-go-grpc?tab=versions
-
+  GO_VERSION: "1.23" # https://go.dev/dl/  
   FOUNDRY_VERSION: stable
 
 jobs:
@@ -38,56 +30,99 @@ jobs:
       - name: Run all the linter tools against code
         run: make lint
 
-  gen:
-    name: Check generated files
+  gen-doc:
+    name: Check gen-doc generated files
     runs-on: ubuntu-latest
     steps:
-      # Dependencies to generate doc, protobuf stubs and go bindings.
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      # Dependencies to generate protobuf stubs.
-      - name: Install protoc
+      
+      - name: gen-doc
+        run: make gen-doc
+        
+      - name: Check if generated files are up to date
         run: |
-          wget https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${{ env.ARCH }}.zip
-          unzip protoc-${{ env.PROTOC_VERSION }}-${{ env.ARCH }}.zip
-          rm protoc-${{ env.PROTOC_VERSION }}-${{ env.ARCH }}.zip
-          rm readme.txt
-          sudo mv bin/protoc /usr/local/bin/
-          sudo mv include/google /usr/local/include
-          protoc --version
-      - name: Install protoc plugins for go
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "❌ Error: Generated files are not up to date. Please run \`make gen\`."
+            echo "🚨 If \`make gen\` doesn't update the contract bytecodes and/or go bindings and this job is still failing, please take a look at the ethereum and foundry versions. We don't pin the versions of these packages in CI so this job may complain after an update of the packages!"
+            git status --porcelain
+            git diff
+            exit 1
+          else
+            echo "✅ Generated files are up to date."
+          fi
+
+  gen-proto:
+    name: Check gen-proto generated files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: gen-proto
+        run: make gen-proto
+
+      - name: Check if generated files are up to date
         run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@v${{ env.PROTOC_GEN_GO_VERSION }}
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v${{ env.PROTOC_GEN_GO_GRPC_VERSION }}
-          protoc-gen-go --version
-          protoc-gen-go-grpc --version
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "❌ Error: Generated files are not up to date. Please run \`make gen\`."
+            echo "🚨 If \`make gen\` doesn't update the contract bytecodes and/or go bindings and this job is still failing, please take a look at the ethereum and foundry versions. We don't pin the versions of these packages in CI so this job may complain after an update of the packages!"
+            git status --porcelain
+            git diff
+            exit 1
+          else
+            echo "✅ Generated files are up to date."
+          fi
 
-      # Dependencies to generate go bindings.
-      - name: Install abigen
+  gen-go-bindings:
+    name: Check gen-go-bindings generated files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: gen-go-bindings
+        run: make gen-go-bindings
+        
+      - name: Check if generated files are up to date
         run: |
-          sudo add-apt-repository ppa:ethereum/ethereum
-          sudo apt-get update
-          sudo apt-get install ethereum
-          abigen --version
-      - name: Install foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: ${{ env.FOUNDRY_VERSION }}
-      - name: Get forge version
-        run: forge --version
-      - name: Install contract dependencies
-        working-directory: contracts
-        run: forge install
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "❌ Error: Generated files are not up to date. Please run \`make gen\`."
+            echo "🚨 If \`make gen\` doesn't update the contract bytecodes and/or go bindings and this job is still failing, please take a look at the ethereum and foundry versions. We don't pin the versions of these packages in CI so this job may complain after an update of the packages!"
+            git status --porcelain
+            git diff
+            exit 1
+          else
+            echo "✅ Generated files are up to date."
+          fi
 
-      # Dependencies to generate loadtest modes strings.
-      - name: Install stringer
-        run: go install golang.org/x/tools/cmd/stringer@v${{ env.STRINGER_VERSION }}
+  gen-load-test-modes:
+    name: Check gen-load-test-modes generated files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Try to update generated files
-        run: make gen
+      - name: gen-load-test-modes
+        run: make gen-load-test-modes
+        
+      - name: Check if generated files are up to date
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "❌ Error: Generated files are not up to date. Please run \`make gen\`."
+            echo "🚨 If \`make gen\` doesn't update the contract bytecodes and/or go bindings and this job is still failing, please take a look at the ethereum and foundry versions. We don't pin the versions of these packages in CI so this job may complain after an update of the packages!"
+            git status --porcelain
+            git diff
+            exit 1
+          else
+            echo "✅ Generated files are up to date."
+          fi
+
+  gen-json-rpc-types:
+    name: Check gen-json-rpc-types generated files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: gen-json-rpc-types
+        run: make gen-json-rpc-types
+        
       - name: Check if generated files are up to date
         run: |
           if [[ -n $(git status --porcelain) ]]; then

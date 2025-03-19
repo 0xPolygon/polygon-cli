@@ -3,6 +3,7 @@ package uniswapv3loadtest
 import (
 	"context"
 	"errors"
+	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"math/big"
 	"reflect"
 	"strings"
@@ -65,7 +66,7 @@ type (
 
 	// Contract represents a UniswapV3 contract (including WETH9 and Swapper).
 	Contract interface {
-		uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.NFTDescriptor | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker | uniswapv3.QuoterV2 | uniswapv3.SwapRouter02 | uniswapv3.WETH9 | uniswapv3.Swapper
+		uniswapv3.UniswapV3Factory | uniswapv3.UniswapInterfaceMulticall | uniswapv3.ProxyAdmin | uniswapv3.TickLens | uniswapv3.NFTDescriptor | uniswapv3.NonfungibleTokenPositionDescriptor | uniswapv3.TransparentUpgradeableProxy | uniswapv3.NonfungiblePositionManager | uniswapv3.V3Migrator | uniswapv3.UniswapV3Staker | uniswapv3.QuoterV2 | uniswapv3.SwapRouter02 | uniswapv3.WETH9 | tokens.ERC20
 	}
 )
 
@@ -255,9 +256,11 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return
 	}
 
-	log.Debug().Msg("Step 11: Transfer UniswapV3Factory ownership")
-	if err = transferUniswapV3FactoryOwnership(config.FactoryV3.Contract, tops, cops, ownerAddress); err != nil {
-		return
+	if knownAddresses.FactoryV3 == (common.Address{}) {
+		log.Debug().Msg("Step 11: Transfer UniswapV3Factory ownership")
+		if err = transferUniswapV3FactoryOwnership(config.FactoryV3.Contract, tops, cops, ownerAddress); err != nil {
+			return
+		}
 	}
 
 	log.Debug().Msg("Step 12: UniswapV3Staker deployment")
@@ -312,9 +315,11 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return
 	}
 
-	log.Debug().Msg("Step 15: Transfer ProxyAdmin ownership")
-	if err = transferProxyAdminOwnership(config.ProxyAdmin.Contract, tops, cops, ownerAddress); err != nil {
-		return
+	if knownAddresses.ProxyAdmin == (common.Address{}) {
+		log.Debug().Msg("Step 15: Transfer ProxyAdmin ownership")
+		if err = transferProxyAdminOwnership(config.ProxyAdmin.Contract, tops, cops, ownerAddress); err != nil {
+			return
+		}
 	}
 
 	return

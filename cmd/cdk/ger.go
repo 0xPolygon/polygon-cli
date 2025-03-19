@@ -212,11 +212,15 @@ func gerMonitor(cmd *cobra.Command) error {
 		return err
 	}
 
-	filter := ethereum.FilterQuery{
-		Addresses: []common.Address{bridgeData.GlobalExitRootManager},
+	filter := customFilter{
+		contractInstance: ger.instance,
+		contractABI:      gerABI,
+		blockchainFilter: ethereum.FilterQuery{
+			Addresses: []common.Address{bridgeData.GlobalExitRootManager},
+		},
 	}
 
-	err = watchNewLogs(ctx, rpcClient, filter, ger.instance, gerABI)
+	err = watchNewLogs(ctx, rpcClient, filter)
 	if err != nil {
 		return err
 	}

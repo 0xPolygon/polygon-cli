@@ -486,8 +486,10 @@ func lightSummary(lts []loadTestSample, startTime, endTime time.Time, rl *rate.L
 	minLat, _ := stats.Min(latencies)
 	maxLat, _ := stats.Max(latencies)
 	stddevLat, _ := stats.StandardDeviation(latencies)
+	lastLTSample := lastSample(lts)
 
 	log.Info().Time("startTime", startTime).Msg("Start time of loadtest (first transaction sent)")
+	log.Info().Time("loadStopTime", lastLTSample.RequestTime).Msg("End of load generation (last transaction sent)")
 	log.Info().Time("endTime", endTime).Msg("End time of loadtest (final transaction mined)")
 	log.Info().Float64("tps", tps).Msg("Successful Requests Per Second")
 	// Only output total rates per second if there are failed transactions and TPS != RPS
@@ -506,4 +508,16 @@ func lightSummary(lts []loadTestSample, startTime, endTime time.Time, rl *rate.L
 		Float64("finalRateLimit", rlLimit).
 		Msg("Rough test summary")
 	log.Info().Uint64("numErrors", numErrors).Msg("Num errors")
+}
+
+func lastSample(lts []loadTestSample) loadTestSample {
+	var maxTime time.Time
+	var maxIdx int
+	for idx, lt := range lts {
+		if maxTime.Before(lt.RequestTime) {
+			maxTime = lt.RequestTime
+			maxIdx = idx
+		}
+	}
+	return lts[maxIdx]
 }

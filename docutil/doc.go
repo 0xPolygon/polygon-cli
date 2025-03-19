@@ -26,6 +26,10 @@ func genMarkdownDoc(cmd *cobra.Command, dir string) error {
 	}
 
 	basename := strings.ReplaceAll(cmd.CommandPath(), " ", "_") + ".md"
+	// clean dupped underscores
+	for strings.Contains(basename, "__") {
+		basename = strings.ReplaceAll(basename, "__", "_")
+	}
 	filename := filepath.Join(dir, basename)
 	f, err := os.Create(filename)
 	if err != nil {

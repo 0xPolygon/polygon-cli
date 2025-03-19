@@ -21,7 +21,12 @@ func ExactInputSingleSwap(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRou
 	swapDirection := getSwapDirection(nonce, poolConfig)
 
 	// Perform swap.
-	amountOut := new(big.Int).Mul(amountIn, new(big.Int).Div(big.NewInt(98), big.NewInt(100)))
+	slippageFactor := new(big.Float).SetFloat64(0.75)
+	amountInFloat := new(big.Float).SetInt(amountIn)
+	amountInFloat.Mul(amountInFloat, slippageFactor)
+	amountOut := new(big.Int)
+	amountInFloat.Int(amountOut)
+
 	tx, err = swapRouter.ExactInputSingle(tops, uniswapv3.IV3SwapRouterExactInputSingleParams{
 		// The contract address of the inbound token.
 		TokenIn: swapDirection.tokenIn,

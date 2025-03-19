@@ -89,6 +89,7 @@ The command also inherits flags from parent commands.
       --eth-amount float                       The amount of ether to send on every transaction
       --gas-limit uint                         In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
       --gas-price uint                         In environments where the gas price can't be determined automatically, we can specify it manually
+      --gas-price-multiplier float             A multiplier to increase or decrease the gas price (default 1)
   -i, --iterations uint                        If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size (default 1)
       --legacy                                 Send a legacy transaction instead of an EIP1559 transaction.
       --nonce uint                             Use this flag to manually set the starting nonce

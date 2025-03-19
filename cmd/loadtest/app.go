@@ -81,21 +81,23 @@ type (
 		InscriptionContent            *string
 		BlobFeeCap                    *uint64
 		StartNonce                    *uint64
+		GasPriceMultiplier            *float64
 
 		// Computed
-		CurrentGasPrice     *big.Int
-		CurrentGasTipCap    *big.Int
-		CurrentNonce        *uint64
-		ECDSAPrivateKey     *ecdsa.PrivateKey
-		FromETHAddress      *ethcommon.Address
-		ToETHAddress        *ethcommon.Address
-		ContractETHAddress  *ethcommon.Address
-		SendAmount          *big.Int
-		CurrentBaseFee      *big.Int
-		ChainSupportBaseFee bool
-		Mode                loadTestMode
-		ParsedModes         []loadTestMode
-		MultiMode           bool
+		CurrentGasPrice       *big.Int
+		CurrentGasTipCap      *big.Int
+		CurrentNonce          *uint64
+		ECDSAPrivateKey       *ecdsa.PrivateKey
+		FromETHAddress        *ethcommon.Address
+		ToETHAddress          *ethcommon.Address
+		ContractETHAddress    *ethcommon.Address
+		SendAmount            *big.Int
+		CurrentBaseFee        *big.Int
+		ChainSupportBaseFee   bool
+		Mode                  loadTestMode
+		ParsedModes           []loadTestMode
+		MultiMode             bool
+		BigGasPriceMultiplier *big.Float
 	}
 )
 
@@ -226,6 +228,7 @@ func initFlags() {
 	ltp.AdaptiveRateLimitIncrement = LoadtestCmd.PersistentFlags().Uint64("adaptive-rate-limit-increment", 50, "When using adaptive rate limiting, this flag controls the size of the additive increases.")
 	ltp.AdaptiveCycleDuration = LoadtestCmd.PersistentFlags().Uint64("adaptive-cycle-duration-seconds", 10, "When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates")
 	ltp.AdaptiveBackoffFactor = LoadtestCmd.PersistentFlags().Float64("adaptive-backoff-factor", 2, "When using adaptive rate limiting, this flag controls our multiplicative decrease value.")
+	ltp.GasPriceMultiplier = LoadtestCmd.PersistentFlags().Float64("gas-price-multiplier", 1, "A multiplier to increase or decrease the gas price")
 	ltp.Iterations = LoadtestCmd.PersistentFlags().Uint64P("iterations", "i", 1, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size")
 	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
 	ltp.ForceGasLimit = LoadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas")
