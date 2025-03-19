@@ -171,7 +171,7 @@ func monitor(ctx context.Context) error {
 			return
 		default:
 			for {
-				err = fetchCurrentBlockData(ctx, ec, ms, isUiRendered)
+				err = fetchCurrentBlockData(ctx, ec, ms, isUiRendered, txPoolStatusSupported, zkEVMBatchesSupported)
 				if err != nil {
 					log.Error().Msg(fmt.Sprintf("Error: unable to fetch current block data: %v", err))
 					// Send the error to the errChan channel to return.
@@ -202,7 +202,7 @@ func monitor(ctx context.Context) error {
 	return err
 }
 
-func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, error) {
+func getChainState(ctx context.Context, ec *ethclient.Client, txPoolStatusSupported, zkEVMBatchesSupported bool) (*chainState, error) {
 	var err error
 	cs := new(chainState)
 	cs.HeadBlock, err = ec.BlockNumber(ctx)
@@ -226,31 +226,34 @@ func getChainState(ctx context.Context, ec *ethclient.Client) (*chainState, erro
 		return nil, fmt.Errorf("couldn't estimate gas: %s", err.Error())
 	}
 
-	cs.TxPoolStatus.pending, cs.TxPoolStatus.queued, err = util.GetTxPoolStatus(ec.Client())
-	if err != nil {
-		log.Debug().Err(err).Msg("Unable to get tx pool status")
+	if txPoolStatusSupported {
+		cs.TxPoolStatus.pending, cs.TxPoolStatus.queued, err = util.GetTxPoolStatus(ec.Client())
+		if err != nil {
+			log.Debug().Err(err).Msg("Unable to get tx pool status")
+		}
 	}
 
-	cs.ZkEVMBatches.trusted, cs.ZkEVMBatches.virtual, cs.ZkEVMBatches.verified, err = util.GetZkEVMBatches(ec.Client())
-	if err != nil {
-		log.Debug().Err(err).Msg("Unable to get zkevm batches")
-	}
+	if zkEVMBatchesSupported {
+		cs.ZkEVMBatches.trusted, cs.ZkEVMBatches.virtual, cs.ZkEVMBatches.verified, err = util.GetZkEVMBatches(ec.Client())
+		if err != nil {
+			log.Debug().Err(err).Msg("Unable to get zkevm batches")
+		}
 
-	cs.ForkID, err = util.GetForkID(ec.Client())
-	if err != nil {
-		log.Debug().Err(err).Msg("Unable to get fork id")
-	}
+		cs.ForkID, err = util.GetForkID(ec.Client())
+		if err != nil {
+			log.Debug().Err(err).Msg("Unable to get fork id")
+		}
 
-	cs.RollupAddress, err = util.GetRollupAddress(ec.Client())
-	if err != nil {
-		log.Debug().Err(err).Msg("Unable to get rollup address")
-	}
+		cs.RollupAddress, err = util.GetRollupAddress(ec.Client())
+		if err != nil {
+			log.Debug().Err(err).Msg("Unable to get rollup address")
+		}
 
-	cs.RollupManagerAddress, err = util.GetRollupManagerAddress(ec.Client())
-	if err != nil {
-		log.Debug().Err(err).Msg("Unable to get rollup manager address")
+		cs.RollupManagerAddress, err = util.GetRollupManagerAddress(ec.Client())
+		if err != nil {
+			log.Debug().Err(err).Msg("Unable to get rollup manager address")
+		}
 	}
-
 	return cs, nil
 
 }
@@ -266,9 +269,9 @@ func (h historicalRange) getValues(limit int) []float64 {
 	return values
 }
 
-func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, isUiRendered bool) (err error) {
+func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, isUiRendered, txPoolStatusSupported, zkEVMBatchesSupported bool) (err error) {
 	var cs *chainState
-	cs, err = getChainState(ctx, ec)
+	cs, err = getChainState(ctx, ec, txPoolStatusSupported, zkEVMBatchesSupported)
 	if err != nil {
 		log.Error().Err(err).Msg("Encountered issue fetching network information")
 		time.Sleep(interval)
