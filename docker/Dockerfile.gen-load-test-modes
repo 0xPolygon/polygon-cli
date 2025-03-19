@@ -1,0 +1,13 @@
+FROM --platform=$BUILDPLATFORM golang:1.23-bookworm
+
+WORKDIR /gen
+
+# https://pkg.go.dev/golang.org/x/tools/cmd/stringer?tab=versions
+ARG STRINGER_VERSION="0.31.0" 
+
+## Install stringer
+RUN go install golang.org/x/tools/cmd/stringer@v${STRINGER_VERSION}
+
+WORKDIR /gen/cmd/loadtest
+
+CMD stringer -type=loadTestMode
