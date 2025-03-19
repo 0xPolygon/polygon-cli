@@ -225,7 +225,7 @@ func (inputArgs *inputArgs) parseRollupArgs(ctx context.Context, rollupManager r
 	}
 
 	if args.rollupID == 0 {
-		log.Error().Msg(ErrRollupNotFound.Error())
+		log.Error().Err(ErrRollupNotFound).Msg("RollupID 0 isn't supported")
 		return nil, ErrRollupNotFound
 	}
 
@@ -243,7 +243,7 @@ func mustGetRPCClient(ctx context.Context, rpcURL string) *ethclient.Client {
 func getRollupManager(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (*rollupManager, *abi.ABI, error) {
 	var contract *rollupManager
 	var contractABI *abi.ABI
-	log.Info().Msgf("Getting rollup manager contract at address %s", addr.Hex())
+	log.Info().Stringer("addr", addr).Msg("Getting rollup manager")
 	switch cdkArgs.forkID {
 	case etrog:
 		contractInstance, err := etrog_rollup_manager.NewPolygonrollupmanager(addr, rpcClient)
@@ -284,7 +284,7 @@ func getRollupManager(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr c
 func getRollup(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (*rollup, *abi.ABI, error) {
 	var contract *rollup
 	var contractABI *abi.ABI
-	log.Info().Msgf("Getting rollup contract at address %s", addr.Hex())
+	log.Info().Stringer("addr", addr).Msg("Getting rollup")
 	switch cdkArgs.forkID {
 	case etrog:
 		contractInstance, err := etrog_rollup.NewPolygonrollupbaseetrog(addr, rpcClient)
@@ -325,7 +325,7 @@ func getRollup(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.A
 func getBridge(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (*bridge, *abi.ABI, error) {
 	var contract *bridge
 	var contractABI *abi.ABI
-	log.Info().Msgf("Getting bridge contract at address %s", addr.Hex())
+	log.Info().Stringer("addr", addr).Msg("Getting bridge")
 	switch cdkArgs.forkID {
 	case etrog:
 		contractInstance, err := etrog_bridge.NewPolygonzkevmbridgev2(addr, rpcClient)
@@ -366,7 +366,7 @@ func getBridge(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.A
 func getGER(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (*ger, *abi.ABI, error) {
 	var contract *ger
 	var contractABI *abi.ABI
-	log.Info().Msgf("Getting GER contract at address %s", addr.Hex())
+	log.Info().Stringer("addr", addr).Msg("Getting GER")
 	switch cdkArgs.forkID {
 	case etrog:
 		contractInstance, err := etrog_ger.NewPolygonzkevmglobalexitrootv2(addr, rpcClient)
@@ -426,7 +426,7 @@ func invalidForkIDErr() error {
 // - rpcClient is used to fetch the logs
 // - filters is used to set which logs must be fetched
 func watchNewLogs(ctx context.Context, rpcClient *ethclient.Client, filters ...customFilter) error {
-	log.Info().Msgf("Waiting for events")
+	log.Info().Msg("Waiting for events")
 
 	latestBlockNumber, err := rpcClient.BlockNumber(ctx)
 	if err != nil {
@@ -452,7 +452,7 @@ func watchNewLogs(ctx context.Context, rpcClient *ethclient.Client, filters ...c
 		}
 
 		for blockNumber := latestBlockNumber + 1; blockNumber <= currentBlockNumber; blockNumber++ {
-			log.Info().Msgf("New block detected %d", blockNumber)
+			log.Info().Uint64("blockNumber", blockNumber).Msg("New block detected")
 
 			logsPrinted := uint(0)
 			for _, filter := range filters {
@@ -494,16 +494,28 @@ func mustPrintLogs(logs []types.Log, contractInstance reflect.Value, contractABI
 		}
 
 		var parsedEvent any
-		parseLogMethod, methodFound := contractInstance.Type().MethodByName(fmt.Sprintf("Parse%s", e.Name))
+		parseLogMethodName := fmt.Sprintf("Parse%s", e.Name)
+		parseLogMethod, methodFound := contractInstance.Type().MethodByName(parseLogMethodName)
 		if !methodFound {
-			log.Warn().Msgf("Method Parse%s not found, printing raw log", e.Name)
+			log.Warn().
+				Any("parseLogMethodName", parseLogMethodName).
+				Msg("parseLogMethod not found, printing raw log")
 			logsPrinted++
 			mustPrintJSONIndent(l)
 		} else {
 			parsedLogValues := parseLogMethod.Func.Call([]reflect.Value{contractInstance, reflect.ValueOf(l)})
+			if len(parsedLogValues) != 2 {
+				log.Warn().
+					Any("parseLogMethodName", parseLogMethodName).
+					Any("parseLogMethod", parseLogMethod).
+					Msg("Unexpected return from parseLogMethod. Printing raw log")
+				logsPrinted++
+				mustPrintJSONIndent(l)
+				continue
+			}
 			errValue := parsedLogValues[1].Interface()
 			if errValue != nil {
-				log.Warn().Err(errValue.(error)).Msgf("Error parsing log %v", l)
+				log.Warn().Any("log", l).Err(errValue.(error)).Msg("Error parsing log")
 			} else {
 				parsedEvent = parsedLogValues[0].Interface()
 			}
