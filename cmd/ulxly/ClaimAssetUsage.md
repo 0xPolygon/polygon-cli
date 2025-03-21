@@ -11,7 +11,7 @@ This is the corresponding interface in the bridge contract:
  * |    0     |  mainnetFlag | rollupIndex | localRootIndex |
  * note that only the rollup index will be used only in case the mainnet flag is 0
  * note that global index do not assert the unused bits to 0.
- * This means that when synching the events, the globalIndex must be decoded the same way that in the Smart contract
+ * This means that when syncing the events, the globalIndex must be decoded the same way that in the Smart contract
  * to avoid possible synch attacks
  * @param mainnetExitRoot Mainnet exit root
  * @param rollupExitRoot Rollup exit root

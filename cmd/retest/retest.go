@@ -111,7 +111,7 @@ type EthTestPre struct {
 type EthTest struct {
 	Pre                map[string]EthTestPre `json:"pre"`                // Pre determines preallocated accounts in the test case
 	Transaction        EthTestTx             `json:"transaction"`        // Transaction is usually a test transaction
-	Env                EthTestEnv            `json:"env"`                // Env sets the environment for execution. This is not relvant usually for creating load
+	Env                EthTestEnv            `json:"env"`                // Env sets the environment for execution. This is not relevant usually for creating load
 	GenesisBlockHeader EthTestGenesis        `json:"genesisBlockHeader"` // GenesisBlockHeader sets the typical genesis params of the network.
 	Blocks             []EthTestBlocks       `json:"blocks"`             // Blocks are the blocks that lead to the state being tested
 	SealEngine         string                `json:"sealEngine"`         // SealEngine is either Null or NoProof
