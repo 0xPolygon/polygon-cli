@@ -38,7 +38,7 @@ require (
 	google.golang.org/protobuf v1.36.5
 )
 
-require github.com/alecthomas/participle/v2 v2.1.2
+require github.com/alecthomas/participle/v2 v2.1.4
 
 require (
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
