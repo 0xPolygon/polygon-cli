@@ -509,6 +509,14 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			termui.Render(selectGrid)
 			return
 		} else if currentMode == monitorModeBlock {
+			if ms.SelectedBlock == nil {
+				currentMode = monitorModeExplorer
+				blockTable.SelectedRow = 0
+				termui.Clear()
+				termui.Render(grid)
+				return
+			}
+
 			// render a block
 			skeleton.BlockInfo.Rows = ui.GetSimpleBlockFields(ms.SelectedBlock)
 			rows, title := ui.GetTransactionsList(ms.SelectedBlock, ms.ChainID)

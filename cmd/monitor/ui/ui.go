@@ -276,6 +276,10 @@ func GetSelectedBlocksList(blocks []rpctypes.PolyBlock) ([]string, string) {
 }
 
 func GetSimpleBlockFields(block rpctypes.PolyBlock) []string {
+	if block == nil {
+		return []string{}
+	}
+
 	ts := block.Time()
 	ut := time.Unix(int64(ts), 0)
 
