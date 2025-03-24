@@ -143,6 +143,14 @@ func monitor(ctx context.Context) error {
 		zkEVMBatchesSupported = true
 	}
 
+	// check if net peerCount is supported
+	peerCountSupported := false
+	if _, err = ec.PeerCount(ctx); err != nil {
+		log.Debug().Err(err).Msg("Unable to fake peer count")
+	} else {
+		peerCountSupported = true
+	}
+
 	ms := new(monitorStatus)
 	ms.BlocksLock.Lock()
 	ms.BlockCache, err = lru.New(blockCacheLimit)
@@ -171,7 +179,7 @@ func monitor(ctx context.Context) error {
 			return
 		default:
 			for {
-				err = fetchCurrentBlockData(ctx, ec, ms, isUiRendered, txPoolStatusSupported, zkEVMBatchesSupported)
+				err = fetchCurrentBlockData(ctx, ec, ms, isUiRendered, txPoolStatusSupported, zkEVMBatchesSupported, peerCountSupported)
 				if err != nil {
 					log.Error().Msg(fmt.Sprintf("Error: unable to fetch current block data: %v", err))
 					// Send the error to the errChan channel to return.
@@ -202,7 +210,7 @@ func monitor(ctx context.Context) error {
 	return err
 }
 
-func getChainState(ctx context.Context, ec *ethclient.Client, txPoolStatusSupported, zkEVMBatchesSupported bool) (*chainState, error) {
+func getChainState(ctx context.Context, ec *ethclient.Client, txPoolStatusSupported, zkEVMBatchesSupported, peerCountSupported bool) (*chainState, error) {
 	var err error
 	cs := new(chainState)
 	cs.HeadBlock, err = ec.BlockNumber(ctx)
@@ -215,10 +223,12 @@ func getChainState(ctx context.Context, ec *ethclient.Client, txPoolStatusSuppor
 		return nil, fmt.Errorf("couldn't fetch chain id: %s", err.Error())
 	}
 
-	cs.PeerCount, err = ec.PeerCount(ctx)
-	if err != nil {
-		log.Debug().Err(err).Msg("Using fake peer count")
-		cs.PeerCount = 0
+	if peerCountSupported {
+		cs.PeerCount, err = ec.PeerCount(ctx)
+		if err != nil {
+			log.Debug().Err(err).Msg("Using fake peer count")
+			cs.PeerCount = 0
+		}
 	}
 
 	cs.GasPrice, err = ec.SuggestGasPrice(ctx)
@@ -269,9 +279,9 @@ func (h historicalRange) getValues(limit int) []float64 {
 	return values
 }
 
-func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, isUiRendered, txPoolStatusSupported, zkEVMBatchesSupported bool) (err error) {
+func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, isUiRendered, txPoolStatusSupported, zkEVMBatchesSupported, peerCountSupported bool) (err error) {
 	var cs *chainState
-	cs, err = getChainState(ctx, ec, txPoolStatusSupported, zkEVMBatchesSupported)
+	cs, err = getChainState(ctx, ec, txPoolStatusSupported, zkEVMBatchesSupported, peerCountSupported)
 	if err != nil {
 		log.Error().Err(err).Msg("Encountered issue fetching network information")
 		time.Sleep(interval)
@@ -933,7 +943,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				log.Debug().
 					Int("TopDisplayedBlock", int(ms.TopDisplayedBlock.Int64())).
 					Int("toBlockNumber", int(toBlockNumber.Int64())).
-					Msg("PageDown")
+					Msg("PageUp")
 
 				forceRedraw = true
 				redraw(ms, true)
