@@ -63,18 +63,6 @@ type rollupManagerContractInterface interface {
 }
 
 type rollupContractInterface interface {
-	GLOBALEXITROOTMANAGERL2(opts *bind.CallOpts) (common.Address, error)
-	INITIALIZETXBRIDGELISTLENLEN(opts *bind.CallOpts) (uint8, error)
-	INITIALIZETXBRIDGEPARAMS(opts *bind.CallOpts) ([]byte, error)
-	INITIALIZETXBRIDGEPARAMSAFTERBRIDGEADDRESS(opts *bind.CallOpts) ([]byte, error)
-	INITIALIZETXBRIDGEPARAMSAFTERBRIDGEADDRESSEMPTYMETADATA(opts *bind.CallOpts) ([]byte, error)
-	INITIALIZETXCONSTANTBYTES(opts *bind.CallOpts) (uint16, error)
-	INITIALIZETXCONSTANTBYTESEMPTYMETADATA(opts *bind.CallOpts) (uint16, error)
-	INITIALIZETXDATALENEMPTYMETADATA(opts *bind.CallOpts) (uint8, error)
-	INITIALIZETXEFFECTIVEPERCENTAGE(opts *bind.CallOpts) ([1]byte, error)
-	SIGNATUREINITIALIZETXR(opts *bind.CallOpts) ([32]byte, error)
-	SIGNATUREINITIALIZETXS(opts *bind.CallOpts) ([32]byte, error)
-	SIGNATUREINITIALIZETXV(opts *bind.CallOpts) (uint8, error)
 	Admin(opts *bind.CallOpts) (common.Address, error)
 	BridgeAddress(opts *bind.CallOpts) (common.Address, error)
 	CalculatePolPerForceBatch(opts *bind.CallOpts) (*big.Int, error)
@@ -94,6 +82,23 @@ type rollupContractInterface interface {
 	RollupManager(opts *bind.CallOpts) (common.Address, error)
 	TrustedSequencer(opts *bind.CallOpts) (common.Address, error)
 	TrustedSequencerURL(opts *bind.CallOpts) (string, error)
+}
+
+type validiumContractInterface interface {
+	DataAvailabilityProtocol(opts *bind.CallOpts) (common.Address, error)
+	IsSequenceWithDataAvailabilityAllowed(opts *bind.CallOpts) (bool, error)
+}
+
+type committeeContractInterface interface {
+	CommitteeHash(opts *bind.CallOpts) ([32]byte, error)
+	GetAmountOfMembers(opts *bind.CallOpts) (*big.Int, error)
+	GetProcotolName(opts *bind.CallOpts) (string, error)
+	Members(opts *bind.CallOpts, arg0 *big.Int) (struct {
+		Url  string
+		Addr common.Address
+	}, error)
+	Owner(opts *bind.CallOpts) (common.Address, error)
+	RequiredAmountOfSignatures(opts *bind.CallOpts) (*big.Int, error)
 }
 
 type bridgeContractInterface interface {
