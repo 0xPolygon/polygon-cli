@@ -443,9 +443,9 @@ func getCommitteeData(committee committeeContractInterface) (*CommitteeData, err
 
 	members := make([]CommitteeMemberData, 0)
 	for i := uint64(0); i < getAmountOfMembers.Uint64(); i++ {
-		member, err := committee.Members(nil, big.NewInt(0).SetUint64(i))
-		if err != nil {
-			return nil, err
+		member, mErr := committee.Members(nil, big.NewInt(0).SetUint64(i))
+		if mErr != nil {
+			return nil, mErr
 		}
 		members = append(members, CommitteeMemberData{
 			Addr: member.Addr,
