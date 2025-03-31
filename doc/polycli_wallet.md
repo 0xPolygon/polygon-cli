@@ -60,11 +60,11 @@ $ polycli wallet create --path "m/44'/0'/0'" --addresses 5
       --iterations uint        Number of pbkdf2 iterations to perform (default 2048)
       --language string        Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish] (default "english")
       --mnemonic string        A mnemonic phrase used to generate entropy
-      --mnemonic-file string   A mneomonic phrase written in a file used to generate entropy
+      --mnemonic-file string   A mnemonic phrase written in a file used to generate entropy
       --password string        Password used along with the mnemonic
       --password-file string   Password stored in a file used along with the mnemonic
       --path string            What would you like the derivation path to be (default "m/44'/60'/0'")
-      --raw-entropy            substrate and polkda dot don't follow strict bip39 and use raw entropy
+      --raw-entropy            substrate and polka dot don't follow strict bip39 and use raw entropy
       --root-only              don't produce HD accounts. Just produce a single wallet
       --words int              The number of words to use in the mnemonic (default 24)
 ```

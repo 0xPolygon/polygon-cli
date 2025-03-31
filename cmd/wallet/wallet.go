@@ -132,7 +132,7 @@ func init() {
 	inputPassword = WalletCmd.PersistentFlags().String("password", "", "Password used along with the mnemonic")
 	inputPasswordFile = WalletCmd.PersistentFlags().String("password-file", "", "Password stored in a file used along with the mnemonic")
 	inputMnemonic = WalletCmd.PersistentFlags().String("mnemonic", "", "A mnemonic phrase used to generate entropy")
-	inputMnemonicFile = WalletCmd.PersistentFlags().String("mnemonic-file", "", "A mneomonic phrase written in a file used to generate entropy")
-	inputUseRawEntropy = WalletCmd.PersistentFlags().Bool("raw-entropy", false, "substrate and polkda dot don't follow strict bip39 and use raw entropy")
+	inputMnemonicFile = WalletCmd.PersistentFlags().String("mnemonic-file", "", "A mnemonic phrase written in a file used to generate entropy")
+	inputUseRawEntropy = WalletCmd.PersistentFlags().Bool("raw-entropy", false, "substrate and polka dot don't follow strict bip39 and use raw entropy")
 	inputRootOnly = WalletCmd.PersistentFlags().Bool("root-only", false, "don't produce HD accounts. Just produce a single wallet")
 }

@@ -315,3 +315,33 @@ func TestGetPublicKeyFromSeed(t *testing.T) {
 	}
 
 }
+
+// https://github.com/0xPolygon/polygon-cli/issues/564
+func TestPaddedPublicKey(t *testing.T) {
+	pw, err := NewPolyWallet("cancel panther badge spell bleak summer hair cup frozen gossip tell element", "")
+	if err != nil {
+		t.Errorf("Failed to create new poly wallet: %v", err)
+	}
+	err = pw.SetPath("m/44'/60'/0'")
+	if err != nil {
+		t.Errorf("Failed setting derivation path failed: %v", err)
+	}
+	err = pw.SetIterations(2048)
+	if err != nil {
+		t.Errorf("Failed to set iteration count: %v", err)
+	}
+	err = pw.SetUseRawEntropy(false)
+	if err != nil {
+		t.Errorf("Failed to set raw entropy: %v", err)
+	}
+	key, err := pw.ExportHDAddresses(2)
+	if err != nil {
+		t.Errorf("Failed to export HD address %v", err)
+	}
+	if len(key.Addresses) != 2 {
+		t.Errorf("Expected 2 addresses to be exported and got %d", len(key.Addresses))
+	}
+	if key.Addresses[1].ETHAddress != "0x2CDfa87C022744CceABC525FaA8e85Df6984A60d" {
+		t.Errorf("Unexpected address. Expected 0x2CDfa87C022744CceABC525FaA8e85Df6984A60d and Got %s", key.Addresses[1].ETHAddress)
+	}
+}
