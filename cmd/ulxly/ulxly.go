@@ -1558,30 +1558,30 @@ var ulxlyClaimCmd = &cobra.Command{
 }
 
 type ulxlyArgs struct {
-	gasLimit             *uint64
-	chainID              *string
-	privateKey           *string
-	addressOfPrivateKey  string
-	value                *string
-	rpcURL               *string
-	bridgeAddress        *string
-	destNetwork          *uint32
-	destAddress          *string
-	tokenAddress         *string
-	forceUpdate          *bool
-	callData             *string
-	callDataFile         *string
-	timeout              *uint64
-	depositCount         *uint64
-	depositNetwork       *uint64
-	bridgeServiceURL     *string
-	globalIndex          *string
-	gasPrice             *string
-	dryRun               *bool
-	bridgeServiceURLs    *[]string
-	bridgeLimit          *int
-	bridgeOffset         *int
-	wait                 *time.Duration
+	gasLimit            *uint64
+	chainID             *string
+	privateKey          *string
+	addressOfPrivateKey string
+	value               *string
+	rpcURL              *string
+	bridgeAddress       *string
+	destNetwork         *uint32
+	destAddress         *string
+	tokenAddress        *string
+	forceUpdate         *bool
+	callData            *string
+	callDataFile        *string
+	timeout             *uint64
+	depositCount        *uint64
+	depositNetwork      *uint64
+	bridgeServiceURL    *string
+	globalIndex         *string
+	gasPrice            *string
+	dryRun              *bool
+	bridgeServiceURLs   *[]string
+	bridgeLimit         *int
+	bridgeOffset        *int
+	wait                *time.Duration
 	concurrency         *uint
 }
 
@@ -1640,7 +1640,7 @@ const (
 	ArgBridgeLimit          = "bridge-limit"
 	ArgBridgeOffset         = "bridge-offset"
 	ArgWait                 = "wait"
-	ArgConcurrency      = "concurrency"
+	ArgConcurrency          = "concurrency"
 )
 
 func prepInputs(cmd *cobra.Command, args []string) error {
