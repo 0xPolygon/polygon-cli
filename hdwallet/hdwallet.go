@@ -330,11 +330,23 @@ func RawPubKeyToETHAddress(concat []byte) common.Address {
 	b := h.Sum(nil)
 	return common.BytesToAddress(b)
 }
+
 func toUncompressedPubKey(prvKey *bip32.Key) []byte {
-	// the GetPublicKey method returns a compressed key so we'll manually get the public key from the curve
 	curve := secp256k1.S256()
 	x1, y1 := curve.ScalarBaseMult(prvKey.Key)
-	concat := append(x1.Bytes(), y1.Bytes()...)
+
+	// left-pad each coordinate to 32 bytes
+	xBytes := x1.Bytes()
+	yBytes := y1.Bytes()
+
+	paddedX := make([]byte, 32-len(xBytes), 32)
+	paddedX = append(paddedX, xBytes...)
+
+	paddedY := make([]byte, 32-len(yBytes), 32)
+	paddedY = append(paddedY, yBytes...)
+
+	// Then we just append them
+	concat := append(paddedX, paddedY...)
 	return concat
 }
 
