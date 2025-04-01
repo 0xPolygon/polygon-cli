@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/oasisprotocol/curve25519-voi/primitives/sr25519"
+	"github.com/rs/zerolog/log"
 	"github.com/tyler-smith/go-bip32"
 	"github.com/tyler-smith/go-bip39"
 	"github.com/tyler-smith/go-bip39/wordlists"
@@ -285,9 +286,40 @@ func (p *PolyWallet) ExportHDAddresses(count int) (*PolyWalletExport, error) {
 	pwe.BIP32PublicKey = bip32Key.PublicKey().String()
 	pwe.Addresses = make([]*PolyAddressExport, 0)
 
-	for i := 0; i < count; i = i + 1 {
+	const derivationPathAddressIndexPosition = 5
+	firstIndex := 0
+	derivationPathParts := strings.Split(p.derivationPath, "/")
+	if len(derivationPathParts) > 1 && count > 1 {
+		missingElements := derivationPathAddressIndexPosition + 1 - len(derivationPathParts)
+		for range missingElements {
+			derivationPathParts = append(derivationPathParts, "0'")
+		}
+
+		// start from 1 to skip m element
+		for i := 1; i < len(derivationPathParts); i++ {
+			if !strings.Contains(derivationPathParts[i], "'") {
+				derivationPathParts[i] += "'"
+			}
+		}
+
+		lastDerivationPathPart := derivationPathParts[len(derivationPathParts)-1]
+		lastDerivationPathPart = strings.ReplaceAll(lastDerivationPathPart, "'", "")
+		idx, err := strconv.Atoi(lastDerivationPathPart)
+		if err == nil {
+			firstIndex = idx
+		} else {
+			log.Warn().Msg("failed to identify the index of the address in the derivation path, starting at 0")
+		}
+	}
+	lastIndex := firstIndex + count
+
+	for i := firstIndex; i < lastIndex; i = i + 1 {
 		// TODO if we want to provide support for hardened addresses it would need to be accommodated here
-		currentPath := p.derivationPath + "/0/" + fmt.Sprintf("%d", i)
+		currentPath := p.derivationPath
+		if lastIndex-firstIndex > 1 {
+			currentPath = strings.Join(derivationPathParts[:len(derivationPathParts)-1], "/") + "/" + strconv.Itoa(i)
+		}
+
 		k, err := p.GetKeyForPath(currentPath)
 		if err != nil {
 			return nil, err
@@ -435,17 +467,12 @@ func parseDerivationPath(inputPath string) ([]uint32, error) {
 		}
 
 		// purpose = 1, coin_type = 2, account = 3, change = 4, address_index = 5
-		if idx >= 1 && idx <= 5 {
-			val, err := parsePathElement(piece)
-			if err != nil {
-				return nil, err
-			}
-			path = append(path, val)
+		// custom > 5
+		val, err := parsePathElement(piece)
+		if err != nil {
+			return nil, err
 		}
-
-		if idx > 5 {
-			return nil, fmt.Errorf("length of derivation path exceeded 5")
-		}
+		path = append(path, val)
 	}
 	return path, nil
 
