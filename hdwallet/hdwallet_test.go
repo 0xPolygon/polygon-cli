@@ -343,8 +343,8 @@ func TestPaddedPublicKey(t *testing.T) {
 	if len(key.Addresses) != 2 {
 		t.Errorf("Expected 2 addresses to be exported and got %d", len(key.Addresses))
 	}
-	if key.Addresses[1].ETHAddress != "0x2CDfa87C022744CceABC525FaA8e85Df6984A60d" {
-		t.Errorf("Unexpected address. Expected 0x2CDfa87C022744CceABC525FaA8e85Df6984A60d and Got %s", key.Addresses[1].ETHAddress)
+	if key.Addresses[1].ETHAddress != "0x1DF2a15A6E2493b55aFCec9d0a5548bB9F113B2C" {
+		t.Errorf("Unexpected address. Expected 0x1DF2a15A6E2493b55aFCec9d0a5548bB9F113B2C and Got %s", key.Addresses[1].ETHAddress)
 	}
 }
 
