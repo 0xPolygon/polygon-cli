@@ -55,7 +55,7 @@ $ polycli wallet create --path "m/44'/0'/0'" --addresses 5
 ## Flags
 
 ```bash
-      --addresses uint         The number of addresses to generate (default 1)
+      --addresses uint         The number of addresses to generate (default 10)
   -h, --help                   help for wallet
       --iterations uint        Number of pbkdf2 iterations to perform (default 2048)
       --language string        Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish] (default "english")
