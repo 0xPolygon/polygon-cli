@@ -359,6 +359,11 @@ func TestDerivationPath(t *testing.T) {
 	const password = ""
 
 	testCases := []testCase{
+		// no path derivation
+		{"", 1, map[string]string{
+			"m/44'/60'/0'": "0x340d8879778d3D3Fec643D1736ebFd2bC5824662",
+		}},
+
 		// path derivation input with 3 parts
 		{"m/44'/60'/0", 1, map[string]string{
 			"m/44'/60'/0": "0xdF0BE9FAb65517CD236a85Cf726313D59e935bB5",
@@ -438,8 +443,10 @@ func TestDerivationPath(t *testing.T) {
 			pw, err := NewPolyWallet(mnemonic, password)
 			require.NoError(t, err)
 
-			err = pw.SetPath(tc.derivationPathInput)
-			require.NoError(t, err)
+			if len(tc.derivationPathInput) > 0 {
+				err = pw.SetPath(tc.derivationPathInput)
+				require.NoError(t, err)
+			}
 
 			hdAddresses, err := pw.ExportHDAddresses(tc.nAddresses)
 			require.NoError(t, err)

@@ -21,7 +21,7 @@ polycli wallet [create|inspect] [flags]
 
 This command is meant to simplify the operations of creating
 wallets. This command can take a seed phrase and spit out child
-accounts or generate new accmounts along with a seed phrase. It can
+accounts or generate new accounts along with a seed phrase. It can
 generate portable wallets to be used across ETH, BTC, PoS, Substrate,
 etc.
 
@@ -55,7 +55,7 @@ $ polycli wallet create --path "m/44'/0'/0'" --addresses 5
 ## Flags
 
 ```bash
-      --addresses uint         The number of addresses to generate (default 10)
+      --addresses uint         The number of addresses to generate (default 1)
   -h, --help                   help for wallet
       --iterations uint        Number of pbkdf2 iterations to perform (default 2048)
       --language string        Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish] (default "english")
