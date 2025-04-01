@@ -291,12 +291,28 @@ func (p *PolyWallet) ExportHDAddresses(count int) (*PolyWalletExport, error) {
 	derivationPathParts := strings.Split(p.derivationPath, "/")
 	if len(derivationPathParts) > 1 && count > 1 {
 		missingElements := derivationPathAddressIndexPosition + 1 - len(derivationPathParts)
-		for range missingElements {
-			derivationPathParts = append(derivationPathParts, "0'")
+		for i := range missingElements {
+			if i == 0 {
+				if missingElements == 4 {
+					derivationPathParts = append(derivationPathParts, "60'")
+				} else if missingElements == 3 {
+					derivationPathParts = append(derivationPathParts, "0'")
+				} else {
+					derivationPathParts = append(derivationPathParts, "0")
+				}
+			} else if i == 1 {
+				if missingElements == 4 {
+					derivationPathParts = append(derivationPathParts, "0'")
+				} else {
+					derivationPathParts = append(derivationPathParts, "0")
+				}
+			} else {
+				derivationPathParts = append(derivationPathParts, "0")
+			}
 		}
 
-		// start from 1 to skip m element
-		for i := 1; i < len(derivationPathParts); i++ {
+		// ensure elements 1, 2 and 3 are hardened(with apostrophe)
+		for i := 1; i <= 3; i++ {
 			if !strings.Contains(derivationPathParts[i], "'") {
 				derivationPathParts[i] += "'"
 			}

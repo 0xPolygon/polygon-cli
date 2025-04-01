@@ -122,7 +122,7 @@ func getFileOrFlag(filename *string, flag *string) (string, error) {
 func init() {
 	inputKDFIterations = WalletCmd.PersistentFlags().Uint("iterations", 2048, "Number of pbkdf2 iterations to perform")
 	inputWords = WalletCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
-	inputAddressesToGenerate = WalletCmd.PersistentFlags().Uint("addresses", 1, "The number of addresses to generate")
+	inputAddressesToGenerate = WalletCmd.PersistentFlags().Uint("addresses", 10, "The number of addresses to generate")
 	inputLang = WalletCmd.PersistentFlags().String("language", "english", "Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
 	// https://github.com/satoshilabs/slips/blob/master/slip-0044.md
 	// 0 - bitcoin
