@@ -69,6 +69,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli p2p](polycli_p2p.md) - Set of commands related to devp2p.
 
+- [polycli parse-batch-l2-data](polycli_parse-batch-l2-data.md) - Convert batch l2 data into an ndjson stream
+
 - [polycli parseethwallet](polycli_parseethwallet.md) - Extract the private key from an eth wallet.
 
 - [polycli retest](polycli_retest.md) - Convert the standard ETH test fillers into something to be replayed against an RPC
