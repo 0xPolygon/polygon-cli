@@ -7,7 +7,6 @@
 - [Description](#description)
 - [Usage](#usage)
 - [Flags](#flags)
-- [See Also](#see-also)
 
 ## Description
 
@@ -51,6 +50,3 @@ The command also inherits flags from parent commands.
                                            700 Trace (default 500)
 ```
 
-## See also
-
-- [polycli ulxly ](polycli_ulxly_.md) - 
