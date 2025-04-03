@@ -124,4 +124,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly  bridge](polycli_ulxly__bridge.md) - Commands for moving funds and sending messages from one chain to another
+- [polycli ulxly bridge](polycli_ulxly_bridge.md) - Commands for moving funds and sending messages from one chain to another

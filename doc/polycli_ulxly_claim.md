@@ -50,8 +50,7 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly ](polycli_ulxly_.md) - 
-- [polycli ulxly  claim asset](polycli_ulxly__claim_asset.md) - Claim a deposit
+- [polycli ulxly claim asset](polycli_ulxly_claim_asset.md) - Claim a deposit
 
-- [polycli ulxly  claim message](polycli_ulxly__claim_message.md) - Claim a message
+- [polycli ulxly claim message](polycli_ulxly_claim_message.md) - Claim a message
 
