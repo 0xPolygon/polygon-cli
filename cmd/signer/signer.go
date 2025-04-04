@@ -80,7 +80,7 @@ var SignerCmd = &cobra.Command{
 	Short: "Utilities for security signing transactions",
 	Long:  signerUsage,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		inputSignerOpts.privateKey = flag_loader.GetRpcUrlFlagValue(cmd)
+		inputSignerOpts.privateKey = flag_loader.GetPrivateKeyFlagValue(cmd)
 	},
 	Args: cobra.NoArgs,
 }
