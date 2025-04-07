@@ -34,7 +34,7 @@ require (
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
 	golang.org/x/text v0.24.0
 	golang.org/x/time v0.11.0
-	google.golang.org/api v0.227.0
+	google.golang.org/api v0.228.0
 	google.golang.org/protobuf v1.36.6
 )
 
@@ -160,7 +160,7 @@ require (
 
 require (
 	cloud.google.com/go/auth v0.15.0 // indirect
-	cloud.google.com/go/auth/oauth2adapt v0.2.7 // indirect
+	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/iam v1.4.1 // indirect
 	cloud.google.com/go/longrunning v0.6.5 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
