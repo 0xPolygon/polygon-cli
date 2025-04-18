@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/holiman/uint256"
@@ -566,7 +565,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 	rateLimitCtx, cancel := context.WithCancel(ctx)
 
-	nonceGetter := func(ec *ethclient.Client, fromAddress common.Address) func() (uint64, error) {
+	nonceGetter := func(ec *ethclient.Client, fromAddress ethcommon.Address) func() (uint64, error) {
 		return func() (uint64, error) {
 			return ec.NonceAt(ctx, fromAddress, nil)
 		}
@@ -698,7 +697,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			var retryForNonce bool = false
 			var myNonceValue uint64
 			var tErr error
-			var ltTxHash common.Hash
+			var ltTxHash ethcommon.Hash
 			for j = 0; j < requests; j = j + 1 {
 				if rl != nil {
 					tErr = rl.Wait(ctx)
@@ -897,7 +896,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 	return
 }
 
-func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
@@ -1064,7 +1063,7 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 }
 
 // TODO - in the future it might be more interesting if this mode takes input or random contracts to be deployed
-func loadTestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestDeploy(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tops *bind.TransactOpts
 	var tx *ethtypes.Transaction
 
@@ -1106,7 +1105,7 @@ func getCurrentLoadTestFunction() uint64 {
 	}
 	return tester.GetRandomOPCode()
 }
-func loadTestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tops *bind.TransactOpts
 	var tx *ethtypes.Transaction
 
@@ -1144,7 +1143,7 @@ func loadTestFunction(ctx context.Context, c *ethclient.Client, nonce uint64, lt
 	return
 }
 
-func loadTestCallPrecompiledContract(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester, useSelectedAddress bool) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestCallPrecompiledContract(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester, useSelectedAddress bool) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var f int
 	var tops *bind.TransactOpts
 	var tx *ethtypes.Transaction
@@ -1186,7 +1185,7 @@ func loadTestCallPrecompiledContract(ctx context.Context, c *ethclient.Client, n
 	return
 }
 
-func loadTestIncrement(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestIncrement(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tops *bind.TransactOpts
 	var tx *ethtypes.Transaction
 	ltp := inputLoadTestParams
@@ -1221,7 +1220,7 @@ func loadTestIncrement(ctx context.Context, c *ethclient.Client, nonce uint64, l
 	return
 }
 
-func loadTestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tops *bind.TransactOpts
 	var tx *ethtypes.Transaction
 
@@ -1259,7 +1258,7 @@ func loadTestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 	return
 }
 
-func loadTestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20Contract *tokens.ERC20, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20Contract *tokens.ERC20, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tops *bind.TransactOpts
 	var tx *ethtypes.Transaction
 	ltp := inputLoadTestParams
@@ -1301,7 +1300,7 @@ func loadTestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 	return
 }
 
-func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc721Contract *tokens.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc721Contract *tokens.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tops *bind.TransactOpts
 	var tx *ethtypes.Transaction
 
@@ -1344,7 +1343,7 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 	return
 }
 
-func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, originalTx rpctypes.PolyTransaction) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestRecall(ctx context.Context, c *ethclient.Client, nonce uint64, originalTx rpctypes.PolyTransaction) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tops *bind.TransactOpts
 	var stx *ethtypes.Transaction
 
@@ -1511,7 +1510,7 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *Ind
 	return
 }
 
-func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tops *bind.TransactOpts
 	var calldata []byte
 	var stx *ethtypes.Transaction
@@ -1618,7 +1617,7 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 	return
 }
 
-func loadTestInscription(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestInscription(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tops *bind.TransactOpts
 	var tx *ethtypes.Transaction
 	var stx *ethtypes.Transaction
@@ -1697,7 +1696,7 @@ func loadTestInscription(ctx context.Context, c *ethclient.Client, nonce uint64)
 	return
 }
 
-func loadTestBlob(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestBlob(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var stx *ethtypes.Transaction
 
 	ltp := inputLoadTestParams
