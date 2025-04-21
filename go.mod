@@ -42,7 +42,10 @@ require github.com/alecthomas/participle/v2 v2.1.4
 
 require (
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
+	github.com/gdamore/encoding v1.0.0 // indirect
+	github.com/gdamore/tcell/v2 v2.7.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
+	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/pion/dtls/v2 v2.2.12 // indirect
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/stun/v2 v2.0.0 // indirect
@@ -156,6 +159,7 @@ require (
 	github.com/google/tink/go v1.7.0
 	github.com/iden3/go-iden3-crypto v0.0.17
 	github.com/montanaflynn/stats v0.7.1
+	github.com/rivo/tview v0.0.0-20250330220935-949945f8d922
 )
 
 require (

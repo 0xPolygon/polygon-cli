@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
+	"github.com/0xPolygon/polygon-cli/cmd/monitor_tview"
 	"github.com/0xPolygon/polygon-cli/util"
 
 	"github.com/0xPolygon/polygon-cli/cmd/cdk"
@@ -127,6 +128,7 @@ func NewPolycliCommand() *cobra.Command {
 		metricsToDash.MetricsToDashCmd,
 		mnemonic.MnemonicCmd,
 		monitor.MonitorCmd,
+		monitor_tview.Cmd,
 		nodekey.NodekeyCmd,
 		p2p.P2pCmd,
 		parseethwallet.ParseETHWalletCmd,
