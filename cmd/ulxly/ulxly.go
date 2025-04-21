@@ -1118,6 +1118,7 @@ func hasCode(ctx context.Context, client *ethclient.Client, address string) erro
 	code, err := client.CodeAt(ctx, common.HexToAddress(address), nil)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting code at address")
+		return err
 	}
 	if len(code) == 0 {
 		return fmt.Errorf("address %s has no code", address)
