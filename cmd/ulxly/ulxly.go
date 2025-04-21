@@ -1114,8 +1114,8 @@ func readDeposits(rawDeposits []byte, depositNumber uint32) error {
 	return nil
 }
 
-func hasCode(client *ethclient.Client, address string) error {
-	code, err := client.CodeAt(context.Background(), common.HexToAddress(address), nil)
+func hasCode(ctx context.Context, client *ethclient.Client, address string) error {
+	code, err := client.CodeAt(ctx, common.HexToAddress(address), nil)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting code at address")
 	}
@@ -1321,7 +1321,7 @@ func generateEmptyHashes(height uint8) []common.Hash {
 
 func generateTransactionPayload(ctx context.Context, client *ethclient.Client, ulxlyInputArgBridge string, ulxlyInputArgPvtKey string, ulxlyInputArgGasLimit uint64, ulxlyInputArgDestAddr string, ulxlyInputArgChainID string) (bridgeV2 *ulxly.Ulxly, toAddress common.Address, opts *bind.TransactOpts, err error) {
 	// checks if bridge address has code
-	err = hasCode(client, ulxlyInputArgBridge)
+	err = hasCode(ctx, client, ulxlyInputArgBridge)
 	if err != nil {
 		err = fmt.Errorf("bridge err: %w", err)
 		return
