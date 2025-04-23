@@ -159,7 +159,8 @@ func monitor(ctx context.Context) error {
 
 	// check if EIP-1559 is supported
 	eip1559Supported := false
-	if latestBlock, err := ec.BlockByNumber(ctx, big.NewInt(0).SetUint64(latestBlockNumber)); err != nil {
+	latestBlock, err := ec.BlockByNumber(ctx, big.NewInt(0).SetUint64(latestBlockNumber))
+	if err != nil {
 		log.Debug().Err(err).Msg("Unable to get latest block")
 	} else {
 		if latestBlock.BaseFee() == nil {
