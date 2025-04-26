@@ -322,6 +322,29 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
+	// setup account pool
+	fundingAmount := *inputLoadTestParams.AddressFundingAmount
+	sendingAddressCount := *inputLoadTestParams.SendingAddressCount
+	accountPool = NewAccountPool(ctx, c, privateKey, big.NewInt(0).SetUint64(fundingAmount))
+	if sendingAddressCount > 0 {
+		err = accountPool.AddRandomN(sendingAddressCount)
+	} else {
+		err = accountPool.Add(privateKey)
+	}
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to add random accounts")
+		return fmt.Errorf("unable to set account pool. %w", err)
+	}
+
+	fundSendingAddressesOnDemand := *inputLoadTestParams.FundSendingAddressesOnDemand
+	if fundSendingAddressesOnDemand {
+		err := accountPool.FundAccounts()
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to fund sending addresses")
+			return fmt.Errorf("unable to fund sending addresses. %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -686,6 +709,12 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	if err != nil {
 		return err
 	}
+
+	log.Debug().
+		Any("sendingAddressCount", ltp.SendingAddressCount).
+		Any("addressFundingAmount", ltp.AddressFundingAmount).
+		Msg("preparing account pool")
+
 	log.Debug().Uint64("currentNonce", currentNonce).Msg("Starting main load test loop")
 	var wg sync.WaitGroup
 	for i = 0; i < routines; i = i + 1 {
@@ -753,7 +782,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				case loadTestModeStore:
 					startReq, endReq, ltTxHash, tErr = loadTestStore(ctx, c, myNonceValue, ltContract)
 				case loadTestModeTransaction:
-					startReq, endReq, ltTxHash, tErr = loadTestTransaction(ctx, c, myNonceValue)
+					startReq, endReq, ltTxHash, tErr = loadTestTransaction(ctx, c)
 				case loadTestModeUniswapV3:
 					swapAmountIn := big.NewInt(int64(*uniswapv3LoadTestParams.SwapAmountInput))
 					startReq, endReq, ltTxHash, tErr = runUniswapV3Loadtest(ctx, c, myNonceValue, uniswapV3Config, poolConfig, swapAmountIn)
@@ -897,7 +926,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 	return
 }
 
-func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestTransaction(ctx context.Context, c *ethclient.Client) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
@@ -907,55 +936,58 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, nonce uint64)
 
 	amount := ltp.SendAmount
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
-	privateKey := ltp.ECDSAPrivateKey
 
-	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable create transaction signer")
-		return
-	}
-	tops.GasLimit = uint64(21000)
-	tops = configureTransactOpts(ctx, c, tops)
-
-	var tx *ethtypes.Transaction
-	if *ltp.LegacyTransactionMode {
-		tx = ethtypes.NewTx(&ethtypes.LegacyTx{
-			Nonce:    nonce,
-			To:       to,
-			Value:    amount,
-			Gas:      tops.GasLimit,
-			GasPrice: tops.GasPrice,
-			Data:     nil,
-		})
-	} else {
-		dynamicFeeTx := &ethtypes.DynamicFeeTx{
-			ChainID:   chainID,
-			Nonce:     nonce,
-			To:        to,
-			Gas:       tops.GasLimit,
-			GasFeeCap: tops.GasFeeCap,
-			GasTipCap: tops.GasTipCap,
-			Data:      nil,
-			Value:     amount,
+	err = accountPool.Run(ctx, func(account Account) error {
+		tops, err := bind.NewKeyedTransactorWithChainID(account.privateKey, chainID)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable create transaction signer")
+			return err
 		}
-		tx = ethtypes.NewTx(dynamicFeeTx)
-	}
+		tops.GasLimit = uint64(21000)
+		tops = configureTransactOpts(ctx, c, tops)
 
-	stx, err := tops.Signer(*ltp.FromETHAddress, tx)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to sign transaction")
-		return
-	}
+		var tx *ethtypes.Transaction
+		if *ltp.LegacyTransactionMode {
+			tx = ethtypes.NewTx(&ethtypes.LegacyTx{
+				Nonce:    account.nonce,
+				To:       to,
+				Value:    amount,
+				Gas:      tops.GasLimit,
+				GasPrice: tops.GasPrice,
+				Data:     nil,
+			})
+		} else {
+			dynamicFeeTx := &ethtypes.DynamicFeeTx{
+				ChainID:   chainID,
+				Nonce:     account.nonce,
+				To:        to,
+				Gas:       tops.GasLimit,
+				GasFeeCap: tops.GasFeeCap,
+				GasTipCap: tops.GasTipCap,
+				Data:      nil,
+				Value:     amount,
+			}
+			tx = ethtypes.NewTx(dynamicFeeTx)
+		}
 
-	txHash = stx.Hash()
+		stx, err := tops.Signer(account.address, tx)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to sign transaction")
+			return err
+		}
 
-	t1 = time.Now()
-	defer func() { t2 = time.Now() }()
-	if *ltp.CallOnly {
-		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
-	} else {
-		err = c.SendTransaction(ctx, stx)
-	}
+		txHash = stx.Hash()
+
+		t1 = time.Now()
+		defer func() { t2 = time.Now() }()
+		if *ltp.CallOnly {
+			_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
+		} else {
+			err = c.SendTransaction(ctx, stx)
+		}
+		return err
+	})
+
 	return
 }
 
@@ -1856,6 +1888,9 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 	var currentNonceForFinalBlock uint64
 	var initialWaitCount = 20
 	var maxWaitCount = initialWaitCount
+
+	noncesToCheck := accountPool.Nonces()
+
 	for {
 		lastBlockNumber, err = c.BlockNumber(ctx)
 		if err != nil {
@@ -1864,27 +1899,51 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 		if *ltp.CallOnly {
 			return lastBlockNumber, nil
 		}
-		currentNonceForFinalBlock, err = c.NonceAt(ctx, *ltp.FromETHAddress, new(big.Int).SetUint64(lastBlockNumber))
-		if err != nil {
-			return 0, err
-		}
-		if currentNonceForFinalBlock < endNonce && maxWaitCount > 0 {
-			log.Trace().Uint64("endNonce", endNonce).Uint64("currentNonceForFinalBlock", currentNonceForFinalBlock).Uint64("prevNonceForFinalBlock", prevNonceForFinalBlock).Msg("Not all transactions have been mined. Waiting")
-			time.Sleep(5 * time.Second)
-			if currentNonceForFinalBlock == prevNonceForFinalBlock {
-				maxWaitCount = maxWaitCount - 1 // only decrement if currentNonceForFinalBlock doesn't progress
+
+		for address, endNonce := range noncesToCheck {
+			currentNonceForFinalBlock, err = c.NonceAt(ctx, address, new(big.Int).SetUint64(lastBlockNumber))
+			if err != nil {
+				return 0, err
 			}
-			prevNonceForFinalBlock = currentNonceForFinalBlock
-			log.Trace().Int("Remaining Attempts", maxWaitCount).Msg("Retrying...")
-			continue
+			if currentNonceForFinalBlock < endNonce {
+				log.Trace().
+					Str("address", address.String()).
+					Uint64("endNonce", endNonce).
+					Uint64("currentNonceForFinalBlock", currentNonceForFinalBlock).
+					Uint64("prevNonceForFinalBlock", prevNonceForFinalBlock).
+					Msg("Not all transactions for account have been mined. Waiting...")
+
+				time.Sleep(5 * time.Second)
+				if currentNonceForFinalBlock == prevNonceForFinalBlock {
+					maxWaitCount = maxWaitCount - 1 // only decrement if currentNonceForFinalBlock doesn't progress
+				}
+				prevNonceForFinalBlock = currentNonceForFinalBlock
+				log.Trace().Int("Remaining Attempts", maxWaitCount).Msg("Retrying...")
+			} else {
+				log.Trace().
+					Str("address", address.String()).
+					Uint64("endNonce", endNonce).
+					Uint64("currentNonceForFinalBlock", currentNonceForFinalBlock).
+					Uint64("prevNonceForFinalBlock", prevNonceForFinalBlock).
+					Msg("All transactions for account have been mined")
+				delete(noncesToCheck, address)
+			}
 		}
+
 		if maxWaitCount <= 0 {
 			return 0, fmt.Errorf("waited for %d attempts for the transactions to be mined", initialWaitCount)
 		}
-		break
+		if len(noncesToCheck) == 0 {
+			log.Trace().Msg("All transactions of all accounts have been mined")
+			break
+		}
 	}
 
-	log.Trace().Uint64("currentNonceForFinalBlock", currentNonceForFinalBlock).Uint64("startblock", startBlockNumber).Uint64("endblock", lastBlockNumber).Msg("It looks like all transactions have been mined")
+	log.Trace().
+		Uint64("currentNonceForFinalBlock", currentNonceForFinalBlock).
+		Uint64("startblock", startBlockNumber).
+		Uint64("endblock", lastBlockNumber).
+		Msg("It looks like all transactions have been mined")
 	return lastBlockNumber, nil
 }
 
