@@ -22,7 +22,6 @@ type Account struct {
 	privateKey *ecdsa.PrivateKey
 	nonce      uint64
 	funded     bool
-	used       bool
 }
 
 func newAccount(client *ethclient.Client, privateKey *ecdsa.PrivateKey) (*Account, error) {

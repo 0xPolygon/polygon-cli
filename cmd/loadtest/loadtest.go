@@ -284,7 +284,8 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	inputLoadTestParams.ParsedModes = make([]loadTestMode, 0)
 	for _, m := range modes {
-		parsedMode, err := characterToLoadTestMode(m)
+		var parsedMode loadTestMode
+		parsedMode, err = characterToLoadTestMode(m)
 		if err != nil {
 			return err
 		}
