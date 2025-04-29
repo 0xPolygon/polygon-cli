@@ -84,7 +84,7 @@ type (
 		GasPriceMultiplier            *float64
 		SendingAddressCount           *uint64
 		AddressFundingAmount          *uint64
-		FundSendingAddressesOnDemand  *bool
+		PreFundSendingAddresses       *bool
 
 		// Computed
 		CurrentGasPrice       *big.Int
@@ -247,7 +247,7 @@ func initFlags() {
 	ltp.BlobFeeCap = LoadtestCmd.Flags().Uint64("blob-fee-cap", 100000, "The blob fee cap, or the maximum blob fee per chunk, in Gwei.")
 	ltp.SendingAddressCount = LoadtestCmd.Flags().Uint64("sending-address-count", 1, "The number of sending addresses to use. This is useful for avoiding pool account queue.")
 	ltp.AddressFundingAmount = LoadtestCmd.Flags().Uint64("address-funding-amount", 1000000000000000000, "The amount in gwei to fund the sending addresses with.")
-	ltp.FundSendingAddressesOnDemand = LoadtestCmd.Flags().Bool("fund-sending-addresses-on-demand", true, "If set to true, the sending addresses will be funded when used for the first time, otherwise all addresses will be fund at the start of the execution.")
+	ltp.PreFundSendingAddresses = LoadtestCmd.Flags().Bool("pre-fund-sending-addresses", false, "If set to true, the sending addresses will be fund at the start of the execution, otherwise all addresses will be funded when used for the first time.")
 
 	// Local flags.
 	ltp.Modes = LoadtestCmd.Flags().StringSliceP("mode", "m", []string{"t"}, `The testing mode to use. It can be multiple like: "c,d,f,t"

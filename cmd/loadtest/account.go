@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
+	"slices"
 	"sync"
 	"time"
 
@@ -18,10 +19,11 @@ import (
 )
 
 type Account struct {
-	address    common.Address
-	privateKey *ecdsa.PrivateKey
-	nonce      uint64
-	funded     bool
+	address        common.Address
+	privateKey     *ecdsa.PrivateKey
+	nonce          uint64
+	funded         bool
+	reusableNonces []uint64
 }
 
 func newAccount(client *ethclient.Client, privateKey *ecdsa.PrivateKey) (*Account, error) {
@@ -35,9 +37,11 @@ func newAccount(client *ethclient.Client, privateKey *ecdsa.PrivateKey) (*Accoun
 	}
 
 	return &Account{
-		privateKey: privateKey,
-		address:    address,
-		nonce:      nonce,
+		privateKey:     privateKey,
+		address:        address,
+		nonce:          nonce,
+		funded:         false,
+		reusableNonces: make([]uint64, 0),
 	}, nil
 }
 
@@ -52,9 +56,11 @@ func (a *Account) Nonce() uint64 {
 }
 
 type AccountPool struct {
+	accounts          []Account
+	accountsPositions map[common.Address]int
+
 	mu                  sync.Mutex
 	client              *ethclient.Client
-	accounts            []Account
 	currentAccountIndex int
 	fundingPrivateKey   *ecdsa.PrivateKey
 	fundingAmount       *big.Int
@@ -91,6 +97,7 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 		fundingPrivateKey:   fundingPrivateKey,
 		fundingAmount:       fundingAmount,
 		chainID:             chainID,
+		accountsPositions:   make(map[common.Address]int),
 	}
 }
 
@@ -129,6 +136,28 @@ func (ap *AccountPool) Add(privateKey *ecdsa.PrivateKey) error {
 	}
 
 	ap.accounts = append(ap.accounts, *account)
+	ap.accountsPositions[account.address] = len(ap.accounts) - 1
+	return nil
+}
+
+func (ap *AccountPool) AddReusableNonce(address common.Address, nonce uint64) error {
+	ap.mu.Lock()
+	defer ap.mu.Unlock()
+
+	accountPos, found := ap.accountsPositions[address]
+	if !found {
+		return fmt.Errorf("account not found in pool")
+	}
+	if accountPos >= len(ap.accounts)-1 {
+		return fmt.Errorf("account position out of bounds")
+	}
+
+	ap.accounts[accountPos].reusableNonces = append(ap.accounts[accountPos].reusableNonces, nonce)
+
+	// sort the reusable nonces ascending because we want to use the lowest nonce first
+	// and we pay the price of sorting only once when adding it
+	slices.Sort(ap.accounts[accountPos].reusableNonces)
+
 	return nil
 }
 
@@ -160,20 +189,16 @@ func (ap *AccountPool) Nonces() map[common.Address]uint64 {
 	return nonces
 }
 
-func (ap *AccountPool) Run(ctx context.Context, f func(account Account) error) error {
+func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 	account, err := ap.next(ctx)
 	log.Debug().
 		Str("address", account.address.Hex()).
 		Str("nonce", fmt.Sprintf("%d", account.nonce)).
 		Msg("account returned from pool")
 	if err != nil {
-		return err
+		return Account{}, err
 	}
-	err = f(account)
-	if err != nil {
-		return err
-	}
-	return nil
+	return account, nil
 }
 
 func (ap *AccountPool) next(ctx context.Context) (Account, error) {
@@ -189,7 +214,14 @@ func (ap *AccountPool) next(ctx context.Context) (Account, error) {
 		return Account{}, err
 	}
 	ap.accounts[ap.currentAccountIndex].funded = true
-	ap.accounts[ap.currentAccountIndex].nonce++
+
+	// Check if the account has a reusable nonce
+	if len(account.reusableNonces) > 0 {
+		account.nonce = ap.accounts[ap.currentAccountIndex].reusableNonces[0]
+		ap.accounts[ap.currentAccountIndex].reusableNonces = ap.accounts[ap.currentAccountIndex].reusableNonces[1:]
+	} else {
+		ap.accounts[ap.currentAccountIndex].nonce++
+	}
 
 	// move current account index to next account
 	ap.currentAccountIndex++

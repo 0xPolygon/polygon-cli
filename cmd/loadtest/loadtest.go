@@ -337,8 +337,8 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return fmt.Errorf("unable to set account pool. %w", err)
 	}
 
-	fundSendingAddressesOnDemand := *inputLoadTestParams.FundSendingAddressesOnDemand
-	if fundSendingAddressesOnDemand {
+	preFundSendingAddresses := *inputLoadTestParams.PreFundSendingAddresses
+	if preFundSendingAddresses {
 		err := accountPool.FundAccounts()
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to fund sending addresses")
@@ -755,15 +755,30 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				if localMode == loadTestModeRandom {
 					localMode = getRandomMode()
 				}
+
+				account, err := accountPool.Next(ctx)
+				if err != nil {
+					log.Error().Err(err).Msg("Unable to get next account from account pool")
+					return
+				}
+				chainID := new(big.Int).SetUint64(*ltp.ChainID)
+				tops, err = bind.NewKeyedTransactorWithChainID(account.privateKey, chainID)
+				if err != nil {
+					log.Error().Err(err).Msg("Unable create transaction signer")
+					return
+				}
+				tops.Nonce = new(big.Int).SetUint64(account.nonce)
+				tops = configureTransactOpts(ctx, c, tops)
+
 				switch localMode {
 				case loadTestModeERC20:
-					startReq, endReq, ltTxHash, tErr = loadTestERC20(ctx, c, myNonceValue, erc20Contract, ltAddr)
+					startReq, endReq, ltTxHash, tErr = loadTestERC20(ctx, c, tops, erc20Contract, ltAddr)
 				case loadTestModeERC721:
-					startReq, endReq, ltTxHash, tErr = loadTestERC721(ctx, c, myNonceValue, erc721Contract, ltAddr)
+					startReq, endReq, ltTxHash, tErr = loadTestERC721(ctx, c, tops, erc721Contract, ltAddr)
 				case loadTestModeBlob:
 					startReq, endReq, ltTxHash, tErr = loadTestBlob(ctx, c, myNonceValue)
 				case loadTestModeContractCall:
-					startReq, endReq, ltTxHash, tErr = loadTestContractCall(ctx, c, myNonceValue)
+					startReq, endReq, ltTxHash, tErr = loadTestContractCall(ctx, c, tops)
 				case loadTestModeDeploy:
 					startReq, endReq, ltTxHash, tErr = loadTestDeploy(ctx, c, myNonceValue)
 				case loadTestModeFunction, loadTestModeCall:
@@ -783,10 +798,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				case loadTestModeStore:
 					startReq, endReq, ltTxHash, tErr = loadTestStore(ctx, c, myNonceValue, ltContract)
 				case loadTestModeTransaction:
-					startReq, endReq, ltTxHash, tErr = loadTestTransaction(ctx, c)
+					startReq, endReq, ltTxHash, tErr = loadTestTransaction(ctx, c, tops)
 				case loadTestModeUniswapV3:
 					swapAmountIn := big.NewInt(int64(*uniswapv3LoadTestParams.SwapAmountInput))
-					startReq, endReq, ltTxHash, tErr = runUniswapV3Loadtest(ctx, c, myNonceValue, uniswapV3Config, poolConfig, swapAmountIn)
+					startReq, endReq, ltTxHash, tErr = runUniswapV3Loadtest(ctx, c, tops, uniswapV3Config, poolConfig, swapAmountIn)
 				default:
 					log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
 				}
@@ -796,6 +811,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					// The nonce is used to index the recalled transactions in call-only mode. We don't want to retry a transaction if it legit failed on the chain
 					if !*ltp.CallOnly {
 						retryForNonce = true
+						accountPool.AddReusableNonce(account.address, account.nonce)
 					}
 					if strings.Contains(tErr.Error(), "replacement transaction underpriced") && retryForNonce {
 						retryForNonce = false
@@ -814,8 +830,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					}
 					if strings.Contains(tErr.Error(), "fee cap less than block base fee") {
 						retryForNonce = true
+						accountPool.AddReusableNonce(account.address, account.nonce)
 					}
-
 				}
 
 				log.Trace().Stringer("txhash", ltTxHash).Uint64("nonce", myNonceValue).Int64("routine", i).Str("mode", localMode.String()).Int64("request", j).Msg("Request")
@@ -927,7 +943,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 	return
 }
 
-func loadTestTransaction(ctx context.Context, c *ethclient.Client) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
@@ -935,59 +951,50 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client) (t1 time.Time
 		to = getRandomAddress()
 	}
 
+	tops.GasLimit = uint64(21000)
+
 	amount := ltp.SendAmount
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 
-	err = accountPool.Run(ctx, func(account Account) error {
-		tops, err := bind.NewKeyedTransactorWithChainID(account.privateKey, chainID)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable create transaction signer")
-			return err
+	var tx *ethtypes.Transaction
+	if *ltp.LegacyTransactionMode {
+		tx = ethtypes.NewTx(&ethtypes.LegacyTx{
+			Nonce:    tops.Nonce.Uint64(),
+			To:       to,
+			Value:    amount,
+			Gas:      tops.GasLimit,
+			GasPrice: tops.GasPrice,
+			Data:     nil,
+		})
+	} else {
+		dynamicFeeTx := &ethtypes.DynamicFeeTx{
+			ChainID:   chainID,
+			Nonce:     tops.Nonce.Uint64(),
+			To:        to,
+			Gas:       tops.GasLimit,
+			GasFeeCap: tops.GasFeeCap,
+			GasTipCap: tops.GasTipCap,
+			Data:      nil,
+			Value:     amount,
 		}
-		tops.GasLimit = uint64(21000)
-		tops = configureTransactOpts(ctx, c, tops)
+		tx = ethtypes.NewTx(dynamicFeeTx)
+	}
 
-		var tx *ethtypes.Transaction
-		if *ltp.LegacyTransactionMode {
-			tx = ethtypes.NewTx(&ethtypes.LegacyTx{
-				Nonce:    account.nonce,
-				To:       to,
-				Value:    amount,
-				Gas:      tops.GasLimit,
-				GasPrice: tops.GasPrice,
-				Data:     nil,
-			})
-		} else {
-			dynamicFeeTx := &ethtypes.DynamicFeeTx{
-				ChainID:   chainID,
-				Nonce:     account.nonce,
-				To:        to,
-				Gas:       tops.GasLimit,
-				GasFeeCap: tops.GasFeeCap,
-				GasTipCap: tops.GasTipCap,
-				Data:      nil,
-				Value:     amount,
-			}
-			tx = ethtypes.NewTx(dynamicFeeTx)
-		}
+	stx, err := tops.Signer(tops.From, tx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to sign transaction")
+		return
+	}
 
-		stx, err := tops.Signer(account.address, tx)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to sign transaction")
-			return err
-		}
+	txHash = stx.Hash()
 
-		txHash = stx.Hash()
-
-		t1 = time.Now()
-		defer func() { t2 = time.Now() }()
-		if *ltp.CallOnly {
-			_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
-		} else {
-			err = c.SendTransaction(ctx, stx)
-		}
-		return err
-	})
+	t1 = time.Now()
+	defer func() { t2 = time.Now() }()
+	if *ltp.CallOnly {
+		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
+	} else {
+		err = c.SendTransaction(ctx, stx)
+	}
 
 	return
 }
@@ -1292,8 +1299,7 @@ func loadTestStore(ctx context.Context, c *ethclient.Client, nonce uint64, ltCon
 	return
 }
 
-func loadTestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20Contract *tokens.ERC20, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
-	var tops *bind.TransactOpts
+func loadTestERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, erc20Contract *tokens.ERC20, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
 	var tx *ethtypes.Transaction
 	ltp := inputLoadTestParams
 
@@ -1302,17 +1308,6 @@ func loadTestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 		to = getRandomAddress()
 	}
 	amount := ltp.SendAmount
-
-	chainID := new(big.Int).SetUint64(*ltp.ChainID)
-	privateKey := ltp.ECDSAPrivateKey
-
-	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable create transaction signer")
-		return
-	}
-	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(ctx, c, tops)
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
@@ -1334,8 +1329,7 @@ func loadTestERC20(ctx context.Context, c *ethclient.Client, nonce uint64, erc20
 	return
 }
 
-func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc721Contract *tokens.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
-	var tops *bind.TransactOpts
+func loadTestERC721(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, erc721Contract *tokens.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
 	var tx *ethtypes.Transaction
 
 	ltp := inputLoadTestParams
@@ -1345,17 +1339,6 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, nonce uint64, erc7
 	if *ltp.ToRandom {
 		to = getRandomAddress()
 	}
-
-	chainID := new(big.Int).SetUint64(*ltp.ChainID)
-	privateKey := ltp.ECDSAPrivateKey
-
-	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable create transaction signer")
-		return
-	}
-	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(ctx, c, tops)
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
@@ -1544,33 +1527,20 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, nonce uint64, ia *Ind
 	return
 }
 
-func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
-	var tops *bind.TransactOpts
+func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
 	var calldata []byte
 	var stx *ethtypes.Transaction
 
 	ltp := inputLoadTestParams
 
 	to := ltp.ContractETHAddress
-
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
-	privateKey := ltp.ECDSAPrivateKey
-
-	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable create transaction signer")
-		return
-	}
-
 	amount := big.NewInt(0)
 	if *ltp.ContractCallPayable {
 		amount = ltp.SendAmount
 	}
 
-	tops = configureTransactOpts(ctx, c, tops)
-
 	var stringCallData string
-
 	if *inputLoadTestParams.ContractCallData == "" && *inputLoadTestParams.ContractCallFunctionSignature == "" {
 		log.Error().Err(fmt.Errorf("Missing calldata for function call"))
 		return
@@ -1612,7 +1582,7 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 	var tx *ethtypes.Transaction
 	if *ltp.LegacyTransactionMode {
 		tx = ethtypes.NewTx(&ethtypes.LegacyTx{
-			Nonce:    nonce,
+			Nonce:    tops.Nonce.Uint64(),
 			To:       to,
 			Value:    amount,
 			Gas:      tops.GasLimit,
@@ -1622,7 +1592,7 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 	} else {
 		tx = ethtypes.NewTx(&ethtypes.DynamicFeeTx{
 			ChainID:   chainID,
-			Nonce:     nonce,
+			Nonce:     tops.Nonce.Uint64(),
 			To:        to,
 			Gas:       tops.GasLimit,
 			GasFeeCap: tops.GasFeeCap,
@@ -1633,7 +1603,7 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, nonce uint64
 	}
 	log.Trace().Interface("tx", tx).Msg("Contract call data")
 
-	stx, err = tops.Signer(*ltp.FromETHAddress, tx)
+	stx, err = tops.Signer(tops.From, tx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
