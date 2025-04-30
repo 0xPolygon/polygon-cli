@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"net/http"
 	"os"
@@ -108,11 +109,11 @@ type BridgeDepositResponse struct {
 }
 
 func readDeposit(cmd *cobra.Command) error {
-	bridgeAddress := getDepositOptions.BridgeAddress
-	rpcUrl := getDepositsAndVerifyBatchesSharedOptions.URL
-	toBlock := getDepositsAndVerifyBatchesSharedOptions.ToBlock
-	fromBlock := getDepositsAndVerifyBatchesSharedOptions.FromBlock
-	filter := getDepositsAndVerifyBatchesSharedOptions.FilterSize
+	bridgeAddress := getSmcOptions.BridgeAddress
+	rpcUrl := getEvent.URL
+	toBlock := getEvent.ToBlock
+	fromBlock := getEvent.FromBlock
+	filter := getEvent.FilterSize
 
 	// Dial the Ethereum RPC server.
 	rpc, err := ethrpc.DialContext(cmd.Context(), rpcUrl)
@@ -164,12 +165,92 @@ func readDeposit(cmd *cobra.Command) error {
 	return nil
 }
 
+func DecodeGlobalIndex(globalIndex *big.Int) (bool, uint32, uint32, error) {
+	const lengthGlobalIndexInBytes = 32
+	var buf [32]byte
+	gIBytes := globalIndex.FillBytes(buf[:])
+	if len(gIBytes) != lengthGlobalIndexInBytes {
+		return false, 0, 0, fmt.Errorf("invalid globaIndex length. Should be 32. Current length: %d", len(gIBytes))
+	}
+	mainnetFlag := big.NewInt(0).SetBytes([]byte{gIBytes[23]}).Uint64() == 1
+	rollupIndex := big.NewInt(0).SetBytes(gIBytes[24:28])
+	localRootIndex := big.NewInt(0).SetBytes(gIBytes[28:32])
+	if rollupIndex.Uint64() > math.MaxUint32 {
+		return false, 0, 0, fmt.Errorf("invalid rollupIndex length. Should be fit into uint32 type")
+	}
+	if localRootIndex.Uint64() > math.MaxUint32 {
+		return false, 0, 0, fmt.Errorf("invalid localRootIndex length. Should be fit into uint32 type")
+	}
+	return mainnetFlag, uint32(rollupIndex.Uint64()), uint32(localRootIndex.Uint64()), nil // nolint:gosec
+}
+
+func readClaim(cmd *cobra.Command) error {
+	bridgeAddress := getSmcOptions.BridgeAddress
+	rpcUrl := getEvent.URL
+	toBlock := getEvent.ToBlock
+	fromBlock := getEvent.FromBlock
+	filter := getEvent.FilterSize
+
+	// Dial the Ethereum RPC server.
+	rpc, err := ethrpc.DialContext(cmd.Context(), rpcUrl)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to Dial RPC")
+		return err
+	}
+	defer rpc.Close()
+	ec := ethclient.NewClient(rpc)
+
+	bridgeV2, err := ulxly.NewUlxly(common.HexToAddress(bridgeAddress), ec)
+	if err != nil {
+		return err
+	}
+	currentBlock := fromBlock
+	for currentBlock < toBlock {
+		endBlock := currentBlock + filter
+		if endBlock > toBlock {
+			endBlock = toBlock
+		}
+
+		opts := bind.FilterOpts{
+			Start:   currentBlock,
+			End:     &endBlock,
+			Context: cmd.Context(),
+		}
+		evtV2Iterator, err := bridgeV2.FilterClaimEvent(&opts)
+		if err != nil {
+			return err
+		}
+
+		for evtV2Iterator.Next() {
+			evt := evtV2Iterator.Event
+			mainnetFlag, rollupIndex, localExitRootIndex, err := DecodeGlobalIndex(evt.GlobalIndex)
+			if err != nil {
+				log.Error().Err(err).Msg("error decoding globalIndex")
+				return err
+			}
+			log.Info().Bool("claim-mainnetFlag", mainnetFlag).Uint32("claim-RollupIndex", rollupIndex).Uint32("claim-LocalExitRootIndex", localExitRootIndex).Uint64("block-number", evt.Raw.BlockNumber).Msg("Found Claim")
+			var jBytes []byte
+			jBytes, err = json.Marshal(evt)
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(jBytes))
+		}
+		err = evtV2Iterator.Close()
+		if err != nil {
+			log.Error().Err(err).Msg("error closing event iterator")
+		}
+		currentBlock = endBlock
+	}
+
+	return nil
+}
 func readVerifyBatches(cmd *cobra.Command) error {
 	rollupManagerAddress := getVerifyBatchesOptions.RollupManagerAddress
-	rpcUrl := getDepositsAndVerifyBatchesSharedOptions.URL
-	toBlock := getDepositsAndVerifyBatchesSharedOptions.ToBlock
-	fromBlock := getDepositsAndVerifyBatchesSharedOptions.FromBlock
-	filter := getDepositsAndVerifyBatchesSharedOptions.FilterSize
+	rpcUrl := getEvent.URL
+	toBlock := getEvent.ToBlock
+	fromBlock := getEvent.FromBlock
+	filter := getEvent.FilterSize
 
 	// Dial the Ethereum RPC server.
 	rpc, err := ethrpc.DialContext(cmd.Context(), rpcUrl)
@@ -1528,6 +1609,9 @@ var rollupsProofUsage string
 //go:embed depositGetUsage.md
 var depositGetUsage string
 
+//go:embed claimGetUsage.md
+var claimGetUsage string
+
 //go:embed verifyBatchesGetUsage.md
 var verifyBatchesGetUsage string
 
@@ -1555,7 +1639,7 @@ var ulxlyBridgeAndClaimCmd = &cobra.Command{
 	},
 }
 
-var ulxlyGetDepositsAndVerifyBatchesCmd = &cobra.Command{
+var ulxlyGetEventsCmd = &cobra.Command{
 	Args:   cobra.NoArgs,
 	Hidden: true,
 }
@@ -1619,14 +1703,15 @@ var (
 	proofCommand             *cobra.Command
 	rollupsProofCommand      *cobra.Command
 	getDepositCommand        *cobra.Command
+	getClaimCommand          *cobra.Command
 	getVerifyBatchesCommand  *cobra.Command
 
-	getDepositsAndVerifyBatchesSharedOptions = &GetDepositsAndVerifyBatchesSharedOptions{}
-	getDepositOptions                        = &GetDepositOptions{}
-	getVerifyBatchesOptions                  = &GetVerifyBatchesOptions{}
-	proofsSharedOptions                      = &ProofsSharedOptions{}
-	proofOptions                             = &ProofOptions{}
-	rollupsProofOptions                      = &RollupsProofOptions{}
+	getEvent                = &GetEvent{}
+	getSmcOptions           = &GetSmcOptions{}
+	getVerifyBatchesOptions = &GetVerifyBatchesOptions{}
+	proofsSharedOptions     = &ProofsSharedOptions{}
+	proofOptions            = &ProofOptions{}
+	rollupsProofOptions     = &RollupsProofOptions{}
 )
 
 const (
@@ -1734,12 +1819,12 @@ func (o *RollupsProofOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVarP(&o.CompleteMerkleTree, ArgCompleteMT, "", false, "Allows to get the proof for a leave higher than the highest rollupID")
 }
 
-type GetDepositsAndVerifyBatchesSharedOptions struct {
+type GetEvent struct {
 	URL                            string
 	FromBlock, ToBlock, FilterSize uint64
 }
 
-func (o *GetDepositsAndVerifyBatchesSharedOptions) AddFlags(cmd *cobra.Command) {
+func (o *GetEvent) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.URL, ArgRPCURL, "u", "", "The RPC URL to read the events data")
 	cmd.Flags().Uint64VarP(&o.FromBlock, ArgFromBlock, "f", 0, "The start of the range of blocks to retrieve")
 	cmd.Flags().Uint64VarP(&o.ToBlock, ArgToBlock, "t", 0, "The end of the range of blocks to retrieve")
@@ -1749,11 +1834,11 @@ func (o *GetDepositsAndVerifyBatchesSharedOptions) AddFlags(cmd *cobra.Command) 
 	fatalIfError(cmd.MarkFlagRequired(ArgRPCURL))
 }
 
-type GetDepositOptions struct {
+type GetSmcOptions struct {
 	BridgeAddress string
 }
 
-func (o *GetDepositOptions) AddFlags(cmd *cobra.Command) {
+func (o *GetSmcOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.BridgeAddress, ArgBridgeAddress, "a", "", "The address of the ulxly bridge")
 }
 
@@ -1885,10 +1970,24 @@ or if it's actually an intermediate hash.`,
 		},
 		SilenceUsage: true,
 	}
-	getDepositsAndVerifyBatchesSharedOptions.AddFlags(getDepositCommand)
-	getDepositOptions.AddFlags(getDepositCommand)
-	ulxlyGetDepositsAndVerifyBatchesCmd.AddCommand(getDepositCommand)
+	getEvent.AddFlags(getDepositCommand)
+	getSmcOptions.AddFlags(getDepositCommand)
+	ulxlyGetEventsCmd.AddCommand(getDepositCommand)
 	ULxLyCmd.AddCommand(getDepositCommand)
+
+	getClaimCommand = &cobra.Command{
+		Use:   "get-claims",
+		Short: "Generate ndjson for each bridge claim over a particular range of blocks",
+		Long:  claimGetUsage,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return readClaim(cmd)
+		},
+		SilenceUsage: true,
+	}
+	getEvent.AddFlags(getClaimCommand)
+	getSmcOptions.AddFlags(getClaimCommand)
+	ulxlyGetEventsCmd.AddCommand(getClaimCommand)
+	ULxLyCmd.AddCommand(getClaimCommand)
 
 	getVerifyBatchesCommand = &cobra.Command{
 		Use:   "get-verify-batches",
@@ -1899,9 +1998,9 @@ or if it's actually an intermediate hash.`,
 		},
 		SilenceUsage: true,
 	}
-	getDepositsAndVerifyBatchesSharedOptions.AddFlags(getVerifyBatchesCommand)
+	getEvent.AddFlags(getVerifyBatchesCommand)
 	getVerifyBatchesOptions.AddFlags(getVerifyBatchesCommand)
-	ulxlyGetDepositsAndVerifyBatchesCmd.AddCommand(getVerifyBatchesCommand)
+	ulxlyGetEventsCmd.AddCommand(getVerifyBatchesCommand)
 	ULxLyCmd.AddCommand(getVerifyBatchesCommand)
 
 	// Arguments for both bridge and claim
@@ -1945,7 +2044,7 @@ or if it's actually an intermediate hash.`,
 
 	// Top Level
 	ULxLyCmd.AddCommand(ulxlyBridgeAndClaimCmd)
-	ULxLyCmd.AddCommand(ulxlyGetDepositsAndVerifyBatchesCmd)
+	ULxLyCmd.AddCommand(ulxlyGetEventsCmd)
 	ULxLyCmd.AddCommand(ulxlyProofsCmd)
 	ULxLyCmd.AddCommand(emptyProofCommand)
 	ULxLyCmd.AddCommand(zeroProofCommand)
