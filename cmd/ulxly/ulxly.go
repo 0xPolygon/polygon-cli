@@ -223,7 +223,11 @@ func readClaim(cmd *cobra.Command) error {
 
 		for evtV2Iterator.Next() {
 			evt := evtV2Iterator.Event
-			mainnetFlag, rollupIndex, localExitRootIndex, err := DecodeGlobalIndex(evt.GlobalIndex)
+			var (
+				mainnetFlag                     bool
+				rollupIndex, localExitRootIndex uint32
+			)
+			mainnetFlag, rollupIndex, localExitRootIndex, err = DecodeGlobalIndex(evt.GlobalIndex)
 			if err != nil {
 				log.Error().Err(err).Msg("error decoding globalIndex")
 				return err
