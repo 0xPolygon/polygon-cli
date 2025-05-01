@@ -361,6 +361,7 @@ func bridgeAsset(cmd *cobra.Command) error {
 		return err
 	}
 	defer client.Close()
+
 	// Initialize and assign variables required to send transaction payload
 	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
@@ -1113,6 +1114,18 @@ func readDeposits(rawDeposits []byte, depositNumber uint32) error {
 	return nil
 }
 
+func ensureCodePresent(ctx context.Context, client *ethclient.Client, address string) error {
+	code, err := client.CodeAt(ctx, common.HexToAddress(address), nil)
+	if err != nil {
+		log.Error().Err(err).Str("address", address).Msg("error getting code at address")
+		return err
+	}
+	if len(code) == 0 {
+		return fmt.Errorf("address %s has no code", address)
+	}
+	return nil
+}
+
 // String will create the json representation of the proof
 func String[T any](p T) string {
 	jsonBytes, err := json.Marshal(p)
@@ -1308,6 +1321,13 @@ func generateEmptyHashes(height uint8) []common.Hash {
 }
 
 func generateTransactionPayload(ctx context.Context, client *ethclient.Client, ulxlyInputArgBridge string, ulxlyInputArgPvtKey string, ulxlyInputArgGasLimit uint64, ulxlyInputArgDestAddr string, ulxlyInputArgChainID string) (bridgeV2 *ulxly.Ulxly, toAddress common.Address, opts *bind.TransactOpts, err error) {
+	// checks if bridge address has code
+	err = ensureCodePresent(ctx, client, ulxlyInputArgBridge)
+	if err != nil {
+		err = fmt.Errorf("bridge code check err: %w", err)
+		return
+	}
+
 	ulxlyInputArgPvtKey = strings.TrimPrefix(ulxlyInputArgPvtKey, "0x")
 	bridgeV2, err = ulxly.NewUlxly(common.HexToAddress(ulxlyInputArgBridge), client)
 	if err != nil {
