@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog/log"
@@ -161,19 +160,75 @@ func (ap *AccountPool) AddReusableNonce(address common.Address, nonce uint64) er
 	return nil
 }
 
-func (ap *AccountPool) FundAccounts() error {
+func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
 
+	wg := sync.WaitGroup{}
+	wg.Add(len(ap.accounts))
+
+	txCh := make(chan *types.Transaction, len(ap.accounts))
+	errCh := make(chan error, len(ap.accounts))
+
+	tops, err := bind.NewKeyedTransactorWithChainID(ap.fundingPrivateKey, ap.chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return err
+	}
+
+	nonce, err := ap.client.PendingNonceAt(ctx, tops.From)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get nonce")
+	}
+
 	for i := range ap.accounts {
-		account := ap.accounts[i]
-		if !account.funded {
-			err := ap.fundAccountIfNeeded(context.Background(), account)
+		accountToFund := ap.accounts[i]
+		go func(forcedNonce uint64, account Account) {
+			defer wg.Done()
+			if !account.funded {
+				tx, err := ap.fundAccountIfNeeded(ctx, account, &forcedNonce, false)
+				if err != nil {
+					errCh <- fmt.Errorf("failed to fund account: %w", err)
+				}
+				if tx != nil {
+					txCh <- tx
+				}
+			}
+		}(nonce, accountToFund)
+		nonce++
+	}
+
+	wg.Wait()
+
+	close(errCh)
+	close(txCh)
+
+	for err := range errCh {
+		if err != nil {
+			return err
+		}
+	}
+
+	for tx := range txCh {
+		if tx != nil {
+			log.Debug().
+				Str("address", tx.To().Hex()).
+				Str("txHash", tx.Hash().Hex()).
+				Msg("transaction to fund account sent")
+
+			_, err := ap.waitMined(ctx, tx)
 			if err != nil {
-				return fmt.Errorf("failed to fund account: %w", err)
+				log.Error().
+					Str("address", tx.To().Hex()).
+					Str("txHash", tx.Hash().Hex()).
+					Msgf("transaction to fund account failed")
+				return err
 			}
 		}
 	}
+
+	log.Debug().
+		Msg("All accounts funded")
 
 	return nil
 }
@@ -209,7 +264,7 @@ func (ap *AccountPool) next(ctx context.Context) (Account, error) {
 	}
 	account := ap.accounts[ap.currentAccountIndex]
 
-	err := ap.fundAccountIfNeeded(ctx, account)
+	_, err := ap.fundAccountIfNeeded(ctx, account, nil, true)
 	if err != nil {
 		return Account{}, err
 	}
@@ -232,20 +287,20 @@ func (ap *AccountPool) next(ctx context.Context) (Account, error) {
 	return account, nil
 }
 
-func (ap *AccountPool) fundAccountIfNeeded(ctx context.Context, account Account) error {
+func (ap *AccountPool) fundAccountIfNeeded(ctx context.Context, account Account, forcedNonce *uint64, waitToFund bool) (*types.Transaction, error) {
 	// if account is funded, return it
 	if account.funded {
-		return nil
+		return nil, nil
 	}
 
 	// Check if the account must be funded
-	balance, err := ap.client.BalanceAt(context.Background(), account.address, nil)
+	balance, err := ap.client.BalanceAt(ctx, account.address, nil)
 	if err != nil {
-		return fmt.Errorf("failed to check account balance: %w", err)
+		return nil, fmt.Errorf("failed to check account balance: %w", err)
 	}
 	// if account has enough balance
 	if balance.Cmp(ap.fundingAmount) >= 0 {
-		return nil
+		return nil, nil
 	}
 
 	// Fund the account
@@ -253,24 +308,25 @@ func (ap *AccountPool) fundAccountIfNeeded(ctx context.Context, account Account)
 		Str("address", account.address.Hex()).
 		Str("balance", balance.String()).
 		Msg("account needs to be funded")
-	_, err = ap.fund(ctx, account, true)
+	tx, err := ap.fund(ctx, account, forcedNonce, waitToFund)
 	if err != nil {
-		return fmt.Errorf("failed to fund account: %w", err)
+		return nil, fmt.Errorf("failed to fund account: %w", err)
 	}
 
-	balance, err = ap.client.BalanceAt(context.Background(), account.address, nil)
-	if err != nil {
-		return fmt.Errorf("failed to check account balance: %w", err)
+	if waitToFund {
+		balance, err = ap.client.BalanceAt(ctx, account.address, nil)
+		if err != nil {
+			return tx, fmt.Errorf("failed to check account balance: %w", err)
+		}
+		log.Debug().
+			Str("address", account.address.Hex()).
+			Str("balance", balance.String()).
+			Msg("account funded")
 	}
-	log.Debug().
-		Str("address", account.address.Hex()).
-		Str("balance", balance.String()).
-		Msg("account funded")
-
-	return nil
+	return tx, nil
 }
 
-func (ap *AccountPool) fund(ctx context.Context, acc Account, waitToFund bool) (*types.Transaction, error) {
+func (ap *AccountPool) fund(ctx context.Context, acc Account, forcedNonce *uint64, waitToFund bool) (*types.Transaction, error) {
 	// Fund the account
 	ltp := inputLoadTestParams
 
@@ -282,14 +338,20 @@ func (ap *AccountPool) fund(ctx context.Context, acc Account, waitToFund bool) (
 	tops.GasLimit = uint64(21000)
 	tops = configureTransactOpts(ctx, ap.client, tops)
 
-	nonce, err := ap.client.PendingNonceAt(ctx, tops.From)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get nonce")
+	var nonce uint64
+
+	if forcedNonce != nil {
+		nonce = *forcedNonce
+	} else {
+		nonce, err = ap.client.PendingNonceAt(ctx, tops.From)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to get nonce")
+		}
 	}
 
-	var tx *ethtypes.Transaction
+	var tx *types.Transaction
 	if *ltp.LegacyTransactionMode {
-		tx = ethtypes.NewTx(&ethtypes.LegacyTx{
+		tx = types.NewTx(&types.LegacyTx{
 			Nonce:    nonce,
 			To:       &acc.address,
 			Value:    ap.fundingAmount,
@@ -298,7 +360,7 @@ func (ap *AccountPool) fund(ctx context.Context, acc Account, waitToFund bool) (
 			Data:     nil,
 		})
 	} else {
-		dynamicFeeTx := &ethtypes.DynamicFeeTx{
+		dynamicFeeTx := &types.DynamicFeeTx{
 			ChainID:   ap.chainID,
 			Nonce:     nonce,
 			To:        &acc.address,
@@ -308,7 +370,7 @@ func (ap *AccountPool) fund(ctx context.Context, acc Account, waitToFund bool) (
 			Data:      nil,
 			Value:     ap.fundingAmount,
 		}
-		tx = ethtypes.NewTx(dynamicFeeTx)
+		tx = types.NewTx(dynamicFeeTx)
 	}
 
 	signedTx, err := tops.Signer(*ltp.FromETHAddress, tx)
@@ -333,9 +395,17 @@ func (ap *AccountPool) fund(ctx context.Context, acc Account, waitToFund bool) (
 		if err != nil {
 			log.Error().
 				Str("address", acc.address.Hex()).
-				Str("txHash", receipt.TxHash.Hex()).
-				Msgf("transaction to fund account failed")
+				Str("txHash", signedTx.Hash().Hex()).
+				Msgf("failed to wait for transaction to be mined")
 			return nil, err
+		}
+
+		if receipt.Status != types.ReceiptStatusSuccessful {
+			log.Error().
+				Str("address", acc.address.Hex()).
+				Str("txHash", receipt.TxHash.Hex()).
+				Msgf("failed to wait for transaction to be mined")
+			return nil, fmt.Errorf("transaction failed")
 		}
 	}
 
@@ -352,9 +422,6 @@ func (ap *AccountPool) waitMined(ctx context.Context, tx *types.Transaction) (*t
 			Err(err).
 			Msg("Unable to wait for transaction to be mined")
 		return nil, err
-	}
-	if receipt.Status != ethtypes.ReceiptStatusSuccessful {
-		return nil, fmt.Errorf("transaction failed")
 	}
 	return receipt, nil
 }

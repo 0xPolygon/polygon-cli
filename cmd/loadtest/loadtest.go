@@ -339,7 +339,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	preFundSendingAddresses := *inputLoadTestParams.PreFundSendingAddresses
 	if preFundSendingAddresses {
-		err := accountPool.FundAccounts()
+		err := accountPool.FundAccounts(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to fund sending addresses")
 			return fmt.Errorf("unable to fund sending addresses. %w", err)
