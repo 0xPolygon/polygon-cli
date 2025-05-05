@@ -1,6 +1,7 @@
 package ulxly
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -62,126 +63,69 @@ func (n *NullifierKey) ToBits() []bool {
 	return bits
 }
 
-var (
+type Tree struct {
 	zeroHashes []common.Hash
-	siblings   []common.Hash
-)
-
+	depth      uint8
+	Tree       map[common.Hash]Node
+}
 type Balancer struct {
-	zeroHashes []common.Hash
-	siblings   []common.Hash
-	depth      int
+	tree     Tree
+	lastRoot common.Hash
 }
 
 func NewBalanceTree() (*Balancer, error) {
 	var depth uint8 = 192
-	zeroHashes = generateZeroHashes(depth)
-	var err error
-	siblings, err = initSiblings(depth)
-	if err != nil {
-		return nil, err
-	}
+	zeroHashes := generateZeroHashes(depth)
+	initRoot := crypto.Keccak256Hash(zeroHashes[depth-1].Bytes(), zeroHashes[depth-1].Bytes())
+	fmt.Println("Initial Root: ", initRoot.String())
 	return &Balancer{
-		zeroHashes: zeroHashes,
-		siblings:   siblings,
-		depth:      int(depth),
+		tree: Tree{
+			zeroHashes: zeroHashes,
+			depth:      depth,
+			Tree:       make(map[common.Hash]Node),
+		},
+		lastRoot: initRoot,
 	}, nil
 }
 
 func (b *Balancer) UpdateBalanceTree(token TokenInfo, leaf *big.Int) (common.Hash, error) {
 	key := token.ToBits()
-	return b.updateSMT(key, FromU256(leaf))
-}
-
-func (p *Balancer) updateSMT(
-	key []bool,
-	newValue common.Hash,
-) (common.Hash, error) {
-	if len(key) != p.depth || len(p.siblings) != p.depth {
-		return common.Hash{}, nil
+	newRoot, err := b.tree.insertHelper(b.lastRoot, 0, key, FromU256(leaf), true)
+	if err != nil {
+		return common.Hash{}, err
 	}
-	hash := newValue
-	for i := 0; i < p.depth; i++ {
-		index := p.depth - i - 1
-		sibling := p.siblings[i]
-		if key[index] {
-			hash = crypto.Keccak256Hash(sibling.Bytes(), hash.Bytes())
-		} else {
-			hash = crypto.Keccak256Hash(hash.Bytes(), sibling.Bytes())
-		}
-	}
-
-	return hash, nil
+	b.lastRoot = newRoot
+	return newRoot, nil
 }
 
 type Nullifier struct {
-	zeroHashes []common.Hash
-	siblings   []common.Hash
-	depth      uint8
+	tree     Tree
+	lastRoot common.Hash
 }
 
 func NewNullifierTree() (*Nullifier, error) {
 	var depth uint8 = 64
-	zeroHashes = generateZeroHashes(depth)
-	var err error
-	siblings, err = initSiblings(depth)
-	if err != nil {
-		return nil, err
-	}
+	zeroHashes := generateZeroHashes(depth)
+	initRoot := crypto.Keccak256Hash(zeroHashes[depth-1].Bytes(), zeroHashes[depth-1].Bytes())
+	fmt.Println("Initial Root: ", initRoot.String())
 	return &Nullifier{
-		zeroHashes: zeroHashes,
-		siblings:   siblings,
-		depth:      depth,
+		tree: Tree{
+			zeroHashes: zeroHashes,
+			depth:      depth,
+			Tree:       make(map[common.Hash]Node),
+		},
+		lastRoot: initRoot,
 	}, nil
 }
 
-func (n *Nullifier) UpdateNullifierTree(nullifier NullifierKey) common.Hash {
+func (n *Nullifier) UpdateNullifierTree(nullifier NullifierKey) (common.Hash, error) {
 	key := nullifier.ToBits()
-	return updateSMTree(key, FromBool(true), n.depth)
-}
-
-// updateSMTree returns the updated root
-func updateSMTree(
-	key []bool,
-	newValue common.Hash,
-	depth uint8,
-) common.Hash {
-	entry := newValue
-	// First loop: From sibling length up to depth. It "fills in" the tree from the leaf up to the first real sibling.
-	for i := int(depth) - 1; i >= len(siblings); i-- {
-		sibling := zeroHashes[int(depth)-i-1]
-		if key[i] {
-			entry = crypto.Keccak256Hash(sibling.Bytes(), entry[:])
-		} else {
-			entry = crypto.Keccak256Hash(entry[:], sibling.Bytes())
-		}
+	newRoot, err := n.tree.insertHelper(n.lastRoot, 0, key, FromBool(true), false)
+	if err != nil {
+		return common.Hash{}, err
 	}
-
-	// Second loop: For provided siblings. This is the classic proof verification and root recomputation step
-	for i := len(siblings) - 1; i >= 0; i-- {
-		sibling := siblings[i]
-		if key[i] {
-			entry = crypto.Keccak256Hash(sibling.Bytes(), entry[:])
-		} else {
-			entry = crypto.Keccak256Hash(entry[:], sibling.Bytes())
-		}
-	}
-
-	return entry
-}
-
-// initSiblings returns the siblings of the node at the given index.
-// it is used to initialize the siblings array in the beginning.
-func initSiblings(height uint8) ([]common.Hash, error) {
-	var (
-		left     common.Hash
-		siblings []common.Hash
-	)
-	for h := 0; h < int(height); h++ {
-		copy(left[:], zeroHashes[h][:])
-		siblings = append(siblings, left)
-	}
-	return siblings, nil
+	n.lastRoot = newRoot
+	return newRoot, nil
 }
 
 func FromU256(u *big.Int) common.Hash {
@@ -197,7 +141,63 @@ func FromU256(u *big.Int) common.Hash {
 func FromBool(b bool) common.Hash {
 	var out [32]byte
 	if b {
-		out[31] = 1 // Set the last byte to 1 (little-end)
+		out[0] = 1
 	}
 	return out
+}
+
+type Node struct {
+	Left  common.Hash
+	Right common.Hash
+}
+
+func (t *Tree) insertHelper(
+	hash common.Hash,
+	depth uint8,
+	bits []bool,
+	value common.Hash,
+	update bool,
+) (common.Hash, error) {
+	if depth > t.depth {
+		return common.Hash{}, fmt.Errorf("depth exceeds maximum")
+	}
+	if depth == t.depth {
+		if !update && hash != t.zeroHashes[0] {
+			return common.Hash{}, fmt.Errorf("key already exists")
+		}
+		return value, nil
+	}
+
+	// Get node at this hash or initialize a default one
+	node, ok := t.Tree[hash]
+	if !ok {
+		defaultChild := t.zeroHashes[t.depth-depth-1]
+		node = Node{
+			Left:  defaultChild,
+			Right: defaultChild,
+		}
+	}
+
+	// Recurse to update or insert value
+	var childHash common.Hash
+	var err error
+	if bits[depth] {
+		childHash, err = t.insertHelper(node.Right, depth+1, bits, value, update)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		node.Right = childHash
+	} else {
+		childHash, err = t.insertHelper(node.Left, depth+1, bits, value, update)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		node.Left = childHash
+	}
+
+	// Compute hash of updated node and store
+	newHash := crypto.Keccak256Hash(node.Left.Bytes(), node.Right.Bytes())
+	t.Tree[newHash] = node
+
+	return newHash, nil
 }
