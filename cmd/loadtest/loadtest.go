@@ -231,7 +231,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	toAddr := ethcommon.HexToAddress(*inputLoadTestParams.ToAddress)
 
-	amt := util.EthToWei(*inputLoadTestParams.EthAmountInWei)
+	amt := new(big.Int).SetUint64(*inputLoadTestParams.EthAmountInWei)
 
 	header, err := c.HeaderByNumber(ctx, nil)
 	if err != nil {
@@ -338,7 +338,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 
 	preFundSendingAddresses := *inputLoadTestParams.PreFundSendingAddresses
-	if preFundSendingAddresses {
+	if preFundSendingAddresses && *inputLoadTestParams.AddressFundingAmount > 0 {
 		err := accountPool.FundAccounts(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to fund sending addresses")

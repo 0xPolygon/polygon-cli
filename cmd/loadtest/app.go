@@ -48,7 +48,7 @@ type (
 		ChainID                       *uint64
 		PrivateKey                    *string
 		ToAddress                     *string
-		EthAmountInWei                *float64
+		EthAmountInWei                *uint64
 		RateLimit                     *float64
 		AdaptiveRateLimit             *bool
 		SteadyStateTxPoolSize         *uint64
@@ -225,7 +225,7 @@ func initFlags() {
 	ltp.ToRandom = LoadtestCmd.PersistentFlags().Bool("to-random", false, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
 	ltp.CallOnly = LoadtestCmd.PersistentFlags().Bool("call-only", false, "When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.")
 	ltp.CallOnlyLatestBlock = LoadtestCmd.PersistentFlags().Bool("call-only-latest", false, "When using call only mode with recall, should we execute on the latest block or on the original block")
-	ltp.EthAmountInWei = LoadtestCmd.PersistentFlags().Float64("eth-amount", 0, "The amount of ether to send on every transaction")
+	ltp.EthAmountInWei = LoadtestCmd.PersistentFlags().Uint64("eth-amount", 0, "The amount of ether in wei to send on every transaction")
 	ltp.RateLimit = LoadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
 	ltp.AdaptiveRateLimit = LoadtestCmd.PersistentFlags().Bool("adaptive-rate-limit", false, "Enable AIMD-style congestion control to automatically adjust request rate")
 	ltp.SteadyStateTxPoolSize = LoadtestCmd.PersistentFlags().Uint64("steady-state-tx-pool-size", 1000, "When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off.")
