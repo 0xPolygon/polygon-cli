@@ -9,6 +9,7 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly"
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly/testvectors"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -39,6 +40,44 @@ func TestBalanceTree(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, transition.NewRoot, root)
 	}
+}
+
+func TestBalanceTree2(t *testing.T) {
+	balancer, err := ulxly.NewBalanceTree()
+	require.NoError(t, err)
+
+	token := ulxly.TokenInfo{
+		OriginNetwork:      big.NewInt(0),
+		OriginTokenAddress: common.HexToAddress("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"),
+	}
+	totalTokenBalance, ok := big.NewInt(0).SetString("100000000000000000000", 0)
+	require.Equal(t, true, ok)
+
+	root, err := balancer.UpdateBalanceTree(token, totalTokenBalance)
+	require.NoError(t, err)
+
+	token2 := ulxly.TokenInfo{
+		OriginNetwork:      big.NewInt(0),
+		OriginTokenAddress: common.HexToAddress("0xa23fd6e51aad88f6f4ce6ab8827279cfffb92300"),
+	}
+	totalToken2Balance, ok := big.NewInt(0).SetString("10000000000000000000", 0)
+	require.Equal(t, true, ok)
+	root2, err := balancer.UpdateBalanceTree(token2, totalToken2Balance)
+	require.NoError(t, err)
+
+	totalToken2Balance = big.NewInt(0)
+	root3, err := balancer.UpdateBalanceTree(token2, totalToken2Balance)
+	require.NoError(t, err)
+
+	totalToken2Balance = big.NewInt(0)
+	root4, err := balancer.UpdateBalanceTree(token, totalToken2Balance)
+	require.NoError(t, err)
+
+	t.Log("balancer root: ", root.String())
+	t.Log("balancer root2: ", root2.String())
+	t.Log("balancer root3: ", root3.String())
+	t.Log("balancer root4: ", root4.String())
+	assert.Equal(t, "0xb89931f7384aeddb5c136a679d54464007e2d828d4741bec626ff92aeb4b12d4", root4.String())
 }
 
 func TestNullifierTree(t *testing.T) {
