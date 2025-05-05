@@ -317,6 +317,83 @@ func proof(args []string) error {
 	return readDeposits(rawDepositData, uint32(depositNumber))
 }
 
+func balanceTree() error {
+	destNetwork := balanceTreeOptions.DestNetwork
+	l1RawDepositsData, l2RawDepositsData, err := getBalanceTreeData()
+	if err != nil {
+		return err
+	}
+	return computeBalanceTree(l1RawDepositsData, destNetwork, l2RawDepositsData)
+}
+
+func computeBalanceTree(l1RawDeposits []byte, destNetwork uint32, l2RawDeposits []byte) error {
+	l1Buf := bytes.NewBuffer(l1RawDeposits)
+	l1Scanner := bufio.NewScanner(l1Buf)
+	l1ScannerBuf := make([]byte, 0)
+	l1Scanner.Buffer(l1ScannerBuf, 1024*1024)
+	bTree, err := NewBalanceTree()
+	if err != nil {
+		return err
+	}
+	balances := make(map[TokenInfo]*big.Int)
+	for l1Scanner.Scan() {
+		l1Deposit := new(ulxly.UlxlyBridgeEvent)
+		err := json.Unmarshal(l1Scanner.Bytes(), l1Deposit)
+		if err != nil {
+			return err
+		}
+		if l1Deposit.DestinationNetwork != destNetwork {
+			continue
+		}
+		token := TokenInfo{
+			OriginNetwork:      big.NewInt(0).SetUint64(uint64(l1Deposit.OriginNetwork)),
+			OriginTokenAddress: l1Deposit.OriginAddress,
+		}
+		if _, ok := balances[token]; !ok {
+			balances[token] = big.NewInt(0)
+		}
+		balances[token] = big.NewInt(0).Add(balances[token], l1Deposit.Amount)
+
+	}
+	l2Buf := bytes.NewBuffer(l2RawDeposits)
+	l2Scanner := bufio.NewScanner(l2Buf)
+	l2ScannerBuf := make([]byte, 0)
+	l2Scanner.Buffer(l2ScannerBuf, 1024*1024)
+	for l2Scanner.Scan() {
+		l2Deposit := new(ulxly.UlxlyBridgeEvent)
+		err := json.Unmarshal(l2Scanner.Bytes(), l2Deposit)
+		if err != nil {
+			return err
+		}
+		token := TokenInfo{
+			OriginNetwork:      big.NewInt(0).SetUint64(uint64(l2Deposit.OriginNetwork)),
+			OriginTokenAddress: l2Deposit.OriginAddress,
+		}
+		if _, ok := balances[token]; !ok {
+			balances[token] = big.NewInt(0)
+		}
+		balances[token] = big.NewInt(0).Sub(balances[token], l2Deposit.Amount)
+	}
+	// Now, the balance map is complete. Let's build the tree.
+	var root common.Hash
+	for token, balance := range balances {
+		if balance.Cmp(big.NewInt(0)) == 0 {
+			continue
+		}
+		root, err = bTree.UpdateBalanceTree(token, balance)
+		if err != nil {
+			return err
+		}
+		log.Info().Msgf("New balanceTree leaf. Token: %s, Balance: %s, Root: %s", token.OriginTokenAddress.String(), balance.String(), root.String())
+	}
+	log.Info().Msgf("Final balanceTree root: %s", root.String())
+	fmt.Printf(`
+	{
+		"root": %s
+	}`, root.String())
+	return nil
+}
+
 func rollupsExitRootProof(args []string) error {
 	rollupID := rollupsProofOptions.RollupID
 	completeMT := rollupsProofOptions.CompleteMerkleTree
@@ -1002,7 +1079,7 @@ func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *type
 }
 
 func getInputData(args []string) ([]byte, error) {
-	fileName := proofsSharedOptions.FileName
+	fileName := fileOptions.FileName
 	if fileName != "" {
 		return os.ReadFile(fileName)
 	}
@@ -1013,6 +1090,35 @@ func getInputData(args []string) ([]byte, error) {
 	}
 
 	return io.ReadAll(os.Stdin)
+}
+
+func getBalanceTreeData() ([]byte, []byte, error) {
+	l1FileName := balanceTreeOptions.L1DepositsFile
+	file, err := os.Open(l1FileName)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer file.Close() // Ensure the file is closed after reading
+
+	// Read the entire file content
+	l1Deposits, err := io.ReadAll(file)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	l2FileName := balanceTreeOptions.L1DepositsFile
+	file2, err := os.Open(l2FileName)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer file2.Close() // Ensure the file is closed after reading
+
+	// Read the entire file content
+	l2Deposits, err := io.ReadAll(file2)
+	if err != nil {
+		return nil, nil, err
+	}
+	return l1Deposits, l2Deposits, nil
 }
 
 func readRollupsExitRootLeaves(rawLeaves []byte, rollupID uint32, completeMT bool) error {
@@ -1610,6 +1716,9 @@ var proofUsage string
 //go:embed rollupsProofUsage.md
 var rollupsProofUsage string
 
+//go:embed balanceTreeUsage.md
+var balanceTreeUsage string
+
 //go:embed depositGetUsage.md
 var depositGetUsage string
 
@@ -1648,7 +1757,7 @@ var ulxlyGetEventsCmd = &cobra.Command{
 	Hidden: true,
 }
 
-var ulxlyProofsCmd = &cobra.Command{
+var ulxlyComputeTreeCmd = &cobra.Command{
 	Args:   cobra.NoArgs,
 	Hidden: true,
 }
@@ -1706,6 +1815,7 @@ var (
 	zeroProofCommand         *cobra.Command
 	proofCommand             *cobra.Command
 	rollupsProofCommand      *cobra.Command
+	balanceTreeCommand       *cobra.Command
 	getDepositCommand        *cobra.Command
 	getClaimCommand          *cobra.Command
 	getVerifyBatchesCommand  *cobra.Command
@@ -1713,7 +1823,8 @@ var (
 	getEvent                = &GetEvent{}
 	getSmcOptions           = &GetSmcOptions{}
 	getVerifyBatchesOptions = &GetVerifyBatchesOptions{}
-	proofsSharedOptions     = &ProofsSharedOptions{}
+	fileOptions             = &FileOptions{}
+	balanceTreeOptions      = &BalanceTreeOptions{}
 	proofOptions            = &ProofOptions{}
 	rollupsProofOptions     = &RollupsProofOptions{}
 )
@@ -1738,6 +1849,8 @@ const (
 	ArgCompleteMT           = "complete-merkle-tree"
 	ArgBridgeServiceURL     = "bridge-service-url"
 	ArgFileName             = "file-name"
+	ArgL1DepositFileName    = "l1-deposits-file"
+	ArgL2DepositFileName    = "l2-deposits-file"
 	ArgFromBlock            = "from-block"
 	ArgToBlock              = "to-block"
 	ArgFilterSize           = "filter-size"
@@ -1797,12 +1910,23 @@ func fatalIfError(err error) {
 	log.Fatal().Err(err).Msg("Unexpected error occurred")
 }
 
-type ProofsSharedOptions struct {
+type FileOptions struct {
 	FileName string
 }
 
-func (o *ProofsSharedOptions) AddFlags(cmd *cobra.Command) {
+func (o *FileOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.FileName, ArgFileName, "", "", "An ndjson file with events data")
+}
+
+type BalanceTreeOptions struct {
+	L1DepositsFile, L2DepositsFile string
+	DestNetwork                    uint32
+}
+
+func (o *BalanceTreeOptions) AddFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVarP(&o.L1DepositsFile, ArgL1DepositFileName, "", "", "An ndjson file with l1 deposit events data")
+	cmd.Flags().StringVarP(&o.L2DepositsFile, ArgL2DepositFileName, "", "", "An ndjson file with l2 deposit events data")
+	cmd.Flags().Uint32VarP(&o.DestNetwork, ArgDestNetwork, "", 0, "The destination network ID")
 }
 
 type ProofOptions struct {
@@ -1946,9 +2070,9 @@ or if it's actually an intermediate hash.`,
 		},
 		SilenceUsage: true,
 	}
-	proofsSharedOptions.AddFlags(proofCommand)
+	fileOptions.AddFlags(proofCommand)
 	proofOptions.AddFlags(proofCommand)
-	ulxlyProofsCmd.AddCommand(proofCommand)
+	ulxlyComputeTreeCmd.AddCommand(proofCommand)
 	ULxLyCmd.AddCommand(proofCommand)
 
 	rollupsProofCommand = &cobra.Command{
@@ -1960,10 +2084,23 @@ or if it's actually an intermediate hash.`,
 		},
 		SilenceUsage: true,
 	}
-	proofsSharedOptions.AddFlags(rollupsProofCommand)
+	fileOptions.AddFlags(rollupsProofCommand)
 	rollupsProofOptions.AddFlags(rollupsProofCommand)
-	ulxlyProofsCmd.AddCommand(rollupsProofCommand)
+	ulxlyComputeTreeCmd.AddCommand(rollupsProofCommand)
 	ULxLyCmd.AddCommand(rollupsProofCommand)
+
+	balanceTreeCommand = &cobra.Command{
+		Use:   "compute-balance-tree",
+		Short: "Compute the balance tree for a given range of deposits",
+		Long:  balanceTreeUsage,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return balanceTree()
+		},
+		SilenceUsage: true,
+	}
+	balanceTreeOptions.AddFlags(balanceTreeCommand)
+	ulxlyComputeTreeCmd.AddCommand(balanceTreeCommand)
+	ULxLyCmd.AddCommand(balanceTreeCommand)
 
 	getDepositCommand = &cobra.Command{
 		Use:   "get-deposits",
@@ -2049,7 +2186,7 @@ or if it's actually an intermediate hash.`,
 	// Top Level
 	ULxLyCmd.AddCommand(ulxlyBridgeAndClaimCmd)
 	ULxLyCmd.AddCommand(ulxlyGetEventsCmd)
-	ULxLyCmd.AddCommand(ulxlyProofsCmd)
+	ULxLyCmd.AddCommand(ulxlyComputeTreeCmd)
 	ULxLyCmd.AddCommand(emptyProofCommand)
 	ULxLyCmd.AddCommand(zeroProofCommand)
 	ULxLyCmd.AddCommand(proofCommand)
