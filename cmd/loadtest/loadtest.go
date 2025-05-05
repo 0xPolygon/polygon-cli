@@ -327,7 +327,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	fundingAmount := *inputLoadTestParams.AddressFundingAmount
 	sendingAddressCount := *inputLoadTestParams.SendingAddressCount
 	accountPool = NewAccountPool(ctx, c, privateKey, big.NewInt(0).SetUint64(fundingAmount))
-	if sendingAddressCount > 0 {
+	if sendingAddressCount > 1 {
 		err = accountPool.AddRandomN(sendingAddressCount)
 	} else {
 		err = accountPool.Add(privateKey)
