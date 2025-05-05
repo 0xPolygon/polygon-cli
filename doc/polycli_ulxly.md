@@ -48,6 +48,8 @@ The command also inherits flags from parent commands.
 
 - [polycli ulxly empty-proof](polycli_ulxly_empty-proof.md) - create an empty proof
 
+- [polycli ulxly get-claims](polycli_ulxly_get-claims.md) - Generate ndjson for each bridge claim over a particular range of blocks
+
 - [polycli ulxly get-deposits](polycli_ulxly_get-deposits.md) - Generate ndjson for each bridge deposit over a particular range of blocks
 
 - [polycli ulxly get-verify-batches](polycli_ulxly_get-verify-batches.md) - Generate ndjson for each verify batch over a particular range of blocks
