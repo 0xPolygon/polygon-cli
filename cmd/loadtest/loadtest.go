@@ -227,7 +227,10 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		log.Error().Err(err).Msg("Unable to get the balance for the account")
 		return err
 	}
-	log.Trace().Interface("balance", accountBal).Msg("Current account balance")
+	log.Trace().
+		Str("addr", ethAddress.Hex()).
+		Interface("balance", accountBal).
+		Msg("funding account balance")
 
 	toAddr := ethcommon.HexToAddress(*inputLoadTestParams.ToAddress)
 
@@ -411,6 +414,11 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 		}
 	}
 	lightSummary(loadTestResults, startTime, endTime, rl)
+
+	err = accountPool.ReturnFunds(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("There was an issue returning the funds from the sending addresses back to the funding address")
+	}
 
 	return nil
 }
@@ -751,52 +759,58 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					return
 				}
 				chainID := new(big.Int).SetUint64(*ltp.ChainID)
-				tops, err = bind.NewKeyedTransactorWithChainID(account.privateKey, chainID)
+				sendingTops, err := bind.NewKeyedTransactorWithChainID(account.privateKey, chainID)
 				if err != nil {
 					log.Error().Err(err).Msg("Unable create transaction signer")
 					return
 				}
-				tops.Nonce = new(big.Int).SetUint64(account.nonce)
-				tops = configureTransactOpts(ctx, c, tops)
+				sendingTops.Nonce = new(big.Int).SetUint64(account.nonce)
+				sendingTops = configureTransactOpts(ctx, c, sendingTops)
 
 				switch localMode {
 				case loadTestModeERC20:
-					startReq, endReq, ltTxHash, tErr = loadTestERC20(ctx, c, tops, erc20Contract, ltAddr)
+					startReq, endReq, ltTxHash, tErr = loadTestERC20(ctx, c, sendingTops, erc20Contract, ltAddr)
 				case loadTestModeERC721:
-					startReq, endReq, ltTxHash, tErr = loadTestERC721(ctx, c, tops, erc721Contract, ltAddr)
+					startReq, endReq, ltTxHash, tErr = loadTestERC721(ctx, c, sendingTops, erc721Contract, ltAddr)
 				case loadTestModeBlob:
-					startReq, endReq, ltTxHash, tErr = loadTestBlob(ctx, c, tops)
+					startReq, endReq, ltTxHash, tErr = loadTestBlob(ctx, c, sendingTops)
 				case loadTestModeContractCall:
-					startReq, endReq, ltTxHash, tErr = loadTestContractCall(ctx, c, tops)
+					startReq, endReq, ltTxHash, tErr = loadTestContractCall(ctx, c, sendingTops)
 				case loadTestModeDeploy:
-					startReq, endReq, ltTxHash, tErr = loadTestDeploy(ctx, c, tops)
+					startReq, endReq, ltTxHash, tErr = loadTestDeploy(ctx, c, sendingTops)
 				case loadTestModeFunction, loadTestModeCall:
-					startReq, endReq, ltTxHash, tErr = loadTestFunction(ctx, c, tops, ltContract)
+					startReq, endReq, ltTxHash, tErr = loadTestFunction(ctx, c, sendingTops, ltContract)
 				case loadTestModeInscription:
-					startReq, endReq, ltTxHash, tErr = loadTestInscription(ctx, c, tops)
+					startReq, endReq, ltTxHash, tErr = loadTestInscription(ctx, c, sendingTops)
 				case loadTestModeIncrement:
-					startReq, endReq, ltTxHash, tErr = loadTestIncrement(ctx, c, tops, ltContract)
+					startReq, endReq, ltTxHash, tErr = loadTestIncrement(ctx, c, sendingTops, ltContract)
 				case loadTestModeRandomPrecompiledContract:
-					startReq, endReq, ltTxHash, tErr = loadTestCallPrecompiledContract(ctx, c, tops, ltContract, false)
+					startReq, endReq, ltTxHash, tErr = loadTestCallPrecompiledContract(ctx, c, sendingTops, ltContract, false)
 				case loadTestModeSpecificPrecompiledContract:
-					startReq, endReq, ltTxHash, tErr = loadTestCallPrecompiledContract(ctx, c, tops, ltContract, true)
+					startReq, endReq, ltTxHash, tErr = loadTestCallPrecompiledContract(ctx, c, sendingTops, ltContract, true)
 				case loadTestModeRecall:
-					startReq, endReq, ltTxHash, tErr = loadTestRecall(ctx, c, tops, recallTransactions[int(tops.Nonce.Uint64())%len(recallTransactions)])
+					startReq, endReq, ltTxHash, tErr = loadTestRecall(ctx, c, sendingTops, recallTransactions[int(sendingTops.Nonce.Uint64())%len(recallTransactions)])
 				case loadTestModeRPC:
 					startReq, endReq, tErr = loadTestRPC(ctx, c, indexedActivity)
 				case loadTestModeStore:
-					startReq, endReq, ltTxHash, tErr = loadTestStore(ctx, c, tops, ltContract)
+					startReq, endReq, ltTxHash, tErr = loadTestStore(ctx, c, sendingTops, ltContract)
 				case loadTestModeTransaction:
-					startReq, endReq, ltTxHash, tErr = loadTestTransaction(ctx, c, tops)
+					startReq, endReq, ltTxHash, tErr = loadTestTransaction(ctx, c, sendingTops)
 				case loadTestModeUniswapV3:
 					swapAmountIn := big.NewInt(int64(*uniswapv3LoadTestParams.SwapAmountInput))
-					startReq, endReq, ltTxHash, tErr = runUniswapV3Loadtest(ctx, c, tops, uniswapV3Config, poolConfig, swapAmountIn)
+					startReq, endReq, ltTxHash, tErr = runUniswapV3Loadtest(ctx, c, sendingTops, uniswapV3Config, poolConfig, swapAmountIn)
 				default:
 					log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
 				}
-				recordSample(i, j, tErr, startReq, endReq, tops.Nonce.Uint64())
+				log.Debug().
+					Int64("i", i).
+					Int64("j", j).
+					Any("nonce", sendingTops.Nonce).
+					Uint64("nonceU64", sendingTops.Nonce.Uint64()).
+					Msg("recordSample")
+				recordSample(i, j, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
 				if tErr != nil {
-					log.Error().Err(tErr).Uint64("nonce", tops.Nonce.Uint64()).Int64("request time", endReq.Sub(startReq).Milliseconds()).Msg("Recorded an error while sending transactions")
+					log.Error().Err(tErr).Uint64("nonce", sendingTops.Nonce.Uint64()).Int64("request time", endReq.Sub(startReq).Milliseconds()).Msg("Recorded an error while sending transactions")
 					// The nonce is used to index the recalled transactions in call-only mode. We don't want to retry a transaction if it legit failed on the chain
 					if !*ltp.CallOnly {
 						err := accountPool.AddReusableNonce(account.address, account.nonce)
@@ -813,7 +827,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 				log.Trace().
 					Stringer("txhash", ltTxHash).
-					Uint64("nonce", tops.Nonce.Uint64()).
+					Uint64("nonce", sendingTops.Nonce.Uint64()).
 					Int64("routine", i).
 					Str("mode", localMode.String()).
 					Int64("request", j).Msg("Request")
@@ -1758,10 +1772,9 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 	ltp := inputLoadTestParams
 	var err error
 	var lastBlockNumber uint64
-	var prevNonceForFinalBlock uint64
-	var currentNonceForFinalBlock uint64
 	var initialWaitCount = 20
 	var maxWaitCount = initialWaitCount
+	var checkInterval = 5 * time.Second
 
 	noncesToCheck := accountPool.Nonces()
 
@@ -1775,7 +1788,7 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 		}
 
 		for address, endNonce := range noncesToCheck {
-			currentNonceForFinalBlock, err = c.NonceAt(ctx, address, new(big.Int).SetUint64(lastBlockNumber))
+			currentNonceForFinalBlock, err := c.NonceAt(ctx, address, new(big.Int).SetUint64(lastBlockNumber))
 			if err != nil {
 				return 0, err
 			}
@@ -1784,21 +1797,12 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 					Str("address", address.String()).
 					Uint64("endNonce", endNonce).
 					Uint64("currentNonceForFinalBlock", currentNonceForFinalBlock).
-					Uint64("prevNonceForFinalBlock", prevNonceForFinalBlock).
 					Msg("Not all transactions for account have been mined. Waiting...")
-
-				time.Sleep(5 * time.Second)
-				if currentNonceForFinalBlock == prevNonceForFinalBlock {
-					maxWaitCount = maxWaitCount - 1 // only decrement if currentNonceForFinalBlock doesn't progress
-				}
-				prevNonceForFinalBlock = currentNonceForFinalBlock
-				log.Trace().Int("Remaining Attempts", maxWaitCount).Msg("Retrying...")
 			} else {
 				log.Trace().
 					Str("address", address.String()).
 					Uint64("endNonce", endNonce).
 					Uint64("currentNonceForFinalBlock", currentNonceForFinalBlock).
-					Uint64("prevNonceForFinalBlock", prevNonceForFinalBlock).
 					Msg("All transactions for account have been mined")
 				delete(noncesToCheck, address)
 			}
@@ -1807,14 +1811,18 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 		if maxWaitCount <= 0 {
 			return 0, fmt.Errorf("waited for %d attempts for the transactions to be mined", initialWaitCount)
 		}
+
 		if len(noncesToCheck) == 0 {
 			log.Trace().Msg("All transactions of all accounts have been mined")
 			break
 		}
+
+		maxWaitCount -= 1 // only decrement if currentNonceForFinalBlock doesn't progress
+		log.Trace().Int("Remaining Attempts", maxWaitCount).Msgf("Retrying in %s...", checkInterval.String())
+		time.Sleep(checkInterval)
 	}
 
 	log.Trace().
-		Uint64("currentNonceForFinalBlock", currentNonceForFinalBlock).
 		Uint64("startblock", startBlockNumber).
 		Uint64("endblock", lastBlockNumber).
 		Msg("It looks like all transactions have been mined")

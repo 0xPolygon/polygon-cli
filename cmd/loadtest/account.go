@@ -17,6 +17,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Structure used by the account pool to control the
+// current state of an account
 type Account struct {
 	address        common.Address
 	privateKey     *ecdsa.PrivateKey
@@ -25,6 +27,8 @@ type Account struct {
 	reusableNonces []uint64
 }
 
+// Creates a new account with the given private key.
+// The client is used to get the nonce of the account.
 func newAccount(client *ethclient.Client, privateKey *ecdsa.PrivateKey) (*Account, error) {
 	publicKey := privateKey.Public()
 	publicKeyECDSA, _ := publicKey.(*ecdsa.PublicKey)
@@ -44,16 +48,22 @@ func newAccount(client *ethclient.Client, privateKey *ecdsa.PrivateKey) (*Accoun
 	}, nil
 }
 
+// Returns the address of the account
 func (a *Account) Address() common.Address {
 	return a.address
 }
+
+// Returns the private key of the account
 func (a *Account) PrivateKey() *ecdsa.PrivateKey {
 	return a.privateKey
 }
+
+// Returns the nonce of the account
 func (a *Account) Nonce() uint64 {
 	return a.nonce
 }
 
+// Structure to control accounts used by the tests
 type AccountPool struct {
 	accounts          []Account
 	accountsPositions map[common.Address]int
@@ -66,6 +76,11 @@ type AccountPool struct {
 	chainID             *big.Int
 }
 
+// Creates a new account pool with the given funding private key.
+// The funding private key is used to fund the accounts in the pool.
+// The funding amount is the amount of ether to send to each account.
+// The client is used to interact with the network to get account information
+// and also to send transactions to fund accounts.
 func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivateKey *ecdsa.PrivateKey, fundingAmount *big.Int) *AccountPool {
 	if fundingPrivateKey == nil {
 		panic("fundingPrivateKey cannot be nil")
@@ -100,6 +115,7 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 	}
 }
 
+// Adds N random accounts to the pool
 func (ap *AccountPool) AddRandomN(n uint64) error {
 	for i := uint64(0); i < n; i++ {
 		err := ap.AddRandom()
@@ -110,6 +126,7 @@ func (ap *AccountPool) AddRandomN(n uint64) error {
 	return nil
 }
 
+// Adds a random account to the pool
 func (ap *AccountPool) AddRandom() error {
 	privateKey, err := crypto.GenerateKey()
 	if err != nil {
@@ -119,6 +136,7 @@ func (ap *AccountPool) AddRandom() error {
 	return ap.Add(privateKey)
 }
 
+// Adds an account to the pool with the given private key
 func (ap *AccountPool) Add(privateKey *ecdsa.PrivateKey) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
@@ -139,6 +157,7 @@ func (ap *AccountPool) Add(privateKey *ecdsa.PrivateKey) error {
 	return nil
 }
 
+// Adds a reusable nonce to the account with the given address
 func (ap *AccountPool) AddReusableNonce(address common.Address, nonce uint64) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
@@ -160,9 +179,13 @@ func (ap *AccountPool) AddReusableNonce(address common.Address, nonce uint64) er
 	return nil
 }
 
+// Funds all accounts in the pool
 func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
+
+	log.Trace().
+		Msg("Funding all sending accounts")
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(ap.accounts))
@@ -183,6 +206,12 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 
 	for i := range ap.accounts {
 		accountToFund := ap.accounts[i]
+
+		// if account is the funding account, skip it
+		if accountToFund.address == tops.From {
+			continue
+		}
+
 		go func(forcedNonce uint64, account Account) {
 			defer wg.Done()
 			if !account.funded {
@@ -227,12 +256,152 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 		}
 	}
 
-	log.Debug().
+	log.Trace().
 		Msg("All accounts funded")
 
 	return nil
 }
 
+// Return the funds from all accounts in the pool to the funding account
+func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
+	ap.mu.Lock()
+	defer ap.mu.Unlock()
+
+	log.Trace().
+		Msg("Returning funds from sending addresses to funding address")
+
+	ethTransferGas := big.NewInt(21000)
+	gasPrice, err := ap.client.SuggestGasPrice(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get gas price")
+		return err
+	}
+	txFee := new(big.Int).Mul(ethTransferGas, gasPrice)
+	// Increase txFee by 10% to account for gas price fluctuations
+	tenPercent := new(big.Int).Div(txFee, big.NewInt(10))
+	txFee.Add(txFee, tenPercent)
+
+	wg := sync.WaitGroup{}
+	wg.Add(len(ap.accounts))
+
+	txCh := make(chan *types.Transaction, len(ap.accounts))
+	errCh := make(chan error, len(ap.accounts))
+
+	fundingAddressHex, _ := getAddressAndPrivateKeyHex(ap.fundingPrivateKey)
+	fundingAddress := common.HexToAddress(fundingAddressHex)
+
+	balanceBefore, err := ap.client.BalanceAt(ctx, fundingAddress, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get funding address balance")
+		return err
+	}
+	log.Trace().
+		Str("address", fundingAddress.Hex()).
+		Str("balance", balanceBefore.String()).
+		Msg("funding account balance before funds returned")
+
+	for i := range len(ap.accounts) {
+		go func(accIdx int) {
+			defer wg.Done()
+			account := ap.accounts[i]
+			// if account is the funding account, skip it
+			if account.address.String() == fundingAddress.String() {
+				return
+			}
+
+			if account.funded {
+				// check if account has enough balance to pay the transfer fee
+				balance, iErr := ap.client.BalanceAt(ctx, account.address, nil)
+				if iErr != nil {
+					errCh <- fmt.Errorf("failed to check account balance for acc %s: %w", account.address.String(), iErr)
+					return
+				}
+				if balance.Cmp(txFee) <= 0 {
+					return
+				}
+
+				// subtract the transfer fee from the balance
+				amount := new(big.Int).Sub(balance, txFee)
+
+				// create the transaction to return the funds
+				signedTx, iErr := ap.createEOATransferTx(ctx, account.privateKey, &account.nonce, fundingAddress, amount)
+				if iErr != nil {
+					errCh <- fmt.Errorf("failed to create tx to return balance from acc %s to %s: %w", account.address.String(), fundingAddressHex, iErr)
+					return
+				}
+
+				log.Trace().
+					Str("from", account.address.Hex()).
+					Str("to", fundingAddressHex).
+					Str("amount", amount.String()).
+					Str("balance", balance.String()).
+					Str("txHash", signedTx.Hash().String()).
+					Msg("returning funds")
+
+				// send the transaction to return the funds
+				iErr = ap.client.SendTransaction(ctx, signedTx)
+				if iErr != nil {
+					log.Debug().
+						Str("from", account.address.Hex()).
+						Str("to", fundingAddressHex).
+						Str("amount", amount.String()).
+						Str("balance", balance.String()).
+						Interface("tx", signedTx).
+						Msg("Unable to send return balance transaction")
+					errCh <- fmt.Errorf("failed to send tx to return balance from acc %s to %s: %w", account.address.String(), fundingAddressHex, iErr)
+					return
+				}
+
+				txCh <- signedTx
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	close(errCh)
+	close(txCh)
+
+	for err := range errCh {
+		if err != nil {
+			return err
+		}
+	}
+
+	for tx := range txCh {
+		if tx != nil {
+			log.Debug().
+				Str("address", tx.To().Hex()).
+				Str("txHash", tx.Hash().Hex()).
+				Msg("transaction to return funds sent")
+
+			_, err = ap.waitMined(ctx, tx)
+			if err != nil {
+				log.Error().
+					Str("address", tx.To().Hex()).
+					Str("txHash", tx.Hash().Hex()).
+					Msgf("transaction to return funds failed")
+				return err
+			}
+		}
+	}
+
+	balanceAfter, err := ap.client.BalanceAt(ctx, fundingAddress, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get funding address balance")
+		return err
+	}
+
+	log.Trace().
+		Str("address", fundingAddress.Hex()).
+		Str("previousBalance", balanceBefore.String()).
+		Str("currentBalance", balanceAfter.String()).
+		Msg("All accounts funds returned")
+
+	return nil
+}
+
+// Returns the nonces of all accounts in the pool
 func (ap *AccountPool) Nonces() map[common.Address]uint64 {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
@@ -244,19 +413,8 @@ func (ap *AccountPool) Nonces() map[common.Address]uint64 {
 	return nonces
 }
 
+// Returns the next account in the pool
 func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
-	account, err := ap.next(ctx)
-	log.Debug().
-		Str("address", account.address.Hex()).
-		Str("nonce", fmt.Sprintf("%d", account.nonce)).
-		Msg("account returned from pool")
-	if err != nil {
-		return Account{}, err
-	}
-	return account, nil
-}
-
-func (ap *AccountPool) next(ctx context.Context) (Account, error) {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
 	if len(ap.accounts) == 0 {
@@ -264,9 +422,12 @@ func (ap *AccountPool) next(ctx context.Context) (Account, error) {
 	}
 	account := ap.accounts[ap.currentAccountIndex]
 
-	_, err := ap.fundAccountIfNeeded(ctx, account, nil, true)
-	if err != nil {
-		return Account{}, err
+	// if test is call only, there is no need to fund accounts, return it
+	if !*inputLoadTestParams.CallOnly {
+		_, err := ap.fundAccountIfNeeded(ctx, account, nil, true)
+		if err != nil {
+			return Account{}, err
+		}
 	}
 	ap.accounts[ap.currentAccountIndex].funded = true
 
@@ -283,10 +444,14 @@ func (ap *AccountPool) next(ctx context.Context) (Account, error) {
 	if ap.currentAccountIndex >= len(ap.accounts) {
 		ap.currentAccountIndex = 0
 	}
-
+	log.Debug().
+		Str("address", account.address.Hex()).
+		Str("nonce", fmt.Sprintf("%d", account.nonce)).
+		Msg("account returned from pool")
 	return account, nil
 }
 
+// Checks multiple conditions of the account and funds it if needed
 func (ap *AccountPool) fundAccountIfNeeded(ctx context.Context, account Account, forcedNonce *uint64, waitToFund bool) (*types.Transaction, error) {
 	// if account is funded, return it
 	if account.funded {
@@ -326,59 +491,14 @@ func (ap *AccountPool) fundAccountIfNeeded(ctx context.Context, account Account,
 	return tx, nil
 }
 
+// Funds the account
 func (ap *AccountPool) fund(ctx context.Context, acc Account, forcedNonce *uint64, waitToFund bool) (*types.Transaction, error) {
 	// Fund the account
-	ltp := inputLoadTestParams
-
-	tops, err := bind.NewKeyedTransactorWithChainID(ap.fundingPrivateKey, ap.chainID)
+	signedTx, err := ap.createEOATransferTx(ctx, ap.fundingPrivateKey, forcedNonce, acc.address, ap.fundingAmount)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable create transaction signer")
+		log.Error().Err(err).Msg("Unable to create EOA Transfer tx")
 		return nil, err
 	}
-	tops.GasLimit = uint64(21000)
-	tops = configureTransactOpts(ctx, ap.client, tops)
-
-	var nonce uint64
-
-	if forcedNonce != nil {
-		nonce = *forcedNonce
-	} else {
-		nonce, err = ap.client.PendingNonceAt(ctx, tops.From)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to get nonce")
-		}
-	}
-
-	var tx *types.Transaction
-	if *ltp.LegacyTransactionMode {
-		tx = types.NewTx(&types.LegacyTx{
-			Nonce:    nonce,
-			To:       &acc.address,
-			Value:    ap.fundingAmount,
-			Gas:      tops.GasLimit,
-			GasPrice: tops.GasPrice,
-			Data:     nil,
-		})
-	} else {
-		dynamicFeeTx := &types.DynamicFeeTx{
-			ChainID:   ap.chainID,
-			Nonce:     nonce,
-			To:        &acc.address,
-			Gas:       tops.GasLimit,
-			GasFeeCap: tops.GasFeeCap,
-			GasTipCap: tops.GasTipCap,
-			Data:      nil,
-			Value:     ap.fundingAmount,
-		}
-		tx = types.NewTx(dynamicFeeTx)
-	}
-
-	signedTx, err := tops.Signer(*ltp.FromETHAddress, tx)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to sign transaction")
-		return nil, err
-	}
-
 	log.Debug().
 		Str("address", acc.address.Hex()).
 		Uint64("amount", ap.fundingAmount.Uint64()).
@@ -412,6 +532,62 @@ func (ap *AccountPool) fund(ctx context.Context, acc Account, forcedNonce *uint6
 	return signedTx, nil
 }
 
+func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.PrivateKey, forcedNonce *uint64, receiver common.Address, amount *big.Int) (*types.Transaction, error) {
+	ltp := inputLoadTestParams
+
+	tops, err := bind.NewKeyedTransactorWithChainID(sender, ap.chainID)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable create transaction signer")
+		return nil, err
+	}
+	tops.GasLimit = uint64(21000)
+	tops = configureTransactOpts(ctx, ap.client, tops)
+
+	var nonce uint64
+
+	if forcedNonce != nil {
+		nonce = *forcedNonce
+	} else {
+		nonce, err = ap.client.PendingNonceAt(ctx, tops.From)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to get nonce")
+		}
+	}
+
+	var tx *types.Transaction
+	if *ltp.LegacyTransactionMode {
+		tx = types.NewTx(&types.LegacyTx{
+			Nonce:    nonce,
+			To:       &receiver,
+			Value:    amount,
+			Gas:      tops.GasLimit,
+			GasPrice: tops.GasPrice,
+			Data:     nil,
+		})
+	} else {
+		dynamicFeeTx := &types.DynamicFeeTx{
+			ChainID:   ap.chainID,
+			Nonce:     nonce,
+			To:        &receiver,
+			Gas:       tops.GasLimit,
+			GasFeeCap: tops.GasFeeCap,
+			GasTipCap: tops.GasTipCap,
+			Data:      nil,
+			Value:     amount,
+		}
+		tx = types.NewTx(dynamicFeeTx)
+	}
+
+	signedTx, err := tops.Signer(tops.From, tx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to sign transaction")
+		return nil, err
+	}
+
+	return signedTx, nil
+}
+
+// Waits for the transaction to be mined
 func (ap *AccountPool) waitMined(ctx context.Context, tx *types.Transaction) (*types.Receipt, error) {
 	ctxTimeout, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
@@ -426,6 +602,7 @@ func (ap *AccountPool) waitMined(ctx context.Context, tx *types.Transaction) (*t
 	return receipt, nil
 }
 
+// Returns the address and private key of the given private key
 func getAddressAndPrivateKeyHex(privateKey *ecdsa.PrivateKey) (string, string) {
 	privateKeyBytes := crypto.FromECDSA(privateKey)
 	privateKeyHex := fmt.Sprintf("0x%x", privateKeyBytes)

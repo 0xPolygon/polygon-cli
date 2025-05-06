@@ -85,6 +85,7 @@ type (
 		SendingAddressCount           *uint64
 		AddressFundingAmount          *uint64
 		PreFundSendingAddresses       *bool
+		KeepFundedAmount              *bool
 
 		// Computed
 		CurrentGasPrice       *big.Int
@@ -248,6 +249,7 @@ func initFlags() {
 	ltp.SendingAddressCount = LoadtestCmd.Flags().Uint64("sending-address-count", 1, "The number of sending addresses to use. This is useful for avoiding pool account queue.")
 	ltp.AddressFundingAmount = LoadtestCmd.Flags().Uint64("address-funding-amount", 1000000000000000000, "The amount in gwei to fund the sending addresses with.")
 	ltp.PreFundSendingAddresses = LoadtestCmd.Flags().Bool("pre-fund-sending-addresses", false, "If set to true, the sending addresses will be fund at the start of the execution, otherwise all addresses will be funded when used for the first time.")
+	ltp.KeepFundedAmount = LoadtestCmd.Flags().Bool("keep-funded-amount", false, "If set to true, the funded amount will be kept in the sending addresses. Otherwise, the funded amount will be refunded back to the account used to fund the account.")
 
 	// Local flags.
 	ltp.Modes = LoadtestCmd.Flags().StringSliceP("mode", "m", []string{"t"}, `The testing mode to use. It can be multiple like: "c,d,f,t"
