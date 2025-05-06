@@ -5,15 +5,15 @@ Example usage:
 
 ```bash
 polycli ulxly compute-balance-tree \
-        --l1-deposits-file l1-cardona-4880876-to-6028159.ndjson \
-        --l2-deposits-file l2-network-4880876-to-6028159.ndjson \
-        --destination-network 19 | jq '.'
+        --l2-claims-file l2-claims-0-to-11454081.ndjson \
+        --l2-deposits-file l2-deposits-0-to-11454081.ndjson \
+        --l2-network-id 3 | jq '.'
 ```
 
 In this case we are assuming we have two files
-`l1-cardona-4880876-to-6028159.ndjson` and `l2-network-4880876-to-6028159.ndjson` that would have been generated
-with a call to `polycli ulxly get-deposits` pointing to each network. The output will be the
-root of the tree for the provided deposits.
+`l2-claims-0-to-11454081.ndjson` and `l2-deposits-0-to-11454081.ndjson` that would have been generated
+with a call to `polycli ulxly get-deposits` and `polycli ulxly get-claims` pointing to each network. The output will be the
+root of the tree for the provided deposits and claims.
 
 This is the response from polycli:
 

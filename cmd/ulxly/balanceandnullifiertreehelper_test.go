@@ -114,3 +114,27 @@ func BoolArrayToString(bits []bool) string {
 	}
 	return b.String()
 }
+
+func TestTokenString(t *testing.T) {
+	token := ulxly.TokenInfo{
+		OriginNetwork:      big.NewInt(0),
+		OriginTokenAddress: common.HexToAddress("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"),
+	}
+	newToken, err := ulxly.TokenInfoStringToStruct(token.String())
+	require.NoError(t, err)
+	assert.Equal(t, token.OriginNetwork.String(), newToken.OriginNetwork.String())
+	assert.Equal(t, token.OriginTokenAddress.String(), newToken.OriginTokenAddress.String())
+	assert.Equal(t, token, newToken)
+	assert.Equal(t, token.String(), newToken.String())
+
+	token2 := ulxly.TokenInfo{
+		OriginNetwork:      big.NewInt(19),
+		OriginTokenAddress: common.HexToAddress("0xf00fd6e51aad88f6f4ce6ab8827279cfffb92006"),
+	}
+	newToken2, err := ulxly.TokenInfoStringToStruct(token2.String())
+	require.NoError(t, err)
+	assert.Equal(t, token2.OriginNetwork.String(), newToken2.OriginNetwork.String())
+	assert.Equal(t, token2.OriginTokenAddress.String(), newToken2.OriginTokenAddress.String())
+	assert.Equal(t, token2, newToken2)
+	assert.Equal(t, token2.String(), newToken2.String())
+}

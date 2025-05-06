@@ -3,6 +3,7 @@ package ulxly
 import (
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -35,6 +36,29 @@ func (t *TokenInfo) ToBits() []bool {
 	}
 
 	return bits
+}
+
+func (t *TokenInfo) String() string {
+    return fmt.Sprintf("%s-%s", t.OriginNetwork.String(), t.OriginTokenAddress.Hex())
+}
+
+func TokenInfoStringToStruct(key string) (TokenInfo, error){
+	parts := strings.Split(key, "-")
+	if len(parts) != 2 {
+		return TokenInfo{}, fmt.Errorf("invalid key format: %s", key)
+	}
+
+	originNetwork, ok := big.NewInt(0).SetString(parts[0], 10) // Parse the first part as a big.Int
+	if !ok {
+		return TokenInfo{}, fmt.Errorf("invalid origin network value: %s", parts[0])
+	}
+
+	originTokenAddress := common.HexToAddress(parts[1]) // Parse the second part as an address
+
+	return TokenInfo{
+		OriginNetwork:      originNetwork,
+		OriginTokenAddress: originTokenAddress,
+	}, nil
 }
 
 // NullifierKey struct
