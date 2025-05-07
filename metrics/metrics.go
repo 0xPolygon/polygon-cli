@@ -107,6 +107,23 @@ func GetMeanGasPricePerBlock(blocks []rpctypes.PolyBlock) []float64 {
 	return gasPrices
 }
 
+// GetMeanBaseFeePerBlock calculates the mean base fee for each block in the provided slice of PolyBlock.
+// It returns a slice of float64 values representing the base fee for each block.
+func GetMeanBaseFeePerBlock(blocks []rpctypes.PolyBlock) []float64 {
+	bs := rpctypes.SortableBlocks(blocks)
+	sort.Sort(bs)
+
+	fee := make([]float64, 0, len(bs))
+	for _, b := range bs {
+		if b.BaseFee() != nil {
+			fee = append(fee, float64(b.BaseFee().Uint64()))
+		} else {
+			fee = append(fee, 0.0)
+		}
+	}
+	return fee
+}
+
 func TruncateHexString(hexStr string, totalLength int) string {
 	hexStr = strings.TrimPrefix(hexStr, "0x")
 

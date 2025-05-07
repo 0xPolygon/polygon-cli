@@ -36,18 +36,29 @@ type UiSkeleton struct {
 	Receipts                       *widgets.List
 }
 
-func GetCurrentText(widget *widgets.Paragraph, headBlock *big.Int, gasPrice string, peerCount uint64, chainID *big.Int, rpcURL string) string {
+func GetCurrentText(widget *widgets.Paragraph, headBlock, safeBlock, finalizedBlock *big.Int, gasPrice string, peerCount uint64, chainID *big.Int, rpcURL string) string {
 	// First column
 	height := fmt.Sprintf("Height: %s", headBlock.String())
-	timeInfo := fmt.Sprintf("Time: %s", time.Now().Format("02 Jan 06 15:04:05 MST"))
+	safeBlockString := fmt.Sprintf("Safe: %s", safeBlock.String())
+	finalizedString := fmt.Sprintf("Finalized: %s", finalizedBlock.String())
 	gasPriceString := fmt.Sprintf("Gas Price: %s gwei", gasPrice)
-	peers := fmt.Sprintf("Peers: %d", peerCount)
 
 	// Second column
+	currentTimeString := fmt.Sprintf("Time: %s", time.Now().Format("02 Jan 06 15:04:05 MST"))
 	rpcURLString := fmt.Sprintf("RPC URL: %s", rpcURL)
-	chainIdString := fmt.Sprintf("Chain ID: %s", chainID.String())
+	chainIDString := fmt.Sprintf("Chain ID: %s", chainID.String())
+	peers := fmt.Sprintf("Peers: %d", peerCount)
 
-	return formatParagraph(widget, []string{height, timeInfo, gasPriceString, peers, chainIdString, rpcURLString})
+	return formatParagraph(widget, []string{
+		height,
+		safeBlockString,
+		finalizedString,
+		gasPriceString,
+		currentTimeString,
+		chainIDString,
+		rpcURLString,
+		peers,
+	})
 }
 
 func GetTxPoolText(widget *widgets.Paragraph, pendingTxCount, queuedTxCount uint64) string {
@@ -500,7 +511,7 @@ func GetSimpleReceipt(ctx context.Context, rpc *ethrpc.Client, tx rpctypes.PolyT
 	return fields
 }
 
-func SetUISkeleton(txPoolStatusSupported, zkEVMBatchesSupported bool) (blockList *widgets.List, blockInfo *widgets.List, transactionList *widgets.List, transactionInformationList *widgets.List, transactionInfo *widgets.Table, grid *ui.Grid, selectGrid *ui.Grid, blockGrid *ui.Grid, transactionGrid *ui.Grid, termUi UiSkeleton) {
+func SetUISkeleton(txPoolStatusSupported, zkEVMBatchesSupported, eip1559Supported bool) (blockList *widgets.List, blockInfo *widgets.List, transactionList *widgets.List, transactionInformationList *widgets.List, transactionInfo *widgets.Table, grid *ui.Grid, selectGrid *ui.Grid, blockGrid *ui.Grid, transactionGrid *ui.Grid, termUi UiSkeleton) {
 	// help := widgets.NewParagraph()
 	// help.Title = "Block Headers"
 	// help.Text = "Use the arrow keys to scroll through the transactions. Press <Esc> to go back to the explorer view"
@@ -564,7 +575,11 @@ func SetUISkeleton(txPoolStatusSupported, zkEVMBatchesSupported bool) (blockList
 	termUi.GasPriceChart.LineColor = ui.ColorGreen
 	termUi.GasPriceChart.MaxHeight = 1000
 	slg1 := widgets.NewSparklineGroup(termUi.GasPriceChart)
-	slg1.Title = "Gas Price"
+	if eip1559Supported {
+		slg1.Title = "Base fee"
+	} else {
+		slg1.Title = "Gas Price"
+	}
 
 	termUi.BlockSizeChart = widgets.NewSparkline()
 	termUi.BlockSizeChart.LineColor = ui.ColorYellow
