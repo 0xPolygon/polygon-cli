@@ -46,6 +46,12 @@ The command also inherits flags from parent commands.
 
 - [polycli ulxly claim-everything](polycli_ulxly_claim-everything.md) - Attempt to claim as many deposits and messages as possible
 
+- [polycli ulxly compute-balance-nullifier-tree](polycli_ulxly_compute-balance-nullifier-tree.md) - Compute the balance tree and the nullifier tree given the deposits and claims
+
+- [polycli ulxly compute-balance-tree](polycli_ulxly_compute-balance-tree.md) - Compute the balance tree given the deposits
+
+- [polycli ulxly compute-nullifier-tree](polycli_ulxly_compute-nullifier-tree.md) - Compute the nullifier tree given the claims
+
 - [polycli ulxly empty-proof](polycli_ulxly_empty-proof.md) - create an empty proof
 
 - [polycli ulxly get-claims](polycli_ulxly_get-claims.md) - Generate ndjson for each bridge claim over a particular range of blocks
