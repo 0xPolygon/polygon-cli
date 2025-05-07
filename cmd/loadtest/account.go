@@ -136,6 +136,18 @@ func (ap *AccountPool) AddRandom() error {
 	return ap.Add(privateKey)
 }
 
+// Adds multiple accounts to the pool with the given private keys
+func (ap *AccountPool) AddN(privateKeys ...*ecdsa.PrivateKey) error {
+	for _, privateKey := range privateKeys {
+		err := ap.Add(privateKey)
+		if err != nil {
+			return fmt.Errorf("failed to add account: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // Adds an account to the pool with the given private key
 func (ap *AccountPool) Add(privateKey *ecdsa.PrivateKey) error {
 	ap.mu.Lock()

@@ -1,7 +1,9 @@
 package loadtest
 
 import (
+	"bufio"
 	"context"
+	"crypto/ecdsa"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
@@ -329,10 +331,30 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	// setup account pool
 	fundingAmount := *inputLoadTestParams.AddressFundingAmount
 	sendingAddressCount := *inputLoadTestParams.SendingAddressCount
+	sendingAddressesFile := *inputLoadTestParams.SendingAddressesFile
 	accountPool = NewAccountPool(ctx, c, privateKey, big.NewInt(0).SetUint64(fundingAmount))
-	if sendingAddressCount > 1 {
+	if len(sendingAddressesFile) > 0 {
+		log.Trace().
+			Str("sendingAddressFile", sendingAddressesFile).
+			Msg("Adding accounts from file to the account pool")
+
+		privateKeys, iErr := readPrivateKeysFromFile(sendingAddressesFile)
+		if iErr != nil {
+			log.Error().
+				Err(iErr).
+				Msg("Unable to read private keys from file")
+			return fmt.Errorf("unable to read private keys from file. %w", iErr)
+		}
+		err = accountPool.AddN(privateKeys...)
+	} else if sendingAddressCount > 1 {
+		log.Trace().
+			Uint64("sendingAddressCount", sendingAddressCount).
+			Msg("Adding random accounts to the account pool")
 		err = accountPool.AddRandomN(sendingAddressCount)
 	} else {
+		log.Trace().
+			Uint64("sendingAddressCount", sendingAddressCount).
+			Msg("Using the same account for all transactions")
 		err = accountPool.Add(privateKey)
 	}
 	if err != nil {
@@ -350,6 +372,35 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 
 	return nil
+}
+
+func readPrivateKeysFromFile(sendingAddressesFile string) ([]*ecdsa.PrivateKey, error) {
+	file, err := os.Open(sendingAddressesFile)
+	if err != nil {
+		return nil, fmt.Errorf("unable to open sending addresses file: %w", err)
+	}
+	defer file.Close()
+
+	var privateKeys []*ecdsa.PrivateKey
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if len(line) == 0 {
+			continue
+		}
+		privateKey, err := ethcrypto.HexToECDSA(strings.TrimPrefix(line, "0x"))
+		if err != nil {
+			log.Error().Err(err).Str("key", line).Msg("Unable to parse private key")
+			return nil, fmt.Errorf("unable to parse private key: %w", err)
+		}
+		privateKeys = append(privateKeys, privateKey)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading sending address file: %w", err)
+	}
+
+	return privateKeys, nil
 }
 
 func initNonce(ctx context.Context, c *ethclient.Client) error {
