@@ -159,7 +159,7 @@ func readDeposit(cmd *cobra.Command) error {
 		if err != nil {
 			log.Error().Err(err).Msg("error closing event iterator")
 		}
-		currentBlock = endBlock
+		currentBlock = endBlock + 1
 	}
 
 	return nil
@@ -244,7 +244,7 @@ func readClaim(cmd *cobra.Command) error {
 		if err != nil {
 			log.Error().Err(err).Msg("error closing event iterator")
 		}
-		currentBlock = endBlock
+		currentBlock = endBlock + 1
 	}
 
 	return nil
@@ -302,7 +302,7 @@ func readVerifyBatches(cmd *cobra.Command) error {
 			}
 			fmt.Println(string(jBytes))
 		}
-		currentBlock = endBlock
+		currentBlock = endBlock + 1
 	}
 
 	return nil
