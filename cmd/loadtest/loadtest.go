@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"math/rand"
 	"net/http"
+	"net/url"
 
 	"os"
 	"os/signal"
@@ -498,6 +499,15 @@ func runLoadTest(ctx context.Context) error {
 		MaxIdleConns:        connLimit,
 		MaxIdleConnsPerHost: connLimit,
 		MaxConnsPerHost:     connLimit,
+	}
+	if inputLoadTestParams.Proxy != nil && *inputLoadTestParams.Proxy != "" {
+		proxyURL, err := url.Parse(*inputLoadTestParams.Proxy)
+		if err != nil {
+			return fmt.Errorf("invalid proxy address %s %w", *inputLoadTestParams.Proxy, err)
+		}
+		proxyFunc := http.ProxyURL(proxyURL)
+		transport.Proxy = proxyFunc
+		log.Debug().Stringer("proxyURL", proxyURL).Msg("transport proxy configured")
 	}
 	goHttpClient := &http.Client{
 		Transport: transport,
