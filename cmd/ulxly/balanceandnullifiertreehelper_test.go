@@ -30,7 +30,6 @@ func TestBalanceTree(t *testing.T) {
 			OriginNetwork:      big.NewInt(0).SetUint64(uint64(transition.UpdateLeaf.Key.OriginNetwork)),
 			OriginTokenAddress: transition.UpdateLeaf.Key.OriginTokenAddress,
 		}
-		totalTokenBalance := big.NewInt(1)
 		totalTokenBalance, ok := big.NewInt(0).SetString(transition.UpdateLeaf.Value.String(), 0)
 		require.Equal(t, true, ok)
 
