@@ -319,11 +319,16 @@ func proof(args []string) error {
 
 func balanceTree() error {
 	l2NetworkID := balanceTreeOptions.L2NetworkID
+	bridgeAddress := common.HexToAddress(balanceTreeOptions.BridgeAddress)
+	client, err := ethclient.DialContext(context.Background(), balanceTreeOptions.RpcURL)
+	if err != nil {
+		return err
+	}
 	l2RawClaimsData, l2RawDepositsData, err := getBalanceTreeData()
 	if err != nil {
 		return err
 	}
-	root, err := computeBalanceTree(l2RawClaimsData, l2NetworkID, l2RawDepositsData)
+	root, err := computeBalanceTree(client, bridgeAddress, l2RawClaimsData, l2NetworkID, l2RawDepositsData)
 	if err != nil {
 		return err
 	}
@@ -354,11 +359,16 @@ func nullifierTree(args []string) error {
 
 func nullifierAndBalanceTree(args []string) error {
 	l2NetworkID := balanceTreeOptions.L2NetworkID
+	bridgeAddress := common.HexToAddress(balanceTreeOptions.BridgeAddress)
+	client, err := ethclient.DialContext(context.Background(), balanceTreeOptions.RpcURL)
+	if err != nil {
+		return err
+	}
 	l2RawClaimsData, l2RawDepositsData, err := getBalanceTreeData()
 	if err != nil {
 		return err
 	}
-	balanceTreeRoot, err := computeBalanceTree(l2RawClaimsData, l2NetworkID, l2RawDepositsData)
+	balanceTreeRoot, err := computeBalanceTree(client, bridgeAddress, l2RawClaimsData, l2NetworkID, l2RawDepositsData)
 	if err != nil {
 		return err
 	}
@@ -405,7 +415,7 @@ func computeNullifierTree(rawClaims []byte) (common.Hash, error) {
 		}
 		root, err = nTree.UpdateNullifierTree(nullifierKey)
 		if err != nil {
-			log.Error().Err(err).Uint32("OriginNetwork: ", claim.OriginNetwork).Msg("error computing nullifierTree. Claim information: GlobalIndex: "+claim.GlobalIndex.String()+", OriginAddress: "+claim.OriginAddress.String()+", Amount: "+claim.Amount.String())
+			log.Error().Err(err).Uint32("OriginNetwork: ", claim.OriginNetwork).Msg("error computing nullifierTree. Claim information: GlobalIndex: " + claim.GlobalIndex.String() + ", OriginAddress: " + claim.OriginAddress.String() + ", Amount: " + claim.Amount.String())
 			return common.Hash{}, err
 		}
 	}
@@ -413,7 +423,7 @@ func computeNullifierTree(rawClaims []byte) (common.Hash, error) {
 	return root, nil
 }
 
-func computeBalanceTree(l2RawClaims []byte, l2NetworkID uint32, l2RawDeposits []byte) (common.Hash, error) {
+func computeBalanceTree(client *ethclient.Client, bridgeAddress common.Address, l2RawClaims []byte, l2NetworkID uint32, l2RawDeposits []byte) (common.Hash, error) {
 	buf := bytes.NewBuffer(l2RawClaims)
 	scanner := bufio.NewScanner(buf)
 	scannerBuf := make([]byte, 0)
@@ -433,7 +443,15 @@ func computeBalanceTree(l2RawClaims []byte, l2NetworkID uint32, l2RawDeposits []
 			OriginNetwork:      big.NewInt(0).SetUint64(uint64(l2Claim.OriginNetwork)),
 			OriginTokenAddress: l2Claim.OriginAddress,
 		}
-		log.Info().Msgf("L2 Claim. OriginNetwork: %d. TokenAddress: %s. Amount: %s", token.OriginNetwork, token.OriginTokenAddress.String(), l2Claim.Amount.String())
+		isMessage, err := checkClaimCalldata(client, bridgeAddress, l2Claim.Raw.TxHash)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		if isMessage {
+			token.OriginNetwork = big.NewInt(0)
+			token.OriginTokenAddress = common.Address{}
+		}
+		log.Info().Msgf("L2 Claim. isMessage: %v OriginNetwork: %d. TokenAddress: %s. Amount: %s", isMessage, token.OriginNetwork, token.OriginTokenAddress.String(), l2Claim.Amount.String())
 		if _, ok := balances[token.String()]; !ok {
 			balances[token.String()] = big.NewInt(0)
 		}
@@ -2017,13 +2035,15 @@ func (o *FileOptions) AddFlags(cmd *cobra.Command) {
 }
 
 type BalanceTreeOptions struct {
-	L2ClaimsFile, L2DepositsFile string
-	L2NetworkID uint32
+	L2ClaimsFile, L2DepositsFile, BridgeAddress, RpcURL string
+	L2NetworkID                                         uint32
 }
 
 func (o *BalanceTreeOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.L2ClaimsFile, ArgL2ClaimsFileName, "", "", "An ndjson file with l2 claim events data")
 	cmd.Flags().StringVarP(&o.L2DepositsFile, ArgL2DepositsFileName, "", "", "An ndjson file with l2 deposit events data")
+	cmd.Flags().StringVarP(&o.BridgeAddress, ArgBridgeAddress, "", "", "Bridge Address")
+	cmd.Flags().StringVarP(&o.RpcURL, ArgRPCURL, "r", "", "RPC URL")
 	cmd.Flags().Uint32VarP(&o.L2NetworkID, ArgL2NetworkID, "", 0, "The L2 networkID")
 }
 

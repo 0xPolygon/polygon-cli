@@ -7,7 +7,9 @@ Example usage:
 polycli ulxly compute-balance-tree \
         --l2-claims-file l2-claims-0-to-11454081.ndjson \
         --l2-deposits-file l2-deposits-0-to-11454081.ndjson \
-        --l2-network-id 3 | jq '.'
+        --l2-network-id 3
+        --bridge-address 0x528e26b25a34a4A5d0dbDa1d57D318153d2ED582 \
+        --rpc-url http://localhost:8213 | jq '.'
 ```
 
 In this case we are assuming we have two files
