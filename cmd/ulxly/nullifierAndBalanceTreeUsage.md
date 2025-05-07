@@ -19,8 +19,9 @@ This is the response from polycli:
 
 ```json
 {
-  "balanceTreeRoot": "0x4516ca2a793b8e20f56ec6ba8ca6033a672330670a3772f76f2ade9bc2125150",
-  "nullifierTreeRoot": "0x4516ca2a793b8e20f56ec6ba8ca6033a672330670a3772f76f2ade9bc2125150",
+  "balanceTreeRoot": "0x089ed8cce8639374a1bbd2480df7ed5224ea715b7521e1e2de549a6def791757",
+  "nullifierTreeRoot": "0x7f075c4345694cc79a573890d7ec6222534cf470355611801104be0c8bf972c4",
+  "initPessimisticRoot": "0x4358f03557f5d34ab419bee9919b4858c9d9bdedbe8e7ce7fb78ff9c4bc65676"
 }
 ```
 

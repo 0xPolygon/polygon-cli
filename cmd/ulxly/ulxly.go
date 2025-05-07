@@ -329,7 +329,7 @@ func balanceTree() error {
 	}
 	fmt.Printf(`
 	{
-		"root": %s
+		"root": "%s"
 	}
 	`, root.String())
 	return nil
@@ -346,7 +346,7 @@ func nullifierTree(args []string) error {
 	}
 	fmt.Printf(`
 	{
-		"root": %s
+		"root": "%s"
 	}
 	`, root.String())
 	return nil
@@ -369,9 +369,9 @@ func nullifierAndBalanceTree(args []string) error {
 	initPessimisticRoot := crypto.Keccak256Hash(balanceTreeRoot.Bytes(), nullifierTreeRoot.Bytes())
 	fmt.Printf(`
 	{
-		"balanceTreeRoot": %s,
-		"nullifierTreeRoot": %s,
-		"initPessimisticRoot": %s
+		"balanceTreeRoot": "%s",
+		"nullifierTreeRoot": "%s",
+		"initPessimisticRoot": "%s"
 	}
 	`, balanceTreeRoot.String(), nullifierTreeRoot.String(), initPessimisticRoot.String())
 	return nil

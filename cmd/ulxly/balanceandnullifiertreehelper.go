@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/rs/zerolog/log"
 )
 
 // TokenInfo struct
@@ -101,7 +102,7 @@ func NewBalanceTree() (*Balancer, error) {
 	var depth uint8 = 192
 	zeroHashes := generateZeroHashes(depth)
 	initRoot := crypto.Keccak256Hash(zeroHashes[depth-1].Bytes(), zeroHashes[depth-1].Bytes())
-	fmt.Println("Initial Root: ", initRoot.String())
+	log.Info().Msg("Initial Root: "+ initRoot.String())
 	return &Balancer{
 		tree: Tree{
 			zeroHashes: zeroHashes,
@@ -131,7 +132,7 @@ func NewNullifierTree() (*Nullifier, error) {
 	var depth uint8 = 64
 	zeroHashes := generateZeroHashes(depth)
 	initRoot := crypto.Keccak256Hash(zeroHashes[depth-1].Bytes(), zeroHashes[depth-1].Bytes())
-	fmt.Println("Initial Root: ", initRoot.String())
+	log.Info().Msg("Initial Root: "+ initRoot.String())
 	return &Nullifier{
 		tree: Tree{
 			zeroHashes: zeroHashes,
