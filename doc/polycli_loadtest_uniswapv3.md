@@ -86,7 +86,7 @@ The command also inherits flags from parent commands.
       --chain-id uint                          The chain id for the transactions.
   -c, --concurrency int                        Number of requests to perform concurrently. Default is one request at a time. (default 1)
       --config string                          config file (default is $HOME/.polygon-cli.yaml)
-      --eth-amount float                       The amount of ether to send on every transaction
+      --eth-amount uint                        The amount of ether in wei to send on every transaction
       --gas-limit uint                         In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
       --gas-price uint                         In environments where the gas price can't be determined automatically, we can specify it manually
       --gas-price-multiplier float             A multiplier to increase or decrease the gas price (default 1)
