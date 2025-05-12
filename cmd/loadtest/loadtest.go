@@ -871,17 +871,44 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					Msg("recordSample")
 				recordSample(i, j, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
 				if tErr != nil {
-					log.Error().Err(tErr).Uint64("nonce", sendingTops.Nonce.Uint64()).Int64("request time", endReq.Sub(startReq).Milliseconds()).Msg("Recorded an error while sending transactions")
-					// The nonce is used to index the recalled transactions in call-only mode. We don't want to retry a transaction if it legit failed on the chain
+					log.Error().
+						Err(tErr).
+						Str("address", sendingTops.From.String()).
+						Uint64("nonce", sendingTops.Nonce.Uint64()).
+						Int64("request time", endReq.Sub(startReq).Milliseconds()).
+						Msg("Recorded an error while sending transactions")
+
+					retryForNonce := false
 					if !*ltp.CallOnly {
-						err := accountPool.AddReusableNonce(account.address, account.nonce)
+						retryForNonce = true
+					}
+					if strings.Contains(tErr.Error(), "replacement transaction underpriced") && retryForNonce {
+						retryForNonce = false
+					}
+					if strings.Contains(tErr.Error(), "transaction underpriced") && retryForNonce {
+						retryForNonce = false
+					}
+					if strings.Contains(tErr.Error(), "nonce too low") && retryForNonce {
+						retryForNonce = false
+					}
+					if strings.Contains(tErr.Error(), "already known") && retryForNonce {
+						retryForNonce = false
+					}
+					if strings.Contains(tErr.Error(), "could not replace existing") && retryForNonce {
+						retryForNonce = false
+					}
+					if strings.Contains(tErr.Error(), "fee cap less than block base fee") {
+						retryForNonce = true
+					}
+
+					if retryForNonce {
+						err := accountPool.AddReusableNonce(sendingTops.From, sendingTops.Nonce.Uint64())
 						if err != nil {
-							log.Error().Err(err).Msg("Unable to add reusable nonce to account pool")
-						}
-					} else if strings.Contains(tErr.Error(), "fee cap less than block base fee") {
-						err := accountPool.AddReusableNonce(account.address, account.nonce)
-						if err != nil {
-							log.Error().Err(err).Msg("Unable to add reusable nonce to account pool")
+							log.Error().
+								Str("address", sendingTops.From.String()).
+								Uint64("nonce", sendingTops.Nonce.Uint64()).
+								Err(err).
+								Msg("Unable to add reusable nonce to account pool")
 						}
 					}
 				}

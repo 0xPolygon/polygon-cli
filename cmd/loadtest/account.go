@@ -289,9 +289,10 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 		return err
 	}
 	txFee := new(big.Int).Mul(ethTransferGas, gasPrice)
-	// Increase txFee by 10% to account for gas price fluctuations
-	tenPercent := new(big.Int).Div(txFee, big.NewInt(10))
-	txFee.Add(txFee, tenPercent)
+	// double the txFee to account for gas price fluctuations and
+	// different ways to charge transactions, like op networks
+	// that charge for the l1 transaction
+	txFee.Add(txFee, txFee)
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(ap.accounts))
