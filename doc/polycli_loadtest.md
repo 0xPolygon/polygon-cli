@@ -154,6 +154,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --pre-fund-sending-addresses             If set to true, the sending addresses will be fund at the start of the execution, otherwise all addresses will be funded when used for the first time.
       --priority-gas-price uint                Specify Gas Tip Price in the case of EIP-1559
       --private-key string                     The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
+      --proxy string                           use the proxy specified
       --rate-limit float                       An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together (default 4)
       --recall-blocks uint                     The number of blocks that we'll attempt to fetch for recall (default 50)
   -n, --requests int                           Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
