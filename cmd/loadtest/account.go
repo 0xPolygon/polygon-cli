@@ -315,8 +315,6 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	// different ways to charge transactions, like op networks
 	// that charge for the l1 transaction
 	txFee.Add(txFee, txFee)
-	// txFee.Add(txFee, txFee)
-	// txFee.Add(txFee, txFee)
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(ap.accounts))
