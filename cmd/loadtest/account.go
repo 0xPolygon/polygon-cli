@@ -178,7 +178,7 @@ func (ap *AccountPool) AddReusableNonce(address common.Address, nonce uint64) er
 	if !found {
 		return fmt.Errorf("account not found in pool")
 	}
-	if accountPos >= len(ap.accounts)-1 {
+	if accountPos > len(ap.accounts)-1 {
 		return fmt.Errorf("account position out of bounds")
 	}
 
@@ -214,6 +214,28 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 	nonce, err := ap.client.PendingNonceAt(ctx, tops.From)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get nonce")
+	}
+
+	balance, err := ap.client.BalanceAt(ctx, tops.From, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get funding address balance")
+	}
+
+	totalBalanceNeeded := new(big.Int).Mul(ap.fundingAmount, big.NewInt(int64(len(ap.accounts))))
+	totalFeeNeeded := new(big.Int).Mul(big.NewInt(21000), big.NewInt(int64(len(ap.accounts))))
+	fudgeAmountNeeded := new(big.Int).Mul(big.NewInt(1000000000), big.NewInt(int64(len(ap.accounts))))
+
+	totalNeeded := new(big.Int).Add(totalBalanceNeeded, totalFeeNeeded)
+	totalNeeded.Add(totalNeeded, fudgeAmountNeeded)
+
+	if balance.Cmp(totalBalanceNeeded) <= 0 {
+		errMsg := "Funding account balance can't cover the funding amount for all accounts"
+		log.Error().
+			Str("address", tops.From.Hex()).
+			Str("balance", balance.String()).
+			Str("totalNeeded", totalNeeded.String()).
+			Msg(errMsg)
+		return fmt.Errorf(errMsg)
 	}
 
 	for i := range ap.accounts {
@@ -293,6 +315,8 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	// different ways to charge transactions, like op networks
 	// that charge for the l1 transaction
 	txFee.Add(txFee, txFee)
+	// txFee.Add(txFee, txFee)
+	// txFee.Add(txFee, txFee)
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(ap.accounts))

@@ -1860,8 +1860,6 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 	ltp := inputLoadTestParams
 	var err error
 	var lastBlockNumber uint64
-	var initialWaitCount = 20
-	var maxWaitCount = initialWaitCount
 	var checkInterval = 5 * time.Second
 
 	noncesToCheck := accountPool.Nonces()
@@ -1896,17 +1894,12 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 			}
 		}
 
-		if maxWaitCount <= 0 {
-			return 0, fmt.Errorf("waited for %d attempts for the transactions to be mined", initialWaitCount)
-		}
-
 		if len(noncesToCheck) == 0 {
 			log.Trace().Msg("All transactions of all accounts have been mined")
 			break
 		}
 
-		maxWaitCount -= 1 // only decrement if currentNonceForFinalBlock doesn't progress
-		log.Trace().Int("Remaining Attempts", maxWaitCount).Msgf("Retrying in %s...", checkInterval.String())
+		log.Trace().Msgf("Retrying in %s...", checkInterval.String())
 		time.Sleep(checkInterval)
 	}
 
