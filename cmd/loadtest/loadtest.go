@@ -1879,13 +1879,13 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 				return 0, err
 			}
 			if currentNonceForFinalBlock < endNonce {
-				log.Trace().
+				log.Debug().
 					Str("address", address.String()).
 					Uint64("endNonce", endNonce).
 					Uint64("currentNonceForFinalBlock", currentNonceForFinalBlock).
 					Msg("Not all transactions for account have been mined. Waiting...")
 			} else {
-				log.Trace().
+				log.Debug().
 					Str("address", address.String()).
 					Uint64("endNonce", endNonce).
 					Uint64("currentNonceForFinalBlock", currentNonceForFinalBlock).
@@ -1895,15 +1895,15 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 		}
 
 		if len(noncesToCheck) == 0 {
-			log.Trace().Msg("All transactions of all accounts have been mined")
+			log.Debug().Msg("All transactions of all accounts have been mined")
 			break
 		}
 
-		log.Trace().Msgf("Retrying in %s...", checkInterval.String())
+		log.Debug().Msgf("Retrying in %s...", checkInterval.String())
 		time.Sleep(checkInterval)
 	}
 
-	log.Trace().
+	log.Debug().
 		Uint64("startblock", startBlockNumber).
 		Uint64("endblock", lastBlockNumber).
 		Msg("It looks like all transactions have been mined")

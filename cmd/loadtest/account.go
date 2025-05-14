@@ -196,7 +196,7 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
 
-	log.Trace().
+	log.Debug().
 		Msg("Funding all sending accounts")
 
 	wg := sync.WaitGroup{}
@@ -290,7 +290,7 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 		}
 	}
 
-	log.Trace().
+	log.Debug().
 		Msg("All accounts funded")
 
 	return nil
@@ -301,7 +301,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
 
-	log.Trace().
+	log.Debug().
 		Msg("Returning funds from sending addresses to funding address")
 
 	ethTransferGas := big.NewInt(21000)
@@ -330,7 +330,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 		log.Error().Err(err).Msg("Unable to get funding address balance")
 		return err
 	}
-	log.Trace().
+	log.Debug().
 		Str("address", fundingAddress.Hex()).
 		Str("balance", balanceBefore.String()).
 		Msg("funding account balance before funds returned")
@@ -365,7 +365,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 					return
 				}
 
-				log.Trace().
+				log.Debug().
 					Str("from", account.address.Hex()).
 					Str("to", fundingAddressHex).
 					Str("amount", amount.String()).
@@ -427,7 +427,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 		return err
 	}
 
-	log.Trace().
+	log.Debug().
 		Str("address", fundingAddress.Hex()).
 		Str("previousBalance", balanceBefore.String()).
 		Str("currentBalance", balanceAfter.String()).
