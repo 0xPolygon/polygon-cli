@@ -26,9 +26,9 @@ Example usage:
 
 ```bash
 polycli ulxly compute-balance-nullifier-tree \
-        --l2-claim-file l2-claim-0-to-11454081.ndjson \
+        --l2-claims-file l2-claim-0-to-11454081.ndjson \
         --l2-deposits-file l2-deposits-0-to-11454081.ndjson \
-        --l2-network-id 3
+        --l2-network-id 3 \
         --bridge-address 0x528e26b25a34a4A5d0dbDa1d57D318153d2ED582 \
         --rpc-url http://localhost:8213 | jq '.'
 ```
