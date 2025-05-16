@@ -30,7 +30,9 @@ anvil: ## Start a local anvil node.
 		--host ${HOST} \
 		--port $(PORT) \
 		--chain-id ${CHAIN_ID} \
-		--balance 999999999999999
+		--balance 999999999999999 \
+		--block-time 5 \
+		--gas-limit 300000000000
 
 .PHONY: fund
 fund: ## Fund the loadtest account with 100k ETH.
