@@ -3,6 +3,7 @@ package loadtest
 import (
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"math/big"
 	"slices"
