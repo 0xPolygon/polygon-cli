@@ -121,13 +121,15 @@ func characterToLoadTestMode(mode string) (loadTestMode, error) {
 }
 
 func getRandomMode() loadTestMode {
-	// Does not include the following modes: blob, call, inscription, recall, rpc, uniswapv3
+	// Does not include the following modes:
+	// blob, call, contract call, inscription,
+	// recall, rpc, uniswap v3
 	modes := []loadTestMode{
 		loadTestModeERC20,
 		loadTestModeERC721,
 		// loadTestModeBlob,
 		// loadTestModeCall,
-		loadTestModeContractCall,
+		// loadTestModeContractCall,
 		loadTestModeDeploy,
 		loadTestModeFunction,
 		// loadTestModeInscription,
@@ -333,7 +335,11 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	fundingAmount := *inputLoadTestParams.AddressFundingAmount
 	sendingAddressCount := *inputLoadTestParams.SendingAddressCount
 	sendingAddressesFile := *inputLoadTestParams.SendingAddressesFile
-	accountPool = NewAccountPool(ctx, c, privateKey, big.NewInt(0).SetUint64(fundingAmount))
+	accountPool, err = NewAccountPool(ctx, c, privateKey, big.NewInt(0).SetUint64(fundingAmount))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to create account pool")
+		return fmt.Errorf("unable to create account pool. %w", err)
+	}
 	if len(sendingAddressesFile) > 0 {
 		log.Trace().
 			Str("sendingAddressFile", sendingAddressesFile).
@@ -346,17 +352,17 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 				Msg("Unable to read private keys from file")
 			return fmt.Errorf("unable to read private keys from file. %w", iErr)
 		}
-		err = accountPool.AddN(privateKeys...)
+		err = accountPool.AddN(ctx, privateKeys...)
 	} else if sendingAddressCount > 1 {
 		log.Trace().
 			Uint64("sendingAddressCount", sendingAddressCount).
 			Msg("Adding random accounts to the account pool")
-		err = accountPool.AddRandomN(sendingAddressCount)
+		err = accountPool.AddRandomN(ctx, sendingAddressCount)
 	} else {
 		log.Trace().
 			Uint64("sendingAddressCount", sendingAddressCount).
 			Msg("Using the same account for all transactions")
-		err = accountPool.Add(privateKey)
+		err = accountPool.Add(ctx, privateKey)
 	}
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to add random accounts")
@@ -404,54 +410,20 @@ func readPrivateKeysFromFile(sendingAddressesFile string) ([]*ecdsa.PrivateKey, 
 	return privateKeys, nil
 }
 
-func initNonce(ctx context.Context, c *ethclient.Client) error {
-	currentNonceMutex.Lock()
-	defer currentNonceMutex.Unlock()
-
-	var err error
-	startBlockNumber, err = c.BlockNumber(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get current block number")
-		return err
-	}
-
-	// Get pending nonce to be prevent nonce collision (if tx from same sender is already present)
-	currentNonce, err = c.PendingNonceAt(ctx, *inputLoadTestParams.FromETHAddress)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get account nonce")
-		return err
-	}
-
-	if inputLoadTestParams.StartNonce != nil && *inputLoadTestParams.StartNonce > 0 {
-		currentNonce = *inputLoadTestParams.StartNonce
-	}
-
-	log.Info().Uint64("startNonce", startNonce).Msg("setting the starting nonce")
-
-	startNonce = currentNonce
-	return nil
-}
-
 func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
-	log.Debug().Uint64("startNonce", startNonce).Uint64("lastNonce", currentNonce).Msg("Finished main load test loop")
 	if *inputLoadTestParams.SendOnly {
-		log.Info().Uint64("transactionsSent", currentNonce-startNonce).Msg("SendOnly mode enabled - skipping wait period and summarization")
+		log.Info().
+			Msg("SendOnly mode enabled - skipping wait period and summarization")
 		return nil
 	}
-	log.Debug().Msg("Waiting for remaining transactions to be completed and mined")
-
-	var err error
-	finalBlockNumber, err = waitForFinalBlock(ctx, c, rpc, startBlockNumber, startNonce, currentNonce)
-	if err != nil {
-		log.Error().Err(err).Msg("There was an issue waiting for all transactions to be mined")
-	}
-	if len(loadTestResults) == 0 {
-		return errors.New("no transactions observed")
-	}
+	log.Debug().
+		Msg("Waiting for remaining transactions to be completed and mined")
 
 	startTime := loadTestResults[0].RequestTime
 	endTime := time.Now()
-	log.Debug().Uint64("currentNonce", currentNonce).Uint64("final block number", finalBlockNumber).Msg("Got final block number")
+	log.Debug().
+		Uint64("final block number", finalBlockNumber).
+		Msg("Got final block number")
 
 	if *inputLoadTestParams.CallOnly {
 		log.Info().Msg("CallOnly mode enabled - blocks aren't mined")
@@ -459,17 +431,32 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 		return nil
 	}
 
+	var err error
+	finalBlockNumber, err = waitForFinalBlock(ctx, c, rpc, startBlockNumber)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Msg("There was an issue waiting for all transactions to be mined")
+	}
+	if len(loadTestResults) == 0 {
+		return errors.New("no transactions observed")
+	}
+
 	if *inputLoadTestParams.ShouldProduceSummary {
-		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
+		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, finalBlockNumber)
 		if err != nil {
-			log.Error().Err(err).Msg("There was an issue creating the load test summary")
+			log.Error().
+				Err(err).
+				Msg("There was an issue creating the load test summary")
 		}
 	}
 	lightSummary(loadTestResults, startTime, endTime, rl)
 
 	err = accountPool.ReturnFunds(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("There was an issue returning the funds from the sending addresses back to the funding address")
+		log.Error().
+			Err(err).
+			Msg("There was an issue returning the funds from the sending addresses back to the funding address")
 	}
 
 	return nil
@@ -536,6 +523,9 @@ func runLoadTest(ctx context.Context) error {
 			return err
 		}
 
+		log.Debug().
+			Msg("Finished main load test loop")
+
 		if err = completeLoadTest(ctx, ec, rpc); err != nil {
 			log.Error().Err(err).Msg("Encountered error while wrapping up loadtest")
 		}
@@ -571,7 +561,7 @@ func runLoadTest(ctx context.Context) error {
 			if err != nil {
 				log.Error().Err(err).Msg("Unable to retrieve final block number")
 			}
-			err = summarizeTransactions(ctx, ec, rpc, startBlockNumber, startNonce, finalBlockNumber, currentNonce)
+			err = summarizeTransactions(ctx, ec, rpc, startBlockNumber, finalBlockNumber)
 			if err != nil {
 				log.Error().Err(err).Msg("There was an issue creating the load test summary")
 			}
@@ -590,40 +580,39 @@ func runLoadTest(ctx context.Context) error {
 	return nil
 }
 
-func updateRateLimit(ctx context.Context, rl *rate.Limiter, rpc *ethrpc.Client, nonceGetter func() (uint64, error), steadyStateQueueSize uint64, rateLimitIncrement uint64, cycleDuration time.Duration, backoff float64) {
+func updateRateLimit(ctx context.Context, rl *rate.Limiter, rpc *ethrpc.Client, accountPool *AccountPool, steadyStateQueueSize uint64, rateLimitIncrement uint64, cycleDuration time.Duration, backoff float64) {
 	tryTxPool := true
 	ticker := time.NewTicker(cycleDuration)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			var adaptiveNonce uint64
 			var txPoolSize uint64
 			var err error
-			var pendingTx uint64
-			var queuedTx uint64
+			var pendingTxs uint64
+			var queuedTxs uint64
 			// TODO perhaps this should be a mode rather than a fallback
 			if tryTxPool {
-				pendingTx, queuedTx, err = util.GetTxPoolStatus(rpc)
+				pendingTxs, queuedTxs, err = util.GetTxPoolStatus(rpc)
 			}
 
 			if err != nil {
 				tryTxPool = false
-				log.Warn().Err(err).Msg("Error getting txpool size. Falling back to latest nonce and disabling txpool check")
-				adaptiveNonce, err = nonceGetter()
+				log.Warn().
+					Err(err).
+					Msg("Error getting txpool size. Falling back to latest nonce and disabling txpool check")
+
+				pendingTxs, err = accountPool.NumberOfPendingTxs(ctx)
 				if err != nil {
-					log.Error().Err(err).Msg("Error getting nonce from rpc")
-					return
+					log.Error().
+						Err(err).
+						Msg("Unable to get pending transactions to update rate limit")
+					break
 				}
-				currentNonceMutex.RLock()
-				if currentNonce < adaptiveNonce {
-					txPoolSize = 0
-				} else {
-					txPoolSize = currentNonce - adaptiveNonce
-				}
-				currentNonceMutex.RUnlock()
+
+				txPoolSize = pendingTxs
 			} else {
-				txPoolSize = pendingTx + queuedTx
+				txPoolSize = pendingTxs + queuedTxs
 			}
 
 			if txPoolSize < steadyStateQueueSize {
@@ -646,8 +635,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	ltp := inputLoadTestParams
 	log.Trace().Interface("Input Params", ltp).Msg("Params")
 
-	routines := *ltp.Concurrency
-	requests := *ltp.Requests
+	maxRoutines := *ltp.Concurrency
+	maxRequests := *ltp.Requests
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 	mode := ltp.Mode
@@ -659,14 +648,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 	rateLimitCtx, cancel := context.WithCancel(ctx)
 
-	nonceGetter := func(ec *ethclient.Client, fromAddress common.Address) func() (uint64, error) {
-		return func() (uint64, error) {
-			return ec.NonceAt(ctx, fromAddress, nil)
-		}
-	}(c, *ltp.FromETHAddress)
 	defer cancel()
 	if *ltp.AdaptiveRateLimit && rl != nil {
-		go updateRateLimit(rateLimitCtx, rl, rpc, nonceGetter, steadyStateTxPoolSize, adaptiveRateLimitIncrement, time.Duration(*ltp.AdaptiveCycleDuration)*time.Second, *ltp.AdaptiveBackoffFactor)
+		go updateRateLimit(rateLimitCtx, rl, rpc, accountPool, steadyStateTxPoolSize, adaptiveRateLimitIncrement, time.Duration(*ltp.AdaptiveCycleDuration)*time.Second, *ltp.AdaptiveBackoffFactor)
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
@@ -774,8 +758,15 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		}
 	}
 
-	var i int64
-	err = initNonce(ctx, c)
+	startBlockNumber, err = c.BlockNumber(ctx)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Msg("Failed to get current block number")
+		return err
+	}
+
+	err = accountPool.RefreshNonce(ctx, tops.From)
 	if err != nil {
 		return err
 	}
@@ -787,27 +778,32 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 	log.Debug().Msg("Starting main load test loop")
 	var wg sync.WaitGroup
-	for i = 0; i < routines; i = i + 1 {
-		log.Trace().Int64("routine", i).Msg("Starting Thread")
+	for routineID := int64(0); routineID < maxRoutines; routineID++ {
+		log.Trace().
+			Int64("routineID", routineID).
+			Msg("starting concurrent routine")
 		wg.Add(1)
-		go func(i int64) {
-			var j int64
+		go func(routineID int64) {
 			var startReq time.Time
 			var endReq time.Time
 			var tErr error
 			var ltTxHash common.Hash
-			for j = 0; j < requests; j = j + 1 {
+			for requestID := int64(0); requestID < maxRequests; requestID++ {
 				if rl != nil {
 					tErr = rl.Wait(ctx)
 					if tErr != nil {
-						log.Error().Err(tErr).Msg("Encountered a rate limiting error")
+						log.Error().
+							Int64("routineID", routineID).
+							Int64("requestID", requestID).
+							Err(tErr).
+							Msg("Encountered a rate limiting error")
 					}
 				}
 
 				localMode := mode
 				// if there are multiple modes, iterate through them, 'r' mode is supported here
 				if ltp.MultiMode {
-					localMode = ltp.ParsedModes[int(i+j)%(len(ltp.ParsedModes))]
+					localMode = ltp.ParsedModes[int(routineID+requestID)%(len(ltp.ParsedModes))]
 				}
 				// if we're doing random, we'll just pick one based on the current index
 				if localMode == loadTestModeRandom {
@@ -816,13 +812,21 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 				account, err := accountPool.Next(ctx)
 				if err != nil {
-					log.Error().Err(err).Msg("Unable to get next account from account pool")
+					log.Error().
+						Int64("routineID", routineID).
+						Int64("requestID", requestID).
+						Err(err).
+						Msg("Unable to get next account from account pool")
 					return
 				}
 				chainID := new(big.Int).SetUint64(*ltp.ChainID)
 				sendingTops, err := bind.NewKeyedTransactorWithChainID(account.privateKey, chainID)
 				if err != nil {
-					log.Error().Err(err).Msg("Unable create transaction signer")
+					log.Error().
+						Int64("routineID", routineID).
+						Int64("requestID", requestID).
+						Err(err).
+						Msg("Unable create transaction signer")
 					return
 				}
 				sendingTops.Nonce = new(big.Int).SetUint64(account.nonce)
@@ -863,18 +867,16 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				default:
 					log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
 				}
-				log.Debug().
-					Int64("i", i).
-					Int64("j", j).
-					Any("nonce", sendingTops.Nonce).
-					Uint64("nonceU64", sendingTops.Nonce.Uint64()).
-					Msg("recordSample")
-				recordSample(i, j, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
+				recordSample(routineID, requestID, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
 				if tErr != nil {
 					log.Error().
+						Int64("routineID", routineID).
+						Int64("requestID", requestID).
 						Err(tErr).
 						Str("address", sendingTops.From.String()).
 						Uint64("nonce", sendingTops.Nonce.Uint64()).
+						Uint64("gas", sendingTops.GasLimit).
+						Any("gasPrice", sendingTops.GasPrice).
 						Int64("request time", endReq.Sub(startReq).Milliseconds()).
 						Msg("Recorded an error while sending transactions")
 
@@ -902,7 +904,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					}
 
 					if retryForNonce {
-						err := accountPool.AddReusableNonce(sendingTops.From, sendingTops.Nonce.Uint64())
+						err := accountPool.AddReusableNonce(ctx, sendingTops.From, sendingTops.Nonce.Uint64())
 						if err != nil {
 							log.Error().
 								Str("address", sendingTops.From.String()).
@@ -914,14 +916,15 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				}
 
 				log.Trace().
+					Int64("routineID", routineID).
+					Int64("requestID", requestID).
 					Stringer("txhash", ltTxHash).
-					Uint64("nonce", sendingTops.Nonce.Uint64()).
-					Int64("routine", i).
+					Any("nonce", sendingTops.Nonce).
 					Str("mode", localMode.String()).
-					Int64("request", j).Msg("Request")
+					Msg("Request")
 			}
 			wg.Done()
-		}(i)
+		}(routineID)
 	}
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
@@ -1084,7 +1087,7 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 }
 
 var (
-	cachedBlockNumber           uint64
+	cachedBlockNumber           *uint64
 	cachedGasPriceLock          sync.Mutex
 	cachedGasPrice              *big.Int
 	cachedGasTipCap             *big.Int
@@ -1121,14 +1124,11 @@ func biasGasPrice(price *big.Int) *big.Int {
 func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, *big.Int) {
 	// this should be one of the fastest RPC calls, so hopefully there isn't too much overhead calling this
 	bn := getLatestBlockNumber(ctx, c)
-	if bn == 0 {
-		return nil, nil
-	}
 	isDynamic := inputLoadTestParams.ChainSupportBaseFee
 
 	cachedGasPriceLock.Lock()
 	defer cachedGasPriceLock.Unlock()
-	if bn <= cachedBlockNumber {
+	if cachedBlockNumber != nil && bn <= *cachedBlockNumber {
 		return cachedGasPrice, cachedGasTipCap
 	}
 
@@ -1153,7 +1153,7 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 	}
 
 	if pErr == nil && (tErr == nil || !isDynamic) {
-		cachedBlockNumber = bn
+		cachedBlockNumber = &bn
 		cachedGasPrice = gp
 		cachedGasTipCap = gt
 
@@ -1785,9 +1785,9 @@ func recordSample(goRoutineID, requestID int64, err error, start, end time.Time,
 	if err != nil {
 		s.IsError = true
 	}
-	loadTestResutsMutex.Lock()
+	loadTestResultsMutex.Lock()
 	loadTestResults = append(loadTestResults, s)
-	loadTestResutsMutex.Unlock()
+	loadTestResultsMutex.Unlock()
 }
 
 func hexwordRead(b []byte) (int, error) {
@@ -1856,13 +1856,13 @@ func configureTransactOpts(ctx context.Context, c *ethclient.Client, tops *bind.
 	return tops
 }
 
-func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, endNonce uint64) (uint64, error) {
+func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber uint64) (uint64, error) {
 	ltp := inputLoadTestParams
 	var err error
 	var lastBlockNumber uint64
 	var checkInterval = 5 * time.Second
 
-	noncesToCheck := accountPool.Nonces()
+	noncesToCheck := accountPool.Nonces(ctx)
 
 	for {
 		lastBlockNumber, err = c.BlockNumber(ctx)
@@ -1873,23 +1873,20 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 			return lastBlockNumber, nil
 		}
 
-		for address, endNonce := range noncesToCheck {
-			currentNonceForFinalBlock, err := c.NonceAt(ctx, address, new(big.Int).SetUint64(lastBlockNumber))
+		for address, expectedNonce := range noncesToCheck {
+			nonce, err := c.NonceAt(ctx, address, new(big.Int).SetUint64(lastBlockNumber))
 			if err != nil {
 				return 0, err
 			}
-			if currentNonceForFinalBlock < endNonce {
-				log.Debug().
-					Str("address", address.String()).
-					Uint64("endNonce", endNonce).
-					Uint64("currentNonceForFinalBlock", currentNonceForFinalBlock).
-					Msg("Not all transactions for account have been mined. Waiting...")
+			logEvent := log.Debug().
+				Str("address", address.String()).
+				Uint64("nonce", nonce).
+				Uint64("expectedNonce", expectedNonce).
+				Uint64("lastBlockNumber", lastBlockNumber)
+			if nonce < expectedNonce {
+				logEvent.Msg("not all transactions for account have been mined. waiting...")
 			} else {
-				log.Debug().
-					Str("address", address.String()).
-					Uint64("endNonce", endNonce).
-					Uint64("currentNonceForFinalBlock", currentNonceForFinalBlock).
-					Msg("All transactions for account have been mined")
+				logEvent.Msg("all transactions for account have been mined")
 				delete(noncesToCheck, address)
 			}
 		}

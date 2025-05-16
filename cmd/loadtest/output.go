@@ -30,8 +30,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNonce, endNonce uint64) {
-	filterBlockSummary(bs, startNonce, endNonce)
+func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary) {
+	filterBlockSummary(bs)
 	mapKeys := getSortedMapKeys(bs)
 	if len(mapKeys) == 0 {
 		return
@@ -143,20 +143,18 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary, startNon
 		log.Error().Str("mode", summaryOutputMode).Msg("Invalid mode for summary output")
 	}
 }
-func filterBlockSummary(blockSummaries map[uint64]blockSummary, startNonce, endNonce uint64) {
+func filterBlockSummary(blockSummaries map[uint64]blockSummary) {
 	validTx := make(map[ethcommon.Hash]struct{}, 0)
 	var minBlock uint64 = math.MaxUint64
 	var maxBlock uint64 = 0
 	for _, bs := range blockSummaries {
 		for _, tx := range bs.Block.Transactions {
-			if tx.Nonce.ToUint64() >= startNonce && tx.Nonce.ToUint64() <= endNonce {
-				validTx[tx.Hash.ToHash()] = struct{}{}
-				if tx.BlockNumber.ToUint64() < minBlock {
-					minBlock = tx.BlockNumber.ToUint64()
-				}
-				if tx.BlockNumber.ToUint64() > maxBlock {
-					maxBlock = tx.BlockNumber.ToUint64()
-				}
+			validTx[tx.Hash.ToHash()] = struct{}{}
+			if tx.BlockNumber.ToUint64() < minBlock {
+				minBlock = tx.BlockNumber.ToUint64()
+			}
+			if tx.BlockNumber.ToUint64() > maxBlock {
+				maxBlock = tx.BlockNumber.ToUint64()
 			}
 		}
 	}
@@ -185,7 +183,6 @@ func filterBlockSummary(blockSummaries map[uint64]blockSummary, startNonce, endN
 			}
 		}
 		bs.Receipts = filteredReceipts
-
 	}
 }
 func getMapValues[K constraints.Ordered, V any](m map[K]V) []V {
@@ -310,7 +307,7 @@ type SummaryOutput struct {
 	Latencies          Latency
 }
 
-func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, startNonce, lastBlockNumber, endNonce uint64) error {
+func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, startBlockNumber, lastBlockNumber uint64) error {
 	ltp := inputLoadTestParams
 	var err error
 
@@ -441,7 +438,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		}
 	}
 
-	printBlockSummary(c, blockData, startNonce, endNonce)
+	printBlockSummary(c, blockData)
 
 	log.Trace().Str("summaryTime", (endReceipt.Sub(startReceipt)).String()).Msg("Total Summary Time")
 

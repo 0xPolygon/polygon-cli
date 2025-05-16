@@ -109,17 +109,14 @@ type (
 
 var (
 	//go:embed loadtestUsage.md
-	loadtestUsage       string
-	inputLoadTestParams loadTestParams
-	loadTestResults     []loadTestSample
-	loadTestResutsMutex sync.RWMutex
-	startBlockNumber    uint64
-	finalBlockNumber    uint64
-	startNonce          uint64
-	currentNonce        uint64
-	currentNonceMutex   sync.RWMutex
-	rl                  *rate.Limiter
-	accountPool         *AccountPool
+	loadTestUsage        string
+	inputLoadTestParams  loadTestParams
+	loadTestResults      []loadTestSample
+	loadTestResultsMutex sync.RWMutex
+	startBlockNumber     uint64
+	finalBlockNumber     uint64
+	rl                   *rate.Limiter
+	accountPool          *AccountPool
 
 	hexwords = []byte{
 		0x00, 0x0F, 0xF1, 0xCE,
@@ -174,7 +171,7 @@ var (
 var LoadtestCmd = &cobra.Command{
 	Use:   "loadtest",
 	Short: "Run a generic load test against an Eth/EVM style JSON-RPC endpoint.",
-	Long:  loadtestUsage,
+	Long:  loadTestUsage,
 	Args:  cobra.NoArgs,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		inputLoadTestParams.RPCUrl = flag_loader.GetRpcUrlFlagValue(cmd)
