@@ -49,10 +49,13 @@ fund: ## Fund the loadtest account with 100k ETH.
 loadtest: fund ## Run random loadtest against a local RPC.
 	sleep 2
 	go run -race main.go loadtest \
-		--verbosity 600 \
+		--verbosity 700 \
 		--rpc-url http://${HOST}:$(PORT) \
 		--chain-id ${CHAIN_ID} \
 		--mode random \
 		--concurrency 1 \
 		--requests 200 \
-		--rate-limit 100
+		--rate-limit 100 \
+		--sending-address-count 10 \
+		--pre-fund-sending-addresses 
+		

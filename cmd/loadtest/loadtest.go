@@ -284,6 +284,23 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		*inputLoadTestParams.ChainID = chainID.Uint64()
 	}
 	inputLoadTestParams.CurrentBaseFee = header.BaseFee
+	go func(c *ethclient.Client, lbn uint64) {
+		latestBlockNumber := lbn
+		for {
+			iHeader, iErr := c.HeaderByNumber(ctx, nil)
+			if iErr == nil {
+				if iHeader.Number.Uint64() > latestBlockNumber {
+					inputLoadTestParams.CurrentBaseFee = iHeader.BaseFee
+					latestBlockNumber = iHeader.Number.Uint64()
+					log.Trace().
+						Uint64("latestBlockNumber", latestBlockNumber).
+						Str("baseFee", iHeader.BaseFee.String()).
+						Msg("Base fee updated")
+				}
+			}
+			time.Sleep(time.Second)
+		}
+	}(c, header.Number.Uint64())
 
 	modes := *inputLoadTestParams.Modes
 	if len(modes) == 0 {
@@ -884,7 +901,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					// check nonce for reuse
 					// if we're not in call only mode, we want to retry
 					if !*ltp.CallOnly {
-
 						// we start setting nonce to be reused
 						reuseNonce := true
 
@@ -1841,7 +1857,7 @@ func configureTransactOpts(ctx context.Context, c *ethclient.Client, tops *bind.
 
 	tops.GasPrice = nil
 	tops.GasTipCap = gasTipCap
-	tops.GasFeeCap = gasTipCap
+	tops.GasFeeCap = ltp.CurrentBaseFee
 
 	if ltp.ForcePriorityGasPrice != nil && *ltp.ForcePriorityGasPrice != 0 {
 		tops.GasTipCap = big.NewInt(0).SetUint64(*ltp.ForcePriorityGasPrice)

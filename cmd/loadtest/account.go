@@ -441,6 +441,8 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
 
+	ltp := inputLoadTestParams
+
 	log.Debug().
 		Msg("Returning funds from sending addresses to funding address")
 
@@ -449,12 +451,23 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	gasPrice, err := ap.client.SuggestGasPrice(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to get gas price")
-		return err
+	pricePerGas := new(big.Int)
+	if *ltp.LegacyTransactionMode {
+		gasPrice, iErr := ap.client.SuggestGasPrice(ctx)
+		if iErr != nil {
+			log.Error().Err(iErr).Msg("Unable to get gas price")
+			return iErr
+		}
+		pricePerGas = gasPrice
+	} else {
+		header, iErr := ap.client.HeaderByNumber(ctx, nil)
+		if iErr != nil {
+			log.Error().Err(iErr).Msg("Unable to get header")
+			return iErr
+		}
+		pricePerGas = header.BaseFee
 	}
-	txFee := new(big.Int).Mul(ethTransferGas, gasPrice)
+	txFee := new(big.Int).Mul(ethTransferGas, pricePerGas)
 	// double the txFee to account for gas price fluctuations and
 	// different ways to charge transactions, like op networks
 	// that charge for the l1 transaction
@@ -486,22 +499,21 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	for i := range len(ap.accounts) {
 		go func(accIdx int) {
 			defer wg.Done()
-			account := ap.accounts[i]
 			// if account is the funding account, skip it
-			if account.address.String() == fundingAddress.String() {
+			if ap.accounts[i].address.String() == fundingAddress.String() {
 				return
 			}
 
-			if account.funded {
+			if ap.accounts[i].funded {
 				// check if account has enough balance to pay the transfer fee
 				iErr := ap.clientRateLimiter.Wait(ctx)
 				if iErr != nil {
-					errCh <- fmt.Errorf("failed to wait rate limit to get balance for acc %s: %w", account.address.String(), iErr)
+					errCh <- fmt.Errorf("failed to wait rate limit to get balance for acc %s: %w", ap.accounts[i].address.String(), iErr)
 					return
 				}
-				balance, iErr := ap.client.BalanceAt(ctx, account.address, nil)
+				balance, iErr := ap.client.BalanceAt(ctx, ap.accounts[i].address, nil)
 				if iErr != nil {
-					errCh <- fmt.Errorf("failed to check account balance for acc %s: %w", account.address.String(), iErr)
+					errCh <- fmt.Errorf("failed to check account balance for acc %s: %w", ap.accounts[i].address.String(), iErr)
 					return
 				}
 				if balance.Cmp(txFee) <= 0 {
@@ -511,15 +523,28 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 				// subtract the transfer fee from the balance
 				amount := new(big.Int).Sub(balance, txFee)
 
-				// create the transaction to return the funds
-				signedTx, iErr := ap.createEOATransferTx(ctx, account.privateKey, &account.nonce, fundingAddress, amount)
+				// get pending nonce for account
+				iErr = ap.clientRateLimiter.Wait(ctx)
 				if iErr != nil {
-					errCh <- fmt.Errorf("failed to create tx to return balance from acc %s to %s: %w", account.address.String(), fundingAddressHex, iErr)
+					errCh <- fmt.Errorf("failed to wait rate limit to get nonce for acc %s: %w", ap.accounts[i].address.String(), iErr)
+					return
+				}
+				pendingNonce, iErr := ap.client.PendingNonceAt(ctx, ap.accounts[i].address)
+				if iErr != nil {
+					errCh <- fmt.Errorf("failed to get nonce for acc %s: %w", ap.accounts[i].address.String(), iErr)
+					return
+				}
+				ap.accounts[i].nonce = pendingNonce
+
+				// create the transaction to return the funds
+				signedTx, iErr := ap.createEOATransferTx(ctx, ap.accounts[i].privateKey, &ap.accounts[i].nonce, fundingAddress, amount)
+				if iErr != nil {
+					errCh <- fmt.Errorf("failed to create tx to return balance from acc %s to %s: %w", ap.accounts[i].address.String(), fundingAddressHex, iErr)
 					return
 				}
 
 				log.Debug().
-					Str("from", account.address.Hex()).
+					Str("from", ap.accounts[i].address.Hex()).
 					Str("to", fundingAddressHex).
 					Str("amount", amount.String()).
 					Str("balance", balance.String()).
@@ -529,19 +554,19 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 				// send the transaction to return the funds
 				iErr = ap.clientRateLimiter.Wait(ctx)
 				if iErr != nil {
-					errCh <- fmt.Errorf("failed to check wait rate limit to send transaction for acc %s: %w", account.address.String(), iErr)
+					errCh <- fmt.Errorf("failed to check wait rate limit to send transaction for acc %s: %w", ap.accounts[i].address.String(), iErr)
 					return
 				}
 				iErr = ap.client.SendTransaction(ctx, signedTx)
 				if iErr != nil {
 					log.Debug().
-						Str("from", account.address.Hex()).
+						Str("from", ap.accounts[i].address.Hex()).
 						Str("to", fundingAddressHex).
 						Str("amount", amount.String()).
 						Str("balance", balance.String()).
 						Interface("tx", signedTx).
 						Msg("Unable to send return balance transaction")
-					errCh <- fmt.Errorf("failed to send tx to return balance from acc %s to %s: %w", account.address.String(), fundingAddressHex, iErr)
+					errCh <- fmt.Errorf("failed to send tx to return balance from acc %s to %s: %w", ap.accounts[i].address.String(), fundingAddressHex, iErr)
 					return
 				}
 
