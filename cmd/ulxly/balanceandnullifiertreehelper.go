@@ -2,6 +2,7 @@ package ulxly
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"strings"
@@ -288,4 +289,10 @@ func checkClaimCalldata(client *ethclient.Client, bridge common.Address, claimHa
 		}
 	}
 	return false, fmt.Errorf("claim not found")
+}
+
+func Uint32ToBytesLittleEndian(num uint32) []byte {
+	bytes := make([]byte, 4) // uint32 is 4 bytes
+	binary.LittleEndian.PutUint32(bytes, num)
+	return bytes
 }

@@ -32,7 +32,6 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly/polygonrollupmanager"
-	"github.com/0xPolygon/polygon-cli/bindings/ulxly/polygonzkevmglobalexitrootl2"
 	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -373,20 +372,11 @@ func nullifierAndBalanceTree(args []string) error {
 	if err != nil {
 		return err
 	}
-	gerManagerAddress, err := bridgeV2.GlobalExitRootManager(&bind.CallOpts{Pending: false})
+	ler_count, err := bridgeV2.LastUpdatedDepositCount(&bind.CallOpts{Pending: false})
 	if err != nil {
 		return err
 	}
-	gerManager, err := polygonzkevmglobalexitrootl2.NewPolygonzkevmglobalexitrootl2(gerManagerAddress, client)
-	if err != nil {
-		return err
-	}
-	var ler common.Hash
-	ler, err = gerManager.LastRollupExitRoot(&bind.CallOpts{Pending: false})
-	if err != nil {
-		return err
-	}
-	log.Info().Msgf("Last Local Exit Root: %s", ler.String())
+	log.Info().Msgf("Last LER count: %d", ler_count)
 	balanceTreeRoot, err := computeBalanceTree(client, bridgeAddress, l2RawClaimsData, l2NetworkID, l2RawDepositsData)
 	if err != nil {
 		return err
@@ -395,7 +385,7 @@ func nullifierAndBalanceTree(args []string) error {
 	if err != nil {
 		return err
 	}
-	initPessimisticRoot := crypto.Keccak256Hash(balanceTreeRoot.Bytes(), nullifierTreeRoot.Bytes(), ler.Bytes())
+	initPessimisticRoot := crypto.Keccak256Hash(balanceTreeRoot.Bytes(), nullifierTreeRoot.Bytes(), Uint32ToBytesLittleEndian(ler_count))
 	fmt.Printf(`
 	{
 		"balanceTreeRoot": "%s",

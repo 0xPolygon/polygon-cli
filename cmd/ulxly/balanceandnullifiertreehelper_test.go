@@ -10,6 +10,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly"
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly/testvectors"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -136,4 +137,13 @@ func TestTokenString(t *testing.T) {
 	assert.Equal(t, token2.OriginTokenAddress.String(), newToken2.OriginTokenAddress.String())
 	assert.Equal(t, token2, newToken2)
 	assert.Equal(t, token2.String(), newToken2.String())
+}
+
+func TestCheckHash(t *testing.T) {
+	balanceTreeRoot := common.HexToHash("0xb89931f7384aeddb5c136a679d54464007e2d828d4741bec626ff92aeb4b12d4")
+	nullifierTreeRoot := common.HexToHash("0xe2c3ed4052eeb1d60514b4c38ece8d73a27f37fa5b36dcbf338e70de95798caa")
+	ler_counter := uint32(0)
+
+	initPessimisticRoot := crypto.Keccak256Hash(balanceTreeRoot.Bytes(), nullifierTreeRoot.Bytes(), ulxly.Uint32ToBytesLittleEndian(ler_counter))
+	assert.Equal(t, "0xc89c9c0f2ebd19afa9e5910097c43e56fb4aff3a06ddee8d7c9bae09bc769184", initPessimisticRoot.String())
 }
