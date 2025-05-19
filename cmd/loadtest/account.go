@@ -605,7 +605,11 @@ func (ap *AccountPool) Nonces(ctx context.Context) map[common.Address]uint64 {
 
 	nonces := make(map[common.Address]uint64)
 	for _, account := range ap.accounts {
-		nonces[account.address] = account.nonce
+		if len(account.reusableNonces) > 0 {
+			nonces[account.address] = account.reusableNonces[len(account.reusableNonces)-1]
+		} else {
+			nonces[account.address] = account.nonce
+		}
 	}
 	return nonces
 }

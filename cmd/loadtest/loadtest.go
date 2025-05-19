@@ -873,48 +873,49 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 						Int64("routineID", routineID).
 						Int64("requestID", requestID).
 						Err(tErr).
+						Str("mode", localMode.String()).
 						Str("address", sendingTops.From.String()).
 						Uint64("nonce", sendingTops.Nonce.Uint64()).
 						Uint64("gas", sendingTops.GasLimit).
 						Any("gasPrice", sendingTops.GasPrice).
 						Int64("request time", endReq.Sub(startReq).Milliseconds()).
-						Msg("Recorded an error while sending transactions")
+						Msg("recorded an error while sending transactions")
 
-					retryForNonce := false
+					// check nonce for reuse
+					// if we're not in call only mode, we want to retry
 					if !*ltp.CallOnly {
-						retryForNonce = true
-					}
-					if strings.Contains(tErr.Error(), "replacement transaction underpriced") && retryForNonce {
-						retryForNonce = false
-					}
-					if strings.Contains(tErr.Error(), "transaction underpriced") && retryForNonce {
-						retryForNonce = false
-					}
-					if strings.Contains(tErr.Error(), "nonce too low") && retryForNonce {
-						retryForNonce = false
-					}
-					if strings.Contains(tErr.Error(), "already known") && retryForNonce {
-						retryForNonce = false
-					}
-					if strings.Contains(tErr.Error(), "could not replace existing") && retryForNonce {
-						retryForNonce = false
-					}
-					if strings.Contains(tErr.Error(), "fee cap less than block base fee") {
-						retryForNonce = true
-					}
 
-					if retryForNonce {
-						err := accountPool.AddReusableNonce(ctx, sendingTops.From, sendingTops.Nonce.Uint64())
-						if err != nil {
-							log.Error().
-								Str("address", sendingTops.From.String()).
-								Uint64("nonce", sendingTops.Nonce.Uint64()).
-								Err(err).
-								Msg("Unable to add reusable nonce to account pool")
+						// we start setting nonce to be reused
+						reuseNonce := true
+
+						// if the transaction hash is not zero, this means a tx was
+						// created, in this case we want to check the error to understand
+						// if the nonce can be reused
+						if ltTxHash.String() != (ethcommon.Hash{}).String() {
+							// if it is an error that consumes the nonce, we can't retry it
+							if strings.Contains(tErr.Error(), "replacement transaction underpriced") ||
+								strings.Contains(tErr.Error(), "transaction underpriced") ||
+								strings.Contains(tErr.Error(), "nonce too low") ||
+								strings.Contains(tErr.Error(), "already known") ||
+								strings.Contains(tErr.Error(), "could not replace existing") {
+								reuseNonce = false
+							}
+						}
+
+						// if we can reuse the nonce, we add it back to the account pool
+						// for the specific account
+						if reuseNonce {
+							err := accountPool.AddReusableNonce(ctx, sendingTops.From, sendingTops.Nonce.Uint64())
+							if err != nil {
+								log.Error().
+									Str("address", sendingTops.From.String()).
+									Uint64("nonce", sendingTops.Nonce.Uint64()).
+									Err(err).
+									Msg("Unable to add reusable nonce to account pool")
+							}
 						}
 					}
 				}
-
 				log.Trace().
 					Int64("routineID", routineID).
 					Int64("requestID", requestID).
@@ -1861,10 +1862,17 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 	var err error
 	var lastBlockNumber uint64
 	var checkInterval = 5 * time.Second
+	var maxRetries = 30
 
 	noncesToCheck := accountPool.Nonces(ctx)
 
+	retry := 0
 	for {
+		retry++
+		if retry > maxRetries {
+			log.Error().Msg("Max retries reached. Exiting...")
+			return 0, fmt.Errorf("max retries reached")
+		}
 		lastBlockNumber, err = c.BlockNumber(ctx)
 		if err != nil {
 			return 0, err
@@ -1896,7 +1904,10 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 			break
 		}
 
-		log.Debug().Msgf("Retrying in %s...", checkInterval.String())
+		log.Debug().
+			Int("maxRetries", maxRetries).
+			Int("retry", retry).
+			Msgf("Retrying in %s...", checkInterval.String())
 		time.Sleep(checkInterval)
 	}
 
