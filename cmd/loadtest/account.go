@@ -451,7 +451,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	pricePerGas := new(big.Int)
+	var pricePerGas *big.Int
 	if *ltp.LegacyTransactionMode {
 		gasPrice, iErr := ap.client.SuggestGasPrice(ctx)
 		if iErr != nil {
