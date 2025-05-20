@@ -98,7 +98,6 @@ type (
 		ToETHAddress          *ethcommon.Address
 		ContractETHAddress    *ethcommon.Address
 		SendAmount            *big.Int
-		FeeMutex              sync.RWMutex
 		CurrentBaseFee        *big.Int
 		MaxFeePerGas          *big.Int
 		ChainSupportBaseFee   bool
@@ -119,6 +118,7 @@ var (
 	finalBlockNumber     uint64
 	rl                   *rate.Limiter
 	accountPool          *AccountPool
+	feeMutex             sync.RWMutex
 
 	hexwords = []byte{
 		0x00, 0x0F, 0xF1, 0xCE,

@@ -283,10 +283,10 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	if *inputLoadTestParams.ChainID == 0 {
 		*inputLoadTestParams.ChainID = chainID.Uint64()
 	}
-	inputLoadTestParams.FeeMutex.Lock()
+	feeMutex.Lock()
 	inputLoadTestParams.CurrentBaseFee = header.BaseFee
 	inputLoadTestParams.MaxFeePerGas = header.BaseFee
-	inputLoadTestParams.FeeMutex.Unlock()
+	feeMutex.Unlock()
 	go func(c *ethclient.Client, lbn uint64) {
 		latestBlockNumber := lbn
 		for {
@@ -311,11 +311,11 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 			priorityFee := feeHistory.Reward[len(feeHistory.Reward)-1][0] // 50th percentile of most recent block
 			baseFee := feeHistory.BaseFee[len(feeHistory.BaseFee)-1]      // base fee of next block
-			inputLoadTestParams.FeeMutex.Lock()
+			feeMutex.Lock()
 			inputLoadTestParams.MaxFeePerGas.Mul(big.NewInt(2), priorityFee)
 			inputLoadTestParams.MaxFeePerGas.Add(inputLoadTestParams.MaxFeePerGas, baseFee)
 			inputLoadTestParams.CurrentBaseFee = baseFee
-			inputLoadTestParams.FeeMutex.Unlock()
+			feeMutex.Unlock()
 
 			latestBlockNumber = iHeader.Number.Uint64()
 			log.Trace().
