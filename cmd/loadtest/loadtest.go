@@ -284,21 +284,44 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		*inputLoadTestParams.ChainID = chainID.Uint64()
 	}
 	inputLoadTestParams.CurrentBaseFee = header.BaseFee
+	inputLoadTestParams.MaxFeePerGas = header.BaseFee
 	go func(c *ethclient.Client, lbn uint64) {
 		latestBlockNumber := lbn
 		for {
+			loopInterval := time.Second
+
 			iHeader, iErr := c.HeaderByNumber(ctx, nil)
-			if iErr == nil {
-				if iHeader.Number.Uint64() > latestBlockNumber {
-					inputLoadTestParams.CurrentBaseFee = iHeader.BaseFee
-					latestBlockNumber = iHeader.Number.Uint64()
-					log.Trace().
-						Uint64("latestBlockNumber", latestBlockNumber).
-						Str("baseFee", iHeader.BaseFee.String()).
-						Msg("Base fee updated")
-				}
+			if iErr != nil {
+				time.Sleep(loopInterval)
+				continue
 			}
-			time.Sleep(time.Second)
+
+			if latestBlockNumber >= iHeader.Number.Uint64() {
+				time.Sleep(loopInterval)
+				continue
+			}
+
+			feeHistory, iErr := c.FeeHistory(ctx, 5, nil, []float64{0.5})
+			if iErr != nil {
+				time.Sleep(loopInterval)
+				continue
+			}
+
+			priorityFee := feeHistory.Reward[len(feeHistory.Reward)-1][0] // 50th percentile of most recent block
+			baseFee := feeHistory.BaseFee[len(feeHistory.BaseFee)-1]      // base fee of next block
+			inputLoadTestParams.MaxFeePerGas.Mul(big.NewInt(2), priorityFee)
+			inputLoadTestParams.MaxFeePerGas.Add(inputLoadTestParams.MaxFeePerGas, baseFee)
+			inputLoadTestParams.CurrentBaseFee = baseFee
+
+			latestBlockNumber = iHeader.Number.Uint64()
+			log.Trace().
+				Uint64("latestBlockNumber", latestBlockNumber).
+				Str("priorityFee", priorityFee.String()).
+				Str("baseFee", baseFee.String()).
+				Str("maxFee", inputLoadTestParams.MaxFeePerGas.String()).
+				Msg("fees updated")
+
+			time.Sleep(loopInterval)
 		}
 	}(c, header.Number.Uint64())
 
@@ -1857,7 +1880,7 @@ func configureTransactOpts(ctx context.Context, c *ethclient.Client, tops *bind.
 
 	tops.GasPrice = nil
 	tops.GasTipCap = gasTipCap
-	tops.GasFeeCap = ltp.CurrentBaseFee
+	tops.GasFeeCap = ltp.MaxFeePerGas
 
 	if ltp.ForcePriorityGasPrice != nil && *ltp.ForcePriorityGasPrice != 0 {
 		tops.GasTipCap = big.NewInt(0).SetUint64(*ltp.ForcePriorityGasPrice)

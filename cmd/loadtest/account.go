@@ -460,12 +460,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 		}
 		pricePerGas = gasPrice
 	} else {
-		header, iErr := ap.client.HeaderByNumber(ctx, nil)
-		if iErr != nil {
-			log.Error().Err(iErr).Msg("Unable to get header")
-			return iErr
-		}
-		pricePerGas = header.BaseFee
+		pricePerGas = ltp.MaxFeePerGas
 	}
 	txFee := new(big.Int).Mul(ethTransferGas, pricePerGas)
 	// double the txFee to account for gas price fluctuations and

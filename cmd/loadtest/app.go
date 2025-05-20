@@ -99,6 +99,7 @@ type (
 		ContractETHAddress    *ethcommon.Address
 		SendAmount            *big.Int
 		CurrentBaseFee        *big.Int
+		MaxFeePerGas          *big.Int
 		ChainSupportBaseFee   bool
 		Mode                  loadTestMode
 		ParsedModes           []loadTestMode
