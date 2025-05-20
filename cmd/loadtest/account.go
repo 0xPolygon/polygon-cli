@@ -460,7 +460,9 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 		}
 		pricePerGas = gasPrice
 	} else {
+		ltp.FeeMutex.RLock()
 		pricePerGas = ltp.MaxFeePerGas
+		ltp.FeeMutex.RUnlock()
 	}
 	txFee := new(big.Int).Mul(ethTransferGas, pricePerGas)
 	// double the txFee to account for gas price fluctuations and

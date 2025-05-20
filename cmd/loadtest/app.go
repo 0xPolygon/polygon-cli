@@ -98,6 +98,7 @@ type (
 		ToETHAddress          *ethcommon.Address
 		ContractETHAddress    *ethcommon.Address
 		SendAmount            *big.Int
+		FeeMutex              sync.RWMutex
 		CurrentBaseFee        *big.Int
 		MaxFeePerGas          *big.Int
 		ChainSupportBaseFee   bool
