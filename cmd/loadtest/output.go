@@ -149,12 +149,15 @@ func filterBlockSummary(blockSummaries map[uint64]blockSummary) {
 	var maxBlock uint64 = 0
 	for _, bs := range blockSummaries {
 		for _, tx := range bs.Block.Transactions {
-			validTx[tx.Hash.ToHash()] = struct{}{}
-			if tx.BlockNumber.ToUint64() < minBlock {
-				minBlock = tx.BlockNumber.ToUint64()
-			}
-			if tx.BlockNumber.ToUint64() > maxBlock {
-				maxBlock = tx.BlockNumber.ToUint64()
+			startNonce, endNonce := accountPool.NoncesOf(tx.From.ToAddress())
+			if tx.Nonce.ToUint64() >= startNonce && tx.Nonce.ToUint64() <= endNonce {
+				validTx[tx.Hash.ToHash()] = struct{}{}
+				if tx.BlockNumber.ToUint64() < minBlock {
+					minBlock = tx.BlockNumber.ToUint64()
+				}
+				if tx.BlockNumber.ToUint64() > maxBlock {
+					maxBlock = tx.BlockNumber.ToUint64()
+				}
 			}
 		}
 	}

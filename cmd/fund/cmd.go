@@ -27,7 +27,7 @@ type cmdFundParams struct {
 	WalletsNumber      *uint64
 	UseHDDerivation    *bool
 	WalletAddresses    *[]string
-	FundingAmountInEth *uint64
+	FundingAmountInWei *uint64
 	OutputFile         *string
 
 	FunderAddress *string
@@ -67,7 +67,7 @@ func init() {
 	p.WalletsNumber = flagSet.Uint64P("number", "n", 10, "The number of wallets to fund")
 	p.UseHDDerivation = flagSet.Bool("hd-derivation", true, "Derive wallets to fund from the private key in a deterministic way")
 	p.WalletAddresses = flagSet.StringSlice("addresses", nil, "Comma-separated list of wallet addresses to fund")
-	p.FundingAmountInEth = flagSet.Uint64P("eth-amount", "a", 50000000000000000, "The amount of wei to send to each wallet")
+	p.FundingAmountInWei = flagSet.Uint64P("eth-amount", "a", 50000000000000000, "The amount of wei to send to each wallet")
 	p.OutputFile = flagSet.StringP("file", "f", "wallets.json", "The output JSON file path for storing the addresses and private keys of funded wallets")
 
 	// Marking flags as mutually exclusive
@@ -98,7 +98,7 @@ func checkFlags() error {
 	if params.WalletsNumber != nil && *params.WalletsNumber == 0 {
 		return errors.New("the number of wallets to fund is set to zero")
 	}
-	if params.FundingAmountInEth != nil && *params.FundingAmountInEth <= 1000000000 {
+	if params.FundingAmountInWei != nil && *params.FundingAmountInWei <= 1000000000 {
 		return errors.New("the funding amount must be greater than 1000000000")
 	}
 	if params.OutputFile != nil && *params.OutputFile == "" {

@@ -24,6 +24,7 @@ import (
 type Account struct {
 	address        common.Address
 	privateKey     *ecdsa.PrivateKey
+	startNonce     uint64
 	nonce          uint64
 	funded         bool
 	reusableNonces []uint64
@@ -44,6 +45,7 @@ func newAccount(ctx context.Context, client *ethclient.Client, privateKey *ecdsa
 	return &Account{
 		privateKey:     privateKey,
 		address:        address,
+		startNonce:     nonce,
 		nonce:          nonce,
 		funded:         false,
 		reusableNonces: make([]uint64, 0),
@@ -634,6 +636,24 @@ func (ap *AccountPool) Nonces(ctx context.Context) map[common.Address]uint64 {
 		}
 	}
 	return nonces
+}
+
+func (ap *AccountPool) NoncesOf(address common.Address) (startNonce, nonce uint64) {
+	ap.mu.Lock()
+	defer ap.mu.Unlock()
+
+	accountPos, found := ap.accountsPositions[address]
+	if !found {
+		return 0, 0
+	}
+	if accountPos > len(ap.accounts)-1 {
+		return 0, 0
+	}
+
+	startNonce = ap.accounts[accountPos].startNonce
+	nonce = ap.accounts[accountPos].nonce
+
+	return startNonce, nonce
 }
 
 // Returns the next account in the pool
