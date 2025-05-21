@@ -249,7 +249,7 @@ func initFlags() {
 	ltp.BlobFeeCap = LoadtestCmd.Flags().Uint64("blob-fee-cap", 100000, "The blob fee cap, or the maximum blob fee per chunk, in Gwei.")
 	ltp.SendingAddressCount = LoadtestCmd.Flags().Uint64("sending-address-count", 1, "The number of sending addresses to use. This is useful for avoiding pool account queue.")
 	ltp.AddressFundingAmount = LoadtestCmd.Flags().Uint64("address-funding-amount", 1000000000000000000, "The amount in wei to fund the sending addresses with.")
-	ltp.PreFundSendingAddresses = LoadtestCmd.Flags().Bool("pre-fund-sending-addresses", false, "If set to true, the sending addresses will be fund at the start of the execution, otherwise all addresses will be funded when used for the first time.")
+	ltp.PreFundSendingAddresses = LoadtestCmd.Flags().Bool("pre-fund-sending-addresses", false, "If set to true, the sending addresses will be funded at the start of the execution, otherwise all addresses will be funded when used for the first time.")
 	ltp.KeepFundedAmount = LoadtestCmd.Flags().Bool("keep-funded-amount", false, "If set to true, the funded amount will be kept in the sending addresses. Otherwise, the funded amount will be refunded back to the account used to fund the account.")
 	ltp.SendingAddressesFile = LoadtestCmd.Flags().String("sending-addresses-file", "", "The file containing the sending addresses private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending addresses for different execution cycles.")
 
@@ -285,7 +285,7 @@ v3, uniswapv3 - Perform UniswapV3 swaps`)
 	ltp.ContractCallFunctionArgs = LoadtestCmd.Flags().StringSlice("function-arg", []string{}, `The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.`)
 	ltp.ContractCallPayable = LoadtestCmd.Flags().Bool("contract-call-payable", false, "Use this flag if the function is payable, the value amount passed will be from --eth-amount. This must be paired up with --mode contract-call and --contract-address")
 	ltp.InscriptionContent = LoadtestCmd.Flags().String("inscription-content", `data:,{"p":"erc-20","op":"mint","tick":"TEST","amt":"1"}`, "The inscription content that will be encoded as calldata. This must be paired up with --mode inscription")
-	ltp.Proxy = LoadtestCmd.Flags().String("proxy", "", "use the proxy specified")
+	ltp.Proxy = LoadtestCmd.Flags().String("proxy", "", "Use the proxy specified")
 
 	inputLoadTestParams = *ltp
 
