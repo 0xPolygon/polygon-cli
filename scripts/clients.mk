@@ -51,11 +51,11 @@ loadtest: fund ## Run random loadtest against a local RPC.
 	go run -race main.go loadtest \
 		--verbosity 700 \
 		--rpc-url http://${HOST}:$(PORT) \
-		--chain-id ${CHAIN_ID} \
 		--mode random \
 		--concurrency 1 \
 		--requests 200 \
 		--rate-limit 100 \
 		--sending-address-count 10 \
-		--pre-fund-sending-addresses 
+		--pre-fund-sending-addresses \
+		--summarize 
 		

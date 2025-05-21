@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
@@ -98,8 +99,6 @@ type (
 		ToETHAddress          *ethcommon.Address
 		ContractETHAddress    *ethcommon.Address
 		SendAmount            *big.Int
-		CurrentBaseFee        *big.Int
-		MaxFeePerGas          *big.Int
 		ChainSupportBaseFee   bool
 		Mode                  loadTestMode
 		ParsedModes           []loadTestMode
@@ -117,8 +116,9 @@ var (
 	startBlockNumber     uint64
 	finalBlockNumber     uint64
 	rl                   *rate.Limiter
+	eip1559Supported     bool
 	accountPool          *AccountPool
-	feeMutex             sync.RWMutex
+	globalMaxFeePerGas   atomic.Uint64
 
 	hexwords = []byte{
 		0x00, 0x0F, 0xF1, 0xCE,
