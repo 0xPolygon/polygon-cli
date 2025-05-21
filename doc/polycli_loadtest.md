@@ -104,6 +104,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --adaptive-cycle-duration-seconds uint   When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates (default 10)
       --adaptive-rate-limit                    Enable AIMD-style congestion control to automatically adjust request rate
       --adaptive-rate-limit-increment uint     When using adaptive rate limiting, this flag controls the size of the additive increases. (default 50)
+      --address-funding-amount uint            The amount in wei to fund the sending addresses with. (default 1000000000000000000)
       --batch-size uint                        Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time. (default 999)
       --blob-fee-cap uint                      The blob fee cap, or the maximum blob fee per chunk, in Gwei. (default 100000)
   -b, --byte-count uint                        If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
@@ -116,7 +117,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --contract-call-payable                  Use this flag if the function is payable, the value amount passed will be from --eth-amount. This must be paired up with --mode contract-call and --contract-address
       --erc20-address string                   The address of a pre-deployed ERC20 contract
       --erc721-address string                  The address of a pre-deployed ERC721 contract
-      --eth-amount float                       The amount of ether to send on every transaction
+      --eth-amount uint                        The amount of ether in wei to send on every transaction
       --force-contract-deploy                  Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.
   -f, --function uint                          A specific function to be called if running with --mode f or a specific precompiled contract when running with --mode a (default 1)
       --function-arg strings                   The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.
@@ -127,6 +128,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
   -h, --help                                   help for loadtest
       --inscription-content string             The inscription content that will be encoded as calldata. This must be paired up with --mode inscription (default "data:,{\"p\":\"erc-20\",\"op\":\"mint\",\"tick\":\"TEST\",\"amt\":\"1\"}")
   -i, --iterations uint                        If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size (default 1)
+      --keep-funded-amount                     If set to true, the funded amount will be kept in the sending addresses. Otherwise, the funded amount will be refunded back to the account used to fund the account.
       --legacy                                 Send a legacy transaction instead of an EIP1559 transaction.
       --lt-address string                      The address of a pre-deployed load test contract
   -m, --mode strings                           The testing mode to use. It can be multiple like: "c,d,f,t"
@@ -149,14 +151,18 @@ The codebase has a contract that used for load testing. It's written in Solidity
                                                v3, uniswapv3 - Perform UniswapV3 swaps (default [t])
       --nonce uint                             Use this flag to manually set the starting nonce
       --output-mode string                     Format mode for summary output (json | text) (default "text")
+      --pre-fund-sending-addresses             If set to true, the sending addresses will be funded at the start of the execution, otherwise all addresses will be funded when used for the first time.
       --priority-gas-price uint                Specify Gas Tip Price in the case of EIP-1559
       --private-key string                     The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
+      --proxy string                           Use the proxy specified
       --rate-limit float                       An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together (default 4)
       --recall-blocks uint                     The number of blocks that we'll attempt to fetch for recall (default 50)
   -n, --requests int                           Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
   -r, --rpc-url string                         The RPC endpoint url (default "http://localhost:8545")
       --seed int                               A seed for generating random values and addresses (default 123456)
       --send-only                              Send transactions and load without waiting for it to be mined.
+      --sending-address-count uint             The number of sending addresses to use. This is useful for avoiding pool account queue. (default 1)
+      --sending-addresses-file string          The file containing the sending addresses private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending addresses for different execution cycles.
       --steady-state-tx-pool-size uint         When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off. (default 1000)
       --summarize                              Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time
   -t, --time-limit int                         Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit. (default -1)

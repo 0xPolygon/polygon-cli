@@ -1,8 +1,9 @@
 package uniswapv3loadtest
 
 import (
-	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/0xPolygon/polygon-cli/bindings/uniswapv3"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
