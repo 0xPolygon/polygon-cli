@@ -46,8 +46,7 @@ func (s *output) Print() {
 		successRatio = float64(s.TxsSentSuccessfully.Load()) / float64(txSent) * 100
 	}
 
-	summaryString := fmt.Sprintf(`
------------------------------------
+	summaryString := fmt.Sprintf(`-----------------------------------
               Summary              
 -----------------------------------
 Input Data Source: %s
@@ -57,7 +56,7 @@ Invalid Inputs: %d
 -----------------------------------
 Elapsed Time: %s
 Txs Sent: %d
-Txs Send Per Second: %.2f
+Txs Sent Per Second: %.2f
 Txs Sent Successfully: %d
 Txs Sent Unsuccessfully: %d
 Success Ratio: %.2f%%

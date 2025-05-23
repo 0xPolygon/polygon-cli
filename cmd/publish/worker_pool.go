@@ -3,6 +3,8 @@ package publish
 import (
 	"context"
 	"sync"
+
+	"github.com/rs/zerolog/log"
 )
 
 const queueSize = 100
@@ -48,6 +50,16 @@ func (wp *WorkerPool) SubmitJob(job JobFn) {
 func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 	defer wp.wg.Done()
 	for job := range wp.jobQueue {
-		job(ctx, workerID)
+		safeJob(ctx, workerID, job)
 	}
+}
+
+// Executes the job safely and recovers in case it panics
+func safeJob(ctx context.Context, workerID int, job JobFn) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error().Msgf("Worker panicked: %v", r)
+		}
+	}()
+	job(ctx, workerID)
 }

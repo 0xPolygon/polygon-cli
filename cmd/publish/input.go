@@ -9,7 +9,10 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/rs/zerolog/log"
 )
+
+const scannerBufferSize = 1024 * 1024
 
 func getInputData(inputFileName *string, args []string) (iter.Seq[string], inputDataSource, error) {
 	// firstly check and see if we have an input file
@@ -61,10 +64,14 @@ func dataFromFile(filename string) (iter.Seq[string], inputDataSource, error) {
 	if err != nil {
 		return func(yield func(string) bool) {}, InputDataSourceFile, err
 	}
-	fmt.Println("Reading data from file: ", filename)
+	log.Info().
+		Str("filename", filename).
+		Msg("Reading data from file")
 
 	return func(yield func(string) bool) {
 		s := bufio.NewScanner(f)
+		sBuf := make([]byte, 0)
+		s.Buffer(sBuf, scannerBufferSize)
 		for s.Scan() {
 			if !yield(s.Text()) {
 				return
@@ -73,7 +80,10 @@ func dataFromFile(filename string) (iter.Seq[string], inputDataSource, error) {
 		// Ensure the file is closed after the function exits
 		defer f.Close()
 		if err := s.Err(); err != nil {
-			fmt.Fprintln(os.Stderr, "error scanning file:", err)
+			log.Error().
+				Err(err).
+				Str("filename", filename).
+				Msg("error scanning file")
 		}
 	}, InputDataSourceFile, nil
 }
@@ -84,13 +94,17 @@ func dataFromStdin() (iter.Seq[string], inputDataSource, error) {
 
 	return func(yield func(string) bool) {
 		s := bufio.NewScanner(os.Stdin)
+		sBuf := make([]byte, 0)
+		s.Buffer(sBuf, scannerBufferSize)
 		for s.Scan() {
 			if !yield(s.Text()) {
 				return
 			}
 		}
 		if err := s.Err(); err != nil {
-			fmt.Fprintln(os.Stderr, "error scanning stdin:", err)
+			log.Error().
+				Err(err).
+				Msg("error scanning stdin")
 		}
 	}, InputDataSourceStdin, nil
 }
