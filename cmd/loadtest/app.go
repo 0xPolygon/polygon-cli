@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"math/rand"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
@@ -118,7 +117,6 @@ var (
 	rl                   *rate.Limiter
 	eip1559Supported     bool
 	accountPool          *AccountPool
-	globalMaxFeePerGas   atomic.Uint64
 
 	hexwords = []byte{
 		0x00, 0x0F, 0xF1, 0xCE,

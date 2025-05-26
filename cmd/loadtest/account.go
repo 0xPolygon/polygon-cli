@@ -72,7 +72,11 @@ type AccountPool struct {
 	accounts          []Account
 	accountsPositions map[common.Address]int
 
-	client            *ethclient.Client
+	client *ethclient.Client
+	// clientRateLimiter is used to limit the rate of requests the account
+	// pool needs to make to the network, like getting the nonce or balance.
+	// it doesn't affect the requests made by the load test and is used only
+	// internally to the account pool.
 	clientRateLimiter *rate.Limiter
 
 	mu                  sync.Mutex
@@ -92,19 +96,24 @@ type AccountPool struct {
 // and also to send transactions to fund accounts.
 func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivateKey *ecdsa.PrivateKey, fundingAmount *big.Int) (*AccountPool, error) {
 	if fundingPrivateKey == nil {
-		panic("fundingPrivateKey cannot be nil")
+		log.Fatal().
+			Msg("fundingPrivateKey cannot be nil")
 	}
 
 	if fundingAmount == nil {
-		panic("fundingAmount cannot be nil")
+		log.Fatal().
+			Msg("fundingAmount cannot be nil")
 	}
 
 	if fundingAmount.Cmp(big.NewInt(0)) <= 0 {
-		panic("fundingAmount must be greater than 0")
+		log.Fatal().
+			Str("fundingAmount", fundingAmount.String()).
+			Msg("fundingAmount must be greater than 0")
 	}
 
 	if client == nil {
-		panic("client cannot be nil")
+		log.Fatal().
+			Msg("client cannot be nil")
 	}
 
 	chainID, err := client.ChainID(ctx)
@@ -454,15 +463,11 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 		return err
 	}
 	var pricePerGas *big.Int
+	gasPrice, _, maxFeePerGas := getSuggestedGasPrices(ctx, ap.client)
 	if *ltp.LegacyTransactionMode {
-		gasPrice, iErr := ap.client.SuggestGasPrice(ctx)
-		if iErr != nil {
-			log.Error().Err(iErr).Msg("Unable to get gas price")
-			return iErr
-		}
 		pricePerGas = gasPrice
 	} else {
-		pricePerGas = big.NewInt(0).SetUint64(globalMaxFeePerGas.Load())
+		pricePerGas = maxFeePerGas
 	}
 	txFee := new(big.Int).Mul(ethTransferGas, pricePerGas)
 	// double the txFee to account for gas price fluctuations and
