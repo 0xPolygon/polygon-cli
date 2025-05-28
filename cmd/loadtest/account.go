@@ -32,14 +32,20 @@ type Account struct {
 
 // Creates a new account with the given private key.
 // The client is used to get the nonce of the account.
-func newAccount(ctx context.Context, client *ethclient.Client, privateKey *ecdsa.PrivateKey) (*Account, error) {
+func newAccount(ctx context.Context, client *ethclient.Client, privateKey *ecdsa.PrivateKey, startNonce *uint64) (*Account, error) {
 	publicKey := privateKey.Public()
 	publicKeyECDSA, _ := publicKey.(*ecdsa.PublicKey)
 	address := crypto.PubkeyToAddress(*publicKeyECDSA)
 
-	nonce, err := client.PendingNonceAt(ctx, address)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get nonce: %w", err)
+	var nonce uint64
+	if startNonce != nil {
+		nonce = *startNonce
+	} else {
+		var err error
+		nonce, err = client.PendingNonceAt(ctx, address)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get nonce: %w", err)
+		}
 	}
 
 	return &Account{
@@ -163,13 +169,13 @@ func (ap *AccountPool) AddRandom(ctx context.Context) error {
 		return fmt.Errorf("failed to generate private key: %w", err)
 	}
 
-	return ap.Add(ctx, privateKey)
+	return ap.Add(ctx, privateKey, nil)
 }
 
 // Adds multiple accounts to the pool with the given private keys
 func (ap *AccountPool) AddN(ctx context.Context, privateKeys ...*ecdsa.PrivateKey) error {
 	for _, privateKey := range privateKeys {
-		err := ap.Add(ctx, privateKey)
+		err := ap.Add(ctx, privateKey, nil)
 		if err != nil {
 			return fmt.Errorf("failed to add account: %w", err)
 		}
@@ -179,11 +185,11 @@ func (ap *AccountPool) AddN(ctx context.Context, privateKeys ...*ecdsa.PrivateKe
 }
 
 // Adds an account to the pool with the given private key
-func (ap *AccountPool) Add(ctx context.Context, privateKey *ecdsa.PrivateKey) error {
+func (ap *AccountPool) Add(ctx context.Context, privateKey *ecdsa.PrivateKey, startNonce *uint64) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
 
-	account, err := newAccount(ctx, ap.client, privateKey)
+	account, err := newAccount(ctx, ap.client, privateKey, startNonce)
 	if err != nil {
 		return fmt.Errorf("failed to create account: %w", err)
 	}

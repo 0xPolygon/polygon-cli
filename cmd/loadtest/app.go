@@ -115,7 +115,6 @@ var (
 	startBlockNumber     uint64
 	finalBlockNumber     uint64
 	rl                   *rate.Limiter
-	eip1559Supported     bool
 	accountPool          *AccountPool
 
 	hexwords = []byte{
