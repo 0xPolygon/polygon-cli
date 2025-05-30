@@ -548,7 +548,7 @@ func (i *implPolyTransaction) MarshalJSON() ([]byte, error) {
 	return json.Marshal(i.inner)
 }
 
-// HexToBigInt assumes that it's input is a hex encoded string and
+// ConvHexToBigInt assumes that it's input is a hex encoded string and
 // will try to convert it to a big int
 func ConvHexToBigInt(raw any) (bi *big.Int, err error) {
 	bi = big.NewInt(0)
@@ -593,7 +593,7 @@ func rawRespToString(raw any) (string, error) {
 	return hexString, nil
 }
 
-// HexToUint64 assumes that its input is a hex encoded string and it
+// ConvHexToUint64 assumes that its input is a hex encoded string and it
 // will attempt to convert this into a uint64
 func ConvHexToUint64(raw any) (uint64, error) {
 	hexString, err := rawRespToString(raw)
