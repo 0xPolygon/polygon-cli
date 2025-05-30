@@ -421,7 +421,13 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 			requestTime := nonceTimes[tx.Nonce.ToUint64()]
 			txLatency := mineTime.Sub(requestTime)
 			if txLatency.Hours() > 2 {
-				log.Debug().Float64("txHours", txLatency.Hours()).Uint64("nonce", tx.Nonce.ToUint64()).Uint64("blockNumber", bs.Block.Number.ToUint64()).Time("mineTime", mineTime).Time("requestTime", requestTime).Msg("Encountered transaction with more than 2 hours latency")
+				log.Debug().
+					Float64("txHours", txLatency.Hours()).
+					Uint64("nonce", tx.Nonce.ToUint64()).
+					Uint64("blockNumber", bs.Block.Number.ToUint64()).
+					Time("mineTime", mineTime).
+					Time("requestTime", requestTime).
+					Msg("Encountered transaction with more than 2 hours latency")
 			}
 			bs.Latencies[tx.Nonce.ToUint64()] = txLatency
 

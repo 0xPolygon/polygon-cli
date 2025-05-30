@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -386,7 +387,7 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 	totalNeeded.Add(totalNeeded, fudgeAmountNeeded)
 
 	if balance.Cmp(totalBalanceNeeded) <= 0 {
-		errMsg := "Funding account balance can't cover the funding amount for all accounts"
+		errMsg := "funding account balance can't cover the funding amount for all accounts"
 		log.Error().
 			Str("address", tops.From.Hex()).
 			Str("balance", balance.String()).
@@ -429,6 +430,7 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 		}
 	}
 
+	failed := false
 	for tx := range txCh {
 		if tx != nil {
 			log.Debug().
@@ -436,15 +438,31 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 				Str("txHash", tx.Hash().Hex()).
 				Msg("transaction to fund account sent")
 
-			_, err := ap.waitMined(ctx, tx)
+			receipt, err := ap.waitMined(ctx, tx)
 			if err != nil {
 				log.Error().
 					Str("address", tx.To().Hex()).
 					Str("txHash", tx.Hash().Hex()).
-					Msgf("transaction to fund account failed")
+					Msgf("failed to wait for transaction to fund account")
 				return err
+			} else if receipt.Status != types.ReceiptStatusSuccessful {
+				failed = true
+				log.Error().
+					Str("address", tx.To().Hex()).
+					Str("txHash", tx.Hash().Hex()).
+					Msgf("transaction to fund account has failed")
 			}
 		}
+	}
+
+	if failed {
+		err := ap.ReturnFunds(ctx)
+		if err != nil {
+			log.Error().
+				Msgf("failed to return funds from accounts after funding failure: %v", err)
+			return fmt.Errorf("failed to return funds from accounts after funding failure: %w", err)
+		}
+		return fmt.Errorf("some transactions to fund accounts failed")
 	}
 
 	log.Debug().
@@ -458,8 +476,6 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
 
-	ltp := inputLoadTestParams
-
 	log.Debug().
 		Msg("Returning funds from sending addresses to funding address")
 
@@ -468,18 +484,12 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	var pricePerGas *big.Int
-	gasPrice, _, maxFeePerGas := getSuggestedGasPrices(ctx, ap.client)
-	if *ltp.LegacyTransactionMode {
-		pricePerGas = gasPrice
-	} else {
-		pricePerGas = maxFeePerGas
-	}
-	txFee := new(big.Int).Mul(ethTransferGas, pricePerGas)
-	// double the txFee to account for gas price fluctuations and
+	gasPrice, _ := getSuggestedGasPrices(ctx, ap.client)
+	txFee := new(big.Int).Mul(ethTransferGas, gasPrice)
+	// triple the txFee to account for gas price fluctuations and
 	// different ways to charge transactions, like op networks
 	// that charge for the l1 transaction
-	txFee.Add(txFee, txFee)
+	biasFee := big.NewInt(0).Mul(txFee, big.NewInt(3))
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(ap.accounts))
@@ -529,7 +539,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 				}
 
 				// subtract the transfer fee from the balance
-				amount := new(big.Int).Sub(balance, txFee)
+				amount := new(big.Int).Sub(balance, biasFee)
 
 				// get pending nonce for account
 				iErr = ap.clientRateLimiter.Wait(ctx)
@@ -544,41 +554,93 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 				}
 				ap.accounts[i].nonce = pendingNonce
 
-				// create the transaction to return the funds
-				signedTx, iErr := ap.createEOATransferTx(ctx, ap.accounts[i].privateKey, &ap.accounts[i].nonce, fundingAddress, amount)
-				if iErr != nil {
-					errCh <- fmt.Errorf("failed to create tx to return balance from acc %s to %s: %w", ap.accounts[i].address.String(), fundingAddressHex, iErr)
-					return
-				}
+				// loop to send tx in case we need to readjust the amount due to
+				// gas price fluctuations and the tx fee
+				for {
+					// create the transaction to return the funds
+					signedTx, iErr := ap.createEOATransferTx(ctx, ap.accounts[i].privateKey, &ap.accounts[i].nonce, fundingAddress, amount)
+					if iErr != nil {
+						errCh <- fmt.Errorf("failed to create tx to return balance from acc %s to %s: %w", ap.accounts[i].address.String(), fundingAddressHex, iErr)
+						return
+					}
 
-				log.Debug().
-					Str("from", ap.accounts[i].address.Hex()).
-					Str("to", fundingAddressHex).
-					Str("amount", amount.String()).
-					Str("balance", balance.String()).
-					Str("txHash", signedTx.Hash().String()).
-					Msg("returning funds")
-
-				// send the transaction to return the funds
-				iErr = ap.clientRateLimiter.Wait(ctx)
-				if iErr != nil {
-					errCh <- fmt.Errorf("failed to check wait rate limit to send transaction for acc %s: %w", ap.accounts[i].address.String(), iErr)
-					return
-				}
-				iErr = ap.client.SendTransaction(ctx, signedTx)
-				if iErr != nil {
 					log.Debug().
 						Str("from", ap.accounts[i].address.Hex()).
 						Str("to", fundingAddressHex).
 						Str("amount", amount.String()).
 						Str("balance", balance.String()).
-						Interface("tx", signedTx).
-						Msg("Unable to send return balance transaction")
-					errCh <- fmt.Errorf("failed to send tx to return balance from acc %s to %s: %w", ap.accounts[i].address.String(), fundingAddressHex, iErr)
-					return
+						Str("txHash", signedTx.Hash().String()).
+						Msg("returning funds")
+
+					// send the transaction to return the funds
+					iErr = ap.clientRateLimiter.Wait(ctx)
+					if iErr != nil {
+						errCh <- fmt.Errorf("failed to check wait rate limit to send transaction for acc %s: %w", ap.accounts[i].address.String(), iErr)
+						return
+					}
+					iErr = ap.client.SendTransaction(ctx, signedTx)
+					if iErr != nil {
+						if strings.Contains(iErr.Error(), "overshot") {
+							log.Info().
+								Err(iErr).
+								Str("from", ap.accounts[i].address.Hex()).
+								Str("to", fundingAddressHex).
+								Str("amount", amount.String()).
+								Str("balance", balance.String()).
+								Msg("Transaction amount overshot, adjusting amount and retrying")
+
+							// if the amount is too high, we need to adjust it
+							errArr := strings.Split(iErr.Error(), "overshot")
+							if len(errArr) < 2 {
+								log.Error().
+									Err(iErr).
+									Str("from", ap.accounts[i].address.Hex()).
+									Str("to", fundingAddressHex).
+									Str("amount", amount.String()).
+									Str("balance", balance.String()).
+									Msg("Unable to adjust amount due to overshot error")
+								errCh <- fmt.Errorf("failed to adjust amount due to overshot error: %w", iErr)
+								return
+							}
+
+							// parse the new amount from the error message
+							overshotAmountStr := strings.TrimSpace(errArr[len(errArr)-1])
+							overshotAmount, ok := new(big.Int).SetString(overshotAmountStr, 10)
+							if !ok {
+								log.Error().
+									Err(iErr).
+									Str("from", ap.accounts[i].address.Hex()).
+									Str("to", fundingAddressHex).
+									Str("amount", amount.String()).
+									Str("balance", balance.String()).
+									Msg("Unable to parse overshot amount from error message")
+								errCh <- fmt.Errorf("failed to parse overshot amount from error message: %w", iErr)
+								return
+							}
+							// reduce all overshot amount
+							amount.Sub(amount, overshotAmount)
+							// reduce the tx fee again to help with gas price fluctuations
+							amount.Sub(amount, txFee)
+
+							continue
+						}
+
+						log.Error().
+							Err(iErr).
+							Str("from", ap.accounts[i].address.Hex()).
+							Str("to", fundingAddressHex).
+							Str("amount", amount.String()).
+							Str("balance", balance.String()).
+							Interface("tx", signedTx).
+							Msg("Unable to send return balance transaction")
+						errCh <- fmt.Errorf("failed to send tx to return balance from acc %s to %s: %w", ap.accounts[i].address.String(), fundingAddressHex, iErr)
+						return
+					}
+
+					txCh <- signedTx
+					break
 				}
 
-				txCh <- signedTx
 			}
 		}(i)
 	}

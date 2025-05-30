@@ -303,7 +303,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	if len(modes) > 1 {
 		inputLoadTestParams.MultiMode = true
 		if !hasUniqueModes(inputLoadTestParams.ParsedModes) {
-			return errors.New("Duplicate modes detected, check input modes for duplicates")
+			return errors.New("duplicate modes detected, check input modes for duplicates")
 		}
 	} else {
 		inputLoadTestParams.MultiMode = false
@@ -319,13 +319,13 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		*inputLoadTestParams.CallOnly = true
 	}
 	if hasMode(loadTestModeContractCall, inputLoadTestParams.ParsedModes) && (*inputLoadTestParams.ContractAddress == "" || (*inputLoadTestParams.ContractCallData == "" && *inputLoadTestParams.ContractCallFunctionSignature == "")) {
-		return errors.New("`--contract-call` requires both a `--contract-address` and calldata, either with `--calldata` or `--function-signature --function-arg` flags.")
+		return errors.New("`--contract-call` requires both a `--contract-address` and calldata, either with `--calldata` or `--function-signature --function-arg` flags")
 	}
 	if *inputLoadTestParams.CallOnly && *inputLoadTestParams.AdaptiveRateLimit {
 		return errors.New("using call only with adaptive rate limit doesn't make sense")
 	}
 	if hasMode(loadTestModeBlob, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode {
-		return errors.New("Blob mode should only be used by itself. Blob mode will take significantly longer than other transactions to finalize, and the address will be reserved, preventing other transactions form being made.")
+		return errors.New("blob mode should only be used by itself. Blob mode will take significantly longer than other transactions to finalize, and the address will be reserved, preventing other transactions form being made")
 	}
 
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
@@ -390,6 +390,13 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		err := accountPool.FundAccounts(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to fund sending addresses")
+			iErr := accountPool.ReturnFunds(ctx)
+			if iErr != nil {
+				log.Error().
+					Err(iErr).
+					Msg("There was an issue returning the funds from the sending addresses back to the funding address")
+				return fmt.Errorf("unable to return funds from sending addresses. %w", iErr)
+			}
 			return fmt.Errorf("unable to fund sending addresses. %w", err)
 		}
 	}
@@ -458,6 +465,13 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 		return errors.New("no transactions observed")
 	}
 
+	err = accountPool.ReturnFunds(ctx)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Msg("There was an issue returning the funds from the sending addresses back to the funding address")
+	}
+
 	if *inputLoadTestParams.ShouldProduceSummary {
 		err = summarizeTransactions(ctx, c, rpc, startBlockNumber, finalBlockNumber)
 		if err != nil {
@@ -467,13 +481,6 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 		}
 	}
 	lightSummary(loadTestResults, startTime, endTime, rl)
-
-	err = accountPool.ReturnFunds(ctx)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Msg("There was an issue returning the funds from the sending addresses back to the funding address")
-	}
 
 	return nil
 }
@@ -889,6 +896,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 						Uint64("nonce", sendingTops.Nonce.Uint64()).
 						Uint64("gas", sendingTops.GasLimit).
 						Any("gasPrice", sendingTops.GasPrice).
+						Any("gasFeeCap", sendingTops.GasFeeCap).
+						Any("gasTipCap", sendingTops.GasTipCap).
 						Int64("request time", endReq.Sub(startReq).Milliseconds()).
 						Msg("recorded an error while sending transactions")
 
@@ -1102,7 +1111,6 @@ var (
 	cachedGasPriceLock          sync.Mutex
 	cachedGasPrice              *big.Int
 	cachedGasTipCap             *big.Int
-	cachedMaxFeePerGas          *big.Int
 	cachedLatestBlockNumber     uint64
 	cachedLatestBlockTime       time.Time
 	cachedLatestBlockNumberLock sync.Mutex
@@ -1133,7 +1141,7 @@ func biasGasPrice(price *big.Int) *big.Int {
 	return result
 }
 
-func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, *big.Int, *big.Int) {
+func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, *big.Int) {
 	cachedGasPriceLock.Lock()
 	defer cachedGasPriceLock.Unlock()
 
@@ -1141,11 +1149,11 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 	bn := getLatestBlockNumber(ctx, c)
 
 	if cachedBlockNumber != nil && bn <= *cachedBlockNumber {
-		return cachedGasPrice, cachedGasTipCap, cachedMaxFeePerGas
+		return cachedGasPrice, cachedGasTipCap
 	}
 
 	// In the case of an EVM compatible system not supporting EIP-1559
-	var gasPrice, gasTipCap, maxFeePerGas *big.Int = big.NewInt(0), big.NewInt(0), big.NewInt(0)
+	var gasPrice, gasTipCap *big.Int = big.NewInt(0), big.NewInt(0)
 	var pErr, tErr error
 	if *inputLoadTestParams.LegacyTransactionMode {
 		if inputLoadTestParams.ForceGasPrice != nil && *inputLoadTestParams.ForceGasPrice != 0 {
@@ -1157,7 +1165,7 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 				gasPrice = biasGasPrice(gasPrice)
 			} else {
 				log.Error().Err(pErr).Msg("Unable to suggest gas price")
-				return cachedGasPrice, cachedGasTipCap, maxFeePerGas
+				return cachedGasPrice, cachedGasTipCap
 			}
 		}
 	} else {
@@ -1172,7 +1180,7 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 				gasTipCap = biasGasPrice(gasTipCap)
 			} else {
 				log.Error().Err(tErr).Msg("Unable to suggest gas tip cap")
-				return cachedGasPrice, cachedGasTipCap, maxFeePerGas
+				return cachedGasPrice, cachedGasTipCap
 			}
 		} else {
 			log.Fatal().
@@ -1180,9 +1188,9 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 		}
 
 		if inputLoadTestParams.ForceGasPrice != nil && *inputLoadTestParams.ForceGasPrice != 0 {
-			maxFeePerGas = new(big.Int).SetUint64(*inputLoadTestParams.ForceGasPrice)
+			gasPrice = new(big.Int).SetUint64(*inputLoadTestParams.ForceGasPrice)
 		} else if inputLoadTestParams.ChainSupportBaseFee {
-			maxFeePerGas = suggestMaxFeePerGas(ctx, c, bn, forcePriorityGasPrice)
+			gasPrice = suggestMaxFeePerGas(ctx, c, bn, forcePriorityGasPrice)
 		} else {
 			log.Fatal().
 				Msg("Chain does not support base fee. Please set gas-price flag with a value to use for max fee per gas")
@@ -1199,13 +1207,10 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 	if cachedGasTipCap != nil {
 		l = l.Uint64("cachedGasTipCap", cachedGasTipCap.Uint64())
 	}
-	if maxFeePerGas != nil {
-		l = l.Uint64("maxFeePerGas", maxFeePerGas.Uint64())
-	}
 
 	l.Msg("Updating gas prices")
 
-	return cachedGasPrice, cachedGasTipCap, maxFeePerGas
+	return cachedGasPrice, cachedGasTipCap
 }
 
 func suggestMaxFeePerGas(ctx context.Context, c *ethclient.Client, blockNumber uint64, forcePriorityFee *big.Int) *big.Int {
@@ -1215,8 +1220,8 @@ func suggestMaxFeePerGas(ctx context.Context, c *ethclient.Client, blockNumber u
 		return nil
 	}
 
-	if cachedBlockNumber != nil && blockNumber <= *cachedBlockNumber && cachedMaxFeePerGas != nil {
-		return cachedMaxFeePerGas
+	if cachedBlockNumber != nil && blockNumber <= *cachedBlockNumber && cachedGasPrice != nil {
+		return cachedGasPrice
 	}
 
 	feeHistory, iErr := c.FeeHistory(ctx, 5, nil, []float64{0.5})
@@ -1237,20 +1242,20 @@ func suggestMaxFeePerGas(ctx context.Context, c *ethclient.Client, blockNumber u
 	// in the case of a decreasing fee, the update happens only
 	// after some blocks to avoid the network fee fluctuations
 	const blocksToWait = 5
-	isDecreasing := cachedMaxFeePerGas != nil && maxFeePerGas.Uint64() <= cachedMaxFeePerGas.Uint64()
+	isDecreasing := cachedGasPrice != nil && maxFeePerGas.Uint64() <= cachedGasPrice.Uint64()
 	canDecrease := blockNumber+blocksToWait <= iHeader.Number.Uint64()
-	if isDecreasing && !canDecrease && cachedMaxFeePerGas != nil {
-		return cachedMaxFeePerGas
+	if isDecreasing && !canDecrease && cachedGasPrice != nil {
+		return cachedGasPrice
 	}
 
-	cachedMaxFeePerGas = maxFeePerGas
+	cachedGasPrice = maxFeePerGas
 
 	log.Trace().
 		Uint64("blockNumber", iHeader.Number.Uint64()).
 		Str("priorityFee", priorityFee.String()).
 		Str("baseFee", baseFee.String()).
 		Str("maxFeePerGas", maxFeePerGas.String()).
-		Uint64("cachedMaxFeePerGas", cachedMaxFeePerGas.Uint64()).
+		Uint64("cachedGasPrice", cachedGasPrice.Uint64()).
 		Msg("max fee updated")
 
 	return maxFeePerGas
@@ -1627,7 +1632,7 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 
 	var stringCallData string
 	if *inputLoadTestParams.ContractCallData == "" && *inputLoadTestParams.ContractCallFunctionSignature == "" {
-		log.Error().Err(fmt.Errorf("Missing calldata for function call"))
+		log.Error().Err(fmt.Errorf("missing calldata for function call"))
 		return
 	}
 
@@ -1789,7 +1794,7 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactO
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 
 	gasLimit := uint64(21000)
-	_, gasTipCap, maxFeePerGas := getSuggestedGasPrices(ctx, c)
+	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
 	// blobFeeCap := uint64(1000000000) // 1eth
 	blobFeeCap := ltp.BlobFeeCap
 
@@ -1798,7 +1803,7 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactO
 		ChainID:    uint256.NewInt(chainID.Uint64()),
 		Nonce:      tops.Nonce.Uint64(),
 		GasTipCap:  uint256.NewInt(gasTipCap.Uint64()),
-		GasFeeCap:  uint256.NewInt(maxFeePerGas.Uint64()),
+		GasFeeCap:  uint256.NewInt(gasPrice.Uint64()),
 		BlobFeeCap: uint256.NewInt(*blobFeeCap),
 		Gas:        gasLimit,
 		To:         *to,
@@ -1887,7 +1892,7 @@ func getRandomAddress() *ethcommon.Address {
 }
 
 func configureTransactOpts(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) *bind.TransactOpts {
-	gasPrice, gasTipCap, maxFeePerGas := getSuggestedGasPrices(ctx, c)
+	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
 	tops.GasPrice = gasPrice
 
 	ltp := inputLoadTestParams
@@ -1908,15 +1913,8 @@ func configureTransactOpts(ctx context.Context, c *ethclient.Client, tops *bind.
 	}
 
 	tops.GasPrice = nil
+	tops.GasFeeCap = gasPrice
 	tops.GasTipCap = gasTipCap
-	tops.GasFeeCap = maxFeePerGas
-
-	if ltp.ForcePriorityGasPrice != nil && *ltp.ForcePriorityGasPrice != 0 {
-		tops.GasTipCap = big.NewInt(0).SetUint64(*ltp.ForcePriorityGasPrice)
-	}
-	if ltp.ForceGasPrice != nil && *ltp.ForceGasPrice != 0 {
-		tops.GasFeeCap = big.NewInt(0).SetUint64(*ltp.ForceGasPrice)
-	}
 
 	if tops.GasTipCap.Cmp(tops.GasFeeCap) == 1 {
 		tops.GasTipCap = new(big.Int).Set(tops.GasFeeCap)
