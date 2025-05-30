@@ -918,6 +918,7 @@ func getBridgeServiceURLs() (map[uint32]string, error) {
 
 func claimEverything(cmd *cobra.Command) error {
 	privateKey := *inputUlxlyArgs.privateKey
+	claimerAddress := inputUlxlyArgs.addressOfPrivateKey
 	gasLimit := *inputUlxlyArgs.gasLimit
 	chainID := *inputUlxlyArgs.chainID
 	timeoutTxnReceipt := *inputUlxlyArgs.timeout
@@ -979,7 +980,7 @@ func claimEverything(cmd *cobra.Command) error {
 
 	workPool := make(chan *BridgeDeposit, concurrency) // bounded chan for controlled concurrency
 
-	nonceCounter, err := currentNonce(cmd.Context(), client, destinationAddress)
+	nonceCounter, err := currentNonce(cmd.Context(), client, claimerAddress)
 	if err != nil {
 		return err
 	}
