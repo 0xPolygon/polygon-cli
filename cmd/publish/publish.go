@@ -35,6 +35,7 @@ var Cmd = &cobra.Command{
 type inputArgs struct {
 	rpcURL        *string
 	concurrency   *uint64
+	jobQueueSize  *uint64
 	inputFileName *string
 	rateLimit     *uint64
 }
@@ -52,16 +53,14 @@ func publish(cmd *cobra.Command, args []string) error {
 
 	client, err := ethclient.Dial(*publishInputArgs.rpcURL)
 	if err != nil {
-		log.Fatal().
-			Err(err).
-			Str("rpcURL", *publishInputArgs.rpcURL).
-			Msg("Failed to connect to the network")
+		return err
 	}
+	defer client.Close()
 	log.Info().
 		Str("rpcURL", *publishInputArgs.rpcURL).
 		Msg("Connected to the network")
 
-	wp := NewWorkerPool(int(*publishInputArgs.concurrency))
+	wp := NewWorkerPool(*publishInputArgs.concurrency, *publishInputArgs.jobQueueSize)
 	wp.Start(ctx)
 
 	log.Info().
@@ -85,7 +84,7 @@ func publish(cmd *cobra.Command, args []string) error {
 				Msg("failed to wait for rate limiter")
 			continue
 		}
-		wp.SubmitJob(func(ctx context.Context, workerID int) {
+		wp.SubmitJob(func(ctx context.Context, workerID uint64) {
 			summary.InputDataCount.Add(1)
 
 			var iErr error
@@ -94,7 +93,7 @@ func publish(cmd *cobra.Command, args []string) error {
 				log.Error().
 					Err(iErr).
 					Str("inputDataItem", inputDataItem).
-					Int("workerID", workerID).
+					Uint64("workerID", workerID).
 					Msg("failed to decode input data item to transaction")
 				summary.InvalidInputs.Add(1)
 				return
@@ -110,7 +109,7 @@ func publish(cmd *cobra.Command, args []string) error {
 				log.Error().
 					Err(iErr).
 					Str("inputDataItem", inputDataItem).
-					Int("workerID", workerID).
+					Uint64("workerID", workerID).
 					Msg("failed to send transaction")
 				summary.TxsSentUnsuccessfully.Add(1)
 				return
@@ -133,12 +132,13 @@ func publish(cmd *cobra.Command, args []string) error {
 
 	summary.Print()
 
-	return err
+	return nil
 }
 
 func init() {
 	publishInputArgs.rpcURL = Cmd.PersistentFlags().String(ArgRpcURL, defaultRPCURL, "The RPC URL of the network")
 	publishInputArgs.concurrency = Cmd.PersistentFlags().Uint64P("concurrency", "c", 1, "Number of txs to send concurrently. Default is one request at a time.")
+	publishInputArgs.jobQueueSize = Cmd.PersistentFlags().Uint64("job-queue-size", 100, "Number of jobs we can put in the job queue for workers to process.")
 	publishInputArgs.inputFileName = Cmd.PersistentFlags().String("file", "", "Provide a filename with transactions to publish")
 	publishInputArgs.rateLimit = Cmd.PersistentFlags().Uint64("rate-limit", 0, "Rate limit in txs per second. Default is no rate limit.")
 }

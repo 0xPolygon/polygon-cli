@@ -7,19 +7,17 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const queueSize = 100
-
-type JobFn func(ctx context.Context, workerID int)
+type JobFn func(ctx context.Context, workerID uint64)
 
 // WorkerPool manages a pool of worker goroutines
 type WorkerPool struct {
-	numWorkers int
+	numWorkers uint64
 	jobQueue   chan JobFn
 	wg         sync.WaitGroup
 }
 
 // NewWorkerPool creates a new worker pool
-func NewWorkerPool(numWorkers int) *WorkerPool {
+func NewWorkerPool(numWorkers, queueSize uint64) *WorkerPool {
 	return &WorkerPool{
 		numWorkers: numWorkers,
 		jobQueue:   make(chan JobFn, queueSize),
@@ -47,7 +45,7 @@ func (wp *WorkerPool) SubmitJob(job JobFn) {
 }
 
 // worker is a worker goroutine that processes jobs
-func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
+func (wp *WorkerPool) worker(ctx context.Context, workerID uint64) {
 	defer wp.wg.Done()
 	for job := range wp.jobQueue {
 		safeJob(ctx, workerID, job)
@@ -55,7 +53,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 }
 
 // Executes the job safely and recovers in case it panics
-func safeJob(ctx context.Context, workerID int, job JobFn) {
+func safeJob(ctx context.Context, workerID uint64, job JobFn) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error().Msgf("Worker panicked: %v", r)

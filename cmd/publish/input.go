@@ -37,7 +37,7 @@ func getInputData(inputFileName *string, args []string) (iter.Seq[string], input
 		// If we get here, we're going to assume the user wants to load transactions
 		// from the command line and we're not going to look for other input sources
 		if len(txArgs) > 0 {
-			return dataFromArgs(args)
+			return dataFromArgs(txArgs)
 		}
 	}
 
@@ -47,7 +47,7 @@ func getInputData(inputFileName *string, args []string) (iter.Seq[string], input
 }
 
 func dataFromArgs(args []string) (iter.Seq[string], inputDataSource, error) {
-	fmt.Println("Reading data from args")
+	log.Info().Msg("Reading data from args")
 
 	return func(yield func(string) bool) {
 		for _, arg := range args {
@@ -69,6 +69,8 @@ func dataFromFile(filename string) (iter.Seq[string], inputDataSource, error) {
 		Msg("Reading data from file")
 
 	return func(yield func(string) bool) {
+		// Ensure the file is closed after the function exits
+		defer f.Close()
 		s := bufio.NewScanner(f)
 		sBuf := make([]byte, 0)
 		s.Buffer(sBuf, scannerBufferSize)
@@ -77,8 +79,6 @@ func dataFromFile(filename string) (iter.Seq[string], inputDataSource, error) {
 				return
 			}
 		}
-		// Ensure the file is closed after the function exits
-		defer f.Close()
 		if err := s.Err(); err != nil {
 			log.Error().
 				Err(err).

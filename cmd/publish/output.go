@@ -40,7 +40,10 @@ func (s *output) Print() {
 		elapsedSeconds = 1
 	}
 	txSent := s.TxsSentSuccessfully.Load() + s.TxsSentUnsuccessfully.Load()
-	txsSendPerSecond := float64(txSent) / elapsedSeconds
+	txsSendPerSecond := 0.0
+	if elapsedSeconds > 0.0001 {
+		txsSendPerSecond = float64(txSent) / elapsedSeconds
+	}
 	successRatio := float64(0)
 	if txSent > 0 {
 		successRatio = float64(s.TxsSentSuccessfully.Load()) / float64(txSent) * 100
