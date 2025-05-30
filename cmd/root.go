@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
+	"github.com/0xPolygon/polygon-cli/cmd/publish"
 	"github.com/0xPolygon/polygon-cli/util"
 
 	"github.com/0xPolygon/polygon-cli/cmd/cdk"
@@ -138,6 +139,7 @@ func NewPolycliCommand() *cobra.Command {
 		wallet.WalletCmd,
 		wrapcontract.WrapContractCmd,
 		foldtrace.FoldTraceCmd,
+		publish.Cmd,
 	)
 	return cmd
 }
