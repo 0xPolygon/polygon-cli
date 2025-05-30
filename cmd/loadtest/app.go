@@ -48,7 +48,7 @@ type (
 		ChainID                       *uint64
 		PrivateKey                    *string
 		ToAddress                     *string
-		EthAmountInWei                *float64
+		EthAmountInWei                *uint64
 		RateLimit                     *float64
 		AdaptiveRateLimit             *bool
 		SteadyStateTxPoolSize         *uint64
@@ -82,6 +82,12 @@ type (
 		BlobFeeCap                    *uint64
 		StartNonce                    *uint64
 		GasPriceMultiplier            *float64
+		SendingAddressCount           *uint64
+		AddressFundingAmount          *uint64
+		PreFundSendingAddresses       *bool
+		KeepFundedAmount              *bool
+		SendingAddressesFile          *string
+		Proxy                         *string
 
 		// Computed
 		CurrentGasPrice       *big.Int
@@ -92,7 +98,6 @@ type (
 		ToETHAddress          *ethcommon.Address
 		ContractETHAddress    *ethcommon.Address
 		SendAmount            *big.Int
-		CurrentBaseFee        *big.Int
 		ChainSupportBaseFee   bool
 		Mode                  loadTestMode
 		ParsedModes           []loadTestMode
@@ -103,16 +108,14 @@ type (
 
 var (
 	//go:embed loadtestUsage.md
-	loadtestUsage       string
-	inputLoadTestParams loadTestParams
-	loadTestResults     []loadTestSample
-	loadTestResutsMutex sync.RWMutex
-	startBlockNumber    uint64
-	finalBlockNumber    uint64
-	startNonce          uint64
-	currentNonce        uint64
-	currentNonceMutex   sync.RWMutex
-	rl                  *rate.Limiter
+	loadTestUsage        string
+	inputLoadTestParams  loadTestParams
+	loadTestResults      []loadTestSample
+	loadTestResultsMutex sync.RWMutex
+	startBlockNumber     uint64
+	finalBlockNumber     uint64
+	rl                   *rate.Limiter
+	accountPool          *AccountPool
 
 	hexwords = []byte{
 		0x00, 0x0F, 0xF1, 0xCE,
@@ -167,7 +170,7 @@ var (
 var LoadtestCmd = &cobra.Command{
 	Use:   "loadtest",
 	Short: "Run a generic load test against an Eth/EVM style JSON-RPC endpoint.",
-	Long:  loadtestUsage,
+	Long:  loadTestUsage,
 	Args:  cobra.NoArgs,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		inputLoadTestParams.RPCUrl = flag_loader.GetRpcUrlFlagValue(cmd)
@@ -221,7 +224,7 @@ func initFlags() {
 	ltp.ToRandom = LoadtestCmd.PersistentFlags().Bool("to-random", false, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
 	ltp.CallOnly = LoadtestCmd.PersistentFlags().Bool("call-only", false, "When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.")
 	ltp.CallOnlyLatestBlock = LoadtestCmd.PersistentFlags().Bool("call-only-latest", false, "When using call only mode with recall, should we execute on the latest block or on the original block")
-	ltp.EthAmountInWei = LoadtestCmd.PersistentFlags().Float64("eth-amount", 0, "The amount of ether to send on every transaction")
+	ltp.EthAmountInWei = LoadtestCmd.PersistentFlags().Uint64("eth-amount", 0, "The amount of ether in wei to send on every transaction")
 	ltp.RateLimit = LoadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
 	ltp.AdaptiveRateLimit = LoadtestCmd.PersistentFlags().Bool("adaptive-rate-limit", false, "Enable AIMD-style congestion control to automatically adjust request rate")
 	ltp.SteadyStateTxPoolSize = LoadtestCmd.PersistentFlags().Uint64("steady-state-tx-pool-size", 1000, "When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off.")
@@ -241,6 +244,11 @@ func initFlags() {
 	ltp.LegacyTransactionMode = LoadtestCmd.PersistentFlags().Bool("legacy", false, "Send a legacy transaction instead of an EIP1559 transaction.")
 	ltp.SendOnly = LoadtestCmd.PersistentFlags().Bool("send-only", false, "Send transactions and load without waiting for it to be mined.")
 	ltp.BlobFeeCap = LoadtestCmd.Flags().Uint64("blob-fee-cap", 100000, "The blob fee cap, or the maximum blob fee per chunk, in Gwei.")
+	ltp.SendingAddressCount = LoadtestCmd.Flags().Uint64("sending-address-count", 1, "The number of sending addresses to use. This is useful for avoiding pool account queue.")
+	ltp.AddressFundingAmount = LoadtestCmd.Flags().Uint64("address-funding-amount", 1000000000000000000, "The amount in wei to fund the sending addresses with.")
+	ltp.PreFundSendingAddresses = LoadtestCmd.Flags().Bool("pre-fund-sending-addresses", false, "If set to true, the sending addresses will be funded at the start of the execution, otherwise all addresses will be funded when used for the first time.")
+	ltp.KeepFundedAmount = LoadtestCmd.Flags().Bool("keep-funded-amount", false, "If set to true, the funded amount will be kept in the sending addresses. Otherwise, the funded amount will be refunded back to the account used to fund the account.")
+	ltp.SendingAddressesFile = LoadtestCmd.Flags().String("sending-addresses-file", "", "The file containing the sending addresses private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending addresses for different execution cycles.")
 
 	// Local flags.
 	ltp.Modes = LoadtestCmd.Flags().StringSliceP("mode", "m", []string{"t"}, `The testing mode to use. It can be multiple like: "c,d,f,t"
@@ -274,6 +282,7 @@ v3, uniswapv3 - Perform UniswapV3 swaps`)
 	ltp.ContractCallFunctionArgs = LoadtestCmd.Flags().StringSlice("function-arg", []string{}, `The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.`)
 	ltp.ContractCallPayable = LoadtestCmd.Flags().Bool("contract-call-payable", false, "Use this flag if the function is payable, the value amount passed will be from --eth-amount. This must be paired up with --mode contract-call and --contract-address")
 	ltp.InscriptionContent = LoadtestCmd.Flags().String("inscription-content", `data:,{"p":"erc-20","op":"mint","tick":"TEST","amt":"1"}`, "The inscription content that will be encoded as calldata. This must be paired up with --mode inscription")
+	ltp.Proxy = LoadtestCmd.Flags().String("proxy", "", "Use the proxy specified")
 
 	inputLoadTestParams = *ltp
 
