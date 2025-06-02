@@ -52,6 +52,10 @@ func (s *output) Print() {
 	summaryString := fmt.Sprintf(`-----------------------------------
               Summary              
 -----------------------------------
+Concurrency: %d
+JobQueueSize: %d
+RateLimit: %d
+-----------------------------------
 Input Data Source: %s
 Input Data Count: %d
 Valid Inputs: %d
@@ -64,10 +68,15 @@ Txs Sent Successfully: %d
 Txs Sent Unsuccessfully: %d
 Success Ratio: %.2f%%
 -----------------------------------`,
+		*publishInputArgs.concurrency,
+		*publishInputArgs.jobQueueSize,
+		*publishInputArgs.rateLimit,
+
 		s.InputDataSource,
 		s.InputDataCount.Load(),
 		s.ValidInputs.Load(),
 		s.InvalidInputs.Load(),
+
 		elapsed,
 		txSent,
 		txsSendPerSecond,
