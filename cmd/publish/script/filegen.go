@@ -161,7 +161,7 @@ func computeFundingAmountInWei(transferAmount *big.Int) *big.Int {
 
 func deleteAndCreateFile(filePath string) (*os.File, error) {
 	if _, err := os.Stat(filePath); err == nil {
-		if err := os.Remove(filePath); err != nil {
+		if iErr := os.Remove(filePath); iErr != nil {
 			return nil, fmt.Errorf("failed to delete existing file: %w", err)
 		}
 	} else if !os.IsNotExist(err) {
