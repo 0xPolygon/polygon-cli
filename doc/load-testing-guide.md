@@ -35,23 +35,51 @@ Each scenario includes example commands and configuration tips to simulate reali
 
 - [Kurtosis CLI](https://docs.kurtosis.com/) installed
 - [polycli](https://github.com/0xpolygon/polygon-cli?tab=readme-ov-file#install) installed and configured
-- Funded accounts with private keys available to `polycli`
+- Set `$private_key` with the private key of the funded account available to `polycli`
 - Access to performance monitoring tools (optional but recommended, e.g., `Grafana` + `Prometheus`)
 
 ## Configuring Kurtosis for Load Testing
 
-Launch a Kurtosis environment with your desired stack (e.g., CDK-Erigon or OP-Geth), for this example we will use the [kurtosis-cdk](https://github.com/0xPolygon/kurtosis-cdk) repository:
+Launch a Kurtosis environment with your desired stack (e.g., `CDK-Erigon` or `OP-Geth`), for this example we will use
+the [kurtosis-cdk](https://github.com/0xPolygon/kurtosis-cdk) repository:
 
+this command will start the latest version of the environment provided by the `kurtosis-cdk` repository
 ````bash
 kurtosis run --enclave cdk github.com/0xPolygon/kurtosis-cdk
+````
+
+if you want to ensure you will run either `cdk-erigon` or `op-geth`, ensure to set the parameter `deployment_stages.deploy_optimism_rollup` accordingly, `false` for `cdk-erigon` and `true` for `op-geth`.
+
+````bash
+kurtosis run --enclave cdk github.com/0xPolygon/kurtosis-cdk '{"deployment_stages": {"deploy_optimism_rollup": false}}'
 ````
 
 After the whole environment is started, set the env var `$rpc_url` with the RPC endpoint URL that will be used by
 `polycli`.
 
+for `op-geth`:
 ```bash
-export $rpc_url=$(kurtosis port print cdk cdk-erigon-rpc-001 rpc)
+export rpc_url=$(kurtosis port print cdk op-el-1-op-geth-op-node-001 rpc)
 ```
+
+for `cdk-erigon`:
+```bash
+export rpc_url=$(kurtosis port print cdk cdk-erigon-rpc-001 rpc)
+```
+
+Last, but not least, all the examples below will use the `$private_key` environment variable, ensure this env var
+contains the correct private key for the network your kurtosis environment is running.
+
+for `op-geth`:
+```bash
+export private_key=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+```
+
+for `cdk-erigon`:
+```bash
+export private_key=0x12d7de8621a77640c9241b2595ba78ce443d05e94090365ab3bb5e19df82c625
+```
+
 
 ## Running Load Tests with polycli
 
@@ -71,11 +99,11 @@ command.
   `200 to Fatal`, `300 to Error`, `400 to Warning`, `500 to Info`, `600 to Debug`, `700 to Trace`, the default is `500`.  
   - `--requests`: defines the number of requests that will be sent to the network by each concurrent execution.
   - `--concurrency`: define the number of concurrent executions of the load test. For example, if `--requests` is set to
-  `10` 
-  and `--concurrency` is set to `2`, then 2 load test executions will start concurrently and each concurrent execution
-  will send 10 requests, making 20 requests in total.
+  `10` and `--concurrency` is set to `2`, then 2 load test executions will start concurrently and each concurrent
+  execution will send 10 requests, making 20 requests in total.
   - `--rate-limit`: defines the number of requests that can be sent per second to the network, this limits the requests
-  sent across the concurrent executions
+  sent across the concurrent executions. _If you want to check TPS, ensure to set this parameter manually accordingly to
+  the environment max capacity because the default value is 4 txs per second._
 
 Here is a template that you can use to start writing you own load tests using `polycli`:
 
@@ -149,16 +177,33 @@ the proxy url.
 
 ## Example Benchmark Results
 
-TBD
+The numbers below were obtained from the execution of the steps above with:
+
+this machine:
+
+```
+- MacBook Pro - 14" 2021
+- Chip Apple M1 Pro
+- 16GB Ram
+- macOS Sequoia 15.5
+```
+
+these extra flags:
+
+```
+--concurrency 20
+--requests 50
+--rate-limit 2000
+```
+
+**Note**: These numbers are based on controlled testnet conditions and may vary depending on hardware, network conditions, and configuration. 
 
 | Scenario             | CDK-Erigon | OP-Geth  | 
 |----------------------|------------|----------|
-| Native Transfers     | ~000 TPS   | ~000 TPS |
-| ERC20 Transfers      | ~000 TPS   | ~000 TPS |
-| NFT Mints (ERC721)   | ~000 TPS   | ~000 TPS |
-| Uniswap Swaps        | ~000 TPS   | ~000 TPS |
-
-> **Note**: These numbers are based on controlled testnet conditions and may vary depending on hardware, network conditions, and configuration.
+| Native Transfers     | ~182 TPS   | ~181 TPS |
+| ERC20 Transfers      | ~171 TPS   | ~177 TPS |
+| NFT Mints (ERC721)   | ~164 TPS   | ~178 TPS |
+| Uniswap Swaps        | ~119 TPS   | ~160 TPS |
 
 ## Monitoring and Visualization (Optional)
 
@@ -172,4 +217,4 @@ For more details, see the [`polycli` repository](https://github.com/0xPolygon/po
 
 ---
 
-_Last updated: 02-JUN-2025_
+_Last updated: 03-JUN-2025_
