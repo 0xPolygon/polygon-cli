@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.23" # https://go.dev/dl/
+  GO_VERSION: "1.24.1" # https://go.dev/dl/
   FOUNDRY_VERSION: stable
 
 jobs:

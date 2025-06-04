@@ -5,10 +5,11 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"github.com/0xPolygon/polygon-cli/bindings/tokens"
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 	"time"
+
+	"github.com/0xPolygon/polygon-cli/bindings/tokens"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/spf13/cobra"
 
@@ -154,25 +155,14 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 }
 
 // Run UniswapV3 loadtest.
-func runUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, nonce uint64, uniswapV3Config uniswapv3loadtest.UniswapV3Config, poolConfig uniswapv3loadtest.PoolConfig, swapAmountIn *big.Int) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
-	var tops *bind.TransactOpts
+func runUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, uniswapV3Config uniswapv3loadtest.UniswapV3Config, poolConfig uniswapv3loadtest.PoolConfig, swapAmountIn *big.Int) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
 	var tx *ethtypes.Transaction
 
 	ltp := inputLoadTestParams
-	chainID := new(big.Int).SetUint64(*ltp.ChainID)
-	privateKey := ltp.ECDSAPrivateKey
-
-	tops, err = bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable create transaction signer")
-		return
-	}
-	tops.Nonce = new(big.Int).SetUint64(nonce)
-	tops = configureTransactOpts(ctx, c, tops)
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
-	tx, err = uniswapv3loadtest.ExactInputSingleSwap(tops, uniswapV3Config.SwapRouter02.Contract, poolConfig, swapAmountIn, *ltp.FromETHAddress, nonce)
+	tx, err = uniswapv3loadtest.ExactInputSingleSwap(tops, uniswapV3Config.SwapRouter02.Contract, poolConfig, swapAmountIn, *ltp.FromETHAddress, tops.Nonce.Uint64())
 	if err == nil && tx != nil {
 		txHash = tx.Hash()
 	}

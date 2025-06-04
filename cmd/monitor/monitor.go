@@ -241,17 +241,17 @@ func getChainState(ctx context.Context, ec *ethclient.Client, txPoolStatusSuppor
 
 	safeBlock, err := ec.HeaderByNumber(ctx, big.NewInt(int64(rpc.SafeBlockNumber)))
 	if err != nil {
-		return nil, fmt.Errorf("couldn't fetch safe block number: %s", err.Error())
-	}
-	if safeBlock != nil {
+		log.Debug().Err(err).Msg("Unable to fetch safe block number")
+		cs.SafeBlock = 0
+	} else if safeBlock != nil {
 		cs.SafeBlock = safeBlock.Number.Uint64()
 	}
 
 	finalizedBlock, err := ec.HeaderByNumber(ctx, big.NewInt(int64(rpc.FinalizedBlockNumber)))
 	if err != nil {
-		return nil, fmt.Errorf("couldn't fetch finalized block number: %s", err.Error())
-	}
-	if finalizedBlock != nil {
+		log.Debug().Err(err).Msg("Unable to fetch finalized block number")
+		cs.FinalizedBlock = 0
+	} else if finalizedBlock != nil {
 		cs.FinalizedBlock = finalizedBlock.Number.Uint64()
 	}
 
