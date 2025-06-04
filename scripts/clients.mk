@@ -30,7 +30,9 @@ anvil: ## Start a local anvil node.
 		--host ${HOST} \
 		--port $(PORT) \
 		--chain-id ${CHAIN_ID} \
-		--balance 999999999999999
+		--balance 999999999999999 \
+		--block-time 5 \
+		--gas-limit 300000000000
 
 .PHONY: fund
 fund: ## Fund the loadtest account with 100k ETH.
@@ -47,10 +49,13 @@ fund: ## Fund the loadtest account with 100k ETH.
 loadtest: fund ## Run random loadtest against a local RPC.
 	sleep 2
 	go run -race main.go loadtest \
-		--verbosity 600 \
+		--verbosity 700 \
 		--rpc-url http://${HOST}:$(PORT) \
-		--chain-id ${CHAIN_ID} \
 		--mode random \
 		--concurrency 1 \
 		--requests 200 \
-		--rate-limit 100
+		--rate-limit 100 \
+		--sending-address-count 10 \
+		--pre-fund-sending-addresses \
+		--summarize 
+		
