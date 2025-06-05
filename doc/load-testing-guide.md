@@ -119,13 +119,11 @@ polycli loadtest \
 ```
 
 As mentioned before, `polycli` test various types of transactions, please take a look for the flag `--mode` for the
-different.
+different ones.
 
 >In the steps below you will find examples on how to run `polycli` for specific scenarios.
 
 ### Native Token Transfers
-
-To test `Native Token Transfers using EOAs`, you can use the following command
 
 ```bash
 polycli loadtest --rpc-url $rpc_url --private-key $private_key --mode t
@@ -154,8 +152,6 @@ polycli loadtest --rpc-url $rpc_url --private-key $private_key --mode v3
 The loadtest command provided by `polycli` send all the transactions with the same sender by default, but some times
 the test requires multiple accounts to be used in order to avoid the pool queue limits, the `polycli` supports
 multi-account by setting the following flags:
-
-sending-address-count
 
 - `sending-address-count`: defines the number of accounts that will be created to send the test txs
 - `address-funding-amount`: defines the amount that will be funded to each sending account that will be created
@@ -209,7 +205,7 @@ conditions, and configuration.
 ## Monitoring and Visualization (Optional)
 
 The `cdk-kurtosis` package also supports additional services to run alongside the network, you can find more details
-[here](https://github.com/0xPolygon/kurtosis-cdk/blob/main/docs/additional-services.md)
+[here](https://github.com/0xPolygon/kurtosis-cdk/blob/main/docs/additional-services.md).
 
 The additional service called `observability` uses the following tools:
 - [panoptichain](https://github.com/0xPolygon/panoptichain)
