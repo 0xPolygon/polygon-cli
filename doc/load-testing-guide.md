@@ -204,6 +204,8 @@ conditions, and configuration.
 
 ## Monitoring and Visualization (Optional)
 
+### Grafana
+
 The `cdk-kurtosis` package also supports additional services to run alongside the network, you can find more details
 [here](https://github.com/0xPolygon/kurtosis-cdk/blob/main/docs/additional-services.md).
 
@@ -225,12 +227,18 @@ Now that the environment is running, we can get the URL to access the observabil
 kurtosis port print cdk grafana-001 dashboards
 ```
 
-Access the dashboard URL in the browser and go to Menu > Dashboards > Panoptchain
-![grafana panoptchain menu](grafana_panoptchain_menu.png)
+Access the dashboard URL in the browser and go to Menu > Dashboards > Panoptichain
+![grafana panoptichain dashboard](grafana_panoptichain_dashboard.png)
 
-Then you can start using the network and observe the following panels:
+### polycli monitor
 
-![grafana panoptchain panels](grafana_panoptchain_panels.png)
+`polycli` also provides a way to observe networks with the command `monitor`.
+
+```bash
+polycli monitor --rpc-url $rpc_url
+```
+
+![polycli monitor](polycli_monitor.png)
 
 ---
 
