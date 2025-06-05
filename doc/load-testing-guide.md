@@ -169,7 +169,7 @@ accounts that were created during the execution will be returned to the funding 
 Instead of creating new accounts, the test will use only the accounts defined in the file with the private keys as the
 accounts that will send the test txs
 
-### Proxy support
+## Proxy support
 
 Generally network RPCs will have some sort of protection to avoid DoS attacks, for cases where you have to by pass the
 IP check or any other change to the requests made by the `polycli` load test, you can specify the `--proxy` flag with
