@@ -196,7 +196,8 @@ these extra flags:
 --rate-limit 2000
 ```
 
-**Note**: These numbers are based on controlled testnet conditions and may vary depending on hardware, network conditions, and configuration. 
+**Note**: These numbers are based on controlled testnet conditions and may vary depending on hardware, network 
+conditions, and configuration. 
 
 | Scenario             | CDK-Erigon | OP-Geth  | 
 |----------------------|------------|----------|
@@ -207,14 +208,42 @@ these extra flags:
 
 ## Monitoring and Visualization (Optional)
 
-TBD
+The `cdk-kurtosis` package also supports additional services to run alongside the network, you can find more details
+[here](https://github.com/0xPolygon/kurtosis-cdk/blob/main/docs/additional-services.md)
+
+The additional service called `observability` uses the following tools:
+- [panoptichain](https://github.com/0xPolygon/panoptichain)
+- [prometheus](https://prometheus.io/)
+- [grafana](https://grafana.com/)
+
+These tools mentioned above are already configured to extract important information from the network and provide it in a
+friendly dashboard that can be accessed via browser. The URL is exposed when the kurtosis package is initialized with
+the `observability` service enabled and here is how you can enabled it:
+
+````bash
+kurtosis run --enclave cdk github.com/0xPolygon/kurtosis-cdk '{"args": {"additional_services": ["observability"]}}'
+````
+
+Now that the environment is running, we can get the URL to access the observability dashboard by running:
+```bash
+kurtosis port print cdk grafana-001 dashboards
+```
+
+Access the dashboard URL in the browser and go to Menu > Dashboards > Panoptchain
+![grafana panoptchain menu](grafana_panoptchain_menu.png)
+
+Then you can start using the network and observe the following panels:
+
+![grafana panoptchain panels](grafana_panoptchain_panels.png)
 
 ---
 
 ## Source
 
-For more details, see the [`polycli` repository](https://github.com/0xPolygon/polygon-cli`).
+For more details, see: 
+- [`polycli` repository](https://github.com/0xPolygon/polygon-cli`)
+- [`kurtosis-cdk` repository](https://github.com/0xPolygon/kurtosis-cdk`).
 
 ---
 
-_Last updated: 03-JUN-2025_
+_Last updated: 05-JUN-2025_
