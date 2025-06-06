@@ -121,3 +121,6 @@ The tool supports configuration via:
 
 ## Development Guidelines
 - Use conventional commit messages
+
+## Development Memories
+- Use `make build` to build polycli

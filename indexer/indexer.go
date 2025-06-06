@@ -182,27 +182,27 @@ func (i *Indexer) checkForNewBlocks() error {
 			Int64("gap", currentTip-lastProcessed).
 			Msg("Catching up missed blocks")
 
-		// Fetch all blocks from lastProcessed+1 to currentTip
-		for height := lastProcessed + 1; height <= currentTip; height++ {
-			select {
-			case <-i.ctx.Done():
-				return i.ctx.Err()
-			default:
-			}
+		// Fetch missed blocks in parallel and publish them in order
+		startHeight := lastProcessed + 1
+		blocks, err := i.fetchBlocksInParallel(startHeight, currentTip)
+		if err != nil {
+			return err
+		}
 
-			block, err := i.store.GetBlockByNumber(i.ctx, big.NewInt(height))
-			if err != nil {
-				log.Error().Err(err).Int64("height", height).Msg("Error fetching block")
+		// Publish blocks to channel in order
+		for height, block := range blocks {
+			if block == nil {
+				// Skip blocks that failed to fetch
 				continue
 			}
 
-			// Publish block to channel
 			select {
 			case i.blockChan <- block:
-				log.Debug().Int64("height", height).Str("hash", block.Hash().Hex()).Msg("Published block")
+				blockHeight := startHeight + int64(height)
+				log.Debug().Int64("height", blockHeight).Str("hash", block.Hash().Hex()).Msg("Published block")
 				// Update latest height after successful publish
 				i.mu.Lock()
-				i.latestHeight = height
+				i.latestHeight = blockHeight
 				i.mu.Unlock()
 			case <-i.ctx.Done():
 				return i.ctx.Err()
@@ -235,24 +235,22 @@ func (i *Indexer) initialCatchup() error {
 		Int64("lookbackDepth", i.lookbackDepth).
 		Msg("Starting initial catchup")
 	
-	// Fetch and publish blocks from startHeight to currentTip
-	for height := startHeight; height <= currentTip; height++ {
-		select {
-		case <-i.ctx.Done():
-			return i.ctx.Err()
-		default:
-		}
-		
-		block, err := i.store.GetBlockByNumber(i.ctx, big.NewInt(height))
-		if err != nil {
-			log.Error().Err(err).Int64("height", height).Msg("Error fetching block during catchup")
+	// Fetch blocks in parallel and publish them in order
+	blocks, err := i.fetchBlocksInParallel(startHeight, currentTip)
+	if err != nil {
+		return err
+	}
+	
+	// Publish blocks to channel in order
+	for height, block := range blocks {
+		if block == nil {
+			// Skip blocks that failed to fetch
 			continue
 		}
 		
-		// Publish block to channel
 		select {
 		case i.blockChan <- block:
-			log.Debug().Int64("height", height).Str("hash", block.Hash().Hex()).Msg("Published catchup block")
+			log.Debug().Int64("height", startHeight+int64(height)).Str("hash", block.Hash().Hex()).Msg("Published catchup block")
 		case <-i.ctx.Done():
 			return i.ctx.Err()
 		}
@@ -264,9 +262,79 @@ func (i *Indexer) initialCatchup() error {
 	i.mu.Unlock()
 	
 	log.Info().
-		Int64("blocksProcessed", currentTip-startHeight+1).
+		Int64("blocksProcessed", int64(len(blocks))).
 		Int64("latestHeight", currentTip).
 		Msg("Initial catchup completed")
 	
 	return nil
+}
+
+// fetchBlocksInParallel fetches a range of blocks concurrently while maintaining order
+func (i *Indexer) fetchBlocksInParallel(startHeight, endHeight int64) ([]rpctypes.PolyBlock, error) {
+	if startHeight > endHeight {
+		return nil, nil
+	}
+	
+	blockCount := endHeight - startHeight + 1
+	blocks := make([]rpctypes.PolyBlock, blockCount)
+	var wg sync.WaitGroup
+	
+	log.Debug().
+		Int64("startHeight", startHeight).
+		Int64("endHeight", endHeight).
+		Int64("blockCount", blockCount).
+		Int("maxConcurrency", i.maxConcurrency).
+		Msg("Starting parallel block fetch")
+	
+	// Fetch blocks in parallel with concurrency control
+	for idx := int64(0); idx < blockCount; idx++ {
+		select {
+		case <-i.ctx.Done():
+			return nil, i.ctx.Err()
+		case i.workerSem <- struct{}{}: // Acquire semaphore
+		}
+		
+		wg.Add(1)
+		go func(index int64, height int64) {
+			defer func() {
+				<-i.workerSem // Release semaphore
+				wg.Done()
+			}()
+			
+			block, err := i.store.GetBlockByNumber(i.ctx, big.NewInt(height))
+			if err != nil {
+				log.Error().
+					Err(err).
+					Int64("height", height).
+					Msg("Error fetching block in parallel")
+				// Leave blocks[index] as nil to indicate failure
+				return
+			}
+			
+			blocks[index] = block
+			log.Trace().
+				Int64("height", height).
+				Str("hash", block.Hash().Hex()).
+				Msg("Fetched block in parallel")
+		}(idx, startHeight+idx)
+	}
+	
+	// Wait for all goroutines to complete
+	wg.Wait()
+	
+	// Count successful fetches
+	successCount := int64(0)
+	for _, block := range blocks {
+		if block != nil {
+			successCount++
+		}
+	}
+	
+	log.Debug().
+		Int64("requested", blockCount).
+		Int64("successful", successCount).
+		Int64("failed", blockCount-successCount).
+		Msg("Parallel block fetch completed")
+	
+	return blocks, nil
 }
