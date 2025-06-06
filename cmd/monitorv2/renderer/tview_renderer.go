@@ -3,7 +3,9 @@ package renderer
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"strconv"
+	"time"
 
 	"github.com/0xPolygon/polygon-cli/indexer"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
@@ -20,7 +22,9 @@ type TviewRenderer struct {
 	blocks []rpctypes.PolyBlock
 	
 	// Pages
-	homePage        *tview.Table
+	homePage        *tview.Flex  // Changed to Flex to hold multiple sections
+	homeTopSection  *tview.TextView
+	homeTable       *tview.Table
 	blockDetailPage *tview.TextView
 	txDetailPage    *tview.TextView
 	infoPage        *tview.TextView
@@ -84,38 +88,56 @@ func (t *TviewRenderer) createPages() {
 	t.pages.AddPage("quit", t.quitModal, true, false)
 }
 
-// createHomePage creates the main block listing table
+// createHomePage creates the main page with top section and block listing table
 func (t *TviewRenderer) createHomePage() {
-	t.homePage = tview.NewTable().
+	// Create top section
+	t.homeTopSection = tview.NewTextView().
+		SetDynamicColors(true).
+		SetRegions(true).
+		SetWordWrap(true)
+	t.homeTopSection.SetBorder(true).SetTitle(" Status ")
+	t.homeTopSection.SetText("Initializing...")
+	
+	// Create the block table
+	t.homeTable = tview.NewTable().
 		SetBorders(false).
 		SetSelectable(true, false).
 		SetFixed(1, 0).  // Fix the header row so it doesn't scroll
 		SetSeparator(' ') // Use space as separator instead of borders
 	
+	// Add border and title to the table
+	t.homeTable.SetBorder(true).SetTitle(" Blocks ")
+	
 	// Set up table headers
-	t.homePage.SetCell(0, 0, tview.NewTableCell("BLOCK NUMBER").
+	t.homeTable.SetCell(0, 0, tview.NewTableCell("BLOCK NUMBER").
 		SetTextColor(tview.Styles.PrimaryTextColor).
 		SetAlign(tview.AlignRight).
 		SetExpansion(1).
 		SetAttributes(tcell.AttrBold))
-	t.homePage.SetCell(0, 1, tview.NewTableCell("BLOCK HASH").
+	t.homeTable.SetCell(0, 1, tview.NewTableCell("BLOCK HASH").
 		SetTextColor(tview.Styles.PrimaryTextColor).
 		SetAlign(tview.AlignLeft).
 		SetExpansion(2).
 		SetAttributes(tcell.AttrBold))
-	t.homePage.SetCell(0, 2, tview.NewTableCell("TXS").
+	t.homeTable.SetCell(0, 2, tview.NewTableCell("TXS").
 		SetTextColor(tview.Styles.PrimaryTextColor).
 		SetAlign(tview.AlignRight).
 		SetExpansion(1).
 		SetAttributes(tcell.AttrBold))
 	
 	// Set up selection handler for Enter key
-	t.homePage.SetSelectedFunc(func(row, column int) {
+	t.homeTable.SetSelectedFunc(func(row, column int) {
 		if row > 0 && row-1 < len(t.blocks) { // Skip header row
 			// Navigate to block detail page
 			t.showBlockDetail(t.blocks[row-1])
 		}
 	})
+	
+	// Create flex container to hold both sections
+	t.homePage = tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(t.homeTopSection, 10, 0, false). // Top section: 10 lines high
+		AddItem(t.homeTable, 0, 1, true)         // Table: takes remaining space
 }
 
 // createBlockDetailPage creates the block detail view
@@ -232,6 +254,10 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 		// Handle Escape key to go back to home
 		if event.Key() == tcell.KeyEscape {
 			t.pages.SwitchToPage("home")
+			// Set focus to the table when returning to home
+			if t.homeTable != nil {
+				t.app.SetFocus(t.homeTable)
+			}
 			return nil
 		}
 		
@@ -241,8 +267,8 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 			switch event.Key() {
 			case tcell.KeyEnter:
 				// Handle Enter key on home page (block selection)
-				if t.homePage != nil {
-					row, _ := t.homePage.GetSelection()
+				if t.homeTable != nil {
+					row, _ := t.homeTable.GetSelection()
 					if row > 0 && row-1 < len(t.blocks) {
 						t.showBlockDetail(t.blocks[row-1])
 					}
@@ -282,6 +308,9 @@ func (t *TviewRenderer) Start(ctx context.Context) error {
 	// Start consuming blocks in a separate goroutine
 	go t.consumeBlocks(ctx)
 	
+	// Start periodic status updates
+	go t.updateChainInfo(ctx)
+	
 	// Start the TUI application
 	// This will block until the application is stopped
 	if err := t.app.Run(); err != nil {
@@ -319,15 +348,15 @@ func (t *TviewRenderer) consumeBlocks(ctx context.Context) {
 
 // updateTable refreshes the home page table with current blocks
 func (t *TviewRenderer) updateTable() {
-	if t.homePage == nil {
+	if t.homeTable == nil {
 		return
 	}
 	
 	// Clear existing rows (except header)
-	rowCount := t.homePage.GetRowCount()
+	rowCount := t.homeTable.GetRowCount()
 	for row := 1; row < rowCount; row++ {
 		for col := 0; col < 3; col++ {
-			t.homePage.SetCell(row, col, nil)
+			t.homeTable.SetCell(row, col, nil)
 		}
 	}
 	
@@ -341,23 +370,130 @@ func (t *TviewRenderer) updateTable() {
 		
 		// Block number
 		blockNum := block.Number().String()
-		t.homePage.SetCell(row, 0, tview.NewTableCell(blockNum).SetAlign(tview.AlignRight))
+		t.homeTable.SetCell(row, 0, tview.NewTableCell(blockNum).SetAlign(tview.AlignRight))
 		
 		// Block hash (truncated for display)
 		hashStr := block.Hash().Hex()
 		if len(hashStr) > 20 {
 			hashStr = hashStr[:10] + "..." + hashStr[len(hashStr)-10:]
 		}
-		t.homePage.SetCell(row, 1, tview.NewTableCell(hashStr).SetAlign(tview.AlignLeft))
+		t.homeTable.SetCell(row, 1, tview.NewTableCell(hashStr).SetAlign(tview.AlignLeft))
 		
 		// Number of transactions
 		txCount := len(block.Transactions())
-		t.homePage.SetCell(row, 2, tview.NewTableCell(strconv.Itoa(txCount)).SetAlign(tview.AlignRight))
+		t.homeTable.SetCell(row, 2, tview.NewTableCell(strconv.Itoa(txCount)).SetAlign(tview.AlignRight))
 	}
 	
-	// Set table title with current block count
-	title := fmt.Sprintf(" Blockchain Monitor (%d blocks) ", len(t.blocks))
-	t.homePage.SetTitle(title)
+	// Update table title with current block count
+	title := fmt.Sprintf(" Blocks (%d) ", len(t.blocks))
+	t.homeTable.SetTitle(title)
+}
+
+// updateChainInfo periodically updates the status section with chain information
+func (t *TviewRenderer) updateChainInfo(ctx context.Context) {
+	// Update immediately on start
+	t.refreshChainInfo(ctx)
+	
+	// Set up ticker for periodic updates
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			t.refreshChainInfo(ctx)
+		}
+	}
+}
+
+// refreshChainInfo fetches and displays current chain information
+func (t *TviewRenderer) refreshChainInfo(ctx context.Context) {
+	if t.homeTopSection == nil {
+		return
+	}
+	
+	// Get chain store from indexer (need to access the store directly)
+	// For now, we'll call the indexer methods which delegate to the store
+	
+	var statusLines []string
+	
+	// Try to get chain ID
+	if chainID, err := t.indexer.GetChainID(ctx); err == nil {
+		statusLines = append(statusLines, fmt.Sprintf("Chain ID: %s", chainID.String()))
+	} else {
+		statusLines = append(statusLines, "Chain ID: N/A")
+	}
+	
+	// Try to get gas price
+	if gasPrice, err := t.indexer.GetGasPrice(ctx); err == nil {
+		gasPriceGwei := weiToGwei(gasPrice)
+		statusLines = append(statusLines, fmt.Sprintf("Gas Price: %s gwei", gasPriceGwei))
+	} else {
+		statusLines = append(statusLines, "Gas Price: N/A")
+	}
+	
+	// Try to get pending transaction count
+	if pendingTxs, err := t.indexer.GetPendingTransactionCount(ctx); err == nil {
+		statusLines = append(statusLines, fmt.Sprintf("Pending TXs: %s", pendingTxs.String()))
+	} else {
+		statusLines = append(statusLines, "Pending TXs: N/A")
+	}
+	
+	// Try to get safe block
+	if safeBlock, err := t.indexer.GetSafeBlock(ctx); err == nil {
+		statusLines = append(statusLines, fmt.Sprintf("Safe Block: #%s", safeBlock.String()))
+	} else {
+		statusLines = append(statusLines, "Safe Block: N/A")
+	}
+	
+	// Get latest block info (use store method)
+	if latestBlock, err := t.indexer.GetBlock(ctx, "latest"); err == nil {
+		statusLines = append(statusLines, fmt.Sprintf("Latest Block: #%s", latestBlock.Number().String()))
+		
+		// Add base fee if available
+		if baseFee := latestBlock.BaseFee(); baseFee != nil {
+			baseFeeGwei := weiToGwei(baseFee)
+			statusLines = append(statusLines, fmt.Sprintf("Base Fee: %s gwei", baseFeeGwei))
+		}
+	} else {
+		statusLines = append(statusLines, "Latest Block: N/A")
+	}
+	
+	// Format status text
+	statusText := ""
+	for i, line := range statusLines {
+		if i > 0 {
+			if i%2 == 0 {
+				statusText += "\n"
+			} else {
+				statusText += " | "
+			}
+		}
+		statusText += line
+	}
+	
+	// Update the status section in the main thread
+	t.app.QueueUpdateDraw(func() {
+		t.homeTopSection.SetText(statusText)
+	})
+	
+	log.Debug().Msg("Updated chain info in status section")
+}
+
+// weiToGwei converts wei to gwei with reasonable precision
+func weiToGwei(wei *big.Int) string {
+	if wei == nil {
+		return "0"
+	}
+	
+	// Convert wei to gwei (divide by 10^9)
+	gwei := new(big.Float).SetInt(wei)
+	gwei = gwei.Quo(gwei, big.NewFloat(1e9))
+	
+	// Format with 2 decimal places
+	return fmt.Sprintf("%.2f", gwei)
 }
 
 // Stop gracefully stops the TUI renderer

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/0xPolygon/polygon-cli/blockstore"
+	"github.com/0xPolygon/polygon-cli/chainstore"
 	"github.com/0xPolygon/polygon-cli/cmd/monitorv2/renderer"
 	"github.com/0xPolygon/polygon-cli/indexer"
 
@@ -30,7 +30,7 @@ var MonitorV2Cmd = &cobra.Command{
 		}
 
 		// Create store
-		store, err := blockstore.NewPassthroughStore(rpcURL)
+		store, err := chainstore.NewPassthroughStore(rpcURL)
 		if err != nil {
 			return fmt.Errorf("failed to create store: %w", err)
 		}

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xPolygon/polygon-cli/blockstore"
+	"github.com/0xPolygon/polygon-cli/chainstore"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog/log"
@@ -14,8 +14,8 @@ import (
 
 // Indexer is responsible for fetching blockchain data and populating the store
 type Indexer struct {
-	// Store is the blockstore to populate with data
-	store blockstore.BlockStore
+	// Store is the chainstore to populate with data
+	store chainstore.ChainStore
 
 	// Configuration
 	pollingInterval time.Duration // How often to poll for new blocks
@@ -67,7 +67,7 @@ func DefaultConfig() *Config {
 }
 
 // NewIndexer creates a new indexer with the given store and configuration
-func NewIndexer(store blockstore.BlockStore, cfg *Config) *Indexer {
+func NewIndexer(store chainstore.ChainStore, cfg *Config) *Indexer {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
@@ -114,6 +114,48 @@ func (i *Indexer) LatestHeight() int64 {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
 	return i.latestHeight
+}
+
+// === CHAIN INFO METHODS (delegate to store) ===
+
+// GetChainID retrieves the chain ID
+func (i *Indexer) GetChainID(ctx context.Context) (*big.Int, error) {
+	return i.store.GetChainID(ctx)
+}
+
+// GetGasPrice retrieves the current gas price
+func (i *Indexer) GetGasPrice(ctx context.Context) (*big.Int, error) {
+	return i.store.GetGasPrice(ctx)
+}
+
+// GetPendingTransactionCount retrieves pending transaction count
+func (i *Indexer) GetPendingTransactionCount(ctx context.Context) (*big.Int, error) {
+	return i.store.GetPendingTransactionCount(ctx)
+}
+
+// GetQueuedTransactionCount retrieves queued transaction count
+func (i *Indexer) GetQueuedTransactionCount(ctx context.Context) (*big.Int, error) {
+	return i.store.GetQueuedTransactionCount(ctx)
+}
+
+// GetSafeBlock retrieves the safe block number
+func (i *Indexer) GetSafeBlock(ctx context.Context) (*big.Int, error) {
+	return i.store.GetSafeBlock(ctx)
+}
+
+// GetFinalizedBlock retrieves the finalized block number
+func (i *Indexer) GetFinalizedBlock(ctx context.Context) (*big.Int, error) {
+	return i.store.GetFinalizedBlock(ctx)
+}
+
+// GetBaseFee retrieves the current base fee
+func (i *Indexer) GetBaseFee(ctx context.Context) (*big.Int, error) {
+	return i.store.GetBaseFee(ctx)
+}
+
+// IsMethodSupported checks if a method is supported
+func (i *Indexer) IsMethodSupported(method string) bool {
+	return i.store.IsMethodSupported(method)
 }
 
 // Start begins the indexing process
