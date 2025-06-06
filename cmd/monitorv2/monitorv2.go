@@ -16,7 +16,8 @@ import (
 var usage string
 
 var (
-	rpcURL string
+	rpcURL         string
+	rendererType   string
 )
 
 var MonitorV2Cmd = &cobra.Command{
@@ -44,15 +45,24 @@ var MonitorV2Cmd = &cobra.Command{
 		}
 		defer idx.Stop()
 
-		// Create JSON renderer (only needs indexer now)
-		jsonRenderer := renderer.NewJSONRenderer(idx)
+		// Create renderer based on type
+		var r renderer.Renderer
+		switch rendererType {
+		case "json":
+			r = renderer.NewJSONRenderer(idx)
+		case "tview", "tui":
+			r = renderer.NewTviewRenderer(idx)
+		default:
+			return fmt.Errorf("unknown renderer type: %s (supported: json, tview, tui)", rendererType)
+		}
 
 		// Start rendering
 		ctx := context.Background()
-		return jsonRenderer.Start(ctx)
+		return r.Start(ctx)
 	},
 }
 
 func init() {
 	MonitorV2Cmd.Flags().StringVar(&rpcURL, "rpc-url", "", "RPC endpoint URL (required)")
+	MonitorV2Cmd.Flags().StringVar(&rendererType, "renderer", "json", "Renderer type (json, tview, tui)")
 }
