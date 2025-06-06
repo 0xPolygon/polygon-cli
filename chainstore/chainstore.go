@@ -64,6 +64,9 @@ type ChainStore interface {
 	RefreshCapabilities(ctx context.Context) error
 	GetSupportedMethods() []string
 	
+	// === CONNECTION INFO ===
+	GetRPCURL() string
+	
 	// Close closes the store and releases any resources
 	Close() error
 }

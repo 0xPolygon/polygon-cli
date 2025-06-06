@@ -19,6 +19,7 @@ type PassthroughStore struct {
 	cache        *ChainCache
 	capabilities *CapabilityManager
 	config       *ChainStoreConfig
+	rpcURL       string
 }
 
 // NewPassthroughStore creates a new passthrough store with the given RPC client
@@ -38,6 +39,7 @@ func NewPassthroughStoreWithConfig(rpcURL string, config *ChainStoreConfig) (*Pa
 		cache:        NewChainCache(),
 		capabilities: NewCapabilityManager(client, config.CapabilityTTL),
 		config:       config,
+		rpcURL:       rpcURL,
 	}
 	
 	// Initialize capabilities in background
@@ -413,6 +415,11 @@ func (s *PassthroughStore) RefreshCapabilities(ctx context.Context) error {
 // GetSupportedMethods returns all supported methods
 func (s *PassthroughStore) GetSupportedMethods() []string {
 	return s.capabilities.GetSupportedMethods()
+}
+
+// GetRPCURL returns the RPC endpoint URL
+func (s *PassthroughStore) GetRPCURL() string {
+	return s.rpcURL
 }
 
 // Close closes the store and releases any resources

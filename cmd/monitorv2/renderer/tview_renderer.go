@@ -109,21 +109,29 @@ func (t *TviewRenderer) createHomePage() {
 	t.homeTable.SetBorder(true).SetTitle(" Blocks ")
 	
 	// Set up table headers
-	t.homeTable.SetCell(0, 0, tview.NewTableCell("BLOCK NUMBER").
-		SetTextColor(tview.Styles.PrimaryTextColor).
-		SetAlign(tview.AlignRight).
-		SetExpansion(1).
-		SetAttributes(tcell.AttrBold))
-	t.homeTable.SetCell(0, 1, tview.NewTableCell("BLOCK HASH").
-		SetTextColor(tview.Styles.PrimaryTextColor).
-		SetAlign(tview.AlignLeft).
-		SetExpansion(2).
-		SetAttributes(tcell.AttrBold))
-	t.homeTable.SetCell(0, 2, tview.NewTableCell("TXS").
-		SetTextColor(tview.Styles.PrimaryTextColor).
-		SetAlign(tview.AlignRight).
-		SetExpansion(1).
-		SetAttributes(tcell.AttrBold))
+	headers := []struct {
+		text      string
+		align     int
+		expansion int
+	}{
+		{"BLOCK #", tview.AlignRight, 1},
+		{"TIME", tview.AlignLeft, 2},
+		{"HASH", tview.AlignLeft, 2},
+		{"TXS", tview.AlignRight, 1},
+		{"SIZE", tview.AlignRight, 1},
+		{"GAS USED", tview.AlignRight, 2},
+		{"GAS %", tview.AlignRight, 1},
+		{"GAS LIMIT", tview.AlignRight, 2},
+		{"STATE ROOT", tview.AlignLeft, 2},
+	}
+	
+	for col, header := range headers {
+		t.homeTable.SetCell(0, col, tview.NewTableCell(header.text).
+			SetTextColor(tview.Styles.PrimaryTextColor).
+			SetAlign(header.align).
+			SetExpansion(header.expansion).
+			SetAttributes(tcell.AttrBold))
+	}
 	
 	// Set up selection handler for Enter key
 	t.homeTable.SetSelectedFunc(func(row, column int) {
@@ -355,7 +363,7 @@ func (t *TviewRenderer) updateTable() {
 	// Clear existing rows (except header)
 	rowCount := t.homeTable.GetRowCount()
 	for row := 1; row < rowCount; row++ {
-		for col := 0; col < 3; col++ {
+		for col := 0; col < 9; col++ { // Updated to 9 columns
 			t.homeTable.SetCell(row, col, nil)
 		}
 	}
@@ -368,20 +376,41 @@ func (t *TviewRenderer) updateTable() {
 		
 		row := i + 1 // +1 to account for header row
 		
-		// Block number
+		// Column 0: Block number
 		blockNum := block.Number().String()
 		t.homeTable.SetCell(row, 0, tview.NewTableCell(blockNum).SetAlign(tview.AlignRight))
 		
-		// Block hash (truncated for display)
-		hashStr := block.Hash().Hex()
-		if len(hashStr) > 20 {
-			hashStr = hashStr[:10] + "..." + hashStr[len(hashStr)-10:]
-		}
-		t.homeTable.SetCell(row, 1, tview.NewTableCell(hashStr).SetAlign(tview.AlignLeft))
+		// Column 1: Time (relative)
+		timeStr := formatRelativeTime(block.Time())
+		t.homeTable.SetCell(row, 1, tview.NewTableCell(timeStr).SetAlign(tview.AlignLeft))
 		
-		// Number of transactions
+		// Column 2: Block hash (truncated for display)
+		hashStr := truncateHash(block.Hash().Hex(), 10, 10)
+		t.homeTable.SetCell(row, 2, tview.NewTableCell(hashStr).SetAlign(tview.AlignLeft))
+		
+		// Column 3: Number of transactions
 		txCount := len(block.Transactions())
-		t.homeTable.SetCell(row, 2, tview.NewTableCell(strconv.Itoa(txCount)).SetAlign(tview.AlignRight))
+		t.homeTable.SetCell(row, 3, tview.NewTableCell(strconv.Itoa(txCount)).SetAlign(tview.AlignRight))
+		
+		// Column 4: Block size
+		sizeStr := formatBytes(block.Size())
+		t.homeTable.SetCell(row, 4, tview.NewTableCell(sizeStr).SetAlign(tview.AlignRight))
+		
+		// Column 5: Gas used
+		gasUsedStr := formatNumber(block.GasUsed())
+		t.homeTable.SetCell(row, 5, tview.NewTableCell(gasUsedStr).SetAlign(tview.AlignRight))
+		
+		// Column 6: Gas percentage
+		gasPercentStr := formatGasPercentage(block.GasUsed(), block.GasLimit())
+		t.homeTable.SetCell(row, 6, tview.NewTableCell(gasPercentStr).SetAlign(tview.AlignRight))
+		
+		// Column 7: Gas limit
+		gasLimitStr := formatNumber(block.GasLimit())
+		t.homeTable.SetCell(row, 7, tview.NewTableCell(gasLimitStr).SetAlign(tview.AlignRight))
+		
+		// Column 8: State root (truncated)
+		stateRootStr := truncateHash(block.Root().Hex(), 8, 8)
+		t.homeTable.SetCell(row, 8, tview.NewTableCell(stateRootStr).SetAlign(tview.AlignLeft))
 	}
 	
 	// Update table title with current block count
@@ -418,6 +447,14 @@ func (t *TviewRenderer) refreshChainInfo(ctx context.Context) {
 	// For now, we'll call the indexer methods which delegate to the store
 	
 	var statusLines []string
+	
+	// Add current time as first status line
+	currentTime := time.Now().Format("2006-01-02 15:04:05")
+	statusLines = append(statusLines, fmt.Sprintf("Time: %s", currentTime))
+	
+	// Add RPC URL as second status line
+	rpcURL := t.indexer.GetRPCURL()
+	statusLines = append(statusLines, fmt.Sprintf("RPC: %s", rpcURL))
 	
 	// Try to get chain ID
 	if chainID, err := t.indexer.GetChainID(ctx); err == nil {
@@ -494,6 +531,70 @@ func weiToGwei(wei *big.Int) string {
 	
 	// Format with 2 decimal places
 	return fmt.Sprintf("%.2f", gwei)
+}
+
+// formatRelativeTime converts Unix timestamp to human-readable relative time
+func formatRelativeTime(timestamp uint64) string {
+	now := time.Now().Unix()
+	diff := now - int64(timestamp)
+	
+	if diff < 0 {
+		return "future"
+	} else if diff < 60 {
+		return fmt.Sprintf("%ds ago", diff)
+	} else if diff < 3600 {
+		return fmt.Sprintf("%dm ago", diff/60)
+	} else if diff < 86400 {
+		return fmt.Sprintf("%dh ago", diff/3600)
+	} else {
+		return fmt.Sprintf("%dd ago", diff/86400)
+	}
+}
+
+// formatBytes converts bytes to human-readable size
+func formatBytes(bytes uint64) string {
+	if bytes < 1024 {
+		return fmt.Sprintf("%dB", bytes)
+	} else if bytes < 1024*1024 {
+		return fmt.Sprintf("%.1fKB", float64(bytes)/1024)
+	} else {
+		return fmt.Sprintf("%.1fMB", float64(bytes)/(1024*1024))
+	}
+}
+
+// formatNumber adds thousand separators to large numbers
+func formatNumber(num uint64) string {
+	str := fmt.Sprintf("%d", num)
+	if len(str) <= 3 {
+		return str
+	}
+	
+	// Add commas every 3 digits from right
+	var result []rune
+	for i, char := range str {
+		if i > 0 && (len(str)-i)%3 == 0 {
+			result = append(result, ',')
+		}
+		result = append(result, char)
+	}
+	return string(result)
+}
+
+// formatGasPercentage calculates and formats gas usage percentage
+func formatGasPercentage(gasUsed, gasLimit uint64) string {
+	if gasLimit == 0 {
+		return "0.0%"
+	}
+	percentage := float64(gasUsed) / float64(gasLimit) * 100
+	return fmt.Sprintf("%.1f%%", percentage)
+}
+
+// truncateHash shortens a hash for display
+func truncateHash(hash string, prefixLen, suffixLen int) string {
+	if len(hash) <= prefixLen+suffixLen+3 {
+		return hash
+	}
+	return hash[:prefixLen] + "..." + hash[len(hash)-suffixLen:]
 }
 
 // Stop gracefully stops the TUI renderer

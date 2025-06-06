@@ -158,6 +158,11 @@ func (i *Indexer) IsMethodSupported(method string) bool {
 	return i.store.IsMethodSupported(method)
 }
 
+// GetRPCURL returns the RPC endpoint URL
+func (i *Indexer) GetRPCURL() string {
+	return i.store.GetRPCURL()
+}
+
 // Start begins the indexing process
 func (i *Indexer) Start() error {
 	log.Info().Msg("Starting indexer")
