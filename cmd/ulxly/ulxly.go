@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"net/http"
 	"os"
@@ -108,11 +109,11 @@ type BridgeDepositResponse struct {
 }
 
 func readDeposit(cmd *cobra.Command) error {
-	bridgeAddress := getDepositOptions.BridgeAddress
-	rpcUrl := getDepositsAndVerifyBatchesSharedOptions.URL
-	toBlock := getDepositsAndVerifyBatchesSharedOptions.ToBlock
-	fromBlock := getDepositsAndVerifyBatchesSharedOptions.FromBlock
-	filter := getDepositsAndVerifyBatchesSharedOptions.FilterSize
+	bridgeAddress := getSmcOptions.BridgeAddress
+	rpcUrl := getEvent.URL
+	toBlock := getEvent.ToBlock
+	fromBlock := getEvent.FromBlock
+	filter := getEvent.FilterSize
 
 	// Dial the Ethereum RPC server.
 	rpc, err := ethrpc.DialContext(cmd.Context(), rpcUrl)
@@ -158,18 +159,102 @@ func readDeposit(cmd *cobra.Command) error {
 		if err != nil {
 			log.Error().Err(err).Msg("error closing event iterator")
 		}
-		currentBlock = endBlock
+		currentBlock = endBlock + 1
 	}
 
 	return nil
 }
 
+func DecodeGlobalIndex(globalIndex *big.Int) (bool, uint32, uint32, error) {
+	const lengthGlobalIndexInBytes = 32
+	var buf [32]byte
+	gIBytes := globalIndex.FillBytes(buf[:])
+	if len(gIBytes) != lengthGlobalIndexInBytes {
+		return false, 0, 0, fmt.Errorf("invalid globaIndex length. Should be 32. Current length: %d", len(gIBytes))
+	}
+	mainnetFlag := big.NewInt(0).SetBytes([]byte{gIBytes[23]}).Uint64() == 1
+	rollupIndex := big.NewInt(0).SetBytes(gIBytes[24:28])
+	localRootIndex := big.NewInt(0).SetBytes(gIBytes[28:32])
+	if rollupIndex.Uint64() > math.MaxUint32 {
+		return false, 0, 0, fmt.Errorf("invalid rollupIndex length. Should be fit into uint32 type")
+	}
+	if localRootIndex.Uint64() > math.MaxUint32 {
+		return false, 0, 0, fmt.Errorf("invalid localRootIndex length. Should be fit into uint32 type")
+	}
+	return mainnetFlag, uint32(rollupIndex.Uint64()), uint32(localRootIndex.Uint64()), nil // nolint:gosec
+}
+
+func readClaim(cmd *cobra.Command) error {
+	bridgeAddress := getSmcOptions.BridgeAddress
+	rpcUrl := getEvent.URL
+	toBlock := getEvent.ToBlock
+	fromBlock := getEvent.FromBlock
+	filter := getEvent.FilterSize
+
+	// Dial the Ethereum RPC server.
+	rpc, err := ethrpc.DialContext(cmd.Context(), rpcUrl)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to Dial RPC")
+		return err
+	}
+	defer rpc.Close()
+	ec := ethclient.NewClient(rpc)
+
+	bridgeV2, err := ulxly.NewUlxly(common.HexToAddress(bridgeAddress), ec)
+	if err != nil {
+		return err
+	}
+	currentBlock := fromBlock
+	for currentBlock < toBlock {
+		endBlock := currentBlock + filter
+		if endBlock > toBlock {
+			endBlock = toBlock
+		}
+
+		opts := bind.FilterOpts{
+			Start:   currentBlock,
+			End:     &endBlock,
+			Context: cmd.Context(),
+		}
+		evtV2Iterator, err := bridgeV2.FilterClaimEvent(&opts)
+		if err != nil {
+			return err
+		}
+
+		for evtV2Iterator.Next() {
+			evt := evtV2Iterator.Event
+			var (
+				mainnetFlag                     bool
+				rollupIndex, localExitRootIndex uint32
+			)
+			mainnetFlag, rollupIndex, localExitRootIndex, err = DecodeGlobalIndex(evt.GlobalIndex)
+			if err != nil {
+				log.Error().Err(err).Msg("error decoding globalIndex")
+				return err
+			}
+			log.Info().Bool("claim-mainnetFlag", mainnetFlag).Uint32("claim-RollupIndex", rollupIndex).Uint32("claim-LocalExitRootIndex", localExitRootIndex).Uint64("block-number", evt.Raw.BlockNumber).Msg("Found Claim")
+			var jBytes []byte
+			jBytes, err = json.Marshal(evt)
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(jBytes))
+		}
+		err = evtV2Iterator.Close()
+		if err != nil {
+			log.Error().Err(err).Msg("error closing event iterator")
+		}
+		currentBlock = endBlock + 1
+	}
+
+	return nil
+}
 func readVerifyBatches(cmd *cobra.Command) error {
 	rollupManagerAddress := getVerifyBatchesOptions.RollupManagerAddress
-	rpcUrl := getDepositsAndVerifyBatchesSharedOptions.URL
-	toBlock := getDepositsAndVerifyBatchesSharedOptions.ToBlock
-	fromBlock := getDepositsAndVerifyBatchesSharedOptions.FromBlock
-	filter := getDepositsAndVerifyBatchesSharedOptions.FilterSize
+	rpcUrl := getEvent.URL
+	toBlock := getEvent.ToBlock
+	fromBlock := getEvent.FromBlock
+	filter := getEvent.FilterSize
 
 	// Dial the Ethereum RPC server.
 	rpc, err := ethrpc.DialContext(cmd.Context(), rpcUrl)
@@ -217,7 +302,7 @@ func readVerifyBatches(cmd *cobra.Command) error {
 			}
 			fmt.Println(string(jBytes))
 		}
-		currentBlock = endBlock
+		currentBlock = endBlock + 1
 	}
 
 	return nil
@@ -230,6 +315,199 @@ func proof(args []string) error {
 		return err
 	}
 	return readDeposits(rawDepositData, uint32(depositNumber))
+}
+
+func balanceTree() error {
+	l2NetworkID := balanceTreeOptions.L2NetworkID
+	bridgeAddress := common.HexToAddress(balanceTreeOptions.BridgeAddress)
+	client, err := ethclient.DialContext(context.Background(), balanceTreeOptions.RpcURL)
+	if err != nil {
+		return err
+	}
+	l2RawClaimsData, l2RawDepositsData, err := getBalanceTreeData()
+	if err != nil {
+		return err
+	}
+	root, err := computeBalanceTree(client, bridgeAddress, l2RawClaimsData, l2NetworkID, l2RawDepositsData)
+	if err != nil {
+		return err
+	}
+	fmt.Printf(`
+	{
+		"root": "%s"
+	}
+	`, root.String())
+	return nil
+}
+
+func nullifierTree(args []string) error {
+	rawClaims, err := getInputData(args)
+	if err != nil {
+		return err
+	}
+	root, err := computeNullifierTree(rawClaims)
+	if err != nil {
+		return err
+	}
+	fmt.Printf(`
+	{
+		"root": "%s"
+	}
+	`, root.String())
+	return nil
+}
+
+func nullifierAndBalanceTree(args []string) error {
+	l2NetworkID := balanceTreeOptions.L2NetworkID
+	bridgeAddress := common.HexToAddress(balanceTreeOptions.BridgeAddress)
+	client, err := ethclient.DialContext(context.Background(), balanceTreeOptions.RpcURL)
+	if err != nil {
+		return err
+	}
+	l2RawClaimsData, l2RawDepositsData, err := getBalanceTreeData()
+	if err != nil {
+		return err
+	}
+	bridgeV2, err := ulxly.NewUlxly(bridgeAddress, client)
+	if err != nil {
+		return err
+	}
+	ler_count, err := bridgeV2.LastUpdatedDepositCount(&bind.CallOpts{Pending: false})
+	if err != nil {
+		return err
+	}
+	log.Info().Msgf("Last LER count: %d", ler_count)
+	balanceTreeRoot, err := computeBalanceTree(client, bridgeAddress, l2RawClaimsData, l2NetworkID, l2RawDepositsData)
+	if err != nil {
+		return err
+	}
+	nullifierTreeRoot, err := computeNullifierTree(l2RawClaimsData)
+	if err != nil {
+		return err
+	}
+	initPessimisticRoot := crypto.Keccak256Hash(balanceTreeRoot.Bytes(), nullifierTreeRoot.Bytes(), Uint32ToBytesLittleEndian(ler_count))
+	fmt.Printf(`
+	{
+		"balanceTreeRoot": "%s",
+		"nullifierTreeRoot": "%s",
+		"initPessimisticRoot": "%s"
+	}
+	`, balanceTreeRoot.String(), nullifierTreeRoot.String(), initPessimisticRoot.String())
+	return nil
+}
+
+func computeNullifierTree(rawClaims []byte) (common.Hash, error) {
+	buf := bytes.NewBuffer(rawClaims)
+	scanner := bufio.NewScanner(buf)
+	scannerBuf := make([]byte, 0)
+	scanner.Buffer(scannerBuf, 1024*1024)
+	nTree, err := NewNullifierTree()
+	if err != nil {
+		return common.Hash{}, err
+	}
+	var root common.Hash
+	for scanner.Scan() {
+		claim := new(ulxly.UlxlyClaimEvent)
+		err := json.Unmarshal(scanner.Bytes(), claim)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		mainnetFlag, rollupIndex, localExitRootIndex, err := DecodeGlobalIndex(claim.GlobalIndex)
+		if err != nil {
+			log.Error().Err(err).Msg("error decoding globalIndex")
+			return common.Hash{}, err
+		}
+		log.Info().Bool("MainnetFlag", mainnetFlag).Uint32("RollupIndex", rollupIndex).Uint32("LocalExitRootIndex", localExitRootIndex).Uint64("block-number", claim.Raw.BlockNumber).Msg("Adding Claim")
+		nullifierKey := NullifierKey{
+			NetworkID: claim.OriginNetwork,
+			Index:     localExitRootIndex,
+		}
+		root, err = nTree.UpdateNullifierTree(nullifierKey)
+		if err != nil {
+			log.Error().Err(err).Uint32("OriginNetwork: ", claim.OriginNetwork).Msg("error computing nullifierTree. Claim information: GlobalIndex: " + claim.GlobalIndex.String() + ", OriginAddress: " + claim.OriginAddress.String() + ", Amount: " + claim.Amount.String())
+			return common.Hash{}, err
+		}
+	}
+	log.Info().Msgf("Final nullifierTree root: %s", root.String())
+	return root, nil
+}
+
+func computeBalanceTree(client *ethclient.Client, bridgeAddress common.Address, l2RawClaims []byte, l2NetworkID uint32, l2RawDeposits []byte) (common.Hash, error) {
+	buf := bytes.NewBuffer(l2RawClaims)
+	scanner := bufio.NewScanner(buf)
+	scannerBuf := make([]byte, 0)
+	scanner.Buffer(scannerBuf, 1024*1024)
+	bTree, err := NewBalanceTree()
+	if err != nil {
+		return common.Hash{}, err
+	}
+	balances := make(map[string]*big.Int)
+	for scanner.Scan() {
+		l2Claim := new(ulxly.UlxlyClaimEvent)
+		err := json.Unmarshal(scanner.Bytes(), l2Claim)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		token := TokenInfo{
+			OriginNetwork:      big.NewInt(0).SetUint64(uint64(l2Claim.OriginNetwork)),
+			OriginTokenAddress: l2Claim.OriginAddress,
+		}
+		isMessage, err := checkClaimCalldata(client, bridgeAddress, l2Claim.Raw.TxHash)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		if isMessage {
+			token.OriginNetwork = big.NewInt(0)
+			token.OriginTokenAddress = common.Address{}
+		}
+		log.Info().Msgf("L2 Claim. isMessage: %v OriginNetwork: %d. TokenAddress: %s. Amount: %s", isMessage, token.OriginNetwork, token.OriginTokenAddress.String(), l2Claim.Amount.String())
+		if _, ok := balances[token.String()]; !ok {
+			balances[token.String()] = big.NewInt(0)
+		}
+		balances[token.String()] = big.NewInt(0).Add(balances[token.String()], l2Claim.Amount)
+
+	}
+	l2Buf := bytes.NewBuffer(l2RawDeposits)
+	l2Scanner := bufio.NewScanner(l2Buf)
+	l2ScannerBuf := make([]byte, 0)
+	l2Scanner.Buffer(l2ScannerBuf, 1024*1024)
+	for l2Scanner.Scan() {
+		l2Deposit := new(ulxly.UlxlyBridgeEvent)
+		err := json.Unmarshal(l2Scanner.Bytes(), l2Deposit)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		token := TokenInfo{
+			OriginNetwork:      big.NewInt(0).SetUint64(uint64(l2Deposit.OriginNetwork)),
+			OriginTokenAddress: l2Deposit.OriginAddress,
+		}
+		if _, ok := balances[token.String()]; !ok {
+			balances[token.String()] = big.NewInt(0)
+		}
+		balances[token.String()] = big.NewInt(0).Sub(balances[token.String()], l2Deposit.Amount)
+	}
+	// Now, the balance map is complete. Let's build the tree.
+	var root common.Hash
+	for t, balance := range balances {
+		if balance.Cmp(big.NewInt(0)) == 0 {
+			continue
+		}
+		token, err := TokenInfoStringToStruct(t)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		if token.OriginNetwork.Uint64() == uint64(l2NetworkID) {
+			continue
+		}
+		root, err = bTree.UpdateBalanceTree(token, balance)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		log.Info().Msgf("New balanceTree leaf. OriginNetwork: %s, TokenAddress: %s, Balance: %s, Root: %s", token.OriginNetwork.String(), token.OriginTokenAddress.String(), balance.String(), root.String())
+	}
+	log.Info().Msgf("Final balanceTree root: %s", root.String())
+
+	return root, nil
 }
 
 func rollupsExitRootProof(args []string) error {
@@ -361,6 +639,7 @@ func bridgeAsset(cmd *cobra.Command) error {
 		return err
 	}
 	defer client.Close()
+
 	// Initialize and assign variables required to send transaction payload
 	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
@@ -639,6 +918,7 @@ func getBridgeServiceURLs() (map[uint32]string, error) {
 
 func claimEverything(cmd *cobra.Command) error {
 	privateKey := *inputUlxlyArgs.privateKey
+	claimerAddress := inputUlxlyArgs.addressOfPrivateKey
 	gasLimit := *inputUlxlyArgs.gasLimit
 	chainID := *inputUlxlyArgs.chainID
 	timeoutTxnReceipt := *inputUlxlyArgs.timeout
@@ -700,7 +980,7 @@ func claimEverything(cmd *cobra.Command) error {
 
 	workPool := make(chan *BridgeDeposit, concurrency) // bounded chan for controlled concurrency
 
-	nonceCounter, err := currentNonce(cmd.Context(), client, destinationAddress)
+	nonceCounter, err := currentNonce(cmd.Context(), client, claimerAddress)
 	if err != nil {
 		return err
 	}
@@ -916,7 +1196,7 @@ func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *type
 }
 
 func getInputData(args []string) ([]byte, error) {
-	fileName := proofsSharedOptions.FileName
+	fileName := fileOptions.FileName
 	if fileName != "" {
 		return os.ReadFile(fileName)
 	}
@@ -927,6 +1207,35 @@ func getInputData(args []string) ([]byte, error) {
 	}
 
 	return io.ReadAll(os.Stdin)
+}
+
+func getBalanceTreeData() ([]byte, []byte, error) {
+	claimsFileName := balanceTreeOptions.L2ClaimsFile
+	file, err := os.Open(claimsFileName)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer file.Close() // Ensure the file is closed after reading
+
+	// Read the entire file content
+	l2Claims, err := io.ReadAll(file)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	l2FileName := balanceTreeOptions.L2DepositsFile
+	file2, err := os.Open(l2FileName)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer file2.Close() // Ensure the file is closed after reading
+
+	// Read the entire file content
+	l2Deposits, err := io.ReadAll(file2)
+	if err != nil {
+		return nil, nil, err
+	}
+	return l2Claims, l2Deposits, nil
 }
 
 func readRollupsExitRootLeaves(rawLeaves []byte, rollupID uint32, completeMT bool) error {
@@ -1110,6 +1419,18 @@ func readDeposits(rawDeposits []byte, depositNumber uint32) error {
 	log.Info().Msg("finished")
 	p := imt.GetProof(depositNumber)
 	fmt.Println(String(p))
+	return nil
+}
+
+func ensureCodePresent(ctx context.Context, client *ethclient.Client, address string) error {
+	code, err := client.CodeAt(ctx, common.HexToAddress(address), nil)
+	if err != nil {
+		log.Error().Err(err).Str("address", address).Msg("error getting code at address")
+		return err
+	}
+	if len(code) == 0 {
+		return fmt.Errorf("address %s has no code", address)
+	}
 	return nil
 }
 
@@ -1308,6 +1629,13 @@ func generateEmptyHashes(height uint8) []common.Hash {
 }
 
 func generateTransactionPayload(ctx context.Context, client *ethclient.Client, ulxlyInputArgBridge string, ulxlyInputArgPvtKey string, ulxlyInputArgGasLimit uint64, ulxlyInputArgDestAddr string, ulxlyInputArgChainID string) (bridgeV2 *ulxly.Ulxly, toAddress common.Address, opts *bind.TransactOpts, err error) {
+	// checks if bridge address has code
+	err = ensureCodePresent(ctx, client, ulxlyInputArgBridge)
+	if err != nil {
+		err = fmt.Errorf("bridge code check err: %w", err)
+		return
+	}
+
 	ulxlyInputArgPvtKey = strings.TrimPrefix(ulxlyInputArgPvtKey, "0x")
 	bridgeV2, err = ulxly.NewUlxly(common.HexToAddress(ulxlyInputArgBridge), client)
 	if err != nil {
@@ -1505,8 +1833,20 @@ var proofUsage string
 //go:embed rollupsProofUsage.md
 var rollupsProofUsage string
 
+//go:embed balanceTreeUsage.md
+var balanceTreeUsage string
+
+//go:embed nullifierAndBalanceTreeUsage.md
+var nullifierAndBalanceTreeUsage string
+
+//go:embed nullifierTreeUsage.md
+var nullifierTreeUsage string
+
 //go:embed depositGetUsage.md
 var depositGetUsage string
+
+//go:embed claimGetUsage.md
+var claimGetUsage string
 
 //go:embed verifyBatchesGetUsage.md
 var verifyBatchesGetUsage string
@@ -1535,7 +1875,7 @@ var ulxlyBridgeAndClaimCmd = &cobra.Command{
 	},
 }
 
-var ulxlyGetDepositsAndVerifyBatchesCmd = &cobra.Command{
+var ulxlyGetEventsCmd = &cobra.Command{
 	Args:   cobra.NoArgs,
 	Hidden: true,
 }
@@ -1588,25 +1928,30 @@ type ulxlyArgs struct {
 var inputUlxlyArgs = ulxlyArgs{}
 
 var (
-	bridgeAssetCommand       *cobra.Command
-	bridgeMessageCommand     *cobra.Command
-	bridgeMessageWETHCommand *cobra.Command
-	claimAssetCommand        *cobra.Command
-	claimMessageCommand      *cobra.Command
-	claimEverythingCommand   *cobra.Command
-	emptyProofCommand        *cobra.Command
-	zeroProofCommand         *cobra.Command
-	proofCommand             *cobra.Command
-	rollupsProofCommand      *cobra.Command
-	getDepositCommand        *cobra.Command
-	getVerifyBatchesCommand  *cobra.Command
+	bridgeAssetCommand             *cobra.Command
+	bridgeMessageCommand           *cobra.Command
+	bridgeMessageWETHCommand       *cobra.Command
+	claimAssetCommand              *cobra.Command
+	claimMessageCommand            *cobra.Command
+	claimEverythingCommand         *cobra.Command
+	emptyProofCommand              *cobra.Command
+	zeroProofCommand               *cobra.Command
+	proofCommand                   *cobra.Command
+	rollupsProofCommand            *cobra.Command
+	balanceTreeCommand             *cobra.Command
+	nullifierAndBalanceTreeCommand *cobra.Command
+	nullifierTreeCommand           *cobra.Command
+	getDepositCommand              *cobra.Command
+	getClaimCommand                *cobra.Command
+	getVerifyBatchesCommand        *cobra.Command
 
-	getDepositsAndVerifyBatchesSharedOptions = &GetDepositsAndVerifyBatchesSharedOptions{}
-	getDepositOptions                        = &GetDepositOptions{}
-	getVerifyBatchesOptions                  = &GetVerifyBatchesOptions{}
-	proofsSharedOptions                      = &ProofsSharedOptions{}
-	proofOptions                             = &ProofOptions{}
-	rollupsProofOptions                      = &RollupsProofOptions{}
+	getEvent                = &GetEvent{}
+	getSmcOptions           = &GetSmcOptions{}
+	getVerifyBatchesOptions = &GetVerifyBatchesOptions{}
+	fileOptions             = &FileOptions{}
+	balanceTreeOptions      = &BalanceTreeOptions{}
+	proofOptions            = &ProofOptions{}
+	rollupsProofOptions     = &RollupsProofOptions{}
 )
 
 const (
@@ -1629,6 +1974,9 @@ const (
 	ArgCompleteMT           = "complete-merkle-tree"
 	ArgBridgeServiceURL     = "bridge-service-url"
 	ArgFileName             = "file-name"
+	ArgL2ClaimsFileName     = "l2-claims-file"
+	ArgL2DepositsFileName   = "l2-deposits-file"
+	ArgL2NetworkID          = "l2-network-id"
 	ArgFromBlock            = "from-block"
 	ArgToBlock              = "to-block"
 	ArgFilterSize           = "filter-size"
@@ -1688,12 +2036,25 @@ func fatalIfError(err error) {
 	log.Fatal().Err(err).Msg("Unexpected error occurred")
 }
 
-type ProofsSharedOptions struct {
+type FileOptions struct {
 	FileName string
 }
 
-func (o *ProofsSharedOptions) AddFlags(cmd *cobra.Command) {
+func (o *FileOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.FileName, ArgFileName, "", "", "An ndjson file with events data")
+}
+
+type BalanceTreeOptions struct {
+	L2ClaimsFile, L2DepositsFile, BridgeAddress, RpcURL string
+	L2NetworkID                                         uint32
+}
+
+func (o *BalanceTreeOptions) AddFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVarP(&o.L2ClaimsFile, ArgL2ClaimsFileName, "", "", "An ndjson file with l2 claim events data")
+	cmd.Flags().StringVarP(&o.L2DepositsFile, ArgL2DepositsFileName, "", "", "An ndjson file with l2 deposit events data")
+	cmd.Flags().StringVarP(&o.BridgeAddress, ArgBridgeAddress, "", "", "Bridge Address")
+	cmd.Flags().StringVarP(&o.RpcURL, ArgRPCURL, "r", "", "RPC URL")
+	cmd.Flags().Uint32VarP(&o.L2NetworkID, ArgL2NetworkID, "", 0, "The L2 networkID")
 }
 
 type ProofOptions struct {
@@ -1714,12 +2075,12 @@ func (o *RollupsProofOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVarP(&o.CompleteMerkleTree, ArgCompleteMT, "", false, "Allows to get the proof for a leave higher than the highest rollupID")
 }
 
-type GetDepositsAndVerifyBatchesSharedOptions struct {
+type GetEvent struct {
 	URL                            string
 	FromBlock, ToBlock, FilterSize uint64
 }
 
-func (o *GetDepositsAndVerifyBatchesSharedOptions) AddFlags(cmd *cobra.Command) {
+func (o *GetEvent) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.URL, ArgRPCURL, "u", "", "The RPC URL to read the events data")
 	cmd.Flags().Uint64VarP(&o.FromBlock, ArgFromBlock, "f", 0, "The start of the range of blocks to retrieve")
 	cmd.Flags().Uint64VarP(&o.ToBlock, ArgToBlock, "t", 0, "The end of the range of blocks to retrieve")
@@ -1729,11 +2090,11 @@ func (o *GetDepositsAndVerifyBatchesSharedOptions) AddFlags(cmd *cobra.Command) 
 	fatalIfError(cmd.MarkFlagRequired(ArgRPCURL))
 }
 
-type GetDepositOptions struct {
+type GetSmcOptions struct {
 	BridgeAddress string
 }
 
-func (o *GetDepositOptions) AddFlags(cmd *cobra.Command) {
+func (o *GetSmcOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.BridgeAddress, ArgBridgeAddress, "a", "", "The address of the ulxly bridge")
 }
 
@@ -1837,7 +2198,7 @@ or if it's actually an intermediate hash.`,
 		},
 		SilenceUsage: true,
 	}
-	proofsSharedOptions.AddFlags(proofCommand)
+	fileOptions.AddFlags(proofCommand)
 	proofOptions.AddFlags(proofCommand)
 	ulxlyProofsCmd.AddCommand(proofCommand)
 	ULxLyCmd.AddCommand(proofCommand)
@@ -1851,10 +2212,46 @@ or if it's actually an intermediate hash.`,
 		},
 		SilenceUsage: true,
 	}
-	proofsSharedOptions.AddFlags(rollupsProofCommand)
+	fileOptions.AddFlags(rollupsProofCommand)
 	rollupsProofOptions.AddFlags(rollupsProofCommand)
 	ulxlyProofsCmd.AddCommand(rollupsProofCommand)
 	ULxLyCmd.AddCommand(rollupsProofCommand)
+
+	balanceTreeCommand = &cobra.Command{
+		Use:   "compute-balance-tree",
+		Short: "Compute the balance tree given the deposits",
+		Long:  balanceTreeUsage,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return balanceTree()
+		},
+		SilenceUsage: true,
+	}
+	balanceTreeOptions.AddFlags(balanceTreeCommand)
+	ULxLyCmd.AddCommand(balanceTreeCommand)
+
+	nullifierAndBalanceTreeCommand = &cobra.Command{
+		Use:   "compute-balance-nullifier-tree",
+		Short: "Compute the balance tree and the nullifier tree given the deposits and claims",
+		Long:  nullifierAndBalanceTreeUsage,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return nullifierAndBalanceTree(args)
+		},
+		SilenceUsage: true,
+	}
+	balanceTreeOptions.AddFlags(nullifierAndBalanceTreeCommand)
+	ULxLyCmd.AddCommand(nullifierAndBalanceTreeCommand)
+
+	nullifierTreeCommand = &cobra.Command{
+		Use:   "compute-nullifier-tree",
+		Short: "Compute the nullifier tree given the claims",
+		Long:  nullifierTreeUsage,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return nullifierTree(args)
+		},
+		SilenceUsage: true,
+	}
+	fileOptions.AddFlags(nullifierTreeCommand)
+	ULxLyCmd.AddCommand(nullifierTreeCommand)
 
 	getDepositCommand = &cobra.Command{
 		Use:   "get-deposits",
@@ -1865,10 +2262,24 @@ or if it's actually an intermediate hash.`,
 		},
 		SilenceUsage: true,
 	}
-	getDepositsAndVerifyBatchesSharedOptions.AddFlags(getDepositCommand)
-	getDepositOptions.AddFlags(getDepositCommand)
-	ulxlyGetDepositsAndVerifyBatchesCmd.AddCommand(getDepositCommand)
+	getEvent.AddFlags(getDepositCommand)
+	getSmcOptions.AddFlags(getDepositCommand)
+	ulxlyGetEventsCmd.AddCommand(getDepositCommand)
 	ULxLyCmd.AddCommand(getDepositCommand)
+
+	getClaimCommand = &cobra.Command{
+		Use:   "get-claims",
+		Short: "Generate ndjson for each bridge claim over a particular range of blocks",
+		Long:  claimGetUsage,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return readClaim(cmd)
+		},
+		SilenceUsage: true,
+	}
+	getEvent.AddFlags(getClaimCommand)
+	getSmcOptions.AddFlags(getClaimCommand)
+	ulxlyGetEventsCmd.AddCommand(getClaimCommand)
+	ULxLyCmd.AddCommand(getClaimCommand)
 
 	getVerifyBatchesCommand = &cobra.Command{
 		Use:   "get-verify-batches",
@@ -1879,9 +2290,9 @@ or if it's actually an intermediate hash.`,
 		},
 		SilenceUsage: true,
 	}
-	getDepositsAndVerifyBatchesSharedOptions.AddFlags(getVerifyBatchesCommand)
+	getEvent.AddFlags(getVerifyBatchesCommand)
 	getVerifyBatchesOptions.AddFlags(getVerifyBatchesCommand)
-	ulxlyGetDepositsAndVerifyBatchesCmd.AddCommand(getVerifyBatchesCommand)
+	ulxlyGetEventsCmd.AddCommand(getVerifyBatchesCommand)
 	ULxLyCmd.AddCommand(getVerifyBatchesCommand)
 
 	// Arguments for both bridge and claim
@@ -1925,7 +2336,7 @@ or if it's actually an intermediate hash.`,
 
 	// Top Level
 	ULxLyCmd.AddCommand(ulxlyBridgeAndClaimCmd)
-	ULxLyCmd.AddCommand(ulxlyGetDepositsAndVerifyBatchesCmd)
+	ULxLyCmd.AddCommand(ulxlyGetEventsCmd)
 	ULxLyCmd.AddCommand(ulxlyProofsCmd)
 	ULxLyCmd.AddCommand(emptyProofCommand)
 	ULxLyCmd.AddCommand(zeroProofCommand)

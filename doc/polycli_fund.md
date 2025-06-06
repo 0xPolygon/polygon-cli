@@ -79,7 +79,7 @@ $ cast balance 0x5D8121cf716B70d3e345adB58157752304eED5C3
 ```bash
       --addresses strings         Comma-separated list of wallet addresses to fund
       --contract-address string   The address of a pre-deployed Funder contract
-  -a, --eth-amount float          The amount of ether to send to each wallet (default 0.05)
+  -a, --eth-amount uint           The amount of wei to send to each wallet (default 50000000000000000)
   -f, --file string               The output JSON file path for storing the addresses and private keys of funded wallets (default "wallets.json")
       --hd-derivation             Derive wallets to fund from the private key in a deterministic way (default true)
   -h, --help                      help for fund
