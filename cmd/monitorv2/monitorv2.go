@@ -38,8 +38,14 @@ var MonitorV2Cmd = &cobra.Command{
 		// Create indexer
 		idx := indexer.NewIndexer(store, indexer.DefaultConfig())
 
-		// Create JSON renderer
-		jsonRenderer := renderer.NewJSONRenderer(store, idx)
+		// Start indexer first
+		if err := idx.Start(); err != nil {
+			return fmt.Errorf("failed to start indexer: %w", err)
+		}
+		defer idx.Stop()
+
+		// Create JSON renderer (only needs indexer now)
+		jsonRenderer := renderer.NewJSONRenderer(idx)
 
 		// Start rendering
 		ctx := context.Background()

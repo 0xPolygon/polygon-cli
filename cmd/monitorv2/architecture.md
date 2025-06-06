@@ -26,6 +26,7 @@ features:
   rendered as a JSON stream
 - Reorg detection - If a block hash changes, we can rewind and update
   the store. The depth to check for reorgs is configurable
+- TUI support for mouse clicking
 
 ## Design Principles
 

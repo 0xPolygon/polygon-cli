@@ -114,3 +114,10 @@ The tool supports configuration via:
 - Environment variables
 - Config file (`~/.polygon-cli.yaml`)
 - Viper is used for configuration management
+
+## Logging
+
+- Use zerolog for structured, performant logging throughout the project
+
+## Development Guidelines
+- Use conventional commit messages

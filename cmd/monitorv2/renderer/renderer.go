@@ -3,7 +3,6 @@ package renderer
 import (
 	"context"
 
-	"github.com/0xPolygon/polygon-cli/blockstore"
 	"github.com/0xPolygon/polygon-cli/indexer"
 )
 
@@ -18,14 +17,12 @@ type Renderer interface {
 
 // BaseRenderer contains common fields that all renderers will need
 type BaseRenderer struct {
-	store   blockstore.BlockStore
 	indexer *indexer.Indexer
 }
 
 // NewBaseRenderer creates a new base renderer with the given dependencies
-func NewBaseRenderer(store blockstore.BlockStore, indexer *indexer.Indexer) BaseRenderer {
+func NewBaseRenderer(indexer *indexer.Indexer) BaseRenderer {
 	return BaseRenderer{
-		store:   store,
 		indexer: indexer,
 	}
 }
