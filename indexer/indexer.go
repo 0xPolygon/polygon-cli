@@ -83,6 +83,7 @@ func NewIndexer(store chainstore.ChainStore, cfg *Config) *Indexer {
 	metricsSystem.RegisterPlugin(metrics.NewTPSMetric())
 	metricsSystem.RegisterPlugin(metrics.NewEmptyBlockMetric())
 	metricsSystem.RegisterPlugin(metrics.NewBlockTimeMetric())
+	metricsSystem.RegisterPlugin(metrics.NewThroughputMetric())
 
 	return &Indexer{
 		store:           store,

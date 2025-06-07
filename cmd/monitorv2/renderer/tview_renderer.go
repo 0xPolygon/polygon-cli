@@ -438,7 +438,17 @@ func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
 
 			cells = [5]string{"BLK", "late " + latestStr, "safe " + safeStr, "final " + finalStr, "[placeholder]"}
 		case 1: // THR
-			cells = [5]string{"THR", "TPS10 [placeholder]", "TPS30 [placeholder]", "GPS10 [placeholder]", "GPS30 [placeholder]"}
+			// Get throughput metrics
+			if throughputValue, ok := t.indexer.GetMetric("throughput"); ok {
+				stats := throughputValue.(metrics.ThroughputStats)
+				tps10Str := "tps10 " + formatThroughput(stats.TPS10, "")
+				tps30Str := "tps30 " + formatThroughput(stats.TPS30, "")
+				gps10Str := "gps10 " + formatThroughput(stats.GPS10, "")
+				gps30Str := "gps30 " + formatThroughput(stats.GPS30, "")
+				cells = [5]string{"THR", tps10Str, tps30Str, gps10Str, gps30Str}
+			} else {
+				cells = [5]string{"THR", "tps10 N/A", "tps30 N/A", "gps10 N/A", "gps30 N/A"}
+			}
 		case 2: // GAS
 			cells = [5]string{"GAS", "Average Basefee [placeholder]", "Gas Price [placeholder]", "[placeholder]", "[placeholder]"}
 		case 3: // POL
@@ -751,6 +761,32 @@ func formatBlockNumber(blockNum *big.Int) string {
 		result = append(result, char)
 	}
 	return "#" + string(result)
+}
+
+// formatThroughput formats throughput values for display with appropriate units
+func formatThroughput(value float64, unit string) string {
+	if value == 0 {
+		if unit == "" {
+			return "0"
+		}
+		return "0 " + unit
+	}
+
+	var formatted string
+	if value >= 1000000000 {
+		formatted = fmt.Sprintf("%.1fG", value/1000000000)
+	} else if value >= 1000000 {
+		formatted = fmt.Sprintf("%.1fM", value/1000000)
+	} else if value >= 1000 {
+		formatted = fmt.Sprintf("%.1fK", value/1000)
+	} else {
+		formatted = fmt.Sprintf("%.1f", value)
+	}
+
+	if unit == "" {
+		return formatted
+	}
+	return formatted + " " + unit
 }
 
 // fetchBlockInfo retrieves the latest, safe, and finalized block numbers
