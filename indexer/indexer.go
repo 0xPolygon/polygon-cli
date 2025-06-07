@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/chainstore"
+	"github.com/0xPolygon/polygon-cli/indexer/metrics"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog/log"
@@ -34,6 +35,9 @@ type Indexer struct {
 
 	// Block channel for publishing new blocks to renderers
 	blockChan chan rpctypes.PolyBlock
+
+	// Metrics system
+	metrics *metrics.MetricsSystem
 
 	// Worker pool
 	workerSem chan struct{} // Semaphore for controlling concurrency
@@ -74,6 +78,12 @@ func NewIndexer(store chainstore.ChainStore, cfg *Config) *Indexer {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Create metrics system and register default plugins
+	metricsSystem := metrics.NewMetricsSystem()
+	metricsSystem.RegisterPlugin(metrics.NewTPSMetric())
+	metricsSystem.RegisterPlugin(metrics.NewEmptyBlockMetric())
+	metricsSystem.RegisterPlugin(metrics.NewBlockTimeMetric())
+
 	return &Indexer{
 		store:           store,
 		pollingInterval: cfg.PollingInterval,
@@ -85,6 +95,7 @@ func NewIndexer(store chainstore.ChainStore, cfg *Config) *Indexer {
 		cancel:          cancel,
 		done:            make(chan struct{}),
 		blockChan:       make(chan rpctypes.PolyBlock, 100), // Buffered channel
+		metrics:         metricsSystem,
 		workerSem:       make(chan struct{}, cfg.MaxConcurrency),
 	}
 }
@@ -92,6 +103,16 @@ func NewIndexer(store chainstore.ChainStore, cfg *Config) *Indexer {
 // BlockChannel returns the channel where new blocks are published
 func (i *Indexer) BlockChannel() <-chan rpctypes.PolyBlock {
 	return i.blockChan
+}
+
+// MetricsChannel returns the channel where metrics updates are published
+func (i *Indexer) MetricsChannel() <-chan metrics.MetricUpdate {
+	return i.metrics.GetUpdateChannel()
+}
+
+// GetMetric returns the current value of a specific metric
+func (i *Indexer) GetMetric(name string) (interface{}, bool) {
+	return i.metrics.GetMetric(name)
 }
 
 // GetBlock retrieves a block by hash or number through the store
@@ -177,6 +198,10 @@ func (i *Indexer) Stop() error {
 	i.cancel()
 	close(i.blockChan)
 	<-i.done
+	
+	// Stop the metrics system
+	i.metrics.Stop()
+	
 	return nil
 }
 
@@ -243,6 +268,9 @@ func (i *Indexer) checkForNewBlocks() error {
 				continue
 			}
 
+			// Send block to metrics system
+			i.metrics.ProcessBlock(block)
+			
 			select {
 			case i.blockChan <- block:
 				blockHeight := startHeight + int64(height)
@@ -294,6 +322,9 @@ func (i *Indexer) initialCatchup() error {
 			// Skip blocks that failed to fetch
 			continue
 		}
+		
+		// Send block to metrics system
+		i.metrics.ProcessBlock(block)
 		
 		select {
 		case i.blockChan <- block:

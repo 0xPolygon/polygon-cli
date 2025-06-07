@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/indexer"
+	"github.com/0xPolygon/polygon-cli/indexer/metrics"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -22,9 +23,12 @@ type TviewRenderer struct {
 	blocks []rpctypes.PolyBlock
 	
 	// Pages
-	homePage        *tview.Flex  // Changed to Flex to hold multiple sections
-	homeTopSection  *tview.TextView
-	homeTable       *tview.Table
+	homePage           *tview.Flex  // Changed to Flex to hold multiple sections
+	homeTopSection     *tview.Flex  // Flex container for 3-column top section
+	homeStatusPane     *tview.TextView  // Left pane: Status information
+	homeMetricsPane    *tview.TextView  // Center pane: Metrics (placeholder)
+	homeNetworkPane    *tview.TextView  // Right pane: Network info (placeholder)
+	homeTable          *tview.Table
 	blockDetailPage *tview.TextView
 	txDetailPage    *tview.TextView
 	infoPage        *tview.TextView
@@ -88,15 +92,36 @@ func (t *TviewRenderer) createPages() {
 	t.pages.AddPage("quit", t.quitModal, true, false)
 }
 
-// createHomePage creates the main page with top section and block listing table
+// createHomePage creates the main page with 3-column top section and block listing table
 func (t *TviewRenderer) createHomePage() {
-	// Create top section
-	t.homeTopSection = tview.NewTextView().
+	// Create the three top panes
+	t.homeStatusPane = tview.NewTextView().
 		SetDynamicColors(true).
 		SetRegions(true).
 		SetWordWrap(true)
-	t.homeTopSection.SetBorder(true).SetTitle(" Status ")
-	t.homeTopSection.SetText("Initializing...")
+	t.homeStatusPane.SetBorder(true).SetTitle(" Status ")
+	t.homeStatusPane.SetText("Initializing...")
+	
+	t.homeMetricsPane = tview.NewTextView().
+		SetDynamicColors(true).
+		SetRegions(true).
+		SetWordWrap(true)
+	t.homeMetricsPane.SetBorder(true).SetTitle(" Metrics ")
+	t.homeMetricsPane.SetText("Initializing metrics...")
+	
+	t.homeNetworkPane = tview.NewTextView().
+		SetDynamicColors(true).
+		SetRegions(true).
+		SetWordWrap(true)
+	t.homeNetworkPane.SetBorder(true).SetTitle(" Network ")
+	t.homeNetworkPane.SetText("Placeholder for network info\n\nThis will show:\n• Peer count\n• Sync status\n• Network version\n• Other network details")
+	
+	// Create horizontal flex container for the 3 top sections
+	t.homeTopSection = tview.NewFlex().
+		SetDirection(tview.FlexColumn).
+		AddItem(t.homeStatusPane, 0, 1, false).   // Left: Status (1/3 width)
+		AddItem(t.homeMetricsPane, 0, 1, false).  // Center: Metrics (1/3 width)
+		AddItem(t.homeNetworkPane, 0, 1, false)   // Right: Network (1/3 width)
 	
 	// Create the block table
 	t.homeTable = tview.NewTable().
@@ -316,6 +341,9 @@ func (t *TviewRenderer) Start(ctx context.Context) error {
 	// Start consuming blocks in a separate goroutine
 	go t.consumeBlocks(ctx)
 	
+	// Start consuming metrics in a separate goroutine
+	go t.consumeMetrics(ctx)
+	
 	// Start periodic status updates
 	go t.updateChainInfo(ctx)
 	
@@ -352,6 +380,72 @@ func (t *TviewRenderer) consumeBlocks(ctx context.Context) {
 			})
 		}
 	}
+}
+
+// consumeMetrics consumes metrics updates from the indexer and updates the metrics pane
+func (t *TviewRenderer) consumeMetrics(ctx context.Context) {
+	metricsChan := t.indexer.MetricsChannel()
+	
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case update, ok := <-metricsChan:
+			if !ok {
+				log.Info().Msg("Metrics channel closed")
+				return
+			}
+			
+			// Update the metrics pane in the main thread
+			t.app.QueueUpdateDraw(func() {
+				t.updateMetricsPane(update)
+			})
+		}
+	}
+}
+
+// updateMetricsPane updates the metrics display with new metric data
+func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
+	if t.homeMetricsPane == nil {
+		return
+	}
+	
+	// Get current metrics text
+	var metricsText string
+	
+	// Get TPS metric
+	if tpsValue, ok := t.indexer.GetMetric("tps"); ok {
+		tps := tpsValue.(float64)
+		metricsText += fmt.Sprintf("TPS: %.2f\n", tps)
+	}
+	
+	// Get block time metric
+	if blockTimeValue, ok := t.indexer.GetMetric("blockTime"); ok {
+		stats := blockTimeValue.(metrics.BlockTimeStats)
+		metricsText += fmt.Sprintf("\nBlock Time:\n")
+		metricsText += fmt.Sprintf("  Average: %s\n", formatDuration(stats.AverageBlockTime))
+		if stats.WindowSize > 0 {
+			metricsText += fmt.Sprintf("  Range: %s - %s\n", 
+				formatDuration(stats.MinBlockTime), formatDuration(stats.MaxBlockTime))
+			metricsText += fmt.Sprintf("  (%d blocks)\n", stats.WindowSize)
+		}
+	}
+	
+	// Get empty block rate metric
+	if emptyStatsValue, ok := t.indexer.GetMetric("emptyBlockRate"); ok {
+		stats := emptyStatsValue.(metrics.EmptyBlockStats)
+		metricsText += fmt.Sprintf("\nEmpty Blocks:\n")
+		metricsText += fmt.Sprintf("  Total: %d/%d blocks\n", stats.EmptyBlocks, stats.TotalBlocks)
+		metricsText += fmt.Sprintf("  Overall Rate: %.1f%%\n", stats.OverallRate*100)
+		metricsText += fmt.Sprintf("  Recent Rate: %.1f%% (last %d blocks)\n", 
+			stats.RecentRate*100, stats.RecentWindowSize)
+	}
+	
+	// Add timestamp
+	metricsText += fmt.Sprintf("\nLast Update: %s", update.Time.Format("15:04:05"))
+	
+	// Update the pane
+	t.homeMetricsPane.SetText(metricsText)
 }
 
 // updateTable refreshes the home page table with current blocks
@@ -439,7 +533,7 @@ func (t *TviewRenderer) updateChainInfo(ctx context.Context) {
 
 // refreshChainInfo fetches and displays current chain information
 func (t *TviewRenderer) refreshChainInfo(ctx context.Context) {
-	if t.homeTopSection == nil {
+	if t.homeStatusPane == nil {
 		return
 	}
 	
@@ -513,7 +607,7 @@ func (t *TviewRenderer) refreshChainInfo(ctx context.Context) {
 	
 	// Update the status section in the main thread
 	t.app.QueueUpdateDraw(func() {
-		t.homeTopSection.SetText(statusText)
+		t.homeStatusPane.SetText(statusText)
 	})
 	
 	log.Debug().Msg("Updated chain info in status section")
@@ -595,6 +689,21 @@ func truncateHash(hash string, prefixLen, suffixLen int) string {
 		return hash
 	}
 	return hash[:prefixLen] + "..." + hash[len(hash)-suffixLen:]
+}
+
+// formatDuration formats a duration for human-readable display
+func formatDuration(d time.Duration) string {
+	if d == 0 {
+		return "0s"
+	}
+	
+	if d < time.Second {
+		return fmt.Sprintf("%.0fms", float64(d.Nanoseconds())/1000000)
+	} else if d < time.Minute {
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	} else {
+		return fmt.Sprintf("%.1fm", d.Minutes())
+	}
 }
 
 // Stop gracefully stops the TUI renderer
