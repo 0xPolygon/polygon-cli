@@ -207,7 +207,7 @@ func (s *PassthroughStore) GetFinalizedBlock(ctx context.Context) (*big.Int, err
 	err := s.client.CallContext(ctx, &result, "eth_getBlockByNumber", "finalized", false)
 	if err == nil && result != nil {
 		if numberHex, ok := result["number"].(string); ok {
-			if block, err := hexToBigInt(numberHex); err == nil {
+			if block, parseErr := hexToBigInt(numberHex); parseErr == nil {
 				s.cache.SetFinalizedBlock(block, s.config.SemiStaticTTL)
 				return block, nil
 			}
@@ -398,6 +398,21 @@ func (s *PassthroughStore) GetQueuedTransactionCount(ctx context.Context) (*big.
 	s.cache.SetQueuedTxCount(queuedCount, s.config.VeryFrequentTTL)
 	
 	return queuedCount, nil
+}
+
+// GetTxPoolStatus retrieves the full txpool status (cached very frequently)
+func (s *PassthroughStore) GetTxPoolStatus(ctx context.Context) (map[string]interface{}, error) {
+	if !s.capabilities.IsMethodSupported("txpool_status") {
+		return nil, fmt.Errorf("txpool_status method not supported")
+	}
+	
+	var result map[string]interface{}
+	err := s.client.CallContext(ctx, &result, "txpool_status")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get txpool status: %w", err)
+	}
+	
+	return result, nil
 }
 
 // === CAPABILITY & MANAGEMENT ===

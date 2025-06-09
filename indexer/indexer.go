@@ -161,6 +161,11 @@ func (i *Indexer) GetQueuedTransactionCount(ctx context.Context) (*big.Int, erro
 	return i.store.GetQueuedTransactionCount(ctx)
 }
 
+// GetTxPoolStatus retrieves the full txpool status
+func (i *Indexer) GetTxPoolStatus(ctx context.Context) (map[string]interface{}, error) {
+	return i.store.GetTxPoolStatus(ctx)
+}
+
 // GetSafeBlock retrieves the safe block number
 func (i *Indexer) GetSafeBlock(ctx context.Context) (*big.Int, error) {
 	return i.store.GetSafeBlock(ctx)

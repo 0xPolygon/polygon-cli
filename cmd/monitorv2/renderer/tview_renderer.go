@@ -53,10 +53,10 @@ func NewTviewRenderer(indexer *indexer.Indexer) *TviewRenderer {
 	app := tview.NewApplication()
 
 	renderer := &TviewRenderer{
-		BaseRenderer: NewBaseRenderer(indexer),
-		app:          app,
-		blocks:       make([]rpctypes.PolyBlock, 0),
-		blocksByHash: make(map[string]rpctypes.PolyBlock),
+		BaseRenderer:        NewBaseRenderer(indexer),
+		app:                 app,
+		blocks:              make([]rpctypes.PolyBlock, 0),
+		blocksByHash:        make(map[string]rpctypes.PolyBlock),
 		initialSelectionSet: false,
 	}
 
@@ -121,7 +121,7 @@ func (t *TviewRenderer) createHomePage() {
 		SetFixed(0, 0).              // No fixed rows/columns
 		SetSeparator('|')            // Vertical pipe separator
 	t.homeMetricsPane.SetBorder(true).SetTitle(" Metrics ")
-	
+
 	// Configure table to use full width
 	// The expansion will be handled by individual cells
 
@@ -129,8 +129,8 @@ func (t *TviewRenderer) createHomePage() {
 	for row := 0; row < 8; row++ {
 		t.homeMetricsPane.SetCell(row, 0,
 			tview.NewTableCell(fmt.Sprintf("Row %d placeholder ", row+1)). // Add trailing space
-				SetAlign(tview.AlignLeft).
-				SetExpansion(1))
+											SetAlign(tview.AlignLeft).
+											SetExpansion(1))
 	}
 
 	// Create horizontal flex container for the 2 top sections
@@ -366,12 +366,12 @@ func (t *TviewRenderer) Start(ctx context.Context) error {
 
 	// Start periodic block info updates
 	go t.updateBlockInfo(ctx)
-	
+
 	// Set initial table selection after a short delay
 	go func() {
 		// Wait for initial blocks to load and UI to stabilize
 		time.Sleep(2 * time.Second)
-		
+
 		t.app.QueueUpdateDraw(func() {
 			if len(t.blocks) > 0 && !t.initialSelectionSet {
 				// Select row 1 (most recent block) and set focus
@@ -411,7 +411,7 @@ func (t *TviewRenderer) consumeBlocks(ctx context.Context) {
 			t.blocks = append([]rpctypes.PolyBlock{block}, t.blocks...)
 			// Also store in hash map for parent lookup
 			t.blocksByHash[block.Hash().Hex()] = block
-			
+
 			// Limit the blocks array and hash map size to prevent memory issues
 			if len(t.blocks) > 1000 {
 				// Remove oldest blocks
@@ -457,6 +457,15 @@ func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
 		return
 	}
 
+	// Get gas price once for use in GAS row
+	ctx := context.Background()
+	var gasPriceStr string
+	if gasPrice, err := t.indexer.GetGasPrice(ctx); err == nil {
+		gasPriceStr = "price " + weiToGwei(gasPrice) + " gwei"
+	} else {
+		gasPriceStr = "price N/A"
+	}
+
 	// For now, just update with placeholder content
 	// Later we'll format metrics data into the cells using atop-style format
 	for row := 0; row < 8; row++ {
@@ -470,7 +479,7 @@ func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
 			finalStr := formatBlockNumber(t.finalizedBlockNum)
 			t.blockInfoMu.RUnlock()
 
-			cells = [5]string{"BLK", "late " + latestStr, "safe " + safeStr, "final " + finalStr, "[placeholder]"}
+			cells = [5]string{"BLOK", "late " + latestStr, "safe " + safeStr, "final " + finalStr, "[placeholder]"}
 		case 1: // THR
 			// Get throughput metrics
 			if throughputValue, ok := t.indexer.GetMetric("throughput"); ok {
@@ -479,9 +488,9 @@ func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
 				tps30Str := "tps30 " + formatThroughput(stats.TPS30, "")
 				gps10Str := "gps10 " + formatThroughput(stats.GPS10, "")
 				gps30Str := "gps30 " + formatThroughput(stats.GPS30, "")
-				cells = [5]string{"THR", tps10Str, tps30Str, gps10Str, gps30Str}
+				cells = [5]string{"THRU", tps10Str, tps30Str, gps10Str, gps30Str}
 			} else {
-				cells = [5]string{"THR", "tps10 N/A", "tps30 N/A", "gps10 N/A", "gps30 N/A"}
+				cells = [5]string{"THRU", "tps10 N/A", "tps30 N/A", "gps10 N/A", "gps30 N/A"}
 			}
 		case 2: // GAS
 			// Get base fee metrics
@@ -489,20 +498,42 @@ func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
 				stats := baseFeeValue.(metrics.BaseFeeStats)
 				base10Str := "base10 " + weiToGwei(stats.BaseFee10) + " gwei"
 				base30Str := "base30 " + weiToGwei(stats.BaseFee30) + " gwei"
-				cells = [5]string{"GAS", base10Str, base30Str, "[placeholder]", "[placeholder]"}
+				cells = [5]string{"GAS ", base10Str, base30Str, gasPriceStr, "[placeholder]"}
 			} else {
-				cells = [5]string{"GAS", "base10 N/A", "base30 N/A", "[placeholder]", "[placeholder]"}
+				cells = [5]string{"GAS ", "base10 N/A", "base30 N/A", gasPriceStr, "[placeholder]"}
 			}
-		case 3: // POL
-			cells = [5]string{"POL", "Pending [placeholder]", "Queued [placeholder]", "Basefee [placeholder]", "[placeholder]"}
+		case 3: // POOL
+			// Get txpool status
+			if txPoolStatus, err := t.indexer.GetTxPoolStatus(ctx); err == nil {
+				pendingStr := "pending N/A"
+				queuedStr := "queued N/A"
+				
+				// Parse pending count
+				if pending, ok := txPoolStatus["pending"]; ok {
+					if pendingBig, err := hexToDecimal(pending); err == nil {
+						pendingStr = "pending " + formatNumber(pendingBig.Uint64())
+					}
+				}
+				
+				// Parse queued count  
+				if queued, ok := txPoolStatus["queued"]; ok {
+					if queuedBig, err := hexToDecimal(queued); err == nil {
+						queuedStr = "queued " + formatNumber(queuedBig.Uint64())
+					}
+				}
+				
+				cells = [5]string{"POOL", pendingStr, queuedStr, "[placeholder]", "[placeholder]"}
+			} else {
+				cells = [5]string{"POOL", "pending N/A", "queued N/A", "[placeholder]", "[placeholder]"}
+			}
 		case 4: // SIG (1)
-			cells = [5]string{"SIG", "EOA [placeholder]", "ERC20 [placeholder]", "NFT [placeholder]", "[placeholder]"}
+			cells = [5]string{"SIG1", "EOA [placeholder]", "ERC20 [placeholder]", "NFT [placeholder]", "[placeholder]"}
 		case 5: // SIG (2)
-			cells = [5]string{"SIG", "Contract Deploy [placeholder]", "Uniswap [placeholder]", "Other [placeholder]", "[placeholder]"}
+			cells = [5]string{"SIG2", "Contract Deploy [placeholder]", "Uniswap [placeholder]", "Other [placeholder]", "[placeholder]"}
 		case 6: // ACC
-			cells = [5]string{"ACC", "Unique From [placeholder]", "Unique To [placeholder]", "[placeholder]", "[placeholder]"}
+			cells = [5]string{"ACCO", "Unique From [placeholder]", "Unique To [placeholder]", "[placeholder]", "[placeholder]"}
 		case 7: // PER
-			cells = [5]string{"PER", "Number of peers [placeholder]", "[placeholder]", "[placeholder]", "[placeholder]"}
+			cells = [5]string{"PEER", "Number of peers [placeholder]", "[placeholder]", "[placeholder]", "[placeholder]"}
 		}
 
 		// Set all 5 cells for this row
@@ -515,7 +546,7 @@ func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
 			if col < 4 { // Add trailing space for non-last columns
 				cellContent = cellContent + " "
 			}
-			
+
 			t.homeMetricsPane.SetCell(row, col,
 				tview.NewTableCell(cellContent).
 					SetAlign(tview.AlignLeft).
@@ -927,6 +958,31 @@ func (t *TviewRenderer) updateBlockInfo(ctx context.Context) {
 				}
 			})
 		}
+	}
+}
+
+// hexToDecimal converts various hex number formats to big.Int
+func hexToDecimal(value interface{}) (*big.Int, error) {
+	switch v := value.(type) {
+	case string:
+		// Handle hex string format
+		if len(v) >= 2 && v[:2] == "0x" {
+			v = v[2:]
+		}
+		result := big.NewInt(0)
+		result, ok := result.SetString(v, 16)
+		if !ok {
+			return nil, fmt.Errorf("invalid hex string: %v", value)
+		}
+		return result, nil
+	case float64:
+		return big.NewInt(int64(v)), nil
+	case int64:
+		return big.NewInt(v), nil
+	case int:
+		return big.NewInt(int64(v)), nil
+	default:
+		return nil, fmt.Errorf("unsupported number type: %T", value)
 	}
 }
 

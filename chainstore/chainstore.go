@@ -58,6 +58,7 @@ type ChainStore interface {
 	// Very frequent info (minimal cache)
 	GetPendingTransactionCount(ctx context.Context) (*big.Int, error)
 	GetQueuedTransactionCount(ctx context.Context) (*big.Int, error)
+	GetTxPoolStatus(ctx context.Context) (map[string]interface{}, error)
 	
 	// === CAPABILITY & MANAGEMENT ===
 	IsMethodSupported(method string) bool
