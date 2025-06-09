@@ -166,6 +166,11 @@ func (i *Indexer) GetTxPoolStatus(ctx context.Context) (map[string]interface{}, 
 	return i.store.GetTxPoolStatus(ctx)
 }
 
+// GetNetPeerCount retrieves the number of connected peers
+func (i *Indexer) GetNetPeerCount(ctx context.Context) (*big.Int, error) {
+	return i.store.GetNetPeerCount(ctx)
+}
+
 // GetSafeBlock retrieves the safe block number
 func (i *Indexer) GetSafeBlock(ctx context.Context) (*big.Int, error) {
 	return i.store.GetSafeBlock(ctx)

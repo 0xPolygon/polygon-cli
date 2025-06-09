@@ -415,6 +415,26 @@ func (s *PassthroughStore) GetTxPoolStatus(ctx context.Context) (map[string]inte
 	return result, nil
 }
 
+// GetNetPeerCount retrieves the number of connected peers (cached very frequently)
+func (s *PassthroughStore) GetNetPeerCount(ctx context.Context) (*big.Int, error) {
+	if !s.capabilities.IsMethodSupported("net_peerCount") {
+		return nil, fmt.Errorf("net_peerCount method not supported")
+	}
+	
+	var result string
+	err := s.client.CallContext(ctx, &result, "net_peerCount")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get peer count: %w", err)
+	}
+	
+	peerCount, err := hexToBigInt(result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse peer count: %w", err)
+	}
+	
+	return peerCount, nil
+}
+
 // === CAPABILITY & MANAGEMENT ===
 
 // IsMethodSupported checks if a method is supported

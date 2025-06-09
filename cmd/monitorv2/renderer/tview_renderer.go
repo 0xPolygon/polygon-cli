@@ -158,6 +158,13 @@ type TviewRenderer struct {
 	finalizedBlockNum *big.Int
 	blockInfoMu       sync.RWMutex
 
+	// Network info for metrics display
+	gasPrice       string
+	txPoolPending  string
+	txPoolQueued   string
+	peerCount      string
+	networkInfoMu  sync.RWMutex
+
 	// Throttling for UI updates
 	lastDrawTime     time.Time
 	drawMu           sync.Mutex
@@ -529,6 +536,9 @@ func (t *TviewRenderer) Start(ctx context.Context) error {
 	// Start periodic block info updates
 	go t.updateBlockInfo(ctx)
 
+	// Start periodic network info updates
+	go t.updateNetworkInfo(ctx)
+
 	// Table selection is handled automatically by view state logic
 
 	// Start the TUI application
@@ -606,20 +616,93 @@ func (t *TviewRenderer) consumeMetrics(ctx context.Context) {
 	}
 }
 
+// updateNetworkInfo periodically updates network information to reduce RPC calls
+func (t *TviewRenderer) updateNetworkInfo(ctx context.Context) {
+	// Update immediately on start
+	t.fetchNetworkInfo(ctx)
+
+	// Set up ticker for periodic updates (every 5 seconds)
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			t.fetchNetworkInfo(ctx)
+		}
+	}
+}
+
+// fetchNetworkInfo fetches and caches network information
+func (t *TviewRenderer) fetchNetworkInfo(ctx context.Context) {
+	t.networkInfoMu.Lock()
+	defer t.networkInfoMu.Unlock()
+
+	// Get gas price
+	if gasPrice, err := t.indexer.GetGasPrice(ctx); err == nil {
+		t.gasPrice = "price " + weiToGwei(gasPrice) + " gwei"
+	} else {
+		t.gasPrice = "price N/A"
+	}
+
+	// Get txpool status
+	if txPoolStatus, err := t.indexer.GetTxPoolStatus(ctx); err == nil {
+		// Parse pending count
+		if pending, ok := txPoolStatus["pending"]; ok {
+			if pendingBig, err := hexToDecimal(pending); err == nil {
+				t.txPoolPending = "pending " + formatNumber(pendingBig.Uint64())
+			} else {
+				t.txPoolPending = "pending N/A"
+			}
+		} else {
+			t.txPoolPending = "pending N/A"
+		}
+
+		// Parse queued count
+		if queued, ok := txPoolStatus["queued"]; ok {
+			if queuedBig, err := hexToDecimal(queued); err == nil {
+				t.txPoolQueued = "queued " + formatNumber(queuedBig.Uint64())
+			} else {
+				t.txPoolQueued = "queued N/A"
+			}
+		} else {
+			t.txPoolQueued = "queued N/A"
+		}
+	} else {
+		t.txPoolPending = "pending N/A"
+		t.txPoolQueued = "queued N/A"
+	}
+
+	// Get peer count
+	if peerCount, err := t.indexer.GetNetPeerCount(ctx); err == nil {
+		t.peerCount = "peers " + peerCount.String()
+	} else {
+		t.peerCount = "peers unknown"
+	}
+
+	log.Debug().
+		Str("gasPrice", t.gasPrice).
+		Str("txPoolPending", t.txPoolPending).
+		Str("txPoolQueued", t.txPoolQueued).
+		Str("peerCount", t.peerCount).
+		Msg("Updated network info cache")
+}
+
 // updateMetricsPane updates the metrics display with new metric data
 func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
 	if t.homeMetricsPane == nil {
 		return
 	}
 
-	// Get gas price once for use in GAS row
-	ctx := context.Background()
-	var gasPriceStr string
-	if gasPrice, err := t.indexer.GetGasPrice(ctx); err == nil {
-		gasPriceStr = "price " + weiToGwei(gasPrice) + " gwei"
-	} else {
-		gasPriceStr = "price N/A"
-	}
+	// Get cached network info
+	t.networkInfoMu.RLock()
+	gasPriceStr := t.gasPrice
+	txPoolPendingStr := t.txPoolPending
+	txPoolQueuedStr := t.txPoolQueued
+	peerCountStr := t.peerCount
+	t.networkInfoMu.RUnlock()
 
 	// For now, just update with placeholder content
 	// Later we'll format metrics data into the cells using atop-style format
@@ -658,29 +741,8 @@ func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
 				cells = [5]string{"GAS ", "base10 N/A", "base30 N/A", gasPriceStr, "[placeholder]"}
 			}
 		case 3: // POOL
-			// Get txpool status
-			if txPoolStatus, err := t.indexer.GetTxPoolStatus(ctx); err == nil {
-				pendingStr := "pending N/A"
-				queuedStr := "queued N/A"
-				
-				// Parse pending count
-				if pending, ok := txPoolStatus["pending"]; ok {
-					if pendingBig, err := hexToDecimal(pending); err == nil {
-						pendingStr = "pending " + formatNumber(pendingBig.Uint64())
-					}
-				}
-				
-				// Parse queued count  
-				if queued, ok := txPoolStatus["queued"]; ok {
-					if queuedBig, err := hexToDecimal(queued); err == nil {
-						queuedStr = "queued " + formatNumber(queuedBig.Uint64())
-					}
-				}
-				
-				cells = [5]string{"POOL", pendingStr, queuedStr, "[placeholder]", "[placeholder]"}
-			} else {
-				cells = [5]string{"POOL", "pending N/A", "queued N/A", "[placeholder]", "[placeholder]"}
-			}
+			// Use cached txpool status
+			cells = [5]string{"POOL", txPoolPendingStr, txPoolQueuedStr, "[placeholder]", "[placeholder]"}
 		case 4: // SIG (1)
 			cells = [5]string{"SIG1", "EOA [placeholder]", "ERC20 [placeholder]", "NFT [placeholder]", "[placeholder]"}
 		case 5: // SIG (2)
@@ -688,7 +750,8 @@ func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
 		case 6: // ACC
 			cells = [5]string{"ACCO", "Unique From [placeholder]", "Unique To [placeholder]", "[placeholder]", "[placeholder]"}
 		case 7: // PER
-			cells = [5]string{"PEER", "Number of peers [placeholder]", "[placeholder]", "[placeholder]", "[placeholder]"}
+			// Use cached peer count
+			cells = [5]string{"PEER", peerCountStr, "[placeholder]", "[placeholder]", "[placeholder]"}
 		}
 
 		// Set all 5 cells for this row

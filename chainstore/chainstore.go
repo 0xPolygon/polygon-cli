@@ -59,6 +59,7 @@ type ChainStore interface {
 	GetPendingTransactionCount(ctx context.Context) (*big.Int, error)
 	GetQueuedTransactionCount(ctx context.Context) (*big.Int, error)
 	GetTxPoolStatus(ctx context.Context) (map[string]interface{}, error)
+	GetNetPeerCount(ctx context.Context) (*big.Int, error)
 	
 	// === CAPABILITY & MANAGEMENT ===
 	IsMethodSupported(method string) bool
