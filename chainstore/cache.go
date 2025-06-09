@@ -42,22 +42,22 @@ func (cv *CachedValue[T]) Get() (T, bool) {
 // ChainCache manages cached chain information with different TTLs
 type ChainCache struct {
 	mu sync.RWMutex
-	
+
 	// Static data (never expires)
 	chainID *CachedValue[*big.Int]
-	
+
 	// Semi-static data (5-15 minute TTL)
 	safeBlock      *CachedValue[*big.Int]
 	finalizedBlock *CachedValue[*big.Int]
-	
+
 	// Block-aligned data (expires when new block)
 	baseFee      *CachedValue[*big.Int]
 	baseFeeBlock *big.Int
-	
+
 	// Frequent data (30-60 second TTL)
 	gasPrice   *CachedValue[*big.Int]
 	feeHistory *CachedValue[*FeeHistoryResult]
-	
+
 	// Very frequent data (5-10 second TTL)
 	pendingTxCount *CachedValue[*big.Int]
 	queuedTxCount  *CachedValue[*big.Int]

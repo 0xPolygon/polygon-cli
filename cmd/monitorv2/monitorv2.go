@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/spf13/cobra"
 	"github.com/0xPolygon/polygon-cli/chainstore"
 	"github.com/0xPolygon/polygon-cli/cmd/monitorv2/renderer"
 	"github.com/0xPolygon/polygon-cli/indexer"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 
 	_ "embed"
 	_ "net/http/pprof" // Import pprof HTTP handlers
@@ -19,9 +19,9 @@ import (
 var usage string
 
 var (
-	rpcURL         string
-	rendererType   string
-	pprofAddr      string
+	rpcURL       string
+	rendererType string
+	pprofAddr    string
 )
 
 var MonitorV2Cmd = &cobra.Command{

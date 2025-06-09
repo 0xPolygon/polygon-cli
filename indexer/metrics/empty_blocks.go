@@ -33,19 +33,19 @@ func (e *EmptyBlockMetric) Name() string {
 func (e *EmptyBlockMetric) ProcessBlock(block rpctypes.PolyBlock) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	
+
 	// Check if block is empty
 	isEmpty := len(block.Transactions()) == 0
-	
+
 	// Update totals
 	e.totalBlocks++
 	if isEmpty {
 		e.emptyBlocks++
 	}
-	
+
 	// Update recent window
 	e.recentWindow = append(e.recentWindow, isEmpty)
-	
+
 	// Maintain window size
 	if len(e.recentWindow) > e.windowSize {
 		// Remove oldest entry
@@ -61,14 +61,14 @@ func (e *EmptyBlockMetric) ProcessBlock(block rpctypes.PolyBlock) {
 func (e *EmptyBlockMetric) GetMetric() interface{} {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	
+
 	// Calculate rates
 	var overallRate, recentRate float64
-	
+
 	if e.totalBlocks > 0 {
 		overallRate = float64(e.emptyBlocks) / float64(e.totalBlocks)
 	}
-	
+
 	// Calculate recent rate from window
 	recentEmpty := 0
 	for _, isEmpty := range e.recentWindow {
@@ -76,11 +76,11 @@ func (e *EmptyBlockMetric) GetMetric() interface{} {
 			recentEmpty++
 		}
 	}
-	
+
 	if len(e.recentWindow) > 0 {
 		recentRate = float64(recentEmpty) / float64(len(e.recentWindow))
 	}
-	
+
 	return EmptyBlockStats{
 		TotalBlocks:      e.totalBlocks,
 		EmptyBlocks:      e.emptyBlocks,

@@ -9,9 +9,9 @@ import (
 
 // ThroughputMetric calculates throughput metrics over block-count windows
 type ThroughputMetric struct {
-	mu          sync.RWMutex
-	blocks      []throughputBlockInfo
-	maxBlocks   int // 30 to cover both 10 and 30 block windows
+	mu        sync.RWMutex
+	blocks    []throughputBlockInfo
+	maxBlocks int // 30 to cover both 10 and 30 block windows
 }
 
 type throughputBlockInfo struct {
@@ -44,7 +44,7 @@ func (t *ThroughputMetric) ProcessBlock(block rpctypes.PolyBlock) {
 		txCount:   len(block.Transactions()),
 		gasUsed:   block.GasUsed(),
 	}
-	
+
 	// Prepend new block (newest first)
 	t.blocks = append([]throughputBlockInfo{info}, t.blocks...)
 
@@ -60,10 +60,10 @@ func (t *ThroughputMetric) GetMetric() interface{} {
 	defer t.mu.RUnlock()
 
 	stats := ThroughputStats{
-		TPS10: t.calculateTPS(10),
-		TPS30: t.calculateTPS(30),
-		GPS10: t.calculateGPS(10),
-		GPS30: t.calculateGPS(30),
+		TPS10:           t.calculateTPS(10),
+		TPS30:           t.calculateTPS(30),
+		GPS10:           t.calculateGPS(10),
+		GPS30:           t.calculateGPS(30),
 		BlocksAvailable: len(t.blocks),
 	}
 
@@ -88,7 +88,7 @@ func (t *ThroughputMetric) calculateTPS(blockCount int) float64 {
 	// Calculate time span (newest - oldest)
 	newestTime := windowBlocks[0].timestamp
 	oldestTime := windowBlocks[blockCount-1].timestamp
-	
+
 	if newestTime <= oldestTime {
 		return 0.0
 	}
@@ -119,7 +119,7 @@ func (t *ThroughputMetric) calculateGPS(blockCount int) float64 {
 	// Calculate time span (newest - oldest)
 	newestTime := windowBlocks[0].timestamp
 	oldestTime := windowBlocks[blockCount-1].timestamp
-	
+
 	if newestTime <= oldestTime {
 		return 0.0
 	}

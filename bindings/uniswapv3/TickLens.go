@@ -239,4 +239,3 @@ func (_TickLens *TickLensSession) GetPopulatedTicksInWord(pool common.Address, t
 func (_TickLens *TickLensCallerSession) GetPopulatedTicksInWord(pool common.Address, tickBitmapIndex int16) ([]ITickLensPopulatedTick, error) {
 	return _TickLens.Contract.GetPopulatedTicksInWord(&_TickLens.CallOpts, pool, tickBitmapIndex)
 }
-

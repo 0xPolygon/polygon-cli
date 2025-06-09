@@ -37,24 +37,24 @@ func (b *BlockTimeMetric) Name() string {
 func (b *BlockTimeMetric) ProcessBlock(block rpctypes.PolyBlock) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	
+
 	currentTimestamp := block.Time()
-	
+
 	// Add block to the list (they come in newest-first order)
 	info := blockTimeInfo{
 		timestamp: currentTimestamp,
 		blockTime: 0, // Will be calculated after sorting
 	}
 	b.blocks = append(b.blocks, info)
-	
+
 	// Maintain window size
 	if len(b.blocks) > b.windowSize {
 		b.blocks = b.blocks[1:]
 	}
-	
+
 	// Sort blocks by timestamp (oldest first) to calculate block times correctly
 	b.sortAndCalculateBlockTimes()
-	
+
 	// Recalculate average
 	b.calculateAverage()
 }
@@ -64,7 +64,7 @@ func (b *BlockTimeMetric) sortAndCalculateBlockTimes() {
 	if len(b.blocks) < 2 {
 		return
 	}
-	
+
 	// Sort by timestamp (oldest first)
 	// Using a simple bubble sort since we typically only add one block at a time
 	for i := 0; i < len(b.blocks)-1; i++ {
@@ -74,13 +74,13 @@ func (b *BlockTimeMetric) sortAndCalculateBlockTimes() {
 			}
 		}
 	}
-	
+
 	// Calculate block times (time between consecutive blocks)
 	for i := 1; i < len(b.blocks); i++ {
 		timeDiff := b.blocks[i].timestamp - b.blocks[i-1].timestamp
 		b.blocks[i].blockTime = time.Duration(timeDiff) * time.Second
 	}
-	
+
 	// First block has no previous block, so no block time
 	if len(b.blocks) > 0 {
 		b.blocks[0].blockTime = 0
@@ -93,10 +93,10 @@ func (b *BlockTimeMetric) calculateAverage() {
 		b.averageTime = 0
 		return
 	}
-	
+
 	totalTime := time.Duration(0)
 	validBlocks := 0
-	
+
 	// Only include blocks with non-zero block times (skip first block)
 	for _, block := range b.blocks {
 		if block.blockTime > 0 {
@@ -104,7 +104,7 @@ func (b *BlockTimeMetric) calculateAverage() {
 			validBlocks++
 		}
 	}
-	
+
 	if validBlocks > 0 {
 		b.averageTime = totalTime / time.Duration(validBlocks)
 	} else {
@@ -116,12 +116,12 @@ func (b *BlockTimeMetric) calculateAverage() {
 func (b *BlockTimeMetric) GetMetric() interface{} {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	
+
 	// Calculate additional statistics (exclude zero block times)
 	var minTime, maxTime time.Duration
 	first := true
 	validBlocks := 0
-	
+
 	for _, block := range b.blocks {
 		if block.blockTime > 0 {
 			validBlocks++
@@ -139,7 +139,7 @@ func (b *BlockTimeMetric) GetMetric() interface{} {
 			}
 		}
 	}
-	
+
 	return BlockTimeStats{
 		AverageBlockTime: b.averageTime,
 		MinBlockTime:     minTime,

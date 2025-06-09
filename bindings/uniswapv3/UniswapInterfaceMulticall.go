@@ -298,4 +298,3 @@ func (_UniswapInterfaceMulticall *UniswapInterfaceMulticallSession) Multicall(ca
 func (_UniswapInterfaceMulticall *UniswapInterfaceMulticallTransactorSession) Multicall(calls []UniswapInterfaceMulticallCall) (*types.Transaction, error) {
 	return _UniswapInterfaceMulticall.Contract.Multicall(&_UniswapInterfaceMulticall.TransactOpts, calls)
 }
-

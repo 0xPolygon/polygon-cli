@@ -49,7 +49,7 @@ func (b *BaseFeeMetric) ProcessBlock(block rpctypes.PolyBlock) {
 		timestamp: block.Time(),
 		baseFee:   new(big.Int).Set(baseFee), // Copy to avoid mutation
 	}
-	
+
 	// Prepend new block (newest first)
 	b.blocks = append([]baseFeeBlockInfo{info}, b.blocks...)
 
@@ -90,7 +90,7 @@ func (b *BaseFeeMetric) calculateAverageBaseFee(blockCount int) *big.Int {
 
 	// Calculate average
 	avgBaseFee := new(big.Int).Div(totalBaseFee, big.NewInt(int64(blockCount)))
-	
+
 	return avgBaseFee
 }
 

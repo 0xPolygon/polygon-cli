@@ -210,10 +210,10 @@ func (i *Indexer) Stop() error {
 	i.cancel()
 	close(i.blockChan)
 	<-i.done
-	
+
 	// Stop the metrics system
 	i.metrics.Stop()
-	
+
 	return nil
 }
 
@@ -282,7 +282,7 @@ func (i *Indexer) checkForNewBlocks() error {
 
 			// Send block to metrics system
 			i.metrics.ProcessBlock(block)
-			
+
 			select {
 			case i.blockChan <- block:
 				blockHeight := startHeight + int64(height)
@@ -307,37 +307,37 @@ func (i *Indexer) initialCatchup() error {
 	if err != nil {
 		return err
 	}
-	
+
 	currentTip := latestBlock.Number().Int64()
-	
+
 	// Calculate starting height (tip - lookbackDepth)
 	startHeight := currentTip - i.lookbackDepth
 	if startHeight < 0 {
 		startHeight = 0
 	}
-	
+
 	log.Info().
 		Int64("currentTip", currentTip).
 		Int64("startHeight", startHeight).
 		Int64("lookbackDepth", i.lookbackDepth).
 		Msg("Starting initial catchup")
-	
+
 	// Fetch blocks in parallel and publish them in order
 	blocks, err := i.fetchBlocksInParallel(startHeight, currentTip)
 	if err != nil {
 		return err
 	}
-	
+
 	// Publish blocks to channel in order
 	for height, block := range blocks {
 		if block == nil {
 			// Skip blocks that failed to fetch
 			continue
 		}
-		
+
 		// Send block to metrics system
 		i.metrics.ProcessBlock(block)
-		
+
 		select {
 		case i.blockChan <- block:
 			log.Debug().Int64("height", startHeight+int64(height)).Str("hash", block.Hash().Hex()).Msg("Published catchup block")
@@ -345,17 +345,17 @@ func (i *Indexer) initialCatchup() error {
 			return i.ctx.Err()
 		}
 	}
-	
+
 	// Update our latest height to the current tip
 	i.mu.Lock()
 	i.latestHeight = currentTip
 	i.mu.Unlock()
-	
+
 	log.Info().
 		Int64("blocksProcessed", int64(len(blocks))).
 		Int64("latestHeight", currentTip).
 		Msg("Initial catchup completed")
-	
+
 	return nil
 }
 
@@ -364,18 +364,18 @@ func (i *Indexer) fetchBlocksInParallel(startHeight, endHeight int64) ([]rpctype
 	if startHeight > endHeight {
 		return nil, nil
 	}
-	
+
 	blockCount := endHeight - startHeight + 1
 	blocks := make([]rpctypes.PolyBlock, blockCount)
 	var wg sync.WaitGroup
-	
+
 	log.Debug().
 		Int64("startHeight", startHeight).
 		Int64("endHeight", endHeight).
 		Int64("blockCount", blockCount).
 		Int("maxConcurrency", i.maxConcurrency).
 		Msg("Starting parallel block fetch")
-	
+
 	// Fetch blocks in parallel with concurrency control
 	for idx := int64(0); idx < blockCount; idx++ {
 		select {
@@ -383,14 +383,14 @@ func (i *Indexer) fetchBlocksInParallel(startHeight, endHeight int64) ([]rpctype
 			return nil, i.ctx.Err()
 		case i.workerSem <- struct{}{}: // Acquire semaphore
 		}
-		
+
 		wg.Add(1)
 		go func(index int64, height int64) {
 			defer func() {
 				<-i.workerSem // Release semaphore
 				wg.Done()
 			}()
-			
+
 			block, err := i.store.GetBlockByNumber(i.ctx, big.NewInt(height))
 			if err != nil {
 				log.Error().
@@ -400,7 +400,7 @@ func (i *Indexer) fetchBlocksInParallel(startHeight, endHeight int64) ([]rpctype
 				// Leave blocks[index] as nil to indicate failure
 				return
 			}
-			
+
 			blocks[index] = block
 			log.Trace().
 				Int64("height", height).
@@ -408,10 +408,10 @@ func (i *Indexer) fetchBlocksInParallel(startHeight, endHeight int64) ([]rpctype
 				Msg("Fetched block in parallel")
 		}(idx, startHeight+idx)
 	}
-	
+
 	// Wait for all goroutines to complete
 	wg.Wait()
-	
+
 	// Count successful fetches
 	successCount := int64(0)
 	for _, block := range blocks {
@@ -419,12 +419,12 @@ func (i *Indexer) fetchBlocksInParallel(startHeight, endHeight int64) ([]rpctype
 			successCount++
 		}
 	}
-	
+
 	log.Debug().
 		Int64("requested", blockCount).
 		Int64("successful", successCount).
 		Int64("failed", blockCount-successCount).
 		Msg("Parallel block fetch completed")
-	
+
 	return blocks, nil
 }

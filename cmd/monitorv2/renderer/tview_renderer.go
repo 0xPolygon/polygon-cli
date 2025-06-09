@@ -53,55 +53,57 @@ func createColumnDefinitions() []ColumnDef {
 	return []ColumnDef{
 		{
 			Name: "BLOCK #", Key: "number", Align: tview.AlignRight, Expansion: 1,
-			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.Number() },
+			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.Number() },
 			CompareFunc: compareNumbers,
 		},
 		{
 			Name: "TIME", Key: "time", Align: tview.AlignLeft, Expansion: 3,
-			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.Time() },
+			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.Time() },
 			CompareFunc: compareUint64,
 		},
 		{
 			Name: "INTERVAL", Key: "interval", Align: tview.AlignRight, Expansion: 1,
-			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.Time() }, // Will be calculated separately
+			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.Time() }, // Will be calculated separately
 			CompareFunc: compareUint64,
 		},
 		{
 			Name: "HASH", Key: "hash", Align: tview.AlignLeft, Expansion: 2,
-			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.Hash().Hex() },
+			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.Hash().Hex() },
 			CompareFunc: compareStrings,
 		},
 		{
 			Name: "TXS", Key: "txs", Align: tview.AlignRight, Expansion: 1,
-			SortFunc: func(block rpctypes.PolyBlock) interface{} { return uint64(len(block.Transactions())) },
+			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return uint64(len(block.Transactions())) },
 			CompareFunc: compareUint64,
 		},
 		{
 			Name: "SIZE", Key: "size", Align: tview.AlignRight, Expansion: 1,
-			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.Size() },
+			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.Size() },
 			CompareFunc: compareUint64,
 		},
 		{
 			Name: "GAS USED", Key: "gasused", Align: tview.AlignRight, Expansion: 2,
-			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.GasUsed() },
+			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.GasUsed() },
 			CompareFunc: compareUint64,
 		},
 		{
 			Name: "GAS %", Key: "gaspct", Align: tview.AlignRight, Expansion: 1,
-			SortFunc: func(block rpctypes.PolyBlock) interface{} { 
-				if block.GasLimit() == 0 { return uint64(0) }
+			SortFunc: func(block rpctypes.PolyBlock) interface{} {
+				if block.GasLimit() == 0 {
+					return uint64(0)
+				}
 				return uint64(float64(block.GasUsed()) / float64(block.GasLimit()) * 10000) // *10000 for precision
 			},
 			CompareFunc: compareUint64,
 		},
 		{
 			Name: "GAS LIMIT", Key: "gaslimit", Align: tview.AlignRight, Expansion: 2,
-			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.GasLimit() },
+			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.GasLimit() },
 			CompareFunc: compareUint64,
 		},
 		{
 			Name: "STATE ROOT", Key: "stateroot", Align: tview.AlignLeft, Expansion: 2,
-			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.Root().Hex() },
+			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.Root().Hex() },
 			CompareFunc: compareStrings,
 		},
 	}
@@ -109,22 +111,22 @@ func createColumnDefinitions() []ColumnDef {
 
 // ColumnDef defines a sortable column with its properties
 type ColumnDef struct {
-	Name       string                                     // Display name
-	Key        string                                     // Internal identifier
-	Align      int                                        // Text alignment
-	Expansion  int                                        // Column width allocation
-	SortFunc   func(rpctypes.PolyBlock) interface{}       // Custom sort extraction
-	CompareFunc func(interface{}, interface{}) int       // Custom comparison
+	Name        string                               // Display name
+	Key         string                               // Internal identifier
+	Align       int                                  // Text alignment
+	Expansion   int                                  // Column width allocation
+	SortFunc    func(rpctypes.PolyBlock) interface{} // Custom sort extraction
+	CompareFunc func(interface{}, interface{}) int   // Custom comparison
 }
 
 // ViewState tracks the current view preferences and selection state
 type ViewState struct {
-	followMode       bool   // Auto-follow newest block vs manual navigation
-	sortColumn       string // Current sort column key
-	sortColumnIndex  int    // Index of current sort column (0-based)
-	sortAscending    bool   // Sort direction (true=asc, false=desc)
-	selectedBlock    string // Hash of currently selected block (empty = none)
-	manualSelect     bool   // User made manual selection (disables auto-follow)
+	followMode      bool   // Auto-follow newest block vs manual navigation
+	sortColumn      string // Current sort column key
+	sortColumnIndex int    // Index of current sort column (0-based)
+	sortAscending   bool   // Sort direction (true=asc, false=desc)
+	selectedBlock   string // Hash of currently selected block (empty = none)
+	manualSelect    bool   // User made manual selection (disables auto-follow)
 }
 
 // TviewRenderer provides a terminal UI using the tview library
@@ -144,17 +146,19 @@ type TviewRenderer struct {
 	viewStateMu sync.RWMutex
 
 	// Pages
-	homePage        *tview.Flex     // Changed to Flex to hold multiple sections
-	homeTopSection  *tview.Flex     // Flex container for 2-column top section
-	homeStatusPane  *tview.TextView // Left pane: Status information (1/3 width)
-	homeMetricsPane *tview.Table    // Right pane: Metrics table (2/3 width)
-	homeTable       *tview.Table
-	blockDetailPage *tview.Flex     // Changed to Flex for side-by-side layout
-	blockDetailLeft *tview.Table    // Left pane: Transaction table
+	homePage         *tview.Flex     // Changed to Flex to hold multiple sections
+	homeTopSection   *tview.Flex     // Flex container for 2-column top section
+	homeStatusPane   *tview.TextView // Left pane: Status information (1/3 width)
+	homeMetricsPane  *tview.Table    // Right pane: Metrics table (2/3 width)
+	homeTable        *tview.Table
+	blockDetailPage  *tview.Flex     // Changed to Flex for side-by-side layout
+	blockDetailLeft  *tview.Table    // Left pane: Transaction table
 	blockDetailRight *tview.TextView // Right pane: Raw JSON
-	txDetailPage    *tview.TextView
-	infoPage        *tview.TextView
-	helpPage        *tview.TextView
+	txDetailPage     *tview.Flex     // Transaction detail with side-by-side layout
+	txDetailLeft     *tview.TextView // Left pane: Transaction properties
+	txDetailRight    *tview.TextView // Right pane: Raw JSON
+	infoPage         *tview.TextView
+	helpPage         *tview.TextView
 
 	// Block info for metrics display
 	latestBlockNum    *big.Int
@@ -163,16 +167,20 @@ type TviewRenderer struct {
 	blockInfoMu       sync.RWMutex
 
 	// Network info for metrics display
-	gasPrice       string
-	txPoolPending  string
-	txPoolQueued   string
-	peerCount      string
-	networkInfoMu  sync.RWMutex
+	gasPrice      string
+	txPoolPending string
+	txPoolQueued  string
+	peerCount     string
+	networkInfoMu sync.RWMutex
+
+	// Current block being viewed in detail (for transaction selection)
+	currentBlock   rpctypes.PolyBlock
+	currentBlockMu sync.RWMutex
 
 	// Throttling for UI updates
-	lastDrawTime     time.Time
-	drawMu           sync.Mutex
-	minDrawInterval  time.Duration
+	lastDrawTime    time.Time
+	drawMu          sync.Mutex
+	minDrawInterval time.Duration
 
 	// Modals
 	quitModal *tview.Modal
@@ -183,7 +191,7 @@ func NewTviewRenderer(indexer *indexer.Indexer) *TviewRenderer {
 	app := tview.NewApplication()
 
 	columns := createColumnDefinitions()
-	
+
 	renderer := &TviewRenderer{
 		BaseRenderer: NewBaseRenderer(indexer),
 		app:          app,
@@ -191,12 +199,12 @@ func NewTviewRenderer(indexer *indexer.Indexer) *TviewRenderer {
 		blocksByHash: make(map[string]rpctypes.PolyBlock),
 		columns:      columns,
 		viewState: ViewState{
-			followMode:       true,  // Start in follow mode
-			sortColumn:       "number", // Default sort by block number
-			sortColumnIndex:  0,     // Block number is first column
-			sortAscending:    false, // Descending (newest first)
-			selectedBlock:    "",    // No selection initially
-			manualSelect:     false, // Auto-follow enabled
+			followMode:      true,     // Start in follow mode
+			sortColumn:      "number", // Default sort by block number
+			sortColumnIndex: 0,        // Block number is first column
+			sortAscending:   false,    // Descending (newest first)
+			selectedBlock:   "",       // No selection initially
+			manualSelect:    false,    // Auto-follow enabled
 		},
 		minDrawInterval: 50 * time.Millisecond, // Limit updates to 20 FPS
 	}
@@ -300,7 +308,7 @@ func (t *TviewRenderer) createHomePage() {
 			t.showBlockDetail(t.blocks[row-1])
 		}
 	})
-	
+
 	// Set up selection change handler to track manual selection
 	t.homeTable.SetSelectionChangedFunc(func(row, column int) {
 		if row > 0 {
@@ -310,7 +318,7 @@ func (t *TviewRenderer) createHomePage() {
 				selectedBlock := t.blocks[row-1]
 				blockHash := selectedBlock.Hash().Hex()
 				t.blocksMu.RUnlock()
-				
+
 				// Update view state safely
 				t.viewStateMu.Lock()
 				// Mark as manual selection if this wasn't triggered by auto-follow
@@ -347,7 +355,7 @@ func (t *TviewRenderer) createBlockDetailPage() {
 	headers := []string{"INDEX", "FROM", "TO", "GAS LIMIT", "INPUT"}
 	aligns := []int{tview.AlignRight, tview.AlignLeft, tview.AlignLeft, tview.AlignRight, tview.AlignLeft}
 	expansions := []int{1, 3, 3, 2, 2}
-	
+
 	for col, header := range headers {
 		t.blockDetailLeft.SetCell(0, col, tview.NewTableCell(header).
 			SetTextColor(tview.Styles.PrimaryTextColor).
@@ -367,20 +375,33 @@ func (t *TviewRenderer) createBlockDetailPage() {
 	// Create flex container to hold both panes side by side
 	t.blockDetailPage = tview.NewFlex().
 		SetDirection(tview.FlexColumn).
-		AddItem(t.blockDetailLeft, 0, 1, true).  // Left pane: 50% width, focusable
+		AddItem(t.blockDetailLeft, 0, 1, true). // Left pane: 50% width, focusable
 		AddItem(t.blockDetailRight, 0, 1, true) // Right pane: 50% width, focusable
 }
 
-// createTransactionDetailPage creates the transaction detail view
+// createTransactionDetailPage creates the transaction detail view with side-by-side text views
 func (t *TviewRenderer) createTransactionDetailPage() {
-	t.txDetailPage = tview.NewTextView().
+	// Create left pane for transaction properties
+	t.txDetailLeft = tview.NewTextView().
 		SetDynamicColors(true).
 		SetRegions(true).
 		SetWordWrap(true)
+	t.txDetailLeft.SetBorder(true).SetTitle(" Transaction Properties ")
+	t.txDetailLeft.SetText("Transaction properties will be displayed here")
 
-	t.txDetailPage.SetTitle(" Transaction Detail ")
-	t.txDetailPage.SetBorder(true)
-	t.txDetailPage.SetText("Transaction detail view - placeholder\n\nPress 'Esc' to go back")
+	// Create right pane for raw JSON
+	t.txDetailRight = tview.NewTextView().
+		SetDynamicColors(true).
+		SetRegions(true).
+		SetWordWrap(true)
+	t.txDetailRight.SetBorder(true).SetTitle(" Raw JSON ")
+	t.txDetailRight.SetText("Select a transaction to view its JSON representation")
+
+	// Create flex container to hold both panes side by side
+	t.txDetailPage = tview.NewFlex().
+		SetDirection(tview.FlexColumn).
+		AddItem(t.txDetailLeft, 0, 1, true). // Left pane: 50% width, focusable
+		AddItem(t.txDetailRight, 0, 1, true) // Right pane: 50% width, focusable
 }
 
 // createInfoPage creates the application info page
@@ -499,7 +520,7 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 				}
 				return nil
 			}
-			
+
 			// Handle sorting shortcuts with immediate feedback
 			switch event.Rune() {
 			case '<':
@@ -536,14 +557,36 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 				}
 				return nil
 			case tcell.KeyEnter:
-				// Handle Enter on transaction table for future transaction detail functionality
+				// Handle Enter on transaction table to show transaction detail
 				focused := t.app.GetFocus()
 				if focused == t.blockDetailLeft {
-					// Transaction selection logic can be added here in the future
-					// For now, just log the selection
 					if row, _ := t.blockDetailLeft.GetSelection(); row > 0 {
-						log.Debug().Int("txIndex", row-1).Msg("Transaction selected")
+						txIndex := row - 1 // -1 to account for header row
+						// Get the current block and its transactions
+						t.currentBlockMu.RLock()
+						currentBlock := t.currentBlock
+						t.currentBlockMu.RUnlock()
+
+						if currentBlock != nil {
+							transactions := currentBlock.Transactions()
+							if txIndex < len(transactions) {
+								// Navigate to transaction detail page with actual transaction
+								t.showTransactionDetail(transactions[txIndex], txIndex)
+							}
+						}
 					}
+				}
+				return nil
+			}
+		case "tx-detail":
+			switch event.Key() {
+			case tcell.KeyTab:
+				// Switch focus between left and right panes
+				focused := t.app.GetFocus()
+				if focused == t.txDetailLeft {
+					t.app.SetFocus(t.txDetailRight)
+				} else {
+					t.app.SetFocus(t.txDetailLeft)
 				}
 				return nil
 			}
@@ -555,6 +598,11 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 
 // showBlockDetail navigates to block detail page and populates it
 func (t *TviewRenderer) showBlockDetail(block rpctypes.PolyBlock) {
+	// Store the current block for transaction selection
+	t.currentBlockMu.Lock()
+	t.currentBlock = block
+	t.currentBlockMu.Unlock()
+
 	// Clear existing table rows (except header)
 	rowCount := t.blockDetailLeft.GetRowCount()
 	for row := 1; row < rowCount; row++ {
@@ -615,11 +663,61 @@ func (t *TviewRenderer) showBlockDetail(block rpctypes.PolyBlock) {
 			t.blockDetailRight.SetText(prettyJSON.String())
 		}
 	}
-	
+
 	t.pages.SwitchToPage("block-detail")
-	
+
 	// Set focus to the left pane (transaction table) by default
 	t.app.SetFocus(t.blockDetailLeft)
+}
+
+// showTransactionDetail navigates to transaction detail page and populates it
+func (t *TviewRenderer) showTransactionDetail(tx rpctypes.PolyTransaction, txIndex int) {
+	// Update pane titles to reflect the transaction content
+	t.txDetailLeft.SetTitle(fmt.Sprintf(" Transaction Receipt (Index: %d) ", txIndex))
+	t.txDetailRight.SetTitle(fmt.Sprintf(" Transaction JSON (Hash: %s) ", truncateHash(tx.Hash().Hex(), 8, 8)))
+
+	// Fetch transaction receipt for left pane
+	ctx := context.Background()
+	receipt, err := t.indexer.GetReceipt(ctx, tx.Hash())
+	if err != nil {
+		// Display error message if receipt cannot be fetched
+		t.txDetailLeft.SetText(fmt.Sprintf("Transaction Receipt\n\nIndex: %d\nHash: %s\n\nError fetching receipt: %v\n\n(Receipt may not be available for pending transactions)", txIndex, tx.Hash().Hex(), err))
+	} else {
+		// Try to access the underlying RawTxReceipt for JSON marshaling
+		// Since PolyReceipt is an interface, we need to marshal it using standard JSON
+		receiptJSON, marshalErr := json.Marshal(receipt)
+		if marshalErr != nil {
+			t.txDetailLeft.SetText(fmt.Sprintf("Transaction Receipt\n\nIndex: %d\nHash: %s\n\nError marshaling receipt JSON: %v", txIndex, tx.Hash().Hex(), marshalErr))
+		} else {
+			// Pretty print the receipt JSON
+			var prettyReceiptJSON bytes.Buffer
+			if indentErr := json.Indent(&prettyReceiptJSON, receiptJSON, "", "  "); indentErr != nil {
+				t.txDetailLeft.SetText(fmt.Sprintf("Transaction Receipt\n\nIndex: %d\nHash: %s\n\nError formatting receipt JSON: %v", txIndex, tx.Hash().Hex(), indentErr))
+			} else {
+				t.txDetailLeft.SetText(prettyReceiptJSON.String())
+			}
+		}
+	}
+
+	// Right pane shows pretty-printed JSON of the transaction
+	txJSON, err := tx.MarshalJSON()
+	if err != nil {
+		t.txDetailRight.SetText(fmt.Sprintf("Error marshaling transaction JSON: %v", err))
+	} else {
+		// Pretty print the JSON
+		var prettyJSON bytes.Buffer
+		if err := json.Indent(&prettyJSON, txJSON, "", "  "); err != nil {
+			t.txDetailRight.SetText(fmt.Sprintf("Error formatting JSON: %v", err))
+		} else {
+			t.txDetailRight.SetText(prettyJSON.String())
+		}
+	}
+
+	// Switch to transaction detail page
+	t.pages.SwitchToPage("tx-detail")
+
+	// Set focus to the left pane by default
+	t.app.SetFocus(t.txDetailLeft)
 }
 
 // Start begins the TUI rendering
@@ -660,12 +758,12 @@ func (t *TviewRenderer) throttledDraw() {
 
 	now := time.Now()
 	elapsed := now.Sub(t.lastDrawTime)
-	
+
 	if elapsed < t.minDrawInterval {
 		// Too soon since last draw, skip this one
 		return
 	}
-	
+
 	t.lastDrawTime = now
 	t.app.Draw()
 }
@@ -880,16 +978,16 @@ func (t *TviewRenderer) updateTableHeaders() {
 	if t.homeTable == nil {
 		return
 	}
-	
+
 	t.viewStateMu.RLock()
 	sortColIndex := t.viewState.sortColumnIndex
 	sortAsc := t.viewState.sortAscending
 	t.viewStateMu.RUnlock()
-	
+
 	// Update headers with sort indicators
 	for col, column := range t.columns {
 		headerText := column.Name
-		
+
 		// Add sort indicator if this is the active sort column
 		if col == sortColIndex {
 			if sortAsc {
@@ -898,7 +996,7 @@ func (t *TviewRenderer) updateTableHeaders() {
 				headerText += " ↓"
 			}
 		}
-		
+
 		t.homeTable.SetCell(0, col, tview.NewTableCell(headerText).
 			SetTextColor(tview.Styles.PrimaryTextColor).
 			SetAlign(column.Align).
@@ -978,7 +1076,7 @@ func (t *TviewRenderer) updateTable() {
 	// Update table title with current block count
 	title := fmt.Sprintf(" Blocks (%d) ", len(blocks))
 	t.homeTable.SetTitle(title)
-	
+
 	// Update headers with current sort indicators
 	t.updateTableHeaders()
 }
@@ -1325,41 +1423,41 @@ func (t *TviewRenderer) updateBlockInfo(ctx context.Context) {
 func (t *TviewRenderer) insertBlockSorted(block rpctypes.PolyBlock) {
 	blockNum := block.Number()
 	blockHash := block.Hash().Hex()
-	
+
 	// Get current sort settings first, outside of locks
 	t.viewStateMu.RLock()
 	sortColIndex := t.viewState.sortColumnIndex
 	sortAsc := t.viewState.sortAscending
 	t.viewStateMu.RUnlock()
-	
+
 	// Get the sort column definition
 	if sortColIndex < 0 || sortColIndex >= len(t.columns) {
 		sortColIndex = 0 // Default to first column
 	}
 	column := t.columns[sortColIndex]
-	
+
 	// Now acquire blocks lock and insert
 	t.blocksMu.Lock()
 	defer t.blocksMu.Unlock()
-	
+
 	// Check if block already exists
 	if _, exists := t.blocksByHash[blockHash]; exists {
 		log.Debug().Str("hash", blockHash).Msg("Block already exists, skipping")
 		return
 	}
-	
+
 	// Find insertion point using binary search with current sort order
 	left, right := 0, len(t.blocks)
 	for left < right {
 		mid := (left + right) / 2
-		
+
 		// Extract values for comparison
 		midVal := column.SortFunc(t.blocks[mid])
 		newVal := column.SortFunc(block)
-		
+
 		// Compare using the column's comparison function
 		cmp := column.CompareFunc(midVal, newVal)
-		
+
 		// Apply sort direction logic
 		if sortAsc {
 			// Ascending: if mid < new, search right half
@@ -1377,15 +1475,15 @@ func (t *TviewRenderer) insertBlockSorted(block rpctypes.PolyBlock) {
 			}
 		}
 	}
-	
+
 	// Insert at the found position
-	t.blocks = append(t.blocks, nil) // Expand slice
+	t.blocks = append(t.blocks, nil)         // Expand slice
 	copy(t.blocks[left+1:], t.blocks[left:]) // Shift elements right
-	t.blocks[left] = block // Insert new block
-	
+	t.blocks[left] = block                   // Insert new block
+
 	// Update hash map
 	t.blocksByHash[blockHash] = block
-	
+
 	// Limit blocks to prevent memory issues
 	if len(t.blocks) > 1000 {
 		// Remove oldest blocks (at the end of the array)
@@ -1394,7 +1492,7 @@ func (t *TviewRenderer) insertBlockSorted(block rpctypes.PolyBlock) {
 		}
 		t.blocks = t.blocks[:1000]
 	}
-	
+
 	log.Debug().
 		Str("hash", blockHash).
 		Str("number", blockNum.String()).
@@ -1410,26 +1508,26 @@ func (t *TviewRenderer) resortBlocks() {
 	sortColIndex := t.viewState.sortColumnIndex
 	sortAsc := t.viewState.sortAscending
 	t.viewStateMu.RUnlock()
-	
+
 	if sortColIndex < 0 || sortColIndex >= len(t.columns) {
 		log.Error().Int("index", sortColIndex).Msg("Invalid sort column index")
 		return
 	}
-	
+
 	column := t.columns[sortColIndex]
-	
+
 	// Now acquire blocks lock and sort
 	t.blocksMu.Lock()
 	defer t.blocksMu.Unlock()
-	
+
 	sort.Slice(t.blocks, func(i, j int) bool {
 		// Extract sort values
 		valI := column.SortFunc(t.blocks[i])
 		valJ := column.SortFunc(t.blocks[j])
-		
+
 		// Compare using the column's comparison function
 		cmp := column.CompareFunc(valI, valJ)
-		
+
 		// Apply sort direction
 		if sortAsc {
 			return cmp < 0
@@ -1437,7 +1535,7 @@ func (t *TviewRenderer) resortBlocks() {
 			return cmp > 0
 		}
 	})
-	
+
 	log.Debug().
 		Str("column", column.Key).
 		Bool("ascending", sortAsc).
@@ -1449,7 +1547,7 @@ func (t *TviewRenderer) resortBlocks() {
 func (t *TviewRenderer) getCurrentSortColumn() ColumnDef {
 	t.viewStateMu.RLock()
 	defer t.viewStateMu.RUnlock()
-	
+
 	if t.viewState.sortColumnIndex < 0 || t.viewState.sortColumnIndex >= len(t.columns) {
 		return t.columns[0] // Default to first column
 	}
@@ -1460,17 +1558,17 @@ func (t *TviewRenderer) getCurrentSortColumn() ColumnDef {
 func (t *TviewRenderer) changeSortColumn(delta int) {
 	t.viewStateMu.Lock()
 	defer t.viewStateMu.Unlock()
-	
+
 	newIndex := t.viewState.sortColumnIndex + delta
 	if newIndex < 0 {
 		newIndex = len(t.columns) - 1 // Wrap to last column
 	} else if newIndex >= len(t.columns) {
 		newIndex = 0 // Wrap to first column
 	}
-	
+
 	t.viewState.sortColumnIndex = newIndex
 	t.viewState.sortColumn = t.columns[newIndex].Key
-	
+
 	log.Debug().
 		Int("newIndex", newIndex).
 		Str("newColumn", t.viewState.sortColumn).
@@ -1481,9 +1579,9 @@ func (t *TviewRenderer) changeSortColumn(delta int) {
 func (t *TviewRenderer) toggleSortDirection() {
 	t.viewStateMu.Lock()
 	defer t.viewStateMu.Unlock()
-	
+
 	t.viewState.sortAscending = !t.viewState.sortAscending
-	
+
 	log.Debug().
 		Bool("ascending", t.viewState.sortAscending).
 		Msg("Toggled sort direction")
@@ -1494,14 +1592,14 @@ func (t *TviewRenderer) applyViewState() {
 	if t.homeTable == nil {
 		return
 	}
-	
+
 	// Get current view state safely
 	t.viewStateMu.RLock()
 	followMode := t.viewState.followMode
 	manualSelect := t.viewState.manualSelect
 	selectedBlock := t.viewState.selectedBlock
 	t.viewStateMu.RUnlock()
-	
+
 	// Get blocks data safely
 	t.blocksMu.RLock()
 	hasBlocks := len(t.blocks) > 0
@@ -1509,7 +1607,7 @@ func (t *TviewRenderer) applyViewState() {
 	if hasBlocks {
 		newestBlockHash = t.blocks[0].Hash().Hex()
 	}
-	
+
 	// Find selected block index without nested locks
 	selectedIndex := -1
 	if selectedBlock != "" {
@@ -1521,7 +1619,7 @@ func (t *TviewRenderer) applyViewState() {
 		}
 	}
 	t.blocksMu.RUnlock()
-	
+
 	// Apply view state logic
 	if followMode && !manualSelect {
 		// Auto-follow mode: always select newest block (index 0, table row 1)

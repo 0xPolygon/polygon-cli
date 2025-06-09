@@ -38,17 +38,17 @@ func (t *TPSMetric) Name() string {
 func (t *TPSMetric) ProcessBlock(block rpctypes.PolyBlock) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	// Add new block info
 	info := blockInfo{
 		timestamp: block.Time(),
 		txCount:   len(block.Transactions()),
 	}
 	t.window = append(t.window, info)
-	
+
 	// Prune old blocks outside the window
 	t.pruneOldBlocks()
-	
+
 	// Recalculate TPS
 	t.calculateTPS()
 }
@@ -58,9 +58,9 @@ func (t *TPSMetric) pruneOldBlocks() {
 	if len(t.window) == 0 {
 		return
 	}
-	
+
 	cutoff := uint64(time.Now().Unix()) - uint64(t.windowSize.Seconds())
-	
+
 	// Find the first block within the window
 	startIdx := 0
 	for i, block := range t.window {
@@ -69,7 +69,7 @@ func (t *TPSMetric) pruneOldBlocks() {
 			break
 		}
 	}
-	
+
 	// Keep only blocks within the window
 	if startIdx > 0 {
 		t.window = t.window[startIdx:]
@@ -82,18 +82,18 @@ func (t *TPSMetric) calculateTPS() {
 		t.tps = 0
 		return
 	}
-	
+
 	// Calculate total transactions and time span
 	totalTxs := 0
 	for _, block := range t.window {
 		totalTxs += block.txCount
 	}
-	
+
 	// Get time span from oldest to newest block
 	oldestTime := t.window[0].timestamp
 	newestTime := t.window[len(t.window)-1].timestamp
 	timeSpan := newestTime - oldestTime
-	
+
 	if timeSpan > 0 {
 		t.tps = float64(totalTxs) / float64(timeSpan)
 	} else {

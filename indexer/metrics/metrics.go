@@ -12,13 +12,13 @@ import (
 type MetricPlugin interface {
 	// Name returns the unique identifier for this metric
 	Name() string
-	
+
 	// ProcessBlock processes a new block for metric calculation
 	ProcessBlock(block rpctypes.PolyBlock)
-	
+
 	// GetMetric returns the current calculated metric value
 	GetMetric() interface{}
-	
+
 	// GetUpdateInterval returns how often this metric should be recalculated
 	GetUpdateInterval() time.Duration
 }
@@ -52,12 +52,12 @@ func NewMetricsSystem() *MetricsSystem {
 func (m *MetricsSystem) RegisterPlugin(plugin MetricPlugin) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	name := plugin.Name()
 	if _, exists := m.plugins[name]; exists {
 		log.Warn().Str("plugin", name).Msg("Metric plugin already registered, replacing")
 	}
-	
+
 	m.plugins[name] = plugin
 	log.Info().Str("plugin", name).Msg("Registered metric plugin")
 }
@@ -70,16 +70,16 @@ func (m *MetricsSystem) ProcessBlock(block rpctypes.PolyBlock) {
 		plugins = append(plugins, plugin)
 	}
 	m.mu.RUnlock()
-	
+
 	// Process block in each plugin
 	for _, plugin := range plugins {
 		m.wg.Add(1)
 		go func(p MetricPlugin) {
 			defer m.wg.Done()
-			
+
 			// Process the block
 			p.ProcessBlock(block)
-			
+
 			// Send update
 			select {
 			case m.updateCh <- MetricUpdate{
@@ -103,7 +103,7 @@ func (m *MetricsSystem) GetUpdateChannel() <-chan MetricUpdate {
 func (m *MetricsSystem) GetMetric(name string) (interface{}, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	if plugin, exists := m.plugins[name]; exists {
 		return plugin.GetMetric(), true
 	}

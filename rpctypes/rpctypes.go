@@ -275,6 +275,7 @@ type (
 		Status() uint64
 		BlobGasPrice() *big.Int
 		BlobGasUsed() *big.Int
+		MarshalJSON() ([]byte, error)
 	}
 	PolyReceipts []PolyReceipt
 	PolyBlock    interface {
@@ -392,6 +393,11 @@ func (i *implPolyReceipt) BlobGasPrice() *big.Int {
 // BlobGasUsed implements PolyReceipt.
 func (i *implPolyReceipt) BlobGasUsed() *big.Int {
 	return i.inner.BlobGasUsed.ToBigInt()
+}
+
+// MarshalJSON implements PolyReceipt.
+func (i *implPolyReceipt) MarshalJSON() ([]byte, error) {
+	return json.Marshal(i.inner)
 }
 
 func NewPolyBlock(r *RawBlockResponse) PolyBlock {
