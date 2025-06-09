@@ -16,6 +16,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// ViewState tracks the current view preferences and selection state
+type ViewState struct {
+	followMode    bool   // Auto-follow newest block vs manual navigation
+	sortColumn    string // Future: "number", "time", "gas", etc.
+	sortAscending bool   // Future: sort direction
+	selectedBlock string // Hash of currently selected block (empty = none)
+	manualSelect  bool   // User made manual selection (disables auto-follow)
+}
+
 // TviewRenderer provides a terminal UI using the tview library
 type TviewRenderer struct {
 	BaseRenderer
@@ -24,8 +33,11 @@ type TviewRenderer struct {
 	blocks []rpctypes.PolyBlock
 	// Map to store blocks by hash for parent lookup
 	blocksByHash map[string]rpctypes.PolyBlock
-	// Track if we've set initial selection
-	initialSelectionSet bool
+	// View state management
+	viewState ViewState
+	// Mutex for thread-safe access to blocks and viewState
+	blocksMu    sync.RWMutex
+	viewStateMu sync.RWMutex
 
 	// Pages
 	homePage        *tview.Flex     // Changed to Flex to hold multiple sections
@@ -53,11 +65,17 @@ func NewTviewRenderer(indexer *indexer.Indexer) *TviewRenderer {
 	app := tview.NewApplication()
 
 	renderer := &TviewRenderer{
-		BaseRenderer:        NewBaseRenderer(indexer),
-		app:                 app,
-		blocks:              make([]rpctypes.PolyBlock, 0),
-		blocksByHash:        make(map[string]rpctypes.PolyBlock),
-		initialSelectionSet: false,
+		BaseRenderer: NewBaseRenderer(indexer),
+		app:          app,
+		blocks:       make([]rpctypes.PolyBlock, 0),
+		blocksByHash: make(map[string]rpctypes.PolyBlock),
+		viewState: ViewState{
+			followMode:    true,  // Start in follow mode
+			sortColumn:    "number", // Default sort by block number
+			sortAscending: false, // Descending (newest first)
+			selectedBlock: "",    // No selection initially
+			manualSelect:  false, // Auto-follow enabled
+		},
 	}
 
 	// Create all pages
@@ -180,6 +198,31 @@ func (t *TviewRenderer) createHomePage() {
 		if row > 0 && row-1 < len(t.blocks) { // Skip header row
 			// Navigate to block detail page
 			t.showBlockDetail(t.blocks[row-1])
+		}
+	})
+	
+	// Set up selection change handler to track manual selection
+	t.homeTable.SetSelectionChangedFunc(func(row, column int) {
+		if row > 0 {
+			// Get block data safely
+			t.blocksMu.RLock()
+			if row-1 < len(t.blocks) {
+				selectedBlock := t.blocks[row-1]
+				blockHash := selectedBlock.Hash().Hex()
+				t.blocksMu.RUnlock()
+				
+				// Update view state safely
+				t.viewStateMu.Lock()
+				// Mark as manual selection if this wasn't triggered by auto-follow
+				if t.viewState.followMode && row != 1 {
+					t.viewState.manualSelect = true
+					t.viewState.selectedBlock = blockHash
+					log.Debug().Str("hash", blockHash).Msg("Manual selection detected, disabling auto-follow")
+				}
+				t.viewStateMu.Unlock()
+			} else {
+				t.blocksMu.RUnlock()
+			}
 		}
 	})
 
@@ -367,21 +410,7 @@ func (t *TviewRenderer) Start(ctx context.Context) error {
 	// Start periodic block info updates
 	go t.updateBlockInfo(ctx)
 
-	// Set initial table selection after a short delay
-	go func() {
-		// Wait for initial blocks to load and UI to stabilize
-		time.Sleep(2 * time.Second)
-
-		t.app.QueueUpdateDraw(func() {
-			if len(t.blocks) > 0 && !t.initialSelectionSet {
-				// Select row 1 (most recent block) and set focus
-				t.homeTable.Select(1, 0)
-				t.app.SetFocus(t.homeTable)
-				t.initialSelectionSet = true
-				log.Debug().Msg("Initial table selection set")
-			}
-		})
-	}()
+	// Table selection is handled automatically by view state logic
 
 	// Start the TUI application
 	// This will block until the application is stopped
@@ -407,23 +436,13 @@ func (t *TviewRenderer) consumeBlocks(ctx context.Context) {
 				return
 			}
 
-			// Add block to the beginning of the slice (descending order)
-			t.blocks = append([]rpctypes.PolyBlock{block}, t.blocks...)
-			// Also store in hash map for parent lookup
-			t.blocksByHash[block.Hash().Hex()] = block
+			// Insert block in sorted order (always maintains descending order by block number)
+			t.insertBlockSorted(block)
 
-			// Limit the blocks array and hash map size to prevent memory issues
-			if len(t.blocks) > 1000 {
-				// Remove oldest blocks
-				for i := 1000; i < len(t.blocks); i++ {
-					delete(t.blocksByHash, t.blocks[i].Hash().Hex())
-				}
-				t.blocks = t.blocks[:1000]
-			}
-
-			// Update the table in the main thread
+			// Update the table and apply view state in the main thread
 			t.app.QueueUpdateDraw(func() {
 				t.updateTable()
+				t.applyViewState()
 			})
 		}
 	}
@@ -561,6 +580,11 @@ func (t *TviewRenderer) updateTable() {
 		return
 	}
 
+	t.blocksMu.RLock()
+	blocks := make([]rpctypes.PolyBlock, len(t.blocks))
+	copy(blocks, t.blocks) // Copy for thread safety
+	t.blocksMu.RUnlock()
+
 	// Clear existing rows (except header)
 	rowCount := t.homeTable.GetRowCount()
 	for row := 1; row < rowCount; row++ {
@@ -570,7 +594,7 @@ func (t *TviewRenderer) updateTable() {
 	}
 
 	// Add blocks to table (newest first)
-	for i, block := range t.blocks {
+	for i, block := range blocks {
 		if i >= 100 { // Limit to 100 blocks for performance
 			break
 		}
@@ -619,7 +643,7 @@ func (t *TviewRenderer) updateTable() {
 	}
 
 	// Update table title with current block count
-	title := fmt.Sprintf(" Blocks (%d) ", len(t.blocks))
+	title := fmt.Sprintf(" Blocks (%d) ", len(blocks))
 	t.homeTable.SetTitle(title)
 }
 
@@ -957,6 +981,118 @@ func (t *TviewRenderer) updateBlockInfo(ctx context.Context) {
 					})
 				}
 			})
+		}
+	}
+}
+
+// insertBlockSorted inserts a block in the correct position to maintain descending order by block number
+func (t *TviewRenderer) insertBlockSorted(block rpctypes.PolyBlock) {
+	t.blocksMu.Lock()
+	defer t.blocksMu.Unlock()
+	
+	blockNum := block.Number()
+	blockHash := block.Hash().Hex()
+	
+	// Check if block already exists
+	if _, exists := t.blocksByHash[blockHash]; exists {
+		log.Debug().Str("hash", blockHash).Msg("Block already exists, skipping")
+		return
+	}
+	
+	// Find insertion point using binary search for descending order
+	left, right := 0, len(t.blocks)
+	for left < right {
+		mid := (left + right) / 2
+		if t.blocks[mid].Number().Cmp(blockNum) > 0 {
+			// Mid block is newer (higher number), search right half
+			left = mid + 1
+		} else {
+			// Mid block is older (lower number), search left half
+			right = mid
+		}
+	}
+	
+	// Insert at the found position
+	t.blocks = append(t.blocks, nil) // Expand slice
+	copy(t.blocks[left+1:], t.blocks[left:]) // Shift elements right
+	t.blocks[left] = block // Insert new block
+	
+	// Update hash map
+	t.blocksByHash[blockHash] = block
+	
+	// Limit blocks to prevent memory issues
+	if len(t.blocks) > 1000 {
+		// Remove oldest blocks (at the end of the array)
+		for i := 1000; i < len(t.blocks); i++ {
+			delete(t.blocksByHash, t.blocks[i].Hash().Hex())
+		}
+		t.blocks = t.blocks[:1000]
+	}
+	
+	log.Debug().
+		Str("hash", blockHash).
+		Str("number", blockNum.String()).
+		Int("position", left).
+		Int("totalBlocks", len(t.blocks)).
+		Msg("Block inserted in sorted order")
+}
+
+// applyViewState applies the current view state to the table selection
+func (t *TviewRenderer) applyViewState() {
+	if t.homeTable == nil {
+		return
+	}
+	
+	// Get current view state safely
+	t.viewStateMu.RLock()
+	followMode := t.viewState.followMode
+	manualSelect := t.viewState.manualSelect
+	selectedBlock := t.viewState.selectedBlock
+	t.viewStateMu.RUnlock()
+	
+	// Get blocks data safely
+	t.blocksMu.RLock()
+	hasBlocks := len(t.blocks) > 0
+	var newestBlockHash string
+	if hasBlocks {
+		newestBlockHash = t.blocks[0].Hash().Hex()
+	}
+	
+	// Find selected block index without nested locks
+	selectedIndex := -1
+	if selectedBlock != "" {
+		for i, block := range t.blocks {
+			if block.Hash().Hex() == selectedBlock {
+				selectedIndex = i
+				break
+			}
+		}
+	}
+	t.blocksMu.RUnlock()
+	
+	// Apply view state logic
+	if followMode && !manualSelect {
+		// Auto-follow mode: always select newest block (index 0, table row 1)
+		if hasBlocks {
+			t.homeTable.Select(1, 0)
+			t.app.SetFocus(t.homeTable)
+			log.Debug().Msg("Auto-follow: selected newest block")
+		}
+	} else if selectedBlock != "" {
+		// Manual selection: find the selected block and maintain selection
+		if selectedIndex >= 0 {
+			t.homeTable.Select(selectedIndex+1, 0) // +1 for header row
+			log.Debug().Int("index", selectedIndex).Str("hash", selectedBlock).Msg("Maintained manual selection")
+		} else {
+			// Selected block no longer exists, fall back to newest
+			if hasBlocks {
+				t.homeTable.Select(1, 0)
+				// Update view state safely
+				t.viewStateMu.Lock()
+				t.viewState.selectedBlock = newestBlockHash
+				t.viewStateMu.Unlock()
+				log.Debug().Msg("Selected block not found, fallback to newest")
+			}
 		}
 	}
 }

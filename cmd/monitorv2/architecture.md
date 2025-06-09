@@ -27,6 +27,8 @@ features:
 - Reorg detection - If a block hash changes, we can rewind and update
   the store. The depth to check for reorgs is configurable
 - TUI support for mouse clicking
+- Sortable columns for adjusting the view based on the currently
+  indexed blocks
 
 ## Design Principles
 
