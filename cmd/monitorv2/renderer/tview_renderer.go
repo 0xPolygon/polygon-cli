@@ -22,6 +22,10 @@ type TviewRenderer struct {
 	app    *tview.Application
 	pages  *tview.Pages
 	blocks []rpctypes.PolyBlock
+	// Map to store blocks by hash for parent lookup
+	blocksByHash map[string]rpctypes.PolyBlock
+	// Track if we've set initial selection
+	initialSelectionSet bool
 
 	// Pages
 	homePage        *tview.Flex     // Changed to Flex to hold multiple sections
@@ -52,6 +56,8 @@ func NewTviewRenderer(indexer *indexer.Indexer) *TviewRenderer {
 		BaseRenderer: NewBaseRenderer(indexer),
 		app:          app,
 		blocks:       make([]rpctypes.PolyBlock, 0),
+		blocksByHash: make(map[string]rpctypes.PolyBlock),
+		initialSelectionSet: false,
 	}
 
 	// Create all pages
@@ -150,7 +156,8 @@ func (t *TviewRenderer) createHomePage() {
 		expansion int
 	}{
 		{"BLOCK #", tview.AlignRight, 1},
-		{"TIME", tview.AlignLeft, 2},
+		{"TIME", tview.AlignLeft, 3},
+		{"INTERVAL", tview.AlignRight, 1},
 		{"HASH", tview.AlignLeft, 2},
 		{"TXS", tview.AlignRight, 1},
 		{"SIZE", tview.AlignRight, 1},
@@ -359,6 +366,22 @@ func (t *TviewRenderer) Start(ctx context.Context) error {
 
 	// Start periodic block info updates
 	go t.updateBlockInfo(ctx)
+	
+	// Set initial table selection after a short delay
+	go func() {
+		// Wait for initial blocks to load and UI to stabilize
+		time.Sleep(2 * time.Second)
+		
+		t.app.QueueUpdateDraw(func() {
+			if len(t.blocks) > 0 && !t.initialSelectionSet {
+				// Select row 1 (most recent block) and set focus
+				t.homeTable.Select(1, 0)
+				t.app.SetFocus(t.homeTable)
+				t.initialSelectionSet = true
+				log.Debug().Msg("Initial table selection set")
+			}
+		})
+	}()
 
 	// Start the TUI application
 	// This will block until the application is stopped
@@ -386,6 +409,17 @@ func (t *TviewRenderer) consumeBlocks(ctx context.Context) {
 
 			// Add block to the beginning of the slice (descending order)
 			t.blocks = append([]rpctypes.PolyBlock{block}, t.blocks...)
+			// Also store in hash map for parent lookup
+			t.blocksByHash[block.Hash().Hex()] = block
+			
+			// Limit the blocks array and hash map size to prevent memory issues
+			if len(t.blocks) > 1000 {
+				// Remove oldest blocks
+				for i := 1000; i < len(t.blocks); i++ {
+					delete(t.blocksByHash, t.blocks[i].Hash().Hex())
+				}
+				t.blocks = t.blocks[:1000]
+			}
 
 			// Update the table in the main thread
 			t.app.QueueUpdateDraw(func() {
@@ -450,7 +484,15 @@ func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
 				cells = [5]string{"THR", "tps10 N/A", "tps30 N/A", "gps10 N/A", "gps30 N/A"}
 			}
 		case 2: // GAS
-			cells = [5]string{"GAS", "Average Basefee [placeholder]", "Gas Price [placeholder]", "[placeholder]", "[placeholder]"}
+			// Get base fee metrics
+			if baseFeeValue, ok := t.indexer.GetMetric("basefee"); ok {
+				stats := baseFeeValue.(metrics.BaseFeeStats)
+				base10Str := "base10 " + weiToGwei(stats.BaseFee10) + " gwei"
+				base30Str := "base30 " + weiToGwei(stats.BaseFee30) + " gwei"
+				cells = [5]string{"GAS", base10Str, base30Str, "[placeholder]", "[placeholder]"}
+			} else {
+				cells = [5]string{"GAS", "base10 N/A", "base30 N/A", "[placeholder]", "[placeholder]"}
+			}
 		case 3: // POL
 			cells = [5]string{"POL", "Pending [placeholder]", "Queued [placeholder]", "Basefee [placeholder]", "[placeholder]"}
 		case 4: // SIG (1)
@@ -491,7 +533,7 @@ func (t *TviewRenderer) updateTable() {
 	// Clear existing rows (except header)
 	rowCount := t.homeTable.GetRowCount()
 	for row := 1; row < rowCount; row++ {
-		for col := 0; col < 9; col++ { // Updated to 9 columns
+		for col := 0; col < 10; col++ { // Updated to 10 columns
 			t.homeTable.SetCell(row, col, nil)
 		}
 	}
@@ -508,37 +550,41 @@ func (t *TviewRenderer) updateTable() {
 		blockNum := block.Number().String()
 		t.homeTable.SetCell(row, 0, tview.NewTableCell(blockNum).SetAlign(tview.AlignRight))
 
-		// Column 1: Time (relative)
-		timeStr := formatRelativeTime(block.Time())
+		// Column 1: Time (absolute and relative)
+		timeStr := formatBlockTime(block.Time())
 		t.homeTable.SetCell(row, 1, tview.NewTableCell(timeStr).SetAlign(tview.AlignLeft))
 
-		// Column 2: Block hash (truncated for display)
+		// Column 2: Block interval
+		intervalStr := t.calculateBlockInterval(block)
+		t.homeTable.SetCell(row, 2, tview.NewTableCell(intervalStr).SetAlign(tview.AlignRight))
+
+		// Column 3: Block hash (truncated for display)
 		hashStr := truncateHash(block.Hash().Hex(), 10, 10)
-		t.homeTable.SetCell(row, 2, tview.NewTableCell(hashStr).SetAlign(tview.AlignLeft))
+		t.homeTable.SetCell(row, 3, tview.NewTableCell(hashStr).SetAlign(tview.AlignLeft))
 
-		// Column 3: Number of transactions
+		// Column 4: Number of transactions
 		txCount := len(block.Transactions())
-		t.homeTable.SetCell(row, 3, tview.NewTableCell(strconv.Itoa(txCount)).SetAlign(tview.AlignRight))
+		t.homeTable.SetCell(row, 4, tview.NewTableCell(strconv.Itoa(txCount)).SetAlign(tview.AlignRight))
 
-		// Column 4: Block size
+		// Column 5: Block size
 		sizeStr := formatBytes(block.Size())
-		t.homeTable.SetCell(row, 4, tview.NewTableCell(sizeStr).SetAlign(tview.AlignRight))
+		t.homeTable.SetCell(row, 5, tview.NewTableCell(sizeStr).SetAlign(tview.AlignRight))
 
-		// Column 5: Gas used
+		// Column 6: Gas used
 		gasUsedStr := formatNumber(block.GasUsed())
-		t.homeTable.SetCell(row, 5, tview.NewTableCell(gasUsedStr).SetAlign(tview.AlignRight))
+		t.homeTable.SetCell(row, 6, tview.NewTableCell(gasUsedStr).SetAlign(tview.AlignRight))
 
-		// Column 6: Gas percentage
+		// Column 7: Gas percentage
 		gasPercentStr := formatGasPercentage(block.GasUsed(), block.GasLimit())
-		t.homeTable.SetCell(row, 6, tview.NewTableCell(gasPercentStr).SetAlign(tview.AlignRight))
+		t.homeTable.SetCell(row, 7, tview.NewTableCell(gasPercentStr).SetAlign(tview.AlignRight))
 
-		// Column 7: Gas limit
+		// Column 8: Gas limit
 		gasLimitStr := formatNumber(block.GasLimit())
-		t.homeTable.SetCell(row, 7, tview.NewTableCell(gasLimitStr).SetAlign(tview.AlignRight))
+		t.homeTable.SetCell(row, 8, tview.NewTableCell(gasLimitStr).SetAlign(tview.AlignRight))
 
-		// Column 8: State root (truncated)
+		// Column 9: State root (truncated)
 		stateRootStr := truncateHash(block.Root().Hex(), 8, 8)
-		t.homeTable.SetCell(row, 8, tview.NewTableCell(stateRootStr).SetAlign(tview.AlignLeft))
+		t.homeTable.SetCell(row, 9, tview.NewTableCell(stateRootStr).SetAlign(tview.AlignLeft))
 	}
 
 	// Update table title with current block count
@@ -677,6 +723,27 @@ func formatRelativeTime(timestamp uint64) string {
 	} else {
 		return fmt.Sprintf("%dd ago", diff/86400)
 	}
+}
+
+// formatBlockTime formats block timestamp as "2006-01-02T15:04:05Z - 6m ago"
+func formatBlockTime(timestamp uint64) string {
+	t := time.Unix(int64(timestamp), 0).UTC()
+	absolute := t.Format("2006-01-02T15:04:05Z")
+	relative := formatRelativeTime(timestamp)
+	return fmt.Sprintf("%s - %s", absolute, relative)
+}
+
+// calculateBlockInterval calculates the time interval between a block and its parent
+func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock) string {
+	// Look up parent block by hash
+	parentHash := block.ParentHash().Hex()
+	if parentBlock, exists := t.blocksByHash[parentHash]; exists {
+		// Calculate interval in seconds
+		interval := int64(block.Time()) - int64(parentBlock.Time())
+		return fmt.Sprintf("%ds", interval)
+	}
+	// Parent not found (might be initial blocks or missing data)
+	return "N/A"
 }
 
 // formatBytes converts bytes to human-readable size
