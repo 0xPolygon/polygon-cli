@@ -43,7 +43,7 @@ type MetricsSystem struct {
 func NewMetricsSystem() *MetricsSystem {
 	return &MetricsSystem{
 		plugins:  make(map[string]MetricPlugin),
-		updateCh: make(chan MetricUpdate, 100),
+		updateCh: make(chan MetricUpdate, 10000), // Increased buffer to handle bursts
 		stopCh:   make(chan struct{}),
 	}
 }

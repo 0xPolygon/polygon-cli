@@ -3,13 +3,16 @@ package monitorv2
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/spf13/cobra"
 	"github.com/0xPolygon/polygon-cli/chainstore"
 	"github.com/0xPolygon/polygon-cli/cmd/monitorv2/renderer"
 	"github.com/0xPolygon/polygon-cli/indexer"
+	"github.com/rs/zerolog/log"
 
 	_ "embed"
+	_ "net/http/pprof" // Import pprof HTTP handlers
 )
 
 //go:embed monitorv2Usage.md
@@ -18,6 +21,7 @@ var usage string
 var (
 	rpcURL         string
 	rendererType   string
+	pprofAddr      string
 )
 
 var MonitorV2Cmd = &cobra.Command{
@@ -27,6 +31,16 @@ var MonitorV2Cmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if rpcURL == "" {
 			return fmt.Errorf("--rpc-url is required")
+		}
+
+		// Start pprof server if requested
+		if pprofAddr != "" {
+			go func() {
+				log.Info().Str("addr", pprofAddr).Msg("Starting pprof server")
+				if err := http.ListenAndServe(pprofAddr, nil); err != nil {
+					log.Error().Err(err).Msg("pprof server failed")
+				}
+			}()
 		}
 
 		// Create store
@@ -65,4 +79,5 @@ var MonitorV2Cmd = &cobra.Command{
 func init() {
 	MonitorV2Cmd.Flags().StringVar(&rpcURL, "rpc-url", "", "RPC endpoint URL (required)")
 	MonitorV2Cmd.Flags().StringVar(&rendererType, "renderer", "json", "Renderer type (json, tview, tui)")
+	MonitorV2Cmd.Flags().StringVar(&pprofAddr, "pprof", "", "Enable pprof server on specified address (e.g. 127.0.0.1:6060)")
 }

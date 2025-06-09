@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -16,13 +17,112 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Comparison functions for different data types
+func compareNumbers(a, b interface{}) int {
+	aNum := a.(*big.Int)
+	bNum := b.(*big.Int)
+	return aNum.Cmp(bNum)
+}
+
+func compareUint64(a, b interface{}) int {
+	aNum := a.(uint64)
+	bNum := b.(uint64)
+	if aNum < bNum {
+		return -1
+	} else if aNum > bNum {
+		return 1
+	}
+	return 0
+}
+
+func compareStrings(a, b interface{}) int {
+	aStr := a.(string)
+	bStr := b.(string)
+	if aStr < bStr {
+		return -1
+	} else if aStr > bStr {
+		return 1
+	}
+	return 0
+}
+
+// createColumnDefinitions creates all sortable column definitions
+func createColumnDefinitions() []ColumnDef {
+	return []ColumnDef{
+		{
+			Name: "BLOCK #", Key: "number", Align: tview.AlignRight, Expansion: 1,
+			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.Number() },
+			CompareFunc: compareNumbers,
+		},
+		{
+			Name: "TIME", Key: "time", Align: tview.AlignLeft, Expansion: 3,
+			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.Time() },
+			CompareFunc: compareUint64,
+		},
+		{
+			Name: "INTERVAL", Key: "interval", Align: tview.AlignRight, Expansion: 1,
+			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.Time() }, // Will be calculated separately
+			CompareFunc: compareUint64,
+		},
+		{
+			Name: "HASH", Key: "hash", Align: tview.AlignLeft, Expansion: 2,
+			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.Hash().Hex() },
+			CompareFunc: compareStrings,
+		},
+		{
+			Name: "TXS", Key: "txs", Align: tview.AlignRight, Expansion: 1,
+			SortFunc: func(block rpctypes.PolyBlock) interface{} { return uint64(len(block.Transactions())) },
+			CompareFunc: compareUint64,
+		},
+		{
+			Name: "SIZE", Key: "size", Align: tview.AlignRight, Expansion: 1,
+			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.Size() },
+			CompareFunc: compareUint64,
+		},
+		{
+			Name: "GAS USED", Key: "gasused", Align: tview.AlignRight, Expansion: 2,
+			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.GasUsed() },
+			CompareFunc: compareUint64,
+		},
+		{
+			Name: "GAS %", Key: "gaspct", Align: tview.AlignRight, Expansion: 1,
+			SortFunc: func(block rpctypes.PolyBlock) interface{} { 
+				if block.GasLimit() == 0 { return uint64(0) }
+				return uint64(float64(block.GasUsed()) / float64(block.GasLimit()) * 10000) // *10000 for precision
+			},
+			CompareFunc: compareUint64,
+		},
+		{
+			Name: "GAS LIMIT", Key: "gaslimit", Align: tview.AlignRight, Expansion: 2,
+			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.GasLimit() },
+			CompareFunc: compareUint64,
+		},
+		{
+			Name: "STATE ROOT", Key: "stateroot", Align: tview.AlignLeft, Expansion: 2,
+			SortFunc: func(block rpctypes.PolyBlock) interface{} { return block.Root().Hex() },
+			CompareFunc: compareStrings,
+		},
+	}
+}
+
+// ColumnDef defines a sortable column with its properties
+type ColumnDef struct {
+	Name       string                                     // Display name
+	Key        string                                     // Internal identifier
+	Align      int                                        // Text alignment
+	Expansion  int                                        // Column width allocation
+	SortFunc   func(rpctypes.PolyBlock) interface{}       // Custom sort extraction
+	CompareFunc func(interface{}, interface{}) int       // Custom comparison
+}
+
 // ViewState tracks the current view preferences and selection state
 type ViewState struct {
-	followMode    bool   // Auto-follow newest block vs manual navigation
-	sortColumn    string // Future: "number", "time", "gas", etc.
-	sortAscending bool   // Future: sort direction
-	selectedBlock string // Hash of currently selected block (empty = none)
-	manualSelect  bool   // User made manual selection (disables auto-follow)
+	followMode       bool   // Auto-follow newest block vs manual navigation
+	sortColumn       string // Current sort column key
+	sortColumnIndex  int    // Index of current sort column (0-based)
+	sortAscending    bool   // Sort direction (true=asc, false=desc)
+	selectedBlock    string // Hash of currently selected block (empty = none)
+	manualSelect     bool   // User made manual selection (disables auto-follow)
 }
 
 // TviewRenderer provides a terminal UI using the tview library
@@ -33,6 +133,8 @@ type TviewRenderer struct {
 	blocks []rpctypes.PolyBlock
 	// Map to store blocks by hash for parent lookup
 	blocksByHash map[string]rpctypes.PolyBlock
+	// Column definitions for sorting
+	columns []ColumnDef
 	// View state management
 	viewState ViewState
 	// Mutex for thread-safe access to blocks and viewState
@@ -56,6 +158,11 @@ type TviewRenderer struct {
 	finalizedBlockNum *big.Int
 	blockInfoMu       sync.RWMutex
 
+	// Throttling for UI updates
+	lastDrawTime     time.Time
+	drawMu           sync.Mutex
+	minDrawInterval  time.Duration
+
 	// Modals
 	quitModal *tview.Modal
 }
@@ -64,18 +171,23 @@ type TviewRenderer struct {
 func NewTviewRenderer(indexer *indexer.Indexer) *TviewRenderer {
 	app := tview.NewApplication()
 
+	columns := createColumnDefinitions()
+	
 	renderer := &TviewRenderer{
 		BaseRenderer: NewBaseRenderer(indexer),
 		app:          app,
 		blocks:       make([]rpctypes.PolyBlock, 0),
 		blocksByHash: make(map[string]rpctypes.PolyBlock),
+		columns:      columns,
 		viewState: ViewState{
-			followMode:    true,  // Start in follow mode
-			sortColumn:    "number", // Default sort by block number
-			sortAscending: false, // Descending (newest first)
-			selectedBlock: "",    // No selection initially
-			manualSelect:  false, // Auto-follow enabled
+			followMode:       true,  // Start in follow mode
+			sortColumn:       "number", // Default sort by block number
+			sortColumnIndex:  0,     // Block number is first column
+			sortAscending:    false, // Descending (newest first)
+			selectedBlock:    "",    // No selection initially
+			manualSelect:     false, // Auto-follow enabled
 		},
+		minDrawInterval: 50 * time.Millisecond, // Limit updates to 20 FPS
 	}
 
 	// Create all pages
@@ -167,31 +279,8 @@ func (t *TviewRenderer) createHomePage() {
 	// Add border and title to the table
 	t.homeTable.SetBorder(true).SetTitle(" Blocks ")
 
-	// Set up table headers
-	headers := []struct {
-		text      string
-		align     int
-		expansion int
-	}{
-		{"BLOCK #", tview.AlignRight, 1},
-		{"TIME", tview.AlignLeft, 3},
-		{"INTERVAL", tview.AlignRight, 1},
-		{"HASH", tview.AlignLeft, 2},
-		{"TXS", tview.AlignRight, 1},
-		{"SIZE", tview.AlignRight, 1},
-		{"GAS USED", tview.AlignRight, 2},
-		{"GAS %", tview.AlignRight, 1},
-		{"GAS LIMIT", tview.AlignRight, 2},
-		{"STATE ROOT", tview.AlignLeft, 2},
-	}
-
-	for col, header := range headers {
-		t.homeTable.SetCell(0, col, tview.NewTableCell(header.text).
-			SetTextColor(tview.Styles.PrimaryTextColor).
-			SetAlign(header.align).
-			SetExpansion(header.expansion).
-			SetAttributes(tcell.AttrBold))
-	}
+	// Set up table headers with sort indicators
+	t.updateTableHeaders()
 
 	// Set up selection handler for Enter key
 	t.homeTable.SetSelectedFunc(func(row, column int) {
@@ -291,6 +380,11 @@ Navigation:
 ↑↓ - Scroll through blocks
 Home/End - Jump to top/bottom
 
+Sorting (on home page):
+< - Move sort column left
+> - Move sort column right
+R - Reverse sort direction
+
 Press 'Esc' to go back to home`
 
 	t.helpPage.SetText(helpText)
@@ -368,6 +462,31 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 				}
 				return nil
 			}
+			
+			// Handle sorting shortcuts with immediate feedback
+			switch event.Rune() {
+			case '<':
+				// Move sort column left and redraw immediately
+				t.changeSortColumn(-1)
+				t.resortBlocks()
+				t.updateTable()
+				t.updateTableHeaders()
+				return nil
+			case '>':
+				// Move sort column right and redraw immediately
+				t.changeSortColumn(1)
+				t.resortBlocks()
+				t.updateTable()
+				t.updateTableHeaders()
+				return nil
+			case 'r', 'R':
+				// Reverse sort direction and redraw immediately
+				t.toggleSortDirection()
+				t.resortBlocks()
+				t.updateTable()
+				t.updateTableHeaders()
+				return nil
+			}
 		}
 
 		return event
@@ -422,6 +541,23 @@ func (t *TviewRenderer) Start(ctx context.Context) error {
 	return nil
 }
 
+// throttledDraw performs a Draw() operation with throttling to prevent overwhelming the UI
+func (t *TviewRenderer) throttledDraw() {
+	t.drawMu.Lock()
+	defer t.drawMu.Unlock()
+
+	now := time.Now()
+	elapsed := now.Sub(t.lastDrawTime)
+	
+	if elapsed < t.minDrawInterval {
+		// Too soon since last draw, skip this one
+		return
+	}
+	
+	t.lastDrawTime = now
+	t.app.Draw()
+}
+
 // consumeBlocks consumes blocks from the indexer and updates the table
 func (t *TviewRenderer) consumeBlocks(ctx context.Context) {
 	blockChan := t.indexer.BlockChannel()
@@ -439,11 +575,11 @@ func (t *TviewRenderer) consumeBlocks(ctx context.Context) {
 			// Insert block in sorted order (always maintains descending order by block number)
 			t.insertBlockSorted(block)
 
-			// Update the table and apply view state in the main thread
-			t.app.QueueUpdateDraw(func() {
-				t.updateTable()
-				t.applyViewState()
-			})
+			// Update the table and apply view state
+			// Direct Draw() call is safe from any goroutine according to tview docs
+			t.updateTable()
+			t.applyViewState()
+			t.throttledDraw()
 		}
 	}
 }
@@ -462,10 +598,10 @@ func (t *TviewRenderer) consumeMetrics(ctx context.Context) {
 				return
 			}
 
-			// Update the metrics pane in the main thread
-			t.app.QueueUpdateDraw(func() {
-				t.updateMetricsPane(update)
-			})
+			// Update the metrics pane
+			// Direct Draw() call is safe from any goroutine according to tview docs
+			t.updateMetricsPane(update)
+			t.throttledDraw()
 		}
 	}
 }
@@ -574,6 +710,38 @@ func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
 	}
 }
 
+// updateTableHeaders updates the table headers with sort indicators
+func (t *TviewRenderer) updateTableHeaders() {
+	if t.homeTable == nil {
+		return
+	}
+	
+	t.viewStateMu.RLock()
+	sortColIndex := t.viewState.sortColumnIndex
+	sortAsc := t.viewState.sortAscending
+	t.viewStateMu.RUnlock()
+	
+	// Update headers with sort indicators
+	for col, column := range t.columns {
+		headerText := column.Name
+		
+		// Add sort indicator if this is the active sort column
+		if col == sortColIndex {
+			if sortAsc {
+				headerText += " ↑"
+			} else {
+				headerText += " ↓"
+			}
+		}
+		
+		t.homeTable.SetCell(0, col, tview.NewTableCell(headerText).
+			SetTextColor(tview.Styles.PrimaryTextColor).
+			SetAlign(column.Align).
+			SetExpansion(column.Expansion).
+			SetAttributes(tcell.AttrBold))
+	}
+}
+
 // updateTable refreshes the home page table with current blocks
 func (t *TviewRenderer) updateTable() {
 	if t.homeTable == nil {
@@ -645,6 +813,9 @@ func (t *TviewRenderer) updateTable() {
 	// Update table title with current block count
 	title := fmt.Sprintf(" Blocks (%d) ", len(blocks))
 	t.homeTable.SetTitle(title)
+	
+	// Update headers with current sort indicators
+	t.updateTableHeaders()
 }
 
 // updateChainInfo periodically updates the status section with chain information
@@ -740,10 +911,10 @@ func (t *TviewRenderer) refreshChainInfo(ctx context.Context) {
 		statusText += line
 	}
 
-	// Update the status section in the main thread
-	t.app.QueueUpdateDraw(func() {
-		t.homeStatusPane.SetText(statusText)
-	})
+	// Update the status section
+	// Direct Draw() call is safe from any goroutine according to tview docs
+	t.homeStatusPane.SetText(statusText)
+	t.throttledDraw()
 
 	log.Debug().Msg("Updated chain info in status section")
 }
@@ -970,28 +1141,41 @@ func (t *TviewRenderer) updateBlockInfo(ctx context.Context) {
 		case <-ticker.C:
 			t.fetchBlockInfo(ctx)
 			// Trigger a metrics pane update to reflect new block info
-			t.app.QueueUpdateDraw(func() {
-				if t.homeMetricsPane != nil {
-					// Force a metrics update by creating a dummy metrics update
-					// This will cause updateMetricsPane to be called with fresh block data
-					t.updateMetricsPane(metrics.MetricUpdate{
-						Name:  "blockInfo",
-						Value: "update",
-						Time:  time.Now(),
-					})
-				}
-			})
+			// Direct Draw() call is safe from any goroutine according to tview docs
+			if t.homeMetricsPane != nil {
+				// Force a metrics update by creating a dummy metrics update
+				// This will cause updateMetricsPane to be called with fresh block data
+				t.updateMetricsPane(metrics.MetricUpdate{
+					Name:  "blockInfo",
+					Value: "update",
+					Time:  time.Now(),
+				})
+			}
+			t.throttledDraw()
 		}
 	}
 }
 
-// insertBlockSorted inserts a block in the correct position to maintain descending order by block number
+// insertBlockSorted inserts a block in the correct position to maintain current sort order
 func (t *TviewRenderer) insertBlockSorted(block rpctypes.PolyBlock) {
-	t.blocksMu.Lock()
-	defer t.blocksMu.Unlock()
-	
 	blockNum := block.Number()
 	blockHash := block.Hash().Hex()
+	
+	// Get current sort settings first, outside of locks
+	t.viewStateMu.RLock()
+	sortColIndex := t.viewState.sortColumnIndex
+	sortAsc := t.viewState.sortAscending
+	t.viewStateMu.RUnlock()
+	
+	// Get the sort column definition
+	if sortColIndex < 0 || sortColIndex >= len(t.columns) {
+		sortColIndex = 0 // Default to first column
+	}
+	column := t.columns[sortColIndex]
+	
+	// Now acquire blocks lock and insert
+	t.blocksMu.Lock()
+	defer t.blocksMu.Unlock()
 	
 	// Check if block already exists
 	if _, exists := t.blocksByHash[blockHash]; exists {
@@ -999,16 +1183,33 @@ func (t *TviewRenderer) insertBlockSorted(block rpctypes.PolyBlock) {
 		return
 	}
 	
-	// Find insertion point using binary search for descending order
+	// Find insertion point using binary search with current sort order
 	left, right := 0, len(t.blocks)
 	for left < right {
 		mid := (left + right) / 2
-		if t.blocks[mid].Number().Cmp(blockNum) > 0 {
-			// Mid block is newer (higher number), search right half
-			left = mid + 1
+		
+		// Extract values for comparison
+		midVal := column.SortFunc(t.blocks[mid])
+		newVal := column.SortFunc(block)
+		
+		// Compare using the column's comparison function
+		cmp := column.CompareFunc(midVal, newVal)
+		
+		// Apply sort direction logic
+		if sortAsc {
+			// Ascending: if mid < new, search right half
+			if cmp < 0 {
+				left = mid + 1
+			} else {
+				right = mid
+			}
 		} else {
-			// Mid block is older (lower number), search left half
-			right = mid
+			// Descending: if mid > new, search right half
+			if cmp > 0 {
+				left = mid + 1
+			} else {
+				right = mid
+			}
 		}
 	}
 	
@@ -1035,6 +1236,92 @@ func (t *TviewRenderer) insertBlockSorted(block rpctypes.PolyBlock) {
 		Int("position", left).
 		Int("totalBlocks", len(t.blocks)).
 		Msg("Block inserted in sorted order")
+}
+
+// resortBlocks sorts the existing blocks array using the current sort settings
+func (t *TviewRenderer) resortBlocks() {
+	// Get sort settings first, outside of any locks
+	t.viewStateMu.RLock()
+	sortColIndex := t.viewState.sortColumnIndex
+	sortAsc := t.viewState.sortAscending
+	t.viewStateMu.RUnlock()
+	
+	if sortColIndex < 0 || sortColIndex >= len(t.columns) {
+		log.Error().Int("index", sortColIndex).Msg("Invalid sort column index")
+		return
+	}
+	
+	column := t.columns[sortColIndex]
+	
+	// Now acquire blocks lock and sort
+	t.blocksMu.Lock()
+	defer t.blocksMu.Unlock()
+	
+	sort.Slice(t.blocks, func(i, j int) bool {
+		// Extract sort values
+		valI := column.SortFunc(t.blocks[i])
+		valJ := column.SortFunc(t.blocks[j])
+		
+		// Compare using the column's comparison function
+		cmp := column.CompareFunc(valI, valJ)
+		
+		// Apply sort direction
+		if sortAsc {
+			return cmp < 0
+		} else {
+			return cmp > 0
+		}
+	})
+	
+	log.Debug().
+		Str("column", column.Key).
+		Bool("ascending", sortAsc).
+		Int("blocks", len(t.blocks)).
+		Msg("Resorted blocks")
+}
+
+// getCurrentSortColumn returns the current sort column definition
+func (t *TviewRenderer) getCurrentSortColumn() ColumnDef {
+	t.viewStateMu.RLock()
+	defer t.viewStateMu.RUnlock()
+	
+	if t.viewState.sortColumnIndex < 0 || t.viewState.sortColumnIndex >= len(t.columns) {
+		return t.columns[0] // Default to first column
+	}
+	return t.columns[t.viewState.sortColumnIndex]
+}
+
+// changeSortColumn changes the sort column by delta (-1 for left, +1 for right)
+func (t *TviewRenderer) changeSortColumn(delta int) {
+	t.viewStateMu.Lock()
+	defer t.viewStateMu.Unlock()
+	
+	newIndex := t.viewState.sortColumnIndex + delta
+	if newIndex < 0 {
+		newIndex = len(t.columns) - 1 // Wrap to last column
+	} else if newIndex >= len(t.columns) {
+		newIndex = 0 // Wrap to first column
+	}
+	
+	t.viewState.sortColumnIndex = newIndex
+	t.viewState.sortColumn = t.columns[newIndex].Key
+	
+	log.Debug().
+		Int("newIndex", newIndex).
+		Str("newColumn", t.viewState.sortColumn).
+		Msg("Changed sort column")
+}
+
+// toggleSortDirection reverses the current sort direction
+func (t *TviewRenderer) toggleSortDirection() {
+	t.viewStateMu.Lock()
+	defer t.viewStateMu.Unlock()
+	
+	t.viewState.sortAscending = !t.viewState.sortAscending
+	
+	log.Debug().
+		Bool("ascending", t.viewState.sortAscending).
+		Msg("Toggled sort direction")
 }
 
 // applyViewState applies the current view state to the table selection
