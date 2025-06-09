@@ -1,7 +1,9 @@
 package renderer
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"sort"
@@ -147,7 +149,9 @@ type TviewRenderer struct {
 	homeStatusPane  *tview.TextView // Left pane: Status information (1/3 width)
 	homeMetricsPane *tview.Table    // Right pane: Metrics table (2/3 width)
 	homeTable       *tview.Table
-	blockDetailPage *tview.TextView
+	blockDetailPage *tview.Flex     // Changed to Flex for side-by-side layout
+	blockDetailLeft *tview.Table    // Left pane: Transaction table
+	blockDetailRight *tview.TextView // Right pane: Raw JSON
 	txDetailPage    *tview.TextView
 	infoPage        *tview.TextView
 	helpPage        *tview.TextView
@@ -329,16 +333,42 @@ func (t *TviewRenderer) createHomePage() {
 		AddItem(t.homeTable, 0, 1, true)         // Table: takes remaining space
 }
 
-// createBlockDetailPage creates the block detail view
+// createBlockDetailPage creates the block detail view with side-by-side panes
 func (t *TviewRenderer) createBlockDetailPage() {
-	t.blockDetailPage = tview.NewTextView().
+	// Create left pane as transaction table
+	t.blockDetailLeft = tview.NewTable().
+		SetBorders(false).
+		SetSelectable(true, false).
+		SetFixed(1, 0).   // Fix the header row
+		SetSeparator(' ') // Use space as separator
+	t.blockDetailLeft.SetBorder(true).SetTitle(" Transactions ")
+
+	// Set up transaction table headers
+	headers := []string{"INDEX", "FROM", "TO", "GAS LIMIT", "INPUT"}
+	aligns := []int{tview.AlignRight, tview.AlignLeft, tview.AlignLeft, tview.AlignRight, tview.AlignLeft}
+	expansions := []int{1, 3, 3, 2, 2}
+	
+	for col, header := range headers {
+		t.blockDetailLeft.SetCell(0, col, tview.NewTableCell(header).
+			SetTextColor(tview.Styles.PrimaryTextColor).
+			SetAlign(aligns[col]).
+			SetExpansion(expansions[col]).
+			SetAttributes(tcell.AttrBold))
+	}
+
+	// Create right pane for raw JSON
+	t.blockDetailRight = tview.NewTextView().
 		SetDynamicColors(true).
 		SetRegions(true).
 		SetWordWrap(true)
+	t.blockDetailRight.SetBorder(true).SetTitle(" Raw JSON ")
+	t.blockDetailRight.SetText("Select a block to view its JSON representation")
 
-	t.blockDetailPage.SetTitle(" Block Detail ")
-	t.blockDetailPage.SetBorder(true)
-	t.blockDetailPage.SetText("Block detail view - placeholder\n\nPress 'Esc' to go back to home")
+	// Create flex container to hold both panes side by side
+	t.blockDetailPage = tview.NewFlex().
+		SetDirection(tview.FlexColumn).
+		AddItem(t.blockDetailLeft, 0, 1, true).  // Left pane: 50% width, focusable
+		AddItem(t.blockDetailRight, 0, 1, true) // Right pane: 50% width, focusable
 }
 
 // createTransactionDetailPage creates the transaction detail view
@@ -494,6 +524,29 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 				t.updateTableHeaders()
 				return nil
 			}
+		case "block-detail":
+			switch event.Key() {
+			case tcell.KeyTab:
+				// Switch focus between left and right panes
+				focused := t.app.GetFocus()
+				if focused == t.blockDetailLeft {
+					t.app.SetFocus(t.blockDetailRight)
+				} else {
+					t.app.SetFocus(t.blockDetailLeft)
+				}
+				return nil
+			case tcell.KeyEnter:
+				// Handle Enter on transaction table for future transaction detail functionality
+				focused := t.app.GetFocus()
+				if focused == t.blockDetailLeft {
+					// Transaction selection logic can be added here in the future
+					// For now, just log the selection
+					if row, _ := t.blockDetailLeft.GetSelection(); row > 0 {
+						log.Debug().Int("txIndex", row-1).Msg("Transaction selected")
+					}
+				}
+				return nil
+			}
 		}
 
 		return event
@@ -502,22 +555,71 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 
 // showBlockDetail navigates to block detail page and populates it
 func (t *TviewRenderer) showBlockDetail(block rpctypes.PolyBlock) {
-	// Update block detail content
-	detailText := fmt.Sprintf(`Block Details:
+	// Clear existing table rows (except header)
+	rowCount := t.blockDetailLeft.GetRowCount()
+	for row := 1; row < rowCount; row++ {
+		for col := 0; col < 5; col++ {
+			t.blockDetailLeft.SetCell(row, col, nil)
+		}
+	}
 
-Block Number: %s
-Block Hash: %s
-Parent Hash: %s
-Transactions: %d
+	// Populate transaction table
+	transactions := block.Transactions()
+	for i, tx := range transactions {
+		row := i + 1 // +1 to account for header row
 
-Press 'Esc' to go back to home`,
-		block.Number().String(),
-		block.Hash().Hex(),
-		block.ParentHash().Hex(),
-		len(block.Transactions()))
+		// Column 0: Transaction index
+		t.blockDetailLeft.SetCell(row, 0, tview.NewTableCell(strconv.Itoa(i)).SetAlign(tview.AlignRight))
 
-	t.blockDetailPage.SetText(detailText)
+		// Column 1: From address (truncated)
+		fromAddr := truncateHash(tx.From().Hex(), 6, 4)
+		t.blockDetailLeft.SetCell(row, 1, tview.NewTableCell(fromAddr).SetAlign(tview.AlignLeft))
+
+		// Column 2: To address (truncated), handle contract creation (empty address)
+		toAddr := "N/A"
+		if tx.To().Hex() != "0x0000000000000000000000000000000000000000" {
+			toAddr = truncateHash(tx.To().Hex(), 6, 4)
+		} else {
+			toAddr = "CONTRACT"
+		}
+		t.blockDetailLeft.SetCell(row, 2, tview.NewTableCell(toAddr).SetAlign(tview.AlignLeft))
+
+		// Column 3: Gas limit
+		gasLimit := formatNumber(tx.Gas())
+		t.blockDetailLeft.SetCell(row, 3, tview.NewTableCell(gasLimit).SetAlign(tview.AlignRight))
+
+		// Column 4: First 4 bytes of input data
+		inputData := "N/A"
+		if len(tx.Data()) >= 4 {
+			inputData = fmt.Sprintf("0x%x", tx.Data()[:4])
+		} else if len(tx.Data()) > 0 {
+			inputData = fmt.Sprintf("0x%x", tx.Data())
+		}
+		t.blockDetailLeft.SetCell(row, 4, tview.NewTableCell(inputData).SetAlign(tview.AlignLeft))
+	}
+
+	// Update table title with transaction count
+	title := fmt.Sprintf(" Transactions (%d) ", len(transactions))
+	t.blockDetailLeft.SetTitle(title)
+
+	// Right pane shows pretty-printed JSON of the block
+	blockJSON, err := block.MarshalJSON()
+	if err != nil {
+		t.blockDetailRight.SetText(fmt.Sprintf("Error marshaling block JSON: %v", err))
+	} else {
+		// Pretty print the JSON
+		var prettyJSON bytes.Buffer
+		if err := json.Indent(&prettyJSON, blockJSON, "", "  "); err != nil {
+			t.blockDetailRight.SetText(fmt.Sprintf("Error formatting JSON: %v", err))
+		} else {
+			t.blockDetailRight.SetText(prettyJSON.String())
+		}
+	}
+	
 	t.pages.SwitchToPage("block-detail")
+	
+	// Set focus to the left pane (transaction table) by default
+	t.app.SetFocus(t.blockDetailLeft)
 }
 
 // Start begins the TUI rendering
