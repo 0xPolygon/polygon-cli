@@ -16,6 +16,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/indexer"
 	"github.com/0xPolygon/polygon-cli/indexer/metrics"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/rs/zerolog/log"
@@ -194,7 +195,8 @@ type TviewRenderer struct {
 	countersMu  sync.RWMutex
 
 	// Modals
-	quitModal *tview.Modal
+	quitModal   *tview.Modal
+	searchForm  *tview.Form
 
 	// Modal state management
 	isModalActive   bool
@@ -260,6 +262,9 @@ func (t *TviewRenderer) createPages() {
 	// Create Quit confirmation modal
 	t.createQuitModal()
 
+	// Create Search modal
+	t.createSearchModal()
+
 	// Add all pages to the container
 	t.pages.AddPage("home", t.homePage, true, true)
 	t.pages.AddPage("block-detail", t.blockDetailPage, true, false)
@@ -267,6 +272,7 @@ func (t *TviewRenderer) createPages() {
 	t.pages.AddPage("info", t.infoPage, true, false)
 	t.pages.AddPage("help", t.helpPage, true, false)
 	t.pages.AddPage("quit", t.quitModal, true, false)
+	t.pages.AddPage("search", t.searchForm, true, false)
 }
 
 // createHomePage creates the main page with 2-column top section and block listing table
@@ -459,6 +465,7 @@ func (t *TviewRenderer) createHelpPage() {
 q - Quit (with confirmation)
 h - Show this help page
 i - Show information page
+/ or s - Open search modal
 Esc - Go back to home page
 Enter - View block details (on home page)
 
@@ -490,6 +497,35 @@ func (t *TviewRenderer) createQuitModal() {
 		})
 }
 
+// createSearchModal creates the search dialog using Form
+func (t *TviewRenderer) createSearchModal() {
+	t.searchForm = tview.NewForm().
+		AddInputField("Search", "", 50, nil, nil).
+		AddButton("Search", func() {
+			// Get the search query from the input field
+			query := t.searchForm.GetFormItem(0).(*tview.InputField).GetText()
+			if strings.TrimSpace(query) != "" {
+				t.performSearch(query)
+			}
+			t.hideModal()
+		}).
+		AddButton("Cancel", func() {
+			t.hideModal()
+		})
+
+	// Set border and title
+	t.searchForm.SetBorder(true).SetTitle(" Search ")
+
+	// Handle Escape key to close modal
+	t.searchForm.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape {
+			t.hideModal()
+			return nil
+		}
+		return event
+	})
+}
+
 // setupKeyboardShortcuts configures global keyboard shortcuts
 func (t *TviewRenderer) setupKeyboardShortcuts() {
 	t.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -511,6 +547,12 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 			return event // Let modal handle other keys
 		}
 
+		// Handle search modal
+		if currentPage == "search" {
+			// Let the modal handle all input for now
+			return event
+		}
+
 		// Global shortcuts (work from any page)
 		switch event.Rune() {
 		case 'q', 'Q':
@@ -521,6 +563,9 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 			return nil
 		case 'i', 'I':
 			t.pages.SwitchToPage("info")
+			return nil
+		case '/', 's', 'S':
+			t.showModal("search")
 			return nil
 		}
 
@@ -2266,6 +2311,141 @@ func hexToDecimal(value interface{}) (*big.Int, error) {
 	}
 }
 
+// Search functionality methods
+
+// performSearch parses the search query and determines the search type
+func (t *TviewRenderer) performSearch(query string) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return
+	}
+
+	// Try to parse as a number (block number)
+	if blockNum, err := strconv.ParseUint(query, 10, 64); err == nil {
+		go t.searchBlockByNumber(blockNum)
+		return
+	}
+
+	// Check if it looks like a hash (0x prefix and 66 characters for full hash)
+	if strings.HasPrefix(query, "0x") && len(query) == 66 {
+		go t.searchByHash(query)
+		return
+	}
+
+	// Show error for invalid format
+	t.showSearchError("Invalid input. Enter a block number or hash (0x...)")
+}
+
+// searchBlockByNumber searches for a block by its number
+func (t *TviewRenderer) searchBlockByNumber(blockNum uint64) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Convert to big.Int for the indexer call
+	blockNumber := big.NewInt(int64(blockNum))
+	
+	block, err := t.indexer.GetBlock(ctx, blockNumber)
+	if err != nil {
+		log.Debug().Err(err).Uint64("blockNum", blockNum).Msg("Block not found")
+		t.showSearchError(fmt.Sprintf("Block #%d not found", blockNum))
+		return
+	}
+
+	// Navigate to block detail page
+	t.app.QueueUpdateDraw(func() {
+		t.showBlockDetail(block)
+	})
+}
+
+// searchByHash searches for a block or transaction by hash
+func (t *TviewRenderer) searchByHash(hash string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Convert string to common.Hash
+	hashBytes := common.HexToHash(hash)
+
+	// Try to find as a block first
+	if block, err := t.indexer.GetBlock(ctx, hashBytes); err == nil {
+		// Found as block - navigate to block detail
+		t.app.QueueUpdateDraw(func() {
+			t.showBlockDetail(block)
+		})
+		return
+	}
+
+	// Try to find as a transaction
+	if tx, err := t.indexer.GetTransaction(ctx, hashBytes); err == nil {
+		// Found as transaction - need to get the containing block
+		go t.showTransactionWithBlock(tx, hashBytes)
+		return
+	}
+
+	// Not found as either block or transaction
+	log.Debug().Str("hash", hash).Msg("Hash not found as block or transaction")
+	t.showSearchError(fmt.Sprintf("Hash %s not found", truncateHash(hash, 8, 8)))
+}
+
+// showTransactionWithBlock gets a transaction's block and shows the transaction detail
+func (t *TviewRenderer) showTransactionWithBlock(tx rpctypes.PolyTransaction, txHash common.Hash) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Get the receipt to find the block number
+	receipt, err := t.indexer.GetReceipt(ctx, txHash)
+	if err != nil {
+		log.Debug().Err(err).Str("txHash", txHash.Hex()).Msg("Failed to get receipt")
+		t.showSearchError("Transaction found but could not load details")
+		return
+	}
+
+	// Get the block number from the receipt
+	blockNumber := receipt.BlockNumber()
+	
+	// Get the full block
+	block, err := t.indexer.GetBlock(ctx, blockNumber)
+	if err != nil {
+		log.Debug().Err(err).Str("blockNum", blockNumber.String()).Msg("Failed to get block for transaction")
+		t.showSearchError("Transaction found but could not load block context")
+		return
+	}
+
+	// Find the transaction index within the block
+	transactions := block.Transactions()
+	txIndex := -1
+	for i, blockTx := range transactions {
+		if blockTx.Hash().Hex() == txHash.Hex() {
+			txIndex = i
+			break
+		}
+	}
+
+	if txIndex == -1 {
+		log.Debug().Str("txHash", txHash.Hex()).Msg("Transaction not found in its block")
+		t.showSearchError("Transaction found but could not locate in block")
+		return
+	}
+
+	// Update UI on main thread
+	t.app.QueueUpdateDraw(func() {
+		// Set the block as current so back navigation works
+		t.currentBlockMu.Lock()
+		t.currentBlock = block
+		t.currentBlockMu.Unlock()
+
+		// Show transaction detail
+		t.showTransactionDetail(tx, txIndex)
+	})
+}
+
+// showSearchError displays an error message to the user
+func (t *TviewRenderer) showSearchError(message string) {
+	// For now, just log the error. In the future, we could show a toast or status message
+	log.Info().Str("searchError", message).Msg("Search error")
+	
+	// TODO: Could implement a status bar or toast notification here
+}
+
 // Modal management methods
 
 // showModal displays a modal and tracks its state
@@ -2282,18 +2462,26 @@ func (t *TviewRenderer) showModal(name string) {
 	switch name {
 	case "quit":
 		t.app.SetFocus(t.quitModal)
+	case "search":
+		// Clear any existing text and focus on the form
+		inputField := t.searchForm.GetFormItem(0).(*tview.InputField)
+		inputField.SetText("")
+		t.app.SetFocus(t.searchForm)
 	}
 }
 
 // hideModal hides the currently active modal and clears state
 func (t *TviewRenderer) hideModal() {
 	t.modalStateMu.Lock()
+	modalName := t.activeModalName
 	t.isModalActive = false
 	t.activeModalName = ""
 	t.modalStateMu.Unlock()
 
 	// Hide the current modal page
-	t.pages.HidePage("quit") // For now, only quit modal exists
+	if modalName != "" {
+		t.pages.HidePage(modalName)
+	}
 	
 	// Return focus to the home page
 	t.app.SetFocus(t.homeTable)
