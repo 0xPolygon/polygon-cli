@@ -187,11 +187,11 @@ type TviewRenderer struct {
 	minDrawInterval time.Duration
 
 	// Transaction counters for metrics
-	eoaCount     uint64
-	deployCount  uint64
-	erc20Count   uint64
-	nftCount     uint64
-	countersMu   sync.RWMutex
+	eoaCount    uint64
+	deployCount uint64
+	erc20Count  uint64
+	nftCount    uint64
+	countersMu  sync.RWMutex
 
 	// Modals
 	quitModal *tview.Modal
@@ -288,7 +288,7 @@ func (t *TviewRenderer) createHomePage() {
 	// Initialize with 8 rows of placeholders
 	for row := 0; row < 8; row++ {
 		t.homeMetricsPane.SetCell(row, 0,
-			tview.NewTableCell(fmt.Sprintf("Row %d placeholder ", row+1)). // Add trailing space
+			tview.NewTableCell(fmt.Sprintf("Initializing ", row+1)). // Add trailing space
 											SetAlign(tview.AlignLeft).
 											SetExpansion(1))
 	}
@@ -1761,7 +1761,8 @@ func (t *TviewRenderer) calculateTransactionCounters() (uint64, uint64) {
 		transactions := block.Transactions()
 		for _, tx := range transactions {
 			toAddr := tx.To().Hex()
-			hasInputData := len(tx.Data()) > 0
+			dataStr := tx.DataStr()
+			hasInputData := len(dataStr) > 2 // More than just "0x"
 
 			if !hasInputData && toAddr != "0x0000000000000000000000000000000000000000" {
 				// EOA transaction: no input data and not sent to zero address
@@ -1783,33 +1784,21 @@ func (t *TviewRenderer) calculateERC20NFTCounters() (uint64, uint64) {
 
 	var erc20Count, nftCount uint64
 
-	// ERC20 method selectors
-	erc20Selectors := map[string]bool{
-		"a9059cbb": true, // transfer(address,uint256)
-	}
-
-	// NFT method selectors
-	nftSelectors := map[string]bool{
-		"b88d4fde": true, // safeTransferFrom(address,address,uint256,bytes)
-		"42842e0e": true, // safeTransferFrom(address,address,uint256)
-		"a22cb465": true, // setApprovalForAll(address,bool)
-	}
-
 	for _, block := range t.blocks {
 		transactions := block.Transactions()
 		for _, tx := range transactions {
+			dataStr := tx.DataStr()
 			// Check if transaction has enough input data for a method selector
-			if len(tx.Data()) >= 4 {
-				// Extract first 4 bytes as method selector (without 0x prefix)
-				methodSelector := fmt.Sprintf("%x", tx.Data()[:4])
-
-				// Check against ERC20 selectors
-				if erc20Selectors[methodSelector] {
+			// "0x" + 8 hex chars = 4 bytes
+			if len(dataStr) >= 10 {
+				// Direct string prefix matching with 0x prefix
+				if strings.HasPrefix(dataStr, "0xa9059cbb") {
+					// ERC20 transfer(address,uint256)
 					erc20Count++
-				}
-
-				// Check against NFT selectors
-				if nftSelectors[methodSelector] {
+				} else if strings.HasPrefix(dataStr, "0xb88d4fde") || // safeTransferFrom(address,address,uint256,bytes)
+					strings.HasPrefix(dataStr, "0x42842e0e") || // safeTransferFrom(address,address,uint256)
+					strings.HasPrefix(dataStr, "0xa22cb465") { // setApprovalForAll(address,bool)
+					// NFT methods
 					nftCount++
 				}
 			}

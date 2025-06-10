@@ -8,6 +8,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/chainstore"
 	"github.com/0xPolygon/polygon-cli/cmd/monitorv2/renderer"
 	"github.com/0xPolygon/polygon-cli/indexer"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
@@ -28,6 +29,14 @@ var MonitorV2Cmd = &cobra.Command{
 	Use:   "monitorv2",
 	Short: "Monitor v2 command stub",
 	Long:  usage,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Set default verbosity to Error level (300) if not explicitly set by user
+		verbosityFlag := cmd.Flag("verbosity")
+		if verbosityFlag != nil && !verbosityFlag.Changed {
+			util.SetLogLevel(300) // Error level
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if rpcURL == "" {
 			return fmt.Errorf("--rpc-url is required")
@@ -78,6 +87,6 @@ var MonitorV2Cmd = &cobra.Command{
 
 func init() {
 	MonitorV2Cmd.Flags().StringVar(&rpcURL, "rpc-url", "", "RPC endpoint URL (required)")
-	MonitorV2Cmd.Flags().StringVar(&rendererType, "renderer", "json", "Renderer type (json, tview, tui)")
+	MonitorV2Cmd.Flags().StringVar(&rendererType, "renderer", "tui", "Renderer type (json, tview, tui)")
 	MonitorV2Cmd.Flags().StringVar(&pprofAddr, "pprof", "", "Enable pprof server on specified address (e.g. 127.0.0.1:6060)")
 }

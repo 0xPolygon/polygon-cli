@@ -242,6 +242,7 @@ type (
 		To() ethcommon.Address
 		From() ethcommon.Address
 		Data() []byte
+		DataStr() string // Raw hex string of transaction data
 		Value() *big.Int
 		Gas() uint64
 		Nonce() uint64
@@ -542,6 +543,9 @@ func (i *implPolyTransaction) From() ethcommon.Address {
 }
 func (i *implPolyTransaction) Data() []byte {
 	return i.inner.Input.ToBytes()
+}
+func (i *implPolyTransaction) DataStr() string {
+	return string(i.inner.Input)
 }
 func (i *implPolyTransaction) String() string {
 	d, err := json.Marshal(i)
