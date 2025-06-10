@@ -186,6 +186,11 @@ type TviewRenderer struct {
 	drawMu          sync.Mutex
 	minDrawInterval time.Duration
 
+	// Transaction counters for metrics
+	eoaCount     uint64
+	deployCount  uint64
+	countersMu   sync.RWMutex
+
 	// Modals
 	quitModal *tview.Modal
 }
@@ -412,13 +417,13 @@ func (t *TviewRenderer) createTransactionDetailPage() {
 	// Create right flex container to stack the JSON views vertically
 	t.txDetailRight = tview.NewFlex().
 		SetDirection(tview.FlexRow).
-		AddItem(t.txDetailTxJSON, 0, 1, false).   // Top: Transaction JSON (50% height)
+		AddItem(t.txDetailTxJSON, 0, 1, false).  // Top: Transaction JSON (50% height)
 		AddItem(t.txDetailRcptJSON, 0, 1, false) // Bottom: Receipt JSON (50% height)
 
 	// Create main flex container to hold left pane and right stack side by side
 	t.txDetailPage = tview.NewFlex().
 		SetDirection(tview.FlexColumn).
-		AddItem(t.txDetailLeft, 0, 1, true).  // Left pane: 50% width, focusable
+		AddItem(t.txDetailLeft, 0, 1, true). // Left pane: 50% width, focusable
 		AddItem(t.txDetailRight, 0, 1, true) // Right stack: 50% width, focusable
 }
 
@@ -713,7 +718,7 @@ func (t *TviewRenderer) showTransactionDetail(tx rpctypes.PolyTransaction, txInd
 
 	// Switch to transaction detail page immediately
 	t.pages.SwitchToPage("tx-detail")
-	
+
 	// Set focus to the left pane by default
 	t.app.SetFocus(t.txDetailLeft)
 
@@ -893,7 +898,7 @@ func (t *TviewRenderer) extractEventSignatures(receipt rpctypes.PolyReceipt) []s
 
 	// Use a map to collect unique event signatures
 	uniqueSigs := make(map[string]bool)
-	
+
 	for _, logEntry := range logs {
 		// Check if the log has topics and the first topic exists (event signature)
 		if len(logEntry.Topics) > 0 {
@@ -917,11 +922,11 @@ func findBestSignature(signatures []chainstore.Signature) chainstore.Signature {
 	if len(signatures) == 0 {
 		return chainstore.Signature{}
 	}
-	
+
 	if len(signatures) == 1 {
 		return signatures[0]
 	}
-	
+
 	// Find signature with minimum ID (earliest submission, more likely to be correct)
 	bestSig := signatures[0]
 	for _, sig := range signatures[1:] {
@@ -929,7 +934,7 @@ func findBestSignature(signatures []chainstore.Signature) chainstore.Signature {
 			bestSig = sig
 		}
 	}
-	
+
 	return bestSig
 }
 
@@ -1029,7 +1034,7 @@ func (t *TviewRenderer) loadTransactionJSONAsync(tx rpctypes.PolyTransaction) {
 func (t *TviewRenderer) loadTransactionDetailsAsync(tx rpctypes.PolyTransaction, txIndex int) {
 	// Create basic transaction details without signature lookup first
 	basicDetails := t.createBasicTransactionDetails(tx, txIndex)
-	
+
 	// Update UI with basic details immediately
 	t.app.QueueUpdateDraw(func() {
 		t.txDetailLeft.SetText(basicDetails)
@@ -1044,13 +1049,13 @@ func (t *TviewRenderer) loadEnhancedTransactionDetailsAsync(tx rpctypes.PolyTran
 	// Channels to receive results
 	methodSigChan := make(chan string, 1)
 	eventLogsChan := make(chan string, 1)
-	
+
 	// Start method signature lookup
 	go func() {
 		enhancedDetails := t.createHumanReadableTransactionDetailsSync(tx, txIndex)
 		methodSigChan <- enhancedDetails
 	}()
-	
+
 	// Start event logs lookup
 	go func() {
 		// Create context with timeout for receipt fetching
@@ -1073,12 +1078,12 @@ func (t *TviewRenderer) loadEnhancedTransactionDetailsAsync(tx rpctypes.PolyTran
 
 		// Look up event signature details
 		eventDetails := t.getEventSignatureDetails(eventSignatures)
-		
+
 		// Build event logs section for display
 		eventLogsText := t.buildEventLogsText(receipt, eventDetails)
 		eventLogsChan <- eventLogsText
 	}()
-	
+
 	// Wait for both responses and combine them
 	var methodDetails, eventLogs string
 	for i := 0; i < 2; i++ {
@@ -1089,13 +1094,13 @@ func (t *TviewRenderer) loadEnhancedTransactionDetailsAsync(tx rpctypes.PolyTran
 			// Event logs received
 		}
 	}
-	
+
 	// Combine the results
 	finalDetails := methodDetails
 	if eventLogs != "" {
 		finalDetails += "\n" + eventLogs
 	}
-	
+
 	// Update UI with complete details
 	t.app.QueueUpdateDraw(func() {
 		t.txDetailLeft.SetText(finalDetails)
@@ -1160,7 +1165,7 @@ func (t *TviewRenderer) buildEventLogsText(receipt rpctypes.PolyReceipt, eventDe
 			// Get the event signature hash and look up its human-readable name
 			eventSigHash := logEntry.Topics[0].ToHash().Hex()
 			eventName := "Unknown"
-			
+
 			if eventDetails != nil {
 				if name, exists := eventDetails[eventSigHash]; exists {
 					eventName = name
@@ -1169,12 +1174,12 @@ func (t *TviewRenderer) buildEventLogsText(receipt rpctypes.PolyReceipt, eventDe
 
 			// Format: "  [index] EventName from 0x1234...5678"
 			logLine := fmt.Sprintf("  [%d] %s from %s", i, eventName, contractAddrShort)
-			
+
 			// Add topic count if there are indexed parameters
 			if len(logEntry.Topics) > 1 {
 				logLine += fmt.Sprintf(" (%d indexed args)", len(logEntry.Topics)-1)
 			}
-			
+
 			logLines = append(logLines, logLine)
 		} else {
 			// Anonymous event (no topics)
@@ -1415,9 +1420,13 @@ func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
 			// Use cached txpool status
 			cells = [5]string{"POOL", txPoolPendingStr, txPoolQueuedStr, "[placeholder]", "[placeholder]"}
 		case 4: // SIG (1)
-			cells = [5]string{"SIG1", "EOA [placeholder]", "ERC20 [placeholder]", "NFT [placeholder]", "[placeholder]"}
+			// Calculate transaction counters
+			eoaCount, deployCount := t.calculateTransactionCounters()
+			eoaStr := "EOA " + formatNumber(eoaCount)
+			deployStr := "deploy " + formatNumber(deployCount)
+			cells = [5]string{"SIG1", eoaStr, deployStr, "[placeholder]", "[placeholder]"}
 		case 5: // SIG (2)
-			cells = [5]string{"SIG2", "Contract Deploy [placeholder]", "Uniswap [placeholder]", "Other [placeholder]", "[placeholder]"}
+			cells = [5]string{"SIG2", "ERC20 [placeholder]", "NFT [placeholder]", "Other [placeholder]", "[placeholder]"}
 		case 6: // ACC
 			cells = [5]string{"ACCO", "Unique From [placeholder]", "Unique To [placeholder]", "[placeholder]", "[placeholder]"}
 		case 7: // PER
@@ -1733,6 +1742,32 @@ func formatNumber(num uint64) string {
 		result = append(result, char)
 	}
 	return string(result)
+}
+
+// calculateTransactionCounters calculates EOA and contract deployment counters from all blocks
+func (t *TviewRenderer) calculateTransactionCounters() (uint64, uint64) {
+	t.blocksMu.RLock()
+	defer t.blocksMu.RUnlock()
+
+	var eoaCount, deployCount uint64
+
+	for _, block := range t.blocks {
+		transactions := block.Transactions()
+		for _, tx := range transactions {
+			toAddr := tx.To().Hex()
+			hasInputData := len(tx.Data()) > 0
+
+			if !hasInputData && toAddr != "0x0000000000000000000000000000000000000000" {
+				// EOA transaction: no input data and not sent to zero address
+				eoaCount++
+			} else if hasInputData && toAddr == "0x0000000000000000000000000000000000000000" {
+				// Contract deployment: has input data and sent to zero address
+				deployCount++
+			}
+		}
+	}
+
+	return eoaCount, deployCount
 }
 
 // formatGasPercentage calculates and formats gas usage percentage
