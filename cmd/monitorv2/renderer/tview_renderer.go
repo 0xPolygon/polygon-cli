@@ -189,6 +189,8 @@ type TviewRenderer struct {
 	// Transaction counters for metrics
 	eoaCount     uint64
 	deployCount  uint64
+	erc20Count   uint64
+	nftCount     uint64
 	countersMu   sync.RWMutex
 
 	// Modals
@@ -1426,7 +1428,11 @@ func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
 			deployStr := "deploy " + formatNumber(deployCount)
 			cells = [5]string{"SIG1", eoaStr, deployStr, "[placeholder]", "[placeholder]"}
 		case 5: // SIG (2)
-			cells = [5]string{"SIG2", "ERC20 [placeholder]", "NFT [placeholder]", "Other [placeholder]", "[placeholder]"}
+			// Calculate ERC20 and NFT transaction counters
+			erc20Count, nftCount := t.calculateERC20NFTCounters()
+			erc20Str := "ERC20 " + formatNumber(erc20Count)
+			nftStr := "NFT " + formatNumber(nftCount)
+			cells = [5]string{"SIG2", erc20Str, nftStr, "Other [placeholder]", "[placeholder]"}
 		case 6: // ACC
 			cells = [5]string{"ACCO", "Unique From [placeholder]", "Unique To [placeholder]", "[placeholder]", "[placeholder]"}
 		case 7: // PER
@@ -1768,6 +1774,49 @@ func (t *TviewRenderer) calculateTransactionCounters() (uint64, uint64) {
 	}
 
 	return eoaCount, deployCount
+}
+
+// calculateERC20NFTCounters calculates ERC20 and NFT transaction counters from all blocks
+func (t *TviewRenderer) calculateERC20NFTCounters() (uint64, uint64) {
+	t.blocksMu.RLock()
+	defer t.blocksMu.RUnlock()
+
+	var erc20Count, nftCount uint64
+
+	// ERC20 method selectors
+	erc20Selectors := map[string]bool{
+		"a9059cbb": true, // transfer(address,uint256)
+	}
+
+	// NFT method selectors
+	nftSelectors := map[string]bool{
+		"b88d4fde": true, // safeTransferFrom(address,address,uint256,bytes)
+		"42842e0e": true, // safeTransferFrom(address,address,uint256)
+		"a22cb465": true, // setApprovalForAll(address,bool)
+	}
+
+	for _, block := range t.blocks {
+		transactions := block.Transactions()
+		for _, tx := range transactions {
+			// Check if transaction has enough input data for a method selector
+			if len(tx.Data()) >= 4 {
+				// Extract first 4 bytes as method selector (without 0x prefix)
+				methodSelector := fmt.Sprintf("%x", tx.Data()[:4])
+
+				// Check against ERC20 selectors
+				if erc20Selectors[methodSelector] {
+					erc20Count++
+				}
+
+				// Check against NFT selectors
+				if nftSelectors[methodSelector] {
+					nftCount++
+				}
+			}
+		}
+	}
+
+	return erc20Count, nftCount
 }
 
 // formatGasPercentage calculates and formats gas usage percentage
