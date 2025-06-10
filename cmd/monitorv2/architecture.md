@@ -81,21 +81,58 @@ The **Renderer** interface supports multiple output formats:
 
 #### TviewRenderer (TUI)
 - **Page-based architecture**: Home, Block Detail, Transaction Detail, Info, Help pages
+- **Dual-pane home layout**: Status pane (1/3) and metrics pane (2/3)
 - **Comprehensive status pane**: Real-time chain information including:
   - Current timestamp (full date-time for screenshots)
   - RPC endpoint URL (for network identification)
   - Chain ID, gas prices, pending transactions
   - Safe/finalized block numbers, base fees
-- **Enhanced blocks table**: 9-column display with:
-  - Block number, relative time, truncated hash
+- **Advanced metrics pane**: 8-row atop-style metrics display:
+  - **BLOK**: Latest, safe, and finalized block numbers
+  - **THRU**: Transaction and gas throughput (10s/30s averages)
+  - **GAS**: Base fee averages and current gas price
+  - **POOL**: Pending and queued transaction counts
+  - **SIG1**: EOA transactions and contract deployments
+  - **SIG2**: ERC20 transfers and NFT transactions
+  - **ACCO**: Unique from/to address counters
+  - **PEER**: Network peer count
+- **Enhanced blocks table**: 10-column display with:
+  - Block number, absolute/relative time, block intervals
   - Transaction count, human-readable size
   - Gas usage with percentage and formatted numbers
   - State root hash
+- **Interactive navigation**: 
+  - Block detail view with side-by-side transaction table and raw JSON
+  - Transaction detail view with human-readable properties and receipt JSON
+  - Breadcrumb-style navigation with Escape key
+  - Tab navigation between panes
+- **Modal system**: Focus-protected quit dialog with background update resistance
 - **Keyboard shortcuts**: Intuitive navigation with h/i/q/Esc keys
-- **Real-time updates**: 10-second refresh cycle for chain info
+- **Real-time updates**: Multiple update cycles (5-15 second intervals)
 
 #### JSONRenderer
 - Structured JSON output for automation and scripting
+
+### Metrics System
+
+The advanced metrics system provides real-time blockchain analytics in an atop-style format:
+
+#### Transaction Analysis
+- **Method Signature Detection**: String-based matching for ERC20/NFT method selectors
+- **Transaction Classification**: EOA transfers vs contract deployments vs contract calls
+- **Performance Optimized**: Direct string prefix matching eliminates hex decoding overhead
+- **Real-time Counters**: Continuously updated across all loaded blocks
+
+#### Throughput Calculations
+- **Windowed Averages**: 10-second and 30-second rolling calculations
+- **TPS (Transactions Per Second)**: Transaction throughput metrics
+- **GPS (Gas Per Second)**: Gas consumption rate metrics
+- **Base Fee Tracking**: Average base fees over time windows
+
+#### Address Analytics
+- **Unique Address Tracking**: Distinct from/to addresses across all transactions
+- **Contract Creation Filtering**: Excludes zero-address transactions appropriately
+- **Memory Efficient**: Hash-map based uniqueness detection
 
 ### Data Types and Formatting
 
@@ -105,6 +142,7 @@ The system includes sophisticated data formatting for human readability:
 - **Number formatting**: Comma-separated thousands (e.g., "13,402,300")
 - **Gas percentages**: Utilization display (e.g., "44.7%")
 - **Hash truncation**: Smart abbreviation with ellipsis
+- **Throughput formatting**: Scientific notation for large values (1.2M, 3.4K)
 
 ## Current Implementation Status
 
@@ -112,16 +150,26 @@ The system includes sophisticated data formatting for human readability:
 - Unified ChainStore architecture replacing BlockStore
 - Intelligent caching system with TTL strategies
 - RPC capability detection and graceful error handling
-- Page-based TUI with keyboard navigation
-- Comprehensive 9-column blocks table
-- Real-time status pane with chain information
+- Page-based TUI with comprehensive keyboard navigation
+- Advanced dual-pane home layout (status + metrics)
+- 8-row atop-style metrics system with real-time counters
+- 10-column enhanced blocks table with sortable columns
+- Interactive block detail page with side-by-side panes
+- Transaction detail page with human-readable formatting
+- Async transaction signature lookup via 4byte.directory
+- Modal focus management system (quit dialog, future search)
+- Breadcrumb navigation with Escape key support
 - Multiple renderer support (JSON, TUI)
 - Human-readable data formatting utilities
+- Performance-optimized transaction counters
 
-### In Progress
-- Chain info update channels in indexer
-- Block detail page implementation
-- Transaction detail page implementation
+### Recently Implemented
+- **Transaction Analysis**: EOA, contract deployment, ERC20, and NFT counters
+- **Address Tracking**: Unique from/to address counters across all transactions
+- **Throughput Metrics**: Real-time TPS/GPS calculations with windowed averages
+- **UI Navigation**: Breadcrumb-style page switching with focus management
+- **Modal System**: Focus-protected dialogs that resist background update interference
+- **Signature Decoding**: Integration with 4byte.directory for method/event identification
 
 ### Future Features
 - Search functionality (block/tx lookup)
@@ -135,16 +183,31 @@ The system includes sophisticated data formatting for human readability:
 ## Data Flow
 
 ```
-┌─────────┐    ┌──────────────┐    ┌─────────┐    ┌──────────┐
-│   RPC   │ -> │  ChainStore  │ -> │ Indexer │ -> │ Renderer │
-│ Network │    │   (Cached)   │    │         │    │   (TUI)  │
-└─────────┘    └──────────────┘    └─────────┘    └──────────┘
+┌─────────┐    ┌──────────────┐    ┌─────────┐    ┌───────────┐    ┌──────────┐
+│   RPC   │ -> │  ChainStore  │ -> │ Indexer │ -> │  Metrics  │ -> │ Renderer │
+│ Network │    │   (Cached)   │    │         │    │  Engine   │    │   (TUI)  │
+└─────────┘    └──────────────┘    └─────────┘    └───────────┘    └──────────┘
+                                        │              │
+                                        v              v
+                                   ┌─────────┐    ┌─────────┐
+                                   │ Blocks  │    │ Real-   │
+                                   │ Channel │    │ time    │
+                                   │         │    │ Metrics │
+                                   └─────────┘    └─────────┘
 ```
 
 1. **RPC Network**: Source of truth for all blockchain data
 2. **ChainStore**: Unified data access with intelligent caching and capability detection
-3. **Indexer**: Coordinates data flow and provides abstraction layer
-4. **Renderer**: Presents data in user-friendly format (TUI, JSON, etc.)
+3. **Indexer**: Coordinates data flow, provides block channels, and manages concurrent fetching
+4. **Metrics Engine**: Real-time analytics processing with throughput, counters, and address tracking
+5. **Renderer**: Presents data in user-friendly format with advanced metrics display (TUI, JSON, etc.)
+
+### Multi-Channel Architecture
+
+The system uses multiple data channels for responsive updates:
+- **Block Channel**: New block notifications for table updates
+- **Metrics Channel**: Real-time analytics updates for metrics pane
+- **Background Updates**: Periodic chain info, network status, and block info refreshes
 
 ### Caching Strategy
 
@@ -163,9 +226,17 @@ The main differences between V1 and V2 monitor:
 1. **Unified Data Access**: Single ChainStore interface for all blockchain data
 2. **Intelligent Caching**: TTL-based strategies reduce RPC load significantly
 3. **Capability Awareness**: Graceful handling of different RPC endpoint capabilities
-4. **Enhanced UI**: Rich 9-column blocks table with comprehensive status information
-5. **Better Architecture**: Clear separation between data access, coordination, and presentation
-6. **Future-Ready**: Extensible design for additional features and store implementations
+4. **Advanced Analytics**: Real-time metrics with transaction analysis, throughput calculations, and address tracking
+5. **Rich UI Experience**: 
+   - Dual-pane layout with 8-row atop-style metrics display
+   - Interactive navigation with breadcrumb-style page switching
+   - Focus-protected modal system for reliable user interactions
+   - 10-column enhanced blocks table with sortable columns
+6. **Performance Optimized**: String-based method signature matching and efficient counter calculations
+7. **Better Architecture**: Clear separation between data access, coordination, analytics, and presentation
+8. **4byte Integration**: Automatic transaction signature decoding for better transaction understanding
+9. **Future-Ready**: Extensible modal system, metrics framework, and store implementations
 
-The V2 monitor is more decomposed, maintainable, and provides significantly richer
-information display while being more efficient with RPC usage through intelligent caching.
+The V2 monitor provides significantly richer blockchain analytics, more responsive UI interactions,
+and better performance while maintaining efficient RPC usage through intelligent caching. It transforms
+basic block monitoring into comprehensive blockchain performance analysis.
