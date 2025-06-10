@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xPolygon/polygon-cli/chainstore"
 	"github.com/0xPolygon/polygon-cli/indexer"
 	"github.com/0xPolygon/polygon-cli/indexer/metrics"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
@@ -513,12 +514,21 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 			return nil
 		}
 
-		// Handle Escape key to go back to home
+		// Handle Escape key for breadcrumb-style navigation
 		if event.Key() == tcell.KeyEscape {
-			t.pages.SwitchToPage("home")
-			// Set focus to the table when returning to home
-			if t.homeTable != nil {
-				t.app.SetFocus(t.homeTable)
+			currentPage, _ := t.pages.GetFrontPage()
+			if currentPage == "tx-detail" {
+				// From transaction detail, go back to block detail
+				t.pages.SwitchToPage("block-detail")
+				if t.blockDetailLeft != nil {
+					t.app.SetFocus(t.blockDetailLeft)
+				}
+			} else {
+				// From all other pages, go back to home
+				t.pages.SwitchToPage("home")
+				if t.homeTable != nil {
+					t.app.SetFocus(t.homeTable)
+				}
 			}
 			return nil
 		}
@@ -902,6 +912,27 @@ func (t *TviewRenderer) extractEventSignatures(receipt rpctypes.PolyReceipt) []s
 	return signatures
 }
 
+// findBestSignature returns the signature with the minimum ID (earliest submission)
+func findBestSignature(signatures []chainstore.Signature) chainstore.Signature {
+	if len(signatures) == 0 {
+		return chainstore.Signature{}
+	}
+	
+	if len(signatures) == 1 {
+		return signatures[0]
+	}
+	
+	// Find signature with minimum ID (earliest submission, more likely to be correct)
+	bestSig := signatures[0]
+	for _, sig := range signatures[1:] {
+		if sig.ID < bestSig.ID {
+			bestSig = sig
+		}
+	}
+	
+	return bestSig
+}
+
 // getEventSignatureDetails fetches and formats event signature information
 func (t *TviewRenderer) getEventSignatureDetails(eventSignatures []string) map[string]string {
 	if t.indexer == nil || len(eventSignatures) == 0 {
@@ -924,12 +955,12 @@ func (t *TviewRenderer) getEventSignatureDetails(eventSignatures []string) map[s
 		if len(signatures) == 0 {
 			eventDetails[eventSig] = fmt.Sprintf("%s (unknown)", eventSig[:10]+"...")
 		} else {
-			// Use the first signature (most common)
-			firstSig := signatures[0]
+			// Use the signature with minimum ID (earliest submission, most likely correct)
+			bestSig := findBestSignature(signatures)
 			if len(signatures) == 1 {
-				eventDetails[eventSig] = firstSig.TextSignature
+				eventDetails[eventSig] = bestSig.TextSignature
 			} else {
-				eventDetails[eventSig] = fmt.Sprintf("%s (+%d more)", firstSig.TextSignature, len(signatures)-1)
+				eventDetails[eventSig] = fmt.Sprintf("%s (+%d more)", bestSig.TextSignature, len(signatures)-1)
 			}
 		}
 	}
@@ -959,12 +990,12 @@ func (t *TviewRenderer) getMethodSignatureDetails(hexSignature string) string {
 		return fmt.Sprintf("%s (unknown)", hexSignature)
 	}
 
-	// Use the first signature (most common)
-	firstSig := signatures[0]
+	// Use the signature with minimum ID (earliest submission, most likely correct)
+	bestSig := findBestSignature(signatures)
 	if len(signatures) == 1 {
-		return fmt.Sprintf("%s (%s)", hexSignature, firstSig.TextSignature)
+		return fmt.Sprintf("%s (%s)", hexSignature, bestSig.TextSignature)
 	} else {
-		return fmt.Sprintf("%s (%s +%d more)", hexSignature, firstSig.TextSignature, len(signatures)-1)
+		return fmt.Sprintf("%s (%s +%d more)", hexSignature, bestSig.TextSignature, len(signatures)-1)
 	}
 }
 
