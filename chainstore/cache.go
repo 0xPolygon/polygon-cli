@@ -61,11 +61,16 @@ type ChainCache struct {
 	// Very frequent data (5-10 second TTL)
 	pendingTxCount *CachedValue[*big.Int]
 	queuedTxCount  *CachedValue[*big.Int]
+
+	// Signature data (1 hour TTL)
+	signatures map[string]*CachedValue[[]Signature]
 }
 
 // NewChainCache creates a new chain cache
 func NewChainCache() *ChainCache {
-	return &ChainCache{}
+	return &ChainCache{
+		signatures: make(map[string]*CachedValue[[]Signature]),
+	}
 }
 
 // GetChainID gets cached chain ID
@@ -207,4 +212,21 @@ func (cc *ChainCache) SetQueuedTxCount(count *big.Int, ttl time.Duration) {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
 	cc.queuedTxCount = NewCachedValue(count, ttl)
+}
+
+// GetSignatures gets cached signatures for a hex signature
+func (cc *ChainCache) GetSignatures(hexSignature string, ttl time.Duration) ([]Signature, bool) {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	if cached, exists := cc.signatures[hexSignature]; exists {
+		return cached.Get()
+	}
+	return nil, false
+}
+
+// SetSignatures caches signatures for a hex signature
+func (cc *ChainCache) SetSignatures(hexSignature string, signatures []Signature, ttl time.Duration) {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+	cc.signatures[hexSignature] = NewCachedValue(signatures, ttl)
 }

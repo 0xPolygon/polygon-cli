@@ -154,9 +154,11 @@ type TviewRenderer struct {
 	blockDetailPage  *tview.Flex     // Changed to Flex for side-by-side layout
 	blockDetailLeft  *tview.Table    // Left pane: Transaction table
 	blockDetailRight *tview.TextView // Right pane: Raw JSON
-	txDetailPage     *tview.Flex     // Transaction detail with side-by-side layout
-	txDetailLeft     *tview.TextView // Left pane: Transaction properties
-	txDetailRight    *tview.TextView // Right pane: Raw JSON
+	txDetailPage     *tview.Flex     // Transaction detail with human-readable left, stacked JSON right
+	txDetailLeft     *tview.TextView // Left pane: Human-readable transaction properties
+	txDetailRight    *tview.Flex     // Right pane: Container for stacked JSON views
+	txDetailTxJSON   *tview.TextView // Top right: Transaction JSON
+	txDetailRcptJSON *tview.TextView // Bottom right: Receipt JSON
 	infoPage         *tview.TextView
 	helpPage         *tview.TextView
 
@@ -379,29 +381,43 @@ func (t *TviewRenderer) createBlockDetailPage() {
 		AddItem(t.blockDetailRight, 0, 1, true) // Right pane: 50% width, focusable
 }
 
-// createTransactionDetailPage creates the transaction detail view with side-by-side text views
+// createTransactionDetailPage creates the transaction detail view with human-readable left pane and stacked JSON right panes
 func (t *TviewRenderer) createTransactionDetailPage() {
-	// Create left pane for transaction properties
+	// Create left pane for human-readable transaction properties
 	t.txDetailLeft = tview.NewTextView().
 		SetDynamicColors(true).
 		SetRegions(true).
 		SetWordWrap(true)
-	t.txDetailLeft.SetBorder(true).SetTitle(" Transaction Properties ")
-	t.txDetailLeft.SetText("Transaction properties will be displayed here")
+	t.txDetailLeft.SetBorder(true).SetTitle(" Transaction Details ")
+	t.txDetailLeft.SetText("Transaction details will be displayed here")
 
-	// Create right pane for raw JSON
-	t.txDetailRight = tview.NewTextView().
+	// Create top right pane for transaction JSON
+	t.txDetailTxJSON = tview.NewTextView().
 		SetDynamicColors(true).
 		SetRegions(true).
 		SetWordWrap(true)
-	t.txDetailRight.SetBorder(true).SetTitle(" Raw JSON ")
-	t.txDetailRight.SetText("Select a transaction to view its JSON representation")
+	t.txDetailTxJSON.SetBorder(true).SetTitle(" Transaction JSON ")
+	t.txDetailTxJSON.SetText("Select a transaction to view its JSON representation")
 
-	// Create flex container to hold both panes side by side
+	// Create bottom right pane for receipt JSON
+	t.txDetailRcptJSON = tview.NewTextView().
+		SetDynamicColors(true).
+		SetRegions(true).
+		SetWordWrap(true)
+	t.txDetailRcptJSON.SetBorder(true).SetTitle(" Receipt JSON ")
+	t.txDetailRcptJSON.SetText("Select a transaction to view its receipt JSON")
+
+	// Create right flex container to stack the JSON views vertically
+	t.txDetailRight = tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(t.txDetailTxJSON, 0, 1, false).   // Top: Transaction JSON (50% height)
+		AddItem(t.txDetailRcptJSON, 0, 1, false) // Bottom: Receipt JSON (50% height)
+
+	// Create main flex container to hold left pane and right stack side by side
 	t.txDetailPage = tview.NewFlex().
 		SetDirection(tview.FlexColumn).
-		AddItem(t.txDetailLeft, 0, 1, true). // Left pane: 50% width, focusable
-		AddItem(t.txDetailRight, 0, 1, true) // Right pane: 50% width, focusable
+		AddItem(t.txDetailLeft, 0, 1, true).  // Left pane: 50% width, focusable
+		AddItem(t.txDetailRight, 0, 1, true) // Right stack: 50% width, focusable
 }
 
 // createInfoPage creates the application info page
@@ -581,10 +597,12 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 		case "tx-detail":
 			switch event.Key() {
 			case tcell.KeyTab:
-				// Switch focus between left and right panes
+				// Cycle focus between left pane, transaction JSON, and receipt JSON
 				focused := t.app.GetFocus()
 				if focused == t.txDetailLeft {
-					t.app.SetFocus(t.txDetailRight)
+					t.app.SetFocus(t.txDetailTxJSON)
+				} else if focused == t.txDetailTxJSON {
+					t.app.SetFocus(t.txDetailRcptJSON)
 				} else {
 					t.app.SetFocus(t.txDetailLeft)
 				}
@@ -670,54 +688,300 @@ func (t *TviewRenderer) showBlockDetail(block rpctypes.PolyBlock) {
 	t.app.SetFocus(t.blockDetailLeft)
 }
 
-// showTransactionDetail navigates to transaction detail page and populates it
+// showTransactionDetail navigates to transaction detail page and populates it asynchronously
 func (t *TviewRenderer) showTransactionDetail(tx rpctypes.PolyTransaction, txIndex int) {
 	// Update pane titles to reflect the transaction content
-	t.txDetailLeft.SetTitle(fmt.Sprintf(" Transaction Receipt (Index: %d) ", txIndex))
-	t.txDetailRight.SetTitle(fmt.Sprintf(" Transaction JSON (Hash: %s) ", truncateHash(tx.Hash().Hex(), 8, 8)))
+	t.txDetailLeft.SetTitle(fmt.Sprintf(" Transaction Details (Index: %d) ", txIndex))
+	t.txDetailTxJSON.SetTitle(fmt.Sprintf(" Transaction JSON (Hash: %s) ", truncateHash(tx.Hash().Hex(), 8, 8)))
+	t.txDetailRcptJSON.SetTitle(" Receipt JSON ")
 
-	// Fetch transaction receipt for left pane
-	ctx := context.Background()
-	receipt, err := t.indexer.GetReceipt(ctx, tx.Hash())
-	if err != nil {
-		// Display error message if receipt cannot be fetched
-		t.txDetailLeft.SetText(fmt.Sprintf("Transaction Receipt\n\nIndex: %d\nHash: %s\n\nError fetching receipt: %v\n\n(Receipt may not be available for pending transactions)", txIndex, tx.Hash().Hex(), err))
-	} else {
-		// Try to access the underlying RawTxReceipt for JSON marshaling
-		// Since PolyReceipt is an interface, we need to marshal it using standard JSON
-		receiptJSON, marshalErr := json.Marshal(receipt)
-		if marshalErr != nil {
-			t.txDetailLeft.SetText(fmt.Sprintf("Transaction Receipt\n\nIndex: %d\nHash: %s\n\nError marshaling receipt JSON: %v", txIndex, tx.Hash().Hex(), marshalErr))
-		} else {
-			// Pretty print the receipt JSON
-			var prettyReceiptJSON bytes.Buffer
-			if indentErr := json.Indent(&prettyReceiptJSON, receiptJSON, "", "  "); indentErr != nil {
-				t.txDetailLeft.SetText(fmt.Sprintf("Transaction Receipt\n\nIndex: %d\nHash: %s\n\nError formatting receipt JSON: %v", txIndex, tx.Hash().Hex(), indentErr))
-			} else {
-				t.txDetailLeft.SetText(prettyReceiptJSON.String())
-			}
-		}
-	}
+	// Set loading states for all panes
+	t.txDetailLeft.SetText("Loading transaction details...")
+	t.txDetailTxJSON.SetText("Loading transaction JSON...")
+	t.txDetailRcptJSON.SetText("Loading receipt JSON...")
 
-	// Right pane shows pretty-printed JSON of the transaction
-	txJSON, err := tx.MarshalJSON()
-	if err != nil {
-		t.txDetailRight.SetText(fmt.Sprintf("Error marshaling transaction JSON: %v", err))
-	} else {
-		// Pretty print the JSON
-		var prettyJSON bytes.Buffer
-		if err := json.Indent(&prettyJSON, txJSON, "", "  "); err != nil {
-			t.txDetailRight.SetText(fmt.Sprintf("Error formatting JSON: %v", err))
-		} else {
-			t.txDetailRight.SetText(prettyJSON.String())
-		}
-	}
-
-	// Switch to transaction detail page
+	// Switch to transaction detail page immediately
 	t.pages.SwitchToPage("tx-detail")
-
+	
 	// Set focus to the left pane by default
 	t.app.SetFocus(t.txDetailLeft)
+
+	// Start async operations
+	go t.loadTransactionJSONAsync(tx)
+	go t.loadTransactionDetailsAsync(tx, txIndex)
+	go t.loadReceiptJSONAsync(tx)
+}
+
+// createBasicTransactionDetails creates basic transaction details without signature lookup
+func (t *TviewRenderer) createBasicTransactionDetails(tx rpctypes.PolyTransaction, txIndex int) string {
+	var details []string
+
+	// Basic transaction information
+	details = append(details, fmt.Sprintf("Transaction Index: %d", txIndex))
+	details = append(details, fmt.Sprintf("Hash: %s", tx.Hash().Hex()))
+	details = append(details, fmt.Sprintf("Block Number: %s", tx.BlockNumber().String()))
+	details = append(details, fmt.Sprintf("Chain ID: %d", tx.ChainID()))
+	details = append(details, "")
+
+	// Transaction details
+	details = append(details, fmt.Sprintf("From: %s", tx.From().Hex()))
+	if tx.To().Hex() != "0x0000000000000000000000000000000000000000" {
+		details = append(details, fmt.Sprintf("To: %s", tx.To().Hex()))
+	} else {
+		details = append(details, "To: [Contract Creation]")
+	}
+	details = append(details, fmt.Sprintf("Value: %s ETH", weiToEther(tx.Value())))
+	details = append(details, fmt.Sprintf("Gas: %s", formatNumber(tx.Gas())))
+	details = append(details, fmt.Sprintf("Gas Price: %s gwei", weiToGwei(tx.GasPrice())))
+	details = append(details, fmt.Sprintf("Nonce: %d", tx.Nonce()))
+	details = append(details, "")
+
+	// Transaction type and data (without signature lookup)
+	details = append(details, fmt.Sprintf("Type: %d", tx.Type()))
+	details = append(details, fmt.Sprintf("Data Size: %d bytes", len(tx.Data())))
+	if len(tx.Data()) > 0 {
+		if len(tx.Data()) >= 4 {
+			// Display method signature without lookup (loading)
+			methodSig := fmt.Sprintf("0x%x", tx.Data()[:4])
+			details = append(details, fmt.Sprintf("Method Signature: %s (loading...)", methodSig))
+		}
+		if len(tx.Data()) <= 32 {
+			details = append(details, fmt.Sprintf("Full Data: 0x%x", tx.Data()))
+		} else {
+			details = append(details, fmt.Sprintf("Data Preview: 0x%x...", tx.Data()[:32]))
+		}
+	} else {
+		details = append(details, "Data: [Empty]")
+	}
+	details = append(details, "")
+
+	// EIP-1559 fields (if applicable)
+	if tx.Type() >= 2 {
+		if tx.MaxFeePerGas() > 0 {
+			maxFeeBig := big.NewInt(int64(tx.MaxFeePerGas()))
+			details = append(details, fmt.Sprintf("Max Fee Per Gas: %s gwei", weiToGwei(maxFeeBig)))
+		}
+		if tx.MaxPriorityFeePerGas() > 0 {
+			maxPriorityBig := big.NewInt(int64(tx.MaxPriorityFeePerGas()))
+			details = append(details, fmt.Sprintf("Max Priority Fee Per Gas: %s gwei", weiToGwei(maxPriorityBig)))
+		}
+		details = append(details, "")
+	}
+
+	// Signature details
+	details = append(details, "Signature:")
+	details = append(details, fmt.Sprintf("  V: %s", tx.V().String()))
+	details = append(details, fmt.Sprintf("  R: %s", tx.R().String()))
+	details = append(details, fmt.Sprintf("  S: %s", tx.S().String()))
+
+	// Combine all details into a single string
+	detailText := ""
+	for _, detail := range details {
+		detailText += detail + "\n"
+	}
+
+	return detailText
+}
+
+// createHumanReadableTransactionDetailsSync creates a human-readable view of transaction details with signature lookup
+func (t *TviewRenderer) createHumanReadableTransactionDetailsSync(tx rpctypes.PolyTransaction, txIndex int) string {
+	var details []string
+
+	// Basic transaction information
+	details = append(details, fmt.Sprintf("Transaction Index: %d", txIndex))
+	details = append(details, fmt.Sprintf("Hash: %s", tx.Hash().Hex()))
+	details = append(details, fmt.Sprintf("Block Number: %s", tx.BlockNumber().String()))
+	details = append(details, fmt.Sprintf("Chain ID: %d", tx.ChainID()))
+	details = append(details, "")
+
+	// Transaction details
+	details = append(details, fmt.Sprintf("From: %s", tx.From().Hex()))
+	if tx.To().Hex() != "0x0000000000000000000000000000000000000000" {
+		details = append(details, fmt.Sprintf("To: %s", tx.To().Hex()))
+	} else {
+		details = append(details, "To: [Contract Creation]")
+	}
+	details = append(details, fmt.Sprintf("Value: %s ETH", weiToEther(tx.Value())))
+	details = append(details, fmt.Sprintf("Gas: %s", formatNumber(tx.Gas())))
+	details = append(details, fmt.Sprintf("Gas Price: %s gwei", weiToGwei(tx.GasPrice())))
+	details = append(details, fmt.Sprintf("Nonce: %d", tx.Nonce()))
+	details = append(details, "")
+
+	// Transaction type and data
+	details = append(details, fmt.Sprintf("Type: %d", tx.Type()))
+	details = append(details, fmt.Sprintf("Data Size: %d bytes", len(tx.Data())))
+	if len(tx.Data()) > 0 {
+		if len(tx.Data()) >= 4 {
+			// Display method signature with human-readable lookup
+			methodSig := fmt.Sprintf("0x%x", tx.Data()[:4])
+			sigDetails := t.getMethodSignatureDetails(methodSig)
+			details = append(details, fmt.Sprintf("Method Signature: %s", sigDetails))
+		}
+		if len(tx.Data()) <= 32 {
+			details = append(details, fmt.Sprintf("Full Data: 0x%x", tx.Data()))
+		} else {
+			details = append(details, fmt.Sprintf("Data Preview: 0x%x...", tx.Data()[:32]))
+		}
+	} else {
+		details = append(details, "Data: [Empty]")
+	}
+	details = append(details, "")
+
+	// EIP-1559 fields (if applicable)
+	if tx.Type() >= 2 {
+		if tx.MaxFeePerGas() > 0 {
+			maxFeeBig := big.NewInt(int64(tx.MaxFeePerGas()))
+			details = append(details, fmt.Sprintf("Max Fee Per Gas: %s gwei", weiToGwei(maxFeeBig)))
+		}
+		if tx.MaxPriorityFeePerGas() > 0 {
+			maxPriorityBig := big.NewInt(int64(tx.MaxPriorityFeePerGas()))
+			details = append(details, fmt.Sprintf("Max Priority Fee Per Gas: %s gwei", weiToGwei(maxPriorityBig)))
+		}
+		details = append(details, "")
+	}
+
+	// Signature details
+	details = append(details, "Signature:")
+	details = append(details, fmt.Sprintf("  V: %s", tx.V().String()))
+	details = append(details, fmt.Sprintf("  R: %s", tx.R().String()))
+	details = append(details, fmt.Sprintf("  S: %s", tx.S().String()))
+
+	// Combine all details into a single string
+	detailText := ""
+	for _, detail := range details {
+		detailText += detail + "\n"
+	}
+
+	return detailText
+}
+
+// weiToEther converts wei to ether with reasonable precision
+func weiToEther(wei *big.Int) string {
+	if wei == nil {
+		return "0"
+	}
+
+	// Convert wei to ether (divide by 10^18)
+	ether := new(big.Float).SetInt(wei)
+	ether = ether.Quo(ether, big.NewFloat(1e18))
+
+	// Format with 6 decimal places
+	return fmt.Sprintf("%.6f", ether)
+}
+
+// getMethodSignatureDetails fetches and formats method signature information
+func (t *TviewRenderer) getMethodSignatureDetails(hexSignature string) string {
+	// First check if we have access to the indexer and it has a store
+	if t.indexer == nil {
+		return hexSignature
+	}
+
+	// Try to get signature from 4byte.directory
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	signatures, err := t.indexer.GetSignature(ctx, hexSignature)
+	if err != nil {
+		// Log error but don't fail - fallback to hex signature
+		log.Debug().Err(err).Str("signature", hexSignature).Msg("Failed to lookup method signature")
+		return hexSignature
+	}
+
+	if len(signatures) == 0 {
+		return fmt.Sprintf("%s (unknown)", hexSignature)
+	}
+
+	// Use the first signature (most common)
+	firstSig := signatures[0]
+	if len(signatures) == 1 {
+		return fmt.Sprintf("%s (%s)", hexSignature, firstSig.TextSignature)
+	} else {
+		return fmt.Sprintf("%s (%s +%d more)", hexSignature, firstSig.TextSignature, len(signatures)-1)
+	}
+}
+
+// loadTransactionJSONAsync loads and formats transaction JSON asynchronously
+func (t *TviewRenderer) loadTransactionJSONAsync(tx rpctypes.PolyTransaction) {
+	// Marshal transaction JSON
+	txJSON, err := tx.MarshalJSON()
+	if err != nil {
+		t.app.QueueUpdateDraw(func() {
+			t.txDetailTxJSON.SetText(fmt.Sprintf("Error marshaling transaction JSON: %v", err))
+		})
+		return
+	}
+
+	// Pretty print the JSON
+	var prettyJSON bytes.Buffer
+	if err := json.Indent(&prettyJSON, txJSON, "", "  "); err != nil {
+		t.app.QueueUpdateDraw(func() {
+			t.txDetailTxJSON.SetText(fmt.Sprintf("Error formatting JSON: %v", err))
+		})
+		return
+	}
+
+	// Update UI on the main thread
+	t.app.QueueUpdateDraw(func() {
+		t.txDetailTxJSON.SetText(prettyJSON.String())
+	})
+}
+
+// loadTransactionDetailsAsync loads human-readable transaction details asynchronously
+func (t *TviewRenderer) loadTransactionDetailsAsync(tx rpctypes.PolyTransaction, txIndex int) {
+	// Create basic transaction details without signature lookup first
+	basicDetails := t.createBasicTransactionDetails(tx, txIndex)
+	
+	// Update UI with basic details immediately
+	t.app.QueueUpdateDraw(func() {
+		t.txDetailLeft.SetText(basicDetails)
+	})
+
+	// Now fetch signatures and update with enhanced details
+	enhancedDetails := t.createHumanReadableTransactionDetailsSync(tx, txIndex)
+	
+	// Update UI with enhanced details including signatures
+	t.app.QueueUpdateDraw(func() {
+		t.txDetailLeft.SetText(enhancedDetails)
+	})
+}
+
+// loadReceiptJSONAsync loads and formats receipt JSON asynchronously
+func (t *TviewRenderer) loadReceiptJSONAsync(tx rpctypes.PolyTransaction) {
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Fetch receipt
+	receipt, err := t.indexer.GetReceipt(ctx, tx.Hash())
+	if err != nil {
+		t.app.QueueUpdateDraw(func() {
+			t.txDetailRcptJSON.SetText(fmt.Sprintf("Error fetching receipt: %v\n\n(Receipt may not be available for pending transactions)", err))
+		})
+		return
+	}
+
+	// Marshal receipt to JSON
+	receiptJSON, err := json.Marshal(receipt)
+	if err != nil {
+		t.app.QueueUpdateDraw(func() {
+			t.txDetailRcptJSON.SetText(fmt.Sprintf("Error marshaling receipt JSON: %v", err))
+		})
+		return
+	}
+
+	// Pretty print the receipt JSON
+	var prettyReceiptJSON bytes.Buffer
+	if err := json.Indent(&prettyReceiptJSON, receiptJSON, "", "  "); err != nil {
+		t.app.QueueUpdateDraw(func() {
+			t.txDetailRcptJSON.SetText(fmt.Sprintf("Error formatting receipt JSON: %v", err))
+		})
+		return
+	}
+
+	// Update UI on the main thread
+	t.app.QueueUpdateDraw(func() {
+		t.txDetailRcptJSON.SetText(prettyReceiptJSON.String())
+	})
 }
 
 // Start begins the TUI rendering

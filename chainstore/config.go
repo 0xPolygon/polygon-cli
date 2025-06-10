@@ -17,6 +17,12 @@ type ChainStoreConfig struct {
 	EnableTxPoolMonitoring   bool
 	EnableFinalityTracking   bool
 	EnableFeeHistoryTracking bool
+
+	// Signature lookup configuration
+	EnableSignatureLookup    bool          // Enable 4byte.directory lookups
+	SignatureLookupTTL       time.Duration // Cache TTL for signatures (1 hour)
+	SignatureLookupTimeout   time.Duration // HTTP timeout for API calls (5 seconds)
+	SignatureLookupAPIURL    string        // 4byte.directory API endpoint
 }
 
 // DefaultChainStoreConfig returns default configuration
@@ -31,5 +37,10 @@ func DefaultChainStoreConfig() *ChainStoreConfig {
 		EnableTxPoolMonitoring:   true,
 		EnableFinalityTracking:   true,
 		EnableFeeHistoryTracking: true,
+
+		EnableSignatureLookup:  true,
+		SignatureLookupTTL:     1 * time.Hour,
+		SignatureLookupTimeout: 5 * time.Second,
+		SignatureLookupAPIURL:  "https://www.4byte.directory/api/v1/signatures/",
 	}
 }

@@ -196,6 +196,11 @@ func (i *Indexer) GetRPCURL() string {
 	return i.store.GetRPCURL()
 }
 
+// GetSignature retrieves function/event signatures from 4byte.directory
+func (i *Indexer) GetSignature(ctx context.Context, hexSignature string) ([]chainstore.Signature, error) {
+	return i.store.GetSignature(ctx, hexSignature)
+}
+
 // Start begins the indexing process
 func (i *Indexer) Start() error {
 	log.Info().Msg("Starting indexer")

@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
+	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/ethereum/go-ethereum/common"
@@ -16,6 +20,7 @@ import (
 // and passes through requests directly to the RPC endpoint with caching
 type PassthroughStore struct {
 	client       *rpc.Client
+	httpClient   *http.Client
 	cache        *ChainCache
 	capabilities *CapabilityManager
 	config       *ChainStoreConfig
@@ -34,8 +39,14 @@ func NewPassthroughStoreWithConfig(rpcURL string, config *ChainStoreConfig) (*Pa
 		return nil, fmt.Errorf("failed to connect to RPC: %w", err)
 	}
 
+	// Create HTTP client with timeout for signature lookups
+	httpClient := &http.Client{
+		Timeout: config.SignatureLookupTimeout,
+	}
+
 	store := &PassthroughStore{
 		client:       client,
+		httpClient:   httpClient,
 		cache:        NewChainCache(),
 		capabilities: NewCapabilityManager(client, config.CapabilityTTL),
 		config:       config,
@@ -455,6 +466,68 @@ func (s *PassthroughStore) GetSupportedMethods() []string {
 // GetRPCURL returns the RPC endpoint URL
 func (s *PassthroughStore) GetRPCURL() string {
 	return s.rpcURL
+}
+
+// === SIGNATURE LOOKUP ===
+
+// GetSignature retrieves function/event signatures from 4byte.directory
+func (s *PassthroughStore) GetSignature(ctx context.Context, hexSignature string) ([]Signature, error) {
+	// Check if signature lookup is enabled
+	if !s.config.EnableSignatureLookup {
+		return nil, fmt.Errorf("signature lookup is disabled")
+	}
+
+	// Ensure hex signature is properly formatted
+	hexSignature = strings.ToLower(strings.TrimSpace(hexSignature))
+	if !strings.HasPrefix(hexSignature, "0x") {
+		hexSignature = "0x" + hexSignature
+	}
+
+	// Validate hex signature length (should be 0x + 8 hex chars for 4 bytes)
+	if len(hexSignature) != 10 {
+		return nil, fmt.Errorf("invalid signature length: expected 10 characters (0x + 8 hex), got %d", len(hexSignature))
+	}
+
+	// Check cache first
+	if signatures, valid := s.cache.GetSignatures(hexSignature, s.config.SignatureLookupTTL); valid {
+		log.Debug().Str("signature", hexSignature).Int("count", len(signatures)).Msg("Signature found in cache")
+		return signatures, nil
+	}
+
+	// Make API request to 4byte.directory
+	apiURL := fmt.Sprintf("%s?hex_signature=%s", s.config.SignatureLookupAPIURL, url.QueryEscape(hexSignature))
+	
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch signature: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var sigResponse SignatureResponse
+	if err := json.NewDecoder(resp.Body).Decode(&sigResponse); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Cache the results
+	s.cache.SetSignatures(hexSignature, sigResponse.Results, s.config.SignatureLookupTTL)
+
+	log.Debug().
+		Str("signature", hexSignature).
+		Int("count", len(sigResponse.Results)).
+		Msg("Fetched signatures from 4byte.directory")
+
+	return sigResponse.Results, nil
 }
 
 // Close closes the store and releases any resources

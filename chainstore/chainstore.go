@@ -3,6 +3,7 @@ package chainstore
 import (
 	"context"
 	"math/big"
+	"time"
 
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/ethereum/go-ethereum/common"
@@ -69,6 +70,27 @@ type ChainStore interface {
 	// === CONNECTION INFO ===
 	GetRPCURL() string
 
+	// === SIGNATURE LOOKUP ===
+	// GetSignature retrieves function/event signatures from 4byte.directory
+	GetSignature(ctx context.Context, hexSignature string) ([]Signature, error)
+
 	// Close closes the store and releases any resources
 	Close() error
+}
+
+// Signature represents a function or event signature from 4byte.directory
+type Signature struct {
+	ID             int       `json:"id"`
+	CreatedAt      time.Time `json:"created_at"`
+	TextSignature  string    `json:"text_signature"`
+	HexSignature   string    `json:"hex_signature"`
+	BytesSignature string    `json:"bytes_signature"`
+}
+
+// SignatureResponse represents the paginated response from 4byte.directory API
+type SignatureResponse struct {
+	Count    int         `json:"count"`
+	Next     *string     `json:"next"`
+	Previous *string     `json:"previous"`
+	Results  []Signature `json:"results"`
 }
