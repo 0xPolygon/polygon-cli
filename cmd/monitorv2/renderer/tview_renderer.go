@@ -288,9 +288,9 @@ func (t *TviewRenderer) createHomePage() {
 	// Initialize with 8 rows of placeholders
 	for row := 0; row < 8; row++ {
 		t.homeMetricsPane.SetCell(row, 0,
-			tview.NewTableCell(fmt.Sprintf("Initializing ", row+1)). // Add trailing space
-											SetAlign(tview.AlignLeft).
-											SetExpansion(1))
+			tview.NewTableCell("Initializing "). // Add trailing space
+								SetAlign(tview.AlignLeft).
+								SetExpansion(1))
 	}
 
 	// Create horizontal flex container for the 2 top sections
@@ -1434,7 +1434,11 @@ func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
 			nftStr := "NFT " + formatNumber(nftCount)
 			cells = [5]string{"SIG2", erc20Str, nftStr, "Other [placeholder]", "[placeholder]"}
 		case 6: // ACC
-			cells = [5]string{"ACCO", "Unique From [placeholder]", "Unique To [placeholder]", "[placeholder]", "[placeholder]"}
+			// Calculate unique address counters
+			fromCount, toCount := t.calculateUniqueAddressCounters()
+			fromStr := "from " + formatNumber(fromCount)
+			toStr := "to " + formatNumber(toCount)
+			cells = [5]string{"ACCO", fromStr, toStr, "[placeholder]", "[placeholder]"}
 		case 7: // PER
 			// Use cached peer count
 			cells = [5]string{"PEER", peerCountStr, "[placeholder]", "[placeholder]", "[placeholder]"}
@@ -1806,6 +1810,32 @@ func (t *TviewRenderer) calculateERC20NFTCounters() (uint64, uint64) {
 	}
 
 	return erc20Count, nftCount
+}
+
+// calculateUniqueAddressCounters calculates unique from and to address counters from all blocks
+func (t *TviewRenderer) calculateUniqueAddressCounters() (uint64, uint64) {
+	t.blocksMu.RLock()
+	defer t.blocksMu.RUnlock()
+
+	uniqueFrom := make(map[string]bool)
+	uniqueTo := make(map[string]bool)
+
+	for _, block := range t.blocks {
+		transactions := block.Transactions()
+		for _, tx := range transactions {
+			// Track unique from addresses
+			fromAddr := tx.From().Hex()
+			uniqueFrom[fromAddr] = true
+
+			// Track unique to addresses (if not contract creation)
+			toAddr := tx.To().Hex()
+			if toAddr != "0x0000000000000000000000000000000000000000" {
+				uniqueTo[toAddr] = true
+			}
+		}
+	}
+
+	return uint64(len(uniqueFrom)), uint64(len(uniqueTo))
 }
 
 // formatGasPercentage calculates and formats gas usage percentage
