@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -869,6 +870,73 @@ func weiToEther(wei *big.Int) string {
 	return fmt.Sprintf("%.6f", ether)
 }
 
+// extractEventSignatures extracts unique event signature hashes from receipt logs
+func (t *TviewRenderer) extractEventSignatures(receipt rpctypes.PolyReceipt) []string {
+	if receipt == nil {
+		return nil
+	}
+
+	logs := receipt.Logs()
+	if len(logs) == 0 {
+		return nil
+	}
+
+	// Use a map to collect unique event signatures
+	uniqueSigs := make(map[string]bool)
+	
+	for _, logEntry := range logs {
+		// Check if the log has topics and the first topic exists (event signature)
+		if len(logEntry.Topics) > 0 {
+			// Get the event signature hash from the first topic
+			eventSigHash := logEntry.Topics[0].ToHash().Hex()
+			uniqueSigs[eventSigHash] = true
+		}
+	}
+
+	// Convert map keys to slice
+	var signatures []string
+	for sig := range uniqueSigs {
+		signatures = append(signatures, sig)
+	}
+
+	return signatures
+}
+
+// getEventSignatureDetails fetches and formats event signature information
+func (t *TviewRenderer) getEventSignatureDetails(eventSignatures []string) map[string]string {
+	if t.indexer == nil || len(eventSignatures) == 0 {
+		return nil
+	}
+
+	eventDetails := make(map[string]string)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Look up each unique event signature
+	for _, eventSig := range eventSignatures {
+		signatures, err := t.indexer.GetSignature(ctx, eventSig)
+		if err != nil {
+			log.Debug().Err(err).Str("signature", eventSig).Msg("Failed to lookup event signature")
+			eventDetails[eventSig] = fmt.Sprintf("%s (unknown)", eventSig[:10]+"...")
+			continue
+		}
+
+		if len(signatures) == 0 {
+			eventDetails[eventSig] = fmt.Sprintf("%s (unknown)", eventSig[:10]+"...")
+		} else {
+			// Use the first signature (most common)
+			firstSig := signatures[0]
+			if len(signatures) == 1 {
+				eventDetails[eventSig] = firstSig.TextSignature
+			} else {
+				eventDetails[eventSig] = fmt.Sprintf("%s (+%d more)", firstSig.TextSignature, len(signatures)-1)
+			}
+		}
+	}
+
+	return eventDetails
+}
+
 // getMethodSignatureDetails fetches and formats method signature information
 func (t *TviewRenderer) getMethodSignatureDetails(hexSignature string) string {
 	// First check if we have access to the indexer and it has a store
@@ -936,12 +1004,70 @@ func (t *TviewRenderer) loadTransactionDetailsAsync(tx rpctypes.PolyTransaction,
 		t.txDetailLeft.SetText(basicDetails)
 	})
 
-	// Now fetch signatures and update with enhanced details
-	enhancedDetails := t.createHumanReadableTransactionDetailsSync(tx, txIndex)
+	// Start coordinated async loading for method signatures and event logs
+	go t.loadEnhancedTransactionDetailsAsync(tx, txIndex)
+}
+
+// loadEnhancedTransactionDetailsAsync coordinates method signature and event log loading
+func (t *TviewRenderer) loadEnhancedTransactionDetailsAsync(tx rpctypes.PolyTransaction, txIndex int) {
+	// Channels to receive results
+	methodSigChan := make(chan string, 1)
+	eventLogsChan := make(chan string, 1)
 	
-	// Update UI with enhanced details including signatures
+	// Start method signature lookup
+	go func() {
+		enhancedDetails := t.createHumanReadableTransactionDetailsSync(tx, txIndex)
+		methodSigChan <- enhancedDetails
+	}()
+	
+	// Start event logs lookup
+	go func() {
+		// Create context with timeout for receipt fetching
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		// Fetch receipt
+		receipt, err := t.indexer.GetReceipt(ctx, tx.Hash())
+		if err != nil {
+			eventLogsChan <- "" // No event logs available
+			return
+		}
+
+		// Extract and look up event signatures from logs
+		eventSignatures := t.extractEventSignatures(receipt)
+		if len(eventSignatures) == 0 {
+			eventLogsChan <- "" // No events to process
+			return
+		}
+
+		// Look up event signature details
+		eventDetails := t.getEventSignatureDetails(eventSignatures)
+		
+		// Build event logs section for display
+		eventLogsText := t.buildEventLogsText(receipt, eventDetails)
+		eventLogsChan <- eventLogsText
+	}()
+	
+	// Wait for both responses and combine them
+	var methodDetails, eventLogs string
+	for i := 0; i < 2; i++ {
+		select {
+		case methodDetails = <-methodSigChan:
+			// Method signature details received
+		case eventLogs = <-eventLogsChan:
+			// Event logs received
+		}
+	}
+	
+	// Combine the results
+	finalDetails := methodDetails
+	if eventLogs != "" {
+		finalDetails += "\n" + eventLogs
+	}
+	
+	// Update UI with complete details
 	t.app.QueueUpdateDraw(func() {
-		t.txDetailLeft.SetText(enhancedDetails)
+		t.txDetailLeft.SetText(finalDetails)
 	})
 }
 
@@ -982,6 +1108,56 @@ func (t *TviewRenderer) loadReceiptJSONAsync(tx rpctypes.PolyTransaction) {
 	t.app.QueueUpdateDraw(func() {
 		t.txDetailRcptJSON.SetText(prettyReceiptJSON.String())
 	})
+}
+
+// buildEventLogsText creates a formatted display of event logs with resolved signatures
+func (t *TviewRenderer) buildEventLogsText(receipt rpctypes.PolyReceipt, eventDetails map[string]string) string {
+	logs := receipt.Logs()
+	if len(logs) == 0 {
+		return ""
+	}
+
+	var logLines []string
+	logLines = append(logLines, "Event Logs:")
+
+	for i, logEntry := range logs {
+		// Get the contract address that emitted the event
+		contractAddr := logEntry.Address.ToAddress().Hex()
+		contractAddrShort := truncateHash(contractAddr, 6, 4)
+
+		if len(logEntry.Topics) > 0 {
+			// Get the event signature hash and look up its human-readable name
+			eventSigHash := logEntry.Topics[0].ToHash().Hex()
+			eventName := "Unknown"
+			
+			if eventDetails != nil {
+				if name, exists := eventDetails[eventSigHash]; exists {
+					eventName = name
+				}
+			}
+
+			// Format: "  [index] EventName from 0x1234...5678"
+			logLine := fmt.Sprintf("  [%d] %s from %s", i, eventName, contractAddrShort)
+			
+			// Add topic count if there are indexed parameters
+			if len(logEntry.Topics) > 1 {
+				logLine += fmt.Sprintf(" (%d indexed args)", len(logEntry.Topics)-1)
+			}
+			
+			logLines = append(logLines, logLine)
+		} else {
+			// Anonymous event (no topics)
+			logLine := fmt.Sprintf("  [%d] Anonymous Event from %s", i, contractAddrShort)
+			logLines = append(logLines, logLine)
+		}
+	}
+
+	// Add summary line
+	if len(logs) > 0 {
+		logLines = append(logLines, fmt.Sprintf("  Total: %d event(s)", len(logs)))
+	}
+
+	return strings.Join(logLines, "\n")
 }
 
 // Start begins the TUI rendering

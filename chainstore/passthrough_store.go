@@ -483,20 +483,28 @@ func (s *PassthroughStore) GetSignature(ctx context.Context, hexSignature string
 		hexSignature = "0x" + hexSignature
 	}
 
-	// Validate hex signature length (should be 0x + 8 hex chars for 4 bytes)
-	if len(hexSignature) != 10 {
-		return nil, fmt.Errorf("invalid signature length: expected 10 characters (0x + 8 hex), got %d", len(hexSignature))
+	// Determine signature type and API endpoint based on length
+	var apiURL string
+	var signatureType string
+	
+	switch len(hexSignature) {
+	case 10: // 0x + 8 hex chars = 4 bytes (function signature)
+		apiURL = fmt.Sprintf("%s?hex_signature=%s", s.config.SignatureLookupAPIURL, url.QueryEscape(hexSignature))
+		signatureType = "function"
+	case 66: // 0x + 64 hex chars = 32 bytes (event signature)
+		apiURL = fmt.Sprintf("%s?hex_signature=%s", s.config.EventSignatureLookupAPIURL, url.QueryEscape(hexSignature))
+		signatureType = "event"
+	default:
+		return nil, fmt.Errorf("invalid signature length: expected 10 chars (function) or 66 chars (event), got %d", len(hexSignature))
 	}
 
 	// Check cache first
 	if signatures, valid := s.cache.GetSignatures(hexSignature, s.config.SignatureLookupTTL); valid {
-		log.Debug().Str("signature", hexSignature).Int("count", len(signatures)).Msg("Signature found in cache")
+		log.Debug().Str("signature", hexSignature).Str("type", signatureType).Int("count", len(signatures)).Msg("Signature found in cache")
 		return signatures, nil
 	}
 
 	// Make API request to 4byte.directory
-	apiURL := fmt.Sprintf("%s?hex_signature=%s", s.config.SignatureLookupAPIURL, url.QueryEscape(hexSignature))
-	
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -524,6 +532,7 @@ func (s *PassthroughStore) GetSignature(ctx context.Context, hexSignature string
 
 	log.Debug().
 		Str("signature", hexSignature).
+		Str("type", signatureType).
 		Int("count", len(sigResponse.Results)).
 		Msg("Fetched signatures from 4byte.directory")
 

@@ -19,10 +19,11 @@ type ChainStoreConfig struct {
 	EnableFeeHistoryTracking bool
 
 	// Signature lookup configuration
-	EnableSignatureLookup    bool          // Enable 4byte.directory lookups
-	SignatureLookupTTL       time.Duration // Cache TTL for signatures (1 hour)
-	SignatureLookupTimeout   time.Duration // HTTP timeout for API calls (5 seconds)
-	SignatureLookupAPIURL    string        // 4byte.directory API endpoint
+	EnableSignatureLookup      bool          // Enable 4byte.directory lookups
+	SignatureLookupTTL         time.Duration // Cache TTL for signatures (1 hour)
+	SignatureLookupTimeout     time.Duration // HTTP timeout for API calls (5 seconds)
+	SignatureLookupAPIURL      string        // 4byte.directory function signatures API endpoint
+	EventSignatureLookupAPIURL string        // 4byte.directory event signatures API endpoint
 }
 
 // DefaultChainStoreConfig returns default configuration
@@ -38,9 +39,10 @@ func DefaultChainStoreConfig() *ChainStoreConfig {
 		EnableFinalityTracking:   true,
 		EnableFeeHistoryTracking: true,
 
-		EnableSignatureLookup:  true,
-		SignatureLookupTTL:     1 * time.Hour,
-		SignatureLookupTimeout: 5 * time.Second,
-		SignatureLookupAPIURL:  "https://www.4byte.directory/api/v1/signatures/",
+		EnableSignatureLookup:      true,
+		SignatureLookupTTL:         1 * time.Hour,
+		SignatureLookupTimeout:     5 * time.Second,
+		SignatureLookupAPIURL:      "https://www.4byte.directory/api/v1/signatures/",
+		EventSignatureLookupAPIURL: "https://www.4byte.directory/api/v1/event-signatures/",
 	}
 }
