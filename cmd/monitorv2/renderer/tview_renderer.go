@@ -22,6 +22,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Zero address constant for efficient comparisons
+var zeroAddress = common.Address{}
+
 // Comparison functions for different data types
 func compareNumbers(a, b interface{}) int {
 	aNum := a.(*big.Int)
@@ -1829,14 +1832,14 @@ func (t *TviewRenderer) calculateTransactionCounters() (uint64, uint64) {
 	for _, block := range t.blocks {
 		transactions := block.Transactions()
 		for _, tx := range transactions {
-			toAddr := tx.To().Hex()
+			toAddr := tx.To()
 			dataStr := tx.DataStr()
 			hasInputData := len(dataStr) > 2 // More than just "0x"
 
-			if !hasInputData && toAddr != "0x0000000000000000000000000000000000000000" {
+			if !hasInputData && toAddr != zeroAddress {
 				// EOA transaction: no input data and not sent to zero address
 				eoaCount++
-			} else if hasInputData && toAddr == "0x0000000000000000000000000000000000000000" {
+			} else if hasInputData && toAddr == zeroAddress {
 				// Contract deployment: has input data and sent to zero address
 				deployCount++
 			}
@@ -1882,19 +1885,19 @@ func (t *TviewRenderer) calculateUniqueAddressCounters() (uint64, uint64) {
 	t.blocksMu.RLock()
 	defer t.blocksMu.RUnlock()
 
-	uniqueFrom := make(map[string]bool)
-	uniqueTo := make(map[string]bool)
+	uniqueFrom := make(map[common.Address]bool)
+	uniqueTo := make(map[common.Address]bool)
 
 	for _, block := range t.blocks {
 		transactions := block.Transactions()
 		for _, tx := range transactions {
 			// Track unique from addresses
-			fromAddr := tx.From().Hex()
+			fromAddr := tx.From()
 			uniqueFrom[fromAddr] = true
 
 			// Track unique to addresses (if not contract creation)
-			toAddr := tx.To().Hex()
-			if toAddr != "0x0000000000000000000000000000000000000000" {
+			toAddr := tx.To()
+			if toAddr != zeroAddress {
 				uniqueTo[toAddr] = true
 			}
 		}
