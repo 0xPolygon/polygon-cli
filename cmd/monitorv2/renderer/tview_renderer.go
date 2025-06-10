@@ -195,6 +195,11 @@ type TviewRenderer struct {
 
 	// Modals
 	quitModal *tview.Modal
+
+	// Modal state management
+	isModalActive   bool
+	activeModalName string
+	modalStateMu    sync.RWMutex
 }
 
 // NewTviewRenderer creates a new TUI renderer using tview
@@ -285,13 +290,11 @@ func (t *TviewRenderer) createHomePage() {
 	// Configure table to use full width
 	// The expansion will be handled by individual cells
 
-	// Initialize with 8 rows of placeholders
-	for row := 0; row < 8; row++ {
-		t.homeMetricsPane.SetCell(row, 0,
-			tview.NewTableCell("Initializing "). // Add trailing space
-								SetAlign(tview.AlignLeft).
-								SetExpansion(1))
-	}
+	// Initialize with 1 rows of placeholders
+	t.homeMetricsPane.SetCell(0, 0,
+		tview.NewTableCell("Initializing... "). // Add trailing space
+							SetAlign(tview.AlignLeft).
+							SetExpansion(1))
 
 	// Create horizontal flex container for the 2 top sections
 	t.homeTopSection = tview.NewFlex().
@@ -482,7 +485,7 @@ func (t *TviewRenderer) createQuitModal() {
 			if buttonLabel == "Yes" {
 				t.app.Stop()
 			} else {
-				t.pages.HidePage("quit")
+				t.hideModal()
 			}
 		})
 }
@@ -511,7 +514,7 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 		// Global shortcuts (work from any page)
 		switch event.Rune() {
 		case 'q', 'Q':
-			t.pages.ShowPage("quit")
+			t.showModal("quit")
 			return nil
 		case 'h', 'H':
 			t.pages.SwitchToPage("help")
@@ -1242,8 +1245,25 @@ func (t *TviewRenderer) throttledDraw() {
 		return
 	}
 
+	// Save current focus if a modal is active
+	var currentFocus tview.Primitive
+	if t.isModalCurrentlyActive() {
+		currentFocus = t.app.GetFocus()
+	}
+
 	t.lastDrawTime = now
 	t.app.Draw()
+
+	// Restore focus to modal if it was stolen during draw
+	if t.isModalCurrentlyActive() && currentFocus != nil {
+		// Small delay to ensure the draw is complete before restoring focus
+		go func() {
+			time.Sleep(1 * time.Millisecond)
+			t.app.QueueUpdateDraw(func() {
+				t.app.SetFocus(currentFocus)
+			})
+		}()
+	}
 }
 
 // consumeBlocks consumes blocks from the indexer and updates the table
@@ -2244,6 +2264,53 @@ func hexToDecimal(value interface{}) (*big.Int, error) {
 	default:
 		return nil, fmt.Errorf("unsupported number type: %T", value)
 	}
+}
+
+// Modal management methods
+
+// showModal displays a modal and tracks its state
+func (t *TviewRenderer) showModal(name string) {
+	t.modalStateMu.Lock()
+	t.isModalActive = true
+	t.activeModalName = name
+	t.modalStateMu.Unlock()
+
+	// Show the modal page
+	t.pages.ShowPage(name)
+	
+	// Set focus to the modal based on its name
+	switch name {
+	case "quit":
+		t.app.SetFocus(t.quitModal)
+	}
+}
+
+// hideModal hides the currently active modal and clears state
+func (t *TviewRenderer) hideModal() {
+	t.modalStateMu.Lock()
+	t.isModalActive = false
+	t.activeModalName = ""
+	t.modalStateMu.Unlock()
+
+	// Hide the current modal page
+	t.pages.HidePage("quit") // For now, only quit modal exists
+	
+	// Return focus to the home page
+	t.app.SetFocus(t.homeTable)
+}
+
+// isModalCurrentlyActive returns true if any modal is currently active
+func (t *TviewRenderer) isModalCurrentlyActive() bool {
+	t.modalStateMu.RLock()
+	defer t.modalStateMu.RUnlock()
+	return t.isModalActive
+}
+
+// getActiveModalName returns the name of the currently active modal
+func (t *TviewRenderer) getActiveModalName() string {
+	t.modalStateMu.RLock()
+	defer t.modalStateMu.RUnlock()
+	return t.activeModalName
 }
 
 // Stop gracefully stops the TUI renderer
