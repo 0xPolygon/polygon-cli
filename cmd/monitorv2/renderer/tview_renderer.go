@@ -344,11 +344,20 @@ func (t *TviewRenderer) createHomePage() {
 
 				// Update view state safely
 				t.viewStateMu.Lock()
-				// Mark as manual selection if this wasn't triggered by auto-follow
-				if t.viewState.followMode && row != 1 {
-					t.viewState.manualSelect = true
-					t.viewState.selectedBlock = blockHash
-					log.Debug().Str("hash", blockHash).Msg("Manual selection detected, disabling auto-follow")
+				if t.viewState.followMode {
+					if row == 1 {
+						// User selected the first row - re-enable auto-follow
+						if t.viewState.manualSelect {
+							t.viewState.manualSelect = false
+							t.viewState.selectedBlock = ""
+							log.Debug().Msg("First row selected, re-enabling auto-follow")
+						}
+					} else {
+						// User selected a different row - disable auto-follow
+						t.viewState.manualSelect = true
+						t.viewState.selectedBlock = blockHash
+						log.Debug().Str("hash", blockHash).Int("row", row).Msg("Manual selection detected, disabling auto-follow")
+					}
 				}
 				t.viewStateMu.Unlock()
 			} else {
