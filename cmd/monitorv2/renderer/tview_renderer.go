@@ -59,42 +59,42 @@ func compareStrings(a, b interface{}) int {
 func createColumnDefinitions() []ColumnDef {
 	return []ColumnDef{
 		{
-			Name: "BLOCK #", Key: "number", Align: tview.AlignRight, Expansion: 1,
+			Name: "BLOCK #", Key: "number", Align: tview.AlignLeft, Expansion: 1,
 			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.Number() },
 			CompareFunc: compareNumbers,
 		},
 		{
-			Name: "TIME", Key: "time", Align: tview.AlignLeft, Expansion: 3,
+			Name: "TIME", Key: "time", Align: tview.AlignLeft, Expansion: 2,
 			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.Time() },
 			CompareFunc: compareUint64,
 		},
 		{
-			Name: "INTERVAL", Key: "interval", Align: tview.AlignRight, Expansion: 1,
+			Name: "INTERVAL", Key: "interval", Align: tview.AlignCenter, Expansion: 1,
 			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.Time() }, // Will be calculated separately
 			CompareFunc: compareUint64,
 		},
 		{
-			Name: "HASH", Key: "hash", Align: tview.AlignLeft, Expansion: 2,
+			Name: "HASH", Key: "hash", Align: tview.AlignCenter, Expansion: 2,
 			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.Hash().Hex() },
 			CompareFunc: compareStrings,
 		},
 		{
-			Name: "TXS", Key: "txs", Align: tview.AlignRight, Expansion: 1,
+			Name: "TXS", Key: "txs", Align: tview.AlignCenter, Expansion: 1,
 			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return uint64(len(block.Transactions())) },
 			CompareFunc: compareUint64,
 		},
 		{
-			Name: "SIZE", Key: "size", Align: tview.AlignRight, Expansion: 1,
+			Name: "SIZE", Key: "size", Align: tview.AlignCenter, Expansion: 1,
 			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.Size() },
 			CompareFunc: compareUint64,
 		},
 		{
-			Name: "GAS USED", Key: "gasused", Align: tview.AlignRight, Expansion: 2,
+			Name: "GAS USED", Key: "gasused", Align: tview.AlignCenter, Expansion: 2,
 			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.GasUsed() },
 			CompareFunc: compareUint64,
 		},
 		{
-			Name: "GAS %", Key: "gaspct", Align: tview.AlignRight, Expansion: 1,
+			Name: "GAS %", Key: "gaspct", Align: tview.AlignCenter, Expansion: 1,
 			SortFunc: func(block rpctypes.PolyBlock) interface{} {
 				if block.GasLimit() == 0 {
 					return uint64(0)
@@ -109,7 +109,7 @@ func createColumnDefinitions() []ColumnDef {
 			CompareFunc: compareUint64,
 		},
 		{
-			Name: "STATE ROOT", Key: "stateroot", Align: tview.AlignLeft, Expansion: 2,
+			Name: "STATE ROOT", Key: "stateroot", Align: tview.AlignRight, Expansion: 2,
 			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.Root().Hex() },
 			CompareFunc: compareStrings,
 		},
@@ -700,7 +700,7 @@ func (t *TviewRenderer) showBlockDetail(block rpctypes.PolyBlock) {
 		Str("blockHash", block.Hash().Hex()).
 		Str("blockNumber", block.Number().String()).
 		Msg("showBlockDetail called")
-		
+
 	// Store the current block for transaction selection
 	t.currentBlockMu.Lock()
 	t.currentBlock = block
@@ -779,7 +779,7 @@ func (t *TviewRenderer) showTransactionDetail(tx rpctypes.PolyTransaction, txInd
 		Str("txHash", tx.Hash().Hex()).
 		Int("txIndex", txIndex).
 		Msg("showTransactionDetail called")
-		
+
 	// Update pane titles to reflect the transaction content
 	t.txDetailLeft.SetTitle(fmt.Sprintf(" Transaction Details (Index: %d) ", txIndex))
 	t.txDetailTxJSON.SetTitle(fmt.Sprintf(" Transaction JSON (Hash: %s) ", truncateHash(tx.Hash().Hex(), 8, 8)))
@@ -1622,43 +1622,43 @@ func (t *TviewRenderer) updateTable() {
 
 		// Column 0: Block number
 		blockNum := block.Number().String()
-		t.homeTable.SetCell(row, 0, tview.NewTableCell(blockNum).SetAlign(tview.AlignRight))
+		t.homeTable.SetCell(row, 0, tview.NewTableCell(blockNum).SetAlign(t.columns[0].Align))
 
 		// Column 1: Time (absolute and relative)
 		timeStr := formatBlockTime(block.Time())
-		t.homeTable.SetCell(row, 1, tview.NewTableCell(timeStr).SetAlign(tview.AlignLeft))
+		t.homeTable.SetCell(row, 1, tview.NewTableCell(timeStr).SetAlign(t.columns[1].Align))
 
 		// Column 2: Block interval
 		intervalStr := t.calculateBlockInterval(block, i, blocks)
-		t.homeTable.SetCell(row, 2, tview.NewTableCell(intervalStr).SetAlign(tview.AlignRight))
+		t.homeTable.SetCell(row, 2, tview.NewTableCell(intervalStr).SetAlign(t.columns[2].Align))
 
 		// Column 3: Block hash (truncated for display)
 		hashStr := truncateHash(block.Hash().Hex(), 10, 10)
-		t.homeTable.SetCell(row, 3, tview.NewTableCell(hashStr).SetAlign(tview.AlignLeft))
+		t.homeTable.SetCell(row, 3, tview.NewTableCell(hashStr).SetAlign(t.columns[3].Align))
 
 		// Column 4: Number of transactions
 		txCount := len(block.Transactions())
-		t.homeTable.SetCell(row, 4, tview.NewTableCell(strconv.Itoa(txCount)).SetAlign(tview.AlignRight))
+		t.homeTable.SetCell(row, 4, tview.NewTableCell(strconv.Itoa(txCount)).SetAlign(t.columns[4].Align))
 
 		// Column 5: Block size
 		sizeStr := formatBytes(block.Size())
-		t.homeTable.SetCell(row, 5, tview.NewTableCell(sizeStr).SetAlign(tview.AlignRight))
+		t.homeTable.SetCell(row, 5, tview.NewTableCell(sizeStr).SetAlign(t.columns[5].Align))
 
 		// Column 6: Gas used
 		gasUsedStr := formatNumber(block.GasUsed())
-		t.homeTable.SetCell(row, 6, tview.NewTableCell(gasUsedStr).SetAlign(tview.AlignRight))
+		t.homeTable.SetCell(row, 6, tview.NewTableCell(gasUsedStr).SetAlign(t.columns[6].Align))
 
 		// Column 7: Gas percentage
 		gasPercentStr := formatGasPercentage(block.GasUsed(), block.GasLimit())
-		t.homeTable.SetCell(row, 7, tview.NewTableCell(gasPercentStr).SetAlign(tview.AlignRight))
+		t.homeTable.SetCell(row, 7, tview.NewTableCell(gasPercentStr).SetAlign(t.columns[7].Align))
 
 		// Column 8: Gas limit
 		gasLimitStr := formatNumber(block.GasLimit())
-		t.homeTable.SetCell(row, 8, tview.NewTableCell(gasLimitStr).SetAlign(tview.AlignRight))
+		t.homeTable.SetCell(row, 8, tview.NewTableCell(gasLimitStr).SetAlign(t.columns[8].Align))
 
 		// Column 9: State root (truncated)
 		stateRootStr := truncateHash(block.Root().Hex(), 8, 8)
-		t.homeTable.SetCell(row, 9, tview.NewTableCell(stateRootStr).SetAlign(tview.AlignLeft))
+		t.homeTable.SetCell(row, 9, tview.NewTableCell(stateRootStr).SetAlign(t.columns[9].Align))
 	}
 
 	// Update table title with current block count
@@ -1736,7 +1736,7 @@ func (t *TviewRenderer) refreshChainInfo(ctx context.Context) {
 	t.networkInfoMu.RLock()
 	connectionStatusStr := t.connectionStatus
 	t.networkInfoMu.RUnlock()
-	
+
 	if connectionStatusStr != "" {
 		statusLines = append(statusLines, fmt.Sprintf("Connection: %s", connectionStatusStr))
 	} else {
@@ -1779,9 +1779,9 @@ func getNetworkName(chainID *big.Int) string {
 	if chainID == nil {
 		return "Unknown"
 	}
-	
+
 	chainIDInt64 := chainID.Int64()
-	
+
 	// Try to get from chainlist cache
 	chainlistMu.RLock()
 	if chainlistCache != nil {
@@ -1791,10 +1791,10 @@ func getNetworkName(chainID *big.Int) string {
 		}
 	}
 	chainlistMu.RUnlock()
-	
+
 	// Initialize chainlist cache on first use
 	chainlistFetch.Do(initChainlist)
-	
+
 	// Try again after initialization
 	chainlistMu.RLock()
 	if chainlistCache != nil {
@@ -1804,29 +1804,29 @@ func getNetworkName(chainID *big.Int) string {
 		}
 	}
 	chainlistMu.RUnlock()
-	
+
 	// Fallback to static mapping for common chains
 	staticNames := map[int64]string{
-		1:     "Ethereum Mainnet",
-		137:   "Polygon PoS",
-		56:    "BNB Smart Chain",
-		10:    "Optimism",
-		42161: "Arbitrum One",
-		43114: "Avalanche C-Chain",
-		250:   "Fantom Opera",
-		8453:  "Base",
-		100:   "Gnosis Chain",
-		324:   "zkSync Era",
-		1101:  "Polygon zkEVM",
-		80001: "Polygon Mumbai",
+		1:        "Ethereum Mainnet",
+		137:      "Polygon PoS",
+		56:       "BNB Smart Chain",
+		10:       "Optimism",
+		42161:    "Arbitrum One",
+		43114:    "Avalanche C-Chain",
+		250:      "Fantom Opera",
+		8453:     "Base",
+		100:      "Gnosis Chain",
+		324:      "zkSync Era",
+		1101:     "Polygon zkEVM",
+		80001:    "Polygon Mumbai",
 		11155111: "Sepolia Testnet",
-		5:     "Goerli Testnet",
+		5:        "Goerli Testnet",
 	}
-	
+
 	if name, exists := staticNames[chainIDInt64]; exists {
 		return name
 	}
-	
+
 	// Return chain ID if name not found
 	return fmt.Sprintf("Chain %s", chainID.String())
 }
@@ -1835,13 +1835,13 @@ func getNetworkName(chainID *big.Int) string {
 func initChainlist() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	
+
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://chainid.network/chains.json", nil)
 	if err != nil {
 		log.Debug().Err(err).Msg("Failed to create chainlist request")
 		return
 	}
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -1849,28 +1849,28 @@ func initChainlist() {
 		return
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != 200 {
 		log.Debug().Int("status", resp.StatusCode).Msg("Chainlist request failed")
 		return
 	}
-	
+
 	var chains []ChainInfo
 	if err := json.NewDecoder(resp.Body).Decode(&chains); err != nil {
 		log.Debug().Err(err).Msg("Failed to decode chainlist")
 		return
 	}
-	
+
 	// Build cache map
 	cache := make(map[int64]ChainInfo, len(chains))
 	for _, chain := range chains {
 		cache[chain.ChainID] = chain
 	}
-	
+
 	chainlistMu.Lock()
 	chainlistCache = cache
 	chainlistMu.Unlock()
-	
+
 	log.Debug().Int("chains", len(chains)).Msg("Loaded chainlist cache")
 }
 
@@ -1886,7 +1886,7 @@ func formatSyncStatus(syncStatus interface{}) string {
 		// Parse sync progress from object response
 		current, ok1 := v["currentBlock"].(string)
 		highest, ok2 := v["highestBlock"].(string)
-		
+
 		if ok1 && ok2 {
 			// Parse hex strings to get numeric values
 			if currentBig, err1 := hexToBigInt(current); err1 == nil {
@@ -1897,7 +1897,7 @@ func formatSyncStatus(syncStatus interface{}) string {
 						total := new(big.Float).SetInt(highestBig)
 						percentage := new(big.Float).Quo(progress, total)
 						percentage.Mul(percentage, big.NewFloat(100))
-						
+
 						pct, _ := percentage.Float64()
 						return fmt.Sprintf("[SYNC] Syncing (%.1f%%)", pct)
 					}
@@ -1926,7 +1926,7 @@ func hexToBigInt(hex string) (*big.Int, error) {
 // formatConnectionStatus converts latency duration to human-readable connection status
 func formatConnectionStatus(latency time.Duration) string {
 	ms := latency.Milliseconds()
-	
+
 	switch {
 	case ms < 50:
 		return fmt.Sprintf("[OK] Excellent (%dms)", ms)
@@ -1992,7 +1992,7 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 		interval := int64(block.Time()) - int64(parentBlock.Time())
 		return fmt.Sprintf("%ds", interval)
 	}
-	
+
 	// Parent not found by hash, use the next block in the slice
 	// Since blocks are sorted newest first, the next block (index+1) is the previous block in time
 	if index+1 < len(blocks) {
@@ -2000,7 +2000,7 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 		// Make sure it's actually the previous block number or close to it
 		currentBlockNum := block.Number().Uint64()
 		prevBlockNum := prevBlock.Number().Uint64()
-		
+
 		// If the blocks are consecutive or reasonably close (within 100 blocks)
 		// we can calculate a meaningful interval
 		if currentBlockNum > prevBlockNum && currentBlockNum-prevBlockNum <= 100 {
@@ -2013,7 +2013,7 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 			return fmt.Sprintf("%ds", interval)
 		}
 	}
-	
+
 	// Can't calculate interval (first block in the list or large gap)
 	return "N/A"
 }
@@ -2548,26 +2548,26 @@ func (t *TviewRenderer) isValidBlock(block rpctypes.PolyBlock) bool {
 		log.Debug().Msg("isValidBlock: block is nil")
 		return false
 	}
-	
+
 	// Check if the block has a valid hash (not zero)
 	blockHash := block.Hash()
 	if blockHash == (common.Hash{}) {
 		log.Debug().Msg("isValidBlock: block hash is zero")
 		return false
 	}
-	
+
 	// Check if the block has a valid number (not zero)
 	blockNum := block.Number()
 	if blockNum == nil {
 		log.Debug().Msg("isValidBlock: block number is nil")
 		return false
 	}
-	
+
 	if blockNum.Cmp(big.NewInt(0)) < 0 {
 		log.Debug().Str("blockNum", blockNum.String()).Msg("isValidBlock: block number is negative")
 		return false
 	}
-	
+
 	log.Debug().
 		Str("hash", blockHash.Hex()).
 		Str("number", blockNum.String()).
@@ -2581,21 +2581,21 @@ func (t *TviewRenderer) isValidTransaction(tx rpctypes.PolyTransaction) bool {
 		log.Debug().Msg("isValidTransaction: transaction is nil")
 		return false
 	}
-	
+
 	// Check if the transaction has a valid hash (not zero)
 	txHash := tx.Hash()
 	if txHash == (common.Hash{}) {
 		log.Debug().Msg("isValidTransaction: transaction hash is zero")
 		return false
 	}
-	
+
 	// Check if the transaction has a from address (all transactions must have a sender)
 	fromAddr := tx.From()
 	if fromAddr == (common.Address{}) {
 		log.Debug().Msg("isValidTransaction: from address is zero")
 		return false
 	}
-	
+
 	// Check if block number is set (transaction has been mined)
 	blockNum := tx.BlockNumber()
 	if blockNum == nil || blockNum.Cmp(big.NewInt(0)) <= 0 {
@@ -2604,7 +2604,7 @@ func (t *TviewRenderer) isValidTransaction(tx rpctypes.PolyTransaction) bool {
 			Msg("isValidTransaction: invalid block number (pending or invalid)")
 		return false
 	}
-	
+
 	log.Debug().
 		Str("hash", txHash.Hex()).
 		Str("from", fromAddr.Hex()).
@@ -2619,7 +2619,7 @@ func (t *TviewRenderer) isValidTransaction(tx rpctypes.PolyTransaction) bool {
 func (t *TviewRenderer) performSearch(query string) {
 	query = strings.TrimSpace(query)
 	log.Debug().Str("query", query).Msg("performSearch called")
-	
+
 	if query == "" {
 		log.Debug().Msg("Empty search query, returning")
 		return
@@ -2668,7 +2668,7 @@ func (t *TviewRenderer) searchBlockByNumber(blockNum uint64) {
 // searchByHash searches for a block or transaction by hash
 func (t *TviewRenderer) searchByHash(hash string) {
 	log.Debug().Str("hash", hash).Msg("searchByHash started")
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -2683,7 +2683,7 @@ func (t *TviewRenderer) searchByHash(hash string) {
 			Str("txHash", hashBytes.Hex()).
 			Interface("tx", tx).
 			Msg("Found as transaction")
-		
+
 		// Validate the transaction has actual data
 		if t.isValidTransaction(tx) {
 			log.Debug().Msg("Transaction is valid, showing detail")
@@ -2707,7 +2707,7 @@ func (t *TviewRenderer) searchByHash(hash string) {
 			Str("blockHash", hash).
 			Bool("blockNotNil", block != nil).
 			Msg("GetBlock returned")
-		
+
 		if block != nil {
 			blockHash := block.Hash()
 			blockNum := block.Number()
@@ -2718,10 +2718,10 @@ func (t *TviewRenderer) searchByHash(hash string) {
 				Bool("numberIsNil", blockNum == nil).
 				Msg("Block details")
 		}
-		
+
 		isValid := t.isValidBlock(block)
 		log.Debug().Bool("isValidBlock", isValid).Msg("Block validation result")
-		
+
 		if isValid {
 			// Found as block and it's valid (not empty) - navigate to block detail
 			log.Debug().Msg("Showing block detail")
@@ -2740,7 +2740,7 @@ func (t *TviewRenderer) searchByHash(hash string) {
 // showTransactionWithBlock gets a transaction's block and shows the transaction detail
 func (t *TviewRenderer) showTransactionWithBlock(tx rpctypes.PolyTransaction, txHash common.Hash) {
 	log.Debug().Str("txHash", txHash.Hex()).Msg("showTransactionWithBlock started")
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -2769,7 +2769,7 @@ func (t *TviewRenderer) showTransactionWithBlock(tx rpctypes.PolyTransaction, tx
 	// Find the transaction index within the block
 	transactions := block.Transactions()
 	log.Debug().Int("txCount", len(transactions)).Msg("Searching for transaction in block")
-	
+
 	txIndex := -1
 	for i, blockTx := range transactions {
 		if blockTx.Hash().Hex() == txHash.Hex() {
