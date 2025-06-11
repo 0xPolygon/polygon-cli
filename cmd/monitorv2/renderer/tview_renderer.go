@@ -696,6 +696,11 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 
 // showBlockDetail navigates to block detail page and populates it
 func (t *TviewRenderer) showBlockDetail(block rpctypes.PolyBlock) {
+	log.Debug().
+		Str("blockHash", block.Hash().Hex()).
+		Str("blockNumber", block.Number().String()).
+		Msg("showBlockDetail called")
+		
 	// Store the current block for transaction selection
 	t.currentBlockMu.Lock()
 	t.currentBlock = block
@@ -770,6 +775,11 @@ func (t *TviewRenderer) showBlockDetail(block rpctypes.PolyBlock) {
 
 // showTransactionDetail navigates to transaction detail page and populates it asynchronously
 func (t *TviewRenderer) showTransactionDetail(tx rpctypes.PolyTransaction, txIndex int) {
+	log.Debug().
+		Str("txHash", tx.Hash().Hex()).
+		Int("txIndex", txIndex).
+		Msg("showTransactionDetail called")
+		
 	// Update pane titles to reflect the transaction content
 	t.txDetailLeft.SetTitle(fmt.Sprintf(" Transaction Details (Index: %d) ", txIndex))
 	t.txDetailTxJSON.SetTitle(fmt.Sprintf(" Transaction JSON (Hash: %s) ", truncateHash(tx.Hash().Hex(), 8, 8)))
@@ -2532,28 +2542,105 @@ func hexToDecimal(value interface{}) (*big.Int, error) {
 	}
 }
 
+// isValidBlock checks if a block response contains valid data
+func (t *TviewRenderer) isValidBlock(block rpctypes.PolyBlock) bool {
+	if block == nil {
+		log.Debug().Msg("isValidBlock: block is nil")
+		return false
+	}
+	
+	// Check if the block has a valid hash (not zero)
+	blockHash := block.Hash()
+	if blockHash == (common.Hash{}) {
+		log.Debug().Msg("isValidBlock: block hash is zero")
+		return false
+	}
+	
+	// Check if the block has a valid number (not zero)
+	blockNum := block.Number()
+	if blockNum == nil {
+		log.Debug().Msg("isValidBlock: block number is nil")
+		return false
+	}
+	
+	if blockNum.Cmp(big.NewInt(0)) < 0 {
+		log.Debug().Str("blockNum", blockNum.String()).Msg("isValidBlock: block number is negative")
+		return false
+	}
+	
+	log.Debug().
+		Str("hash", blockHash.Hex()).
+		Str("number", blockNum.String()).
+		Msg("isValidBlock: block is valid")
+	return true
+}
+
+// isValidTransaction checks if a transaction response contains valid data
+func (t *TviewRenderer) isValidTransaction(tx rpctypes.PolyTransaction) bool {
+	if tx == nil {
+		log.Debug().Msg("isValidTransaction: transaction is nil")
+		return false
+	}
+	
+	// Check if the transaction has a valid hash (not zero)
+	txHash := tx.Hash()
+	if txHash == (common.Hash{}) {
+		log.Debug().Msg("isValidTransaction: transaction hash is zero")
+		return false
+	}
+	
+	// Check if the transaction has a from address (all transactions must have a sender)
+	fromAddr := tx.From()
+	if fromAddr == (common.Address{}) {
+		log.Debug().Msg("isValidTransaction: from address is zero")
+		return false
+	}
+	
+	// Check if block number is set (transaction has been mined)
+	blockNum := tx.BlockNumber()
+	if blockNum == nil || blockNum.Cmp(big.NewInt(0)) <= 0 {
+		log.Debug().
+			Bool("blockNumNil", blockNum == nil).
+			Msg("isValidTransaction: invalid block number (pending or invalid)")
+		return false
+	}
+	
+	log.Debug().
+		Str("hash", txHash.Hex()).
+		Str("from", fromAddr.Hex()).
+		Str("blockNumber", blockNum.String()).
+		Msg("isValidTransaction: transaction is valid")
+	return true
+}
+
 // Search functionality methods
 
 // performSearch parses the search query and determines the search type
 func (t *TviewRenderer) performSearch(query string) {
 	query = strings.TrimSpace(query)
+	log.Debug().Str("query", query).Msg("performSearch called")
+	
 	if query == "" {
+		log.Debug().Msg("Empty search query, returning")
 		return
 	}
 
 	// Try to parse as a number (block number)
 	if blockNum, err := strconv.ParseUint(query, 10, 64); err == nil {
+		log.Debug().Uint64("blockNum", blockNum).Msg("Detected block number search")
 		go t.searchBlockByNumber(blockNum)
 		return
 	}
 
 	// Check if it looks like a hash (0x prefix and 66 characters for full hash)
 	if strings.HasPrefix(query, "0x") && len(query) == 66 {
+		log.Debug().Str("hash", query).Msg("Detected hash search")
 		go t.searchByHash(query)
 		return
 	}
 
 	// Show error for invalid format
+	log.Debug().Str("query", query).Msg("Invalid search format")
 	t.showSearchError("Invalid input. Enter a block number or hash (0x...)")
 }
 
@@ -2580,26 +2667,69 @@ func (t *TviewRenderer) searchBlockByNumber(blockNum uint64) {
 
 // searchByHash searches for a block or transaction by hash
 func (t *TviewRenderer) searchByHash(hash string) {
+	log.Debug().Str("hash", hash).Msg("searchByHash started")
+	
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// Convert string to common.Hash
 	hashBytes := common.HexToHash(hash)
+	log.Debug().Str("hashBytes", hashBytes.Hex()).Msg("Converted to common.Hash")
 
-	// Try to find as a block first
-	if block, err := t.indexer.GetBlock(ctx, hashBytes); err == nil {
-		// Found as block - navigate to block detail
-		t.app.QueueUpdateDraw(func() {
-			t.showBlockDetail(block)
-		})
-		return
+	// Try to find as a transaction first (more common than block hash searches)
+	log.Debug().Msg("Attempting to find as transaction")
+	if tx, err := t.indexer.GetTransaction(ctx, hashBytes); err == nil {
+		log.Debug().
+			Str("txHash", hashBytes.Hex()).
+			Interface("tx", tx).
+			Msg("Found as transaction")
+		
+		// Validate the transaction has actual data
+		if t.isValidTransaction(tx) {
+			log.Debug().Msg("Transaction is valid, showing detail")
+			// Found as transaction - need to get the containing block
+			go t.showTransactionWithBlock(tx, hashBytes)
+			return
+		} else {
+			log.Debug().Msg("Transaction response is empty/invalid, trying as block")
+		}
+	} else {
+		log.Debug().Err(err).Str("hash", hash).Msg("Not found as transaction")
 	}
 
-	// Try to find as a transaction
-	if tx, err := t.indexer.GetTransaction(ctx, hashBytes); err == nil {
-		// Found as transaction - need to get the containing block
-		go t.showTransactionWithBlock(tx, hashBytes)
-		return
+	// Try to find as a block
+	log.Debug().Msg("Attempting to find as block")
+	block, err := t.indexer.GetBlock(ctx, hashBytes)
+	if err != nil {
+		log.Debug().Err(err).Str("hash", hash).Msg("Error getting block")
+	} else {
+		log.Debug().
+			Str("blockHash", hash).
+			Bool("blockNotNil", block != nil).
+			Msg("GetBlock returned")
+		
+		if block != nil {
+			blockHash := block.Hash()
+			blockNum := block.Number()
+			log.Debug().
+				Str("returnedHash", blockHash.Hex()).
+				Bool("hashIsZero", blockHash == (common.Hash{})).
+				Interface("blockNumber", blockNum).
+				Bool("numberIsNil", blockNum == nil).
+				Msg("Block details")
+		}
+		
+		isValid := t.isValidBlock(block)
+		log.Debug().Bool("isValidBlock", isValid).Msg("Block validation result")
+		
+		if isValid {
+			// Found as block and it's valid (not empty) - navigate to block detail
+			log.Debug().Msg("Showing block detail")
+			t.app.QueueUpdateDraw(func() {
+				t.showBlockDetail(block)
+			})
+			return
+		}
 	}
 
 	// Not found as either block or transaction
@@ -2609,10 +2739,13 @@ func (t *TviewRenderer) searchByHash(hash string) {
 
 // showTransactionWithBlock gets a transaction's block and shows the transaction detail
 func (t *TviewRenderer) showTransactionWithBlock(tx rpctypes.PolyTransaction, txHash common.Hash) {
+	log.Debug().Str("txHash", txHash.Hex()).Msg("showTransactionWithBlock started")
+	
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// Get the receipt to find the block number
+	log.Debug().Msg("Getting receipt for transaction")
 	receipt, err := t.indexer.GetReceipt(ctx, txHash)
 	if err != nil {
 		log.Debug().Err(err).Str("txHash", txHash.Hex()).Msg("Failed to get receipt")
@@ -2622,8 +2755,10 @@ func (t *TviewRenderer) showTransactionWithBlock(tx rpctypes.PolyTransaction, tx
 
 	// Get the block number from the receipt
 	blockNumber := receipt.BlockNumber()
+	log.Debug().Str("blockNumber", blockNumber.String()).Msg("Got block number from receipt")
 
 	// Get the full block
+	log.Debug().Msg("Getting block for transaction")
 	block, err := t.indexer.GetBlock(ctx, blockNumber)
 	if err != nil {
 		log.Debug().Err(err).Str("blockNum", blockNumber.String()).Msg("Failed to get block for transaction")
@@ -2633,10 +2768,13 @@ func (t *TviewRenderer) showTransactionWithBlock(tx rpctypes.PolyTransaction, tx
 
 	// Find the transaction index within the block
 	transactions := block.Transactions()
+	log.Debug().Int("txCount", len(transactions)).Msg("Searching for transaction in block")
+	
 	txIndex := -1
 	for i, blockTx := range transactions {
 		if blockTx.Hash().Hex() == txHash.Hex() {
 			txIndex = i
+			log.Debug().Int("txIndex", i).Msg("Found transaction at index")
 			break
 		}
 	}
@@ -2648,6 +2786,7 @@ func (t *TviewRenderer) showTransactionWithBlock(tx rpctypes.PolyTransaction, tx
 	}
 
 	// Update UI on main thread
+	log.Debug().Msg("Updating UI with transaction detail")
 	t.app.QueueUpdateDraw(func() {
 		// Set the block as current so back navigation works
 		t.currentBlockMu.Lock()
@@ -2656,6 +2795,7 @@ func (t *TviewRenderer) showTransactionWithBlock(tx rpctypes.PolyTransaction, tx
 
 		// Show transaction detail
 		t.showTransactionDetail(tx, txIndex)
+		log.Debug().Msg("showTransactionDetail called")
 	})
 }
 
@@ -2663,6 +2803,7 @@ func (t *TviewRenderer) showTransactionWithBlock(tx rpctypes.PolyTransaction, tx
 func (t *TviewRenderer) showSearchError(message string) {
 	// For now, just log the error. In the future, we could show a toast or status message
 	log.Info().Str("searchError", message).Msg("Search error")
+	log.Debug().Str("errorMessage", message).Msg("showSearchError called")
 
 	// TODO: Could implement a status bar or toast notification here
 }
