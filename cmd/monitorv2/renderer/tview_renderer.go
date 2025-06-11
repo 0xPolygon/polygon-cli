@@ -2823,12 +2823,13 @@ func (t *TviewRenderer) showModal(name string) {
 	// Set focus to the modal based on its name
 	switch name {
 	case "quit":
+		t.quitModal.SetFocus(0) // Always start on "Yes"
 		t.app.SetFocus(t.quitModal)
 	case "search":
-		// Clear any existing text and focus on the form
+		// Clear any existing text and focus on the input field
 		inputField := t.searchForm.GetFormItem(0).(*tview.InputField)
 		inputField.SetText("")
-		t.app.SetFocus(t.searchForm)
+		t.app.SetFocus(inputField)
 	}
 }
 
