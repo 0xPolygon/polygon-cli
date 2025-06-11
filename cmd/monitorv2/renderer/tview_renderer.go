@@ -2460,7 +2460,10 @@ func (t *TviewRenderer) applyViewState() {
 		// Auto-follow mode: always select newest block (index 0, table row 1)
 		if hasBlocks {
 			t.homeTable.Select(1, 0)
-			t.app.SetFocus(t.homeTable)
+			// Only set focus if no modal is currently active
+			if !t.isModalCurrentlyActive() {
+				t.app.SetFocus(t.homeTable)
+			}
 			log.Debug().Msg("Auto-follow: selected newest block")
 		}
 	} else if selectedBlock != "" {
