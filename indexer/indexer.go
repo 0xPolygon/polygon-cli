@@ -206,6 +206,11 @@ func (i *Indexer) GetRPCURL() string {
 	return i.store.GetRPCURL()
 }
 
+// MeasureConnectionLatency measures the connection latency to the RPC endpoint
+func (i *Indexer) MeasureConnectionLatency(ctx context.Context) (time.Duration, error) {
+	return i.store.MeasureConnectionLatency(ctx)
+}
+
 // GetSignature retrieves function/event signatures from 4byte.directory
 func (i *Indexer) GetSignature(ctx context.Context, hexSignature string) ([]chainstore.Signature, error) {
 	return i.store.GetSignature(ctx, hexSignature)

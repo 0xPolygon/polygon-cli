@@ -176,11 +176,12 @@ type TviewRenderer struct {
 	blockInfoMu       sync.RWMutex
 
 	// Network info for metrics display
-	gasPrice      string
-	txPoolPending string
-	txPoolQueued  string
-	peerCount     string
-	networkInfoMu sync.RWMutex
+	gasPrice         string
+	txPoolPending    string
+	txPoolQueued     string
+	peerCount        string
+	connectionStatus string
+	networkInfoMu    sync.RWMutex
 
 	// Current block being viewed in detail (for transaction selection)
 	currentBlock   rpctypes.PolyBlock
@@ -1438,11 +1439,20 @@ func (t *TviewRenderer) fetchNetworkInfo(ctx context.Context) {
 		t.peerCount = "peers unknown"
 	}
 
+	// Measure connection latency
+	if latency, err := t.indexer.MeasureConnectionLatency(ctx); err == nil {
+		t.connectionStatus = formatConnectionStatus(latency)
+	} else {
+		t.connectionStatus = "[ERROR] Connection failed"
+		log.Debug().Err(err).Msg("Failed to measure connection latency")
+	}
+
 	log.Debug().
 		Str("gasPrice", t.gasPrice).
 		Str("txPoolPending", t.txPoolPending).
 		Str("txPoolQueued", t.txPoolQueued).
 		Str("peerCount", t.peerCount).
+		Str("connectionStatus", t.connectionStatus).
 		Msg("Updated network info cache")
 }
 
@@ -1712,6 +1722,17 @@ func (t *TviewRenderer) refreshChainInfo(ctx context.Context) {
 		statusLines = append(statusLines, "Sync: N/A")
 	}
 
+	// Get cached connection status
+	t.networkInfoMu.RLock()
+	connectionStatusStr := t.connectionStatus
+	t.networkInfoMu.RUnlock()
+	
+	if connectionStatusStr != "" {
+		statusLines = append(statusLines, fmt.Sprintf("Connection: %s", connectionStatusStr))
+	} else {
+		statusLines = append(statusLines, "Connection: Measuring...")
+	}
+
 	// Format status text
 	statusText := ""
 	for i, line := range statusLines {
@@ -1890,6 +1911,26 @@ func hexToBigInt(hex string) (*big.Int, error) {
 		return nil, fmt.Errorf("invalid hex string")
 	}
 	return result, nil
+}
+
+// formatConnectionStatus converts latency duration to human-readable connection status
+func formatConnectionStatus(latency time.Duration) string {
+	ms := latency.Milliseconds()
+	
+	switch {
+	case ms < 50:
+		return fmt.Sprintf("[OK] Excellent (%dms)", ms)
+	case ms < 150:
+		return fmt.Sprintf("[OK] Good (%dms)", ms)
+	case ms < 300:
+		return fmt.Sprintf("[OK] Fair (%dms)", ms)
+	case ms < 500:
+		return fmt.Sprintf("[SLOW] Slow (%dms)", ms)
+	case ms < 1000:
+		return fmt.Sprintf("[SLOW] Poor (%dms)", ms)
+	default:
+		return fmt.Sprintf("[POOR] Very Poor (%dms)", ms)
+	}
 }
 
 // weiToGwei converts wei to gwei with reasonable precision

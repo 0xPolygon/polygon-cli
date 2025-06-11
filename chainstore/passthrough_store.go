@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/ethereum/go-ethereum/common"
@@ -504,6 +506,48 @@ func (s *PassthroughStore) GetSupportedMethods() []string {
 // GetRPCURL returns the RPC endpoint URL
 func (s *PassthroughStore) GetRPCURL() string {
 	return s.rpcURL
+}
+
+// MeasureConnectionLatency measures the connection latency to the RPC endpoint
+func (s *PassthroughStore) MeasureConnectionLatency(ctx context.Context) (time.Duration, error) {
+	u, err := url.Parse(s.rpcURL)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse RPC URL: %w", err)
+	}
+
+	// Determine the port
+	port := u.Port()
+	if port == "" {
+		switch u.Scheme {
+		case "https", "wss":
+			port = "443"
+		case "http", "ws":
+			port = "80"
+		default:
+			return 0, fmt.Errorf("unsupported scheme: %s", u.Scheme)
+		}
+	}
+
+	// Measure TCP connection time
+	address := net.JoinHostPort(u.Hostname(), port)
+	start := time.Now()
+
+	// Create a dialer with timeout from context
+	dialer := &net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "tcp", address)
+	if err != nil {
+		return 0, fmt.Errorf("failed to connect to %s: %w", address, err)
+	}
+	defer conn.Close()
+
+	latency := time.Since(start)
+	
+	log.Debug().
+		Str("address", address).
+		Dur("latency", latency).
+		Msg("Measured connection latency")
+
+	return latency, nil
 }
 
 // === SIGNATURE LOOKUP ===

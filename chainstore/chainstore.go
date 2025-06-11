@@ -71,6 +71,7 @@ type ChainStore interface {
 
 	// === CONNECTION INFO ===
 	GetRPCURL() string
+	MeasureConnectionLatency(ctx context.Context) (time.Duration, error)
 
 	// === SIGNATURE LOOKUP ===
 	// GetSignature retrieves function/event signatures from 4byte.directory
