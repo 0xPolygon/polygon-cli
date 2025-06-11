@@ -145,11 +145,7 @@ func (s *PassthroughStore) GetChainID(ctx context.Context) (*big.Int, error) {
 		return chainID, nil
 	}
 
-	// Not supported, return error
-	if !s.capabilities.IsMethodSupported("eth_chainId") {
-		return nil, fmt.Errorf("eth_chainId method not supported")
-	}
-
+	// Try the call optimistically (eth_chainId is supported by virtually all Ethereum RPCs)
 	var result string
 	err := s.client.CallContext(ctx, &result, "eth_chainId")
 	if err != nil {
@@ -166,6 +162,48 @@ func (s *PassthroughStore) GetChainID(ctx context.Context) (*big.Int, error) {
 
 	log.Debug().Str("chainID", chainID.String()).Msg("Retrieved and cached chain ID")
 	return chainID, nil
+}
+
+// GetClientVersion retrieves the client version (cached indefinitely)
+func (s *PassthroughStore) GetClientVersion(ctx context.Context) (string, error) {
+	// Check cache first
+	if clientVersion, valid := s.cache.GetClientVersion(); valid {
+		return clientVersion, nil
+	}
+
+	// Try the call optimistically (web3_clientVersion is widely supported)
+	var result string
+	err := s.client.CallContext(ctx, &result, "web3_clientVersion")
+	if err != nil {
+		return "", fmt.Errorf("failed to get client version: %w", err)
+	}
+
+	// Cache the result
+	s.cache.SetClientVersion(result)
+
+	log.Debug().Str("clientVersion", result).Msg("Retrieved and cached client version")
+	return result, nil
+}
+
+// GetSyncStatus retrieves the sync status (cached semi-statically)
+func (s *PassthroughStore) GetSyncStatus(ctx context.Context) (interface{}, error) {
+	// Check cache first
+	if syncStatus, valid := s.cache.GetSyncStatus(s.config.SemiStaticTTL); valid {
+		return syncStatus, nil
+	}
+
+	// Try the call optimistically (eth_syncing is standard Ethereum RPC)
+	var result interface{}
+	err := s.client.CallContext(ctx, &result, "eth_syncing")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sync status: %w", err)
+	}
+
+	// Cache the result
+	s.cache.SetSyncStatus(result, s.config.SemiStaticTTL)
+
+	log.Debug().Interface("syncStatus", result).Msg("Retrieved and cached sync status")
+	return result, nil
 }
 
 // GetSafeBlock retrieves the safe block number (cached semi-statically)

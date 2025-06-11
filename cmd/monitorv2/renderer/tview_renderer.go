@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -198,8 +199,8 @@ type TviewRenderer struct {
 	countersMu  sync.RWMutex
 
 	// Modals
-	quitModal   *tview.Modal
-	searchForm  *tview.Form
+	quitModal  *tview.Modal
+	searchForm *tview.Form
 
 	// Modal state management
 	isModalActive   bool
@@ -1686,57 +1687,36 @@ func (t *TviewRenderer) refreshChainInfo(ctx context.Context) {
 	rpcURL := t.indexer.GetRPCURL()
 	statusLines = append(statusLines, fmt.Sprintf("RPC: %s", rpcURL))
 
-	// Try to get chain ID
+	// Try to get chain ID and network name
 	if chainID, err := t.indexer.GetChainID(ctx); err == nil {
+		networkName := getNetworkName(chainID)
+		statusLines = append(statusLines, fmt.Sprintf("Network: %s", networkName))
 		statusLines = append(statusLines, fmt.Sprintf("Chain ID: %s", chainID.String()))
 	} else {
+		statusLines = append(statusLines, "Network: Unknown")
 		statusLines = append(statusLines, "Chain ID: N/A")
 	}
 
-	// Try to get gas price
-	if gasPrice, err := t.indexer.GetGasPrice(ctx); err == nil {
-		gasPriceGwei := weiToGwei(gasPrice)
-		statusLines = append(statusLines, fmt.Sprintf("Gas Price: %s gwei", gasPriceGwei))
+	// Try to get client version
+	if clientVersion, err := t.indexer.GetClientVersion(ctx); err == nil {
+		statusLines = append(statusLines, fmt.Sprintf("Client: %s", clientVersion))
 	} else {
-		statusLines = append(statusLines, "Gas Price: N/A")
+		statusLines = append(statusLines, "Client: N/A")
 	}
 
-	// Try to get pending transaction count
-	if pendingTxs, err := t.indexer.GetPendingTransactionCount(ctx); err == nil {
-		statusLines = append(statusLines, fmt.Sprintf("Pending TXs: %s", pendingTxs.String()))
+	// Try to get sync status
+	if syncStatus, err := t.indexer.GetSyncStatus(ctx); err == nil {
+		syncStr := formatSyncStatus(syncStatus)
+		statusLines = append(statusLines, fmt.Sprintf("Sync: %s", syncStr))
 	} else {
-		statusLines = append(statusLines, "Pending TXs: N/A")
-	}
-
-	// Try to get safe block
-	if safeBlock, err := t.indexer.GetSafeBlock(ctx); err == nil {
-		statusLines = append(statusLines, fmt.Sprintf("Safe Block: #%s", safeBlock.String()))
-	} else {
-		statusLines = append(statusLines, "Safe Block: N/A")
-	}
-
-	// Get latest block info (use store method)
-	if latestBlock, err := t.indexer.GetBlock(ctx, "latest"); err == nil {
-		statusLines = append(statusLines, fmt.Sprintf("Latest Block: #%s", latestBlock.Number().String()))
-
-		// Add base fee if available
-		if baseFee := latestBlock.BaseFee(); baseFee != nil {
-			baseFeeGwei := weiToGwei(baseFee)
-			statusLines = append(statusLines, fmt.Sprintf("Base Fee: %s gwei", baseFeeGwei))
-		}
-	} else {
-		statusLines = append(statusLines, "Latest Block: N/A")
+		statusLines = append(statusLines, "Sync: N/A")
 	}
 
 	// Format status text
 	statusText := ""
 	for i, line := range statusLines {
 		if i > 0 {
-			if i%2 == 0 {
-				statusText += "\n"
-			} else {
-				statusText += " | "
-			}
+			statusText += "\n"
 		}
 		statusText += line
 	}
@@ -1747,6 +1727,169 @@ func (t *TviewRenderer) refreshChainInfo(ctx context.Context) {
 	t.throttledDraw()
 
 	log.Debug().Msg("Updated chain info in status section")
+}
+
+// ChainInfo represents a blockchain network from chainlist
+type ChainInfo struct {
+	Name    string `json:"name"`
+	ChainID int64  `json:"chainId"`
+	Chain   string `json:"chain"`
+}
+
+// chainlistCache holds the cached chain information
+var (
+	chainlistCache map[int64]ChainInfo
+	chainlistMu    sync.RWMutex
+	chainlistFetch sync.Once
+)
+
+// getNetworkName returns the human-readable network name for a given chain ID
+func getNetworkName(chainID *big.Int) string {
+	if chainID == nil {
+		return "Unknown"
+	}
+	
+	chainIDInt64 := chainID.Int64()
+	
+	// Try to get from chainlist cache
+	chainlistMu.RLock()
+	if chainlistCache != nil {
+		if chain, exists := chainlistCache[chainIDInt64]; exists {
+			chainlistMu.RUnlock()
+			return chain.Name
+		}
+	}
+	chainlistMu.RUnlock()
+	
+	// Initialize chainlist cache on first use
+	chainlistFetch.Do(initChainlist)
+	
+	// Try again after initialization
+	chainlistMu.RLock()
+	if chainlistCache != nil {
+		if chain, exists := chainlistCache[chainIDInt64]; exists {
+			chainlistMu.RUnlock()
+			return chain.Name
+		}
+	}
+	chainlistMu.RUnlock()
+	
+	// Fallback to static mapping for common chains
+	staticNames := map[int64]string{
+		1:     "Ethereum Mainnet",
+		137:   "Polygon PoS",
+		56:    "BNB Smart Chain",
+		10:    "Optimism",
+		42161: "Arbitrum One",
+		43114: "Avalanche C-Chain",
+		250:   "Fantom Opera",
+		8453:  "Base",
+		100:   "Gnosis Chain",
+		324:   "zkSync Era",
+		1101:  "Polygon zkEVM",
+		80001: "Polygon Mumbai",
+		11155111: "Sepolia Testnet",
+		5:     "Goerli Testnet",
+	}
+	
+	if name, exists := staticNames[chainIDInt64]; exists {
+		return name
+	}
+	
+	// Return chain ID if name not found
+	return fmt.Sprintf("Chain %s", chainID.String())
+}
+
+// initChainlist downloads and caches chain information from chainlist.org
+func initChainlist() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://chainid.network/chains.json", nil)
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to create chainlist request")
+		return
+	}
+	
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to fetch chainlist")
+		return
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != 200 {
+		log.Debug().Int("status", resp.StatusCode).Msg("Chainlist request failed")
+		return
+	}
+	
+	var chains []ChainInfo
+	if err := json.NewDecoder(resp.Body).Decode(&chains); err != nil {
+		log.Debug().Err(err).Msg("Failed to decode chainlist")
+		return
+	}
+	
+	// Build cache map
+	cache := make(map[int64]ChainInfo, len(chains))
+	for _, chain := range chains {
+		cache[chain.ChainID] = chain
+	}
+	
+	chainlistMu.Lock()
+	chainlistCache = cache
+	chainlistMu.Unlock()
+	
+	log.Debug().Int("chains", len(chains)).Msg("Loaded chainlist cache")
+}
+
+// formatSyncStatus converts sync status response to human-readable string
+func formatSyncStatus(syncStatus interface{}) string {
+	switch v := syncStatus.(type) {
+	case bool:
+		if v {
+			return "[SYNC] Syncing"
+		}
+		return "[OK] Synced"
+	case map[string]interface{}:
+		// Parse sync progress from object response
+		current, ok1 := v["currentBlock"].(string)
+		highest, ok2 := v["highestBlock"].(string)
+		
+		if ok1 && ok2 {
+			// Parse hex strings to get numeric values
+			if currentBig, err1 := hexToBigInt(current); err1 == nil {
+				if highestBig, err2 := hexToBigInt(highest); err2 == nil {
+					if highestBig.Cmp(big.NewInt(0)) > 0 {
+						// Calculate percentage
+						progress := new(big.Float).SetInt(currentBig)
+						total := new(big.Float).SetInt(highestBig)
+						percentage := new(big.Float).Quo(progress, total)
+						percentage.Mul(percentage, big.NewFloat(100))
+						
+						pct, _ := percentage.Float64()
+						return fmt.Sprintf("[SYNC] Syncing (%.1f%%)", pct)
+					}
+				}
+			}
+		}
+		return "[SYNC] Syncing"
+	default:
+		return "[?] Unknown"
+	}
+}
+
+// hexToBigInt converts hex string to big.Int (helper for sync status)
+func hexToBigInt(hex string) (*big.Int, error) {
+	if len(hex) >= 2 && hex[:2] == "0x" {
+		hex = hex[2:]
+	}
+	result := big.NewInt(0)
+	result, ok := result.SetString(hex, 16)
+	if !ok {
+		return nil, fmt.Errorf("invalid hex string")
+	}
+	return result, nil
 }
 
 // weiToGwei converts wei to gwei with reasonable precision
@@ -2355,7 +2498,7 @@ func (t *TviewRenderer) searchBlockByNumber(blockNum uint64) {
 
 	// Convert to big.Int for the indexer call
 	blockNumber := big.NewInt(int64(blockNum))
-	
+
 	block, err := t.indexer.GetBlock(ctx, blockNumber)
 	if err != nil {
 		log.Debug().Err(err).Uint64("blockNum", blockNum).Msg("Block not found")
@@ -2413,7 +2556,7 @@ func (t *TviewRenderer) showTransactionWithBlock(tx rpctypes.PolyTransaction, tx
 
 	// Get the block number from the receipt
 	blockNumber := receipt.BlockNumber()
-	
+
 	// Get the full block
 	block, err := t.indexer.GetBlock(ctx, blockNumber)
 	if err != nil {
@@ -2454,7 +2597,7 @@ func (t *TviewRenderer) showTransactionWithBlock(tx rpctypes.PolyTransaction, tx
 func (t *TviewRenderer) showSearchError(message string) {
 	// For now, just log the error. In the future, we could show a toast or status message
 	log.Info().Str("searchError", message).Msg("Search error")
-	
+
 	// TODO: Could implement a status bar or toast notification here
 }
 
@@ -2469,7 +2612,7 @@ func (t *TviewRenderer) showModal(name string) {
 
 	// Show the modal page
 	t.pages.ShowPage(name)
-	
+
 	// Set focus to the modal based on its name
 	switch name {
 	case "quit":
@@ -2494,7 +2637,7 @@ func (t *TviewRenderer) hideModal() {
 	if modalName != "" {
 		t.pages.HidePage(modalName)
 	}
-	
+
 	// Return focus to the home page
 	t.app.SetFocus(t.homeTable)
 }

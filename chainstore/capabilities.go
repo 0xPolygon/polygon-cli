@@ -63,6 +63,8 @@ func (cm *CapabilityManager) RefreshCapabilities(ctx context.Context) error {
 	// Methods to test for capability
 	methodsToTest := []string{
 		"eth_chainId",
+		"web3_clientVersion",
+		"eth_syncing",
 		"eth_gasPrice",
 		"eth_feeHistory",
 		"eth_maxPriorityFeePerGas",
@@ -75,25 +77,44 @@ func (cm *CapabilityManager) RefreshCapabilities(ctx context.Context) error {
 		"engine_forkchoiceUpdatedV3",
 		"debug_getRawBlock",
 		"debug_getRawHeader",
+		"net_peerCount",
+	}
+
+	// Test methods concurrently for faster detection
+	results := make(chan struct {
+		method    string
+		supported bool
+	}, len(methodsToTest))
+
+	// Launch concurrent tests
+	for _, method := range methodsToTest {
+		go func(m string) {
+			supported := cm.testMethodCapability(ctx, m)
+			results <- struct {
+				method    string
+				supported bool
+			}{m, supported}
+			log.Debug().
+				Str("method", m).
+				Bool("supported", supported).
+				Msg("Tested RPC method capability")
+		}(method)
+	}
+
+	// Collect results
+	capabilities := make(map[string]bool)
+	for i := 0; i < len(methodsToTest); i++ {
+		result := <-results
+		capabilities[result.method] = result.supported
 	}
 
 	cm.mu.Lock()
-	defer cm.mu.Unlock()
-
-	for _, method := range methodsToTest {
-		supported := cm.testMethodCapability(ctx, method)
-		cm.capabilities[method] = supported
-
-		log.Debug().
-			Str("method", method).
-			Bool("supported", supported).
-			Msg("Tested RPC method capability")
-	}
-
+	cm.capabilities = capabilities
 	cm.lastChecked = time.Now()
+	cm.mu.Unlock()
 
 	supportedCount := 0
-	for _, supported := range cm.capabilities {
+	for _, supported := range capabilities {
 		if supported {
 			supportedCount++
 		}

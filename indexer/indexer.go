@@ -146,6 +146,16 @@ func (i *Indexer) GetChainID(ctx context.Context) (*big.Int, error) {
 	return i.store.GetChainID(ctx)
 }
 
+// GetClientVersion retrieves the client version
+func (i *Indexer) GetClientVersion(ctx context.Context) (string, error) {
+	return i.store.GetClientVersion(ctx)
+}
+
+// GetSyncStatus retrieves the sync status
+func (i *Indexer) GetSyncStatus(ctx context.Context) (interface{}, error) {
+	return i.store.GetSyncStatus(ctx)
+}
+
 // GetGasPrice retrieves the current gas price
 func (i *Indexer) GetGasPrice(ctx context.Context) (*big.Int, error) {
 	return i.store.GetGasPrice(ctx)

@@ -43,8 +43,10 @@ type ChainStore interface {
 
 	// Static info (fetch once, cache indefinitely)
 	GetChainID(ctx context.Context) (*big.Int, error)
+	GetClientVersion(ctx context.Context) (string, error)
 
 	// Semi-static info (cache for minutes)
+	GetSyncStatus(ctx context.Context) (interface{}, error)
 	GetSafeBlock(ctx context.Context) (*big.Int, error)
 	GetFinalizedBlock(ctx context.Context) (*big.Int, error)
 

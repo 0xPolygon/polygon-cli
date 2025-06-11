@@ -44,9 +44,11 @@ type ChainCache struct {
 	mu sync.RWMutex
 
 	// Static data (never expires)
-	chainID *CachedValue[*big.Int]
+	chainID       *CachedValue[*big.Int]
+	clientVersion *CachedValue[string]
 
 	// Semi-static data (5-15 minute TTL)
+	syncStatus     *CachedValue[interface{}]
 	safeBlock      *CachedValue[*big.Int]
 	finalizedBlock *CachedValue[*big.Int]
 
@@ -88,6 +90,40 @@ func (cc *ChainCache) SetChainID(chainID *big.Int) {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
 	cc.chainID = NewCachedValue(chainID, 0) // Never expires
+}
+
+// GetClientVersion gets cached client version
+func (cc *ChainCache) GetClientVersion() (string, bool) {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	if cc.clientVersion == nil {
+		return "", false
+	}
+	return cc.clientVersion.Get()
+}
+
+// SetClientVersion caches client version (never expires)
+func (cc *ChainCache) SetClientVersion(clientVersion string) {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+	cc.clientVersion = NewCachedValue(clientVersion, 0) // Never expires
+}
+
+// GetSyncStatus gets cached sync status
+func (cc *ChainCache) GetSyncStatus(ttl time.Duration) (interface{}, bool) {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	if cc.syncStatus == nil {
+		return nil, false
+	}
+	return cc.syncStatus.Get()
+}
+
+// SetSyncStatus caches sync status with TTL
+func (cc *ChainCache) SetSyncStatus(syncStatus interface{}, ttl time.Duration) {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+	cc.syncStatus = NewCachedValue(syncStatus, ttl)
 }
 
 // GetSafeBlock gets cached safe block
