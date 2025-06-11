@@ -749,7 +749,7 @@ func (t *TviewRenderer) showBlockDetail(block rpctypes.PolyBlock) {
 	t.blockDetailLeft.SetTitle(title)
 
 	// Right pane shows pretty-printed JSON of the block
-	blockJSON, err := block.MarshalJSON()
+	blockJSON, err := rpctypes.PolyBlockToPrettyJSON(block)
 	if err != nil {
 		t.blockDetailRight.SetText(fmt.Sprintf("Error marshaling block JSON: %v", err))
 	} else {
@@ -1071,7 +1071,7 @@ func (t *TviewRenderer) getMethodSignatureDetails(hexSignature string) string {
 // loadTransactionJSONAsync loads and formats transaction JSON asynchronously
 func (t *TviewRenderer) loadTransactionJSONAsync(tx rpctypes.PolyTransaction) {
 	// Marshal transaction JSON
-	txJSON, err := tx.MarshalJSON()
+	txJSON, err := rpctypes.PolyTransactionToPrettyJSON(tx)
 	if err != nil {
 		t.app.QueueUpdateDraw(func() {
 			t.txDetailTxJSON.SetText(fmt.Sprintf("Error marshaling transaction JSON: %v", err))
@@ -1187,7 +1187,7 @@ func (t *TviewRenderer) loadReceiptJSONAsync(tx rpctypes.PolyTransaction) {
 	}
 
 	// Marshal receipt to JSON
-	receiptJSON, err := json.Marshal(receipt)
+	receiptJSON, err := rpctypes.PolyReceiptToPrettyJSON(receipt)
 	if err != nil {
 		t.app.QueueUpdateDraw(func() {
 			t.txDetailRcptJSON.SetText(fmt.Sprintf("Error marshaling receipt JSON: %v", err))
