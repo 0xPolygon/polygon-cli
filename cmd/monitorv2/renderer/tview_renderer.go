@@ -1619,7 +1619,7 @@ func (t *TviewRenderer) updateTable() {
 		t.homeTable.SetCell(row, 1, tview.NewTableCell(timeStr).SetAlign(tview.AlignLeft))
 
 		// Column 2: Block interval
-		intervalStr := t.calculateBlockInterval(block)
+		intervalStr := t.calculateBlockInterval(block, i, blocks)
 		t.homeTable.SetCell(row, 2, tview.NewTableCell(intervalStr).SetAlign(tview.AlignRight))
 
 		// Column 3: Block hash (truncated for display)
@@ -1974,15 +1974,37 @@ func formatBlockTime(timestamp uint64) string {
 }
 
 // calculateBlockInterval calculates the time interval between a block and its parent
-func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock) string {
-	// Look up parent block by hash
+func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index int, blocks []rpctypes.PolyBlock) string {
+	// First try to look up parent block by hash (most accurate)
 	parentHash := block.ParentHash().Hex()
 	if parentBlock, exists := t.blocksByHash[parentHash]; exists {
 		// Calculate interval in seconds
 		interval := int64(block.Time()) - int64(parentBlock.Time())
 		return fmt.Sprintf("%ds", interval)
 	}
-	// Parent not found (might be initial blocks or missing data)
+	
+	// Parent not found by hash, use the next block in the slice
+	// Since blocks are sorted newest first, the next block (index+1) is the previous block in time
+	if index+1 < len(blocks) {
+		prevBlock := blocks[index+1]
+		// Make sure it's actually the previous block number or close to it
+		currentBlockNum := block.Number().Uint64()
+		prevBlockNum := prevBlock.Number().Uint64()
+		
+		// If the blocks are consecutive or reasonably close (within 100 blocks)
+		// we can calculate a meaningful interval
+		if currentBlockNum > prevBlockNum && currentBlockNum-prevBlockNum <= 100 {
+			interval := int64(block.Time()) - int64(prevBlock.Time())
+			// For non-consecutive blocks, show average interval
+			if currentBlockNum-prevBlockNum > 1 {
+				avgInterval := interval / int64(currentBlockNum-prevBlockNum)
+				return fmt.Sprintf("~%ds", avgInterval)
+			}
+			return fmt.Sprintf("%ds", interval)
+		}
+	}
+	
+	// Can't calculate interval (first block in the list or large gap)
 	return "N/A"
 }
 
