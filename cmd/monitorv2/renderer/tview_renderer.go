@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"net/http"
 	"sort"
@@ -848,11 +849,21 @@ func (t *TviewRenderer) createBasicTransactionDetails(tx rpctypes.PolyTransactio
 	// EIP-1559 fields (if applicable)
 	if tx.Type() >= 2 {
 		if tx.MaxFeePerGas() > 0 {
-			maxFeeBig := big.NewInt(int64(tx.MaxFeePerGas()))
+			maxFeeGas := tx.MaxFeePerGas()
+			if maxFeeGas > math.MaxInt64 {
+				log.Error().Uint64("max_fee_per_gas", maxFeeGas).Msg("MaxFeePerGas exceeds int64 range, using MaxInt64")
+				maxFeeGas = math.MaxInt64
+			}
+			maxFeeBig := big.NewInt(int64(maxFeeGas))
 			details = append(details, fmt.Sprintf("Max Fee Per Gas: %s gwei", weiToGwei(maxFeeBig)))
 		}
 		if tx.MaxPriorityFeePerGas() > 0 {
-			maxPriorityBig := big.NewInt(int64(tx.MaxPriorityFeePerGas()))
+			maxPriorityGas := tx.MaxPriorityFeePerGas()
+			if maxPriorityGas > math.MaxInt64 {
+				log.Error().Uint64("max_priority_fee_per_gas", maxPriorityGas).Msg("MaxPriorityFeePerGas exceeds int64 range, using MaxInt64")
+				maxPriorityGas = math.MaxInt64
+			}
+			maxPriorityBig := big.NewInt(int64(maxPriorityGas))
 			details = append(details, fmt.Sprintf("Max Priority Fee Per Gas: %s gwei", weiToGwei(maxPriorityBig)))
 		}
 		details = append(details, "")
@@ -920,11 +931,21 @@ func (t *TviewRenderer) createHumanReadableTransactionDetailsSync(tx rpctypes.Po
 	// EIP-1559 fields (if applicable)
 	if tx.Type() >= 2 {
 		if tx.MaxFeePerGas() > 0 {
-			maxFeeBig := big.NewInt(int64(tx.MaxFeePerGas()))
+			maxFeeGas := tx.MaxFeePerGas()
+			if maxFeeGas > math.MaxInt64 {
+				log.Error().Uint64("max_fee_per_gas", maxFeeGas).Msg("MaxFeePerGas exceeds int64 range, using MaxInt64")
+				maxFeeGas = math.MaxInt64
+			}
+			maxFeeBig := big.NewInt(int64(maxFeeGas))
 			details = append(details, fmt.Sprintf("Max Fee Per Gas: %s gwei", weiToGwei(maxFeeBig)))
 		}
 		if tx.MaxPriorityFeePerGas() > 0 {
-			maxPriorityBig := big.NewInt(int64(tx.MaxPriorityFeePerGas()))
+			maxPriorityGas := tx.MaxPriorityFeePerGas()
+			if maxPriorityGas > math.MaxInt64 {
+				log.Error().Uint64("max_priority_fee_per_gas", maxPriorityGas).Msg("MaxPriorityFeePerGas exceeds int64 range, using MaxInt64")
+				maxPriorityGas = math.MaxInt64
+			}
+			maxPriorityBig := big.NewInt(int64(maxPriorityGas))
 			details = append(details, fmt.Sprintf("Max Priority Fee Per Gas: %s gwei", weiToGwei(maxPriorityBig)))
 		}
 		details = append(details, "")
@@ -1960,6 +1981,10 @@ func weiToGwei(wei *big.Int) string {
 // formatRelativeTime converts Unix timestamp to human-readable relative time
 func formatRelativeTime(timestamp uint64) string {
 	now := time.Now().Unix()
+	if timestamp > math.MaxInt64 {
+		log.Error().Uint64("timestamp", timestamp).Msg("Timestamp exceeds int64 range, using current time")
+		timestamp = uint64(now)
+	}
 	diff := now - int64(timestamp)
 
 	if diff < 0 {
@@ -1977,6 +2002,10 @@ func formatRelativeTime(timestamp uint64) string {
 
 // formatBlockTime formats block timestamp as "2006-01-02T15:04:05Z - 6m ago"
 func formatBlockTime(timestamp uint64) string {
+	if timestamp > math.MaxInt64 {
+		log.Error().Uint64("timestamp", timestamp).Msg("Timestamp exceeds int64 range, using current time")
+		timestamp = uint64(time.Now().Unix())
+	}
 	t := time.Unix(int64(timestamp), 0).UTC()
 	absolute := t.Format("2006-01-02T15:04:05Z")
 	relative := formatRelativeTime(timestamp)
@@ -1989,7 +2018,17 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 	parentHash := block.ParentHash().Hex()
 	if parentBlock, exists := t.blocksByHash[parentHash]; exists {
 		// Calculate interval in seconds
-		interval := int64(block.Time()) - int64(parentBlock.Time())
+		blockTime := block.Time()
+		parentTime := parentBlock.Time()
+		if blockTime > math.MaxInt64 {
+			log.Error().Uint64("block_time", blockTime).Msg("Block time exceeds int64 range, using MaxInt64")
+			blockTime = math.MaxInt64
+		}
+		if parentTime > math.MaxInt64 {
+			log.Error().Uint64("parent_time", parentTime).Msg("Parent block time exceeds int64 range, using MaxInt64")
+			parentTime = math.MaxInt64
+		}
+		interval := int64(blockTime) - int64(parentTime)
 		return fmt.Sprintf("%ds", interval)
 	}
 
@@ -2004,10 +2043,25 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 		// If the blocks are consecutive or reasonably close (within 100 blocks)
 		// we can calculate a meaningful interval
 		if currentBlockNum > prevBlockNum && currentBlockNum-prevBlockNum <= 100 {
-			interval := int64(block.Time()) - int64(prevBlock.Time())
+			blockTime := block.Time()
+		prevTime := prevBlock.Time()
+		if blockTime > math.MaxInt64 {
+			log.Error().Uint64("block_time", blockTime).Msg("Block time exceeds int64 range, using MaxInt64")
+			blockTime = math.MaxInt64
+		}
+		if prevTime > math.MaxInt64 {
+			log.Error().Uint64("prev_time", prevTime).Msg("Previous block time exceeds int64 range, using MaxInt64")
+			prevTime = math.MaxInt64
+		}
+		interval := int64(blockTime) - int64(prevTime)
 			// For non-consecutive blocks, show average interval
 			if currentBlockNum-prevBlockNum > 1 {
-				avgInterval := interval / int64(currentBlockNum-prevBlockNum)
+				blockDiff := currentBlockNum - prevBlockNum
+				if blockDiff > math.MaxInt64 {
+					log.Error().Uint64("block_diff", blockDiff).Msg("Block difference exceeds int64 range, using MaxInt64")
+					blockDiff = math.MaxInt64
+				}
+				avgInterval := interval / int64(blockDiff)
 				return fmt.Sprintf("~%ds", avgInterval)
 			}
 			return fmt.Sprintf("%ds", interval)
@@ -2532,10 +2586,26 @@ func hexToDecimal(value interface{}) (*big.Int, error) {
 		}
 		return result, nil
 	case float64:
+		if v > math.MaxInt64 || v < math.MinInt64 {
+			log.Error().Float64("value", v).Msg("Float64 value exceeds int64 range, clamping")
+			if v > math.MaxInt64 {
+				v = math.MaxInt64
+			} else {
+				v = math.MinInt64
+			}
+		}
 		return big.NewInt(int64(v)), nil
 	case int64:
 		return big.NewInt(v), nil
 	case int:
+		if v > math.MaxInt64 || v < math.MinInt64 {
+			log.Error().Int("value", v).Msg("Int value exceeds int64 range, clamping")
+			if v > math.MaxInt64 {
+				v = math.MaxInt64
+			} else {
+				v = math.MinInt64
+			}
+		}
 		return big.NewInt(int64(v)), nil
 	default:
 		return nil, fmt.Errorf("unsupported number type: %T", value)
@@ -2650,6 +2720,10 @@ func (t *TviewRenderer) searchBlockByNumber(blockNum uint64) {
 	defer cancel()
 
 	// Convert to big.Int for the indexer call
+	if blockNum > math.MaxInt64 {
+		log.Error().Uint64("block_num", blockNum).Msg("Block number exceeds int64 range, using MaxInt64")
+		blockNum = math.MaxInt64
+	}
 	blockNumber := big.NewInt(int64(blockNum))
 
 	block, err := t.indexer.GetBlock(ctx, blockNumber)
