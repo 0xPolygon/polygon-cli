@@ -1977,8 +1977,8 @@ func weiToGwei(wei *big.Int) string {
 func formatRelativeTime(timestamp uint64) string {
 	now := time.Now().Unix()
 	if timestamp > math.MaxInt64 {
-		log.Error().Uint64("timestamp", timestamp).Msg("Timestamp exceeds int64 range, using current time")
-		timestamp = uint64(now)
+		log.Error().Uint64("timestamp", timestamp).Msg("Timestamp exceeds int64 range, clamping to MaxInt64")
+		timestamp = math.MaxInt64
 	}
 	diff := now - int64(timestamp)
 
@@ -1998,8 +1998,8 @@ func formatRelativeTime(timestamp uint64) string {
 // formatBlockTime formats block timestamp as "2006-01-02T15:04:05Z - 6m ago"
 func formatBlockTime(timestamp uint64) string {
 	if timestamp > math.MaxInt64 {
-		log.Error().Uint64("timestamp", timestamp).Msg("Timestamp exceeds int64 range, using current time")
-		timestamp = uint64(time.Now().Unix())
+		log.Error().Uint64("timestamp", timestamp).Msg("Timestamp exceeds int64 range, clamping to MaxInt64")
+		timestamp = math.MaxInt64
 	}
 	t := time.Unix(int64(timestamp), 0).UTC()
 	absolute := t.Format("2006-01-02T15:04:05Z")
