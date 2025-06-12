@@ -49,10 +49,7 @@ func (e *EmptyBlockMetric) ProcessBlock(block rpctypes.PolyBlock) {
 	// Maintain window size
 	if len(e.recentWindow) > e.windowSize {
 		// Remove oldest entry
-		if e.recentWindow[0] {
-			// If the removed block was empty, adjust the count
-			// (Note: we don't decrement totalBlocks as that's cumulative)
-		}
+		// (Note: we don't decrement totalBlocks as that's cumulative)
 		e.recentWindow = e.recentWindow[1:]
 	}
 }

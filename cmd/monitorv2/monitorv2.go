@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/0xPolygon/polygon-cli/chainstore"
 	"github.com/0xPolygon/polygon-cli/cmd/monitorv2/renderer"
@@ -66,7 +67,12 @@ var MonitorV2Cmd = &cobra.Command{
 		if err := idx.Start(); err != nil {
 			return fmt.Errorf("failed to start indexer: %w", err)
 		}
-		defer idx.Stop()
+		defer func() {
+			if err := idx.Stop(); err != nil {
+				// Log error but don't return it since we're in a defer
+				fmt.Fprintf(os.Stderr, "Warning: failed to stop indexer: %v\n", err)
+			}
+		}()
 
 		// Create renderer based on type
 		var r renderer.Renderer

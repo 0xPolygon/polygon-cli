@@ -541,7 +541,7 @@ func (s *PassthroughStore) MeasureConnectionLatency(ctx context.Context) (time.D
 	defer conn.Close()
 
 	latency := time.Since(start)
-	
+
 	log.Debug().
 		Str("address", address).
 		Dur("latency", latency).
@@ -568,7 +568,7 @@ func (s *PassthroughStore) GetSignature(ctx context.Context, hexSignature string
 	// Determine signature type and API endpoint based on length
 	var apiURL string
 	var signatureType string
-	
+
 	switch len(hexSignature) {
 	case 10: // 0x + 8 hex chars = 4 bytes (function signature)
 		apiURL = fmt.Sprintf("%s?hex_signature=%s", s.config.SignatureLookupAPIURL, url.QueryEscape(hexSignature))

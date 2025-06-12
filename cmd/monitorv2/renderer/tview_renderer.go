@@ -193,12 +193,7 @@ type TviewRenderer struct {
 	drawMu          sync.Mutex
 	minDrawInterval time.Duration
 
-	// Transaction counters for metrics
-	eoaCount    uint64
-	deployCount uint64
-	erc20Count  uint64
-	nftCount    uint64
-	countersMu  sync.RWMutex
+	// Transaction counters for metrics - removed unused fields
 
 	// Modals
 	quitModal  *tview.Modal
@@ -728,7 +723,7 @@ func (t *TviewRenderer) showBlockDetail(block rpctypes.PolyBlock) {
 		t.blockDetailLeft.SetCell(row, 1, tview.NewTableCell(fromAddr).SetAlign(tview.AlignLeft))
 
 		// Column 2: To address (truncated), handle contract creation (empty address)
-		toAddr := "N/A"
+		var toAddr string
 		if tx.To().Hex() != "0x0000000000000000000000000000000000000000" {
 			toAddr = truncateHash(tx.To().Hex(), 6, 4)
 		} else {
@@ -2044,16 +2039,16 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 		// we can calculate a meaningful interval
 		if currentBlockNum > prevBlockNum && currentBlockNum-prevBlockNum <= 100 {
 			blockTime := block.Time()
-		prevTime := prevBlock.Time()
-		if blockTime > math.MaxInt64 {
-			log.Error().Uint64("block_time", blockTime).Msg("Block time exceeds int64 range, using MaxInt64")
-			blockTime = math.MaxInt64
-		}
-		if prevTime > math.MaxInt64 {
-			log.Error().Uint64("prev_time", prevTime).Msg("Previous block time exceeds int64 range, using MaxInt64")
-			prevTime = math.MaxInt64
-		}
-		interval := int64(blockTime) - int64(prevTime)
+			prevTime := prevBlock.Time()
+			if blockTime > math.MaxInt64 {
+				log.Error().Uint64("block_time", blockTime).Msg("Block time exceeds int64 range, using MaxInt64")
+				blockTime = math.MaxInt64
+			}
+			if prevTime > math.MaxInt64 {
+				log.Error().Uint64("prev_time", prevTime).Msg("Previous block time exceeds int64 range, using MaxInt64")
+				prevTime = math.MaxInt64
+			}
+			interval := int64(blockTime) - int64(prevTime)
 			// For non-consecutive blocks, show average interval
 			if currentBlockNum-prevBlockNum > 1 {
 				blockDiff := currentBlockNum - prevBlockNum
@@ -2200,21 +2195,6 @@ func truncateHash(hash string, prefixLen, suffixLen int) string {
 		return hash
 	}
 	return hash[:prefixLen] + "..." + hash[len(hash)-suffixLen:]
-}
-
-// formatDuration formats a duration for human-readable display
-func formatDuration(d time.Duration) string {
-	if d == 0 {
-		return "0s"
-	}
-
-	if d < time.Second {
-		return fmt.Sprintf("%.0fms", float64(d.Nanoseconds())/1000000)
-	} else if d < time.Minute {
-		return fmt.Sprintf("%.1fs", d.Seconds())
-	} else {
-		return fmt.Sprintf("%.1fm", d.Minutes())
-	}
 }
 
 // formatBlockNumber formats a block number for display with thousand separators
@@ -2464,17 +2444,6 @@ func (t *TviewRenderer) resortBlocks() {
 		Msg("Resorted blocks")
 }
 
-// getCurrentSortColumn returns the current sort column definition
-func (t *TviewRenderer) getCurrentSortColumn() ColumnDef {
-	t.viewStateMu.RLock()
-	defer t.viewStateMu.RUnlock()
-
-	if t.viewState.sortColumnIndex < 0 || t.viewState.sortColumnIndex >= len(t.columns) {
-		return t.columns[0] // Default to first column
-	}
-	return t.columns[t.viewState.sortColumnIndex]
-}
-
 // changeSortColumn changes the sort column by delta (-1 for left, +1 for right)
 func (t *TviewRenderer) changeSortColumn(delta int) {
 	t.viewStateMu.Lock()
@@ -2598,14 +2567,6 @@ func hexToDecimal(value interface{}) (*big.Int, error) {
 	case int64:
 		return big.NewInt(v), nil
 	case int:
-		if v > math.MaxInt64 || v < math.MinInt64 {
-			log.Error().Int("value", v).Msg("Int value exceeds int64 range, clamping")
-			if v > math.MaxInt64 {
-				v = math.MaxInt64
-			} else {
-				v = math.MinInt64
-			}
-		}
 		return big.NewInt(int64(v)), nil
 	default:
 		return nil, fmt.Errorf("unsupported number type: %T", value)
@@ -2929,13 +2890,6 @@ func (t *TviewRenderer) isModalCurrentlyActive() bool {
 	t.modalStateMu.RLock()
 	defer t.modalStateMu.RUnlock()
 	return t.isModalActive
-}
-
-// getActiveModalName returns the name of the currently active modal
-func (t *TviewRenderer) getActiveModalName() string {
-	t.modalStateMu.RLock()
-	defer t.modalStateMu.RUnlock()
-	return t.activeModalName
 }
 
 // Stop gracefully stops the TUI renderer

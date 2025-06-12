@@ -8,12 +8,13 @@
 //   - Hashes: "0xabcd..." -> common.Hash type
 //
 // Usage example:
-//   block := NewPolyBlock(rawBlockResponse)
-//   prettyJSON, err := PolyBlockToPrettyJSON(block)
-//   if err != nil {
-//       log.Fatal(err)
-//   }
-//   fmt.Println(string(prettyJSON))
+//
+//	block := NewPolyBlock(rawBlockResponse)
+//	prettyJSON, err := PolyBlockToPrettyJSON(block)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Println(string(prettyJSON))
 package rpctypes
 
 import (
@@ -25,27 +26,27 @@ import (
 
 // PrettyBlock represents a human-readable block structure
 type PrettyBlock struct {
-	Number           *big.Int               `json:"number"`
-	Hash             ethcommon.Hash         `json:"hash"`
-	ParentHash       ethcommon.Hash         `json:"parentHash"`
-	Nonce            uint64                 `json:"nonce"`
-	SHA3Uncles       ethcommon.Hash         `json:"sha3Uncles"`
-	LogsBloom        []byte                 `json:"logsBloom"`
-	TransactionsRoot ethcommon.Hash         `json:"transactionsRoot"`
-	StateRoot        ethcommon.Hash         `json:"stateRoot"`
-	ReceiptsRoot     ethcommon.Hash         `json:"receiptsRoot"`
-	Miner            ethcommon.Address      `json:"miner"`
-	Difficulty       *big.Int               `json:"difficulty"`
-	TotalDifficulty  *big.Int               `json:"totalDifficulty,omitempty"`
-	ExtraData        []byte                 `json:"extraData"`
-	Size             uint64                 `json:"size"`
-	GasLimit         uint64                 `json:"gasLimit"`
-	GasUsed          uint64                 `json:"gasUsed"`
-	Timestamp        uint64                 `json:"timestamp"`
-	Transactions     []PrettyTransaction    `json:"transactions"`
-	Uncles           []ethcommon.Hash       `json:"uncles"`
-	BaseFeePerGas    *big.Int               `json:"baseFeePerGas"`
-	MixHash          ethcommon.Hash         `json:"mixHash"`
+	Number           *big.Int            `json:"number"`
+	Hash             ethcommon.Hash      `json:"hash"`
+	ParentHash       ethcommon.Hash      `json:"parentHash"`
+	Nonce            uint64              `json:"nonce"`
+	SHA3Uncles       ethcommon.Hash      `json:"sha3Uncles"`
+	LogsBloom        []byte              `json:"logsBloom"`
+	TransactionsRoot ethcommon.Hash      `json:"transactionsRoot"`
+	StateRoot        ethcommon.Hash      `json:"stateRoot"`
+	ReceiptsRoot     ethcommon.Hash      `json:"receiptsRoot"`
+	Miner            ethcommon.Address   `json:"miner"`
+	Difficulty       *big.Int            `json:"difficulty"`
+	TotalDifficulty  *big.Int            `json:"totalDifficulty,omitempty"`
+	ExtraData        []byte              `json:"extraData"`
+	Size             uint64              `json:"size"`
+	GasLimit         uint64              `json:"gasLimit"`
+	GasUsed          uint64              `json:"gasUsed"`
+	Timestamp        uint64              `json:"timestamp"`
+	Transactions     []PrettyTransaction `json:"transactions"`
+	Uncles           []ethcommon.Hash    `json:"uncles"`
+	BaseFeePerGas    *big.Int            `json:"baseFeePerGas"`
+	MixHash          ethcommon.Hash      `json:"mixHash"`
 }
 
 // PrettyTransaction represents a human-readable transaction structure
@@ -73,15 +74,15 @@ type PrettyTransaction struct {
 
 // PrettyTxLogs represents a human-readable log structure
 type PrettyTxLogs struct {
-	BlockHash        ethcommon.Hash      `json:"blockHash"`
-	BlockNumber      uint64              `json:"blockNumber"`
-	TransactionIndex uint64              `json:"transactionIndex"`
-	Address          ethcommon.Address   `json:"address"`
-	LogIndex         uint64              `json:"logIndex"`
-	Data             []byte              `json:"data"`
-	Removed          bool                `json:"removed"`
-	Topics           []ethcommon.Hash    `json:"topics"`
-	TransactionHash  ethcommon.Hash      `json:"transactionHash"`
+	BlockHash        ethcommon.Hash    `json:"blockHash"`
+	BlockNumber      uint64            `json:"blockNumber"`
+	TransactionIndex uint64            `json:"transactionIndex"`
+	Address          ethcommon.Address `json:"address"`
+	LogIndex         uint64            `json:"logIndex"`
+	Data             []byte            `json:"data"`
+	Removed          bool              `json:"removed"`
+	Topics           []ethcommon.Hash  `json:"topics"`
+	TransactionHash  ethcommon.Hash    `json:"transactionHash"`
 }
 
 // PrettyReceipt represents a human-readable receipt structure
