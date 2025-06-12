@@ -586,7 +586,7 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 
 		// Handle Escape key for breadcrumb-style navigation
 		if event.Key() == tcell.KeyEscape {
-			currentPage, _ := t.pages.GetFrontPage()
+			currentPage, _ = t.pages.GetFrontPage()
 			if currentPage == "tx-detail" {
 				// From transaction detail, go back to block detail
 				t.pages.SwitchToPage("block-detail")
