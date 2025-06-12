@@ -1975,11 +1975,11 @@ func weiToGwei(wei *big.Int) string {
 
 // formatRelativeTime converts Unix timestamp to human-readable relative time
 func formatRelativeTime(timestamp uint64) string {
-	now := time.Now().Unix()
 	if timestamp > math.MaxInt64 {
 		log.Error().Uint64("timestamp", timestamp).Msg("Timestamp exceeds int64 range, clamping to MaxInt64")
 		timestamp = math.MaxInt64
 	}
+	now := time.Now().Unix()
 	diff := now - int64(timestamp)
 
 	if diff < 0 {
