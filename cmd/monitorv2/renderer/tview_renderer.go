@@ -2695,12 +2695,17 @@ func (t *TviewRenderer) searchBlockByNumber(blockNum uint64) {
 	defer cancel()
 
 	// Convert to big.Int for the indexer call
-	var constrainedBlockNum uint64 = blockNum
+	var constrainedBlockNum int64
 	if blockNum > math.MaxInt64 {
 		log.Error().Uint64("block_num", blockNum).Msg("Block number exceeds int64 range, using MaxInt64")
 		constrainedBlockNum = math.MaxInt64
+	} else if blockNum < 0 {
+		log.Error().Uint64("block_num", blockNum).Msg("Block number is negative, using 0")
+		constrainedBlockNum = 0
+	} else {
+		constrainedBlockNum = int64(blockNum)
 	}
-	blockNumber := big.NewInt(int64(constrainedBlockNum))
+	blockNumber := big.NewInt(constrainedBlockNum)
 
 	block, err := t.indexer.GetBlock(ctx, blockNumber)
 	if err != nil {
