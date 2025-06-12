@@ -2037,18 +2037,18 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 		blockTime := block.Time()
 		parentTime := parentBlock.Time()
 
-		// Check if times can be safely converted to int64
-		if blockTime > math.MaxInt64 || parentTime > math.MaxInt64 {
-			log.Error().
-				Uint64("block_time", blockTime).
-				Uint64("parent_time", parentTime).
-				Msg("Time values exceed int64 range")
-			return "N/A"
+		// Check if blockTime is after parentTime (normal case)
+		if blockTime >= parentTime {
+			interval := blockTime - parentTime
+			return fmt.Sprintf("%ds", interval)
 		}
 
-		// Safe conversion after bounds check
-		interval := int64(blockTime) - int64(parentTime)
-		return fmt.Sprintf("%ds", interval)
+		// Handle edge case where parent time is after block time
+		log.Warn().
+			Uint64("block_time", blockTime).
+			Uint64("parent_time", parentTime).
+			Msg("Parent block time is after child block time")
+		return "N/A"
 	}
 
 	// Parent not found by hash, use the next block in the slice
@@ -2065,27 +2065,22 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 			blockTime := block.Time()
 			prevTime := prevBlock.Time()
 
-			// Check if times can be safely converted to int64
-			if blockTime > math.MaxInt64 || prevTime > math.MaxInt64 {
-				log.Error().
+			// Check if blockTime is after prevTime (normal case)
+			if blockTime < prevTime {
+				log.Warn().
 					Uint64("block_time", blockTime).
 					Uint64("prev_time", prevTime).
-					Msg("Time values exceed int64 range")
+					Msg("Previous block time is after current block time")
 				return "N/A"
 			}
 
-			// Safe conversion after bounds check
-			interval := int64(blockTime) - int64(prevTime)
+			// Calculate interval as uint64
+			interval := blockTime - prevTime
 
 			// For non-consecutive blocks, show average interval
 			if currentBlockNum-prevBlockNum > 1 {
 				blockDiff := currentBlockNum - prevBlockNum
-				// Check if block difference can be safely converted to int64
-				if blockDiff > math.MaxInt64 {
-					log.Error().Uint64("block_diff", blockDiff).Msg("Block difference exceeds int64 range")
-					return "N/A"
-				}
-				avgInterval := interval / int64(blockDiff)
+				avgInterval := interval / blockDiff
 				return fmt.Sprintf("~%ds", avgInterval)
 			}
 			return fmt.Sprintf("%ds", interval)
