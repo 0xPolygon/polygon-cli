@@ -665,6 +665,10 @@ func (r RawQuantityResponse) ToUint64() uint64 {
 	if err != nil {
 		return 0
 	}
+	if result > math.MaxUint64 {
+		log.Error().Uint64("value", result).Msg("Value exceeds uint64 range, clamping to MaxUint64")
+		result = math.MaxUint64
+	}
 	return uint64(result)
 }
 func (r RawQuantityResponse) ToFloat64() float64 {

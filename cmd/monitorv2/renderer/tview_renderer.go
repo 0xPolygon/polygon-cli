@@ -2055,6 +2055,9 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 			if prevTime > math.MaxInt64 {
 				log.Error().Uint64("prev_time", prevTime).Msg("Previous block time exceeds int64 range, clamping to MaxInt64")
 				prevTime = math.MaxInt64
+			} else if prevTime < 0 {
+				log.Error().Uint64("prev_time", prevTime).Msg("Previous block time is negative, clamping to 0")
+				prevTime = 0
 			}
 			// Ensure values are within int64 range before conversion
 			clampedBlockTime := int64(blockTime)
