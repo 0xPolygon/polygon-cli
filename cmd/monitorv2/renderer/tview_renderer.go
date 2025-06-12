@@ -845,21 +845,23 @@ func (t *TviewRenderer) createBasicTransactionDetails(tx rpctypes.PolyTransactio
 	if tx.Type() >= 2 {
 		if tx.MaxFeePerGas() > 0 {
 			maxFeeGas := tx.MaxFeePerGas()
+			var maxFeeBig *big.Int
 			if maxFeeGas > math.MaxInt64 {
 				log.Error().Uint64("max_fee_per_gas", maxFeeGas).Msg("MaxFeePerGas exceeds int64 range, using MaxInt64")
-				maxFeeBig := big.NewInt(math.MaxInt64)
+				maxFeeBig = big.NewInt(math.MaxInt64)
 			} else {
-				maxFeeBig := big.NewInt(int64(maxFeeGas))
+				maxFeeBig = big.NewInt(int64(maxFeeGas))
 			}
 			details = append(details, fmt.Sprintf("Max Fee Per Gas: %s gwei", weiToGwei(maxFeeBig)))
 		}
 		if tx.MaxPriorityFeePerGas() > 0 {
 			maxPriorityGas := tx.MaxPriorityFeePerGas()
+			var maxPriorityBig *big.Int
 			if maxPriorityGas > math.MaxInt64 {
 				log.Error().Uint64("max_priority_fee_per_gas", maxPriorityGas).Msg("MaxPriorityFeePerGas exceeds int64 range, using MaxInt64")
-				maxPriorityBig := big.NewInt(math.MaxInt64)
+				maxPriorityBig = big.NewInt(math.MaxInt64)
 			} else {
-				maxPriorityBig := big.NewInt(int64(maxPriorityGas))
+				maxPriorityBig = big.NewInt(int64(maxPriorityGas))
 			}
 			details = append(details, fmt.Sprintf("Max Priority Fee Per Gas: %s gwei", weiToGwei(maxPriorityBig)))
 		}
@@ -929,20 +931,24 @@ func (t *TviewRenderer) createHumanReadableTransactionDetailsSync(tx rpctypes.Po
 	if tx.Type() >= 2 {
 		if tx.MaxFeePerGas() > 0 {
 			maxFeeGas := tx.MaxFeePerGas()
+			var maxFeeBig *big.Int
 			if maxFeeGas > math.MaxInt64 {
 				log.Error().Uint64("max_fee_per_gas", maxFeeGas).Msg("MaxFeePerGas exceeds int64 range, using MaxInt64")
-				maxFeeGas = math.MaxInt64
+				maxFeeBig = big.NewInt(math.MaxInt64)
+			} else {
+				maxFeeBig = big.NewInt(int64(maxFeeGas))
 			}
-			maxFeeBig := big.NewInt(int64(maxFeeGas))
 			details = append(details, fmt.Sprintf("Max Fee Per Gas: %s gwei", weiToGwei(maxFeeBig)))
 		}
 		if tx.MaxPriorityFeePerGas() > 0 {
 			maxPriorityGas := tx.MaxPriorityFeePerGas()
+			var maxPriorityBig *big.Int
 			if maxPriorityGas > math.MaxInt64 {
 				log.Error().Uint64("max_priority_fee_per_gas", maxPriorityGas).Msg("MaxPriorityFeePerGas exceeds int64 range, using MaxInt64")
-				maxPriorityGas = math.MaxInt64
+				maxPriorityBig = big.NewInt(math.MaxInt64)
+			} else {
+				maxPriorityBig = big.NewInt(int64(maxPriorityGas))
 			}
-			maxPriorityBig := big.NewInt(int64(maxPriorityGas))
 			details = append(details, fmt.Sprintf("Max Priority Fee Per Gas: %s gwei", weiToGwei(maxPriorityBig)))
 		}
 		details = append(details, "")
@@ -2049,9 +2055,6 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 			if prevTime > math.MaxInt64 {
 				log.Error().Uint64("prev_time", prevTime).Msg("Previous block time exceeds int64 range, using MaxInt64")
 				prevTime = math.MaxInt64
-			} else if prevTime < 0 {
-				log.Error().Uint64("prev_time", prevTime).Msg("Previous block time is negative, using 0")
-				prevTime = 0
 			}
 			interval := int64(blockTime) - int64(prevTime)
 			// For non-consecutive blocks, show average interval
