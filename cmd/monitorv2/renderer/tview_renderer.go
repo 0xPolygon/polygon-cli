@@ -847,18 +847,20 @@ func (t *TviewRenderer) createBasicTransactionDetails(tx rpctypes.PolyTransactio
 			maxFeeGas := tx.MaxFeePerGas()
 			if maxFeeGas > math.MaxInt64 {
 				log.Error().Uint64("max_fee_per_gas", maxFeeGas).Msg("MaxFeePerGas exceeds int64 range, using MaxInt64")
-				maxFeeGas = math.MaxInt64
+				maxFeeBig := big.NewInt(math.MaxInt64)
+			} else {
+				maxFeeBig := big.NewInt(int64(maxFeeGas))
 			}
-			maxFeeBig := big.NewInt(int64(maxFeeGas))
 			details = append(details, fmt.Sprintf("Max Fee Per Gas: %s gwei", weiToGwei(maxFeeBig)))
 		}
 		if tx.MaxPriorityFeePerGas() > 0 {
 			maxPriorityGas := tx.MaxPriorityFeePerGas()
 			if maxPriorityGas > math.MaxInt64 {
 				log.Error().Uint64("max_priority_fee_per_gas", maxPriorityGas).Msg("MaxPriorityFeePerGas exceeds int64 range, using MaxInt64")
-				maxPriorityGas = math.MaxInt64
+				maxPriorityBig := big.NewInt(math.MaxInt64)
+			} else {
+				maxPriorityBig := big.NewInt(int64(maxPriorityGas))
 			}
-			maxPriorityBig := big.NewInt(int64(maxPriorityGas))
 			details = append(details, fmt.Sprintf("Max Priority Fee Per Gas: %s gwei", weiToGwei(maxPriorityBig)))
 		}
 		details = append(details, "")
