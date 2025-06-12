@@ -2056,7 +2056,10 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 				log.Error().Uint64("prev_time", prevTime).Msg("Previous block time exceeds int64 range, clamping to MaxInt64")
 				prevTime = math.MaxInt64
 			}
-			interval := int64(blockTime) - int64(prevTime)
+			// Ensure values are within int64 range before conversion
+			clampedBlockTime := int64(blockTime)
+			clampedPrevTime := int64(prevTime)
+			interval := clampedBlockTime - clampedPrevTime
 			// For non-consecutive blocks, show average interval
 			if currentBlockNum-prevBlockNum > 1 {
 				blockDiff := currentBlockNum - prevBlockNum
