@@ -682,8 +682,8 @@ func (r RawQuantityResponse) ToInt64() int64 {
 		return 0
 	}
 	if result > math.MaxInt64 {
-		log.Error().Uint64("value", result).Msg("Value exceeds int64 range, clamping to MaxInt64")
-		result = math.MaxInt64
+		log.Error().Uint64("value", result).Msg("Value exceeds int64 range, returning MaxInt64")
+		return math.MaxInt64
 	}
 	return int64(result)
 }
