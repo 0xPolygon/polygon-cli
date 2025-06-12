@@ -1984,21 +1984,21 @@ func weiToGwei(wei *big.Int) string {
 // formatRelativeTime converts Unix timestamp to human-readable relative time
 func formatRelativeTime(timestamp uint64) string {
 	now := time.Now().Unix()
-	
+
 	// Check if timestamp can be safely converted to int64
 	if timestamp > math.MaxInt64 {
 		log.Error().Uint64("timestamp", timestamp).Msg("Timestamp exceeds int64 range")
 		return "invalid"
 	}
-	
+
 	// Safe conversion after bounds check
 	timestampInt64 := int64(timestamp)
-	
+
 	// Handle case where timestamp is in the future
 	if timestampInt64 > now {
 		return "future"
 	}
-	
+
 	diff := now - timestampInt64
 
 	if diff < 60 {
@@ -2020,7 +2020,7 @@ func formatBlockTime(timestamp uint64) string {
 		// Return a special format for invalid timestamps
 		return "invalid timestamp - invalid"
 	}
-	
+
 	// Safe conversion after bounds check
 	t := time.Unix(int64(timestamp), 0).UTC()
 	absolute := t.Format("2006-01-02T15:04:05Z")
@@ -2036,7 +2036,7 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 		// Calculate interval in seconds
 		blockTime := block.Time()
 		parentTime := parentBlock.Time()
-		
+
 		// Check if times can be safely converted to int64
 		if blockTime > math.MaxInt64 || parentTime > math.MaxInt64 {
 			log.Error().
@@ -2045,7 +2045,7 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 				Msg("Time values exceed int64 range")
 			return "N/A"
 		}
-		
+
 		// Safe conversion after bounds check
 		interval := int64(blockTime) - int64(parentTime)
 		return fmt.Sprintf("%ds", interval)
@@ -2064,7 +2064,7 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 		if currentBlockNum > prevBlockNum && currentBlockNum-prevBlockNum <= 100 {
 			blockTime := block.Time()
 			prevTime := prevBlock.Time()
-			
+
 			// Check if times can be safely converted to int64
 			if blockTime > math.MaxInt64 || prevTime > math.MaxInt64 {
 				log.Error().
@@ -2073,10 +2073,10 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 					Msg("Time values exceed int64 range")
 				return "N/A"
 			}
-			
+
 			// Safe conversion after bounds check
 			interval := int64(blockTime) - int64(prevTime)
-			
+
 			// For non-consecutive blocks, show average interval
 			if currentBlockNum-prevBlockNum > 1 {
 				blockDiff := currentBlockNum - prevBlockNum
@@ -2720,9 +2720,6 @@ func (t *TviewRenderer) searchBlockByNumber(blockNum uint64) {
 	if blockNum > math.MaxInt64 {
 		log.Error().Uint64("block_num", blockNum).Msg("Block number exceeds int64 range, using MaxInt64")
 		constrainedBlockNum = math.MaxInt64
-	} else if blockNum < 0 {
-		log.Error().Uint64("block_num", blockNum).Msg("Block number is negative, using 0")
-		constrainedBlockNum = 0
 	} else {
 		constrainedBlockNum = int64(blockNum)
 	}
