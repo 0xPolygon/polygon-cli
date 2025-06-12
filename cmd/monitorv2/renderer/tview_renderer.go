@@ -2014,10 +2014,14 @@ func formatRelativeTime(timestamp uint64) string {
 
 // formatBlockTime formats block timestamp as "2006-01-02T15:04:05Z - 6m ago"
 func formatBlockTime(timestamp uint64) string {
+	// Check if timestamp can be safely converted to int64
 	if timestamp > math.MaxInt64 {
-		log.Error().Uint64("timestamp", timestamp).Msg("Timestamp exceeds int64 range, clamping to MaxInt64")
-		timestamp = math.MaxInt64
+		log.Error().Uint64("timestamp", timestamp).Msg("Timestamp exceeds int64 range")
+		// Return a special format for invalid timestamps
+		return "invalid timestamp - invalid"
 	}
+	
+	// Safe conversion after bounds check
 	t := time.Unix(int64(timestamp), 0).UTC()
 	absolute := t.Format("2006-01-02T15:04:05Z")
 	relative := formatRelativeTime(timestamp)
