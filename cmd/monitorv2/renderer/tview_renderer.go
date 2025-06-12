@@ -2035,18 +2035,18 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 	if parentBlock, exists := t.blocksByHash[parentHash]; exists {
 		// Calculate interval in seconds
 		blockTime := block.Time()
-		if blockTime > math.MaxInt64 {
-			log.Error().Uint64("block_time", blockTime).Msg("Block time exceeds int64 range, clamping to MaxInt64")
-			blockTime = math.MaxInt64
-		}
 		parentTime := parentBlock.Time()
-		if parentTime > math.MaxInt64 {
-			log.Error().Uint64("parent_time", parentTime).Msg("Parent block time exceeds int64 range, clamping to MaxInt64")
-			parentTime = math.MaxInt64
-		} else if parentTime < 0 {
-			log.Error().Uint64("parent_time", parentTime).Msg("Parent block time is negative, clamping to 0")
-			parentTime = 0
+		
+		// Check if times can be safely converted to int64
+		if blockTime > math.MaxInt64 || parentTime > math.MaxInt64 {
+			log.Error().
+				Uint64("block_time", blockTime).
+				Uint64("parent_time", parentTime).
+				Msg("Time values exceed int64 range")
+			return "N/A"
 		}
+		
+		// Safe conversion after bounds check
 		interval := int64(blockTime) - int64(parentTime)
 		return fmt.Sprintf("%ds", interval)
 	}
@@ -2063,31 +2063,27 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 		// we can calculate a meaningful interval
 		if currentBlockNum > prevBlockNum && currentBlockNum-prevBlockNum <= 100 {
 			blockTime := block.Time()
-			if blockTime > math.MaxInt64 {
-				log.Error().Uint64("block_time", blockTime).Msg("Block time exceeds int64 range, clamping to MaxInt64")
-				blockTime = math.MaxInt64
-			} else if blockTime < 0 {
-				log.Error().Uint64("block_time", blockTime).Msg("Block time is negative, clamping to 0")
-				blockTime = 0
-			}
 			prevTime := prevBlock.Time()
-			if prevTime > math.MaxInt64 {
-				log.Error().Uint64("prev_time", prevTime).Msg("Previous block time exceeds int64 range, clamping to MaxInt64")
-				prevTime = math.MaxInt64
-			} else if prevTime < 0 {
-				log.Error().Uint64("prev_time", prevTime).Msg("Previous block time is negative, clamping to 0")
-				prevTime = 0
+			
+			// Check if times can be safely converted to int64
+			if blockTime > math.MaxInt64 || prevTime > math.MaxInt64 {
+				log.Error().
+					Uint64("block_time", blockTime).
+					Uint64("prev_time", prevTime).
+					Msg("Time values exceed int64 range")
+				return "N/A"
 			}
-			// Ensure values are within int64 range before conversion
-			clampedBlockTime := int64(blockTime)
-			clampedPrevTime := int64(prevTime)
-			interval := clampedBlockTime - clampedPrevTime
+			
+			// Safe conversion after bounds check
+			interval := int64(blockTime) - int64(prevTime)
+			
 			// For non-consecutive blocks, show average interval
 			if currentBlockNum-prevBlockNum > 1 {
 				blockDiff := currentBlockNum - prevBlockNum
+				// Check if block difference can be safely converted to int64
 				if blockDiff > math.MaxInt64 {
-					log.Error().Uint64("block_diff", blockDiff).Msg("Block difference exceeds int64 range, using MaxInt64")
-					blockDiff = math.MaxInt64
+					log.Error().Uint64("block_diff", blockDiff).Msg("Block difference exceeds int64 range")
+					return "N/A"
 				}
 				avgInterval := interval / int64(blockDiff)
 				return fmt.Sprintf("~%ds", avgInterval)
