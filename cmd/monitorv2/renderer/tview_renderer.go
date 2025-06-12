@@ -2022,13 +2022,13 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 	if parentBlock, exists := t.blocksByHash[parentHash]; exists {
 		// Calculate interval in seconds
 		blockTime := block.Time()
-		parentTime := parentBlock.Time()
 		if blockTime > math.MaxInt64 {
-			log.Error().Uint64("block_time", blockTime).Msg("Block time exceeds int64 range, using MaxInt64")
+			log.Error().Uint64("block_time", blockTime).Msg("Block time exceeds int64 range, clamping to MaxInt64")
 			blockTime = math.MaxInt64
 		}
+		parentTime := parentBlock.Time()
 		if parentTime > math.MaxInt64 {
-			log.Error().Uint64("parent_time", parentTime).Msg("Parent block time exceeds int64 range, using MaxInt64")
+			log.Error().Uint64("parent_time", parentTime).Msg("Parent block time exceeds int64 range, clamping to MaxInt64")
 			parentTime = math.MaxInt64
 		}
 		interval := int64(blockTime) - int64(parentTime)
@@ -2047,13 +2047,13 @@ func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index i
 		// we can calculate a meaningful interval
 		if currentBlockNum > prevBlockNum && currentBlockNum-prevBlockNum <= 100 {
 			blockTime := block.Time()
-			prevTime := prevBlock.Time()
 			if blockTime > math.MaxInt64 {
-				log.Error().Uint64("block_time", blockTime).Msg("Block time exceeds int64 range, using MaxInt64")
+				log.Error().Uint64("block_time", blockTime).Msg("Block time exceeds int64 range, clamping to MaxInt64")
 				blockTime = math.MaxInt64
 			}
+			prevTime := prevBlock.Time()
 			if prevTime > math.MaxInt64 {
-				log.Error().Uint64("prev_time", prevTime).Msg("Previous block time exceeds int64 range, using MaxInt64")
+				log.Error().Uint64("prev_time", prevTime).Msg("Previous block time exceeds int64 range, clamping to MaxInt64")
 				prevTime = math.MaxInt64
 			}
 			interval := int64(blockTime) - int64(prevTime)
