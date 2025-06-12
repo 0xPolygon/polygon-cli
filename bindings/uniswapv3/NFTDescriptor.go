@@ -250,4 +250,3 @@ func (_NFTDescriptor *NFTDescriptorSession) ConstructTokenURI(params NFTDescript
 func (_NFTDescriptor *NFTDescriptorCallerSession) ConstructTokenURI(params NFTDescriptorConstructTokenURIParams) (string, error) {
 	return _NFTDescriptor.Contract.ConstructTokenURI(&_NFTDescriptor.CallOpts, params)
 }
-

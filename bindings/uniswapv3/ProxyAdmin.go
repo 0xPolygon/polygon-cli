@@ -552,4 +552,3 @@ func (_ProxyAdmin *ProxyAdminFilterer) ParseOwnershipTransferred(log types.Log) 
 	event.Raw = log
 	return event, nil
 }
-

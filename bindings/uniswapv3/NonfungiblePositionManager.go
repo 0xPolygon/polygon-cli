@@ -2215,4 +2215,3 @@ func (_NonfungiblePositionManager *NonfungiblePositionManagerFilterer) ParseTran
 	event.Raw = log
 	return event, nil
 }
-

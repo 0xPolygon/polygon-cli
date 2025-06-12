@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"strconv"
 	"strings"
@@ -24,7 +25,8 @@ func (a SortableBlocks) Swap(i, j int) {
 	a[i], a[j] = a[j], a[i]
 }
 func (a SortableBlocks) Less(i, j int) bool {
-	return a[i].Number().Int64() < a[j].Number().Int64()
+	// Use Cmp to compare big.Int values directly without conversion
+	return a[i].Number().Cmp(a[j].Number()) < 0
 }
 
 type (
@@ -242,6 +244,7 @@ type (
 		To() ethcommon.Address
 		From() ethcommon.Address
 		Data() []byte
+		DataStr() string // Raw hex string of transaction data
 		Value() *big.Int
 		Gas() uint64
 		Nonce() uint64
@@ -275,6 +278,7 @@ type (
 		Status() uint64
 		BlobGasPrice() *big.Int
 		BlobGasUsed() *big.Int
+		MarshalJSON() ([]byte, error)
 	}
 	PolyReceipts []PolyReceipt
 	PolyBlock    interface {
@@ -392,6 +396,11 @@ func (i *implPolyReceipt) BlobGasPrice() *big.Int {
 // BlobGasUsed implements PolyReceipt.
 func (i *implPolyReceipt) BlobGasUsed() *big.Int {
 	return i.inner.BlobGasUsed.ToBigInt()
+}
+
+// MarshalJSON implements PolyReceipt.
+func (i *implPolyReceipt) MarshalJSON() ([]byte, error) {
+	return json.Marshal(i.inner)
 }
 
 func NewPolyBlock(r *RawBlockResponse) PolyBlock {
@@ -537,6 +546,9 @@ func (i *implPolyTransaction) From() ethcommon.Address {
 func (i *implPolyTransaction) Data() []byte {
 	return i.inner.Input.ToBytes()
 }
+func (i *implPolyTransaction) DataStr() string {
+	return string(i.inner.Input)
+}
 func (i *implPolyTransaction) String() string {
 	d, err := json.Marshal(i)
 	if err != nil {
@@ -653,7 +665,7 @@ func (r RawQuantityResponse) ToUint64() uint64 {
 	if err != nil {
 		return 0
 	}
-	return uint64(result)
+	return result
 }
 func (r RawQuantityResponse) ToFloat64() float64 {
 	return float64(r.ToInt64())
@@ -665,8 +677,11 @@ func (r RawQuantityResponse) ToInt64() int64 {
 	if err != nil {
 		return 0
 	}
+	if result > math.MaxInt64 {
+		log.Error().Uint64("value", result).Msg("Value exceeds int64 range, returning MaxInt64")
+		return math.MaxInt64
+	}
 	return int64(result)
-
 }
 
 func (r *RawQuantityResponse) ToBigInt() *big.Int {

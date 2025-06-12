@@ -387,4 +387,3 @@ func (_NonfungibleTokenPositionDescriptor *NonfungibleTokenPositionDescriptorSes
 func (_NonfungibleTokenPositionDescriptor *NonfungibleTokenPositionDescriptorCallerSession) TokenURI(positionManager common.Address, tokenId *big.Int) (string, error) {
 	return _NonfungibleTokenPositionDescriptor.Contract.TokenURI(&_NonfungibleTokenPositionDescriptor.CallOpts, positionManager, tokenId)
 }
-

@@ -2453,4 +2453,3 @@ func (_IUniswapV3Pool *IUniswapV3PoolFilterer) ParseSwap(log types.Log) (*IUnisw
 	event.Raw = log
 	return event, nil
 }
-

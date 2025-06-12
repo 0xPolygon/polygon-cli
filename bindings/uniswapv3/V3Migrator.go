@@ -479,4 +479,3 @@ func (_V3Migrator *V3MigratorSession) Receive() (*types.Transaction, error) {
 func (_V3Migrator *V3MigratorTransactorSession) Receive() (*types.Transaction, error) {
 	return _V3Migrator.Contract.Receive(&_V3Migrator.TransactOpts)
 }
-

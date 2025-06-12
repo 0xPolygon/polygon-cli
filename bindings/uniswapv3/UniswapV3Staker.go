@@ -1665,4 +1665,3 @@ func (_UniswapV3Staker *UniswapV3StakerFilterer) ParseTokenUnstaked(log types.Lo
 	event.Raw = log
 	return event, nil
 }
-

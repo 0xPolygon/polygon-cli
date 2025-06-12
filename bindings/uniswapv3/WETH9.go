@@ -1111,4 +1111,3 @@ func (_WETH9 *WETH9Filterer) ParseWithdrawal(log types.Log) (*WETH9Withdrawal, e
 	event.Raw = log
 	return event, nil
 }
-

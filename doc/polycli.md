@@ -65,6 +65,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli monitor](polycli_monitor.md) - Monitor blocks using a JSON-RPC endpoint.
 
+- [polycli monitorv2](polycli_monitorv2.md) - Monitor v2 command stub
+
 - [polycli nodekey](polycli_nodekey.md) - Generate node keys for different blockchain clients and protocols.
 
 - [polycli p2p](polycli_p2p.md) - Set of commands related to devp2p.
