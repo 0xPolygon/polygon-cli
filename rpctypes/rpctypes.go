@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"strconv"
 	"strings"
@@ -675,8 +676,11 @@ func (r RawQuantityResponse) ToInt64() int64 {
 	if err != nil {
 		return 0
 	}
+	if result > math.MaxInt64 {
+		log.Error().Uint64("value", result).Msg("Value exceeds int64 range, using MaxInt64")
+		return math.MaxInt64
+	}
 	return int64(result)
-
 }
 
 func (r *RawQuantityResponse) ToBigInt() *big.Int {

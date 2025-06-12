@@ -2564,6 +2564,12 @@ func hexToDecimal(value interface{}) (*big.Int, error) {
 			}
 		}
 		return big.NewInt(int64(v)), nil
+	case uint64:
+		if v > math.MaxInt64 {
+			log.Error().Uint64("value", v).Msg("Uint64 value exceeds int64 range, using MaxInt64")
+			v = math.MaxInt64
+		}
+		return big.NewInt(int64(v)), nil
 	case int64:
 		return big.NewInt(v), nil
 	case int:
