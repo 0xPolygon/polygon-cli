@@ -30,6 +30,7 @@ import (
 	ethclient "github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
+	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly/polygonrollupmanager"
 	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
@@ -619,7 +620,7 @@ func logAndReturnJsonError(cmd *cobra.Command, client *ethclient.Client, tx *typ
 }
 
 func bridgeAsset(cmd *cobra.Command) error {
-	bridgeAddress := *inputUlxlyArgs.bridgeAddress
+	bridgeAddr := *inputUlxlyArgs.bridgeAddress
 	privateKey := *inputUlxlyArgs.privateKey
 	gasLimit := *inputUlxlyArgs.gasLimit
 	destinationAddress := *inputUlxlyArgs.destAddress
@@ -641,18 +642,52 @@ func bridgeAsset(cmd *cobra.Command) error {
 	defer client.Close()
 
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddr, privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
 	}
 
+	bridgeAddress := common.HexToAddress(bridgeAddr)
 	value, _ := big.NewInt(0).SetString(amount, 0)
 	tokenAddress := common.HexToAddress(tokenAddr)
 	callData := common.Hex2Bytes(strings.TrimPrefix(callDataString, "0x"))
 
 	if tokenAddress == common.HexToAddress("0x0000000000000000000000000000000000000000") {
 		auth.Value = value
+	} else {
+		// in case it's a token transfer, we need to ensure that the bridge contract
+		// has enough allowance to transfer the tokens on behalf of the user
+		tokenContract, iErr := tokens.NewERC20(tokenAddress, client)
+		if iErr != nil {
+			log.Error().Err(iErr).Msg("error getting token contract")
+			return iErr
+		}
+
+		allowance, iErr := tokenContract.Allowance(&bind.CallOpts{Pending: false}, auth.From, bridgeAddress)
+		if iErr != nil {
+			log.Error().Err(iErr).Msg("error getting token allowance")
+			return iErr
+		}
+
+		if allowance.Cmp(value) < 0 {
+			log.Info().
+				Str("amount", value.String()).
+				Str("tokenAddress", tokenAddress.String()).
+				Str("bridgeAddress", bridgeAddress.String()).
+				Str("userAddress", auth.From.String()).
+				Msg("approving bridge contract to spend tokens on behalf of user")
+
+			// Approve the bridge contract to spend the tokens on behalf of the user
+			approveTxn, iErr := tokenContract.Approve(auth, bridgeAddress, value)
+			if iErr = logAndReturnJsonError(cmd, client, approveTxn, auth, iErr); iErr != nil {
+				return iErr
+			}
+			log.Info().Msg("approveTxn: " + approveTxn.Hash().String())
+			if iErr = WaitMineTransaction(cmd.Context(), client, approveTxn, timeoutTxnReceipt); iErr != nil {
+				return iErr
+			}
+		}
 	}
 
 	bridgeTxn, err := bridgeV2.BridgeAsset(auth, destinationNetwork, toAddress, value, tokenAddress, isForced, callData)
