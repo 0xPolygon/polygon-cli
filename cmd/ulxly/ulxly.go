@@ -665,13 +665,18 @@ func bridgeAsset(cmd *cobra.Command) error {
 		}
 
 		allowance, iErr := tokenContract.Allowance(&bind.CallOpts{Pending: false}, auth.From, bridgeAddress)
-		if allowance.Cmp(value) < 0 || iErr != nil {
+		if iErr != nil {
+			log.Error().Err(iErr).Msg("error getting token allowance")
+			return iErr
+		}
+
+		if allowance.Cmp(value) < 0 {
 			log.Info().
 				Str("amount", value.String()).
 				Str("tokenAddress", tokenAddress.String()).
 				Str("bridgeAddress", bridgeAddress.String()).
 				Str("userAddress", auth.From.String()).
-				Msg("Approving bridge contract to spend tokens on behalf of user")
+				Msg("approving bridge contract to spend tokens on behalf of user")
 
 			// Approve the bridge contract to spend the tokens on behalf of the user
 			approveTxn, iErr := tokenContract.Approve(auth, bridgeAddress, value)
