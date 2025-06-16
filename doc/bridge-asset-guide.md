@@ -157,12 +157,12 @@ polycli ulxly bridge asset --help
 and here is the command that will bridge the assets from l1 to l2
 
 ```bash
-polycli ulxly bridge asset
-    --bridge-address <BRIDGE_ADDRESS>
-    --rpc-url $rpc_url
-    --private-key $private_key
-    --destination-network 1
-    --value 10000000000000000
-    --token-address $token_address
+polycli ulxly bridge asset \
+    --bridge-address <BRIDGE_ADDRESS> \
+    --rpc-url $rpc_url \
+    --private-key $private_key \
+    --destination-network 1 \
+    --value 10000000000000000 \
+    --token-address $token_address \
     --destination-address 
 ```
