@@ -319,42 +319,8 @@ func isDebugMessage(logLine string) bool {
 	return strings.Contains(strings.ToLower(logLine), "debug")
 }
 
-// Utility functions
-func parseServiceNames(serviceList string) []string {
-	if serviceList == "" {
-		return nil
-	}
-	names := strings.Split(serviceList, ",")
-	for i, name := range names {
-		names[i] = strings.TrimSpace(name)
-	}
-	return names
-}
-
 func sanitizeLogLine(logLine string) string {
 	// Remove ANSI color codes
 	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	return ansiRegex.ReplaceAllString(logLine, "")
-}
-
-// Color handling functions
-func getLogColor(logLine string) *color.Color {
-	logLineLower := strings.ToLower(logLine)
-	if strings.Contains(logLineLower, "error") {
-		return color.New(color.FgRed, color.Bold)
-	} else if strings.Contains(logLineLower, "warn") {
-		return color.New(color.FgYellow, color.Bold)
-	}
-	return color.New(color.FgGreen)
-}
-
-func ColorizeLog(level string, message string) string {
-	switch level {
-	case "error":
-		return errorColor.Sprint(message)
-	case "warn":
-		return warningColor.Sprint(message)
-	default:
-		return normalColor.Sprint(message)
-	}
 }
