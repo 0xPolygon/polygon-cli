@@ -41,6 +41,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli dbbench](polycli_dbbench.md) - Perform a level/pebble db benchmark
 
+- [polycli dockerlogger](polycli_dockerlogger.md) - Monitor and filter Docker container logs
+
 - [polycli dumpblocks](polycli_dumpblocks.md) - Export a range of blocks from a JSON-RPC endpoint.
 
 - [polycli ecrecover](polycli_ecrecover.md) - Recovers and returns the public key of the signature
