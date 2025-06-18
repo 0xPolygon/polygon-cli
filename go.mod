@@ -43,14 +43,21 @@ require github.com/alecthomas/participle/v2 v2.1.4
 require (
 	github.com/crate-crypto/go-eth-kzg v1.3.0 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
+	github.com/docker/distribution v2.8.2+incompatible // indirect
+	github.com/docker/go-connections v0.4.0 // indirect
+	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ethereum/c-kzg-4844/v2 v2.1.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
+	github.com/morikuni/aec v1.0.0 // indirect
+	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pion/dtls/v2 v2.2.12 // indirect
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/stun/v2 v2.0.0 // indirect
 	github.com/pion/transport/v2 v2.2.10 // indirect
 	github.com/pion/transport/v3 v3.0.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
+	gotest.tools/v3 v3.5.2 // indirect
 )
 
 require (
@@ -139,7 +146,7 @@ require (
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/term v0.32.0 // indirect
 	google.golang.org/genproto v0.0.0-20250505200425-f936aa4a68b2 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20250505200425-f936aa4a68b2 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20250519155744-55703ea1f237 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
 	google.golang.org/grpc v1.73.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
@@ -151,6 +158,8 @@ require (
 	cloud.google.com/go/kms v1.22.0
 	github.com/0xPolygon/cdk-contracts-tooling v0.0.1
 	github.com/cometbft/cometbft v0.38.17
+	github.com/docker/docker v24.0.7+incompatible
+	github.com/fatih/color v1.16.0
 	github.com/gateway-fm/vectorized-poseidon-gold v1.0.0
 	github.com/go-errors/errors v1.5.1
 	github.com/google/tink/go v1.7.0
