@@ -2148,7 +2148,10 @@ func init() {
 		Long:    bridgeAssetUsage,
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return bridgeAsset(cmd)
+			if err := bridgeAsset(cmd); err != nil {
+				log.Fatal().Err(err).Msg("Received critical error")
+			}
+			return nil
 		},
 		SilenceUsage: true,
 	}
@@ -2158,7 +2161,10 @@ func init() {
 		Long:    bridgeMessageUsage,
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return bridgeMessage(cmd)
+			if err := bridgeMessage(cmd); err != nil {
+				log.Fatal().Err(err).Msg("Received critical error")
+			}
+			return nil
 		},
 		SilenceUsage: true,
 	}
@@ -2168,7 +2174,10 @@ func init() {
 		Long:    bridgeWETHMessageUsage,
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return bridgeWETHMessage(cmd)
+			if err := bridgeWETHMessage(cmd); err != nil {
+				log.Fatal().Err(err).Msg("Received critical error")
+			}
+			return nil
 		},
 		SilenceUsage: true,
 	}
@@ -2178,7 +2187,10 @@ func init() {
 		Long:    claimAssetUsage,
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return claimAsset(cmd)
+			if err := claimAsset(cmd); err != nil {
+				log.Fatal().Err(err).Msg("Received critical error")
+			}
+			return nil
 		},
 		SilenceUsage: true,
 	}
@@ -2188,7 +2200,10 @@ func init() {
 		Long:    claimMessageUsage,
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return claimMessage(cmd)
+			if err := claimMessage(cmd); err != nil {
+				log.Fatal().Err(err).Msg("Received critical error")
+			}
+			return nil
 		},
 		SilenceUsage: true,
 	}
@@ -2197,7 +2212,10 @@ func init() {
 		Short:   "Attempt to claim as many deposits and messages as possible",
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return claimEverything(cmd)
+			if err := claimEverything(cmd); err != nil {
+				log.Fatal().Err(err).Msg("Received critical error")
+			}
+			return nil
 		},
 		SilenceUsage: true,
 	}
