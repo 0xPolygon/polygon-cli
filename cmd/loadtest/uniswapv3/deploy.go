@@ -73,7 +73,7 @@ type (
 // Deploy the full UniswapV3 contract suite in 15 different steps.
 // Source: https://github.com/Uniswap/deploy-v3
 func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, knownAddresses UniswapV3Addresses, ownerAddress common.Address) (config UniswapV3Config, err error) {
-	log.Debug().Msg("Step 0: WETH9 deployment")
+	log.Info().Msg("Step 0: WETH9 deployment")
 	config.WETH9.Address, config.WETH9.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		knownAddresses.WETH9,
@@ -88,7 +88,7 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return
 	}
 
-	log.Debug().Msg("Step 1: UniswapV3Factory deployment")
+	log.Info().Msg("Step 1: UniswapV3Factory deployment")
 	config.FactoryV3.Address, config.FactoryV3.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		knownAddresses.FactoryV3,
@@ -103,12 +103,12 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return
 	}
 
-	log.Debug().Msg("Step 2: Enable fee amount")
+	log.Info().Msg("Step 2: Enable fee amount")
 	if err = enableFeeAmount(config.FactoryV3.Contract, tops, cops, oneBPFee, oneBPTickSpacing); err != nil {
 		return
 	}
 
-	log.Debug().Msg("Step 3: UniswapInterfaceMulticall deployment")
+	log.Info().Msg("Step 3: UniswapInterfaceMulticall deployment")
 	config.Multicall.Address, config.Multicall.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		knownAddresses.Multicall,
@@ -123,7 +123,7 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return
 	}
 
-	log.Debug().Msg("Step 4: ProxyAdmin deployment")
+	log.Info().Msg("Step 4: ProxyAdmin deployment")
 	config.ProxyAdmin.Address, config.ProxyAdmin.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		knownAddresses.ProxyAdmin,
@@ -138,7 +138,7 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return
 	}
 
-	log.Debug().Msg("Step 5: TickLens deployment")
+	log.Info().Msg("Step 5: TickLens deployment")
 	config.TickLens.Address, config.TickLens.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		knownAddresses.TickLens,
@@ -155,7 +155,7 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return
 	}
 
-	log.Debug().Msg("Step 6: NFTDescriptorLib deployment")
+	log.Info().Msg("Step 6: NFTDescriptorLib deployment")
 	config.NFTDescriptorLib.Address, _, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		knownAddresses.NFTDescriptorLib,
@@ -170,7 +170,7 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return
 	}
 
-	log.Debug().Msg("Step 7: NFTPositionDescriptor deployment")
+	log.Info().Msg("Step 7: NFTPositionDescriptor deployment")
 	config.NonfungibleTokenPositionDescriptor.Address, config.NonfungibleTokenPositionDescriptor.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		knownAddresses.NonfungibleTokenPositionDescriptor,
@@ -201,7 +201,7 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return
 	}
 
-	log.Debug().Msg("Step 8: TransparentUpgradeableProxy deployment")
+	log.Info().Msg("Step 8: TransparentUpgradeableProxy deployment")
 	config.TransparentUpgradeableProxy.Address, config.TransparentUpgradeableProxy.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		knownAddresses.TransparentUpgradeableProxy,
@@ -222,7 +222,7 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return
 	}
 
-	log.Debug().Msg("Step 9: NonfungiblePositionManager deployment")
+	log.Info().Msg("Step 9: NonfungiblePositionManager deployment")
 	config.NonfungiblePositionManager.Address, config.NonfungiblePositionManager.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		knownAddresses.NonfungiblePositionManager,
@@ -239,7 +239,7 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return
 	}
 
-	log.Debug().Msg("Step 10: V3Migrator deployment")
+	log.Info().Msg("Step 10: V3Migrator deployment")
 	config.Migrator.Address, config.Migrator.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		knownAddresses.Migrator,
@@ -257,13 +257,13 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	}
 
 	if knownAddresses.FactoryV3 == (common.Address{}) {
-		log.Debug().Msg("Step 11: Transfer UniswapV3Factory ownership")
+		log.Info().Msg("Step 11: Transfer UniswapV3Factory ownership")
 		if err = transferUniswapV3FactoryOwnership(config.FactoryV3.Contract, tops, cops, ownerAddress); err != nil {
 			return
 		}
 	}
 
-	log.Debug().Msg("Step 12: UniswapV3Staker deployment")
+	log.Info().Msg("Step 12: UniswapV3Staker deployment")
 	config.Staker.Address, config.Staker.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		knownAddresses.Staker,
@@ -280,7 +280,7 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return
 	}
 
-	log.Debug().Msg("Step 13: QuoterV2 deployment")
+	log.Info().Msg("Step 13: QuoterV2 deployment")
 	config.QuoterV2.Address, config.QuoterV2.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		knownAddresses.QuoterV2,
@@ -297,7 +297,7 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 		return
 	}
 
-	log.Debug().Msg("Step 14: SwapRouter02 deployment")
+	log.Info().Msg("Step 14: SwapRouter02 deployment")
 	config.SwapRouter02.Address, config.SwapRouter02.Contract, err = deployOrInstantiateContract(
 		ctx, c, tops, cops,
 		knownAddresses.SwapRouter02,
@@ -316,7 +316,7 @@ func DeployUniswapV3(ctx context.Context, c *ethclient.Client, tops *bind.Transa
 	}
 
 	if knownAddresses.ProxyAdmin == (common.Address{}) {
-		log.Debug().Msg("Step 15: Transfer ProxyAdmin ownership")
+		log.Info().Msg("Step 15: Transfer ProxyAdmin ownership")
 		if err = transferProxyAdminOwnership(config.ProxyAdmin.Contract, tops, cops, ownerAddress); err != nil {
 			return
 		}

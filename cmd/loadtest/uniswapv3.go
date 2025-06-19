@@ -104,14 +104,14 @@ func init() {
 
 // Initialise UniswapV3 loadtest.
 func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapAddresses uniswapv3loadtest.UniswapV3Addresses, recipient common.Address) (uniswapV3Config uniswapv3loadtest.UniswapV3Config, poolConfig uniswapv3loadtest.PoolConfig, err error) {
-	log.Debug().Msg("🦄 Deploying UniswapV3 contracts...")
+	log.Info().Msg("Deploying UniswapV3 contracts...")
 	uniswapV3Config, err = uniswapv3loadtest.DeployUniswapV3(ctx, c, tops, cops, uniswapAddresses, recipient)
 	if err != nil {
 		return
 	}
-	log.Debug().Interface("addresses", uniswapV3Config.GetAddresses()).Msg("UniswapV3 deployed")
+	log.Info().Interface("addresses", uniswapV3Config.GetAddresses()).Msg("UniswapV3 deployed")
 
-	log.Debug().Msg("🪙 Deploying ERC20 tokens...")
+	log.Info().Msg("Deploying ERC20 tokens...")
 	var token0 uniswapv3loadtest.ContractConfig[tokens.ERC20]
 	token0, err = uniswapv3loadtest.DeployERC20(
 		ctx, c, tops, cops, uniswapV3Config, "SwapperA", "SA", uniswapv3loadtest.MintAmount, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0))
