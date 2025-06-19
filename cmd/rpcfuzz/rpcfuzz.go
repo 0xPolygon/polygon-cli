@@ -281,17 +281,15 @@ func runRpcFuzz(ctx context.Context) error {
 	testResults.GenerateTabularResult()
 	if *testExportJson {
 		testResults.ExportResultToJSON(filepath.Join(*testOutputExportPath, "output.json"))
-	}
-	if *testExportCSV {
+	} else if *testExportCSV {
 		testResults.ExportResultToCSV(filepath.Join(*testOutputExportPath, "output.csv"))
-	}
-	if *testExportMarkdown {
+	} else if *testExportMarkdown {
 		testResults.ExportResultToMarkdown(filepath.Join(*testOutputExportPath, "output.md"))
-	}
-	if *testExportHTML {
+	} else if *testExportHTML {
 		testResults.ExportResultToHTML(filepath.Join(*testOutputExportPath, "output.html"))
+	} else {
+		testResults.PrintTabularResult()
 	}
-	testResults.PrintTabularResult()
 
 	return nil
 }
