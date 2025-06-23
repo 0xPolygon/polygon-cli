@@ -41,13 +41,18 @@ require (
 require github.com/alecthomas/participle/v2 v2.1.4
 
 require (
+	github.com/containerd/errdefs v1.0.0 // indirect
+	github.com/containerd/errdefs/pkg v0.3.0 // indirect
+	github.com/containerd/log v0.1.0 // indirect
 	github.com/crate-crypto/go-eth-kzg v1.3.0 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
-	github.com/docker/distribution v2.8.2+incompatible // indirect
+	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ethereum/c-kzg-4844/v2 v2.1.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
+	github.com/moby/docker-image-spec v1.3.1 // indirect
+	github.com/moby/sys/atomicwriter v0.1.0 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
@@ -57,6 +62,7 @@ require (
 	github.com/pion/transport/v2 v2.2.10 // indirect
 	github.com/pion/transport/v3 v3.0.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.36.0 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 )
 
@@ -158,7 +164,7 @@ require (
 	cloud.google.com/go/kms v1.22.0
 	github.com/0xPolygon/cdk-contracts-tooling v0.0.1
 	github.com/cometbft/cometbft v0.38.17
-	github.com/docker/docker v24.0.7+incompatible
+	github.com/docker/docker v28.2.2+incompatible
 	github.com/fatih/color v1.16.0
 	github.com/gateway-fm/vectorized-poseidon-gold v1.0.0
 	github.com/go-errors/errors v1.5.1
