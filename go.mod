@@ -159,7 +159,7 @@ require (
 	github.com/0xPolygon/cdk-contracts-tooling v0.0.1
 	github.com/cometbft/cometbft v0.38.17
 	github.com/docker/docker v24.0.7+incompatible
-	github.com/fatih/color v1.16.0
+	github.com/fatih/color v1.18.0
 	github.com/gateway-fm/vectorized-poseidon-gold v1.0.0
 	github.com/go-errors/errors v1.5.1
 	github.com/google/tink/go v1.7.0
