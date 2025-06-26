@@ -27,6 +27,9 @@ import (
 // Zero address constant for efficient comparisons
 var zeroAddress = common.Address{}
 
+// Maximum number of blocks to store and display
+const maxBlocks = 1000
+
 // Comparison functions for different data types
 func compareNumbers(a, b interface{}) int {
 	aNum := a.(*big.Int)
@@ -588,6 +591,12 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 				if t.blockDetailLeft != nil {
 					t.app.SetFocus(t.blockDetailLeft)
 				}
+			} else if currentPage == "home" {
+				// On home page, reset table selection to top
+				if t.homeTable != nil {
+					t.homeTable.Select(1, 0) // Row 1 (first data row, since 0 is header)
+					t.app.SetFocus(t.homeTable)
+				}
 			} else {
 				// From all other pages, go back to home
 				t.pages.SwitchToPage("home")
@@ -765,6 +774,11 @@ func (t *TviewRenderer) showBlockDetail(block rpctypes.PolyBlock) {
 
 	t.pages.SwitchToPage("block-detail")
 
+	// Reset table selection to the first row (row 1, since row 0 is header)
+	if len(transactions) > 0 {
+		t.blockDetailLeft.Select(1, 0)
+	}
+
 	// Set focus to the left pane (transaction table) by default
 	t.app.SetFocus(t.blockDetailLeft)
 }
@@ -788,6 +802,11 @@ func (t *TviewRenderer) showTransactionDetail(tx rpctypes.PolyTransaction, txInd
 
 	// Switch to transaction detail page immediately
 	t.pages.SwitchToPage("tx-detail")
+
+	// Reset scroll position to the top
+	t.txDetailLeft.ScrollToBeginning()
+	t.txDetailTxJSON.ScrollToBeginning()
+	t.txDetailRcptJSON.ScrollToBeginning()
 
 	// Set focus to the left pane by default
 	t.app.SetFocus(t.txDetailLeft)
@@ -1638,7 +1657,7 @@ func (t *TviewRenderer) updateTable() {
 
 	// Add blocks to table (newest first)
 	for i, block := range blocks {
-		if i >= 100 { // Limit to 100 blocks for performance
+		if i >= maxBlocks { // Limit blocks for performance
 			break
 		}
 
@@ -2410,12 +2429,12 @@ func (t *TviewRenderer) insertBlockSorted(block rpctypes.PolyBlock) {
 	t.blocksByHash[blockHash] = block
 
 	// Limit blocks to prevent memory issues
-	if len(t.blocks) > 1000 {
+	if len(t.blocks) > maxBlocks {
 		// Remove oldest blocks (at the end of the array)
-		for i := 1000; i < len(t.blocks); i++ {
+		for i := maxBlocks; i < len(t.blocks); i++ {
 			delete(t.blocksByHash, t.blocks[i].Hash().Hex())
 		}
-		t.blocks = t.blocks[:1000]
+		t.blocks = t.blocks[:maxBlocks]
 	}
 
 	log.Debug().
