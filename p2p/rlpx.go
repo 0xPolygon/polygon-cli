@@ -225,6 +225,7 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 					GetWitnessRequest: &GetWitnessRequest{
 						Hashes: hashes,
 					},
+					RequestId: uint64(time.Now().Unix()),
 				}
 				if err := c.Write(req); err != nil {
 					log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
@@ -237,6 +238,7 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 					GetWitnessRequest: &GetWitnessRequest{
 						Hashes: []common.Hash{msg.Block.Hash()},
 					},
+					RequestId: uint64(time.Now().Unix()),
 				}
 				if err := c.Write(req); err != nil {
 					log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
