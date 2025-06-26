@@ -41,9 +41,21 @@ func Dial(n *enode.Node) (*rlpxConn, error) {
 		},
 	}
 
-	if conn.ourKey, err = crypto.GenerateKey(); err != nil {
+	if conn.ourKey, err = crypto.LoadECDSA("witness.key"); err != nil {
+		log.Warn().Msg("witness.key not found generating key")
+		if conn.ourKey, err = crypto.GenerateKey(); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := crypto.SaveECDSA("witness.key", conn.ourKey); err != nil {
 		return nil, err
 	}
+
+	ip := net.ParseIP("127.0.0.1")
+	v4 := enode.NewV4(&conn.ourKey.PublicKey, ip, 30303, 30303)
+
+	log.Info().Any("enode", v4.String()).Send()
 
 	defer func() { _ = conn.SetDeadline(time.Time{}) }()
 	if err = conn.SetDeadline(time.Now().Add(20 * time.Second)); err != nil {
