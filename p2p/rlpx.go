@@ -197,26 +197,26 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 
 				var hashes []common.Hash
 				for _, hash := range *msg {
-					headersRequest := &GetBlockHeaders{
-						GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
-							// Providing both the hash and number will result in a `both origin
-							// hash and number` error.
-							Origin: eth.HashOrNumber{Hash: hash.Hash},
-							Amount: 1,
-						},
-					}
+					// headersRequest := &GetBlockHeaders{
+					// 	GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+					// 		// Providing both the hash and number will result in a `both origin
+					// 		// hash and number` error.
+					// 		Origin: eth.HashOrNumber{Hash: hash.Hash},
+					// 		Amount: 1,
+					// 	},
+					// }
+					//
+					// if err := c.Write(headersRequest); err != nil {
+					// 	c.logger.Error().Err(err).Msg("Failed to write GetBlockHeaders request")
+					// }
+					//
+					// bodiesRequest := &GetBlockBodies{
+					// 	GetBlockBodiesRequest: []common.Hash{hash.Hash},
+					// }
 
-					if err := c.Write(headersRequest); err != nil {
-						c.logger.Error().Err(err).Msg("Failed to write GetBlockHeaders request")
-					}
-
-					bodiesRequest := &GetBlockBodies{
-						GetBlockBodiesRequest: []common.Hash{hash.Hash},
-					}
-
-					if err := c.Write(bodiesRequest); err != nil {
-						c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
-					}
+					// if err := c.Write(bodiesRequest); err != nil {
+					// 	c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
+					// }
 
 					hashes = append(hashes, hash.Hash)
 				}
@@ -244,29 +244,29 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 					log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
 				}
 			case *Transactions:
-				atomic.AddInt64(&count.Transactions, int64(len(*msg)))
-				c.logger.Trace().Msgf("Received %v Transactions", len(*msg))
+				// atomic.AddInt64(&count.Transactions, int64(len(*msg)))
+				// c.logger.Trace().Msgf("Received %v Transactions", len(*msg))
 			case *PooledTransactions:
-				atomic.AddInt64(&count.Transactions, int64(len(msg.PooledTransactionsResponse)))
-				c.logger.Trace().Msgf("Received %v PooledTransactions", len(msg.PooledTransactionsResponse))
+				// atomic.AddInt64(&count.Transactions, int64(len(msg.PooledTransactionsResponse)))
+				// c.logger.Trace().Msgf("Received %v PooledTransactions", len(msg.PooledTransactionsResponse))
 			case *NewPooledTransactionHashes:
-				if err := c.processNewPooledTransactionHashes(count, msg.Hashes); err != nil {
-					return err
-				}
+				// if err := c.processNewPooledTransactionHashes(count, msg.Hashes); err != nil {
+				// 	return err
+				// }
 			case *NewPooledTransactionHashes66:
-				if err := c.processNewPooledTransactionHashes(count, *msg); err != nil {
-					return err
-				}
+				// if err := c.processNewPooledTransactionHashes(count, *msg); err != nil {
+				// 	return err
+				// }
 			case *GetPooledTransactions:
-				atomic.AddInt64(&count.TransactionRequests, int64(len(msg.GetPooledTransactionsRequest)))
-				c.logger.Trace().Msgf("Received %v GetPooledTransactions request", len(msg.GetPooledTransactionsRequest))
+				// atomic.AddInt64(&count.TransactionRequests, int64(len(msg.GetPooledTransactionsRequest)))
+				// c.logger.Trace().Msgf("Received %v GetPooledTransactions request", len(msg.GetPooledTransactionsRequest))
 
-				res := &PooledTransactions{
-					RequestId: msg.RequestId,
-				}
-				if err := c.Write(res); err != nil {
-					c.logger.Error().Err(err).Msg("Failed to write PooledTransactions response")
-				}
+				// res := &PooledTransactions{
+				// 	RequestId: msg.RequestId,
+				// }
+				// if err := c.Write(res); err != nil {
+				// 	c.logger.Error().Err(err).Msg("Failed to write PooledTransactions response")
+				// }
 			case *Error:
 				atomic.AddInt64(&count.Errors, 1)
 				c.logger.Trace().Err(msg.Unwrap()).Msg("Received Error")

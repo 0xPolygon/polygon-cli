@@ -43,6 +43,10 @@ func (count *MessageCount) Load() MessageCount {
 		Pings:               atomic.LoadInt64(&count.Pings),
 		Errors:              atomic.LoadInt64(&count.Errors),
 		Disconnects:         atomic.LoadInt64(&count.Disconnects),
+		NewWitness:          atomic.LoadInt64(&count.NewWitness),
+		NewWitnessHashes:    atomic.LoadInt64(&count.NewWitnessHashes),
+		GetWitnessRequest:   atomic.LoadInt64(&count.GetWitnessRequest),
+		Witness:             atomic.LoadInt64(&count.Witness),
 	}
 }
 
@@ -60,6 +64,10 @@ func (count *MessageCount) Clear() {
 	atomic.StoreInt64(&count.Pings, 0)
 	atomic.StoreInt64(&count.Errors, 0)
 	atomic.StoreInt64(&count.Disconnects, 0)
+	atomic.StoreInt64(&count.NewWitness, 0)
+	atomic.StoreInt64(&count.NewWitnessHashes, 0)
+	atomic.StoreInt64(&count.GetWitnessRequest, 0)
+	atomic.StoreInt64(&count.Witness, 0)
 }
 
 // IsEmpty checks whether the sum of all the counts is empty. Make sure to call
