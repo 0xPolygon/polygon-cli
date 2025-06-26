@@ -37,6 +37,7 @@ func Dial(n *enode.Node) (*rlpxConn, error) {
 			{Name: "eth", Version: 66},
 			{Name: "eth", Version: 67},
 			{Name: "eth", Version: 68},
+			{Name: "wit", Version: 1},
 		},
 	}
 
@@ -194,6 +195,7 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 				atomic.AddInt64(&count.BlockHashes, int64(len(*msg)))
 				c.logger.Trace().Msgf("Received %v NewBlockHashes", len(*msg))
 
+				var hashes []common.Hash
 				for _, hash := range *msg {
 					headersRequest := &GetBlockHeaders{
 						GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
@@ -215,11 +217,30 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 					if err := c.Write(bodiesRequest); err != nil {
 						c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
 					}
+
+					hashes = append(hashes, hash.Hash)
 				}
 
+				req := GetWitnessPacket{
+					GetWitnessRequest: &GetWitnessRequest{
+						Hashes: hashes,
+					},
+				}
+				if err := c.Write(req); err != nil {
+					log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
+				}
 			case *NewBlock:
 				atomic.AddInt64(&count.Blocks, 1)
 				c.logger.Trace().Str("hash", msg.Block.Hash().Hex()).Msg("Received NewBlock")
+
+				req := GetWitnessPacket{
+					GetWitnessRequest: &GetWitnessRequest{
+						Hashes: []common.Hash{msg.Block.Hash()},
+					},
+				}
+				if err := c.Write(req); err != nil {
+					log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
+				}
 			case *Transactions:
 				atomic.AddInt64(&count.Transactions, int64(len(*msg)))
 				c.logger.Trace().Msgf("Received %v Transactions", len(*msg))
@@ -248,15 +269,27 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 				atomic.AddInt64(&count.Errors, 1)
 				c.logger.Trace().Err(msg.Unwrap()).Msg("Received Error")
 
-				if !strings.Contains(msg.Error(), "timeout") {
-					return msg.Unwrap()
-				}
+				// if !strings.Contains(msg.Error(), "timeout") {
+				// 	return msg.Unwrap()
+				// }
 			case *Disconnect:
 				atomic.AddInt64(&count.Disconnects, 1)
 				c.logger.Debug().Msgf("Disconnect received: %v", msg)
 			case *Disconnects:
 				atomic.AddInt64(&count.Disconnects, 1)
 				c.logger.Debug().Msgf("Disconnect received: %v", msg)
+			case *NewWitnessPacket:
+				atomic.AddInt64(&count.NewWitness, 1)
+				c.logger.Debug().Any("msg", msg).Msg("Received NewWitness")
+			case *NewWitnessHashesPacket:
+				atomic.AddInt64(&count.NewWitnessHashes, 1)
+				c.logger.Debug().Any("msg", msg).Msg("Received NewWitnessHashes")
+			case *GetWitnessPacket:
+				atomic.AddInt64(&count.GetWitnessRequest, 1)
+				c.logger.Debug().Any("msg", msg).Msg("Received GetWitnessRequest")
+			case *WitnessPacketRLPPacket:
+				atomic.AddInt64(&count.Witness, 1)
+				c.logger.Debug().Any("msg", msg).Msg("Received Witness")
 			default:
 				c.logger.Info().Interface("msg", msg).Int("code", msg.Code()).Msg("Received message")
 			}

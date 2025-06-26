@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -13,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type Message interface {
@@ -229,7 +231,16 @@ func (c *rlpxConn) Read() Message {
 			return errorf("could not rlp decode message: %v", err)
 		}
 		return (*PooledTransactions)(ethMsg)
+	case (NewWitnessPacket{}.Code()):
+		msg = new(NewWitnessPacket)
+	case (NewWitnessHashesPacket{}.Code()):
+		msg = new(NewWitnessHashesPacket)
+	case (GetWitnessPacket{}.Code()):
+		msg = new(GetWitnessPacket)
+	case (WitnessPacketRLPPacket{}.Code()):
+		msg = new(WitnessPacketRLPPacket)
 	default:
+		log.Info().Any("code", code).Send()
 		msg = errorf("invalid message code: %d", code)
 	}
 
@@ -331,3 +342,45 @@ type TrieNodes snap.TrieNodesPacket
 
 func (msg TrieNodes) Code() int     { return 40 }
 func (msg TrieNodes) ReqID() uint64 { return msg.ID }
+
+type NewWitnessPacket struct {
+	Witness *stateless.Witness
+}
+
+func (msg NewWitnessPacket) Code() int     { return 33 }
+func (msg NewWitnessPacket) ReqID() uint64 { return 0 }
+
+type NewWitnessHashesPacket struct {
+	Hashes  []common.Hash
+	Numbers []uint64
+}
+
+func (msg NewWitnessHashesPacket) Code() int     { return 34 }
+func (msg NewWitnessHashesPacket) ReqID() uint64 { return 0 }
+
+// GetWitnessRequest represents a list of witnesses query by block hashes.
+type GetWitnessRequest struct {
+	Hashes []common.Hash // Request by list of block hashes
+}
+
+// GetWitnessPacket represents a witness query with request ID wrapping.
+type GetWitnessPacket struct {
+	RequestId uint64
+	*GetWitnessRequest
+}
+
+func (msg GetWitnessPacket) Code() int     { return 35 }
+func (msg GetWitnessPacket) ReqID() uint64 { return msg.RequestId }
+
+// WitnessPacketRLPPacket represents a witness response with request ID wrapping.
+type WitnessPacketRLPPacket struct {
+	RequestId uint64
+	WitnessPacketResponse
+}
+
+// WitnessPacketResponse represents a witness response, to use when we already
+// have the witness rlp encoded.
+type WitnessPacketResponse []rlp.RawValue
+
+func (msg WitnessPacketRLPPacket) Code() int     { return 36 }
+func (msg WitnessPacketRLPPacket) ReqID() uint64 { return msg.RequestId }

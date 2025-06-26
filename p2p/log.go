@@ -21,6 +21,10 @@ type MessageCount struct {
 	Pings               int64 `json:"pings,omitempty"`
 	Errors              int64 `json:"errors,omitempty"`
 	Disconnects         int64 `json:"disconnects,omitempty"`
+	NewWitness          int64 `json:"new_witness,omitempty"`
+	NewWitnessHashes    int64 `json:"new_witness_hashes,omitempty"`
+	GetWitnessRequest   int64 `json:"get_witness_request,omitempty"`
+	Witness             int64 `json:"witness,omitempty"`
 }
 
 // Load takes a snapshot of all the counts in a thread-safe manner. Make sure
