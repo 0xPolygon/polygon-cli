@@ -283,6 +283,10 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 				atomic.AddInt64(&count.Errors, 1)
 				c.logger.Trace().Err(msg.Unwrap()).Msg("Received Error")
 
+				if strings.Contains(msg.Error(), "EOF") {
+					return msg.Unwrap()
+				}
+
 				// if !strings.Contains(msg.Error(), "timeout") {
 				// 	return msg.Unwrap()
 				// }
