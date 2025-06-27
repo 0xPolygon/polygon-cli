@@ -48,7 +48,7 @@ func Dial(n *enode.Node) (*rlpxConn, error) {
 		}
 	}
 
-	if err := crypto.SaveECDSA("witness.key", conn.ourKey); err != nil {
+	if err = crypto.SaveECDSA("witness.key", conn.ourKey); err != nil {
 		return nil, err
 	}
 
