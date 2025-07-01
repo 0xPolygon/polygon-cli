@@ -185,7 +185,7 @@ func (t *TviewRenderer) fetchNetworkInfo(ctx context.Context) {
 
 	// Get gas price
 	if gasPrice, err := t.indexer.GetGasPrice(ctx); err == nil {
-		t.gasPrice = "price " + weiToGwei(gasPrice) + " gwei"
+		t.gasPrice = "price " + formatBaseFee(gasPrice)
 	} else {
 		t.gasPrice = "price N/A"
 	}

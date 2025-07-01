@@ -777,19 +777,6 @@ func formatConnectionStatus(latency time.Duration) string {
 	}
 }
 
-// weiToGwei converts wei to gwei with reasonable precision
-func weiToGwei(wei *big.Int) string {
-	if wei == nil {
-		return "0"
-	}
-
-	// Convert wei to gwei (divide by 10^9)
-	gwei := new(big.Float).SetInt(wei)
-	gwei = gwei.Quo(gwei, big.NewFloat(1e9))
-
-	// Format with 2 decimal places
-	return fmt.Sprintf("%.2f", gwei)
-}
 
 // formatRelativeTime converts Unix timestamp to human-readable relative time
 func formatRelativeTime(timestamp uint64) string {

@@ -108,7 +108,7 @@ func (t *TviewRenderer) createBasicTransactionDetails(tx rpctypes.PolyTransactio
 	}
 	details = append(details, fmt.Sprintf("Value: %s ETH", weiToEther(tx.Value())))
 	details = append(details, fmt.Sprintf("Gas: %s", formatNumber(tx.Gas())))
-	details = append(details, fmt.Sprintf("Gas Price: %s gwei", weiToGwei(tx.GasPrice())))
+	details = append(details, fmt.Sprintf("Gas Price: %s", formatBaseFee(tx.GasPrice())))
 	details = append(details, fmt.Sprintf("Nonce: %d", tx.Nonce()))
 	details = append(details, "")
 
@@ -142,7 +142,7 @@ func (t *TviewRenderer) createBasicTransactionDetails(tx rpctypes.PolyTransactio
 			} else {
 				maxFeeBig = big.NewInt(int64(maxFeeGas))
 			}
-			details = append(details, fmt.Sprintf("Max Fee Per Gas: %s gwei", weiToGwei(maxFeeBig)))
+			details = append(details, fmt.Sprintf("Max Fee Per Gas: %s", formatBaseFee(maxFeeBig)))
 		}
 		if tx.MaxPriorityFeePerGas() > 0 {
 			maxPriorityGas := tx.MaxPriorityFeePerGas()
@@ -153,7 +153,7 @@ func (t *TviewRenderer) createBasicTransactionDetails(tx rpctypes.PolyTransactio
 			} else {
 				maxPriorityBig = big.NewInt(int64(maxPriorityGas))
 			}
-			details = append(details, fmt.Sprintf("Max Priority Fee Per Gas: %s gwei", weiToGwei(maxPriorityBig)))
+			details = append(details, fmt.Sprintf("Max Priority Fee Per Gas: %s", formatBaseFee(maxPriorityBig)))
 		}
 		details = append(details, "")
 	}
@@ -193,7 +193,7 @@ func (t *TviewRenderer) createHumanReadableTransactionDetailsSync(tx rpctypes.Po
 	}
 	details = append(details, fmt.Sprintf("Value: %s ETH", weiToEther(tx.Value())))
 	details = append(details, fmt.Sprintf("Gas: %s", formatNumber(tx.Gas())))
-	details = append(details, fmt.Sprintf("Gas Price: %s gwei", weiToGwei(tx.GasPrice())))
+	details = append(details, fmt.Sprintf("Gas Price: %s", formatBaseFee(tx.GasPrice())))
 	details = append(details, fmt.Sprintf("Nonce: %d", tx.Nonce()))
 	details = append(details, "")
 
@@ -228,7 +228,7 @@ func (t *TviewRenderer) createHumanReadableTransactionDetailsSync(tx rpctypes.Po
 			} else {
 				maxFeeBig = big.NewInt(int64(maxFeeGas))
 			}
-			details = append(details, fmt.Sprintf("Max Fee Per Gas: %s gwei", weiToGwei(maxFeeBig)))
+			details = append(details, fmt.Sprintf("Max Fee Per Gas: %s", formatBaseFee(maxFeeBig)))
 		}
 		if tx.MaxPriorityFeePerGas() > 0 {
 			maxPriorityGas := tx.MaxPriorityFeePerGas()
@@ -239,7 +239,7 @@ func (t *TviewRenderer) createHumanReadableTransactionDetailsSync(tx rpctypes.Po
 			} else {
 				maxPriorityBig = big.NewInt(int64(maxPriorityGas))
 			}
-			details = append(details, fmt.Sprintf("Max Priority Fee Per Gas: %s gwei", weiToGwei(maxPriorityBig)))
+			details = append(details, fmt.Sprintf("Max Priority Fee Per Gas: %s", formatBaseFee(maxPriorityBig)))
 		}
 		details = append(details, "")
 	}
