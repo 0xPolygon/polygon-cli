@@ -21,6 +21,7 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/cmd/abi"
 	"github.com/0xPolygon/polygon-cli/cmd/dbbench"
+	"github.com/0xPolygon/polygon-cli/cmd/dockerlogger"
 	"github.com/0xPolygon/polygon-cli/cmd/dumpblocks"
 	"github.com/0xPolygon/polygon-cli/cmd/ecrecover"
 	"github.com/0xPolygon/polygon-cli/cmd/enr"
@@ -142,6 +143,7 @@ func NewPolycliCommand() *cobra.Command {
 		wrapcontract.WrapContractCmd,
 		foldtrace.FoldTraceCmd,
 		publish.Cmd,
+		dockerlogger.Cmd,
 	)
 	return cmd
 }
