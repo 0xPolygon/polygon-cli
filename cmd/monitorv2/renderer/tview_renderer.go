@@ -1558,8 +1558,8 @@ func (t *TviewRenderer) updateMetricsPane(update metrics.MetricUpdate) {
 			// Get base fee metrics
 			if baseFeeValue, ok := t.indexer.GetMetric("basefee"); ok {
 				stats := baseFeeValue.(metrics.BaseFeeStats)
-				base10Str := "base10 " + weiToGwei(stats.BaseFee10) + " gwei"
-				base30Str := "base30 " + weiToGwei(stats.BaseFee30) + " gwei"
+				base10Str := "base10 " + formatBaseFee(stats.BaseFee10)
+				base30Str := "base30 " + formatBaseFee(stats.BaseFee30)
 				cells = [5]string{"GAS ", base10Str, base30Str, gasPriceStr, "[placeholder]"}
 			} else {
 				cells = [5]string{"GAS ", "base10 N/A", "base30 N/A", gasPriceStr, "[placeholder]"}
