@@ -93,6 +93,11 @@ func createColumnDefinitions() []ColumnDef {
 			CompareFunc: compareUint64,
 		},
 		{
+			Name: "BASE FEE", Key: "basefee", Align: tview.AlignCenter, Expansion: 2,
+			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.BaseFee() },
+			CompareFunc: compareNumbers,
+		},
+		{
 			Name: "GAS USED", Key: "gasused", Align: tview.AlignCenter, Expansion: 2,
 			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.GasUsed() },
 			CompareFunc: compareUint64,
@@ -1687,21 +1692,25 @@ func (t *TviewRenderer) updateTable() {
 		sizeStr := formatBytes(block.Size())
 		t.homeTable.SetCell(row, 5, tview.NewTableCell(sizeStr).SetAlign(t.columns[5].Align))
 
-		// Column 6: Gas used
+		// Column 6: Base fee
+		baseFeeStr := formatBaseFee(block.BaseFee())
+		t.homeTable.SetCell(row, 6, tview.NewTableCell(baseFeeStr).SetAlign(t.columns[6].Align))
+
+		// Column 7: Gas used
 		gasUsedStr := formatNumber(block.GasUsed())
-		t.homeTable.SetCell(row, 6, tview.NewTableCell(gasUsedStr).SetAlign(t.columns[6].Align))
+		t.homeTable.SetCell(row, 7, tview.NewTableCell(gasUsedStr).SetAlign(t.columns[7].Align))
 
-		// Column 7: Gas percentage
+		// Column 8: Gas percentage
 		gasPercentStr := formatGasPercentage(block.GasUsed(), block.GasLimit())
-		t.homeTable.SetCell(row, 7, tview.NewTableCell(gasPercentStr).SetAlign(t.columns[7].Align))
+		t.homeTable.SetCell(row, 8, tview.NewTableCell(gasPercentStr).SetAlign(t.columns[8].Align))
 
-		// Column 8: Gas limit
+		// Column 9: Gas limit
 		gasLimitStr := formatNumber(block.GasLimit())
-		t.homeTable.SetCell(row, 8, tview.NewTableCell(gasLimitStr).SetAlign(t.columns[8].Align))
+		t.homeTable.SetCell(row, 9, tview.NewTableCell(gasLimitStr).SetAlign(t.columns[9].Align))
 
-		// Column 9: State root (truncated)
+		// Column 10: State root (truncated)
 		stateRootStr := truncateHash(block.Root().Hex(), 8, 8)
-		t.homeTable.SetCell(row, 9, tview.NewTableCell(stateRootStr).SetAlign(t.columns[9].Align))
+		t.homeTable.SetCell(row, 10, tview.NewTableCell(stateRootStr).SetAlign(t.columns[10].Align))
 	}
 
 	// Update table title with current block count
@@ -2137,6 +2146,37 @@ func formatNumber(num uint64) string {
 		result = append(result, char)
 	}
 	return string(result)
+}
+
+// formatBaseFee formats base fee in wei to human-readable format
+func formatBaseFee(baseFee *big.Int) string {
+	if baseFee == nil || baseFee.Cmp(big.NewInt(0)) == 0 {
+		return "0"
+	}
+
+	// Convert to gwei (wei / 1e9)
+	gwei := new(big.Int).Div(baseFee, big.NewInt(1000000000))
+	
+	// If less than 1 gwei, show in wei
+	if gwei.Cmp(big.NewInt(0)) == 0 {
+		return fmt.Sprintf("%s wei", baseFee.String())
+	}
+
+	// Format with thousand separators
+	gweiStr := gwei.String()
+	if len(gweiStr) <= 3 {
+		return fmt.Sprintf("%s gwei", gweiStr)
+	}
+
+	// Add commas for readability
+	var result []rune
+	for i, char := range gweiStr {
+		if i > 0 && (len(gweiStr)-i)%3 == 0 {
+			result = append(result, ',')
+		}
+		result = append(result, char)
+	}
+	return fmt.Sprintf("%s gwei", string(result))
 }
 
 // calculateTransactionCounters calculates EOA and contract deployment counters from all blocks
