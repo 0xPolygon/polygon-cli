@@ -983,6 +983,7 @@ func getLoadTestContract(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 func getERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (erc20Addr ethcommon.Address, erc20Contract *tokens.ERC20, err error) {
 	erc20Addr = ethcommon.HexToAddress(*inputLoadTestParams.ERC20Address)
 	if *inputLoadTestParams.ERC20Address == "" {
+		log.Info().Msg("Deploying ERC20 contract")
 		erc20Addr, _, _, err = tokens.DeployERC20(tops, c)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to deploy ERC20 contract")
@@ -990,7 +991,7 @@ func getERC20Contract(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 		}
 		// Tokens already minted and sent to the address of the deployer.
 	}
-	log.Trace().Interface("contractaddress", erc20Addr).Msg("ERC20 contract address")
+	log.Info().Interface("contractaddress", erc20Addr).Msg("ERC20 contract address")
 
 	erc20Contract, err = tokens.NewERC20(erc20Addr, c)
 	if err != nil {
@@ -1017,6 +1018,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 	erc721Addr = ethcommon.HexToAddress(*inputLoadTestParams.ERC721Address)
 	shouldMint := true
 	if *inputLoadTestParams.ERC721Address == "" {
+		log.Info().Msg("Deploying ERC721 contract")
 		erc721Addr, _, _, err = tokens.DeployERC721(tops, c)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to deploy ERC721 contract")
@@ -1024,7 +1026,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 		}
 		shouldMint = false
 	}
-	log.Trace().Interface("contractaddress", erc721Addr).Msg("ERC721 contract address")
+	log.Info().Interface("contractaddress", erc721Addr).Msg("ERC721 contract address")
 
 	erc721Contract, err = tokens.NewERC721(erc721Addr, c)
 	if err != nil {
@@ -1043,6 +1045,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 		return
 	}
 
+	log.Info().Msg("Mint one ERC721 token")
 	err = util.BlockUntilSuccessful(ctx, c, func() error {
 		_, err = erc721Contract.MintBatch(tops, *inputLoadTestParams.FromETHAddress, new(big.Int).SetUint64(1))
 		return err
