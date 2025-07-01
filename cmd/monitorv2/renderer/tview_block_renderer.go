@@ -1,5 +1,17 @@
 package renderer
 
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"strconv"
+
+	"github.com/0xPolygon/polygon-cli/rpctypes"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
+	"github.com/rs/zerolog/log"
+)
+
 // createBlockDetailPage creates the block detail view with side-by-side panes
 func (t *TviewRenderer) createBlockDetailPage() {
 	// Create left pane as transaction table

@@ -1,5 +1,20 @@
 package renderer
 
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"math"
+	"math/big"
+	"strings"
+	"time"
+
+	"github.com/0xPolygon/polygon-cli/rpctypes"
+	"github.com/rivo/tview"
+	"github.com/rs/zerolog/log"
+)
+
 // createTransactionDetailPage creates the transaction detail view with human-readable left pane and stacked JSON right panes
 func (t *TviewRenderer) createTransactionDetailPage() {
 	// Create left pane for human-readable transaction properties

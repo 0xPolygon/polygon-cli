@@ -1,14 +1,12 @@
 package renderer
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,7 +14,6 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/chainstore"
 	"github.com/0xPolygon/polygon-cli/indexer"
-	"github.com/0xPolygon/polygon-cli/indexer/metrics"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gdamore/tcell/v2"
