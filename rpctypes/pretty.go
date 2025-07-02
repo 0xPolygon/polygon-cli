@@ -18,11 +18,54 @@
 package rpctypes
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math/big"
+	"strings"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 )
+
+// HexBytes represents byte data that should be JSON-marshaled as hex strings
+type HexBytes []byte
+
+// MarshalJSON implements the json.Marshaler interface for HexBytes
+func (h HexBytes) MarshalJSON() ([]byte, error) {
+	if h == nil {
+		return []byte("null"), nil
+	}
+	if len(h) == 0 {
+		return []byte(`"0x"`), nil
+	}
+	hexStr := "0x" + hex.EncodeToString(h)
+	return json.Marshal(hexStr)
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface for HexBytes
+func (h *HexBytes) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	
+	if s == "" || s == "0x" {
+		*h = HexBytes{}
+		return nil
+	}
+	
+	if !strings.HasPrefix(s, "0x") {
+		return fmt.Errorf("hex string must start with 0x")
+	}
+	
+	decoded, err := hex.DecodeString(s[2:])
+	if err != nil {
+		return err
+	}
+	
+	*h = HexBytes(decoded)
+	return nil
+}
 
 // PrettyBlock represents a human-readable block structure
 type PrettyBlock struct {
@@ -31,14 +74,14 @@ type PrettyBlock struct {
 	ParentHash       ethcommon.Hash      `json:"parentHash"`
 	Nonce            uint64              `json:"nonce"`
 	SHA3Uncles       ethcommon.Hash      `json:"sha3Uncles"`
-	LogsBloom        []byte              `json:"logsBloom"`
+	LogsBloom        HexBytes            `json:"logsBloom"`
 	TransactionsRoot ethcommon.Hash      `json:"transactionsRoot"`
 	StateRoot        ethcommon.Hash      `json:"stateRoot"`
 	ReceiptsRoot     ethcommon.Hash      `json:"receiptsRoot"`
 	Miner            ethcommon.Address   `json:"miner"`
 	Difficulty       *big.Int            `json:"difficulty"`
 	TotalDifficulty  *big.Int            `json:"totalDifficulty,omitempty"`
-	ExtraData        []byte              `json:"extraData"`
+	ExtraData        HexBytes            `json:"extraData"`
 	Size             uint64              `json:"size"`
 	GasLimit         uint64              `json:"gasLimit"`
 	GasUsed          uint64              `json:"gasUsed"`
@@ -59,7 +102,7 @@ type PrettyTransaction struct {
 	MaxPriorityFeePerGas uint64            `json:"maxPriorityFeePerGas"`
 	MaxFeePerGas         uint64            `json:"maxFeePerGas"`
 	Hash                 ethcommon.Hash    `json:"hash"`
-	Input                []byte            `json:"input"`
+	Input                HexBytes          `json:"input"`
 	Nonce                uint64            `json:"nonce"`
 	To                   ethcommon.Address `json:"to"`
 	TransactionIndex     uint64            `json:"transactionIndex"`
@@ -79,7 +122,7 @@ type PrettyTxLogs struct {
 	TransactionIndex uint64            `json:"transactionIndex"`
 	Address          ethcommon.Address `json:"address"`
 	LogIndex         uint64            `json:"logIndex"`
-	Data             []byte            `json:"data"`
+	Data             HexBytes          `json:"data"`
 	Removed          bool              `json:"removed"`
 	Topics           []ethcommon.Hash  `json:"topics"`
 	TransactionHash  ethcommon.Hash    `json:"transactionHash"`
@@ -98,7 +141,7 @@ type PrettyReceipt struct {
 	GasUsed           *big.Int          `json:"gasUsed"`
 	ContractAddress   ethcommon.Address `json:"contractAddress"`
 	Logs              []PrettyTxLogs    `json:"logs"`
-	LogsBloom         []byte            `json:"logsBloom"`
+	LogsBloom         HexBytes          `json:"logsBloom"`
 	Root              ethcommon.Hash    `json:"root"`
 	Status            uint64            `json:"status"`
 	BlobGasPrice      *big.Int          `json:"blobGasPrice"`
@@ -119,7 +162,7 @@ func (i *implPolyBlock) MarshalJSONPretty() ([]byte, error) {
 			MaxPriorityFeePerGas: tx.MaxPriorityFeePerGas.ToUint64(),
 			MaxFeePerGas:         tx.MaxFeePerGas.ToUint64(),
 			Hash:                 tx.Hash.ToHash(),
-			Input:                tx.Input.ToBytes(),
+			Input:                HexBytes(tx.Input.ToBytes()),
 			Nonce:                tx.Nonce.ToUint64(),
 			To:                   tx.To.ToAddress(),
 			TransactionIndex:     tx.TransactionIndex.ToUint64(),
@@ -145,13 +188,13 @@ func (i *implPolyBlock) MarshalJSONPretty() ([]byte, error) {
 		ParentHash:       i.inner.ParentHash.ToHash(),
 		Nonce:            i.inner.Nonce.ToUint64(),
 		SHA3Uncles:       i.inner.SHA3Uncles.ToHash(),
-		LogsBloom:        i.inner.LogsBloom.ToBytes(),
+		LogsBloom:        HexBytes(i.inner.LogsBloom.ToBytes()),
 		TransactionsRoot: i.inner.TransactionsRoot.ToHash(),
 		StateRoot:        i.inner.StateRoot.ToHash(),
 		ReceiptsRoot:     i.inner.ReceiptsRoot.ToHash(),
 		Miner:            i.inner.Miner.ToAddress(),
 		Difficulty:       i.inner.Difficulty.ToBigInt(),
-		ExtraData:        i.inner.ExtraData.ToBytes(),
+		ExtraData:        HexBytes(i.inner.ExtraData.ToBytes()),
 		Size:             i.inner.Size.ToUint64(),
 		GasLimit:         i.inner.GasLimit.ToUint64(),
 		GasUsed:          i.inner.GasUsed.ToUint64(),
@@ -176,7 +219,7 @@ func (i *implPolyTransaction) MarshalJSONPretty() ([]byte, error) {
 		MaxPriorityFeePerGas: i.inner.MaxPriorityFeePerGas.ToUint64(),
 		MaxFeePerGas:         i.inner.MaxFeePerGas.ToUint64(),
 		Hash:                 i.inner.Hash.ToHash(),
-		Input:                i.inner.Input.ToBytes(),
+		Input:                HexBytes(i.inner.Input.ToBytes()),
 		Nonce:                i.inner.Nonce.ToUint64(),
 		To:                   i.inner.To.ToAddress(),
 		TransactionIndex:     i.inner.TransactionIndex.ToUint64(),
@@ -209,7 +252,7 @@ func (i *implPolyReceipt) MarshalJSONPretty() ([]byte, error) {
 			TransactionIndex: log.TransactionIndex.ToUint64(),
 			Address:          log.Address.ToAddress(),
 			LogIndex:         log.LogIndex.ToUint64(),
-			Data:             log.Data.ToBytes(),
+			Data:             HexBytes(log.Data.ToBytes()),
 			Removed:          log.Removed,
 			Topics:           prettyTopics,
 			TransactionHash:  log.TransactionHash.ToHash(),
@@ -228,7 +271,7 @@ func (i *implPolyReceipt) MarshalJSONPretty() ([]byte, error) {
 		GasUsed:           i.inner.GasUsed.ToBigInt(),
 		ContractAddress:   i.inner.ContractAddress.ToAddress(),
 		Logs:              prettyLogs,
-		LogsBloom:         i.inner.LogsBloom.ToBytes(),
+		LogsBloom:         HexBytes(i.inner.LogsBloom.ToBytes()),
 		Root:              i.inner.Root.ToHash(),
 		Status:            i.inner.Status.ToUint64(),
 		BlobGasPrice:      i.inner.BlobGasPrice.ToBigInt(),
