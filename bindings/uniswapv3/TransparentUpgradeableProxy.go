@@ -627,4 +627,3 @@ func (_TransparentUpgradeableProxy *TransparentUpgradeableProxyFilterer) ParseUp
 	event.Raw = log
 	return event, nil
 }
-
