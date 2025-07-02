@@ -855,35 +855,95 @@ func formatNumber(num uint64) string {
 	return string(result)
 }
 
-// formatBaseFee formats base fee in wei to human-readable format
+// formatBaseFee formats base fee in wei to human-readable format using appropriate SI units
 func formatBaseFee(baseFee *big.Int) string {
 	if baseFee == nil || baseFee.Cmp(big.NewInt(0)) == 0 {
 		return "0"
 	}
 
-	// Convert to gwei (wei / 1e9)
-	gwei := new(big.Int).Div(baseFee, big.NewInt(1000000000))
-
-	// If less than 1 gwei, show in wei
-	if gwei.Cmp(big.NewInt(0)) == 0 {
-		return fmt.Sprintf("%s wei", baseFee.String())
+	// Define units with their divisors, names, thresholds, and decimal precision
+	type unit struct {
+		divisor   *big.Int
+		name      string
+		threshold *big.Int
+		decimals  int
 	}
 
-	// Format with thousand separators
-	gweiStr := gwei.String()
-	if len(gweiStr) <= 3 {
-		return fmt.Sprintf("%s gwei", gweiStr)
+	units := []unit{
+		{new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil), "ether", new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil), 3},  // 10^18
+		{new(big.Int).Exp(big.NewInt(10), big.NewInt(15), nil), "milli", new(big.Int).Exp(big.NewInt(10), big.NewInt(15), nil), 3},  // 10^15 milliether
+		{new(big.Int).Exp(big.NewInt(10), big.NewInt(12), nil), "micro", new(big.Int).Exp(big.NewInt(10), big.NewInt(12), nil), 3},  // 10^12 microether
+		{new(big.Int).Exp(big.NewInt(10), big.NewInt(9), nil), "gwei", new(big.Int).Exp(big.NewInt(10), big.NewInt(9), nil), 3},     // 10^9 gwei
+		{new(big.Int).Exp(big.NewInt(10), big.NewInt(6), nil), "mwei", new(big.Int).Exp(big.NewInt(10), big.NewInt(6), nil), 3},     // 10^6 megawei
+		{new(big.Int).Exp(big.NewInt(10), big.NewInt(3), nil), "kwei", new(big.Int).Exp(big.NewInt(10), big.NewInt(3), nil), 3},     // 10^3 kilowei
+		{big.NewInt(1), "wei", big.NewInt(1), 0}, // wei (no decimals)
 	}
 
-	// Add commas for readability
+	// Find the appropriate unit (largest unit where value >= threshold)
+	for _, u := range units {
+		if baseFee.Cmp(u.threshold) >= 0 {
+			if u.name == "wei" {
+				// For wei, add thousand separators for values >= 1,000
+				weiStr := baseFee.String()
+				if len(weiStr) > 3 {
+					return fmt.Sprintf("%s wei", addThousandSeparators(weiStr))
+				}
+				return fmt.Sprintf("%s wei", weiStr)
+			}
+
+			// Convert to the selected unit using big.Float for precision
+			value := new(big.Float).SetInt(baseFee)
+			divisor := new(big.Float).SetInt(u.divisor)
+			result := new(big.Float).Quo(value, divisor)
+
+			// Format with appropriate precision
+			formatStr := fmt.Sprintf("%%.%df %%s", u.decimals)
+			resultFloat, _ := result.Float64()
+			
+			// Remove trailing zeros from decimal representation
+			formatted := fmt.Sprintf(formatStr, resultFloat, u.name)
+			return removeTrailingZeros(formatted)
+		}
+	}
+
+	// Fallback (should never reach here)
+	return baseFee.String() + " wei"
+}
+
+// addThousandSeparators adds commas to a numeric string for readability
+func addThousandSeparators(numStr string) string {
+	if len(numStr) <= 3 {
+		return numStr
+	}
+
 	var result []rune
-	for i, char := range gweiStr {
-		if i > 0 && (len(gweiStr)-i)%3 == 0 {
+	for i, char := range numStr {
+		if i > 0 && (len(numStr)-i)%3 == 0 {
 			result = append(result, ',')
 		}
 		result = append(result, char)
 	}
-	return fmt.Sprintf("%s gwei", string(result))
+	return string(result)
+}
+
+// removeTrailingZeros removes trailing zeros from decimal numbers in formatted strings
+func removeTrailingZeros(formatted string) string {
+	// Split on space to separate number from unit
+	parts := strings.Split(formatted, " ")
+	if len(parts) != 2 {
+		return formatted
+	}
+
+	numberPart := parts[0]
+	unitPart := parts[1]
+
+	// If it contains a decimal point, remove trailing zeros
+	if strings.Contains(numberPart, ".") {
+		numberPart = strings.TrimRight(numberPart, "0")
+		numberPart = strings.TrimRight(numberPart, ".")
+	}
+
+	return numberPart + " " + unitPart
 }
 
 // formatGasPercentage calculates and formats gas usage percentage
