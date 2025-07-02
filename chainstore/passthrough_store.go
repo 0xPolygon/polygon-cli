@@ -41,6 +41,18 @@ func NewPassthroughStoreWithConfig(rpcURL string, config *ChainStoreConfig) (*Pa
 		return nil, fmt.Errorf("failed to connect to RPC: %w", err)
 	}
 
+	// Verify the endpoint supports EVM by checking the chain ID
+	var chainID string
+	err = client.Call(&chainID, "eth_chainId")
+	if err != nil {
+		client.Close()
+		return nil, fmt.Errorf("failed to retrieve chainID: %w", err)
+	}
+	if chainID == "" || chainID == "0x0" {
+		client.Close()
+		return nil, fmt.Errorf("invalid or empty chainID: %s", chainID)
+	}
+
 	// Create HTTP client with timeout for signature lookups
 	httpClient := &http.Client{
 		Timeout: config.SignatureLookupTimeout,
