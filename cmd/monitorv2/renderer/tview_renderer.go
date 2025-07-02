@@ -139,9 +139,10 @@ type TviewRenderer struct {
 	searchForm *tview.Form
 
 	// Modal state management
-	isModalActive   bool
-	activeModalName string
-	modalStateMu    sync.RWMutex
+	isModalActive      bool
+	activeModalName    string
+	previousPageName   string // Track page before modal was opened
+	modalStateMu       sync.RWMutex
 }
 
 // NewTviewRenderer creates a new TUI renderer using tview
@@ -1330,9 +1331,13 @@ func (t *TviewRenderer) showSearchError(message string) {
 
 // showModal displays a modal and tracks its state
 func (t *TviewRenderer) showModal(name string) {
+	// Get current page before showing modal
+	currentPage, _ := t.pages.GetFrontPage()
+	
 	t.modalStateMu.Lock()
 	t.isModalActive = true
 	t.activeModalName = name
+	t.previousPageName = currentPage // Track previous page
 	t.modalStateMu.Unlock()
 
 	// Show the modal page
@@ -1355,8 +1360,10 @@ func (t *TviewRenderer) showModal(name string) {
 func (t *TviewRenderer) hideModal() {
 	t.modalStateMu.Lock()
 	modalName := t.activeModalName
+	previousPage := t.previousPageName
 	t.isModalActive = false
 	t.activeModalName = ""
+	t.previousPageName = ""
 	t.modalStateMu.Unlock()
 
 	// Hide the current modal page
@@ -1364,8 +1371,34 @@ func (t *TviewRenderer) hideModal() {
 		t.pages.HidePage(modalName)
 	}
 
-	// Return focus to the home page
-	t.app.SetFocus(t.homeTable)
+	// Return focus to the appropriate UI element based on the previous page
+	switch previousPage {
+	case "home":
+		if t.homeTable != nil {
+			t.app.SetFocus(t.homeTable)
+		}
+	case "block-detail":
+		if t.blockDetailLeft != nil {
+			t.app.SetFocus(t.blockDetailLeft)
+		}
+	case "tx-detail":
+		if t.txDetailLeft != nil {
+			t.app.SetFocus(t.txDetailLeft)
+		}
+	case "info":
+		if t.infoPage != nil {
+			t.app.SetFocus(t.infoPage)
+		}
+	case "help":
+		if t.helpPage != nil {
+			t.app.SetFocus(t.helpPage)
+		}
+	default:
+		// Fallback to home page
+		if t.homeTable != nil {
+			t.app.SetFocus(t.homeTable)
+		}
+	}
 }
 
 // isModalCurrentlyActive returns true if any modal is currently active
