@@ -54,7 +54,7 @@ func ExactInputSingleSwap(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRou
 	return
 }
 
-// swapDirection represents a swap direction with the inbound and outbound tokens.
+// uniswapDirection represents a swap direction with the inbound and outbound tokens.
 type uniswapDirection struct {
 	tokenIn, tokenOut         common.Address
 	tokenInName, tokenOutName string

@@ -19,7 +19,7 @@ const defaultMnemonic = "code code code code code code code code code code code 
 // The default password used to create a wallet for HD derivation.
 const defaultPassword = "password"
 
-// cmdParams holds the command-line parameters for the fund command.
+// cmdFundParams holds the command-line parameters for the fund command.
 type cmdFundParams struct {
 	RpcUrl     *string
 	PrivateKey *string
