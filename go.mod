@@ -41,6 +41,8 @@ require (
 require github.com/alecthomas/participle/v2 v2.1.4
 
 require (
+	github.com/containerd/errdefs v1.0.0 // indirect
+	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/crate-crypto/go-eth-kzg v1.3.0 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
@@ -51,6 +53,8 @@ require (
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
+	github.com/moby/docker-image-spec v1.3.1 // indirect
+	github.com/moby/sys/atomicwriter v0.1.0 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
@@ -163,7 +167,7 @@ require (
 	cloud.google.com/go/kms v1.22.0
 	github.com/0xPolygon/cdk-contracts-tooling v0.0.1
 	github.com/cometbft/cometbft v0.38.17
-	github.com/docker/docker v25.0.6+incompatible
+	github.com/docker/docker v28.3.1+incompatible
 	github.com/fatih/color v1.18.0
 	github.com/gateway-fm/vectorized-poseidon-gold v1.0.0
 	github.com/gdamore/tcell/v2 v2.7.1
