@@ -731,7 +731,9 @@ func bridgeAsset(cmd *cobra.Command) error {
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
-	WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
+	if err = WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
+		return err
+	}
 	receipt, err := client.TransactionReceipt(cmd.Context(), bridgeTxn.Hash())
 	if err != nil {
 		return err
@@ -792,7 +794,9 @@ func bridgeMessage(cmd *cobra.Command) error {
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
-	WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
+	if err = WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
+		return err
+	}
 	receipt, err := client.TransactionReceipt(cmd.Context(), bridgeTxn.Hash())
 	if err != nil {
 		return err
@@ -856,7 +860,9 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
-	WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
+	if err = WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
+		return err
+	}
 	receipt, err := client.TransactionReceipt(cmd.Context(), bridgeTxn.Hash())
 	if err != nil {
 		return err
@@ -1438,7 +1444,7 @@ func ComputeSiblings(rollupID uint32, leaves []common.Hash, height uint8) (*Roll
 			hashes []common.Hash
 		)
 		for i := 0; i < len(leaves); i += 2 {
-			var left, right int = i, i + 1
+			var left, right = i, i + 1
 			hash := crypto.Keccak256Hash(leaves[left][:], leaves[right][:])
 			nsi = append(nsi, [][]byte{hash[:], leaves[left][:], leaves[right][:]})
 			hashes = append(hashes, hash)
