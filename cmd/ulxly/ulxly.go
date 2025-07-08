@@ -619,6 +619,42 @@ func logAndReturnJsonError(cmd *cobra.Command, client *ethclient.Client, tx *typ
 	return err
 }
 
+// Function to parse deposit count from bridge transaction logs
+func ParseBridgeDepositCount(logs []types.Log) (uint32, error) {
+	// Bridge event topic: 0x501781209a1f8899323b96b4ef08b168df93e0a90c673d1e4cce39366cb62f9b
+	bridgeEventTopic := common.HexToHash("0x501781209a1f8899323b96b4ef08b168df93e0a90c673d1e4cce39366cb62f9b")
+
+	for _, log := range logs {
+		// Check if this log is the bridge event
+		if len(log.Topics) > 0 && log.Topics[0] == bridgeEventTopic {
+			// Bridge event data layout:
+			// [0-32]   : leaf type
+			// [32-64]  : origin network
+			// [64-96]  : origin address
+			// [96-128] : destination network
+			// [128-160]: destination address
+			// [160-192]: amount
+			// [192-224]: force update GER
+			// [224-256]: deposit count
+			// [256-288]: metadata length
+
+			if len(log.Data) < 192 {
+				return 0, fmt.Errorf("bridge event data too short")
+			}
+
+			// Extract deposit count from data
+			// It starts at position 160 (5 * 32) and is 32 bytes long
+			depositCountBytes := log.Data[224:256]
+			// uint32 is 4 bytes long, so only parse the last 4 bytes
+			depositCount := binary.BigEndian.Uint32(depositCountBytes[28:32])
+
+			return depositCount, nil
+		}
+	}
+
+	return 0, fmt.Errorf("bridge event not found in logs")
+}
+
 func bridgeAsset(cmd *cobra.Command) error {
 	bridgeAddr := *inputUlxlyArgs.bridgeAddress
 	privateKey := *inputUlxlyArgs.privateKey
@@ -695,7 +731,24 @@ func bridgeAsset(cmd *cobra.Command) error {
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
-	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
+	WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
+	receipt, err := client.TransactionReceipt(cmd.Context(), bridgeTxn.Hash())
+	if err != nil {
+		return err
+	}
+	// Convert []*types.Log to []types.Log
+	logs := make([]types.Log, len(receipt.Logs))
+	for i, log := range receipt.Logs {
+		logs[i] = *log
+	}
+	depositCount, err := ParseBridgeDepositCount(logs)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to parse deposit count from logs")
+		return err
+	}
+
+	log.Info().Uint32("depositCount", depositCount).Msg("Bridge deposit count parsed from logs")
+	return nil
 }
 
 func bridgeMessage(cmd *cobra.Command) error {
@@ -739,7 +792,24 @@ func bridgeMessage(cmd *cobra.Command) error {
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
-	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
+	WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
+	receipt, err := client.TransactionReceipt(cmd.Context(), bridgeTxn.Hash())
+	if err != nil {
+		return err
+	}
+	// Convert []*types.Log to []types.Log
+	logs := make([]types.Log, len(receipt.Logs))
+	for i, log := range receipt.Logs {
+		logs[i] = *log
+	}
+	depositCount, err := ParseBridgeDepositCount(logs)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to parse deposit count from logs")
+		return err
+	}
+
+	log.Info().Uint32("depositCount", depositCount).Msg("Bridge deposit count parsed from logs")
+	return nil
 }
 
 func bridgeWETHMessage(cmd *cobra.Command) error {
@@ -786,7 +856,24 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
-	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
+	WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
+	receipt, err := client.TransactionReceipt(cmd.Context(), bridgeTxn.Hash())
+	if err != nil {
+		return err
+	}
+	// Convert []*types.Log to []types.Log
+	logs := make([]types.Log, len(receipt.Logs))
+	for i, log := range receipt.Logs {
+		logs[i] = *log
+	}
+	depositCount, err := ParseBridgeDepositCount(logs)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to parse deposit count from logs")
+		return err
+	}
+
+	log.Info().Uint32("depositCount", depositCount).Msg("Bridge deposit count parsed from logs")
+	return nil
 }
 
 func claimAsset(cmd *cobra.Command) error {
