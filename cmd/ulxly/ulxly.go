@@ -620,36 +620,17 @@ func logAndReturnJsonError(cmd *cobra.Command, client *ethclient.Client, tx *typ
 }
 
 // Function to parse deposit count from bridge transaction logs
-func ParseBridgeDepositCount(logs []types.Log) (uint32, error) {
-	// Bridge event topic: 0x501781209a1f8899323b96b4ef08b168df93e0a90c673d1e4cce39366cb62f9b
-	bridgeEventTopic := common.HexToHash("0x501781209a1f8899323b96b4ef08b168df93e0a90c673d1e4cce39366cb62f9b")
-
+func ParseBridgeDepositCount(logs []types.Log, bridgeContract *ulxly.Ulxly) (uint32, error) {
 	for _, log := range logs {
-		// Check if this log is the bridge event
-		if len(log.Topics) > 0 && log.Topics[0] == bridgeEventTopic {
-			// Bridge event data layout:
-			// [0-32]   : leaf type
-			// [32-64]  : origin network
-			// [64-96]  : origin address
-			// [96-128] : destination network
-			// [128-160]: destination address
-			// [160-192]: amount
-			// [192-224]: force update GER
-			// [224-256]: deposit count
-			// [256-288]: metadata length
-
-			if len(log.Data) < 192 {
-				return 0, fmt.Errorf("bridge event data too short")
-			}
-
-			// Extract deposit count from data
-			// It starts at position 160 (5 * 32) and is 32 bytes long
-			depositCountBytes := log.Data[224:256]
-			// uint32 is 4 bytes long, so only parse the last 4 bytes
-			depositCount := binary.BigEndian.Uint32(depositCountBytes[28:32])
-
-			return depositCount, nil
+		// Try to parse the log as a BridgeEvent using the contract's filterer
+		bridgeEvent, err := bridgeContract.ParseBridgeEvent(log)
+		if err != nil {
+			// This log is not a bridge event, continue to next log
+			continue
 		}
+
+		// Successfully parsed a bridge event, return the deposit count
+		return bridgeEvent.DepositCount, nil
 	}
 
 	return 0, fmt.Errorf("bridge event not found in logs")
@@ -738,12 +719,17 @@ func bridgeAsset(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
+	// Check if the transaction was successful before trying to parse logs
+	if receipt.Status == 0 {
+		log.Error().Str("txHash", receipt.TxHash.String()).Msg("Bridge transaction failed")
+		return fmt.Errorf("bridge transaction failed with hash: %s", receipt.TxHash.String())
+	}
 	// Convert []*types.Log to []types.Log
 	logs := make([]types.Log, len(receipt.Logs))
 	for i, log := range receipt.Logs {
 		logs[i] = *log
 	}
-	depositCount, err := ParseBridgeDepositCount(logs)
+	depositCount, err := ParseBridgeDepositCount(logs, bridgeV2)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to parse deposit count from logs")
 		return err
@@ -801,12 +787,17 @@ func bridgeMessage(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
+	// Check if the transaction was successful before trying to parse logs
+	if receipt.Status == 0 {
+		log.Error().Str("txHash", receipt.TxHash.String()).Msg("Bridge transaction failed")
+		return fmt.Errorf("bridge transaction failed with hash: %s", receipt.TxHash.String())
+	}
 	// Convert []*types.Log to []types.Log
 	logs := make([]types.Log, len(receipt.Logs))
 	for i, log := range receipt.Logs {
 		logs[i] = *log
 	}
-	depositCount, err := ParseBridgeDepositCount(logs)
+	depositCount, err := ParseBridgeDepositCount(logs, bridgeV2)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to parse deposit count from logs")
 		return err
@@ -867,12 +858,17 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
+	// Check if the transaction was successful before trying to parse logs
+	if receipt.Status == 0 {
+		log.Error().Str("txHash", receipt.TxHash.String()).Msg("Bridge transaction failed")
+		return fmt.Errorf("bridge transaction failed with hash: %s", receipt.TxHash.String())
+	}
 	// Convert []*types.Log to []types.Log
 	logs := make([]types.Log, len(receipt.Logs))
 	for i, log := range receipt.Logs {
 		logs[i] = *log
 	}
-	depositCount, err := ParseBridgeDepositCount(logs)
+	depositCount, err := ParseBridgeDepositCount(logs, bridgeV2)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to parse deposit count from logs")
 		return err
