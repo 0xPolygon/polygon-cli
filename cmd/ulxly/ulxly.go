@@ -636,6 +636,34 @@ func ParseBridgeDepositCount(logs []types.Log, bridgeContract *ulxly.Ulxly) (uin
 	return 0, fmt.Errorf("bridge event not found in logs")
 }
 
+// parseDepositCountFromTransaction extracts the deposit count from a bridge transaction receipt
+func parseDepositCountFromTransaction(ctx context.Context, client *ethclient.Client, txHash common.Hash, bridgeContract *ulxly.Ulxly) (uint32, error) {
+	receipt, err := client.TransactionReceipt(ctx, txHash)
+	if err != nil {
+		return 0, err
+	}
+
+	// Check if the transaction was successful before trying to parse logs
+	if receipt.Status == 0 {
+		log.Error().Str("txHash", receipt.TxHash.String()).Msg("Bridge transaction failed")
+		return 0, fmt.Errorf("bridge transaction failed with hash: %s", receipt.TxHash.String())
+	}
+
+	// Convert []*types.Log to []types.Log
+	logs := make([]types.Log, len(receipt.Logs))
+	for i, log := range receipt.Logs {
+		logs[i] = *log
+	}
+
+	depositCount, err := ParseBridgeDepositCount(logs, bridgeContract)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to parse deposit count from logs")
+		return 0, err
+	}
+
+	return depositCount, nil
+}
+
 func bridgeAsset(cmd *cobra.Command) error {
 	bridgeAddr := *inputUlxlyArgs.bridgeAddress
 	privateKey := *inputUlxlyArgs.privateKey
@@ -715,23 +743,8 @@ func bridgeAsset(cmd *cobra.Command) error {
 	if err = WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
 		return err
 	}
-	receipt, err := client.TransactionReceipt(cmd.Context(), bridgeTxn.Hash())
+	depositCount, err := parseDepositCountFromTransaction(cmd.Context(), client, bridgeTxn.Hash(), bridgeV2)
 	if err != nil {
-		return err
-	}
-	// Check if the transaction was successful before trying to parse logs
-	if receipt.Status == 0 {
-		log.Error().Str("txHash", receipt.TxHash.String()).Msg("Bridge transaction failed")
-		return fmt.Errorf("bridge transaction failed with hash: %s", receipt.TxHash.String())
-	}
-	// Convert []*types.Log to []types.Log
-	logs := make([]types.Log, len(receipt.Logs))
-	for i, log := range receipt.Logs {
-		logs[i] = *log
-	}
-	depositCount, err := ParseBridgeDepositCount(logs, bridgeV2)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to parse deposit count from logs")
 		return err
 	}
 
@@ -783,23 +796,8 @@ func bridgeMessage(cmd *cobra.Command) error {
 	if err = WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
 		return err
 	}
-	receipt, err := client.TransactionReceipt(cmd.Context(), bridgeTxn.Hash())
+	depositCount, err := parseDepositCountFromTransaction(cmd.Context(), client, bridgeTxn.Hash(), bridgeV2)
 	if err != nil {
-		return err
-	}
-	// Check if the transaction was successful before trying to parse logs
-	if receipt.Status == 0 {
-		log.Error().Str("txHash", receipt.TxHash.String()).Msg("Bridge transaction failed")
-		return fmt.Errorf("bridge transaction failed with hash: %s", receipt.TxHash.String())
-	}
-	// Convert []*types.Log to []types.Log
-	logs := make([]types.Log, len(receipt.Logs))
-	for i, log := range receipt.Logs {
-		logs[i] = *log
-	}
-	depositCount, err := ParseBridgeDepositCount(logs, bridgeV2)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to parse deposit count from logs")
 		return err
 	}
 
@@ -854,23 +852,8 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 	if err = WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
 		return err
 	}
-	receipt, err := client.TransactionReceipt(cmd.Context(), bridgeTxn.Hash())
+	depositCount, err := parseDepositCountFromTransaction(cmd.Context(), client, bridgeTxn.Hash(), bridgeV2)
 	if err != nil {
-		return err
-	}
-	// Check if the transaction was successful before trying to parse logs
-	if receipt.Status == 0 {
-		log.Error().Str("txHash", receipt.TxHash.String()).Msg("Bridge transaction failed")
-		return fmt.Errorf("bridge transaction failed with hash: %s", receipt.TxHash.String())
-	}
-	// Convert []*types.Log to []types.Log
-	logs := make([]types.Log, len(receipt.Logs))
-	for i, log := range receipt.Logs {
-		logs[i] = *log
-	}
-	depositCount, err := ParseBridgeDepositCount(logs, bridgeV2)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to parse deposit count from logs")
 		return err
 	}
 
