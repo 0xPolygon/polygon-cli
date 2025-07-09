@@ -619,6 +619,51 @@ func logAndReturnJsonError(cmd *cobra.Command, client *ethclient.Client, tx *typ
 	return err
 }
 
+// Function to parse deposit count from bridge transaction logs
+func ParseBridgeDepositCount(logs []types.Log, bridgeContract *ulxly.Ulxly) (uint32, error) {
+	for _, log := range logs {
+		// Try to parse the log as a BridgeEvent using the contract's filterer
+		bridgeEvent, err := bridgeContract.ParseBridgeEvent(log)
+		if err != nil {
+			// This log is not a bridge event, continue to next log
+			continue
+		}
+
+		// Successfully parsed a bridge event, return the deposit count
+		return bridgeEvent.DepositCount, nil
+	}
+
+	return 0, fmt.Errorf("bridge event not found in logs")
+}
+
+// parseDepositCountFromTransaction extracts the deposit count from a bridge transaction receipt
+func parseDepositCountFromTransaction(ctx context.Context, client *ethclient.Client, txHash common.Hash, bridgeContract *ulxly.Ulxly) (uint32, error) {
+	receipt, err := client.TransactionReceipt(ctx, txHash)
+	if err != nil {
+		return 0, err
+	}
+
+	// Check if the transaction was successful before trying to parse logs
+	if receipt.Status == 0 {
+		log.Error().Str("txHash", receipt.TxHash.String()).Msg("Bridge transaction failed")
+		return 0, fmt.Errorf("bridge transaction failed with hash: %s", receipt.TxHash.String())
+	}
+
+	// Convert []*types.Log to []types.Log
+	logs := make([]types.Log, len(receipt.Logs))
+	for i, log := range receipt.Logs {
+		logs[i] = *log
+	}
+
+	depositCount, err := ParseBridgeDepositCount(logs, bridgeContract)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to parse deposit count from logs")
+		return 0, err
+	}
+
+	return depositCount, nil
+}
+
 func bridgeAsset(cmd *cobra.Command) error {
 	bridgeAddr := *inputUlxlyArgs.bridgeAddress
 	privateKey := *inputUlxlyArgs.privateKey
@@ -695,7 +740,16 @@ func bridgeAsset(cmd *cobra.Command) error {
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
-	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
+	if err = WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
+		return err
+	}
+	depositCount, err := parseDepositCountFromTransaction(cmd.Context(), client, bridgeTxn.Hash(), bridgeV2)
+	if err != nil {
+		return err
+	}
+
+	log.Info().Uint32("depositCount", depositCount).Msg("Bridge deposit count parsed from logs")
+	return nil
 }
 
 func bridgeMessage(cmd *cobra.Command) error {
@@ -739,7 +793,16 @@ func bridgeMessage(cmd *cobra.Command) error {
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
-	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
+	if err = WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
+		return err
+	}
+	depositCount, err := parseDepositCountFromTransaction(cmd.Context(), client, bridgeTxn.Hash(), bridgeV2)
+	if err != nil {
+		return err
+	}
+
+	log.Info().Uint32("depositCount", depositCount).Msg("Bridge deposit count parsed from logs")
+	return nil
 }
 
 func bridgeWETHMessage(cmd *cobra.Command) error {
@@ -786,7 +849,16 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
-	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
+	if err = WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
+		return err
+	}
+	depositCount, err := parseDepositCountFromTransaction(cmd.Context(), client, bridgeTxn.Hash(), bridgeV2)
+	if err != nil {
+		return err
+	}
+
+	log.Info().Uint32("depositCount", depositCount).Msg("Bridge deposit count parsed from logs")
+	return nil
 }
 
 func claimAsset(cmd *cobra.Command) error {
@@ -1351,7 +1423,7 @@ func ComputeSiblings(rollupID uint32, leaves []common.Hash, height uint8) (*Roll
 			hashes []common.Hash
 		)
 		for i := 0; i < len(leaves); i += 2 {
-			var left, right int = i, i + 1
+			var left, right = i, i + 1
 			hash := crypto.Keccak256Hash(leaves[left][:], leaves[right][:])
 			nsi = append(nsi, [][]byte{hash[:], leaves[left][:], leaves[right][:]})
 			hashes = append(hashes, hash)
