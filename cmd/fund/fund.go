@@ -128,7 +128,7 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 	if *params.FunderAddress == "" {
 		// Deploy the Funder contract.
 		// Note: `fundingAmountInWei` reprensents the amount the Funder contract will send to each newly generated wallets.
-		fundingAmountInWei := new(big.Int).SetUint64(*params.FundingAmountInWei)
+		fundingAmountInWei := params.FundingAmountInWei
 		contractAddress, _, _, err = funder.DeployFunder(tops, c, fundingAmountInWei)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to deploy Funder contract")
