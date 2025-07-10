@@ -885,7 +885,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				default:
 					log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
 				}
-				recordSample(routineID, requestID, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
+				if !*inputLoadTestParams.SendOnly {
+					recordSample(routineID, requestID, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
+				}
 				if tErr != nil {
 					log.Error().
 						Int64("routineID", routineID).
