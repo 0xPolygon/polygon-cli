@@ -737,6 +737,7 @@ func bridgeAsset(cmd *cobra.Command) error {
 
 	bridgeTxn, err := bridgeV2.BridgeAsset(auth, destinationNetwork, toAddress, value, tokenAddress, isForced, callData)
 	if err = logAndReturnJsonError(cmd, client, bridgeTxn, auth, err); err != nil {
+		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
@@ -790,6 +791,7 @@ func bridgeMessage(cmd *cobra.Command) error {
 
 	bridgeTxn, err := bridgeV2.BridgeMessage(auth, destinationNetwork, toAddress, isForced, callData)
 	if err = logAndReturnJsonError(cmd, client, bridgeTxn, auth, err); err != nil {
+		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
@@ -846,6 +848,7 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 
 	bridgeTxn, err := bridgeV2.BridgeMessageWETH(auth, destinationNetwork, toAddress, value, isForced, callData)
 	if err = logAndReturnJsonError(cmd, client, bridgeTxn, auth, err); err != nil {
+		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
