@@ -2,6 +2,7 @@ package fund
 
 import (
 	"errors"
+	"math/big"
 
 	_ "embed"
 
@@ -27,7 +28,7 @@ type cmdFundParams struct {
 	WalletsNumber      *uint64
 	UseHDDerivation    *bool
 	WalletAddresses    *[]string
-	FundingAmountInWei *uint64
+	FundingAmountInWei *big.Int
 	OutputFile         *string
 
 	FunderAddress *string
@@ -37,6 +38,7 @@ var (
 	//go:embed usage.md
 	usage  string
 	params cmdFundParams
+	defaultFundingInWei = big.NewInt(50000000000000000) // 0.05 ETH
 )
 
 // FundCmd represents the fund command.
@@ -67,7 +69,9 @@ func init() {
 	p.WalletsNumber = flagSet.Uint64P("number", "n", 10, "The number of wallets to fund")
 	p.UseHDDerivation = flagSet.Bool("hd-derivation", true, "Derive wallets to fund from the private key in a deterministic way")
 	p.WalletAddresses = flagSet.StringSlice("addresses", nil, "Comma-separated list of wallet addresses to fund")
-	p.FundingAmountInWei = flagSet.Uint64P("eth-amount", "a", 50000000000000000, "The amount of wei to send to each wallet")
+	p.FundingAmountInWei = defaultFundingInWei
+	flagSet.Var(&flag_loader.BigIntValue{Val: p.FundingAmountInWei }, "eth-amount", "The amount of wei to send to each wallet")
+
 	p.OutputFile = flagSet.StringP("file", "f", "wallets.json", "The output JSON file path for storing the addresses and private keys of funded wallets")
 
 	// Marking flags as mutually exclusive
@@ -98,7 +102,8 @@ func checkFlags() error {
 	if params.WalletsNumber != nil && *params.WalletsNumber == 0 {
 		return errors.New("the number of wallets to fund is set to zero")
 	}
-	if params.FundingAmountInWei != nil && *params.FundingAmountInWei <= 1000000000 {
+	minValue := big.NewInt(1000000000)
+	if params.FundingAmountInWei != nil && params.FundingAmountInWei.Cmp(minValue) <= 0 {
 		return errors.New("the funding amount must be greater than 1000000000")
 	}
 	if params.OutputFile != nil && *params.OutputFile == "" {

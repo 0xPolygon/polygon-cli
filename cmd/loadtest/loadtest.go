@@ -331,10 +331,10 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
 	// setup account pool
-	fundingAmount := *inputLoadTestParams.AddressFundingAmount
+	fundingAmount := inputLoadTestParams.AddressFundingAmount
 	sendingAddressCount := *inputLoadTestParams.SendingAddressCount
 	sendingAddressesFile := *inputLoadTestParams.SendingAddressesFile
-	accountPool, err = NewAccountPool(ctx, c, privateKey, big.NewInt(0).SetUint64(fundingAmount))
+	accountPool, err = NewAccountPool(ctx, c, privateKey, fundingAmount)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to create account pool")
 		return fmt.Errorf("unable to create account pool. %w", err)
@@ -386,7 +386,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 
 	preFundSendingAddresses := *inputLoadTestParams.PreFundSendingAddresses
-	if preFundSendingAddresses && *inputLoadTestParams.AddressFundingAmount > 0 {
+	if preFundSendingAddresses && inputLoadTestParams.AddressFundingAmount.Cmp(new(big.Int)) > 0 {
 		err := accountPool.FundAccounts(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to fund sending addresses")
@@ -885,7 +885,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				default:
 					log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
 				}
-				recordSample(routineID, requestID, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
+				if !*inputLoadTestParams.SendOnly {
+					recordSample(routineID, requestID, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
+				}
 				if tErr != nil {
 					log.Error().
 						Int64("routineID", routineID).

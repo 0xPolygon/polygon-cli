@@ -3,6 +3,7 @@ package flag_loader
 import (
 	"fmt"
 	"os"
+	"math/big"
 
 	"github.com/spf13/cobra"
 )
@@ -11,6 +12,27 @@ const (
 	rpcUrlFlagName, rpcUrlEnvVar         = "rpc-url", "ETH_RPC_URL"
 	privateKeyFlagName, privateKeyEnvVar = "private-key", "PRIVATE_KEY"
 )
+
+type BigIntValue struct {
+    Val *big.Int
+}
+
+func (b *BigIntValue) String() string {
+    // Return the decimal representation
+    return b.Val.String()
+}
+
+func (b *BigIntValue) Set(s string) error {
+    // Parse the string in base 10
+    if _, ok := b.Val.SetString(s, 10); !ok {
+        return fmt.Errorf("invalid big integer: %q", s)
+    }
+    return nil
+}
+
+func (b *BigIntValue) Type() string {
+    return "big.Int"
+}
 
 func GetRpcUrlFlagValue(cmd *cobra.Command) *string {
 	v, _ := getFlagValue(cmd, rpcUrlFlagName, rpcUrlEnvVar, false)
