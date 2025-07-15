@@ -104,7 +104,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --adaptive-cycle-duration-seconds uint   When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates (default 10)
       --adaptive-rate-limit                    Enable AIMD-style congestion control to automatically adjust request rate
       --adaptive-rate-limit-increment uint     When using adaptive rate limiting, this flag controls the size of the additive increases. (default 50)
-      --address-funding-amount uint            The amount in wei to fund the sending addresses with. (default 1000000000000000000)
+      --address-funding-amount big.Int         The amount in wei to fund the sending addresses with. (default 1000000000000000000)
       --batch-size uint                        Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time. (default 999)
       --blob-fee-cap uint                      The blob fee cap, or the maximum blob fee per chunk, in Gwei. (default 100000)
   -b, --byte-count uint                        If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
