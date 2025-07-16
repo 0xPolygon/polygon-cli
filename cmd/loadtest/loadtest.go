@@ -351,7 +351,20 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	if (sendingAddressCount > 1 || preFundSendingAddresses) &&
 		inputLoadTestParams.AddressFundingAmount.Cmp(big.NewInt(0)) == 0 &&
 		!*inputLoadTestParams.CallOnly {
-		// ...existing auto-funding logic...
+		// Set default funding to 1 ETH (1000000000000000000 wei)
+		defaultFunding := new(big.Int).SetUint64(1000000000000000000)
+		inputLoadTestParams.AddressFundingAmount = defaultFunding
+		if sendingAddressCount > 1 {
+			log.Info().
+				Uint64("sendingAddressCount", sendingAddressCount).
+				Str("fundingAmount", defaultFunding.String()).
+				Msg("Multiple sending addresses detected with zero funding - auto-setting funding amount to 1 ETH")
+		} else if preFundSendingAddresses {
+			log.Info().
+				Bool("preFundSendingAddresses", preFundSendingAddresses).
+				Str("fundingAmount", defaultFunding.String()).
+				Msg("Pre-funding enabled with zero funding amount - auto-setting funding amount to 1 ETH")
+		}
 	}
 
 	// Now setup account pool with the potentially updated funding amount (REMOVE DUPLICATE)
@@ -1181,7 +1194,7 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 	}
 
 	// In the case of an EVM compatible system not supporting EIP-1559
-	var gasPrice, gasTipCap *big.Int = big.NewInt(0), big.NewInt(0)
+	var gasPrice, gasTipCap = big.NewInt(0), big.NewInt(0)
 	var pErr, tErr error
 	if *inputLoadTestParams.LegacyTransactionMode {
 		if inputLoadTestParams.ForceGasPrice != nil && *inputLoadTestParams.ForceGasPrice != 0 {
