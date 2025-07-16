@@ -330,10 +330,31 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
-	// setup account pool
-	fundingAmount := inputLoadTestParams.AddressFundingAmount
+	// Auto-configure funding amount BEFORE creating account pool
 	sendingAddressCount := *inputLoadTestParams.SendingAddressCount
+	if sendingAddressCount > 1 &&
+		inputLoadTestParams.AddressFundingAmount.Cmp(big.NewInt(0)) == 0 &&
+		!*inputLoadTestParams.CallOnly {
+
+		// Set default funding to 1 ETH (1000000000000000000 wei)
+		defaultFunding := new(big.Int).SetUint64(1000000000000000000)
+		inputLoadTestParams.AddressFundingAmount = defaultFunding
+
+		log.Info().
+			Uint64("sendingAddressCount", sendingAddressCount).
+			Str("fundingAmount", defaultFunding.String()).
+			Msg("Multiple sending addresses detected with zero funding - auto-setting funding amount to 1 ETH")
+	}
+
+	// Now setup account pool with the potentially updated funding amount
+	fundingAmount := inputLoadTestParams.AddressFundingAmount
 	sendingAddressesFile := *inputLoadTestParams.SendingAddressesFile
+	accountPool, err = NewAccountPool(ctx, c, privateKey, fundingAmount)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to create account pool")
+		return fmt.Errorf("unable to create account pool. %w", err)
+	}
+
 	accountPool, err = NewAccountPool(ctx, c, privateKey, fundingAmount)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to create account pool")

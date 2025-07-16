@@ -18,7 +18,6 @@ import (
 	"golang.org/x/time/rate"
 )
 
-
 type (
 	blockSummary struct {
 		Block     *rpctypes.RawBlockResponse
@@ -164,8 +163,8 @@ var (
 		0xF0, 0x0D, 0xBA, 0xBE,
 	}
 
-	randSrc *rand.Rand
-	defaultFunding = new(big.Int).SetUint64(1000000000000000000) // 1 ETH
+	randSrc        *rand.Rand
+	defaultFunding = new(big.Int).SetUint64(0) // 1 ETH
 )
 
 // LoadtestCmd represents the loadtest command
@@ -248,7 +247,7 @@ func initFlags() {
 	ltp.BlobFeeCap = LoadtestCmd.Flags().Uint64("blob-fee-cap", 100000, "The blob fee cap, or the maximum blob fee per chunk, in Gwei.")
 	ltp.SendingAddressCount = LoadtestCmd.Flags().Uint64("sending-address-count", 1, "The number of sending addresses to use. This is useful for avoiding pool account queue.")
 	ltp.AddressFundingAmount = defaultFunding
-	LoadtestCmd.Flags().Var(&flag_loader.BigIntValue{Val: ltp.AddressFundingAmount},"address-funding-amount", "The amount in wei to fund the sending addresses with.")
+	LoadtestCmd.Flags().Var(&flag_loader.BigIntValue{Val: ltp.AddressFundingAmount}, "address-funding-amount", "The amount in wei to fund the sending addresses with. Set to 0 to disable account funding (useful for call-only mode or pre-funded addresses).")
 	ltp.PreFundSendingAddresses = LoadtestCmd.Flags().Bool("pre-fund-sending-addresses", false, "If set to true, the sending addresses will be funded at the start of the execution, otherwise all addresses will be funded when used for the first time.")
 	ltp.KeepFundedAmount = LoadtestCmd.Flags().Bool("keep-funded-amount", false, "If set to true, the funded amount will be kept in the sending addresses. Otherwise, the funded amount will be refunded back to the account used to fund the account.")
 	ltp.SendingAddressesFile = LoadtestCmd.Flags().String("sending-addresses-file", "", "The file containing the sending addresses private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending addresses for different execution cycles.")
