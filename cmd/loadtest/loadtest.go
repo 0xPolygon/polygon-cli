@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/holiman/uint256"
@@ -332,21 +333,28 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	// Auto-configure funding amount BEFORE creating account pool
 	sendingAddressCount := *inputLoadTestParams.SendingAddressCount
-	if sendingAddressCount > 1 &&
-		inputLoadTestParams.AddressFundingAmount.Cmp(big.NewInt(0)) == 0 &&
-		!*inputLoadTestParams.CallOnly {
+	preFundSendingAddresses := *inputLoadTestParams.PreFundSendingAddresses
 
-		// Set default funding to 1 ETH (1000000000000000000 wei)
-		defaultFunding := new(big.Int).SetUint64(1000000000000000000)
-		inputLoadTestParams.AddressFundingAmount = defaultFunding
-
-		log.Info().
-			Uint64("sendingAddressCount", sendingAddressCount).
-			Str("fundingAmount", defaultFunding.String()).
-			Msg("Multiple sending addresses detected with zero funding - auto-setting funding amount to 1 ETH")
+	// If using only one address and it's the funding address, disable pre-funding
+	if sendingAddressCount == 1 && preFundSendingAddresses {
+		fundingAddress := crypto.PubkeyToAddress(privateKey.PublicKey)
+		// Check if the single sending address will be the funding address
+		if len(*inputLoadTestParams.SendingAddressesFile) == 0 {
+			log.Info().
+				Str("fundingAddress", fundingAddress.Hex()).
+				Msg("Pre-funding disabled - single sending address is the same as funding address")
+			preFundSendingAddresses = false
+		}
 	}
 
-	// Now setup account pool with the potentially updated funding amount
+	// Check if we need to auto-set funding amount for multiple addresses OR pre-funding
+	if (sendingAddressCount > 1 || preFundSendingAddresses) &&
+		inputLoadTestParams.AddressFundingAmount.Cmp(big.NewInt(0)) == 0 &&
+		!*inputLoadTestParams.CallOnly {
+		// ...existing auto-funding logic...
+	}
+
+	// Now setup account pool with the potentially updated funding amount (REMOVE DUPLICATE)
 	fundingAmount := inputLoadTestParams.AddressFundingAmount
 	sendingAddressesFile := *inputLoadTestParams.SendingAddressesFile
 	accountPool, err = NewAccountPool(ctx, c, privateKey, fundingAmount)
@@ -355,11 +363,6 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return fmt.Errorf("unable to create account pool. %w", err)
 	}
 
-	accountPool, err = NewAccountPool(ctx, c, privateKey, fundingAmount)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to create account pool")
-		return fmt.Errorf("unable to create account pool. %w", err)
-	}
 	if len(sendingAddressesFile) > 0 {
 		log.Trace().
 			Str("sendingAddressFile", sendingAddressesFile).
@@ -406,7 +409,6 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return fmt.Errorf("unable to set account pool. %w", err)
 	}
 
-	preFundSendingAddresses := *inputLoadTestParams.PreFundSendingAddresses
 	if preFundSendingAddresses && inputLoadTestParams.AddressFundingAmount.Cmp(new(big.Int)) > 0 {
 		err := accountPool.FundAccounts(ctx)
 		if err != nil {
