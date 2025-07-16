@@ -143,7 +143,8 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 	}
 
 	if fundingAmount.Cmp(big.NewInt(0)) == 0 {
-		log.Info().
+		// TODO: this will be logged twice. Once during initialization and once when actually calling.
+		log.Debug().
 			Msg("Funding amount is zero - account funding disabled")
 
 		// Create account pool without funding capability
