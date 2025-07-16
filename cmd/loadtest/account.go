@@ -112,10 +112,10 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 			Msg("fundingAmount cannot be nil")
 	}
 
-	if fundingAmount.Cmp(big.NewInt(0)) <= 0 {
+	if fundingAmount.Cmp(big.NewInt(0)) < 0 {
 		log.Fatal().
 			Str("fundingAmount", fundingAmount.String()).
-			Msg("fundingAmount must be greater than 0")
+			Msg("fundingAmount must be non negative")
 	}
 
 	if client == nil {
@@ -137,6 +137,24 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 			Err(err).
 			Msg("unable to get latestBlockNumber")
 		return nil, fmt.Errorf("unable to get latestBlockNumber: %w", err)
+	}
+
+	if fundingAmount.Cmp(big.NewInt(0)) == 0 {
+		log.Info().
+			Msg("Funding amount is zero - account funding disabled")
+
+		// Create account pool without funding capability
+		return &AccountPool{
+			currentAccountIndex: 0,
+			client:              client,
+			accounts:            make([]Account, 0),
+			fundingPrivateKey:   fundingPrivateKey,
+			fundingAmount:       big.NewInt(0), // Keep as 0 to indicate no funding
+			chainID:             chainID,
+			accountsPositions:   make(map[common.Address]int),
+			latestBlockNumber:   latestBlockNumber,
+			clientRateLimiter:   rate.NewLimiter(rate.Every(50*time.Millisecond), 1),
+		}, nil
 	}
 
 	return &AccountPool{
@@ -767,6 +785,14 @@ func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 
 // Checks multiple conditions of the account and funds it if needed
 func (ap *AccountPool) fundAccountIfNeeded(ctx context.Context, account Account, forcedNonce *uint64, waitToFund bool) (*types.Transaction, error) {
+	// If funding amount is zero, skip funding entirely
+	if ap.fundingAmount.Cmp(big.NewInt(0)) == 0 {
+		log.Info().
+			Str("address", account.address.Hex()).
+			Msg("Funding disabled - skipping account funding")
+		return nil, nil
+	}
+
 	// if account is funded, return it
 	if account.funded {
 		return nil, nil
