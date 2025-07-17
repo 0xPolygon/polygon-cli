@@ -18,7 +18,6 @@ import (
 	"golang.org/x/time/rate"
 )
 
-
 type (
 	blockSummary struct {
 		Block     *rpctypes.RawBlockResponse
@@ -164,8 +163,8 @@ var (
 		0xF0, 0x0D, 0xBA, 0xBE,
 	}
 
-	randSrc *rand.Rand
-	defaultFunding = new(big.Int).SetUint64(1000000000000000000) // 1 ETH
+	randSrc        *rand.Rand
+	defaultFunding = new(big.Int).SetUint64(0) // 1 ETH
 )
 
 // LoadtestCmd represents the loadtest command
@@ -226,7 +225,7 @@ func initFlags() {
 	ltp.ToRandom = LoadtestCmd.PersistentFlags().Bool("to-random", false, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
 	ltp.CallOnly = LoadtestCmd.PersistentFlags().Bool("call-only", false, "When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.")
 	ltp.CallOnlyLatestBlock = LoadtestCmd.PersistentFlags().Bool("call-only-latest", false, "When using call only mode with recall, should we execute on the latest block or on the original block")
-	ltp.EthAmountInWei = LoadtestCmd.PersistentFlags().Uint64("eth-amount", 0, "The amount of ether in wei to send on every transaction")
+	ltp.EthAmountInWei = LoadtestCmd.PersistentFlags().Uint64("eth-amount-in-wei", 0, "The amount of ether in wei to send on every transaction")
 	ltp.RateLimit = LoadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
 	ltp.AdaptiveRateLimit = LoadtestCmd.PersistentFlags().Bool("adaptive-rate-limit", false, "Enable AIMD-style congestion control to automatically adjust request rate")
 	ltp.SteadyStateTxPoolSize = LoadtestCmd.PersistentFlags().Uint64("steady-state-tx-pool-size", 1000, "When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off.")
@@ -248,7 +247,7 @@ func initFlags() {
 	ltp.BlobFeeCap = LoadtestCmd.Flags().Uint64("blob-fee-cap", 100000, "The blob fee cap, or the maximum blob fee per chunk, in Gwei.")
 	ltp.SendingAddressCount = LoadtestCmd.Flags().Uint64("sending-address-count", 1, "The number of sending addresses to use. This is useful for avoiding pool account queue.")
 	ltp.AddressFundingAmount = defaultFunding
-	LoadtestCmd.Flags().Var(&flag_loader.BigIntValue{Val: ltp.AddressFundingAmount},"address-funding-amount", "The amount in wei to fund the sending addresses with.")
+	LoadtestCmd.Flags().Var(&flag_loader.BigIntValue{Val: ltp.AddressFundingAmount}, "address-funding-amount", "The amount in wei to fund the sending addresses with. Set to 0 to disable account funding (useful for call-only mode or pre-funded addresses).")
 	ltp.PreFundSendingAddresses = LoadtestCmd.Flags().Bool("pre-fund-sending-addresses", false, "If set to true, the sending addresses will be funded at the start of the execution, otherwise all addresses will be funded when used for the first time.")
 	ltp.KeepFundedAmount = LoadtestCmd.Flags().Bool("keep-funded-amount", false, "If set to true, the funded amount will be kept in the sending addresses. Otherwise, the funded amount will be refunded back to the account used to fund the account.")
 	ltp.SendingAddressesFile = LoadtestCmd.Flags().String("sending-addresses-file", "", "The file containing the sending addresses private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending addresses for different execution cycles.")
@@ -283,7 +282,7 @@ v3, uniswapv3 - Perform UniswapV3 swaps`)
 	ltp.ContractCallData = LoadtestCmd.Flags().String("calldata", "", "The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with --mode contract-call and --contract-address")
 	ltp.ContractCallFunctionSignature = LoadtestCmd.Flags().String("function-signature", "", "The contract's function signature that will be called. The format is '<function name>(<types...>)'. This must be paired up with '--mode contract-call' and '--contract-address'. If the function requires parameters you can pass them with '--function-arg <value>'.")
 	ltp.ContractCallFunctionArgs = LoadtestCmd.Flags().StringSlice("function-arg", []string{}, `The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.`)
-	ltp.ContractCallPayable = LoadtestCmd.Flags().Bool("contract-call-payable", false, "Use this flag if the function is payable, the value amount passed will be from --eth-amount. This must be paired up with --mode contract-call and --contract-address")
+	ltp.ContractCallPayable = LoadtestCmd.Flags().Bool("contract-call-payable", false, "Use this flag if the function is payable, the value amount passed will be from --eth-amount-in-wei. This must be paired up with --mode contract-call and --contract-address")
 	ltp.InscriptionContent = LoadtestCmd.Flags().String("inscription-content", `data:,{"p":"erc-20","op":"mint","tick":"TEST","amt":"1"}`, "The inscription content that will be encoded as calldata. This must be paired up with --mode inscription")
 	ltp.Proxy = LoadtestCmd.Flags().String("proxy", "", "Use the proxy specified")
 

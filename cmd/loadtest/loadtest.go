@@ -21,7 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/holiman/uint256"
@@ -330,15 +329,16 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
-	// setup account pool
-	fundingAmount := inputLoadTestParams.AddressFundingAmount
 	sendingAddressCount := *inputLoadTestParams.SendingAddressCount
+	preFundSendingAddresses := *inputLoadTestParams.PreFundSendingAddresses
+	fundingAmount := inputLoadTestParams.AddressFundingAmount
 	sendingAddressesFile := *inputLoadTestParams.SendingAddressesFile
 	accountPool, err = NewAccountPool(ctx, c, privateKey, fundingAmount)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to create account pool")
 		return fmt.Errorf("unable to create account pool. %w", err)
 	}
+
 	if len(sendingAddressesFile) > 0 {
 		log.Trace().
 			Str("sendingAddressFile", sendingAddressesFile).
@@ -385,19 +385,30 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return fmt.Errorf("unable to set account pool. %w", err)
 	}
 
-	preFundSendingAddresses := *inputLoadTestParams.PreFundSendingAddresses
-	if preFundSendingAddresses && inputLoadTestParams.AddressFundingAmount.Cmp(new(big.Int)) > 0 {
-		err := accountPool.FundAccounts(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to fund sending addresses")
-			iErr := accountPool.ReturnFunds(ctx)
-			if iErr != nil {
-				log.Error().
-					Err(iErr).
-					Msg("There was an issue returning the funds from the sending addresses back to the funding address")
-				return fmt.Errorf("unable to return funds from sending addresses. %w", iErr)
+	// Only call FundAccounts() to prefund addresses if preFundSendingAddresses enabled and sendingAddressCount > 1.
+	// For single addresses, it will not be prefunded.
+	if preFundSendingAddresses && sendingAddressCount > 1 {
+		// Check if we need to auto-set funding amount for multiple addresses or pre-funding
+		if inputLoadTestParams.AddressFundingAmount.Cmp(new(big.Int)) > 0 {
+			err := accountPool.FundAccounts(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to fund sending addresses")
+				iErr := accountPool.ReturnFunds(ctx)
+				if iErr != nil {
+					log.Error().
+						Err(iErr).
+						Msg("There was an issue returning the funds from the sending addresses back to the funding address")
+					return fmt.Errorf("unable to return funds from sending addresses. %w", iErr)
+				}
+				return fmt.Errorf("unable to fund sending addresses. %w", err)
 			}
-			return fmt.Errorf("unable to fund sending addresses. %w", err)
+		} else if !*inputLoadTestParams.CallOnly {
+			// When using multiple sending addresses and not using --call-only and --address-funding-amount <= 0, we need to make sure the addresses get funded
+			// Set default funding to 1 ETH (1000000000000000000 wei)
+			defaultFunding := new(big.Int).SetUint64(1000000000000000000)
+			inputLoadTestParams.AddressFundingAmount = defaultFunding
+			log.Debug().
+				Msg("Multiple sending addresses detected with pre-funding enabled with zero funding amount - auto-setting funding amount to 1 ETH")
 		}
 	}
 
@@ -805,7 +816,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 			var startReq time.Time
 			var endReq time.Time
 			var tErr error
-			var ltTxHash common.Hash
+			var ltTxHash ethcommon.Hash
 			for requestID := int64(0); requestID < maxRequests; requestID++ {
 				if rl != nil {
 					tErr = rl.Wait(ctx)
@@ -1055,7 +1066,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 	return
 }
 
-func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
@@ -1158,7 +1169,7 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 	}
 
 	// In the case of an EVM compatible system not supporting EIP-1559
-	var gasPrice, gasTipCap *big.Int = big.NewInt(0), big.NewInt(0)
+	var gasPrice, gasTipCap = big.NewInt(0), big.NewInt(0)
 	var pErr, tErr error
 	if *inputLoadTestParams.LegacyTransactionMode {
 		if inputLoadTestParams.ForceGasPrice != nil && *inputLoadTestParams.ForceGasPrice != 0 {
@@ -1267,7 +1278,7 @@ func suggestMaxFeePerGas(ctx context.Context, c *ethclient.Client, blockNumber u
 }
 
 // TODO - in the future it might be more interesting if this mode takes input or random contracts to be deployed
-func loadTestDeploy(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestDeploy(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tx *ethtypes.Transaction
 
 	ltp := inputLoadTestParams
@@ -1297,7 +1308,7 @@ func getCurrentLoadTestFunction() uint64 {
 	}
 	return tester.GetRandomOPCode()
 }
-func loadTestFunction(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestFunction(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tx *ethtypes.Transaction
 
 	ltp := inputLoadTestParams
@@ -1324,7 +1335,7 @@ func loadTestFunction(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 	return
 }
 
-func loadTestCallPrecompiledContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, ltContract *tester.LoadTester, useSelectedAddress bool) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestCallPrecompiledContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, ltContract *tester.LoadTester, useSelectedAddress bool) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var f int
 	var tx *ethtypes.Transaction
 	ltp := inputLoadTestParams
@@ -1356,7 +1367,7 @@ func loadTestCallPrecompiledContract(ctx context.Context, c *ethclient.Client, t
 	return
 }
 
-func loadTestIncrement(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestIncrement(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tx *ethtypes.Transaction
 	ltp := inputLoadTestParams
 
@@ -1379,7 +1390,7 @@ func loadTestIncrement(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 	return
 }
 
-func loadTestStore(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestStore(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tx *ethtypes.Transaction
 
 	ltp := inputLoadTestParams
@@ -1405,7 +1416,7 @@ func loadTestStore(ctx context.Context, c *ethclient.Client, tops *bind.Transact
 	return
 }
 
-func loadTestERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, erc20Contract *tokens.ERC20, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, erc20Contract *tokens.ERC20, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tx *ethtypes.Transaction
 	ltp := inputLoadTestParams
 
@@ -1435,7 +1446,7 @@ func loadTestERC20(ctx context.Context, c *ethclient.Client, tops *bind.Transact
 	return
 }
 
-func loadTestERC721(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, erc721Contract *tokens.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestERC721(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, erc721Contract *tokens.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tx *ethtypes.Transaction
 
 	ltp := inputLoadTestParams
@@ -1466,7 +1477,7 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 	return
 }
 
-func loadTestRecall(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, originalTx rpctypes.PolyTransaction) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestRecall(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, originalTx rpctypes.PolyTransaction) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var stx *ethtypes.Transaction
 
 	ltp := inputLoadTestParams
@@ -1622,7 +1633,7 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, ia *IndexedActivity) 
 	return
 }
 
-func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var calldata []byte
 	var stx *ethtypes.Transaction
 
@@ -1716,7 +1727,7 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 	return
 }
 
-func loadTestInscription(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestInscription(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var tx *ethtypes.Transaction
 	var stx *ethtypes.Transaction
 
@@ -1785,7 +1796,7 @@ func loadTestInscription(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 	return
 }
 
-func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
+func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var stx *ethtypes.Transaction
 
 	ltp := inputLoadTestParams
@@ -1815,7 +1826,7 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactO
 		Value:      uint256.NewInt(amount.Uint64()),
 		Data:       nil,
 		AccessList: nil,
-		BlobHashes: make([]common.Hash, 0),
+		BlobHashes: make([]ethcommon.Hash, 0),
 		Sidecar: &ethtypes.BlobTxSidecar{
 			Blobs:       make([]kzg4844.Blob, 0),
 			Commitments: make([]kzg4844.Commitment, 0),

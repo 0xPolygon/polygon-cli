@@ -112,10 +112,11 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 			Msg("fundingAmount cannot be nil")
 	}
 
-	if fundingAmount.Cmp(big.NewInt(0)) <= 0 {
+	// Allow fundingAmount to be set to 0. Only check for negative fundingAmount.
+	if fundingAmount.Cmp(big.NewInt(0)) < 0 {
 		log.Fatal().
 			Str("fundingAmount", fundingAmount.String()).
-			Msg("fundingAmount must be greater than 0")
+			Msg("fundingAmount must be greater or equal to zero")
 	}
 
 	if client == nil {
@@ -137,6 +138,12 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 			Err(err).
 			Msg("unable to get latestBlockNumber")
 		return nil, fmt.Errorf("unable to get latestBlockNumber: %w", err)
+	}
+
+	// Debug log for when fundingAmount==0.
+	if fundingAmount.Cmp(big.NewInt(0)) == 0 {
+		log.Debug().
+			Msg("address-funding-amount is zero - account funding disabled")
 	}
 
 	return &AccountPool{
@@ -767,6 +774,14 @@ func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 
 // Checks multiple conditions of the account and funds it if needed
 func (ap *AccountPool) fundAccountIfNeeded(ctx context.Context, account Account, forcedNonce *uint64, waitToFund bool) (*types.Transaction, error) {
+	// If funding amount is zero, skip funding entirely
+	if ap.fundingAmount.Cmp(big.NewInt(0)) == 0 {
+		// Log only once per account pool
+		log.Debug().
+			Msg("Funding disabled - skipping account funding for all accounts")
+		return nil, nil
+	}
+
 	// if account is funded, return it
 	if account.funded {
 		return nil, nil

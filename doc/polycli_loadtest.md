@@ -104,7 +104,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --adaptive-cycle-duration-seconds uint   When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates (default 10)
       --adaptive-rate-limit                    Enable AIMD-style congestion control to automatically adjust request rate
       --adaptive-rate-limit-increment uint     When using adaptive rate limiting, this flag controls the size of the additive increases. (default 50)
-      --address-funding-amount big.Int         The amount in wei to fund the sending addresses with. (default 1000000000000000000)
+      --address-funding-amount big.Int         The amount in wei to fund the sending addresses with. Set to 0 to disable account funding (useful for call-only mode or pre-funded addresses).
       --batch-size uint                        Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time. (default 999)
       --blob-fee-cap uint                      The blob fee cap, or the maximum blob fee per chunk, in Gwei. (default 100000)
   -b, --byte-count uint                        If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
@@ -114,10 +114,10 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --chain-id uint                          The chain id for the transactions.
   -c, --concurrency int                        Number of requests to perform concurrently. Default is one request at a time. (default 1)
       --contract-address string                The address of the contract that will be used in --mode contract-call. This must be paired up with --mode contract-call and --calldata
-      --contract-call-payable                  Use this flag if the function is payable, the value amount passed will be from --eth-amount. This must be paired up with --mode contract-call and --contract-address
+      --contract-call-payable                  Use this flag if the function is payable, the value amount passed will be from --eth-amount-in-wei. This must be paired up with --mode contract-call and --contract-address
       --erc20-address string                   The address of a pre-deployed ERC20 contract
       --erc721-address string                  The address of a pre-deployed ERC721 contract
-      --eth-amount uint                        The amount of ether in wei to send on every transaction
+      --eth-amount-in-wei uint                 The amount of ether in wei to send on every transaction
       --force-contract-deploy                  Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.
   -f, --function uint                          A specific function to be called if running with --mode f or a specific precompiled contract when running with --mode a (default 1)
       --function-arg strings                   The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.
