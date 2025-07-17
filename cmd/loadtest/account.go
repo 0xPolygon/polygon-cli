@@ -112,6 +112,7 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 			Msg("fundingAmount cannot be nil")
 	}
 
+	// Allow fundingAmount to be set to 0. Only check for negative fundingAmount.
 	if fundingAmount.Cmp(big.NewInt(0)) < 0 {
 		log.Fatal().
 			Str("fundingAmount", fundingAmount.String()).
@@ -139,6 +140,7 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 		return nil, fmt.Errorf("unable to get latestBlockNumber: %w", err)
 	}
 
+	// Debug log for when fundingAmount==0.
 	if fundingAmount.Cmp(big.NewInt(0)) == 0 {
 		log.Debug().
 			Msg("address-funding-amount is zero - account funding disabled")

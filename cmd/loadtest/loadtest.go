@@ -331,8 +331,6 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	sendingAddressCount := *inputLoadTestParams.SendingAddressCount
 	preFundSendingAddresses := *inputLoadTestParams.PreFundSendingAddresses
-
-	// Now setup account pool with the potentially updated funding amount
 	fundingAmount := inputLoadTestParams.AddressFundingAmount
 	sendingAddressesFile := *inputLoadTestParams.SendingAddressesFile
 	accountPool, err = NewAccountPool(ctx, c, privateKey, fundingAmount)
@@ -386,6 +384,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		log.Error().Err(err).Msg("unable to set account pool")
 		return fmt.Errorf("unable to set account pool. %w", err)
 	}
+
 	// Only call FundAccounts() to prefund addresses if preFundSendingAddresses enabled and sendingAddressCount > 1.
 	// For single addresses, it will not be prefunded.
 	if preFundSendingAddresses && sendingAddressCount > 1 {
