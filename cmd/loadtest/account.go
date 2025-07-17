@@ -94,9 +94,6 @@ type AccountPool struct {
 
 	latestBlockNumber uint64
 	pendingTxsCache   *uint64
-
-	// field to track if we've already logged the funding disabled message
-	fundingDisabledLogged bool
 }
 
 // Creates a new account pool with the given funding private key.
@@ -143,35 +140,20 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 	}
 
 	if fundingAmount.Cmp(big.NewInt(0)) == 0 {
-		log.Info().
+		log.Debug().
 			Msg("address-funding-amount is zero - account funding disabled")
-
-		// Create account pool without funding capability
-		return &AccountPool{
-			currentAccountIndex:   0,
-			client:                client,
-			accounts:              make([]Account, 0),
-			fundingPrivateKey:     fundingPrivateKey,
-			fundingAmount:         big.NewInt(0), // Keep as 0 to indicate no funding
-			chainID:               chainID,
-			accountsPositions:     make(map[common.Address]int),
-			latestBlockNumber:     latestBlockNumber,
-			clientRateLimiter:     rate.NewLimiter(rate.Every(50*time.Millisecond), 1),
-			fundingDisabledLogged: false,
-		}, nil
 	}
 
 	return &AccountPool{
-		currentAccountIndex:   0,
-		client:                client,
-		accounts:              make([]Account, 0),
-		fundingPrivateKey:     fundingPrivateKey,
-		fundingAmount:         fundingAmount,
-		chainID:               chainID,
-		accountsPositions:     make(map[common.Address]int),
-		latestBlockNumber:     latestBlockNumber,
-		clientRateLimiter:     rate.NewLimiter(rate.Every(50*time.Millisecond), 1),
-		fundingDisabledLogged: false, // Initialize the flag
+		currentAccountIndex: 0,
+		client:              client,
+		accounts:            make([]Account, 0),
+		fundingPrivateKey:   fundingPrivateKey,
+		fundingAmount:       fundingAmount,
+		chainID:             chainID,
+		accountsPositions:   make(map[common.Address]int),
+		latestBlockNumber:   latestBlockNumber,
+		clientRateLimiter:   rate.NewLimiter(rate.Every(50*time.Millisecond), 1),
 	}, nil
 }
 
@@ -793,11 +775,8 @@ func (ap *AccountPool) fundAccountIfNeeded(ctx context.Context, account Account,
 	// If funding amount is zero, skip funding entirely
 	if ap.fundingAmount.Cmp(big.NewInt(0)) == 0 {
 		// Log only once per account pool
-		if !ap.fundingDisabledLogged {
-			log.Info().
-				Msg("Funding disabled - skipping account funding for all accounts")
-			ap.fundingDisabledLogged = true
-		}
+		log.Debug().
+			Msg("Funding disabled - skipping account funding for all accounts")
 		return nil, nil
 	}
 
