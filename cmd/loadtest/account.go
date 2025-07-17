@@ -116,7 +116,7 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 	if fundingAmount.Cmp(big.NewInt(0)) < 0 {
 		log.Fatal().
 			Str("fundingAmount", fundingAmount.String()).
-			Msg("fundingAmount must be non negative")
+			Msg("fundingAmount must be greater or equal to zero")
 	}
 
 	if client == nil {
