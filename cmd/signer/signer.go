@@ -330,7 +330,7 @@ func (g *GCPKMS) ListKeyRingKeys(ctx context.Context) error {
 	// It will require modifications to work:
 	// - It may require correct/in-range values for request initialization.
 	// - It may require specifying regional endpoints when creating the service client as shown in:
-	//   https://pkg.go.dev/cloud.google.com/go#hdr-Client_Options
+	// https://pkg.go.dev/cloud.google.com/go#hdr-Client_Options
 	c, err := kms.NewKeyManagementClient(ctx)
 	if err != nil {
 		return err
