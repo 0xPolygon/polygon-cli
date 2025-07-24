@@ -207,14 +207,14 @@ func (wr *WrappedData) ToSlice() []*WrappedData {
 	if v.Len() == 0 {
 		return []*WrappedData{}
 	}
-	wrappedDatas := make([]*WrappedData, v.Len())
+	wrappedData := make([]*WrappedData, v.Len())
 	for i := 0; i < v.Len(); i = i + 1 {
 		nwd := new(WrappedData)
 		nwd.raw = v.Index(i).Interface().(EthTestData)
-		wrappedDatas[i] = nwd
+		wrappedData[i] = nwd
 
 	}
-	return wrappedDatas
+	return wrappedData
 }
 func (wn *WrappedNumeric) IsSlice() bool {
 	v := reflect.ValueOf(wn.raw)
@@ -229,14 +229,14 @@ func (wn *WrappedNumeric) ToSlice() []*WrappedNumeric {
 	if v.Len() == 0 {
 		return []*WrappedNumeric{}
 	}
-	wrappedDatas := make([]*WrappedNumeric, v.Len())
+	wrappedData := make([]*WrappedNumeric, v.Len())
 	for i := 0; i < v.Len(); i = i + 1 {
 		nwd := new(WrappedNumeric)
 		nwd.raw = v.Index(i).Interface().(EthTestData)
-		wrappedDatas[i] = nwd
+		wrappedData[i] = nwd
 
 	}
-	return wrappedDatas
+	return wrappedData
 }
 func EthTestNumericToBigInt(num EthTestNumeric) *big.Int {
 	if num == nil {

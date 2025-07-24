@@ -61,5 +61,5 @@ This is the proof response from polycli:
 ![Sample Tree](./tree-diagram.png)
 
 When we're creating the proof here, we're essentially storing the paths to the
-various leafs. When we want to generate a proof, we find the appropriate sibling
+various leaves. When we want to generate a proof, we find the appropriate sibling
 node in the tree to prove that the leaf is part of the given merkle root.

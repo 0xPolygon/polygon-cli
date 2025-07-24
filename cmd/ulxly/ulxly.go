@@ -171,7 +171,7 @@ func DecodeGlobalIndex(globalIndex *big.Int) (bool, uint32, uint32, error) {
 	var buf [32]byte
 	gIBytes := globalIndex.FillBytes(buf[:])
 	if len(gIBytes) != lengthGlobalIndexInBytes {
-		return false, 0, 0, fmt.Errorf("invalid globaIndex length. Should be 32. Current length: %d", len(gIBytes))
+		return false, 0, 0, fmt.Errorf("invalid globalIndex length. Should be 32. Current length: %d", len(gIBytes))
 	}
 	mainnetFlag := big.NewInt(0).SetBytes([]byte{gIBytes[23]}).Uint64() == 1
 	rollupIndex := big.NewInt(0).SetBytes(gIBytes[24:28])

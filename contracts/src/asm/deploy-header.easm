@@ -1,6 +1,6 @@
         ;; 0x12 is the number of instructions in our runtime code
         PUSH 0x68
-        ;; this is the position of the runtime code in the paylod
+        ;; this is the position of the runtime code in the payload
         PUSH 0x0C
         ;; this is the slot where we'll store this data
         PUSH 0x00
