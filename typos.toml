@@ -3,6 +3,9 @@ extend-ignore-re = [
   "Selector:0.*Signature:.*", # polycli abi
 ]
 
+[default.extend-identifiers]
+GetProcotolName = "GetProcotolName" # typo in PolygonDataCommittee contract
+
 [default.extend-words]
 AIMD = "AIMD" # accronym for Additive Increase Multiplicative Decrease
 BLOK = "BLOK" # accronym for block

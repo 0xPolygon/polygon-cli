@@ -435,7 +435,7 @@ func getCommitteeData(committee committeeContractInterface) (*CommitteeData, err
 	}
 	time.Sleep(contractRequestInterval)
 
-	getProtocolName, err := committee.GetProtocolName(nil)
+	getProtocolName, err := committee.GetProcotolName(nil)
 	if err != nil {
 		return nil, err
 	}
