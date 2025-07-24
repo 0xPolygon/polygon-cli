@@ -10,7 +10,7 @@ import (
 )
 
 // updateReadmeCommands will update the list of `polycli` commands.
-// The section is identified by the HTML tags `<startTag></endTag>“.
+// The section is identified by the HTML tags `<startTag></endTag>`.
 func updateReadmeCommands(cmd *cobra.Command, delimiter, docDir string) error {
 	// Generate the list of commands.
 	buf := new(bytes.Buffer)
