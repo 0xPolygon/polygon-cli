@@ -1,0 +1,12 @@
+[default]
+extend-ignore-re = [
+  "Selector:0.*Signature:.*", # polycli abi
+]
+
+[default.extend-words]
+AIMD = "AIMD" # accronym for Additive Increase Multiplicative Decrease
+BLOK = "BLOK" # accronym for block
+THR = "THR"   # accronym for throughput
+
+[files]
+extend-exclude = ["contracts/lib*", "hdwallet/hdwallet_test.go"]

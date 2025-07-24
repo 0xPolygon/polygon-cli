@@ -92,7 +92,7 @@ type validiumContractInterface interface {
 type committeeContractInterface interface {
 	CommitteeHash(opts *bind.CallOpts) ([32]byte, error)
 	GetAmountOfMembers(opts *bind.CallOpts) (*big.Int, error)
-	GetProcotolName(opts *bind.CallOpts) (string, error)
+	GetProtocolName(opts *bind.CallOpts) (string, error)
 	Members(opts *bind.CallOpts, arg0 *big.Int) (struct {
 		Url  string
 		Addr common.Address

@@ -135,7 +135,7 @@ type RollupTypeData struct {
 type CommitteeData struct {
 	CommitteeHash              common.Hash `json:"committeeHash"`
 	AmountOfMembers            *big.Int    `json:"amountOfMembers"`
-	ProcotolName               string      `json:"procotolName"`
+	ProtocolName               string      `json:"protocolName"`
 	Members                    []CommitteeMemberData
 	Owner                      common.Address `json:"owner"`
 	RequiredAmountOfSignatures *big.Int       `json:"requiredAmountOfSignatures"`
@@ -435,7 +435,7 @@ func getCommitteeData(committee committeeContractInterface) (*CommitteeData, err
 	}
 	time.Sleep(contractRequestInterval)
 
-	getProcotolName, err := committee.GetProcotolName(nil)
+	getProtocolName, err := committee.GetProtocolName(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -469,7 +469,7 @@ func getCommitteeData(committee committeeContractInterface) (*CommitteeData, err
 	return &CommitteeData{
 		CommitteeHash:              committeeHash,
 		AmountOfMembers:            getAmountOfMembers,
-		ProcotolName:               getProcotolName,
+		ProtocolName:               getProtocolName,
 		Members:                    members,
 		Owner:                      owner,
 		RequiredAmountOfSignatures: requiredAmountOfSignatures,
