@@ -358,9 +358,14 @@ type NewWitnessHashesPacket struct {
 func (msg NewWitnessHashesPacket) Code() int     { return 34 }
 func (msg NewWitnessHashesPacket) ReqID() uint64 { return 0 }
 
-// GetWitnessRequest represents a list of witnesses query by block hashes.
+// GetWitnessRequest represents a list of witnesses query by witness pages.
 type GetWitnessRequest struct {
-	Hashes []common.Hash // Request by list of block hashes
+	WitnessPages []WitnessPageRequest // Request by list of witness pages
+}
+
+type WitnessPageRequest struct {
+	Hash common.Hash // BlockHash
+	Page uint64      // Starts on 0
 }
 
 // GetWitnessPacket represents a witness query with request ID wrapping.
@@ -380,7 +385,14 @@ type WitnessPacketRLPPacket struct {
 
 // WitnessPacketResponse represents a witness response, to use when we already
 // have the witness rlp encoded.
-type WitnessPacketResponse []rlp.RawValue
+type WitnessPacketResponse []WitnessPageResponse
+
+type WitnessPageResponse struct {
+	Data       []byte
+	Hash       common.Hash
+	Page       uint64 // Starts on 0; If Page >= TotalPages means the request was invalid and the response is an empty data array
+	TotalPages uint64 // Length of pages
+}
 
 func (msg WitnessPacketRLPPacket) Code() int     { return 36 }
 func (msg WitnessPacketRLPPacket) ReqID() uint64 { return msg.RequestId }

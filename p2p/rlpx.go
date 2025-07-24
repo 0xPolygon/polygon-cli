@@ -233,9 +233,17 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 					hashes = append(hashes, hash.Hash)
 				}
 
+				pages := []WitnessPageRequest{}
+				for _, hash := range hashes {
+					pages = append(pages, WitnessPageRequest{
+						Hash: hash,
+						Page: 0,
+					})
+				}
+
 				req := GetWitnessPacket{
 					GetWitnessRequest: &GetWitnessRequest{
-						Hashes: hashes,
+						WitnessPages: pages,
 					},
 					RequestId: uint64(time.Now().Unix()),
 				}
@@ -248,7 +256,12 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 
 				req := GetWitnessPacket{
 					GetWitnessRequest: &GetWitnessRequest{
-						Hashes: []common.Hash{msg.Block.Hash()},
+						WitnessPages: []WitnessPageRequest{
+							WitnessPageRequest{
+								Hash: msg.Block.Hash(),
+								Page: 0,
+							},
+						},
 					},
 					RequestId: uint64(time.Now().Unix()),
 				}
