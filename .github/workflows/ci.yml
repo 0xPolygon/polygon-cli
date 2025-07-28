@@ -32,6 +32,13 @@ jobs:
         run: go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@latest
       - name: Run all the linter tools against code
         run: make lint
+  
+  typos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: crate-ci/typos@392b78fe18a52790c53f42456e46124f77346842 # v1.34.0
 
   gen-doc:
     name: Check gen-doc generated files

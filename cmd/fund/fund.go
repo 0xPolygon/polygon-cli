@@ -127,7 +127,7 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 	var err error
 	if *params.FunderAddress == "" {
 		// Deploy the Funder contract.
-		// Note: `fundingAmountInWei` reprensents the amount the Funder contract will send to each newly generated wallets.
+		// Note: `fundingAmountInWei` represents the amount the Funder contract will send to each newly generated wallets.
 		fundingAmountInWei := params.FundingAmountInWei
 		contractAddress, _, _, err = funder.DeployFunder(tops, c, fundingAmountInWei)
 		if err != nil {
@@ -138,7 +138,7 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 
 		// Fund the Funder contract.
 		// Calculate the total amount needed to fund the contract based on the number of addresses.
-		// Note: `funderContractBalanceInWei` reprensents the initial balance of the Funder contract.
+		// Note: `funderContractBalanceInWei` represents the initial balance of the Funder contract.
 		// The contract needs initial funds to be able to fund wallets.
 		funderContractBalanceInWei := new(big.Int).Mul(fundingAmountInWei, big.NewInt(int64(numAddresses)))
 		if err = util.SendTx(ctx, c, privateKey, &contractAddress, funderContractBalanceInWei, nil, uint64(30000)); err != nil {
