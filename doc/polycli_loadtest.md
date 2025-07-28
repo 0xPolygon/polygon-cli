@@ -107,7 +107,6 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --address-funding-amount big.Int         The amount in wei to fund the sending addresses with. Set to 0 to disable account funding (useful for call-only mode or pre-funded addresses).
       --batch-size uint                        Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time. (default 999)
       --blob-fee-cap uint                      The blob fee cap, or the maximum blob fee per chunk, in Gwei. (default 100000)
-  -b, --byte-count uint                        If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
       --call-only                              When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.
       --call-only-latest                       When using call only mode with recall, should we execute on the latest block or on the original block
       --calldata string                        The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with --mode contract-call and --contract-address
@@ -160,6 +159,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --sending-address-count uint             The number of sending addresses to use. This is useful for avoiding pool account queue. (default 1)
       --sending-addresses-file string          The file containing the sending addresses private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending addresses for different execution cycles.
       --steady-state-tx-pool-size uint         When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off. (default 1000)
+      --store-data-size uint                   If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
       --summarize                              Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time
   -t, --time-limit int                         Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit. (default -1)
       --to-address string                      The address that we're going to send to (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")

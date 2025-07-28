@@ -937,9 +937,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 }
 
 func getLoadTestContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (ltAddr ethcommon.Address, ltContract *tester.LoadTester, err error) {
-	ltAddr = ethcommon.HexToAddress(*inputLoadTestParams.LtAddress)
+	ltAddr = ethcommon.HexToAddress(*inputLoadTestParams.LoadtestContractAddress)
 
-	if *inputLoadTestParams.LtAddress == "" {
+	if *inputLoadTestParams.LoadtestContractAddress == "" {
 		ltAddr, _, _, err = tester.DeployLoadTester(tops, c)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to create the load testing contract. Do you have the right chain id? Do you have enough funds?")
@@ -1293,7 +1293,7 @@ func loadTestStore(ctx context.Context, c *ethclient.Client, tops *bind.Transact
 
 	ltp := inputLoadTestParams
 
-	inputData := make([]byte, *ltp.ByteCount)
+	inputData := make([]byte, *ltp.StoreDataSize)
 	_, _ = hexwordRead(inputData)
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
