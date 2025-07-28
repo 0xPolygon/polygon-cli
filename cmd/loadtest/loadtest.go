@@ -647,7 +647,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 	privateKey := ltp.ECDSAPrivateKey
 	mode := ltp.Mode
-	steadyStateTxPoolSize := *ltp.SteadyStateTxPoolSize
+	steadyStateTxPoolSize := *ltp.AdaptiveTargetSize
 	adaptiveRateLimitIncrement := *ltp.AdaptiveRateLimitIncrement
 	rl = rate.NewLimiter(rate.Limit(*ltp.RateLimit), 1)
 	if *ltp.RateLimit <= 0.0 {
