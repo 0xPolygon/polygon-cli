@@ -118,8 +118,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --erc20-address string                   The address of a pre-deployed ERC20 contract
       --erc721-address string                  The address of a pre-deployed ERC721 contract
       --eth-amount-in-wei uint                 The amount of ether in wei to send on every transaction
-      --force-contract-deploy                  Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.
-  -f, --function uint                          A specific function to be called if running with --mode f or a specific precompiled contract when running with --mode a (default 1)
+      --force-contract-deploy                  Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --loadtest-contract-address flags.
       --function-arg strings                   The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.
       --function-signature string              The contract's function signature that will be called. The format is '<function name>(<types...>)'. This must be paired up with '--mode contract-call' and '--contract-address'. If the function requires parameters you can pass them with '--function-arg <value>'.
       --gas-limit uint                         In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
@@ -130,7 +129,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
   -i, --iterations uint                        If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size (default 1)
       --keep-funded-amount                     If set to true, the funded amount will be kept in the sending addresses. Otherwise, the funded amount will be refunded back to the account used to fund the account.
       --legacy                                 Send a legacy transaction instead of an EIP1559 transaction.
-      --lt-address string                      The address of a pre-deployed load test contract
+      --loadtest-contract-address string       The address of a pre-deployed load test contract
   -m, --mode strings                           The testing mode to use. It can be multiple like: "c,d,f,t"
                                                2, erc20 - Send ERC20 tokens
                                                7, erc721 - Mint ERC721 tokens
@@ -138,11 +137,8 @@ The codebase has a contract that used for load testing. It's written in Solidity
                                                c, call - Call random contract functions
                                                cc, contract-call - Make contract calls
                                                d, deploy - Deploy contracts
-                                               f, function - Call random contract functions
                                                i, inscription - Send inscription transactions
                                                inc, increment - Increment a counter
-                                               pr, random-precompile - Call random precompiled contracts
-                                               px, specific-precompile - Call specific precompiled contracts
                                                r, random - Random modes (does not include the following modes: blob, call, inscription, recall, rpc, uniswapv3)
                                                R, recall - Replay or simulate transactions
                                                rpc - Call random rpc methods

@@ -268,10 +268,10 @@ s, store - Store bytes in a dynamic byte array
 t, transaction - Send transactions
 v3, uniswapv3 - Perform UniswapV3 swaps`)
 	ltp.ByteCount = LoadtestCmd.Flags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
-	ltp.LtAddress = LoadtestCmd.Flags().String("lt-address", "", "The address of a pre-deployed load test contract")
+	ltp.LtAddress = LoadtestCmd.Flags().String("loadtest-contract-address", "", "The address of a pre-deployed load test contract")
 	ltp.ERC20Address = LoadtestCmd.Flags().String("erc20-address", "", "The address of a pre-deployed ERC20 contract")
 	ltp.ERC721Address = LoadtestCmd.Flags().String("erc721-address", "", "The address of a pre-deployed ERC721 contract")
-	ltp.ForceContractDeploy = LoadtestCmd.Flags().Bool("force-contract-deploy", false, "Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.")
+	ltp.ForceContractDeploy = LoadtestCmd.Flags().Bool("force-contract-deploy", false, "Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --loadtest-contract-address flags.")
 	ltp.RecallLength = LoadtestCmd.Flags().Uint64("recall-blocks", 50, "The number of blocks that we'll attempt to fetch for recall")
 	ltp.ContractAddress = LoadtestCmd.Flags().String("contract-address", "", "The address of the contract that will be used in --mode contract-call. This must be paired up with --mode contract-call and --calldata")
 	ltp.ContractCallData = LoadtestCmd.Flags().String("calldata", "", "The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with --mode contract-call and --contract-address")
