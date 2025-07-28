@@ -59,14 +59,10 @@ const (
 	loadTestModeERC20 loadTestMode = iota
 	loadTestModeERC721
 	loadTestModeBlob
-	loadTestModeCall
 	loadTestModeContractCall
 	loadTestModeDeploy
-	loadTestModeFunction
 	loadTestModeInscription
 	loadTestModeIncrement
-	loadTestModeRandomPrecompiledContract
-	loadTestModeSpecificPrecompiledContract
 	loadTestModeRandom
 	loadTestModeRecall
 	loadTestModeRPC
@@ -86,22 +82,14 @@ func characterToLoadTestMode(mode string) (loadTestMode, error) {
 		return loadTestModeERC721, nil
 	case "b", "blob":
 		return loadTestModeBlob, nil
-	case "c", "call":
-		return loadTestModeCall, nil
 	case "cc", "contract-call":
 		return loadTestModeContractCall, nil
 	case "d", "deploy":
 		return loadTestModeDeploy, nil
-	case "f", "function":
-		return loadTestModeFunction, nil
 	case "i", "inscription":
 		return loadTestModeInscription, nil
 	case "inc", "increment":
 		return loadTestModeIncrement, nil
-	case "pr", "random-precompile":
-		return loadTestModeRandomPrecompiledContract, nil
-	case "px", "specific-precompile":
-		return loadTestModeSpecificPrecompiledContract, nil
 	case "r", "random":
 		return loadTestModeRandom, nil
 	case "R", "recall":
@@ -126,33 +114,18 @@ func getRandomMode() loadTestMode {
 	modes := []loadTestMode{
 		loadTestModeERC20,
 		loadTestModeERC721,
-		// loadTestModeBlob,
-		// loadTestModeCall,
-		// loadTestModeContractCall,
 		loadTestModeDeploy,
-		loadTestModeFunction,
-		// loadTestModeInscription,
 		loadTestModeIncrement,
-		loadTestModeRandomPrecompiledContract,
-		loadTestModeSpecificPrecompiledContract,
-		// loadTestModeRandom,
-		// loadTestModeRecall,
-		// loadTestModeRPC,
 		loadTestModeStore,
 		loadTestModeTransaction,
-		// loadTestModeUniswapV3,
 	}
 	return modes[randSrc.Intn(len(modes))]
 }
 
 func modeRequiresLoadTestContract(m loadTestMode) bool {
-	if m == loadTestModeCall ||
-		m == loadTestModeFunction ||
-		m == loadTestModeIncrement ||
+	if m == loadTestModeIncrement ||
 		m == loadTestModeRandom ||
-		m == loadTestModeStore ||
-		m == loadTestModeRandomPrecompiledContract ||
-		m == loadTestModeSpecificPrecompiledContract {
+		m == loadTestModeStore {
 		return true
 	}
 	return false
@@ -872,16 +845,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					startReq, endReq, ltTxHash, tErr = loadTestContractCall(ctx, c, sendingTops)
 				case loadTestModeDeploy:
 					startReq, endReq, ltTxHash, tErr = loadTestDeploy(ctx, c, sendingTops)
-				case loadTestModeFunction, loadTestModeCall:
-					startReq, endReq, ltTxHash, tErr = loadTestFunction(ctx, c, sendingTops, ltContract)
 				case loadTestModeInscription:
 					startReq, endReq, ltTxHash, tErr = loadTestInscription(ctx, c, sendingTops)
 				case loadTestModeIncrement:
 					startReq, endReq, ltTxHash, tErr = loadTestIncrement(ctx, c, sendingTops, ltContract)
-				case loadTestModeRandomPrecompiledContract:
-					startReq, endReq, ltTxHash, tErr = loadTestCallPrecompiledContract(ctx, c, sendingTops, ltContract, false)
-				case loadTestModeSpecificPrecompiledContract:
-					startReq, endReq, ltTxHash, tErr = loadTestCallPrecompiledContract(ctx, c, sendingTops, ltContract, true)
 				case loadTestModeRecall:
 					startReq, endReq, ltTxHash, tErr = loadTestRecall(ctx, c, sendingTops, recallTransactions[int(sendingTops.Nonce.Uint64())%len(recallTransactions)])
 				case loadTestModeRPC:
@@ -1291,75 +1258,6 @@ func loadTestDeploy(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 		_, err = c.CallContract(ctx, msg, nil)
 	} else {
 		_, tx, _, err = tester.DeployLoadTester(tops, c)
-		if err == nil && tx != nil {
-			txHash = tx.Hash()
-		}
-	}
-	return
-}
-
-// getCurrentLoadTestFunction is meant to handle the business logic
-// around deciding which function to execute. When we're in function
-// mode where the user has provided a specific function to execute, we
-// should use that function. Otherwise, we'll select random functions.
-func getCurrentLoadTestFunction() uint64 {
-	if loadTestModeFunction == inputLoadTestParams.Mode {
-		return *inputLoadTestParams.Function
-	}
-	return tester.GetRandomOPCode()
-}
-func loadTestFunction(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
-	var tx *ethtypes.Transaction
-
-	ltp := inputLoadTestParams
-
-	iterations := ltp.Iterations
-	f := getCurrentLoadTestFunction()
-
-	t1 = time.Now()
-	defer func() { t2 = time.Now() }()
-	if *ltp.CallOnly {
-		tops.NoSend = true
-		tx, err = tester.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
-		if err != nil {
-			return
-		}
-		msg := txToCallMsg(tx)
-		_, err = c.CallContract(ctx, msg, nil)
-	} else {
-		tx, err = tester.CallLoadTestFunctionByOpCode(f, ltContract, tops, *iterations)
-		if err == nil && tx != nil {
-			txHash = tx.Hash()
-		}
-	}
-	return
-}
-
-func loadTestCallPrecompiledContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, ltContract *tester.LoadTester, useSelectedAddress bool) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
-	var f int
-	var tx *ethtypes.Transaction
-	ltp := inputLoadTestParams
-
-	privateKey := ltp.ECDSAPrivateKey
-	iterations := ltp.Iterations
-	if useSelectedAddress {
-		f = int(*ltp.Function)
-	} else {
-		f = tester.GetRandomPrecompiledContractAddress()
-	}
-
-	t1 = time.Now()
-	defer func() { t2 = time.Now() }()
-	if *ltp.CallOnly {
-		tops.NoSend = true
-		tx, err = tester.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
-		if err != nil {
-			return
-		}
-		msg := txToCallMsg(tx)
-		_, err = c.CallContract(ctx, msg, nil)
-	} else {
-		tx, err = tester.CallPrecompiledContracts(f, ltContract, tops, *iterations, privateKey)
 		if err == nil && tx != nil {
 			txHash = tx.Hash()
 		}

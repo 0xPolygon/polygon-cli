@@ -56,7 +56,6 @@ type (
 		AdaptiveCycleDuration         *uint64
 		AdaptiveBackoffFactor         *float64
 		Modes                         *[]string
-		Function                      *uint64
 		Iterations                    *uint64
 		ByteCount                     *uint64
 		Seed                          *int64
@@ -260,18 +259,14 @@ b, blob - Send blob transactions
 c, call - Call random contract functions
 cc, contract-call - Make contract calls
 d, deploy - Deploy contracts
-f, function - Call random contract functions
 i, inscription - Send inscription transactions
 inc, increment - Increment a counter
-pr, random-precompile - Call random precompiled contracts
-px, specific-precompile - Call specific precompiled contracts
 r, random - Random modes (does not include the following modes: blob, call, inscription, recall, rpc, uniswapv3)
 R, recall - Replay or simulate transactions
 rpc - Call random rpc methods
 s, store - Store bytes in a dynamic byte array
 t, transaction - Send transactions
 v3, uniswapv3 - Perform UniswapV3 swaps`)
-	ltp.Function = LoadtestCmd.Flags().Uint64P("function", "f", 1, "A specific function to be called if running with --mode f or a specific precompiled contract when running with --mode a")
 	ltp.ByteCount = LoadtestCmd.Flags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
 	ltp.LtAddress = LoadtestCmd.Flags().String("lt-address", "", "The address of a pre-deployed load test contract")
 	ltp.ERC20Address = LoadtestCmd.Flags().String("erc20-address", "", "The address of a pre-deployed ERC20 contract")
