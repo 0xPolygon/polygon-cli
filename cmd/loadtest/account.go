@@ -744,7 +744,7 @@ func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 	account := ap.accounts[ap.currentAccountIndex]
 
 	// if test is call only, there is no need to fund accounts, return it
-	if !*inputLoadTestParams.CallOnly {
+	if !*inputLoadTestParams.EthCallOnly {
 		_, err := ap.fundAccountIfNeeded(ctx, account, nil, true)
 		if err != nil {
 			return Account{}, err

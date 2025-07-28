@@ -82,12 +82,12 @@ The command also inherits flags from parent commands.
       --adaptive-rate-limit-increment uint     When using adaptive rate limiting, this flag controls the size of the additive increases. (default 50)
       --adaptive-target-size uint              When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off. (default 1000)
       --batch-size uint                        Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time. (default 999)
-      --call-only                              When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.
       --call-only-latest                       When using call only mode with recall, should we execute on the latest block or on the original block
       --chain-id uint                          The chain id for the transactions.
   -c, --concurrency int                        Number of requests to perform concurrently. Default is one request at a time. (default 1)
       --config string                          config file (default is $HOME/.polygon-cli.yaml)
       --eth-amount-in-wei uint                 The amount of ether in wei to send on every transaction
+      --eth-call-only                          When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.
       --fire-and-forget                        Send transactions and load without waiting for it to be mined.
       --gas-limit uint                         In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
       --gas-price uint                         In environments where the gas price can't be determined automatically, we can specify it manually

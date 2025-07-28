@@ -108,7 +108,6 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --address-funding-amount big.Int         The amount in wei to fund the sending addresses with. Set to 0 to disable account funding (useful for call-only mode or pre-funded addresses).
       --batch-size uint                        Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time. (default 999)
       --blob-fee-cap uint                      The blob fee cap, or the maximum blob fee per chunk, in Gwei. (default 100000)
-      --call-only                              When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.
       --call-only-latest                       When using call only mode with recall, should we execute on the latest block or on the original block
       --calldata string                        The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with --mode contract-call and --contract-address
       --chain-id uint                          The chain id for the transactions.
@@ -118,6 +117,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --erc20-address string                   The address of a pre-deployed ERC20 contract
       --erc721-address string                  The address of a pre-deployed ERC721 contract
       --eth-amount-in-wei uint                 The amount of ether in wei to send on every transaction
+      --eth-call-only                          When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.
       --fire-and-forget                        Send transactions and load without waiting for it to be mined.
       --force-contract-deploy                  Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --loadtest-contract-address flags.
       --function-arg strings                   The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.

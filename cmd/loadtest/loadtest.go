@@ -239,7 +239,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return errors.New("max priority fee per gas higher than max fee per gas")
 	}
 
-	if *inputLoadTestParams.AdaptiveRateLimit && *inputLoadTestParams.CallOnly {
+	if *inputLoadTestParams.AdaptiveRateLimit && *inputLoadTestParams.EthCallOnly {
 		return errors.New("the adaptive rate limit is based on the pending transaction pool. It doesn't use this feature while also using call only")
 	}
 
@@ -284,16 +284,16 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	if hasMode(loadTestModeRandom, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode {
 		return errors.New("random mode can't be used in combinations with any other modes")
 	}
-	if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode && !*inputLoadTestParams.CallOnly {
+	if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode && !*inputLoadTestParams.EthCallOnly {
 		return errors.New("rpc mode must be called with call-only when multiple modes are used")
 	} else if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) {
 		log.Trace().Msg("Setting call only mode since we're doing RPC testing")
-		*inputLoadTestParams.CallOnly = true
+		*inputLoadTestParams.EthCallOnly = true
 	}
 	if hasMode(loadTestModeContractCall, inputLoadTestParams.ParsedModes) && (*inputLoadTestParams.ContractAddress == "" || (*inputLoadTestParams.ContractCallData == "" && *inputLoadTestParams.ContractCallFunctionSignature == "")) {
 		return errors.New("`--contract-call` requires both a `--contract-address` and calldata, either with `--calldata` or `--function-signature --function-arg` flags")
 	}
-	if *inputLoadTestParams.CallOnly && *inputLoadTestParams.AdaptiveRateLimit {
+	if *inputLoadTestParams.EthCallOnly && *inputLoadTestParams.AdaptiveRateLimit {
 		return errors.New("using call only with adaptive rate limit doesn't make sense")
 	}
 	if hasMode(loadTestModeBlob, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode {
@@ -375,7 +375,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 				}
 				return fmt.Errorf("unable to fund sending addresses. %w", err)
 			}
-		} else if !*inputLoadTestParams.CallOnly {
+		} else if !*inputLoadTestParams.EthCallOnly {
 			// When using multiple sending addresses and not using --call-only and --address-funding-amount <= 0, we need to make sure the addresses get funded
 			// Set default funding to 1 ETH (1000000000000000000 wei)
 			defaultFunding := new(big.Int).SetUint64(1000000000000000000)
@@ -432,7 +432,7 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 		Uint64("final block number", finalBlockNumber).
 		Msg("Got final block number")
 
-	if *inputLoadTestParams.CallOnly {
+	if *inputLoadTestParams.EthCallOnly {
 		log.Info().Msg("CallOnly mode enabled - blocks aren't mined")
 		lightSummary(loadTestResults, startTime, endTime, rl)
 		return nil
@@ -883,7 +883,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 					// check nonce for reuse
 					// if we're not in call only mode, we want to retry
-					if !*ltp.CallOnly {
+					if !*ltp.EthCallOnly {
 						// we start setting nonce to be reused
 						reuseNonce := true
 
@@ -929,7 +929,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
 	cancel()
-	if *ltp.CallOnly {
+	if *ltp.EthCallOnly {
 		return nil
 	}
 
@@ -1080,7 +1080,7 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
-	if *ltp.CallOnly {
+	if *ltp.EthCallOnly {
 		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
 	} else {
 		err = c.SendTransaction(ctx, stx)
@@ -1252,7 +1252,7 @@ func loadTestDeploy(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
-	if *ltp.CallOnly {
+	if *ltp.EthCallOnly {
 		msg := transactOptsToCallMsg(tops)
 		msg.Data = ethcommon.FromHex(tester.LoadTesterMetaData.Bin)
 		_, err = c.CallContract(ctx, msg, nil)
@@ -1271,7 +1271,7 @@ func loadTestIncrement(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
-	if *ltp.CallOnly {
+	if *ltp.EthCallOnly {
 		tops.NoSend = true
 		tx, err = ltContract.Inc(tops)
 		if err != nil {
@@ -1297,7 +1297,7 @@ func loadTestStore(ctx context.Context, c *ethclient.Client, tops *bind.Transact
 	_, _ = hexwordRead(inputData)
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
-	if *ltp.CallOnly {
+	if *ltp.EthCallOnly {
 		tops.NoSend = true
 		tx, err = ltContract.Store(tops, inputData)
 		if err != nil {
@@ -1326,7 +1326,7 @@ func loadTestERC20(ctx context.Context, c *ethclient.Client, tops *bind.Transact
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
-	if *ltp.CallOnly {
+	if *ltp.EthCallOnly {
 		tops.NoSend = true
 		tx, err = erc20Contract.Transfer(tops, *to, amount)
 		if err != nil {
@@ -1357,7 +1357,7 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
-	if *ltp.CallOnly {
+	if *ltp.EthCallOnly {
 		tops.NoSend = true
 		tx, err = erc721Contract.MintBatch(tops, *to, new(big.Int).SetUint64(*iterations))
 		if err != nil {
@@ -1387,16 +1387,16 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
 	}
-	log.Trace().Str("txId", originalTx.Hash().String()).Bool("callOnly", *ltp.CallOnly).Msg("Attempting to replay transaction")
+	log.Trace().Str("txId", originalTx.Hash().String()).Bool("callOnly", *ltp.EthCallOnly).Msg("Attempting to replay transaction")
 	txHash = stx.Hash()
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
-	if *ltp.CallOnly {
+	if *ltp.EthCallOnly {
 		callMsg := txToCallMsg(stx)
 		callMsg.From = originalTx.From()
 		callMsg.Gas = originalTx.Gas()
-		if *ltp.CallOnlyLatestBlock {
+		if *ltp.EthCallOnlyLatestBlock {
 			_, err = c.CallContract(ctx, callMsg, nil)
 		} else {
 			callMsg.GasPrice = originalTx.GasPrice()
@@ -1617,7 +1617,7 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
-	if *ltp.CallOnly {
+	if *ltp.EthCallOnly {
 		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
 	} else {
 		err = c.SendTransaction(ctx, stx)
@@ -1686,7 +1686,7 @@ func loadTestInscription(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
-	if *ltp.CallOnly {
+	if *ltp.EthCallOnly {
 		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
 	} else {
 		err = c.SendTransaction(ctx, stx)
@@ -1754,7 +1754,7 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactO
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
-	if *ltp.CallOnly {
+	if *ltp.EthCallOnly {
 		log.Error().Err(err).Msg("CallOnly not supported to blob transactions")
 		return
 	} else {
@@ -1857,7 +1857,7 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 		if err != nil {
 			return 0, err
 		}
-		if *ltp.CallOnly {
+		if *ltp.EthCallOnly {
 			return lastBlockNumber, nil
 		}
 
