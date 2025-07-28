@@ -118,6 +118,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --erc20-address string                   The address of a pre-deployed ERC20 contract
       --erc721-address string                  The address of a pre-deployed ERC721 contract
       --eth-amount-in-wei uint                 The amount of ether in wei to send on every transaction
+      --fire-and-forget                        Send transactions and load without waiting for it to be mined.
       --force-contract-deploy                  Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --loadtest-contract-address flags.
       --function-arg strings                   The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.
       --function-signature string              The contract's function signature that will be called. The format is '<function name>(<types...>)'. This must be paired up with '--mode contract-call' and '--contract-address'. If the function requires parameters you can pass them with '--function-arg <value>'.
@@ -156,7 +157,6 @@ The codebase has a contract that used for load testing. It's written in Solidity
   -n, --requests int                           Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
   -r, --rpc-url string                         The RPC endpoint url (default "http://localhost:8545")
       --seed int                               A seed for generating random values and addresses (default 123456)
-      --send-only                              Send transactions and load without waiting for it to be mined.
       --sending-address-count uint             The number of sending addresses to use. This is useful for avoiding pool account queue. (default 1)
       --sending-addresses-file string          The file containing the sending addresses private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending addresses for different execution cycles.
       --store-data-size uint                   If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)

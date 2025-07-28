@@ -418,9 +418,9 @@ func readPrivateKeysFromFile(sendingAddressesFile string) ([]*ecdsa.PrivateKey, 
 }
 
 func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
-	if *inputLoadTestParams.SendOnly {
+	if *inputLoadTestParams.FireAndForget {
 		log.Info().
-			Msg("SendOnly mode enabled - skipping wait period and summarization")
+			Msg("FireAndForget mode enabled - skipping wait period and summarization")
 		return nil
 	}
 	log.Debug().
@@ -863,7 +863,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				default:
 					log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
 				}
-				if !*inputLoadTestParams.SendOnly {
+				if !*inputLoadTestParams.FireAndForget {
 					recordSample(routineID, requestID, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
 				}
 				if tErr != nil {

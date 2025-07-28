@@ -88,6 +88,7 @@ The command also inherits flags from parent commands.
   -c, --concurrency int                        Number of requests to perform concurrently. Default is one request at a time. (default 1)
       --config string                          config file (default is $HOME/.polygon-cli.yaml)
       --eth-amount-in-wei uint                 The amount of ether in wei to send on every transaction
+      --fire-and-forget                        Send transactions and load without waiting for it to be mined.
       --gas-limit uint                         In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
       --gas-price uint                         In environments where the gas price can't be determined automatically, we can specify it manually
       --gas-price-multiplier float             A multiplier to increase or decrease the gas price (default 1)
@@ -102,7 +103,6 @@ The command also inherits flags from parent commands.
   -n, --requests int                           Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
   -r, --rpc-url string                         The RPC endpoint url (default "http://localhost:8545")
       --seed int                               A seed for generating random values and addresses (default 123456)
-      --send-only                              Send transactions and load without waiting for it to be mined.
       --summarize                              Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time
   -t, --time-limit int                         Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit. (default -1)
       --to-address string                      The address that we're going to send to (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")

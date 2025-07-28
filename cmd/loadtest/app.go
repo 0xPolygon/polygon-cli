@@ -70,7 +70,7 @@ type (
 		ShouldProduceSummary          *bool
 		SummaryOutputMode             *string
 		LegacyTransactionMode         *bool
-		SendOnly                      *bool
+		FireAndForget                 *bool
 		RecallLength                  *uint64
 		ContractAddress               *string
 		ContractCallData              *string
@@ -242,7 +242,7 @@ func initFlags() {
 	ltp.BatchSize = LoadtestCmd.PersistentFlags().Uint64("batch-size", 999, "Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time.")
 	ltp.SummaryOutputMode = LoadtestCmd.PersistentFlags().String("output-mode", "text", "Format mode for summary output (json | text)")
 	ltp.LegacyTransactionMode = LoadtestCmd.PersistentFlags().Bool("legacy", false, "Send a legacy transaction instead of an EIP1559 transaction.")
-	ltp.SendOnly = LoadtestCmd.PersistentFlags().Bool("send-only", false, "Send transactions and load without waiting for it to be mined.")
+	ltp.FireAndForget = LoadtestCmd.PersistentFlags().Bool("fire-and-forget", false, "Send transactions and load without waiting for it to be mined.")
 	ltp.BlobFeeCap = LoadtestCmd.Flags().Uint64("blob-fee-cap", 100000, "The blob fee cap, or the maximum blob fee per chunk, in Gwei.")
 	ltp.SendingAddressCount = LoadtestCmd.Flags().Uint64("sending-address-count", 1, "The number of sending addresses to use. This is useful for avoiding pool account queue.")
 	ltp.AddressFundingAmount = defaultFunding
