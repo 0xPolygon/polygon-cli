@@ -1348,7 +1348,6 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 	var tx *ethtypes.Transaction
 
 	ltp := inputLoadTestParams
-	iterations := ltp.Iterations
 
 	to := ltp.ToETHAddress
 	if *ltp.ToRandom {
@@ -1359,14 +1358,14 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 	defer func() { t2 = time.Now() }()
 	if *ltp.EthCallOnly {
 		tops.NoSend = true
-		tx, err = erc721Contract.MintBatch(tops, *to, new(big.Int).SetUint64(*iterations))
+		tx, err = erc721Contract.MintBatch(tops, *to, big.NewInt(1))
 		if err != nil {
 			return
 		}
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
 	} else {
-		tx, err = erc721Contract.MintBatch(tops, *to, new(big.Int).SetUint64(*iterations))
+		tx, err = erc721Contract.MintBatch(tops, *to, big.NewInt(1))
 		if err == nil && tx != nil {
 			txHash = tx.Hash()
 		}
