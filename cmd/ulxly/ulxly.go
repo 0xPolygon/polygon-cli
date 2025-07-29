@@ -600,7 +600,7 @@ func logAndReturnJsonError(ctx context.Context, client *ethclient.Client, tx *ty
 		return err
 	}
 
-	reason, decodeErr := smcerror.DecodeInterfaceSmcErrorCode(jsonError.Data)
+	reason, decodeErr := smcerror.DecodeSmcErrorCode(jsonError.Data)
 	if decodeErr != nil {
 		log.Error().Err(err).Msg("unable to decode smart contract error")
 		return err
