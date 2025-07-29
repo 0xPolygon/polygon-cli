@@ -1037,7 +1037,7 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
-	if *ltp.ToRandom {
+	if *ltp.RandomRecipients {
 		to = getRandomAddress()
 	}
 
@@ -1319,7 +1319,7 @@ func loadTestERC20(ctx context.Context, c *ethclient.Client, tops *bind.Transact
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
-	if *ltp.ToRandom {
+	if *ltp.RandomRecipients {
 		to = getRandomAddress()
 	}
 	amount := ltp.SendAmount
@@ -1350,7 +1350,7 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
-	if *ltp.ToRandom {
+	if *ltp.RandomRecipients {
 		to = getRandomAddress()
 	}
 
@@ -1699,7 +1699,7 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactO
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
-	if *ltp.ToRandom {
+	if *ltp.RandomRecipients {
 		to = getRandomAddress()
 	}
 
