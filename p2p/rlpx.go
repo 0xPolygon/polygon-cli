@@ -324,13 +324,11 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 				atomic.AddInt64(&count.Witness, int64(len(msg.WitnessPacketResponse)))
 
 				for _, witness := range msg.WitnessPacketResponse {
-					if witness.TotalPages > 1 {
-						c.logger.Info().
-							Any("len", len(msg.WitnessPacketResponse)).
-							Any("page", witness.Page).
-							Any("total_pages", witness.TotalPages).
-							Msg("Received Witness")
-					}
+					c.logger.Info().
+						Any("len", len(msg.WitnessPacketResponse)).
+						Any("page", witness.Page).
+						Any("total_pages", witness.TotalPages).
+						Msg("Received Witness")
 
 					if witness.Page+1 >= witness.TotalPages {
 						continue
