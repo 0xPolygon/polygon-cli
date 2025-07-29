@@ -22,7 +22,7 @@ func TestDecodeSmcErrorCode (t *testing.T) {
     assert.Equal(t, "0x9aad315a (unknown selector)", reason)
 
     var emptyInterface interface{}
-    reason, err = errors.DecodeSmcErrorCode(emptyInterface)
+    _, err = errors.DecodeSmcErrorCode(emptyInterface)
 	require.Error(t, err)
 
     code := "0x3bbd317c"
