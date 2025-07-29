@@ -321,7 +321,7 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 				atomic.AddInt64(&count.GetWitnessRequest, 1)
 				c.logger.Debug().Any("msg", msg).Msg("Received GetWitnessRequest")
 			case *WitnessPacketRLPPacket:
-				atomic.AddInt64(&count.Witness, 1)
+				atomic.AddInt64(&count.Witness, int64(len(msg.WitnessPacketResponse)))
 
 				for _, witness := range msg.WitnessPacketResponse {
 					if witness.TotalPages > 1 {
@@ -331,35 +331,29 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 							Any("total_pages", witness.TotalPages).
 							Msg("Received Witness")
 					}
-				}
 
-				if len(msg.WitnessPacketResponse) != 1 {
-					break
-				}
+					if witness.Page+1 >= witness.TotalPages {
+						continue
+					}
 
-				witness := msg.WitnessPacketResponse[0]
-				if witness.TotalPages <= 1 {
-					break
-				}
+					pages := []WitnessPageRequest{
+						{
+							Hash: witness.Hash,
+							Page: witness.Page + 1,
+						},
+					}
 
-				var pages []WitnessPageRequest
-				for i := witness.Page; i < witness.TotalPages; i++ {
-					pages = append(pages, WitnessPageRequest{
-						Hash: witness.Hash,
-						Page: i,
-					})
-				}
+					req := GetWitnessPacket{
+						GetWitnessRequest: &GetWitnessRequest{
+							WitnessPages: pages,
+						},
+						RequestId: uint64(time.Now().Unix()),
+					}
 
-				req := GetWitnessPacket{
-					GetWitnessRequest: &GetWitnessRequest{
-						WitnessPages: pages,
-					},
-					RequestId: uint64(time.Now().Unix()),
+					if err := c.Write(req); err != nil {
+						log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
+					}
 				}
-				if err := c.Write(req); err != nil {
-					log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
-				}
-
 			default:
 				c.logger.Info().Interface("msg", msg).Int("code", msg.Code()).Msg("Received message")
 			}
