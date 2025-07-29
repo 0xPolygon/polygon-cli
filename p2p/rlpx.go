@@ -207,7 +207,6 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 				atomic.AddInt64(&count.BlockHashes, int64(len(*msg)))
 				c.logger.Trace().Msgf("Received %v NewBlockHashes", len(*msg))
 
-				var hashes []common.Hash
 				for _, hash := range *msg {
 					// headersRequest := &GetBlockHeaders{
 					// 	GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
@@ -230,27 +229,21 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 					// 	c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
 					// }
 
-					hashes = append(hashes, hash.Hash)
-				}
-
-				log.Debug().Any("hashes", hashes).Send()
-
-				pages := []WitnessPageRequest{}
-				for _, hash := range hashes {
-					pages = append(pages, WitnessPageRequest{
-						Hash: hash,
-						Page: 0,
-					})
-				}
-
-				req := GetWitnessPacket{
-					GetWitnessRequest: &GetWitnessRequest{
-						WitnessPages: pages,
-					},
-					RequestId: uint64(time.Now().Unix()),
-				}
-				if err := c.Write(req); err != nil {
-					log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
+					req := GetWitnessPacket{
+						GetWitnessRequest: &GetWitnessRequest{
+							WitnessPages: []WitnessPageRequest{
+								{
+									Hash: hash.Hash,
+									Page: 0,
+								},
+							},
+						},
+						RequestId: uint64(time.Now().Unix()),
+					}
+					log.Trace().Any("request", req).Msg("Writing GetWitnessPacket request")
+					if err := c.Write(req); err != nil {
+						log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
+					}
 				}
 			case *NewBlock:
 				atomic.AddInt64(&count.Blocks, 1)
@@ -259,7 +252,7 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 				req := GetWitnessPacket{
 					GetWitnessRequest: &GetWitnessRequest{
 						WitnessPages: []WitnessPageRequest{
-							WitnessPageRequest{
+							{
 								Hash: msg.Block.Hash(),
 								Page: 0,
 							},
@@ -267,6 +260,7 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 					},
 					RequestId: uint64(time.Now().Unix()),
 				}
+				log.Trace().Any("request", req).Msg("Writing GetWitnessPacket request")
 				if err := c.Write(req); err != nil {
 					log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
 				}
@@ -334,20 +328,18 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 						continue
 					}
 
-					pages := []WitnessPageRequest{
-						{
-							Hash: witness.Hash,
-							Page: witness.Page + 1,
-						},
-					}
-
 					req := GetWitnessPacket{
 						GetWitnessRequest: &GetWitnessRequest{
-							WitnessPages: pages,
+							WitnessPages: []WitnessPageRequest{
+								{
+									Hash: witness.Hash,
+									Page: witness.Page + 1,
+								},
+							},
 						},
 						RequestId: uint64(time.Now().Unix()),
 					}
-
+					log.Trace().Any("request", req).Msg("Writing GetWitnessPacket request")
 					if err := c.Write(req); err != nil {
 						log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
 					}
