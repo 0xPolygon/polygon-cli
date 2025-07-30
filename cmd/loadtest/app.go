@@ -62,7 +62,6 @@ type (
 		ERC20Address                  *string
 		ERC721Address                 *string
 		DelAddress                    *string
-		SkipContractDeploy            *bool
 		ForceGasLimit                 *uint64
 		ForceGasPrice                 *uint64
 		ForcePriorityGasPrice         *uint64
@@ -269,7 +268,6 @@ v3, uniswapv3 - Perform UniswapV3 swaps`)
 	ltp.LoadtestContractAddress = LoadtestCmd.Flags().String("loadtest-contract-address", "", "The address of a pre-deployed load test contract")
 	ltp.ERC20Address = LoadtestCmd.Flags().String("erc20-address", "", "The address of a pre-deployed ERC20 contract")
 	ltp.ERC721Address = LoadtestCmd.Flags().String("erc721-address", "", "The address of a pre-deployed ERC721 contract")
-	ltp.SkipContractDeploy = LoadtestCmd.Flags().Bool("skip-contract-deploy", true, "Some load test modes don't require a contract deployment. Set this flag to true(default) to skip contract deployments. This will still respect the --loadtest-contract-address flags.")
 	ltp.RecallLength = LoadtestCmd.Flags().Uint64("recall-blocks", 50, "The number of blocks that we'll attempt to fetch for recall")
 	ltp.ContractAddress = LoadtestCmd.Flags().String("contract-address", "", "The address of the contract that will be used in --mode contract-call. This must be paired up with --mode contract-call and --calldata")
 	ltp.ContractCallData = LoadtestCmd.Flags().String("calldata", "", "The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with --mode contract-call and --contract-address")
