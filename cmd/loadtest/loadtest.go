@@ -677,7 +677,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	// deploy and instantiate the load tester contract
 	var ltAddr ethcommon.Address
 	var ltContract *tester.LoadTester
-	if anyModeRequiresLoadTestContract(ltp.ParsedModes) || *inputLoadTestParams.ForceContractDeploy {
+	mustDeployContract := !*inputLoadTestParams.SkipContractDeploy
+	if mustDeployContract || anyModeRequiresLoadTestContract(ltp.ParsedModes) {
 		ltAddr, ltContract, err = getLoadTestContract(ctx, c, tops, cops)
 		if err != nil {
 			return err

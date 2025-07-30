@@ -62,7 +62,7 @@ type (
 		ERC20Address                  *string
 		ERC721Address                 *string
 		DelAddress                    *string
-		ForceContractDeploy           *bool
+		SkipContractDeploy            *bool
 		ForceGasLimit                 *uint64
 		ForceGasPrice                 *uint64
 		ForcePriorityGasPrice         *uint64
@@ -83,7 +83,7 @@ type (
 		SendingAddressCount           *uint64
 		AddressFundingAmount          *big.Int
 		PreFundSendingAddresses       *bool
-		KeepFundedAmount              *bool
+		KeepFundsAfterTest            *bool
 		SendingAddressesFile          *string
 		Proxy                         *string
 
@@ -246,7 +246,7 @@ func initFlags() {
 	ltp.AddressFundingAmount = defaultFunding
 	LoadtestCmd.Flags().Var(&flag_loader.BigIntValue{Val: ltp.AddressFundingAmount}, "address-funding-amount", "The amount in wei to fund the sending addresses with. Set to 0 to disable account funding (useful for call-only mode or pre-funded addresses).")
 	ltp.PreFundSendingAddresses = LoadtestCmd.Flags().Bool("pre-fund-sending-addresses", false, "If set to true, the sending addresses will be funded at the start of the execution, otherwise all addresses will be funded when used for the first time.")
-	ltp.KeepFundedAmount = LoadtestCmd.Flags().Bool("keep-funded-amount", false, "If set to true, the funded amount will be kept in the sending addresses. Otherwise, the funded amount will be refunded back to the account used to fund the account.")
+	ltp.KeepFundsAfterTest = LoadtestCmd.Flags().Bool("keep-funds-after-test", false, "If set to true, the funded amount will be kept in the sending addresses. Otherwise, the funded amount will be refunded back to the account used to fund the account.")
 	ltp.SendingAddressesFile = LoadtestCmd.Flags().String("sending-addresses-file", "", "The file containing the sending addresses private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending addresses for different execution cycles.")
 
 	// Local flags.
@@ -269,7 +269,7 @@ v3, uniswapv3 - Perform UniswapV3 swaps`)
 	ltp.LoadtestContractAddress = LoadtestCmd.Flags().String("loadtest-contract-address", "", "The address of a pre-deployed load test contract")
 	ltp.ERC20Address = LoadtestCmd.Flags().String("erc20-address", "", "The address of a pre-deployed ERC20 contract")
 	ltp.ERC721Address = LoadtestCmd.Flags().String("erc721-address", "", "The address of a pre-deployed ERC721 contract")
-	ltp.ForceContractDeploy = LoadtestCmd.Flags().Bool("force-contract-deploy", false, "Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --loadtest-contract-address flags.")
+	ltp.SkipContractDeploy = LoadtestCmd.Flags().Bool("skip-contract-deploy", true, "Some load test modes don't require a contract deployment. Set this flag to true(default) to skip contract deployments. This will still respect the --loadtest-contract-address flags.")
 	ltp.RecallLength = LoadtestCmd.Flags().Uint64("recall-blocks", 50, "The number of blocks that we'll attempt to fetch for recall")
 	ltp.ContractAddress = LoadtestCmd.Flags().String("contract-address", "", "The address of the contract that will be used in --mode contract-call. This must be paired up with --mode contract-call and --calldata")
 	ltp.ContractCallData = LoadtestCmd.Flags().String("calldata", "", "The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with --mode contract-call and --contract-address")

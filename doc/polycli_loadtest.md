@@ -119,7 +119,6 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --eth-call-only                          When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.
       --eth-call-only-latest                   When using call only mode with recall, should we execute on the latest block or on the original block
       --fire-and-forget                        Send transactions and load without waiting for it to be mined.
-      --force-contract-deploy                  Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --loadtest-contract-address flags.
       --function-arg strings                   The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.
       --function-signature string              The contract's function signature that will be called. The format is '<function name>(<types...>)'. This must be paired up with '--mode contract-call' and '--contract-address'. If the function requires parameters you can pass them with '--function-arg <value>'.
       --gas-limit uint                         In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
@@ -127,7 +126,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --gas-price-multiplier float             A multiplier to increase or decrease the gas price (default 1)
   -h, --help                                   help for loadtest
       --inscription-content string             The inscription content that will be encoded as calldata. This must be paired up with --mode inscription (default "data:,{\"p\":\"erc-20\",\"op\":\"mint\",\"tick\":\"TEST\",\"amt\":\"1\"}")
-      --keep-funded-amount                     If set to true, the funded amount will be kept in the sending addresses. Otherwise, the funded amount will be refunded back to the account used to fund the account.
+      --keep-funds-after-test                  If set to true, the funded amount will be kept in the sending addresses. Otherwise, the funded amount will be refunded back to the account used to fund the account.
       --legacy                                 Send a legacy transaction instead of an EIP1559 transaction.
       --loadtest-contract-address string       The address of a pre-deployed load test contract
   -m, --mode strings                           The testing mode to use. It can be multiple like: "c,d,f,t"
@@ -159,6 +158,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --seed int                               A seed for generating random values and addresses (default 123456)
       --sending-address-count uint             The number of sending addresses to use. This is useful for avoiding pool account queue. (default 1)
       --sending-addresses-file string          The file containing the sending addresses private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending addresses for different execution cycles.
+      --skip-contract-deploy                   Some load test modes don't require a contract deployment. Set this flag to true(default) to skip contract deployments. This will still respect the --loadtest-contract-address flags. (default true)
       --store-data-size uint                   If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
       --summarize                              Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time
   -t, --time-limit int                         Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit. (default -1)
