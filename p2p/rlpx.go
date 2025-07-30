@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"crypto/ecdsa"
 	"fmt"
 	"math/rand"
 	"net"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -30,6 +32,12 @@ func Dial(n *enode.Node) (*rlpxConn, error) {
 // DialWithLocalAddr attempts to Dial the given node with a specific local IP and port,
 // returning the created Conn if successful.
 func DialWithLocalAddr(n *enode.Node, localIP string, localPort int) (*rlpxConn, error) {
+	return DialWithLocalAddrAndKey(n, localIP, localPort, "")
+}
+
+// DialWithLocalAddrAndKey attempts to Dial the given node with a specific local IP, port, and private key,
+// returning the created Conn if successful.
+func DialWithLocalAddrAndKey(n *enode.Node, localIP string, localPort int, privateKeyHex string) (*rlpxConn, error) {
 	fd, err := net.Dial("tcp", fmt.Sprintf("%v:%d", n.IP(), n.TCP()))
 	if err != nil {
 		return nil, err
@@ -49,15 +57,26 @@ func DialWithLocalAddr(n *enode.Node, localIP string, localPort int) (*rlpxConn,
 		},
 	}
 
-	if conn.ourKey, err = crypto.LoadECDSA("witness.key"); err != nil {
-		log.Warn().Msg("witness.key not found generating key")
-		if conn.ourKey, err = crypto.GenerateKey(); err != nil {
+	// Handle private key loading
+	if privateKeyHex != "" {
+		// Parse private key from hex string
+		conn.ourKey, err = parsePrivateKeyFromHex(privateKeyHex)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse private key: %v", err)
+		}
+		log.Info().Msg("Using provided private key")
+	} else {
+		// Use existing witness.key logic as fallback
+		if conn.ourKey, err = crypto.LoadECDSA("witness.key"); err != nil {
+			log.Warn().Msg("witness.key not found generating key")
+			if conn.ourKey, err = crypto.GenerateKey(); err != nil {
+				return nil, err
+			}
+		}
+
+		if err = crypto.SaveECDSA("witness.key", conn.ourKey); err != nil {
 			return nil, err
 		}
-	}
-
-	if err = crypto.SaveECDSA("witness.key", conn.ourKey); err != nil {
-		return nil, err
 	}
 
 	ip := net.ParseIP(localIP)
@@ -565,4 +584,26 @@ func calculateThroughput(bytes int, durationMs int64) float64 {
 // makeWitnessKey creates a unique key for tracking witness requests
 func makeWitnessKey(hash common.Hash, page uint64) string {
 	return fmt.Sprintf("%s:%d", hash.Hex(), page)
+}
+
+// parsePrivateKeyFromHex parses a private key from a hex string, handling 0x prefix
+func parsePrivateKeyFromHex(privateKeyHex string) (*ecdsa.PrivateKey, error) {
+	// Remove 0x prefix if present
+	if strings.HasPrefix(privateKeyHex, "0x") || strings.HasPrefix(privateKeyHex, "0X") {
+		privateKeyHex = privateKeyHex[2:]
+	}
+	
+	// Decode hex string to bytes
+	keyBytes, err := hexutil.Decode("0x" + privateKeyHex)
+	if err != nil {
+		return nil, fmt.Errorf("invalid hex string: %v", err)
+	}
+	
+	// Convert bytes to ECDSA private key
+	privateKey, err := crypto.ToECDSA(keyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("invalid private key: %v", err)
+	}
+	
+	return privateKey, nil
 }

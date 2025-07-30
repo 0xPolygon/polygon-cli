@@ -19,6 +19,7 @@ type (
 		Listen     bool
 		LocalIP    string
 		LocalPort  int
+		PrivateKey string
 	}
 )
 
@@ -83,7 +84,7 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 					status *p2p.Status
 				)
 
-				conn, err := p2p.DialWithLocalAddr(node, inputPingParams.LocalIP, inputPingParams.LocalPort)
+				conn, err := p2p.DialWithLocalAddrAndKey(node, inputPingParams.LocalIP, inputPingParams.LocalPort, inputPingParams.PrivateKey)
 				if err != nil {
 					log.Error().Err(err).Msg("Dial failed")
 				} else {
@@ -136,4 +137,5 @@ func init() {
 argument is an enode/enr, not a nodes file.`)
 	PingCmd.PersistentFlags().StringVar(&inputPingParams.LocalIP, "local-ip", "127.0.0.1", "Local IP address to bind to for outbound connections")
 	PingCmd.PersistentFlags().IntVar(&inputPingParams.LocalPort, "local-port", 30303, "Local port to use for the enode identity")
+	PingCmd.PersistentFlags().StringVar(&inputPingParams.PrivateKey, "private-key", "", "Private key in hex format (with or without 0x prefix) to use instead of witness.key file")
 }
