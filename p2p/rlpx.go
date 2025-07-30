@@ -24,6 +24,12 @@ var (
 // Dial attempts to Dial the given node and perform a handshake,
 // returning the created Conn if successful.
 func Dial(n *enode.Node) (*rlpxConn, error) {
+	return DialWithLocalAddr(n, "127.0.0.1", 30303)
+}
+
+// DialWithLocalAddr attempts to Dial the given node with a specific local IP and port,
+// returning the created Conn if successful.
+func DialWithLocalAddr(n *enode.Node, localIP string, localPort int) (*rlpxConn, error) {
 	fd, err := net.Dial("tcp", fmt.Sprintf("%v:%d", n.IP(), n.TCP()))
 	if err != nil {
 		return nil, err
@@ -54,8 +60,8 @@ func Dial(n *enode.Node) (*rlpxConn, error) {
 		return nil, err
 	}
 
-	ip := net.ParseIP("127.0.0.1")
-	v4 := enode.NewV4(&conn.ourKey.PublicKey, ip, 30303, 30303)
+	ip := net.ParseIP(localIP)
+	v4 := enode.NewV4(&conn.ourKey.PublicKey, ip, localPort, localPort)
 
 	log.Info().Any("enode", v4.String()).Send()
 

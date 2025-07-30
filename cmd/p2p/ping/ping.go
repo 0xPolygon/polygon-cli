@@ -17,6 +17,8 @@ type (
 		OutputFile string
 		NodesFile  string
 		Listen     bool
+		LocalIP    string
+		LocalPort  int
 	}
 )
 
@@ -81,7 +83,7 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 					status *p2p.Status
 				)
 
-				conn, err := p2p.Dial(node)
+				conn, err := p2p.DialWithLocalAddr(node, inputPingParams.LocalIP, inputPingParams.LocalPort)
 				if err != nil {
 					log.Error().Err(err).Msg("Dial failed")
 				} else {
@@ -132,4 +134,6 @@ func init() {
 	PingCmd.PersistentFlags().BoolVarP(&inputPingParams.Listen, "listen", "l", true,
 		`Keep the connection open and listen to the peer. This only works if the first
 argument is an enode/enr, not a nodes file.`)
+	PingCmd.PersistentFlags().StringVar(&inputPingParams.LocalIP, "local-ip", "127.0.0.1", "Local IP address to bind to for outbound connections")
+	PingCmd.PersistentFlags().IntVar(&inputPingParams.LocalPort, "local-port", 30303, "Local port to use for the enode identity")
 }
