@@ -2,8 +2,8 @@ package flag_loader
 
 import (
 	"fmt"
-	"os"
 	"math/big"
+	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -14,24 +14,24 @@ const (
 )
 
 type BigIntValue struct {
-    Val *big.Int
+	Val *big.Int
 }
 
 func (b *BigIntValue) String() string {
-    // Return the decimal representation
-    return b.Val.String()
+	// Return the decimal representation
+	return b.Val.String()
 }
 
 func (b *BigIntValue) Set(s string) error {
-    // Parse the string in base 10
-    if _, ok := b.Val.SetString(s, 10); !ok {
-        return fmt.Errorf("invalid big integer: %q", s)
-    }
-    return nil
+	// Parse the string in base 10
+	if _, ok := b.Val.SetString(s, 10); !ok {
+		return fmt.Errorf("invalid big integer: %q", s)
+	}
+	return nil
 }
 
 func (b *BigIntValue) Type() string {
-    return "big.Int"
+	return "big.Int"
 }
 
 func GetRpcUrlFlagValue(cmd *cobra.Command) *string {

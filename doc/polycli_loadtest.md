@@ -158,7 +158,6 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --seed int                               A seed for generating random values and addresses (default 123456)
       --sending-address-count uint             The number of sending addresses to use. This is useful for avoiding pool account queue. (default 1)
       --sending-addresses-file string          The file containing the sending addresses private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending addresses for different execution cycles.
-      --skip-contract-deploy                   Some load test modes don't require a contract deployment. Set this flag to true(default) to skip contract deployments. This will still respect the --loadtest-contract-address flags. (default true)
       --store-data-size uint                   If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
       --summarize                              Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time
   -t, --time-limit int                         Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit. (default -1)
