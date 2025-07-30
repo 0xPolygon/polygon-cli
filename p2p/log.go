@@ -25,6 +25,9 @@ type MessageCount struct {
 	NewWitnessHashes    int64 `json:"new_witness_hashes,omitempty"`
 	GetWitnessRequest   int64 `json:"get_witness_request,omitempty"`
 	Witness             int64 `json:"witness,omitempty"`
+	WitnessDataBytes    int64 `json:"witness_data_bytes,omitempty"`
+	WitnessLatencyMs    int64 `json:"witness_latency_ms,omitempty"`
+	WitnessPagesFetched int64 `json:"witness_pages_fetched,omitempty"`
 }
 
 // Load takes a snapshot of all the counts in a thread-safe manner. Make sure
@@ -47,6 +50,9 @@ func (count *MessageCount) Load() MessageCount {
 		NewWitnessHashes:    atomic.LoadInt64(&count.NewWitnessHashes),
 		GetWitnessRequest:   atomic.LoadInt64(&count.GetWitnessRequest),
 		Witness:             atomic.LoadInt64(&count.Witness),
+		WitnessDataBytes:    atomic.LoadInt64(&count.WitnessDataBytes),
+		WitnessLatencyMs:    atomic.LoadInt64(&count.WitnessLatencyMs),
+		WitnessPagesFetched: atomic.LoadInt64(&count.WitnessPagesFetched),
 	}
 }
 
@@ -68,6 +74,9 @@ func (count *MessageCount) Clear() {
 	atomic.StoreInt64(&count.NewWitnessHashes, 0)
 	atomic.StoreInt64(&count.GetWitnessRequest, 0)
 	atomic.StoreInt64(&count.Witness, 0)
+	atomic.StoreInt64(&count.WitnessDataBytes, 0)
+	atomic.StoreInt64(&count.WitnessLatencyMs, 0)
+	atomic.StoreInt64(&count.WitnessPagesFetched, 0)
 }
 
 // IsEmpty checks whether the sum of all the counts is empty. Make sure to call

@@ -30,9 +30,11 @@ func Dial(n *enode.Node) (*rlpxConn, error) {
 	}
 
 	conn := rlpxConn{
-		Conn:   rlpx.NewConn(fd, n.Pubkey()),
-		node:   n,
-		logger: log.With().Str("peer", n.URLv4()).Logger(),
+		Conn:           rlpx.NewConn(fd, n.Pubkey()),
+		node:           n,
+		logger:         log.With().Str("peer", n.URLv4()).Logger(),
+		witnessTracker: make(map[string]*witnessRequest),
+		witnessFetches: make(map[common.Hash]*witnessFetch),
 		caps: []p2p.Cap{
 			{Name: "eth", Version: 66},
 			{Name: "eth", Version: 67},
@@ -238,11 +240,27 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 								},
 							},
 						},
-						RequestId: uint64(time.Now().Unix()),
+						RequestId: uint64(rand.Uint32()),
 					}
-					log.Trace().Any("request", req).Msg("Writing GetWitnessPacket request")
+					
+					// Track witness request
+					key := makeWitnessKey(hash.Hash, 0)
+					c.witnessTracker[key] = &witnessRequest{
+						requestID: req.RequestId,
+						hash:      hash.Hash,
+						page:      0,
+						startTime: time.Now(),
+					}
+					
+					c.logger.Trace().
+						Str("hash", hash.Hash.Hex()).
+						Uint64("request_id", req.RequestId).
+						Uint64("page", 0).
+						Msg("Sending GetWitnessPacket request")
+						
 					if err := c.Write(req); err != nil {
-						log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
+						c.logger.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
+						delete(c.witnessTracker, key)
 					}
 				}
 			case *NewBlock:
@@ -258,11 +276,27 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 							},
 						},
 					},
-					RequestId: uint64(time.Now().Unix()),
+					RequestId: uint64(rand.Uint32()),
 				}
-				log.Trace().Any("request", req).Msg("Writing GetWitnessPacket request")
+				
+				// Track witness request
+				key := makeWitnessKey(msg.Block.Hash(), 0)
+				c.witnessTracker[key] = &witnessRequest{
+					requestID: req.RequestId,
+					hash:      msg.Block.Hash(),
+					page:      0,
+					startTime: time.Now(),
+				}
+				
+				c.logger.Trace().
+					Str("hash", msg.Block.Hash().Hex()).
+					Uint64("request_id", req.RequestId).
+					Uint64("page", 0).
+					Msg("Sending GetWitnessPacket request")
+					
 				if err := c.Write(req); err != nil {
-					log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
+					c.logger.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
+					delete(c.witnessTracker, key)
 				}
 			case *Transactions:
 				// atomic.AddInt64(&count.Transactions, int64(len(*msg)))
@@ -318,16 +352,70 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 				atomic.AddInt64(&count.Witness, int64(len(msg.WitnessPacketResponse)))
 
 				for _, witness := range msg.WitnessPacketResponse {
-					c.logger.Info().
-						Any("len", len(msg.WitnessPacketResponse)).
-						Any("page", witness.Page).
-						Any("total_pages", witness.TotalPages).
-						Msg("Received Witness")
+					key := makeWitnessKey(witness.Hash, witness.Page)
+					var latencyMs int64
+					
+					// Calculate latency if we have tracking info
+					if req, exists := c.witnessTracker[key]; exists {
+						req.endTime = time.Now()
+						latencyMs = req.endTime.Sub(req.startTime).Milliseconds()
+						atomic.AddInt64(&count.WitnessLatencyMs, latencyMs)
+						delete(c.witnessTracker, key)
+					}
+					
+					// Update metrics
+					dataSize := len(witness.Data)
+					atomic.AddInt64(&count.WitnessDataBytes, int64(dataSize))
+					atomic.AddInt64(&count.WitnessPagesFetched, 1)
+					
+					// Track overall witness fetch
+					fetch, exists := c.witnessFetches[witness.Hash]
+					if !exists {
+						fetch = &witnessFetch{
+							hash:       witness.Hash,
+							totalPages: witness.TotalPages,
+							startTime:  time.Now(),
+						}
+						c.witnessFetches[witness.Hash] = fetch
+						
+						c.logger.Trace().
+							Str("hash", witness.Hash.Hex()).
+							Uint64("expected_pages", witness.TotalPages).
+							Msg("Started fetching witness")
+					}
+					
+					fetch.pagesReceived++
+					fetch.totalBytes += int64(dataSize)
+					fetch.lastUpdateTime = time.Now()
+					
+					c.logger.Trace().
+						Str("hash", witness.Hash.Hex()).
+						Uint64("page", witness.Page).
+						Uint64("total_pages", witness.TotalPages).
+						Str("size", formatDataSize(dataSize)).
+						Int64("latency_ms", latencyMs).
+						Msg("Received Witness page")
 
 					if witness.Page+1 >= witness.TotalPages {
+						// Calculate final metrics
+						totalTime := fetch.lastUpdateTime.Sub(fetch.startTime)
+						throughput := calculateThroughput(int(fetch.totalBytes), totalTime.Milliseconds())
+						
+						// Log summary for completed witness
+						c.logger.Info().
+							Str("hash", witness.Hash.Hex()).
+							Uint64("total_pages", fetch.totalPages).
+							Str("total_size", formatDataSize(int(fetch.totalBytes))).
+							Str("total_time", totalTime.String()).
+							Float64("throughput_mbps", throughput).
+							Msg("Witness fetch complete")
+							
+						// Clean up tracking
+						delete(c.witnessFetches, witness.Hash)
 						continue
 					}
 
+					// Request next page
 					req := GetWitnessPacket{
 						GetWitnessRequest: &GetWitnessRequest{
 							WitnessPages: []WitnessPageRequest{
@@ -337,11 +425,28 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 								},
 							},
 						},
-						RequestId: uint64(time.Now().Unix()),
+						RequestId: uint64(rand.Uint32()),
 					}
-					log.Trace().Any("request", req).Msg("Writing GetWitnessPacket request")
+					
+					// Track the next page request
+					nextKey := makeWitnessKey(witness.Hash, witness.Page+1)
+					c.witnessTracker[nextKey] = &witnessRequest{
+						requestID: req.RequestId,
+						hash:      witness.Hash,
+						page:      witness.Page + 1,
+						startTime: time.Now(),
+					}
+					
+					c.logger.Trace().
+						Str("hash", witness.Hash.Hex()).
+						Uint64("request_id", req.RequestId).
+						Uint64("page", witness.Page+1).
+						Uint64("total_pages", witness.TotalPages).
+						Msg("Sending GetWitnessPacket request")
+						
 					if err := c.Write(req); err != nil {
-						log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
+						c.logger.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
+						delete(c.witnessTracker, nextKey)
 					}
 				}
 			default:
@@ -420,4 +525,38 @@ func (c *rlpxConn) ListenHeaders() (eth.BlockHeadersRequest, error) {
 			}
 		}
 	}
+}
+
+// formatDataSize formats bytes into human-readable format
+func formatDataSize(bytes int) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+		GB = MB * 1024
+	)
+
+	switch {
+	case bytes >= GB:
+		return fmt.Sprintf("%.2fGB", float64(bytes)/float64(GB))
+	case bytes >= MB:
+		return fmt.Sprintf("%.2fMB", float64(bytes)/float64(MB))
+	case bytes >= KB:
+		return fmt.Sprintf("%.2fKB", float64(bytes)/float64(KB))
+	default:
+		return fmt.Sprintf("%dB", bytes)
+	}
+}
+
+// calculateThroughput calculates throughput in MB/s
+func calculateThroughput(bytes int, durationMs int64) float64 {
+	if durationMs == 0 {
+		return 0
+	}
+	bytesPerMs := float64(bytes) / float64(durationMs)
+	return bytesPerMs * 1000 / (1024 * 1024) // Convert to MB/s
+}
+
+// makeWitnessKey creates a unique key for tracking witness requests
+func makeWitnessKey(hash common.Hash, page uint64) string {
+	return fmt.Sprintf("%s:%d", hash.Hex(), page)
 }

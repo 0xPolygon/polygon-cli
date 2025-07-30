@@ -22,6 +22,26 @@ type Message interface {
 	ReqID() uint64
 }
 
+// witnessRequest tracks witness request timing and metadata
+type witnessRequest struct {
+	requestID  uint64
+	hash       common.Hash
+	page       uint64
+	totalPages uint64
+	startTime  time.Time
+	endTime    time.Time
+}
+
+// witnessFetch tracks overall witness fetch progress
+type witnessFetch struct {
+	hash           common.Hash
+	totalPages     uint64
+	pagesReceived  uint64
+	totalBytes     int64
+	startTime      time.Time
+	lastUpdateTime time.Time
+}
+
 type Error struct {
 	err error
 }
@@ -152,10 +172,12 @@ func (msg PooledTransactions) ReqID() uint64 { return msg.RequestId }
 type rlpxConn struct {
 	*rlpx.Conn
 
-	ourKey *ecdsa.PrivateKey
-	caps   []p2p.Cap
-	node   *enode.Node
-	logger zerolog.Logger
+	ourKey          *ecdsa.PrivateKey
+	caps            []p2p.Cap
+	node            *enode.Node
+	logger          zerolog.Logger
+	witnessTracker  map[string]*witnessRequest // Track witness requests by hash+page
+	witnessFetches  map[common.Hash]*witnessFetch // Track overall witness fetches by hash
 }
 
 // Read reads an eth protocol packet from the connection.
