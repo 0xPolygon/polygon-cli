@@ -84,7 +84,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --adaptive-rate-limit                    Enable AIMD-style congestion control to automatically adjust request rate
       --adaptive-rate-limit-increment uint     When using adaptive rate limiting, this flag controls the size of the additive increases. (default 50)
       --adaptive-target-size uint              When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off. (default 1000)
-      --address-funding-amount big.Int         The amount in wei to fund the sending addresses with. Set to 0 to disable account funding (useful for call-only mode or pre-funded addresses).
+      --address-funding-amount big.Int         The amount in wei to fund the sending addresses with. Set to 0 to disable account funding (useful for eth-call-only mode or pre-funded addresses).
       --batch-size uint                        Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time. (default 999)
       --blob-fee-cap uint                      The blob fee cap, or the maximum blob fee per chunk, in Gwei. (default 100000)
       --calldata string                        The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with --mode contract-call and --contract-address
