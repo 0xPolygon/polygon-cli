@@ -285,7 +285,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return errors.New("random mode can't be used in combinations with any other modes")
 	}
 	if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode && !*inputLoadTestParams.EthCallOnly {
-		return errors.New("rpc mode must be called with call-only when multiple modes are used")
+		return errors.New("rpc mode must be called with eth-call-only when multiple modes are used")
 	} else if hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) {
 		log.Trace().Msg("Setting call only mode since we're doing RPC testing")
 		*inputLoadTestParams.EthCallOnly = true
@@ -376,7 +376,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 				return fmt.Errorf("unable to fund sending addresses. %w", err)
 			}
 		} else if !*inputLoadTestParams.EthCallOnly {
-			// When using multiple sending addresses and not using --call-only and --address-funding-amount <= 0, we need to make sure the addresses get funded
+			// When using multiple sending addresses and not using --eth-call-only and --address-funding-amount <= 0, we need to make sure the addresses get funded
 			// Set default funding to 1 ETH (1000000000000000000 wei)
 			defaultFunding := new(big.Int).SetUint64(1000000000000000000)
 			inputLoadTestParams.AddressFundingAmount = defaultFunding
