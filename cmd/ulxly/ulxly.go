@@ -30,6 +30,7 @@ import (
 	ethclient "github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
+	smcerror "github.com/0xPolygon/polygon-cli/errors"
 	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly/polygonrollupmanager"
@@ -545,12 +546,12 @@ type JsonError struct {
 	Data    interface{} `json:"data"`
 }
 
-func logAndReturnJsonError(cmd *cobra.Command, client *ethclient.Client, tx *types.Transaction, opts *bind.TransactOpts, err error) error {
+func logAndReturnJsonError(ctx context.Context, client *ethclient.Client, tx *types.Transaction, opts *bind.TransactOpts, err error) error {
 
 	var callErr error
 	if tx != nil {
 		// in case the error came down to gas estimation, we can sometimes get more information by doing a call
-		_, callErr = client.CallContract(cmd.Context(), ethereum.CallMsg{
+		_, callErr = client.CallContract(ctx, ethereum.CallMsg{
 			From:          opts.From,
 			To:            tx.To(),
 			Gas:           tx.Gas(),
@@ -599,24 +600,30 @@ func logAndReturnJsonError(cmd *cobra.Command, client *ethclient.Client, tx *typ
 		return err
 	}
 
+	reason, decodeErr := smcerror.DecodeSmcErrorCode(jsonError.Data)
+	if decodeErr != nil {
+		log.Error().Err(err).Msg("unable to decode smart contract error")
+		return err
+	}
 	errLog := log.Error().
 		Err(err).
 		Str("message", jsonError.Message).
 		Int("code", jsonError.Code).
-		Interface("data", jsonError.Data)
+		Interface("data", jsonError.Data).
+		Str("reason", reason)
 
 	if callErr != nil {
 		errLog = errLog.Err(callErr)
 	}
 
+	customErr := errors.New(err.Error()+": " + reason)
 	if errCode, isValid := jsonError.Data.(string); isValid && errCode == "0x646cf558" {
 		// I don't want to bother with the additional error logging for previously claimed deposits
-		return err
+		return customErr
 	}
 
 	errLog.Msg("Unable to interact with bridge contract")
-
-	return err
+	return customErr
 }
 
 // Function to parse deposit count from bridge transaction logs
@@ -725,7 +732,7 @@ func bridgeAsset(cmd *cobra.Command) error {
 
 			// Approve the bridge contract to spend the tokens on behalf of the user
 			approveTxn, iErr := tokenContract.Approve(auth, bridgeAddress, value)
-			if iErr = logAndReturnJsonError(cmd, client, approveTxn, auth, iErr); iErr != nil {
+			if iErr = logAndReturnJsonError(cmd.Context(), client, approveTxn, auth, iErr); iErr != nil {
 				return iErr
 			}
 			log.Info().Msg("approveTxn: " + approveTxn.Hash().String())
@@ -736,7 +743,7 @@ func bridgeAsset(cmd *cobra.Command) error {
 	}
 
 	bridgeTxn, err := bridgeV2.BridgeAsset(auth, destinationNetwork, toAddress, value, tokenAddress, isForced, callData)
-	if err = logAndReturnJsonError(cmd, client, bridgeTxn, auth, err); err != nil {
+	if err = logAndReturnJsonError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
 		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
@@ -790,7 +797,7 @@ func bridgeMessage(cmd *cobra.Command) error {
 	}
 
 	bridgeTxn, err := bridgeV2.BridgeMessage(auth, destinationNetwork, toAddress, isForced, callData)
-	if err = logAndReturnJsonError(cmd, client, bridgeTxn, auth, err); err != nil {
+	if err = logAndReturnJsonError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
 		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
@@ -847,7 +854,7 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 	callData := common.Hex2Bytes(strings.TrimPrefix(callDataString, "0x"))
 
 	bridgeTxn, err := bridgeV2.BridgeMessageWETH(auth, destinationNetwork, toAddress, value, isForced, callData)
-	if err = logAndReturnJsonError(cmd, client, bridgeTxn, auth, err); err != nil {
+	if err = logAndReturnJsonError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
 		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
@@ -911,7 +918,7 @@ func claimAsset(cmd *cobra.Command) error {
 	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
 
 	claimTxn, err := bridgeV2.ClaimAsset(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
-	if err = logAndReturnJsonError(cmd, client, claimTxn, auth, err); err != nil {
+	if err = logAndReturnJsonError(cmd.Context(), client, claimTxn, auth, err); err != nil {
 		return err
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
@@ -964,7 +971,7 @@ func claimMessage(cmd *cobra.Command) error {
 	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
 
 	claimTxn, err := bridgeV2.ClaimMessage(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
-	if err = logAndReturnJsonError(cmd, client, claimTxn, auth, err); err != nil {
+	if err = logAndReturnJsonError(cmd.Context(), client, claimTxn, auth, err); err != nil {
 		return err
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
@@ -1252,7 +1259,7 @@ func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeCont
 		claimTx, err = bridgeContract.ClaimMessage(opts, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), deposit.OrigNet, originAddress, deposit.DestNet, toAddress, amount, metadata)
 	}
 
-	if err = logAndReturnJsonError(cmd, client, claimTx, opts, err); err != nil {
+	if err = logAndReturnJsonError(cmd.Context(), client, claimTx, opts, err); err != nil {
 		log.Warn().
 			Uint32("DepositCnt", deposit.DepositCnt).
 			Uint32("OrigNet", deposit.OrigNet).
