@@ -302,22 +302,22 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
-	sendingAddressCount := *inputLoadTestParams.SendingAddressCount
-	preFundSendingAddresses := *inputLoadTestParams.PreFundSendingAddresses
-	fundingAmount := inputLoadTestParams.AddressFundingAmount
-	sendingAddressesFile := *inputLoadTestParams.SendingAddressesFile
+	sendingAccountsCount := *inputLoadTestParams.SendingAccountsCount
+	preFundSendingAccounts := *inputLoadTestParams.PreFundSendingAccounts
+	fundingAmount := inputLoadTestParams.AccountFundingAmount
+	sendingAccountsFile := *inputLoadTestParams.SendingAccountsFile
 	accountPool, err = NewAccountPool(ctx, c, privateKey, fundingAmount)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to create account pool")
 		return fmt.Errorf("unable to create account pool. %w", err)
 	}
 
-	if len(sendingAddressesFile) > 0 {
+	if len(sendingAccountsFile) > 0 {
 		log.Trace().
-			Str("sendingAddressFile", sendingAddressesFile).
+			Str("sendingAccountsFile", sendingAccountsFile).
 			Msg("Adding accounts from file to the account pool")
 
-		privateKeys, iErr := readPrivateKeysFromFile(sendingAddressesFile)
+		privateKeys, iErr := readPrivateKeysFromFile(sendingAccountsFile)
 		if iErr != nil {
 			log.Error().
 				Err(iErr).
@@ -326,25 +326,25 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		}
 		if len(privateKeys) == 0 && *inputLoadTestParams.StartNonce > 0 {
 			log.Fatal().
-				Str("sendingAddressFile", sendingAddressesFile).
+				Str("sendingAccountsFile", sendingAccountsFile).
 				Msg("nonce can't be set while using multiple sending accounts")
 		}
 
 		err = accountPool.AddN(ctx, privateKeys...)
-	} else if sendingAddressCount > 1 {
+	} else if sendingAccountsCount > 1 {
 		log.Trace().
-			Uint64("sendingAddressCount", sendingAddressCount).
+			Uint64("sendingAccountsCount", sendingAccountsCount).
 			Msg("Adding random accounts to the account pool")
 
 		if *inputLoadTestParams.StartNonce > 0 {
 			log.Fatal().
-				Uint64("sendingAddressCount", sendingAddressCount).
+				Uint64("sendingAccountsCount", sendingAccountsCount).
 				Msg("nonce can't be set while using multiple sending accounts")
 		}
-		err = accountPool.AddRandomN(ctx, sendingAddressCount)
+		err = accountPool.AddRandomN(ctx, sendingAccountsCount)
 	} else {
 		log.Trace().
-			Uint64("sendingAddressCount", sendingAddressCount).
+			Uint64("sendingAccountsCount", sendingAccountsCount).
 			Msg("Using the same account for all transactions")
 		var nonce *uint64
 		if *inputLoadTestParams.StartNonce > 0 {
@@ -358,40 +358,40 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return fmt.Errorf("unable to set account pool. %w", err)
 	}
 
-	// Only call FundAccounts() to prefund addresses if preFundSendingAddresses enabled and sendingAddressCount > 1.
-	// For single addresses, it will not be prefunded.
-	if preFundSendingAddresses && sendingAddressCount > 1 {
-		// Check if we need to auto-set funding amount for multiple addresses or pre-funding
-		if inputLoadTestParams.AddressFundingAmount.Cmp(new(big.Int)) > 0 {
+	// Only call FundAccounts() to pre fund accounts if preFundSendingAccounts enabled and sendingAAccountsCount > 1.
+	// For single account, it will not be prefunded.
+	if preFundSendingAccounts && sendingAccountsCount > 1 {
+		// Check if we need to auto-set funding amount for multiple accounts or pre-funding
+		if inputLoadTestParams.AccountFundingAmount.Cmp(new(big.Int)) > 0 {
 			err := accountPool.FundAccounts(ctx)
 			if err != nil {
-				log.Error().Err(err).Msg("Unable to fund sending addresses")
+				log.Error().Err(err).Msg("Unable to fund sending accounts")
 				iErr := accountPool.ReturnFunds(ctx)
 				if iErr != nil {
 					log.Error().
 						Err(iErr).
-						Msg("There was an issue returning the funds from the sending addresses back to the funding address")
-					return fmt.Errorf("unable to return funds from sending addresses. %w", iErr)
+						Msg("There was an issue returning the funds from the sending accounts back to the funding account")
+					return fmt.Errorf("unable to return funds from sending accounts. %w", iErr)
 				}
-				return fmt.Errorf("unable to fund sending addresses. %w", err)
+				return fmt.Errorf("unable to fund sending accounts. %w", err)
 			}
 		} else if !*inputLoadTestParams.EthCallOnly {
-			// When using multiple sending addresses and not using --eth-call-only and --address-funding-amount <= 0, we need to make sure the addresses get funded
+			// When using multiple sending accounts and not using --eth-call-only and --account-funding-amount <= 0, we need to make sure the accounts get funded
 			// Set default funding to 1 ETH (1000000000000000000 wei)
 			defaultFunding := new(big.Int).SetUint64(1000000000000000000)
-			inputLoadTestParams.AddressFundingAmount = defaultFunding
+			inputLoadTestParams.AccountFundingAmount = defaultFunding
 			log.Debug().
-				Msg("Multiple sending addresses detected with pre-funding enabled with zero funding amount - auto-setting funding amount to 1 ETH")
+				Msg("Multiple sending accounts detected with pre-funding enabled with zero funding amount - auto-setting funding amount to 1 ETH")
 		}
 	}
 
 	return nil
 }
 
-func readPrivateKeysFromFile(sendingAddressesFile string) ([]*ecdsa.PrivateKey, error) {
-	file, err := os.Open(sendingAddressesFile)
+func readPrivateKeysFromFile(sendingAccountsFile string) ([]*ecdsa.PrivateKey, error) {
+	file, err := os.Open(sendingAccountsFile)
 	if err != nil {
-		return nil, fmt.Errorf("unable to open sending addresses file: %w", err)
+		return nil, fmt.Errorf("unable to open sending accounts file: %w", err)
 	}
 	defer file.Close()
 
@@ -411,7 +411,7 @@ func readPrivateKeysFromFile(sendingAddressesFile string) ([]*ecdsa.PrivateKey, 
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading sending address file: %w", err)
+		return nil, fmt.Errorf("error reading sending accounts file: %w", err)
 	}
 
 	return privateKeys, nil
@@ -453,7 +453,7 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 	if err != nil {
 		log.Error().
 			Err(err).
-			Msg("There was an issue returning the funds from the sending addresses back to the funding address")
+			Msg("There was an issue returning the funds from the sending accounts back to the funding account")
 	}
 
 	if *inputLoadTestParams.ShouldProduceSummary {

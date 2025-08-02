@@ -79,12 +79,12 @@ The codebase has a contract that used for load testing. It's written in Solidity
 ## Flags
 
 ```bash
+      --account-funding-amount big.Int         The amount in wei to fund the sending accounts with. Set to 0 to disable account funding (useful for eth-call-only mode or pre-funded accounts).
       --adaptive-backoff-factor float          When using adaptive rate limiting, this flag controls our multiplicative decrease value. (default 2)
       --adaptive-cycle-duration-seconds uint   When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates (default 10)
       --adaptive-rate-limit                    Enable AIMD-style congestion control to automatically adjust request rate
       --adaptive-rate-limit-increment uint     When using adaptive rate limiting, this flag controls the size of the additive increases. (default 50)
       --adaptive-target-size uint              When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off. (default 1000)
-      --address-funding-amount big.Int         The amount in wei to fund the sending addresses with. Set to 0 to disable account funding (useful for eth-call-only mode or pre-funded addresses).
       --batch-size uint                        Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time. (default 999)
       --blob-fee-cap uint                      The blob fee cap, or the maximum blob fee per chunk, in Gwei. (default 100000)
       --calldata string                        The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with --mode contract-call and --contract-address
@@ -105,7 +105,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --gas-price-multiplier float             A multiplier to increase or decrease the gas price (default 1)
   -h, --help                                   help for loadtest
       --inscription-content string             The inscription content that will be encoded as calldata. This must be paired up with --mode inscription (default "data:,{\"p\":\"erc-20\",\"op\":\"mint\",\"tick\":\"TEST\",\"amt\":\"1\"}")
-      --keep-funds-after-test                  If set to true, the funded amount will be kept in the sending addresses. Otherwise, the funded amount will be refunded back to the account used to fund the account.
+      --keep-funds-after-test                  If set to true, the funded amount will be kept in the sending accounts. Otherwise, the funded amount will be refunded back to the account used to fund the account.
       --legacy                                 Send a legacy transaction instead of an EIP1559 transaction.
       --loadtest-contract-address string       The address of a pre-deployed load test contract
   -m, --mode strings                           The testing mode to use. It can be multiple like: "d,t"
@@ -124,7 +124,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
                                                v3, uniswapv3 - Perform UniswapV3 swaps (default [t])
       --nonce uint                             Use this flag to manually set the starting nonce
       --output-mode string                     Format mode for summary output (json | text) (default "text")
-      --pre-fund-sending-addresses             If set to true, the sending addresses will be funded at the start of the execution, otherwise all addresses will be funded when used for the first time.
+      --pre-fund-sending-accounts              If set to true, the sending accounts will be funded at the start of the execution, otherwise all accounts will be funded when used for the first time.
       --priority-gas-price uint                Specify Gas Tip Price in the case of EIP-1559
       --private-key string                     The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
       --proxy string                           Use the proxy specified
@@ -134,8 +134,8 @@ The codebase has a contract that used for load testing. It's written in Solidity
   -n, --requests int                           Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
   -r, --rpc-url string                         The RPC endpoint url (default "http://localhost:8545")
       --seed int                               A seed for generating random values and addresses (default 123456)
-      --sending-address-count uint             The number of sending addresses to use. This is useful for avoiding pool account queue. (default 1)
-      --sending-addresses-file string          The file containing the sending addresses private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending addresses for different execution cycles.
+      --sending-accounts-count uint            The number of sending accounts to use. This is useful for avoiding pool account queue. (default 1)
+      --sending-accounts-file string           The file containing the sending accounts private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending accounts for different execution cycles.
       --store-data-size uint                   If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
       --summarize                              Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time
   -t, --time-limit int                         Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit. (default -1)
