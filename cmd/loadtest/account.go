@@ -143,7 +143,7 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 	// Debug log for when fundingAmount==0.
 	if fundingAmount.Cmp(big.NewInt(0)) == 0 {
 		log.Debug().
-			Msg("address-funding-amount is zero - account funding disabled")
+			Msg("account-funding-amount is zero - account funding disabled")
 	}
 
 	return &AccountPool{
@@ -383,7 +383,7 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 	}
 	balance, err := ap.client.BalanceAt(ctx, tops.From, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get funding address balance")
+		log.Error().Err(err).Msg("Unable to get funding account balance")
 	}
 
 	totalBalanceNeeded := new(big.Int).Mul(ap.fundingAmount, big.NewInt(int64(len(ap.accounts))))
@@ -484,7 +484,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	defer ap.mu.Unlock()
 
 	log.Debug().
-		Msg("Returning funds from sending addresses to funding address")
+		Msg("Returning funds from sending accounts to funding account")
 
 	ethTransferGas := big.NewInt(21000)
 	err := ap.clientRateLimiter.Wait(ctx)
@@ -513,7 +513,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	}
 	balanceBefore, err := ap.client.BalanceAt(ctx, fundingAddress, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get funding address balance")
+		log.Error().Err(err).Msg("Unable to get funding account balance")
 		return err
 	}
 	log.Debug().
@@ -687,7 +687,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	}
 	balanceAfter, err := ap.client.BalanceAt(ctx, fundingAddress, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get funding address balance")
+		log.Error().Err(err).Msg("Unable to get funding account balance")
 		return err
 	}
 
@@ -744,7 +744,7 @@ func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 	account := ap.accounts[ap.currentAccountIndex]
 
 	// if test is call only, there is no need to fund accounts, return it
-	if !*inputLoadTestParams.CallOnly {
+	if !*inputLoadTestParams.EthCallOnly {
 		_, err := ap.fundAccountIfNeeded(ctx, account, nil, true)
 		if err != nil {
 			return Account{}, err

@@ -36,8 +36,8 @@ type cmdFundParams struct {
 
 var (
 	//go:embed usage.md
-	usage  string
-	params cmdFundParams
+	usage               string
+	params              cmdFundParams
 	defaultFundingInWei = big.NewInt(50000000000000000) // 0.05 ETH
 )
 
@@ -70,7 +70,7 @@ func init() {
 	p.UseHDDerivation = flagSet.Bool("hd-derivation", true, "Derive wallets to fund from the private key in a deterministic way")
 	p.WalletAddresses = flagSet.StringSlice("addresses", nil, "Comma-separated list of wallet addresses to fund")
 	p.FundingAmountInWei = defaultFundingInWei
-	flagSet.Var(&flag_loader.BigIntValue{Val: p.FundingAmountInWei }, "eth-amount", "The amount of wei to send to each wallet")
+	flagSet.Var(&flag_loader.BigIntValue{Val: p.FundingAmountInWei}, "eth-amount", "The amount of wei to send to each wallet")
 
 	p.OutputFile = flagSet.StringP("file", "f", "wallets.json", "The output JSON file path for storing the addresses and private keys of funded wallets")
 

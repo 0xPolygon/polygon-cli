@@ -48,21 +48,21 @@ func (h *HexBytes) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &s); err != nil {
 		return err
 	}
-	
+
 	if s == "" || s == "0x" {
 		*h = HexBytes{}
 		return nil
 	}
-	
+
 	if !strings.HasPrefix(s, "0x") {
 		return fmt.Errorf("hex string must start with 0x")
 	}
-	
+
 	decoded, err := hex.DecodeString(s[2:])
 	if err != nil {
 		return err
 	}
-	
+
 	*h = HexBytes(decoded)
 	return nil
 }

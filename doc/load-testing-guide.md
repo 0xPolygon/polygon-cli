@@ -153,15 +153,15 @@ The loadtest command provided by `polycli` send all the transactions with the sa
 the test requires multiple accounts to be used in order to avoid the pool queue limits, the `polycli` supports
 multi-account by setting the following flags:
 
-- `sending-address-count`: defines the number of accounts that will be created to send the test txs
-- `address-funding-amount`: defines the amount that will be funded to each sending account that will be created
-- `pre-fund-sending-addresses`: if set to true, the sending addresses will be funded at the start of the execution of
+- `sending-accounts-count`: defines the number of accounts that will be created to send the test txs
+- `account-funding-amount`: defines the amount that will be funded to each sending account that will be created
+- `pre-fund-sending-accounts`: if set to true, the sending account will be funded at the start of the execution of
 the load test, funding all the created accounts concurrently, otherwise all sending accounts will be funded only when
 used for the first time.
 - `keep-funded-amount`: by default, at the final of the load test execution, all the funds funded to the sending
 accounts that were created during the execution will be returned to the funding account, which is the account set in the 
 `--private-key` flag. In case you want the funded funds to remain in the created accounts, set it to `true`
-- `sending-addresses-file`: defines the path to a file containing a list of private keys to be used by the load test.
+- `sending-accounts-file`: defines the path to a file containing a list of private keys to be used by the load test.
 Instead of creating new accounts, the test will use only the accounts defined in the file with the private keys as the
 accounts that will send the test txs
 
