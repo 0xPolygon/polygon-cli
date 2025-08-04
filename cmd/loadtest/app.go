@@ -88,6 +88,7 @@ type (
 		KeepFundedAmount              *bool
 		SendingAddressesFile          *string
 		Proxy                         *string
+		WaitForReceipt                *bool
 
 		// Computed
 		CurrentGasPrice       *big.Int
@@ -285,6 +286,7 @@ v3, uniswapv3 - Perform UniswapV3 swaps`)
 	ltp.ContractCallPayable = LoadtestCmd.Flags().Bool("contract-call-payable", false, "Use this flag if the function is payable, the value amount passed will be from --eth-amount-in-wei. This must be paired up with --mode contract-call and --contract-address")
 	ltp.InscriptionContent = LoadtestCmd.Flags().String("inscription-content", `data:,{"p":"erc-20","op":"mint","tick":"TEST","amt":"1"}`, "The inscription content that will be encoded as calldata. This must be paired up with --mode inscription")
 	ltp.Proxy = LoadtestCmd.Flags().String("proxy", "", "Use the proxy specified")
+	ltp.WaitForReceipt = LoadtestCmd.Flags().Bool("wait-for-receipt", false, "If set to true, the load test will wait for the transaction receipt to be mined. If set to false, the load test will not wait for the transaction receipt and will just send the transaction.")
 
 	inputLoadTestParams = *ltp
 
