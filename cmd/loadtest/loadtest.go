@@ -358,8 +358,8 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return fmt.Errorf("unable to set account pool. %w", err)
 	}
 
-	// Only call FundAccounts() to pre fund accounts if preFundSendingAccounts enabled and sendingAAccountsCount > 1.
-	// For single account, it will not be prefunded.
+	// Only call FundAccounts() to pre fund accounts if preFundSendingAccounts enabled and sendingAccountsCount > 1.
+	// For a single account, it will not be prefunded.
 	if preFundSendingAccounts && sendingAccountsCount > 1 {
 		// Check if we need to auto-set funding amount for multiple accounts or pre-funding
 		if inputLoadTestParams.AccountFundingAmount.Cmp(new(big.Int)) > 0 {
