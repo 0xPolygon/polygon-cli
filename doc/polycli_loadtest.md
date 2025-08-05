@@ -168,6 +168,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
   -t, --time-limit int                         Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit. (default -1)
       --to-address string                      The address that we're going to send to (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
       --to-random                              When doing a transfer test, should we send to random addresses rather than DEADBEEFx5
+      --wait-for-receipt                       If set to true, the load test will wait for the transaction receipt to be mined. If set to false, the load test will not wait for the transaction receipt and will just send the transaction.
 ```
 
 The command also inherits flags from parent commands.
