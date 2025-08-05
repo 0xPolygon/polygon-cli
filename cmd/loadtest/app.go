@@ -89,6 +89,8 @@ type (
 		SendingAddressesFile          *string
 		Proxy                         *string
 		WaitForReceipt                *bool
+		ReceiptRetryMax               *uint
+		ReceiptRetryInitialDelayMs    *uint
 
 		// Computed
 		CurrentGasPrice       *big.Int
@@ -287,6 +289,8 @@ v3, uniswapv3 - Perform UniswapV3 swaps`)
 	ltp.InscriptionContent = LoadtestCmd.Flags().String("inscription-content", `data:,{"p":"erc-20","op":"mint","tick":"TEST","amt":"1"}`, "The inscription content that will be encoded as calldata. This must be paired up with --mode inscription")
 	ltp.Proxy = LoadtestCmd.Flags().String("proxy", "", "Use the proxy specified")
 	ltp.WaitForReceipt = LoadtestCmd.Flags().Bool("wait-for-receipt", false, "If set to true, the load test will wait for the transaction receipt to be mined. If set to false, the load test will not wait for the transaction receipt and will just send the transaction.")
+	ltp.ReceiptRetryMax = LoadtestCmd.Flags().Uint("receipt-retry-max", 30, "Maximum number of attempts to poll for transaction receipt when --wait-for-receipt is enabled.")
+	ltp.ReceiptRetryInitialDelayMs = LoadtestCmd.Flags().Uint("receipt-retry-initial-delay-ms", 100, "Initial delay in milliseconds for receipt polling retry. Uses exponential backoff with jitter.")
 
 	inputLoadTestParams = *ltp
 

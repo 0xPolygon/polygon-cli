@@ -157,6 +157,8 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --proxy string                           Use the proxy specified
       --rate-limit float                       An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together (default 4)
       --recall-blocks uint                     The number of blocks that we'll attempt to fetch for recall (default 50)
+      --receipt-retry-initial-delay-ms uint    Initial delay in milliseconds for receipt polling retry. Uses exponential backoff with jitter. (default 100)
+      --receipt-retry-max uint                 Maximum number of attempts to poll for transaction receipt when --wait-for-receipt is enabled. (default 30)
   -n, --requests int                           Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
   -r, --rpc-url string                         The RPC endpoint url (default "http://localhost:8545")
       --seed int                               A seed for generating random values and addresses (default 123456)
