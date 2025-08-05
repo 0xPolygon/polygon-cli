@@ -54,6 +54,7 @@ Note: more info https://github.com/BrianSeong99/Agglayer_PessimisticProof_Benchm
 ```bash
       --bridge-address string     Bridge Address
   -h, --help                      help for compute-balance-nullifier-tree
+      --insecure                  skip TLS certificate verification (development only)
       --l2-claims-file string     An ndjson file with l2 claim events data
       --l2-deposits-file string   An ndjson file with l2 deposit events data
       --l2-network-id uint32      The L2 networkID

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"crypto/tls"
 	_ "embed"
 	"encoding/binary"
 	"encoding/json"
@@ -30,11 +31,11 @@ import (
 	ethclient "github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
-	smcerror "github.com/0xPolygon/polygon-cli/errors"
 	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly/polygonrollupmanager"
 	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
+	smcerror "github.com/0xPolygon/polygon-cli/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -117,13 +118,27 @@ func readDeposit(cmd *cobra.Command) error {
 	fromBlock := getEvent.FromBlock
 	filter := getEvent.FilterSize
 
-	// Dial the Ethereum RPC server.
-	rpc, err := ethrpc.DialContext(cmd.Context(), rpcUrl)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to Dial RPC")
-		return err
+	// Use the new helper function
+	var rpc *ethrpc.Client
+	var err error
+
+	if getEvent.insecure != nil && *getEvent.insecure {
+		client, clientErr := createInsecureEthClient(rpcUrl)
+		if clientErr != nil {
+			log.Error().Err(clientErr).Msg("Unable to create insecure client")
+			return clientErr
+		}
+		defer client.Close()
+		rpc = client.Client()
+	} else {
+		rpc, err = ethrpc.DialContext(cmd.Context(), rpcUrl)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to Dial RPC")
+			return err
+		}
+		defer rpc.Close()
 	}
-	defer rpc.Close()
+
 	ec := ethclient.NewClient(rpc)
 
 	bridgeV2, err := ulxly.NewUlxly(common.HexToAddress(bridgeAddress), ec)
@@ -193,13 +208,27 @@ func readClaim(cmd *cobra.Command) error {
 	fromBlock := getEvent.FromBlock
 	filter := getEvent.FilterSize
 
-	// Dial the Ethereum RPC server.
-	rpc, err := ethrpc.DialContext(cmd.Context(), rpcUrl)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to Dial RPC")
-		return err
+	// Use the new helper function
+	var rpc *ethrpc.Client
+	var err error
+
+	if getEvent.insecure != nil && *getEvent.insecure {
+		client, clientErr := createInsecureEthClient(rpcUrl)
+		if clientErr != nil {
+			log.Error().Err(clientErr).Msg("Unable to create insecure client")
+			return clientErr
+		}
+		defer client.Close()
+		rpc = client.Client()
+	} else {
+		rpc, err = ethrpc.DialContext(cmd.Context(), rpcUrl)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to Dial RPC")
+			return err
+		}
+		defer rpc.Close()
 	}
-	defer rpc.Close()
+
 	ec := ethclient.NewClient(rpc)
 
 	bridgeV2, err := ulxly.NewUlxly(common.HexToAddress(bridgeAddress), ec)
@@ -251,6 +280,7 @@ func readClaim(cmd *cobra.Command) error {
 
 	return nil
 }
+
 func readVerifyBatches(cmd *cobra.Command) error {
 	rollupManagerAddress := getVerifyBatchesOptions.RollupManagerAddress
 	rpcUrl := getEvent.URL
@@ -258,13 +288,27 @@ func readVerifyBatches(cmd *cobra.Command) error {
 	fromBlock := getEvent.FromBlock
 	filter := getEvent.FilterSize
 
-	// Dial the Ethereum RPC server.
-	rpc, err := ethrpc.DialContext(cmd.Context(), rpcUrl)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to Dial RPC")
-		return err
+	// Use the new helper function
+	var rpc *ethrpc.Client
+	var err error
+
+	if getEvent.insecure != nil && *getEvent.insecure {
+		client, clientErr := createInsecureEthClient(rpcUrl)
+		if clientErr != nil {
+			log.Error().Err(clientErr).Msg("Unable to create insecure client")
+			return clientErr
+		}
+		defer client.Close()
+		rpc = client.Client()
+	} else {
+		rpc, err = ethrpc.DialContext(cmd.Context(), rpcUrl)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to Dial RPC")
+			return err
+		}
+		defer rpc.Close()
 	}
-	defer rpc.Close()
+
 	client := ethclient.NewClient(rpc)
 	rm := common.HexToAddress(rollupManagerAddress)
 	rollupManager, err := polygonrollupmanager.NewPolygonrollupmanager(rm, client)
@@ -322,10 +366,20 @@ func proof(args []string) error {
 func balanceTree() error {
 	l2NetworkID := balanceTreeOptions.L2NetworkID
 	bridgeAddress := common.HexToAddress(balanceTreeOptions.BridgeAddress)
-	client, err := ethclient.DialContext(context.Background(), balanceTreeOptions.RpcURL)
+
+	var client *ethclient.Client
+	var err error
+
+	if balanceTreeOptions.insecure != nil && *balanceTreeOptions.insecure {
+		client, err = createInsecureEthClient(balanceTreeOptions.RpcURL)
+	} else {
+		client, err = ethclient.DialContext(context.Background(), balanceTreeOptions.RpcURL)
+	}
+
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 	l2RawClaimsData, l2RawDepositsData, err := getBalanceTreeData()
 	if err != nil {
 		return err
@@ -362,10 +416,20 @@ func nullifierTree(args []string) error {
 func nullifierAndBalanceTree(args []string) error {
 	l2NetworkID := balanceTreeOptions.L2NetworkID
 	bridgeAddress := common.HexToAddress(balanceTreeOptions.BridgeAddress)
-	client, err := ethclient.DialContext(context.Background(), balanceTreeOptions.RpcURL)
+
+	var client *ethclient.Client
+	var err error
+
+	if balanceTreeOptions.insecure != nil && *balanceTreeOptions.insecure {
+		client, err = createInsecureEthClient(balanceTreeOptions.RpcURL)
+	} else {
+		client, err = ethclient.DialContext(context.Background(), balanceTreeOptions.RpcURL)
+	}
+
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 	l2RawClaimsData, l2RawDepositsData, err := getBalanceTreeData()
 	if err != nil {
 		return err
@@ -616,7 +680,7 @@ func logAndReturnJsonError(ctx context.Context, client *ethclient.Client, tx *ty
 		errLog = errLog.Err(callErr)
 	}
 
-	customErr := errors.New(err.Error()+": " + reason)
+	customErr := errors.New(err.Error() + ": " + reason)
 	if errCode, isValid := jsonError.Data.(string); isValid && errCode == "0x646cf558" {
 		// I don't want to bother with the additional error logging for previously claimed deposits
 		return customErr
@@ -685,8 +749,7 @@ func bridgeAsset(cmd *cobra.Command) error {
 	timeoutTxnReceipt := *inputUlxlyArgs.timeout
 	RPCURL := *inputUlxlyArgs.rpcURL
 
-	// Dial the Ethereum RPC server.
-	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
+	client, err := createEthClient(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
@@ -775,7 +838,7 @@ func bridgeMessage(cmd *cobra.Command) error {
 	RPCURL := *inputUlxlyArgs.rpcURL
 
 	// Dial the Ethereum RPC server.
-	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
+	client, err := createEthClient(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
@@ -828,7 +891,7 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 	RPCURL := *inputUlxlyArgs.rpcURL
 
 	// Dial the Ethereum RPC server.
-	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
+	client, err := createEthClient(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
@@ -886,7 +949,7 @@ func claimAsset(cmd *cobra.Command) error {
 	wait := *inputUlxlyArgs.wait
 
 	// Dial Ethereum client
-	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
+	client, err := createEthClient(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
@@ -940,7 +1003,7 @@ func claimMessage(cmd *cobra.Command) error {
 	wait := *inputUlxlyArgs.wait
 
 	// Dial Ethereum client
-	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
+	client, err := createEthClient(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
@@ -1078,7 +1141,7 @@ func claimEverything(cmd *cobra.Command) error {
 		}
 	}
 
-	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
+	client, err := createEthClient(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
@@ -1929,6 +1992,33 @@ func getDepositsForAddress(bridgeRequestUrl string) ([]BridgeDeposit, error) {
 	return resp.Deposits, nil
 }
 
+// Add the helper function to create an insecure client
+func createInsecureEthClient(rpcURL string) (*ethclient.Client, error) {
+	// WARNING: This disables TLS certificate verification
+	log.Warn().Msg("WARNING: TLS certificate verification is disabled. This is unsafe for production use.")
+
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	rpcClient, err := ethrpc.DialHTTPWithClient(rpcURL, httpClient)
+	if err != nil {
+		return nil, err
+	}
+
+	return ethclient.NewClient(rpcClient), nil
+}
+
+// Add helper function to create either secure or insecure client based on flag
+func createEthClient(ctx context.Context, rpcURL string) (*ethclient.Client, error) {
+	if inputUlxlyArgs.insecure != nil && *inputUlxlyArgs.insecure {
+		return createInsecureEthClient(rpcURL)
+	}
+	return ethclient.DialContext(ctx, rpcURL)
+}
+
 //go:embed BridgeAssetUsage.md
 var bridgeAssetUsage string
 
@@ -2040,6 +2130,7 @@ type ulxlyArgs struct {
 	bridgeOffset        *int
 	wait                *time.Duration
 	concurrency         *uint
+	insecure            *bool
 }
 
 var inputUlxlyArgs = ulxlyArgs{}
@@ -2164,6 +2255,7 @@ func (o *FileOptions) AddFlags(cmd *cobra.Command) {
 type BalanceTreeOptions struct {
 	L2ClaimsFile, L2DepositsFile, BridgeAddress, RpcURL string
 	L2NetworkID                                         uint32
+	insecure                                            *bool
 }
 
 func (o *BalanceTreeOptions) AddFlags(cmd *cobra.Command) {
@@ -2172,6 +2264,7 @@ func (o *BalanceTreeOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.BridgeAddress, ArgBridgeAddress, "", "", "Bridge Address")
 	cmd.Flags().StringVarP(&o.RpcURL, ArgRPCURL, "r", "", "RPC URL")
 	cmd.Flags().Uint32VarP(&o.L2NetworkID, ArgL2NetworkID, "", 0, "The L2 networkID")
+	o.insecure = cmd.Flags().Bool("insecure", false, "skip TLS certificate verification (development only)")
 }
 
 type ProofOptions struct {
@@ -2195,6 +2288,7 @@ func (o *RollupsProofOptions) AddFlags(cmd *cobra.Command) {
 type GetEvent struct {
 	URL                            string
 	FromBlock, ToBlock, FilterSize uint64
+	insecure                       *bool
 }
 
 func (o *GetEvent) AddFlags(cmd *cobra.Command) {
@@ -2202,6 +2296,7 @@ func (o *GetEvent) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().Uint64VarP(&o.FromBlock, ArgFromBlock, "f", 0, "The start of the range of blocks to retrieve")
 	cmd.Flags().Uint64VarP(&o.ToBlock, ArgToBlock, "t", 0, "The end of the range of blocks to retrieve")
 	cmd.Flags().Uint64VarP(&o.FilterSize, ArgFilterSize, "i", 1000, "The batch size for individual filter queries")
+	o.insecure = cmd.Flags().Bool("insecure", false, "skip TLS certificate verification")
 	fatalIfError(cmd.MarkFlagRequired(ArgFromBlock))
 	fatalIfError(cmd.MarkFlagRequired(ArgToBlock))
 	fatalIfError(cmd.MarkFlagRequired(ArgRPCURL))
@@ -2440,6 +2535,7 @@ or if it's actually an intermediate hash.`,
 	inputUlxlyArgs.timeout = ulxlyBridgeAndClaimCmd.PersistentFlags().Uint64(ArgTimeout, 60, "the amount of time to wait while trying to confirm a transaction receipt")
 	inputUlxlyArgs.gasPrice = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgGasPrice, "", "the gas price to be used")
 	inputUlxlyArgs.dryRun = ulxlyBridgeAndClaimCmd.PersistentFlags().Bool(ArgDryRun, false, "do all of the transaction steps but do not send the transaction")
+	inputUlxlyArgs.insecure = ulxlyBridgeAndClaimCmd.PersistentFlags().Bool("insecure", false, "skip TLS certificate verification")
 	fatalIfError(ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgBridgeAddress))
 
 	// bridge specific args
