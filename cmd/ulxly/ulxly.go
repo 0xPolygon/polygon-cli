@@ -1865,8 +1865,25 @@ func generateTransactionPayload(ctx context.Context, client *ethclient.Client, u
 	return bridgeV2, toAddress, opts, err
 }
 
+// Helper function to get the appropriate HTTP client
+func getHTTPClient() *http.Client {
+	if inputUlxlyArgs.insecure != nil && *inputUlxlyArgs.insecure {
+		log.Warn().Msg("WARNING: Using insecure HTTP client for bridge service requests")
+		return &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		}
+	}
+	return &http.Client{
+		Timeout: 30 * time.Second,
+	}
+}
+
 func getMerkleProofsExitRoots(bridgeServiceProofEndpoint string) (merkleProofArray [32][32]byte, rollupMerkleProofArray [32][32]byte, mainExitRoot []byte, rollupExitRoot []byte) {
-	reqBridgeProof, err := http.Get(bridgeServiceProofEndpoint)
+	client := getHTTPClient()
+	reqBridgeProof, err := client.Get(bridgeServiceProofEndpoint)
 	if err != nil {
 		log.Error().Err(err)
 		return
@@ -1914,7 +1931,8 @@ func getMerkleProofsExitRoots(bridgeServiceProofEndpoint string) (merkleProofArr
 }
 
 func getDeposit(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, originAddress common.Address, amount *big.Int, metadata []byte, leafType uint8, claimDestNetwork, claimOriginalNetwork uint32, err error) {
-	reqBridgeDeposit, err := http.Get(bridgeServiceDepositsEndpoint)
+	client := getHTTPClient()
+	reqBridgeDeposit, err := client.Get(bridgeServiceDepositsEndpoint)
 	if err != nil {
 		log.Error().Err(err)
 		return
@@ -1972,7 +1990,8 @@ func getDepositsForAddress(bridgeRequestUrl string) ([]BridgeDeposit, error) {
 		Deposits []BridgeDeposit `json:"deposits"`
 		Total    int             `json:"total_cnt,string"`
 	}
-	httpResp, err := http.Get(bridgeRequestUrl)
+	client := getHTTPClient()
+	httpResp, err := client.Get(bridgeRequestUrl)
 	if err != nil {
 		return nil, err
 	}
