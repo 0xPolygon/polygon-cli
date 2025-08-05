@@ -122,7 +122,7 @@ func readDeposit(cmd *cobra.Command) error {
 	var rpc *ethrpc.Client
 	var err error
 
-	if getEvent.insecure != nil && *getEvent.insecure {
+	if getEvent.Insecure {
 		client, clientErr := createInsecureEthClient(rpcUrl)
 		if clientErr != nil {
 			log.Error().Err(clientErr).Msg("Unable to create insecure client")
@@ -212,7 +212,7 @@ func readClaim(cmd *cobra.Command) error {
 	var rpc *ethrpc.Client
 	var err error
 
-	if getEvent.insecure != nil && *getEvent.insecure {
+	if getEvent.Insecure {
 		client, clientErr := createInsecureEthClient(rpcUrl)
 		if clientErr != nil {
 			log.Error().Err(clientErr).Msg("Unable to create insecure client")
@@ -292,7 +292,7 @@ func readVerifyBatches(cmd *cobra.Command) error {
 	var rpc *ethrpc.Client
 	var err error
 
-	if getEvent.insecure != nil && *getEvent.insecure {
+	if getEvent.Insecure {
 		client, clientErr := createInsecureEthClient(rpcUrl)
 		if clientErr != nil {
 			log.Error().Err(clientErr).Msg("Unable to create insecure client")
@@ -370,7 +370,7 @@ func balanceTree() error {
 	var client *ethclient.Client
 	var err error
 
-	if balanceTreeOptions.insecure != nil && *balanceTreeOptions.insecure {
+	if balanceTreeOptions.Insecure {
 		client, err = createInsecureEthClient(balanceTreeOptions.RpcURL)
 	} else {
 		client, err = ethclient.DialContext(context.Background(), balanceTreeOptions.RpcURL)
@@ -420,7 +420,7 @@ func nullifierAndBalanceTree(args []string) error {
 	var client *ethclient.Client
 	var err error
 
-	if balanceTreeOptions.insecure != nil && *balanceTreeOptions.insecure {
+	if balanceTreeOptions.Insecure {
 		client, err = createInsecureEthClient(balanceTreeOptions.RpcURL)
 	} else {
 		client, err = ethclient.DialContext(context.Background(), balanceTreeOptions.RpcURL)
@@ -1867,7 +1867,7 @@ func generateTransactionPayload(ctx context.Context, client *ethclient.Client, u
 
 // Helper function to get the appropriate HTTP client
 func getHTTPClient() *http.Client {
-	if inputUlxlyArgs.insecure != nil && *inputUlxlyArgs.insecure {
+	if *inputUlxlyArgs.insecure {
 		log.Warn().Msg("WARNING: Using insecure HTTP client for bridge service requests")
 		return &http.Client{
 			Timeout: 30 * time.Second,
@@ -2022,7 +2022,7 @@ func createInsecureEthClient(rpcURL string) (*ethclient.Client, error) {
 		},
 	}
 
-	rpcClient, err := ethrpc.DialHTTPWithClient(rpcURL, httpClient)
+	rpcClient, err := ethrpc.DialOptions(context.Background(), rpcURL, ethrpc.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, err
 	}
@@ -2032,7 +2032,7 @@ func createInsecureEthClient(rpcURL string) (*ethclient.Client, error) {
 
 // Add helper function to create either secure or insecure client based on flag
 func createEthClient(ctx context.Context, rpcURL string) (*ethclient.Client, error) {
-	if inputUlxlyArgs.insecure != nil && *inputUlxlyArgs.insecure {
+	if *inputUlxlyArgs.insecure {
 		return createInsecureEthClient(rpcURL)
 	}
 	return ethclient.DialContext(ctx, rpcURL)
@@ -2216,6 +2216,7 @@ const (
 	ArgBridgeOffset         = "bridge-offset"
 	ArgWait                 = "wait"
 	ArgConcurrency          = "concurrency"
+	ArgInsecure             = "insecure"
 )
 
 func prepInputs(cmd *cobra.Command, args []string) error {
@@ -2274,7 +2275,7 @@ func (o *FileOptions) AddFlags(cmd *cobra.Command) {
 type BalanceTreeOptions struct {
 	L2ClaimsFile, L2DepositsFile, BridgeAddress, RpcURL string
 	L2NetworkID                                         uint32
-	insecure                                            *bool
+	Insecure                                            bool
 }
 
 func (o *BalanceTreeOptions) AddFlags(cmd *cobra.Command) {
@@ -2283,7 +2284,7 @@ func (o *BalanceTreeOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.BridgeAddress, ArgBridgeAddress, "", "", "Bridge Address")
 	cmd.Flags().StringVarP(&o.RpcURL, ArgRPCURL, "r", "", "RPC URL")
 	cmd.Flags().Uint32VarP(&o.L2NetworkID, ArgL2NetworkID, "", 0, "The L2 networkID")
-	o.insecure = cmd.Flags().Bool("insecure", false, "skip TLS certificate verification (development only)")
+	cmd.Flags().BoolVarP(&o.Insecure, ArgInsecure, "", false, "skip TLS certificate verification")
 }
 
 type ProofOptions struct {
@@ -2307,7 +2308,7 @@ func (o *RollupsProofOptions) AddFlags(cmd *cobra.Command) {
 type GetEvent struct {
 	URL                            string
 	FromBlock, ToBlock, FilterSize uint64
-	insecure                       *bool
+	Insecure                       bool
 }
 
 func (o *GetEvent) AddFlags(cmd *cobra.Command) {
@@ -2315,7 +2316,7 @@ func (o *GetEvent) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().Uint64VarP(&o.FromBlock, ArgFromBlock, "f", 0, "The start of the range of blocks to retrieve")
 	cmd.Flags().Uint64VarP(&o.ToBlock, ArgToBlock, "t", 0, "The end of the range of blocks to retrieve")
 	cmd.Flags().Uint64VarP(&o.FilterSize, ArgFilterSize, "i", 1000, "The batch size for individual filter queries")
-	o.insecure = cmd.Flags().Bool("insecure", false, "skip TLS certificate verification")
+	cmd.Flags().BoolVarP(&o.Insecure, ArgInsecure, "", false, "skip TLS certificate verification")
 	fatalIfError(cmd.MarkFlagRequired(ArgFromBlock))
 	fatalIfError(cmd.MarkFlagRequired(ArgToBlock))
 	fatalIfError(cmd.MarkFlagRequired(ArgRPCURL))
@@ -2554,7 +2555,7 @@ or if it's actually an intermediate hash.`,
 	inputUlxlyArgs.timeout = ulxlyBridgeAndClaimCmd.PersistentFlags().Uint64(ArgTimeout, 60, "the amount of time to wait while trying to confirm a transaction receipt")
 	inputUlxlyArgs.gasPrice = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgGasPrice, "", "the gas price to be used")
 	inputUlxlyArgs.dryRun = ulxlyBridgeAndClaimCmd.PersistentFlags().Bool(ArgDryRun, false, "do all of the transaction steps but do not send the transaction")
-	inputUlxlyArgs.insecure = ulxlyBridgeAndClaimCmd.PersistentFlags().Bool("insecure", false, "skip TLS certificate verification")
+	inputUlxlyArgs.insecure = ulxlyBridgeAndClaimCmd.PersistentFlags().Bool(ArgInsecure, false, "skip TLS certificate verification")
 	fatalIfError(ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgBridgeAddress))
 
 	// bridge specific args
