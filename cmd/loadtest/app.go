@@ -240,6 +240,7 @@ func initFlags() {
 	ltp.SummaryOutputMode = LoadtestCmd.PersistentFlags().String("output-mode", "text", "Format mode for summary output (json | text)")
 	ltp.LegacyTransactionMode = LoadtestCmd.PersistentFlags().Bool("legacy", false, "Send a legacy transaction instead of an EIP1559 transaction.")
 	ltp.FireAndForget = LoadtestCmd.PersistentFlags().Bool("fire-and-forget", false, "Send transactions and load without waiting for it to be mined.")
+	LoadtestCmd.PersistentFlags().BoolVar(ltp.FireAndForget, "sendOnly", false, "Alias for --fire-and-forget.")
 	ltp.BlobFeeCap = LoadtestCmd.Flags().Uint64("blob-fee-cap", 100000, "The blob fee cap, or the maximum blob fee per chunk, in Gwei.")
 	ltp.SendingAccountsCount = LoadtestCmd.Flags().Uint64("sending-accounts-count", 1, "The number of sending accounts to use. This is useful for avoiding pool account queue.")
 	ltp.AccountFundingAmount = defaultAccountFundingAmount
