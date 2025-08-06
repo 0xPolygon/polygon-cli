@@ -139,10 +139,10 @@ type TviewRenderer struct {
 	searchForm *tview.Form
 
 	// Modal state management
-	isModalActive      bool
-	activeModalName    string
-	previousPageName   string // Track page before modal was opened
-	modalStateMu       sync.RWMutex
+	isModalActive    bool
+	activeModalName  string
+	previousPageName string // Track page before modal was opened
+	modalStateMu     sync.RWMutex
 }
 
 // NewTviewRenderer creates a new TUI renderer using tview
@@ -778,7 +778,6 @@ func formatConnectionStatus(latency time.Duration) string {
 	}
 }
 
-
 // formatRelativeTime converts Unix timestamp to human-readable relative time
 func formatRelativeTime(timestamp uint64) string {
 	now := time.Now().Unix()
@@ -870,12 +869,12 @@ func formatBaseFee(baseFee *big.Int) string {
 	}
 
 	units := []unit{
-		{new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil), "ether", new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil), 3},  // 10^18
-		{new(big.Int).Exp(big.NewInt(10), big.NewInt(15), nil), "milli", new(big.Int).Exp(big.NewInt(10), big.NewInt(15), nil), 3},  // 10^15 milliether
-		{new(big.Int).Exp(big.NewInt(10), big.NewInt(12), nil), "micro", new(big.Int).Exp(big.NewInt(10), big.NewInt(12), nil), 3},  // 10^12 microether
-		{new(big.Int).Exp(big.NewInt(10), big.NewInt(9), nil), "gwei", new(big.Int).Exp(big.NewInt(10), big.NewInt(9), nil), 3},     // 10^9 gwei
-		{new(big.Int).Exp(big.NewInt(10), big.NewInt(6), nil), "mwei", new(big.Int).Exp(big.NewInt(10), big.NewInt(6), nil), 3},     // 10^6 megawei
-		{new(big.Int).Exp(big.NewInt(10), big.NewInt(3), nil), "kwei", new(big.Int).Exp(big.NewInt(10), big.NewInt(3), nil), 3},     // 10^3 kilowei
+		{new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil), "ether", new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil), 3}, // 10^18
+		{new(big.Int).Exp(big.NewInt(10), big.NewInt(15), nil), "milli", new(big.Int).Exp(big.NewInt(10), big.NewInt(15), nil), 3}, // 10^15 milliether
+		{new(big.Int).Exp(big.NewInt(10), big.NewInt(12), nil), "micro", new(big.Int).Exp(big.NewInt(10), big.NewInt(12), nil), 3}, // 10^12 microether
+		{new(big.Int).Exp(big.NewInt(10), big.NewInt(9), nil), "gwei", new(big.Int).Exp(big.NewInt(10), big.NewInt(9), nil), 3},    // 10^9 gwei
+		{new(big.Int).Exp(big.NewInt(10), big.NewInt(6), nil), "mwei", new(big.Int).Exp(big.NewInt(10), big.NewInt(6), nil), 3},    // 10^6 megawei
+		{new(big.Int).Exp(big.NewInt(10), big.NewInt(3), nil), "kwei", new(big.Int).Exp(big.NewInt(10), big.NewInt(3), nil), 3},    // 10^3 kilowei
 		{big.NewInt(1), "wei", big.NewInt(1), 0}, // wei (no decimals)
 	}
 
@@ -899,7 +898,7 @@ func formatBaseFee(baseFee *big.Int) string {
 			// Format with appropriate precision
 			formatStr := fmt.Sprintf("%%.%df %%s", u.decimals)
 			resultFloat, _ := result.Float64()
-			
+
 			// Remove trailing zeros from decimal representation
 			formatted := fmt.Sprintf(formatStr, resultFloat, u.name)
 			return removeTrailingZeros(formatted)
@@ -1393,7 +1392,7 @@ func (t *TviewRenderer) showSearchError(message string) {
 func (t *TviewRenderer) showModal(name string) {
 	// Get current page before showing modal
 	currentPage, _ := t.pages.GetFrontPage()
-	
+
 	t.modalStateMu.Lock()
 	t.isModalActive = true
 	t.activeModalName = name
