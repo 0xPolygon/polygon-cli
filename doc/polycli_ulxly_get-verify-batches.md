@@ -68,6 +68,7 @@ serve as the input to the rollup-proof command.
   -i, --filter-size uint                The batch size for individual filter queries (default 1000)
   -f, --from-block uint                 The start of the range of blocks to retrieve
   -h, --help                            help for get-verify-batches
+      --insecure                        skip TLS certificate verification
   -a, --rollup-manager-address string   The address of the rollup manager contract
   -u, --rpc-url string                  The RPC URL to read the events data
   -t, --to-block uint                   The end of the range of blocks to retrieve
