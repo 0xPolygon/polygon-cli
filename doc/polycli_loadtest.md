@@ -134,7 +134,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
   -n, --requests int                           Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
   -r, --rpc-url string                         The RPC endpoint url (default "http://localhost:8545")
       --seed int                               A seed for generating random values and addresses (default 123456)
-      --sendOnly                               Alias for --fire-and-forget.
+      --send-only                              Alias for --fire-and-forget.
       --sending-accounts-count uint            The number of sending accounts to use. This is useful for avoiding pool account queue. (default 1)
       --sending-accounts-file string           The file containing the sending accounts private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending accounts for different execution cycles.
       --store-data-size uint                   If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
