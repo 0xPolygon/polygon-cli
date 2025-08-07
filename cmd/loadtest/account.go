@@ -445,7 +445,7 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 				Str("txHash", tx.Hash().Hex()).
 				Msg("transaction to fund account sent")
 
-			receipt, err := ap.waitMined(ctx, tx)
+			receipt, err := waitReceipt(ctx, ap.client, tx.Hash())
 			if err != nil {
 				log.Error().
 					Str("address", tx.To().Hex()).
@@ -670,7 +670,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 				Str("txHash", tx.Hash().Hex()).
 				Msg("transaction to return funds sent")
 
-			_, err = ap.waitMined(ctx, tx)
+			_, err = waitReceiptWithTimeout(ctx, ap.client, tx.Hash(), time.Minute)
 			if err != nil {
 				log.Error().
 					Str("address", tx.To().Hex()).
@@ -852,7 +852,7 @@ func (ap *AccountPool) fund(ctx context.Context, acc Account, forcedNonce *uint6
 
 	// Wait for the transaction to be mined
 	if waitToFund {
-		receipt, err := ap.waitMined(ctx, signedTx)
+		receipt, err := waitReceipt(ctx, ap.client, signedTx.Hash())
 		if err != nil {
 			log.Error().
 				Str("address", acc.address.Hex()).
@@ -933,21 +933,6 @@ func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.Pr
 	}
 
 	return signedTx, nil
-}
-
-// Waits for the transaction to be mined
-func (ap *AccountPool) waitMined(ctx context.Context, tx *types.Transaction) (*types.Receipt, error) {
-	ctxTimeout, cancel := context.WithTimeout(ctx, time.Minute)
-	defer cancel()
-	receipt, err := bind.WaitMined(ctxTimeout, ap.client, tx)
-	if err != nil {
-		log.Error().
-			Str("txHash", tx.Hash().Hex()).
-			Err(err).
-			Msg("Unable to wait for transaction to be mined")
-		return nil, err
-	}
-	return receipt, nil
 }
 
 // Returns the address and private key of the given private key

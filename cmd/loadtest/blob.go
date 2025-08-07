@@ -29,7 +29,7 @@ func generateRandomBlobData(size int) ([]byte, error) {
 		return nil, err
 	}
 	if n != size {
-		return nil, fmt.Errorf("Could not create random blob data with size %d: %v", size, err)
+		return nil, fmt.Errorf("could not create random blob data with size %d: %v", size, err)
 	}
 	return data, nil
 }
@@ -56,7 +56,7 @@ func createBlob(data []byte) kzg4844.Blob {
 func generateBlobCommitment(data []byte) (*BlobCommitment, error) {
 	dataLen := len(data)
 	if dataLen > params.BlobTxFieldElementsPerBlob*(params.BlobTxBytesPerFieldElement-1) {
-		return nil, fmt.Errorf("Blob data longer than allowed (length: %v, limit: %v)", dataLen, params.BlobTxFieldElementsPerBlob*(params.BlobTxBytesPerFieldElement-1))
+		return nil, fmt.Errorf("blob data longer than allowed (length: %v, limit: %v)", dataLen, params.BlobTxFieldElementsPerBlob*(params.BlobTxBytesPerFieldElement-1))
 	}
 	blobCommitment := BlobCommitment{
 		Blob: createBlob(data),
@@ -66,13 +66,13 @@ func generateBlobCommitment(data []byte) (*BlobCommitment, error) {
 	// Generate blob commitment
 	blobCommitment.Commitment, err = kzg4844.BlobToCommitment(&blobCommitment.Blob)
 	if err != nil {
-		return nil, fmt.Errorf("Failed generating blob commitment: %w", err)
+		return nil, fmt.Errorf("failed generating blob commitment: %w", err)
 	}
 
 	// Generate blob proof
 	blobCommitment.Proof, err = kzg4844.ComputeBlobProof(&blobCommitment.Blob, blobCommitment.Commitment)
 	if err != nil {
-		return nil, fmt.Errorf("Failed generating blob proof: %w", err)
+		return nil, fmt.Errorf("failed generating blob proof: %w", err)
 	}
 
 	// Build versioned hash
@@ -90,13 +90,13 @@ func appendBlobCommitment(tx *types.BlobTx) error {
 	blobRefBytes, _ = generateRandomBlobData(blobLen)
 
 	if blobRefBytes == nil {
-		return fmt.Errorf("Unknown blob ref")
+		return fmt.Errorf("unknown blob ref")
 	}
 	blobBytes = append(blobBytes, blobRefBytes...)
 
 	blobCommitment, err := generateBlobCommitment(blobBytes)
 	if err != nil {
-		return fmt.Errorf("Invalid blob: %w", err)
+		return fmt.Errorf("invalid blob: %w", err)
 	}
 
 	tx.BlobHashes = append(tx.BlobHashes, blobCommitment.VersionedHash)
