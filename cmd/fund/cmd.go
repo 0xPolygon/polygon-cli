@@ -31,13 +31,15 @@ type cmdFundParams struct {
 	FundingAmountInWei *big.Int
 	OutputFile         *string
 
+	KeyFile *string
+
 	FunderAddress *string
 }
 
 var (
 	//go:embed usage.md
-	usage  string
-	params cmdFundParams
+	usage               string
+	params              cmdFundParams
 	defaultFundingInWei = big.NewInt(50000000000000000) // 0.05 ETH
 )
 
@@ -70,7 +72,8 @@ func init() {
 	p.UseHDDerivation = flagSet.Bool("hd-derivation", true, "Derive wallets to fund from the private key in a deterministic way")
 	p.WalletAddresses = flagSet.StringSlice("addresses", nil, "Comma-separated list of wallet addresses to fund")
 	p.FundingAmountInWei = defaultFundingInWei
-	flagSet.Var(&flag_loader.BigIntValue{Val: p.FundingAmountInWei }, "eth-amount", "The amount of wei to send to each wallet")
+	flagSet.Var(&flag_loader.BigIntValue{Val: p.FundingAmountInWei}, "eth-amount", "The amount of wei to send to each wallet")
+	p.KeyFile = flagSet.String("key-file", "", "The file containing the accounts private keys, one per line.")
 
 	p.OutputFile = flagSet.StringP("file", "f", "wallets.json", "The output JSON file path for storing the addresses and private keys of funded wallets")
 
@@ -94,14 +97,18 @@ func checkFlags() error {
 	}
 
 	// Check private key flag.
-	if params.PrivateKey != nil && *params.PrivateKey == "" {
-		return errors.New("the private key is empty")
+	if params.PrivateKey != nil && *params.PrivateKey != "" {
+		// Check wallet flags.
+		if params.WalletsNumber != nil && *params.WalletsNumber == 0 {
+			return errors.New("the number of wallets to fund is set to zero")
+		}
+	} else {
+		// check accounts file flag.
+		if params.KeyFile == nil || *params.KeyFile == "" {
+			return errors.New("the private key or accounts file is not specified")
+		}
 	}
 
-	// Check wallet flags.
-	if params.WalletsNumber != nil && *params.WalletsNumber == 0 {
-		return errors.New("the number of wallets to fund is set to zero")
-	}
 	minValue := big.NewInt(1000000000)
 	if params.FundingAmountInWei != nil && params.FundingAmountInWei.Cmp(minValue) <= 0 {
 		return errors.New("the funding amount must be greater than 1000000000")
