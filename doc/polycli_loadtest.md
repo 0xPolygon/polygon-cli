@@ -131,6 +131,8 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --random-recipients                      When doing a transfer test, should we send to random addresses rather than DEADBEEFx5
       --rate-limit float                       An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together (default 4)
       --recall-blocks uint                     The number of blocks that we'll attempt to fetch for recall (default 50)
+      --receipt-retry-initial-delay-ms uint    Initial delay in milliseconds for receipt polling retry. Uses exponential backoff with jitter. (default 100)
+      --receipt-retry-max uint                 Maximum number of attempts to poll for transaction receipt when --wait-for-receipt is enabled. (default 30)
   -n, --requests int                           Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
   -r, --rpc-url string                         The RPC endpoint url (default "http://localhost:8545")
       --seed int                               A seed for generating random values and addresses (default 123456)
@@ -141,6 +143,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --summarize                              Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time
   -t, --time-limit int                         Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit. (default -1)
       --to-address string                      The address that we're going to send to (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
+      --wait-for-receipt                       If set to true, the load test will wait for the transaction receipt to be mined. If set to false, the load test will not wait for the transaction receipt and will just send the transaction.
 ```
 
 The command also inherits flags from parent commands.
