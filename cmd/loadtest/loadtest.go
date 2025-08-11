@@ -899,6 +899,12 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				if !*inputLoadTestParams.SendOnly {
 					recordSample(routineID, requestID, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
 				}
+				if tErr == nil && *inputLoadTestParams.WaitForReceipt {
+					receiptMaxRetries := *inputLoadTestParams.ReceiptRetryMax
+					receiptRetryInitialDelayMs := *inputLoadTestParams.ReceiptRetryInitialDelayMs
+					_, tErr = waitReceiptWithRetries(ctx, c, ltTxHash, receiptMaxRetries, receiptRetryInitialDelayMs)
+				}
+
 				if tErr != nil {
 					log.Error().
 						Int64("routineID", routineID).

@@ -1,0 +1,84 @@
+package loadtest
+
+import (
+	"context"
+	"fmt"
+	"math/rand"
+	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
+)
+
+// waitReceipt waits for a transaction receipt with default parameters.
+func waitReceipt(ctx context.Context, client *ethclient.Client, txHash common.Hash) (*types.Receipt, error) {
+	return internalWaitReceipt(ctx, client, txHash, 0, 0, 0)
+}
+
+// waitReceiptWithRetries waits for a transaction receipt with retries and exponential backoff.
+func waitReceiptWithRetries(ctx context.Context, client *ethclient.Client, txHash common.Hash, maxRetries uint, initialDelayMs uint) (*types.Receipt, error) {
+	return internalWaitReceipt(ctx, client, txHash, maxRetries, initialDelayMs, 0)
+}
+
+// waitReceiptWithTimeout waits for a transaction receipt with a specified timeout.
+func waitReceiptWithTimeout(ctx context.Context, client *ethclient.Client, txHash common.Hash, timeout time.Duration) (*types.Receipt, error) {
+	return internalWaitReceipt(ctx, client, txHash, 0, 0, timeout)
+}
+
+// waitReceiptWithRetriesAndTimeout waits for a transaction receipt with retries, exponential backoff, and a timeout.
+func internalWaitReceipt(ctx context.Context, client *ethclient.Client, txHash common.Hash, maxRetries uint, initialDelayMs uint, timeout time.Duration) (*types.Receipt, error) {
+	// Set defaults for zero values
+	effectiveTimeout := timeout
+	if effectiveTimeout == 0 {
+		effectiveTimeout = 1 * time.Minute // Default: 1 minute
+	}
+
+	// Create context with timeout
+	timeoutCtx, cancel := context.WithTimeout(ctx, effectiveTimeout)
+	defer cancel()
+
+	effectiveInitialDelayMs := initialDelayMs
+	if effectiveInitialDelayMs == 0 {
+		effectiveInitialDelayMs = 100 // Default: 100ms
+	} else if effectiveInitialDelayMs < 10 {
+		effectiveInitialDelayMs = 10 // Minimum 10ms
+	}
+
+	for attempt := uint(0); ; attempt++ {
+		receipt, err := client.TransactionReceipt(timeoutCtx, txHash)
+		if err == nil && receipt != nil {
+			return receipt, nil
+		}
+
+		// If maxRetries > 0 and we've reached the limit, exit
+		// Note: effectiveMaxRetries is always > 0 due to default above
+		if maxRetries > 0 && attempt >= maxRetries-1 {
+			return nil, fmt.Errorf("failed to get receipt after %d attempts: %w", maxRetries, err)
+		}
+
+		// Calculate delay
+		baseDelay := time.Duration(effectiveInitialDelayMs) * time.Millisecond
+		exponentialDelay := baseDelay * time.Duration(1<<attempt)
+
+		// Add cap to prevent extremely long delays
+		maxDelay := 30 * time.Second
+		if exponentialDelay > maxDelay {
+			exponentialDelay = maxDelay
+		}
+
+		maxJitter := exponentialDelay / 2
+		if maxJitter <= 0 {
+			maxJitter = 1 * time.Millisecond
+		}
+		jitter := time.Duration(rand.Int63n(int64(maxJitter)))
+		totalDelay := exponentialDelay + jitter
+
+		select {
+		case <-timeoutCtx.Done():
+			return nil, timeoutCtx.Err()
+		case <-time.After(totalDelay):
+			// Continue
+		}
+	}
+}
