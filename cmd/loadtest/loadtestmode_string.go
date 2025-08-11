@@ -11,25 +11,21 @@ func _() {
 	_ = x[loadTestModeERC20-0]
 	_ = x[loadTestModeERC721-1]
 	_ = x[loadTestModeBlob-2]
-	_ = x[loadTestModeCall-3]
-	_ = x[loadTestModeContractCall-4]
-	_ = x[loadTestModeDeploy-5]
-	_ = x[loadTestModeFunction-6]
-	_ = x[loadTestModeInscription-7]
-	_ = x[loadTestModeIncrement-8]
-	_ = x[loadTestModeRandomPrecompiledContract-9]
-	_ = x[loadTestModeSpecificPrecompiledContract-10]
-	_ = x[loadTestModeRandom-11]
-	_ = x[loadTestModeRecall-12]
-	_ = x[loadTestModeRPC-13]
-	_ = x[loadTestModeStore-14]
-	_ = x[loadTestModeTransaction-15]
-	_ = x[loadTestModeUniswapV3-16]
+	_ = x[loadTestModeContractCall-3]
+	_ = x[loadTestModeDeploy-4]
+	_ = x[loadTestModeInscription-5]
+	_ = x[loadTestModeIncrement-6]
+	_ = x[loadTestModeRandom-7]
+	_ = x[loadTestModeRecall-8]
+	_ = x[loadTestModeRPC-9]
+	_ = x[loadTestModeStore-10]
+	_ = x[loadTestModeTransaction-11]
+	_ = x[loadTestModeUniswapV3-12]
 }
 
-const _loadTestMode_name = "loadTestModeERC20loadTestModeERC721loadTestModeBlobloadTestModeCallloadTestModeContractCallloadTestModeDeployloadTestModeFunctionloadTestModeInscriptionloadTestModeIncrementloadTestModeRandomPrecompiledContractloadTestModeSpecificPrecompiledContractloadTestModeRandomloadTestModeRecallloadTestModeRPCloadTestModeStoreloadTestModeTransactionloadTestModeUniswapV3"
+const _loadTestMode_name = "loadTestModeERC20loadTestModeERC721loadTestModeBlobloadTestModeContractCallloadTestModeDeployloadTestModeInscriptionloadTestModeIncrementloadTestModeRandomloadTestModeRecallloadTestModeRPCloadTestModeStoreloadTestModeTransactionloadTestModeUniswapV3"
 
-var _loadTestMode_index = [...]uint16{0, 17, 35, 51, 67, 91, 109, 129, 152, 173, 210, 249, 267, 285, 300, 317, 340, 361}
+var _loadTestMode_index = [...]uint8{0, 17, 35, 51, 75, 93, 116, 137, 155, 173, 188, 205, 228, 249}
 
 func (i loadTestMode) String() string {
 	if i < 0 || i >= loadTestMode(len(_loadTestMode_index)-1) {
