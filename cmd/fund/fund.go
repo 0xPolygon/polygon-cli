@@ -52,10 +52,10 @@ func runFunding(ctx context.Context) error {
 
 	var addresses []common.Address
 
-	if len(*params.PrivateKey) > 0 { // get addresses from private key
-		addresses, err = getAddressesFromPrivateKey(ctx, err, c)
-	} else { // get addresses from key file
+	if len(*params.KeyFile) > 0 { // get addresses from key-file
 		addresses, err = getAddressesFromKeyFile(*params.KeyFile)
+	} else { // get addresses from key file
+		addresses, err = getAddressesFromPrivateKey(ctx, err, c)
 	}
 	// check errors after getting addresses
 	if err != nil {

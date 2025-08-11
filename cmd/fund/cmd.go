@@ -80,6 +80,9 @@ func init() {
 	// Marking flags as mutually exclusive
 	FundCmd.MarkFlagsMutuallyExclusive("addresses", "number")
 	FundCmd.MarkFlagsMutuallyExclusive("addresses", "hd-derivation")
+	FundCmd.MarkFlagsMutuallyExclusive("key-file", "addresses")
+	FundCmd.MarkFlagsMutuallyExclusive("key-file", "number")
+	FundCmd.MarkFlagsMutuallyExclusive("key-file", "hd-derivation")
 
 	// Funder contract parameters.
 	p.FunderAddress = flagSet.String("contract-address", "", "The address of a pre-deployed Funder contract")
@@ -97,16 +100,16 @@ func checkFlags() error {
 	}
 
 	// Check private key flag.
-	if params.PrivateKey != nil && *params.PrivateKey != "" {
-		// Check wallet flags.
-		if params.WalletsNumber != nil && *params.WalletsNumber == 0 {
-			return errors.New("the number of wallets to fund is set to zero")
-		}
-	} else {
-		// check accounts file flag.
-		if params.KeyFile == nil || *params.KeyFile == "" {
-			return errors.New("the private key or accounts file is not specified")
-		}
+	if params.PrivateKey != nil && *params.PrivateKey == "" {
+		return errors.New("the private key is empty")
+	}
+
+	// Check that exactly one method is used to specify target accounts
+	hasAddresses := params.WalletAddresses != nil && len(*params.WalletAddresses) > 0
+	hasKeyFile := params.KeyFile != nil && *params.KeyFile != ""
+	hasNumberFlag := params.WalletsNumber != nil && *params.WalletsNumber > 0
+	if !hasAddresses && !hasKeyFile && !hasNumberFlag {
+		return errors.New("must specify target accounts via --addresses, --key-file, or --number")
 	}
 
 	minValue := big.NewInt(1000000000)
