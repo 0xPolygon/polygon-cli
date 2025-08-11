@@ -42,36 +42,33 @@ type (
 		Concurrency                   *int64
 		BatchSize                     *uint64
 		TimeLimit                     *int64
-		ToRandom                      *bool
-		CallOnly                      *bool
-		CallOnlyLatestBlock           *bool
+		RandomRecipients              *bool
+		EthCallOnly                   *bool
+		EthCallOnlyLatestBlock        *bool
 		ChainID                       *uint64
 		PrivateKey                    *string
 		ToAddress                     *string
 		EthAmountInWei                *uint64
 		RateLimit                     *float64
 		AdaptiveRateLimit             *bool
-		SteadyStateTxPoolSize         *uint64
+		AdaptiveTargetSize            *uint64
 		AdaptiveRateLimitIncrement    *uint64
 		AdaptiveCycleDuration         *uint64
 		AdaptiveBackoffFactor         *float64
 		Modes                         *[]string
-		Function                      *uint64
-		Iterations                    *uint64
-		ByteCount                     *uint64
+		StoreDataSize                 *uint64
 		Seed                          *int64
-		LtAddress                     *string
+		LoadtestContractAddress       *string
 		ERC20Address                  *string
 		ERC721Address                 *string
 		DelAddress                    *string
-		ForceContractDeploy           *bool
 		ForceGasLimit                 *uint64
 		ForceGasPrice                 *uint64
 		ForcePriorityGasPrice         *uint64
 		ShouldProduceSummary          *bool
 		SummaryOutputMode             *string
 		LegacyTransactionMode         *bool
-		SendOnly                      *bool
+		FireAndForget                 *bool
 		RecallLength                  *uint64
 		ContractAddress               *string
 		ContractCallData              *string
@@ -82,11 +79,11 @@ type (
 		BlobFeeCap                    *uint64
 		StartNonce                    *uint64
 		GasPriceMultiplier            *float64
-		SendingAddressCount           *uint64
-		AddressFundingAmount          *big.Int
-		PreFundSendingAddresses       *bool
-		KeepFundedAmount              *bool
-		SendingAddressesFile          *string
+		SendingAccountsCount          *uint64
+		AccountFundingAmount          *big.Int
+		PreFundSendingAccounts        *bool
+		KeepFundsAfterTest            *bool
+		SendingAccountsFile           *string
 		Proxy                         *string
 		WaitForReceipt                *bool
 		ReceiptRetryMax               *uint
@@ -166,8 +163,8 @@ var (
 		0xF0, 0x0D, 0xBA, 0xBE,
 	}
 
-	randSrc        *rand.Rand
-	defaultFunding = new(big.Int).SetUint64(0) // 1 ETH
+	randSrc                     *rand.Rand
+	defaultAccountFundingAmount = new(big.Int).SetUint64(0) // 1 ETH
 )
 
 // LoadtestCmd represents the loadtest command
@@ -225,18 +222,17 @@ func initFlags() {
 	ltp.PrivateKey = LoadtestCmd.PersistentFlags().String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to send transactions")
 	ltp.ChainID = LoadtestCmd.PersistentFlags().Uint64("chain-id", 0, "The chain id for the transactions.")
 	ltp.ToAddress = LoadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
-	ltp.ToRandom = LoadtestCmd.PersistentFlags().Bool("to-random", false, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
-	ltp.CallOnly = LoadtestCmd.PersistentFlags().Bool("call-only", false, "When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.")
-	ltp.CallOnlyLatestBlock = LoadtestCmd.PersistentFlags().Bool("call-only-latest", false, "When using call only mode with recall, should we execute on the latest block or on the original block")
+	ltp.RandomRecipients = LoadtestCmd.PersistentFlags().Bool("random-recipients", false, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
+	ltp.EthCallOnly = LoadtestCmd.PersistentFlags().Bool("eth-call-only", false, "When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.")
+	ltp.EthCallOnlyLatestBlock = LoadtestCmd.PersistentFlags().Bool("eth-call-only-latest", false, "When using call only mode with recall, should we execute on the latest block or on the original block")
 	ltp.EthAmountInWei = LoadtestCmd.PersistentFlags().Uint64("eth-amount-in-wei", 0, "The amount of ether in wei to send on every transaction")
 	ltp.RateLimit = LoadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
 	ltp.AdaptiveRateLimit = LoadtestCmd.PersistentFlags().Bool("adaptive-rate-limit", false, "Enable AIMD-style congestion control to automatically adjust request rate")
-	ltp.SteadyStateTxPoolSize = LoadtestCmd.PersistentFlags().Uint64("steady-state-tx-pool-size", 1000, "When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off.")
+	ltp.AdaptiveTargetSize = LoadtestCmd.PersistentFlags().Uint64("adaptive-target-size", 1000, "When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off.")
 	ltp.AdaptiveRateLimitIncrement = LoadtestCmd.PersistentFlags().Uint64("adaptive-rate-limit-increment", 50, "When using adaptive rate limiting, this flag controls the size of the additive increases.")
 	ltp.AdaptiveCycleDuration = LoadtestCmd.PersistentFlags().Uint64("adaptive-cycle-duration-seconds", 10, "When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates")
 	ltp.AdaptiveBackoffFactor = LoadtestCmd.PersistentFlags().Float64("adaptive-backoff-factor", 2, "When using adaptive rate limiting, this flag controls our multiplicative decrease value.")
 	ltp.GasPriceMultiplier = LoadtestCmd.PersistentFlags().Float64("gas-price-multiplier", 1, "A multiplier to increase or decrease the gas price")
-	ltp.Iterations = LoadtestCmd.PersistentFlags().Uint64P("iterations", "i", 1, "If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size")
 	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
 	ltp.ForceGasLimit = LoadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas")
 	ltp.ForceGasPrice = LoadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be determined automatically, we can specify it manually")
@@ -246,40 +242,35 @@ func initFlags() {
 	ltp.BatchSize = LoadtestCmd.PersistentFlags().Uint64("batch-size", 999, "Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time.")
 	ltp.SummaryOutputMode = LoadtestCmd.PersistentFlags().String("output-mode", "text", "Format mode for summary output (json | text)")
 	ltp.LegacyTransactionMode = LoadtestCmd.PersistentFlags().Bool("legacy", false, "Send a legacy transaction instead of an EIP1559 transaction.")
-	ltp.SendOnly = LoadtestCmd.PersistentFlags().Bool("send-only", false, "Send transactions and load without waiting for it to be mined.")
+	ltp.FireAndForget = LoadtestCmd.PersistentFlags().Bool("fire-and-forget", false, "Send transactions and load without waiting for it to be mined.")
+	LoadtestCmd.PersistentFlags().BoolVar(ltp.FireAndForget, "send-only", false, "Alias for --fire-and-forget.")
 	ltp.BlobFeeCap = LoadtestCmd.Flags().Uint64("blob-fee-cap", 100000, "The blob fee cap, or the maximum blob fee per chunk, in Gwei.")
-	ltp.SendingAddressCount = LoadtestCmd.Flags().Uint64("sending-address-count", 1, "The number of sending addresses to use. This is useful for avoiding pool account queue.")
-	ltp.AddressFundingAmount = defaultFunding
-	LoadtestCmd.Flags().Var(&flag_loader.BigIntValue{Val: ltp.AddressFundingAmount}, "address-funding-amount", "The amount in wei to fund the sending addresses with. Set to 0 to disable account funding (useful for call-only mode or pre-funded addresses).")
-	ltp.PreFundSendingAddresses = LoadtestCmd.Flags().Bool("pre-fund-sending-addresses", false, "If set to true, the sending addresses will be funded at the start of the execution, otherwise all addresses will be funded when used for the first time.")
-	ltp.KeepFundedAmount = LoadtestCmd.Flags().Bool("keep-funded-amount", false, "If set to true, the funded amount will be kept in the sending addresses. Otherwise, the funded amount will be refunded back to the account used to fund the account.")
-	ltp.SendingAddressesFile = LoadtestCmd.Flags().String("sending-addresses-file", "", "The file containing the sending addresses private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending addresses for different execution cycles.")
+	ltp.SendingAccountsCount = LoadtestCmd.Flags().Uint64("sending-accounts-count", 1, "The number of sending accounts to use. This is useful for avoiding pool account queue.")
+	ltp.AccountFundingAmount = defaultAccountFundingAmount
+	LoadtestCmd.Flags().Var(&flag_loader.BigIntValue{Val: ltp.AccountFundingAmount}, "account-funding-amount", "The amount in wei to fund the sending accounts with. Set to 0 to disable account funding (useful for eth-call-only mode or pre-funded accounts).")
+	ltp.PreFundSendingAccounts = LoadtestCmd.Flags().Bool("pre-fund-sending-accounts", false, "If set to true, the sending accounts will be funded at the start of the execution, otherwise all accounts will be funded when used for the first time.")
+	ltp.KeepFundsAfterTest = LoadtestCmd.Flags().Bool("keep-funds-after-test", false, "If set to true, the funded amount will be kept in the sending accounts. Otherwise, the funded amount will be refunded back to the account used to fund the account.")
+	ltp.SendingAccountsFile = LoadtestCmd.Flags().String("sending-accounts-file", "", "The file containing the sending accounts private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending accounts for different execution cycles.")
 
 	// Local flags.
-	ltp.Modes = LoadtestCmd.Flags().StringSliceP("mode", "m", []string{"t"}, `The testing mode to use. It can be multiple like: "c,d,f,t"
+	ltp.Modes = LoadtestCmd.Flags().StringSliceP("mode", "m", []string{"t"}, `The testing mode to use. It can be multiple like: "d,t"
 2, erc20 - Send ERC20 tokens
 7, erc721 - Mint ERC721 tokens
 b, blob - Send blob transactions
-c, call - Call random contract functions
 cc, contract-call - Make contract calls
 d, deploy - Deploy contracts
-f, function - Call random contract functions
 i, inscription - Send inscription transactions
 inc, increment - Increment a counter
-pr, random-precompile - Call random precompiled contracts
-px, specific-precompile - Call specific precompiled contracts
 r, random - Random modes (does not include the following modes: blob, call, inscription, recall, rpc, uniswapv3)
 R, recall - Replay or simulate transactions
 rpc - Call random rpc methods
 s, store - Store bytes in a dynamic byte array
 t, transaction - Send transactions
 v3, uniswapv3 - Perform UniswapV3 swaps`)
-	ltp.Function = LoadtestCmd.Flags().Uint64P("function", "f", 1, "A specific function to be called if running with --mode f or a specific precompiled contract when running with --mode a")
-	ltp.ByteCount = LoadtestCmd.Flags().Uint64P("byte-count", "b", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
-	ltp.LtAddress = LoadtestCmd.Flags().String("lt-address", "", "The address of a pre-deployed load test contract")
+	ltp.StoreDataSize = LoadtestCmd.Flags().Uint64("store-data-size", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
+	ltp.LoadtestContractAddress = LoadtestCmd.Flags().String("loadtest-contract-address", "", "The address of a pre-deployed load test contract")
 	ltp.ERC20Address = LoadtestCmd.Flags().String("erc20-address", "", "The address of a pre-deployed ERC20 contract")
 	ltp.ERC721Address = LoadtestCmd.Flags().String("erc721-address", "", "The address of a pre-deployed ERC721 contract")
-	ltp.ForceContractDeploy = LoadtestCmd.Flags().Bool("force-contract-deploy", false, "Some load test modes don't require a contract deployment. Set this flag to true to force contract deployments. This will still respect the --lt-address flags.")
 	ltp.RecallLength = LoadtestCmd.Flags().Uint64("recall-blocks", 50, "The number of blocks that we'll attempt to fetch for recall")
 	ltp.ContractAddress = LoadtestCmd.Flags().String("contract-address", "", "The address of the contract that will be used in --mode contract-call. This must be paired up with --mode contract-call and --calldata")
 	ltp.ContractCallData = LoadtestCmd.Flags().String("calldata", "", "The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with --mode contract-call and --contract-address")

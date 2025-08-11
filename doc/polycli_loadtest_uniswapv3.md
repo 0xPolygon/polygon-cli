@@ -80,33 +80,33 @@ The command also inherits flags from parent commands.
       --adaptive-cycle-duration-seconds uint   When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates (default 10)
       --adaptive-rate-limit                    Enable AIMD-style congestion control to automatically adjust request rate
       --adaptive-rate-limit-increment uint     When using adaptive rate limiting, this flag controls the size of the additive increases. (default 50)
+      --adaptive-target-size uint              When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off. (default 1000)
       --batch-size uint                        Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time. (default 999)
-      --call-only                              When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.
-      --call-only-latest                       When using call only mode with recall, should we execute on the latest block or on the original block
       --chain-id uint                          The chain id for the transactions.
   -c, --concurrency int                        Number of requests to perform concurrently. Default is one request at a time. (default 1)
       --config string                          config file (default is $HOME/.polygon-cli.yaml)
       --eth-amount-in-wei uint                 The amount of ether in wei to send on every transaction
+      --eth-call-only                          When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.
+      --eth-call-only-latest                   When using call only mode with recall, should we execute on the latest block or on the original block
+      --fire-and-forget                        Send transactions and load without waiting for it to be mined.
       --gas-limit uint                         In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
       --gas-price uint                         In environments where the gas price can't be determined automatically, we can specify it manually
       --gas-price-multiplier float             A multiplier to increase or decrease the gas price (default 1)
-  -i, --iterations uint                        If we're making contract calls, this controls how many times the contract will execute the instruction in a loop. If we are making ERC721 Mints, this indicates the minting batch size (default 1)
       --legacy                                 Send a legacy transaction instead of an EIP1559 transaction.
       --nonce uint                             Use this flag to manually set the starting nonce
       --output-mode string                     Format mode for summary output (json | text) (default "text")
       --pretty-logs                            Should logs be in pretty format or JSON (default true)
       --priority-gas-price uint                Specify Gas Tip Price in the case of EIP-1559
       --private-key string                     The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
+      --random-recipients                      When doing a transfer test, should we send to random addresses rather than DEADBEEFx5
       --rate-limit float                       An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together (default 4)
   -n, --requests int                           Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
   -r, --rpc-url string                         The RPC endpoint url (default "http://localhost:8545")
       --seed int                               A seed for generating random values and addresses (default 123456)
-      --send-only                              Send transactions and load without waiting for it to be mined.
-      --steady-state-tx-pool-size uint         When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off. (default 1000)
+      --send-only                              Alias for --fire-and-forget.
       --summarize                              Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time
   -t, --time-limit int                         Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit. (default -1)
       --to-address string                      The address that we're going to send to (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
-      --to-random                              When doing a transfer test, should we send to random addresses rather than DEADBEEFx5
   -v, --verbosity int                          0 - Silent
                                                100 Panic
                                                200 Fatal
