@@ -935,18 +935,3 @@ func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.Pr
 
 	return signedTx, nil
 }
-
-// Waits for the transaction to be mined
-func (ap *AccountPool) waitMined(ctx context.Context, tx *types.Transaction) (*types.Receipt, error) {
-	ctxTimeout, cancel := context.WithTimeout(ctx, time.Minute)
-	defer cancel()
-	receipt, err := bind.WaitMined(ctxTimeout, ap.client, tx)
-	if err != nil {
-		log.Error().
-			Str("txHash", tx.Hash().Hex()).
-			Err(err).
-			Msg("Unable to wait for transaction to be mined")
-		return nil, err
-	}
-	return receipt, nil
-}
