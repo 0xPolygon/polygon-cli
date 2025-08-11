@@ -54,8 +54,8 @@ func runFunding(ctx context.Context) error {
 
 	if len(*params.KeyFile) > 0 { // get addresses from key-file
 		addresses, err = getAddressesFromKeyFile(*params.KeyFile)
-	} else { // get addresses from key file
-		addresses, err = getAddressesFromPrivateKey(ctx, err, c)
+	} else { // get addresses from private key
+		addresses, err = getAddressesFromPrivateKey(ctx, c)
 	}
 	// check errors after getting addresses
 	if err != nil {
@@ -107,9 +107,10 @@ func getAddressesFromKeyFile(keyFilePath string) ([]common.Address, error) {
 	return addresses, nil
 }
 
-func getAddressesFromPrivateKey(ctx context.Context, err error, c *ethclient.Client) ([]common.Address, error) {
+func getAddressesFromPrivateKey(ctx context.Context, c *ethclient.Client) ([]common.Address, error) {
 	// Derive or generate a set of wallets.
 	var addresses []common.Address
+	var err error
 	if params.WalletAddresses != nil && *params.WalletAddresses != nil {
 		log.Info().Msg("Using addresses provided by the user")
 		addresses = make([]common.Address, len(*params.WalletAddresses))

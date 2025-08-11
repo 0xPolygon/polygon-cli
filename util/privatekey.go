@@ -10,7 +10,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog/log"
 )
 
@@ -28,7 +27,7 @@ func ReadPrivateKeysFromFile(sendingAddressesFile string) ([]*ecdsa.PrivateKey, 
 		if len(line) == 0 {
 			continue
 		}
-		privateKey, err := ethcrypto.HexToECDSA(strings.TrimPrefix(line, "0x"))
+		privateKey, err := crypto.HexToECDSA(strings.TrimPrefix(line, "0x"))
 		if err != nil {
 			log.Error().Err(err).Str("key", line).Msg("Unable to parse private key")
 			return nil, fmt.Errorf("unable to parse private key: %w", err)
