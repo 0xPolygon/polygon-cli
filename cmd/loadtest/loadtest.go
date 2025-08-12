@@ -1,9 +1,7 @@
 package loadtest
 
 import (
-	"bufio"
 	"context"
-	"crypto/ecdsa"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
@@ -317,7 +315,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 			Str("sendingAccountsFile", sendingAccountsFile).
 			Msg("Adding accounts from file to the account pool")
 
-		privateKeys, iErr := readPrivateKeysFromFile(sendingAccountsFile)
+		privateKeys, iErr := util.ReadPrivateKeysFromFile(sendingAccountsFile)
 		if iErr != nil {
 			log.Error().
 				Err(iErr).
@@ -386,35 +384,6 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	}
 
 	return nil
-}
-
-func readPrivateKeysFromFile(sendingAccountsFile string) ([]*ecdsa.PrivateKey, error) {
-	file, err := os.Open(sendingAccountsFile)
-	if err != nil {
-		return nil, fmt.Errorf("unable to open sending accounts file: %w", err)
-	}
-	defer file.Close()
-
-	var privateKeys []*ecdsa.PrivateKey
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if len(line) == 0 {
-			continue
-		}
-		privateKey, err := ethcrypto.HexToECDSA(strings.TrimPrefix(line, "0x"))
-		if err != nil {
-			log.Error().Err(err).Str("key", line).Msg("Unable to parse private key")
-			return nil, fmt.Errorf("unable to parse private key: %w", err)
-		}
-		privateKeys = append(privateKeys, privateKey)
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading sending accounts file: %w", err)
-	}
-
-	return privateKeys, nil
 }
 
 func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {

@@ -24,6 +24,13 @@ $ polycli fund --number 20 --hd-derivation=false
 3:58PM INF Wallets' address(es) and private key(s) saved to file fileName=wallets.json
 3:58PM INF Wallet(s) funded! 💸
 3:58PM INF Total execution time: 1.027506s
+
+# Fund wallets from a key file (one private key in hex per line).
+$ polycli fund --key-file=keys.txt
+3:58PM INF Starting bulk funding wallets
+3:58PM INF Wallet(s) derived from key file count=3
+3:58PM INF Wallet(s) funded! 💸
+3:58PM INF Total execution time: 1.2s
 ```
 
 Extract from `wallets.json`.
