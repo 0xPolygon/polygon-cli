@@ -72,6 +72,8 @@ const (
 
 	codeQualitySeed       = "code code code code code code code code code code code quality"
 	codeQualityPrivateKey = "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa"
+
+	oneEtherInWei = 1000000000000000000 // 1 ETH in wei
 )
 
 func characterToLoadTestMode(mode string) (loadTestMode, error) {
@@ -302,18 +304,30 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
 
+	err = initializeAccountPool(ctx, c, privateKey)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func initializeAccountPool(ctx context.Context, c *ethclient.Client, privateKey *ecdsa.PrivateKey) error {
+	var err error
 	sendingAccountsCount := *inputLoadTestParams.SendingAccountsCount
 	preFundSendingAccounts := *inputLoadTestParams.PreFundSendingAccounts
-	fundingAmount := inputLoadTestParams.AccountFundingAmount
+	accountFundingAmount := *inputLoadTestParams.AccountFundingAmount
 	sendingAccountsFile := *inputLoadTestParams.SendingAccountsFile
-	accountPool, err = NewAccountPool(ctx, c, privateKey, fundingAmount)
+	callOnly := *inputLoadTestParams.EthCallOnly
+
+	accountPool, err = NewAccountPool(ctx, c, privateKey, &accountFundingAmount)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to create account pool")
 		return fmt.Errorf("unable to create account pool. %w", err)
 	}
 
 	if len(sendingAccountsFile) > 0 {
-		log.Trace().
+		log.Info().
 			Str("sendingAccountsFile", sendingAccountsFile).
 			Msg("Adding accounts from file to the account pool")
 
@@ -324,65 +338,88 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 				Msg("Unable to read private keys from file")
 			return fmt.Errorf("unable to read private keys from file. %w", iErr)
 		}
-		if len(privateKeys) == 0 && *inputLoadTestParams.StartNonce > 0 {
+		if len(privateKeys) == 0 {
+			const errMsg = "no private keys found in sending accounts file"
+			log.Error().Str("sendingAccountsFile", sendingAccountsFile).Msg(errMsg)
+			return fmt.Errorf(errMsg)
+		}
+
+		if len(privateKeys) > 1 && *inputLoadTestParams.StartNonce > 0 {
 			log.Fatal().
 				Str("sendingAccountsFile", sendingAccountsFile).
 				Msg("nonce can't be set while using multiple sending accounts")
 		}
 
-		err = accountPool.AddN(ctx, privateKeys...)
-	} else if sendingAccountsCount > 1 {
-		log.Trace().
+		if len(privateKeys) == 1 {
+			var nonce *uint64
+			if *inputLoadTestParams.StartNonce > 0 {
+				nonce = inputLoadTestParams.StartNonce
+			}
+			err = accountPool.Add(ctx, privateKeys[0], nonce)
+		} else {
+			err = accountPool.AddN(ctx, privateKeys...)
+		}
+
+		sendingAccountsCount = uint64(len(privateKeys))
+	} else if sendingAccountsCount > 0 {
+		log.Info().
 			Uint64("sendingAccountsCount", sendingAccountsCount).
 			Msg("Adding random accounts to the account pool")
 
 		if *inputLoadTestParams.StartNonce > 0 {
 			log.Fatal().
 				Uint64("sendingAccountsCount", sendingAccountsCount).
-				Msg("nonce can't be set while using multiple sending accounts")
+				Msg("nonce can't be set while using random multiple sending accounts")
 		}
+
 		err = accountPool.AddRandomN(ctx, sendingAccountsCount)
 	} else {
-		log.Trace().
+		log.Info().
 			Uint64("sendingAccountsCount", sendingAccountsCount).
-			Msg("Using the same account for all transactions")
+			Msg("Adding single account from private key to the account pool")
 		var nonce *uint64
 		if *inputLoadTestParams.StartNonce > 0 {
 			nonce = inputLoadTestParams.StartNonce
 		}
 		err = accountPool.Add(ctx, privateKey, nonce)
 	}
-
 	if err != nil {
 		log.Error().Err(err).Msg("unable to set account pool")
 		return fmt.Errorf("unable to set account pool. %w", err)
 	}
 
-	// Only call FundAccounts() to pre fund accounts if preFundSendingAccounts enabled and sendingAccountsCount > 1.
-	// For a single account, it will not be prefunded.
-	if preFundSendingAccounts && sendingAccountsCount > 1 {
-		// Check if we need to auto-set funding amount for multiple accounts or pre-funding
-		if inputLoadTestParams.AccountFundingAmount.Cmp(new(big.Int)) > 0 {
-			err := accountPool.FundAccounts(ctx)
-			if err != nil {
-				log.Error().Err(err).Msg("Unable to fund sending accounts")
-				iErr := accountPool.ReturnFunds(ctx)
-				if iErr != nil {
-					log.Error().
-						Err(iErr).
-						Msg("There was an issue returning the funds from the sending accounts back to the funding account")
-					return fmt.Errorf("unable to return funds from sending accounts. %w", iErr)
-				}
-				return fmt.Errorf("unable to fund sending accounts. %w", err)
-			}
-		} else if !*inputLoadTestParams.EthCallOnly {
-			// When using multiple sending accounts and not using --eth-call-only and --account-funding-amount <= 0, we need to make sure the accounts get funded
-			// Set default funding to 1 ETH (1000000000000000000 wei)
-			defaultFunding := new(big.Int).SetUint64(1000000000000000000)
-			inputLoadTestParams.AccountFundingAmount = defaultFunding
-			log.Debug().
-				Msg("Multiple sending accounts detected with pre-funding enabled with zero funding amount - auto-setting funding amount to 1 ETH")
+	// Check if we need to pre-fund sending accounts
+	if sendingAccountsCount == 0 || callOnly {
+		log.Info().Msg("No sending accounts to pre-fund or call-only mode is enabled. Skipping pre-funding of sending accounts.")
+		return nil
+	}
+
+	// If pre-funding is disabled, we don't need to fund accounts right now
+	if !preFundSendingAccounts {
+		log.Info().Msg("pre-funding of sending accounts is disabled.")
+		return nil
+	}
+
+	// If pre-funding is enabled, we need to fund accounts
+	if accountFundingAmount.Cmp(new(big.Int)) == 0 {
+		// When using multiple sending accounts and not using --eth-call-only and --account-funding-amount <= 0,
+		// we need to make sure the accounts get funded. Set default funding to 1 ETH (1000000000000000000 wei)
+		accountPool.fundingAmount = new(big.Int).SetUint64(oneEtherInWei)
+		log.Debug().
+			Msg("Multiple sending accounts detected with pre-funding enabled with zero funding amount - auto-setting funding amount to 1 ETH")
+	}
+
+	err = accountPool.FundAccounts(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("unable to fund sending accounts")
+		iErr := accountPool.ReturnFunds(ctx)
+		if iErr != nil {
+			log.Error().
+				Err(iErr).
+				Msg("there was an issue returning the funds from the sending accounts back to the funding account")
+			return fmt.Errorf("unable to return funds from sending accounts. %w", iErr)
 		}
+		return fmt.Errorf("unable to fund sending accounts. %w", err)
 	}
 
 	return nil
