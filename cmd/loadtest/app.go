@@ -82,7 +82,7 @@ type (
 		SendingAccountsCount          *uint64
 		AccountFundingAmount          *big.Int
 		PreFundSendingAccounts        *bool
-		KeepFundsAfterTest            *bool
+		RefundRemainingFunds          *bool
 		SendingAccountsFile           *string
 		Proxy                         *string
 		WaitForReceipt                *bool
@@ -245,11 +245,11 @@ func initFlags() {
 	ltp.FireAndForget = LoadtestCmd.PersistentFlags().Bool("fire-and-forget", false, "Send transactions and load without waiting for it to be mined.")
 	LoadtestCmd.PersistentFlags().BoolVar(ltp.FireAndForget, "send-only", false, "Alias for --fire-and-forget.")
 	ltp.BlobFeeCap = LoadtestCmd.Flags().Uint64("blob-fee-cap", 100000, "The blob fee cap, or the maximum blob fee per chunk, in Gwei.")
-	ltp.SendingAccountsCount = LoadtestCmd.Flags().Uint64("sending-accounts-count", 1, "The number of sending accounts to use. This is useful for avoiding pool account queue.")
+	ltp.SendingAccountsCount = LoadtestCmd.Flags().Uint64("sending-accounts-count", 0, "The number of sending accounts to use. This is useful for avoiding pool account queue.")
 	ltp.AccountFundingAmount = defaultAccountFundingAmount
 	LoadtestCmd.Flags().Var(&flag_loader.BigIntValue{Val: ltp.AccountFundingAmount}, "account-funding-amount", "The amount in wei to fund the sending accounts with. Set to 0 to disable account funding (useful for eth-call-only mode or pre-funded accounts).")
 	ltp.PreFundSendingAccounts = LoadtestCmd.Flags().Bool("pre-fund-sending-accounts", false, "If set to true, the sending accounts will be funded at the start of the execution, otherwise all accounts will be funded when used for the first time.")
-	ltp.KeepFundsAfterTest = LoadtestCmd.Flags().Bool("keep-funds-after-test", false, "If set to true, the funded amount will be kept in the sending accounts. Otherwise, the funded amount will be refunded back to the account used to fund the account.")
+	ltp.RefundRemainingFunds = LoadtestCmd.Flags().Bool("refund-remaining-funds", false, "If set to true, the funded amount will be refunded to the funding account. Otherwise, the funded amount will remain in the sending accounts.")
 	ltp.SendingAccountsFile = LoadtestCmd.Flags().String("sending-accounts-file", "", "The file containing the sending accounts private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending accounts for different execution cycles.")
 
 	// Local flags.

@@ -105,7 +105,6 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --gas-price-multiplier float             A multiplier to increase or decrease the gas price (default 1)
   -h, --help                                   help for loadtest
       --inscription-content string             The inscription content that will be encoded as calldata. This must be paired up with --mode inscription (default "data:,{\"p\":\"erc-20\",\"op\":\"mint\",\"tick\":\"TEST\",\"amt\":\"1\"}")
-      --keep-funds-after-test                  If set to true, the funded amount will be kept in the sending accounts. Otherwise, the funded amount will be refunded back to the account used to fund the account.
       --legacy                                 Send a legacy transaction instead of an EIP1559 transaction.
       --loadtest-contract-address string       The address of a pre-deployed load test contract
   -m, --mode strings                           The testing mode to use. It can be multiple like: "d,t"
@@ -133,11 +132,12 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --recall-blocks uint                     The number of blocks that we'll attempt to fetch for recall (default 50)
       --receipt-retry-initial-delay-ms uint    Initial delay in milliseconds for receipt polling retry. Uses exponential backoff with jitter. (default 100)
       --receipt-retry-max uint                 Maximum number of attempts to poll for transaction receipt when --wait-for-receipt is enabled. (default 30)
+      --refund-remaining-funds                 If set to true, the funded amount will be refunded to the funding account. Otherwise, the funded amount will remain in the sending accounts.
   -n, --requests int                           Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results. (default 1)
   -r, --rpc-url string                         The RPC endpoint url (default "http://localhost:8545")
       --seed int                               A seed for generating random values and addresses (default 123456)
       --send-only                              Alias for --fire-and-forget.
-      --sending-accounts-count uint            The number of sending accounts to use. This is useful for avoiding pool account queue. (default 1)
+      --sending-accounts-count uint            The number of sending accounts to use. This is useful for avoiding pool account queue.
       --sending-accounts-file string           The file containing the sending accounts private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending accounts for different execution cycles.
       --store-data-size uint                   If we're in store mode, this controls how many bytes we'll try to store in our contract (default 1024)
       --summarize                              Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time
