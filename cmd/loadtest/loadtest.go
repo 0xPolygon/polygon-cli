@@ -773,7 +773,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		return err
 	}
 
-	err = accountPool.RefreshNonce(ctx, tops.From)
+	err = accountPool.RefreshNonce(ctx, tops.From, false)
 	if err != nil {
 		return err
 	}

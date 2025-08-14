@@ -242,8 +242,8 @@ func (ap *AccountPool) AddReusableNonce(ctx context.Context, address common.Addr
 	return nil
 }
 
-// Refreshes the nonce with the PendingNonceAt for the given address
-func (ap *AccountPool) RefreshNonce(ctx context.Context, address common.Address) error {
+// Refreshes the nonce for the given address
+func (ap *AccountPool) RefreshNonce(ctx context.Context, address common.Address, pending bool) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
 
@@ -259,7 +259,13 @@ func (ap *AccountPool) RefreshNonce(ctx context.Context, address common.Address)
 	if err != nil {
 		return err
 	}
-	nonce, err := ap.client.PendingNonceAt(context.Background(), address)
+
+	var nonce uint64
+	if !pending {
+		nonce, err = ap.client.NonceAt(ctx, address, nil)
+	} else {
+		nonce, err = ap.client.PendingNonceAt(ctx, address)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to get nonce: %w", err)
 	}
