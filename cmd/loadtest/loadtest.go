@@ -2,6 +2,7 @@ package loadtest
 
 import (
 	"context"
+	"crypto/ecdsa"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
