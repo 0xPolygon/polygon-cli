@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -202,7 +203,7 @@ func (ap *AccountPool) Add(ctx context.Context, privateKey *ecdsa.PrivateKey, st
 		return fmt.Errorf("failed to create account: %w", err)
 	}
 
-	addressHex, privateKeyHex := getAddressAndPrivateKeyHex(ctx, privateKey)
+	addressHex, privateKeyHex := util.GetAddressAndPrivateKeyHex(ctx, privateKey)
 	log.Debug().
 		Str("address", addressHex).
 		Str("privateKey", privateKeyHex).
@@ -505,7 +506,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	txCh := make(chan *types.Transaction, len(ap.accounts))
 	errCh := make(chan error, len(ap.accounts))
 
-	fundingAddressHex, _ := getAddressAndPrivateKeyHex(ctx, ap.fundingPrivateKey)
+	fundingAddressHex, _ := util.GetAddressAndPrivateKeyHex(ctx, ap.fundingPrivateKey)
 	fundingAddress := common.HexToAddress(fundingAddressHex)
 
 	err = ap.clientRateLimiter.Wait(ctx)
@@ -934,15 +935,4 @@ func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.Pr
 	}
 
 	return signedTx, nil
-}
-
-// Returns the address and private key of the given private key
-func getAddressAndPrivateKeyHex(ctx context.Context, privateKey *ecdsa.PrivateKey) (string, string) {
-	privateKeyBytes := crypto.FromECDSA(privateKey)
-	privateKeyHex := fmt.Sprintf("0x%x", privateKeyBytes)
-
-	publicKey := privateKey.Public().(*ecdsa.PublicKey)
-	address := crypto.PubkeyToAddress(*publicKey)
-
-	return address.String(), privateKeyHex
 }
