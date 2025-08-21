@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"sync/atomic"
 
 	"os"
 	"os/signal"
@@ -660,9 +661,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	if *ltp.RateLimit <= 0.0 {
 		rl = nil
 	}
-	rateLimitCtx, cancel := context.WithCancel(ctx)
 
-	defer cancel()
+	rateLimitCtx, rateLimitCancel := context.WithCancel(ctx)
+	defer rateLimitCancel()
 	if *ltp.AdaptiveRateLimit && rl != nil {
 		go updateRateLimit(rateLimitCtx, rl, rpc, accountPool, steadyStateTxPoolSize, adaptiveRateLimitIncrement, time.Duration(*ltp.AdaptiveCycleDuration)*time.Second, *ltp.AdaptiveBackoffFactor)
 	}
@@ -785,6 +786,30 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		return err
 	}
 
+	// monitor max base fee if configured
+	maxBaseFeeCtx, maxBaseFeeCtxCancel := context.WithCancel(ctx)
+	defer maxBaseFeeCtxCancel()
+	mustCheckMaxBaseFee := *ltp.MaxBaseFeeGwei > 0
+	var waitBaseFeeToDrop atomic.Bool
+	waitBaseFeeToDrop.Store(false)
+	if mustCheckMaxBaseFee {
+		go func(ctx context.Context, c *ethclient.Client) {
+			for {
+				gasPrice, _ := getSuggestedGasPrices(ctx, c)
+				if gasPrice.Uint64() > *ltp.MaxBaseFeeGwei {
+					waitBaseFeeToDrop.Store(true)
+					log.Warn().
+						Uint64("currentBaseFeeGwei", gasPrice.Uint64()).
+						Uint64("maxBaseFeeGwei", *ltp.MaxBaseFeeGwei).
+						Msg("Current base fee exceeds configured max base fee, waiting base fee to drop to continue")
+				} else {
+					waitBaseFeeToDrop.Store(false)
+				}
+				time.Sleep(500 * time.Millisecond)
+			}
+		}(maxBaseFeeCtx, c)
+	}
+
 	log.Debug().Msg("Starting main load test loop")
 	var wg sync.WaitGroup
 	for routineID := int64(0); routineID < maxRoutines; routineID++ {
@@ -839,6 +864,17 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					return
 				}
 				sendingTops.Nonce = new(big.Int).SetUint64(account.nonce)
+
+				if mustCheckMaxBaseFee {
+					for waitBaseFeeToDrop.Load() {
+						log.Debug().
+							Int64("routineID", routineID).
+							Int64("requestID", requestID).
+							Msg("go routine is waiting for base fee to drop")
+						time.Sleep(time.Second)
+					}
+				}
+
 				sendingTops = configureTransactOpts(ctx, c, sendingTops)
 
 				switch localMode {
@@ -941,7 +977,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
-	cancel()
+	rateLimitCancel()
+	maxBaseFeeCtxCancel()
 	if *ltp.EthCallOnly {
 		return nil
 	}
