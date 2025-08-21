@@ -793,19 +793,38 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	var waitBaseFeeToDrop atomic.Bool
 	waitBaseFeeToDrop.Store(false)
 	if mustCheckMaxBaseFee {
+		log.Info().
+			Msg("max base fee monitoring enabled")
 		go func(ctx context.Context, c *ethclient.Client) {
 			for {
-				gasPrice, _ := getSuggestedGasPrices(ctx, c)
-				if gasPrice.Uint64() > *ltp.MaxBaseFeeGwei {
-					waitBaseFeeToDrop.Store(true)
-					log.Warn().
-						Uint64("currentBaseFeeGwei", gasPrice.Uint64()).
-						Uint64("maxBaseFeeGwei", *ltp.MaxBaseFeeGwei).
-						Msg("Current base fee exceeds configured max base fee, waiting base fee to drop to continue")
+				header, err := c.HeaderByNumber(ctx, nil)
+				if err != nil {
+					log.Error().Err(err).Msg("Unable to get latest block header for base fee check")
+					continue
+				}
+
+				if header.BaseFee != nil {
+					baseFeeGwei := new(big.Int).Div(header.BaseFee, big.NewInt(1e9)) // Convert wei to gwei
+					if baseFeeGwei.Uint64() > *ltp.MaxBaseFeeGwei {
+						waitBaseFeeToDrop.Store(true)
+						log.Warn().
+							Msgf("PAUSE: base fee %d Gwei > limit %d Gwei", baseFeeGwei.Uint64(), *ltp.MaxBaseFeeGwei)
+					} else {
+						if waitBaseFeeToDrop.Load() {
+							waitBaseFeeToDrop.Store(false)
+							log.Info().
+								Msgf("RESUME: base fee %d Gwei ≤ limit %d Gwei", baseFeeGwei.Uint64(), *ltp.MaxBaseFeeGwei)
+						}
+					}
 				} else {
 					waitBaseFeeToDrop.Store(false)
 				}
-				time.Sleep(500 * time.Millisecond)
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					time.Sleep(time.Second)
+				}
 			}
 		}(maxBaseFeeCtx, c)
 	}
