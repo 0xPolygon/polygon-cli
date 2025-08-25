@@ -77,11 +77,7 @@ var DumpblocksCmd = &cobra.Command{
 
 		for start < end {
 			rangeStart := start
-			rangeEnd := rangeStart + inputDumpblocks.BatchSize
-
-			if rangeEnd > end {
-				rangeEnd = end
-			}
+			rangeEnd := min(rangeStart+inputDumpblocks.BatchSize, end)
 
 			pool <- true
 			wg.Add(1)
