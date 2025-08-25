@@ -107,7 +107,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --inscription-content string             The inscription content that will be encoded as calldata. This must be paired up with --mode inscription (default "data:,{\"p\":\"erc-20\",\"op\":\"mint\",\"tick\":\"TEST\",\"amt\":\"1\"}")
       --legacy                                 Send a legacy transaction instead of an EIP1559 transaction.
       --loadtest-contract-address string       The address of a pre-deployed load test contract
-      --max-base-fee-gwei uint                 The maximum base fee in gwei. If the base fee exceeds this value, sending tx will be paused and while paused, existing in-flight transactions continue to confirmation, but no additional SendTransaction calls occur. This is useful to avoid sending transactions when the network is congested.
+      --max-base-fee-wei uint                  The maximum base fee in wei. If the base fee exceeds this value, sending tx will be paused and while paused, existing in-flight transactions continue to confirmation, but no additional SendTransaction calls occur. This is useful to avoid sending transactions when the network is congested.
   -m, --mode strings                           The testing mode to use. It can be multiple like: "d,t"
                                                2, erc20 - Send ERC20 tokens
                                                7, erc721 - Mint ERC721 tokens
