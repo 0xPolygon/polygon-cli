@@ -26,7 +26,7 @@ func waitReceiptWithTimeout(ctx context.Context, client *ethclient.Client, txHas
 	return internalWaitReceipt(ctx, client, txHash, 0, 0, timeout)
 }
 
-// waitReceiptWithRetriesAndTimeout waits for a transaction receipt with retries, exponential backoff, and a timeout.
+// internalWaitReceipt waits for a transaction receipt with retries, exponential backoff, and a timeout.
 func internalWaitReceipt(ctx context.Context, client *ethclient.Client, txHash common.Hash, maxRetries uint, initialDelayMs uint, timeout time.Duration) (*types.Receipt, error) {
 	// Set defaults for zero values
 	effectiveTimeout := timeout
