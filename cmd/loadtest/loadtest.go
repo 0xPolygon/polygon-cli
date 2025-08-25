@@ -786,48 +786,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		return err
 	}
 
-	// monitor max base fee if configured
-	maxBaseFeeCtx, maxBaseFeeCtxCancel := context.WithCancel(ctx)
-	defer maxBaseFeeCtxCancel()
-	mustCheckMaxBaseFee := *ltp.MaxBaseFeeGwei > 0
-	var waitBaseFeeToDrop atomic.Bool
-	waitBaseFeeToDrop.Store(false)
-	if mustCheckMaxBaseFee {
-		log.Info().
-			Msg("max base fee monitoring enabled")
-		go func(ctx context.Context, c *ethclient.Client) {
-			for {
-				header, err := c.HeaderByNumber(ctx, nil)
-				if err != nil {
-					log.Error().Err(err).Msg("Unable to get latest block header for base fee check")
-					continue
-				}
-
-				if header.BaseFee != nil {
-					baseFeeGwei := new(big.Int).Div(header.BaseFee, big.NewInt(1e9)) // Convert wei to gwei
-					if baseFeeGwei.Uint64() > *ltp.MaxBaseFeeGwei {
-						waitBaseFeeToDrop.Store(true)
-						log.Warn().
-							Msgf("PAUSE: base fee %d Gwei > limit %d Gwei", baseFeeGwei.Uint64(), *ltp.MaxBaseFeeGwei)
-					} else {
-						if waitBaseFeeToDrop.Load() {
-							waitBaseFeeToDrop.Store(false)
-							log.Info().
-								Msgf("RESUME: base fee %d Gwei ≤ limit %d Gwei", baseFeeGwei.Uint64(), *ltp.MaxBaseFeeGwei)
-						}
-					}
-				} else {
-					waitBaseFeeToDrop.Store(false)
-				}
-				select {
-				case <-ctx.Done():
-					return
-				default:
-					time.Sleep(time.Second)
-				}
-			}
-		}(maxBaseFeeCtx, c)
-	}
+	mustCheckMaxBaseFee, maxBaseFeeCtxCancel, waitBaseFeeToDrop := setupBaseFeeMonitoring(ctx, c, ltp)
 
 	log.Debug().Msg("Starting main load test loop")
 	var wg sync.WaitGroup
@@ -1003,6 +962,80 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	return nil
+}
+
+func setupBaseFeeMonitoring(ctx context.Context, c *ethclient.Client, ltp loadTestParams) (bool, context.CancelFunc, *atomic.Bool) {
+	// monitor max base fee if configured
+	maxBaseFeeCtx, maxBaseFeeCtxCancel := context.WithCancel(ctx)
+	mustCheckMaxBaseFee := *ltp.MaxBaseFeeWei > 0
+	var waitBaseFeeToDrop atomic.Bool
+	waitBaseFeeToDrop.Store(false)
+	if mustCheckMaxBaseFee {
+		log.Info().
+			Msg("max base fee monitoring enabled")
+
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		// start a goroutine to monitor the base fee while load test is running
+		go func(ctx context.Context, c *ethclient.Client, waitToDrop *atomic.Bool, maxBaseFeeWei uint64) {
+			firstRun := true
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					currentBaseFeeIsGreater, currentBaseFeeWei, err := isCurrentBaseFeeGreaterThanMaxBaseFee(ctx, c, maxBaseFeeWei)
+					if err != nil {
+						log.Error().
+							Err(err).
+							Msg("Error checking base fee during load test")
+					} else {
+						if currentBaseFeeIsGreater {
+							log.Warn().
+								Msgf("PAUSE: base fee %d Wei > limit %d Wei", currentBaseFeeWei.Uint64(), maxBaseFeeWei)
+							waitToDrop.Store(true)
+						} else {
+							log.Info().
+								Msgf("RESUME: base fee %d Wei ≤ limit %d Wei", currentBaseFeeWei.Uint64(), maxBaseFeeWei)
+							waitToDrop.Store(false)
+						}
+
+						if firstRun {
+							firstRun = false
+							wg.Done()
+						}
+					}
+					time.Sleep(time.Second)
+				}
+			}
+		}(maxBaseFeeCtx, c, &waitBaseFeeToDrop, *ltp.MaxBaseFeeWei)
+
+		// wait for first run to complete so we know if we need to wait or not for base fee to drop
+		wg.Wait()
+	}
+	return mustCheckMaxBaseFee, maxBaseFeeCtxCancel, &waitBaseFeeToDrop
+}
+
+func isCurrentBaseFeeGreaterThanMaxBaseFee(ctx context.Context, c *ethclient.Client, maxBaseFee uint64) (bool, *big.Int, error) {
+	header, err := c.HeaderByNumber(ctx, nil)
+	if errors.Is(err, context.Canceled) {
+		log.Debug().Msg("max base fee monitoring context canceled")
+		return false, nil, nil
+	} else if err != nil {
+		log.Error().Err(err).Msg("Unable to get latest block header to check base fee")
+		return false, nil, err
+	}
+
+	if header.BaseFee != nil {
+		currentBaseFee := header.BaseFee
+		if currentBaseFee.Cmp(new(big.Int).SetUint64(maxBaseFee)) > 0 {
+			return true, currentBaseFee, nil
+		} else {
+			return false, currentBaseFee, nil
+		}
+	}
+
+	return false, nil, nil
 }
 
 func getLoadTestContract(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts) (ltAddr ethcommon.Address, ltContract *tester.LoadTester, err error) {
