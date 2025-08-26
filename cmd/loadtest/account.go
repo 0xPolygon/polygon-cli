@@ -780,10 +780,6 @@ func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 	if ap.currentAccountIndex >= len(ap.accounts) {
 		ap.currentAccountIndex = 0
 	}
-	log.Debug().
-		Str("address", account.address.Hex()).
-		Str("nonce", fmt.Sprintf("%d", account.nonce)).
-		Msg("account returned from pool")
 	return account, nil
 }
 
@@ -791,10 +787,6 @@ func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 func (ap *AccountPool) fundAccountIfNeeded(ctx context.Context, account Account, forcedNonce *uint64, waitToFund bool) (*types.Transaction, error) {
 	// If funding amount is zero, skip funding entirely
 	if !ap.isFundingEnabled() {
-		log.Debug().
-			Uint64("fundingAmount", ap.fundingAmount.Uint64()).
-			Stringer("address", account.address).
-			Msg("funding disabled - skipping account funding for account")
 		return nil, nil
 	}
 
@@ -954,8 +946,6 @@ func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.Pr
 func (ap *AccountPool) isFundingEnabled() bool {
 	callOnly := *inputLoadTestParams.EthCallOnly
 	if callOnly {
-		log.Debug().
-			Msg("sending account funding is disabled in call only mode")
 		return false
 	}
 
