@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/chainstore"
 	"github.com/0xPolygon/polygon-cli/indexer"
+	polymetrics "github.com/0xPolygon/polygon-cli/metrics"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gdamore/tcell/v2"
@@ -85,7 +87,10 @@ type TviewRenderer struct {
 	// Map to store blocks by hash for parent lookup
 	blocksByHash map[string]rpctypes.PolyBlock
 	// Column definitions for sorting
-	columns []ColumnDef
+	columns         []ColumnDef
+	// Signer cache to avoid expensive Ecrecover operations
+	signerCache   map[string]string // block hash -> signer address
+	signerCacheMu sync.RWMutex
 	// View state management
 	viewState ViewState
 	// Mutex for thread-safe access to blocks and viewState
@@ -152,11 +157,12 @@ func NewTviewRenderer(indexer *indexer.Indexer) *TviewRenderer {
 	columns := createColumnDefinitions()
 
 	renderer := &TviewRenderer{
-		BaseRenderer: NewBaseRenderer(indexer),
-		app:          app,
-		blocks:       make([]rpctypes.PolyBlock, 0),
-		blocksByHash: make(map[string]rpctypes.PolyBlock),
-		columns:      columns,
+		BaseRenderer:     NewBaseRenderer(indexer),
+		app:              app,
+		blocks:           make([]rpctypes.PolyBlock, 0),
+		blocksByHash:     make(map[string]rpctypes.PolyBlock),
+		columns:          columns,
+		signerCache:      make(map[string]string),
 		viewState: ViewState{
 			followMode:      true,     // Start in follow mode
 			sortColumn:      "number", // Default sort by block number
@@ -562,6 +568,48 @@ func (t *TviewRenderer) throttledDraw() {
 			})
 		}()
 	}
+}
+
+// getCachedSigner gets the signer for a block, using cache to avoid expensive Ecrecover calls
+func (t *TviewRenderer) getCachedSigner(block rpctypes.PolyBlock) string {
+	blockHash := block.Hash().Hex()
+	
+	// Check cache first
+	t.signerCacheMu.RLock()
+	if cached, exists := t.signerCache[blockHash]; exists {
+		t.signerCacheMu.RUnlock()
+		return cached
+	}
+	t.signerCacheMu.RUnlock()
+	
+	// If miner is non-zero, use the miner
+	zeroAddr := common.Address{}
+	if block.Miner() != zeroAddr {
+		result := truncateHash(block.Miner().Hex(), 6, 4)
+		// Cache the result
+		t.signerCacheMu.Lock()
+		t.signerCache[blockHash] = result
+		t.signerCacheMu.Unlock()
+		return result
+	}
+	
+	// If miner is zero, try to extract signer from extra data
+	if signer, err := polymetrics.Ecrecover(&block); err == nil {
+		signerAddr := common.HexToAddress("0x" + hex.EncodeToString(signer))
+		result := truncateHash(signerAddr.Hex(), 6, 4)
+		// Cache the result
+		t.signerCacheMu.Lock()
+		t.signerCache[blockHash] = result
+		t.signerCacheMu.Unlock()
+		return result
+	}
+	
+	// If can't extract signer, cache N/A result
+	result := "N/A"
+	t.signerCacheMu.Lock()
+	t.signerCache[blockHash] = result
+	t.signerCacheMu.Unlock()
+	return result
 }
 
 // consumeBlocks consumes blocks from the indexer and updates the table
