@@ -147,10 +147,7 @@ func readDeposit(cmd *cobra.Command) error {
 	}
 	currentBlock := fromBlock
 	for currentBlock < toBlock {
-		endBlock := currentBlock + filter
-		if endBlock > toBlock {
-			endBlock = toBlock
-		}
+		endBlock := min(currentBlock+filter, toBlock)
 
 		opts := bind.FilterOpts{
 			Start:   currentBlock,
@@ -237,10 +234,7 @@ func readClaim(cmd *cobra.Command) error {
 	}
 	currentBlock := fromBlock
 	for currentBlock < toBlock {
-		endBlock := currentBlock + filter
-		if endBlock > toBlock {
-			endBlock = toBlock
-		}
+		endBlock := min(currentBlock+filter, toBlock)
 
 		opts := bind.FilterOpts{
 			Start:   currentBlock,
@@ -319,10 +313,7 @@ func readVerifyBatches(cmd *cobra.Command) error {
 
 	currentBlock := fromBlock
 	for currentBlock < toBlock {
-		endBlock := currentBlock + filter
-		if endBlock > toBlock {
-			endBlock = toBlock
-		}
+		endBlock := min(currentBlock+filter, toBlock)
 		// Filter 0xd1ec3a1216f08b6eff72e169ceb548b782db18a6614852618d86bb19f3f9b0d3
 		query := ethereum.FilterQuery{
 			FromBlock: new(big.Int).SetUint64(currentBlock),

@@ -437,10 +437,7 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 				<-semaphore
 				wg.Done()
 			}()
-			end := i + subBatchSize
-			if end > len(blms) {
-				end = len(blms)
-			}
+			end := min(i+subBatchSize, len(blms))
 			subBatch := blms[i:end]
 
 			b := backoff.NewExponentialBackOff()

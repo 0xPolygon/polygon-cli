@@ -43,10 +43,7 @@ func createBlob(data []byte) kzg4844.Blob {
 		if fieldIndex == params.BlobTxFieldElementsPerBlob {
 			break
 		}
-		max := i + 31
-		if max > len(data) {
-			max = len(data)
-		}
+		max := min(i+31, len(data))
 		copy(blob[fieldIndex*32+1:], data[i:max])
 	}
 	return blob
