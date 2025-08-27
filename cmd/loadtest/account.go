@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -140,12 +141,6 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 		return nil, fmt.Errorf("unable to get latestBlockNumber: %w", err)
 	}
 
-	// Debug log for when fundingAmount==0.
-	if fundingAmount.Cmp(big.NewInt(0)) == 0 {
-		log.Debug().
-			Msg("address-funding-amount is zero - account funding disabled")
-	}
-
 	return &AccountPool{
 		currentAccountIndex: 0,
 		client:              client,
@@ -202,7 +197,7 @@ func (ap *AccountPool) Add(ctx context.Context, privateKey *ecdsa.PrivateKey, st
 		return fmt.Errorf("failed to create account: %w", err)
 	}
 
-	addressHex, privateKeyHex := getAddressAndPrivateKeyHex(ctx, privateKey)
+	addressHex, privateKeyHex := util.GetAddressAndPrivateKeyHex(ctx, privateKey)
 	log.Debug().
 		Str("address", addressHex).
 		Str("privateKey", privateKeyHex).
@@ -242,7 +237,7 @@ func (ap *AccountPool) AddReusableNonce(ctx context.Context, address common.Addr
 	return nil
 }
 
-// Refreshes the nonce with the PendingNonceAt for the given address
+// Refreshes the nonce for the given address
 func (ap *AccountPool) RefreshNonce(ctx context.Context, address common.Address) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
@@ -259,7 +254,8 @@ func (ap *AccountPool) RefreshNonce(ctx context.Context, address common.Address)
 	if err != nil {
 		return err
 	}
-	nonce, err := ap.client.PendingNonceAt(context.Background(), address)
+
+	nonce, err := ap.client.NonceAt(ctx, address, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get nonce: %w", err)
 	}
@@ -353,8 +349,15 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
 
+	if !ap.isFundingEnabled() {
+		log.Info().
+			Uint64("fundingAmount", ap.fundingAmount.Uint64()).
+			Msg("account funding is disabled, skipping funding of sending accounts")
+		return nil
+	}
+
 	log.Debug().
-		Msg("Funding all sending accounts")
+		Msg("funding all sending accounts")
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(ap.accounts))
@@ -364,7 +367,7 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 
 	tops, err := bind.NewKeyedTransactorWithChainID(ap.fundingPrivateKey, ap.chainID)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable create transaction signer")
+		log.Error().Err(err).Msg("unable create transaction signer")
 		return err
 	}
 
@@ -374,7 +377,7 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 	}
 	nonce, err := ap.client.PendingNonceAt(ctx, tops.From)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get nonce")
+		log.Error().Err(err).Msg("unable to get nonce")
 	}
 
 	err = ap.clientRateLimiter.Wait(ctx)
@@ -383,7 +386,7 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 	}
 	balance, err := ap.client.BalanceAt(ctx, tops.From, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get funding address balance")
+		log.Error().Err(err).Msg("unable to get funding account balance")
 	}
 
 	totalBalanceNeeded := new(big.Int).Mul(ap.fundingAmount, big.NewInt(int64(len(ap.accounts))))
@@ -445,19 +448,19 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 				Str("txHash", tx.Hash().Hex()).
 				Msg("transaction to fund account sent")
 
-			receipt, err := ap.waitMined(ctx, tx)
+			receipt, err := waitReceipt(ctx, ap.client, tx.Hash())
 			if err != nil {
 				log.Error().
 					Str("address", tx.To().Hex()).
 					Str("txHash", tx.Hash().Hex()).
-					Msgf("failed to wait for transaction to fund account")
+					Msg("failed to wait for transaction to fund account")
 				return err
 			} else if receipt.Status != types.ReceiptStatusSuccessful {
 				failed = true
 				log.Error().
 					Str("address", tx.To().Hex()).
 					Str("txHash", tx.Hash().Hex()).
-					Msgf("transaction to fund account has failed")
+					Msg("transaction to fund account has failed")
 			}
 		}
 	}
@@ -466,14 +469,15 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 		err := ap.ReturnFunds(ctx)
 		if err != nil {
 			log.Error().
-				Msgf("failed to return funds from accounts after funding failure: %v", err)
+				Err(err).
+				Msg("failed to return funds from accounts after funding failure")
 			return fmt.Errorf("failed to return funds from accounts after funding failure: %w", err)
 		}
 		return fmt.Errorf("some transactions to fund accounts failed")
 	}
 
 	log.Debug().
-		Msg("All accounts funded")
+		Msg("all accounts funded")
 
 	return nil
 }
@@ -483,8 +487,22 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
 
-	log.Debug().
-		Msg("Returning funds from sending addresses to funding address")
+	if !ap.isFundingEnabled() {
+		log.Debug().
+			Uint64("fundingAmount", ap.fundingAmount.Uint64()).
+			Msg("account funding is disabled, skipping returning funds from sending accounts")
+		return nil
+	}
+
+	if !ap.isRefundingEnabled() {
+		log.Debug().
+			Bool("refundRemainingFunds", *inputLoadTestParams.RefundRemainingFunds).
+			Msg("account refunding is disabled, skipping returning funds from sending accounts")
+		return nil
+	}
+
+	log.Info().
+		Msg("returning funds from sending accounts back to the funding account")
 
 	ethTransferGas := big.NewInt(21000)
 	err := ap.clientRateLimiter.Wait(ctx)
@@ -504,7 +522,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	txCh := make(chan *types.Transaction, len(ap.accounts))
 	errCh := make(chan error, len(ap.accounts))
 
-	fundingAddressHex, _ := getAddressAndPrivateKeyHex(ctx, ap.fundingPrivateKey)
+	fundingAddressHex, _ := util.GetAddressAndPrivateKeyHex(ctx, ap.fundingPrivateKey)
 	fundingAddress := common.HexToAddress(fundingAddressHex)
 
 	err = ap.clientRateLimiter.Wait(ctx)
@@ -513,7 +531,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	}
 	balanceBefore, err := ap.client.BalanceAt(ctx, fundingAddress, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get funding address balance")
+		log.Error().Err(err).Msg("unable to get funding account balance")
 		return err
 	}
 	log.Debug().
@@ -594,7 +612,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 								Str("to", fundingAddressHex).
 								Str("amount", amount.String()).
 								Str("balance", balance.String()).
-								Msg("Transaction amount overshot, adjusting amount and retrying")
+								Msg("transaction amount overshot, adjusting amount and retrying")
 
 							// if the amount is too high, we need to adjust it
 							errArr := strings.Split(iErr.Error(), "overshot")
@@ -605,7 +623,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 									Str("to", fundingAddressHex).
 									Str("amount", amount.String()).
 									Str("balance", balance.String()).
-									Msg("Unable to adjust amount due to overshot error")
+									Msg("unable to adjust amount due to overshot error")
 								errCh <- fmt.Errorf("failed to adjust amount due to overshot error: %w", iErr)
 								return
 							}
@@ -620,7 +638,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 									Str("to", fundingAddressHex).
 									Str("amount", amount.String()).
 									Str("balance", balance.String()).
-									Msg("Unable to parse overshot amount from error message")
+									Msg("unable to parse overshot amount from error message")
 								errCh <- fmt.Errorf("failed to parse overshot amount from error message: %w", iErr)
 								return
 							}
@@ -639,7 +657,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 							Str("amount", amount.String()).
 							Str("balance", balance.String()).
 							Interface("tx", signedTx).
-							Msg("Unable to send return balance transaction")
+							Msg("unable to send return balance transaction")
 						errCh <- fmt.Errorf("failed to send tx to return balance from acc %s to %s: %w", ap.accounts[i].address.String(), fundingAddressHex, iErr)
 						return
 					}
@@ -670,12 +688,12 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 				Str("txHash", tx.Hash().Hex()).
 				Msg("transaction to return funds sent")
 
-			_, err = ap.waitMined(ctx, tx)
+			_, err = waitReceiptWithTimeout(ctx, ap.client, tx.Hash(), time.Minute)
 			if err != nil {
 				log.Error().
 					Str("address", tx.To().Hex()).
 					Str("txHash", tx.Hash().Hex()).
-					Msgf("transaction to return funds failed")
+					Msg("transaction to return funds failed")
 				return err
 			}
 		}
@@ -687,7 +705,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	}
 	balanceAfter, err := ap.client.BalanceAt(ctx, fundingAddress, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to get funding address balance")
+		log.Error().Err(err).Msg("unable to get funding account balance")
 		return err
 	}
 
@@ -695,7 +713,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 		Str("address", fundingAddress.Hex()).
 		Str("previousBalance", balanceBefore.String()).
 		Str("currentBalance", balanceAfter.String()).
-		Msg("All accounts funds returned")
+		Msg("all accounts funds returned")
 
 	return nil
 }
@@ -743,12 +761,9 @@ func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 	}
 	account := ap.accounts[ap.currentAccountIndex]
 
-	// if test is call only, there is no need to fund accounts, return it
-	if !*inputLoadTestParams.CallOnly {
-		_, err := ap.fundAccountIfNeeded(ctx, account, nil, true)
-		if err != nil {
-			return Account{}, err
-		}
+	_, err := ap.fundAccountIfNeeded(ctx, account, nil, true)
+	if err != nil {
+		return Account{}, err
 	}
 	ap.accounts[ap.currentAccountIndex].funded = true
 
@@ -775,10 +790,11 @@ func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 // Checks multiple conditions of the account and funds it if needed
 func (ap *AccountPool) fundAccountIfNeeded(ctx context.Context, account Account, forcedNonce *uint64, waitToFund bool) (*types.Transaction, error) {
 	// If funding amount is zero, skip funding entirely
-	if ap.fundingAmount.Cmp(big.NewInt(0)) == 0 {
-		// Log only once per account pool
+	if !ap.isFundingEnabled() {
 		log.Debug().
-			Msg("Funding disabled - skipping account funding for all accounts")
+			Uint64("fundingAmount", ap.fundingAmount.Uint64()).
+			Stringer("address", account.address).
+			Msg("funding disabled - skipping account funding for account")
 		return nil, nil
 	}
 
@@ -833,31 +849,31 @@ func (ap *AccountPool) fund(ctx context.Context, acc Account, forcedNonce *uint6
 	// Fund the account
 	signedTx, err := ap.createEOATransferTx(ctx, ap.fundingPrivateKey, forcedNonce, acc.address, ap.fundingAmount)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to create EOA Transfer tx")
+		log.Error().Err(err).Msg("unable to create EOA Transfer tx")
 		return nil, err
 	}
 	log.Debug().
 		Str("address", acc.address.Hex()).
 		Uint64("amount", ap.fundingAmount.Uint64()).
-		Msgf("waiting account to get funded")
+		Msg("waiting account to get funded")
 	err = ap.clientRateLimiter.Wait(ctx)
 	if err != nil {
 		return nil, err
 	}
 	err = ap.client.SendTransaction(ctx, signedTx)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to send transaction")
+		log.Error().Err(err).Msg("unable to send transaction")
 		return nil, err
 	}
 
 	// Wait for the transaction to be mined
 	if waitToFund {
-		receipt, err := ap.waitMined(ctx, signedTx)
+		receipt, err := waitReceipt(ctx, ap.client, signedTx.Hash())
 		if err != nil {
 			log.Error().
 				Str("address", acc.address.Hex()).
 				Str("txHash", signedTx.Hash().Hex()).
-				Msgf("failed to wait for transaction to be mined")
+				Msg("failed to wait for transaction to be mined")
 			return nil, err
 		}
 
@@ -865,7 +881,7 @@ func (ap *AccountPool) fund(ctx context.Context, acc Account, forcedNonce *uint6
 			log.Error().
 				Str("address", acc.address.Hex()).
 				Str("txHash", receipt.TxHash.Hex()).
-				Msgf("failed to wait for transaction to be mined")
+				Msg("failed to wait for transaction to be mined")
 			return nil, fmt.Errorf("transaction failed")
 		}
 	}
@@ -878,7 +894,7 @@ func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.Pr
 
 	tops, err := bind.NewKeyedTransactorWithChainID(sender, ap.chainID)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable create transaction signer")
+		log.Error().Err(err).Msg("unable create transaction signer")
 		return nil, err
 	}
 	tops.GasLimit = uint64(21000)
@@ -897,7 +913,7 @@ func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.Pr
 		if err != nil {
 			log.Error().
 				Err(err).
-				Msg("Unable to get pending nonce")
+				Msg("unable to get pending nonce")
 			return nil, err
 		}
 	}
@@ -928,35 +944,44 @@ func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.Pr
 
 	signedTx, err := tops.Signer(tops.From, tx)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to sign transaction")
+		log.Error().Err(err).Msg("unable to sign transaction")
 		return nil, err
 	}
 
 	return signedTx, nil
 }
 
-// Waits for the transaction to be mined
-func (ap *AccountPool) waitMined(ctx context.Context, tx *types.Transaction) (*types.Receipt, error) {
-	ctxTimeout, cancel := context.WithTimeout(ctx, time.Minute)
-	defer cancel()
-	receipt, err := bind.WaitMined(ctxTimeout, ap.client, tx)
-	if err != nil {
-		log.Error().
-			Str("txHash", tx.Hash().Hex()).
-			Err(err).
-			Msg("Unable to wait for transaction to be mined")
-		return nil, err
+func (ap *AccountPool) isFundingEnabled() bool {
+	callOnly := *inputLoadTestParams.EthCallOnly
+	if callOnly {
+		log.Debug().
+			Msg("sending account funding is disabled in call only mode")
+		return false
 	}
-	return receipt, nil
+
+	hasFundingAmount := ap.fundingAmount != nil && ap.fundingAmount.Cmp(big.NewInt(0)) > 0
+	if !hasFundingAmount {
+		log.Debug().
+			Msg("sending account funding is disabled due to funding amount being zero")
+		return false
+	}
+
+	return true
 }
 
-// Returns the address and private key of the given private key
-func getAddressAndPrivateKeyHex(ctx context.Context, privateKey *ecdsa.PrivateKey) (string, string) {
-	privateKeyBytes := crypto.FromECDSA(privateKey)
-	privateKeyHex := fmt.Sprintf("0x%x", privateKeyBytes)
+func (ap *AccountPool) isRefundingEnabled() bool {
+	if !ap.isFundingEnabled() {
+		log.Debug().
+			Msg("refund remaining funds is disabled because funding is disabled")
+		return false
+	}
 
-	publicKey := privateKey.Public().(*ecdsa.PublicKey)
-	address := crypto.PubkeyToAddress(*publicKey)
+	shouldRefund := inputLoadTestParams.RefundRemainingFunds != nil && *inputLoadTestParams.RefundRemainingFunds
+	if !shouldRefund {
+		log.Debug().
+			Msg("refund remaining funds is disabled")
+		return false
+	}
 
-	return address.String(), privateKeyHex
+	return true
 }
