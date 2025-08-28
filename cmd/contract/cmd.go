@@ -75,7 +75,6 @@ func contract(cmd *cobra.Command) error {
 		return fmt.Errorf("failed to fetch contract balance: %w", err)
 	}
 
-	// Placeholder for demo purposes
 	info := ContractInfo{
 		Address:         address,
 		CreationReceipt: receipt,
@@ -143,7 +142,7 @@ func fetchContractCreationTx(ctx context.Context, client *ethclient.Client, cont
 		if tx.To() != nil {
 			continue // Not a contract creation transaction
 		}
-		if tx.Data() == nil || len(tx.Data()) == 0 {
+		if len(tx.Data()) == 0 {
 			continue // No data, not a contract creation transaction
 		}
 
@@ -170,4 +169,6 @@ func fetchContractCreationTx(ctx context.Context, client *ethclient.Client, cont
 func init() {
 	inputArgs.rpcURL = Cmd.PersistentFlags().String(ArgRpcURL, defaultRPCURL, "The RPC URL of the network containing the contract")
 	inputArgs.address = Cmd.PersistentFlags().String("address", "", "The contract address")
+
+	Cmd.MarkPersistentFlagRequired("address")
 }
