@@ -946,6 +946,7 @@ func claimAsset(cmd *cobra.Command) error {
 	depositNetwork := *inputUlxlyArgs.depositNetwork
 	bridgeServiceUrl := *inputUlxlyArgs.bridgeServiceURL
 	globalIndexOverride := *inputUlxlyArgs.globalIndex
+	proofGERHash := *inputUlxlyArgs.proofGER
 	wait := *inputUlxlyArgs.wait
 
 	// Dial Ethereum client
@@ -978,6 +979,11 @@ func claimAsset(cmd *cobra.Command) error {
 
 	// Call the bridge service RPC URL to get the merkle proofs and exit roots and parses them to the correct formats.
 	bridgeServiceProofEndpoint := fmt.Sprintf("%s/merkle-proof?deposit_cnt=%d&net_id=%d", bridgeServiceUrl, depositCount, depositNetwork)
+	if proofGERHash != "" {
+		bridgeServiceProofEndpoint = fmt.Sprintf("%s/merkle-proof-by-ger?deposit_cnt=%d&net_id=%d&ger=%s", bridgeServiceUrl, depositCount, depositNetwork, proofGERHash)
+	}
+	log.Info().Str("URL", bridgeServiceProofEndpoint).Msg("making proof request")
+
 	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
 
 	claimTxn, err := bridgeV2.ClaimAsset(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
@@ -2150,6 +2156,7 @@ type ulxlyArgs struct {
 	wait                *time.Duration
 	concurrency         *uint
 	insecure            *bool
+	proofGER            *string
 }
 
 var inputUlxlyArgs = ulxlyArgs{}
@@ -2217,6 +2224,7 @@ const (
 	ArgWait                 = "wait"
 	ArgConcurrency          = "concurrency"
 	ArgInsecure             = "insecure"
+	ArgProofGER             = "proof-ger"
 )
 
 func prepInputs(cmd *cobra.Command, args []string) error {
@@ -2573,6 +2581,7 @@ or if it's actually an intermediate hash.`,
 	inputUlxlyArgs.bridgeServiceURL = ulxlyClaimCmd.PersistentFlags().String(ArgBridgeServiceURL, "", "the URL of the bridge service")
 	inputUlxlyArgs.globalIndex = ulxlyClaimCmd.PersistentFlags().String(ArgGlobalIndex, "", "an override of the global index value")
 	inputUlxlyArgs.wait = ulxlyClaimCmd.PersistentFlags().Duration(ArgWait, time.Duration(0), "this flag is available for claim asset and claim message. if specified, the command will retry in a loop for the deposit to be ready to claim up to duration. Once the deposit is ready to claim, the claim will actually be sent.")
+	inputUlxlyArgs.proofGER = ulxlyClaimCmd.PersistentFlags().String(ArgProofGER, "", "if specified, the proof will be generated against this GER")
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositCount))
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositNetwork))
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgBridgeServiceURL))
