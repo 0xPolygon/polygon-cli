@@ -427,8 +427,21 @@ func CallRPCWithFuzzAndValidate(ctx context.Context, rpcClient *rpc.Client, curr
 
 	originalArgs := currTest.GetArgs()
 	for i := 0; i < *testFuzzNum; i++ {
-		args := make([]interface{}, len(originalArgs))
-		copy(args, originalArgs)
+		args := make([]any, len(originalArgs))
+		for j, arg := range originalArgs {
+			// Deep copy each argument using JSON marshal/unmarshal
+			b, err := json.Marshal(arg)
+			if err != nil {
+				args[j] = arg // fallback to shallow copy if marshal fails
+				continue
+			}
+			var copied any
+			if err := json.Unmarshal(b, &copied); err != nil {
+				args[j] = arg // fallback to shallow copy if unmarshal fails
+				continue
+			}
+			args[j] = copied
+		}
 		fuzzer.Fuzz(&args)
 
 		start := time.Now()
