@@ -3,6 +3,7 @@ package streamer
 import (
 	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"io"
 	"strconv"
 )
@@ -28,7 +29,10 @@ func (c *CSVStreamer) StreamTestExecution(exec TestExecution) error {
 	}
 
 	if !c.headerWritten {
-		c.csvWriter.Write([]string{"test_name", "method", "args", "result", "status", "duration_ms", "timestamp", "error"})
+		err := c.csvWriter.Write([]string{"test_name", "method", "args", "result", "status", "duration_ms", "timestamp", "error"})
+		if err != nil {
+			return fmt.Errorf("failed to write CSV header: %w", err)
+		}
 		c.headerWritten = true
 	}
 

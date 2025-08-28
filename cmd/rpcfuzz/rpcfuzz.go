@@ -261,7 +261,10 @@ func runRpcFuzz(ctx context.Context) error {
 
 		execution := CallRPCAndValidate(ctx, rpcClient, wrappedHTTPClient, t)
 		if shouldOutput(execution) {
-			outputStreamer.StreamTestExecution(execution)
+			iErr := outputStreamer.StreamTestExecution(execution)
+			if iErr != nil {
+				log.Error().Err(iErr).Msg("Unable to stream test execution")
+			}
 		}
 
 		summary := createSummaryFromExecution(t, execution)
@@ -276,12 +279,18 @@ func runRpcFuzz(ctx context.Context) error {
 		// Periodic summary output
 		if *summaryInterval > 0 && len(summaries)%(*summaryInterval) == 0 {
 			overallSummary := calculateProgressSummary(summaries)
-			outputStreamer.StreamSummary(overallSummary)
+			iErr := outputStreamer.StreamSummary(overallSummary)
+			if iErr != nil {
+				log.Error().Err(iErr).Msg("Unable to stream summary")
+			}
 		}
 	}
 
 	// Final summary
-	outputStreamer.StreamFinalSummary(summaries)
+	err = outputStreamer.StreamFinalSummary(summaries)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to stream final summary")
+	}
 
 	return nil
 }
@@ -449,7 +458,10 @@ func CallRPCWithFuzzAndValidate(ctx context.Context, rpcClient *rpc.Client, curr
 		}
 
 		if shouldOutput(execution) {
-			outputStreamer.StreamTestExecution(execution)
+			iErr := outputStreamer.StreamTestExecution(execution)
+			if iErr != nil {
+				log.Error().Err(iErr).Msg("Unable to stream test execution")
+			}
 		}
 	}
 
