@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/0xPolygon/polygon-cli/cmd/contract"
 	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
 	"github.com/0xPolygon/polygon-cli/cmd/publish"
 	"github.com/0xPolygon/polygon-cli/util"
@@ -144,6 +145,7 @@ func NewPolycliCommand() *cobra.Command {
 		foldtrace.FoldTraceCmd,
 		publish.Cmd,
 		dockerlogger.Cmd,
+		contract.Cmd,
 	)
 	return cmd
 }
