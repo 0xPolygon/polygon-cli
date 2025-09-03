@@ -388,9 +388,15 @@ func initializeAccountPool(ctx context.Context, c *ethclient.Client, privateKey 
 		return fmt.Errorf("unable to set account pool. %w", err)
 	}
 
-	// Check if we need to pre-fund sending accounts
-	if sendingAccountsCount == 0 || callOnly {
-		log.Info().Msg("No sending accounts to pre-fund or call-only mode is enabled. Skipping pre-funding of sending accounts.")
+	// check if there are sending accounts to pre fund
+	if sendingAccountsCount == 0 {
+		log.Info().Msg("No sending accounts to pre-fund. Skipping pre-funding of sending accounts.")
+		return nil
+	}
+
+	// checks if call only is enabled
+	if callOnly {
+		log.Info().Msg("call only mode is enabled. Skipping pre-funding of sending accounts.")
 		return nil
 	}
 
@@ -844,11 +850,15 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				sendingTops.Nonce = new(big.Int).SetUint64(account.nonce)
 
 				if mustCheckMaxBaseFee {
+					waiting := false
 					for waitBaseFeeToDrop.Load() {
-						log.Debug().
-							Int64("routineID", routineID).
-							Int64("requestID", requestID).
-							Msg("go routine is waiting for base fee to drop")
+						if !waiting {
+							waiting = true
+							log.Debug().
+								Int64("routineID", routineID).
+								Int64("requestID", requestID).
+								Msg("go routine is waiting for base fee to drop")
+						}
 						time.Sleep(time.Second)
 					}
 				}
@@ -948,6 +958,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					Stringer("txhash", ltTxHash).
 					Any("nonce", sendingTops.Nonce).
 					Str("mode", localMode.String()).
+					Str("sendingAddress", sendingTops.From.String()).
 					Msg("Request")
 			}
 			wg.Done()
@@ -984,17 +995,19 @@ func setupBaseFeeMonitoring(ctx context.Context, c *ethclient.Client, ltp loadTe
 				case <-ctx.Done():
 					return
 				default:
-					currentBaseFeeIsGreater, currentBaseFeeWei, err := isCurrentBaseFeeGreaterThanMaxBaseFee(ctx, c, maxBaseFeeWei)
+					currentBaseFeeIsGreaterThanMax, currentBaseFeeWei, err := isCurrentBaseFeeGreaterThanMaxBaseFee(ctx, c, maxBaseFeeWei)
 					if err != nil {
 						log.Error().
 							Err(err).
 							Msg("Error checking base fee during load test")
 					} else {
-						if currentBaseFeeIsGreater {
-							log.Warn().
-								Msgf("PAUSE: base fee %d Wei > limit %d Wei", currentBaseFeeWei.Uint64(), maxBaseFeeWei)
-							waitToDrop.Store(true)
-						} else {
+						if currentBaseFeeIsGreaterThanMax {
+							if !waitToDrop.Load() {
+								log.Warn().
+									Msgf("PAUSE: base fee %d Wei > limit %d Wei", currentBaseFeeWei.Uint64(), maxBaseFeeWei)
+								waitToDrop.Store(true)
+							}
+						} else if waitToDrop.Load() {
 							log.Info().
 								Msgf("RESUME: base fee %d Wei ≤ limit %d Wei", currentBaseFeeWei.Uint64(), maxBaseFeeWei)
 							waitToDrop.Store(false)
