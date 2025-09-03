@@ -20,18 +20,21 @@ var (
 	usage string
 
 	// flags
-	rpcUrl               *string
-	testPrivateHexKey    *string
-	testContractAddress  *string
-	testNamespaces       *string
-	testFuzz             *bool
-	testFuzzNum          *int
-	seed                 *int64
-	testOutputExportPath *string
-	testExportJson       *bool
-	testExportCSV        *bool
-	testExportMarkdown   *bool
-	testExportHTML       *bool
+	rpcUrl              *string
+	testPrivateHexKey   *string
+	testContractAddress *string
+	testNamespaces      *string
+	testFuzz            *bool
+	testFuzzNum         *int
+	seed                *int64
+	streamJSON          *bool
+	streamCSV           *bool
+	streamCompact       *bool
+	streamHTML          *bool
+	streamMarkdown      *bool
+	outputFilter        *string
+	summaryInterval     *int
+	quietMode           *bool
 )
 
 var RPCFuzzCmd = &cobra.Command{
@@ -61,11 +64,18 @@ func init() {
 	testFuzz = flagSet.Bool("fuzz", false, "Flag to indicate whether to fuzz input or not.")
 	testFuzzNum = flagSet.Int("fuzzn", 100, "Number of times to run the fuzzer per test.")
 	seed = flagSet.Int64("seed", 123456, "A seed for generating random values within the fuzzer")
-	testOutputExportPath = flagSet.String("export-path", "", "The directory export path of the output of the tests. Must pair this with either --json, --csv, --md, or --html")
-	testExportJson = flagSet.Bool("json", false, "Flag to indicate that output will be exported as a JSON.")
-	testExportCSV = flagSet.Bool("csv", false, "Flag to indicate that output will be exported as a CSV.")
-	testExportMarkdown = flagSet.Bool("md", false, "Flag to indicate that output will be exported as a Markdown.")
-	testExportHTML = flagSet.Bool("html", false, "Flag to indicate that output will be exported as a HTML.")
+
+	// Streamer type flags (mutually exclusive)
+	streamJSON = flagSet.Bool("json", false, "Stream output in JSON format")
+	streamCSV = flagSet.Bool("csv", false, "Stream output in CSV format")
+	streamCompact = flagSet.Bool("compact", false, "Stream output in compact format (default)")
+	streamHTML = flagSet.Bool("html", false, "Stream output in HTML format")
+	streamMarkdown = flagSet.Bool("md", false, "Stream output in Markdown format")
+
+	// Output control flags
+	outputFilter = flagSet.String("output", "all", "What to output: all, failures, summary")
+	summaryInterval = flagSet.Int("summary-interval", 0, "Print summary every N tests (0=disabled)")
+	quietMode = flagSet.Bool("quiet", false, "Only show final summary")
 
 	argfuzz.SetSeed(seed)
 
@@ -80,6 +90,28 @@ func checkFlags() (err error) {
 	}
 	if err = util.ValidateUrl(*rpcUrl); err != nil {
 		return
+	}
+
+	// Ensure only one streamer type is selected
+	streamerCount := 0
+	if *streamJSON {
+		streamerCount++
+	}
+	if *streamCSV {
+		streamerCount++
+	}
+	if *streamCompact {
+		streamerCount++
+	}
+	if *streamHTML {
+		streamerCount++
+	}
+	if *streamMarkdown {
+		streamerCount++
+	}
+
+	if streamerCount > 1 {
+		return fmt.Errorf("only one output format can be specified: --json, --csv, --compact, --html, or --md")
 	}
 
 	// Check private key flag.
