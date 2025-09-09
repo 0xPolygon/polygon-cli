@@ -72,6 +72,58 @@ Once this has been completed this will be the address of the contract: `0x6fda56
 $  docker run -v $PWD/contracts:/contracts ethereum/solc:stable --storage-layout /contracts/tokens/ERC20/ERC20.sol
 ```
 
+## Running RPC Fuzz Tests
+
+After setting up your RPC endpoint and funding an account, you can run the RPC fuzz tests using various output formats. The tool supports streaming output that follows Unix philosophy - results are sent to stdout and you control data persistence through shell redirection.
+
+### Output Format Examples
+
+All commands use the same core parameters but produce different output formats:
+
+#### Compact Format (Default)
+Real-time colored console output with pass/fail indicators:
+```bash
+polycli rpcfuzz --rpc-url http://localhost:8545 --private-key <YOUR_PRIVATE_KEY> --namespaces eth,web3,net --compact > results.txt
+```
+
+#### CSV Format
+Structured CSV with headers for data analysis:
+```bash
+polycli rpcfuzz --rpc-url http://localhost:8545 --private-key <YOUR_PRIVATE_KEY> --namespaces eth,web3,net --csv > results.csv
+```
+
+#### JSON Format
+Streaming JSON with detailed test execution data:
+```bash
+polycli rpcfuzz --rpc-url http://localhost:8545 --private-key <YOUR_PRIVATE_KEY> --namespaces eth,web3,net --json > results.json
+```
+
+#### HTML Format
+Complete styled HTML document for browser viewing:
+```bash
+polycli rpcfuzz --rpc-url http://localhost:8545 --private-key <YOUR_PRIVATE_KEY> --namespaces eth,web3,net --html > results.html
+```
+
+#### Markdown Format
+Formatted Markdown table with emoji indicators:
+```bash
+polycli rpcfuzz --rpc-url http://localhost:8545 --private-key <YOUR_PRIVATE_KEY> --namespaces eth,web3,net --md > results.md
+```
+
+### Command Options
+
+- `--rpc-url`: The JSON RPC endpoint URL
+- `--private-key`: Private key for account with funds for testing
+- `--namespaces`: Comma-separated list of RPC method namespaces to test (e.g., `eth,web3,net`)
+- Output format flags: `--compact`, `--csv`, `--json`, `--html`, `--md` (mutually exclusive)
+
+### Example with Error Suppression
+
+To capture only test results without debug output:
+```bash
+polycli rpcfuzz --rpc-url <RPC_URL> --private-key <PRIVATE_KEY> --namespaces eth,web3,net --json 2>/dev/null > clean_results.json
+```
+
 ### Links
 
 - https://ethereum.github.io/execution-apis/api-documentation/
