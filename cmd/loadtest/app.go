@@ -88,6 +88,7 @@ type (
 		WaitForReceipt                *bool
 		ReceiptRetryMax               *uint
 		ReceiptRetryInitialDelayMs    *uint
+		MaxBaseFeeWei                 *uint64
 
 		// Computed
 		CurrentGasPrice       *big.Int
@@ -251,6 +252,7 @@ func initFlags() {
 	ltp.PreFundSendingAccounts = LoadtestCmd.Flags().Bool("pre-fund-sending-accounts", false, "If set to true, the sending accounts will be funded at the start of the execution, otherwise all accounts will be funded when used for the first time.")
 	ltp.RefundRemainingFunds = LoadtestCmd.Flags().Bool("refund-remaining-funds", false, "If set to true, the funded amount will be refunded to the funding account. Otherwise, the funded amount will remain in the sending accounts.")
 	ltp.SendingAccountsFile = LoadtestCmd.Flags().String("sending-accounts-file", "", "The file containing the sending accounts private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending accounts for different execution cycles.")
+	ltp.MaxBaseFeeWei = LoadtestCmd.Flags().Uint64("max-base-fee-wei", 0, "The maximum base fee in wei. If the base fee exceeds this value, sending tx will be paused and while paused, existing in-flight transactions continue to confirmation, but no additional SendTransaction calls occur. This is useful to avoid sending transactions when the network is congested.")
 
 	// Local flags.
 	ltp.Modes = LoadtestCmd.Flags().StringSliceP("mode", "m", []string{"t"}, `The testing mode to use. It can be multiple like: "d,t"
