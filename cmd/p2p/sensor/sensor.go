@@ -70,6 +70,7 @@ type (
 		QuickStart                   bool
 		TTL                          time.Duration
 		DiscoveryDNS                 string
+		Persistence                  string
 
 		bootnodes    []*enode.Node
 		nodes        []*enode.Node
@@ -161,18 +162,37 @@ var SensorCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		db := database.NewDatastore(cmd.Context(), database.DatastoreOptions{
-			ProjectID:                    inputSensorParams.ProjectID,
-			DatabaseID:                   inputSensorParams.DatabaseID,
-			SensorID:                     inputSensorParams.SensorID,
-			MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
-			ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
-			ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
-			ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
-			ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
-			ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
-			TTL:                          inputSensorParams.TTL,
-		})
+		// Initialize the database based on the persistence flag
+		var db database.Database
+		switch inputSensorParams.Persistence {
+		case "datastore":
+			db = database.NewDatastore(cmd.Context(), database.DatastoreOptions{
+				ProjectID:                    inputSensorParams.ProjectID,
+				DatabaseID:                   inputSensorParams.DatabaseID,
+				SensorID:                     inputSensorParams.SensorID,
+				MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
+				ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
+				ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
+				ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
+				ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
+				ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
+				TTL:                          inputSensorParams.TTL,
+			})
+		case "json":
+			db = database.NewJSONDatabase(database.JSONDatabaseOptions{
+				SensorID:                     inputSensorParams.SensorID,
+				MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
+				ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
+				ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
+				ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
+				ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
+				ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
+			})
+		case "false":
+			db = database.NewNoopDatabase()
+		default:
+			return fmt.Errorf("invalid persistence option: %s", inputSensorParams.Persistence)
+		}
 
 		// Fetch the latest block which will be used later when crafting the status
 		// message. This call will only be made once and stored in the head field
@@ -570,4 +590,5 @@ connect to new peers if the nodes.json file is large.`)
 	SensorCmd.Flags().StringVar(&inputSensorParams.TrustedNodesFile, "trusted-nodes", "", "Trusted nodes file")
 	SensorCmd.Flags().DurationVar(&inputSensorParams.TTL, "ttl", 14*24*time.Hour, "Time to live")
 	SensorCmd.Flags().StringVar(&inputSensorParams.DiscoveryDNS, "discovery-dns", "", "DNS discovery ENR tree url")
+	SensorCmd.Flags().StringVar(&inputSensorParams.Persistence, "persistence", "datastore", "Persistence mode: datastore (Google Datastore), json (output to stdout), false (no persistence)")
 }
