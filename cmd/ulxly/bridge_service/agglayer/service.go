@@ -45,11 +45,11 @@ func (s *BridgeService) GetDeposits(destinationAddress string, offset, limit int
 	pageNumber := offset/limit + 1
 	skipItems := offset % limit
 
-	const endpointTemplate = "%s/bridges?from_address%s&page_number=%d&page_size=%d"
+	const endpointTemplate = "%s/bridges?from_address=%s&page_number=%d&page_size=%d"
 
 	// loads all deposits when offset is exactly the size of a page or the first part of them when offset is not
 	// exactly the size of a page
-	endpoint := fmt.Sprintf(endpointTemplate, s.BridgeServiceBase.Url(), destinationAddress, pageSize, pageNumber)
+	endpoint := fmt.Sprintf(endpointTemplate, s.BridgeServiceBase.Url(), destinationAddress, pageNumber, pageSize)
 	resp, respError, statusCode, err := httpjson.HTTPGetWithError[GetBridgeResponse, ErrorResponse](s.httpClient, endpoint)
 	if err != nil {
 		return nil, 0, err
@@ -68,7 +68,7 @@ func (s *BridgeService) GetDeposits(destinationAddress string, offset, limit int
 	// this is needed because the API only supports pagination by page number and page size
 	// and not by offset and limit
 	if skipItems > 0 {
-		endpoint := fmt.Sprintf(endpointTemplate, s.BridgeServiceBase.Url(), destinationAddress, pageSize, pageNumber+1)
+		endpoint := fmt.Sprintf(endpointTemplate, s.BridgeServiceBase.Url(), destinationAddress, pageNumber+1, pageSize)
 		resp, respError, statusCode, err = httpjson.HTTPGetWithError[GetBridgeResponse, ErrorResponse](s.httpClient, endpoint)
 		if err != nil {
 			return nil, 0, err

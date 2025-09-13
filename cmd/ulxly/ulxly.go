@@ -2081,7 +2081,7 @@ const (
 
 var (
 	bridgeService  bridge_service.BridgeService
-	bridgeServices map[uint32]bridge_service.BridgeService
+	bridgeServices map[uint32]bridge_service.BridgeService = make(map[uint32]bridge_service.BridgeService)
 )
 
 func prepInputs(cmd *cobra.Command, args []string) error {
