@@ -51,9 +51,9 @@ func OffsetLimitToPagination(arr []int, offset, limit int) []int {
 		start := 0
 		end := skipItems
 		page := pages[pageNumber+1]
-		pageItensCount := len(page)
-		if pageItensCount < end {
-			end = pageItensCount
+		pageItemsCount := len(page)
+		if pageItemsCount < end {
+			end = pageItemsCount
 		}
 
 		items = append(items, page[start:end]...)
