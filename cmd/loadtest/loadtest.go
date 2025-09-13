@@ -340,7 +340,7 @@ func initializeAccountPool(ctx context.Context, c *ethclient.Client, privateKey 
 		if len(privateKeys) == 0 {
 			const errMsg = "no private keys found in sending accounts file"
 			log.Error().Str("sendingAccountsFile", sendingAccountsFile).Msg(errMsg)
-			return fmt.Errorf(errMsg)
+			return errors.New(errMsg)
 		}
 
 		if len(privateKeys) > 1 && *inputLoadTestParams.StartNonce > 0 {

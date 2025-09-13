@@ -1,0 +1,73 @@
+package legacy
+
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/bridge_service"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/bridge_service/httpjson"
+	"github.com/rs/zerolog/log"
+)
+
+type BridgeService struct {
+	bridge_service.BridgeServiceBase
+	httpClient *http.Client
+}
+
+// NewBridgeService creates an instance of the BridgeService.
+func NewBridgeService(url string, insecure bool) (*BridgeService, error) {
+	return &BridgeService{
+		httpClient:        httpjson.NewHTTPClient(insecure),
+		BridgeServiceBase: bridge_service.NewBridgeServiceBase(url),
+	}, nil
+}
+
+func (s *BridgeService) GetDeposit(depositNetwork, depositCount uint32) (*bridge_service.Deposit, error) {
+	endpoint := fmt.Sprintf("%s/bridge?net_id=%d&deposit_cnt=%d", s.BridgeServiceBase.Url(), depositNetwork, depositCount)
+	depositResponse, err := httpjson.HTTPGet[GetDepositResponse](s.httpClient, endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	if depositResponse.Code != nil {
+		errMsg := "unable to retrieve bridge deposit"
+		log.Warn().Int("code", *depositResponse.Code).Str("message", *depositResponse.Message).Msgf("%s", errMsg)
+		return nil, bridge_service.ErrUnableToRetrieveDeposit
+	}
+
+	deposit, err := depositResponse.Deposit.ToDeposit()
+	if err != nil {
+		return nil, err
+	}
+	return deposit, nil
+}
+
+func (s *BridgeService) GetDeposits(destinationAddress string, offset, limit int) ([]bridge_service.Deposit, int, error) {
+	url := fmt.Sprintf("%s/bridges/%s?offset=%d&limit=%d", s.BridgeServiceBase.Url(), destinationAddress, offset, limit)
+	resp, err := httpjson.HTTPGet[GetDepositsResponse](s.httpClient, url)
+	if err != nil {
+		return nil, 0, err
+	}
+	deposits := make([]bridge_service.Deposit, 0, len(resp.Deposits))
+	for _, d := range resp.Deposits {
+		deposit, err := d.ToDeposit()
+		if err != nil {
+			return nil, 0, err
+		}
+		deposits = append(deposits, *deposit)
+	}
+
+	return deposits, resp.Total, nil
+
+}
+
+func (s *BridgeService) GetProof(depositNetwork, depositCount uint32) (*bridge_service.Proof, error) {
+	endpoint := fmt.Sprintf("%s/merkle-proof?net_id=%d&deposit_cnt=%d", s.BridgeServiceBase.Url(), depositNetwork, depositCount)
+	proofResponse, err := httpjson.HTTPGet[GetProofResponse](s.httpClient, endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	proof := proofResponse.Proof.ToProof()
+	return proof, nil
+}
