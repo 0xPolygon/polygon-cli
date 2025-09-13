@@ -24,18 +24,18 @@ func NewBridgeService(url string, insecure bool) (*BridgeService, error) {
 
 func (s *BridgeService) GetDeposit(depositNetwork, depositCount uint32) (*bridge_service.Deposit, error) {
 	endpoint := fmt.Sprintf("%s/bridge?net_id=%d&deposit_cnt=%d", s.BridgeServiceBase.Url(), depositNetwork, depositCount)
-	depositResponse, err := httpjson.HTTPGet[GetDepositResponse](s.httpClient, endpoint)
+	resp, _, err := httpjson.HTTPGet[GetDepositResponse](s.httpClient, endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	if depositResponse.Code != nil {
+	if resp.Code != nil {
 		errMsg := "unable to retrieve bridge deposit"
-		log.Warn().Int("code", *depositResponse.Code).Str("message", *depositResponse.Message).Msgf("%s", errMsg)
+		log.Warn().Int("code", *resp.Code).Str("message", *resp.Message).Msgf("%s", errMsg)
 		return nil, bridge_service.ErrUnableToRetrieveDeposit
 	}
 
-	deposit, err := depositResponse.Deposit.ToDeposit()
+	deposit, err := resp.Deposit.ToDeposit()
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ func (s *BridgeService) GetDeposit(depositNetwork, depositCount uint32) (*bridge
 
 func (s *BridgeService) GetDeposits(destinationAddress string, offset, limit int) ([]bridge_service.Deposit, int, error) {
 	url := fmt.Sprintf("%s/bridges/%s?offset=%d&limit=%d", s.BridgeServiceBase.Url(), destinationAddress, offset, limit)
-	resp, err := httpjson.HTTPGet[GetDepositsResponse](s.httpClient, url)
+	resp, _, err := httpjson.HTTPGet[GetDepositsResponse](s.httpClient, url)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -63,11 +63,11 @@ func (s *BridgeService) GetDeposits(destinationAddress string, offset, limit int
 
 func (s *BridgeService) GetProof(depositNetwork, depositCount uint32) (*bridge_service.Proof, error) {
 	endpoint := fmt.Sprintf("%s/merkle-proof?net_id=%d&deposit_cnt=%d", s.BridgeServiceBase.Url(), depositNetwork, depositCount)
-	proofResponse, err := httpjson.HTTPGet[GetProofResponse](s.httpClient, endpoint)
+	resp, _, err := httpjson.HTTPGet[GetProofResponse](s.httpClient, endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	proof := proofResponse.Proof.ToProof()
+	proof := resp.Proof.ToProof()
 	return proof, nil
 }

@@ -23,11 +23,13 @@ func (r *ProofResponse) ToProof() *bridge_service.Proof {
 	for i, p := range r.MerkleProof {
 		merkleProof[i] = common.HexToHash(p)
 	}
+	p.MerkleProof = merkleProof
 
 	var rollupMerkleProof = make([]common.Hash, len(r.RollupMerkleProof))
 	for i, p := range r.RollupMerkleProof {
 		rollupMerkleProof[i] = common.HexToHash(p)
 	}
+	p.RollupMerkleProof = rollupMerkleProof
 
 	if len(r.MainExitRoot) > 0 {
 		mainExitRoot := common.HexToHash(r.MainExitRoot)
@@ -38,9 +40,6 @@ func (r *ProofResponse) ToProof() *bridge_service.Proof {
 		rollupExitRoot := common.HexToHash(r.RollupExitRoot)
 		p.RollupExitRoot = &rollupExitRoot
 	}
-
-	p.MerkleProof = merkleProof
-	p.RollupMerkleProof = rollupMerkleProof
 
 	return p
 }
