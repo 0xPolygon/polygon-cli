@@ -36,11 +36,10 @@ type BridgeResponse struct {
 
 	// TODO: REVIEW THESE INFORMATION USED IN THE LEGACY BRIDGE SERVICE
 	// ClaimTxHash   string `json:"claim_tx_hash"`
-	// ReadyForClaim bool   `json:"ready_for_claim"`
 	// GlobalIndex   string `json:"global_index"`
 }
 
-func (r *BridgeResponse) ToDeposit() *bridge_service.Deposit {
+func (r *BridgeResponse) ToDeposit(isReadyForClaim bool) *bridge_service.Deposit {
 	d := &bridge_service.Deposit{}
 	d.BlockNum = r.BlockNum
 
@@ -51,10 +50,10 @@ func (r *BridgeResponse) ToDeposit() *bridge_service.Deposit {
 	d.Amount.SetString(r.Amount, 10)
 
 	d.TxHash = common.HexToHash(r.TxHash)
-	// if len(r.ClaimTxHash) > 0 {
-	// 	claimTxHash := common.HexToHash(r.ClaimTxHash)
-	// 	d.ClaimTxHash = &claimTxHash
-	// }
+	if len(r.BridgeHash) > 0 {
+		claimTxHash := common.HexToHash(r.BridgeHash)
+		d.ClaimTxHash = &claimTxHash
+	}
 
 	d.OrigAddr = common.HexToAddress(r.OrigAddr)
 	d.DestAddr = common.HexToAddress(r.DestAddr)
@@ -66,7 +65,7 @@ func (r *BridgeResponse) ToDeposit() *bridge_service.Deposit {
 	d.DestNet = r.DestNet
 	d.NetworkID = r.NetworkID
 	d.DepositCnt = r.DepositCnt
-	// d.ReadyForClaim = r.ReadyForClaim
+	d.ReadyForClaim = isReadyForClaim
 
 	return d
 }

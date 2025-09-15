@@ -68,6 +68,6 @@ func (r *DepositResponse) ToDeposit() (*bridge_service.Deposit, error) {
 }
 
 type GetDepositsResponse struct {
-	Deposits []DepositResponse `json:"deposit"`
+	Deposits []DepositResponse `json:"deposits"`
 	Total    int               `json:"total_cnt,string"`
 }

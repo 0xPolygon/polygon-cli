@@ -57,7 +57,7 @@ func HTTPGetWithError[T any, TError any](client *http.Client, url string) (obj T
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode != http.StatusOK {
+	if res.StatusCode == http.StatusOK {
 		err = json.Unmarshal(body, &obj)
 	} else {
 		err = json.Unmarshal(body, &objError)
