@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"slices"
 
 	"os"
 	"os/signal"
@@ -132,20 +133,10 @@ func modeRequiresLoadTestContract(m loadTestMode) bool {
 	return false
 }
 func anyModeRequiresLoadTestContract(modes []loadTestMode) bool {
-	for _, m := range modes {
-		if modeRequiresLoadTestContract(m) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(modes, modeRequiresLoadTestContract)
 }
 func hasMode(mode loadTestMode, modes []loadTestMode) bool {
-	for _, m := range modes {
-		if m == mode {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(modes, mode)
 }
 
 func hasUniqueModes(modes []loadTestMode) bool {
