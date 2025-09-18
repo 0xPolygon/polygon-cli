@@ -290,9 +290,9 @@ func (j *JSONDatabase) WritePeers(ctx context.Context, peers []*p2p.Peer, tls ti
 	}
 }
 
-// HasBlock always returns false to allow re-fetching for JSON output.
+// HasBlock always returns true to avoid unnecessary parent block fetching for JSON output.
 func (j *JSONDatabase) HasBlock(ctx context.Context, hash common.Hash) bool {
-	return false
+	return true
 }
 
 // MaxConcurrentWrites returns the configured max concurrency.

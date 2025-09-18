@@ -65,6 +65,9 @@ type EthProtocolOptions struct {
 	// when doing the status exchange.
 	Head      *HeadBlock
 	HeadMutex *sync.RWMutex
+
+	// ConnManager manages active connections for broadcasting
+	ConnManager *ConnectionManager
 }
 
 // HeadBlock contains the necessary head block data for the status message.
@@ -82,6 +85,59 @@ type BlockHashEntry struct {
 
 // blockHashTTL defines the time-to-live for block hash entries in blockHashes list.
 var blockHashTTL = 10 * time.Minute
+
+// ConnectionManager manages active connections for transaction broadcasting
+type ConnectionManager struct {
+	connections map[string]*conn
+	mu          sync.RWMutex
+}
+
+// NewConnectionManager creates a new connection manager
+func NewConnectionManager() *ConnectionManager {
+	return &ConnectionManager{
+		connections: make(map[string]*conn),
+	}
+}
+
+// AddConnection adds a connection to the manager
+func (cm *ConnectionManager) AddConnection(nodeID string, c *conn) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.connections[nodeID] = c
+}
+
+// RemoveConnection removes a connection from the manager
+func (cm *ConnectionManager) RemoveConnection(nodeID string) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	delete(cm.connections, nodeID)
+}
+
+// BroadcastTransaction sends a transaction to all connected peers
+func (cm *ConnectionManager) BroadcastTransaction(tx *types.Transaction) int {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	txs := types.Transactions{tx}
+	successCount := 0
+
+	for nodeID, c := range cm.connections {
+		if err := ethp2p.Send(c.rw, eth.TransactionsMsg, txs); err != nil {
+			log.Error().
+				Err(err).
+				Str("nodeID", nodeID).
+				Msg("Failed to send transaction to peer")
+		} else {
+			successCount++
+			log.Debug().
+				Str("nodeID", nodeID).
+				Str("tx", tx.Hash().Hex()).
+				Msg("Sent transaction to peer")
+		}
+	}
+
+	return successCount
+}
 
 // NewEthProtocol creates the new eth protocol. This will handle writing the
 // status exchange, message handling, and writing blocks/txs to the database.
@@ -125,6 +181,12 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 			// across all connections and written to the nodes.json file.
 			opts.Peers <- p.Node()
 			ctx := opts.Context
+
+			// Register connection with the manager if available
+			if opts.ConnManager != nil {
+				opts.ConnManager.AddConnection(p.Node().ID().String(), &c)
+				defer opts.ConnManager.RemoveConnection(p.Node().ID().String())
+			}
 
 			// Handle all the of the messages here.
 			for {

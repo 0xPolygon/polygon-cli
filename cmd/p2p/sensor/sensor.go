@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"math/big"
 	"os"
 	"os/signal"
 	"slices"
@@ -17,7 +19,9 @@ import (
 	_ "net/http/pprof"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
@@ -58,6 +62,7 @@ type (
 		ShouldRunPrometheus          bool
 		PrometheusPort               uint
 		APIPort                      uint
+		RPCPort                      uint
 		KeyFile                      string
 		PrivateKey                   string
 		Port                         int
@@ -219,6 +224,9 @@ var SensorCmd = &cobra.Command{
 			Help:      "The number and type of messages the sensor has received",
 		}, []string{"message", "url", "name"})
 
+		// Create connection manager for transaction broadcasting
+		connManager := p2p.NewConnectionManager()
+
 		opts := p2p.EthProtocolOptions{
 			Context:     cmd.Context(),
 			Database:    db,
@@ -231,6 +239,7 @@ var SensorCmd = &cobra.Command{
 			HeadMutex:   &sync.RWMutex{},
 			ForkID:      forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
 			MsgCounter:  msgCounter,
+			ConnManager: connManager,
 		}
 
 		config := ethp2p.Config{
@@ -292,6 +301,7 @@ var SensorCmd = &cobra.Command{
 		}
 
 		go handleAPI(&server, msgCounter)
+		go handleRPC(connManager, inputSensorParams.NetworkID)
 
 		// Run DNS discovery immediately at startup.
 		go handleDNSDiscovery(&server)
@@ -448,6 +458,161 @@ func handleDNSDiscovery(server *ethp2p.Server) {
 	log.Info().Msg("Finished adding DNS discovery peers")
 }
 
+// handleRPC sets up the JSON-RPC server for receiving and broadcasting transactions.
+// It handles eth_sendRawTransaction requests, validates transaction signatures,
+// and broadcasts valid transactions to all connected peers.
+func handleRPC(connManager *p2p.ConnectionManager, networkID uint64) {
+	// Use network ID as chain ID for signature validation
+	chainID := new(big.Int).SetUint64(networkID)
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Read request body
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeJSONError(w, -32700, "Parse error", nil)
+			return
+		}
+		defer r.Body.Close()
+
+		// Parse JSON-RPC request
+		var req jsonRPCRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			writeJSONError(w, -32700, "Parse error", nil)
+			return
+		}
+
+		// Handle eth_sendRawTransaction
+		if req.Method == "eth_sendRawTransaction" {
+			handleSendRawTransaction(w, req, connManager, chainID)
+			return
+		}
+
+		// Method not found
+		writeJSONError(w, -32601, "Method not found", req.ID)
+	})
+
+	addr := fmt.Sprintf(":%d", inputSensorParams.RPCPort)
+	log.Info().Str("addr", addr).Msg("Starting JSON-RPC server")
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Error().Err(err).Msg("Failed to start RPC server")
+	}
+}
+
+// JSON-RPC request structure
+type jsonRPCRequest struct {
+	JSONRPC string        `json:"jsonrpc"`
+	Method  string        `json:"method"`
+	Params  []interface{} `json:"params"`
+	ID      interface{}   `json:"id"`
+}
+
+// JSON-RPC response structures
+type jsonRPCResponse struct {
+	JSONRPC string      `json:"jsonrpc"`
+	Result  interface{} `json:"result,omitempty"`
+	Error   *rpcError   `json:"error,omitempty"`
+	ID      interface{} `json:"id"`
+}
+
+type rpcError struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
+// writeJSONError writes a JSON-RPC error response
+func writeJSONError(w http.ResponseWriter, code int, message string, id interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	response := jsonRPCResponse{
+		JSONRPC: "2.0",
+		Error: &rpcError{
+			Code:    code,
+			Message: message,
+		},
+		ID: id,
+	}
+	json.NewEncoder(w).Encode(response)
+}
+
+// writeJSONResult writes a JSON-RPC success response
+func writeJSONResult(w http.ResponseWriter, result interface{}, id interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	response := jsonRPCResponse{
+		JSONRPC: "2.0",
+		Result:  result,
+		ID:      id,
+	}
+	json.NewEncoder(w).Encode(response)
+}
+
+// handleSendRawTransaction processes eth_sendRawTransaction requests
+func handleSendRawTransaction(w http.ResponseWriter, req jsonRPCRequest, connManager *p2p.ConnectionManager, chainID *big.Int) {
+	// Check params
+	if len(req.Params) == 0 {
+		writeJSONError(w, -32602, "Invalid params: missing raw transaction", req.ID)
+		return
+	}
+
+	// Extract raw transaction hex string
+	rawTxHex, ok := req.Params[0].(string)
+	if !ok {
+		writeJSONError(w, -32602, "Invalid params: raw transaction must be a hex string", req.ID)
+		return
+	}
+
+	// Decode hex string to bytes
+	txBytes, err := hexutil.Decode(rawTxHex)
+	if err != nil {
+		writeJSONError(w, -32602, fmt.Sprintf("Invalid transaction hex: %v", err), req.ID)
+		return
+	}
+
+	// Unmarshal transaction
+	tx := new(types.Transaction)
+	if err := tx.UnmarshalBinary(txBytes); err != nil {
+		writeJSONError(w, -32602, fmt.Sprintf("Invalid transaction encoding: %v", err), req.ID)
+		return
+	}
+
+	// Validate transaction signature
+	signer := types.LatestSignerForChainID(chainID)
+	sender, err := types.Sender(signer, tx)
+	if err != nil {
+		writeJSONError(w, -32602, fmt.Sprintf("Invalid transaction signature: %v", err), req.ID)
+		return
+	}
+
+	// Log the transaction
+	toAddr := "nil"
+	if tx.To() != nil {
+		toAddr = tx.To().Hex()
+	}
+
+	log.Info().
+		Str("hash", tx.Hash().Hex()).
+		Str("from", sender.Hex()).
+		Str("to", toAddr).
+		Str("value", tx.Value().String()).
+		Uint64("gas", tx.Gas()).
+		Msg("Broadcasting transaction")
+
+	// Broadcast to all peers using the connection manager
+	broadcastCount := connManager.BroadcastTransaction(tx)
+
+	log.Info().
+		Str("hash", tx.Hash().Hex()).
+		Int("peers", broadcastCount).
+		Msg("Transaction broadcast complete")
+
+	// Return transaction hash
+	writeJSONResult(w, tx.Hash().Hex(), req.ID)
+}
+
 // getPeerMessages retrieves the count of various types of eth packets sent by a
 // peer.
 func getPeerMessages(url string, counter *prometheus.CounterVec) p2p.MessageCount {
@@ -571,6 +736,7 @@ significantly increase CPU and memory usage.`)
 	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "Whether to run Prometheus")
 	SensorCmd.Flags().UintVar(&inputSensorParams.PrometheusPort, "prom-port", 2112, "Port Prometheus runs on")
 	SensorCmd.Flags().UintVar(&inputSensorParams.APIPort, "api-port", 8080, "Port the API server will listen on")
+	SensorCmd.Flags().UintVar(&inputSensorParams.RPCPort, "rpc-port", 8545, "Port for JSON-RPC server to receive transactions")
 	SensorCmd.Flags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "Private key file (cannot be set with --key)")
 	SensorCmd.Flags().StringVar(&inputSensorParams.PrivateKey, "key", "", "Hex-encoded private key (cannot be set with --key-file)")
 	SensorCmd.MarkFlagsMutuallyExclusive("key-file", "key")
