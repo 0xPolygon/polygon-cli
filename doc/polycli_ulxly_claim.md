@@ -17,8 +17,8 @@ Commands for claiming deposits on a particular chain
 
 ```bash
       --bridge-service-url string   the URL of the bridge service
-      --deposit-count uint          the deposit count of the bridge transaction
-      --deposit-network uint        the rollup id of the network where the deposit was initially made
+      --deposit-count uint32        the deposit count of the bridge transaction
+      --deposit-network uint32      the rollup id of the network where the deposit was initially made
       --global-index string         an override of the global index value
   -h, --help                        help for claim
       --wait duration               this flag is available for claim asset and claim message. if specified, the command will retry in a loop for the deposit to be ready to claim up to duration. Once the deposit is ready to claim, the claim will actually be sent.
@@ -35,6 +35,7 @@ The command also inherits flags from parent commands.
       --gas-limit uint                     force a gas limit when sending a transaction
       --gas-price string                   the gas price to be used
       --insecure                           skip TLS certificate verification
+      --legacy                             force usage of legacy bridge service
       --pretty-logs                        Should logs be in pretty format or JSON (default true)
       --private-key string                 the hex encoded private key to be used when sending the tx
       --rpc-url string                     the URL of the RPC to send the transaction

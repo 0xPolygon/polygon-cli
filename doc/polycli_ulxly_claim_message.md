@@ -117,14 +117,15 @@ The command also inherits flags from parent commands.
       --bridge-service-url string          the URL of the bridge service
       --chain-id string                    set the chain id to be used in the transaction
       --config string                      config file (default is $HOME/.polygon-cli.yaml)
-      --deposit-count uint                 the deposit count of the bridge transaction
-      --deposit-network uint               the rollup id of the network where the deposit was initially made
+      --deposit-count uint32               the deposit count of the bridge transaction
+      --deposit-network uint32             the rollup id of the network where the deposit was initially made
       --destination-address string         the address where the bridge will be sent to
       --dry-run                            do all of the transaction steps but do not send the transaction
       --gas-limit uint                     force a gas limit when sending a transaction
       --gas-price string                   the gas price to be used
       --global-index string                an override of the global index value
       --insecure                           skip TLS certificate verification
+      --legacy                             force usage of legacy bridge service
       --pretty-logs                        Should logs be in pretty format or JSON (default true)
       --private-key string                 the hex encoded private key to be used when sending the tx
       --rpc-url string                     the URL of the RPC to send the transaction
