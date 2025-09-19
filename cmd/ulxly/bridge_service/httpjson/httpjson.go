@@ -38,6 +38,7 @@ func HTTPGet[T any](client *http.Client, url string) (obj T, statusCode int, err
 		return obj, res.StatusCode, err
 	}
 	defer res.Body.Close()
+	log.Trace().Msgf("HTTPGet() %s - status %d - body: %s", url, res.StatusCode, string(body))
 
 	err = json.Unmarshal(body, &obj)
 
@@ -56,6 +57,7 @@ func HTTPGetWithError[T any, TError any](client *http.Client, url string) (obj T
 		return obj, objError, res.StatusCode, err
 	}
 	defer res.Body.Close()
+	log.Trace().Msgf("HTTPGetWithError() %s - status %d - body: %s", url, res.StatusCode, string(body))
 
 	if res.StatusCode == http.StatusOK {
 		err = json.Unmarshal(body, &obj)

@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	ErrUnableToRetrieveDeposit = errors.New("the bridge deposit was not found")
+	ErrNotFound = errors.New("the bridge deposit was not found")
 )
 
 type BridgeService interface {

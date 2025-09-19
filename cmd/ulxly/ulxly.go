@@ -1021,7 +1021,7 @@ out:
 			}
 			break out
 		default:
-			if errors.Is(err, ErrNotReadyForClaim) || errors.Is(err, bridge_service.ErrUnableToRetrieveDeposit) {
+			if errors.Is(err, ErrNotReadyForClaim) || errors.Is(err, bridge_service.ErrNotFound) {
 				log.Info().Msg("retrying...")
 				time.Sleep(10 * time.Second)
 				continue
@@ -1849,7 +1849,7 @@ func getDeposit(depositNetwork, depositCount uint32) (*bridge_service.Deposit, e
 		log.Error().Msg("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
 		return nil, ErrNotReadyForClaim
 	} else if deposit.ClaimTxHash != nil {
-		log.Info().Str("claimTxHash", deposit.ClaimTxHash.String()).Msg("The claim transaction has already been claimed")
+		log.Info().Str("claimTxHash", deposit.ClaimTxHash.String()).Msg(ErrDepositAlreadyClaimed.Error())
 		return nil, ErrDepositAlreadyClaimed
 	}
 
