@@ -170,7 +170,7 @@ require (
 	github.com/google/tink/go v1.7.0
 	github.com/iden3/go-iden3-crypto v0.0.17
 	github.com/montanaflynn/stats v0.7.1
-	github.com/rivo/tview v0.0.0-20250501113434-0c592cd31026
+	github.com/rivo/tview v0.42.0
 )
 
 require (
