@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"slices"
 	"sync/atomic"
 
 	"os"
@@ -133,20 +134,10 @@ func modeRequiresLoadTestContract(m loadTestMode) bool {
 	return false
 }
 func anyModeRequiresLoadTestContract(modes []loadTestMode) bool {
-	for _, m := range modes {
-		if modeRequiresLoadTestContract(m) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(modes, modeRequiresLoadTestContract)
 }
 func hasMode(mode loadTestMode, modes []loadTestMode) bool {
-	for _, m := range modes {
-		if m == mode {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(modes, mode)
 }
 
 func hasUniqueModes(modes []loadTestMode) bool {
@@ -341,7 +332,7 @@ func initializeAccountPool(ctx context.Context, c *ethclient.Client, privateKey 
 		if len(privateKeys) == 0 {
 			const errMsg = "no private keys found in sending accounts file"
 			log.Error().Str("sendingAccountsFile", sendingAccountsFile).Msg(errMsg)
-			return fmt.Errorf(errMsg)
+			return errors.New(errMsg)
 		}
 
 		if len(privateKeys) > 1 && *inputLoadTestParams.StartNonce > 0 {
