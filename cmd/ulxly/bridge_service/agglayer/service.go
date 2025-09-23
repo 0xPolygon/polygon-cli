@@ -22,14 +22,14 @@ type BridgeService struct {
 // NewBridgeService creates an instance of the BridgeService.
 func NewBridgeService(url string, insecure bool) (*BridgeService, error) {
 	return &BridgeService{
-		httpClient:        httpjson.NewHTTPClient(insecure),
 		BridgeServiceBase: bridge_service.NewBridgeServiceBase(url),
+		httpClient:        httpjson.NewHTTPClient(insecure),
 	}, nil
 }
 
 func (s *BridgeService) GetDeposit(depositNetwork, depositCount uint32) (*bridge_service.Deposit, error) {
 	bridgeEndpoint := fmt.Sprintf("%s/%s/bridges?network_id=%d&deposit_count=%d", s.BridgeServiceBase.Url(), urlPath, depositNetwork, depositCount)
-	bridgeResp, bridgeRespError, statusCode, err := httpjson.HTTPGetWithError[GetBridgeResponse, ErrorResponse](s.httpClient, bridgeEndpoint)
+	bridgeResp, bridgeRespError, statusCode, err := httpjson.HTTPGetWithError[getBridgesResponse, errorResponse](s.httpClient, bridgeEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (s *BridgeService) GetDeposits(destinationAddress string, offset, limit int
 	// loads all deposits when offset is exactly the size of a page or the first part of them when offset is not
 	// exactly the size of a page
 	endpoint := fmt.Sprintf(endpointTemplate, s.BridgeServiceBase.Url(), urlPath, destinationAddress, pageNumber, pageSize)
-	resp, respError, statusCode, err := httpjson.HTTPGetWithError[GetBridgeResponse, ErrorResponse](s.httpClient, endpoint)
+	resp, respError, statusCode, err := httpjson.HTTPGetWithError[getBridgesResponse, errorResponse](s.httpClient, endpoint)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -73,7 +73,7 @@ func (s *BridgeService) GetDeposits(destinationAddress string, offset, limit int
 		return nil, 0, bridge_service.ErrNotFound
 	}
 
-	bridgesResponses := make([]BridgeResponse, 0, limit)
+	bridgesResponses := make([]bridgeResponse, 0, limit)
 	bridgesResponses = append(bridgesResponses, resp.Bridges[skipItems:pageSize]...)
 
 	// loads the remaining part of deposits when offset is not exactly the size of a page
@@ -81,7 +81,7 @@ func (s *BridgeService) GetDeposits(destinationAddress string, offset, limit int
 	// and not by offset and limit
 	if skipItems > 0 {
 		endpoint := fmt.Sprintf(endpointTemplate, s.BridgeServiceBase.Url(), urlPath, destinationAddress, pageNumber+1, pageSize)
-		resp, respError, statusCode, err = httpjson.HTTPGetWithError[GetBridgeResponse, ErrorResponse](s.httpClient, endpoint)
+		resp, respError, statusCode, err = httpjson.HTTPGetWithError[getBridgesResponse, errorResponse](s.httpClient, endpoint)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -136,7 +136,7 @@ out:
 	}
 
 	endpoint := fmt.Sprintf("%s/%s/claim-proof?network_id=%d&leaf_index=%d&deposit_count=%d", s.BridgeServiceBase.Url(), urlPath, depositNetwork, l1InfoTreeIndex, depositCount)
-	resp, respError, statusCode, err := httpjson.HTTPGetWithError[GetClaimProofResponse, ErrorResponse](s.httpClient, endpoint)
+	resp, respError, statusCode, err := httpjson.HTTPGetWithError[getClaimProofResponse, errorResponse](s.httpClient, endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ out:
 
 func (s *BridgeService) getInjectedL1InfoLeaf(depositNetwork, l1InfoTreeIndex uint32) (*getInjectedL1InfoLeafResponse, error) {
 	endpoint := fmt.Sprintf("%s/%s/injected-l1-info-leaf?network_id=%d&leaf_index=%d", s.BridgeServiceBase.Url(), urlPath, depositNetwork, l1InfoTreeIndex)
-	resp, errorResp, statusCode, err := httpjson.HTTPGetWithError[*getInjectedL1InfoLeafResponse, ErrorResponse](s.httpClient, endpoint)
+	resp, errorResp, statusCode, err := httpjson.HTTPGetWithError[*getInjectedL1InfoLeafResponse, errorResponse](s.httpClient, endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func (s *BridgeService) getInjectedL1InfoLeaf(depositNetwork, l1InfoTreeIndex ui
 
 func (s *BridgeService) getL1InfoTreeIndex(depositNetwork, depositCount uint32) (*uint32, error) {
 	l1InfoTreeIndexEndpoint := fmt.Sprintf("%s/%s/l1-info-tree-index?network_id=%d&deposit_count=%d", s.BridgeServiceBase.Url(), urlPath, depositNetwork, depositCount)
-	l1InfoTreeIndex, l1InfoTreeIndexRespError, statusCode, err := httpjson.HTTPGetWithError[uint32, ErrorResponse](s.httpClient, l1InfoTreeIndexEndpoint)
+	l1InfoTreeIndex, l1InfoTreeIndexRespError, statusCode, err := httpjson.HTTPGetWithError[uint32, errorResponse](s.httpClient, l1InfoTreeIndexEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -198,27 +198,58 @@ func (s *BridgeService) getL1InfoTreeIndex(depositNetwork, depositCount uint32) 
 	return &l1InfoTreeIndex, nil
 }
 
-func (s *BridgeService) responseToDeposit(bridgeResp BridgeResponse) (*bridge_service.Deposit, error) {
+func (s *BridgeService) getClaim(depositNetwork uint32, globalIndex string) (*claimResponse, error) {
+	endpoint := fmt.Sprintf("%s/%s/claims?network_id=%d&global_index=%s", s.BridgeServiceBase.Url(), urlPath, depositNetwork, globalIndex)
+	resp, respError, statusCode, err := httpjson.HTTPGetWithError[getClaimsResponse, errorResponse](s.httpClient, endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	if statusCode != http.StatusOK {
+		if statusCode == http.StatusNotFound {
+			return nil, bridge_service.ErrNotFound
+		}
+		errMsg := "unable to retrieve claim"
+		log.Warn().Int("code", statusCode).Str("message", respError.Error).Msgf("%s", errMsg)
+		return nil, fmt.Errorf(respError.Error)
+	}
+
+	if len(resp.Claims) == 0 {
+		return nil, bridge_service.ErrNotFound
+	}
+
+	return &resp.Claims[0], nil
+}
+
+func (s *BridgeService) responseToDeposit(bridgeResp bridgeResponse) (*bridge_service.Deposit, error) {
 	depositNetwork := bridgeResp.OrigNet
 	depositCount := bridgeResp.DepositCnt
 
+	claimTx := ""
 	isReadyForClaim := false
-	l1InfoTreeIndex, err := s.getL1InfoTreeIndex(depositNetwork, depositCount)
-	if err != nil {
-		return nil, err
-	}
-	if l1InfoTreeIndex == nil {
-		l1InfoLeaf, iErr := s.getInjectedL1InfoLeaf(depositNetwork, *l1InfoTreeIndex)
-		if iErr != nil {
-			return nil, iErr
-		}
-		isReadyForClaim = l1InfoLeaf != nil
+
+	claim, err := s.getClaim(depositNetwork, bridgeResp.GlobalIndex)
+	if !errors.Is(err, bridge_service.ErrNotFound) && err != nil {
+		return nil, fmt.Errorf("error retrieving claim: %w", err)
 	}
 
-	deposit, err := bridgeResp.ToDeposit(isReadyForClaim)
-	if err != nil {
-		return nil, err
+	if claim != nil {
+		claimTx = claim.TxHash
+	} else {
+		l1InfoTreeIndex, err := s.getL1InfoTreeIndex(depositNetwork, depositCount)
+		if !errors.Is(err, bridge_service.ErrNotFound) && err != nil {
+			return nil, fmt.Errorf("error retrieving l1 info tree index: %w", err)
+		}
+		if l1InfoTreeIndex != nil {
+			l1InfoLeaf, iErr := s.getInjectedL1InfoLeaf(depositNetwork, *l1InfoTreeIndex)
+			if !errors.Is(err, bridge_service.ErrNotFound) && err != nil {
+				return nil, fmt.Errorf("error retrieving injected l1 info leaf: %w", iErr)
+			}
+			isReadyForClaim = l1InfoLeaf != nil
+		}
 	}
+
+	deposit := bridgeResp.ToDeposit(isReadyForClaim, claimTx)
 
 	return deposit, nil
 }

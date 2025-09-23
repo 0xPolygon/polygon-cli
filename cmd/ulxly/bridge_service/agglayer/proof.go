@@ -5,13 +5,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type GetClaimProofResponse struct {
-	L1InfoTreeLeafResponse L1InfoTreeLeafResponse `json:"l1_info_tree_leaf"`
+type getClaimProofResponse struct {
+	L1InfoTreeLeafResponse l1InfoTreeLeafResponse `json:"l1_info_tree_leaf"`
 	ProofLocalExitRoot     []string               `json:"proof_local_exit_root"`
 	ProofRollupExitRoot    []string               `json:"proof_rollup_exit_root"`
 }
 
-type L1InfoTreeLeafResponse struct {
+type l1InfoTreeLeafResponse struct {
 	BlockNum          uint64 `json:"block_num"`
 	BlockPos          uint64 `json:"block_pos"`
 	GlobalExitRoot    string `json:"global_exit_root"`
@@ -23,7 +23,7 @@ type L1InfoTreeLeafResponse struct {
 	Timestamp         uint64 `json:"timestamp"`
 }
 
-func (r *GetClaimProofResponse) ToProof() *bridge_service.Proof {
+func (r *getClaimProofResponse) ToProof() *bridge_service.Proof {
 	p := &bridge_service.Proof{}
 
 	var merkleProof = make([]common.Hash, len(r.ProofLocalExitRoot))
