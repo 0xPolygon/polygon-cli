@@ -267,3 +267,10 @@ polycli ulxly claim asset \
     --deposit-count 482 \
     --rpc-url "$l1_rpc_url"
 ```
+
+```bash
+8:43PM INF No destination address specified. Using private key's address destAddress=0xced253B29527D62a1880b95C23F256CE78a73c06
+8:43PM INF The deposit is ready to be claimed
+8:43PM INF claimTxn: 0xcff2e97b9c476367f8c299c6526360a3d2dfc692c8021c5c2cb7503d079b0174
+8:43PM INF transaction successful txHash=0xcff2e97b9c476367f8c299c6526360a3d2dfc692c8021c5c2cb7503d079b0174
+```
