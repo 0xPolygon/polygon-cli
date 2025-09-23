@@ -23,11 +23,9 @@ type bridgeResponse struct {
 	DestAddr    string `json:"destination_address"`
 	BlockNum    uint64 `json:"block_num"`
 	DepositCnt  uint32 `json:"deposit_count"`
-	NetworkID   uint32 `json:"network_id"`
 	TxHash      string `json:"tx_hash"`
 	Metadata    string `json:"metadata"`
 	GlobalIndex string `json:"global_index"`
-	ClaimTxHash string `json:"claim_tx_hash"`
 
 	// Additional fields from the AggLayer API
 	BridgeHash     string `json:"bridge_hash"`
@@ -37,7 +35,7 @@ type bridgeResponse struct {
 	FromAddress    string `json:"from_address"`
 }
 
-func (r *bridgeResponse) ToDeposit(isReadyForClaim bool, claimTx string) *bridge_service.Deposit {
+func (r *bridgeResponse) ToDeposit(networkID uint32, isReadyForClaim bool, claimTx string) *bridge_service.Deposit {
 	d := &bridge_service.Deposit{}
 	d.BlockNum = r.BlockNum
 
@@ -48,11 +46,10 @@ func (r *bridgeResponse) ToDeposit(isReadyForClaim bool, claimTx string) *bridge
 	d.Amount.SetString(r.Amount, 10)
 
 	d.TxHash = common.HexToHash(r.TxHash)
-	// TODO: Thiago review
-	// if len(r.ClaimTxHash) > 0 {
-	// 	claimTxHash := common.HexToHash(r.ClaimTxHash)
-	// 	d.ClaimTxHash = &claimTxHash
-	// }
+	if len(claimTx) > 0 {
+		claimTxHash := common.HexToHash(claimTx)
+		d.ClaimTxHash = &claimTxHash
+	}
 
 	d.OrigAddr = common.HexToAddress(r.OrigAddr)
 	d.DestAddr = common.HexToAddress(r.DestAddr)
@@ -62,7 +59,7 @@ func (r *bridgeResponse) ToDeposit(isReadyForClaim bool, claimTx string) *bridge
 	d.LeafType = r.LeafType
 	d.OrigNet = r.OrigNet
 	d.DestNet = r.DestNet
-	d.NetworkID = r.NetworkID
+	d.NetworkID = networkID
 	d.DepositCnt = r.DepositCnt
 	d.ReadyForClaim = isReadyForClaim
 

@@ -1083,8 +1083,10 @@ func claimEverything(cmd *cobra.Command) error {
 			}
 
 			// if this new deposit is ready for claim OR it has already been claimed we should override the existing value
-			if deposit.ReadyForClaim || deposit.ClaimTxHash != nil {
-				depositMap[depId] = &deposits[idx]
+			if *inputUlxlyArgs.legacy {
+				if deposit.ReadyForClaim || deposit.ClaimTxHash != nil {
+					depositMap[depId] = &deposits[idx]
+				}
 			}
 		}
 	}
@@ -1845,12 +1847,14 @@ func getDeposit(depositNetwork, depositCount uint32) (*bridge_service.Deposit, e
 		return nil, err
 	}
 
-	if !deposit.ReadyForClaim {
-		log.Error().Msg("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
-		return nil, ErrNotReadyForClaim
-	} else if deposit.ClaimTxHash != nil {
-		log.Info().Str("claimTxHash", deposit.ClaimTxHash.String()).Msg(ErrDepositAlreadyClaimed.Error())
-		return nil, ErrDepositAlreadyClaimed
+	if *inputUlxlyArgs.legacy {
+		if !deposit.ReadyForClaim {
+			log.Error().Msg("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
+			return nil, ErrNotReadyForClaim
+		} else if deposit.ClaimTxHash != nil {
+			log.Info().Str("claimTxHash", deposit.ClaimTxHash.String()).Msg(ErrDepositAlreadyClaimed.Error())
+			return nil, ErrDepositAlreadyClaimed
+		}
 	}
 
 	return deposit, nil
