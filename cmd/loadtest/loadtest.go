@@ -154,6 +154,13 @@ func hasUniqueModes(modes []loadTestMode) bool {
 
 func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	log.Info().Msg("Connecting with RPC endpoint to initialize load test parameters")
+
+	// When outputting raw transactions, we don't need to wait for anything to be mined
+	if *inputLoadTestParams.OutputRawTxOnly {
+		*inputLoadTestParams.FireAndForget = true
+		log.Debug().Msg("OutputRawTxOnly mode enabled - automatically enabling FireAndForget mode")
+	}
+
 	gas, err := c.SuggestGasPrice(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to retrieve gas price")
@@ -1188,6 +1195,22 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 	defer func() { t2 = time.Now() }()
 	if *ltp.EthCallOnly {
 		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
+	} else if *ltp.OutputRawTxOnly {
+		// Get raw signed transaction bytes
+		var rawTx []byte
+		rawTx, err = stx.MarshalBinary()
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to marshal transaction to binary")
+			return
+		}
+		// Convert to hex string with 0x prefix
+		rawTxHex := "0x" + hex.EncodeToString(rawTx)
+
+		// Output the raw transaction
+		fmt.Println(rawTxHex)
+
+		// Don't actually send the transaction
+		err = nil
 	} else {
 		err = c.SendTransaction(ctx, stx)
 	}

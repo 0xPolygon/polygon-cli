@@ -89,6 +89,7 @@ type (
 		ReceiptRetryMax               *uint
 		ReceiptRetryInitialDelayMs    *uint
 		MaxBaseFeeWei                 *uint64
+		OutputRawTxOnly               *bool
 
 		// Computed
 		CurrentGasPrice       *big.Int
@@ -226,6 +227,7 @@ func initFlags() {
 	ltp.RandomRecipients = LoadtestCmd.PersistentFlags().Bool("random-recipients", false, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
 	ltp.EthCallOnly = LoadtestCmd.PersistentFlags().Bool("eth-call-only", false, "When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.")
 	ltp.EthCallOnlyLatestBlock = LoadtestCmd.PersistentFlags().Bool("eth-call-only-latest", false, "When using call only mode with recall, should we execute on the latest block or on the original block")
+	ltp.OutputRawTxOnly = LoadtestCmd.PersistentFlags().Bool("output-raw-tx-only", false, "When using this mode, rather than sending a transaction, we'll just output the raw signed transaction hex. POC: currently only works with transaction mode.")
 	ltp.EthAmountInWei = LoadtestCmd.PersistentFlags().Uint64("eth-amount-in-wei", 0, "The amount of ether in wei to send on every transaction")
 	ltp.RateLimit = LoadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
 	ltp.AdaptiveRateLimit = LoadtestCmd.PersistentFlags().Bool("adaptive-rate-limit", false, "Enable AIMD-style congestion control to automatically adjust request rate")
