@@ -168,6 +168,9 @@ var SensorCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Initialize the database based on the persistence flag
+		// Convert network ID to chain ID for database use
+		chainID := new(big.Int).SetUint64(inputSensorParams.NetworkID)
+
 		var db database.Database
 		switch inputSensorParams.Persistence {
 		case "datastore":
@@ -175,6 +178,7 @@ var SensorCmd = &cobra.Command{
 				ProjectID:                    inputSensorParams.ProjectID,
 				DatabaseID:                   inputSensorParams.DatabaseID,
 				SensorID:                     inputSensorParams.SensorID,
+				ChainID:                      chainID,
 				MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
 				ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
 				ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
@@ -186,6 +190,7 @@ var SensorCmd = &cobra.Command{
 		case "json":
 			db = database.NewJSONDatabase(database.JSONDatabaseOptions{
 				SensorID:                     inputSensorParams.SensorID,
+				ChainID:                      chainID,
 				MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
 				ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
 				ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,

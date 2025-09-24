@@ -21,6 +21,7 @@ import (
 // Each record is output as a single line of JSON (newline-delimited JSON).
 type JSONDatabase struct {
 	sensorID                     string
+	chainID                      *big.Int
 	maxConcurrency               int
 	shouldWriteBlocks            bool
 	shouldWriteBlockEvents       bool
@@ -33,6 +34,7 @@ type JSONDatabase struct {
 // JSONDatabaseOptions is used when creating a NewJSONDatabase.
 type JSONDatabaseOptions struct {
 	SensorID                     string
+	ChainID                      *big.Int
 	MaxConcurrency               int
 	ShouldWriteBlocks            bool
 	ShouldWriteBlockEvents       bool
@@ -45,6 +47,7 @@ type JSONDatabaseOptions struct {
 func NewJSONDatabase(opts JSONDatabaseOptions) Database {
 	return &JSONDatabase{
 		sensorID:                     opts.SensorID,
+		chainID:                      opts.ChainID,
 		maxConcurrency:               opts.MaxConcurrency,
 		shouldWriteBlocks:            opts.ShouldWriteBlocks,
 		shouldWriteBlockEvents:       opts.ShouldWriteBlockEvents,
@@ -233,7 +236,12 @@ func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, 
 func (j *JSONDatabase) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
 	if j.ShouldWriteTransactions() {
 		for _, tx := range txs {
-			from, _ := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+			// Use the transaction's chain ID if available, otherwise use the database's chain ID
+			chainID := tx.ChainId()
+			if chainID == nil {
+				chainID = j.chainID
+			}
+			from, _ := types.Sender(types.LatestSignerForChainID(chainID), tx)
 			
 			jsonTx := JSONTransaction{
 				Type:          "transaction",
