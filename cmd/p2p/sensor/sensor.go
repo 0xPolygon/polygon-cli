@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"slices"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -466,6 +467,7 @@ func handleDNSDiscovery(server *ethp2p.Server) {
 // handleRPC sets up the JSON-RPC server for receiving and broadcasting transactions.
 // It handles eth_sendRawTransaction requests, validates transaction signatures,
 // and broadcasts valid transactions to all connected peers.
+// Supports both single requests and batch requests per JSON-RPC 2.0 specification.
 func handleRPC(connManager *p2p.ConnectionManager, networkID uint64) {
 	// Use network ID as chain ID for signature validation
 	chainID := new(big.Int).SetUint64(networkID)
@@ -484,7 +486,15 @@ func handleRPC(connManager *p2p.ConnectionManager, networkID uint64) {
 		}
 		defer r.Body.Close()
 
-		// Parse JSON-RPC request
+		// Check if this is a batch request (starts with '[') or single request
+		trimmedBody := strings.TrimSpace(string(body))
+		if len(trimmedBody) > 0 && trimmedBody[0] == '[' {
+			// Handle batch request
+			handleBatchRequest(w, body, connManager, chainID)
+			return
+		}
+
+		// Parse single JSON-RPC request
 		var req jsonRPCRequest
 		if err := json.Unmarshal(body, &req); err != nil {
 			writeJSONError(w, -32700, "Parse error", nil)
@@ -553,6 +563,272 @@ func writeJSONResult(w http.ResponseWriter, result interface{}, id interface{}) 
 		ID:      id,
 	}
 	json.NewEncoder(w).Encode(response)
+}
+
+// handleBatchRequest processes JSON-RPC batch requests
+func handleBatchRequest(w http.ResponseWriter, body []byte, connManager *p2p.ConnectionManager, chainID *big.Int) {
+	// Parse batch of requests
+	var requests []jsonRPCRequest
+	if err := json.Unmarshal(body, &requests); err != nil {
+		writeJSONError(w, -32700, "Parse error", nil)
+		return
+	}
+
+	// Validate batch is not empty
+	if len(requests) == 0 {
+		writeJSONError(w, -32600, "Invalid request: empty batch", nil)
+		return
+	}
+
+	// Process all requests and collect valid transactions for batch broadcasting
+	responses := make([]jsonRPCResponse, 0, len(requests))
+	validTxs := make(types.Transactions, 0)
+	txIndexToResponse := make(map[int]int) // maps transaction index to response index
+
+	for i, req := range requests {
+		if req.Method == "eth_sendRawTransaction" {
+			// Try to parse and validate the transaction
+			tx, response := validateTransaction(req, chainID)
+			if tx != nil {
+				// Transaction is valid, add to batch
+				validTxs = append(validTxs, tx)
+				txIndexToResponse[len(validTxs)-1] = i
+				// Create success response placeholder (will be updated after broadcast)
+				responses = append(responses, jsonRPCResponse{
+					JSONRPC: "2.0",
+					Result:  tx.Hash().Hex(),
+					ID:      req.ID,
+				})
+			} else {
+				// Transaction is invalid, add error response
+				responses = append(responses, response)
+			}
+		} else {
+			// Not a sendRawTransaction request
+			response := processSingleRequest(req, connManager, chainID)
+			responses = append(responses, response)
+		}
+	}
+
+	// Broadcast all valid transactions in a single batch if there are any
+	if len(validTxs) > 0 {
+		log.Info().
+			Int("txCount", len(validTxs)).
+			Int("totalRequests", len(requests)).
+			Msg("Broadcasting batch of transactions")
+
+		broadcastCount := connManager.BroadcastTransactions(validTxs)
+
+		log.Info().
+			Int("txCount", len(validTxs)).
+			Int("peers", broadcastCount).
+			Msg("Batch broadcast complete")
+	}
+
+	// Write batch response
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(responses); err != nil {
+		log.Error().Err(err).Msg("Failed to encode batch response")
+	}
+}
+
+// validateTransaction validates a transaction request and returns the transaction if valid
+func validateTransaction(req jsonRPCRequest, chainID *big.Int) (*types.Transaction, jsonRPCResponse) {
+	// Check params
+	if len(req.Params) == 0 {
+		return nil, jsonRPCResponse{
+			JSONRPC: "2.0",
+			Error: &rpcError{
+				Code:    -32602,
+				Message: "Invalid params: missing raw transaction",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Extract raw transaction hex string
+	rawTxHex, ok := req.Params[0].(string)
+	if !ok {
+		return nil, jsonRPCResponse{
+			JSONRPC: "2.0",
+			Error: &rpcError{
+				Code:    -32602,
+				Message: "Invalid params: raw transaction must be a hex string",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Decode hex string to bytes
+	txBytes, err := hexutil.Decode(rawTxHex)
+	if err != nil {
+		return nil, jsonRPCResponse{
+			JSONRPC: "2.0",
+			Error: &rpcError{
+				Code:    -32602,
+				Message: fmt.Sprintf("Invalid transaction hex: %v", err),
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Unmarshal transaction
+	tx := new(types.Transaction)
+	if err := tx.UnmarshalBinary(txBytes); err != nil {
+		return nil, jsonRPCResponse{
+			JSONRPC: "2.0",
+			Error: &rpcError{
+				Code:    -32602,
+				Message: fmt.Sprintf("Invalid transaction encoding: %v", err),
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Validate transaction signature
+	signer := types.LatestSignerForChainID(chainID)
+	sender, err := types.Sender(signer, tx)
+	if err != nil {
+		return nil, jsonRPCResponse{
+			JSONRPC: "2.0",
+			Error: &rpcError{
+				Code:    -32602,
+				Message: fmt.Sprintf("Invalid transaction signature: %v", err),
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Log the transaction
+	toAddr := "nil"
+	if tx.To() != nil {
+		toAddr = tx.To().Hex()
+	}
+
+	log.Debug().
+		Str("hash", tx.Hash().Hex()).
+		Str("from", sender.Hex()).
+		Str("to", toAddr).
+		Str("value", tx.Value().String()).
+		Uint64("gas", tx.Gas()).
+		Msg("Validated transaction")
+
+	return tx, jsonRPCResponse{}
+}
+
+// processSingleRequest processes a single JSON-RPC request and returns a response
+func processSingleRequest(req jsonRPCRequest, connManager *p2p.ConnectionManager, chainID *big.Int) jsonRPCResponse {
+	// Handle eth_sendRawTransaction
+	if req.Method == "eth_sendRawTransaction" {
+		return processSendRawTransaction(req, connManager, chainID)
+	}
+
+	// Method not found
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		Error: &rpcError{
+			Code:    -32601,
+			Message: "Method not found",
+		},
+		ID: req.ID,
+	}
+}
+
+// processSendRawTransaction processes a single eth_sendRawTransaction request and returns a response
+func processSendRawTransaction(req jsonRPCRequest, connManager *p2p.ConnectionManager, chainID *big.Int) jsonRPCResponse {
+	// Check params
+	if len(req.Params) == 0 {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			Error: &rpcError{
+				Code:    -32602,
+				Message: "Invalid params: missing raw transaction",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Extract raw transaction hex string
+	rawTxHex, ok := req.Params[0].(string)
+	if !ok {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			Error: &rpcError{
+				Code:    -32602,
+				Message: "Invalid params: raw transaction must be a hex string",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Decode hex string to bytes
+	txBytes, err := hexutil.Decode(rawTxHex)
+	if err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			Error: &rpcError{
+				Code:    -32602,
+				Message: fmt.Sprintf("Invalid transaction hex: %v", err),
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Unmarshal transaction
+	tx := new(types.Transaction)
+	if err := tx.UnmarshalBinary(txBytes); err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			Error: &rpcError{
+				Code:    -32602,
+				Message: fmt.Sprintf("Invalid transaction encoding: %v", err),
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Validate transaction signature
+	signer := types.LatestSignerForChainID(chainID)
+	sender, err := types.Sender(signer, tx)
+	if err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			Error: &rpcError{
+				Code:    -32602,
+				Message: fmt.Sprintf("Invalid transaction signature: %v", err),
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Log the transaction
+	toAddr := "nil"
+	if tx.To() != nil {
+		toAddr = tx.To().Hex()
+	}
+
+	log.Info().
+		Str("hash", tx.Hash().Hex()).
+		Str("from", sender.Hex()).
+		Str("to", toAddr).
+		Str("value", tx.Value().String()).
+		Uint64("gas", tx.Gas()).
+		Msg("Broadcasting transaction")
+
+	// Broadcast to all peers using the connection manager
+	broadcastCount := connManager.BroadcastTransaction(tx)
+
+	log.Info().
+		Str("hash", tx.Hash().Hex()).
+		Int("peers", broadcastCount).
+		Msg("Transaction broadcast complete")
+
+	// Return transaction hash
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		Result:  tx.Hash().Hex(),
+		ID:      req.ID,
+	}
 }
 
 // handleSendRawTransaction processes eth_sendRawTransaction requests

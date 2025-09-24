@@ -139,6 +139,41 @@ func (cm *ConnectionManager) BroadcastTransaction(tx *types.Transaction) int {
 	return successCount
 }
 
+// BroadcastTransactions sends multiple transactions to all connected peers in a single message
+func (cm *ConnectionManager) BroadcastTransactions(txs types.Transactions) int {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	if len(txs) == 0 {
+		return 0
+	}
+
+	successCount := 0
+
+	for nodeID, c := range cm.connections {
+		if err := ethp2p.Send(c.rw, eth.TransactionsMsg, txs); err != nil {
+			log.Error().
+				Err(err).
+				Str("nodeID", nodeID).
+				Int("txCount", len(txs)).
+				Msg("Failed to send transactions to peer")
+		} else {
+			successCount++
+			log.Debug().
+				Str("nodeID", nodeID).
+				Int("txCount", len(txs)).
+				Msg("Sent transactions to peer")
+		}
+	}
+
+	log.Info().
+		Int("txCount", len(txs)).
+		Int("peers", successCount).
+		Msg("Batch transaction broadcast complete")
+
+	return successCount
+}
+
 // NewEthProtocol creates the new eth protocol. This will handle writing the
 // status exchange, message handling, and writing blocks/txs to the database.
 func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
