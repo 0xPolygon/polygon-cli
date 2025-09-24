@@ -157,24 +157,24 @@ out:
 	return proof, nil
 }
 
-func (s *BridgeService) getInjectedL1InfoLeaf(depositNetwork, l1InfoTreeIndex uint32) (*getInjectedL1InfoLeafResponse, error) {
-	endpoint := fmt.Sprintf("%s/%s/injected-l1-info-leaf?network_id=%d&leaf_index=%d", s.BridgeServiceBase.Url(), urlPath, depositNetwork, l1InfoTreeIndex)
-	resp, errorResp, statusCode, err := httpjson.HTTPGetWithError[*getInjectedL1InfoLeafResponse, errorResponse](s.httpClient, endpoint)
-	if err != nil {
-		return nil, err
-	}
+// func (s *BridgeService) getInjectedL1InfoLeaf(depositNetwork, l1InfoTreeIndex uint32) (*getInjectedL1InfoLeafResponse, error) {
+// 	endpoint := fmt.Sprintf("%s/%s/injected-l1-info-leaf?network_id=%d&leaf_index=%d", s.BridgeServiceBase.Url(), urlPath, depositNetwork, l1InfoTreeIndex)
+// 	resp, errorResp, statusCode, err := httpjson.HTTPGetWithError[*getInjectedL1InfoLeafResponse, errorResponse](s.httpClient, endpoint)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	if statusCode != http.StatusOK {
-		if statusCode == http.StatusNotFound {
-			return nil, bridge_service.ErrNotFound
-		}
-		errMsg := "unable to retrieve l1 info leaf"
-		log.Warn().Int("code", statusCode).Str("message", errorResp.Error).Msgf("%s", errMsg)
-		return nil, bridge_service.ErrNotFound
-	}
+// 	if statusCode != http.StatusOK {
+// 		if statusCode == http.StatusNotFound {
+// 			return nil, bridge_service.ErrNotFound
+// 		}
+// 		errMsg := "unable to retrieve l1 info leaf"
+// 		log.Warn().Int("code", statusCode).Str("message", errorResp.Error).Msgf("%s", errMsg)
+// 		return nil, bridge_service.ErrNotFound
+// 	}
 
-	return resp, nil
-}
+// 	return resp, nil
+// }
 
 func (s *BridgeService) getL1InfoTreeIndex(depositNetwork, depositCount uint32) (*uint32, error) {
 	l1InfoTreeIndexEndpoint := fmt.Sprintf("%s/%s/l1-info-tree-index?network_id=%d&deposit_count=%d", s.BridgeServiceBase.Url(), urlPath, depositNetwork, depositCount)
@@ -201,28 +201,28 @@ func (s *BridgeService) getL1InfoTreeIndex(depositNetwork, depositCount uint32) 
 	return &l1InfoTreeIndex, nil
 }
 
-func (s *BridgeService) getClaim(depositNetwork uint32, globalIndex string) (*claimResponse, error) {
-	endpoint := fmt.Sprintf("%s/%s/claims?network_id=%d&global_index=%s", s.BridgeServiceBase.Url(), urlPath, depositNetwork, globalIndex)
-	resp, respError, statusCode, err := httpjson.HTTPGetWithError[getClaimsResponse, errorResponse](s.httpClient, endpoint)
-	if err != nil {
-		return nil, err
-	}
+// func (s *BridgeService) getClaim(depositNetwork uint32, globalIndex string) (*claimResponse, error) {
+// 	endpoint := fmt.Sprintf("%s/%s/claims?network_id=%d&global_index=%s", s.BridgeServiceBase.Url(), urlPath, depositNetwork, globalIndex)
+// 	resp, respError, statusCode, err := httpjson.HTTPGetWithError[getClaimsResponse, errorResponse](s.httpClient, endpoint)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	if statusCode != http.StatusOK {
-		if statusCode == http.StatusNotFound {
-			return nil, bridge_service.ErrNotFound
-		}
-		errMsg := "unable to retrieve claim"
-		log.Warn().Int("code", statusCode).Str("message", respError.Error).Msgf("%s", errMsg)
-		return nil, fmt.Errorf(respError.Error)
-	}
+// 	if statusCode != http.StatusOK {
+// 		if statusCode == http.StatusNotFound {
+// 			return nil, bridge_service.ErrNotFound
+// 		}
+// 		errMsg := "unable to retrieve claim"
+// 		log.Warn().Int("code", statusCode).Str("message", respError.Error).Msgf("%s", errMsg)
+// 		return nil, fmt.Errorf(respError.Error)
+// 	}
 
-	if len(resp.Claims) == 0 {
-		return nil, bridge_service.ErrNotFound
-	}
+// 	if len(resp.Claims) == 0 {
+// 		return nil, bridge_service.ErrNotFound
+// 	}
 
-	return &resp.Claims[0], nil
-}
+// 	return &resp.Claims[0], nil
+// }
 
 func (s *BridgeService) responseToDeposit(depositNetwork uint32, bridgeResp bridgeResponse) (*bridge_service.Deposit, error) {
 	claimTx := ""
