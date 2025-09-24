@@ -241,7 +241,12 @@ func (j *JSONDatabase) WriteTransactions(ctx context.Context, peer *enode.Node, 
 			if chainID == nil {
 				chainID = j.chainID
 			}
-			from, _ := types.Sender(types.LatestSignerForChainID(chainID), tx)
+
+			var from common.Address
+			// Only attempt sender recovery if we have a valid non-zero chainID
+			if chainID != nil && chainID.Sign() > 0 {
+				from, _ = types.Sender(types.LatestSignerForChainID(chainID), tx)
+			}
 			
 			jsonTx := JSONTransaction{
 				Type:          "transaction",

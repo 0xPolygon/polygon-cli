@@ -356,9 +356,13 @@ func (d *Datastore) newDatastoreTransaction(tx *types.Transaction, tfs time.Time
 	if chainID == nil {
 		chainID = d.chainID
 	}
-	address, err := types.Sender(types.LatestSignerForChainID(chainID), tx)
-	if err == nil {
-		from = address.String()
+
+	// Only attempt sender recovery if we have a valid non-zero chainID
+	if chainID != nil && chainID.Sign() > 0 {
+		address, err := types.Sender(types.LatestSignerForChainID(chainID), tx)
+		if err == nil {
+			from = address.String()
+		}
 	}
 
 	if tx.To() != nil {
