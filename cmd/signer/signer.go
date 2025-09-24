@@ -330,7 +330,7 @@ func (g *GCPKMS) ListKeyRingKeys(ctx context.Context) error {
 	// It will require modifications to work:
 	// - It may require correct/in-range values for request initialization.
 	// - It may require specifying regional endpoints when creating the service client as shown in:
-	//   https://pkg.go.dev/cloud.google.com/go#hdr-Client_Options
+	// https://pkg.go.dev/cloud.google.com/go#hdr-Client_Options
 	c, err := kms.NewKeyManagementClient(ctx)
 	if err != nil {
 		return err
@@ -700,7 +700,7 @@ func (g *GCPKMS) Sign(ctx context.Context, tx *ethtypes.Transaction) error {
 	ethSig = append(ethSig, bigIntTo32Bytes(parsedSig.S)...)
 	ethSig = append(ethSig, 0)
 
-	// Feels like a hack, but I cna't figure out a better way to determine the recovery ID than this since google isn't returning it. More research is required
+	// Feels like a hack, but I can't figure out a better way to determine the recovery ID than this since google isn't returning it. More research is required
 	pubKey, err := crypto.Ecrecover(digest.Bytes(), ethSig)
 	if err != nil || !bytes.Equal(pubKey, gcpPubKey.PublicKey.Bytes) {
 		ethSig[64] = 1

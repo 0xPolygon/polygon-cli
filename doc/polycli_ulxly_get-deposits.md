@@ -73,6 +73,7 @@ serve as the input to the proof command.
   -i, --filter-size uint        The batch size for individual filter queries (default 1000)
   -f, --from-block uint         The start of the range of blocks to retrieve
   -h, --help                    help for get-deposits
+      --insecure                skip TLS certificate verification
   -u, --rpc-url string          The RPC URL to read the events data
   -t, --to-block uint           The end of the range of blocks to retrieve
 ```

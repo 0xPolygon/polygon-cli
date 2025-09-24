@@ -55,7 +55,4 @@ loadtest: fund ## Run random loadtest against a local RPC.
 		--concurrency 1 \
 		--requests 200 \
 		--rate-limit 100 \
-		--sending-address-count 10 \
-		--pre-fund-sending-addresses \
-		--summarize 
-		
+		--summarize

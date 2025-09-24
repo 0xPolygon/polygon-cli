@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -177,7 +178,7 @@ func streamContainerLogs(ctx context.Context, cli *client.Client, containerID, c
 	}
 
 	// Update to use container.LogsOptions instead of types.ContainerLogsOptions
-	opts := types.ContainerLogsOptions{
+	opts := container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Follow:     true,

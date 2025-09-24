@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"os"
 	"strings"
@@ -49,21 +50,14 @@ func runFunding(ctx context.Context) error {
 		return err
 	}
 
-	// Derive or generate a set of wallets.
 	var addresses []common.Address
-	if params.WalletAddresses != nil && *params.WalletAddresses != nil {
-		log.Info().Msg("Using addresses provided by the user")
-		addresses = make([]common.Address, len(*params.WalletAddresses))
-		for i, address := range *params.WalletAddresses {
-			addresses[i] = common.HexToAddress(address)
-		}
-	} else if *params.UseHDDerivation {
-		log.Info().Msg("Deriving wallets from the default mnemonic")
-		addresses, err = deriveHDWallets(int(*params.WalletsNumber))
-	} else {
-		log.Info().Msg("Generating random wallets")
-		addresses, err = generateWallets(int(*params.WalletsNumber))
+
+	if len(*params.KeyFile) > 0 { // get addresses from key-file
+		addresses, err = getAddressesFromKeyFile(*params.KeyFile)
+	} else { // get addresses from private key
+		addresses, err = getAddressesFromPrivateKey(ctx, c)
 	}
+	// check errors after getting addresses
 	if err != nil {
 		return err
 	}
@@ -83,6 +77,57 @@ func runFunding(ctx context.Context) error {
 
 	log.Info().Msgf("Total execution time: %s", time.Since(startTime))
 	return nil
+}
+
+func getAddressesFromKeyFile(keyFilePath string) ([]common.Address, error) {
+	if len(keyFilePath) == 0 {
+		return nil, errors.New("the key file path is empty")
+	}
+
+	log.Trace().
+		Str("keyFilePath", keyFilePath).
+		Msg("getting addresses from key file")
+
+	privateKeys, iErr := util.ReadPrivateKeysFromFile(keyFilePath)
+	if iErr != nil {
+		log.Error().
+			Err(iErr).
+			Msg("Unable to read private keys from key file")
+		return nil, fmt.Errorf("unable to read private keys from key file. %w", iErr)
+	}
+	addresses := make([]common.Address, len(privateKeys))
+	for i, privateKey := range privateKeys {
+		addresses[i] = util.GetAddress(context.Background(), privateKey)
+		log.Trace().
+			Interface("address", addresses[i]).
+			Str("privateKey", hex.EncodeToString(privateKey.D.Bytes())).
+			Msg("New wallet derived from key file")
+	}
+	log.Info().Int("count", len(addresses)).Msg("Wallet(s) derived from key file")
+	return addresses, nil
+}
+
+func getAddressesFromPrivateKey(ctx context.Context, c *ethclient.Client) ([]common.Address, error) {
+	// Derive or generate a set of wallets.
+	var addresses []common.Address
+	var err error
+	if params.WalletAddresses != nil && *params.WalletAddresses != nil {
+		log.Info().Msg("Using addresses provided by the user")
+		addresses = make([]common.Address, len(*params.WalletAddresses))
+		for i, address := range *params.WalletAddresses {
+			addresses[i] = common.HexToAddress(address)
+		}
+	} else if *params.UseHDDerivation {
+		log.Info().Msg("Deriving wallets from the default mnemonic")
+		addresses, err = deriveHDWallets(int(*params.WalletsNumber))
+	} else {
+		log.Info().Msg("Generating random wallets")
+		addresses, err = generateWallets(int(*params.WalletsNumber))
+	}
+	if err != nil {
+		return nil, err
+	}
+	return addresses, nil
 }
 
 // dialRpc dials the Ethereum RPC server and return an Ethereum client.
@@ -127,8 +172,8 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 	var err error
 	if *params.FunderAddress == "" {
 		// Deploy the Funder contract.
-		// Note: `fundingAmountInWei` reprensents the amount the Funder contract will send to each newly generated wallets.
-		fundingAmountInWei := new(big.Int).SetUint64(*params.FundingAmountInWei)
+		// Note: `fundingAmountInWei` represents the amount the Funder contract will send to each newly generated wallets.
+		fundingAmountInWei := params.FundingAmountInWei
 		contractAddress, _, _, err = funder.DeployFunder(tops, c, fundingAmountInWei)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to deploy Funder contract")
@@ -138,7 +183,7 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 
 		// Fund the Funder contract.
 		// Calculate the total amount needed to fund the contract based on the number of addresses.
-		// Note: `funderContractBalanceInWei` reprensents the initial balance of the Funder contract.
+		// Note: `funderContractBalanceInWei` represents the initial balance of the Funder contract.
 		// The contract needs initial funds to be able to fund wallets.
 		funderContractBalanceInWei := new(big.Int).Mul(fundingAmountInWei, big.NewInt(int64(numAddresses)))
 		if err = util.SendTx(ctx, c, privateKey, &contractAddress, funderContractBalanceInWei, nil, uint64(30000)); err != nil {
