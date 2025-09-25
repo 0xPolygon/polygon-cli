@@ -37,46 +37,48 @@ import (
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 )
 
-type sensorParams struct {
-	Bootnodes                    string
-	NetworkID                    uint64
-	NodesFile                    string
-	TrustedNodesFile             string
-	ProjectID                    string
-	DatabaseID                   string
-	SensorID                     string
-	MaxPeers                     int
-	MaxDatabaseConcurrency       int
-	ShouldWriteBlocks            bool
-	ShouldWriteBlockEvents       bool
-	ShouldWriteTransactions      bool
-	ShouldWriteTransactionEvents bool
-	ShouldWritePeers             bool
-	ShouldRunPprof               bool
-	PprofPort                    uint
-	ShouldRunPrometheus          bool
-	PrometheusPort               uint
-	APIPort                      uint
-	KeyFile                      string
-	PrivateKey                   string
-	Port                         int
-	DiscoveryPort                int
-	RPC                          string
-	GenesisHash                  string
-	ForkID                       []byte
-	DialRatio                    int
-	NAT                          string
-	QuickStart                   bool
-	TTL                          time.Duration
-	DiscoveryDNS                 string
-	Database                     string
+type (
+	sensorParams struct {
+		Bootnodes                    string
+		NetworkID                    uint64
+		NodesFile                    string
+		TrustedNodesFile             string
+		ProjectID                    string
+		DatabaseID                   string
+		SensorID                     string
+		MaxPeers                     int
+		MaxDatabaseConcurrency       int
+		ShouldWriteBlocks            bool
+		ShouldWriteBlockEvents       bool
+		ShouldWriteTransactions      bool
+		ShouldWriteTransactionEvents bool
+		ShouldWritePeers             bool
+		ShouldRunPprof               bool
+		PprofPort                    uint
+		ShouldRunPrometheus          bool
+		PrometheusPort               uint
+		APIPort                      uint
+		KeyFile                      string
+		PrivateKey                   string
+		Port                         int
+		DiscoveryPort                int
+		RPC                          string
+		GenesisHash                  string
+		ForkID                       []byte
+		DialRatio                    int
+		NAT                          string
+		QuickStart                   bool
+		TTL                          time.Duration
+		DiscoveryDNS                 string
+		Database                     string
 
-	bootnodes    []*enode.Node
-	nodes        []*enode.Node
-	trustedNodes []*enode.Node
-	privateKey   *ecdsa.PrivateKey
-	nat          nat.Interface
-}
+		bootnodes    []*enode.Node
+		nodes        []*enode.Node
+		trustedNodes []*enode.Node
+		privateKey   *ecdsa.PrivateKey
+		nat          nat.Interface
+	}
+)
 
 var (
 	inputSensorParams sensorParams
