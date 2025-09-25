@@ -22,7 +22,6 @@ import (
 type JSONDatabase struct {
 	sensorID                     string
 	chainID                      *big.Int
-	maxConcurrency               int
 	shouldWriteBlocks            bool
 	shouldWriteBlockEvents       bool
 	shouldWriteTransactions      bool
@@ -46,7 +45,6 @@ type JSONDatabaseOptions struct {
 func NewJSONDatabase(opts JSONDatabaseOptions) Database {
 	return &JSONDatabase{
 		sensorID:                     opts.SensorID,
-		maxConcurrency:               opts.MaxConcurrency,
 		shouldWriteBlocks:            opts.ShouldWriteBlocks,
 		shouldWriteBlockEvents:       opts.ShouldWriteBlockEvents,
 		shouldWriteTransactions:      opts.ShouldWriteTransactions,
@@ -307,9 +305,9 @@ func (j *JSONDatabase) HasBlock(ctx context.Context, hash common.Hash) bool {
 	return true
 }
 
-// MaxConcurrentWrites returns the configured max concurrency.
+// MaxConcurrentWrites returns the max concurrency.
 func (j *JSONDatabase) MaxConcurrentWrites() int {
-	return j.maxConcurrency
+	return 1
 }
 
 // ShouldWriteBlocks returns the configured value.
