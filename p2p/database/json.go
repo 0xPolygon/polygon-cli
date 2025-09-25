@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -21,13 +20,11 @@ import (
 // Each record is output as a single line of JSON (newline-delimited JSON).
 type JSONDatabase struct {
 	sensorID                     string
-	chainID                      *big.Int
 	shouldWriteBlocks            bool
 	shouldWriteBlockEvents       bool
 	shouldWriteTransactions      bool
 	shouldWriteTransactionEvents bool
 	shouldWritePeers             bool
-	mu                           sync.Mutex
 }
 
 // JSONDatabaseOptions is used when creating a NewJSONDatabase.
@@ -117,11 +114,8 @@ type JSONPeer struct {
 	TimeLastSeen time.Time `json:"time_last_seen"`
 }
 
-// outputJSON safely outputs JSON to stdout.
-func (j *JSONDatabase) outputJSON(v any) {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-
+// Write safely outputs JSON to stdout.
+func (j *JSONDatabase) Write(v any) {
 	data, err := json.Marshal(v)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to marshal JSON")
@@ -132,39 +126,53 @@ func (j *JSONDatabase) outputJSON(v any) {
 }
 
 // WriteBlock writes the block and the block event as JSON.
-func (j *JSONDatabase) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
-	if j.ShouldWriteBlockEvents() && peer != nil {
-		event := JSONBlockEvent{
-			Type:      "block_event",
-			SensorID:  j.sensorID,
-			PeerID:    peer.URLv4(),
-			Hash:      block.Hash().Hex(),
-			Timestamp: tfs,
-		}
-		j.outputJSON(event)
+func (j *JSONDatabase) WriteBlock(_ context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
+	j.writeBlockEvent(peer, block, tfs)
+	j.writeBlock(block, td, tfs)
+}
+
+func (j *JSONDatabase) writeBlockEvent(peer *enode.Node, block *types.Block, tfs time.Time) {
+	if !j.ShouldWriteBlockEvents() || peer == nil {
+		return
 	}
 
-	if j.ShouldWriteBlocks() {
-		jsonBlock := JSONBlock{
-			Type:            "block",
-			SensorID:        j.sensorID,
-			Hash:            block.Hash().Hex(),
-			ParentHash:      block.ParentHash().Hex(),
-			Number:          block.NumberU64(),
-			Timestamp:       block.Time(),
-			GasLimit:        block.GasLimit(),
-			GasUsed:         block.GasUsed(),
-			Difficulty:      block.Difficulty().String(),
-			TotalDifficulty: td.String(),
-			TxCount:         len(block.Transactions()),
-			UncleCount:      len(block.Uncles()),
-			TimeFirstSeen:   tfs,
-		}
-		if block.BaseFee() != nil {
-			jsonBlock.BaseFee = block.BaseFee().String()
-		}
-		j.outputJSON(jsonBlock)
+	event := JSONBlockEvent{
+		Type:      "block_event",
+		SensorID:  j.sensorID,
+		PeerID:    peer.URLv4(),
+		Hash:      block.Hash().Hex(),
+		Timestamp: tfs,
 	}
+
+	j.Write(event)
+}
+
+func (j *JSONDatabase) writeBlock(block *types.Block, td *big.Int, tfs time.Time) {
+	if !j.ShouldWriteBlocks() {
+		return
+	}
+
+	jsonBlock := JSONBlock{
+		Type:            "block",
+		SensorID:        j.sensorID,
+		Hash:            block.Hash().Hex(),
+		ParentHash:      block.ParentHash().Hex(),
+		Number:          block.NumberU64(),
+		Timestamp:       block.Time(),
+		GasLimit:        block.GasLimit(),
+		GasUsed:         block.GasUsed(),
+		Difficulty:      block.Difficulty().String(),
+		TotalDifficulty: td.String(),
+		TxCount:         len(block.Transactions()),
+		UncleCount:      len(block.Uncles()),
+		TimeFirstSeen:   tfs,
+	}
+
+	if block.BaseFee() != nil {
+		jsonBlock.BaseFee = block.BaseFee().String()
+	}
+
+	j.Write(jsonBlock)
 }
 
 // WriteBlockHeaders writes the block headers as JSON.
@@ -174,7 +182,7 @@ func (j *JSONDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.H
 	}
 
 	for _, header := range headers {
-		jsonBlock := JSONBlock{
+		block := JSONBlock{
 			Type:          "block_header",
 			SensorID:      j.sensorID,
 			Hash:          header.Hash().Hex(),
@@ -186,10 +194,12 @@ func (j *JSONDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.H
 			Difficulty:    header.Difficulty.String(),
 			TimeFirstSeen: tfs,
 		}
+
 		if header.BaseFee != nil {
-			jsonBlock.BaseFee = header.BaseFee.String()
+			block.BaseFee = header.BaseFee.String()
 		}
-		j.outputJSON(jsonBlock)
+
+		j.Write(block)
 	}
 }
 
@@ -207,7 +217,8 @@ func (j *JSONDatabase) WriteBlockHashes(ctx context.Context, peer *enode.Node, h
 			Hash:      hash.Hex(),
 			Timestamp: tfs,
 		}
-		j.outputJSON(event)
+
+		j.Write(event)
 	}
 }
 
@@ -217,8 +228,7 @@ func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, 
 		return
 	}
 
-	// For block bodies, we just output basic info about the body
-	bodyInfo := map[string]any{
+	jsonBody := map[string]any{
 		"type":            "block_body",
 		"sensor_id":       j.sensorID,
 		"hash":            hash.Hex(),
@@ -226,57 +236,63 @@ func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, 
 		"uncle_count":     len(body.Uncles),
 		"time_first_seen": tfs,
 	}
-	j.outputJSON(bodyInfo)
+
+	j.Write(jsonBody)
 }
 
 // WriteTransactions writes the transactions and transaction events as JSON.
-func (j *JSONDatabase) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
-	if j.ShouldWriteTransactions() {
-		for _, tx := range txs {
-			// Use the transaction's chain ID if available, otherwise use the database's chain ID
-			chainID := tx.ChainId()
-			if chainID == nil {
-				chainID = j.chainID
-			}
+func (j *JSONDatabase) WriteTransactions(_ context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
+	j.writeTxs(txs, tfs)
+	j.writeTxEvents(peer, txs, tfs)
+}
 
-			var from common.Address
-			// Only attempt sender recovery if we have a valid non-zero chainID
-			if chainID != nil && chainID.Sign() > 0 {
-				from, _ = types.Sender(types.LatestSignerForChainID(chainID), tx)
-			}
-
-			jsonTx := JSONTransaction{
-				Type:          "transaction",
-				SensorID:      j.sensorID,
-				Hash:          tx.Hash().Hex(),
-				From:          from.Hex(),
-				Value:         tx.Value().String(),
-				Gas:           tx.Gas(),
-				GasPrice:      tx.GasPrice().String(),
-				GasFeeCap:     tx.GasFeeCap().String(),
-				GasTipCap:     tx.GasTipCap().String(),
-				Nonce:         tx.Nonce(),
-				TxType:        tx.Type(),
-				TimeFirstSeen: tfs,
-			}
-			if tx.To() != nil {
-				jsonTx.To = tx.To().Hex()
-			}
-			j.outputJSON(jsonTx)
-		}
+func (j *JSONDatabase) writeTxs(txs []*types.Transaction, tfs time.Time) {
+	if !j.ShouldWriteTransactions() {
+		return
 	}
 
-	if j.ShouldWriteTransactionEvents() && peer != nil {
-		for _, tx := range txs {
-			event := JSONTransactionEvent{
-				Type:      "transaction_event",
-				SensorID:  j.sensorID,
-				PeerID:    peer.URLv4(),
-				Hash:      tx.Hash().Hex(),
-				Timestamp: tfs,
-			}
-			j.outputJSON(event)
+	for _, tx := range txs {
+		var from common.Address
+		from, _ = types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+
+		jsonTx := JSONTransaction{
+			Type:          "transaction",
+			SensorID:      j.sensorID,
+			Hash:          tx.Hash().Hex(),
+			From:          from.Hex(),
+			Value:         tx.Value().String(),
+			Gas:           tx.Gas(),
+			GasPrice:      tx.GasPrice().String(),
+			GasFeeCap:     tx.GasFeeCap().String(),
+			GasTipCap:     tx.GasTipCap().String(),
+			Nonce:         tx.Nonce(),
+			TxType:        tx.Type(),
+			TimeFirstSeen: tfs,
 		}
+
+		if tx.To() != nil {
+			jsonTx.To = tx.To().Hex()
+		}
+
+		j.Write(jsonTx)
+	}
+}
+
+func (j *JSONDatabase) writeTxEvents(peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
+	if !j.ShouldWriteTransactionEvents() || peer == nil {
+		return
+	}
+
+	for _, tx := range txs {
+		event := JSONTransactionEvent{
+			Type:      "transaction_event",
+			SensorID:  j.sensorID,
+			PeerID:    peer.URLv4(),
+			Hash:      tx.Hash().Hex(),
+			Timestamp: tfs,
+		}
+
+		j.Write(event)
 	}
 }
 
@@ -296,7 +312,8 @@ func (j *JSONDatabase) WritePeers(ctx context.Context, peers []*p2p.Peer, tls ti
 			Caps:         peer.Info().Caps,
 			TimeLastSeen: tls,
 		}
-		j.outputJSON(jsonPeer)
+
+		j.Write(jsonPeer)
 	}
 }
 
