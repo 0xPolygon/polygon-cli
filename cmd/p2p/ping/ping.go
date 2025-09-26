@@ -153,9 +153,7 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 func init() {
 	PingCmd.Flags().StringVarP(&inputPingParams.OutputFile, "output", "o", "", "Write ping results to output file (default stdout)")
 	PingCmd.Flags().IntVarP(&inputPingParams.Threads, "parallel", "p", 16, "How many parallel pings to attempt")
-	PingCmd.Flags().BoolVarP(&inputPingParams.Listen, "listen", "l", true,
-		`Keep the connection open and listen to the peer. This only works if the first
-argument is an enode/enr, not a nodes file.`)
+	PingCmd.Flags().BoolVarP(&inputPingParams.Listen, "listen", "l", true, "Keep the connection open and listen to the peer(s)")
 	PingCmd.Flags().BoolVarP(&inputPingParams.EnableWit, "wit", "w", false, "Whether to enable the wit/1 capability")
 	PingCmd.Flags().IntVarP(&inputPingParams.Port, "port", "P", 30303, "Port for discovery protocol")
 	PingCmd.Flags().IPVarP(&inputPingParams.Addr, "addr", "a", net.ParseIP("127.0.0.1"), "Address to bind discovery listener")
