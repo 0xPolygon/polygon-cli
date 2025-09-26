@@ -18,7 +18,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
@@ -123,33 +122,9 @@ var SensorCmd = &cobra.Command{
 			go handlePrometheus()
 		}
 
-		inputSensorParams.privateKey, err = crypto.GenerateKey()
+		inputSensorParams.privateKey, err = p2p.ParsePrivateKey(inputSensorParams.KeyFile, inputSensorParams.PrivateKey)
 		if err != nil {
 			return err
-		}
-
-		if len(inputSensorParams.KeyFile) > 0 {
-			var privateKey *ecdsa.PrivateKey
-			privateKey, err = crypto.LoadECDSA(inputSensorParams.KeyFile)
-
-			if err != nil {
-				log.Warn().Err(err).Msg("Key file was not found, generating a new key file")
-
-				err = crypto.SaveECDSA(inputSensorParams.KeyFile, inputSensorParams.privateKey)
-				if err != nil {
-					return err
-				}
-			} else {
-				inputSensorParams.privateKey = privateKey
-			}
-		}
-
-		if len(inputSensorParams.PrivateKey) > 0 {
-			inputSensorParams.privateKey, err = crypto.HexToECDSA(inputSensorParams.PrivateKey)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to parse PrivateKey")
-				return err
-			}
 		}
 
 		inputSensorParams.nat, err = nat.Parse(inputSensorParams.NAT)

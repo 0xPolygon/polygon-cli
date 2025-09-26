@@ -1,6 +1,7 @@
 package ping
 
 import (
+	"crypto/ecdsa"
 	"sync"
 	"time"
 
@@ -17,6 +18,10 @@ type (
 		OutputFile string
 		NodesFile  string
 		Listen     bool
+		KeyFile    string
+		PrivateKey string
+
+		privateKey *ecdsa.PrivateKey
 	}
 )
 
@@ -34,6 +39,14 @@ Status messages and output JSON. If providing a enode/enr rather than a nodes
 file, then the connection will remain open by default (--listen=true), and you
 can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 	Args: cobra.MinimumNArgs(1),
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		inputPingParams.privateKey, err = p2p.ParsePrivateKey(inputPingParams.KeyFile, inputPingParams.PrivateKey)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		nodes := []*enode.Node{}
 		if input, err := p2p.ReadNodeSet(args[0]); err == nil {
@@ -132,4 +145,7 @@ func init() {
 	PingCmd.PersistentFlags().BoolVarP(&inputPingParams.Listen, "listen", "l", true,
 		`Keep the connection open and listen to the peer. This only works if the first
 argument is an enode/enr, not a nodes file.`)
+	PingCmd.Flags().StringVarP(&inputPingParams.KeyFile, "key-file", "k", "", "Private key file (cannot be set with --key)")
+	PingCmd.Flags().StringVar(&inputPingParams.PrivateKey, "key", "", "Hex-encoded private key (cannot be set with --key-file)")
+	PingCmd.MarkFlagsMutuallyExclusive("key-file", "key")
 }
