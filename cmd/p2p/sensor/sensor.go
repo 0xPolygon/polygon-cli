@@ -169,6 +169,7 @@ var SensorCmd = &cobra.Command{
 				ProjectID:                    inputSensorParams.ProjectID,
 				DatabaseID:                   inputSensorParams.DatabaseID,
 				SensorID:                     inputSensorParams.SensorID,
+				ChainID:                      inputSensorParams.NetworkID,
 				MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
 				ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
 				ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
@@ -180,6 +181,7 @@ var SensorCmd = &cobra.Command{
 		case "json":
 			db = database.NewJSONDatabase(database.JSONDatabaseOptions{
 				SensorID:                     inputSensorParams.SensorID,
+				ChainID:                      inputSensorParams.NetworkID,
 				MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
 				ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
 				ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,

@@ -20,6 +20,7 @@ import (
 // Each record is output as a single line of JSON (newline-delimited JSON).
 type JSONDatabase struct {
 	sensorID                     string
+	chainID                      *big.Int
 	shouldWriteBlocks            bool
 	shouldWriteBlockEvents       bool
 	shouldWriteTransactions      bool
@@ -30,6 +31,7 @@ type JSONDatabase struct {
 // JSONDatabaseOptions is used when creating a NewJSONDatabase.
 type JSONDatabaseOptions struct {
 	SensorID                     string
+	ChainID                      uint64
 	MaxConcurrency               int
 	ShouldWriteBlocks            bool
 	ShouldWriteBlockEvents       bool
@@ -42,6 +44,7 @@ type JSONDatabaseOptions struct {
 func NewJSONDatabase(opts JSONDatabaseOptions) Database {
 	return &JSONDatabase{
 		sensorID:                     opts.SensorID,
+		chainID:                      new(big.Int).SetUint64(opts.ChainID),
 		shouldWriteBlocks:            opts.ShouldWriteBlocks,
 		shouldWriteBlockEvents:       opts.ShouldWriteBlockEvents,
 		shouldWriteTransactions:      opts.ShouldWriteTransactions,
@@ -252,14 +255,22 @@ func (j *JSONDatabase) writeTxs(txs []*types.Transaction, tfs time.Time) {
 	}
 
 	for _, tx := range txs {
-		var from common.Address
-		from, _ = types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+		chainID := tx.ChainId()
+		if tx.ChainId() == nil || tx.ChainId().Sign() <= 0 {
+			chainID = j.chainID
+		}
+
+		var from string
+		addr, err := types.Sender(types.LatestSignerForChainID(chainID), tx)
+		if err == nil {
+			from = addr.Hex()
+		}
 
 		jsonTx := JSONTransaction{
 			Type:          "transaction",
 			SensorID:      j.sensorID,
 			Hash:          tx.Hash().Hex(),
-			From:          from.Hex(),
+			From:          from,
 			Value:         tx.Value().String(),
 			Gas:           tx.Gas(),
 			GasPrice:      tx.GasPrice().String(),
