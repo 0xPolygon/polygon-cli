@@ -501,8 +501,8 @@ func init() {
 	if err := SensorCmd.MarkFlagRequired("network-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark network-id as required persistent flag")
 	}
-	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.ProjectID, "project-id", "p", "", "GCP project ID")
-	SensorCmd.PersistentFlags().StringVarP(&inputSensorParams.DatabaseID, "database-id", "d", "", "Datastore database ID")
+	SensorCmd.Flags().StringVarP(&inputSensorParams.ProjectID, "project-id", "p", "", "GCP project ID")
+	SensorCmd.Flags().StringVarP(&inputSensorParams.DatabaseID, "database-id", "d", "", "Datastore database ID")
 	SensorCmd.Flags().StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "Sensor ID when writing block/tx events")
 	if err := SensorCmd.MarkFlagRequired("sensor-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")

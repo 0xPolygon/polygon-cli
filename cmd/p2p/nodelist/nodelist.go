@@ -57,6 +57,6 @@ var NodeListCmd = &cobra.Command{
 }
 
 func init() {
-	NodeListCmd.PersistentFlags().IntVarP(&inputNodeListParams.Limit, "limit", "l", 100, "Number of unique nodes to return")
-	NodeListCmd.PersistentFlags().StringVarP(&inputNodeListParams.ProjectID, "project-id", "p", "", "GCP project ID")
+	NodeListCmd.Flags().IntVarP(&inputNodeListParams.Limit, "limit", "l", 100, "Number of unique nodes to return")
+	NodeListCmd.Flags().StringVarP(&inputNodeListParams.ProjectID, "project-id", "p", "", "GCP project ID")
 }

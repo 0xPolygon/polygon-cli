@@ -18,6 +18,8 @@ type (
 		OutputFile string
 		NodesFile  string
 		Listen     bool
+		Port       uint
+		Addr       bool
 		KeyFile    string
 		PrivateKey string
 
@@ -140,11 +142,15 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 }
 
 func init() {
-	PingCmd.PersistentFlags().StringVarP(&inputPingParams.OutputFile, "output", "o", "", "Write ping results to output file (default stdout)")
-	PingCmd.PersistentFlags().IntVarP(&inputPingParams.Threads, "parallel", "p", 16, "How many parallel pings to attempt")
-	PingCmd.PersistentFlags().BoolVarP(&inputPingParams.Listen, "listen", "l", true,
+	PingCmd.Flags().StringVarP(&inputPingParams.OutputFile, "output", "o", "", "Write ping results to output file (default stdout)")
+	PingCmd.Flags().IntVarP(&inputPingParams.Threads, "parallel", "p", 16, "How many parallel pings to attempt")
+	PingCmd.Flags().BoolVarP(&inputPingParams.Listen, "listen", "l", true,
 		`Keep the connection open and listen to the peer. This only works if the first
 argument is an enode/enr, not a nodes file.`)
+	PingCmd.Flags().BoolVarP(&inputPingParams.Listen, "listen", "l", true,
+		`Keep the connection open and listen to the peer. This only works if the first
+argument is an enode/enr, not a nodes file.`)
+	PingCmd.Flags().UintVarP(&inputPingParams.Port, "port", "P", 30303, "The port to listen on")
 	PingCmd.Flags().StringVarP(&inputPingParams.KeyFile, "key-file", "k", "", "Private key file (cannot be set with --key)")
 	PingCmd.Flags().StringVar(&inputPingParams.PrivateKey, "key", "", "Hex-encoded private key (cannot be set with --key-file)")
 	PingCmd.MarkFlagsMutuallyExclusive("key-file", "key")
