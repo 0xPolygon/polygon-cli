@@ -100,7 +100,7 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 
 				opts := p2p.DialOpts{
 					EnableWit:  inputPingParams.EnableWit,
-					Port:       int(inputPingParams.Port),
+					Port:       inputPingParams.Port,
 					Addr:       inputPingParams.Addr,
 					PrivateKey: inputPingParams.privateKey,
 				}
