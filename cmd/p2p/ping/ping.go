@@ -156,9 +156,6 @@ func init() {
 	PingCmd.Flags().BoolVarP(&inputPingParams.Listen, "listen", "l", true,
 		`Keep the connection open and listen to the peer. This only works if the first
 argument is an enode/enr, not a nodes file.`)
-	PingCmd.Flags().BoolVarP(&inputPingParams.Listen, "listen", "l", true,
-		`Keep the connection open and listen to the peer. This only works if the first
-argument is an enode/enr, not a nodes file.`)
 	PingCmd.Flags().BoolVarP(&inputPingParams.EnableWit, "wit", "w", false, "Whether to enable the wit/1 capability")
 	PingCmd.Flags().IntVarP(&inputPingParams.Port, "port", "P", 30303, "Port for discovery protocol")
 	PingCmd.Flags().IPVarP(&inputPingParams.Addr, "addr", "a", net.ParseIP("127.0.0.1"), "Address to bind discovery listener")
