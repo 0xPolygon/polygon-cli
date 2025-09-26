@@ -205,6 +205,25 @@ func checkLoadtestFlags() error {
 		return fmt.Errorf("the backoff factor needs to be non-zero positive. Given: %f", *ltp.AdaptiveBackoffFactor)
 	}
 
+	if *ltp.WaitForReceipt && *ltp.ReceiptRetryMax <= 1 {
+		return fmt.Errorf("when waiting for a receipt, use a max retry greater than 1")
+	}
+
+	if *ltp.PreFundSendingAccounts && ltp.AccountFundingAmount != nil && ltp.AccountFundingAmount.Uint64() == 0 {
+		return fmt.Errorf("a non-zero funding amount is required when pre-funding sending accounts")
+	}
+	if *ltp.EthCallOnly {
+		if *ltp.PreFundSendingAccounts || *ltp.SendingAccountsFile != "" || *ltp.SendingAccountsCount > 0 {
+			return fmt.Errorf("pre-funding accounts with call only mode doesn't make sense")
+		}
+		if *ltp.WaitForReceipt {
+			return fmt.Errorf("waiting for receipts doesn't make sense with call only mode")
+		}
+	}
+	if *ltp.GasPriceMultiplier == 0 {
+		return fmt.Errorf("gas price multiplier should be non-zero")
+	}
+
 	return nil
 }
 

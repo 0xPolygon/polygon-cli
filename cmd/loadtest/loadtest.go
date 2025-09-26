@@ -296,8 +296,24 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	if *inputLoadTestParams.EthCallOnly && *inputLoadTestParams.AdaptiveRateLimit {
 		return errors.New("using call only with adaptive rate limit doesn't make sense")
 	}
+	if *inputLoadTestParams.EthCallOnly && *inputLoadTestParams.WaitForReceipt {
+		return errors.New("using call only with receipts doesn't make sense")
+	}
+	if *inputLoadTestParams.EthCallOnly && inputLoadTestParams.Mode == loadTestModeBlob {
+		return errors.New("using call only with blobs doesn't make sense")
+	}
+	if *inputLoadTestParams.LegacyTransactionMode && inputLoadTestParams.Mode == loadTestModeBlob {
+		return errors.New("blob tansactions require eip-1559")
+	}
 	if hasMode(loadTestModeBlob, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode {
 		return errors.New("blob mode should only be used by itself. Blob mode will take significantly longer than other transactions to finalize, and the address will be reserved, preventing other transactions form being made")
+	}
+	if *inputLoadTestParams.OutputRawTxOnly && inputLoadTestParams.MultiMode {
+		return errors.New("Raw output is not compatible with multiple modes")
+	}
+	if *inputLoadTestParams.OutputRawTxOnly && inputLoadTestParams.Mode != loadTestModeTransaction {
+		// This is temporary... There's no reason why this feature can't work with some of the other load test modes.
+		return errors.New("Raw output is only compatible with transaction mode")
 	}
 
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
@@ -735,6 +751,19 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		if err != nil {
 			return err
 		}
+
+		// Validate that the chain has enough activity for RPC mode
+		if len(indexedActivity.TransactionIDs) == 0 ||
+			len(indexedActivity.Addresses) == 0 ||
+			len(indexedActivity.BlockIDs) == 0 ||
+			indexedActivity.BlockNumber == 0 {
+			return fmt.Errorf("insufficient chain activity for RPC mode: the chain must have at least some transaction history. Found %d transactions, %d addresses, %d blocks, current block number %d",
+				len(indexedActivity.TransactionIDs),
+				len(indexedActivity.Addresses),
+				len(indexedActivity.BlockIDs),
+				indexedActivity.BlockNumber)
+		}
+
 		if len(indexedActivity.ERC20Addresses) == 0 {
 			indexedActivity.ERC20Addresses = append(indexedActivity.ERC20Addresses, erc20Addr.String())
 		}
@@ -785,9 +814,11 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		return err
 	}
 
-	err = accountPool.RefreshNonce(ctx, tops.From)
-	if err != nil {
-		return err
+	if *inputLoadTestParams.StartNonce <= 0 {
+		err = accountPool.RefreshNonce(ctx, tops.From)
+		if err != nil {
+			return err
+		}
 	}
 
 	mustCheckMaxBaseFee, maxBaseFeeCtxCancel, waitBaseFeeToDrop := setupBaseFeeMonitoring(ctx, c, ltp)
@@ -922,18 +953,13 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 						// we start setting nonce to be reused
 						reuseNonce := true
 
-						// if the transaction hash is not zero, this means a tx was
-						// created, in this case we want to check the error to understand
-						// if the nonce can be reused
-						if ltTxHash.String() != (ethcommon.Hash{}).String() {
-							// if it is an error that consumes the nonce, we can't retry it
-							if strings.Contains(tErr.Error(), "replacement transaction underpriced") ||
-								strings.Contains(tErr.Error(), "transaction underpriced") ||
-								strings.Contains(tErr.Error(), "nonce too low") ||
-								strings.Contains(tErr.Error(), "already known") ||
-								strings.Contains(tErr.Error(), "could not replace existing") {
-								reuseNonce = false
-							}
+						// if it is an error that consumes the nonce, we can't retry it
+						if strings.Contains(tErr.Error(), "replacement transaction underpriced") ||
+							strings.Contains(tErr.Error(), "transaction underpriced") ||
+							strings.Contains(tErr.Error(), "nonce too low") ||
+							strings.Contains(tErr.Error(), "already known") ||
+							strings.Contains(tErr.Error(), "could not replace existing") {
+							reuseNonce = false
 						}
 
 						// if we can reuse the nonce, we add it back to the account pool
@@ -1516,7 +1542,12 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 
 	ltp := inputLoadTestParams
 
-	tx := rawTransactionToNewTx(originalTx, tops.Nonce.Uint64(), tops.GasPrice, tops.GasTipCap)
+	// For EIP-1559 transactions, use GasFeeCap instead of GasPrice (which is nil for dynamic fee txs)
+	gasPrice := tops.GasPrice
+	if gasPrice == nil && tops.GasFeeCap != nil {
+		gasPrice = tops.GasFeeCap
+	}
+	tx := rawTransactionToNewTx(originalTx, tops.Nonce.Uint64(), gasPrice, tops.GasTipCap)
 
 	stx, err = tops.Signer(tops.From, tx)
 	if err != nil {
@@ -1844,16 +1875,23 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactO
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 
 	gasLimit := uint64(21000)
-	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
-	// blobFeeCap := uint64(1000000000) // 1eth
+	// Use the gas values from tops which have been properly configured by configureTransactOpts
+	// This ensures we respect ForceGasPrice, ForcePriorityGasPrice, and other overrides
 	blobFeeCap := ltp.BlobFeeCap
+
+	// Blob transactions require EIP-1559 support
+	if tops.GasFeeCap == nil || tops.GasTipCap == nil {
+		err = fmt.Errorf("blob transactions require EIP-1559 support (non-legacy mode)")
+		log.Error().Err(err).Msg("Cannot send blob transaction in legacy mode")
+		return
+	}
 
 	// Initialize blobTx with blob transaction type
 	blobTx := ethtypes.BlobTx{
 		ChainID:    uint256.NewInt(chainID.Uint64()),
 		Nonce:      tops.Nonce.Uint64(),
-		GasTipCap:  uint256.NewInt(gasTipCap.Uint64()),
-		GasFeeCap:  uint256.NewInt(gasPrice.Uint64()),
+		GasTipCap:  uint256.NewInt(tops.GasTipCap.Uint64()),
+		GasFeeCap:  uint256.NewInt(tops.GasFeeCap.Uint64()),
 		BlobFeeCap: uint256.NewInt(*blobFeeCap),
 		Gas:        gasLimit,
 		To:         *to,
