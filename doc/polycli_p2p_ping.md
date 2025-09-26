@@ -28,11 +28,15 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).
 ## Flags
 
 ```bash
-  -h, --help            help for ping
-  -l, --listen          Keep the connection open and listen to the peer. This only works if the first
-                        argument is an enode/enr, not a nodes file. (default true)
-  -o, --output string   Write ping results to output file (default stdout)
-  -p, --parallel int    How many parallel pings to attempt (default 16)
+  -a, --addr ip           Address to bind discovery listener (default 127.0.0.1)
+  -h, --help              help for ping
+      --key string        Hex-encoded private key (cannot be set with --key-file)
+  -k, --key-file string   Private key file (cannot be set with --key)
+  -l, --listen            Keep the connection open and listen to the peer(s) (default true)
+  -o, --output string     Write ping results to output file (default stdout)
+  -p, --parallel int      How many parallel pings to attempt (default 16)
+  -P, --port int          Port for discovery protocol (default 30303)
+  -w, --wit               Whether to enable the wit/1 capability
 ```
 
 The command also inherits flags from parent commands.
