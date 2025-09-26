@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"crypto/ecdsa"
 	"fmt"
 	"math/rand"
 	"net"
@@ -21,39 +22,54 @@ var (
 	timeout = 20 * time.Second
 )
 
+type DialOpts struct {
+	EnableWit  bool
+	Port       int
+	Addr       net.IP
+	PrivateKey *ecdsa.PrivateKey
+}
+
+func NewDialOpts() DialOpts {
+	privateKey, err := crypto.GenerateKey()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to generate private key")
+	}
+
+	return DialOpts{
+		EnableWit:  false,
+		Port:       30303,
+		Addr:       net.ParseIP("127.0.0.1"),
+		PrivateKey: privateKey,
+	}
+}
+
 // Dial attempts to Dial the given node and perform a handshake,
 // returning the created Conn if successful.
-func Dial(n *enode.Node) (*rlpxConn, error) {
+func Dial(n *enode.Node, opts DialOpts) (*rlpxConn, error) {
 	fd, err := net.Dial("tcp", fmt.Sprintf("%v:%d", n.IP(), n.TCP()))
 	if err != nil {
 		return nil, err
+	}
+
+	caps := []p2p.Cap{
+		{Name: "eth", Version: 66},
+		{Name: "eth", Version: 67},
+		{Name: "eth", Version: 68},
+	}
+
+	if opts.EnableWit {
+		caps = append(caps, p2p.Cap{Name: "wit", Version: 1})
 	}
 
 	conn := rlpxConn{
 		Conn:   rlpx.NewConn(fd, n.Pubkey()),
 		node:   n,
 		logger: log.With().Str("peer", n.URLv4()).Logger(),
-		caps: []p2p.Cap{
-			{Name: "eth", Version: 66},
-			{Name: "eth", Version: 67},
-			{Name: "eth", Version: 68},
-			{Name: "wit", Version: 1},
-		},
+		caps:   caps,
+		ourKey: opts.PrivateKey,
 	}
 
-	if conn.ourKey, err = crypto.LoadECDSA("witness.key"); err != nil {
-		log.Warn().Msg("witness.key not found generating key")
-		if conn.ourKey, err = crypto.GenerateKey(); err != nil {
-			return nil, err
-		}
-	}
-
-	if err = crypto.SaveECDSA("witness.key", conn.ourKey); err != nil {
-		return nil, err
-	}
-
-	ip := net.ParseIP("127.0.0.1")
-	v4 := enode.NewV4(&conn.ourKey.PublicKey, ip, 30303, 30303)
+	v4 := enode.NewV4(&conn.ourKey.PublicKey, opts.Addr, opts.Port, opts.Port)
 
 	log.Info().Any("enode", v4.String()).Send()
 
@@ -230,6 +246,7 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 					}
 
 					req := GetWitnessPacket{
+						RequestId: rand.Uint64(),
 						GetWitnessRequest: &GetWitnessRequest{
 							WitnessPages: []WitnessPageRequest{
 								{
@@ -238,9 +255,7 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 								},
 							},
 						},
-						RequestId: uint64(time.Now().Unix()),
 					}
-					log.Trace().Any("request", req).Msg("Writing GetWitnessPacket request")
 					if err := c.Write(req); err != nil {
 						log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
 					}
@@ -250,6 +265,7 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 				c.logger.Trace().Str("hash", msg.Block.Hash().Hex()).Msg("Received NewBlock")
 
 				req := GetWitnessPacket{
+					RequestId: rand.Uint64(),
 					GetWitnessRequest: &GetWitnessRequest{
 						WitnessPages: []WitnessPageRequest{
 							{
@@ -258,9 +274,7 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 							},
 						},
 					},
-					RequestId: uint64(time.Now().Unix()),
 				}
-				log.Trace().Any("request", req).Msg("Writing GetWitnessPacket request")
 				if err := c.Write(req); err != nil {
 					log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
 				}

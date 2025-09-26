@@ -2,6 +2,7 @@ package ping
 
 import (
 	"crypto/ecdsa"
+	"net"
 	"sync"
 	"time"
 
@@ -18,10 +19,11 @@ type (
 		OutputFile string
 		NodesFile  string
 		Listen     bool
-		Port       uint
-		Addr       bool
+		Port       int
+		Addr       net.IP
 		KeyFile    string
 		PrivateKey string
+		EnableWit  bool
 
 		privateKey *ecdsa.PrivateKey
 	}
@@ -96,7 +98,14 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 					status *p2p.Status
 				)
 
-				conn, err := p2p.Dial(node)
+				opts := p2p.DialOpts{
+					EnableWit:  inputPingParams.EnableWit,
+					Port:       int(inputPingParams.Port),
+					Addr:       inputPingParams.Addr,
+					PrivateKey: inputPingParams.privateKey,
+				}
+
+				conn, err := p2p.Dial(node, opts)
 				if err != nil {
 					log.Error().Err(err).Msg("Dial failed")
 				} else {
@@ -150,7 +159,9 @@ argument is an enode/enr, not a nodes file.`)
 	PingCmd.Flags().BoolVarP(&inputPingParams.Listen, "listen", "l", true,
 		`Keep the connection open and listen to the peer. This only works if the first
 argument is an enode/enr, not a nodes file.`)
-	PingCmd.Flags().UintVarP(&inputPingParams.Port, "port", "P", 30303, "The port to listen on")
+	PingCmd.Flags().BoolVarP(&inputPingParams.EnableWit, "wit", "w", false, "Whether to enable the wit/1 capability")
+	PingCmd.Flags().IntVarP(&inputPingParams.Port, "port", "P", 30303, "Port for discovery protocol")
+	PingCmd.Flags().IPVarP(&inputPingParams.Addr, "addr", "a", net.ParseIP("127.0.0.1"), "Address to bind discovery listener")
 	PingCmd.Flags().StringVarP(&inputPingParams.KeyFile, "key-file", "k", "", "Private key file (cannot be set with --key)")
 	PingCmd.Flags().StringVar(&inputPingParams.PrivateKey, "key", "", "Hex-encoded private key (cannot be set with --key-file)")
 	PingCmd.MarkFlagsMutuallyExclusive("key-file", "key")

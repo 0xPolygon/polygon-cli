@@ -50,7 +50,7 @@ and the amount of blocks to query and print the results.`,
 			amount uint64 = inputQueryParams.Amount
 		)
 
-		conn, err := p2p.Dial(node)
+		conn, err := p2p.Dial(node, p2p.NewDialOpts())
 		if err != nil {
 			log.Error().Err(err).Msg("Dial failed")
 			return
