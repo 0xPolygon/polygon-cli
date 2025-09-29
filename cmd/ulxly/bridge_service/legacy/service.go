@@ -6,6 +6,7 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly/bridge_service"
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly/bridge_service/httpjson"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog/log"
 )
 
@@ -61,8 +62,12 @@ func (s *BridgeService) GetDeposits(destinationAddress string, offset, limit int
 
 }
 
-func (s *BridgeService) GetProof(depositNetwork, depositCount uint32) (*bridge_service.Proof, error) {
+func (s *BridgeService) GetProof(depositNetwork, depositCount uint32, ger *common.Hash) (*bridge_service.Proof, error) {
 	endpoint := fmt.Sprintf("%s/merkle-proof?net_id=%d&deposit_cnt=%d", s.BridgeServiceBase.Url(), depositNetwork, depositCount)
+	if ger != nil {
+		endpoint = fmt.Sprintf("%s/merkle-proof-by-ger?net_id=%d&deposit_cnt=%d&ger=%s", s.BridgeServiceBase.Url(), depositNetwork, depositCount, ger.String())
+	}
+
 	resp, _, err := httpjson.HTTPGet[GetProofResponse](s.httpClient, endpoint)
 	if err != nil {
 		return nil, err

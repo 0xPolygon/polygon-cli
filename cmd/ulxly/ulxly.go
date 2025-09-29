@@ -903,6 +903,7 @@ func claimAsset(cmd *cobra.Command) error {
 	depositCount := *inputUlxlyArgs.depositCount
 	depositNetwork := *inputUlxlyArgs.depositNetwork
 	globalIndexOverride := *inputUlxlyArgs.globalIndex
+	proofGERHash := *inputUlxlyArgs.proofGER
 	wait := *inputUlxlyArgs.wait
 
 	// Dial Ethereum client
@@ -932,7 +933,7 @@ func claimAsset(cmd *cobra.Command) error {
 		deposit.GlobalIndex.SetString(globalIndexOverride, 10)
 	}
 
-	proof, err := getMerkleProofsExitRoots(bridgeService, *deposit)
+	proof, err := getMerkleProofsExitRoots(bridgeService, *deposit, proofGERHash)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting merkle proofs and exit roots from bridge service")
 		return err
@@ -957,6 +958,7 @@ func claimMessage(cmd *cobra.Command) error {
 	depositCount := *inputUlxlyArgs.depositCount
 	depositNetwork := *inputUlxlyArgs.depositNetwork
 	globalIndexOverride := *inputUlxlyArgs.globalIndex
+	proofGERHash := *inputUlxlyArgs.proofGER
 	wait := *inputUlxlyArgs.wait
 
 	// Dial Ethereum client
@@ -986,7 +988,7 @@ func claimMessage(cmd *cobra.Command) error {
 		deposit.GlobalIndex.SetString(globalIndexOverride, 10)
 	}
 
-	proof, err := getMerkleProofsExitRoots(bridgeService, *deposit)
+	proof, err := getMerkleProofsExitRoots(bridgeService, *deposit, proofGERHash)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting merkle proofs and exit roots from bridge service")
 		return err
@@ -1239,7 +1241,7 @@ func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeCont
 		return nil, fmt.Errorf("we don't have a bridge service url for network: %d", deposit.DestNet)
 	}
 
-	proof, err := getMerkleProofsExitRoots(bridgeServiceFromMap, deposit)
+	proof, err := getMerkleProofsExitRoots(bridgeServiceFromMap, deposit, "")
 	if err != nil {
 		log.Error().Err(err).Msg("error getting merkle proofs and exit roots from bridge service")
 		return nil, err
@@ -1795,8 +1797,14 @@ func generateTransactionPayload(ctx context.Context, client *ethclient.Client, u
 	return bridgeV2, toAddress, opts, err
 }
 
-func getMerkleProofsExitRoots(bridgeService bridge_service.BridgeService, deposit bridge_service.Deposit) (*bridge_service.Proof, error) {
-	proof, err := bridgeService.GetProof(deposit.NetworkID, deposit.DepositCnt) // just to populate cache if needed
+func getMerkleProofsExitRoots(bridgeService bridge_service.BridgeService, deposit bridge_service.Deposit, proofGERHash string) (*bridge_service.Proof, error) {
+	var ger *common.Hash
+	if len(proofGERHash) > 0 {
+		hash := common.HexToHash(proofGERHash)
+		ger = &hash
+	}
+
+	proof, err := bridgeService.GetProof(deposit.NetworkID, deposit.DepositCnt, ger)
 	if err != nil {
 		return nil, fmt.Errorf("error getting proof for deposit %d on network %d: %w", deposit.DepositCnt, deposit.NetworkID, err)
 	}
@@ -2013,6 +2021,7 @@ type ulxlyArgs struct {
 	concurrency         *uint
 	insecure            *bool
 	legacy              *bool
+	proofGER            *string
 }
 
 var inputUlxlyArgs = ulxlyArgs{}
@@ -2081,6 +2090,7 @@ const (
 	ArgConcurrency          = "concurrency"
 	ArgInsecure             = "insecure"
 	ArgLegacy               = "legacy"
+	ArgProofGER             = "proof-ger"
 )
 
 var (
@@ -2469,6 +2479,7 @@ or if it's actually an intermediate hash.`,
 	inputUlxlyArgs.bridgeServiceURL = ulxlyClaimCmd.PersistentFlags().String(ArgBridgeServiceURL, "", "the URL of the bridge service")
 	inputUlxlyArgs.globalIndex = ulxlyClaimCmd.PersistentFlags().String(ArgGlobalIndex, "", "an override of the global index value")
 	inputUlxlyArgs.wait = ulxlyClaimCmd.PersistentFlags().Duration(ArgWait, time.Duration(0), "this flag is available for claim asset and claim message. if specified, the command will retry in a loop for the deposit to be ready to claim up to duration. Once the deposit is ready to claim, the claim will actually be sent.")
+	inputUlxlyArgs.proofGER = ulxlyClaimCmd.PersistentFlags().String(ArgProofGER, "", "if specified, the proof will be generated against this GER")
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositCount))
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositNetwork))
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgBridgeServiceURL))

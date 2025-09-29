@@ -9,6 +9,7 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly/bridge_service"
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly/bridge_service/httpjson"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog/log"
 )
 
@@ -116,8 +117,13 @@ func (s *BridgeService) GetDeposits(destinationAddress string, offset, limit int
 	panic("not implemented yet") // bridges endpoint requires network_id parameter
 }
 
-func (s *BridgeService) GetProof(depositNetwork, depositCount uint32) (*bridge_service.Proof, error) {
+func (s *BridgeService) GetProof(depositNetwork, depositCount uint32, ger *common.Hash) (*bridge_service.Proof, error) {
 	var l1InfoTreeIndex uint32
+
+	if ger != nil {
+		return nil, errors.New("getting proof by ger is not supported yet by Agglayer bridge service")
+	}
+
 out:
 	for {
 		select {

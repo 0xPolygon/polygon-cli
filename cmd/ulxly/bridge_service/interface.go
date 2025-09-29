@@ -14,7 +14,7 @@ var (
 type BridgeService interface {
 	GetDeposit(depositNetwork, depositCount uint32) (*Deposit, error)
 	GetDeposits(destinationAddress string, offset, limit int) (deposits []Deposit, total int, err error)
-	GetProof(depositNetwork, depositCount uint32) (*Proof, error)
+	GetProof(depositNetwork, depositCount uint32, ger *common.Hash) (*Proof, error)
 	Url() string
 }
 
