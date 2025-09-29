@@ -21,6 +21,7 @@ Commands for claiming deposits on a particular chain
       --deposit-network uint32      the rollup id of the network where the deposit was initially made
       --global-index string         an override of the global index value
   -h, --help                        help for claim
+      --proof-ger string            if specified, the proof will be generated against this GER
       --wait duration               this flag is available for claim asset and claim message. if specified, the command will retry in a loop for the deposit to be ready to claim up to duration. Once the deposit is ready to claim, the claim will actually be sent.
 ```
 

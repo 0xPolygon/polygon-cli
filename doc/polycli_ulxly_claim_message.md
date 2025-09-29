@@ -128,6 +128,7 @@ The command also inherits flags from parent commands.
       --legacy                             force usage of legacy bridge service
       --pretty-logs                        Should logs be in pretty format or JSON (default true)
       --private-key string                 the hex encoded private key to be used when sending the tx
+      --proof-ger string                   if specified, the proof will be generated against this GER
       --rpc-url string                     the URL of the RPC to send the transaction
       --transaction-receipt-timeout uint   the amount of time to wait while trying to confirm a transaction receipt (default 60)
   -v, --verbosity int                      0 - Silent
