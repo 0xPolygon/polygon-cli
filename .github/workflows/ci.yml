@@ -29,7 +29,7 @@ jobs:
       - name: Install golangci-lint
         run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.64.8
       - name: Install shadow
-        run: go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@latest
+        run: go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@v0.37.0
       - name: Run all the linter tools against code
         run: make lint
   
