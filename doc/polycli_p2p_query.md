@@ -27,8 +27,12 @@ and the amount of blocks to query and print the results.
 ## Flags
 
 ```bash
+      --addr ip            Address to bind discovery listener (default 127.0.0.1)
   -a, --amount uint        Amount of blocks to query (default 1)
   -h, --help               help for query
+      --key string         Hex-encoded private key (cannot be set with --key-file)
+  -k, --key-file string    Private key file (cannot be set with --key)
+  -P, --port int           Port for discovery protocol (default 30303)
   -s, --start-block uint   Block number to start querying from
 ```
 
