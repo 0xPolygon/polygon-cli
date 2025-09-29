@@ -130,6 +130,7 @@ func init() {
 	QueryCmd.Flags().IPVarP(&inputQueryParams.Addr, "addr", "a", net.ParseIP("127.0.0.1"), "Address to bind discovery listener")
 	QueryCmd.Flags().StringVarP(&inputQueryParams.KeyFile, "key-file", "k", "", "Private key file (cannot be set with --key)")
 	QueryCmd.Flags().StringVar(&inputQueryParams.PrivateKey, "key", "", "Hex-encoded private key (cannot be set with --key-file)")
+	QueryCmd.MarkFlagsMutuallyExclusive("key-file", "key")
 	if err := QueryCmd.MarkFlagRequired("start-block"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark start-block as required persistent flag")
 	}
