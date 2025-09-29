@@ -70,9 +70,10 @@ for pk in ${keys_to_warm[@]}; do
 done
 
 shuf test-commands.sh | while read polyclicmd ; do
-    echo $polyclicmd > cur.out
-    if ! timeout 120s bash -c "$polyclicmd" &>> cur.out ; then
-        rc=$?
+    echo "$polyclicmd" > cur.out
+    timeout 120s bash -c "$polyclicmd" &>> cur.out
+    rc=$?
+    if [[ $rc -ne 0 ]]; then
         if [[ $rc -eq 124 ]]; then
             mv cur.out timeout.$(date +%s).out
         else
@@ -80,7 +81,6 @@ shuf test-commands.sh | while read polyclicmd ; do
         fi
     fi
 done
-
 
 kill "$(cat anvil.pid)"
 kill "$(cat mitm.pid)"

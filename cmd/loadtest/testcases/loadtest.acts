@@ -41,7 +41,7 @@ legacy (boolean): TRUE, FALSE
 -- the load test contract isn't used ans much anymore... I wonder if we should drop this as well?
 loadtestContractAddress (enum): UNSPECIFIED, 0xbB186bd43C992F68Ac430686370343aeF2A22B96
 maxBaseFeeWei (int): -1, 1000, 1000000
-mode (enum): UNSPECIFIED, erc20, erc721, blob, contract-call, deploy, inscription, increment, random, recall, rpc, store, transaction, uniswapv3
+mode (enum): UNSPECIFIED, erc20, erc721, blob, contract-call, deploy, increment, random, recall, rpc, store, transaction, uniswapv3
 nonce (int): -1, 1, 5
 outputMode (enum): UNSPECIFIED, json, text
 outputRawTxOnly (boolean): TRUE, FALSE
