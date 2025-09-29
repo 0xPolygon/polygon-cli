@@ -2,7 +2,7 @@
 
 ## Create account
 
-```bash 
+```bash
 cast wallet new-mnemonic
 ```
 

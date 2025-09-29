@@ -2,7 +2,7 @@
 
 ## Create account
 
-```bash 
+```bash
 cast wallet new-mnemonic
 ```
 
@@ -20,7 +20,7 @@ Private key: 0x516d5e1c8f7e1da24379041b758b5d16fd066c8a8856791d3c5c0c79a81bad59
 
 ## Load env variables from kurtosis env
 
-```bash 
+```bash
 echo l1_rpc_url=\""http://"$(kurtosis port print cdk el-1-geth-lighthouse rpc)\"
 
 echo l2_a_rpc_url=\"$(kurtosis port print cdk op-el-1-op-geth-op-node-001 rpc)\"
@@ -377,7 +377,7 @@ polycli ulxly claim asset \
 6:57PM INF transaction successful txHash=0x61027c8e10f3da9142fb3ed6076571f27b16c3d9ece83e710f428b5ed6222e07
 ```
 
-## Check balances to ensure deposit was claimed from A to B
+## Check balances to ensure deposit was claimed from B to C
 
 ```bash
 cast balance --rpc-url "$l1_rpc_url" --ether "$eth_address"
@@ -427,7 +427,7 @@ cast balance --rpc-url "$l2_c_rpc_url" --ether "$eth_address"
 0.000899856360939603
 ```
 
-## Check deposit is already indexed by bridge service on B to be claimed on C
+## Check deposit is already indexed by bridge service on C to be claimed on A
 
 ```bash
 curl -s "$l2_c_bridge_url/bridge/v1/bridges?network_id=3&from_address=$eth_address" | jq -M '.bridges[] | select(.destination_network == 1)'

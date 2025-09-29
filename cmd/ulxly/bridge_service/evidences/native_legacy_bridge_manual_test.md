@@ -2,7 +2,7 @@
 
 ## Create account
 
-```bash 
+```bash
 cast wallet new-mnemonic
 ```
 
@@ -20,7 +20,7 @@ Private key: 0x516d5e1c8f7e1da24379041b758b5d16fd066c8a8856791d3c5c0c79a81bad59
 
 ## Load env variables from kurtosis env
 
-```bash 
+```bash
 echo l1_rpc_url=\""http://"$(kurtosis port print cdk el-1-geth-lighthouse rpc)\"
 
 echo l2_a_rpc_url=\"$(kurtosis port print cdk op-el-1-op-geth-op-node-001 rpc)\"
