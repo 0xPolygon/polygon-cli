@@ -127,7 +127,7 @@ func init() {
 	QueryCmd.Flags().Uint64VarP(&inputQueryParams.StartBlock, "start-block", "s", 0, "Block number to start querying from")
 	QueryCmd.Flags().Uint64VarP(&inputQueryParams.Amount, "amount", "a", 1, "Amount of blocks to query")
 	QueryCmd.Flags().IntVarP(&inputQueryParams.Port, "port", "P", 30303, "Port for discovery protocol")
-	QueryCmd.Flags().IPVarP(&inputQueryParams.Addr, "addr", "a", net.ParseIP("127.0.0.1"), "Address to bind discovery listener")
+	QueryCmd.Flags().IPVar(&inputQueryParams.Addr, "addr", net.ParseIP("127.0.0.1"), "Address to bind discovery listener")
 	QueryCmd.Flags().StringVarP(&inputQueryParams.KeyFile, "key-file", "k", "", "Private key file (cannot be set with --key)")
 	QueryCmd.Flags().StringVar(&inputQueryParams.PrivateKey, "key", "", "Hex-encoded private key (cannot be set with --key-file)")
 	QueryCmd.MarkFlagsMutuallyExclusive("key-file", "key")
