@@ -37,56 +37,56 @@ type (
 	}
 	loadTestParams struct {
 		// inputs
-		RPCUrl                        *string
-		Requests                      *int64
-		Concurrency                   *int64
-		BatchSize                     *uint64
-		TimeLimit                     *int64
-		RandomRecipients              *bool
-		EthCallOnly                   *bool
-		EthCallOnlyLatestBlock        *bool
-		ChainID                       *uint64
-		PrivateKey                    *string
-		ToAddress                     *string
-		EthAmountInWei                *uint64
-		RateLimit                     *float64
-		AdaptiveRateLimit             *bool
-		AdaptiveTargetSize            *uint64
-		AdaptiveRateLimitIncrement    *uint64
-		AdaptiveCycleDuration         *uint64
-		AdaptiveBackoffFactor         *float64
-		Modes                         *[]string
-		StoreDataSize                 *uint64
-		Seed                          *int64
-		LoadtestContractAddress       *string
-		ERC20Address                  *string
-		ERC721Address                 *string
-		DelAddress                    *string
-		ForceGasLimit                 *uint64
-		ForceGasPrice                 *uint64
-		ForcePriorityGasPrice         *uint64
-		ShouldProduceSummary          *bool
-		SummaryOutputMode             *string
-		LegacyTransactionMode         *bool
-		FireAndForget                 *bool
-		RecallLength                  *uint64
-		ContractAddress               *string
-		ContractCallData              *string
-		ContractCallPayable           *bool
-		BlobFeeCap                    *uint64
-		StartNonce                    *uint64
-		GasPriceMultiplier            *float64
-		SendingAccountsCount          *uint64
-		AccountFundingAmount          *big.Int
-		PreFundSendingAccounts        *bool
-		RefundRemainingFunds          *bool
-		SendingAccountsFile           *string
-		Proxy                         *string
-		WaitForReceipt                *bool
-		ReceiptRetryMax               *uint
-		ReceiptRetryInitialDelayMs    *uint
-		MaxBaseFeeWei                 *uint64
-		OutputRawTxOnly               *bool
+		RPCUrl                     *string
+		Requests                   *int64
+		Concurrency                *int64
+		BatchSize                  *uint64
+		TimeLimit                  *int64
+		RandomRecipients           *bool
+		EthCallOnly                *bool
+		EthCallOnlyLatestBlock     *bool
+		ChainID                    *uint64
+		PrivateKey                 *string
+		ToAddress                  *string
+		EthAmountInWei             *uint64
+		RateLimit                  *float64
+		AdaptiveRateLimit          *bool
+		AdaptiveTargetSize         *uint64
+		AdaptiveRateLimitIncrement *uint64
+		AdaptiveCycleDuration      *uint64
+		AdaptiveBackoffFactor      *float64
+		Modes                      *[]string
+		StoreDataSize              *uint64
+		Seed                       *int64
+		LoadtestContractAddress    *string
+		ERC20Address               *string
+		ERC721Address              *string
+		DelAddress                 *string
+		ForceGasLimit              *uint64
+		ForceGasPrice              *uint64
+		ForcePriorityGasPrice      *uint64
+		ShouldProduceSummary       *bool
+		SummaryOutputMode          *string
+		LegacyTransactionMode      *bool
+		FireAndForget              *bool
+		RecallLength               *uint64
+		ContractAddress            *string
+		ContractCallData           *string
+		ContractCallPayable        *bool
+		BlobFeeCap                 *uint64
+		StartNonce                 *uint64
+		GasPriceMultiplier         *float64
+		SendingAccountsCount       *uint64
+		AccountFundingAmount       *big.Int
+		PreFundSendingAccounts     *bool
+		RefundRemainingFunds       *bool
+		SendingAccountsFile        *string
+		Proxy                      *string
+		WaitForReceipt             *bool
+		ReceiptRetryMax            *uint
+		ReceiptRetryInitialDelayMs *uint
+		MaxBaseFeeWei              *uint64
+		OutputRawTxOnly            *bool
 
 		// Computed
 		CurrentGasPrice       *big.Int
@@ -243,7 +243,7 @@ func initFlags() {
 	ltp.RandomRecipients = LoadtestCmd.PersistentFlags().Bool("random-recipients", false, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
 	ltp.EthCallOnly = LoadtestCmd.PersistentFlags().Bool("eth-call-only", false, "When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.")
 	ltp.EthCallOnlyLatestBlock = LoadtestCmd.PersistentFlags().Bool("eth-call-only-latest", false, "When using call only mode with recall, should we execute on the latest block or on the original block")
-	ltp.OutputRawTxOnly = LoadtestCmd.PersistentFlags().Bool("output-raw-tx-only", false, "When using this mode, rather than sending a transaction, we'll just output the raw signed transaction hex. POC: currently only works with transaction mode.")
+	ltp.OutputRawTxOnly = LoadtestCmd.PersistentFlags().Bool("output-raw-tx-only", false, "When using this mode, rather than sending a transaction, we'll just output the raw signed transaction hex. Works with most load test modes except RPC and UniswapV3.")
 	ltp.EthAmountInWei = LoadtestCmd.PersistentFlags().Uint64("eth-amount-in-wei", 0, "The amount of ether in wei to send on every transaction")
 	ltp.RateLimit = LoadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
 	ltp.AdaptiveRateLimit = LoadtestCmd.PersistentFlags().Bool("adaptive-rate-limit", false, "Enable AIMD-style congestion control to automatically adjust request rate")
@@ -279,7 +279,6 @@ func initFlags() {
 b, blob - Send blob transactions
 cc, contract-call - Make contract calls
 d, deploy - Deploy contracts
-i, inscription - Send inscription transactions
 inc, increment - Increment a counter
 r, random - Random modes (does not include the following modes: blob, call, inscription, recall, rpc, uniswapv3)
 R, recall - Replay or simulate transactions

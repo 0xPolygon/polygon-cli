@@ -306,9 +306,11 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	if *inputLoadTestParams.OutputRawTxOnly && inputLoadTestParams.MultiMode {
 		return errors.New("Raw output is not compatible with multiple modes")
 	}
-	if *inputLoadTestParams.OutputRawTxOnly && inputLoadTestParams.Mode != loadTestModeTransaction {
-		// This is temporary... There's no reason why this feature can't work with some of the other load test modes.
-		return errors.New("Raw output is only compatible with transaction mode")
+	if *inputLoadTestParams.OutputRawTxOnly && hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) {
+		return errors.New("Raw output is not compatible with RPC mode")
+	}
+	if *inputLoadTestParams.OutputRawTxOnly && hasMode(loadTestModeUniswapV3, inputLoadTestParams.ParsedModes) {
+		return errors.New("Raw output is not compatible with UniswapV3 mode")
 	}
 
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
@@ -1215,21 +1217,7 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 	if *ltp.EthCallOnly {
 		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
 	} else if *ltp.OutputRawTxOnly {
-		// Get raw signed transaction bytes
-		var rawTx []byte
-		rawTx, err = stx.MarshalBinary()
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to marshal transaction to binary")
-			return
-		}
-		// Convert to hex string with 0x prefix
-		rawTxHex := "0x" + hex.EncodeToString(rawTx)
-
-		// Output the raw transaction
-		fmt.Println(rawTxHex)
-
-		// Don't actually send the transaction
-		err = nil
+		err = outputRawTransaction(stx)
 	} else {
 		err = c.SendTransaction(ctx, stx)
 	}
@@ -1412,6 +1400,18 @@ func loadTestDeploy(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 		msg := transactOptsToCallMsg(tops)
 		msg.Data = ethcommon.FromHex(tester.LoadTesterMetaData.Bin)
 		_, err = c.CallContract(ctx, msg, nil)
+	} else if *ltp.OutputRawTxOnly {
+		// For raw output, we need to manually create and sign the deployment transaction
+		tops.NoSend = true
+		_, tx, _, err = tester.DeployLoadTester(tops, c)
+		if err != nil {
+			return
+		}
+		// The transaction from DeployLoadTester should already be signed
+		if tx != nil {
+			txHash = tx.Hash()
+			err = outputRawTransaction(tx)
+		}
 	} else {
 		_, tx, _, err = tester.DeployLoadTester(tops, c)
 		if err == nil && tx != nil {
@@ -1435,6 +1435,20 @@ func loadTestIncrement(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 		}
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
+	} else if *ltp.OutputRawTxOnly {
+		tops.NoSend = true
+		tx, err = ltContract.Inc(tops)
+		if err != nil {
+			return
+		}
+		// Sign the transaction manually since NoSend was true
+		signedTx, signErr := tops.Signer(tops.From, tx)
+		if signErr != nil {
+			err = signErr
+			return
+		}
+		txHash = signedTx.Hash()
+		err = outputRawTransaction(signedTx)
 	} else {
 		tx, err = ltContract.Inc(tops)
 		if err == nil && tx != nil {
@@ -1461,6 +1475,20 @@ func loadTestStore(ctx context.Context, c *ethclient.Client, tops *bind.Transact
 		}
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
+	} else if *ltp.OutputRawTxOnly {
+		tops.NoSend = true
+		tx, err = ltContract.Store(tops, inputData)
+		if err != nil {
+			return
+		}
+		// Sign the transaction manually since NoSend was true
+		signedTx, signErr := tops.Signer(tops.From, tx)
+		if signErr != nil {
+			err = signErr
+			return
+		}
+		txHash = signedTx.Hash()
+		err = outputRawTransaction(signedTx)
 	} else {
 		tx, err = ltContract.Store(tops, inputData)
 		if err == nil && tx != nil {
@@ -1490,6 +1518,20 @@ func loadTestERC20(ctx context.Context, c *ethclient.Client, tops *bind.Transact
 		}
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
+	} else if *ltp.OutputRawTxOnly {
+		tops.NoSend = true
+		tx, err = erc20Contract.Transfer(tops, *to, amount)
+		if err != nil {
+			return
+		}
+		// Sign the transaction manually since NoSend was true
+		signedTx, signErr := tops.Signer(tops.From, tx)
+		if signErr != nil {
+			err = signErr
+			return
+		}
+		txHash = signedTx.Hash()
+		err = outputRawTransaction(signedTx)
 	} else {
 		tx, err = erc20Contract.Transfer(tops, *to, amount)
 		if err == nil && tx != nil {
@@ -1520,6 +1562,20 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 		}
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
+	} else if *ltp.OutputRawTxOnly {
+		tops.NoSend = true
+		tx, err = erc721Contract.MintBatch(tops, *to, big.NewInt(1))
+		if err != nil {
+			return
+		}
+		// Sign the transaction manually since NoSend was true
+		signedTx, signErr := tops.Signer(tops.From, tx)
+		if signErr != nil {
+			err = signErr
+			return
+		}
+		txHash = signedTx.Hash()
+		err = outputRawTransaction(signedTx)
 	} else {
 		tx, err = erc721Contract.MintBatch(tops, *to, big.NewInt(1))
 		if err == nil && tx != nil {
@@ -1569,6 +1625,8 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 		}
 		// we're not going to return the error in the case because there is no point retrying
 		err = nil
+	} else if *ltp.OutputRawTxOnly {
+		err = outputRawTransaction(stx)
 	} else {
 		err = c.SendTransaction(ctx, stx)
 	}
@@ -1769,6 +1827,8 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 	defer func() { t2 = time.Now() }()
 	if *ltp.EthCallOnly {
 		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
+	} else if *ltp.OutputRawTxOnly {
+		err = outputRawTransaction(stx)
 	} else {
 		err = c.SendTransaction(ctx, stx)
 	}
@@ -1846,10 +1906,26 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactO
 	if *ltp.EthCallOnly {
 		log.Error().Err(err).Msg("CallOnly not supported to blob transactions")
 		return
+	} else if *ltp.OutputRawTxOnly {
+		err = outputRawTransaction(stx)
 	} else {
 		err = c.SendTransaction(ctx, stx)
 	}
 	return
+}
+
+// outputRawTransaction marshals a signed transaction to hex and outputs it to stdout
+func outputRawTransaction(stx *ethtypes.Transaction) error {
+	rawTx, err := stx.MarshalBinary()
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to marshal transaction to binary")
+		return err
+	}
+
+	rawTxHex := "0x" + hex.EncodeToString(rawTx)
+	fmt.Println(rawTxHex)
+
+	return nil
 }
 
 func recordSample(goRoutineID, requestID int64, err error, start, end time.Time, nonce uint64) {

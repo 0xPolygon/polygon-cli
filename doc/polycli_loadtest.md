@@ -111,7 +111,6 @@ The codebase has a contract that used for load testing. It's written in Solidity
                                                b, blob - Send blob transactions
                                                cc, contract-call - Make contract calls
                                                d, deploy - Deploy contracts
-                                               i, inscription - Send inscription transactions
                                                inc, increment - Increment a counter
                                                r, random - Random modes (does not include the following modes: blob, call, inscription, recall, rpc, uniswapv3)
                                                R, recall - Replay or simulate transactions
@@ -121,7 +120,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
                                                v3, uniswapv3 - Perform UniswapV3 swaps (default [t])
       --nonce uint                             Use this flag to manually set the starting nonce
       --output-mode string                     Format mode for summary output (json | text) (default "text")
-      --output-raw-tx-only                     When using this mode, rather than sending a transaction, we'll just output the raw signed transaction hex. POC: currently only works with transaction mode.
+      --output-raw-tx-only                     When using this mode, rather than sending a transaction, we'll just output the raw signed transaction hex. Works with most load test modes except RPC and UniswapV3.
       --pre-fund-sending-accounts              If set to true, the sending accounts will be funded at the start of the execution, otherwise all accounts will be funded when used for the first time.
       --priority-gas-price uint                Specify Gas Tip Price in the case of EIP-1559
       --private-key string                     The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")

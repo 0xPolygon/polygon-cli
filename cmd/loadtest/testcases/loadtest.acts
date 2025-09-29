@@ -116,7 +116,7 @@ mode == "blob" => !legacy
 
 nonce != -1 => accountFundingAmount == "-1" && sendingAccountsFile == "UNSPECIFIED" && !preFundSendingAccounts
 
-outputRawTxOnly => mode == "transaction" && maxBaseFeeWei == -1 && !adaptiveRateLimit && !waitForReceipt && !ethCallOnly && !preFundSendingAccounts && timeLimit == -1
+outputRawTxOnly => mode != "rpc" && mode != "uniswapv3" && maxBaseFeeWei == -1 && !adaptiveRateLimit && !waitForReceipt && !ethCallOnly && !preFundSendingAccounts && timeLimit == -1
 
 -- random recipeints only works for certain modes
 randomRecipients => toAddress == "UNSPECIFIED"

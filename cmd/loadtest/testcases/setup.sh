@@ -72,7 +72,12 @@ done
 shuf test-commands.sh | while read polyclicmd ; do
     echo $polyclicmd > cur.out
     if ! timeout 120s bash -c "$polyclicmd" &>> cur.out ; then
-        mv cur.out failure.$(date +%s).out
+        rc=$?
+        if [[ $rc -eq 124 ]]; then
+            mv cur.out timeout.$(date +%s).out
+        else
+            mv cur.out failure.$(date +%s).out
+        fi
     fi
 done
 
