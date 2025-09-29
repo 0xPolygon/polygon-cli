@@ -914,7 +914,7 @@ func claimAsset(cmd *cobra.Command) error {
 	}
 	defer client.Close()
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	bridgeV2, _, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -939,7 +939,7 @@ func claimAsset(cmd *cobra.Command) error {
 		return err
 	}
 
-	claimTxn, err := bridgeV2.ClaimAsset(auth, bridge_service.HashArrayToBytesArray(proof.MerkleProof), bridge_service.HashArrayToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, toAddress, deposit.Amount, deposit.Metadata)
+	claimTxn, err := bridgeV2.ClaimAsset(auth, bridge_service.HashArrayToBytesArray(proof.MerkleProof), bridge_service.HashArrayToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, deposit.DestAddr, deposit.Amount, deposit.Metadata)
 	if err = logAndReturnJsonError(cmd.Context(), client, claimTxn, auth, err); err != nil {
 		return err
 	}
@@ -969,7 +969,7 @@ func claimMessage(cmd *cobra.Command) error {
 	}
 	defer client.Close()
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	bridgeV2, _, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
@@ -994,7 +994,7 @@ func claimMessage(cmd *cobra.Command) error {
 		return err
 	}
 
-	claimTxn, err := bridgeV2.ClaimMessage(auth, bridge_service.HashArrayToBytesArray(proof.MerkleProof), bridge_service.HashArrayToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, toAddress, deposit.Amount, deposit.Metadata)
+	claimTxn, err := bridgeV2.ClaimMessage(auth, bridge_service.HashArrayToBytesArray(proof.MerkleProof), bridge_service.HashArrayToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, deposit.DestAddr, deposit.Amount, deposit.Metadata)
 	if err = logAndReturnJsonError(cmd.Context(), client, claimTxn, auth, err); err != nil {
 		return err
 	}
