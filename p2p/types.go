@@ -240,7 +240,6 @@ func (c *rlpxConn) Read() Message {
 	case (WitnessPacketRLPPacket{}.Code()):
 		msg = new(WitnessPacketRLPPacket)
 	default:
-		log.Info().Any("code", code).Send()
 		msg = errorf("invalid message code: %d", code)
 	}
 
@@ -272,7 +271,7 @@ func (c *rlpxConn) ReadSnap(id uint64) (Message, error) {
 		if err != nil {
 			return nil, fmt.Errorf("could not read from connection: %v", err)
 		}
-		var snpMsg interface{}
+		var snpMsg any
 		switch int(code) {
 		case (GetAccountRange{}).Code():
 			snpMsg = new(GetAccountRange)
