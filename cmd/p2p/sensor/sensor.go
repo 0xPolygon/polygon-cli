@@ -69,6 +69,7 @@ type (
 		QuickStart                   bool
 		TTL                          time.Duration
 		DiscoveryDNS                 string
+		Database                     string
 
 		bootnodes    []*enode.Node
 		nodes        []*enode.Node
@@ -136,18 +137,38 @@ var SensorCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		db := database.NewDatastore(cmd.Context(), database.DatastoreOptions{
-			ProjectID:                    inputSensorParams.ProjectID,
-			DatabaseID:                   inputSensorParams.DatabaseID,
-			SensorID:                     inputSensorParams.SensorID,
-			MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
-			ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
-			ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
-			ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
-			ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
-			ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
-			TTL:                          inputSensorParams.TTL,
-		})
+		var db database.Database
+		switch inputSensorParams.Database {
+		case "datastore":
+			db = database.NewDatastore(cmd.Context(), database.DatastoreOptions{
+				ProjectID:                    inputSensorParams.ProjectID,
+				DatabaseID:                   inputSensorParams.DatabaseID,
+				SensorID:                     inputSensorParams.SensorID,
+				ChainID:                      inputSensorParams.NetworkID,
+				MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
+				ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
+				ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
+				ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
+				ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
+				ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
+				TTL:                          inputSensorParams.TTL,
+			})
+		case "json":
+			db = database.NewJSONDatabase(database.JSONDatabaseOptions{
+				SensorID:                     inputSensorParams.SensorID,
+				ChainID:                      inputSensorParams.NetworkID,
+				MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
+				ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
+				ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
+				ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
+				ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
+				ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
+			})
+		case "none":
+			db = database.NoDatabase()
+		default:
+			return fmt.Errorf("invalid database option: %s", inputSensorParams.Database)
+		}
 
 		// Fetch the latest block which will be used later when crafting the status
 		// message. This call will only be made once and stored in the head field
@@ -545,4 +566,9 @@ connect to new peers if the nodes.json file is large.`)
 	SensorCmd.Flags().StringVar(&inputSensorParams.TrustedNodesFile, "trusted-nodes", "", "Trusted nodes file")
 	SensorCmd.Flags().DurationVar(&inputSensorParams.TTL, "ttl", 14*24*time.Hour, "Time to live")
 	SensorCmd.Flags().StringVar(&inputSensorParams.DiscoveryDNS, "discovery-dns", "", "DNS discovery ENR tree url")
+	SensorCmd.Flags().StringVar(&inputSensorParams.Database, "database", "none",
+		`Which database to persist data to, options are:
+  - datastore (GCP Datastore)
+  - json (output to stdout)
+  - none (no persistence)`)
 }
