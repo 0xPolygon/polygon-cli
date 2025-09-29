@@ -2461,7 +2461,7 @@ or if it's actually an intermediate hash.`,
 	inputUlxlyArgs.gasPrice = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgGasPrice, "", "the gas price to be used")
 	inputUlxlyArgs.dryRun = ulxlyBridgeAndClaimCmd.PersistentFlags().Bool(ArgDryRun, false, "do all of the transaction steps but do not send the transaction")
 	inputUlxlyArgs.insecure = ulxlyBridgeAndClaimCmd.PersistentFlags().Bool(ArgInsecure, false, "skip TLS certificate verification")
-	inputUlxlyArgs.legacy = ulxlyBridgeAndClaimCmd.PersistentFlags().Bool(ArgLegacy, false, "force usage of legacy bridge service")
+	inputUlxlyArgs.legacy = ulxlyBridgeAndClaimCmd.PersistentFlags().Bool(ArgLegacy, true, "force usage of legacy bridge service")
 	fatalIfError(ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgBridgeAddress))
 
 	// bridge specific args
