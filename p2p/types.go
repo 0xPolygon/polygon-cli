@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 type Message interface {
