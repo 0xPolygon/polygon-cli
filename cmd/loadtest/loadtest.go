@@ -30,7 +30,6 @@ import (
 	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	uniswapv3loadtest "github.com/0xPolygon/polygon-cli/cmd/loadtest/uniswapv3"
 
-	"github.com/0xPolygon/polygon-cli/abi"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/0xPolygon/polygon-cli/util"
 
@@ -62,7 +61,6 @@ const (
 	loadTestModeBlob
 	loadTestModeContractCall
 	loadTestModeDeploy
-	loadTestModeInscription
 	loadTestModeIncrement
 	loadTestModeRandom
 	loadTestModeRecall
@@ -89,8 +87,6 @@ func characterToLoadTestMode(mode string) (loadTestMode, error) {
 		return loadTestModeContractCall, nil
 	case "d", "deploy":
 		return loadTestModeDeploy, nil
-	case "i", "inscription":
-		return loadTestModeInscription, nil
 	case "inc", "increment":
 		return loadTestModeIncrement, nil
 	case "r", "random":
@@ -112,8 +108,7 @@ func characterToLoadTestMode(mode string) (loadTestMode, error) {
 
 func getRandomMode() loadTestMode {
 	// Does not include the following modes:
-	// blob, call, contract call, inscription,
-	// recall, rpc, uniswap v3
+	// blob, contract call, recall, rpc, uniswap v3
 	modes := []loadTestMode{
 		loadTestModeERC20,
 		loadTestModeERC721,
@@ -290,8 +285,8 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		log.Trace().Msg("Setting call only mode since we're doing RPC testing")
 		*inputLoadTestParams.EthCallOnly = true
 	}
-	if hasMode(loadTestModeContractCall, inputLoadTestParams.ParsedModes) && (*inputLoadTestParams.ContractAddress == "" || (*inputLoadTestParams.ContractCallData == "" && *inputLoadTestParams.ContractCallFunctionSignature == "")) {
-		return errors.New("`--contract-call` requires both a `--contract-address` and calldata, either with `--calldata` or `--function-signature --function-arg` flags")
+	if hasMode(loadTestModeContractCall, inputLoadTestParams.ParsedModes) && (*inputLoadTestParams.ContractAddress == "" || *inputLoadTestParams.ContractCallData == "") {
+		return errors.New("`--contract-call` requires both a `--contract-address` and `--calldata` flags")
 	}
 	if *inputLoadTestParams.EthCallOnly && *inputLoadTestParams.AdaptiveRateLimit {
 		return errors.New("using call only with adaptive rate limit doesn't make sense")
@@ -905,8 +900,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					startReq, endReq, ltTxHash, tErr = loadTestContractCall(ctx, c, sendingTops)
 				case loadTestModeDeploy:
 					startReq, endReq, ltTxHash, tErr = loadTestDeploy(ctx, c, sendingTops)
-				case loadTestModeInscription:
-					startReq, endReq, ltTxHash, tErr = loadTestInscription(ctx, c, sendingTops)
 				case loadTestModeIncrement:
 					startReq, endReq, ltTxHash, tErr = loadTestIncrement(ctx, c, sendingTops, ltContract)
 				case loadTestModeRecall:
@@ -1711,23 +1704,13 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 		amount = ltp.SendAmount
 	}
 
-	var stringCallData string
-	if *inputLoadTestParams.ContractCallData == "" && *inputLoadTestParams.ContractCallFunctionSignature == "" {
-		log.Error().Err(fmt.Errorf("missing calldata for function call"))
+	if *inputLoadTestParams.ContractCallData == "" {
+		err = fmt.Errorf("missing calldata for function call")
+		log.Error().Err(err).Msg("--calldata flag is required for contract-call mode")
 		return
 	}
 
-	if *inputLoadTestParams.ContractCallData != "" {
-		stringCallData = *inputLoadTestParams.ContractCallData
-	} else {
-		stringCallData, err = abi.AbiEncode(*inputLoadTestParams.ContractCallFunctionSignature, *inputLoadTestParams.ContractCallFunctionArgs)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to encode calldata")
-			return
-		}
-	}
-
-	calldata, err = hex.DecodeString(strings.TrimPrefix(stringCallData, "0x"))
+	calldata, err = hex.DecodeString(strings.TrimPrefix(*inputLoadTestParams.ContractCallData, "0x"))
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to decode calldata string")
 		return
@@ -1792,74 +1775,6 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 	return
 }
 
-func loadTestInscription(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
-	var tx *ethtypes.Transaction
-	var stx *ethtypes.Transaction
-
-	ltp := inputLoadTestParams
-
-	to := ltp.FromETHAddress
-
-	chainID := new(big.Int).SetUint64(*ltp.ChainID)
-	amount := big.NewInt(0)
-
-	calldata := []byte(*ltp.InscriptionContent)
-	if tops.GasLimit == 0 {
-		estimateInput := ethereum.CallMsg{
-			From:      tops.From,
-			To:        to,
-			Value:     amount,
-			GasPrice:  tops.GasPrice,
-			GasTipCap: tops.GasTipCap,
-			GasFeeCap: tops.GasFeeCap,
-			Data:      calldata,
-		}
-		tops.GasLimit, err = c.EstimateGas(ctx, estimateInput)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to estimate gas for transaction. Manually setting gas-limit might be required")
-			return
-		}
-	}
-
-	if *ltp.LegacyTransactionMode {
-		tx = ethtypes.NewTx(&ethtypes.LegacyTx{
-			Nonce:    tops.Nonce.Uint64(),
-			To:       to,
-			Value:    amount,
-			Gas:      tops.GasLimit,
-			GasPrice: tops.GasPrice,
-			Data:     calldata,
-		})
-	} else {
-		tx = ethtypes.NewTx(&ethtypes.DynamicFeeTx{
-			ChainID:   chainID,
-			Nonce:     tops.Nonce.Uint64(),
-			To:        to,
-			Gas:       tops.GasLimit,
-			GasFeeCap: tops.GasFeeCap,
-			GasTipCap: tops.GasTipCap,
-			Data:      calldata,
-			Value:     amount,
-		})
-	}
-	log.Trace().Interface("tx", tx).Msg("Contract call data")
-
-	stx, err = tops.Signer(tops.From, tx)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to sign transaction")
-		return
-	}
-	txHash = stx.Hash()
-
-	t1 = time.Now()
-	defer func() { t2 = time.Now() }()
-	if *ltp.EthCallOnly {
-		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
-	} else {
-		err = c.SendTransaction(ctx, stx)
-	}
-	return
-}
 
 func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var stx *ethtypes.Transaction

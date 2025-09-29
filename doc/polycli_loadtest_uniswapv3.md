@@ -95,6 +95,7 @@ The command also inherits flags from parent commands.
       --legacy                                 Send a legacy transaction instead of an EIP1559 transaction.
       --nonce uint                             Use this flag to manually set the starting nonce
       --output-mode string                     Format mode for summary output (json | text) (default "text")
+      --output-raw-tx-only                     When using this mode, rather than sending a transaction, we'll just output the raw signed transaction hex. POC: currently only works with transaction mode.
       --pretty-logs                            Should logs be in pretty format or JSON (default true)
       --priority-gas-price uint                Specify Gas Tip Price in the case of EIP-1559
       --private-key string                     The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")

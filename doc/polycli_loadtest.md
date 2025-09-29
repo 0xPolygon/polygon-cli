@@ -98,13 +98,10 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --eth-call-only                          When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.
       --eth-call-only-latest                   When using call only mode with recall, should we execute on the latest block or on the original block
       --fire-and-forget                        Send transactions and load without waiting for it to be mined.
-      --function-arg strings                   The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.
-      --function-signature string              The contract's function signature that will be called. The format is '<function name>(<types...>)'. This must be paired up with '--mode contract-call' and '--contract-address'. If the function requires parameters you can pass them with '--function-arg <value>'.
       --gas-limit uint                         In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
       --gas-price uint                         In environments where the gas price can't be determined automatically, we can specify it manually
       --gas-price-multiplier float             A multiplier to increase or decrease the gas price (default 1)
   -h, --help                                   help for loadtest
-      --inscription-content string             The inscription content that will be encoded as calldata. This must be paired up with --mode inscription (default "data:,{\"p\":\"erc-20\",\"op\":\"mint\",\"tick\":\"TEST\",\"amt\":\"1\"}")
       --legacy                                 Send a legacy transaction instead of an EIP1559 transaction.
       --loadtest-contract-address string       The address of a pre-deployed load test contract
       --max-base-fee-wei uint                  The maximum base fee in wei. If the base fee exceeds this value, sending tx will be paused and while paused, existing in-flight transactions continue to confirmation, but no additional SendTransaction calls occur. This is useful to avoid sending transactions when the network is congested.
@@ -124,6 +121,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
                                                v3, uniswapv3 - Perform UniswapV3 swaps (default [t])
       --nonce uint                             Use this flag to manually set the starting nonce
       --output-mode string                     Format mode for summary output (json | text) (default "text")
+      --output-raw-tx-only                     When using this mode, rather than sending a transaction, we'll just output the raw signed transaction hex. POC: currently only works with transaction mode.
       --pre-fund-sending-accounts              If set to true, the sending accounts will be funded at the start of the execution, otherwise all accounts will be funded when used for the first time.
       --priority-gas-price uint                Specify Gas Tip Price in the case of EIP-1559
       --private-key string                     The hex encoded private key that we'll use to send transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")

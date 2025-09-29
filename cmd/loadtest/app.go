@@ -72,10 +72,7 @@ type (
 		RecallLength                  *uint64
 		ContractAddress               *string
 		ContractCallData              *string
-		ContractCallFunctionSignature *string
-		ContractCallFunctionArgs      *[]string
 		ContractCallPayable           *bool
-		InscriptionContent            *string
 		BlobFeeCap                    *uint64
 		StartNonce                    *uint64
 		GasPriceMultiplier            *float64
@@ -297,10 +294,7 @@ v3, uniswapv3 - Perform UniswapV3 swaps`)
 	ltp.RecallLength = LoadtestCmd.Flags().Uint64("recall-blocks", 50, "The number of blocks that we'll attempt to fetch for recall")
 	ltp.ContractAddress = LoadtestCmd.Flags().String("contract-address", "", "The address of the contract that will be used in --mode contract-call. This must be paired up with --mode contract-call and --calldata")
 	ltp.ContractCallData = LoadtestCmd.Flags().String("calldata", "", "The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with --mode contract-call and --contract-address")
-	ltp.ContractCallFunctionSignature = LoadtestCmd.Flags().String("function-signature", "", "The contract's function signature that will be called. The format is '<function name>(<types...>)'. This must be paired up with '--mode contract-call' and '--contract-address'. If the function requires parameters you can pass them with '--function-arg <value>'.")
-	ltp.ContractCallFunctionArgs = LoadtestCmd.Flags().StringSlice("function-arg", []string{}, `The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.`)
 	ltp.ContractCallPayable = LoadtestCmd.Flags().Bool("contract-call-payable", false, "Use this flag if the function is payable, the value amount passed will be from --eth-amount-in-wei. This must be paired up with --mode contract-call and --contract-address")
-	ltp.InscriptionContent = LoadtestCmd.Flags().String("inscription-content", `data:,{"p":"erc-20","op":"mint","tick":"TEST","amt":"1"}`, "The inscription content that will be encoded as calldata. This must be paired up with --mode inscription")
 	ltp.Proxy = LoadtestCmd.Flags().String("proxy", "", "Use the proxy specified")
 	ltp.WaitForReceipt = LoadtestCmd.Flags().Bool("wait-for-receipt", false, "If set to true, the load test will wait for the transaction receipt to be mined. If set to false, the load test will not wait for the transaction receipt and will just send the transaction.")
 	ltp.ReceiptRetryMax = LoadtestCmd.Flags().Uint("receipt-retry-max", 30, "Maximum number of attempts to poll for transaction receipt when --wait-for-receipt is enabled.")
