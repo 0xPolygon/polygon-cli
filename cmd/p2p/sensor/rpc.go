@@ -143,8 +143,14 @@ func handleBatchRequest(w http.ResponseWriter, body []byte, conns *p2p.Conns, ch
 
 	for _, req := range requests {
 		if req.Method != "eth_sendRawTransaction" {
-			response := processSingleRequest(req, conns, chainID)
-			responses = append(responses, response)
+			responses = append(responses, rpcResponse{
+				JSONRPC: "2.0",
+				Error: &rpcError{
+					Code:    -32601,
+					Message: "Method not found",
+				},
+				ID: req.ID,
+			})
 			continue
 		}
 
@@ -270,176 +276,20 @@ func validateTransaction(req rpcRequest, chainID *big.Int) (*types.Transaction, 
 	return tx, rpcResponse{}
 }
 
-// processSingleRequest processes a single JSON-RPC request and returns a response.
-// Currently supports eth_sendRawTransaction method.
-func processSingleRequest(req rpcRequest, conns *p2p.Conns, chainID *big.Int) rpcResponse {
-	// Handle eth_sendRawTransaction
-	if req.Method == "eth_sendRawTransaction" {
-		return processSendRawTransaction(req, conns, chainID)
-	}
-
-	// Method not found
-	return rpcResponse{
-		JSONRPC: "2.0",
-		Error: &rpcError{
-			Code:    -32601,
-			Message: "Method not found",
-		},
-		ID: req.ID,
-	}
-}
-
-// processSendRawTransaction processes a single eth_sendRawTransaction request, validates
-// the transaction, broadcasts it to all connected peers, and returns the transaction hash.
-func processSendRawTransaction(req rpcRequest, conns *p2p.Conns, chainID *big.Int) rpcResponse {
-	// Check params
-	if len(req.Params) == 0 {
-		return rpcResponse{
-			JSONRPC: "2.0",
-			Error: &rpcError{
-				Code:    -32602,
-				Message: "Invalid params: missing raw transaction",
-			},
-			ID: req.ID,
-		}
-	}
-
-	// Extract raw transaction hex string
-	rawTxHex, ok := req.Params[0].(string)
-	if !ok {
-		return rpcResponse{
-			JSONRPC: "2.0",
-			Error: &rpcError{
-				Code:    -32602,
-				Message: "Invalid params: raw transaction must be a hex string",
-			},
-			ID: req.ID,
-		}
-	}
-
-	// Decode hex string to bytes
-	txBytes, err := hexutil.Decode(rawTxHex)
-	if err != nil {
-		return rpcResponse{
-			JSONRPC: "2.0",
-			Error: &rpcError{
-				Code:    -32602,
-				Message: fmt.Sprintf("Invalid transaction hex: %v", err),
-			},
-			ID: req.ID,
-		}
-	}
-
-	// Unmarshal transaction
-	tx := new(types.Transaction)
-	if err := tx.UnmarshalBinary(txBytes); err != nil {
-		return rpcResponse{
-			JSONRPC: "2.0",
-			Error: &rpcError{
-				Code:    -32602,
-				Message: fmt.Sprintf("Invalid transaction encoding: %v", err),
-			},
-			ID: req.ID,
-		}
-	}
-
-	// Validate transaction signature
-	signer := types.LatestSignerForChainID(chainID)
-	sender, err := types.Sender(signer, tx)
-	if err != nil {
-		return rpcResponse{
-			JSONRPC: "2.0",
-			Error: &rpcError{
-				Code:    -32602,
-				Message: fmt.Sprintf("Invalid transaction signature: %v", err),
-			},
-			ID: req.ID,
-		}
-	}
-
-	// Log the transaction
-	toAddr := "nil"
-	if tx.To() != nil {
-		toAddr = tx.To().Hex()
-	}
-
-	log.Info().
-		Str("hash", tx.Hash().Hex()).
-		Str("from", sender.Hex()).
-		Str("to", toAddr).
-		Str("value", tx.Value().String()).
-		Uint64("gas", tx.Gas()).
-		Msg("Broadcasting transaction")
-
-	// Broadcast to all peers
-	broadcastCount := conns.BroadcastTx(tx)
-
-	log.Info().
-		Str("hash", tx.Hash().Hex()).
-		Int("peers", broadcastCount).
-		Msg("Transaction broadcast complete")
-
-	// Return transaction hash
-	return rpcResponse{
-		JSONRPC: "2.0",
-		Result:  tx.Hash().Hex(),
-		ID:      req.ID,
-	}
-}
-
 // handleSendRawTransaction processes eth_sendRawTransaction requests, validates the
 // transaction, broadcasts it to all connected peers, and writes the transaction hash
 // as a JSON-RPC response.
 func handleSendRawTransaction(w http.ResponseWriter, req rpcRequest, conns *p2p.Conns, chainID *big.Int) {
-	// Check params
-	if len(req.Params) == 0 {
-		writeError(w, -32602, "Invalid params: missing raw transaction", req.ID)
+	tx, errResp := validateTransaction(req, chainID)
+	if tx == nil {
+		writeError(w, errResp.Error.Code, errResp.Error.Message, errResp.ID)
 		return
-	}
-
-	// Extract raw transaction hex string
-	rawTxHex, ok := req.Params[0].(string)
-	if !ok {
-		writeError(w, -32602, "Invalid params: raw transaction must be a hex string", req.ID)
-		return
-	}
-
-	// Decode hex string to bytes
-	txBytes, err := hexutil.Decode(rawTxHex)
-	if err != nil {
-		writeError(w, -32602, fmt.Sprintf("Invalid transaction hex: %v", err), req.ID)
-		return
-	}
-
-	// Unmarshal transaction
-	tx := new(types.Transaction)
-	if err := tx.UnmarshalBinary(txBytes); err != nil {
-		writeError(w, -32602, fmt.Sprintf("Invalid transaction encoding: %v", err), req.ID)
-		return
-	}
-
-	// Validate transaction signature
-	signer := types.LatestSignerForChainID(chainID)
-	sender, err := types.Sender(signer, tx)
-	if err != nil {
-		writeError(w, -32602, fmt.Sprintf("Invalid transaction signature: %v", err), req.ID)
-		return
-	}
-
-	to := "nil"
-	if tx.To() != nil {
-		to = tx.To().Hex()
 	}
 
 	log.Info().
 		Str("hash", tx.Hash().Hex()).
-		Str("from", sender.Hex()).
-		Str("to", to).
-		Str("value", tx.Value().String()).
-		Uint64("gas", tx.Gas()).
 		Msg("Broadcasting transaction")
 
-	// Broadcast to all peers
 	count := conns.BroadcastTx(tx)
 
 	log.Info().
@@ -447,6 +297,5 @@ func handleSendRawTransaction(w http.ResponseWriter, req rpcRequest, conns *p2p.
 		Int("peers", count).
 		Msg("Transaction broadcast complete")
 
-	// Return transaction hash
 	writeResult(w, tx.Hash().Hex(), req.ID)
 }
