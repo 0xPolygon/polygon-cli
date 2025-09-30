@@ -75,9 +75,9 @@ var DumpblocksCmd = &cobra.Command{
 		start := inputDumpblocks.Start
 		end := inputDumpblocks.End
 
-		for start < end {
+		for start <= end {
 			rangeStart := start
-			rangeEnd := min(rangeStart+inputDumpblocks.BatchSize, end)
+			rangeEnd := min(rangeStart+inputDumpblocks.BatchSize-1, end)
 
 			pool <- true
 			wg.Add(1)
@@ -129,7 +129,7 @@ var DumpblocksCmd = &cobra.Command{
 				}
 				<-pool
 			}()
-			start = rangeEnd
+			start = rangeEnd + 1
 		}
 
 		log.Info().Msg("Finished requesting data starting to wait")

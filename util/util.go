@@ -113,6 +113,83 @@ func GetBlockRangeInPages(ctx context.Context, from, to, pageSize uint64, c *eth
 }
 
 func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Client, batchSize uint64) ([]*json.RawMessage, error) {
+	// check if get receipts by block is supported
+	err := c.CallContext(ctx, nil, "eth_getBlockReceipts", "0x1")
+	if err == nil {
+		return getReceiptsByBlock(ctx, rawBlocks, c, batchSize)
+	}
+
+	log.Debug().Err(err).Msg("eth_getBlockReceipts not supported, falling back to eth_getTransactionReceipt")
+	return getReceiptsByTx(ctx, rawBlocks, c, batchSize)
+}
+
+func getReceiptsByBlock(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Client, batchSize uint64) ([]*json.RawMessage, error) {
+	var startBlock *string
+	batchElements := make([]ethrpc.BatchElem, 0, len(rawBlocks))
+	for _, rawBlock := range rawBlocks {
+		var block simpleRPCBlock
+		err := json.Unmarshal(*rawBlock, &block)
+		if err != nil {
+			return nil, err
+		}
+		batchElements = append(batchElements, ethrpc.BatchElem{
+			Method: "eth_getBlockReceipts",
+			Args:   []interface{}{block.Number},
+			Result: new([]*json.RawMessage),
+		})
+		if startBlock == nil {
+			startBlock = &block.Number
+		}
+	}
+	if len(batchElements) == 0 {
+		log.Debug().Int("Length of BatchElem", len(batchElements)).Msg("BatchElem is empty")
+		return nil, nil
+	}
+
+	var start uint64 = 0
+	for {
+		last := false
+		end := start + batchSize
+		if int(end) >= len(batchElements) {
+			last = true
+			end = uint64(len(batchElements))
+		}
+
+		log.Trace().Str("startblock", *startBlock).Uint64("start", start).Uint64("end", end).Msg("Fetching receipt range")
+		err := c.BatchCallContext(ctx, batchElements[start:end])
+		if err != nil {
+			log.Error().Err(err).Uint64("start", start).Uint64("end", end).Msg("RPC issue fetching receipts, have you checked the batch size limit of the RPC endpoint and adjusted the --batch-size flag?")
+			break
+		}
+		start = end
+		if last {
+			break
+		}
+	}
+
+	receipts := make([]*json.RawMessage, 0)
+	for _, b := range batchElements {
+		if b.Error != nil {
+			log.Error().Err(b.Error).
+				Interface("blockNumber", b.Args[0]).
+				Msg("Block response err")
+			return nil, b.Error
+		}
+		if b.Result == nil || reflect.ValueOf(b.Result).IsNil() {
+			continue
+		}
+		rs := *(b.Result.(*[]*json.RawMessage))
+		receipts = append(receipts, rs...)
+	}
+	if len(receipts) == 0 {
+		log.Error().Msg("No receipts have been fetched")
+		return nil, nil
+	}
+	log.Info().Int("blocks", len(rawBlocks)).Int("receipts", len(receipts)).Msg("Fetched tx receipts")
+	return receipts, nil
+}
+
+func getReceiptsByTx(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Client, batchSize uint64) ([]*json.RawMessage, error) {
 	txHashes := make([]string, 0)
 	txHashMap := make(map[string]string, 0)
 	for _, rb := range rawBlocks {
@@ -120,13 +197,11 @@ func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Cl
 		err := json.Unmarshal(*rb, &block)
 		if err != nil {
 			return nil, err
-
 		}
 		for _, tx := range block.Transactions {
 			txHashes = append(txHashes, tx.Hash)
 			txHashMap[tx.Hash] = block.Number
 		}
-
 	}
 	if len(txHashes) == 0 {
 		return nil, nil
