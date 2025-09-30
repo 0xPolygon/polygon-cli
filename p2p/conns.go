@@ -43,9 +43,8 @@ func (c *Conns) BroadcastTx(tx *types.Transaction) int {
 	return c.BroadcastTxs(types.Transactions{tx})
 }
 
-// BroadcastTxs broadcasts multiple transactions to all currently active peers.
+// BroadcastTxs broadcasts multiple transactions to all connected peers.
 // Returns the number of peers the transactions were successfully sent to.
-// Silently skips disconnected peers from the historical connection list.
 func (c *Conns) BroadcastTxs(txs types.Transactions) int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -56,9 +55,7 @@ func (c *Conns) BroadcastTxs(txs types.Transactions) int {
 
 	count := 0
 	for _, cn := range c.conns {
-		// Try to send, failures indicate disconnected peers
 		if err := ethp2p.Send(cn.rw, 0x02, txs); err != nil {
-			// Silently skip - this peer is in our history but disconnected
 			continue
 		}
 		count++
@@ -67,8 +64,7 @@ func (c *Conns) BroadcastTxs(txs types.Transactions) int {
 	return count
 }
 
-// Nodes returns all peer nodes that have ever connected (historical record).
-// This includes both currently active and previously disconnected peers.
+// Nodes returns all currently connected peer nodes.
 func (c *Conns) Nodes() []*enode.Node {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
