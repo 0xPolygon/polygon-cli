@@ -178,7 +178,7 @@ func handleBatchRequest(w http.ResponseWriter, body []byte, conns *p2p.Conns, ch
 		count := conns.BroadcastTxs(txs)
 
 		log.Info().
-			Int("txCount", len(txs)).
+			Int("txs", len(txs)).
 			Int("peers", count).
 			Msg("Batch broadcast complete")
 	}
