@@ -51,13 +51,12 @@ func handleRPC(conns *p2p.Conns, networkID uint64) {
 			return
 		}
 
-		defer r.Body.Close()
-
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			writeError(w, -32700, "Parse error", nil)
 			return
 		}
+		defer r.Body.Close()
 
 		// Check if this is a batch request (starts with '[') or single request
 		trimmed := strings.TrimSpace(string(body))
