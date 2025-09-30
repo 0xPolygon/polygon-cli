@@ -36,7 +36,6 @@ fireAndForget (boolean): TRUE, FALSE
 gasLimit (int): -1, 21000, 100000, 1000000, 10000000, 20000000
 gasPrice (int): -1, 100, 10000, 1000000
 gasPriceMultiplier (int): -1, 1, 2, 10
--- inscriptionContent i wonder if this flag should be dropped as well.. It's redunant with contract call i think
 legacy (boolean): TRUE, FALSE
 -- the load test contract isn't used ans much anymore... I wonder if we should drop this as well?
 loadtestContractAddress (enum): UNSPECIFIED, 0xbB186bd43C992F68Ac430686370343aeF2A22B96
@@ -118,7 +117,7 @@ nonce != -1 => accountFundingAmount == "-1" && sendingAccountsFile == "UNSPECIFI
 
 outputRawTxOnly => mode != "rpc" && mode != "uniswapv3" && maxBaseFeeWei == -1 && !adaptiveRateLimit && !waitForReceipt && !ethCallOnly && !preFundSendingAccounts && timeLimit == -1
 
--- random recipeints only works for certain modes
+-- random recipients only works for certain modes
 randomRecipients => toAddress == "UNSPECIFIED"
 
 recallBlocks != -1 => mode == "recall"

@@ -298,7 +298,7 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		return errors.New("using call only with blobs doesn't make sense")
 	}
 	if *inputLoadTestParams.LegacyTransactionMode && inputLoadTestParams.Mode == loadTestModeBlob {
-		return errors.New("blob tansactions require eip-1559")
+		return errors.New("blob transactions require eip-1559")
 	}
 	if hasMode(loadTestModeBlob, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode {
 		return errors.New("blob mode should only be used by itself. Blob mode will take significantly longer than other transactions to finalize, and the address will be reserved, preventing other transactions form being made")
@@ -1834,7 +1834,6 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 	}
 	return
 }
-
 
 func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
 	var stx *ethtypes.Transaction
