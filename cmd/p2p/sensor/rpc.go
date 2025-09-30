@@ -422,10 +422,15 @@ func handleSendRawTransaction(w http.ResponseWriter, req rpcRequest, conns *p2p.
 		return
 	}
 
+	to := "nil"
+	if tx.To() != nil {
+		to = tx.To().Hex()
+	}
+
 	log.Info().
 		Str("hash", tx.Hash().Hex()).
 		Str("from", sender.Hex()).
-		Any("to", tx.To().Hex()).
+		Str("to", to).
 		Str("value", tx.Value().String()).
 		Uint64("gas", tx.Gas()).
 		Msg("Broadcasting transaction")

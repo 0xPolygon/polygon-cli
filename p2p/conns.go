@@ -6,11 +6,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/rs/zerolog/log"
 )
 
-// Conns manages a collection of peer connections for transaction broadcasting.
-// It keeps a historical record of all peers that have ever connected.
+// Conns manages a collection of active peer connections for transaction broadcasting.
 type Conns struct {
 	conns map[string]*conn
 	mu    sync.RWMutex
@@ -24,18 +22,19 @@ func NewConns() *Conns {
 }
 
 // Add adds a connection to the manager.
-// Connections are kept in the map even after they disconnect for historical tracking.
 func (c *Conns) Add(cn *conn) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.conns[cn.node.ID().String()] = cn
-	log.Debug().Msg("Added connection for broadcasting")
+	cn.logger.Debug().Msg("Added connection")
 }
 
-// Remove is a no-op. Connections remain in the map for historical tracking.
-// Active connections are identified by checking if the peer is still connected during operations.
+// Remove removes a connection from the manager when a peer disconnects.
 func (c *Conns) Remove(cn *conn) {
-	// Intentionally empty - keep all connections for historical record
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.conns, cn.node.ID().String())
+	cn.logger.Debug().Msg("Removed connection")
 }
 
 // BroadcastTx broadcasts a single transaction to all connected peers.

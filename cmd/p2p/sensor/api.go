@@ -79,8 +79,7 @@ func getPeerMessages(url string, counter *prometheus.CounterVec) p2p.MessageCoun
 		BlockBodiesRequests: getCounterValue(new(eth.GetBlockBodiesPacket), url, counter),
 		Transactions: getCounterValue(new(eth.TransactionsPacket), url, counter) +
 			getCounterValue(new(eth.PooledTransactionsPacket), url, counter),
-		TransactionHashes: getCounterValue(new(eth.NewPooledTransactionHashesPacket), url, counter) +
-			getCounterValue(new(eth.NewPooledTransactionHashesPacket), url, counter),
+		TransactionHashes:   getCounterValue(new(eth.NewPooledTransactionHashesPacket), url, counter),
 		TransactionRequests: getCounterValue(new(eth.GetPooledTransactionsRequest), url, counter),
 	}
 }
