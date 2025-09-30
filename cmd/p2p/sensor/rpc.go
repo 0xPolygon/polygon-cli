@@ -51,13 +51,13 @@ func handleRPC(conns *p2p.Conns, networkID uint64) {
 			return
 		}
 
-		// Read request body
+		defer r.Body.Close()
+
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			writeError(w, -32700, "Parse error", nil)
 			return
 		}
-		defer r.Body.Close()
 
 		// Check if this is a batch request (starts with '[') or single request
 		trimmed := strings.TrimSpace(string(body))
@@ -102,7 +102,9 @@ func writeError(w http.ResponseWriter, code int, message string, id any) {
 		},
 		ID: id,
 	}
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Error().Err(err).Msg("Failed to encode error response")
+	}
 }
 
 // writeResult writes a JSON-RPC 2.0 success response with the specified result and request ID.
@@ -113,7 +115,9 @@ func writeResult(w http.ResponseWriter, result any, id any) {
 		Result:  result,
 		ID:      id,
 	}
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Error().Err(err).Msg("Failed to encode result response")
+	}
 }
 
 // handleBatchRequest processes JSON-RPC 2.0 batch requests, validates all transactions,

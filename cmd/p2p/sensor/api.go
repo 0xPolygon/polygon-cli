@@ -14,6 +14,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// nodeInfo represents information about the sensor node.
+type nodeInfo struct {
+	ENR string `json:"enr"`
+	URL string `json:"enode"`
+}
+
 // handleAPI sets up the API for interacting with the sensor. The `/peers`
 // endpoint returns a list of all peers connected to the sensor, including the
 // types and counts of eth packets sent by each peer.
@@ -33,8 +39,7 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec) {
 			peers[url] = getPeerMessages(url, counter)
 		}
 
-		err := json.NewEncoder(w).Encode(peers)
-		if err != nil {
+		if err := json.NewEncoder(w).Encode(peers); err != nil {
 			log.Error().Err(err).Msg("Failed to encode peers")
 		}
 	})
@@ -45,18 +50,12 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec) {
 			return
 		}
 
-		type NodeInfo struct {
-			ENR string `json:"enr"`
-			URL string `json:"enode"`
-		}
-
-		info := NodeInfo{
+		info := nodeInfo{
 			ENR: server.NodeInfo().ENR,
 			URL: server.Self().URLv4(),
 		}
 
-		err := json.NewEncoder(w).Encode(info)
-		if err != nil {
+		if err := json.NewEncoder(w).Encode(info); err != nil {
 			log.Error().Err(err).Msg("Failed to encode node info")
 		}
 	})
