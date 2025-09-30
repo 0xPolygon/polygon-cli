@@ -58,6 +58,7 @@ type (
 		ShouldRunPrometheus          bool
 		PrometheusPort               uint
 		APIPort                      uint
+		RPCPort                      uint
 		KeyFile                      string
 		PrivateKey                   string
 		Port                         int
@@ -572,6 +573,7 @@ significantly increase CPU and memory usage.`)
 	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "Whether to run Prometheus")
 	SensorCmd.Flags().UintVar(&inputSensorParams.PrometheusPort, "prom-port", 2112, "Port Prometheus runs on")
 	SensorCmd.Flags().UintVar(&inputSensorParams.APIPort, "api-port", 8080, "Port the API server will listen on")
+	SensorCmd.Flags().UintVar(&inputSensorParams.RPCPort, "rpc-port", 8545, "Port for JSON-RPC server to receive transactions")
 	SensorCmd.Flags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "Private key file (cannot be set with --key)")
 	SensorCmd.Flags().StringVar(&inputSensorParams.PrivateKey, "key", "", "Hex-encoded private key (cannot be set with --key-file)")
 	SensorCmd.MarkFlagsMutuallyExclusive("key-file", "key")
