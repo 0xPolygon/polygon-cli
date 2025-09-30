@@ -154,7 +154,7 @@ func handleBatchRequest(w http.ResponseWriter, body []byte, conns *p2p.Conns, ch
 			continue
 		}
 
-		tx, response := validateTransaction(req, chainID)
+		tx, response := validateTx(req, chainID)
 		if tx == nil {
 			responses = append(responses, response)
 			continue
@@ -190,10 +190,10 @@ func handleBatchRequest(w http.ResponseWriter, body []byte, conns *p2p.Conns, ch
 	}
 }
 
-// validateTransaction validates a transaction from a JSON-RPC request by decoding the raw
+// validateTx validates a transaction from a JSON-RPC request by decoding the raw
 // transaction hex, unmarshaling it, and verifying the signature. Returns the transaction if valid
 // (with an empty response), or nil transaction with an error response if validation fails.
-func validateTransaction(req rpcRequest, chainID *big.Int) (*types.Transaction, rpcResponse) {
+func validateTx(req rpcRequest, chainID *big.Int) (*types.Transaction, rpcResponse) {
 	// Check params
 	if len(req.Params) == 0 {
 		return nil, rpcResponse{
@@ -280,9 +280,9 @@ func validateTransaction(req rpcRequest, chainID *big.Int) (*types.Transaction, 
 // transaction, broadcasts it to all connected peers, and writes the transaction hash
 // as a JSON-RPC response.
 func handleSendRawTransaction(w http.ResponseWriter, req rpcRequest, conns *p2p.Conns, chainID *big.Int) {
-	tx, errResp := validateTransaction(req, chainID)
+	tx, response := validateTx(req, chainID)
 	if tx == nil {
-		writeError(w, errResp.Error.Code, errResp.Error.Message, errResp.ID)
+		writeError(w, response.Error.Code, response.Error.Message, response.ID)
 		return
 	}
 
