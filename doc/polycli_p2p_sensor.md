@@ -45,6 +45,7 @@ If no nodes.json file exists, it will be created.
   -m, --max-peers int            Maximum number of peers to connect to (default 2000)
       --nat string               NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
   -n, --network-id uint          Filter discovered nodes by this network ID
+      --no-discovery             Disable P2P peer discovery
       --port int                 TCP network listening port (default 30303)
       --pprof                    Whether to run pprof
       --pprof-port uint          Port pprof runs on (default 6060)
