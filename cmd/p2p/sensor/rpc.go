@@ -191,8 +191,8 @@ func handleBatchRequest(w http.ResponseWriter, body []byte, conns *p2p.Conns, ch
 }
 
 // validateTransaction validates a transaction from a JSON-RPC request by decoding the raw
-// transaction hex, unmarshaling it, and verifying the signature. Returns the transaction
-// if valid, or an error response if validation fails.
+// transaction hex, unmarshaling it, and verifying the signature. Returns the transaction if valid
+// (with an empty response), or nil transaction with an error response if validation fails.
 func validateTransaction(req rpcRequest, chainID *big.Int) (*types.Transaction, rpcResponse) {
 	// Check params
 	if len(req.Params) == 0 {
