@@ -60,8 +60,8 @@ func handleRPC(conns *p2p.Conns, networkID uint64) {
 		defer r.Body.Close()
 
 		// Check if this is a batch request (starts with '[') or single request
-		trimmedBody := strings.TrimSpace(string(body))
-		if len(trimmedBody) > 0 && trimmedBody[0] == '[' {
+		trimmed := strings.TrimSpace(string(body))
+		if len(trimmed) > 0 && trimmed[0] == '[' {
 			// Handle batch request
 			handleBatchRequest(w, body, conns, chainID)
 			return
@@ -138,27 +138,24 @@ func handleBatchRequest(w http.ResponseWriter, body []byte, conns *p2p.Conns, ch
 	txs := make(types.Transactions, 0)
 
 	for _, req := range requests {
-		if req.Method == "eth_sendRawTransaction" {
-			// Try to parse and validate the transaction
-			tx, response := validateTransaction(req, chainID)
-			if tx != nil {
-				// Transaction is valid, add to batch
-				txs = append(txs, tx)
-				// Create success response placeholder (will be updated after broadcast)
-				responses = append(responses, rpcResponse{
-					JSONRPC: "2.0",
-					Result:  tx.Hash().Hex(),
-					ID:      req.ID,
-				})
-			} else {
-				// Transaction is invalid, add error response
-				responses = append(responses, response)
-			}
-		} else {
-			// Not a sendRawTransaction request
+		if req.Method != "eth_sendRawTransaction" {
 			response := processSingleRequest(req, conns, chainID)
 			responses = append(responses, response)
+			continue
 		}
+
+		tx, response := validateTransaction(req, chainID)
+		if tx == nil {
+			responses = append(responses, response)
+			continue
+		}
+
+		txs = append(txs, tx)
+		responses = append(responses, rpcResponse{
+			JSONRPC: "2.0",
+			Result:  tx.Hash().Hex(),
+			ID:      req.ID,
+		})
 	}
 
 	// Broadcast all valid transactions in a single batch if there are any
@@ -200,7 +197,7 @@ func validateTransaction(req rpcRequest, chainID *big.Int) (*types.Transaction, 
 	}
 
 	// Extract raw transaction hex string
-	rawTxHex, ok := req.Params[0].(string)
+	hex, ok := req.Params[0].(string)
 	if !ok {
 		return nil, rpcResponse{
 			JSONRPC: "2.0",
@@ -213,7 +210,7 @@ func validateTransaction(req rpcRequest, chainID *big.Int) (*types.Transaction, 
 	}
 
 	// Decode hex string to bytes
-	txBytes, err := hexutil.Decode(rawTxHex)
+	bytes, err := hexutil.Decode(hex)
 	if err != nil {
 		return nil, rpcResponse{
 			JSONRPC: "2.0",
@@ -227,7 +224,7 @@ func validateTransaction(req rpcRequest, chainID *big.Int) (*types.Transaction, 
 
 	// Unmarshal transaction
 	tx := new(types.Transaction)
-	if err := tx.UnmarshalBinary(txBytes); err != nil {
+	if err := tx.UnmarshalBinary(bytes); err != nil {
 		return nil, rpcResponse{
 			JSONRPC: "2.0",
 			Error: &rpcError{
