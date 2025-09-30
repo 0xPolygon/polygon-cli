@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
@@ -262,6 +263,10 @@ func provideLiquidity(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 		log.Debug().Stringer("tx-hash", tx.Hash()).Uint64("gas-used", receipt.GasUsed).Msg("Transaction mined successfully")
 		return nil
 	})
+	if err != nil {
+		return fmt.Errorf("unable to confirm receipt for mint transactions: %w", err)
+	}
+
 	// Check that liquidity has been added to the pool.
 	liquidity, err = poolContract.Liquidity(cops)
 	if err != nil {
