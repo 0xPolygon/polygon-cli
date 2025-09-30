@@ -122,6 +122,7 @@ func (c *rlpxConn) handshake() (*Hello, error) {
 		if msg.Version >= 5 {
 			c.SetSnappy(true)
 		}
+		c.peerCaps = msg.Caps
 		return msg, nil
 	case *Disconnect:
 		return nil, fmt.Errorf("disconnect received: %v", msg)
@@ -244,6 +245,10 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 						c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
 					}
 
+					if !c.hasCap("wit", 1) {
+						continue
+					}
+
 					req := GetWitnessPacket{
 						RequestId: rand.Uint64(),
 						GetWitnessRequest: &GetWitnessRequest{
@@ -262,6 +267,10 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 			case *NewBlock:
 				atomic.AddInt64(&count.Blocks, 1)
 				c.logger.Trace().Str("hash", msg.Block.Hash().Hex()).Msg("Received NewBlock")
+
+				if !c.hasCap("wit", 1) {
+					continue
+				}
 
 				req := GetWitnessPacket{
 					RequestId: rand.Uint64(),
@@ -325,6 +334,10 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 				c.logger.Debug().Any("msg", msg).Msg("Received GetWitnessRequest")
 			case *WitnessPacketRLPPacket:
 				atomic.AddInt64(&count.Witness, int64(len(msg.WitnessPacketResponse)))
+
+				if !c.hasCap("wit", 1) {
+					continue
+				}
 
 				for _, witness := range msg.WitnessPacketResponse {
 					c.logger.Info().

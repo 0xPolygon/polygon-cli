@@ -3,6 +3,7 @@ package p2p
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,7 +33,7 @@ func (e *Error) String() string { return e.Error() }
 func (e *Error) Code() int     { return -1 }
 func (e *Error) ReqID() uint64 { return 0 }
 
-func errorf(format string, args ...interface{}) *Error {
+func errorf(format string, args ...any) *Error {
 	return &Error{fmt.Errorf(format, args...)}
 }
 
@@ -151,10 +152,11 @@ func (msg PooledTransactions) ReqID() uint64 { return msg.RequestId }
 type rlpxConn struct {
 	*rlpx.Conn
 
-	ourKey *ecdsa.PrivateKey
-	caps   []p2p.Cap
-	node   *enode.Node
-	logger zerolog.Logger
+	ourKey   *ecdsa.PrivateKey
+	caps     []p2p.Cap
+	peerCaps []p2p.Cap
+	node     *enode.Node
+	logger   zerolog.Logger
 }
 
 // Read reads an eth protocol packet from the connection.
@@ -394,3 +396,9 @@ type WitnessPageResponse struct {
 
 func (msg WitnessPacketRLPPacket) Code() int     { return 36 }
 func (msg WitnessPacketRLPPacket) ReqID() uint64 { return msg.RequestId }
+
+// hasCap checks if both the peer and our connection support a specific capability.
+func (c *rlpxConn) hasCap(name string, version uint) bool {
+	cap := p2p.Cap{Name: name, Version: version}
+	return slices.Contains(c.peerCaps, cap) && slices.Contains(c.caps, cap)
+}
