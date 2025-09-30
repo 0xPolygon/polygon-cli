@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -55,7 +56,7 @@ func (c *Conns) BroadcastTxs(txs types.Transactions) int {
 
 	count := 0
 	for _, cn := range c.conns {
-		if err := ethp2p.Send(cn.rw, 0x02, txs); err != nil {
+		if err := ethp2p.Send(cn.rw, eth.TransactionsMsg, txs); err != nil {
 			continue
 		}
 		count++
