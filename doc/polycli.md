@@ -39,6 +39,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks
 
+- [polycli contract](polycli_contract.md) - Interact with smart contracts and fetch contract information from the blockchain
+
 - [polycli dbbench](polycli_dbbench.md) - Perform a level/pebble db benchmark
 
 - [polycli dockerlogger](polycli_dockerlogger.md) - Monitor and filter Docker container logs
