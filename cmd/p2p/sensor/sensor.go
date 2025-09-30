@@ -1,14 +1,11 @@
 package sensor
 
 import (
-	"context"
 	"crypto/ecdsa"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/signal"
-	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -19,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -28,7 +24,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	dto "github.com/prometheus/client_model/go"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
@@ -221,6 +216,9 @@ var SensorCmd = &cobra.Command{
 			Help:      "The number and type of messages the sensor has received",
 		}, []string{"message", "url", "name"})
 
+		// Create peer connection manager for broadcasting transactions
+		conns := p2p.NewConns()
+
 		opts := p2p.EthProtocolOptions{
 			Context:     cmd.Context(),
 			Database:    db,
@@ -228,7 +226,7 @@ var SensorCmd = &cobra.Command{
 			RPC:         inputSensorParams.RPC,
 			SensorID:    inputSensorParams.SensorID,
 			NetworkID:   inputSensorParams.NetworkID,
-			Peers:       make(chan *enode.Node),
+			Conns:       conns,
 			Head:        &head,
 			HeadMutex:   &sync.RWMutex{},
 			ForkID:      forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
@@ -286,7 +284,6 @@ var SensorCmd = &cobra.Command{
 		// enabled. This map does not represent the peers that are currently
 		// connected to the sensor. To do that use `server.Peers()` instead.
 		peers := make(map[enode.ID]string)
-		var peersMutex sync.Mutex
 
 		for _, node := range inputSensorParams.nodes {
 			// Map node URLs to node IDs to avoid duplicates.
@@ -295,6 +292,9 @@ var SensorCmd = &cobra.Command{
 
 		go handleAPI(&server, msgCounter)
 
+		// Start the RPC server for receiving transactions
+		go handleRPC(conns, inputSensorParams.NetworkID)
+
 		// Run DNS discovery immediately at startup.
 		go handleDNSDiscovery(&server)
 
@@ -302,22 +302,20 @@ var SensorCmd = &cobra.Command{
 			select {
 			case <-ticker.C:
 				peersGauge.Set(float64(server.PeerCount()))
-				if err := removePeerMessages(msgCounter, server.Peers()); err != nil {
+				db.WritePeers(cmd.Context(), server.Peers(), time.Now())
+
+				urls := []string{}
+				for _, peer := range server.Peers() {
+					urls = append(urls, peer.Node().URLv4())
+				}
+
+				if err := removePeerMessages(msgCounter, urls); err != nil {
 					log.Error().Err(err).Msg("Failed to clean up peer messages")
 				}
-				db.WritePeers(context.Background(), server.Peers(), time.Now())
-			case peer := <-opts.Peers:
-				// Lock the peers map before modifying it.
-				peersMutex.Lock()
-				// Update the peer list and the nodes file.
-				if _, ok := peers[peer.ID()]; !ok {
-					peers[peer.ID()] = peer.URLv4()
 
-					if err := p2p.WritePeers(inputSensorParams.NodesFile, peers); err != nil {
-						log.Error().Err(err).Msg("Failed to write nodes to file")
-					}
+				if err := p2p.WritePeers(inputSensorParams.NodesFile, urls); err != nil {
+					log.Error().Err(err).Msg("Failed to write nodes to file")
 				}
-				peersMutex.Unlock()
 			case <-hourlyTicker.C:
 				go handleDNSDiscovery(&server)
 			case <-signals:
@@ -358,59 +356,6 @@ func handlePrometheus() {
 	}
 }
 
-// handleAPI sets up the API for interacting with the sensor. The `/peers`
-// endpoint returns a list of all peers connected to the sensor, including the
-// types and counts of eth packets sent by each peer.
-func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec) {
-	http.HandleFunc("/peers", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-
-		peers := make(map[string]p2p.MessageCount)
-		for _, peer := range server.Peers() {
-			url := peer.Node().URLv4()
-			peers[url] = getPeerMessages(url, counter)
-		}
-
-		err := json.NewEncoder(w).Encode(peers)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to encode peers")
-		}
-	})
-
-	http.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		type NodeInfo struct {
-			ENR string `json:"enr"`
-			URL string `json:"enode"`
-		}
-
-		info := NodeInfo{
-			ENR: server.NodeInfo().ENR,
-			URL: server.Self().URLv4(),
-		}
-
-		err := json.NewEncoder(w).Encode(info)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to encode node info")
-		}
-	})
-
-	addr := fmt.Sprintf(":%d", inputSensorParams.APIPort)
-	if err := http.ListenAndServe(addr, nil); err != nil {
-		log.Error().Err(err).Msg("Failed to start API handler")
-	}
-}
-
 // handleDNSDiscovery performs DNS-based peer discovery and adds new peers to
 // the p2p server. It syncs the DNS discovery tree and adds any newly discovered
 // peers not already in the peers map.
@@ -448,81 +393,6 @@ func handleDNSDiscovery(server *ethp2p.Server) {
 	}
 
 	log.Info().Msg("Finished adding DNS discovery peers")
-}
-
-// getPeerMessages retrieves the count of various types of eth packets sent by a
-// peer.
-func getPeerMessages(url string, counter *prometheus.CounterVec) p2p.MessageCount {
-	return p2p.MessageCount{
-		BlockHeaders:        getCounterValue(new(eth.BlockHeadersPacket), url, counter),
-		BlockBodies:         getCounterValue(new(eth.BlockBodiesPacket), url, counter),
-		Blocks:              getCounterValue(new(eth.NewBlockPacket), url, counter),
-		BlockHashes:         getCounterValue(new(eth.NewBlockHashesPacket), url, counter),
-		BlockHeaderRequests: getCounterValue(new(eth.GetBlockHeadersPacket), url, counter),
-		BlockBodiesRequests: getCounterValue(new(eth.GetBlockBodiesPacket), url, counter),
-		Transactions: getCounterValue(new(eth.TransactionsPacket), url, counter) +
-			getCounterValue(new(eth.PooledTransactionsPacket), url, counter),
-		TransactionHashes: getCounterValue(new(eth.NewPooledTransactionHashesPacket), url, counter) +
-			getCounterValue(new(eth.NewPooledTransactionHashesPacket), url, counter),
-		TransactionRequests: getCounterValue(new(eth.GetPooledTransactionsRequest), url, counter),
-	}
-}
-
-// getCounterValue retrieves the count of packets for a specific type from the
-// Prometheus counter.
-func getCounterValue(packet eth.Packet, url string, counter *prometheus.CounterVec) int64 {
-	metric := &dto.Metric{}
-
-	err := counter.WithLabelValues(packet.Name(), url).Write(metric)
-	if err != nil {
-		log.Error().Err(err).Send()
-		return 0
-	}
-
-	return int64(metric.GetCounter().GetValue())
-}
-
-// removePeerMessages removes all the counters of peers that disconnected from
-// the sensor. This prevents the metrics list from infinitely growing.
-func removePeerMessages(counter *prometheus.CounterVec, peers []*ethp2p.Peer) error {
-	urls := []string{}
-	for _, peer := range peers {
-		urls = append(urls, peer.Node().URLv4())
-	}
-
-	families, err := prometheus.DefaultGatherer.Gather()
-	if err != nil {
-		return err
-	}
-
-	var family *dto.MetricFamily
-	for _, f := range families {
-		if f.GetName() == "sensor_messages" {
-			family = f
-			break
-		}
-	}
-
-	// During DNS-discovery or when the server is taking a while to discover
-	// peers and has yet to receive a message, the sensor_messages prometheus
-	// metric may not exist yet.
-	if family == nil {
-		log.Trace().Msg("Could not find sensor_messages metric family")
-		return nil
-	}
-
-	for _, metric := range family.GetMetric() {
-		for _, label := range metric.GetLabel() {
-			url := label.GetValue()
-			if label.GetName() != "url" || slices.Contains(urls, url) {
-				continue
-			}
-
-			counter.DeletePartialMatch(prometheus.Labels{"url": url})
-		}
-	}
-
-	return nil
 }
 
 // getLatestBlock will get the latest block from an RPC provider.
