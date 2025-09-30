@@ -55,6 +55,7 @@ If no nodes.json file exists, it will be created.
                                  This produces faster development cycles but can prevent the sensor from being to
                                  connect to new peers if the nodes.json file is large.
       --rpc string               RPC endpoint used to fetch the latest block (default "https://polygon-rpc.com")
+      --rpc-port uint            Port for JSON-RPC server to receive transactions (default 8545)
   -s, --sensor-id string         Sensor ID when writing block/tx events
       --trusted-nodes string     Trusted nodes file
       --ttl duration             Time to live (default 336h0m0s)
