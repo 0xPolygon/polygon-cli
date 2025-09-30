@@ -67,6 +67,7 @@ type (
 		TTL                          time.Duration
 		DiscoveryDNS                 string
 		Database                     string
+		NoDiscovery                  bool
 
 		bootnodes    []*enode.Node
 		nodes        []*enode.Node
@@ -242,8 +243,8 @@ var SensorCmd = &cobra.Command{
 			DiscAddr:       fmt.Sprintf(":%d", inputSensorParams.DiscoveryPort),
 			DialRatio:      inputSensorParams.DialRatio,
 			NAT:            inputSensorParams.nat,
-			DiscoveryV4:    true,
-			DiscoveryV5:    true,
+			DiscoveryV4:    !inputSensorParams.NoDiscovery,
+			DiscoveryV5:    !inputSensorParams.NoDiscovery,
 			Protocols: []ethp2p.Protocol{
 				p2p.NewEthProtocol(66, opts),
 				p2p.NewEthProtocol(67, opts),
@@ -468,4 +469,5 @@ connect to new peers if the nodes.json file is large.`)
   - datastore (GCP Datastore)
   - json (output to stdout)
   - none (no persistence)`)
+	SensorCmd.Flags().BoolVar(&inputSensorParams.NoDiscovery, "no-discovery", false, "Disable P2P peer discovery")
 }
