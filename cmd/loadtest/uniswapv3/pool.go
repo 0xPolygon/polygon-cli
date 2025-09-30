@@ -1,6 +1,7 @@
 package uniswapv3loadtest
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"github.com/0xPolygon/polygon-cli/bindings/tokens"
@@ -66,7 +67,7 @@ func NewPool(token0, token1 ContractConfig[tokens.ERC20], fees *big.Int) *PoolCo
 	}
 
 	// Make sure the token pair is sorted.
-	if token0.Address.Hex() < token1.Address.Hex() {
+	if bytes.Compare(token0.Address.Bytes(), token1.Address.Bytes()) < 0 {
 		p.Token0 = token0
 		p.Token1 = token1
 	} else {
