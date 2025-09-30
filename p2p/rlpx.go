@@ -70,8 +70,7 @@ func Dial(n *enode.Node, opts DialOpts) (*rlpxConn, error) {
 	}
 
 	v4 := enode.NewV4(&conn.ourKey.PublicKey, opts.Addr, opts.Port, opts.Port)
-
-	log.Info().Any("enode", v4.String()).Send()
+	log.Debug().Str("enode", v4.String()).Send()
 
 	defer func() { _ = conn.SetDeadline(time.Time{}) }()
 	if err = conn.SetDeadline(time.Now().Add(20 * time.Second)); err != nil {
@@ -306,13 +305,9 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 				atomic.AddInt64(&count.Errors, 1)
 				c.logger.Trace().Err(msg.Unwrap()).Msg("Received Error")
 
-				if strings.Contains(msg.Error(), "EOF") {
+				if !strings.Contains(msg.Error(), "timeout") {
 					return msg.Unwrap()
 				}
-
-				// if !strings.Contains(msg.Error(), "timeout") {
-				// 	return msg.Unwrap()
-				// }
 			case *Disconnect:
 				atomic.AddInt64(&count.Disconnects, 1)
 				c.logger.Debug().Msgf("Disconnect received: %v", msg)
@@ -353,7 +348,6 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 						},
 						RequestId: uint64(time.Now().Unix()),
 					}
-					log.Trace().Any("request", req).Msg("Writing GetWitnessPacket request")
 					if err := c.Write(req); err != nil {
 						log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
 					}
