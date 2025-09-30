@@ -234,7 +234,7 @@ func validateTransaction(req rpcRequest, chainID *big.Int) (*types.Transaction, 
 
 	// Unmarshal transaction
 	tx := new(types.Transaction)
-	if err := tx.UnmarshalBinary(bytes); err != nil {
+	if err = tx.UnmarshalBinary(bytes); err != nil {
 		return nil, rpcResponse{
 			JSONRPC: "2.0",
 			Error: &rpcError{
