@@ -1,4 +1,4 @@
-# Agglayer Bridge Service Manual Test
+# Aggkit Bridge Service Manual Test
 
 ## Create account
 

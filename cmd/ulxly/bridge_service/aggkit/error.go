@@ -1,4 +1,4 @@
-package agglayer
+package aggkit
 
 type errorResponse struct {
 	Error string `json:"error"`

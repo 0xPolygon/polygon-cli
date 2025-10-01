@@ -1,4 +1,4 @@
-package agglayer
+package aggkit
 
 import (
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly/bridge_service"

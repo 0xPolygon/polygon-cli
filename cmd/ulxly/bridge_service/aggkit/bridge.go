@@ -1,4 +1,4 @@
-package agglayer
+package aggkit
 
 import (
 	"math/big"
@@ -26,10 +26,8 @@ type bridgeResponse struct {
 	DepositCnt uint32 `json:"deposit_count"`
 	TxHash     string `json:"tx_hash"`
 	Metadata   string `json:"metadata"`
-	// TODO: bridge service doesnt provide this information yet, but will do
-	// GlobalIndex string `json:"global_index"`
 
-	// Additional fields from the AggLayer API
+	// Additional fields from the Aggkit API
 	BridgeHash     string `json:"bridge_hash"`
 	BlockPos       uint64 `json:"block_pos"`
 	BlockTimestamp uint64 `json:"block_timestamp"`
@@ -37,22 +35,16 @@ type bridgeResponse struct {
 	FromAddress    string `json:"from_address"`
 }
 
-func (r *bridgeResponse) ToDeposit(networkID uint32, isReadyForClaim bool, claimTx string) *bridge_service.Deposit {
+func (r *bridgeResponse) ToDeposit(networkID uint32) *bridge_service.Deposit {
 	d := &bridge_service.Deposit{}
 	d.BlockNum = r.BlockNum
 
-	// d.GlobalIndex = new(big.Int)
-	// d.GlobalIndex.SetString(r.GlobalIndex, 10)
 	d.GlobalIndex = r.generateGlobalIndex(networkID, false, false)
 
 	d.Amount = new(big.Int)
 	d.Amount.SetString(r.Amount, 10)
 
 	d.TxHash = common.HexToHash(r.TxHash)
-	if len(claimTx) > 0 {
-		claimTxHash := common.HexToHash(claimTx)
-		d.ClaimTxHash = &claimTxHash
-	}
 
 	d.OrigAddr = common.HexToAddress(r.OrigAddr)
 	d.DestAddr = common.HexToAddress(r.DestAddr)
@@ -64,7 +56,6 @@ func (r *bridgeResponse) ToDeposit(networkID uint32, isReadyForClaim bool, claim
 	d.DestNet = r.DestNet
 	d.NetworkID = networkID
 	d.DepositCnt = r.DepositCnt
-	d.ReadyForClaim = isReadyForClaim
 
 	return d
 }
