@@ -192,7 +192,7 @@ func (c *conn) statusExchange(packet *eth.StatusPacket) error {
 	timeout := time.NewTimer(5 * time.Second)
 	defer timeout.Stop()
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		select {
 		case err := <-errc:
 			if err != nil {
