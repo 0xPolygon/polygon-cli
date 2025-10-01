@@ -226,7 +226,7 @@ func DecodeBatchV2(txsData []byte) (*BatchRawV2, error) {
 		// is a tx
 		default:
 			if currentBlock == nil {
-				_, _, err := decodeTxRLP(txsData, pos)
+				_, _, err = decodeTxRLP(txsData, pos)
 				if err == nil {
 					// There is no changeL2Block but have a valid RLP transaction
 					return nil, ErrBatchV2DontStartWithChangeL2Block
