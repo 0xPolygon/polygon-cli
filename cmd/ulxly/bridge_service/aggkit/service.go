@@ -45,7 +45,10 @@ func (s *BridgeService) GetDeposit(depositNetwork, depositCount uint32) (*bridge
 		return nil, bridge_service.ErrNotFound
 	}
 
-	deposit := bridgeResp.Bridges[0].ToDeposit(depositNetwork)
+	deposit, err := bridgeResp.Bridges[0].ToDeposit(depositNetwork)
+	if err != nil {
+		return nil, err
+	}
 
 	return deposit, nil
 }

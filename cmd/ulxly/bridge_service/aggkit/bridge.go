@@ -1,6 +1,7 @@
 package aggkit
 
 import (
+	"fmt"
 	"math/big"
 	"strings"
 
@@ -35,14 +36,17 @@ type bridgeResponse struct {
 	FromAddress    string `json:"from_address"`
 }
 
-func (r *bridgeResponse) ToDeposit(networkID uint32) *bridge_service.Deposit {
+func (r *bridgeResponse) ToDeposit(networkID uint32) (*bridge_service.Deposit, error) {
 	d := &bridge_service.Deposit{}
 	d.BlockNum = r.BlockNum
 
 	d.GlobalIndex = r.generateGlobalIndex(networkID, false, false)
 
 	d.Amount = new(big.Int)
-	d.Amount.SetString(r.Amount, 10)
+	_, ok := d.Amount.SetString(r.Amount, 10)
+	if !ok {
+		return nil, fmt.Errorf("invalid amount: %s", r.Amount)
+	}
 
 	d.TxHash = common.HexToHash(r.TxHash)
 
@@ -57,7 +61,7 @@ func (r *bridgeResponse) ToDeposit(networkID uint32) *bridge_service.Deposit {
 	d.NetworkID = networkID
 	d.DepositCnt = r.DepositCnt
 
-	return d
+	return d, nil
 }
 
 // GenerateGlobalIndex converts the bash `generate_global_index` into Go.
