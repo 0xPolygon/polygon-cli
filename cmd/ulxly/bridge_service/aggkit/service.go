@@ -91,7 +91,7 @@ out:
 		}
 		errMsg := "unable to retrieve proof"
 		log.Warn().Int("code", statusCode).Str("message", respError.Error).Msg(errMsg)
-		return nil, fmt.Errorf(respError.Error)
+		return nil, fmt.Errorf("unable to get proof: %s", respError.Error)
 	}
 
 	proof := resp.ToProof()
