@@ -71,7 +71,6 @@ type (
 		NoDiscovery                  bool
 
 		bootnodes    []*enode.Node
-		nodes        []*enode.Node
 		staticNodes  []*enode.Node
 		trustedNodes []*enode.Node
 		privateKey   *ecdsa.PrivateKey
@@ -92,7 +91,7 @@ var SensorCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputSensorParams.NodesFile = args[0]
-		inputSensorParams.nodes, err = p2p.ReadNodeSet(inputSensorParams.NodesFile)
+		_, err = p2p.ReadNodeSet(inputSensorParams.NodesFile)
 		if err != nil {
 			log.Warn().Err(err).Msgf("Creating nodes file %v because it does not exist", inputSensorParams.NodesFile)
 		}
@@ -257,17 +256,6 @@ var SensorCmd = &cobra.Command{
 
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
-
-		// peers represents the peer map that is used to write to the nodes.json
-		// file. This is helpful when restarting the node with the --quickstart flag
-		// enabled. This map does not represent the peers that are currently
-		// connected to the sensor. To do that use `server.Peers()` instead.
-		peers := make(map[enode.ID]string)
-
-		for _, node := range inputSensorParams.nodes {
-			// Map node URLs to node IDs to avoid duplicates.
-			peers[node.ID()] = node.URLv4()
-		}
 
 		go handleAPI(&server, msgCounter)
 
