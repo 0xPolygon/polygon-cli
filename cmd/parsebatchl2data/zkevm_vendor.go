@@ -29,7 +29,7 @@ type ForcedBatchRawV2 struct {
 }
 
 type L2TxRaw struct {
-	Tx                   types.Transaction
+	Tx                   *types.Transaction
 	EfficiencyPercentage uint8
 }
 
@@ -129,7 +129,7 @@ func RlpFieldsToLegacyTx(fields [][]byte, v, r, s []byte) (tx *types.LegacyTx, e
 	gas := big.NewInt(0).SetBytes(fields[2]).Uint64()
 	var to *common.Address
 
-	if fields[3] != nil && len(fields[3]) != 0 {
+	if len(fields[3]) != 0 {
 		tmp := common.BytesToAddress(fields[3])
 		to = &tmp
 	}
@@ -198,7 +198,7 @@ func decodeTxRLP(txsData []byte, offset int) (int, *L2TxRaw, error) {
 	}
 
 	l2Tx := &L2TxRaw{
-		Tx:                   *types.NewTx(legacyTx),
+		Tx:                   types.NewTx(legacyTx),
 		EfficiencyPercentage: efficiencyPercentage,
 	}
 
@@ -251,10 +251,10 @@ func DecodeBatchV2(txsData []byte) (*BatchRawV2, error) {
 }
 
 // DecodeTxs extracts Transactions for its encoded form
-func DecodeTxs(txsData []byte, forkID uint64) ([]types.Transaction, []byte, []uint8, error) {
+func DecodeTxs(txsData []byte, forkID uint64) ([]*types.Transaction, []byte, []uint8, error) {
 	// Process coded txs
 	var pos uint64
-	var txs []types.Transaction
+	var txs []*types.Transaction
 	var efficiencyPercentages []uint8
 	txDataLength := uint64(len(txsData))
 	if txDataLength == 0 {
@@ -263,25 +263,25 @@ func DecodeTxs(txsData []byte, forkID uint64) ([]types.Transaction, []byte, []ui
 	for pos < txDataLength {
 		num, err := strconv.ParseUint(hex.EncodeToString(txsData[pos:pos+1]), 16, 64)
 		if err != nil {
-			return []types.Transaction{}, txsData, []uint8{}, err
+			return []*types.Transaction{}, txsData, []uint8{}, err
 		}
 		// First byte is the length and must be ignored
 		if num < c0 {
-			return []types.Transaction{}, txsData, []uint8{}, ErrInvalidData
+			return []*types.Transaction{}, txsData, []uint8{}, ErrInvalidData
 		}
 		length := num - c0
 		if length > shortRlp { // If rlp is bigger than length 55
 			// n is the length of the rlp data without the header (1 byte) for example "0xf7"
 			if (pos + 1 + num - f7) > txDataLength {
-				return []types.Transaction{}, txsData, []uint8{}, err
+				return []*types.Transaction{}, txsData, []uint8{}, err
 			}
 			var n uint64
 			n, err = strconv.ParseUint(hex.EncodeToString(txsData[pos+1:pos+1+num-f7]), 16, 64) // +1 is the header. For example 0xf7
 			if err != nil {
-				return []types.Transaction{}, txsData, []uint8{}, err
+				return []*types.Transaction{}, txsData, []uint8{}, err
 			}
 			if n+num < f7 {
-				return []types.Transaction{}, txsData, []uint8{}, ErrInvalidData
+				return []*types.Transaction{}, txsData, []uint8{}, ErrInvalidData
 			}
 			length = n + num - f7 // num - f7 is the header. For example 0xf7
 		}
@@ -294,17 +294,17 @@ func DecodeTxs(txsData []byte, forkID uint64) ([]types.Transaction, []byte, []ui
 
 		if endPos > txDataLength {
 			err = fmt.Errorf("endPos %d is bigger than txDataLength %d", endPos, txDataLength)
-			return []types.Transaction{}, txsData, []uint8{}, err
+			return []*types.Transaction{}, txsData, []uint8{}, err
 		}
 
 		if endPos < pos {
 			err = fmt.Errorf("endPos %d is smaller than pos %d", endPos, pos)
-			return []types.Transaction{}, txsData, []uint8{}, err
+			return []*types.Transaction{}, txsData, []uint8{}, err
 		}
 
 		if endPos < pos {
 			err = fmt.Errorf("endPos %d is smaller than pos %d", endPos, pos)
-			return []types.Transaction{}, txsData, []uint8{}, err
+			return []*types.Transaction{}, txsData, []uint8{}, err
 		}
 
 		fullDataTx := txsData[pos:endPos]
@@ -326,16 +326,16 @@ func DecodeTxs(txsData []byte, forkID uint64) ([]types.Transaction, []byte, []ui
 		err = rlp.DecodeBytes(txInfo, &rlpFields)
 		if err != nil {
 			log.Error().Bytes("fullDataTx", fullDataTx).Bytes("tx", txInfo).Bytes("txReceived", txsData).Err(err)
-			return []types.Transaction{}, txsData, []uint8{}, ErrInvalidData
+			return []*types.Transaction{}, txsData, []uint8{}, ErrInvalidData
 		}
 
 		legacyTx, err := RlpFieldsToLegacyTx(rlpFields, vData, rData, sData)
 		if err != nil {
-			return []types.Transaction{}, txsData, []uint8{}, err
+			return []*types.Transaction{}, txsData, []uint8{}, err
 		}
 
 		tx := types.NewTx(legacyTx)
-		txs = append(txs, *tx)
+		txs = append(txs, tx)
 	}
 	return txs, txsData, efficiencyPercentages, nil
 }
@@ -350,9 +350,9 @@ func DecodeForcedBatchV2(txsData []byte) (*ForcedBatchRawV2, error) {
 		return nil, fmt.Errorf("error decoding len(efficiencyPercentages) != len(txs). len(efficiencyPercentages)=%d, len(txs)=%d : %w", len(efficiencyPercentages), len(txs), ErrInvalidRLP)
 	}
 	forcedBatch := ForcedBatchRawV2{}
-	for i, tx := range txs {
+	for i := range txs {
 		forcedBatch.Transactions = append(forcedBatch.Transactions, L2TxRaw{
-			Tx:                   tx,
+			Tx:                   txs[i],
 			EfficiencyPercentage: efficiencyPercentages[i],
 		})
 	}

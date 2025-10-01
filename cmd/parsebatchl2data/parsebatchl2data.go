@@ -89,7 +89,7 @@ func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
 
 func printTxData(rawL2Tx *L2TxRaw) error {
 	signer := types.NewEIP155Signer(rawL2Tx.Tx.ChainId())
-	sender, err := signer.Sender(&rawL2Tx.Tx)
+	sender, err := signer.Sender(rawL2Tx.Tx)
 	if err != nil {
 		log.Error().Err(err).Msg("unable to reccover sender")
 		return err
