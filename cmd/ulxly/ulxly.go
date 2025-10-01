@@ -2479,7 +2479,7 @@ or if it's actually an intermediate hash.`,
 	inputUlxlyArgs.bridgeServiceURL = ulxlyClaimCmd.PersistentFlags().String(ArgBridgeServiceURL, "", "the URL of the bridge service")
 	inputUlxlyArgs.globalIndex = ulxlyClaimCmd.PersistentFlags().String(ArgGlobalIndex, "", "an override of the global index value")
 	inputUlxlyArgs.wait = ulxlyClaimCmd.PersistentFlags().Duration(ArgWait, time.Duration(0), "this flag is available for claim asset and claim message. if specified, the command will retry in a loop for the deposit to be ready to claim up to duration. Once the deposit is ready to claim, the claim will actually be sent.")
-	inputUlxlyArgs.proofGER = ulxlyClaimCmd.PersistentFlags().String(ArgProofGER, "", "if specified, the proof will be generated against this GER")
+	inputUlxlyArgs.proofGER = ulxlyClaimCmd.PersistentFlags().String(ArgProofGER, "", "if specified and using legacy mode, the proof will be generated against this GER")
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositCount))
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositNetwork))
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgBridgeServiceURL))
