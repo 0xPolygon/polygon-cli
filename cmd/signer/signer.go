@@ -719,7 +719,7 @@ func (g *GCPKMS) Sign(ctx context.Context, tx *ethtypes.Transaction) error {
 	log.Info().
 		Str("recoveredPub", hex.EncodeToString(pubKey)).
 		Str("gcpPub", hex.EncodeToString(gcpPubKey.PublicKey.Bytes)).
-		Str("ethAddress", pubKeyAddr.String()).
+		Stringer("ethAddress", pubKeyAddr).
 		Msg("Recovered pub key")
 
 	signedTx, err := tx.WithSignature(signer, ethSig)

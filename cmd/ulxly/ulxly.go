@@ -1159,8 +1159,8 @@ func claimEverything(cmd *cobra.Command) error {
 					Uint32("OrigNet", deposit.OrigNet).
 					Uint32("DestNet", deposit.DestNet).
 					Uint32("NetworkID", deposit.NetworkID).
-					Str("OrigAddr", deposit.OrigAddr.String()).
-					Str("DestAddr", deposit.DestAddr.String()).
+					Stringer("OrigAddr", deposit.OrigAddr).
+					Stringer("DestAddr", deposit.DestAddr).
 					Int64("nonce", nextNonce.Int64()).
 					Msg("There was an error claiming")
 
@@ -1260,8 +1260,8 @@ func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeCont
 			Uint32("OrigNet", deposit.OrigNet).
 			Uint32("DestNet", deposit.DestNet).
 			Uint32("NetworkID", deposit.NetworkID).
-			Str("OrigAddr", deposit.OrigAddr.String()).
-			Str("DestAddr", deposit.DestAddr.String()).
+			Stringer("OrigAddr", deposit.OrigAddr).
+			Stringer("DestAddr", deposit.DestAddr).
 			Msg("attempt to claim deposit failed")
 		return nil, err
 	}
@@ -1835,8 +1835,8 @@ func getMerkleProofsExitRoots(bridgeService bridge_service.BridgeService, deposi
 			Uint32("OrigNet", deposit.OrigNet).
 			Uint32("DestNet", deposit.DestNet).
 			Uint32("NetworkID", deposit.NetworkID).
-			Str("OrigAddr", deposit.OrigAddr.String()).
-			Str("DestAddr", deposit.DestAddr.String()).
+			Stringer("OrigAddr", deposit.OrigAddr).
+			Stringer("DestAddr", deposit.DestAddr).
 			Msg("deposit can't be claimed!")
 		log.Error().
 			Str("url", bridgeService.Url()).
