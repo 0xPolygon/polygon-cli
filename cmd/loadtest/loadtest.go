@@ -30,7 +30,6 @@ import (
 	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	uniswapv3loadtest "github.com/0xPolygon/polygon-cli/cmd/loadtest/uniswapv3"
 
-	"github.com/0xPolygon/polygon-cli/abi"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/0xPolygon/polygon-cli/util"
 
@@ -62,7 +61,6 @@ const (
 	loadTestModeBlob
 	loadTestModeContractCall
 	loadTestModeDeploy
-	loadTestModeInscription
 	loadTestModeIncrement
 	loadTestModeRandom
 	loadTestModeRecall
@@ -89,8 +87,6 @@ func characterToLoadTestMode(mode string) (loadTestMode, error) {
 		return loadTestModeContractCall, nil
 	case "d", "deploy":
 		return loadTestModeDeploy, nil
-	case "i", "inscription":
-		return loadTestModeInscription, nil
 	case "inc", "increment":
 		return loadTestModeIncrement, nil
 	case "r", "random":
@@ -112,8 +108,7 @@ func characterToLoadTestMode(mode string) (loadTestMode, error) {
 
 func getRandomMode() loadTestMode {
 	// Does not include the following modes:
-	// blob, call, contract call, inscription,
-	// recall, rpc, uniswap v3
+	// blob, contract call, recall, rpc, uniswap v3
 	modes := []loadTestMode{
 		loadTestModeERC20,
 		loadTestModeERC721,
@@ -154,6 +149,13 @@ func hasUniqueModes(modes []loadTestMode) bool {
 
 func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 	log.Info().Msg("Connecting with RPC endpoint to initialize load test parameters")
+
+	// When outputting raw transactions, we don't need to wait for anything to be mined
+	if *inputLoadTestParams.OutputRawTxOnly {
+		*inputLoadTestParams.FireAndForget = true
+		log.Debug().Msg("OutputRawTxOnly mode enabled - automatically enabling FireAndForget mode")
+	}
+
 	gas, err := c.SuggestGasPrice(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to retrieve gas price")
@@ -283,14 +285,32 @@ func initializeLoadTestParams(ctx context.Context, c *ethclient.Client) error {
 		log.Trace().Msg("Setting call only mode since we're doing RPC testing")
 		*inputLoadTestParams.EthCallOnly = true
 	}
-	if hasMode(loadTestModeContractCall, inputLoadTestParams.ParsedModes) && (*inputLoadTestParams.ContractAddress == "" || (*inputLoadTestParams.ContractCallData == "" && *inputLoadTestParams.ContractCallFunctionSignature == "")) {
-		return errors.New("`--contract-call` requires both a `--contract-address` and calldata, either with `--calldata` or `--function-signature --function-arg` flags")
+	if hasMode(loadTestModeContractCall, inputLoadTestParams.ParsedModes) && (*inputLoadTestParams.ContractAddress == "" || *inputLoadTestParams.ContractCallData == "") {
+		return errors.New("`--contract-call` requires both a `--contract-address` and `--calldata` flags")
 	}
 	if *inputLoadTestParams.EthCallOnly && *inputLoadTestParams.AdaptiveRateLimit {
 		return errors.New("using call only with adaptive rate limit doesn't make sense")
 	}
+	if *inputLoadTestParams.EthCallOnly && *inputLoadTestParams.WaitForReceipt {
+		return errors.New("using call only with receipts doesn't make sense")
+	}
+	if *inputLoadTestParams.EthCallOnly && inputLoadTestParams.Mode == loadTestModeBlob {
+		return errors.New("using call only with blobs doesn't make sense")
+	}
+	if *inputLoadTestParams.LegacyTransactionMode && inputLoadTestParams.Mode == loadTestModeBlob {
+		return errors.New("blob transactions require eip-1559")
+	}
 	if hasMode(loadTestModeBlob, inputLoadTestParams.ParsedModes) && inputLoadTestParams.MultiMode {
 		return errors.New("blob mode should only be used by itself. Blob mode will take significantly longer than other transactions to finalize, and the address will be reserved, preventing other transactions form being made")
+	}
+	if *inputLoadTestParams.OutputRawTxOnly && inputLoadTestParams.MultiMode {
+		return errors.New("Raw output is not compatible with multiple modes")
+	}
+	if *inputLoadTestParams.OutputRawTxOnly && hasMode(loadTestModeRPC, inputLoadTestParams.ParsedModes) {
+		return errors.New("Raw output is not compatible with RPC mode")
+	}
+	if *inputLoadTestParams.OutputRawTxOnly && hasMode(loadTestModeUniswapV3, inputLoadTestParams.ParsedModes) {
+		return errors.New("Raw output is not compatible with UniswapV3 mode")
 	}
 
 	randSrc = rand.New(rand.NewSource(*inputLoadTestParams.Seed))
@@ -728,6 +748,19 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		if err != nil {
 			return err
 		}
+
+		// Validate that the chain has enough activity for RPC mode
+		if len(indexedActivity.TransactionIDs) == 0 ||
+			len(indexedActivity.Addresses) == 0 ||
+			len(indexedActivity.BlockIDs) == 0 ||
+			indexedActivity.BlockNumber == 0 {
+			return fmt.Errorf("insufficient chain activity for RPC mode: the chain must have at least some transaction history. Found %d transactions, %d addresses, %d blocks, current block number %d",
+				len(indexedActivity.TransactionIDs),
+				len(indexedActivity.Addresses),
+				len(indexedActivity.BlockIDs),
+				indexedActivity.BlockNumber)
+		}
+
 		if len(indexedActivity.ERC20Addresses) == 0 {
 			indexedActivity.ERC20Addresses = append(indexedActivity.ERC20Addresses, erc20Addr.String())
 		}
@@ -778,9 +811,11 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		return err
 	}
 
-	err = accountPool.RefreshNonce(ctx, tops.From)
-	if err != nil {
-		return err
+	if *inputLoadTestParams.StartNonce <= 0 {
+		err = accountPool.RefreshNonce(ctx, tops.From)
+		if err != nil {
+			return err
+		}
 	}
 
 	mustCheckMaxBaseFee, maxBaseFeeCtxCancel, waitBaseFeeToDrop := setupBaseFeeMonitoring(ctx, c, ltp)
@@ -867,8 +902,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					startReq, endReq, ltTxHash, tErr = loadTestContractCall(ctx, c, sendingTops)
 				case loadTestModeDeploy:
 					startReq, endReq, ltTxHash, tErr = loadTestDeploy(ctx, c, sendingTops)
-				case loadTestModeInscription:
-					startReq, endReq, ltTxHash, tErr = loadTestInscription(ctx, c, sendingTops)
 				case loadTestModeIncrement:
 					startReq, endReq, ltTxHash, tErr = loadTestIncrement(ctx, c, sendingTops, ltContract)
 				case loadTestModeRecall:
@@ -915,18 +948,13 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 						// we start setting nonce to be reused
 						reuseNonce := true
 
-						// if the transaction hash is not zero, this means a tx was
-						// created, in this case we want to check the error to understand
-						// if the nonce can be reused
-						if ltTxHash.String() != (ethcommon.Hash{}).String() {
-							// if it is an error that consumes the nonce, we can't retry it
-							if strings.Contains(tErr.Error(), "replacement transaction underpriced") ||
-								strings.Contains(tErr.Error(), "transaction underpriced") ||
-								strings.Contains(tErr.Error(), "nonce too low") ||
-								strings.Contains(tErr.Error(), "already known") ||
-								strings.Contains(tErr.Error(), "could not replace existing") {
-								reuseNonce = false
-							}
+						// if it is an error that consumes the nonce, we can't retry it
+						if strings.Contains(tErr.Error(), "replacement transaction underpriced") ||
+							strings.Contains(tErr.Error(), "transaction underpriced") ||
+							strings.Contains(tErr.Error(), "nonce too low") ||
+							strings.Contains(tErr.Error(), "already known") ||
+							strings.Contains(tErr.Error(), "could not replace existing") {
+							reuseNonce = false
 						}
 
 						// if we can reuse the nonce, we add it back to the account pool
@@ -1188,6 +1216,8 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 	defer func() { t2 = time.Now() }()
 	if *ltp.EthCallOnly {
 		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
+	} else if *ltp.OutputRawTxOnly {
+		err = outputRawTransaction(stx)
 	} else {
 		err = c.SendTransaction(ctx, stx)
 	}
@@ -1370,6 +1400,18 @@ func loadTestDeploy(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 		msg := transactOptsToCallMsg(tops)
 		msg.Data = ethcommon.FromHex(tester.LoadTesterMetaData.Bin)
 		_, err = c.CallContract(ctx, msg, nil)
+	} else if *ltp.OutputRawTxOnly {
+		// For raw output, we need to manually create and sign the deployment transaction
+		tops.NoSend = true
+		_, tx, _, err = tester.DeployLoadTester(tops, c)
+		if err != nil {
+			return
+		}
+		// The transaction from DeployLoadTester should already be signed
+		if tx != nil {
+			txHash = tx.Hash()
+			err = outputRawTransaction(tx)
+		}
 	} else {
 		_, tx, _, err = tester.DeployLoadTester(tops, c)
 		if err == nil && tx != nil {
@@ -1393,6 +1435,20 @@ func loadTestIncrement(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 		}
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
+	} else if *ltp.OutputRawTxOnly {
+		tops.NoSend = true
+		tx, err = ltContract.Inc(tops)
+		if err != nil {
+			return
+		}
+		// Sign the transaction manually since NoSend was true
+		signedTx, signErr := tops.Signer(tops.From, tx)
+		if signErr != nil {
+			err = signErr
+			return
+		}
+		txHash = signedTx.Hash()
+		err = outputRawTransaction(signedTx)
 	} else {
 		tx, err = ltContract.Inc(tops)
 		if err == nil && tx != nil {
@@ -1419,6 +1475,20 @@ func loadTestStore(ctx context.Context, c *ethclient.Client, tops *bind.Transact
 		}
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
+	} else if *ltp.OutputRawTxOnly {
+		tops.NoSend = true
+		tx, err = ltContract.Store(tops, inputData)
+		if err != nil {
+			return
+		}
+		// Sign the transaction manually since NoSend was true
+		signedTx, signErr := tops.Signer(tops.From, tx)
+		if signErr != nil {
+			err = signErr
+			return
+		}
+		txHash = signedTx.Hash()
+		err = outputRawTransaction(signedTx)
 	} else {
 		tx, err = ltContract.Store(tops, inputData)
 		if err == nil && tx != nil {
@@ -1448,6 +1518,20 @@ func loadTestERC20(ctx context.Context, c *ethclient.Client, tops *bind.Transact
 		}
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
+	} else if *ltp.OutputRawTxOnly {
+		tops.NoSend = true
+		tx, err = erc20Contract.Transfer(tops, *to, amount)
+		if err != nil {
+			return
+		}
+		// Sign the transaction manually since NoSend was true
+		signedTx, signErr := tops.Signer(tops.From, tx)
+		if signErr != nil {
+			err = signErr
+			return
+		}
+		txHash = signedTx.Hash()
+		err = outputRawTransaction(signedTx)
 	} else {
 		tx, err = erc20Contract.Transfer(tops, *to, amount)
 		if err == nil && tx != nil {
@@ -1478,6 +1562,20 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 		}
 		msg := txToCallMsg(tx)
 		_, err = c.CallContract(ctx, msg, nil)
+	} else if *ltp.OutputRawTxOnly {
+		tops.NoSend = true
+		tx, err = erc721Contract.MintBatch(tops, *to, big.NewInt(1))
+		if err != nil {
+			return
+		}
+		// Sign the transaction manually since NoSend was true
+		signedTx, signErr := tops.Signer(tops.From, tx)
+		if signErr != nil {
+			err = signErr
+			return
+		}
+		txHash = signedTx.Hash()
+		err = outputRawTransaction(signedTx)
 	} else {
 		tx, err = erc721Contract.MintBatch(tops, *to, big.NewInt(1))
 		if err == nil && tx != nil {
@@ -1493,7 +1591,12 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 
 	ltp := inputLoadTestParams
 
-	tx := rawTransactionToNewTx(originalTx, tops.Nonce.Uint64(), tops.GasPrice, tops.GasTipCap)
+	// For EIP-1559 transactions, use GasFeeCap instead of GasPrice (which is nil for dynamic fee txs)
+	gasPrice := tops.GasPrice
+	if gasPrice == nil && tops.GasFeeCap != nil {
+		gasPrice = tops.GasFeeCap
+	}
+	tx := rawTransactionToNewTx(originalTx, tops.Nonce.Uint64(), gasPrice, tops.GasTipCap)
 
 	stx, err = tops.Signer(tops.From, tx)
 	if err != nil {
@@ -1522,6 +1625,8 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 		}
 		// we're not going to return the error in the case because there is no point retrying
 		err = nil
+	} else if *ltp.OutputRawTxOnly {
+		err = outputRawTransaction(stx)
 	} else {
 		err = c.SendTransaction(ctx, stx)
 	}
@@ -1657,23 +1762,13 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 		amount = ltp.SendAmount
 	}
 
-	var stringCallData string
-	if *inputLoadTestParams.ContractCallData == "" && *inputLoadTestParams.ContractCallFunctionSignature == "" {
-		log.Error().Err(fmt.Errorf("missing calldata for function call"))
+	if *inputLoadTestParams.ContractCallData == "" {
+		err = fmt.Errorf("missing calldata for function call")
+		log.Error().Err(err).Msg("--calldata flag is required for contract-call mode")
 		return
 	}
 
-	if *inputLoadTestParams.ContractCallData != "" {
-		stringCallData = *inputLoadTestParams.ContractCallData
-	} else {
-		stringCallData, err = abi.AbiEncode(*inputLoadTestParams.ContractCallFunctionSignature, *inputLoadTestParams.ContractCallFunctionArgs)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to encode calldata")
-			return
-		}
-	}
-
-	calldata, err = hex.DecodeString(strings.TrimPrefix(stringCallData, "0x"))
+	calldata, err = hex.DecodeString(strings.TrimPrefix(*inputLoadTestParams.ContractCallData, "0x"))
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to decode calldata string")
 		return
@@ -1732,75 +1827,8 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 	defer func() { t2 = time.Now() }()
 	if *ltp.EthCallOnly {
 		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
-	} else {
-		err = c.SendTransaction(ctx, stx)
-	}
-	return
-}
-
-func loadTestInscription(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
-	var tx *ethtypes.Transaction
-	var stx *ethtypes.Transaction
-
-	ltp := inputLoadTestParams
-
-	to := ltp.FromETHAddress
-
-	chainID := new(big.Int).SetUint64(*ltp.ChainID)
-	amount := big.NewInt(0)
-
-	calldata := []byte(*ltp.InscriptionContent)
-	if tops.GasLimit == 0 {
-		estimateInput := ethereum.CallMsg{
-			From:      tops.From,
-			To:        to,
-			Value:     amount,
-			GasPrice:  tops.GasPrice,
-			GasTipCap: tops.GasTipCap,
-			GasFeeCap: tops.GasFeeCap,
-			Data:      calldata,
-		}
-		tops.GasLimit, err = c.EstimateGas(ctx, estimateInput)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to estimate gas for transaction. Manually setting gas-limit might be required")
-			return
-		}
-	}
-
-	if *ltp.LegacyTransactionMode {
-		tx = ethtypes.NewTx(&ethtypes.LegacyTx{
-			Nonce:    tops.Nonce.Uint64(),
-			To:       to,
-			Value:    amount,
-			Gas:      tops.GasLimit,
-			GasPrice: tops.GasPrice,
-			Data:     calldata,
-		})
-	} else {
-		tx = ethtypes.NewTx(&ethtypes.DynamicFeeTx{
-			ChainID:   chainID,
-			Nonce:     tops.Nonce.Uint64(),
-			To:        to,
-			Gas:       tops.GasLimit,
-			GasFeeCap: tops.GasFeeCap,
-			GasTipCap: tops.GasTipCap,
-			Data:      calldata,
-			Value:     amount,
-		})
-	}
-	log.Trace().Interface("tx", tx).Msg("Contract call data")
-
-	stx, err = tops.Signer(tops.From, tx)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to sign transaction")
-		return
-	}
-	txHash = stx.Hash()
-
-	t1 = time.Now()
-	defer func() { t2 = time.Now() }()
-	if *ltp.EthCallOnly {
-		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
+	} else if *ltp.OutputRawTxOnly {
+		err = outputRawTransaction(stx)
 	} else {
 		err = c.SendTransaction(ctx, stx)
 	}
@@ -1821,16 +1849,23 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactO
 	chainID := new(big.Int).SetUint64(*ltp.ChainID)
 
 	gasLimit := uint64(21000)
-	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
-	// blobFeeCap := uint64(1000000000) // 1eth
+	// Use the gas values from tops which have been properly configured by configureTransactOpts
+	// This ensures we respect ForceGasPrice, ForcePriorityGasPrice, and other overrides
 	blobFeeCap := ltp.BlobFeeCap
+
+	// Blob transactions require EIP-1559 support
+	if tops.GasFeeCap == nil || tops.GasTipCap == nil {
+		err = fmt.Errorf("blob transactions require EIP-1559 support (non-legacy mode)")
+		log.Error().Err(err).Msg("Cannot send blob transaction in legacy mode")
+		return
+	}
 
 	// Initialize blobTx with blob transaction type
 	blobTx := ethtypes.BlobTx{
 		ChainID:    uint256.NewInt(chainID.Uint64()),
 		Nonce:      tops.Nonce.Uint64(),
-		GasTipCap:  uint256.NewInt(gasTipCap.Uint64()),
-		GasFeeCap:  uint256.NewInt(gasPrice.Uint64()),
+		GasTipCap:  uint256.NewInt(tops.GasTipCap.Uint64()),
+		GasFeeCap:  uint256.NewInt(tops.GasFeeCap.Uint64()),
 		BlobFeeCap: uint256.NewInt(*blobFeeCap),
 		Gas:        gasLimit,
 		To:         *to,
@@ -1870,10 +1905,26 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactO
 	if *ltp.EthCallOnly {
 		log.Error().Err(err).Msg("CallOnly not supported to blob transactions")
 		return
+	} else if *ltp.OutputRawTxOnly {
+		err = outputRawTransaction(stx)
 	} else {
 		err = c.SendTransaction(ctx, stx)
 	}
 	return
+}
+
+// outputRawTransaction marshals a signed transaction to hex and outputs it to stdout
+func outputRawTransaction(stx *ethtypes.Transaction) error {
+	rawTx, err := stx.MarshalBinary()
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to marshal transaction to binary")
+		return err
+	}
+
+	rawTxHex := "0x" + hex.EncodeToString(rawTx)
+	fmt.Println(rawTxHex)
+
+	return nil
 }
 
 func recordSample(goRoutineID, requestID int64, err error, start, end time.Time, nonce uint64) {
