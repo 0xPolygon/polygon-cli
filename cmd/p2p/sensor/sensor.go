@@ -1,6 +1,7 @@
 package sensor
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
@@ -37,6 +38,7 @@ type (
 		Bootnodes                    string
 		NetworkID                    uint64
 		NodesFile                    string
+		StaticNodesFile              string
 		TrustedNodesFile             string
 		ProjectID                    string
 		DatabaseID                   string
@@ -63,7 +65,6 @@ type (
 		ForkID                       []byte
 		DialRatio                    int
 		NAT                          string
-		QuickStart                   bool
 		TTL                          time.Duration
 		DiscoveryDNS                 string
 		Database                     string
@@ -71,6 +72,7 @@ type (
 
 		bootnodes    []*enode.Node
 		nodes        []*enode.Node
+		staticNodes  []*enode.Node
 		trustedNodes []*enode.Node
 		privateKey   *ecdsa.PrivateKey
 		nat          nat.Interface
@@ -93,6 +95,13 @@ var SensorCmd = &cobra.Command{
 		inputSensorParams.nodes, err = p2p.ReadNodeSet(inputSensorParams.NodesFile)
 		if err != nil {
 			log.Warn().Err(err).Msgf("Creating nodes file %v because it does not exist", inputSensorParams.NodesFile)
+		}
+
+		if len(inputSensorParams.StaticNodesFile) > 0 {
+			inputSensorParams.staticNodes, err = p2p.ReadNodeSet(inputSensorParams.StaticNodesFile)
+			if err != nil {
+				log.Warn().Err(err).Msgf("Static nodes file %v not found", inputSensorParams.StaticNodesFile)
+			}
 		}
 
 		if len(inputSensorParams.TrustedNodesFile) > 0 {
@@ -159,37 +168,9 @@ var SensorCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var db database.Database
-		switch inputSensorParams.Database {
-		case "datastore":
-			db = database.NewDatastore(cmd.Context(), database.DatastoreOptions{
-				ProjectID:                    inputSensorParams.ProjectID,
-				DatabaseID:                   inputSensorParams.DatabaseID,
-				SensorID:                     inputSensorParams.SensorID,
-				ChainID:                      inputSensorParams.NetworkID,
-				MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
-				ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
-				ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
-				ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
-				ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
-				ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
-				TTL:                          inputSensorParams.TTL,
-			})
-		case "json":
-			db = database.NewJSONDatabase(database.JSONDatabaseOptions{
-				SensorID:                     inputSensorParams.SensorID,
-				ChainID:                      inputSensorParams.NetworkID,
-				MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
-				ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
-				ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
-				ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
-				ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
-				ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
-			})
-		case "none":
-			db = database.NoDatabase()
-		default:
-			return fmt.Errorf("invalid database option: %s", inputSensorParams.Database)
+		db, err := newDatabase(cmd.Context())
+		if err != nil {
+			return err
 		}
 
 		// Fetch the latest block which will be used later when crafting the status
@@ -237,6 +218,7 @@ var SensorCmd = &cobra.Command{
 		config := ethp2p.Config{
 			PrivateKey:     inputSensorParams.privateKey,
 			BootstrapNodes: inputSensorParams.bootnodes,
+			StaticNodes:    inputSensorParams.staticNodes,
 			TrustedNodes:   inputSensorParams.trustedNodes,
 			MaxPeers:       inputSensorParams.MaxPeers,
 			ListenAddr:     fmt.Sprintf(":%d", inputSensorParams.Port),
@@ -250,10 +232,6 @@ var SensorCmd = &cobra.Command{
 				p2p.NewEthProtocol(67, opts),
 				p2p.NewEthProtocol(68, opts),
 			},
-		}
-
-		if inputSensorParams.QuickStart {
-			config.StaticNodes = inputSensorParams.nodes
 		}
 
 		server := ethp2p.Server{Config: config}
@@ -413,6 +391,42 @@ func getLatestBlock(url string) (*rpctypes.RawBlockResponse, error) {
 	return &block, nil
 }
 
+// newDatabase creates and configures the appropriate database backend based
+// on the sensor parameters.
+func newDatabase(ctx context.Context) (database.Database, error) {
+	switch inputSensorParams.Database {
+	case "datastore":
+		return database.NewDatastore(ctx, database.DatastoreOptions{
+			ProjectID:                    inputSensorParams.ProjectID,
+			DatabaseID:                   inputSensorParams.DatabaseID,
+			SensorID:                     inputSensorParams.SensorID,
+			ChainID:                      inputSensorParams.NetworkID,
+			MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
+			ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
+			ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
+			ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
+			ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
+			ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
+			TTL:                          inputSensorParams.TTL,
+		}), nil
+	case "json":
+		return database.NewJSONDatabase(database.JSONDatabaseOptions{
+			SensorID:                     inputSensorParams.SensorID,
+			ChainID:                      inputSensorParams.NetworkID,
+			MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
+			ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
+			ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
+			ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
+			ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
+			ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
+		}), nil
+	case "none":
+		return database.NoDatabase(), nil
+	default:
+		return nil, fmt.Errorf("invalid database option: %s", inputSensorParams.Database)
+	}
+}
+
 func init() {
 	SensorCmd.Flags().StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", "Comma separated nodes used for bootstrapping")
 	SensorCmd.Flags().Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network ID")
@@ -457,10 +471,7 @@ significantly increase CPU and memory usage.`)
 		`Ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
 connections to be dialed. Setting this to 0 defaults it to 3.`)
 	SensorCmd.Flags().StringVar(&inputSensorParams.NAT, "nat", "any", "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")
-	SensorCmd.Flags().BoolVar(&inputSensorParams.QuickStart, "quick-start", false,
-		`Whether to load the nodes.json as static nodes to quickly start the network.
-This produces faster development cycles but can prevent the sensor from being to
-connect to new peers if the nodes.json file is large.`)
+	SensorCmd.Flags().StringVar(&inputSensorParams.StaticNodesFile, "static-nodes", "", "Static nodes file")
 	SensorCmd.Flags().StringVar(&inputSensorParams.TrustedNodesFile, "trusted-nodes", "", "Trusted nodes file")
 	SensorCmd.Flags().DurationVar(&inputSensorParams.TTL, "ttl", 14*24*time.Hour, "Time to live")
 	SensorCmd.Flags().StringVar(&inputSensorParams.DiscoveryDNS, "discovery-dns", "", "DNS discovery ENR tree url")
