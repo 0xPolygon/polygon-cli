@@ -939,7 +939,7 @@ func claimAsset(cmd *cobra.Command) error {
 		return err
 	}
 
-	claimTxn, err := bridgeV2.ClaimAsset(auth, bridge_service.HashArrayToBytesArray(proof.MerkleProof), bridge_service.HashArrayToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, deposit.DestAddr, deposit.Amount, deposit.Metadata)
+	claimTxn, err := bridgeV2.ClaimAsset(auth, bridge_service.HashSliceToBytesArray(proof.MerkleProof), bridge_service.HashSliceToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, deposit.DestAddr, deposit.Amount, deposit.Metadata)
 	if err = logAndReturnJsonError(cmd.Context(), client, claimTxn, auth, err); err != nil {
 		return err
 	}
@@ -994,7 +994,7 @@ func claimMessage(cmd *cobra.Command) error {
 		return err
 	}
 
-	claimTxn, err := bridgeV2.ClaimMessage(auth, bridge_service.HashArrayToBytesArray(proof.MerkleProof), bridge_service.HashArrayToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, deposit.DestAddr, deposit.Amount, deposit.Metadata)
+	claimTxn, err := bridgeV2.ClaimMessage(auth, bridge_service.HashSliceToBytesArray(proof.MerkleProof), bridge_service.HashSliceToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, deposit.DestAddr, deposit.Amount, deposit.Metadata)
 	if err = logAndReturnJsonError(cmd.Context(), client, claimTxn, auth, err); err != nil {
 		return err
 	}
@@ -1249,9 +1249,9 @@ func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeCont
 
 	var claimTx *types.Transaction
 	if deposit.LeafType == 0 {
-		claimTx, err = bridgeContract.ClaimAsset(opts, bridge_service.HashArrayToBytesArray(proof.MerkleProof), bridge_service.HashArrayToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, deposit.DestAddr, deposit.Amount, deposit.Metadata)
+		claimTx, err = bridgeContract.ClaimAsset(opts, bridge_service.HashSliceToBytesArray(proof.MerkleProof), bridge_service.HashSliceToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, deposit.DestAddr, deposit.Amount, deposit.Metadata)
 	} else {
-		claimTx, err = bridgeContract.ClaimMessage(opts, bridge_service.HashArrayToBytesArray(proof.MerkleProof), bridge_service.HashArrayToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, deposit.DestAddr, deposit.Amount, deposit.Metadata)
+		claimTx, err = bridgeContract.ClaimMessage(opts, bridge_service.HashSliceToBytesArray(proof.MerkleProof), bridge_service.HashSliceToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, deposit.DestAddr, deposit.Amount, deposit.Metadata)
 	}
 
 	if err = logAndReturnJsonError(cmd.Context(), client, claimTx, opts, err); err != nil {

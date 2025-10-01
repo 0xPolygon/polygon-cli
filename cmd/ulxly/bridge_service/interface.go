@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -56,10 +57,11 @@ type Proof struct {
 	RollupExitRoot    *common.Hash
 }
 
-func HashArrayToBytesArray(hashes []common.Hash) [32][32]byte {
+func HashSliceToBytesArray(hashes []common.Hash) [32][32]byte {
 	var array [32][32]byte
 	for i, h := range hashes {
 		if i >= 32 {
+			log.Warn().Msg("HashSliceToBytesArray: more than 32 hashes, truncating")
 			break
 		}
 		array[i] = h
