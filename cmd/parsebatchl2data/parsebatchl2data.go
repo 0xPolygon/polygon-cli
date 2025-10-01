@@ -58,8 +58,10 @@ var ParseBatchL2Data = &cobra.Command{
 			}
 			fmt.Println(string(blockDataBytes))
 
-			for idx := range l2RawBlock.Transactions {
-				_ = printTxData(&l2RawBlock.Transactions[idx])
+			for i := range l2RawBlock.Transactions {
+				if err := printTxData(&l2RawBlock.Transactions[i]); err != nil {
+					log.Error().Err(err).Int("tx_index", i).Msg("Failed to print transaction data")
+				}
 			}
 		}
 		return nil
@@ -122,7 +124,9 @@ func tryRawBatch(rawBatchL2Data []byte) {
 		log.Error().Err(err).Msg("unable to decode raw l2 batch data")
 		return
 	}
-	for _, t := range rawBatch.Transactions {
-		_ = printTxData(&t)
+	for i, t := range rawBatch.Transactions {
+		if err := printTxData(&t); err != nil {
+			log.Error().Err(err).Int("tx_index", i).Msg("Failed to print transaction data in forced batch")
+		}
 	}
 }
