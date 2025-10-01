@@ -32,7 +32,11 @@ func (s *BridgeService) GetDeposit(depositNetwork, depositCount uint32) (*bridge
 
 	if resp.Code != nil {
 		errMsg := "unable to retrieve bridge deposit"
-		log.Warn().Int("code", *resp.Code).Str("message", *resp.Message).Msgf("%s", errMsg)
+		l := log.Warn().Int("code", *resp.Code)
+		if resp.Message != nil {
+			l.Str("message", *resp.Message)
+		}
+		l.Msgf("%s", errMsg)
 		return nil, bridge_service.ErrNotFound
 	}
 
