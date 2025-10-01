@@ -61,23 +61,21 @@ func (s *BridgeService) GetProof(depositNetwork, depositCount uint32, ger *commo
 		return nil, errors.New("getting proof by ger is not supported yet by Aggkit bridge service")
 	}
 
+	timeout := time.After(time.Minute)
 out:
 	for {
-		select {
-		case <-time.After(time.Minute):
-			return nil, fmt.Errorf("timeout waiting for l1 info tree index")
-		default:
-			idx, err := s.getL1InfoTreeIndex(depositNetwork, depositCount)
-			if errors.Is(err, bridge_service.ErrNotFound) {
-				time.Sleep(time.Second)
-				continue
-			}
-			if err != nil {
-				return nil, err
-			}
-
+		idx, err := s.getL1InfoTreeIndex(depositNetwork, depositCount)
+		if err != nil && !errors.Is(err, bridge_service.ErrNotFound) {
+			return nil, err
+		} else if err == nil {
 			l1InfoTreeIndex = *idx
 			break out
+		}
+		select {
+		case <-timeout:
+			return nil, fmt.Errorf("timeout waiting for l1 info tree index")
+		default:
+			time.Sleep(time.Second)
 		}
 	}
 
