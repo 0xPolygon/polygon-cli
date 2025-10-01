@@ -32,12 +32,13 @@ func HTTPGet[T any](client *http.Client, url string) (obj T, statusCode int, err
 	if err != nil {
 		return obj, 0, err
 	}
+	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return obj, res.StatusCode, err
 	}
-	defer res.Body.Close()
+
 	log.Trace().Msgf("HTTPGet() %s - status %d - body: %s", url, res.StatusCode, string(body))
 
 	err = json.Unmarshal(body, &obj)
@@ -51,12 +52,13 @@ func HTTPGetWithError[T any, TError any](client *http.Client, url string) (obj T
 	if err != nil {
 		return obj, objError, 0, err
 	}
+	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return obj, objError, res.StatusCode, err
 	}
-	defer res.Body.Close()
+
 	log.Trace().Msgf("HTTPGetWithError() %s - status %d - body: %s", url, res.StatusCode, string(body))
 
 	if res.StatusCode == http.StatusOK {
