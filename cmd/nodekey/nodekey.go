@@ -67,7 +67,7 @@ var NodekeyCmd = &cobra.Command{
 	Short: "Generate node keys for different blockchain clients and protocols.",
 	Long:  usage,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		inputNodeKeyPrivateKey = flag_loader.GetRpcUrlFlagValue(cmd)
+		inputNodeKeyPrivateKey = flag_loader.GetPrivateKeyFlagValue(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var nko nodeKeyOut

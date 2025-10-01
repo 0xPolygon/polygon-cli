@@ -18,19 +18,18 @@ import (
 	"crypto/sha1"
 	_ "embed"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
 	"net/http"
-	"path/filepath"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/bindings/tester"
-	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz/testreporter"
+	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz/streamer"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -182,12 +181,6 @@ var (
 	// fuzzing.. E.g. loop over the various tests, and mutate the
 	// Args before sending
 	allTests = make([]RPCTest, 0)
-
-	testResults   testreporter.TestResults
-	testResultsCh = make(chan testreporter.TestResult)
-
-	fuzzedTestsGroup sync.WaitGroup
-	testResultMutex  sync.Mutex
 )
 
 func getConformanceContract(ctx context.Context, rpc *rpc.Client, chainID *big.Int) (conformanceContractAddrStr string, conformanceContract *tester.ConformanceTester, err error) {
@@ -209,10 +202,22 @@ func getConformanceContract(ctx context.Context, rpc *rpc.Client, chainID *big.I
 }
 
 func runRpcFuzz(ctx context.Context) error {
-	if *testOutputExportPath != "" && !*testExportJson && !*testExportCSV && !*testExportMarkdown && !*testExportHTML {
-		log.Warn().Msg("Setting --export-path must pair with a export type: --json, --csv, --md, or --html")
+	// Setup streamer based on flags
+	var outputStreamer streamer.OutputStreamer
+	switch {
+	case *streamJSON:
+		outputStreamer = streamer.NewJSONStreamer(os.Stdout)
+	case *streamCSV:
+		outputStreamer = streamer.NewCSVStreamer(os.Stdout, *quietMode)
+	case *streamHTML:
+		outputStreamer = streamer.NewHTMLStreamer(os.Stdout, *quietMode)
+	case *streamMarkdown:
+		outputStreamer = streamer.NewMarkdownStreamer(os.Stdout, *quietMode)
+	default: // compact is default
+		outputStreamer = streamer.NewCompactStreamer(os.Stdout, *quietMode)
 	}
 
+	// KEEP ALL EXISTING SETUP CODE
 	rpcClient, err := rpc.DialContext(ctx, *rpcUrl)
 	if err != nil {
 		return err
@@ -245,6 +250,8 @@ func runRpcFuzz(ctx context.Context) error {
 	httpClient := &http.Client{}
 	wrappedHTTPClient := wrappedHttpClient{httpClient, *rpcUrl}
 
+	summaries := make([]streamer.TestSummary, 0)
+
 	for _, t := range allTests {
 		if !shouldRunTest(t) {
 			log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Skipping test")
@@ -252,48 +259,282 @@ func runRpcFuzz(ctx context.Context) error {
 		}
 		log.Trace().Str("name", t.GetName()).Str("method", t.GetMethod()).Msg("Running Test")
 
-		currTestResult := CallRPCAndValidate(ctx, rpcClient, wrappedHTTPClient, t)
-		testResults.AddTestResult(currTestResult)
+		execution := CallRPCAndValidate(ctx, rpcClient, wrappedHTTPClient, t)
+		if shouldOutput(execution) {
+			iErr := outputStreamer.StreamTestExecution(execution)
+			if iErr != nil {
+				log.Error().Err(iErr).Msg("Unable to stream test execution")
+			}
+		}
+
+		summary := createSummaryFromExecution(t, execution)
 
 		if *testFuzz {
-			fuzzedTestsGroup.Add(1)
+			fuzzSummary := CallRPCWithFuzzAndValidate(ctx, rpcClient, t, outputStreamer)
+			summaries = append(summaries, fuzzSummary)
+		} else {
+			summaries = append(summaries, summary)
+		}
 
-			log.Info().Str("method", t.GetMethod()).Msg("Running with fuzzed args")
-			go func(t RPCTest) {
-				defer fuzzedTestsGroup.Done()
-				currTestResult := CallRPCWithFuzzAndValidate(ctx, rpcClient, t)
-				testResultsCh <- currTestResult
-			}(t)
+		// Periodic summary output
+		if *summaryInterval > 0 && len(summaries)%(*summaryInterval) == 0 {
+			overallSummary := calculateProgressSummary(summaries)
+			iErr := outputStreamer.StreamSummary(overallSummary)
+			if iErr != nil {
+				log.Error().Err(iErr).Msg("Unable to stream summary")
+			}
 		}
 	}
 
-	go func() {
-		for currTestResult := range testResultsCh {
-			testResultMutex.Lock()
-			testResults.AddTestResult(currTestResult)
-			testResultMutex.Unlock()
-		}
-	}()
-
-	fuzzedTestsGroup.Wait()
-	close(testResultsCh)
-
-	testResults.GenerateTabularResult()
-	if *testExportJson {
-		testResults.ExportResultToJSON(filepath.Join(*testOutputExportPath, "output.json"))
+	// Final summary
+	err = outputStreamer.StreamFinalSummary(summaries)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to stream final summary")
 	}
-	if *testExportCSV {
-		testResults.ExportResultToCSV(filepath.Join(*testOutputExportPath, "output.csv"))
-	}
-	if *testExportMarkdown {
-		testResults.ExportResultToMarkdown(filepath.Join(*testOutputExportPath, "output.md"))
-	}
-	if *testExportHTML {
-		testResults.ExportResultToHTML(filepath.Join(*testOutputExportPath, "output.html"))
-	}
-	testResults.PrintTabularResult()
 
 	return nil
+}
+
+func shouldOutput(exec streamer.TestExecution) bool {
+	if *quietMode {
+		return false
+	}
+
+	switch *outputFilter {
+	case "failures":
+		return exec.Status == "fail"
+	case "summary":
+		return false // Only summaries
+	default:
+		return true // All
+	}
+}
+
+func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHTTPClient wrappedHttpClient, currTest RPCTest) streamer.TestExecution {
+	start := time.Now()
+	args := currTest.GetArgs()
+
+	var result interface{}
+	var err error
+
+	// COPY existing RPC call logic from CallRPCAndValidate
+	switch currTest.(type) {
+	case *RPCTestRawHTTP:
+		// Marshal the HTTP request payload.
+		var payload []byte
+		payload, err = json.Marshal(args)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Unable to marshal HTTP request payload")
+		}
+
+		// Create the request.
+		var request *http.Request
+		request, err = http.NewRequest(currTest.GetMethod(), wrappedHTTPClient.url, bytes.NewBuffer(payload))
+		if err != nil {
+			log.Fatal().Err(err).Msg("Unable to create HTTP request")
+		}
+		request.Header.Set("Content-Type", "application/json")
+
+		// Send the request.
+		var response *http.Response
+		response, err = wrappedHTTPClient.client.Do(request)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to send HTTP request")
+			break
+		}
+		defer response.Body.Close()
+
+		// Read the response body.
+		var body []byte
+		body, err = io.ReadAll(response.Body)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to read HTTP body")
+			break
+		}
+
+		// Marshal the response and extract the error if there is any.
+		var rpcResponse RPCJSONResponse
+		err = json.Unmarshal(body, &rpcResponse)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to unmarshal HTTP body")
+			break
+		}
+		if rpcResponse.Error != nil {
+			result = &rpcResponse.Error
+		}
+	default:
+		err = rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
+
+		if err != nil && !currTest.ExpectError() {
+			// Return execution immediately for streaming
+			return streamer.TestExecution{
+				TestName:  currTest.GetName(),
+				Method:    currTest.GetMethod(),
+				Args:      args,
+				Result:    result,
+				Status:    "fail",
+				Error:     "method test failed: " + err.Error(),
+				Duration:  time.Since(start),
+				Timestamp: time.Now(),
+			}
+		}
+		if err == nil && currTest.ExpectError() {
+			// Return execution immediately for streaming
+			return streamer.TestExecution{
+				TestName:  currTest.GetName(),
+				Method:    currTest.GetMethod(),
+				Args:      args,
+				Result:    result,
+				Status:    "fail",
+				Error:     "expected an error but didn't get one",
+				Duration:  time.Since(start),
+				Timestamp: time.Now(),
+			}
+		}
+	}
+
+	var validationErr error
+	if currTest.ExpectError() {
+		validationErr = currTest.Validate(err)
+	} else {
+		validationErr = currTest.Validate(result)
+	}
+
+	execution := streamer.TestExecution{
+		TestName:  currTest.GetName(),
+		Method:    currTest.GetMethod(),
+		Args:      args,
+		Result:    result,
+		Duration:  time.Since(start),
+		Timestamp: time.Now(),
+	}
+
+	if validationErr != nil {
+		execution.Status = "fail"
+		execution.Error = "Failed to validate: " + validationErr.Error()
+	} else {
+		execution.Status = "pass"
+	}
+
+	return execution
+}
+
+func CallRPCWithFuzzAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPCTest, outputStreamer streamer.OutputStreamer) streamer.TestSummary {
+	summary := streamer.TestSummary{
+		TestName: currTest.GetName() + "-FUZZED",
+		Method:   currTest.GetMethod(),
+	}
+
+	originalArgs := currTest.GetArgs()
+	for i := 0; i < *testFuzzNum; i++ {
+		args := make([]any, len(originalArgs))
+		for j, arg := range originalArgs {
+			// Deep copy each argument using JSON marshal/unmarshal
+			b, err := json.Marshal(arg)
+			if err != nil {
+				args[j] = arg // fallback to shallow copy if marshal fails
+				continue
+			}
+			var copied any
+			if err := json.Unmarshal(b, &copied); err != nil {
+				args[j] = arg // fallback to shallow copy if unmarshal fails
+				continue
+			}
+			args[j] = copied
+		}
+		fuzzer.Fuzz(&args)
+
+		start := time.Now()
+		var result interface{}
+		err := rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
+		duration := time.Since(start)
+
+		execution := streamer.TestExecution{
+			TestName:  summary.TestName,
+			Method:    summary.Method,
+			Args:      args,
+			Result:    result,
+			Duration:  duration,
+			Timestamp: time.Now(),
+		}
+
+		summary.TestsRan++
+		summary.TotalDuration += duration
+
+		if err != nil {
+			execution.Status = "fail"
+			execution.Error = err.Error()
+			summary.TestsFailed++
+		} else {
+			execution.Status = "pass"
+			summary.TestsPassed++
+		}
+
+		if shouldOutput(execution) {
+			iErr := outputStreamer.StreamTestExecution(execution)
+			if iErr != nil {
+				log.Error().Err(iErr).Msg("Unable to stream test execution")
+			}
+		}
+	}
+
+	if summary.TestsRan > 0 {
+		summary.SuccessRate = float64(summary.TestsPassed) / float64(summary.TestsRan)
+	}
+
+	return summary
+}
+
+func createSummaryFromExecution(t RPCTest, execution streamer.TestExecution) streamer.TestSummary {
+	summary := streamer.TestSummary{
+		TestName:      t.GetName(),
+		Method:        t.GetMethod(),
+		TestsRan:      1,
+		TotalDuration: execution.Duration,
+	}
+
+	if execution.Status == "pass" {
+		summary.TestsPassed = 1
+		summary.TestsFailed = 0
+		summary.SuccessRate = 1.0
+	} else {
+		summary.TestsPassed = 0
+		summary.TestsFailed = 1
+		summary.SuccessRate = 0.0
+	}
+
+	return summary
+}
+
+func calculateProgressSummary(summaries []streamer.TestSummary) streamer.TestSummary {
+	if len(summaries) == 0 {
+		return streamer.TestSummary{}
+	}
+
+	totalRan, totalPassed, totalFailed := 0, 0, 0
+	var totalDuration time.Duration
+
+	for _, s := range summaries {
+		totalRan += s.TestsRan
+		totalPassed += s.TestsPassed
+		totalFailed += s.TestsFailed
+		totalDuration += s.TotalDuration
+	}
+
+	successRate := 0.0
+	if totalRan > 0 {
+		successRate = float64(totalPassed) / float64(totalRan)
+	}
+
+	return streamer.TestSummary{
+		TestName:      "Overall Progress",
+		Method:        "all",
+		TestsRan:      totalRan,
+		TestsPassed:   totalPassed,
+		TestsFailed:   totalFailed,
+		SuccessRate:   successRate,
+		TotalDuration: totalDuration,
+	}
 }
 
 // setupTests will add all of the `RPCTests` to the `allTests` slice.
@@ -1875,107 +2116,6 @@ func GetCurrentChainID(ctx context.Context, rpcClient *rpc.Client) (*big.Int, er
 	}
 	log.Trace().Uint64("chainId", chainId.Uint64()).Msg("Fetch chainid")
 	return chainId, err
-}
-
-func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHttpClient wrappedHttpClient, currTest RPCTest) testreporter.TestResult {
-	currTestResult := testreporter.New(currTest.GetName(), currTest.GetMethod(), 1)
-	args := currTest.GetArgs()
-
-	var result interface{}
-	var err error
-	switch currTest.(type) {
-	case *RPCTestRawHTTP:
-		// Marshal the HTTP request payload.
-		var payload []byte
-		payload, err = json.Marshal(args)
-		if err != nil {
-			log.Fatal().Err(err).Msg("Unable to marshal HTTP request payload")
-		}
-
-		// Create the request.
-		var request *http.Request
-		request, err = http.NewRequest(currTest.GetMethod(), wrappedHttpClient.url, bytes.NewBuffer(payload)) // TODO: fix
-		if err != nil {
-			log.Fatal().Err(err).Msg("Unable to create HTTP request")
-
-		}
-		request.Header.Set("Content-Type", "application/json")
-
-		// Send the request.
-		var response *http.Response
-		response, err = wrappedHttpClient.client.Do(request)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to send HTTP request")
-			break
-		}
-		defer response.Body.Close()
-
-		// Read the response body.
-		var body []byte
-		body, err = io.ReadAll(response.Body)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to read HTTP body")
-			break
-		}
-
-		// Marshal the response and extract the error if there is any.
-		var rpcResponse RPCJSONResponse
-		err = json.Unmarshal(body, &rpcResponse)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to unmarshal HTTP body")
-			break
-		}
-		if rpcResponse.Error != nil {
-			result = &rpcResponse.Error
-		}
-	default:
-		err = rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
-
-		if err != nil && !currTest.ExpectError() {
-			currTestResult.Fail(args, result, errors.New("method test failed: "+err.Error()))
-			return currTestResult
-		}
-		if err == nil && currTest.ExpectError() {
-			currTestResult.Fail(args, result, errors.New("expected an error but didn't get one"))
-			return currTestResult
-		}
-	}
-
-	if currTest.ExpectError() {
-		err = currTest.Validate(err)
-	} else {
-		err = currTest.Validate(result)
-	}
-
-	if err != nil {
-		currTestResult.Fail(args, result, errors.New("Failed to validate: "+err.Error()))
-		return currTestResult
-	}
-
-	currTestResult.Pass(args, result, err)
-
-	return currTestResult
-}
-
-func CallRPCWithFuzzAndValidate(ctx context.Context, rpcClient *rpc.Client, currTest RPCTest) testreporter.TestResult {
-	currTestResult := testreporter.New(currTest.GetName()+"-FUZZED", currTest.GetMethod(), *testFuzzNum)
-
-	originalArgs := currTest.GetArgs()
-	for i := 0; i < *testFuzzNum; i++ {
-		args := originalArgs
-		fuzzer.Fuzz(&args)
-
-		var result interface{}
-		err := rpcClient.CallContext(ctx, &result, currTest.GetMethod(), args...)
-
-		if err != nil {
-			currTestResult.Fail(args, result, err)
-		} else {
-			currTestResult.Pass(args, result, err)
-		}
-	}
-
-	return currTestResult
 }
 
 func (r *RPCTestGeneric) GetMethod() string {

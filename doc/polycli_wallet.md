@@ -21,7 +21,7 @@ polycli wallet [create|inspect] [flags]
 
 This command is meant to simplify the operations of creating
 wallets. This command can take a seed phrase and spit out child
-accounts or generate new accmounts along with a seed phrase. It can
+accounts or generate new accounts along with a seed phrase. It can
 generate portable wallets to be used across ETH, BTC, PoS, Substrate,
 etc.
 

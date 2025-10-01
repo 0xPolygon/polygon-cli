@@ -45,6 +45,13 @@ $ polycli fund --number 20 --hd-derivation=false
 3:58PM INF Wallets' address(es) and private key(s) saved to file fileName=wallets.json
 3:58PM INF Wallet(s) funded! 💸
 3:58PM INF Total execution time: 1.027506s
+
+# Fund wallets from a key file (one private key in hex per line).
+$ polycli fund --key-file=keys.txt
+3:58PM INF Starting bulk funding wallets
+3:58PM INF Wallet(s) derived from key file count=3
+3:58PM INF Wallet(s) funded! 💸
+3:58PM INF Total execution time: 1.2s
 ```
 
 Extract from `wallets.json`.
@@ -79,10 +86,11 @@ $ cast balance 0x5D8121cf716B70d3e345adB58157752304eED5C3
 ```bash
       --addresses strings         Comma-separated list of wallet addresses to fund
       --contract-address string   The address of a pre-deployed Funder contract
-  -a, --eth-amount float          The amount of ether to send to each wallet (default 0.05)
+      --eth-amount big.Int        The amount of wei to send to each wallet (default 50000000000000000)
   -f, --file string               The output JSON file path for storing the addresses and private keys of funded wallets (default "wallets.json")
       --hd-derivation             Derive wallets to fund from the private key in a deterministic way (default true)
   -h, --help                      help for fund
+      --key-file string           The file containing the accounts private keys, one per line.
   -n, --number uint               The number of wallets to fund (default 10)
       --private-key string        The hex encoded private key that we'll use to send transactions (default "0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
   -r, --rpc-url string            The RPC endpoint url (default "http://localhost:8545")

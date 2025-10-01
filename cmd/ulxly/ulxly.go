@@ -5,12 +5,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"crypto/tls"
 	_ "embed"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"net/http"
 	"os"
@@ -29,9 +31,11 @@ import (
 	ethclient "github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
+	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly/polygonrollupmanager"
 	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
+	smcerror "github.com/0xPolygon/polygon-cli/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -108,19 +112,33 @@ type BridgeDepositResponse struct {
 }
 
 func readDeposit(cmd *cobra.Command) error {
-	bridgeAddress := getDepositOptions.BridgeAddress
-	rpcUrl := getDepositsAndVerifyBatchesSharedOptions.URL
-	toBlock := getDepositsAndVerifyBatchesSharedOptions.ToBlock
-	fromBlock := getDepositsAndVerifyBatchesSharedOptions.FromBlock
-	filter := getDepositsAndVerifyBatchesSharedOptions.FilterSize
+	bridgeAddress := getSmcOptions.BridgeAddress
+	rpcUrl := getEvent.URL
+	toBlock := getEvent.ToBlock
+	fromBlock := getEvent.FromBlock
+	filter := getEvent.FilterSize
 
-	// Dial the Ethereum RPC server.
-	rpc, err := ethrpc.DialContext(cmd.Context(), rpcUrl)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to Dial RPC")
-		return err
+	// Use the new helper function
+	var rpc *ethrpc.Client
+	var err error
+
+	if getEvent.Insecure {
+		client, clientErr := createInsecureEthClient(rpcUrl)
+		if clientErr != nil {
+			log.Error().Err(clientErr).Msg("Unable to create insecure client")
+			return clientErr
+		}
+		defer client.Close()
+		rpc = client.Client()
+	} else {
+		rpc, err = ethrpc.DialContext(cmd.Context(), rpcUrl)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to Dial RPC")
+			return err
+		}
+		defer rpc.Close()
 	}
-	defer rpc.Close()
+
 	ec := ethclient.NewClient(rpc)
 
 	bridgeV2, err := ulxly.NewUlxly(common.HexToAddress(bridgeAddress), ec)
@@ -129,10 +147,7 @@ func readDeposit(cmd *cobra.Command) error {
 	}
 	currentBlock := fromBlock
 	for currentBlock < toBlock {
-		endBlock := currentBlock + filter
-		if endBlock > toBlock {
-			endBlock = toBlock
-		}
+		endBlock := min(currentBlock+filter, toBlock)
 
 		opts := bind.FilterOpts{
 			Start:   currentBlock,
@@ -158,7 +173,103 @@ func readDeposit(cmd *cobra.Command) error {
 		if err != nil {
 			log.Error().Err(err).Msg("error closing event iterator")
 		}
-		currentBlock = endBlock
+		currentBlock = endBlock + 1
+	}
+
+	return nil
+}
+
+func DecodeGlobalIndex(globalIndex *big.Int) (bool, uint32, uint32, error) {
+	const lengthGlobalIndexInBytes = 32
+	var buf [32]byte
+	gIBytes := globalIndex.FillBytes(buf[:])
+	if len(gIBytes) != lengthGlobalIndexInBytes {
+		return false, 0, 0, fmt.Errorf("invalid globalIndex length. Should be 32. Current length: %d", len(gIBytes))
+	}
+	mainnetFlag := big.NewInt(0).SetBytes([]byte{gIBytes[23]}).Uint64() == 1
+	rollupIndex := big.NewInt(0).SetBytes(gIBytes[24:28])
+	localRootIndex := big.NewInt(0).SetBytes(gIBytes[28:32])
+	if rollupIndex.Uint64() > math.MaxUint32 {
+		return false, 0, 0, fmt.Errorf("invalid rollupIndex length. Should be fit into uint32 type")
+	}
+	if localRootIndex.Uint64() > math.MaxUint32 {
+		return false, 0, 0, fmt.Errorf("invalid localRootIndex length. Should be fit into uint32 type")
+	}
+	return mainnetFlag, uint32(rollupIndex.Uint64()), uint32(localRootIndex.Uint64()), nil // nolint:gosec
+}
+
+func readClaim(cmd *cobra.Command) error {
+	bridgeAddress := getSmcOptions.BridgeAddress
+	rpcUrl := getEvent.URL
+	toBlock := getEvent.ToBlock
+	fromBlock := getEvent.FromBlock
+	filter := getEvent.FilterSize
+
+	// Use the new helper function
+	var rpc *ethrpc.Client
+	var err error
+
+	if getEvent.Insecure {
+		client, clientErr := createInsecureEthClient(rpcUrl)
+		if clientErr != nil {
+			log.Error().Err(clientErr).Msg("Unable to create insecure client")
+			return clientErr
+		}
+		defer client.Close()
+		rpc = client.Client()
+	} else {
+		rpc, err = ethrpc.DialContext(cmd.Context(), rpcUrl)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to Dial RPC")
+			return err
+		}
+		defer rpc.Close()
+	}
+
+	ec := ethclient.NewClient(rpc)
+
+	bridgeV2, err := ulxly.NewUlxly(common.HexToAddress(bridgeAddress), ec)
+	if err != nil {
+		return err
+	}
+	currentBlock := fromBlock
+	for currentBlock < toBlock {
+		endBlock := min(currentBlock+filter, toBlock)
+
+		opts := bind.FilterOpts{
+			Start:   currentBlock,
+			End:     &endBlock,
+			Context: cmd.Context(),
+		}
+		evtV2Iterator, err := bridgeV2.FilterClaimEvent(&opts)
+		if err != nil {
+			return err
+		}
+
+		for evtV2Iterator.Next() {
+			evt := evtV2Iterator.Event
+			var (
+				mainnetFlag                     bool
+				rollupIndex, localExitRootIndex uint32
+			)
+			mainnetFlag, rollupIndex, localExitRootIndex, err = DecodeGlobalIndex(evt.GlobalIndex)
+			if err != nil {
+				log.Error().Err(err).Msg("error decoding globalIndex")
+				return err
+			}
+			log.Info().Bool("claim-mainnetFlag", mainnetFlag).Uint32("claim-RollupIndex", rollupIndex).Uint32("claim-LocalExitRootIndex", localExitRootIndex).Uint64("block-number", evt.Raw.BlockNumber).Msg("Found Claim")
+			var jBytes []byte
+			jBytes, err = json.Marshal(evt)
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(jBytes))
+		}
+		err = evtV2Iterator.Close()
+		if err != nil {
+			log.Error().Err(err).Msg("error closing event iterator")
+		}
+		currentBlock = endBlock + 1
 	}
 
 	return nil
@@ -166,18 +277,32 @@ func readDeposit(cmd *cobra.Command) error {
 
 func readVerifyBatches(cmd *cobra.Command) error {
 	rollupManagerAddress := getVerifyBatchesOptions.RollupManagerAddress
-	rpcUrl := getDepositsAndVerifyBatchesSharedOptions.URL
-	toBlock := getDepositsAndVerifyBatchesSharedOptions.ToBlock
-	fromBlock := getDepositsAndVerifyBatchesSharedOptions.FromBlock
-	filter := getDepositsAndVerifyBatchesSharedOptions.FilterSize
+	rpcUrl := getEvent.URL
+	toBlock := getEvent.ToBlock
+	fromBlock := getEvent.FromBlock
+	filter := getEvent.FilterSize
 
-	// Dial the Ethereum RPC server.
-	rpc, err := ethrpc.DialContext(cmd.Context(), rpcUrl)
-	if err != nil {
-		log.Error().Err(err).Msg("Unable to Dial RPC")
-		return err
+	// Use the new helper function
+	var rpc *ethrpc.Client
+	var err error
+
+	if getEvent.Insecure {
+		client, clientErr := createInsecureEthClient(rpcUrl)
+		if clientErr != nil {
+			log.Error().Err(clientErr).Msg("Unable to create insecure client")
+			return clientErr
+		}
+		defer client.Close()
+		rpc = client.Client()
+	} else {
+		rpc, err = ethrpc.DialContext(cmd.Context(), rpcUrl)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to Dial RPC")
+			return err
+		}
+		defer rpc.Close()
 	}
-	defer rpc.Close()
+
 	client := ethclient.NewClient(rpc)
 	rm := common.HexToAddress(rollupManagerAddress)
 	rollupManager, err := polygonrollupmanager.NewPolygonrollupmanager(rm, client)
@@ -188,10 +313,7 @@ func readVerifyBatches(cmd *cobra.Command) error {
 
 	currentBlock := fromBlock
 	for currentBlock < toBlock {
-		endBlock := currentBlock + filter
-		if endBlock > toBlock {
-			endBlock = toBlock
-		}
+		endBlock := min(currentBlock+filter, toBlock)
 		// Filter 0xd1ec3a1216f08b6eff72e169ceb548b782db18a6614852618d86bb19f3f9b0d3
 		query := ethereum.FilterQuery{
 			FromBlock: new(big.Int).SetUint64(currentBlock),
@@ -217,7 +339,7 @@ func readVerifyBatches(cmd *cobra.Command) error {
 			}
 			fmt.Println(string(jBytes))
 		}
-		currentBlock = endBlock
+		currentBlock = endBlock + 1
 	}
 
 	return nil
@@ -230,6 +352,219 @@ func proof(args []string) error {
 		return err
 	}
 	return readDeposits(rawDepositData, uint32(depositNumber))
+}
+
+func balanceTree() error {
+	l2NetworkID := balanceTreeOptions.L2NetworkID
+	bridgeAddress := common.HexToAddress(balanceTreeOptions.BridgeAddress)
+
+	var client *ethclient.Client
+	var err error
+
+	if balanceTreeOptions.Insecure {
+		client, err = createInsecureEthClient(balanceTreeOptions.RpcURL)
+	} else {
+		client, err = ethclient.DialContext(context.Background(), balanceTreeOptions.RpcURL)
+	}
+
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	l2RawClaimsData, l2RawDepositsData, err := getBalanceTreeData()
+	if err != nil {
+		return err
+	}
+	root, err := computeBalanceTree(client, bridgeAddress, l2RawClaimsData, l2NetworkID, l2RawDepositsData)
+	if err != nil {
+		return err
+	}
+	fmt.Printf(`
+	{
+		"root": "%s"
+	}
+	`, root.String())
+	return nil
+}
+
+func nullifierTree(args []string) error {
+	rawClaims, err := getInputData(args)
+	if err != nil {
+		return err
+	}
+	root, err := computeNullifierTree(rawClaims)
+	if err != nil {
+		return err
+	}
+	fmt.Printf(`
+	{
+		"root": "%s"
+	}
+	`, root.String())
+	return nil
+}
+
+func nullifierAndBalanceTree(args []string) error {
+	l2NetworkID := balanceTreeOptions.L2NetworkID
+	bridgeAddress := common.HexToAddress(balanceTreeOptions.BridgeAddress)
+
+	var client *ethclient.Client
+	var err error
+
+	if balanceTreeOptions.Insecure {
+		client, err = createInsecureEthClient(balanceTreeOptions.RpcURL)
+	} else {
+		client, err = ethclient.DialContext(context.Background(), balanceTreeOptions.RpcURL)
+	}
+
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	l2RawClaimsData, l2RawDepositsData, err := getBalanceTreeData()
+	if err != nil {
+		return err
+	}
+	bridgeV2, err := ulxly.NewUlxly(bridgeAddress, client)
+	if err != nil {
+		return err
+	}
+	ler_count, err := bridgeV2.LastUpdatedDepositCount(&bind.CallOpts{Pending: false})
+	if err != nil {
+		return err
+	}
+	log.Info().Msgf("Last LER count: %d", ler_count)
+	balanceTreeRoot, err := computeBalanceTree(client, bridgeAddress, l2RawClaimsData, l2NetworkID, l2RawDepositsData)
+	if err != nil {
+		return err
+	}
+	nullifierTreeRoot, err := computeNullifierTree(l2RawClaimsData)
+	if err != nil {
+		return err
+	}
+	initPessimisticRoot := crypto.Keccak256Hash(balanceTreeRoot.Bytes(), nullifierTreeRoot.Bytes(), Uint32ToBytesLittleEndian(ler_count))
+	fmt.Printf(`
+	{
+		"balanceTreeRoot": "%s",
+		"nullifierTreeRoot": "%s",
+		"initPessimisticRoot": "%s"
+	}
+	`, balanceTreeRoot.String(), nullifierTreeRoot.String(), initPessimisticRoot.String())
+	return nil
+}
+
+func computeNullifierTree(rawClaims []byte) (common.Hash, error) {
+	buf := bytes.NewBuffer(rawClaims)
+	scanner := bufio.NewScanner(buf)
+	scannerBuf := make([]byte, 0)
+	scanner.Buffer(scannerBuf, 1024*1024)
+	nTree, err := NewNullifierTree()
+	if err != nil {
+		return common.Hash{}, err
+	}
+	var root common.Hash
+	for scanner.Scan() {
+		claim := new(ulxly.UlxlyClaimEvent)
+		err := json.Unmarshal(scanner.Bytes(), claim)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		mainnetFlag, rollupIndex, localExitRootIndex, err := DecodeGlobalIndex(claim.GlobalIndex)
+		if err != nil {
+			log.Error().Err(err).Msg("error decoding globalIndex")
+			return common.Hash{}, err
+		}
+		log.Info().Bool("MainnetFlag", mainnetFlag).Uint32("RollupIndex", rollupIndex).Uint32("LocalExitRootIndex", localExitRootIndex).Uint64("block-number", claim.Raw.BlockNumber).Msg("Adding Claim")
+		nullifierKey := NullifierKey{
+			NetworkID: claim.OriginNetwork,
+			Index:     localExitRootIndex,
+		}
+		root, err = nTree.UpdateNullifierTree(nullifierKey)
+		if err != nil {
+			log.Error().Err(err).Uint32("OriginNetwork: ", claim.OriginNetwork).Msg("error computing nullifierTree. Claim information: GlobalIndex: " + claim.GlobalIndex.String() + ", OriginAddress: " + claim.OriginAddress.String() + ", Amount: " + claim.Amount.String())
+			return common.Hash{}, err
+		}
+	}
+	log.Info().Msgf("Final nullifierTree root: %s", root.String())
+	return root, nil
+}
+
+func computeBalanceTree(client *ethclient.Client, bridgeAddress common.Address, l2RawClaims []byte, l2NetworkID uint32, l2RawDeposits []byte) (common.Hash, error) {
+	buf := bytes.NewBuffer(l2RawClaims)
+	scanner := bufio.NewScanner(buf)
+	scannerBuf := make([]byte, 0)
+	scanner.Buffer(scannerBuf, 1024*1024)
+	bTree, err := NewBalanceTree()
+	if err != nil {
+		return common.Hash{}, err
+	}
+	balances := make(map[string]*big.Int)
+	for scanner.Scan() {
+		l2Claim := new(ulxly.UlxlyClaimEvent)
+		err := json.Unmarshal(scanner.Bytes(), l2Claim)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		token := TokenInfo{
+			OriginNetwork:      big.NewInt(0).SetUint64(uint64(l2Claim.OriginNetwork)),
+			OriginTokenAddress: l2Claim.OriginAddress,
+		}
+		isMessage, err := checkClaimCalldata(client, bridgeAddress, l2Claim.Raw.TxHash)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		if isMessage {
+			token.OriginNetwork = big.NewInt(0)
+			token.OriginTokenAddress = common.Address{}
+		}
+		log.Info().Msgf("L2 Claim. isMessage: %v OriginNetwork: %d. TokenAddress: %s. Amount: %s", isMessage, token.OriginNetwork, token.OriginTokenAddress.String(), l2Claim.Amount.String())
+		if _, ok := balances[token.String()]; !ok {
+			balances[token.String()] = big.NewInt(0)
+		}
+		balances[token.String()] = big.NewInt(0).Add(balances[token.String()], l2Claim.Amount)
+
+	}
+	l2Buf := bytes.NewBuffer(l2RawDeposits)
+	l2Scanner := bufio.NewScanner(l2Buf)
+	l2ScannerBuf := make([]byte, 0)
+	l2Scanner.Buffer(l2ScannerBuf, 1024*1024)
+	for l2Scanner.Scan() {
+		l2Deposit := new(ulxly.UlxlyBridgeEvent)
+		err := json.Unmarshal(l2Scanner.Bytes(), l2Deposit)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		token := TokenInfo{
+			OriginNetwork:      big.NewInt(0).SetUint64(uint64(l2Deposit.OriginNetwork)),
+			OriginTokenAddress: l2Deposit.OriginAddress,
+		}
+		if _, ok := balances[token.String()]; !ok {
+			balances[token.String()] = big.NewInt(0)
+		}
+		balances[token.String()] = big.NewInt(0).Sub(balances[token.String()], l2Deposit.Amount)
+	}
+	// Now, the balance map is complete. Let's build the tree.
+	var root common.Hash
+	for t, balance := range balances {
+		if balance.Cmp(big.NewInt(0)) == 0 {
+			continue
+		}
+		token, err := TokenInfoStringToStruct(t)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		if token.OriginNetwork.Uint64() == uint64(l2NetworkID) {
+			continue
+		}
+		root, err = bTree.UpdateBalanceTree(token, balance)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		log.Info().Msgf("New balanceTree leaf. OriginNetwork: %s, TokenAddress: %s, Balance: %s, Root: %s", token.OriginNetwork.String(), token.OriginTokenAddress.String(), balance.String(), root.String())
+	}
+	log.Info().Msgf("Final balanceTree root: %s", root.String())
+
+	return root, nil
 }
 
 func rollupsExitRootProof(args []string) error {
@@ -266,12 +601,12 @@ type JsonError struct {
 	Data    interface{} `json:"data"`
 }
 
-func logAndReturnJsonError(cmd *cobra.Command, client *ethclient.Client, tx *types.Transaction, opts *bind.TransactOpts, err error) error {
+func logAndReturnJsonError(ctx context.Context, client *ethclient.Client, tx *types.Transaction, opts *bind.TransactOpts, err error) error {
 
 	var callErr error
 	if tx != nil {
 		// in case the error came down to gas estimation, we can sometimes get more information by doing a call
-		_, callErr = client.CallContract(cmd.Context(), ethereum.CallMsg{
+		_, callErr = client.CallContract(ctx, ethereum.CallMsg{
 			From:          opts.From,
 			To:            tx.To(),
 			Gas:           tx.Gas(),
@@ -320,28 +655,79 @@ func logAndReturnJsonError(cmd *cobra.Command, client *ethclient.Client, tx *typ
 		return err
 	}
 
+	reason, decodeErr := smcerror.DecodeSmcErrorCode(jsonError.Data)
+	if decodeErr != nil {
+		log.Error().Err(err).Msg("unable to decode smart contract error")
+		return err
+	}
 	errLog := log.Error().
 		Err(err).
 		Str("message", jsonError.Message).
 		Int("code", jsonError.Code).
-		Interface("data", jsonError.Data)
+		Interface("data", jsonError.Data).
+		Str("reason", reason)
 
 	if callErr != nil {
 		errLog = errLog.Err(callErr)
 	}
 
+	customErr := errors.New(err.Error() + ": " + reason)
 	if errCode, isValid := jsonError.Data.(string); isValid && errCode == "0x646cf558" {
 		// I don't want to bother with the additional error logging for previously claimed deposits
-		return err
+		return customErr
 	}
 
 	errLog.Msg("Unable to interact with bridge contract")
+	return customErr
+}
 
-	return err
+// Function to parse deposit count from bridge transaction logs
+func ParseBridgeDepositCount(logs []types.Log, bridgeContract *ulxly.Ulxly) (uint32, error) {
+	for _, log := range logs {
+		// Try to parse the log as a BridgeEvent using the contract's filterer
+		bridgeEvent, err := bridgeContract.ParseBridgeEvent(log)
+		if err != nil {
+			// This log is not a bridge event, continue to next log
+			continue
+		}
+
+		// Successfully parsed a bridge event, return the deposit count
+		return bridgeEvent.DepositCount, nil
+	}
+
+	return 0, fmt.Errorf("bridge event not found in logs")
+}
+
+// parseDepositCountFromTransaction extracts the deposit count from a bridge transaction receipt
+func parseDepositCountFromTransaction(ctx context.Context, client *ethclient.Client, txHash common.Hash, bridgeContract *ulxly.Ulxly) (uint32, error) {
+	receipt, err := client.TransactionReceipt(ctx, txHash)
+	if err != nil {
+		return 0, err
+	}
+
+	// Check if the transaction was successful before trying to parse logs
+	if receipt.Status == 0 {
+		log.Error().Str("txHash", receipt.TxHash.String()).Msg("Bridge transaction failed")
+		return 0, fmt.Errorf("bridge transaction failed with hash: %s", receipt.TxHash.String())
+	}
+
+	// Convert []*types.Log to []types.Log
+	logs := make([]types.Log, len(receipt.Logs))
+	for i, log := range receipt.Logs {
+		logs[i] = *log
+	}
+
+	depositCount, err := ParseBridgeDepositCount(logs, bridgeContract)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to parse deposit count from logs")
+		return 0, err
+	}
+
+	return depositCount, nil
 }
 
 func bridgeAsset(cmd *cobra.Command) error {
-	bridgeAddress := *inputUlxlyArgs.bridgeAddress
+	bridgeAddr := *inputUlxlyArgs.bridgeAddress
 	privateKey := *inputUlxlyArgs.privateKey
 	gasLimit := *inputUlxlyArgs.gasLimit
 	destinationAddress := *inputUlxlyArgs.destAddress
@@ -354,34 +740,78 @@ func bridgeAsset(cmd *cobra.Command) error {
 	timeoutTxnReceipt := *inputUlxlyArgs.timeout
 	RPCURL := *inputUlxlyArgs.rpcURL
 
-	// Dial the Ethereum RPC server.
-	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
+	client, err := createEthClient(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
 	}
 	defer client.Close()
+
 	// Initialize and assign variables required to send transaction payload
-	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
+	bridgeV2, toAddress, auth, err := generateTransactionPayload(cmd.Context(), client, bridgeAddr, privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("error generating transaction payload")
 		return err
 	}
 
+	bridgeAddress := common.HexToAddress(bridgeAddr)
 	value, _ := big.NewInt(0).SetString(amount, 0)
 	tokenAddress := common.HexToAddress(tokenAddr)
 	callData := common.Hex2Bytes(strings.TrimPrefix(callDataString, "0x"))
 
 	if tokenAddress == common.HexToAddress("0x0000000000000000000000000000000000000000") {
 		auth.Value = value
+	} else {
+		// in case it's a token transfer, we need to ensure that the bridge contract
+		// has enough allowance to transfer the tokens on behalf of the user
+		tokenContract, iErr := tokens.NewERC20(tokenAddress, client)
+		if iErr != nil {
+			log.Error().Err(iErr).Msg("error getting token contract")
+			return iErr
+		}
+
+		allowance, iErr := tokenContract.Allowance(&bind.CallOpts{Pending: false}, auth.From, bridgeAddress)
+		if iErr != nil {
+			log.Error().Err(iErr).Msg("error getting token allowance")
+			return iErr
+		}
+
+		if allowance.Cmp(value) < 0 {
+			log.Info().
+				Str("amount", value.String()).
+				Str("tokenAddress", tokenAddress.String()).
+				Str("bridgeAddress", bridgeAddress.String()).
+				Str("userAddress", auth.From.String()).
+				Msg("approving bridge contract to spend tokens on behalf of user")
+
+			// Approve the bridge contract to spend the tokens on behalf of the user
+			approveTxn, iErr := tokenContract.Approve(auth, bridgeAddress, value)
+			if iErr = logAndReturnJsonError(cmd.Context(), client, approveTxn, auth, iErr); iErr != nil {
+				return iErr
+			}
+			log.Info().Msg("approveTxn: " + approveTxn.Hash().String())
+			if iErr = WaitMineTransaction(cmd.Context(), client, approveTxn, timeoutTxnReceipt); iErr != nil {
+				return iErr
+			}
+		}
 	}
 
 	bridgeTxn, err := bridgeV2.BridgeAsset(auth, destinationNetwork, toAddress, value, tokenAddress, isForced, callData)
-	if err = logAndReturnJsonError(cmd, client, bridgeTxn, auth, err); err != nil {
+	if err = logAndReturnJsonError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
+		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
-	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
+	if err = WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
+		return err
+	}
+	depositCount, err := parseDepositCountFromTransaction(cmd.Context(), client, bridgeTxn.Hash(), bridgeV2)
+	if err != nil {
+		return err
+	}
+
+	log.Info().Uint32("depositCount", depositCount).Msg("Bridge deposit count parsed from logs")
+	return nil
 }
 
 func bridgeMessage(cmd *cobra.Command) error {
@@ -399,7 +829,7 @@ func bridgeMessage(cmd *cobra.Command) error {
 	RPCURL := *inputUlxlyArgs.rpcURL
 
 	// Dial the Ethereum RPC server.
-	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
+	client, err := createEthClient(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
@@ -421,11 +851,21 @@ func bridgeMessage(cmd *cobra.Command) error {
 	}
 
 	bridgeTxn, err := bridgeV2.BridgeMessage(auth, destinationNetwork, toAddress, isForced, callData)
-	if err = logAndReturnJsonError(cmd, client, bridgeTxn, auth, err); err != nil {
+	if err = logAndReturnJsonError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
+		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
-	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
+	if err = WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
+		return err
+	}
+	depositCount, err := parseDepositCountFromTransaction(cmd.Context(), client, bridgeTxn.Hash(), bridgeV2)
+	if err != nil {
+		return err
+	}
+
+	log.Info().Uint32("depositCount", depositCount).Msg("Bridge deposit count parsed from logs")
+	return nil
 }
 
 func bridgeWETHMessage(cmd *cobra.Command) error {
@@ -442,7 +882,7 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 	RPCURL := *inputUlxlyArgs.rpcURL
 
 	// Dial the Ethereum RPC server.
-	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
+	client, err := createEthClient(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
@@ -468,11 +908,21 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 	callData := common.Hex2Bytes(strings.TrimPrefix(callDataString, "0x"))
 
 	bridgeTxn, err := bridgeV2.BridgeMessageWETH(auth, destinationNetwork, toAddress, value, isForced, callData)
-	if err = logAndReturnJsonError(cmd, client, bridgeTxn, auth, err); err != nil {
+	if err = logAndReturnJsonError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
+		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
 	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
-	return WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt)
+	if err = WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
+		return err
+	}
+	depositCount, err := parseDepositCountFromTransaction(cmd.Context(), client, bridgeTxn.Hash(), bridgeV2)
+	if err != nil {
+		return err
+	}
+
+	log.Info().Uint32("depositCount", depositCount).Msg("Bridge deposit count parsed from logs")
+	return nil
 }
 
 func claimAsset(cmd *cobra.Command) error {
@@ -490,7 +940,7 @@ func claimAsset(cmd *cobra.Command) error {
 	wait := *inputUlxlyArgs.wait
 
 	// Dial Ethereum client
-	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
+	client, err := createEthClient(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
@@ -522,7 +972,7 @@ func claimAsset(cmd *cobra.Command) error {
 	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
 
 	claimTxn, err := bridgeV2.ClaimAsset(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
-	if err = logAndReturnJsonError(cmd, client, claimTxn, auth, err); err != nil {
+	if err = logAndReturnJsonError(cmd.Context(), client, claimTxn, auth, err); err != nil {
 		return err
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
@@ -544,7 +994,7 @@ func claimMessage(cmd *cobra.Command) error {
 	wait := *inputUlxlyArgs.wait
 
 	// Dial Ethereum client
-	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
+	client, err := createEthClient(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
@@ -575,7 +1025,7 @@ func claimMessage(cmd *cobra.Command) error {
 	merkleProofArray, rollupMerkleProofArray, mainExitRoot, rollupExitRoot := getMerkleProofsExitRoots(bridgeServiceProofEndpoint)
 
 	claimTxn, err := bridgeV2.ClaimMessage(auth, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), claimOriginalNetwork, originAddress, claimDestNetwork, toAddress, amount, metadata)
-	if err = logAndReturnJsonError(cmd, client, claimTxn, auth, err); err != nil {
+	if err = logAndReturnJsonError(cmd.Context(), client, claimTxn, auth, err); err != nil {
 		return err
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
@@ -639,6 +1089,7 @@ func getBridgeServiceURLs() (map[uint32]string, error) {
 
 func claimEverything(cmd *cobra.Command) error {
 	privateKey := *inputUlxlyArgs.privateKey
+	claimerAddress := inputUlxlyArgs.addressOfPrivateKey
 	gasLimit := *inputUlxlyArgs.gasLimit
 	chainID := *inputUlxlyArgs.chainID
 	timeoutTxnReceipt := *inputUlxlyArgs.timeout
@@ -681,7 +1132,7 @@ func claimEverything(cmd *cobra.Command) error {
 		}
 	}
 
-	client, err := ethclient.DialContext(cmd.Context(), RPCURL)
+	client, err := createEthClient(cmd.Context(), RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to Dial RPC")
 		return err
@@ -700,7 +1151,7 @@ func claimEverything(cmd *cobra.Command) error {
 
 	workPool := make(chan *BridgeDeposit, concurrency) // bounded chan for controlled concurrency
 
-	nonceCounter, err := currentNonce(cmd.Context(), client, destinationAddress)
+	nonceCounter, err := currentNonce(cmd.Context(), client, claimerAddress)
 	if err != nil {
 		return err
 	}
@@ -862,7 +1313,7 @@ func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeCont
 		claimTx, err = bridgeContract.ClaimMessage(opts, merkleProofArray, rollupMerkleProofArray, globalIndex, [32]byte(mainExitRoot), [32]byte(rollupExitRoot), deposit.OrigNet, originAddress, deposit.DestNet, toAddress, amount, metadata)
 	}
 
-	if err = logAndReturnJsonError(cmd, client, claimTx, opts, err); err != nil {
+	if err = logAndReturnJsonError(cmd.Context(), client, claimTx, opts, err); err != nil {
 		log.Warn().
 			Uint32("DepositCnt", deposit.DepositCnt).
 			Uint32("OrigNet", deposit.OrigNet).
@@ -916,7 +1367,7 @@ func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *type
 }
 
 func getInputData(args []string) ([]byte, error) {
-	fileName := proofsSharedOptions.FileName
+	fileName := fileOptions.FileName
 	if fileName != "" {
 		return os.ReadFile(fileName)
 	}
@@ -927,6 +1378,35 @@ func getInputData(args []string) ([]byte, error) {
 	}
 
 	return io.ReadAll(os.Stdin)
+}
+
+func getBalanceTreeData() ([]byte, []byte, error) {
+	claimsFileName := balanceTreeOptions.L2ClaimsFile
+	file, err := os.Open(claimsFileName)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer file.Close() // Ensure the file is closed after reading
+
+	// Read the entire file content
+	l2Claims, err := io.ReadAll(file)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	l2FileName := balanceTreeOptions.L2DepositsFile
+	file2, err := os.Open(l2FileName)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer file2.Close() // Ensure the file is closed after reading
+
+	// Read the entire file content
+	l2Deposits, err := io.ReadAll(file2)
+	if err != nil {
+		return nil, nil, err
+	}
+	return l2Claims, l2Deposits, nil
 }
 
 func readRollupsExitRootLeaves(rawLeaves []byte, rollupID uint32, completeMT bool) error {
@@ -1007,7 +1487,7 @@ func ComputeSiblings(rollupID uint32, leaves []common.Hash, height uint8) (*Roll
 			hashes []common.Hash
 		)
 		for i := 0; i < len(leaves); i += 2 {
-			var left, right int = i, i + 1
+			var left, right = i, i + 1
 			hash := crypto.Keccak256Hash(leaves[left][:], leaves[right][:])
 			nsi = append(nsi, [][]byte{hash[:], leaves[left][:], leaves[right][:]})
 			hashes = append(hashes, hash)
@@ -1110,6 +1590,18 @@ func readDeposits(rawDeposits []byte, depositNumber uint32) error {
 	log.Info().Msg("finished")
 	p := imt.GetProof(depositNumber)
 	fmt.Println(String(p))
+	return nil
+}
+
+func ensureCodePresent(ctx context.Context, client *ethclient.Client, address string) error {
+	code, err := client.CodeAt(ctx, common.HexToAddress(address), nil)
+	if err != nil {
+		log.Error().Err(err).Str("address", address).Msg("error getting code at address")
+		return err
+	}
+	if len(code) == 0 {
+		return fmt.Errorf("address %s has no code", address)
+	}
 	return nil
 }
 
@@ -1308,6 +1800,13 @@ func generateEmptyHashes(height uint8) []common.Hash {
 }
 
 func generateTransactionPayload(ctx context.Context, client *ethclient.Client, ulxlyInputArgBridge string, ulxlyInputArgPvtKey string, ulxlyInputArgGasLimit uint64, ulxlyInputArgDestAddr string, ulxlyInputArgChainID string) (bridgeV2 *ulxly.Ulxly, toAddress common.Address, opts *bind.TransactOpts, err error) {
+	// checks if bridge address has code
+	err = ensureCodePresent(ctx, client, ulxlyInputArgBridge)
+	if err != nil {
+		err = fmt.Errorf("bridge code check err: %w", err)
+		return
+	}
+
 	ulxlyInputArgPvtKey = strings.TrimPrefix(ulxlyInputArgPvtKey, "0x")
 	bridgeV2, err = ulxly.NewUlxly(common.HexToAddress(ulxlyInputArgBridge), client)
 	if err != nil {
@@ -1357,8 +1856,25 @@ func generateTransactionPayload(ctx context.Context, client *ethclient.Client, u
 	return bridgeV2, toAddress, opts, err
 }
 
+// Helper function to get the appropriate HTTP client
+func getHTTPClient() *http.Client {
+	if *inputUlxlyArgs.insecure {
+		log.Warn().Msg("WARNING: Using insecure HTTP client for bridge service requests")
+		return &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		}
+	}
+	return &http.Client{
+		Timeout: 30 * time.Second,
+	}
+}
+
 func getMerkleProofsExitRoots(bridgeServiceProofEndpoint string) (merkleProofArray [32][32]byte, rollupMerkleProofArray [32][32]byte, mainExitRoot []byte, rollupExitRoot []byte) {
-	reqBridgeProof, err := http.Get(bridgeServiceProofEndpoint)
+	client := getHTTPClient()
+	reqBridgeProof, err := client.Get(bridgeServiceProofEndpoint)
 	if err != nil {
 		log.Error().Err(err)
 		return
@@ -1406,7 +1922,8 @@ func getMerkleProofsExitRoots(bridgeServiceProofEndpoint string) (merkleProofArr
 }
 
 func getDeposit(bridgeServiceDepositsEndpoint string) (globalIndex *big.Int, originAddress common.Address, amount *big.Int, metadata []byte, leafType uint8, claimDestNetwork, claimOriginalNetwork uint32, err error) {
-	reqBridgeDeposit, err := http.Get(bridgeServiceDepositsEndpoint)
+	client := getHTTPClient()
+	reqBridgeDeposit, err := client.Get(bridgeServiceDepositsEndpoint)
 	if err != nil {
 		log.Error().Err(err)
 		return
@@ -1464,7 +1981,8 @@ func getDepositsForAddress(bridgeRequestUrl string) ([]BridgeDeposit, error) {
 		Deposits []BridgeDeposit `json:"deposits"`
 		Total    int             `json:"total_cnt,string"`
 	}
-	httpResp, err := http.Get(bridgeRequestUrl)
+	client := getHTTPClient()
+	httpResp, err := client.Get(bridgeRequestUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -1482,6 +2000,33 @@ func getDepositsForAddress(bridgeRequestUrl string) ([]BridgeDeposit, error) {
 	}
 
 	return resp.Deposits, nil
+}
+
+// Add the helper function to create an insecure client
+func createInsecureEthClient(rpcURL string) (*ethclient.Client, error) {
+	// WARNING: This disables TLS certificate verification
+	log.Warn().Msg("WARNING: TLS certificate verification is disabled. This is unsafe for production use.")
+
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	rpcClient, err := ethrpc.DialOptions(context.Background(), rpcURL, ethrpc.WithHTTPClient(httpClient))
+	if err != nil {
+		return nil, err
+	}
+
+	return ethclient.NewClient(rpcClient), nil
+}
+
+// Add helper function to create either secure or insecure client based on flag
+func createEthClient(ctx context.Context, rpcURL string) (*ethclient.Client, error) {
+	if *inputUlxlyArgs.insecure {
+		return createInsecureEthClient(rpcURL)
+	}
+	return ethclient.DialContext(ctx, rpcURL)
 }
 
 //go:embed BridgeAssetUsage.md
@@ -1505,8 +2050,20 @@ var proofUsage string
 //go:embed rollupsProofUsage.md
 var rollupsProofUsage string
 
+//go:embed balanceTreeUsage.md
+var balanceTreeUsage string
+
+//go:embed nullifierAndBalanceTreeUsage.md
+var nullifierAndBalanceTreeUsage string
+
+//go:embed nullifierTreeUsage.md
+var nullifierTreeUsage string
+
 //go:embed depositGetUsage.md
 var depositGetUsage string
+
+//go:embed claimGetUsage.md
+var claimGetUsage string
 
 //go:embed verifyBatchesGetUsage.md
 var verifyBatchesGetUsage string
@@ -1535,7 +2092,7 @@ var ulxlyBridgeAndClaimCmd = &cobra.Command{
 	},
 }
 
-var ulxlyGetDepositsAndVerifyBatchesCmd = &cobra.Command{
+var ulxlyGetEventsCmd = &cobra.Command{
 	Args:   cobra.NoArgs,
 	Hidden: true,
 }
@@ -1558,55 +2115,61 @@ var ulxlyClaimCmd = &cobra.Command{
 }
 
 type ulxlyArgs struct {
-	gasLimit             *uint64
-	chainID              *string
-	privateKey           *string
-	addressOfPrivateKey  string
-	value                *string
-	rpcURL               *string
-	bridgeAddress        *string
-	destNetwork          *uint32
-	destAddress          *string
-	tokenAddress         *string
-	forceUpdate          *bool
-	callData             *string
-	callDataFile         *string
-	timeout              *uint64
-	depositCount         *uint64
-	depositNetwork       *uint64
-	bridgeServiceURL     *string
-	globalIndex          *string
-	gasPrice             *string
-	dryRun               *bool
-	bridgeServiceURLs    *[]string
-	bridgeLimit          *int
-	bridgeOffset         *int
-	wait                 *time.Duration
+	gasLimit            *uint64
+	chainID             *string
+	privateKey          *string
+	addressOfPrivateKey string
+	value               *string
+	rpcURL              *string
+	bridgeAddress       *string
+	destNetwork         *uint32
+	destAddress         *string
+	tokenAddress        *string
+	forceUpdate         *bool
+	callData            *string
+	callDataFile        *string
+	timeout             *uint64
+	depositCount        *uint64
+	depositNetwork      *uint64
+	bridgeServiceURL    *string
+	globalIndex         *string
+	gasPrice            *string
+	dryRun              *bool
+	bridgeServiceURLs   *[]string
+	bridgeLimit         *int
+	bridgeOffset        *int
+	wait                *time.Duration
 	concurrency         *uint
+	insecure            *bool
 }
 
 var inputUlxlyArgs = ulxlyArgs{}
 
 var (
-	bridgeAssetCommand       *cobra.Command
-	bridgeMessageCommand     *cobra.Command
-	bridgeMessageWETHCommand *cobra.Command
-	claimAssetCommand        *cobra.Command
-	claimMessageCommand      *cobra.Command
-	claimEverythingCommand   *cobra.Command
-	emptyProofCommand        *cobra.Command
-	zeroProofCommand         *cobra.Command
-	proofCommand             *cobra.Command
-	rollupsProofCommand      *cobra.Command
-	getDepositCommand        *cobra.Command
-	getVerifyBatchesCommand  *cobra.Command
+	bridgeAssetCommand             *cobra.Command
+	bridgeMessageCommand           *cobra.Command
+	bridgeMessageWETHCommand       *cobra.Command
+	claimAssetCommand              *cobra.Command
+	claimMessageCommand            *cobra.Command
+	claimEverythingCommand         *cobra.Command
+	emptyProofCommand              *cobra.Command
+	zeroProofCommand               *cobra.Command
+	proofCommand                   *cobra.Command
+	rollupsProofCommand            *cobra.Command
+	balanceTreeCommand             *cobra.Command
+	nullifierAndBalanceTreeCommand *cobra.Command
+	nullifierTreeCommand           *cobra.Command
+	getDepositCommand              *cobra.Command
+	getClaimCommand                *cobra.Command
+	getVerifyBatchesCommand        *cobra.Command
 
-	getDepositsAndVerifyBatchesSharedOptions = &GetDepositsAndVerifyBatchesSharedOptions{}
-	getDepositOptions                        = &GetDepositOptions{}
-	getVerifyBatchesOptions                  = &GetVerifyBatchesOptions{}
-	proofsSharedOptions                      = &ProofsSharedOptions{}
-	proofOptions                             = &ProofOptions{}
-	rollupsProofOptions                      = &RollupsProofOptions{}
+	getEvent                = &GetEvent{}
+	getSmcOptions           = &GetSmcOptions{}
+	getVerifyBatchesOptions = &GetVerifyBatchesOptions{}
+	fileOptions             = &FileOptions{}
+	balanceTreeOptions      = &BalanceTreeOptions{}
+	proofOptions            = &ProofOptions{}
+	rollupsProofOptions     = &RollupsProofOptions{}
 )
 
 const (
@@ -1629,6 +2192,9 @@ const (
 	ArgCompleteMT           = "complete-merkle-tree"
 	ArgBridgeServiceURL     = "bridge-service-url"
 	ArgFileName             = "file-name"
+	ArgL2ClaimsFileName     = "l2-claims-file"
+	ArgL2DepositsFileName   = "l2-deposits-file"
+	ArgL2NetworkID          = "l2-network-id"
 	ArgFromBlock            = "from-block"
 	ArgToBlock              = "to-block"
 	ArgFilterSize           = "filter-size"
@@ -1640,7 +2206,8 @@ const (
 	ArgBridgeLimit          = "bridge-limit"
 	ArgBridgeOffset         = "bridge-offset"
 	ArgWait                 = "wait"
-	ArgConcurrency      = "concurrency"
+	ArgConcurrency          = "concurrency"
+	ArgInsecure             = "insecure"
 )
 
 func prepInputs(cmd *cobra.Command, args []string) error {
@@ -1688,12 +2255,27 @@ func fatalIfError(err error) {
 	log.Fatal().Err(err).Msg("Unexpected error occurred")
 }
 
-type ProofsSharedOptions struct {
+type FileOptions struct {
 	FileName string
 }
 
-func (o *ProofsSharedOptions) AddFlags(cmd *cobra.Command) {
+func (o *FileOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.FileName, ArgFileName, "", "", "An ndjson file with events data")
+}
+
+type BalanceTreeOptions struct {
+	L2ClaimsFile, L2DepositsFile, BridgeAddress, RpcURL string
+	L2NetworkID                                         uint32
+	Insecure                                            bool
+}
+
+func (o *BalanceTreeOptions) AddFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVarP(&o.L2ClaimsFile, ArgL2ClaimsFileName, "", "", "An ndjson file with l2 claim events data")
+	cmd.Flags().StringVarP(&o.L2DepositsFile, ArgL2DepositsFileName, "", "", "An ndjson file with l2 deposit events data")
+	cmd.Flags().StringVarP(&o.BridgeAddress, ArgBridgeAddress, "", "", "Bridge Address")
+	cmd.Flags().StringVarP(&o.RpcURL, ArgRPCURL, "r", "", "RPC URL")
+	cmd.Flags().Uint32VarP(&o.L2NetworkID, ArgL2NetworkID, "", 0, "The L2 networkID")
+	cmd.Flags().BoolVarP(&o.Insecure, ArgInsecure, "", false, "skip TLS certificate verification")
 }
 
 type ProofOptions struct {
@@ -1714,26 +2296,28 @@ func (o *RollupsProofOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVarP(&o.CompleteMerkleTree, ArgCompleteMT, "", false, "Allows to get the proof for a leave higher than the highest rollupID")
 }
 
-type GetDepositsAndVerifyBatchesSharedOptions struct {
+type GetEvent struct {
 	URL                            string
 	FromBlock, ToBlock, FilterSize uint64
+	Insecure                       bool
 }
 
-func (o *GetDepositsAndVerifyBatchesSharedOptions) AddFlags(cmd *cobra.Command) {
+func (o *GetEvent) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.URL, ArgRPCURL, "u", "", "The RPC URL to read the events data")
 	cmd.Flags().Uint64VarP(&o.FromBlock, ArgFromBlock, "f", 0, "The start of the range of blocks to retrieve")
 	cmd.Flags().Uint64VarP(&o.ToBlock, ArgToBlock, "t", 0, "The end of the range of blocks to retrieve")
 	cmd.Flags().Uint64VarP(&o.FilterSize, ArgFilterSize, "i", 1000, "The batch size for individual filter queries")
+	cmd.Flags().BoolVarP(&o.Insecure, ArgInsecure, "", false, "skip TLS certificate verification")
 	fatalIfError(cmd.MarkFlagRequired(ArgFromBlock))
 	fatalIfError(cmd.MarkFlagRequired(ArgToBlock))
 	fatalIfError(cmd.MarkFlagRequired(ArgRPCURL))
 }
 
-type GetDepositOptions struct {
+type GetSmcOptions struct {
 	BridgeAddress string
 }
 
-func (o *GetDepositOptions) AddFlags(cmd *cobra.Command) {
+func (o *GetSmcOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.BridgeAddress, ArgBridgeAddress, "a", "", "The address of the ulxly bridge")
 }
 
@@ -1752,7 +2336,10 @@ func init() {
 		Long:    bridgeAssetUsage,
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return bridgeAsset(cmd)
+			if err := bridgeAsset(cmd); err != nil {
+				log.Fatal().Err(err).Msg("Received critical error")
+			}
+			return nil
 		},
 		SilenceUsage: true,
 	}
@@ -1762,7 +2349,10 @@ func init() {
 		Long:    bridgeMessageUsage,
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return bridgeMessage(cmd)
+			if err := bridgeMessage(cmd); err != nil {
+				log.Fatal().Err(err).Msg("Received critical error")
+			}
+			return nil
 		},
 		SilenceUsage: true,
 	}
@@ -1772,7 +2362,10 @@ func init() {
 		Long:    bridgeWETHMessageUsage,
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return bridgeWETHMessage(cmd)
+			if err := bridgeWETHMessage(cmd); err != nil {
+				log.Fatal().Err(err).Msg("Received critical error")
+			}
+			return nil
 		},
 		SilenceUsage: true,
 	}
@@ -1782,7 +2375,10 @@ func init() {
 		Long:    claimAssetUsage,
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return claimAsset(cmd)
+			if err := claimAsset(cmd); err != nil {
+				log.Fatal().Err(err).Msg("Received critical error")
+			}
+			return nil
 		},
 		SilenceUsage: true,
 	}
@@ -1792,7 +2388,10 @@ func init() {
 		Long:    claimMessageUsage,
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return claimMessage(cmd)
+			if err := claimMessage(cmd); err != nil {
+				log.Fatal().Err(err).Msg("Received critical error")
+			}
+			return nil
 		},
 		SilenceUsage: true,
 	}
@@ -1801,7 +2400,10 @@ func init() {
 		Short:   "Attempt to claim as many deposits and messages as possible",
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return claimEverything(cmd)
+			if err := claimEverything(cmd); err != nil {
+				log.Fatal().Err(err).Msg("Received critical error")
+			}
+			return nil
 		},
 		SilenceUsage: true,
 	}
@@ -1837,7 +2439,7 @@ or if it's actually an intermediate hash.`,
 		},
 		SilenceUsage: true,
 	}
-	proofsSharedOptions.AddFlags(proofCommand)
+	fileOptions.AddFlags(proofCommand)
 	proofOptions.AddFlags(proofCommand)
 	ulxlyProofsCmd.AddCommand(proofCommand)
 	ULxLyCmd.AddCommand(proofCommand)
@@ -1851,10 +2453,46 @@ or if it's actually an intermediate hash.`,
 		},
 		SilenceUsage: true,
 	}
-	proofsSharedOptions.AddFlags(rollupsProofCommand)
+	fileOptions.AddFlags(rollupsProofCommand)
 	rollupsProofOptions.AddFlags(rollupsProofCommand)
 	ulxlyProofsCmd.AddCommand(rollupsProofCommand)
 	ULxLyCmd.AddCommand(rollupsProofCommand)
+
+	balanceTreeCommand = &cobra.Command{
+		Use:   "compute-balance-tree",
+		Short: "Compute the balance tree given the deposits",
+		Long:  balanceTreeUsage,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return balanceTree()
+		},
+		SilenceUsage: true,
+	}
+	balanceTreeOptions.AddFlags(balanceTreeCommand)
+	ULxLyCmd.AddCommand(balanceTreeCommand)
+
+	nullifierAndBalanceTreeCommand = &cobra.Command{
+		Use:   "compute-balance-nullifier-tree",
+		Short: "Compute the balance tree and the nullifier tree given the deposits and claims",
+		Long:  nullifierAndBalanceTreeUsage,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return nullifierAndBalanceTree(args)
+		},
+		SilenceUsage: true,
+	}
+	balanceTreeOptions.AddFlags(nullifierAndBalanceTreeCommand)
+	ULxLyCmd.AddCommand(nullifierAndBalanceTreeCommand)
+
+	nullifierTreeCommand = &cobra.Command{
+		Use:   "compute-nullifier-tree",
+		Short: "Compute the nullifier tree given the claims",
+		Long:  nullifierTreeUsage,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return nullifierTree(args)
+		},
+		SilenceUsage: true,
+	}
+	fileOptions.AddFlags(nullifierTreeCommand)
+	ULxLyCmd.AddCommand(nullifierTreeCommand)
 
 	getDepositCommand = &cobra.Command{
 		Use:   "get-deposits",
@@ -1865,10 +2503,24 @@ or if it's actually an intermediate hash.`,
 		},
 		SilenceUsage: true,
 	}
-	getDepositsAndVerifyBatchesSharedOptions.AddFlags(getDepositCommand)
-	getDepositOptions.AddFlags(getDepositCommand)
-	ulxlyGetDepositsAndVerifyBatchesCmd.AddCommand(getDepositCommand)
+	getEvent.AddFlags(getDepositCommand)
+	getSmcOptions.AddFlags(getDepositCommand)
+	ulxlyGetEventsCmd.AddCommand(getDepositCommand)
 	ULxLyCmd.AddCommand(getDepositCommand)
+
+	getClaimCommand = &cobra.Command{
+		Use:   "get-claims",
+		Short: "Generate ndjson for each bridge claim over a particular range of blocks",
+		Long:  claimGetUsage,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return readClaim(cmd)
+		},
+		SilenceUsage: true,
+	}
+	getEvent.AddFlags(getClaimCommand)
+	getSmcOptions.AddFlags(getClaimCommand)
+	ulxlyGetEventsCmd.AddCommand(getClaimCommand)
+	ULxLyCmd.AddCommand(getClaimCommand)
 
 	getVerifyBatchesCommand = &cobra.Command{
 		Use:   "get-verify-batches",
@@ -1879,9 +2531,9 @@ or if it's actually an intermediate hash.`,
 		},
 		SilenceUsage: true,
 	}
-	getDepositsAndVerifyBatchesSharedOptions.AddFlags(getVerifyBatchesCommand)
+	getEvent.AddFlags(getVerifyBatchesCommand)
 	getVerifyBatchesOptions.AddFlags(getVerifyBatchesCommand)
-	ulxlyGetDepositsAndVerifyBatchesCmd.AddCommand(getVerifyBatchesCommand)
+	ulxlyGetEventsCmd.AddCommand(getVerifyBatchesCommand)
 	ULxLyCmd.AddCommand(getVerifyBatchesCommand)
 
 	// Arguments for both bridge and claim
@@ -1894,6 +2546,7 @@ or if it's actually an intermediate hash.`,
 	inputUlxlyArgs.timeout = ulxlyBridgeAndClaimCmd.PersistentFlags().Uint64(ArgTimeout, 60, "the amount of time to wait while trying to confirm a transaction receipt")
 	inputUlxlyArgs.gasPrice = ulxlyBridgeAndClaimCmd.PersistentFlags().String(ArgGasPrice, "", "the gas price to be used")
 	inputUlxlyArgs.dryRun = ulxlyBridgeAndClaimCmd.PersistentFlags().Bool(ArgDryRun, false, "do all of the transaction steps but do not send the transaction")
+	inputUlxlyArgs.insecure = ulxlyBridgeAndClaimCmd.PersistentFlags().Bool(ArgInsecure, false, "skip TLS certificate verification")
 	fatalIfError(ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgBridgeAddress))
 
 	// bridge specific args
@@ -1925,7 +2578,7 @@ or if it's actually an intermediate hash.`,
 
 	// Top Level
 	ULxLyCmd.AddCommand(ulxlyBridgeAndClaimCmd)
-	ULxLyCmd.AddCommand(ulxlyGetDepositsAndVerifyBatchesCmd)
+	ULxLyCmd.AddCommand(ulxlyGetEventsCmd)
 	ULxLyCmd.AddCommand(ulxlyProofsCmd)
 	ULxLyCmd.AddCommand(emptyProofCommand)
 	ULxLyCmd.AddCommand(zeroProofCommand)

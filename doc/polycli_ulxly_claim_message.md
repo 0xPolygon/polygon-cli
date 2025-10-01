@@ -124,6 +124,7 @@ The command also inherits flags from parent commands.
       --gas-limit uint                     force a gas limit when sending a transaction
       --gas-price string                   the gas price to be used
       --global-index string                an override of the global index value
+      --insecure                           skip TLS certificate verification
       --pretty-logs                        Should logs be in pretty format or JSON (default true)
       --private-key string                 the hex encoded private key to be used when sending the tx
       --rpc-url string                     the URL of the RPC to send the transaction
@@ -141,4 +142,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly  claim](polycli_ulxly__claim.md) - Commands for claiming deposits on a particular chain
+- [polycli ulxly claim](polycli_ulxly_claim.md) - Commands for claiming deposits on a particular chain

@@ -887,4 +887,3 @@ func (_UniswapV3Factory *UniswapV3FactoryFilterer) ParsePoolCreated(log types.Lo
 	event.Raw = log
 	return event, nil
 }
-

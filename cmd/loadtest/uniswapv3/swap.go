@@ -1,8 +1,9 @@
 package uniswapv3loadtest
 
 import (
-	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/0xPolygon/polygon-cli/bindings/uniswapv3"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -53,7 +54,7 @@ func ExactInputSingleSwap(tops *bind.TransactOpts, swapRouter *uniswapv3.SwapRou
 	return
 }
 
-// swapDirection represents a swap direction with the inbound and outbound tokens.
+// uniswapDirection represents a swap direction with the inbound and outbound tokens.
 type uniswapDirection struct {
 	tokenIn, tokenOut         common.Address
 	tokenInName, tokenOutName string

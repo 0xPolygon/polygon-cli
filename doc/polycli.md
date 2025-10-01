@@ -39,7 +39,11 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks
 
+- [polycli contract](polycli_contract.md) - Interact with smart contracts and fetch contract information from the blockchain
+
 - [polycli dbbench](polycli_dbbench.md) - Perform a level/pebble db benchmark
+
+- [polycli dockerlogger](polycli_dockerlogger.md) - Monitor and filter Docker container logs
 
 - [polycli dumpblocks](polycli_dumpblocks.md) - Export a range of blocks from a JSON-RPC endpoint.
 
@@ -65,6 +69,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli monitor](polycli_monitor.md) - Monitor blocks using a JSON-RPC endpoint.
 
+- [polycli monitorv2](polycli_monitorv2.md) - Monitor v2 command stub
+
 - [polycli nodekey](polycli_nodekey.md) - Generate node keys for different blockchain clients and protocols.
 
 - [polycli p2p](polycli_p2p.md) - Set of commands related to devp2p.
@@ -72,6 +78,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 - [polycli parse-batch-l2-data](polycli_parse-batch-l2-data.md) - Convert batch l2 data into an ndjson stream
 
 - [polycli parseethwallet](polycli_parseethwallet.md) - Extract the private key from an eth wallet.
+
+- [polycli publish](polycli_publish.md) - Publish transactions to the network with high-throughput
 
 - [polycli retest](polycli_retest.md) - Convert the standard ETH test fillers into something to be replayed against an RPC
 

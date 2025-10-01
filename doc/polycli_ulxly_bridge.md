@@ -35,6 +35,7 @@ The command also inherits flags from parent commands.
       --dry-run                            do all of the transaction steps but do not send the transaction
       --gas-limit uint                     force a gas limit when sending a transaction
       --gas-price string                   the gas price to be used
+      --insecure                           skip TLS certificate verification
       --pretty-logs                        Should logs be in pretty format or JSON (default true)
       --private-key string                 the hex encoded private key to be used when sending the tx
       --rpc-url string                     the URL of the RPC to send the transaction
@@ -51,10 +52,9 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly ](polycli_ulxly_.md) - 
-- [polycli ulxly  bridge asset](polycli_ulxly__bridge_asset.md) - Move ETH or an ERC20 between to chains
+- [polycli ulxly bridge asset](polycli_ulxly_bridge_asset.md) - Move ETH or an ERC20 between to chains
 
-- [polycli ulxly  bridge message](polycli_ulxly__bridge_message.md) - Send some ETH along with data from one chain to another chain
+- [polycli ulxly bridge message](polycli_ulxly_bridge_message.md) - Send some ETH along with data from one chain to another chain
 
-- [polycli ulxly  bridge weth](polycli_ulxly__bridge_weth.md) - For L2's that use a gas token, use this to transfer WETH to another chain
+- [polycli ulxly bridge weth](polycli_ulxly_bridge_weth.md) - For L2's that use a gas token, use this to transfer WETH to another chain
 

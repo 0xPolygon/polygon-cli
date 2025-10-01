@@ -6,12 +6,15 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
 
 env:
-  GO_VERSION: "1.23" # https://go.dev/dl/  
+  GO_VERSION: "1.24.1" # https://go.dev/dl/
   FOUNDRY_VERSION: stable
 
 jobs:
@@ -19,26 +22,33 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Install golangci-lint
         run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.64.8
       - name: Install shadow
-        run: go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@latest
+        run: go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@v0.37.0
       - name: Run all the linter tools against code
         run: make lint
+  
+  typos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: crate-ci/typos@0c17dabcee8b8f1957fa917d17393a23e02e1583 # v1.36.3
 
   gen-doc:
     name: Check gen-doc generated files
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
+      - uses: actions/checkout@v5
+
       - name: gen-doc
         run: make gen-doc
-        
+
       - name: Check if generated files are up to date
         run: |
           if [[ -n $(git status --porcelain) ]]; then
@@ -55,8 +65,8 @@ jobs:
     name: Check gen-proto generated files
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
+      - uses: actions/checkout@v5
+
       - name: gen-proto
         run: make gen-proto
 
@@ -76,11 +86,11 @@ jobs:
     name: Check gen-go-bindings generated files
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
+      - uses: actions/checkout@v5
+
       - name: gen-go-bindings
         run: make gen-go-bindings
-        
+
       - name: Check if generated files are up to date
         run: |
           if [[ -n $(git status --porcelain) ]]; then
@@ -97,11 +107,11 @@ jobs:
     name: Check gen-load-test-modes generated files
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: gen-load-test-modes
         run: make gen-load-test-modes
-        
+
       - name: Check if generated files are up to date
         run: |
           if [[ -n $(git status --porcelain) ]]; then
@@ -118,11 +128,11 @@ jobs:
     name: Check gen-json-rpc-types generated files
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: gen-json-rpc-types
         run: make gen-json-rpc-types
-        
+
       - name: Check if generated files are up to date
         run: |
           if [[ -n $(git status --porcelain) ]]; then
@@ -139,8 +149,8 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Run tests
@@ -153,12 +163,12 @@ jobs:
       matrix:
         tool: [geth, anvil]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
+        uses: foundry-rs/foundry-toolchain@82dee4ba654bd2146511f85f0d013af94670c4de # v1.4.0
         with:
           version: ${{ env.FOUNDRY_VERSION }}
       - name: Install Geth
@@ -180,8 +190,8 @@ jobs:
     name: Install go package
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 

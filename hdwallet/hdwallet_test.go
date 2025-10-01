@@ -2,9 +2,11 @@ package hdwallet
 
 import (
 	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
@@ -343,5 +345,161 @@ func TestPaddedPublicKey(t *testing.T) {
 	}
 	if key.Addresses[1].ETHAddress != "0x2CDfa87C022744CceABC525FaA8e85Df6984A60d" {
 		t.Errorf("Unexpected address. Expected 0x2CDfa87C022744CceABC525FaA8e85Df6984A60d and Got %s", key.Addresses[1].ETHAddress)
+	}
+}
+
+func TestDerivationPath(t *testing.T) {
+	type testCase struct {
+		derivationPathInput  string
+		nAddresses           int
+		expectedSetPathError *error
+		expectedAddresses    map[string]string
+	}
+
+	const mnemonic = "test test test test test test test test test test test junk"
+	const password = ""
+	doesntMakeSenseErrFunc := func(path string) *error {
+		err := fmt.Errorf("the path %s doesn't seem to make sense", path)
+		return &err
+	}
+
+	testCases := []testCase{
+		// no path derivation
+		{"", 1, nil, map[string]string{
+			"m/44'/60'/0'": "0x340d8879778d3D3Fec643D1736ebFd2bC5824662",
+		}},
+		{"", 3, nil, map[string]string{
+			"m/44'/60'/0'/0/0": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+			"m/44'/60'/0'/0/1": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+			"m/44'/60'/0'/0/2": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+		}},
+
+		// path derivation input with 1 part
+		{"m", 1, doesntMakeSenseErrFunc("m"), nil},
+		{"m", 3, doesntMakeSenseErrFunc("m"), nil},
+
+		// path derivation input with 2 parts
+		{"m/44'", 1, nil, map[string]string{
+			"m/44'": "0xBe0B49bD63bea56C4c18733ad9C8A41B7161318F",
+		}},
+		{"m/44'", 3, nil, map[string]string{
+			"m/44'/60'/0'/0/0": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+			"m/44'/60'/0'/0/1": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+			"m/44'/60'/0'/0/2": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+		}},
+
+		// path derivation input with 3 parts
+		{"m/44'/60'", 1, nil, map[string]string{
+			"m/44'/60'": "0x27439E87140CF69e87c89bB4C9776eAaD35BeFb3",
+		}},
+		{"m/44'/60'", 3, nil, map[string]string{
+			"m/44'/60'/0'/0/0": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+			"m/44'/60'/0'/0/1": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+			"m/44'/60'/0'/0/2": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+		}},
+
+		// path derivation input with 4 parts
+		{"m/44'/60'/0'", 1, nil, map[string]string{
+			"m/44'/60'/0'": "0x340d8879778d3D3Fec643D1736ebFd2bC5824662",
+		}},
+		{"m/44'/60'/0", 3, nil, map[string]string{
+			"m/44'/60'/0'/0/0": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+			"m/44'/60'/0'/0/1": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+			"m/44'/60'/0'/0/2": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+		}},
+
+		{"m/44'/60'/1", 1, nil, map[string]string{
+			"m/44'/60'/1": "0x5600C4Cda24214FAFB227703437a3C98751C3f4F",
+		}},
+		{"m/44'/60'/1", 3, nil, map[string]string{
+			"m/44'/60'/1'/0/0": "0x8C8d35429F74ec245F8Ef2f4Fd1e551cFF97d650",
+			"m/44'/60'/1'/0/1": "0x40FBBE484b8Ee6139Af08446950B088e10b2306A",
+			"m/44'/60'/1'/0/2": "0x2b382887D362cCae885a421C978c7e998D3c95a6",
+		}},
+
+		// path derivation input with 5 parts
+		{"m/44'/60'/0'/0", 1, nil, map[string]string{
+			"m/44'/60'/0'/0": "0x1e59ce931B4CFea3fe4B875411e280e173cB7A9C",
+		}},
+		{"m/44'/60'/0'/0", 3, nil, map[string]string{
+			"m/44'/60'/0'/0/0": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+			"m/44'/60'/0'/0/1": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+			"m/44'/60'/0'/0/2": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+		}},
+
+		{"m/44'/60'/1'/2", 1, nil, map[string]string{
+			"m/44'/60'/1'/2": "0xDd74C01e87759Ca5787C0A166103Df20a9493836",
+		}},
+		{"m/44'/60'/1'/2", 3, nil, map[string]string{
+			"m/44'/60'/1'/2/0": "0x481Ea61d7635E00e32fd5BbA05E8eFe3855b0146",
+			"m/44'/60'/1'/2/1": "0x14954c8606365f18013BCE3Af14ff4431766B3Aa",
+			"m/44'/60'/1'/2/2": "0xC4094cD7436447541Fe5Dfe72023BBFE86799571",
+		}},
+
+		// path derivation input with 6 parts
+		{"m/44'/60'/0'/0/0", 1, nil, map[string]string{
+			"m/44'/60'/0'/0/0": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+		}},
+		{"m/44'/60'/0'/0/0", 3, nil, map[string]string{
+			"m/44'/60'/0'/0/0": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+			"m/44'/60'/0'/0/1": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+			"m/44'/60'/0'/0/2": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+		}},
+
+		{"m/44'/60'/1'/2/3", 1, nil, map[string]string{
+			"m/44'/60'/1'/2/3": "0xC0698b4Bf4Bf25219BFF2ef077e9979DE5263b60",
+		}},
+		{"m/44'/60'/1'/2/3", 3, nil, map[string]string{
+			"m/44'/60'/1'/2/3": "0xC0698b4Bf4Bf25219BFF2ef077e9979DE5263b60",
+			"m/44'/60'/1'/2/4": "0x6B41E428F4C5a582666533B02af618291d4de347",
+			"m/44'/60'/1'/2/5": "0x68331EB6CE792DF5c6cE927366Cb6dE41CFff51b",
+		}},
+
+		// custom derivation
+		{"m/44'/60'/1'/2/3/4/5/6/7/8/9/0", 1, nil, map[string]string{
+			"m/44'/60'/1'/2/3/4/5/6/7/8/9/0": "0x510F2Da3BAc8Bfbf5D1b07852f48FbA3d89aFf8a",
+		}},
+		{"m/44'/60'/1'/2/3/4/5/6/7/8/9/0", 3, nil, map[string]string{
+			"m/44'/60'/1'/2/3/4/5/6/7/8/9/0": "0x510F2Da3BAc8Bfbf5D1b07852f48FbA3d89aFf8a",
+			"m/44'/60'/1'/2/3/4/5/6/7/8/9/1": "0xB3ce368159A8a60d0a71CA7161aBCa9b40fa68f4",
+			"m/44'/60'/1'/2/3/4/5/6/7/8/9/2": "0x70DB395c0e92F3f32B6698174bBE355451Bde07A",
+		}},
+
+		// op
+		{"m/44'/60'/2'/470/10", 1, nil, map[string]string{
+			"m/44'/60'/2'/470/10": "0x86487B98fB4BeC557dEa441C06A3c4a7feCe152F",
+		}},
+		{"m/44'/60'/2'/470/10", 3, nil, map[string]string{
+			"m/44'/60'/2'/470/10": "0x86487B98fB4BeC557dEa441C06A3c4a7feCe152F",
+			"m/44'/60'/2'/470/11": "0x2E29b5BD52b1D1D387c8dB9721Db93E8C210654E",
+			"m/44'/60'/2'/470/12": "0x824FBFCb5F4B5dC2D01533f03C0c815a2F8Bcb03",
+		}},
+	}
+
+	for _, tc := range testCases {
+		tcName := fmt.Sprintf("Input: \"%s\" nAddresses: %d", tc.derivationPathInput, tc.nAddresses)
+		t.Run(tcName, func(t *testing.T) {
+			pw, err := NewPolyWallet(mnemonic, password)
+			require.NoError(t, err)
+
+			if len(tc.derivationPathInput) > 0 {
+				err = pw.SetPath(tc.derivationPathInput)
+				if tc.expectedSetPathError != nil {
+					require.Error(t, err)
+					assert.Equal(t, *tc.expectedSetPathError, err)
+					return
+				}
+				require.NoError(t, err)
+			}
+
+			hdAddresses, err := pw.ExportHDAddresses(tc.nAddresses)
+			require.NoError(t, err)
+			assert.Len(t, hdAddresses.Addresses, tc.nAddresses)
+
+			for _, addr := range hdAddresses.Addresses {
+				assert.Contains(t, tc.expectedAddresses, addr.Path)
+				assert.Equal(t, tc.expectedAddresses[addr.Path], addr.ETHAddress)
+			}
+		})
 	}
 }

@@ -16,6 +16,7 @@ import (
 	_ "embed"
 
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/0xPolygon/polygon-cli/cmd/monitor/ui"
@@ -64,6 +65,8 @@ type (
 		ChainID              *big.Int
 		ForkID               uint64
 		HeadBlock            *big.Int
+		SafeBlock            *big.Int
+		FinalizedBlock       *big.Int
 		PeerCount            uint64
 		GasPrice             *big.Int
 		TxPoolStatus         txPoolStatus
@@ -77,6 +80,8 @@ type (
 	}
 	chainState struct {
 		HeadBlock            uint64
+		SafeBlock            uint64
+		FinalizedBlock       uint64
 		ChainID              *big.Int
 		PeerCount            uint64
 		GasPrice             *big.Int
@@ -118,7 +123,8 @@ func monitor(ctx context.Context) error {
 		return err
 	}
 	ec := ethclient.NewClient(rpc)
-	if _, err = ec.BlockNumber(ctx); err != nil {
+	latestBlockNumber, err := ec.BlockNumber(ctx)
+	if err != nil {
 		return err
 	}
 
@@ -149,6 +155,21 @@ func monitor(ctx context.Context) error {
 		log.Debug().Err(err).Msg("Unable to fake peer count")
 	} else {
 		peerCountSupported = true
+	}
+
+	// check if EIP-1559 is supported
+	eip1559Supported := false
+	latestBlock, err := ec.BlockByNumber(ctx, big.NewInt(0).SetUint64(latestBlockNumber))
+	if err != nil {
+		log.Debug().Err(err).Msg("Unable to get latest block")
+	} else {
+		if latestBlock.BaseFee() == nil {
+			log.Debug().Msg("EIP-1559 not supported")
+			eip1559Supported = false
+		} else {
+			log.Debug().Msg("EIP-1559 supported")
+			eip1559Supported = true
+		}
 	}
 
 	ms := new(monitorStatus)
@@ -191,7 +212,7 @@ func monitor(ctx context.Context) error {
 				}
 				if !isUiRendered {
 					go func() {
-						errChan <- renderMonitorUI(ctx, ec, ms, rpc, txPoolStatusSupported, zkEVMBatchesSupported)
+						errChan <- renderMonitorUI(ctx, ec, ms, rpc, txPoolStatusSupported, zkEVMBatchesSupported, eip1559Supported)
 					}()
 					isUiRendered = true
 				}
@@ -216,6 +237,22 @@ func getChainState(ctx context.Context, ec *ethclient.Client, txPoolStatusSuppor
 	cs.HeadBlock, err = ec.BlockNumber(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't fetch block number: %s", err.Error())
+	}
+
+	safeBlock, err := ec.HeaderByNumber(ctx, big.NewInt(int64(rpc.SafeBlockNumber)))
+	if err != nil {
+		log.Debug().Err(err).Msg("Unable to fetch safe block number")
+		cs.SafeBlock = 0
+	} else if safeBlock != nil {
+		cs.SafeBlock = safeBlock.Number.Uint64()
+	}
+
+	finalizedBlock, err := ec.HeaderByNumber(ctx, big.NewInt(int64(rpc.FinalizedBlockNumber)))
+	if err != nil {
+		log.Debug().Err(err).Msg("Unable to fetch finalized block number")
+		cs.FinalizedBlock = 0
+	} else if finalizedBlock != nil {
+		cs.FinalizedBlock = finalizedBlock.Number.Uint64()
 	}
 
 	cs.ChainID, err = ec.ChainID(ctx)
@@ -301,6 +338,9 @@ func fetchCurrentBlockData(ctx context.Context, ec *ethclient.Client, ms *monito
 	}
 
 	ms.HeadBlock = new(big.Int).SetUint64(cs.HeadBlock)
+	ms.SafeBlock = new(big.Int).SetUint64(cs.SafeBlock)
+	ms.FinalizedBlock = new(big.Int).SetUint64(cs.FinalizedBlock)
+
 	ms.ChainID = cs.ChainID
 	ms.PeerCount = cs.PeerCount
 	ms.GasPrice = cs.GasPrice
@@ -397,10 +437,7 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 				<-semaphore
 				wg.Done()
 			}()
-			end := i + subBatchSize
-			if end > len(blms) {
-				end = len(blms)
-			}
+			end := min(i+subBatchSize, len(blms))
 			subBatch := blms[i:end]
 
 			b := backoff.NewExponentialBackOff()
@@ -442,7 +479,7 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 	return errors.Join(errs...)
 }
 
-func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client, txPoolStatusSupported, zkEVMBatchesSupported bool) error {
+func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatus, rpc *ethrpc.Client, txPoolStatusSupported, zkEVMBatchesSupported, eip1559Supported bool) error {
 	if err := termui.Init(); err != nil {
 		log.Error().Err(err).Msg("Failed to initialize UI")
 		return err
@@ -451,7 +488,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 	currentMode := monitorModeExplorer
 
-	blockTable, blockInfo, transactionList, transactionInformationList, transactionInfo, grid, selectGrid, blockGrid, transactionGrid, skeleton := ui.SetUISkeleton(txPoolStatusSupported, zkEVMBatchesSupported)
+	blockTable, blockInfo, transactionList, transactionInformationList, transactionInfo, grid, selectGrid, blockGrid, transactionGrid, skeleton := ui.SetUISkeleton(txPoolStatusSupported, zkEVMBatchesSupported, eip1559Supported)
 
 	termWidth, termHeight := termui.TerminalDimensions()
 	windowSize = termHeight/2 - 4
@@ -621,15 +658,22 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 		}
 		ms.BlocksLock.RUnlock()
 		renderedBlocks = renderedBlocksTemp
-		renderedBlocksMeanGasPrice := metrics.GetMeanGasPricePerBlock(renderedBlocks)
+
+		var renderedBlocksMeanGasPrice []float64
+		if eip1559Supported {
+			renderedBlocksMeanGasPrice = metrics.GetMeanBaseFeePerBlock(renderedBlocks)
+		} else {
+			renderedBlocksMeanGasPrice = metrics.GetMeanGasPricePerBlock(renderedBlocks)
+		}
+
 		// First initialization will render no gas price because the GasPriceChart will have no data.
 		if renderedBlocksMeanGasPrice == nil {
-			skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, "--", ms.PeerCount, ms.ChainID, rpcUrl)
+			skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, ms.SafeBlock, ms.FinalizedBlock, "--", ms.PeerCount, ms.ChainID, rpcUrl)
 		} else {
 			if len(renderedBlocksMeanGasPrice) >= 1 {
 				// Under normal cases, the gas price will be derived from the last element of the GasPriceChart with 2 decimal places precision.
 				gasPriceStr := strconv.FormatFloat(renderedBlocksMeanGasPrice[len(renderedBlocksMeanGasPrice)-1]/1000000000, 'f', 2, 64)
-				skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, gasPriceStr, ms.PeerCount, ms.ChainID, rpcUrl)
+				skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, ms.SafeBlock, ms.FinalizedBlock, gasPriceStr, ms.PeerCount, ms.ChainID, rpcUrl)
 			}
 		}
 

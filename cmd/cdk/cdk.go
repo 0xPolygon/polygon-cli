@@ -21,18 +21,24 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
+	banana_committee "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygondatacommittee"
 	banana_rollup "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonrollupbaseetrog"
 	banana_rollup_manager "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonrollupmanager"
+	banana_validium "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonvalidiumetrog"
 	banana_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonzkevmbridgev2"
 	banana_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonzkevmglobalexitrootv2"
 
+	elderberry_committee "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygondatacommittee"
 	elderberry_rollup "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonrollupbaseetrog"
 	elderberry_rollup_manager "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonrollupmanager"
+	elderberry_validium "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonvalidiumetrog"
 	elderberry_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonzkevmbridgev2"
 	elderberry_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/elderberry/polygonzkevmglobalexitrootv2"
 
+	etrog_committee "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygondatacommittee"
 	etrog_rollup "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonrollupbaseetrog"
 	etrog_rollup_manager "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonrollupmanager"
+	etrog_validium "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonvalidiumetrog"
 	etrog_bridge "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonzkevmbridgev2"
 	etrog_ger "github.com/0xPolygon/cdk-contracts-tooling/contracts/etrog/polygonzkevmglobalexitrootv2"
 )
@@ -65,7 +71,10 @@ const (
 	contractRequestInterval = 200 * time.Millisecond
 )
 
-var ErrRollupNotFound = errors.New("rollup not found")
+var (
+	ErrRollupNotFound     = errors.New("rollup not found")
+	ErrMethodNotSupported = errors.New("method not supported")
+)
 
 var (
 	knownRollupManagerAddresses = map[string]string{
@@ -285,13 +294,28 @@ func getRollup(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.A
 	var contract *rollup
 	var contractABI *abi.ABI
 	log.Info().Stringer("addr", addr).Msg("Getting rollup")
+
 	switch cdkArgs.forkID {
 	case etrog:
 		contractInstance, err := etrog_rollup.NewPolygonrollupbaseetrog(addr, rpcClient)
 		if err != nil {
 			return nil, nil, err
 		}
-		contract = &rollup{contractInstance, reflect.ValueOf(contractInstance)}
+
+		validiumContractInstance, err := etrog_validium.NewPolygonvalidiumetrog(addr, rpcClient)
+		if err != nil {
+			return nil, nil, err
+		}
+		_, err = validiumContractInstance.DataAvailabilityProtocol(nil)
+		if err != nil {
+			if err.Error() == "execution reverted" {
+				validiumContractInstance = nil
+			} else {
+				return nil, nil, err
+			}
+		}
+
+		contract = &rollup{contractInstance, validiumContractInstance, reflect.ValueOf(contractInstance)}
 		contractABI, err = etrog_rollup.PolygonrollupbaseetrogMetaData.GetAbi()
 		if err != nil {
 			return nil, nil, err
@@ -301,7 +325,21 @@ func getRollup(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.A
 		if err != nil {
 			return nil, nil, err
 		}
-		contract = &rollup{contractInstance, reflect.ValueOf(contractInstance)}
+
+		validiumContractInstance, err := elderberry_validium.NewPolygonvalidiumetrog(addr, rpcClient)
+		if err != nil {
+			return nil, nil, err
+		}
+		_, err = validiumContractInstance.DataAvailabilityProtocol(nil)
+		if err != nil {
+			if err.Error() == "execution reverted" {
+				validiumContractInstance = nil
+			} else {
+				return nil, nil, err
+			}
+		}
+
+		contract = &rollup{contractInstance, validiumContractInstance, reflect.ValueOf(contractInstance)}
 		contractABI, err = elderberry_rollup.PolygonrollupbaseetrogMetaData.GetAbi()
 		if err != nil {
 			return nil, nil, err
@@ -311,8 +349,63 @@ func getRollup(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.A
 		if err != nil {
 			return nil, nil, err
 		}
-		contract = &rollup{contractInstance, reflect.ValueOf(contractInstance)}
+
+		validiumContractInstance, err := banana_validium.NewPolygonvalidiumetrog(addr, rpcClient)
+		if err != nil {
+			return nil, nil, err
+		}
+		_, err = validiumContractInstance.DataAvailabilityProtocol(nil)
+		if err != nil {
+			if err.Error() == "execution reverted" {
+				validiumContractInstance = nil
+			} else {
+				return nil, nil, err
+			}
+		}
+
+		contract = &rollup{contractInstance, validiumContractInstance, reflect.ValueOf(contractInstance)}
 		contractABI, err = banana_rollup.PolygonrollupbaseetrogMetaData.GetAbi()
+		if err != nil {
+			return nil, nil, err
+		}
+	default:
+		return nil, nil, invalidForkIDErr()
+	}
+	return contract, contractABI, nil
+}
+
+func getCommittee(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, addr common.Address) (*committee, *abi.ABI, error) {
+	var contract *committee
+	var contractABI *abi.ABI
+	log.Info().Stringer("addr", addr).Msg("Getting committee")
+	switch cdkArgs.forkID {
+	case etrog:
+		contractInstance, err := etrog_committee.NewPolygondatacommittee(addr, rpcClient)
+		if err != nil {
+			return nil, nil, err
+		}
+		contract = &committee{contractInstance, reflect.ValueOf(contractInstance)}
+		contractABI, err = etrog_committee.PolygondatacommitteeMetaData.GetAbi()
+		if err != nil {
+			return nil, nil, err
+		}
+	case elderberry:
+		contractInstance, err := elderberry_committee.NewPolygondatacommittee(addr, rpcClient)
+		if err != nil {
+			return nil, nil, err
+		}
+		contract = &committee{contractInstance, reflect.ValueOf(contractInstance)}
+		contractABI, err = elderberry_committee.PolygondatacommitteeMetaData.GetAbi()
+		if err != nil {
+			return nil, nil, err
+		}
+	case banana:
+		contractInstance, err := banana_committee.NewPolygondatacommittee(addr, rpcClient)
+		if err != nil {
+			return nil, nil, err
+		}
+		contract = &committee{contractInstance, reflect.ValueOf(contractInstance)}
+		contractABI, err = banana_committee.PolygondatacommitteeMetaData.GetAbi()
 		if err != nil {
 			return nil, nil, err
 		}

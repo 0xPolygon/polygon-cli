@@ -109,6 +109,7 @@ The command also inherits flags from parent commands.
       --force-update-root                  indicates if the new global exit root is updated or not (default true)
       --gas-limit uint                     force a gas limit when sending a transaction
       --gas-price string                   the gas price to be used
+      --insecure                           skip TLS certificate verification
       --pretty-logs                        Should logs be in pretty format or JSON (default true)
       --private-key string                 the hex encoded private key to be used when sending the tx
       --rpc-url string                     the URL of the RPC to send the transaction
@@ -127,4 +128,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly  bridge](polycli_ulxly__bridge.md) - Commands for moving funds and sending messages from one chain to another
+- [polycli ulxly bridge](polycli_ulxly_bridge.md) - Commands for moving funds and sending messages from one chain to another

@@ -5,7 +5,9 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/parsebatchl2data"
 	"os"
 
+	"github.com/0xPolygon/polygon-cli/cmd/contract"
 	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
+	"github.com/0xPolygon/polygon-cli/cmd/publish"
 	"github.com/0xPolygon/polygon-cli/util"
 
 	"github.com/0xPolygon/polygon-cli/cmd/cdk"
@@ -21,6 +23,7 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/cmd/abi"
 	"github.com/0xPolygon/polygon-cli/cmd/dbbench"
+	"github.com/0xPolygon/polygon-cli/cmd/dockerlogger"
 	"github.com/0xPolygon/polygon-cli/cmd/dumpblocks"
 	"github.com/0xPolygon/polygon-cli/cmd/ecrecover"
 	"github.com/0xPolygon/polygon-cli/cmd/enr"
@@ -30,6 +33,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/metricsToDash"
 	"github.com/0xPolygon/polygon-cli/cmd/mnemonic"
 	"github.com/0xPolygon/polygon-cli/cmd/monitor"
+	"github.com/0xPolygon/polygon-cli/cmd/monitorv2"
 	"github.com/0xPolygon/polygon-cli/cmd/nodekey"
 	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz"
 	"github.com/0xPolygon/polygon-cli/cmd/signer"
@@ -128,6 +132,7 @@ func NewPolycliCommand() *cobra.Command {
 		metricsToDash.MetricsToDashCmd,
 		mnemonic.MnemonicCmd,
 		monitor.MonitorCmd,
+		monitorv2.MonitorV2Cmd,
 		nodekey.NodekeyCmd,
 		p2p.P2pCmd,
 		parseethwallet.ParseETHWalletCmd,
@@ -140,6 +145,9 @@ func NewPolycliCommand() *cobra.Command {
 		wrapcontract.WrapContractCmd,
 		foldtrace.FoldTraceCmd,
 		parsebatchl2data.ParseBatchL2Data,
+		publish.Cmd,
+		dockerlogger.Cmd,
+		contract.Cmd,
 	)
 	return cmd
 }

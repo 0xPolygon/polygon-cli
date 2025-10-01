@@ -29,19 +29,23 @@ func GetMeanBlockTime(blocks []rpctypes.PolyBlock) float64 {
 	if len(blocks) < 2 {
 		return 0
 	}
-	times := make([]int, 0)
-	for _, block := range blocks {
-		blockTime := block.Time()
-		times = append(times, int(blockTime))
+
+	t0 := blocks[0].Time()
+	minTs, maxTs := t0, t0
+
+	for i := 1; i < len(blocks); i++ {
+		ts := blocks[i].Time()
+
+		if ts < minTs {
+			minTs = ts
+		}
+
+		if ts > maxTs {
+			maxTs = ts
+		}
 	}
 
-	sortTimes := sort.IntSlice(times)
-	sortTimes.Sort()
-
-	minTime := sortTimes[0]
-	maxTime := sortTimes[len(sortTimes)-1]
-
-	return float64(maxTime-minTime) / float64(len(sortTimes)-1)
+	return float64(maxTs-minTs) / float64(len(blocks)-1)
 }
 
 func GetTxsPerBlock(blocks []rpctypes.PolyBlock) []float64 {
@@ -54,6 +58,7 @@ func GetTxsPerBlock(blocks []rpctypes.PolyBlock) []float64 {
 	}
 	return txns
 }
+
 func GetUnclesPerBlock(blocks []rpctypes.PolyBlock) []float64 {
 	bs := rpctypes.SortableBlocks(blocks)
 	sort.Sort(bs)
@@ -75,6 +80,7 @@ func GetSizePerBlock(blocks []rpctypes.PolyBlock) []float64 {
 	}
 	return bSize
 }
+
 func GetGasPerBlock(blocks []rpctypes.PolyBlock) []float64 {
 	bs := rpctypes.SortableBlocks(blocks)
 	sort.Sort(bs)
@@ -107,13 +113,27 @@ func GetMeanGasPricePerBlock(blocks []rpctypes.PolyBlock) []float64 {
 	return gasPrices
 }
 
+// GetMeanBaseFeePerBlock calculates the mean base fee for each block in the provided slice of PolyBlock.
+// It returns a slice of float64 values representing the base fee for each block.
+func GetMeanBaseFeePerBlock(blocks []rpctypes.PolyBlock) []float64 {
+	bs := rpctypes.SortableBlocks(blocks)
+	sort.Sort(bs)
+
+	fee := make([]float64, 0, len(bs))
+	for _, b := range bs {
+		if b.BaseFee() != nil {
+			fee = append(fee, float64(b.BaseFee().Uint64()))
+		} else {
+			fee = append(fee, 0.0)
+		}
+	}
+	return fee
+}
+
 func TruncateHexString(hexStr string, totalLength int) string {
 	hexStr = strings.TrimPrefix(hexStr, "0x")
 
-	visibleLength := totalLength - 5
-	if visibleLength < 0 {
-		visibleLength = 0
-	}
+	visibleLength := max(totalLength-5, 0)
 
 	if len(hexStr) <= visibleLength {
 		return "0x" + hexStr

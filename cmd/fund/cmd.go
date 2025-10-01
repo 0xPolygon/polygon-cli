@@ -2,7 +2,7 @@ package fund
 
 import (
 	"errors"
-	"math"
+	"math/big"
 
 	_ "embed"
 
@@ -20,7 +20,7 @@ const defaultMnemonic = "code code code code code code code code code code code 
 // The default password used to create a wallet for HD derivation.
 const defaultPassword = "password"
 
-// cmdParams holds the command-line parameters for the fund command.
+// cmdFundParams holds the command-line parameters for the fund command.
 type cmdFundParams struct {
 	RpcUrl     *string
 	PrivateKey *string
@@ -28,16 +28,19 @@ type cmdFundParams struct {
 	WalletsNumber      *uint64
 	UseHDDerivation    *bool
 	WalletAddresses    *[]string
-	FundingAmountInEth *float64
+	FundingAmountInWei *big.Int
 	OutputFile         *string
+
+	KeyFile *string
 
 	FunderAddress *string
 }
 
 var (
 	//go:embed usage.md
-	usage  string
-	params cmdFundParams
+	usage               string
+	params              cmdFundParams
+	defaultFundingInWei = big.NewInt(50000000000000000) // 0.05 ETH
 )
 
 // FundCmd represents the fund command.
@@ -68,12 +71,18 @@ func init() {
 	p.WalletsNumber = flagSet.Uint64P("number", "n", 10, "The number of wallets to fund")
 	p.UseHDDerivation = flagSet.Bool("hd-derivation", true, "Derive wallets to fund from the private key in a deterministic way")
 	p.WalletAddresses = flagSet.StringSlice("addresses", nil, "Comma-separated list of wallet addresses to fund")
-	p.FundingAmountInEth = flagSet.Float64P("eth-amount", "a", 0.05, "The amount of ether to send to each wallet")
+	p.FundingAmountInWei = defaultFundingInWei
+	flagSet.Var(&flag_loader.BigIntValue{Val: p.FundingAmountInWei}, "eth-amount", "The amount of wei to send to each wallet")
+	p.KeyFile = flagSet.String("key-file", "", "The file containing the accounts private keys, one per line.")
+
 	p.OutputFile = flagSet.StringP("file", "f", "wallets.json", "The output JSON file path for storing the addresses and private keys of funded wallets")
 
 	// Marking flags as mutually exclusive
 	FundCmd.MarkFlagsMutuallyExclusive("addresses", "number")
 	FundCmd.MarkFlagsMutuallyExclusive("addresses", "hd-derivation")
+	FundCmd.MarkFlagsMutuallyExclusive("key-file", "addresses")
+	FundCmd.MarkFlagsMutuallyExclusive("key-file", "number")
+	FundCmd.MarkFlagsMutuallyExclusive("key-file", "hd-derivation")
 
 	// Funder contract parameters.
 	p.FunderAddress = flagSet.String("contract-address", "", "The address of a pre-deployed Funder contract")
@@ -95,12 +104,17 @@ func checkFlags() error {
 		return errors.New("the private key is empty")
 	}
 
-	// Check wallet flags.
-	if params.WalletsNumber != nil && *params.WalletsNumber == 0 {
-		return errors.New("the number of wallets to fund is set to zero")
+	// Check that exactly one method is used to specify target accounts
+	hasAddresses := params.WalletAddresses != nil && len(*params.WalletAddresses) > 0
+	hasKeyFile := params.KeyFile != nil && *params.KeyFile != ""
+	hasNumberFlag := params.WalletsNumber != nil && *params.WalletsNumber > 0
+	if !hasAddresses && !hasKeyFile && !hasNumberFlag {
+		return errors.New("must specify target accounts via --addresses, --key-file, or --number")
 	}
-	if params.FundingAmountInEth != nil && math.Abs(*params.FundingAmountInEth) <= 1e-9 {
-		return errors.New("the amount of eth to send to each wallet is set to zero")
+
+	minValue := big.NewInt(1000000000)
+	if params.FundingAmountInWei != nil && params.FundingAmountInWei.Cmp(minValue) <= 0 {
+		return errors.New("the funding amount must be greater than 1000000000")
 	}
 	if params.OutputFile != nil && *params.OutputFile == "" {
 		return errors.New("the output file is not specified")

@@ -2,12 +2,14 @@ package cdk
 
 import (
 	_ "embed"
+	"errors"
 	"math/big"
 	"reflect"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog/log"
@@ -61,6 +63,32 @@ var rollupMonitorCmd = &cobra.Command{
 
 type rollup struct {
 	rollupContractInterface
+	validiumContractInterface
+	instance reflect.Value
+}
+
+func (r *rollup) validiumSupported() bool {
+	// this check needs to be via reflection, because go doesn't allow to compare nil to interface
+	// https://stackoverflow.com/questions/13476349/check-for-nil-and-nil-interface-in-go
+	return !reflect.ValueOf(r.validiumContractInterface).IsNil()
+}
+
+func (r *rollup) DataAvailabilityProtocol(opts *bind.CallOpts) (common.Address, error) {
+	if !r.validiumSupported() {
+		return common.Address{}, ErrMethodNotSupported
+	}
+	return r.validiumContractInterface.DataAvailabilityProtocol(opts)
+}
+
+func (r *rollup) IsSequenceWithDataAvailabilityAllowed(opts *bind.CallOpts) (bool, error) {
+	if !r.validiumSupported() {
+		return false, ErrMethodNotSupported
+	}
+	return r.validiumContractInterface.IsSequenceWithDataAvailabilityAllowed(opts)
+}
+
+type committee struct {
+	committeeContractInterface
 	instance reflect.Value
 }
 
@@ -88,6 +116,11 @@ type RollupData struct {
 	NetworkName         string         `json:"networkName"`
 	TrustedSequencer    common.Address `json:"trustedSequencer"`
 	TrustedSequencerURL string         `json:"trustedSequencerURL"`
+
+	// validium
+	Validium                              bool            `json:"validium"`
+	DataAvailabilityProtocol              *common.Address `json:"dataAvailabilityProtocol,omitempty"`
+	IsSequenceWithDataAvailabilityAllowed *bool           `json:"isSequenceWithDataAvailabilityAllowed,omitempty"`
 }
 
 type RollupTypeData struct {
@@ -99,9 +132,24 @@ type RollupTypeData struct {
 	Genesis                 common.Hash    `json:"genesis"`
 }
 
+type CommitteeData struct {
+	CommitteeHash              common.Hash `json:"committeeHash"`
+	AmountOfMembers            *big.Int    `json:"amountOfMembers"`
+	ProtocolName               string      `json:"protocolName"`
+	Members                    []CommitteeMemberData
+	Owner                      common.Address `json:"owner"`
+	RequiredAmountOfSignatures *big.Int       `json:"requiredAmountOfSignatures"`
+}
+
+type CommitteeMemberData struct {
+	Addr common.Address `json:"addr"`
+	Url  string         `json:"url"`
+}
+
 type RollupDumpData struct {
-	Data *RollupData     `json:"data"`
-	Type *RollupTypeData `json:"type"`
+	Data      *RollupData     `json:"data"`
+	Type      *RollupTypeData `json:"type"`
+	Committee *CommitteeData  `json:"committee,omitempty"`
 }
 
 func rollupInspect(cmd *cobra.Command) error {
@@ -173,6 +221,18 @@ func rollupDump(cmd *cobra.Command) error {
 	data.Type, err = getRollupTypeData(rollupManager, data.Data.RollupTypeID)
 	if err != nil {
 		return err
+	}
+
+	if data.Data.Validium {
+		committee, _, err := getCommittee(cdkArgs, rpcClient, *data.Data.DataAvailabilityProtocol)
+		if err != nil {
+			return err
+		}
+
+		data.Committee, err = getCommitteeData(committee)
+		if err != nil {
+			return err
+		}
 	}
 
 	mustPrintJSONIndent(data)
@@ -301,7 +361,7 @@ func getRollupData(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, rollupMan
 	}
 	time.Sleep(contractRequestInterval)
 
-	return &RollupData{
+	data := &RollupData{
 		RollupID:                       rollupID,
 		RollupContract:                 rollupData.RollupContract,
 		ChainID:                        rollupData.ChainID,
@@ -323,7 +383,28 @@ func getRollupData(cdkArgs parsedCDKArgs, rpcClient *ethclient.Client, rollupMan
 		NetworkName:         networkName,
 		TrustedSequencer:    trustedSequencer,
 		TrustedSequencerURL: trustedSequencerURL,
-	}, rollup, rollupABI, nil
+	}
+
+	dataAvailabilityProtocol, err := rollup.DataAvailabilityProtocol(nil)
+	if err != nil && !errors.Is(err, ErrMethodNotSupported) {
+		return nil, nil, nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	data.Validium = err == nil
+
+	if data.Validium {
+		data.DataAvailabilityProtocol = &dataAvailabilityProtocol
+
+		isSequenceWithDataAvailabilityAllowed, err := rollup.IsSequenceWithDataAvailabilityAllowed(nil)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		data.IsSequenceWithDataAvailabilityAllowed = &isSequenceWithDataAvailabilityAllowed
+		time.Sleep(contractRequestInterval)
+	}
+
+	return data, rollup, rollupABI, nil
 }
 
 func getRollupTypeData(rollupManager rollupManagerContractInterface, rollupTypeID uint64) (*RollupTypeData, error) {
@@ -338,5 +419,59 @@ func getRollupTypeData(rollupManager rollupManagerContractInterface, rollupTypeI
 		RollupCompatibilityID:   rollupType.RollupCompatibilityID,
 		Obsolete:                rollupType.Obsolete,
 		Genesis:                 rollupType.Genesis,
+	}, nil
+}
+
+func getCommitteeData(committee committeeContractInterface) (*CommitteeData, error) {
+	committeeHash, err := committee.CommitteeHash(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	getAmountOfMembers, err := committee.GetAmountOfMembers(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	getProtocolName, err := committee.GetProcotolName(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	members := make([]CommitteeMemberData, 0)
+	for i := uint64(0); i < getAmountOfMembers.Uint64(); i++ {
+		member, mErr := committee.Members(nil, big.NewInt(0).SetUint64(i))
+		if mErr != nil {
+			return nil, mErr
+		}
+		members = append(members, CommitteeMemberData{
+			Addr: member.Addr,
+			Url:  member.Url,
+		})
+		time.Sleep(contractRequestInterval)
+	}
+
+	owner, err := committee.Owner(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	requiredAmountOfSignatures, err := committee.RequiredAmountOfSignatures(nil)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(contractRequestInterval)
+
+	return &CommitteeData{
+		CommitteeHash:              committeeHash,
+		AmountOfMembers:            getAmountOfMembers,
+		ProtocolName:               getProtocolName,
+		Members:                    members,
+		Owner:                      owner,
+		RequiredAmountOfSignatures: requiredAmountOfSignatures,
 	}, nil
 }
