@@ -8,6 +8,7 @@ import (
 	"hash"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -85,10 +86,8 @@ var HashCmd = &cobra.Command{
 		if len(args) < 1 {
 			return fmt.Errorf("expected 1 argument to specify hash function. got %d", len(args))
 		}
-		for _, v := range supportedHashFunctions {
-			if v == args[0] {
-				return nil
-			}
+		if slices.Contains(supportedHashFunctions, args[0]) {
+			return nil
 		}
 
 		return fmt.Errorf("the name %s is not recognized. Please use one of the following: %s", args[0], strings.Join(supportedHashFunctions, ","))
