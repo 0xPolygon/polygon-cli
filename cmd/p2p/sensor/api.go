@@ -36,7 +36,7 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec) {
 		peers := make(map[string]p2p.MessageCount)
 		for _, peer := range server.Peers() {
 			url := peer.Node().URLv4()
-			peers[url] = getPeerMessages(url, counter)
+			peers[url] = getPeerMessages(url, peer.Fullname(), counter)
 		}
 
 		if err := json.NewEncoder(w).Encode(peers); err != nil {
@@ -68,27 +68,27 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec) {
 
 // getPeerMessages retrieves the count of various types of eth packets sent by a
 // peer.
-func getPeerMessages(url string, counter *prometheus.CounterVec) p2p.MessageCount {
+func getPeerMessages(url, name string, counter *prometheus.CounterVec) p2p.MessageCount {
 	return p2p.MessageCount{
-		BlockHeaders:        getCounterValue(new(eth.BlockHeadersPacket), url, counter),
-		BlockBodies:         getCounterValue(new(eth.BlockBodiesPacket), url, counter),
-		Blocks:              getCounterValue(new(eth.NewBlockPacket), url, counter),
-		BlockHashes:         getCounterValue(new(eth.NewBlockHashesPacket), url, counter),
-		BlockHeaderRequests: getCounterValue(new(eth.GetBlockHeadersPacket), url, counter),
-		BlockBodiesRequests: getCounterValue(new(eth.GetBlockBodiesPacket), url, counter),
-		Transactions: getCounterValue(new(eth.TransactionsPacket), url, counter) +
-			getCounterValue(new(eth.PooledTransactionsPacket), url, counter),
-		TransactionHashes:   getCounterValue(new(eth.NewPooledTransactionHashesPacket), url, counter),
-		TransactionRequests: getCounterValue(new(eth.GetPooledTransactionsRequest), url, counter),
+		BlockHeaders:        getCounterValue(new(eth.BlockHeadersPacket), url, name, counter),
+		BlockBodies:         getCounterValue(new(eth.BlockBodiesPacket), url, name, counter),
+		Blocks:              getCounterValue(new(eth.NewBlockPacket), url, name, counter),
+		BlockHashes:         getCounterValue(new(eth.NewBlockHashesPacket), url, name, counter),
+		BlockHeaderRequests: getCounterValue(new(eth.GetBlockHeadersPacket), url, name, counter),
+		BlockBodiesRequests: getCounterValue(new(eth.GetBlockBodiesPacket), url, name, counter),
+		Transactions: getCounterValue(new(eth.TransactionsPacket), url, name, counter) +
+			getCounterValue(new(eth.PooledTransactionsPacket), url, name, counter),
+		TransactionHashes:   getCounterValue(new(eth.NewPooledTransactionHashesPacket), url, name, counter),
+		TransactionRequests: getCounterValue(new(eth.GetPooledTransactionsRequest), url, name, counter),
 	}
 }
 
 // getCounterValue retrieves the count of packets for a specific type from the
 // Prometheus counter.
-func getCounterValue(packet eth.Packet, url string, counter *prometheus.CounterVec) int64 {
+func getCounterValue(packet eth.Packet, url, name string, counter *prometheus.CounterVec) int64 {
 	metric := &dto.Metric{}
 
-	err := counter.WithLabelValues(packet.Name(), url).Write(metric)
+	err := counter.WithLabelValues(packet.Name(), url, name).Write(metric)
 	if err != nil {
 		log.Error().Err(err).Send()
 		return 0
