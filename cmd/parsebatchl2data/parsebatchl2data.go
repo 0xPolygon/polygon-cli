@@ -33,7 +33,7 @@ var ParseBatchL2Data = &cobra.Command{
 		batchL2Data := strings.TrimSpace(strings.TrimPrefix(string(rawData), "0x"))
 		rawBatchL2Data, err := hex.DecodeString(batchL2Data)
 		if err != nil {
-			log.Err(err).Msg("Unable to hex decode batch l2 dat")
+			log.Err(err).Msg("Unable to hex decode batch l2 data")
 			return err
 		}
 
