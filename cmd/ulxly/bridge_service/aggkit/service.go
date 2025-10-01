@@ -51,7 +51,7 @@ func (s *BridgeService) GetDeposit(depositNetwork, depositCount uint32) (*bridge
 }
 
 func (s *BridgeService) GetDeposits(destinationAddress string, offset, limit int) ([]bridge_service.Deposit, int, error) {
-	panic("not implemented yet") // bridges endpoint requires network_id parameter
+	return nil, 0, fmt.Errorf("GetDeposits is not supported by aggkit bridge service yet")
 }
 
 func (s *BridgeService) GetProof(depositNetwork, depositCount uint32, ger *common.Hash) (*bridge_service.Proof, error) {
