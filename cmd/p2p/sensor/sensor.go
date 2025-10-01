@@ -121,14 +121,6 @@ var SensorCmd = &cobra.Command{
 			return errors.New("network ID must be greater than zero")
 		}
 
-		if inputSensorParams.ShouldRunPprof {
-			go handlePprof()
-		}
-
-		if inputSensorParams.ShouldRunPrometheus {
-			go handlePrometheus()
-		}
-
 		inputSensorParams.privateKey, err = crypto.GenerateKey()
 		if err != nil {
 			return err
@@ -256,6 +248,14 @@ var SensorCmd = &cobra.Command{
 
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+
+		if inputSensorParams.ShouldRunPprof {
+			go handlePprof()
+		}
+
+		if inputSensorParams.ShouldRunPrometheus {
+			go handlePrometheus()
+		}
 
 		go handleAPI(&server, msgCounter)
 
