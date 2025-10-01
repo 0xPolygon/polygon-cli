@@ -37,7 +37,7 @@ func (s *BridgeService) GetDeposit(depositNetwork, depositCount uint32) (*bridge
 
 	if statusCode != http.StatusOK {
 		errMsg := "unable to retrieve bridge deposit"
-		log.Warn().Int("code", statusCode).Str("message", bridgeRespError.Error).Msgf("%s", errMsg)
+		log.Warn().Int("code", statusCode).Str("message", bridgeRespError.Error).Msg(errMsg)
 		return nil, bridge_service.ErrNotFound
 	}
 
@@ -90,7 +90,7 @@ out:
 			return nil, bridge_service.ErrNotFound
 		}
 		errMsg := "unable to retrieve proof"
-		log.Warn().Int("code", statusCode).Str("message", respError.Error).Msgf("%s", errMsg)
+		log.Warn().Int("code", statusCode).Str("message", respError.Error).Msg(errMsg)
 		return nil, fmt.Errorf(respError.Error)
 	}
 
@@ -116,7 +116,7 @@ func (s *BridgeService) getL1InfoTreeIndex(depositNetwork, depositCount uint32) 
 			}
 		}
 		errMsg := "unable to retrieve l1 info tree index"
-		log.Warn().Int("code", statusCode).Str("message", l1InfoTreeIndexRespError.Error).Msgf("%s", errMsg)
+		log.Warn().Int("code", statusCode).Str("message", l1InfoTreeIndexRespError.Error).Msg(errMsg)
 		return nil, fmt.Errorf(l1InfoTreeIndexRespError.Error)
 	}
 

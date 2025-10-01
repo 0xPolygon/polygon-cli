@@ -36,7 +36,7 @@ func (s *BridgeService) GetDeposit(depositNetwork, depositCount uint32) (*bridge
 		if resp.Message != nil {
 			l.Str("message", *resp.Message)
 		}
-		l.Msgf("%s", errMsg)
+		l.Msg(errMsg)
 		return nil, bridge_service.ErrNotFound
 	}
 
