@@ -8,8 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const jsonIndent = "    "
-
 type (
 	nodeListParams struct {
 		ProjectID  string
@@ -43,7 +41,7 @@ var NodeListCmd = &cobra.Command{
 			return err
 		}
 
-		bytes, err := json.MarshalIndent(nodes, "", jsonIndent)
+		bytes, err := json.MarshalIndent(nodes, "", "    ")
 		if err != nil {
 			return err
 		}
