@@ -7,7 +7,6 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly/bridge_service"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/rs/zerolog/log"
 )
 
 type getBridgesResponse struct {
@@ -40,7 +39,7 @@ func (r *bridgeResponse) ToDeposit(networkID uint32) (*bridge_service.Deposit, e
 	d := &bridge_service.Deposit{}
 	d.BlockNum = r.BlockNum
 
-	d.GlobalIndex = r.generateGlobalIndex(networkID, false, false)
+	d.GlobalIndex = r.generateGlobalIndex(networkID)
 
 	d.Amount = new(big.Int)
 	_, ok := d.Amount.SetString(r.Amount, 10)
@@ -64,61 +63,16 @@ func (r *bridgeResponse) ToDeposit(networkID uint32) (*bridge_service.Deposit, e
 	return d, nil
 }
 
-// GenerateGlobalIndex converts the bash `generate_global_index` into Go.
-// - bridgeInfoJSON: JSON string that contains a "deposit_count"
-// - sourceNetworkID: 32-bit source network id
-// - manipulatedUnusedBits / manipulatedRollupID: same flags as in the bash script
-//
-// Returns the computed 256-bit value as *big.Int.
-func (r *bridgeResponse) generateGlobalIndex(networkID uint32, manipulatedUnusedBits, manipulatedRollupID bool) *big.Int {
-	// ---- Parse deposit_count from JSON (supports number or string) ----
-	depositCount := r.DepositCnt
-
-	// ---- Mask both to 32 bits (match bash behavior) ----
-	srcMasked := uint64(networkID) & 0xFFFFFFFF
-	depMasked := uint64(depositCount) & 0xFFFFFFFF
-
-	final := new(big.Int) // starts at 0
-
-	// precompute some powers of two we need
-	twoPow32 := new(big.Int).Lsh(big.NewInt(1), 32)   // 2^32
-	twoPow64 := new(big.Int).Lsh(big.NewInt(1), 64)   // 2^64
-	twoPow128 := new(big.Int).Lsh(big.NewInt(1), 128) // 2^128
-
-	// Offsets used when flags are set (match bash constants)
-	unusedBitsOffset := new(big.Int).Mul(big.NewInt(10), twoPow128) // 10 * 2^128
-	rollupIDOffset := new(big.Int).Mul(big.NewInt(10), twoPow32)    // 10 * 2^32
-
-	// ---- 192nd bit logic (bash adds 2^64 when source_network_id == 0) ----
-	if srcMasked == 0 {
-		// final_value += 2^64
-		final.Add(final, twoPow64)
-
-		if manipulatedUnusedBits {
-			log.Trace().Msg("-------------------------- Manipulated unused bits: true")
-			final.Add(final, unusedBitsOffset)
-		}
-		if manipulatedRollupID {
-			log.Trace().Msg("-------------------------- Manipulated rollup id: true")
-			final.Add(final, rollupIDOffset)
-		}
+func (r *bridgeResponse) generateGlobalIndex(networkID uint32) *big.Int {
+	result := new(big.Int)
+	if networkID == 0 {
+		// Mainnet: set bit 64 (add 2^64)
+		result.SetBit(result, 64, 1)
+	} else {
+		// Non-mainnet: (networkID - 1) shifted left by 32 bits
+		result.SetUint64(uint64(networkID-1) << 32)
 	}
-
-	// ---- 193-224 bits: if mainnet is 0 -> 0; otherwise (source_network_id - 1) * 2^32 ----
-	if srcMasked != 0 {
-		// (source_network_id - 1) * 2^32
-		mult := new(big.Int).SetUint64(srcMasked - 1)
-		destShifted := new(big.Int).Mul(mult, twoPow32)
-		final.Add(final, destShifted)
-
-		if manipulatedUnusedBits {
-			log.Trace().Msg("🔍 -------------------------- Manipulated unused bits: true")
-			final.Add(final, unusedBitsOffset)
-		}
-	}
-
-	// ---- 225-256 bits: add deposit_count (lower 32 bits) ----
-	final.Add(final, new(big.Int).SetUint64(depMasked))
-
-	return final
+	// Add deposit count to the lower 32 bits
+	result.Add(result, big.NewInt(int64(r.DepositCnt)))
+	return result
 }
