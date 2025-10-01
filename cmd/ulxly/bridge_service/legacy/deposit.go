@@ -1,6 +1,7 @@
 package legacy
 
 import (
+	"fmt"
 	"math/big"
 	"strconv"
 	"strings"
@@ -41,10 +42,16 @@ func (r *DepositResponse) ToDeposit() (*bridge_service.Deposit, error) {
 	}
 
 	d.GlobalIndex = new(big.Int)
-	d.GlobalIndex.SetString(r.GlobalIndex, 10)
+	_, ok := d.GlobalIndex.SetString(r.GlobalIndex, 10)
+	if !ok {
+		return nil, fmt.Errorf("invalid global index: %s", r.GlobalIndex)
+	}
 
 	d.Amount = new(big.Int)
-	d.Amount.SetString(r.Amount, 10)
+	_, ok = d.Amount.SetString(r.Amount, 10)
+	if !ok {
+		return nil, fmt.Errorf("invalid amount: %s", r.Amount)
+	}
 
 	d.TxHash = common.HexToHash(r.TxHash)
 	if len(r.ClaimTxHash) > 0 {
