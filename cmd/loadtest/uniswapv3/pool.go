@@ -1,9 +1,12 @@
 package uniswapv3loadtest
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/0xPolygon/polygon-cli/bindings/tokens"
+	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 	"time"
 
@@ -66,7 +69,7 @@ func NewPool(token0, token1 ContractConfig[tokens.ERC20], fees *big.Int) *PoolCo
 	}
 
 	// Make sure the token pair is sorted.
-	if token0.Address.Hex() < token1.Address.Hex() {
+	if bytes.Compare(token0.Address.Bytes(), token1.Address.Bytes()) < 0 {
 		p.Token0 = token0
 		p.Token1 = token1
 	} else {
@@ -245,26 +248,33 @@ func provideLiquidity(ctx context.Context, c *ethclient.Client, tops *bind.Trans
 		Deadline: deadline,
 	}
 	var liquidity *big.Int
-	err = util.BlockUntilSuccessful(ctx, c, func() (err error) {
-		// Mint tokens.
-		_, err = nftPositionManagerContract.Mint(tops, mintParams)
-		if err != nil {
-			return err
-		}
+	var tx *types.Transaction
+	tx, err = nftPositionManagerContract.Mint(tops, mintParams)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to mint liquidity")
+		return err
+	}
 
-		// Check that liquidity has been added to the pool.
-		liquidity, err = poolContract.Liquidity(cops)
+	err = util.BlockUntilSuccessful(ctx, c, func() (err error) {
+		receipt, err := c.TransactionReceipt(ctx, tx.Hash())
 		if err != nil {
 			return err
 		}
-		if liquidity.Cmp(big.NewInt(0)) == 0 {
-			return errors.New("pool has no liquidity")
-		}
+		log.Debug().Stringer("tx-hash", tx.Hash()).Uint64("gas-used", receipt.GasUsed).Msg("Transaction mined successfully")
 		return nil
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to provide liquidity to the pool")
+		return fmt.Errorf("unable to confirm receipt for mint transactions: %w", err)
+	}
+
+	// Check that liquidity has been added to the pool.
+	liquidity, err = poolContract.Liquidity(cops)
+	if err != nil {
 		return err
+	}
+	if liquidity.Cmp(big.NewInt(0)) == 0 {
+		log.Error().Err(err).Msg("Unable to provide liquidity to the pool")
+		return errors.New("pool has no liquidity")
 	}
 	log.Debug().Interface("liquidity", liquidity).Msg("Liquidity provided to the pool")
 	return nil
