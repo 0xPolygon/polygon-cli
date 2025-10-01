@@ -187,7 +187,7 @@ func getReceiptsByBlock(ctx context.Context, rawBlocks []*json.RawMessage, c *et
 		receipts = append(receipts, rs...)
 	}
 	if len(receipts) == 0 {
-		log.Error().Msg("No receipts have been fetched")
+		log.Info().Msg("No receipts have been fetched")
 		return nil, nil
 	}
 	log.Info().Int("blocks", len(rawBlocks)).Int("receipts", len(receipts)).Msg("Fetched tx receipts")
@@ -279,7 +279,7 @@ func getReceiptsByTx(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrp
 		receipts = append(receipts, b.Result.(*json.RawMessage))
 	}
 	if len(receipts) == 0 {
-		log.Error().Msg("No receipts have been fetched")
+		log.Info().Msg("No receipts have been fetched")
 		return nil, nil
 	}
 	log.Info().Int("hashes", len(txHashes)).Int("receipts", len(receipts)).Msg("Fetched tx receipts")
