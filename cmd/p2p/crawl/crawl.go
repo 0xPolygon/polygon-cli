@@ -114,15 +114,15 @@ var CrawlCmd = &cobra.Command{
 }
 
 func init() {
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Bootnodes, "bootnodes", "b", "",
+	CrawlCmd.Flags().StringVarP(&inputCrawlParams.Bootnodes, "bootnodes", "b", "",
 		`Comma separated nodes used for bootstrapping. At least one bootnode is
 required, so other nodes in the network can discover each other.`)
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.DiscoveryDNS, "discovery-dns", "", "", `Enable EIP-1459, DNS Discovery to recover node list from given ENRTree`)
+	CrawlCmd.Flags().StringVarP(&inputCrawlParams.DiscoveryDNS, "discovery-dns", "", "", `Enable EIP-1459, DNS Discovery to recover node list from given ENRTree`)
 	CrawlCmd.MarkFlagsMutuallyExclusive("bootnodes", "discovery-dns")
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "Time limit for the crawl")
-	CrawlCmd.PersistentFlags().IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt")
-	CrawlCmd.PersistentFlags().Uint64VarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id")
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.Database, "database", "d", "", "Node database for updating and storing client information")
-	CrawlCmd.PersistentFlags().StringVarP(&inputCrawlParams.RevalidationInterval, "revalidation-interval", "r", "10m", "Time before retrying to connect to a failed peer")
-	CrawlCmd.PersistentFlags().BoolVarP(&inputCrawlParams.OnlyURLs, "only-urls", "u", true, "Only writes the enode URLs to the output")
+	CrawlCmd.Flags().StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "Time limit for the crawl")
+	CrawlCmd.Flags().IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "How many parallel discoveries to attempt")
+	CrawlCmd.Flags().Uint64VarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network id")
+	CrawlCmd.Flags().StringVarP(&inputCrawlParams.Database, "database", "d", "", "Node database for updating and storing client information")
+	CrawlCmd.Flags().StringVarP(&inputCrawlParams.RevalidationInterval, "revalidation-interval", "r", "10m", "Time before retrying to connect to a failed peer")
+	CrawlCmd.Flags().BoolVarP(&inputCrawlParams.OnlyURLs, "only-urls", "u", true, "Only writes the enode URLs to the output")
 }
