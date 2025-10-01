@@ -12,7 +12,7 @@ fmt:
 
 # Run `go vet` and `shadow` (which reports shadowed variables) against code.
 # https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/shadow
-# `go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@latest`
+# `go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@v0.37.0`
 .PHONY: vet
 vet:
 	go vet ./...
