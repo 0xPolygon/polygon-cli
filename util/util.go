@@ -112,14 +112,19 @@ func GetBlockRangeInPages(ctx context.Context, from, to, pageSize uint64, c *eth
 	return allBlocks, nil
 }
 
+var getReceiptsByBlockIsSupported *bool
+
 func GetReceipts(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrpc.Client, batchSize uint64) ([]*json.RawMessage, error) {
-	// check if get receipts by block is supported
-	err := c.CallContext(ctx, nil, "eth_getBlockReceipts", "0x1")
-	if err == nil {
+	if getReceiptsByBlockIsSupported == nil {
+		err := c.CallContext(ctx, nil, "eth_getBlockReceipts", "0x0")
+		supported := err == nil
+		getReceiptsByBlockIsSupported = &supported
+	}
+
+	if getReceiptsByBlockIsSupported != nil && *getReceiptsByBlockIsSupported {
 		return getReceiptsByBlock(ctx, rawBlocks, c, batchSize)
 	}
 
-	log.Debug().Err(err).Msg("eth_getBlockReceipts not supported, falling back to eth_getTransactionReceipt")
 	return getReceiptsByTx(ctx, rawBlocks, c, batchSize)
 }
 
