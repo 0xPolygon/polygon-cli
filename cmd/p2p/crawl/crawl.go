@@ -118,12 +118,12 @@ func init() {
 	f.StringVarP(&inputCrawlParams.Bootnodes, "bootnodes", "b", "",
 		`comma separated nodes used for bootstrapping. At least one bootnode is
 required, so other nodes in the network can discover each other`)
-	f.StringVarP(&inputCrawlParams.DiscoveryDNS, "discovery-dns", "", "", `enable EIP-1459, DNS Discovery to recover node list from given ENRTree`)
+	f.StringVarP(&inputCrawlParams.DiscoveryDNS, "discovery-dns", "", "", "enable EIP-1459, DNS Discovery to recover node list from given ENRTree")
 	CrawlCmd.MarkFlagsMutuallyExclusive("bootnodes", "discovery-dns")
 	f.StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "time limit for the crawl")
 	f.IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "how many parallel discoveries to attempt")
 	f.Uint64VarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "filter discovered nodes by this network ID")
 	f.StringVarP(&inputCrawlParams.Database, "database", "d", "", "node database for updating and storing client information")
 	f.StringVarP(&inputCrawlParams.RevalidationInterval, "revalidation-interval", "r", "10m", "time before retrying to connect to a failed peer")
-	f.BoolVarP(&inputCrawlParams.OnlyURLs, "only-urls", "u", true, "only writes the enode URLs to the output")
+	f.BoolVarP(&inputCrawlParams.OnlyURLs, "only-urls", "u", true, "only writes enode URLs to output")
 }

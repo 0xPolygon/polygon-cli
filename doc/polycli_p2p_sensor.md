@@ -45,24 +45,24 @@ If no nodes.json file exists, it will be created.
   -m, --max-peers int            maximum number of peers to connect to (default 2000)
       --nat string               NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
   -n, --network-id uint          filter discovered nodes by this network ID
+      --no-discovery             disable P2P peer discovery
       --port int                 TCP network listening port (default 30303)
       --pprof                    run pprof server
       --pprof-port uint          port pprof runs on (default 6060)
   -p, --project-id string        GCP project ID
       --prom                     run Prometheus server (default true)
       --prom-port uint           port Prometheus runs on (default 2112)
-      --quick-start              whether to load the nodes.json as static nodes to quickly start the network.
-                                 This produces faster development cycles but can prevent the sensor from being to
-                                 connect to new peers if the nodes.json file is large
-      --rpc string               RPC endpoint used to fetch the latest block (default "https://polygon-rpc.com")
+      --rpc string               RPC endpoint used to fetch latest block (default "https://polygon-rpc.com")
+      --rpc-port uint            port for JSON-RPC server to receive transactions (default 8545)
   -s, --sensor-id string         sensor ID when writing block/tx events
+      --static-nodes string      static nodes file
       --trusted-nodes string     trusted nodes file
       --ttl duration             time to live (default 336h0m0s)
-      --write-block-events       write block events to the database (default true)
-  -B, --write-blocks             write blocks to the database (default true)
-      --write-peers              write peers to the database (default true)
-      --write-tx-events          write transaction events to the database (can significantly increase CPU and memory usage) (default true)
-  -t, --write-txs                write transactions to the database (can significantly increase CPU and memory usage) (default true)
+      --write-block-events       write block events to database (default true)
+  -B, --write-blocks             write blocks to database (default true)
+      --write-peers              write peers to database (default true)
+      --write-tx-events          write transaction events to database. This option can significantly increase CPU and memory usage (default true)
+  -t, --write-txs                write transactions to database. This option can significantly increase CPU and memory usage (default true)
 ```
 
 The command also inherits flags from parent commands.

@@ -20,9 +20,10 @@ polycli p2p nodelist [nodes.json] [flags]
 ## Flags
 
 ```bash
-  -h, --help                help for nodelist
-  -l, --limit int           number of unique nodes to return (default 100)
-  -p, --project-id string   GCP project ID
+  -d, --database-id string   datastore database ID
+  -h, --help                 help for nodelist
+  -l, --limit int            number of unique nodes to return (default 100)
+  -p, --project-id string    GCP project ID
 ```
 
 The command also inherits flags from parent commands.

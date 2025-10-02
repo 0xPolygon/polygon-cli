@@ -131,6 +131,6 @@ func init() {
 	f.StringVarP(&inputPingParams.OutputFile, "output", "o", "", "write ping results to output file (default stdout)")
 	f.IntVarP(&inputPingParams.Threads, "parallel", "p", 16, "how many parallel pings to attempt")
 	f.BoolVarP(&inputPingParams.Listen, "listen", "l", true,
-		`keep the connection open and listen to the peer. This only works if the first
+		`keep connection open and listen to peer. This only works if first
 argument is an enode/enr, not a nodes file`)
 }
