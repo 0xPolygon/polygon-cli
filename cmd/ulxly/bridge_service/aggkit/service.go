@@ -120,7 +120,7 @@ func (s *BridgeService) getL1InfoTreeIndex(depositNetwork, depositCount uint32) 
 		}
 		errMsg := "unable to retrieve l1 info tree index"
 		log.Warn().Int("code", statusCode).Str("message", l1InfoTreeIndexRespError.Error).Msg(errMsg)
-		return nil, fmt.Errorf(l1InfoTreeIndexRespError.Error)
+		return nil, fmt.Errorf("%s: %s", errMsg, l1InfoTreeIndexRespError.Error)
 	}
 
 	return &l1InfoTreeIndex, nil
