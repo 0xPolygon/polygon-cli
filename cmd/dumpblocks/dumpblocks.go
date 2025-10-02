@@ -185,14 +185,14 @@ var DumpblocksCmd = &cobra.Command{
 }
 
 func init() {
-	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.RpcUrl, "rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
-	DumpblocksCmd.PersistentFlags().UintVarP(&inputDumpblocks.Threads, "concurrency", "c", 1, "how many go routines to leverage")
-	DumpblocksCmd.PersistentFlags().BoolVarP(&inputDumpblocks.ShouldDumpBlocks, "dump-blocks", "B", true, "if the blocks will be dumped")
-	DumpblocksCmd.PersistentFlags().BoolVar(&inputDumpblocks.ShouldDumpReceipts, "dump-receipts", true, "if the receipts will be dumped")
-	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.Filename, "filename", "f", "", "where to write the output to (default stdout)")
-	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
-	DumpblocksCmd.PersistentFlags().Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "the batch size. Realistically, this probably shouldn't be bigger than 999. Most providers seem to cap at 1000.")
-	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from, not setting a filter means all are allowed")
+	DumpblocksCmd.Flags().StringVarP(&inputDumpblocks.RpcUrl, "rpc-url", "r", "http://localhost:8545", "the RPC endpoint URL")
+	DumpblocksCmd.Flags().UintVarP(&inputDumpblocks.Threads, "concurrency", "c", 1, "how many go routines to leverage")
+	DumpblocksCmd.Flags().BoolVarP(&inputDumpblocks.ShouldDumpBlocks, "dump-blocks", "B", true, "if the blocks will be dumped")
+	DumpblocksCmd.Flags().BoolVar(&inputDumpblocks.ShouldDumpReceipts, "dump-receipts", true, "if the receipts will be dumped")
+	DumpblocksCmd.Flags().StringVarP(&inputDumpblocks.Filename, "filename", "f", "", "where to write the output to (default stdout)")
+	DumpblocksCmd.Flags().StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
+	DumpblocksCmd.Flags().Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "the batch size. Realistically, this probably shouldn't be bigger than 999. Most providers seem to cap at 1000")
+	DumpblocksCmd.Flags().StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from, not setting a filter means all are allowed")
 }
 
 func checkFlags() error {

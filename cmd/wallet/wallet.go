@@ -120,19 +120,19 @@ func getFileOrFlag(filename *string, flag *string) (string, error) {
 }
 
 func init() {
-	inputKDFIterations = WalletCmd.PersistentFlags().Uint("iterations", 2048, "Number of pbkdf2 iterations to perform")
-	inputWords = WalletCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
-	inputAddressesToGenerate = WalletCmd.PersistentFlags().Uint("addresses", 10, "The number of addresses to generate")
-	inputLang = WalletCmd.PersistentFlags().String("language", "english", "Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
+	inputKDFIterations = WalletCmd.Flags().Uint("iterations", 2048, "number of pbkdf2 iterations to perform")
+	inputWords = WalletCmd.Flags().Int("words", 24, "number of words to use in mnemonic")
+	inputAddressesToGenerate = WalletCmd.Flags().Uint("addresses", 10, "number of addresses to generate")
+	inputLang = WalletCmd.Flags().String("language", "english", "which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
 	// https://github.com/satoshilabs/slips/blob/master/slip-0044.md
 	// 0 - bitcoin
 	// 60 - ether
 	// 966 - matic
-	inputPath = WalletCmd.PersistentFlags().String("path", "m/44'/60'/0'", "What would you like the derivation path to be")
-	inputPassword = WalletCmd.PersistentFlags().String("password", "", "Password used along with the mnemonic")
-	inputPasswordFile = WalletCmd.PersistentFlags().String("password-file", "", "Password stored in a file used along with the mnemonic")
-	inputMnemonic = WalletCmd.PersistentFlags().String("mnemonic", "", "A mnemonic phrase used to generate entropy")
-	inputMnemonicFile = WalletCmd.PersistentFlags().String("mnemonic-file", "", "A mnemonic phrase written in a file used to generate entropy")
-	inputUseRawEntropy = WalletCmd.PersistentFlags().Bool("raw-entropy", false, "substrate and polka dot don't follow strict bip39 and use raw entropy")
-	inputRootOnly = WalletCmd.PersistentFlags().Bool("root-only", false, "don't produce HD accounts. Just produce a single wallet")
+	inputPath = WalletCmd.Flags().String("path", "m/44'/60'/0'", "what would you like the derivation path to be")
+	inputPassword = WalletCmd.Flags().String("password", "", "password used along with the mnemonic")
+	inputPasswordFile = WalletCmd.Flags().String("password-file", "", "password stored in a file used along with the mnemonic")
+	inputMnemonic = WalletCmd.Flags().String("mnemonic", "", "mnemonic phrase used to generate entropy")
+	inputMnemonicFile = WalletCmd.Flags().String("mnemonic-file", "", "mnemonic phrase written in file used to generate entropy")
+	inputUseRawEntropy = WalletCmd.Flags().Bool("raw-entropy", false, "substrate and polka dot don't follow strict bip39 and use raw entropy")
+	inputRootOnly = WalletCmd.Flags().Bool("root-only", false, "don't produce HD accounts. Just produce a single wallet")
 }

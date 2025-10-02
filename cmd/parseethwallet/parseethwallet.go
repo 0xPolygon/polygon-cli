@@ -81,7 +81,7 @@ var ParseETHWalletCmd = &cobra.Command{
 }
 
 func init() {
-	flagSet := ParseETHWalletCmd.PersistentFlags()
+	flagSet := ParseETHWalletCmd.Flags()
 	inputFileName = flagSet.String("file", "", "Provide a file with the key information ")
 	inputPassword = flagSet.String("password", "", "An optional password use to unlock the key")
 	inputRawHexPrivateKey = flagSet.String("hexkey", "", "An optional hexkey that would be use to generate a geth style key")

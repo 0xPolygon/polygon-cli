@@ -227,10 +227,10 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	inputFixNonceGapArgs.rpcURL = FixNonceGapCmd.PersistentFlags().StringP(ArgRpcURL, "r", "http://localhost:8545", "The RPC endpoint url")
-	inputFixNonceGapArgs.privateKey = FixNonceGapCmd.PersistentFlags().String(ArgPrivateKey, "", "the private key to be used when sending the txs to fix the nonce gap")
-	inputFixNonceGapArgs.replace = FixNonceGapCmd.PersistentFlags().Bool(ArgReplace, false, "replace the existing txs in the pool")
-	inputFixNonceGapArgs.maxNonce = FixNonceGapCmd.PersistentFlags().Uint64(ArgMaxNonce, 0, "when set, the max nonce will be this value instead of trying to get it from the pool")
+	inputFixNonceGapArgs.rpcURL = FixNonceGapCmd.Flags().StringP(ArgRpcURL, "r", "http://localhost:8545", "the RPC endpoint URL")
+	inputFixNonceGapArgs.privateKey = FixNonceGapCmd.Flags().String(ArgPrivateKey, "", "private key to be used when sending txs to fix nonce gap")
+	inputFixNonceGapArgs.replace = FixNonceGapCmd.Flags().Bool(ArgReplace, false, "replace the existing txs in the pool")
+	inputFixNonceGapArgs.maxNonce = FixNonceGapCmd.Flags().Uint64(ArgMaxNonce, 0, "when set, the max nonce will be this value instead of trying to get it from the pool")
 }
 
 // Wait for the transaction to be mined

@@ -136,9 +136,9 @@ func publish(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	publishInputArgs.rpcURL = Cmd.PersistentFlags().String(ArgRpcURL, defaultRPCURL, "The RPC URL of the network")
-	publishInputArgs.concurrency = Cmd.PersistentFlags().Uint64P("concurrency", "c", 1, "Number of txs to send concurrently. Default is one request at a time.")
-	publishInputArgs.jobQueueSize = Cmd.PersistentFlags().Uint64("job-queue-size", 100, "Number of jobs we can put in the job queue for workers to process.")
-	publishInputArgs.inputFileName = Cmd.PersistentFlags().String("file", "", "Provide a filename with transactions to publish")
-	publishInputArgs.rateLimit = Cmd.PersistentFlags().Uint64("rate-limit", 0, "Rate limit in txs per second. Default is no rate limit.")
+	publishInputArgs.rpcURL = Cmd.Flags().String(ArgRpcURL, defaultRPCURL, "RPC URL of network")
+	publishInputArgs.concurrency = Cmd.Flags().Uint64P("concurrency", "c", 1, "number of txs to send concurrently. Default is one request at a time")
+	publishInputArgs.jobQueueSize = Cmd.Flags().Uint64("job-queue-size", 100, "number of jobs we can put in the job queue for workers to process")
+	publishInputArgs.inputFileName = Cmd.Flags().String("file", "", "provide a filename with transactions to publish")
+	publishInputArgs.rateLimit = Cmd.Flags().Uint64("rate-limit", 0, "rate limit in txs per second. Default is no rate limit")
 }

@@ -95,7 +95,7 @@ var HashCmd = &cobra.Command{
 }
 
 func init() {
-	flagSet := HashCmd.PersistentFlags()
+	flagSet := HashCmd.Flags()
 	inputFileName = flagSet.String("file", "", "Provide a filename to read and hash")
 }
 

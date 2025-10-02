@@ -844,22 +844,22 @@ func init() {
 	SignerCmd.AddCommand(ListCmd)
 	SignerCmd.AddCommand(ImportCmd)
 
-	inputSignerOpts.keystore = SignerCmd.PersistentFlags().String("keystore", "", "Use the keystore in the given folder or file")
-	inputSignerOpts.privateKey = SignerCmd.PersistentFlags().String("private-key", "", "Use the provided hex encoded private key")
-	inputSignerOpts.kms = SignerCmd.PersistentFlags().String("kms", "", "AWS or GCP if the key is stored in the cloud")
-	inputSignerOpts.keyID = SignerCmd.PersistentFlags().String("key-id", "", "The id of the key to be used for signing")
-	inputSignerOpts.unsafePassword = SignerCmd.PersistentFlags().String("unsafe-password", "", "A non-interactively specified password for unlocking the keystore")
+	inputSignerOpts.keystore = SignerCmd.Flags().String("keystore", "", "use the keystore in the given folder or file")
+	inputSignerOpts.privateKey = SignerCmd.Flags().String("private-key", "", "use the provided hex encoded private key")
+	inputSignerOpts.kms = SignerCmd.Flags().String("kms", "", "AWS or GCP if the key is stored in the cloud")
+	inputSignerOpts.keyID = SignerCmd.Flags().String("key-id", "", "ID of key to be used for signing")
+	inputSignerOpts.unsafePassword = SignerCmd.Flags().String("unsafe-password", "", "non-interactively specified password for unlocking keystore")
 
-	inputSignerOpts.signerType = SignerCmd.PersistentFlags().String("type", "london", "The type of signer to use: latest, cancun, london, eip2930, eip155")
-	inputSignerOpts.dataFile = SignerCmd.PersistentFlags().String("data-file", "", "File name holding data to be signed")
+	inputSignerOpts.signerType = SignerCmd.Flags().String("type", "london", "type of signer to use: latest, cancun, london, eip2930, eip155")
+	inputSignerOpts.dataFile = SignerCmd.Flags().String("data-file", "", "file name holding data to be signed")
 
-	inputSignerOpts.chainID = SignerCmd.PersistentFlags().Uint64("chain-id", 0, "The chain id for the transactions.")
+	inputSignerOpts.chainID = SignerCmd.Flags().Uint64("chain-id", 0, "chain ID for transactions")
 
 	// https://github.com/golang/oauth2/issues/241
-	inputSignerOpts.gcpProjectID = SignerCmd.PersistentFlags().String("gcp-project-id", "", "The GCP Project ID to use")
-	inputSignerOpts.gcpRegion = SignerCmd.PersistentFlags().String("gcp-location", "europe-west2", "The GCP Region to use")
+	inputSignerOpts.gcpProjectID = SignerCmd.Flags().String("gcp-project-id", "", "GCP project ID to use")
+	inputSignerOpts.gcpRegion = SignerCmd.Flags().String("gcp-location", "europe-west2", "GCP region to use")
 	// What is dead may never die https://cloud.google.com/kms/docs/faq#cannot_delete
-	inputSignerOpts.gcpKeyRingID = SignerCmd.PersistentFlags().String("gcp-keyring-id", "polycli-keyring", "The GCP Keyring ID to be used")
-	inputSignerOpts.gcpImportJob = SignerCmd.PersistentFlags().String("gcp-import-job-id", "", "The GCP Import Job ID to use when importing a key")
-	inputSignerOpts.gcpKeyVersion = SignerCmd.PersistentFlags().Int("gcp-key-version", 1, "The GCP crypto key version to use")
+	inputSignerOpts.gcpKeyRingID = SignerCmd.Flags().String("gcp-keyring-id", "polycli-keyring", "GCP keyring ID to be used")
+	inputSignerOpts.gcpImportJob = SignerCmd.Flags().String("gcp-import-job-id", "", "GCP import job ID to use when importing key")
+	inputSignerOpts.gcpKeyVersion = SignerCmd.Flags().Int("gcp-key-version", 1, "GCP crypto key version to use")
 }

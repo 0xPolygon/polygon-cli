@@ -168,8 +168,8 @@ func fetchContractCreationTx(ctx context.Context, client *ethclient.Client, cont
 }
 
 func init() {
-	inputArgs.rpcURL = Cmd.PersistentFlags().String(ArgRpcURL, defaultRPCURL, "The RPC URL of the network containing the contract")
-	inputArgs.address = Cmd.PersistentFlags().String(ArgAddress, "", "The contract address")
+	inputArgs.rpcURL = Cmd.Flags().String(ArgRpcURL, defaultRPCURL, "RPC URL of network containing contract")
+	inputArgs.address = Cmd.Flags().String(ArgAddress, "", "contract address")
 
-	_ = Cmd.MarkPersistentFlagRequired(ArgAddress)
+	_ = Cmd.MarkFlagRequired(ArgAddress)
 }

@@ -46,7 +46,7 @@ var WrapContractCmd = &cobra.Command{
 }
 
 func init() {
-	flagSet := WrapContractCmd.PersistentFlags()
+	flagSet := WrapContractCmd.Flags()
 	jsonStorage = flagSet.String("storage", "", "Provide storage slots in json format k:v")
 }
 

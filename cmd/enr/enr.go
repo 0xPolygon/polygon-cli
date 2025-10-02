@@ -102,7 +102,7 @@ func ForkIDToString(id forkid.ID) string {
 }
 
 func init() {
-	flagSet := ENRCmd.PersistentFlags()
+	flagSet := ENRCmd.Flags()
 	inputFileName = flagSet.String("file", "", "Provide a file that's holding ENRs")
 }
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {

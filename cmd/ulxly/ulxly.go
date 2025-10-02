@@ -2260,7 +2260,7 @@ type FileOptions struct {
 }
 
 func (o *FileOptions) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVarP(&o.FileName, ArgFileName, "", "", "An ndjson file with events data")
+	cmd.Flags().StringVarP(&o.FileName, ArgFileName, "", "", "an ndjson file with events data")
 }
 
 type BalanceTreeOptions struct {
@@ -2270,11 +2270,11 @@ type BalanceTreeOptions struct {
 }
 
 func (o *BalanceTreeOptions) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVarP(&o.L2ClaimsFile, ArgL2ClaimsFileName, "", "", "An ndjson file with l2 claim events data")
-	cmd.Flags().StringVarP(&o.L2DepositsFile, ArgL2DepositsFileName, "", "", "An ndjson file with l2 deposit events data")
-	cmd.Flags().StringVarP(&o.BridgeAddress, ArgBridgeAddress, "", "", "Bridge Address")
+	cmd.Flags().StringVarP(&o.L2ClaimsFile, ArgL2ClaimsFileName, "", "", "an ndjson file with l2 claim events data")
+	cmd.Flags().StringVarP(&o.L2DepositsFile, ArgL2DepositsFileName, "", "", "an ndjson file with l2 deposit events data")
+	cmd.Flags().StringVarP(&o.BridgeAddress, ArgBridgeAddress, "", "", "bridge address")
 	cmd.Flags().StringVarP(&o.RpcURL, ArgRPCURL, "r", "", "RPC URL")
-	cmd.Flags().Uint32VarP(&o.L2NetworkID, ArgL2NetworkID, "", 0, "The L2 networkID")
+	cmd.Flags().Uint32VarP(&o.L2NetworkID, ArgL2NetworkID, "", 0, "the L2 network ID")
 	cmd.Flags().BoolVarP(&o.Insecure, ArgInsecure, "", false, "skip TLS certificate verification")
 }
 
@@ -2283,7 +2283,7 @@ type ProofOptions struct {
 }
 
 func (o *ProofOptions) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().Uint32VarP(&o.DepositCount, ArgDepositCount, "", 0, "The deposit number to generate a proof for")
+	cmd.Flags().Uint32VarP(&o.DepositCount, ArgDepositCount, "", 0, "the deposit number to generate a proof for")
 }
 
 type RollupsProofOptions struct {
@@ -2292,8 +2292,8 @@ type RollupsProofOptions struct {
 }
 
 func (o *RollupsProofOptions) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().Uint32VarP(&o.RollupID, ArgRollupID, "", 0, "The rollupID number to generate a proof for")
-	cmd.Flags().BoolVarP(&o.CompleteMerkleTree, ArgCompleteMT, "", false, "Allows to get the proof for a leave higher than the highest rollupID")
+	cmd.Flags().Uint32VarP(&o.RollupID, ArgRollupID, "", 0, "the rollup ID number to generate a proof for")
+	cmd.Flags().BoolVarP(&o.CompleteMerkleTree, ArgCompleteMT, "", false, "allows to get the proof for a leave higher than the highest rollup ID")
 }
 
 type GetEvent struct {
@@ -2303,10 +2303,10 @@ type GetEvent struct {
 }
 
 func (o *GetEvent) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVarP(&o.URL, ArgRPCURL, "u", "", "The RPC URL to read the events data")
-	cmd.Flags().Uint64VarP(&o.FromBlock, ArgFromBlock, "f", 0, "The start of the range of blocks to retrieve")
-	cmd.Flags().Uint64VarP(&o.ToBlock, ArgToBlock, "t", 0, "The end of the range of blocks to retrieve")
-	cmd.Flags().Uint64VarP(&o.FilterSize, ArgFilterSize, "i", 1000, "The batch size for individual filter queries")
+	cmd.Flags().StringVarP(&o.URL, ArgRPCURL, "u", "", "the RPC URL to read the events data")
+	cmd.Flags().Uint64VarP(&o.FromBlock, ArgFromBlock, "f", 0, "the start of the range of blocks to retrieve")
+	cmd.Flags().Uint64VarP(&o.ToBlock, ArgToBlock, "t", 0, "the end of the range of blocks to retrieve")
+	cmd.Flags().Uint64VarP(&o.FilterSize, ArgFilterSize, "i", 1000, "the batch size for individual filter queries")
 	cmd.Flags().BoolVarP(&o.Insecure, ArgInsecure, "", false, "skip TLS certificate verification")
 	fatalIfError(cmd.MarkFlagRequired(ArgFromBlock))
 	fatalIfError(cmd.MarkFlagRequired(ArgToBlock))
@@ -2318,7 +2318,7 @@ type GetSmcOptions struct {
 }
 
 func (o *GetSmcOptions) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVarP(&o.BridgeAddress, ArgBridgeAddress, "a", "", "The address of the ulxly bridge")
+	cmd.Flags().StringVarP(&o.BridgeAddress, ArgBridgeAddress, "a", "", "the address of the ulxly bridge")
 }
 
 type GetVerifyBatchesOptions struct {
@@ -2326,7 +2326,7 @@ type GetVerifyBatchesOptions struct {
 }
 
 func (o *GetVerifyBatchesOptions) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVarP(&o.RollupManagerAddress, ArgRollupManagerAddress, "a", "", "The address of the rollup manager contract")
+	cmd.Flags().StringVarP(&o.RollupManagerAddress, ArgRollupManagerAddress, "a", "", "the address of the rollup manager contract")
 }
 
 func init() {
@@ -2569,10 +2569,10 @@ or if it's actually an intermediate hash.`,
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgBridgeServiceURL))
 
 	// Claim Everything Helper Command
-	inputUlxlyArgs.bridgeServiceURLs = claimEverythingCommand.Flags().StringSlice(ArgBridgeMappings, nil, "Mappings between network ids and bridge service urls. E.g. '1=http://network-1-bridgeurl,7=http://network-2-bridgeurl'")
-	inputUlxlyArgs.bridgeLimit = claimEverythingCommand.Flags().Int(ArgBridgeLimit, 25, "Limit the number or responses returned by the bridge service when claiming")
-	inputUlxlyArgs.bridgeOffset = claimEverythingCommand.Flags().Int(ArgBridgeOffset, 0, "The offset to specify for pagination of the underlying bridge service deposits")
-	inputUlxlyArgs.concurrency = claimEverythingCommand.Flags().Uint(ArgConcurrency, 1, "The worker pool size for claims")
+	inputUlxlyArgs.bridgeServiceURLs = claimEverythingCommand.Flags().StringSlice(ArgBridgeMappings, nil, "mappings between network IDs and bridge service URLs. E.g. '1=http://network-1-bridgeurl,7=http://network-2-bridgeurl'")
+	inputUlxlyArgs.bridgeLimit = claimEverythingCommand.Flags().Int(ArgBridgeLimit, 25, "limit the number or responses returned by the bridge service when claiming")
+	inputUlxlyArgs.bridgeOffset = claimEverythingCommand.Flags().Int(ArgBridgeOffset, 0, "offset to specify for pagination of underlying bridge service deposits")
+	inputUlxlyArgs.concurrency = claimEverythingCommand.Flags().Uint(ArgConcurrency, 1, "worker pool size for claims")
 
 	fatalIfError(claimEverythingCommand.MarkFlagRequired(ArgBridgeMappings))
 

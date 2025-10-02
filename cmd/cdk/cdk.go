@@ -632,22 +632,22 @@ func mustPrintLogs(logs []types.Log, contractInstance reflect.Value, contractABI
 
 func init() {
 	// cdk
-	cdkInputArgs.rpcURL = CDKCmd.PersistentFlags().String(ArgRpcURL, defaultRPCURL, "The RPC URL of the network containing the CDK contracts")
-	cdkInputArgs.forkID = CDKCmd.PersistentFlags().String(ArgForkID, defaultForkId, "The ForkID of the cdk networks")
-	cdkInputArgs.rollupManagerAddress = CDKCmd.PersistentFlags().String(ArgRollupManagerAddress, "", "The address of the rollup contract")
+	cdkInputArgs.rpcURL = CDKCmd.PersistentFlags().String(ArgRpcURL, defaultRPCURL, "the RPC URL of the network containing the CDK contracts")
+	cdkInputArgs.forkID = CDKCmd.PersistentFlags().String(ArgForkID, defaultForkId, "the fork ID of the CDK networks")
+	cdkInputArgs.rollupManagerAddress = CDKCmd.PersistentFlags().String(ArgRollupManagerAddress, "", "the address of the rollup contract")
 
 	// rollup manager
 
 	// rollup
-	cdkInputArgs.rollupID = rollupCmd.PersistentFlags().String(ArgRollupID, "", "The rollup ID")
-	cdkInputArgs.rollupChainID = rollupCmd.PersistentFlags().String(ArgRollupChainID, "", "The rollup chain ID")
-	cdkInputArgs.rollupAddress = rollupCmd.PersistentFlags().String(ArgRollupAddress, "", "The rollup Address")
+	cdkInputArgs.rollupID = rollupCmd.PersistentFlags().String(ArgRollupID, "", "the rollup ID")
+	cdkInputArgs.rollupChainID = rollupCmd.PersistentFlags().String(ArgRollupChainID, "", "the rollup chain ID")
+	cdkInputArgs.rollupAddress = rollupCmd.PersistentFlags().String(ArgRollupAddress, "", "the rollup address")
 
 	// bridge
-	cdkInputArgs.bridgeAddress = bridgeCmd.PersistentFlags().String(ArgBridgeAddress, "", "The address of the bridge contract")
+	cdkInputArgs.bridgeAddress = bridgeCmd.PersistentFlags().String(ArgBridgeAddress, "", "the address of the bridge contract")
 
 	// ger
-	cdkInputArgs.gerAddress = gerCmd.PersistentFlags().String(ArgGERAddress, "", "The address of the GER contract")
+	cdkInputArgs.gerAddress = gerCmd.PersistentFlags().String(ArgGERAddress, "", "the address of the GER contract")
 
 	CDKCmd.AddCommand(rollupManagerCmd)
 	CDKCmd.AddCommand(rollupCmd)

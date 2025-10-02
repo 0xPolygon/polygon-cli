@@ -72,7 +72,7 @@ var ParseBatchL2Data = &cobra.Command{
 }
 
 func init() {
-	flagSet := ParseBatchL2Data.PersistentFlags()
+	flagSet := ParseBatchL2Data.Flags()
 	inputFileName = flagSet.String("file", "", "Provide a file with the key information ")
 }
 

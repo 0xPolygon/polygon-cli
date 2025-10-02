@@ -127,10 +127,10 @@ var EcRecoverCmd = &cobra.Command{
 }
 
 func init() {
-	EcRecoverCmd.PersistentFlags().StringVarP(&rpcUrl, "rpc-url", "r", "", "The RPC endpoint url")
-	EcRecoverCmd.PersistentFlags().Uint64VarP(&blockNumber, "block-number", "b", 0, "Block number to check the extra data for (default: latest)")
-	EcRecoverCmd.PersistentFlags().StringVarP(&filePath, "file", "f", "", "Path to a file containing block information in JSON format")
-	EcRecoverCmd.PersistentFlags().StringVarP(&txData, "tx", "t", "", "Transaction data in hex format")
+	EcRecoverCmd.Flags().StringVarP(&rpcUrl, "rpc-url", "r", "", "the RPC endpoint URL")
+	EcRecoverCmd.Flags().Uint64VarP(&blockNumber, "block-number", "b", 0, "block number to check the extra data for (default: latest)")
+	EcRecoverCmd.Flags().StringVarP(&filePath, "file", "f", "", "path to a file containing block information in JSON format")
+	EcRecoverCmd.Flags().StringVarP(&txData, "tx", "t", "", "transaction data in hex format")
 
 	// The sources of decoding are mutually exclusive
 	EcRecoverCmd.MarkFlagsMutuallyExclusive("file", "block-number", "tx")

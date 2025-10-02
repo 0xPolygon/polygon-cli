@@ -95,15 +95,15 @@ var Cmd = &cobra.Command{
 }
 
 func init() {
-	dockerloggerInputArgs.network = Cmd.Flags().String("network", "", "Docker network name to monitor")
-	dockerloggerInputArgs.showAll = Cmd.Flags().Bool("all", false, "Show all logs")
-	dockerloggerInputArgs.showErrors = Cmd.Flags().Bool("errors", false, "Show error logs")
-	dockerloggerInputArgs.showWarnings = Cmd.Flags().Bool("warnings", false, "Show warning logs")
-	dockerloggerInputArgs.showInfo = Cmd.Flags().Bool("info", false, "Show info logs")
-	dockerloggerInputArgs.showDebug = Cmd.Flags().Bool("debug", false, "Show debug logs")
-	dockerloggerInputArgs.filter = Cmd.Flags().String("filter", "", "Additional keywords to filter, comma-separated")
-	dockerloggerInputArgs.levels = Cmd.Flags().String("levels", "", "Comma-separated log levels to show (error,warn,info,debug)")
-	dockerloggerInputArgs.service = Cmd.Flags().String("service", "", "Filter logs by service names (comma-separated, partial match)")
+	dockerloggerInputArgs.network = Cmd.Flags().String("network", "", "docker network name to monitor")
+	dockerloggerInputArgs.showAll = Cmd.Flags().Bool("all", false, "show all logs")
+	dockerloggerInputArgs.showErrors = Cmd.Flags().Bool("errors", false, "show error logs")
+	dockerloggerInputArgs.showWarnings = Cmd.Flags().Bool("warnings", false, "show warning logs")
+	dockerloggerInputArgs.showInfo = Cmd.Flags().Bool("info", false, "show info logs")
+	dockerloggerInputArgs.showDebug = Cmd.Flags().Bool("debug", false, "show debug logs")
+	dockerloggerInputArgs.filter = Cmd.Flags().String("filter", "", "additional keywords to filter, comma-separated")
+	dockerloggerInputArgs.levels = Cmd.Flags().String("levels", "", "comma-separated log levels to show (error,warn,info,debug)")
+	dockerloggerInputArgs.service = Cmd.Flags().String("service", "", "filter logs by service names (comma-separated, partial match)")
 }
 
 // Core functionality functions

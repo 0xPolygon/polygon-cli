@@ -124,3 +124,11 @@ The tool supports configuration via:
 
 ## Development Memories
 - Use `make build` to build polycli
+
+## Code Style
+
+### Cobra Flags
+- Flag names: lowercase with hyphens (kebab-case), e.g., `--output-file`
+- Usage strings: lowercase, no ending punctuation, e.g., `"path to output file"`
+- Remove unnecessary leading articles and filler words (e.g., "the", "a", "an") from usage strings
+- Use `PersistentFlags()` only when flags need to be inherited by subcommands; otherwise use `Flags()`

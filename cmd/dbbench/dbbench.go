@@ -610,7 +610,7 @@ func parseRawSizeDistribution(dist string) (*IODistribution, error) {
 }
 
 func init() {
-	flagSet := DBBenchCmd.PersistentFlags()
+	flagSet := DBBenchCmd.Flags()
 	writeLimit = flagSet.Uint64("write-limit", 1000000, "The number of entries to write in the db")
 	readLimit = flagSet.Uint64("read-limit", 10000000, "the number of reads will attempt to complete in a given test")
 	overwriteCount = flagSet.Uint64("overwrite-count", 5, "the number of times to overwrite the data")

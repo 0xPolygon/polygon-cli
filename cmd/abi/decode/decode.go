@@ -81,7 +81,7 @@ var ABIDecodeCmd = &cobra.Command{
 }
 
 func init() {
-	flagSet := ABIDecodeCmd.PersistentFlags()
+	flagSet := ABIDecodeCmd.Flags()
 	inputFileName = flagSet.String("file", "", "Provide a filename to read and analyze")
 	inputData = flagSet.String("data", "", "Provide input data to be unpacked based on the ABI definition")
 }

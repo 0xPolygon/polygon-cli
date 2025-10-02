@@ -59,20 +59,20 @@ func init() {
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	inputMetricsToDashFile = MetricsToDashCmd.PersistentFlags().StringP("input-file", "i", "", "the metrics file to be used")
-	inputMetricsToDashPrefix = MetricsToDashCmd.PersistentFlags().StringP("prefix", "p", "", "prefix to use before all metrics")
-	inputMetricsToDashTitle = MetricsToDashCmd.PersistentFlags().StringP("title", "t", "Polycli Dashboard", "title for the dashboard")
-	inputMetricsToDashDesc = MetricsToDashCmd.PersistentFlags().StringP("desc", "d", "Polycli Dashboard", "description for the dashboard")
-	inputMetricsToDashWidth = MetricsToDashCmd.PersistentFlags().IntP("width", "W", 4, "widget width")
-	inputMetricsToDashHeight = MetricsToDashCmd.PersistentFlags().IntP("height", "H", 3, "widget height")
+	inputMetricsToDashFile = MetricsToDashCmd.Flags().StringP("input-file", "i", "", "the metrics file to be used")
+	inputMetricsToDashPrefix = MetricsToDashCmd.Flags().StringP("prefix", "p", "", "prefix to use before all metrics")
+	inputMetricsToDashTitle = MetricsToDashCmd.Flags().StringP("title", "t", "Polycli Dashboard", "title for the dashboard")
+	inputMetricsToDashDesc = MetricsToDashCmd.Flags().StringP("desc", "d", "Polycli Dashboard", "description for the dashboard")
+	inputMetricsToDashWidth = MetricsToDashCmd.Flags().IntP("width", "W", 4, "widget width")
+	inputMetricsToDashHeight = MetricsToDashCmd.Flags().IntP("height", "H", 3, "widget height")
 
-	inputMetricsToDashTemplateVars = MetricsToDashCmd.PersistentFlags().StringArrayP("template-vars", "T", []string{}, "The template variables to use for the dashboard")
-	inputMetricsToDashTemplateVarDefaults = MetricsToDashCmd.PersistentFlags().StringArrayP("template-var-defaults", "D", []string{}, "The defaults to use for the template variables")
+	inputMetricsToDashTemplateVars = MetricsToDashCmd.Flags().StringArrayP("template-vars", "T", []string{}, "the template variables to use for the dashboard")
+	inputMetricsToDashTemplateVarDefaults = MetricsToDashCmd.Flags().StringArrayP("template-var-defaults", "D", []string{}, "the defaults to use for the template variables")
 
-	inputMetricsToDashStripPrefixes = MetricsToDashCmd.PersistentFlags().StringArrayP("strip-prefix", "s", []string{}, "A prefix that can be removed from the metrics")
-	inputMetricsToDashPretty = MetricsToDashCmd.PersistentFlags().BoolP("pretty-name", "P", true, "Should the metric names be prettified")
+	inputMetricsToDashStripPrefixes = MetricsToDashCmd.Flags().StringArrayP("strip-prefix", "s", []string{}, "a prefix that can be removed from the metrics")
+	inputMetricsToDashPretty = MetricsToDashCmd.Flags().BoolP("pretty-name", "P", true, "should the metric names be prettified")
 
-	inputMetricsToDashShowHelp = MetricsToDashCmd.PersistentFlags().BoolP("show-help", "S", false, "Should we show the help text for each metric")
+	inputMetricsToDashShowHelp = MetricsToDashCmd.Flags().BoolP("show-help", "S", false, "should we show the help text for each metric")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:

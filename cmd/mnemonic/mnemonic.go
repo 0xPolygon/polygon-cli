@@ -41,6 +41,6 @@ var MnemonicCmd = &cobra.Command{
 }
 
 func init() {
-	inputMnemonicWords = MnemonicCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
-	inputMnemonicLang = MnemonicCmd.PersistentFlags().String("language", "english", "Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
+	inputMnemonicWords = MnemonicCmd.Flags().Int("words", 24, "number of words to use in mnemonic")
+	inputMnemonicLang = MnemonicCmd.Flags().String("language", "english", "which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
 }

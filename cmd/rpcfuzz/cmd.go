@@ -55,7 +55,7 @@ var RPCFuzzCmd = &cobra.Command{
 }
 
 func init() {
-	flagSet := RPCFuzzCmd.PersistentFlags()
+	flagSet := RPCFuzzCmd.Flags()
 
 	rpcUrl = flagSet.StringP("rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
 	testPrivateHexKey = flagSet.String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
