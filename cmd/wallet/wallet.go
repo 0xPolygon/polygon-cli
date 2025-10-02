@@ -132,5 +132,5 @@ func init() {
 	f.StringVar(&inputMnemonic, "mnemonic", "", "mnemonic phrase used to generate entropy")
 	f.StringVar(&inputMnemonicFile, "mnemonic-file", "", "mnemonic phrase written in file used to generate entropy")
 	f.BoolVar(&inputUseRawEntropy, "raw-entropy", false, "substrate and polka dot don't follow strict bip39 and use raw entropy")
-	f.BoolVar(&inputRootOnly, "root-only", false, "don't produce HD accounts. Just produce a single wallet")
+	f.BoolVar(&inputRootOnly, "root-only", false, "produce only root wallet without HD accounts")
 }

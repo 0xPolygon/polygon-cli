@@ -2573,14 +2573,14 @@ or if it's actually an intermediate hash.`,
 	fClaim.Uint64Var(&inputUlxlyArgs.depositNetwork, ArgDepositNetwork, 0, "rollup ID of the network where the deposit was made")
 	fClaim.StringVar(&inputUlxlyArgs.bridgeServiceURL, ArgBridgeServiceURL, "", "URL of the bridge service")
 	fClaim.StringVar(&inputUlxlyArgs.globalIndex, ArgGlobalIndex, "", "an override of the global index value")
-	fClaim.DurationVar(&inputUlxlyArgs.wait, ArgWait, time.Duration(0), "this flag is available for claim asset and claim message. if specified, the command will retry in a loop for the deposit to be ready to claim up to duration. Once the deposit is ready to claim, the claim will actually be sent.")
+	fClaim.DurationVar(&inputUlxlyArgs.wait, ArgWait, time.Duration(0), "retry claiming until deposit is ready, up to specified duration (available for claim asset and claim message)")
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositCount))
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositNetwork))
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgBridgeServiceURL))
 
 	// Claim Everything Helper Command
 	fClaimEverything := claimEverythingCommand.Flags()
-	fClaimEverything.StringSliceVar(&inputUlxlyArgs.bridgeServiceURLs, ArgBridgeMappings, nil, "mappings between network IDs and bridge service URLs. E.g. '1=http://network-1-bridgeurl,7=http://network-2-bridgeurl'")
+	fClaimEverything.StringSliceVar(&inputUlxlyArgs.bridgeServiceURLs, ArgBridgeMappings, nil, "network ID to bridge service URL mappings (e.g. '1=http://network-1-bridgeurl,7=http://network-2-bridgeurl')")
 	fClaimEverything.IntVar(&inputUlxlyArgs.bridgeLimit, ArgBridgeLimit, 25, "limit the number or responses returned by the bridge service when claiming")
 	fClaimEverything.IntVar(&inputUlxlyArgs.bridgeOffset, ArgBridgeOffset, 0, "offset to specify for pagination of underlying bridge service deposits")
 	fClaimEverything.UintVar(&inputUlxlyArgs.concurrency, ArgConcurrency, 1, "worker pool size for claims")

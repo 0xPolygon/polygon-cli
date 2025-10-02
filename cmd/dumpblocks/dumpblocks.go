@@ -192,7 +192,7 @@ func init() {
 	f.BoolVar(&inputDumpblocks.ShouldDumpReceipts, "dump-receipts", true, "dump receipts to output")
 	f.StringVarP(&inputDumpblocks.Filename, "filename", "f", "", "where to write the output to (default stdout)")
 	f.StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
-	f.Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "the batch size. Realistically, this probably shouldn't be bigger than 999. Most providers seem to cap at 1000")
+	f.Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "batch size for requests (most providers cap at 1000)")
 	f.StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from, not setting a filter means all are allowed")
 }
 
