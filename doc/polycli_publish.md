@@ -50,11 +50,11 @@ polycli publish --rpc-url https://sepolia.drpc.org
 ## Flags
 
 ```bash
-  -c, --concurrency uint      number of txs to send concurrently. Default is one request at a time (default 1)
+  -c, --concurrency uint      number of txs to send concurrently (default: one at a time) (default 1)
       --file string           provide a filename with transactions to publish
   -h, --help                  help for publish
       --job-queue-size uint   number of jobs we can put in the job queue for workers to process (default 100)
-      --rate-limit uint       rate limit in txs per second. Default is no rate limit
+      --rate-limit uint       rate limit in txs per second (default: no limit)
       --rpc-url string        RPC URL of network (default "http://localhost:8545")
 ```
 

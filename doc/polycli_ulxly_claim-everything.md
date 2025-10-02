@@ -21,7 +21,7 @@ polycli ulxly  claim-everything [flags]
 ```bash
       --bridge-limit int             limit the number or responses returned by the bridge service when claiming (default 25)
       --bridge-offset int            offset to specify for pagination of underlying bridge service deposits
-      --bridge-service-map strings   mappings between network IDs and bridge service URLs. E.g. '1=http://network-1-bridgeurl,7=http://network-2-bridgeurl'
+      --bridge-service-map strings   network ID to bridge service URL mappings (e.g. '1=http://network-1-bridgeurl,7=http://network-2-bridgeurl')
       --concurrency uint             worker pool size for claims (default 1)
   -h, --help                         help for claim-everything
 ```

@@ -54,7 +54,7 @@ Contracts are cloned from the different Uniswap repositories, compiled with a sp
 
 ```bash
   -h, --help                                                   help for uniswapv3
-  -f, --pool-fees float                                        trading fees charged on each swap or trade made within a UniswapV3 liquidity pool (e.g. 0.3 means 0.3%) (default 0.3)
+  -f, --pool-fees float                                        trading fees for UniswapV3 liquidity pool swaps (e.g. 0.3 means 0.3%) (default 0.3)
   -a, --swap-amount uint                                       amount of inbound token given as swap input (default 1000)
       --uniswap-factory-v3-address string                      address of pre-deployed UniswapFactoryV3 contract
       --uniswap-migrator-address string                        address of pre-deployed Migrator contract
@@ -81,16 +81,16 @@ The command also inherits flags from parent commands.
       --adaptive-rate-limit                    enable AIMD-style congestion control to automatically adjust request rate
       --adaptive-rate-limit-increment uint     size of additive increases for adaptive rate limiting (default 50)
       --adaptive-target-size uint              target queue size for adaptive rate limiting (speed up if smaller, back off if larger) (default 1000)
-      --batch-size uint                        number of batches to perform at a time for receipt fetching. Default is 999 requests at a time (default 999)
+      --batch-size uint                        batch size for receipt fetching (default: 999) (default 999)
       --chain-id uint                          chain ID for the transactions
-  -c, --concurrency int                        number of requests to perform concurrently. Default is one request at a time (default 1)
+  -c, --concurrency int                        number of requests to perform concurrently (default: one at a time) (default 1)
       --config string                          config file (default is $HOME/.polygon-cli.yaml)
       --eth-amount-in-wei uint                 amount of ether in wei to send per transaction
       --eth-call-only                          call contracts without sending transactions (incompatible with adaptive rate limiting and summarization)
       --eth-call-only-latest                   execute on latest block instead of original block in call-only mode with recall
       --fire-and-forget                        send transactions and load without waiting for it to be mined
-      --gas-limit uint                         in environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas
-      --gas-price uint                         in environments where the gas price can't be determined automatically, we can specify it manually
+      --gas-limit uint                         manually specify gas limit (useful to avoid eth_estimateGas or when auto-computation fails)
+      --gas-price uint                         manually specify gas price (useful when auto-detection fails)
       --gas-price-multiplier float             a multiplier to increase or decrease the gas price (default 1)
       --legacy                                 send a legacy transaction instead of an EIP1559 transaction
       --nonce uint                             use this flag to manually set the starting nonce
@@ -100,13 +100,13 @@ The command also inherits flags from parent commands.
       --priority-gas-price uint                gas tip price for EIP-1559 transactions
       --private-key string                     hex encoded private key to use for sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
       --random-recipients                      send to random addresses instead of fixed address in transfer tests
-      --rate-limit float                       an overall limit to the number of requests per second. Give a number less than zero to remove this limit all together (default 4)
-  -n, --requests int                           number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results (default 1)
+      --rate-limit float                       requests per second limit (use negative value to remove limit) (default 4)
+  -n, --requests int                           number of requests to perform for the benchmarking session (default of 1 leads to non-representative results) (default 1)
   -r, --rpc-url string                         the RPC endpoint URL (default "http://localhost:8545")
       --seed int                               a seed for generating random values and addresses (default 123456)
       --send-only                              alias for --fire-and-forget
       --summarize                              produce execution summary after load test (can take a long time for large tests)
-  -t, --time-limit int                         maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit (default -1)
+  -t, --time-limit int                         maximum seconds to spend benchmarking (default: no limit) (default -1)
       --to-address string                      recipient address for transactions (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
   -v, --verbosity int                          0 - silent
                                                100 panic

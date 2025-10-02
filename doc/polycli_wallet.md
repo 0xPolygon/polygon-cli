@@ -65,7 +65,7 @@ $ polycli wallet create --path "m/44'/0'/0'" --addresses 5
       --password-file string   password stored in a file used along with the mnemonic
       --path string            what would you like the derivation path to be (default "m/44'/60'/0'")
       --raw-entropy            substrate and polka dot don't follow strict bip39 and use raw entropy
-      --root-only              don't produce HD accounts. Just produce a single wallet
+      --root-only              produce only root wallet without HD accounts
       --words int              number of words to use in mnemonic (default 24)
 ```
 

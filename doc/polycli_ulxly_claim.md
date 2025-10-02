@@ -21,7 +21,7 @@ Commands for claiming deposits on a particular chain
       --deposit-network uint        rollup ID of the network where the deposit was made
       --global-index string         an override of the global index value
   -h, --help                        help for claim
-      --wait duration               this flag is available for claim asset and claim message. if specified, the command will retry in a loop for the deposit to be ready to claim up to duration. Once the deposit is ready to claim, the claim will actually be sent.
+      --wait duration               retry claiming until deposit is ready, up to specified duration (available for claim asset and claim message)
 ```
 
 The command also inherits flags from parent commands.

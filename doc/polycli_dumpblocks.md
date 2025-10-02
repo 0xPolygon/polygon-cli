@@ -74,7 +74,7 @@ To solve this, add the unknown fields to the `.proto` files and recompile them (
 ## Flags
 
 ```bash
-  -b, --batch-size uint    the batch size. Realistically, this probably shouldn't be bigger than 999. Most providers seem to cap at 1000 (default 150)
+  -b, --batch-size uint    batch size for requests (most providers cap at 1000) (default 150)
   -c, --concurrency uint   how many go routines to leverage (default 1)
   -B, --dump-blocks        dump blocks to output (default true)
       --dump-receipts      dump receipts to output (default true)
