@@ -29,7 +29,7 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).
 
 ```bash
   -h, --help            help for ping
-  -l, --listen          keep the connection open and listen to the peer. This only works if the first
+  -l, --listen          keep connection open and listen to peer. This only works if first
                         argument is an enode/enr, not a nodes file (default true)
   -o, --output string   write ping results to output file (default stdout)
   -p, --parallel int    how many parallel pings to attempt (default 16)

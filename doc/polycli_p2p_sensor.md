@@ -23,7 +23,7 @@ If no nodes.json file exists, it will be created.
 ## Flags
 
 ```bash
-      --api-port uint            port the API server will listen on (default 8080)
+      --api-port uint            port API server will listen on (default 8080)
   -b, --bootnodes string         comma separated nodes used for bootstrapping
       --database string          which database to persist data to, options are:
                                    - datastore (GCP Datastore)
@@ -34,8 +34,8 @@ If no nodes.json file exists, it will be created.
                                  connections to be dialed. Setting this to 0 defaults it to 3
       --discovery-dns string     DNS discovery ENR tree URL
       --discovery-port int       UDP P2P discovery port (default 30303)
-      --fork-id bytesHex         the hex encoded fork ID (omit the 0x) (default F097BC13)
-      --genesis-hash string      the genesis block hash (default "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
+      --fork-id bytesHex         hex encoded fork ID (omit 0x) (default F097BC13)
+      --genesis-hash string      genesis block hash (default "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
   -h, --help                     help for sensor
       --key string               hex-encoded private key (cannot be set with --key-file)
   -k, --key-file string          private key file (cannot be set with --key)

@@ -29,7 +29,7 @@ If no nodes.json file exists, it will be created.
       --discovery-dns string           enable EIP-1459, DNS Discovery to recover node list from given ENRTree
   -h, --help                           help for crawl
   -n, --network-id uint                filter discovered nodes by this network ID
-  -u, --only-urls                      only writes the enode URLs to the output (default true)
+  -u, --only-urls                      only writes enode URLs to output (default true)
   -p, --parallel int                   how many parallel discoveries to attempt (default 16)
   -r, --revalidation-interval string   time before retrying to connect to a failed peer (default "10m")
   -t, --timeout string                 time limit for the crawl (default "30m0s")
