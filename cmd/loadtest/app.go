@@ -281,19 +281,19 @@ func initFlags() {
 	f.BoolVar(&ltp.RefundRemainingFunds, "refund-remaining-funds", false, "refund remaining balance to funding account after completion")
 	f.StringVar(&ltp.SendingAccountsFile, "sending-accounts-file", "", "file containing sending accounts private keys, one per line. This is useful for avoiding pool account queue but also to keep same sending accounts for different execution cycles")
 	f.Uint64Var(&ltp.MaxBaseFeeWei, "max-base-fee-wei", 0, "maximum base fee in wei (pause sending new transactions when exceeded, useful during network congestion)")
-	f.StringSliceVarP(&ltp.Modes, "mode", "m", []string{"t"}, `the testing mode to use. It can be multiple like: "d,t"
-2, erc20 - Send ERC20 tokens
-7, erc721 - Mint ERC721 tokens
-b, blob - Send blob transactions
-cc, contract-call - Make contract calls
-d, deploy - Deploy contracts
-inc, increment - Increment a counter
-r, random - Random modes (does not include the following modes: blob, call, inscription, recall, rpc, uniswapv3)
-R, recall - Replay or simulate transactions
-rpc - Call random rpc methods
-s, store - Store bytes in a dynamic byte array
-t, transaction - Send transactions
-v3, uniswapv3 - Perform UniswapV3 swaps`)
+	f.StringSliceVarP(&ltp.Modes, "mode", "m", []string{"t"}, `testing mode (can specify multiple like "d,t"):
+2, erc20 - send ERC20 tokens
+7, erc721 - mint ERC721 tokens
+b, blob - send blob transactions
+cc, contract-call - make contract calls
+d, deploy - deploy contracts
+inc, increment - increment a counter
+r, random - random modes (excludes: blob, call, inscription, recall, rpc, uniswapv3)
+R, recall - replay or simulate transactions
+rpc - call random rpc methods
+s, store - store bytes in a dynamic byte array
+t, transaction - send transactions
+v3, uniswapv3 - perform UniswapV3 swaps`)
 	f.Uint64Var(&ltp.StoreDataSize, "store-data-size", 1024, "number of bytes to store in contract for store mode")
 	f.StringVar(&ltp.LoadtestContractAddress, "loadtest-contract-address", "", "address of pre-deployed load test contract")
 	f.StringVar(&ltp.ERC20Address, "erc20-address", "", "address of pre-deployed ERC20 contract")
