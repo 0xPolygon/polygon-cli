@@ -114,15 +114,16 @@ var CrawlCmd = &cobra.Command{
 }
 
 func init() {
-	CrawlCmd.Flags().StringVarP(&inputCrawlParams.Bootnodes, "bootnodes", "b", "",
+	f := CrawlCmd.Flags()
+	f.StringVarP(&inputCrawlParams.Bootnodes, "bootnodes", "b", "",
 		`comma separated nodes used for bootstrapping. At least one bootnode is
 required, so other nodes in the network can discover each other`)
-	CrawlCmd.Flags().StringVarP(&inputCrawlParams.DiscoveryDNS, "discovery-dns", "", "", `enable EIP-1459, DNS Discovery to recover node list from given ENRTree`)
+	f.StringVarP(&inputCrawlParams.DiscoveryDNS, "discovery-dns", "", "", `enable EIP-1459, DNS Discovery to recover node list from given ENRTree`)
 	CrawlCmd.MarkFlagsMutuallyExclusive("bootnodes", "discovery-dns")
-	CrawlCmd.Flags().StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "time limit for the crawl")
-	CrawlCmd.Flags().IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "how many parallel discoveries to attempt")
-	CrawlCmd.Flags().Uint64VarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "filter discovered nodes by this network ID")
-	CrawlCmd.Flags().StringVarP(&inputCrawlParams.Database, "database", "d", "", "node database for updating and storing client information")
-	CrawlCmd.Flags().StringVarP(&inputCrawlParams.RevalidationInterval, "revalidation-interval", "r", "10m", "time before retrying to connect to a failed peer")
-	CrawlCmd.Flags().BoolVarP(&inputCrawlParams.OnlyURLs, "only-urls", "u", true, "only writes the enode URLs to the output")
+	f.StringVarP(&inputCrawlParams.Timeout, "timeout", "t", "30m0s", "time limit for the crawl")
+	f.IntVarP(&inputCrawlParams.Threads, "parallel", "p", 16, "how many parallel discoveries to attempt")
+	f.Uint64VarP(&inputCrawlParams.NetworkID, "network-id", "n", 0, "filter discovered nodes by this network ID")
+	f.StringVarP(&inputCrawlParams.Database, "database", "d", "", "node database for updating and storing client information")
+	f.StringVarP(&inputCrawlParams.RevalidationInterval, "revalidation-interval", "r", "10m", "time before retrying to connect to a failed peer")
+	f.BoolVarP(&inputCrawlParams.OnlyURLs, "only-urls", "u", true, "only writes the enode URLs to the output")
 }

@@ -42,7 +42,7 @@ func printBlockSummary(c *ethclient.Client, bs map[uint64]blockSummary) {
 	p := message.NewPrinter(language.English)
 
 	allLatencies := make([]time.Duration, 0)
-	summaryOutputMode := *inputLoadTestParams.SummaryOutputMode
+	summaryOutputMode := inputLoadTestParams.SummaryOutputMode
 	jsonSummaryList := []Summary{}
 	for _, v := range mapKeys {
 		summary := bs[v]
@@ -325,8 +325,8 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 		return err
 	}
 	// TODO: Add some kind of decimation to avoid summarizing for 10 minutes?
-	batchSize := *ltp.BatchSize
-	goRoutineLimit := *ltp.Concurrency
+	batchSize := ltp.BatchSize
+	goRoutineLimit := ltp.Concurrency
 	var txGroup sync.WaitGroup
 	threadPool := make(chan bool, goRoutineLimit)
 	log.Trace().Msg("Starting tx receipt capture")

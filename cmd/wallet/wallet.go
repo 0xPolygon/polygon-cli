@@ -14,17 +14,17 @@ import (
 var (
 	//go:embed usage.md
 	usage                    string
-	inputWords               *int
-	inputLang                *string
-	inputKDFIterations       *uint
-	inputPassword            *string
-	inputPasswordFile        *string
-	inputMnemonic            *string
-	inputMnemonicFile        *string
-	inputPath                *string
-	inputAddressesToGenerate *uint
-	inputUseRawEntropy       *bool
-	inputRootOnly            *bool
+	inputWords               int
+	inputLang                string
+	inputKDFIterations       uint
+	inputPassword            string
+	inputPasswordFile        string
+	inputMnemonic            string
+	inputMnemonicFile        string
+	inputPath                string
+	inputAddressesToGenerate uint
+	inputUseRawEntropy       bool
+	inputRootOnly            bool
 )
 
 // WalletCmd represents the wallet command
@@ -43,7 +43,7 @@ var WalletCmd = &cobra.Command{
 				return err
 			}
 		} else {
-			mnemonic, err = hdwallet.NewMnemonic(*inputWords, *inputLang)
+			mnemonic, err = hdwallet.NewMnemonic(inputWords, inputLang)
 			if err != nil {
 				return err
 			}
@@ -59,20 +59,20 @@ var WalletCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		err = pw.SetPath(*inputPath)
+		err = pw.SetPath(inputPath)
 		if err != nil {
 			return err
 		}
-		err = pw.SetIterations(*inputKDFIterations)
+		err = pw.SetIterations(inputKDFIterations)
 		if err != nil {
 			return err
 		}
-		err = pw.SetUseRawEntropy(*inputUseRawEntropy)
+		err = pw.SetUseRawEntropy(inputUseRawEntropy)
 		if err != nil {
 			return err
 		}
 
-		if *inputRootOnly {
+		if inputRootOnly {
 			var key *hdwallet.PolyWalletExport
 			key, err = pw.ExportRootAddress()
 			if err != nil {
@@ -82,7 +82,7 @@ var WalletCmd = &cobra.Command{
 			fmt.Println(string(out))
 			return nil
 		}
-		key, err := pw.ExportHDAddresses(int(*inputAddressesToGenerate))
+		key, err := pw.ExportHDAddresses(int(inputAddressesToGenerate))
 		if err != nil {
 			return err
 		}
@@ -102,37 +102,35 @@ var WalletCmd = &cobra.Command{
 	},
 }
 
-func getFileOrFlag(filename *string, flag *string) (string, error) {
-	if filename == nil && flag == nil {
-		return "", fmt.Errorf("both the filename and the flag pointers are nil")
-	}
-	if filename != nil && *filename != "" {
-		filedata, err := os.ReadFile(*filename)
+func getFileOrFlag(filename string, flag string) (string, error) {
+	if filename != "" {
+		filedata, err := os.ReadFile(filename)
 		if err != nil {
-			return "", fmt.Errorf("could not open the specified file %s. Got error %s", *filename, err.Error())
+			return "", fmt.Errorf("could not open the specified file %s. Got error %s", filename, err.Error())
 		}
 		return string(filedata), nil
 	}
-	if flag != nil {
-		return *flag, nil
+	if flag != "" {
+		return flag, nil
 	}
 	return "", fmt.Errorf("unable to determine flat or filename")
 }
 
 func init() {
-	inputKDFIterations = WalletCmd.Flags().Uint("iterations", 2048, "number of pbkdf2 iterations to perform")
-	inputWords = WalletCmd.Flags().Int("words", 24, "number of words to use in mnemonic")
-	inputAddressesToGenerate = WalletCmd.Flags().Uint("addresses", 10, "number of addresses to generate")
-	inputLang = WalletCmd.Flags().String("language", "english", "which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
+	f := WalletCmd.Flags()
+	f.UintVar(&inputKDFIterations, "iterations", 2048, "number of pbkdf2 iterations to perform")
+	f.IntVar(&inputWords, "words", 24, "number of words to use in mnemonic")
+	f.UintVar(&inputAddressesToGenerate, "addresses", 10, "number of addresses to generate")
+	f.StringVar(&inputLang, "language", "english", "which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
 	// https://github.com/satoshilabs/slips/blob/master/slip-0044.md
 	// 0 - bitcoin
 	// 60 - ether
 	// 966 - matic
-	inputPath = WalletCmd.Flags().String("path", "m/44'/60'/0'", "what would you like the derivation path to be")
-	inputPassword = WalletCmd.Flags().String("password", "", "password used along with the mnemonic")
-	inputPasswordFile = WalletCmd.Flags().String("password-file", "", "password stored in a file used along with the mnemonic")
-	inputMnemonic = WalletCmd.Flags().String("mnemonic", "", "mnemonic phrase used to generate entropy")
-	inputMnemonicFile = WalletCmd.Flags().String("mnemonic-file", "", "mnemonic phrase written in file used to generate entropy")
-	inputUseRawEntropy = WalletCmd.Flags().Bool("raw-entropy", false, "substrate and polka dot don't follow strict bip39 and use raw entropy")
-	inputRootOnly = WalletCmd.Flags().Bool("root-only", false, "don't produce HD accounts. Just produce a single wallet")
+	f.StringVar(&inputPath, "path", "m/44'/60'/0'", "what would you like the derivation path to be")
+	f.StringVar(&inputPassword, "password", "", "password used along with the mnemonic")
+	f.StringVar(&inputPasswordFile, "password-file", "", "password stored in a file used along with the mnemonic")
+	f.StringVar(&inputMnemonic, "mnemonic", "", "mnemonic phrase used to generate entropy")
+	f.StringVar(&inputMnemonicFile, "mnemonic-file", "", "mnemonic phrase written in file used to generate entropy")
+	f.BoolVar(&inputUseRawEntropy, "raw-entropy", false, "substrate and polka dot don't follow strict bip39 and use raw entropy")
+	f.BoolVar(&inputRootOnly, "root-only", false, "don't produce HD accounts. Just produce a single wallet")
 }

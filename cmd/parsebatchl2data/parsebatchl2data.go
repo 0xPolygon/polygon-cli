@@ -16,7 +16,7 @@ import (
 var (
 	//go:embed usage.md
 	usage         string
-	inputFileName *string
+	inputFileName string
 )
 
 var ParseBatchL2Data = &cobra.Command{
@@ -72,13 +72,13 @@ var ParseBatchL2Data = &cobra.Command{
 }
 
 func init() {
-	flagSet := ParseBatchL2Data.Flags()
-	inputFileName = flagSet.String("file", "", "Provide a file with the key information ")
+	f := ParseBatchL2Data.Flags()
+	f.StringVar(&inputFileName, "file", "", "Provide a file with the key information ")
 }
 
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
-	if inputFileName != nil && *inputFileName != "" {
-		return os.ReadFile(*inputFileName)
+	if inputFileName != "" {
+		return os.ReadFile(inputFileName)
 	}
 
 	if len(args) > 1 {

@@ -80,11 +80,12 @@ var MonitorCmd = &cobra.Command{
 }
 
 func init() {
-	MonitorCmd.Flags().StringVarP(&rpcUrl, "rpc-url", "r", "http://localhost:8545", "the RPC endpoint URL")
-	MonitorCmd.Flags().StringVarP(&batchSizeValue, "batch-size", "b", "auto", "number of requests per batch")
-	MonitorCmd.Flags().IntVarP(&subBatchSize, "sub-batch-size", "s", 50, "number of requests per sub-batch")
-	MonitorCmd.Flags().IntVarP(&blockCacheLimit, "cache-limit", "c", 200, "number of cached blocks for the LRU block data structure (Min 100)")
-	MonitorCmd.Flags().StringVarP(&intervalStr, "interval", "i", "5s", "amount of time between batch block RPC calls")
+	f := MonitorCmd.Flags()
+	f.StringVarP(&rpcUrl, "rpc-url", "r", "http://localhost:8545", "the RPC endpoint URL")
+	f.StringVarP(&batchSizeValue, "batch-size", "b", "auto", "number of requests per batch")
+	f.IntVarP(&subBatchSize, "sub-batch-size", "s", 50, "number of requests per sub-batch")
+	f.IntVarP(&blockCacheLimit, "cache-limit", "c", 200, "number of cached blocks for the LRU block data structure (Min 100)")
+	f.StringVarP(&intervalStr, "interval", "i", "5s", "amount of time between batch block RPC calls")
 }
 
 func checkFlags() (err error) {

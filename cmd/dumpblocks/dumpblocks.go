@@ -185,14 +185,15 @@ var DumpblocksCmd = &cobra.Command{
 }
 
 func init() {
-	DumpblocksCmd.Flags().StringVarP(&inputDumpblocks.RpcUrl, "rpc-url", "r", "http://localhost:8545", "the RPC endpoint URL")
-	DumpblocksCmd.Flags().UintVarP(&inputDumpblocks.Threads, "concurrency", "c", 1, "how many go routines to leverage")
-	DumpblocksCmd.Flags().BoolVarP(&inputDumpblocks.ShouldDumpBlocks, "dump-blocks", "B", true, "if the blocks will be dumped")
-	DumpblocksCmd.Flags().BoolVar(&inputDumpblocks.ShouldDumpReceipts, "dump-receipts", true, "if the receipts will be dumped")
-	DumpblocksCmd.Flags().StringVarP(&inputDumpblocks.Filename, "filename", "f", "", "where to write the output to (default stdout)")
-	DumpblocksCmd.Flags().StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
-	DumpblocksCmd.Flags().Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "the batch size. Realistically, this probably shouldn't be bigger than 999. Most providers seem to cap at 1000")
-	DumpblocksCmd.Flags().StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from, not setting a filter means all are allowed")
+	f := DumpblocksCmd.Flags()
+	f.StringVarP(&inputDumpblocks.RpcUrl, "rpc-url", "r", "http://localhost:8545", "the RPC endpoint URL")
+	f.UintVarP(&inputDumpblocks.Threads, "concurrency", "c", 1, "how many go routines to leverage")
+	f.BoolVarP(&inputDumpblocks.ShouldDumpBlocks, "dump-blocks", "B", true, "if the blocks will be dumped")
+	f.BoolVar(&inputDumpblocks.ShouldDumpReceipts, "dump-receipts", true, "if the receipts will be dumped")
+	f.StringVarP(&inputDumpblocks.Filename, "filename", "f", "", "where to write the output to (default stdout)")
+	f.StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
+	f.Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "the batch size. Realistically, this probably shouldn't be bigger than 999. Most providers seem to cap at 1000")
+	f.StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from, not setting a filter means all are allowed")
 }
 
 func checkFlags() error {

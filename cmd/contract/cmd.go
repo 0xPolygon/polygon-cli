@@ -28,8 +28,8 @@ var (
 )
 
 type contractInputArgs struct {
-	rpcURL  *string
-	address *string
+	rpcURL  string
+	address string
 }
 
 var inputArgs = contractInputArgs{}
@@ -46,7 +46,8 @@ var Cmd = &cobra.Command{
 	Short: "Interact with smart contracts and fetch contract information from the blockchain",
 	Long:  usage,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		inputArgs.rpcURL = flag_loader.GetRpcUrlFlagValue(cmd)
+		rpcURL := flag_loader.GetRpcUrlFlagValue(cmd)
+		inputArgs.rpcURL = *rpcURL
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return contract(cmd)
@@ -56,8 +57,8 @@ var Cmd = &cobra.Command{
 func contract(cmd *cobra.Command) error {
 	ctx := cmd.Context()
 
-	rpcURL := *inputArgs.rpcURL
-	address := *inputArgs.address
+	rpcURL := inputArgs.rpcURL
+	address := inputArgs.address
 
 	// connect to the blockchain node and fetch contract information
 	c, err := ethclient.Dial(rpcURL)
@@ -168,8 +169,9 @@ func fetchContractCreationTx(ctx context.Context, client *ethclient.Client, cont
 }
 
 func init() {
-	inputArgs.rpcURL = Cmd.Flags().String(ArgRpcURL, defaultRPCURL, "RPC URL of network containing contract")
-	inputArgs.address = Cmd.Flags().String(ArgAddress, "", "contract address")
+	f := Cmd.Flags()
+	f.StringVar(&inputArgs.rpcURL, ArgRpcURL, defaultRPCURL, "RPC URL of network containing contract")
+	f.StringVar(&inputArgs.address, ArgAddress, "", "contract address")
 
 	_ = Cmd.MarkFlagRequired(ArgAddress)
 }

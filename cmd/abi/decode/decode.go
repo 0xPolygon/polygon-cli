@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	inputFileName *string
-	inputData     *string
+	inputFileName string
+	inputData     string
 )
 
 var ABIDecodeCmd = &cobra.Command{
@@ -39,8 +39,8 @@ var ABIDecodeCmd = &cobra.Command{
 		for _, meth := range abi.Methods {
 			fmt.Printf("Selector:%s\tSignature:%s%s\n", hex.EncodeToString(meth.ID), meth.Sig, getReturnSignature(meth.Outputs))
 		}
-		if *inputData != "" {
-			id, callData, err := parseContractInputData(*inputData)
+		if inputData != "" {
+			id, callData, err := parseContractInputData(inputData)
 			fmt.Printf("id: %x, %x\n", id, callData)
 			if err != nil {
 				return err
@@ -81,9 +81,9 @@ var ABIDecodeCmd = &cobra.Command{
 }
 
 func init() {
-	flagSet := ABIDecodeCmd.Flags()
-	inputFileName = flagSet.String("file", "", "Provide a filename to read and analyze")
-	inputData = flagSet.String("data", "", "Provide input data to be unpacked based on the ABI definition")
+	f := ABIDecodeCmd.Flags()
+	f.StringVar(&inputFileName, "file", "", "Provide a filename to read and analyze")
+	f.StringVar(&inputData, "data", "", "Provide input data to be unpacked based on the ABI definition")
 }
 
 func parseContractInputData(data string) ([]byte, []byte, error) {
@@ -107,8 +107,8 @@ func parseContractInputData(data string) ([]byte, []byte, error) {
 }
 
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
-	if inputFileName != nil && *inputFileName != "" {
-		return os.ReadFile(*inputFileName)
+	if inputFileName != "" {
+		return os.ReadFile(inputFileName)
 	}
 
 	if len(args) > 1 {

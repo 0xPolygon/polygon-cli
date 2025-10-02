@@ -15,7 +15,7 @@ import (
 var (
 	//go:embed usage.md
 	usage       string
-	jsonStorage *string
+	jsonStorage string
 )
 
 var WrapContractCmd = &cobra.Command{
@@ -46,8 +46,8 @@ var WrapContractCmd = &cobra.Command{
 }
 
 func init() {
-	flagSet := WrapContractCmd.Flags()
-	jsonStorage = flagSet.String("storage", "", "Provide storage slots in json format k:v")
+	f := WrapContractCmd.Flags()
+	f.StringVar(&jsonStorage, "storage", "", "Provide storage slots in json format k:v")
 }
 
 func getInputData(args []string) (string, error) {
@@ -78,9 +78,9 @@ func getInputData(args []string) (string, error) {
 func getStorageBytecode() (string, error) {
 	var storageBytecode string = ""
 
-	if jsonStorage != nil && *jsonStorage != "" {
+	if jsonStorage != "" {
 		var storage map[string]string
-		err := json.Unmarshal([]byte(*jsonStorage), &storage)
+		err := json.Unmarshal([]byte(jsonStorage), &storage)
 		if err != nil {
 			return storageBytecode, err
 		}

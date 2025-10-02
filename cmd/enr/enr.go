@@ -21,7 +21,7 @@ import (
 var (
 	//go:embed usage.md
 	usage         string
-	inputFileName *string
+	inputFileName string
 )
 
 var ENRCmd = &cobra.Command{
@@ -102,12 +102,12 @@ func ForkIDToString(id forkid.ID) string {
 }
 
 func init() {
-	flagSet := ENRCmd.Flags()
-	inputFileName = flagSet.String("file", "", "Provide a file that's holding ENRs")
+	f := ENRCmd.Flags()
+	f.StringVar(&inputFileName, "file", "", "Provide a file that's holding ENRs")
 }
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
-	if inputFileName != nil && *inputFileName != "" {
-		return os.ReadFile(*inputFileName)
+	if inputFileName != "" {
+		return os.ReadFile(inputFileName)
 	}
 
 	if len(args) >= 1 {

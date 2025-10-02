@@ -68,9 +68,9 @@ Txs Sent Successfully: %d
 Txs Sent Unsuccessfully: %d
 Success Ratio: %.2f%%
 -----------------------------------`,
-		*publishInputArgs.concurrency,
-		*publishInputArgs.jobQueueSize,
-		*publishInputArgs.rateLimit,
+		publishInputArgs.concurrency,
+		publishInputArgs.jobQueueSize,
+		publishInputArgs.rateLimit,
 
 		s.InputDataSource,
 		s.InputDataCount.Load(),
