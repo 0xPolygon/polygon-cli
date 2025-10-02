@@ -636,23 +636,23 @@ func mustPrintLogs(logs []types.Log, contractInstance reflect.Value, contractABI
 func init() {
 	// cdk
 	f := CDKCmd.PersistentFlags()
-	f.StringVar(&cdkInputArgs.rpcURL, ArgRpcURL, defaultRPCURL, "the RPC URL of the network containing the CDK contracts")
-	f.StringVar(&cdkInputArgs.forkID, ArgForkID, defaultForkId, "the fork ID of the CDK networks")
-	f.StringVar(&cdkInputArgs.rollupManagerAddress, ArgRollupManagerAddress, "", "the address of the rollup contract")
+	f.StringVar(&cdkInputArgs.rpcURL, ArgRpcURL, defaultRPCURL, "RPC URL of network containing CDK contracts")
+	f.StringVar(&cdkInputArgs.forkID, ArgForkID, defaultForkId, "fork ID of CDK networks")
+	f.StringVar(&cdkInputArgs.rollupManagerAddress, ArgRollupManagerAddress, "", "address of rollup contract")
 
 	// rollup manager
 
 	// rollup
 	fRollup := rollupCmd.PersistentFlags()
-	fRollup.StringVar(&cdkInputArgs.rollupID, ArgRollupID, "", "the rollup ID")
-	fRollup.StringVar(&cdkInputArgs.rollupChainID, ArgRollupChainID, "", "the rollup chain ID")
-	fRollup.StringVar(&cdkInputArgs.rollupAddress, ArgRollupAddress, "", "the rollup address")
+	fRollup.StringVar(&cdkInputArgs.rollupID, ArgRollupID, "", "rollup ID")
+	fRollup.StringVar(&cdkInputArgs.rollupChainID, ArgRollupChainID, "", "rollup chain ID")
+	fRollup.StringVar(&cdkInputArgs.rollupAddress, ArgRollupAddress, "", "rollup address")
 
 	// bridge
-	bridgeCmd.PersistentFlags().StringVar(&cdkInputArgs.bridgeAddress, ArgBridgeAddress, "", "the address of the bridge contract")
+	bridgeCmd.PersistentFlags().StringVar(&cdkInputArgs.bridgeAddress, ArgBridgeAddress, "", "address of bridge contract")
 
 	// ger
-	gerCmd.PersistentFlags().StringVar(&cdkInputArgs.gerAddress, ArgGERAddress, "", "the address of the GER contract")
+	gerCmd.PersistentFlags().StringVar(&cdkInputArgs.gerAddress, ArgGERAddress, "", "address of GER contract")
 
 	CDKCmd.AddCommand(rollupManagerCmd)
 	CDKCmd.AddCommand(rollupCmd)

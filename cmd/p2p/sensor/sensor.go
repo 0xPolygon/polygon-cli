@@ -559,18 +559,16 @@ func init() {
 		`maximum number of concurrent database operations to perform. Increasing this
 will result in less chance of missing data (i.e. broken pipes) but can
 significantly increase memory usage`)
-	f.BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "whether to write blocks to the database")
-	f.BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "whether to write block events to the database")
+	f.BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "write blocks to the database")
+	f.BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "write block events to the database")
 	f.BoolVarP(&inputSensorParams.ShouldWriteTransactions, "write-txs", "t", true,
-		`whether to write transactions to the database. This option could significantly
-increase CPU and memory usage`)
+		`write transactions to the database (can significantly increase CPU and memory usage)`)
 	f.BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
-		`whether to write transaction events to the database. This option could
-significantly increase CPU and memory usage`)
-	f.BoolVar(&inputSensorParams.ShouldWritePeers, "write-peers", true, "whether to write peers to the database")
-	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "whether to run pprof")
+		`write transaction events to the database (can significantly increase CPU and memory usage)`)
+	f.BoolVar(&inputSensorParams.ShouldWritePeers, "write-peers", true, "write peers to the database")
+	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
-	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "whether to run Prometheus")
+	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")
 	f.UintVar(&inputSensorParams.PrometheusPort, "prom-port", 2112, "port Prometheus runs on")
 	f.UintVar(&inputSensorParams.APIPort, "api-port", 8080, "port the API server will listen on")
 	f.StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "private key file (cannot be set with --key)")

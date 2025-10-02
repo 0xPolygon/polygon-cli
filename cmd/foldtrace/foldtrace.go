@@ -146,9 +146,9 @@ func validateInputMetric() error {
 
 func init() {
 	f := FoldTraceCmd.Flags()
-	f.StringVar(&inputFileName, "file", "", "Provide a filename to read and hash")
-	f.StringVar(&inputRootContextName, "root-context", "root context", "The name for the top most initial context")
-	f.StringVar(&inputMetric, "metric", "gas", "Provide a metric name for analysis: gas, count, actualgas")
+	f.StringVar(&inputFileName, "file", "", "filename to read and hash")
+	f.StringVar(&inputRootContextName, "root-context", "root context", "name for top most initial context")
+	f.StringVar(&inputMetric, "metric", "gas", "metric name for analysis: gas, count, actualgas")
 
 }
 

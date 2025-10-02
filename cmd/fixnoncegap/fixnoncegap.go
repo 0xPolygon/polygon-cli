@@ -233,7 +233,7 @@ func init() {
 	f.StringVarP(&inputFixNonceGapArgs.rpcURL, ArgRpcURL, "r", "http://localhost:8545", "the RPC endpoint URL")
 	f.StringVar(&inputFixNonceGapArgs.privateKey, ArgPrivateKey, "", "private key to be used when sending txs to fix nonce gap")
 	f.BoolVar(&inputFixNonceGapArgs.replace, ArgReplace, false, "replace the existing txs in the pool")
-	f.Uint64Var(&inputFixNonceGapArgs.maxNonce, ArgMaxNonce, 0, "when set, the max nonce will be this value instead of trying to get it from the pool")
+	f.Uint64Var(&inputFixNonceGapArgs.maxNonce, ArgMaxNonce, 0, "override max nonce value instead of getting it from the pool")
 }
 
 // Wait for the transaction to be mined

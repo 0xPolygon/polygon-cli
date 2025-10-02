@@ -94,5 +94,5 @@ var MonitorV2Cmd = &cobra.Command{
 func init() {
 	MonitorV2Cmd.Flags().StringVar(&rpcURL, "rpc-url", "", "RPC endpoint URL (required)")
 	MonitorV2Cmd.Flags().StringVar(&rendererType, "renderer", "tui", "renderer type (json, tview, tui)")
-	MonitorV2Cmd.Flags().StringVar(&pprofAddr, "pprof", "", "enable pprof server on specified address (e.g. 127.0.0.1:6060)")
+	MonitorV2Cmd.Flags().StringVar(&pprofAddr, "pprof", "", "pprof server address (e.g. 127.0.0.1:6060)")
 }

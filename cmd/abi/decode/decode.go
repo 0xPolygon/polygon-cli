@@ -82,8 +82,8 @@ var ABIDecodeCmd = &cobra.Command{
 
 func init() {
 	f := ABIDecodeCmd.Flags()
-	f.StringVar(&inputFileName, "file", "", "Provide a filename to read and analyze")
-	f.StringVar(&inputData, "data", "", "Provide input data to be unpacked based on the ABI definition")
+	f.StringVar(&inputFileName, "file", "", "filename to read and analyze")
+	f.StringVar(&inputData, "data", "", "input data to be unpacked based on ABI definition")
 }
 
 func parseContractInputData(data string) ([]byte, []byte, error) {

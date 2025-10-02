@@ -66,18 +66,18 @@ func init() {
 	p := new(cmdFundParams)
 	f := FundCmd.Flags()
 
-	f.StringVarP(&p.RpcUrl, "rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
-	f.StringVar(&p.PrivateKey, "private-key", defaultPrivateKey, "The hex encoded private key that we'll use to send transactions")
+	f.StringVarP(&p.RpcUrl, "rpc-url", "r", "http://localhost:8545", "RPC endpoint URL")
+	f.StringVar(&p.PrivateKey, "private-key", defaultPrivateKey, "hex encoded private key to use for sending transactions")
 
 	// Wallet parameters.
-	f.Uint64VarP(&p.WalletsNumber, "number", "n", 10, "The number of wallets to fund")
-	f.BoolVar(&p.UseHDDerivation, "hd-derivation", true, "Derive wallets to fund from the private key in a deterministic way")
-	f.StringSliceVar(&p.WalletAddresses, "addresses", nil, "Comma-separated list of wallet addresses to fund")
+	f.Uint64VarP(&p.WalletsNumber, "number", "n", 10, "number of wallets to fund")
+	f.BoolVar(&p.UseHDDerivation, "hd-derivation", true, "derive wallets to fund from private key in deterministic way")
+	f.StringSliceVar(&p.WalletAddresses, "addresses", nil, "comma-separated list of wallet addresses to fund")
 	p.FundingAmountInWei = defaultFundingInWei
-	f.Var(&flag_loader.BigIntValue{Val: p.FundingAmountInWei}, "eth-amount", "The amount of wei to send to each wallet")
-	f.StringVar(&p.KeyFile, "key-file", "", "The file containing the accounts private keys, one per line.")
+	f.Var(&flag_loader.BigIntValue{Val: p.FundingAmountInWei}, "eth-amount", "amount of wei to send to each wallet")
+	f.StringVar(&p.KeyFile, "key-file", "", "file containing accounts private keys, one per line")
 
-	f.StringVarP(&p.OutputFile, "file", "f", "wallets.json", "The output JSON file path for storing the addresses and private keys of funded wallets")
+	f.StringVarP(&p.OutputFile, "file", "f", "wallets.json", "output JSON file path for storing addresses and private keys of funded wallets")
 
 	// Marking flags as mutually exclusive
 	FundCmd.MarkFlagsMutuallyExclusive("addresses", "number")
@@ -87,7 +87,7 @@ func init() {
 	FundCmd.MarkFlagsMutuallyExclusive("key-file", "hd-derivation")
 
 	// Funder contract parameters.
-	f.StringVar(&p.FunderAddress, "contract-address", "", "The address of a pre-deployed Funder contract")
+	f.StringVar(&p.FunderAddress, "contract-address", "", "address of pre-deployed Funder contract")
 
 	params = *p
 }

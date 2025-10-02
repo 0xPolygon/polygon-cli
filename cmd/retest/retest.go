@@ -828,7 +828,7 @@ var RetestCmd = &cobra.Command{
 
 func init() {
 	f := RetestCmd.Flags()
-	f.StringVar(&inputFileName, "file", "", "Provide a file that's filed with test transaction fillers")
+	f.StringVar(&inputFileName, "file", "", "file filled with test transaction fillers")
 	solcPath = os.Getenv("SOLC_PATH")
 	if solcPath == "" {
 		solcPath = "solc"

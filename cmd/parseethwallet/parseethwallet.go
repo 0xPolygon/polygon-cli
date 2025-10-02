@@ -82,10 +82,10 @@ var ParseETHWalletCmd = &cobra.Command{
 
 func init() {
 	f := ParseETHWalletCmd.Flags()
-	f.StringVar(&inputFileName, "file", "", "Provide a file with the key information ")
-	f.StringVar(&inputPassword, "password", "", "An optional password use to unlock the key")
-	f.StringVar(&inputRawHexPrivateKey, "hexkey", "", "An optional hexkey that would be use to generate a geth style key")
-	f.StringVar(&inputKeyStoreDirectory, "keystore", "/tmp/keystore", "The directory where keys would be stored when importing a raw hex")
+	f.StringVar(&inputFileName, "file", "", "file with key information")
+	f.StringVar(&inputPassword, "password", "", "optional password to unlock key")
+	f.StringVar(&inputRawHexPrivateKey, "hexkey", "", "optional hexkey to use for generating geth style key")
+	f.StringVar(&inputKeyStoreDirectory, "keystore", "/tmp/keystore", "directory where keys will be stored when importing raw hex")
 }
 
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {

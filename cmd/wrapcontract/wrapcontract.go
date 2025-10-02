@@ -47,7 +47,7 @@ var WrapContractCmd = &cobra.Command{
 
 func init() {
 	f := WrapContractCmd.Flags()
-	f.StringVar(&jsonStorage, "storage", "", "Provide storage slots in json format k:v")
+	f.StringVar(&jsonStorage, "storage", "", "storage slots in JSON format k:v")
 }
 
 func getInputData(args []string) (string, error) {

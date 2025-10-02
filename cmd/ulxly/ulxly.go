@@ -2264,7 +2264,7 @@ type FileOptions struct {
 }
 
 func (o *FileOptions) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVarP(&o.FileName, ArgFileName, "", "", "an ndjson file with events data")
+	cmd.Flags().StringVarP(&o.FileName, ArgFileName, "", "", "ndjson file with events data")
 }
 
 type BalanceTreeOptions struct {
@@ -2275,11 +2275,11 @@ type BalanceTreeOptions struct {
 
 func (o *BalanceTreeOptions) AddFlags(cmd *cobra.Command) {
 	f := cmd.Flags()
-	f.StringVarP(&o.L2ClaimsFile, ArgL2ClaimsFileName, "", "", "an ndjson file with l2 claim events data")
-	f.StringVarP(&o.L2DepositsFile, ArgL2DepositsFileName, "", "", "an ndjson file with l2 deposit events data")
+	f.StringVarP(&o.L2ClaimsFile, ArgL2ClaimsFileName, "", "", "ndjson file with l2 claim events data")
+	f.StringVarP(&o.L2DepositsFile, ArgL2DepositsFileName, "", "", "ndjson file with l2 deposit events data")
 	f.StringVarP(&o.BridgeAddress, ArgBridgeAddress, "", "", "bridge address")
 	f.StringVarP(&o.RpcURL, ArgRPCURL, "r", "", "RPC URL")
-	f.Uint32VarP(&o.L2NetworkID, ArgL2NetworkID, "", 0, "the L2 network ID")
+	f.Uint32VarP(&o.L2NetworkID, ArgL2NetworkID, "", 0, "L2 network ID")
 	f.BoolVarP(&o.Insecure, ArgInsecure, "", false, "skip TLS certificate verification")
 }
 
@@ -2288,7 +2288,7 @@ type ProofOptions struct {
 }
 
 func (o *ProofOptions) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().Uint32VarP(&o.DepositCount, ArgDepositCount, "", 0, "the deposit number to generate a proof for")
+	cmd.Flags().Uint32VarP(&o.DepositCount, ArgDepositCount, "", 0, "deposit number to generate a proof for")
 }
 
 type RollupsProofOptions struct {
@@ -2298,8 +2298,8 @@ type RollupsProofOptions struct {
 
 func (o *RollupsProofOptions) AddFlags(cmd *cobra.Command) {
 	f := cmd.Flags()
-	f.Uint32VarP(&o.RollupID, ArgRollupID, "", 0, "the rollup ID number to generate a proof for")
-	f.BoolVarP(&o.CompleteMerkleTree, ArgCompleteMT, "", false, "allows to get the proof for a leave higher than the highest rollup ID")
+	f.Uint32VarP(&o.RollupID, ArgRollupID, "", 0, "rollup ID number to generate a proof for")
+	f.BoolVarP(&o.CompleteMerkleTree, ArgCompleteMT, "", false, "get proof for a leave higher than the highest rollup ID")
 }
 
 type GetEvent struct {
@@ -2310,10 +2310,10 @@ type GetEvent struct {
 
 func (o *GetEvent) AddFlags(cmd *cobra.Command) {
 	f := cmd.Flags()
-	f.StringVarP(&o.URL, ArgRPCURL, "u", "", "the RPC URL to read the events data")
-	f.Uint64VarP(&o.FromBlock, ArgFromBlock, "f", 0, "the start of the range of blocks to retrieve")
-	f.Uint64VarP(&o.ToBlock, ArgToBlock, "t", 0, "the end of the range of blocks to retrieve")
-	f.Uint64VarP(&o.FilterSize, ArgFilterSize, "i", 1000, "the batch size for individual filter queries")
+	f.StringVarP(&o.URL, ArgRPCURL, "u", "", "RPC URL to read the events data")
+	f.Uint64VarP(&o.FromBlock, ArgFromBlock, "f", 0, "start of the range of blocks to retrieve")
+	f.Uint64VarP(&o.ToBlock, ArgToBlock, "t", 0, "end of the range of blocks to retrieve")
+	f.Uint64VarP(&o.FilterSize, ArgFilterSize, "i", 1000, "batch size for individual filter queries")
 	f.BoolVarP(&o.Insecure, ArgInsecure, "", false, "skip TLS certificate verification")
 	fatalIfError(cmd.MarkFlagRequired(ArgFromBlock))
 	fatalIfError(cmd.MarkFlagRequired(ArgToBlock))
@@ -2325,7 +2325,7 @@ type GetSmcOptions struct {
 }
 
 func (o *GetSmcOptions) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVarP(&o.BridgeAddress, ArgBridgeAddress, "a", "", "the address of the ulxly bridge")
+	cmd.Flags().StringVarP(&o.BridgeAddress, ArgBridgeAddress, "a", "", "address of the ulxly bridge")
 }
 
 type GetVerifyBatchesOptions struct {
@@ -2333,7 +2333,7 @@ type GetVerifyBatchesOptions struct {
 }
 
 func (o *GetVerifyBatchesOptions) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVarP(&o.RollupManagerAddress, ArgRollupManagerAddress, "a", "", "the address of the rollup manager contract")
+	cmd.Flags().StringVarP(&o.RollupManagerAddress, ArgRollupManagerAddress, "a", "", "address of the rollup manager contract")
 }
 
 func init() {
@@ -2545,33 +2545,33 @@ or if it's actually an intermediate hash.`,
 
 	// Arguments for both bridge and claim
 	fBridgeAndClaim := ulxlyBridgeAndClaimCmd.PersistentFlags()
-	fBridgeAndClaim.StringVar(&inputUlxlyArgs.rpcURL, ArgRPCURL, "", "the URL of the RPC to send the transaction")
-	fBridgeAndClaim.StringVar(&inputUlxlyArgs.bridgeAddress, ArgBridgeAddress, "", "the address of the lxly bridge")
-	fBridgeAndClaim.Uint64Var(&inputUlxlyArgs.gasLimit, ArgGasLimit, 0, "force a gas limit when sending a transaction")
-	fBridgeAndClaim.StringVar(&inputUlxlyArgs.chainID, ArgChainID, "", "set the chain id to be used in the transaction")
-	fBridgeAndClaim.StringVar(&inputUlxlyArgs.privateKey, ArgPrivateKey, "", "the hex encoded private key to be used when sending the tx")
-	fBridgeAndClaim.StringVar(&inputUlxlyArgs.destAddress, ArgDestAddress, "", "the address where the bridge will be sent to")
-	fBridgeAndClaim.Uint64Var(&inputUlxlyArgs.timeout, ArgTimeout, 60, "the amount of time to wait while trying to confirm a transaction receipt")
-	fBridgeAndClaim.StringVar(&inputUlxlyArgs.gasPrice, ArgGasPrice, "", "the gas price to be used")
+	fBridgeAndClaim.StringVar(&inputUlxlyArgs.rpcURL, ArgRPCURL, "", "RPC URL to send the transaction")
+	fBridgeAndClaim.StringVar(&inputUlxlyArgs.bridgeAddress, ArgBridgeAddress, "", "address of the lxly bridge")
+	fBridgeAndClaim.Uint64Var(&inputUlxlyArgs.gasLimit, ArgGasLimit, 0, "force specific gas limit for transaction")
+	fBridgeAndClaim.StringVar(&inputUlxlyArgs.chainID, ArgChainID, "", "chain ID to use in the transaction")
+	fBridgeAndClaim.StringVar(&inputUlxlyArgs.privateKey, ArgPrivateKey, "", "hex encoded private key for sending transaction")
+	fBridgeAndClaim.StringVar(&inputUlxlyArgs.destAddress, ArgDestAddress, "", "destination address for the bridge")
+	fBridgeAndClaim.Uint64Var(&inputUlxlyArgs.timeout, ArgTimeout, 60, "timeout in seconds to wait for transaction receipt confirmation")
+	fBridgeAndClaim.StringVar(&inputUlxlyArgs.gasPrice, ArgGasPrice, "", "gas price to use")
 	fBridgeAndClaim.BoolVar(&inputUlxlyArgs.dryRun, ArgDryRun, false, "do all of the transaction steps but do not send the transaction")
 	fBridgeAndClaim.BoolVar(&inputUlxlyArgs.insecure, ArgInsecure, false, "skip TLS certificate verification")
 	fatalIfError(ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgBridgeAddress))
 
 	// bridge specific args
 	fBridge := ulxlyBridgeCmd.PersistentFlags()
-	fBridge.BoolVar(&inputUlxlyArgs.forceUpdate, ArgForceUpdate, true, "indicates if the new global exit root is updated or not")
-	fBridge.StringVar(&inputUlxlyArgs.value, ArgValue, "0", "the amount in wei to be sent along with the transaction")
-	fBridge.Uint32Var(&inputUlxlyArgs.destNetwork, ArgDestNetwork, 0, "the rollup id of the destination network")
-	fBridge.StringVar(&inputUlxlyArgs.tokenAddress, ArgTokenAddress, "0x0000000000000000000000000000000000000000", "the address of an ERC20 token to be used")
+	fBridge.BoolVar(&inputUlxlyArgs.forceUpdate, ArgForceUpdate, true, "update the new global exit root")
+	fBridge.StringVar(&inputUlxlyArgs.value, ArgValue, "0", "amount in wei to send with the transaction")
+	fBridge.Uint32Var(&inputUlxlyArgs.destNetwork, ArgDestNetwork, 0, "rollup ID of the destination network")
+	fBridge.StringVar(&inputUlxlyArgs.tokenAddress, ArgTokenAddress, "0x0000000000000000000000000000000000000000", "address of ERC20 token to use")
 	fBridge.StringVar(&inputUlxlyArgs.callData, ArgCallData, "0x", "call data to be passed directly with bridge-message or as an ERC20 Permit")
 	fBridge.StringVar(&inputUlxlyArgs.callDataFile, ArgCallDataFile, "", "a file containing hex encoded call data")
 	fatalIfError(ulxlyBridgeCmd.MarkPersistentFlagRequired(ArgDestNetwork))
 
 	// Claim specific args
 	fClaim := ulxlyClaimCmd.PersistentFlags()
-	fClaim.Uint64Var(&inputUlxlyArgs.depositCount, ArgDepositCount, 0, "the deposit count of the bridge transaction")
-	fClaim.Uint64Var(&inputUlxlyArgs.depositNetwork, ArgDepositNetwork, 0, "the rollup id of the network where the deposit was initially made")
-	fClaim.StringVar(&inputUlxlyArgs.bridgeServiceURL, ArgBridgeServiceURL, "", "the URL of the bridge service")
+	fClaim.Uint64Var(&inputUlxlyArgs.depositCount, ArgDepositCount, 0, "deposit count of the bridge transaction")
+	fClaim.Uint64Var(&inputUlxlyArgs.depositNetwork, ArgDepositNetwork, 0, "rollup ID of the network where the deposit was made")
+	fClaim.StringVar(&inputUlxlyArgs.bridgeServiceURL, ArgBridgeServiceURL, "", "URL of the bridge service")
 	fClaim.StringVar(&inputUlxlyArgs.globalIndex, ArgGlobalIndex, "", "an override of the global index value")
 	fClaim.DurationVar(&inputUlxlyArgs.wait, ArgWait, time.Duration(0), "this flag is available for claim asset and claim message. if specified, the command will retry in a loop for the deposit to be ready to claim up to duration. Once the deposit is ready to claim, the claim will actually be sent.")
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositCount))

@@ -71,9 +71,9 @@ func init() {
 	f.StringArrayVarP(&inputMetricsToDashTemplateVarDefaults, "template-var-defaults", "D", []string{}, "the defaults to use for the template variables")
 
 	f.StringArrayVarP(&inputMetricsToDashStripPrefixes, "strip-prefix", "s", []string{}, "a prefix that can be removed from the metrics")
-	f.BoolVarP(&inputMetricsToDashPretty, "pretty-name", "P", true, "should the metric names be prettified")
+	f.BoolVarP(&inputMetricsToDashPretty, "pretty-name", "P", true, "prettify metric names")
 
-	f.BoolVarP(&inputMetricsToDashShowHelp, "show-help", "S", false, "should we show the help text for each metric")
+	f.BoolVarP(&inputMetricsToDashShowHelp, "show-help", "S", false, "show help text for each metric")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:

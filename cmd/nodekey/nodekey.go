@@ -293,7 +293,7 @@ func init() {
 	f.StringVarP(&inputNodeKeyIP, "ip", "i", "0.0.0.0", "the IP to be associated with this address")
 	f.IntVarP(&inputNodeKeyTCP, "tcp", "t", 30303, "the TCP port to be associated with this address")
 	f.IntVarP(&inputNodeKeyUDP, "udp", "u", 0, "the UDP port to be associated with this address")
-	f.BoolVarP(&inputNodeKeySign, "sign", "s", false, "should the node record be signed")
+	f.BoolVarP(&inputNodeKeySign, "sign", "s", false, "sign the node record")
 	f.Uint64VarP(&inputNodeKeySeed, "seed", "S", 271828, "a numeric seed value")
-	f.BoolVarP(&inputNodeKeyMarshalProtobuf, "marshal-protobuf", "m", false, "if true the libp2p key will be marshaled to protobuf format rather than raw")
+	f.BoolVarP(&inputNodeKeyMarshalProtobuf, "marshal-protobuf", "m", false, "marshal libp2p key to protobuf format instead of raw")
 }

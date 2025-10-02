@@ -59,25 +59,25 @@ var RPCFuzzCmd = &cobra.Command{
 func init() {
 	f := RPCFuzzCmd.Flags()
 
-	f.StringVarP(&rpcUrl, "rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
-	f.StringVar(&testPrivateHexKey, "private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to sending transactions")
-	f.StringVar(&testContractAddress, "contract-address", "", "The address of a contract that can be used for testing. If not specified, a contract will be deployed automatically.")
-	f.StringVar(&testNamespaces, "namespaces", fmt.Sprintf("eth,web3,net,debug,%s", rpcTestRawHTTPNamespace), "Comma separated list of rpc namespaces to test")
-	f.BoolVar(&testFuzz, "fuzz", false, "Flag to indicate whether to fuzz input or not.")
-	f.IntVar(&testFuzzNum, "fuzzn", 100, "Number of times to run the fuzzer per test.")
-	f.Int64Var(&seed, "seed", 123456, "A seed for generating random values within the fuzzer")
+	f.StringVarP(&rpcUrl, "rpc-url", "r", "http://localhost:8545", "RPC endpoint URL")
+	f.StringVar(&testPrivateHexKey, "private-key", codeQualityPrivateKey, "hex encoded private key to use for sending transactions")
+	f.StringVar(&testContractAddress, "contract-address", "", "address of contract to use for testing (if not specified, contract will be deployed automatically)")
+	f.StringVar(&testNamespaces, "namespaces", fmt.Sprintf("eth,web3,net,debug,%s", rpcTestRawHTTPNamespace), "comma separated list of RPC namespaces to test")
+	f.BoolVar(&testFuzz, "fuzz", false, "flag to indicate whether to fuzz input or not")
+	f.IntVar(&testFuzzNum, "fuzzn", 100, "number of times to run fuzzer per test")
+	f.Int64Var(&seed, "seed", 123456, "seed for generating random values within fuzzer")
 
 	// Streamer type flags (mutually exclusive)
-	f.BoolVar(&streamJSON, "json", false, "Stream output in JSON format")
-	f.BoolVar(&streamCSV, "csv", false, "Stream output in CSV format")
-	f.BoolVar(&streamCompact, "compact", false, "Stream output in compact format (default)")
-	f.BoolVar(&streamHTML, "html", false, "Stream output in HTML format")
-	f.BoolVar(&streamMarkdown, "md", false, "Stream output in Markdown format")
+	f.BoolVar(&streamJSON, "json", false, "stream output in JSON format")
+	f.BoolVar(&streamCSV, "csv", false, "stream output in CSV format")
+	f.BoolVar(&streamCompact, "compact", false, "stream output in compact format (default)")
+	f.BoolVar(&streamHTML, "html", false, "stream output in HTML format")
+	f.BoolVar(&streamMarkdown, "md", false, "stream output in Markdown format")
 
 	// Output control flags
-	f.StringVar(&outputFilter, "output", "all", "What to output: all, failures, summary")
-	f.IntVar(&summaryInterval, "summary-interval", 0, "Print summary every N tests (0=disabled)")
-	f.BoolVar(&quietMode, "quiet", false, "Only show final summary")
+	f.StringVar(&outputFilter, "output", "all", "what to output: all, failures, summary")
+	f.IntVar(&summaryInterval, "summary-interval", 0, "print summary every N tests (0=disabled)")
+	f.BoolVar(&quietMode, "quiet", false, "only show final summary")
 
 	argfuzz.SetSeed(&seed)
 

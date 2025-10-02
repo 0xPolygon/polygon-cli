@@ -73,7 +73,7 @@ var ParseBatchL2Data = &cobra.Command{
 
 func init() {
 	f := ParseBatchL2Data.Flags()
-	f.StringVar(&inputFileName, "file", "", "Provide a file with the key information ")
+	f.StringVar(&inputFileName, "file", "", "file with key information")
 }
 
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
