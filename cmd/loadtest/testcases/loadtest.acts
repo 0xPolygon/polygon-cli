@@ -1,0 +1,143 @@
+-- java -Doutput=nist -Ddoi=2 -Dchandler=solver -jar ~/.local/bin/acts_3.3.jar loadtest.acts
+-- java -Doutput=nist -Ddoi=2 -jar ~/.local/bin/acts_3.3.jar loadtest.acts
+-- ./nist-to-cmd.sh output.txt > test-commands.sh
+
+-- Domains over [-21474836, 21474836] are strongly inadvisable
+-- And using numbers greater than the max java.lang.integer causes issues as well
+
+
+[System]
+-- specify system name
+Name: Polycli Loadtest
+
+[Parameter]
+accountFundingAmount (enum): -1, 1000000000000000000
+adaptiveBackoffFactor (int): -1, 1, 2, 10
+adaptiveCycleDurationSeconds (int): -1, 1, 10, 30, 60
+adaptiveRateLimit (boolean): TRUE, FALSE
+adaptiveRateLimitIncrement (int): -1, 1, 10, 25, 50, 100, 200
+adaptiveTargetSize (int): -1, 100, 1000, 5000, 10000
+batchSize (int): -1, 10, 100, 999, 1000
+blobFeeCap (int): -1, 100000
+calldata (enum): UNSPECIFIED, 0x0000000000000000000000000000000000000000000000000000000000000000, 0xc0ffeebeefdeadc0ffeebeefdeadc0ffeedeadbeefbeefbeefbeefc0ffeedead
+chainId (int): -1, 31337
+concurrency (int): -1, 1, 10, 50
+-- random address that we can use ad a contract
+contractAddress (enum): UNSPECIFIED, 0xF00000000000000000000000000000000000000F
+contractCallPayable (boolean): TRUE, FALSE
+erc20Address (enum): UNSPECIFIED, 0x28A42e0C1Ea5f7D555Fae6189b4078041FAB0A08
+erc721Address (enum): UNSPECIFIED, 0x9E2FE5EaD821676a68BfcF85f16B1303AF647aC0
+ethAmountInWei (int): -1, 0, 1, 1000, 1000000
+ethCallOnly (boolean): TRUE, FALSE
+ethCallOnlyLatest (boolean): TRUE, FALSE
+fireAndForget (boolean): TRUE, FALSE
+-- functionArg i'm not sure what to do about this parameter... we should decide if we actually need this
+-- functionSignature similar... i'm tempted to remove support for this one
+gasLimit (int): -1, 21000, 100000, 1000000, 10000000, 20000000
+gasPrice (int): -1, 100, 10000, 1000000
+gasPriceMultiplier (int): -1, 1, 2, 10
+legacy (boolean): TRUE, FALSE
+-- the load test contract isn't used ans much anymore... I wonder if we should drop this as well?
+loadtestContractAddress (enum): UNSPECIFIED, 0xbB186bd43C992F68Ac430686370343aeF2A22B96
+maxBaseFeeWei (int): -1, 1000, 1000000
+mode (enum): UNSPECIFIED, erc20, erc721, blob, contract-call, deploy, increment, random, recall, rpc, store, transaction, uniswapv3
+nonce (int): -1, 1, 5
+outputMode (enum): UNSPECIFIED, json, text
+outputRawTxOnly (boolean): TRUE, FALSE
+preFundSendingAccounts (boolean): TRUE, FALSE
+priorityGasPrice (int): -1, 100, 10000, 1000000
+privateKey (enum): UNSPECIFIED, 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d, 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
+proxy (enum): UNSPECIFIED, http://127.0.0.1:8484
+randomRecipients (boolean): TRUE, FALSE
+rateLimit (int): -1, 1, 10, 100
+recallBlocks (int): -1, 1, 10, 100
+receiptRetryInitialDelayMs (int): -1, 10, 100, 1000, 10000
+receiptRetryMax (int): -1, 2, 10, 30
+refundRemainingFunds (boolean): TRUE, FALSE
+requests (int): -1, 1, 10, 100, 1000
+rpcUrl (enum): UNSPECIFIED, http://localhost:8545
+seed (int): -1, 0, 1, 123
+sendOnly (boolean): TRUE, FALSE
+sendingAccountsCount (int): -1, 1, 10, 50
+sendingAccountsFile (enum): UNSPECIFIED, private-keys.txt
+storeDataSize (int): -1, 0, 2, 4, 16, 256, 1024
+summarize (boolean): TRUE, FALSE
+timeLimit (int): -1, 10, 30, 60
+toAddress (enum): UNSPECIFIED, 0xF00000000000000000000000000000000000000F
+waitForReceipt (boolean): TRUE, FALSE
+
+[Relation]
+
+[Constraint]
+refundRemainingFunds => preFundSendingAccounts
+-- I wonder if these really need to be two different flags?
+preFundSendingAccounts => accountFundingAmount != "-1"
+
+adaptiveBackoffFactor != -1 || adaptiveCycleDurationSeconds != -1 || adaptiveRateLimitIncrement != -1 || adaptiveTargetSize != -1 => adaptiveRateLimit
+
+batchSize != -1 => summarize
+
+blobFeeCap != -1 => mode == "blob"
+
+calldata != "UNSPECIFIED" => mode == "contract-call" && contractAddress != "UNSPECIFIED"
+contractAddress != "UNSPECIFIED" => mode == "contract-call"
+mode == "contract-call" => contractAddress != "UNSPECIFIED"
+contractCallPayable => mode == "contract-call" && ethAmountInWei > 0
+
+concurrency > 1 => rateLimit > 1
+concurrency >= 10 => requests < 100
+
+erc20Address != "UNSPECIFIED" => mode == "erc20"
+erc721Address != "UNSPECIFIED" => mode == "erc721"
+
+ethAmountInWei != -1 => mode == "blob" || mode == "contract-call" || mode == "random" || mode == "transaction"
+
+ethCallOnly => mode != "rpc" && !adaptiveRateLimit && !waitForReceipt && mode != "blob" && mode != "random" && sendingAccountsFile == "UNSPECIFIED" && !preFundSendingAccounts && sendingAccountsCount == -1
+ethCallOnlyLatest => ethCallOnly
+
+fireAndForget => !ethCallOnly && mode != "rpc"
+sendOnly => !ethCallOnly && mode != "rpc"
+
+gasPriceMultiplier != -1 => gasPrice == -1 && priorityGasPrice == -1
+
+legacy => priorityGasPrice == -1
+
+loadtestContractAddress != "UNSPECIFIED" => mode == "increment" || mode == "store"
+
+maxBaseFeeWei != -1 => !legacy && priorityGasPrice == -1
+
+mode != "transaction" => gasLimit == -1 || gasLimit > 21000
+
+-- These two flags are somewhat equivant in this context of mode==rpc
+mode == "rpc" => ethCallOnly
+mode == "blob" => !legacy
+
+
+nonce != -1 => accountFundingAmount == "-1" && sendingAccountsFile == "UNSPECIFIED" && !preFundSendingAccounts
+
+outputRawTxOnly => mode != "rpc" && mode != "uniswapv3" && maxBaseFeeWei == -1 && !adaptiveRateLimit && !waitForReceipt && !ethCallOnly && !preFundSendingAccounts && timeLimit == -1
+
+-- random recipients only works for certain modes
+randomRecipients => toAddress == "UNSPECIFIED"
+
+recallBlocks != -1 => mode == "recall"
+
+receiptRetryInitialDelayMs != -1 => waitForReceipt
+receiptRetryMax != -1 => waitForReceipt
+
+requests > 10 => rateLimit > 10
+
+preFundSendingAccounts => !ethCallOnly
+priorityGasPrice >= 0 => priorityGasPrice <= gasPrice
+
+sendingAccountsCount != -1 => sendingAccountsFile == "UNSPECIFIED" && accountFundingAmount == "1000000000000000000"
+sendingAccountsFile != "UNSPECIFIED" => sendingAccountsCount == -1
+
+storeDataSize != -1 => mode == "store"
+
+toAddress != "UNSPECIFIED" => !randomRecipients && mode != "contract-call" && mode != "deploy" && mode != "increment" && mode != "recall" && mode != "store" && mode != "uniswapv3"
+
+waitForReceipt => mode != "rpc" && mode != "recall"
+
+[Test Set]
+
