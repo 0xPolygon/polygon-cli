@@ -179,7 +179,7 @@ jobs:
             sudo apt-get install ethereum
             geth --version
           fi
-      - name: Run loadtest againt ${{ matrix.tool }}
+      - name: Run loadtest against ${{ matrix.tool }}
         run: |
           ${{ matrix.tool }} --version
           make ${{ matrix.tool }} &
