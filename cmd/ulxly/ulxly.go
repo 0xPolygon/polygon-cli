@@ -2070,7 +2070,7 @@ var verifyBatchesGetUsage string
 
 var ULxLyCmd = &cobra.Command{
 	Use:   "ulxly",
-	Short: "Utilities for interacting with the uLxLy bridge",
+	Short: "Utilities for interacting with the uLxLy bridge.",
 	Long:  "Basic utility commands for interacting with the bridge contracts, bridge services, and generating proofs",
 	Args:  cobra.NoArgs,
 }
@@ -2110,13 +2110,13 @@ var ulxlyProofsCmd = &cobra.Command{
 
 var ulxlyBridgeCmd = &cobra.Command{
 	Use:   "bridge",
-	Short: "Commands for moving funds and sending messages from one chain to another",
+	Short: "Commands for moving funds and sending messages from one chain to another.",
 	Args:  cobra.NoArgs,
 }
 
 var ulxlyClaimCmd = &cobra.Command{
 	Use:   "claim",
-	Short: "Commands for claiming deposits on a particular chain",
+	Short: "Commands for claiming deposits on a particular chain.",
 	Args:  cobra.NoArgs,
 }
 
@@ -2339,7 +2339,7 @@ func (o *GetVerifyBatchesOptions) AddFlags(cmd *cobra.Command) {
 func init() {
 	bridgeAssetCommand = &cobra.Command{
 		Use:     "asset",
-		Short:   "Move ETH or an ERC20 between to chains",
+		Short:   "Move ETH or an ERC20 between to chains.",
 		Long:    bridgeAssetUsage,
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -2352,7 +2352,7 @@ func init() {
 	}
 	bridgeMessageCommand = &cobra.Command{
 		Use:     "message",
-		Short:   "Send some ETH along with data from one chain to another chain",
+		Short:   "Send some ETH along with data from one chain to another chain.",
 		Long:    bridgeMessageUsage,
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -2365,7 +2365,7 @@ func init() {
 	}
 	bridgeMessageWETHCommand = &cobra.Command{
 		Use:     "weth",
-		Short:   "For L2's that use a gas token, use this to transfer WETH to another chain",
+		Short:   "For L2's that use a gas token, use this to transfer WETH to another chain.",
 		Long:    bridgeWETHMessageUsage,
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -2378,7 +2378,7 @@ func init() {
 	}
 	claimAssetCommand = &cobra.Command{
 		Use:     "asset",
-		Short:   "Claim a deposit",
+		Short:   "Claim a deposit.",
 		Long:    claimAssetUsage,
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -2391,7 +2391,7 @@ func init() {
 	}
 	claimMessageCommand = &cobra.Command{
 		Use:     "message",
-		Short:   "Claim a message",
+		Short:   "Claim a message.",
 		Long:    claimMessageUsage,
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -2404,7 +2404,7 @@ func init() {
 	}
 	claimEverythingCommand = &cobra.Command{
 		Use:     "claim-everything",
-		Short:   "Attempt to claim as many deposits and messages as possible",
+		Short:   "Attempt to claim as many deposits and messages as possible.",
 		PreRunE: prepInputs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := claimEverything(cmd); err != nil {
@@ -2416,7 +2416,7 @@ func init() {
 	}
 	emptyProofCommand = &cobra.Command{
 		Use:   "empty-proof",
-		Short: "create an empty proof",
+		Short: "Create an empty proof.",
 		Long:  "Use this command to print an empty proof response that's filled with zero-valued siblings like 0x0000000000000000000000000000000000000000000000000000000000000000. This can be useful when you need to submit a dummy proof.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return emptyProof()
@@ -2425,7 +2425,7 @@ func init() {
 	}
 	zeroProofCommand = &cobra.Command{
 		Use:   "zero-proof",
-		Short: "create a proof that's filled with zeros",
+		Short: "Create a proof that's filled with zeros.",
 		Long: `Use this command to print a proof response that's filled with the zero
 hashes. This values are very helpful for debugging because it would
 tell you how populated the tree is and roughly which leaves and
@@ -2439,7 +2439,7 @@ or if it's actually an intermediate hash.`,
 	}
 	proofCommand = &cobra.Command{
 		Use:   "proof",
-		Short: "Generate a proof for a given range of deposits",
+		Short: "Generate a proof for a given range of deposits.",
 		Long:  proofUsage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return proof(args)
@@ -2453,7 +2453,7 @@ or if it's actually an intermediate hash.`,
 
 	rollupsProofCommand = &cobra.Command{
 		Use:   "rollups-proof",
-		Short: "Generate a proof for a given range of rollups",
+		Short: "Generate a proof for a given range of rollups.",
 		Long:  rollupsProofUsage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return rollupsExitRootProof(args)
@@ -2467,7 +2467,7 @@ or if it's actually an intermediate hash.`,
 
 	balanceTreeCommand = &cobra.Command{
 		Use:   "compute-balance-tree",
-		Short: "Compute the balance tree given the deposits",
+		Short: "Compute the balance tree given the deposits.",
 		Long:  balanceTreeUsage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return balanceTree()
@@ -2479,7 +2479,7 @@ or if it's actually an intermediate hash.`,
 
 	nullifierAndBalanceTreeCommand = &cobra.Command{
 		Use:   "compute-balance-nullifier-tree",
-		Short: "Compute the balance tree and the nullifier tree given the deposits and claims",
+		Short: "Compute the balance tree and the nullifier tree given the deposits and claims.",
 		Long:  nullifierAndBalanceTreeUsage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return nullifierAndBalanceTree(args)
@@ -2491,7 +2491,7 @@ or if it's actually an intermediate hash.`,
 
 	nullifierTreeCommand = &cobra.Command{
 		Use:   "compute-nullifier-tree",
-		Short: "Compute the nullifier tree given the claims",
+		Short: "Compute the nullifier tree given the claims.",
 		Long:  nullifierTreeUsage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return nullifierTree(args)
@@ -2503,7 +2503,7 @@ or if it's actually an intermediate hash.`,
 
 	getDepositCommand = &cobra.Command{
 		Use:   "get-deposits",
-		Short: "Generate ndjson for each bridge deposit over a particular range of blocks",
+		Short: "Generate ndjson for each bridge deposit over a particular range of blocks.",
 		Long:  depositGetUsage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return readDeposit(cmd)
@@ -2517,7 +2517,7 @@ or if it's actually an intermediate hash.`,
 
 	getClaimCommand = &cobra.Command{
 		Use:   "get-claims",
-		Short: "Generate ndjson for each bridge claim over a particular range of blocks",
+		Short: "Generate ndjson for each bridge claim over a particular range of blocks.",
 		Long:  claimGetUsage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return readClaim(cmd)
@@ -2531,7 +2531,7 @@ or if it's actually an intermediate hash.`,
 
 	getVerifyBatchesCommand = &cobra.Command{
 		Use:   "get-verify-batches",
-		Short: "Generate ndjson for each verify batch over a particular range of blocks",
+		Short: "Generate ndjson for each verify batch over a particular range of blocks.",
 		Long:  verifyBatchesGetUsage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return readVerifyBatches(cmd)

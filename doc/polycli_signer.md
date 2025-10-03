@@ -11,7 +11,7 @@
 
 ## Description
 
-Utilities for security signing transactions
+Utilities for security signing transactions.
 
 ## Usage
 
@@ -56,11 +56,11 @@ The command also inherits flags from parent commands.
 ## See also
 
 - [polycli](polycli.md) - A Swiss Army knife of blockchain tools.
-- [polycli signer create](polycli_signer_create.md) - Create a new key
+- [polycli signer create](polycli_signer_create.md) - Create a new key.
 
-- [polycli signer import](polycli_signer_import.md) - Import a private key into the keyring / keystore
+- [polycli signer import](polycli_signer_import.md) - Import a private key into the keyring / keystore.
 
-- [polycli signer list](polycli_signer_list.md) - List the keys in the keyring / keystore
+- [polycli signer list](polycli_signer_list.md) - List the keys in the keyring / keystore.
 
-- [polycli signer sign](polycli_signer_sign.md) - Sign tx data
+- [polycli signer sign](polycli_signer_sign.md) - Sign tx data.
 

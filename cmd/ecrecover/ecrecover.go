@@ -29,7 +29,7 @@ var (
 
 var EcRecoverCmd = &cobra.Command{
 	Use:   "ecrecover",
-	Short: "Recovers and returns the public key of the signature",
+	Short: "Recovers and returns the public key of the signature.",
 	Long:  usage,
 	Args:  cobra.NoArgs,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {

@@ -11,7 +11,7 @@
 
 ## Description
 
-Utilities for interacting with CDK rollup manager contract
+Utilities for interacting with CDK rollup manager contract.
 
 ## Flags
 
@@ -40,14 +40,14 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks
-- [polycli cdk rollup-manager dump](polycli_cdk_rollup-manager_dump.md) - List detailed information about the rollup manager
+- [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks.
+- [polycli cdk rollup-manager dump](polycli_cdk_rollup-manager_dump.md) - List detailed information about the rollup manager.
 
-- [polycli cdk rollup-manager inspect](polycli_cdk_rollup-manager_inspect.md) - List some basic information about the rollup manager
+- [polycli cdk rollup-manager inspect](polycli_cdk_rollup-manager_inspect.md) - List some basic information about the rollup manager.
 
-- [polycli cdk rollup-manager list-rollup-types](polycli_cdk_rollup-manager_list-rollup-types.md) - List some basic information about each rollup type
+- [polycli cdk rollup-manager list-rollup-types](polycli_cdk_rollup-manager_list-rollup-types.md) - List some basic information about each rollup type.
 
-- [polycli cdk rollup-manager list-rollups](polycli_cdk_rollup-manager_list-rollups.md) - List some basic information about each rollup
+- [polycli cdk rollup-manager list-rollups](polycli_cdk_rollup-manager_list-rollups.md) - List some basic information about each rollup.
 
-- [polycli cdk rollup-manager monitor](polycli_cdk_rollup-manager_monitor.md) - Watch for rollup manager events and display them on the fly
+- [polycli cdk rollup-manager monitor](polycli_cdk_rollup-manager_monitor.md) - Watch for rollup manager events and display them on the fly.
 

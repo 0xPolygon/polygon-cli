@@ -11,7 +11,7 @@
 
 ## Description
 
-Get the current version of this application
+Get the current version of this application.
 
 ```bash
 polycli version [flags]

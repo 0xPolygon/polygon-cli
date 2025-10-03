@@ -35,7 +35,7 @@ type TraceData struct {
 
 var FoldTraceCmd = &cobra.Command{
 	Use:   "fold-trace",
-	Short: "Trace an execution trace and fold it for visualization",
+	Short: "Trace an execution trace and fold it for visualization.",
 	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		data, err := getInputData(cmd, args)
