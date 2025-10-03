@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/0xPolygon/polygon-cli/util"
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -172,17 +171,15 @@ var LoadtestCmd = &cobra.Command{
 	Short: "Run a generic load test against an Eth/EVM style JSON-RPC endpoint.",
 	Long:  loadTestUsage,
 	Args:  cobra.NoArgs,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		rpcUrl := flag_loader.GetRpcUrlFlagValue(cmd)
-		privateKey := flag_loader.GetPrivateKeyFlagValue(cmd)
-		if rpcUrl != nil {
-			inputLoadTestParams.RPCUrl = *rpcUrl
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		inputLoadTestParams.RPCUrl, err = util.GetRPCURL(cmd)
+		if err != nil {
+			return err
 		}
-		if privateKey != nil {
-			inputLoadTestParams.PrivateKey = *privateKey
+		inputLoadTestParams.PrivateKey, err = util.GetPrivateKey(cmd)
+		if err != nil {
+			return err
 		}
-	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
 		zerolog.DurationFieldUnit = time.Second
 		zerolog.DurationFieldInteger = true
 
@@ -199,9 +196,6 @@ func checkLoadtestFlags() error {
 	// Check `rpc-url` flag.
 	if ltp.RPCUrl == "" {
 		return fmt.Errorf("RPC URL is empty")
-	}
-	if err := util.ValidateUrl(ltp.RPCUrl); err != nil {
-		return err
 	}
 
 	if ltp.AdaptiveBackoffFactor <= 0.0 {
@@ -276,7 +270,7 @@ func initFlags() {
 	f.Uint64Var(&ltp.BlobFeeCap, "blob-fee-cap", 100000, "blob fee cap, or maximum blob fee per chunk, in Gwei")
 	f.Uint64Var(&ltp.SendingAccountsCount, "sending-accounts-count", 0, "number of sending accounts to use (avoids pool account queue)")
 	ltp.AccountFundingAmount = defaultAccountFundingAmount
-	f.Var(&flag_loader.BigIntValue{Val: ltp.AccountFundingAmount}, "account-funding-amount", "amount in wei to fund sending accounts (set to 0 to disable)")
+	f.Var(&util.BigIntValue{Val: ltp.AccountFundingAmount}, "account-funding-amount", "amount in wei to fund sending accounts (set to 0 to disable)")
 	f.BoolVar(&ltp.PreFundSendingAccounts, "pre-fund-sending-accounts", false, "fund all sending accounts at start instead of on first use")
 	f.BoolVar(&ltp.RefundRemainingFunds, "refund-remaining-funds", false, "refund remaining balance to funding account after completion")
 	f.StringVar(&ltp.SendingAccountsFile, "sending-accounts-file", "", "file with sending account private keys, one per line (avoids pool queue and preserves accounts across runs)")

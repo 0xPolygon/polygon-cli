@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"time"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -26,9 +26,12 @@ var Cmd = &cobra.Command{
 	Use:   "publish",
 	Short: "Publish transactions to the network with high-throughput",
 	Long:  cmdUsage,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		rpcURL := flag_loader.GetRpcUrlFlagValue(cmd)
-		publishInputArgs.rpcURL = *rpcURL
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		publishInputArgs.rpcURL, err = util.GetRPCURL(cmd)
+		if err != nil {
+			return err
+		}
+		return nil
 	},
 	RunE: publish,
 }

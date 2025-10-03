@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -45,9 +45,12 @@ var Cmd = &cobra.Command{
 	Use:   "contract",
 	Short: "Interact with smart contracts and fetch contract information from the blockchain",
 	Long:  usage,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		rpcURL := flag_loader.GetRpcUrlFlagValue(cmd)
-		inputArgs.rpcURL = *rpcURL
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		inputArgs.rpcURL, err = util.GetRPCURL(cmd)
+		if err != nil {
+			return err
+		}
+		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return contract(cmd)

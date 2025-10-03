@@ -24,7 +24,6 @@ import (
 
 	kms "cloud.google.com/go/kms/apiv1"
 	"cloud.google.com/go/kms/apiv1/kmspb"
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/gethkeystore"
 	accounts2 "github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -34,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/google/tink/go/kwp/subtle"
 	"github.com/manifoldco/promptui"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/iterator"
@@ -79,9 +79,12 @@ var SignerCmd = &cobra.Command{
 	Use:   "signer",
 	Short: "Utilities for security signing transactions",
 	Long:  signerUsage,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		privateKey := flag_loader.GetPrivateKeyFlagValue(cmd)
-		inputSignerOpts.privateKey = *privateKey
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		inputSignerOpts.privateKey, err = util.GetPrivateKey(cmd)
+		if err != nil {
+			return err
+		}
+		return nil
 	},
 	Args: cobra.NoArgs,
 }

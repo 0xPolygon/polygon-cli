@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/custom_marshaller"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -106,11 +106,12 @@ var CDKCmd = &cobra.Command{
 	Use:   "cdk",
 	Short: "Utilities for interacting with CDK networks",
 	Long:  "Basic utility commands for interacting with the cdk contracts",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		rpcURL := flag_loader.GetRpcUrlFlagValue(cmd)
-		if rpcURL != nil {
-			cdkInputArgs.rpcURL = *rpcURL
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		cdkInputArgs.rpcURL, err = util.GetRPCURL(cmd)
+		if err != nil {
+			return err
 		}
+		return nil
 	},
 	Args: cobra.NoArgs,
 }

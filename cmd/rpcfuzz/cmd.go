@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz/argfuzz"
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -42,13 +41,15 @@ var RPCFuzzCmd = &cobra.Command{
 	Short: "Continually run a variety of RPC calls and fuzzers.",
 	Long:  usage,
 	Args:  cobra.NoArgs,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		rpcUrlPtr := flag_loader.GetRpcUrlFlagValue(cmd)
-		rpcUrl = *rpcUrlPtr
-		privateKeyPtr := flag_loader.GetPrivateKeyFlagValue(cmd)
-		testPrivateHexKey = *privateKeyPtr
-	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		rpcUrl, err = util.GetRPCURL(cmd)
+		if err != nil {
+			return err
+		}
+		testPrivateHexKey, err = util.GetPrivateKey(cmd)
+		if err != nil {
+			return err
+		}
 		return checkFlags()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -89,9 +90,6 @@ func checkFlags() (err error) {
 	// Check rpc-url flag.
 	if rpcUrl == "" {
 		panic("RPC URL is empty")
-	}
-	if err = util.ValidateUrl(rpcUrl); err != nil {
-		return
 	}
 
 	// Ensure only one streamer type is selected

@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/spf13/cobra"
 )
@@ -57,21 +56,23 @@ var MonitorCmd = &cobra.Command{
 	Long:         usage,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		rpcUrlFlagValue := flag_loader.GetRpcUrlFlagValue(cmd)
-		rpcUrl = *rpcUrlFlagValue
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		rpcUrl, err = util.GetRPCURL(cmd)
+		if err != nil {
+			return err
+		}
+
 		// By default, hide logs from `polycli monitor`.
 		verbosityFlag := cmd.Flag("verbosity")
 		if verbosityFlag != nil && !verbosityFlag.Changed {
 			util.SetLogLevel(util.Silent)
 		}
+
 		prettyFlag := cmd.Flag("pretty-logs")
 		if prettyFlag != nil && prettyFlag.Value.String() == "true" {
 			return util.SetLogMode(util.Console)
 		}
-		return nil
-	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
+
 		return checkFlags()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -89,10 +90,6 @@ func init() {
 }
 
 func checkFlags() (err error) {
-	if err = util.ValidateUrl(rpcUrl); err != nil {
-		return
-	}
-
 	interval, err = time.ParseDuration(intervalStr)
 	if err != nil {
 		return err

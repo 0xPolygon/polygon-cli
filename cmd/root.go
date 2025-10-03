@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/0xPolygon/polygon-cli/cmd/parsebatchl2data"
 	"os"
+	"strings"
 
 	"github.com/0xPolygon/polygon-cli/cmd/contract"
+	"github.com/0xPolygon/polygon-cli/cmd/parsebatchl2data"
 	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
 	"github.com/0xPolygon/polygon-cli/cmd/publish"
 	"github.com/0xPolygon/polygon-cli/util"
@@ -83,6 +84,11 @@ func initConfig() {
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match
+
+	// Set up environment variable mappings for common flags
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	viper.BindEnv("rpc-url", "ETH_RPC_URL")
+	viper.BindEnv("private-key", "PRIVATE_KEY")
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {

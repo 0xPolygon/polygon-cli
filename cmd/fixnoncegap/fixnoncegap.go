@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -25,19 +25,18 @@ var FixNonceGapCmd = &cobra.Command{
 	Short: "Send txs to fix the nonce gap for a specific account",
 	Long:  fixNonceGapUsage,
 	Args:  cobra.NoArgs,
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		var err error
-		rpcURL := flag_loader.GetRpcUrlFlagValue(cmd)
-		inputFixNonceGapArgs.rpcURL = *rpcURL
-		privateKey, err := flag_loader.GetRequiredPrivateKeyFlagValue(cmd)
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		inputFixNonceGapArgs.rpcURL, err = util.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
-		inputFixNonceGapArgs.privateKey = *privateKey
-		return nil
+		inputFixNonceGapArgs.privateKey, err = util.GetPrivateKey(cmd)
+		if err != nil {
+			return err
+		}
+		return prepareRpcClient(cmd, args)
 	},
-	PreRunE:      prepareRpcClient,
-	RunE:         fixNonceGap,
+	RunE: fixNonceGap,
 	SilenceUsage: true,
 }
 

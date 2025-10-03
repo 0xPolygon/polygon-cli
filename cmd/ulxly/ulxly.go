@@ -34,8 +34,8 @@ import (
 	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly/polygonrollupmanager"
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	smcerror "github.com/0xPolygon/polygon-cli/errors"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -2077,22 +2077,14 @@ var ULxLyCmd = &cobra.Command{
 var ulxlyBridgeAndClaimCmd = &cobra.Command{
 	Args:   cobra.NoArgs,
 	Hidden: true,
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		var err error
-		rpcURL, err := flag_loader.GetRequiredRpcUrlFlagValue(cmd)
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		inputUlxlyArgs.rpcURL, err = util.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
-		if rpcURL != nil {
-			inputUlxlyArgs.rpcURL = *rpcURL
-		}
-
-		privateKey, err := flag_loader.GetRequiredPrivateKeyFlagValue(cmd)
+		inputUlxlyArgs.privateKey, err = util.GetPrivateKey(cmd)
 		if err != nil {
 			return err
-		}
-		if privateKey != nil {
-			inputUlxlyArgs.privateKey = *privateKey
 		}
 		return nil
 	},
@@ -2216,7 +2208,7 @@ const (
 	ArgInsecure             = "insecure"
 )
 
-func prepInputs(cmd *cobra.Command, args []string) error {
+func prepInputs(cmd *cobra.Command, args []string) (err error) {
 	if inputUlxlyArgs.dryRun && inputUlxlyArgs.gasLimit == 0 {
 		inputUlxlyArgs.gasLimit = uint64(10_000_000)
 	}

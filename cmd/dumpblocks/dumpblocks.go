@@ -12,7 +12,6 @@ import (
 
 	_ "embed"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/proto/gen/pb"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/0xPolygon/polygon-cli/util"
@@ -55,12 +54,12 @@ var DumpblocksCmd = &cobra.Command{
 	Use:   "dumpblocks start end",
 	Short: "Export a range of blocks from a JSON-RPC endpoint.",
 	Long:  usage,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		rpcUrlFlagValue := flag_loader.GetRpcUrlFlagValue(cmd)
-		inputDumpblocks.RpcUrl = *rpcUrlFlagValue
-	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		return checkFlags()
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		inputDumpblocks.RpcUrl, err = util.GetRPCURL(cmd)
+		if err != nil {
+			return err
+		}
+		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -194,15 +193,6 @@ func init() {
 	f.StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
 	f.Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "batch size for requests (most providers cap at 1000)")
 	f.StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from, not setting a filter means all are allowed")
-}
-
-func checkFlags() error {
-	// Check rpc url flag.
-	if err := util.ValidateUrl(inputDumpblocks.RpcUrl); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // writeResponses writes the data to either stdout or a file if one is provided.
