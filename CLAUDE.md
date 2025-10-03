@@ -146,3 +146,6 @@ The tool supports configuration via:
   f.StringVar(&myVar, "name", "", "description")
   f.IntVar(&count, "count", 0, "description")
   ```
+
+### Cobra Command Arguments
+- Prefer to use Cobra built-in validators (`cobra.NoArgs`, `cobra.ExactArgs(n)`, `cobra.MinimumNArgs(n)`, `cobra.MaximumNArgs(n)`, `cobra.ArbitraryArgs`) instead of custom `Args: func(cmd *cobra.Command, args []string) error` functions, and move argument parsing/validation logic to `PreRunE` hook

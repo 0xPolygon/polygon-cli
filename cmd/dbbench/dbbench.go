@@ -140,6 +140,18 @@ var DBBenchCmd = &cobra.Command{
 	Use:   "dbbench [flags]",
 	Short: "Perform a level/pebble db benchmark",
 	Long:  usage,
+	Args:  cobra.NoArgs,
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		var err error
+		sizeDistribution, err = parseRawSizeDistribution(rawSizeDistribution)
+		if err != nil {
+			return err
+		}
+		if keySize > 64 {
+			return fmt.Errorf("max supported key size is 64 bytes. %d is too big", keySize)
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Info().Msg("Starting db test")
 		var kvdb KeyValueDB
@@ -216,17 +228,6 @@ var DBBenchCmd = &cobra.Command{
 		}
 
 		return printSummary(trs)
-	},
-	Args: func(cmd *cobra.Command, args []string) error {
-		var err error
-		sizeDistribution, err = parseRawSizeDistribution(rawSizeDistribution)
-		if err != nil {
-			return err
-		}
-		if keySize > 64 {
-			return fmt.Errorf(" max supported key size is 64 bytes. %d is too big", keySize)
-		}
-		return nil
 	},
 }
 

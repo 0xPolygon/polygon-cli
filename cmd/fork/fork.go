@@ -28,6 +28,12 @@ var ForkCmd = &cobra.Command{
 	Use:   "fork blockhash url",
 	Short: "Take a forked block and walk up the chain to do analysis.",
 	Long:  "",
+	Args:  cobra.ExactArgs(2),
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		blockHash = ethcommon.HexToHash(args[0])
+		rpcURL = args[1]
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Info().Str("rpc", rpcURL).Str("blockHash", blockHash.String()).Msg("Starting Analysis")
 		c, err := ethclient.Dial(rpcURL)
@@ -36,14 +42,6 @@ var ForkCmd = &cobra.Command{
 			return err
 		}
 		return walkTheBlocks(blockHash, c)
-	},
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) != 2 {
-			return fmt.Errorf("two arguments required a block hash and an RPC URL")
-		}
-		blockHash = ethcommon.HexToHash(args[0])
-		rpcURL = args[1]
-		return nil
 	},
 }
 

@@ -37,12 +37,7 @@ var WrapContractCmd = &cobra.Command{
 		fmt.Println(createBytecode)
 		return nil
 	},
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) > 1 {
-			return fmt.Errorf("expected at most one argument: bytecode")
-		}
-		return nil
-	},
+	Args: cobra.MaximumNArgs(1),
 }
 
 func init() {
