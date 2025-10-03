@@ -108,14 +108,15 @@ The command also inherits flags from parent commands.
       --summarize                              produce execution summary after load test (can take a long time for large tests)
   -t, --time-limit int                         maximum seconds to spend benchmarking (default: no limit) (default -1)
       --to-address string                      recipient address for transactions (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
-  -v, --verbosity int                          0 - silent
-                                               100 panic
-                                               200 fatal
-                                               300 error
-                                               400 warning
-                                               500 info
-                                               600 debug
-                                               700 trace (default 500)
+  -v, --verbosity string                       log level (string or int):
+                                                 0   - silent
+                                                 100 - panic
+                                                 200 - fatal
+                                                 300 - error
+                                                 400 - warn
+                                                 500 - info (default)
+                                                 600 - debug
+                                                 700 - trace (default "info")
 ```
 
 ## See also

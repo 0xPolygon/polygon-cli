@@ -43,16 +43,17 @@ flamegraph.pl --title "Gas Profile for 0x7405fc5e254352350bebcadc1392bd06f158aa8
 The command also inherits flags from parent commands.
 
 ```bash
-      --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     output logs in pretty format instead of JSON (default true)
-  -v, --verbosity int   0 - silent
-                        100 panic
-                        200 fatal
-                        300 error
-                        400 warning
-                        500 info
-                        600 debug
-                        700 trace (default 500)
+      --config string      config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs        output logs in pretty format instead of JSON (default true)
+  -v, --verbosity string   log level (string or int):
+                             0   - silent
+                             100 - panic
+                             200 - fatal
+                             300 - error
+                             400 - warn
+                             500 - info (default)
+                             600 - debug
+                             700 - trace (default "info")
 ```
 
 ## See also
