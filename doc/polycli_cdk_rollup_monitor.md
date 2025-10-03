@@ -11,7 +11,7 @@
 
 ## Description
 
-Watch for rollup events and display them on the fly
+Watch for rollup events and display them on the fly.
 
 ```bash
 polycli cdk rollup monitor [flags]
@@ -70,4 +70,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk rollup](polycli_cdk_rollup.md) - Utilities for interacting with CDK rollup manager to get rollup specific information
+- [polycli cdk rollup](polycli_cdk_rollup.md) - Utilities for interacting with CDK rollup manager to get rollup specific information.

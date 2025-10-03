@@ -11,7 +11,7 @@
 
 ## Description
 
-Create a new key
+Create a new key.
 
 ```bash
 polycli signer create [flags]
@@ -62,4 +62,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli signer](polycli_signer.md) - Utilities for security signing transactions
+- [polycli signer](polycli_signer.md) - Utilities for security signing transactions.

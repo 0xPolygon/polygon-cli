@@ -11,7 +11,7 @@
 
 ## Description
 
-Sign tx data
+Sign tx data.
 
 ```bash
 polycli signer sign [flags]
@@ -119,4 +119,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli signer](polycli_signer.md) - Utilities for security signing transactions
+- [polycli signer](polycli_signer.md) - Utilities for security signing transactions.

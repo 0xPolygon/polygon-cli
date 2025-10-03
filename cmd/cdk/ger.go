@@ -13,7 +13,7 @@ import (
 
 var gerCmd = &cobra.Command{
 	Use:   "ger",
-	Short: "Utilities for interacting with CDK global exit root manager contract",
+	Short: "Utilities for interacting with CDK global exit root manager contract.",
 	Args:  cobra.NoArgs,
 }
 
@@ -21,7 +21,7 @@ var gerCmd = &cobra.Command{
 var gerInspectUsage string
 var gerInspectCmd = &cobra.Command{
 	Use:   "inspect",
-	Short: "List some basic information about the global exit root manager",
+	Short: "List some basic information about the global exit root manager.",
 	Long:  gerInspectUsage,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -33,7 +33,7 @@ var gerInspectCmd = &cobra.Command{
 var gerDumpUsage string
 var gerDumpCmd = &cobra.Command{
 	Use:   "dump",
-	Short: "List detailed information about the global exit root manager",
+	Short: "List detailed information about the global exit root manager.",
 	Long:  gerDumpUsage,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -45,7 +45,7 @@ var gerDumpCmd = &cobra.Command{
 var gerMonitorUsage string
 var gerMonitorCmd = &cobra.Command{
 	Use:   "monitor",
-	Short: "Watch for global exit root manager events and display them on the fly",
+	Short: "Watch for global exit root manager events and display them on the fly.",
 	Long:  gerMonitorUsage,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

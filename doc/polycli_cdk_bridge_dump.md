@@ -11,7 +11,7 @@
 
 ## Description
 
-List detailed information about the bridge
+List detailed information about the bridge.
 
 ```bash
 polycli cdk bridge dump [flags]
@@ -57,4 +57,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk bridge](polycli_cdk_bridge.md) - Utilities for interacting with CDK bridge contract
+- [polycli cdk bridge](polycli_cdk_bridge.md) - Utilities for interacting with CDK bridge contract.

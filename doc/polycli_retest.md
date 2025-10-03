@@ -11,7 +11,7 @@
 
 ## Description
 
-Convert the standard ETH test fillers into something to be replayed against an RPC
+Convert the standard ETH test fillers into something to be replayed against an RPC.
 
 ```bash
 polycli retest [flags]

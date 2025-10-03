@@ -24,7 +24,7 @@ var cmdUsage string
 
 var Cmd = &cobra.Command{
 	Use:   "publish",
-	Short: "Publish transactions to the network with high-throughput",
+	Short: "Publish transactions to the network with high-throughput.",
 	Long:  cmdUsage,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		rpcURL := flag_loader.GetRpcUrlFlagValue(cmd)

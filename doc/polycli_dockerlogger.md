@@ -11,7 +11,7 @@
 
 ## Description
 
-Monitor and filter Docker container logs
+Monitor and filter Docker container logs.
 
 ```bash
 polycli dockerlogger [flags]

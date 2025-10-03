@@ -11,7 +11,7 @@
 
 ## Description
 
-Move ETH or an ERC20 between to chains
+Move ETH or an ERC20 between to chains.
 
 ```bash
 polycli ulxly  bridge asset [flags]
@@ -129,4 +129,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly bridge](polycli_ulxly_bridge.md) - Commands for moving funds and sending messages from one chain to another
+- [polycli ulxly bridge](polycli_ulxly_bridge.md) - Commands for moving funds and sending messages from one chain to another.

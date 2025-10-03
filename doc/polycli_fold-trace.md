@@ -11,7 +11,7 @@
 
 ## Description
 
-Trace an execution trace and fold it for visualization
+Trace an execution trace and fold it for visualization.
 
 ```bash
 polycli fold-trace [flags]

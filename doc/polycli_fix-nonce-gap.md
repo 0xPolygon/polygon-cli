@@ -11,7 +11,7 @@
 
 ## Description
 
-Send txs to fix the nonce gap for a specific account
+Send txs to fix the nonce gap for a specific account.
 
 ```bash
 polycli fix-nonce-gap [flags]

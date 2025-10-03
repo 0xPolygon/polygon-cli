@@ -11,7 +11,7 @@
 
 ## Description
 
-Generate ndjson for each verify batch over a particular range of blocks
+Generate ndjson for each verify batch over a particular range of blocks.
 
 ```bash
 polycli ulxly get-verify-batches [flags]
@@ -92,4 +92,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge
+- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge.

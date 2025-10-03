@@ -11,7 +11,7 @@
 
 ## Description
 
-Claim a message
+Claim a message.
 
 ```bash
 polycli ulxly  claim message [flags]
@@ -143,4 +143,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly claim](polycli_ulxly_claim.md) - Commands for claiming deposits on a particular chain
+- [polycli ulxly claim](polycli_ulxly_claim.md) - Commands for claiming deposits on a particular chain.

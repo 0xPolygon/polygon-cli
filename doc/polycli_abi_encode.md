@@ -11,7 +11,7 @@
 
 ## Description
 
-ABI encodes a function signature and the inputs
+ABI encodes a function signature and the inputs.
 
 ```bash
 polycli abi encode [function signature] [args...] [flags]

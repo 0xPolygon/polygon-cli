@@ -22,7 +22,7 @@ var (
 var ParseBatchL2Data = &cobra.Command{
 	Use:     "parse-batch-l2-data [flags]",
 	Aliases: []string{"parsebatchl2data"},
-	Short:   "Convert batch l2 data into an ndjson stream",
+	Short:   "Convert batch l2 data into an ndjson stream.",
 	Long:    usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 

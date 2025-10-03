@@ -11,7 +11,7 @@
 
 ## Description
 
-Compute the balance tree given the deposits
+Compute the balance tree given the deposits.
 
 ```bash
 polycli ulxly compute-balance-tree [flags]
@@ -77,4 +77,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge
+- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge.

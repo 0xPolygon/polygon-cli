@@ -14,7 +14,7 @@ import (
 
 var rollupManagerCmd = &cobra.Command{
 	Use:   "rollup-manager",
-	Short: "Utilities for interacting with CDK rollup manager contract",
+	Short: "Utilities for interacting with CDK rollup manager contract.",
 	Args:  cobra.NoArgs,
 }
 
@@ -23,7 +23,7 @@ var rollupManagerListRollupsUsage string
 
 var rollupManagerListRollupsCmd = &cobra.Command{
 	Use:   "list-rollups",
-	Short: "List some basic information about each rollup",
+	Short: "List some basic information about each rollup.",
 	Long:  rollupManagerListRollupsUsage,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -36,7 +36,7 @@ var rollupManagerListRollupTypesUsage string
 
 var rollupManagerListRollupTypesCmd = &cobra.Command{
 	Use:   "list-rollup-types",
-	Short: "List some basic information about each rollup type",
+	Short: "List some basic information about each rollup type.",
 	Long:  rollupManagerListRollupTypesUsage,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -49,7 +49,7 @@ var rollupManagerInspectUsage string
 
 var rollupManagerInspectCmd = &cobra.Command{
 	Use:   "inspect",
-	Short: "List some basic information about the rollup manager",
+	Short: "List some basic information about the rollup manager.",
 	Long:  rollupManagerInspectUsage,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -62,7 +62,7 @@ var rollupManagerDumpUsage string
 
 var rollupManagerDumpCmd = &cobra.Command{
 	Use:   "dump",
-	Short: "List detailed information about the rollup manager",
+	Short: "List detailed information about the rollup manager.",
 	Long:  rollupManagerDumpUsage,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -75,7 +75,7 @@ var rollupManagerMonitorUsage string
 
 var rollupManagerMonitorCmd = &cobra.Command{
 	Use:   "monitor",
-	Short: "Watch for rollup manager events and display them on the fly",
+	Short: "Watch for rollup manager events and display them on the fly.",
 	Long:  rollupManagerMonitorUsage,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

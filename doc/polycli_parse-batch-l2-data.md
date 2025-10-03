@@ -11,7 +11,7 @@
 
 ## Description
 
-Convert batch l2 data into an ndjson stream
+Convert batch l2 data into an ndjson stream.
 
 ```bash
 polycli parse-batch-l2-data [flags]

@@ -11,7 +11,7 @@
 
 ## Description
 
-Import a private key into the keyring / keystore
+Import a private key into the keyring / keystore.
 
 ```bash
 polycli signer import [flags]
@@ -69,4 +69,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli signer](polycli_signer.md) - Utilities for security signing transactions
+- [polycli signer](polycli_signer.md) - Utilities for security signing transactions.

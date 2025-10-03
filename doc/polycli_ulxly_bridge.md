@@ -11,7 +11,7 @@
 
 ## Description
 
-Commands for moving funds and sending messages from one chain to another
+Commands for moving funds and sending messages from one chain to another.
 
 ## Flags
 
@@ -53,9 +53,9 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly bridge asset](polycli_ulxly_bridge_asset.md) - Move ETH or an ERC20 between to chains
+- [polycli ulxly bridge asset](polycli_ulxly_bridge_asset.md) - Move ETH or an ERC20 between to chains.
 
-- [polycli ulxly bridge message](polycli_ulxly_bridge_message.md) - Send some ETH along with data from one chain to another chain
+- [polycli ulxly bridge message](polycli_ulxly_bridge_message.md) - Send some ETH along with data from one chain to another chain.
 
-- [polycli ulxly bridge weth](polycli_ulxly_bridge_weth.md) - For L2's that use a gas token, use this to transfer WETH to another chain
+- [polycli ulxly bridge weth](polycli_ulxly_bridge_weth.md) - For L2's that use a gas token, use this to transfer WETH to another chain.
 

@@ -11,7 +11,7 @@
 
 ## Description
 
-For L2's that use a gas token, use this to transfer WETH to another chain
+For L2's that use a gas token, use this to transfer WETH to another chain.
 
 ```bash
 polycli ulxly  bridge weth [flags]
@@ -95,4 +95,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly bridge](polycli_ulxly_bridge.md) - Commands for moving funds and sending messages from one chain to another
+- [polycli ulxly bridge](polycli_ulxly_bridge.md) - Commands for moving funds and sending messages from one chain to another.

@@ -11,7 +11,7 @@
 
 ## Description
 
-Compute the nullifier tree given the claims
+Compute the nullifier tree given the claims.
 
 ```bash
 polycli ulxly compute-nullifier-tree [flags]
@@ -67,4 +67,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge
+- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge.

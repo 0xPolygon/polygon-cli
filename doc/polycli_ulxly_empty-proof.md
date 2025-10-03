@@ -11,7 +11,7 @@
 
 ## Description
 
-create an empty proof
+Create an empty proof.
 
 ```bash
 polycli ulxly empty-proof [flags]
@@ -44,4 +44,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge
+- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge.

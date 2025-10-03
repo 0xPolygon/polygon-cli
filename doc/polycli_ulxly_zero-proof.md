@@ -11,7 +11,7 @@
 
 ## Description
 
-create a proof that's filled with zeros
+Create a proof that's filled with zeros.
 
 ```bash
 polycli ulxly zero-proof [flags]
@@ -20,7 +20,7 @@ polycli ulxly zero-proof [flags]
 ## Usage
 
 Use this command to print a proof response that's filled with the zero
-hashes. This values are very helpful for debugging because it would
+hashes. These values are very helpful for debugging because they would
 tell you how populated the tree is and roughly which leaves and
 siblings are empty. It's also helpful for sanity checking a proof
 response to understand if the hashed value is part of the zero hashes
@@ -49,4 +49,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge
+- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge.

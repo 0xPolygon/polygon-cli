@@ -11,7 +11,7 @@
 
 ## Description
 
-Interact with smart contracts and fetch contract information from the blockchain
+Interact with smart contracts and fetch contract information from the blockchain.
 
 ```bash
 polycli contract [flags]

@@ -11,7 +11,7 @@
 
 ## Description
 
-Recovers and returns the public key of the signature
+Recovers and returns the public key of the signature.
 
 ```bash
 polycli ecrecover [flags]

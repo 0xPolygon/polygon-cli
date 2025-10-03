@@ -10,7 +10,7 @@
 
 ## Description
 
-Attempt to claim as many deposits and messages as possible
+Attempt to claim as many deposits and messages as possible.
 
 ```bash
 polycli ulxly  claim-everything [flags]

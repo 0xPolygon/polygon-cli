@@ -11,7 +11,7 @@
 
 ## Description
 
-List some basic information about the global exit root manager
+List some basic information about the global exit root manager.
 
 ```bash
 polycli cdk ger inspect [flags]
@@ -57,4 +57,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk ger](polycli_cdk_ger.md) - Utilities for interacting with CDK global exit root manager contract
+- [polycli cdk ger](polycli_cdk_ger.md) - Utilities for interacting with CDK global exit root manager contract.

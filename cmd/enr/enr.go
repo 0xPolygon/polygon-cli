@@ -26,7 +26,7 @@ var (
 
 var ENRCmd = &cobra.Command{
 	Use:   "enr [flags]",
-	Short: "Convert between ENR and Enode format",
+	Short: "Convert between ENR and Enode format.",
 	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		rawData, err := getInputData(cmd, args)

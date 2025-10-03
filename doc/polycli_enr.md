@@ -11,7 +11,7 @@
 
 ## Description
 
-Convert between ENR and Enode format
+Convert between ENR and Enode format.
 
 ```bash
 polycli enr [flags]

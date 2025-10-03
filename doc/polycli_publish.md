@@ -11,7 +11,7 @@
 
 ## Description
 
-Publish transactions to the network with high-throughput
+Publish transactions to the network with high-throughput.
 
 ```bash
 polycli publish [flags]

@@ -18,7 +18,7 @@ import (
 
 var rollupCmd = &cobra.Command{
 	Use:   "rollup",
-	Short: "Utilities for interacting with CDK rollup manager to get rollup specific information",
+	Short: "Utilities for interacting with CDK rollup manager to get rollup specific information.",
 	Args:  cobra.NoArgs,
 }
 
@@ -27,7 +27,7 @@ var rollupInspectUsage string
 
 var rollupInspectCmd = &cobra.Command{
 	Use:   "inspect",
-	Short: "List some basic information about a specific rollup",
+	Short: "List some basic information about a specific rollup.",
 	Long:  rollupInspectUsage,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -40,7 +40,7 @@ var rollupDumpUsage string
 
 var rollupDumpCmd = &cobra.Command{
 	Use:   "dump",
-	Short: "List detailed information about a specific rollup",
+	Short: "List detailed information about a specific rollup.",
 	Long:  rollupDumpUsage,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -53,7 +53,7 @@ var rollupMonitorUsage string
 
 var rollupMonitorCmd = &cobra.Command{
 	Use:   "monitor",
-	Short: "Watch for rollup events and display them on the fly",
+	Short: "Watch for rollup events and display them on the fly.",
 	Long:  rollupMonitorUsage,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

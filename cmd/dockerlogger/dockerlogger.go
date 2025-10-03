@@ -89,7 +89,7 @@ func dockerlogger(cmd *cobra.Command, args []string) error {
 // Cobra command for Docker logger
 var Cmd = &cobra.Command{
 	Use:   "dockerlogger",
-	Short: "Monitor and filter Docker container logs",
+	Short: "Monitor and filter Docker container logs.",
 	Long:  cmdUsage,
 	RunE:  dockerlogger,
 }

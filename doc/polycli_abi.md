@@ -202,5 +202,5 @@ The command also inherits flags from parent commands.
 - [polycli](polycli.md) - A Swiss Army knife of blockchain tools.
 - [polycli abi decode](polycli_abi_decode.md) - Parse an ABI and print the encoded signatures.
 
-- [polycli abi encode](polycli_abi_encode.md) - ABI encodes a function signature and the inputs
+- [polycli abi encode](polycli_abi_encode.md) - ABI encodes a function signature and the inputs.
 

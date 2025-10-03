@@ -13,7 +13,7 @@ import (
 
 var bridgeCmd = &cobra.Command{
 	Use:   "bridge",
-	Short: "Utilities for interacting with CDK bridge contract",
+	Short: "Utilities for interacting with CDK bridge contract.",
 	Args:  cobra.NoArgs,
 }
 
@@ -21,7 +21,7 @@ var bridgeCmd = &cobra.Command{
 var bridgeInspectUsage string
 var bridgeInspectCmd = &cobra.Command{
 	Use:   "inspect",
-	Short: "List some basic information about the bridge",
+	Short: "List some basic information about the bridge.",
 	Long:  bridgeInspectUsage,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -33,7 +33,7 @@ var bridgeInspectCmd = &cobra.Command{
 var bridgeDumpUsage string
 var bridgeDumpCmd = &cobra.Command{
 	Use:   "dump",
-	Short: "List detailed information about the bridge",
+	Short: "List detailed information about the bridge.",
 	Long:  bridgeDumpUsage,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -45,7 +45,7 @@ var bridgeDumpCmd = &cobra.Command{
 var bridgeMonitorUsage string
 var bridgeMonitorCmd = &cobra.Command{
 	Use:   "monitor",
-	Short: "Watch for bridge events and display them on the fly",
+	Short: "Watch for bridge events and display them on the fly.",
 	Long:  bridgeMonitorUsage,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
