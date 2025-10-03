@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
-	"github.com/0xPolygon/polygon-cli/custom_marshaller"
+	"github.com/0xPolygon/polygon-cli/custommarshaller"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -617,7 +617,7 @@ func mustPrintLogs(logs []types.Log, contractInstance reflect.Value, contractABI
 			}
 		}
 
-		customMarshaller := custom_marshaller.New(parsedEvent)
+		customMarshaller := custommarshaller.New(parsedEvent)
 
 		logsPrinted++
 		mustPrintJSONIndent(struct {

@@ -1,4 +1,4 @@
-package custom_marshaller
+package custommarshaller
 
 import (
 	"encoding/json"
@@ -51,7 +51,7 @@ func New(i any) CustomMarshaller {
 //		"Field4": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 //	}
 //
-//	result, _ = json.Marshal(custom_marshaller.New(myStruct))
+//	result, _ = json.Marshal(custommarshaller.New(myStruct))
 //	fmt.Println(string(result))
 //
 // Result returned when marshalling MyStruct using CustomMarshaller:
