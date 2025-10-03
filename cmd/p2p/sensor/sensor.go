@@ -430,15 +430,14 @@ func init() {
 	}
 	f.IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 2000, "maximum number of peers to connect to")
 	f.IntVarP(&inputSensorParams.MaxDatabaseConcurrency, "max-db-concurrency", "D", 10000,
-		`maximum number of concurrent database operations to perform. Increasing this
-will result in less chance of missing data (i.e. broken pipes) but can
-significantly increase memory usage`)
+		`maximum number of concurrent database operations to perform (increasing this
+will result in less chance of missing data but can significantly increase memory usage)`)
 	f.BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "write blocks to database")
 	f.BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "write block events to database")
 	f.BoolVarP(&inputSensorParams.ShouldWriteTransactions, "write-txs", "t", true,
-		`write transactions to database. This option can significantly increase CPU and memory usage`)
+		`write transactions to database (this option can significantly increase CPU and memory usage)`)
 	f.BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
-		`write transaction events to database. This option can significantly increase CPU and memory usage`)
+		`write transaction events to database (this option can significantly increase CPU and memory usage)`)
 	f.BoolVar(&inputSensorParams.ShouldWritePeers, "write-peers", true, "write peers to database")
 	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
@@ -455,8 +454,7 @@ significantly increase memory usage`)
 	f.StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "genesis block hash")
 	f.BytesHexVar(&inputSensorParams.ForkID, "fork-id", []byte{240, 151, 188, 19}, "hex encoded fork ID (omit 0x)")
 	f.IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
-		`ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
-connections to be dialed. Setting this to 0 defaults it to 3`)
+		`ratio of inbound to dialed connections (dial ratio of 2 allows 1/2 of connections to be dialed, setting to 0 defaults to 3)`)
 	f.StringVar(&inputSensorParams.NAT, "nat", "any", "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")
 	f.StringVar(&inputSensorParams.StaticNodesFile, "static-nodes", "", "static nodes file")
 	f.StringVar(&inputSensorParams.TrustedNodesFile, "trusted-nodes", "", "trusted nodes file")
