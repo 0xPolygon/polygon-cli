@@ -23,9 +23,9 @@ type (
 
 func NewWrappedPebbleDB() (*PebbleDBWrapper, error) {
 	memTableLimit := 2
-	memTableSize := *cacheSize * 1024 * 1024 / 2 / memTableLimit
+	memTableSize := cacheSize * 1024 * 1024 / 2 / memTableLimit
 	opt := &pebble.Options{
-		Cache:                       pebble.NewCache(int64(*cacheSize * 1024 * 1024)),
+		Cache:                       pebble.NewCache(int64(cacheSize * 1024 * 1024)),
 		MemTableSize:                uint64(memTableSize),
 		MemTableStopWritesThreshold: memTableLimit,
 		MaxConcurrentCompactions:    func() int { return runtime.NumCPU() },
@@ -38,15 +38,15 @@ func NewWrappedPebbleDB() (*PebbleDBWrapper, error) {
 			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
 			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
 		},
-		ReadOnly: *readOnly || *fullScan,
+		ReadOnly: readOnly || fullScan,
 	}
-	p, err := pebble.Open(*dbPath, opt)
+	p, err := pebble.Open(dbPath, opt)
 	if err != nil {
 		return nil, err
 	}
 	db := new(PebbleDBWrapper)
 	db.handle = p
-	db.wo = &pebble.WriteOptions{Sync: *syncWrites}
+	db.wo = &pebble.WriteOptions{Sync: syncWrites}
 	return db, err
 }
 

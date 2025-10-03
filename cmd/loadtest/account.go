@@ -509,7 +509,7 @@ func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 
 	if !ap.isRefundingEnabled() {
 		log.Debug().
-			Bool("refundRemainingFunds", *inputLoadTestParams.RefundRemainingFunds).
+			Bool("refundRemainingFunds", inputLoadTestParams.RefundRemainingFunds).
 			Msg("account refunding is disabled, skipping returning funds from sending accounts")
 		return nil
 	}
@@ -924,7 +924,7 @@ func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.Pr
 	}
 
 	var tx *types.Transaction
-	if *ltp.LegacyTransactionMode {
+	if ltp.LegacyTransactionMode {
 		tx = types.NewTx(&types.LegacyTx{
 			Nonce:    nonce,
 			To:       &receiver,
@@ -969,7 +969,7 @@ func (ap *AccountPool) isFundingEnabled() bool {
 }
 
 func (ap *AccountPool) isCallOnly() bool {
-	return *inputLoadTestParams.EthCallOnly
+	return inputLoadTestParams.EthCallOnly
 }
 
 func (ap *AccountPool) hasFundingAmount() bool {
@@ -983,7 +983,7 @@ func (ap *AccountPool) isRefundingEnabled() bool {
 		return false
 	}
 
-	shouldRefund := inputLoadTestParams.RefundRemainingFunds != nil && *inputLoadTestParams.RefundRemainingFunds
+	shouldRefund := inputLoadTestParams.RefundRemainingFunds
 	if !shouldRefund {
 		log.Debug().
 			Msg("refund remaining funds is disabled")

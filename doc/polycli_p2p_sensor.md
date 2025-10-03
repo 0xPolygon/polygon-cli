@@ -23,63 +23,61 @@ If no nodes.json file exists, it will be created.
 ## Flags
 
 ```bash
-      --api-port uint            Port the API server will listen on (default 8080)
-  -b, --bootnodes string         Comma separated nodes used for bootstrapping
-      --database string          Which database to persist data to, options are:
+      --api-port uint            port API server will listen on (default 8080)
+  -b, --bootnodes string         comma separated nodes used for bootstrapping
+      --database string          which database to persist data to, options are:
                                    - datastore (GCP Datastore)
                                    - json (output to stdout)
                                    - none (no persistence) (default "none")
-  -d, --database-id string       Datastore database ID
-      --dial-ratio int           Ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
-                                 connections to be dialed. Setting this to 0 defaults it to 3.
-      --discovery-dns string     DNS discovery ENR tree url
+  -d, --database-id string       datastore database ID
+      --dial-ratio int           ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
+                                 connections to be dialed. Setting this to 0 defaults it to 3
+      --discovery-dns string     DNS discovery ENR tree URL
       --discovery-port int       UDP P2P discovery port (default 30303)
-      --fork-id bytesHex         The hex encoded fork id (omit the 0x) (default F097BC13)
-      --genesis-hash string      The genesis block hash (default "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
+      --fork-id bytesHex         hex encoded fork ID (omit 0x) (default F097BC13)
+      --genesis-hash string      genesis block hash (default "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
   -h, --help                     help for sensor
-      --key string               Hex-encoded private key (cannot be set with --key-file)
-  -k, --key-file string          Private key file (cannot be set with --key)
-  -D, --max-db-concurrency int   Maximum number of concurrent database operations to perform. Increasing this
+      --key string               hex-encoded private key (cannot be set with --key-file)
+  -k, --key-file string          private key file (cannot be set with --key)
+  -D, --max-db-concurrency int   maximum number of concurrent database operations to perform. Increasing this
                                  will result in less chance of missing data (i.e. broken pipes) but can
-                                 significantly increase memory usage. (default 10000)
-  -m, --max-peers int            Maximum number of peers to connect to (default 2000)
+                                 significantly increase memory usage (default 10000)
+  -m, --max-peers int            maximum number of peers to connect to (default 2000)
       --nat string               NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
-  -n, --network-id uint          Filter discovered nodes by this network ID
-      --no-discovery             Disable P2P peer discovery
+  -n, --network-id uint          filter discovered nodes by this network ID
+      --no-discovery             disable P2P peer discovery
       --port int                 TCP network listening port (default 30303)
-      --pprof                    Whether to run pprof
-      --pprof-port uint          Port pprof runs on (default 6060)
+      --pprof                    run pprof server
+      --pprof-port uint          port pprof runs on (default 6060)
   -p, --project-id string        GCP project ID
-      --prom                     Whether to run Prometheus (default true)
-      --prom-port uint           Port Prometheus runs on (default 2112)
-      --rpc string               RPC endpoint used to fetch the latest block (default "https://polygon-rpc.com")
-      --rpc-port uint            Port for JSON-RPC server to receive transactions (default 8545)
-  -s, --sensor-id string         Sensor ID when writing block/tx events
-      --static-nodes string      Static nodes file
-      --trusted-nodes string     Trusted nodes file
-      --ttl duration             Time to live (default 336h0m0s)
-      --write-block-events       Whether to write block events to the database (default true)
-  -B, --write-blocks             Whether to write blocks to the database (default true)
-      --write-peers              Whether to write peers to the database (default true)
-      --write-tx-events          Whether to write transaction events to the database. This option could
-                                 significantly increase CPU and memory usage. (default true)
-  -t, --write-txs                Whether to write transactions to the database. This option could significantly
-                                 increase CPU and memory usage. (default true)
+      --prom                     run Prometheus server (default true)
+      --prom-port uint           port Prometheus runs on (default 2112)
+      --rpc string               RPC endpoint used to fetch latest block (default "https://polygon-rpc.com")
+      --rpc-port uint            port for JSON-RPC server to receive transactions (default 8545)
+  -s, --sensor-id string         sensor ID when writing block/tx events
+      --static-nodes string      static nodes file
+      --trusted-nodes string     trusted nodes file
+      --ttl duration             time to live (default 336h0m0s)
+      --write-block-events       write block events to database (default true)
+  -B, --write-blocks             write blocks to database (default true)
+      --write-peers              write peers to database (default true)
+      --write-tx-events          write transaction events to database. This option can significantly increase CPU and memory usage (default true)
+  -t, --write-txs                write transactions to database. This option can significantly increase CPU and memory usage (default true)
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
       --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --pretty-logs     output logs in pretty format instead of JSON (default true)
+  -v, --verbosity int   0 - silent
+                        100 panic
+                        200 fatal
+                        300 error
+                        400 warning
+                        500 info
+                        600 debug
+                        700 trace (default 500)
 ```
 
 ## See also

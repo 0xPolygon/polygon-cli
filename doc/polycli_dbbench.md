@@ -138,42 +138,42 @@ as well.
 ## Flags
 
 ```bash
-      --cache-size int                the number of megabytes to use as our internal cache size (default 512)
-      --db-mode string                The mode to use: leveldb or pebbledb (default "leveldb")
-      --db-path string                the path of the database that we'll use for testing (default "_benchmark_db")
-      --degree-of-parallelism uint8   The number of concurrent goroutines we'll use (default 2)
-      --dont-fill-read-cache          if false, then random reads will be cached
-      --full-scan-mode                if true, the application will scan the full database as fast as possible and print a summary
-      --handles int                   defines the capacity of the open files caching. Use -1 for zero, this has same effect as specifying NoCacher to OpenFilesCacher. (default 500)
+      --cache-size int                number of megabytes to use as internal cache size (default 512)
+      --db-mode string                mode to use: leveldb or pebbledb (default "leveldb")
+      --db-path string                path of database to use for testing (default "_benchmark_db")
+      --degree-of-parallelism uint8   number of concurrent goroutines to use (default 2)
+      --dont-fill-read-cache          disable caching for random reads
+      --full-scan-mode                scan full database as fast as possible and print summary
+      --handles int                   capacity of open files caching (use -1 for zero, this has same effect as specifying NoCacher to OpenFilesCacher) (default 500)
   -h, --help                          help for dbbench
-      --key-size uint                 The byte length of the keys that we'll use (default 32)
-      --nil-read-opts                 if true we'll use nil read opt (this is what geth/bor does)
-      --no-merge-write                allows disabling write merge
-      --overwrite-count uint          the number of times to overwrite the data (default 5)
-      --read-limit uint               the number of reads will attempt to complete in a given test (default 10000000)
-      --read-only                     if true, we'll skip all the write operations and open the DB in read only mode
-      --read-strict                   if true the rand reads will be made in strict mode
-      --sequential-reads              if true we'll perform reads sequentially
-      --sequential-writes             if true we'll perform writes in somewhat sequential manner
-      --size-distribution string      the size distribution to use while testing (default "0-1:2347864,2-3:804394856,4-7:541267689,8-15:738828593,16-31:261122372,32-63:1063470933,64-127:3584745195,128-255:1605760137,256-511:316074206,512-1023:312887514,1024-2047:328894149,2048-4095:141180,4096-8191:92789,8192-16383:256060,16384-32767:261806,32768-65535:191032,65536-131071:99715,131072-262143:73782,262144-524287:17552,524288-1048575:717,1048576-2097151:995,2097152-4194303:1,8388608-16777215:1")
+      --key-size uint                 byte length of keys to use (default 32)
+      --nil-read-opts                 use nil read options (matches geth/bor behavior)
+      --no-merge-write                disable write merge
+      --overwrite-count uint          number of times to overwrite data (default 5)
+      --read-limit uint               number of reads to attempt to complete in given test (default 10000000)
+      --read-only                     skip all write operations and open DB in read-only mode
+      --read-strict                   make random reads in strict mode
+      --sequential-reads              perform reads sequentially
+      --sequential-writes             perform writes in sequential manner
+      --size-distribution string      size distribution to use while testing (default "0-1:2347864,2-3:804394856,4-7:541267689,8-15:738828593,16-31:261122372,32-63:1063470933,64-127:3584745195,128-255:1605760137,256-511:316074206,512-1023:312887514,1024-2047:328894149,2048-4095:141180,4096-8191:92789,8192-16383:256060,16384-32767:261806,32768-65535:191032,65536-131071:99715,131072-262143:73782,262144-524287:17552,524288-1048575:717,1048576-2097151:995,2097152-4194303:1,8388608-16777215:1")
       --sync-writes                   sync each write
-      --write-limit uint              The number of entries to write in the db (default 1000000)
-      --write-zero                    if true, we'll write 0s rather than random data
+      --write-limit uint              number of entries to write in db (default 1000000)
+      --write-zero                    write zeros instead of random data
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
       --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --pretty-logs     output logs in pretty format instead of JSON (default true)
+  -v, --verbosity int   0 - silent
+                        100 panic
+                        200 fatal
+                        300 error
+                        400 warning
+                        500 info
+                        600 debug
+                        700 trace (default 500)
 ```
 
 ## See also

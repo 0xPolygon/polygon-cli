@@ -21,16 +21,16 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 ```bash
       --config string   config file (default is $HOME/.polygon-cli.yaml)
   -h, --help            help for polycli
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -t, --toggle          Help message for toggle
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --pretty-logs     output logs in pretty format instead of JSON (default true)
+  -t, --toggle          help message for toggle
+  -v, --verbosity int   0 - silent
+                        100 panic
+                        200 fatal
+                        300 error
+                        400 warning
+                        500 info
+                        600 debug
+                        700 trace (default 500)
 ```
 
 ## See also

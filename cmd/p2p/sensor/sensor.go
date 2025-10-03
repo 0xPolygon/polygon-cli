@@ -416,57 +416,56 @@ func newDatabase(ctx context.Context) (database.Database, error) {
 }
 
 func init() {
-	SensorCmd.Flags().StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", "Comma separated nodes used for bootstrapping")
-	SensorCmd.Flags().Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network ID")
+	f := SensorCmd.Flags()
+	f.StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", "comma separated nodes used for bootstrapping")
+	f.Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "filter discovered nodes by this network ID")
 	if err := SensorCmd.MarkFlagRequired("network-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark network-id as required persistent flag")
 	}
-	SensorCmd.Flags().StringVarP(&inputSensorParams.ProjectID, "project-id", "p", "", "GCP project ID")
-	SensorCmd.Flags().StringVarP(&inputSensorParams.DatabaseID, "database-id", "d", "", "Datastore database ID")
-	SensorCmd.Flags().StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "Sensor ID when writing block/tx events")
+	f.StringVarP(&inputSensorParams.ProjectID, "project-id", "p", "", "GCP project ID")
+	f.StringVarP(&inputSensorParams.DatabaseID, "database-id", "d", "", "datastore database ID")
+	f.StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "sensor ID when writing block/tx events")
 	if err := SensorCmd.MarkFlagRequired("sensor-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")
 	}
-	SensorCmd.Flags().IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 2000, "Maximum number of peers to connect to")
-	SensorCmd.Flags().IntVarP(&inputSensorParams.MaxDatabaseConcurrency, "max-db-concurrency", "D", 10000,
-		`Maximum number of concurrent database operations to perform. Increasing this
+	f.IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 2000, "maximum number of peers to connect to")
+	f.IntVarP(&inputSensorParams.MaxDatabaseConcurrency, "max-db-concurrency", "D", 10000,
+		`maximum number of concurrent database operations to perform. Increasing this
 will result in less chance of missing data (i.e. broken pipes) but can
-significantly increase memory usage.`)
-	SensorCmd.Flags().BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "Whether to write blocks to the database")
-	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "Whether to write block events to the database")
-	SensorCmd.Flags().BoolVarP(&inputSensorParams.ShouldWriteTransactions, "write-txs", "t", true,
-		`Whether to write transactions to the database. This option could significantly
-increase CPU and memory usage.`)
-	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
-		`Whether to write transaction events to the database. This option could
-significantly increase CPU and memory usage.`)
-	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldWritePeers, "write-peers", true, "Whether to write peers to the database")
-	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "Whether to run pprof")
-	SensorCmd.Flags().UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "Port pprof runs on")
-	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "Whether to run Prometheus")
-	SensorCmd.Flags().UintVar(&inputSensorParams.PrometheusPort, "prom-port", 2112, "Port Prometheus runs on")
-	SensorCmd.Flags().UintVar(&inputSensorParams.APIPort, "api-port", 8080, "Port the API server will listen on")
-	SensorCmd.Flags().UintVar(&inputSensorParams.RPCPort, "rpc-port", 8545, "Port for JSON-RPC server to receive transactions")
-	SensorCmd.Flags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "Private key file (cannot be set with --key)")
-	SensorCmd.Flags().StringVar(&inputSensorParams.PrivateKey, "key", "", "Hex-encoded private key (cannot be set with --key-file)")
+significantly increase memory usage`)
+	f.BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "write blocks to database")
+	f.BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "write block events to database")
+	f.BoolVarP(&inputSensorParams.ShouldWriteTransactions, "write-txs", "t", true,
+		`write transactions to database. This option can significantly increase CPU and memory usage`)
+	f.BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
+		`write transaction events to database. This option can significantly increase CPU and memory usage`)
+	f.BoolVar(&inputSensorParams.ShouldWritePeers, "write-peers", true, "write peers to database")
+	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
+	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
+	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")
+	f.UintVar(&inputSensorParams.PrometheusPort, "prom-port", 2112, "port Prometheus runs on")
+	f.UintVar(&inputSensorParams.APIPort, "api-port", 8080, "port API server will listen on")
+	f.UintVar(&inputSensorParams.RPCPort, "rpc-port", 8545, "port for JSON-RPC server to receive transactions")
+	f.StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "private key file (cannot be set with --key)")
+	f.StringVar(&inputSensorParams.PrivateKey, "key", "", "hex-encoded private key (cannot be set with --key-file)")
 	SensorCmd.MarkFlagsMutuallyExclusive("key-file", "key")
-	SensorCmd.Flags().IntVar(&inputSensorParams.Port, "port", 30303, "TCP network listening port")
-	SensorCmd.Flags().IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
-	SensorCmd.Flags().StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "RPC endpoint used to fetch the latest block")
-	SensorCmd.Flags().StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "The genesis block hash")
-	SensorCmd.Flags().BytesHexVar(&inputSensorParams.ForkID, "fork-id", []byte{240, 151, 188, 19}, "The hex encoded fork id (omit the 0x)")
-	SensorCmd.Flags().IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
-		`Ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
-connections to be dialed. Setting this to 0 defaults it to 3.`)
-	SensorCmd.Flags().StringVar(&inputSensorParams.NAT, "nat", "any", "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")
-	SensorCmd.Flags().StringVar(&inputSensorParams.StaticNodesFile, "static-nodes", "", "Static nodes file")
-	SensorCmd.Flags().StringVar(&inputSensorParams.TrustedNodesFile, "trusted-nodes", "", "Trusted nodes file")
-	SensorCmd.Flags().DurationVar(&inputSensorParams.TTL, "ttl", 14*24*time.Hour, "Time to live")
-	SensorCmd.Flags().StringVar(&inputSensorParams.DiscoveryDNS, "discovery-dns", "", "DNS discovery ENR tree url")
-	SensorCmd.Flags().StringVar(&inputSensorParams.Database, "database", "none",
-		`Which database to persist data to, options are:
+	f.IntVar(&inputSensorParams.Port, "port", 30303, "TCP network listening port")
+	f.IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
+	f.StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "RPC endpoint used to fetch latest block")
+	f.StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "genesis block hash")
+	f.BytesHexVar(&inputSensorParams.ForkID, "fork-id", []byte{240, 151, 188, 19}, "hex encoded fork ID (omit 0x)")
+	f.IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
+		`ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
+connections to be dialed. Setting this to 0 defaults it to 3`)
+	f.StringVar(&inputSensorParams.NAT, "nat", "any", "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")
+	f.StringVar(&inputSensorParams.StaticNodesFile, "static-nodes", "", "static nodes file")
+	f.StringVar(&inputSensorParams.TrustedNodesFile, "trusted-nodes", "", "trusted nodes file")
+	f.DurationVar(&inputSensorParams.TTL, "ttl", 14*24*time.Hour, "time to live")
+	f.StringVar(&inputSensorParams.DiscoveryDNS, "discovery-dns", "", "DNS discovery ENR tree URL")
+	f.StringVar(&inputSensorParams.Database, "database", "none",
+		`which database to persist data to, options are:
   - datastore (GCP Datastore)
   - json (output to stdout)
   - none (no persistence)`)
-	SensorCmd.Flags().BoolVar(&inputSensorParams.NoDiscovery, "no-discovery", false, "Disable P2P peer discovery")
+	f.BoolVar(&inputSensorParams.NoDiscovery, "no-discovery", false, "disable P2P peer discovery")
 }

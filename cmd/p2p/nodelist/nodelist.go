@@ -57,9 +57,10 @@ var NodeListCmd = &cobra.Command{
 }
 
 func init() {
-	NodeListCmd.Flags().IntVarP(&inputNodeListParams.Limit, "limit", "l", 100, "Number of unique nodes to return")
-	NodeListCmd.Flags().StringVarP(&inputNodeListParams.ProjectID, "project-id", "p", "", "GCP project ID")
-	NodeListCmd.Flags().StringVarP(&inputNodeListParams.DatabaseID, "database-id", "d", "", "Datastore database ID")
+	f := NodeListCmd.Flags()
+	f.IntVarP(&inputNodeListParams.Limit, "limit", "l", 100, "number of unique nodes to return")
+	f.StringVarP(&inputNodeListParams.ProjectID, "project-id", "p", "", "GCP project ID")
+	f.StringVarP(&inputNodeListParams.DatabaseID, "database-id", "d", "", "datastore database ID")
 	if err := NodeListCmd.MarkFlagRequired("project-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark project-id as required flag")
 	}

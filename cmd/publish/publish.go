@@ -27,17 +27,18 @@ var Cmd = &cobra.Command{
 	Short: "Publish transactions to the network with high-throughput",
 	Long:  cmdUsage,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		publishInputArgs.rpcURL = flag_loader.GetRpcUrlFlagValue(cmd)
+		rpcURL := flag_loader.GetRpcUrlFlagValue(cmd)
+		publishInputArgs.rpcURL = *rpcURL
 	},
 	RunE: publish,
 }
 
 type inputArgs struct {
-	rpcURL        *string
-	concurrency   *uint64
-	jobQueueSize  *uint64
-	inputFileName *string
-	rateLimit     *uint64
+	rpcURL        string
+	concurrency   uint64
+	jobQueueSize  uint64
+	inputFileName string
+	rateLimit     uint64
 }
 
 var publishInputArgs = inputArgs{}
@@ -45,30 +46,30 @@ var publishInputArgs = inputArgs{}
 func publish(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	inputData, dataSource, err := getInputData(publishInputArgs.inputFileName, args)
+	inputData, dataSource, err := getInputData(&publishInputArgs.inputFileName, args)
 	if err != nil {
 		cmd.PrintErrf("There was an error reading input data: %s", err.Error())
 		return err
 	}
 
-	client, err := ethclient.Dial(*publishInputArgs.rpcURL)
+	client, err := ethclient.Dial(publishInputArgs.rpcURL)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
 	log.Info().
-		Str("rpcURL", *publishInputArgs.rpcURL).
+		Str("rpcURL", publishInputArgs.rpcURL).
 		Msg("Connected to the network")
 
-	wp := NewWorkerPool(*publishInputArgs.concurrency, *publishInputArgs.jobQueueSize)
+	wp := NewWorkerPool(publishInputArgs.concurrency, publishInputArgs.jobQueueSize)
 	wp.Start(ctx)
 
 	log.Info().
 		Msg("Starting to publish transactions")
 
 	limit := time.Duration(0)
-	if *publishInputArgs.rateLimit > 0 {
-		limit = time.Second / time.Duration(*publishInputArgs.rateLimit)
+	if publishInputArgs.rateLimit > 0 {
+		limit = time.Second / time.Duration(publishInputArgs.rateLimit)
 	}
 	rl := rate.NewLimiter(rate.Every(limit), 1)
 
@@ -136,9 +137,10 @@ func publish(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	publishInputArgs.rpcURL = Cmd.PersistentFlags().String(ArgRpcURL, defaultRPCURL, "The RPC URL of the network")
-	publishInputArgs.concurrency = Cmd.PersistentFlags().Uint64P("concurrency", "c", 1, "Number of txs to send concurrently. Default is one request at a time.")
-	publishInputArgs.jobQueueSize = Cmd.PersistentFlags().Uint64("job-queue-size", 100, "Number of jobs we can put in the job queue for workers to process.")
-	publishInputArgs.inputFileName = Cmd.PersistentFlags().String("file", "", "Provide a filename with transactions to publish")
-	publishInputArgs.rateLimit = Cmd.PersistentFlags().Uint64("rate-limit", 0, "Rate limit in txs per second. Default is no rate limit.")
+	f := Cmd.Flags()
+	f.StringVar(&publishInputArgs.rpcURL, ArgRpcURL, defaultRPCURL, "RPC URL of network")
+	f.Uint64VarP(&publishInputArgs.concurrency, "concurrency", "c", 1, "number of txs to send concurrently (default: one at a time)")
+	f.Uint64Var(&publishInputArgs.jobQueueSize, "job-queue-size", 100, "number of jobs we can put in the job queue for workers to process")
+	f.StringVar(&publishInputArgs.inputFileName, "file", "", "provide a filename with transactions to publish")
+	f.Uint64Var(&publishInputArgs.rateLimit, "rate-limit", 0, "rate limit in txs per second (default: no limit)")
 }
