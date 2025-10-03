@@ -171,10 +171,10 @@ func fetchContractCreationTx(ctx context.Context, client *ethclient.Client, cont
 
 func init() {
 	f := Cmd.Flags()
-	f.StringVar(&inputArgs.rpcURL, flag.FlagRPCURL, flag.DefaultRPCURL, "RPC URL of network containing contract")
+	f.StringVar(&inputArgs.rpcURL, flag.RPCURL, flag.DefaultRPCURL, "RPC URL of network containing contract")
 	f.StringVar(&inputArgs.address, ArgAddress, "", "contract address")
 
 	// Mark required flags
 	flag.MarkFlagRequired(Cmd, ArgAddress)
-	flag.MarkFlagRequired(Cmd, flag.FlagRPCURL)
+	flag.MarkFlagRequired(Cmd, flag.RPCURL)
 }

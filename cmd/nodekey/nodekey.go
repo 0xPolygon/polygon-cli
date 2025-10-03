@@ -301,5 +301,5 @@ func init() {
 	f.BoolVarP(&inputNodeKeyMarshalProtobuf, "marshal-protobuf", "m", false, "marshal libp2p key to protobuf format instead of raw")
 
 	// Mark required flags
-	flag.MarkFlagRequired(NodekeyCmd, flag.FlagPrivateKey)
+	flag.MarkFlagRequired(NodekeyCmd, flag.PrivateKey)
 }

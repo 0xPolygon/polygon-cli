@@ -304,8 +304,8 @@ v3, uniswapv3 - perform UniswapV3 swaps`)
 	// TODO Compression
 
 	// Mark required flags
-	flag.MarkPersistentFlagRequired(LoadtestCmd, flag.FlagRPCURL)
-	flag.MarkPersistentFlagRequired(LoadtestCmd, flag.FlagPrivateKey)
+	flag.MarkPersistentFlagRequired(LoadtestCmd, flag.RPCURL)
+	flag.MarkPersistentFlagRequired(LoadtestCmd, flag.PrivateKey)
 }
 
 func initSubCommands() {

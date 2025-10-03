@@ -90,7 +90,7 @@ func init() {
 	f.StringVarP(&intervalStr, "interval", "i", "5s", "amount of time between batch block RPC calls")
 
 	// Mark required flags
-	flag.MarkFlagRequired(MonitorCmd, flag.FlagRPCURL)
+	flag.MarkFlagRequired(MonitorCmd, flag.RPCURL)
 }
 
 func checkFlags() (err error) {

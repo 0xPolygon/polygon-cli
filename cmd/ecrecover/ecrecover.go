@@ -137,5 +137,5 @@ func init() {
 	EcRecoverCmd.MarkFlagsMutuallyExclusive("file", "block-number", "tx")
 
 	// Mark required flags
-	flag.MarkFlagRequired(EcRecoverCmd, flag.FlagRPCURL)
+	flag.MarkFlagRequired(EcRecoverCmd, flag.RPCURL)
 }

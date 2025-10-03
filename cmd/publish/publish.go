@@ -138,12 +138,12 @@ func publish(cmd *cobra.Command, args []string) error {
 
 func init() {
 	f := Cmd.Flags()
-	f.StringVar(&publishInputArgs.rpcURL, flag.FlagRPCURL, flag.DefaultRPCURL, "RPC URL of network")
+	f.StringVar(&publishInputArgs.rpcURL, flag.RPCURL, flag.DefaultRPCURL, "RPC URL of network")
 	f.Uint64VarP(&publishInputArgs.concurrency, "concurrency", "c", 1, "number of txs to send concurrently (default: one at a time)")
 	f.Uint64Var(&publishInputArgs.jobQueueSize, "job-queue-size", 100, "number of jobs we can put in the job queue for workers to process")
 	f.StringVar(&publishInputArgs.inputFileName, "file", "", "provide a filename with transactions to publish")
 	f.Uint64Var(&publishInputArgs.rateLimit, "rate-limit", 0, "rate limit in txs per second (default: no limit)")
 
 	// Mark required flags
-	flag.MarkFlagRequired(Cmd, flag.FlagRPCURL)
+	flag.MarkFlagRequired(Cmd, flag.RPCURL)
 }

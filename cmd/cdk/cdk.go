@@ -635,7 +635,7 @@ func mustPrintLogs(logs []types.Log, contractInstance reflect.Value, contractABI
 func init() {
 	// cdk
 	f := CDKCmd.PersistentFlags()
-	f.StringVar(&cdkInputArgs.rpcURL, flag.FlagRPCURL, flag.DefaultRPCURL, "RPC URL of network containing CDK contracts")
+	f.StringVar(&cdkInputArgs.rpcURL, flag.RPCURL, flag.DefaultRPCURL, "RPC URL of network containing CDK contracts")
 	f.StringVar(&cdkInputArgs.forkID, ArgForkID, defaultForkId, "fork ID of CDK networks")
 	f.StringVar(&cdkInputArgs.rollupManagerAddress, ArgRollupManagerAddress, "", "address of rollup contract")
 
@@ -677,5 +677,5 @@ func init() {
 	gerCmd.AddCommand(gerMonitorCmd)
 
 	// Mark required flags
-	flag.MarkPersistentFlagRequired(CDKCmd, flag.FlagRPCURL)
+	flag.MarkPersistentFlagRequired(CDKCmd, flag.RPCURL)
 }

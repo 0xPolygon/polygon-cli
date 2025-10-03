@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	// FlagRPCURL is the standard flag name for RPC endpoint URLs.
-	FlagRPCURL = "rpc-url"
-	// FlagPrivateKey is the standard flag name for private keys.
-	FlagPrivateKey = "private-key"
+	// RPCURL is the standard flag name for RPC endpoint URLs.
+	RPCURL = "rpc-url"
+	// PrivateKey is the standard flag name for private keys.
+	PrivateKey = "private-key"
 
 	// DefaultRPCURL is the default RPC endpoint URL.
 	DefaultRPCURL = "http://localhost:8545"
@@ -29,7 +29,7 @@ func GetFlag(cmd *cobra.Command, flagName string) string {
 // GetRPCURL retrieves the rpc-url flag value from Viper after binding it and validates
 // that it is a valid URL with a supported scheme (http, https, ws, wss).
 func GetRPCURL(cmd *cobra.Command) (string, error) {
-	rpcURL := GetFlag(cmd, FlagRPCURL)
+	rpcURL := GetFlag(cmd, RPCURL)
 	if err := util.ValidateUrl(rpcURL); err != nil {
 		return "", err
 	}
@@ -39,7 +39,7 @@ func GetRPCURL(cmd *cobra.Command) (string, error) {
 // GetPrivateKey retrieves the private-key flag value from Viper after binding it.
 // This is a convenience wrapper around GetFlag for the standard private key flag.
 func GetPrivateKey(cmd *cobra.Command) (string, error) {
-	return GetFlag(cmd, FlagPrivateKey), nil
+	return GetFlag(cmd, PrivateKey), nil
 }
 
 // MarkFlagRequired marks a regular flag as required and logs a fatal error if marking fails.

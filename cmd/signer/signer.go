@@ -866,5 +866,5 @@ func init() {
 	f.IntVar(&inputSignerOpts.gcpKeyVersion, "gcp-key-version", 1, "GCP crypto key version to use")
 
 	// Mark required flags
-	flag.MarkFlagRequired(SignerCmd, flag.FlagPrivateKey)
+	flag.MarkFlagRequired(SignerCmd, flag.PrivateKey)
 }

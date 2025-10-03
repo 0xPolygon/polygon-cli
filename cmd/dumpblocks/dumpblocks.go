@@ -196,7 +196,7 @@ func init() {
 	f.StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from, not setting a filter means all are allowed")
 
 	// Mark required flags
-	flag.MarkFlagRequired(DumpblocksCmd, flag.FlagRPCURL)
+	flag.MarkFlagRequired(DumpblocksCmd, flag.RPCURL)
 }
 
 // writeResponses writes the data to either stdout or a file if one is provided.
