@@ -15,7 +15,7 @@ Utilities for interacting with CDK networks.
 
 ## Usage
 
-Basic utility commands for interacting with the cdk contracts
+Basic utility commands for interacting with the cdk contracts.
 ## Flags
 
 ```bash

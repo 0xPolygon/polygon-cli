@@ -19,7 +19,7 @@ polycli version [flags]
 
 ## Usage
 
-Nothing fancy. Print the version of this application
+Nothing fancy. Print the version of this application.
 ## Flags
 
 ```bash

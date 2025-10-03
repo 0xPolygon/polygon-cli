@@ -15,7 +15,7 @@ Utilities for interacting with the uLxLy bridge.
 
 ## Usage
 
-Basic utility commands for interacting with the bridge contracts, bridge services, and generating proofs
+Basic utility commands for interacting with the bridge contracts, bridge services, and generating proofs.
 ## Flags
 
 ```bash

@@ -15,7 +15,7 @@ A Swiss Army knife of blockchain tools.
 
 ## Usage
 
-Polycli is a collection of tools that are meant to be useful while building, testing, and running block chain applications.
+Polycli is a collection of tools that are meant to be useful while building, testing, and running blockchain applications.
 ## Flags
 
 ```bash

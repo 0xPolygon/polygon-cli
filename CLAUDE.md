@@ -149,6 +149,6 @@ The tool supports configuration via:
 
 ### Cobra Commands
 - Command `Short` descriptions: sentence case with ending period, e.g., `"Generate a node list to seed a node."`
-- Command `Long` descriptions: use embedded usage.md file via `//go:embed usage.md` pattern
+- Command `Long` descriptions: consider using embedded usage.md file via `//go:embed usage.md` pattern; when using inline strings, use sentence case with ending period for complete sentences
 - Command `Short` should be brief (~50 characters or less), appears in help menus and command lists
-- Each command should have a corresponding `usage.md` file that provides detailed documentation
+- Command `Long` provides detailed explanation, can be empty if `Short` is sufficient
