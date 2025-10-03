@@ -297,10 +297,6 @@ v3, uniswapv3 - perform UniswapV3 swaps`)
 	f.UintVar(&ltp.ReceiptRetryInitialDelayMs, "receipt-retry-initial-delay-ms", 100, "initial delay in milliseconds for receipt polling (uses exponential backoff with jitter)")
 
 	// TODO Compression
-
-	// Mark required flags
-	flag.MarkPersistentFlagRequired(LoadtestCmd, flag.RPCURL)
-	flag.MarkPersistentFlagRequired(LoadtestCmd, flag.PrivateKey)
 }
 
 func initSubCommands() {

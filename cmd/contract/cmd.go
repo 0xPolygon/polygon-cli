@@ -176,5 +176,4 @@ func init() {
 
 	// Mark required flags
 	flag.MarkFlagRequired(Cmd, ArgAddress)
-	flag.MarkFlagRequired(Cmd, flag.RPCURL)
 }

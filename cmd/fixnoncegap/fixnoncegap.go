@@ -233,7 +233,6 @@ func init() {
 	f.Uint64Var(&inputFixNonceGapArgs.maxNonce, ArgMaxNonce, 0, "override max nonce value instead of getting it from the pool")
 
 	// Mark required flags
-	flag.MarkFlagRequired(FixNonceGapCmd, flag.RPCURL)
 	flag.MarkFlagRequired(FixNonceGapCmd, flag.PrivateKey)
 }
 

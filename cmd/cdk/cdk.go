@@ -675,7 +675,4 @@ func init() {
 	gerCmd.AddCommand(gerInspectCmd)
 	gerCmd.AddCommand(gerDumpCmd)
 	gerCmd.AddCommand(gerMonitorCmd)
-
-	// Mark required flags
-	flag.MarkPersistentFlagRequired(CDKCmd, flag.RPCURL)
 }

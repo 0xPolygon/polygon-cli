@@ -88,9 +88,6 @@ func init() {
 	f.IntVarP(&subBatchSize, "sub-batch-size", "s", 50, "number of requests per sub-batch")
 	f.IntVarP(&blockCacheLimit, "cache-limit", "c", 200, "number of cached blocks for the LRU block data structure (Min 100)")
 	f.StringVarP(&intervalStr, "interval", "i", "5s", "amount of time between batch block RPC calls")
-
-	// Mark required flags
-	flag.MarkFlagRequired(MonitorCmd, flag.RPCURL)
 }
 
 func checkFlags() (err error) {
