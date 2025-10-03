@@ -707,7 +707,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		if err != nil {
 			return err
 		}
-		log.Debug().Str("ltAddr", ltAddr.String()).Msg("Obtained load test contract address")
+		log.Debug().Stringer("ltAddr", ltAddr).Msg("Obtained load test contract address")
 	}
 
 	var erc20Addr ethcommon.Address
@@ -717,7 +717,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		if err != nil {
 			return err
 		}
-		log.Debug().Str("erc20Addr", erc20Addr.String()).Msg("Obtained erc 20 contract address")
+		log.Debug().Stringer("erc20Addr", erc20Addr).Msg("Obtained erc 20 contract address")
 	}
 
 	var erc721Addr ethcommon.Address
@@ -727,7 +727,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		if err != nil {
 			return err
 		}
-		log.Debug().Str("erc721Addr", erc721Addr.String()).Msg("Obtained erc 721 contract address")
+		log.Debug().Stringer("erc721Addr", erc721Addr).Msg("Obtained erc 721 contract address")
 	}
 
 	var recallTransactions []rpctypes.PolyTransaction
@@ -1695,7 +1695,7 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, ia *IndexedActivity) 
 
 			log.Trace().
 				Str("erc20str", erc20Str).
-				Str("erc20addr", erc20Addr.String()).
+				Stringer("erc20addr", erc20Addr).
 				Msg("Retrieve contract addresses")
 			cops := new(bind.CallOpts)
 			cops.Context = ctx
@@ -1723,7 +1723,7 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, ia *IndexedActivity) 
 
 			log.Trace().
 				Str("erc721str", erc721Str).
-				Str("erc721addr", erc721Addr.String()).
+				Stringer("erc721addr", erc721Addr).
 				Msg("Retrieve contract addresses")
 			cops := new(bind.CallOpts)
 			cops.Context = ctx

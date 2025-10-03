@@ -74,7 +74,7 @@ func main() {
 	acc, err := newAccount()
 	checkErr(err, "failed to create new account")
 	log.Info().
-		Str("address", acc.addr.String()).
+		Stringer("address", acc.addr).
 		Str("privateKey", acc.keyHex()).
 		Msg("new account created")
 
