@@ -47,7 +47,7 @@ JSON Data passed in follows object definition [here](https://www.quicknode.com/d
   -b, --block-number uint   block number to check the extra data for (default: latest)
   -f, --file string         path to a file containing block information in JSON format
   -h, --help                help for ecrecover
-  -r, --rpc-url string      RPC endpoint URL
+  -r, --rpc-url string      the RPC endpoint URL
   -t, --tx string           transaction data in hex format
 ```
 
