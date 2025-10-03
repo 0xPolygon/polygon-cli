@@ -16,9 +16,9 @@ import (
 var (
 	//go:embed usage.md
 	usage                string
-	inputFileName        *string
-	inputRootContextName *string
-	inputMetric          *string
+	inputFileName        string
+	inputRootContextName string
+	inputMetric          string
 )
 
 type TraceOperation struct {
@@ -50,11 +50,11 @@ var FoldTraceCmd = &cobra.Command{
 
 		folded := make(map[string]uint64)
 
-		contexts := []string{*inputRootContextName}
+		contexts := []string{inputRootContextName}
 		currentDepth := uint64(1)
 		lastLabel := ""
 
-		metricType := *inputMetric
+		metricType := inputMetric
 		for idx, op := range td.StructLogs {
 			if op.Depth > currentDepth {
 				contexts = append(contexts, lastLabel)
@@ -137,28 +137,28 @@ func isCall(op string) bool {
 }
 
 func validateInputMetric() error {
-	switch *inputMetric {
+	switch inputMetric {
 	case "gas", "count", "actualgas":
 		return nil
 	}
-	return fmt.Errorf("invalid input metric: %s", *inputMetric)
+	return fmt.Errorf("invalid input metric: %s", inputMetric)
 }
 
 func init() {
-	flagSet := FoldTraceCmd.PersistentFlags()
-	inputFileName = flagSet.String("file", "", "Provide a filename to read and hash")
-	inputRootContextName = flagSet.String("root-context", "root context", "The name for the top most initial context")
-	inputMetric = flagSet.String("metric", "gas", "Provide a metric name for analysis: gas, count, actualgas")
+	f := FoldTraceCmd.Flags()
+	f.StringVar(&inputFileName, "file", "", "filename to read and hash")
+	f.StringVar(&inputRootContextName, "root-context", "root context", "name for top most initial context")
+	f.StringVar(&inputMetric, "metric", "gas", "metric name for analysis: gas, count, actualgas")
 
 }
 
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
 	// first check and see if we have an input file
-	if inputFileName != nil && *inputFileName != "" {
+	if inputFileName != "" {
 		// If we get here, we're going to assume the user
 		// wants to hash a file and we're not going to look
 		// for other input sources
-		return os.ReadFile(*inputFileName)
+		return os.ReadFile(inputFileName)
 	}
 
 	// This is a little tricky. If a user provides multiple args that aren't quoted, it could be confusing

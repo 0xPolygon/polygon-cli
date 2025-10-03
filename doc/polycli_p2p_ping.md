@@ -28,30 +28,31 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).
 ## Flags
 
 ```bash
-  -a, --addr ip           Address to bind discovery listener (default 127.0.0.1)
+  -a, --addr ip           address to bind discovery listener (default 127.0.0.1)
   -h, --help              help for ping
-      --key string        Hex-encoded private key (cannot be set with --key-file)
-  -k, --key-file string   Private key file (cannot be set with --key)
-  -l, --listen            Keep the connection open and listen to the peer(s) (default true)
-  -o, --output string     Write ping results to output file (default stdout)
-  -p, --parallel int      How many parallel pings to attempt (default 16)
-  -P, --port int          Port for discovery protocol (default 30303)
-  -w, --wit               Whether to enable the wit/1 capability
+      --key string        hex-encoded private key (cannot be set with --key-file)
+  -k, --key-file string   private key file (cannot be set with --key)
+  -l, --listen            keep connection open and listen to peer. This only works if first
+                          argument is an enode/enr, not a nodes file (default true)
+  -o, --output string     write ping results to output file (default stdout)
+  -p, --parallel int      how many parallel pings to attempt (default 16)
+  -P, --port int          port for discovery protocol (default 30303)
+  -w, --wit               enable wit/1 capability
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
       --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --pretty-logs     output logs in pretty format instead of JSON (default true)
+  -v, --verbosity int   0 - silent
+                        100 panic
+                        200 fatal
+                        300 error
+                        400 warning
+                        500 info
+                        600 debug
+                        700 trace (default 500)
 ```
 
 ## See also

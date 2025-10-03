@@ -33,7 +33,7 @@ type conn struct {
 	head      *HeadBlock
 	headMutex *sync.RWMutex
 	counter   *prometheus.CounterVec
-	name      string
+	peer      *ethp2p.Peer
 
 	// requests is used to store the request ID and the block hash. This is used
 	// when fetching block bodies because the eth protocol block bodies do not
@@ -57,7 +57,7 @@ type EthProtocolOptions struct {
 	RPC         string
 	SensorID    string
 	NetworkID   uint64
-	Peers       chan *enode.Node
+	Conns       *Conns
 	ForkID      forkid.ID
 	MsgCounter  *prometheus.CounterVec
 
@@ -91,7 +91,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 		Version: version,
 		Length:  17,
 		Run: func(p *ethp2p.Peer, rw ethp2p.MsgReadWriter) error {
-			c := conn{
+			c := &conn{
 				sensorID:    opts.SensorID,
 				node:        p.Node(),
 				logger:      log.With().Str("peer", p.Node().URLv4()).Logger(),
@@ -102,7 +102,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				head:        opts.Head,
 				headMutex:   opts.HeadMutex,
 				counter:     opts.MsgCounter,
-				name:        p.Fullname(),
+				peer:        p,
 				blockHashes: list.New(),
 			}
 
@@ -121,9 +121,10 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				return err
 			}
 
-			// Send the node to the peers channel. This allows the peers to be captured
-			// across all connections and written to the nodes.json file.
-			opts.Peers <- p.Node()
+			// Send the connection object to the conns manager for RPC broadcasting
+			opts.Conns.Add(c)
+			defer opts.Conns.Remove(c)
+
 			ctx := opts.Context
 
 			// Handle all the of the messages here.
@@ -204,6 +205,11 @@ func (c *conn) statusExchange(packet *eth.StatusPacket) error {
 	}
 
 	return nil
+}
+
+// AddCount increments the prometheus counter for this connection with the given message name and count.
+func (c *conn) AddCount(messageName string, count float64) {
+	c.counter.WithLabelValues(messageName, c.node.URLv4(), c.peer.Fullname()).Add(count)
 }
 
 func (c *conn) readStatus(packet *eth.StatusPacket) error {
@@ -314,7 +320,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 	tfs := time.Now()
 
-	c.counter.WithLabelValues(packet.Name(), c.node.URLv4(), c.name).Add(float64(len(packet)))
+	c.AddCount(packet.Name(), float64(len(packet)))
 
 	// Collect unique hashes for database write.
 	uniqueHashes := make([]common.Hash, 0, len(packet))
@@ -383,7 +389,7 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 
 	tfs := time.Now()
 
-	c.counter.WithLabelValues(txs.Name(), c.node.URLv4(), c.name).Add(float64(len(txs)))
+	c.AddCount(txs.Name(), float64(len(txs)))
 
 	c.db.WriteTransactions(ctx, c.node, txs, tfs)
 
@@ -396,7 +402,7 @@ func (c *conn) handleGetBlockHeaders(msg ethp2p.Msg) error {
 		return err
 	}
 
-	c.counter.WithLabelValues(request.Name(), c.node.URLv4(), c.name).Inc()
+	c.AddCount(request.Name(), 1)
 
 	return ethp2p.Send(
 		c.rw,
@@ -414,7 +420,7 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 	tfs := time.Now()
 
 	headers := packet.BlockHeadersRequest
-	c.counter.WithLabelValues(packet.Name(), c.node.URLv4(), c.name).Add(float64(len(headers)))
+	c.AddCount(packet.Name(), float64(len(headers)))
 
 	for _, header := range headers {
 		if err := c.getParentBlock(ctx, header); err != nil {
@@ -432,7 +438,7 @@ func (c *conn) handleGetBlockBodies(msg ethp2p.Msg) error {
 		return err
 	}
 
-	c.counter.WithLabelValues(request.Name(), c.node.URLv4(), c.name).Add(float64(len(request.GetBlockBodiesRequest)))
+	c.AddCount(request.Name(), float64(len(request.GetBlockBodiesRequest)))
 
 	return ethp2p.Send(
 		c.rw,
@@ -453,7 +459,7 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	c.counter.WithLabelValues(packet.Name(), c.node.URLv4(), c.name).Add(float64(len(packet.BlockBodiesResponse)))
+	c.AddCount(packet.Name(), float64(len(packet.BlockBodiesResponse)))
 
 	var hash *common.Hash
 	for e := c.requests.Front(); e != nil; e = e.Next() {
@@ -484,7 +490,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 
 	tfs := time.Now()
 
-	c.counter.WithLabelValues(block.Name(), c.node.URLv4(), c.name).Inc()
+	c.AddCount(block.Name(), 1)
 
 	// Set the head block if newer.
 	c.headMutex.Lock()
@@ -514,7 +520,7 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 		return err
 	}
 
-	c.counter.WithLabelValues(request.Name(), c.node.URLv4(), c.name).Add(float64(len(request.GetPooledTransactionsRequest)))
+	c.AddCount(request.Name(), float64(len(request.GetPooledTransactionsRequest)))
 
 	return ethp2p.Send(
 		c.rw,
@@ -538,7 +544,7 @@ func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) er
 		return errors.New("protocol version not found")
 	}
 
-	c.counter.WithLabelValues(name, c.node.URLv4(), c.name).Add(float64(len(hashes)))
+	c.AddCount(name, float64(len(hashes)))
 
 	if !c.db.ShouldWriteTransactions() || !c.db.ShouldWriteTransactionEvents() {
 		return nil
@@ -559,7 +565,7 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 
 	tfs := time.Now()
 
-	c.counter.WithLabelValues(packet.Name(), c.node.URLv4(), c.name).Add(float64(len(packet.PooledTransactionsResponse)))
+	c.AddCount(packet.Name(), float64(len(packet.PooledTransactionsResponse)))
 
 	c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse, tfs)
 

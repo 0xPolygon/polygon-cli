@@ -151,13 +151,16 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 }
 
 func init() {
-	PingCmd.Flags().StringVarP(&inputPingParams.OutputFile, "output", "o", "", "Write ping results to output file (default stdout)")
-	PingCmd.Flags().IntVarP(&inputPingParams.Threads, "parallel", "p", 16, "How many parallel pings to attempt")
-	PingCmd.Flags().BoolVarP(&inputPingParams.Listen, "listen", "l", true, "Keep the connection open and listen to the peer(s)")
-	PingCmd.Flags().BoolVarP(&inputPingParams.EnableWit, "wit", "w", false, "Whether to enable the wit/1 capability")
-	PingCmd.Flags().IntVarP(&inputPingParams.Port, "port", "P", 30303, "Port for discovery protocol")
-	PingCmd.Flags().IPVarP(&inputPingParams.Addr, "addr", "a", net.ParseIP("127.0.0.1"), "Address to bind discovery listener")
-	PingCmd.Flags().StringVarP(&inputPingParams.KeyFile, "key-file", "k", "", "Private key file (cannot be set with --key)")
-	PingCmd.Flags().StringVar(&inputPingParams.PrivateKey, "key", "", "Hex-encoded private key (cannot be set with --key-file)")
+	f := PingCmd.Flags()
+	f.StringVarP(&inputPingParams.OutputFile, "output", "o", "", "write ping results to output file (default stdout)")
+	f.IntVarP(&inputPingParams.Threads, "parallel", "p", 16, "how many parallel pings to attempt")
+	f.BoolVarP(&inputPingParams.Listen, "listen", "l", true,
+		`keep connection open and listen to peer. This only works if first
+argument is an enode/enr, not a nodes file`)
+	f.BoolVarP(&inputPingParams.EnableWit, "wit", "w", false, "enable wit/1 capability")
+	f.IntVarP(&inputPingParams.Port, "port", "P", 30303, "port for discovery protocol")
+	f.IPVarP(&inputPingParams.Addr, "addr", "a", net.ParseIP("127.0.0.1"), "address to bind discovery listener")
+	f.StringVarP(&inputPingParams.KeyFile, "key-file", "k", "", "private key file (cannot be set with --key)")
+	f.StringVar(&inputPingParams.PrivateKey, "key", "", "hex-encoded private key (cannot be set with --key-file)")
 	PingCmd.MarkFlagsMutuallyExclusive("key-file", "key")
 }

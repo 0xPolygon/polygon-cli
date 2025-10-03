@@ -3,12 +3,10 @@ package sensor
 import (
 	"context"
 	"crypto/ecdsa"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/signal"
-	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -18,7 +16,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/ethereum/go-ethereum/crypto"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -27,7 +25,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	dto "github.com/prometheus/client_model/go"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
@@ -41,6 +38,7 @@ type (
 		Bootnodes                    string
 		NetworkID                    uint64
 		NodesFile                    string
+		StaticNodesFile              string
 		TrustedNodesFile             string
 		ProjectID                    string
 		DatabaseID                   string
@@ -57,6 +55,7 @@ type (
 		ShouldRunPrometheus          bool
 		PrometheusPort               uint
 		APIPort                      uint
+		RPCPort                      uint
 		KeyFile                      string
 		PrivateKey                   string
 		Port                         int
@@ -66,13 +65,13 @@ type (
 		ForkID                       []byte
 		DialRatio                    int
 		NAT                          string
-		QuickStart                   bool
 		TTL                          time.Duration
 		DiscoveryDNS                 string
 		Database                     string
+		NoDiscovery                  bool
 
 		bootnodes    []*enode.Node
-		nodes        []*enode.Node
+		staticNodes  []*enode.Node
 		trustedNodes []*enode.Node
 		privateKey   *ecdsa.PrivateKey
 		nat          nat.Interface
@@ -92,9 +91,16 @@ var SensorCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputSensorParams.NodesFile = args[0]
-		inputSensorParams.nodes, err = p2p.ReadNodeSet(inputSensorParams.NodesFile)
+		_, err = p2p.ReadNodeSet(inputSensorParams.NodesFile)
 		if err != nil {
 			log.Warn().Err(err).Msgf("Creating nodes file %v because it does not exist", inputSensorParams.NodesFile)
+		}
+
+		if len(inputSensorParams.StaticNodesFile) > 0 {
+			inputSensorParams.staticNodes, err = p2p.ReadNodeSet(inputSensorParams.StaticNodesFile)
+			if err != nil {
+				log.Warn().Err(err).Msgf("Static nodes file %v not found", inputSensorParams.StaticNodesFile)
+			}
 		}
 
 		if len(inputSensorParams.TrustedNodesFile) > 0 {
@@ -115,17 +121,33 @@ var SensorCmd = &cobra.Command{
 			return errors.New("network ID must be greater than zero")
 		}
 
-		if inputSensorParams.ShouldRunPprof {
-			go handlePprof()
-		}
-
-		if inputSensorParams.ShouldRunPrometheus {
-			go handlePrometheus()
-		}
-
-		inputSensorParams.privateKey, err = p2p.ParsePrivateKey(inputSensorParams.KeyFile, inputSensorParams.PrivateKey)
+		inputSensorParams.privateKey, err = crypto.GenerateKey()
 		if err != nil {
 			return err
+		}
+
+		if len(inputSensorParams.KeyFile) > 0 {
+			var privateKey *ecdsa.PrivateKey
+			privateKey, err = crypto.LoadECDSA(inputSensorParams.KeyFile)
+
+			if err != nil {
+				log.Warn().Err(err).Msg("Key file was not found, generating a new key file")
+
+				err = crypto.SaveECDSA(inputSensorParams.KeyFile, inputSensorParams.privateKey)
+				if err != nil {
+					return err
+				}
+			} else {
+				inputSensorParams.privateKey = privateKey
+			}
+		}
+
+		if len(inputSensorParams.PrivateKey) > 0 {
+			inputSensorParams.privateKey, err = crypto.HexToECDSA(inputSensorParams.PrivateKey)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to parse PrivateKey")
+				return err
+			}
 		}
 
 		inputSensorParams.nat, err = nat.Parse(inputSensorParams.NAT)
@@ -137,37 +159,9 @@ var SensorCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var db database.Database
-		switch inputSensorParams.Database {
-		case "datastore":
-			db = database.NewDatastore(cmd.Context(), database.DatastoreOptions{
-				ProjectID:                    inputSensorParams.ProjectID,
-				DatabaseID:                   inputSensorParams.DatabaseID,
-				SensorID:                     inputSensorParams.SensorID,
-				ChainID:                      inputSensorParams.NetworkID,
-				MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
-				ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
-				ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
-				ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
-				ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
-				ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
-				TTL:                          inputSensorParams.TTL,
-			})
-		case "json":
-			db = database.NewJSONDatabase(database.JSONDatabaseOptions{
-				SensorID:                     inputSensorParams.SensorID,
-				ChainID:                      inputSensorParams.NetworkID,
-				MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
-				ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
-				ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
-				ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
-				ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
-				ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
-			})
-		case "none":
-			db = database.NoDatabase()
-		default:
-			return fmt.Errorf("invalid database option: %s", inputSensorParams.Database)
+		db, err := newDatabase(cmd.Context())
+		if err != nil {
+			return err
 		}
 
 		// Fetch the latest block which will be used later when crafting the status
@@ -195,6 +189,9 @@ var SensorCmd = &cobra.Command{
 			Help:      "The number and type of messages the sensor has received",
 		}, []string{"message", "url", "name"})
 
+		// Create peer connection manager for broadcasting transactions
+		conns := p2p.NewConns()
+
 		opts := p2p.EthProtocolOptions{
 			Context:     cmd.Context(),
 			Database:    db,
@@ -202,7 +199,7 @@ var SensorCmd = &cobra.Command{
 			RPC:         inputSensorParams.RPC,
 			SensorID:    inputSensorParams.SensorID,
 			NetworkID:   inputSensorParams.NetworkID,
-			Peers:       make(chan *enode.Node),
+			Conns:       conns,
 			Head:        &head,
 			HeadMutex:   &sync.RWMutex{},
 			ForkID:      forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
@@ -212,23 +209,20 @@ var SensorCmd = &cobra.Command{
 		config := ethp2p.Config{
 			PrivateKey:     inputSensorParams.privateKey,
 			BootstrapNodes: inputSensorParams.bootnodes,
+			StaticNodes:    inputSensorParams.staticNodes,
 			TrustedNodes:   inputSensorParams.trustedNodes,
 			MaxPeers:       inputSensorParams.MaxPeers,
 			ListenAddr:     fmt.Sprintf(":%d", inputSensorParams.Port),
 			DiscAddr:       fmt.Sprintf(":%d", inputSensorParams.DiscoveryPort),
 			DialRatio:      inputSensorParams.DialRatio,
 			NAT:            inputSensorParams.nat,
-			DiscoveryV4:    true,
-			DiscoveryV5:    true,
+			DiscoveryV4:    !inputSensorParams.NoDiscovery,
+			DiscoveryV5:    !inputSensorParams.NoDiscovery,
 			Protocols: []ethp2p.Protocol{
 				p2p.NewEthProtocol(66, opts),
 				p2p.NewEthProtocol(67, opts),
 				p2p.NewEthProtocol(68, opts),
 			},
-		}
-
-		if inputSensorParams.QuickStart {
-			config.StaticNodes = inputSensorParams.nodes
 		}
 
 		server := ethp2p.Server{Config: config}
@@ -255,19 +249,18 @@ var SensorCmd = &cobra.Command{
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-		// peers represents the peer map that is used to write to the nodes.json
-		// file. This is helpful when restarting the node with the --quickstart flag
-		// enabled. This map does not represent the peers that are currently
-		// connected to the sensor. To do that use `server.Peers()` instead.
-		peers := make(map[enode.ID]string)
-		var peersMutex sync.Mutex
+		if inputSensorParams.ShouldRunPprof {
+			go handlePprof()
+		}
 
-		for _, node := range inputSensorParams.nodes {
-			// Map node URLs to node IDs to avoid duplicates.
-			peers[node.ID()] = node.URLv4()
+		if inputSensorParams.ShouldRunPrometheus {
+			go handlePrometheus()
 		}
 
 		go handleAPI(&server, msgCounter)
+
+		// Start the RPC server for receiving transactions
+		go handleRPC(conns, inputSensorParams.NetworkID)
 
 		// Run DNS discovery immediately at startup.
 		go handleDNSDiscovery(&server)
@@ -276,22 +269,20 @@ var SensorCmd = &cobra.Command{
 			select {
 			case <-ticker.C:
 				peersGauge.Set(float64(server.PeerCount()))
-				if err := removePeerMessages(msgCounter, server.Peers()); err != nil {
+				db.WritePeers(cmd.Context(), server.Peers(), time.Now())
+
+				urls := []string{}
+				for _, peer := range server.Peers() {
+					urls = append(urls, peer.Node().URLv4())
+				}
+
+				if err := removePeerMessages(msgCounter, urls); err != nil {
 					log.Error().Err(err).Msg("Failed to clean up peer messages")
 				}
-				db.WritePeers(context.Background(), server.Peers(), time.Now())
-			case peer := <-opts.Peers:
-				// Lock the peers map before modifying it.
-				peersMutex.Lock()
-				// Update the peer list and the nodes file.
-				if _, ok := peers[peer.ID()]; !ok {
-					peers[peer.ID()] = peer.URLv4()
 
-					if err := p2p.WritePeers(inputSensorParams.NodesFile, peers); err != nil {
-						log.Error().Err(err).Msg("Failed to write nodes to file")
-					}
+				if err := p2p.WritePeers(inputSensorParams.NodesFile, urls); err != nil {
+					log.Error().Err(err).Msg("Failed to write nodes to file")
 				}
-				peersMutex.Unlock()
 			case <-hourlyTicker.C:
 				go handleDNSDiscovery(&server)
 			case <-signals:
@@ -329,59 +320,6 @@ func handlePrometheus() {
 	addr := fmt.Sprintf(":%d", inputSensorParams.PrometheusPort)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Error().Err(err).Msg("Failed to start Prometheus handler")
-	}
-}
-
-// handleAPI sets up the API for interacting with the sensor. The `/peers`
-// endpoint returns a list of all peers connected to the sensor, including the
-// types and counts of eth packets sent by each peer.
-func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec) {
-	http.HandleFunc("/peers", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-
-		peers := make(map[string]p2p.MessageCount)
-		for _, peer := range server.Peers() {
-			url := peer.Node().URLv4()
-			peers[url] = getPeerMessages(url, counter)
-		}
-
-		err := json.NewEncoder(w).Encode(peers)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to encode peers")
-		}
-	})
-
-	http.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		type NodeInfo struct {
-			ENR string `json:"enr"`
-			URL string `json:"enode"`
-		}
-
-		info := NodeInfo{
-			ENR: server.NodeInfo().ENR,
-			URL: server.Self().URLv4(),
-		}
-
-		err := json.NewEncoder(w).Encode(info)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to encode node info")
-		}
-	})
-
-	addr := fmt.Sprintf(":%d", inputSensorParams.APIPort)
-	if err := http.ListenAndServe(addr, nil); err != nil {
-		log.Error().Err(err).Msg("Failed to start API handler")
 	}
 }
 
@@ -424,81 +362,6 @@ func handleDNSDiscovery(server *ethp2p.Server) {
 	log.Info().Msg("Finished adding DNS discovery peers")
 }
 
-// getPeerMessages retrieves the count of various types of eth packets sent by a
-// peer.
-func getPeerMessages(url string, counter *prometheus.CounterVec) p2p.MessageCount {
-	return p2p.MessageCount{
-		BlockHeaders:        getCounterValue(new(eth.BlockHeadersPacket), url, counter),
-		BlockBodies:         getCounterValue(new(eth.BlockBodiesPacket), url, counter),
-		Blocks:              getCounterValue(new(eth.NewBlockPacket), url, counter),
-		BlockHashes:         getCounterValue(new(eth.NewBlockHashesPacket), url, counter),
-		BlockHeaderRequests: getCounterValue(new(eth.GetBlockHeadersPacket), url, counter),
-		BlockBodiesRequests: getCounterValue(new(eth.GetBlockBodiesPacket), url, counter),
-		Transactions: getCounterValue(new(eth.TransactionsPacket), url, counter) +
-			getCounterValue(new(eth.PooledTransactionsPacket), url, counter),
-		TransactionHashes: getCounterValue(new(eth.NewPooledTransactionHashesPacket), url, counter) +
-			getCounterValue(new(eth.NewPooledTransactionHashesPacket), url, counter),
-		TransactionRequests: getCounterValue(new(eth.GetPooledTransactionsRequest), url, counter),
-	}
-}
-
-// getCounterValue retrieves the count of packets for a specific type from the
-// Prometheus counter.
-func getCounterValue(packet eth.Packet, url string, counter *prometheus.CounterVec) int64 {
-	metric := &dto.Metric{}
-
-	err := counter.WithLabelValues(packet.Name(), url).Write(metric)
-	if err != nil {
-		log.Error().Err(err).Send()
-		return 0
-	}
-
-	return int64(metric.GetCounter().GetValue())
-}
-
-// removePeerMessages removes all the counters of peers that disconnected from
-// the sensor. This prevents the metrics list from infinitely growing.
-func removePeerMessages(counter *prometheus.CounterVec, peers []*ethp2p.Peer) error {
-	urls := []string{}
-	for _, peer := range peers {
-		urls = append(urls, peer.Node().URLv4())
-	}
-
-	families, err := prometheus.DefaultGatherer.Gather()
-	if err != nil {
-		return err
-	}
-
-	var family *dto.MetricFamily
-	for _, f := range families {
-		if f.GetName() == "sensor_messages" {
-			family = f
-			break
-		}
-	}
-
-	// During DNS-discovery or when the server is taking a while to discover
-	// peers and has yet to receive a message, the sensor_messages prometheus
-	// metric may not exist yet.
-	if family == nil {
-		log.Trace().Msg("Could not find sensor_messages metric family")
-		return nil
-	}
-
-	for _, metric := range family.GetMetric() {
-		for _, label := range metric.GetLabel() {
-			url := label.GetValue()
-			if label.GetName() != "url" || slices.Contains(urls, url) {
-				continue
-			}
-
-			counter.DeletePartialMatch(prometheus.Labels{"url": url})
-		}
-	}
-
-	return nil
-}
-
 // getLatestBlock will get the latest block from an RPC provider.
 func getLatestBlock(url string) (*rpctypes.RawBlockResponse, error) {
 	client, err := rpc.Dial(url)
@@ -516,59 +379,93 @@ func getLatestBlock(url string) (*rpctypes.RawBlockResponse, error) {
 	return &block, nil
 }
 
+// newDatabase creates and configures the appropriate database backend based
+// on the sensor parameters.
+func newDatabase(ctx context.Context) (database.Database, error) {
+	switch inputSensorParams.Database {
+	case "datastore":
+		return database.NewDatastore(ctx, database.DatastoreOptions{
+			ProjectID:                    inputSensorParams.ProjectID,
+			DatabaseID:                   inputSensorParams.DatabaseID,
+			SensorID:                     inputSensorParams.SensorID,
+			ChainID:                      inputSensorParams.NetworkID,
+			MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
+			ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
+			ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
+			ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
+			ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
+			ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
+			TTL:                          inputSensorParams.TTL,
+		}), nil
+	case "json":
+		return database.NewJSONDatabase(database.JSONDatabaseOptions{
+			SensorID:                     inputSensorParams.SensorID,
+			ChainID:                      inputSensorParams.NetworkID,
+			MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
+			ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
+			ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
+			ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
+			ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
+			ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
+		}), nil
+	case "none":
+		return database.NoDatabase(), nil
+	default:
+		return nil, fmt.Errorf("invalid database option: %s", inputSensorParams.Database)
+	}
+}
+
 func init() {
-	SensorCmd.Flags().StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", "Comma separated nodes used for bootstrapping")
-	SensorCmd.Flags().Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "Filter discovered nodes by this network ID")
+	f := SensorCmd.Flags()
+	f.StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", "comma separated nodes used for bootstrapping")
+	f.Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "filter discovered nodes by this network ID")
 	if err := SensorCmd.MarkFlagRequired("network-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark network-id as required persistent flag")
 	}
-	SensorCmd.Flags().StringVarP(&inputSensorParams.ProjectID, "project-id", "p", "", "GCP project ID")
-	SensorCmd.Flags().StringVarP(&inputSensorParams.DatabaseID, "database-id", "d", "", "Datastore database ID")
-	SensorCmd.Flags().StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "Sensor ID when writing block/tx events")
+	f.StringVarP(&inputSensorParams.ProjectID, "project-id", "p", "", "GCP project ID")
+	f.StringVarP(&inputSensorParams.DatabaseID, "database-id", "d", "", "datastore database ID")
+	f.StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "sensor ID when writing block/tx events")
 	if err := SensorCmd.MarkFlagRequired("sensor-id"); err != nil {
 		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")
 	}
-	SensorCmd.Flags().IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 2000, "Maximum number of peers to connect to")
-	SensorCmd.Flags().IntVarP(&inputSensorParams.MaxDatabaseConcurrency, "max-db-concurrency", "D", 10000,
-		`Maximum number of concurrent database operations to perform. Increasing this
+	f.IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 2000, "maximum number of peers to connect to")
+	f.IntVarP(&inputSensorParams.MaxDatabaseConcurrency, "max-db-concurrency", "D", 10000,
+		`maximum number of concurrent database operations to perform. Increasing this
 will result in less chance of missing data (i.e. broken pipes) but can
-significantly increase memory usage.`)
-	SensorCmd.Flags().BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "Whether to write blocks to the database")
-	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "Whether to write block events to the database")
-	SensorCmd.Flags().BoolVarP(&inputSensorParams.ShouldWriteTransactions, "write-txs", "t", true,
-		`Whether to write transactions to the database. This option could significantly
-increase CPU and memory usage.`)
-	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
-		`Whether to write transaction events to the database. This option could
-significantly increase CPU and memory usage.`)
-	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldWritePeers, "write-peers", true, "Whether to write peers to the database")
-	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "Whether to run pprof")
-	SensorCmd.Flags().UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "Port pprof runs on")
-	SensorCmd.Flags().BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "Whether to run Prometheus")
-	SensorCmd.Flags().UintVar(&inputSensorParams.PrometheusPort, "prom-port", 2112, "Port Prometheus runs on")
-	SensorCmd.Flags().UintVar(&inputSensorParams.APIPort, "api-port", 8080, "Port the API server will listen on")
-	SensorCmd.Flags().StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "Private key file (cannot be set with --key)")
-	SensorCmd.Flags().StringVar(&inputSensorParams.PrivateKey, "key", "", "Hex-encoded private key (cannot be set with --key-file)")
+significantly increase memory usage`)
+	f.BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "write blocks to database")
+	f.BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "write block events to database")
+	f.BoolVarP(&inputSensorParams.ShouldWriteTransactions, "write-txs", "t", true,
+		`write transactions to database. This option can significantly increase CPU and memory usage`)
+	f.BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
+		`write transaction events to database. This option can significantly increase CPU and memory usage`)
+	f.BoolVar(&inputSensorParams.ShouldWritePeers, "write-peers", true, "write peers to database")
+	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
+	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
+	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")
+	f.UintVar(&inputSensorParams.PrometheusPort, "prom-port", 2112, "port Prometheus runs on")
+	f.UintVar(&inputSensorParams.APIPort, "api-port", 8080, "port API server will listen on")
+	f.UintVar(&inputSensorParams.RPCPort, "rpc-port", 8545, "port for JSON-RPC server to receive transactions")
+	f.StringVarP(&inputSensorParams.KeyFile, "key-file", "k", "", "private key file (cannot be set with --key)")
+	f.StringVar(&inputSensorParams.PrivateKey, "key", "", "hex-encoded private key (cannot be set with --key-file)")
 	SensorCmd.MarkFlagsMutuallyExclusive("key-file", "key")
-	SensorCmd.Flags().IntVar(&inputSensorParams.Port, "port", 30303, "TCP network listening port")
-	SensorCmd.Flags().IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
-	SensorCmd.Flags().StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "RPC endpoint used to fetch the latest block")
-	SensorCmd.Flags().StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "The genesis block hash")
-	SensorCmd.Flags().BytesHexVar(&inputSensorParams.ForkID, "fork-id", []byte{240, 151, 188, 19}, "The hex encoded fork id (omit the 0x)")
-	SensorCmd.Flags().IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
-		`Ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
-connections to be dialed. Setting this to 0 defaults it to 3.`)
-	SensorCmd.Flags().StringVar(&inputSensorParams.NAT, "nat", "any", "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")
-	SensorCmd.Flags().BoolVar(&inputSensorParams.QuickStart, "quick-start", false,
-		`Whether to load the nodes.json as static nodes to quickly start the network.
-This produces faster development cycles but can prevent the sensor from being to
-connect to new peers if the nodes.json file is large.`)
-	SensorCmd.Flags().StringVar(&inputSensorParams.TrustedNodesFile, "trusted-nodes", "", "Trusted nodes file")
-	SensorCmd.Flags().DurationVar(&inputSensorParams.TTL, "ttl", 14*24*time.Hour, "Time to live")
-	SensorCmd.Flags().StringVar(&inputSensorParams.DiscoveryDNS, "discovery-dns", "", "DNS discovery ENR tree url")
-	SensorCmd.Flags().StringVar(&inputSensorParams.Database, "database", "none",
-		`Which database to persist data to, options are:
+	f.IntVar(&inputSensorParams.Port, "port", 30303, "TCP network listening port")
+	f.IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
+	f.StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "RPC endpoint used to fetch latest block")
+	f.StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "genesis block hash")
+	f.BytesHexVar(&inputSensorParams.ForkID, "fork-id", []byte{240, 151, 188, 19}, "hex encoded fork ID (omit 0x)")
+	f.IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
+		`ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
+connections to be dialed. Setting this to 0 defaults it to 3`)
+	f.StringVar(&inputSensorParams.NAT, "nat", "any", "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")
+	f.StringVar(&inputSensorParams.StaticNodesFile, "static-nodes", "", "static nodes file")
+	f.StringVar(&inputSensorParams.TrustedNodesFile, "trusted-nodes", "", "trusted nodes file")
+	f.DurationVar(&inputSensorParams.TTL, "ttl", 14*24*time.Hour, "time to live")
+	f.StringVar(&inputSensorParams.DiscoveryDNS, "discovery-dns", "", "DNS discovery ENR tree URL")
+	f.StringVar(&inputSensorParams.Database, "database", "none",
+		`which database to persist data to, options are:
   - datastore (GCP Datastore)
   - json (output to stdout)
   - none (no persistence)`)
+	f.BoolVar(&inputSensorParams.NoDiscovery, "no-discovery", false, "disable P2P peer discovery")
 }

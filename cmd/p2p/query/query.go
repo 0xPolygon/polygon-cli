@@ -124,14 +124,15 @@ func print(headers eth.BlockHeadersRequest) {
 }
 
 func init() {
-	QueryCmd.Flags().Uint64VarP(&inputQueryParams.StartBlock, "start-block", "s", 0, "Block number to start querying from")
-	QueryCmd.Flags().Uint64VarP(&inputQueryParams.Amount, "amount", "a", 1, "Amount of blocks to query")
-	QueryCmd.Flags().IntVarP(&inputQueryParams.Port, "port", "P", 30303, "Port for discovery protocol")
-	QueryCmd.Flags().IPVar(&inputQueryParams.Addr, "addr", net.ParseIP("127.0.0.1"), "Address to bind discovery listener")
-	QueryCmd.Flags().StringVarP(&inputQueryParams.KeyFile, "key-file", "k", "", "Private key file (cannot be set with --key)")
-	QueryCmd.Flags().StringVar(&inputQueryParams.PrivateKey, "key", "", "Hex-encoded private key (cannot be set with --key-file)")
+	f := QueryCmd.Flags()
+	f.Uint64VarP(&inputQueryParams.StartBlock, "start-block", "s", 0, "block number to start querying from")
+	f.Uint64VarP(&inputQueryParams.Amount, "amount", "a", 1, "amount of blocks to query")
+	f.IntVarP(&inputQueryParams.Port, "port", "P", 30303, "port for discovery protocol")
+	f.IPVar(&inputQueryParams.Addr, "addr", net.ParseIP("127.0.0.1"), "address to bind discovery listener")
+	f.StringVarP(&inputQueryParams.KeyFile, "key-file", "k", "", "private key file (cannot be set with --key)")
+	f.StringVar(&inputQueryParams.PrivateKey, "key", "", "hex-encoded private key (cannot be set with --key-file)")
 	QueryCmd.MarkFlagsMutuallyExclusive("key-file", "key")
 	if err := QueryCmd.MarkFlagRequired("start-block"); err != nil {
-		log.Error().Err(err).Msg("Failed to mark start-block as required persistent flag")
+		log.Error().Err(err).Msg("Failed to mark start-block as required flag")
 	}
 }

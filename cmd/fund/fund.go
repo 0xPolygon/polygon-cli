@@ -52,8 +52,8 @@ func runFunding(ctx context.Context) error {
 
 	var addresses []common.Address
 
-	if len(*params.KeyFile) > 0 { // get addresses from key-file
-		addresses, err = getAddressesFromKeyFile(*params.KeyFile)
+	if len(params.KeyFile) > 0 { // get addresses from key-file
+		addresses, err = getAddressesFromKeyFile(params.KeyFile)
 	} else { // get addresses from private key
 		addresses, err = getAddressesFromPrivateKey(ctx, c)
 	}
@@ -111,18 +111,18 @@ func getAddressesFromPrivateKey(ctx context.Context, c *ethclient.Client) ([]com
 	// Derive or generate a set of wallets.
 	var addresses []common.Address
 	var err error
-	if params.WalletAddresses != nil && *params.WalletAddresses != nil {
+	if len(params.WalletAddresses) > 0 {
 		log.Info().Msg("Using addresses provided by the user")
-		addresses = make([]common.Address, len(*params.WalletAddresses))
-		for i, address := range *params.WalletAddresses {
+		addresses = make([]common.Address, len(params.WalletAddresses))
+		for i, address := range params.WalletAddresses {
 			addresses[i] = common.HexToAddress(address)
 		}
-	} else if *params.UseHDDerivation {
+	} else if params.UseHDDerivation {
 		log.Info().Msg("Deriving wallets from the default mnemonic")
-		addresses, err = deriveHDWallets(int(*params.WalletsNumber))
+		addresses, err = deriveHDWallets(int(params.WalletsNumber))
 	} else {
 		log.Info().Msg("Generating random wallets")
-		addresses, err = generateWallets(int(*params.WalletsNumber))
+		addresses, err = generateWallets(int(params.WalletsNumber))
 	}
 	if err != nil {
 		return nil, err
@@ -132,7 +132,7 @@ func getAddressesFromPrivateKey(ctx context.Context, c *ethclient.Client) ([]com
 
 // dialRpc dials the Ethereum RPC server and return an Ethereum client.
 func dialRpc(ctx context.Context) (*ethclient.Client, error) {
-	rpc, err := rpc.DialContext(ctx, *params.RpcUrl)
+	rpc, err := rpc.DialContext(ctx, params.RpcUrl)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to dial")
 		return nil, err
@@ -146,7 +146,7 @@ func dialRpc(ctx context.Context) (*ethclient.Client, error) {
 // Initialize  parameters.
 func initializeParams(ctx context.Context, c *ethclient.Client) (*ecdsa.PrivateKey, *big.Int, error) {
 	// Parse the private key.
-	trimmedHexPrivateKey := strings.TrimPrefix(*params.PrivateKey, "0x")
+	trimmedHexPrivateKey := strings.TrimPrefix(params.PrivateKey, "0x")
 	privateKey, err := crypto.HexToECDSA(trimmedHexPrivateKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to process the private key")
@@ -170,7 +170,7 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 	// Deploy the contract if no pre-deployed address flag is provided.
 	var contractAddress common.Address
 	var err error
-	if *params.FunderAddress == "" {
+	if params.FunderAddress == "" {
 		// Deploy the Funder contract.
 		// Note: `fundingAmountInWei` represents the amount the Funder contract will send to each newly generated wallets.
 		fundingAmountInWei := params.FundingAmountInWei
@@ -191,7 +191,7 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 		}
 	} else {
 		// Use the pre-deployed address.
-		contractAddress = common.HexToAddress(*params.FunderAddress)
+		contractAddress = common.HexToAddress(params.FunderAddress)
 	}
 
 	// Instantiate the contract.
@@ -245,11 +245,11 @@ func generateWallets(n int) ([]common.Address, error) {
 
 	// Save private and public keys to a file.
 	go func() {
-		if err := saveToFile(*params.OutputFile, privateKeys); err != nil {
+		if err := saveToFile(params.OutputFile, privateKeys); err != nil {
 			log.Error().Err(err).Msg("Unable to save keys to file")
 			panic(err)
 		}
-		log.Info().Str("fileName", *params.OutputFile).Msg("Wallets' address(es) and private key(s) saved to file")
+		log.Info().Str("fileName", params.OutputFile).Msg("Wallets' address(es) and private key(s) saved to file")
 	}()
 
 	return addresses, nil

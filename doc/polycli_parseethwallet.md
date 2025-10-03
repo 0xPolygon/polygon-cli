@@ -64,26 +64,26 @@ polycli parseethwallet --file /tmp/keystore/UTC--2023-05-09T22-48-57.582848385Z-
 ## Flags
 
 ```bash
-      --file string       Provide a file with the key information 
+      --file string       file with key information
   -h, --help              help for parseethwallet
-      --hexkey string     An optional hexkey that would be use to generate a geth style key
-      --keystore string   The directory where keys would be stored when importing a raw hex (default "/tmp/keystore")
-      --password string   An optional password use to unlock the key
+      --hexkey string     optional hexkey to use for generating geth style key
+      --keystore string   directory where keys will be stored when importing raw hex (default "/tmp/keystore")
+      --password string   optional password to unlock key
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
       --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --pretty-logs     output logs in pretty format instead of JSON (default true)
+  -v, --verbosity int   0 - silent
+                        100 panic
+                        200 fatal
+                        300 error
+                        400 warning
+                        500 info
+                        600 debug
+                        700 trace (default 500)
 ```
 
 ## See also

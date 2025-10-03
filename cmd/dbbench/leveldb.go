@@ -17,32 +17,32 @@ type (
 )
 
 func NewWrappedLevelDB() (*LevelDBWrapper, error) {
-	db, err := leveldb.OpenFile(*dbPath, &opt.Options{
+	db, err := leveldb.OpenFile(dbPath, &opt.Options{
 		Filter:                 filter.NewBloomFilter(10),
 		DisableSeeksCompaction: true,
-		OpenFilesCacheCapacity: *openFilesCacheCapacity,
-		BlockCacheCapacity:     *cacheSize / 2 * opt.MiB,
-		WriteBuffer:            *cacheSize / 4 * opt.MiB,
+		OpenFilesCacheCapacity: openFilesCacheCapacity,
+		BlockCacheCapacity:     cacheSize / 2 * opt.MiB,
+		WriteBuffer:            cacheSize / 4 * opt.MiB,
 		// if we've disabled writes, or we're doing a full scan, we should open the database in read only mode
-		ReadOnly: *readOnly || *fullScan,
+		ReadOnly: readOnly || fullScan,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	wo := &opt.WriteOptions{
-		NoWriteMerge: *noWriteMerge,
-		Sync:         *syncWrites,
+		NoWriteMerge: noWriteMerge,
+		Sync:         syncWrites,
 	}
 	ro := &opt.ReadOptions{
-		DontFillCache: *dontFillCache,
+		DontFillCache: dontFillCache,
 	}
-	if *readStrict {
+	if readStrict {
 		ro.Strict = opt.StrictAll
 	} else {
 		ro.Strict = opt.DefaultStrict
 	}
-	if *nilReadOptions {
+	if nilReadOptions {
 		ro = nil
 	}
 	wrapper := new(LevelDBWrapper)
