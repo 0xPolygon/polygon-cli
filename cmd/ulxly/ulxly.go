@@ -2244,13 +2244,6 @@ func prepInputs(cmd *cobra.Command, args []string) (err error) {
 	return nil
 }
 
-func fatalIfError(err error) {
-	if err == nil {
-		return
-	}
-	log.Fatal().Err(err).Msg("Unexpected error occurred")
-}
-
 type FileOptions struct {
 	FileName string
 }
