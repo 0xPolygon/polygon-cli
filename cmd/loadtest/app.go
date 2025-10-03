@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/0xPolygon/polygon-cli/flag"
+	"github.com/0xPolygon/polygon-cli/rpctypes"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -192,11 +192,6 @@ var LoadtestCmd = &cobra.Command{
 
 func checkLoadtestFlags() error {
 	ltp := inputLoadTestParams
-
-	// Check `rpc-url` flag.
-	if ltp.RPCUrl == "" {
-		return fmt.Errorf("RPC URL is empty")
-	}
 
 	if ltp.AdaptiveBackoffFactor <= 0.0 {
 		return fmt.Errorf("the backoff factor needs to be non-zero positive. Given: %f", ltp.AdaptiveBackoffFactor)
