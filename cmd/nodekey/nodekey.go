@@ -72,30 +72,16 @@ var NodekeyCmd = &cobra.Command{
 		inputNodeKeyPrivateKey = *privateKey
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		validProtocols := []string{"devp2p", "libp2p", "seed-libp2p"}
-		ok := slices.Contains(validProtocols, inputNodeKeyProtocol)
-		if !ok {
-			return fmt.Errorf("the protocol %s is not implemented", inputNodeKeyProtocol)
-		}
-
-		if inputNodeKeyProtocol == "devp2p" {
+		switch inputNodeKeyProtocol {
+		case "devp2p":
 			invalidFlags := []string{"seed", "marshal-protobuf"}
-			err := validateNodeKeyFlags(cmd, invalidFlags)
-			if err != nil {
-				return err
-			}
-		}
-		if inputNodeKeyProtocol == "libp2p" {
+			return validateNodeKeyFlags(cmd, invalidFlags)
+		case "libp2p":
 			invalidFlags := []string{"file", "ip", "tcp", "udp", "sign", "seed"}
-			err := validateNodeKeyFlags(cmd, invalidFlags)
-			if err != nil {
-				return err
-			}
-		}
-		if inputNodeKeyProtocol == "seed-libp2p" {
+			return validateNodeKeyFlags(cmd, invalidFlags)
+		case "seed-libp2p":
 			invalidFlags := []string{"file", "ip", "tcp", "udp", "sign"}
-			err := validateNodeKeyFlags(cmd, invalidFlags)
-			if err != nil {
+			if err := validateNodeKeyFlags(cmd, invalidFlags); err != nil {
 				return err
 			}
 			if inputNodeKeyType == "rsa" {
@@ -104,8 +90,10 @@ var NodekeyCmd = &cobra.Command{
 			if inputNodeKeyType == "secp256k1" {
 				return fmt.Errorf("the secp256k1 key type doesn't support manual key seeding")
 			}
+			return nil
+		default:
+			return fmt.Errorf("the protocol %s is not implemented", inputNodeKeyProtocol)
 		}
-		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var nko nodeKeyOut
