@@ -2071,7 +2071,7 @@ var verifyBatchesGetUsage string
 var ULxLyCmd = &cobra.Command{
 	Use:   "ulxly",
 	Short: "Utilities for interacting with the uLxLy bridge.",
-	Long:  "Basic utility commands for interacting with the bridge contracts, bridge services, and generating proofs",
+	Long:  "Basic utility commands for interacting with the bridge contracts, bridge services, and generating proofs.",
 	Args:  cobra.NoArgs,
 }
 var ulxlyBridgeAndClaimCmd = &cobra.Command{
@@ -2427,7 +2427,7 @@ func init() {
 		Use:   "zero-proof",
 		Short: "Create a proof that's filled with zeros.",
 		Long: `Use this command to print a proof response that's filled with the zero
-hashes. This values are very helpful for debugging because it would
+hashes. These values are very helpful for debugging because they would
 tell you how populated the tree is and roughly which leaves and
 siblings are empty. It's also helpful for sanity checking a proof
 response to understand if the hashed value is part of the zero hashes
