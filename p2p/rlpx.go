@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"crypto/ecdsa"
 	"fmt"
 	"math/rand"
 	"net"
@@ -21,28 +22,55 @@ var (
 	timeout = 20 * time.Second
 )
 
+type DialOpts struct {
+	EnableWit  bool
+	Port       int
+	Addr       net.IP
+	PrivateKey *ecdsa.PrivateKey
+}
+
+func NewDialOpts() DialOpts {
+	privateKey, err := crypto.GenerateKey()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to generate private key")
+	}
+
+	return DialOpts{
+		EnableWit:  false,
+		Port:       30303,
+		Addr:       net.ParseIP("127.0.0.1"),
+		PrivateKey: privateKey,
+	}
+}
+
 // Dial attempts to Dial the given node and perform a handshake,
 // returning the created Conn if successful.
-func Dial(n *enode.Node) (*rlpxConn, error) {
+func Dial(n *enode.Node, opts DialOpts) (*rlpxConn, error) {
 	fd, err := net.Dial("tcp", fmt.Sprintf("%v:%d", n.IP(), n.TCP()))
 	if err != nil {
 		return nil, err
+	}
+
+	caps := []p2p.Cap{
+		{Name: "eth", Version: 66},
+		{Name: "eth", Version: 67},
+		{Name: "eth", Version: 68},
+	}
+
+	if opts.EnableWit {
+		caps = append(caps, p2p.Cap{Name: "wit", Version: 1})
 	}
 
 	conn := rlpxConn{
 		Conn:   rlpx.NewConn(fd, n.Pubkey()),
 		node:   n,
 		logger: log.With().Str("peer", n.URLv4()).Logger(),
-		caps: []p2p.Cap{
-			{Name: "eth", Version: 66},
-			{Name: "eth", Version: 67},
-			{Name: "eth", Version: 68},
-		},
+		caps:   caps,
+		ourKey: opts.PrivateKey,
 	}
 
-	if conn.ourKey, err = crypto.GenerateKey(); err != nil {
-		return nil, err
-	}
+	v4 := enode.NewV4(&conn.ourKey.PublicKey, opts.Addr, opts.Port, opts.Port)
+	log.Debug().Str("enode", v4.String()).Send()
 
 	defer func() { _ = conn.SetDeadline(time.Time{}) }()
 	if err = conn.SetDeadline(time.Now().Add(20 * time.Second)); err != nil {
@@ -94,6 +122,7 @@ func (c *rlpxConn) handshake() (*Hello, error) {
 		if msg.Version >= 5 {
 			c.SetSnappy(true)
 		}
+		c.peerCaps = msg.Caps
 		return msg, nil
 	case *Disconnect:
 		return nil, fmt.Errorf("disconnect received: %v", msg)
@@ -215,11 +244,48 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 					if err := c.Write(bodiesRequest); err != nil {
 						c.logger.Error().Err(err).Msg("Failed to write GetBlockBodies request")
 					}
-				}
 
+					if !c.hasCap("wit", 1) {
+						continue
+					}
+
+					req := GetWitnessPacket{
+						RequestId: rand.Uint64(),
+						GetWitnessRequest: &GetWitnessRequest{
+							WitnessPages: []WitnessPageRequest{
+								{
+									Hash: hash.Hash,
+									Page: 0,
+								},
+							},
+						},
+					}
+					if err := c.Write(req); err != nil {
+						log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
+					}
+				}
 			case *NewBlock:
 				atomic.AddInt64(&count.Blocks, 1)
 				c.logger.Trace().Str("hash", msg.Block.Hash().Hex()).Msg("Received NewBlock")
+
+				if !c.hasCap("wit", 1) {
+					continue
+				}
+
+				req := GetWitnessPacket{
+					RequestId: rand.Uint64(),
+					GetWitnessRequest: &GetWitnessRequest{
+						WitnessPages: []WitnessPageRequest{
+							{
+								Hash: msg.Block.Hash(),
+								Page: 0,
+							},
+						},
+					},
+				}
+				if err := c.Write(req); err != nil {
+					log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
+				}
 			case *Transactions:
 				atomic.AddInt64(&count.Transactions, int64(len(*msg)))
 				c.logger.Trace().Msgf("Received %v Transactions", len(*msg))
@@ -257,6 +323,48 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 			case *Disconnects:
 				atomic.AddInt64(&count.Disconnects, 1)
 				c.logger.Debug().Msgf("Disconnect received: %v", msg)
+			case *NewWitnessPacket:
+				atomic.AddInt64(&count.NewWitness, 1)
+				c.logger.Debug().Any("msg", msg).Msg("Received NewWitness")
+			case *NewWitnessHashesPacket:
+				atomic.AddInt64(&count.NewWitnessHashes, 1)
+				c.logger.Debug().Any("msg", msg).Msg("Received NewWitnessHashes")
+			case *GetWitnessPacket:
+				atomic.AddInt64(&count.GetWitnessRequest, 1)
+				c.logger.Debug().Any("msg", msg).Msg("Received GetWitnessRequest")
+			case *WitnessPacketRLPPacket:
+				atomic.AddInt64(&count.Witness, int64(len(msg.WitnessPacketResponse)))
+
+				if !c.hasCap("wit", 1) {
+					continue
+				}
+
+				for _, witness := range msg.WitnessPacketResponse {
+					c.logger.Info().
+						Any("len", len(msg.WitnessPacketResponse)).
+						Any("page", witness.Page).
+						Any("total_pages", witness.TotalPages).
+						Msg("Received Witness")
+
+					if witness.Page+1 >= witness.TotalPages {
+						continue
+					}
+
+					req := GetWitnessPacket{
+						GetWitnessRequest: &GetWitnessRequest{
+							WitnessPages: []WitnessPageRequest{
+								{
+									Hash: witness.Hash,
+									Page: witness.Page + 1,
+								},
+							},
+						},
+						RequestId: uint64(time.Now().Unix()),
+					}
+					if err := c.Write(req); err != nil {
+						log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
+					}
+				}
 			default:
 				c.logger.Info().Interface("msg", msg).Int("code", msg.Code()).Msg("Received message")
 			}

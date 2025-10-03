@@ -3,9 +3,11 @@ package p2p
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -31,7 +33,7 @@ func (e *Error) String() string { return e.Error() }
 func (e *Error) Code() int     { return -1 }
 func (e *Error) ReqID() uint64 { return 0 }
 
-func errorf(format string, args ...interface{}) *Error {
+func errorf(format string, args ...any) *Error {
 	return &Error{fmt.Errorf(format, args...)}
 }
 
@@ -150,10 +152,11 @@ func (msg PooledTransactions) ReqID() uint64 { return msg.RequestId }
 type rlpxConn struct {
 	*rlpx.Conn
 
-	ourKey *ecdsa.PrivateKey
-	caps   []p2p.Cap
-	node   *enode.Node
-	logger zerolog.Logger
+	ourKey   *ecdsa.PrivateKey
+	caps     []p2p.Cap
+	peerCaps []p2p.Cap
+	node     *enode.Node
+	logger   zerolog.Logger
 }
 
 // Read reads an eth protocol packet from the connection.
@@ -229,6 +232,14 @@ func (c *rlpxConn) Read() Message {
 			return errorf("could not rlp decode message: %v", err)
 		}
 		return (*PooledTransactions)(ethMsg)
+	case (NewWitnessPacket{}.Code()):
+		msg = new(NewWitnessPacket)
+	case (NewWitnessHashesPacket{}.Code()):
+		msg = new(NewWitnessHashesPacket)
+	case (GetWitnessPacket{}.Code()):
+		msg = new(GetWitnessPacket)
+	case (WitnessPacketRLPPacket{}.Code()):
+		msg = new(WitnessPacketRLPPacket)
 	default:
 		msg = errorf("invalid message code: %d", code)
 	}
@@ -261,7 +272,7 @@ func (c *rlpxConn) ReadSnap(id uint64) (Message, error) {
 		if err != nil {
 			return nil, fmt.Errorf("could not read from connection: %v", err)
 		}
-		var snpMsg interface{}
+		var snpMsg any
 		switch int(code) {
 		case (GetAccountRange{}).Code():
 			snpMsg = new(GetAccountRange)
@@ -331,3 +342,63 @@ type TrieNodes snap.TrieNodesPacket
 
 func (msg TrieNodes) Code() int     { return 40 }
 func (msg TrieNodes) ReqID() uint64 { return msg.ID }
+
+type NewWitnessPacket struct {
+	Witness *stateless.Witness
+}
+
+func (msg NewWitnessPacket) Code() int     { return 33 }
+func (msg NewWitnessPacket) ReqID() uint64 { return 0 }
+
+type NewWitnessHashesPacket struct {
+	Hashes  []common.Hash
+	Numbers []uint64
+}
+
+func (msg NewWitnessHashesPacket) Code() int     { return 34 }
+func (msg NewWitnessHashesPacket) ReqID() uint64 { return 0 }
+
+// GetWitnessRequest represents a list of witnesses query by witness pages.
+type GetWitnessRequest struct {
+	WitnessPages []WitnessPageRequest // Request by list of witness pages
+}
+
+type WitnessPageRequest struct {
+	Hash common.Hash // BlockHash
+	Page uint64      // Starts on 0
+}
+
+// GetWitnessPacket represents a witness query with request ID wrapping.
+type GetWitnessPacket struct {
+	RequestId uint64
+	*GetWitnessRequest
+}
+
+func (msg GetWitnessPacket) Code() int     { return 35 }
+func (msg GetWitnessPacket) ReqID() uint64 { return msg.RequestId }
+
+// WitnessPacketRLPPacket represents a witness response with request ID wrapping.
+type WitnessPacketRLPPacket struct {
+	RequestId uint64
+	WitnessPacketResponse
+}
+
+// WitnessPacketResponse represents a witness response, to use when we already
+// have the witness rlp encoded.
+type WitnessPacketResponse []WitnessPageResponse
+
+type WitnessPageResponse struct {
+	Data       []byte
+	Hash       common.Hash
+	Page       uint64 // Starts on 0; If Page >= TotalPages means the request was invalid and the response is an empty data array
+	TotalPages uint64 // Length of pages
+}
+
+func (msg WitnessPacketRLPPacket) Code() int     { return 36 }
+func (msg WitnessPacketRLPPacket) ReqID() uint64 { return msg.RequestId }
+
+// hasCap checks if both the peer and our connection support a specific capability.
+func (c *rlpxConn) hasCap(name string, version uint) bool {
+	cap := p2p.Cap{Name: name, Version: version}
+	return slices.Contains(c.peerCaps, cap) && slices.Contains(c.caps, cap)
+}

@@ -181,7 +181,7 @@ func (c *crawler) updateNode(n *enode.Node) int {
 		c.mu.Unlock()
 	}()
 
-	conn, dialErr := p2p.Dial(n)
+	conn, dialErr := p2p.Dial(n, p2p.NewDialOpts())
 	if err = dialErr; err != nil {
 		log.Error().Err(err).Msg("Dial failed")
 		return nodeDialErr
