@@ -134,4 +134,7 @@ func init() {
 
 	// The sources of decoding are mutually exclusive
 	EcRecoverCmd.MarkFlagsMutuallyExclusive("file", "block-number", "tx")
+
+	// Mark required flags
+	util.MarkFlagRequired(EcRecoverCmd, util.FlagRPCURL)
 }

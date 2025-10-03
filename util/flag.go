@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -13,36 +14,56 @@ const (
 	FlagRPCURL = "rpc-url"
 	// FlagPrivateKey is the standard flag name for private keys.
 	FlagPrivateKey = "private-key"
+
+	// DefaultRPCURL is the default RPC endpoint URL.
+	DefaultRPCURL = "http://localhost:8545"
 )
 
-// GetRequiredFlag retrieves a flag value from Viper after binding it and marking it as required.
-// It binds the flag to enable environment variable fallback via Viper, marks the flag as required,
-// and returns the flag's value.
-func GetRequiredFlag(cmd *cobra.Command, flagName string) (string, error) {
+// GetFlag retrieves a flag value from Viper after binding it.
+// It binds the flag to enable environment variable fallback via Viper.
+func GetFlag(cmd *cobra.Command, flagName string) string {
 	viper.BindPFlag(flagName, cmd.Flags().Lookup(flagName))
-	if err := cmd.MarkFlagRequired(flagName); err != nil {
-		return "", err
-	}
-	return viper.GetString(flagName), nil
+	return viper.GetString(flagName)
 }
 
-// GetRPCURL retrieves the rpc-url flag value from Viper after binding it, marking it as required,
-// and validating that it is a valid URL with a supported scheme (http, https, ws, wss).
+// GetRPCURL retrieves the rpc-url flag value from Viper after binding it and validates
+// that it is a valid URL with a supported scheme (http, https, ws, wss).
 func GetRPCURL(cmd *cobra.Command) (string, error) {
-	rpcURL, err := GetRequiredFlag(cmd, FlagRPCURL)
-	if err != nil {
-		return "", err
-	}
+	rpcURL := GetFlag(cmd, FlagRPCURL)
 	if err := ValidateUrl(rpcURL); err != nil {
 		return "", err
 	}
 	return rpcURL, nil
 }
 
-// GetPrivateKey retrieves the private-key flag value from Viper after binding it and marking it as required.
-// This is a convenience wrapper around GetRequiredFlag for the standard private key flag.
+// GetPrivateKey retrieves the private-key flag value from Viper after binding it.
+// This is a convenience wrapper around GetFlag for the standard private key flag.
 func GetPrivateKey(cmd *cobra.Command) (string, error) {
-	return GetRequiredFlag(cmd, FlagPrivateKey)
+	return GetFlag(cmd, FlagPrivateKey), nil
+}
+
+// MarkFlagRequired marks a regular flag as required and logs a fatal error if marking fails.
+// This helper ensures consistent error handling across all commands when marking flags as required.
+func MarkFlagRequired(cmd *cobra.Command, flagName string) {
+	if err := cmd.MarkFlagRequired(flagName); err != nil {
+		log.Fatal().
+			Err(err).
+			Str("flag", flagName).
+			Str("command", cmd.Name()).
+			Msg("Failed to mark flag as required")
+	}
+}
+
+// MarkPersistentFlagRequired marks a persistent flag as required and logs a fatal error if marking fails.
+// This helper ensures consistent error handling across all commands when marking persistent flags as required.
+func MarkPersistentFlagRequired(cmd *cobra.Command, flagName string) {
+	if err := cmd.MarkPersistentFlagRequired(flagName); err != nil {
+		log.Fatal().
+			Err(err).
+			Str("flag", flagName).
+			Str("command", cmd.Name()).
+			Msg("Failed to mark persistent flag as required")
+	}
 }
 
 // BigIntValue is a custom flag type for big.Int values.

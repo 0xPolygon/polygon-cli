@@ -44,7 +44,6 @@ import (
 )
 
 const (
-	ArgRpcURL = "rpc-url"
 	ArgForkID = "fork-id"
 
 	ArgRollupManagerAddress = "rollup-manager-address"
@@ -53,9 +52,8 @@ const (
 	ArgRollupID      = "rollup-id"
 	ArgRollupAddress = "rollup-address"
 	ArgBridgeAddress = "bridge-address"
-	ArgGERAddress    = "ger-address"
+	ArgGERAddress = "ger-address"
 
-	defaultRPCURL = "http://localhost:8545"
 	defaultForkId = "12"
 
 	// forks
@@ -637,7 +635,7 @@ func mustPrintLogs(logs []types.Log, contractInstance reflect.Value, contractABI
 func init() {
 	// cdk
 	f := CDKCmd.PersistentFlags()
-	f.StringVar(&cdkInputArgs.rpcURL, ArgRpcURL, defaultRPCURL, "RPC URL of network containing CDK contracts")
+	f.StringVar(&cdkInputArgs.rpcURL, util.FlagRPCURL, util.DefaultRPCURL, "RPC URL of network containing CDK contracts")
 	f.StringVar(&cdkInputArgs.forkID, ArgForkID, defaultForkId, "fork ID of CDK networks")
 	f.StringVar(&cdkInputArgs.rollupManagerAddress, ArgRollupManagerAddress, "", "address of rollup contract")
 
@@ -677,4 +675,7 @@ func init() {
 	gerCmd.AddCommand(gerInspectCmd)
 	gerCmd.AddCommand(gerDumpCmd)
 	gerCmd.AddCommand(gerMonitorCmd)
+
+	// Mark required flags
+	util.MarkPersistentFlagRequired(CDKCmd, util.FlagRPCURL)
 }

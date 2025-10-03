@@ -299,4 +299,7 @@ func init() {
 	f.BoolVarP(&inputNodeKeySign, "sign", "s", false, "sign the node record")
 	f.Uint64VarP(&inputNodeKeySeed, "seed", "S", 271828, "a numeric seed value")
 	f.BoolVarP(&inputNodeKeyMarshalProtobuf, "marshal-protobuf", "m", false, "marshal libp2p key to protobuf format instead of raw")
+
+	// Mark required flags
+	util.MarkFlagRequired(NodekeyCmd, util.FlagPrivateKey)
 }

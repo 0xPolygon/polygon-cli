@@ -89,6 +89,10 @@ func init() {
 	// Require at least one method to specify target accounts
 	FundCmd.MarkFlagsOneRequired("addresses", "key-file", "number")
 
+	// Mark required flags
+	util.MarkFlagRequired(FundCmd, util.FlagRPCURL)
+	util.MarkFlagRequired(FundCmd, util.FlagPrivateKey)
+
 	// Funder contract parameters.
 	f.StringVar(&params.FunderAddress, "contract-address", "", "address of pre-deployed Funder contract")
 }

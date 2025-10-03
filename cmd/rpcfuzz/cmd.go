@@ -84,6 +84,10 @@ func init() {
 
 	fuzzer = fuzz.New()
 	fuzzer.Funcs(argfuzz.FuzzRPCArgs)
+
+	// Mark required flags
+	util.MarkFlagRequired(RPCFuzzCmd, util.FlagRPCURL)
+	util.MarkFlagRequired(RPCFuzzCmd, util.FlagPrivateKey)
 }
 
 func checkFlags() (err error) {

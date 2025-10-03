@@ -241,9 +241,6 @@ var ImportCmd = &cobra.Command{
 		if err := sanityCheck(cmd, args); err != nil {
 			return err
 		}
-		if err := cmd.MarkFlagRequired("private-key"); err != nil {
-			return err
-		}
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -867,4 +864,7 @@ func init() {
 	f.StringVar(&inputSignerOpts.gcpKeyRingID, "gcp-keyring-id", "polycli-keyring", "GCP keyring ID to be used")
 	f.StringVar(&inputSignerOpts.gcpImportJob, "gcp-import-job-id", "", "GCP import job ID to use when importing key")
 	f.IntVar(&inputSignerOpts.gcpKeyVersion, "gcp-key-version", 1, "GCP crypto key version to use")
+
+	// Mark required flags
+	util.MarkFlagRequired(SignerCmd, util.FlagPrivateKey)
 }

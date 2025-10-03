@@ -193,6 +193,9 @@ func init() {
 	f.StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
 	f.Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "batch size for requests (most providers cap at 1000)")
 	f.StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from, not setting a filter means all are allowed")
+
+	// Mark required flags
+	util.MarkFlagRequired(DumpblocksCmd, util.FlagRPCURL)
 }
 
 // writeResponses writes the data to either stdout or a file if one is provided.

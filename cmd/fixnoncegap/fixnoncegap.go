@@ -54,10 +54,8 @@ type fixNonceGapArgs struct {
 var inputFixNonceGapArgs = fixNonceGapArgs{}
 
 const (
-	ArgPrivateKey = "private-key"
-	ArgRpcURL     = "rpc-url"
-	ArgReplace    = "replace"
-	ArgMaxNonce   = "max-nonce"
+	ArgReplace  = "replace"
+	ArgMaxNonce = "max-nonce"
 )
 
 //go:embed FixNonceGapUsage.md
@@ -229,10 +227,14 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 
 func init() {
 	f := FixNonceGapCmd.Flags()
-	f.StringVarP(&inputFixNonceGapArgs.rpcURL, ArgRpcURL, "r", "http://localhost:8545", "the RPC endpoint URL")
-	f.StringVar(&inputFixNonceGapArgs.privateKey, ArgPrivateKey, "", "private key to be used when sending txs to fix nonce gap")
+	f.StringVarP(&inputFixNonceGapArgs.rpcURL, util.FlagRPCURL, "r", "http://localhost:8545", "the RPC endpoint URL")
+	f.StringVar(&inputFixNonceGapArgs.privateKey, util.FlagPrivateKey, "", "private key to be used when sending txs to fix nonce gap")
 	f.BoolVar(&inputFixNonceGapArgs.replace, ArgReplace, false, "replace the existing txs in the pool")
 	f.Uint64Var(&inputFixNonceGapArgs.maxNonce, ArgMaxNonce, 0, "override max nonce value instead of getting it from the pool")
+
+	// Mark required flags
+	util.MarkFlagRequired(FixNonceGapCmd, util.FlagRPCURL)
+	util.MarkFlagRequired(FixNonceGapCmd, util.FlagPrivateKey)
 }
 
 // Wait for the transaction to be mined
