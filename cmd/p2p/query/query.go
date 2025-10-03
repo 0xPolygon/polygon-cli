@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/flag"
