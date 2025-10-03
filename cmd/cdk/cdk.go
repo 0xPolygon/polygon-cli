@@ -52,7 +52,7 @@ const (
 	ArgRollupID      = "rollup-id"
 	ArgRollupAddress = "rollup-address"
 	ArgBridgeAddress = "bridge-address"
-	ArgGERAddress = "ger-address"
+	ArgGERAddress    = "ger-address"
 
 	defaultForkId = "12"
 
