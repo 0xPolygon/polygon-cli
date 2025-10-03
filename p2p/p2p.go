@@ -2,15 +2,18 @@ package p2p
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"net"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/rs/zerolog/log"
 )
 
 func Listen(ln *enode.LocalNode) (*net.UDPConn, error) {
@@ -100,4 +103,44 @@ func ParseBootnodes(bootnodes string) ([]*enode.Node, error) {
 	}
 
 	return nodes, nil
+}
+
+// ParsePrivateKey loads a private key from a file path or hex string.
+// If file is provided, it attempts to load from the file path first.
+// If the file doesn't exist, it generates a new key and saves it to the file.
+// If key is provided instead, it parses the hex-encoded private key string.
+// If neither file nor key is provided, it generates and returns a new private key.
+func ParsePrivateKey(file string, key string) (*ecdsa.PrivateKey, error) {
+	if len(file) > 0 {
+		privateKey, err := crypto.LoadECDSA(file)
+		if err == nil {
+			return privateKey, nil
+		}
+
+		log.Warn().Err(err).Msg("Key file was not found, generating a new key file")
+
+		privateKey, err = crypto.GenerateKey()
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to generate new private key")
+			return nil, err
+		}
+
+		if err := crypto.SaveECDSA(file, privateKey); err != nil {
+			log.Error().Err(err).Msg("Failed to save private key to file")
+			return nil, err
+		}
+
+		return privateKey, nil
+	}
+
+	if len(key) > 0 {
+		privateKey, err := crypto.HexToECDSA(key)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to parse private key")
+			return nil, err
+		}
+		return privateKey, nil
+	}
+
+	return crypto.GenerateKey()
 }
