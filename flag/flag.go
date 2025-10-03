@@ -20,7 +20,9 @@ const (
 // GetFlag retrieves a flag value from Viper after binding it.
 // It binds the flag to enable environment variable fallback via Viper.
 func GetFlag(cmd *cobra.Command, flagName string) string {
-	viper.BindPFlag(flagName, cmd.Flags().Lookup(flagName))
+	if err := viper.BindPFlag(flagName, cmd.Flags().Lookup(flagName)); err != nil {
+		log.Fatal().Err(err).Str("flag", flagName).Msg("Failed to bind flag to viper")
+	}
 	return viper.GetString(flagName)
 }
 
