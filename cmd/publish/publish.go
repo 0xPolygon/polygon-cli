@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"time"
 
-	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -24,7 +24,7 @@ var Cmd = &cobra.Command{
 	Short: "Publish transactions to the network with high-throughput",
 	Long:  cmdUsage,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		publishInputArgs.rpcURL, err = util.GetRPCURL(cmd)
+		publishInputArgs.rpcURL, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
@@ -138,12 +138,12 @@ func publish(cmd *cobra.Command, args []string) error {
 
 func init() {
 	f := Cmd.Flags()
-	f.StringVar(&publishInputArgs.rpcURL, util.FlagRPCURL, util.DefaultRPCURL, "RPC URL of network")
+	f.StringVar(&publishInputArgs.rpcURL, flag.FlagRPCURL, flag.DefaultRPCURL, "RPC URL of network")
 	f.Uint64VarP(&publishInputArgs.concurrency, "concurrency", "c", 1, "number of txs to send concurrently (default: one at a time)")
 	f.Uint64Var(&publishInputArgs.jobQueueSize, "job-queue-size", 100, "number of jobs we can put in the job queue for workers to process")
 	f.StringVar(&publishInputArgs.inputFileName, "file", "", "provide a filename with transactions to publish")
 	f.Uint64Var(&publishInputArgs.rateLimit, "rate-limit", 0, "rate limit in txs per second (default: no limit)")
 
 	// Mark required flags
-	util.MarkFlagRequired(Cmd, util.FlagRPCURL)
+	flag.MarkFlagRequired(Cmd, flag.FlagRPCURL)
 }

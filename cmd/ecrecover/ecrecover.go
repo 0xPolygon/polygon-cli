@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/flag"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -32,7 +33,7 @@ var EcRecoverCmd = &cobra.Command{
 	Long:  usage,
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		rpcUrl, err = util.GetRPCURL(cmd)
+		rpcUrl, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
@@ -136,5 +137,5 @@ func init() {
 	EcRecoverCmd.MarkFlagsMutuallyExclusive("file", "block-number", "tx")
 
 	// Mark required flags
-	util.MarkFlagRequired(EcRecoverCmd, util.FlagRPCURL)
+	flag.MarkFlagRequired(EcRecoverCmd, flag.FlagRPCURL)
 }

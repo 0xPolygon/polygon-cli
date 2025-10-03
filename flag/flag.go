@@ -1,9 +1,7 @@
-package util
+package flag
 
 import (
-	"fmt"
-	"math/big"
-
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -30,7 +28,7 @@ func GetFlag(cmd *cobra.Command, flagName string) string {
 // that it is a valid URL with a supported scheme (http, https, ws, wss).
 func GetRPCURL(cmd *cobra.Command) (string, error) {
 	rpcURL := GetFlag(cmd, FlagRPCURL)
-	if err := ValidateUrl(rpcURL); err != nil {
+	if err := util.ValidateUrl(rpcURL); err != nil {
 		return "", err
 	}
 	return rpcURL, nil
@@ -64,28 +62,4 @@ func MarkPersistentFlagRequired(cmd *cobra.Command, flagName string) {
 			Str("command", cmd.Name()).
 			Msg("Failed to mark persistent flag as required")
 	}
-}
-
-// BigIntValue is a custom flag type for big.Int values.
-// It implements the pflag.Value interface to enable using *big.Int with Cobra flags.
-type BigIntValue struct {
-	Val *big.Int
-}
-
-// String returns the decimal string representation of the big.Int value.
-func (b *BigIntValue) String() string {
-	return b.Val.String()
-}
-
-// Set parses a decimal string and sets the big.Int value.
-func (b *BigIntValue) Set(s string) error {
-	if _, ok := b.Val.SetString(s, 10); !ok {
-		return fmt.Errorf("invalid big integer: %q", s)
-	}
-	return nil
-}
-
-// Type returns the type string for this flag value.
-func (b *BigIntValue) Type() string {
-	return "big.Int"
 }

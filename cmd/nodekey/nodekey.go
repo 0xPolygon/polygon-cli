@@ -18,7 +18,7 @@ import (
 	gethcrypto "github.com/ethereum/go-ethereum/crypto"
 	gethenode "github.com/ethereum/go-ethereum/p2p/enode"
 	libp2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/flag"
 	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -67,7 +67,7 @@ var NodekeyCmd = &cobra.Command{
 	Short: "Generate node keys for different blockchain clients and protocols.",
 	Long:  usage,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		inputNodeKeyPrivateKey, err = util.GetPrivateKey(cmd)
+		inputNodeKeyPrivateKey, err = flag.GetPrivateKey(cmd)
 		if err != nil {
 			return err
 		}
@@ -301,5 +301,5 @@ func init() {
 	f.BoolVarP(&inputNodeKeyMarshalProtobuf, "marshal-protobuf", "m", false, "marshal libp2p key to protobuf format instead of raw")
 
 	// Mark required flags
-	util.MarkFlagRequired(NodekeyCmd, util.FlagPrivateKey)
+	flag.MarkFlagRequired(NodekeyCmd, flag.FlagPrivateKey)
 }

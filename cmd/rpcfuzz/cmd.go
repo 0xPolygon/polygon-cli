@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz/argfuzz"
-	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/ethereum/go-ethereum/crypto"
 	fuzz "github.com/google/gofuzz"
 	"github.com/rs/zerolog/log"
@@ -42,11 +42,11 @@ var RPCFuzzCmd = &cobra.Command{
 	Long:  usage,
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		rpcUrl, err = util.GetRPCURL(cmd)
+		rpcUrl, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
-		testPrivateHexKey, err = util.GetPrivateKey(cmd)
+		testPrivateHexKey, err = flag.GetPrivateKey(cmd)
 		if err != nil {
 			return err
 		}
@@ -86,8 +86,8 @@ func init() {
 	fuzzer.Funcs(argfuzz.FuzzRPCArgs)
 
 	// Mark required flags
-	util.MarkFlagRequired(RPCFuzzCmd, util.FlagRPCURL)
-	util.MarkFlagRequired(RPCFuzzCmd, util.FlagPrivateKey)
+	flag.MarkFlagRequired(RPCFuzzCmd, flag.FlagRPCURL)
+	flag.MarkFlagRequired(RPCFuzzCmd, flag.FlagPrivateKey)
 }
 
 func checkFlags() (err error) {

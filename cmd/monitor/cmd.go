@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/spf13/cobra"
 )
 
@@ -57,7 +58,7 @@ var MonitorCmd = &cobra.Command{
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		rpcUrl, err = util.GetRPCURL(cmd)
+		rpcUrl, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
@@ -89,7 +90,7 @@ func init() {
 	f.StringVarP(&intervalStr, "interval", "i", "5s", "amount of time between batch block RPC calls")
 
 	// Mark required flags
-	util.MarkFlagRequired(MonitorCmd, util.FlagRPCURL)
+	flag.MarkFlagRequired(MonitorCmd, flag.FlagRPCURL)
 }
 
 func checkFlags() (err error) {

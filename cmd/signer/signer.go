@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/google/tink/go/kwp/subtle"
 	"github.com/manifoldco/promptui"
-	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/iterator"
@@ -80,7 +80,7 @@ var SignerCmd = &cobra.Command{
 	Short: "Utilities for security signing transactions",
 	Long:  signerUsage,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		inputSignerOpts.privateKey, err = util.GetPrivateKey(cmd)
+		inputSignerOpts.privateKey, err = flag.GetPrivateKey(cmd)
 		if err != nil {
 			return err
 		}
@@ -866,5 +866,5 @@ func init() {
 	f.IntVar(&inputSignerOpts.gcpKeyVersion, "gcp-key-version", 1, "GCP crypto key version to use")
 
 	// Mark required flags
-	util.MarkFlagRequired(SignerCmd, util.FlagPrivateKey)
+	flag.MarkFlagRequired(SignerCmd, flag.FlagPrivateKey)
 }

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -26,11 +26,11 @@ var FixNonceGapCmd = &cobra.Command{
 	Long:  fixNonceGapUsage,
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		inputFixNonceGapArgs.rpcURL, err = util.GetRPCURL(cmd)
+		inputFixNonceGapArgs.rpcURL, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
-		inputFixNonceGapArgs.privateKey, err = util.GetPrivateKey(cmd)
+		inputFixNonceGapArgs.privateKey, err = flag.GetPrivateKey(cmd)
 		if err != nil {
 			return err
 		}
@@ -227,14 +227,14 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 
 func init() {
 	f := FixNonceGapCmd.Flags()
-	f.StringVarP(&inputFixNonceGapArgs.rpcURL, util.FlagRPCURL, "r", "http://localhost:8545", "the RPC endpoint URL")
-	f.StringVar(&inputFixNonceGapArgs.privateKey, util.FlagPrivateKey, "", "private key to be used when sending txs to fix nonce gap")
+	f.StringVarP(&inputFixNonceGapArgs.rpcURL, flag.FlagRPCURL, "r", "http://localhost:8545", "the RPC endpoint URL")
+	f.StringVar(&inputFixNonceGapArgs.privateKey, flag.FlagPrivateKey, "", "private key to be used when sending txs to fix nonce gap")
 	f.BoolVar(&inputFixNonceGapArgs.replace, ArgReplace, false, "replace the existing txs in the pool")
 	f.Uint64Var(&inputFixNonceGapArgs.maxNonce, ArgMaxNonce, 0, "override max nonce value instead of getting it from the pool")
 
 	// Mark required flags
-	util.MarkFlagRequired(FixNonceGapCmd, util.FlagRPCURL)
-	util.MarkFlagRequired(FixNonceGapCmd, util.FlagPrivateKey)
+	flag.MarkFlagRequired(FixNonceGapCmd, flag.FlagRPCURL)
+	flag.MarkFlagRequired(FixNonceGapCmd, flag.FlagPrivateKey)
 }
 
 // Wait for the transaction to be mined

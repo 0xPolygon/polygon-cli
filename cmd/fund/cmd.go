@@ -6,7 +6,7 @@ import (
 
 	_ "embed"
 
-	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/spf13/cobra"
 )
 
@@ -48,11 +48,11 @@ var FundCmd = &cobra.Command{
 	Short: "Bulk fund crypto wallets automatically.",
 	Long:  usage,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		params.RpcUrl, err = util.GetRPCURL(cmd)
+		params.RpcUrl, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
-		params.PrivateKey, err = util.GetPrivateKey(cmd)
+		params.PrivateKey, err = flag.GetPrivateKey(cmd)
 		if err != nil {
 			return err
 		}
@@ -74,7 +74,7 @@ func init() {
 	f.BoolVar(&params.UseHDDerivation, "hd-derivation", true, "derive wallets to fund from private key in deterministic way")
 	f.StringSliceVar(&params.WalletAddresses, "addresses", nil, "comma-separated list of wallet addresses to fund")
 	params.FundingAmountInWei = defaultFundingInWei
-	f.Var(&util.BigIntValue{Val: params.FundingAmountInWei}, "eth-amount", "amount of wei to send to each wallet")
+	f.Var(&flag.BigIntValue{Val: params.FundingAmountInWei}, "eth-amount", "amount of wei to send to each wallet")
 	f.StringVar(&params.KeyFile, "key-file", "", "file containing accounts private keys, one per line")
 
 	f.StringVarP(&params.OutputFile, "file", "f", "wallets.json", "output JSON file path for storing addresses and private keys of funded wallets")
@@ -90,8 +90,8 @@ func init() {
 	FundCmd.MarkFlagsOneRequired("addresses", "key-file", "number")
 
 	// Mark required flags
-	util.MarkFlagRequired(FundCmd, util.FlagRPCURL)
-	util.MarkFlagRequired(FundCmd, util.FlagPrivateKey)
+	flag.MarkFlagRequired(FundCmd, flag.FlagRPCURL)
+	flag.MarkFlagRequired(FundCmd, flag.FlagPrivateKey)
 
 	// Funder contract parameters.
 	f.StringVar(&params.FunderAddress, "contract-address", "", "address of pre-deployed Funder contract")

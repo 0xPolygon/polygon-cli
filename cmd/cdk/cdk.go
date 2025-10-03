@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/custom_marshaller"
-	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -105,7 +105,7 @@ var CDKCmd = &cobra.Command{
 	Short: "Utilities for interacting with CDK networks",
 	Long:  "Basic utility commands for interacting with the cdk contracts",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		cdkInputArgs.rpcURL, err = util.GetRPCURL(cmd)
+		cdkInputArgs.rpcURL, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
@@ -635,7 +635,7 @@ func mustPrintLogs(logs []types.Log, contractInstance reflect.Value, contractABI
 func init() {
 	// cdk
 	f := CDKCmd.PersistentFlags()
-	f.StringVar(&cdkInputArgs.rpcURL, util.FlagRPCURL, util.DefaultRPCURL, "RPC URL of network containing CDK contracts")
+	f.StringVar(&cdkInputArgs.rpcURL, flag.FlagRPCURL, flag.DefaultRPCURL, "RPC URL of network containing CDK contracts")
 	f.StringVar(&cdkInputArgs.forkID, ArgForkID, defaultForkId, "fork ID of CDK networks")
 	f.StringVar(&cdkInputArgs.rollupManagerAddress, ArgRollupManagerAddress, "", "address of rollup contract")
 
@@ -677,5 +677,5 @@ func init() {
 	gerCmd.AddCommand(gerMonitorCmd)
 
 	// Mark required flags
-	util.MarkPersistentFlagRequired(CDKCmd, util.FlagRPCURL)
+	flag.MarkPersistentFlagRequired(CDKCmd, flag.FlagRPCURL)
 }

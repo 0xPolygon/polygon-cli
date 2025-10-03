@@ -35,7 +35,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly/polygonrollupmanager"
 	smcerror "github.com/0xPolygon/polygon-cli/errors"
-	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -2078,11 +2078,11 @@ var ulxlyBridgeAndClaimCmd = &cobra.Command{
 	Args:   cobra.NoArgs,
 	Hidden: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		inputUlxlyArgs.rpcURL, err = util.GetRPCURL(cmd)
+		inputUlxlyArgs.rpcURL, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
-		inputUlxlyArgs.privateKey, err = util.GetPrivateKey(cmd)
+		inputUlxlyArgs.privateKey, err = flag.GetPrivateKey(cmd)
 		if err != nil {
 			return err
 		}

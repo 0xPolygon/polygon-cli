@@ -15,6 +15,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/proto/gen/pb"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/flag"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -55,7 +56,7 @@ var DumpblocksCmd = &cobra.Command{
 	Short: "Export a range of blocks from a JSON-RPC endpoint.",
 	Long:  usage,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		inputDumpblocks.RpcUrl, err = util.GetRPCURL(cmd)
+		inputDumpblocks.RpcUrl, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
@@ -195,7 +196,7 @@ func init() {
 	f.StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from, not setting a filter means all are allowed")
 
 	// Mark required flags
-	util.MarkFlagRequired(DumpblocksCmd, util.FlagRPCURL)
+	flag.MarkFlagRequired(DumpblocksCmd, flag.FlagRPCURL)
 }
 
 // writeResponses writes the data to either stdout or a file if one is provided.

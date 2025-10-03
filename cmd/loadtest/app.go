@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/rpctypes"
-	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/flag"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -172,11 +172,11 @@ var LoadtestCmd = &cobra.Command{
 	Long:  loadTestUsage,
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		inputLoadTestParams.RPCUrl, err = util.GetRPCURL(cmd)
+		inputLoadTestParams.RPCUrl, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
-		inputLoadTestParams.PrivateKey, err = util.GetPrivateKey(cmd)
+		inputLoadTestParams.PrivateKey, err = flag.GetPrivateKey(cmd)
 		if err != nil {
 			return err
 		}
@@ -270,7 +270,7 @@ func initFlags() {
 	f.Uint64Var(&ltp.BlobFeeCap, "blob-fee-cap", 100000, "blob fee cap, or maximum blob fee per chunk, in Gwei")
 	f.Uint64Var(&ltp.SendingAccountsCount, "sending-accounts-count", 0, "number of sending accounts to use (avoids pool account queue)")
 	ltp.AccountFundingAmount = defaultAccountFundingAmount
-	f.Var(&util.BigIntValue{Val: ltp.AccountFundingAmount}, "account-funding-amount", "amount in wei to fund sending accounts (set to 0 to disable)")
+	f.Var(&flag.BigIntValue{Val: ltp.AccountFundingAmount}, "account-funding-amount", "amount in wei to fund sending accounts (set to 0 to disable)")
 	f.BoolVar(&ltp.PreFundSendingAccounts, "pre-fund-sending-accounts", false, "fund all sending accounts at start instead of on first use")
 	f.BoolVar(&ltp.RefundRemainingFunds, "refund-remaining-funds", false, "refund remaining balance to funding account after completion")
 	f.StringVar(&ltp.SendingAccountsFile, "sending-accounts-file", "", "file with sending account private keys, one per line (avoids pool queue and preserves accounts across runs)")
@@ -304,8 +304,8 @@ v3, uniswapv3 - perform UniswapV3 swaps`)
 	// TODO Compression
 
 	// Mark required flags
-	util.MarkPersistentFlagRequired(LoadtestCmd, util.FlagRPCURL)
-	util.MarkPersistentFlagRequired(LoadtestCmd, util.FlagPrivateKey)
+	flag.MarkPersistentFlagRequired(LoadtestCmd, flag.FlagRPCURL)
+	flag.MarkPersistentFlagRequired(LoadtestCmd, flag.FlagPrivateKey)
 }
 
 func initSubCommands() {
