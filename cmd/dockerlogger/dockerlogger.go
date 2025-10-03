@@ -21,15 +21,15 @@ import (
 var cmdUsage string
 
 type inputArgs struct {
-	network      *string
-	showAll      *bool
-	showErrors   *bool
-	showWarnings *bool
-	showInfo     *bool
-	showDebug    *bool
-	filter       *string
-	levels       *string
-	service      *string
+	network      string
+	showAll      bool
+	showErrors   bool
+	showWarnings bool
+	showInfo     bool
+	showDebug    bool
+	filter       string
+	levels       string
+	service      string
 }
 
 var dockerloggerInputArgs = inputArgs{}
@@ -57,22 +57,22 @@ type LogConfig struct {
 func dockerlogger(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	if *dockerloggerInputArgs.network == "" {
+	if dockerloggerInputArgs.network == "" {
 		return fmt.Errorf("--network flag is required")
 	}
 
 	config := LogConfig{
-		showAll:     *dockerloggerInputArgs.showAll,
-		showErrors:  *dockerloggerInputArgs.showErrors,
-		showWarns:   *dockerloggerInputArgs.showWarnings,
-		showInfo:    *dockerloggerInputArgs.showInfo,
-		showDebug:   *dockerloggerInputArgs.showDebug,
-		customWords: *dockerloggerInputArgs.filter,
-		logLevels:   *dockerloggerInputArgs.levels,
+		showAll:     dockerloggerInputArgs.showAll,
+		showErrors:  dockerloggerInputArgs.showErrors,
+		showWarns:   dockerloggerInputArgs.showWarnings,
+		showInfo:    dockerloggerInputArgs.showInfo,
+		showDebug:   dockerloggerInputArgs.showDebug,
+		customWords: dockerloggerInputArgs.filter,
+		logLevels:   dockerloggerInputArgs.levels,
 	}
 
-	if *dockerloggerInputArgs.service != "" {
-		config.serviceNames = strings.Split(*dockerloggerInputArgs.service, ",")
+	if dockerloggerInputArgs.service != "" {
+		config.serviceNames = strings.Split(dockerloggerInputArgs.service, ",")
 	}
 
 	// Set up Docker client
@@ -83,7 +83,7 @@ func dockerlogger(cmd *cobra.Command, args []string) error {
 	defer cli.Close()
 
 	// Monitor logs
-	return monitorLogs(ctx, cli, *dockerloggerInputArgs.network, &config)
+	return monitorLogs(ctx, cli, dockerloggerInputArgs.network, &config)
 }
 
 // Cobra command for Docker logger
@@ -95,15 +95,16 @@ var Cmd = &cobra.Command{
 }
 
 func init() {
-	dockerloggerInputArgs.network = Cmd.Flags().String("network", "", "Docker network name to monitor")
-	dockerloggerInputArgs.showAll = Cmd.Flags().Bool("all", false, "Show all logs")
-	dockerloggerInputArgs.showErrors = Cmd.Flags().Bool("errors", false, "Show error logs")
-	dockerloggerInputArgs.showWarnings = Cmd.Flags().Bool("warnings", false, "Show warning logs")
-	dockerloggerInputArgs.showInfo = Cmd.Flags().Bool("info", false, "Show info logs")
-	dockerloggerInputArgs.showDebug = Cmd.Flags().Bool("debug", false, "Show debug logs")
-	dockerloggerInputArgs.filter = Cmd.Flags().String("filter", "", "Additional keywords to filter, comma-separated")
-	dockerloggerInputArgs.levels = Cmd.Flags().String("levels", "", "Comma-separated log levels to show (error,warn,info,debug)")
-	dockerloggerInputArgs.service = Cmd.Flags().String("service", "", "Filter logs by service names (comma-separated, partial match)")
+	f := Cmd.Flags()
+	f.StringVar(&dockerloggerInputArgs.network, "network", "", "docker network name to monitor")
+	f.BoolVar(&dockerloggerInputArgs.showAll, "all", false, "show all logs")
+	f.BoolVar(&dockerloggerInputArgs.showErrors, "errors", false, "show error logs")
+	f.BoolVar(&dockerloggerInputArgs.showWarnings, "warnings", false, "show warning logs")
+	f.BoolVar(&dockerloggerInputArgs.showInfo, "info", false, "show info logs")
+	f.BoolVar(&dockerloggerInputArgs.showDebug, "debug", false, "show debug logs")
+	f.StringVar(&dockerloggerInputArgs.filter, "filter", "", "additional keywords to filter, comma-separated")
+	f.StringVar(&dockerloggerInputArgs.levels, "levels", "", "comma-separated log levels to show (error,warn,info,debug)")
+	f.StringVar(&dockerloggerInputArgs.service, "service", "", "filter logs by service names (comma-separated, partial match)")
 }
 
 // Core functionality functions

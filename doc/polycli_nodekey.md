@@ -74,32 +74,32 @@ polycli nodekey --private-key 2a4ae8c4c250917781d38d95dafbb0abe87ae2c9aea02ed7c7
 ## Flags
 
 ```bash
-  -f, --file string          A file with the private nodekey (in hex format)
+  -f, --file string          a file with the private nodekey (in hex format)
   -h, --help                 help for nodekey
-  -i, --ip string            The IP to be associated with this address (default "0.0.0.0")
+  -i, --ip string            the IP to be associated with this address (default "0.0.0.0")
       --key-type string      ed25519|secp256k1|ecdsa|rsa (default "ed25519")
-  -m, --marshal-protobuf     If true the libp2p key will be marshaled to protobuf format rather than raw
-      --private-key string   Use the provided private key (in hex format)
+  -m, --marshal-protobuf     marshal libp2p key to protobuf format instead of raw
+      --private-key string   use the provided private key (in hex format)
       --protocol string      devp2p|libp2p|pex|seed-libp2p (default "devp2p")
-  -S, --seed uint            A numeric seed value (default 271828)
-  -s, --sign                 Should the node record be signed?
-  -t, --tcp int              The tcp Port to be associated with this address (default 30303)
-  -u, --udp int              The udp Port to be associated with this address
+  -S, --seed uint            a numeric seed value (default 271828)
+  -s, --sign                 sign the node record
+  -t, --tcp int              the TCP port to be associated with this address (default 30303)
+  -u, --udp int              the UDP port to be associated with this address
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
       --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --pretty-logs     output logs in pretty format instead of JSON (default true)
+  -v, --verbosity int   0 - silent
+                        100 panic
+                        200 fatal
+                        300 error
+                        400 warning
+                        500 info
+                        600 debug
+                        700 trace (default 500)
 ```
 
 ## See also

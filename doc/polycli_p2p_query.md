@@ -27,24 +27,24 @@ and the amount of blocks to query and print the results.
 ## Flags
 
 ```bash
-  -a, --amount uint        Amount of blocks to query (default 1)
+  -a, --amount uint        amount of blocks to query (default 1)
   -h, --help               help for query
-  -s, --start-block uint   Block number to start querying from
+  -s, --start-block uint   block number to start querying from
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
       --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --pretty-logs     output logs in pretty format instead of JSON (default true)
+  -v, --verbosity int   0 - silent
+                        100 panic
+                        200 fatal
+                        300 error
+                        400 warning
+                        500 info
+                        600 debug
+                        700 trace (default 500)
 ```
 
 ## See also

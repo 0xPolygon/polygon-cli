@@ -22,18 +22,18 @@ const defaultPassword = "password"
 
 // cmdFundParams holds the command-line parameters for the fund command.
 type cmdFundParams struct {
-	RpcUrl     *string
-	PrivateKey *string
+	RpcUrl     string
+	PrivateKey string
 
-	WalletsNumber      *uint64
-	UseHDDerivation    *bool
-	WalletAddresses    *[]string
+	WalletsNumber      uint64
+	UseHDDerivation    bool
+	WalletAddresses    []string
 	FundingAmountInWei *big.Int
-	OutputFile         *string
+	OutputFile         string
 
-	KeyFile *string
+	KeyFile string
 
-	FunderAddress *string
+	FunderAddress string
 }
 
 var (
@@ -49,8 +49,10 @@ var FundCmd = &cobra.Command{
 	Short: "Bulk fund crypto wallets automatically.",
 	Long:  usage,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		params.RpcUrl = flag_loader.GetRpcUrlFlagValue(cmd)
-		params.PrivateKey = flag_loader.GetPrivateKeyFlagValue(cmd)
+		rpcUrl := flag_loader.GetRpcUrlFlagValue(cmd)
+		params.RpcUrl = *rpcUrl
+		privateKey := flag_loader.GetPrivateKeyFlagValue(cmd)
+		params.PrivateKey = *privateKey
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return checkFlags()
@@ -62,20 +64,20 @@ var FundCmd = &cobra.Command{
 
 func init() {
 	p := new(cmdFundParams)
-	flagSet := FundCmd.Flags()
+	f := FundCmd.Flags()
 
-	p.RpcUrl = flagSet.StringP("rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
-	p.PrivateKey = flagSet.String("private-key", defaultPrivateKey, "The hex encoded private key that we'll use to send transactions")
+	f.StringVarP(&p.RpcUrl, "rpc-url", "r", "http://localhost:8545", "RPC endpoint URL")
+	f.StringVar(&p.PrivateKey, "private-key", defaultPrivateKey, "hex encoded private key to use for sending transactions")
 
 	// Wallet parameters.
-	p.WalletsNumber = flagSet.Uint64P("number", "n", 10, "The number of wallets to fund")
-	p.UseHDDerivation = flagSet.Bool("hd-derivation", true, "Derive wallets to fund from the private key in a deterministic way")
-	p.WalletAddresses = flagSet.StringSlice("addresses", nil, "Comma-separated list of wallet addresses to fund")
+	f.Uint64VarP(&p.WalletsNumber, "number", "n", 10, "number of wallets to fund")
+	f.BoolVar(&p.UseHDDerivation, "hd-derivation", true, "derive wallets to fund from private key in deterministic way")
+	f.StringSliceVar(&p.WalletAddresses, "addresses", nil, "comma-separated list of wallet addresses to fund")
 	p.FundingAmountInWei = defaultFundingInWei
-	flagSet.Var(&flag_loader.BigIntValue{Val: p.FundingAmountInWei}, "eth-amount", "The amount of wei to send to each wallet")
-	p.KeyFile = flagSet.String("key-file", "", "The file containing the accounts private keys, one per line.")
+	f.Var(&flag_loader.BigIntValue{Val: p.FundingAmountInWei}, "eth-amount", "amount of wei to send to each wallet")
+	f.StringVar(&p.KeyFile, "key-file", "", "file containing accounts private keys, one per line")
 
-	p.OutputFile = flagSet.StringP("file", "f", "wallets.json", "The output JSON file path for storing the addresses and private keys of funded wallets")
+	f.StringVarP(&p.OutputFile, "file", "f", "wallets.json", "output JSON file path for storing addresses and private keys of funded wallets")
 
 	// Marking flags as mutually exclusive
 	FundCmd.MarkFlagsMutuallyExclusive("addresses", "number")
@@ -85,29 +87,29 @@ func init() {
 	FundCmd.MarkFlagsMutuallyExclusive("key-file", "hd-derivation")
 
 	// Funder contract parameters.
-	p.FunderAddress = flagSet.String("contract-address", "", "The address of a pre-deployed Funder contract")
+	f.StringVar(&p.FunderAddress, "contract-address", "", "address of pre-deployed Funder contract")
 
 	params = *p
 }
 
 func checkFlags() error {
 	// Check rpc url flag.
-	if params.RpcUrl == nil {
+	if params.RpcUrl == "" {
 		panic("RPC URL is empty")
 	}
-	if err := util.ValidateUrl(*params.RpcUrl); err != nil {
+	if err := util.ValidateUrl(params.RpcUrl); err != nil {
 		return err
 	}
 
 	// Check private key flag.
-	if params.PrivateKey != nil && *params.PrivateKey == "" {
+	if params.PrivateKey == "" {
 		return errors.New("the private key is empty")
 	}
 
 	// Check that exactly one method is used to specify target accounts
-	hasAddresses := params.WalletAddresses != nil && len(*params.WalletAddresses) > 0
-	hasKeyFile := params.KeyFile != nil && *params.KeyFile != ""
-	hasNumberFlag := params.WalletsNumber != nil && *params.WalletsNumber > 0
+	hasAddresses := len(params.WalletAddresses) > 0
+	hasKeyFile := params.KeyFile != ""
+	hasNumberFlag := params.WalletsNumber > 0
 	if !hasAddresses && !hasKeyFile && !hasNumberFlag {
 		return errors.New("must specify target accounts via --addresses, --key-file, or --number")
 	}
@@ -116,7 +118,7 @@ func checkFlags() error {
 	if params.FundingAmountInWei != nil && params.FundingAmountInWei.Cmp(minValue) <= 0 {
 		return errors.New("the funding amount must be greater than 1000000000")
 	}
-	if params.OutputFile != nil && *params.OutputFile == "" {
+	if params.OutputFile == "" {
 		return errors.New("the output file is not specified")
 	}
 

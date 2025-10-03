@@ -155,37 +155,37 @@ polycli rpcfuzz --rpc-url <RPC_URL> --private-key <PRIVATE_KEY> --namespaces eth
 ## Flags
 
 ```bash
-      --compact                   Stream output in compact format (default)
-      --contract-address string   The address of a contract that can be used for testing. If not specified, a contract will be deployed automatically.
-      --csv                       Stream output in CSV format
-      --fuzz                      Flag to indicate whether to fuzz input or not.
-      --fuzzn int                 Number of times to run the fuzzer per test. (default 100)
+      --compact                   stream output in compact format (default)
+      --contract-address string   address of contract to use for testing (if not specified, contract will be deployed automatically)
+      --csv                       stream output in CSV format
+      --fuzz                      flag to indicate whether to fuzz input or not
+      --fuzzn int                 number of times to run fuzzer per test (default 100)
   -h, --help                      help for rpcfuzz
-      --html                      Stream output in HTML format
-      --json                      Stream output in JSON format
-      --md                        Stream output in Markdown format
-      --namespaces string         Comma separated list of rpc namespaces to test (default "eth,web3,net,debug,raw")
-      --output string             What to output: all, failures, summary (default "all")
-      --private-key string        The hex encoded private key that we'll use to sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
-      --quiet                     Only show final summary
-  -r, --rpc-url string            The RPC endpoint url (default "http://localhost:8545")
-      --seed int                  A seed for generating random values within the fuzzer (default 123456)
-      --summary-interval int      Print summary every N tests (0=disabled)
+      --html                      stream output in HTML format
+      --json                      stream output in JSON format
+      --md                        stream output in Markdown format
+      --namespaces string         comma separated list of RPC namespaces to test (default "eth,web3,net,debug,raw")
+      --output string             what to output: all, failures, summary (default "all")
+      --private-key string        hex encoded private key to use for sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
+      --quiet                     only show final summary
+  -r, --rpc-url string            RPC endpoint URL (default "http://localhost:8545")
+      --seed int                  seed for generating random values within fuzzer (default 123456)
+      --summary-interval int      print summary every N tests (0=disabled)
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
       --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --pretty-logs     output logs in pretty format instead of JSON (default true)
+  -v, --verbosity int   0 - silent
+                        100 panic
+                        200 fatal
+                        300 error
+                        400 warning
+                        500 info
+                        600 debug
+                        700 trace (default 500)
 ```
 
 ## See also

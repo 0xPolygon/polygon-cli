@@ -124,3 +124,25 @@ The tool supports configuration via:
 
 ## Development Memories
 - Use `make build` to build polycli
+
+## Code Style
+
+### Cobra Flags
+- Flag names: lowercase with hyphens (kebab-case), e.g., `--output-file`
+- Usage strings: lowercase, no ending punctuation, e.g., `"path to output file"`
+- Remove unnecessary leading articles and filler words (e.g., "the", "a", "an") from usage strings
+- Use `PersistentFlags()` only when flags need to be inherited by subcommands; otherwise use `Flags()`
+- When defining multiple flags, use `f := cmd.Flags()` to avoid repetition
+- Prefer `Var()` flag methods (e.g., `StringVar`, `IntVar`, `BoolVar`) over non-Var methods (e.g., `String`, `Int`, `Bool`) to bind directly to variables:
+  ```go
+  f := cmd.Flags()
+  f.StringVar(&myVar, "name", "", "description")
+  f.IntVar(&count, "count", 0, "description")
+  ```
+- Flag variables should be non-pointer types unless there's a specific need for pointers (e.g., distinguishing unset from zero value):
+  ```go
+  var myVar string  // preferred
+  var count int     // preferred
+  f.StringVar(&myVar, "name", "", "description")
+  f.IntVar(&count, "count", 0, "description")
+  ```

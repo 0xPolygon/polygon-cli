@@ -58,7 +58,7 @@ var (
 		"poseidon",
 		"poseidongold",
 	}
-	inputFileName *string
+	inputFileName string
 )
 
 // hashCmd represents the hash command
@@ -95,8 +95,8 @@ var HashCmd = &cobra.Command{
 }
 
 func init() {
-	flagSet := HashCmd.PersistentFlags()
-	inputFileName = flagSet.String("file", "", "Provide a filename to read and hash")
+	f := HashCmd.Flags()
+	f.StringVar(&inputFileName, "file", "", "filename to read and hash")
 }
 
 func getHash(name string) (hash.Hash, error) {
@@ -153,11 +153,11 @@ func getHash(name string) (hash.Hash, error) {
 
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
 	// first check and see if we have an input file
-	if inputFileName != nil && *inputFileName != "" {
+	if inputFileName != "" {
 		// If we get here, we're going to assume the user
 		// wants to hash a file and we're not going to look
 		// for other input sources
-		return os.ReadFile(*inputFileName)
+		return os.ReadFile(inputFileName)
 	}
 
 	// This is a little tricky. If a user provides multiple args that aren't quoted, it could be confusing

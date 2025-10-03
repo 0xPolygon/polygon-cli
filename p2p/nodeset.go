@@ -115,12 +115,7 @@ func WriteURLs(file string, ns NodeSet) error {
 	return os.WriteFile(file, bytes, 0644)
 }
 
-func WritePeers(file string, nodes map[enode.ID]string) error {
-	urls := []string{}
-	for _, node := range nodes {
-		urls = append(urls, node)
-	}
-
+func WritePeers(file string, urls []string) error {
 	bytes, err := json.MarshalIndent(urls, "", jsonIndent)
 	if err != nil {
 		return err

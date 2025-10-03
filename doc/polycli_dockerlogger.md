@@ -42,31 +42,31 @@ Flags:
 ## Flags
 
 ```bash
-      --all              Show all logs
-      --debug            Show debug logs
-      --errors           Show error logs
-      --filter string    Additional keywords to filter, comma-separated
+      --all              show all logs
+      --debug            show debug logs
+      --errors           show error logs
+      --filter string    additional keywords to filter, comma-separated
   -h, --help             help for dockerlogger
-      --info             Show info logs
-      --levels string    Comma-separated log levels to show (error,warn,info,debug)
-      --network string   Docker network name to monitor
-      --service string   Filter logs by service names (comma-separated, partial match)
-      --warnings         Show warning logs
+      --info             show info logs
+      --levels string    comma-separated log levels to show (error,warn,info,debug)
+      --network string   docker network name to monitor
+      --service string   filter logs by service names (comma-separated, partial match)
+      --warnings         show warning logs
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
       --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --pretty-logs     output logs in pretty format instead of JSON (default true)
+  -v, --verbosity int   0 - silent
+                        100 panic
+                        200 fatal
+                        300 error
+                        400 warning
+                        500 info
+                        600 debug
+                        700 trace (default 500)
 ```
 
 ## See also

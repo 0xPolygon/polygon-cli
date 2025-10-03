@@ -27,11 +27,13 @@ var FixNonceGapCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		var err error
-		inputFixNonceGapArgs.rpcURL = flag_loader.GetRpcUrlFlagValue(cmd)
-		inputFixNonceGapArgs.privateKey, err = flag_loader.GetRequiredPrivateKeyFlagValue(cmd)
+		rpcURL := flag_loader.GetRpcUrlFlagValue(cmd)
+		inputFixNonceGapArgs.rpcURL = *rpcURL
+		privateKey, err := flag_loader.GetRequiredPrivateKeyFlagValue(cmd)
 		if err != nil {
 			return err
 		}
+		inputFixNonceGapArgs.privateKey = *privateKey
 		return nil
 	},
 	PreRunE:      prepareRpcClient,
@@ -44,10 +46,10 @@ var (
 )
 
 type fixNonceGapArgs struct {
-	rpcURL     *string
-	privateKey *string
-	replace    *bool
-	maxNonce   *uint64
+	rpcURL     string
+	privateKey string
+	replace    bool
+	maxNonce   uint64
 }
 
 var inputFixNonceGapArgs = fixNonceGapArgs{}
@@ -64,7 +66,7 @@ var fixNonceGapUsage string
 
 func prepareRpcClient(cmd *cobra.Command, args []string) error {
 	var err error
-	rpcURL := *inputFixNonceGapArgs.rpcURL
+	rpcURL := inputFixNonceGapArgs.rpcURL
 
 	rpcClient, err = ethclient.Dial(rpcURL)
 	if err != nil {
@@ -81,8 +83,8 @@ func prepareRpcClient(cmd *cobra.Command, args []string) error {
 }
 
 func fixNonceGap(cmd *cobra.Command, args []string) error {
-	replace := *inputFixNonceGapArgs.replace
-	pvtKey := strings.TrimPrefix(*inputFixNonceGapArgs.privateKey, "0x")
+	replace := inputFixNonceGapArgs.replace
+	pvtKey := strings.TrimPrefix(inputFixNonceGapArgs.privateKey, "0x")
 	pk, err := crypto.HexToECDSA(pvtKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Invalid private key")
@@ -111,8 +113,8 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 	log.Info().Stringer("addr", addr).Msgf("Current nonce: %d", currentNonce)
 
 	var maxNonce uint64
-	if *inputFixNonceGapArgs.maxNonce != 0 {
-		maxNonce = *inputFixNonceGapArgs.maxNonce
+	if inputFixNonceGapArgs.maxNonce != 0 {
+		maxNonce = inputFixNonceGapArgs.maxNonce
 	} else {
 		maxNonce, err = getMaxNonceFromTxPool(addr)
 		if err != nil {
@@ -233,10 +235,11 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	inputFixNonceGapArgs.rpcURL = FixNonceGapCmd.PersistentFlags().StringP(ArgRpcURL, "r", "http://localhost:8545", "The RPC endpoint url")
-	inputFixNonceGapArgs.privateKey = FixNonceGapCmd.PersistentFlags().String(ArgPrivateKey, "", "the private key to be used when sending the txs to fix the nonce gap")
-	inputFixNonceGapArgs.replace = FixNonceGapCmd.PersistentFlags().Bool(ArgReplace, false, "replace the existing txs in the pool")
-	inputFixNonceGapArgs.maxNonce = FixNonceGapCmd.PersistentFlags().Uint64(ArgMaxNonce, 0, "when set, the max nonce will be this value instead of trying to get it from the pool")
+	f := FixNonceGapCmd.Flags()
+	f.StringVarP(&inputFixNonceGapArgs.rpcURL, ArgRpcURL, "r", "http://localhost:8545", "the RPC endpoint URL")
+	f.StringVar(&inputFixNonceGapArgs.privateKey, ArgPrivateKey, "", "private key to be used when sending txs to fix nonce gap")
+	f.BoolVar(&inputFixNonceGapArgs.replace, ArgReplace, false, "replace the existing txs in the pool")
+	f.Uint64Var(&inputFixNonceGapArgs.maxNonce, ArgMaxNonce, 0, "override max nonce value instead of getting it from the pool")
 }
 
 // Wait for the transaction to be mined

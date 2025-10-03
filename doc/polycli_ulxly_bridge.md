@@ -18,37 +18,36 @@ Commands for moving funds and sending messages from one chain to another
 ```bash
       --call-data string             call data to be passed directly with bridge-message or as an ERC20 Permit (default "0x")
       --call-data-file string        a file containing hex encoded call data
-      --destination-network uint32   the rollup id of the destination network
-      --force-update-root            indicates if the new global exit root is updated or not (default true)
+      --destination-network uint32   rollup ID of the destination network
+      --force-update-root            update the new global exit root (default true)
   -h, --help                         help for bridge
-      --token-address string         the address of an ERC20 token to be used (default "0x0000000000000000000000000000000000000000")
-      --value string                 the amount in wei to be sent along with the transaction (default "0")
+      --token-address string         address of ERC20 token to use (default "0x0000000000000000000000000000000000000000")
+      --value string                 amount in wei to send with the transaction (default "0")
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
-      --bridge-address string              the address of the lxly bridge
-      --chain-id string                    set the chain id to be used in the transaction
+      --bridge-address string              address of the lxly bridge
+      --chain-id string                    chain ID to use in the transaction
       --config string                      config file (default is $HOME/.polygon-cli.yaml)
-      --destination-address string         the address where the bridge will be sent to
+      --destination-address string         destination address for the bridge
       --dry-run                            do all of the transaction steps but do not send the transaction
-      --gas-limit uint                     force a gas limit when sending a transaction
-      --gas-price string                   the gas price to be used
+      --gas-limit uint                     force specific gas limit for transaction
+      --gas-price string                   gas price to use
       --insecure                           skip TLS certificate verification
-      --legacy                             force usage of legacy bridge service (default true)
-      --pretty-logs                        Should logs be in pretty format or JSON (default true)
-      --private-key string                 the hex encoded private key to be used when sending the tx
-      --rpc-url string                     the URL of the RPC to send the transaction
-      --transaction-receipt-timeout uint   the amount of time to wait while trying to confirm a transaction receipt (default 60)
-  -v, --verbosity int                      0 - Silent
-                                           100 Panic
-                                           200 Fatal
-                                           300 Error
-                                           400 Warning
-                                           500 Info
-                                           600 Debug
-                                           700 Trace (default 500)
+      --pretty-logs                        output logs in pretty format instead of JSON (default true)
+      --private-key string                 hex encoded private key for sending transaction
+      --rpc-url string                     RPC URL to send the transaction
+      --transaction-receipt-timeout uint   timeout in seconds to wait for transaction receipt confirmation (default 60)
+  -v, --verbosity int                      0 - silent
+                                           100 panic
+                                           200 fatal
+                                           300 error
+                                           400 warning
+                                           500 info
+                                           600 debug
+                                           700 trace (default 500)
 ```
 
 ## See also

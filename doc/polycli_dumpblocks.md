@@ -74,30 +74,30 @@ To solve this, add the unknown fields to the `.proto` files and recompile them (
 ## Flags
 
 ```bash
-  -b, --batch-size uint    the batch size. Realistically, this probably shouldn't be bigger than 999. Most providers seem to cap at 1000. (default 150)
+  -b, --batch-size uint    batch size for requests (most providers cap at 1000) (default 150)
   -c, --concurrency uint   how many go routines to leverage (default 1)
-  -B, --dump-blocks        if the blocks will be dumped (default true)
-      --dump-receipts      if the receipts will be dumped (default true)
+  -B, --dump-blocks        dump blocks to output (default true)
+      --dump-receipts      dump receipts to output (default true)
   -f, --filename string    where to write the output to (default stdout)
   -F, --filter string      filter output based on tx to and from, not setting a filter means all are allowed (default "{}")
   -h, --help               help for dumpblocks
   -m, --mode string        the output format [json, proto] (default "json")
-  -r, --rpc-url string     The RPC endpoint url (default "http://localhost:8545")
+  -r, --rpc-url string     the RPC endpoint URL (default "http://localhost:8545")
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
       --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --pretty-logs     output logs in pretty format instead of JSON (default true)
+  -v, --verbosity int   0 - silent
+                        100 panic
+                        200 fatal
+                        300 error
+                        400 warning
+                        500 info
+                        600 debug
+                        700 trace (default 500)
 ```
 
 ## See also

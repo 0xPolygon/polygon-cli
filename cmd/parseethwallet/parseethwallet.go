@@ -22,10 +22,10 @@ import (
 var (
 	//go:embed usage.md
 	usage                  string
-	inputFileName          *string
-	inputPassword          *string
-	inputRawHexPrivateKey  *string
-	inputKeyStoreDirectory *string
+	inputFileName          string
+	inputPassword          string
+	inputRawHexPrivateKey  string
+	inputKeyStoreDirectory string
 )
 
 type outKey struct {
@@ -40,14 +40,14 @@ var ParseETHWalletCmd = &cobra.Command{
 	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// it would be nice to have a generic reader
-		if *inputRawHexPrivateKey != "" {
-			trimmedHexPrivateKey := strings.TrimPrefix(*inputRawHexPrivateKey, "0x")
-			ks := keystore.NewKeyStore(*inputKeyStoreDirectory, keystore.StandardScryptN, keystore.StandardScryptP)
+		if inputRawHexPrivateKey != "" {
+			trimmedHexPrivateKey := strings.TrimPrefix(inputRawHexPrivateKey, "0x")
+			ks := keystore.NewKeyStore(inputKeyStoreDirectory, keystore.StandardScryptN, keystore.StandardScryptP)
 			pk, err := crypto.HexToECDSA(trimmedHexPrivateKey)
 			if err != nil {
 				return err
 			}
-			_, err = ks.ImportECDSA(pk, *inputPassword)
+			_, err = ks.ImportECDSA(pk, inputPassword)
 			if err != nil {
 				return err
 			}
@@ -63,7 +63,7 @@ var ParseETHWalletCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		d, err := keystore.DecryptDataV3(k.Crypto, *inputPassword)
+		d, err := keystore.DecryptDataV3(k.Crypto, inputPassword)
 		if err != nil {
 			return err
 		}
@@ -81,16 +81,16 @@ var ParseETHWalletCmd = &cobra.Command{
 }
 
 func init() {
-	flagSet := ParseETHWalletCmd.PersistentFlags()
-	inputFileName = flagSet.String("file", "", "Provide a file with the key information ")
-	inputPassword = flagSet.String("password", "", "An optional password use to unlock the key")
-	inputRawHexPrivateKey = flagSet.String("hexkey", "", "An optional hexkey that would be use to generate a geth style key")
-	inputKeyStoreDirectory = flagSet.String("keystore", "/tmp/keystore", "The directory where keys would be stored when importing a raw hex")
+	f := ParseETHWalletCmd.Flags()
+	f.StringVar(&inputFileName, "file", "", "file with key information")
+	f.StringVar(&inputPassword, "password", "", "optional password to unlock key")
+	f.StringVar(&inputRawHexPrivateKey, "hexkey", "", "optional hexkey to use for generating geth style key")
+	f.StringVar(&inputKeyStoreDirectory, "keystore", "/tmp/keystore", "directory where keys will be stored when importing raw hex")
 }
 
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
-	if inputFileName != nil && *inputFileName != "" {
-		return os.ReadFile(*inputFileName)
+	if inputFileName != "" {
+		return os.ReadFile(inputFileName)
 	}
 
 	if len(args) > 1 {

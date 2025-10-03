@@ -104,9 +104,9 @@ func print(headers eth.BlockHeadersRequest) {
 }
 
 func init() {
-	QueryCmd.Flags().Uint64VarP(&inputQueryParams.StartBlock, "start-block", "s", 0, "Block number to start querying from")
-	QueryCmd.Flags().Uint64VarP(&inputQueryParams.Amount, "amount", "a", 1, "Amount of blocks to query")
+	QueryCmd.Flags().Uint64VarP(&inputQueryParams.StartBlock, "start-block", "s", 0, "block number to start querying from")
+	QueryCmd.Flags().Uint64VarP(&inputQueryParams.Amount, "amount", "a", 1, "amount of blocks to query")
 	if err := QueryCmd.MarkFlagRequired("start-block"); err != nil {
-		log.Error().Err(err).Msg("Failed to mark start-block as required persistent flag")
+		log.Error().Err(err).Msg("Failed to mark start-block as required flag")
 	}
 }
