@@ -130,14 +130,15 @@ The command also inherits flags from parent commands.
       --proof-ger string                   if specified and using legacy mode, the proof will be generated against this GER
       --rpc-url string                     RPC URL to send the transaction
       --transaction-receipt-timeout uint   timeout in seconds to wait for transaction receipt confirmation (default 60)
-  -v, --verbosity int                      0 - silent
-                                           100 panic
-                                           200 fatal
-                                           300 error
-                                           400 warning
-                                           500 info
-                                           600 debug
-                                           700 trace (default 500)
+  -v, --verbosity string                   log level (string or int):
+                                             0   - silent
+                                             100 - panic
+                                             200 - fatal
+                                             300 - error
+                                             400 - warn
+                                             500 - info (default)
+                                             600 - debug
+                                             700 - trace (default "info")
       --wait duration                      retry claiming until deposit is ready, up to specified duration (available for claim asset and claim message)
 ```
 

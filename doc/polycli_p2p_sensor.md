@@ -30,8 +30,7 @@ If no nodes.json file exists, it will be created.
                                    - json (output to stdout)
                                    - none (no persistence) (default "none")
   -d, --database-id string       datastore database ID
-      --dial-ratio int           ratio of inbound to dialed connections. A dial ratio of 2 allows 1/2 of
-                                 connections to be dialed. Setting this to 0 defaults it to 3
+      --dial-ratio int           ratio of inbound to dialed connections (dial ratio of 2 allows 1/2 of connections to be dialed, setting to 0 defaults to 3)
       --discovery-dns string     DNS discovery ENR tree URL
       --discovery-port int       UDP P2P discovery port (default 30303)
       --fork-id bytesHex         hex encoded fork ID (omit 0x) (default F097BC13)
@@ -39,9 +38,8 @@ If no nodes.json file exists, it will be created.
   -h, --help                     help for sensor
       --key string               hex-encoded private key (cannot be set with --key-file)
   -k, --key-file string          private key file (cannot be set with --key)
-  -D, --max-db-concurrency int   maximum number of concurrent database operations to perform. Increasing this
-                                 will result in less chance of missing data (i.e. broken pipes) but can
-                                 significantly increase memory usage (default 10000)
+  -D, --max-db-concurrency int   maximum number of concurrent database operations to perform (increasing this
+                                 will result in less chance of missing data but can significantly increase memory usage) (default 10000)
   -m, --max-peers int            maximum number of peers to connect to (default 2000)
       --nat string               NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
   -n, --network-id uint          filter discovered nodes by this network ID
@@ -61,23 +59,24 @@ If no nodes.json file exists, it will be created.
       --write-block-events       write block events to database (default true)
   -B, --write-blocks             write blocks to database (default true)
       --write-peers              write peers to database (default true)
-      --write-tx-events          write transaction events to database. This option can significantly increase CPU and memory usage (default true)
-  -t, --write-txs                write transactions to database. This option can significantly increase CPU and memory usage (default true)
+      --write-tx-events          write transaction events to database (this option can significantly increase CPU and memory usage) (default true)
+  -t, --write-txs                write transactions to database (this option can significantly increase CPU and memory usage) (default true)
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
-      --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     output logs in pretty format instead of JSON (default true)
-  -v, --verbosity int   0 - silent
-                        100 panic
-                        200 fatal
-                        300 error
-                        400 warning
-                        500 info
-                        600 debug
-                        700 trace (default 500)
+      --config string      config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs        output logs in pretty format instead of JSON (default true)
+  -v, --verbosity string   log level (string or int):
+                             0   - silent
+                             100 - panic
+                             200 - fatal
+                             300 - error
+                             400 - warn
+                             500 - info (default)
+                             600 - debug
+                             700 - trace (default "info")
 ```
 
 ## See also

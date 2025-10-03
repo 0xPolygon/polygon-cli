@@ -27,24 +27,29 @@ and the amount of blocks to query and print the results.
 ## Flags
 
 ```bash
+      --addr ip            address to bind discovery listener (default 127.0.0.1)
   -a, --amount uint        amount of blocks to query (default 1)
   -h, --help               help for query
+      --key string         hex-encoded private key (cannot be set with --key-file)
+  -k, --key-file string    private key file (cannot be set with --key)
+  -P, --port int           port for discovery protocol (default 30303)
   -s, --start-block uint   block number to start querying from
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
-      --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     output logs in pretty format instead of JSON (default true)
-  -v, --verbosity int   0 - silent
-                        100 panic
-                        200 fatal
-                        300 error
-                        400 warning
-                        500 info
-                        600 debug
-                        700 trace (default 500)
+      --config string      config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs        output logs in pretty format instead of JSON (default true)
+  -v, --verbosity string   log level (string or int):
+                             0   - silent
+                             100 - panic
+                             200 - fatal
+                             300 - error
+                             400 - warn
+                             500 - info (default)
+                             600 - debug
+                             700 - trace (default "info")
 ```
 
 ## See also

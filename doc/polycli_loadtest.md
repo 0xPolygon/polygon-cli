@@ -147,16 +147,17 @@ The codebase has a contract that used for load testing. It's written in Solidity
 The command also inherits flags from parent commands.
 
 ```bash
-      --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     output logs in pretty format instead of JSON (default true)
-  -v, --verbosity int   0 - silent
-                        100 panic
-                        200 fatal
-                        300 error
-                        400 warning
-                        500 info
-                        600 debug
-                        700 trace (default 500)
+      --config string      config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs        output logs in pretty format instead of JSON (default true)
+  -v, --verbosity string   log level (string or int):
+                             0   - silent
+                             100 - panic
+                             200 - fatal
+                             300 - error
+                             400 - warn
+                             500 - info (default)
+                             600 - debug
+                             700 - trace (default "info")
 ```
 
 ## See also

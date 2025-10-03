@@ -79,7 +79,7 @@ To solve this, add the unknown fields to the `.proto` files and recompile them (
   -B, --dump-blocks        dump blocks to output (default true)
       --dump-receipts      dump receipts to output (default true)
   -f, --filename string    where to write the output to (default stdout)
-  -F, --filter string      filter output based on tx to and from, not setting a filter means all are allowed (default "{}")
+  -F, --filter string      filter output based on tx to and from (not setting a filter means all are allowed) (default "{}")
   -h, --help               help for dumpblocks
   -m, --mode string        the output format [json, proto] (default "json")
   -r, --rpc-url string     the RPC endpoint URL (default "http://localhost:8545")
@@ -88,16 +88,17 @@ To solve this, add the unknown fields to the `.proto` files and recompile them (
 The command also inherits flags from parent commands.
 
 ```bash
-      --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     output logs in pretty format instead of JSON (default true)
-  -v, --verbosity int   0 - silent
-                        100 panic
-                        200 fatal
-                        300 error
-                        400 warning
-                        500 info
-                        600 debug
-                        700 trace (default 500)
+      --config string      config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs        output logs in pretty format instead of JSON (default true)
+  -v, --verbosity string   log level (string or int):
+                             0   - silent
+                             100 - panic
+                             200 - fatal
+                             300 - error
+                             400 - warn
+                             500 - info (default)
+                             600 - debug
+                             700 - trace (default "info")
 ```
 
 ## See also

@@ -63,7 +63,7 @@ var MonitorCmd = &cobra.Command{
 		// By default, hide logs from `polycli monitor`.
 		verbosityFlag := cmd.Flag("verbosity")
 		if verbosityFlag != nil && !verbosityFlag.Changed {
-			util.SetLogLevel(int(util.Silent))
+			util.SetLogLevel(util.Silent)
 		}
 		prettyFlag := cmd.Flag("pretty-logs")
 		if prettyFlag != nil && prettyFlag.Value.String() == "true" {
