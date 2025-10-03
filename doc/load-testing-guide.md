@@ -95,8 +95,15 @@ command.
   - `--rpc-url`: defines the RPC URL that the test will call when calling the network RPC.
   - `--private-key`: defines the private key of the account used to send the transactions to the network.
   - `--mode`: defines what kind of load test you want to perform, EOA txs, ERC20, etc.
-  - `--verbosity`: defines the log level that will be printed to the console: `0 to Silent`, `100 to Panic`, 
-  `200 to Fatal`, `300 to Error`, `400 to Warning`, `500 to Info`, `600 to Debug`, `700 to Trace`, the default is `500`.  
+  - `--verbosity`: defines the log level that will be printed to the console:
+    - `0`   - silent
+    - `100` - panic
+    - `200` - fatal
+    - `300` - error
+    - `400` - warn
+    - `500` - info (default)
+    - `600` - debug
+    - `700` - trace
   - `--requests`: defines the number of requests that will be sent to the network by each concurrent execution.
   - `--concurrency`: define the number of concurrent executions of the load test. For example, if `--requests` is set to
   `10` and `--concurrency` is set to `2`, then 2 load test executions will start concurrently and each concurrent

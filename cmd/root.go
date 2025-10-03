@@ -43,9 +43,9 @@ import (
 )
 
 var (
-	cfgFile   string
-	verbosity int
-	pretty    bool
+	cfgFile        string
+	verbosityInput string
+	pretty         bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -97,20 +97,32 @@ func NewPolycliCommand() *cobra.Command {
 		Use:   "polycli",
 		Short: "A Swiss Army knife of blockchain tools.",
 		Long:  "Polycli is a collection of tools that are meant to be useful while building, testing, and running block chain applications.",
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			verbosity, err := util.ParseVerbosity(verbosityInput)
+			if err != nil {
+				return err
+			}
 			util.SetLogLevel(verbosity)
 			logMode := util.JSON
 			if pretty {
 				logMode = util.Console
 			}
-			_ = util.SetLogMode(logMode)
+			return util.SetLogMode(logMode)
 		},
 	}
 
 	// Define flags and configuration settings.
 	f := cmd.PersistentFlags()
 	f.StringVar(&cfgFile, "config", "", "config file (default is $HOME/.polygon-cli.yaml)")
-	f.IntVarP(&verbosity, "verbosity", "v", 500, "0 - silent\n100 panic\n200 fatal\n300 error\n400 warning\n500 info\n600 debug\n700 trace")
+	f.StringVarP(&verbosityInput, "verbosity", "v", "info", `log level (string or int):
+  0   - silent
+  100 - panic
+  200 - fatal
+  300 - error
+  400 - warn
+  500 - info (default)
+  600 - debug
+  700 - trace`)
 	f.BoolVar(&pretty, "pretty-logs", true, "output logs in pretty format instead of JSON")
 
 	// Define local flags which will only run when this action is called directly.
