@@ -34,8 +34,8 @@ import (
 	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly/polygonrollupmanager"
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	smcerror "github.com/0xPolygon/polygon-cli/errors"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -2077,22 +2077,14 @@ var ULxLyCmd = &cobra.Command{
 var ulxlyBridgeAndClaimCmd = &cobra.Command{
 	Args:   cobra.NoArgs,
 	Hidden: true,
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		var err error
-		rpcURL, err := flag_loader.GetRequiredRpcUrlFlagValue(cmd)
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		inputUlxlyArgs.rpcURL, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
-		if rpcURL != nil {
-			inputUlxlyArgs.rpcURL = *rpcURL
-		}
-
-		privateKey, err := flag_loader.GetRequiredPrivateKeyFlagValue(cmd)
+		inputUlxlyArgs.privateKey, err = flag.GetPrivateKey(cmd)
 		if err != nil {
 			return err
-		}
-		if privateKey != nil {
-			inputUlxlyArgs.privateKey = *privateKey
 		}
 		return nil
 	},
@@ -2216,7 +2208,7 @@ const (
 	ArgInsecure             = "insecure"
 )
 
-func prepInputs(cmd *cobra.Command, args []string) error {
+func prepInputs(cmd *cobra.Command, args []string) (err error) {
 	if inputUlxlyArgs.dryRun && inputUlxlyArgs.gasLimit == 0 {
 		inputUlxlyArgs.gasLimit = uint64(10_000_000)
 	}
@@ -2250,13 +2242,6 @@ func prepInputs(cmd *cobra.Command, args []string) error {
 		inputUlxlyArgs.callData = string(rawCallData)
 	}
 	return nil
-}
-
-func fatalIfError(err error) {
-	if err == nil {
-		return
-	}
-	log.Fatal().Err(err).Msg("Unexpected error occurred")
 }
 
 type FileOptions struct {
@@ -2315,9 +2300,9 @@ func (o *GetEvent) AddFlags(cmd *cobra.Command) {
 	f.Uint64VarP(&o.ToBlock, ArgToBlock, "t", 0, "end of the range of blocks to retrieve")
 	f.Uint64VarP(&o.FilterSize, ArgFilterSize, "i", 1000, "batch size for individual filter queries")
 	f.BoolVarP(&o.Insecure, ArgInsecure, "", false, "skip TLS certificate verification")
-	fatalIfError(cmd.MarkFlagRequired(ArgFromBlock))
-	fatalIfError(cmd.MarkFlagRequired(ArgToBlock))
-	fatalIfError(cmd.MarkFlagRequired(ArgRPCURL))
+	flag.MarkFlagRequired(cmd, ArgFromBlock)
+	flag.MarkFlagRequired(cmd, ArgToBlock)
+	flag.MarkFlagRequired(cmd, ArgRPCURL)
 }
 
 type GetSmcOptions struct {
@@ -2555,7 +2540,7 @@ or if it's actually an intermediate hash.`,
 	fBridgeAndClaim.StringVar(&inputUlxlyArgs.gasPrice, ArgGasPrice, "", "gas price to use")
 	fBridgeAndClaim.BoolVar(&inputUlxlyArgs.dryRun, ArgDryRun, false, "do all of the transaction steps but do not send the transaction")
 	fBridgeAndClaim.BoolVar(&inputUlxlyArgs.insecure, ArgInsecure, false, "skip TLS certificate verification")
-	fatalIfError(ulxlyBridgeAndClaimCmd.MarkPersistentFlagRequired(ArgBridgeAddress))
+	flag.MarkPersistentFlagRequired(ulxlyBridgeAndClaimCmd, ArgBridgeAddress)
 
 	// bridge specific args
 	fBridge := ulxlyBridgeCmd.PersistentFlags()
@@ -2565,7 +2550,7 @@ or if it's actually an intermediate hash.`,
 	fBridge.StringVar(&inputUlxlyArgs.tokenAddress, ArgTokenAddress, "0x0000000000000000000000000000000000000000", "address of ERC20 token to use")
 	fBridge.StringVar(&inputUlxlyArgs.callData, ArgCallData, "0x", "call data to be passed directly with bridge-message or as an ERC20 Permit")
 	fBridge.StringVar(&inputUlxlyArgs.callDataFile, ArgCallDataFile, "", "a file containing hex encoded call data")
-	fatalIfError(ulxlyBridgeCmd.MarkPersistentFlagRequired(ArgDestNetwork))
+	flag.MarkPersistentFlagRequired(ulxlyBridgeCmd, ArgDestNetwork)
 
 	// Claim specific args
 	fClaim := ulxlyClaimCmd.PersistentFlags()
@@ -2574,9 +2559,9 @@ or if it's actually an intermediate hash.`,
 	fClaim.StringVar(&inputUlxlyArgs.bridgeServiceURL, ArgBridgeServiceURL, "", "URL of the bridge service")
 	fClaim.StringVar(&inputUlxlyArgs.globalIndex, ArgGlobalIndex, "", "an override of the global index value")
 	fClaim.DurationVar(&inputUlxlyArgs.wait, ArgWait, time.Duration(0), "retry claiming until deposit is ready, up to specified duration (available for claim asset and claim message)")
-	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositCount))
-	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositNetwork))
-	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgBridgeServiceURL))
+	flag.MarkPersistentFlagRequired(ulxlyClaimCmd, ArgDepositCount)
+	flag.MarkPersistentFlagRequired(ulxlyClaimCmd, ArgDepositNetwork)
+	flag.MarkPersistentFlagRequired(ulxlyClaimCmd, ArgBridgeServiceURL)
 
 	// Claim Everything Helper Command
 	fClaimEverything := claimEverythingCommand.Flags()
@@ -2585,7 +2570,7 @@ or if it's actually an intermediate hash.`,
 	fClaimEverything.IntVar(&inputUlxlyArgs.bridgeOffset, ArgBridgeOffset, 0, "offset to specify for pagination of underlying bridge service deposits")
 	fClaimEverything.UintVar(&inputUlxlyArgs.concurrency, ArgConcurrency, 1, "worker pool size for claims")
 
-	fatalIfError(claimEverythingCommand.MarkFlagRequired(ArgBridgeMappings))
+	flag.MarkFlagRequired(claimEverythingCommand, ArgBridgeMappings)
 
 	// Top Level
 	ULxLyCmd.AddCommand(ulxlyBridgeAndClaimCmd)

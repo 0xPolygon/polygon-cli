@@ -7,8 +7,8 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/flag"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -32,12 +32,12 @@ var EcRecoverCmd = &cobra.Command{
 	Short: "Recovers and returns the public key of the signature",
 	Long:  usage,
 	Args:  cobra.NoArgs,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		rpcUrlFlagValue := flag_loader.GetRpcUrlFlagValue(cmd)
-		rpcUrl = *rpcUrlFlagValue
-	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		return checkFlags()
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		rpcUrl, err = flag.GetRPCURL(cmd)
+		if err != nil {
+			return err
+		}
+		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := cmd.Context()
@@ -135,14 +135,7 @@ func init() {
 
 	// The sources of decoding are mutually exclusive
 	EcRecoverCmd.MarkFlagsMutuallyExclusive("file", "block-number", "tx")
-}
 
-func checkFlags() error {
-	var err error
-	if rpcUrl != "" {
-		if err = util.ValidateUrl(rpcUrl); err != nil {
-			return err
-		}
-	}
-	return err
+	// Mark required flags
+	flag.MarkFlagRequired(EcRecoverCmd, flag.RPCURL)
 }

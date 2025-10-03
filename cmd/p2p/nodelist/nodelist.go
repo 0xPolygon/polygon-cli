@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"os"
 
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/p2p/database"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -61,7 +61,5 @@ func init() {
 	f.IntVarP(&inputNodeListParams.Limit, "limit", "l", 100, "number of unique nodes to return")
 	f.StringVarP(&inputNodeListParams.ProjectID, "project-id", "p", "", "GCP project ID")
 	f.StringVarP(&inputNodeListParams.DatabaseID, "database-id", "d", "", "datastore database ID")
-	if err := NodeListCmd.MarkFlagRequired("project-id"); err != nil {
-		log.Error().Err(err).Msg("Failed to mark project-id as required flag")
-	}
+	flag.MarkFlagRequired(NodeListCmd, "project-id")
 }

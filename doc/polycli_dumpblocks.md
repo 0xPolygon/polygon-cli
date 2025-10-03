@@ -79,7 +79,7 @@ To solve this, add the unknown fields to the `.proto` files and recompile them (
   -B, --dump-blocks        dump blocks to output (default true)
       --dump-receipts      dump receipts to output (default true)
   -f, --filename string    where to write the output to (default stdout)
-  -F, --filter string      filter output based on tx to and from (not setting a filter means all are allowed) (default "{}")
+  -F, --filter string      filter output based on tx to and from, not setting a filter means all are allowed (default "{}")
   -h, --help               help for dumpblocks
   -m, --mode string        the output format [json, proto] (default "json")
   -r, --rpc-url string     the RPC endpoint URL (default "http://localhost:8545")

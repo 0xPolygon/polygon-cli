@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/0xPolygon/polygon-cli/cmd/parsebatchl2data"
 	"os"
+	"strings"
 
 	"github.com/0xPolygon/polygon-cli/cmd/contract"
+	"github.com/0xPolygon/polygon-cli/cmd/parsebatchl2data"
 	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
 	"github.com/0xPolygon/polygon-cli/cmd/publish"
 	"github.com/0xPolygon/polygon-cli/util"
@@ -18,6 +19,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/fork"
 	"github.com/0xPolygon/polygon-cli/cmd/p2p"
 	"github.com/0xPolygon/polygon-cli/cmd/parseethwallet"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -83,6 +85,15 @@ func initConfig() {
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match
+
+	// Set up environment variable mappings for common flags
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	if err := viper.BindEnv("rpc-url", "ETH_RPC_URL"); err != nil {
+		log.Fatal().Err(err).Msg("Failed to bind rpc-url environment variable")
+	}
+	if err := viper.BindEnv("private-key", "PRIVATE_KEY"); err != nil {
+		log.Fatal().Err(err).Msg("Failed to bind private-key environment variable")
+	}
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
