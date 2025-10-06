@@ -2453,6 +2453,7 @@ or if it's actually an intermediate hash.`,
 	fBridgeAndClaim.StringVar(&inputUlxlyArgs.gasPrice, ArgGasPrice, "", "gas price to use")
 	fBridgeAndClaim.BoolVar(&inputUlxlyArgs.dryRun, ArgDryRun, false, "do all of the transaction steps but do not send the transaction")
 	fBridgeAndClaim.BoolVar(&inputUlxlyArgs.insecure, ArgInsecure, false, "skip TLS certificate verification")
+	fBridgeAndClaim.BoolVar(&inputUlxlyArgs.legacy, ArgLegacy, true, "force usage of legacy bridge service")
 	flag.MarkPersistentFlagRequired(ulxlyBridgeAndClaimCmd, ArgBridgeAddress)
 
 	// bridge specific args
