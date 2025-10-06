@@ -13,7 +13,7 @@ build: ## Build the smart contracts
 ##@ Gen go bindings
 
 .PHONY: gen-go-bindings
-gen-go-bindings: build gen-funder-go-bindings gen-tester-go-bindings gen-tokens-go-bindings ## Generate go bindings.
+gen-go-bindings: build gen-funder-go-bindings gen-tester-go-bindings gen-tokens-go-bindings gen-multicall3-go-bindings## Generate go bindings.
 
 .PHONY: gen-funder-go-bindings
 gen-funder-go-bindings: ## Generatego go bindings for the funder contract.
@@ -58,3 +58,12 @@ gen-ulxly-go-bindings:
 	cat ./out/PolygonZkEVMBridge.sol/PolygonZkEVMBridge.json | jq -r '.bytecode.object' > ../bindings/ulxly/PolygonZkEVMBridge.bin
 	abigen --abi ../bindings/ulxly/PolygonZkEVMBridge.abi --bin ../bindings/ulxly/PolygonZkEVMBridge.bin --pkg ulxly --type legacy --out ../bindings/ulxly/PolygonZkEVMBridge.go
 	@echo "✅ ulxly/PolygonZkEVMBridge.go generated"
+
+.PHONY: gen-multicall3-go-bindings
+gen-multicall3-go-bindings:
+	forge build --force --contracts ./lib/multicall3/src/Multicall3.sol --use solc:0.8.12
+	mkdir -p ../bindings/multicall3/
+	cat ./out/Multicall3.sol/Multicall3.json | jq -r '.abi'             > ../bindings/multicall3/Multicall3.abi
+	cat ./out/Multicall3.sol/Multicall3.json | jq -r '.bytecode.object' > ../bindings/multicall3/Multicall3.bin
+	abigen --abi ../bindings/multicall3/Multicall3.abi --bin ../bindings/multicall3/Multicall3.bin --pkg multicall3 --type multicall3 --out ../bindings/multicall3/multicall3.go
+	@echo "✅ multicall3/multicall3.go generated"

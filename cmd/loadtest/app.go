@@ -87,6 +87,7 @@ type (
 		ReceiptRetryInitialDelayMs uint
 		MaxBaseFeeWei              uint64
 		OutputRawTxOnly            bool
+		CheckBalanceBeforeFunding  bool
 
 		// Computed
 		CurrentGasPrice       *big.Int
@@ -306,6 +307,7 @@ v3, uniswapv3 - perform UniswapV3 swaps`)
 	f.BoolVar(&ltp.WaitForReceipt, "wait-for-receipt", false, "wait for transaction receipt to be mined instead of just sending")
 	f.UintVar(&ltp.ReceiptRetryMax, "receipt-retry-max", 30, "maximum polling attempts for transaction receipt with --wait-for-receipt")
 	f.UintVar(&ltp.ReceiptRetryInitialDelayMs, "receipt-retry-initial-delay-ms", 100, "initial delay in milliseconds for receipt polling (uses exponential backoff with jitter)")
+	f.BoolVar(&ltp.CheckBalanceBeforeFunding, "check-balance-before-funding", false, "check account balance before funding sending accounts (saves gas when accounts are already funded)")
 
 	// TODO Compression
 }

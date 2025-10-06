@@ -330,8 +330,9 @@ func initializeAccountPool(ctx context.Context, c *ethclient.Client, privateKey 
 	accountFundingAmount := inputLoadTestParams.AccountFundingAmount
 	sendingAccountsFile := inputLoadTestParams.SendingAccountsFile
 	callOnly := inputLoadTestParams.EthCallOnly
+	rateLimit := inputLoadTestParams.RateLimit
 
-	accountPool, err = NewAccountPool(ctx, c, privateKey, accountFundingAmount)
+	accountPool, err = NewAccountPool(ctx, c, privateKey, accountFundingAmount, rateLimit)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to create account pool")
 		return fmt.Errorf("unable to create account pool. %w", err)
@@ -399,6 +400,17 @@ func initializeAccountPool(ctx context.Context, c *ethclient.Client, privateKey 
 		return fmt.Errorf("unable to set account pool. %w", err)
 	}
 
+	// wait all accounts to be ready
+	for {
+		rdy, rdyCount, accQty := accountPool.AllAccountsReady()
+		if rdy {
+			log.Info().Msg("All accounts are ready")
+			break
+		}
+		log.Info().Int("ready", rdyCount).Int("total", accQty).Msg("waiting for all accounts to be ready")
+		time.Sleep(time.Second)
+	}
+
 	// check if there are sending accounts to pre fund
 	if sendingAccountsCount == 0 {
 		log.Info().Msg("No sending accounts to pre-fund. Skipping pre-funding of sending accounts.")
@@ -429,14 +441,6 @@ func initializeAccountPool(ctx context.Context, c *ethclient.Client, privateKey 
 	err = accountPool.FundAccounts(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("unable to fund sending accounts")
-		iErr := accountPool.ReturnFunds(ctx)
-		if iErr != nil {
-			log.Error().
-				Err(iErr).
-				Msg("there was an issue returning the funds from the sending accounts back to the funding account")
-			return fmt.Errorf("unable to return funds from sending accounts. %w", iErr)
-		}
-		return fmt.Errorf("unable to fund sending accounts. %w", err)
 	}
 
 	return nil
@@ -473,6 +477,7 @@ func completeLoadTest(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Clie
 	if len(loadTestResults) == 0 {
 		return errors.New("no transactions observed")
 	}
+	endTime = time.Now()
 
 	err = accountPool.ReturnFunds(ctx)
 	if err != nil {
@@ -2008,7 +2013,8 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 	var checkInterval = 5 * time.Second
 	var maxRetries = 30
 
-	noncesToCheck := accountPool.Nonces(ctx)
+	rateLimiter := rate.NewLimiter(rate.Limit(ltp.RateLimit), 1)
+	noncesToCheck := accountPool.Nonces(ctx, true)
 
 	retry := 0
 	for {
@@ -2025,25 +2031,42 @@ func waitForFinalBlock(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Cli
 			return lastBlockNumber, nil
 		}
 
-		for address, expectedNonce := range noncesToCheck {
-			nonce, err := c.NonceAt(ctx, address, new(big.Int).SetUint64(lastBlockNumber))
-			if err != nil {
-				return 0, err
-			}
-			logEvent := log.Debug().
-				Str("address", address.String()).
-				Uint64("nonce", nonce).
-				Uint64("expectedNonce", expectedNonce).
-				Uint64("lastBlockNumber", lastBlockNumber)
-			if nonce < expectedNonce {
-				logEvent.Msg("not all transactions for account have been mined. waiting...")
-			} else {
-				logEvent.Msg("all transactions for account have been mined")
-				delete(noncesToCheck, address)
-			}
-		}
+		wg := sync.WaitGroup{}
+		remainingNoncesToCheck := atomic.Int64{}
+		noncesToCheck.Range(func(key, value any) bool {
+			wg.Add(1)
+			remainingNoncesToCheck.Add(1)
+			address := key.(ethcommon.Address)
+			expectedNonce := value.(uint64)
+			go func(ctx context.Context, rl *rate.Limiter) {
+				defer wg.Done()
+				err := rl.Wait(ctx)
+				if err != nil {
+					log.Error().Err(err).Msg("Rate limiter wait error")
+					return
+				}
+				nonce, err := c.NonceAt(ctx, address, new(big.Int).SetUint64(lastBlockNumber))
+				if err != nil {
+					log.Error().Err(err).Str("address", address.String()).Msg("Unable to get nonce for account while checking for final block")
+					return
+				}
+				logEvent := log.Debug().
+					Str("address", address.String()).
+					Uint64("nonce", nonce).
+					Uint64("expectedNonce", expectedNonce).
+					Uint64("lastBlockNumber", lastBlockNumber)
+				if nonce < expectedNonce {
+					logEvent.Msg("not all transactions for account have been mined. waiting...")
+				} else {
+					remainingNoncesToCheck.Add(-1)
+					noncesToCheck.Delete(address)
+				}
+			}(ctx, rateLimiter)
+			return true
+		})
+		wg.Wait()
 
-		if len(noncesToCheck) == 0 {
+		if remainingNoncesToCheck.Load() == 0 {
 			log.Debug().Msg("All transactions of all accounts have been mined")
 			break
 		}
