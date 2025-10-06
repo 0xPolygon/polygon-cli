@@ -60,8 +60,8 @@ var RPCFuzzCmd = &cobra.Command{
 func init() {
 	f := RPCFuzzCmd.Flags()
 
-	f.StringVarP(&rpcUrl, "rpc-url", "r", "http://localhost:8545", "RPC endpoint URL")
-	f.StringVar(&testPrivateHexKey, "private-key", codeQualityPrivateKey, "hex encoded private key to use for sending transactions")
+	f.StringVarP(&rpcUrl, flag.RPCURL, "r", flag.DefaultRPCURL, "RPC endpoint URL")
+	f.StringVar(&testPrivateHexKey, flag.PrivateKey, codeQualityPrivateKey, "hex encoded private key to use for sending transactions")
 	f.StringVar(&testContractAddress, "contract-address", "", "address of contract to use for testing (if not specified, contract will be deployed automatically)")
 	f.StringVar(&testNamespaces, "namespaces", fmt.Sprintf("eth,web3,net,debug,%s", rpcTestRawHTTPNamespace), "comma separated list of RPC namespaces to test")
 	f.BoolVar(&testFuzz, "fuzz", false, "flag to indicate whether to fuzz input or not")

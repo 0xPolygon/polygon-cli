@@ -847,7 +847,7 @@ func init() {
 
 	f := SignerCmd.Flags()
 	f.StringVar(&inputSignerOpts.keystore, "keystore", "", "use keystore in given folder or file")
-	f.StringVar(&inputSignerOpts.privateKey, "private-key", "", "use provided hex encoded private key")
+	f.StringVar(&inputSignerOpts.privateKey, flag.PrivateKey, "", "use provided hex encoded private key")
 	f.StringVar(&inputSignerOpts.kms, "kms", "", "AWS or GCP if key is stored in cloud")
 	f.StringVar(&inputSignerOpts.keyID, "key-id", "", "ID of key to be used for signing")
 	f.StringVar(&inputSignerOpts.unsafePassword, "unsafe-password", "", "non-interactively specified password for unlocking keystore")

@@ -287,9 +287,9 @@ func generateLibp2pNodeKey(keyType int, seed bool) (nodeKeyOut, error) {
 
 func init() {
 	f := NodekeyCmd.Flags()
-	f.StringVar(&inputNodeKeyPrivateKey, "private-key", "", "use the provided private key (in hex format)")
+	f.StringVar(&inputNodeKeyPrivateKey, flag.PrivateKey, "", "use the provided private key (in hex format)")
 	f.StringVarP(&inputNodeKeyFile, "file", "f", "", "a file with the private nodekey (in hex format)")
-	NodekeyCmd.MarkFlagsMutuallyExclusive("private-key", "file")
+	NodekeyCmd.MarkFlagsMutuallyExclusive(flag.PrivateKey, "file")
 
 	f.StringVar(&inputNodeKeyProtocol, "protocol", "devp2p", "devp2p|libp2p|pex|seed-libp2p")
 	f.StringVar(&inputNodeKeyType, "key-type", "ed25519", "ed25519|secp256k1|ecdsa|rsa")

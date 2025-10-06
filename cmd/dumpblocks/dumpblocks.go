@@ -186,7 +186,7 @@ var DumpblocksCmd = &cobra.Command{
 
 func init() {
 	f := DumpblocksCmd.Flags()
-	f.StringVarP(&inputDumpblocks.RpcUrl, "rpc-url", "r", "http://localhost:8545", "the RPC endpoint URL")
+	f.StringVarP(&inputDumpblocks.RpcUrl, flag.RPCURL, "r", flag.DefaultRPCURL, "the RPC endpoint URL")
 	f.UintVarP(&inputDumpblocks.Threads, "concurrency", "c", 1, "how many go routines to leverage")
 	f.BoolVarP(&inputDumpblocks.ShouldDumpBlocks, "dump-blocks", "B", true, "dump blocks to output")
 	f.BoolVar(&inputDumpblocks.ShouldDumpReceipts, "dump-receipts", true, "dump receipts to output")

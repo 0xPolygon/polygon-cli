@@ -66,8 +66,8 @@ var FundCmd = &cobra.Command{
 func init() {
 	f := FundCmd.Flags()
 
-	f.StringVarP(&params.RpcUrl, "rpc-url", "r", "http://localhost:8545", "RPC endpoint URL")
-	f.StringVar(&params.PrivateKey, "private-key", defaultPrivateKey, "hex encoded private key to use for sending transactions")
+	f.StringVarP(&params.RpcUrl, flag.RPCURL, "r", flag.DefaultRPCURL, "RPC endpoint URL")
+	f.StringVar(&params.PrivateKey, flag.PrivateKey, defaultPrivateKey, "hex encoded private key to use for sending transactions")
 
 	// Wallet parameters.
 	f.Uint64VarP(&params.WalletsNumber, "number", "n", 10, "number of wallets to fund")

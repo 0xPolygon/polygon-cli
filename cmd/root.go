@@ -9,6 +9,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/parsebatchl2data"
 	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
 	"github.com/0xPolygon/polygon-cli/cmd/publish"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/util"
 
 	"github.com/0xPolygon/polygon-cli/cmd/cdk"
@@ -88,10 +89,10 @@ func initConfig() {
 
 	// Set up environment variable mappings for common flags
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	if err := viper.BindEnv("rpc-url", "ETH_RPC_URL"); err != nil {
+	if err := viper.BindEnv(flag.RPCURL, flag.RPCURLEnvVar); err != nil {
 		log.Fatal().Err(err).Msg("Failed to bind rpc-url environment variable")
 	}
-	if err := viper.BindEnv("private-key", "PRIVATE_KEY"); err != nil {
+	if err := viper.BindEnv(flag.PrivateKey, flag.PrivateKeyEnvVar); err != nil {
 		log.Fatal().Err(err).Msg("Failed to bind private-key environment variable")
 	}
 

@@ -229,11 +229,11 @@ func initFlags() {
 
 	// Persistent flags.
 	pf := LoadtestCmd.PersistentFlags()
-	pf.StringVarP(&ltp.RPCUrl, "rpc-url", "r", "http://localhost:8545", "the RPC endpoint URL")
+	pf.StringVarP(&ltp.RPCUrl, flag.RPCURL, "r", flag.DefaultRPCURL, "the RPC endpoint URL")
 	pf.Int64VarP(&ltp.Requests, "requests", "n", 1, "number of requests to perform for the benchmarking session (default of 1 leads to non-representative results)")
 	pf.Int64VarP(&ltp.Concurrency, "concurrency", "c", 1, "number of requests to perform concurrently (default: one at a time)")
 	pf.Int64VarP(&ltp.TimeLimit, "time-limit", "t", -1, "maximum seconds to spend benchmarking (default: no limit)")
-	pf.StringVar(&ltp.PrivateKey, "private-key", codeQualityPrivateKey, "hex encoded private key to use for sending transactions")
+	pf.StringVar(&ltp.PrivateKey, flag.PrivateKey, codeQualityPrivateKey, "hex encoded private key to use for sending transactions")
 	pf.Uint64Var(&ltp.ChainID, "chain-id", 0, "chain ID for the transactions")
 	pf.StringVar(&ltp.ToAddress, "to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "recipient address for transactions")
 	pf.BoolVar(&ltp.RandomRecipients, "random-recipients", false, "send to random addresses instead of fixed address in transfer tests")

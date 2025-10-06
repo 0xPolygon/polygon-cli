@@ -128,7 +128,7 @@ var EcRecoverCmd = &cobra.Command{
 
 func init() {
 	f := EcRecoverCmd.Flags()
-	f.StringVarP(&rpcUrl, "rpc-url", "r", "", "the RPC endpoint URL")
+	f.StringVarP(&rpcUrl, flag.RPCURL, "r", "", "the RPC endpoint URL")
 	f.Uint64VarP(&blockNumber, "block-number", "b", 0, "block number to check the extra data for (default: latest)")
 	f.StringVarP(&filePath, "file", "f", "", "path to a file containing block information in JSON format")
 	f.StringVarP(&txData, "tx", "t", "", "transaction data in hex format")

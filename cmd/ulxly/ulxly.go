@@ -2173,9 +2173,9 @@ var (
 const (
 	ArgGasLimit             = "gas-limit"
 	ArgChainID              = "chain-id"
-	ArgPrivateKey           = "private-key"
+	ArgPrivateKey           = flag.PrivateKey
 	ArgValue                = "value"
-	ArgRPCURL               = "rpc-url"
+	ArgRPCURL               = flag.RPCURL
 	ArgBridgeAddress        = "bridge-address"
 	ArgRollupManagerAddress = "rollup-manager-address"
 	ArgDestNetwork          = "destination-network"
@@ -2300,9 +2300,7 @@ func (o *GetEvent) AddFlags(cmd *cobra.Command) {
 	f.Uint64VarP(&o.ToBlock, ArgToBlock, "t", 0, "end of the range of blocks to retrieve")
 	f.Uint64VarP(&o.FilterSize, ArgFilterSize, "i", 1000, "batch size for individual filter queries")
 	f.BoolVarP(&o.Insecure, ArgInsecure, "", false, "skip TLS certificate verification")
-	flag.MarkFlagRequired(cmd, ArgFromBlock)
-	flag.MarkFlagRequired(cmd, ArgToBlock)
-	flag.MarkFlagRequired(cmd, ArgRPCURL)
+	flag.MarkFlagRequired(cmd, ArgFromBlock, ArgToBlock, ArgRPCURL)
 }
 
 type GetSmcOptions struct {
@@ -2559,9 +2557,7 @@ or if it's actually an intermediate hash.`,
 	fClaim.StringVar(&inputUlxlyArgs.bridgeServiceURL, ArgBridgeServiceURL, "", "URL of the bridge service")
 	fClaim.StringVar(&inputUlxlyArgs.globalIndex, ArgGlobalIndex, "", "an override of the global index value")
 	fClaim.DurationVar(&inputUlxlyArgs.wait, ArgWait, time.Duration(0), "retry claiming until deposit is ready, up to specified duration (available for claim asset and claim message)")
-	flag.MarkPersistentFlagRequired(ulxlyClaimCmd, ArgDepositCount)
-	flag.MarkPersistentFlagRequired(ulxlyClaimCmd, ArgDepositNetwork)
-	flag.MarkPersistentFlagRequired(ulxlyClaimCmd, ArgBridgeServiceURL)
+	flag.MarkPersistentFlagRequired(ulxlyClaimCmd, ArgDepositCount, ArgDepositNetwork, ArgBridgeServiceURL)
 
 	// Claim Everything Helper Command
 	fClaimEverything := claimEverythingCommand.Flags()

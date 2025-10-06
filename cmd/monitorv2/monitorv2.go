@@ -8,6 +8,7 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/chainstore"
 	"github.com/0xPolygon/polygon-cli/cmd/monitorv2/renderer"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/indexer"
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/rs/zerolog/log"
@@ -92,7 +93,7 @@ var MonitorV2Cmd = &cobra.Command{
 }
 
 func init() {
-	MonitorV2Cmd.Flags().StringVar(&rpcURL, "rpc-url", "", "RPC endpoint URL (required)")
+	MonitorV2Cmd.Flags().StringVar(&rpcURL, flag.RPCURL, "", "RPC endpoint URL (required)")
 	MonitorV2Cmd.Flags().StringVar(&rendererType, "renderer", "tui", "renderer type (json, tview, tui)")
 	MonitorV2Cmd.Flags().StringVar(&pprofAddr, "pprof", "", "pprof server address (e.g. 127.0.0.1:6060)")
 }
