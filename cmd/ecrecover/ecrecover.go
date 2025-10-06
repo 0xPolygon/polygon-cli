@@ -7,8 +7,8 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/0xPolygon/polygon-cli/flag"
+	"github.com/0xPolygon/polygon-cli/util"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -132,10 +132,5 @@ func init() {
 	f.Uint64VarP(&blockNumber, "block-number", "b", 0, "block number to check the extra data for (default: latest)")
 	f.StringVarP(&filePath, "file", "f", "", "path to a file containing block information in JSON format")
 	f.StringVarP(&txData, "tx", "t", "", "transaction data in hex format")
-
-	// The sources of decoding are mutually exclusive
 	EcRecoverCmd.MarkFlagsMutuallyExclusive("file", "block-number", "tx")
-
-	// Mark required flags
-	flag.MarkFlagRequired(EcRecoverCmd, flag.RPCURL)
 }
