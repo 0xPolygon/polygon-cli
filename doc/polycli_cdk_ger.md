@@ -41,7 +41,7 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks.
+- [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks
 - [polycli cdk ger dump](polycli_cdk_ger_dump.md) - List detailed information about the global exit root manager.
 
 - [polycli cdk ger inspect](polycli_cdk_ger_inspect.md) - List some basic information about the global exit root manager.
