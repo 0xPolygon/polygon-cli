@@ -102,7 +102,7 @@ var (
 
 var CDKCmd = &cobra.Command{
 	Use:   "cdk",
-	Short: "Utilities for interacting with CDK networks",
+	Short: "Utilities for interacting with CDK networks.",
 	Long:  "Basic utility commands for interacting with the cdk contracts",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		cdkInputArgs.rpcURL, err = flag.GetRPCURL(cmd)

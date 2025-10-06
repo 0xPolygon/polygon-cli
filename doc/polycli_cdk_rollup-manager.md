@@ -40,7 +40,7 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks
+- [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks.
 - [polycli cdk rollup-manager dump](polycli_cdk_rollup-manager_dump.md) - List detailed information about the rollup manager.
 
 - [polycli cdk rollup-manager inspect](polycli_cdk_rollup-manager_inspect.md) - List some basic information about the rollup manager.

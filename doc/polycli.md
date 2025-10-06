@@ -38,7 +38,7 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli abi](polycli_abi.md) - Provides encoding and decoding functionalities with contract signatures and ABI.
 
-- [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks
+- [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks.
 
 - [polycli contract](polycli_contract.md) - Interact with smart contracts and fetch contract information from the blockchain.
 

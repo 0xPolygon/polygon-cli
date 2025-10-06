@@ -41,7 +41,7 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks
+- [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks.
 - [polycli cdk bridge dump](polycli_cdk_bridge_dump.md) - List detailed information about the bridge.
 
 - [polycli cdk bridge inspect](polycli_cdk_bridge_inspect.md) - List some basic information about the bridge.

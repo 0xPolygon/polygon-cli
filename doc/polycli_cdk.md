@@ -11,7 +11,7 @@
 
 ## Description
 
-Utilities for interacting with CDK networks
+Utilities for interacting with CDK networks.
 
 ## Usage
 
