@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/0xPolygon/polygon-cli/flag"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/spf13/cobra"
 )
 
@@ -71,7 +71,9 @@ var MonitorCmd = &cobra.Command{
 
 		prettyFlag := cmd.Flag("pretty-logs")
 		if prettyFlag != nil && prettyFlag.Value.String() == "true" {
-			return util.SetLogMode(util.Console)
+			if err = util.SetLogMode(util.Console); err != nil {
+				return err
+			}
 		}
 
 		return checkFlags()
