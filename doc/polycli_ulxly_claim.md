@@ -36,6 +36,7 @@ The command also inherits flags from parent commands.
       --gas-limit uint                     force specific gas limit for transaction
       --gas-price string                   gas price to use
       --insecure                           skip TLS certificate verification
+      --legacy                             force usage of legacy bridge service (default true)
       --pretty-logs                        output logs in pretty format instead of JSON (default true)
       --private-key string                 hex encoded private key for sending transaction
       --rpc-url string                     RPC URL to send the transaction
