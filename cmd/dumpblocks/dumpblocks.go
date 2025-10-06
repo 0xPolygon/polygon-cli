@@ -12,10 +12,10 @@ import (
 
 	_ "embed"
 
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/proto/gen/pb"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/0xPolygon/polygon-cli/util"
-	"github.com/0xPolygon/polygon-cli/flag"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -193,7 +193,7 @@ func init() {
 	f.StringVarP(&inputDumpblocks.Filename, "filename", "f", "", "where to write the output to (default stdout)")
 	f.StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
 	f.Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "batch size for requests (most providers cap at 1000)")
-	f.StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from, not setting a filter means all are allowed")
+	f.StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from (not setting a filter means all are allowed)")
 }
 
 // writeResponses writes the data to either stdout or a file if one is provided.
