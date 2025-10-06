@@ -25,7 +25,7 @@ import (
 // Structure used by the account pool to control the
 // current state of an account
 type Account struct {
-	ready          atomic.Bool
+	ready          bool
 	address        common.Address
 	privateKey     *ecdsa.PrivateKey
 	startNonce     uint64
@@ -36,13 +36,13 @@ type Account struct {
 
 // Creates a new account with the given private key.
 // The client is used to get the nonce of the account.
-func newAccount(ctx context.Context, client *ethclient.Client, clientRateLimiter *rate.Limiter, privateKey *ecdsa.PrivateKey, startNonce *uint64) (*Account, error) {
+func newAccount(ctx context.Context, client *ethclient.Client, clientRateLimiter *rate.Limiter, privateKey *ecdsa.PrivateKey, startNonce *uint64, mu *sync.Mutex) (*Account, error) {
 	publicKey := privateKey.Public()
 	publicKeyECDSA, _ := publicKey.(*ecdsa.PublicKey)
 	address := crypto.PubkeyToAddress(*publicKeyECDSA)
 
 	acc := &Account{
-		ready:          atomic.Bool{},
+		ready:          false,
 		privateKey:     privateKey,
 		address:        address,
 		funded:         false,
@@ -52,10 +52,9 @@ func newAccount(ctx context.Context, client *ethclient.Client, clientRateLimiter
 	if startNonce != nil {
 		acc.nonce = *startNonce
 		acc.startNonce = *startNonce
-		acc.ready.Store(true)
+		acc.ready = true
 	} else {
 		go func(a *Account) {
-		out:
 			for {
 				log.Trace().Stringer("addr", acc.address).Msg("loading nonce for account in background, account not ready to be used yet")
 				var err error
@@ -72,8 +71,10 @@ func newAccount(ctx context.Context, client *ethclient.Client, clientRateLimiter
 					continue
 				}
 				acc.startNonce = acc.nonce
-				acc.ready.Store(true)
-				break out
+				mu.Lock()
+				defer mu.Unlock()
+				acc.ready = true
+				break
 			}
 		}(acc)
 	}
@@ -215,7 +216,7 @@ func (ap *AccountPool) AllAccountsReady() (bool, int, int) {
 	defer ap.mu.Unlock()
 	rdyCount := 0
 	for i := range ap.accounts {
-		if ap.accounts[i].ready.Load() {
+		if ap.accounts[i].ready {
 			rdyCount++
 		}
 	}
@@ -261,7 +262,7 @@ func (ap *AccountPool) Add(ctx context.Context, privateKey *ecdsa.PrivateKey, st
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
 
-	account, err := newAccount(ctx, ap.client, ap.clientRateLimiter, privateKey, startNonce)
+	account, err := newAccount(ctx, ap.client, ap.clientRateLimiter, privateKey, startNonce, &ap.mu)
 	if err != nil {
 		return fmt.Errorf("failed to create account: %w", err)
 	}
