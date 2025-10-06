@@ -125,6 +125,7 @@ The command also inherits flags from parent commands.
       --gas-price string                   gas price to use
       --global-index string                an override of the global index value
       --insecure                           skip TLS certificate verification
+      --legacy                             force usage of legacy bridge service (default true)
       --pretty-logs                        output logs in pretty format instead of JSON (default true)
       --private-key string                 hex encoded private key for sending transaction
       --proof-ger string                   if specified and using legacy mode, the proof will be generated against this GER
