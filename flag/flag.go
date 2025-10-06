@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -24,16 +25,36 @@ const (
 )
 
 // GetRPCURL retrieves the RPC URL from the command flag or environment variable.
-// Returns the flag value if set, otherwise the environment variable value, otherwise the default.
-// Returns empty string and nil error if none are set.
+// Returns the flag value if set, otherwise the environment variable value, otherwise empty string.
+// Validates the URL format if a non-empty value is provided and returns an error if validation fails.
+// Returns empty string and nil error if no value is set.
 func GetRPCURL(cmd *cobra.Command) (string, error) {
-	return getValue(cmd, RPCURL, RPCURLEnvVar, false)
+	value, err := getValue(cmd, RPCURL, RPCURLEnvVar, false)
+	if err != nil || value == "" {
+		return value, err
+	}
+
+	if err := util.ValidateUrl(value); err != nil {
+		return "", err
+	}
+
+	return value, nil
 }
 
 // GetRequiredRPCURL retrieves the RPC URL from the command flag or environment variable.
-// Returns an error if the value is not set or empty.
+// Returns the flag value if set, otherwise the environment variable value.
+// Validates the URL format and returns an error if the value is not set, empty, or invalid.
 func GetRequiredRPCURL(cmd *cobra.Command) (string, error) {
-	return getValue(cmd, RPCURL, RPCURLEnvVar, true)
+	value, err := getValue(cmd, RPCURL, RPCURLEnvVar, true)
+	if err != nil {
+		return "", err
+	}
+
+	if err := util.ValidateUrl(value); err != nil {
+		return "", err
+	}
+
+	return value, nil
 }
 
 // GetPrivateKey retrieves the private key from the command flag or environment variable.

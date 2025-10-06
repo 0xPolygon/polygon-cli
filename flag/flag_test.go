@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
@@ -183,4 +184,118 @@ func TestValuePriority(t *testing.T) {
 // nil (not set) and a zero value (explicitly set to 0).
 func ptr[T any](v T) *T {
 	return &v
+}
+
+// TestValidateURL tests the URL validation function.
+func TestValidateURL(t *testing.T) {
+	testCases := []struct {
+		name        string
+		url         string
+		expectError bool
+	}{
+		{
+			name:        "Valid HTTP URL",
+			url:         "http://localhost:8545",
+			expectError: false,
+		},
+		{
+			name:        "Valid HTTPS URL",
+			url:         "https://eth-mainnet.example.com",
+			expectError: false,
+		},
+		{
+			name:        "Valid WS URL",
+			url:         "ws://localhost:8546",
+			expectError: false,
+		},
+		{
+			name:        "Valid WSS URL",
+			url:         "wss://eth-mainnet.example.com",
+			expectError: false,
+		},
+		{
+			name:        "URL with path",
+			url:         "https://example.com/rpc/v1",
+			expectError: false,
+		},
+		{
+			name:        "URL with port",
+			url:         "http://localhost:8545",
+			expectError: false,
+		},
+		{
+			name:        "Empty URL",
+			url:         "",
+			expectError: true,
+		},
+		{
+			name:        "URL without scheme",
+			url:         "localhost:8545",
+			expectError: true,
+		},
+		{
+			name:        "URL without host",
+			url:         "http://",
+			expectError: false, // util.ValidateUrl only checks scheme, not host
+		},
+		{
+			name:        "Invalid URL format",
+			url:         "ht!tp://invalid",
+			expectError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := util.ValidateUrl(tc.url)
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestGetRPCURLValidation tests that GetRPCURL validates URLs.
+func TestGetRPCURLValidation(t *testing.T) {
+	testCases := []struct {
+		name        string
+		flagValue   string
+		expectError bool
+	}{
+		{
+			name:        "Valid RPC URL",
+			flagValue:   "http://localhost:8545",
+			expectError: false,
+		},
+		{
+			name:        "Invalid RPC URL - no scheme",
+			flagValue:   "localhost:8545",
+			expectError: true,
+		},
+		{
+			name:        "Invalid RPC URL - no host",
+			flagValue:   "http://",
+			expectError: false, // util.ValidateUrl only checks scheme, not host
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := &cobra.Command{Use: "test"}
+			cmd.Flags().String(RPCURL, DefaultRPCURL, "test rpc url")
+			if tc.flagValue != "" {
+				cmd.SetArgs([]string{"--" + RPCURL, tc.flagValue})
+				_ = cmd.Execute()
+			}
+
+			_, err := GetRPCURL(cmd)
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }

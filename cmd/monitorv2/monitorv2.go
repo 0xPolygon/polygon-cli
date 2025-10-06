@@ -31,12 +31,18 @@ var MonitorV2Cmd = &cobra.Command{
 	Use:   "monitorv2",
 	Short: "Monitor v2 command stub",
 	Long:  usage,
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		// Set default verbosity to Error level (300) if not explicitly set by user
 		verbosityFlag := cmd.Flag("verbosity")
 		if verbosityFlag != nil && !verbosityFlag.Changed {
 			util.SetLogLevel(300) // Error level
 		}
+
+		rpcURL, err = flag.GetRequiredRPCURL(cmd)
+		if err != nil {
+			return err
+		}
+
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
