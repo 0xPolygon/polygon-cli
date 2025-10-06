@@ -11,7 +11,7 @@
 
 ## Description
 
-Watch for bridge events and display them on the fly
+Watch for bridge events and display them on the fly.
 
 ```bash
 polycli cdk bridge monitor [flags]
@@ -57,4 +57,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk bridge](polycli_cdk_bridge.md) - Utilities for interacting with CDK bridge contract
+- [polycli cdk bridge](polycli_cdk_bridge.md) - Utilities for interacting with CDK bridge contract.

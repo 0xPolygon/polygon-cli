@@ -11,7 +11,7 @@
 
 ## Description
 
-Generate a node list to seed a node
+Generate a node list to seed a node.
 
 ```bash
 polycli p2p nodelist [nodes.json] [flags]

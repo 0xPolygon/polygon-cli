@@ -35,7 +35,7 @@ type TraceData struct {
 
 var FoldTraceCmd = &cobra.Command{
 	Use:   "fold-trace",
-	Short: "Trace an execution trace and fold it for visualization",
+	Short: "Trace an execution trace and fold it for visualization.",
 	Long:  usage,
 	Args:  cobra.ArbitraryArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) error {

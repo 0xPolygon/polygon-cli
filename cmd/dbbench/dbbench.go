@@ -138,7 +138,7 @@ func NewTestResult(startTime, endTime time.Time, desc string, opCount uint64) *T
 
 var DBBenchCmd = &cobra.Command{
 	Use:   "dbbench [flags]",
-	Short: "Perform a level/pebble db benchmark",
+	Short: "Perform a level/pebble db benchmark.",
 	Long:  usage,
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) error {

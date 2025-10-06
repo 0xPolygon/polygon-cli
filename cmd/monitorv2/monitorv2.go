@@ -28,7 +28,7 @@ var (
 
 var MonitorV2Cmd = &cobra.Command{
 	Use:   "monitorv2",
-	Short: "Monitor v2 command stub",
+	Short: "Monitor v2 command stub.",
 	Long:  usage,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Set default verbosity to Error level (300) if not explicitly set by user

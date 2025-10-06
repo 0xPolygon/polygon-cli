@@ -77,7 +77,7 @@ var importCmdUsage string
 
 var SignerCmd = &cobra.Command{
 	Use:   "signer",
-	Short: "Utilities for security signing transactions",
+	Short: "Utilities for security signing transactions.",
 	Long:  signerUsage,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		privateKey := flag_loader.GetPrivateKeyFlagValue(cmd)
@@ -88,7 +88,7 @@ var SignerCmd = &cobra.Command{
 
 var SignCmd = &cobra.Command{
 	Use:     "sign",
-	Short:   "Sign tx data",
+	Short:   "Sign tx data.",
 	Long:    signCmdUsage,
 	Args:    cobra.NoArgs,
 	PreRunE: sanityCheck,
@@ -159,7 +159,7 @@ var SignCmd = &cobra.Command{
 
 var CreateCmd = &cobra.Command{
 	Use:     "create",
-	Short:   "Create a new key",
+	Short:   "Create a new key.",
 	Long:    createCmdUsage,
 	Args:    cobra.NoArgs,
 	PreRunE: sanityCheck,
@@ -208,7 +208,7 @@ var CreateCmd = &cobra.Command{
 
 var ListCmd = &cobra.Command{
 	Use:     "list",
-	Short:   "List the keys in the keyring / keystore",
+	Short:   "List the keys in the keyring / keystore.",
 	Long:    listCmdUsage,
 	Args:    cobra.NoArgs,
 	PreRunE: sanityCheck,
@@ -231,7 +231,7 @@ var ListCmd = &cobra.Command{
 
 var ImportCmd = &cobra.Command{
 	Use:   "import",
-	Short: "Import a private key into the keyring / keystore",
+	Short: "Import a private key into the keyring / keystore.",
 	Long:  importCmdUsage,
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
