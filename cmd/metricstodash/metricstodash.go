@@ -1,4 +1,4 @@
-package metricsToDash
+package metricstodash
 
 import (
 	"fmt"
