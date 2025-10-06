@@ -11,7 +11,7 @@
 
 ## Description
 
-Perform a level/pebble db benchmark
+Perform a level/pebble db benchmark.
 
 ```bash
 polycli dbbench [flags]

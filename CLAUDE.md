@@ -146,3 +146,9 @@ The tool supports configuration via:
   f.StringVar(&myVar, "name", "", "description")
   f.IntVar(&count, "count", 0, "description")
   ```
+
+### Cobra Commands
+- Command `Short` descriptions: sentence case with ending period, e.g., `"Generate a node list to seed a node."`
+- Command `Long` descriptions: consider using embedded usage.md file via `//go:embed usage.md` pattern; when using inline strings, use sentence case with ending period for complete sentences
+- Command `Short` should be brief (~50 characters or less), appears in help menus and command lists
+- Command `Long` provides detailed explanation, can be empty if `Short` is sufficient
