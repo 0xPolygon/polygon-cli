@@ -147,6 +147,9 @@ The tool supports configuration via:
   f.IntVar(&count, "count", 0, "description")
   ```
 
+### Cobra Command Arguments
+- Prefer to use Cobra built-in validators (`cobra.NoArgs`, `cobra.ExactArgs(n)`, `cobra.MinimumNArgs(n)`, `cobra.MaximumNArgs(n)`, `cobra.ArbitraryArgs`) instead of custom `Args: func(cmd *cobra.Command, args []string) error` functions, and move argument parsing/validation logic to `PreRunE` hook
+
 ### Cobra Commands
 - Command `Short` descriptions: sentence case with ending period, e.g., `"Generate a node list to seed a node."`
 - Command `Long` descriptions: consider using embedded usage.md file via `//go:embed usage.md` pattern; when using inline strings, use sentence case with ending period for complete sentences

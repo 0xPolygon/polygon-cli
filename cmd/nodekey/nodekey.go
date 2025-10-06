@@ -22,7 +22,6 @@ import (
 	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"golang.org/x/exp/slices"
 )
 
 // libp2p (substrate/avail) - https://github.com/libp2p/specs/blob/master/peer-ids/peer-ids.md
@@ -66,9 +65,34 @@ var NodekeyCmd = &cobra.Command{
 	Use:   "nodekey",
 	Short: "Generate node keys for different blockchain clients and protocols.",
 	Long:  usage,
+	Args:  cobra.NoArgs,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		privateKey := flag_loader.GetPrivateKeyFlagValue(cmd)
 		inputNodeKeyPrivateKey = *privateKey
+	},
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		switch inputNodeKeyProtocol {
+		case "devp2p":
+			invalidFlags := []string{"seed", "marshal-protobuf"}
+			return validateNodeKeyFlags(cmd, invalidFlags)
+		case "libp2p":
+			invalidFlags := []string{"file", "ip", "tcp", "udp", "sign", "seed"}
+			return validateNodeKeyFlags(cmd, invalidFlags)
+		case "seed-libp2p":
+			invalidFlags := []string{"file", "ip", "tcp", "udp", "sign"}
+			if err := validateNodeKeyFlags(cmd, invalidFlags); err != nil {
+				return err
+			}
+			if inputNodeKeyType == "rsa" {
+				return fmt.Errorf("the RSA key type doesn't support manual key seeding")
+			}
+			if inputNodeKeyType == "secp256k1" {
+				return fmt.Errorf("the secp256k1 key type doesn't support manual key seeding")
+			}
+			return nil
+		default:
+			return fmt.Errorf("the protocol %s is not implemented", inputNodeKeyProtocol)
+		}
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var nko nodeKeyOut
@@ -113,46 +137,6 @@ var NodekeyCmd = &cobra.Command{
 		}
 		fmt.Println(string(out))
 
-		return nil
-	},
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) != 0 {
-			return fmt.Errorf("this command expects no arguments")
-		}
-
-		validProtocols := []string{"devp2p", "libp2p", "seed-libp2p"}
-		ok := slices.Contains(validProtocols, inputNodeKeyProtocol)
-		if !ok {
-			return fmt.Errorf("the protocol %s is not implemented", inputNodeKeyProtocol)
-		}
-
-		if inputNodeKeyProtocol == "devp2p" {
-			invalidFlags := []string{"seed", "marshal-protobuf"}
-			err := validateNodeKeyFlags(cmd, invalidFlags)
-			if err != nil {
-				return err
-			}
-		}
-		if inputNodeKeyProtocol == "libp2p" {
-			invalidFlags := []string{"file", "ip", "tcp", "udp", "sign", "seed"}
-			err := validateNodeKeyFlags(cmd, invalidFlags)
-			if err != nil {
-				return err
-			}
-		}
-		if inputNodeKeyProtocol == "seed-libp2p" {
-			invalidFlags := []string{"file", "ip", "tcp", "udp", "sign"}
-			err := validateNodeKeyFlags(cmd, invalidFlags)
-			if err != nil {
-				return err
-			}
-			if inputNodeKeyType == "rsa" {
-				return fmt.Errorf("the RSA key type doesn't support manual key seeding")
-			}
-			if inputNodeKeyType == "secp256k1" {
-				return fmt.Errorf("the secp256k1 key type doesn't support manual key seeding")
-			}
-		}
 		return nil
 	},
 }
