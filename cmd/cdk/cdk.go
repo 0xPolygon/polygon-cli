@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xPolygon/polygon-cli/custom_marshaller"
+	"github.com/0xPolygon/polygon-cli/custommarshaller"
 	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
