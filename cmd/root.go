@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/0xPolygon/polygon-cli/cmd/contract"
-	"github.com/0xPolygon/polygon-cli/cmd/parsebatchl2data"
 	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
+	"github.com/0xPolygon/polygon-cli/cmd/parsebatchl2data"
 	"github.com/0xPolygon/polygon-cli/cmd/publish"
 	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/util"
@@ -86,15 +86,6 @@ func initConfig() {
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match
-
-	// Set up environment variable mappings for common flags
-	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	if err := viper.BindEnv(flag.RPCURL, flag.RPCURLEnvVar); err != nil {
-		log.Fatal().Err(err).Msg("Failed to bind rpc-url environment variable")
-	}
-	if err := viper.BindEnv(flag.PrivateKey, flag.PrivateKeyEnvVar); err != nil {
-		log.Fatal().Err(err).Msg("Failed to bind private-key environment variable")
-	}
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
