@@ -11,7 +11,7 @@
 
 ## Description
 
-Utilities for interacting with CDK bridge contract
+Utilities for interacting with CDK bridge contract.
 
 ## Flags
 
@@ -41,10 +41,10 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks
-- [polycli cdk bridge dump](polycli_cdk_bridge_dump.md) - List detailed information about the bridge
+- [polycli cdk](polycli_cdk.md) - Utilities for interacting with CDK networks.
+- [polycli cdk bridge dump](polycli_cdk_bridge_dump.md) - List detailed information about the bridge.
 
-- [polycli cdk bridge inspect](polycli_cdk_bridge_inspect.md) - List some basic information about the bridge
+- [polycli cdk bridge inspect](polycli_cdk_bridge_inspect.md) - List some basic information about the bridge.
 
-- [polycli cdk bridge monitor](polycli_cdk_bridge_monitor.md) - Watch for bridge events and display them on the fly
+- [polycli cdk bridge monitor](polycli_cdk_bridge_monitor.md) - Watch for bridge events and display them on the fly.
 

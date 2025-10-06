@@ -11,7 +11,7 @@
 
 ## Description
 
-List some basic information about a specific rollup
+List some basic information about a specific rollup.
 
 ```bash
 polycli cdk rollup inspect [flags]
@@ -70,4 +70,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk rollup](polycli_cdk_rollup.md) - Utilities for interacting with CDK rollup manager to get rollup specific information
+- [polycli cdk rollup](polycli_cdk_rollup.md) - Utilities for interacting with CDK rollup manager to get rollup specific information.

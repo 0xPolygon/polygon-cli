@@ -11,7 +11,7 @@
 
 ## Description
 
-List some basic information about each rollup
+List some basic information about each rollup.
 
 ```bash
 polycli cdk rollup-manager list-rollups [flags]
@@ -56,4 +56,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk rollup-manager](polycli_cdk_rollup-manager.md) - Utilities for interacting with CDK rollup manager contract
+- [polycli cdk rollup-manager](polycli_cdk_rollup-manager.md) - Utilities for interacting with CDK rollup manager contract.

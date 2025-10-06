@@ -11,7 +11,7 @@
 
 ## Description
 
-Watch for global exit root manager events and display them on the fly
+Watch for global exit root manager events and display them on the fly.
 
 ```bash
 polycli cdk ger monitor [flags]
@@ -57,4 +57,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli cdk ger](polycli_cdk_ger.md) - Utilities for interacting with CDK global exit root manager contract
+- [polycli cdk ger](polycli_cdk_ger.md) - Utilities for interacting with CDK global exit root manager contract.

@@ -11,7 +11,7 @@
 
 ## Description
 
-Monitor v2 command stub
+Monitor v2 command stub.
 
 ```bash
 polycli monitorv2 [flags]
