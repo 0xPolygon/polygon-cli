@@ -616,7 +616,7 @@ func mustPrintLogs(logs []types.Log, contractInstance reflect.Value, contractABI
 			}
 		}
 
-		customMarshaller := custom_marshaller.New(parsedEvent)
+		customMarshaller := custommarshaller.New(parsedEvent)
 
 		logsPrinted++
 		mustPrintJSONIndent(struct {

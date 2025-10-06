@@ -11,7 +11,7 @@
 
 ## Description
 
-Compute the balance tree and the nullifier tree given the deposits and claims
+Compute the balance tree and the nullifier tree given the deposits and claims.
 
 ```bash
 polycli ulxly compute-balance-nullifier-tree [flags]
@@ -79,4 +79,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge
+- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge.

@@ -33,7 +33,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/fund"
 	"github.com/0xPolygon/polygon-cli/cmd/hash"
 	"github.com/0xPolygon/polygon-cli/cmd/loadtest"
-	"github.com/0xPolygon/polygon-cli/cmd/metricsToDash"
+	"github.com/0xPolygon/polygon-cli/cmd/metricstodash"
 	"github.com/0xPolygon/polygon-cli/cmd/mnemonic"
 	"github.com/0xPolygon/polygon-cli/cmd/monitor"
 	"github.com/0xPolygon/polygon-cli/cmd/monitorv2"
@@ -108,7 +108,7 @@ func NewPolycliCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "polycli",
 		Short: "A Swiss Army knife of blockchain tools.",
-		Long:  "Polycli is a collection of tools that are meant to be useful while building, testing, and running block chain applications.",
+		Long:  "Polycli is a collection of tools that are meant to be useful while building, testing, and running blockchain applications.",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			verbosity, err := util.ParseVerbosity(verbosityInput)
 			if err != nil {
@@ -154,7 +154,7 @@ func NewPolycliCommand() *cobra.Command {
 		fund.FundCmd,
 		hash.HashCmd,
 		loadtest.LoadtestCmd,
-		metricsToDash.MetricsToDashCmd,
+		metricstodash.MetricsToDashCmd,
 		mnemonic.MnemonicCmd,
 		monitor.MonitorCmd,
 		monitorv2.MonitorV2Cmd,

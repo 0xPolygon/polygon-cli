@@ -41,7 +41,7 @@ type ContractInfo struct {
 
 var Cmd = &cobra.Command{
 	Use:   "contract",
-	Short: "Interact with smart contracts and fetch contract information from the blockchain",
+	Short: "Interact with smart contracts and fetch contract information from the blockchain.",
 	Long:  usage,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputArgs.rpcURL, err = flag.GetRPCURL(cmd)

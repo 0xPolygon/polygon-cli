@@ -21,7 +21,7 @@ var cmdUsage string
 
 var Cmd = &cobra.Command{
 	Use:   "publish",
-	Short: "Publish transactions to the network with high-throughput",
+	Short: "Publish transactions to the network with high-throughput.",
 	Long:  cmdUsage,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		publishInputArgs.rpcURL, err = flag.GetRPCURL(cmd)

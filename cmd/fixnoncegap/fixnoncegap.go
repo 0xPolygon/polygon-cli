@@ -22,7 +22,7 @@ import (
 
 var FixNonceGapCmd = &cobra.Command{
 	Use:   "fix-nonce-gap",
-	Short: "Send txs to fix the nonce gap for a specific account",
+	Short: "Send txs to fix the nonce gap for a specific account.",
 	Long:  fixNonceGapUsage,
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
@@ -182,12 +182,18 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 					strings.Contains(err.Error(), "INTERNAL_ERROR: could not replace existing tx") {
 					if replace {
 						txTemplateCopy := *txTemplate
-						oldGasPrice := txTemplate.GasPrice
+						oldGasPrice := tx.GasPrice()
 						// increase TX gas price by 10% and retry
-						txTemplateCopy.GasPrice = new(big.Int).Mul(txTemplate.GasPrice, big.NewInt(11))
+						txTemplateCopy.GasPrice = new(big.Int).Mul(oldGasPrice, big.NewInt(11))
 						txTemplateCopy.GasPrice = new(big.Int).Div(txTemplateCopy.GasPrice, big.NewInt(10))
+						// if gas price didn't increase, this means the value is really small and 10% was smaller than 1.
+						// This can be the case for local networks running for a long time without transactions.
+						// We just add 1 wei to force gasPrice to move up to allow tx replacement
+						if txTemplateCopy.GasPrice.Cmp(oldGasPrice) == 0 {
+							txTemplateCopy.GasPrice = new(big.Int).Add(txTemplateCopy.GasPrice, big.NewInt(1))
+						}
 						tx = types.NewTx(&txTemplateCopy)
-						log.Info().Stringer("hash", signedTx.Hash()).Msgf("tx with nonce %d is underpriced, increasing fee by 10%%. From %d To %d", txTemplate.Nonce, oldGasPrice, txTemplateCopy.GasPrice)
+						log.Info().Stringer("hash", signedTx.Hash()).Msgf("tx with nonce %d is underpriced, increasing fee. From %d To %d", txTemplate.Nonce, oldGasPrice, txTemplateCopy.GasPrice)
 						time.Sleep(time.Second)
 						continue
 					} else {
