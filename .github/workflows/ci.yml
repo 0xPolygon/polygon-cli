@@ -88,6 +88,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: init submodules
+        run: |
+          git submodule sync --recursive
+          git submodule update --init --recursive
+
       - name: gen-go-bindings
         run: make gen-go-bindings
 
