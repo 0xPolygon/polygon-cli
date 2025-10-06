@@ -11,7 +11,7 @@
 
 ## Description
 
-Commands for claiming deposits on a particular chain
+Commands for claiming deposits on a particular chain.
 
 ## Flags
 
@@ -53,7 +53,7 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly claim asset](polycli_ulxly_claim_asset.md) - Claim a deposit
+- [polycli ulxly claim asset](polycli_ulxly_claim_asset.md) - Claim a deposit.
 
-- [polycli ulxly claim message](polycli_ulxly_claim_message.md) - Claim a message
+- [polycli ulxly claim message](polycli_ulxly_claim_message.md) - Claim a message.
 

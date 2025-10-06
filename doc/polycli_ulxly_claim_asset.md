@@ -11,7 +11,7 @@
 
 ## Description
 
-Claim a deposit
+Claim a deposit.
 
 ```bash
 polycli ulxly  claim asset [flags]
@@ -139,4 +139,4 @@ The command also inherits flags from parent commands.
 
 ## See also
 
-- [polycli ulxly claim](polycli_ulxly_claim.md) - Commands for claiming deposits on a particular chain
+- [polycli ulxly claim](polycli_ulxly_claim.md) - Commands for claiming deposits on a particular chain.

@@ -11,11 +11,11 @@
 
 ## Description
 
-Utilities for interacting with CDK networks
+Utilities for interacting with CDK networks.
 
 ## Usage
 
-Basic utility commands for interacting with the cdk contracts
+Basic utility commands for interacting with the cdk contracts.
 ## Flags
 
 ```bash
@@ -44,11 +44,11 @@ The command also inherits flags from parent commands.
 ## See also
 
 - [polycli](polycli.md) - A Swiss Army knife of blockchain tools.
-- [polycli cdk bridge](polycli_cdk_bridge.md) - Utilities for interacting with CDK bridge contract
+- [polycli cdk bridge](polycli_cdk_bridge.md) - Utilities for interacting with CDK bridge contract.
 
-- [polycli cdk ger](polycli_cdk_ger.md) - Utilities for interacting with CDK global exit root manager contract
+- [polycli cdk ger](polycli_cdk_ger.md) - Utilities for interacting with CDK global exit root manager contract.
 
-- [polycli cdk rollup](polycli_cdk_rollup.md) - Utilities for interacting with CDK rollup manager to get rollup specific information
+- [polycli cdk rollup](polycli_cdk_rollup.md) - Utilities for interacting with CDK rollup manager to get rollup specific information.
 
-- [polycli cdk rollup-manager](polycli_cdk_rollup-manager.md) - Utilities for interacting with CDK rollup manager contract
+- [polycli cdk rollup-manager](polycli_cdk_rollup-manager.md) - Utilities for interacting with CDK rollup manager contract.
 

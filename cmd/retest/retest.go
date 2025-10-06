@@ -700,7 +700,7 @@ func checkContractMap(input any, contractMap map[string]string) (string, bool) {
 
 var RetestCmd = &cobra.Command{
 	Use:   "retest [flags]",
-	Short: "Convert the standard ETH test fillers into something to be replayed against an RPC",
+	Short: "Convert the standard ETH test fillers into something to be replayed against an RPC.",
 	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Info().Msg("starting")

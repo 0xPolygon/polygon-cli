@@ -22,7 +22,7 @@ import (
 
 var FixNonceGapCmd = &cobra.Command{
 	Use:   "fix-nonce-gap",
-	Short: "Send txs to fix the nonce gap for a specific account",
+	Short: "Send txs to fix the nonce gap for a specific account.",
 	Long:  fixNonceGapUsage,
 	Args:  cobra.NoArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
