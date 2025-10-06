@@ -473,10 +473,13 @@ func (ap *AccountPool) fundAccountsWithMulticall3(ctx context.Context, tops *bin
 	log.Debug().
 		Msg("funding sending accounts with multicall3")
 
+	const defaultAccsToFundPerTx = 400
 	accsToFundPerTx, err := util.Multicall3MaxAccountsToFundPerTx(ctx, ap.client)
 	if err != nil {
-		log.Warn().Err(err).Msg("failed to get multicall3 max accounts to fund per tx, falling back to 400")
-		accsToFundPerTx = 400
+		log.Warn().Err(err).
+			Uint64("defaultAccsToFundPerTx", defaultAccsToFundPerTx).
+			Msg("failed to get multicall3 max accounts to fund per tx, falling back to default")
+		accsToFundPerTx = defaultAccsToFundPerTx
 	}
 	log.Debug().Uint64("accsToFundPerTx", accsToFundPerTx).Msg("multicall3 max accounts to fund per tx")
 	chSize := (uint64(len(ap.accounts)) / accsToFundPerTx) + 1

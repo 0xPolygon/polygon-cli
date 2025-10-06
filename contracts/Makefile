@@ -13,7 +13,7 @@ build: ## Build the smart contracts
 ##@ Gen go bindings
 
 .PHONY: gen-go-bindings
-gen-go-bindings: build gen-funder-go-bindings gen-tester-go-bindings gen-tokens-go-bindings gen-multicall3-go-bindings## Generate go bindings.
+gen-go-bindings: build gen-funder-go-bindings gen-tester-go-bindings gen-tokens-go-bindings gen-multicall3-go-bindings ## Generate go bindings.
 
 .PHONY: gen-funder-go-bindings
 gen-funder-go-bindings: ## Generatego go bindings for the funder contract.
