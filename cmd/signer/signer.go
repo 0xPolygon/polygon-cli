@@ -24,6 +24,7 @@ import (
 
 	kms "cloud.google.com/go/kms/apiv1"
 	"cloud.google.com/go/kms/apiv1/kmspb"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/gethkeystore"
 	accounts2 "github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -33,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/google/tink/go/kwp/subtle"
 	"github.com/manifoldco/promptui"
-	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/iterator"
@@ -80,7 +80,7 @@ var SignerCmd = &cobra.Command{
 	Short: "Utilities for security signing transactions",
 	Long:  signerUsage,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		inputSignerOpts.privateKey, err = flag.GetPrivateKey(cmd)
+		inputSignerOpts.privateKey, err = flag.GetRequiredPrivateKey(cmd)
 		if err != nil {
 			return err
 		}
@@ -115,7 +115,7 @@ var SignCmd = &cobra.Command{
 				for _, a := range accounts {
 					accountStrings += a.Address.String() + " "
 				}
-				return fmt.Errorf("the account with address <%s> could not be found in list [%s]", inputSignerOpts.keyID, accountStrings)
+				return fmt.Errorf("account with address %s not found in list [%s]", inputSignerOpts.keyID, accountStrings)
 			}
 			password, err := getKeystorePassword()
 			if err != nil {
@@ -270,7 +270,7 @@ var ImportCmd = &cobra.Command{
 
 func getTxDataToSign() (*ethtypes.Transaction, error) {
 	if inputSignerOpts.dataFile == "" {
-		return nil, fmt.Errorf("no datafile was specified to sign")
+		return nil, fmt.Errorf("datafile not specified")
 	}
 	dataToSign, err := os.ReadFile(inputSignerOpts.dataFile)
 	if err != nil {
@@ -561,7 +561,7 @@ func wrapKeyForGCPKMS(ctx context.Context, client *kms.KeyManagementClient) ([]b
 		PublicKey: asn1.BitString{Bytes: elliptic.Marshal(key.Curve, key.X, key.Y)}, //nolint:staticcheck
 	})
 	if err != nil {
-		return nil, fmt.Errorf("unable to marshal private key %w", err)
+		return nil, fmt.Errorf("unable to marshal private key: %w", err)
 	}
 	keyBytes, err := asn1.Marshal(privKey)
 	if err != nil {
@@ -676,13 +676,13 @@ func (g *GCPKMS) Sign(ctx context.Context, tx *ethtypes.Transaction) error {
 	// For more details on ensuring E2E in-transit integrity to and from Cloud KMS visit:
 	// https://cloud.google.com/kms/docs/data-integrity-guidelines
 	if !result.VerifiedDigestCrc32C {
-		return fmt.Errorf("AsymmetricSign: request corrupted in-transit")
+		return fmt.Errorf("asymmetric sign: request corrupted in-transit")
 	}
 	if result.Name != req.Name {
-		return fmt.Errorf("AsymmetricSign: request corrupted in-transit")
+		return fmt.Errorf("asymmetric sign: request corrupted in-transit")
 	}
 	if int64(crc32c(result.Signature)) != result.SignatureCrc32C.Value {
-		return fmt.Errorf("AsymmetricSign: response corrupted in-transit")
+		return fmt.Errorf("asymmetric sign: response corrupted in-transit")
 	}
 
 	gcpPubKey, err := getPublicKeyByName(ctx, client, name)
@@ -782,7 +782,7 @@ func sanityCheck(cmd *cobra.Command, args []string) error {
 		keyStoreMethods += 1
 	}
 	if keyStoreMethods > 1 {
-		return fmt.Errorf("Multiple conflicting keystore sources were specified")
+		return fmt.Errorf("multiple conflicting keystore sources were specified")
 	}
 	pwErr := passwordValidation(inputSignerOpts.unsafePassword)
 	if inputSignerOpts.unsafePassword != "" && pwErr != nil {
@@ -791,18 +791,18 @@ func sanityCheck(cmd *cobra.Command, args []string) error {
 
 	if inputSignerOpts.kms == "GCP" {
 		if inputSignerOpts.gcpProjectID == "" {
-			return fmt.Errorf("a GCP project id must be specified")
+			return fmt.Errorf("GCP project id must be specified")
 		}
 
 		if inputSignerOpts.gcpRegion == "" {
-			return fmt.Errorf("a location is required")
+			return fmt.Errorf("location is required")
 		}
 
 		if inputSignerOpts.gcpKeyRingID == "" {
-			return fmt.Errorf("a GCP Keyring ID is needed")
+			return fmt.Errorf("GCP keyring ID is required")
 		}
 		if inputSignerOpts.keyID == "" && cmd.Name() != "list" {
-			return fmt.Errorf("a key id is required")
+			return fmt.Errorf("key id is required")
 		}
 	}
 
@@ -811,7 +811,7 @@ func sanityCheck(cmd *cobra.Command, args []string) error {
 
 func passwordValidation(inputPw string) error {
 	if len(inputPw) < 6 {
-		return fmt.Errorf("Password only had %d character. 8 or more required", len(inputPw))
+		return fmt.Errorf("password only had %d characters, 8 or more required", len(inputPw))
 	}
 	return nil
 }
@@ -864,7 +864,4 @@ func init() {
 	f.StringVar(&inputSignerOpts.gcpKeyRingID, "gcp-keyring-id", "polycli-keyring", "GCP keyring ID to be used")
 	f.StringVar(&inputSignerOpts.gcpImportJob, "gcp-import-job-id", "", "GCP import job ID to use when importing key")
 	f.IntVar(&inputSignerOpts.gcpKeyVersion, "gcp-key-version", 1, "GCP crypto key version to use")
-
-	// Mark required flags
-	flag.MarkFlagRequired(SignerCmd, flag.PrivateKey)
 }

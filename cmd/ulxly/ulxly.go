@@ -2078,11 +2078,11 @@ var ulxlyBridgeAndClaimCmd = &cobra.Command{
 	Args:   cobra.NoArgs,
 	Hidden: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		inputUlxlyArgs.rpcURL, err = flag.GetRPCURL(cmd)
+		inputUlxlyArgs.rpcURL, err = flag.GetRequiredRPCURL(cmd)
 		if err != nil {
 			return err
 		}
-		inputUlxlyArgs.privateKey, err = flag.GetPrivateKey(cmd)
+		inputUlxlyArgs.privateKey, err = flag.GetRequiredPrivateKey(cmd)
 		if err != nil {
 			return err
 		}
@@ -2565,7 +2565,6 @@ or if it's actually an intermediate hash.`,
 	fClaimEverything.IntVar(&inputUlxlyArgs.bridgeLimit, ArgBridgeLimit, 25, "limit the number or responses returned by the bridge service when claiming")
 	fClaimEverything.IntVar(&inputUlxlyArgs.bridgeOffset, ArgBridgeOffset, 0, "offset to specify for pagination of underlying bridge service deposits")
 	fClaimEverything.UintVar(&inputUlxlyArgs.concurrency, ArgConcurrency, 1, "worker pool size for claims")
-
 	flag.MarkFlagRequired(claimEverythingCommand, ArgBridgeMappings)
 
 	// Top Level
