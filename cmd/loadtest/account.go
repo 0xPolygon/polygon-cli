@@ -25,7 +25,7 @@ import (
 // Structure used by the account pool to control the
 // current state of an account
 type Account struct {
-	ready          bool
+	ready          atomic.Bool
 	address        common.Address
 	privateKey     *ecdsa.PrivateKey
 	startNonce     uint64
@@ -42,7 +42,7 @@ func newAccount(ctx context.Context, client *ethclient.Client, clientRateLimiter
 	address := crypto.PubkeyToAddress(*publicKeyECDSA)
 
 	acc := &Account{
-		ready:          false,
+		ready:          atomic.Bool{},
 		privateKey:     privateKey,
 		address:        address,
 		funded:         false,
@@ -52,7 +52,7 @@ func newAccount(ctx context.Context, client *ethclient.Client, clientRateLimiter
 	if startNonce != nil {
 		acc.nonce = *startNonce
 		acc.startNonce = *startNonce
-		acc.ready = true
+		acc.ready.Store(true)
 	} else {
 		go func(a *Account) {
 		out:
@@ -72,7 +72,7 @@ func newAccount(ctx context.Context, client *ethclient.Client, clientRateLimiter
 					continue
 				}
 				acc.startNonce = acc.nonce
-				acc.ready = true
+				acc.ready.Store(true)
 				break out
 			}
 		}(acc)
@@ -215,7 +215,7 @@ func (ap *AccountPool) AllAccountsReady() (bool, int, int) {
 	defer ap.mu.Unlock()
 	rdyCount := 0
 	for i := range ap.accounts {
-		if ap.accounts[i].ready {
+		if ap.accounts[i].ready.Load() {
 			rdyCount++
 		}
 	}
