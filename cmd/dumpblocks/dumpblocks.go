@@ -55,12 +55,13 @@ var DumpblocksCmd = &cobra.Command{
 	Use:   "dumpblocks start end",
 	Short: "Export a range of blocks from a JSON-RPC endpoint.",
 	Long:  usage,
+	Args:  cobra.MinimumNArgs(2),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputDumpblocks.RpcUrl, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
-		return nil
+		return checkFlags(args)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -138,50 +139,6 @@ var DumpblocksCmd = &cobra.Command{
 
 		return nil
 	},
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) < 2 {
-			return fmt.Errorf("command needs at least two arguments. A start block and an end block")
-		}
-
-		start, err := strconv.ParseInt(args[0], 10, 64)
-		if err != nil {
-			return err
-		}
-		end, err := strconv.ParseInt(args[1], 10, 64)
-		if err != nil {
-			return err
-		}
-		if start < 0 || end < 0 {
-			return fmt.Errorf("the start and end parameters need to be positive")
-		}
-		if end < start {
-			start, end = end, start
-		}
-
-		inputDumpblocks.Start = uint64(start)
-		inputDumpblocks.End = uint64(end)
-
-		if inputDumpblocks.Threads == 0 {
-			inputDumpblocks.Threads = 1
-		}
-		if !slices.Contains([]string{"json", "proto"}, inputDumpblocks.Mode) {
-			return fmt.Errorf("output format must one of [json, proto]")
-		}
-
-		if err := json.Unmarshal([]byte(inputDumpblocks.FilterStr), &inputDumpblocks.filter); err != nil {
-			return fmt.Errorf("could not unmarshal filter string")
-		}
-
-		// Make sure the filters are all lowercase.
-		for i := 0; i < len(inputDumpblocks.filter.To); i++ {
-			inputDumpblocks.filter.To[i] = strings.ToLower(inputDumpblocks.filter.To[i])
-		}
-		for i := 0; i < len(inputDumpblocks.filter.From); i++ {
-			inputDumpblocks.filter.From[i] = strings.ToLower(inputDumpblocks.filter.From[i])
-		}
-
-		return nil
-	},
 }
 
 func init() {
@@ -194,6 +151,48 @@ func init() {
 	f.StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
 	f.Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "batch size for requests (most providers cap at 1000)")
 	f.StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from (not setting a filter means all are allowed)")
+}
+
+func checkFlags(args []string) error {
+	// Parse start and end blocks
+	start, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		return err
+	}
+	end, err := strconv.ParseInt(args[1], 10, 64)
+	if err != nil {
+		return err
+	}
+	if start < 0 || end < 0 {
+		return fmt.Errorf("the start and end parameters need to be positive")
+	}
+	if end < start {
+		start, end = end, start
+	}
+
+	inputDumpblocks.Start = uint64(start)
+	inputDumpblocks.End = uint64(end)
+
+	if inputDumpblocks.Threads == 0 {
+		inputDumpblocks.Threads = 1
+	}
+	if !slices.Contains([]string{"json", "proto"}, inputDumpblocks.Mode) {
+		return fmt.Errorf("output format must one of [json, proto]")
+	}
+
+	if err := json.Unmarshal([]byte(inputDumpblocks.FilterStr), &inputDumpblocks.filter); err != nil {
+		return fmt.Errorf("could not unmarshal filter string")
+	}
+
+	// Make sure the filters are all lowercase.
+	for i := 0; i < len(inputDumpblocks.filter.To); i++ {
+		inputDumpblocks.filter.To[i] = strings.ToLower(inputDumpblocks.filter.To[i])
+	}
+	for i := 0; i < len(inputDumpblocks.filter.From); i++ {
+		inputDumpblocks.filter.From[i] = strings.ToLower(inputDumpblocks.filter.From[i])
+	}
+
+	return nil
 }
 
 // writeResponses writes the data to either stdout or a file if one is provided.
