@@ -61,5 +61,5 @@ func init() {
 	f.IntVarP(&inputNodeListParams.Limit, "limit", "l", 100, "number of unique nodes to return")
 	f.StringVarP(&inputNodeListParams.ProjectID, "project-id", "p", "", "GCP project ID")
 	f.StringVarP(&inputNodeListParams.DatabaseID, "database-id", "d", "", "datastore database ID")
-	flag.MarkFlagRequired(NodeListCmd, "project-id")
+	flag.MarkFlagsRequired(NodeListCmd, "project-id")
 }

@@ -420,11 +420,11 @@ func init() {
 	f := SensorCmd.Flags()
 	f.StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", "comma separated nodes used for bootstrapping")
 	f.Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "filter discovered nodes by this network ID")
-	flag.MarkFlagRequired(SensorCmd, "network-id")
+	flag.MarkFlagsRequired(SensorCmd, "network-id")
 	f.StringVarP(&inputSensorParams.ProjectID, "project-id", "p", "", "GCP project ID")
 	f.StringVarP(&inputSensorParams.DatabaseID, "database-id", "d", "", "datastore database ID")
 	f.StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "sensor ID when writing block/tx events")
-	flag.MarkFlagRequired(SensorCmd, "sensor-id")
+	flag.MarkFlagsRequired(SensorCmd, "sensor-id")
 	f.IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 2000, "maximum number of peers to connect to")
 	f.IntVarP(&inputSensorParams.MaxDatabaseConcurrency, "max-db-concurrency", "D", 10000,
 		`maximum number of concurrent database operations to perform (increasing this

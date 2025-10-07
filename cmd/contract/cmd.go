@@ -173,5 +173,5 @@ func init() {
 	f := Cmd.Flags()
 	f.StringVar(&inputArgs.rpcURL, flag.RPCURL, flag.DefaultRPCURL, "RPC URL of network containing contract")
 	f.StringVar(&inputArgs.address, ArgAddress, "", "contract address")
-	flag.MarkFlagRequired(Cmd, ArgAddress)
+	flag.MarkFlagsRequired(Cmd, ArgAddress)
 }

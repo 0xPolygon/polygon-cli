@@ -133,5 +133,5 @@ func init() {
 	f.StringVarP(&inputQueryParams.KeyFile, "key-file", "k", "", "private key file (cannot be set with --key)")
 	f.StringVar(&inputQueryParams.PrivateKey, "key", "", "hex-encoded private key (cannot be set with --key-file)")
 	QueryCmd.MarkFlagsMutuallyExclusive("key-file", "key")
-	flag.MarkFlagRequired(QueryCmd, "start-block")
+	flag.MarkFlagsRequired(QueryCmd, "start-block")
 }

@@ -106,9 +106,9 @@ func getValue(cmd *cobra.Command, flagName, envVarName string, required bool) (s
 	return value, nil
 }
 
-// MarkFlagRequired marks one or more regular flags as required and logs a fatal error if marking fails.
+// MarkFlagsRequired marks one or more regular flags as required and logs a fatal error if marking fails.
 // This helper ensures consistent error handling across all commands when marking flags as required.
-func MarkFlagRequired(cmd *cobra.Command, flagNames ...string) {
+func MarkFlagsRequired(cmd *cobra.Command, flagNames ...string) {
 	for _, flagName := range flagNames {
 		if err := cmd.MarkFlagRequired(flagName); err != nil {
 			log.Fatal().
@@ -120,9 +120,9 @@ func MarkFlagRequired(cmd *cobra.Command, flagNames ...string) {
 	}
 }
 
-// MarkPersistentFlagRequired marks one or more persistent flags as required and logs a fatal error if marking fails.
+// MarkPersistentFlagsRequired marks one or more persistent flags as required and logs a fatal error if marking fails.
 // This helper ensures consistent error handling across all commands when marking persistent flags as required.
-func MarkPersistentFlagRequired(cmd *cobra.Command, flagNames ...string) {
+func MarkPersistentFlagsRequired(cmd *cobra.Command, flagNames ...string) {
 	for _, flagName := range flagNames {
 		if err := cmd.MarkPersistentFlagRequired(flagName); err != nil {
 			log.Fatal().

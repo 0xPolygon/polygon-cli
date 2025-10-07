@@ -2215,7 +2215,7 @@ func (o *GetEvent) AddFlags(cmd *cobra.Command) {
 	f.Uint64VarP(&o.ToBlock, ArgToBlock, "t", 0, "end of the range of blocks to retrieve")
 	f.Uint64VarP(&o.FilterSize, ArgFilterSize, "i", 1000, "batch size for individual filter queries")
 	f.BoolVarP(&o.Insecure, ArgInsecure, "", false, "skip TLS certificate verification")
-	flag.MarkFlagRequired(cmd, ArgFromBlock, ArgToBlock, ArgRPCURL)
+	flag.MarkFlagsRequired(cmd, ArgFromBlock, ArgToBlock, ArgRPCURL)
 }
 
 type GetSmcOptions struct {
@@ -2454,7 +2454,7 @@ or if it's actually an intermediate hash.`,
 	fBridgeAndClaim.BoolVar(&inputUlxlyArgs.dryRun, ArgDryRun, false, "do all of the transaction steps but do not send the transaction")
 	fBridgeAndClaim.BoolVar(&inputUlxlyArgs.insecure, ArgInsecure, false, "skip TLS certificate verification")
 	fBridgeAndClaim.BoolVar(&inputUlxlyArgs.legacy, ArgLegacy, true, "force usage of legacy bridge service")
-	flag.MarkPersistentFlagRequired(ulxlyBridgeAndClaimCmd, ArgBridgeAddress)
+	flag.MarkPersistentFlagsRequired(ulxlyBridgeAndClaimCmd, ArgBridgeAddress)
 
 	// bridge specific args
 	fBridge := ulxlyBridgeCmd.PersistentFlags()
@@ -2464,7 +2464,7 @@ or if it's actually an intermediate hash.`,
 	fBridge.StringVar(&inputUlxlyArgs.tokenAddress, ArgTokenAddress, "0x0000000000000000000000000000000000000000", "address of ERC20 token to use")
 	fBridge.StringVar(&inputUlxlyArgs.callData, ArgCallData, "0x", "call data to be passed directly with bridge-message or as an ERC20 Permit")
 	fBridge.StringVar(&inputUlxlyArgs.callDataFile, ArgCallDataFile, "", "a file containing hex encoded call data")
-	flag.MarkPersistentFlagRequired(ulxlyBridgeCmd, ArgDestNetwork)
+	flag.MarkPersistentFlagsRequired(ulxlyBridgeCmd, ArgDestNetwork)
 
 	// Claim specific args
 	fClaim := ulxlyClaimCmd.PersistentFlags()
@@ -2474,7 +2474,7 @@ or if it's actually an intermediate hash.`,
 	fClaim.StringVar(&inputUlxlyArgs.globalIndex, ArgGlobalIndex, "", "an override of the global index value")
 	fClaim.DurationVar(&inputUlxlyArgs.wait, ArgWait, time.Duration(0), "retry claiming until deposit is ready, up to specified duration (available for claim asset and claim message)")
 	fClaim.StringVar(&inputUlxlyArgs.proofGER, ArgProofGER, "", "if specified and using legacy mode, the proof will be generated against this GER")
-	flag.MarkPersistentFlagRequired(ulxlyClaimCmd, ArgDepositCount, ArgDepositNetwork, ArgBridgeServiceURL)
+	flag.MarkPersistentFlagsRequired(ulxlyClaimCmd, ArgDepositCount, ArgDepositNetwork, ArgBridgeServiceURL)
 
 	// Claim Everything Helper Command
 	fClaimEverything := claimEverythingCommand.Flags()
@@ -2482,7 +2482,7 @@ or if it's actually an intermediate hash.`,
 	fClaimEverything.IntVar(&inputUlxlyArgs.bridgeLimit, ArgBridgeLimit, 25, "limit the number or responses returned by the bridge service when claiming")
 	fClaimEverything.IntVar(&inputUlxlyArgs.bridgeOffset, ArgBridgeOffset, 0, "offset to specify for pagination of underlying bridge service deposits")
 	fClaimEverything.UintVar(&inputUlxlyArgs.concurrency, ArgConcurrency, 1, "worker pool size for claims")
-	flag.MarkFlagRequired(claimEverythingCommand, ArgBridgeMappings)
+	flag.MarkFlagsRequired(claimEverythingCommand, ArgBridgeMappings)
 
 	// Top Level
 	ULxLyCmd.AddCommand(ulxlyBridgeAndClaimCmd)
