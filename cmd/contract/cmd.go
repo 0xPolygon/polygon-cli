@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -17,9 +17,7 @@ import (
 )
 
 const (
-	ArgRpcURL     = "rpc-url"
-	ArgAddress    = "address"
-	defaultRPCURL = "http://localhost:8545"
+	ArgAddress = "address"
 )
 
 var (
@@ -45,9 +43,12 @@ var Cmd = &cobra.Command{
 	Use:   "contract",
 	Short: "Interact with smart contracts and fetch contract information from the blockchain.",
 	Long:  usage,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		rpcURL := flag_loader.GetRpcUrlFlagValue(cmd)
-		inputArgs.rpcURL = *rpcURL
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		inputArgs.rpcURL, err = flag.GetRPCURL(cmd)
+		if err != nil {
+			return err
+		}
+		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return contract(cmd)
@@ -170,8 +171,7 @@ func fetchContractCreationTx(ctx context.Context, client *ethclient.Client, cont
 
 func init() {
 	f := Cmd.Flags()
-	f.StringVar(&inputArgs.rpcURL, ArgRpcURL, defaultRPCURL, "RPC URL of network containing contract")
+	f.StringVar(&inputArgs.rpcURL, flag.RPCURL, flag.DefaultRPCURL, "RPC URL of network containing contract")
 	f.StringVar(&inputArgs.address, ArgAddress, "", "contract address")
-
-	_ = Cmd.MarkFlagRequired(ArgAddress)
+	flag.MarkFlagsRequired(Cmd, ArgAddress)
 }
