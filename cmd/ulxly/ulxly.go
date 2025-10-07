@@ -904,6 +904,7 @@ func claimAsset(cmd *cobra.Command) error {
 	depositNetwork := inputUlxlyArgs.depositNetwork
 	globalIndexOverride := inputUlxlyArgs.globalIndex
 	proofGERHash := inputUlxlyArgs.proofGER
+	proofL1InfoTreeIndex := inputUlxlyArgs.proofL1InfoTreeIndex
 	wait := inputUlxlyArgs.wait
 
 	// Dial Ethereum client
@@ -933,7 +934,7 @@ func claimAsset(cmd *cobra.Command) error {
 		deposit.GlobalIndex.SetString(globalIndexOverride, 10)
 	}
 
-	proof, err := getMerkleProofsExitRoots(bridgeService, *deposit, proofGERHash)
+	proof, err := getMerkleProofsExitRoots(bridgeService, *deposit, proofGERHash, proofL1InfoTreeIndex)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting merkle proofs and exit roots from bridge service")
 		return err
@@ -959,6 +960,7 @@ func claimMessage(cmd *cobra.Command) error {
 	depositNetwork := inputUlxlyArgs.depositNetwork
 	globalIndexOverride := inputUlxlyArgs.globalIndex
 	proofGERHash := inputUlxlyArgs.proofGER
+	proofL1InfoTreeIndex := inputUlxlyArgs.proofL1InfoTreeIndex
 	wait := inputUlxlyArgs.wait
 
 	// Dial Ethereum client
@@ -988,7 +990,7 @@ func claimMessage(cmd *cobra.Command) error {
 		deposit.GlobalIndex.SetString(globalIndexOverride, 10)
 	}
 
-	proof, err := getMerkleProofsExitRoots(bridgeService, *deposit, proofGERHash)
+	proof, err := getMerkleProofsExitRoots(bridgeService, *deposit, proofGERHash, proofL1InfoTreeIndex)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting merkle proofs and exit roots from bridge service")
 		return err
@@ -1242,7 +1244,7 @@ func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeCont
 		return nil, fmt.Errorf("we don't have a bridge service url for network: %d", deposit.DestNet)
 	}
 
-	proof, err := getMerkleProofsExitRoots(bridgeServiceFromMap, deposit, "")
+	proof, err := getMerkleProofsExitRoots(bridgeServiceFromMap, deposit, "", 0)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting merkle proofs and exit roots from bridge service")
 		return nil, err
@@ -1798,14 +1800,22 @@ func generateTransactionPayload(ctx context.Context, client *ethclient.Client, u
 	return bridgeV2, toAddress, opts, err
 }
 
-func getMerkleProofsExitRoots(bridgeService bridge_service.BridgeService, deposit bridge_service.Deposit, proofGERHash string) (*bridge_service.Proof, error) {
+func getMerkleProofsExitRoots(bridgeService bridge_service.BridgeService, deposit bridge_service.Deposit, proofGERHash string, l1InfoTreeIndex uint32) (*bridge_service.Proof, error) {
 	var ger *common.Hash
 	if len(proofGERHash) > 0 {
 		hash := common.HexToHash(proofGERHash)
 		ger = &hash
 	}
 
-	proof, err := bridgeService.GetProof(deposit.NetworkID, deposit.DepositCnt, ger)
+	var proof *bridge_service.Proof
+	var err error
+	if ger != nil {
+		proof, err = bridgeService.GetProofByGer(deposit.NetworkID, deposit.DepositCnt, *ger)
+	} else if l1InfoTreeIndex > 0 {
+		proof, err = bridgeService.GetProofByL1InfoTreeIndex(deposit.NetworkID, deposit.DepositCnt, l1InfoTreeIndex)
+	} else {
+		proof, err = bridgeService.GetProof(deposit.NetworkID, deposit.DepositCnt)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("error getting proof for deposit %d on network %d: %w", deposit.DepositCnt, deposit.NetworkID, err)
 	}
@@ -2001,34 +2011,35 @@ var ulxlyClaimCmd = &cobra.Command{
 }
 
 type ulxlyArgs struct {
-	gasLimit            uint64
-	chainID             string
-	privateKey          string
-	addressOfPrivateKey string
-	value               string
-	rpcURL              string
-	bridgeAddress       string
-	destNetwork         uint32
-	destAddress         string
-	tokenAddress        string
-	forceUpdate         bool
-	callData            string
-	callDataFile        string
-	timeout             uint64
-	depositCount        uint32
-	depositNetwork      uint32
-	bridgeServiceURL    string
-	globalIndex         string
-	gasPrice            string
-	dryRun              bool
-	bridgeServiceURLs   []string
-	bridgeLimit         int
-	bridgeOffset        int
-	wait                time.Duration
-	concurrency         uint
-	insecure            bool
-	legacy              bool
-	proofGER            string
+	gasLimit             uint64
+	chainID              string
+	privateKey           string
+	addressOfPrivateKey  string
+	value                string
+	rpcURL               string
+	bridgeAddress        string
+	destNetwork          uint32
+	destAddress          string
+	tokenAddress         string
+	forceUpdate          bool
+	callData             string
+	callDataFile         string
+	timeout              uint64
+	depositCount         uint32
+	depositNetwork       uint32
+	bridgeServiceURL     string
+	globalIndex          string
+	gasPrice             string
+	dryRun               bool
+	bridgeServiceURLs    []string
+	bridgeLimit          int
+	bridgeOffset         int
+	wait                 time.Duration
+	concurrency          uint
+	insecure             bool
+	legacy               bool
+	proofGER             string
+	proofL1InfoTreeIndex uint32
 }
 
 var inputUlxlyArgs = ulxlyArgs{}
@@ -2098,6 +2109,7 @@ const (
 	ArgInsecure             = "insecure"
 	ArgLegacy               = "legacy"
 	ArgProofGER             = "proof-ger"
+	ArgProofL1InfoTreeIndex = "proof-l1-info-tree-index"
 )
 
 var (
@@ -2491,6 +2503,7 @@ or if it's actually an intermediate hash.`,
 	fClaim.StringVar(&inputUlxlyArgs.globalIndex, ArgGlobalIndex, "", "an override of the global index value")
 	fClaim.DurationVar(&inputUlxlyArgs.wait, ArgWait, time.Duration(0), "retry claiming until deposit is ready, up to specified duration (available for claim asset and claim message)")
 	fClaim.StringVar(&inputUlxlyArgs.proofGER, ArgProofGER, "", "if specified and using legacy mode, the proof will be generated against this GER")
+	fClaim.Uint32Var(&inputUlxlyArgs.proofL1InfoTreeIndex, ArgProofL1InfoTreeIndex, 0, "if specified and using aggkit mode, the proof will be generated against this L1 Info Tree Index")
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositCount))
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositNetwork))
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgBridgeServiceURL))
