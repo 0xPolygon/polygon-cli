@@ -42,7 +42,7 @@ var RPCFuzzCmd = &cobra.Command{
 	Long:  usage,
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		rpcUrl, err = flag.GetRPCURL(cmd)
+		rpcUrl, err = flag.GetRequiredRPCURL(cmd)
 		if err != nil {
 			return err
 		}
@@ -87,11 +87,6 @@ func init() {
 }
 
 func checkFlags() (err error) {
-	// Check rpc-url flag.
-	if rpcUrl == "" {
-		panic("RPC URL is empty")
-	}
-
 	// Ensure only one streamer type is selected
 	streamerCount := 0
 	if streamJSON {
