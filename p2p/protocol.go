@@ -26,16 +26,17 @@ import (
 
 // conn represents an individual connection with a peer.
 type conn struct {
-	sensorID  string
-	node      *enode.Node
-	logger    zerolog.Logger
-	rw        ethp2p.MsgReadWriter
-	db        database.Database
-	conns     *Conns
-	head      *HeadBlock
-	headMutex *sync.RWMutex
-	counter   *prometheus.CounterVec
-	peer      *ethp2p.Peer
+	sensorID        string
+	node            *enode.Node
+	logger          zerolog.Logger
+	rw              ethp2p.MsgReadWriter
+	db              database.Database
+	conns           *Conns
+	head            *HeadBlock
+	headMutex       *sync.RWMutex
+	counterReceived *prometheus.CounterVec
+	counterSent     *prometheus.CounterVec
+	peer            *ethp2p.Peer
 
 	// requests is used to store the request ID and the block hash. This is used
 	// when fetching block bodies because the eth protocol block bodies do not
@@ -66,15 +67,16 @@ type conn struct {
 
 // EthProtocolOptions is the options used when creating a new eth protocol.
 type EthProtocolOptions struct {
-	Context     context.Context
-	Database    database.Database
-	GenesisHash common.Hash
-	RPC         string
-	SensorID    string
-	NetworkID   uint64
-	Conns       *Conns
-	ForkID      forkid.ID
-	MsgCounter  *prometheus.CounterVec
+	Context            context.Context
+	Database           database.Database
+	GenesisHash        common.Hash
+	RPC                string
+	SensorID           string
+	NetworkID          uint64
+	Conns              *Conns
+	ForkID             forkid.ID
+	MsgCounterReceived *prometheus.CounterVec
+	MsgCounterSent     *prometheus.CounterVec
 
 	// Head keeps track of the current head block of the chain. This is required
 	// when doing the status exchange.
@@ -133,7 +135,8 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				requestNum:                 0,
 				head:                       opts.Head,
 				headMutex:                  opts.HeadMutex,
-				counter:                    opts.MsgCounter,
+				counterReceived:            opts.MsgCounterReceived,
+				counterSent:                opts.MsgCounterSent,
 				peer:                       p,
 				blockHashes:                list.New(),
 				shouldBroadcastTx:          opts.ShouldBroadcastTx,
@@ -255,9 +258,14 @@ func (c *conn) statusExchange(packet *eth.StatusPacket) error {
 	return nil
 }
 
-// AddCount increments the prometheus counter for this connection with the given message name and count.
+// AddCount increments the prometheus counter for received messages.
 func (c *conn) AddCount(messageName string, count float64) {
-	c.counter.WithLabelValues(messageName, c.node.URLv4(), c.peer.Fullname()).Add(count)
+	c.counterReceived.WithLabelValues(messageName, c.node.URLv4(), c.peer.Fullname()).Add(count)
+}
+
+// AddCountSent increments the prometheus counter for sent messages.
+func (c *conn) AddCountSent(messageName string, count float64) {
+	c.counterSent.WithLabelValues(messageName, c.node.URLv4(), c.peer.Fullname()).Add(count)
 }
 
 func (c *conn) readStatus(packet *eth.StatusPacket) error {
@@ -308,6 +316,7 @@ func (c *conn) getBlockData(hash common.Hash) error {
 		},
 	}
 
+	c.AddCountSent(headersRequest.Name(), 1)
 	if err := ethp2p.Send(c.rw, eth.GetBlockHeadersMsg, headersRequest); err != nil {
 		return err
 	}
@@ -332,6 +341,7 @@ func (c *conn) getBlockData(hash common.Hash) error {
 		GetBlockBodiesRequest: []common.Hash{hash},
 	}
 
+	c.AddCountSent(bodiesRequest.Name(), 1)
 	return ethp2p.Send(c.rw, eth.GetBlockBodiesMsg, bodiesRequest)
 }
 
@@ -536,14 +546,12 @@ func (c *conn) handleGetBlockHeaders(msg ethp2p.Msg) error {
 		headers = []*types.Header{block.Header()}
 	}
 
-	return ethp2p.Send(
-		c.rw,
-		eth.BlockHeadersMsg,
-		&eth.BlockHeadersPacket{
-			RequestId:           request.RequestId,
-			BlockHeadersRequest: headers,
-		},
-	)
+	packet := &eth.BlockHeadersPacket{
+		RequestId:           request.RequestId,
+		BlockHeadersRequest: headers,
+	}
+	c.AddCountSent(packet.Name(), float64(len(headers)))
+	return ethp2p.Send(c.rw, eth.BlockHeadersMsg, packet)
 }
 
 func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
@@ -587,14 +595,12 @@ func (c *conn) handleGetBlockBodies(msg ethp2p.Msg) error {
 		}
 	}
 
-	return ethp2p.Send(
-		c.rw,
-		eth.BlockBodiesMsg,
-		&eth.BlockBodiesPacket{
-			RequestId:           request.RequestId,
-			BlockBodiesResponse: bodies,
-		},
-	)
+	packet := &eth.BlockBodiesPacket{
+		RequestId:           request.RequestId,
+		BlockBodiesResponse: bodies,
+	}
+	c.AddCountSent(packet.Name(), float64(len(bodies)))
+	return ethp2p.Send(c.rw, eth.BlockBodiesMsg, packet)
 }
 
 func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
@@ -701,13 +707,12 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 		}
 	}
 
-	return ethp2p.Send(
-		c.rw,
-		eth.PooledTransactionsMsg,
-		&eth.PooledTransactionsPacket{
-			RequestId:                  request.RequestId,
-			PooledTransactionsResponse: txs,
-		})
+	packet := &eth.PooledTransactionsPacket{
+		RequestId:                  request.RequestId,
+		PooledTransactionsResponse: txs,
+	}
+	c.AddCountSent(packet.Name(), float64(len(txs)))
+	return ethp2p.Send(c.rw, eth.PooledTransactionsMsg, packet)
 }
 
 func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) error {
@@ -785,9 +790,8 @@ func (c *conn) handleGetReceipts(msg ethp2p.Msg) error {
 	if err := msg.Decode(&request); err != nil {
 		return err
 	}
-	return ethp2p.Send(
-		c.rw,
-		eth.ReceiptsMsg,
-		&eth.ReceiptsPacket{RequestId: request.RequestId},
-	)
+
+	packet := &eth.ReceiptsPacket{RequestId: request.RequestId}
+	c.AddCountSent(packet.Name(), 0)
+	return ethp2p.Send(c.rw, eth.ReceiptsMsg, packet)
 }

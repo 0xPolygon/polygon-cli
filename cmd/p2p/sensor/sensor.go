@@ -187,28 +187,35 @@ var SensorCmd = &cobra.Command{
 			Help:      "The number of peers the sensor is connected to",
 		})
 
-		msgCounter := promauto.NewCounterVec(prometheus.CounterOpts{
+		msgCounterReceived := promauto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "sensor",
-			Name:      "messages",
+			Name:      "messages_received",
 			Help:      "The number and type of messages the sensor has received",
+		}, []string{"message", "url", "name"})
+
+		msgCounterSent := promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "sensor",
+			Name:      "messages_sent",
+			Help:      "The number and type of messages the sensor has sent",
 		}, []string{"message", "url", "name"})
 
 		// Create peer connection manager for broadcasting transactions
 		conns := p2p.NewConns()
 
 		opts := p2p.EthProtocolOptions{
-			Context:                cmd.Context(),
-			Database:               db,
-			GenesisHash:            common.HexToHash(inputSensorParams.GenesisHash),
-			RPC:                    inputSensorParams.RPC,
-			SensorID:               inputSensorParams.SensorID,
-			NetworkID:              inputSensorParams.NetworkID,
-			Conns:                  conns,
-			Head:                   &head,
-			HeadMutex:              &sync.RWMutex{},
-			ForkID:                 forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
-			MsgCounter:             msgCounter,
-			ShouldBroadcastTx:      inputSensorParams.ShouldBroadcastTx,
+			Context:                      cmd.Context(),
+			Database:                     db,
+			GenesisHash:                  common.HexToHash(inputSensorParams.GenesisHash),
+			RPC:                          inputSensorParams.RPC,
+			SensorID:                     inputSensorParams.SensorID,
+			NetworkID:                    inputSensorParams.NetworkID,
+			Conns:                        conns,
+			Head:                         &head,
+			HeadMutex:                    &sync.RWMutex{},
+			ForkID:                       forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
+			MsgCounterReceived:           msgCounterReceived,
+			MsgCounterSent:               msgCounterSent,
+			ShouldBroadcastTx:            inputSensorParams.ShouldBroadcastTx,
 			ShouldBroadcastTxHashes:      inputSensorParams.ShouldBroadcastTxHashes,
 			ShouldBroadcastBlocks:        inputSensorParams.ShouldBroadcastBlocks,
 			ShouldBroadcastBlockHashes:   inputSensorParams.ShouldBroadcastBlockHashes,
@@ -265,7 +272,7 @@ var SensorCmd = &cobra.Command{
 			go handlePrometheus()
 		}
 
-		go handleAPI(&server, msgCounter, conns)
+		go handleAPI(&server, msgCounterReceived, msgCounterSent, conns)
 
 		// Start the RPC server for receiving transactions
 		go handleRPC(conns, inputSensorParams.NetworkID)
@@ -284,8 +291,11 @@ var SensorCmd = &cobra.Command{
 					urls = append(urls, peer.Node().URLv4())
 				}
 
-				if err := removePeerMessages(msgCounter, urls); err != nil {
-					log.Error().Err(err).Msg("Failed to clean up peer messages")
+				if err := removePeerMessages(msgCounterReceived, urls); err != nil {
+					log.Error().Err(err).Msg("Failed to clean up received peer messages")
+				}
+				if err := removePeerMessages(msgCounterSent, urls); err != nil {
+					log.Error().Err(err).Msg("Failed to clean up sent peer messages")
 				}
 
 				if err := p2p.WritePeers(inputSensorParams.NodesFile, urls); err != nil {
