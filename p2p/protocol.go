@@ -550,7 +550,7 @@ func (c *conn) handleGetBlockHeaders(msg ethp2p.Msg) error {
 		RequestId:           request.RequestId,
 		BlockHeadersRequest: headers,
 	}
-	c.AddCountSent(packet.Name(), float64(len(headers)))
+	c.AddCountSent(packet.Name(), 1)
 	return ethp2p.Send(c.rw, eth.BlockHeadersMsg, packet)
 }
 
@@ -599,7 +599,7 @@ func (c *conn) handleGetBlockBodies(msg ethp2p.Msg) error {
 		RequestId:           request.RequestId,
 		BlockBodiesResponse: bodies,
 	}
-	c.AddCountSent(packet.Name(), float64(len(bodies)))
+	c.AddCountSent(packet.Name(), 1)
 	return ethp2p.Send(c.rw, eth.BlockBodiesMsg, packet)
 }
 
@@ -711,7 +711,7 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 		RequestId:                  request.RequestId,
 		PooledTransactionsResponse: txs,
 	}
-	c.AddCountSent(packet.Name(), float64(len(txs)))
+	c.AddCountSent(packet.Name(), 1)
 	return ethp2p.Send(c.rw, eth.PooledTransactionsMsg, packet)
 }
 
