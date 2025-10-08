@@ -3,25 +3,51 @@ package p2p
 import (
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	// maxCachedTxs is the maximum number of transactions to cache for serving to peers
+	maxCachedTxs = 10000
+
+	// maxCachedBlocks is the maximum number of blocks to cache for serving to peers
+	maxCachedBlocks = 1000
 )
 
 // Conns manages a collection of active peer connections for transaction broadcasting.
 type Conns struct {
 	conns map[string]*conn
 	mu    sync.RWMutex
+
+	// Shared LRU caches for serving broadcast data to peers
+	txs    *lru.Cache[common.Hash, *types.Transaction]
+	blocks *lru.Cache[common.Hash, *types.Block]
 }
 
 // NewConns creates a new connection manager.
 func NewConns() *Conns {
+	txCache, err := lru.New[common.Hash, *types.Transaction](maxCachedTxs)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create transaction cache")
+	}
+
+	blockCache, err := lru.New[common.Hash, *types.Block](maxCachedBlocks)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create block cache")
+	}
+
 	return &Conns{
-		conns: make(map[string]*conn),
+		conns:  make(map[string]*conn),
+		txs:    txCache,
+		blocks: blockCache,
 	}
 }
 
@@ -276,4 +302,16 @@ func (c *Conns) Nodes() []*enode.Node {
 	}
 
 	return nodes
+}
+
+// GetPeerConnectedAt returns the time when a peer connected, or zero time if not found.
+func (c *Conns) GetPeerConnectedAt(url string) time.Time {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if cn, ok := c.conns[url]; ok {
+		return cn.connectedAt
+	}
+
+	return time.Time{}
 }
