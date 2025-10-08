@@ -1,12 +1,15 @@
 package p2p
 
 import (
+	"math/big"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/rs/zerolog/log"
 )
 
 // Conns manages a collection of active peer connections for transaction broadcasting.
@@ -38,14 +41,15 @@ func (c *Conns) Remove(cn *conn) {
 	cn.logger.Debug().Msg("Removed connection")
 }
 
-// BroadcastTx broadcasts a single transaction to all connected peers.
-// Returns the number of peers the transaction was successfully sent to.
+// BroadcastTx broadcasts a single transaction to all connected peers and
+// returns the number of peers the transaction was successfully sent to.
 func (c *Conns) BroadcastTx(tx *types.Transaction) int {
 	return c.BroadcastTxs(types.Transactions{tx})
 }
 
-// BroadcastTxs broadcasts multiple transactions to all connected peers.
-// Returns the number of peers the transactions were successfully sent to.
+// BroadcastTxs broadcasts multiple transactions to all connected peers,
+// filtering out transactions that each peer already knows about, and returns
+// the number of peers the transactions were successfully sent to.
 func (c *Conns) BroadcastTxs(txs types.Transactions) int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -56,10 +60,206 @@ func (c *Conns) BroadcastTxs(txs types.Transactions) int {
 
 	count := 0
 	for _, cn := range c.conns {
-		if err := ethp2p.Send(cn.rw, eth.TransactionsMsg, txs); err != nil {
+		// Filter transactions this peer doesn't know about
+		unknownTxs := make(types.Transactions, 0, len(txs))
+		for _, tx := range txs {
+			if !cn.hasKnownTx(tx.Hash()) {
+				unknownTxs = append(unknownTxs, tx)
+			}
+		}
+
+		if len(unknownTxs) == 0 {
 			continue
 		}
+
+		// Send as TransactionsPacket
+		packet := eth.TransactionsPacket(unknownTxs)
+		if err := ethp2p.Send(cn.rw, eth.TransactionsMsg, packet); err != nil {
+			cn.logger.Debug().
+				Err(err).
+				Msg("Failed to send transactions")
+			continue
+		}
+
+		// Mark transactions as known for this peer
+		for _, tx := range unknownTxs {
+			cn.addKnownTx(tx.Hash())
+		}
+
 		count++
+	}
+
+	if count > 0 {
+		log.Debug().
+			Int("peers", count).
+			Int("txs", len(txs)).
+			Msg("Broadcasted transactions")
+	}
+
+	return count
+}
+
+// BroadcastTxHashes broadcasts transaction hashes to peers that don't already
+// know about them and returns the number of peers the hashes were successfully
+// sent to.
+func (c *Conns) BroadcastTxHashes(hashes []common.Hash) int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if len(hashes) == 0 {
+		return 0
+	}
+
+	count := 0
+	for _, cn := range c.conns {
+		// Filter hashes this peer doesn't know about
+		unknownHashes := make([]common.Hash, 0, len(hashes))
+		for _, hash := range hashes {
+			if !cn.hasKnownTx(hash) {
+				unknownHashes = append(unknownHashes, hash)
+			}
+		}
+
+		if len(unknownHashes) == 0 {
+			continue
+		}
+
+		// Send NewPooledTransactionHashesPacket
+		packet := eth.NewPooledTransactionHashesPacket{
+			Types:  make([]byte, len(unknownHashes)),
+			Sizes:  make([]uint32, len(unknownHashes)),
+			Hashes: unknownHashes,
+		}
+
+		if err := ethp2p.Send(cn.rw, eth.NewPooledTransactionHashesMsg, packet); err != nil {
+			cn.logger.Debug().
+				Err(err).
+				Msg("Failed to send transaction hashes")
+			continue
+		}
+
+		// Mark hashes as known for this peer
+		for _, hash := range unknownHashes {
+			cn.addKnownTx(hash)
+		}
+
+		count++
+	}
+
+	if count > 0 {
+		log.Debug().
+			Int("peers", count).
+			Int("hashes", len(hashes)).
+			Msg("Broadcasted transaction hashes")
+	}
+
+	return count
+}
+
+// BroadcastBlock broadcasts a full block to peers that don't already know
+// about it and returns the number of peers the block was successfully sent to.
+func (c *Conns) BroadcastBlock(block *types.Block, td *big.Int) int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if block == nil {
+		return 0
+	}
+
+	hash := block.Hash()
+	count := 0
+
+	for _, cn := range c.conns {
+		// Skip if peer already knows about this block
+		if cn.hasKnownBlock(hash) {
+			continue
+		}
+
+		// Send NewBlockPacket
+		packet := eth.NewBlockPacket{
+			Block: block,
+			TD:    td,
+		}
+
+		if err := ethp2p.Send(cn.rw, eth.NewBlockMsg, &packet); err != nil {
+			cn.logger.Debug().
+				Err(err).
+				Uint64("number", block.Number().Uint64()).
+				Msg("Failed to send block")
+			continue
+		}
+
+		// Mark block as known for this peer
+		cn.addKnownBlock(hash)
+		count++
+	}
+
+	if count > 0 {
+		log.Debug().
+			Int("peers", count).
+			Uint64("number", block.NumberU64()).
+			Msg("Broadcasted block")
+	}
+
+	return count
+}
+
+// BroadcastBlockHashes broadcasts block hashes with their corresponding block
+// numbers to peers that don't already know about them and returns the number
+// of peers the hashes were successfully sent to.
+func (c *Conns) BroadcastBlockHashes(hashes []common.Hash, numbers []uint64) int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if len(hashes) == 0 || len(hashes) != len(numbers) {
+		return 0
+	}
+
+	count := 0
+
+	for _, cn := range c.conns {
+		// Filter hashes this peer doesn't know about
+		unknownHashes := make([]common.Hash, 0, len(hashes))
+		unknownNumbers := make([]uint64, 0, len(numbers))
+
+		for i, hash := range hashes {
+			if !cn.hasKnownBlock(hash) {
+				unknownHashes = append(unknownHashes, hash)
+				unknownNumbers = append(unknownNumbers, numbers[i])
+			}
+		}
+
+		if len(unknownHashes) == 0 {
+			continue
+		}
+
+		// Send NewBlockHashesPacket
+		packet := make(eth.NewBlockHashesPacket, len(unknownHashes))
+		for i := range unknownHashes {
+			packet[i].Hash = unknownHashes[i]
+			packet[i].Number = unknownNumbers[i]
+		}
+
+		if err := ethp2p.Send(cn.rw, eth.NewBlockHashesMsg, packet); err != nil {
+			cn.logger.Debug().
+				Err(err).
+				Msg("Failed to send block hashes")
+			continue
+		}
+
+		// Mark hashes as known for this peer
+		for _, hash := range unknownHashes {
+			cn.addKnownBlock(hash)
+		}
+
+		count++
+	}
+
+	if count > 0 {
+		log.Debug().
+			Int("peers", count).
+			Int("hashes", len(hashes)).
+			Msg("Broadcasted block hashes")
 	}
 
 	return count

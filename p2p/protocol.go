@@ -30,6 +30,7 @@ type conn struct {
 	logger    zerolog.Logger
 	rw        ethp2p.MsgReadWriter
 	db        database.Database
+	conns     *Conns
 	head      *HeadBlock
 	headMutex *sync.RWMutex
 	counter   *prometheus.CounterVec
@@ -47,6 +48,17 @@ type conn struct {
 	// oldestBlock stores the first block the sensor has seen so when fetching
 	// parent blocks, it does not request blocks older than this.
 	oldestBlock *types.Header
+
+	// Broadcast flags control what gets rebroadcasted to other peers
+	shouldBroadcastTx          bool
+	shouldBroadcastTxHashes    bool
+	shouldBroadcastBlocks      bool
+	shouldBroadcastBlockHashes bool
+
+	// Known caches track what this peer has seen to avoid redundant sends.
+	// Similar to Bor's knownCache implementation.
+	knownTxs    *list.List
+	knownBlocks *list.List
 }
 
 // EthProtocolOptions is the options used when creating a new eth protocol.
@@ -65,6 +77,12 @@ type EthProtocolOptions struct {
 	// when doing the status exchange.
 	Head      *HeadBlock
 	HeadMutex *sync.RWMutex
+
+	// Broadcast flags control what gets rebroadcasted to other peers
+	ShouldBroadcastTx          bool
+	ShouldBroadcastTxHashes    bool
+	ShouldBroadcastBlocks      bool
+	ShouldBroadcastBlockHashes bool
 }
 
 // HeadBlock contains the necessary head block data for the status message.
@@ -80,6 +98,19 @@ type BlockHashEntry struct {
 	time time.Time
 }
 
+const (
+	// maxKnownTxs is the maximum transaction hashes to keep in the known list
+	// before starting to evict old ones. Matches Bor's configuration.
+	maxKnownTxs = 32768
+
+	// maxKnownBlocks is the maximum block hashes to keep in the known list
+	// before starting to evict old ones. Matches Bor's configuration.
+	maxKnownBlocks = 1024
+
+	// knownCacheTTL defines how long to keep entries in the known cache
+	knownCacheTTL = 10 * time.Minute
+)
+
 // blockHashTTL defines the time-to-live for block hash entries in blockHashes list.
 var blockHashTTL = 10 * time.Minute
 
@@ -92,18 +123,25 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 		Length:  17,
 		Run: func(p *ethp2p.Peer, rw ethp2p.MsgReadWriter) error {
 			c := &conn{
-				sensorID:    opts.SensorID,
-				node:        p.Node(),
-				logger:      log.With().Str("peer", p.Node().URLv4()).Logger(),
-				rw:          rw,
-				db:          opts.Database,
-				requests:    list.New(),
-				requestNum:  0,
-				head:        opts.Head,
-				headMutex:   opts.HeadMutex,
-				counter:     opts.MsgCounter,
-				peer:        p,
-				blockHashes: list.New(),
+				sensorID:                   opts.SensorID,
+				node:                       p.Node(),
+				logger:                     log.With().Str("peer", p.Node().URLv4()).Logger(),
+				rw:                         rw,
+				db:                         opts.Database,
+				conns:                      opts.Conns,
+				requests:                   list.New(),
+				requestNum:                 0,
+				head:                       opts.Head,
+				headMutex:                  opts.HeadMutex,
+				counter:                    opts.MsgCounter,
+				peer:                       p,
+				blockHashes:                list.New(),
+				shouldBroadcastTx:          opts.ShouldBroadcastTx,
+				shouldBroadcastTxHashes:    opts.ShouldBroadcastTxHashes,
+				shouldBroadcastBlocks:      opts.ShouldBroadcastBlocks,
+				shouldBroadcastBlockHashes: opts.ShouldBroadcastBlockHashes,
+				knownTxs:                   list.New(),
+				knownBlocks:                list.New(),
 			}
 
 			c.headMutex.RLock()
@@ -333,6 +371,9 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 			continue
 		}
 
+		// Mark as known from this peer
+		c.addKnownBlock(hash)
+
 		// Attempt to fetch block data first
 		if err := c.getBlockData(hash); err != nil {
 			return err
@@ -348,6 +389,19 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		c.db.WriteBlockHashes(ctx, c.node, uniqueHashes, tfs)
 	}
 
+	// Broadcast block hashes to other peers if enabled
+	if !c.shouldBroadcastBlockHashes || len(uniqueHashes) == 0 {
+		return nil
+	}
+
+	numbers := make([]uint64, len(uniqueHashes))
+	for i, entry := range packet {
+		if i < len(uniqueHashes) {
+			numbers[i] = entry.Number
+		}
+	}
+	c.conns.BroadcastBlockHashes(uniqueHashes, numbers)
+
 	return nil
 }
 
@@ -362,7 +416,7 @@ func (c *conn) addBlockHash(hash common.Hash) {
 	})
 }
 
-// Helper method to check if a block hash is already in blockHashes.
+// hasSeenBlockHash checks if a block hash is already in the blockHashes list.
 func (c *conn) hasSeenBlockHash(hash common.Hash) bool {
 	now := time.Now()
 	for e := c.blockHashes.Front(); e != nil; e = e.Next() {
@@ -381,6 +435,100 @@ func (c *conn) hasSeenBlockHash(hash common.Hash) bool {
 	return false
 }
 
+// KnownCacheEntry represents an entry in the known cache with timestamp for TTL.
+type KnownCacheEntry struct {
+	hash common.Hash
+	time time.Time
+}
+
+// addKnownTx adds a transaction hash to the known tx cache with cleanup of old entries.
+func (c *conn) addKnownTx(hash common.Hash) {
+	if !c.shouldBroadcastTx && !c.shouldBroadcastTxHashes {
+		return
+	}
+
+	now := time.Now()
+
+	// Remove old entries if we're at capacity
+	if c.knownTxs.Len() >= maxKnownTxs {
+		c.knownTxs.Remove(c.knownTxs.Front())
+	}
+
+	c.knownTxs.PushBack(KnownCacheEntry{hash: hash, time: now})
+}
+
+// addKnownBlock adds a block hash to the known block cache with cleanup of old entries.
+func (c *conn) addKnownBlock(hash common.Hash) {
+	if !c.shouldBroadcastBlocks && !c.shouldBroadcastBlockHashes {
+		return
+	}
+
+	now := time.Now()
+
+	// Remove old entries if we're at capacity
+	if c.knownBlocks.Len() >= maxKnownBlocks {
+		c.knownBlocks.Remove(c.knownBlocks.Front())
+	}
+
+	c.knownBlocks.PushBack(KnownCacheEntry{hash: hash, time: now})
+}
+
+// hasKnownTx checks if a transaction hash is in the known tx cache and cleans
+// up expired entries during the check.
+func (c *conn) hasKnownTx(hash common.Hash) bool {
+	if !c.shouldBroadcastTx && !c.shouldBroadcastTxHashes {
+		return false
+	}
+
+	now := time.Now()
+	for e := c.knownTxs.Front(); e != nil; {
+		entry := e.Value.(KnownCacheEntry)
+		next := e.Next()
+
+		// Remove expired entries
+		if now.Sub(entry.time) > knownCacheTTL {
+			c.knownTxs.Remove(e)
+			e = next
+			continue
+		}
+
+		// Check if hash matches
+		if entry.hash == hash {
+			return true
+		}
+		e = next
+	}
+	return false
+}
+
+// hasKnownBlock checks if a block hash is in the known block cache and cleans
+// up expired entries during the check.
+func (c *conn) hasKnownBlock(hash common.Hash) bool {
+	if !c.shouldBroadcastBlocks && !c.shouldBroadcastBlockHashes {
+		return false
+	}
+
+	now := time.Now()
+	for e := c.knownBlocks.Front(); e != nil; {
+		entry := e.Value.(KnownCacheEntry)
+		next := e.Next()
+
+		// Remove expired entries
+		if now.Sub(entry.time) > knownCacheTTL {
+			c.knownBlocks.Remove(e)
+			e = next
+			continue
+		}
+
+		// Check if hash matches
+		if entry.hash == hash {
+			return true
+		}
+		e = next
+	}
+	return false
+}
+
 func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 	var txs eth.TransactionsPacket
 	if err := msg.Decode(&txs); err != nil {
@@ -391,7 +539,26 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.AddCount(txs.Name(), float64(len(txs)))
 
+	// Mark transactions as known from this peer
+	for _, tx := range txs {
+		c.addKnownTx(tx.Hash())
+	}
+
 	c.db.WriteTransactions(ctx, c.node, txs, tfs)
+
+	// Broadcast transactions or hashes to other peers if enabled
+	if c.shouldBroadcastTx {
+		c.conns.BroadcastTxs(types.Transactions(txs))
+		return nil
+	}
+
+	if c.shouldBroadcastTxHashes {
+		hashes := make([]common.Hash, len(txs))
+		for i, tx := range txs {
+			hashes[i] = tx.Hash()
+		}
+		c.conns.BroadcastTxHashes(hashes)
+	}
 
 	return nil
 }
@@ -511,6 +678,22 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.db.WriteBlock(ctx, c.node, block.Block, block.TD, tfs)
 
+	// Mark block as known from this peer
+	c.addKnownBlock(block.Block.Hash())
+
+	// Broadcast block or block hash to other peers if enabled
+	if c.shouldBroadcastBlocks {
+		c.conns.BroadcastBlock(block.Block, block.TD)
+		return nil
+	}
+
+	if c.shouldBroadcastBlockHashes {
+		c.conns.BroadcastBlockHashes(
+			[]common.Hash{block.Block.Hash()},
+			[]uint64{block.Block.Number().Uint64()},
+		)
+	}
+
 	return nil
 }
 
@@ -567,7 +750,26 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 
 	c.AddCount(packet.Name(), float64(len(packet.PooledTransactionsResponse)))
 
+	// Mark transactions as known from this peer
+	for _, tx := range packet.PooledTransactionsResponse {
+		c.addKnownTx(tx.Hash())
+	}
+
 	c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse, tfs)
+
+	// Broadcast transactions or hashes to other peers if enabled
+	if c.shouldBroadcastTx {
+		c.conns.BroadcastTxs(types.Transactions(packet.PooledTransactionsResponse))
+		return nil
+	}
+
+	if c.shouldBroadcastTxHashes {
+		hashes := make([]common.Hash, len(packet.PooledTransactionsResponse))
+		for i, tx := range packet.PooledTransactionsResponse {
+			hashes[i] = tx.Hash()
+		}
+		c.conns.BroadcastTxHashes(hashes)
+	}
 
 	return nil
 }

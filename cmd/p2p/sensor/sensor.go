@@ -50,6 +50,10 @@ type (
 		ShouldWriteTransactions      bool
 		ShouldWriteTransactionEvents bool
 		ShouldWritePeers             bool
+		ShouldBroadcastTx            bool
+		ShouldBroadcastTxHashes      bool
+		ShouldBroadcastBlocks        bool
+		ShouldBroadcastBlockHashes   bool
 		ShouldRunPprof               bool
 		PprofPort                    uint
 		ShouldRunPrometheus          bool
@@ -193,17 +197,21 @@ var SensorCmd = &cobra.Command{
 		conns := p2p.NewConns()
 
 		opts := p2p.EthProtocolOptions{
-			Context:     cmd.Context(),
-			Database:    db,
-			GenesisHash: common.HexToHash(inputSensorParams.GenesisHash),
-			RPC:         inputSensorParams.RPC,
-			SensorID:    inputSensorParams.SensorID,
-			NetworkID:   inputSensorParams.NetworkID,
-			Conns:       conns,
-			Head:        &head,
-			HeadMutex:   &sync.RWMutex{},
-			ForkID:      forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
-			MsgCounter:  msgCounter,
+			Context:                cmd.Context(),
+			Database:               db,
+			GenesisHash:            common.HexToHash(inputSensorParams.GenesisHash),
+			RPC:                    inputSensorParams.RPC,
+			SensorID:               inputSensorParams.SensorID,
+			NetworkID:              inputSensorParams.NetworkID,
+			Conns:                  conns,
+			Head:                   &head,
+			HeadMutex:              &sync.RWMutex{},
+			ForkID:                 forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
+			MsgCounter:             msgCounter,
+			ShouldBroadcastTx:      inputSensorParams.ShouldBroadcastTx,
+			ShouldBroadcastTxHashes:      inputSensorParams.ShouldBroadcastTxHashes,
+			ShouldBroadcastBlocks:        inputSensorParams.ShouldBroadcastBlocks,
+			ShouldBroadcastBlockHashes:   inputSensorParams.ShouldBroadcastBlockHashes,
 		}
 
 		config := ethp2p.Config{
@@ -439,6 +447,10 @@ will result in less chance of missing data but can significantly increase memory
 	f.BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
 		`write transaction events to database (this option can significantly increase CPU and memory usage)`)
 	f.BoolVar(&inputSensorParams.ShouldWritePeers, "write-peers", true, "write peers to database")
+	f.BoolVar(&inputSensorParams.ShouldBroadcastTx, "broadcast-tx", false, "broadcast full transactions to peers")
+	f.BoolVar(&inputSensorParams.ShouldBroadcastTxHashes, "broadcast-tx-hashes", false, "broadcast transaction hashes to peers")
+	f.BoolVar(&inputSensorParams.ShouldBroadcastBlocks, "broadcast-blocks", false, "broadcast full blocks to peers")
+	f.BoolVar(&inputSensorParams.ShouldBroadcastBlockHashes, "broadcast-block-hashes", false, "broadcast block hashes to peers")
 	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
 	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")
