@@ -37,6 +37,10 @@ var FoldTraceCmd = &cobra.Command{
 	Use:   "fold-trace",
 	Short: "Trace an execution trace and fold it for visualization.",
 	Long:  usage,
+	Args:  cobra.ArbitraryArgs,
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		return validateInputMetric()
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		data, err := getInputData(cmd, args)
 		if err != nil {
@@ -98,13 +102,6 @@ var FoldTraceCmd = &cobra.Command{
 			fmt.Printf("%s %d\n", context, metric)
 		}
 
-		return nil
-	},
-	Args: func(cmd *cobra.Command, args []string) error {
-		err := validateInputMetric()
-		if err != nil {
-			return err
-		}
 		return nil
 	},
 }
