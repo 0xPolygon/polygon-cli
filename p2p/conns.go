@@ -100,6 +100,7 @@ func (c *Conns) BroadcastTxs(txs types.Transactions) int {
 
 		// Send as TransactionsPacket
 		packet := eth.TransactionsPacket(unknownTxs)
+		cn.AddCountSent(packet.Name(), 1)
 		if err := ethp2p.Send(cn.rw, eth.TransactionsMsg, packet); err != nil {
 			cn.logger.Debug().
 				Err(err).
@@ -157,6 +158,7 @@ func (c *Conns) BroadcastTxHashes(hashes []common.Hash) int {
 			Hashes: unknownHashes,
 		}
 
+		cn.AddCountSent(packet.Name(), 1)
 		if err := ethp2p.Send(cn.rw, eth.NewPooledTransactionHashesMsg, packet); err != nil {
 			cn.logger.Debug().
 				Err(err).
@@ -207,6 +209,7 @@ func (c *Conns) BroadcastBlock(block *types.Block, td *big.Int) int {
 			TD:    td,
 		}
 
+		cn.AddCountSent(packet.Name(), 1)
 		if err := ethp2p.Send(cn.rw, eth.NewBlockMsg, &packet); err != nil {
 			cn.logger.Debug().
 				Err(err).
@@ -266,6 +269,7 @@ func (c *Conns) BroadcastBlockHashes(hashes []common.Hash, numbers []uint64) int
 			packet[i].Number = unknownNumbers[i]
 		}
 
+		cn.AddCountSent(packet.Name(), 1)
 		if err := ethp2p.Send(cn.rw, eth.NewBlockHashesMsg, packet); err != nil {
 			cn.logger.Debug().
 				Err(err).

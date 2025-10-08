@@ -737,11 +737,9 @@ func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) er
 		return nil
 	}
 
-	return ethp2p.Send(
-		c.rw,
-		eth.GetPooledTransactionsMsg,
-		&eth.GetPooledTransactionsPacket{GetPooledTransactionsRequest: hashes},
-	)
+	packet := &eth.GetPooledTransactionsPacket{GetPooledTransactionsRequest: hashes}
+	c.AddCountSent(packet.Name(), 1)
+	return ethp2p.Send(c.rw, eth.GetPooledTransactionsMsg, packet)
 }
 
 func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) error {
