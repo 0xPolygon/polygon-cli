@@ -33,7 +33,7 @@ type peerInfo struct {
 // handleAPI sets up the API for interacting with the sensor. The `/peers`
 // endpoint returns a list of all peers connected to the sensor, including the
 // types and counts of eth packets sent by and received from each peer.
-func handleAPI(server *ethp2p.Server, counterReceived, counterSent *prometheus.CounterVec, conns *p2p.Conns) {
+func handleAPI(server *ethp2p.Server, msgsReceived, msgsSent *prometheus.CounterVec, conns *p2p.Conns) {
 	http.HandleFunc("/peers", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -50,8 +50,8 @@ func handleAPI(server *ethp2p.Server, counterReceived, counterSent *prometheus.C
 			connectedAt := conns.GetPeerConnectedAt(nodeID)
 
 			peers[url] = peerInfo{
-				MessagesReceived: getPeerMessages(url, peer.Fullname(), counterReceived),
-				MessagesSent:     getPeerMessages(url, peer.Fullname(), counterSent),
+				MessagesReceived: getPeerMessages(url, peer.Fullname(), msgsReceived),
+				MessagesSent:     getPeerMessages(url, peer.Fullname(), msgsSent),
 				ConnectedAt:      connectedAt.UTC().Format(time.RFC3339),
 				DurationSeconds:  int64(time.Since(connectedAt).Seconds()),
 			}

@@ -187,13 +187,13 @@ var SensorCmd = &cobra.Command{
 			Help:      "The number of peers the sensor is connected to",
 		})
 
-		msgCounterReceived := promauto.NewCounterVec(prometheus.CounterOpts{
+		msgsReceived := promauto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "sensor",
 			Name:      "messages_received",
 			Help:      "The number and type of messages the sensor has received",
 		}, []string{"message", "url", "name"})
 
-		msgCounterSent := promauto.NewCounterVec(prometheus.CounterOpts{
+		msgsSent := promauto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "sensor",
 			Name:      "messages_sent",
 			Help:      "The number and type of messages the sensor has sent",
@@ -203,22 +203,22 @@ var SensorCmd = &cobra.Command{
 		conns := p2p.NewConns()
 
 		opts := p2p.EthProtocolOptions{
-			Context:                      cmd.Context(),
-			Database:                     db,
-			GenesisHash:                  common.HexToHash(inputSensorParams.GenesisHash),
-			RPC:                          inputSensorParams.RPC,
-			SensorID:                     inputSensorParams.SensorID,
-			NetworkID:                    inputSensorParams.NetworkID,
-			Conns:                        conns,
-			Head:                         &head,
-			HeadMutex:                    &sync.RWMutex{},
-			ForkID:                       forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
-			MsgCounterReceived:           msgCounterReceived,
-			MsgCounterSent:               msgCounterSent,
-			ShouldBroadcastTx:            inputSensorParams.ShouldBroadcastTx,
-			ShouldBroadcastTxHashes:      inputSensorParams.ShouldBroadcastTxHashes,
-			ShouldBroadcastBlocks:        inputSensorParams.ShouldBroadcastBlocks,
-			ShouldBroadcastBlockHashes:   inputSensorParams.ShouldBroadcastBlockHashes,
+			Context:                    cmd.Context(),
+			Database:                   db,
+			GenesisHash:                common.HexToHash(inputSensorParams.GenesisHash),
+			RPC:                        inputSensorParams.RPC,
+			SensorID:                   inputSensorParams.SensorID,
+			NetworkID:                  inputSensorParams.NetworkID,
+			Conns:                      conns,
+			Head:                       &head,
+			HeadMutex:                  &sync.RWMutex{},
+			ForkID:                     forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
+			MessagesReceived:           msgsReceived,
+			MessagesSent:               msgsSent,
+			ShouldBroadcastTx:          inputSensorParams.ShouldBroadcastTx,
+			ShouldBroadcastTxHashes:    inputSensorParams.ShouldBroadcastTxHashes,
+			ShouldBroadcastBlocks:      inputSensorParams.ShouldBroadcastBlocks,
+			ShouldBroadcastBlockHashes: inputSensorParams.ShouldBroadcastBlockHashes,
 		}
 
 		config := ethp2p.Config{
@@ -272,7 +272,7 @@ var SensorCmd = &cobra.Command{
 			go handlePrometheus()
 		}
 
-		go handleAPI(&server, msgCounterReceived, msgCounterSent, conns)
+		go handleAPI(&server, msgsReceived, msgsSent, conns)
 
 		// Start the RPC server for receiving transactions
 		go handleRPC(conns, inputSensorParams.NetworkID)
@@ -291,10 +291,10 @@ var SensorCmd = &cobra.Command{
 					urls = append(urls, peer.Node().URLv4())
 				}
 
-				if err := removePeerMessages(msgCounterReceived, urls); err != nil {
+				if err := removePeerMessages(msgsReceived, urls); err != nil {
 					log.Error().Err(err).Msg("Failed to clean up received peer messages")
 				}
-				if err := removePeerMessages(msgCounterSent, urls); err != nil {
+				if err := removePeerMessages(msgsSent, urls); err != nil {
 					log.Error().Err(err).Msg("Failed to clean up sent peer messages")
 				}
 

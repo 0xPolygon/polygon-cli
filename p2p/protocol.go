@@ -26,17 +26,17 @@ import (
 
 // conn represents an individual connection with a peer.
 type conn struct {
-	sensorID        string
-	node            *enode.Node
-	logger          zerolog.Logger
-	rw              ethp2p.MsgReadWriter
-	db              database.Database
-	conns           *Conns
-	head            *HeadBlock
-	headMutex       *sync.RWMutex
-	counterReceived *prometheus.CounterVec
-	counterSent     *prometheus.CounterVec
-	peer            *ethp2p.Peer
+	sensorID     string
+	node         *enode.Node
+	logger       zerolog.Logger
+	rw           ethp2p.MsgReadWriter
+	db           database.Database
+	conns        *Conns
+	head         *HeadBlock
+	headMutex    *sync.RWMutex
+	msgsReceived *prometheus.CounterVec
+	msgsSent     *prometheus.CounterVec
+	peer         *ethp2p.Peer
 
 	// requests is used to store the request ID and the block hash. This is used
 	// when fetching block bodies because the eth protocol block bodies do not
@@ -67,16 +67,16 @@ type conn struct {
 
 // EthProtocolOptions is the options used when creating a new eth protocol.
 type EthProtocolOptions struct {
-	Context            context.Context
-	Database           database.Database
-	GenesisHash        common.Hash
-	RPC                string
-	SensorID           string
-	NetworkID          uint64
-	Conns              *Conns
-	ForkID             forkid.ID
-	MsgCounterReceived *prometheus.CounterVec
-	MsgCounterSent     *prometheus.CounterVec
+	Context          context.Context
+	Database         database.Database
+	GenesisHash      common.Hash
+	RPC              string
+	SensorID         string
+	NetworkID        uint64
+	Conns            *Conns
+	ForkID           forkid.ID
+	MessagesReceived *prometheus.CounterVec
+	MessagesSent     *prometheus.CounterVec
 
 	// Head keeps track of the current head block of the chain. This is required
 	// when doing the status exchange.
@@ -135,8 +135,8 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				requestNum:                 0,
 				head:                       opts.Head,
 				headMutex:                  opts.HeadMutex,
-				counterReceived:            opts.MsgCounterReceived,
-				counterSent:                opts.MsgCounterSent,
+				msgsReceived:               opts.MessagesReceived,
+				msgsSent:                   opts.MessagesSent,
 				peer:                       p,
 				blockHashes:                list.New(),
 				shouldBroadcastTx:          opts.ShouldBroadcastTx,
@@ -260,12 +260,12 @@ func (c *conn) statusExchange(packet *eth.StatusPacket) error {
 
 // AddCount increments the prometheus counter for received messages.
 func (c *conn) AddCount(messageName string, count float64) {
-	c.counterReceived.WithLabelValues(messageName, c.node.URLv4(), c.peer.Fullname()).Add(count)
+	c.msgsReceived.WithLabelValues(messageName, c.node.URLv4(), c.peer.Fullname()).Add(count)
 }
 
 // AddCountSent increments the prometheus counter for sent messages.
 func (c *conn) AddCountSent(messageName string, count float64) {
-	c.counterSent.WithLabelValues(messageName, c.node.URLv4(), c.peer.Fullname()).Add(count)
+	c.msgsSent.WithLabelValues(messageName, c.node.URLv4(), c.peer.Fullname()).Add(count)
 }
 
 func (c *conn) readStatus(packet *eth.StatusPacket) error {
