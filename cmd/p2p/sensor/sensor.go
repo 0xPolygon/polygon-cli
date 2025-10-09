@@ -54,6 +54,8 @@ type (
 		ShouldBroadcastTxHashes      bool
 		ShouldBroadcastBlocks        bool
 		ShouldBroadcastBlockHashes   bool
+		MaxCachedTxs                 int
+		MaxCachedBlocks              int
 		ShouldRunPprof               bool
 		PprofPort                    uint
 		ShouldRunPrometheus          bool
@@ -200,7 +202,10 @@ var SensorCmd = &cobra.Command{
 		}, []string{"message", "url", "name"})
 
 		// Create peer connection manager for broadcasting transactions
-		conns := p2p.NewConns()
+		conns := p2p.NewConns(
+			inputSensorParams.MaxCachedTxs,
+			inputSensorParams.MaxCachedBlocks,
+		)
 
 		opts := p2p.EthProtocolOptions{
 			Context:                    cmd.Context(),
@@ -461,6 +466,8 @@ will result in less chance of missing data but can significantly increase memory
 	f.BoolVar(&inputSensorParams.ShouldBroadcastTxHashes, "broadcast-tx-hashes", false, "broadcast transaction hashes to peers")
 	f.BoolVar(&inputSensorParams.ShouldBroadcastBlocks, "broadcast-blocks", false, "broadcast full blocks to peers")
 	f.BoolVar(&inputSensorParams.ShouldBroadcastBlockHashes, "broadcast-block-hashes", false, "broadcast block hashes to peers")
+	f.IntVar(&inputSensorParams.MaxCachedTxs, "max-cached-txs", 10000, "maximum number of transactions to cache for serving to peers")
+	f.IntVar(&inputSensorParams.MaxCachedBlocks, "max-cached-blocks", 1000, "maximum number of blocks to cache for serving to peers")
 	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
 	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")

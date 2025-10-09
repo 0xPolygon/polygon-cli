@@ -14,14 +14,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const (
-	// maxCachedTxs is the maximum number of transactions to cache for serving to peers
-	maxCachedTxs = 10000
-
-	// maxCachedBlocks is the maximum number of blocks to cache for serving to peers
-	maxCachedBlocks = 1000
-)
-
 // Conns manages a collection of active peer connections for transaction broadcasting.
 type Conns struct {
 	conns map[string]*conn
@@ -32,8 +24,8 @@ type Conns struct {
 	blocks *lru.Cache[common.Hash, *types.Block]
 }
 
-// NewConns creates a new connection manager.
-func NewConns() *Conns {
+// NewConns creates a new connection manager with the specified cache sizes.
+func NewConns(maxCachedTxs, maxCachedBlocks int) *Conns {
 	txCache, err := lru.New[common.Hash, *types.Transaction](maxCachedTxs)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create transaction cache")
