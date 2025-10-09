@@ -204,7 +204,14 @@ var SensorCmd = &cobra.Command{
 		}, []string{"message", "url", "name"})
 
 		// Create peer connection manager for broadcasting transactions
-		conns := p2p.NewConns(inputSensorParams.MaxCachedTxs, inputSensorParams.MaxCachedBlocks)
+		conns := p2p.NewConns(p2p.ConnsOptions{
+			MaxCachedTxs:               inputSensorParams.MaxCachedTxs,
+			MaxCachedBlocks:            inputSensorParams.MaxCachedBlocks,
+			ShouldBroadcastTx:          inputSensorParams.ShouldBroadcastTx,
+			ShouldBroadcastTxHashes:    inputSensorParams.ShouldBroadcastTxHashes,
+			ShouldBroadcastBlocks:      inputSensorParams.ShouldBroadcastBlocks,
+			ShouldBroadcastBlockHashes: inputSensorParams.ShouldBroadcastBlockHashes,
+		})
 
 		opts := p2p.EthProtocolOptions{
 			Context:                    cmd.Context(),

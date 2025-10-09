@@ -14,6 +14,16 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// ConnsOptions contains configuration options for the connection manager.
+type ConnsOptions struct {
+	MaxCachedTxs               int
+	MaxCachedBlocks            int
+	ShouldBroadcastTx          bool
+	ShouldBroadcastTxHashes    bool
+	ShouldBroadcastBlocks      bool
+	ShouldBroadcastBlockHashes bool
+}
+
 // Conns manages a collection of active peer connections for transaction broadcasting.
 type Conns struct {
 	conns map[string]*conn
@@ -22,24 +32,34 @@ type Conns struct {
 	// Shared LRU caches for serving broadcast data to peers
 	txs    *lru.Cache[common.Hash, *types.Transaction]
 	blocks *lru.Cache[common.Hash, *types.Block]
+
+	// Broadcast flags control what gets cached and rebroadcasted
+	shouldBroadcastTx          bool
+	shouldBroadcastTxHashes    bool
+	shouldBroadcastBlocks      bool
+	shouldBroadcastBlockHashes bool
 }
 
-// NewConns creates a new connection manager with the specified cache sizes.
-func NewConns(maxCachedTxs, maxCachedBlocks int) *Conns {
-	txCache, err := lru.New[common.Hash, *types.Transaction](maxCachedTxs)
+// NewConns creates a new connection manager with the specified options.
+func NewConns(opts ConnsOptions) *Conns {
+	txCache, err := lru.New[common.Hash, *types.Transaction](opts.MaxCachedTxs)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create transaction cache")
 	}
 
-	blockCache, err := lru.New[common.Hash, *types.Block](maxCachedBlocks)
+	blockCache, err := lru.New[common.Hash, *types.Block](opts.MaxCachedBlocks)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create block cache")
 	}
 
 	return &Conns{
-		conns:  make(map[string]*conn),
-		txs:    txCache,
-		blocks: blockCache,
+		conns:                      make(map[string]*conn),
+		txs:                        txCache,
+		blocks:                     blockCache,
+		shouldBroadcastTx:          opts.ShouldBroadcastTx,
+		shouldBroadcastTxHashes:    opts.ShouldBroadcastTxHashes,
+		shouldBroadcastBlocks:      opts.ShouldBroadcastBlocks,
+		shouldBroadcastBlockHashes: opts.ShouldBroadcastBlockHashes,
 	}
 }
 
@@ -68,7 +88,12 @@ func (c *Conns) BroadcastTx(tx *types.Transaction) int {
 // BroadcastTxs broadcasts multiple transactions to all connected peers,
 // filtering out transactions that each peer already knows about, and returns
 // the number of peers the transactions were successfully sent to.
+// If broadcast flags are disabled, this is a no-op.
 func (c *Conns) BroadcastTxs(txs types.Transactions) int {
+	if !c.shouldBroadcastTx {
+		return 0
+	}
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -120,8 +145,12 @@ func (c *Conns) BroadcastTxs(txs types.Transactions) int {
 
 // BroadcastTxHashes broadcasts transaction hashes to peers that don't already
 // know about them and returns the number of peers the hashes were successfully
-// sent to.
+// sent to. If broadcast flags are disabled, this is a no-op.
 func (c *Conns) BroadcastTxHashes(hashes []common.Hash) int {
+	if !c.shouldBroadcastTxHashes {
+		return 0
+	}
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -178,7 +207,12 @@ func (c *Conns) BroadcastTxHashes(hashes []common.Hash) int {
 
 // BroadcastBlock broadcasts a full block to peers that don't already know
 // about it and returns the number of peers the block was successfully sent to.
+// If broadcast flags are disabled, this is a no-op.
 func (c *Conns) BroadcastBlock(block *types.Block, td *big.Int) int {
+	if !c.shouldBroadcastBlocks {
+		return 0
+	}
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -227,8 +261,12 @@ func (c *Conns) BroadcastBlock(block *types.Block, td *big.Int) int {
 
 // BroadcastBlockHashes broadcasts block hashes with their corresponding block
 // numbers to peers that don't already know about them and returns the number
-// of peers the hashes were successfully sent to.
+// of peers the hashes were successfully sent to. If broadcast flags are disabled, this is a no-op.
 func (c *Conns) BroadcastBlockHashes(hashes []common.Hash, numbers []uint64) int {
+	if !c.shouldBroadcastBlockHashes {
+		return 0
+	}
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -300,14 +338,24 @@ func (c *Conns) Nodes() []*enode.Node {
 	return nodes
 }
 
-// AddTx adds a transaction to the shared cache.
+// AddTx adds a transaction to the shared cache for duplicate detection and serving.
+// Stores actual tx if broadcasting enabled, nil otherwise to mark as seen.
 func (c *Conns) AddTx(hash common.Hash, tx *types.Transaction) {
-	c.txs.Add(hash, tx)
+	if c.shouldBroadcastTx || c.shouldBroadcastTxHashes {
+		c.txs.Add(hash, tx)
+	} else {
+		c.txs.Add(hash, nil)
+	}
 }
 
-// AddBlock adds a block to the shared cache.
+// AddBlock adds a block to the shared cache for duplicate detection and serving.
+// Stores actual block if broadcasting enabled, nil otherwise to mark as seen.
 func (c *Conns) AddBlock(hash common.Hash, block *types.Block) {
-	c.blocks.Add(hash, block)
+	if c.shouldBroadcastBlocks || c.shouldBroadcastBlockHashes {
+		c.blocks.Add(hash, block)
+	} else {
+		c.blocks.Add(hash, nil)
+	}
 }
 
 // GetTx retrieves a transaction from the shared cache.

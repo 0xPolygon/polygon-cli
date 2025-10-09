@@ -362,45 +362,37 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.AddCount(packet.Name(), float64(len(packet)))
 
-	// Collect unique hashes for database write.
+	// Collect unique hashes and numbers for database write and broadcasting.
 	uniqueHashes := make([]common.Hash, 0, len(packet))
+	uniqueNumbers := make([]uint64, 0, len(packet))
 
 	for _, entry := range packet {
-		hash := entry.Hash
-
 		// Check if we've already seen this block (in cache or database)
-		if _, ok := c.conns.GetBlock(hash); ok || c.db.HasBlock(ctx, hash) {
+		if _, ok := c.conns.GetBlock(entry.Hash); ok || c.db.HasBlock(ctx, entry.Hash) {
 			continue
 		}
 
 		// Mark as known from this peer
-		c.addKnownBlock(hash)
+		c.addKnownBlock(entry.Hash)
 
 		// Attempt to fetch block data first
-		if err := c.getBlockData(hash); err != nil {
+		if err := c.getBlockData(entry.Hash); err != nil {
 			return err
 		}
 
-		uniqueHashes = append(uniqueHashes, hash)
+		uniqueHashes = append(uniqueHashes, entry.Hash)
+		uniqueNumbers = append(uniqueNumbers, entry.Number)
 	}
 
 	// Write only unique hashes to the database.
-	if len(uniqueHashes) > 0 {
-		c.db.WriteBlockHashes(ctx, c.node, uniqueHashes, tfs)
-	}
-
-	// Broadcast block hashes to other peers if enabled
-	if !c.shouldBroadcastBlockHashes || len(uniqueHashes) == 0 {
+	if len(uniqueHashes) == 0 {
 		return nil
 	}
 
-	numbers := make([]uint64, len(uniqueHashes))
-	for i, entry := range packet {
-		if i < len(uniqueHashes) {
-			numbers[i] = entry.Number
-		}
-	}
-	c.conns.BroadcastBlockHashes(uniqueHashes, numbers)
+	c.db.WriteBlockHashes(ctx, c.node, uniqueHashes, tfs)
+
+	// Broadcast block hashes to other peers
+	c.conns.BroadcastBlockHashes(uniqueHashes, uniqueNumbers)
 
 	return nil
 }
@@ -458,26 +450,19 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.db.WriteTransactions(ctx, c.node, txs, tfs)
 
-	// Cache transactions for serving to peers if broadcasting is enabled
-	if c.shouldBroadcastTx || c.shouldBroadcastTxHashes {
-		for _, tx := range txs {
-			c.conns.AddTx(tx.Hash(), tx)
-		}
+	// Cache transactions for duplicate detection and serving to peers
+	for _, tx := range txs {
+		c.conns.AddTx(tx.Hash(), tx)
 	}
 
-	// Broadcast transactions or hashes to other peers if enabled
-	if c.shouldBroadcastTx {
-		c.conns.BroadcastTxs(types.Transactions(txs))
-		return nil
+	hashes := make([]common.Hash, len(txs))
+	for i, tx := range txs {
+		hashes[i] = tx.Hash()
 	}
 
-	if c.shouldBroadcastTxHashes {
-		hashes := make([]common.Hash, len(txs))
-		for i, tx := range txs {
-			hashes[i] = tx.Hash()
-		}
-		c.conns.BroadcastTxHashes(hashes)
-	}
+	// Broadcast transactions or hashes to other peers
+	c.conns.BroadcastTxs(types.Transactions(txs))
+	c.conns.BroadcastTxHashes(hashes)
 
 	return nil
 }
@@ -620,23 +605,15 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	// Mark block as known from this peer
 	c.addKnownBlock(block.Block.Hash())
 
-	// Cache block for serving to peers if broadcasting is enabled
-	if c.shouldBroadcastBlocks || c.shouldBroadcastBlockHashes {
-		c.conns.AddBlock(block.Block.Hash(), block.Block)
-	}
+	// Cache block for duplicate detection and serving to peers
+	c.conns.AddBlock(block.Block.Hash(), block.Block)
 
-	// Broadcast block or block hash to other peers if enabled
-	if c.shouldBroadcastBlocks {
-		c.conns.BroadcastBlock(block.Block, block.TD)
-		return nil
-	}
-
-	if c.shouldBroadcastBlockHashes {
-		c.conns.BroadcastBlockHashes(
-			[]common.Hash{block.Block.Hash()},
-			[]uint64{block.Block.Number().Uint64()},
-		)
-	}
+	// Broadcast block or block hash to other peers
+	c.conns.BroadcastBlock(block.Block, block.TD)
+	c.conns.BroadcastBlockHashes(
+		[]common.Hash{block.Block.Hash()},
+		[]uint64{block.Block.Number().Uint64()},
+	)
 
 	return nil
 }
@@ -709,26 +686,19 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 
 	c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse, tfs)
 
-	// Cache transactions for serving to peers if broadcasting is enabled
-	if c.shouldBroadcastTx || c.shouldBroadcastTxHashes {
-		for _, tx := range packet.PooledTransactionsResponse {
-			c.conns.AddTx(tx.Hash(), tx)
-		}
+	// Cache transactions for duplicate detection and serving to peers
+	for _, tx := range packet.PooledTransactionsResponse {
+		c.conns.AddTx(tx.Hash(), tx)
 	}
 
-	// Broadcast transactions or hashes to other peers if enabled
-	if c.shouldBroadcastTx {
-		c.conns.BroadcastTxs(types.Transactions(packet.PooledTransactionsResponse))
-		return nil
+	hashes := make([]common.Hash, len(packet.PooledTransactionsResponse))
+	for i, tx := range packet.PooledTransactionsResponse {
+		hashes[i] = tx.Hash()
 	}
 
-	if c.shouldBroadcastTxHashes {
-		hashes := make([]common.Hash, len(packet.PooledTransactionsResponse))
-		for i, tx := range packet.PooledTransactionsResponse {
-			hashes[i] = tx.Hash()
-		}
-		c.conns.BroadcastTxHashes(hashes)
-	}
+	// Broadcast transactions or hashes to other peers
+	c.conns.BroadcastTxs(types.Transactions(packet.PooledTransactionsResponse))
+	c.conns.BroadcastTxHashes(hashes)
 
 	return nil
 }
