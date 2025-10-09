@@ -44,9 +44,6 @@ type conn struct {
 	requests   *list.List
 	requestNum uint64
 
-	// Linked list of seen block hashes with timestamps.
-	blockHashes *list.List
-
 	// oldestBlock stores the first block the sensor has seen so when fetching
 	// parent blocks, it does not request blocks older than this.
 	oldestBlock *types.Header
@@ -98,11 +95,6 @@ type HeadBlock struct {
 	Time            uint64
 }
 
-type BlockHashEntry struct {
-	hash common.Hash
-	time time.Time
-}
-
 const (
 	// maxKnownTxs is the maximum transaction hashes to keep in the known list
 	// before starting to evict old ones. Matches Bor's configuration.
@@ -112,9 +104,6 @@ const (
 	// before starting to evict old ones. Matches Bor's configuration.
 	maxKnownBlocks = 1024
 )
-
-// blockHashTTL defines the time-to-live for block hash entries in blockHashes list.
-var blockHashTTL = 10 * time.Minute
 
 // NewEthProtocol creates the new eth protocol. This will handle writing the
 // status exchange, message handling, and writing blocks/txs to the database.
@@ -138,7 +127,6 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				msgsReceived:               opts.MessagesReceived,
 				msgsSent:                   opts.MessagesSent,
 				peer:                       p,
-				blockHashes:                list.New(),
 				shouldBroadcastTx:          opts.ShouldBroadcastTx,
 				shouldBroadcastTxHashes:    opts.ShouldBroadcastTxHashes,
 				shouldBroadcastBlocks:      opts.ShouldBroadcastBlocks,
@@ -386,8 +374,8 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 	for _, entry := range packet {
 		hash := entry.Hash
 
-		// Check if we've seen the hash and remove old entries
-		if c.hasSeenBlockHash(hash) {
+		// Check if we've already seen this block (in cache or database)
+		if _, ok := c.conns.blocks.Get(hash); ok || c.db.HasBlock(ctx, hash) {
 			continue
 		}
 
@@ -399,8 +387,6 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 			return err
 		}
 
-		// Now that we've successfully fetched, record the new block hash
-		c.addBlockHash(hash)
 		uniqueHashes = append(uniqueHashes, hash)
 	}
 
@@ -423,36 +409,6 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 	c.conns.BroadcastBlockHashes(uniqueHashes, numbers)
 
 	return nil
-}
-
-// addBlockHash adds a new block hash with a timestamp to the blockHashes list.
-func (c *conn) addBlockHash(hash common.Hash) {
-	now := time.Now()
-
-	// Add the new block hash entry to the list.
-	c.blockHashes.PushBack(BlockHashEntry{
-		hash: hash,
-		time: now,
-	})
-}
-
-// hasSeenBlockHash checks if a block hash is already in the blockHashes list.
-func (c *conn) hasSeenBlockHash(hash common.Hash) bool {
-	now := time.Now()
-	for e := c.blockHashes.Front(); e != nil; e = e.Next() {
-		entry := e.Value.(BlockHashEntry)
-		// Check if the hash matches. We can short circuit here because there will
-		// be block hashes that we haven't seen before, which will make a full
-		// iteration of the blockHashes linked list.
-		if entry.hash.Cmp(hash) == 0 {
-			return true
-		}
-		// Remove entries older than blockHashTTL.
-		if now.Sub(entry.time) > blockHashTTL {
-			c.blockHashes.Remove(e)
-		}
-	}
-	return false
 }
 
 // addKnownTx adds a transaction hash to the known tx cache.
