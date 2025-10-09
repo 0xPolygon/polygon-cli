@@ -85,9 +85,9 @@ type EthProtocolOptions struct {
 	ShouldBroadcastBlockHashes bool
 
 	// Cache sizes for known tx/block tracking per peer
-	MaxKnownTxs         int
-	MaxKnownBlocks      int
-	PeerCacheTTL        time.Duration
+	MaxKnownTxs    int
+	MaxKnownBlocks int
+	PeerCacheTTL   time.Duration
 }
 
 // HeadBlock contains the necessary head block data for the status message.
@@ -248,8 +248,9 @@ func (c *conn) readStatus(packet *eth.StatusPacket) error {
 	if err != nil {
 		return err
 	}
+
 	defer func() {
-		if err := msg.Discard(); err != nil {
+		if err = msg.Discard(); err != nil {
 			c.logger.Error().Err(err).Msg("Failed to discard message")
 		}
 	}()
