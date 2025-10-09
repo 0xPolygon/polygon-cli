@@ -255,6 +255,7 @@ func (c *conn) readStatus(packet *eth.StatusPacket) error {
 	if err != nil {
 		return err
 	}
+	defer msg.Discard()
 
 	if msg.Code != eth.StatusMsg {
 		return errors.New("expected status message code")
