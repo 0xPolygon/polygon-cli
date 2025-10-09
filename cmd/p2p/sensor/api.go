@@ -52,7 +52,7 @@ func handleAPI(server *ethp2p.Server, counterReceived, counterSent *prometheus.C
 			peers[url] = peerInfo{
 				MessagesReceived: getPeerMessages(url, peer.Fullname(), counterReceived),
 				MessagesSent:     getPeerMessages(url, peer.Fullname(), counterSent),
-				ConnectedAt:      connectedAt.Format(time.RFC3339),
+				ConnectedAt:      connectedAt.UTC().Format(time.RFC3339),
 				DurationSeconds:  int64(time.Since(connectedAt).Seconds()),
 			}
 		}
