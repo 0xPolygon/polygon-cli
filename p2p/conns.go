@@ -43,16 +43,16 @@ func NewConns(maxCachedTxs, maxCachedBlocks int) *Conns {
 	}
 }
 
-// Add adds a connection to the manager.
-func (c *Conns) Add(cn *conn) {
+// AddConn adds a connection to the manager.
+func (c *Conns) AddConn(cn *conn) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.conns[cn.node.ID().String()] = cn
 	cn.logger.Debug().Msg("Added connection")
 }
 
-// Remove removes a connection from the manager when a peer disconnects.
-func (c *Conns) Remove(cn *conn) {
+// RemoveConn removes a connection from the manager when a peer disconnects.
+func (c *Conns) RemoveConn(cn *conn) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.conns, cn.node.ID().String())
@@ -298,6 +298,26 @@ func (c *Conns) Nodes() []*enode.Node {
 	}
 
 	return nodes
+}
+
+// AddTx adds a transaction to the shared cache.
+func (c *Conns) AddTx(hash common.Hash, tx *types.Transaction) {
+	c.txs.Add(hash, tx)
+}
+
+// AddBlock adds a block to the shared cache.
+func (c *Conns) AddBlock(hash common.Hash, block *types.Block) {
+	c.blocks.Add(hash, block)
+}
+
+// GetTx retrieves a transaction from the shared cache.
+func (c *Conns) GetTx(hash common.Hash) (*types.Transaction, bool) {
+	return c.txs.Get(hash)
+}
+
+// GetBlock retrieves a block from the shared cache.
+func (c *Conns) GetBlock(hash common.Hash) (*types.Block, bool) {
+	return c.blocks.Get(hash)
 }
 
 // GetPeerConnectedAt returns the time when a peer connected, or zero time if not found.

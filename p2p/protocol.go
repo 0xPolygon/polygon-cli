@@ -155,8 +155,8 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 			}
 
 			// Send the connection object to the conns manager for RPC broadcasting
-			opts.Conns.Add(c)
-			defer opts.Conns.Remove(c)
+			opts.Conns.AddConn(c)
+			defer opts.Conns.RemoveConn(c)
 
 			ctx := opts.Context
 
@@ -369,7 +369,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		hash := entry.Hash
 
 		// Check if we've already seen this block (in cache or database)
-		if _, ok := c.conns.blocks.Get(hash); ok || c.db.HasBlock(ctx, hash) {
+		if _, ok := c.conns.GetBlock(hash); ok || c.db.HasBlock(ctx, hash) {
 			continue
 		}
 
@@ -461,7 +461,7 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 	// Cache transactions for serving to peers if broadcasting is enabled
 	if c.shouldBroadcastTx || c.shouldBroadcastTxHashes {
 		for _, tx := range txs {
-			c.conns.txs.Add(tx.Hash(), tx)
+			c.conns.AddTx(tx.Hash(), tx)
 		}
 	}
 
@@ -492,7 +492,7 @@ func (c *conn) handleGetBlockHeaders(msg ethp2p.Msg) error {
 
 	// Try to serve from cache if we have the block
 	var headers []*types.Header
-	if block, ok := c.conns.blocks.Get(request.Origin.Hash); ok {
+	if block, ok := c.conns.GetBlock(request.Origin.Hash); ok {
 		headers = []*types.Header{block.Header()}
 	}
 
@@ -536,7 +536,7 @@ func (c *conn) handleGetBlockBodies(msg ethp2p.Msg) error {
 	// Try to serve from cache
 	var bodies []*eth.BlockBody
 	for _, hash := range request.GetBlockBodiesRequest {
-		if block, ok := c.conns.blocks.Get(hash); ok {
+		if block, ok := c.conns.GetBlock(hash); ok {
 			bodies = append(bodies, &eth.BlockBody{
 				Transactions: block.Transactions(),
 				Uncles:       block.Uncles(),
@@ -622,7 +622,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 
 	// Cache block for serving to peers if broadcasting is enabled
 	if c.shouldBroadcastBlocks || c.shouldBroadcastBlockHashes {
-		c.conns.blocks.Add(block.Block.Hash(), block.Block)
+		c.conns.AddBlock(block.Block.Hash(), block.Block)
 	}
 
 	// Broadcast block or block hash to other peers if enabled
@@ -652,7 +652,7 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 	// Try to serve from cache
 	var txs []*types.Transaction
 	for _, hash := range request.GetPooledTransactionsRequest {
-		if tx, ok := c.conns.txs.Get(hash); ok {
+		if tx, ok := c.conns.GetTx(hash); ok {
 			txs = append(txs, tx)
 		}
 	}
@@ -712,7 +712,7 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 	// Cache transactions for serving to peers if broadcasting is enabled
 	if c.shouldBroadcastTx || c.shouldBroadcastTxHashes {
 		for _, tx := range packet.PooledTransactionsResponse {
-			c.conns.txs.Add(tx.Hash(), tx)
+			c.conns.AddTx(tx.Hash(), tx)
 		}
 	}
 
