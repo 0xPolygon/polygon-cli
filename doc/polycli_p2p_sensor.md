@@ -42,10 +42,12 @@ If no nodes.json file exists, it will be created.
   -h, --help                     help for sensor
       --key string               hex-encoded private key (cannot be set with --key-file)
   -k, --key-file string          private key file (cannot be set with --key)
-      --max-cached-blocks int    maximum number of blocks to cache for serving to peers (default 1000)
-      --max-cached-txs int       maximum number of transactions to cache for serving to peers (default 10000)
+      --max-cached-blocks int    maximum number of blocks to cache for serving to peers (default 128)
+      --max-cached-txs int       maximum number of transactions to cache for serving to peers (default 2048)
   -D, --max-db-concurrency int   maximum number of concurrent database operations to perform (increasing this
                                  will result in less chance of missing data but can significantly increase memory usage) (default 10000)
+      --max-known-blocks int     maximum block hashes to track per peer (default 1024)
+      --max-known-txs int        maximum transaction hashes to track per peer (default 8192)
   -m, --max-peers int            maximum number of peers to connect to (default 2000)
       --nat string               NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
   -n, --network-id uint          filter discovered nodes by this network ID
