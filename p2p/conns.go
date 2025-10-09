@@ -339,23 +339,64 @@ func (c *Conns) Nodes() []*enode.Node {
 }
 
 // AddTx adds a transaction to the shared cache for duplicate detection and serving.
-// Stores actual tx if broadcasting enabled, nil otherwise to mark as seen.
 func (c *Conns) AddTx(hash common.Hash, tx *types.Transaction) {
-	if c.shouldBroadcastTx || c.shouldBroadcastTxHashes {
-		c.txs.Add(hash, tx)
-	} else {
-		c.txs.Add(hash, nil)
-	}
+	c.txs.Add(hash, tx)
 }
 
 // AddBlock adds a block to the shared cache for duplicate detection and serving.
-// Stores actual block if broadcasting enabled, nil otherwise to mark as seen.
 func (c *Conns) AddBlock(hash common.Hash, block *types.Block) {
-	if c.shouldBroadcastBlocks || c.shouldBroadcastBlockHashes {
-		c.blocks.Add(hash, block)
-	} else {
-		c.blocks.Add(hash, nil)
+	c.blocks.Add(hash, block)
+}
+
+// AddBlockHeader adds a block header to the cache. If a block already exists with a real header, does nothing.
+// If a block exists with an empty header (body received first), replaces it with the real header.
+// Otherwise creates a new block with just the header.
+func (c *Conns) AddBlockHeader(header *types.Header) {
+	hash := header.Hash()
+
+	// Check if block already exists in cache
+	block, ok := c.blocks.Get(hash)
+	if !ok {
+		// No block exists, create new one with header only
+		c.AddBlock(hash, types.NewBlockWithHeader(header))
+		return
 	}
+
+	// Check if existing block has a real header already
+	if block.Number() != nil && block.Number().Uint64() > 0 {
+		// Block already has a real header, don't overwrite
+		return
+	}
+
+	// Block has empty header (body came first), replace with real header + keep body
+	b := types.NewBlockWithHeader(header).WithBody(types.Body{
+		Transactions: block.Transactions(),
+		Uncles:       block.Uncles(),
+		Withdrawals:  block.Withdrawals(),
+	})
+	c.AddBlock(hash, b)
+}
+
+// AddBlockBody adds a body to an existing block in the cache. If no block exists for this hash,
+// creates a block with an empty header and the body. If a block exists with only a header, updates it with the body.
+func (c *Conns) AddBlockBody(hash common.Hash, body *eth.BlockBody) {
+	// Get existing block from cache
+	block, ok := c.blocks.Get(hash)
+	if !ok {
+		// No header yet, create block with empty header and body
+		blockWithBody := types.NewBlockWithHeader(&types.Header{}).WithBody(types.Body(*body))
+		c.AddBlock(hash, blockWithBody)
+		return
+	}
+
+	// Check if block already has a body
+	if len(block.Transactions()) > 0 || len(block.Uncles()) > 0 || len(block.Withdrawals()) > 0 {
+		// Block already has a body, no need to update
+		return
+	}
+
+	// Reconstruct full block with existing header and body
+	c.AddBlock(hash, block.WithBody(types.Body(*body)))
 }
 
 // GetTx retrieves a transaction from the shared cache.
@@ -366,6 +407,18 @@ func (c *Conns) GetTx(hash common.Hash) (*types.Transaction, bool) {
 // GetBlock retrieves a block from the shared cache.
 func (c *Conns) GetBlock(hash common.Hash) (*types.Block, bool) {
 	return c.blocks.Get(hash)
+}
+
+// HasBlockHeader checks if we have at least a header for a block in the cache.
+// Returns true if we have a block with a real header (number > 0).
+func (c *Conns) HasBlockHeader(hash common.Hash) bool {
+	block, ok := c.blocks.Get(hash)
+	if !ok {
+		return false
+	}
+
+	// Check if block has a real header (not empty)
+	return block.Number() != nil && block.Number().Uint64() > 0
 }
 
 // GetPeerConnectedAt returns the time when a peer connected, or zero time if not found.

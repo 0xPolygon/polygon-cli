@@ -328,7 +328,7 @@ func (c *conn) getBlockData(hash common.Hash) error {
 }
 
 // getParentBlock will send a request to the peer if the parent of the header
-// does not exist in the database.
+// does not exist in the cache or database.
 func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 	if !c.db.ShouldWriteBlocks() || !c.db.ShouldWriteBlockEvents() {
 		return nil
@@ -340,7 +340,9 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 		return nil
 	}
 
-	if c.db.HasBlock(ctx, header.ParentHash) || header.Number.Cmp(c.oldestBlock.Number) != 1 {
+	if c.conns.HasBlockHeader(header.ParentHash) ||
+		c.db.HasBlock(ctx, header.ParentHash) ||
+		header.Number.Cmp(c.oldestBlock.Number) != 1 {
 		return nil
 	}
 
@@ -507,6 +509,11 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	c.db.WriteBlockHeaders(ctx, headers, tfs)
+
+	for _, header := range headers {
+		c.conns.AddBlockHeader(header)
+	}
+
 	return nil
 }
 
@@ -569,6 +576,9 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	c.db.WriteBlockBody(ctx, packet.BlockBodiesResponse[0], *hash, tfs)
+
+	// Add body to cache - will merge with header if it exists
+	c.conns.AddBlockBody(*hash, packet.BlockBodiesResponse[0])
 
 	return nil
 }
