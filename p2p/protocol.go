@@ -250,8 +250,8 @@ func (c *conn) readStatus(packet *eth.StatusPacket) error {
 	}
 
 	defer func() {
-		if err = msg.Discard(); err != nil {
-			c.logger.Error().Err(err).Msg("Failed to discard message")
+		if msgErr := msg.Discard(); msgErr != nil {
+			c.logger.Error().Err(msgErr).Msg("Failed to discard message")
 		}
 	}()
 
