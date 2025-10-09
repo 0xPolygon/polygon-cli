@@ -85,6 +85,10 @@ type EthProtocolOptions struct {
 	ShouldBroadcastTxHashes    bool
 	ShouldBroadcastBlocks      bool
 	ShouldBroadcastBlockHashes bool
+
+	// Cache sizes for known tx/block tracking per peer
+	MaxKnownTxs    int
+	MaxKnownBlocks int
 }
 
 // HeadBlock contains the necessary head block data for the status message.
@@ -94,16 +98,6 @@ type HeadBlock struct {
 	Number          uint64
 	Time            uint64
 }
-
-const (
-	// maxKnownTxs is the maximum transaction hashes to keep in the known list
-	// before starting to evict old ones. Matches Bor's configuration.
-	maxKnownTxs = 32768
-
-	// maxKnownBlocks is the maximum block hashes to keep in the known list
-	// before starting to evict old ones. Matches Bor's configuration.
-	maxKnownBlocks = 1024
-)
 
 // NewEthProtocol creates the new eth protocol. This will handle writing the
 // status exchange, message handling, and writing blocks/txs to the database.
@@ -136,11 +130,11 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 
 			// Initialize LRU caches for known tx/block tracking
 			var err error
-			c.knownTxs, err = lru.New[common.Hash, struct{}](maxKnownTxs)
+			c.knownTxs, err = lru.New[common.Hash, struct{}](opts.MaxKnownTxs)
 			if err != nil {
 				return fmt.Errorf("failed to create known txs cache: %w", err)
 			}
-			c.knownBlocks, err = lru.New[common.Hash, struct{}](maxKnownBlocks)
+			c.knownBlocks, err = lru.New[common.Hash, struct{}](opts.MaxKnownBlocks)
 			if err != nil {
 				return fmt.Errorf("failed to create known blocks cache: %w", err)
 			}

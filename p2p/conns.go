@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/rs/zerolog/log"
 )
 
@@ -17,12 +18,28 @@ import (
 type Conns struct {
 	conns map[string]*conn
 	mu    sync.RWMutex
+
+	// Shared LRU caches for serving broadcast data to peers
+	txs    *lru.Cache[common.Hash, *types.Transaction]
+	blocks *lru.Cache[common.Hash, *types.Block]
 }
 
 // NewConns creates a new connection manager with the specified cache sizes.
-func NewConns() *Conns {
+func NewConns(maxCachedTxs, maxCachedBlocks int) *Conns {
+	txCache, err := lru.New[common.Hash, *types.Transaction](maxCachedTxs)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create transaction cache")
+	}
+
+	blockCache, err := lru.New[common.Hash, *types.Block](maxCachedBlocks)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create block cache")
+	}
+
 	return &Conns{
-		conns: make(map[string]*conn),
+		conns:  make(map[string]*conn),
+		txs:    txCache,
+		blocks: blockCache,
 	}
 }
 

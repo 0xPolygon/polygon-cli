@@ -56,6 +56,8 @@ type (
 		ShouldBroadcastBlockHashes   bool
 		MaxCachedTxs                 int
 		MaxCachedBlocks              int
+		MaxKnownTxs                  int
+		MaxKnownBlocks               int
 		ShouldRunPprof               bool
 		PprofPort                    uint
 		ShouldRunPrometheus          bool
@@ -202,7 +204,7 @@ var SensorCmd = &cobra.Command{
 		}, []string{"message", "url", "name"})
 
 		// Create peer connection manager for broadcasting transactions
-		conns := p2p.NewConns()
+		conns := p2p.NewConns(inputSensorParams.MaxCachedTxs, inputSensorParams.MaxCachedBlocks)
 
 		opts := p2p.EthProtocolOptions{
 			Context:                    cmd.Context(),
@@ -221,6 +223,8 @@ var SensorCmd = &cobra.Command{
 			ShouldBroadcastTxHashes:    inputSensorParams.ShouldBroadcastTxHashes,
 			ShouldBroadcastBlocks:      inputSensorParams.ShouldBroadcastBlocks,
 			ShouldBroadcastBlockHashes: inputSensorParams.ShouldBroadcastBlockHashes,
+			MaxKnownTxs:                inputSensorParams.MaxKnownTxs,
+			MaxKnownBlocks:             inputSensorParams.MaxKnownBlocks,
 		}
 
 		config := ethp2p.Config{
@@ -465,6 +469,8 @@ will result in less chance of missing data but can significantly increase memory
 	f.BoolVar(&inputSensorParams.ShouldBroadcastBlockHashes, "broadcast-block-hashes", false, "broadcast block hashes to peers")
 	f.IntVar(&inputSensorParams.MaxCachedTxs, "max-cached-txs", 10000, "maximum number of transactions to cache for serving to peers")
 	f.IntVar(&inputSensorParams.MaxCachedBlocks, "max-cached-blocks", 1000, "maximum number of blocks to cache for serving to peers")
+	f.IntVar(&inputSensorParams.MaxKnownTxs, "max-known-txs", 8192, "maximum transaction hashes to track per peer")
+	f.IntVar(&inputSensorParams.MaxKnownBlocks, "max-known-blocks", 1024, "maximum block hashes to track per peer")
 	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
 	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")
