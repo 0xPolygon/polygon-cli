@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/rs/zerolog/log"
 )
 
@@ -18,6 +17,7 @@ import (
 type ConnsOptions struct {
 	MaxCachedTxs               int
 	MaxCachedBlocks            int
+	CacheTTL                   time.Duration
 	ShouldBroadcastTx          bool
 	ShouldBroadcastTxHashes    bool
 	ShouldBroadcastBlocks      bool
@@ -29,9 +29,9 @@ type Conns struct {
 	conns map[string]*conn
 	mu    sync.RWMutex
 
-	// Shared LRU caches for serving broadcast data to peers
-	txs    *lru.Cache[common.Hash, *types.Transaction]
-	blocks *lru.Cache[common.Hash, *types.Block]
+	// Shared caches for serving broadcast data to peers
+	txs    *Cache[common.Hash, *types.Transaction]
+	blocks *Cache[common.Hash, *types.Block]
 
 	// Broadcast flags control what gets cached and rebroadcasted
 	shouldBroadcastTx          bool
@@ -42,15 +42,9 @@ type Conns struct {
 
 // NewConns creates a new connection manager with the specified options.
 func NewConns(opts ConnsOptions) *Conns {
-	txCache, err := lru.New[common.Hash, *types.Transaction](opts.MaxCachedTxs)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to create transaction cache")
-	}
-
-	blockCache, err := lru.New[common.Hash, *types.Block](opts.MaxCachedBlocks)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to create block cache")
-	}
+	// Create caches with configured TTL for data freshness
+	txCache := NewCache[common.Hash, *types.Transaction](opts.MaxCachedTxs, opts.CacheTTL)
+	blockCache := NewCache[common.Hash, *types.Block](opts.MaxCachedBlocks, opts.CacheTTL)
 
 	return &Conns{
 		conns:                      make(map[string]*conn),

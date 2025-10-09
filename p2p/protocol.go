@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"container/list"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -16,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -41,7 +39,7 @@ type conn struct {
 	// requests is used to store the request ID and the block hash. This is used
 	// when fetching block bodies because the eth protocol block bodies do not
 	// contain information about the block hash.
-	requests   *list.List
+	requests   *Cache[uint64, common.Hash]
 	requestNum uint64
 
 	// oldestBlock stores the first block the sensor has seen so when fetching
@@ -55,8 +53,8 @@ type conn struct {
 	shouldBroadcastBlockHashes bool
 
 	// Known caches track what this peer has seen to avoid redundant sends.
-	knownTxs    *lru.Cache[common.Hash, struct{}]
-	knownBlocks *lru.Cache[common.Hash, struct{}]
+	knownTxs    *Cache[common.Hash, struct{}]
+	knownBlocks *Cache[common.Hash, struct{}]
 
 	// connectedAt stores when this connection was established
 	connectedAt time.Time
@@ -87,8 +85,9 @@ type EthProtocolOptions struct {
 	ShouldBroadcastBlockHashes bool
 
 	// Cache sizes for known tx/block tracking per peer
-	MaxKnownTxs    int
-	MaxKnownBlocks int
+	MaxKnownTxs         int
+	MaxKnownBlocks      int
+	PeerCacheTTL        time.Duration
 }
 
 // HeadBlock contains the necessary head block data for the status message.
@@ -114,7 +113,6 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				rw:                         rw,
 				db:                         opts.Database,
 				conns:                      opts.Conns,
-				requests:                   list.New(),
 				requestNum:                 0,
 				head:                       opts.Head,
 				headMutex:                  opts.HeadMutex,
@@ -128,16 +126,11 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				connectedAt:                time.Now(),
 			}
 
-			// Initialize LRU caches for known tx/block tracking
-			var err error
-			c.knownTxs, err = lru.New[common.Hash, struct{}](opts.MaxKnownTxs)
-			if err != nil {
-				return fmt.Errorf("failed to create known txs cache: %w", err)
-			}
-			c.knownBlocks, err = lru.New[common.Hash, struct{}](opts.MaxKnownBlocks)
-			if err != nil {
-				return fmt.Errorf("failed to create known blocks cache: %w", err)
-			}
+			// Initialize per-peer caches with configured TTL
+			c.knownTxs = NewCache[common.Hash, struct{}](opts.MaxKnownTxs, opts.PeerCacheTTL)
+			c.knownBlocks = NewCache[common.Hash, struct{}](opts.MaxKnownBlocks, opts.PeerCacheTTL)
+			// Initialize requests cache with no size limit, uses peer cache TTL
+			c.requests = NewCache[uint64, common.Hash](0, opts.PeerCacheTTL)
 
 			c.headMutex.RLock()
 			status := eth.StatusPacket{
@@ -148,7 +141,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				Head:            opts.Head.Hash,
 				TD:              opts.Head.TotalDifficulty,
 			}
-			err = c.statusExchange(&status)
+			err := c.statusExchange(&status)
 			c.headMutex.RUnlock()
 			if err != nil {
 				return err
@@ -255,7 +248,11 @@ func (c *conn) readStatus(packet *eth.StatusPacket) error {
 	if err != nil {
 		return err
 	}
-	defer msg.Discard()
+	defer func() {
+		if err := msg.Discard(); err != nil {
+			c.logger.Error().Err(err).Msg("Failed to discard message")
+		}
+	}()
 
 	if msg.Code != eth.StatusMsg {
 		return errors.New("expected status message code")
@@ -304,20 +301,8 @@ func (c *conn) getBlockData(hash common.Hash) error {
 		return err
 	}
 
-	for e := c.requests.Front(); e != nil; e = e.Next() {
-		r := e.Value.(request)
-
-		if time.Since(r.time).Minutes() > 10 {
-			c.requests.Remove(e)
-		}
-	}
-
 	c.requestNum++
-	c.requests.PushBack(request{
-		requestID: c.requestNum,
-		hash:      hash,
-		time:      time.Now(),
-	})
+	c.requests.Add(c.requestNum, hash)
 
 	bodiesRequest := &GetBlockBodies{
 		RequestId:             c.requestNum,
@@ -560,26 +545,17 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.AddCount(packet.Name(), float64(len(packet.BlockBodiesResponse)))
 
-	var hash *common.Hash
-	for e := c.requests.Front(); e != nil; e = e.Next() {
-		r := e.Value.(request)
-
-		if r.requestID == packet.RequestId {
-			hash = &r.hash
-			c.requests.Remove(e)
-			break
-		}
-	}
-
-	if hash == nil {
+	hash, ok := c.requests.Get(packet.RequestId)
+	if !ok {
 		c.logger.Warn().Msg("No block hash found for block body")
 		return nil
 	}
+	c.requests.Remove(packet.RequestId)
 
-	c.db.WriteBlockBody(ctx, packet.BlockBodiesResponse[0], *hash, tfs)
+	c.db.WriteBlockBody(ctx, packet.BlockBodiesResponse[0], hash, tfs)
 
 	// Add body to cache - will merge with header if it exists
-	c.conns.AddBlockBody(*hash, packet.BlockBodiesResponse[0])
+	c.conns.AddBlockBody(hash, packet.BlockBodiesResponse[0])
 
 	return nil
 }
