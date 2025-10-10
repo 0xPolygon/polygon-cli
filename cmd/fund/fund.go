@@ -69,7 +69,7 @@ func runFunding(ctx context.Context) error {
 	// Save private and public keys to a file if we have private keys.
 	if len(privateKeys) > 0 {
 		go func() {
-			if err := saveToFile(params.OutputFile, privateKeys); err != nil {
+			if err = saveToFile(params.OutputFile, privateKeys); err != nil {
 				log.Error().Err(err).Msg("Unable to save keys to file")
 				panic(err)
 			}
