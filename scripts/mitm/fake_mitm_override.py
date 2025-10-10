@@ -1,6 +1,5 @@
 # fake_mitm_override_fixed.py
 # this is a mitm proxy script to be used to fake certain JSON-RPC responses from an Ethereum node
-# to help with testing the fixnoncegap command.
 import json, time
 from mitmproxy import http
 
