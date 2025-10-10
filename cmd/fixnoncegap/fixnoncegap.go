@@ -279,7 +279,7 @@ func getMaxNonce(addr common.Address) (uint64, error) {
 	log.Info().Msg("getting max nonce from txpool_content")
 	maxNonce, err := getMaxNonceFromTxPool(addr)
 	if err == nil {
-		log.Info().Uint64("maxNonce", maxNonce).Msg("maxNonce loaded from txpool_content flag")
+		log.Info().Uint64("maxNonce", maxNonce).Msg("maxNonce loaded from txpool_content")
 		return maxNonce, nil
 	}
 	log.Warn().Err(err).Msg("unable to get max nonce from txpool_content")
@@ -311,7 +311,6 @@ func getMaxNonceFromTxPool(addr common.Address) (uint64, error) {
 	maxNonceFound := uint64(0)
 	for _, txCollection := range txCollections {
 		// get only txs from the address we are looking for
-		log.Info().Stringer("addr", addr).Msg("")
 		txs, found := txCollection[addr.String()]
 		if !found {
 			continue
