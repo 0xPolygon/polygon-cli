@@ -50,6 +50,17 @@ type (
 		ShouldWriteTransactions      bool
 		ShouldWriteTransactionEvents bool
 		ShouldWritePeers             bool
+		ShouldBroadcastTx            bool
+		ShouldBroadcastTxHashes      bool
+		ShouldBroadcastBlocks        bool
+		ShouldBroadcastBlockHashes   bool
+		MaxCachedTxs                 int
+		MaxCachedBlocks              int
+		MaxKnownTxs                  int
+		MaxKnownBlocks               int
+		MaxRequests                  int
+		CacheTTL                     time.Duration
+		PeerCacheTTL                 time.Duration
 		ShouldRunPprof               bool
 		PprofPort                    uint
 		ShouldRunPrometheus          bool
@@ -183,27 +194,50 @@ var SensorCmd = &cobra.Command{
 			Help:      "The number of peers the sensor is connected to",
 		})
 
-		msgCounter := promauto.NewCounterVec(prometheus.CounterOpts{
+		msgsReceived := promauto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "sensor",
-			Name:      "messages",
+			Name:      "messages_received",
 			Help:      "The number and type of messages the sensor has received",
 		}, []string{"message", "url", "name"})
 
+		msgsSent := promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "sensor",
+			Name:      "messages_sent",
+			Help:      "The number and type of messages the sensor has sent",
+		}, []string{"message", "url", "name"})
+
 		// Create peer connection manager for broadcasting transactions
-		conns := p2p.NewConns()
+		conns := p2p.NewConns(p2p.ConnsOptions{
+			MaxCachedTxs:               inputSensorParams.MaxCachedTxs,
+			MaxCachedBlocks:            inputSensorParams.MaxCachedBlocks,
+			CacheTTL:                   inputSensorParams.CacheTTL,
+			ShouldBroadcastTx:          inputSensorParams.ShouldBroadcastTx,
+			ShouldBroadcastTxHashes:    inputSensorParams.ShouldBroadcastTxHashes,
+			ShouldBroadcastBlocks:      inputSensorParams.ShouldBroadcastBlocks,
+			ShouldBroadcastBlockHashes: inputSensorParams.ShouldBroadcastBlockHashes,
+		})
 
 		opts := p2p.EthProtocolOptions{
-			Context:     cmd.Context(),
-			Database:    db,
-			GenesisHash: common.HexToHash(inputSensorParams.GenesisHash),
-			RPC:         inputSensorParams.RPC,
-			SensorID:    inputSensorParams.SensorID,
-			NetworkID:   inputSensorParams.NetworkID,
-			Conns:       conns,
-			Head:        &head,
-			HeadMutex:   &sync.RWMutex{},
-			ForkID:      forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
-			MsgCounter:  msgCounter,
+			Context:                    cmd.Context(),
+			Database:                   db,
+			GenesisHash:                common.HexToHash(inputSensorParams.GenesisHash),
+			RPC:                        inputSensorParams.RPC,
+			SensorID:                   inputSensorParams.SensorID,
+			NetworkID:                  inputSensorParams.NetworkID,
+			Conns:                      conns,
+			Head:                       &head,
+			HeadMutex:                  &sync.RWMutex{},
+			ForkID:                     forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
+			MessagesReceived:           msgsReceived,
+			MessagesSent:               msgsSent,
+			ShouldBroadcastTx:          inputSensorParams.ShouldBroadcastTx,
+			ShouldBroadcastTxHashes:    inputSensorParams.ShouldBroadcastTxHashes,
+			ShouldBroadcastBlocks:      inputSensorParams.ShouldBroadcastBlocks,
+			ShouldBroadcastBlockHashes: inputSensorParams.ShouldBroadcastBlockHashes,
+			MaxKnownTxs:                inputSensorParams.MaxKnownTxs,
+			MaxKnownBlocks:             inputSensorParams.MaxKnownBlocks,
+			MaxRequests:                inputSensorParams.MaxRequests,
+			PeerCacheTTL:               inputSensorParams.PeerCacheTTL,
 		}
 
 		config := ethp2p.Config{
@@ -242,10 +276,11 @@ var SensorCmd = &cobra.Command{
 		defer sub.Unsubscribe()
 
 		ticker := time.NewTicker(2 * time.Second) // Ticker for recurring tasks every 2 seconds.
-		hourlyTicker := time.NewTicker(time.Hour) // Ticker for running DNS discovery every hour.
+		ticker1h := time.NewTicker(time.Hour)     // Ticker for running DNS discovery every hour.
 		defer ticker.Stop()
-		defer hourlyTicker.Stop()
+		defer ticker1h.Stop()
 
+		dnsLock := make(chan struct{}, 1)
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
@@ -257,13 +292,13 @@ var SensorCmd = &cobra.Command{
 			go handlePrometheus()
 		}
 
-		go handleAPI(&server, msgCounter)
+		go handleAPI(&server, msgsReceived, msgsSent, conns)
 
 		// Start the RPC server for receiving transactions
 		go handleRPC(conns, inputSensorParams.NetworkID)
 
 		// Run DNS discovery immediately at startup.
-		go handleDNSDiscovery(&server)
+		go handleDNSDiscovery(&server, dnsLock)
 
 		for {
 			select {
@@ -276,15 +311,18 @@ var SensorCmd = &cobra.Command{
 					urls = append(urls, peer.Node().URLv4())
 				}
 
-				if err := removePeerMessages(msgCounter, urls); err != nil {
-					log.Error().Err(err).Msg("Failed to clean up peer messages")
+				if err := removePeerMessages(msgsReceived, urls); err != nil {
+					log.Error().Err(err).Msg("Failed to clean up received peer messages")
+				}
+				if err := removePeerMessages(msgsSent, urls); err != nil {
+					log.Error().Err(err).Msg("Failed to clean up sent peer messages")
 				}
 
 				if err := p2p.WritePeers(inputSensorParams.NodesFile, urls); err != nil {
 					log.Error().Err(err).Msg("Failed to write nodes to file")
 				}
-			case <-hourlyTicker.C:
-				go handleDNSDiscovery(&server)
+			case <-ticker1h.C:
+				go handleDNSDiscovery(&server, dnsLock)
 			case <-signals:
 				// This gracefully stops the sensor so that the peers can be written to
 				// the nodes file.
@@ -326,8 +364,16 @@ func handlePrometheus() {
 // handleDNSDiscovery performs DNS-based peer discovery and adds new peers to
 // the p2p server. It syncs the DNS discovery tree and adds any newly discovered
 // peers not already in the peers map.
-func handleDNSDiscovery(server *ethp2p.Server) {
+func handleDNSDiscovery(server *ethp2p.Server, dnsLock chan struct{}) {
 	if len(inputSensorParams.DiscoveryDNS) == 0 {
+		return
+	}
+
+	select {
+	case dnsLock <- struct{}{}:
+		defer func() { <-dnsLock }()
+	default:
+		log.Debug().Msg("DNS discovery already running, skipping")
 		return
 	}
 
@@ -336,19 +382,17 @@ func handleDNSDiscovery(server *ethp2p.Server) {
 		Msg("Starting DNS discovery sync")
 
 	client := dnsdisc.NewClient(dnsdisc.Config{})
-	tree, err := client.SyncTree(inputSensorParams.DiscoveryDNS)
+	iter, err := client.NewIterator(inputSensorParams.DiscoveryDNS)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to sync DNS discovery tree")
+		log.Error().Err(err).Msg("Failed to create DNS discovery iterator")
 		return
 	}
 
-	// Log the number of nodes in the tree.
-	log.Info().
-		Int("unique_nodes", len(tree.Nodes())).
-		Msg("Successfully synced DNS discovery tree")
-
-	// Add DNS-discovered peers.
-	for _, node := range tree.Nodes() {
+	// Iterate through discovered nodes. The iterator will skip over broken branches
+	// and continue with valid nodes.
+	count := 0
+	for iter.Next() {
+		node := iter.Node()
 		log.Debug().
 			Str("enode", node.URLv4()).
 			Msg("Discovered peer through DNS")
@@ -357,9 +401,12 @@ func handleDNSDiscovery(server *ethp2p.Server) {
 		// connect to the peer if it's already connected. If a node is part of the
 		// static peer set, the server will handle reconnecting after disconnects.
 		server.AddPeer(node)
+		count++
 	}
 
-	log.Info().Msg("Finished adding DNS discovery peers")
+	log.Info().
+		Int("nodes_added", count).
+		Msg("Finished adding DNS discovery peers")
 }
 
 // getLatestBlock will get the latest block from an RPC provider.
@@ -439,6 +486,17 @@ will result in less chance of missing data but can significantly increase memory
 	f.BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
 		`write transaction events to database (this option can significantly increase CPU and memory usage)`)
 	f.BoolVar(&inputSensorParams.ShouldWritePeers, "write-peers", true, "write peers to database")
+	f.BoolVar(&inputSensorParams.ShouldBroadcastTx, "broadcast-tx", false, "broadcast full transactions to peers")
+	f.BoolVar(&inputSensorParams.ShouldBroadcastTxHashes, "broadcast-tx-hashes", false, "broadcast transaction hashes to peers")
+	f.BoolVar(&inputSensorParams.ShouldBroadcastBlocks, "broadcast-blocks", false, "broadcast full blocks to peers")
+	f.BoolVar(&inputSensorParams.ShouldBroadcastBlockHashes, "broadcast-block-hashes", false, "broadcast block hashes to peers")
+	f.IntVar(&inputSensorParams.MaxCachedTxs, "max-cached-txs", 2048, "maximum number of transactions to cache for serving to peers")
+	f.IntVar(&inputSensorParams.MaxCachedBlocks, "max-cached-blocks", 128, "maximum number of blocks to cache for serving to peers")
+	f.DurationVar(&inputSensorParams.CacheTTL, "cache-ttl", 10*time.Minute, "time to live for cached transactions and blocks")
+	f.IntVar(&inputSensorParams.MaxKnownTxs, "max-known-txs", 8192, "maximum transaction hashes to track per peer")
+	f.IntVar(&inputSensorParams.MaxKnownBlocks, "max-known-blocks", 1024, "maximum block hashes to track per peer")
+	f.IntVar(&inputSensorParams.MaxRequests, "max-requests", 2048, "maximum request IDs to track per peer")
+	f.DurationVar(&inputSensorParams.PeerCacheTTL, "peer-cache-ttl", 5*time.Minute, "time to live for per-peer caches (known tx/block hashes and requests)")
 	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
 	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")
