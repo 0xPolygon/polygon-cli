@@ -3,17 +3,18 @@ package loadtest
 import (
 	"context"
 	"encoding/json"
+	"math/big"
+	"strings"
+
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/0xPolygon/polygon-cli/util"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
-	"math/big"
-	"strings"
 )
 
 // TODO allow this to be pre-specified with an input file
-func getRecentBlocks(ctx context.Context, ec *ethclient.Client, c *ethrpc.Client) ([]*json.RawMessage, error) {
+func getRecentBlocks(ctx context.Context, ec *ethclient.Client, c *ethrpc.Client, onlyTxHashes bool) ([]*json.RawMessage, error) {
 	bn, err := ec.BlockNumber(ctx)
 	if err != nil {
 		return nil, err
@@ -22,12 +23,12 @@ func getRecentBlocks(ctx context.Context, ec *ethclient.Client, c *ethrpc.Client
 	// FIXME the batch size of 25 is hard coded and probably should at least be a constant or a parameter. This limit is
 	// different than the actual json RPC batch size of 999. Because we're fetching blocks, its' more likely that we hit
 	// a response size limit rather than a batch length limit
-	rawBlocks, err := util.GetBlockRangeInPages(ctx, bn-inputLoadTestParams.RecallLength, bn, 25, c)
+	rawBlocks, err := util.GetBlockRangeInPages(ctx, bn-inputLoadTestParams.RecallLength, bn, 25, c, onlyTxHashes)
 	return rawBlocks, err
 }
 
 func getRecallTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) ([]rpctypes.PolyTransaction, error) {
-	rb, err := getRecentBlocks(ctx, c, rpc)
+	rb, err := getRecentBlocks(ctx, c, rpc, false)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +61,7 @@ type IndexedActivity struct {
 }
 
 func getIndexedRecentActivity(ctx context.Context, ec *ethclient.Client, c *ethrpc.Client) (*IndexedActivity, error) {
-	blockData, err := getRecentBlocks(ctx, ec, c)
+	blockData, err := getRecentBlocks(ctx, ec, c, false)
 	if err != nil {
 		return nil, err
 	}
