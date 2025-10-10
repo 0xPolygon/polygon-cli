@@ -66,11 +66,8 @@ func (s *BridgeService) GetDeposits(destinationAddress string, offset, limit int
 
 }
 
-func (s *BridgeService) GetProof(depositNetwork, depositCount uint32, ger *common.Hash) (*bridge_service.Proof, error) {
+func (s *BridgeService) GetProof(depositNetwork, depositCount uint32) (*bridge_service.Proof, error) {
 	endpoint := fmt.Sprintf("%s/merkle-proof?net_id=%d&deposit_cnt=%d", s.BridgeServiceBase.Url(), depositNetwork, depositCount)
-	if ger != nil {
-		endpoint = fmt.Sprintf("%s/merkle-proof-by-ger?net_id=%d&deposit_cnt=%d&ger=%s", s.BridgeServiceBase.Url(), depositNetwork, depositCount, ger.String())
-	}
 
 	resp, _, err := httpjson.HTTPGet[GetProofResponse](s.httpClient, endpoint)
 	if err != nil {
@@ -79,4 +76,20 @@ func (s *BridgeService) GetProof(depositNetwork, depositCount uint32, ger *commo
 
 	proof := resp.Proof.ToProof()
 	return proof, nil
+}
+
+func (s *BridgeService) GetProofByGer(depositNetwork, depositCount uint32, ger common.Hash) (*bridge_service.Proof, error) {
+	endpoint := fmt.Sprintf("%s/merkle-proof-by-ger?net_id=%d&deposit_cnt=%d&ger=%s", s.BridgeServiceBase.Url(), depositNetwork, depositCount, ger.String())
+
+	resp, _, err := httpjson.HTTPGet[GetProofResponse](s.httpClient, endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	proof := resp.Proof.ToProof()
+	return proof, nil
+}
+
+func (s *BridgeService) GetProofByL1InfoTreeIndex(depositNetwork, depositCount uint32, l1InfoTreeIndex uint32) (*bridge_service.Proof, error) {
+	return nil, fmt.Errorf("GetProofByL1InfoTreeIndex is not supported in the legacy bridge service")
 }

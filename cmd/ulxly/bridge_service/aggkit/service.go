@@ -57,32 +57,43 @@ func (s *BridgeService) GetDeposits(destinationAddress string, offset, limit int
 	return nil, 0, fmt.Errorf("GetDeposits is not supported by aggkit bridge service yet")
 }
 
-func (s *BridgeService) GetProof(depositNetwork, depositCount uint32, ger *common.Hash) (*bridge_service.Proof, error) {
-	var l1InfoTreeIndex uint32
+func (s *BridgeService) GetProof(depositNetwork, depositCount uint32) (*bridge_service.Proof, error) {
+	return s.getProof(depositNetwork, depositCount, nil)
+}
 
-	if ger != nil {
-		return nil, errors.New("getting proof by ger is not supported yet by Aggkit bridge service")
-	}
+func (s *BridgeService) GetProofByGer(depositNetwork, depositCount uint32, ger common.Hash) (*bridge_service.Proof, error) {
+	return nil, errors.New("getting proof by ger is not supported yet by Aggkit bridge service")
+}
 
-	timeout := time.After(time.Minute)
-out:
-	for {
-		idx, err := s.getL1InfoTreeIndex(depositNetwork, depositCount)
-		if err != nil && !errors.Is(err, bridge_service.ErrNotFound) {
-			return nil, err
-		} else if err == nil {
-			l1InfoTreeIndex = *idx
-			break out
+func (s *BridgeService) GetProofByL1InfoTreeIndex(depositNetwork, depositCount uint32, l1InfoTreeIndex uint32) (*bridge_service.Proof, error) {
+	return s.getProof(depositNetwork, depositCount, &l1InfoTreeIndex)
+}
+
+func (s *BridgeService) getProof(depositNetwork, depositCount uint32, l1InfoTreeIndex *uint32) (*bridge_service.Proof, error) {
+	var l1InfoTreeIndexValue uint32
+	if l1InfoTreeIndex != nil {
+		l1InfoTreeIndexValue = *l1InfoTreeIndex
+	} else {
+
+		timeout := time.After(time.Minute)
+	out:
+		for {
+			idx, err := s.getL1InfoTreeIndex(depositNetwork, depositCount)
+			if err != nil && !errors.Is(err, bridge_service.ErrNotFound) {
+				return nil, err
+			} else if err == nil {
+				l1InfoTreeIndexValue = *idx
+				break out
+			}
+			select {
+			case <-timeout:
+				return nil, fmt.Errorf("timeout waiting for l1 info tree index")
+			default:
+				time.Sleep(time.Second)
+			}
 		}
-		select {
-		case <-timeout:
-			return nil, fmt.Errorf("timeout waiting for l1 info tree index")
-		default:
-			time.Sleep(time.Second)
-		}
 	}
-
-	endpoint := fmt.Sprintf("%s/%s/claim-proof?network_id=%d&leaf_index=%d&deposit_count=%d", s.BridgeServiceBase.Url(), urlPath, depositNetwork, l1InfoTreeIndex, depositCount)
+	endpoint := fmt.Sprintf("%s/%s/claim-proof?network_id=%d&leaf_index=%d&deposit_count=%d", s.BridgeServiceBase.Url(), urlPath, depositNetwork, l1InfoTreeIndexValue, depositCount)
 	resp, respError, statusCode, err := httpjson.HTTPGetWithError[getClaimProofResponse, errorResponse](s.httpClient, endpoint)
 	if err != nil {
 		return nil, err
