@@ -60,14 +60,14 @@ func EcrecoverTx(tx *types.Transaction) ([]byte, error) {
 	return from.Bytes(), nil
 }
 
-func GetBlockRange(ctx context.Context, from, to uint64, c *ethrpc.Client) ([]*json.RawMessage, error) {
+func GetBlockRange(ctx context.Context, from, to uint64, c *ethrpc.Client, onlyTxHashes bool) ([]*json.RawMessage, error) {
 	blms := make([]ethrpc.BatchElem, 0)
 	for i := from; i <= to; i = i + 1 {
 		r := new(json.RawMessage)
 		var err error
 		blms = append(blms, ethrpc.BatchElem{
 			Method: "eth_getBlockByNumber",
-			Args:   []interface{}{"0x" + strconv.FormatUint(i, 16), true},
+			Args:   []interface{}{"0x" + strconv.FormatUint(i, 16), !onlyTxHashes},
 			Result: r,
 			Error:  err,
 		})
@@ -92,7 +92,7 @@ func GetBlockRange(ctx context.Context, from, to uint64, c *ethrpc.Client) ([]*j
 	return blocks, nil
 }
 
-func GetBlockRangeInPages(ctx context.Context, from, to, pageSize uint64, c *ethrpc.Client) ([]*json.RawMessage, error) {
+func GetBlockRangeInPages(ctx context.Context, from, to, pageSize uint64, c *ethrpc.Client, onlyTxHashes bool) ([]*json.RawMessage, error) {
 	var allBlocks []*json.RawMessage
 
 	for i := from; i <= to; i += pageSize {
@@ -101,7 +101,7 @@ func GetBlockRangeInPages(ctx context.Context, from, to, pageSize uint64, c *eth
 			end = to
 		}
 
-		blocks, err := GetBlockRange(ctx, i, end, c)
+		blocks, err := GetBlockRange(ctx, i, end, c, onlyTxHashes)
 		if err != nil {
 			return nil, err
 		}
