@@ -34,7 +34,10 @@ type cmdFundParams struct {
 	KeyFile string
 	Seed    string
 
-	FunderAddress string
+	FunderAddress     string
+	Multicall3Address string
+
+	RateLimit float64
 }
 
 var (
@@ -78,6 +81,7 @@ func init() {
 	f.StringVar(&params.KeyFile, "key-file", "", "file containing accounts private keys, one per line")
 	f.StringVar(&params.Seed, "seed", "", "seed string for deterministic wallet generation (e.g., 'ephemeral_test')")
 
+	// Output parameters.
 	f.StringVarP(&params.OutputFile, "file", "f", "wallets.json", "output JSON file path for storing addresses and private keys of funded wallets")
 
 	// Marking flags as mutually exclusive
@@ -90,8 +94,13 @@ func init() {
 	FundCmd.MarkFlagsMutuallyExclusive("key-file", "seed")
 	FundCmd.MarkFlagsMutuallyExclusive("seed", "hd-derivation")
 
-	// Funder contract parameters.
-	f.StringVar(&params.FunderAddress, "contract-address", "", "address of pre-deployed Funder contract")
+	// contract parameters.
+	f.StringVar(&params.FunderAddress, "funder-address", "", "address of pre-deployed funder contract")
+	f.StringVar(&params.Multicall3Address, "multicall3-address", "", "address of pre-deployed multicall3 contract")
+
+	// RPC parameters.
+	f.Float64Var(&params.RateLimit, "rate-limit", 4, "requests per second limit (use negative value to remove limit)")
+
 }
 
 func checkFlags() error {

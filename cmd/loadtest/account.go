@@ -537,7 +537,7 @@ func (ap *AccountPool) fundAccountsWithMulticall3(ctx context.Context, tops *bin
 		if err != nil {
 			return err
 		}
-		r, err := waitReceipt(ctx, ap.client, tx.Hash())
+		r, err := util.WaitReceipt(ctx, ap.client, tx.Hash())
 		if err != nil {
 			log.Error().Err(err).Msg("failed to wait for transaction to fund accounts with multicall3")
 			return err
@@ -636,7 +636,7 @@ func (ap *AccountPool) fundAccountsWithEOATransfers(ctx context.Context, tops *b
 						Msg("failed to wait rate limiter before waiting for receipt of transaction to fund account")
 					return
 				}
-				receipt, err := waitReceipt(ctx, ap.client, tx.Hash())
+				receipt, err := util.WaitReceipt(ctx, ap.client, tx.Hash())
 				if receipt != nil {
 					log.Debug().
 						Stringer("address", tx.To()).
@@ -896,7 +896,7 @@ func (ap *AccountPool) returnFunds(ctx context.Context, lock bool) error {
 				Stringer("txHash", tx.Hash()).
 				Msg("transaction to return funds sent")
 
-			_, err = waitReceiptWithTimeout(ctx, ap.client, tx.Hash(), time.Minute)
+			_, err = util.WaitReceiptWithTimeout(ctx, ap.client, tx.Hash(), time.Minute)
 			if err != nil {
 				log.Error().
 					Stringer("address", tx.To()).
@@ -1081,7 +1081,7 @@ func (ap *AccountPool) fund(ctx context.Context, addr common.Address, forcedNonc
 
 	// Wait for the transaction to be mined
 	if waitToFund {
-		receipt, err := waitReceipt(ctx, ap.client, signedTx.Hash())
+		receipt, err := util.WaitReceipt(ctx, ap.client, signedTx.Hash())
 		if err != nil {
 			log.Error().
 				Stringer("address", addr).
