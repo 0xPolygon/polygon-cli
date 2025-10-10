@@ -320,7 +320,7 @@ func summarizeTransactions(ctx context.Context, c *ethclient.Client, rpc *ethrpc
 	if err != nil {
 		return err
 	}
-	rawBlocks, err := util.GetBlockRange(ctx, startBlockNumber, lastBlockNumber, rpc)
+	rawBlocks, err := util.GetBlockRange(ctx, startBlockNumber, lastBlockNumber, rpc, false)
 	if err != nil {
 		return err
 	}

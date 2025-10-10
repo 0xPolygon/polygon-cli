@@ -32,6 +32,7 @@ type (
 		BatchSize          uint64
 		Threads            uint
 		ShouldDumpBlocks   bool
+		OnlyTxHashes       bool
 		ShouldDumpReceipts bool
 		Filename           string
 		Mode               string
@@ -87,7 +88,7 @@ var DumpblocksCmd = &cobra.Command{
 				defer wg.Done()
 				for {
 					failCount := 0
-					blocks, err := util.GetBlockRange(ctx, rangeStart, rangeEnd, ec)
+					blocks, err := util.GetBlockRange(ctx, rangeStart, rangeEnd, ec, inputDumpblocks.OnlyTxHashes)
 					if err != nil {
 						failCount = failCount + 1
 						if failCount > 5 {
@@ -146,6 +147,7 @@ func init() {
 	f.StringVarP(&inputDumpblocks.RpcUrl, "rpc-url", "r", "http://localhost:8545", "the RPC endpoint URL")
 	f.UintVarP(&inputDumpblocks.Threads, "concurrency", "c", 1, "how many go routines to leverage")
 	f.BoolVarP(&inputDumpblocks.ShouldDumpBlocks, "dump-blocks", "B", true, "dump blocks to output")
+	f.BoolVar(&inputDumpblocks.OnlyTxHashes, "only-tx-hashes", false, "dump blocks will output only the tx hashes instead of the full tx body")
 	f.BoolVar(&inputDumpblocks.ShouldDumpReceipts, "dump-receipts", true, "dump receipts to output")
 	f.StringVarP(&inputDumpblocks.Filename, "filename", "f", "", "where to write the output to (default stdout)")
 	f.StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")

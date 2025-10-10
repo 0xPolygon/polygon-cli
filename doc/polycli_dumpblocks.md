@@ -82,6 +82,7 @@ To solve this, add the unknown fields to the `.proto` files and recompile them (
   -F, --filter string      filter output based on tx to and from (not setting a filter means all are allowed) (default "{}")
   -h, --help               help for dumpblocks
   -m, --mode string        the output format [json, proto] (default "json")
+      --only-tx-hashes     dump blocks will output only the tx hashes instead of the full tx body
   -r, --rpc-url string     the RPC endpoint URL (default "http://localhost:8545")
 ```
 
