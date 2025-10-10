@@ -87,6 +87,7 @@ type EthProtocolOptions struct {
 	// Cache sizes for known tx/block tracking per peer
 	MaxKnownTxs    int
 	MaxKnownBlocks int
+	MaxRequests    int
 	PeerCacheTTL   time.Duration
 }
 
@@ -126,11 +127,9 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				connectedAt:                time.Now(),
 			}
 
-			// Initialize per-peer caches with configured TTL
 			c.knownTxs = NewCache[common.Hash, struct{}](opts.MaxKnownTxs, opts.PeerCacheTTL)
 			c.knownBlocks = NewCache[common.Hash, struct{}](opts.MaxKnownBlocks, opts.PeerCacheTTL)
-			// Initialize requests cache with no size limit, uses peer cache TTL
-			c.requests = NewCache[uint64, common.Hash](0, opts.PeerCacheTTL)
+			c.requests = NewCache[uint64, common.Hash](opts.MaxRequests, opts.PeerCacheTTL)
 
 			c.headMutex.RLock()
 			status := eth.StatusPacket{

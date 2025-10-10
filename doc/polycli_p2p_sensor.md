@@ -50,6 +50,7 @@ If no nodes.json file exists, it will be created.
       --max-known-blocks int      maximum block hashes to track per peer (default 1024)
       --max-known-txs int         maximum transaction hashes to track per peer (default 8192)
   -m, --max-peers int             maximum number of peers to connect to (default 2000)
+      --max-requests int          maximum request IDs to track per peer (default 2048)
       --nat string                NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
   -n, --network-id uint           filter discovered nodes by this network ID
       --no-discovery              disable P2P peer discovery

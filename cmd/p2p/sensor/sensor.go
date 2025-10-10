@@ -58,6 +58,7 @@ type (
 		MaxCachedBlocks              int
 		MaxKnownTxs                  int
 		MaxKnownBlocks               int
+		MaxRequests                  int
 		CacheTTL                     time.Duration
 		PeerCacheTTL                 time.Duration
 		ShouldRunPprof               bool
@@ -235,6 +236,7 @@ var SensorCmd = &cobra.Command{
 			ShouldBroadcastBlockHashes: inputSensorParams.ShouldBroadcastBlockHashes,
 			MaxKnownTxs:                inputSensorParams.MaxKnownTxs,
 			MaxKnownBlocks:             inputSensorParams.MaxKnownBlocks,
+			MaxRequests:                inputSensorParams.MaxRequests,
 			PeerCacheTTL:               inputSensorParams.PeerCacheTTL,
 		}
 
@@ -483,6 +485,7 @@ will result in less chance of missing data but can significantly increase memory
 	f.DurationVar(&inputSensorParams.CacheTTL, "cache-ttl", 10*time.Minute, "time to live for cached transactions and blocks")
 	f.IntVar(&inputSensorParams.MaxKnownTxs, "max-known-txs", 8192, "maximum transaction hashes to track per peer")
 	f.IntVar(&inputSensorParams.MaxKnownBlocks, "max-known-blocks", 1024, "maximum block hashes to track per peer")
+	f.IntVar(&inputSensorParams.MaxRequests, "max-requests", 2048, "maximum request IDs to track per peer")
 	f.DurationVar(&inputSensorParams.PeerCacheTTL, "peer-cache-ttl", 5*time.Minute, "time to live for per-peer caches (known tx/block hashes and requests)")
 	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
