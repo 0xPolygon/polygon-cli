@@ -3,6 +3,7 @@ package fund
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -51,15 +52,29 @@ func runFunding(ctx context.Context) error {
 	}
 
 	var addresses []common.Address
+	var privateKeys []*ecdsa.PrivateKey
 
 	if len(params.KeyFile) > 0 { // get addresses from key-file
-		addresses, err = getAddressesFromKeyFile(params.KeyFile)
+		addresses, privateKeys, err = getAddressesAndKeysFromKeyFile(params.KeyFile)
+	} else if len(params.Seed) > 0 { // get addresses from seed
+		addresses, privateKeys, err = getAddressesAndKeysFromSeed(params.Seed, int(params.WalletsNumber))
 	} else { // get addresses from private key
-		addresses, err = getAddressesFromPrivateKey(ctx, c)
+		addresses, privateKeys, err = getAddressesAndKeysFromPrivateKey(ctx, c)
 	}
 	// check errors after getting addresses
 	if err != nil {
 		return err
+	}
+
+	// Save private and public keys to a file if we have private keys.
+	if len(privateKeys) > 0 {
+		go func() {
+			if err := saveToFile(params.OutputFile, privateKeys); err != nil {
+				log.Error().Err(err).Msg("Unable to save keys to file")
+				panic(err)
+			}
+			log.Info().Str("fileName", params.OutputFile).Msg("Wallets' address(es) and private key(s) saved to file")
+		}()
 	}
 
 	// Deploy or instantiate the Funder contract.
@@ -79,9 +94,9 @@ func runFunding(ctx context.Context) error {
 	return nil
 }
 
-func getAddressesFromKeyFile(keyFilePath string) ([]common.Address, error) {
+func getAddressesAndKeysFromKeyFile(keyFilePath string) ([]common.Address, []*ecdsa.PrivateKey, error) {
 	if len(keyFilePath) == 0 {
-		return nil, errors.New("the key file path is empty")
+		return nil, nil, errors.New("the key file path is empty")
 	}
 
 	log.Trace().
@@ -93,7 +108,7 @@ func getAddressesFromKeyFile(keyFilePath string) ([]common.Address, error) {
 		log.Error().
 			Err(iErr).
 			Msg("Unable to read private keys from key file")
-		return nil, fmt.Errorf("unable to read private keys from key file. %w", iErr)
+		return nil, nil, fmt.Errorf("unable to read private keys from key file. %w", iErr)
 	}
 	addresses := make([]common.Address, len(privateKeys))
 	for i, privateKey := range privateKeys {
@@ -104,12 +119,13 @@ func getAddressesFromKeyFile(keyFilePath string) ([]common.Address, error) {
 			Msg("New wallet derived from key file")
 	}
 	log.Info().Int("count", len(addresses)).Msg("Wallet(s) derived from key file")
-	return addresses, nil
+	return addresses, privateKeys, nil
 }
 
-func getAddressesFromPrivateKey(ctx context.Context, c *ethclient.Client) ([]common.Address, error) {
+func getAddressesAndKeysFromPrivateKey(ctx context.Context, c *ethclient.Client) ([]common.Address, []*ecdsa.PrivateKey, error) {
 	// Derive or generate a set of wallets.
 	var addresses []common.Address
+	var privateKeys []*ecdsa.PrivateKey
 	var err error
 	if len(params.WalletAddresses) > 0 {
 		log.Info().Msg("Using addresses provided by the user")
@@ -117,17 +133,19 @@ func getAddressesFromPrivateKey(ctx context.Context, c *ethclient.Client) ([]com
 		for i, address := range params.WalletAddresses {
 			addresses[i] = common.HexToAddress(address)
 		}
+		// No private keys available when using provided addresses
+		privateKeys = nil
 	} else if params.UseHDDerivation {
 		log.Info().Msg("Deriving wallets from the default mnemonic")
-		addresses, err = deriveHDWallets(int(params.WalletsNumber))
+		addresses, privateKeys, err = deriveHDWalletsWithKeys(int(params.WalletsNumber))
 	} else {
 		log.Info().Msg("Generating random wallets")
-		addresses, err = generateWallets(int(params.WalletsNumber))
+		addresses, privateKeys, err = generateWalletsWithKeys(int(params.WalletsNumber))
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return addresses, nil
+	return addresses, privateKeys, nil
 }
 
 // dialRpc dials the Ethereum RPC server and return an Ethereum client.
@@ -203,31 +221,39 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 	return contract, nil
 }
 
-// deriveHDWallets generates and exports a specified number of HD wallet addresses.
-func deriveHDWallets(n int) ([]common.Address, error) {
+// deriveHDWalletsWithKeys generates and exports a specified number of HD wallet addresses and their private keys.
+func deriveHDWalletsWithKeys(n int) ([]common.Address, []*ecdsa.PrivateKey, error) {
 	wallet, err := hdwallet.NewPolyWallet(defaultMnemonic, defaultPassword)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var derivedWallets *hdwallet.PolyWalletExport
 	derivedWallets, err = wallet.ExportHDAddresses(n)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	addresses := make([]common.Address, n)
+	privateKeys := make([]*ecdsa.PrivateKey, n)
 	for i, wallet := range derivedWallets.Addresses {
 		addresses[i] = common.HexToAddress(wallet.ETHAddress)
+		// Parse the private key
+		trimmedHexPrivateKey := strings.TrimPrefix(wallet.HexPrivateKey, "0x")
+		privateKey, err := crypto.HexToECDSA(trimmedHexPrivateKey)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to parse private key for wallet %d: %w", i, err)
+		}
+		privateKeys[i] = privateKey
 		log.Trace().Interface("address", addresses[i]).Str("privateKey", wallet.HexPrivateKey).Str("path", wallet.Path).Msg("New wallet derived")
 	}
 	log.Info().Int("count", n).Msg("Wallet(s) derived")
-	return addresses, nil
+	return addresses, privateKeys, nil
 }
 
-// generateWallets generates a specified number of Ethereum wallets with random private keys.
-// It returns a slice of common.Address representing the Ethereum addresses of the generated wallets.
-func generateWallets(n int) ([]common.Address, error) {
+// generateWalletsWithKeys generates a specified number of Ethereum wallets with random private keys.
+// It returns a slice of common.Address representing the Ethereum addresses and their corresponding private keys.
+func generateWalletsWithKeys(n int) ([]common.Address, []*ecdsa.PrivateKey, error) {
 	// Generate private keys.
 	privateKeys := make([]*ecdsa.PrivateKey, n)
 	addresses := make([]common.Address, n)
@@ -235,7 +261,7 @@ func generateWallets(n int) ([]common.Address, error) {
 		pk, err := crypto.GenerateKey()
 		if err != nil {
 			log.Error().Err(err).Msg("Error generating key")
-			return nil, err
+			return nil, nil, err
 		}
 		privateKeys[i] = pk
 		addresses[i] = crypto.PubkeyToAddress(pk.PublicKey)
@@ -243,16 +269,7 @@ func generateWallets(n int) ([]common.Address, error) {
 	}
 	log.Info().Int("count", n).Msg("Wallet(s) generated")
 
-	// Save private and public keys to a file.
-	go func() {
-		if err := saveToFile(params.OutputFile, privateKeys); err != nil {
-			log.Error().Err(err).Msg("Unable to save keys to file")
-			panic(err)
-		}
-		log.Info().Str("fileName", params.OutputFile).Msg("Wallets' address(es) and private key(s) saved to file")
-	}()
-
-	return addresses, nil
+	return addresses, privateKeys, nil
 }
 
 // saveToFile serializes wallet data into the specified JSON format and writes it to the designated file.
@@ -303,4 +320,50 @@ func fundWallets(ctx context.Context, c *ethclient.Client, tops *bind.TransactOp
 		}
 	}
 	return nil
+}
+
+func getAddressesAndKeysFromSeed(seed string, numWallets int) ([]common.Address, []*ecdsa.PrivateKey, error) {
+	if len(seed) == 0 {
+		return nil, nil, errors.New("the seed string is empty")
+	}
+	if numWallets <= 0 {
+		return nil, nil, errors.New("number of wallets must be greater than 0")
+	}
+
+	log.Info().
+		Str("seed", seed).
+		Int("numWallets", numWallets).
+		Msg("Generating wallets from seed")
+
+	addresses := make([]common.Address, numWallets)
+	privateKeys := make([]*ecdsa.PrivateKey, numWallets)
+
+	for i := 0; i < numWallets; i++ {
+		// Create a deterministic string by combining seed with index and current date
+		// Format: seed_index_YYYYMMDD (e.g., "ephemeral_test_0_20241010")
+		currentDate := time.Now().Format("20060102") // YYYYMMDD format
+		seedWithIndex := fmt.Sprintf("%s_%d_%s", seed, i, currentDate)
+
+		// Generate SHA256 hash of the seed+index+date
+		hash := sha256.Sum256([]byte(seedWithIndex))
+		hashHex := hex.EncodeToString(hash[:])
+
+		// Create private key from hash
+		privateKey, err := crypto.HexToECDSA(hashHex)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to create private key from seed for wallet %d: %w", i, err)
+		}
+
+		privateKeys[i] = privateKey
+		addresses[i] = crypto.PubkeyToAddress(privateKey.PublicKey)
+
+		log.Trace().
+			Interface("address", addresses[i]).
+			Str("privateKey", hashHex).
+			Str("seedWithIndex", seedWithIndex).
+			Msg("New wallet generated from seed")
+	}
+
+	log.Info().Int("count", numWallets).Msg("Wallet(s) generated from seed")
+	return addresses, privateKeys, nil
 }
