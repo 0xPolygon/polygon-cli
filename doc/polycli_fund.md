@@ -94,6 +94,7 @@ $ cast balance 0x5D8121cf716B70d3e345adB58157752304eED5C3
   -n, --number uint               number of wallets to fund (default 10)
       --private-key string        hex encoded private key to use for sending transactions (default "0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
   -r, --rpc-url string            RPC endpoint URL (default "http://localhost:8545")
+      --seed string               seed string for deterministic wallet generation (e.g., 'ephemeral_test')
 ```
 
 The command also inherits flags from parent commands.

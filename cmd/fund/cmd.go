@@ -32,6 +32,7 @@ type cmdFundParams struct {
 	OutputFile         string
 
 	KeyFile string
+	Seed    string
 
 	FunderAddress string
 }
@@ -63,33 +64,34 @@ var FundCmd = &cobra.Command{
 }
 
 func init() {
-	p := new(cmdFundParams)
 	f := FundCmd.Flags()
 
-	f.StringVarP(&p.RpcUrl, "rpc-url", "r", "http://localhost:8545", "RPC endpoint URL")
-	f.StringVar(&p.PrivateKey, "private-key", defaultPrivateKey, "hex encoded private key to use for sending transactions")
+	f.StringVarP(&params.RpcUrl, "rpc-url", "r", "http://localhost:8545", "RPC endpoint URL")
+	f.StringVar(&params.PrivateKey, "private-key", defaultPrivateKey, "hex encoded private key to use for sending transactions")
 
 	// Wallet parameters.
-	f.Uint64VarP(&p.WalletsNumber, "number", "n", 10, "number of wallets to fund")
-	f.BoolVar(&p.UseHDDerivation, "hd-derivation", true, "derive wallets to fund from private key in deterministic way")
-	f.StringSliceVar(&p.WalletAddresses, "addresses", nil, "comma-separated list of wallet addresses to fund")
-	p.FundingAmountInWei = defaultFundingInWei
-	f.Var(&flag_loader.BigIntValue{Val: p.FundingAmountInWei}, "eth-amount", "amount of wei to send to each wallet")
-	f.StringVar(&p.KeyFile, "key-file", "", "file containing accounts private keys, one per line")
+	f.Uint64VarP(&params.WalletsNumber, "number", "n", 10, "number of wallets to fund")
+	f.BoolVar(&params.UseHDDerivation, "hd-derivation", true, "derive wallets to fund from private key in deterministic way")
+	f.StringSliceVar(&params.WalletAddresses, "addresses", nil, "comma-separated list of wallet addresses to fund")
+	params.FundingAmountInWei = defaultFundingInWei
+	f.Var(&flag_loader.BigIntValue{Val: params.FundingAmountInWei}, "eth-amount", "amount of wei to send to each wallet")
+	f.StringVar(&params.KeyFile, "key-file", "", "file containing accounts private keys, one per line")
+	f.StringVar(&params.Seed, "seed", "", "seed string for deterministic wallet generation (e.g., 'ephemeral_test')")
 
-	f.StringVarP(&p.OutputFile, "file", "f", "wallets.json", "output JSON file path for storing addresses and private keys of funded wallets")
+	f.StringVarP(&params.OutputFile, "file", "f", "wallets.json", "output JSON file path for storing addresses and private keys of funded wallets")
 
 	// Marking flags as mutually exclusive
 	FundCmd.MarkFlagsMutuallyExclusive("addresses", "number")
 	FundCmd.MarkFlagsMutuallyExclusive("addresses", "hd-derivation")
+	FundCmd.MarkFlagsMutuallyExclusive("addresses", "seed")
 	FundCmd.MarkFlagsMutuallyExclusive("key-file", "addresses")
 	FundCmd.MarkFlagsMutuallyExclusive("key-file", "number")
 	FundCmd.MarkFlagsMutuallyExclusive("key-file", "hd-derivation")
+	FundCmd.MarkFlagsMutuallyExclusive("key-file", "seed")
+	FundCmd.MarkFlagsMutuallyExclusive("seed", "hd-derivation")
 
 	// Funder contract parameters.
-	f.StringVar(&p.FunderAddress, "contract-address", "", "address of pre-deployed Funder contract")
-
-	params = *p
+	f.StringVar(&params.FunderAddress, "contract-address", "", "address of pre-deployed Funder contract")
 }
 
 func checkFlags() error {
@@ -109,9 +111,33 @@ func checkFlags() error {
 	// Check that exactly one method is used to specify target accounts
 	hasAddresses := len(params.WalletAddresses) > 0
 	hasKeyFile := params.KeyFile != ""
-	hasNumberFlag := params.WalletsNumber > 0
-	if !hasAddresses && !hasKeyFile && !hasNumberFlag {
-		return errors.New("must specify target accounts via --addresses, --key-file, or --number")
+	hasSeed := params.Seed != ""
+	hasNumberWithoutSeed := params.WalletsNumber > 0 && !hasSeed
+
+	methodCount := 0
+	if hasAddresses {
+		methodCount++
+	}
+	if hasKeyFile {
+		methodCount++
+	}
+	if hasNumberWithoutSeed {
+		methodCount++
+	}
+	if hasSeed {
+		methodCount++
+	}
+
+	if methodCount == 0 {
+		return errors.New("must specify target accounts via --addresses, --key-file, --number, or --seed")
+	}
+	if methodCount > 1 {
+		return errors.New("cannot use multiple wallet specification methods simultaneously")
+	}
+
+	// When using seed, require a number of wallets to generate
+	if hasSeed && params.WalletsNumber <= 0 {
+		return errors.New("when using --seed, must also specify --number > 0 to indicate how many wallets to generate")
 	}
 
 	minValue := big.NewInt(1000000000)
