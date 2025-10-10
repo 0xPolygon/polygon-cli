@@ -276,10 +276,11 @@ var SensorCmd = &cobra.Command{
 		defer sub.Unsubscribe()
 
 		ticker := time.NewTicker(2 * time.Second) // Ticker for recurring tasks every 2 seconds.
-		hourlyTicker := time.NewTicker(time.Hour) // Ticker for running DNS discovery every hour.
+		ticker1h := time.NewTicker(time.Hour)     // Ticker for running DNS discovery every hour.
 		defer ticker.Stop()
-		defer hourlyTicker.Stop()
+		defer ticker1h.Stop()
 
+		dnsLock := make(chan struct{}, 1)
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
@@ -297,7 +298,7 @@ var SensorCmd = &cobra.Command{
 		go handleRPC(conns, inputSensorParams.NetworkID)
 
 		// Run DNS discovery immediately at startup.
-		go handleDNSDiscovery(&server)
+		go handleDNSDiscovery(&server, dnsLock)
 
 		for {
 			select {
@@ -320,8 +321,8 @@ var SensorCmd = &cobra.Command{
 				if err := p2p.WritePeers(inputSensorParams.NodesFile, urls); err != nil {
 					log.Error().Err(err).Msg("Failed to write nodes to file")
 				}
-			case <-hourlyTicker.C:
-				go handleDNSDiscovery(&server)
+			case <-ticker1h.C:
+				go handleDNSDiscovery(&server, dnsLock)
 			case <-signals:
 				// This gracefully stops the sensor so that the peers can be written to
 				// the nodes file.
@@ -363,8 +364,16 @@ func handlePrometheus() {
 // handleDNSDiscovery performs DNS-based peer discovery and adds new peers to
 // the p2p server. It syncs the DNS discovery tree and adds any newly discovered
 // peers not already in the peers map.
-func handleDNSDiscovery(server *ethp2p.Server) {
+func handleDNSDiscovery(server *ethp2p.Server, dnsLock chan struct{}) {
 	if len(inputSensorParams.DiscoveryDNS) == 0 {
+		return
+	}
+
+	select {
+	case dnsLock <- struct{}{}:
+		defer func() { <-dnsLock }()
+	default:
+		log.Debug().Msg("DNS discovery already running, skipping")
 		return
 	}
 
@@ -373,19 +382,17 @@ func handleDNSDiscovery(server *ethp2p.Server) {
 		Msg("Starting DNS discovery sync")
 
 	client := dnsdisc.NewClient(dnsdisc.Config{})
-	tree, err := client.SyncTree(inputSensorParams.DiscoveryDNS)
+	iter, err := client.NewIterator(inputSensorParams.DiscoveryDNS)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to sync DNS discovery tree")
+		log.Error().Err(err).Msg("Failed to create DNS discovery iterator")
 		return
 	}
 
-	// Log the number of nodes in the tree.
-	log.Info().
-		Int("unique_nodes", len(tree.Nodes())).
-		Msg("Successfully synced DNS discovery tree")
-
-	// Add DNS-discovered peers.
-	for _, node := range tree.Nodes() {
+	// Iterate through discovered nodes. The iterator will skip over broken branches
+	// and continue with valid nodes.
+	count := 0
+	for iter.Next() {
+		node := iter.Node()
 		log.Debug().
 			Str("enode", node.URLv4()).
 			Msg("Discovered peer through DNS")
@@ -394,9 +401,12 @@ func handleDNSDiscovery(server *ethp2p.Server) {
 		// connect to the peer if it's already connected. If a node is part of the
 		// static peer set, the server will handle reconnecting after disconnects.
 		server.AddPeer(node)
+		count++
 	}
 
-	log.Info().Msg("Finished adding DNS discovery peers")
+	log.Info().
+		Int("nodes_added", count).
+		Msg("Finished adding DNS discovery peers")
 }
 
 // getLatestBlock will get the latest block from an RPC provider.
