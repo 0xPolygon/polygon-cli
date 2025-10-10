@@ -233,8 +233,8 @@ func (c *conn) statusExchange(packet *eth.StatusPacket) error {
 	return nil
 }
 
-// AddCount increments the prometheus counter for received messages.
-func (c *conn) AddCount(messageName string, count float64) {
+// AddCountReceived increments the prometheus counter for received messages.
+func (c *conn) AddCountReceived(messageName string, count float64) {
 	c.msgsReceived.WithLabelValues(messageName, c.node.URLv4(), c.peer.Fullname()).Add(count)
 }
 
@@ -349,7 +349,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 	tfs := time.Now()
 
-	c.AddCount(packet.Name(), float64(len(packet)))
+	c.AddCountReceived(packet.Name(), float64(len(packet)))
 
 	// Collect unique hashes and numbers for database write and broadcasting.
 	uniqueHashes := make([]common.Hash, 0, len(packet))
@@ -430,7 +430,7 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 
 	tfs := time.Now()
 
-	c.AddCount(txs.Name(), float64(len(txs)))
+	c.AddCountReceived(txs.Name(), float64(len(txs)))
 
 	// Mark transactions as known from this peer
 	for _, tx := range txs {
@@ -462,7 +462,7 @@ func (c *conn) handleGetBlockHeaders(msg ethp2p.Msg) error {
 		return err
 	}
 
-	c.AddCount(request.Name(), 1)
+	c.AddCountReceived(request.Name(), 1)
 
 	// Try to serve from cache if we have the block
 	var headers []*types.Header
@@ -487,7 +487,7 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 	tfs := time.Now()
 
 	headers := packet.BlockHeadersRequest
-	c.AddCount(packet.Name(), float64(len(headers)))
+	c.AddCountReceived(packet.Name(), float64(len(headers)))
 
 	for _, header := range headers {
 		if err := c.getParentBlock(ctx, header); err != nil {
@@ -510,7 +510,7 @@ func (c *conn) handleGetBlockBodies(msg ethp2p.Msg) error {
 		return err
 	}
 
-	c.AddCount(request.Name(), float64(len(request.GetBlockBodiesRequest)))
+	c.AddCountReceived(request.Name(), float64(len(request.GetBlockBodiesRequest)))
 
 	// Try to serve from cache
 	var bodies []*eth.BlockBody
@@ -544,7 +544,7 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	c.AddCount(packet.Name(), float64(len(packet.BlockBodiesResponse)))
+	c.AddCountReceived(packet.Name(), float64(len(packet.BlockBodiesResponse)))
 
 	hash, ok := c.requests.Get(packet.RequestId)
 	if !ok {
@@ -569,7 +569,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 
 	tfs := time.Now()
 
-	c.AddCount(block.Name(), 1)
+	c.AddCountReceived(block.Name(), 1)
 
 	// Set the head block if newer.
 	c.headMutex.Lock()
@@ -612,7 +612,7 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 		return err
 	}
 
-	c.AddCount(request.Name(), float64(len(request.GetPooledTransactionsRequest)))
+	c.AddCountReceived(request.Name(), float64(len(request.GetPooledTransactionsRequest)))
 
 	// Try to serve from cache
 	var txs []*types.Transaction
@@ -646,7 +646,7 @@ func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) er
 		return errors.New("protocol version not found")
 	}
 
-	c.AddCount(name, float64(len(hashes)))
+	c.AddCountReceived(name, float64(len(hashes)))
 
 	if !c.db.ShouldWriteTransactions() || !c.db.ShouldWriteTransactionEvents() {
 		return nil
@@ -665,7 +665,7 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 
 	tfs := time.Now()
 
-	c.AddCount(packet.Name(), float64(len(packet.PooledTransactionsResponse)))
+	c.AddCountReceived(packet.Name(), float64(len(packet.PooledTransactionsResponse)))
 
 	// Mark transactions as known from this peer
 	for _, tx := range packet.PooledTransactionsResponse {
