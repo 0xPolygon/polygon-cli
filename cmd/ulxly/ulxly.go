@@ -2507,6 +2507,7 @@ or if it's actually an intermediate hash.`,
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositCount))
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgDepositNetwork))
 	fatalIfError(ulxlyClaimCmd.MarkPersistentFlagRequired(ArgBridgeServiceURL))
+	ulxlyClaimCmd.MarkFlagsMutuallyExclusive(ArgProofGER, ArgProofL1InfoTreeIndex)
 
 	// Claim Everything Helper Command
 	fClaimEverything := claimEverythingCommand.Flags()
