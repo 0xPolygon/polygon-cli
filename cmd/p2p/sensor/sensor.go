@@ -186,8 +186,8 @@ var SensorCmd = &cobra.Command{
 		msgCounter := promauto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "sensor",
 			Name:      "messages",
-			Help:      "The number and type of messages the sensor has received",
-		}, []string{"message", "url", "name"})
+			Help:      "The number and type of messages the sensor has sent and received",
+		}, []string{"message", "url", "name", "direction"})
 
 		// Create peer connection manager for broadcasting transactions
 		conns := p2p.NewConns()
