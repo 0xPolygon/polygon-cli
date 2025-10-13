@@ -47,6 +47,9 @@ type conn struct {
 	// oldestBlock stores the first block the sensor has seen so when fetching
 	// parent blocks, it does not request blocks older than this.
 	oldestBlock *types.Header
+
+	// connectedAt stores when this peer connection was established.
+	connectedAt time.Time
 }
 
 // EthProtocolOptions is the options used when creating a new eth protocol.
@@ -104,6 +107,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				counter:     opts.MsgCounter,
 				peer:        p,
 				blockHashes: list.New(),
+				connectedAt: time.Now(),
 			}
 
 			c.headMutex.RLock()
