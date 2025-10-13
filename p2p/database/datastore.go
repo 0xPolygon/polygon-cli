@@ -23,7 +23,7 @@ const (
 	TransactionsKind      = "transactions"
 	TransactionEventsKind = "transaction_events"
 	PeersKind             = "peers"
-	MaxAttempts           = 3
+	MaxAttempts           = 10
 )
 
 // Datastore wraps the datastore client, stores the sensorID, and other
@@ -433,7 +433,7 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 		}
 
 		return nil
-	}, datastore.MaxAttempts(MaxAttempts))
+	}, datastore.BeginLater, datastore.MaxAttempts(MaxAttempts))
 
 	if err != nil {
 		log.Error().Err(err).Str("hash", block.Hash().Hex()).Msg("Failed to write new block")
@@ -496,7 +496,7 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, 
 		block.DatastoreHeader = d.newDatastoreHeader(header, tfs)
 		_, err := tx.Put(key, &block)
 		return err
-	}, datastore.MaxAttempts(MaxAttempts))
+	}, datastore.BeginLater, datastore.MaxAttempts(MaxAttempts))
 
 	if err != nil {
 		log.Error().Err(err).Str("hash", header.Hash().Hex()).Msg("Failed to write block header")
@@ -541,7 +541,7 @@ func (d *Datastore) writeBlockBody(ctx context.Context, body *eth.BlockBody, has
 		}
 
 		return nil
-	}, datastore.MaxAttempts(MaxAttempts))
+	}, datastore.BeginLater, datastore.MaxAttempts(MaxAttempts))
 
 	if err != nil {
 		log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to write block body")
