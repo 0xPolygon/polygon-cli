@@ -16,6 +16,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/bindings/funder"
 	"github.com/0xPolygon/polygon-cli/hdwallet"
 	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -77,18 +78,27 @@ func runFunding(ctx context.Context) error {
 		}()
 	}
 
-	// Deploy or instantiate the Funder contract.
-	var contract *funder.Funder
-	contract, err = deployOrInstantiateFunderContract(ctx, c, tops, privateKey, len(addresses))
-	if err != nil {
-		return err
-	}
+	// If ERC20 mode is enabled, fund with tokens instead of ETH
+	if params.TokenAddress != "" {
+		log.Info().Str("tokenAddress", params.TokenAddress).Msg("Starting ERC20 token funding (ETH funding disabled)")
+		if err = fundWalletsWithERC20(ctx, c, tops, privateKey, addresses, privateKeys); err != nil {
+			return err
+		}
+		log.Info().Msg("Wallet(s) funded with ERC20 tokens! 🪙")
+	} else {
+		// Deploy or instantiate the Funder contract.
+		var contract *funder.Funder
+		contract, err = deployOrInstantiateFunderContract(ctx, c, tops, privateKey, len(addresses))
+		if err != nil {
+			return err
+		}
 
-	// Fund wallets.
-	if err = fundWallets(ctx, c, tops, contract, addresses); err != nil {
-		return err
+		// Fund wallets with ETH.
+		if err = fundWallets(ctx, c, tops, contract, addresses); err != nil {
+			return err
+		}
+		log.Info().Msg("Wallet(s) funded with ETH! 💸")
 	}
-	log.Info().Msg("Wallet(s) funded! 💸")
 
 	log.Info().Msgf("Total execution time: %s", time.Since(startTime))
 	return nil
@@ -366,4 +376,91 @@ func getAddressesAndKeysFromSeed(seed string, numWallets int) ([]common.Address,
 
 	log.Info().Int("count", numWallets).Msg("Wallet(s) generated from seed")
 	return addresses, privateKeys, nil
+}
+
+// fundWalletsWithERC20 funds multiple wallets with ERC20 tokens by minting directly to each wallet and optionally approving a spender.
+func fundWalletsWithERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, privateKey *ecdsa.PrivateKey, wallets []common.Address, walletsPrivateKeys []*ecdsa.PrivateKey) error {
+	if len(wallets) == 0 {
+		return errors.New("no wallet to fund with ERC20 tokens")
+	}
+
+	// Get the token contract instance
+	tokenAddress := common.HexToAddress(params.TokenAddress)
+
+	log.Info().Int("wallets", len(wallets)).Str("amountPerWallet", params.TokenAmount.String()).Msg("Minting tokens directly to each wallet")
+
+	// Create ABI for mint(address, uint256) function since the generated binding has wrong signature
+	mintABI, err := abi.JSON(strings.NewReader(`[{"type":"function","name":"mint","inputs":[{"name":"to","type":"address"},{"name":"amount","type":"uint256"}],"outputs":[],"stateMutability":"nonpayable"}]`))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to parse mint ABI")
+		return err
+	}
+
+	// Create bound contract with the correct ABI
+	mintContract := bind.NewBoundContract(tokenAddress, mintABI, c, c, c)
+
+	// Mint tokens directly to each wallet
+	for i, wallet := range wallets {
+		log.Debug().Int("wallet", i+1).Int("total", len(wallets)).Str("address", wallet.String()).Str("amount", params.TokenAmount.String()).Msg("Minting tokens directly to wallet")
+
+		// Call mint(address, uint256) function directly
+		_, err = mintContract.Transact(tops, "mint", wallet, params.TokenAmount)
+		if err != nil {
+			log.Error().Err(err).Str("wallet", wallet.String()).Msg("Unable to mint ERC20 tokens directly to wallet")
+			return err
+		}
+	}
+
+	log.Info().Int("count", len(wallets)).Str("amount", params.TokenAmount.String()).Msg("Successfully minted tokens to all wallets")
+
+	// If approve spender is specified, approve tokens from each wallet
+	if params.ApproveSpender != "" && len(walletsPrivateKeys) > 0 {
+		spenderAddress := common.HexToAddress(params.ApproveSpender)
+		log.Info().Str("spender", spenderAddress.String()).Str("amount", params.ApproveAmount.String()).Msg("Starting bulk approve for all wallets")
+
+		// Create ABI for approve(address, uint256) function
+		approveABI, err := abi.JSON(strings.NewReader(`[{"type":"function","name":"approve","inputs":[{"name":"spender","type":"address"},{"name":"amount","type":"uint256"}],"outputs":[{"name":"","type":"bool"}],"stateMutability":"nonpayable"}]`))
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to parse approve ABI")
+			return err
+		}
+
+		// Get chain ID for signing transactions
+		chainID, err := c.ChainID(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("Unable to get chain ID for approve transactions")
+			return err
+		}
+
+		// Approve from each wallet
+		for i, walletPrivateKey := range walletsPrivateKeys {
+			if i >= len(wallets) {
+				break // Safety check
+			}
+
+			wallet := wallets[i]
+			log.Debug().Int("wallet", i+1).Int("total", len(wallets)).Str("address", wallet.String()).Str("spender", spenderAddress.String()).Str("amount", params.ApproveAmount.String()).Msg("Approving spender from wallet")
+
+			// Create transaction options for this wallet
+			walletTops, err := bind.NewKeyedTransactorWithChainID(walletPrivateKey, chainID)
+			if err != nil {
+				log.Error().Err(err).Str("wallet", wallet.String()).Msg("Unable to create transaction signer for wallet")
+				return err
+			}
+
+			// Create bound contract for approve call
+			approveContract := bind.NewBoundContract(tokenAddress, approveABI, c, c, c)
+
+			// Call approve(address, uint256) function from this wallet
+			_, err = approveContract.Transact(walletTops, "approve", spenderAddress, params.ApproveAmount)
+			if err != nil {
+				log.Error().Err(err).Str("wallet", wallet.String()).Str("spender", spenderAddress.String()).Msg("Unable to approve spender from wallet")
+				return err
+			}
+		}
+
+		log.Info().Int("count", len(wallets)).Str("spender", spenderAddress.String()).Str("amount", params.ApproveAmount.String()).Msg("Successfully approved spender for all wallets")
+	}
+
+	return nil
 }

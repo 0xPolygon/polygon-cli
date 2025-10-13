@@ -87,6 +87,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: init submodules
+        run: |
+          git submodule sync --recursive
+          git submodule update --init --recursive
 
       - name: gen-go-bindings
         run: make gen-go-bindings

@@ -35,6 +35,13 @@ type cmdFundParams struct {
 	Seed    string
 
 	FunderAddress string
+
+	// ERC20 specific parameters
+	TokenAddress           string
+	TokenAmount            *big.Int
+	ERC20BulkMinterAddress string
+	ApproveSpender         string
+	ApproveAmount          *big.Int
 }
 
 var (
@@ -79,6 +86,17 @@ func init() {
 	f.StringVar(&params.Seed, "seed", "", "seed string for deterministic wallet generation (e.g., 'ephemeral_test')")
 
 	f.StringVarP(&params.OutputFile, "file", "f", "wallets.json", "output JSON file path for storing addresses and private keys of funded wallets")
+
+	// ERC20 parameters
+	f.StringVar(&params.TokenAddress, "token-address", "", "address of the ERC20 token contract to mint and fund (if provided, enables ERC20 mode)")
+	params.TokenAmount = new(big.Int)
+	params.TokenAmount.SetString("1000000000000000000", 10) // 1 token
+	f.Var(&flag_loader.BigIntValue{Val: params.TokenAmount}, "token-amount", "amount of ERC20 tokens to mint and transfer to each wallet")
+	f.StringVar(&params.ERC20BulkMinterAddress, "erc20-bulk-funder-address", "", "address of pre-deployed ERC20BulkFunder contract")
+	f.StringVar(&params.ApproveSpender, "approve-spender", "", "address to approve for spending tokens from each funded wallet")
+	params.ApproveAmount = new(big.Int)
+	params.ApproveAmount.SetString("1000000000000000000000", 10) // 1000 tokens default
+	f.Var(&flag_loader.BigIntValue{Val: params.ApproveAmount}, "approve-amount", "amount of ERC20 tokens to approve for the spender")
 
 	// Marking flags as mutually exclusive
 	FundCmd.MarkFlagsMutuallyExclusive("addresses", "number")
@@ -146,6 +164,21 @@ func checkFlags() error {
 	}
 	if params.OutputFile == "" {
 		return errors.New("the output file is not specified")
+	}
+
+	// ERC20 specific validations
+	if params.TokenAddress != "" {
+		// ERC20 mode - validate token parameters
+		if params.TokenAmount == nil || params.TokenAmount.Cmp(big.NewInt(0)) <= 0 {
+			return errors.New("token amount must be greater than 0 when using ERC20 mode")
+		}
+		// Validate approve parameters if provided
+		if params.ApproveSpender != "" {
+			if params.ApproveAmount == nil || params.ApproveAmount.Cmp(big.NewInt(0)) <= 0 {
+				return errors.New("approve amount must be greater than 0 when approve spender is specified")
+			}
+		}
+		// In ERC20 mode, ETH funding is still supported alongside token minting
 	}
 
 	return nil

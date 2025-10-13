@@ -84,17 +84,22 @@ $ cast balance 0x5D8121cf716B70d3e345adB58157752304eED5C3
 ## Flags
 
 ```bash
-      --addresses strings         comma-separated list of wallet addresses to fund
-      --contract-address string   address of pre-deployed Funder contract
-      --eth-amount big.Int        amount of wei to send to each wallet (default 50000000000000000)
-  -f, --file string               output JSON file path for storing addresses and private keys of funded wallets (default "wallets.json")
-      --hd-derivation             derive wallets to fund from private key in deterministic way (default true)
-  -h, --help                      help for fund
-      --key-file string           file containing accounts private keys, one per line
-  -n, --number uint               number of wallets to fund (default 10)
-      --private-key string        hex encoded private key to use for sending transactions (default "0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
-  -r, --rpc-url string            RPC endpoint URL (default "http://localhost:8545")
-      --seed string               seed string for deterministic wallet generation (e.g., 'ephemeral_test')
+      --addresses strings                  comma-separated list of wallet addresses to fund
+      --approve-amount big.Int             amount of ERC20 tokens to approve for the spender (default 1000000000000000000000)
+      --approve-spender string             address to approve for spending tokens from each funded wallet
+      --contract-address string            address of pre-deployed Funder contract
+      --erc20-bulk-funder-address string   address of pre-deployed ERC20BulkFunder contract
+      --eth-amount big.Int                 amount of wei to send to each wallet (default 50000000000000000)
+  -f, --file string                        output JSON file path for storing addresses and private keys of funded wallets (default "wallets.json")
+      --hd-derivation                      derive wallets to fund from private key in deterministic way (default true)
+  -h, --help                               help for fund
+      --key-file string                    file containing accounts private keys, one per line
+  -n, --number uint                        number of wallets to fund (default 10)
+      --private-key string                 hex encoded private key to use for sending transactions (default "0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
+  -r, --rpc-url string                     RPC endpoint URL (default "http://localhost:8545")
+      --seed string                        seed string for deterministic wallet generation (e.g., 'ephemeral_test')
+      --token-address string               address of the ERC20 token contract to mint and fund (if provided, enables ERC20 mode)
+      --token-amount big.Int               amount of ERC20 tokens to mint and transfer to each wallet (default 1000000000000000000)
 ```
 
 The command also inherits flags from parent commands.
