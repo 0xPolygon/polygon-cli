@@ -55,7 +55,7 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec, conns *p2p
 			peerID := peer.Node().ID().String()
 			name := peer.Fullname()
 			connectedAt := conns.GetPeerConnectedAt(peerID)
-			if !connectedAt.IsZero() {
+			if connectedAt.IsZero() {
 				continue
 			}
 
