@@ -66,7 +66,7 @@ type EthProtocolOptions struct {
 	Head      *HeadBlock
 	HeadMutex *sync.RWMutex
 
-	// Request cache configuration
+	// Requests cache configuration
 	MaxRequests      int
 	RequestsCacheTTL time.Duration
 }
