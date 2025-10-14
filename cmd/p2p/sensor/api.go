@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
+	"time"
 
 	"github.com/0xPolygon/polygon-cli/p2p"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
@@ -20,10 +22,18 @@ type nodeInfo struct {
 	URL string `json:"enode"`
 }
 
+// peerInfo represents information about a connected peer.
+type peerInfo struct {
+	MessagesReceived p2p.MessageCount `json:"messages_received"`
+	MessagesSent     p2p.MessageCount `json:"messages_sent"`
+	ConnectedAt      string           `json:"connected_at"`
+	DurationSeconds  int64            `json:"duration_seconds"`
+}
+
 // handleAPI sets up the API for interacting with the sensor. The `/peers`
 // endpoint returns a list of all peers connected to the sensor, including the
-// types and counts of eth packets sent by each peer.
-func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec) {
+// types and counts of eth packets sent by and received from each peer.
+func handleAPI(server *ethp2p.Server, msgsReceived, msgsSent *prometheus.CounterVec, conns *p2p.Conns) {
 	http.HandleFunc("/peers", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -33,10 +43,18 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
-		peers := make(map[string]p2p.MessageCount)
+		peers := make(map[string]peerInfo)
 		for _, peer := range server.Peers() {
 			url := peer.Node().URLv4()
-			peers[url] = getPeerMessages(url, peer.Fullname(), counter)
+			nodeID := peer.Node().ID().String()
+			connectedAt := conns.GetPeerConnectedAt(nodeID)
+
+			peers[url] = peerInfo{
+				MessagesReceived: getPeerMessages(url, peer.Fullname(), msgsReceived),
+				MessagesSent:     getPeerMessages(url, peer.Fullname(), msgsSent),
+				ConnectedAt:      connectedAt.UTC().Format(time.RFC3339),
+				DurationSeconds:  int64(time.Since(connectedAt).Seconds()),
+			}
 		}
 
 		if err := json.NewEncoder(w).Encode(peers); err != nil {
@@ -105,30 +123,22 @@ func removePeerMessages(counter *prometheus.CounterVec, urls []string) error {
 		return err
 	}
 
-	var family *dto.MetricFamily
-	for _, f := range families {
-		if f.GetName() == "sensor_messages" {
-			family = f
-			break
+	// Find all matching metric families
+	for _, family := range families {
+		// Check for any sensor_messages metric (received, sent, etc.)
+		if !strings.Contains(family.GetName(), "sensor_messages") {
+			continue
 		}
-	}
 
-	// During DNS-discovery or when the server is taking a while to discover
-	// peers and has yet to receive a message, the sensor_messages prometheus
-	// metric may not exist yet.
-	if family == nil {
-		log.Trace().Msg("Could not find sensor_messages metric family")
-		return nil
-	}
+		for _, metric := range family.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				url := label.GetValue()
+				if label.GetName() != "url" || slices.Contains(urls, url) {
+					continue
+				}
 
-	for _, metric := range family.GetMetric() {
-		for _, label := range metric.GetLabel() {
-			url := label.GetValue()
-			if label.GetName() != "url" || slices.Contains(urls, url) {
-				continue
+				counter.DeletePartialMatch(prometheus.Labels{"url": url})
 			}
-
-			counter.DeletePartialMatch(prometheus.Labels{"url": url})
 		}
 	}
 
