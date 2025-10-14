@@ -69,6 +69,8 @@ type (
 		DiscoveryDNS                 string
 		Database                     string
 		NoDiscovery                  bool
+		MaxRequests                  int
+		RequestCacheTTL              time.Duration
 
 		bootnodes    []*enode.Node
 		staticNodes  []*enode.Node
@@ -193,17 +195,19 @@ var SensorCmd = &cobra.Command{
 		conns := p2p.NewConns()
 
 		opts := p2p.EthProtocolOptions{
-			Context:     cmd.Context(),
-			Database:    db,
-			GenesisHash: common.HexToHash(inputSensorParams.GenesisHash),
-			RPC:         inputSensorParams.RPC,
-			SensorID:    inputSensorParams.SensorID,
-			NetworkID:   inputSensorParams.NetworkID,
-			Conns:       conns,
-			Head:        &head,
-			HeadMutex:   &sync.RWMutex{},
-			ForkID:      forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
-			MsgCounter:  msgCounter,
+			Context:         cmd.Context(),
+			Database:        db,
+			GenesisHash:     common.HexToHash(inputSensorParams.GenesisHash),
+			RPC:             inputSensorParams.RPC,
+			SensorID:        inputSensorParams.SensorID,
+			NetworkID:       inputSensorParams.NetworkID,
+			Conns:           conns,
+			Head:            &head,
+			HeadMutex:       &sync.RWMutex{},
+			ForkID:          forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
+			MsgCounter:      msgCounter,
+			MaxRequests:     inputSensorParams.MaxRequests,
+			RequestCacheTTL: inputSensorParams.RequestCacheTTL,
 		}
 
 		config := ethp2p.Config{
@@ -476,4 +480,6 @@ will result in less chance of missing data but can significantly increase memory
   - json (output to stdout)
   - none (no persistence)`)
 	f.BoolVar(&inputSensorParams.NoDiscovery, "no-discovery", false, "disable P2P peer discovery")
+	f.IntVar(&inputSensorParams.MaxRequests, "max-requests", 2048, "maximum request IDs to track per peer (0 for no limit)")
+	f.DurationVar(&inputSensorParams.RequestCacheTTL, "requests-cache-ttl", 5*time.Minute, "time to live for requests cache entries (0 for no expiration)")
 }

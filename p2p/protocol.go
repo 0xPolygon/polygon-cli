@@ -38,7 +38,7 @@ type conn struct {
 	// requests is used to store the request ID and the block hash. This is used
 	// when fetching block bodies because the eth protocol block bodies do not
 	// contain information about the block hash.
-	requests   *list.List
+	requests   *Cache[uint64, common.Hash]
 	requestNum uint64
 
 	// Linked list of seen block hashes with timestamps.
@@ -65,6 +65,10 @@ type EthProtocolOptions struct {
 	// when doing the status exchange.
 	Head      *HeadBlock
 	HeadMutex *sync.RWMutex
+
+	// Request cache configuration
+	MaxRequests     int
+	RequestCacheTTL time.Duration
 }
 
 // HeadBlock contains the necessary head block data for the status message.
@@ -97,7 +101,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				logger:      log.With().Str("peer", p.Node().URLv4()).Logger(),
 				rw:          rw,
 				db:          opts.Database,
-				requests:    list.New(),
+				requests:    NewCache[uint64, common.Hash](opts.MaxRequests, opts.RequestCacheTTL),
 				requestNum:  0,
 				head:        opts.Head,
 				headMutex:   opts.HeadMutex,
@@ -264,20 +268,8 @@ func (c *conn) getBlockData(hash common.Hash) error {
 		return err
 	}
 
-	for e := c.requests.Front(); e != nil; e = e.Next() {
-		r := e.Value.(request)
-
-		if time.Since(r.time).Minutes() > 10 {
-			c.requests.Remove(e)
-		}
-	}
-
 	c.requestNum++
-	c.requests.PushBack(request{
-		requestID: c.requestNum,
-		hash:      hash,
-		time:      time.Now(),
-	})
+	c.requests.Add(c.requestNum, hash)
 
 	bodiesRequest := &GetBlockBodies{
 		RequestId:             c.requestNum,
@@ -461,23 +453,14 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.AddCount(packet.Name(), float64(len(packet.BlockBodiesResponse)))
 
-	var hash *common.Hash
-	for e := c.requests.Front(); e != nil; e = e.Next() {
-		r := e.Value.(request)
-
-		if r.requestID == packet.RequestId {
-			hash = &r.hash
-			c.requests.Remove(e)
-			break
-		}
-	}
-
-	if hash == nil {
+	hash, ok := c.requests.Get(packet.RequestId)
+	if !ok {
 		c.logger.Warn().Msg("No block hash found for block body")
 		return nil
 	}
+	c.requests.Remove(packet.RequestId)
 
-	c.db.WriteBlockBody(ctx, packet.BlockBodiesResponse[0], *hash, tfs)
+	c.db.WriteBlockBody(ctx, packet.BlockBodiesResponse[0], hash, tfs)
 
 	return nil
 }
