@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"container/list"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -41,8 +40,8 @@ type conn struct {
 	requests   *Cache[uint64, common.Hash]
 	requestNum uint64
 
-	// Linked list of seen block hashes with timestamps.
-	blockHashes *list.List
+	// blocks caches seen block hashes to avoid duplicate processing.
+	blocks *Cache[common.Hash, struct{}]
 
 	// oldestBlock stores the first block the sensor has seen so when fetching
 	// parent blocks, it does not request blocks older than this.
@@ -69,6 +68,10 @@ type EthProtocolOptions struct {
 	// Requests cache configuration
 	MaxRequests      int
 	RequestsCacheTTL time.Duration
+
+	// Blocks cache configuration
+	MaxBlocks      int
+	BlocksCacheTTL time.Duration
 }
 
 // HeadBlock contains the necessary head block data for the status message.
@@ -79,14 +82,6 @@ type HeadBlock struct {
 	Time            uint64
 }
 
-type BlockHashEntry struct {
-	hash common.Hash
-	time time.Time
-}
-
-// blockHashTTL defines the time-to-live for block hash entries in blockHashes list.
-var blockHashTTL = 10 * time.Minute
-
 // NewEthProtocol creates the new eth protocol. This will handle writing the
 // status exchange, message handling, and writing blocks/txs to the database.
 func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
@@ -96,18 +91,18 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 		Length:  17,
 		Run: func(p *ethp2p.Peer, rw ethp2p.MsgReadWriter) error {
 			c := &conn{
-				sensorID:    opts.SensorID,
-				node:        p.Node(),
-				logger:      log.With().Str("peer", p.Node().URLv4()).Logger(),
-				rw:          rw,
-				db:          opts.Database,
-				requests:    NewCache[uint64, common.Hash](opts.MaxRequests, opts.RequestsCacheTTL),
-				requestNum:  0,
-				head:        opts.Head,
-				headMutex:   opts.HeadMutex,
-				counter:     opts.MsgCounter,
-				peer:        p,
-				blockHashes: list.New(),
+				sensorID:   opts.SensorID,
+				node:       p.Node(),
+				logger:     log.With().Str("peer", p.Node().URLv4()).Logger(),
+				rw:         rw,
+				db:         opts.Database,
+				requests:   NewCache[uint64, common.Hash](opts.MaxRequests, opts.RequestsCacheTTL),
+				requestNum: 0,
+				head:       opts.Head,
+				headMutex:  opts.HeadMutex,
+				counter:    opts.MsgCounter,
+				peer:       p,
+				blocks:     NewCache[common.Hash, struct{}](opts.MaxBlocks, opts.BlocksCacheTTL),
 			}
 
 			c.headMutex.RLock()
@@ -320,8 +315,8 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 	for _, entry := range packet {
 		hash := entry.Hash
 
-		// Check if we've seen the hash and remove old entries
-		if c.hasSeenBlockHash(hash) {
+		// Check if we've seen the hash
+		if c.blocks.Contains(hash) {
 			continue
 		}
 
@@ -331,7 +326,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		}
 
 		// Now that we've successfully fetched, record the new block hash
-		c.addBlockHash(hash)
+		c.blocks.Add(hash, struct{}{})
 		uniqueHashes = append(uniqueHashes, hash)
 	}
 
@@ -341,36 +336,6 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	return nil
-}
-
-// addBlockHash adds a new block hash with a timestamp to the blockHashes list.
-func (c *conn) addBlockHash(hash common.Hash) {
-	now := time.Now()
-
-	// Add the new block hash entry to the list.
-	c.blockHashes.PushBack(BlockHashEntry{
-		hash: hash,
-		time: now,
-	})
-}
-
-// Helper method to check if a block hash is already in blockHashes.
-func (c *conn) hasSeenBlockHash(hash common.Hash) bool {
-	now := time.Now()
-	for e := c.blockHashes.Front(); e != nil; e = e.Next() {
-		entry := e.Value.(BlockHashEntry)
-		// Check if the hash matches. We can short circuit here because there will
-		// be block hashes that we haven't seen before, which will make a full
-		// iteration of the blockHashes linked list.
-		if entry.hash.Cmp(hash) == 0 {
-			return true
-		}
-		// Remove entries older than blockHashTTL.
-		if now.Sub(entry.time) > blockHashTTL {
-			c.blockHashes.Remove(e)
-		}
-	}
-	return false
 }
 
 func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {

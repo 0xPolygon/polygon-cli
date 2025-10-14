@@ -71,6 +71,8 @@ type (
 		NoDiscovery                  bool
 		MaxRequests                  int
 		RequestsCacheTTL             time.Duration
+		MaxBlocks                    int
+		BlocksCacheTTL               time.Duration
 
 		bootnodes    []*enode.Node
 		staticNodes  []*enode.Node
@@ -208,6 +210,8 @@ var SensorCmd = &cobra.Command{
 			MsgCounter:       msgCounter,
 			MaxRequests:      inputSensorParams.MaxRequests,
 			RequestsCacheTTL: inputSensorParams.RequestsCacheTTL,
+			MaxBlocks:        inputSensorParams.MaxBlocks,
+			BlocksCacheTTL:   inputSensorParams.BlocksCacheTTL,
 		}
 
 		config := ethp2p.Config{
@@ -482,4 +486,6 @@ will result in less chance of missing data but can significantly increase memory
 	f.BoolVar(&inputSensorParams.NoDiscovery, "no-discovery", false, "disable P2P peer discovery")
 	f.IntVar(&inputSensorParams.MaxRequests, "max-requests", 2048, "maximum request IDs to track per peer (0 for no limit)")
 	f.DurationVar(&inputSensorParams.RequestsCacheTTL, "requests-cache-ttl", 5*time.Minute, "time to live for requests cache entries (0 for no expiration)")
+	f.IntVar(&inputSensorParams.MaxBlocks, "max-blocks", 1024, "maximum blocks to track per peer (0 for no limit)")
+	f.DurationVar(&inputSensorParams.BlocksCacheTTL, "blocks-cache-ttl", 10*time.Minute, "time to live for blocks cache entries (0 for no expiration)")
 }
