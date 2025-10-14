@@ -23,7 +23,7 @@ const (
 	TransactionsKind      = "transactions"
 	TransactionEventsKind = "transaction_events"
 	PeersKind             = "peers"
-	MaxAttempts           = 10
+	MaxAttempts           = 3
 )
 
 // Datastore wraps the datastore client, stores the sensorID, and other
