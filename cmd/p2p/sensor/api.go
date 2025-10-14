@@ -15,8 +15,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// peerMessages represents the messages sent and received by a peer.
-type peerMessages struct {
+// peerData represents the metrics and connection information for a peer.
+// It includes both message counts (items sent/received) and packet counts
+// (number of p2p messages), along with connection timing information.
+type peerData struct {
 	Received        p2p.MessageCount `json:"received"`
 	Sent            p2p.MessageCount `json:"sent"`
 	PacketsReceived p2p.MessageCount `json:"packets_received"`
@@ -27,10 +29,10 @@ type peerMessages struct {
 
 // apiData represents all sensor information including node info and peer data.
 type apiData struct {
-	ENR       string                  `json:"enr"`
-	URL       string                  `json:"enode"`
-	PeerCount int                     `json:"peer_count"`
-	Peers     map[string]peerMessages `json:"peers"`
+	ENR       string              `json:"enr"`
+	URL       string              `json:"enode"`
+	PeerCount int                 `json:"peer_count"`
+	Peers     map[string]peerData `json:"peers"`
 }
 
 // handleAPI sets up the API for interacting with the sensor. All endpoints
@@ -47,23 +49,23 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec, conns *p2p
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
-		peers := make(map[string]peerMessages)
+		peers := make(map[string]peerData)
 		for _, peer := range server.Peers() {
 			url := peer.Node().URLv4()
 			peerID := peer.Node().ID().String()
 			name := peer.Fullname()
+			connectedAt := conns.GetPeerConnectedAt(peerID)
+			if !connectedAt.IsZero() {
+				continue
+			}
 
-			msgs := peerMessages{
+			msgs := peerData{
 				Received:        getPeerMessages(counter, url, name, p2p.MsgReceived, false),
 				Sent:            getPeerMessages(counter, url, name, p2p.MsgSent, false),
 				PacketsReceived: getPeerMessages(counter, url, name, p2p.MsgReceived, true),
 				PacketsSent:     getPeerMessages(counter, url, name, p2p.MsgSent, true),
-			}
-
-			connectedAt := conns.GetPeerConnectedAt(peerID)
-			if !connectedAt.IsZero() {
-				msgs.ConnectedAt = connectedAt.UTC().Format(time.RFC3339)
-				msgs.DurationSeconds = time.Since(connectedAt).Seconds()
+				ConnectedAt:     connectedAt.UTC().Format(time.RFC3339),
+				DurationSeconds: time.Since(connectedAt).Seconds(),
 			}
 
 			peers[url] = msgs
