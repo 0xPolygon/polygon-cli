@@ -402,7 +402,7 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 					log.Error().Err(err).Msg("failed to fund accounts with multicall3")
 					return
 				}
-				log.Debug().
+				log.Info().
 					Stringer("txHash", tx.Hash()).
 					Int("done", i+1).
 					Uint64("of", uint64(len(wallets))).
@@ -436,7 +436,7 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 			log.Error().Msg(errMsg)
 			return errors.New(errMsg)
 		}
-		log.Debug().
+		log.Info().
 			Stringer("txHash", tx.Hash()).
 			Msg("transaction to fund accounts confirmed")
 	}

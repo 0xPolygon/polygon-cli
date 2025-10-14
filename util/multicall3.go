@@ -114,12 +114,12 @@ func IsMulticall3Supported(ctx context.Context, c *ethclient.Client, tryDeployIf
 }
 
 func Multicall3MaxAccountsToFundPerTx(ctx context.Context, c *ethclient.Client) (uint64, error) {
-	latestBlock, err := c.BlockByNumber(ctx, nil)
+	latestBlock, err := c.HeaderByNumber(ctx, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get block gas limit")
 		return 0, err
 	}
-	return min(latestBlock.GasLimit()/gasToFundAccountAnAccount, maxAccsToFundPerTx), nil
+	return min(latestBlock.GasLimit/gasToFundAccountAnAccount, maxAccsToFundPerTx), nil
 }
 
 func Multicall3FundAccountsWithNativeToken(c *ethclient.Client, sender *bind.TransactOpts, accounts []common.Address, amount *big.Int, customAddr *common.Address) (*types.Transaction, error) {

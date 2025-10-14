@@ -516,7 +516,7 @@ func (ap *AccountPool) fundAccountsWithMulticall3(ctx context.Context, tops *bin
 					log.Error().Err(err).Msg("failed to fund accounts with multicall3")
 					return
 				}
-				log.Debug().
+				log.Info().
 					Stringer("txHash", tx.Hash()).
 					Int("done", i+1).
 					Uint64("of", uint64(len(ap.accounts))).
@@ -547,7 +547,7 @@ func (ap *AccountPool) fundAccountsWithMulticall3(ctx context.Context, tops *bin
 			log.Error().Msg(errMsg)
 			return errors.New(errMsg)
 		}
-		log.Debug().
+		log.Info().
 			Stringer("txHash", tx.Hash()).
 			Msg("transaction to fund accounts confirmed")
 	}
