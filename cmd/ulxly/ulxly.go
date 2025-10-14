@@ -1419,7 +1419,7 @@ func ComputeSiblings(rollupID uint32, leaves []common.Hash, height uint8) (*Roll
 		if len(leaves)%2 == 1 {
 			leaves = append(leaves, currentZeroHashHeight)
 		}
-		if index%2 == 1 { //If it is odd
+		if index%2 == 1 { // If it is odd
 			siblings = append(siblings, leaves[index-1])
 		} else { // It is even
 			if len(leaves) > 1 {
