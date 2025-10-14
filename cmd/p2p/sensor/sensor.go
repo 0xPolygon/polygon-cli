@@ -70,7 +70,7 @@ type (
 		Database                     string
 		NoDiscovery                  bool
 		MaxRequests                  int
-		RequestCacheTTL              time.Duration
+		RequestsCacheTTL             time.Duration
 
 		bootnodes    []*enode.Node
 		staticNodes  []*enode.Node
@@ -207,7 +207,7 @@ var SensorCmd = &cobra.Command{
 			ForkID:          forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
 			MsgCounter:      msgCounter,
 			MaxRequests:     inputSensorParams.MaxRequests,
-			RequestCacheTTL: inputSensorParams.RequestCacheTTL,
+			RequestCacheTTL: inputSensorParams.RequestsCacheTTL,
 		}
 
 		config := ethp2p.Config{
@@ -481,5 +481,5 @@ will result in less chance of missing data but can significantly increase memory
   - none (no persistence)`)
 	f.BoolVar(&inputSensorParams.NoDiscovery, "no-discovery", false, "disable P2P peer discovery")
 	f.IntVar(&inputSensorParams.MaxRequests, "max-requests", 2048, "maximum request IDs to track per peer (0 for no limit)")
-	f.DurationVar(&inputSensorParams.RequestCacheTTL, "requests-cache-ttl", 5*time.Minute, "time to live for requests cache entries (0 for no expiration)")
+	f.DurationVar(&inputSensorParams.RequestsCacheTTL, "requests-cache-ttl", 5*time.Minute, "time to live for requests cache entries (0 for no expiration)")
 }
