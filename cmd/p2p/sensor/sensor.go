@@ -195,19 +195,19 @@ var SensorCmd = &cobra.Command{
 		conns := p2p.NewConns()
 
 		opts := p2p.EthProtocolOptions{
-			Context:         cmd.Context(),
-			Database:        db,
-			GenesisHash:     common.HexToHash(inputSensorParams.GenesisHash),
-			RPC:             inputSensorParams.RPC,
-			SensorID:        inputSensorParams.SensorID,
-			NetworkID:       inputSensorParams.NetworkID,
-			Conns:           conns,
-			Head:            &head,
-			HeadMutex:       &sync.RWMutex{},
-			ForkID:          forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
-			MsgCounter:      msgCounter,
-			MaxRequests:     inputSensorParams.MaxRequests,
-			RequestCacheTTL: inputSensorParams.RequestsCacheTTL,
+			Context:          cmd.Context(),
+			Database:         db,
+			GenesisHash:      common.HexToHash(inputSensorParams.GenesisHash),
+			RPC:              inputSensorParams.RPC,
+			SensorID:         inputSensorParams.SensorID,
+			NetworkID:        inputSensorParams.NetworkID,
+			Conns:            conns,
+			Head:             &head,
+			HeadMutex:        &sync.RWMutex{},
+			ForkID:           forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
+			MsgCounter:       msgCounter,
+			MaxRequests:      inputSensorParams.MaxRequests,
+			RequestsCacheTTL: inputSensorParams.RequestsCacheTTL,
 		}
 
 		config := ethp2p.Config{
