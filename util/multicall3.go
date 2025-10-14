@@ -23,8 +23,8 @@ const Multicall3Addr = "0xcA11bde05977b3631167028862bE2a173976CA11"
 // CALL base ~700 and value transfer cost 9,000. (Standard CALL metering.)
 // GitHub
 // Net: for brand-new recipients, a Multicall3 transfer is ~37k gas each (≈25k + 9k + 2.6k + 0.7k)
-const gasToFundAccountAnAccount = 40000 // estimated gas per account to fund with multicall3
-const maxAccsToFundPerTx = 700          // arbitrary limit to avoid too large transactions
+const estimatedGasNeededToFundASingleAccount = 40000 // estimated gas per account to fund with multicall3 + margin(3k)
+const maxAccsToFundPerTx = 700                       // arbitrary limit to avoid too large transactions
 
 func Multicall3Deploy(c *ethclient.Client, sender *bind.TransactOpts) (common.Address, *types.Transaction, *multicall3.Multicall3, error) {
 	address, tx, instance, err := multicall3.DeployMulticall3(sender, c)
@@ -119,7 +119,7 @@ func Multicall3MaxAccountsToFundPerTx(ctx context.Context, c *ethclient.Client) 
 		log.Error().Err(err).Msg("failed to get block gas limit")
 		return 0, err
 	}
-	return min(latestBlock.GasLimit/gasToFundAccountAnAccount, maxAccsToFundPerTx), nil
+	return min(latestBlock.GasLimit/estimatedGasNeededToFundASingleAccount, maxAccsToFundPerTx), nil
 }
 
 func Multicall3FundAccountsWithNativeToken(c *ethclient.Client, sender *bind.TransactOpts, accounts []common.Address, amount *big.Int, customAddr *common.Address) (*types.Transaction, error) {
