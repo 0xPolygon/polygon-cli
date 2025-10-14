@@ -81,46 +81,33 @@ func runFunding(ctx context.Context) error {
 		}()
 	}
 
-	// If ERC20 mode is enabled, fund with tokens instead of ETH
-	if params.TokenAddress != "" {
-		log.Info().Str("tokenAddress", params.TokenAddress).Msg("Starting ERC20 token funding (ETH funding disabled)")
-		if err = fundWalletsWithERC20(ctx, c, tops, privateKey, addresses, privateKeys); err != nil {
-			return err
-		}
-		log.Info().Msg("Wallet(s) funded with ERC20 tokens! 🪙")
-	} else {
-		// Fund wallets.
-		log.Debug().Msg("checking if multicall3 is supported")
-		var multicall3Addr *common.Address
-		if len(params.Multicall3Address) > 0 {
-			addr := common.HexToAddress(params.Multicall3Address)
-			if addr == (common.Address{}) {
-				log.Warn().
-					Str("address", params.Multicall3Address).
-					Msg("invalid multicall3 address provided, will try to detect or deploy multicall3")
-				multicall3Addr = &addr
-			}
-		}
-
-		multicall3Addr, _ = util.IsMulticall3Supported(ctx, c, true, tops, multicall3Addr)
-		if multicall3Addr != nil {
-			log.Info().
-				Stringer("address", multicall3Addr).
-				Msg("multicall3 is supported and will be used to fund wallets")
-			return fundWalletsWithMulticall3(ctx, c, tops, addresses, multicall3Addr)
-		} else {
-			log.Info().Msg("multicall3 is not supported, will use funder contract to fund wallets")
-			// Deploy or instantiate the Funder contract.
-			var contract *funder.Funder
-			contract, err = deployOrInstantiateFunderContract(ctx, c, tops, privateKey, len(addresses))
-			if err != nil {
-				return err
-			}
-			if err = fundWallets(ctx, c, tops, contract, addresses); err != nil {
-				return err
-			}
+	// Fund wallets.
+	log.Debug().Msg("checking if multicall3 is supported")
+	var multicall3Addr *common.Address
+	if len(params.Multicall3Address) > 0 {
+		addr := common.HexToAddress(params.Multicall3Address)
+		if addr == (common.Address{}) {
+			log.Warn().
+				Str("address", params.Multicall3Address).
+				Msg("invalid multicall3 address provided, will try to detect or deploy multicall3")
+			multicall3Addr = &addr
 		}
 	}
+
+	multicall3Addr, _ = util.IsMulticall3Supported(ctx, c, true, tops, multicall3Addr)
+	if multicall3Addr != nil {
+		log.Info().
+			Stringer("address", multicall3Addr).
+			Msg("multicall3 is supported and will be used to fund wallets")
+		err = fundWalletsWithMulticall3(ctx, c, tops, addresses, multicall3Addr)
+	} else {
+		log.Info().Msg("multicall3 is not supported, will use funder contract to fund wallets")
+		err = fundWalletsWithFunder(ctx, c, tops, privateKey, addresses, privateKeys)
+	}
+	if err != nil {
+		return err
+	}
+
 	log.Info().Msg("Wallet(s) funded! 💸")
 
 	log.Info().Msgf("Total execution time: %s", time.Since(startTime))
@@ -355,6 +342,29 @@ func fundWallets(ctx context.Context, c *ethclient.Client, tops *bind.TransactOp
 	return nil
 }
 
+func fundWalletsWithFunder(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, privateKey *ecdsa.PrivateKey, addresses []common.Address, privateKeys []*ecdsa.PrivateKey) error {
+	var err error
+	// If ERC20 mode is enabled, fund with tokens instead of ETH
+	if params.TokenAddress != "" {
+		log.Info().Str("tokenAddress", params.TokenAddress).Msg("Starting ERC20 token funding (ETH funding disabled)")
+		if err = fundWalletsWithERC20(ctx, c, tops, privateKey, addresses, privateKeys); err != nil {
+			return err
+		}
+		log.Info().Msg("Wallet(s) funded with ERC20 tokens! 🪙")
+	} else {
+		// Deploy or instantiate the Funder contract.
+		var contract *funder.Funder
+		contract, err = deployOrInstantiateFunderContract(ctx, c, tops, privateKey, len(addresses))
+		if err != nil {
+			return err
+		}
+		if err = fundWallets(ctx, c, tops, contract, addresses); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, wallets []common.Address, multicall3Addr *common.Address) error {
 	log.Debug().
 		Msg("funding wallets with multicall3")
@@ -370,7 +380,14 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 	log.Debug().Uint64("accsToFundPerTx", accsToFundPerTx).Msg("multicall3 max accounts to fund per tx")
 	chSize := (uint64(len(wallets)) / accsToFundPerTx) + 1
 
-	txsCh := make(chan *types.Transaction, chSize)
+	var txsCh chan *types.Transaction
+	if params.TokenAddress == "" {
+		txsCh = make(chan *types.Transaction, chSize)
+	} else {
+		txsCh = make(chan *types.Transaction, chSize*2)
+	}
+
+	errCh := make(chan error, chSize)
 
 	accs := []common.Address{}
 	wg := sync.WaitGroup{}
@@ -390,16 +407,33 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 			wg.Add(1)
 			go func(tops *bind.TransactOpts, accs []common.Address) {
 				defer wg.Done()
+				var iErr error
 				if rl != nil {
-					err := rl.Wait(ctx)
-					if err != nil {
-						log.Error().Err(err).Msg("rate limiter wait failed before funding accounts with multicall3")
+					iErr = rl.Wait(ctx)
+					if iErr != nil {
+						log.Error().Err(iErr).Msg("rate limiter wait failed before funding accounts with multicall3")
 						return
 					}
 				}
-				tx, err := util.Multicall3FundAccountsWithNativeToken(c, tops, accs, params.FundingAmountInWei, multicall3Addr)
-				if err != nil {
-					log.Error().Err(err).Msg("failed to fund accounts with multicall3")
+				var tx *types.Transaction
+				if params.TokenAddress != "" {
+					tokenAddress := common.HexToAddress(params.TokenAddress)
+					var txApprove *types.Transaction
+					txApprove, tx, iErr = util.Multicall3FundAccountsWithERC20Token(ctx, c, tops, accs, tokenAddress, params.TokenAmount, multicall3Addr)
+					if txApprove != nil {
+						log.Info().
+							Stringer("txHash", txApprove.Hash()).
+							Int("done", i+1).
+							Uint64("of", uint64(len(wallets))).
+							Msg("transaction to approve ERC20 token spending by multicall3 sent")
+						txsCh <- txApprove
+					}
+				} else {
+					tx, iErr = util.Multicall3FundAccountsWithNativeToken(c, tops, accs, params.FundingAmountInWei, multicall3Addr)
+				}
+				if iErr != nil {
+					errCh <- iErr
+					log.Error().Err(iErr).Msg("failed to fund accounts with multicall3")
 					return
 				}
 				log.Info().
@@ -414,6 +448,21 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 	}
 	wg.Wait()
 	close(txsCh)
+	close(errCh)
+
+	var combinedErrors error
+	for len(errCh) > 0 {
+		err = <-errCh
+		if combinedErrors == nil {
+			combinedErrors = err
+		} else {
+			combinedErrors = errors.Join(combinedErrors, err)
+		}
+	}
+	// return if there were errors sending the funding transactions
+	if combinedErrors != nil {
+		return combinedErrors
+	}
 
 	log.Info().Msg("all funding transactions sent, waiting for confirmation...")
 
@@ -438,7 +487,7 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 		}
 		log.Info().
 			Stringer("txHash", tx.Hash()).
-			Msg("transaction to fund accounts confirmed")
+			Msg("transaction confirmed")
 	}
 
 	return nil
