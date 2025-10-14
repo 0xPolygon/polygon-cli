@@ -48,7 +48,7 @@ require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ethereum/c-kzg-4844/v2 v2.1.0 // indirect
 	github.com/gdamore/encoding v1.0.1 // indirect
-	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
+	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
@@ -82,7 +82,7 @@ require (
 	github.com/consensys/gnark-crypto v0.16.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
-	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/getsentry/sentry-go v0.29.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
@@ -161,8 +161,8 @@ require (
 require (
 	cloud.google.com/go/kms v1.23.1
 	github.com/0xPolygon/cdk-contracts-tooling v0.0.1
-	github.com/cometbft/cometbft v0.38.17
-	github.com/docker/docker v25.0.6+incompatible
+	github.com/cometbft/cometbft v0.38.19
+	github.com/docker/docker v25.0.13+incompatible
 	github.com/fatih/color v1.18.0
 	github.com/gateway-fm/vectorized-poseidon-gold v1.0.0
 	github.com/gdamore/tcell/v2 v2.9.0
