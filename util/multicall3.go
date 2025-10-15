@@ -3,10 +3,9 @@ package util
 import (
 	"context"
 	"math/big"
-	"strings"
 
 	"github.com/0xPolygon/polygon-cli/bindings/multicall3"
-	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -140,23 +139,41 @@ func Multicall3FundAccountsWithNativeToken(c *ethclient.Client, tops *bind.Trans
 	return sc.Aggregate3Value(tops, calls)
 }
 
-func Multicall3MintERC20ToAccounts(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, accounts []common.Address, tokenAddress common.Address, amount *big.Int, customAddr *common.Address) (*types.Transaction, error) {
-	_, sc, err := Multicall3New(c, customAddr)
+func Multicall3FundAccountsWithERC20Token(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, accounts []common.Address, tokenAddress common.Address, amount *big.Int, customAddr *common.Address) (approveTx, transfersTx *types.Transaction, err error) {
+	scAddr, sc, err := Multicall3New(c, customAddr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	// Create ABI for mint(address, uint256) function
-	mintABI, err := abi.JSON(strings.NewReader(`[{"type":"function","name":"mint","inputs":[{"name":"to","type":"address"},{"name":"amount","type":"uint256"}],"outputs":[],"stateMutability":"nonpayable"}]`))
+	erc20, err := tokens.NewERC20(tokenAddress, c)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	// Calculate total amount to approve
+	totalAmount := big.NewInt(0).Mul(amount, big.NewInt(int64(len(accounts))))
+
+	// Prepare approve calldata for the Multicall3 contract to spend tokens
+	approveTx, err = erc20.Approve(tops, scAddr, totalAmount)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	receipt, err := bind.WaitMined(ctx, c, approveTx.Hash())
+	if err != nil || receipt == nil || receipt.Status != 1 {
+		return approveTx, nil, err
+	}
+
+	erc20ABI, err := tokens.ERC20MetaData.GetAbi()
+	if err != nil {
+		return approveTx, nil, err
 	}
 
 	calls := make([]multicall3.Multicall3Call3, 0, len(accounts))
 	for _, account := range accounts {
-		callData, iErr := mintABI.Pack("mint", account, amount)
+		callData, iErr := erc20ABI.Pack("transferFrom", tops.From, account, amount)
 		if iErr != nil {
-			return nil, iErr
+			return approveTx, nil, iErr
 		}
 
 		calls = append(calls, multicall3.Multicall3Call3{
@@ -166,5 +183,10 @@ func Multicall3MintERC20ToAccounts(ctx context.Context, c *ethclient.Client, top
 		})
 	}
 
-	return sc.Aggregate3(tops, calls)
+	transfersTx, err = sc.Aggregate3(tops, calls)
+	if err != nil {
+		return approveTx, nil, err
+	}
+
+	return approveTx, transfersTx, nil
 }

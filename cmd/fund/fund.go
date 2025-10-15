@@ -418,13 +418,16 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 				var tx *types.Transaction
 				if params.TokenAddress != "" {
 					tokenAddress := common.HexToAddress(params.TokenAddress)
-					log.Info().
-						Stringer("tokenAddress", tokenAddress).
-						Stringer("minter", tops.From).
-						Int("accounts", len(accs)).
-						Str("amount", params.TokenAmount.String()).
-						Msg("Using multicall3 to mint tokens directly to accounts")
-					tx, iErr = util.Multicall3MintERC20ToAccounts(ctx, c, tops, accs, tokenAddress, params.TokenAmount, multicall3Addr)
+					var txApprove *types.Transaction
+					txApprove, tx, iErr = util.Multicall3FundAccountsWithERC20Token(ctx, c, tops, accs, tokenAddress, params.TokenAmount, multicall3Addr)
+					if txApprove != nil {
+						log.Info().
+							Stringer("txHash", txApprove.Hash()).
+							Int("done", i+1).
+							Uint64("of", uint64(len(wallets))).
+							Msg("transaction to approve ERC20 token spending by multicall3 sent")
+						txsCh <- txApprove
+					}
 				} else {
 					tx, iErr = util.Multicall3FundAccountsWithNativeToken(c, tops, accs, params.FundingAmountInWei, multicall3Addr)
 				}
