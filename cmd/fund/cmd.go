@@ -22,18 +22,26 @@ const defaultPassword = "password"
 
 // cmdFundParams holds the command-line parameters for the fund command.
 type cmdFundParams struct {
-	RpcUrl     *string
-	PrivateKey *string
+	RpcUrl     string
+	PrivateKey string
 
-	WalletsNumber      *uint64
-	UseHDDerivation    *bool
-	WalletAddresses    *[]string
+	WalletsNumber      uint64
+	UseHDDerivation    bool
+	WalletAddresses    []string
 	FundingAmountInWei *big.Int
-	OutputFile         *string
+	OutputFile         string
 
-	KeyFile *string
+	KeyFile string
+	Seed    string
 
-	FunderAddress *string
+	FunderAddress string
+
+	// ERC20 specific parameters
+	TokenAddress           string
+	TokenAmount            *big.Int
+	ERC20BulkMinterAddress string
+	ApproveSpender         string
+	ApproveAmount          *big.Int
 }
 
 var (
@@ -49,8 +57,10 @@ var FundCmd = &cobra.Command{
 	Short: "Bulk fund crypto wallets automatically.",
 	Long:  usage,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		params.RpcUrl = flag_loader.GetRpcUrlFlagValue(cmd)
-		params.PrivateKey = flag_loader.GetPrivateKeyFlagValue(cmd)
+		rpcUrl := flag_loader.GetRpcUrlFlagValue(cmd)
+		params.RpcUrl = *rpcUrl
+		privateKey := flag_loader.GetPrivateKeyFlagValue(cmd)
+		params.PrivateKey = *privateKey
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return checkFlags()
@@ -61,63 +71,114 @@ var FundCmd = &cobra.Command{
 }
 
 func init() {
-	p := new(cmdFundParams)
-	flagSet := FundCmd.Flags()
+	f := FundCmd.Flags()
 
-	p.RpcUrl = flagSet.StringP("rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
-	p.PrivateKey = flagSet.String("private-key", defaultPrivateKey, "The hex encoded private key that we'll use to send transactions")
+	f.StringVarP(&params.RpcUrl, "rpc-url", "r", "http://localhost:8545", "RPC endpoint URL")
+	f.StringVar(&params.PrivateKey, "private-key", defaultPrivateKey, "hex encoded private key to use for sending transactions")
 
 	// Wallet parameters.
-	p.WalletsNumber = flagSet.Uint64P("number", "n", 10, "The number of wallets to fund")
-	p.UseHDDerivation = flagSet.Bool("hd-derivation", true, "Derive wallets to fund from the private key in a deterministic way")
-	p.WalletAddresses = flagSet.StringSlice("addresses", nil, "Comma-separated list of wallet addresses to fund")
-	p.FundingAmountInWei = defaultFundingInWei
-	flagSet.Var(&flag_loader.BigIntValue{Val: p.FundingAmountInWei}, "eth-amount", "The amount of wei to send to each wallet")
-	p.KeyFile = flagSet.String("key-file", "", "The file containing the accounts private keys, one per line.")
+	f.Uint64VarP(&params.WalletsNumber, "number", "n", 10, "number of wallets to fund")
+	f.BoolVar(&params.UseHDDerivation, "hd-derivation", true, "derive wallets to fund from private key in deterministic way")
+	f.StringSliceVar(&params.WalletAddresses, "addresses", nil, "comma-separated list of wallet addresses to fund")
+	params.FundingAmountInWei = defaultFundingInWei
+	f.Var(&flag_loader.BigIntValue{Val: params.FundingAmountInWei}, "eth-amount", "amount of wei to send to each wallet")
+	f.StringVar(&params.KeyFile, "key-file", "", "file containing accounts private keys, one per line")
+	f.StringVar(&params.Seed, "seed", "", "seed string for deterministic wallet generation (e.g., 'ephemeral_test')")
 
-	p.OutputFile = flagSet.StringP("file", "f", "wallets.json", "The output JSON file path for storing the addresses and private keys of funded wallets")
+	f.StringVarP(&params.OutputFile, "file", "f", "wallets.json", "output JSON file path for storing addresses and private keys of funded wallets")
+
+	// ERC20 parameters
+	f.StringVar(&params.TokenAddress, "token-address", "", "address of the ERC20 token contract to mint and fund (if provided, enables ERC20 mode)")
+	params.TokenAmount = new(big.Int)
+	params.TokenAmount.SetString("1000000000000000000", 10) // 1 token
+	f.Var(&flag_loader.BigIntValue{Val: params.TokenAmount}, "token-amount", "amount of ERC20 tokens to mint and transfer to each wallet")
+	f.StringVar(&params.ERC20BulkMinterAddress, "erc20-bulk-funder-address", "", "address of pre-deployed ERC20BulkFunder contract")
+	f.StringVar(&params.ApproveSpender, "approve-spender", "", "address to approve for spending tokens from each funded wallet")
+	params.ApproveAmount = new(big.Int)
+	params.ApproveAmount.SetString("1000000000000000000000", 10) // 1000 tokens default
+	f.Var(&flag_loader.BigIntValue{Val: params.ApproveAmount}, "approve-amount", "amount of ERC20 tokens to approve for the spender")
 
 	// Marking flags as mutually exclusive
 	FundCmd.MarkFlagsMutuallyExclusive("addresses", "number")
 	FundCmd.MarkFlagsMutuallyExclusive("addresses", "hd-derivation")
+	FundCmd.MarkFlagsMutuallyExclusive("addresses", "seed")
 	FundCmd.MarkFlagsMutuallyExclusive("key-file", "addresses")
 	FundCmd.MarkFlagsMutuallyExclusive("key-file", "number")
 	FundCmd.MarkFlagsMutuallyExclusive("key-file", "hd-derivation")
+	FundCmd.MarkFlagsMutuallyExclusive("key-file", "seed")
+	FundCmd.MarkFlagsMutuallyExclusive("seed", "hd-derivation")
 
 	// Funder contract parameters.
-	p.FunderAddress = flagSet.String("contract-address", "", "The address of a pre-deployed Funder contract")
-
-	params = *p
+	f.StringVar(&params.FunderAddress, "contract-address", "", "address of pre-deployed Funder contract")
 }
 
 func checkFlags() error {
 	// Check rpc url flag.
-	if params.RpcUrl == nil {
+	if params.RpcUrl == "" {
 		panic("RPC URL is empty")
 	}
-	if err := util.ValidateUrl(*params.RpcUrl); err != nil {
+	if err := util.ValidateUrl(params.RpcUrl); err != nil {
 		return err
 	}
 
 	// Check private key flag.
-	if params.PrivateKey != nil && *params.PrivateKey == "" {
+	if params.PrivateKey == "" {
 		return errors.New("the private key is empty")
 	}
 
 	// Check that exactly one method is used to specify target accounts
-	hasAddresses := params.WalletAddresses != nil && len(*params.WalletAddresses) > 0
-	hasKeyFile := params.KeyFile != nil && *params.KeyFile != ""
-	hasNumberFlag := params.WalletsNumber != nil && *params.WalletsNumber > 0
-	if !hasAddresses && !hasKeyFile && !hasNumberFlag {
-		return errors.New("must specify target accounts via --addresses, --key-file, or --number")
+	hasAddresses := len(params.WalletAddresses) > 0
+	hasKeyFile := params.KeyFile != ""
+	hasSeed := params.Seed != ""
+	hasNumberWithoutSeed := params.WalletsNumber > 0 && !hasSeed
+
+	methodCount := 0
+	if hasAddresses {
+		methodCount++
+	}
+	if hasKeyFile {
+		methodCount++
+	}
+	if hasNumberWithoutSeed {
+		methodCount++
+	}
+	if hasSeed {
+		methodCount++
+	}
+
+	if methodCount == 0 {
+		return errors.New("must specify target accounts via --addresses, --key-file, --number, or --seed")
+	}
+	if methodCount > 1 {
+		return errors.New("cannot use multiple wallet specification methods simultaneously")
+	}
+
+	// When using seed, require a number of wallets to generate
+	if hasSeed && params.WalletsNumber <= 0 {
+		return errors.New("when using --seed, must also specify --number > 0 to indicate how many wallets to generate")
 	}
 
 	minValue := big.NewInt(1000000000)
 	if params.FundingAmountInWei != nil && params.FundingAmountInWei.Cmp(minValue) <= 0 {
 		return errors.New("the funding amount must be greater than 1000000000")
 	}
-	if params.OutputFile != nil && *params.OutputFile == "" {
+	if params.OutputFile == "" {
 		return errors.New("the output file is not specified")
+	}
+
+	// ERC20 specific validations
+	if params.TokenAddress != "" {
+		// ERC20 mode - validate token parameters
+		if params.TokenAmount == nil || params.TokenAmount.Cmp(big.NewInt(0)) <= 0 {
+			return errors.New("token amount must be greater than 0 when using ERC20 mode")
+		}
+		// Validate approve parameters if provided
+		if params.ApproveSpender != "" {
+			if params.ApproveAmount == nil || params.ApproveAmount.Cmp(big.NewInt(0)) <= 0 {
+				return errors.New("approve amount must be greater than 0 when approve spender is specified")
+			}
+		}
+		// In ERC20 mode, ETH funding is still supported alongside token minting
 	}
 
 	return nil

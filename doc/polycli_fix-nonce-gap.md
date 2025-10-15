@@ -11,7 +11,7 @@
 
 ## Description
 
-Send txs to fix the nonce gap for a specific account
+Send txs to fix the nonce gap for a specific account.
 
 ```bash
 polycli fix-nonce-gap [flags]
@@ -50,25 +50,26 @@ polycli fix-nonce-gap \
 
 ```bash
   -h, --help                 help for fix-nonce-gap
-      --max-nonce uint       when set, the max nonce will be this value instead of trying to get it from the pool
-      --private-key string   the private key to be used when sending the txs to fix the nonce gap
+      --max-nonce uint       override max nonce value instead of getting it from the pool
+      --private-key string   private key to be used when sending txs to fix nonce gap
       --replace              replace the existing txs in the pool
-  -r, --rpc-url string       The RPC endpoint url (default "http://localhost:8545")
+  -r, --rpc-url string       the RPC endpoint URL (default "http://localhost:8545")
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
-      --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --config string      config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs        output logs in pretty format instead of JSON (default true)
+  -v, --verbosity string   log level (string or int):
+                             0   - silent
+                             100 - panic
+                             200 - fatal
+                             300 - error
+                             400 - warn
+                             500 - info (default)
+                             600 - debug
+                             700 - trace (default "info")
 ```
 
 ## See also

@@ -22,16 +22,18 @@ import (
 
 var FixNonceGapCmd = &cobra.Command{
 	Use:   "fix-nonce-gap",
-	Short: "Send txs to fix the nonce gap for a specific account",
+	Short: "Send txs to fix the nonce gap for a specific account.",
 	Long:  fixNonceGapUsage,
 	Args:  cobra.NoArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		var err error
-		inputFixNonceGapArgs.rpcURL = flag_loader.GetRpcUrlFlagValue(cmd)
-		inputFixNonceGapArgs.privateKey, err = flag_loader.GetRequiredPrivateKeyFlagValue(cmd)
+		rpcURL := flag_loader.GetRpcUrlFlagValue(cmd)
+		inputFixNonceGapArgs.rpcURL = *rpcURL
+		privateKey, err := flag_loader.GetRequiredPrivateKeyFlagValue(cmd)
 		if err != nil {
 			return err
 		}
+		inputFixNonceGapArgs.privateKey = *privateKey
 		return nil
 	},
 	PreRunE:      prepareRpcClient,
@@ -44,10 +46,10 @@ var (
 )
 
 type fixNonceGapArgs struct {
-	rpcURL     *string
-	privateKey *string
-	replace    *bool
-	maxNonce   *uint64
+	rpcURL     string
+	privateKey string
+	replace    bool
+	maxNonce   uint64
 }
 
 var inputFixNonceGapArgs = fixNonceGapArgs{}
@@ -64,7 +66,7 @@ var fixNonceGapUsage string
 
 func prepareRpcClient(cmd *cobra.Command, args []string) error {
 	var err error
-	rpcURL := *inputFixNonceGapArgs.rpcURL
+	rpcURL := inputFixNonceGapArgs.rpcURL
 
 	rpcClient, err = ethclient.Dial(rpcURL)
 	if err != nil {
@@ -81,8 +83,8 @@ func prepareRpcClient(cmd *cobra.Command, args []string) error {
 }
 
 func fixNonceGap(cmd *cobra.Command, args []string) error {
-	replace := *inputFixNonceGapArgs.replace
-	pvtKey := strings.TrimPrefix(*inputFixNonceGapArgs.privateKey, "0x")
+	replace := inputFixNonceGapArgs.replace
+	pvtKey := strings.TrimPrefix(inputFixNonceGapArgs.privateKey, "0x")
 	pk, err := crypto.HexToECDSA(pvtKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Invalid private key")
@@ -111,16 +113,14 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 	log.Info().Stringer("addr", addr).Msgf("Current nonce: %d", currentNonce)
 
 	var maxNonce uint64
-	if *inputFixNonceGapArgs.maxNonce != 0 {
-		maxNonce = *inputFixNonceGapArgs.maxNonce
+	if inputFixNonceGapArgs.maxNonce != 0 {
+		maxNonce = inputFixNonceGapArgs.maxNonce
+		log.Info().Uint64("maxNonce", maxNonce).Msg("maxNonce loaded from --max-nonce flag")
 	} else {
-		maxNonce, err = getMaxNonceFromTxPool(addr)
+		log.Info().Msg("--max-nonce flag not set")
+		maxNonce, err = getMaxNonce(addr)
 		if err != nil {
-			if strings.Contains(err.Error(), "the method txpool_content does not exist/is not available") {
-				log.Error().Err(err).Msg("The RPC doesn't provide access to txpool_content, please check --help for more information about --max-nonce")
-				return nil
-			}
-			log.Error().Err(err).Msg("Unable to get max nonce from txpool")
+			log.Error().Err(err).Msg("Unable to get max nonce, please check --help for more information about --max-nonce")
 			return err
 		}
 	}
@@ -130,7 +130,11 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 		log.Info().Stringer("addr", addr).Msg("There is no nonce gap.")
 		return nil
 	}
-	log.Info().Stringer("addr", addr).Msgf("Nonce gap found. Max nonce: %d", maxNonce)
+	log.Info().
+		Stringer("addr", addr).
+		Uint64("currentNonce", currentNonce).
+		Uint64("maxNonce", maxNonce).
+		Msg("Nonce gap found")
 
 	gasPrice, err := rpcClient.SuggestGasPrice(cmd.Context())
 	if err != nil {
@@ -183,12 +187,18 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 					strings.Contains(err.Error(), "INTERNAL_ERROR: could not replace existing tx") {
 					if replace {
 						txTemplateCopy := *txTemplate
-						oldGasPrice := txTemplate.GasPrice
+						oldGasPrice := tx.GasPrice()
 						// increase TX gas price by 10% and retry
-						txTemplateCopy.GasPrice = new(big.Int).Mul(txTemplate.GasPrice, big.NewInt(11))
+						txTemplateCopy.GasPrice = new(big.Int).Mul(oldGasPrice, big.NewInt(11))
 						txTemplateCopy.GasPrice = new(big.Int).Div(txTemplateCopy.GasPrice, big.NewInt(10))
+						// if gas price didn't increase, this means the value is really small and 10% was smaller than 1.
+						// This can be the case for local networks running for a long time without transactions.
+						// We just add 1 wei to force gasPrice to move up to allow tx replacement
+						if txTemplateCopy.GasPrice.Cmp(oldGasPrice) == 0 {
+							txTemplateCopy.GasPrice = new(big.Int).Add(txTemplateCopy.GasPrice, big.NewInt(1))
+						}
 						tx = types.NewTx(&txTemplateCopy)
-						log.Info().Stringer("hash", signedTx.Hash()).Msgf("tx with nonce %d is underpriced, increasing fee by 10%%. From %d To %d", txTemplate.Nonce, oldGasPrice, txTemplateCopy.GasPrice)
+						log.Info().Stringer("hash", signedTx.Hash()).Msgf("tx with nonce %d is underpriced, increasing fee. From %d To %d", txTemplate.Nonce, oldGasPrice, txTemplateCopy.GasPrice)
 						time.Sleep(time.Second)
 						continue
 					} else {
@@ -227,10 +237,11 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	inputFixNonceGapArgs.rpcURL = FixNonceGapCmd.PersistentFlags().StringP(ArgRpcURL, "r", "http://localhost:8545", "The RPC endpoint url")
-	inputFixNonceGapArgs.privateKey = FixNonceGapCmd.PersistentFlags().String(ArgPrivateKey, "", "the private key to be used when sending the txs to fix the nonce gap")
-	inputFixNonceGapArgs.replace = FixNonceGapCmd.PersistentFlags().Bool(ArgReplace, false, "replace the existing txs in the pool")
-	inputFixNonceGapArgs.maxNonce = FixNonceGapCmd.PersistentFlags().Uint64(ArgMaxNonce, 0, "when set, the max nonce will be this value instead of trying to get it from the pool")
+	f := FixNonceGapCmd.Flags()
+	f.StringVarP(&inputFixNonceGapArgs.rpcURL, ArgRpcURL, "r", "http://localhost:8545", "the RPC endpoint URL")
+	f.StringVar(&inputFixNonceGapArgs.privateKey, ArgPrivateKey, "", "private key to be used when sending txs to fix nonce gap")
+	f.BoolVar(&inputFixNonceGapArgs.replace, ArgReplace, false, "replace the existing txs in the pool")
+	f.Uint64Var(&inputFixNonceGapArgs.maxNonce, ArgMaxNonce, 0, "override max nonce value instead of getting it from the pool")
 }
 
 // Wait for the transaction to be mined
@@ -264,6 +275,26 @@ func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *type
 	}
 }
 
+func getMaxNonce(addr common.Address) (uint64, error) {
+	log.Info().Msg("getting max nonce from txpool_content")
+	maxNonce, err := getMaxNonceFromTxPool(addr)
+	if err == nil {
+		log.Info().Uint64("maxNonce", maxNonce).Msg("maxNonce loaded from txpool_content")
+		return maxNonce, nil
+	}
+	log.Warn().Err(err).Msg("unable to get max nonce from txpool_content")
+
+	log.Info().Msg("getting max nonce from pending nonce")
+	// if the error is not about txpool_content, falls back to PendingNonceAt
+	maxNonce, err = rpcClient.PendingNonceAt(context.Background(), addr)
+	if err != nil {
+		return 0, err
+	}
+
+	log.Info().Uint64("maxNonce", maxNonce).Msg("maxNonce loaded from pending nonce")
+	return maxNonce, nil
+}
+
 func getMaxNonceFromTxPool(addr common.Address) (uint64, error) {
 	var result PoolContent
 	err := rpcClient.Client().Call(&result, "txpool_content")
@@ -290,6 +321,7 @@ func getMaxNonceFromTxPool(addr common.Address) (uint64, error) {
 			nonceInt, ok := new(big.Int).SetString(nonce, 10)
 			if !ok {
 				err = fmt.Errorf("invalid nonce found: %s", nonce)
+				log.Warn().Err(err).Msg("unable to get txpool_content")
 				return 0, err
 			}
 

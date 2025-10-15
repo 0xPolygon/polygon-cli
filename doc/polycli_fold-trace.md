@@ -11,7 +11,7 @@
 
 ## Description
 
-Trace an execution trace and fold it for visualization
+Trace an execution trace and fold it for visualization.
 
 ```bash
 polycli fold-trace [flags]
@@ -34,25 +34,26 @@ flamegraph.pl --title "Gas Profile for 0x7405fc5e254352350bebcadc1392bd06f158aa8
 ## Flags
 
 ```bash
-      --file string           Provide a filename to read and hash
+      --file string           filename to read and hash
   -h, --help                  help for fold-trace
-      --metric string         Provide a metric name for analysis: gas, count, actualgas (default "gas")
-      --root-context string   The name for the top most initial context (default "root context")
+      --metric string         metric name for analysis: gas, count, actualgas (default "gas")
+      --root-context string   name for top most initial context (default "root context")
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
-      --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --config string      config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs        output logs in pretty format instead of JSON (default true)
+  -v, --verbosity string   log level (string or int):
+                             0   - silent
+                             100 - panic
+                             200 - fatal
+                             300 - error
+                             400 - warn
+                             500 - info (default)
+                             600 - debug
+                             700 - trace (default "info")
 ```
 
 ## See also

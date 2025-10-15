@@ -28,7 +28,7 @@ $ brew install protobuf
 2. Install the protobuf plugin
 
 ```bash
-$ go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+$ go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.9
 ```
 
 3. Compile the proto file

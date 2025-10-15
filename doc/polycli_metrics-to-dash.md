@@ -35,11 +35,11 @@ $ polycli metrics-to-dash -i avail-light-metrics.txt -p avail_light. -t "Avail L
   -h, --help                                help for metrics-to-dash
   -i, --input-file string                   the metrics file to be used
   -p, --prefix string                       prefix to use before all metrics
-  -P, --pretty-name                         Should the metric names be prettified (default true)
-  -S, --show-help                           Should we show the help text for each metric
-  -s, --strip-prefix stringArray            A prefix that can be removed from the metrics
-  -D, --template-var-defaults stringArray   The defaults to use for the template variables
-  -T, --template-vars stringArray           The template variables to use for the dashboard
+  -P, --pretty-name                         prettify metric names (default true)
+  -S, --show-help                           show help text for each metric
+  -s, --strip-prefix stringArray            a prefix that can be removed from the metrics
+  -D, --template-var-defaults stringArray   the defaults to use for the template variables
+  -T, --template-vars stringArray           the template variables to use for the dashboard
   -t, --title string                        title for the dashboard (default "Polycli Dashboard")
   -W, --width int                           widget width (default 4)
 ```
@@ -47,16 +47,17 @@ $ polycli metrics-to-dash -i avail-light-metrics.txt -p avail_light. -t "Avail L
 The command also inherits flags from parent commands.
 
 ```bash
-      --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --config string      config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs        output logs in pretty format instead of JSON (default true)
+  -v, --verbosity string   log level (string or int):
+                             0   - silent
+                             100 - panic
+                             200 - fatal
+                             300 - error
+                             400 - warn
+                             500 - info (default)
+                             600 - debug
+                             700 - trace (default "info")
 ```
 
 ## See also

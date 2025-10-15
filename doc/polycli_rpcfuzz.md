@@ -93,6 +93,58 @@ Once this has been completed this will be the address of the contract: `0x6fda56
 $  docker run -v $PWD/contracts:/contracts ethereum/solc:stable --storage-layout /contracts/tokens/ERC20/ERC20.sol
 ```
 
+## Running RPC Fuzz Tests
+
+After setting up your RPC endpoint and funding an account, you can run the RPC fuzz tests using various output formats. The tool supports streaming output that follows Unix philosophy - results are sent to stdout and you control data persistence through shell redirection.
+
+### Output Format Examples
+
+All commands use the same core parameters but produce different output formats:
+
+#### Compact Format (Default)
+Real-time colored console output with pass/fail indicators:
+```bash
+polycli rpcfuzz --rpc-url http://localhost:8545 --private-key <YOUR_PRIVATE_KEY> --namespaces eth,web3,net --compact > results.txt
+```
+
+#### CSV Format
+Structured CSV with headers for data analysis:
+```bash
+polycli rpcfuzz --rpc-url http://localhost:8545 --private-key <YOUR_PRIVATE_KEY> --namespaces eth,web3,net --csv > results.csv
+```
+
+#### JSON Format
+Streaming JSON with detailed test execution data:
+```bash
+polycli rpcfuzz --rpc-url http://localhost:8545 --private-key <YOUR_PRIVATE_KEY> --namespaces eth,web3,net --json > results.json
+```
+
+#### HTML Format
+Complete styled HTML document for browser viewing:
+```bash
+polycli rpcfuzz --rpc-url http://localhost:8545 --private-key <YOUR_PRIVATE_KEY> --namespaces eth,web3,net --html > results.html
+```
+
+#### Markdown Format
+Formatted Markdown table with emoji indicators:
+```bash
+polycli rpcfuzz --rpc-url http://localhost:8545 --private-key <YOUR_PRIVATE_KEY> --namespaces eth,web3,net --md > results.md
+```
+
+### Command Options
+
+- `--rpc-url`: The JSON RPC endpoint URL
+- `--private-key`: Private key for account with funds for testing
+- `--namespaces`: Comma-separated list of RPC method namespaces to test (e.g., `eth,web3,net`)
+- Output format flags: `--compact`, `--csv`, `--json`, `--html`, `--md` (mutually exclusive)
+
+### Example with Error Suppression
+
+To capture only test results without debug output:
+```bash
+polycli rpcfuzz --rpc-url <RPC_URL> --private-key <PRIVATE_KEY> --namespaces eth,web3,net --json 2>/dev/null > clean_results.json
+```
+
 ### Links
 
 - https://ethereum.github.io/execution-apis/api-documentation/
@@ -103,34 +155,38 @@ $  docker run -v $PWD/contracts:/contracts ethereum/solc:stable --storage-layout
 ## Flags
 
 ```bash
-      --contract-address string   The address of a contract that can be used for testing. If not specified, a contract will be deployed automatically.
-      --csv                       Flag to indicate that output will be exported as a CSV.
-      --export-path string        The directory export path of the output of the tests. Must pair this with either --json, --csv, --md, or --html
-      --fuzz                      Flag to indicate whether to fuzz input or not.
-      --fuzzn int                 Number of times to run the fuzzer per test. (default 100)
+      --compact                   stream output in compact format (default)
+      --contract-address string   address of contract to use for testing (if not specified, contract will be deployed automatically)
+      --csv                       stream output in CSV format
+      --fuzz                      flag to indicate whether to fuzz input or not
+      --fuzzn int                 number of times to run fuzzer per test (default 100)
   -h, --help                      help for rpcfuzz
-      --html                      Flag to indicate that output will be exported as a HTML.
-      --json                      Flag to indicate that output will be exported as a JSON.
-      --md                        Flag to indicate that output will be exported as a Markdown.
-      --namespaces string         Comma separated list of rpc namespaces to test (default "eth,web3,net,debug,raw")
-      --private-key string        The hex encoded private key that we'll use to sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
-  -r, --rpc-url string            The RPC endpoint url (default "http://localhost:8545")
-      --seed int                  A seed for generating random values within the fuzzer (default 123456)
+      --html                      stream output in HTML format
+      --json                      stream output in JSON format
+      --md                        stream output in Markdown format
+      --namespaces string         comma separated list of RPC namespaces to test (default "eth,web3,net,debug,raw")
+      --output string             what to output: all, failures, summary (default "all")
+      --private-key string        hex encoded private key to use for sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
+      --quiet                     only show final summary
+  -r, --rpc-url string            RPC endpoint URL (default "http://localhost:8545")
+      --seed int                  seed for generating random values within fuzzer (default 123456)
+      --summary-interval int      print summary every N tests (0=disabled)
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
-      --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --config string      config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs        output logs in pretty format instead of JSON (default true)
+  -v, --verbosity string   log level (string or int):
+                             0   - silent
+                             100 - panic
+                             200 - fatal
+                             300 - error
+                             400 - warn
+                             500 - info (default)
+                             600 - debug
+                             700 - trace (default "info")
 ```
 
 ## See also

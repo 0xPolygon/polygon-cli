@@ -28,7 +28,7 @@ var (
 
 var MonitorV2Cmd = &cobra.Command{
 	Use:   "monitorv2",
-	Short: "Monitor v2 command stub",
+	Short: "Monitor v2 command stub.",
 	Long:  usage,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Set default verbosity to Error level (300) if not explicitly set by user
@@ -93,6 +93,6 @@ var MonitorV2Cmd = &cobra.Command{
 
 func init() {
 	MonitorV2Cmd.Flags().StringVar(&rpcURL, "rpc-url", "", "RPC endpoint URL (required)")
-	MonitorV2Cmd.Flags().StringVar(&rendererType, "renderer", "tui", "Renderer type (json, tview, tui)")
-	MonitorV2Cmd.Flags().StringVar(&pprofAddr, "pprof", "", "Enable pprof server on specified address (e.g. 127.0.0.1:6060)")
+	MonitorV2Cmd.Flags().StringVar(&rendererType, "renderer", "tui", "renderer type (json, tview, tui)")
+	MonitorV2Cmd.Flags().StringVar(&pprofAddr, "pprof", "", "pprof server address (e.g. 127.0.0.1:6060)")
 }

@@ -21,12 +21,12 @@ import (
 var (
 	//go:embed usage.md
 	usage         string
-	inputFileName *string
+	inputFileName string
 )
 
 var ENRCmd = &cobra.Command{
 	Use:   "enr [flags]",
-	Short: "Convert between ENR and Enode format",
+	Short: "Convert between ENR and Enode format.",
 	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		rawData, err := getInputData(cmd, args)
@@ -102,12 +102,12 @@ func ForkIDToString(id forkid.ID) string {
 }
 
 func init() {
-	flagSet := ENRCmd.PersistentFlags()
-	inputFileName = flagSet.String("file", "", "Provide a file that's holding ENRs")
+	f := ENRCmd.Flags()
+	f.StringVar(&inputFileName, "file", "", "file holding ENRs")
 }
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
-	if inputFileName != nil && *inputFileName != "" {
-		return os.ReadFile(*inputFileName)
+	if inputFileName != "" {
+		return os.ReadFile(inputFileName)
 	}
 
 	if len(args) >= 1 {

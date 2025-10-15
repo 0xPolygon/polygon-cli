@@ -11,7 +11,7 @@
 
 ## Description
 
-Publish transactions to the network with high-throughput
+Publish transactions to the network with high-throughput.
 
 ```bash
 polycli publish [flags]
@@ -50,27 +50,28 @@ polycli publish --rpc-url https://sepolia.drpc.org
 ## Flags
 
 ```bash
-  -c, --concurrency uint      Number of txs to send concurrently. Default is one request at a time. (default 1)
-      --file string           Provide a filename with transactions to publish
+  -c, --concurrency uint      number of txs to send concurrently (default: one at a time) (default 1)
+      --file string           provide a filename with transactions to publish
   -h, --help                  help for publish
-      --job-queue-size uint   Number of jobs we can put in the job queue for workers to process. (default 100)
-      --rate-limit uint       Rate limit in txs per second. Default is no rate limit.
-      --rpc-url string        The RPC URL of the network (default "http://localhost:8545")
+      --job-queue-size uint   number of jobs we can put in the job queue for workers to process (default 100)
+      --rate-limit uint       rate limit in txs per second (default: no limit)
+      --rpc-url string        RPC URL of network (default "http://localhost:8545")
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
-      --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --config string      config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs        output logs in pretty format instead of JSON (default true)
+  -v, --verbosity string   log level (string or int):
+                             0   - silent
+                             100 - panic
+                             200 - fatal
+                             300 - error
+                             400 - warn
+                             500 - info (default)
+                             600 - debug
+                             700 - trace (default "info")
 ```
 
 ## See also

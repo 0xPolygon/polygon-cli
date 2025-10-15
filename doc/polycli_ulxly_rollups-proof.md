@@ -11,7 +11,7 @@
 
 ## Description
 
-Generate a proof for a given range of rollups
+Generate a proof for a given range of rollups.
 
 ```bash
 polycli ulxly rollups-proof [flags]
@@ -88,27 +88,28 @@ node in the tree to prove that the leaf is part of the given merkle root.
 ## Flags
 
 ```bash
-      --complete-merkle-tree   Allows to get the proof for a leave higher than the highest rollupID
-      --file-name string       An ndjson file with events data
+      --complete-merkle-tree   get proof for a leave higher than the highest rollup ID
+      --file-name string       ndjson file with events data
   -h, --help                   help for rollups-proof
-      --rollup-id uint32       The rollupID number to generate a proof for
+      --rollup-id uint32       rollup ID number to generate a proof for
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
-      --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --config string      config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs        output logs in pretty format instead of JSON (default true)
+  -v, --verbosity string   log level (string or int):
+                             0   - silent
+                             100 - panic
+                             200 - fatal
+                             300 - error
+                             400 - warn
+                             500 - info (default)
+                             600 - debug
+                             700 - trace (default "info")
 ```
 
 ## See also
 
-- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge
+- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge.

@@ -48,19 +48,18 @@ polycli p2p sensor nodes.json \
   --rpc "https://polygon-rpc.com"
 ```
 
-#### Mumbai
+#### Amoy
 
-To run a Polygon Mumbai sensor, copy the `genesis.json` from
-[here][mumbai-genesis].
+To run a Polygon Amoy sensor, copy the `genesis.json` from
+[here][amoy-genesis].
 
 ```bash
 polycli p2p sensor nodes.json \
-  --bootnodes "enode://bdcd4786a616a853b8a041f53496d853c68d99d54ff305615cd91c03cd56895e0a7f6e9f35dbf89131044e2114a9a782b792b5661e3aff07faf125a98606a071@43.200.206.40:30303,enode://209aaf7ed549cf4a5700fd833da25413f80a1248bd3aa7fe2a87203e3f7b236dd729579e5c8df61c97bf508281bae4969d6de76a7393bcbd04a0af70270333b3@54.216.248.9:30303" \
-  --network-id 80001 \
-  --sensor-id sensor \
-  --rpc "https://polygon-mumbai-bor.publicnode.com" \
-  --genesis-hash 0x7b66506a9ebdbf30d32b43c5f15a3b1216269a1ec3a75aa3182b86176a2b1ca7 \
-  --fork-id 0c015a91
+  --bootnodes "enode://0ef8758cafc0063405f3f31fe22f2a3b566aa871bd7cd405e35954ec8aa7237c21e1ccc1f65f1b6099ab36db029362bc2fecf001a771b3d9803bbf1968508cef@35.197.249.21:30303,enode://c9c8c18cde48b41d46ced0c564496aef721a9b58f8724025a0b1f3f26f1b826f31786f890f8f8781e18b16dbb3c7bff805c7304d1273ac11630ed25a3f0dc41c@34.89.39.114:30303" \
+  --network-id 80002 \
+  --sensor-id "sensor" \
+  --genesis-hash "0x7202b2b53c5a0836e773e319d18922cc756dd67432f9a1f65352b61f4406c697" \
+  --fork-id "8b7e4175" 
 ```
 
 ### Crawl
@@ -76,7 +75,7 @@ polycli p2p crawl nodes.json \
 ```
 
 [mainnet-genesis]: https://github.com/0xPolygon/bor/blob/master/builder/files/genesis-mainnet-v1.json
-[mumbai-genesis]: https://github.com/0xPolygon/bor/blob/master/builder/files/genesis-testnet-v4.json
+[amoy-genesis]: https://github.com/0xPolygon/bor/blob/master/builder/files/genesis-amoy.json
 [bootnodes]: https://wiki.polygon.technology/docs/pos/operate/node/full-node-binaries/#configure-bor-seeds-mainnet
 
 ## Flags
@@ -88,16 +87,17 @@ polycli p2p crawl nodes.json \
 The command also inherits flags from parent commands.
 
 ```bash
-      --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --config string      config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs        output logs in pretty format instead of JSON (default true)
+  -v, --verbosity string   log level (string or int):
+                             0   - silent
+                             100 - panic
+                             200 - fatal
+                             300 - error
+                             400 - warn
+                             500 - info (default)
+                             600 - debug
+                             700 - trace (default "info")
 ```
 
 ## See also
@@ -105,7 +105,7 @@ The command also inherits flags from parent commands.
 - [polycli](polycli.md) - A Swiss Army knife of blockchain tools.
 - [polycli p2p crawl](polycli_p2p_crawl.md) - Crawl a network on the devp2p layer and generate a nodes JSON file.
 
-- [polycli p2p nodelist](polycli_p2p_nodelist.md) - Generate a node list to seed a node
+- [polycli p2p nodelist](polycli_p2p_nodelist.md) - Generate a node list to seed a node.
 
 - [polycli p2p ping](polycli_p2p_ping.md) - Ping node(s) and return the output.
 

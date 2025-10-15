@@ -5,14 +5,14 @@ import (
 	"os"
 
 	"github.com/0xPolygon/polygon-cli/p2p/database"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
-
-const jsonIndent = "    "
 
 type (
 	nodeListParams struct {
 		ProjectID  string
+		DatabaseID string
 		OutputFile string
 		Limit      int
 	}
@@ -24,18 +24,18 @@ var (
 
 var NodeListCmd = &cobra.Command{
 	Use:   "nodelist [nodes.json]",
-	Short: "Generate a node list to seed a node",
+	Short: "Generate a node list to seed a node.",
 	Args:  cobra.MinimumNArgs(1),
-	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+	PreRunE: func(cmd *cobra.Command, args []string) error {
 		inputNodeListParams.OutputFile = args[0]
-		inputNodeListParams.ProjectID, err = cmd.Flags().GetString("project-id")
-		return err
+		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
 		db := database.NewDatastore(cmd.Context(), database.DatastoreOptions{
-			ProjectID: inputNodeListParams.ProjectID,
+			ProjectID:  inputNodeListParams.ProjectID,
+			DatabaseID: inputNodeListParams.DatabaseID,
 		})
 
 		nodes, err := db.NodeList(ctx, inputNodeListParams.Limit)
@@ -43,7 +43,7 @@ var NodeListCmd = &cobra.Command{
 			return err
 		}
 
-		bytes, err := json.MarshalIndent(nodes, "", jsonIndent)
+		bytes, err := json.MarshalIndent(nodes, "", "    ")
 		if err != nil {
 			return err
 		}
@@ -57,6 +57,11 @@ var NodeListCmd = &cobra.Command{
 }
 
 func init() {
-	NodeListCmd.PersistentFlags().IntVarP(&inputNodeListParams.Limit, "limit", "l", 100, "Number of unique nodes to return")
-	NodeListCmd.PersistentFlags().StringVarP(&inputNodeListParams.ProjectID, "project-id", "p", "", "GCP project ID")
+	f := NodeListCmd.Flags()
+	f.IntVarP(&inputNodeListParams.Limit, "limit", "l", 100, "number of unique nodes to return")
+	f.StringVarP(&inputNodeListParams.ProjectID, "project-id", "p", "", "GCP project ID")
+	f.StringVarP(&inputNodeListParams.DatabaseID, "database-id", "d", "", "datastore database ID")
+	if err := NodeListCmd.MarkFlagRequired("project-id"); err != nil {
+		log.Error().Err(err).Msg("Failed to mark project-id as required flag")
+	}
 }

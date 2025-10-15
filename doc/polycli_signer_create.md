@@ -11,7 +11,7 @@
 
 ## Description
 
-Create a new key
+Create a new key.
 
 ```bash
 polycli signer create [flags]
@@ -47,31 +47,19 @@ polycli signer create --kms GCP --gcp-project-id prj-polygonlabs-devtools-dev --
 The command also inherits flags from parent commands.
 
 ```bash
-      --chain-id uint              The chain id for the transactions.
-      --config string              config file (default is $HOME/.polygon-cli.yaml)
-      --data-file string           File name holding data to be signed
-      --gcp-import-job-id string   The GCP Import Job ID to use when importing a key
-      --gcp-key-version int        The GCP crypto key version to use (default 1)
-      --gcp-keyring-id string      The GCP Keyring ID to be used (default "polycli-keyring")
-      --gcp-location string        The GCP Region to use (default "europe-west2")
-      --gcp-project-id string      The GCP Project ID to use
-      --key-id string              The id of the key to be used for signing
-      --keystore string            Use the keystore in the given folder or file
-      --kms string                 AWS or GCP if the key is stored in the cloud
-      --pretty-logs                Should logs be in pretty format or JSON (default true)
-      --private-key string         Use the provided hex encoded private key
-      --type string                The type of signer to use: latest, cancun, london, eip2930, eip155 (default "london")
-      --unsafe-password string     A non-interactively specified password for unlocking the keystore
-  -v, --verbosity int              0 - Silent
-                                   100 Panic
-                                   200 Fatal
-                                   300 Error
-                                   400 Warning
-                                   500 Info
-                                   600 Debug
-                                   700 Trace (default 500)
+      --config string      config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs        output logs in pretty format instead of JSON (default true)
+  -v, --verbosity string   log level (string or int):
+                             0   - silent
+                             100 - panic
+                             200 - fatal
+                             300 - error
+                             400 - warn
+                             500 - info (default)
+                             600 - debug
+                             700 - trace (default "info")
 ```
 
 ## See also
 
-- [polycli signer](polycli_signer.md) - Utilities for security signing transactions
+- [polycli signer](polycli_signer.md) - Utilities for security signing transactions.

@@ -37,57 +37,57 @@ type (
 	}
 	loadTestParams struct {
 		// inputs
-		RPCUrl                        *string
-		Requests                      *int64
-		Concurrency                   *int64
-		BatchSize                     *uint64
-		TimeLimit                     *int64
-		RandomRecipients              *bool
-		EthCallOnly                   *bool
-		EthCallOnlyLatestBlock        *bool
-		ChainID                       *uint64
-		PrivateKey                    *string
-		ToAddress                     *string
-		EthAmountInWei                *uint64
-		RateLimit                     *float64
-		AdaptiveRateLimit             *bool
-		AdaptiveTargetSize            *uint64
-		AdaptiveRateLimitIncrement    *uint64
-		AdaptiveCycleDuration         *uint64
-		AdaptiveBackoffFactor         *float64
-		Modes                         *[]string
-		StoreDataSize                 *uint64
-		Seed                          *int64
-		LoadtestContractAddress       *string
-		ERC20Address                  *string
-		ERC721Address                 *string
-		DelAddress                    *string
-		ForceGasLimit                 *uint64
-		ForceGasPrice                 *uint64
-		ForcePriorityGasPrice         *uint64
-		ShouldProduceSummary          *bool
-		SummaryOutputMode             *string
-		LegacyTransactionMode         *bool
-		FireAndForget                 *bool
-		RecallLength                  *uint64
-		ContractAddress               *string
-		ContractCallData              *string
-		ContractCallFunctionSignature *string
-		ContractCallFunctionArgs      *[]string
-		ContractCallPayable           *bool
-		InscriptionContent            *string
-		BlobFeeCap                    *uint64
-		StartNonce                    *uint64
-		GasPriceMultiplier            *float64
-		SendingAccountsCount          *uint64
-		AccountFundingAmount          *big.Int
-		PreFundSendingAccounts        *bool
-		RefundRemainingFunds          *bool
-		SendingAccountsFile           *string
-		Proxy                         *string
-		WaitForReceipt                *bool
-		ReceiptRetryMax               *uint
-		ReceiptRetryInitialDelayMs    *uint
+		RPCUrl                     string
+		Requests                   int64
+		Concurrency                int64
+		BatchSize                  uint64
+		TimeLimit                  int64
+		RandomRecipients           bool
+		EthCallOnly                bool
+		EthCallOnlyLatestBlock     bool
+		ChainID                    uint64
+		PrivateKey                 string
+		ToAddress                  string
+		EthAmountInWei             uint64
+		RateLimit                  float64
+		AdaptiveRateLimit          bool
+		AdaptiveTargetSize         uint64
+		AdaptiveRateLimitIncrement uint64
+		AdaptiveCycleDuration      uint64
+		AdaptiveBackoffFactor      float64
+		Modes                      []string
+		StoreDataSize              uint64
+		Seed                       int64
+		LoadtestContractAddress    string
+		ERC20Address               string
+		ERC721Address              string
+		DelAddress                 string
+		ForceGasLimit              uint64
+		ForceGasPrice              uint64
+		ForcePriorityGasPrice      uint64
+		ShouldProduceSummary       bool
+		SummaryOutputMode          string
+		LegacyTransactionMode      bool
+		FireAndForget              bool
+		RecallLength               uint64
+		ContractAddress            string
+		ContractCallData           string
+		ContractCallPayable        bool
+		BlobFeeCap                 uint64
+		StartNonce                 uint64
+		GasPriceMultiplier         float64
+		SendingAccountsCount       uint64
+		AccountFundingAmount       *big.Int
+		PreFundSendingAccounts     bool
+		RefundRemainingFunds       bool
+		SendingAccountsFile        string
+		Proxy                      string
+		WaitForReceipt             bool
+		ReceiptRetryMax            uint
+		ReceiptRetryInitialDelayMs uint
+		MaxBaseFeeWei              uint64
+		OutputRawTxOnly            bool
+		CheckBalanceBeforeFunding  bool
 
 		// Computed
 		CurrentGasPrice       *big.Int
@@ -174,8 +174,14 @@ var LoadtestCmd = &cobra.Command{
 	Long:  loadTestUsage,
 	Args:  cobra.NoArgs,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		inputLoadTestParams.RPCUrl = flag_loader.GetRpcUrlFlagValue(cmd)
-		inputLoadTestParams.PrivateKey = flag_loader.GetPrivateKeyFlagValue(cmd)
+		rpcUrl := flag_loader.GetRpcUrlFlagValue(cmd)
+		privateKey := flag_loader.GetPrivateKeyFlagValue(cmd)
+		if rpcUrl != nil {
+			inputLoadTestParams.RPCUrl = *rpcUrl
+		}
+		if privateKey != nil {
+			inputLoadTestParams.PrivateKey = *privateKey
+		}
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		zerolog.DurationFieldUnit = time.Second
@@ -192,15 +198,34 @@ func checkLoadtestFlags() error {
 	ltp := inputLoadTestParams
 
 	// Check `rpc-url` flag.
-	if ltp.RPCUrl == nil {
+	if ltp.RPCUrl == "" {
 		return fmt.Errorf("RPC URL is empty")
 	}
-	if err := util.ValidateUrl(*ltp.RPCUrl); err != nil {
+	if err := util.ValidateUrl(ltp.RPCUrl); err != nil {
 		return err
 	}
 
-	if ltp.AdaptiveBackoffFactor != nil && *ltp.AdaptiveBackoffFactor <= 0.0 {
-		return fmt.Errorf("the backoff factor needs to be non-zero positive. Given: %f", *ltp.AdaptiveBackoffFactor)
+	if ltp.AdaptiveBackoffFactor <= 0.0 {
+		return fmt.Errorf("the backoff factor needs to be non-zero positive. Given: %f", ltp.AdaptiveBackoffFactor)
+	}
+
+	if ltp.WaitForReceipt && ltp.ReceiptRetryMax <= 1 {
+		return fmt.Errorf("when waiting for a receipt, use a max retry greater than 1")
+	}
+
+	if ltp.PreFundSendingAccounts && ltp.AccountFundingAmount != nil && ltp.AccountFundingAmount.Uint64() == 0 {
+		return fmt.Errorf("a non-zero funding amount is required when pre-funding sending accounts")
+	}
+	if ltp.EthCallOnly {
+		if ltp.PreFundSendingAccounts || ltp.SendingAccountsFile != "" || ltp.SendingAccountsCount > 0 {
+			return fmt.Errorf("pre-funding accounts with call only mode doesn't make sense")
+		}
+		if ltp.WaitForReceipt {
+			return fmt.Errorf("waiting for receipts doesn't make sense with call only mode")
+		}
+	}
+	if ltp.GasPriceMultiplier == 0 {
+		return fmt.Errorf("gas price multiplier should be non-zero")
 	}
 
 	return nil
@@ -212,78 +237,77 @@ func init() {
 }
 
 func initFlags() {
-	ltp := new(loadTestParams)
+	ltp := &inputLoadTestParams
 
 	// Persistent flags.
-	ltp.RPCUrl = LoadtestCmd.PersistentFlags().StringP("rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
-	ltp.Requests = LoadtestCmd.PersistentFlags().Int64P("requests", "n", 1, "Number of requests to perform for the benchmarking session. The default is to just perform a single request which usually leads to non-representative benchmarking results.")
-	ltp.Concurrency = LoadtestCmd.PersistentFlags().Int64P("concurrency", "c", 1, "Number of requests to perform concurrently. Default is one request at a time.")
-	ltp.TimeLimit = LoadtestCmd.PersistentFlags().Int64P("time-limit", "t", -1, "Maximum number of seconds to spend for benchmarking. Use this to benchmark within a fixed total amount of time. Per default there is no time limit.")
-	ltp.PrivateKey = LoadtestCmd.PersistentFlags().String("private-key", codeQualityPrivateKey, "The hex encoded private key that we'll use to send transactions")
-	ltp.ChainID = LoadtestCmd.PersistentFlags().Uint64("chain-id", 0, "The chain id for the transactions.")
-	ltp.ToAddress = LoadtestCmd.PersistentFlags().String("to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "The address that we're going to send to")
-	ltp.RandomRecipients = LoadtestCmd.PersistentFlags().Bool("random-recipients", false, "When doing a transfer test, should we send to random addresses rather than DEADBEEFx5")
-	ltp.EthCallOnly = LoadtestCmd.PersistentFlags().Bool("eth-call-only", false, "When using this mode, rather than sending a transaction, we'll just call. This mode is incompatible with adaptive rate limiting, summarization, and a few other features.")
-	ltp.EthCallOnlyLatestBlock = LoadtestCmd.PersistentFlags().Bool("eth-call-only-latest", false, "When using call only mode with recall, should we execute on the latest block or on the original block")
-	ltp.EthAmountInWei = LoadtestCmd.PersistentFlags().Uint64("eth-amount-in-wei", 0, "The amount of ether in wei to send on every transaction")
-	ltp.RateLimit = LoadtestCmd.PersistentFlags().Float64("rate-limit", 4, "An overall limit to the number of requests per second. Give a number less than zero to remove this limit all together")
-	ltp.AdaptiveRateLimit = LoadtestCmd.PersistentFlags().Bool("adaptive-rate-limit", false, "Enable AIMD-style congestion control to automatically adjust request rate")
-	ltp.AdaptiveTargetSize = LoadtestCmd.PersistentFlags().Uint64("adaptive-target-size", 1000, "When using adaptive rate limiting, this value sets the target queue size. If the queue is smaller than this value, we'll speed up. If the queue is smaller than this value, we'll back off.")
-	ltp.AdaptiveRateLimitIncrement = LoadtestCmd.PersistentFlags().Uint64("adaptive-rate-limit-increment", 50, "When using adaptive rate limiting, this flag controls the size of the additive increases.")
-	ltp.AdaptiveCycleDuration = LoadtestCmd.PersistentFlags().Uint64("adaptive-cycle-duration-seconds", 10, "When using adaptive rate limiting, this flag controls how often we check the queue size and adjust the rates")
-	ltp.AdaptiveBackoffFactor = LoadtestCmd.PersistentFlags().Float64("adaptive-backoff-factor", 2, "When using adaptive rate limiting, this flag controls our multiplicative decrease value.")
-	ltp.GasPriceMultiplier = LoadtestCmd.PersistentFlags().Float64("gas-price-multiplier", 1, "A multiplier to increase or decrease the gas price")
-	ltp.Seed = LoadtestCmd.PersistentFlags().Int64("seed", 123456, "A seed for generating random values and addresses")
-	ltp.ForceGasLimit = LoadtestCmd.PersistentFlags().Uint64("gas-limit", 0, "In environments where the gas limit can't be computed on the fly, we can specify it manually. This can also be used to avoid eth_estimateGas")
-	ltp.ForceGasPrice = LoadtestCmd.PersistentFlags().Uint64("gas-price", 0, "In environments where the gas price can't be determined automatically, we can specify it manually")
-	ltp.StartNonce = LoadtestCmd.PersistentFlags().Uint64("nonce", 0, "Use this flag to manually set the starting nonce")
-	ltp.ForcePriorityGasPrice = LoadtestCmd.PersistentFlags().Uint64("priority-gas-price", 0, "Specify Gas Tip Price in the case of EIP-1559")
-	ltp.ShouldProduceSummary = LoadtestCmd.PersistentFlags().Bool("summarize", false, "Should we produce an execution summary after the load test has finished. If you're running a large load test, this can take a long time")
-	ltp.BatchSize = LoadtestCmd.PersistentFlags().Uint64("batch-size", 999, "Number of batches to perform at a time for receipt fetching. Default is 999 requests at a time.")
-	ltp.SummaryOutputMode = LoadtestCmd.PersistentFlags().String("output-mode", "text", "Format mode for summary output (json | text)")
-	ltp.LegacyTransactionMode = LoadtestCmd.PersistentFlags().Bool("legacy", false, "Send a legacy transaction instead of an EIP1559 transaction.")
-	ltp.FireAndForget = LoadtestCmd.PersistentFlags().Bool("fire-and-forget", false, "Send transactions and load without waiting for it to be mined.")
-	LoadtestCmd.PersistentFlags().BoolVar(ltp.FireAndForget, "send-only", false, "Alias for --fire-and-forget.")
-	ltp.BlobFeeCap = LoadtestCmd.Flags().Uint64("blob-fee-cap", 100000, "The blob fee cap, or the maximum blob fee per chunk, in Gwei.")
-	ltp.SendingAccountsCount = LoadtestCmd.Flags().Uint64("sending-accounts-count", 0, "The number of sending accounts to use. This is useful for avoiding pool account queue.")
-	ltp.AccountFundingAmount = defaultAccountFundingAmount
-	LoadtestCmd.Flags().Var(&flag_loader.BigIntValue{Val: ltp.AccountFundingAmount}, "account-funding-amount", "The amount in wei to fund the sending accounts with. Set to 0 to disable account funding (useful for eth-call-only mode or pre-funded accounts).")
-	ltp.PreFundSendingAccounts = LoadtestCmd.Flags().Bool("pre-fund-sending-accounts", false, "If set to true, the sending accounts will be funded at the start of the execution, otherwise all accounts will be funded when used for the first time.")
-	ltp.RefundRemainingFunds = LoadtestCmd.Flags().Bool("refund-remaining-funds", false, "If set to true, the funded amount will be refunded to the funding account. Otherwise, the funded amount will remain in the sending accounts.")
-	ltp.SendingAccountsFile = LoadtestCmd.Flags().String("sending-accounts-file", "", "The file containing the sending accounts private keys, one per line. This is useful for avoiding pool account queue but also to keep the same sending accounts for different execution cycles.")
+	pf := LoadtestCmd.PersistentFlags()
+	pf.StringVarP(&ltp.RPCUrl, "rpc-url", "r", "http://localhost:8545", "the RPC endpoint URL")
+	pf.Int64VarP(&ltp.Requests, "requests", "n", 1, "number of requests to perform for the benchmarking session (default of 1 leads to non-representative results)")
+	pf.Int64VarP(&ltp.Concurrency, "concurrency", "c", 1, "number of requests to perform concurrently (default: one at a time)")
+	pf.Int64VarP(&ltp.TimeLimit, "time-limit", "t", -1, "maximum seconds to spend benchmarking (default: no limit)")
+	pf.StringVar(&ltp.PrivateKey, "private-key", codeQualityPrivateKey, "hex encoded private key to use for sending transactions")
+	pf.Uint64Var(&ltp.ChainID, "chain-id", 0, "chain ID for the transactions")
+	pf.StringVar(&ltp.ToAddress, "to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "recipient address for transactions")
+	pf.BoolVar(&ltp.RandomRecipients, "random-recipients", false, "send to random addresses instead of fixed address in transfer tests")
+	pf.BoolVar(&ltp.EthCallOnly, "eth-call-only", false, "call contracts without sending transactions (incompatible with adaptive rate limiting and summarization)")
+	pf.BoolVar(&ltp.EthCallOnlyLatestBlock, "eth-call-only-latest", false, "execute on latest block instead of original block in call-only mode with recall")
+	pf.BoolVar(&ltp.OutputRawTxOnly, "output-raw-tx-only", false, "output raw signed transaction hex without sending (works with most modes except RPC and UniswapV3)")
+	pf.Uint64Var(&ltp.EthAmountInWei, "eth-amount-in-wei", 0, "amount of ether in wei to send per transaction")
+	pf.Float64Var(&ltp.RateLimit, "rate-limit", 4, "requests per second limit (use negative value to remove limit)")
+	pf.BoolVar(&ltp.AdaptiveRateLimit, "adaptive-rate-limit", false, "enable AIMD-style congestion control to automatically adjust request rate")
+	pf.Uint64Var(&ltp.AdaptiveTargetSize, "adaptive-target-size", 1000, "target queue size for adaptive rate limiting (speed up if smaller, back off if larger)")
+	pf.Uint64Var(&ltp.AdaptiveRateLimitIncrement, "adaptive-rate-limit-increment", 50, "size of additive increases for adaptive rate limiting")
+	pf.Uint64Var(&ltp.AdaptiveCycleDuration, "adaptive-cycle-duration-seconds", 10, "interval in seconds to check queue size and adjust rates for adaptive rate limiting")
+	pf.Float64Var(&ltp.AdaptiveBackoffFactor, "adaptive-backoff-factor", 2, "multiplicative decrease factor for adaptive rate limiting")
+	pf.Float64Var(&ltp.GasPriceMultiplier, "gas-price-multiplier", 1, "a multiplier to increase or decrease the gas price")
+	pf.Int64Var(&ltp.Seed, "seed", 123456, "a seed for generating random values and addresses")
+	pf.Uint64Var(&ltp.ForceGasLimit, "gas-limit", 0, "manually specify gas limit (useful to avoid eth_estimateGas or when auto-computation fails)")
+	pf.Uint64Var(&ltp.ForceGasPrice, "gas-price", 0, "manually specify gas price (useful when auto-detection fails)")
+	pf.Uint64Var(&ltp.StartNonce, "nonce", 0, "use this flag to manually set the starting nonce")
+	pf.Uint64Var(&ltp.ForcePriorityGasPrice, "priority-gas-price", 0, "gas tip price for EIP-1559 transactions")
+	pf.BoolVar(&ltp.ShouldProduceSummary, "summarize", false, "produce execution summary after load test (can take a long time for large tests)")
+	pf.Uint64Var(&ltp.BatchSize, "batch-size", 999, "batch size for receipt fetching (default: 999)")
+	pf.StringVar(&ltp.SummaryOutputMode, "output-mode", "text", "format mode for summary output (json | text)")
+	pf.BoolVar(&ltp.LegacyTransactionMode, "legacy", false, "send a legacy transaction instead of an EIP1559 transaction")
+	pf.BoolVar(&ltp.FireAndForget, "fire-and-forget", false, "send transactions and load without waiting for it to be mined")
+	pf.BoolVar(&ltp.FireAndForget, "send-only", false, "alias for --fire-and-forget")
 
 	// Local flags.
-	ltp.Modes = LoadtestCmd.Flags().StringSliceP("mode", "m", []string{"t"}, `The testing mode to use. It can be multiple like: "d,t"
-2, erc20 - Send ERC20 tokens
-7, erc721 - Mint ERC721 tokens
-b, blob - Send blob transactions
-cc, contract-call - Make contract calls
-d, deploy - Deploy contracts
-i, inscription - Send inscription transactions
-inc, increment - Increment a counter
-r, random - Random modes (does not include the following modes: blob, call, inscription, recall, rpc, uniswapv3)
-R, recall - Replay or simulate transactions
-rpc - Call random rpc methods
-s, store - Store bytes in a dynamic byte array
-t, transaction - Send transactions
-v3, uniswapv3 - Perform UniswapV3 swaps`)
-	ltp.StoreDataSize = LoadtestCmd.Flags().Uint64("store-data-size", 1024, "If we're in store mode, this controls how many bytes we'll try to store in our contract")
-	ltp.LoadtestContractAddress = LoadtestCmd.Flags().String("loadtest-contract-address", "", "The address of a pre-deployed load test contract")
-	ltp.ERC20Address = LoadtestCmd.Flags().String("erc20-address", "", "The address of a pre-deployed ERC20 contract")
-	ltp.ERC721Address = LoadtestCmd.Flags().String("erc721-address", "", "The address of a pre-deployed ERC721 contract")
-	ltp.RecallLength = LoadtestCmd.Flags().Uint64("recall-blocks", 50, "The number of blocks that we'll attempt to fetch for recall")
-	ltp.ContractAddress = LoadtestCmd.Flags().String("contract-address", "", "The address of the contract that will be used in --mode contract-call. This must be paired up with --mode contract-call and --calldata")
-	ltp.ContractCallData = LoadtestCmd.Flags().String("calldata", "", "The hex encoded calldata passed in. The format is function signature + arguments encoded together. This must be paired up with --mode contract-call and --contract-address")
-	ltp.ContractCallFunctionSignature = LoadtestCmd.Flags().String("function-signature", "", "The contract's function signature that will be called. The format is '<function name>(<types...>)'. This must be paired up with '--mode contract-call' and '--contract-address'. If the function requires parameters you can pass them with '--function-arg <value>'.")
-	ltp.ContractCallFunctionArgs = LoadtestCmd.Flags().StringSlice("function-arg", []string{}, `The arguments that will be passed to a contract function call. This must be paired up with "--mode contract-call" and "--contract-address". Args can be passed multiple times: "--function-arg 'test' --function-arg 999" or comma separated values "--function-arg "test",9". The ordering of the arguments must match the ordering of the function parameters.`)
-	ltp.ContractCallPayable = LoadtestCmd.Flags().Bool("contract-call-payable", false, "Use this flag if the function is payable, the value amount passed will be from --eth-amount-in-wei. This must be paired up with --mode contract-call and --contract-address")
-	ltp.InscriptionContent = LoadtestCmd.Flags().String("inscription-content", `data:,{"p":"erc-20","op":"mint","tick":"TEST","amt":"1"}`, "The inscription content that will be encoded as calldata. This must be paired up with --mode inscription")
-	ltp.Proxy = LoadtestCmd.Flags().String("proxy", "", "Use the proxy specified")
-	ltp.WaitForReceipt = LoadtestCmd.Flags().Bool("wait-for-receipt", false, "If set to true, the load test will wait for the transaction receipt to be mined. If set to false, the load test will not wait for the transaction receipt and will just send the transaction.")
-	ltp.ReceiptRetryMax = LoadtestCmd.Flags().Uint("receipt-retry-max", 30, "Maximum number of attempts to poll for transaction receipt when --wait-for-receipt is enabled.")
-	ltp.ReceiptRetryInitialDelayMs = LoadtestCmd.Flags().Uint("receipt-retry-initial-delay-ms", 100, "Initial delay in milliseconds for receipt polling retry. Uses exponential backoff with jitter.")
-
-	inputLoadTestParams = *ltp
+	f := LoadtestCmd.Flags()
+	f.Uint64Var(&ltp.BlobFeeCap, "blob-fee-cap", 100000, "blob fee cap, or maximum blob fee per chunk, in Gwei")
+	f.Uint64Var(&ltp.SendingAccountsCount, "sending-accounts-count", 0, "number of sending accounts to use (avoids pool account queue)")
+	ltp.AccountFundingAmount = defaultAccountFundingAmount
+	f.Var(&flag_loader.BigIntValue{Val: ltp.AccountFundingAmount}, "account-funding-amount", "amount in wei to fund sending accounts (set to 0 to disable)")
+	f.BoolVar(&ltp.PreFundSendingAccounts, "pre-fund-sending-accounts", false, "fund all sending accounts at start instead of on first use")
+	f.BoolVar(&ltp.RefundRemainingFunds, "refund-remaining-funds", false, "refund remaining balance to funding account after completion")
+	f.StringVar(&ltp.SendingAccountsFile, "sending-accounts-file", "", "file with sending account private keys, one per line (avoids pool queue and preserves accounts across runs)")
+	f.Uint64Var(&ltp.MaxBaseFeeWei, "max-base-fee-wei", 0, "maximum base fee in wei (pause sending new transactions when exceeded, useful during network congestion)")
+	f.StringSliceVarP(&ltp.Modes, "mode", "m", []string{"t"}, `testing mode (can specify multiple like "d,t"):
+2, erc20 - send ERC20 tokens
+7, erc721 - mint ERC721 tokens
+b, blob - send blob transactions
+cc, contract-call - make contract calls
+d, deploy - deploy contracts
+inc, increment - increment a counter
+r, random - random modes (excludes: blob, call, inscription, recall, rpc, uniswapv3)
+R, recall - replay or simulate transactions
+rpc - call random rpc methods
+s, store - store bytes in a dynamic byte array
+t, transaction - send transactions
+v3, uniswapv3 - perform UniswapV3 swaps`)
+	f.Uint64Var(&ltp.StoreDataSize, "store-data-size", 1024, "number of bytes to store in contract for store mode")
+	f.StringVar(&ltp.LoadtestContractAddress, "loadtest-contract-address", "", "address of pre-deployed load test contract")
+	f.StringVar(&ltp.ERC20Address, "erc20-address", "", "address of pre-deployed ERC20 contract")
+	f.StringVar(&ltp.ERC721Address, "erc721-address", "", "address of pre-deployed ERC721 contract")
+	f.Uint64Var(&ltp.RecallLength, "recall-blocks", 50, "number of blocks that we'll attempt to fetch for recall")
+	f.StringVar(&ltp.ContractAddress, "contract-address", "", "contract address for --mode contract-call (requires --calldata)")
+	f.StringVar(&ltp.ContractCallData, "calldata", "", "hex encoded calldata: function signature + encoded arguments (requires --mode contract-call and --contract-address)")
+	f.BoolVar(&ltp.ContractCallPayable, "contract-call-payable", false, "mark function as payable using value from --eth-amount-in-wei (requires --mode contract-call and --contract-address)")
+	f.StringVar(&ltp.Proxy, "proxy", "", "use the proxy specified")
+	f.BoolVar(&ltp.WaitForReceipt, "wait-for-receipt", false, "wait for transaction receipt to be mined instead of just sending")
+	f.UintVar(&ltp.ReceiptRetryMax, "receipt-retry-max", 30, "maximum polling attempts for transaction receipt with --wait-for-receipt")
+	f.UintVar(&ltp.ReceiptRetryInitialDelayMs, "receipt-retry-initial-delay-ms", 100, "initial delay in milliseconds for receipt polling (uses exponential backoff with jitter)")
+	f.BoolVar(&ltp.CheckBalanceBeforeFunding, "check-balance-before-funding", false, "check account balance before funding sending accounts (saves gas when accounts are already funded)")
 
 	// TODO Compression
 }

@@ -26,7 +26,7 @@ var (
 	//go:embed usage.md
 	usage         string
 	solcPath      string
-	inputFileName *string
+	inputFileName string
 
 	validBase10         *regexp.Regexp
 	dataLabel           *regexp.Regexp
@@ -700,7 +700,7 @@ func checkContractMap(input any, contractMap map[string]string) (string, bool) {
 
 var RetestCmd = &cobra.Command{
 	Use:   "retest [flags]",
-	Short: "Convert the standard ETH test fillers into something to be replayed against an RPC",
+	Short: "Convert the standard ETH test fillers into something to be replayed against an RPC.",
 	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Info().Msg("starting")
@@ -827,8 +827,8 @@ var RetestCmd = &cobra.Command{
 }
 
 func init() {
-	flagSet := RetestCmd.PersistentFlags()
-	inputFileName = flagSet.String("file", "", "Provide a file that's filed with test transaction fillers")
+	f := RetestCmd.Flags()
+	f.StringVar(&inputFileName, "file", "", "file filled with test transaction fillers")
 	solcPath = os.Getenv("SOLC_PATH")
 	if solcPath == "" {
 		solcPath = "solc"
@@ -847,8 +847,8 @@ func init() {
 }
 
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
-	if inputFileName != nil && *inputFileName != "" {
-		return os.ReadFile(*inputFileName)
+	if inputFileName != "" {
+		return os.ReadFile(inputFileName)
 	}
 
 	return io.ReadAll(os.Stdin)

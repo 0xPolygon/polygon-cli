@@ -102,7 +102,7 @@ Always run `make gen` before committing if you've changed anything that affects 
 
 ## Key Dependencies
 
-- Go 1.23+ required
+- Go 1.24+ required
 - Foundry (for smart contract compilation)
 - Docker (for generation tasks)
 - Additional tools: jq, bc, protoc (for development)
@@ -124,3 +124,34 @@ The tool supports configuration via:
 
 ## Development Memories
 - Use `make build` to build polycli
+
+## Code Style
+
+### Cobra Flags
+- Flag names: lowercase with hyphens (kebab-case), e.g., `--output-file`
+- Usage strings: lowercase, no ending punctuation, e.g., `"path to output file"`
+- Remove unnecessary leading articles and filler words (e.g., "the", "a", "an") from usage strings
+- Use `PersistentFlags()` only when flags need to be inherited by subcommands; otherwise use `Flags()`
+- When defining multiple flags, use `f := cmd.Flags()` to avoid repetition
+- Prefer `Var()` flag methods (e.g., `StringVar`, `IntVar`, `BoolVar`) over non-Var methods (e.g., `String`, `Int`, `Bool`) to bind directly to variables:
+  ```go
+  f := cmd.Flags()
+  f.StringVar(&myVar, "name", "", "description")
+  f.IntVar(&count, "count", 0, "description")
+  ```
+- Flag variables should be non-pointer types unless there's a specific need for pointers (e.g., distinguishing unset from zero value):
+  ```go
+  var myVar string  // preferred
+  var count int     // preferred
+  f.StringVar(&myVar, "name", "", "description")
+  f.IntVar(&count, "count", 0, "description")
+  ```
+
+### Cobra Command Arguments
+- Prefer to use Cobra built-in validators (`cobra.NoArgs`, `cobra.ExactArgs(n)`, `cobra.MinimumNArgs(n)`, `cobra.MaximumNArgs(n)`, `cobra.ArbitraryArgs`) instead of custom `Args: func(cmd *cobra.Command, args []string) error` functions, and move argument parsing/validation logic to `PreRunE` hook
+
+### Cobra Commands
+- Command `Short` descriptions: sentence case with ending period, e.g., `"Generate a node list to seed a node."`
+- Command `Long` descriptions: consider using embedded usage.md file via `//go:embed usage.md` pattern; when using inline strings, use sentence case with ending period for complete sentences
+- Command `Short` should be brief (~50 characters or less), appears in help menus and command lists
+- Command `Long` provides detailed explanation, can be empty if `Short` is sufficient

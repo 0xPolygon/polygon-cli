@@ -11,7 +11,7 @@
 
 ## Description
 
-Compute the balance tree and the nullifier tree given the deposits and claims
+Compute the balance tree and the nullifier tree given the deposits and claims.
 
 ```bash
 polycli ulxly compute-balance-nullifier-tree [flags]
@@ -52,30 +52,31 @@ Note: more info https://github.com/BrianSeong99/Agglayer_PessimisticProof_Benchm
 ## Flags
 
 ```bash
-      --bridge-address string     Bridge Address
+      --bridge-address string     bridge address
   -h, --help                      help for compute-balance-nullifier-tree
       --insecure                  skip TLS certificate verification
-      --l2-claims-file string     An ndjson file with l2 claim events data
-      --l2-deposits-file string   An ndjson file with l2 deposit events data
-      --l2-network-id uint32      The L2 networkID
+      --l2-claims-file string     ndjson file with l2 claim events data
+      --l2-deposits-file string   ndjson file with l2 deposit events data
+      --l2-network-id uint32      L2 network ID
   -r, --rpc-url string            RPC URL
 ```
 
 The command also inherits flags from parent commands.
 
 ```bash
-      --config string   config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs     Should logs be in pretty format or JSON (default true)
-  -v, --verbosity int   0 - Silent
-                        100 Panic
-                        200 Fatal
-                        300 Error
-                        400 Warning
-                        500 Info
-                        600 Debug
-                        700 Trace (default 500)
+      --config string      config file (default is $HOME/.polygon-cli.yaml)
+      --pretty-logs        output logs in pretty format instead of JSON (default true)
+  -v, --verbosity string   log level (string or int):
+                             0   - silent
+                             100 - panic
+                             200 - fatal
+                             300 - error
+                             400 - warn
+                             500 - info (default)
+                             600 - debug
+                             700 - trace (default "info")
 ```
 
 ## See also
 
-- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge
+- [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge.

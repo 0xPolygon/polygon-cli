@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
-	"github.com/0xPolygon/polygon-cli/custom_marshaller"
+	"github.com/0xPolygon/polygon-cli/custommarshaller"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -104,26 +104,29 @@ var (
 
 var CDKCmd = &cobra.Command{
 	Use:   "cdk",
-	Short: "Utilities for interacting with CDK networks",
-	Long:  "Basic utility commands for interacting with the cdk contracts",
+	Short: "Utilities for interacting with CDK networks.",
+	Long:  "Basic utility commands for interacting with the cdk contracts.",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		cdkInputArgs.rpcURL = flag_loader.GetRpcUrlFlagValue(cmd)
+		rpcURL := flag_loader.GetRpcUrlFlagValue(cmd)
+		if rpcURL != nil {
+			cdkInputArgs.rpcURL = *rpcURL
+		}
 	},
 	Args: cobra.NoArgs,
 }
 
 type inputArgs struct {
-	rpcURL *string
+	rpcURL string
 
-	forkID *string
+	forkID string
 
-	rollupManagerAddress *string
+	rollupManagerAddress string
 
-	rollupID      *string
-	rollupChainID *string
-	rollupAddress *string
-	bridgeAddress *string
-	gerAddress    *string
+	rollupID      string
+	rollupChainID string
+	rollupAddress string
+	bridgeAddress string
+	gerAddress    string
 }
 
 type parsedCDKArgs struct {
@@ -156,14 +159,14 @@ func checkAddressArg(argFlagName, address string) error {
 func (inputArgs *inputArgs) parseCDKArgs(ctx context.Context) (parsedCDKArgs, error) {
 	args := parsedCDKArgs{}
 
-	args.rpcURL = *inputArgs.rpcURL
+	args.rpcURL = inputArgs.rpcURL
 
-	if inputArgs.forkID != nil && len(*inputArgs.forkID) > 0 {
-		_, found := knownForks[*inputArgs.forkID]
+	if len(inputArgs.forkID) > 0 {
+		_, found := knownForks[inputArgs.forkID]
 		if !found {
 			return parsedCDKArgs{}, invalidForkIDErr()
 		}
-		args.forkID = knownForks[*inputArgs.forkID]
+		args.forkID = knownForks[inputArgs.forkID]
 	}
 
 	return args, nil
@@ -172,14 +175,14 @@ func (inputArgs *inputArgs) parseCDKArgs(ctx context.Context) (parsedCDKArgs, er
 func (inputArgs *inputArgs) parseRollupManagerArgs(ctx context.Context, cdkArgs parsedCDKArgs) (*parsedRollupManagerArgs, error) {
 	args := &parsedRollupManagerArgs{}
 
-	if knownRollupManagerAddress, found := knownRollupManagerAddresses[*cdkInputArgs.rollupManagerAddress]; found {
+	if knownRollupManagerAddress, found := knownRollupManagerAddresses[cdkInputArgs.rollupManagerAddress]; found {
 		args.rollupManagerAddress = common.HexToAddress(knownRollupManagerAddress)
 	} else {
-		err := checkAddressArg(ArgRollupManagerAddress, *inputArgs.rollupManagerAddress)
+		err := checkAddressArg(ArgRollupManagerAddress, inputArgs.rollupManagerAddress)
 		if err != nil {
 			return nil, err
 		}
-		args.rollupManagerAddress = common.HexToAddress(*cdkInputArgs.rollupManagerAddress)
+		args.rollupManagerAddress = common.HexToAddress(cdkInputArgs.rollupManagerAddress)
 	}
 
 	return args, nil
@@ -189,29 +192,29 @@ func (inputArgs *inputArgs) parseRollupArgs(ctx context.Context, rollupManager r
 	args := &parsedRollupArgs{}
 
 	var rollupChainID uint64
-	if cdkInputArgs.rollupChainID != nil && len(*cdkInputArgs.rollupChainID) > 0 {
-		rollupChainIDN, err := strconv.ParseInt(*cdkInputArgs.rollupChainID, 10, 64)
+	if len(cdkInputArgs.rollupChainID) > 0 {
+		rollupChainIDN, err := strconv.ParseInt(cdkInputArgs.rollupChainID, 10, 64)
 		if err != nil || rollupChainIDN < 0 {
-			return nil, fmt.Errorf("invalid rollupChainID: %s, it must be a valid uint64", *cdkInputArgs.rollupID)
+			return nil, fmt.Errorf("invalid rollupChainID: %s, it must be a valid uint64", cdkInputArgs.rollupID)
 		}
 		rollupChainID = uint64(rollupChainIDN)
 	}
 	args.rollupChainID = rollupChainID
 
 	args.rollupAddress = common.Address{}
-	if inputArgs.rollupAddress != nil && len(*inputArgs.rollupAddress) > 0 {
-		err := checkAddressArg(ArgRollupAddress, *inputArgs.rollupAddress)
+	if len(inputArgs.rollupAddress) > 0 {
+		err := checkAddressArg(ArgRollupAddress, inputArgs.rollupAddress)
 		if err != nil {
 			return nil, err
 		}
-		args.rollupAddress = common.HexToAddress(*inputArgs.rollupAddress)
+		args.rollupAddress = common.HexToAddress(inputArgs.rollupAddress)
 	}
 
 	args.rollupID = 0
-	if cdkInputArgs.rollupID != nil && len(*cdkInputArgs.rollupID) > 0 {
-		rollupIDN, err := strconv.Atoi(*cdkInputArgs.rollupID)
+	if len(cdkInputArgs.rollupID) > 0 {
+		rollupIDN, err := strconv.Atoi(cdkInputArgs.rollupID)
 		if err != nil || rollupIDN < 0 {
-			return nil, fmt.Errorf("invalid rollupID: %s, it must be a valid uint32", *cdkInputArgs.rollupID)
+			return nil, fmt.Errorf("invalid rollupID: %s, it must be a valid uint32", cdkInputArgs.rollupID)
 		}
 		args.rollupID = uint32(rollupIDN)
 	} else {
@@ -614,7 +617,7 @@ func mustPrintLogs(logs []types.Log, contractInstance reflect.Value, contractABI
 			}
 		}
 
-		customMarshaller := custom_marshaller.New(parsedEvent)
+		customMarshaller := custommarshaller.New(parsedEvent)
 
 		logsPrinted++
 		mustPrintJSONIndent(struct {
@@ -632,22 +635,24 @@ func mustPrintLogs(logs []types.Log, contractInstance reflect.Value, contractABI
 
 func init() {
 	// cdk
-	cdkInputArgs.rpcURL = CDKCmd.PersistentFlags().String(ArgRpcURL, defaultRPCURL, "The RPC URL of the network containing the CDK contracts")
-	cdkInputArgs.forkID = CDKCmd.PersistentFlags().String(ArgForkID, defaultForkId, "The ForkID of the cdk networks")
-	cdkInputArgs.rollupManagerAddress = CDKCmd.PersistentFlags().String(ArgRollupManagerAddress, "", "The address of the rollup contract")
+	f := CDKCmd.PersistentFlags()
+	f.StringVar(&cdkInputArgs.rpcURL, ArgRpcURL, defaultRPCURL, "RPC URL of network containing CDK contracts")
+	f.StringVar(&cdkInputArgs.forkID, ArgForkID, defaultForkId, "fork ID of CDK networks")
+	f.StringVar(&cdkInputArgs.rollupManagerAddress, ArgRollupManagerAddress, "", "address of rollup contract")
 
 	// rollup manager
 
 	// rollup
-	cdkInputArgs.rollupID = rollupCmd.PersistentFlags().String(ArgRollupID, "", "The rollup ID")
-	cdkInputArgs.rollupChainID = rollupCmd.PersistentFlags().String(ArgRollupChainID, "", "The rollup chain ID")
-	cdkInputArgs.rollupAddress = rollupCmd.PersistentFlags().String(ArgRollupAddress, "", "The rollup Address")
+	fRollup := rollupCmd.PersistentFlags()
+	fRollup.StringVar(&cdkInputArgs.rollupID, ArgRollupID, "", "rollup ID")
+	fRollup.StringVar(&cdkInputArgs.rollupChainID, ArgRollupChainID, "", "rollup chain ID")
+	fRollup.StringVar(&cdkInputArgs.rollupAddress, ArgRollupAddress, "", "rollup address")
 
 	// bridge
-	cdkInputArgs.bridgeAddress = bridgeCmd.PersistentFlags().String(ArgBridgeAddress, "", "The address of the bridge contract")
+	bridgeCmd.PersistentFlags().StringVar(&cdkInputArgs.bridgeAddress, ArgBridgeAddress, "", "address of bridge contract")
 
 	// ger
-	cdkInputArgs.gerAddress = gerCmd.PersistentFlags().String(ArgGERAddress, "", "The address of the GER contract")
+	gerCmd.PersistentFlags().StringVar(&cdkInputArgs.gerAddress, ArgGERAddress, "", "address of GER contract")
 
 	CDKCmd.AddCommand(rollupManagerCmd)
 	CDKCmd.AddCommand(rollupCmd)

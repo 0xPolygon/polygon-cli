@@ -119,7 +119,7 @@ type DatastoreOptions struct {
 	ProjectID                    string
 	DatabaseID                   string
 	SensorID                     string
-	ChainID                      *big.Int
+	ChainID                      uint64
 	MaxConcurrency               int
 	ShouldWriteBlocks            bool
 	ShouldWriteBlockEvents       bool
@@ -140,7 +140,7 @@ func NewDatastore(ctx context.Context, opts DatastoreOptions) Database {
 	return &Datastore{
 		client:                       client,
 		sensorID:                     opts.SensorID,
-		chainID:                      opts.ChainID,
+		chainID:                      new(big.Int).SetUint64(opts.ChainID),
 		maxConcurrency:               opts.MaxConcurrency,
 		shouldWriteBlocks:            opts.ShouldWriteBlocks,
 		shouldWriteBlockEvents:       opts.ShouldWriteBlockEvents,
@@ -351,18 +351,14 @@ func (d *Datastore) newDatastoreTransaction(tx *types.Transaction, tfs time.Time
 	v, r, s := tx.RawSignatureValues()
 	var from, to string
 
-	// Use the transaction's chain ID if available, otherwise use the database's chain ID
 	chainID := tx.ChainId()
-	if chainID == nil {
+	if tx.ChainId() == nil || tx.ChainId().Sign() <= 0 {
 		chainID = d.chainID
 	}
 
-	// Only attempt sender recovery if we have a valid non-zero chainID
-	if chainID != nil && chainID.Sign() > 0 {
-		address, err := types.Sender(types.LatestSignerForChainID(chainID), tx)
-		if err == nil {
-			from = address.String()
-		}
+	address, err := types.Sender(types.LatestSignerForChainID(chainID), tx)
+	if err == nil {
+		from = address.Hex()
 	}
 
 	if tx.To() != nil {

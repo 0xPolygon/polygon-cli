@@ -36,7 +36,7 @@ var uniswapV3LoadTestCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Override root command `mode` flag.
-		inputLoadTestParams.Modes = &[]string{"v3"}
+		inputLoadTestParams.Modes = []string{"v3"}
 
 		// Run load test.
 		err := runLoadTest(cmd.Context())
@@ -49,7 +49,7 @@ var uniswapV3LoadTestCmd = &cobra.Command{
 
 func checkUniswapV3LoadtestFlags() error {
 	// Check pool fees.
-	switch fees := *uniswapv3LoadTestParams.PoolFees; fees {
+	switch fees := uniswapv3LoadTestParams.PoolFees; fees {
 	case float64(uniswapv3loadtest.StableTier), float64(uniswapv3loadtest.StandardTier), float64(uniswapv3loadtest.ExoticTier):
 		// Fees are correct, do nothing.
 	default:
@@ -58,48 +58,47 @@ func checkUniswapV3LoadtestFlags() error {
 	}
 
 	// Check swap amount input.
-	if *uniswapv3LoadTestParams.SwapAmountInput == 0 {
+	if uniswapv3LoadTestParams.SwapAmountInput == 0 {
 		return errors.New("swap amount input has to be greater than zero")
 	}
 
-	if (*uniswapv3LoadTestParams.UniswapPoolToken0 != "") != (*uniswapv3LoadTestParams.UniswapPoolToken1 != "") {
+	if (uniswapv3LoadTestParams.UniswapPoolToken0 != "") != (uniswapv3LoadTestParams.UniswapPoolToken1 != "") {
 		return errors.New("both pool tokens must be empty or specified. Specifying only one token is not allowed")
 	}
 	return nil
 }
 
 type uniswap3params struct {
-	UniswapFactoryV3, UniswapMulticall, UniswapProxyAdmin, UniswapTickLens, UniswapNFTLibDescriptor, UniswapNonfungibleTokenPositionDescriptor, UniswapUpgradeableProxy, UniswapNonfungiblePositionManager, UniswapMigrator, UniswapStaker, UniswapQuoterV2, UniswapSwapRouter, WETH9, UniswapPoolToken0, UniswapPoolToken1 *string
-	PoolFees                                                                                                                                                                                                                                                                                                                *float64
-	SwapAmountInput                                                                                                                                                                                                                                                                                                         *uint64
+	UniswapFactoryV3, UniswapMulticall, UniswapProxyAdmin, UniswapTickLens, UniswapNFTLibDescriptor, UniswapNonfungibleTokenPositionDescriptor, UniswapUpgradeableProxy, UniswapNonfungiblePositionManager, UniswapMigrator, UniswapStaker, UniswapQuoterV2, UniswapSwapRouter, WETH9, UniswapPoolToken0, UniswapPoolToken1 string
+	PoolFees                                                                                                                                                                                                                                                                                                                float64
+	SwapAmountInput                                                                                                                                                                                                                                                                                                         uint64
 }
 
 func init() {
 	// Specify subcommand flags.
-	params := new(uniswap3params)
+	params := &uniswapv3LoadTestParams
 
 	// Pre-deployed addresses.
-	params.UniswapFactoryV3 = uniswapV3LoadTestCmd.Flags().String("uniswap-factory-v3-address", "", "The address of a pre-deployed UniswapFactoryV3 contract")
-	params.UniswapMulticall = uniswapV3LoadTestCmd.Flags().String("uniswap-multicall-address", "", "The address of a pre-deployed Multicall contract")
-	params.UniswapProxyAdmin = uniswapV3LoadTestCmd.Flags().String("uniswap-proxy-admin-address", "", "The address of a pre-deployed ProxyAdmin contract")
-	params.UniswapTickLens = uniswapV3LoadTestCmd.Flags().String("uniswap-tick-lens-address", "", "The address of a pre-deployed TickLens contract")
-	params.UniswapNFTLibDescriptor = uniswapV3LoadTestCmd.Flags().String("uniswap-nft-descriptor-lib-address", "", "The address of a pre-deployed NFTDescriptor library contract")
-	params.UniswapNonfungibleTokenPositionDescriptor = uniswapV3LoadTestCmd.Flags().String("uniswap-nft-position-descriptor-address", "", "The address of a pre-deployed NonfungibleTokenPositionDescriptor contract")
-	params.UniswapUpgradeableProxy = uniswapV3LoadTestCmd.Flags().String("uniswap-upgradeable-proxy-address", "", "The address of a pre-deployed TransparentUpgradeableProxy contract")
-	params.UniswapNonfungiblePositionManager = uniswapV3LoadTestCmd.Flags().String("uniswap-non-fungible-position-manager-address", "", "The address of a pre-deployed NonfungiblePositionManager contract")
-	params.UniswapMigrator = uniswapV3LoadTestCmd.Flags().String("uniswap-migrator-address", "", "The address of a pre-deployed Migrator contract")
-	params.UniswapStaker = uniswapV3LoadTestCmd.Flags().String("uniswap-staker-address", "", "The address of a pre-deployed Staker contract")
-	params.UniswapQuoterV2 = uniswapV3LoadTestCmd.Flags().String("uniswap-quoter-v2-address", "", "The address of a pre-deployed QuoterV2 contract")
-	params.UniswapSwapRouter = uniswapV3LoadTestCmd.Flags().String("uniswap-swap-router-address", "", "The address of a pre-deployed SwapRouter contract")
-	params.WETH9 = uniswapV3LoadTestCmd.Flags().String("weth9-address", "", "The address of a pre-deployed WETH9 contract")
-	params.UniswapPoolToken0 = uniswapV3LoadTestCmd.Flags().String("uniswap-pool-token-0-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
-	params.UniswapPoolToken1 = uniswapV3LoadTestCmd.Flags().String("uniswap-pool-token-1-address", "", "The address of a pre-deployed ERC20 contract used in the Uniswap pool Token0 // Token1")
+	f := uniswapV3LoadTestCmd.Flags()
+	f.StringVar(&params.UniswapFactoryV3, "uniswap-factory-v3-address", "", "address of pre-deployed UniswapFactoryV3 contract")
+	f.StringVar(&params.UniswapMulticall, "uniswap-multicall-address", "", "address of pre-deployed Multicall contract")
+	f.StringVar(&params.UniswapProxyAdmin, "uniswap-proxy-admin-address", "", "address of pre-deployed ProxyAdmin contract")
+	f.StringVar(&params.UniswapTickLens, "uniswap-tick-lens-address", "", "address of pre-deployed TickLens contract")
+	f.StringVar(&params.UniswapNFTLibDescriptor, "uniswap-nft-descriptor-lib-address", "", "address of pre-deployed NFTDescriptor library contract")
+	f.StringVar(&params.UniswapNonfungibleTokenPositionDescriptor, "uniswap-nft-position-descriptor-address", "", "address of pre-deployed NonfungibleTokenPositionDescriptor contract")
+	f.StringVar(&params.UniswapUpgradeableProxy, "uniswap-upgradeable-proxy-address", "", "address of pre-deployed TransparentUpgradeableProxy contract")
+	f.StringVar(&params.UniswapNonfungiblePositionManager, "uniswap-non-fungible-position-manager-address", "", "address of pre-deployed NonfungiblePositionManager contract")
+	f.StringVar(&params.UniswapMigrator, "uniswap-migrator-address", "", "address of pre-deployed Migrator contract")
+	f.StringVar(&params.UniswapStaker, "uniswap-staker-address", "", "address of pre-deployed Staker contract")
+	f.StringVar(&params.UniswapQuoterV2, "uniswap-quoter-v2-address", "", "address of pre-deployed QuoterV2 contract")
+	f.StringVar(&params.UniswapSwapRouter, "uniswap-swap-router-address", "", "address of pre-deployed SwapRouter contract")
+	f.StringVar(&params.WETH9, "weth9-address", "", "address of pre-deployed WETH9 contract")
+	f.StringVar(&params.UniswapPoolToken0, "uniswap-pool-token-0-address", "", "address of pre-deployed ERC20 contract used in Uniswap pool Token0 // Token1")
+	f.StringVar(&params.UniswapPoolToken1, "uniswap-pool-token-1-address", "", "address of pre-deployed ERC20 contract used in Uniswap pool Token0 // Token1")
 
 	// Pool and swap parameters.
-	params.PoolFees = uniswapV3LoadTestCmd.Flags().Float64P("pool-fees", "f", float64(uniswapv3loadtest.StandardTier), "Trading fees charged on each swap or trade made within a UniswapV3 liquidity pool (e.g. 0.3 means 0.3%)")
-	params.SwapAmountInput = uniswapV3LoadTestCmd.Flags().Uint64P("swap-amount", "a", uniswapv3loadtest.SwapAmountInput.Uint64(), "The amount of inbound token given as swap input")
-
-	uniswapv3LoadTestParams = *params
+	f.Float64VarP(&params.PoolFees, "pool-fees", "f", float64(uniswapv3loadtest.StandardTier), "trading fees for UniswapV3 liquidity pool swaps (e.g. 0.3 means 0.3%)")
+	f.Uint64VarP(&params.SwapAmountInput, "swap-amount", "a", uniswapv3loadtest.SwapAmountInput.Uint64(), "amount of inbound token given as swap input")
 }
 
 // Initialise UniswapV3 loadtest.
@@ -114,18 +113,26 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 	log.Info().Msg("Deploying ERC20 tokens...")
 	var token0 uniswapv3loadtest.ContractConfig[tokens.ERC20]
 	token0, err = uniswapv3loadtest.DeployERC20(
-		ctx, c, tops, cops, uniswapV3Config, "SwapperA", "SA", uniswapv3loadtest.MintAmount, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken0))
+		ctx, c, tops, cops, uniswapV3Config, "SwapperA", "SA", uniswapv3loadtest.MintAmount, recipient, common.HexToAddress(uniswapv3LoadTestParams.UniswapPoolToken0))
 	if err != nil {
 		return
 	}
 
 	var token1 uniswapv3loadtest.ContractConfig[tokens.ERC20]
 	token1, err = uniswapv3loadtest.DeployERC20(
-		ctx, c, tops, cops, uniswapV3Config, "SwapperB", "SB", uniswapv3loadtest.MintAmount, recipient, common.HexToAddress(*uniswapv3LoadTestParams.UniswapPoolToken1))
+		ctx, c, tops, cops, uniswapV3Config, "SwapperB", "SB", uniswapv3loadtest.MintAmount, recipient, common.HexToAddress(uniswapv3LoadTestParams.UniswapPoolToken1))
 	if err != nil {
 		return
 	}
 
+	fees := uniswapv3loadtest.PercentageToUniswapFeeTier(uniswapv3LoadTestParams.PoolFees)
+	poolConfig = *uniswapv3loadtest.NewPool(token0, token1, fees)
+	if uniswapv3LoadTestParams.UniswapPoolToken0 != "" {
+		return
+	}
+	if err = uniswapv3loadtest.SetupLiquidityPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, recipient); err != nil {
+		return
+	}
 	log.Info().
 		Stringer("--uniswap-factory-v3-address", uniswapV3Config.FactoryV3.Address).
 		Stringer("--uniswap-migrator-address", uniswapV3Config.Migrator.Address).
@@ -133,8 +140,8 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 		Stringer("--uniswap-nft-descriptor-lib-address", uniswapV3Config.NFTDescriptorLib.Address).
 		Stringer("--uniswap-nft-position-descriptor-address", uniswapV3Config.NonfungibleTokenPositionDescriptor.Address).
 		Stringer("--uniswap-non-fungible-position-manager-address", uniswapV3Config.NonfungiblePositionManager.Address).
-		Stringer("--uniswap-pool-token-0-address", token0.Address).
-		Stringer("--uniswap-pool-token-1-address", token1.Address).
+		Stringer("--uniswap-pool-token-0-address", poolConfig.Token0.Address).
+		Stringer("--uniswap-pool-token-1-address", poolConfig.Token1.Address).
 		Stringer("--uniswap-proxy-admin-address", uniswapV3Config.ProxyAdmin.Address).
 		Stringer("--uniswap-quoter-v2-address", uniswapV3Config.QuoterV2.Address).
 		Stringer("--uniswap-staker-address", uniswapV3Config.Staker.Address).
@@ -143,14 +150,6 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 		Stringer("--uniswap-upgradeable-proxy-address", uniswapV3Config.TransparentUpgradeableProxy.Address).
 		Stringer("--weth9-address", uniswapV3Config.WETH9.Address).Msg("Parameters to re-run")
 
-	fees := uniswapv3loadtest.PercentageToUniswapFeeTier(*uniswapv3LoadTestParams.PoolFees)
-	poolConfig = *uniswapv3loadtest.NewPool(token0, token1, fees)
-	if *uniswapv3LoadTestParams.UniswapPoolToken0 != "" {
-		return
-	}
-	if err = uniswapv3loadtest.SetupLiquidityPool(ctx, c, tops, cops, uniswapV3Config, poolConfig, recipient); err != nil {
-		return
-	}
 	return
 }
 

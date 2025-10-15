@@ -31,27 +31,27 @@ var (
 
 	randSrc                *rand.Rand
 	randSrcMutex           sync.Mutex
-	writeLimit             *uint64
-	noWriteMerge           *bool
-	syncWrites             *bool
-	dontFillCache          *bool
-	readStrict             *bool
-	keySize                *uint64
-	degreeOfParallelism    *uint8
-	readLimit              *uint64
-	rawSizeDistribution    *string
+	writeLimit             uint64
+	noWriteMerge           bool
+	syncWrites             bool
+	dontFillCache          bool
+	readStrict             bool
+	keySize                uint64
+	degreeOfParallelism    uint8
+	readLimit              uint64
+	rawSizeDistribution    string
 	sizeDistribution       *IODistribution
-	overwriteCount         *uint64
-	sequentialReads        *bool
-	sequentialWrites       *bool
-	nilReadOptions         *bool
-	cacheSize              *int
-	openFilesCacheCapacity *int
-	writeZero              *bool
-	readOnly               *bool
-	dbPath                 *string
-	fullScan               *bool
-	dbMode                 *string
+	overwriteCount         uint64
+	sequentialReads        bool
+	sequentialWrites       bool
+	nilReadOptions         bool
+	cacheSize              int
+	openFilesCacheCapacity int
+	writeZero              bool
+	readOnly               bool
+	dbPath                 string
+	fullScan               bool
+	dbMode                 string
 )
 
 const (
@@ -138,13 +138,25 @@ func NewTestResult(startTime, endTime time.Time, desc string, opCount uint64) *T
 
 var DBBenchCmd = &cobra.Command{
 	Use:   "dbbench [flags]",
-	Short: "Perform a level/pebble db benchmark",
+	Short: "Perform a level/pebble db benchmark.",
 	Long:  usage,
+	Args:  cobra.NoArgs,
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		var err error
+		sizeDistribution, err = parseRawSizeDistribution(rawSizeDistribution)
+		if err != nil {
+			return err
+		}
+		if keySize > 64 {
+			return fmt.Errorf("max supported key size is 64 bytes. %d is too big", keySize)
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Info().Msg("Starting db test")
 		var kvdb KeyValueDB
 		var err error
-		switch *dbMode {
+		switch dbMode {
 		case "leveldb":
 			kvdb, err = NewWrappedLevelDB()
 			if err != nil {
@@ -156,7 +168,7 @@ var DBBenchCmd = &cobra.Command{
 				return err
 			}
 		default:
-			return fmt.Errorf("the mode %s is not recognized", *dbMode)
+			return fmt.Errorf("the mode %s is not recognized", dbMode)
 		}
 
 		ctx := context.Background()
@@ -165,15 +177,15 @@ var DBBenchCmd = &cobra.Command{
 		trs := make([]*TestResult, 0)
 
 		sequentialWritesDesc := "random"
-		if *sequentialWrites {
+		if sequentialWrites {
 			sequentialWritesDesc = "sequential"
 		}
 		sequentialReadsDesc := "random"
-		if *sequentialReads {
+		if sequentialReads {
 			sequentialReadsDesc = "sequential"
 		}
 
-		if *fullScan {
+		if fullScan {
 			start = time.Now()
 			opCount, valueDist := runFullScan(ctx, kvdb)
 			tr := NewTestResult(start, time.Now(), "full scan", opCount)
@@ -183,15 +195,15 @@ var DBBenchCmd = &cobra.Command{
 		}
 
 		// in no write mode, we assume the database as already been populated in a previous run or we're using some other database
-		if !*readOnly {
+		if !readOnly {
 			start = time.Now()
-			writeData(ctx, kvdb, 0, *writeLimit, *sequentialWrites)
-			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("initial %s write", sequentialWritesDesc), *writeLimit))
+			writeData(ctx, kvdb, 0, writeLimit, sequentialWrites)
+			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("initial %s write", sequentialWritesDesc), writeLimit))
 
-			for i := 0; i < int(*overwriteCount); i += 1 {
+			for i := 0; i < int(overwriteCount); i += 1 {
 				start = time.Now()
-				writeData(ctx, kvdb, 0, *writeLimit, *sequentialWrites)
-				trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s overwrite %d", sequentialWritesDesc, i), *writeLimit))
+				writeData(ctx, kvdb, 0, writeLimit, sequentialWrites)
+				trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s overwrite %d", sequentialWritesDesc, i), writeLimit))
 			}
 
 			start = time.Now()
@@ -199,14 +211,14 @@ var DBBenchCmd = &cobra.Command{
 			trs = append(trs, NewTestResult(start, time.Now(), "compaction", 1))
 		}
 
-		if *sequentialReads {
+		if sequentialReads {
 			start = time.Now()
-			readSeq(ctx, kvdb, *readLimit)
-			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s read", sequentialReadsDesc), *readLimit))
+			readSeq(ctx, kvdb, readLimit)
+			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s read", sequentialReadsDesc), readLimit))
 		} else {
 			start = time.Now()
-			readRandom(ctx, kvdb, *readLimit)
-			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s read", sequentialWritesDesc), *readLimit))
+			readRandom(ctx, kvdb, readLimit)
+			trs = append(trs, NewTestResult(start, time.Now(), fmt.Sprintf("%s read", sequentialWritesDesc), readLimit))
 		}
 
 		log.Info().Msg("Close DB")
@@ -216,17 +228,6 @@ var DBBenchCmd = &cobra.Command{
 		}
 
 		return printSummary(trs)
-	},
-	Args: func(cmd *cobra.Command, args []string) error {
-		var err error
-		sizeDistribution, err = parseRawSizeDistribution(*rawSizeDistribution)
-		if err != nil {
-			return err
-		}
-		if *keySize > 64 {
-			return fmt.Errorf(" max supported key size is 64 bytes. %d is too big", *keySize)
-		}
-		return nil
 	},
 }
 
@@ -246,7 +247,7 @@ func runFullCompact(ctx context.Context, db KeyValueDB) {
 	}
 }
 func runFullScan(ctx context.Context, db KeyValueDB) (uint64, []uint64) {
-	pool := make(chan bool, *degreeOfParallelism)
+	pool := make(chan bool, degreeOfParallelism)
 	var wg sync.WaitGroup
 	// 32 should be safe here. That would correspond to a single value that's 4.2 GB
 	buckets := make([]uint64, 32)
@@ -306,7 +307,7 @@ func runFullScan(ctx context.Context, db KeyValueDB) (uint64, []uint64) {
 func writeData(ctx context.Context, db KeyValueDB, startIndex, writeLimit uint64, sequential bool) {
 	var i uint64 = startIndex
 	var wg sync.WaitGroup
-	pool := make(chan bool, *degreeOfParallelism)
+	pool := make(chan bool, degreeOfParallelism)
 	bar := getNewProgressBar(int64(writeLimit), "Writing data")
 	lim := writeLimit + startIndex
 	for ; i < lim; i = i + 1 {
@@ -330,7 +331,7 @@ func writeData(ctx context.Context, db KeyValueDB, startIndex, writeLimit uint64
 func readSeq(ctx context.Context, db KeyValueDB, limit uint64) {
 	pb := getNewProgressBar(int64(limit), "sequential reads")
 	var rCount uint64 = 0
-	pool := make(chan bool, *degreeOfParallelism)
+	pool := make(chan bool, degreeOfParallelism)
 	var wg sync.WaitGroup
 benchLoop:
 	for {
@@ -364,7 +365,7 @@ benchLoop:
 func readRandom(ctx context.Context, db KeyValueDB, limit uint64) {
 	pb := getNewProgressBar(int64(limit), "random reads")
 	var rCount uint64 = 0
-	pool := make(chan bool, *degreeOfParallelism)
+	pool := make(chan bool, degreeOfParallelism)
 	var wg sync.WaitGroup
 	rks := NewRandomKeySeeker(db)
 	defer rks.iterator.Release()
@@ -485,10 +486,10 @@ func getNewProgressBar(max int64, description string) *progressbar.ProgressBar {
 }
 
 func makeKV(seed, valueSize uint64, sequential bool) ([]byte, []byte) {
-	tmpKey := make([]byte, *keySize)
+	tmpKey := make([]byte, keySize)
 	binary.LittleEndian.PutUint64(tmpKey, seed)
 	hashedKey := sha512.Sum512(tmpKey)
-	tmpKey = hashedKey[0:*keySize]
+	tmpKey = hashedKey[0:keySize]
 	if sequential {
 		// binary.BigEndian.PutUint64(tmpKey, seed)
 		binary.BigEndian.PutUint64(tmpKey, seed)
@@ -497,7 +498,7 @@ func makeKV(seed, valueSize uint64, sequential bool) ([]byte, []byte) {
 	log.Trace().Str("tmpKey", hex.EncodeToString(tmpKey)).Uint64("valueSize", valueSize).Uint64("seed", seed).Msg("Generated key")
 
 	tmpValue := make([]byte, valueSize)
-	if !*writeZero {
+	if !writeZero {
 		// Assuming we're not in zero mode, we'll fill the data with random data
 		randSrcMutex.Lock()
 		randSrc.Read(tmpValue)
@@ -610,29 +611,29 @@ func parseRawSizeDistribution(dist string) (*IODistribution, error) {
 }
 
 func init() {
-	flagSet := DBBenchCmd.PersistentFlags()
-	writeLimit = flagSet.Uint64("write-limit", 1000000, "The number of entries to write in the db")
-	readLimit = flagSet.Uint64("read-limit", 10000000, "the number of reads will attempt to complete in a given test")
-	overwriteCount = flagSet.Uint64("overwrite-count", 5, "the number of times to overwrite the data")
-	sequentialReads = flagSet.Bool("sequential-reads", false, "if true we'll perform reads sequentially")
-	sequentialWrites = flagSet.Bool("sequential-writes", false, "if true we'll perform writes in somewhat sequential manner")
-	keySize = flagSet.Uint64("key-size", 32, "The byte length of the keys that we'll use")
-	degreeOfParallelism = flagSet.Uint8("degree-of-parallelism", 2, "The number of concurrent goroutines we'll use")
-	rawSizeDistribution = flagSet.String("size-distribution", borDistribution, "the size distribution to use while testing")
-	nilReadOptions = flagSet.Bool("nil-read-opts", false, "if true we'll use nil read opt (this is what geth/bor does)")
-	dontFillCache = flagSet.Bool("dont-fill-read-cache", false, "if false, then random reads will be cached")
-	readStrict = flagSet.Bool("read-strict", false, "if true the rand reads will be made in strict mode")
-	noWriteMerge = flagSet.Bool("no-merge-write", false, "allows disabling write merge")
-	syncWrites = flagSet.Bool("sync-writes", false, "sync each write")
+	f := DBBenchCmd.Flags()
+	f.Uint64Var(&writeLimit, "write-limit", 1000000, "number of entries to write in db")
+	f.Uint64Var(&readLimit, "read-limit", 10000000, "number of reads to attempt to complete in given test")
+	f.Uint64Var(&overwriteCount, "overwrite-count", 5, "number of times to overwrite data")
+	f.BoolVar(&sequentialReads, "sequential-reads", false, "perform reads sequentially")
+	f.BoolVar(&sequentialWrites, "sequential-writes", false, "perform writes in sequential manner")
+	f.Uint64Var(&keySize, "key-size", 32, "byte length of keys to use")
+	f.Uint8Var(&degreeOfParallelism, "degree-of-parallelism", 2, "number of concurrent goroutines to use")
+	f.StringVar(&rawSizeDistribution, "size-distribution", borDistribution, "size distribution to use while testing")
+	f.BoolVar(&nilReadOptions, "nil-read-opts", false, "use nil read options (matches geth/bor behavior)")
+	f.BoolVar(&dontFillCache, "dont-fill-read-cache", false, "disable caching for random reads")
+	f.BoolVar(&readStrict, "read-strict", false, "make random reads in strict mode")
+	f.BoolVar(&noWriteMerge, "no-merge-write", false, "disable write merge")
+	f.BoolVar(&syncWrites, "sync-writes", false, "sync each write")
 	// https://github.com/0xPolygon/bor/blob/eedeaed1fb17d73dd46d8999644d5035e176e22a/eth/backend.go#L141
 	// https://github.com/0xPolygon/bor/blob/eedeaed1fb17d73dd46d8999644d5035e176e22a/eth/ethconfig/config.go#L86C2-L86C15
-	cacheSize = flagSet.Int("cache-size", 512, "the number of megabytes to use as our internal cache size")
-	openFilesCacheCapacity = flagSet.Int("handles", 500, "defines the capacity of the open files caching. Use -1 for zero, this has same effect as specifying NoCacher to OpenFilesCacher.")
-	writeZero = flagSet.Bool("write-zero", false, "if true, we'll write 0s rather than random data")
-	readOnly = flagSet.Bool("read-only", false, "if true, we'll skip all the write operations and open the DB in read only mode")
-	dbPath = flagSet.String("db-path", "_benchmark_db", "the path of the database that we'll use for testing")
-	fullScan = flagSet.Bool("full-scan-mode", false, "if true, the application will scan the full database as fast as possible and print a summary")
-	dbMode = flagSet.String("db-mode", "leveldb", "The mode to use: leveldb or pebbledb")
+	f.IntVar(&cacheSize, "cache-size", 512, "number of megabytes to use as internal cache size")
+	f.IntVar(&openFilesCacheCapacity, "handles", 500, "capacity of open files caching (use -1 for zero, this has same effect as specifying NoCacher to OpenFilesCacher)")
+	f.BoolVar(&writeZero, "write-zero", false, "write zeros instead of random data")
+	f.BoolVar(&readOnly, "read-only", false, "skip all write operations and open DB in read-only mode")
+	f.StringVar(&dbPath, "db-path", "_benchmark_db", "path of database to use for testing")
+	f.BoolVar(&fullScan, "full-scan-mode", false, "scan full database as fast as possible and print summary")
+	f.StringVar(&dbMode, "db-mode", "leveldb", "mode to use: leveldb or pebbledb")
 
 	randSrc = rand.New(rand.NewSource(1))
 }

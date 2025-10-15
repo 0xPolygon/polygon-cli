@@ -32,6 +32,7 @@ type (
 		BatchSize          uint64
 		Threads            uint
 		ShouldDumpBlocks   bool
+		OnlyTxHashes       bool
 		ShouldDumpReceipts bool
 		Filename           string
 		Mode               string
@@ -55,12 +56,13 @@ var DumpblocksCmd = &cobra.Command{
 	Use:   "dumpblocks start end",
 	Short: "Export a range of blocks from a JSON-RPC endpoint.",
 	Long:  usage,
+	Args:  cobra.MinimumNArgs(2),
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		rpcUrlFlagValue := flag_loader.GetRpcUrlFlagValue(cmd)
 		inputDumpblocks.RpcUrl = *rpcUrlFlagValue
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		return checkFlags()
+		return checkFlags(args)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -75,13 +77,9 @@ var DumpblocksCmd = &cobra.Command{
 		start := inputDumpblocks.Start
 		end := inputDumpblocks.End
 
-		for start < end {
+		for start <= end {
 			rangeStart := start
-			rangeEnd := rangeStart + inputDumpblocks.BatchSize
-
-			if rangeEnd > end {
-				rangeEnd = end
-			}
+			rangeEnd := min(rangeStart+inputDumpblocks.BatchSize-1, end)
 
 			pool <- true
 			wg.Add(1)
@@ -90,7 +88,7 @@ var DumpblocksCmd = &cobra.Command{
 				defer wg.Done()
 				for {
 					failCount := 0
-					blocks, err := util.GetBlockRange(ctx, rangeStart, rangeEnd, ec)
+					blocks, err := util.GetBlockRange(ctx, rangeStart, rangeEnd, ec, inputDumpblocks.OnlyTxHashes)
 					if err != nil {
 						failCount = failCount + 1
 						if failCount > 5 {
@@ -133,7 +131,7 @@ var DumpblocksCmd = &cobra.Command{
 				}
 				<-pool
 			}()
-			start = rangeEnd
+			start = rangeEnd + 1
 		}
 
 		log.Info().Msg("Finished requesting data starting to wait")
@@ -142,67 +140,63 @@ var DumpblocksCmd = &cobra.Command{
 
 		return nil
 	},
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) < 2 {
-			return fmt.Errorf("command needs at least two arguments. A start block and an end block")
-		}
-
-		start, err := strconv.ParseInt(args[0], 10, 64)
-		if err != nil {
-			return err
-		}
-		end, err := strconv.ParseInt(args[1], 10, 64)
-		if err != nil {
-			return err
-		}
-		if start < 0 || end < 0 {
-			return fmt.Errorf("the start and end parameters need to be positive")
-		}
-		if end < start {
-			start, end = end, start
-		}
-
-		inputDumpblocks.Start = uint64(start)
-		inputDumpblocks.End = uint64(end)
-
-		if inputDumpblocks.Threads == 0 {
-			inputDumpblocks.Threads = 1
-		}
-		if !slices.Contains([]string{"json", "proto"}, inputDumpblocks.Mode) {
-			return fmt.Errorf("output format must one of [json, proto]")
-		}
-
-		if err := json.Unmarshal([]byte(inputDumpblocks.FilterStr), &inputDumpblocks.filter); err != nil {
-			return fmt.Errorf("could not unmarshal filter string")
-		}
-
-		// Make sure the filters are all lowercase.
-		for i := 0; i < len(inputDumpblocks.filter.To); i++ {
-			inputDumpblocks.filter.To[i] = strings.ToLower(inputDumpblocks.filter.To[i])
-		}
-		for i := 0; i < len(inputDumpblocks.filter.From); i++ {
-			inputDumpblocks.filter.From[i] = strings.ToLower(inputDumpblocks.filter.From[i])
-		}
-
-		return nil
-	},
 }
 
 func init() {
-	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.RpcUrl, "rpc-url", "r", "http://localhost:8545", "The RPC endpoint url")
-	DumpblocksCmd.PersistentFlags().UintVarP(&inputDumpblocks.Threads, "concurrency", "c", 1, "how many go routines to leverage")
-	DumpblocksCmd.PersistentFlags().BoolVarP(&inputDumpblocks.ShouldDumpBlocks, "dump-blocks", "B", true, "if the blocks will be dumped")
-	DumpblocksCmd.PersistentFlags().BoolVar(&inputDumpblocks.ShouldDumpReceipts, "dump-receipts", true, "if the receipts will be dumped")
-	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.Filename, "filename", "f", "", "where to write the output to (default stdout)")
-	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
-	DumpblocksCmd.PersistentFlags().Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "the batch size. Realistically, this probably shouldn't be bigger than 999. Most providers seem to cap at 1000.")
-	DumpblocksCmd.PersistentFlags().StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from, not setting a filter means all are allowed")
+	f := DumpblocksCmd.Flags()
+	f.StringVarP(&inputDumpblocks.RpcUrl, "rpc-url", "r", "http://localhost:8545", "the RPC endpoint URL")
+	f.UintVarP(&inputDumpblocks.Threads, "concurrency", "c", 1, "how many go routines to leverage")
+	f.BoolVarP(&inputDumpblocks.ShouldDumpBlocks, "dump-blocks", "B", true, "dump blocks to output")
+	f.BoolVar(&inputDumpblocks.OnlyTxHashes, "only-tx-hashes", false, "dump blocks will output only the tx hashes instead of the full tx body")
+	f.BoolVar(&inputDumpblocks.ShouldDumpReceipts, "dump-receipts", true, "dump receipts to output")
+	f.StringVarP(&inputDumpblocks.Filename, "filename", "f", "", "where to write the output to (default stdout)")
+	f.StringVarP(&inputDumpblocks.Mode, "mode", "m", "json", "the output format [json, proto]")
+	f.Uint64VarP(&inputDumpblocks.BatchSize, "batch-size", "b", 150, "batch size for requests (most providers cap at 1000)")
+	f.StringVarP(&inputDumpblocks.FilterStr, "filter", "F", "{}", "filter output based on tx to and from (not setting a filter means all are allowed)")
 }
 
-func checkFlags() error {
+func checkFlags(args []string) error {
 	// Check rpc url flag.
 	if err := util.ValidateUrl(inputDumpblocks.RpcUrl); err != nil {
 		return err
+	}
+
+	// Parse start and end blocks
+	start, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		return err
+	}
+	end, err := strconv.ParseInt(args[1], 10, 64)
+	if err != nil {
+		return err
+	}
+	if start < 0 || end < 0 {
+		return fmt.Errorf("the start and end parameters need to be positive")
+	}
+	if end < start {
+		start, end = end, start
+	}
+
+	inputDumpblocks.Start = uint64(start)
+	inputDumpblocks.End = uint64(end)
+
+	if inputDumpblocks.Threads == 0 {
+		inputDumpblocks.Threads = 1
+	}
+	if !slices.Contains([]string{"json", "proto"}, inputDumpblocks.Mode) {
+		return fmt.Errorf("output format must one of [json, proto]")
+	}
+
+	if err := json.Unmarshal([]byte(inputDumpblocks.FilterStr), &inputDumpblocks.filter); err != nil {
+		return fmt.Errorf("could not unmarshal filter string")
+	}
+
+	// Make sure the filters are all lowercase.
+	for i := 0; i < len(inputDumpblocks.filter.To); i++ {
+		inputDumpblocks.filter.To[i] = strings.ToLower(inputDumpblocks.filter.To[i])
+	}
+	for i := 0; i < len(inputDumpblocks.filter.From); i++ {
+		inputDumpblocks.filter.From[i] = strings.ToLower(inputDumpblocks.filter.From[i])
 	}
 
 	return nil

@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	inputMnemonicWords *int
-	inputMnemonicLang  *string
+	inputMnemonicWords int
+	inputMnemonicLang  string
 )
 
 // mnemonicCmd represents the mnemonic command
@@ -18,7 +18,7 @@ var MnemonicCmd = &cobra.Command{
 	Short: "Generate a BIP39 mnemonic seed.",
 	Long:  "",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		mnemonic, err := hdwallet.NewMnemonic(*inputMnemonicWords, *inputMnemonicLang)
+		mnemonic, err := hdwallet.NewMnemonic(inputMnemonicWords, inputMnemonicLang)
 		if err != nil {
 			return err
 		}
@@ -26,13 +26,13 @@ var MnemonicCmd = &cobra.Command{
 		return nil
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if *inputMnemonicWords < 12 {
-			return fmt.Errorf("the number of words in the mnemonic must be 12 or more. Given: %d", *inputMnemonicWords)
+		if inputMnemonicWords < 12 {
+			return fmt.Errorf("the number of words in the mnemonic must be 12 or more. Given: %d", inputMnemonicWords)
 		}
-		if *inputMnemonicWords > 24 {
-			return fmt.Errorf("the number of words in the mnemonic must be 24 or less. Given: %d", *inputMnemonicWords)
+		if inputMnemonicWords > 24 {
+			return fmt.Errorf("the number of words in the mnemonic must be 24 or less. Given: %d", inputMnemonicWords)
 		}
-		if *inputMnemonicWords%3 != 0 {
+		if inputMnemonicWords%3 != 0 {
 			return fmt.Errorf("the number of words in the mnemonic must be a multiple of 3")
 		}
 		return nil
@@ -41,6 +41,7 @@ var MnemonicCmd = &cobra.Command{
 }
 
 func init() {
-	inputMnemonicWords = MnemonicCmd.PersistentFlags().Int("words", 24, "The number of words to use in the mnemonic")
-	inputMnemonicLang = MnemonicCmd.PersistentFlags().String("language", "english", "Which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
+	f := MnemonicCmd.Flags()
+	f.IntVar(&inputMnemonicWords, "words", 24, "number of words to use in mnemonic")
+	f.StringVar(&inputMnemonicLang, "language", "english", "which language to use [ChineseSimplified, ChineseTraditional, Czech, English, French, Italian, Japanese, Korean, Spanish]")
 }

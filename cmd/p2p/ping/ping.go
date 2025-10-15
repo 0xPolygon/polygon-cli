@@ -1,6 +1,8 @@
 package ping
 
 import (
+	"crypto/ecdsa"
+	"net"
 	"sync"
 	"time"
 
@@ -17,6 +19,13 @@ type (
 		OutputFile string
 		NodesFile  string
 		Listen     bool
+		Port       int
+		Addr       net.IP
+		KeyFile    string
+		PrivateKey string
+		EnableWit  bool
+
+		privateKey *ecdsa.PrivateKey
 	}
 )
 
@@ -34,6 +43,14 @@ Status messages and output JSON. If providing a enode/enr rather than a nodes
 file, then the connection will remain open by default (--listen=true), and you
 can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 	Args: cobra.MinimumNArgs(1),
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		inputPingParams.privateKey, err = p2p.ParsePrivateKey(inputPingParams.KeyFile, inputPingParams.PrivateKey)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		nodes := []*enode.Node{}
 		if input, err := p2p.ReadNodeSet(args[0]); err == nil {
@@ -81,7 +98,14 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 					status *p2p.Status
 				)
 
-				conn, err := p2p.Dial(node)
+				opts := p2p.DialOpts{
+					EnableWit:  inputPingParams.EnableWit,
+					Port:       inputPingParams.Port,
+					Addr:       inputPingParams.Addr,
+					PrivateKey: inputPingParams.privateKey,
+				}
+
+				conn, err := p2p.Dial(node, opts)
 				if err != nil {
 					log.Error().Err(err).Msg("Dial failed")
 				} else {
@@ -127,9 +151,16 @@ can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
 }
 
 func init() {
-	PingCmd.PersistentFlags().StringVarP(&inputPingParams.OutputFile, "output", "o", "", "Write ping results to output file (default stdout)")
-	PingCmd.PersistentFlags().IntVarP(&inputPingParams.Threads, "parallel", "p", 16, "How many parallel pings to attempt")
-	PingCmd.PersistentFlags().BoolVarP(&inputPingParams.Listen, "listen", "l", true,
-		`Keep the connection open and listen to the peer. This only works if the first
-argument is an enode/enr, not a nodes file.`)
+	f := PingCmd.Flags()
+	f.StringVarP(&inputPingParams.OutputFile, "output", "o", "", "write ping results to output file (default stdout)")
+	f.IntVarP(&inputPingParams.Threads, "parallel", "p", 16, "how many parallel pings to attempt")
+	f.BoolVarP(&inputPingParams.Listen, "listen", "l", true,
+		`keep connection open and listen to peer. This only works if first
+argument is an enode/enr, not a nodes file`)
+	f.BoolVarP(&inputPingParams.EnableWit, "wit", "w", false, "enable wit/1 capability")
+	f.IntVarP(&inputPingParams.Port, "port", "P", 30303, "port for discovery protocol")
+	f.IPVarP(&inputPingParams.Addr, "addr", "a", net.ParseIP("127.0.0.1"), "address to bind discovery listener")
+	f.StringVarP(&inputPingParams.KeyFile, "key-file", "k", "", "private key file (cannot be set with --key)")
+	f.StringVar(&inputPingParams.PrivateKey, "key", "", "hex-encoded private key (cannot be set with --key-file)")
+	PingCmd.MarkFlagsMutuallyExclusive("key-file", "key")
 }

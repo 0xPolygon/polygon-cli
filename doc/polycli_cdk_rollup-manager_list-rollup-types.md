@@ -11,7 +11,7 @@
 
 ## Description
 
-List some basic information about each rollup type
+List some basic information about each rollup type.
 
 ```bash
 polycli cdk rollup-manager list-rollup-types [flags]
@@ -39,20 +39,21 @@ The command also inherits flags from parent commands.
 
 ```bash
       --config string                   config file (default is $HOME/.polygon-cli.yaml)
-      --fork-id string                  The ForkID of the cdk networks (default "12")
-      --pretty-logs                     Should logs be in pretty format or JSON (default true)
-      --rollup-manager-address string   The address of the rollup contract
-      --rpc-url string                  The RPC URL of the network containing the CDK contracts (default "http://localhost:8545")
-  -v, --verbosity int                   0 - Silent
-                                        100 Panic
-                                        200 Fatal
-                                        300 Error
-                                        400 Warning
-                                        500 Info
-                                        600 Debug
-                                        700 Trace (default 500)
+      --fork-id string                  fork ID of CDK networks (default "12")
+      --pretty-logs                     output logs in pretty format instead of JSON (default true)
+      --rollup-manager-address string   address of rollup contract
+      --rpc-url string                  RPC URL of network containing CDK contracts (default "http://localhost:8545")
+  -v, --verbosity string                log level (string or int):
+                                          0   - silent
+                                          100 - panic
+                                          200 - fatal
+                                          300 - error
+                                          400 - warn
+                                          500 - info (default)
+                                          600 - debug
+                                          700 - trace (default "info")
 ```
 
 ## See also
 
-- [polycli cdk rollup-manager](polycli_cdk_rollup-manager.md) - Utilities for interacting with CDK rollup manager contract
+- [polycli cdk rollup-manager](polycli_cdk_rollup-manager.md) - Utilities for interacting with CDK rollup manager contract.

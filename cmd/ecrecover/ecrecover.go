@@ -29,7 +29,7 @@ var (
 
 var EcRecoverCmd = &cobra.Command{
 	Use:   "ecrecover",
-	Short: "Recovers and returns the public key of the signature",
+	Short: "Recovers and returns the public key of the signature.",
 	Long:  usage,
 	Args:  cobra.NoArgs,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
@@ -127,10 +127,11 @@ var EcRecoverCmd = &cobra.Command{
 }
 
 func init() {
-	EcRecoverCmd.PersistentFlags().StringVarP(&rpcUrl, "rpc-url", "r", "", "The RPC endpoint url")
-	EcRecoverCmd.PersistentFlags().Uint64VarP(&blockNumber, "block-number", "b", 0, "Block number to check the extra data for (default: latest)")
-	EcRecoverCmd.PersistentFlags().StringVarP(&filePath, "file", "f", "", "Path to a file containing block information in JSON format")
-	EcRecoverCmd.PersistentFlags().StringVarP(&txData, "tx", "t", "", "Transaction data in hex format")
+	f := EcRecoverCmd.Flags()
+	f.StringVarP(&rpcUrl, "rpc-url", "r", "", "the RPC endpoint URL")
+	f.Uint64VarP(&blockNumber, "block-number", "b", 0, "block number to check the extra data for (default: latest)")
+	f.StringVarP(&filePath, "file", "f", "", "path to a file containing block information in JSON format")
+	f.StringVarP(&txData, "tx", "t", "", "transaction data in hex format")
 
 	// The sources of decoding are mutually exclusive
 	EcRecoverCmd.MarkFlagsMutuallyExclusive("file", "block-number", "tx")
