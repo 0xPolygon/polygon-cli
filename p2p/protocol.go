@@ -220,7 +220,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 
 			// Register connection with the manager if available
 			if opts.ConnManager != nil {
-				opts.ConnManager.AddConnection(p.Node().ID().String(), &c)
+				opts.ConnManager.AddConnection(p.Node().ID().String(), c)
 				defer opts.ConnManager.RemoveConnection(p.Node().ID().String())
 			}
 

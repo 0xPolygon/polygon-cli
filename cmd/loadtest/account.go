@@ -996,21 +996,13 @@ func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 	if ap.currentAccountIndex >= len(ap.accounts) {
 		ap.currentAccountIndex = 0
 	}
-<<<<<<< HEAD
-	return account, nil
-=======
 	return accCopy, nil
->>>>>>> main
 }
 
 func (ap *AccountPool) accountMustBeFunded(ctx context.Context, account *Account) (bool, error) {
 	// If funding amount is zero, skip funding entirely
 	if !ap.isFundingEnabled() {
-<<<<<<< HEAD
-		return nil, nil
-=======
 		return false, nil
->>>>>>> main
 	}
 
 	// if account is funded, return it
@@ -1173,12 +1165,7 @@ func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.Pr
 }
 
 func (ap *AccountPool) isFundingEnabled() bool {
-<<<<<<< HEAD
-	callOnly := *inputLoadTestParams.EthCallOnly
-	if callOnly {
-=======
 	if ap.isCallOnly() {
->>>>>>> main
 		return false
 	}
 
