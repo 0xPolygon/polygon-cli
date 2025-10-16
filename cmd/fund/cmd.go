@@ -34,14 +34,16 @@ type cmdFundParams struct {
 	KeyFile string
 	Seed    string
 
-	FunderAddress string
+	FunderAddress     string
+	Multicall3Address string
+
+	RateLimit float64
 
 	// ERC20 specific parameters
-	TokenAddress           string
-	TokenAmount            *big.Int
-	ERC20BulkMinterAddress string
-	ApproveSpender         string
-	ApproveAmount          *big.Int
+	TokenAddress   string
+	TokenAmount    *big.Int
+	ApproveSpender string
+	ApproveAmount  *big.Int
 }
 
 var (
@@ -85,14 +87,14 @@ func init() {
 	f.StringVar(&params.KeyFile, "key-file", "", "file containing accounts private keys, one per line")
 	f.StringVar(&params.Seed, "seed", "", "seed string for deterministic wallet generation (e.g., 'ephemeral_test')")
 
+	// Output parameters.
 	f.StringVarP(&params.OutputFile, "file", "f", "wallets.json", "output JSON file path for storing addresses and private keys of funded wallets")
 
 	// ERC20 parameters
 	f.StringVar(&params.TokenAddress, "token-address", "", "address of the ERC20 token contract to mint and fund (if provided, enables ERC20 mode)")
 	params.TokenAmount = new(big.Int)
 	params.TokenAmount.SetString("1000000000000000000", 10) // 1 token
-	f.Var(&flag_loader.BigIntValue{Val: params.TokenAmount}, "token-amount", "amount of ERC20 tokens to mint and transfer to each wallet")
-	f.StringVar(&params.ERC20BulkMinterAddress, "erc20-bulk-funder-address", "", "address of pre-deployed ERC20BulkFunder contract")
+	f.Var(&flag_loader.BigIntValue{Val: params.TokenAmount}, "token-amount", "amount of ERC20 tokens to transfer from private-key wallet to each wallet")
 	f.StringVar(&params.ApproveSpender, "approve-spender", "", "address to approve for spending tokens from each funded wallet")
 	params.ApproveAmount = new(big.Int)
 	params.ApproveAmount.SetString("1000000000000000000000", 10) // 1000 tokens default
@@ -108,8 +110,13 @@ func init() {
 	FundCmd.MarkFlagsMutuallyExclusive("key-file", "seed")
 	FundCmd.MarkFlagsMutuallyExclusive("seed", "hd-derivation")
 
-	// Funder contract parameters.
-	f.StringVar(&params.FunderAddress, "contract-address", "", "address of pre-deployed Funder contract")
+	// contract parameters.
+	f.StringVar(&params.FunderAddress, "funder-address", "", "address of pre-deployed funder contract")
+	f.StringVar(&params.Multicall3Address, "multicall3-address", "", "address of pre-deployed multicall3 contract")
+
+	// RPC parameters.
+	f.Float64Var(&params.RateLimit, "rate-limit", 4, "requests per second limit (use negative value to remove limit)")
+
 }
 
 func checkFlags() error {
@@ -130,7 +137,7 @@ func checkFlags() error {
 	hasAddresses := len(params.WalletAddresses) > 0
 	hasKeyFile := params.KeyFile != ""
 	hasSeed := params.Seed != ""
-	hasNumberWithoutSeed := params.WalletsNumber > 0 && !hasSeed
+	hasNumberWithoutSeed := params.WalletsNumber > 0 && !hasSeed && !hasAddresses && !hasKeyFile
 
 	methodCount := 0
 	if hasAddresses {

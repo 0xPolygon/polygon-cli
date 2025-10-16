@@ -485,6 +485,7 @@ func (ap *AccountPool) fundAccountsWithMulticall3(ctx context.Context, tops *bin
 	chSize := (uint64(len(ap.accounts)) / accsToFundPerTx) + 1
 
 	txsCh := make(chan *types.Transaction, chSize)
+	errCh := make(chan error, chSize)
 
 	accs := []common.Address{}
 	wg := sync.WaitGroup{}
@@ -495,28 +496,29 @@ func (ap *AccountPool) fundAccountsWithMulticall3(ctx context.Context, tops *bin
 		if accountToFund.address == tops.From {
 			continue
 		}
-		if mustBeFunded, err := ap.accountMustBeFunded(ctx, accountToFund); err != nil || !mustBeFunded {
+		if mustBeFunded, iErr := ap.accountMustBeFunded(ctx, accountToFund); iErr != nil || !mustBeFunded {
 			continue
 		}
+
 		accs = append(accs, accountToFund.address)
 
 		if uint64(len(accs)) == accsToFundPerTx || i == len(ap.accounts)-1 {
 			wg.Add(1)
 			go func(tops *bind.TransactOpts, accs []common.Address) {
 				defer wg.Done()
-				err := ap.clientRateLimiter.Wait(ctx)
-				if err != nil {
-					log.Error().Err(err).Msg("rate limiter wait failed before funding accounts with multicall3")
+				iErr := ap.clientRateLimiter.Wait(ctx)
+				if iErr != nil {
+					log.Error().Err(iErr).Msg("rate limiter wait failed before funding accounts with multicall3")
 					return
 				}
 				mu.Lock()
 				defer mu.Unlock()
-				tx, err := util.Multicall3FundAccountsWithNativeToken(ap.client, tops, accs, ap.fundingAmount, ap.multicall3Addr)
-				if err != nil {
-					log.Error().Err(err).Msg("failed to fund accounts with multicall3")
+				tx, iErr := util.Multicall3FundAccountsWithNativeToken(ap.client, tops, accs, ap.fundingAmount, ap.multicall3Addr)
+				if iErr != nil {
+					log.Error().Err(iErr).Msg("failed to fund accounts with multicall3")
 					return
 				}
-				log.Debug().
+				log.Info().
 					Stringer("txHash", tx.Hash()).
 					Int("done", i+1).
 					Uint64("of", uint64(len(ap.accounts))).
@@ -528,6 +530,21 @@ func (ap *AccountPool) fundAccountsWithMulticall3(ctx context.Context, tops *bin
 	}
 	wg.Wait()
 	close(txsCh)
+	close(errCh)
+
+	var combinedErrors error
+	for len(errCh) > 0 {
+		err = <-errCh
+		if combinedErrors == nil {
+			combinedErrors = err
+		} else {
+			combinedErrors = errors.Join(combinedErrors, err)
+		}
+	}
+	// return if there were errors sending the funding transactions
+	if combinedErrors != nil {
+		return combinedErrors
+	}
 
 	log.Info().Msg("all funding transactions sent, waiting for confirmation...")
 
@@ -537,7 +554,7 @@ func (ap *AccountPool) fundAccountsWithMulticall3(ctx context.Context, tops *bin
 		if err != nil {
 			return err
 		}
-		r, err := waitReceipt(ctx, ap.client, tx.Hash())
+		r, err := util.WaitReceipt(ctx, ap.client, tx.Hash())
 		if err != nil {
 			log.Error().Err(err).Msg("failed to wait for transaction to fund accounts with multicall3")
 			return err
@@ -547,7 +564,7 @@ func (ap *AccountPool) fundAccountsWithMulticall3(ctx context.Context, tops *bin
 			log.Error().Msg(errMsg)
 			return errors.New(errMsg)
 		}
-		log.Debug().
+		log.Info().
 			Stringer("txHash", tx.Hash()).
 			Msg("transaction to fund accounts confirmed")
 	}
@@ -636,7 +653,7 @@ func (ap *AccountPool) fundAccountsWithEOATransfers(ctx context.Context, tops *b
 						Msg("failed to wait rate limiter before waiting for receipt of transaction to fund account")
 					return
 				}
-				receipt, err := waitReceipt(ctx, ap.client, tx.Hash())
+				receipt, err := util.WaitReceipt(ctx, ap.client, tx.Hash())
 				if receipt != nil {
 					log.Debug().
 						Stringer("address", tx.To()).
@@ -896,7 +913,7 @@ func (ap *AccountPool) returnFunds(ctx context.Context, lock bool) error {
 				Stringer("txHash", tx.Hash()).
 				Msg("transaction to return funds sent")
 
-			_, err = waitReceiptWithTimeout(ctx, ap.client, tx.Hash(), time.Minute)
+			_, err = util.WaitReceiptWithTimeout(ctx, ap.client, tx.Hash(), time.Minute)
 			if err != nil {
 				log.Error().
 					Stringer("address", tx.To()).
@@ -1081,7 +1098,7 @@ func (ap *AccountPool) fund(ctx context.Context, addr common.Address, forcedNonc
 
 	// Wait for the transaction to be mined
 	if waitToFund {
-		receipt, err := waitReceipt(ctx, ap.client, signedTx.Hash())
+		receipt, err := util.WaitReceipt(ctx, ap.client, signedTx.Hash())
 		if err != nil {
 			log.Error().
 				Stringer("address", addr).
