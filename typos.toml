@@ -12,4 +12,10 @@ BLOK = "BLOK" # accronym for block
 THR = "THR"   # accronym for throughput
 
 [files]
-extend-exclude = ["bindings/", "contracts/lib*", "hdwallet/hdwallet_test.go"]
+extend-exclude = [
+  "go.mod",
+  "go.sum",
+  "bindings/",
+  "contracts/lib",
+  "hdwallet/hdwallet_test.go"
+]
