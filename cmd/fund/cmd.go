@@ -137,7 +137,7 @@ func checkFlags() error {
 	hasAddresses := len(params.WalletAddresses) > 0
 	hasKeyFile := params.KeyFile != ""
 	hasSeed := params.Seed != ""
-	hasNumberWithoutSeed := params.WalletsNumber > 0 && !hasSeed
+	hasNumberWithoutSeed := params.WalletsNumber > 0 && !hasSeed && !hasAddresses && !hasKeyFile
 
 	methodCount := 0
 	if hasAddresses {
