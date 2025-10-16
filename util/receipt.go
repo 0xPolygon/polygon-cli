@@ -1,4 +1,4 @@
-package loadtest
+package util
 
 import (
 	"context"
@@ -11,18 +11,18 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-// waitReceipt waits for a transaction receipt with default parameters.
-func waitReceipt(ctx context.Context, client *ethclient.Client, txHash common.Hash) (*types.Receipt, error) {
+// WaitReceipt waits for a transaction receipt with default parameters.
+func WaitReceipt(ctx context.Context, client *ethclient.Client, txHash common.Hash) (*types.Receipt, error) {
 	return internalWaitReceipt(ctx, client, txHash, 0, 0, 0)
 }
 
-// waitReceiptWithRetries waits for a transaction receipt with retries and exponential backoff.
-func waitReceiptWithRetries(ctx context.Context, client *ethclient.Client, txHash common.Hash, maxRetries uint, initialDelayMs uint) (*types.Receipt, error) {
+// WaitReceiptWithRetries waits for a transaction receipt with retries and exponential backoff.
+func WaitReceiptWithRetries(ctx context.Context, client *ethclient.Client, txHash common.Hash, maxRetries uint, initialDelayMs uint) (*types.Receipt, error) {
 	return internalWaitReceipt(ctx, client, txHash, maxRetries, initialDelayMs, 0)
 }
 
-// waitReceiptWithTimeout waits for a transaction receipt with a specified timeout.
-func waitReceiptWithTimeout(ctx context.Context, client *ethclient.Client, txHash common.Hash, timeout time.Duration) (*types.Receipt, error) {
+// WaitReceiptWithTimeout waits for a transaction receipt with a specified timeout.
+func WaitReceiptWithTimeout(ctx context.Context, client *ethclient.Client, txHash common.Hash, timeout time.Duration) (*types.Receipt, error) {
 	return internalWaitReceipt(ctx, client, txHash, 0, 0, timeout)
 }
 

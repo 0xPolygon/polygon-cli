@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
@@ -76,4 +77,17 @@ func (c *Conns) Nodes() []*enode.Node {
 	}
 
 	return nodes
+}
+
+// GetPeerConnectedAt returns the connection time for a peer by their ID.
+// Returns zero time if the peer is not found.
+func (c *Conns) GetPeerConnectedAt(peerID string) time.Time {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if cn, ok := c.conns[peerID]; ok {
+		return cn.connectedAt
+	}
+
+	return time.Time{}
 }
