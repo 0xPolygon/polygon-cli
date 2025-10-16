@@ -338,7 +338,7 @@ func (fat FunctionArgType) EncodeInput(object Object) (EncodedItem, error) {
 			currHead := val.Head
 			if val.Tail != "" {
 				// is dynamic
-				pointerLoc := (tailLoc + len(tail)) / 2 // converrt the hex length to bytes
+				pointerLoc := (tailLoc + len(tail)) / 2 // convert the hex length to bytes
 				pointerLocHex, err := ConvertInt(fmt.Sprintf("%d", pointerLoc))
 				if err != nil {
 					return EncodedItem{}, err

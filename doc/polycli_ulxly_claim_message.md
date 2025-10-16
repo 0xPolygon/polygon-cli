@@ -129,6 +129,7 @@ The command also inherits flags from parent commands.
       --pretty-logs                        output logs in pretty format instead of JSON (default true)
       --private-key string                 hex encoded private key for sending transaction
       --proof-ger string                   if specified and using legacy mode, the proof will be generated against this GER
+      --proof-l1-info-tree-index uint32    if specified and using aggkit mode, the proof will be generated against this L1 Info Tree Index
       --rpc-url string                     RPC URL to send the transaction
       --transaction-receipt-timeout uint   timeout in seconds to wait for transaction receipt confirmation (default 60)
   -v, --verbosity string                   log level (string or int):

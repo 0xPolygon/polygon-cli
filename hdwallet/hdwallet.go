@@ -462,10 +462,10 @@ func (p *PolyWallet) GetKeyForPath(inputPath string) (*bip32.Key, error) {
 	return currentKey, nil
 }
 
-// bip44... It looks like polkdadot substrate can support random paths
+// bip44... It looks like polkadot substrate can support random paths
 // with different conventions that are non numeric.
 //
-// TODO add support for polkdadot style derivation paths
+// TODO add support for polkadot style derivation paths
 func (p *PolyWallet) parseDerivationPath() ([]uint32, error) {
 	return parseDerivationPath(p.derivationPath)
 }
