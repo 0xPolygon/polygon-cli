@@ -90,7 +90,6 @@ func runFunding(ctx context.Context) error {
 			log.Warn().
 				Str("address", params.Multicall3Address).
 				Msg("invalid multicall3 address provided, will try to detect or deploy multicall3")
-			multicall3Addr = &addr
 		}
 	}
 
