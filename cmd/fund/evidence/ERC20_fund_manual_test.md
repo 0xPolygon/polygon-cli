@@ -112,7 +112,7 @@ polycli fund  --verbosity 700 --rate-limit 2000 --rpc-url "$l1_rpc_url" --privat
 ```bash
 4:27AM TRC Starting logger in console mode
 4:27AM INF Starting bulk funding wallets
-4:27AM TRC Input parameters params={"ApproveAmount":1000000000000000000000,"ApproveSpender":"","ERC20BulkMinterAddress":"","FunderAddress":"","FundingAmountInWei":50000000000000000,"KeyFile":"","Multicall3Address":"","OutputFile":"wallets-funded.json","PrivateKey":"0x12d7de8621a77640c9241b2595ba78ce443d05e94090365ab3bb5e19df82c625","RateLimit":2000,"RpcUrl":"http://127.0.0.1:32804","Seed":"ephemeral_test","TokenAddress":"0x62bf798EdaE1B7FDe524276864757cc424A5c3dD","TokenAmount":1000,"UseHDDerivation":true,"WalletAddresses":null,"WalletsNumber":5}
+4:27AM TRC Input parameters params={"ApproveAmount":1000000000000000000000,"ApproveSpender":"","FunderAddress":"","FundingAmountInWei":50000000000000000,"KeyFile":"","Multicall3Address":"","OutputFile":"wallets-funded.json","PrivateKey":"0x12d7de8621a77640c9241b2595ba78ce443d05e94090365ab3bb5e19df82c625","RateLimit":2000,"RpcUrl":"http://127.0.0.1:32804","Seed":"ephemeral_test","TokenAddress":"0x62bf798EdaE1B7FDe524276864757cc424A5c3dD","TokenAmount":1000,"UseHDDerivation":true,"WalletAddresses":null,"WalletsNumber":5}
 4:27AM TRC Detected chain ID chainID=271828
 4:27AM INF Generating wallets from seed numWallets=5 seed=ephemeral_test
 4:27AM TRC New wallet generated from seed address=0x6705a7352c76b0c9d204b5ad9e9dc92e57c4d44c privateKey=ad7a39a4c7e10a4d55dd5307b10d42cb7afe8b43ba54e4fe70ea4e5efc67b958 seedWithIndex=ephemeral_test_0_20251014

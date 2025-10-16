@@ -40,11 +40,10 @@ type cmdFundParams struct {
 	RateLimit float64
 
 	// ERC20 specific parameters
-	TokenAddress           string
-	TokenAmount            *big.Int
-	ERC20BulkMinterAddress string
-	ApproveSpender         string
-	ApproveAmount          *big.Int
+	TokenAddress   string
+	TokenAmount    *big.Int
+	ApproveSpender string
+	ApproveAmount  *big.Int
 }
 
 var (
@@ -96,7 +95,6 @@ func init() {
 	params.TokenAmount = new(big.Int)
 	params.TokenAmount.SetString("1000000000000000000", 10) // 1 token
 	f.Var(&flag_loader.BigIntValue{Val: params.TokenAmount}, "token-amount", "amount of ERC20 tokens to mint and transfer to each wallet")
-	f.StringVar(&params.ERC20BulkMinterAddress, "erc20-bulk-funder-address", "", "address of pre-deployed ERC20BulkFunder contract")
 	f.StringVar(&params.ApproveSpender, "approve-spender", "", "address to approve for spending tokens from each funded wallet")
 	params.ApproveAmount = new(big.Int)
 	params.ApproveAmount.SetString("1000000000000000000000", 10) // 1000 tokens default
