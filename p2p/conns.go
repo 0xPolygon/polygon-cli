@@ -2,7 +2,9 @@ package p2p
 
 import (
 	"sync"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
@@ -10,15 +12,21 @@ import (
 )
 
 // Conns manages a collection of active peer connections for transaction broadcasting.
+// It also maintains a global cache of blocks written to the database.
 type Conns struct {
 	conns map[string]*conn
 	mu    sync.RWMutex
+
+	// BlocksCache tracks blocks written to the database across all peers
+	// to avoid duplicate writes and requests.
+	BlocksCache *Cache[common.Hash, BlockWriteState]
 }
 
-// NewConns creates a new connection manager.
-func NewConns() *Conns {
+// NewConns creates a new connection manager with a blocks cache.
+func NewConns(maxBlocks int, blocksCacheTTL time.Duration) *Conns {
 	return &Conns{
-		conns: make(map[string]*conn),
+		conns:       make(map[string]*conn),
+		BlocksCache: NewCache[common.Hash, BlockWriteState](maxBlocks, blocksCacheTTL),
 	}
 }
 
