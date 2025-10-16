@@ -94,7 +94,7 @@ func init() {
 	f.StringVar(&params.TokenAddress, "token-address", "", "address of the ERC20 token contract to mint and fund (if provided, enables ERC20 mode)")
 	params.TokenAmount = new(big.Int)
 	params.TokenAmount.SetString("1000000000000000000", 10) // 1 token
-	f.Var(&flag_loader.BigIntValue{Val: params.TokenAmount}, "token-amount", "amount of ERC20 tokens to mint and transfer to each wallet")
+	f.Var(&flag_loader.BigIntValue{Val: params.TokenAmount}, "token-amount", "amount of ERC20 tokens to transfer from private-key wallet to each wallet")
 	f.StringVar(&params.ApproveSpender, "approve-spender", "", "address to approve for spending tokens from each funded wallet")
 	params.ApproveAmount = new(big.Int)
 	params.ApproveAmount.SetString("1000000000000000000000", 10) // 1000 tokens default

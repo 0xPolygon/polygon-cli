@@ -100,7 +100,7 @@ $ cast balance 0x5D8121cf716B70d3e345adB58157752304eED5C3
   -r, --rpc-url string              RPC endpoint URL (default "http://localhost:8545")
       --seed string                 seed string for deterministic wallet generation (e.g., 'ephemeral_test')
       --token-address string        address of the ERC20 token contract to mint and fund (if provided, enables ERC20 mode)
-      --token-amount big.Int        amount of ERC20 tokens to mint and transfer to each wallet (default 1000000000000000000)
+      --token-amount big.Int        amount of ERC20 tokens to transfer from private-key wallet to each wallet (default 1000000000000000000)
 ```
 
 The command also inherits flags from parent commands.
