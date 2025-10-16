@@ -181,7 +181,7 @@ func dialRpc(ctx context.Context) (*ethclient.Client, error) {
 	return ethclient.NewClient(rpc), nil
 }
 
-// Initialize  parameters.
+// Initialize parameters.
 func initializeParams(ctx context.Context, c *ethclient.Client) (*ecdsa.PrivateKey, *big.Int, error) {
 	// Parse the private key.
 	trimmedHexPrivateKey := strings.TrimPrefix(params.PrivateKey, "0x")

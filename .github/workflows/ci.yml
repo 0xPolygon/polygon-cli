@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
-      - uses: crate-ci/typos@0c17dabcee8b8f1957fa917d17393a23e02e1583 # v1.36.3
+      - uses: crate-ci/typos@80c8a4945eec0f6d464eaf9e65ed98ef085283d1 # v1.38.1
 
   gen-doc:
     name: Check gen-doc generated files
@@ -175,7 +175,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@82dee4ba654bd2146511f85f0d013af94670c4de # v1.4.0
+        uses: foundry-rs/foundry-toolchain@50d5a8956f2e319df19e6b57539d7e2acb9f8c1e # v1.5.0
         with:
           version: ${{ env.FOUNDRY_VERSION }}
       - name: Install Geth
