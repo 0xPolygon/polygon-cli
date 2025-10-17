@@ -191,6 +191,12 @@ var SensorCmd = &cobra.Command{
 			Help:      "The number and type of messages the sensor has sent and received",
 		}, []string{"message", "url", "name", "direction"})
 
+		goroutinesGauge := promauto.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: "sensor",
+			Name:      "peer_goroutines",
+			Help:      "The number of active goroutines per peer for database writes",
+		}, []string{"url", "name"})
+
 		// Create peer connection manager for broadcasting transactions
 		conns := p2p.NewConns()
 
@@ -278,7 +284,13 @@ var SensorCmd = &cobra.Command{
 
 				urls := []string{}
 				for _, peer := range server.Peers() {
-					urls = append(urls, peer.Node().URLv4())
+					url := peer.Node().URLv4()
+					peerID := peer.Node().ID().String()
+					name := peer.Fullname()
+					urls = append(urls, url)
+
+					activeGoroutines := conns.GetPeerActiveGoroutines(peerID)
+					goroutinesGauge.WithLabelValues(url, name).Set(float64(activeGoroutines))
 				}
 
 				if err := removePeerMessages(msgCounter, urls); err != nil {

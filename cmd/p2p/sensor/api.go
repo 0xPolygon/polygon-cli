@@ -19,12 +19,13 @@ import (
 // It includes both message counts (items sent/received) and packet counts
 // (number of p2p messages), along with connection timing information.
 type peerData struct {
-	Received        p2p.MessageCount `json:"received"`
-	Sent            p2p.MessageCount `json:"sent"`
-	PacketsReceived p2p.MessageCount `json:"packets_received"`
-	PacketsSent     p2p.MessageCount `json:"packets_sent"`
-	ConnectedAt     string           `json:"connected_at"`
-	DurationSeconds float64          `json:"duration_seconds"`
+	Received         p2p.MessageCount `json:"received"`
+	Sent             p2p.MessageCount `json:"sent"`
+	PacketsReceived  p2p.MessageCount `json:"packets_received"`
+	PacketsSent      p2p.MessageCount `json:"packets_sent"`
+	ConnectedAt      string           `json:"connected_at"`
+	DurationSeconds  float64          `json:"duration_seconds"`
+	ActiveGoroutines int64            `json:"active_goroutines"`
 }
 
 // apiData represents all sensor information including node info and peer data.
@@ -60,12 +61,13 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec, conns *p2p
 			}
 
 			msgs := peerData{
-				Received:        getPeerMessages(counter, url, name, p2p.MsgReceived, false),
-				Sent:            getPeerMessages(counter, url, name, p2p.MsgSent, false),
-				PacketsReceived: getPeerMessages(counter, url, name, p2p.MsgReceived, true),
-				PacketsSent:     getPeerMessages(counter, url, name, p2p.MsgSent, true),
-				ConnectedAt:     connectedAt.UTC().Format(time.RFC3339),
-				DurationSeconds: time.Since(connectedAt).Seconds(),
+				Received:         getPeerMessages(counter, url, name, p2p.MsgReceived, false),
+				Sent:             getPeerMessages(counter, url, name, p2p.MsgSent, false),
+				PacketsReceived:  getPeerMessages(counter, url, name, p2p.MsgReceived, true),
+				PacketsSent:      getPeerMessages(counter, url, name, p2p.MsgSent, true),
+				ConnectedAt:      connectedAt.UTC().Format(time.RFC3339),
+				DurationSeconds:  time.Since(connectedAt).Seconds(),
+				ActiveGoroutines: conns.GetPeerActiveGoroutines(peerID),
 			}
 
 			peers[url] = msgs

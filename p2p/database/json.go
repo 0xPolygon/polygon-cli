@@ -129,7 +129,7 @@ func (j *JSONDatabase) Write(v any) {
 }
 
 // WriteBlock writes the block and the block event as JSON.
-func (j *JSONDatabase) WriteBlock(_ context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
+func (j *JSONDatabase) WriteBlock(_ context.Context, _ GoroutineTracker, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
 	j.writeBlockEvent(peer, block, tfs)
 	j.writeBlock(block, td, tfs)
 }
@@ -179,7 +179,7 @@ func (j *JSONDatabase) writeBlock(block *types.Block, td *big.Int, tfs time.Time
 }
 
 // WriteBlockHeaders writes the block headers as JSON.
-func (j *JSONDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time) {
+func (j *JSONDatabase) WriteBlockHeaders(ctx context.Context, _ GoroutineTracker, headers []*types.Header, tfs time.Time) {
 	if !j.ShouldWriteBlocks() {
 		return
 	}
@@ -207,7 +207,7 @@ func (j *JSONDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.H
 }
 
 // WriteBlockHashes writes the block events as JSON.
-func (j *JSONDatabase) WriteBlockHashes(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
+func (j *JSONDatabase) WriteBlockHashes(ctx context.Context, _ GoroutineTracker, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
 	if !j.ShouldWriteBlockEvents() || len(hashes) == 0 || peer == nil {
 		return
 	}
@@ -226,7 +226,7 @@ func (j *JSONDatabase) WriteBlockHashes(ctx context.Context, peer *enode.Node, h
 }
 
 // WriteBlockBody writes the block body as JSON.
-func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, hash common.Hash, tfs time.Time) {
+func (j *JSONDatabase) WriteBlockBody(ctx context.Context, _ GoroutineTracker, body *eth.BlockBody, hash common.Hash, tfs time.Time) {
 	if !j.ShouldWriteBlocks() {
 		return
 	}
@@ -244,7 +244,7 @@ func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, 
 }
 
 // WriteTransactions writes the transactions and transaction events as JSON.
-func (j *JSONDatabase) WriteTransactions(_ context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
+func (j *JSONDatabase) WriteTransactions(_ context.Context, _ GoroutineTracker, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
 	j.writeTxs(txs, tfs)
 	j.writeTxEvents(peer, txs, tfs)
 }

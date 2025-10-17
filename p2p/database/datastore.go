@@ -153,25 +153,25 @@ func NewDatastore(ctx context.Context, opts DatastoreOptions) Database {
 }
 
 // WriteBlock writes the block and the block event to datastore.
-func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
+func (d *Datastore) WriteBlock(ctx context.Context, tracker GoroutineTracker, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
 	if d.client == nil {
 		return
 	}
 
 	if d.ShouldWriteBlockEvents() {
-		d.jobs <- struct{}{}
-		go func() {
+		tracker.TrackGoroutine(func() {
+			d.jobs <- struct{}{}
 			d.writeEvent(peer, BlockEventsKind, block.Hash(), BlocksKind, tfs)
 			<-d.jobs
-		}()
+		})
 	}
 
 	if d.ShouldWriteBlocks() {
-		d.jobs <- struct{}{}
-		go func() {
+		tracker.TrackGoroutine(func() {
+			d.jobs <- struct{}{}
 			d.writeBlock(ctx, block, td, tfs)
 			<-d.jobs
-		}()
+		})
 	}
 }
 
@@ -179,17 +179,19 @@ func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *typ
 // write block events because headers will only be sent to the sensor when
 // requested. The block events will be written when the hash is received
 // instead.
-func (d *Datastore) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time) {
+func (d *Datastore) WriteBlockHeaders(ctx context.Context, tracker GoroutineTracker, headers []*types.Header, tfs time.Time) {
 	if d.client == nil || !d.ShouldWriteBlocks() {
 		return
 	}
 
 	for _, h := range headers {
-		d.jobs <- struct{}{}
-		go func(header *types.Header) {
-			d.writeBlockHeader(ctx, header, tfs)
-			<-d.jobs
-		}(h)
+		tracker.TrackGoroutine(func(header *types.Header) func() {
+			return func() {
+				d.jobs <- struct{}{}
+				d.writeBlockHeader(ctx, header, tfs)
+				<-d.jobs
+			}
+		}(h))
 	}
 }
 
@@ -198,43 +200,43 @@ func (d *Datastore) WriteBlockHeaders(ctx context.Context, headers []*types.Head
 // requested. The block events will be written when the hash is received
 // instead. It will write the uncles and transactions to datastore if they
 // don't already exist.
-func (d *Datastore) WriteBlockBody(ctx context.Context, body *eth.BlockBody, hash common.Hash, tfs time.Time) {
+func (d *Datastore) WriteBlockBody(ctx context.Context, tracker GoroutineTracker, body *eth.BlockBody, hash common.Hash, tfs time.Time) {
 	if d.client == nil || !d.ShouldWriteBlocks() {
 		return
 	}
 
-	d.jobs <- struct{}{}
-	go func() {
+	tracker.TrackGoroutine(func() {
+		d.jobs <- struct{}{}
 		d.writeBlockBody(ctx, body, hash, tfs)
 		<-d.jobs
-	}()
+	})
 }
 
 // WriteBlockHashes will write the block events to datastore.
-func (d *Datastore) WriteBlockHashes(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
+func (d *Datastore) WriteBlockHashes(ctx context.Context, tracker GoroutineTracker, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
 	if d.client == nil || !d.ShouldWriteBlockEvents() || len(hashes) == 0 {
 		return
 	}
 
-	d.jobs <- struct{}{}
-	go func() {
+	tracker.TrackGoroutine(func() {
+		d.jobs <- struct{}{}
 		d.writeEvents(ctx, peer, BlockEventsKind, hashes, BlocksKind, tfs)
 		<-d.jobs
-	}()
+	})
 }
 
 // WriteTransactions will write the transactions and transaction events to datastore.
-func (d *Datastore) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
+func (d *Datastore) WriteTransactions(ctx context.Context, tracker GoroutineTracker, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
 	if d.client == nil {
 		return
 	}
 
 	if d.ShouldWriteTransactions() {
-		d.jobs <- struct{}{}
-		go func() {
+		tracker.TrackGoroutine(func() {
+			d.jobs <- struct{}{}
 			d.writeTransactions(ctx, txs, tfs)
 			<-d.jobs
-		}()
+		})
 	}
 
 	if d.ShouldWriteTransactionEvents() {
@@ -243,11 +245,11 @@ func (d *Datastore) WriteTransactions(ctx context.Context, peer *enode.Node, txs
 			hashes = append(hashes, tx.Hash())
 		}
 
-		d.jobs <- struct{}{}
-		go func() {
+		tracker.TrackGoroutine(func() {
+			d.jobs <- struct{}{}
 			d.writeEvents(ctx, peer, TransactionEventsKind, hashes, TransactionsKind, tfs)
 			<-d.jobs
-		}()
+		})
 	}
 }
 

@@ -91,3 +91,16 @@ func (c *Conns) GetPeerConnectedAt(peerID string) time.Time {
 
 	return time.Time{}
 }
+
+// GetPeerActiveGoroutines returns the number of active goroutines for a peer by their ID.
+// Returns 0 if the peer is not found.
+func (c *Conns) GetPeerActiveGoroutines(peerID string) int64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if cn, ok := c.conns[peerID]; ok {
+		return cn.ActiveGoroutines()
+	}
+
+	return 0
+}

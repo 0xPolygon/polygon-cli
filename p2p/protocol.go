@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -50,6 +51,10 @@ type conn struct {
 
 	// connectedAt stores when this peer connection was established.
 	connectedAt time.Time
+
+	// activeGoroutines tracks the number of active goroutines spawned by this peer
+	// for database write operations
+	activeGoroutines atomic.Int64
 }
 
 // EthProtocolOptions is the options used when creating a new eth protocol.
@@ -233,6 +238,21 @@ func (c *conn) countMsgSent(messageName string, count float64) {
 	c.countMsg(MsgSent, messageName+PacketSuffix, 1)
 }
 
+// TrackGoroutine runs a function in a goroutine and tracks the active goroutine count.
+// This implements the database.GoroutineTracker interface.
+func (c *conn) TrackGoroutine(f func()) {
+	c.activeGoroutines.Add(1)
+	go func() {
+		defer c.activeGoroutines.Add(-1)
+		f()
+	}()
+}
+
+// ActiveGoroutines returns the number of active goroutines for this peer.
+func (c *conn) ActiveGoroutines() int64 {
+	return c.activeGoroutines.Load()
+}
+
 func (c *conn) readStatus(packet *eth.StatusPacket) error {
 	msg, err := c.rw.ReadMsg()
 	if err != nil {
@@ -356,7 +376,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 	// Write only unique hashes to the database.
 	if len(uniqueHashes) > 0 {
-		c.db.WriteBlockHashes(ctx, c.node, uniqueHashes, tfs)
+		c.db.WriteBlockHashes(ctx, c, c.node, uniqueHashes, tfs)
 	}
 
 	return nil
@@ -402,7 +422,7 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.countMsgReceived(txs.Name(), float64(len(txs)))
 
-	c.db.WriteTransactions(ctx, c.node, txs, tfs)
+	c.db.WriteTransactions(ctx, c, c.node, txs, tfs)
 
 	return nil
 }
@@ -437,7 +457,7 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 		}
 	}
 
-	c.db.WriteBlockHeaders(ctx, headers, tfs)
+	c.db.WriteBlockHeaders(ctx, c, headers, tfs)
 	return nil
 }
 
@@ -475,7 +495,7 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	}
 	c.requests.Remove(packet.RequestId)
 
-	c.db.WriteBlockBody(ctx, packet.BlockBodiesResponse[0], hash, tfs)
+	c.db.WriteBlockBody(ctx, c, packet.BlockBodiesResponse[0], hash, tfs)
 
 	return nil
 }
@@ -507,7 +527,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
-	c.db.WriteBlock(ctx, c.node, block.Block, block.TD, tfs)
+	c.db.WriteBlock(ctx, c, c.node, block.Block, block.TD, tfs)
 
 	return nil
 }
@@ -562,7 +582,7 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 
 	c.countMsgReceived(packet.Name(), float64(len(packet.PooledTransactionsResponse)))
 
-	c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse, tfs)
+	c.db.WriteTransactions(ctx, c, c.node, packet.PooledTransactionsResponse, tfs)
 
 	return nil
 }

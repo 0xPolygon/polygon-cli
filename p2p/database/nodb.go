@@ -22,23 +22,23 @@ func NoDatabase() Database {
 }
 
 // WriteBlock does nothing.
-func (n *nodb) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
+func (n *nodb) WriteBlock(ctx context.Context, _ GoroutineTracker, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
 }
 
 // WriteBlockHeaders does nothing.
-func (n *nodb) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time) {
+func (n *nodb) WriteBlockHeaders(ctx context.Context, _ GoroutineTracker, headers []*types.Header, tfs time.Time) {
 }
 
 // WriteBlockHashes does nothing.
-func (n *nodb) WriteBlockHashes(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
+func (n *nodb) WriteBlockHashes(ctx context.Context, _ GoroutineTracker, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
 }
 
 // WriteBlockBody does nothing.
-func (n *nodb) WriteBlockBody(ctx context.Context, body *eth.BlockBody, hash common.Hash, tfs time.Time) {
+func (n *nodb) WriteBlockBody(ctx context.Context, _ GoroutineTracker, body *eth.BlockBody, hash common.Hash, tfs time.Time) {
 }
 
 // WriteTransactions does nothing.
-func (n *nodb) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
+func (n *nodb) WriteTransactions(ctx context.Context, _ GoroutineTracker, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
 }
 
 // WritePeers does nothing.

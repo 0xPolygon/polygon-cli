@@ -12,30 +12,36 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
+// GoroutineTracker is an interface for tracking goroutine spawns.
+type GoroutineTracker interface {
+	// TrackGoroutine wraps a function to track its goroutine.
+	TrackGoroutine(f func())
+}
+
 // Database represents a database solution to write block and transaction data
 // to. To use another database solution, just implement these methods and
 // update the sensor to use the new connection.
 type Database interface {
 	// WriteBlock will write the both the block and block event to the database
 	// if ShouldWriteBlocks and ShouldWriteBlockEvents return true, respectively.
-	WriteBlock(context.Context, *enode.Node, *types.Block, *big.Int, time.Time)
+	WriteBlock(context.Context, GoroutineTracker, *enode.Node, *types.Block, *big.Int, time.Time)
 
 	// WriteBlockHeaders will write the block headers if ShouldWriteBlocks
 	// returns true.
-	WriteBlockHeaders(context.Context, []*types.Header, time.Time)
+	WriteBlockHeaders(context.Context, GoroutineTracker, []*types.Header, time.Time)
 
 	// WriteBlockHashes will write the block hashes if ShouldWriteBlockEvents
 	// returns true.
-	WriteBlockHashes(context.Context, *enode.Node, []common.Hash, time.Time)
+	WriteBlockHashes(context.Context, GoroutineTracker, *enode.Node, []common.Hash, time.Time)
 
 	// WriteBlockBody will write the block bodies if ShouldWriteBlocks returns
 	// true.
-	WriteBlockBody(context.Context, *eth.BlockBody, common.Hash, time.Time)
+	WriteBlockBody(context.Context, GoroutineTracker, *eth.BlockBody, common.Hash, time.Time)
 
 	// WriteTransactions will write the both the transaction and transaction
 	// event to the database if ShouldWriteTransactions and
 	// ShouldWriteTransactionEvents return true, respectively.
-	WriteTransactions(context.Context, *enode.Node, []*types.Transaction, time.Time)
+	WriteTransactions(context.Context, GoroutineTracker, *enode.Node, []*types.Transaction, time.Time)
 
 	// WritePeers will write the connected peers to the database.
 	WritePeers(context.Context, []*p2p.Peer, time.Time)
