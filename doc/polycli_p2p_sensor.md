@@ -24,7 +24,7 @@ If no nodes.json file exists, it will be created.
 
 ```bash
       --api-port uint                 port API server will listen on (default 8080)
-      --blocks-cache-ttl duration     time to live for blocks cache entries (0 for no expiration) (default 10m0s)
+      --blocks-cache-ttl duration     time to live for block cache entries (0 for no expiration) (default 10m0s)
   -b, --bootnodes string              comma separated nodes used for bootstrapping
       --database string               which database to persist data to, options are:
                                         - datastore (GCP Datastore)
@@ -39,7 +39,7 @@ If no nodes.json file exists, it will be created.
   -h, --help                          help for sensor
       --key string                    hex-encoded private key (cannot be set with --key-file)
   -k, --key-file string               private key file (cannot be set with --key)
-      --max-blocks int                maximum blocks to track per peer (0 for no limit) (default 1024)
+      --max-blocks int                maximum blocks to track across all peers (0 for no limit) (default 1024)
   -D, --max-db-concurrency int        maximum number of concurrent database operations to perform (increasing this
                                       will result in less chance of missing data but can significantly increase memory usage) (default 10000)
   -m, --max-peers int                 maximum number of peers to connect to (default 2000)
@@ -53,7 +53,7 @@ If no nodes.json file exists, it will be created.
   -p, --project-id string             GCP project ID
       --prom                          run Prometheus server (default true)
       --prom-port uint                port Prometheus runs on (default 2112)
-      --requests-cache-ttl duration   time to live for requests cache entries (0 for no expiration) (default 5m0s)
+      --requests-cache-ttl duration   time to live for request cache entries (0 for no expiration) (default 5m0s)
       --rpc string                    RPC endpoint used to fetch latest block (default "https://polygon-rpc.com")
       --rpc-port uint                 port for JSON-RPC server to receive transactions (default 8545)
   -s, --sensor-id string              sensor ID when writing block/tx events
