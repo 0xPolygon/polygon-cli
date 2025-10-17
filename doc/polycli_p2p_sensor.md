@@ -53,7 +53,7 @@ If no nodes.json file exists, it will be created.
   -p, --project-id string             GCP project ID
       --prom                          run Prometheus server (default true)
       --prom-port uint                port Prometheus runs on (default 2112)
-      --requests-cache-ttl duration   time to live for request cache entries (0 for no expiration) (default 5m0s)
+      --requests-cache-ttl duration   time to live for requests cache entries (0 for no expiration) (default 5m0s)
       --rpc string                    RPC endpoint used to fetch latest block (default "https://polygon-rpc.com")
       --rpc-port uint                 port for JSON-RPC server to receive transactions (default 8545)
   -s, --sensor-id string              sensor ID when writing block/tx events
