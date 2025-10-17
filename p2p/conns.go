@@ -17,16 +17,16 @@ type Conns struct {
 	conns map[string]*conn
 	mu    sync.RWMutex
 
-	// BlocksCache tracks blocks written to the database across all peers
+	// blocks tracks blocks written to the database across all peers
 	// to avoid duplicate writes and requests.
-	BlocksCache *Cache[common.Hash, BlockWriteState]
+	blocks *Cache[common.Hash, BlockWriteState]
 }
 
 // NewConns creates a new connection manager with a blocks cache.
 func NewConns(maxBlocks int, blocksCacheTTL time.Duration) *Conns {
 	return &Conns{
-		conns:       make(map[string]*conn),
-		BlocksCache: NewCache[common.Hash, BlockWriteState](maxBlocks, blocksCacheTTL),
+		conns:  make(map[string]*conn),
+		blocks: NewCache[common.Hash, BlockWriteState](maxBlocks, blocksCacheTTL),
 	}
 }
 
@@ -97,4 +97,9 @@ func (c *Conns) GetPeerConnectedAt(peerID string) time.Time {
 	}
 
 	return time.Time{}
+}
+
+// Blocks returns the global blocks cache.
+func (c *Conns) Blocks() *Cache[common.Hash, BlockWriteState] {
+	return c.blocks
 }
