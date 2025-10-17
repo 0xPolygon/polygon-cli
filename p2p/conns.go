@@ -22,11 +22,19 @@ type Conns struct {
 	blocks *Cache[common.Hash, BlockWriteState]
 }
 
+// ConnsOptions contains configuration options for creating a new Conns manager.
+type ConnsOptions struct {
+	// MaxBlocks is the maximum number of blocks to track in the cache.
+	MaxBlocks int
+	// BlocksCacheTTL is the time to live for block cache entries.
+	BlocksCacheTTL time.Duration
+}
+
 // NewConns creates a new connection manager with a blocks cache.
-func NewConns(maxBlocks int, blocksCacheTTL time.Duration) *Conns {
+func NewConns(opts ConnsOptions) *Conns {
 	return &Conns{
 		conns:  make(map[string]*conn),
-		blocks: NewCache[common.Hash, BlockWriteState](maxBlocks, blocksCacheTTL),
+		blocks: NewCache[common.Hash, BlockWriteState](opts.MaxBlocks, opts.BlocksCacheTTL),
 	}
 }
 
