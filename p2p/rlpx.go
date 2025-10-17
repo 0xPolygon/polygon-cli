@@ -167,13 +167,6 @@ loop:
 	return status, nil
 }
 
-// request stores the request ID and the block's hash.
-type request struct {
-	requestID uint64
-	hash      common.Hash
-	time      time.Time
-}
-
 // ReadAndServe reads messages from peers and writes it to a database.
 func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 	for {
