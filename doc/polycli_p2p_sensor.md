@@ -39,7 +39,7 @@ If no nodes.json file exists, it will be created.
       --key string                    hex-encoded private key (cannot be set with --key-file)
   -k, --key-file string               private key file (cannot be set with --key)
   -D, --max-db-concurrency int        maximum number of concurrent database operations to perform (increasing this
-                                      will result in less chance of missing data but can significantly increase memory usage) (default 10000)
+                                      will result in less chance of missing data but can significantly increase memory usage) (default 20000)
   -m, --max-peers int                 maximum number of peers to connect to (default 2000)
       --max-requests int              maximum request IDs to track per peer (0 for no limit) (default 2048)
       --nat string                    NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
