@@ -97,18 +97,18 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 		Length:  17,
 		Run: func(p *ethp2p.Peer, rw ethp2p.MsgReadWriter) error {
 			c := &conn{
-				sensorID:   opts.SensorID,
-				node:       p.Node(),
-				logger:     log.With().Str("peer", p.Node().URLv4()).Logger(),
-				rw:         rw,
-				db:         opts.Database,
-				requests:   NewCache[uint64, common.Hash](opts.MaxRequests, opts.RequestsCacheTTL),
-				requestNum: 0,
-				head:       opts.Head,
-				headMutex:  opts.HeadMutex,
-				counter:    opts.MsgCounter,
-				peer:       p,
-				conns:      opts.Conns,
+				sensorID:    opts.SensorID,
+				node:        p.Node(),
+				logger:      log.With().Str("peer", p.Node().URLv4()).Logger(),
+				rw:          rw,
+				db:          opts.Database,
+				requests:    NewCache[uint64, common.Hash](opts.MaxRequests, opts.RequestsCacheTTL),
+				requestNum:  0,
+				head:        opts.Head,
+				headMutex:   opts.HeadMutex,
+				counter:     opts.MsgCounter,
+				peer:        p,
+				conns:       opts.Conns,
 				connectedAt: time.Now(),
 			}
 
@@ -423,13 +423,6 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 	c.countMsgReceived(packet.Name(), float64(len(headers)))
 
 	for _, header := range headers {
-		hash := header.Hash()
-
-		// Check if we already have the header in the cache
-		if state, ok := c.conns.Blocks().Get(hash); ok && state.HasHeader {
-			continue
-		}
-
 		if err := c.getParentBlock(ctx, header); err != nil {
 			return err
 		}
