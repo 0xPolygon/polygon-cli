@@ -929,7 +929,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				if tErr == nil && inputLoadTestParams.WaitForReceipt {
 					receiptMaxRetries := inputLoadTestParams.ReceiptRetryMax
 					receiptRetryInitialDelayMs := inputLoadTestParams.ReceiptRetryInitialDelayMs
-					_, tErr = waitReceiptWithRetries(ctx, c, ltTxHash, receiptMaxRetries, receiptRetryInitialDelayMs)
+					_, tErr = util.WaitReceiptWithRetries(ctx, c, ltTxHash, receiptMaxRetries, receiptRetryInitialDelayMs)
 				}
 
 				if tErr != nil {
