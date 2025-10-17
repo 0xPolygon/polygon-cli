@@ -443,7 +443,7 @@ func init() {
 		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")
 	}
 	f.IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 2000, "maximum number of peers to connect to")
-	f.IntVarP(&inputSensorParams.MaxDatabaseConcurrency, "max-db-concurrency", "D", 10000,
+	f.IntVarP(&inputSensorParams.MaxDatabaseConcurrency, "max-db-concurrency", "D", 20000,
 		`maximum number of concurrent database operations to perform (increasing this
 will result in less chance of missing data but can significantly increase memory usage)`)
 	f.BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "write blocks to database")
