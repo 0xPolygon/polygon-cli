@@ -267,33 +267,44 @@ func (c *conn) readStatus(packet *eth.StatusPacket) error {
 	return nil
 }
 
-// getBlockData will send a GetBlockHeaders and GetBlockBodies request to the
-// peer. It will return an error if the sending either of the requests failed.
-func (c *conn) getBlockData(hash common.Hash) error {
-	headersRequest := &GetBlockHeaders{
-		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
-			// Providing both the hash and number will result in a `both origin
-			// hash and number` error.
-			Origin: eth.HashOrNumber{Hash: hash},
-			Amount: 1,
-		},
+// getBlockData will send GetBlockHeaders and/or GetBlockBodies requests to the
+// peer based on what parts of the block we already have. It will return an error
+// if sending either of the requests failed.
+func (c *conn) getBlockData(hash common.Hash, state BlockWriteState) error {
+	// Only request header if we don't have it
+	if !state.HasHeader {
+		headersRequest := &GetBlockHeaders{
+			GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+				// Providing both the hash and number will result in a `both origin
+				// hash and number` error.
+				Origin: eth.HashOrNumber{Hash: hash},
+				Amount: 1,
+			},
+		}
+
+		c.countMsgSent(headersRequest.Name(), 1)
+		if err := ethp2p.Send(c.rw, eth.GetBlockHeadersMsg, headersRequest); err != nil {
+			return err
+		}
 	}
 
-	c.countMsgSent(headersRequest.Name(), 1)
-	if err := ethp2p.Send(c.rw, eth.GetBlockHeadersMsg, headersRequest); err != nil {
-		return err
+	// Only request body if we don't have it
+	if !state.HasBody {
+		c.requestNum++
+		c.requests.Add(c.requestNum, hash)
+
+		bodiesRequest := &GetBlockBodies{
+			RequestId:             c.requestNum,
+			GetBlockBodiesRequest: []common.Hash{hash},
+		}
+
+		c.countMsgSent(bodiesRequest.Name(), 1)
+		if err := ethp2p.Send(c.rw, eth.GetBlockBodiesMsg, bodiesRequest); err != nil {
+			return err
+		}
 	}
 
-	c.requestNum++
-	c.requests.Add(c.requestNum, hash)
-
-	bodiesRequest := &GetBlockBodies{
-		RequestId:             c.requestNum,
-		GetBlockBodiesRequest: []common.Hash{hash},
-	}
-
-	c.countMsgSent(bodiesRequest.Name(), 1)
-	return ethp2p.Send(c.rw, eth.GetBlockBodiesMsg, bodiesRequest)
+	return nil
 }
 
 // getParentBlock will send a request to the peer if the parent of the header
@@ -323,7 +334,9 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 		Str("number", new(big.Int).Sub(header.Number, big.NewInt(1)).String()).
 		Msg("Fetching missing parent block")
 
-	return c.getBlockData(header.ParentHash)
+	// Get current state from cache (will be zero value if not present)
+	state, _ := c.conns.Blocks().Get(header.ParentHash)
+	return c.getBlockData(header.ParentHash, state)
 }
 
 func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
@@ -342,19 +355,23 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 	for _, entry := range packet {
 		hash := entry.Hash
 
-		// Check if we've already seen this block in the cache
-		if c.conns.Blocks().Contains(hash) {
+		// Check what parts of the block we already have
+		state, ok := c.conns.Blocks().Get(hash)
+		if ok && state.HasHeader && state.HasBody {
+			// We already have the full block
 			continue
 		}
 
-		// Attempt to fetch block data first
-		if err := c.getBlockData(hash); err != nil {
+		// Request only the parts we don't have
+		if err := c.getBlockData(hash, state); err != nil {
 			return err
 		}
 
-		// Mark that we've requested this block (header and body will be marked
-		// when they're actually written to the database)
-		c.conns.Blocks().Add(hash, BlockWriteState{HasHeader: false, HasBody: false})
+		// Update cache to track what we've requested (actual parts will be marked
+		// when they're written to the database)
+		if !ok {
+			c.conns.Blocks().Add(hash, BlockWriteState{HasHeader: false, HasBody: false})
+		}
 		uniqueHashes = append(uniqueHashes, hash)
 	}
 
