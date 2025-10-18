@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/bindings/tokens"
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/spf13/cobra"
 
 	uniswapv3loadtest "github.com/0xPolygon/polygon-cli/cmd/loadtest/uniswapv3"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog/log"
 )
@@ -154,16 +154,11 @@ func initUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.
 }
 
 // Run UniswapV3 loadtest.
-func runUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, uniswapV3Config uniswapv3loadtest.UniswapV3Config, poolConfig uniswapv3loadtest.PoolConfig, swapAmountIn *big.Int) (t1 time.Time, t2 time.Time, txHash common.Hash, err error) {
-	var tx *ethtypes.Transaction
-
+func runUniswapV3Loadtest(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, uniswapV3Config uniswapv3loadtest.UniswapV3Config, poolConfig uniswapv3loadtest.PoolConfig, swapAmountIn *big.Int) (t1 time.Time, t2 time.Time, tx *types.Transaction, err error) {
 	ltp := inputLoadTestParams
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
 	tx, err = uniswapv3loadtest.ExactInputSingleSwap(tops, uniswapV3Config.SwapRouter02.Contract, poolConfig, swapAmountIn, *ltp.FromETHAddress, tops.Nonce.Uint64())
-	if err == nil && tx != nil {
-		txHash = tx.Hash()
-	}
 	return
 }

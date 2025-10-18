@@ -28,6 +28,7 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/bindings/tester"
 	"github.com/0xPolygon/polygon-cli/bindings/tokens"
+	"github.com/0xPolygon/polygon-cli/cmd/loadtest/gaslimiter"
 	uniswapv3loadtest "github.com/0xPolygon/polygon-cli/cmd/loadtest/uniswapv3"
 
 	"github.com/0xPolygon/polygon-cli/rpctypes"
@@ -36,6 +37,7 @@ import (
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -827,166 +829,199 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 	log.Debug().Msg("Starting main load test loop")
 	var wg sync.WaitGroup
-	for routineID := int64(0); routineID < maxRoutines; routineID++ {
-		log.Trace().
-			Int64("routineID", routineID).
-			Msg("starting concurrent routine")
-		wg.Add(1)
-		go func(routineID int64) {
-			var startReq time.Time
-			var endReq time.Time
-			var tErr error
-			var ltTxHash ethcommon.Hash
-			for requestID := int64(0); requestID < maxRequests; requestID++ {
-				if rl != nil {
-					tErr = rl.Wait(ctx)
+
+	// setup gas budget provider
+	gasVault := gaslimiter.NewGasVault()
+
+	// TODO(Thiago): make this configurable
+	curve := gaslimiter.NewSineCurve(gaslimiter.CurveConfig{
+		Period:    8,
+		Amplitude: 5_000_000,
+		Target:    30_000_000,
+	})
+	gasProvider := gaslimiter.NewOscillatingGasProvider(c, gasVault, curve)
+	gasProvider.Start(ctx)
+
+	// TODO(Thiago): make this configurable
+	infinite := true
+	for {
+		for routineID := range maxRoutines {
+			log.Trace().Int64("routineID", routineID).Msg("starting concurrent routine")
+			wg.Add(1)
+			go func(routineID int64) {
+				var startReq time.Time
+				var endReq time.Time
+				var tErr error
+				var ltTx *types.Transaction
+				for requestID := range maxRequests {
+					if rl != nil {
+						tErr = rl.Wait(ctx)
+						if tErr != nil {
+							log.Error().
+								Int64("routineID", routineID).
+								Int64("requestID", requestID).
+								Err(tErr).
+								Msg("Encountered a rate limiting error")
+						}
+					}
+
+					localMode := mode
+					// if there are multiple modes, iterate through them, 'r' mode is supported here
+					if ltp.MultiMode {
+						localMode = ltp.ParsedModes[int(routineID+requestID)%(len(ltp.ParsedModes))]
+					}
+					// if we're doing random, we'll just pick one based on the current index
+					if localMode == loadTestModeRandom {
+						localMode = getRandomMode()
+					}
+
+					account, err := accountPool.Next(ctx)
+					if err != nil {
+						log.Error().
+							Int64("routineID", routineID).
+							Int64("requestID", requestID).
+							Err(err).
+							Msg("Unable to get next account from account pool")
+						return
+					}
+					chainID := new(big.Int).SetUint64(ltp.ChainID)
+					sendingTops, err := bind.NewKeyedTransactorWithChainID(account.privateKey, chainID)
+					if err != nil {
+						log.Error().
+							Int64("routineID", routineID).
+							Int64("requestID", requestID).
+							Err(err).
+							Msg("Unable create transaction signer")
+						return
+					}
+					sendingTops.Nonce = new(big.Int).SetUint64(account.nonce)
+
+					if mustCheckMaxBaseFee {
+						waiting := false
+						for waitBaseFeeToDrop.Load() {
+							if !waiting {
+								waiting = true
+								log.Debug().
+									Int64("routineID", routineID).
+									Int64("requestID", requestID).
+									Msg("go routine is waiting for base fee to drop")
+							}
+							time.Sleep(time.Second)
+						}
+					}
+
+					sendingTops = configureTransactOpts(ctx, c, sendingTops)
+
+					// TODO(Thiago): set gas limit based on gas strategy
+					fixedGasLimit := uint64(0)
+
+					// in case the gas limit is fixed, we spend or wait for the gas budget before sending the transaction
+					if fixedGasLimit > 0 {
+						gasVault.SpendOrWaitAvailableBudget(fixedGasLimit)
+						sendingTops.GasLimit = fixedGasLimit
+					}
+
+					switch localMode {
+					case loadTestModeERC20:
+						startReq, endReq, ltTx, tErr = loadTestERC20(ctx, c, sendingTops, erc20Contract, ltAddr)
+					case loadTestModeERC721:
+						startReq, endReq, ltTx, tErr = loadTestERC721(ctx, c, sendingTops, erc721Contract, ltAddr)
+					case loadTestModeBlob:
+						startReq, endReq, ltTx, tErr = loadTestBlob(ctx, c, sendingTops)
+					case loadTestModeContractCall:
+						startReq, endReq, ltTx, tErr = loadTestContractCall(ctx, c, sendingTops)
+					case loadTestModeDeploy:
+						startReq, endReq, ltTx, tErr = loadTestDeploy(ctx, c, sendingTops)
+					case loadTestModeIncrement:
+						startReq, endReq, ltTx, tErr = loadTestIncrement(ctx, c, sendingTops, ltContract)
+					case loadTestModeRecall:
+						startReq, endReq, ltTx, tErr = loadTestRecall(ctx, c, sendingTops, recallTransactions[int(sendingTops.Nonce.Uint64())%len(recallTransactions)])
+					case loadTestModeRPC:
+						startReq, endReq, tErr = loadTestRPC(ctx, c, indexedActivity)
+					case loadTestModeStore:
+						startReq, endReq, ltTx, tErr = loadTestStore(ctx, c, sendingTops, ltContract)
+					case loadTestModeTransaction:
+						startReq, endReq, ltTx, tErr = loadTestTransaction(ctx, c, sendingTops)
+					case loadTestModeUniswapV3:
+						swapAmountIn := big.NewInt(int64(uniswapv3LoadTestParams.SwapAmountInput))
+						startReq, endReq, ltTx, tErr = runUniswapV3Loadtest(ctx, c, sendingTops, uniswapV3Config, poolConfig, swapAmountIn)
+					default:
+						log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
+					}
+					if !inputLoadTestParams.FireAndForget {
+						recordSample(routineID, requestID, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
+					}
+					if tErr == nil && inputLoadTestParams.WaitForReceipt {
+						receiptMaxRetries := inputLoadTestParams.ReceiptRetryMax
+						receiptRetryInitialDelayMs := inputLoadTestParams.ReceiptRetryInitialDelayMs
+						_, tErr = util.WaitReceiptWithRetries(ctx, c, ltTx.Hash(), receiptMaxRetries, receiptRetryInitialDelayMs)
+					}
+
 					if tErr != nil {
 						log.Error().
 							Int64("routineID", routineID).
 							Int64("requestID", requestID).
 							Err(tErr).
-							Msg("Encountered a rate limiting error")
-					}
-				}
+							Str("mode", localMode.String()).
+							Str("address", sendingTops.From.String()).
+							Uint64("nonce", sendingTops.Nonce.Uint64()).
+							Uint64("gas", sendingTops.GasLimit).
+							Any("gasPrice", sendingTops.GasPrice).
+							Any("gasFeeCap", sendingTops.GasFeeCap).
+							Any("gasTipCap", sendingTops.GasTipCap).
+							Int64("request time", endReq.Sub(startReq).Milliseconds()).
+							Msg("recorded an error while sending transactions")
 
-				localMode := mode
-				// if there are multiple modes, iterate through them, 'r' mode is supported here
-				if ltp.MultiMode {
-					localMode = ltp.ParsedModes[int(routineID+requestID)%(len(ltp.ParsedModes))]
-				}
-				// if we're doing random, we'll just pick one based on the current index
-				if localMode == loadTestModeRandom {
-					localMode = getRandomMode()
-				}
+						// check nonce for reuse
+						// if we're not in call only mode, we want to retry
+						if !ltp.EthCallOnly {
+							// we start setting nonce to be reused
+							reuseNonce := true
 
-				account, err := accountPool.Next(ctx)
-				if err != nil {
-					log.Error().
-						Int64("routineID", routineID).
-						Int64("requestID", requestID).
-						Err(err).
-						Msg("Unable to get next account from account pool")
-					return
-				}
-				chainID := new(big.Int).SetUint64(ltp.ChainID)
-				sendingTops, err := bind.NewKeyedTransactorWithChainID(account.privateKey, chainID)
-				if err != nil {
-					log.Error().
-						Int64("routineID", routineID).
-						Int64("requestID", requestID).
-						Err(err).
-						Msg("Unable create transaction signer")
-					return
-				}
-				sendingTops.Nonce = new(big.Int).SetUint64(account.nonce)
+							// if it is an error that consumes the nonce, we can't retry it
+							if strings.Contains(tErr.Error(), "replacement transaction underpriced") ||
+								strings.Contains(tErr.Error(), "transaction underpriced") ||
+								strings.Contains(tErr.Error(), "nonce too low") ||
+								strings.Contains(tErr.Error(), "already known") ||
+								strings.Contains(tErr.Error(), "could not replace existing") {
+								reuseNonce = false
+							}
 
-				if mustCheckMaxBaseFee {
-					waiting := false
-					for waitBaseFeeToDrop.Load() {
-						if !waiting {
-							waiting = true
-							log.Debug().
-								Int64("routineID", routineID).
-								Int64("requestID", requestID).
-								Msg("go routine is waiting for base fee to drop")
-						}
-						time.Sleep(time.Second)
-					}
-				}
-
-				sendingTops = configureTransactOpts(ctx, c, sendingTops)
-
-				switch localMode {
-				case loadTestModeERC20:
-					startReq, endReq, ltTxHash, tErr = loadTestERC20(ctx, c, sendingTops, erc20Contract, ltAddr)
-				case loadTestModeERC721:
-					startReq, endReq, ltTxHash, tErr = loadTestERC721(ctx, c, sendingTops, erc721Contract, ltAddr)
-				case loadTestModeBlob:
-					startReq, endReq, ltTxHash, tErr = loadTestBlob(ctx, c, sendingTops)
-				case loadTestModeContractCall:
-					startReq, endReq, ltTxHash, tErr = loadTestContractCall(ctx, c, sendingTops)
-				case loadTestModeDeploy:
-					startReq, endReq, ltTxHash, tErr = loadTestDeploy(ctx, c, sendingTops)
-				case loadTestModeIncrement:
-					startReq, endReq, ltTxHash, tErr = loadTestIncrement(ctx, c, sendingTops, ltContract)
-				case loadTestModeRecall:
-					startReq, endReq, ltTxHash, tErr = loadTestRecall(ctx, c, sendingTops, recallTransactions[int(sendingTops.Nonce.Uint64())%len(recallTransactions)])
-				case loadTestModeRPC:
-					startReq, endReq, tErr = loadTestRPC(ctx, c, indexedActivity)
-				case loadTestModeStore:
-					startReq, endReq, ltTxHash, tErr = loadTestStore(ctx, c, sendingTops, ltContract)
-				case loadTestModeTransaction:
-					startReq, endReq, ltTxHash, tErr = loadTestTransaction(ctx, c, sendingTops)
-				case loadTestModeUniswapV3:
-					swapAmountIn := big.NewInt(int64(uniswapv3LoadTestParams.SwapAmountInput))
-					startReq, endReq, ltTxHash, tErr = runUniswapV3Loadtest(ctx, c, sendingTops, uniswapV3Config, poolConfig, swapAmountIn)
-				default:
-					log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
-				}
-				if !inputLoadTestParams.FireAndForget {
-					recordSample(routineID, requestID, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
-				}
-				if tErr == nil && inputLoadTestParams.WaitForReceipt {
-					receiptMaxRetries := inputLoadTestParams.ReceiptRetryMax
-					receiptRetryInitialDelayMs := inputLoadTestParams.ReceiptRetryInitialDelayMs
-					_, tErr = util.WaitReceiptWithRetries(ctx, c, ltTxHash, receiptMaxRetries, receiptRetryInitialDelayMs)
-				}
-
-				if tErr != nil {
-					log.Error().
-						Int64("routineID", routineID).
-						Int64("requestID", requestID).
-						Err(tErr).
-						Str("mode", localMode.String()).
-						Str("address", sendingTops.From.String()).
-						Uint64("nonce", sendingTops.Nonce.Uint64()).
-						Uint64("gas", sendingTops.GasLimit).
-						Any("gasPrice", sendingTops.GasPrice).
-						Any("gasFeeCap", sendingTops.GasFeeCap).
-						Any("gasTipCap", sendingTops.GasTipCap).
-						Int64("request time", endReq.Sub(startReq).Milliseconds()).
-						Msg("recorded an error while sending transactions")
-
-					// check nonce for reuse
-					// if we're not in call only mode, we want to retry
-					if !ltp.EthCallOnly {
-						// we start setting nonce to be reused
-						reuseNonce := true
-
-						// if it is an error that consumes the nonce, we can't retry it
-						if strings.Contains(tErr.Error(), "replacement transaction underpriced") ||
-							strings.Contains(tErr.Error(), "transaction underpriced") ||
-							strings.Contains(tErr.Error(), "nonce too low") ||
-							strings.Contains(tErr.Error(), "already known") ||
-							strings.Contains(tErr.Error(), "could not replace existing") {
-							reuseNonce = false
-						}
-
-						// if we can reuse the nonce, we add it back to the account pool
-						// for the specific account
-						if reuseNonce {
-							err := accountPool.AddReusableNonce(ctx, sendingTops.From, sendingTops.Nonce.Uint64())
-							if err != nil {
-								log.Error().
-									Str("address", sendingTops.From.String()).
-									Uint64("nonce", sendingTops.Nonce.Uint64()).
-									Err(err).
-									Msg("Unable to add reusable nonce to account pool")
+							// if we can reuse the nonce, we add it back to the account pool
+							// for the specific account
+							if reuseNonce {
+								err := accountPool.AddReusableNonce(ctx, sendingTops.From, sendingTops.Nonce.Uint64())
+								if err != nil {
+									log.Error().
+										Str("address", sendingTops.From.String()).
+										Uint64("nonce", sendingTops.Nonce.Uint64()).
+										Err(err).
+										Msg("Unable to add reusable nonce to account pool")
+								}
 							}
 						}
 					}
+
+					// if gas limit is not fixed, we spend the gas used from the gas budget after the transaction is sent
+					if fixedGasLimit == 0 {
+						gasVault.SpendOrWaitAvailableBudget(ltTx.Gas())
+					}
+
+					log.Trace().
+						Int64("routineID", routineID).
+						Int64("requestID", requestID).
+						Stringer("txhash", ltTx.Hash()).
+						Any("nonce", sendingTops.Nonce).
+						Str("mode", localMode.String()).
+						Str("sendingAddress", sendingTops.From.String()).
+						Msg("Request")
 				}
-				log.Trace().
-					Int64("routineID", routineID).
-					Int64("requestID", requestID).
-					Stringer("txhash", ltTxHash).
-					Any("nonce", sendingTops.Nonce).
-					Str("mode", localMode.String()).
-					Str("sendingAddress", sendingTops.From.String()).
-					Msg("Request")
-			}
-			wg.Done()
-		}(routineID)
+				wg.Done()
+			}(routineID)
+		}
+		if !infinite {
+			break
+		}
 	}
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
@@ -1172,7 +1207,7 @@ func getERC721Contract(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 	return
 }
 
-func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
+func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, tx *types.Transaction, err error) {
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
@@ -1185,9 +1220,9 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 	amount := ltp.SendAmount
 	chainID := new(big.Int).SetUint64(ltp.ChainID)
 
-	var tx *ethtypes.Transaction
+	var rtx *types.Transaction
 	if ltp.LegacyTransactionMode {
-		tx = ethtypes.NewTx(&ethtypes.LegacyTx{
+		rtx = ethtypes.NewTx(&ethtypes.LegacyTx{
 			Nonce:    tops.Nonce.Uint64(),
 			To:       to,
 			Value:    amount,
@@ -1206,25 +1241,23 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 			Data:      nil,
 			Value:     amount,
 		}
-		tx = ethtypes.NewTx(dynamicFeeTx)
+		rtx = ethtypes.NewTx(dynamicFeeTx)
 	}
 
-	stx, err := tops.Signer(tops.From, tx)
+	tx, err = tops.Signer(tops.From, rtx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
 	}
 
-	txHash = stx.Hash()
-
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
 	if ltp.EthCallOnly {
-		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
+		_, err = c.CallContract(ctx, txToCallMsg(tx), nil)
 	} else if ltp.OutputRawTxOnly {
-		err = outputRawTransaction(stx)
+		err = outputRawTransaction(tx)
 	} else {
-		err = c.SendTransaction(ctx, stx)
+		err = c.SendTransaction(ctx, tx)
 	}
 
 	return
@@ -1394,9 +1427,7 @@ func suggestMaxFeePerGas(ctx context.Context, c *ethclient.Client, blockNumber u
 }
 
 // TODO - in the future it might be more interesting if this mode takes input or random contracts to be deployed
-func loadTestDeploy(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
-	var tx *ethtypes.Transaction
-
+func loadTestDeploy(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, tx *types.Transaction, err error) {
 	ltp := inputLoadTestParams
 
 	t1 = time.Now()
@@ -1414,20 +1445,15 @@ func loadTestDeploy(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 		}
 		// The transaction from DeployLoadTester should already be signed
 		if tx != nil {
-			txHash = tx.Hash()
 			err = outputRawTransaction(tx)
 		}
 	} else {
 		_, tx, _, err = tester.DeployLoadTester(tops, c)
-		if err == nil && tx != nil {
-			txHash = tx.Hash()
-		}
 	}
 	return
 }
 
-func loadTestIncrement(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
-	var tx *ethtypes.Transaction
+func loadTestIncrement(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, tx *types.Transaction, err error) {
 	ltp := inputLoadTestParams
 
 	t1 = time.Now()
@@ -1452,20 +1478,14 @@ func loadTestIncrement(ctx context.Context, c *ethclient.Client, tops *bind.Tran
 			err = signErr
 			return
 		}
-		txHash = signedTx.Hash()
 		err = outputRawTransaction(signedTx)
 	} else {
 		tx, err = ltContract.Inc(tops)
-		if err == nil && tx != nil {
-			txHash = tx.Hash()
-		}
 	}
 	return
 }
 
-func loadTestStore(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
-	var tx *ethtypes.Transaction
-
+func loadTestStore(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, ltContract *tester.LoadTester) (t1 time.Time, t2 time.Time, tx *types.Transaction, err error) {
 	ltp := inputLoadTestParams
 
 	inputData := make([]byte, ltp.StoreDataSize)
@@ -1492,19 +1512,14 @@ func loadTestStore(ctx context.Context, c *ethclient.Client, tops *bind.Transact
 			err = signErr
 			return
 		}
-		txHash = signedTx.Hash()
 		err = outputRawTransaction(signedTx)
 	} else {
 		tx, err = ltContract.Store(tops, inputData)
-		if err == nil && tx != nil {
-			txHash = tx.Hash()
-		}
 	}
 	return
 }
 
-func loadTestERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, erc20Contract *tokens.ERC20, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
-	var tx *ethtypes.Transaction
+func loadTestERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, erc20Contract *tokens.ERC20, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, tx *types.Transaction, err error) {
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
@@ -1535,21 +1550,15 @@ func loadTestERC20(ctx context.Context, c *ethclient.Client, tops *bind.Transact
 			err = signErr
 			return
 		}
-		txHash = signedTx.Hash()
 		err = outputRawTransaction(signedTx)
 	} else {
 		tx, err = erc20Contract.Transfer(tops, *to, amount)
-		if err == nil && tx != nil {
-			txHash = tx.Hash()
-		}
 	}
 
 	return
 }
 
-func loadTestERC721(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, erc721Contract *tokens.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
-	var tx *ethtypes.Transaction
-
+func loadTestERC721(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, erc721Contract *tokens.ERC721, ltAddress ethcommon.Address) (t1 time.Time, t2 time.Time, tx *types.Transaction, err error) {
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
@@ -1579,21 +1588,15 @@ func loadTestERC721(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 			err = signErr
 			return
 		}
-		txHash = signedTx.Hash()
 		err = outputRawTransaction(signedTx)
 	} else {
 		tx, err = erc721Contract.MintBatch(tops, *to, big.NewInt(1))
-		if err == nil && tx != nil {
-			txHash = tx.Hash()
-		}
 	}
 
 	return
 }
 
-func loadTestRecall(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, originalTx rpctypes.PolyTransaction) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
-	var stx *ethtypes.Transaction
-
+func loadTestRecall(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, originalTx rpctypes.PolyTransaction) (t1 time.Time, t2 time.Time, tx *types.Transaction, err error) {
 	ltp := inputLoadTestParams
 
 	// For EIP-1559 transactions, use GasFeeCap instead of GasPrice (which is nil for dynamic fee txs)
@@ -1601,20 +1604,19 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 	if gasPrice == nil && tops.GasFeeCap != nil {
 		gasPrice = tops.GasFeeCap
 	}
-	tx := rawTransactionToNewTx(originalTx, tops.Nonce.Uint64(), gasPrice, tops.GasTipCap)
+	rtx := rawTransactionToNewTx(originalTx, tops.Nonce.Uint64(), gasPrice, tops.GasTipCap)
 
-	stx, err = tops.Signer(tops.From, tx)
+	tx, err = tops.Signer(tops.From, rtx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
 	}
 	log.Trace().Str("txId", originalTx.Hash().String()).Bool("callOnly", ltp.EthCallOnly).Msg("Attempting to replay transaction")
-	txHash = stx.Hash()
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
 	if ltp.EthCallOnly {
-		callMsg := txToCallMsg(stx)
+		callMsg := txToCallMsg(tx)
 		callMsg.From = originalTx.From()
 		callMsg.Gas = originalTx.Gas()
 		if ltp.EthCallOnlyLatestBlock {
@@ -1631,9 +1633,9 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 		// we're not going to return the error in the case because there is no point retrying
 		err = nil
 	} else if ltp.OutputRawTxOnly {
-		err = outputRawTransaction(stx)
+		err = outputRawTransaction(tx)
 	} else {
-		err = c.SendTransaction(ctx, stx)
+		err = c.SendTransaction(ctx, tx)
 	}
 	return
 }
@@ -1754,9 +1756,8 @@ func loadTestRPC(ctx context.Context, c *ethclient.Client, ia *IndexedActivity) 
 	return
 }
 
-func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
+func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, tx *types.Transaction, err error) {
 	var calldata []byte
-	var stx *ethtypes.Transaction
 
 	ltp := inputLoadTestParams
 
@@ -1796,7 +1797,7 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 		}
 	}
 
-	var tx *ethtypes.Transaction
+	var rtx *ethtypes.Transaction
 	if ltp.LegacyTransactionMode {
 		tx = ethtypes.NewTx(&ethtypes.LegacyTx{
 			Nonce:    tops.Nonce.Uint64(),
@@ -1820,29 +1821,25 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 	}
 	log.Trace().Interface("tx", tx).Msg("Contract call data")
 
-	stx, err = tops.Signer(tops.From, tx)
+	tx, err = tops.Signer(tops.From, rtx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
 	}
 
-	txHash = stx.Hash()
-
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
 	if ltp.EthCallOnly {
-		_, err = c.CallContract(ctx, txToCallMsg(stx), nil)
+		_, err = c.CallContract(ctx, txToCallMsg(tx), nil)
 	} else if ltp.OutputRawTxOnly {
-		err = outputRawTransaction(stx)
+		err = outputRawTransaction(tx)
 	} else {
-		err = c.SendTransaction(ctx, stx)
+		err = c.SendTransaction(ctx, tx)
 	}
 	return
 }
 
-func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, txHash ethcommon.Hash, err error) {
-	var stx *ethtypes.Transaction
-
+func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) (t1 time.Time, t2 time.Time, tx *types.Transaction, err error) {
 	ltp := inputLoadTestParams
 
 	to := ltp.ToETHAddress
@@ -1895,15 +1892,13 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactO
 		log.Error().Err(err).Msg("Unable to parse blob")
 		return
 	}
-	tx := ethtypes.NewTx(&blobTx)
+	rtx := ethtypes.NewTx(&blobTx)
 
-	stx, err = tops.Signer(tops.From, tx)
+	tx, err = tops.Signer(tops.From, rtx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
 	}
-
-	txHash = stx.Hash()
 
 	t1 = time.Now()
 	defer func() { t2 = time.Now() }()
@@ -1911,9 +1906,9 @@ func loadTestBlob(ctx context.Context, c *ethclient.Client, tops *bind.TransactO
 		log.Error().Err(err).Msg("CallOnly not supported to blob transactions")
 		return
 	} else if ltp.OutputRawTxOnly {
-		err = outputRawTransaction(stx)
+		err = outputRawTransaction(tx)
 	} else {
-		err = c.SendTransaction(ctx, stx)
+		err = c.SendTransaction(ctx, tx)
 	}
 	return
 }
