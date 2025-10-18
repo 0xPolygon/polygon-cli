@@ -26,6 +26,7 @@ import (
 type BlockWriteState struct {
 	HasHeader bool
 	HasBody   bool
+	HasBlock  bool
 }
 
 // conn represents an individual connection with a peer.
@@ -321,7 +322,8 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 	}
 
 	// Check cache first before querying the database
-	if state, ok := c.conns.Blocks().Get(header.ParentHash); ok && state.HasHeader {
+	state, ok := c.conns.Blocks().Get(header.ParentHash)
+	if ok && state.HasHeader && state.HasBody {
 		return nil
 	}
 
@@ -334,8 +336,6 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 		Str("number", new(big.Int).Sub(header.Number, big.NewInt(1)).String()).
 		Msg("Fetching missing parent block")
 
-	// Get current state from cache (will be zero value if not present)
-	state, _ := c.conns.Blocks().Get(header.ParentHash)
 	return c.getBlockData(header.ParentHash, state)
 }
 
@@ -357,8 +357,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 		// Check what parts of the block we already have
 		state, ok := c.conns.Blocks().Get(hash)
-		if ok && state.HasHeader && state.HasBody {
-			// We already have the full block
+		if ok {
 			continue
 		}
 
@@ -367,11 +366,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 			return err
 		}
 
-		// Update cache to track what we've requested (actual parts will be marked
-		// when they're written to the database)
-		if !ok {
-			c.conns.Blocks().Add(hash, BlockWriteState{HasHeader: false, HasBody: false})
-		}
+		c.conns.Blocks().Add(hash, BlockWriteState{})
 		uniqueHashes = append(uniqueHashes, hash)
 	}
 
@@ -514,19 +509,24 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	}
 	c.headMutex.Unlock()
 
-	// Check if we already have the full block in the cache
-	if state, ok := c.conns.Blocks().Get(hash); ok && state.HasHeader && state.HasBody {
-		return nil
-	}
-
 	if err := c.getParentBlock(ctx, block.Block.Header()); err != nil {
 		return err
+	}
+
+	// Check if we already have the full block in the cache
+	if state, ok := c.conns.Blocks().Get(hash); ok && state.HasBlock {
+		return nil
 	}
 
 	c.db.WriteBlock(ctx, c.node, block.Block, block.TD, tfs)
 
 	// Update cache to mark both header and body as written
-	c.conns.Blocks().Add(hash, BlockWriteState{HasHeader: true, HasBody: true})
+	state := BlockWriteState{
+		HasHeader: true,
+		HasBody:   true,
+		HasBlock:  true,
+	}
+	c.conns.Blocks().Add(hash, state)
 
 	return nil
 }
