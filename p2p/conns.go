@@ -19,7 +19,7 @@ type Conns struct {
 
 	// blocks tracks blocks written to the database across all peers
 	// to avoid duplicate writes and requests.
-	blocks *Cache[common.Hash, BlockWriteState]
+	blocks *Cache[common.Hash, BlockCache]
 }
 
 // ConnsOptions contains configuration options for creating a new Conns manager.
@@ -34,7 +34,7 @@ type ConnsOptions struct {
 func NewConns(opts ConnsOptions) *Conns {
 	return &Conns{
 		conns:  make(map[string]*conn),
-		blocks: NewCache[common.Hash, BlockWriteState](opts.MaxBlocks, opts.BlocksCacheTTL),
+		blocks: NewCache[common.Hash, BlockCache](opts.MaxBlocks, opts.BlocksCacheTTL),
 	}
 }
 
@@ -108,6 +108,6 @@ func (c *Conns) GetPeerConnectedAt(peerID string) time.Time {
 }
 
 // Blocks returns the global blocks cache.
-func (c *Conns) Blocks() *Cache[common.Hash, BlockWriteState] {
+func (c *Conns) Blocks() *Cache[common.Hash, BlockCache] {
 	return c.blocks
 }

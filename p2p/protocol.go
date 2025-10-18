@@ -22,11 +22,11 @@ import (
 	"github.com/0xPolygon/polygon-cli/p2p/database"
 )
 
-// BlockWriteState tracks what parts of a block have been written to the database.
-type BlockWriteState struct {
-	HasHeader bool
-	HasBody   bool
-	HasBlock  bool
+// BlockCache stores the actual block data to avoid duplicate fetches and database queries.
+type BlockCache struct {
+	Header *types.Header
+	Body   *eth.BlockBody
+	TD     *big.Int
 }
 
 // conn represents an individual connection with a peer.
@@ -271,9 +271,9 @@ func (c *conn) readStatus(packet *eth.StatusPacket) error {
 // getBlockData will send GetBlockHeaders and/or GetBlockBodies requests to the
 // peer based on what parts of the block we already have. It will return an error
 // if sending either of the requests failed.
-func (c *conn) getBlockData(hash common.Hash, state BlockWriteState) error {
+func (c *conn) getBlockData(hash common.Hash, cache BlockCache) error {
 	// Only request header if we don't have it
-	if !state.HasHeader {
+	if cache.Header == nil {
 		headersRequest := &GetBlockHeaders{
 			GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
 				// Providing both the hash and number will result in a `both origin
@@ -290,7 +290,7 @@ func (c *conn) getBlockData(hash common.Hash, state BlockWriteState) error {
 	}
 
 	// Only request body if we don't have it
-	if !state.HasBody {
+	if cache.Body == nil {
 		c.requestNum++
 		c.requests.Add(c.requestNum, hash)
 
@@ -322,8 +322,8 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 	}
 
 	// Check cache first before querying the database
-	state, ok := c.conns.Blocks().Get(header.ParentHash)
-	if ok && state.HasHeader && state.HasBody {
+	cache, ok := c.conns.Blocks().Get(header.ParentHash)
+	if ok && cache.Header != nil && cache.Body != nil {
 		return nil
 	}
 
@@ -336,7 +336,7 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 		Str("number", new(big.Int).Sub(header.Number, big.NewInt(1)).String()).
 		Msg("Fetching missing parent block")
 
-	return c.getBlockData(header.ParentHash, state)
+	return c.getBlockData(header.ParentHash, cache)
 }
 
 func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
@@ -356,17 +356,17 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		hash := entry.Hash
 
 		// Check what parts of the block we already have
-		state, ok := c.conns.Blocks().Get(hash)
+		cache, ok := c.conns.Blocks().Get(hash)
 		if ok {
 			continue
 		}
 
 		// Request only the parts we don't have
-		if err := c.getBlockData(hash, state); err != nil {
+		if err := c.getBlockData(hash, cache); err != nil {
 			return err
 		}
 
-		c.conns.Blocks().Add(hash, BlockWriteState{})
+		c.conns.Blocks().Add(hash, BlockCache{})
 		uniqueHashes = append(uniqueHashes, hash)
 	}
 
@@ -425,12 +425,12 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.db.WriteBlockHeaders(ctx, headers, tfs)
 
-	// Update cache to mark headers as written
+	// Update cache to store headers
 	for _, header := range headers {
 		hash := header.Hash()
-		state, _ := c.conns.Blocks().Get(hash)
-		state.HasHeader = true
-		c.conns.Blocks().Add(hash, state)
+		cache, _ := c.conns.Blocks().Get(hash)
+		cache.Header = header
+		c.conns.Blocks().Add(hash, cache)
 	}
 
 	return nil
@@ -471,16 +471,17 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	c.requests.Remove(packet.RequestId)
 
 	// Check if we already have the body in the cache
-	if state, ok := c.conns.Blocks().Get(hash); ok && state.HasBody {
+	if cache, ok := c.conns.Blocks().Get(hash); ok && cache.Body != nil {
 		return nil
 	}
 
-	c.db.WriteBlockBody(ctx, packet.BlockBodiesResponse[0], hash, tfs)
+	body := packet.BlockBodiesResponse[0]
+	c.db.WriteBlockBody(ctx, body, hash, tfs)
 
-	// Update cache to mark body as written
-	state, _ := c.conns.Blocks().Get(hash)
-	state.HasBody = true
-	c.conns.Blocks().Add(hash, state)
+	// Update cache to store body
+	cache, _ := c.conns.Blocks().Get(hash)
+	cache.Body = body
+	c.conns.Blocks().Add(hash, cache)
 
 	return nil
 }
@@ -514,19 +515,22 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	// Check if we already have the full block in the cache
-	if state, ok := c.conns.Blocks().Get(hash); ok && state.HasBlock {
+	if cache, ok := c.conns.Blocks().Get(hash); ok && cache.TD != nil {
 		return nil
 	}
 
 	c.db.WriteBlock(ctx, c.node, block.Block, block.TD, tfs)
 
-	// Update cache to mark both header and body as written
-	state := BlockWriteState{
-		HasHeader: true,
-		HasBody:   true,
-		HasBlock:  true,
-	}
-	c.conns.Blocks().Add(hash, state)
+	// Update cache to store the full block
+	c.conns.Blocks().Add(hash, BlockCache{
+		Header: block.Block.Header(),
+		Body: &eth.BlockBody{
+			Transactions: block.Block.Transactions(),
+			Uncles:       block.Block.Uncles(),
+			Withdrawals:  block.Block.Withdrawals(),
+		},
+		TD: block.TD,
+	})
 
 	return nil
 }
