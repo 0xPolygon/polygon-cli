@@ -57,6 +57,10 @@ type conn struct {
 
 	// connectedAt stores when this peer connection was established.
 	connectedAt time.Time
+
+	// Cached values for prometheus labels to avoid repeated URLv4() calls
+	peerURL      string
+	peerFullname string
 }
 
 // EthProtocolOptions is the options used when creating a new eth protocol.
@@ -97,20 +101,23 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 		Version: version,
 		Length:  17,
 		Run: func(p *ethp2p.Peer, rw ethp2p.MsgReadWriter) error {
+			peerURL := p.Node().URLv4()
 			c := &conn{
-				sensorID:    opts.SensorID,
-				node:        p.Node(),
-				logger:      log.With().Str("peer", p.Node().URLv4()).Logger(),
-				rw:          rw,
-				db:          opts.Database,
-				requests:    NewCache[uint64, common.Hash](opts.MaxRequests, opts.RequestsCacheTTL),
-				requestNum:  0,
-				head:        opts.Head,
-				headMutex:   opts.HeadMutex,
-				counter:     opts.MsgCounter,
-				peer:        p,
-				conns:       opts.Conns,
-				connectedAt: time.Now(),
+				sensorID:     opts.SensorID,
+				node:         p.Node(),
+				logger:       log.With().Str("peer", peerURL).Logger(),
+				rw:           rw,
+				db:           opts.Database,
+				requests:     NewCache[uint64, common.Hash](opts.MaxRequests, opts.RequestsCacheTTL),
+				requestNum:   0,
+				head:         opts.Head,
+				headMutex:    opts.HeadMutex,
+				counter:      opts.MsgCounter,
+				peer:         p,
+				conns:        opts.Conns,
+				connectedAt:  time.Now(),
+				peerURL:      peerURL,
+				peerFullname: p.Fullname(),
 			}
 
 			c.headMutex.RLock()
@@ -217,7 +224,7 @@ func (c *conn) statusExchange(packet *eth.StatusPacket) error {
 
 // countMsg increments the prometheus counter for this connection with the given direction, message name, and count.
 func (c *conn) countMsg(direction Direction, messageName string, count float64) {
-	c.counter.WithLabelValues(messageName, c.node.URLv4(), c.peer.Fullname(), string(direction)).Add(count)
+	c.counter.WithLabelValues(messageName, c.peerURL, c.peerFullname, string(direction)).Add(count)
 }
 
 // countMsgReceived increments the prometheus counter for received messages.
@@ -322,7 +329,7 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 	}
 
 	// Check cache first before querying the database
-	cache, ok := c.conns.Blocks().Get(header.ParentHash)
+	cache, ok := c.conns.Blocks().Peek(header.ParentHash)
 	if ok && cache.Header != nil && cache.Body != nil {
 		return nil
 	}
@@ -428,9 +435,10 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 	// Update cache to store headers
 	for _, header := range headers {
 		hash := header.Hash()
-		cache, _ := c.conns.Blocks().Get(hash)
-		cache.Header = header
-		c.conns.Blocks().Add(hash, cache)
+		c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
+			cache.Header = header
+			return cache
+		})
 	}
 
 	return nil
@@ -471,7 +479,7 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	c.requests.Remove(packet.RequestId)
 
 	// Check if we already have the body in the cache
-	if cache, ok := c.conns.Blocks().Get(hash); ok && cache.Body != nil {
+	if cache, ok := c.conns.Blocks().Peek(hash); ok && cache.Body != nil {
 		return nil
 	}
 
@@ -479,9 +487,10 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	c.db.WriteBlockBody(ctx, body, hash, tfs)
 
 	// Update cache to store body
-	cache, _ := c.conns.Blocks().Get(hash)
-	cache.Body = body
-	c.conns.Blocks().Add(hash, cache)
+	c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
+		cache.Body = body
+		return cache
+	})
 
 	return nil
 }
@@ -515,7 +524,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	// Check if we already have the full block in the cache
-	if cache, ok := c.conns.Blocks().Get(hash); ok && cache.TD != nil {
+	if cache, ok := c.conns.Blocks().Peek(hash); ok && cache.TD != nil {
 		return nil
 	}
 
