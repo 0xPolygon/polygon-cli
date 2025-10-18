@@ -71,6 +71,8 @@ type (
 		NoDiscovery                  bool
 		MaxRequests                  int
 		RequestsCacheTTL             time.Duration
+		MaxBlocks                    int
+		BlocksCacheTTL               time.Duration
 
 		bootnodes    []*enode.Node
 		staticNodes  []*enode.Node
@@ -192,7 +194,11 @@ var SensorCmd = &cobra.Command{
 		}, []string{"message", "url", "name", "direction"})
 
 		// Create peer connection manager for broadcasting transactions
-		conns := p2p.NewConns()
+		// and managing the global blocks cache
+		conns := p2p.NewConns(p2p.ConnsOptions{
+			MaxBlocks:      inputSensorParams.MaxBlocks,
+			BlocksCacheTTL: inputSensorParams.BlocksCacheTTL,
+		})
 
 		opts := p2p.EthProtocolOptions{
 			Context:          cmd.Context(),
@@ -482,4 +488,6 @@ will result in less chance of missing data but can significantly increase memory
 	f.BoolVar(&inputSensorParams.NoDiscovery, "no-discovery", false, "disable P2P peer discovery")
 	f.IntVar(&inputSensorParams.MaxRequests, "max-requests", 2048, "maximum request IDs to track per peer (0 for no limit)")
 	f.DurationVar(&inputSensorParams.RequestsCacheTTL, "requests-cache-ttl", 5*time.Minute, "time to live for requests cache entries (0 for no expiration)")
+	f.IntVar(&inputSensorParams.MaxBlocks, "max-blocks", 1024, "maximum blocks to track across all peers (0 for no limit)")
+	f.DurationVar(&inputSensorParams.BlocksCacheTTL, "blocks-cache-ttl", 10*time.Minute, "time to live for block cache entries (0 for no expiration)")
 }

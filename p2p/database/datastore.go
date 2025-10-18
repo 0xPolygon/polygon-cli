@@ -152,6 +152,16 @@ func NewDatastore(ctx context.Context, opts DatastoreOptions) Database {
 	}
 }
 
+// runAsync executes the provided function asynchronously with concurrency control.
+// It uses the jobs channel as a semaphore to limit concurrent operations.
+func (d *Datastore) runAsync(fn func()) {
+	d.jobs <- struct{}{}
+	go func() {
+		fn()
+		<-d.jobs
+	}()
+}
+
 // WriteBlock writes the block and the block event to datastore.
 func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
 	if d.client == nil {
@@ -159,19 +169,15 @@ func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *typ
 	}
 
 	if d.ShouldWriteBlockEvents() {
-		d.jobs <- struct{}{}
-		go func() {
+		d.runAsync(func() {
 			d.writeEvent(peer, BlockEventsKind, block.Hash(), BlocksKind, tfs)
-			<-d.jobs
-		}()
+		})
 	}
 
 	if d.ShouldWriteBlocks() {
-		d.jobs <- struct{}{}
-		go func() {
+		d.runAsync(func() {
 			d.writeBlock(ctx, block, td, tfs)
-			<-d.jobs
-		}()
+		})
 	}
 }
 
@@ -185,11 +191,9 @@ func (d *Datastore) WriteBlockHeaders(ctx context.Context, headers []*types.Head
 	}
 
 	for _, h := range headers {
-		d.jobs <- struct{}{}
-		go func(header *types.Header) {
-			d.writeBlockHeader(ctx, header, tfs)
-			<-d.jobs
-		}(h)
+		d.runAsync(func() {
+			d.writeBlockHeader(ctx, h, tfs)
+		})
 	}
 }
 
@@ -203,11 +207,9 @@ func (d *Datastore) WriteBlockBody(ctx context.Context, body *eth.BlockBody, has
 		return
 	}
 
-	d.jobs <- struct{}{}
-	go func() {
+	d.runAsync(func() {
 		d.writeBlockBody(ctx, body, hash, tfs)
-		<-d.jobs
-	}()
+	})
 }
 
 // WriteBlockHashes will write the block events to datastore.
@@ -216,11 +218,9 @@ func (d *Datastore) WriteBlockHashes(ctx context.Context, peer *enode.Node, hash
 		return
 	}
 
-	d.jobs <- struct{}{}
-	go func() {
+	d.runAsync(func() {
 		d.writeEvents(ctx, peer, BlockEventsKind, hashes, BlocksKind, tfs)
-		<-d.jobs
-	}()
+	})
 }
 
 // WriteTransactions will write the transactions and transaction events to datastore.
@@ -230,11 +230,9 @@ func (d *Datastore) WriteTransactions(ctx context.Context, peer *enode.Node, txs
 	}
 
 	if d.ShouldWriteTransactions() {
-		d.jobs <- struct{}{}
-		go func() {
+		d.runAsync(func() {
 			d.writeTransactions(ctx, txs, tfs)
-			<-d.jobs
-		}()
+		})
 	}
 
 	if d.ShouldWriteTransactionEvents() {
@@ -243,11 +241,9 @@ func (d *Datastore) WriteTransactions(ctx context.Context, peer *enode.Node, txs
 			hashes = append(hashes, tx.Hash())
 		}
 
-		d.jobs <- struct{}{}
-		go func() {
+		d.runAsync(func() {
 			d.writeEvents(ctx, peer, TransactionEventsKind, hashes, TransactionsKind, tfs)
-			<-d.jobs
-		}()
+		})
 	}
 }
 
@@ -257,9 +253,7 @@ func (d *Datastore) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time.
 		return
 	}
 
-	d.jobs <- struct{}{}
-	go func() {
-
+	d.runAsync(func() {
 		keys := make([]*datastore.Key, 0, len(peers))
 		dsPeers := make([]*DatastorePeer, 0, len(peers))
 
@@ -279,9 +273,7 @@ func (d *Datastore) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time.
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to write peers")
 		}
-
-		<-d.jobs
-	}()
+	})
 }
 
 func (d *Datastore) MaxConcurrentWrites() int {
