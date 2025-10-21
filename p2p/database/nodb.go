@@ -33,6 +33,10 @@ func (n *nodb) WriteBlockHeaders(ctx context.Context, headers []*types.Header, t
 func (n *nodb) WriteBlockHashes(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
 }
 
+// WriteBlockHashFirstSeen does nothing.
+func (n *nodb) WriteBlockHashFirstSeen(ctx context.Context, hash common.Hash, tfsh time.Time) {
+}
+
 // WriteBlockBody does nothing.
 func (n *nodb) WriteBlockBody(ctx context.Context, body *eth.BlockBody, hash common.Hash, tfs time.Time) {
 }

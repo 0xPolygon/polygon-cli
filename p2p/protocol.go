@@ -382,6 +382,9 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 			continue
 		}
 
+		// Write hash first seen time immediately for new blocks
+		c.db.WriteBlockHashFirstSeen(ctx, hash, tfs)
+
 		// Request only the parts we don't have
 		if err := c.getBlockData(hash, cache, false); err != nil {
 			return err
