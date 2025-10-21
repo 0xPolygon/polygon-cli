@@ -22,6 +22,13 @@ import (
 	"github.com/0xPolygon/polygon-cli/p2p/database"
 )
 
+// BlockCache stores the actual block data to avoid duplicate fetches and database queries.
+type BlockCache struct {
+	Header *types.Header
+	Body   *eth.BlockBody
+	TD     *big.Int
+}
+
 // conn represents an individual connection with a peer.
 type conn struct {
 	sensorID  string
