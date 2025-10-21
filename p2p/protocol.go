@@ -47,6 +47,10 @@ type conn struct {
 	requests   *Cache[uint64, common.Hash]
 	requestNum uint64
 
+	// parents tracks hashes of blocks requested as parents to mark them
+	// with IsParent=true when writing to the database.
+	parents *Cache[common.Hash, struct{}]
+
 	// conns provides access to the global connection manager, which includes
 	// the blocks cache shared across all peers.
 	conns *Conns
@@ -83,6 +87,10 @@ type EthProtocolOptions struct {
 	// Requests cache configuration
 	MaxRequests      int
 	RequestsCacheTTL time.Duration
+
+	// Parent hash tracking cache configuration
+	MaxParents      int
+	ParentsCacheTTL time.Duration
 }
 
 // HeadBlock contains the necessary head block data for the status message.
@@ -110,6 +118,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				db:           opts.Database,
 				requests:     NewCache[uint64, common.Hash](opts.MaxRequests, opts.RequestsCacheTTL),
 				requestNum:   0,
+				parents:      NewCache[common.Hash, struct{}](opts.MaxParents, opts.ParentsCacheTTL),
 				head:         opts.Head,
 				headMutex:    opts.HeadMutex,
 				counter:      opts.MsgCounter,
@@ -277,8 +286,9 @@ func (c *conn) readStatus(packet *eth.StatusPacket) error {
 
 // getBlockData will send GetBlockHeaders and/or GetBlockBodies requests to the
 // peer based on what parts of the block we already have. It will return an error
-// if sending either of the requests failed.
-func (c *conn) getBlockData(hash common.Hash, cache BlockCache) error {
+// if sending either of the requests failed. The isParent parameter indicates if
+// this block is being fetched as a parent block.
+func (c *conn) getBlockData(hash common.Hash, cache BlockCache, isParent bool) error {
 	// Only request header if we don't have it
 	if cache.Header == nil {
 		headersRequest := &GetBlockHeaders{
@@ -288,6 +298,10 @@ func (c *conn) getBlockData(hash common.Hash, cache BlockCache) error {
 				Origin: eth.HashOrNumber{Hash: hash},
 				Amount: 1,
 			},
+		}
+
+		if isParent {
+			c.parents.Add(hash, struct{}{})
 		}
 
 		c.countMsgSent(headersRequest.Name(), 1)
@@ -343,7 +357,7 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 		Str("number", new(big.Int).Sub(header.Number, big.NewInt(1)).String()).
 		Msg("Fetching missing parent block")
 
-	return c.getBlockData(header.ParentHash, cache)
+	return c.getBlockData(header.ParentHash, cache, true)
 }
 
 func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
@@ -369,7 +383,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		}
 
 		// Request only the parts we don't have
-		if err := c.getBlockData(hash, cache); err != nil {
+		if err := c.getBlockData(hash, cache, false); err != nil {
 			return err
 		}
 
@@ -422,6 +436,10 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 	tfs := time.Now()
 
 	headers := packet.BlockHeadersRequest
+	if len(headers) == 0 {
+		return nil
+	}
+
 	c.countMsgReceived(packet.Name(), float64(len(headers)))
 
 	for _, header := range headers {
@@ -430,7 +448,10 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 		}
 	}
 
-	c.db.WriteBlockHeaders(ctx, headers, tfs)
+	// Check if any of these headers were requested as parent blocks
+	_, isParent := c.parents.Remove(headers[0].Hash())
+
+	c.db.WriteBlockHeaders(ctx, headers, tfs, isParent)
 
 	// Update cache to store headers
 	for _, header := range headers {

@@ -26,7 +26,7 @@ func (n *nodb) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Bl
 }
 
 // WriteBlockHeaders does nothing.
-func (n *nodb) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time) {
+func (n *nodb) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time, isParent bool) {
 }
 
 // WriteBlockHashes does nothing.
