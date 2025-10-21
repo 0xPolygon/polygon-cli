@@ -358,7 +358,8 @@ func balanceTree() error {
             continue
         }
         
-        token, err := TokenInfoStringToStruct(tokenKey)
+        var token TokenInfo
+        token, err = TokenInfoStringToStruct(tokenKey)
         if err != nil {
             return err
         }
@@ -471,7 +472,7 @@ func computeNullifierTree(rawClaims []byte) (common.Hash, error) {
 	var root common.Hash
 	for scanner.Scan() {
 		claim := new(ulxly.UlxlyClaimEvent)
-		err := json.Unmarshal(scanner.Bytes(), claim)
+		err = json.Unmarshal(scanner.Bytes(), claim)
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -507,7 +508,7 @@ func computeBalanceTree(client *ethclient.Client, bridgeAddress common.Address, 
 	balances := make(map[string]*big.Int)
 	for scanner.Scan() {
 		l2Claim := new(ulxly.UlxlyClaimEvent)
-		err := json.Unmarshal(scanner.Bytes(), l2Claim)
+		err = json.Unmarshal(scanner.Bytes(), l2Claim)
 		if err != nil {
 			return common.Hash{}, nil, err
 		}
