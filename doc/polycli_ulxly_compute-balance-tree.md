@@ -42,7 +42,12 @@ This is the response from polycli:
 
 ```json
 {
-  "root": "0x4516ca2a793b8e20f56ec6ba8ca6033a672330670a3772f76f2ade9bc2125150"",
+  "root": "0x4516ca2a793b8e20f56ec6ba8ca6033a672330670a3772f76f2ade9bc2125150",
+  "balances": [{
+    "originNetwork": 0,
+    "originTokenAddress": "0x4348967e282138d8f377b467f7d9c2eb0f335d2a",
+    "totalSupply": "993432432123"
+  }]
 }
 ```
 
