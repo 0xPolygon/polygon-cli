@@ -845,7 +845,7 @@ func init() {
 	SignerCmd.AddCommand(ListCmd)
 	SignerCmd.AddCommand(ImportCmd)
 
-	f := SignerCmd.Flags()
+	f := SignerCmd.PersistentFlags()
 	f.StringVar(&inputSignerOpts.keystore, "keystore", "", "use keystore in given folder or file")
 	f.StringVar(&inputSignerOpts.privateKey, "private-key", "", "use provided hex encoded private key")
 	f.StringVar(&inputSignerOpts.kms, "kms", "", "AWS or GCP if key is stored in cloud")
