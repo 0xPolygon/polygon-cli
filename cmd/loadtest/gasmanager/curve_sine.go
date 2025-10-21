@@ -1,4 +1,4 @@
-package gaslimiter
+package gasmanager
 
 import "math"
 
@@ -10,8 +10,9 @@ type SineCurve struct {
 func NewSineCurve(config CurveConfig) *SineCurve {
 	c := &SineCurve{
 		BaseCurve: *NewBaseCurve(config),
-		points:    computeCurve(config),
 	}
+
+	c.computeCurve(config)
 
 	return c
 }
@@ -27,12 +28,12 @@ func (c *SineCurve) MoveNext() {
 	}
 }
 
-func computeCurve(config CurveConfig) map[float64]float64 {
+func (c *SineCurve) computeCurve(config CurveConfig) {
 	const start = float64(0)
 	const step = float64(1.0)
 	end := float64(config.Period)
 
-	points := map[float64]float64{}
+	c.points = map[float64]float64{}
 
 	// The `b` parameter in the generalized sine formula is derived from the period.
 	b := (2 * math.Pi) / float64(config.Period)
@@ -40,8 +41,6 @@ func computeCurve(config CurveConfig) map[float64]float64 {
 	for x := start; x <= end; x += step {
 		// Apply the generalized sine formula: y = A * sin(b(x)) + k
 		y := float64(config.Amplitude)*math.Sin(b*x) + float64(config.Target)
-		points[float64(x)] = float64(y)
+		c.points[float64(x)] = float64(y)
 	}
-
-	return points
 }

@@ -1,8 +1,8 @@
-# Gas Limiter
+# Gas Manager
 
 ## Goal
 
-Control the flow of transactions by limiting the amount of gas it can use. The gas limiter package works basically as a semaphore/throttle mechanism to help the application to know if a determined amount of gas can be spent given the rules defined by the gas provider.
+Control the flow of transactions by limiting the amount of gas it can use. The gas manager package works basically as a semaphore/throttle mechanism to help the application to know if a determined amount of gas can be spent given the rules defined by the gas provider.
 
 ## Components
 

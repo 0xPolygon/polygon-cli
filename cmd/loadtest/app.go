@@ -88,6 +88,16 @@ type (
 		MaxBaseFeeWei              uint64
 		OutputRawTxOnly            bool
 		CheckBalanceBeforeFunding  bool
+		Infinite                   bool
+
+		// gas manager
+		GasManagerOscillationCurve string
+		GasManagerTarget           uint64
+		GasManagerPeriod           uint64
+		GasManagerAmplitude        uint64
+
+		GasManagerPriceStrategy    string
+		GasManagerFixedGasPriceWei uint64
 
 		// Computed
 		CurrentGasPrice       *big.Int
@@ -271,6 +281,7 @@ func initFlags() {
 	pf.BoolVar(&ltp.LegacyTransactionMode, "legacy", false, "send a legacy transaction instead of an EIP1559 transaction")
 	pf.BoolVar(&ltp.FireAndForget, "fire-and-forget", false, "send transactions and load without waiting for it to be mined")
 	pf.BoolVar(&ltp.FireAndForget, "send-only", false, "alias for --fire-and-forget")
+	pf.BoolVar(&ltp.Infinite, "infinite", false, "run the load test indefinitely until manually stopped. It will follow the rate limit and concurrency settings, but at the end, it will repeat all over again")
 
 	// Local flags.
 	f := LoadtestCmd.Flags()
@@ -308,6 +319,16 @@ v3, uniswapv3 - perform UniswapV3 swaps`)
 	f.UintVar(&ltp.ReceiptRetryMax, "receipt-retry-max", 30, "maximum polling attempts for transaction receipt with --wait-for-receipt")
 	f.UintVar(&ltp.ReceiptRetryInitialDelayMs, "receipt-retry-initial-delay-ms", 100, "initial delay in milliseconds for receipt polling (uses exponential backoff with jitter)")
 	f.BoolVar(&ltp.CheckBalanceBeforeFunding, "check-balance-before-funding", false, "check account balance before funding sending accounts (saves gas when accounts are already funded)")
+
+	// gas manager flags - gas limit
+	f.Uint64Var(&ltp.GasManagerTarget, "gas-manager-target", 30_000_000_000, "target gas limit for the gas manager oscillation curve")
+	f.Uint64Var(&ltp.GasManagerPeriod, "gas-manager-period", 1, "period in blocks for the gas manager oscillation curve")
+	f.Uint64Var(&ltp.GasManagerAmplitude, "gas-manager-amplitude", 1, "amplitude for the gas manager oscillation curve")
+	f.StringVar(&ltp.GasManagerOscillationCurve, "gas-manager-oscillation-curve", "flat", "type of oscillation curve for the gas manager (flat | sine | square | triangle)")
+
+	// gas manager flags - gas price
+	f.StringVar(&ltp.GasManagerPriceStrategy, "gas-manager-price-strategy", "estimated", "gas price strategy for the gas manager (estimated | fixed | dynamic)")
+	f.Uint64Var(&ltp.GasManagerFixedGasPriceWei, "gas-manager-fixed-gas-price-wei", 0, "fixed gas price in wei for the gas manager")
 
 	// TODO Compression
 }

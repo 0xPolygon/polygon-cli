@@ -28,7 +28,7 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/bindings/tester"
 	"github.com/0xPolygon/polygon-cli/bindings/tokens"
-	"github.com/0xPolygon/polygon-cli/cmd/loadtest/gaslimiter"
+	"github.com/0xPolygon/polygon-cli/cmd/loadtest/gasmanager"
 	uniswapv3loadtest "github.com/0xPolygon/polygon-cli/cmd/loadtest/uniswapv3"
 
 	"github.com/0xPolygon/polygon-cli/rpctypes"
@@ -693,7 +693,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-	tops = configureTransactOpts(ctx, c, tops)
+	tops = configureTransactOpts(ctx, c, tops, nil)
 	// configureTransactOpts will set some parameters meant for load testing that could interfere with the deployment of our contracts
 	tops.GasLimit = 0
 	tops.GasPrice = nil
@@ -831,23 +831,16 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	var wg sync.WaitGroup
 
 	// setup gas budget provider
-	log.Trace().Msg("Setting up gas budget provider")
-	gasVault := gaslimiter.NewGasVault()
+	gasVault, gasPricer, err := setupGasManager(ctx, c)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Msg("Unable to setup gas manager")
+		return err
+	}
 
 	// TODO(Thiago): make this configurable
-	curve := gaslimiter.NewSineCurve(gaslimiter.CurveConfig{
-		Period:    10,
-		Amplitude: 2_100_000,
-		Target:    4_200_000,
-	})
-	// TODO(Thiago): set gas limit based on gas strategy and move it to the tx creation on each go routine
-	fixedGasLimit := uint64(21_000)
-
-	gasProvider := gaslimiter.NewOscillatingGasProvider(c, gasVault, curve)
-	gasProvider.Start(ctx)
-
-	// TODO(Thiago): make this configurable
-	infinite := true
+	infinite := inputLoadTestParams.Infinite
 	for {
 		for routineID := range maxRoutines {
 			log.Trace().Int64("routineID", routineID).Msg("starting concurrent routine")
@@ -914,7 +907,9 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 						}
 					}
 
-					sendingTops = configureTransactOpts(ctx, c, sendingTops)
+					sendingTops = configureTransactOpts(ctx, c, sendingTops, gasPricer)
+
+					var fixedGasLimit uint64 = sendingTops.GasLimit
 
 					// in case the gas limit is fixed, we spend or wait for the gas budget before sending the transaction
 					if fixedGasLimit > 0 {
@@ -1042,6 +1037,75 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	}
 
 	return nil
+}
+
+func setupGasManager(ctx context.Context, c *ethclient.Client) (*gasmanager.GasVault, *gasmanager.GasPricer, error) {
+	gasVault, err := setupGasVault(ctx, c)
+	if err != nil {
+		return nil, nil, err
+	}
+	gasPricer, err := setupGasPricer()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return gasVault, gasPricer, nil
+}
+
+func setupGasVault(ctx context.Context, c *ethclient.Client) (*gasmanager.GasVault, error) {
+	log.Trace().Msg("Setting up gas limiter")
+	gasVault := gasmanager.NewGasVault()
+
+	curveLog := log.Trace().
+		Uint64("Period", inputLoadTestParams.GasManagerPeriod).
+		Uint64("Amplitude", inputLoadTestParams.GasManagerAmplitude).
+		Uint64("Target", inputLoadTestParams.GasManagerTarget)
+	var curve gasmanager.Curve
+	switch inputLoadTestParams.GasManagerOscillationCurve {
+	case "sine":
+		curveLog.Msg("Using sine curve")
+		curve = gasmanager.NewSineCurve(gasmanager.CurveConfig{
+			Period:    inputLoadTestParams.GasManagerPeriod,
+			Amplitude: inputLoadTestParams.GasManagerAmplitude,
+			Target:    inputLoadTestParams.GasManagerTarget,
+		})
+	case "flat":
+		curveLog.Msg("Using flat curve")
+		curve = gasmanager.NewFlatCurve(gasmanager.CurveConfig{
+			Period:    inputLoadTestParams.GasManagerPeriod,
+			Amplitude: inputLoadTestParams.GasManagerAmplitude,
+			Target:    inputLoadTestParams.GasManagerTarget,
+		})
+	default:
+		err := fmt.Errorf("unknown gas oscillation curve: %s", inputLoadTestParams.GasManagerOscillationCurve)
+		return nil, err
+	}
+
+	gasProvider := gasmanager.NewOscillatingGasProvider(c, gasVault, curve)
+	gasProvider.Start(ctx)
+
+	return gasVault, nil
+}
+
+func setupGasPricer() (*gasmanager.GasPricer, error) {
+	log.Trace().Msg("Setting up gas pricer")
+	var strategy gasmanager.PriceStrategy
+	switch inputLoadTestParams.GasManagerPriceStrategy {
+	case "fixed":
+		log.Trace().Msg("Using fixed gas price strategy")
+		strategy = gasmanager.NewFixedGasPriceStrategy(gasmanager.FixedGasPriceConfig{
+			GasPriceWei: inputLoadTestParams.GasManagerFixedGasPriceWei,
+		})
+	case "estimated":
+		log.Trace().Msg("Using estimated gas price strategy")
+		strategy = gasmanager.NewEstimatedGasPriceStrategy()
+	default:
+		return nil, fmt.Errorf("unknown gas price strategy: %s", inputLoadTestParams.GasManagerPriceStrategy)
+	}
+
+	gasPricer := gasmanager.NewGasPricer(strategy)
+
+	return gasPricer, nil
 }
 
 func setupBaseFeeMonitoring(ctx context.Context, c *ethclient.Client, ltp loadTestParams) (bool, context.CancelFunc, *atomic.Bool) {
@@ -1310,7 +1374,7 @@ func biasGasPrice(price *big.Int) *big.Int {
 	return result
 }
 
-func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, *big.Int) {
+func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client, gasPricer *gasmanager.GasPricer) (*big.Int, *big.Int) {
 	cachedGasPriceLock.Lock()
 	defer cachedGasPriceLock.Unlock()
 
@@ -1328,14 +1392,21 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 		if inputLoadTestParams.ForceGasPrice != 0 {
 			gasPrice = new(big.Int).SetUint64(inputLoadTestParams.ForceGasPrice)
 		} else {
-			gasPrice, pErr = c.SuggestGasPrice(ctx)
-			if pErr == nil {
-				// Bias the value up slightly
-				gasPrice = biasGasPrice(gasPrice)
-			} else {
-				log.Error().Err(pErr).Msg("Unable to suggest gas price")
-				return cachedGasPrice, cachedGasTipCap
+			var gp *uint64
+			if gasPricer != nil {
+				gp = gasPricer.GetGasPrice()
 			}
+			if gp != nil {
+				gasPrice = big.NewInt(0).SetUint64(*gp)
+			} else {
+				gasPrice, pErr = c.SuggestGasPrice(ctx)
+				if pErr != nil {
+					log.Error().Err(pErr).Msg("Unable to suggest gas price")
+					return cachedGasPrice, cachedGasTipCap
+				}
+			}
+			// Bias the value up slightly
+			gasPrice = biasGasPrice(gasPrice)
 		}
 	} else {
 		var forcePriorityGasPrice *big.Int
@@ -1343,14 +1414,21 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client) (*big.Int, 
 			gasTipCap = new(big.Int).SetUint64(inputLoadTestParams.ForcePriorityGasPrice)
 			forcePriorityGasPrice = gasTipCap
 		} else if inputLoadTestParams.ChainSupportBaseFee {
-			gasTipCap, tErr = c.SuggestGasTipCap(ctx)
-			if tErr == nil {
-				// Bias the value up slightly
-				gasTipCap = biasGasPrice(gasTipCap)
-			} else {
-				log.Error().Err(tErr).Msg("Unable to suggest gas tip cap")
-				return cachedGasPrice, cachedGasTipCap
+			var gp *uint64
+			if gasPricer != nil {
+				gp = gasPricer.GetGasPrice()
 			}
+			if gp != nil {
+				gasPrice = big.NewInt(0).SetUint64(*gp)
+			} else {
+				gasTipCap, tErr = c.SuggestGasTipCap(ctx)
+				if tErr != nil {
+					log.Error().Err(tErr).Msg("Unable to suggest gas tip cap")
+					return cachedGasPrice, cachedGasTipCap
+				}
+			}
+			// Bias the value up slightly
+			gasTipCap = biasGasPrice(gasTipCap)
 		} else {
 			log.Fatal().
 				Msg("Chain does not support base fee. Please set priority-gas-price flag with a value to use for gas tip cap")
@@ -1981,8 +2059,9 @@ func getRandomAddress() *ethcommon.Address {
 	return &realAddr
 }
 
-func configureTransactOpts(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) *bind.TransactOpts {
-	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c)
+func configureTransactOpts(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, gasPricer *gasmanager.GasPricer) *bind.TransactOpts {
+	gasPrice, gasTipCap := getSuggestedGasPrices(ctx, c, gasPricer)
+
 	tops.GasPrice = gasPrice
 
 	ltp := inputLoadTestParams

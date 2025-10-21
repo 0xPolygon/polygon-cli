@@ -1,4 +1,4 @@
-package gaslimiter
+package gasmanager
 
 type CurveConfig struct {
 	Period    uint64
