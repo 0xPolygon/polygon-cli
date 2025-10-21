@@ -410,7 +410,7 @@ func nullifierTree(args []string) error {
 	return nil
 }
 
-func nullifierAndBalanceTree(args []string) error {
+func nullifierAndBalanceTree() error {
 	l2NetworkID := balanceTreeOptions.L2NetworkID
 	bridgeAddress := common.HexToAddress(balanceTreeOptions.BridgeAddress)
 
@@ -2448,7 +2448,7 @@ or if it's actually an intermediate hash.`,
 		Short: "Compute the balance tree and the nullifier tree given the deposits and claims.",
 		Long:  nullifierAndBalanceTreeUsage,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return nullifierAndBalanceTree(args)
+			return nullifierAndBalanceTree()
 		},
 		SilenceUsage: true,
 	}
