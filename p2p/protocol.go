@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"container/list"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -23,6 +22,13 @@ import (
 	"github.com/0xPolygon/polygon-cli/p2p/database"
 )
 
+// BlockCache stores the actual block data to avoid duplicate fetches and database queries.
+type BlockCache struct {
+	Header *types.Header
+	Body   *eth.BlockBody
+	TD     *big.Int
+}
+
 // conn represents an individual connection with a peer.
 type conn struct {
 	sensorID  string
@@ -41,8 +47,9 @@ type conn struct {
 	requests   *Cache[uint64, common.Hash]
 	requestNum uint64
 
-	// Linked list of seen block hashes with timestamps.
-	blockHashes *list.List
+	// conns provides access to the global connection manager, which includes
+	// the blocks cache shared across all peers.
+	conns *Conns
 
 	// oldestBlock stores the first block the sensor has seen so when fetching
 	// parent blocks, it does not request blocks older than this.
@@ -50,6 +57,10 @@ type conn struct {
 
 	// connectedAt stores when this peer connection was established.
 	connectedAt time.Time
+
+	// Cached values for prometheus labels to avoid repeated URLv4() calls
+	peerURL      string
+	peerFullname string
 }
 
 // EthProtocolOptions is the options used when creating a new eth protocol.
@@ -82,14 +93,6 @@ type HeadBlock struct {
 	Time            uint64
 }
 
-type BlockHashEntry struct {
-	hash common.Hash
-	time time.Time
-}
-
-// blockHashTTL defines the time-to-live for block hash entries in blockHashes list.
-var blockHashTTL = 10 * time.Minute
-
 // NewEthProtocol creates the new eth protocol. This will handle writing the
 // status exchange, message handling, and writing blocks/txs to the database.
 func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
@@ -98,20 +101,23 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 		Version: version,
 		Length:  17,
 		Run: func(p *ethp2p.Peer, rw ethp2p.MsgReadWriter) error {
+			peerURL := p.Node().URLv4()
 			c := &conn{
-				sensorID:    opts.SensorID,
-				node:        p.Node(),
-				logger:      log.With().Str("peer", p.Node().URLv4()).Logger(),
-				rw:          rw,
-				db:          opts.Database,
-				requests:    NewCache[uint64, common.Hash](opts.MaxRequests, opts.RequestsCacheTTL),
-				requestNum:  0,
-				head:        opts.Head,
-				headMutex:   opts.HeadMutex,
-				counter:     opts.MsgCounter,
-				peer:        p,
-				blockHashes: list.New(),
-				connectedAt: time.Now(),
+				sensorID:     opts.SensorID,
+				node:         p.Node(),
+				logger:       log.With().Str("peer", peerURL).Logger(),
+				rw:           rw,
+				db:           opts.Database,
+				requests:     NewCache[uint64, common.Hash](opts.MaxRequests, opts.RequestsCacheTTL),
+				requestNum:   0,
+				head:         opts.Head,
+				headMutex:    opts.HeadMutex,
+				counter:      opts.MsgCounter,
+				peer:         p,
+				conns:        opts.Conns,
+				connectedAt:  time.Now(),
+				peerURL:      peerURL,
+				peerFullname: p.Fullname(),
 			}
 
 			c.headMutex.RLock()
@@ -218,7 +224,7 @@ func (c *conn) statusExchange(packet *eth.StatusPacket) error {
 
 // countMsg increments the prometheus counter for this connection with the given direction, message name, and count.
 func (c *conn) countMsg(direction Direction, messageName string, count float64) {
-	c.counter.WithLabelValues(messageName, c.node.URLv4(), c.peer.Fullname(), string(direction)).Add(count)
+	c.counter.WithLabelValues(messageName, c.peerURL, c.peerFullname, string(direction)).Add(count)
 }
 
 // countMsgReceived increments the prometheus counter for received messages.
@@ -269,33 +275,44 @@ func (c *conn) readStatus(packet *eth.StatusPacket) error {
 	return nil
 }
 
-// getBlockData will send a GetBlockHeaders and GetBlockBodies request to the
-// peer. It will return an error if the sending either of the requests failed.
-func (c *conn) getBlockData(hash common.Hash) error {
-	headersRequest := &GetBlockHeaders{
-		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
-			// Providing both the hash and number will result in a `both origin
-			// hash and number` error.
-			Origin: eth.HashOrNumber{Hash: hash},
-			Amount: 1,
-		},
+// getBlockData will send GetBlockHeaders and/or GetBlockBodies requests to the
+// peer based on what parts of the block we already have. It will return an error
+// if sending either of the requests failed.
+func (c *conn) getBlockData(hash common.Hash, cache BlockCache) error {
+	// Only request header if we don't have it
+	if cache.Header == nil {
+		headersRequest := &GetBlockHeaders{
+			GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+				// Providing both the hash and number will result in a `both origin
+				// hash and number` error.
+				Origin: eth.HashOrNumber{Hash: hash},
+				Amount: 1,
+			},
+		}
+
+		c.countMsgSent(headersRequest.Name(), 1)
+		if err := ethp2p.Send(c.rw, eth.GetBlockHeadersMsg, headersRequest); err != nil {
+			return err
+		}
 	}
 
-	c.countMsgSent(headersRequest.Name(), 1)
-	if err := ethp2p.Send(c.rw, eth.GetBlockHeadersMsg, headersRequest); err != nil {
-		return err
+	// Only request body if we don't have it
+	if cache.Body == nil {
+		c.requestNum++
+		c.requests.Add(c.requestNum, hash)
+
+		bodiesRequest := &GetBlockBodies{
+			RequestId:             c.requestNum,
+			GetBlockBodiesRequest: []common.Hash{hash},
+		}
+
+		c.countMsgSent(bodiesRequest.Name(), 1)
+		if err := ethp2p.Send(c.rw, eth.GetBlockBodiesMsg, bodiesRequest); err != nil {
+			return err
+		}
 	}
 
-	c.requestNum++
-	c.requests.Add(c.requestNum, hash)
-
-	bodiesRequest := &GetBlockBodies{
-		RequestId:             c.requestNum,
-		GetBlockBodiesRequest: []common.Hash{hash},
-	}
-
-	c.countMsgSent(bodiesRequest.Name(), 1)
-	return ethp2p.Send(c.rw, eth.GetBlockBodiesMsg, bodiesRequest)
+	return nil
 }
 
 // getParentBlock will send a request to the peer if the parent of the header
@@ -311,6 +328,12 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 		return nil
 	}
 
+	// Check cache first before querying the database
+	cache, ok := c.conns.Blocks().Peek(header.ParentHash)
+	if ok && cache.Header != nil && cache.Body != nil {
+		return nil
+	}
+
 	if c.db.HasBlock(ctx, header.ParentHash) || header.Number.Cmp(c.oldestBlock.Number) != 1 {
 		return nil
 	}
@@ -320,7 +343,7 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 		Str("number", new(big.Int).Sub(header.Number, big.NewInt(1)).String()).
 		Msg("Fetching missing parent block")
 
-	return c.getBlockData(header.ParentHash)
+	return c.getBlockData(header.ParentHash, cache)
 }
 
 func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
@@ -339,18 +362,18 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 	for _, entry := range packet {
 		hash := entry.Hash
 
-		// Check if we've seen the hash and remove old entries
-		if c.hasSeenBlockHash(hash) {
+		// Check what parts of the block we already have
+		cache, ok := c.conns.Blocks().Get(hash)
+		if ok {
 			continue
 		}
 
-		// Attempt to fetch block data first
-		if err := c.getBlockData(hash); err != nil {
+		// Request only the parts we don't have
+		if err := c.getBlockData(hash, cache); err != nil {
 			return err
 		}
 
-		// Now that we've successfully fetched, record the new block hash
-		c.addBlockHash(hash)
+		c.conns.Blocks().Add(hash, BlockCache{})
 		uniqueHashes = append(uniqueHashes, hash)
 	}
 
@@ -360,36 +383,6 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	return nil
-}
-
-// addBlockHash adds a new block hash with a timestamp to the blockHashes list.
-func (c *conn) addBlockHash(hash common.Hash) {
-	now := time.Now()
-
-	// Add the new block hash entry to the list.
-	c.blockHashes.PushBack(BlockHashEntry{
-		hash: hash,
-		time: now,
-	})
-}
-
-// Helper method to check if a block hash is already in blockHashes.
-func (c *conn) hasSeenBlockHash(hash common.Hash) bool {
-	now := time.Now()
-	for e := c.blockHashes.Front(); e != nil; e = e.Next() {
-		entry := e.Value.(BlockHashEntry)
-		// Check if the hash matches. We can short circuit here because there will
-		// be block hashes that we haven't seen before, which will make a full
-		// iteration of the blockHashes linked list.
-		if entry.hash.Cmp(hash) == 0 {
-			return true
-		}
-		// Remove entries older than blockHashTTL.
-		if now.Sub(entry.time) > blockHashTTL {
-			c.blockHashes.Remove(e)
-		}
-	}
-	return false
 }
 
 func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
@@ -438,6 +431,16 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	c.db.WriteBlockHeaders(ctx, headers, tfs)
+
+	// Update cache to store headers
+	for _, header := range headers {
+		hash := header.Hash()
+		c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
+			cache.Header = header
+			return cache
+		})
+	}
+
 	return nil
 }
 
@@ -475,7 +478,19 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	}
 	c.requests.Remove(packet.RequestId)
 
-	c.db.WriteBlockBody(ctx, packet.BlockBodiesResponse[0], hash, tfs)
+	// Check if we already have the body in the cache
+	if cache, ok := c.conns.Blocks().Peek(hash); ok && cache.Body != nil {
+		return nil
+	}
+
+	body := packet.BlockBodiesResponse[0]
+	c.db.WriteBlockBody(ctx, body, hash, tfs)
+
+	// Update cache to store body
+	c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
+		cache.Body = body
+		return cache
+	})
 
 	return nil
 }
@@ -487,6 +502,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	tfs := time.Now()
+	hash := block.Block.Hash()
 
 	c.countMsgReceived(block.Name(), 1)
 
@@ -494,7 +510,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	c.headMutex.Lock()
 	if block.Block.Number().Uint64() > c.head.Number && block.TD.Cmp(c.head.TotalDifficulty) == 1 {
 		*c.head = HeadBlock{
-			Hash:            block.Block.Hash(),
+			Hash:            hash,
 			TotalDifficulty: block.TD,
 			Number:          block.Block.Number().Uint64(),
 			Time:            block.Block.Time(),
@@ -507,7 +523,23 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
+	// Check if we already have the full block in the cache
+	if cache, ok := c.conns.Blocks().Peek(hash); ok && cache.TD != nil {
+		return nil
+	}
+
 	c.db.WriteBlock(ctx, c.node, block.Block, block.TD, tfs)
+
+	// Update cache to store the full block
+	c.conns.Blocks().Add(hash, BlockCache{
+		Header: block.Block.Header(),
+		Body: &eth.BlockBody{
+			Transactions: block.Block.Transactions(),
+			Uncles:       block.Block.Uncles(),
+			Withdrawals:  block.Block.Withdrawals(),
+		},
+		TD: block.TD,
+	})
 
 	return nil
 }
