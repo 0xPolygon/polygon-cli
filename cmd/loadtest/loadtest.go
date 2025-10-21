@@ -831,14 +831,18 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	var wg sync.WaitGroup
 
 	// setup gas budget provider
+	log.Trace().Msg("Setting up gas budget provider")
 	gasVault := gaslimiter.NewGasVault()
 
 	// TODO(Thiago): make this configurable
 	curve := gaslimiter.NewSineCurve(gaslimiter.CurveConfig{
-		Period:    8,
-		Amplitude: 5_000_000,
-		Target:    30_000_000,
+		Period:    10,
+		Amplitude: 2_100_000,
+		Target:    4_200_000,
 	})
+	// TODO(Thiago): set gas limit based on gas strategy and move it to the tx creation on each go routine
+	fixedGasLimit := uint64(21_000)
+
 	gasProvider := gaslimiter.NewOscillatingGasProvider(c, gasVault, curve)
 	gasProvider.Start(ctx)
 
@@ -912,11 +916,12 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 					sendingTops = configureTransactOpts(ctx, c, sendingTops)
 
-					// TODO(Thiago): set gas limit based on gas strategy
-					fixedGasLimit := uint64(0)
-
 					// in case the gas limit is fixed, we spend or wait for the gas budget before sending the transaction
 					if fixedGasLimit > 0 {
+						log.Trace().Int64("routineID", routineID).
+							Int64("requestID", requestID).
+							Uint64("gas", fixedGasLimit).
+							Msg("spending or waiting for fixed gas limit from gas budget")
 						gasVault.SpendOrWaitAvailableBudget(fixedGasLimit)
 						sendingTops.GasLimit = fixedGasLimit
 					}
@@ -1002,8 +1007,12 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 						}
 					}
 
-					// if gas limit is not fixed, we spend the gas used from the gas budget after the transaction is sent
+					// if gas limit was not fixed, we spend the gas used from the gas budget after the transaction is sent
 					if fixedGasLimit == 0 {
+						log.Trace().Int64("routineID", routineID).
+							Int64("requestID", requestID).
+							Uint64("gas", ltTx.Gas()).
+							Msg("spending gas from gas budget after transaction is sent")
 						gasVault.SpendOrWaitAvailableBudget(ltTx.Gas())
 					}
 
@@ -1019,12 +1028,13 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				wg.Done()
 			}(routineID)
 		}
+		log.Trace().Msg("Finished starting go routines. Waiting..")
+		wg.Wait()
+
 		if !infinite {
 			break
 		}
 	}
-	log.Trace().Msg("Finished starting go routines. Waiting..")
-	wg.Wait()
 	rateLimitCancel()
 	maxBaseFeeCtxCancel()
 	if ltp.EthCallOnly {
@@ -1215,7 +1225,9 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 		to = getRandomAddress()
 	}
 
-	tops.GasLimit = uint64(21000)
+	if tops.GasLimit == 0 {
+		tops.GasLimit = uint64(21000)
+	}
 
 	amount := ltp.SendAmount
 	chainID := new(big.Int).SetUint64(ltp.ChainID)
