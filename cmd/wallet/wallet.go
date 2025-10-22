@@ -102,10 +102,6 @@ var WalletCmd = &cobra.Command{
 }
 
 func getFileOrFlag(filename string, flag string) (string, error) {
-	if filename == "" && flag == "" {
-		return "", fmt.Errorf("both filename and flag are empty")
-	}
-
 	if filename == "" {
 		return flag, nil
 	}
