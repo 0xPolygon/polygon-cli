@@ -55,21 +55,24 @@ func NewJSONDatabase(opts JSONDatabaseOptions) Database {
 
 // JSONBlock represents a block in JSON format.
 type JSONBlock struct {
-	Type            string    `json:"type"`
-	SensorID        string    `json:"sensor_id"`
-	Hash            string    `json:"hash"`
-	ParentHash      string    `json:"parent_hash"`
-	Number          uint64    `json:"number"`
-	Timestamp       uint64    `json:"timestamp"`
-	GasLimit        uint64    `json:"gas_limit"`
-	GasUsed         uint64    `json:"gas_used"`
-	Difficulty      string    `json:"difficulty,omitempty"`
-	TotalDifficulty string    `json:"total_difficulty,omitempty"`
-	BaseFee         string    `json:"base_fee,omitempty"`
-	TxCount         int       `json:"tx_count"`
-	UncleCount      int       `json:"uncle_count"`
-	TimeFirstSeen   time.Time `json:"time_first_seen"`
-	IsParent        bool      `json:"is_parent"`
+	Type                string    `json:"type"`
+	SensorID            string    `json:"sensor_id"`
+	Hash                string    `json:"hash"`
+	ParentHash          string    `json:"parent_hash"`
+	Number              uint64    `json:"number"`
+	Timestamp           uint64    `json:"timestamp"`
+	GasLimit            uint64    `json:"gas_limit"`
+	GasUsed             uint64    `json:"gas_used"`
+	Difficulty          string    `json:"difficulty,omitempty"`
+	TotalDifficulty     string    `json:"total_difficulty,omitempty"`
+	BaseFee             string    `json:"base_fee,omitempty"`
+	TxCount             int       `json:"tx_count"`
+	UncleCount          int       `json:"uncle_count"`
+	TimeFirstSeen       time.Time `json:"time_first_seen"`
+	TimeFirstSeenHash   time.Time `json:"time_first_seen_hash"`
+	IsParent            bool      `json:"is_parent"`
+	SensorFirstSeen     string    `json:"sensor_first_seen"`
+	SensorFirstSeenHash string    `json:"sensor_first_seen_hash,omitempty"`
 }
 
 // JSONBlockEvent represents a block event in JSON format.
@@ -170,6 +173,7 @@ func (j *JSONDatabase) writeBlock(block *types.Block, td *big.Int, tfs time.Time
 		TxCount:         len(block.Transactions()),
 		UncleCount:      len(block.Uncles()),
 		TimeFirstSeen:   tfs,
+		SensorFirstSeen: j.sensorID,
 	}
 
 	if block.BaseFee() != nil {
@@ -188,17 +192,18 @@ func (j *JSONDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.H
 
 	for _, header := range headers {
 		block := JSONBlock{
-			Type:          "block_header",
-			SensorID:      j.sensorID,
-			Hash:          header.Hash().Hex(),
-			ParentHash:    header.ParentHash.Hex(),
-			Number:        header.Number.Uint64(),
-			Timestamp:     header.Time,
-			GasLimit:      header.GasLimit,
-			GasUsed:       header.GasUsed,
-			Difficulty:    header.Difficulty.String(),
-			TimeFirstSeen: tfs,
-			IsParent:      isParent,
+			Type:            "block_header",
+			SensorID:        j.sensorID,
+			Hash:            header.Hash().Hex(),
+			ParentHash:      header.ParentHash.Hex(),
+			Number:          header.Number.Uint64(),
+			Timestamp:       header.Time,
+			GasLimit:        header.GasLimit,
+			GasUsed:         header.GasUsed,
+			Difficulty:      header.Difficulty.String(),
+			TimeFirstSeen:   tfs,
+			IsParent:        isParent,
+			SensorFirstSeen: j.sensorID,
 		}
 
 		if header.BaseFee != nil {
@@ -226,6 +231,24 @@ func (j *JSONDatabase) WriteBlockHashes(ctx context.Context, peer *enode.Node, h
 
 		j.Write(event)
 	}
+}
+
+// WriteBlockHashFirstSeen writes a partial block entry with just the hash
+// first seen time. For JSON output, this writes a separate record type.
+func (j *JSONDatabase) WriteBlockHashFirstSeen(ctx context.Context, hash common.Hash, tfsh time.Time) {
+	if !j.ShouldWriteBlocks() {
+		return
+	}
+
+	partial := map[string]any{
+		"type":                   "block_hash_first_seen",
+		"sensor_id":              j.sensorID,
+		"hash":                   hash.Hex(),
+		"time_first_seen_hash":   tfsh,
+		"sensor_first_seen_hash": j.sensorID,
+	}
+
+	j.Write(partial)
 }
 
 // WriteBlockBody writes the block body as JSON.

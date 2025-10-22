@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"math/big"
 	"sync"
 	"time"
 
@@ -10,6 +11,13 @@ import (
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
+
+// BlockCache stores the actual block data to avoid duplicate fetches and database queries.
+type BlockCache struct {
+	Header *types.Header
+	Body   *eth.BlockBody
+	TD     *big.Int
+}
 
 // Conns manages a collection of active peer connections for transaction broadcasting.
 // It also maintains a global cache of blocks written to the database.
