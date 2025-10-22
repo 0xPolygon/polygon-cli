@@ -400,12 +400,8 @@ func (d *Datastore) writeFirstSeen(newHeader *DatastoreHeader, block *DatastoreB
 		newHeader.SensorFirstSeen = block.DatastoreHeader.SensorFirstSeen
 	}
 
-	// Preserve earlier hash timing if it exists
-	if !block.TimeFirstSeenHash.IsZero() && block.TimeFirstSeenHash.Before(tfs) {
-		// Keep existing hash timing
-		// (no need to reassign since we're reading and writing to the same block)
-	} else {
-		// Set new hash timing
+	// Set hash timing if it doesn't exist or if new timestamp is earlier
+	if block.TimeFirstSeenHash.IsZero() || tfs.Before(block.TimeFirstSeenHash) {
 		block.TimeFirstSeenHash = tfs
 		block.SensorFirstSeenHash = d.sensorID
 	}
