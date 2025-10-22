@@ -57,36 +57,36 @@ type DatastoreEvent struct {
 // DatastoreHeader stores the data in manner that can be easily written without
 // loss of precision.
 type DatastoreHeader struct {
-	ParentHash          *datastore.Key
-	UncleHash           string
-	Coinbase            string
-	Root                string
-	TxHash              string
-	ReceiptHash         string
-	Bloom               []byte `datastore:",noindex"`
-	Difficulty          string
-	Number              string
-	GasLimit            string
-	GasUsed             string
-	Time                time.Time
-	Extra               []byte `datastore:",noindex"`
-	MixDigest           string
-	Nonce               string
-	BaseFee             string
-	TimeFirstSeen       time.Time
-	TimeFirstSeenHash   time.Time
-	TTL                 time.Time
-	IsParent            bool
-	SensorFirstSeen     string
-	SensorFirstSeenHash string
+	ParentHash      *datastore.Key
+	UncleHash       string
+	Coinbase        string
+	Root            string
+	TxHash          string
+	ReceiptHash     string
+	Bloom           []byte `datastore:",noindex"`
+	Difficulty      string
+	Number          string
+	GasLimit        string
+	GasUsed         string
+	Time            time.Time
+	Extra           []byte `datastore:",noindex"`
+	MixDigest       string
+	Nonce           string
+	BaseFee         string
+	TimeFirstSeen   time.Time
+	TTL             time.Time
+	IsParent        bool
+	SensorFirstSeen string
 }
 
 // DatastoreBlock represents a block stored in datastore.
 type DatastoreBlock struct {
 	*DatastoreHeader
-	TotalDifficulty string
-	Transactions    []*datastore.Key
-	Uncles          []*datastore.Key
+	TotalDifficulty     string
+	Transactions        []*datastore.Key
+	Uncles              []*datastore.Key
+	TimeFirstSeenHash   time.Time
+	SensorFirstSeenHash string
 }
 
 // DatastoreTransaction represents a transaction stored in datastore. Data is
@@ -249,24 +249,22 @@ func (d *Datastore) writeBlockHashFirstSeen(ctx context.Context, hash common.Has
 		var block DatastoreBlock
 		err := tx.Get(key, &block)
 
-		// If block doesn't exist, create partial entry
-		if err != nil || block.DatastoreHeader == nil {
-			block.DatastoreHeader = &DatastoreHeader{
-				TimeFirstSeenHash:   tfsh,
-				SensorFirstSeenHash: d.sensorID,
-			}
+		// If block doesn't exist, create partial entry with just hash timing
+		if err != nil {
+			block.TimeFirstSeenHash = tfsh
+			block.SensorFirstSeenHash = d.sensorID
 			_, err = tx.Put(key, &block)
 			return err
 		}
 
 		// If timestamp already set and not earlier, no update needed
-		if !block.DatastoreHeader.TimeFirstSeenHash.IsZero() && !tfsh.Before(block.DatastoreHeader.TimeFirstSeenHash) {
+		if !block.TimeFirstSeenHash.IsZero() && !tfsh.Before(block.TimeFirstSeenHash) {
 			return nil
 		}
 
 		// Update with earlier timestamp
-		block.DatastoreHeader.TimeFirstSeenHash = tfsh
-		block.DatastoreHeader.SensorFirstSeenHash = d.sensorID
+		block.TimeFirstSeenHash = tfsh
+		block.SensorFirstSeenHash = d.sensorID
 		_, err = tx.Put(key, &block)
 		return err
 	}, datastore.MaxAttempts(MaxAttempts))
@@ -392,34 +390,30 @@ func (d *Datastore) newDatastoreHeader(header *types.Header, tfs time.Time, isPa
 	}
 }
 
-// writeFirstSeen updates timing fields on a header, preserving earlier timestamps from existingHeader.
-func (d *Datastore) writeFirstSeen(newHeader *DatastoreHeader, existingHeader *DatastoreHeader, tfs time.Time) {
-	// If no existing header, set hash timing to current time
-	if existingHeader == nil {
-		newHeader.TimeFirstSeenHash = tfs
-		newHeader.SensorFirstSeenHash = d.sensorID
-		return
-	}
-
+// writeFirstSeen updates timing fields on a header and block, preserving earlier timestamps.
+func (d *Datastore) writeFirstSeen(newHeader *DatastoreHeader, block *DatastoreBlock, tfs time.Time) {
 	// Preserve earlier header timing if it exists
-	if !existingHeader.TimeFirstSeen.IsZero() && existingHeader.TimeFirstSeen.Before(tfs) {
-		newHeader.TimeFirstSeen = existingHeader.TimeFirstSeen
-		newHeader.SensorFirstSeen = existingHeader.SensorFirstSeen
+	if block.DatastoreHeader != nil &&
+		!block.DatastoreHeader.TimeFirstSeen.IsZero() &&
+		block.DatastoreHeader.TimeFirstSeen.Before(tfs) {
+		newHeader.TimeFirstSeen = block.DatastoreHeader.TimeFirstSeen
+		newHeader.SensorFirstSeen = block.DatastoreHeader.SensorFirstSeen
 	}
 
 	// Preserve earlier hash timing if it exists
-	if !existingHeader.TimeFirstSeenHash.IsZero() && existingHeader.TimeFirstSeenHash.Before(tfs) {
-		newHeader.TimeFirstSeenHash = existingHeader.TimeFirstSeenHash
-		newHeader.SensorFirstSeenHash = existingHeader.SensorFirstSeenHash
+	if !block.TimeFirstSeenHash.IsZero() && block.TimeFirstSeenHash.Before(tfs) {
+		// Keep existing hash timing
+		// (no need to reassign since we're reading and writing to the same block)
 	} else {
-		newHeader.TimeFirstSeenHash = tfs
-		newHeader.SensorFirstSeenHash = d.sensorID
+		// Set new hash timing
+		block.TimeFirstSeenHash = tfs
+		block.SensorFirstSeenHash = d.sensorID
 	}
 
 	// If hash was seen before header, also update header timing
-	if newHeader.TimeFirstSeenHash.Before(newHeader.TimeFirstSeen) {
-		newHeader.TimeFirstSeen = newHeader.TimeFirstSeenHash
-		newHeader.SensorFirstSeen = newHeader.SensorFirstSeenHash
+	if block.TimeFirstSeenHash.Before(newHeader.TimeFirstSeen) {
+		newHeader.TimeFirstSeen = block.TimeFirstSeenHash
+		newHeader.SensorFirstSeen = block.SensorFirstSeenHash
 	}
 }
 
@@ -480,8 +474,8 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 			// Create new header with current timing
 			header := d.newDatastoreHeader(block.Header(), tfs, false)
 
-			// Preserve hash timing from any earlier announcement
-			d.writeFirstSeen(header, dsBlock.DatastoreHeader, tfs)
+			// Preserve earlier timestamps from any earlier announcement
+			d.writeFirstSeen(header, &dsBlock, tfs)
 
 			dsBlock.DatastoreHeader = header
 		}
@@ -584,14 +578,8 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, 
 		// Create new header with current timing
 		newHeader := d.newDatastoreHeader(header, tfs, isParent)
 
-		// Preserve hash timing from any earlier announcement
-		if err == nil {
-			d.writeFirstSeen(newHeader, block.DatastoreHeader, tfs)
-		} else {
-			// Block doesn't exist at all, no prior hash announcement
-			newHeader.TimeFirstSeenHash = tfs
-			newHeader.SensorFirstSeenHash = d.sensorID
-		}
+		// Preserve earlier timestamps from any earlier announcement
+		d.writeFirstSeen(newHeader, &block, tfs)
 
 		block.DatastoreHeader = newHeader
 		_, err = tx.Put(key, &block)
