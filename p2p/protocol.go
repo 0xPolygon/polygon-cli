@@ -77,13 +77,9 @@ type EthProtocolOptions struct {
 	Head      *HeadBlock
 	HeadMutex *sync.RWMutex
 
-	// Requests cache configuration
-	MaxRequests      int
-	RequestsCacheTTL time.Duration
-
-	// Parent hash tracking cache configuration
-	MaxParents      int
-	ParentsCacheTTL time.Duration
+	// Cache configurations
+	RequestsCache CacheOptions
+	ParentsCache  CacheOptions
 }
 
 // HeadBlock contains the necessary head block data for the status message.
@@ -109,9 +105,9 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				logger:       log.With().Str("peer", peerURL).Logger(),
 				rw:           rw,
 				db:           opts.Database,
-				requests:     NewCache[uint64, common.Hash](opts.MaxRequests, opts.RequestsCacheTTL),
+				requests:     NewCache[uint64, common.Hash](opts.RequestsCache),
 				requestNum:   0,
-				parents:      NewCache[common.Hash, struct{}](opts.MaxParents, opts.ParentsCacheTTL),
+				parents:      NewCache[common.Hash, struct{}](opts.ParentsCache),
 				head:         opts.Head,
 				headMutex:    opts.HeadMutex,
 				counter:      opts.MsgCounter,
