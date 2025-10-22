@@ -47,17 +47,30 @@ polycli signer create --kms GCP --gcp-project-id prj-polygonlabs-devtools-dev --
 The command also inherits flags from parent commands.
 
 ```bash
-      --config string      config file (default is $HOME/.polygon-cli.yaml)
-      --pretty-logs        output logs in pretty format instead of JSON (default true)
-  -v, --verbosity string   log level (string or int):
-                             0   - silent
-                             100 - panic
-                             200 - fatal
-                             300 - error
-                             400 - warn
-                             500 - info (default)
-                             600 - debug
-                             700 - trace (default "info")
+      --chain-id uint              chain ID for transactions
+      --config string              config file (default is $HOME/.polygon-cli.yaml)
+      --data-file string           file name holding data to be signed
+      --gcp-import-job-id string   GCP import job ID to use when importing key
+      --gcp-key-version int        GCP crypto key version to use (default 1)
+      --gcp-keyring-id string      GCP keyring ID to be used (default "polycli-keyring")
+      --gcp-location string        GCP region to use (default "europe-west2")
+      --gcp-project-id string      GCP project ID to use
+      --key-id string              ID of key to be used for signing
+      --keystore string            use keystore in given folder or file
+      --kms string                 AWS or GCP if key is stored in cloud
+      --pretty-logs                output logs in pretty format instead of JSON (default true)
+      --private-key string         use provided hex encoded private key
+      --type string                type of signer to use: latest, cancun, london, eip2930, eip155 (default "london")
+      --unsafe-password string     non-interactively specified password for unlocking keystore
+  -v, --verbosity string           log level (string or int):
+                                     0   - silent
+                                     100 - panic
+                                     200 - fatal
+                                     300 - error
+                                     400 - warn
+                                     500 - info (default)
+                                     600 - debug
+                                     700 - trace (default "info")
 ```
 
 ## See also

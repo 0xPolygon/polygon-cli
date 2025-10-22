@@ -4,6 +4,19 @@ import (
 	"sync/atomic"
 )
 
+// Direction represents the direction of a message (sent or received).
+type Direction string
+
+const (
+	// MsgReceived represents messages received from peers.
+	MsgReceived Direction = "received"
+	// MsgSent represents messages sent to peers.
+	MsgSent Direction = "sent"
+
+	// PacketSuffix is appended to message names to create packet count metrics.
+	PacketSuffix = "Packet"
+)
+
 // MessageCount is used to help the outer goroutine to receive summary of the
 // number and type of messages that were sent. This is used for distributed
 // logging. It can be used to count the different types of messages received

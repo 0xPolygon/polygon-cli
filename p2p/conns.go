@@ -2,7 +2,9 @@ package p2p
 
 import (
 	"sync"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
@@ -10,15 +12,29 @@ import (
 )
 
 // Conns manages a collection of active peer connections for transaction broadcasting.
+// It also maintains a global cache of blocks written to the database.
 type Conns struct {
 	conns map[string]*conn
 	mu    sync.RWMutex
+
+	// blocks tracks blocks written to the database across all peers
+	// to avoid duplicate writes and requests.
+	blocks *Cache[common.Hash, BlockCache]
 }
 
-// NewConns creates a new connection manager.
-func NewConns() *Conns {
+// ConnsOptions contains configuration options for creating a new Conns manager.
+type ConnsOptions struct {
+	// MaxBlocks is the maximum number of blocks to track in the cache.
+	MaxBlocks int
+	// BlocksCacheTTL is the time to live for block cache entries.
+	BlocksCacheTTL time.Duration
+}
+
+// NewConns creates a new connection manager with a blocks cache.
+func NewConns(opts ConnsOptions) *Conns {
 	return &Conns{
-		conns: make(map[string]*conn),
+		conns:  make(map[string]*conn),
+		blocks: NewCache[common.Hash, BlockCache](opts.MaxBlocks, opts.BlocksCacheTTL),
 	}
 }
 
@@ -76,4 +92,22 @@ func (c *Conns) Nodes() []*enode.Node {
 	}
 
 	return nodes
+}
+
+// GetPeerConnectedAt returns the connection time for a peer by their ID.
+// Returns zero time if the peer is not found.
+func (c *Conns) GetPeerConnectedAt(peerID string) time.Time {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if cn, ok := c.conns[peerID]; ok {
+		return cn.connectedAt
+	}
+
+	return time.Time{}
+}
+
+// Blocks returns the global blocks cache.
+func (c *Conns) Blocks() *Cache[common.Hash, BlockCache] {
+	return c.blocks
 }
