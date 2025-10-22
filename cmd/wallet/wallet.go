@@ -45,7 +45,7 @@ var WalletCmd = &cobra.Command{
 		var err error
 		var mnemonic string
 		if mode == "inspect" {
-			// in the case of inspect, we'll partse a mnemonic and then continue
+			// in the case of inspect, we'll parse a mnemonic and then continue
 			mnemonic, err = getFileOrFlag(inputMnemonicFile, inputMnemonic)
 			if err != nil {
 				return err
@@ -102,17 +102,20 @@ var WalletCmd = &cobra.Command{
 }
 
 func getFileOrFlag(filename string, flag string) (string, error) {
-	if filename != "" {
-		filedata, err := os.ReadFile(filename)
-		if err != nil {
-			return "", fmt.Errorf("could not open the specified file %s. Got error %s", filename, err.Error())
-		}
-		return string(filedata), nil
+	if filename == "" && flag == "" {
+		return "", fmt.Errorf("both filename and flag are empty")
 	}
-	if flag != "" {
+
+	if filename == "" {
 		return flag, nil
 	}
-	return "", fmt.Errorf("unable to determine flat or filename")
+
+	filedata, err := os.ReadFile(filename)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file %s: %w", filename, err)
+	}
+
+	return string(filedata), nil
 }
 
 func init() {
