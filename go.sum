@@ -11,8 +11,8 @@ cloud.google.com/go/datastore v1.20.0 h1:NNpXoyEqIJmZFc0ACcwBEaXnmscUpcG4NkKnbCe
 cloud.google.com/go/datastore v1.20.0/go.mod h1:uFo3e+aEpRfHgtp5pp0+6M0o147KoPaYNaPAKpfh8Ew=
 cloud.google.com/go/iam v1.5.2 h1:qgFRAGEmd8z6dJ/qyEchAuL9jpswyODjA2lS+w234g8=
 cloud.google.com/go/iam v1.5.2/go.mod h1:SE1vg0N81zQqLzQEwxL2WI6yhetBdbNQuTvIKCSkUHE=
-cloud.google.com/go/kms v1.23.1 h1:Mesyv84WoP3tPjUC0O5LRqPWICO0ufdpWf9jtBCEz64=
-cloud.google.com/go/kms v1.23.1/go.mod h1:rZ5kK0I7Kn9W4erhYVoIRPtpizjunlrfU4fUkumUp8g=
+cloud.google.com/go/kms v1.23.2 h1:4IYDQL5hG4L+HzJBhzejUySoUOheh3Lk5YT4PCyyW6k=
+cloud.google.com/go/kms v1.23.2/go.mod h1:rZ5kK0I7Kn9W4erhYVoIRPtpizjunlrfU4fUkumUp8g=
 cloud.google.com/go/longrunning v0.6.7 h1:IGtfDWHhQCgCjwQjV9iiLnUta9LBCo8R9QmAFsS/PrE=
 cloud.google.com/go/longrunning v0.6.7/go.mod h1:EAFV3IZAKmM56TyiE6VAP3VoTzhZzySwI/YI1s/nRsY=
 github.com/0xPolygon/cdk-contracts-tooling v0.0.1 h1:2HH8KpO1CZRl1zHfn0IYwJhPA7l91DOWrjdExmaB9Kk=

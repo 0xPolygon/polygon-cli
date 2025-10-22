@@ -159,7 +159,7 @@ require (
 )
 
 require (
-	cloud.google.com/go/kms v1.23.1
+	cloud.google.com/go/kms v1.23.2
 	github.com/0xPolygon/cdk-contracts-tooling v0.0.1
 	github.com/cometbft/cometbft v0.38.19
 	github.com/docker/docker v25.0.13+incompatible
