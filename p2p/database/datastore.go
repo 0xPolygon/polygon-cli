@@ -391,13 +391,13 @@ func (d *Datastore) newDatastoreHeader(header *types.Header, tfs time.Time, isPa
 }
 
 // writeFirstSeen updates timing fields on a header and block, preserving earlier timestamps.
-func (d *Datastore) writeFirstSeen(newHeader *DatastoreHeader, block *DatastoreBlock, tfs time.Time) {
+func (d *Datastore) writeFirstSeen(header *DatastoreHeader, block *DatastoreBlock, tfs time.Time) {
 	// Preserve earlier header timing if it exists
 	if block.DatastoreHeader != nil &&
 		!block.DatastoreHeader.TimeFirstSeen.IsZero() &&
 		block.DatastoreHeader.TimeFirstSeen.Before(tfs) {
-		newHeader.TimeFirstSeen = block.DatastoreHeader.TimeFirstSeen
-		newHeader.SensorFirstSeen = block.DatastoreHeader.SensorFirstSeen
+		header.TimeFirstSeen = block.DatastoreHeader.TimeFirstSeen
+		header.SensorFirstSeen = block.DatastoreHeader.SensorFirstSeen
 	}
 
 	// Set hash timing if it doesn't exist or if new timestamp is earlier
@@ -407,9 +407,9 @@ func (d *Datastore) writeFirstSeen(newHeader *DatastoreHeader, block *DatastoreB
 	}
 
 	// If hash was seen before header, also update header timing
-	if block.TimeFirstSeenHash.Before(newHeader.TimeFirstSeen) {
-		newHeader.TimeFirstSeen = block.TimeFirstSeenHash
-		newHeader.SensorFirstSeen = block.SensorFirstSeenHash
+	if block.TimeFirstSeenHash.Before(header.TimeFirstSeen) {
+		header.TimeFirstSeen = block.TimeFirstSeenHash
+		header.SensorFirstSeen = block.SensorFirstSeenHash
 	}
 }
 
