@@ -569,7 +569,7 @@ func ConvHexToBigInt(raw any) (bi *big.Int, err error) {
 	if err != nil {
 		return nil, err
 	}
-	hexString = strings.Replace(hexString, "0x", "", -1)
+	hexString = strings.ReplaceAll(hexString, "0x", "")
 	if len(hexString)%2 != 0 {
 		hexString = "0" + hexString
 	}
@@ -614,7 +614,7 @@ func ConvHexToUint64(raw any) (uint64, error) {
 		return 0, err
 	}
 
-	hexString = strings.Replace(hexString, "0x", "", -1)
+	hexString = strings.ReplaceAll(hexString, "0x", "")
 	if len(hexString)%2 != 0 {
 		hexString = "0" + hexString
 	}
@@ -669,7 +669,7 @@ func (r *RawBlockResponse) ToBlock() *types.Block {
 }
 
 func normalizeHexString(s string) string {
-	hexString := strings.Replace(s, "0x", "", -1)
+	hexString := strings.ReplaceAll(s, "0x", "")
 	if len(hexString)%2 != 0 {
 		hexString = "0" + hexString
 	}
