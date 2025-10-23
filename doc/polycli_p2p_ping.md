@@ -19,12 +19,17 @@ polycli p2p ping [enode/enr or nodes file] [flags]
 
 ## Usage
 
-Ping nodes by either giving a single enode/enr or an entire nodes file.
+Pinging a peer is useful to determine information about the peer and retrieving
+the `Hello` and `Status` messages. By default, it will listen to the peer after
+the status exchange for blocks and transactions. To disable this behavior, set
+the `--listen` flag.
 
-This command will establish a handshake and status exchange to get the Hello and
-Status messages and output JSON. If providing a enode/enr rather than a nodes
-file, then the connection will remain open by default (--listen=true), and you
-can see other messages the peer sends (e.g. blocks, transactions, etc.).
+## Example
+
+```bash
+polycli p2p ping <enode/enr or nodes.json file>
+```
+
 ## Flags
 
 ```bash

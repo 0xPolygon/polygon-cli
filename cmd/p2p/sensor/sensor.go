@@ -3,6 +3,7 @@ package sensor
 import (
 	"context"
 	"crypto/ecdsa"
+	_ "embed"
 	"errors"
 	"fmt"
 	"os"
@@ -82,6 +83,8 @@ type (
 )
 
 var (
+	//go:embed usage.md
+	sensorUsage       string
 	inputSensorParams sensorParams
 )
 
@@ -90,7 +93,7 @@ var (
 var SensorCmd = &cobra.Command{
 	Use:   "sensor [nodes file]",
 	Short: "Start a devp2p sensor that discovers other peers and will receive blocks and transactions.",
-	Long:  "If no nodes.json file exists, it will be created.",
+	Long:  sensorUsage,
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputSensorParams.NodesFile = args[0]
