@@ -69,6 +69,7 @@ type JSONBlock struct {
 	TxCount         int       `json:"tx_count"`
 	UncleCount      int       `json:"uncle_count"`
 	TimeFirstSeen   time.Time `json:"time_first_seen"`
+	IsParent        bool      `json:"is_parent"`
 }
 
 // JSONBlockEvent represents a block event in JSON format.
@@ -179,7 +180,8 @@ func (j *JSONDatabase) writeBlock(block *types.Block, td *big.Int, tfs time.Time
 }
 
 // WriteBlockHeaders writes the block headers as JSON.
-func (j *JSONDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time) {
+// The isParent parameter indicates if these headers were fetched as parent blocks.
+func (j *JSONDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time, isParent bool) {
 	if !j.ShouldWriteBlocks() {
 		return
 	}
@@ -196,6 +198,7 @@ func (j *JSONDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.H
 			GasUsed:       header.GasUsed,
 			Difficulty:    header.Difficulty.String(),
 			TimeFirstSeen: tfs,
+			IsParent:      isParent,
 		}
 
 		if header.BaseFee != nil {

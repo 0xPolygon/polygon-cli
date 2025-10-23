@@ -21,8 +21,9 @@ type Database interface {
 	WriteBlock(context.Context, *enode.Node, *types.Block, *big.Int, time.Time)
 
 	// WriteBlockHeaders will write the block headers if ShouldWriteBlocks
-	// returns true.
-	WriteBlockHeaders(context.Context, []*types.Header, time.Time)
+	// returns true. The isParent parameter indicates if these headers were
+	// fetched as parent blocks.
+	WriteBlockHeaders(context.Context, []*types.Header, time.Time, bool)
 
 	// WriteBlockHashes will write the block hashes if ShouldWriteBlockEvents
 	// returns true.
