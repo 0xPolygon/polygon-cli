@@ -192,6 +192,8 @@ var SensorCmd = &cobra.Command{
 			Help:      "The number and type of messages the sensor has sent and received",
 		}, []string{"message", "url", "name", "direction"})
 
+		metrics := p2p.NewBlockMetrics(head.Block)
+
 		// Create peer connection manager for broadcasting transactions
 		// and managing the global blocks cache
 		conns := p2p.NewConns(p2p.ConnsOptions{
@@ -278,6 +280,8 @@ var SensorCmd = &cobra.Command{
 			case <-ticker.C:
 				peersGauge.Set(float64(server.PeerCount()))
 				db.WritePeers(cmd.Context(), server.Peers(), time.Now())
+
+				metrics.Update(conns.GetHeadBlock().Block, conns.GetOldestBlock())
 
 				urls := []string{}
 				for _, peer := range server.Peers() {
