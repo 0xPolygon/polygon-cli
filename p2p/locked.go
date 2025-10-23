@@ -23,9 +23,12 @@ func (l *Locked[T]) Set(value T) {
 }
 
 // Update atomically updates the value using a function.
-// The function receives the current value and returns the new value.
-func (l *Locked[T]) Update(fn func(T) T) {
+// The function receives the current value and returns the new value and a result.
+// The result is returned to the caller.
+func (l *Locked[T]) Update(fn func(T) (T, bool)) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.value = fn(l.value)
+	newValue, changed := fn(l.value)
+	l.value = newValue
+	return changed
 }

@@ -130,11 +130,11 @@ func (c *Conns) GetOldestBlock() *types.Header {
 // UpdateOldestBlock updates the oldest block seen by the sensor.
 // Only updates if the provided header is older than the current oldest block.
 func (c *Conns) UpdateOldestBlock(header *types.Header) {
-	c.oldest.Update(func(current *types.Header) *types.Header {
+	c.oldest.Update(func(current *types.Header) (*types.Header, bool) {
 		if current == nil || header.Number.Cmp(current.Number) < 0 {
-			return header
+			return header, true
 		}
-		return current
+		return current, false
 	})
 }
 
@@ -144,11 +144,12 @@ func (c *Conns) GetHeadBlock() eth.NewBlockPacket {
 }
 
 // UpdateHeadBlock updates the head block if the provided block is newer.
-func (c *Conns) UpdateHeadBlock(packet eth.NewBlockPacket) {
-	c.head.Update(func(current eth.NewBlockPacket) eth.NewBlockPacket {
+// Returns true if the head block was updated, false otherwise.
+func (c *Conns) UpdateHeadBlock(packet eth.NewBlockPacket) bool {
+	return c.head.Update(func(current eth.NewBlockPacket) (eth.NewBlockPacket, bool) {
 		if current.Block == nil || (packet.Block.NumberU64() > current.Block.NumberU64() && packet.TD.Cmp(current.TD) == 1) {
-			return packet
+			return packet, true
 		}
-		return current
+		return current, false
 	})
 }

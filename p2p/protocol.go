@@ -502,12 +502,13 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	c.countMsgReceived(block.Name(), 1)
 
 	// Set the head block if newer.
-	c.conns.UpdateHeadBlock(block)
-	c.logger.Info().
-		Str("hash", hash.Hex()).
-		Uint64("number", block.Block.Number().Uint64()).
-		Str("td", block.TD.String()).
-		Msg("Updated head block")
+	if c.conns.UpdateHeadBlock(block) {
+		c.logger.Info().
+			Str("hash", hash.Hex()).
+			Uint64("number", block.Block.Number().Uint64()).
+			Str("td", block.TD.String()).
+			Msg("Updated head block")
+	}
 
 	if err := c.getParentBlock(ctx, block.Block.Header()); err != nil {
 		return err
