@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -31,15 +30,13 @@ type BlockCache struct {
 
 // conn represents an individual connection with a peer.
 type conn struct {
-	sensorID  string
-	node      *enode.Node
-	logger    zerolog.Logger
-	rw        ethp2p.MsgReadWriter
-	db        database.Database
-	head      *HeadBlock
-	headMutex *sync.RWMutex
-	counter   *prometheus.CounterVec
-	peer      *ethp2p.Peer
+	sensorID string
+	node     *enode.Node
+	logger   zerolog.Logger
+	rw       ethp2p.MsgReadWriter
+	db       database.Database
+	counter  *prometheus.CounterVec
+	peer     *ethp2p.Peer
 
 	// requests is used to store the request ID and the block hash. This is used
 	// when fetching block bodies because the eth protocol block bodies do not
@@ -54,10 +51,6 @@ type conn struct {
 	// conns provides access to the global connection manager, which includes
 	// the blocks cache shared across all peers.
 	conns *Conns
-
-	// oldestBlock stores the first block the sensor has seen so when fetching
-	// parent blocks, it does not request blocks older than this.
-	oldestBlock *types.Header
 
 	// connectedAt stores when this peer connection was established.
 	connectedAt time.Time
@@ -78,11 +71,6 @@ type EthProtocolOptions struct {
 	Conns       *Conns
 	ForkID      forkid.ID
 	MsgCounter  *prometheus.CounterVec
-
-	// Head keeps track of the current head block of the chain. This is required
-	// when doing the status exchange.
-	Head      *HeadBlock
-	HeadMutex *sync.RWMutex
 
 	// Cache configurations
 	RequestsCache CacheOptions
@@ -115,8 +103,6 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				requests:     NewCache[uint64, common.Hash](opts.RequestsCache),
 				requestNum:   0,
 				parents:      NewCache[common.Hash, struct{}](opts.ParentsCache),
-				head:         opts.Head,
-				headMutex:    opts.HeadMutex,
 				counter:      opts.MsgCounter,
 				peer:         p,
 				conns:        opts.Conns,
@@ -125,17 +111,16 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				peerFullname: p.Fullname(),
 			}
 
-			c.headMutex.RLock()
+			head := c.conns.GetHead()
 			status := eth.StatusPacket{
 				ProtocolVersion: uint32(version),
 				NetworkID:       opts.NetworkID,
 				Genesis:         opts.GenesisHash,
 				ForkID:          opts.ForkID,
-				Head:            opts.Head.Hash,
-				TD:              opts.Head.TotalDifficulty,
+				Head:            head.Hash,
+				TD:              head.TotalDifficulty,
 			}
 			err := c.statusExchange(&status)
-			c.headMutex.RUnlock()
 			if err != nil {
 				return err
 			}
@@ -332,9 +317,10 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 		return nil
 	}
 
-	if c.oldestBlock == nil {
+	oldestBlock := c.conns.GetOldestBlock()
+	if oldestBlock == nil {
 		c.logger.Info().Interface("block", header).Msg("Setting oldest block")
-		c.oldestBlock = header
+		c.conns.UpdateOldestBlock(header)
 		return nil
 	}
 
@@ -344,7 +330,7 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 		return nil
 	}
 
-	if c.db.HasBlock(ctx, header.ParentHash) || header.Number.Cmp(c.oldestBlock.Number) != 1 {
+	if c.db.HasBlock(ctx, header.ParentHash) || header.Number.Cmp(oldestBlock.Number) != 1 {
 		return nil
 	}
 
@@ -524,17 +510,13 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	c.countMsgReceived(block.Name(), 1)
 
 	// Set the head block if newer.
-	c.headMutex.Lock()
-	if block.Block.Number().Uint64() > c.head.Number && block.TD.Cmp(c.head.TotalDifficulty) == 1 {
-		*c.head = HeadBlock{
-			Hash:            hash,
-			TotalDifficulty: block.TD,
-			Number:          block.Block.Number().Uint64(),
-			Time:            block.Block.Time(),
-		}
-		c.logger.Info().Interface("head", c.head).Msg("Setting head block")
-	}
-	c.headMutex.Unlock()
+	number := block.Block.Number().Uint64()
+	c.conns.UpdateHead(hash, block.TD, number, block.Block.Time())
+	c.logger.Info().
+		Str("hash", hash.Hex()).
+		Uint64("number", number).
+		Str("td", block.TD.String()).
+		Msg("Updated head block")
 
 	if err := c.getParentBlock(ctx, block.Block.Header()); err != nil {
 		return err

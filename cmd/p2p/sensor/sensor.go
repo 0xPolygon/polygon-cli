@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -196,6 +195,7 @@ var SensorCmd = &cobra.Command{
 		// and managing the global blocks cache
 		conns := p2p.NewConns(p2p.ConnsOptions{
 			BlocksCache: inputSensorParams.BlocksCache,
+			Head:        head,
 		})
 
 		opts := p2p.EthProtocolOptions{
@@ -206,8 +206,6 @@ var SensorCmd = &cobra.Command{
 			SensorID:      inputSensorParams.SensorID,
 			NetworkID:     inputSensorParams.NetworkID,
 			Conns:         conns,
-			Head:          &head,
-			HeadMutex:     &sync.RWMutex{},
 			ForkID:        forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
 			MsgCounter:    msgCounter,
 			RequestsCache: inputSensorParams.RequestsCache,

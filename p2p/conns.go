@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"math/big"
 	"sync"
 	"time"
 
@@ -20,18 +21,30 @@ type Conns struct {
 	// blocks tracks blocks written to the database across all peers
 	// to avoid duplicate writes and requests.
 	blocks *Cache[common.Hash, BlockCache]
+
+	// oldest stores the first block the sensor has seen so when fetching
+	// parent blocks, it does not request blocks older than this.
+	oldest *Locked[*types.Header]
+
+	// head keeps track of the current head block of the chain.
+	head *Locked[HeadBlock]
 }
 
 // ConnsOptions contains configuration options for creating a new Conns manager.
 type ConnsOptions struct {
 	BlocksCache CacheOptions
+	Head        HeadBlock
 }
 
 // NewConns creates a new connection manager with a blocks cache.
 func NewConns(opts ConnsOptions) *Conns {
+	head := &Locked[HeadBlock]{}
+	head.Set(opts.Head)
 	return &Conns{
 		conns:  make(map[string]*conn),
 		blocks: NewCache[common.Hash, BlockCache](opts.BlocksCache),
+		oldest: &Locked[*types.Header]{},
+		head:   head,
 	}
 }
 
@@ -107,4 +120,41 @@ func (c *Conns) GetPeerConnectedAt(peerID string) time.Time {
 // Blocks returns the global blocks cache.
 func (c *Conns) Blocks() *Cache[common.Hash, BlockCache] {
 	return c.blocks
+}
+
+// GetOldestBlock returns the oldest block seen by the sensor.
+// Returns nil if no block has been set yet.
+func (c *Conns) GetOldestBlock() *types.Header {
+	return c.oldest.Get()
+}
+
+// UpdateOldestBlock updates the oldest block seen by the sensor.
+// Only updates if the provided header is older than the current oldest block.
+func (c *Conns) UpdateOldestBlock(header *types.Header) {
+	c.oldest.Update(func(current *types.Header) *types.Header {
+		if current == nil || header.Number.Cmp(current.Number) < 0 {
+			return header
+		}
+		return current
+	})
+}
+
+// GetHeadBlock returns the current head block.
+func (c *Conns) GetHeadBlock() HeadBlock {
+	return c.head.Get()
+}
+
+// UpdateHeadBlock updates the head block if the provided block is newer.
+func (c *Conns) UpdateHeadBlock(hash common.Hash, td *big.Int, number uint64, timestamp uint64) {
+	c.head.Update(func(current HeadBlock) HeadBlock {
+		if number > current.Number && td.Cmp(current.TotalDifficulty) == 1 {
+			return HeadBlock{
+				Hash:            hash,
+				TotalDifficulty: td,
+				Number:          number,
+				Time:            timestamp,
+			}
+		}
+		return current
+	})
 }
