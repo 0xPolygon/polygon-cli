@@ -27,12 +27,20 @@ type peerData struct {
 	DurationSeconds float64          `json:"duration_seconds"`
 }
 
+// blockInfo represents basic block information.
+type blockInfo struct {
+	Hash   string `json:"hash"`
+	Number uint64 `json:"number"`
+}
+
 // apiData represents all sensor information including node info and peer data.
 type apiData struct {
 	ENR       string              `json:"enr"`
 	URL       string              `json:"enode"`
 	PeerCount int                 `json:"peer_count"`
 	Peers     map[string]peerData `json:"peers"`
+	Head      blockInfo           `json:"head_block"`
+	Oldest    blockInfo           `json:"oldest_block"`
 }
 
 // handleAPI sets up the API for interacting with the sensor. All endpoints
@@ -71,11 +79,22 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec, conns *p2p
 			peers[url] = msgs
 		}
 
+		head := conns.GetHeadBlock()
+		oldest := conns.GetOldestBlock()
+
 		data := apiData{
 			ENR:       server.NodeInfo().ENR,
 			URL:       server.Self().URLv4(),
 			PeerCount: len(peers),
 			Peers:     peers,
+			Head: blockInfo{
+				Hash:   head.Block.Hash().Hex(),
+				Number: head.Block.NumberU64(),
+			},
+			Oldest: blockInfo{
+				Hash:   oldest.Hash().Hex(),
+				Number: oldest.Number.Uint64(),
+			},
 		}
 
 		if err := json.NewEncoder(w).Encode(data); err != nil {
