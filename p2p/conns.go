@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"math/big"
 	"sync"
 	"time"
 
@@ -27,18 +26,18 @@ type Conns struct {
 	oldest *Locked[*types.Header]
 
 	// head keeps track of the current head block of the chain.
-	head *Locked[HeadBlock]
+	head *Locked[eth.NewBlockPacket]
 }
 
 // ConnsOptions contains configuration options for creating a new Conns manager.
 type ConnsOptions struct {
 	BlocksCache CacheOptions
-	Head        HeadBlock
+	Head        eth.NewBlockPacket
 }
 
 // NewConns creates a new connection manager with a blocks cache.
 func NewConns(opts ConnsOptions) *Conns {
-	head := &Locked[HeadBlock]{}
+	head := &Locked[eth.NewBlockPacket]{}
 	head.Set(opts.Head)
 	return &Conns{
 		conns:  make(map[string]*conn),
@@ -139,21 +138,16 @@ func (c *Conns) UpdateOldestBlock(header *types.Header) {
 	})
 }
 
-// GetHeadBlock returns the current head block.
-func (c *Conns) GetHeadBlock() HeadBlock {
+// GetHeadBlock returns the current head block packet.
+func (c *Conns) GetHeadBlock() eth.NewBlockPacket {
 	return c.head.Get()
 }
 
 // UpdateHeadBlock updates the head block if the provided block is newer.
-func (c *Conns) UpdateHeadBlock(hash common.Hash, td *big.Int, number uint64, timestamp uint64) {
-	c.head.Update(func(current HeadBlock) HeadBlock {
-		if number > current.Number && td.Cmp(current.TotalDifficulty) == 1 {
-			return HeadBlock{
-				Hash:            hash,
-				TotalDifficulty: td,
-				Number:          number,
-				Time:            timestamp,
-			}
+func (c *Conns) UpdateHeadBlock(packet eth.NewBlockPacket) {
+	c.head.Update(func(current eth.NewBlockPacket) eth.NewBlockPacket {
+		if current.Block == nil || (packet.Block.NumberU64() > current.Block.NumberU64() && packet.TD.Cmp(current.TD) == 1) {
+			return packet
 		}
 		return current
 	})

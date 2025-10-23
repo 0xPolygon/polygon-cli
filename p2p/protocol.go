@@ -77,14 +77,6 @@ type EthProtocolOptions struct {
 	ParentsCache  CacheOptions
 }
 
-// HeadBlock contains the necessary head block data for the status message.
-type HeadBlock struct {
-	Hash            common.Hash
-	TotalDifficulty *big.Int
-	Number          uint64
-	Time            uint64
-}
-
 // NewEthProtocol creates the new eth protocol. This will handle writing the
 // status exchange, message handling, and writing blocks/txs to the database.
 func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
@@ -111,14 +103,14 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				peerFullname: p.Fullname(),
 			}
 
-			head := c.conns.GetHead()
+			head := c.conns.GetHeadBlock()
 			status := eth.StatusPacket{
 				ProtocolVersion: uint32(version),
 				NetworkID:       opts.NetworkID,
 				Genesis:         opts.GenesisHash,
 				ForkID:          opts.ForkID,
-				Head:            head.Hash,
-				TD:              head.TotalDifficulty,
+				Head:            head.Block.Hash(),
+				TD:              head.TD,
 			}
 			err := c.statusExchange(&status)
 			if err != nil {
@@ -510,11 +502,10 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	c.countMsgReceived(block.Name(), 1)
 
 	// Set the head block if newer.
-	number := block.Block.Number().Uint64()
-	c.conns.UpdateHead(hash, block.TD, number, block.Block.Time())
+	c.conns.UpdateHeadBlock(block)
 	c.logger.Info().
 		Str("hash", hash.Hex()).
-		Uint64("number", number).
+		Uint64("number", block.Block.Number().Uint64()).
 		Str("td", block.TD.String()).
 		Msg("Updated head block")
 
