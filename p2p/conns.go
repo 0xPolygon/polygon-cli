@@ -39,10 +39,14 @@ type ConnsOptions struct {
 func NewConns(opts ConnsOptions) *Conns {
 	head := &Locked[eth.NewBlockPacket]{}
 	head.Set(opts.Head)
+
+	oldest := &Locked[*types.Header]{}
+	oldest.Set(opts.Head.Block.Header())
+
 	return &Conns{
 		conns:  make(map[string]*conn),
 		blocks: NewCache[common.Hash, BlockCache](opts.BlocksCache),
-		oldest: &Locked[*types.Header]{},
+		oldest: oldest,
 		head:   head,
 	}
 }
@@ -121,21 +125,11 @@ func (c *Conns) Blocks() *Cache[common.Hash, BlockCache] {
 	return c.blocks
 }
 
-// GetOldestBlock returns the oldest block seen by the sensor.
-// Returns nil if no block has been set yet.
+// GetOldestBlock returns the oldest block the sensor will fetch parents for.
+// This is set once at initialization to the head block and acts as a floor
+// to prevent the sensor from crawling backwards indefinitely.
 func (c *Conns) GetOldestBlock() *types.Header {
 	return c.oldest.Get()
-}
-
-// UpdateOldestBlock updates the oldest block seen by the sensor.
-// Only updates if the provided header is older than the current oldest block.
-func (c *Conns) UpdateOldestBlock(header *types.Header) {
-	c.oldest.Update(func(current *types.Header) (*types.Header, bool) {
-		if current == nil || header.Number.Cmp(current.Number) < 0 {
-			return header, true
-		}
-		return current, false
-	})
 }
 
 // GetHeadBlock returns the current head block packet.

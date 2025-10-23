@@ -303,18 +303,14 @@ func (c *conn) getBlockData(hash common.Hash, cache BlockCache, isParent bool) e
 }
 
 // getParentBlock will send a request to the peer if the parent of the header
-// does not exist in the database.
+// does not exist in the database. It only fetches parents back to the oldest
+// block (initialized to the head block at sensor startup).
 func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 	if !c.db.ShouldWriteBlocks() || !c.db.ShouldWriteBlockEvents() {
 		return nil
 	}
 
 	oldestBlock := c.conns.GetOldestBlock()
-	if oldestBlock == nil {
-		c.logger.Info().Interface("block", header).Msg("Setting oldest block")
-		c.conns.UpdateOldestBlock(header)
-		return nil
-	}
 
 	// Check cache first before querying the database
 	cache, ok := c.conns.Blocks().Peek(header.ParentHash)
@@ -322,6 +318,7 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 		return nil
 	}
 
+	// Don't fetch parents older than our starting point (oldest block)
 	if c.db.HasBlock(ctx, header.ParentHash) || header.Number.Cmp(oldestBlock.Number) != 1 {
 		return nil
 	}
