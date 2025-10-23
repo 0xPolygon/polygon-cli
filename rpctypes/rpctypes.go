@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/rs/zerolog/log"
 )
@@ -568,7 +569,7 @@ func ConvHexToBigInt(raw any) (bi *big.Int, err error) {
 	if err != nil {
 		return nil, err
 	}
-	hexString = strings.Replace(hexString, "0x", "", -1)
+	hexString = strings.ReplaceAll(hexString, "0x", "")
 	if len(hexString)%2 != 0 {
 		hexString = "0" + hexString
 	}
@@ -613,7 +614,7 @@ func ConvHexToUint64(raw any) (uint64, error) {
 		return 0, err
 	}
 
-	hexString = strings.Replace(hexString, "0x", "", -1)
+	hexString = strings.ReplaceAll(hexString, "0x", "")
 	if len(hexString)%2 != 0 {
 		hexString = "0" + hexString
 	}
@@ -643,8 +644,32 @@ func NewRawBlockResponseFromAny(raw any) (*RawBlockResponse, error) {
 
 }
 
+// ToBlock converts a RawBlockResponse to a types.Block with header only.
+// The block will not contain transactions, uncles, or withdrawals.
+func (r *RawBlockResponse) ToBlock() *types.Block {
+	header := &types.Header{
+		ParentHash:  r.ParentHash.ToHash(),
+		UncleHash:   r.SHA3Uncles.ToHash(),
+		Coinbase:    r.Miner.ToAddress(),
+		Root:        r.StateRoot.ToHash(),
+		TxHash:      r.TransactionsRoot.ToHash(),
+		ReceiptHash: r.ReceiptsRoot.ToHash(),
+		Bloom:       types.BytesToBloom(r.LogsBloom.ToBytes()),
+		Difficulty:  r.Difficulty.ToBigInt(),
+		Number:      r.Number.ToBigInt(),
+		GasLimit:    r.GasLimit.ToUint64(),
+		GasUsed:     r.GasUsed.ToUint64(),
+		Time:        r.Timestamp.ToUint64(),
+		Extra:       r.ExtraData.ToBytes(),
+		MixDigest:   r.MixHash.ToHash(),
+		Nonce:       types.EncodeNonce(r.Nonce.ToUint64()),
+		BaseFee:     r.BaseFeePerGas.ToBigInt(),
+	}
+	return types.NewBlockWithHeader(header)
+}
+
 func normalizeHexString(s string) string {
-	hexString := strings.Replace(s, "0x", "", -1)
+	hexString := strings.ReplaceAll(s, "0x", "")
 	if len(hexString)%2 != 0 {
 		hexString = "0" + hexString
 	}

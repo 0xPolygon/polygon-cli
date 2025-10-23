@@ -2,6 +2,7 @@ package ping
 
 import (
 	"crypto/ecdsa"
+	_ "embed"
 	"net"
 	"sync"
 	"time"
@@ -30,19 +31,16 @@ type (
 )
 
 var (
+	//go:embed usage.md
+	pingUsage       string
 	inputPingParams pingParams
 )
 
 var PingCmd = &cobra.Command{
 	Use:   "ping [enode/enr or nodes file]",
 	Short: "Ping node(s) and return the output.",
-	Long: `Ping nodes by either giving a single enode/enr or an entire nodes file.
-
-This command will establish a handshake and status exchange to get the Hello and
-Status messages and output JSON. If providing a enode/enr rather than a nodes
-file, then the connection will remain open by default (--listen=true), and you
-can see other messages the peer sends (e.g. blocks, transactions, etc.).`,
-	Args: cobra.MinimumNArgs(1),
+	Long:  pingUsage,
+	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputPingParams.privateKey, err = p2p.ParsePrivateKey(inputPingParams.KeyFile, inputPingParams.PrivateKey)
 		if err != nil {

@@ -31,4 +31,12 @@ func main() {
 		log.Fatal(err)
 	}
 	fmt.Println("`README.md` updated!")
+
+	// Generate Prometheus metrics documentation
+	metricsPath := fmt.Sprintf("%s/polycli_p2p_sensor_metrics.md", docDir)
+	if err := genMetricsDoc(metricsPath); err != nil {
+		fmt.Println("Unable to generate metrics documentation.")
+		log.Fatal(err)
+	}
+	fmt.Println("Metrics documentation generated!")
 }

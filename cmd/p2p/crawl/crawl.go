@@ -1,6 +1,7 @@
 package crawl
 
 import (
+	_ "embed"
 	"fmt"
 	"time"
 
@@ -32,6 +33,8 @@ type (
 )
 
 var (
+	//go:embed usage.md
+	crawlUsage       string
 	inputCrawlParams crawlParams
 )
 
@@ -40,7 +43,7 @@ var (
 var CrawlCmd = &cobra.Command{
 	Use:   "crawl [nodes file]",
 	Short: "Crawl a network on the devp2p layer and generate a nodes JSON file.",
-	Long:  "If no nodes.json file exists, it will be created.",
+	Long:  crawlUsage,
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputCrawlParams.NodesFile = args[0]

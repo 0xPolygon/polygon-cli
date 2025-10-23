@@ -20,18 +20,34 @@ type Conns struct {
 	// blocks tracks blocks written to the database across all peers
 	// to avoid duplicate writes and requests.
 	blocks *Cache[common.Hash, BlockCache]
+
+	// oldest stores the first block the sensor has seen so when fetching
+	// parent blocks, it does not request blocks older than this.
+	oldest *Locked[*types.Header]
+
+	// head keeps track of the current head block of the chain.
+	head *Locked[eth.NewBlockPacket]
 }
 
 // ConnsOptions contains configuration options for creating a new Conns manager.
 type ConnsOptions struct {
 	BlocksCache CacheOptions
+	Head        eth.NewBlockPacket
 }
 
 // NewConns creates a new connection manager with a blocks cache.
 func NewConns(opts ConnsOptions) *Conns {
+	head := &Locked[eth.NewBlockPacket]{}
+	head.Set(opts.Head)
+
+	oldest := &Locked[*types.Header]{}
+	oldest.Set(opts.Head.Block.Header())
+
 	return &Conns{
 		conns:  make(map[string]*conn),
 		blocks: NewCache[common.Hash, BlockCache](opts.BlocksCache),
+		oldest: oldest,
+		head:   head,
 	}
 }
 
@@ -107,4 +123,27 @@ func (c *Conns) GetPeerConnectedAt(peerID string) time.Time {
 // Blocks returns the global blocks cache.
 func (c *Conns) Blocks() *Cache[common.Hash, BlockCache] {
 	return c.blocks
+}
+
+// GetOldestBlock returns the oldest block the sensor will fetch parents for.
+// This is set once at initialization to the head block and acts as a floor
+// to prevent the sensor from crawling backwards indefinitely.
+func (c *Conns) GetOldestBlock() *types.Header {
+	return c.oldest.Get()
+}
+
+// GetHeadBlock returns the current head block packet.
+func (c *Conns) GetHeadBlock() eth.NewBlockPacket {
+	return c.head.Get()
+}
+
+// UpdateHeadBlock updates the head block if the provided block is newer.
+// Returns true if the head block was updated, false otherwise.
+func (c *Conns) UpdateHeadBlock(packet eth.NewBlockPacket) bool {
+	return c.head.Update(func(current eth.NewBlockPacket) (eth.NewBlockPacket, bool) {
+		if current.Block == nil || (packet.Block.NumberU64() > current.Block.NumberU64() && packet.TD.Cmp(current.TD) == 1) {
+			return packet, true
+		}
+		return current, false
+	})
 }

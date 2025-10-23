@@ -63,7 +63,7 @@ func genMarkdownPage(cmd *cobra.Command, w io.Writer) error {
 	buf.WriteString("## Description\n\n")
 	buf.WriteString(short + "\n\n")
 	if cmd.Runnable() {
-		buf.WriteString(fmt.Sprintf("```bash\n%s\n```\n\n", cmd.UseLine()))
+		fmt.Fprintf(buf, "```bash\n%s\n```\n\n", cmd.UseLine())
 	}
 
 	if len(cmd.Long) != 0 {
@@ -77,7 +77,7 @@ func genMarkdownPage(cmd *cobra.Command, w io.Writer) error {
 
 	if len(cmd.Example) > 0 {
 		buf.WriteString("## Examples\n\n")
-		buf.WriteString(fmt.Sprintf("```bash\n%s\n```\n\n", cmd.Example))
+		fmt.Fprintf(buf, "```bash\n%s\n```\n\n", cmd.Example)
 	}
 
 	if hasSeeAlso(cmd) {
@@ -106,7 +106,7 @@ func printToC(buf *bytes.Buffer, cmd *cobra.Command) {
 }
 
 // Print the command flags. This is a modified fork of Cobra's `printOptions` function.
-func printFlags(buf *bytes.Buffer, cmd *cobra.Command, name string) error {
+func printFlags(buf *bytes.Buffer, cmd *cobra.Command, _ string) error {
 	flags := cmd.NonInheritedFlags()
 	parentFlags := cmd.InheritedFlags()
 	if flags.HasAvailableFlags() || parentFlags.HasAvailableFlags() {
@@ -156,9 +156,9 @@ func printSeeAlso(buf *bytes.Buffer, cmd *cobra.Command, name string, linkHandle
 		pname = cleanDuppedSeparator(pname, " ")
 		pname = strings.TrimSuffix(pname, " ")
 		link := pname + ".md"
-		link = strings.Replace(link, " ", "_", -1)
+		link = strings.ReplaceAll(link, " ", "_")
 		link = cleanDuppedSeparator(link, "_")
-		buf.WriteString(fmt.Sprintf("\n- [%s](%s) - %s", pname, linkHandler(link), parent.Short))
+		fmt.Fprintf(buf, "\n- [%s](%s) - %s", pname, linkHandler(link), parent.Short)
 		cmd.VisitParents(func(c *cobra.Command) {
 			if c.DisableAutoGenTag {
 				cmd.DisableAutoGenTag = c.DisableAutoGenTag
@@ -177,9 +177,9 @@ func printSeeAlso(buf *bytes.Buffer, cmd *cobra.Command, name string, linkHandle
 		cname = cleanDuppedSeparator(cname, " ")
 		cname = strings.TrimSuffix(cname, " ")
 		link := cname + ".md"
-		link = strings.Replace(link, " ", "_", -1)
+		link = strings.ReplaceAll(link, " ", "_")
 		link = cleanDuppedSeparator(link, "_")
-		buf.WriteString(fmt.Sprintf("\n- [%s](%s) - %s\n", cname, linkHandler(link), child.Short))
+		fmt.Fprintf(buf, "\n- [%s](%s) - %s\n", cname, linkHandler(link), child.Short)
 	}
 	buf.WriteString("\n")
 }
