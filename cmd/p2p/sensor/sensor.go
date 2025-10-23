@@ -15,7 +15,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
@@ -176,28 +175,8 @@ var SensorCmd = &cobra.Command{
 			return err
 		}
 
-		// Construct a minimal block header from RPC response for initial head
-		header := &types.Header{
-			ParentHash:  rpcBlock.ParentHash.ToHash(),
-			UncleHash:   rpcBlock.SHA3Uncles.ToHash(),
-			Coinbase:    rpcBlock.Miner.ToAddress(),
-			Root:        rpcBlock.StateRoot.ToHash(),
-			TxHash:      rpcBlock.TransactionsRoot.ToHash(),
-			ReceiptHash: rpcBlock.ReceiptsRoot.ToHash(),
-			Bloom:       types.BytesToBloom(rpcBlock.LogsBloom.ToBytes()),
-			Difficulty:  rpcBlock.Difficulty.ToBigInt(),
-			Number:      rpcBlock.Number.ToBigInt(),
-			GasLimit:    rpcBlock.GasLimit.ToUint64(),
-			GasUsed:     rpcBlock.GasUsed.ToUint64(),
-			Time:        rpcBlock.Timestamp.ToUint64(),
-			Extra:       rpcBlock.ExtraData.ToBytes(),
-			MixDigest:   rpcBlock.MixHash.ToHash(),
-			Nonce:       types.EncodeNonce(rpcBlock.Nonce.ToUint64()),
-			BaseFee:     rpcBlock.BaseFeePerGas.ToBigInt(),
-		}
-
 		head := eth.NewBlockPacket{
-			Block: types.NewBlockWithHeader(header),
+			Block: rpcBlock.ToBlock(),
 			TD:    rpcBlock.TotalDifficulty.ToBigInt(),
 		}
 

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/rs/zerolog/log"
 )
@@ -641,6 +642,30 @@ func NewRawBlockResponseFromAny(raw any) (*RawBlockResponse, error) {
 	_ = topMap
 	return nil, nil
 
+}
+
+// ToBlock converts a RawBlockResponse to a types.Block with header only.
+// The block will not contain transactions, uncles, or withdrawals.
+func (r *RawBlockResponse) ToBlock() *types.Block {
+	header := &types.Header{
+		ParentHash:  r.ParentHash.ToHash(),
+		UncleHash:   r.SHA3Uncles.ToHash(),
+		Coinbase:    r.Miner.ToAddress(),
+		Root:        r.StateRoot.ToHash(),
+		TxHash:      r.TransactionsRoot.ToHash(),
+		ReceiptHash: r.ReceiptsRoot.ToHash(),
+		Bloom:       types.BytesToBloom(r.LogsBloom.ToBytes()),
+		Difficulty:  r.Difficulty.ToBigInt(),
+		Number:      r.Number.ToBigInt(),
+		GasLimit:    r.GasLimit.ToUint64(),
+		GasUsed:     r.GasUsed.ToUint64(),
+		Time:        r.Timestamp.ToUint64(),
+		Extra:       r.ExtraData.ToBytes(),
+		MixDigest:   r.MixHash.ToHash(),
+		Nonce:       types.EncodeNonce(r.Nonce.ToUint64()),
+		BaseFee:     r.BaseFeePerGas.ToBigInt(),
+	}
+	return types.NewBlockWithHeader(header)
 }
 
 func normalizeHexString(s string) string {
