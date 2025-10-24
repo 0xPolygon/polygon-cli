@@ -1000,25 +1000,27 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 								}
 							}
 						}
-					}
+					} else {
+						if ltTx != nil {
+							// if gas limit was not fixed, we ask the vault to spend the gas used after the transaction was sent
+							if fixedGasLimit == 0 {
+								log.Trace().Int64("routineID", routineID).
+									Int64("requestID", requestID).
+									Uint64("gas", ltTx.Gas()).
+									Msg("spending gas from gas budget after transaction is sent")
+								gasVault.SpendOrWaitAvailableBudget(ltTx.Gas())
+							}
 
-					// if gas limit was not fixed, we spend the gas used from the gas budget after the transaction is sent
-					if fixedGasLimit == 0 {
-						log.Trace().Int64("routineID", routineID).
-							Int64("requestID", requestID).
-							Uint64("gas", ltTx.Gas()).
-							Msg("spending gas from gas budget after transaction is sent")
-						gasVault.SpendOrWaitAvailableBudget(ltTx.Gas())
+							log.Trace().
+								Int64("routineID", routineID).
+								Int64("requestID", requestID).
+								Stringer("txhash", ltTx.Hash()).
+								Any("nonce", sendingTops.Nonce).
+								Str("mode", localMode.String()).
+								Str("sendingAddress", sendingTops.From.String()).
+								Msg("Request")
+						}
 					}
-
-					log.Trace().
-						Int64("routineID", routineID).
-						Int64("requestID", requestID).
-						Stringer("txhash", ltTx.Hash()).
-						Any("nonce", sendingTops.Nonce).
-						Str("mode", localMode.String()).
-						Str("sendingAddress", sendingTops.From.String()).
-						Msg("Request")
 				}
 				wg.Done()
 			}(routineID)
@@ -1099,6 +1101,24 @@ func setupGasPricer() (*gasmanager.GasPricer, error) {
 	case "estimated":
 		log.Trace().Msg("Using estimated gas price strategy")
 		strategy = gasmanager.NewEstimatedGasPriceStrategy()
+	case "dynamic":
+		log.Trace().Msg("Using dynamic gas price strategy")
+		strategy = gasmanager.NewDynamicGasPriceStrategy(gasmanager.DynamicGasPriceConfig{
+			GasPrices: []uint64{
+				0,
+				2_000_000_000,
+				5_000_000_000,
+				10_000_000_000,
+				15_000_000_000,
+				100_000_000_000,
+				150_000_000_000,
+				250_000_000_000,
+				500_000_000_000,
+				750_000_000_000,
+				1_000_000_000_000,
+			},
+		})
+
 	default:
 		return nil, fmt.Errorf("unknown gas price strategy: %s", inputLoadTestParams.GasManagerPriceStrategy)
 	}
