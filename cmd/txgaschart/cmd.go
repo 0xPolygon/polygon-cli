@@ -3,29 +3,60 @@ package txgaschart
 import (
 	"context"
 	"fmt"
-	"image/color"
 	"math"
 	"math/big"
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
+	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/time/rate"
-
-	"gonum.org/v1/plot"
-	"gonum.org/v1/plot/plotter"
-	"gonum.org/v1/plot/vg"
-	"gonum.org/v1/plot/vg/draw"
-
-	vgd "gonum.org/v1/plot/vg/draw"
 )
+
+type txGasChartConfig struct {
+	rateLimiter *rate.Limiter
+	concurrency uint64
+	output      string
+
+	targetAddr string
+	startBlock uint64
+	endBlock   uint64
+
+	scale string
+}
+
+type blocksMetadata struct {
+	blocks []block
+
+	minTxGasLimit    uint64
+	maxTxGasLimit    uint64
+	minTxGasPrice    uint64
+	maxTxGasPrice    uint64
+	maxBlockGasLimit uint64
+	avgBlockGasUsed  uint64
+	txCount          uint64
+	targetTxCount    uint64
+}
+
+type block struct {
+	number      uint64
+	avgGasPrice uint64
+	gasLimit    uint64
+	gasUsed     uint64
+	txs         []transaction
+}
+
+type transaction struct {
+	hash     common.Hash
+	gasPrice uint64
+	gasLimit uint64
+	target   bool
+}
 
 func buildChart(cmd *cobra.Command) error {
 	ctx := context.Background()
@@ -40,8 +71,6 @@ func buildChart(cmd *cobra.Command) error {
 		Str("target_address", inputArgs.targetAddr).
 		Msg("Chart generation parameters")
 
-	target := common.HexToAddress(inputArgs.targetAddr)
-
 	client, err := ethclient.DialContext(ctx, inputArgs.rpcURL)
 	if err != nil {
 		return err
@@ -53,245 +82,243 @@ func buildChart(cmd *cobra.Command) error {
 		return err
 	}
 
-	rl := rate.NewLimiter(rate.Limit(inputArgs.rateLimit), 1)
-	if inputArgs.rateLimit <= 0.0 {
-		rl = nil
+	config, err := parseFlags(ctx, client)
+	if err != nil {
+		return err
 	}
 
-	startBlock := inputArgs.startBlock
-	endBlock := inputArgs.endBlock
-	if endBlock == math.MaxUint64 {
-		h, err := client.HeaderByNumber(ctx, nil)
-		if err != nil {
-			return err
+	bm := loadBlocksMetadata(ctx, config, client, chainID)
+
+	chartMetadata := txGasChartMetadata{
+		rpcURL:  inputArgs.rpcURL,
+		chainID: chainID.Uint64(),
+
+		targetAddr: config.targetAddr,
+		startBlock: config.startBlock,
+		endBlock:   config.endBlock,
+
+		blocksMetadata: bm,
+
+		scale: config.scale,
+
+		outputPath: config.output,
+	}
+
+	logMostUsedGasPrices(bm)
+
+	return plotChart(chartMetadata)
+}
+
+func logMostUsedGasPrices(bm blocksMetadata) {
+	x := map[uint64]uint64{}
+	for _, b := range bm.blocks {
+		for _, t := range b.txs {
+			x[t.gasPrice]++
 		}
-		endBlock = h.Number.Uint64()
-		log.Warn().Uint64("end_block", endBlock).Msg("end block was set to max uint64 or not set, defaulting to latest block")
 	}
-	if startBlock > endBlock {
-		return fmt.Errorf("start block %d cannot be greater than end block %d", startBlock, endBlock)
+
+	ox := []struct {
+		gasPrice uint64
+		count    uint64
+	}{}
+	for k, v := range x {
+		ox = append(ox, struct {
+			gasPrice uint64
+			count    uint64
+		}{
+			gasPrice: k,
+			count:    v,
+		})
 	}
-	if startBlock == 0 {
-		if endBlock < 1000 {
-			startBlock = 0
+
+	slices.SortFunc(ox, func(a, b struct {
+		gasPrice uint64
+		count    uint64
+	}) int {
+		if a.count < b.count {
+			return 1
+		} else if a.count > b.count {
+			return -1
+		}
+		return 0
+	})
+
+	if len(ox) > 0 {
+		log.Debug().Msg("most used gas prices:")
+		max := 20
+		for _, v := range ox {
+			log.Debug().Uint64("gas_price_wei", v.gasPrice).
+				Uint64("count", v.count).
+				Msg("gas price usage")
+			max--
+			if max <= 0 {
+				break
+			}
+		}
+	}
+}
+
+func parseFlags(ctx context.Context, client *ethclient.Client) (*txGasChartConfig, error) {
+	config := &txGasChartConfig{}
+
+	config.startBlock = inputArgs.startBlock
+	config.endBlock = inputArgs.endBlock
+
+	h, err := client.HeaderByNumber(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if config.endBlock == math.MaxUint64 || config.endBlock > h.Number.Uint64() {
+		config.endBlock = h.Number.Uint64()
+		log.Warn().Uint64("end_block", config.endBlock).Msg("end block was not set or set to a value higher than the latest block in the network, defaulting to latest block")
+	}
+
+	if config.startBlock > config.endBlock {
+		return nil, fmt.Errorf("start block %d cannot be greater than end block %d", config.startBlock, config.endBlock)
+	}
+
+	const defaultBlockRange = 100
+
+	if config.startBlock == 0 {
+		if config.endBlock < defaultBlockRange {
+			config.startBlock = 0
 		} else {
-			startBlock = endBlock - 1000
+			config.startBlock = config.endBlock - defaultBlockRange
 		}
 
-		log.Warn().Uint64("start_block", startBlock).
-			Msg("start block was 0, defaulting to last 1000 blocks")
+		log.Warn().Uint64("start_block", config.startBlock).
+			Msg("start block was 0, defaulting to last blocks")
 	}
 
-	perBlockAvgMu := &sync.Mutex{}
-	perBlockAvg := make(map[uint64]float64)
+	config.rateLimiter = nil
+	if inputArgs.rateLimit > 0.0 {
+		config.rateLimiter = rate.NewLimiter(rate.Limit(inputArgs.rateLimit), 1)
+	}
 
-	wrk := make(chan struct{}, 15) // max concurrent requests
+	if len(inputArgs.targetAddr) > 0 && !common.IsHexAddress(inputArgs.targetAddr) {
+		return nil, fmt.Errorf("target address %s is not a valid hex address", inputArgs.targetAddr)
+	}
+
+	config.targetAddr = inputArgs.targetAddr
+	config.concurrency = inputArgs.concurrency
+	config.output = inputArgs.output
+	config.scale = inputArgs.scale
+
+	return config, nil
+}
+
+func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *ethclient.Client, chainID *big.Int) blocksMetadata {
+	// prepare worker pool
+	wrk := make(chan struct{}, config.concurrency)
 	for i := 0; i < cap(wrk); i++ {
 		wrk <- struct{}{}
 	}
-	txs := make(chan TxPoint, 1000)
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	var minGL, maxGL atomic.Uint64
-	minGL.Store(math.MaxUint64)
-	maxGL.Store(0.0)
+
+	blockMutex := &sync.Mutex{}
+	blocks := blocksMetadata{
+		minTxGasLimit: math.MaxUint64,
+		maxTxGasLimit: 0,
+		minTxGasPrice: math.MaxUint64,
+		maxTxGasPrice: 0,
+		txCount:       0,
+		targetTxCount: 0,
+	}
+
+	blocks.blocks = make([]block, config.endBlock-config.startBlock+1)
+	offset := config.startBlock
+
 	log.Info().Msg("reading blocks")
-	go func() {
-		wgb := sync.WaitGroup{}
-		for b := startBlock; b <= endBlock; b++ {
-			wgb.Add(1)
-			go func(b uint64) {
-				defer wgb.Done()
-				<-wrk
-				log.Trace().Uint64("block_number", b).Msg("processing block")
-				defer func() { wrk <- struct{}{} }()
-				_ = rl.Wait(ctx)
-				blk, err := client.BlockByNumber(ctx, new(big.Int).SetUint64(b))
-				if err != nil {
-					log.Error().Err(err).Uint64("block_number", b).Msg("failed to fetch block")
-					return
+
+	wg := sync.WaitGroup{}
+	totalGasUsed := big.NewInt(0)
+	for blockNumber := config.startBlock; blockNumber <= config.endBlock; blockNumber++ {
+		wg.Add(1) // notify block to process
+		go func(blockNumber uint64) {
+			defer wg.Done()                      // notify block done
+			<-wrk                                // wait for worker slot
+			defer func() { wrk <- struct{}{} }() // release worker slot
+
+			for {
+				log.Trace().Uint64("block_number", blockNumber).Msg("processing block")
+				if config.rateLimiter != nil {
+					_ = config.rateLimiter.Wait(ctx)
 				}
-				list := blk.Transactions()
-				if len(list) == 0 {
-					return
+				blockFromNetwork, err := client.BlockByNumber(ctx, new(big.Int).SetUint64(blockNumber))
+				if err != nil {
+					log.Error().Err(err).Uint64("block_number", blockNumber).Msg("failed to fetch block, retrying...")
+					time.Sleep(time.Second)
+					continue
 				}
 
-				sum := 0.0
-				for _, tx := range list {
-					wg.Add(1)
+				txs := blockFromNetwork.Transactions()
+
+				b := block{
+					number:   blockFromNetwork.NumberU64(),
+					gasLimit: blockFromNetwork.GasLimit(),
+					gasUsed:  blockFromNetwork.GasUsed(),
+					txs:      make([]transaction, len(blockFromNetwork.Transactions())),
+				}
+
+				blockMutex.Lock()
+				blocks.maxBlockGasLimit = max(blocks.maxBlockGasLimit, b.gasLimit)
+				totalGasUsed = totalGasUsed.Add(totalGasUsed, big.NewInt(int64(b.gasUsed)))
+				blockMutex.Unlock()
+
+				totalGasPrice := uint64(0)
+				for txi, tx := range txs {
 					signer := types.LatestSignerForChainID(chainID)
 					from, _ := types.Sender(signer, tx)
-					isTarget := strings.EqualFold(from.String(), target.String())
-					if !isTarget {
-						isTarget = tx.To() != nil && strings.EqualFold(tx.To().String(), target.String())
+					target := strings.EqualFold(from.String(), config.targetAddr)
+					if !target {
+						target = tx.To() != nil && strings.EqualFold(tx.To().String(), config.targetAddr)
 					}
-					gp := f64FromBigIntWei(tx.GasPrice())
-					gl := tx.Gas()
-					txs <- TxPoint{b, tx.Hash(), gp, gl, isTarget}
+					gasPrice := tx.GasPrice().Uint64()
+					gasLimit := tx.Gas()
 
-					minGL.Store(min(minGL.Load(), gl))
-					maxGL.Store(max(maxGL.Load(), gl))
-					sum += gp
+					b.txs[txi] = transaction{
+						hash:     tx.Hash(),
+						gasPrice: gasPrice,
+						gasLimit: gasLimit,
+						target:   target,
+					}
+
+					totalGasPrice += gasPrice
+
+					blockMutex.Lock()
+					blocks.minTxGasLimit = min(blocks.minTxGasLimit, gasLimit)
+					blocks.maxTxGasLimit = max(blocks.maxTxGasLimit, gasLimit)
+					blocks.minTxGasPrice = min(blocks.minTxGasPrice, gasPrice)
+					blocks.maxTxGasPrice = max(blocks.maxTxGasPrice, gasPrice)
+
+					blocks.txCount++
+					if target {
+						blocks.targetTxCount++
+						log.Info().
+							Uint64("block", b.number).
+							Stringer("txHash", tx.Hash()).
+							Uint64("gas_price_wei", gasPrice).
+							Uint64("gas_limit", gasLimit).
+							Msg("target tx found")
+					}
+					blockMutex.Unlock()
 				}
-				perBlockAvgMu.Lock()
-				perBlockAvg[b] = sum / float64(len(list))
-				perBlockAvgMu.Unlock()
-			}(b)
-		}
-		wgb.Wait()
-		close(txs)
-	}()
+				if len(txs) > 0 {
+					b.avgGasPrice = uint64(totalGasPrice / uint64(len(txs)))
+				} else {
+					b.avgGasPrice = 1
+				}
 
-	// build plot
-	p := plot.New()
-	p.Title.Text = fmt.Sprintf("RPC: %s | Transactions from block %d to %d\nTransactions with red * are from/to: %s | Blue line is 30-block rolling avg gas price",
-		inputArgs.rpcURL, startBlock, endBlock, target.String())
-	p.Title.TextStyle.Font.Size = vg.Points(14)
-	p.X.Label.Text = "Block Number"
-	p.Y.Label.Text = "Gas Price (wei, log10)"
-	p.Y.Scale = plot.LogScale{}
-	p.Y.Tick.Marker = plot.TickerFunc(func(min, max float64) []plot.Tick {
-		ticks := plot.LogTicks{}.Ticks(min, max)
-		for i := range ticks {
-			if ticks[i].Label == "" {
-				continue
+				blocks.blocks[blockNumber-offset] = b
+				break
 			}
-			v := ticks[i].Value // this is the real value (e.g., 10000), not an exponent
-			if v >= 1 {
-				ticks[i].Label = humanize.Comma(int64(math.Round(v)))
-			} else {
-				ticks[i].Label = fmt.Sprintf("%g", v) // 0.1, 0.01, etc.
-			}
-		}
-		return ticks
-	})
-
-	// scatter points
-	grayColor := color.RGBA{0, 0, 0, 25}
-	redColor := color.RGBA{255, 0, 0, 255}
-
-	log.Info().Msg("processing transactions for plotting")
-	go func() {
-		for t := range txs {
-			sc, err := plotter.NewScatter(plotter.XYs{{X: float64(t.Block), Y: t.GasPrice}})
-			if err != nil {
-				log.Error().Err(err).
-					Uint64("block", t.Block).
-					Stringer("txHash", t.TxHash).
-					Msg("failed to create scatter point")
-				wg.Done()
-				continue
-			}
-			if t.IsTarget {
-				sc.GlyphStyle.Color = redColor
-				sc.GlyphStyle.Radius = vg.Points(15)
-				sc.GlyphStyle.Shape = ThickCrossGlyph{Width: vg.Points(4)} // thickness
-				log.Info().
-					Uint64("block", t.Block).
-					Stringer("txHash", t.TxHash).
-					Float64("gas_price_wei", t.GasPrice).
-					Uint64("gas_limit", t.GasLimit).
-					Msg("target tx found")
-				p.Add(sc)
-			} else {
-				sc.GlyphStyle.Color = grayColor
-				sc.GlyphStyle.Radius = scale(minGL.Load(), maxGL.Load(), t.GasLimit)
-				sc.GlyphStyle.Shape = draw.CircleGlyph{}
-			}
-			p.Add(sc)
-			wg.Done()
-		}
-		wg.Done()
-	}()
+		}(blockNumber)
+	}
 	wg.Wait()
 
-	// rolling avg line
-	var blocks []uint64
-	for b := range perBlockAvg {
-		blocks = append(blocks, b)
-	}
-	lineXY := rollingMean(blocks, perBlockAvg, 30)
-	line, _ := plotter.NewLine(lineXY)
-	blueColor := color.RGBA{0, 100, 255, 255}
-	line.Color = blueColor
-	line.Width = vg.Points(3)
-	p.Add(line)
+	blocks.avgBlockGasUsed = big.NewInt(0).Div(totalGasUsed, big.NewInt(int64(len(blocks.blocks)))).Uint64()
 
-	if err := p.Save(1600, 900, inputArgs.output); err != nil {
-		return err
-	}
-	log.Info().
-		Str("file", inputArgs.output).
-		Msg("Chart saved successfully")
-
-	return nil
+	return blocks
 }
 
-// ThickCrossGlyph draws an 'X' with configurable stroke width.
-type ThickCrossGlyph struct {
-	Width vg.Length
-}
-
-func (g ThickCrossGlyph) DrawGlyph(c *vgd.Canvas, sty vgd.GlyphStyle, p vg.Point) {
-	if !c.Contains(p) {
-		return
-	}
-	r := sty.Radius
-	ls := vgd.LineStyle{Color: sty.Color, Width: g.Width}
-
-	// Horizontal
-	h := []vg.Point{{X: p.X - r, Y: p.Y}, {X: p.X + r, Y: p.Y}}
-	// Vertical
-	v := []vg.Point{{X: p.X, Y: p.Y - r}, {X: p.X, Y: p.Y + r}}
-	// Diagonal 1 (top-left -> bottom-right)
-	d1 := []vg.Point{{X: p.X - r, Y: p.Y + r}, {X: p.X + r, Y: p.Y - r}}
-	// Diagonal 2 (bottom-left -> top-right)
-	d2 := []vg.Point{{X: p.X - r, Y: p.Y - r}, {X: p.X + r, Y: p.Y + r}}
-
-	c.StrokeLines(ls, h)
-	c.StrokeLines(ls, v)
-	c.StrokeLines(ls, d1)
-	c.StrokeLines(ls, d2)
-}
-
-type TxPoint struct {
-	Block    uint64
-	TxHash   common.Hash
-	GasPrice float64
-	GasLimit uint64
-	IsTarget bool
-}
-
-func f64FromBigIntWei(x *big.Int) float64 {
-	bf := new(big.Float).SetInt(x)
-	f, _ := bf.Float64()
-	return f
-}
-
-func rollingMean(blocks []uint64, perBlockAvg map[uint64]float64, window int) plotter.XYs {
-	slices.Sort(blocks)
-	points := make(plotter.XYs, len(blocks))
-	sum := 0.0
-	buffer := make([]float64, 0, window)
-	for i, b := range blocks {
-		val := perBlockAvg[b]
-		buffer = append(buffer, val)
-		sum += val
-		if len(buffer) > window {
-			sum -= buffer[0]
-			buffer = buffer[1:]
-		}
-		points[i].X = float64(b)
-		points[i].Y = sum / float64(len(buffer))
-	}
-	return points
-}
-
-// normalize sizes
-func scale(minGL, maxGL, gl uint64) vg.Length {
-	if maxGL == minGL {
-		return vg.Points(4)
-	}
-	norm := (gl - minGL) / (maxGL - minGL)
-	return vg.Points(float64(3 + 8*norm))
-}
+// 26683746818

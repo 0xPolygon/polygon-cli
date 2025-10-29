@@ -33,14 +33,14 @@ func (o *GasVault) AddGas(gas uint64) {
 }
 
 func (o *GasVault) SpendOrWaitAvailableBudget(gas uint64) {
-	o.mu.Lock()
-	log.Trace().Uint64("gas", gas).Uint64("available_budget", o.gasBudgetAvailable).Msg("requesting gas from vault")
-	o.mu.Unlock()
+	// o.mu.Lock()
+	// log.Trace().Uint64("gas", gas).Uint64("available_budget", o.gasBudgetAvailable).Msg("requesting gas from vault")
+	// o.mu.Unlock()
 	for {
 		o.mu.Lock()
 		if gas <= o.gasBudgetAvailable {
 			o.gasBudgetAvailable -= gas
-			log.Trace().Uint64("gas", gas).Uint64("available_budget", o.gasBudgetAvailable).Msg("gas spent from vault")
+			// log.Trace().Uint64("gas", gas).Uint64("available_budget", o.gasBudgetAvailable).Msg("gas spent from vault")
 			o.mu.Unlock()
 			break
 		}

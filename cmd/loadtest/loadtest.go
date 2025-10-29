@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"sync/atomic"
 
 	"os"
@@ -113,10 +114,10 @@ func getRandomMode() loadTestMode {
 	// blob, contract call, recall, rpc, uniswap v3
 	modes := []loadTestMode{
 		loadTestModeERC20,
-		loadTestModeERC721,
-		loadTestModeDeploy,
-		loadTestModeIncrement,
-		loadTestModeStore,
+		// loadTestModeERC721,
+		// loadTestModeDeploy,
+		// loadTestModeIncrement,
+		// loadTestModeStore,
 		loadTestModeTransaction,
 	}
 	return modes[randSrc.Intn(len(modes))]
@@ -1004,10 +1005,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 						if ltTx != nil {
 							// if gas limit was not fixed, we ask the vault to spend the gas used after the transaction was sent
 							if fixedGasLimit == 0 {
-								log.Trace().Int64("routineID", routineID).
-									Int64("requestID", requestID).
-									Uint64("gas", ltTx.Gas()).
-									Msg("spending gas from gas budget after transaction is sent")
+								// log.Trace().Int64("routineID", routineID).
+								// 	Int64("requestID", requestID).
+								// 	Uint64("gas", ltTx.Gas()).
+								// 	Msg("spending gas from gas budget after transaction is sent")
 								gasVault.SpendOrWaitAvailableBudget(ltTx.Gas())
 							}
 
@@ -1018,6 +1019,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 								Any("nonce", sendingTops.Nonce).
 								Str("mode", localMode.String()).
 								Str("sendingAddress", sendingTops.From.String()).
+								Uint64("gas", ltTx.Gas()).
+								Any("gasPrice", sendingTops.GasPrice).
+								Any("gasFeeCap", sendingTops.GasFeeCap).
+								Any("gasTipCap", sendingTops.GasTipCap).
 								Msg("Request")
 						}
 					}
@@ -1028,7 +1033,16 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		log.Trace().Msg("Finished starting go routines. Waiting..")
 		wg.Wait()
 
-		if !infinite {
+		if infinite {
+			if inputLoadTestParams.InfiniteIntervalDuration > 0 {
+				infiniteDurationInSeconds := inputLoadTestParams.InfiniteIntervalDuration
+				infiniteDuration := time.Duration(infiniteDurationInSeconds) * time.Second
+				log.Info().
+					Dur("infiniteDuration", infiniteDuration).
+					Msg("Infinite load test mode: waiting before starting next cycle")
+				time.Sleep(infiniteDuration)
+			}
+		} else {
 			break
 		}
 	}
@@ -1058,32 +1072,53 @@ func setupGasVault(ctx context.Context, c *ethclient.Client) (*gasmanager.GasVau
 	log.Trace().Msg("Setting up gas limiter")
 	gasVault := gasmanager.NewGasVault()
 
-	curveLog := log.Trace().
+	waveLog := log.Trace().
 		Uint64("Period", inputLoadTestParams.GasManagerPeriod).
 		Uint64("Amplitude", inputLoadTestParams.GasManagerAmplitude).
 		Uint64("Target", inputLoadTestParams.GasManagerTarget)
-	var curve gasmanager.Curve
-	switch inputLoadTestParams.GasManagerOscillationCurve {
-	case "sine":
-		curveLog.Msg("Using sine curve")
-		curve = gasmanager.NewSineCurve(gasmanager.CurveConfig{
+	var wave gasmanager.Wave
+	switch inputLoadTestParams.GasManagerOscillationWave {
+	case "flat":
+		waveLog.Msg("Using flat wave")
+		wave = gasmanager.NewFlatWave(gasmanager.WaveConfig{
 			Period:    inputLoadTestParams.GasManagerPeriod,
 			Amplitude: inputLoadTestParams.GasManagerAmplitude,
 			Target:    inputLoadTestParams.GasManagerTarget,
 		})
-	case "flat":
-		curveLog.Msg("Using flat curve")
-		curve = gasmanager.NewFlatCurve(gasmanager.CurveConfig{
+	case "sine":
+		waveLog.Msg("Using sine wave")
+		wave = gasmanager.NewSineWave(gasmanager.WaveConfig{
+			Period:    inputLoadTestParams.GasManagerPeriod,
+			Amplitude: inputLoadTestParams.GasManagerAmplitude,
+			Target:    inputLoadTestParams.GasManagerTarget,
+		})
+	case "sawtooth":
+		waveLog.Msg("Using sawtooth wave")
+		wave = gasmanager.NewSawtoothWave(gasmanager.WaveConfig{
+			Period:    inputLoadTestParams.GasManagerPeriod,
+			Amplitude: inputLoadTestParams.GasManagerAmplitude,
+			Target:    inputLoadTestParams.GasManagerTarget,
+		})
+	case "square":
+		waveLog.Msg("Using square wave")
+		wave = gasmanager.NewSquareWave(gasmanager.WaveConfig{
+			Period:    inputLoadTestParams.GasManagerPeriod,
+			Amplitude: inputLoadTestParams.GasManagerAmplitude,
+			Target:    inputLoadTestParams.GasManagerTarget,
+		})
+	case "triangle":
+		waveLog.Msg("Using triangle wave")
+		wave = gasmanager.NewTriangleWave(gasmanager.WaveConfig{
 			Period:    inputLoadTestParams.GasManagerPeriod,
 			Amplitude: inputLoadTestParams.GasManagerAmplitude,
 			Target:    inputLoadTestParams.GasManagerTarget,
 		})
 	default:
-		err := fmt.Errorf("unknown gas oscillation curve: %s", inputLoadTestParams.GasManagerOscillationCurve)
+		err := fmt.Errorf("unknown gas oscillation wave: %s", inputLoadTestParams.GasManagerOscillationWave)
 		return nil, err
 	}
 
-	gasProvider := gasmanager.NewOscillatingGasProvider(c, gasVault, curve)
+	gasProvider := gasmanager.NewOscillatingGasProvider(c, gasVault, wave)
 	gasProvider.Start(ctx)
 
 	return gasVault, nil
@@ -1103,28 +1138,30 @@ func setupGasPricer() (*gasmanager.GasPricer, error) {
 		strategy = gasmanager.NewEstimatedGasPriceStrategy()
 	case "dynamic":
 		log.Trace().Msg("Using dynamic gas price strategy")
-		strategy = gasmanager.NewDynamicGasPriceStrategy(gasmanager.DynamicGasPriceConfig{
-			GasPrices: []uint64{
-				0,
-				2_000_000_000,
-				5_000_000_000,
-				10_000_000_000,
-				15_000_000_000,
-				100_000_000_000,
-				150_000_000_000,
-				250_000_000_000,
-				500_000_000_000,
-				750_000_000_000,
-				1_000_000_000_000,
-			},
-		})
 
+		gasPricesArr := strings.Split(inputLoadTestParams.GasManagerDynamicGasPricesWei, ",")
+		var gasPrices []uint64
+		if len(gasPricesArr) > 0 {
+			for _, gpStr := range gasPricesArr {
+				gp, err := strconv.ParseUint(strings.TrimSpace(gpStr), 10, 64)
+				if err != nil {
+					return nil, fmt.Errorf("invalid gas price in dynamic gas prices list: %s", gpStr)
+				}
+				gasPrices = append(gasPrices, gp)
+			}
+			log.Trace().
+				Any("GasPrices", gasPrices).
+				Msg("Using custom dynamic gas prices")
+		}
+
+		strategy = gasmanager.NewDynamicGasPriceStrategy(gasmanager.DynamicGasPriceConfig{
+			GasPrices: gasPrices,
+		})
 	default:
 		return nil, fmt.Errorf("unknown gas price strategy: %s", inputLoadTestParams.GasManagerPriceStrategy)
 	}
 
 	gasPricer := gasmanager.NewGasPricer(strategy)
-
 	return gasPricer, nil
 }
 
@@ -1401,8 +1438,10 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client, gasPricer *
 	// this should be one of the fastest RPC calls, so hopefully there isn't too much overhead calling this
 	bn := getLatestBlockNumber(ctx, c)
 
-	if cachedBlockNumber != nil && bn <= *cachedBlockNumber {
-		return cachedGasPrice, cachedGasTipCap
+	if gasPricer == nil { // cache is used only when gas pricer is not used
+		if cachedBlockNumber != nil && bn <= *cachedBlockNumber {
+			return cachedGasPrice, cachedGasTipCap
+		}
 	}
 
 	// In the case of an EVM compatible system not supporting EIP-1559
@@ -1439,7 +1478,7 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client, gasPricer *
 				gp = gasPricer.GetGasPrice()
 			}
 			if gp != nil {
-				gasPrice = big.NewInt(0).SetUint64(*gp)
+				gasTipCap = big.NewInt(0).SetUint64(*gp)
 			} else {
 				gasTipCap, tErr = c.SuggestGasTipCap(ctx)
 				if tErr != nil {
@@ -1483,7 +1522,10 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client, gasPricer *
 		l = l.Interface("cachedGasTipCap", cachedGasTipCap)
 	}
 
-	l.Msg("Updating gas prices")
+	if gasPricer == nil {
+		// only log when cache is used
+		l.Msg("Updating gas prices")
+	}
 
 	return cachedGasPrice, cachedGasTipCap
 }

@@ -2,33 +2,33 @@ package gasmanager
 
 import "math"
 
-type SineCurve struct {
-	BaseCurve
+type SineWave struct {
+	BaseWave
 	points map[float64]float64
 }
 
-func NewSineCurve(config CurveConfig) *SineCurve {
-	c := &SineCurve{
-		BaseCurve: *NewBaseCurve(config),
+func NewSineWave(config WaveConfig) *SineWave {
+	c := &SineWave{
+		BaseWave: *NewBaseWave(config),
 	}
 
-	c.computeCurve(config)
+	c.computeWave(config)
 
 	return c
 }
 
-func (c *SineCurve) Y() float64 {
+func (c *SineWave) Y() float64 {
 	return c.points[c.x]
 }
 
-func (c *SineCurve) MoveNext() {
+func (c *SineWave) MoveNext() {
 	c.x++
 	if c.x >= float64(c.config.Period) {
 		c.x = 0
 	}
 }
 
-func (c *SineCurve) computeCurve(config CurveConfig) {
+func (c *SineWave) computeWave(config WaveConfig) {
 	const start = float64(0)
 	const step = float64(1.0)
 	end := float64(config.Period)

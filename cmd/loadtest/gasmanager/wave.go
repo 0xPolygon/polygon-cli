@@ -1,12 +1,12 @@
 package gasmanager
 
-type CurveConfig struct {
+type WaveConfig struct {
 	Period    uint64
 	Amplitude uint64
 	Target    uint64
 }
 
-type Curve interface {
+type Wave interface {
 	Period() uint64
 	Amplitude() uint64
 	Target() uint64
@@ -15,30 +15,30 @@ type Curve interface {
 	MoveNext()
 }
 
-type BaseCurve struct {
-	config CurveConfig
+type BaseWave struct {
+	config WaveConfig
 	x      float64
 }
 
-func NewBaseCurve(config CurveConfig) *BaseCurve {
-	return &BaseCurve{
+func NewBaseWave(config WaveConfig) *BaseWave {
+	return &BaseWave{
 		config: config,
 		x:      0,
 	}
 }
 
-func (c *BaseCurve) Period() uint64 {
+func (c *BaseWave) Period() uint64 {
 	return c.config.Period
 }
 
-func (c *BaseCurve) Amplitude() uint64 {
+func (c *BaseWave) Amplitude() uint64 {
 	return c.config.Amplitude
 }
 
-func (c *BaseCurve) Target() uint64 {
+func (c *BaseWave) Target() uint64 {
 	return c.config.Target
 }
 
-func (c *BaseCurve) X() float64 {
+func (c *BaseWave) X() float64 {
 	return c.x
 }

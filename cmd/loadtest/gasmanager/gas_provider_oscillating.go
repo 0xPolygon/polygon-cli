@@ -11,13 +11,13 @@ import (
 
 type OscillatingGasProvider struct {
 	GasProviderBase
-	oscillationCurve Curve
+	wave Wave
 }
 
-func NewOscillatingGasProvider(client *ethclient.Client, vault *GasVault, oscillationCurve Curve) *OscillatingGasProvider {
+func NewOscillatingGasProvider(client *ethclient.Client, vault *GasVault, wave Wave) *OscillatingGasProvider {
 	p := &OscillatingGasProvider{
-		GasProviderBase:  *NewGasProviderBase(client, vault),
-		oscillationCurve: oscillationCurve,
+		GasProviderBase: *NewGasProviderBase(client, vault),
+		wave:            wave,
 	}
 
 	p.GasProviderBase.onStart = p.onStart
@@ -30,15 +30,15 @@ func (o *OscillatingGasProvider) Start(ctx context.Context) {
 }
 
 func (o *OscillatingGasProvider) onStart() {
-	o.vault.AddGas(uint64(math.Floor(o.oscillationCurve.Y())))
+	o.vault.AddGas(uint64(math.Floor(o.wave.Y())))
 }
 
 func (o *OscillatingGasProvider) onNewHeader(header *types.Header) {
 	log.Trace().Uint64("block_number", header.Number.Uint64()).Msg("oscillating gas provider processing new block header")
-	o.oscillationCurve.MoveNext()
+	o.wave.MoveNext()
 	if o.vault != nil {
-		log.Trace().Float64("new_gas_amount", o.oscillationCurve.Y()).Msg("adding gas to vault based on oscillation curve")
-		o.vault.AddGas(uint64(math.Floor(o.oscillationCurve.Y())))
+		log.Trace().Float64("new_gas_amount", o.wave.Y()).Msg("adding gas to vault based on oscillation wave")
+		o.vault.AddGas(uint64(math.Floor(o.wave.Y())))
 		log.Trace().Uint64("available_budget", o.vault.GetAvailableBudget()).Msg("updated gas vault budget after oscillation")
 	}
 }
