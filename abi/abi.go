@@ -190,7 +190,7 @@ func (fs *FunctionSignature) Encode(functionArguments []string) (string, error) 
 	}
 
 	// backfill dynamic types...
-	head := ""
+	var head strings.Builder
 	tail := ""
 	for _, val := range vals {
 		currHead := val.Head
@@ -204,10 +204,10 @@ func (fs *FunctionSignature) Encode(functionArguments []string) (string, error) 
 			currHead = pointerLocHex
 			tail += val.Tail
 		}
-		head += currHead
+		head.WriteString(currHead)
 	}
 
-	return head + tail, nil
+	return head.String() + tail, nil
 }
 
 // EncodeInput encodes an object with the mapped function arg type.

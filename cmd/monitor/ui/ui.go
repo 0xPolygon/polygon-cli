@@ -195,18 +195,19 @@ func GetBlocksList(blocks []rpctypes.PolyBlock) ([]string, string) {
 			author.String(),
 		}
 
-		record := " "
+		var record strings.Builder
+		record.WriteString(" ")
 		for i := 0; i < len(recordVariables)-1; i++ {
 			spaceOffset := len(headerVariables[i]) + proportion[i] - len(recordVariables[i])
 			if spaceOffset < 0 {
 				spaceOffset = 0
 				log.Error().Str("record", recordVariables[i]).Str("column", headerVariables[i]).Msg("Column width exceed header width")
 			}
-			record += recordVariables[i] + strings.Repeat(" ", spaceOffset)
+			record.WriteString(recordVariables[i] + strings.Repeat(" ", spaceOffset))
 		}
-		record += recordVariables[len(recordVariables)-1]
+		record.WriteString(recordVariables[len(recordVariables)-1])
 
-		records = append(records, record)
+		records = append(records, record.String())
 	}
 	return records, header
 }
@@ -270,18 +271,19 @@ func GetSelectedBlocksList(blocks []rpctypes.PolyBlock) ([]string, string) {
 			metrics.TruncateHexString(author.String(), 24),
 		}
 
-		record := " "
+		var record strings.Builder
+		record.WriteString(" ")
 		for i := 0; i < len(recordVariables)-1; i++ {
 			spaceOffset := len(headerVariables[i]) + proportion[i] - len(recordVariables[i])
 			if spaceOffset < 0 {
 				spaceOffset = 0
 				log.Error().Str("record", recordVariables[i]).Str("column", headerVariables[i]).Msg("Column width exceed header width")
 			}
-			record += recordVariables[i] + strings.Repeat(" ", spaceOffset)
+			record.WriteString(recordVariables[i] + strings.Repeat(" ", spaceOffset))
 		}
-		record += recordVariables[len(recordVariables)-1]
+		record.WriteString(recordVariables[len(recordVariables)-1])
 
-		records = append(records, record)
+		records = append(records, record.String())
 	}
 	return records, header
 }
@@ -393,11 +395,11 @@ func GetTransactionsList(block rpctypes.PolyBlock, chainID *big.Int) ([]string, 
 	headerVariables := []string{"Txn Hash", "Method", "From", "To", "Value", "Gas Price"}
 	proportion := []int{60, 20, 50, 50, 20}
 
-	header := ""
+	var header strings.Builder
 	for i, prop := range proportion {
-		header += headerVariables[i] + strings.Repeat("─", prop)
+		header.WriteString(headerVariables[i] + strings.Repeat("─", prop))
 	}
-	header += headerVariables[len(headerVariables)-1]
+	header.WriteString(headerVariables[len(headerVariables)-1])
 
 	records := []string{""}
 
@@ -414,20 +416,21 @@ func GetTransactionsList(block rpctypes.PolyBlock, chainID *big.Int) ([]string, 
 			fmt.Sprintf("%s", tx.GasPrice()),
 		}
 
-		record := " "
+		var record strings.Builder
+		record.WriteString(" ")
 		for i := 0; i < len(recordVariables)-1; i++ {
 			spaceOffset := len(headerVariables[i]) + proportion[i] - len(recordVariables[i])
 			if spaceOffset < 0 {
 				spaceOffset = 0
 				log.Error().Str("record", recordVariables[i]).Str("column", headerVariables[i]).Msg("Column width exceed header width")
 			}
-			record += recordVariables[i] + strings.Repeat(" ", spaceOffset)
+			record.WriteString(recordVariables[i] + strings.Repeat(" ", spaceOffset))
 		}
-		record += recordVariables[len(recordVariables)-1]
+		record.WriteString(recordVariables[len(recordVariables)-1])
 
-		records = append(records, record)
+		records = append(records, record.String())
 	}
-	return records, header
+	return records, header.String()
 }
 
 func GetSimpleTxFields(tx rpctypes.PolyTransaction, chainID, baseFee *big.Int) []string {
