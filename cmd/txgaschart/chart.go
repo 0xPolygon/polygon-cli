@@ -16,20 +16,32 @@ import (
 )
 
 var (
-	gasLimitLineColor     = color.NRGBA{255, 0, 0, 100}
-	gasLimitLineThickness = 2
+	gasBlockLimitLineColor     = color.NRGBA{130, 38, 89, 220}
+	gasBlockLimitLineThickness = 5
 
-	gasUsedLineColor     = color.NRGBA{0, 255, 0, 150}
-	gasUsedLineThickness = 1
+	gasTxsLimitLineColor     = color.NRGBA{255, 0, 189, 220}
+	gasTxsLimitLineThickness = 5
 
-	avgGasUsedLineColor     = color.NRGBA{255, 165, 0, 150}
-	avgGasUsedLineThickness = 2
+	gasUsedLineColor     = color.NRGBA{0, 255, 133, 220}
+	gasUsedLineThickness = 5
 
-	avgGasPriceAvgLineColor     = color.NRGBA{0, 0, 255, 150}
-	avgGasPriceAvgLineThickness = 3
+	avgGasUsedLineColor     = color.NRGBA{255, 193, 7, 220}
+	avgGasUsedLineThickness = 5
 
-	txDotsColor       = color.NRGBA{0, 0, 0, 25}
-	targetTxDotsColor = color.NRGBA{255, 0, 0, 255}
+	avgGasPriceAvgLineColor     = color.NRGBA{30, 144, 255, 220}
+	avgGasPriceAvgLineThickness = 5
+
+	txDotsColor = color.NRGBA{0, 0, 0, 25}
+	txDotsSize1 = 3
+	txDotsSize2 = 4
+	txDotsSize3 = 5
+	txDotsSize4 = 6
+	txDotsSize5 = 7
+	txDotsSize6 = 8
+
+	targetTxDotsThickness = 2
+	targetTxDotsSize      = 8
+	targetTxDotsColor     = color.NRGBA{255, 0, 0, 255}
 )
 
 type txGasChartMetadata struct {
@@ -50,8 +62,14 @@ type txGasChartMetadata struct {
 func plotChart(metadata txGasChartMetadata) error {
 	p := plot.New()
 	createHeader(p, metadata)
-	createLines(p, metadata)
 	createTxsDots(p, metadata)
+	createLines(p, metadata)
+
+	p.X.Min = float64(metadata.startBlock)
+	p.X.Max = float64(metadata.endBlock) + (float64(metadata.endBlock-metadata.startBlock) * 0.02)
+	p.Y.Min = float64(metadata.blocksMetadata.minTxGasPrice)
+	p.Y.Max = float64(metadata.blocksMetadata.maxTxGasPrice) * 1.02
+
 	return save(p, metadata)
 }
 
@@ -64,7 +82,7 @@ func createHeader(p *plot.Plot, metadata txGasChartMetadata) {
 	} else {
 		title += "\n"
 	}
-	title += "Red stars are target transactions | Blue line is 30-block rolling avg gas price\nGas are % Y height means 100% | Green line is block gas used | Orange line is avg block gas used | Red line is block gas limit"
+	title += "Red stars are target transactions | Blue line is 30-block rolling avg gas price\nGas in % and Y height means 100% | Green line is block gas used | Orange line is avg block gas used | Red line is block gas limit | Cyan line is txs gas limit"
 	p.Title.Text = title
 }
 
@@ -79,10 +97,6 @@ func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
 		p.Y.Label.Text = "Gas Price (wei, linear)"
 	}
 
-	p.X.Min = float64(metadata.startBlock)
-	p.X.Max = float64(metadata.endBlock) + (float64(metadata.endBlock-metadata.startBlock) * 0.02)
-	p.Y.Min = float64(metadata.blocksMetadata.minTxGasPrice)
-	p.Y.Max = float64(metadata.blocksMetadata.maxTxGasPrice) * 1.02
 	p.Y.Tick.Marker = plot.TickerFunc(func(min, max float64) []plot.Tick {
 		ticks := plot.LogTicks{}.Ticks(min, max)
 		for i := range ticks {
@@ -131,18 +145,7 @@ func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
 		}
 	}
 
-	if len(txGroups[0]) > 0 {
-		sc, err := plotter.NewScatter(txGroups[0])
-		if err != nil {
-			log.Error().Err(err).Msg("failed to create target tx scatter plot")
-		} else {
-			sc.GlyphStyle.Color = targetTxDotsColor
-			sc.GlyphStyle.Shape = ThickCrossGlyph{Width: vg.Points(4)}
-			sc.GlyphStyle.Radius = vg.Points(15)
-			p.Add(sc)
-		}
-	}
-
+	// other transactions
 	for group := range len(txGroups) {
 		if group == 0 {
 			continue
@@ -158,18 +161,31 @@ func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
 			sc.GlyphStyle.Shape = draw.CircleGlyph{}
 			switch group {
 			case 1:
-				sc.GlyphStyle.Radius = vg.Points(3)
+				sc.GlyphStyle.Radius = vg.Points(float64(txDotsSize1))
 			case 2:
-				sc.GlyphStyle.Radius = vg.Points(4)
+				sc.GlyphStyle.Radius = vg.Points(float64(txDotsSize2))
 			case 3:
-				sc.GlyphStyle.Radius = vg.Points(5)
+				sc.GlyphStyle.Radius = vg.Points(float64(txDotsSize3))
 			case 4:
-				sc.GlyphStyle.Radius = vg.Points(6)
+				sc.GlyphStyle.Radius = vg.Points(float64(txDotsSize4))
 			case 5:
-				sc.GlyphStyle.Radius = vg.Points(7)
+				sc.GlyphStyle.Radius = vg.Points(float64(txDotsSize5))
 			case 6:
-				sc.GlyphStyle.Radius = vg.Points(8)
+				sc.GlyphStyle.Radius = vg.Points(float64(txDotsSize6))
 			}
+			p.Add(sc)
+		}
+	}
+
+	// target transactions
+	if len(txGroups[0]) > 0 {
+		sc, err := plotter.NewScatter(txGroups[0])
+		if err != nil {
+			log.Error().Err(err).Msg("failed to create target tx scatter plot")
+		} else {
+			sc.GlyphStyle.Color = targetTxDotsColor
+			sc.GlyphStyle.Shape = ThickCrossGlyph{Width: vg.Points(float64(targetTxDotsThickness))}
+			sc.GlyphStyle.Radius = vg.Points(float64(targetTxDotsSize))
 			p.Add(sc)
 		}
 	}
@@ -178,7 +194,8 @@ func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
 func createLines(p *plot.Plot, metadata txGasChartMetadata) {
 	var blocks []uint64
 	var perBlockAvgGasPrice = make(map[uint64]float64)
-	pointsGasLimit := make(plotter.XYs, len(metadata.blocksMetadata.blocks))
+	pointsBlockGasLimit := make(plotter.XYs, len(metadata.blocksMetadata.blocks))
+	pointsTxsGasLimit := make(plotter.XYs, len(metadata.blocksMetadata.blocks))
 	pointsAvgGasUsed := make(plotter.XYs, len(metadata.blocksMetadata.blocks))
 	pointsGasUsed := make(plotter.XYs, len(metadata.blocksMetadata.blocks))
 	for i, b := range metadata.blocksMetadata.blocks {
@@ -186,8 +203,11 @@ func createLines(p *plot.Plot, metadata txGasChartMetadata) {
 
 		perBlockAvgGasPrice[b.number] = float64(b.avgGasPrice)
 
-		pointsGasLimit[i].X = float64(b.number)
-		pointsGasLimit[i].Y = scaleGasToGasPrice(b.gasLimit, metadata)
+		pointsBlockGasLimit[i].X = float64(b.number)
+		pointsBlockGasLimit[i].Y = scaleGasToGasPrice(b.gasLimit, metadata)
+
+		pointsTxsGasLimit[i].X = float64(b.number)
+		pointsTxsGasLimit[i].Y = scaleGasToGasPrice(b.txsGasLimit, metadata)
 
 		pointsAvgGasUsed[i].X = float64(b.number)
 		pointsAvgGasUsed[i].Y = scaleGasToGasPrice(metadata.blocksMetadata.avgBlockGasUsed, metadata)
@@ -207,9 +227,14 @@ func createLines(p *plot.Plot, metadata txGasChartMetadata) {
 	line.Width = vg.Points(float64(gasUsedLineThickness))
 	p.Add(line)
 
-	line, _ = plotter.NewLine(pointsGasLimit)
-	line.Color = gasLimitLineColor
-	line.Width = vg.Points(float64(gasLimitLineThickness))
+	line, _ = plotter.NewLine(pointsTxsGasLimit)
+	line.Color = gasTxsLimitLineColor
+	line.Width = vg.Points(float64(gasTxsLimitLineThickness))
+	p.Add(line)
+
+	line, _ = plotter.NewLine(pointsBlockGasLimit)
+	line.Color = gasBlockLimitLineColor
+	line.Width = vg.Points(float64(gasBlockLimitLineThickness))
 	p.Add(line)
 
 	line, _ = plotter.NewLine(pointsAvgGasUsed)

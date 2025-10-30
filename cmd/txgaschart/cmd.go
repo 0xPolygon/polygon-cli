@@ -47,6 +47,7 @@ type block struct {
 	number      uint64
 	avgGasPrice uint64
 	gasLimit    uint64
+	txsGasLimit uint64
 	gasUsed     uint64
 	txs         []transaction
 }
@@ -178,7 +179,7 @@ func parseFlags(ctx context.Context, client *ethclient.Client) (*txGasChartConfi
 		return nil, fmt.Errorf("start block %d cannot be greater than end block %d", config.startBlock, config.endBlock)
 	}
 
-	const defaultBlockRange = 100
+	const defaultBlockRange = 500
 
 	if config.startBlock == 0 {
 		if config.endBlock < defaultBlockRange {
@@ -266,6 +267,7 @@ func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *e
 				blockMutex.Unlock()
 
 				totalGasPrice := uint64(0)
+				totalGasLimit := uint64(0)
 				for txi, tx := range txs {
 					signer := types.LatestSignerForChainID(chainID)
 					from, _ := types.Sender(signer, tx)
@@ -284,6 +286,7 @@ func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *e
 					}
 
 					totalGasPrice += gasPrice
+					totalGasLimit += gasLimit
 
 					blockMutex.Lock()
 					blocks.minTxGasLimit = min(blocks.minTxGasLimit, gasLimit)
@@ -308,6 +311,8 @@ func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *e
 				} else {
 					b.avgGasPrice = 1
 				}
+
+				b.txsGasLimit = totalGasLimit
 
 				blocks.blocks[blockNumber-offset] = b
 				break

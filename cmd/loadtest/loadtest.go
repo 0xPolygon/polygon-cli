@@ -840,7 +840,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		return err
 	}
 
-	// TODO(Thiago): make this configurable
 	infinite := inputLoadTestParams.Infinite
 	for {
 		for routineID := range maxRoutines {
@@ -1458,6 +1457,9 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client, gasPricer *
 			if gp != nil {
 				gasPrice = big.NewInt(0).SetUint64(*gp)
 			} else {
+				if cachedBlockNumber != nil && bn <= *cachedBlockNumber {
+					return cachedGasPrice, cachedGasTipCap
+				}
 				gasPrice, pErr = c.SuggestGasPrice(ctx)
 				if pErr != nil {
 					log.Error().Err(pErr).Msg("Unable to suggest gas price")
@@ -1473,21 +1475,17 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client, gasPricer *
 			gasTipCap = new(big.Int).SetUint64(inputLoadTestParams.ForcePriorityGasPrice)
 			forcePriorityGasPrice = gasTipCap
 		} else if inputLoadTestParams.ChainSupportBaseFee {
-			var gp *uint64
-			if gasPricer != nil {
-				gp = gasPricer.GetGasPrice()
-			}
-			if gp != nil {
-				gasTipCap = big.NewInt(0).SetUint64(*gp)
+			if cachedBlockNumber != nil && bn <= *cachedBlockNumber {
+				gasTipCap = cachedGasTipCap
 			} else {
 				gasTipCap, tErr = c.SuggestGasTipCap(ctx)
 				if tErr != nil {
 					log.Error().Err(tErr).Msg("Unable to suggest gas tip cap")
 					return cachedGasPrice, cachedGasTipCap
 				}
+				// Bias the value up slightly
+				gasTipCap = biasGasPrice(gasTipCap)
 			}
-			// Bias the value up slightly
-			gasTipCap = biasGasPrice(gasTipCap)
 		} else {
 			log.Fatal().
 				Msg("Chain does not support base fee. Please set priority-gas-price flag with a value to use for gas tip cap")
@@ -1496,7 +1494,18 @@ func getSuggestedGasPrices(ctx context.Context, c *ethclient.Client, gasPricer *
 		if inputLoadTestParams.ForceGasPrice != 0 {
 			gasPrice = new(big.Int).SetUint64(inputLoadTestParams.ForceGasPrice)
 		} else if inputLoadTestParams.ChainSupportBaseFee {
-			gasPrice = suggestMaxFeePerGas(ctx, c, bn, forcePriorityGasPrice)
+			var gp *uint64
+			if gasPricer != nil {
+				gp = gasPricer.GetGasPrice()
+			}
+			if gp != nil {
+				gasPrice = big.NewInt(0).SetUint64(*gp)
+			} else {
+				if cachedBlockNumber != nil && bn <= *cachedBlockNumber {
+					return cachedGasPrice, cachedGasTipCap
+				}
+				gasPrice = suggestMaxFeePerGas(ctx, c, bn, forcePriorityGasPrice)
+			}
 		} else {
 			log.Fatal().
 				Msg("Chain does not support base fee. Please set gas-price flag with a value to use for max fee per gas")

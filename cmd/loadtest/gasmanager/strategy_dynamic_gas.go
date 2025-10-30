@@ -1,6 +1,7 @@
 package gasmanager
 
 import (
+	"math/rand/v2"
 	"sync/atomic"
 )
 
@@ -29,8 +30,7 @@ func (s *DynamicGasPriceStrategy) GetGasPrice() *uint64 {
 	}
 
 	// introduce random  variation
-	// factor := 0.7 + rand.Float64()*0.6 // random value in [0.7, 1.3]
-	factor := float64(1)
+	factor := 0.7 + rand.Float64()*0.6 // random value in [0.7, 1.3]
 	varied := uint64(float64(gp) * factor)
 	return &varied
 }
