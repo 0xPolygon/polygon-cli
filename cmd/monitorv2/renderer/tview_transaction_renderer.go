@@ -165,12 +165,12 @@ func (t *TviewRenderer) createBasicTransactionDetails(tx rpctypes.PolyTransactio
 	details = append(details, fmt.Sprintf("  S: %s", tx.S().String()))
 
 	// Combine all details into a single string
-	detailText := ""
+	var detailText strings.Builder
 	for _, detail := range details {
-		detailText += detail + "\n"
+		detailText.WriteString(detail + "\n")
 	}
 
-	return detailText
+	return detailText.String()
 }
 
 // createHumanReadableTransactionDetailsSync creates a human-readable view of transaction details with signature lookup
@@ -251,12 +251,12 @@ func (t *TviewRenderer) createHumanReadableTransactionDetailsSync(tx rpctypes.Po
 	details = append(details, fmt.Sprintf("  S: %s", tx.S().String()))
 
 	// Combine all details into a single string
-	detailText := ""
+	var detailText strings.Builder
 	for _, detail := range details {
-		detailText += detail + "\n"
+		detailText.WriteString(detail + "\n")
 	}
 
-	return detailText
+	return detailText.String()
 }
 
 // extractEventSignatures extracts unique event signature hashes from receipt logs

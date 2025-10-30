@@ -524,17 +524,17 @@ func (t *TviewRenderer) refreshChainInfo(ctx context.Context) {
 	}
 
 	// Format status text
-	statusText := ""
+	var statusText strings.Builder
 	for i, line := range statusLines {
 		if i > 0 {
-			statusText += "\n"
+			statusText.WriteString("\n")
 		}
-		statusText += line
+		statusText.WriteString(line)
 	}
 
 	// Update the status section
 	// Direct Draw() call is safe from any goroutine according to tview docs
-	t.homeStatusPane.SetText(statusText)
+	t.homeStatusPane.SetText(statusText.String())
 	t.throttledDraw()
 
 	log.Debug().Msg("Updated chain info in status section")

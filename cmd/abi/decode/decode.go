@@ -120,15 +120,16 @@ func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
 }
 
 func getReturnSignature(funcReturns gethabi.Arguments) string {
-	returnSig := "("
+	var returnSig strings.Builder
+	returnSig.WriteString("(")
 	for key, ret := range funcReturns {
 		// Append comma only for non first and last elements
 		if key > 0 && key < len(funcReturns) {
-			returnSig += ","
+			returnSig.WriteString(",")
 		}
-		returnSig += ret.Type.String()
+		returnSig.WriteString(ret.Type.String())
 	}
-	returnSig += ")"
+	returnSig.WriteString(")")
 
-	return returnSig
+	return returnSig.String()
 }

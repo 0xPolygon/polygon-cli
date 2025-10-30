@@ -108,11 +108,11 @@ var SignCmd = &cobra.Command{
 				}
 			}
 			if accountToUnlock == nil {
-				accountStrings := ""
+				var accountStrings strings.Builder
 				for _, a := range accounts {
-					accountStrings += a.Address.String() + " "
+					accountStrings.WriteString(a.Address.String() + " ")
 				}
-				return fmt.Errorf("the account with address <%s> could not be found in list [%s]", inputSignerOpts.keyID, accountStrings)
+				return fmt.Errorf("the account with address <%s> could not be found in list [%s]", inputSignerOpts.keyID, accountStrings.String())
 			}
 			password, err := getKeystorePassword()
 			if err != nil {

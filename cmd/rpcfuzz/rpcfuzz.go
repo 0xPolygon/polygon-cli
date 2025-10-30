@@ -1594,12 +1594,12 @@ func ValidateJSONSchema(schema string) func(result interface{}) error {
 		}
 		// fmt.Println(string(jsonBytes))
 		if !validatorResult.Valid() {
-			errStr := ""
+			var errStr strings.Builder
 			for _, desc := range validatorResult.Errors() {
-				errStr += desc.String() + "\n"
+				errStr.WriteString(desc.String() + "\n")
 			}
 			log.Trace().Str("resultJson", string(jsonBytes)).Msg("JSON failed to validate")
-			return fmt.Errorf("the json document is not valid: %s", errStr)
+			return fmt.Errorf("the json document is not valid: %s", errStr.String())
 		}
 		return nil
 
