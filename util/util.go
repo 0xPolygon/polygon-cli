@@ -96,10 +96,7 @@ func GetBlockRangeInPages(ctx context.Context, from, to, pageSize uint64, c *eth
 	var allBlocks []*json.RawMessage
 
 	for i := from; i <= to; i += pageSize {
-		end := i + pageSize - 1
-		if end > to {
-			end = to
-		}
+		end := min(i+pageSize-1, to)
 
 		blocks, err := GetBlockRange(ctx, i, end, c, onlyTxHashes)
 		if err != nil {
