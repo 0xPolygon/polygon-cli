@@ -8,11 +8,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// GasVault manages a budget of gas that can be added to and spent from.
 type GasVault struct {
 	mu                 *sync.Mutex
 	gasBudgetAvailable uint64
 }
 
+// NewGasVault creates a new GasVault instance.
 func NewGasVault() *GasVault {
 	return &GasVault{
 		mu:                 &sync.Mutex{},
@@ -20,6 +22,7 @@ func NewGasVault() *GasVault {
 	}
 }
 
+// AddGas adds the specified amount of gas to the vault's available budget.
 func (o *GasVault) AddGas(gas uint64) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -32,15 +35,12 @@ func (o *GasVault) AddGas(gas uint64) {
 	}
 }
 
+// SpendOrWaitAvailableBudget attempts to spend the specified amount of gas from the vault's available budget.
 func (o *GasVault) SpendOrWaitAvailableBudget(gas uint64) {
-	// o.mu.Lock()
-	// log.Trace().Uint64("gas", gas).Uint64("available_budget", o.gasBudgetAvailable).Msg("requesting gas from vault")
-	// o.mu.Unlock()
 	for {
 		o.mu.Lock()
 		if gas <= o.gasBudgetAvailable {
 			o.gasBudgetAvailable -= gas
-			// log.Trace().Uint64("gas", gas).Uint64("available_budget", o.gasBudgetAvailable).Msg("gas spent from vault")
 			o.mu.Unlock()
 			break
 		}
@@ -49,6 +49,7 @@ func (o *GasVault) SpendOrWaitAvailableBudget(gas uint64) {
 	}
 }
 
+// GetAvailableBudget returns the current available gas budget in the vault.
 func (o *GasVault) GetAvailableBudget() uint64 {
 	o.mu.Lock()
 	defer o.mu.Unlock()

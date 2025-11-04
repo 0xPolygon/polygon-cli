@@ -1155,6 +1155,7 @@ func setupGasPricer() (*gasmanager.GasPricer, error) {
 
 		strategy = gasmanager.NewDynamicGasPriceStrategy(gasmanager.DynamicGasPriceConfig{
 			GasPrices: gasPrices,
+			Variation: inputLoadTestParams.GasManagerDynamicGasPricesVariation,
 		})
 	default:
 		return nil, fmt.Errorf("unknown gas price strategy: %s", inputLoadTestParams.GasManagerPriceStrategy)

@@ -9,10 +9,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// GasProvider defines the interface for gas providers.
 type GasProvider interface {
 	Start(ctx context.Context)
 }
 
+// GasProviderBase provides common functionality for gas providers.
 type GasProviderBase struct {
 	client      *ethclient.Client
 	vault       *GasVault
@@ -20,6 +22,7 @@ type GasProviderBase struct {
 	onNewHeader func(header *types.Header)
 }
 
+// NewGasProviderBase creates a new GasProviderBase with the given Ethereum client and gas vault.
 func NewGasProviderBase(client *ethclient.Client, vault *GasVault) *GasProviderBase {
 	return &GasProviderBase{
 		client: client,
@@ -27,12 +30,14 @@ func NewGasProviderBase(client *ethclient.Client, vault *GasVault) *GasProviderB
 	}
 }
 
+// Start begins the operation of the GasProviderBase by invoking the onStart callback and starting to watch for new block headers.
 func (o *GasProviderBase) Start(ctx context.Context) {
 	log.Trace().Msg("starting GasProviderBase")
 	o.onStart()
 	go o.watchNewHeaders(ctx)
 }
 
+// watchNewHeaders continuously monitors for new block headers and triggers the onNewHeader callback when a new header is detected.
 func (o *GasProviderBase) watchNewHeaders(ctx context.Context) {
 	if o.onNewHeader == nil {
 		return

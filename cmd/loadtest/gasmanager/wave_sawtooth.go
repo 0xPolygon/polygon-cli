@@ -2,14 +2,15 @@ package gasmanager
 
 import "math"
 
+// SawtoothWave represents a wave that linearly rises from the minimum to the maximum value over its period.
 type SawtoothWave struct {
-	BaseWave
-	points map[float64]float64
+	*BaseWave
 }
 
+// NewSawtoothWave creates a new SawtoothWave with the given configuration.
 func NewSawtoothWave(config WaveConfig) *SawtoothWave {
 	c := &SawtoothWave{
-		BaseWave: *NewBaseWave(config),
+		BaseWave: NewBaseWave(config),
 	}
 
 	c.computeWave(config)
@@ -17,17 +18,8 @@ func NewSawtoothWave(config WaveConfig) *SawtoothWave {
 	return c
 }
 
-func (c *SawtoothWave) Y() float64 {
-	return c.points[c.x]
-}
-
-func (c *SawtoothWave) MoveNext() {
-	c.x++
-	if c.x >= float64(c.config.Period) {
-		c.x = 0
-	}
-}
-
+// computeWave calculates the wave points based on the configuration.
+// The sawtooth wave rises linearly from the minimum to the maximum value over its period.
 func (c *SawtoothWave) computeWave(config WaveConfig) {
 	const start = float64(0)
 	const step = float64(1.0)

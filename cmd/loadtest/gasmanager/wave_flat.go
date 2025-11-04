@@ -1,31 +1,21 @@
 package gasmanager
 
+// FlatWave represents a wave that maintains a constant target value over its period.
 type FlatWave struct {
-	BaseWave
-	points map[float64]float64
+	*BaseWave
 }
 
+// NewFlatWave creates a new FlatWave with the given configuration.
 func NewFlatWave(config WaveConfig) *FlatWave {
-	c := &FlatWave{
-		BaseWave: *NewBaseWave(config),
+	c := FlatWave{
+		BaseWave: NewBaseWave(config),
 	}
-
 	c.computeWave(config)
-
-	return c
+	return &c
 }
 
-func (c *FlatWave) Y() float64 {
-	return c.points[c.x]
-}
-
-func (c *FlatWave) MoveNext() {
-	c.x++
-	if c.x >= float64(c.config.Period) {
-		c.x = 0
-	}
-}
-
+// computeWave calculates the wave points based on the configuration
+// by setting all points to the target value.
 func (c *FlatWave) computeWave(config WaveConfig) {
 	const start = float64(0)
 	const step = float64(1.0)

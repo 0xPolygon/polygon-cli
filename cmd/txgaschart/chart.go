@@ -17,18 +17,23 @@ import (
 
 var (
 	gasBlockLimitLineColor     = color.NRGBA{130, 38, 89, 220}
+	gasBlockLimitLineColorName = "Purple"
 	gasBlockLimitLineThickness = 5
 
 	gasTxsLimitLineColor     = color.NRGBA{255, 0, 189, 220}
+	gasTxsLimitLineColorName = "Pink"
 	gasTxsLimitLineThickness = 5
 
 	gasUsedLineColor     = color.NRGBA{0, 255, 133, 220}
+	gasUsedLineColorName = "Green"
 	gasUsedLineThickness = 5
 
 	avgGasUsedLineColor     = color.NRGBA{255, 193, 7, 220}
+	avgGasUsedLineColorName = "Orange"
 	avgGasUsedLineThickness = 5
 
 	avgGasPriceAvgLineColor     = color.NRGBA{30, 144, 255, 220}
+	avgGasPriceAvgLineColorName = "Blue"
 	avgGasPriceAvgLineThickness = 5
 
 	txDotsColor = color.NRGBA{0, 0, 0, 25}
@@ -42,8 +47,10 @@ var (
 	targetTxDotsThickness = 2
 	targetTxDotsSize      = 8
 	targetTxDotsColor     = color.NRGBA{255, 0, 0, 255}
+	targetTxDotsColorName = "Red"
 )
 
+// txGasChartMetadata holds metadata for generating the transaction gas chart.
 type txGasChartMetadata struct {
 	rpcURL  string
 	chainID uint64
@@ -59,6 +66,7 @@ type txGasChartMetadata struct {
 	outputPath string
 }
 
+// plotChart generates and saves the transaction gas chart based on the provided metadata.
 func plotChart(metadata txGasChartMetadata) error {
 	p := plot.New()
 	createHeader(p, metadata)
@@ -73,6 +81,7 @@ func plotChart(metadata txGasChartMetadata) error {
 	return save(p, metadata)
 }
 
+// createHeader sets the title and header information for the plot.
 func createHeader(p *plot.Plot, metadata txGasChartMetadata) {
 	p.Title.TextStyle.Font.Size = vg.Points(14)
 	title := fmt.Sprintf("ChainID: %d | Block range %d - %d\n", metadata.chainID, metadata.startBlock, metadata.endBlock)
@@ -82,10 +91,15 @@ func createHeader(p *plot.Plot, metadata txGasChartMetadata) {
 	} else {
 		title += "\n"
 	}
-	title += "Red stars are target transactions | Blue line is 30-block rolling avg gas price\nGas in % and Y height means 100% | Green line is block gas used | Orange line is avg block gas used | Red line is block gas limit | Cyan line is txs gas limit"
+
+	title += fmt.Sprintf("%s stars are target transactions | %s line is 30-block rolling avg gas price\n", targetTxDotsColorName, avgGasPriceAvgLineColorName)
+	title += fmt.Sprintf("Gas in %%, Y height = 100%% | %s line is block gas used | %s line is avg block gas used | %s line is block gas limit | %s line is txs gas limit",
+		gasUsedLineColorName, avgGasUsedLineColorName, gasBlockLimitLineColorName, gasTxsLimitLineColorName)
+
 	p.Title.Text = title
 }
 
+// createTxsDots creates scatter plots for transaction gas prices.
 func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
 	p.X.Label.Text = "Block Number"
 
@@ -191,6 +205,7 @@ func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
 	}
 }
 
+// createLines creates line plots for various gas metrics.
 func createLines(p *plot.Plot, metadata txGasChartMetadata) {
 	var blocks []uint64
 	var perBlockAvgGasPrice = make(map[uint64]float64)
@@ -243,6 +258,7 @@ func createLines(p *plot.Plot, metadata txGasChartMetadata) {
 	p.Add(line)
 }
 
+// save saves the plot to the specified output path.
 func save(p *plot.Plot, metadata txGasChartMetadata) error {
 	if err := p.Save(1600, 900, metadata.outputPath); err != nil {
 		return err
@@ -253,6 +269,7 @@ func save(p *plot.Plot, metadata txGasChartMetadata) error {
 	return nil
 }
 
+// rollingMean calculates the rolling mean of per-block average gas prices over a specified window.
 func rollingMean(blocks []uint64, perBlockAvg map[uint64]float64, window int) plotter.XYs {
 	slices.Sort(blocks)
 	points := make(plotter.XYs, len(blocks))
@@ -272,6 +289,7 @@ func rollingMean(blocks []uint64, perBlockAvg map[uint64]float64, window int) pl
 	return points
 }
 
+// scaleGasToGasPrice scales the gas limit to a corresponding gas price based on the provided metadata.
 func scaleGasToGasPrice(gasLimit uint64, metadata txGasChartMetadata) float64 {
 	minTxGasPrice := metadata.blocksMetadata.minTxGasPrice
 	maxTxGasPrice := metadata.blocksMetadata.maxTxGasPrice

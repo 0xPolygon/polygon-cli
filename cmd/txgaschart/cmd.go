@@ -18,6 +18,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// txGasChartConfig holds the configuration for generating the transaction gas chart.
 type txGasChartConfig struct {
 	rateLimiter *rate.Limiter
 	concurrency uint64
@@ -30,6 +31,7 @@ type txGasChartConfig struct {
 	scale string
 }
 
+// blocksMetadata holds metadata about a range of blocks.
 type blocksMetadata struct {
 	blocks []block
 
@@ -43,6 +45,7 @@ type blocksMetadata struct {
 	targetTxCount    uint64
 }
 
+// block holds metadata about a single block.
 type block struct {
 	number      uint64
 	avgGasPrice uint64
@@ -52,6 +55,7 @@ type block struct {
 	txs         []transaction
 }
 
+// transaction holds metadata about a single transaction.
 type transaction struct {
 	hash     common.Hash
 	gasPrice uint64
@@ -59,6 +63,7 @@ type transaction struct {
 	target   bool
 }
 
+// buildChart builds the transaction gas chart based on the provided command and input arguments.
 func buildChart(cmd *cobra.Command) error {
 	ctx := context.Background()
 	log.Info().
@@ -110,6 +115,7 @@ func buildChart(cmd *cobra.Command) error {
 	return plotChart(chartMetadata)
 }
 
+// logMostUsedGasPrices logs the most frequently used gas prices in the provided blocks metadata.
 func logMostUsedGasPrices(bm blocksMetadata) {
 	x := map[uint64]uint64{}
 	for _, b := range bm.blocks {
@@ -159,6 +165,7 @@ func logMostUsedGasPrices(bm blocksMetadata) {
 	}
 }
 
+// parseFlags parses the command-line flags and returns the corresponding txGasChartConfig.
 func parseFlags(ctx context.Context, client *ethclient.Client) (*txGasChartConfig, error) {
 	config := &txGasChartConfig{}
 
@@ -209,6 +216,7 @@ func parseFlags(ctx context.Context, client *ethclient.Client) (*txGasChartConfi
 	return config, nil
 }
 
+// loadBlocksMetadata loads metadata for blocks in the specified range using the provided Ethereum client and configuration.
 func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *ethclient.Client, chainID *big.Int) blocksMetadata {
 	// prepare worker pool
 	wrk := make(chan struct{}, config.concurrency)
@@ -325,5 +333,3 @@ func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *e
 
 	return blocks
 }
-
-// 26683746818

@@ -97,9 +97,10 @@ type (
 		GasManagerPeriod          uint64
 		GasManagerAmplitude       uint64
 
-		GasManagerPriceStrategy       string
-		GasManagerFixedGasPriceWei    uint64
-		GasManagerDynamicGasPricesWei string
+		GasManagerPriceStrategy             string
+		GasManagerFixedGasPriceWei          uint64
+		GasManagerDynamicGasPricesWei       string
+		GasManagerDynamicGasPricesVariation float64
 
 		// Computed
 		CurrentGasPrice       *big.Int
@@ -333,6 +334,7 @@ v3, uniswapv3 - perform UniswapV3 swaps`)
 	f.StringVar(&ltp.GasManagerPriceStrategy, "gas-manager-price-strategy", "estimated", "gas price strategy for the gas manager (estimated | fixed | dynamic)")
 	f.Uint64Var(&ltp.GasManagerFixedGasPriceWei, "gas-manager-fixed-gas-price-wei", 300000000, "fixed gas price in wei for the gas manager fixed strategy")
 	f.StringVar(&ltp.GasManagerDynamicGasPricesWei, "gas-manager-dynamic-gas-prices-wei", "0,1000000,0,10000000,0,100000000", "comma-separated list of gas prices in wei for the gas manager dynamic strategy, 0 means the tx will use the suggested gas price from the network.")
+	f.Float64Var(&ltp.GasManagerDynamicGasPricesVariation, "gas-manager-dynamic-gas-prices-variation", 0.3, "variation percentage (e.g., 0.3 for ±30%) to apply to each gas price in the dynamic strategy")
 
 	// TODO Compression
 }

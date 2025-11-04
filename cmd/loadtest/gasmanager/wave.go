@@ -18,27 +18,42 @@ type Wave interface {
 type BaseWave struct {
 	config WaveConfig
 	x      float64
+	points map[float64]float64
 }
 
 func NewBaseWave(config WaveConfig) *BaseWave {
 	return &BaseWave{
 		config: config,
 		x:      0,
+		points: make(map[float64]float64),
 	}
 }
 
-func (c *BaseWave) Period() uint64 {
-	return c.config.Period
+// MoveNext advances the wave to the next position.
+func (w *BaseWave) MoveNext() {
+	w.x++
+	if w.x >= float64(w.config.Period) {
+		w.x = 0
+	}
 }
 
-func (c *BaseWave) Amplitude() uint64 {
-	return c.config.Amplitude
+// Y returns the current value of the wave at position x.
+func (w *BaseWave) Y() float64 {
+	return w.points[w.x]
 }
 
-func (c *BaseWave) Target() uint64 {
-	return c.config.Target
+func (w *BaseWave) Period() uint64 {
+	return w.config.Period
 }
 
-func (c *BaseWave) X() float64 {
-	return c.x
+func (w *BaseWave) Amplitude() uint64 {
+	return w.config.Amplitude
+}
+
+func (w *BaseWave) Target() uint64 {
+	return w.config.Target
+}
+
+func (w *BaseWave) X() float64 {
+	return w.x
 }

@@ -2,14 +2,15 @@ package gasmanager
 
 import "math"
 
+// SineWave represents a sine wave pattern for gas price modulation.
 type SineWave struct {
-	BaseWave
-	points map[float64]float64
+	*BaseWave
 }
 
+// NewSineWave creates a new SineWave with the given configuration.
 func NewSineWave(config WaveConfig) *SineWave {
 	c := &SineWave{
-		BaseWave: *NewBaseWave(config),
+		BaseWave: NewBaseWave(config),
 	}
 
 	c.computeWave(config)
@@ -17,17 +18,13 @@ func NewSineWave(config WaveConfig) *SineWave {
 	return c
 }
 
-func (c *SineWave) Y() float64 {
-	return c.points[c.x]
-}
-
-func (c *SineWave) MoveNext() {
-	c.x++
-	if c.x >= float64(c.config.Period) {
-		c.x = 0
-	}
-}
-
+// computeWave calculates the wave points based on the configuration
+// using the generalized sine wave formula.
+// The formula used is: y = A * sin(b(x)) + k
+// where:
+// A = Amplitude
+// b = (2π) / Period
+// k = Target (vertical shift)
 func (c *SineWave) computeWave(config WaveConfig) {
 	const start = float64(0)
 	const step = float64(1.0)

@@ -10,6 +10,7 @@ type ThickCrossGlyph struct {
 	Width vg.Length
 }
 
+// DrawGlyph implements the GlyphDrawer interface.
 func (g ThickCrossGlyph) DrawGlyph(c *vgd.Canvas, sty vgd.GlyphStyle, p vg.Point) {
 	if !c.Contains(p) {
 		return

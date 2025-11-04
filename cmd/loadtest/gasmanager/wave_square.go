@@ -2,14 +2,15 @@ package gasmanager
 
 import "math"
 
+// SquareWave represents a square wave pattern for gas price modulation.
 type SquareWave struct {
-	BaseWave
-	points map[float64]float64
+	*BaseWave
 }
 
+// NewSquareWave creates a new SquareWave with the given configuration.
 func NewSquareWave(config WaveConfig) *SquareWave {
 	c := &SquareWave{
-		BaseWave: *NewBaseWave(config),
+		BaseWave: NewBaseWave(config),
 	}
 
 	c.computeWave(config)
@@ -17,17 +18,8 @@ func NewSquareWave(config WaveConfig) *SquareWave {
 	return c
 }
 
-func (c *SquareWave) Y() float64 {
-	return c.points[c.x]
-}
-
-func (c *SquareWave) MoveNext() {
-	c.x++
-	if c.x >= float64(c.config.Period) {
-		c.x = 0
-	}
-}
-
+// computeWave calculates the wave points based on the configuration
+// The square wave alternates between high and low values over its period.
 func (c *SquareWave) computeWave(config WaveConfig) {
 	const start = float64(0)
 	const step = float64(1.0)

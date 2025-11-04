@@ -2,14 +2,15 @@ package gasmanager
 
 import "math"
 
+// TriangleWave represents a triangle wave pattern for gas price modulation.
 type TriangleWave struct {
-	BaseWave
-	points map[float64]float64
+	*BaseWave
 }
 
+// NewTriangleWave creates a new TriangleWave with the given configuration.
 func NewTriangleWave(config WaveConfig) *TriangleWave {
 	c := &TriangleWave{
-		BaseWave: *NewBaseWave(config),
+		BaseWave: NewBaseWave(config),
 	}
 
 	c.computeWave(config)
@@ -17,17 +18,8 @@ func NewTriangleWave(config WaveConfig) *TriangleWave {
 	return c
 }
 
-func (c *TriangleWave) Y() float64 {
-	return c.points[c.x]
-}
-
-func (c *TriangleWave) MoveNext() {
-	c.x++
-	if c.x >= float64(c.config.Period) {
-		c.x = 0
-	}
-}
-
+// computeWave calculates the wave points based on the configuration.
+// The triangle wave rises and falls linearly between its peak and trough over its period.
 func (c *TriangleWave) computeWave(config WaveConfig) {
 	const start = float64(0)
 	const step = float64(1.0)
