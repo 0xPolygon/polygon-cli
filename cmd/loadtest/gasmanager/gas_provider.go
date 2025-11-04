@@ -42,6 +42,7 @@ func (o *GasProviderBase) watchNewHeaders(ctx context.Context) {
 	if o.onNewHeader == nil {
 		return
 	}
+	const intervalToCheckNewHeader = 1 * time.Second
 	log.Trace().Msg("starting to watch for new block headers")
 	var lastHeader *types.Header
 	for {
@@ -51,12 +52,13 @@ func (o *GasProviderBase) watchNewHeaders(ctx context.Context) {
 			return
 		default:
 			log.Trace().Msg("fetching latest block header")
-			time.Sleep(1 * time.Second)
+			time.Sleep(intervalToCheckNewHeader)
 		}
 
 		header, err := o.client.HeaderByNumber(ctx, nil)
 		if err != nil {
 			log.Warn().Err(err).Msg("failed to fetch latest block header, retrying...")
+			continue
 		}
 
 		// Only trigger when there is a new header

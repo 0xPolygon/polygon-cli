@@ -1346,8 +1346,9 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 		to = getRandomAddress()
 	}
 
+	const eoaTransferGasLimit = 21000
 	if tops.GasLimit == 0 {
-		tops.GasLimit = uint64(21000)
+		tops.GasLimit = uint64(eoaTransferGasLimit)
 	}
 
 	amount := ltp.SendAmount

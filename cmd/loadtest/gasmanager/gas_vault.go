@@ -37,16 +37,25 @@ func (o *GasVault) AddGas(gas uint64) {
 
 // SpendOrWaitAvailableBudget attempts to spend the specified amount of gas from the vault's available budget.
 func (o *GasVault) SpendOrWaitAvailableBudget(gas uint64) {
+	const intervalToCheckBudgetAvailability = 100 * time.Millisecond
 	for {
-		o.mu.Lock()
-		if gas <= o.gasBudgetAvailable {
-			o.gasBudgetAvailable -= gas
-			o.mu.Unlock()
+		if spent := o.trySpendBudget(gas); spent {
 			break
 		}
-		o.mu.Unlock()
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(intervalToCheckBudgetAvailability)
 	}
+}
+
+// trySpendBudget tries to spend the specified amount of gas from the vault's available budget.
+// It returns true if the gas was successfully spent, or false if there was insufficient budget.
+func (o *GasVault) trySpendBudget(gas uint64) bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if gas <= o.gasBudgetAvailable {
+		o.gasBudgetAvailable -= gas
+		return true
+	}
+	return false
 }
 
 // GetAvailableBudget returns the current available gas budget in the vault.
