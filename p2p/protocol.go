@@ -624,7 +624,7 @@ func (c *conn) handleGetReceipts(msg ethp2p.Msg) error {
 
 	c.countMsgReceived(request.Name(), float64(len(request.GetReceiptsRequest)))
 
-	response := &eth.ReceiptsPacket{RequestId: request.RequestId}
-	c.countMsgSent(response.Name(), 0)
+	response := &eth.ReceiptsRLPPacket{RequestId: request.RequestId}
+	c.countMsgSent((&eth.ReceiptsRLPResponse{}).Name(), 0)
 	return ethp2p.Send(c.rw, eth.ReceiptsMsg, response)
 }
