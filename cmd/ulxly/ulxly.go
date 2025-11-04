@@ -342,15 +342,55 @@ func balanceTree() error {
 	if err != nil {
 		return err
 	}
-	root, err := computeBalanceTree(client, bridgeAddress, l2RawClaimsData, l2NetworkID, l2RawDepositsData)
+	root, balances, err := computeBalanceTree(client, bridgeAddress, l2RawClaimsData, l2NetworkID, l2RawDepositsData)
 	if err != nil {
 		return err
 	}
-	fmt.Printf(`
-	{
-		"root": "%s"
-	}
-	`, root.String())
+	type BalanceEntry struct {
+        OriginNetwork      uint32         `json:"originNetwork"`
+        OriginTokenAddress common.Address `json:"originTokenAddress"`
+        TotalSupply        string         `json:"totalSupply"`
+    }
+
+    var balanceEntries []BalanceEntry
+    for tokenKey, balance := range balances {
+        if balance.Cmp(big.NewInt(0)) == 0 {
+            continue
+        }
+        
+        var token TokenInfo
+        token, err = TokenInfoStringToStruct(tokenKey)
+        if err != nil {
+            return err
+        }
+        
+        if token.OriginNetwork.Uint64() == uint64(l2NetworkID) {
+            continue
+        }
+
+		balanceEntries = append(balanceEntries, BalanceEntry{
+			OriginNetwork:      uint32(token.OriginNetwork.Uint64()),
+			OriginTokenAddress: token.OriginTokenAddress,
+			TotalSupply:        balance.String(),
+		})
+    }
+
+    // Create the response structure
+    response := struct {
+        Root     string         `json:"root"`
+        Balances []BalanceEntry `json:"balances"`
+    }{
+        Root:     root.String(),
+        Balances: balanceEntries,
+    }
+
+    // Marshal to JSON with proper formatting
+    jsonOutput, err := json.MarshalIndent(response, "", "  ")
+    if err != nil {
+        return err
+    }
+
+    fmt.Println(string(jsonOutput))
 	return nil
 }
 
@@ -371,7 +411,7 @@ func nullifierTree(args []string) error {
 	return nil
 }
 
-func nullifierAndBalanceTree(args []string) error {
+func nullifierAndBalanceTree() error {
 	l2NetworkID := balanceTreeOptions.L2NetworkID
 	bridgeAddress := common.HexToAddress(balanceTreeOptions.BridgeAddress)
 
@@ -401,7 +441,7 @@ func nullifierAndBalanceTree(args []string) error {
 		return err
 	}
 	log.Info().Msgf("Last LER count: %d", ler_count)
-	balanceTreeRoot, err := computeBalanceTree(client, bridgeAddress, l2RawClaimsData, l2NetworkID, l2RawDepositsData)
+	balanceTreeRoot, _, err := computeBalanceTree(client, bridgeAddress, l2RawClaimsData, l2NetworkID, l2RawDepositsData)
 	if err != nil {
 		return err
 	}
@@ -432,7 +472,7 @@ func computeNullifierTree(rawClaims []byte) (common.Hash, error) {
 	var root common.Hash
 	for scanner.Scan() {
 		claim := new(ulxly.UlxlyClaimEvent)
-		err := json.Unmarshal(scanner.Bytes(), claim)
+		err = json.Unmarshal(scanner.Bytes(), claim)
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -456,21 +496,21 @@ func computeNullifierTree(rawClaims []byte) (common.Hash, error) {
 	return root, nil
 }
 
-func computeBalanceTree(client *ethclient.Client, bridgeAddress common.Address, l2RawClaims []byte, l2NetworkID uint32, l2RawDeposits []byte) (common.Hash, error) {
+func computeBalanceTree(client *ethclient.Client, bridgeAddress common.Address, l2RawClaims []byte, l2NetworkID uint32, l2RawDeposits []byte) (common.Hash, map[string]*big.Int, error) {
 	buf := bytes.NewBuffer(l2RawClaims)
 	scanner := bufio.NewScanner(buf)
 	scannerBuf := make([]byte, 0)
 	scanner.Buffer(scannerBuf, 1024*1024)
 	bTree, err := NewBalanceTree()
 	if err != nil {
-		return common.Hash{}, err
+		return common.Hash{}, nil, err
 	}
 	balances := make(map[string]*big.Int)
 	for scanner.Scan() {
 		l2Claim := new(ulxly.UlxlyClaimEvent)
-		err := json.Unmarshal(scanner.Bytes(), l2Claim)
+		err = json.Unmarshal(scanner.Bytes(), l2Claim)
 		if err != nil {
-			return common.Hash{}, err
+			return common.Hash{}, nil, err
 		}
 		token := TokenInfo{
 			OriginNetwork:      big.NewInt(0).SetUint64(uint64(l2Claim.OriginNetwork)),
@@ -478,7 +518,7 @@ func computeBalanceTree(client *ethclient.Client, bridgeAddress common.Address, 
 		}
 		isMessage, err := checkClaimCalldata(client, bridgeAddress, l2Claim.Raw.TxHash)
 		if err != nil {
-			return common.Hash{}, err
+			return common.Hash{}, nil, err
 		}
 		if isMessage {
 			token.OriginNetwork = big.NewInt(0)
@@ -499,7 +539,7 @@ func computeBalanceTree(client *ethclient.Client, bridgeAddress common.Address, 
 		l2Deposit := new(ulxly.UlxlyBridgeEvent)
 		err := json.Unmarshal(l2Scanner.Bytes(), l2Deposit)
 		if err != nil {
-			return common.Hash{}, err
+			return common.Hash{}, nil, err
 		}
 		token := TokenInfo{
 			OriginNetwork:      big.NewInt(0).SetUint64(uint64(l2Deposit.OriginNetwork)),
@@ -518,20 +558,20 @@ func computeBalanceTree(client *ethclient.Client, bridgeAddress common.Address, 
 		}
 		token, err := TokenInfoStringToStruct(t)
 		if err != nil {
-			return common.Hash{}, err
+			return common.Hash{}, nil, err
 		}
 		if token.OriginNetwork.Uint64() == uint64(l2NetworkID) {
 			continue
 		}
 		root, err = bTree.UpdateBalanceTree(token, balance)
 		if err != nil {
-			return common.Hash{}, err
+			return common.Hash{}, nil, err
 		}
 		log.Info().Msgf("New balanceTree leaf. OriginNetwork: %s, TokenAddress: %s, Balance: %s, Root: %s", token.OriginNetwork.String(), token.OriginTokenAddress.String(), balance.String(), root.String())
 	}
 	log.Info().Msgf("Final balanceTree root: %s", root.String())
 
-	return root, nil
+	return root, balances, nil
 }
 
 func rollupsExitRootProof(args []string) error {
@@ -2409,7 +2449,7 @@ or if it's actually an intermediate hash.`,
 		Short: "Compute the balance tree and the nullifier tree given the deposits and claims.",
 		Long:  nullifierAndBalanceTreeUsage,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return nullifierAndBalanceTree(args)
+			return nullifierAndBalanceTree()
 		},
 		SilenceUsage: true,
 	}

@@ -58,31 +58,32 @@ type DatastoreEvent struct {
 // loss of precision.
 type DatastoreHeader struct {
 	ParentHash    *datastore.Key
-	UncleHash     string
-	Coinbase      string
-	Root          string
-	TxHash        string
-	ReceiptHash   string
+	UncleHash     string `datastore:",noindex"`
+	Coinbase      string `datastore:",noindex"`
+	Root          string `datastore:",noindex"`
+	TxHash        string `datastore:",noindex"`
+	ReceiptHash   string `datastore:",noindex"`
 	Bloom         []byte `datastore:",noindex"`
-	Difficulty    string
+	Difficulty    string `datastore:",noindex"`
 	Number        string
-	GasLimit      string
+	GasLimit      string `datastore:",noindex"`
 	GasUsed       string
 	Time          time.Time
 	Extra         []byte `datastore:",noindex"`
-	MixDigest     string
-	Nonce         string
-	BaseFee       string
+	MixDigest     string `datastore:",noindex"`
+	Nonce         string `datastore:",noindex"`
+	BaseFee       string `datastore:",noindex"`
 	TimeFirstSeen time.Time
 	TTL           time.Time
+	IsParent      bool
 }
 
 // DatastoreBlock represents a block stored in datastore.
 type DatastoreBlock struct {
 	*DatastoreHeader
-	TotalDifficulty string
-	Transactions    []*datastore.Key
-	Uncles          []*datastore.Key
+	TotalDifficulty string           `datastore:",noindex"`
+	Transactions    []*datastore.Key `datastore:",noindex"`
+	Uncles          []*datastore.Key `datastore:",noindex"`
 }
 
 // DatastoreTransaction represents a transaction stored in datastore. Data is
@@ -98,7 +99,7 @@ type DatastoreTransaction struct {
 	Nonce         string
 	To            string
 	Value         string
-	V, R, S       string
+	V, R, S       string `datastore:",noindex"`
 	Time          time.Time
 	TimeFirstSeen time.Time
 	TTL           time.Time
@@ -107,7 +108,7 @@ type DatastoreTransaction struct {
 
 type DatastorePeer struct {
 	Name         string
-	Caps         []string
+	Caps         []string `datastore:",noindex"`
 	URL          string
 	LastSeenBy   string
 	TimeLastSeen time.Time
@@ -152,6 +153,16 @@ func NewDatastore(ctx context.Context, opts DatastoreOptions) Database {
 	}
 }
 
+// runAsync executes the provided function asynchronously with concurrency control.
+// It uses the jobs channel as a semaphore to limit concurrent operations.
+func (d *Datastore) runAsync(fn func()) {
+	d.jobs <- struct{}{}
+	go func() {
+		fn()
+		<-d.jobs
+	}()
+}
+
 // WriteBlock writes the block and the block event to datastore.
 func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
 	if d.client == nil {
@@ -159,37 +170,32 @@ func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *typ
 	}
 
 	if d.ShouldWriteBlockEvents() {
-		d.jobs <- struct{}{}
-		go func() {
+		d.runAsync(func() {
 			d.writeEvent(peer, BlockEventsKind, block.Hash(), BlocksKind, tfs)
-			<-d.jobs
-		}()
+		})
 	}
 
 	if d.ShouldWriteBlocks() {
-		d.jobs <- struct{}{}
-		go func() {
+		d.runAsync(func() {
 			d.writeBlock(ctx, block, td, tfs)
-			<-d.jobs
-		}()
+		})
 	}
 }
 
 // WriteBlockHeaders will write the block headers to datastore. It will not
 // write block events because headers will only be sent to the sensor when
 // requested. The block events will be written when the hash is received
-// instead.
-func (d *Datastore) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time) {
+// instead. The isParent parameter indicates if these headers were fetched
+// as parent blocks.
+func (d *Datastore) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time, isParent bool) {
 	if d.client == nil || !d.ShouldWriteBlocks() {
 		return
 	}
 
 	for _, h := range headers {
-		d.jobs <- struct{}{}
-		go func(header *types.Header) {
-			d.writeBlockHeader(ctx, header, tfs)
-			<-d.jobs
-		}(h)
+		d.runAsync(func() {
+			d.writeBlockHeader(ctx, h, tfs, isParent)
+		})
 	}
 }
 
@@ -203,11 +209,9 @@ func (d *Datastore) WriteBlockBody(ctx context.Context, body *eth.BlockBody, has
 		return
 	}
 
-	d.jobs <- struct{}{}
-	go func() {
+	d.runAsync(func() {
 		d.writeBlockBody(ctx, body, hash, tfs)
-		<-d.jobs
-	}()
+	})
 }
 
 // WriteBlockHashes will write the block events to datastore.
@@ -216,11 +220,9 @@ func (d *Datastore) WriteBlockHashes(ctx context.Context, peer *enode.Node, hash
 		return
 	}
 
-	d.jobs <- struct{}{}
-	go func() {
+	d.runAsync(func() {
 		d.writeEvents(ctx, peer, BlockEventsKind, hashes, BlocksKind, tfs)
-		<-d.jobs
-	}()
+	})
 }
 
 // WriteTransactions will write the transactions and transaction events to datastore.
@@ -230,11 +232,9 @@ func (d *Datastore) WriteTransactions(ctx context.Context, peer *enode.Node, txs
 	}
 
 	if d.ShouldWriteTransactions() {
-		d.jobs <- struct{}{}
-		go func() {
+		d.runAsync(func() {
 			d.writeTransactions(ctx, txs, tfs)
-			<-d.jobs
-		}()
+		})
 	}
 
 	if d.ShouldWriteTransactionEvents() {
@@ -243,11 +243,9 @@ func (d *Datastore) WriteTransactions(ctx context.Context, peer *enode.Node, txs
 			hashes = append(hashes, tx.Hash())
 		}
 
-		d.jobs <- struct{}{}
-		go func() {
+		d.runAsync(func() {
 			d.writeEvents(ctx, peer, TransactionEventsKind, hashes, TransactionsKind, tfs)
-			<-d.jobs
-		}()
+		})
 	}
 }
 
@@ -257,9 +255,7 @@ func (d *Datastore) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time.
 		return
 	}
 
-	d.jobs <- struct{}{}
-	go func() {
-
+	d.runAsync(func() {
 		keys := make([]*datastore.Key, 0, len(peers))
 		dsPeers := make([]*DatastorePeer, 0, len(peers))
 
@@ -279,9 +275,7 @@ func (d *Datastore) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time.
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to write peers")
 		}
-
-		<-d.jobs
-	}()
+	})
 }
 
 func (d *Datastore) MaxConcurrentWrites() int {
@@ -322,7 +316,7 @@ func (d *Datastore) HasBlock(ctx context.Context, hash common.Hash) bool {
 
 // newDatastoreHeader creates a DatastoreHeader from a types.Header. Some
 // values are converted into strings to prevent a loss of precision.
-func (d *Datastore) newDatastoreHeader(header *types.Header, tfs time.Time) *DatastoreHeader {
+func (d *Datastore) newDatastoreHeader(header *types.Header, tfs time.Time, isParent bool) *DatastoreHeader {
 	return &DatastoreHeader{
 		ParentHash:    datastore.NameKey(BlocksKind, header.ParentHash.Hex(), nil),
 		UncleHash:     header.UncleHash.Hex(),
@@ -342,6 +336,7 @@ func (d *Datastore) newDatastoreHeader(header *types.Header, tfs time.Time) *Dat
 		BaseFee:       header.BaseFee.String(),
 		TimeFirstSeen: tfs,
 		TTL:           tfs.Add(d.ttl),
+		IsParent:      isParent,
 	}
 }
 
@@ -398,7 +393,7 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 
 		if dsBlock.DatastoreHeader == nil {
 			shouldWrite = true
-			dsBlock.DatastoreHeader = d.newDatastoreHeader(block.Header(), tfs)
+			dsBlock.DatastoreHeader = d.newDatastoreHeader(block.Header(), tfs, false)
 		}
 
 		if len(dsBlock.TotalDifficulty) == 0 {
@@ -422,7 +417,7 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 			shouldWrite = true
 			dsBlock.Uncles = make([]*datastore.Key, 0, len(block.Uncles()))
 			for _, uncle := range block.Uncles() {
-				d.writeBlockHeader(ctx, uncle, tfs)
+				d.writeBlockHeader(ctx, uncle, tfs, false)
 				dsBlock.Uncles = append(dsBlock.Uncles, datastore.NameKey(BlocksKind, uncle.Hash().Hex(), nil))
 			}
 		}
@@ -483,8 +478,8 @@ func (d *Datastore) writeEvents(ctx context.Context, peer *enode.Node, eventKind
 }
 
 // writeBlockHeader will write the block header to datastore if it doesn't
-// exist.
-func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, tfs time.Time) {
+// exist. The isParent parameter indicates if this block was fetched as a parent block.
+func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, tfs time.Time, isParent bool) {
 	key := datastore.NameKey(BlocksKind, header.Hash().Hex(), nil)
 
 	_, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
@@ -493,7 +488,7 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, 
 			return nil
 		}
 
-		block.DatastoreHeader = d.newDatastoreHeader(header, tfs)
+		block.DatastoreHeader = d.newDatastoreHeader(header, tfs, isParent)
 		_, err := tx.Put(key, &block)
 		return err
 	}, datastore.MaxAttempts(MaxAttempts))
@@ -530,7 +525,7 @@ func (d *Datastore) writeBlockBody(ctx context.Context, body *eth.BlockBody, has
 			shouldWrite = true
 			block.Uncles = make([]*datastore.Key, 0, len(body.Uncles))
 			for _, uncle := range body.Uncles {
-				d.writeBlockHeader(ctx, uncle, tfs)
+				d.writeBlockHeader(ctx, uncle, tfs, false)
 				block.Uncles = append(block.Uncles, datastore.NameKey(BlocksKind, uncle.Hash().Hex(), nil))
 			}
 		}

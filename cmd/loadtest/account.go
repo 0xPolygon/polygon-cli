@@ -340,7 +340,7 @@ func (ap *AccountPool) RefreshNonce(ctx context.Context, address common.Address)
 	return nil
 }
 
-// NumberOfPendingTxs returns the the difference between the internal nonce
+// NumberOfPendingTxs returns the difference between the internal nonce
 // and the network pending nonce for all accounts in the pool. It uses
 // caching to avoid making too many requests to the network.
 func (ap *AccountPool) NumberOfPendingTxs(ctx context.Context) (uint64, error) {
