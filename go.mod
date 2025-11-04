@@ -18,7 +18,7 @@ require (
 	github.com/manifoldco/promptui v0.9.0
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20230904125328-1f23a7beb09a
 	github.com/prometheus/client_model v0.6.2
-	github.com/prometheus/common v0.67.1
+	github.com/prometheus/common v0.67.2
 	github.com/rs/zerolog v1.34.0
 	github.com/schollz/progressbar/v3 v3.18.0
 	github.com/spf13/cobra v1.10.1
@@ -33,7 +33,7 @@ require (
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
 	golang.org/x/text v0.30.0
 	golang.org/x/time v0.14.0
-	google.golang.org/api v0.253.0
+	google.golang.org/api v0.254.0
 	google.golang.org/protobuf v1.36.10
 )
 
@@ -158,7 +158,7 @@ require (
 	golang.org/x/term v0.36.0 // indirect
 	google.golang.org/genproto v0.0.0-20250603155806-513f23925822 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250818200422-3122310a409c // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20251014184007-4626949a642f // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251022142026-3a174f9686a8 // indirect
 	google.golang.org/grpc v1.76.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.3.0 // indirect
@@ -186,7 +186,7 @@ require (
 	cloud.google.com/go/longrunning v0.6.7 // indirect
 	github.com/0xPolygon/cdk-rpc v0.0.0-20250213125803-179882ad6229
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/btcsuite/btcd/btcec/v2 v2.3.5
+	github.com/btcsuite/btcd/btcec/v2 v2.3.6
 	github.com/cockroachdb/fifo v0.0.0-20240816210425-c5d0cb0b6fc0 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/cometbft/cometbft-db v0.14.1 // indirect
