@@ -34,9 +34,9 @@ var ENRCmd = &cobra.Command{
 			log.Error().Err(err).Msg("Unable to read input")
 			return err
 		}
-		lines := strings.Split(string(rawData), "\n")
+		lines := strings.SplitSeq(string(rawData), "\n")
 
-		for _, l := range lines {
+		for l := range lines {
 			var node *enode.Node
 			var err error
 			l = strings.TrimSpace(l)

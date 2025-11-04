@@ -244,7 +244,7 @@ func shouldLogMessage(logLine string, config *LogConfig) bool {
 	var allowedLevels map[string]bool
 	if config.logLevels != "" {
 		allowedLevels = make(map[string]bool)
-		for _, level := range strings.Split(config.logLevels, ",") {
+		for level := range strings.SplitSeq(config.logLevels, ",") {
 			allowedLevels[strings.TrimSpace(strings.ToLower(level))] = true
 		}
 	}
@@ -267,8 +267,8 @@ func shouldLogMessage(logLine string, config *LogConfig) bool {
 
 	// Check custom keywords if no level match
 	if config.customWords != "" {
-		customKeywords := strings.Split(config.customWords, ",")
-		for _, keyword := range customKeywords {
+		customKeywords := strings.SplitSeq(config.customWords, ",")
+		for keyword := range customKeywords {
 			if strings.Contains(logLine, strings.TrimSpace(strings.ToLower(keyword))) {
 				return true
 			}
