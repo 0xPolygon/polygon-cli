@@ -45,23 +45,28 @@ The `GasPricer` determines gas prices for transactions using pluggable strategie
 The Gas Manager supports multiple oscillation wave patterns to simulate varying network conditions:
 
 ### Flat Wave
+
 Maintains constant gas limit per block:
 y = Target
 
 ### Sine Wave
+
 Smooth oscillation following a sinusoidal pattern:
 y = Amplitude × sin(2π/Period × x) + Target
 
 ### Square Wave
+
 Alternates between high and low values:
 y = Target ± Amplitude (alternates at half-period intervals)
 
 ### Triangle Wave
+
 Linear increase and decrease:
 y increases from (Target - Amplitude) to (Target + Amplitude)
   then decreases back linearly over the period
 
 ### Sawtooth Wave
+
 Linear increase with sharp drop:
 y increases linearly from (Target - Amplitude) to (Target + Amplitude)
   then resets sharply
@@ -82,11 +87,11 @@ The `polycli loadtest` command integrates the Gas Manager through several flags:
 Gas Price Control (Pricing Strategy)
 
 # Select and configure pricing strategy
---gas-manager-price-strategy string                 # Strategy: estimated, fixed, dynamic (default: "estimated")
+--gas-manager-price-strategy string                # Strategy: estimated, fixed, dynamic (default: "estimated")
 --gas-manager-fixed-gas-price-wei uint64           # Fixed price in wei (default: 300000000)
 --gas-manager-dynamic-gas-prices-wei string        # Comma-separated prices for dynamic strategy
-                                                    # Use 0 for network-suggested price
-                                                    # (default: "0,1000000,0,10000000,0,100000000")
+                                                   # Use 0 for network-suggested price
+                                                   # (default: "0,1000000,0,10000000,0,100000000")
 --gas-manager-dynamic-gas-prices-variation float64 # Variation ±percentage for dynamic prices (default: 0.3)
 
 Examples
