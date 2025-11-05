@@ -219,9 +219,9 @@ func parseFlags(ctx context.Context, client *ethclient.Client) (*txGasChartConfi
 // loadBlocksMetadata loads metadata for blocks in the specified range using the provided Ethereum client and configuration.
 func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *ethclient.Client, chainID *big.Int) blocksMetadata {
 	// prepare worker pool
-	wrk := make(chan struct{}, config.concurrency)
-	for i := 0; i < cap(wrk); i++ {
-		wrk <- struct{}{}
+	workers := make(chan struct{}, config.concurrency)
+	for i := 0; i < cap(workers); i++ {
+		workers <- struct{}{}
 	}
 
 	blockMutex := &sync.Mutex{}
@@ -244,9 +244,9 @@ func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *e
 	for blockNumber := config.startBlock; blockNumber <= config.endBlock; blockNumber++ {
 		wg.Add(1) // notify block to process
 		go func(blockNumber uint64) {
-			defer wg.Done()                      // notify block done
-			<-wrk                                // wait for worker slot
-			defer func() { wrk <- struct{}{} }() // release worker slot
+			defer wg.Done()                          // notify block done
+			<-workers                                // wait for worker slot
+			defer func() { workers <- struct{}{} }() // release worker slot
 
 			for {
 				log.Trace().Uint64("block_number", blockNumber).Msg("processing block")
