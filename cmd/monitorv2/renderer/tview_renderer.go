@@ -1,6 +1,7 @@
 package renderer
 
 import (
+	"container/list"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -28,6 +29,83 @@ var zeroAddress = common.Address{}
 
 // Maximum number of blocks to store and display
 const maxBlocks = 1000
+
+// Maximum number of signer cache entries (LRU eviction when exceeded)
+const maxSignerCacheSize = 1000
+
+// signerCacheEntry represents an entry in the LRU cache
+type signerCacheEntry struct {
+	key   string
+	value string
+}
+
+// signerLRUCache implements a simple LRU cache for signer addresses
+type signerLRUCache struct {
+	capacity int
+	cache    map[string]*list.Element
+	lruList  *list.List
+	mu       sync.RWMutex
+}
+
+// newSignerLRUCache creates a new LRU cache with the given capacity
+func newSignerLRUCache(capacity int) *signerLRUCache {
+	return &signerLRUCache{
+		capacity: capacity,
+		cache:    make(map[string]*list.Element),
+		lruList:  list.New(),
+	}
+}
+
+// get retrieves a value from the cache and marks it as recently used
+func (c *signerLRUCache) get(key string) (string, bool) {
+	c.mu.RLock()
+	elem, exists := c.cache[key]
+	c.mu.RUnlock()
+
+	if !exists {
+		return "", false
+	}
+
+	c.mu.Lock()
+	c.lruList.MoveToFront(elem)
+	c.mu.Unlock()
+
+	return elem.Value.(*signerCacheEntry).value, true
+}
+
+// put adds or updates a value in the cache
+func (c *signerLRUCache) put(key, value string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Check if key already exists
+	if elem, exists := c.cache[key]; exists {
+		// Update existing entry and move to front
+		c.lruList.MoveToFront(elem)
+		elem.Value.(*signerCacheEntry).value = value
+		return
+	}
+
+	// Add new entry
+	entry := &signerCacheEntry{key: key, value: value}
+	elem := c.lruList.PushFront(entry)
+	c.cache[key] = elem
+
+	// Evict least recently used if over capacity
+	if c.lruList.Len() > c.capacity {
+		c.evictOldest()
+	}
+}
+
+// evictOldest removes the least recently used entry (must be called with lock held)
+func (c *signerLRUCache) evictOldest() {
+	elem := c.lruList.Back()
+	if elem != nil {
+		c.lruList.Remove(elem)
+		entry := elem.Value.(*signerCacheEntry)
+		delete(c.cache, entry.key)
+	}
+}
 
 // Comparison functions for different data types
 func compareNumbers(a, b interface{}) int {
@@ -87,10 +165,9 @@ type TviewRenderer struct {
 	// Map to store blocks by hash for parent lookup
 	blocksByHash map[string]rpctypes.PolyBlock
 	// Column definitions for sorting
-	columns         []ColumnDef
-	// Signer cache to avoid expensive Ecrecover operations
-	signerCache   map[string]string // block hash -> signer address
-	signerCacheMu sync.RWMutex
+	columns []ColumnDef
+	// Signer LRU cache to avoid expensive Ecrecover operations
+	signerCache *signerLRUCache
 	// View state management
 	viewState ViewState
 	// Mutex for thread-safe access to blocks and viewState
@@ -157,12 +234,12 @@ func NewTviewRenderer(indexer *indexer.Indexer) *TviewRenderer {
 	columns := createColumnDefinitions()
 
 	renderer := &TviewRenderer{
-		BaseRenderer:     NewBaseRenderer(indexer),
-		app:              app,
-		blocks:           make([]rpctypes.PolyBlock, 0),
-		blocksByHash:     make(map[string]rpctypes.PolyBlock),
-		columns:          columns,
-		signerCache:      make(map[string]string),
+		BaseRenderer: NewBaseRenderer(indexer),
+		app:          app,
+		blocks:       make([]rpctypes.PolyBlock, 0),
+		blocksByHash: make(map[string]rpctypes.PolyBlock),
+		columns:      columns,
+		signerCache:  newSignerLRUCache(maxSignerCacheSize),
 		viewState: ViewState{
 			followMode:      true,     // Start in follow mode
 			sortColumn:      "number", // Default sort by block number
@@ -570,45 +647,34 @@ func (t *TviewRenderer) throttledDraw() {
 	}
 }
 
-// getCachedSigner gets the signer for a block, using cache to avoid expensive Ecrecover calls
+// getCachedSigner gets the signer for a block, using LRU cache to avoid expensive Ecrecover calls
 func (t *TviewRenderer) getCachedSigner(block rpctypes.PolyBlock) string {
 	blockHash := block.Hash().Hex()
-	
+
 	// Check cache first
-	t.signerCacheMu.RLock()
-	if cached, exists := t.signerCache[blockHash]; exists {
-		t.signerCacheMu.RUnlock()
+	if cached, exists := t.signerCache.get(blockHash); exists {
 		return cached
 	}
-	t.signerCacheMu.RUnlock()
-	
+
 	// If miner is non-zero, use the miner
 	zeroAddr := common.Address{}
 	if block.Miner() != zeroAddr {
 		result := truncateHash(block.Miner().Hex(), 6, 4)
-		// Cache the result
-		t.signerCacheMu.Lock()
-		t.signerCache[blockHash] = result
-		t.signerCacheMu.Unlock()
+		t.signerCache.put(blockHash, result)
 		return result
 	}
-	
-	// If miner is zero, try to extract signer from extra data
+
+	// If miner is zero, try to extract signer from extra data (EXPENSIVE - Ecrecover)
 	if signer, err := polymetrics.Ecrecover(&block); err == nil {
 		signerAddr := common.HexToAddress("0x" + hex.EncodeToString(signer))
 		result := truncateHash(signerAddr.Hex(), 6, 4)
-		// Cache the result
-		t.signerCacheMu.Lock()
-		t.signerCache[blockHash] = result
-		t.signerCacheMu.Unlock()
+		t.signerCache.put(blockHash, result)
 		return result
 	}
-	
+
 	// If can't extract signer, cache N/A result
 	result := "N/A"
-	t.signerCacheMu.Lock()
-	t.signerCache[blockHash] = result
-	t.signerCacheMu.Unlock()
+	t.signerCache.put(blockHash, result)
 	return result
 }
 
