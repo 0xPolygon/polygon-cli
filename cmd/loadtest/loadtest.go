@@ -1960,7 +1960,6 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 		}
 	}
 
-	var rtx *ethtypes.Transaction
 	if ltp.LegacyTransactionMode {
 		tx = ethtypes.NewTx(&ethtypes.LegacyTx{
 			Nonce:    tops.Nonce.Uint64(),
@@ -1984,7 +1983,7 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 	}
 	log.Trace().Interface("tx", tx).Msg("Contract call data")
 
-	tx, err = tops.Signer(tops.From, rtx)
+	tx, err = tops.Signer(tops.From, tx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
