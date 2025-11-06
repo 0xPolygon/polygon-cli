@@ -331,10 +331,7 @@ func (i *Indexer) initialCatchup() error {
 	currentTip := latestBlock.Number().Int64()
 
 	// Calculate starting height (tip - lookbackDepth)
-	startHeight := currentTip - i.lookbackDepth
-	if startHeight < 0 {
-		startHeight = 0
-	}
+	startHeight := max(currentTip-i.lookbackDepth, 0)
 
 	log.Info().
 		Int64("currentTip", currentTip).
