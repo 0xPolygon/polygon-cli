@@ -42,11 +42,13 @@ If no nodes.json file exists, it will be created.
       --max-blocks int                maximum blocks to track across all peers (0 for no limit) (default 1024)
   -D, --max-db-concurrency int        maximum number of concurrent database operations to perform (increasing this
                                       will result in less chance of missing data but can significantly increase memory usage) (default 10000)
+      --max-parents int               maximum parent block hashes to track per peer (0 for no limit) (default 1024)
   -m, --max-peers int                 maximum number of peers to connect to (default 2000)
       --max-requests int              maximum request IDs to track per peer (0 for no limit) (default 2048)
       --nat string                    NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
   -n, --network-id uint               filter discovered nodes by this network ID
       --no-discovery                  disable P2P peer discovery
+      --parents-cache-ttl duration    time to live for parent hash cache entries (0 for no expiration) (default 5m0s)
       --port int                      TCP network listening port (default 30303)
       --pprof                         run pprof server
       --pprof-port uint               port pprof runs on (default 6060)

@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+// CacheOptions contains configuration for LRU caches with TTL.
+type CacheOptions struct {
+	MaxSize int
+	TTL     time.Duration
+}
+
 // Cache is a thread-safe LRU cache with optional TTL-based expiration.
 type Cache[K comparable, V any] struct {
 	mu      sync.RWMutex
@@ -21,13 +27,13 @@ type entry[K comparable, V any] struct {
 	expiresAt time.Time
 }
 
-// NewCache creates a new cache with the given max size and optional TTL.
-// If maxSize <= 0, the cache has no size limit.
-// If ttl is 0, entries never expire based on time.
-func NewCache[K comparable, V any](maxSize int, ttl time.Duration) *Cache[K, V] {
+// NewCache creates a new cache with the given options.
+// If opts.MaxSize <= 0, the cache has no size limit.
+// If opts.TTL is 0, entries never expire based on time.
+func NewCache[K comparable, V any](opts CacheOptions) *Cache[K, V] {
 	return &Cache[K, V]{
-		maxSize: maxSize,
-		ttl:     ttl,
+		maxSize: opts.MaxSize,
+		ttl:     opts.TTL,
 		items:   make(map[K]*list.Element),
 		list:    list.New(),
 	}
@@ -187,15 +193,20 @@ func (c *Cache[K, V]) Contains(key K) bool {
 	return true
 }
 
-// Remove removes a key from the cache.
-func (c *Cache[K, V]) Remove(key K) {
+// Remove removes a key from the cache and returns the value if it existed.
+func (c *Cache[K, V]) Remove(key K) (V, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if elem, ok := c.items[key]; ok {
+		e := elem.Value.(*entry[K, V])
 		c.list.Remove(elem)
 		delete(c.items, key)
+		return e.value, true
 	}
+
+	var zero V
+	return zero, false
 }
 
 // Len returns the number of items in the cache.

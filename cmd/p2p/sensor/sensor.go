@@ -69,10 +69,9 @@ type (
 		DiscoveryDNS                 string
 		Database                     string
 		NoDiscovery                  bool
-		MaxRequests                  int
-		RequestsCacheTTL             time.Duration
-		MaxBlocks                    int
-		BlocksCacheTTL               time.Duration
+		RequestsCache                p2p.CacheOptions
+		ParentsCache                 p2p.CacheOptions
+		BlocksCache                  p2p.CacheOptions
 
 		bootnodes    []*enode.Node
 		staticNodes  []*enode.Node
@@ -196,24 +195,23 @@ var SensorCmd = &cobra.Command{
 		// Create peer connection manager for broadcasting transactions
 		// and managing the global blocks cache
 		conns := p2p.NewConns(p2p.ConnsOptions{
-			MaxBlocks:      inputSensorParams.MaxBlocks,
-			BlocksCacheTTL: inputSensorParams.BlocksCacheTTL,
+			BlocksCache: inputSensorParams.BlocksCache,
 		})
 
 		opts := p2p.EthProtocolOptions{
-			Context:          cmd.Context(),
-			Database:         db,
-			GenesisHash:      common.HexToHash(inputSensorParams.GenesisHash),
-			RPC:              inputSensorParams.RPC,
-			SensorID:         inputSensorParams.SensorID,
-			NetworkID:        inputSensorParams.NetworkID,
-			Conns:            conns,
-			Head:             &head,
-			HeadMutex:        &sync.RWMutex{},
-			ForkID:           forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
-			MsgCounter:       msgCounter,
-			MaxRequests:      inputSensorParams.MaxRequests,
-			RequestsCacheTTL: inputSensorParams.RequestsCacheTTL,
+			Context:       cmd.Context(),
+			Database:      db,
+			GenesisHash:   common.HexToHash(inputSensorParams.GenesisHash),
+			RPC:           inputSensorParams.RPC,
+			SensorID:      inputSensorParams.SensorID,
+			NetworkID:     inputSensorParams.NetworkID,
+			Conns:         conns,
+			Head:          &head,
+			HeadMutex:     &sync.RWMutex{},
+			ForkID:        forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
+			MsgCounter:    msgCounter,
+			RequestsCache: inputSensorParams.RequestsCache,
+			ParentsCache:  inputSensorParams.ParentsCache,
 		}
 
 		config := ethp2p.Config{
@@ -486,8 +484,10 @@ will result in less chance of missing data but can significantly increase memory
   - json (output to stdout)
   - none (no persistence)`)
 	f.BoolVar(&inputSensorParams.NoDiscovery, "no-discovery", false, "disable P2P peer discovery")
-	f.IntVar(&inputSensorParams.MaxRequests, "max-requests", 2048, "maximum request IDs to track per peer (0 for no limit)")
-	f.DurationVar(&inputSensorParams.RequestsCacheTTL, "requests-cache-ttl", 5*time.Minute, "time to live for requests cache entries (0 for no expiration)")
-	f.IntVar(&inputSensorParams.MaxBlocks, "max-blocks", 1024, "maximum blocks to track across all peers (0 for no limit)")
-	f.DurationVar(&inputSensorParams.BlocksCacheTTL, "blocks-cache-ttl", 10*time.Minute, "time to live for block cache entries (0 for no expiration)")
+	f.IntVar(&inputSensorParams.RequestsCache.MaxSize, "max-requests", 2048, "maximum request IDs to track per peer (0 for no limit)")
+	f.DurationVar(&inputSensorParams.RequestsCache.TTL, "requests-cache-ttl", 5*time.Minute, "time to live for requests cache entries (0 for no expiration)")
+	f.IntVar(&inputSensorParams.ParentsCache.MaxSize, "max-parents", 1024, "maximum parent block hashes to track per peer (0 for no limit)")
+	f.DurationVar(&inputSensorParams.ParentsCache.TTL, "parents-cache-ttl", 5*time.Minute, "time to live for parent hash cache entries (0 for no expiration)")
+	f.IntVar(&inputSensorParams.BlocksCache.MaxSize, "max-blocks", 1024, "maximum blocks to track across all peers (0 for no limit)")
+	f.DurationVar(&inputSensorParams.BlocksCache.TTL, "blocks-cache-ttl", 10*time.Minute, "time to live for block cache entries (0 for no expiration)")
 }

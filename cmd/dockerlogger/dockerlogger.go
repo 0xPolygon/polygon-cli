@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -117,23 +117,23 @@ func CreateClient() (*client.Client, error) {
 }
 
 // InspectNetwork retrieves detailed information about a Docker network.
-func InspectNetwork(ctx context.Context, cli *client.Client, networkName string) (types.NetworkResource, error) {
+func InspectNetwork(ctx context.Context, cli *client.Client, networkName string) (network.Inspect, error) {
 	if networkName == "" {
-		return types.NetworkResource{}, fmt.Errorf("network name cannot be empty")
+		return network.Inspect{}, fmt.Errorf("network name cannot be empty")
 	}
 
 	if cli == nil {
-		return types.NetworkResource{}, fmt.Errorf("docker client cannot be nil")
+		return network.Inspect{}, fmt.Errorf("docker client cannot be nil")
 	}
 
-	network, err := cli.NetworkInspect(ctx, networkName, types.NetworkInspectOptions{
+	net, err := cli.NetworkInspect(ctx, networkName, network.InspectOptions{
 		Verbose: true,
 	})
 	if err != nil {
-		return types.NetworkResource{}, fmt.Errorf("failed to inspect network %s: %w", networkName, err)
+		return network.Inspect{}, fmt.Errorf("failed to inspect network %s: %w", networkName, err)
 	}
 
-	return network, nil
+	return net, nil
 }
 
 func monitorLogs(ctx context.Context, cli *client.Client, networkName string, config *LogConfig) error {
@@ -244,7 +244,7 @@ func shouldLogMessage(logLine string, config *LogConfig) bool {
 	var allowedLevels map[string]bool
 	if config.logLevels != "" {
 		allowedLevels = make(map[string]bool)
-		for _, level := range strings.Split(config.logLevels, ",") {
+		for level := range strings.SplitSeq(config.logLevels, ",") {
 			allowedLevels[strings.TrimSpace(strings.ToLower(level))] = true
 		}
 	}
@@ -267,8 +267,8 @@ func shouldLogMessage(logLine string, config *LogConfig) bool {
 
 	// Check custom keywords if no level match
 	if config.customWords != "" {
-		customKeywords := strings.Split(config.customWords, ",")
-		for _, keyword := range customKeywords {
+		customKeywords := strings.SplitSeq(config.customWords, ",")
+		for keyword := range customKeywords {
 			if strings.Contains(logLine, strings.TrimSpace(strings.ToLower(keyword))) {
 				return true
 			}
