@@ -26,7 +26,7 @@ func (n *NoopDatabase) WriteBlock(ctx context.Context, peer *enode.Node, block *
 }
 
 // WriteBlockHeaders does nothing.
-func (n *NoopDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time) {
+func (n *NoopDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time, isParent bool) {
 }
 
 // WriteBlockHashes does nothing.

@@ -146,12 +146,6 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 
 			ctx := opts.Context
 
-			// Register connection with the manager if available
-			if opts.ConnManager != nil {
-				opts.ConnManager.AddConnection(p.Node().ID().String(), c)
-				defer opts.ConnManager.RemoveConnection(p.Node().ID().String())
-			}
-
 			// Handle all the of the messages here.
 			for {
 				msg, err := rw.ReadMsg()
