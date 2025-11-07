@@ -42,16 +42,11 @@ Flags:
 ## Flags
 
 ```bash
-      --all              show all logs
-      --debug            show debug logs
-      --errors           show error logs
       --filter string    additional keywords to filter, comma-separated
   -h, --help             help for dockerlogger
-      --info             show info logs
       --levels string    comma-separated log levels to show (error,warn,info,debug)
       --network string   docker network name to monitor
       --service string   filter logs by service names (comma-separated, partial match)
-      --warnings         show warning logs
 ```
 
 The command also inherits flags from parent commands.
