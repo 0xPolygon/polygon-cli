@@ -1770,9 +1770,16 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 		if ltp.EthCallOnlyLatestBlock {
 			_, err = c.CallContract(ctx, callMsg, nil)
 		} else {
-			callMsg.GasPrice = originalTx.GasPrice()
 			callMsg.GasFeeCap = new(big.Int).SetUint64(originalTx.MaxFeePerGas())
 			callMsg.GasTipCap = new(big.Int).SetUint64(originalTx.MaxPriorityFeePerGas())
+			if originalTx.MaxFeePerGas() == 0 && originalTx.MaxPriorityFeePerGas() == 0 {
+				callMsg.GasPrice = originalTx.GasPrice()
+				callMsg.GasFeeCap = nil
+				callMsg.GasTipCap = nil
+			} else {
+				callMsg.GasPrice = nil
+			}
+
 			_, err = c.CallContract(ctx, callMsg, originalTx.BlockNumber())
 		}
 		if err != nil {
