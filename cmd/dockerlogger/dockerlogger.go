@@ -5,6 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -21,33 +23,27 @@ import (
 var cmdUsage string
 
 type inputArgs struct {
-	network      string
-	showAll      bool
-	showErrors   bool
-	showWarnings bool
-	showInfo     bool
-	showDebug    bool
-	filter       string
-	levels       string
-	service      string
+	network string
+	filter  string
+	levels  string
+	service string
 }
 
 var dockerloggerInputArgs = inputArgs{}
 
 var (
-	// Colors for log output
-	normalColor  = color.New(color.FgGreen)
-	warningColor = color.New(color.FgYellow, color.Bold)
-	errorColor   = color.New(color.FgRed, color.Bold)
+	// Colors for log output components
+	timestampColor   = color.New(color.FgCyan)
+	serviceNameColor = color.New(color.FgBlue)
+	errorLevelColor  = color.New(color.FgRed, color.Bold)
+	warnLevelColor   = color.New(color.FgYellow, color.Bold)
+	infoLevelColor   = color.New(color.FgGreen)
+	debugLevelColor  = color.New(color.FgMagenta)
+	messageColor     = color.New(color.Reset) // Normal text color
 )
 
 // Types
 type LogConfig struct {
-	showAll      bool
-	showErrors   bool
-	showWarns    bool
-	showInfo     bool
-	showDebug    bool
 	customWords  string
 	logLevels    string
 	serviceNames []string
@@ -62,11 +58,6 @@ func dockerlogger(cmd *cobra.Command, args []string) error {
 	}
 
 	config := LogConfig{
-		showAll:     dockerloggerInputArgs.showAll,
-		showErrors:  dockerloggerInputArgs.showErrors,
-		showWarns:   dockerloggerInputArgs.showWarnings,
-		showInfo:    dockerloggerInputArgs.showInfo,
-		showDebug:   dockerloggerInputArgs.showDebug,
 		customWords: dockerloggerInputArgs.filter,
 		logLevels:   dockerloggerInputArgs.levels,
 	}
@@ -97,11 +88,6 @@ var Cmd = &cobra.Command{
 func init() {
 	f := Cmd.Flags()
 	f.StringVar(&dockerloggerInputArgs.network, "network", "", "docker network name to monitor")
-	f.BoolVar(&dockerloggerInputArgs.showAll, "all", false, "show all logs")
-	f.BoolVar(&dockerloggerInputArgs.showErrors, "errors", false, "show error logs")
-	f.BoolVar(&dockerloggerInputArgs.showWarnings, "warnings", false, "show warning logs")
-	f.BoolVar(&dockerloggerInputArgs.showInfo, "info", false, "show info logs")
-	f.BoolVar(&dockerloggerInputArgs.showDebug, "debug", false, "show debug logs")
 	f.StringVar(&dockerloggerInputArgs.filter, "filter", "", "additional keywords to filter, comma-separated")
 	f.StringVar(&dockerloggerInputArgs.levels, "levels", "", "comma-separated log levels to show (error,warn,info,debug)")
 	f.StringVar(&dockerloggerInputArgs.service, "service", "", "filter logs by service names (comma-separated, partial match)")
@@ -195,8 +181,23 @@ func streamContainerLogs(ctx context.Context, cli *client.Client, containerID, c
 
 	fmt.Printf("Started monitoring container: %s\n", serviceName)
 
-	// Read logs line by line
-	scanner := bufio.NewScanner(logs)
+	// Create a pipe to demultiplex Docker's stdout/stderr stream
+	reader, writer := io.Pipe()
+	defer reader.Close()
+	defer writer.Close()
+
+	// Demultiplex the Docker log stream in a goroutine
+	go func() {
+		// stdcopy.StdCopy properly handles Docker's 8-byte header format
+		_, err := stdcopy.StdCopy(writer, writer, logs)
+		if err != nil && err != io.EOF {
+			fmt.Printf("Error demultiplexing logs for %s: %v\n", serviceName, err)
+		}
+		writer.Close()
+	}()
+
+	// Read demultiplexed logs line by line
+	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		logLine := scanner.Text()
 		if logLine == "" {
@@ -214,18 +215,15 @@ func streamContainerLogs(ctx context.Context, cli *client.Client, containerID, c
 			continue
 		}
 
-		// Format timestamp and print log
+		// Format timestamp and print log with colored components
 		timestamp := time.Now().UTC().Format("2006-01-02 15:04:05")
-		var logColor *color.Color
-		if isErrorMessage(logLineLower) {
-			logColor = errorColor
-		} else if isWarningMessage(logLineLower) {
-			logColor = warningColor
-		} else {
-			logColor = normalColor
-		}
 
-		logColor.Printf("[%s] [%s] %s\n", timestamp, serviceName, logLine)
+		// Print with different colors for each component
+		timestampColor.Printf("[%s] ", timestamp)
+		serviceNameColor.Printf("[%s] ", serviceName)
+
+		// Colorize the log level within the message and print the rest normally
+		printColorizedLogLine(logLine, logLineLower)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -233,13 +231,59 @@ func streamContainerLogs(ctx context.Context, cli *client.Client, containerID, c
 	}
 }
 
-// Log filtering and processing functions
-func shouldLogMessage(logLine string, config *LogConfig) bool {
-	// If showAll is true, skip other checks
-	if config.showAll {
-		return true
+// printColorizedLogLine prints a log line with appropriate colors for log levels
+func printColorizedLogLine(logLine, logLineLower string) {
+	// Define log level patterns to search for
+	logLevelPatterns := []struct {
+		pattern string
+		color   *color.Color
+	}{
+		{"ERROR", errorLevelColor},
+		{"ERRO", errorLevelColor},
+		{"EROR", errorLevelColor},
+		{"ERR", errorLevelColor},
+		{"WARNING", warnLevelColor},
+		{"WARN", warnLevelColor},
+		{"WRN", warnLevelColor},
+		{"INFO", infoLevelColor},
+		{"INF", infoLevelColor},
+		{"DEBUG", debugLevelColor},
+		{"DBG", debugLevelColor},
 	}
 
+	// Find the log level in the message
+	foundLevel := false
+	for _, lp := range logLevelPatterns {
+		// Case-insensitive search for the pattern
+		patternLower := strings.ToLower(lp.pattern)
+		if idx := strings.Index(logLineLower, patternLower); idx != -1 {
+			// Print everything before the log level
+			if idx > 0 {
+				messageColor.Print(logLine[:idx])
+			}
+
+			// Print the log level with its color (preserve original case)
+			levelEnd := idx + len(lp.pattern)
+			lp.color.Print(logLine[idx:levelEnd])
+
+			// Print everything after the log level
+			if levelEnd < len(logLine) {
+				messageColor.Print(logLine[levelEnd:])
+			}
+			fmt.Println()
+			foundLevel = true
+			break
+		}
+	}
+
+	// If no log level found, print the entire line normally
+	if !foundLevel {
+		messageColor.Println(logLine)
+	}
+}
+
+// Log filtering and processing functions
+func shouldLogMessage(logLine string, config *LogConfig) bool {
 	// Parse configured log levels
 	var allowedLevels map[string]bool
 	if config.logLevels != "" {
@@ -275,17 +319,8 @@ func shouldLogMessage(logLine string, config *LogConfig) bool {
 		}
 	}
 
-	// Check individual flag settings if no level match
-	if config.showErrors && isErrorMessage(logLine) {
-		return true
-	}
-	if config.showWarns && isWarningMessage(logLine) {
-		return true
-	}
-	if config.showInfo && isInfoMessage(logLine) {
-		return true
-	}
-	if config.showDebug && isDebugMessage(logLine) {
+	// If no levels or keywords specified, show all logs
+	if config.logLevels == "" && config.customWords == "" {
 		return true
 	}
 
@@ -324,5 +359,16 @@ func isDebugMessage(logLine string) bool {
 func sanitizeLogLine(logLine string) string {
 	// Remove ANSI color codes
 	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
-	return ansiRegex.ReplaceAllString(logLine, "")
+	logLine = ansiRegex.ReplaceAllString(logLine, "")
+
+	// Remove any remaining non-printable characters except common whitespace
+	var result strings.Builder
+	for _, r := range logLine {
+		// Keep printable characters and common whitespace (space, tab, newline)
+		if r >= 32 || r == '\t' || r == '\n' || r == '\r' {
+			result.WriteRune(r)
+		}
+	}
+
+	return strings.TrimSpace(result.String())
 }
