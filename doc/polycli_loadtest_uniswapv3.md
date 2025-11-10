@@ -76,49 +76,47 @@ Contracts are cloned from the different Uniswap repositories, compiled with a sp
 The command also inherits flags from parent commands.
 
 ```bash
-      --adaptive-backoff-factor float             multiplicative decrease factor for adaptive rate limiting (default 2)
-      --adaptive-cycle-duration-seconds uint      interval in seconds to check queue size and adjust rates for adaptive rate limiting (default 10)
-      --adaptive-rate-limit                       enable AIMD-style congestion control to automatically adjust request rate
-      --adaptive-rate-limit-increment uint        size of additive increases for adaptive rate limiting (default 50)
-      --adaptive-target-size uint                 target queue size for adaptive rate limiting (speed up if smaller, back off if larger) (default 1000)
-      --batch-size uint                           batch size for receipt fetching (default: 999) (default 999)
-      --chain-id uint                             chain ID for the transactions
-  -c, --concurrency int                           number of requests to perform concurrently (default: one at a time) (default 1)
-      --config string                             config file (default is $HOME/.polygon-cli.yaml)
-      --eth-amount-in-wei uint                    amount of ether in wei to send per transaction
-      --eth-call-only                             call contracts without sending transactions (incompatible with adaptive rate limiting and summarization)
-      --eth-call-only-latest                      execute on latest block instead of original block in call-only mode with recall
-      --fire-and-forget                           send transactions and load without waiting for it to be mined
-      --gas-limit uint                            manually specify gas limit (useful to avoid eth_estimateGas or when auto-computation fails)
-      --gas-price uint                            manually specify gas price (useful when auto-detection fails)
-      --gas-price-multiplier float                a multiplier to increase or decrease the gas price (default 1)
-      --infinite                                  run the load test indefinitely until manually stopped. It will follow the rate limit and concurrency settings, but at the end, it will repeat all over again
-      --infinite-interval-duration-seconds uint   duration to wait between iterations when running in infinite mode
-      --legacy                                    send a legacy transaction instead of an EIP1559 transaction
-      --nonce uint                                use this flag to manually set the starting nonce
-      --output-mode string                        format mode for summary output (json | text) (default "text")
-      --output-raw-tx-only                        output raw signed transaction hex without sending (works with most modes except RPC and UniswapV3)
-      --pretty-logs                               output logs in pretty format instead of JSON (default true)
-      --priority-gas-price uint                   gas tip price for EIP-1559 transactions
-      --private-key string                        hex encoded private key to use for sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
-      --random-recipients                         send to random addresses instead of fixed address in transfer tests
-      --rate-limit float                          requests per second limit (use negative value to remove limit) (default 4)
-  -n, --requests int                              number of requests to perform for the benchmarking session (default of 1 leads to non-representative results) (default 1)
-  -r, --rpc-url string                            the RPC endpoint URL (default "http://localhost:8545")
-      --seed int                                  a seed for generating random values and addresses (default 123456)
-      --send-only                                 alias for --fire-and-forget
-      --summarize                                 produce execution summary after load test (can take a long time for large tests)
-  -t, --time-limit int                            maximum seconds to spend benchmarking (default: no limit) (default -1)
-      --to-address string                         recipient address for transactions (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
-  -v, --verbosity string                          log level (string or int):
-                                                    0   - silent
-                                                    100 - panic
-                                                    200 - fatal
-                                                    300 - error
-                                                    400 - warn
-                                                    500 - info (default)
-                                                    600 - debug
-                                                    700 - trace (default "info")
+      --adaptive-backoff-factor float          multiplicative decrease factor for adaptive rate limiting (default 2)
+      --adaptive-cycle-duration-seconds uint   interval in seconds to check queue size and adjust rates for adaptive rate limiting (default 10)
+      --adaptive-rate-limit                    enable AIMD-style congestion control to automatically adjust request rate
+      --adaptive-rate-limit-increment uint     size of additive increases for adaptive rate limiting (default 50)
+      --adaptive-target-size uint              target queue size for adaptive rate limiting (speed up if smaller, back off if larger) (default 1000)
+      --batch-size uint                        batch size for receipt fetching (default: 999) (default 999)
+      --chain-id uint                          chain ID for the transactions
+  -c, --concurrency int                        number of requests to perform concurrently (default: one at a time) (default 1)
+      --config string                          config file (default is $HOME/.polygon-cli.yaml)
+      --eth-amount-in-wei uint                 amount of ether in wei to send per transaction
+      --eth-call-only                          call contracts without sending transactions (incompatible with adaptive rate limiting and summarization)
+      --eth-call-only-latest                   execute on latest block instead of original block in call-only mode with recall
+      --fire-and-forget                        send transactions and load without waiting for it to be mined
+      --gas-limit uint                         manually specify gas limit (useful to avoid eth_estimateGas or when auto-computation fails)
+      --gas-price uint                         manually specify gas price (useful when auto-detection fails)
+      --gas-price-multiplier float             a multiplier to increase or decrease the gas price (default 1)
+      --legacy                                 send a legacy transaction instead of an EIP1559 transaction
+      --nonce uint                             use this flag to manually set the starting nonce
+      --output-mode string                     format mode for summary output (json | text) (default "text")
+      --output-raw-tx-only                     output raw signed transaction hex without sending (works with most modes except RPC and UniswapV3)
+      --pretty-logs                            output logs in pretty format instead of JSON (default true)
+      --priority-gas-price uint                gas tip price for EIP-1559 transactions
+      --private-key string                     hex encoded private key to use for sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
+      --random-recipients                      send to random addresses instead of fixed address in transfer tests
+      --rate-limit float                       requests per second limit (use negative value to remove limit) (default 4)
+  -n, --requests int                           number of requests to perform for the benchmarking session (default of 1 leads to non-representative results) (default 1)
+  -r, --rpc-url string                         the RPC endpoint URL (default "http://localhost:8545")
+      --seed int                               a seed for generating random values and addresses (default 123456)
+      --send-only                              alias for --fire-and-forget
+      --summarize                              produce execution summary after load test (can take a long time for large tests)
+  -t, --time-limit int                         maximum seconds to spend benchmarking (default: no limit) (default -1)
+      --to-address string                      recipient address for transactions (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
+  -v, --verbosity string                       log level (string or int):
+                                                 0   - silent
+                                                 100 - panic
+                                                 200 - fatal
+                                                 300 - error
+                                                 400 - warn
+                                                 500 - info (default)
+                                                 600 - debug
+                                                 700 - trace (default "info")
 ```
 
 ## See also

@@ -111,8 +111,6 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --gas-price uint                                   manually specify gas price (useful when auto-detection fails)
       --gas-price-multiplier float                       a multiplier to increase or decrease the gas price (default 1)
   -h, --help                                             help for loadtest
-      --infinite                                         run the load test indefinitely until manually stopped. It will follow the rate limit and concurrency settings, but at the end, it will repeat all over again
-      --infinite-interval-duration-seconds uint          duration to wait between iterations when running in infinite mode
       --legacy                                           send a legacy transaction instead of an EIP1559 transaction
       --loadtest-contract-address string                 address of pre-deployed load test contract
       --max-base-fee-wei uint                            maximum base fee in wei (pause sending new transactions when exceeded, useful during network congestion)
