@@ -23,7 +23,6 @@ func NewOscillatingGasProvider(client *ethclient.Client, vault *GasVault, wave W
 		wave:            wave,
 	}
 
-	p.GasProviderBase.onStart = p.onStart
 	p.GasProviderBase.onNewHeader = p.onNewHeader
 	return p
 }
@@ -33,19 +32,14 @@ func (o *OscillatingGasProvider) Start(ctx context.Context) {
 	o.GasProviderBase.Start(ctx)
 }
 
-// onStart is called when the gas provider starts and adds the initial gas amount based on the wave's current Y value.
-func (o *OscillatingGasProvider) onStart() {
-	o.vault.AddGas(uint64(math.Floor(o.wave.Y())))
-}
-
 // onNewHeader is called when a new block header is received.
 // It advances the wave and adds gas to the vault based on the new Y value of the wave.
 func (o *OscillatingGasProvider) onNewHeader(header *types.Header) {
 	log.Trace().Uint64("block_number", header.Number.Uint64()).Msg("oscillating gas provider processing new block header")
-	o.wave.MoveNext()
 	if o.vault != nil {
 		log.Trace().Float64("new_gas_amount", o.wave.Y()).Msg("adding gas to vault based on oscillation wave")
 		o.vault.AddGas(uint64(math.Floor(o.wave.Y())))
 		log.Trace().Uint64("available_budget", o.vault.GetAvailableBudget()).Msg("updated gas vault budget after oscillation")
 	}
+	o.wave.MoveNext()
 }

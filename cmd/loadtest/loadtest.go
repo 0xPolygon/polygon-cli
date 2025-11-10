@@ -840,211 +840,196 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 		return err
 	}
 
-	infinite := inputLoadTestParams.Infinite
-	for {
-		for routineID := range maxRoutines {
-			log.Trace().Int64("routineID", routineID).Msg("starting concurrent routine")
-			wg.Add(1)
-			go func(routineID int64) {
-				var startReq time.Time
-				var endReq time.Time
-				var tErr error
-				var ltTx *types.Transaction
-				for requestID := range maxRequests {
-					if rl != nil {
-						tErr = rl.Wait(ctx)
-						if tErr != nil {
-							log.Error().
-								Int64("routineID", routineID).
-								Int64("requestID", requestID).
-								Err(tErr).
-								Msg("Encountered a rate limiting error")
-						}
-					}
-
-					localMode := mode
-					// if there are multiple modes, iterate through them, 'r' mode is supported here
-					if ltp.MultiMode {
-						localMode = ltp.ParsedModes[int(routineID+requestID)%(len(ltp.ParsedModes))]
-					}
-					// if we're doing random, we'll just pick one based on the current index
-					if localMode == loadTestModeRandom {
-						localMode = getRandomMode()
-					}
-
-					account, err := accountPool.Next(ctx)
-					if err != nil {
-						log.Error().
-							Int64("routineID", routineID).
-							Int64("requestID", requestID).
-							Err(err).
-							Msg("Unable to get next account from account pool")
-						return
-					}
-					chainID := new(big.Int).SetUint64(ltp.ChainID)
-					sendingTops, err := bind.NewKeyedTransactorWithChainID(account.privateKey, chainID)
-					if err != nil {
-						log.Error().
-							Int64("routineID", routineID).
-							Int64("requestID", requestID).
-							Err(err).
-							Msg("Unable create transaction signer")
-						return
-					}
-					sendingTops.Nonce = new(big.Int).SetUint64(account.nonce)
-
-					if mustCheckMaxBaseFee {
-						waiting := false
-						for waitBaseFeeToDrop.Load() {
-							if !waiting {
-								waiting = true
-								log.Debug().
-									Int64("routineID", routineID).
-									Int64("requestID", requestID).
-									Msg("go routine is waiting for base fee to drop")
-							}
-							time.Sleep(time.Second)
-						}
-					}
-
-					sendingTops = configureTransactOpts(ctx, c, sendingTops, gasPricer)
-
-					var fixedGasLimit uint64 = sendingTops.GasLimit
-
-					// in case the gas limit is fixed, we spend or wait for the gas budget before sending the transaction
-					if fixedGasLimit > 0 {
-						log.Trace().Int64("routineID", routineID).
-							Int64("requestID", requestID).
-							Uint64("gas", fixedGasLimit).
-							Msg("spending or waiting for fixed gas limit from gas budget")
-						gasVault.SpendOrWaitAvailableBudget(fixedGasLimit)
-						sendingTops.GasLimit = fixedGasLimit
-					}
-
-					switch localMode {
-					case loadTestModeERC20:
-						startReq, endReq, ltTx, tErr = loadTestERC20(ctx, c, sendingTops, erc20Contract, ltAddr)
-					case loadTestModeERC721:
-						startReq, endReq, ltTx, tErr = loadTestERC721(ctx, c, sendingTops, erc721Contract, ltAddr)
-					case loadTestModeBlob:
-						startReq, endReq, ltTx, tErr = loadTestBlob(ctx, c, sendingTops)
-					case loadTestModeContractCall:
-						startReq, endReq, ltTx, tErr = loadTestContractCall(ctx, c, sendingTops)
-					case loadTestModeDeploy:
-						startReq, endReq, ltTx, tErr = loadTestDeploy(ctx, c, sendingTops)
-					case loadTestModeIncrement:
-						startReq, endReq, ltTx, tErr = loadTestIncrement(ctx, c, sendingTops, ltContract)
-					case loadTestModeRecall:
-						startReq, endReq, ltTx, tErr = loadTestRecall(ctx, c, sendingTops, recallTransactions[int(sendingTops.Nonce.Uint64())%len(recallTransactions)])
-					case loadTestModeRPC:
-						startReq, endReq, tErr = loadTestRPC(ctx, c, indexedActivity)
-					case loadTestModeStore:
-						startReq, endReq, ltTx, tErr = loadTestStore(ctx, c, sendingTops, ltContract)
-					case loadTestModeTransaction:
-						startReq, endReq, ltTx, tErr = loadTestTransaction(ctx, c, sendingTops)
-					case loadTestModeUniswapV3:
-						swapAmountIn := big.NewInt(int64(uniswapv3LoadTestParams.SwapAmountInput))
-						startReq, endReq, ltTx, tErr = runUniswapV3Loadtest(ctx, c, sendingTops, uniswapV3Config, poolConfig, swapAmountIn)
-					default:
-						log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
-					}
-					if !inputLoadTestParams.FireAndForget {
-						recordSample(routineID, requestID, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
-					}
-					if tErr == nil && inputLoadTestParams.WaitForReceipt {
-						receiptMaxRetries := inputLoadTestParams.ReceiptRetryMax
-						receiptRetryInitialDelayMs := inputLoadTestParams.ReceiptRetryInitialDelayMs
-						_, tErr = util.WaitReceiptWithRetries(ctx, c, ltTx.Hash(), receiptMaxRetries, receiptRetryInitialDelayMs)
-					}
-
+	for routineID := range maxRoutines {
+		log.Trace().Int64("routineID", routineID).Msg("starting concurrent routine")
+		wg.Add(1)
+		go func(routineID int64) {
+			var startReq time.Time
+			var endReq time.Time
+			var tErr error
+			var ltTx *types.Transaction
+			for requestID := range maxRequests {
+				if rl != nil {
+					tErr = rl.Wait(ctx)
 					if tErr != nil {
 						log.Error().
 							Int64("routineID", routineID).
 							Int64("requestID", requestID).
 							Err(tErr).
+							Msg("Encountered a rate limiting error")
+					}
+				}
+
+				localMode := mode
+				// if there are multiple modes, iterate through them, 'r' mode is supported here
+				if ltp.MultiMode {
+					localMode = ltp.ParsedModes[int(routineID+requestID)%(len(ltp.ParsedModes))]
+				}
+				// if we're doing random, we'll just pick one based on the current index
+				if localMode == loadTestModeRandom {
+					localMode = getRandomMode()
+				}
+
+				account, err := accountPool.Next(ctx)
+				if err != nil {
+					log.Error().
+						Int64("routineID", routineID).
+						Int64("requestID", requestID).
+						Err(err).
+						Msg("Unable to get next account from account pool")
+					return
+				}
+				chainID := new(big.Int).SetUint64(ltp.ChainID)
+				sendingTops, err := bind.NewKeyedTransactorWithChainID(account.privateKey, chainID)
+				if err != nil {
+					log.Error().
+						Int64("routineID", routineID).
+						Int64("requestID", requestID).
+						Err(err).
+						Msg("Unable create transaction signer")
+					return
+				}
+				sendingTops.Nonce = new(big.Int).SetUint64(account.nonce)
+
+				if mustCheckMaxBaseFee {
+					waiting := false
+					for waitBaseFeeToDrop.Load() {
+						if !waiting {
+							waiting = true
+							log.Debug().
+								Int64("routineID", routineID).
+								Int64("requestID", requestID).
+								Msg("go routine is waiting for base fee to drop")
+						}
+						time.Sleep(time.Second)
+					}
+				}
+
+				sendingTops = configureTransactOpts(ctx, c, sendingTops, gasPricer)
+
+				var fixedGasLimit uint64 = sendingTops.GasLimit
+
+				// in case the gas limit is fixed, we spend or wait for the gas budget before sending the transaction
+				if fixedGasLimit > 0 {
+					log.Trace().Int64("routineID", routineID).
+						Int64("requestID", requestID).
+						Uint64("gas", fixedGasLimit).
+						Msg("spending or waiting for fixed gas limit from gas budget")
+					gasVault.SpendOrWaitAvailableBudget(fixedGasLimit)
+					sendingTops.GasLimit = fixedGasLimit
+				}
+
+				switch localMode {
+				case loadTestModeERC20:
+					startReq, endReq, ltTx, tErr = loadTestERC20(ctx, c, sendingTops, erc20Contract, ltAddr)
+				case loadTestModeERC721:
+					startReq, endReq, ltTx, tErr = loadTestERC721(ctx, c, sendingTops, erc721Contract, ltAddr)
+				case loadTestModeBlob:
+					startReq, endReq, ltTx, tErr = loadTestBlob(ctx, c, sendingTops)
+				case loadTestModeContractCall:
+					startReq, endReq, ltTx, tErr = loadTestContractCall(ctx, c, sendingTops)
+				case loadTestModeDeploy:
+					startReq, endReq, ltTx, tErr = loadTestDeploy(ctx, c, sendingTops)
+				case loadTestModeIncrement:
+					startReq, endReq, ltTx, tErr = loadTestIncrement(ctx, c, sendingTops, ltContract)
+				case loadTestModeRecall:
+					startReq, endReq, ltTx, tErr = loadTestRecall(ctx, c, sendingTops, recallTransactions[int(sendingTops.Nonce.Uint64())%len(recallTransactions)])
+				case loadTestModeRPC:
+					startReq, endReq, tErr = loadTestRPC(ctx, c, indexedActivity)
+				case loadTestModeStore:
+					startReq, endReq, ltTx, tErr = loadTestStore(ctx, c, sendingTops, ltContract)
+				case loadTestModeTransaction:
+					startReq, endReq, ltTx, tErr = loadTestTransaction(ctx, c, sendingTops)
+				case loadTestModeUniswapV3:
+					swapAmountIn := big.NewInt(int64(uniswapv3LoadTestParams.SwapAmountInput))
+					startReq, endReq, ltTx, tErr = runUniswapV3Loadtest(ctx, c, sendingTops, uniswapV3Config, poolConfig, swapAmountIn)
+				default:
+					log.Error().Str("mode", mode.String()).Msg("We've arrived at a load test mode that we don't recognize")
+				}
+				if !inputLoadTestParams.FireAndForget {
+					recordSample(routineID, requestID, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
+				}
+				if tErr == nil && inputLoadTestParams.WaitForReceipt {
+					receiptMaxRetries := inputLoadTestParams.ReceiptRetryMax
+					receiptRetryInitialDelayMs := inputLoadTestParams.ReceiptRetryInitialDelayMs
+					_, tErr = util.WaitReceiptWithRetries(ctx, c, ltTx.Hash(), receiptMaxRetries, receiptRetryInitialDelayMs)
+				}
+
+				if tErr != nil {
+					log.Error().
+						Int64("routineID", routineID).
+						Int64("requestID", requestID).
+						Err(tErr).
+						Str("mode", localMode.String()).
+						Str("address", sendingTops.From.String()).
+						Uint64("nonce", sendingTops.Nonce.Uint64()).
+						Uint64("gas", sendingTops.GasLimit).
+						Any("gasPrice", sendingTops.GasPrice).
+						Any("gasFeeCap", sendingTops.GasFeeCap).
+						Any("gasTipCap", sendingTops.GasTipCap).
+						Int64("request time", endReq.Sub(startReq).Milliseconds()).
+						Msg("recorded an error while sending transactions")
+
+					// check nonce for reuse
+					// if we're not in call only mode, we want to retry
+					if !ltp.EthCallOnly {
+						// we start setting nonce to be reused
+						reuseNonce := true
+
+						// if it is an error that consumes the nonce, we can't retry it
+						if strings.Contains(tErr.Error(), "replacement transaction underpriced") ||
+							strings.Contains(tErr.Error(), "transaction underpriced") ||
+							strings.Contains(tErr.Error(), "nonce too low") ||
+							strings.Contains(tErr.Error(), "already known") ||
+							strings.Contains(tErr.Error(), "could not replace existing") {
+							reuseNonce = false
+						}
+
+						// if we can reuse the nonce, we add it back to the account pool
+						// for the specific account
+						if reuseNonce {
+							err := accountPool.AddReusableNonce(ctx, sendingTops.From, sendingTops.Nonce.Uint64())
+							if err != nil {
+								log.Error().
+									Str("address", sendingTops.From.String()).
+									Uint64("nonce", sendingTops.Nonce.Uint64()).
+									Err(err).
+									Msg("Unable to add reusable nonce to account pool")
+							}
+						}
+					}
+				} else {
+					if ltTx != nil {
+						// if gas limit was not fixed, we ask the vault to spend the gas used after the transaction was sent
+						if fixedGasLimit == 0 {
+							// log.Trace().Int64("routineID", routineID).
+							// 	Int64("requestID", requestID).
+							// 	Uint64("gas", ltTx.Gas()).
+							// 	Msg("spending gas from gas budget after transaction is sent")
+							gasVault.SpendOrWaitAvailableBudget(ltTx.Gas())
+						}
+
+						log.Trace().
+							Int64("routineID", routineID).
+							Int64("requestID", requestID).
+							Stringer("txhash", ltTx.Hash()).
+							Any("nonce", sendingTops.Nonce).
 							Str("mode", localMode.String()).
-							Str("address", sendingTops.From.String()).
-							Uint64("nonce", sendingTops.Nonce.Uint64()).
-							Uint64("gas", sendingTops.GasLimit).
+							Str("sendingAddress", sendingTops.From.String()).
+							Uint64("gas", ltTx.Gas()).
 							Any("gasPrice", sendingTops.GasPrice).
 							Any("gasFeeCap", sendingTops.GasFeeCap).
 							Any("gasTipCap", sendingTops.GasTipCap).
-							Int64("request time", endReq.Sub(startReq).Milliseconds()).
-							Msg("recorded an error while sending transactions")
-
-						// check nonce for reuse
-						// if we're not in call only mode, we want to retry
-						if !ltp.EthCallOnly {
-							// we start setting nonce to be reused
-							reuseNonce := true
-
-							// if it is an error that consumes the nonce, we can't retry it
-							if strings.Contains(tErr.Error(), "replacement transaction underpriced") ||
-								strings.Contains(tErr.Error(), "transaction underpriced") ||
-								strings.Contains(tErr.Error(), "nonce too low") ||
-								strings.Contains(tErr.Error(), "already known") ||
-								strings.Contains(tErr.Error(), "could not replace existing") {
-								reuseNonce = false
-							}
-
-							// if we can reuse the nonce, we add it back to the account pool
-							// for the specific account
-							if reuseNonce {
-								err := accountPool.AddReusableNonce(ctx, sendingTops.From, sendingTops.Nonce.Uint64())
-								if err != nil {
-									log.Error().
-										Str("address", sendingTops.From.String()).
-										Uint64("nonce", sendingTops.Nonce.Uint64()).
-										Err(err).
-										Msg("Unable to add reusable nonce to account pool")
-								}
-							}
-						}
-					} else {
-						if ltTx != nil {
-							// if gas limit was not fixed, we ask the vault to spend the gas used after the transaction was sent
-							if fixedGasLimit == 0 {
-								// log.Trace().Int64("routineID", routineID).
-								// 	Int64("requestID", requestID).
-								// 	Uint64("gas", ltTx.Gas()).
-								// 	Msg("spending gas from gas budget after transaction is sent")
-								gasVault.SpendOrWaitAvailableBudget(ltTx.Gas())
-							}
-
-							log.Trace().
-								Int64("routineID", routineID).
-								Int64("requestID", requestID).
-								Stringer("txhash", ltTx.Hash()).
-								Any("nonce", sendingTops.Nonce).
-								Str("mode", localMode.String()).
-								Str("sendingAddress", sendingTops.From.String()).
-								Uint64("gas", ltTx.Gas()).
-								Any("gasPrice", sendingTops.GasPrice).
-								Any("gasFeeCap", sendingTops.GasFeeCap).
-								Any("gasTipCap", sendingTops.GasTipCap).
-								Msg("Request")
-						}
+							Msg("Request")
 					}
 				}
-				wg.Done()
-			}(routineID)
-		}
-		log.Trace().Msg("Finished starting go routines. Waiting..")
-		wg.Wait()
-
-		if infinite {
-			if inputLoadTestParams.InfiniteIntervalDuration > 0 {
-				infiniteDurationInSeconds := inputLoadTestParams.InfiniteIntervalDuration
-				infiniteDuration := time.Duration(infiniteDurationInSeconds) * time.Second
-				log.Info().
-					Dur("infiniteDuration", infiniteDuration).
-					Msg("Infinite load test mode: waiting before starting next cycle")
-				time.Sleep(infiniteDuration)
 			}
-		} else {
-			break
-		}
+			wg.Done()
+		}(routineID)
 	}
+	log.Trace().Msg("Finished starting go routines. Waiting..")
+	wg.Wait()
+
 	rateLimitCancel()
 	maxBaseFeeCtxCancel()
 	if ltp.EthCallOnly {
@@ -1960,8 +1945,9 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 		}
 	}
 
+	var rtx *types.Transaction
 	if ltp.LegacyTransactionMode {
-		tx = ethtypes.NewTx(&ethtypes.LegacyTx{
+		rtx = ethtypes.NewTx(&ethtypes.LegacyTx{
 			Nonce:    tops.Nonce.Uint64(),
 			To:       to,
 			Value:    amount,
@@ -1970,7 +1956,7 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 			Data:     calldata,
 		})
 	} else {
-		tx = ethtypes.NewTx(&ethtypes.DynamicFeeTx{
+		rtx = ethtypes.NewTx(&ethtypes.DynamicFeeTx{
 			ChainID:   chainID,
 			Nonce:     tops.Nonce.Uint64(),
 			To:        to,
@@ -1981,9 +1967,9 @@ func loadTestContractCall(ctx context.Context, c *ethclient.Client, tops *bind.T
 			Value:     amount,
 		})
 	}
-	log.Trace().Interface("tx", tx).Msg("Contract call data")
+	log.Trace().Interface("rtx", rtx).Msg("Contract call data")
 
-	tx, err = tops.Signer(tops.From, tx)
+	tx, err = tops.Signer(tops.From, rtx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return

@@ -88,8 +88,6 @@ type (
 		MaxBaseFeeWei              uint64
 		OutputRawTxOnly            bool
 		CheckBalanceBeforeFunding  bool
-		Infinite                   bool
-		InfiniteIntervalDuration   uint64
 
 		// gas manager
 		GasManagerOscillationWave string
@@ -284,8 +282,6 @@ func initFlags() {
 	pf.BoolVar(&ltp.LegacyTransactionMode, "legacy", false, "send a legacy transaction instead of an EIP1559 transaction")
 	pf.BoolVar(&ltp.FireAndForget, "fire-and-forget", false, "send transactions and load without waiting for it to be mined")
 	pf.BoolVar(&ltp.FireAndForget, "send-only", false, "alias for --fire-and-forget")
-	pf.BoolVar(&ltp.Infinite, "infinite", false, "run the load test indefinitely until manually stopped. It will follow the rate limit and concurrency settings, but at the end, it will repeat all over again")
-	pf.Uint64Var(&ltp.InfiniteIntervalDuration, "infinite-interval-duration-seconds", 0, "duration to wait between iterations when running in infinite mode")
 
 	// Local flags.
 	f := LoadtestCmd.Flags()

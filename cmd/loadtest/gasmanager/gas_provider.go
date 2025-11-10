@@ -18,7 +18,6 @@ type GasProvider interface {
 type GasProviderBase struct {
 	client      *ethclient.Client
 	vault       *GasVault
-	onStart     func()
 	onNewHeader func(header *types.Header)
 }
 
@@ -33,7 +32,6 @@ func NewGasProviderBase(client *ethclient.Client, vault *GasVault) *GasProviderB
 // Start begins the operation of the GasProviderBase by invoking the onStart callback and starting to watch for new block headers.
 func (o *GasProviderBase) Start(ctx context.Context) {
 	log.Trace().Msg("starting GasProviderBase")
-	o.onStart()
 	go o.watchNewHeaders(ctx)
 }
 
