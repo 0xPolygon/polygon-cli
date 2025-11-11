@@ -77,7 +77,7 @@ func (msg Pong) Code() int     { return 0x03 }
 func (msg Pong) ReqID() uint64 { return 0 }
 
 // Status is the network packet for the status message for eth/64 and later.
-type Status eth.StatusPacket
+type Status eth.StatusPacket68
 
 func (msg Status) Code() int     { return 16 }
 func (msg Status) ReqID() uint64 { return 0 }
