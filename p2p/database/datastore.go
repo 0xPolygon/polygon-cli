@@ -57,33 +57,34 @@ type DatastoreEvent struct {
 // DatastoreHeader stores the data in manner that can be easily written without
 // loss of precision.
 type DatastoreHeader struct {
-	ParentHash    *datastore.Key
-	UncleHash     string `datastore:",noindex"`
-	Coinbase      string `datastore:",noindex"`
-	Root          string `datastore:",noindex"`
-	TxHash        string `datastore:",noindex"`
-	ReceiptHash   string `datastore:",noindex"`
-	Bloom         []byte `datastore:",noindex"`
-	Difficulty    string `datastore:",noindex"`
-	Number        string
-	GasLimit      string `datastore:",noindex"`
-	GasUsed       string
-	Time          time.Time
-	Extra         []byte `datastore:",noindex"`
-	MixDigest     string `datastore:",noindex"`
-	Nonce         string `datastore:",noindex"`
-	BaseFee       string `datastore:",noindex"`
-	TimeFirstSeen time.Time
-	TTL           time.Time
-	IsParent      bool
+	ParentHash      *datastore.Key
+	UncleHash       string `datastore:",noindex"`
+	Coinbase        string `datastore:",noindex"`
+	Root            string `datastore:",noindex"`
+	TxHash          string `datastore:",noindex"`
+	ReceiptHash     string `datastore:",noindex"`
+	Bloom           []byte `datastore:",noindex"`
+	Difficulty      string `datastore:",noindex"`
+	Number          string
+	GasLimit        string `datastore:",noindex"`
+	GasUsed         string
+	Time            time.Time
+	Extra           []byte `datastore:",noindex"`
+	MixDigest       string `datastore:",noindex"`
+	Nonce           string `datastore:",noindex"`
+	BaseFee         string `datastore:",noindex"`
+	TimeFirstSeen   time.Time
+	TTL             time.Time
+	IsParent        bool
+	SensorFirstSeen string
 }
 
 // DatastoreBlock represents a block stored in datastore.
 type DatastoreBlock struct {
 	*DatastoreHeader
-	TotalDifficulty string           `datastore:",noindex"`
-	Transactions    []*datastore.Key `datastore:",noindex"`
-	Uncles          []*datastore.Key `datastore:",noindex"`
+	TotalDifficulty     string           `datastore:",noindex"`
+	Transactions        []*datastore.Key `datastore:",noindex"`
+	Uncles              []*datastore.Key `datastore:",noindex"`
 	TimeFirstSeenHash   time.Time
 	SensorFirstSeenHash string
 }
