@@ -284,7 +284,7 @@ var SensorCmd = &cobra.Command{
 				peersGauge.Set(float64(server.PeerCount()))
 				db.WritePeers(cmd.Context(), server.Peers(), time.Now())
 
-				metrics.Update(conns.GetHeadBlock().Block, conns.GetOldestBlock())
+				metrics.Update(conns.HeadBlock().Block, conns.OldestBlock())
 
 				urls := []string{}
 				for _, peer := range server.Peers() {

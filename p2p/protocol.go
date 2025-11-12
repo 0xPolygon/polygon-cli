@@ -103,7 +103,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				peerFullname: p.Fullname(),
 			}
 
-			head := c.conns.GetHeadBlock()
+			head := c.conns.HeadBlock()
 			status := eth.StatusPacket{
 				ProtocolVersion: uint32(version),
 				NetworkID:       opts.NetworkID,
@@ -310,7 +310,7 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 		return nil
 	}
 
-	oldestBlock := c.conns.GetOldestBlock()
+	oldestBlock := c.conns.OldestBlock()
 
 	// Check cache first before querying the database
 	cache, ok := c.conns.Blocks().Peek(header.ParentHash)

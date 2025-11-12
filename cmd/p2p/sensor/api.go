@@ -62,7 +62,7 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec, conns *p2p
 			url := peer.Node().URLv4()
 			peerID := peer.Node().ID().String()
 			name := peer.Fullname()
-			connectedAt := conns.GetPeerConnectedAt(peerID)
+			connectedAt := conns.PeerConnectedAt(peerID)
 			if connectedAt.IsZero() {
 				continue
 			}
@@ -79,8 +79,8 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec, conns *p2p
 			peers[url] = msgs
 		}
 
-		head := conns.GetHeadBlock()
-		oldest := conns.GetOldestBlock()
+		head := conns.HeadBlock()
+		oldest := conns.OldestBlock()
 
 		data := apiData{
 			ENR:       server.NodeInfo().ENR,

@@ -107,9 +107,9 @@ func (c *Conns) Nodes() []*enode.Node {
 	return nodes
 }
 
-// GetPeerConnectedAt returns the connection time for a peer by their ID.
+// PeerConnectedAt returns the connection time for a peer by their ID.
 // Returns zero time if the peer is not found.
-func (c *Conns) GetPeerConnectedAt(peerID string) time.Time {
+func (c *Conns) PeerConnectedAt(peerID string) time.Time {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -125,15 +125,15 @@ func (c *Conns) Blocks() *Cache[common.Hash, BlockCache] {
 	return c.blocks
 }
 
-// GetOldestBlock returns the oldest block the sensor will fetch parents for.
+// OldestBlock returns the oldest block the sensor will fetch parents for.
 // This is set once at initialization to the head block and acts as a floor
 // to prevent the sensor from crawling backwards indefinitely.
-func (c *Conns) GetOldestBlock() *types.Header {
+func (c *Conns) OldestBlock() *types.Header {
 	return c.oldest.Get()
 }
 
-// GetHeadBlock returns the current head block packet.
-func (c *Conns) GetHeadBlock() eth.NewBlockPacket {
+// HeadBlock returns the current head block packet.
+func (c *Conns) HeadBlock() eth.NewBlockPacket {
 	return c.head.Get()
 }
 
