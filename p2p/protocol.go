@@ -311,6 +311,9 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 	}
 
 	oldestBlock := c.conns.OldestBlock()
+	if oldestBlock == nil {
+		return nil
+	}
 
 	// Check cache first before querying the database
 	cache, ok := c.conns.Blocks().Peek(header.ParentHash)

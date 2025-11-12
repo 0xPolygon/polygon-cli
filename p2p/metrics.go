@@ -58,7 +58,7 @@ func NewBlockMetrics(block *types.Block) *BlockMetrics {
 
 // Update updates all block metrics.
 func (m *BlockMetrics) Update(block *types.Block, oldest *types.Header) {
-	if m == nil {
+	if m == nil || block == nil || oldest == nil {
 		return
 	}
 
