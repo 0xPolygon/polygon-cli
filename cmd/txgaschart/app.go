@@ -7,13 +7,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// const (
-// 	rpcURL     = "https://sepolia.infura.io/v3/f694519bed4a476bbe8905b8c2e00ace"
-// 	startBlock = uint64(9356826)
-// 	endBlock   = uint64(9358826)
-// 	targetAddr = "0xeE76bECaF80fFe451c8B8AFEec0c21518Def02f9"
-// )
-
 type args struct {
 	rpcURL      string
 	rateLimit   float64
