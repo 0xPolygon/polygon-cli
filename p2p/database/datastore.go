@@ -58,21 +58,21 @@ type DatastoreEvent struct {
 // loss of precision.
 type DatastoreHeader struct {
 	ParentHash    *datastore.Key
-	UncleHash     string
-	Coinbase      string
-	Root          string
-	TxHash        string
-	ReceiptHash   string
+	UncleHash     string `datastore:",noindex"`
+	Coinbase      string `datastore:",noindex"`
+	Root          string `datastore:",noindex"`
+	TxHash        string `datastore:",noindex"`
+	ReceiptHash   string `datastore:",noindex"`
 	Bloom         []byte `datastore:",noindex"`
-	Difficulty    string
+	Difficulty    string `datastore:",noindex"`
 	Number        string
-	GasLimit      string
+	GasLimit      string `datastore:",noindex"`
 	GasUsed       string
 	Time          time.Time
 	Extra         []byte `datastore:",noindex"`
-	MixDigest     string
-	Nonce         string
-	BaseFee       string
+	MixDigest     string `datastore:",noindex"`
+	Nonce         string `datastore:",noindex"`
+	BaseFee       string `datastore:",noindex"`
 	TimeFirstSeen time.Time
 	TTL           time.Time
 	IsParent      bool
@@ -81,9 +81,9 @@ type DatastoreHeader struct {
 // DatastoreBlock represents a block stored in datastore.
 type DatastoreBlock struct {
 	*DatastoreHeader
-	TotalDifficulty string
-	Transactions    []*datastore.Key
-	Uncles          []*datastore.Key
+	TotalDifficulty string           `datastore:",noindex"`
+	Transactions    []*datastore.Key `datastore:",noindex"`
+	Uncles          []*datastore.Key `datastore:",noindex"`
 }
 
 // DatastoreTransaction represents a transaction stored in datastore. Data is
@@ -99,7 +99,7 @@ type DatastoreTransaction struct {
 	Nonce         string
 	To            string
 	Value         string
-	V, R, S       string
+	V, R, S       string `datastore:",noindex"`
 	Time          time.Time
 	TimeFirstSeen time.Time
 	TTL           time.Time
@@ -108,7 +108,7 @@ type DatastoreTransaction struct {
 
 type DatastorePeer struct {
 	Name         string
-	Caps         []string
+	Caps         []string `datastore:",noindex"`
 	URL          string
 	LastSeenBy   string
 	TimeLastSeen time.Time

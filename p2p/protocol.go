@@ -306,7 +306,7 @@ func (c *conn) getBlockData(hash common.Hash, cache BlockCache, isParent bool) e
 // does not exist in the database. It only fetches parents back to the oldest
 // block (initialized to the head block at sensor startup).
 func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
-	if !c.db.ShouldWriteBlocks() || !c.db.ShouldWriteBlockEvents() {
+	if !c.db.ShouldWriteBlocks() {
 		return nil
 	}
 
