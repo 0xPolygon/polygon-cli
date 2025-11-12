@@ -17,5 +17,6 @@ extend-exclude = [
   "go.sum",
   "bindings/",
   "contracts/lib",
-  "hdwallet/hdwallet_test.go"
+  "hdwallet/hdwallet_test.go",
+  "cmd/dockerlogger/dockerlogger.go",
 ]

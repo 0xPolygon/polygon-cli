@@ -57,34 +57,33 @@ type DatastoreEvent struct {
 // DatastoreHeader stores the data in manner that can be easily written without
 // loss of precision.
 type DatastoreHeader struct {
-	ParentHash      *datastore.Key
-	UncleHash       string
-	Coinbase        string
-	Root            string
-	TxHash          string
-	ReceiptHash     string
-	Bloom           []byte `datastore:",noindex"`
-	Difficulty      string
-	Number          string
-	GasLimit        string
-	GasUsed         string
-	Time            time.Time
-	Extra           []byte `datastore:",noindex"`
-	MixDigest       string
-	Nonce           string
-	BaseFee         string
-	TimeFirstSeen   time.Time
-	TTL             time.Time
-	IsParent        bool
-	SensorFirstSeen string
+	ParentHash    *datastore.Key
+	UncleHash     string `datastore:",noindex"`
+	Coinbase      string `datastore:",noindex"`
+	Root          string `datastore:",noindex"`
+	TxHash        string `datastore:",noindex"`
+	ReceiptHash   string `datastore:",noindex"`
+	Bloom         []byte `datastore:",noindex"`
+	Difficulty    string `datastore:",noindex"`
+	Number        string
+	GasLimit      string `datastore:",noindex"`
+	GasUsed       string
+	Time          time.Time
+	Extra         []byte `datastore:",noindex"`
+	MixDigest     string `datastore:",noindex"`
+	Nonce         string `datastore:",noindex"`
+	BaseFee       string `datastore:",noindex"`
+	TimeFirstSeen time.Time
+	TTL           time.Time
+	IsParent      bool
 }
 
 // DatastoreBlock represents a block stored in datastore.
 type DatastoreBlock struct {
 	*DatastoreHeader
-	TotalDifficulty     string
-	Transactions        []*datastore.Key
-	Uncles              []*datastore.Key
+	TotalDifficulty string           `datastore:",noindex"`
+	Transactions    []*datastore.Key `datastore:",noindex"`
+	Uncles          []*datastore.Key `datastore:",noindex"`
 	TimeFirstSeenHash   time.Time
 	SensorFirstSeenHash string
 }
@@ -102,7 +101,7 @@ type DatastoreTransaction struct {
 	Nonce         string
 	To            string
 	Value         string
-	V, R, S       string
+	V, R, S       string `datastore:",noindex"`
 	Time          time.Time
 	TimeFirstSeen time.Time
 	TTL           time.Time
@@ -111,7 +110,7 @@ type DatastoreTransaction struct {
 
 type DatastorePeer struct {
 	Name         string
-	Caps         []string
+	Caps         []string `datastore:",noindex"`
 	URL          string
 	LastSeenBy   string
 	TimeLastSeen time.Time

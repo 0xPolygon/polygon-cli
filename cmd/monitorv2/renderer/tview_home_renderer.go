@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"sort"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/indexer/metrics"
+	polymetrics "github.com/0xPolygon/polygon-cli/metrics"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gdamore/tcell/v2"
@@ -38,6 +40,21 @@ func createColumnDefinitions() []ColumnDef {
 		{
 			Name: "HASH", Key: "hash", Align: tview.AlignCenter, Expansion: 2,
 			SortFunc:    func(block rpctypes.PolyBlock) interface{} { return block.Hash().Hex() },
+			CompareFunc: compareStrings,
+		},
+		{
+			Name: "AUTHOR", Key: "signer", Align: tview.AlignCenter, Expansion: 2,
+			SortFunc: func(block rpctypes.PolyBlock) interface{} {
+				// For blocks with validator signatures, extract the signer
+				zeroAddr := common.Address{}
+				if block.Miner() == zeroAddr {
+					if signer, err := polymetrics.Ecrecover(&block); err == nil {
+						return common.HexToAddress("0x" + hex.EncodeToString(signer)).Hex()
+					}
+				}
+				// For mined blocks, use the miner address
+				return block.Miner().Hex()
+			},
 			CompareFunc: compareStrings,
 		},
 		{
@@ -369,6 +386,39 @@ func (t *TviewRenderer) updateTableHeaders() {
 	}
 }
 
+// getColumnValue gets the display value for a specific column and block
+func (t *TviewRenderer) getColumnValue(column ColumnDef, block rpctypes.PolyBlock, blockIndex int, blocks []rpctypes.PolyBlock) string {
+	switch column.Key {
+	case "number":
+		return block.Number().String()
+	case "time":
+		return formatBlockTime(block.Time())
+	case "interval":
+		return t.calculateBlockInterval(block, blockIndex, blocks)
+	case "hash":
+		return truncateHash(block.Hash().Hex(), 10, 10)
+	case "signer":
+		// Use cached signer to avoid expensive repeated Ecrecover calls
+		return t.getCachedSigner(block)
+	case "txs":
+		return strconv.Itoa(len(block.Transactions()))
+	case "size":
+		return formatBytes(block.Size())
+	case "basefee":
+		return formatBaseFee(block.BaseFee())
+	case "gasused":
+		return formatNumber(block.GasUsed())
+	case "gaspct":
+		return formatGasPercentage(block.GasUsed(), block.GasLimit())
+	case "gaslimit":
+		return formatNumber(block.GasLimit())
+	case "stateroot":
+		return truncateHash(block.Root().Hex(), 8, 8)
+	default:
+		return "N/A"
+	}
+}
+
 // updateTable refreshes the home page table with current blocks
 func (t *TviewRenderer) updateTable() {
 	if t.homeTable == nil {
@@ -382,8 +432,9 @@ func (t *TviewRenderer) updateTable() {
 
 	// Clear existing rows (except header)
 	rowCount := t.homeTable.GetRowCount()
+	numColumns := len(t.columns)
 	for row := 1; row < rowCount; row++ {
-		for col := 0; col < 10; col++ { // Updated to 10 columns
+		for col := 0; col < numColumns; col++ {
 			t.homeTable.SetCell(row, col, nil)
 		}
 	}
@@ -396,49 +447,11 @@ func (t *TviewRenderer) updateTable() {
 
 		row := i + 1 // +1 to account for header row
 
-		// Column 0: Block number
-		blockNum := block.Number().String()
-		t.homeTable.SetCell(row, 0, tview.NewTableCell(blockNum).SetAlign(t.columns[0].Align))
-
-		// Column 1: Time (absolute and relative)
-		timeStr := formatBlockTime(block.Time())
-		t.homeTable.SetCell(row, 1, tview.NewTableCell(timeStr).SetAlign(t.columns[1].Align))
-
-		// Column 2: Block interval
-		intervalStr := t.calculateBlockInterval(block, i, blocks)
-		t.homeTable.SetCell(row, 2, tview.NewTableCell(intervalStr).SetAlign(t.columns[2].Align))
-
-		// Column 3: Block hash (truncated for display)
-		hashStr := truncateHash(block.Hash().Hex(), 10, 10)
-		t.homeTable.SetCell(row, 3, tview.NewTableCell(hashStr).SetAlign(t.columns[3].Align))
-
-		// Column 4: Number of transactions
-		txCount := len(block.Transactions())
-		t.homeTable.SetCell(row, 4, tview.NewTableCell(strconv.Itoa(txCount)).SetAlign(t.columns[4].Align))
-
-		// Column 5: Block size
-		sizeStr := formatBytes(block.Size())
-		t.homeTable.SetCell(row, 5, tview.NewTableCell(sizeStr).SetAlign(t.columns[5].Align))
-
-		// Column 6: Base fee
-		baseFeeStr := formatBaseFee(block.BaseFee())
-		t.homeTable.SetCell(row, 6, tview.NewTableCell(baseFeeStr).SetAlign(t.columns[6].Align))
-
-		// Column 7: Gas used
-		gasUsedStr := formatNumber(block.GasUsed())
-		t.homeTable.SetCell(row, 7, tview.NewTableCell(gasUsedStr).SetAlign(t.columns[7].Align))
-
-		// Column 8: Gas percentage
-		gasPercentStr := formatGasPercentage(block.GasUsed(), block.GasLimit())
-		t.homeTable.SetCell(row, 8, tview.NewTableCell(gasPercentStr).SetAlign(t.columns[8].Align))
-
-		// Column 9: Gas limit
-		gasLimitStr := formatNumber(block.GasLimit())
-		t.homeTable.SetCell(row, 9, tview.NewTableCell(gasLimitStr).SetAlign(t.columns[9].Align))
-
-		// Column 10: State root (truncated)
-		stateRootStr := truncateHash(block.Root().Hex(), 8, 8)
-		t.homeTable.SetCell(row, 10, tview.NewTableCell(stateRootStr).SetAlign(t.columns[10].Align))
+		// Set cells for each active column
+		for col, column := range t.columns {
+			value := t.getColumnValue(column, block, i, blocks)
+			t.homeTable.SetCell(row, col, tview.NewTableCell(value).SetAlign(column.Align))
+		}
 	}
 
 	// Update table title with current block count
