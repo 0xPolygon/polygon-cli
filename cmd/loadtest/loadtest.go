@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/holiman/uint256"
@@ -1224,7 +1225,13 @@ func loadTestTransaction(ctx context.Context, c *ethclient.Client, tops *bind.Tr
 	} else if ltp.OutputRawTxOnly {
 		err = outputRawTransaction(stx)
 	} else {
-		err = c.SendTransaction(ctx, stx)
+		// err = c.SendTransaction(ctx, stx)
+		var data []byte
+		data, err = stx.MarshalBinary()
+		if err != nil {
+			return
+		}
+		err = c.Client().CallContext(ctx, nil, "eth_sendRawTransactionForPreconf", hexutil.Encode(data))
 	}
 
 	return
