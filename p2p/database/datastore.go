@@ -458,7 +458,7 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 
 		shouldWrite := false
 
-		if dsBlock.DatastoreHeader == nil {
+		if dsBlock.DatastoreHeader == nil || tfs.Before(dsBlock.DatastoreHeader.TimeFirstSeen) {
 			shouldWrite = true
 
 			// Create new header with current timing
