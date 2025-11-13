@@ -458,7 +458,7 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 
 		shouldWrite := false
 
-		if dsBlock.DatastoreHeader == nil || dsBlock.DatastoreHeader.Number == "" {
+		if dsBlock.DatastoreHeader == nil {
 			shouldWrite = true
 
 			// Create new header with current timing
