@@ -560,8 +560,8 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, 
 		var block DatastoreBlock
 		err := tx.Get(key, &block)
 
-		// If block header already exists with full data, don't overwrite
-		if err == nil && block.DatastoreHeader != nil && block.DatastoreHeader.Number != "" {
+		// If block header already exists, don't overwrite
+		if err == nil && block.DatastoreHeader != nil {
 			return nil
 		}
 
