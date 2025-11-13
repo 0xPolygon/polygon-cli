@@ -560,15 +560,15 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, 
 		var block DatastoreBlock
 		err := tx.Get(key, &block)
 
-		// If block header already exists, don't overwrite
-		if err == nil && block.DatastoreHeader != nil {
+		// If block header already exists and new timestamp is not earlier, don't overwrite
+		if err == nil && block.DatastoreHeader != nil && !tfs.Before(block.DatastoreHeader.TimeFirstSeen) {
 			return nil
 		}
 
 		// Create new header with current timing
 		newHeader := d.newDatastoreHeader(header, tfs, isParent)
 
-		// Preserve earlier timestamps from any earlier announcement
+		// Preserve earlier timestamps from any earlier announcement or full block
 		d.writeFirstSeen(newHeader, &block, tfs)
 
 		block.DatastoreHeader = newHeader
