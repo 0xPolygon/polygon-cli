@@ -405,12 +405,6 @@ func (d *Datastore) writeFirstSeen(header *DatastoreHeader, block *DatastoreBloc
 		block.TimeFirstSeenHash = tfs
 		block.SensorFirstSeenHash = d.sensorID
 	}
-
-	// If hash was seen before header, also update header timing
-	if block.TimeFirstSeenHash.Before(header.TimeFirstSeen) {
-		header.TimeFirstSeen = block.TimeFirstSeenHash
-		header.SensorFirstSeen = block.SensorFirstSeenHash
-	}
 }
 
 // newDatastoreTransaction creates a DatastoreTransaction from a types.Transaction. Some
