@@ -82,6 +82,14 @@ type JSONBlockEvent struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
+// JSONBlockHashFirstSeen represents a block hash announcement in JSON format.
+type JSONBlockHashFirstSeen struct {
+	Type          string    `json:"type"`
+	SensorID      string    `json:"sensor_id"`
+	Hash          string    `json:"hash"`
+	TimeFirstSeen time.Time `json:"time_first_seen"`
+}
+
 // JSONTransaction represents a transaction in JSON format.
 type JSONTransaction struct {
 	Type          string    `json:"type"`
@@ -238,15 +246,12 @@ func (j *JSONDatabase) WriteBlockHashFirstSeen(ctx context.Context, hash common.
 		return
 	}
 
-	partial := map[string]any{
-		"type":                   "block_hash_first_seen",
-		"sensor_id":              j.sensorID,
-		"hash":                   hash.Hex(),
-		"time_first_seen_hash":   tfsh,
-		"sensor_first_seen_hash": j.sensorID,
-	}
-
-	j.Write(partial)
+	j.Write(JSONBlockHashFirstSeen{
+		Type:          "block_hash_first_seen",
+		SensorID:      j.sensorID,
+		Hash:          hash.Hex(),
+		TimeFirstSeen: tfsh,
+	})
 }
 
 // WriteBlockBody writes the block body as JSON.
