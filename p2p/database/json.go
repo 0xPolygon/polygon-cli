@@ -70,7 +70,6 @@ type JSONBlock struct {
 	UncleCount      int       `json:"uncle_count"`
 	TimeFirstSeen   time.Time `json:"time_first_seen"`
 	IsParent        bool      `json:"is_parent"`
-	SensorFirstSeen string    `json:"sensor_first_seen"`
 }
 
 // JSONBlockEvent represents a block event in JSON format.
@@ -179,7 +178,6 @@ func (j *JSONDatabase) writeBlock(block *types.Block, td *big.Int, tfs time.Time
 		TxCount:         len(block.Transactions()),
 		UncleCount:      len(block.Uncles()),
 		TimeFirstSeen:   tfs,
-		SensorFirstSeen: j.sensorID,
 	}
 
 	if block.BaseFee() != nil {
@@ -198,18 +196,17 @@ func (j *JSONDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.H
 
 	for _, header := range headers {
 		block := JSONBlock{
-			Type:            "block_header",
-			SensorID:        j.sensorID,
-			Hash:            header.Hash().Hex(),
-			ParentHash:      header.ParentHash.Hex(),
-			Number:          header.Number.Uint64(),
-			Timestamp:       header.Time,
-			GasLimit:        header.GasLimit,
-			GasUsed:         header.GasUsed,
-			Difficulty:      header.Difficulty.String(),
-			TimeFirstSeen:   tfs,
-			IsParent:        isParent,
-			SensorFirstSeen: j.sensorID,
+			Type:          "block_header",
+			SensorID:      j.sensorID,
+			Hash:          header.Hash().Hex(),
+			ParentHash:    header.ParentHash.Hex(),
+			Number:        header.Number.Uint64(),
+			Timestamp:     header.Time,
+			GasLimit:      header.GasLimit,
+			GasUsed:       header.GasUsed,
+			Difficulty:    header.Difficulty.String(),
+			TimeFirstSeen: tfs,
+			IsParent:      isParent,
 		}
 
 		if header.BaseFee != nil {
