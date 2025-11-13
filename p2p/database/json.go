@@ -55,24 +55,22 @@ func NewJSONDatabase(opts JSONDatabaseOptions) Database {
 
 // JSONBlock represents a block in JSON format.
 type JSONBlock struct {
-	Type                string    `json:"type"`
-	SensorID            string    `json:"sensor_id"`
-	Hash                string    `json:"hash"`
-	ParentHash          string    `json:"parent_hash"`
-	Number              uint64    `json:"number"`
-	Timestamp           uint64    `json:"timestamp"`
-	GasLimit            uint64    `json:"gas_limit"`
-	GasUsed             uint64    `json:"gas_used"`
-	Difficulty          string    `json:"difficulty,omitempty"`
-	TotalDifficulty     string    `json:"total_difficulty,omitempty"`
-	BaseFee             string    `json:"base_fee,omitempty"`
-	TxCount             int       `json:"tx_count"`
-	UncleCount          int       `json:"uncle_count"`
-	TimeFirstSeen       time.Time `json:"time_first_seen"`
-	TimeFirstSeenHash   time.Time `json:"time_first_seen_hash"`
-	IsParent            bool      `json:"is_parent"`
-	SensorFirstSeen     string    `json:"sensor_first_seen"`
-	SensorFirstSeenHash string    `json:"sensor_first_seen_hash,omitempty"`
+	Type            string    `json:"type"`
+	SensorID        string    `json:"sensor_id"`
+	Hash            string    `json:"hash"`
+	ParentHash      string    `json:"parent_hash"`
+	Number          uint64    `json:"number"`
+	Timestamp       uint64    `json:"timestamp"`
+	GasLimit        uint64    `json:"gas_limit"`
+	GasUsed         uint64    `json:"gas_used"`
+	Difficulty      string    `json:"difficulty,omitempty"`
+	TotalDifficulty string    `json:"total_difficulty,omitempty"`
+	BaseFee         string    `json:"base_fee,omitempty"`
+	TxCount         int       `json:"tx_count"`
+	UncleCount      int       `json:"uncle_count"`
+	TimeFirstSeen   time.Time `json:"time_first_seen"`
+	IsParent        bool      `json:"is_parent"`
+	SensorFirstSeen string    `json:"sensor_first_seen"`
 }
 
 // JSONBlockEvent represents a block event in JSON format.
