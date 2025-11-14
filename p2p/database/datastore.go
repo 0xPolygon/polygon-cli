@@ -23,7 +23,7 @@ const (
 	TransactionsKind      = "transactions"
 	TransactionEventsKind = "transaction_events"
 	PeersKind             = "peers"
-	MaxAttempts           = 3
+	MaxAttempts           = 5
 )
 
 // Datastore wraps the datastore client, stores the sensorID, and other
@@ -57,33 +57,36 @@ type DatastoreEvent struct {
 // DatastoreHeader stores the data in manner that can be easily written without
 // loss of precision.
 type DatastoreHeader struct {
-	ParentHash    *datastore.Key
-	UncleHash     string `datastore:",noindex"`
-	Coinbase      string `datastore:",noindex"`
-	Root          string `datastore:",noindex"`
-	TxHash        string `datastore:",noindex"`
-	ReceiptHash   string `datastore:",noindex"`
-	Bloom         []byte `datastore:",noindex"`
-	Difficulty    string `datastore:",noindex"`
-	Number        string
-	GasLimit      string `datastore:",noindex"`
-	GasUsed       string
-	Time          time.Time
-	Extra         []byte `datastore:",noindex"`
-	MixDigest     string `datastore:",noindex"`
-	Nonce         string `datastore:",noindex"`
-	BaseFee       string `datastore:",noindex"`
-	TimeFirstSeen time.Time
-	TTL           time.Time
-	IsParent      bool
+	ParentHash      *datastore.Key
+	UncleHash       string `datastore:",noindex"`
+	Coinbase        string `datastore:",noindex"`
+	Root            string `datastore:",noindex"`
+	TxHash          string `datastore:",noindex"`
+	ReceiptHash     string `datastore:",noindex"`
+	Bloom           []byte `datastore:",noindex"`
+	Difficulty      string `datastore:",noindex"`
+	Number          string
+	GasLimit        string `datastore:",noindex"`
+	GasUsed         string
+	Time            time.Time
+	Extra           []byte `datastore:",noindex"`
+	MixDigest       string `datastore:",noindex"`
+	Nonce           string `datastore:",noindex"`
+	BaseFee         string `datastore:",noindex"`
+	TimeFirstSeen   time.Time
+	TTL             time.Time
+	IsParent        bool
+	SensorFirstSeen string
 }
 
 // DatastoreBlock represents a block stored in datastore.
 type DatastoreBlock struct {
 	*DatastoreHeader
-	TotalDifficulty string           `datastore:",noindex"`
-	Transactions    []*datastore.Key `datastore:",noindex"`
-	Uncles          []*datastore.Key `datastore:",noindex"`
+	TotalDifficulty     string           `datastore:",noindex"`
+	Transactions        []*datastore.Key `datastore:",noindex"`
+	Uncles              []*datastore.Key `datastore:",noindex"`
+	TimeFirstSeenHash   time.Time
+	SensorFirstSeenHash string
 }
 
 // DatastoreTransaction represents a transaction stored in datastore. Data is
@@ -225,6 +228,52 @@ func (d *Datastore) WriteBlockHashes(ctx context.Context, peer *enode.Node, hash
 	})
 }
 
+// WriteBlockHashFirstSeen writes a partial block entry with just the hash
+// first seen time if the block doesn't exist yet. If it exists, updates the
+// TimeFirstSeenHash if the new time is earlier.
+func (d *Datastore) WriteBlockHashFirstSeen(ctx context.Context, hash common.Hash, tfsh time.Time) {
+	if d.client == nil || !d.ShouldWriteBlocks() {
+		return
+	}
+
+	d.runAsync(func() {
+		d.writeBlockHashFirstSeen(ctx, hash, tfsh)
+	})
+}
+
+// writeBlockHashFirstSeen performs the actual transaction to write or update the block hash first seen time.
+func (d *Datastore) writeBlockHashFirstSeen(ctx context.Context, hash common.Hash, tfsh time.Time) {
+	key := datastore.NameKey(BlocksKind, hash.Hex(), nil)
+
+	_, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
+		var block DatastoreBlock
+		err := tx.Get(key, &block)
+
+		// If block doesn't exist, create partial entry with just hash timing
+		if err != nil {
+			block.TimeFirstSeenHash = tfsh
+			block.SensorFirstSeenHash = d.sensorID
+			_, err = tx.Put(key, &block)
+			return err
+		}
+
+		// If timestamp already set and not earlier, no update needed
+		if !block.TimeFirstSeenHash.IsZero() && !tfsh.Before(block.TimeFirstSeenHash) {
+			return nil
+		}
+
+		// Update with earlier timestamp
+		block.TimeFirstSeenHash = tfsh
+		block.SensorFirstSeenHash = d.sensorID
+		_, err = tx.Put(key, &block)
+		return err
+	}, datastore.MaxAttempts(MaxAttempts))
+
+	if err != nil {
+		log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to write block hash first seen")
+	}
+}
+
 // WriteTransactions will write the transactions and transaction events to datastore.
 func (d *Datastore) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
 	if d.client == nil {
@@ -318,25 +367,43 @@ func (d *Datastore) HasBlock(ctx context.Context, hash common.Hash) bool {
 // values are converted into strings to prevent a loss of precision.
 func (d *Datastore) newDatastoreHeader(header *types.Header, tfs time.Time, isParent bool) *DatastoreHeader {
 	return &DatastoreHeader{
-		ParentHash:    datastore.NameKey(BlocksKind, header.ParentHash.Hex(), nil),
-		UncleHash:     header.UncleHash.Hex(),
-		Coinbase:      header.Coinbase.Hex(),
-		Root:          header.Root.Hex(),
-		TxHash:        header.TxHash.Hex(),
-		ReceiptHash:   header.ReceiptHash.Hex(),
-		Bloom:         header.Bloom.Bytes(),
-		Difficulty:    header.Difficulty.String(),
-		Number:        header.Number.String(),
-		GasLimit:      fmt.Sprint(header.GasLimit),
-		GasUsed:       fmt.Sprint(header.GasUsed),
-		Time:          time.Unix(int64(header.Time), 0),
-		Extra:         header.Extra,
-		MixDigest:     header.MixDigest.String(),
-		Nonce:         fmt.Sprint(header.Nonce.Uint64()),
-		BaseFee:       header.BaseFee.String(),
-		TimeFirstSeen: tfs,
-		TTL:           tfs.Add(d.ttl),
-		IsParent:      isParent,
+		ParentHash:      datastore.NameKey(BlocksKind, header.ParentHash.Hex(), nil),
+		UncleHash:       header.UncleHash.Hex(),
+		Coinbase:        header.Coinbase.Hex(),
+		Root:            header.Root.Hex(),
+		TxHash:          header.TxHash.Hex(),
+		ReceiptHash:     header.ReceiptHash.Hex(),
+		Bloom:           header.Bloom.Bytes(),
+		Difficulty:      header.Difficulty.String(),
+		Number:          header.Number.String(),
+		GasLimit:        fmt.Sprint(header.GasLimit),
+		GasUsed:         fmt.Sprint(header.GasUsed),
+		Time:            time.Unix(int64(header.Time), 0),
+		Extra:           header.Extra,
+		MixDigest:       header.MixDigest.String(),
+		Nonce:           fmt.Sprint(header.Nonce.Uint64()),
+		BaseFee:         header.BaseFee.String(),
+		TimeFirstSeen:   tfs,
+		TTL:             tfs.Add(d.ttl),
+		IsParent:        isParent,
+		SensorFirstSeen: d.sensorID,
+	}
+}
+
+// writeFirstSeen updates timing fields on a header and block, preserving earlier timestamps.
+func (d *Datastore) writeFirstSeen(header *DatastoreHeader, block *DatastoreBlock, tfs time.Time) {
+	// Preserve earlier header timing if it exists
+	if block.DatastoreHeader != nil &&
+		!block.DatastoreHeader.TimeFirstSeen.IsZero() &&
+		block.DatastoreHeader.TimeFirstSeen.Before(tfs) {
+		header.TimeFirstSeen = block.DatastoreHeader.TimeFirstSeen
+		header.SensorFirstSeen = block.DatastoreHeader.SensorFirstSeen
+	}
+
+	// Set hash timing if it doesn't exist or if new timestamp is earlier
+	if block.TimeFirstSeenHash.IsZero() || tfs.Before(block.TimeFirstSeenHash) {
+		block.TimeFirstSeenHash = tfs
+		block.SensorFirstSeenHash = d.sensorID
 	}
 }
 
@@ -391,9 +458,16 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 
 		shouldWrite := false
 
-		if dsBlock.DatastoreHeader == nil {
+		if dsBlock.DatastoreHeader == nil || tfs.Before(dsBlock.DatastoreHeader.TimeFirstSeen) {
 			shouldWrite = true
-			dsBlock.DatastoreHeader = d.newDatastoreHeader(block.Header(), tfs, false)
+
+			// Create new header with current timing
+			header := d.newDatastoreHeader(block.Header(), tfs, false)
+
+			// Preserve earlier timestamps from any earlier announcement
+			d.writeFirstSeen(header, &dsBlock, tfs)
+
+			dsBlock.DatastoreHeader = header
 		}
 
 		if len(dsBlock.TotalDifficulty) == 0 {
@@ -484,12 +558,21 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, 
 
 	_, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
 		var block DatastoreBlock
-		if err := tx.Get(key, &block); err == nil && block.DatastoreHeader != nil {
+		err := tx.Get(key, &block)
+
+		// If block header already exists and new timestamp is not earlier, don't overwrite
+		if err == nil && block.DatastoreHeader != nil && !tfs.Before(block.DatastoreHeader.TimeFirstSeen) {
 			return nil
 		}
 
-		block.DatastoreHeader = d.newDatastoreHeader(header, tfs, isParent)
-		_, err := tx.Put(key, &block)
+		// Create new header with current timing
+		newHeader := d.newDatastoreHeader(header, tfs, isParent)
+
+		// Preserve earlier timestamps from any earlier announcement or full block
+		d.writeFirstSeen(newHeader, &block, tfs)
+
+		block.DatastoreHeader = newHeader
+		_, err = tx.Put(key, &block)
 		return err
 	}, datastore.MaxAttempts(MaxAttempts))
 

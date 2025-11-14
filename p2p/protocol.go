@@ -21,13 +21,6 @@ import (
 	"github.com/0xPolygon/polygon-cli/p2p/database"
 )
 
-// BlockCache stores the actual block data to avoid duplicate fetches and database queries.
-type BlockCache struct {
-	Header *types.Header
-	Body   *eth.BlockBody
-	TD     *big.Int
-}
-
 // conn represents an individual connection with a peer.
 type conn struct {
 	sensorID string
@@ -355,6 +348,9 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		if ok {
 			continue
 		}
+
+		// Write hash first seen time immediately for new blocks
+		c.db.WriteBlockHashFirstSeen(ctx, hash, tfs)
 
 		// Request only the parts we don't have
 		if err := c.getBlockData(hash, cache, false); err != nil {

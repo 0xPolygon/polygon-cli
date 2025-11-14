@@ -347,50 +347,50 @@ func balanceTree() error {
 		return err
 	}
 	type BalanceEntry struct {
-        OriginNetwork      uint32         `json:"originNetwork"`
-        OriginTokenAddress common.Address `json:"originTokenAddress"`
-        TotalSupply        string         `json:"totalSupply"`
-    }
+		OriginNetwork      uint32         `json:"originNetwork"`
+		OriginTokenAddress common.Address `json:"originTokenAddress"`
+		TotalSupply        string         `json:"totalSupply"`
+	}
 
-    var balanceEntries []BalanceEntry
-    for tokenKey, balance := range balances {
-        if balance.Cmp(big.NewInt(0)) == 0 {
-            continue
-        }
-        
-        var token TokenInfo
-        token, err = TokenInfoStringToStruct(tokenKey)
-        if err != nil {
-            return err
-        }
-        
-        if token.OriginNetwork.Uint64() == uint64(l2NetworkID) {
-            continue
-        }
+	var balanceEntries []BalanceEntry
+	for tokenKey, balance := range balances {
+		if balance.Cmp(big.NewInt(0)) == 0 {
+			continue
+		}
+
+		var token TokenInfo
+		token, err = TokenInfoStringToStruct(tokenKey)
+		if err != nil {
+			return err
+		}
+
+		if token.OriginNetwork.Uint64() == uint64(l2NetworkID) {
+			continue
+		}
 
 		balanceEntries = append(balanceEntries, BalanceEntry{
 			OriginNetwork:      uint32(token.OriginNetwork.Uint64()),
 			OriginTokenAddress: token.OriginTokenAddress,
 			TotalSupply:        balance.String(),
 		})
-    }
+	}
 
-    // Create the response structure
-    response := struct {
-        Root     string         `json:"root"`
-        Balances []BalanceEntry `json:"balances"`
-    }{
-        Root:     root.String(),
-        Balances: balanceEntries,
-    }
+	// Create the response structure
+	response := struct {
+		Root     string         `json:"root"`
+		Balances []BalanceEntry `json:"balances"`
+	}{
+		Root:     root.String(),
+		Balances: balanceEntries,
+	}
 
-    // Marshal to JSON with proper formatting
-    jsonOutput, err := json.MarshalIndent(response, "", "  ")
-    if err != nil {
-        return err
-    }
+	// Marshal to JSON with proper formatting
+	jsonOutput, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		return err
+	}
 
-    fmt.Println(string(jsonOutput))
+	fmt.Println(string(jsonOutput))
 	return nil
 }
 
