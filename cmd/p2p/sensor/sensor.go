@@ -3,11 +3,11 @@ package sensor
 import (
 	"context"
 	"crypto/ecdsa"
+	_ "embed"
 	"errors"
 	"fmt"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -82,6 +83,8 @@ type (
 )
 
 var (
+	//go:embed usage.md
+	sensorUsage       string
 	inputSensorParams sensorParams
 )
 
@@ -90,7 +93,7 @@ var (
 var SensorCmd = &cobra.Command{
 	Use:   "sensor [nodes file]",
 	Short: "Start a devp2p sensor that discovers other peers and will receive blocks and transactions.",
-	Long:  "If no nodes.json file exists, it will be created.",
+	Long:  sensorUsage,
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputSensorParams.NodesFile = args[0]
@@ -170,14 +173,14 @@ var SensorCmd = &cobra.Command{
 		// Fetch the latest block which will be used later when crafting the status
 		// message. This call will only be made once and stored in the head field
 		// until the sensor receives a new block it can overwrite it with.
-		block, err := getLatestBlock(inputSensorParams.RPC)
+		rpcBlock, err := getLatestBlock(inputSensorParams.RPC)
 		if err != nil {
 			return err
 		}
-		head := p2p.HeadBlock{
-			Hash:            block.Hash.ToHash(),
-			TotalDifficulty: block.TotalDifficulty.ToBigInt(),
-			Number:          block.Number.ToUint64(),
+
+		head := eth.NewBlockPacket{
+			Block: rpcBlock.ToBlock(),
+			TD:    rpcBlock.TotalDifficulty.ToBigInt(),
 		}
 
 		peersGauge := promauto.NewGauge(prometheus.GaugeOpts{
@@ -192,10 +195,13 @@ var SensorCmd = &cobra.Command{
 			Help:      "The number and type of messages the sensor has sent and received",
 		}, []string{"message", "url", "name", "direction"})
 
+		metrics := p2p.NewBlockMetrics(head.Block)
+
 		// Create peer connection manager for broadcasting transactions
 		// and managing the global blocks cache
 		conns := p2p.NewConns(p2p.ConnsOptions{
 			BlocksCache: inputSensorParams.BlocksCache,
+			Head:        head,
 		})
 
 		opts := p2p.EthProtocolOptions{
@@ -206,8 +212,6 @@ var SensorCmd = &cobra.Command{
 			SensorID:      inputSensorParams.SensorID,
 			NetworkID:     inputSensorParams.NetworkID,
 			Conns:         conns,
-			Head:          &head,
-			HeadMutex:     &sync.RWMutex{},
 			ForkID:        forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
 			MsgCounter:    msgCounter,
 			RequestsCache: inputSensorParams.RequestsCache,
@@ -279,6 +283,8 @@ var SensorCmd = &cobra.Command{
 			case <-ticker.C:
 				peersGauge.Set(float64(server.PeerCount()))
 				db.WritePeers(cmd.Context(), server.Peers(), time.Now())
+
+				metrics.Update(conns.HeadBlock().Block, conns.OldestBlock())
 
 				urls := []string{}
 				for _, peer := range server.Peers() {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/p2p"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/prometheus/client_golang/prometheus"
@@ -27,12 +28,33 @@ type peerData struct {
 	DurationSeconds float64          `json:"duration_seconds"`
 }
 
+// blockInfo represents basic block information.
+type blockInfo struct {
+	Hash   string `json:"hash"`
+	Number uint64 `json:"number"`
+}
+
+// newBlockInfo creates a blockInfo from a types.Header.
+// Returns nil if the header is nil.
+func newBlockInfo(header *types.Header) *blockInfo {
+	if header == nil {
+		return nil
+	}
+
+	return &blockInfo{
+		Hash:   header.Hash().Hex(),
+		Number: header.Number.Uint64(),
+	}
+}
+
 // apiData represents all sensor information including node info and peer data.
 type apiData struct {
 	ENR       string              `json:"enr"`
 	URL       string              `json:"enode"`
 	PeerCount int                 `json:"peer_count"`
 	Peers     map[string]peerData `json:"peers"`
+	Head      *blockInfo          `json:"head_block"`
+	Oldest    *blockInfo          `json:"oldest_block"`
 }
 
 // handleAPI sets up the API for interacting with the sensor. All endpoints
@@ -54,7 +76,7 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec, conns *p2p
 			url := peer.Node().URLv4()
 			peerID := peer.Node().ID().String()
 			name := peer.Fullname()
-			connectedAt := conns.GetPeerConnectedAt(peerID)
+			connectedAt := conns.PeerConnectedAt(peerID)
 			if connectedAt.IsZero() {
 				continue
 			}
@@ -71,11 +93,21 @@ func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec, conns *p2p
 			peers[url] = msgs
 		}
 
+		head := conns.HeadBlock()
+		oldest := conns.OldestBlock()
+
+		var headHeader *types.Header
+		if head.Block != nil {
+			headHeader = head.Block.Header()
+		}
+
 		data := apiData{
 			ENR:       server.NodeInfo().ENR,
 			URL:       server.Self().URLv4(),
 			PeerCount: len(peers),
 			Peers:     peers,
+			Head:      newBlockInfo(headHeader),
+			Oldest:    newBlockInfo(oldest),
 		}
 
 		if err := json.NewEncoder(w).Encode(data); err != nil {
