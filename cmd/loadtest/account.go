@@ -734,7 +734,7 @@ func (ap *AccountPool) returnFunds(ctx context.Context, lock bool) error {
 	if err != nil {
 		return err
 	}
-	gasPrice, _ := getSuggestedGasPrices(ctx, ap.client)
+	gasPrice, _ := getSuggestedGasPrices(ctx, ap.client, nil)
 	txFee := new(big.Int).Mul(ethTransferGas, gasPrice)
 	// triple the txFee to account for gas price fluctuations and
 	// different ways to charge transactions, like op networks
@@ -1128,7 +1128,7 @@ func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.Pr
 		return nil, err
 	}
 	tops.GasLimit = uint64(21000)
-	tops = configureTransactOpts(ctx, ap.client, tops)
+	tops = configureTransactOpts(ctx, ap.client, tops, nil)
 
 	var nonce uint64
 
