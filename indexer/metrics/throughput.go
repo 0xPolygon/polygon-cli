@@ -55,7 +55,7 @@ func (t *ThroughputMetric) ProcessBlock(block rpctypes.PolyBlock) {
 }
 
 // GetMetric returns the current throughput statistics
-func (t *ThroughputMetric) GetMetric() interface{} {
+func (t *ThroughputMetric) GetMetric() any {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 

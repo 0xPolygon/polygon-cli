@@ -113,12 +113,12 @@ func (i *Indexer) MetricsChannel() <-chan metrics.MetricUpdate {
 }
 
 // GetMetric returns the current value of a specific metric
-func (i *Indexer) GetMetric(name string) (interface{}, bool) {
+func (i *Indexer) GetMetric(name string) (any, bool) {
 	return i.metrics.GetMetric(name)
 }
 
 // GetBlock retrieves a block by hash or number through the store
-func (i *Indexer) GetBlock(ctx context.Context, blockHashOrNumber interface{}) (rpctypes.PolyBlock, error) {
+func (i *Indexer) GetBlock(ctx context.Context, blockHashOrNumber any) (rpctypes.PolyBlock, error) {
 	return i.store.GetBlock(ctx, blockHashOrNumber)
 }
 
@@ -152,7 +152,7 @@ func (i *Indexer) GetClientVersion(ctx context.Context) (string, error) {
 }
 
 // GetSyncStatus retrieves the sync status
-func (i *Indexer) GetSyncStatus(ctx context.Context) (interface{}, error) {
+func (i *Indexer) GetSyncStatus(ctx context.Context) (any, error) {
 	return i.store.GetSyncStatus(ctx)
 }
 
@@ -172,7 +172,7 @@ func (i *Indexer) GetQueuedTransactionCount(ctx context.Context) (*big.Int, erro
 }
 
 // GetTxPoolStatus retrieves the full txpool status
-func (i *Indexer) GetTxPoolStatus(ctx context.Context) (map[string]interface{}, error) {
+func (i *Indexer) GetTxPoolStatus(ctx context.Context) (map[string]any, error) {
 	return i.store.GetTxPoolStatus(ctx)
 }
 

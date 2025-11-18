@@ -111,7 +111,7 @@ func writeBlock(folderName string, block *types.Block, isCanonical bool) error {
 		log.Error().Err(err).Msg("Unable to json marshal the header")
 		return err
 	}
-	fields := make(map[string]interface{}, 0)
+	fields := make(map[string]any, 0)
 	err = json.Unmarshal(rawHeader, &fields)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to convert header to map type")

@@ -17,7 +17,7 @@ type MetricPlugin interface {
 	ProcessBlock(block rpctypes.PolyBlock)
 
 	// GetMetric returns the current calculated metric value
-	GetMetric() interface{}
+	GetMetric() any
 
 	// GetUpdateInterval returns how often this metric should be recalculated
 	GetUpdateInterval() time.Duration
@@ -26,7 +26,7 @@ type MetricPlugin interface {
 // MetricUpdate represents an update from a metric plugin
 type MetricUpdate struct {
 	Name  string
-	Value interface{}
+	Value any
 	Time  time.Time
 }
 
@@ -100,7 +100,7 @@ func (m *MetricsSystem) GetUpdateChannel() <-chan MetricUpdate {
 }
 
 // GetMetric returns the current value of a specific metric
-func (m *MetricsSystem) GetMetric(name string) (interface{}, bool) {
+func (m *MetricsSystem) GetMetric(name string) (any, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

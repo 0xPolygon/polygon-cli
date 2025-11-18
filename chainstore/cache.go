@@ -48,7 +48,7 @@ type ChainCache struct {
 	clientVersion *CachedValue[string]
 
 	// Semi-static data (5-15 minute TTL)
-	syncStatus     *CachedValue[interface{}]
+	syncStatus     *CachedValue[any]
 	safeBlock      *CachedValue[*big.Int]
 	finalizedBlock *CachedValue[*big.Int]
 
@@ -110,7 +110,7 @@ func (cc *ChainCache) SetClientVersion(clientVersion string) {
 }
 
 // GetSyncStatus gets cached sync status
-func (cc *ChainCache) GetSyncStatus(ttl time.Duration) (interface{}, bool) {
+func (cc *ChainCache) GetSyncStatus(ttl time.Duration) (any, bool) {
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
 	if cc.syncStatus == nil {
@@ -120,7 +120,7 @@ func (cc *ChainCache) GetSyncStatus(ttl time.Duration) (interface{}, bool) {
 }
 
 // SetSyncStatus caches sync status with TTL
-func (cc *ChainCache) SetSyncStatus(syncStatus interface{}, ttl time.Duration) {
+func (cc *ChainCache) SetSyncStatus(syncStatus any, ttl time.Duration) {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
 	cc.syncStatus = NewCachedValue(syncStatus, ttl)

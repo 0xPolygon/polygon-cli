@@ -233,7 +233,7 @@ var ErrorMessages = map[string]string{
 	"0x3a64d973": "OnlyChainsWithPessimisticProofsError",
 }
 
-func DecodeSmcErrorCode(errorCode interface{}) (string, error) {
+func DecodeSmcErrorCode(errorCode any) (string, error) {
 	codeStr, ok := errorCode.(string)
 	if !ok {
 		return "", errors.New("jsonError.Data is not a string, unable to decode smart contract error")

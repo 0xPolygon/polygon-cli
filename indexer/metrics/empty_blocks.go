@@ -55,7 +55,7 @@ func (e *EmptyBlockMetric) ProcessBlock(block rpctypes.PolyBlock) {
 }
 
 // GetMetric returns the current empty block statistics
-func (e *EmptyBlockMetric) GetMetric() interface{} {
+func (e *EmptyBlockMetric) GetMetric() any {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 

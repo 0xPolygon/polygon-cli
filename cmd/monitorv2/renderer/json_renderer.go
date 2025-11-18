@@ -50,7 +50,7 @@ func (j *JSONRenderer) Stop() error {
 }
 
 // outputBlock outputs a block as JSON
-func (j *JSONRenderer) outputBlock(block interface{}) error {
+func (j *JSONRenderer) outputBlock(block any) error {
 	// Output as line-delimited JSON
 	encoder := json.NewEncoder(os.Stdout)
 	return encoder.Encode(block)

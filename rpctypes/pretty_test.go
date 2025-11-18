@@ -46,12 +46,12 @@ func TestPrettyMarshaling(t *testing.T) {
 	}
 
 	// Verify both are valid JSON
-	var regularData map[string]interface{}
+	var regularData map[string]any
 	if err := json.Unmarshal(regularJSON, &regularData); err != nil {
 		t.Fatalf("Regular JSON is invalid: %v", err)
 	}
 
-	var prettyData map[string]interface{}
+	var prettyData map[string]any
 	if err := json.Unmarshal(prettyJSON, &prettyData); err != nil {
 		t.Fatalf("Pretty JSON is invalid: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestPrettyTransactionMarshaling(t *testing.T) {
 	}
 
 	// Verify it's valid JSON
-	var prettyData map[string]interface{}
+	var prettyData map[string]any
 	if err := json.Unmarshal(prettyJSON, &prettyData); err != nil {
 		t.Fatalf("Pretty JSON is invalid: %v", err)
 	}
@@ -174,27 +174,27 @@ func TestPrettyReceiptLogMarshaling(t *testing.T) {
 	}
 
 	// Verify both are valid JSON
-	var regularData map[string]interface{}
+	var regularData map[string]any
 	if err := json.Unmarshal(regularJSON, &regularData); err != nil {
 		t.Fatalf("Regular JSON is invalid: %v", err)
 	}
 
-	var prettyData map[string]interface{}
+	var prettyData map[string]any
 	if err := json.Unmarshal(prettyJSON, &prettyData); err != nil {
 		t.Fatalf("Pretty JSON is invalid: %v", err)
 	}
 
 	// Verify logs structure in regular vs pretty JSON
-	regularLogs := regularData["logs"].([]interface{})
-	prettyLogs := prettyData["logs"].([]interface{})
+	regularLogs := regularData["logs"].([]any)
+	prettyLogs := prettyData["logs"].([]any)
 
 	if len(regularLogs) != len(prettyLogs) {
 		t.Errorf("Expected same number of logs, got regular: %d, pretty: %d", len(regularLogs), len(prettyLogs))
 	}
 
 	if len(regularLogs) > 0 {
-		regularLog := regularLogs[0].(map[string]interface{})
-		prettyLog := prettyLogs[0].(map[string]interface{})
+		regularLog := regularLogs[0].(map[string]any)
+		prettyLog := prettyLogs[0].(map[string]any)
 
 		// Check that blockNumber is converted from hex string to uint64
 		regularBlockNumber := regularLog["blockNumber"].(string)
@@ -213,8 +213,8 @@ func TestPrettyReceiptLogMarshaling(t *testing.T) {
 		}
 
 		// Check that topics are converted properly
-		regularTopics := regularLog["topics"].([]interface{})
-		prettyTopics := prettyLog["topics"].([]interface{})
+		regularTopics := regularLog["topics"].([]any)
+		prettyTopics := prettyLog["topics"].([]any)
 
 		t.Logf("Regular log topics[0] (hex): %s", regularTopics[0].(string))
 		t.Logf("Pretty log topics[0] (hash): %s", prettyTopics[0].(string))
