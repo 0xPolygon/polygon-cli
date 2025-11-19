@@ -14,7 +14,7 @@ func NewJSONStreamer(writer io.Writer) *JSONStreamer {
 }
 
 func (j *JSONStreamer) StreamTestExecution(exec TestExecution) error {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"type": "test_execution",
 		"data": exec,
 	}
@@ -22,7 +22,7 @@ func (j *JSONStreamer) StreamTestExecution(exec TestExecution) error {
 }
 
 func (j *JSONStreamer) StreamSummary(summary TestSummary) error {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"type": "test_summary",
 		"data": summary,
 	}
@@ -30,7 +30,7 @@ func (j *JSONStreamer) StreamSummary(summary TestSummary) error {
 }
 
 func (j *JSONStreamer) StreamFinalSummary(summaries []TestSummary) error {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"type": "final_summary",
 		"data": summaries,
 	}

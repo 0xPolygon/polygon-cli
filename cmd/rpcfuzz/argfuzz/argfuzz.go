@@ -51,7 +51,7 @@ func ByteMutator(arg []byte) []byte {
 	return arg
 }
 
-func FuzzRPCArgs(args *[]interface{}, c fuzz.Continue) {
+func FuzzRPCArgs(args *[]any, c fuzz.Continue) {
 	for i, d := range *args {
 		if d == nil {
 			d = c.RandString()

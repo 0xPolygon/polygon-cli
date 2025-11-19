@@ -102,7 +102,7 @@ func (t *TPSMetric) calculateTPS() {
 }
 
 // GetMetric returns the current TPS value
-func (t *TPSMetric) GetMetric() interface{} {
+func (t *TPSMetric) GetMetric() any {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.tps
