@@ -431,8 +431,7 @@ func GetHexString(data any) string {
 	if reflect.TypeOf(data).Kind() == reflect.Float64 {
 		result = fmt.Sprintf("%x", int64(data.(float64)))
 	} else if reflect.TypeOf(data).Kind() == reflect.String {
-		if strings.HasPrefix(data.(string), "0x") {
-			result = strings.TrimPrefix(data.(string), "0x")
+		if result, ok := strings.CutPrefix(data.(string), "0x"); ok {
 		} else {
 			result = data.(string)
 		}
