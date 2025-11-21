@@ -89,6 +89,17 @@ type (
 		OutputRawTxOnly            bool
 		CheckBalanceBeforeFunding  bool
 
+		// gas manager
+		GasManagerOscillationWave string
+		GasManagerTarget          uint64
+		GasManagerPeriod          uint64
+		GasManagerAmplitude       uint64
+
+		GasManagerPriceStrategy             string
+		GasManagerFixedGasPriceWei          uint64
+		GasManagerDynamicGasPricesWei       string
+		GasManagerDynamicGasPricesVariation float64
+
 		// Computed
 		CurrentGasPrice       *big.Int
 		CurrentGasTipCap      *big.Int
@@ -308,6 +319,18 @@ v3, uniswapv3 - perform UniswapV3 swaps`)
 	f.UintVar(&ltp.ReceiptRetryMax, "receipt-retry-max", 30, "maximum polling attempts for transaction receipt with --wait-for-receipt")
 	f.UintVar(&ltp.ReceiptRetryInitialDelayMs, "receipt-retry-initial-delay-ms", 100, "initial delay in milliseconds for receipt polling (uses exponential backoff with jitter)")
 	f.BoolVar(&ltp.CheckBalanceBeforeFunding, "check-balance-before-funding", false, "check account balance before funding sending accounts (saves gas when accounts are already funded)")
+
+	// gas manager flags - gas limit
+	f.Uint64Var(&ltp.GasManagerTarget, "gas-manager-target", 30_000_000, "target gas limit for the gas manager oscillation wave")
+	f.Uint64Var(&ltp.GasManagerPeriod, "gas-manager-period", 1, "period in blocks for the gas manager oscillation wave")
+	f.Uint64Var(&ltp.GasManagerAmplitude, "gas-manager-amplitude", 0, "amplitude for the gas manager oscillation wave")
+	f.StringVar(&ltp.GasManagerOscillationWave, "gas-manager-oscillation-wave", "flat", "type of oscillation wave for the gas manager (flat | sine | square | triangle | sawtooth)")
+
+	// gas manager flags - gas price
+	f.StringVar(&ltp.GasManagerPriceStrategy, "gas-manager-price-strategy", "estimated", "gas price strategy for the gas manager (estimated | fixed | dynamic)")
+	f.Uint64Var(&ltp.GasManagerFixedGasPriceWei, "gas-manager-fixed-gas-price-wei", 300000000, "fixed gas price in wei for the gas manager fixed strategy")
+	f.StringVar(&ltp.GasManagerDynamicGasPricesWei, "gas-manager-dynamic-gas-prices-wei", "0,1000000,0,10000000,0,100000000", "comma-separated list of gas prices in wei for the gas manager dynamic strategy, 0 means the tx will use the suggested gas price from the network.")
+	f.Float64Var(&ltp.GasManagerDynamicGasPricesVariation, "gas-manager-dynamic-gas-prices-variation", 0.3, "variation percentage (e.g., 0.3 for ±30%) to apply to each gas price in the dynamic strategy")
 
 	// TODO Compression
 }

@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/0xPolygon/polygon-cli/cmd/parsebatchl2data"
 	"os"
+
+	"github.com/0xPolygon/polygon-cli/cmd/parsebatchl2data"
+	"github.com/0xPolygon/polygon-cli/cmd/txgaschart"
 
 	"github.com/0xPolygon/polygon-cli/cmd/contract"
 	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
@@ -161,6 +163,7 @@ func NewPolycliCommand() *cobra.Command {
 		publish.Cmd,
 		dockerlogger.Cmd,
 		contract.Cmd,
+		txgaschart.Cmd,
 	)
 	return cmd
 }
