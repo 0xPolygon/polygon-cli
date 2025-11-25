@@ -278,8 +278,7 @@ func processNumericString(s string) *big.Int {
 	if strings.Contains(s, ":") {
 		log.Fatal().Str("string", s).Msg("Unknown number format")
 	}
-	if strings.HasPrefix(s, "0x") {
-		s = strings.TrimPrefix(s, "0x")
+	if s, ok := strings.CutPrefix(s, "0x"); ok {
 		num, fullRead := new(big.Int).SetString(s, 16)
 		if !fullRead {
 			log.Fatal().Str("input", s).Msg("Unable to read the full hex data?!")
@@ -584,8 +583,7 @@ func rawArgsToStrings(rawArgs string, params []string) []string {
 	processedArgs := make([]string, count)
 	for k, arg := range argList {
 		if strings.HasPrefix(params[k], "uint") {
-			if strings.HasPrefix(arg, "0x") {
-				arg = strings.TrimPrefix(arg, "0x")
+			if arg, ok := strings.CutPrefix(arg, "0x"); ok {
 				if len(arg) > 64 {
 					// i think this is a bug but there is a test case that's somehow longer than 32 bytes
 					// https://github.com/ethereum/tests/blob/fd26aad70e24f042fcd135b2f0338b1c6bf1a324/src/GeneralStateTestsFiller/Cancun/stEIP1153-transientStorage/transStorageOKFiller.yml#L801
