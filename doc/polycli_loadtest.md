@@ -4,10 +4,13 @@
 
 ## Table of Contents
 
-- [Description](#description)
-- [Usage](#usage)
-- [Flags](#flags)
-- [See Also](#see-also)
+- [`polycli loadtest`](#polycli-loadtest)
+  - [Table of Contents](#table-of-contents)
+  - [Description](#description)
+  - [Usage](#usage)
+    - [Load Test Contract](#load-test-contract)
+  - [Flags](#flags)
+  - [See also](#see-also)
 
 ## Description
 
@@ -113,7 +116,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
                                                cc, contract-call - make contract calls
                                                d, deploy - deploy contracts
                                                inc, increment - increment a counter
-                                               r, random - random modes (excludes: blob, call, inscription, recall, rpc, uniswapv3)
+                                               r, random - random modes (excludes: blob, call, recall, rpc, uniswapv3)
                                                R, recall - replay or simulate transactions
                                                rpc - call random rpc methods
                                                s, store - store bytes in a dynamic byte array
