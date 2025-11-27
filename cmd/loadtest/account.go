@@ -117,8 +117,6 @@ type AccountPool struct {
 
 	latestBlockNumber uint64
 	pendingTxsCache   *uint64
-
-	multicall3Addr *common.Address
 }
 
 // Creates a new account pool with the given funding private key.
@@ -165,24 +163,6 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 		return nil, fmt.Errorf("unable to get latestBlockNumber: %w", err)
 	}
 
-	tops, err := bind.NewKeyedTransactorWithChainID(fundingPrivateKey, chainID)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Msg("unable create transaction signer")
-		return nil, fmt.Errorf("unable create transaction signer: %w", err)
-	}
-
-	log.Debug().Msg("checking if multicall3 is supported")
-	multicall3Addr, _ := util.IsMulticall3Supported(ctx, client, true, tops, nil)
-	if multicall3Addr != nil {
-		log.Info().
-			Stringer("address", multicall3Addr).
-			Msg("multicall3 is supported and will be used to fund accounts")
-	} else {
-		log.Info().Msg("multicall3 is not supported, will use EOA transfers to fund accounts")
-	}
-
 	ap := &AccountPool{
 		currentAccountIndex: 0,
 		client:              client,
@@ -193,7 +173,6 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 		accountsPositions:   make(map[common.Address]int),
 		latestBlockNumber:   latestBlockNumber,
 		clientRateLimiter:   rate.NewLimiter(rate.Every(50*time.Millisecond), 1),
-		multicall3Addr:      multicall3Addr,
 	}
 
 	if !ap.isFundingEnabled() {
@@ -463,13 +442,23 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 		return errors.New(errMsg)
 	}
 
-	if ap.multicall3Addr != nil {
-		return ap.fundAccountsWithMulticall3(ctx, tops)
+	log.Debug().Msg("checking if multicall3 is supported")
+	multicall3Addr, _ := util.IsMulticall3Supported(ctx, ap.client, true, tops, nil)
+	if multicall3Addr != nil {
+		log.Info().
+			Stringer("address", multicall3Addr).
+			Msg("multicall3 is supported and will be used to fund accounts")
+	} else {
+		log.Info().Msg("multicall3 is not supported, will use EOA transfers to fund accounts")
+	}
+
+	if multicall3Addr != nil {
+		return ap.fundAccountsWithMulticall3(ctx, tops, multicall3Addr)
 	}
 	return ap.fundAccountsWithEOATransfers(ctx, tops)
 }
 
-func (ap *AccountPool) fundAccountsWithMulticall3(ctx context.Context, tops *bind.TransactOpts) error {
+func (ap *AccountPool) fundAccountsWithMulticall3(ctx context.Context, tops *bind.TransactOpts, multicall3Addr *common.Address) error {
 	log.Debug().
 		Msg("funding sending accounts with multicall3")
 
@@ -513,7 +502,7 @@ func (ap *AccountPool) fundAccountsWithMulticall3(ctx context.Context, tops *bin
 				}
 				mu.Lock()
 				defer mu.Unlock()
-				tx, iErr := util.Multicall3FundAccountsWithNativeToken(ap.client, tops, accs, ap.fundingAmount, ap.multicall3Addr)
+				tx, iErr := util.Multicall3FundAccountsWithNativeToken(ap.client, tops, accs, ap.fundingAmount, multicall3Addr)
 				if iErr != nil {
 					log.Error().Err(iErr).Msg("failed to fund accounts with multicall3")
 					return
