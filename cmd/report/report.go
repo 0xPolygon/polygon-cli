@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	_ "embed"
@@ -15,15 +17,18 @@ import (
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"golang.org/x/time/rate"
 )
 
 type (
 	reportParams struct {
-		RpcUrl     string
-		StartBlock uint64
-		EndBlock   uint64
-		OutputFile string
-		Format     string
+		RpcUrl      string
+		StartBlock  uint64
+		EndBlock    uint64
+		OutputFile  string
+		Format      string
+		Concurrency int
+		RateLimit   float64
 	}
 )
 
@@ -77,7 +82,7 @@ var ReportCmd = &cobra.Command{
 		}
 
 		// Generate the report
-		err = generateReport(ctx, ec, report)
+		err = generateReport(ctx, ec, report, inputReport.Concurrency, inputReport.RateLimit)
 		if err != nil {
 			return fmt.Errorf("failed to generate report: %w", err)
 		}
@@ -99,6 +104,8 @@ func init() {
 	f.Uint64Var(&inputReport.EndBlock, "end-block", 0, "ending block number for analysis")
 	f.StringVarP(&inputReport.OutputFile, "output", "o", "", "output file path (default: stdout for JSON, report.html for HTML)")
 	f.StringVarP(&inputReport.Format, "format", "f", "json", "output format [json, html]")
+	f.IntVar(&inputReport.Concurrency, "concurrency", 10, "number of concurrent RPC requests")
+	f.Float64Var(&inputReport.RateLimit, "rate-limit", 4, "requests per second limit")
 }
 
 func checkFlags() error {
@@ -126,53 +133,105 @@ func checkFlags() error {
 }
 
 // generateReport analyzes the block range and generates a report
-func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport) error {
+func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport, concurrency int, rateLimit float64) error {
 	log.Info().Msg("Fetching and analyzing blocks")
 
+	// Create rate limiter
+	rateLimiter := rate.NewLimiter(rate.Limit(rateLimit), 1)
+
+	totalBlocks := report.EndBlock - report.StartBlock + 1
+	blockChan := make(chan uint64, totalBlocks)
+	resultChan := make(chan *BlockInfo, concurrency)
+	errorChan := make(chan error, totalBlocks)
+
+	// Fill the block channel with block numbers to fetch
+	for blockNum := report.StartBlock; blockNum <= report.EndBlock; blockNum++ {
+		blockChan <- blockNum
+	}
+	close(blockChan)
+
+	// Start worker goroutines
+	var wg sync.WaitGroup
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for blockNum := range blockChan {
+				select {
+				case <-ctx.Done():
+					errorChan <- ctx.Err()
+					return
+				default:
+				}
+
+				blockInfo, err := fetchBlockInfo(ctx, ec, blockNum, rateLimiter)
+				if err != nil {
+					errorChan <- fmt.Errorf("failed to fetch block %d: %w", blockNum, err)
+					return
+				}
+
+				resultChan <- blockInfo
+			}
+		}()
+	}
+
+	// Close result channel when all workers are done
+	go func() {
+		wg.Wait()
+		close(resultChan)
+		close(errorChan)
+	}()
+
+	// Collect results
 	totalTxCount := uint64(0)
 	totalGasUsed := uint64(0)
 	totalBaseFee := big.NewInt(0)
 	blockCount := uint64(0)
 	uniqueSenders := make(map[string]bool)
 	uniqueRecipients := make(map[string]bool)
+	processedBlocks := uint64(0)
 
-	// Fetch blocks in the range
-	for blockNum := report.StartBlock; blockNum <= report.EndBlock; blockNum++ {
+	// Process results and check for errors
+	for {
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		blockInfo, err := fetchBlockInfo(ctx, ec, blockNum)
-		if err != nil {
-			log.Warn().Err(err).Uint64("block", blockNum).Msg("Failed to fetch block, skipping")
-			continue
-		}
-
-		report.Blocks = append(report.Blocks, *blockInfo)
-		totalTxCount += blockInfo.TxCount
-		totalGasUsed += blockInfo.GasUsed
-		if blockInfo.BaseFeePerGas != nil {
-			totalBaseFee.Add(totalBaseFee, blockInfo.BaseFeePerGas)
-		}
-		blockCount++
-
-		// Track unique addresses
-		for _, tx := range blockInfo.Transactions {
-			if tx.From != "" {
-				uniqueSenders[tx.From] = true
+		case blockInfo, ok := <-resultChan:
+			if !ok {
+				// Channel closed, all results processed
+				goto done
 			}
-			if tx.To != "" {
-				uniqueRecipients[tx.To] = true
+			report.Blocks = append(report.Blocks, *blockInfo)
+			totalTxCount += blockInfo.TxCount
+			totalGasUsed += blockInfo.GasUsed
+			if blockInfo.BaseFeePerGas != nil {
+				totalBaseFee.Add(totalBaseFee, blockInfo.BaseFeePerGas)
 			}
-		}
+			blockCount++
 
-		if blockNum%100 == 0 || blockNum == report.EndBlock {
-			log.Info().Uint64("block", blockNum).Uint64("progress", blockNum-report.StartBlock+1).Uint64("total", report.EndBlock-report.StartBlock+1).Msg("Progress")
+			// Track unique addresses
+			for _, tx := range blockInfo.Transactions {
+				if tx.From != "" {
+					uniqueSenders[tx.From] = true
+				}
+				if tx.To != "" {
+					uniqueRecipients[tx.To] = true
+				}
+			}
+
+			processedBlocks++
+			if processedBlocks%100 == 0 || processedBlocks == totalBlocks {
+				log.Info().Uint64("progress", processedBlocks).Uint64("total", totalBlocks).Msg("Progress")
+			}
+		case err, ok := <-errorChan:
+			if !ok {
+				// Channel closed, no more errors
+				goto done
+			}
+			if err != nil {
+				return err
+			}
 		}
 	}
-
+done:
 	// Calculate summary statistics
 	report.Summary = SummaryStats{
 		TotalBlocks:       blockCount,
@@ -198,7 +257,12 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport)
 }
 
 // fetchBlockInfo retrieves information about a specific block and its transactions
-func fetchBlockInfo(ctx context.Context, ec *ethrpc.Client, blockNum uint64) (*BlockInfo, error) {
+func fetchBlockInfo(ctx context.Context, ec *ethrpc.Client, blockNum uint64, rateLimiter *rate.Limiter) (*BlockInfo, error) {
+	// Wait for rate limiter before making RPC call
+	if err := rateLimiter.Wait(ctx); err != nil {
+		return nil, fmt.Errorf("rate limiter error: %w", err)
+	}
+
 	var result map[string]any
 	err := ec.CallContext(ctx, &result, "eth_getBlockByNumber", fmt.Sprintf("0x%x", blockNum), true)
 	if err != nil {
@@ -228,45 +292,93 @@ func fetchBlockInfo(ctx context.Context, ec *ethrpc.Client, blockNum uint64) (*B
 	if txs, ok := result["transactions"].([]any); ok {
 		blockInfo.TxCount = uint64(len(txs))
 
-		// Fetch transaction receipts to get actual gas used
+		// Prepare channels for parallel receipt fetching
+		type txWithReceipt struct {
+			info TransactionInfo
+			err  error
+		}
+		txChan := make(chan map[string]any, len(txs))
+		receiptChan := make(chan txWithReceipt, len(txs))
+
+		// Fill transaction channel
 		for _, txData := range txs {
-			txMap, ok := txData.(map[string]any)
-			if !ok {
-				continue
+			if txMap, ok := txData.(map[string]any); ok {
+				txChan <- txMap
 			}
+		}
+		close(txChan)
 
-			txHash, _ := txMap["hash"].(string)
-			from, _ := txMap["from"].(string)
-			to, _ := txMap["to"].(string)
-			gasPrice := hexToUint64(txMap["gasPrice"])
-			gasLimit := hexToUint64(txMap["gas"])
+		// Fetch receipts in parallel (limit to 10 concurrent requests)
+		var wg sync.WaitGroup
+		workers := 10
+		if len(txs) < workers {
+			workers = len(txs)
+		}
 
-			// Fetch transaction receipt for gas used
-			var receipt map[string]any
-			err := ec.CallContext(ctx, &receipt, "eth_getTransactionReceipt", txHash)
-			if err != nil || receipt == nil {
-				continue
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for txMap := range txChan {
+					txHash, _ := txMap["hash"].(string)
+					from, _ := txMap["from"].(string)
+					to, _ := txMap["to"].(string)
+					gasPrice := hexToUint64(txMap["gasPrice"])
+					gasLimit := hexToUint64(txMap["gas"])
+
+					// Wait for rate limiter before making RPC call
+					if err := rateLimiter.Wait(ctx); err != nil {
+						receiptChan <- txWithReceipt{err: fmt.Errorf("rate limiter error for tx %s: %w", txHash, err)}
+						continue
+					}
+
+					// Fetch transaction receipt for gas used
+					var receipt map[string]any
+					err := ec.CallContext(ctx, &receipt, "eth_getTransactionReceipt", txHash)
+					if err != nil {
+						receiptChan <- txWithReceipt{err: fmt.Errorf("failed to fetch receipt for tx %s: %w", txHash, err)}
+						continue
+					}
+					if receipt == nil {
+						receiptChan <- txWithReceipt{err: fmt.Errorf("receipt not found for tx %s", txHash)}
+						continue
+					}
+
+					gasUsed := hexToUint64(receipt["gasUsed"])
+					gasUsedPercent := 0.0
+					if blockInfo.GasLimit > 0 {
+						gasUsedPercent = (float64(gasUsed) / float64(blockInfo.GasLimit)) * 100
+					}
+
+					txInfo := TransactionInfo{
+						Hash:           txHash,
+						From:           from,
+						To:             to,
+						BlockNumber:    blockNum,
+						GasUsed:        gasUsed,
+						GasLimit:       gasLimit,
+						GasPrice:       gasPrice,
+						BlockGasLimit:  blockInfo.GasLimit,
+						GasUsedPercent: gasUsedPercent,
+					}
+
+					receiptChan <- txWithReceipt{info: txInfo}
+				}
+			}()
+		}
+
+		// Close receipt channel when all workers are done
+		go func() {
+			wg.Wait()
+			close(receiptChan)
+		}()
+
+		// Collect transaction results
+		for result := range receiptChan {
+			if result.err != nil {
+				return nil, result.err
 			}
-
-			gasUsed := hexToUint64(receipt["gasUsed"])
-			gasUsedPercent := 0.0
-			if blockInfo.GasLimit > 0 {
-				gasUsedPercent = (float64(gasUsed) / float64(blockInfo.GasLimit)) * 100
-			}
-
-			txInfo := TransactionInfo{
-				Hash:           txHash,
-				From:           from,
-				To:             to,
-				BlockNumber:    blockNum,
-				GasUsed:        gasUsed,
-				GasLimit:       gasLimit,
-				GasPrice:       gasPrice,
-				BlockGasLimit:  blockInfo.GasLimit,
-				GasUsedPercent: gasUsedPercent,
-			}
-
-			blockInfo.Transactions = append(blockInfo.Transactions, txInfo)
+			blockInfo.Transactions = append(blockInfo.Transactions, result.info)
 		}
 	}
 
@@ -302,13 +414,9 @@ func calculateTop10Stats(blocks []BlockInfo) Top10Stats {
 		}
 	}
 	// Sort by tx count descending
-	for i := 0; i < len(blocksByTxCount)-1; i++ {
-		for j := i + 1; j < len(blocksByTxCount); j++ {
-			if blocksByTxCount[j].TxCount > blocksByTxCount[i].TxCount {
-				blocksByTxCount[i], blocksByTxCount[j] = blocksByTxCount[j], blocksByTxCount[i]
-			}
-		}
-	}
+	sort.Slice(blocksByTxCount, func(i, j int) bool {
+		return blocksByTxCount[i].TxCount > blocksByTxCount[j].TxCount
+	})
 	if len(blocksByTxCount) > 10 {
 		top10.BlocksByTxCount = blocksByTxCount[:10]
 	} else {
@@ -330,13 +438,9 @@ func calculateTop10Stats(blocks []BlockInfo) Top10Stats {
 		}
 	}
 	// Sort by gas used descending
-	for i := 0; i < len(blocksByGasUsed)-1; i++ {
-		for j := i + 1; j < len(blocksByGasUsed); j++ {
-			if blocksByGasUsed[j].GasUsed > blocksByGasUsed[i].GasUsed {
-				blocksByGasUsed[i], blocksByGasUsed[j] = blocksByGasUsed[j], blocksByGasUsed[i]
-			}
-		}
-	}
+	sort.Slice(blocksByGasUsed, func(i, j int) bool {
+		return blocksByGasUsed[i].GasUsed > blocksByGasUsed[j].GasUsed
+	})
 	if len(blocksByGasUsed) > 10 {
 		top10.BlocksByGasUsed = blocksByGasUsed[:10]
 	} else {
@@ -372,13 +476,9 @@ func calculateTop10Stats(blocks []BlockInfo) Top10Stats {
 
 	// Top 10 transactions by gas used
 	// Sort transactions by gas used descending
-	for i := 0; i < len(allTxsByGasUsed)-1; i++ {
-		for j := i + 1; j < len(allTxsByGasUsed); j++ {
-			if allTxsByGasUsed[j].GasUsed > allTxsByGasUsed[i].GasUsed {
-				allTxsByGasUsed[i], allTxsByGasUsed[j] = allTxsByGasUsed[j], allTxsByGasUsed[i]
-			}
-		}
-	}
+	sort.Slice(allTxsByGasUsed, func(i, j int) bool {
+		return allTxsByGasUsed[i].GasUsed > allTxsByGasUsed[j].GasUsed
+	})
 	if len(allTxsByGasUsed) > 10 {
 		top10.TransactionsByGas = allTxsByGasUsed[:10]
 	} else {
@@ -387,13 +487,9 @@ func calculateTop10Stats(blocks []BlockInfo) Top10Stats {
 
 	// Top 10 transactions by gas limit
 	// Sort transactions by gas limit descending
-	for i := 0; i < len(allTxsByGasLimit)-1; i++ {
-		for j := i + 1; j < len(allTxsByGasLimit); j++ {
-			if allTxsByGasLimit[j].GasLimit > allTxsByGasLimit[i].GasLimit {
-				allTxsByGasLimit[i], allTxsByGasLimit[j] = allTxsByGasLimit[j], allTxsByGasLimit[i]
-			}
-		}
-	}
+	sort.Slice(allTxsByGasLimit, func(i, j int) bool {
+		return allTxsByGasLimit[i].GasLimit > allTxsByGasLimit[j].GasLimit
+	})
 	if len(allTxsByGasLimit) > 10 {
 		top10.TransactionsByGasLimit = allTxsByGasLimit[:10]
 	} else {
@@ -409,13 +505,9 @@ func calculateTop10Stats(blocks []BlockInfo) Top10Stats {
 		})
 	}
 	// Sort by count descending
-	for i := 0; i < len(gasPriceFreqs)-1; i++ {
-		for j := i + 1; j < len(gasPriceFreqs); j++ {
-			if gasPriceFreqs[j].Count > gasPriceFreqs[i].Count {
-				gasPriceFreqs[i], gasPriceFreqs[j] = gasPriceFreqs[j], gasPriceFreqs[i]
-			}
-		}
-	}
+	sort.Slice(gasPriceFreqs, func(i, j int) bool {
+		return gasPriceFreqs[i].Count > gasPriceFreqs[j].Count
+	})
 	if len(gasPriceFreqs) > 10 {
 		top10.MostUsedGasPrices = gasPriceFreqs[:10]
 	} else {
@@ -431,13 +523,9 @@ func calculateTop10Stats(blocks []BlockInfo) Top10Stats {
 		})
 	}
 	// Sort by count descending
-	for i := 0; i < len(gasLimitFreqs)-1; i++ {
-		for j := i + 1; j < len(gasLimitFreqs); j++ {
-			if gasLimitFreqs[j].Count > gasLimitFreqs[i].Count {
-				gasLimitFreqs[i], gasLimitFreqs[j] = gasLimitFreqs[j], gasLimitFreqs[i]
-			}
-		}
-	}
+	sort.Slice(gasLimitFreqs, func(i, j int) bool {
+		return gasLimitFreqs[i].Count > gasLimitFreqs[j].Count
+	})
 	if len(gasLimitFreqs) > 10 {
 		top10.MostUsedGasLimits = gasLimitFreqs[:10]
 	} else {
