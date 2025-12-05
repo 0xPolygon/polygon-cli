@@ -2,6 +2,7 @@ package txgaschart
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -10,9 +11,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xPolygon/polygon-cli/rpctypes"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
+	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/time/rate"
@@ -77,13 +79,13 @@ func buildChart(cmd *cobra.Command) error {
 		Str("target_address", inputArgs.targetAddr).
 		Msg("Chart generation parameters")
 
-	client, err := ethclient.DialContext(ctx, inputArgs.rpcURL)
+	client, err := ethrpc.DialContext(ctx, inputArgs.rpcURL)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
 
-	chainID, err := client.ChainID(ctx)
+	chainID, err := util.GetChainID(ctx, client)
 	if err != nil {
 		return err
 	}
@@ -166,13 +168,13 @@ func logMostUsedGasPrices(bm blocksMetadata) {
 }
 
 // parseFlags parses the command-line flags and returns the corresponding txGasChartConfig.
-func parseFlags(ctx context.Context, client *ethclient.Client) (*txGasChartConfig, error) {
+func parseFlags(ctx context.Context, client *ethrpc.Client) (*txGasChartConfig, error) {
 	config := &txGasChartConfig{}
 
 	config.startBlock = inputArgs.startBlock
 	config.endBlock = inputArgs.endBlock
 
-	h, err := client.HeaderByNumber(ctx, nil)
+	h, err := util.HeaderByBlockNumber(ctx, client, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +219,8 @@ func parseFlags(ctx context.Context, client *ethclient.Client) (*txGasChartConfi
 }
 
 // loadBlocksMetadata loads metadata for blocks in the specified range using the provided Ethereum client and configuration.
-func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *ethclient.Client, chainID *big.Int) blocksMetadata {
+func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *ethrpc.Client, chainID *big.Int) blocksMetadata {
+
 	// prepare worker pool
 	workers := make(chan struct{}, config.concurrency)
 	for i := 0; i < cap(workers); i++ {
@@ -253,20 +256,29 @@ func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *e
 				if config.rateLimiter != nil {
 					_ = config.rateLimiter.Wait(ctx)
 				}
-				blockFromNetwork, err := client.BlockByNumber(ctx, new(big.Int).SetUint64(blockNumber))
+				blocksFromNetwork, err := util.GetBlockRange(ctx, blockNumber, blockNumber, client, false)
 				if err != nil {
 					log.Error().Err(err).Uint64("block_number", blockNumber).Msg("failed to fetch block, retrying...")
 					time.Sleep(time.Second)
 					continue
 				}
 
-				txs := blockFromNetwork.Transactions()
+				blockFromNetwork := blocksFromNetwork[0]
+
+				var rawBlock rpctypes.RawBlockResponse
+				if err := json.Unmarshal(*blockFromNetwork, &rawBlock); err != nil {
+					log.Error().Bytes("block", *blockFromNetwork).Msg("Unable to unmarshal block")
+					continue
+				}
+
+				parsedBlock := rpctypes.NewPolyBlock(&rawBlock)
+				txs := parsedBlock.Transactions()
 
 				b := block{
-					number:   blockFromNetwork.NumberU64(),
-					gasLimit: blockFromNetwork.GasLimit(),
-					gasUsed:  blockFromNetwork.GasUsed(),
-					txs:      make([]transaction, len(blockFromNetwork.Transactions())),
+					number:   parsedBlock.Number().Uint64(),
+					gasLimit: parsedBlock.GasLimit(),
+					gasUsed:  parsedBlock.GasUsed(),
+					txs:      make([]transaction, len(parsedBlock.Transactions())),
 				}
 
 				blockMutex.Lock()
@@ -277,11 +289,15 @@ func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *e
 				totalGasPrice := uint64(0)
 				totalGasLimit := uint64(0)
 				for txi, tx := range txs {
-					signer := types.LatestSignerForChainID(chainID)
-					from, _ := types.Sender(signer, tx)
+					from, err := util.GetSenderFromTx(ctx, tx)
+					if err != nil {
+						log.Error().Err(err).Uint64("block", b.number).Stringer("txHash", tx.Hash()).Msg("unable to get sender from tx, skipping tx")
+						continue
+					}
+
 					target := strings.EqualFold(from.String(), config.targetAddr)
 					if !target {
-						target = tx.To() != nil && strings.EqualFold(tx.To().String(), config.targetAddr)
+						target = strings.EqualFold(tx.To().String(), config.targetAddr)
 					}
 					gasPrice := tx.GasPrice().Uint64()
 					gasLimit := tx.Gas()

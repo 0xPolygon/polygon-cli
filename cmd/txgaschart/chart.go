@@ -16,25 +16,27 @@ import (
 )
 
 var (
+	lineThickness = 2
+
 	gasBlockLimitLineColor     = color.NRGBA{130, 38, 89, 220}
 	gasBlockLimitLineColorName = "Purple"
-	gasBlockLimitLineThickness = 5
+	gasBlockLimitLineThickness = lineThickness
 
 	gasTxsLimitLineColor     = color.NRGBA{255, 0, 189, 220}
 	gasTxsLimitLineColorName = "Pink"
-	gasTxsLimitLineThickness = 5
+	gasTxsLimitLineThickness = lineThickness
 
 	gasUsedLineColor     = color.NRGBA{0, 255, 133, 220}
 	gasUsedLineColorName = "Green"
-	gasUsedLineThickness = 5
+	gasUsedLineThickness = lineThickness
 
 	avgGasUsedLineColor     = color.NRGBA{255, 193, 7, 220}
 	avgGasUsedLineColorName = "Orange"
-	avgGasUsedLineThickness = 5
+	avgGasUsedLineThickness = lineThickness
 
 	avgGasPriceAvgLineColor     = color.NRGBA{30, 144, 255, 220}
 	avgGasPriceAvgLineColorName = "Blue"
-	avgGasPriceAvgLineThickness = 5
+	avgGasPriceAvgLineThickness = lineThickness
 
 	txDotsColor = color.NRGBA{0, 0, 0, 25}
 	txDotsSize1 = 3
@@ -75,6 +77,15 @@ func plotChart(metadata txGasChartMetadata) error {
 
 	p.X.Min = float64(metadata.startBlock)
 	p.X.Max = float64(metadata.endBlock) + (float64(metadata.endBlock-metadata.startBlock) * 0.02)
+
+	// Protect min and max for logarithmic scale
+	if metadata.blocksMetadata.minTxGasPrice == 0 {
+		metadata.blocksMetadata.minTxGasPrice = 1
+	}
+	if metadata.blocksMetadata.maxTxGasPrice == 0 {
+		metadata.blocksMetadata.maxTxGasPrice = 1
+	}
+
 	p.Y.Min = float64(metadata.blocksMetadata.minTxGasPrice)
 	p.Y.Max = float64(metadata.blocksMetadata.maxTxGasPrice) * 1.02
 
@@ -84,7 +95,12 @@ func plotChart(metadata txGasChartMetadata) error {
 // createHeader sets the title and header information for the plot.
 func createHeader(p *plot.Plot, metadata txGasChartMetadata) {
 	p.Title.TextStyle.Font.Size = vg.Points(14)
-	title := fmt.Sprintf("ChainID: %d | Block range %d - %d\n", metadata.chainID, metadata.startBlock, metadata.endBlock)
+	scale := "logarithmic"
+	if !strings.EqualFold(metadata.scale, "log") {
+		scale = "linear"
+	}
+
+	title := fmt.Sprintf("ChainID: %d | Block range %d - %d\n | Scale: %s", metadata.chainID, metadata.startBlock, metadata.endBlock, scale)
 	title += fmt.Sprintf("Blocks: %d | Txs: %d | Target Txs: %d", metadata.endBlock-metadata.startBlock, metadata.blocksMetadata.txCount, metadata.blocksMetadata.targetTxCount)
 	if len(metadata.targetAddr) > 0 {
 		title += fmt.Sprintf(" | Target Addr: %s\n", metadata.targetAddr)
@@ -103,29 +119,68 @@ func createHeader(p *plot.Plot, metadata txGasChartMetadata) {
 func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
 	p.X.Label.Text = "Block Number"
 
-	if strings.EqualFold(metadata.scale, "log") {
-		p.Y.Scale = plot.LogScale{}
-		p.Y.Label.Text = "Gas Price (wei, log)"
-	} else {
-		p.Y.Scale = plot.LinearScale{}
-		p.Y.Label.Text = "Gas Price (wei, linear)"
-	}
-
-	p.Y.Tick.Marker = plot.TickerFunc(func(min, max float64) []plot.Tick {
-		ticks := plot.LogTicks{}.Ticks(min, max)
+	// Custom ticker for X axis (block numbers must be integers)
+	p.X.Tick.Marker = plot.TickerFunc(func(min, max float64) []plot.Tick {
+		ticks := plot.DefaultTicks{}.Ticks(min, max)
 		for i := range ticks {
 			if ticks[i].Label == "" {
 				continue
 			}
-			v := ticks[i].Value // this is the real value (e.g., 10000), not an exponent
-			if v >= 1 {
-				ticks[i].Label = humanize.Comma(int64(math.Round(v)))
-			} else {
-				ticks[i].Label = fmt.Sprintf("%g", v) // 0.1, 0.01, etc.
-			}
+			// Format as integer without decimal places
+			ticks[i].Label = humanize.Comma(int64(math.Round(ticks[i].Value)))
 		}
 		return ticks
 	})
+
+	if strings.EqualFold(metadata.scale, "log") {
+		p.Y.Scale = plot.LogScale{}
+		p.Y.Label.Text = "Gas Price (wei, log)"
+
+		// Custom ticker for logarithmic scale
+		p.Y.Tick.Marker = plot.TickerFunc(func(min, max float64) []plot.Tick {
+			// Protect against values <= 0
+			if min <= 0 {
+				min = 1
+			}
+			if max <= 0 {
+				max = 1
+			}
+
+			ticks := plot.LogTicks{}.Ticks(min, max)
+			for i := range ticks {
+				if ticks[i].Label == "" {
+					continue
+				}
+				v := ticks[i].Value // this is the real value (e.g., 10000), not an exponent
+				if v >= 1 {
+					ticks[i].Label = humanize.Comma(int64(math.Round(v)))
+				} else {
+					ticks[i].Label = fmt.Sprintf("%g", v) // 0.1, 0.01, etc.
+				}
+			}
+			return ticks
+		})
+	} else {
+		p.Y.Scale = plot.LinearScale{}
+		p.Y.Label.Text = "Gas Price (wei, linear)"
+
+		// Custom ticker for linear scale
+		p.Y.Tick.Marker = plot.TickerFunc(func(min, max float64) []plot.Tick {
+			ticks := plot.DefaultTicks{}.Ticks(min, max)
+			for i := range ticks {
+				if ticks[i].Label == "" {
+					continue
+				}
+				v := ticks[i].Value
+				if v >= 1 {
+					ticks[i].Label = humanize.Comma(int64(math.Round(v)))
+				} else {
+					ticks[i].Label = fmt.Sprintf("%g", v) // 0.1, 0.01, etc.
+				}
+			}
+			return ticks
+		})
+	}
 
 	txGroups := make(map[uint64]plotter.XYs)
 	txGroups[0] = make(plotter.XYs, 0) // target txs
@@ -138,23 +193,27 @@ func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
 
 	for _, b := range metadata.blocksMetadata.blocks {
 		for _, t := range b.txs {
-			if t.gasPrice <= 0 {
-				t.gasPrice = 1
+			// Ensure gasPrice is >= 1 for logarithmic scale
+			gasPrice := t.gasPrice
+			if gasPrice <= 0 {
+				gasPrice = 1
 			}
+
+			// Use the local gasPrice variable (protected) in all appends
 			if t.target {
-				txGroups[0] = append(txGroups[0], plotter.XY{X: float64(b.number), Y: float64(t.gasPrice)})
+				txGroups[0] = append(txGroups[0], plotter.XY{X: float64(b.number), Y: float64(gasPrice)})
 			} else if t.gasLimit <= 1000000 {
-				txGroups[1] = append(txGroups[1], plotter.XY{X: float64(b.number), Y: float64(t.gasPrice)})
+				txGroups[1] = append(txGroups[1], plotter.XY{X: float64(b.number), Y: float64(gasPrice)})
 			} else if t.gasLimit <= 2000000 {
-				txGroups[2] = append(txGroups[2], plotter.XY{X: float64(b.number), Y: float64(t.gasPrice)})
+				txGroups[2] = append(txGroups[2], plotter.XY{X: float64(b.number), Y: float64(gasPrice)})
 			} else if t.gasLimit <= 3000000 {
-				txGroups[3] = append(txGroups[3], plotter.XY{X: float64(b.number), Y: float64(t.gasPrice)})
+				txGroups[3] = append(txGroups[3], plotter.XY{X: float64(b.number), Y: float64(gasPrice)})
 			} else if t.gasLimit <= 4000000 {
-				txGroups[4] = append(txGroups[4], plotter.XY{X: float64(b.number), Y: float64(t.gasPrice)})
+				txGroups[4] = append(txGroups[4], plotter.XY{X: float64(b.number), Y: float64(gasPrice)})
 			} else if t.gasLimit <= 5000000 {
-				txGroups[5] = append(txGroups[5], plotter.XY{X: float64(b.number), Y: float64(t.gasPrice)})
+				txGroups[5] = append(txGroups[5], plotter.XY{X: float64(b.number), Y: float64(gasPrice)})
 			} else {
-				txGroups[6] = append(txGroups[6], plotter.XY{X: float64(b.number), Y: float64(t.gasPrice)})
+				txGroups[6] = append(txGroups[6], plotter.XY{X: float64(b.number), Y: float64(gasPrice)})
 			}
 		}
 	}
@@ -216,7 +275,12 @@ func createLines(p *plot.Plot, metadata txGasChartMetadata) {
 	for i, b := range metadata.blocksMetadata.blocks {
 		blocks = append(blocks, b.number)
 
-		perBlockAvgGasPrice[b.number] = float64(b.avgGasPrice)
+		// Protect avgGasPrice for logarithmic scale
+		avgGasPrice := float64(b.avgGasPrice)
+		if avgGasPrice <= 0 {
+			avgGasPrice = 1
+		}
+		perBlockAvgGasPrice[b.number] = avgGasPrice
 
 		pointsBlockGasLimit[i].X = float64(b.number)
 		pointsBlockGasLimit[i].Y = scaleGasToGasPrice(b.gasLimit, metadata)
