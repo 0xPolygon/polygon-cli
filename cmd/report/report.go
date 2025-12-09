@@ -102,8 +102,8 @@ func init() {
 	f.StringVar(&inputReport.RpcUrl, "rpc-url", "http://localhost:8545", "RPC endpoint URL")
 	f.Uint64Var(&inputReport.StartBlock, "start-block", 0, "starting block number for analysis")
 	f.Uint64Var(&inputReport.EndBlock, "end-block", 0, "ending block number for analysis")
-	f.StringVarP(&inputReport.OutputFile, "output", "o", "", "output file path (default: stdout for JSON, report.html for HTML)")
-	f.StringVarP(&inputReport.Format, "format", "f", "json", "output format [json, html]")
+	f.StringVarP(&inputReport.OutputFile, "output", "o", "", "output file path (default: stdout for JSON, report.html for HTML, report.pdf for PDF)")
+	f.StringVarP(&inputReport.Format, "format", "f", "json", "output format [json, html, pdf]")
 	f.IntVar(&inputReport.Concurrency, "concurrency", 10, "number of concurrent RPC requests")
 	f.Float64Var(&inputReport.RateLimit, "rate-limit", 4, "requests per second limit")
 }
@@ -120,13 +120,18 @@ func checkFlags() error {
 	}
 
 	// Validate format
-	if inputReport.Format != "json" && inputReport.Format != "html" {
-		return fmt.Errorf("format must be either 'json' or 'html'")
+	if inputReport.Format != "json" && inputReport.Format != "html" && inputReport.Format != "pdf" {
+		return fmt.Errorf("format must be either 'json', 'html', or 'pdf'")
 	}
 
 	// Set default output file for HTML if not specified
 	if inputReport.Format == "html" && inputReport.OutputFile == "" {
 		inputReport.OutputFile = "report.html"
+	}
+
+	// Set default output file for PDF if not specified
+	if inputReport.Format == "pdf" && inputReport.OutputFile == "" {
+		inputReport.OutputFile = "report.pdf"
 	}
 
 	return nil
@@ -506,6 +511,8 @@ func outputReport(report *BlockReport, format, outputFile string) error {
 		return outputJSON(report, outputFile)
 	case "html":
 		return outputHTML(report, outputFile)
+	case "pdf":
+		return outputPDF(report, outputFile)
 	default:
 		return fmt.Errorf("unsupported format: %s", format)
 	}

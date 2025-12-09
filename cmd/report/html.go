@@ -78,8 +78,9 @@ func generateTxCountChart(report *BlockReport) string {
 
 	var sb strings.Builder
 	sb.WriteString(`
-        <h2>Transaction Count by Block</h2>
-        <div class="chart-container">`)
+        <div class="section">
+            <h2>Transaction Count by Block</h2>
+            <div class="chart-container">`)
 
 	// Find max tx count for scaling
 	maxTx := uint64(1)
@@ -153,6 +154,9 @@ func generateTxCountChart(report *BlockReport) string {
 		padding-35, height-padding+5,
 		padding-35, padding+5, maxTx))
 
+	sb.WriteString(`
+        </div>`)
+
 	return sb.String()
 }
 
@@ -164,8 +168,9 @@ func generateGasUsageChart(report *BlockReport) string {
 
 	var sb strings.Builder
 	sb.WriteString(`
-        <h2>Gas Usage by Block</h2>
-        <div class="chart-container">`)
+        <div class="section">
+            <h2>Gas Usage by Block</h2>
+            <div class="chart-container">`)
 
 	// Find max gas for scaling
 	maxGas := uint64(1)
@@ -238,6 +243,9 @@ func generateGasUsageChart(report *BlockReport) string {
 		width-padding, height-padding+15, report.Blocks[len(report.Blocks)-1].Number,
 		padding-35, height-padding+5,
 		padding-35, padding+5, formatNumber(maxGas)))
+
+	sb.WriteString(`
+        </div>`)
 
 	return sb.String()
 }
@@ -400,13 +408,16 @@ func formatNumberWithUnits(n uint64) string {
 func generateTop10Sections(report *BlockReport) string {
 	var sb strings.Builder
 
-	sb.WriteString(`<h2>Top 10 Analysis</h2>`)
+	sb.WriteString(`
+        <div class="section">
+            <h2>Top 10 Analysis</h2>`)
 
 	// Top 10 blocks by transaction count
 	if len(report.Top10.BlocksByTxCount) > 0 {
 		sb.WriteString(`
-        <h3>Top 10 Blocks by Transaction Count</h3>
-        <table>
+        <div class="subsection">
+            <h3>Top 10 Blocks by Transaction Count</h3>
+            <table>
             <thead>
                 <tr>
                     <th>Rank</th>
@@ -427,14 +438,16 @@ func generateTop10Sections(report *BlockReport) string {
 
 		sb.WriteString(`
             </tbody>
-        </table>`)
+        </table>
+        </div>`)
 	}
 
 	// Top 10 blocks by gas used
 	if len(report.Top10.BlocksByGasUsed) > 0 {
 		sb.WriteString(`
-        <h3>Top 10 Blocks by Gas Used</h3>
-        <table>
+        <div class="subsection">
+            <h3>Top 10 Blocks by Gas Used</h3>
+            <table>
             <thead>
                 <tr>
                     <th>Rank</th>
@@ -459,14 +472,16 @@ func generateTop10Sections(report *BlockReport) string {
 
 		sb.WriteString(`
             </tbody>
-        </table>`)
+        </table>
+        </div>`)
 	}
 
 	// Top 10 transactions by gas used
 	if len(report.Top10.TransactionsByGas) > 0 {
 		sb.WriteString(`
-        <h3>Top 10 Transactions by Gas Used</h3>
-        <table>
+        <div class="subsection">
+            <h3>Top 10 Transactions by Gas Used</h3>
+            <table>
             <thead>
                 <tr>
                     <th>Rank</th>
@@ -491,14 +506,16 @@ func generateTop10Sections(report *BlockReport) string {
 
 		sb.WriteString(`
             </tbody>
-        </table>`)
+        </table>
+        </div>`)
 	}
 
 	// Top 10 transactions by gas limit
 	if len(report.Top10.TransactionsByGasLimit) > 0 {
 		sb.WriteString(`
-        <h3>Top 10 Transactions by Gas Limit</h3>
-        <table>
+        <div class="subsection">
+            <h3>Top 10 Transactions by Gas Limit</h3>
+            <table>
             <thead>
                 <tr>
                     <th>Rank</th>
@@ -523,14 +540,16 @@ func generateTop10Sections(report *BlockReport) string {
 
 		sb.WriteString(`
             </tbody>
-        </table>`)
+        </table>
+        </div>`)
 	}
 
 	// Top 10 most used gas prices
 	if len(report.Top10.MostUsedGasPrices) > 0 {
 		sb.WriteString(`
-        <h3>Top 10 Most Used Gas Prices</h3>
-        <table>
+        <div class="subsection">
+            <h3>Top 10 Most Used Gas Prices</h3>
+            <table>
             <thead>
                 <tr>
                     <th>Rank</th>
@@ -551,14 +570,16 @@ func generateTop10Sections(report *BlockReport) string {
 
 		sb.WriteString(`
             </tbody>
-        </table>`)
+        </table>
+        </div>`)
 	}
 
 	// Top 10 most used gas limits
 	if len(report.Top10.MostUsedGasLimits) > 0 {
 		sb.WriteString(`
-        <h3>Top 10 Most Used Gas Limits</h3>
-        <table>
+        <div class="subsection">
+            <h3>Top 10 Most Used Gas Limits</h3>
+            <table>
             <thead>
                 <tr>
                     <th>Rank</th>
@@ -579,8 +600,12 @@ func generateTop10Sections(report *BlockReport) string {
 
 		sb.WriteString(`
             </tbody>
-        </table>`)
+        </table>
+        </div>`)
 	}
+
+	sb.WriteString(`
+        </div>`)
 
 	return sb.String()
 }

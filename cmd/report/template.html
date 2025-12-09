@@ -175,6 +175,79 @@
         .chart-tooltip.visible {
             opacity: 1;
         }
+
+        /* PDF/Print-specific styles for page break control */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+                padding: 0;
+            }
+
+            /* Keep sections together and start them on new pages */
+            .section {
+                break-before: page;
+                page-break-before: always;
+            }
+
+            /* Don't break the first section (Transaction Count chart) */
+            .section:first-of-type {
+                break-before: auto;
+                page-break-before: auto;
+            }
+
+            /* Keep subsections together (h3 + table) */
+            .subsection {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+
+            /* Prevent page breaks inside these elements */
+            .metadata,
+            .stat-card,
+            .chart-container,
+            table,
+            h3 {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+
+            /* Keep summary statistics section on first page */
+            h2:first-of-type {
+                break-before: auto;
+                page-break-before: auto;
+            }
+
+            /* Keep h3 with the content that follows */
+            h3 {
+                break-after: avoid;
+                page-break-after: avoid;
+            }
+
+            /* Prevent orphaned table headers */
+            thead {
+                display: table-header-group;
+            }
+
+            tbody tr {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+
+            /* Don't break between h2 and stats-grid */
+            .stats-grid {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+
+            .footer {
+                margin-top: 20px;
+            }
+        }
     </style>
 </head>
 <body>
