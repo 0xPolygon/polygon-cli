@@ -100,10 +100,10 @@ func createHeader(p *plot.Plot, metadata txGasChartMetadata) {
 		scale = "linear"
 	}
 
-	title := fmt.Sprintf("ChainID: %d | Block range %d - %d\n | Scale: %s", metadata.chainID, metadata.startBlock, metadata.endBlock, scale)
-	title += fmt.Sprintf("Blocks: %d | Txs: %d | Target Txs: %d", metadata.endBlock-metadata.startBlock, metadata.blocksMetadata.txCount, metadata.blocksMetadata.targetTxCount)
+	title := fmt.Sprintf("ChainID: %d | Block range %d - %d | Scale: %s\n", metadata.chainID, metadata.startBlock, metadata.endBlock, scale)
+	title += fmt.Sprintf("Blocks: %d | Txs: %d", metadata.endBlock-metadata.startBlock, metadata.blocksMetadata.txCount)
 	if len(metadata.targetAddr) > 0 {
-		title += fmt.Sprintf(" | Target Addr: %s\n", metadata.targetAddr)
+		title += fmt.Sprintf(" | Target Txs: %d | Target Addr: %s\n", metadata.blocksMetadata.targetTxCount, metadata.targetAddr)
 	} else {
 		title += "\n"
 	}
