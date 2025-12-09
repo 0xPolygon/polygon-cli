@@ -152,7 +152,7 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 
 	// Start worker goroutines
 	var wg sync.WaitGroup
-	for i := 0; i < concurrency; i++ {
+	for range concurrency {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -274,10 +274,10 @@ func fetchBlockInfo(ctx context.Context, ec *ethrpc.Client, blockNum uint64, rat
 	}
 
 	blockInfo := &BlockInfo{
-		Number:    blockNum,
-		Timestamp: hexToUint64(result["timestamp"]),
-		GasUsed:   hexToUint64(result["gasUsed"]),
-		GasLimit:  hexToUint64(result["gasLimit"]),
+		Number:       blockNum,
+		Timestamp:    hexToUint64(result["timestamp"]),
+		GasUsed:      hexToUint64(result["gasUsed"]),
+		GasLimit:     hexToUint64(result["gasLimit"]),
 		Transactions: []TransactionInfo{},
 	}
 
@@ -292,93 +292,57 @@ func fetchBlockInfo(ctx context.Context, ec *ethrpc.Client, blockNum uint64, rat
 	if txs, ok := result["transactions"].([]any); ok {
 		blockInfo.TxCount = uint64(len(txs))
 
-		// Prepare channels for parallel receipt fetching
-		type txWithReceipt struct {
-			info TransactionInfo
-			err  error
-		}
-		txChan := make(chan map[string]any, len(txs))
-		receiptChan := make(chan txWithReceipt, len(txs))
-
-		// Fill transaction channel
-		for _, txData := range txs {
-			if txMap, ok := txData.(map[string]any); ok {
-				txChan <- txMap
+		// Fetch all receipts for this block in a single call
+		if len(txs) > 0 {
+			// Wait for rate limiter before making RPC call
+			if err := rateLimiter.Wait(ctx); err != nil {
+				return nil, fmt.Errorf("rate limiter error: %w", err)
 			}
-		}
-		close(txChan)
 
-		// Fetch receipts in parallel (limit to 10 concurrent requests)
-		var wg sync.WaitGroup
-		workers := 10
-		if len(txs) < workers {
-			workers = len(txs)
-		}
+			var receipts []map[string]any
+			err := ec.CallContext(ctx, &receipts, "eth_getBlockReceipts", fmt.Sprintf("0x%x", blockNum))
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch block receipts: %w", err)
+			}
 
-		for i := 0; i < workers; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for txMap := range txChan {
-					txHash, _ := txMap["hash"].(string)
-					from, _ := txMap["from"].(string)
-					to, _ := txMap["to"].(string)
-					gasPrice := hexToUint64(txMap["gasPrice"])
-					gasLimit := hexToUint64(txMap["gas"])
+			if len(receipts) != len(txs) {
+				return nil, fmt.Errorf("mismatch between transactions (%d) and receipts (%d)", len(txs), len(receipts))
+			}
 
-					// Wait for rate limiter before making RPC call
-					if err := rateLimiter.Wait(ctx); err != nil {
-						receiptChan <- txWithReceipt{err: fmt.Errorf("rate limiter error for tx %s: %w", txHash, err)}
-						continue
-					}
-
-					// Fetch transaction receipt for gas used
-					var receipt map[string]any
-					err := ec.CallContext(ctx, &receipt, "eth_getTransactionReceipt", txHash)
-					if err != nil {
-						receiptChan <- txWithReceipt{err: fmt.Errorf("failed to fetch receipt for tx %s: %w", txHash, err)}
-						continue
-					}
-					if receipt == nil {
-						receiptChan <- txWithReceipt{err: fmt.Errorf("receipt not found for tx %s", txHash)}
-						continue
-					}
-
-					gasUsed := hexToUint64(receipt["gasUsed"])
-					gasUsedPercent := 0.0
-					if blockInfo.GasLimit > 0 {
-						gasUsedPercent = (float64(gasUsed) / float64(blockInfo.GasLimit)) * 100
-					}
-
-					txInfo := TransactionInfo{
-						Hash:           txHash,
-						From:           from,
-						To:             to,
-						BlockNumber:    blockNum,
-						GasUsed:        gasUsed,
-						GasLimit:       gasLimit,
-						GasPrice:       gasPrice,
-						BlockGasLimit:  blockInfo.GasLimit,
-						GasUsedPercent: gasUsedPercent,
-					}
-
-					receiptChan <- txWithReceipt{info: txInfo}
+			// Process each transaction with its corresponding receipt
+			for i, txData := range txs {
+				txMap, ok := txData.(map[string]any)
+				if !ok {
+					continue
 				}
-			}()
-		}
 
-		// Close receipt channel when all workers are done
-		go func() {
-			wg.Wait()
-			close(receiptChan)
-		}()
+				txHash, _ := txMap["hash"].(string)
+				from, _ := txMap["from"].(string)
+				to, _ := txMap["to"].(string)
+				gasPrice := hexToUint64(txMap["gasPrice"])
+				gasLimit := hexToUint64(txMap["gas"])
 
-		// Collect transaction results
-		for result := range receiptChan {
-			if result.err != nil {
-				return nil, result.err
+				receipt := receipts[i]
+				gasUsed := hexToUint64(receipt["gasUsed"])
+				gasUsedPercent := 0.0
+				if blockInfo.GasLimit > 0 {
+					gasUsedPercent = (float64(gasUsed) / float64(blockInfo.GasLimit)) * 100
+				}
+
+				txInfo := TransactionInfo{
+					Hash:           txHash,
+					From:           from,
+					To:             to,
+					BlockNumber:    blockNum,
+					GasUsed:        gasUsed,
+					GasLimit:       gasLimit,
+					GasPrice:       gasPrice,
+					BlockGasLimit:  blockInfo.GasLimit,
+					GasUsedPercent: gasUsedPercent,
+				}
+
+				blockInfo.Transactions = append(blockInfo.Transactions, txInfo)
 			}
-			blockInfo.Transactions = append(blockInfo.Transactions, result.info)
 		}
 	}
 
