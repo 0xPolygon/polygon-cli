@@ -384,7 +384,6 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	txs := decodeTxs(rawTxs)
-
 	tfs := time.Now()
 
 	c.countMsgReceived((&eth.TransactionsPacket{}).Name(), float64(len(txs)))
@@ -585,7 +584,7 @@ func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) er
 	var name string
 
 	switch version {
-	case 67, 68:
+	case 67, 68, 69:
 		var txs eth.NewPooledTransactionHashesPacket
 		if err := msg.Decode(&txs); err != nil {
 			return err
