@@ -446,6 +446,14 @@ func decodeTx(raw []byte) *types.Transaction {
 		if tx.UnmarshalBinary(bytes) == nil {
 			return tx
 		}
+
+		log.Warn().
+			Uint8("type", bytes[0]).
+			Int("size", len(bytes)).
+			Str("hash", crypto.Keccak256Hash(bytes).Hex()).
+			Msg("Failed to decode transaction")
+
+		return nil
 	}
 
 	tx := new(types.Transaction)
