@@ -97,7 +97,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 			}
 
 			head := c.conns.HeadBlock()
-			status := eth.StatusPacket{
+			status := eth.StatusPacket68{
 				ProtocolVersion: uint32(version),
 				NetworkID:       opts.NetworkID,
 				Genesis:         opts.GenesisHash,
@@ -168,11 +168,11 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 
 // statusExchange will exchange status message between the nodes. It will return
 // an error if the nodes are incompatible.
-func (c *conn) statusExchange(packet *eth.StatusPacket) error {
+func (c *conn) statusExchange(packet *eth.StatusPacket68) error {
 	errc := make(chan error, 2)
 
 	go func() {
-		c.countMsgSent((&eth.StatusPacket{}).Name(), 1)
+		c.countMsgSent((&eth.StatusPacket68{}).Name(), 1)
 		errc <- ethp2p.Send(c.rw, eth.StatusMsg, &packet)
 	}()
 
@@ -214,7 +214,7 @@ func (c *conn) countMsgSent(messageName string, count float64) {
 	c.countMsg(MsgSent, messageName+PacketSuffix, 1)
 }
 
-func (c *conn) readStatus(packet *eth.StatusPacket) error {
+func (c *conn) readStatus(packet *eth.StatusPacket68) error {
 	msg, err := c.rw.ReadMsg()
 	if err != nil {
 		return err
@@ -224,7 +224,7 @@ func (c *conn) readStatus(packet *eth.StatusPacket) error {
 		return errors.New("expected status message code")
 	}
 
-	var status eth.StatusPacket
+	var status eth.StatusPacket68
 	err = msg.Decode(&status)
 	if err != nil {
 		return err
@@ -594,7 +594,7 @@ func (c *conn) handleGetReceipts(msg ethp2p.Msg) error {
 
 	c.countMsgReceived(request.Name(), float64(len(request.GetReceiptsRequest)))
 
-	response := &eth.ReceiptsPacket{RequestId: request.RequestId}
-	c.countMsgSent(response.Name(), 0)
+	response := &eth.ReceiptsRLPPacket{RequestId: request.RequestId}
+	c.countMsgSent((&eth.ReceiptsRLPResponse{}).Name(), 0)
 	return ethp2p.Send(c.rw, eth.ReceiptsMsg, response)
 }
