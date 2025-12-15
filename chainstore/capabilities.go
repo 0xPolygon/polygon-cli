@@ -147,7 +147,7 @@ func (cm *CapabilityManager) testMethodCapability(ctx context.Context, method st
 		return err == nil
 
 	case "eth_feeHistory":
-		var result interface{}
+		var result any
 		// Test with minimal parameters: 1 block, latest block, no percentiles
 		err := cm.client.CallContext(testCtx, &result, method, "0x1", "latest", nil)
 		return err == nil
@@ -158,47 +158,47 @@ func (cm *CapabilityManager) testMethodCapability(ctx context.Context, method st
 		return err == nil
 
 	case "eth_getBlockByNumber":
-		var result interface{}
+		var result any
 		err := cm.client.CallContext(testCtx, &result, method, "latest", false)
 		return err == nil
 
 	case "txpool_status":
-		var result interface{}
+		var result any
 		err := cm.client.CallContext(testCtx, &result, method)
 		return err == nil
 
 	case "txpool_inspect":
-		var result interface{}
+		var result any
 		err := cm.client.CallContext(testCtx, &result, method)
 		return err == nil
 
 	case "txpool_content":
-		var result interface{}
+		var result any
 		err := cm.client.CallContext(testCtx, &result, method)
 		return err == nil
 
 	case "engine_forkchoiceUpdatedV1", "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3":
 		// These are consensus layer methods, likely not supported by most nodes
 		// Test with empty/invalid parameters to see if method exists
-		var result interface{}
+		var result any
 		err := cm.client.CallContext(testCtx, &result, method, nil, nil)
 		// Even if it fails due to invalid params, if the method exists we'll get a different error
 		// than "method not found"
 		return err != nil && !isMethodNotFoundError(err)
 
 	case "debug_getRawBlock":
-		var result interface{}
+		var result any
 		err := cm.client.CallContext(testCtx, &result, method, "latest")
 		return err == nil
 
 	case "debug_getRawHeader":
-		var result interface{}
+		var result any
 		err := cm.client.CallContext(testCtx, &result, method, "latest")
 		return err == nil
 
 	default:
 		// For unknown methods, try a generic call
-		var result interface{}
+		var result any
 		err := cm.client.CallContext(testCtx, &result, method)
 		return err == nil
 	}

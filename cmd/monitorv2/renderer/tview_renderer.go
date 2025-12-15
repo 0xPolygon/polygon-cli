@@ -1,7 +1,9 @@
 package renderer
 
 import (
+	"container/list"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/chainstore"
 	"github.com/0xPolygon/polygon-cli/indexer"
+	polymetrics "github.com/0xPolygon/polygon-cli/metrics"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gdamore/tcell/v2"
@@ -27,14 +30,91 @@ var zeroAddress = common.Address{}
 // Maximum number of blocks to store and display
 const maxBlocks = 1000
 
+// Maximum number of signer cache entries (LRU eviction when exceeded)
+const maxSignerCacheSize = 1000
+
+// signerCacheEntry represents an entry in the LRU cache
+type signerCacheEntry struct {
+	key   string
+	value string
+}
+
+// signerLRUCache implements a simple LRU cache for signer addresses
+type signerLRUCache struct {
+	capacity int
+	cache    map[string]*list.Element
+	lruList  *list.List
+	mu       sync.RWMutex
+}
+
+// newSignerLRUCache creates a new LRU cache with the given capacity
+func newSignerLRUCache(capacity int) *signerLRUCache {
+	return &signerLRUCache{
+		capacity: capacity,
+		cache:    make(map[string]*list.Element),
+		lruList:  list.New(),
+	}
+}
+
+// get retrieves a value from the cache and marks it as recently used
+func (c *signerLRUCache) get(key string) (string, bool) {
+	c.mu.RLock()
+	elem, exists := c.cache[key]
+	c.mu.RUnlock()
+
+	if !exists {
+		return "", false
+	}
+
+	c.mu.Lock()
+	c.lruList.MoveToFront(elem)
+	c.mu.Unlock()
+
+	return elem.Value.(*signerCacheEntry).value, true
+}
+
+// put adds or updates a value in the cache
+func (c *signerLRUCache) put(key, value string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Check if key already exists
+	if elem, exists := c.cache[key]; exists {
+		// Update existing entry and move to front
+		c.lruList.MoveToFront(elem)
+		elem.Value.(*signerCacheEntry).value = value
+		return
+	}
+
+	// Add new entry
+	entry := &signerCacheEntry{key: key, value: value}
+	elem := c.lruList.PushFront(entry)
+	c.cache[key] = elem
+
+	// Evict least recently used if over capacity
+	if c.lruList.Len() > c.capacity {
+		c.evictOldest()
+	}
+}
+
+// evictOldest removes the least recently used entry (must be called with lock held)
+func (c *signerLRUCache) evictOldest() {
+	elem := c.lruList.Back()
+	if elem != nil {
+		c.lruList.Remove(elem)
+		entry := elem.Value.(*signerCacheEntry)
+		delete(c.cache, entry.key)
+	}
+}
+
 // Comparison functions for different data types
-func compareNumbers(a, b interface{}) int {
+func compareNumbers(a, b any) int {
 	aNum := a.(*big.Int)
 	bNum := b.(*big.Int)
 	return aNum.Cmp(bNum)
 }
 
-func compareUint64(a, b interface{}) int {
+func compareUint64(a, b any) int {
 	aNum := a.(uint64)
 	bNum := b.(uint64)
 	if aNum < bNum {
@@ -45,7 +125,7 @@ func compareUint64(a, b interface{}) int {
 	return 0
 }
 
-func compareStrings(a, b interface{}) int {
+func compareStrings(a, b any) int {
 	aStr := a.(string)
 	bStr := b.(string)
 	if aStr < bStr {
@@ -58,12 +138,12 @@ func compareStrings(a, b interface{}) int {
 
 // ColumnDef defines a sortable column with its properties
 type ColumnDef struct {
-	Name        string                               // Display name
-	Key         string                               // Internal identifier
-	Align       int                                  // Text alignment
-	Expansion   int                                  // Column width allocation
-	SortFunc    func(rpctypes.PolyBlock) interface{} // Custom sort extraction
-	CompareFunc func(interface{}, interface{}) int   // Custom comparison
+	Name        string                       // Display name
+	Key         string                       // Internal identifier
+	Align       int                          // Text alignment
+	Expansion   int                          // Column width allocation
+	SortFunc    func(rpctypes.PolyBlock) any // Custom sort extraction
+	CompareFunc func(any, any) int           // Custom comparison
 }
 
 // ViewState tracks the current view preferences and selection state
@@ -86,6 +166,8 @@ type TviewRenderer struct {
 	blocksByHash map[string]rpctypes.PolyBlock
 	// Column definitions for sorting
 	columns []ColumnDef
+	// Signer LRU cache to avoid expensive Ecrecover operations
+	signerCache *signerLRUCache
 	// View state management
 	viewState ViewState
 	// Mutex for thread-safe access to blocks and viewState
@@ -157,6 +239,7 @@ func NewTviewRenderer(indexer *indexer.Indexer) *TviewRenderer {
 		blocks:       make([]rpctypes.PolyBlock, 0),
 		blocksByHash: make(map[string]rpctypes.PolyBlock),
 		columns:      columns,
+		signerCache:  newSignerLRUCache(maxSignerCacheSize),
 		viewState: ViewState{
 			followMode:      true,     // Start in follow mode
 			sortColumn:      "number", // Default sort by block number
@@ -562,6 +645,37 @@ func (t *TviewRenderer) throttledDraw() {
 			})
 		}()
 	}
+}
+
+// getCachedSigner gets the signer for a block, using LRU cache to avoid expensive Ecrecover calls
+func (t *TviewRenderer) getCachedSigner(block rpctypes.PolyBlock) string {
+	blockHash := block.Hash().Hex()
+
+	// Check cache first
+	if cached, exists := t.signerCache.get(blockHash); exists {
+		return cached
+	}
+
+	// If miner is non-zero, use the miner
+	zeroAddr := common.Address{}
+	if block.Miner() != zeroAddr {
+		result := truncateHash(block.Miner().Hex(), 6, 4)
+		t.signerCache.put(blockHash, result)
+		return result
+	}
+
+	// If miner is zero, try to extract signer from extra data (EXPENSIVE - Ecrecover)
+	if signer, err := polymetrics.Ecrecover(&block); err == nil {
+		signerAddr := common.HexToAddress("0x" + hex.EncodeToString(signer))
+		result := truncateHash(signerAddr.Hex(), 6, 4)
+		t.signerCache.put(blockHash, result)
+		return result
+	}
+
+	// If can't extract signer, cache N/A result
+	result := "N/A"
+	t.signerCache.put(blockHash, result)
+	return result
 }
 
 // consumeBlocks consumes blocks from the indexer and updates the table
@@ -1075,7 +1189,7 @@ func (t *TviewRenderer) applyViewState() {
 }
 
 // hexToDecimal converts various hex number formats to big.Int
-func hexToDecimal(value interface{}) (*big.Int, error) {
+func hexToDecimal(value any) (*big.Int, error) {
 	switch v := value.(type) {
 	case string:
 		// Handle hex string format

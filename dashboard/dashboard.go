@@ -36,8 +36,8 @@ type (
 	}
 
 	DataDogFormula struct {
-		Alias              string        `json:"alias,omitempty"`
-		ConditionalFormats []interface{} `json:"conditional_formats,omitempty"`
+		Alias              string `json:"alias,omitempty"`
+		ConditionalFormats []any  `json:"conditional_formats,omitempty"`
 		Limit              struct {
 			Count int    `json:"count,omitempty"`
 			Order string `json:"order,omitempty"`
@@ -98,7 +98,7 @@ type (
 		TemplateVariables []DataDogTemplateVariables `json:"template_variables,omitempty"`
 		LayoutType        string                     `json:"layout_type,omitempty"`
 		IsReadOnly        bool                       `json:"is_read_only,omitempty"`
-		NotifyList        []interface{}              `json:"notify_list,omitempty"`
+		NotifyList        []any                      `json:"notify_list,omitempty"`
 		ReflowType        string                     `json:"reflow_type,omitempty"`
 		ID                string                     `json:"id,omitempty"`
 	}

@@ -21,7 +21,7 @@ func TestDecodeSmcErrorCode(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "0x9aad315a (unknown selector)", reason)
 
-	var emptyInterface interface{}
+	var emptyInterface any
 	_, err = errors.DecodeSmcErrorCode(emptyInterface)
 	require.Error(t, err)
 

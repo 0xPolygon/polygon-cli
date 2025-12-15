@@ -92,7 +92,7 @@ const (
 	SignatureSr25519
 )
 
-func GenPrivKeyFromSecret(seed []byte, c PolySignature) (interface{}, error) {
+func GenPrivKeyFromSecret(seed []byte, c PolySignature) (any, error) {
 	if c == SignatureEd25519 {
 		return ed25519.NewKeyFromSeed(seed[0:32]), nil
 	}

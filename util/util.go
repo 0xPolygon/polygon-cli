@@ -67,7 +67,7 @@ func GetBlockRange(ctx context.Context, from, to uint64, c *ethrpc.Client, onlyT
 		var err error
 		blms = append(blms, ethrpc.BatchElem{
 			Method: "eth_getBlockByNumber",
-			Args:   []interface{}{"0x" + strconv.FormatUint(i, 16), !onlyTxHashes},
+			Args:   []any{"0x" + strconv.FormatUint(i, 16), !onlyTxHashes},
 			Result: r,
 			Error:  err,
 		})
@@ -96,10 +96,7 @@ func GetBlockRangeInPages(ctx context.Context, from, to, pageSize uint64, c *eth
 	var allBlocks []*json.RawMessage
 
 	for i := from; i <= to; i += pageSize {
-		end := i + pageSize - 1
-		if end > to {
-			end = to
-		}
+		end := min(i+pageSize-1, to)
 
 		blocks, err := GetBlockRange(ctx, i, end, c, onlyTxHashes)
 		if err != nil {
@@ -139,7 +136,7 @@ func getReceiptsByBlock(ctx context.Context, rawBlocks []*json.RawMessage, c *et
 		}
 		batchElements = append(batchElements, ethrpc.BatchElem{
 			Method: "eth_getBlockReceipts",
-			Args:   []interface{}{block.Number},
+			Args:   []any{block.Number},
 			Result: new([]*json.RawMessage),
 		})
 		if startBlock == nil {
@@ -219,7 +216,7 @@ func getReceiptsByTx(ctx context.Context, rawBlocks []*json.RawMessage, c *ethrp
 		var err error
 		blms = append(blms, ethrpc.BatchElem{
 			Method: "eth_getTransactionReceipt",
-			Args:   []interface{}{tx},
+			Args:   []any{tx},
 			Result: r,
 			Error:  err,
 		})
@@ -324,7 +321,7 @@ func GetZkEVMBatches(rpc *ethrpc.Client) (uint64, uint64, uint64, error) {
 }
 
 func GetForkID(rpc *ethrpc.Client) (uint64, error) {
-	var raw interface{}
+	var raw any
 	if err := rpc.Call(&raw, "zkevm_getForkId"); err != nil {
 		return 0, err
 	}
@@ -336,7 +333,7 @@ func GetForkID(rpc *ethrpc.Client) (uint64, error) {
 }
 
 func GetRollupAddress(rpc *ethrpc.Client) (string, error) {
-	var raw interface{}
+	var raw any
 	if err := rpc.Call(&raw, "zkevm_getRollupAddress"); err != nil {
 		return "", err
 	}
@@ -346,7 +343,7 @@ func GetRollupAddress(rpc *ethrpc.Client) (string, error) {
 }
 
 func GetRollupManagerAddress(rpc *ethrpc.Client) (string, error) {
-	var raw interface{}
+	var raw any
 	if err := rpc.Call(&raw, "zkevm_getRollupManagerAddress"); err != nil {
 		return "", err
 	}
@@ -364,7 +361,7 @@ const (
 )
 
 func getZkEVMBatch(rpc *ethrpc.Client, batchType batch) (uint64, error) {
-	var raw interface{}
+	var raw any
 	if err := rpc.Call(&raw, string(batchType)); err != nil {
 		return 0, err
 	}
