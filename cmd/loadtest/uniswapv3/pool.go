@@ -5,15 +5,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/0xPolygon/polygon-cli/bindings/tokens"
-	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 	"time"
 
+	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"github.com/0xPolygon/polygon-cli/bindings/uniswapv3"
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog/log"
 )

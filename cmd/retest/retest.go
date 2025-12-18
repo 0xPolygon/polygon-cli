@@ -6,12 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/0xPolygon/polygon-cli/abi"
-	"github.com/0xPolygon/polygon-cli/util"
-	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/rs/zerolog/log"
-	"github.com/spf13/cobra"
 	"io"
 	"math"
 	"math/big"
@@ -20,6 +14,13 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+
+	"github.com/0xPolygon/polygon-cli/abi"
+	"github.com/0xPolygon/polygon-cli/util"
+	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 )
 
 var (

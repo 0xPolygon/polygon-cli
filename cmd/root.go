@@ -2,31 +2,19 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/0xPolygon/polygon-cli/cmd/parsebatchl2data"
 	"os"
 
-	"github.com/0xPolygon/polygon-cli/cmd/contract"
-	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
-	"github.com/0xPolygon/polygon-cli/cmd/publish"
-	"github.com/0xPolygon/polygon-cli/util"
-
-	"github.com/0xPolygon/polygon-cli/cmd/cdk"
-	"github.com/0xPolygon/polygon-cli/cmd/fixnoncegap"
-	"github.com/0xPolygon/polygon-cli/cmd/retest"
-	"github.com/0xPolygon/polygon-cli/cmd/ulxly"
-
-	"github.com/0xPolygon/polygon-cli/cmd/fork"
-	"github.com/0xPolygon/polygon-cli/cmd/p2p"
-	"github.com/0xPolygon/polygon-cli/cmd/parseethwallet"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-
 	"github.com/0xPolygon/polygon-cli/cmd/abi"
+	"github.com/0xPolygon/polygon-cli/cmd/cdk"
+	"github.com/0xPolygon/polygon-cli/cmd/contract"
 	"github.com/0xPolygon/polygon-cli/cmd/dbbench"
 	"github.com/0xPolygon/polygon-cli/cmd/dockerlogger"
 	"github.com/0xPolygon/polygon-cli/cmd/dumpblocks"
 	"github.com/0xPolygon/polygon-cli/cmd/ecrecover"
 	"github.com/0xPolygon/polygon-cli/cmd/enr"
+	"github.com/0xPolygon/polygon-cli/cmd/fixnoncegap"
+	"github.com/0xPolygon/polygon-cli/cmd/foldtrace"
+	"github.com/0xPolygon/polygon-cli/cmd/fork"
 	"github.com/0xPolygon/polygon-cli/cmd/fund"
 	"github.com/0xPolygon/polygon-cli/cmd/hash"
 	"github.com/0xPolygon/polygon-cli/cmd/loadtest"
@@ -35,11 +23,20 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/monitor"
 	"github.com/0xPolygon/polygon-cli/cmd/monitorv2"
 	"github.com/0xPolygon/polygon-cli/cmd/nodekey"
+	"github.com/0xPolygon/polygon-cli/cmd/p2p"
+	"github.com/0xPolygon/polygon-cli/cmd/parsebatchl2data"
+	"github.com/0xPolygon/polygon-cli/cmd/parseethwallet"
+	"github.com/0xPolygon/polygon-cli/cmd/publish"
+	"github.com/0xPolygon/polygon-cli/cmd/retest"
 	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz"
 	"github.com/0xPolygon/polygon-cli/cmd/signer"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly"
 	"github.com/0xPolygon/polygon-cli/cmd/version"
 	"github.com/0xPolygon/polygon-cli/cmd/wallet"
 	"github.com/0xPolygon/polygon-cli/cmd/wrapcontract"
+	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
