@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"math"
 	"math/big"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -200,9 +200,7 @@ func getMinMedianMax[V constraints.Float | constraints.Integer](values []V) (V, 
 	if len(values) == 0 {
 		return 0, 0, 0
 	}
-	sort.Slice(values, func(i, j int) bool {
-		return values[i] < values[j]
-	})
+	slices.Sort(values)
 	half := len(values) / 2
 	median := values[half]
 	if len(values)%2 == 0 {
@@ -231,9 +229,7 @@ func getSortedMapKeys[V any, K constraints.Ordered](m map[K]V) []K {
 	for k := range m {
 		keys = append(keys, k)
 	}
-	sort.Slice(keys, func(i, j int) bool {
-		return keys[i] < keys[j]
-	})
+	slices.Sort(keys)
 	return keys
 }
 
