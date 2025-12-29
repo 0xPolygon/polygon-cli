@@ -30,6 +30,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/retest"
 	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz"
 	"github.com/0xPolygon/polygon-cli/cmd/signer"
+	"github.com/0xPolygon/polygon-cli/cmd/txgaschart"
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly"
 	"github.com/0xPolygon/polygon-cli/cmd/version"
 	"github.com/0xPolygon/polygon-cli/cmd/wallet"
@@ -158,6 +159,7 @@ func NewPolycliCommand() *cobra.Command {
 		publish.Cmd,
 		dockerlogger.Cmd,
 		contract.Cmd,
+		txgaschart.Cmd,
 	)
 	return cmd
 }
