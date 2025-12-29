@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"reflect"
 	"strconv"
@@ -380,6 +381,9 @@ func getZkEVMBatch(rpc *ethrpc.Client, batchType batch) (uint64, error) {
 func tryCastToUint64(val any) (uint64, error) {
 	switch t := val.(type) {
 	case float64:
+		if t < 0 || t > float64(math.MaxUint64) {
+			return 0, fmt.Errorf("value %v is out of range for uint64", t)
+		}
 		return uint64(t), nil
 	case string:
 		return convHexToUint64(t)
@@ -434,7 +438,11 @@ func WrapDeployedCode(deployedBytecode string, storageBytecode string) string {
 func GetHexString(data any) string {
 	var result string
 	if reflect.TypeOf(data).Kind() == reflect.Float64 {
-		result = fmt.Sprintf("%x", int64(data.(float64)))
+		f := data.(float64)
+		if f < 0 || f > float64(math.MaxUint64) {
+			log.Fatal().Float64("value", f).Msg("value out of range for uint64")
+		}
+		result = fmt.Sprintf("%x", uint64(f))
 	} else if reflect.TypeOf(data).Kind() == reflect.String {
 		var ok bool
 		result, ok = strings.CutPrefix(data.(string), "0x")
@@ -525,8 +533,8 @@ func GetSenderFromTx(ctx context.Context, tx rpctypes.PolyTransaction) (common.A
 		// If you need full support, you'll need to add AccessList to PolyTransaction interface
 		sigHash, err = calculateEIP2930SigningHash(chainID, nonce, tx.GasPrice(), gas, to, value, data, []interface{}{})
 	case 2: // EIP-1559
-		maxPriorityFee := big.NewInt(int64(tx.MaxPriorityFeePerGas()))
-		maxFee := big.NewInt(int64(tx.MaxFeePerGas()))
+		maxPriorityFee := new(big.Int).SetUint64(tx.MaxPriorityFeePerGas())
+		maxFee := new(big.Int).SetUint64(tx.MaxFeePerGas())
 		sigHash, err = calculateEIP1559SigningHash(chainID, nonce, maxPriorityFee, maxFee, gas, to, value, data)
 	default:
 		return common.Address{}, fmt.Errorf("unsupported transaction type: %d (0x%x)", txType, txType)
@@ -545,7 +553,7 @@ func GetSenderFromTx(ctx context.Context, tx rpctypes.PolyTransaction) (common.A
 			// Extract recovery id: recoveryID = v - (chainId * 2 + 35)
 			vBig := new(big.Int).Set(v)
 			vBig.Sub(vBig, big.NewInt(35))
-			vBig.Sub(vBig, new(big.Int).Mul(big.NewInt(int64(chainID)), big.NewInt(2)))
+			vBig.Sub(vBig, new(big.Int).Mul(new(big.Int).SetUint64(chainID), big.NewInt(2)))
 			recoveryID = byte(vBig.Uint64())
 		} else {
 			// Pre-EIP-155: v is 27 or 28

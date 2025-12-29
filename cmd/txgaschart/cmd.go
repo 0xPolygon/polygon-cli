@@ -283,7 +283,7 @@ func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *e
 
 				blockMutex.Lock()
 				blocks.maxBlockGasLimit = max(blocks.maxBlockGasLimit, b.gasLimit)
-				totalGasUsed = totalGasUsed.Add(totalGasUsed, big.NewInt(int64(b.gasUsed)))
+				totalGasUsed = totalGasUsed.Add(totalGasUsed, new(big.Int).SetUint64(b.gasUsed))
 				blockMutex.Unlock()
 
 				totalGasPrice := uint64(0)
