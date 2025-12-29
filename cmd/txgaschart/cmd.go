@@ -190,7 +190,7 @@ func parseFlags(ctx context.Context, client *ethrpc.Client) (*txGasChartConfig, 
 
 	const defaultBlockRange = 500
 
-	if config.startBlock == 0 {
+	if config.startBlock == math.MaxUint64 {
 		if config.endBlock < defaultBlockRange {
 			config.startBlock = 0
 		} else {
@@ -198,7 +198,7 @@ func parseFlags(ctx context.Context, client *ethrpc.Client) (*txGasChartConfig, 
 		}
 
 		log.Warn().Uint64("start_block", config.startBlock).
-			Msg("start block was 0, defaulting to last blocks")
+			Msg("start block was not set, defaulting to last blocks")
 	}
 
 	config.rateLimiter = nil

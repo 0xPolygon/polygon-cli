@@ -112,7 +112,7 @@ polycli tx-gas-chart [flags]
 
   Notes
 
-  - If --start-block is 0 (default), the command analyzes the last 500 blocks
+  - If --start-block is not set, the command analyzes the last 500 blocks
   - If --end-block exceeds the latest block or is not set, it defaults to the latest block
   - The command logs the 20 most frequently used gas prices at debug level
   - Charts use PNG format and can be opened with any image viewer
@@ -127,7 +127,7 @@ polycli tx-gas-chart [flags]
       --rate-limit float        requests per second limit (use negative value to remove limit) (default 4)
       --rpc-url string          RPC URL of network (default "http://localhost:8545")
       --scale string            scale for gas price axis (options: log, linear) (default "log")
-      --start-block uint        starting block number (inclusive)
+      --start-block uint        starting block number (inclusive) (default 18446744073709551615)
       --target-address string   address that will have tx sent from or to highlighted in the chart
 ```
 

@@ -91,7 +91,7 @@
 
   Notes
 
-  - If --start-block is 0 (default), the command analyzes the last 500 blocks
+  - If --start-block is not set, the command analyzes the last 500 blocks
   - If --end-block exceeds the latest block or is not set, it defaults to the latest block
   - The command logs the 20 most frequently used gas prices at debug level
   - Charts use PNG format and can be opened with any image viewer
