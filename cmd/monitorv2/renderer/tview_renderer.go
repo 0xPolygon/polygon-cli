@@ -108,13 +108,13 @@ func (c *signerLRUCache) evictOldest() {
 }
 
 // Comparison functions for different data types
-func compareNumbers(a, b interface{}) int {
+func compareNumbers(a, b any) int {
 	aNum := a.(*big.Int)
 	bNum := b.(*big.Int)
 	return aNum.Cmp(bNum)
 }
 
-func compareUint64(a, b interface{}) int {
+func compareUint64(a, b any) int {
 	aNum := a.(uint64)
 	bNum := b.(uint64)
 	if aNum < bNum {
@@ -125,7 +125,7 @@ func compareUint64(a, b interface{}) int {
 	return 0
 }
 
-func compareStrings(a, b interface{}) int {
+func compareStrings(a, b any) int {
 	aStr := a.(string)
 	bStr := b.(string)
 	if aStr < bStr {
@@ -138,12 +138,12 @@ func compareStrings(a, b interface{}) int {
 
 // ColumnDef defines a sortable column with its properties
 type ColumnDef struct {
-	Name        string                               // Display name
-	Key         string                               // Internal identifier
-	Align       int                                  // Text alignment
-	Expansion   int                                  // Column width allocation
-	SortFunc    func(rpctypes.PolyBlock) interface{} // Custom sort extraction
-	CompareFunc func(interface{}, interface{}) int   // Custom comparison
+	Name        string                       // Display name
+	Key         string                       // Internal identifier
+	Align       int                          // Text alignment
+	Expansion   int                          // Column width allocation
+	SortFunc    func(rpctypes.PolyBlock) any // Custom sort extraction
+	CompareFunc func(any, any) int           // Custom comparison
 }
 
 // ViewState tracks the current view preferences and selection state
@@ -1189,7 +1189,7 @@ func (t *TviewRenderer) applyViewState() {
 }
 
 // hexToDecimal converts various hex number formats to big.Int
-func hexToDecimal(value interface{}) (*big.Int, error) {
+func hexToDecimal(value any) (*big.Int, error) {
 	switch v := value.(type) {
 	case string:
 		// Handle hex string format

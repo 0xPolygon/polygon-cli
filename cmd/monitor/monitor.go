@@ -405,7 +405,7 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, to *big.Int, rpc *et
 		r := new(rpctypes.RawBlockResponse)
 		blms = append(blms, ethrpc.BatchElem{
 			Method: "eth_getBlockByNumber",
-			Args:   []interface{}{"0x" + i.Text(16), true},
+			Args:   []any{"0x" + i.Text(16), true},
 			Result: r,
 			Error:  nil,
 		})

@@ -8,8 +8,8 @@ import (
 type TestExecution struct {
 	TestName  string        `json:"test_name"`
 	Method    string        `json:"method"`
-	Args      []interface{} `json:"args"`
-	Result    interface{}   `json:"result,omitempty"`
+	Args      []any         `json:"args"`
+	Result    any           `json:"result,omitempty"`
 	Error     string        `json:"error,omitempty"`
 	Status    string        `json:"status"` // "pass" or "fail"
 	Duration  time.Duration `json:"duration"`

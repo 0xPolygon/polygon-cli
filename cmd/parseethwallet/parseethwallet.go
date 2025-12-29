@@ -1,22 +1,20 @@
 package parseethwallet
 
 import (
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/0xPolygon/polygon-cli/gethkeystore"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/0xPolygon/polygon-cli/gethkeystore"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-	"golang.org/x/crypto/sha3"
-
-	_ "embed"
-
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/spf13/cobra"
+	"golang.org/x/crypto/sha3"
 )
 
 var (

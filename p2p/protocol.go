@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -22,24 +23,15 @@ import (
 	"github.com/0xPolygon/polygon-cli/p2p/database"
 )
 
-// BlockCache stores the actual block data to avoid duplicate fetches and database queries.
-type BlockCache struct {
-	Header *types.Header
-	Body   *eth.BlockBody
-	TD     *big.Int
-}
-
 // conn represents an individual connection with a peer.
 type conn struct {
-	sensorID  string
-	node      *enode.Node
-	logger    zerolog.Logger
-	rw        ethp2p.MsgReadWriter
-	db        database.Database
-	head      *HeadBlock
-	headMutex *sync.RWMutex
-	counter   *prometheus.CounterVec
-	peer      *ethp2p.Peer
+	sensorID string
+	node     *enode.Node
+	logger   zerolog.Logger
+	rw       ethp2p.MsgReadWriter
+	db       database.Database
+	counter  *prometheus.CounterVec
+	peer     *ethp2p.Peer
 
 	// requests is used to store the request ID and the block hash. This is used
 	// when fetching block bodies because the eth protocol block bodies do not
@@ -54,10 +46,6 @@ type conn struct {
 	// conns provides access to the global connection manager, which includes
 	// the blocks cache shared across all peers.
 	conns *Conns
-
-	// oldestBlock stores the first block the sensor has seen so when fetching
-	// parent blocks, it does not request blocks older than this.
-	oldestBlock *types.Header
 
 	// connectedAt stores when this peer connection was established.
 	connectedAt time.Time
@@ -79,22 +67,9 @@ type EthProtocolOptions struct {
 	ForkID      forkid.ID
 	MsgCounter  *prometheus.CounterVec
 
-	// Head keeps track of the current head block of the chain. This is required
-	// when doing the status exchange.
-	Head      *HeadBlock
-	HeadMutex *sync.RWMutex
-
 	// Cache configurations
 	RequestsCache CacheOptions
 	ParentsCache  CacheOptions
-}
-
-// HeadBlock contains the necessary head block data for the status message.
-type HeadBlock struct {
-	Hash            common.Hash
-	TotalDifficulty *big.Int
-	Number          uint64
-	Time            uint64
 }
 
 // NewEthProtocol creates the new eth protocol. This will handle writing the
@@ -115,8 +90,6 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				requests:     NewCache[uint64, common.Hash](opts.RequestsCache),
 				requestNum:   0,
 				parents:      NewCache[common.Hash, struct{}](opts.ParentsCache),
-				head:         opts.Head,
-				headMutex:    opts.HeadMutex,
 				counter:      opts.MsgCounter,
 				peer:         p,
 				conns:        opts.Conns,
@@ -125,17 +98,16 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				peerFullname: p.Fullname(),
 			}
 
-			c.headMutex.RLock()
-			status := eth.StatusPacket{
+			head := c.conns.HeadBlock()
+			status := eth.StatusPacket68{
 				ProtocolVersion: uint32(version),
 				NetworkID:       opts.NetworkID,
 				Genesis:         opts.GenesisHash,
 				ForkID:          opts.ForkID,
-				Head:            opts.Head.Hash,
-				TD:              opts.Head.TotalDifficulty,
+				Head:            head.Block.Hash(),
+				TD:              head.TD,
 			}
 			err := c.statusExchange(&status)
-			c.headMutex.RUnlock()
 			if err != nil {
 				return err
 			}
@@ -198,11 +170,11 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 
 // statusExchange will exchange status message between the nodes. It will return
 // an error if the nodes are incompatible.
-func (c *conn) statusExchange(packet *eth.StatusPacket) error {
+func (c *conn) statusExchange(packet *eth.StatusPacket68) error {
 	errc := make(chan error, 2)
 
 	go func() {
-		c.countMsgSent((&eth.StatusPacket{}).Name(), 1)
+		c.countMsgSent((&eth.StatusPacket68{}).Name(), 1)
 		errc <- ethp2p.Send(c.rw, eth.StatusMsg, &packet)
 	}()
 
@@ -244,7 +216,7 @@ func (c *conn) countMsgSent(messageName string, count float64) {
 	c.countMsg(MsgSent, messageName+PacketSuffix, 1)
 }
 
-func (c *conn) readStatus(packet *eth.StatusPacket) error {
+func (c *conn) readStatus(packet *eth.StatusPacket68) error {
 	msg, err := c.rw.ReadMsg()
 	if err != nil {
 		return err
@@ -254,7 +226,7 @@ func (c *conn) readStatus(packet *eth.StatusPacket) error {
 		return errors.New("expected status message code")
 	}
 
-	var status eth.StatusPacket
+	var status eth.StatusPacket68
 	err = msg.Decode(&status)
 	if err != nil {
 		return err
@@ -326,15 +298,15 @@ func (c *conn) getBlockData(hash common.Hash, cache BlockCache, isParent bool) e
 }
 
 // getParentBlock will send a request to the peer if the parent of the header
-// does not exist in the database.
+// does not exist in the database. It only fetches parents back to the oldest
+// block (initialized to the head block at sensor startup).
 func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 	if !c.db.ShouldWriteBlocks() {
 		return nil
 	}
 
-	if c.oldestBlock == nil {
-		c.logger.Info().Interface("block", header).Msg("Setting oldest block")
-		c.oldestBlock = header
+	oldestBlock := c.conns.OldestBlock()
+	if oldestBlock == nil {
 		return nil
 	}
 
@@ -344,7 +316,8 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 		return nil
 	}
 
-	if c.db.HasBlock(ctx, header.ParentHash) || header.Number.Cmp(c.oldestBlock.Number) != 1 {
+	// Don't fetch parents older than our starting point (oldest block)
+	if c.db.HasBlock(ctx, header.ParentHash) || header.Number.Cmp(oldestBlock.Number) != 1 {
 		return nil
 	}
 
@@ -378,6 +351,9 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 			continue
 		}
 
+		// Write hash first seen time immediately for new blocks
+		c.db.WriteBlockHashFirstSeen(ctx, hash, tfs)
+
 		// Request only the parts we don't have
 		if err := c.getBlockData(hash, cache, false); err != nil {
 			return err
@@ -396,16 +372,25 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 }
 
 func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
-	var txs eth.TransactionsPacket
-	if err := msg.Decode(&txs); err != nil {
-		return err
+	payload, err := io.ReadAll(msg.Payload)
+	if err != nil {
+		return fmt.Errorf("failed to read transactions payload: %w", err)
 	}
 
+	var rawTxs []rlp.RawValue
+	if err := rlp.DecodeBytes(payload, &rawTxs); err != nil {
+		c.logger.Warn().Err(err).Msg("Failed to decode transactions")
+		return nil
+	}
+
+	txs := decodeTxs(rawTxs)
 	tfs := time.Now()
 
-	c.countMsgReceived(txs.Name(), float64(len(txs)))
+	c.countMsgReceived((&eth.TransactionsPacket{}).Name(), float64(len(txs)))
 
-	c.db.WriteTransactions(ctx, c.node, txs, tfs)
+	if len(txs) > 0 {
+		c.db.WriteTransactions(ctx, c.node, txs, tfs)
+	}
 
 	return nil
 }
@@ -475,18 +460,18 @@ func (c *conn) handleGetBlockBodies(msg ethp2p.Msg) error {
 }
 
 func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
-	var packet eth.BlockBodiesPacket
+	var packet eth.BlockBodiesRLPPacket
 	if err := msg.Decode(&packet); err != nil {
 		return err
 	}
 
 	tfs := time.Now()
 
-	if len(packet.BlockBodiesResponse) == 0 {
+	if len(packet.BlockBodiesRLPResponse) == 0 {
 		return nil
 	}
 
-	c.countMsgReceived(packet.Name(), float64(len(packet.BlockBodiesResponse)))
+	c.countMsgReceived((&eth.BlockBodiesPacket{}).Name(), float64(len(packet.BlockBodiesRLPResponse)))
 
 	hash, ok := c.requests.Get(packet.RequestId)
 	if !ok {
@@ -500,7 +485,18 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	body := packet.BlockBodiesResponse[0]
+	var decoded rawBlockBody
+	if err := rlp.DecodeBytes(packet.BlockBodiesRLPResponse[0], &decoded); err != nil {
+		c.logger.Warn().Err(err).Msg("Failed to decode block body")
+		return nil
+	}
+
+	body := &eth.BlockBody{
+		Transactions: decodeTxs(decoded.Transactions),
+		Uncles:       decoded.Uncles,
+		Withdrawals:  decoded.Withdrawals,
+	}
+
 	c.db.WriteBlockBody(ctx, body, hash, tfs)
 
 	// Update cache to store body
@@ -513,30 +509,39 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 }
 
 func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
-	var block eth.NewBlockPacket
-	if err := msg.Decode(&block); err != nil {
-		return err
+	payload, err := io.ReadAll(msg.Payload)
+	if err != nil {
+		return fmt.Errorf("failed to read new block payload: %w", err)
 	}
+
+	var raw rawNewBlockPacket
+	if err := rlp.DecodeBytes(payload, &raw); err != nil {
+		c.logger.Warn().Err(err).Msg("Failed to decode new block")
+		return nil
+	}
+
+	block := types.NewBlockWithHeader(raw.Block.Header).WithBody(types.Body{
+		Transactions: decodeTxs(raw.Block.Txs),
+		Uncles:       raw.Block.Uncles,
+		Withdrawals:  raw.Block.Withdrawals,
+	})
+	packet := &eth.NewBlockPacket{Block: block, TD: raw.TD}
 
 	tfs := time.Now()
-	hash := block.Block.Hash()
+	hash := packet.Block.Hash()
 
-	c.countMsgReceived(block.Name(), 1)
+	c.countMsgReceived(packet.Name(), 1)
 
 	// Set the head block if newer.
-	c.headMutex.Lock()
-	if block.Block.Number().Uint64() > c.head.Number && block.TD.Cmp(c.head.TotalDifficulty) == 1 {
-		*c.head = HeadBlock{
-			Hash:            hash,
-			TotalDifficulty: block.TD,
-			Number:          block.Block.Number().Uint64(),
-			Time:            block.Block.Time(),
-		}
-		c.logger.Info().Interface("head", c.head).Msg("Setting head block")
+	if c.conns.UpdateHeadBlock(*packet) {
+		c.logger.Info().
+			Str("hash", hash.Hex()).
+			Uint64("number", packet.Block.Number().Uint64()).
+			Str("td", packet.TD.String()).
+			Msg("Updated head block")
 	}
-	c.headMutex.Unlock()
 
-	if err := c.getParentBlock(ctx, block.Block.Header()); err != nil {
+	if err := c.getParentBlock(ctx, packet.Block.Header()); err != nil {
 		return err
 	}
 
@@ -545,17 +550,17 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	c.db.WriteBlock(ctx, c.node, block.Block, block.TD, tfs)
+	c.db.WriteBlock(ctx, c.node, packet.Block, packet.TD, tfs)
 
 	// Update cache to store the full block
 	c.conns.Blocks().Add(hash, BlockCache{
-		Header: block.Block.Header(),
+		Header: packet.Block.Header(),
 		Body: &eth.BlockBody{
-			Transactions: block.Block.Transactions(),
-			Uncles:       block.Block.Uncles(),
-			Withdrawals:  block.Block.Withdrawals(),
+			Transactions: packet.Block.Transactions(),
+			Uncles:       packet.Block.Uncles(),
+			Withdrawals:  packet.Block.Withdrawals(),
 		},
-		TD: block.TD,
+		TD: packet.TD,
 	})
 
 	return nil
@@ -579,7 +584,7 @@ func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) er
 	var name string
 
 	switch version {
-	case 67, 68:
+	case 67, 68, 69:
 		var txs eth.NewPooledTransactionHashesPacket
 		if err := msg.Decode(&txs); err != nil {
 			return err
@@ -602,16 +607,28 @@ func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) er
 }
 
 func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) error {
-	var packet eth.PooledTransactionsPacket
-	if err := msg.Decode(&packet); err != nil {
-		return err
+	payload, err := io.ReadAll(msg.Payload)
+	if err != nil {
+		return fmt.Errorf("failed to read pooled transactions payload: %w", err)
+	}
+
+	var raw rawPooledTransactionsPacket
+	if err := rlp.DecodeBytes(payload, &raw); err != nil {
+		c.logger.Warn().Err(err).Msg("Failed to decode pooled transactions")
+		return nil
+	}
+
+	packet := &eth.PooledTransactionsPacket{
+		PooledTransactionsResponse: decodeTxs(raw.Txs),
 	}
 
 	tfs := time.Now()
 
 	c.countMsgReceived(packet.Name(), float64(len(packet.PooledTransactionsResponse)))
 
-	c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse, tfs)
+	if len(packet.PooledTransactionsResponse) > 0 {
+		c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse, tfs)
+	}
 
 	return nil
 }
@@ -624,7 +641,7 @@ func (c *conn) handleGetReceipts(msg ethp2p.Msg) error {
 
 	c.countMsgReceived(request.Name(), float64(len(request.GetReceiptsRequest)))
 
-	response := &eth.ReceiptsPacket{RequestId: request.RequestId}
-	c.countMsgSent(response.Name(), 0)
+	response := &eth.ReceiptsRLPPacket{RequestId: request.RequestId}
+	c.countMsgSent((&eth.ReceiptsRLPResponse{}).Name(), 0)
 	return ethp2p.Send(c.rw, eth.ReceiptsMsg, response)
 }

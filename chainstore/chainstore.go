@@ -22,7 +22,7 @@ type ChainStore interface {
 	// === BLOCK DATA (existing BlockStore methods) ===
 
 	// GetBlock retrieves a block by hash or number
-	GetBlock(ctx context.Context, blockHashOrNumber interface{}) (rpctypes.PolyBlock, error)
+	GetBlock(ctx context.Context, blockHashOrNumber any) (rpctypes.PolyBlock, error)
 
 	// GetTransaction retrieves a transaction by hash
 	GetTransaction(ctx context.Context, txHash common.Hash) (rpctypes.PolyTransaction, error)
@@ -46,7 +46,7 @@ type ChainStore interface {
 	GetClientVersion(ctx context.Context) (string, error)
 
 	// Semi-static info (cache for minutes)
-	GetSyncStatus(ctx context.Context) (interface{}, error)
+	GetSyncStatus(ctx context.Context) (any, error)
 	GetSafeBlock(ctx context.Context) (*big.Int, error)
 	GetFinalizedBlock(ctx context.Context) (*big.Int, error)
 
@@ -61,7 +61,7 @@ type ChainStore interface {
 	// Very frequent info (minimal cache)
 	GetPendingTransactionCount(ctx context.Context) (*big.Int, error)
 	GetQueuedTransactionCount(ctx context.Context) (*big.Int, error)
-	GetTxPoolStatus(ctx context.Context) (map[string]interface{}, error)
+	GetTxPoolStatus(ctx context.Context) (map[string]any, error)
 	GetNetPeerCount(ctx context.Context) (*big.Int, error)
 
 	// === CAPABILITY & MANAGEMENT ===
