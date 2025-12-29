@@ -118,8 +118,8 @@ func generateTxCountChart(report *BlockReport) string {
 	numPoints := 0
 	for i := 0; i < len(report.Blocks); i += step {
 		block := report.Blocks[i]
-		x := padding + (float64(numPoints) / float64((len(report.Blocks)-1)/step)) * chartWidth
-		y := height - padding - (float64(block.TxCount) / float64(maxTx)) * chartHeight
+		x := padding + (float64(numPoints)/float64((len(report.Blocks)-1)/step))*chartWidth
+		y := height - padding - (float64(block.TxCount)/float64(maxTx))*chartHeight
 
 		points = append(points, fmt.Sprintf("%.2f,%.2f", x, y))
 		circles.WriteString(fmt.Sprintf(`
@@ -208,8 +208,8 @@ func generateGasUsageChart(report *BlockReport) string {
 	numPoints := 0
 	for i := 0; i < len(report.Blocks); i += step {
 		block := report.Blocks[i]
-		x := padding + (float64(numPoints) / float64((len(report.Blocks)-1)/step)) * chartWidth
-		y := height - padding - (float64(block.GasUsed) / float64(maxGas)) * chartHeight
+		x := padding + (float64(numPoints)/float64((len(report.Blocks)-1)/step))*chartWidth
+		y := height - padding - (float64(block.GasUsed)/float64(maxGas))*chartHeight
 
 		points = append(points, fmt.Sprintf("%.2f,%.2f", x, y))
 		circles.WriteString(fmt.Sprintf(`
@@ -250,109 +250,6 @@ func generateGasUsageChart(report *BlockReport) string {
 	return sb.String()
 }
 
-// generateBlocksTable creates a table with detailed block information
-func generateBlocksTable(report *BlockReport) string {
-	if len(report.Blocks) == 0 {
-		return ""
-	}
-
-	var sb strings.Builder
-	sb.WriteString(`
-        <h2>Block Details</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Block Number</th>
-                    <th>Timestamp</th>
-                    <th>Transactions</th>
-                    <th>Gas Used</th>
-                    <th>Gas Limit</th>
-                    <th>Gas Used %</th>`)
-
-	// Check if any block has base fee
-	hasBaseFee := false
-	for _, block := range report.Blocks {
-		if block.BaseFeePerGas != nil {
-			hasBaseFee = true
-			break
-		}
-	}
-
-	if hasBaseFee {
-		sb.WriteString(`
-                    <th>Base Fee (Gwei)</th>`)
-	}
-
-	sb.WriteString(`
-                </tr>
-            </thead>
-            <tbody>`)
-
-	// Limit table rows if there are too many blocks
-	blocks := report.Blocks
-	showEllipsis := false
-	if len(blocks) > 1000 {
-		// Show first 500 and last 500
-		blocks = append(report.Blocks[:500], report.Blocks[len(report.Blocks)-500:]...)
-		showEllipsis = true
-	}
-
-	for i, block := range blocks {
-		// Insert ellipsis row after first 500
-		if showEllipsis && i == 500 {
-			colSpan := 6
-			if hasBaseFee {
-				colSpan = 7
-			}
-			sb.WriteString(fmt.Sprintf(`
-                <tr>
-                    <td colspan="%d" style="text-align: center; font-style: italic;">
-                        ... (showing first 500 and last 500 blocks of %d total)
-                    </td>
-                </tr>`, colSpan, len(report.Blocks)))
-		}
-
-		timestamp := time.Unix(int64(block.Timestamp), 0).Format("2006-01-02 15:04:05")
-		gasUsedPercent := 0.0
-		if block.GasLimit > 0 {
-			gasUsedPercent = (float64(block.GasUsed) / float64(block.GasLimit)) * 100
-		}
-
-		sb.WriteString(fmt.Sprintf(`
-                <tr>
-                    <td>%d</td>
-                    <td>%s</td>
-                    <td>%s</td>
-                    <td>%s</td>
-                    <td>%s</td>
-                    <td>%.2f%%</td>`,
-			block.Number,
-			timestamp,
-			formatNumber(block.TxCount),
-			formatNumber(block.GasUsed),
-			formatNumber(block.GasLimit),
-			gasUsedPercent))
-
-		if hasBaseFee {
-			baseFeeGwei := "-"
-			if block.BaseFeePerGas != nil {
-				baseFeeGwei = fmt.Sprintf("%.2f", float64(block.BaseFeePerGas.Uint64())/1e9)
-			}
-			sb.WriteString(fmt.Sprintf(`
-                    <td>%s</td>`, baseFeeGwei))
-		}
-
-		sb.WriteString(`
-                </tr>`)
-	}
-
-	sb.WriteString(`
-            </tbody>
-        </table>`)
-
-	return sb.String()
-}
-
 // formatNumber adds thousand separators to numbers
 func formatNumber(n uint64) string {
 	str := fmt.Sprintf("%d", n)
@@ -380,11 +277,11 @@ func formatNumberWithUnits(n uint64) string {
 		suffix    string
 		threshold uint64
 	}{
-		{"Q", 1e15},  // Quadrillion
-		{"T", 1e12},  // Trillion
-		{"B", 1e9},   // Billion
-		{"M", 1e6},   // Million
-		{"K", 1e3},   // Thousand
+		{"Q", 1e15}, // Quadrillion
+		{"T", 1e12}, // Trillion
+		{"B", 1e9},  // Billion
+		{"M", 1e6},  // Million
+		{"K", 1e3},  // Thousand
 	}
 
 	for _, unit := range units {

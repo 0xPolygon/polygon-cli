@@ -31,36 +31,36 @@ type SummaryStats struct {
 
 // BlockInfo contains information about a single block
 type BlockInfo struct {
-	Number        uint64          `json:"number"`
-	Timestamp     uint64          `json:"timestamp"`
-	TxCount       uint64          `json:"tx_count"`
-	GasUsed       uint64          `json:"gas_used"`
-	GasLimit      uint64          `json:"gas_limit"`
-	BaseFeePerGas *big.Int        `json:"base_fee_per_gas,omitempty"`
+	Number        uint64            `json:"number"`
+	Timestamp     uint64            `json:"timestamp"`
+	TxCount       uint64            `json:"tx_count"`
+	GasUsed       uint64            `json:"gas_used"`
+	GasLimit      uint64            `json:"gas_limit"`
+	BaseFeePerGas *big.Int          `json:"base_fee_per_gas,omitempty"`
 	Transactions  []TransactionInfo `json:"-"` // Internal use only
 }
 
 // TransactionInfo contains information about a single transaction
 type TransactionInfo struct {
-	Hash             string   `json:"hash"`
-	From             string   `json:"from"`
-	To               string   `json:"to"`
-	BlockNumber      uint64   `json:"block_number"`
-	GasUsed          uint64   `json:"gas_used"`
-	GasLimit         uint64   `json:"gas_limit"`
-	GasPrice         uint64   `json:"gas_price"`
-	BlockGasLimit    uint64   `json:"block_gas_limit"`
-	GasUsedPercent   float64  `json:"gas_used_percent"`
+	Hash           string  `json:"hash"`
+	From           string  `json:"from"`
+	To             string  `json:"to"`
+	BlockNumber    uint64  `json:"block_number"`
+	GasUsed        uint64  `json:"gas_used"`
+	GasLimit       uint64  `json:"gas_limit"`
+	GasPrice       uint64  `json:"gas_price"`
+	BlockGasLimit  uint64  `json:"block_gas_limit"`
+	GasUsedPercent float64 `json:"gas_used_percent"`
 }
 
 // Top10Stats contains top 10 lists for various metrics
 type Top10Stats struct {
-	BlocksByTxCount         []TopBlock        `json:"blocks_by_tx_count"`
-	BlocksByGasUsed         []TopBlock        `json:"blocks_by_gas_used"`
-	TransactionsByGas       []TopTransaction  `json:"transactions_by_gas"`
-	TransactionsByGasLimit  []TopTransaction  `json:"transactions_by_gas_limit"`
-	MostUsedGasPrices       []GasPriceFreq    `json:"most_used_gas_prices"`
-	MostUsedGasLimits       []GasLimitFreq    `json:"most_used_gas_limits"`
+	BlocksByTxCount        []TopBlock       `json:"blocks_by_tx_count"`
+	BlocksByGasUsed        []TopBlock       `json:"blocks_by_gas_used"`
+	TransactionsByGas      []TopTransaction `json:"transactions_by_gas"`
+	TransactionsByGasLimit []TopTransaction `json:"transactions_by_gas_limit"`
+	MostUsedGasPrices      []GasPriceFreq   `json:"most_used_gas_prices"`
+	MostUsedGasLimits      []GasLimitFreq   `json:"most_used_gas_limits"`
 }
 
 // TopBlock represents a block in a top 10 list
@@ -74,12 +74,12 @@ type TopBlock struct {
 
 // TopTransaction represents a transaction in a top 10 list
 type TopTransaction struct {
-	Hash            string  `json:"hash"`
-	BlockNumber     uint64  `json:"block_number"`
-	GasUsed         uint64  `json:"gas_used,omitempty"`
-	GasLimit        uint64  `json:"gas_limit,omitempty"`
-	BlockGasLimit   uint64  `json:"block_gas_limit,omitempty"`
-	GasUsedPercent  float64 `json:"gas_used_percent,omitempty"`
+	Hash           string  `json:"hash"`
+	BlockNumber    uint64  `json:"block_number"`
+	GasUsed        uint64  `json:"gas_used,omitempty"`
+	GasLimit       uint64  `json:"gas_limit,omitempty"`
+	BlockGasLimit  uint64  `json:"block_gas_limit,omitempty"`
+	GasUsedPercent float64 `json:"gas_used_percent,omitempty"`
 }
 
 // GasPriceFreq represents the frequency of a specific gas price
