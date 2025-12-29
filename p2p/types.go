@@ -3,11 +3,14 @@ package p2p
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"math/big"
 	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/stateless"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -15,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type Message interface {
@@ -77,7 +81,7 @@ func (msg Pong) Code() int     { return 0x03 }
 func (msg Pong) ReqID() uint64 { return 0 }
 
 // Status is the network packet for the status message for eth/64 and later.
-type Status eth.StatusPacket
+type Status eth.StatusPacket68
 
 func (msg Status) Code() int     { return 16 }
 func (msg Status) ReqID() uint64 { return 0 }
@@ -401,4 +405,80 @@ func (msg WitnessPacketRLPPacket) ReqID() uint64 { return msg.RequestId }
 func (c *rlpxConn) hasCap(name string, version uint) bool {
 	cap := p2p.Cap{Name: name, Version: version}
 	return slices.Contains(c.peerCaps, cap) && slices.Contains(c.caps, cap)
+}
+
+// rawBlockBody is used to decode block bodies with any transaction type.
+type rawBlockBody struct {
+	Transactions []rlp.RawValue
+	Uncles       []*types.Header
+	Withdrawals  []*types.Withdrawal `rlp:"optional"`
+}
+
+// rawBlock is used to decode blocks with any transaction type.
+type rawBlock struct {
+	Header      *types.Header
+	Txs         []rlp.RawValue
+	Uncles      []*types.Header
+	Withdrawals []*types.Withdrawal `rlp:"optional"`
+}
+
+// rawNewBlockPacket is used to decode NewBlockMsg with any transaction type.
+type rawNewBlockPacket struct {
+	Block rawBlock
+	TD    *big.Int
+}
+
+// rawPooledTransactionsPacket is used to decode PooledTransactionsMsg with any transaction type.
+type rawPooledTransactionsPacket struct {
+	RequestId uint64
+	Txs       []rlp.RawValue
+}
+
+// decodeTx attempts to decode a transaction from an RLP-encoded raw value.
+func decodeTx(raw []byte) *types.Transaction {
+	if len(raw) == 0 {
+		return nil
+	}
+
+	var bytes []byte
+	if rlp.DecodeBytes(raw, &bytes) == nil {
+		tx := new(types.Transaction)
+		if tx.UnmarshalBinary(bytes) == nil {
+			return tx
+		}
+
+		log.Warn().
+			Uint8("type", bytes[0]).
+			Int("size", len(bytes)).
+			Str("hash", crypto.Keccak256Hash(bytes).Hex()).
+			Msg("Failed to decode transaction")
+
+		return nil
+	}
+
+	tx := new(types.Transaction)
+	if tx.UnmarshalBinary(raw) == nil {
+		return tx
+	}
+
+	log.Warn().
+		Uint8("prefix", raw[0]).
+		Int("size", len(raw)).
+		Str("hash", crypto.Keccak256Hash(raw).Hex()).
+		Msg("Failed to decode transaction")
+
+	return nil
+}
+
+// decodeTxs decodes a list of transactions, returning only successfully decoded ones.
+func decodeTxs(rawTxs []rlp.RawValue) []*types.Transaction {
+	var txs []*types.Transaction
+
+	for _, raw := range rawTxs {
+		if tx := decodeTx(raw); tx != nil {
+			txs = append(txs, tx)
+		}
+	}
+
+	return txs
 }

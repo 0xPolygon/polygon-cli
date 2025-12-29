@@ -4,13 +4,10 @@
 
 ## Table of Contents
 
-- [`polycli loadtest`](#polycli-loadtest)
-  - [Table of Contents](#table-of-contents)
-  - [Description](#description)
-  - [Usage](#usage)
-    - [Load Test Contract](#load-test-contract)
-  - [Flags](#flags)
-  - [See also](#see-also)
+- [Description](#description)
+- [Usage](#usage)
+- [Flags](#flags)
+- [See Also](#see-also)
 
 ## Description
 

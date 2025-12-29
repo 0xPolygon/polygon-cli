@@ -1,12 +1,13 @@
 package dbbench
 
 import (
+	"runtime"
+	"sync"
+
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/bloom"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"runtime"
-	"sync"
 )
 
 type (
