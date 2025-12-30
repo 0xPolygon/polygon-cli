@@ -224,14 +224,17 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 	rateLimiter := rate.NewLimiter(rate.Limit(rateLimit), 1)
 
 	totalBlocks := report.EndBlock - report.StartBlock + 1
-	blockChan := make(chan uint64, totalBlocks)
+	// Use a small fixed buffer size to avoid excessive memory allocation for large block ranges
+	blockChan := make(chan uint64, concurrency*2)
 	resultChan := make(chan *BlockInfo, concurrency)
 
-	// Fill the block channel with block numbers to fetch
-	for blockNum := report.StartBlock; blockNum <= report.EndBlock; blockNum++ {
-		blockChan <- blockNum
-	}
-	close(blockChan)
+	// Fill the block channel with block numbers to fetch (in a goroutine to avoid blocking)
+	go func() {
+		for blockNum := report.StartBlock; blockNum <= report.EndBlock; blockNum++ {
+			blockChan <- blockNum
+		}
+		close(blockChan)
+	}()
 
 	// Start worker goroutines
 	var wg sync.WaitGroup
