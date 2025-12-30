@@ -19,15 +19,15 @@ func outputPDF(report *BlockReport, outputFile string) error {
 	html := generateHTML(report)
 
 	// Create chromedp context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// Allocate a new browser context
-	ctx, cancelChrome := chromedp.NewContext(ctx)
+	chromeCtx, cancelChrome := chromedp.NewContext(timeoutCtx)
 	defer cancelChrome()
 
 	var buf []byte
-	err := chromedp.Run(ctx,
+	err := chromedp.Run(chromeCtx,
 		chromedp.Navigate("about:blank"),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			// Get the frame tree to set document content
