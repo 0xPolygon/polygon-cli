@@ -125,6 +125,135 @@ The tool supports configuration via:
 ## Development Memories
 - Use `make build` to build polycli
 
+## Code Quality Checklist
+
+**CRITICAL**: Before writing any code, systematically check these categories to avoid rework:
+
+### 1. Security
+- **HTML/Template Injection**: Always use `html.EscapeString()` for any data interpolated into HTML, even if currently from trusted sources
+- **Input Validation**: Validate all user inputs at boundaries (flags, API inputs)
+- **SQL Injection**: Use parameterized queries, never string concatenation
+- **Command Injection**: Never pass user input directly to shell commands
+- **Question to ask**: "What data is untrusted? Where does it flow? Is it escaped/validated at every output point?"
+
+### 2. Resource Management & Performance
+- **Goroutine Lifecycle**: Every goroutine must have a clear termination condition via context cancellation
+- **Timer Cleanup**: Use `time.NewTimer()` + `defer timer.Stop()`, never `time.After()` in select statements (causes goroutine leaks)
+- **Channel Buffers**: Use small fixed buffers (e.g., `concurrency*2`), never proportional to total dataset size
+- **Memory Allocation**: Consider behavior with 10x, 100x, 1000x expected input
+- **Question to ask**: "How does every goroutine, timer, and channel clean up on cancellation? What's the memory footprint at scale?"
+
+### 3. Context Propagation
+- **Never create root contexts**: Always thread `context.Context` through call chains; never use `context.Background()` in the middle of operations
+- **Cancellation Flow**: Context should flow through every I/O operation, long-running task, and goroutine
+- **Timeout Management**: Create child contexts with `context.WithTimeout(parentCtx, duration)`, not `context.WithTimeout(context.Background(), duration)`
+- **Question to ask**: "Does context flow through all long-running operations? Will Ctrl+C immediately stop everything?"
+
+### 4. Data Integrity & Determinism
+- **Completeness**: Data collection operations must fetch ALL requested data or fail entirely - never produce partial results
+- **Retry Logic**: Failed operations should retry (with backoff) before failing
+- **Idempotency**: Same input parameters should produce identical output every time
+- **Validation**: Verify expected vs actual data counts; fail loudly if mismatched
+- **Question to ask**: "If I run this twice with the same parameters, will I get identical results? What makes this non-deterministic?"
+
+### 5. Error Handling
+- **Error Wrapping**: Use `fmt.Errorf("context: %w", err)` to wrap errors with context
+- **Single-line Messages**: Put context before `%w` in single line: `fmt.Errorf("failed after %d attempts: %w", n, err)`
+- **Failure Modes**: Consider and handle all failure paths explicitly
+- **Logging Levels**: Use appropriate levels (Error for failures, Warn for retries, Info for progress)
+- **Question to ask**: "What can fail? How is each failure mode handled? Are errors properly wrapped?"
+
+### 6. Concurrency Patterns
+- **Channel Closing**: Close channels in the correct goroutine (usually the sender); use atomic counters to coordinate
+- **Worker Pools**: Use `sync.WaitGroup` to wait for workers; protect shared state with mutexes or channels
+- **Race Conditions**: Run with `-race` flag during testing
+- **Goroutine Leaks**: Ensure every goroutine can exit on context cancellation
+- **Question to ask**: "Who closes each channel? Can any goroutine block forever? Does this have race conditions?"
+
+### 7. Testing & Validation
+- **Test Coverage**: Write tests for edge cases, not just happy paths
+- **Error Injection**: Test retry logic, failure modes, and error paths
+- **Resource Limits**: Test with large inputs to verify scalability
+- **Cancellation**: Test that context cancellation stops operations immediately
+- **Question to ask**: "What edge cases exist? How do I test failure modes?"
+
+### Common Patterns to Apply by Default
+
+```go
+// ✅ DO: Timer cleanup
+timer := time.NewTimer(500 * time.Millisecond)
+defer timer.Stop()
+select {
+case <-timer.C:
+case <-ctx.Done():
+    return ctx.Err()
+}
+
+// ❌ DON'T: Timer leak
+select {
+case <-time.After(500 * time.Millisecond): // Leaks if ctx cancels first
+case <-ctx.Done():
+}
+
+// ✅ DO: HTML escaping
+html := fmt.Sprintf(`<div>%s</div>`, html.EscapeString(userInput))
+
+// ❌ DON'T: HTML injection risk
+html := fmt.Sprintf(`<div>%s</div>`, userInput)
+
+// ✅ DO: Context propagation
+func outputPDF(ctx context.Context, ...) error {
+    timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+    defer cancel()
+    ...
+}
+
+// ❌ DON'T: Context.Background in call chain
+func outputPDF(...) error {
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    ...
+}
+
+// ✅ DO: Deterministic data collection with retries
+for attempt := 1; attempt <= maxRetries; attempt++ {
+    if data, err := fetch(); err == nil {
+        return data
+    }
+}
+return fmt.Errorf("failed after %d attempts", maxRetries)
+
+// ❌ DON'T: Skip failures (non-deterministic)
+if data, err := fetch(); err != nil {
+    log.Warn("skipping failed item")
+    continue
+}
+
+// ✅ DO: Fixed channel buffer
+ch := make(chan T, concurrency*2)
+
+// ❌ DON'T: Buffer proportional to input size
+ch := make(chan T, totalItems) // Can allocate GB of memory
+
+// ✅ DO: Goroutine with cancellation
+go func() {
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case item := <-inputChan:
+            process(item)
+        }
+    }
+}()
+
+// ❌ DON'T: Goroutine without cancellation path
+go func() {
+    for item := range inputChan { // Blocks forever if ctx cancels
+        process(item)
+    }
+}()
+```
+
 ## Code Style
 
 ### Cobra Flags
