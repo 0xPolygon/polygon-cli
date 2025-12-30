@@ -205,7 +205,6 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 	totalBlocks := report.EndBlock - report.StartBlock + 1
 	blockChan := make(chan uint64, totalBlocks)
 	resultChan := make(chan *BlockInfo, concurrency)
-	errorChan := make(chan error, 1) // Only need space for one error
 
 	// Fill the block channel with block numbers to fetch
 	for blockNum := report.StartBlock; blockNum <= report.EndBlock; blockNum++ {
@@ -249,7 +248,6 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 	go func() {
 		wg.Wait()
 		close(resultChan)
-		close(errorChan)
 	}()
 
 	// Collect results
