@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/holiman/uint256"
@@ -926,6 +927,17 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				if !inputLoadTestParams.FireAndForget {
 					recordSample(routineID, requestID, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
 				}
+				go func(hash common.Hash, tErr error) {
+					if tErr == nil && inputLoadTestParams.CheckForPreconf {
+						preconfStatus, err := util.WaitPreconf(context.Background(), c, ltTxHash)
+						if err != nil {
+							log.Error().Err(err).Msg("Error fetching preconf")
+						} else {
+							log.Info().Bool("preconf", preconfStatus).Msg("Fetched preconf status")
+						}
+					}
+				}(ltTxHash, tErr)
+				log.Info().Str("hash", ltTxHash.Hex()).Msg("Sent tx")
 				if tErr == nil && inputLoadTestParams.WaitForReceipt {
 					receiptMaxRetries := inputLoadTestParams.ReceiptRetryMax
 					receiptRetryInitialDelayMs := inputLoadTestParams.ReceiptRetryInitialDelayMs
@@ -976,7 +988,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 						}
 					}
 				}
-				log.Trace().
+				log.Info().
 					Int64("routineID", routineID).
 					Int64("requestID", requestID).
 					Stringer("txhash", ltTxHash).

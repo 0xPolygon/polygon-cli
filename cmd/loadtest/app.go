@@ -69,6 +69,7 @@ type (
 		SummaryOutputMode          string
 		LegacyTransactionMode      bool
 		FireAndForget              bool
+		CheckForPreconf            bool
 		RecallLength               uint64
 		ContractAddress            string
 		ContractCallData           string
@@ -271,6 +272,7 @@ func initFlags() {
 	pf.BoolVar(&ltp.LegacyTransactionMode, "legacy", false, "send a legacy transaction instead of an EIP1559 transaction")
 	pf.BoolVar(&ltp.FireAndForget, "fire-and-forget", false, "send transactions and load without waiting for it to be mined")
 	pf.BoolVar(&ltp.FireAndForget, "send-only", false, "alias for --fire-and-forget")
+	pf.BoolVar(&ltp.CheckForPreconf, "check-preconf", false, "check for preconf status after sending tx")
 
 	// Local flags.
 	f := LoadtestCmd.Flags()
