@@ -205,6 +205,17 @@ func checkFlags() error {
 func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport, concurrency int, rateLimit float64) error {
 	log.Info().Msg("Fetching and analyzing blocks")
 
+	// Validate block range to prevent infinite loop
+	if report.StartBlock == BlockNotSet {
+		return fmt.Errorf("start block must be specified")
+	}
+	if report.EndBlock == BlockNotSet {
+		return fmt.Errorf("end block must be specified")
+	}
+	if report.EndBlock < report.StartBlock {
+		return fmt.Errorf("end block (%d) must be greater than or equal to start block (%d)", report.EndBlock, report.StartBlock)
+	}
+
 	// Create a cancellable context for workers
 	workerCtx, cancelWorkers := context.WithCancel(ctx)
 	defer cancelWorkers() // Ensure workers are stopped when function returns

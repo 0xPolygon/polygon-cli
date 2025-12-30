@@ -1,7 +1,9 @@
 package report
 
 import (
+	"context"
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -460,4 +462,69 @@ func TestCheckFlagsValidation(t *testing.T) {
 
 	// Restore original values
 	inputReport = originalParams
+}
+
+// TestGenerateReportBlockRangeValidation tests that generateReport validates block ranges
+func TestGenerateReportBlockRangeValidation(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name        string
+		startBlock  uint64
+		endBlock    uint64
+		wantError   bool
+		errorSubstr string
+	}{
+		{
+			name:        "start block is BlockNotSet",
+			startBlock:  BlockNotSet,
+			endBlock:    1000,
+			wantError:   true,
+			errorSubstr: "start block must be specified",
+		},
+		{
+			name:        "end block is BlockNotSet",
+			startBlock:  0,
+			endBlock:    BlockNotSet,
+			wantError:   true,
+			errorSubstr: "end block must be specified",
+		},
+		{
+			name:        "both blocks are BlockNotSet",
+			startBlock:  BlockNotSet,
+			endBlock:    BlockNotSet,
+			wantError:   true,
+			errorSubstr: "start block must be specified",
+		},
+		{
+			name:        "end block less than start block",
+			startBlock:  1000,
+			endBlock:    500,
+			wantError:   true,
+			errorSubstr: "end block (500) must be greater than or equal to start block (1000)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			report := &BlockReport{
+				StartBlock: tt.startBlock,
+				EndBlock:   tt.endBlock,
+			}
+
+			// We can't actually call generateReport without a real RPC client,
+			// so we only test the cases that should fail validation
+			if !tt.wantError {
+				t.Skip("skipping valid range test as it requires real RPC client")
+			}
+
+			err := generateReport(ctx, nil, report, 1, 1.0)
+
+			if err == nil {
+				t.Errorf("generateReport() expected error containing %q, got nil", tt.errorSubstr)
+			} else if !strings.Contains(err.Error(), tt.errorSubstr) {
+				t.Errorf("generateReport() error = %q, want error containing %q", err.Error(), tt.errorSubstr)
+			}
+		})
+	}
 }
