@@ -73,7 +73,7 @@ func generateStatCards(report *BlockReport) string {
             <div class="stat-card">
                 <h3>%s</h3>
                 <div class="value">%s</div>
-            </div>`, card.title, card.value))
+            </div>`, html.EscapeString(card.title), html.EscapeString(card.value)))
 	}
 
 	return sb.String()
