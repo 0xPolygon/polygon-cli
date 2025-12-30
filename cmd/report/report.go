@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"sync"
@@ -101,11 +102,16 @@ func init() {
 	f := ReportCmd.Flags()
 	f.StringVar(&inputReport.RpcUrl, "rpc-url", "http://localhost:8545", "RPC endpoint URL")
 	f.Uint64Var(&inputReport.StartBlock, "start-block", 0, "starting block number for analysis")
-	f.Uint64Var(&inputReport.EndBlock, "end-block", 0, "ending block number for analysis")
+	f.Uint64Var(&inputReport.EndBlock, "end-block", 0, "ending block number for analysis (required)")
 	f.StringVarP(&inputReport.OutputFile, "output", "o", "", "output file path (default: stdout for JSON, report.html for HTML, report.pdf for PDF)")
 	f.StringVarP(&inputReport.Format, "format", "f", "json", "output format [json, html, pdf]")
 	f.IntVar(&inputReport.Concurrency, "concurrency", 10, "number of concurrent RPC requests")
 	f.Float64Var(&inputReport.RateLimit, "rate-limit", 4, "requests per second limit")
+
+	// Mark end-block as required to prevent confusion with default values
+	if err := ReportCmd.MarkFlagRequired("end-block"); err != nil {
+		panic(fmt.Sprintf("failed to mark end-block as required: %v", err))
+	}
 }
 
 func checkFlags() error {
@@ -141,13 +147,17 @@ func checkFlags() error {
 func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport, concurrency int, rateLimit float64) error {
 	log.Info().Msg("Fetching and analyzing blocks")
 
+	// Create a cancellable context for workers
+	workerCtx, cancelWorkers := context.WithCancel(ctx)
+	defer cancelWorkers() // Ensure workers are stopped when function returns
+
 	// Create rate limiter
 	rateLimiter := rate.NewLimiter(rate.Limit(rateLimit), 1)
 
 	totalBlocks := report.EndBlock - report.StartBlock + 1
 	blockChan := make(chan uint64, totalBlocks)
 	resultChan := make(chan *BlockInfo, concurrency)
-	errorChan := make(chan error, totalBlocks)
+	errorChan := make(chan error, 1) // Only need space for one error
 
 	// Fill the block channel with block numbers to fetch
 	for blockNum := report.StartBlock; blockNum <= report.EndBlock; blockNum++ {
@@ -162,20 +172,27 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 		go func() {
 			defer wg.Done()
 			for blockNum := range blockChan {
-				select {
-				case <-ctx.Done():
-					errorChan <- ctx.Err()
+				// Check if worker context is canceled
+				if workerCtx.Err() != nil {
 					return
-				default:
 				}
 
-				blockInfo, err := fetchBlockInfo(ctx, ec, blockNum, rateLimiter)
+				blockInfo, err := fetchBlockInfo(workerCtx, ec, blockNum, rateLimiter)
 				if err != nil {
-					errorChan <- fmt.Errorf("failed to fetch block %d: %w", blockNum, err)
-					return
+					// Check for context cancellation errors (user interrupt or internal cancellation)
+					if workerCtx.Err() != nil {
+						return
+					}
+					log.Warn().Err(err).Uint64("block", blockNum).Msg("Failed to fetch block, skipping")
+					continue
 				}
 
-				resultChan <- blockInfo
+				// Send result with context check to avoid blocking
+				select {
+				case resultChan <- blockInfo:
+				case <-workerCtx.Done():
+					return
+				}
 			}
 		}()
 	}
@@ -196,7 +213,7 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 	uniqueRecipients := make(map[string]bool)
 	processedBlocks := uint64(0)
 
-	// Process results and check for errors
+	// Process results and check for context cancellation
 	for {
 		select {
 		case blockInfo, ok := <-resultChan:
@@ -226,17 +243,28 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 			if processedBlocks%100 == 0 || processedBlocks == totalBlocks {
 				log.Info().Uint64("progress", processedBlocks).Uint64("total", totalBlocks).Msg("Progress")
 			}
-		case err, ok := <-errorChan:
-			if !ok {
-				// Channel closed, no more errors
-				goto done
-			}
-			if err != nil {
-				return err
-			}
+		case <-ctx.Done():
+			// Parent context canceled (e.g., user pressed Ctrl+C)
+			// cancelWorkers() will be called by defer to stop all workers
+			return ctx.Err()
 		}
 	}
 done:
+	// Sort blocks by block number to ensure correct ordering for charts and analysis
+	slices.SortFunc(report.Blocks, func(a, b BlockInfo) int {
+		if a.Number < b.Number {
+			return -1
+		} else if a.Number > b.Number {
+			return 1
+		}
+		return 0
+	})
+
+	// Warn if no blocks were successfully fetched
+	if len(report.Blocks) == 0 {
+		log.Warn().Msg("No blocks were successfully fetched. Report will be empty.")
+	}
+
 	// Calculate summary statistics
 	report.Summary = SummaryStats{
 		TotalBlocks:       blockCount,
@@ -251,7 +279,7 @@ done:
 		report.Summary.AvgGasPerBlock = float64(totalGasUsed) / float64(blockCount)
 		if totalBaseFee.Cmp(big.NewInt(0)) > 0 {
 			avgBaseFee := new(big.Int).Div(totalBaseFee, big.NewInt(int64(blockCount)))
-			report.Summary.AvgBaseFeePerGas = avgBaseFee.Uint64()
+			report.Summary.AvgBaseFeePerGas = avgBaseFee.String()
 		}
 	}
 
@@ -287,10 +315,15 @@ func fetchBlockInfo(ctx context.Context, ec *ethrpc.Client, blockNum uint64, rat
 	}
 
 	// Parse base fee if present (EIP-1559)
-	if baseFee, ok := result["baseFeePerGas"].(string); ok {
+	if baseFee, ok := result["baseFeePerGas"].(string); ok && baseFee != "" {
 		bf := new(big.Int)
-		bf.SetString(baseFee[2:], 16) // Remove "0x" prefix
-		blockInfo.BaseFeePerGas = bf
+		// Remove "0x" prefix if present
+		if len(baseFee) > 2 && baseFee[:2] == "0x" {
+			baseFee = baseFee[2:]
+		}
+		if _, success := bf.SetString(baseFee, 16); success {
+			blockInfo.BaseFeePerGas = bf
+		}
 	}
 
 	// Process transactions

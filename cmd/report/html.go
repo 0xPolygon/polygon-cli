@@ -3,6 +3,8 @@ package report
 import (
 	_ "embed"
 	"fmt"
+	"html"
+	"math/big"
 	"strings"
 	"time"
 )
@@ -12,26 +14,26 @@ var htmlTemplate string
 
 // generateHTML creates an HTML report from the BlockReport data
 func generateHTML(report *BlockReport) string {
-	html := htmlTemplate
+	output := htmlTemplate
 
 	// Replace metadata placeholders
-	html = strings.ReplaceAll(html, "{{CHAIN_ID}}", fmt.Sprintf("%d", report.ChainID))
-	html = strings.ReplaceAll(html, "{{RPC_URL}}", report.RpcUrl)
-	html = strings.ReplaceAll(html, "{{BLOCK_RANGE}}", fmt.Sprintf("%d - %d", report.StartBlock, report.EndBlock))
-	html = strings.ReplaceAll(html, "{{GENERATED_AT}}", report.GeneratedAt.Format(time.RFC3339))
-	html = strings.ReplaceAll(html, "{{TOTAL_BLOCKS}}", formatNumber(report.Summary.TotalBlocks))
+	output = strings.ReplaceAll(output, "{{CHAIN_ID}}", fmt.Sprintf("%d", report.ChainID))
+	output = strings.ReplaceAll(output, "{{RPC_URL}}", html.EscapeString(report.RpcUrl))
+	output = strings.ReplaceAll(output, "{{BLOCK_RANGE}}", fmt.Sprintf("%d - %d", report.StartBlock, report.EndBlock))
+	output = strings.ReplaceAll(output, "{{GENERATED_AT}}", report.GeneratedAt.Format(time.RFC3339))
+	output = strings.ReplaceAll(output, "{{TOTAL_BLOCKS}}", formatNumber(report.Summary.TotalBlocks))
 
 	// Generate and replace stat cards
-	html = strings.ReplaceAll(html, "{{STAT_CARDS}}", generateStatCards(report))
+	output = strings.ReplaceAll(output, "{{STAT_CARDS}}", generateStatCards(report))
 
 	// Generate and replace charts
-	html = strings.ReplaceAll(html, "{{TX_COUNT_CHART}}", generateTxCountChart(report))
-	html = strings.ReplaceAll(html, "{{GAS_USAGE_CHART}}", generateGasUsageChart(report))
+	output = strings.ReplaceAll(output, "{{TX_COUNT_CHART}}", generateTxCountChart(report))
+	output = strings.ReplaceAll(output, "{{GAS_USAGE_CHART}}", generateGasUsageChart(report))
 
 	// Generate and replace top 10 sections
-	html = strings.ReplaceAll(html, "{{TOP_10_SECTIONS}}", generateTop10Sections(report))
+	output = strings.ReplaceAll(output, "{{TOP_10_SECTIONS}}", generateTop10Sections(report))
 
-	return html
+	return output
 }
 
 // generateStatCards creates the statistics cards HTML
@@ -52,11 +54,18 @@ func generateStatCards(report *BlockReport) string {
 	}
 
 	// Add base fee card if available
-	if report.Summary.AvgBaseFeePerGas > 0 {
-		cards = append(cards, struct {
-			title string
-			value string
-		}{"Avg Base Fee (Gwei)", fmt.Sprintf("%.2f", float64(report.Summary.AvgBaseFeePerGas)/1e9)})
+	if report.Summary.AvgBaseFeePerGas != "" {
+		// Parse the base fee string as big.Int and convert to Gwei
+		avgBaseFee := new(big.Int)
+		if _, ok := avgBaseFee.SetString(report.Summary.AvgBaseFeePerGas, 10); ok {
+			avgBaseFeeFloat := new(big.Float).SetInt(avgBaseFee)
+			gwei := new(big.Float).Quo(avgBaseFeeFloat, big.NewFloat(1e9))
+			gweiFloat, _ := gwei.Float64()
+			cards = append(cards, struct {
+				title string
+				value string
+			}{"Avg Base Fee (Gwei)", fmt.Sprintf("%.2f", gweiFloat)})
+		}
 	}
 
 	for _, card := range cards {
@@ -116,9 +125,14 @@ func generateTxCountChart(report *BlockReport) string {
 	var points []string
 	var circles strings.Builder
 	numPoints := 0
+	// Calculate number of data points to avoid division by zero
+	totalPoints := (len(report.Blocks) - 1) / step
+	if totalPoints < 1 {
+		totalPoints = 1
+	}
 	for i := 0; i < len(report.Blocks); i += step {
 		block := report.Blocks[i]
-		x := padding + (float64(numPoints)/float64((len(report.Blocks)-1)/step))*chartWidth
+		x := padding + (float64(numPoints)/float64(totalPoints))*chartWidth
 		y := height - padding - (float64(block.TxCount)/float64(maxTx))*chartHeight
 
 		points = append(points, fmt.Sprintf("%.2f,%.2f", x, y))
@@ -206,9 +220,14 @@ func generateGasUsageChart(report *BlockReport) string {
 	var points []string
 	var circles strings.Builder
 	numPoints := 0
+	// Calculate number of data points to avoid division by zero
+	totalPoints := (len(report.Blocks) - 1) / step
+	if totalPoints < 1 {
+		totalPoints = 1
+	}
 	for i := 0; i < len(report.Blocks); i += step {
 		block := report.Blocks[i]
-		x := padding + (float64(numPoints)/float64((len(report.Blocks)-1)/step))*chartWidth
+		x := padding + (float64(numPoints)/float64(totalPoints))*chartWidth
 		y := height - padding - (float64(block.GasUsed)/float64(maxGas))*chartHeight
 
 		points = append(points, fmt.Sprintf("%.2f,%.2f", x, y))
@@ -398,7 +417,7 @@ func generateTop10Sections(report *BlockReport) string {
                     <td>%s</td>
                     <td>%s</td>
                     <td>%s</td>
-                </tr>`, i+1, tx.Hash, formatNumber(tx.BlockNumber), formatNumberWithUnits(tx.GasLimit), formatNumber(tx.GasUsed)))
+                </tr>`, i+1, html.EscapeString(tx.Hash), formatNumber(tx.BlockNumber), formatNumberWithUnits(tx.GasLimit), formatNumber(tx.GasUsed)))
 		}
 
 		sb.WriteString(`
@@ -432,7 +451,7 @@ func generateTop10Sections(report *BlockReport) string {
                     <td>%s</td>
                     <td>%s</td>
                     <td>%s</td>
-                </tr>`, i+1, tx.Hash, formatNumber(tx.BlockNumber), formatNumberWithUnits(tx.GasLimit), formatNumber(tx.GasUsed)))
+                </tr>`, i+1, html.EscapeString(tx.Hash), formatNumber(tx.BlockNumber), formatNumberWithUnits(tx.GasLimit), formatNumber(tx.GasUsed)))
 		}
 
 		sb.WriteString(`

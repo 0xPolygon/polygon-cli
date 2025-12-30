@@ -23,8 +23,8 @@ func outputPDF(report *BlockReport, outputFile string) error {
 	defer cancel()
 
 	// Allocate a new browser context
-	ctx, cancel = chromedp.NewContext(ctx)
-	defer cancel()
+	ctx, cancelChrome := chromedp.NewContext(ctx)
+	defer cancelChrome()
 
 	var buf []byte
 	err := chromedp.Run(ctx,
@@ -40,9 +40,13 @@ func outputPDF(report *BlockReport, outputFile string) error {
 			return page.SetDocumentContent(frameTree.Frame.ID, html).Do(ctx)
 		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			// Wait a bit for any dynamic content to settle
-			time.Sleep(500 * time.Millisecond)
-			return nil
+			// Wait a bit for any dynamic content to settle, respecting context cancellation
+			select {
+			case <-time.After(500 * time.Millisecond):
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			// Print to PDF with appropriate settings

@@ -72,9 +72,25 @@ Quick analysis to stdout:
 polycli report --rpc-url http://localhost:8545 --start-block 1000 --end-block 1100 | jq '.summary'
 ```
 
+Adjust concurrency for rate-limited endpoints:
+```bash
+polycli report --rpc-url https://public-rpc.example.com \
+  --start-block 1000000 \
+  --end-block 1001000 \
+  --concurrency 5 \
+  --rate-limit 2 \
+  --format html
+```
+
 ## Notes
 
-- The command queries blocks sequentially to avoid overwhelming the RPC endpoint
+- The `--end-block` flag is required; you must explicitly specify the block range to analyze
+- The `--start-block` flag defaults to 0 (genesis block), which is a valid starting point
+- To analyze a single block, set both start and end to the same block number (e.g., `--start-block 100 --end-block 100`)
+- The command queries blocks concurrently with rate limiting to avoid overwhelming the RPC endpoint:
+  - `--concurrency` controls the number of concurrent RPC requests (default: 10)
+  - `--rate-limit` controls the maximum requests per second (default: 4)
+  - Adjust these values based on your RPC endpoint's capacity
 - Progress is logged every 100 blocks
 - Blocks that cannot be fetched are skipped with a warning
 - HTML reports include interactive hover tooltips on charts

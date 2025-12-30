@@ -24,7 +24,7 @@ type SummaryStats struct {
 	TotalGasUsed      uint64  `json:"total_gas_used"`
 	AvgTxPerBlock     float64 `json:"avg_tx_per_block"`
 	AvgGasPerBlock    float64 `json:"avg_gas_per_block"`
-	AvgBaseFeePerGas  uint64  `json:"avg_base_fee_per_gas,omitempty"`
+	AvgBaseFeePerGas  string  `json:"avg_base_fee_per_gas,omitempty"`
 	UniqueSenders     uint64  `json:"unique_senders"`
 	UniqueRecipients  uint64  `json:"unique_recipients"`
 }
