@@ -230,10 +230,14 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 
 	// Fill the block channel with block numbers to fetch (in a goroutine to avoid blocking)
 	go func() {
+		defer close(blockChan)
 		for blockNum := report.StartBlock; blockNum <= report.EndBlock; blockNum++ {
-			blockChan <- blockNum
+			select {
+			case blockChan <- blockNum:
+			case <-workerCtx.Done():
+				return
+			}
 		}
-		close(blockChan)
 	}()
 
 	// Start worker goroutines
