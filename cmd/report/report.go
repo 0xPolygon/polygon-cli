@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	_ "embed"
@@ -223,17 +224,54 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 	// Create rate limiter
 	rateLimiter := rate.NewLimiter(rate.Limit(rateLimit), 1)
 
+	const maxRetries = 3
 	totalBlocks := report.EndBlock - report.StartBlock + 1
-	// Use a small fixed buffer size to avoid excessive memory allocation for large block ranges
-	blockChan := make(chan uint64, concurrency*2)
-	resultChan := make(chan *BlockInfo, concurrency)
 
-	// Fill the block channel with block numbers to fetch (in a goroutine to avoid blocking)
+	// blockRequest tracks a block fetch attempt
+	type blockRequest struct {
+		blockNum uint64
+		attempt  int
+	}
+
+	// Use a small fixed buffer size to avoid excessive memory allocation for large block ranges
+	blockChan := make(chan blockRequest, concurrency*2)
+	resultChan := make(chan *BlockInfo, concurrency)
+	// Channel for blocks that need to be retried
+	retryChan := make(chan blockRequest, concurrency*2)
+	// Channel for blocks that failed all retry attempts
+	failedChan := make(chan uint64, totalBlocks)
+
+	// Track pending work to know when to close channels
+	var pendingWork atomic.Int64
+	pendingWork.Store(int64(totalBlocks))
+
+	// Fill the block channel with initial block requests (in a goroutine to avoid blocking)
 	go func() {
-		defer close(blockChan)
 		for blockNum := report.StartBlock; blockNum <= report.EndBlock; blockNum++ {
 			select {
-			case blockChan <- blockNum:
+			case blockChan <- blockRequest{blockNum: blockNum, attempt: 1}:
+			case <-workerCtx.Done():
+				return
+			}
+		}
+	}()
+
+	// Goroutine to forward retries from retryChan back to blockChan
+	retryForwarderDone := make(chan struct{})
+	go func() {
+		defer close(retryForwarderDone)
+		for {
+			select {
+			case req, ok := <-retryChan:
+				if !ok {
+					// retryChan closed, exit
+					return
+				}
+				select {
+				case blockChan <- req:
+				case <-workerCtx.Done():
+					return
+				}
 			case <-workerCtx.Done():
 				return
 			}
@@ -246,36 +284,68 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for blockNum := range blockChan {
+			for req := range blockChan {
 				// Check if worker context is canceled
 				if workerCtx.Err() != nil {
 					return
 				}
 
-				blockInfo, err := fetchBlockInfo(workerCtx, ec, blockNum, rateLimiter)
+				blockInfo, err := fetchBlockInfo(workerCtx, ec, req.blockNum, rateLimiter)
 				if err != nil {
 					// Check for context cancellation errors (user interrupt or internal cancellation)
 					if workerCtx.Err() != nil {
 						return
 					}
-					log.Warn().Err(err).Uint64("block", blockNum).Msg("Failed to fetch block, skipping")
+
+					if req.attempt < maxRetries {
+						// Retry the block (don't decrement pendingWork yet)
+						log.Warn().Err(err).Uint64("block", req.blockNum).Int("attempt", req.attempt).Msg("Failed to fetch block, retrying")
+						select {
+						case retryChan <- blockRequest{blockNum: req.blockNum, attempt: req.attempt + 1}:
+						case <-workerCtx.Done():
+							return
+						}
+						continue
+					}
+
+					// All retry attempts exhausted - decrement pending work
+					log.Error().Err(err).Uint64("block", req.blockNum).Int("attempts", req.attempt).Msg("Failed to fetch block after all retry attempts")
+					select {
+					case failedChan <- req.blockNum:
+					case <-workerCtx.Done():
+						return
+					}
+					if pendingWork.Add(-1) == 0 {
+						close(retryChan) // No more retries possible
+					}
 					continue
 				}
 
-				// Send result with context check to avoid blocking
+				// Block fetched successfully - send result and decrement pending work
 				select {
 				case resultChan <- blockInfo:
 				case <-workerCtx.Done():
 					return
 				}
+
+				if pendingWork.Add(-1) == 0 {
+					close(retryChan) // No more retries needed
+				}
 			}
 		}()
 	}
 
-	// Close result channel when all workers are done
+	// Monitor goroutine to close blockChan when all work is done
+	go func() {
+		<-retryForwarderDone // Wait for retry forwarder to finish
+		close(blockChan)     // Signal workers to exit
+	}()
+
+	// Close remaining channels when workers are done
 	go func() {
 		wg.Wait()
 		close(resultChan)
+		close(failedChan)
 	}()
 
 	// Collect results
@@ -287,6 +357,7 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 	uniqueSenders := make(map[string]bool)
 	uniqueRecipients := make(map[string]bool)
 	processedBlocks := uint64(0)
+	var failedBlocks []uint64
 
 	// Process results and check for context cancellation
 	for {
@@ -319,6 +390,8 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 			if processedBlocks%100 == 0 || processedBlocks == totalBlocks {
 				log.Info().Uint64("progress", processedBlocks).Uint64("total", totalBlocks).Msg("Progress")
 			}
+		case failedBlock := <-failedChan:
+			failedBlocks = append(failedBlocks, failedBlock)
 		case <-ctx.Done():
 			// Parent context canceled (e.g., user pressed Ctrl+C)
 			// cancelWorkers() will be called by defer to stop all workers
@@ -326,6 +399,17 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 		}
 	}
 done:
+	// Check if any blocks failed after all retry attempts
+	if len(failedBlocks) > 0 {
+		slices.Sort(failedBlocks)
+		return fmt.Errorf("failed to fetch %d block(s) after %d retry attempts: %v", len(failedBlocks), maxRetries, failedBlocks)
+	}
+
+	// Verify we got all expected blocks
+	if uint64(len(report.Blocks)) != totalBlocks {
+		return fmt.Errorf("expected to fetch %d blocks but only got %d", totalBlocks, len(report.Blocks))
+	}
+
 	// Sort blocks by block number to ensure correct ordering for charts and analysis
 	slices.SortFunc(report.Blocks, func(a, b BlockInfo) int {
 		if a.Number < b.Number {
@@ -335,11 +419,6 @@ done:
 		}
 		return 0
 	})
-
-	// Warn if no blocks were successfully fetched
-	if len(report.Blocks) == 0 {
-		log.Warn().Msg("No blocks were successfully fetched. Report will be empty.")
-	}
 
 	// Calculate summary statistics
 	report.Summary = SummaryStats{
