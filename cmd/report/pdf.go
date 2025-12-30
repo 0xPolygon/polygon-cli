@@ -41,8 +41,10 @@ func outputPDF(report *BlockReport, outputFile string) error {
 		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			// Wait a bit for any dynamic content to settle, respecting context cancellation
+			timer := time.NewTimer(500 * time.Millisecond)
+			defer timer.Stop()
 			select {
-			case <-time.After(500 * time.Millisecond):
+			case <-timer.C:
 				return nil
 			case <-ctx.Done():
 				return ctx.Err()
