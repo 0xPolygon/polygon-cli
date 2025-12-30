@@ -3,17 +3,42 @@ The `report` command analyzes a range of blocks from an Ethereum-compatible bloc
 ## Features
 
 - **Stateless Operation**: All data is queried from the blockchain via RPC, no local storage required
+- **Smart Defaults**: Automatically analyzes the latest 500 blocks if no range is specified
 - **JSON Output**: Always generates a structured JSON report for programmatic analysis
 - **HTML Visualization**: Optionally generates a visual HTML report with charts and tables
-- **Block Range Analysis**: Analyze any range of blocks from start to end
+- **Flexible Block Range**: Analyze any range of blocks with automatic range completion
 - **Transaction Metrics**: Track transaction counts, gas usage, and other key metrics
 
 ## Basic Usage
+
+Analyze the latest 500 blocks (no range specified):
+
+```bash
+polycli report --rpc-url http://localhost:8545
+```
 
 Generate a JSON report for blocks 1000 to 2000:
 
 ```bash
 polycli report --rpc-url http://localhost:8545 --start-block 1000 --end-block 2000
+```
+
+Analyze 500 blocks starting from block 1000:
+
+```bash
+polycli report --rpc-url http://localhost:8545 --start-block 1000
+```
+
+Analyze the previous 500 blocks ending at block 2000:
+
+```bash
+polycli report --rpc-url http://localhost:8545 --end-block 2000
+```
+
+Analyze only the genesis block (block 0):
+
+```bash
+polycli report --rpc-url http://localhost:8545 --start-block 0 --end-block 0
 ```
 
 Generate an HTML report:
@@ -82,10 +107,21 @@ polycli report --rpc-url https://public-rpc.example.com \
   --format html
 ```
 
+## Block Range Behavior
+
+The command uses smart defaults for block ranges:
+
+- **No flags specified**: Analyzes the latest 500 blocks on the chain
+- **Only `--start-block` specified**: Analyzes 500 blocks starting from the specified block, or up to the latest block if fewer than 500 blocks remain
+- **Only `--end-block` specified**: Analyzes 500 blocks ending at the specified block (or from block 0 if the chain has fewer than 500 blocks)
+- **Both flags specified**: Analyzes the exact range specified (e.g., `--start-block 0 --end-block 0` analyzes only the genesis block)
+
+The default range of 500 blocks can be modified by changing the `DefaultBlockRange` constant in the code.
+
+**Note**: Block 0 (genesis) can be explicitly specified. To analyze only the genesis block, use `--start-block 0 --end-block 0`.
+
 ## Notes
 
-- The `--end-block` flag is required; you must explicitly specify the block range to analyze
-- The `--start-block` flag defaults to 0 (genesis block), which is a valid starting point
 - To analyze a single block, set both start and end to the same block number (e.g., `--start-block 100 --end-block 100`)
 - The command queries blocks concurrently with rate limiting to avoid overwhelming the RPC endpoint:
   - `--concurrency` controls the number of concurrent RPC requests (default: 10)

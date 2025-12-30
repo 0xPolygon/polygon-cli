@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"os"
 	"slices"
@@ -19,6 +20,13 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/time/rate"
+)
+
+const (
+	// DefaultBlockRange is the default number of blocks to analyze when start/end blocks are not specified
+	DefaultBlockRange = 500
+	// BlockNotSet is a sentinel value to indicate a block number flag was not set by the user
+	BlockNotSet = math.MaxUint64
 )
 
 type (
@@ -58,12 +66,6 @@ var ReportCmd = &cobra.Command{
 		}
 		defer ec.Close()
 
-		log.Info().
-			Str("rpc-url", inputReport.RpcUrl).
-			Uint64("start-block", inputReport.StartBlock).
-			Uint64("end-block", inputReport.EndBlock).
-			Msg("Starting block analysis")
-
 		// Fetch chain ID
 		var chainIDHex string
 		err = ec.CallContext(ctx, &chainIDHex, "eth_chainId")
@@ -72,12 +74,61 @@ var ReportCmd = &cobra.Command{
 		}
 		chainID := hexToUint64(chainIDHex)
 
+		// Determine block range with smart defaults
+		startBlock := inputReport.StartBlock
+		endBlock := inputReport.EndBlock
+
+		// Fetch latest block if needed for auto-detection
+		var latestBlock uint64
+		needsLatest := startBlock == BlockNotSet || endBlock == BlockNotSet
+		if needsLatest {
+			var latestBlockHex string
+			err = ec.CallContext(ctx, &latestBlockHex, "eth_blockNumber")
+			if err != nil {
+				return fmt.Errorf("failed to fetch latest block number: %w", err)
+			}
+			latestBlock = hexToUint64(latestBlockHex)
+			log.Info().Uint64("latest-block", latestBlock).Msg("Auto-detected latest block")
+		}
+
+		// Apply smart defaults based on which flags were set
+		if startBlock == BlockNotSet && endBlock == BlockNotSet {
+			// Both unspecified: analyze latest DefaultBlockRange blocks
+			endBlock = latestBlock
+			if latestBlock >= DefaultBlockRange-1 {
+				startBlock = latestBlock - (DefaultBlockRange - 1)
+			} else {
+				startBlock = 0
+			}
+		} else if startBlock == BlockNotSet {
+			// Only start-block unspecified: analyze previous DefaultBlockRange blocks from end-block
+			if endBlock >= DefaultBlockRange-1 {
+				startBlock = endBlock - (DefaultBlockRange - 1)
+			} else {
+				startBlock = 0
+			}
+		} else if endBlock == BlockNotSet {
+			// Only end-block unspecified: analyze next DefaultBlockRange blocks from start-block
+			// But don't exceed the latest block
+			endBlock = startBlock + (DefaultBlockRange - 1)
+			if endBlock > latestBlock {
+				endBlock = latestBlock
+			}
+		}
+		// If both are set by user (including 0,0), use them as-is
+
+		log.Info().
+			Str("rpc-url", inputReport.RpcUrl).
+			Uint64("start-block", startBlock).
+			Uint64("end-block", endBlock).
+			Msg("Starting block analysis")
+
 		// Initialize the report
 		report := &BlockReport{
 			ChainID:     chainID,
 			RpcUrl:      inputReport.RpcUrl,
-			StartBlock:  inputReport.StartBlock,
-			EndBlock:    inputReport.EndBlock,
+			StartBlock:  startBlock,
+			EndBlock:    endBlock,
 			GeneratedAt: time.Now(),
 			Blocks:      []BlockInfo{},
 		}
@@ -101,17 +152,12 @@ var ReportCmd = &cobra.Command{
 func init() {
 	f := ReportCmd.Flags()
 	f.StringVar(&inputReport.RpcUrl, "rpc-url", "http://localhost:8545", "RPC endpoint URL")
-	f.Uint64Var(&inputReport.StartBlock, "start-block", 0, "starting block number for analysis")
-	f.Uint64Var(&inputReport.EndBlock, "end-block", 0, "ending block number for analysis (required)")
+	f.Uint64Var(&inputReport.StartBlock, "start-block", BlockNotSet, "starting block number (default: auto-detect based on end-block or latest)")
+	f.Uint64Var(&inputReport.EndBlock, "end-block", BlockNotSet, "ending block number (default: auto-detect based on start-block or latest)")
 	f.StringVarP(&inputReport.OutputFile, "output", "o", "", "output file path (default: stdout for JSON, report.html for HTML, report.pdf for PDF)")
 	f.StringVarP(&inputReport.Format, "format", "f", "json", "output format [json, html, pdf]")
 	f.IntVar(&inputReport.Concurrency, "concurrency", 10, "number of concurrent RPC requests")
 	f.Float64Var(&inputReport.RateLimit, "rate-limit", 4, "requests per second limit")
-
-	// Mark end-block as required to prevent confusion with default values
-	if err := ReportCmd.MarkFlagRequired("end-block"); err != nil {
-		panic(fmt.Sprintf("failed to mark end-block as required: %v", err))
-	}
 }
 
 func checkFlags() error {
@@ -120,9 +166,11 @@ func checkFlags() error {
 		return err
 	}
 
-	// Validate block range
-	if inputReport.EndBlock < inputReport.StartBlock {
-		return fmt.Errorf("end-block must be greater than or equal to start-block")
+	// Validate block range only if both are explicitly specified by the user
+	if inputReport.StartBlock != BlockNotSet && inputReport.EndBlock != BlockNotSet {
+		if inputReport.EndBlock < inputReport.StartBlock {
+			return fmt.Errorf("end-block must be greater than or equal to start-block")
+		}
 	}
 
 	// Validate format
