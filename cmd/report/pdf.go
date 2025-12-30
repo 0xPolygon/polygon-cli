@@ -72,7 +72,7 @@ func outputPDF(report *BlockReport, outputFile string) error {
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to generate PDF: %w\n\nPDF generation requires Google Chrome or Chromium to be installed on your system.\nPlease install Chrome/Chromium and try again. See documentation for installation instructions", err)
+		return fmt.Errorf("failed to generate PDF (requires Chrome or Chromium to be installed - see documentation for installation instructions): %w", err)
 	}
 
 	// Write PDF to file
