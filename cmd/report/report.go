@@ -140,7 +140,7 @@ var ReportCmd = &cobra.Command{
 		}
 
 		// Output the report
-		if err := outputReport(report, inputReport.Format, inputReport.OutputFile); err != nil {
+		if err := outputReport(ctx, report, inputReport.Format, inputReport.OutputFile); err != nil {
 			return fmt.Errorf("failed to output report: %w", err)
 		}
 
@@ -615,14 +615,14 @@ func calculateTop10Stats(blocks []BlockInfo) Top10Stats {
 }
 
 // outputReport writes the report to the specified output
-func outputReport(report *BlockReport, format, outputFile string) error {
+func outputReport(ctx context.Context, report *BlockReport, format, outputFile string) error {
 	switch format {
 	case "json":
 		return outputJSON(report, outputFile)
 	case "html":
 		return outputHTML(report, outputFile)
 	case "pdf":
-		return outputPDF(report, outputFile)
+		return outputPDF(ctx, report, outputFile)
 	default:
 		return fmt.Errorf("unsupported format: %s", format)
 	}

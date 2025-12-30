@@ -12,14 +12,14 @@ import (
 )
 
 // outputPDF generates a PDF report from the BlockReport data
-func outputPDF(report *BlockReport, outputFile string) error {
+func outputPDF(ctx context.Context, report *BlockReport, outputFile string) error {
 	log.Info().Msg("Generating PDF report from HTML")
 
 	// Generate HTML from the existing template
 	html := generateHTML(report)
 
 	// Create chromedp context with timeout
-	timeoutCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	// Allocate a new browser context
