@@ -255,6 +255,7 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 	totalGasUsed := uint64(0)
 	totalBaseFee := big.NewInt(0)
 	blockCount := uint64(0)
+	blocksWithBaseFee := uint64(0)
 	uniqueSenders := make(map[string]bool)
 	uniqueRecipients := make(map[string]bool)
 	processedBlocks := uint64(0)
@@ -272,6 +273,7 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 			totalGasUsed += blockInfo.GasUsed
 			if blockInfo.BaseFeePerGas != nil {
 				totalBaseFee.Add(totalBaseFee, blockInfo.BaseFeePerGas)
+				blocksWithBaseFee++
 			}
 			blockCount++
 
@@ -323,8 +325,9 @@ done:
 	if blockCount > 0 {
 		report.Summary.AvgTxPerBlock = float64(totalTxCount) / float64(blockCount)
 		report.Summary.AvgGasPerBlock = float64(totalGasUsed) / float64(blockCount)
-		if totalBaseFee.Cmp(big.NewInt(0)) > 0 {
-			avgBaseFee := new(big.Int).Div(totalBaseFee, big.NewInt(int64(blockCount)))
+		// Only calculate average base fee if there are blocks with base fee (post-EIP-1559)
+		if blocksWithBaseFee > 0 {
+			avgBaseFee := new(big.Int).Div(totalBaseFee, big.NewInt(int64(blocksWithBaseFee)))
 			report.Summary.AvgBaseFeePerGas = avgBaseFee.String()
 		}
 	}
