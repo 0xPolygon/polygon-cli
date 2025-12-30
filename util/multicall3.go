@@ -206,8 +206,8 @@ func Multicall3FundAccountsWithNativeToken(c *ethclient.Client, tops *bind.Trans
 	}
 
 	tops.Value = big.NewInt(0).Mul(amount, big.NewInt(int64(len(accounts))))
-	tops.GasFeeCap = big.NewInt(300000000000) // 300 Gwei
-	tops.GasTipCap = big.NewInt(30000000000)  // 30 Gwei
+	tops.GasFeeCap = big.NewInt(30000000000) // 30 Gwei
+	tops.GasTipCap = big.NewInt(30000000000) // 30 Gwei
 
 	return sc.Aggregate3Value(tops, calls)
 }
