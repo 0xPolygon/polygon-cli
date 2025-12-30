@@ -21,6 +21,8 @@ polycli report [flags]
 
 The `report` command analyzes a range of blocks from an Ethereum-compatible blockchain and generates a comprehensive report with statistics and visualizations.
 
+**⚠️ Note**: Requires an RPC endpoint with `eth_getBlockReceipts` support (see [RPC Requirements](#rpc-requirements)).
+
 ## Features
 
 - **Stateless Operation**: All data is queried from the blockchain via RPC, no local storage required
@@ -140,6 +142,27 @@ The command uses smart defaults for block ranges:
 The default range of 500 blocks can be modified by changing the `DefaultBlockRange` constant in the code.
 
 **Note**: Block 0 (genesis) can be explicitly specified. To analyze only the genesis block, use `--start-block 0 --end-block 0`.
+
+## RPC Requirements
+
+**IMPORTANT**: This command requires an RPC endpoint that supports the `eth_getBlockReceipts` method. This is a non-standard but widely implemented extension to the JSON-RPC API.
+
+### Supported RPC Providers
+- ✅ Geth (full nodes)
+- ✅ Erigon
+- ✅ Polygon nodes
+- ✅ Most self-hosted nodes
+- ✅ Alchemy (premium endpoints)
+- ✅ QuickNode
+- ❌ Many public/free RPC endpoints (may not support `eth_getBlockReceipts`)
+- ❌ Infura (does not support `eth_getBlockReceipts`)
+
+If your RPC endpoint does not support `eth_getBlockReceipts`, the command will fail with an error like:
+```
+failed to fetch block receipts: method eth_getBlockReceipts does not exist/is not available
+```
+
+**Recommendation**: Use a self-hosted node or a premium RPC provider that supports this method.
 
 ## Notes
 

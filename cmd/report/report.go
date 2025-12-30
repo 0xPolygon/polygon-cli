@@ -380,6 +380,10 @@ func fetchBlockInfo(ctx context.Context, ec *ethrpc.Client, blockNum uint64, rat
 		blockInfo.TxCount = uint64(len(txs))
 
 		// Fetch all receipts for this block in a single call
+		// NOTE: eth_getBlockReceipts is a non-standard but widely supported RPC method.
+		// It's supported by Geth, Erigon, Polygon nodes, Alchemy, QuickNode, and most self-hosted nodes.
+		// It is NOT supported by Infura and some public RPC endpoints.
+		// If this method is not available, the command will fail.
 		if len(txs) > 0 {
 			// Wait for rate limiter before making RPC call
 			if err := rateLimiter.Wait(ctx); err != nil {
