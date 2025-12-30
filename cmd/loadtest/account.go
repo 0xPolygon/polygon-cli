@@ -442,19 +442,19 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 		return errors.New(errMsg)
 	}
 
-	log.Debug().Msg("checking if multicall3 is supported")
-	multicall3Addr, _ := util.IsMulticall3Supported(ctx, ap.client, true, tops, nil)
-	if multicall3Addr != nil {
-		log.Info().
-			Stringer("address", multicall3Addr).
-			Msg("multicall3 is supported and will be used to fund accounts")
-	} else {
-		log.Info().Msg("multicall3 is not supported, will use EOA transfers to fund accounts")
-	}
+	// log.Debug().Msg("checking if multicall3 is supported")
+	// multicall3Addr, _ := util.IsMulticall3Supported(ctx, ap.client, true, tops, nil)
+	// if multicall3Addr != nil {
+	// 	log.Info().
+	// 		Stringer("address", multicall3Addr).
+	// 		Msg("multicall3 is supported and will be used to fund accounts")
+	// } else {
+	// 	log.Info().Msg("multicall3 is not supported, will use EOA transfers to fund accounts")
+	// }
 
-	if multicall3Addr != nil {
-		return ap.fundAccountsWithMulticall3(ctx, tops, multicall3Addr)
-	}
+	// if multicall3Addr != nil {
+	// 	return ap.fundAccountsWithMulticall3(ctx, tops, multicall3Addr)
+	// }
 	return ap.fundAccountsWithEOATransfers(ctx, tops)
 }
 
