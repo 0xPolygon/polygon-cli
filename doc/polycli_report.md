@@ -21,7 +21,9 @@ polycli report [flags]
 
 The `report` command analyzes a range of blocks from an Ethereum-compatible blockchain and generates a comprehensive report with statistics and visualizations.
 
-**⚠️ Note**: Requires an RPC endpoint with `eth_getBlockReceipts` support (see [RPC Requirements](#rpc-requirements)).
+**⚠️ Important Requirements**:
+- RPC endpoint with `eth_getBlockReceipts` support (see [RPC Requirements](#rpc-requirements))
+- Chrome or Chromium for PDF generation (see [System Requirements](#system-requirements))
 
 ## Features
 
@@ -29,6 +31,7 @@ The `report` command analyzes a range of blocks from an Ethereum-compatible bloc
 - **Smart Defaults**: Automatically analyzes the latest 500 blocks if no range is specified
 - **JSON Output**: Always generates a structured JSON report for programmatic analysis
 - **HTML Visualization**: Optionally generates a visual HTML report with charts and tables
+- **PDF Export**: Generate PDF reports (requires Chrome/Chromium installed)
 - **Flexible Block Range**: Analyze any range of blocks with automatic range completion
 - **Transaction Metrics**: Track transaction counts, gas usage, and other key metrics
 
@@ -163,6 +166,41 @@ failed to fetch block receipts: method eth_getBlockReceipts does not exist/is no
 ```
 
 **Recommendation**: Use a self-hosted node or a premium RPC provider that supports this method.
+
+## System Requirements
+
+### PDF Generation
+
+**IMPORTANT**: PDF report generation requires Google Chrome or Chromium to be installed on your system. The command uses Chrome's headless mode to render the HTML report as a PDF.
+
+**Installing Chrome/Chromium:**
+
+- **macOS**:
+  ```bash
+  brew install --cask google-chrome
+  # or
+  brew install chromium
+  ```
+
+- **Ubuntu/Debian**:
+  ```bash
+  sudo apt-get update
+  sudo apt-get install chromium-browser
+  # or
+  sudo apt-get install google-chrome-stable
+  ```
+
+- **RHEL/CentOS/Fedora**:
+  ```bash
+  sudo dnf install chromium
+  # or install Chrome from official RPM
+  ```
+
+- **Windows**: Download and install from [google.com/chrome](https://www.google.com/chrome/)
+
+If Chrome/Chromium is not installed, PDF generation will fail with an error message indicating that Chrome could not be found.
+
+**Alternative**: If you need PDF reports but cannot install Chrome, you can generate an HTML report and convert it to PDF using another tool.
 
 ## Notes
 
