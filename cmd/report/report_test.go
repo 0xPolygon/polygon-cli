@@ -334,3 +334,130 @@ func TestDefaultBlockRangeConstant(t *testing.T) {
 		t.Errorf("DefaultBlockRange = %d, want 500", DefaultBlockRange)
 	}
 }
+
+// TestCheckFlagsValidation tests the validation in checkFlags function
+func TestCheckFlagsValidation(t *testing.T) {
+	// Save original values to restore after tests
+	originalParams := inputReport
+
+	// Helper to reset to valid defaults
+	resetToValidDefaults := func() {
+		inputReport = reportParams{
+			RpcUrl:      "http://localhost:8545",
+			StartBlock:  0,
+			EndBlock:    100,
+			OutputFile:  "",
+			Format:      "json",
+			Concurrency: 10,
+			RateLimit:   4.0,
+		}
+	}
+
+	tests := []struct {
+		name        string
+		setupParams func()
+		wantError   bool
+		errorMsg    string
+	}{
+		{
+			name: "valid parameters",
+			setupParams: func() {
+				resetToValidDefaults()
+			},
+			wantError: false,
+		},
+		{
+			name: "concurrency zero",
+			setupParams: func() {
+				resetToValidDefaults()
+				inputReport.Concurrency = 0
+			},
+			wantError: true,
+			errorMsg:  "concurrency must be at least 1",
+		},
+		{
+			name: "concurrency negative",
+			setupParams: func() {
+				resetToValidDefaults()
+				inputReport.Concurrency = -5
+			},
+			wantError: true,
+			errorMsg:  "concurrency must be at least 1",
+		},
+		{
+			name: "rate-limit zero",
+			setupParams: func() {
+				resetToValidDefaults()
+				inputReport.RateLimit = 0
+			},
+			wantError: true,
+			errorMsg:  "rate-limit must be greater than 0",
+		},
+		{
+			name: "rate-limit negative",
+			setupParams: func() {
+				resetToValidDefaults()
+				inputReport.RateLimit = -2.5
+			},
+			wantError: true,
+			errorMsg:  "rate-limit must be greater than 0",
+		},
+		{
+			name: "invalid format",
+			setupParams: func() {
+				resetToValidDefaults()
+				inputReport.Format = "xml"
+			},
+			wantError: true,
+			errorMsg:  "format must be either 'json', 'html', or 'pdf'",
+		},
+		{
+			name: "end-block less than start-block",
+			setupParams: func() {
+				resetToValidDefaults()
+				inputReport.StartBlock = 100
+				inputReport.EndBlock = 50
+			},
+			wantError: true,
+			errorMsg:  "end-block must be greater than or equal to start-block",
+		},
+		{
+			name: "minimum valid concurrency",
+			setupParams: func() {
+				resetToValidDefaults()
+				inputReport.Concurrency = 1
+			},
+			wantError: false,
+		},
+		{
+			name: "minimum valid rate-limit",
+			setupParams: func() {
+				resetToValidDefaults()
+				inputReport.RateLimit = 0.1
+			},
+			wantError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupParams()
+			err := checkFlags()
+
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("checkFlags() expected error containing %q, got nil", tt.errorMsg)
+				} else if err.Error() != tt.errorMsg {
+					t.Errorf("checkFlags() error = %q, want %q", err.Error(), tt.errorMsg)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("checkFlags() unexpected error: %v", err)
+				}
+			}
+		})
+	}
+
+	// Restore original values
+	inputReport = originalParams
+}

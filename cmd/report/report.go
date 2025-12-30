@@ -173,6 +173,16 @@ func checkFlags() error {
 		}
 	}
 
+	// Validate concurrency
+	if inputReport.Concurrency < 1 {
+		return fmt.Errorf("concurrency must be at least 1")
+	}
+
+	// Validate rate limit
+	if inputReport.RateLimit <= 0 {
+		return fmt.Errorf("rate-limit must be greater than 0")
+	}
+
 	// Validate format
 	if inputReport.Format != "json" && inputReport.Format != "html" && inputReport.Format != "pdf" {
 		return fmt.Errorf("format must be either 'json', 'html', or 'pdf'")
