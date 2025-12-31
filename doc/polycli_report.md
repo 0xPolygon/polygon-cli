@@ -210,7 +210,7 @@ If Chrome/Chromium is not installed, PDF generation will fail with an error mess
   - `--rate-limit` controls the maximum requests per second (default: 4)
   - Adjust these values based on your RPC endpoint's capacity
 - Progress is logged every 100 blocks
-- Blocks that cannot be fetched are skipped with a warning
+- **Data Integrity**: The command automatically retries failed block fetches up to 3 times. If any blocks cannot be fetched after all retry attempts, the command fails with an error listing the failed blocks. This ensures reports are deterministic and complete - the same parameters always produce the same report.
 - HTML reports include interactive hover tooltips on charts
 - For large block ranges, consider running the command with a dedicated RPC endpoint
 
