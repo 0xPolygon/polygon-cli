@@ -388,10 +388,17 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 
 			processedBlocks++
 			if processedBlocks%100 == 0 || processedBlocks == totalBlocks {
-				log.Info().Uint64("progress", processedBlocks).Uint64("total", totalBlocks).Msg("Progress")
+				successfulBlocks := processedBlocks - uint64(len(failedBlocks))
+				log.Info().Uint64("processed", processedBlocks).Uint64("successful", successfulBlocks).Uint64("failed", uint64(len(failedBlocks))).Uint64("total", totalBlocks).Msg("Progress")
 			}
 		case failedBlock := <-failedChan:
 			failedBlocks = append(failedBlocks, failedBlock)
+			processedBlocks++
+			// Log progress for failed blocks too
+			if processedBlocks%100 == 0 || processedBlocks == totalBlocks {
+				successfulBlocks := processedBlocks - uint64(len(failedBlocks))
+				log.Info().Uint64("processed", processedBlocks).Uint64("successful", successfulBlocks).Uint64("failed", uint64(len(failedBlocks))).Uint64("total", totalBlocks).Msg("Progress")
+			}
 		case <-ctx.Done():
 			// Parent context canceled (e.g., user pressed Ctrl+C)
 			// cancelWorkers() will be called by defer to stop all workers
