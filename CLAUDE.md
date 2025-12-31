@@ -129,6 +129,42 @@ The tool supports configuration via:
 
 **CRITICAL**: Before writing any code, systematically check these categories to avoid rework:
 
+### 0. Critical Thinking & Code Analysis (Meta-Level)
+**MOST IMPORTANT**: Think critically before implementing any suggestion or requirement.
+
+- **Analyze Existing Code First**: Before adding validation, checks, or features, thoroughly examine what already exists
+- **Question Redundancy**: If validation already exists earlier in the call chain, don't add duplicate checks
+- **Provide Feedback Before Implementation**: When a suggestion seems unnecessary or redundant, explain WHY rather than blindly implementing it
+- **Consider Token Efficiency**: Rework wastes time and tokens. Get it right the first time by applying this entire checklist systematically
+- **Defense-in-Depth vs Redundancy**:
+  - Defense-in-depth = validating at system boundaries (user input, external APIs, different layers)
+  - Redundancy = checking the same condition twice in the same function after it was already validated
+  - Apply defense-in-depth, avoid redundancy
+- **Evaluate Necessity**: Just because something CAN be added doesn't mean it SHOULD be. Ask: "Does this add value or just clutter?"
+
+**Questions to ask before writing ANY code:**
+1. "What validation/checks already exist in this call chain?"
+2. "Is this truly adding safety, or is it redundant?"
+3. "What value does this code provide?"
+4. "Am I implementing this because it was suggested, or because it's actually needed?"
+
+**Example of what NOT to do:**
+```go
+// Earlier in function (line 211)
+if report.EndBlock == math.MaxUint64 {
+    return fmt.Errorf("end block must be specified")
+}
+
+// ... code ...
+
+// Later in same function (line 231) - REDUNDANT
+if report.EndBlock == math.MaxUint64 {
+    return fmt.Errorf("internal error: end block cannot be math.MaxUint64")
+}
+totalBlocks := report.EndBlock - report.StartBlock + 1
+```
+This is pure redundancy - if the value can't be MaxUint64 (validated at line 211), checking again at line 231 adds zero value.
+
 ### 1. Security
 - **HTML/Template Injection**: Always use `html.EscapeString()` for any data interpolated into HTML, even if currently from trusted sources
 - **Input Validation**: Validate all user inputs at boundaries (flags, API inputs)
@@ -154,28 +190,32 @@ The tool supports configuration via:
 - **Retry Logic**: Failed operations should retry (with backoff) before failing
 - **Idempotency**: Same input parameters should produce identical output every time
 - **Validation**: Verify expected vs actual data counts; fail loudly if mismatched
-- **Question to ask**: "If I run this twice with the same parameters, will I get identical results? What makes this non-deterministic?"
+- **Use Correct Data Source**: For blockchain data, prefer receipt fields over transaction fields (e.g., `effectiveGasPrice` from receipt works for both legacy and EIP-1559 txs, while `gasPrice` from transaction is missing in EIP-1559)
+- **Question to ask**: "If I run this twice with the same parameters, will I get identical results? What makes this non-deterministic? Am I reading from the authoritative data source?"
 
-### 5. Error Handling
+### 5. Error Handling & Logging
 - **Error Wrapping**: Use `fmt.Errorf("context: %w", err)` to wrap errors with context
 - **Single-line Messages**: Put context before `%w` in single line: `fmt.Errorf("failed after %d attempts: %w", n, err)`
 - **Failure Modes**: Consider and handle all failure paths explicitly
 - **Logging Levels**: Use appropriate levels (Error for failures, Warn for retries, Info for progress)
-- **Question to ask**: "What can fail? How is each failure mode handled? Are errors properly wrapped?"
+- **Progress Accuracy**: Progress counters must reflect ALL completed work (successes + final failures), not just successes, or progress will appear stuck during retries
+- **Question to ask**: "What can fail? How is each failure mode handled? Are errors properly wrapped? Is progress logging accurate during retries/failures?"
 
 ### 6. Concurrency Patterns
 - **Channel Closing**: Close channels in the correct goroutine (usually the sender); use atomic counters to coordinate
+- **Channel Draining**: When using select with multiple channels and one closes, drain remaining channels to avoid missing messages
 - **Worker Pools**: Use `sync.WaitGroup` to wait for workers; protect shared state with mutexes or channels
 - **Race Conditions**: Run with `-race` flag during testing
 - **Goroutine Leaks**: Ensure every goroutine can exit on context cancellation
-- **Question to ask**: "Who closes each channel? Can any goroutine block forever? Does this have race conditions?"
+- **Question to ask**: "Who closes each channel? Can any goroutine block forever? Does this have race conditions? Are all channel messages guaranteed to be read?"
 
 ### 7. Testing & Validation
 - **Test Coverage**: Write tests for edge cases, not just happy paths
 - **Error Injection**: Test retry logic, failure modes, and error paths
 - **Resource Limits**: Test with large inputs to verify scalability
 - **Cancellation**: Test that context cancellation stops operations immediately
-- **Question to ask**: "What edge cases exist? How do I test failure modes?"
+- **Documentation Consistency**: Ensure documentation accurately describes implementation behavior (e.g., "blocks are skipped" vs "command fails on errors")
+- **Question to ask**: "What edge cases exist? How do I test failure modes? Does the documentation match what the code actually does?"
 
 ### Common Patterns to Apply by Default
 
