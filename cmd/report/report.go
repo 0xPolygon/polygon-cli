@@ -399,6 +399,11 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 		}
 	}
 done:
+	// Drain any remaining failed blocks from failedChan to avoid missing failures
+	for failedBlock := range failedChan {
+		failedBlocks = append(failedBlocks, failedBlock)
+	}
+
 	// Check if any blocks failed after all retry attempts
 	if len(failedBlocks) > 0 {
 		slices.Sort(failedBlocks)
