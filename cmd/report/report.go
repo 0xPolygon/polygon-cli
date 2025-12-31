@@ -529,11 +529,14 @@ func fetchBlockInfo(ctx context.Context, ec *ethrpc.Client, blockNum uint64, rat
 				txHash, _ := txMap["hash"].(string)
 				from, _ := txMap["from"].(string)
 				to, _ := txMap["to"].(string)
-				gasPrice := hexToUint64(txMap["gasPrice"])
 				gasLimit := hexToUint64(txMap["gas"])
 
 				receipt := receipts[i]
 				gasUsed := hexToUint64(receipt["gasUsed"])
+				// Use effectiveGasPrice from receipt which works for both legacy and EIP-1559 transactions
+				// For legacy txs: effectiveGasPrice = gasPrice
+				// For EIP-1559 txs: effectiveGasPrice = baseFee + min(maxPriorityFeePerGas, maxFeePerGas - baseFee)
+				gasPrice := hexToUint64(receipt["effectiveGasPrice"])
 				gasUsedPercent := 0.0
 				if blockInfo.GasLimit > 0 {
 					gasUsedPercent = (float64(gasUsed) / float64(blockInfo.GasLimit)) * 100
