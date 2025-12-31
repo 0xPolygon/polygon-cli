@@ -1160,6 +1160,7 @@ func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.Pr
 			Data:      nil,
 			Value:     amount,
 		}
+		log.Info().Uint64("gasFeeCap", dynamicFeeTx.GasFeeCap.Uint64()).Uint64("gasTipCap", dynamicFeeTx.GasTipCap.Uint64()).Msg("Creating fund tx")
 		tx = types.NewTx(dynamicFeeTx)
 	}
 
