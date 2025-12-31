@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -204,13 +205,37 @@ func (ap *AccountPool) AllAccountsReady() (bool, int, int) {
 
 // Adds N random accounts to the pool
 func (ap *AccountPool) AddRandomN(ctx context.Context, n uint64) error {
+	// for i := uint64(0); i < n; i++ {
+	// 	err := ap.AddRandom(ctx)
+	// 	if err != nil {
+	// 		return fmt.Errorf("failed to add random account: %w", err)
+	// 	}
+	// }
+	pks := make([]*ecdsa.PrivateKey, n)
 	for i := uint64(0); i < n; i++ {
-		err := ap.AddRandom(ctx)
+		privateKey, err := crypto.GenerateKey()
 		if err != nil {
-			return fmt.Errorf("failed to add random account: %w", err)
+			return fmt.Errorf("failed to generate private key: %w", err)
+		}
+		pks[i] = privateKey
+	}
+
+	// Dump data to a file "pks"
+	f, err := os.Create("./privatekeys")
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create private keys file")
+	}
+	defer f.Close()
+	for _, pk := range pks {
+		// pkBytes := crypto.FromECDSA(pk)
+		pkStr := util.GetPrivateKeyHex(pk)
+		_, err := fmt.Fprintf(f, "%s\n", pkStr)
+		if err != nil {
+			return fmt.Errorf("failed to write private key: %w", err)
 		}
 	}
-	return nil
+
+	return ap.AddN(ctx, pks...)
 }
 
 // Adds a random account to the pool
