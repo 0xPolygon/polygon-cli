@@ -828,6 +828,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 	// setup tracking for preconfs
 	preconfTracker := NewPreconfTracker(c)
 	defer preconfTracker.Stats()
+	log.Info().Msg("Setup preconf tracker")
 
 	log.Debug().Msg("Starting main load test loop")
 	var wg sync.WaitGroup
@@ -931,6 +932,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 					recordSample(routineID, requestID, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
 				}
 				if tErr == nil && inputLoadTestParams.CheckForPreconf {
+					log.Info().Msg("Send tx for preconf tracking...")
 					go preconfTracker.Track(ltTxHash)
 				}
 				if tErr == nil && inputLoadTestParams.WaitForReceipt {
