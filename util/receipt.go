@@ -84,9 +84,9 @@ func internalWaitReceipt(ctx context.Context, client *ethclient.Client, txHash c
 }
 
 func WaitReceiptNew(ctx context.Context, client *ethclient.Client, txHash common.Hash) (*types.Receipt, error) {
-	var maxRetries uint = 10
+	var maxRetries uint = 20
 	var timeout time.Duration = time.Minute
-	var delay time.Duration = 2 * time.Second
+	var delay time.Duration = 3 * time.Second
 
 	// Create context with timeout
 	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -114,9 +114,9 @@ func WaitReceiptNew(ctx context.Context, client *ethclient.Client, txHash common
 }
 
 func WaitPreconf(ctx context.Context, client *ethclient.Client, txHash common.Hash) (bool, error) {
-	var maxRetries uint = 15
+	var maxRetries uint = 20
 	var timeout time.Duration = time.Minute
-	var delay time.Duration = 1 * time.Second
+	var delay time.Duration = 1500 * time.Millisecond
 
 	// Create context with timeout
 	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
