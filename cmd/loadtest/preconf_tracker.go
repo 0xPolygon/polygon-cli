@@ -28,8 +28,9 @@ type PreconfTracker struct {
 	falsePositiveCount atomic.Uint64
 	confidence         atomic.Uint64
 
-	preconfDurationLock sync.Mutex
-	preconfDurations    []time.Duration
+	mu               sync.Mutex
+	preconfDurations []time.Duration
+	blockDiffs       []uint64
 }
 
 func NewPreconfTracker(client *ethclient.Client) *PreconfTracker {
@@ -85,9 +86,9 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 	pt.totalTasks.Add(1)
 	if preconfStatus {
 		pt.preconfSuccess.Add(1)
-		pt.preconfDurationLock.Lock()
+		pt.mu.Lock()
 		pt.preconfDurations = append(pt.preconfDurations, preconfDuration)
-		pt.preconfDurationLock.Unlock()
+		pt.mu.Unlock()
 	} else {
 		pt.preconfFail.Add(1)
 	}
@@ -125,6 +126,9 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 		// if receipt received in less than 10 blocks and preconf said
 		// true, increase the confidence meter.
 		if blockDiff < 10 {
+			pt.mu.Lock()
+			pt.blockDiffs = append(pt.blockDiffs, blockDiff)
+			pt.mu.Unlock()
 			pt.confidence.Add(1)
 		}
 	}
@@ -140,7 +144,7 @@ func (pt *PreconfTracker) Stats() {
 		Uint64("confidence", pt.confidence.Load()).
 		Msg("Preconf Tracker Stats")
 
-	pt.preconfDurationLock.Lock()
+	pt.mu.Lock()
 	path := "preconf_durations" + time.Now().String() + ".csv"
 	err := dumpDurationsCSV(path, pt.preconfDurations)
 	if err != nil {
@@ -148,7 +152,44 @@ func (pt *PreconfTracker) Stats() {
 	} else {
 		log.Info().Str("path", path).Msg("Dumped preconf durations into file")
 	}
-	pt.preconfDurationLock.Unlock()
+
+	path = "preconf_block_diffs" + time.Now().String() + ".csv"
+	err = dumpBlockDiff(path, pt.blockDiffs)
+	if err != nil {
+		log.Error().Err(err).Msg("Error dumping preconf block diffs")
+	} else {
+		log.Info().Str("path", path).Msg("Dumped preconf block diffs into file")
+	}
+
+	pt.mu.Unlock()
+}
+
+func dumpBlockDiff(path string, diffs []uint64) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	w := csv.NewWriter(f)
+	defer w.Flush()
+
+	// header
+	if err := w.Write([]string{"idx", "diff"}); err != nil {
+		return err
+	}
+
+	for i, d := range diffs {
+		row := []string{
+			strconv.Itoa(i),
+			strconv.FormatUint(d, 10),
+		}
+		if err := w.Write(row); err != nil {
+			return err
+		}
+	}
+
+	return w.Error()
 }
 
 func dumpDurationsCSV(path string, durations []time.Duration) error {
