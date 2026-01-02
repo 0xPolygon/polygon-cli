@@ -60,11 +60,6 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 		}()
 
 		preconfStatus, preconfError = util.WaitPreconf(context.Background(), pt.client, txHash)
-		if preconfStatus {
-			pt.preconfSuccess.Add(1)
-		} else {
-			pt.preconfFail.Add(1)
-		}
 	}()
 
 	// wait for receipt
@@ -87,13 +82,15 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 
 	wg.Wait()
 
+	pt.totalTasks.Add(1)
 	if preconfStatus {
+		pt.preconfSuccess.Add(1)
 		pt.preconfDurationLock.Lock()
 		pt.preconfDurations = append(pt.preconfDurations, preconfDuration)
 		pt.preconfDurationLock.Unlock()
+	} else {
+		pt.preconfFail.Add(1)
 	}
-
-	pt.totalTasks.Add(1)
 
 	// both failed case. no tx inclusion in txpool or block
 	if preconfError != nil && receiptError != nil {
