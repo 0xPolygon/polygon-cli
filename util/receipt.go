@@ -83,14 +83,40 @@ func internalWaitReceipt(ctx context.Context, client *ethclient.Client, txHash c
 	}
 }
 
-func WaitPreconf(ctx context.Context, client *ethclient.Client, txHash common.Hash) (bool, error) {
-	return internalWaitPreconf(ctx, client, txHash)
+func WaitReceiptNew(ctx context.Context, client *ethclient.Client, txHash common.Hash) (*types.Receipt, error) {
+	var maxRetries uint = 10
+	var timeout time.Duration = time.Minute
+	var delay time.Duration = 2 * time.Second
+
+	// Create context with timeout
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	for attempt := uint(0); ; attempt++ {
+		receipt, err := client.TransactionReceipt(timeoutCtx, txHash)
+		if err == nil && receipt != nil {
+			return receipt, nil
+		}
+
+		// If maxRetries > 0 and we've reached the limit, exit
+		// Note: effectiveMaxRetries is always > 0 due to default above
+		if maxRetries > 0 && attempt >= maxRetries-1 {
+			return nil, fmt.Errorf("failed to get receipt after %d attempts: %w", maxRetries, err)
+		}
+
+		select {
+		case <-timeoutCtx.Done():
+			return nil, timeoutCtx.Err()
+		case <-time.After(delay):
+			// Continue
+		}
+	}
 }
 
-func internalWaitPreconf(ctx context.Context, client *ethclient.Client, txHash common.Hash) (bool, error) {
-	var maxRetries uint = 3
-	var timeout time.Duration = 30 * time.Second
-	var delay time.Duration = time.Second
+func WaitPreconf(ctx context.Context, client *ethclient.Client, txHash common.Hash) (bool, error) {
+	var maxRetries uint = 15
+	var timeout time.Duration = time.Minute
+	var delay time.Duration = 1 * time.Second
 
 	// Create context with timeout
 	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
