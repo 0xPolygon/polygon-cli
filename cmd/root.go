@@ -27,6 +27,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/parsebatchl2data"
 	"github.com/0xPolygon/polygon-cli/cmd/parseethwallet"
 	"github.com/0xPolygon/polygon-cli/cmd/publish"
+	"github.com/0xPolygon/polygon-cli/cmd/report"
 	"github.com/0xPolygon/polygon-cli/cmd/retest"
 	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz"
 	"github.com/0xPolygon/polygon-cli/cmd/signer"
@@ -147,6 +148,7 @@ func NewPolycliCommand() *cobra.Command {
 		nodekey.NodekeyCmd,
 		p2p.P2pCmd,
 		parseethwallet.ParseETHWalletCmd,
+		report.ReportCmd,
 		retest.RetestCmd,
 		rpcfuzz.RPCFuzzCmd,
 		signer.SignerCmd,
