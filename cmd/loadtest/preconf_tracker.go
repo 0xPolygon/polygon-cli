@@ -125,7 +125,7 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 	if preconfError == nil && receiptError == nil {
 		// after how many blocks did the tx got mined
 		blockDiff := receipt.BlockNumber.Uint64() - currentBlock
-		// if receipt got received in less than 10 blocks and preconf said
+		// if receipt received in less than 10 blocks and preconf said
 		// true, increase the confidence meter.
 		if blockDiff < 10 {
 			pt.confidence.Add(1)
