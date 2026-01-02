@@ -32,8 +32,8 @@ type PreconfTracker struct {
 	preconfDurations    []time.Duration
 }
 
-func NewPreconfTracker(client *ethclient.Client) PreconfTracker {
-	return PreconfTracker{
+func NewPreconfTracker(client *ethclient.Client) *PreconfTracker {
+	return &PreconfTracker{
 		client:           client,
 		preconfDurations: make([]time.Duration, 0, 1024),
 	}

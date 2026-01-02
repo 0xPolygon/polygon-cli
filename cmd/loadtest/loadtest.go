@@ -546,6 +546,8 @@ func runLoadTest(ctx context.Context) error {
 	rpc.SetHeader("Accept-Encoding", "identity")
 	ec := ethclient.NewClient(rpc)
 
+	var preconfTracker *PreconfTracker
+
 	// Define the main loop function.
 	// Make sure to define any logic associated to the load test (initialization, main load test loop
 	// or completion steps) in this function in order to handle cancellation signals properly.
@@ -555,7 +557,12 @@ func runLoadTest(ctx context.Context) error {
 			return err
 		}
 
-		if err = mainLoop(ctx, ec, rpc); err != nil {
+		if inputLoadTestParams.CheckForPreconf {
+			preconfTracker = NewPreconfTracker(ec)
+			log.Info().Msg("Done setting up preconf tracker...")
+		}
+
+		if err = mainLoop(ctx, ec, rpc, preconfTracker); err != nil {
 			log.Error().Err(err).Msg("Error during the main load test loop")
 			return err
 		}
@@ -593,6 +600,9 @@ func runLoadTest(ctx context.Context) error {
 		log.Info().Msg("Time's up")
 	case <-sigCh:
 		log.Info().Msg("Interrupted.. Stopping load test")
+		if preconfTracker != nil {
+			preconfTracker.Stats()
+		}
 		if inputLoadTestParams.ShouldProduceSummary {
 			finalBlockNumber, err = ec.BlockNumber(ctx)
 			if err != nil {
@@ -668,7 +678,7 @@ func updateRateLimit(ctx context.Context, rl *rate.Limiter, rpc *ethrpc.Client, 
 	}
 }
 
-func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) error {
+func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client, pt *PreconfTracker) error {
 	ltp := inputLoadTestParams
 	log.Trace().Interface("Input Params", ltp).Msg("Params")
 
@@ -825,11 +835,6 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 
 	mustCheckMaxBaseFee, maxBaseFeeCtxCancel, waitBaseFeeToDrop := setupBaseFeeMonitoring(ctx, c, ltp)
 
-	// setup tracking for preconfs
-	preconfTracker := NewPreconfTracker(c)
-	defer preconfTracker.Stats()
-	log.Info().Msg("Setup preconf tracker")
-
 	log.Debug().Msg("Starting main load test loop")
 	var wg sync.WaitGroup
 	for routineID := int64(0); routineID < maxRoutines; routineID++ {
@@ -931,9 +936,8 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				if !inputLoadTestParams.FireAndForget {
 					recordSample(routineID, requestID, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
 				}
-				if tErr == nil && inputLoadTestParams.CheckForPreconf {
-					log.Info().Msg("Send tx for preconf tracking...")
-					go preconfTracker.Track(ltTxHash)
+				if tErr == nil && inputLoadTestParams.CheckForPreconf && pt != nil {
+					go pt.Track(ltTxHash)
 				}
 				if tErr == nil && inputLoadTestParams.WaitForReceipt {
 					receiptMaxRetries := inputLoadTestParams.ReceiptRetryMax
