@@ -345,7 +345,24 @@ func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *e
 	}
 	wg.Wait()
 
-	blocks.avgBlockGasUsed = big.NewInt(0).Div(totalGasUsed, big.NewInt(int64(len(blocks.blocks)))).Uint64()
+	// Calculate average block gas used safely
+	numBlocks := len(blocks.blocks)
+	if numBlocks == 0 {
+		blocks.avgBlockGasUsed = 0
+	} else if numBlocks > math.MaxInt64 {
+		// Extremely unlikely but theoretically possible
+		log.Warn().Int("num_blocks", numBlocks).Msg("number of blocks exceeds int64 max, cannot calculate average")
+		blocks.avgBlockGasUsed = 0
+	} else {
+		avgGasUsed := new(big.Int).Div(totalGasUsed, big.NewInt(int64(numBlocks)))
+		if avgGasUsed.IsUint64() {
+			blocks.avgBlockGasUsed = avgGasUsed.Uint64()
+		} else {
+			// Result exceeds uint64 max, cap it to max value
+			blocks.avgBlockGasUsed = math.MaxUint64
+			log.Warn().Msg("average block gas used exceeds uint64 max, capping to max value")
+		}
+	}
 
 	return blocks
 }
