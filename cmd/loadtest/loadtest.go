@@ -114,10 +114,10 @@ func getRandomMode() loadTestMode {
 	// blob, contract call, recall, rpc, uniswap v3
 	modes := []loadTestMode{
 		loadTestModeERC20,
-		// loadTestModeERC721,
-		// loadTestModeDeploy,
-		// loadTestModeIncrement,
-		// loadTestModeStore,
+		loadTestModeERC721,
+		loadTestModeDeploy,
+		loadTestModeIncrement,
+		loadTestModeStore,
 		loadTestModeTransaction,
 	}
 	return modes[randSrc.Intn(len(modes))]
