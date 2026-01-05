@@ -1,6 +1,7 @@
 package gasmanager
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"sync/atomic"
 )
@@ -18,11 +19,14 @@ type DynamicGasPriceStrategy struct {
 }
 
 // NewDynamicGasPriceStrategy creates a new DynamicGasPriceStrategy with the given configuration.
-func NewDynamicGasPriceStrategy(config DynamicGasPriceConfig) *DynamicGasPriceStrategy {
+func NewDynamicGasPriceStrategy(config DynamicGasPriceConfig) (*DynamicGasPriceStrategy, error) {
+	if len(config.GasPrices) == 0 {
+		return nil, fmt.Errorf("DynamicGasPriceConfig.GasPrices cannot be empty")
+	}
 	s := &DynamicGasPriceStrategy{
 		config: config,
 	}
-	return s
+	return s, nil
 }
 
 // GetGasPrice retrieves the next gas price from the list, applying random variation.
