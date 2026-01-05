@@ -36,7 +36,7 @@ func (s *DynamicGasPriceStrategy) GetGasPrice() *uint64 {
 
 	variationMin := float64(1) - s.config.Variation
 	variationMax := float64(1) + s.config.Variation
-	factor := variationMin + rand.Float64()*variationMax
+	factor := variationMin + rand.Float64()*(variationMax-variationMin)
 	varied := uint64(float64(gp) * factor)
 	return &varied
 }
