@@ -67,7 +67,7 @@ type transaction struct {
 
 // buildChart builds the transaction gas chart based on the provided command and input arguments.
 func buildChart(cmd *cobra.Command) error {
-	ctx := context.Background()
+	ctx := cmd.Context()
 	log.Info().
 		Str("rpc_url", inputArgs.rpcURL).
 		Float64("rate_limit", inputArgs.rateLimit).
