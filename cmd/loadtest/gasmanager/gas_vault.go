@@ -1,6 +1,7 @@
 package gasmanager
 
 import (
+	"context"
 	"math"
 	"sync"
 	"time"
@@ -36,13 +37,22 @@ func (o *GasVault) AddGas(gas uint64) {
 }
 
 // SpendOrWaitAvailableBudget attempts to spend the specified amount of gas from the vault's available budget.
-func (o *GasVault) SpendOrWaitAvailableBudget(gas uint64) {
+// It blocks until sufficient budget is available or the context is cancelled.
+func (o *GasVault) SpendOrWaitAvailableBudget(ctx context.Context, gas uint64) error {
 	const intervalToCheckBudgetAvailability = 100 * time.Millisecond
+	ticker := time.NewTicker(intervalToCheckBudgetAvailability)
+	defer ticker.Stop()
+
 	for {
 		if spent := o.trySpendBudget(gas); spent {
-			break
+			return nil
 		}
-		time.Sleep(intervalToCheckBudgetAvailability)
+		select {
+		case <-ticker.C:
+			continue
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 

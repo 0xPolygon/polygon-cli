@@ -915,7 +915,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 						Int64("requestID", requestID).
 						Uint64("gas", fixedGasLimit).
 						Msg("spending or waiting for fixed gas limit from gas budget")
-					gasVault.SpendOrWaitAvailableBudget(fixedGasLimit)
+					if err := gasVault.SpendOrWaitAvailableBudget(ctx, fixedGasLimit); err != nil {
+						log.Debug().Err(err).Msg("gas vault cancelled")
+						return
+					}
 					sendingTops.GasLimit = fixedGasLimit
 				}
 
@@ -1006,7 +1009,10 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 							// 	Int64("requestID", requestID).
 							// 	Uint64("gas", ltTx.Gas()).
 							// 	Msg("spending gas from gas budget after transaction is sent")
-							gasVault.SpendOrWaitAvailableBudget(ltTx.Gas())
+							if err := gasVault.SpendOrWaitAvailableBudget(ctx, ltTx.Gas()); err != nil {
+								log.Debug().Err(err).Msg("gas vault cancelled")
+								return
+							}
 						}
 
 						log.Trace().
