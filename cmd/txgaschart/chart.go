@@ -193,7 +193,9 @@ func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
 
 	for _, b := range metadata.blocksMetadata.blocks {
 		for _, t := range b.txs {
-			// Ensure gasPrice is >= 1 for logarithmic scale
+			// For plotting on a logarithmic Y scale we must avoid zero/negative values.
+			// Clamp gasPrice to at least 1 for visualization purposes; this means the
+			// plotted gas price may differ from the original t.gasPrice when it is <= 0.
 			gasPrice := t.gasPrice
 			if gasPrice <= 0 {
 				gasPrice = 1
