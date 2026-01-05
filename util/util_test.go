@@ -147,17 +147,17 @@ func TestGetSenderFromTx_InvalidSignature(t *testing.T) {
 
 	// Create a mock PolyTransaction with invalid signature values
 	mockTx := &mockPolyTransaction{
-		txType:  0,
-		chainID: 1,
-		nonce:   0,
+		txType:   0,
+		chainID:  1,
+		nonce:    0,
 		gasPrice: big.NewInt(1000000000),
-		gas:     21000,
-		to:      to,
-		value:   big.NewInt(1000),
-		data:    []byte{},
-		v:       big.NewInt(27), // Invalid v, r, s combination
-		r:       big.NewInt(0),
-		s:       big.NewInt(0),
+		gas:      21000,
+		to:       to,
+		value:    big.NewInt(1000),
+		data:     []byte{},
+		v:        big.NewInt(27), // Invalid v, r, s combination
+		r:        big.NewInt(0),
+		s:        big.NewInt(0),
 	}
 
 	_, err := GetSenderFromTx(ctx, mockTx)
@@ -215,15 +215,15 @@ func TestGetSenderFromTx_UnsupportedType(t *testing.T) {
 
 	// Create a mock transaction with an unsupported type (e.g., type 3)
 	mockTx := &mockPolyTransaction{
-		txType:  3, // Unsupported type
-		chainID: 1,
-		from:    common.HexToAddress("0x0000000000000000000000000000000000000000"),
-		nonce:   0,
+		txType:   3, // Unsupported type
+		chainID:  1,
+		from:     common.HexToAddress("0x0000000000000000000000000000000000000000"),
+		nonce:    0,
 		gasPrice: big.NewInt(1000000000),
-		gas:     21000,
-		to:      to,
-		value:   big.NewInt(1000),
-		data:    []byte{},
+		gas:      21000,
+		to:       to,
+		value:    big.NewInt(1000),
+		data:     []byte{},
 	}
 
 	// For type > 2, GetSenderFromTx should return the 'from' field directly
@@ -373,17 +373,17 @@ func createPolyTransactionFromSignedTx(t *testing.T, signedTx *types.Transaction
 	}
 
 	mockTx := &mockPolyTransaction{
-		txType:   uint64(signedTx.Type()),
-		chainID:  signedTx.ChainId().Uint64(),
-		nonce:    signedTx.Nonce(),
-		gas:      signedTx.Gas(),
-		to:       to,
-		value:    signedTx.Value(),
-		data:     signedTx.Data(),
-		v:        v,
-		r:        r,
-		s:        s,
-		hash:     signedTx.Hash(),
+		txType:  uint64(signedTx.Type()),
+		chainID: signedTx.ChainId().Uint64(),
+		nonce:   signedTx.Nonce(),
+		gas:     signedTx.Gas(),
+		to:      to,
+		value:   signedTx.Value(),
+		data:    signedTx.Data(),
+		v:       v,
+		r:       r,
+		s:       s,
+		hash:    signedTx.Hash(),
 	}
 
 	// Set price fields based on transaction type
@@ -416,21 +416,19 @@ type mockPolyTransaction struct {
 	v, r, s              *big.Int
 	hash                 common.Hash
 	blockNumber          *big.Int
-	blockHash            common.Hash
-	transactionIndex     uint
 }
 
-func (m *mockPolyTransaction) Type() uint64                       { return m.txType }
-func (m *mockPolyTransaction) ChainID() uint64                    { return m.chainID }
-func (m *mockPolyTransaction) From() common.Address               { return m.from }
-func (m *mockPolyTransaction) Nonce() uint64                      { return m.nonce }
-func (m *mockPolyTransaction) GasPrice() *big.Int                 { return m.gasPrice }
-func (m *mockPolyTransaction) MaxPriorityFeePerGas() uint64       { return m.maxPriorityFeePerGas }
-func (m *mockPolyTransaction) MaxFeePerGas() uint64               { return m.maxFeePerGas }
-func (m *mockPolyTransaction) Gas() uint64                        { return m.gas }
-func (m *mockPolyTransaction) To() common.Address                 { return m.to }
-func (m *mockPolyTransaction) Value() *big.Int                    { return m.value }
-func (m *mockPolyTransaction) Data() []byte                       { return m.data }
+func (m *mockPolyTransaction) Type() uint64                 { return m.txType }
+func (m *mockPolyTransaction) ChainID() uint64              { return m.chainID }
+func (m *mockPolyTransaction) From() common.Address         { return m.from }
+func (m *mockPolyTransaction) Nonce() uint64                { return m.nonce }
+func (m *mockPolyTransaction) GasPrice() *big.Int           { return m.gasPrice }
+func (m *mockPolyTransaction) MaxPriorityFeePerGas() uint64 { return m.maxPriorityFeePerGas }
+func (m *mockPolyTransaction) MaxFeePerGas() uint64         { return m.maxFeePerGas }
+func (m *mockPolyTransaction) Gas() uint64                  { return m.gas }
+func (m *mockPolyTransaction) To() common.Address           { return m.to }
+func (m *mockPolyTransaction) Value() *big.Int              { return m.value }
+func (m *mockPolyTransaction) Data() []byte                 { return m.data }
 func (m *mockPolyTransaction) DataStr() string {
 	return "0x" + common.Bytes2Hex(m.data)
 }
