@@ -349,11 +349,8 @@ func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *e
 	numBlocks := len(blocks.blocks)
 	if numBlocks == 0 {
 		blocks.avgBlockGasUsed = 0
-	} else if numBlocks > math.MaxInt64 {
-		// Extremely unlikely but theoretically possible
-		log.Warn().Int("num_blocks", numBlocks).Msg("number of blocks exceeds int64 max, cannot calculate average")
-		blocks.avgBlockGasUsed = 0
 	} else {
+		// len() returns int, which always fits in int64, so conversion is safe
 		avgGasUsed := new(big.Int).Div(totalGasUsed, big.NewInt(int64(numBlocks)))
 		if avgGasUsed.IsUint64() {
 			blocks.avgBlockGasUsed = avgGasUsed.Uint64()
