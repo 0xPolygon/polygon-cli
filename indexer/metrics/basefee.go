@@ -60,7 +60,7 @@ func (b *BaseFeeMetric) ProcessBlock(block rpctypes.PolyBlock) {
 }
 
 // GetMetric returns the current base fee statistics
-func (b *BaseFeeMetric) GetMetric() interface{} {
+func (b *BaseFeeMetric) GetMetric() any {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 

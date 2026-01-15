@@ -16,13 +16,14 @@ Commands for claiming deposits on a particular chain.
 ## Flags
 
 ```bash
-      --bridge-service-url string   URL of the bridge service
-      --deposit-count uint32        deposit count of the bridge transaction
-      --deposit-network uint32      rollup ID of the network where the deposit was made
-      --global-index string         an override of the global index value
-  -h, --help                        help for claim
-      --proof-ger string            if specified and using legacy mode, the proof will be generated against this GER
-      --wait duration               retry claiming until deposit is ready, up to specified duration (available for claim asset and claim message)
+      --bridge-service-url string         URL of the bridge service
+      --deposit-count uint32              deposit count of the bridge transaction
+      --deposit-network uint32            rollup ID of the network where the deposit was made
+      --global-index string               an override of the global index value
+  -h, --help                              help for claim
+      --proof-ger string                  if specified and using legacy mode, the proof will be generated against this GER
+      --proof-l1-info-tree-index uint32   if specified and using aggkit mode, the proof will be generated against this L1 Info Tree Index
+      --wait duration                     retry claiming until deposit is ready, up to specified duration (available for claim asset and claim message)
 ```
 
 The command also inherits flags from parent commands.

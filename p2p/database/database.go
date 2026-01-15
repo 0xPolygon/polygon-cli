@@ -22,11 +22,15 @@ type Database interface {
 
 	// WriteBlockHeaders will write the block headers if ShouldWriteBlocks
 	// returns true.
-	WriteBlockHeaders(context.Context, []*types.Header, time.Time)
+	WriteBlockHeaders(context.Context, []*types.Header, time.Time, bool)
 
 	// WriteBlockHashes will write the block hashes if ShouldWriteBlockEvents
 	// returns true.
 	WriteBlockHashes(context.Context, *enode.Node, []common.Hash, time.Time)
+
+	// WriteBlockHashFirstSeen writes a partial block entry with just the hash
+	// first seen time if the block doesn't exist yet.
+	WriteBlockHashFirstSeen(context.Context, common.Hash, time.Time)
 
 	// WriteBlockBody will write the block bodies if ShouldWriteBlocks returns
 	// true.

@@ -1,16 +1,15 @@
 package foldtrace
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-
-	_ "embed"
 )
 
 var (

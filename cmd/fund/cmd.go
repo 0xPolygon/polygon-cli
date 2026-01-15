@@ -31,8 +31,18 @@ type cmdFundParams struct {
 	OutputFile         string
 
 	KeyFile string
+	Seed    string
 
-	FunderAddress string
+	FunderAddress     string
+	Multicall3Address string
+
+	RateLimit float64
+
+	// ERC20 specific parameters
+	TokenAddress   string
+	TokenAmount    *big.Int
+	ApproveSpender string
+	ApproveAmount  *big.Int
 }
 
 var (
@@ -76,28 +86,67 @@ func init() {
 	params.FundingAmountInWei = defaultFundingInWei
 	f.Var(&flag.BigIntValue{Val: params.FundingAmountInWei}, "eth-amount", "amount of wei to send to each wallet")
 	f.StringVar(&params.KeyFile, "key-file", "", "file containing accounts private keys, one per line")
+	f.StringVar(&params.Seed, "seed", "", "seed string for deterministic wallet generation (e.g., 'ephemeral_test')")
 
+	// Output parameters.
 	f.StringVarP(&params.OutputFile, "file", "f", "wallets.json", "output JSON file path for storing addresses and private keys of funded wallets")
+
+	// ERC20 parameters
+	f.StringVar(&params.TokenAddress, "token-address", "", "address of the ERC20 token contract to mint and fund (if provided, enables ERC20 mode)")
+	params.TokenAmount = new(big.Int)
+	params.TokenAmount.SetString("1000000000000000000", 10) // 1 token
+	f.Var(&flag.BigIntValue{Val: params.TokenAmount}, "token-amount", "amount of ERC20 tokens to transfer from private-key wallet to each wallet")
+	f.StringVar(&params.ApproveSpender, "approve-spender", "", "address to approve for spending tokens from each funded wallet")
+	params.ApproveAmount = new(big.Int)
+	params.ApproveAmount.SetString("1000000000000000000000", 10) // 1000 tokens default
+	f.Var(&flag.BigIntValue{Val: params.ApproveAmount}, "approve-amount", "amount of ERC20 tokens to approve for the spender")
 
 	// Marking flags as mutually exclusive
 	FundCmd.MarkFlagsMutuallyExclusive("addresses", "number")
 	FundCmd.MarkFlagsMutuallyExclusive("addresses", "hd-derivation")
+	FundCmd.MarkFlagsMutuallyExclusive("addresses", "seed")
 	FundCmd.MarkFlagsMutuallyExclusive("key-file", "addresses")
 	FundCmd.MarkFlagsMutuallyExclusive("key-file", "number")
 	FundCmd.MarkFlagsMutuallyExclusive("key-file", "hd-derivation")
+	FundCmd.MarkFlagsMutuallyExclusive("key-file", "seed")
+	FundCmd.MarkFlagsMutuallyExclusive("seed", "hd-derivation")
 
 	// Require at least one method to specify target accounts
-	FundCmd.MarkFlagsOneRequired("addresses", "key-file", "number")
+	FundCmd.MarkFlagsOneRequired("addresses", "key-file", "number", "seed")
 
-	// Funder contract parameters.
-	f.StringVar(&params.FunderAddress, "contract-address", "", "address of pre-deployed Funder contract")
+	// Contract parameters.
+	f.StringVar(&params.FunderAddress, "funder-address", "", "address of pre-deployed funder contract")
+	f.StringVar(&params.Multicall3Address, "multicall3-address", "", "address of pre-deployed multicall3 contract")
+
+	// RPC parameters.
+	f.Float64Var(&params.RateLimit, "rate-limit", 4, "requests per second limit (use negative value to remove limit)")
 }
 
 func checkFlags() error {
+	// When using seed, require a number of wallets to generate
+	if params.Seed != "" && params.WalletsNumber <= 0 {
+		return errors.New("when using --seed, must also specify --number > 0 to indicate how many wallets to generate")
+	}
+
 	// Validate funding amount
 	minValue := big.NewInt(1000000000)
 	if params.FundingAmountInWei != nil && params.FundingAmountInWei.Cmp(minValue) <= 0 {
 		return errors.New("the funding amount must be greater than 1000000000")
 	}
+
+	// ERC20 specific validations
+	if params.TokenAddress != "" {
+		// ERC20 mode - validate token parameters
+		if params.TokenAmount == nil || params.TokenAmount.Cmp(big.NewInt(0)) <= 0 {
+			return errors.New("token amount must be greater than 0 when using ERC20 mode")
+		}
+		// Validate approve parameters if provided
+		if params.ApproveSpender != "" {
+			if params.ApproveAmount == nil || params.ApproveAmount.Cmp(big.NewInt(0)) <= 0 {
+				return errors.New("approve amount must be greater than 0 when approve spender is specified")
+			}
+		}
+	}
+
 	return nil
 }

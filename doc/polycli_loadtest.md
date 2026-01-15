@@ -89,6 +89,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --blob-fee-cap uint                      blob fee cap, or maximum blob fee per chunk, in Gwei (default 100000)
       --calldata string                        hex encoded calldata: function signature + encoded arguments (requires --mode contract-call and --contract-address)
       --chain-id uint                          chain ID for the transactions
+      --check-balance-before-funding           check account balance before funding sending accounts (saves gas when accounts are already funded)
   -c, --concurrency int                        number of requests to perform concurrently (default: one at a time) (default 1)
       --contract-address string                contract address for --mode contract-call (requires --calldata)
       --contract-call-payable                  mark function as payable using value from --eth-amount-in-wei (requires --mode contract-call and --contract-address)
@@ -112,7 +113,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
                                                cc, contract-call - make contract calls
                                                d, deploy - deploy contracts
                                                inc, increment - increment a counter
-                                               r, random - random modes (excludes: blob, call, inscription, recall, rpc, uniswapv3)
+                                               r, random - random modes (excludes: blob, call, recall, rpc, uniswapv3)
                                                R, recall - replay or simulate transactions
                                                rpc - call random rpc methods
                                                s, store - store bytes in a dynamic byte array

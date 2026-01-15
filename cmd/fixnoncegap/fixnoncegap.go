@@ -112,14 +112,12 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 	var maxNonce uint64
 	if inputFixNonceGapArgs.maxNonce != 0 {
 		maxNonce = inputFixNonceGapArgs.maxNonce
+		log.Info().Uint64("maxNonce", maxNonce).Msg("maxNonce loaded from --max-nonce flag")
 	} else {
-		maxNonce, err = getMaxNonceFromTxPool(addr)
+		log.Info().Msg("--max-nonce flag not set")
+		maxNonce, err = getMaxNonce(addr)
 		if err != nil {
-			if strings.Contains(err.Error(), "the method txpool_content does not exist/is not available") {
-				log.Error().Err(err).Msg("The RPC doesn't provide access to txpool_content, please check --help for more information about --max-nonce")
-				return nil
-			}
-			log.Error().Err(err).Msg("Unable to get max nonce from txpool")
+			log.Error().Err(err).Msg("Unable to get max nonce, please check --help for more information about --max-nonce")
 			return err
 		}
 	}
@@ -129,7 +127,11 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 		log.Info().Stringer("addr", addr).Msg("There is no nonce gap.")
 		return nil
 	}
-	log.Info().Stringer("addr", addr).Msgf("Nonce gap found. Max nonce: %d", maxNonce)
+	log.Info().
+		Stringer("addr", addr).
+		Uint64("currentNonce", currentNonce).
+		Uint64("maxNonce", maxNonce).
+		Msg("Nonce gap found")
 
 	gasPrice, err := rpcClient.SuggestGasPrice(cmd.Context())
 	if err != nil {
@@ -270,6 +272,26 @@ func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *type
 	}
 }
 
+func getMaxNonce(addr common.Address) (uint64, error) {
+	log.Info().Msg("getting max nonce from txpool_content")
+	maxNonce, err := getMaxNonceFromTxPool(addr)
+	if err == nil {
+		log.Info().Uint64("maxNonce", maxNonce).Msg("maxNonce loaded from txpool_content")
+		return maxNonce, nil
+	}
+	log.Warn().Err(err).Msg("unable to get max nonce from txpool_content")
+
+	log.Info().Msg("getting max nonce from pending nonce")
+	// if the error is not about txpool_content, falls back to PendingNonceAt
+	maxNonce, err = rpcClient.PendingNonceAt(context.Background(), addr)
+	if err != nil {
+		return 0, err
+	}
+
+	log.Info().Uint64("maxNonce", maxNonce).Msg("maxNonce loaded from pending nonce")
+	return maxNonce, nil
+}
+
 func getMaxNonceFromTxPool(addr common.Address) (uint64, error) {
 	var result PoolContent
 	err := rpcClient.Client().Call(&result, "txpool_content")
@@ -296,6 +318,7 @@ func getMaxNonceFromTxPool(addr common.Address) (uint64, error) {
 			nonceInt, ok := new(big.Int).SetString(nonce, 10)
 			if !ok {
 				err = fmt.Errorf("invalid nonce found: %s", nonce)
+				log.Warn().Err(err).Msg("unable to get txpool_content")
 				return 0, err
 			}
 

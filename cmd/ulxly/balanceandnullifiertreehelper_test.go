@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly"
-	"github.com/0xPolygon/polygon-cli/cmd/ulxly/testvectors"
+	vectors "github.com/0xPolygon/polygon-cli/cmd/ulxly/testvectors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"

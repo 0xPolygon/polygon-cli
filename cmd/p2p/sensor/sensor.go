@@ -3,11 +3,11 @@ package sensor
 import (
 	"context"
 	"crypto/ecdsa"
+	_ "embed"
 	"errors"
 	"fmt"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -70,6 +71,9 @@ type (
 		DiscoveryDNS                 string
 		Database                     string
 		NoDiscovery                  bool
+		RequestsCache                p2p.CacheOptions
+		ParentsCache                 p2p.CacheOptions
+		BlocksCache                  p2p.CacheOptions
 
 		bootnodes    []*enode.Node
 		staticNodes  []*enode.Node
@@ -80,6 +84,8 @@ type (
 )
 
 var (
+	//go:embed usage.md
+	sensorUsage       string
 	inputSensorParams sensorParams
 )
 
@@ -88,7 +94,7 @@ var (
 var SensorCmd = &cobra.Command{
 	Use:   "sensor [nodes file]",
 	Short: "Start a devp2p sensor that discovers other peers and will receive blocks and transactions.",
-	Long:  "If no nodes.json file exists, it will be created.",
+	Long:  sensorUsage,
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputSensorParams.NodesFile = args[0]
@@ -168,14 +174,14 @@ var SensorCmd = &cobra.Command{
 		// Fetch the latest block which will be used later when crafting the status
 		// message. This call will only be made once and stored in the head field
 		// until the sensor receives a new block it can overwrite it with.
-		block, err := getLatestBlock(inputSensorParams.RPC)
+		rpcBlock, err := getLatestBlock(inputSensorParams.RPC)
 		if err != nil {
 			return err
 		}
-		head := p2p.HeadBlock{
-			Hash:            block.Hash.ToHash(),
-			TotalDifficulty: block.TotalDifficulty.ToBigInt(),
-			Number:          block.Number.ToUint64(),
+
+		head := eth.NewBlockPacket{
+			Block: rpcBlock.ToBlock(),
+			TD:    rpcBlock.TotalDifficulty.ToBigInt(),
 		}
 
 		peersGauge := promauto.NewGauge(prometheus.GaugeOpts{
@@ -187,24 +193,30 @@ var SensorCmd = &cobra.Command{
 		msgCounter := promauto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "sensor",
 			Name:      "messages",
-			Help:      "The number and type of messages the sensor has received",
-		}, []string{"message", "url", "name"})
+			Help:      "The number and type of messages the sensor has sent and received",
+		}, []string{"message", "url", "name", "direction"})
+
+		metrics := p2p.NewBlockMetrics(head.Block)
 
 		// Create peer connection manager for broadcasting transactions
-		conns := p2p.NewConns()
+		// and managing the global blocks cache
+		conns := p2p.NewConns(p2p.ConnsOptions{
+			BlocksCache: inputSensorParams.BlocksCache,
+			Head:        head,
+		})
 
 		opts := p2p.EthProtocolOptions{
-			Context:     cmd.Context(),
-			Database:    db,
-			GenesisHash: common.HexToHash(inputSensorParams.GenesisHash),
-			RPC:         inputSensorParams.RPC,
-			SensorID:    inputSensorParams.SensorID,
-			NetworkID:   inputSensorParams.NetworkID,
-			Conns:       conns,
-			Head:        &head,
-			HeadMutex:   &sync.RWMutex{},
-			ForkID:      forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
-			MsgCounter:  msgCounter,
+			Context:       cmd.Context(),
+			Database:      db,
+			GenesisHash:   common.HexToHash(inputSensorParams.GenesisHash),
+			RPC:           inputSensorParams.RPC,
+			SensorID:      inputSensorParams.SensorID,
+			NetworkID:     inputSensorParams.NetworkID,
+			Conns:         conns,
+			ForkID:        forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
+			MsgCounter:    msgCounter,
+			RequestsCache: inputSensorParams.RequestsCache,
+			ParentsCache:  inputSensorParams.ParentsCache,
 		}
 
 		config := ethp2p.Config{
@@ -243,10 +255,11 @@ var SensorCmd = &cobra.Command{
 		defer sub.Unsubscribe()
 
 		ticker := time.NewTicker(2 * time.Second) // Ticker for recurring tasks every 2 seconds.
-		hourlyTicker := time.NewTicker(time.Hour) // Ticker for running DNS discovery every hour.
+		ticker1h := time.NewTicker(time.Hour)     // Ticker for running DNS discovery every hour.
 		defer ticker.Stop()
-		defer hourlyTicker.Stop()
+		defer ticker1h.Stop()
 
+		dnsLock := make(chan struct{}, 1)
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
@@ -258,19 +271,21 @@ var SensorCmd = &cobra.Command{
 			go handlePrometheus()
 		}
 
-		go handleAPI(&server, msgCounter)
+		go handleAPI(&server, msgCounter, conns)
 
 		// Start the RPC server for receiving transactions
 		go handleRPC(conns, inputSensorParams.NetworkID)
 
 		// Run DNS discovery immediately at startup.
-		go handleDNSDiscovery(&server)
+		go handleDNSDiscovery(&server, dnsLock)
 
 		for {
 			select {
 			case <-ticker.C:
 				peersGauge.Set(float64(server.PeerCount()))
 				db.WritePeers(cmd.Context(), server.Peers(), time.Now())
+
+				metrics.Update(conns.HeadBlock().Block, conns.OldestBlock())
 
 				urls := []string{}
 				for _, peer := range server.Peers() {
@@ -284,8 +299,8 @@ var SensorCmd = &cobra.Command{
 				if err := p2p.WritePeers(inputSensorParams.NodesFile, urls); err != nil {
 					log.Error().Err(err).Msg("Failed to write nodes to file")
 				}
-			case <-hourlyTicker.C:
-				go handleDNSDiscovery(&server)
+			case <-ticker1h.C:
+				go handleDNSDiscovery(&server, dnsLock)
 			case <-signals:
 				// This gracefully stops the sensor so that the peers can be written to
 				// the nodes file.
@@ -325,31 +340,37 @@ func handlePrometheus() {
 }
 
 // handleDNSDiscovery performs DNS-based peer discovery and adds new peers to
-// the p2p server. It syncs the DNS discovery tree and adds any newly discovered
-// peers not already in the peers map.
-func handleDNSDiscovery(server *ethp2p.Server) {
+// the p2p server. It uses an iterator to discover peers incrementally rather
+// than loading all nodes at once. The lock channel prevents concurrent runs.
+func handleDNSDiscovery(server *ethp2p.Server, lock chan struct{}) {
 	if len(inputSensorParams.DiscoveryDNS) == 0 {
+		return
+	}
+
+	select {
+	case lock <- struct{}{}:
+		defer func() { <-lock }()
+	default:
+		log.Warn().Msg("DNS discovery already running, skipping")
 		return
 	}
 
 	log.Info().
 		Str("discovery-dns", inputSensorParams.DiscoveryDNS).
-		Msg("Starting DNS discovery sync")
+		Msg("Starting DNS discovery")
 
 	client := dnsdisc.NewClient(dnsdisc.Config{})
-	tree, err := client.SyncTree(inputSensorParams.DiscoveryDNS)
+	iter, err := client.NewIterator(inputSensorParams.DiscoveryDNS)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to sync DNS discovery tree")
+		log.Error().Err(err).Msg("Failed to create DNS discovery iterator")
 		return
 	}
+	defer iter.Close()
 
-	// Log the number of nodes in the tree.
-	log.Info().
-		Int("unique_nodes", len(tree.Nodes())).
-		Msg("Successfully synced DNS discovery tree")
-
-	// Add DNS-discovered peers.
-	for _, node := range tree.Nodes() {
+	// Add DNS-discovered peers using the iterator.
+	count := 0
+	for iter.Next() {
+		node := iter.Node()
 		log.Debug().
 			Str("enode", node.URLv4()).
 			Msg("Discovered peer through DNS")
@@ -358,9 +379,12 @@ func handleDNSDiscovery(server *ethp2p.Server) {
 		// connect to the peer if it's already connected. If a node is part of the
 		// static peer set, the server will handle reconnecting after disconnects.
 		server.AddPeer(node)
+		count++
 	}
 
-	log.Info().Msg("Finished adding DNS discovery peers")
+	log.Info().
+		Int("discovered_peers", count).
+		Msg("Finished DNS discovery")
 }
 
 // getLatestBlock will get the latest block from an RPC provider.
@@ -463,4 +487,10 @@ will result in less chance of missing data but can significantly increase memory
   - json (output to stdout)
   - none (no persistence)`)
 	f.BoolVar(&inputSensorParams.NoDiscovery, "no-discovery", false, "disable P2P peer discovery")
+	f.IntVar(&inputSensorParams.RequestsCache.MaxSize, "max-requests", 2048, "maximum request IDs to track per peer (0 for no limit)")
+	f.DurationVar(&inputSensorParams.RequestsCache.TTL, "requests-cache-ttl", 5*time.Minute, "time to live for requests cache entries (0 for no expiration)")
+	f.IntVar(&inputSensorParams.ParentsCache.MaxSize, "max-parents", 1024, "maximum parent block hashes to track per peer (0 for no limit)")
+	f.DurationVar(&inputSensorParams.ParentsCache.TTL, "parents-cache-ttl", 5*time.Minute, "time to live for parent hash cache entries (0 for no expiration)")
+	f.IntVar(&inputSensorParams.BlocksCache.MaxSize, "max-blocks", 1024, "maximum blocks to track across all peers (0 for no limit)")
+	f.DurationVar(&inputSensorParams.BlocksCache.TTL, "blocks-cache-ttl", 10*time.Minute, "time to live for block cache entries (0 for no expiration)")
 }
