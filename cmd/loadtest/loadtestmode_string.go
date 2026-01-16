@@ -27,8 +27,9 @@ const _loadTestMode_name = "loadTestModeERC20loadTestModeERC721loadTestModeBlobl
 var _loadTestMode_index = [...]uint8{0, 17, 35, 51, 75, 93, 114, 132, 150, 165, 182, 205, 226}
 
 func (i loadTestMode) String() string {
-	if i < 0 || i >= loadTestMode(len(_loadTestMode_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_loadTestMode_index)-1 {
 		return "loadTestMode(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _loadTestMode_name[_loadTestMode_index[i]:_loadTestMode_index[i+1]]
+	return _loadTestMode_name[_loadTestMode_index[idx]:_loadTestMode_index[idx+1]]
 }
