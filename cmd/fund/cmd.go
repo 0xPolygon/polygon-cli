@@ -58,11 +58,11 @@ var FundCmd = &cobra.Command{
 	Short: "Bulk fund crypto wallets automatically.",
 	Long:  usage,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		params.RpcUrl, err = flag.GetRPCURL(cmd)
+		params.RpcUrl, err = flag.GetRequiredRPCURL(cmd)
 		if err != nil {
 			return err
 		}
-		params.PrivateKey, err = flag.GetPrivateKey(cmd)
+		params.PrivateKey, err = flag.GetRequiredPrivateKey(cmd)
 		if err != nil {
 			return err
 		}
@@ -123,12 +123,6 @@ func init() {
 }
 
 func checkFlags() error {
-	if params.RpcUrl == "" {
-		return errors.New("RPC URL is empty")
-	}
-	if params.PrivateKey == "" {
-		return errors.New("the private key is empty")
-	}
 	// When using seed, require a number of wallets to generate
 	if params.Seed != "" && params.WalletsNumber <= 0 {
 		return errors.New("when using --seed, must also specify --number > 0 to indicate how many wallets to generate")
