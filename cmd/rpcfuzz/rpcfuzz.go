@@ -218,15 +218,15 @@ func runRpcFuzz(ctx context.Context) error {
 	}
 
 	// KEEP ALL EXISTING SETUP CODE
-	rpcClient, err := rpc.DialContext(ctx, rpcUrl)
+	rpcClient, err := rpc.DialContext(ctx, rpcURL)
 	if err != nil {
 		return err
 	}
-	chainId, err := GetCurrentChainID(ctx, rpcClient)
+	chainID, err := GetCurrentChainID(ctx, rpcClient)
 	if err != nil {
 		return err
 	}
-	currentChainID = chainId
+	currentChainID = chainID
 
 	if testContractAddress == "" {
 		conformanceContractAddr, _, deploymentErr := getConformanceContract(ctx, rpcClient, currentChainID)
@@ -244,11 +244,11 @@ func runRpcFuzz(ctx context.Context) error {
 	}
 	testAccountNonce = nonce
 
-	log.Trace().Uint64("nonce", nonce).Uint64("chainId", chainId.Uint64()).Msg("Doing test setup")
+	log.Trace().Uint64("nonce", nonce).Uint64("chainID", chainID.Uint64()).Msg("Doing test setup")
 	setupTests(ctx, rpcClient)
 
 	httpClient := &http.Client{}
-	wrappedHTTPClient := wrappedHttpClient{httpClient, rpcUrl}
+	wrappedHTTPClient := wrappedHTTPClient{httpClient, rpcURL}
 
 	summaries := make([]streamer.TestSummary, 0)
 
@@ -310,7 +310,7 @@ func shouldOutput(exec streamer.TestExecution) bool {
 	}
 }
 
-func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHTTPClient wrappedHttpClient, currTest RPCTest) streamer.TestExecution {
+func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHTTPClient wrappedHTTPClient, currTest RPCTest) streamer.TestExecution {
 	start := time.Now()
 	args := currTest.GetArgs()
 
@@ -1865,15 +1865,15 @@ func ArgsCoinbase(ctx context.Context, rpcClient *rpc.Client, extraArgs ...any) 
 // corresponding to a block filte
 func ArgsBlockFilterID(ctx context.Context, rpcClient *rpc.Client, extraArgs ...any) func() []any {
 	return func() []any {
-		var filterId string
-		err := rpcClient.CallContext(ctx, &filterId, "eth_newBlockFilter")
+		var filterID string
+		err := rpcClient.CallContext(ctx, &filterID, "eth_newBlockFilter")
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to create new block filter")
 			return []any{"0x0"}
 		}
-		log.Trace().Str("filterid", filterId).Msg("Created filter")
+		log.Trace().Str("filterID", filterID).Msg("Created filter")
 
-		args := []any{filterId}
+		args := []any{filterID}
 		args = append(args, extraArgs...)
 		return args
 	}
@@ -1883,15 +1883,15 @@ func ArgsBlockFilterID(ctx context.Context, rpcClient *rpc.Client, extraArgs ...
 // corresponding to the provide filter args
 func ArgsFilterID(ctx context.Context, rpcClient *rpc.Client, filterArgs RPCTestFilterArgs, extraArgs ...any) func() []any {
 	return func() []any {
-		var filterId string
-		err := rpcClient.CallContext(ctx, &filterId, "eth_newFilter", filterArgs)
+		var filterID string
+		err := rpcClient.CallContext(ctx, &filterID, "eth_newFilter", filterArgs)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to create new block filter")
 			return []any{"0x0"}
 		}
-		log.Trace().Str("filterid", filterId).Msg("Created filter")
+		log.Trace().Str("filterID", filterID).Msg("Created filter")
 
-		args := []any{filterId}
+		args := []any{filterID}
 		args = append(args, extraArgs...)
 		return args
 	}
@@ -1952,13 +1952,13 @@ func ArgsSignTransactionWithNonce(ctx context.Context, rpcClient *rpc.Client, tx
 }
 
 func getSignedRawTx(tx *RPCTestTransactionArgs, curNonce uint64) ([]byte, error) {
-	chainId := currentChainID
+	chainID := currentChainID
 
 	dft := GenericTransactionToDynamicFeeTx(tx)
-	dft.ChainID = chainId
+	dft.ChainID = chainID
 	dft.Nonce = curNonce
 
-	londonSigner := ethtypes.NewLondonSigner(chainId)
+	londonSigner := ethtypes.NewLondonSigner(chainID)
 	signedTx, err := ethtypes.SignNewTx(testPrivateKey, londonSigner, &dft)
 	if err != nil {
 		log.Error().Err(err).Msg("There was an issue signing the transaction")
@@ -2108,14 +2108,14 @@ func GetTestAccountNonce(ctx context.Context, rpcClient *rpc.Client) (uint64, er
 // GetCurrentChainID will attempt to determine the chain for the current network
 func GetCurrentChainID(ctx context.Context, rpcClient *rpc.Client) (*big.Int, error) {
 	ec := ethclient.NewClient(rpcClient)
-	chainId, err := ec.ChainID(ctx)
+	chainID, err := ec.ChainID(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get chain id")
-		chainId = big.NewInt(1)
+		chainID = big.NewInt(1)
 
 	}
-	log.Trace().Uint64("chainId", chainId.Uint64()).Msg("Fetch chainid")
-	return chainId, err
+	log.Trace().Uint64("chainID", chainID.Uint64()).Msg("Fetch chainid")
+	return chainID, err
 }
 
 func (r *RPCTestGeneric) GetMethod() string {
@@ -2170,7 +2170,7 @@ func (r *RPCJSONError) Error() string {
 	return r.Message
 }
 
-type wrappedHttpClient struct {
+type wrappedHTTPClient struct {
 	client *http.Client
 	url    string
 }

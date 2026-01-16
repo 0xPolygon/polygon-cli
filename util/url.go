@@ -8,8 +8,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// ValidateUrl checks if a string URL can be parsed and if it has a valid scheme.
-func ValidateUrl(input string) error {
+// ValidateURL checks if a string URL can be parsed and if it has a valid scheme.
+func ValidateURL(input string) error {
 	url, err := url.Parse(input)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to parse url input error")

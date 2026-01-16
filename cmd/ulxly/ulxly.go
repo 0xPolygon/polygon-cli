@@ -80,7 +80,7 @@ type DepositID struct {
 
 func readDeposit(cmd *cobra.Command) error {
 	bridgeAddress := getSmcOptions.BridgeAddress
-	rpcUrl := getEvent.URL
+	rpcURL := getEvent.URL
 	toBlock := getEvent.ToBlock
 	fromBlock := getEvent.FromBlock
 	filter := getEvent.FilterSize
@@ -90,7 +90,7 @@ func readDeposit(cmd *cobra.Command) error {
 	var err error
 
 	if getEvent.Insecure {
-		client, clientErr := createInsecureEthClient(rpcUrl)
+		client, clientErr := createInsecureEthClient(rpcURL)
 		if clientErr != nil {
 			log.Error().Err(clientErr).Msg("Unable to create insecure client")
 			return clientErr
@@ -98,7 +98,7 @@ func readDeposit(cmd *cobra.Command) error {
 		defer client.Close()
 		rpc = client.Client()
 	} else {
-		rpc, err = ethrpc.DialContext(cmd.Context(), rpcUrl)
+		rpc, err = ethrpc.DialContext(cmd.Context(), rpcURL)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to Dial RPC")
 			return err
@@ -167,7 +167,7 @@ func DecodeGlobalIndex(globalIndex *big.Int) (bool, uint32, uint32, error) {
 
 func readClaim(cmd *cobra.Command) error {
 	bridgeAddress := getSmcOptions.BridgeAddress
-	rpcUrl := getEvent.URL
+	rpcURL := getEvent.URL
 	toBlock := getEvent.ToBlock
 	fromBlock := getEvent.FromBlock
 	filter := getEvent.FilterSize
@@ -177,7 +177,7 @@ func readClaim(cmd *cobra.Command) error {
 	var err error
 
 	if getEvent.Insecure {
-		client, clientErr := createInsecureEthClient(rpcUrl)
+		client, clientErr := createInsecureEthClient(rpcURL)
 		if clientErr != nil {
 			log.Error().Err(clientErr).Msg("Unable to create insecure client")
 			return clientErr
@@ -185,7 +185,7 @@ func readClaim(cmd *cobra.Command) error {
 		defer client.Close()
 		rpc = client.Client()
 	} else {
-		rpc, err = ethrpc.DialContext(cmd.Context(), rpcUrl)
+		rpc, err = ethrpc.DialContext(cmd.Context(), rpcURL)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to Dial RPC")
 			return err
@@ -244,7 +244,7 @@ func readClaim(cmd *cobra.Command) error {
 
 func readVerifyBatches(cmd *cobra.Command) error {
 	rollupManagerAddress := getVerifyBatchesOptions.RollupManagerAddress
-	rpcUrl := getEvent.URL
+	rpcURL := getEvent.URL
 	toBlock := getEvent.ToBlock
 	fromBlock := getEvent.FromBlock
 	filter := getEvent.FilterSize
@@ -254,7 +254,7 @@ func readVerifyBatches(cmd *cobra.Command) error {
 	var err error
 
 	if getEvent.Insecure {
-		client, clientErr := createInsecureEthClient(rpcUrl)
+		client, clientErr := createInsecureEthClient(rpcURL)
 		if clientErr != nil {
 			log.Error().Err(clientErr).Msg("Unable to create insecure client")
 			return clientErr
@@ -262,7 +262,7 @@ func readVerifyBatches(cmd *cobra.Command) error {
 		defer client.Close()
 		rpc = client.Client()
 	} else {
-		rpc, err = ethrpc.DialContext(cmd.Context(), rpcUrl)
+		rpc, err = ethrpc.DialContext(cmd.Context(), rpcURL)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to Dial RPC")
 			return err
@@ -602,13 +602,13 @@ func zeroProof() error {
 	return nil
 }
 
-type JsonError struct {
+type JSONError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Data    any    `json:"data"`
 }
 
-func logAndReturnJsonError(ctx context.Context, client *ethclient.Client, tx *types.Transaction, opts *bind.TransactOpts, err error) error {
+func logAndReturnJSONError(ctx context.Context, client *ethclient.Client, tx *types.Transaction, opts *bind.TransactOpts, err error) error {
 
 	var callErr error
 	if tx != nil {
@@ -649,7 +649,7 @@ func logAndReturnJsonError(ctx context.Context, client *ethclient.Client, tx *ty
 		return nil
 	}
 
-	var jsonError JsonError
+	var jsonError JSONError
 	jsonErrorBytes, jsErr := json.Marshal(err)
 	if jsErr != nil {
 		log.Error().Err(err).Msg("Unable to interact with the bridge contract")
@@ -793,7 +793,7 @@ func bridgeAsset(cmd *cobra.Command) error {
 
 			// Approve the bridge contract to spend the tokens on behalf of the user
 			approveTxn, iErr := tokenContract.Approve(auth, bridgeAddress, value)
-			if iErr = logAndReturnJsonError(cmd.Context(), client, approveTxn, auth, iErr); iErr != nil {
+			if iErr = logAndReturnJSONError(cmd.Context(), client, approveTxn, auth, iErr); iErr != nil {
 				return iErr
 			}
 			log.Info().Msg("approveTxn: " + approveTxn.Hash().String())
@@ -804,7 +804,7 @@ func bridgeAsset(cmd *cobra.Command) error {
 	}
 
 	bridgeTxn, err := bridgeV2.BridgeAsset(auth, destinationNetwork, toAddress, value, tokenAddress, isForced, callData)
-	if err = logAndReturnJsonError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
+	if err = logAndReturnJSONError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
 		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
@@ -858,7 +858,7 @@ func bridgeMessage(cmd *cobra.Command) error {
 	}
 
 	bridgeTxn, err := bridgeV2.BridgeMessage(auth, destinationNetwork, toAddress, isForced, callData)
-	if err = logAndReturnJsonError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
+	if err = logAndReturnJSONError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
 		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
@@ -915,7 +915,7 @@ func bridgeWETHMessage(cmd *cobra.Command) error {
 	callData := common.Hex2Bytes(strings.TrimPrefix(callDataString, "0x"))
 
 	bridgeTxn, err := bridgeV2.BridgeMessageWETH(auth, destinationNetwork, toAddress, value, isForced, callData)
-	if err = logAndReturnJsonError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
+	if err = logAndReturnJSONError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
 		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
@@ -981,7 +981,7 @@ func claimAsset(cmd *cobra.Command) error {
 	}
 
 	claimTxn, err := bridgeV2.ClaimAsset(auth, bridge_service.HashSliceToBytesArray(proof.MerkleProof), bridge_service.HashSliceToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, deposit.DestAddr, deposit.Amount, deposit.Metadata)
-	if err = logAndReturnJsonError(cmd.Context(), client, claimTxn, auth, err); err != nil {
+	if err = logAndReturnJSONError(cmd.Context(), client, claimTxn, auth, err); err != nil {
 		return err
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
@@ -1037,7 +1037,7 @@ func claimMessage(cmd *cobra.Command) error {
 	}
 
 	claimTxn, err := bridgeV2.ClaimMessage(auth, bridge_service.HashSliceToBytesArray(proof.MerkleProof), bridge_service.HashSliceToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, deposit.DestAddr, deposit.Amount, deposit.Metadata)
-	if err = logAndReturnJsonError(cmd.Context(), client, claimTxn, auth, err); err != nil {
+	if err = logAndReturnJSONError(cmd.Context(), client, claimTxn, auth, err); err != nil {
 		return err
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
@@ -1084,11 +1084,11 @@ func getBridgeServiceURLs() (map[uint32]string, error) {
 		if len(pieces) != 2 {
 			return nil, fmt.Errorf("bridge service url mapping should contain a networkid and url separated by an equal sign. Got: %s", mapping)
 		}
-		networkId, err := strconv.ParseInt(pieces[0], 10, 32)
+		networkID, err := strconv.ParseInt(pieces[0], 10, 32)
 		if err != nil {
 			return nil, err
 		}
-		urlMap[uint32(networkId)] = pieces[1]
+		urlMap[uint32(networkID)] = pieces[1]
 	}
 	return urlMap, nil
 }
@@ -1116,21 +1116,21 @@ func claimEverything(cmd *cobra.Command) error {
 			return bErr
 		}
 		for idx, deposit := range deposits {
-			depId := DepositID{
+			depID := DepositID{
 				DepositCnt: deposit.DepositCnt,
 				NetworkID:  deposit.NetworkID,
 			}
-			_, hasKey := depositMap[depId]
+			_, hasKey := depositMap[depID]
 			// if we haven't seen this deposit at all, we'll store it
 			if !hasKey {
-				depositMap[depId] = &deposits[idx]
+				depositMap[depID] = &deposits[idx]
 				continue
 			}
 
 			// if this new deposit is ready for claim OR it has already been claimed we should override the existing value
 			if inputUlxlyArgs.legacy {
 				if deposit.ReadyForClaim || deposit.ClaimTxHash != nil {
-					depositMap[depId] = &deposits[idx]
+					depositMap[depID] = &deposits[idx]
 				}
 			}
 		}
@@ -1297,7 +1297,7 @@ func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeCont
 		claimTx, err = bridgeContract.ClaimMessage(opts, bridge_service.HashSliceToBytesArray(proof.MerkleProof), bridge_service.HashSliceToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, deposit.DestAddr, deposit.Amount, deposit.Metadata)
 	}
 
-	if err = logAndReturnJsonError(cmd.Context(), client, claimTx, opts, err); err != nil {
+	if err = logAndReturnJSONError(cmd.Context(), client, claimTx, opts, err); err != nil {
 		log.Warn().
 			Uint32("DepositCnt", deposit.DepositCnt).
 			Uint32("OrigNet", deposit.OrigNet).

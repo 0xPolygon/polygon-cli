@@ -236,7 +236,7 @@ func TestValidateURL(t *testing.T) {
 		{
 			name:        "URL without host",
 			url:         "http://",
-			expectError: false, // util.ValidateUrl only checks scheme, not host
+			expectError: false, // util.ValidateURL only checks scheme, not host
 		},
 		{
 			name:        "Invalid URL format",
@@ -247,7 +247,7 @@ func TestValidateURL(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := util.ValidateUrl(tc.url)
+			err := util.ValidateURL(tc.url)
 			if tc.expectError {
 				assert.Error(t, err)
 			} else {
@@ -277,7 +277,7 @@ func TestGetRPCURLValidation(t *testing.T) {
 		{
 			name:        "Invalid RPC URL - no host",
 			flagValue:   "http://",
-			expectError: false, // util.ValidateUrl only checks scheme, not host
+			expectError: false, // util.ValidateURL only checks scheme, not host
 		},
 	}
 

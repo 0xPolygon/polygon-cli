@@ -34,7 +34,7 @@ func GetRPCURL(cmd *cobra.Command) (string, error) {
 		return value, err
 	}
 
-	if err := util.ValidateUrl(value); err != nil {
+	if err := util.ValidateURL(value); err != nil {
 		return "", err
 	}
 
@@ -50,7 +50,7 @@ func GetRequiredRPCURL(cmd *cobra.Command) (string, error) {
 		return "", err
 	}
 
-	if err := util.ValidateUrl(value); err != nil {
+	if err := util.ValidateURL(value); err != nil {
 		return "", err
 	}
 

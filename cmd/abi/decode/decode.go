@@ -94,8 +94,8 @@ func parseContractInputData(data string) ([]byte, []byte, error) {
 		return nil, nil, fmt.Errorf("the input %s is too short for a function call. It should start with 0x and needs at least 4 bytes for a function selector", data)
 	}
 
-	selectorId := data[:selectorLength]
-	rawId, err := hex.DecodeString(selectorId)
+	selectorID := data[:selectorLength]
+	rawID, err := hex.DecodeString(selectorID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -103,7 +103,7 @@ func parseContractInputData(data string) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return rawId, rawCallData, err
+	return rawID, rawCallData, err
 }
 
 func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
