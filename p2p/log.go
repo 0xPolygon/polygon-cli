@@ -42,45 +42,45 @@ type MessageCount struct {
 
 // Load takes a snapshot of all the counts in a thread-safe manner. Make sure
 // you call this and read from the returned object.
-func (count *MessageCount) Load() MessageCount {
+func (mc *MessageCount) Load() MessageCount {
 	return MessageCount{
-		BlockHeaders:        atomic.LoadInt64(&count.BlockHeaders),
-		BlockBodies:         atomic.LoadInt64(&count.BlockBodies),
-		Blocks:              atomic.LoadInt64(&count.Blocks),
-		BlockHashes:         atomic.LoadInt64(&count.BlockHashes),
-		BlockHeaderRequests: atomic.LoadInt64(&count.BlockHeaderRequests),
-		BlockBodiesRequests: atomic.LoadInt64(&count.BlockBodiesRequests),
-		Transactions:        atomic.LoadInt64(&count.Transactions),
-		TransactionHashes:   atomic.LoadInt64(&count.TransactionHashes),
-		TransactionRequests: atomic.LoadInt64(&count.TransactionRequests),
-		Pings:               atomic.LoadInt64(&count.Pings),
-		Errors:              atomic.LoadInt64(&count.Errors),
-		Disconnects:         atomic.LoadInt64(&count.Disconnects),
-		NewWitness:          atomic.LoadInt64(&count.NewWitness),
-		NewWitnessHashes:    atomic.LoadInt64(&count.NewWitnessHashes),
-		GetWitnessRequest:   atomic.LoadInt64(&count.GetWitnessRequest),
-		Witness:             atomic.LoadInt64(&count.Witness),
+		BlockHeaders:        atomic.LoadInt64(&mc.BlockHeaders),
+		BlockBodies:         atomic.LoadInt64(&mc.BlockBodies),
+		Blocks:              atomic.LoadInt64(&mc.Blocks),
+		BlockHashes:         atomic.LoadInt64(&mc.BlockHashes),
+		BlockHeaderRequests: atomic.LoadInt64(&mc.BlockHeaderRequests),
+		BlockBodiesRequests: atomic.LoadInt64(&mc.BlockBodiesRequests),
+		Transactions:        atomic.LoadInt64(&mc.Transactions),
+		TransactionHashes:   atomic.LoadInt64(&mc.TransactionHashes),
+		TransactionRequests: atomic.LoadInt64(&mc.TransactionRequests),
+		Pings:               atomic.LoadInt64(&mc.Pings),
+		Errors:              atomic.LoadInt64(&mc.Errors),
+		Disconnects:         atomic.LoadInt64(&mc.Disconnects),
+		NewWitness:          atomic.LoadInt64(&mc.NewWitness),
+		NewWitnessHashes:    atomic.LoadInt64(&mc.NewWitnessHashes),
+		GetWitnessRequest:   atomic.LoadInt64(&mc.GetWitnessRequest),
+		Witness:             atomic.LoadInt64(&mc.Witness),
 	}
 }
 
 // Clear clears all of the counts from the message counter.
-func (count *MessageCount) Clear() {
-	atomic.StoreInt64(&count.BlockHeaders, 0)
-	atomic.StoreInt64(&count.BlockBodies, 0)
-	atomic.StoreInt64(&count.Blocks, 0)
-	atomic.StoreInt64(&count.BlockHashes, 0)
-	atomic.StoreInt64(&count.BlockHeaderRequests, 0)
-	atomic.StoreInt64(&count.BlockBodiesRequests, 0)
-	atomic.StoreInt64(&count.Transactions, 0)
-	atomic.StoreInt64(&count.TransactionHashes, 0)
-	atomic.StoreInt64(&count.TransactionRequests, 0)
-	atomic.StoreInt64(&count.Pings, 0)
-	atomic.StoreInt64(&count.Errors, 0)
-	atomic.StoreInt64(&count.Disconnects, 0)
-	atomic.StoreInt64(&count.NewWitness, 0)
-	atomic.StoreInt64(&count.NewWitnessHashes, 0)
-	atomic.StoreInt64(&count.GetWitnessRequest, 0)
-	atomic.StoreInt64(&count.Witness, 0)
+func (mc *MessageCount) Clear() {
+	atomic.StoreInt64(&mc.BlockHeaders, 0)
+	atomic.StoreInt64(&mc.BlockBodies, 0)
+	atomic.StoreInt64(&mc.Blocks, 0)
+	atomic.StoreInt64(&mc.BlockHashes, 0)
+	atomic.StoreInt64(&mc.BlockHeaderRequests, 0)
+	atomic.StoreInt64(&mc.BlockBodiesRequests, 0)
+	atomic.StoreInt64(&mc.Transactions, 0)
+	atomic.StoreInt64(&mc.TransactionHashes, 0)
+	atomic.StoreInt64(&mc.TransactionRequests, 0)
+	atomic.StoreInt64(&mc.Pings, 0)
+	atomic.StoreInt64(&mc.Errors, 0)
+	atomic.StoreInt64(&mc.Disconnects, 0)
+	atomic.StoreInt64(&mc.NewWitness, 0)
+	atomic.StoreInt64(&mc.NewWitnessHashes, 0)
+	atomic.StoreInt64(&mc.GetWitnessRequest, 0)
+	atomic.StoreInt64(&mc.Witness, 0)
 }
 
 // IsEmpty checks whether the sum of all the counts is empty. Make sure to call

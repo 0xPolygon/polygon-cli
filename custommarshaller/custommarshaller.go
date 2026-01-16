@@ -62,10 +62,10 @@ func New(i any) CustomMarshaller {
 //		"Field3": "0x0000000000000000000000000000000000000000",
 //		"Field4": "0x0000000000000000000000000000000000000000000000000000000000000000"
 //	}
-func (instance CustomMarshaller) MarshalJSON() ([]byte, error) {
+func (c CustomMarshaller) MarshalJSON() ([]byte, error) {
 	result := map[string]any{}
-	instanceType := reflect.TypeOf(instance.any)
-	instanceValue := reflect.ValueOf(instance.any)
+	instanceType := reflect.TypeOf(c.any)
+	instanceValue := reflect.ValueOf(c.any)
 
 	if instanceType.Kind() == reflect.Ptr {
 		instanceType = instanceType.Elem()
