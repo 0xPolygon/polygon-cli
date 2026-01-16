@@ -123,6 +123,12 @@ func init() {
 }
 
 func checkFlags() error {
+	if params.RpcUrl == "" {
+		return errors.New("RPC URL is empty")
+	}
+	if params.PrivateKey == "" {
+		return errors.New("the private key is empty")
+	}
 	// When using seed, require a number of wallets to generate
 	if params.Seed != "" && params.WalletsNumber <= 0 {
 		return errors.New("when using --seed, must also specify --number > 0 to indicate how many wallets to generate")
@@ -132,6 +138,9 @@ func checkFlags() error {
 	minValue := big.NewInt(1000000000)
 	if params.FundingAmountInWei != nil && params.FundingAmountInWei.Cmp(minValue) <= 0 {
 		return errors.New("the funding amount must be greater than 1000000000")
+	}
+	if params.OutputFile == "" {
+		return errors.New("the output file is not specified")
 	}
 
 	// ERC20 specific validations

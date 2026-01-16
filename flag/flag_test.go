@@ -283,6 +283,7 @@ func TestGetRPCURLValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(RPCURLEnvVar, "")
 			cmd := &cobra.Command{Use: "test"}
 			cmd.Flags().String(RPCURL, DefaultRPCURL, "test rpc url")
 			if tc.flagValue != "" {

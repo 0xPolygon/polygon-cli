@@ -80,7 +80,7 @@ var SignerCmd = &cobra.Command{
 	Short: "Utilities for security signing transactions.",
 	Long:  signerUsage,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		inputSignerOpts.privateKey, err = flag.GetRequiredPrivateKey(cmd)
+		inputSignerOpts.privateKey, err = flag.GetPrivateKey(cmd)
 		if err != nil {
 			return err
 		}
