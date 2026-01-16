@@ -8,7 +8,7 @@ import (
 // BlockReport represents the complete report for a range of blocks
 type BlockReport struct {
 	ChainID     uint64       `json:"chain_id"`
-	RpcUrl      string       `json:"rpc_url"`
+	RPCURL      string       `json:"rpc_url"`
 	StartBlock  uint64       `json:"start_block"`
 	EndBlock    uint64       `json:"end_block"`
 	GeneratedAt time.Time    `json:"generated_at"`

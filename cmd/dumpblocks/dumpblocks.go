@@ -26,7 +26,7 @@ import (
 
 type (
 	dumpblocksParams struct {
-		RpcUrl             string
+		RPCURL             string
 		Start              uint64
 		End                uint64
 		BatchSize          uint64
@@ -58,7 +58,7 @@ var DumpblocksCmd = &cobra.Command{
 	Long:  usage,
 	Args:  cobra.MinimumNArgs(2),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		inputDumpblocks.RpcUrl, err = flag.GetRPCURL(cmd)
+		inputDumpblocks.RPCURL, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
@@ -66,7 +66,7 @@ var DumpblocksCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		ec, err := ethrpc.DialContext(ctx, inputDumpblocks.RpcUrl)
+		ec, err := ethrpc.DialContext(ctx, inputDumpblocks.RPCURL)
 		if err != nil {
 			return err
 		}
@@ -144,7 +144,7 @@ var DumpblocksCmd = &cobra.Command{
 
 func init() {
 	f := DumpblocksCmd.Flags()
-	f.StringVarP(&inputDumpblocks.RpcUrl, flag.RPCURL, "r", flag.DefaultRPCURL, "the RPC endpoint URL")
+	f.StringVarP(&inputDumpblocks.RPCURL, flag.RPCURL, "r", flag.DefaultRPCURL, "the RPC endpoint URL")
 	f.UintVarP(&inputDumpblocks.Threads, "concurrency", "c", 1, "how many go routines to leverage")
 	f.BoolVarP(&inputDumpblocks.ShouldDumpBlocks, "dump-blocks", "B", true, "dump blocks to output")
 	f.BoolVar(&inputDumpblocks.OnlyTxHashes, "only-tx-hashes", false, "dump blocks will output only the tx hashes instead of the full tx body")

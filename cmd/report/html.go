@@ -18,7 +18,7 @@ func generateHTML(report *BlockReport) string {
 
 	// Replace metadata placeholders
 	output = strings.ReplaceAll(output, "{{CHAIN_ID}}", fmt.Sprintf("%d", report.ChainID))
-	output = strings.ReplaceAll(output, "{{RPC_URL}}", html.EscapeString(report.RpcUrl))
+	output = strings.ReplaceAll(output, "{{RPC_URL}}", html.EscapeString(report.RPCURL))
 	output = strings.ReplaceAll(output, "{{BLOCK_RANGE}}", fmt.Sprintf("%d - %d", report.StartBlock, report.EndBlock))
 	output = strings.ReplaceAll(output, "{{GENERATED_AT}}", report.GeneratedAt.Format(time.RFC3339))
 	output = strings.ReplaceAll(output, "{{TOTAL_BLOCKS}}", formatNumber(report.Summary.TotalBlocks))

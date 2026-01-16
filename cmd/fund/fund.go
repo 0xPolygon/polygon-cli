@@ -169,7 +169,7 @@ func getAddressesAndKeysFromPrivateKey(ctx context.Context, c *ethclient.Client)
 
 // dialRpc dials the Ethereum RPC server and return an Ethereum client.
 func dialRpc(ctx context.Context) (*ethclient.Client, error) {
-	rpc, err := rpc.DialContext(ctx, params.RpcUrl)
+	rpc, err := rpc.DialContext(ctx, params.RPCURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to dial")
 		return nil, err
