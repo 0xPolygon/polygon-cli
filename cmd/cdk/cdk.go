@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/custommarshaller"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -44,7 +44,6 @@ import (
 )
 
 const (
-	ArgRpcURL = "rpc-url"
 	ArgForkID = "fork-id"
 
 	ArgRollupManagerAddress = "rollup-manager-address"
@@ -55,7 +54,6 @@ const (
 	ArgBridgeAddress = "bridge-address"
 	ArgGERAddress    = "ger-address"
 
-	defaultRPCURL = "http://localhost:8545"
 	defaultForkId = "12"
 
 	// forks
@@ -106,11 +104,12 @@ var CDKCmd = &cobra.Command{
 	Use:   "cdk",
 	Short: "Utilities for interacting with CDK networks.",
 	Long:  "Basic utility commands for interacting with the cdk contracts.",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		rpcURL := flag_loader.GetRpcUrlFlagValue(cmd)
-		if rpcURL != nil {
-			cdkInputArgs.rpcURL = *rpcURL
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		cdkInputArgs.rpcURL, err = flag.GetRPCURL(cmd)
+		if err != nil {
+			return err
 		}
+		return nil
 	},
 	Args: cobra.NoArgs,
 }
@@ -636,7 +635,7 @@ func mustPrintLogs(logs []types.Log, contractInstance reflect.Value, contractABI
 func init() {
 	// cdk
 	f := CDKCmd.PersistentFlags()
-	f.StringVar(&cdkInputArgs.rpcURL, ArgRpcURL, defaultRPCURL, "RPC URL of network containing CDK contracts")
+	f.StringVar(&cdkInputArgs.rpcURL, flag.RPCURL, flag.DefaultRPCURL, "RPC URL of network containing CDK contracts")
 	f.StringVar(&cdkInputArgs.forkID, ArgForkID, defaultForkId, "fork ID of CDK networks")
 	f.StringVar(&cdkInputArgs.rollupManagerAddress, ArgRollupManagerAddress, "", "address of rollup contract")
 

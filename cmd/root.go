@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+
 	"github.com/0xPolygon/polygon-cli/cmd/abi"
 	"github.com/0xPolygon/polygon-cli/cmd/cdk"
 	"github.com/0xPolygon/polygon-cli/cmd/contract"
@@ -36,8 +39,6 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/wallet"
 	"github.com/0xPolygon/polygon-cli/cmd/wrapcontract"
 	"github.com/0xPolygon/polygon-cli/util"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (

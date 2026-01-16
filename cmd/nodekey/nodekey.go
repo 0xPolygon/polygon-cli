@@ -15,7 +15,7 @@ import (
 
 	_ "embed"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
+	"github.com/0xPolygon/polygon-cli/flag"
 	gethcrypto "github.com/ethereum/go-ethereum/crypto"
 	gethenode "github.com/ethereum/go-ethereum/p2p/enode"
 	libp2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
@@ -66,11 +66,12 @@ var NodekeyCmd = &cobra.Command{
 	Short: "Generate node keys for different blockchain clients and protocols.",
 	Long:  usage,
 	Args:  cobra.NoArgs,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		privateKey := flag_loader.GetPrivateKeyFlagValue(cmd)
-		inputNodeKeyPrivateKey = *privateKey
-	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		inputNodeKeyPrivateKey, err = flag.GetPrivateKey(cmd)
+		if err != nil {
+			return err
+		}
+
 		switch inputNodeKeyProtocol {
 		case "devp2p":
 			invalidFlags := []string{"seed", "marshal-protobuf"}
@@ -268,9 +269,9 @@ func generateLibp2pNodeKey(keyType int, seed bool) (nodeKeyOut, error) {
 
 func init() {
 	f := NodekeyCmd.Flags()
-	f.StringVar(&inputNodeKeyPrivateKey, "private-key", "", "use the provided private key (in hex format)")
+	f.StringVar(&inputNodeKeyPrivateKey, flag.PrivateKey, "", "use the provided private key (in hex format)")
 	f.StringVarP(&inputNodeKeyFile, "file", "f", "", "a file with the private nodekey (in hex format)")
-	NodekeyCmd.MarkFlagsMutuallyExclusive("private-key", "file")
+	NodekeyCmd.MarkFlagsMutuallyExclusive(flag.PrivateKey, "file")
 
 	f.StringVar(&inputNodeKeyProtocol, "protocol", "devp2p", "devp2p|libp2p|pex|seed-libp2p")
 	f.StringVar(&inputNodeKeyType, "key-type", "ed25519", "ed25519|secp256k1|ecdsa|rsa")
