@@ -134,7 +134,7 @@ func getAddressesAndKeysFromKeyFile(keyFilePath string) ([]common.Address, []*ec
 		addresses[i] = util.GetAddress(context.Background(), privateKey)
 		log.Trace().
 			Interface("address", addresses[i]).
-			Str("privateKey", hex.EncodeToString(privateKey.D.Bytes())).
+			Str("privateKey", hex.EncodeToString(crypto.FromECDSA(privateKey))).
 			Msg("New wallet derived from key file")
 	}
 	log.Info().Int("count", len(addresses)).Msg("Wallet(s) derived from key file")
@@ -284,7 +284,7 @@ func generateWalletsWithKeys(n int) ([]common.Address, []*ecdsa.PrivateKey, erro
 		}
 		privateKeys[i] = pk
 		addresses[i] = crypto.PubkeyToAddress(pk.PublicKey)
-		log.Trace().Interface("address", addresses[i]).Str("privateKey", hex.EncodeToString(pk.D.Bytes())).Msg("New wallet generated")
+		log.Trace().Interface("address", addresses[i]).Str("privateKey", hex.EncodeToString(crypto.FromECDSA(pk))).Msg("New wallet generated")
 	}
 	log.Info().Int("count", n).Msg("Wallet(s) generated")
 
@@ -304,7 +304,7 @@ func saveToFile(fileName string, privateKeys []*ecdsa.PrivateKey) error {
 		address := crypto.PubkeyToAddress(privateKey.PublicKey)
 		data[i] = wallet{
 			Address:    address.String(),
-			PrivateKey: hex.EncodeToString(privateKey.D.Bytes()),
+			PrivateKey: hex.EncodeToString(crypto.FromECDSA(privateKey)),
 		}
 	}
 
