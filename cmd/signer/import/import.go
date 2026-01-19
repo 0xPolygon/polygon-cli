@@ -4,7 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 
-	"github.com/0xPolygon/polygon-cli/cmd/signer"
+	"github.com/0xPolygon/polygon-cli/signer"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/spf13/cobra"
@@ -25,7 +25,7 @@ var ImportCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		opts := signer.InputSignerOpts
+		opts := signer.InputOpts
 		if opts.Keystore != "" {
 			ks := keystore.NewKeyStore(opts.Keystore, keystore.StandardScryptN, keystore.StandardScryptP)
 			pk, err := crypto.HexToECDSA(opts.PrivateKey)

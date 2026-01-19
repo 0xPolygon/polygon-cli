@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/0xPolygon/polygon-cli/cmd/signer"
 	"github.com/0xPolygon/polygon-cli/gethkeystore"
+	"github.com/0xPolygon/polygon-cli/signer"
 	accounts2 "github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -24,7 +24,7 @@ var SignCmd = &cobra.Command{
 	Args:    cobra.NoArgs,
 	PreRunE: signer.SanityCheck,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		opts := signer.InputSignerOpts
+		opts := signer.InputOpts
 		if opts.Keystore == "" && opts.PrivateKey == "" && opts.KMS == "" {
 			return fmt.Errorf("no valid keystore was specified")
 		}

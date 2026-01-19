@@ -4,7 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 
-	"github.com/0xPolygon/polygon-cli/cmd/signer"
+	"github.com/0xPolygon/polygon-cli/signer"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -20,7 +20,7 @@ var ListCmd = &cobra.Command{
 	Args:    cobra.NoArgs,
 	PreRunE: signer.SanityCheck,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		opts := signer.InputSignerOpts
+		opts := signer.InputOpts
 		if opts.Keystore != "" {
 			ks := keystore.NewKeyStore(opts.Keystore, keystore.StandardScryptN, keystore.StandardScryptP)
 			accounts := ks.Accounts()

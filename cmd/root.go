@@ -34,10 +34,6 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/retest"
 	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz"
 	"github.com/0xPolygon/polygon-cli/cmd/signer"
-	"github.com/0xPolygon/polygon-cli/cmd/signer/create"
-	importcmd "github.com/0xPolygon/polygon-cli/cmd/signer/import"
-	"github.com/0xPolygon/polygon-cli/cmd/signer/list"
-	"github.com/0xPolygon/polygon-cli/cmd/signer/sign"
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly"
 	"github.com/0xPolygon/polygon-cli/cmd/version"
 	"github.com/0xPolygon/polygon-cli/cmd/wallet"
@@ -165,14 +161,6 @@ func NewPolycliCommand() *cobra.Command {
 		publish.Cmd,
 		dockerlogger.Cmd,
 		contract.Cmd,
-	)
-
-	// Add signer subcommands.
-	signer.SignerCmd.AddCommand(
-		sign.SignCmd,
-		create.CreateCmd,
-		list.ListCmd,
-		importcmd.ImportCmd,
 	)
 
 	return cmd

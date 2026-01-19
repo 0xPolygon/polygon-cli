@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/0xPolygon/polygon-cli/cmd/signer"
+	"github.com/0xPolygon/polygon-cli/signer"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog/log"
@@ -22,7 +22,7 @@ var CreateCmd = &cobra.Command{
 	Args:    cobra.NoArgs,
 	PreRunE: signer.SanityCheck,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		opts := signer.InputSignerOpts
+		opts := signer.InputOpts
 		if opts.Keystore == "" && opts.KMS == "" {
 			log.Info().Msg("Generating new private hex key and writing to stdout")
 			pk, err := crypto.GenerateKey()
