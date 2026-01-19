@@ -24,7 +24,7 @@ import (
 
 	kms "cloud.google.com/go/kms/apiv1"
 	"cloud.google.com/go/kms/apiv1/kmspb"
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/gethkeystore"
 	accounts2 "github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -79,9 +79,12 @@ var SignerCmd = &cobra.Command{
 	Use:   "signer",
 	Short: "Utilities for security signing transactions.",
 	Long:  signerUsage,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		privateKey := flag_loader.GetPrivateKeyFlagValue(cmd)
-		inputSignerOpts.privateKey = *privateKey
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		inputSignerOpts.privateKey, err = flag.GetPrivateKey(cmd)
+		if err != nil {
+			return err
+		}
+		return nil
 	},
 	Args: cobra.NoArgs,
 }
@@ -112,7 +115,7 @@ var SignCmd = &cobra.Command{
 				for _, a := range accounts {
 					accountStrings += a.Address.String() + " "
 				}
-				return fmt.Errorf("the account with address <%s> could not be found in list [%s]", inputSignerOpts.keyID, accountStrings)
+				return fmt.Errorf("account with address %s not found in list [%s]", inputSignerOpts.keyID, accountStrings)
 			}
 			password, err := getKeystorePassword()
 			if err != nil {
@@ -238,9 +241,6 @@ var ImportCmd = &cobra.Command{
 		if err := sanityCheck(cmd, args); err != nil {
 			return err
 		}
-		if err := cmd.MarkFlagRequired("private-key"); err != nil {
-			return err
-		}
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -270,7 +270,7 @@ var ImportCmd = &cobra.Command{
 
 func getTxDataToSign() (*ethtypes.Transaction, error) {
 	if inputSignerOpts.dataFile == "" {
-		return nil, fmt.Errorf("no datafile was specified to sign")
+		return nil, fmt.Errorf("datafile not specified")
 	}
 	dataToSign, err := os.ReadFile(inputSignerOpts.dataFile)
 	if err != nil {
@@ -561,7 +561,7 @@ func wrapKeyForGCPKMS(ctx context.Context, client *kms.KeyManagementClient) ([]b
 		PublicKey: asn1.BitString{Bytes: elliptic.Marshal(key.Curve, key.X, key.Y)}, //nolint:staticcheck
 	})
 	if err != nil {
-		return nil, fmt.Errorf("unable to marshal private key %w", err)
+		return nil, fmt.Errorf("unable to marshal private key: %w", err)
 	}
 	keyBytes, err := asn1.Marshal(privKey)
 	if err != nil {
@@ -676,13 +676,13 @@ func (g *GCPKMS) Sign(ctx context.Context, tx *ethtypes.Transaction) error {
 	// For more details on ensuring E2E in-transit integrity to and from Cloud KMS visit:
 	// https://cloud.google.com/kms/docs/data-integrity-guidelines
 	if !result.VerifiedDigestCrc32C {
-		return fmt.Errorf("AsymmetricSign: request corrupted in-transit")
+		return fmt.Errorf("asymmetric sign: request corrupted in-transit")
 	}
 	if result.Name != req.Name {
-		return fmt.Errorf("AsymmetricSign: request corrupted in-transit")
+		return fmt.Errorf("asymmetric sign: request corrupted in-transit")
 	}
 	if int64(crc32c(result.Signature)) != result.SignatureCrc32C.Value {
-		return fmt.Errorf("AsymmetricSign: response corrupted in-transit")
+		return fmt.Errorf("asymmetric sign: response corrupted in-transit")
 	}
 
 	gcpPubKey, err := getPublicKeyByName(ctx, client, name)
@@ -782,7 +782,7 @@ func sanityCheck(cmd *cobra.Command, args []string) error {
 		keyStoreMethods += 1
 	}
 	if keyStoreMethods > 1 {
-		return fmt.Errorf("Multiple conflicting keystore sources were specified")
+		return fmt.Errorf("multiple conflicting keystore sources were specified")
 	}
 	pwErr := passwordValidation(inputSignerOpts.unsafePassword)
 	if inputSignerOpts.unsafePassword != "" && pwErr != nil {
@@ -791,18 +791,18 @@ func sanityCheck(cmd *cobra.Command, args []string) error {
 
 	if inputSignerOpts.kms == "GCP" {
 		if inputSignerOpts.gcpProjectID == "" {
-			return fmt.Errorf("a GCP project id must be specified")
+			return fmt.Errorf("GCP project id must be specified")
 		}
 
 		if inputSignerOpts.gcpRegion == "" {
-			return fmt.Errorf("a location is required")
+			return fmt.Errorf("location is required")
 		}
 
 		if inputSignerOpts.gcpKeyRingID == "" {
-			return fmt.Errorf("a GCP Keyring ID is needed")
+			return fmt.Errorf("GCP keyring ID is required")
 		}
 		if inputSignerOpts.keyID == "" && cmd.Name() != "list" {
-			return fmt.Errorf("a key id is required")
+			return fmt.Errorf("key id is required")
 		}
 	}
 
@@ -811,7 +811,7 @@ func sanityCheck(cmd *cobra.Command, args []string) error {
 
 func passwordValidation(inputPw string) error {
 	if len(inputPw) < 6 {
-		return fmt.Errorf("Password only had %d character. 8 or more required", len(inputPw))
+		return fmt.Errorf("password only had %d characters, 8 or more required", len(inputPw))
 	}
 	return nil
 }
@@ -847,7 +847,7 @@ func init() {
 
 	f := SignerCmd.PersistentFlags()
 	f.StringVar(&inputSignerOpts.keystore, "keystore", "", "use keystore in given folder or file")
-	f.StringVar(&inputSignerOpts.privateKey, "private-key", "", "use provided hex encoded private key")
+	f.StringVar(&inputSignerOpts.privateKey, flag.PrivateKey, "", "use provided hex encoded private key")
 	f.StringVar(&inputSignerOpts.kms, "kms", "", "AWS or GCP if key is stored in cloud")
 	f.StringVar(&inputSignerOpts.keyID, "key-id", "", "ID of key to be used for signing")
 	f.StringVar(&inputSignerOpts.unsafePassword, "unsafe-password", "", "non-interactively specified password for unlocking keystore")

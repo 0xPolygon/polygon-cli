@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/p2p"
 )
 
@@ -132,7 +133,5 @@ func init() {
 	f.StringVarP(&inputQueryParams.KeyFile, "key-file", "k", "", "private key file (cannot be set with --key)")
 	f.StringVar(&inputQueryParams.PrivateKey, "key", "", "hex-encoded private key (cannot be set with --key-file)")
 	QueryCmd.MarkFlagsMutuallyExclusive("key-file", "key")
-	if err := QueryCmd.MarkFlagRequired("start-block"); err != nil {
-		log.Error().Err(err).Msg("Failed to mark start-block as required flag")
-	}
+	flag.MarkFlagsRequired(QueryCmd, "start-block")
 }
