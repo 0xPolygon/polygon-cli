@@ -25,9 +25,6 @@ import (
 	kms "cloud.google.com/go/kms/apiv1"
 	"cloud.google.com/go/kms/apiv1/kmspb"
 	"github.com/0xPolygon/polygon-cli/flag"
-	"github.com/0xPolygon/polygon-cli/gethkeystore"
-	accounts2 "github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -41,46 +38,34 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// signerOpts are the input arguments for these commands
-type signerOpts struct {
-	keystore       string
-	privateKey     string
-	kms            string
-	keyID          string
-	unsafePassword string
-	dataFile       string
-	signerType     string
-	chainID        uint64
-	gcpProjectID   string
-	gcpRegion      string
-	gcpKeyRingID   string
-	gcpImportJob   string
-	gcpKeyVersion  int
+// SignerOpts are the input arguments for these commands
+type SignerOpts struct {
+	Keystore       string
+	PrivateKey     string
+	KMS            string
+	KeyID          string
+	UnsafePassword string
+	DataFile       string
+	SignerType     string
+	ChainID        uint64
+	GCPProjectID   string
+	GCPRegion      string
+	GCPKeyRingID   string
+	GCPImportJob   string
+	GCPKeyVersion  int
 }
 
-var inputSignerOpts = signerOpts{}
+var InputSignerOpts = SignerOpts{}
 
 //go:embed usage.md
 var signerUsage string
-
-//go:embed signCmdUsage.md
-var signCmdUsage string
-
-//go:embed createCmdUsage.md
-var createCmdUsage string
-
-//go:embed listCmdUsage.md
-var listCmdUsage string
-
-//go:embed importCmdUsage.md
-var importCmdUsage string
 
 var SignerCmd = &cobra.Command{
 	Use:   "signer",
 	Short: "Utilities for security signing transactions.",
 	Long:  signerUsage,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		inputSignerOpts.privateKey, err = flag.GetPrivateKey(cmd)
+		InputSignerOpts.PrivateKey, err = flag.GetPrivateKey(cmd)
 		if err != nil {
 			return err
 		}
@@ -89,190 +74,11 @@ var SignerCmd = &cobra.Command{
 	Args: cobra.NoArgs,
 }
 
-var SignCmd = &cobra.Command{
-	Use:     "sign",
-	Short:   "Sign tx data.",
-	Long:    signCmdUsage,
-	Args:    cobra.NoArgs,
-	PreRunE: sanityCheck,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if inputSignerOpts.keystore == "" && inputSignerOpts.privateKey == "" && inputSignerOpts.kms == "" {
-			return fmt.Errorf("no valid keystore was specified")
-		}
-
-		if inputSignerOpts.keystore != "" {
-			ks := keystore.NewKeyStore(inputSignerOpts.keystore, keystore.StandardScryptN, keystore.StandardScryptP)
-			accounts := ks.Accounts()
-			var accountToUnlock *accounts2.Account
-			for _, a := range accounts {
-				if a.Address.String() == inputSignerOpts.keyID {
-					accountToUnlock = &a
-					break
-				}
-			}
-			if accountToUnlock == nil {
-				accountStrings := ""
-				for _, a := range accounts {
-					accountStrings += a.Address.String() + " "
-				}
-				return fmt.Errorf("account with address %s not found in list [%s]", inputSignerOpts.keyID, accountStrings)
-			}
-			password, err := getKeystorePassword()
-			if err != nil {
-				return err
-			}
-
-			err = ks.Unlock(*accountToUnlock, password)
-			if err != nil {
-				return err
-			}
-			// chainID := new(big.Int).SetUint64(inputSignerOpts.chainID)
-
-			// ks.SignTx(*accountToUnlock, &tx, chainID)
-			log.Info().Str("path", accountToUnlock.URL.Path).Msg("Unlocked account")
-			encryptedKey, err := os.ReadFile(accountToUnlock.URL.Path)
-			if err != nil {
-				return err
-			}
-			privKey, err := gethkeystore.DecryptKeystoreFile(encryptedKey, password)
-			if err != nil {
-				return err
-			}
-			return sign(privKey)
-		}
-
-		if inputSignerOpts.privateKey != "" {
-			pk, err := crypto.HexToECDSA(inputSignerOpts.privateKey)
-			if err != nil {
-				return err
-			}
-			return sign(pk)
-		}
-		if inputSignerOpts.kms == "GCP" {
-			tx, err := getTxDataToSign()
-			if err != nil {
-				return err
-			}
-			gcpKMS := GCPKMS{}
-			return gcpKMS.Sign(cmd.Context(), tx)
-		}
-		return fmt.Errorf("not implemented")
-	},
-}
-
-var CreateCmd = &cobra.Command{
-	Use:     "create",
-	Short:   "Create a new key.",
-	Long:    createCmdUsage,
-	Args:    cobra.NoArgs,
-	PreRunE: sanityCheck,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if inputSignerOpts.keystore == "" && inputSignerOpts.kms == "" {
-			log.Info().Msg("Generating new private hex key and writing to stdout")
-			pk, err := crypto.GenerateKey()
-			if err != nil {
-				return err
-			}
-			k := hex.EncodeToString(crypto.FromECDSA(pk))
-			fmt.Println(k)
-			return nil
-		}
-		if inputSignerOpts.keystore != "" {
-			ks := keystore.NewKeyStore(inputSignerOpts.keystore, keystore.StandardScryptN, keystore.StandardScryptP)
-			pk, err := crypto.GenerateKey()
-			if err != nil {
-				return err
-			}
-			password, err := getKeystorePassword()
-			if err != nil {
-				return err
-			}
-			acc, err := ks.ImportECDSA(pk, password)
-			if err != nil {
-				return err
-			}
-			log.Info().Str("address", acc.Address.String()).Msg("imported new account")
-			return nil
-		}
-		if inputSignerOpts.kms == "GCP" {
-			gcpKMS := GCPKMS{}
-			err := gcpKMS.CreateKeyRing(cmd.Context())
-			if err != nil {
-				return err
-			}
-			err = gcpKMS.CreateKey(cmd.Context())
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	},
-}
-
-var ListCmd = &cobra.Command{
-	Use:     "list",
-	Short:   "List the keys in the keyring / keystore.",
-	Long:    listCmdUsage,
-	Args:    cobra.NoArgs,
-	PreRunE: sanityCheck,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if inputSignerOpts.keystore != "" {
-			ks := keystore.NewKeyStore(inputSignerOpts.keystore, keystore.StandardScryptN, keystore.StandardScryptP)
-			accounts := ks.Accounts()
-			for idx, a := range accounts {
-				log.Info().Str("account", a.Address.String()).Int("index", idx).Msg("Account")
-			}
-			return nil
-		}
-		if inputSignerOpts.kms == "GCP" {
-			gcpKMS := GCPKMS{}
-			return gcpKMS.ListKeyRingKeys(cmd.Context())
-		}
-		return fmt.Errorf("unable to list accounts")
-	},
-}
-
-var ImportCmd = &cobra.Command{
-	Use:   "import",
-	Short: "Import a private key into the keyring / keystore.",
-	Long:  importCmdUsage,
-	Args:  cobra.NoArgs,
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if err := sanityCheck(cmd, args); err != nil {
-			return err
-		}
-		return nil
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if inputSignerOpts.keystore != "" {
-			ks := keystore.NewKeyStore(inputSignerOpts.keystore, keystore.StandardScryptN, keystore.StandardScryptP)
-			pk, err := crypto.HexToECDSA(inputSignerOpts.privateKey)
-			if err != nil {
-				return err
-			}
-			pass, err := getKeystorePassword()
-			if err != nil {
-				return err
-			}
-			_, err = ks.ImportECDSA(pk, pass)
-			return err
-		}
-		if inputSignerOpts.kms == "GCP" {
-			gcpKMS := GCPKMS{}
-			if err := gcpKMS.CreateImportJob(cmd.Context()); err != nil {
-				return err
-			}
-			return gcpKMS.ImportKey(cmd.Context())
-		}
-		return fmt.Errorf("unable to import key")
-	},
-}
-
-func getTxDataToSign() (*ethtypes.Transaction, error) {
-	if inputSignerOpts.dataFile == "" {
+func GetTxDataToSign() (*ethtypes.Transaction, error) {
+	if InputSignerOpts.DataFile == "" {
 		return nil, fmt.Errorf("datafile not specified")
 	}
-	dataToSign, err := os.ReadFile(inputSignerOpts.dataFile)
+	dataToSign, err := os.ReadFile(InputSignerOpts.DataFile)
 	if err != nil {
 		return nil, err
 	}
@@ -291,12 +97,12 @@ func getTxDataToSign() (*ethtypes.Transaction, error) {
 	return tx, nil
 
 }
-func sign(pk *ecdsa.PrivateKey) error {
-	tx, err := getTxDataToSign()
+func Sign(pk *ecdsa.PrivateKey) error {
+	tx, err := GetTxDataToSign()
 	if err != nil {
 		return err
 	}
-	signer, err := getSigner()
+	signer, err := GetSigner()
 	if err != nil {
 		return err
 	}
@@ -304,10 +110,10 @@ func sign(pk *ecdsa.PrivateKey) error {
 	if err != nil {
 		return err
 	}
-	return outputSignedTx(signedTx)
+	return OutputSignedTx(signedTx)
 }
 
-func outputSignedTx(signedTx *ethtypes.Transaction) error {
+func OutputSignedTx(signedTx *ethtypes.Transaction) error {
 	rawTx, err := signedTx.MarshalBinary()
 	if err != nil {
 		return err
@@ -337,7 +143,7 @@ func (g *GCPKMS) ListKeyRingKeys(ctx context.Context) error {
 		return err
 	}
 	defer c.Close()
-	parent := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s", inputSignerOpts.gcpProjectID, inputSignerOpts.gcpRegion, inputSignerOpts.gcpKeyRingID)
+	parent := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s", InputSignerOpts.GCPProjectID, InputSignerOpts.GCPRegion, InputSignerOpts.GCPKeyRingID)
 
 	req := &kmspb.ListCryptoKeysRequest{
 		Parent: parent,
@@ -352,7 +158,7 @@ func (g *GCPKMS) ListKeyRingKeys(ctx context.Context) error {
 			return err
 		}
 
-		pubKey, err := getPublicKeyByName(ctx, c, fmt.Sprintf("%s/cryptoKeyVersions/%d", resp.Name, inputSignerOpts.gcpKeyVersion))
+		pubKey, err := getPublicKeyByName(ctx, c, fmt.Sprintf("%s/cryptoKeyVersions/%d", resp.Name, InputSignerOpts.GCPKeyVersion))
 		if err != nil {
 			log.Error().Err(err).Str("name", resp.Name).Msg("key not found")
 			continue
@@ -372,8 +178,8 @@ func (g *GCPKMS) ListKeyRingKeys(ctx context.Context) error {
 	return nil
 }
 func (g *GCPKMS) CreateKeyRing(ctx context.Context) error {
-	parent := fmt.Sprintf("projects/%s/locations/%s", inputSignerOpts.gcpProjectID, inputSignerOpts.gcpRegion)
-	id := inputSignerOpts.gcpKeyRingID
+	parent := fmt.Sprintf("projects/%s/locations/%s", InputSignerOpts.GCPProjectID, InputSignerOpts.GCPRegion)
+	id := InputSignerOpts.GCPKeyRingID
 	log.Info().Str("parent", parent).Str("id", id).Msg("Creating keyring")
 	// Create the client.
 	client, err := kms.NewKeyManagementClient(ctx)
@@ -411,8 +217,8 @@ func (g *GCPKMS) CreateKeyRing(ctx context.Context) error {
 }
 
 func (g *GCPKMS) CreateKey(ctx context.Context) error {
-	parent := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s", inputSignerOpts.gcpProjectID, inputSignerOpts.gcpRegion, inputSignerOpts.gcpKeyRingID)
-	id := inputSignerOpts.keyID
+	parent := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s", InputSignerOpts.GCPProjectID, InputSignerOpts.GCPRegion, InputSignerOpts.GCPKeyRingID)
+	id := InputSignerOpts.KeyID
 
 	client, err := kms.NewKeyManagementClient(ctx)
 	if err != nil {
@@ -453,8 +259,8 @@ func (g *GCPKMS) CreateKey(ctx context.Context) error {
 func (g *GCPKMS) CreateImportJob(ctx context.Context) error {
 	// parent := "projects/PROJECT_ID/locations/global/keyRings/my-key-ring"
 	// id := "my-import-job"
-	parent := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s", inputSignerOpts.gcpProjectID, inputSignerOpts.gcpRegion, inputSignerOpts.gcpKeyRingID)
-	id := inputSignerOpts.gcpImportJob
+	parent := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s", InputSignerOpts.GCPProjectID, InputSignerOpts.GCPRegion, InputSignerOpts.GCPKeyRingID)
+	id := InputSignerOpts.GCPImportJob
 
 	// Create the client.
 	client, err := kms.NewKeyManagementClient(ctx)
@@ -492,8 +298,8 @@ func (g *GCPKMS) CreateImportJob(ctx context.Context) error {
 }
 
 func (g *GCPKMS) ImportKey(ctx context.Context) error {
-	name := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s/cryptoKeys/%s", inputSignerOpts.gcpProjectID, inputSignerOpts.gcpRegion, inputSignerOpts.gcpKeyRingID, inputSignerOpts.keyID)
-	importJob := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s/importJobs/%s", inputSignerOpts.gcpProjectID, inputSignerOpts.gcpRegion, inputSignerOpts.gcpKeyRingID, inputSignerOpts.gcpImportJob)
+	name := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s/cryptoKeys/%s", InputSignerOpts.GCPProjectID, InputSignerOpts.GCPRegion, InputSignerOpts.GCPKeyRingID, InputSignerOpts.KeyID)
+	importJob := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s/importJobs/%s", InputSignerOpts.GCPProjectID, InputSignerOpts.GCPRegion, InputSignerOpts.GCPKeyRingID, InputSignerOpts.GCPImportJob)
 	client, err := kms.NewKeyManagementClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create kms client: %w", err)
@@ -526,7 +332,7 @@ func (g *GCPKMS) ImportKey(ctx context.Context) error {
 
 func wrapKeyForGCPKMS(ctx context.Context, client *kms.KeyManagementClient) ([]byte, error) {
 	// Generate a ECDSA keypair, and format the private key as PKCS #8 DER.
-	key, err := crypto.HexToECDSA(inputSignerOpts.privateKey)
+	key, err := crypto.HexToECDSA(InputSignerOpts.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -583,7 +389,7 @@ func wrapKeyForGCPKMS(ctx context.Context, client *kms.KeyManagementClient) ([]b
 		return nil, fmt.Errorf("failed to wrap target key with KWP: %w", err)
 	}
 
-	importJobName := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s/importJobs/%s", inputSignerOpts.gcpProjectID, inputSignerOpts.gcpRegion, inputSignerOpts.gcpKeyRingID, inputSignerOpts.gcpImportJob)
+	importJobName := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s/importJobs/%s", InputSignerOpts.GCPProjectID, InputSignerOpts.GCPRegion, InputSignerOpts.GCPKeyRingID, InputSignerOpts.GCPImportJob)
 
 	// Retrieve the public key from the import job.
 	importJob, err := client.GetImportJob(ctx, &kmspb.GetImportJobRequest{
@@ -634,7 +440,7 @@ type pkcs8 struct {
 }
 
 func (g *GCPKMS) Sign(ctx context.Context, tx *ethtypes.Transaction) error {
-	name := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s/cryptoKeys/%s/cryptoKeyVersions/%d", inputSignerOpts.gcpProjectID, inputSignerOpts.gcpRegion, inputSignerOpts.gcpKeyRingID, inputSignerOpts.keyID, inputSignerOpts.gcpKeyVersion)
+	name := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s/cryptoKeys/%s/cryptoKeyVersions/%d", InputSignerOpts.GCPProjectID, InputSignerOpts.GCPRegion, InputSignerOpts.GCPKeyRingID, InputSignerOpts.KeyID, InputSignerOpts.GCPKeyVersion)
 
 	client, err := kms.NewKeyManagementClient(ctx)
 	if err != nil {
@@ -642,7 +448,7 @@ func (g *GCPKMS) Sign(ctx context.Context, tx *ethtypes.Transaction) error {
 	}
 	defer client.Close()
 
-	signer, err := getSigner()
+	signer, err := GetSigner()
 	if err != nil {
 		return err
 	}
@@ -728,7 +534,7 @@ func (g *GCPKMS) Sign(ctx context.Context, tx *ethtypes.Transaction) error {
 		return err
 	}
 
-	return outputSignedTx(signedTx)
+	return OutputSignedTx(signedTx)
 }
 
 func gcpPubKeyToEthAddress(gcpPubKey *publicKeyInfo) common.Address {
@@ -757,51 +563,51 @@ func bigIntTo32Bytes(num *big.Int) []byte {
 	}
 	return b
 }
-func getKeystorePassword() (string, error) {
-	if inputSignerOpts.unsafePassword != "" {
-		return inputSignerOpts.unsafePassword, nil
+func GetKeystorePassword() (string, error) {
+	if InputSignerOpts.UnsafePassword != "" {
+		return InputSignerOpts.UnsafePassword, nil
 	}
-	return passwordPrompt.Run()
+	return PasswordPrompt.Run()
 }
 
-func sanityCheck(cmd *cobra.Command, args []string) error {
+func SanityCheck(cmd *cobra.Command, args []string) error {
 	// Strip off the 0x if it's included in the private key hex
-	inputSignerOpts.privateKey = strings.TrimPrefix(inputSignerOpts.privateKey, "0x")
+	InputSignerOpts.PrivateKey = strings.TrimPrefix(InputSignerOpts.PrivateKey, "0x")
 
 	// normalize the format of the kms argument
-	inputSignerOpts.kms = strings.ToUpper(inputSignerOpts.kms)
+	InputSignerOpts.KMS = strings.ToUpper(InputSignerOpts.KMS)
 
 	keyStoreMethods := 0
-	if inputSignerOpts.kms != "" {
+	if InputSignerOpts.KMS != "" {
 		keyStoreMethods += 1
 	}
-	if inputSignerOpts.privateKey != "" && cmd.Name() != "import" {
+	if InputSignerOpts.PrivateKey != "" && cmd.Name() != "import" {
 		keyStoreMethods += 1
 	}
-	if inputSignerOpts.keystore != "" {
+	if InputSignerOpts.Keystore != "" {
 		keyStoreMethods += 1
 	}
 	if keyStoreMethods > 1 {
 		return fmt.Errorf("multiple conflicting keystore sources were specified")
 	}
-	pwErr := passwordValidation(inputSignerOpts.unsafePassword)
-	if inputSignerOpts.unsafePassword != "" && pwErr != nil {
+	pwErr := PasswordValidation(InputSignerOpts.UnsafePassword)
+	if InputSignerOpts.UnsafePassword != "" && pwErr != nil {
 		return pwErr
 	}
 
-	if inputSignerOpts.kms == "GCP" {
-		if inputSignerOpts.gcpProjectID == "" {
+	if InputSignerOpts.KMS == "GCP" {
+		if InputSignerOpts.GCPProjectID == "" {
 			return fmt.Errorf("GCP project id must be specified")
 		}
 
-		if inputSignerOpts.gcpRegion == "" {
+		if InputSignerOpts.GCPRegion == "" {
 			return fmt.Errorf("location is required")
 		}
 
-		if inputSignerOpts.gcpKeyRingID == "" {
+		if InputSignerOpts.GCPKeyRingID == "" {
 			return fmt.Errorf("GCP keyring ID is required")
 		}
-		if inputSignerOpts.keyID == "" && cmd.Name() != "list" {
+		if InputSignerOpts.KeyID == "" && cmd.Name() != "list" {
 			return fmt.Errorf("key id is required")
 		}
 	}
@@ -809,22 +615,22 @@ func sanityCheck(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func passwordValidation(inputPw string) error {
+func PasswordValidation(inputPw string) error {
 	if len(inputPw) < 6 {
 		return fmt.Errorf("password only had %d characters, 8 or more required", len(inputPw))
 	}
 	return nil
 }
 
-var passwordPrompt = promptui.Prompt{
+var PasswordPrompt = promptui.Prompt{
 	Label:    "Password",
-	Validate: passwordValidation,
+	Validate: PasswordValidation,
 	Mask:     '*',
 }
 
-func getSigner() (ethtypes.Signer, error) {
-	chainID := new(big.Int).SetUint64(inputSignerOpts.chainID)
-	switch inputSignerOpts.signerType {
+func GetSigner() (ethtypes.Signer, error) {
+	chainID := new(big.Int).SetUint64(InputSignerOpts.ChainID)
+	switch InputSignerOpts.SignerType {
 	case "latest":
 		return ethtypes.LatestSignerForChainID(chainID), nil
 	case "cancun":
@@ -836,32 +642,27 @@ func getSigner() (ethtypes.Signer, error) {
 	case "eip155":
 		return ethtypes.NewEIP155Signer(chainID), nil
 	}
-	return nil, fmt.Errorf("signer %s is not recognized", inputSignerOpts.signerType)
+	return nil, fmt.Errorf("signer %s is not recognized", InputSignerOpts.SignerType)
 }
 
 func init() {
-	SignerCmd.AddCommand(SignCmd)
-	SignerCmd.AddCommand(CreateCmd)
-	SignerCmd.AddCommand(ListCmd)
-	SignerCmd.AddCommand(ImportCmd)
-
 	f := SignerCmd.PersistentFlags()
-	f.StringVar(&inputSignerOpts.keystore, "keystore", "", "use keystore in given folder or file")
-	f.StringVar(&inputSignerOpts.privateKey, flag.PrivateKey, "", "use provided hex encoded private key")
-	f.StringVar(&inputSignerOpts.kms, "kms", "", "AWS or GCP if key is stored in cloud")
-	f.StringVar(&inputSignerOpts.keyID, "key-id", "", "ID of key to be used for signing")
-	f.StringVar(&inputSignerOpts.unsafePassword, "unsafe-password", "", "non-interactively specified password for unlocking keystore")
+	f.StringVar(&InputSignerOpts.Keystore, "keystore", "", "use keystore in given folder or file")
+	f.StringVar(&InputSignerOpts.PrivateKey, flag.PrivateKey, "", "use provided hex encoded private key")
+	f.StringVar(&InputSignerOpts.KMS, "kms", "", "AWS or GCP if key is stored in cloud")
+	f.StringVar(&InputSignerOpts.KeyID, "key-id", "", "ID of key to be used for signing")
+	f.StringVar(&InputSignerOpts.UnsafePassword, "unsafe-password", "", "non-interactively specified password for unlocking keystore")
 
-	f.StringVar(&inputSignerOpts.signerType, "type", "london", "type of signer to use: latest, cancun, london, eip2930, eip155")
-	f.StringVar(&inputSignerOpts.dataFile, "data-file", "", "file name holding data to be signed")
+	f.StringVar(&InputSignerOpts.SignerType, "type", "london", "type of signer to use: latest, cancun, london, eip2930, eip155")
+	f.StringVar(&InputSignerOpts.DataFile, "data-file", "", "file name holding data to be signed")
 
-	f.Uint64Var(&inputSignerOpts.chainID, "chain-id", 0, "chain ID for transactions")
+	f.Uint64Var(&InputSignerOpts.ChainID, "chain-id", 0, "chain ID for transactions")
 
 	// https://github.com/golang/oauth2/issues/241
-	f.StringVar(&inputSignerOpts.gcpProjectID, "gcp-project-id", "", "GCP project ID to use")
-	f.StringVar(&inputSignerOpts.gcpRegion, "gcp-location", "europe-west2", "GCP region to use")
+	f.StringVar(&InputSignerOpts.GCPProjectID, "gcp-project-id", "", "GCP project ID to use")
+	f.StringVar(&InputSignerOpts.GCPRegion, "gcp-location", "europe-west2", "GCP region to use")
 	// What is dead may never die https://cloud.google.com/kms/docs/faq#cannot_delete
-	f.StringVar(&inputSignerOpts.gcpKeyRingID, "gcp-keyring-id", "polycli-keyring", "GCP keyring ID to be used")
-	f.StringVar(&inputSignerOpts.gcpImportJob, "gcp-import-job-id", "", "GCP import job ID to use when importing key")
-	f.IntVar(&inputSignerOpts.gcpKeyVersion, "gcp-key-version", 1, "GCP crypto key version to use")
+	f.StringVar(&InputSignerOpts.GCPKeyRingID, "gcp-keyring-id", "polycli-keyring", "GCP keyring ID to be used")
+	f.StringVar(&InputSignerOpts.GCPImportJob, "gcp-import-job-id", "", "GCP import job ID to use when importing key")
+	f.IntVar(&InputSignerOpts.GCPKeyVersion, "gcp-key-version", 1, "GCP crypto key version to use")
 }
