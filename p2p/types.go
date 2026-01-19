@@ -269,9 +269,9 @@ func (c *rlpxConn) Write(msg Message) error {
 
 // ReadSnap reads a snap/1 response with the given id from the connection.
 func (c *rlpxConn) ReadSnap(id uint64) (Message, error) {
-	respId := id + 1
+	respID := id + 1
 	start := time.Now()
-	for respId != id && time.Since(start) < timeout {
+	for respID != id && time.Since(start) < timeout {
 		code, rawData, _, err := c.Conn.Read()
 		if err != nil {
 			return nil, fmt.Errorf("could not read from connection: %v", err)

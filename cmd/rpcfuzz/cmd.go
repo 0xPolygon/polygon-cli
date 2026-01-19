@@ -19,7 +19,7 @@ var (
 	usage string
 
 	// flags
-	rpcUrl              string
+	rpcURL              string
 	testPrivateHexKey   string
 	testContractAddress string
 	testNamespaces      string
@@ -42,7 +42,7 @@ var RPCFuzzCmd = &cobra.Command{
 	Long:  usage,
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		rpcUrl, err = flag.GetRequiredRPCURL(cmd)
+		rpcURL, err = flag.GetRequiredRPCURL(cmd)
 		if err != nil {
 			return err
 		}
@@ -60,7 +60,7 @@ var RPCFuzzCmd = &cobra.Command{
 func init() {
 	f := RPCFuzzCmd.Flags()
 
-	f.StringVarP(&rpcUrl, flag.RPCURL, "r", flag.DefaultRPCURL, "RPC endpoint URL")
+	f.StringVarP(&rpcURL, flag.RPCURL, "r", flag.DefaultRPCURL, "RPC endpoint URL")
 	f.StringVar(&testPrivateHexKey, flag.PrivateKey, codeQualityPrivateKey, "hex encoded private key to use for sending transactions")
 	f.StringVar(&testContractAddress, "contract-address", "", "address of contract to use for testing (if not specified, contract will be deployed automatically)")
 	f.StringVar(&testNamespaces, "namespaces", fmt.Sprintf("eth,web3,net,debug,%s", rpcTestRawHTTPNamespace), "comma separated list of RPC namespaces to test")

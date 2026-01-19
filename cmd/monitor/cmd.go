@@ -17,7 +17,7 @@ var (
 	usage string
 
 	// flags
-	rpcUrl          string
+	rpcURL          string
 	batchSizeValue  string
 	subBatchSize    int
 	blockCacheLimit int
@@ -58,7 +58,7 @@ var MonitorCmd = &cobra.Command{
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		rpcUrl, err = flag.GetRPCURL(cmd)
+		rpcURL, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
@@ -85,7 +85,7 @@ var MonitorCmd = &cobra.Command{
 
 func init() {
 	f := MonitorCmd.Flags()
-	f.StringVarP(&rpcUrl, flag.RPCURL, "r", flag.DefaultRPCURL, "the RPC endpoint URL")
+	f.StringVarP(&rpcURL, flag.RPCURL, "r", flag.DefaultRPCURL, "the RPC endpoint URL")
 	f.StringVarP(&batchSizeValue, "batch-size", "b", "auto", "number of requests per batch")
 	f.IntVarP(&subBatchSize, "sub-batch-size", "s", 50, "number of requests per sub-batch")
 	f.IntVarP(&blockCacheLimit, "cache-limit", "c", 200, "number of cached blocks for the LRU block data structure (Min 100)")

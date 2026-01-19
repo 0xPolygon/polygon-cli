@@ -54,7 +54,7 @@ const (
 	ArgBridgeAddress = "bridge-address"
 	ArgGERAddress    = "ger-address"
 
-	defaultForkId = "12"
+	defaultForkID = "12"
 
 	// forks
 	blueberry   = uint64(4)
@@ -636,7 +636,7 @@ func init() {
 	// cdk
 	f := CDKCmd.PersistentFlags()
 	f.StringVar(&cdkInputArgs.rpcURL, flag.RPCURL, flag.DefaultRPCURL, "RPC URL of network containing CDK contracts")
-	f.StringVar(&cdkInputArgs.forkID, ArgForkID, defaultForkId, "fork ID of CDK networks")
+	f.StringVar(&cdkInputArgs.forkID, ArgForkID, defaultForkID, "fork ID of CDK networks")
 	f.StringVar(&cdkInputArgs.rollupManagerAddress, ArgRollupManagerAddress, "", "address of rollup contract")
 
 	// rollup manager

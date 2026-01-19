@@ -21,7 +21,7 @@ const defaultPassword = "password"
 
 // cmdFundParams holds the command-line parameters for the fund command.
 type cmdFundParams struct {
-	RpcUrl     string
+	RPCURL     string
 	PrivateKey string
 
 	WalletsNumber      uint64
@@ -58,7 +58,7 @@ var FundCmd = &cobra.Command{
 	Short: "Bulk fund crypto wallets automatically.",
 	Long:  usage,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		params.RpcUrl, err = flag.GetRequiredRPCURL(cmd)
+		params.RPCURL, err = flag.GetRequiredRPCURL(cmd)
 		if err != nil {
 			return err
 		}
@@ -76,7 +76,7 @@ var FundCmd = &cobra.Command{
 func init() {
 	f := FundCmd.Flags()
 
-	f.StringVarP(&params.RpcUrl, flag.RPCURL, "r", flag.DefaultRPCURL, "RPC endpoint URL")
+	f.StringVarP(&params.RPCURL, flag.RPCURL, "r", flag.DefaultRPCURL, "RPC endpoint URL")
 	f.StringVar(&params.PrivateKey, flag.PrivateKey, defaultPrivateKey, "hex encoded private key to use for sending transactions")
 
 	// Wallet parameters.
