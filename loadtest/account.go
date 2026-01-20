@@ -31,6 +31,11 @@ type AccountPoolConfig struct {
 	RefundRemainingFunds      bool
 	CheckBalanceBeforeFunding bool
 	LegacyTxMode              bool
+	// Gas override settings
+	ForceGasPrice         uint64
+	ForcePriorityGasPrice uint64
+	GasPriceMultiplier    *big.Float
+	ChainSupportBaseFee   bool
 }
 
 // Account represents a single account used by the load test.
@@ -1217,27 +1222,56 @@ func (ap *AccountPool) isRefundingEnabled() bool {
 	return true
 }
 
+func (ap *AccountPool) biasGasPrice(price *big.Int) *big.Int {
+	if ap.cfg.GasPriceMultiplier == nil {
+		return price
+	}
+	gasPriceFloat := new(big.Float).SetInt(price)
+	gasPriceFloat.Mul(gasPriceFloat, ap.cfg.GasPriceMultiplier)
+	result := new(big.Int)
+	gasPriceFloat.Int(result)
+	return result
+}
+
 func (ap *AccountPool) getSuggestedGasPrices(ctx context.Context) (*big.Int, *big.Int) {
 	var gasPrice *big.Int
 	gasTipCap := big.NewInt(0)
 	var err error
 
 	if ap.cfg.LegacyTxMode {
-		gasPrice, err = ap.client.SuggestGasPrice(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("unable to suggest gas price")
-			return big.NewInt(0), big.NewInt(0)
+		if ap.cfg.ForceGasPrice != 0 {
+			gasPrice = new(big.Int).SetUint64(ap.cfg.ForceGasPrice)
+		} else {
+			gasPrice, err = ap.client.SuggestGasPrice(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("unable to suggest gas price")
+				return big.NewInt(0), big.NewInt(0)
+			}
+			gasPrice = ap.biasGasPrice(gasPrice)
 		}
 	} else {
-		gasPrice, err = ap.client.SuggestGasPrice(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("unable to suggest gas price")
-			return big.NewInt(0), big.NewInt(0)
+		// Handle tip cap
+		if ap.cfg.ForcePriorityGasPrice != 0 {
+			gasTipCap = new(big.Int).SetUint64(ap.cfg.ForcePriorityGasPrice)
+		} else if ap.cfg.ChainSupportBaseFee {
+			gasTipCap, err = ap.client.SuggestGasTipCap(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("unable to suggest gas tip cap")
+				return big.NewInt(0), big.NewInt(0)
+			}
+			gasTipCap = ap.biasGasPrice(gasTipCap)
 		}
-		gasTipCap, err = ap.client.SuggestGasTipCap(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("unable to suggest gas tip cap")
-			return gasPrice, big.NewInt(0)
+
+		// Handle gas price / max fee
+		if ap.cfg.ForceGasPrice != 0 {
+			gasPrice = new(big.Int).SetUint64(ap.cfg.ForceGasPrice)
+		} else {
+			gasPrice, err = ap.client.SuggestGasPrice(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("unable to suggest gas price")
+				return big.NewInt(0), big.NewInt(0)
+			}
+			gasPrice = ap.biasGasPrice(gasPrice)
 		}
 	}
 

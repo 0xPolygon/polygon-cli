@@ -40,21 +40,24 @@ func (m *RandomMode) RequiresERC721() bool {
 }
 
 func (m *RandomMode) Init(ctx context.Context, cfg *config.Config, deps *mode.Dependencies) error {
-	// Get all available modes except blob, contract-call, recall, rpc, uniswapv3
-	excludedModes := map[string]bool{
-		"blob":          true,
-		"contract-call": true,
-		"recall":        true,
-		"rpc":           true,
-		"uniswapv3":     true,
-		"random":        true, // exclude self
+	// Use a deterministic, hardcoded list of modes (same as old behavior)
+	// Does not include: blob, contract-call, recall, rpc, uniswapv3, random
+	modeNames := []string{
+		"deploy",
+		"erc20",
+		"erc721",
+		"increment",
+		"store",
+		"transaction",
 	}
 
-	m.modes = make([]mode.Runner, 0)
-	for _, md := range mode.GetAll() {
-		if !excludedModes[md.Name()] {
-			m.modes = append(m.modes, md)
+	m.modes = make([]mode.Runner, 0, len(modeNames))
+	for _, name := range modeNames {
+		md, err := mode.Get(name)
+		if err != nil {
+			continue // skip if mode not found
 		}
+		m.modes = append(m.modes, md)
 	}
 	return nil
 }

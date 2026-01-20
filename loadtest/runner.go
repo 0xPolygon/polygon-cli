@@ -21,6 +21,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/loadtest/config"
 	"github.com/0xPolygon/polygon-cli/loadtest/mode"
 	"github.com/0xPolygon/polygon-cli/loadtest/modes"
+	"github.com/0xPolygon/polygon-cli/loadtest/uniswapv3"
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -233,6 +234,10 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		RefundRemainingFunds:      r.cfg.RefundRemainingFunds,
 		CheckBalanceBeforeFunding: r.cfg.CheckBalanceBeforeFunding,
 		LegacyTxMode:              r.cfg.LegacyTxMode,
+		ForceGasPrice:             r.cfg.ForceGasPrice,
+		ForcePriorityGasPrice:     r.cfg.ForcePriorityGasPrice,
+		GasPriceMultiplier:        r.cfg.BigGasPriceMultiplier,
+		ChainSupportBaseFee:       r.cfg.ChainSupportBaseFee,
 	}
 
 	var err error
@@ -434,9 +439,19 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 	}
 
 	// Deploy contracts if needed
-	err = r.deployContracts(tops)
+	err = r.deployContracts(ctx, tops)
 	if err != nil {
 		return err
+	}
+
+	// Backfill ERC20/721 addresses for RPC mode if the chain has none
+	if r.deps.IndexedActivity != nil {
+		if len(r.deps.IndexedActivity.ERC20Addresses) == 0 && r.deps.ERC20Address != (common.Address{}) {
+			r.deps.IndexedActivity.ERC20Addresses = append(r.deps.IndexedActivity.ERC20Addresses, r.deps.ERC20Address.String())
+		}
+		if len(r.deps.IndexedActivity.ERC721Addresses) == 0 && r.deps.ERC721Address != (common.Address{}) {
+			r.deps.IndexedActivity.ERC721Addresses = append(r.deps.IndexedActivity.ERC721Addresses, r.deps.ERC721Address.String())
+		}
 	}
 
 	r.startBlockNumber, err = r.client.BlockNumber(ctx)
@@ -793,7 +808,7 @@ func (r *Runner) handleNonceReuse(ctx context.Context, tops *bind.TransactOpts, 
 	}
 }
 
-func (r *Runner) deployContracts(tops *bind.TransactOpts) error {
+func (r *Runner) deployContracts(ctx context.Context, tops *bind.TransactOpts) error {
 	// Deploy LoadTester contract if needed
 	if r.cfg.LoadTestContractAddress == "" && config.AnyRequiresLoadTestContract(r.cfg.ParsedModes) {
 		ltAddr, _, _, err := tester.DeployLoadTester(tops, r.client)
@@ -863,6 +878,41 @@ func (r *Runner) deployContracts(tops *bind.TransactOpts) error {
 			return errors.New("unable to instantiate ERC721 contract: " + err.Error())
 		}
 		r.deps.ERC721Contract = erc721Contract
+	}
+
+	// Initialize UniswapV3 if needed
+	if config.HasMode(config.ModeUniswapV3, r.cfg.ParsedModes) && r.cfg.UniswapV3 != nil {
+		log.Info().Msg("Initializing UniswapV3 contracts...")
+		uniswapAddresses := uniswapv3.UniswapV3Addresses{
+			FactoryV3:                          common.HexToAddress(r.cfg.UniswapV3.FactoryV3),
+			Multicall:                          common.HexToAddress(r.cfg.UniswapV3.Multicall),
+			ProxyAdmin:                         common.HexToAddress(r.cfg.UniswapV3.ProxyAdmin),
+			TickLens:                           common.HexToAddress(r.cfg.UniswapV3.TickLens),
+			NFTDescriptorLib:                   common.HexToAddress(r.cfg.UniswapV3.NFTDescriptorLib),
+			NonfungibleTokenPositionDescriptor: common.HexToAddress(r.cfg.UniswapV3.NonfungibleTokenPositionDescriptor),
+			TransparentUpgradeableProxy:        common.HexToAddress(r.cfg.UniswapV3.TransparentUpgradeableProxy),
+			NonfungiblePositionManager:         common.HexToAddress(r.cfg.UniswapV3.NonfungiblePositionManager),
+			Migrator:                           common.HexToAddress(r.cfg.UniswapV3.Migrator),
+			Staker:                             common.HexToAddress(r.cfg.UniswapV3.Staker),
+			QuoterV2:                           common.HexToAddress(r.cfg.UniswapV3.QuoterV2),
+			SwapRouter02:                       common.HexToAddress(r.cfg.UniswapV3.SwapRouter),
+			WETH9:                              common.HexToAddress(r.cfg.UniswapV3.WETH9),
+		}
+
+		cops := &bind.CallOpts{Context: ctx}
+		initParams := uniswapv3.InitParams{
+			PoolToken0Address: common.HexToAddress(r.cfg.UniswapV3.PoolToken0),
+			PoolToken1Address: common.HexToAddress(r.cfg.UniswapV3.PoolToken1),
+			PoolFees:          uniswapv3.PercentageToUniswapFeeTier(r.cfg.UniswapV3.PoolFees),
+		}
+
+		uniswapV3Config, poolConfig, err := uniswapv3.Init(ctx, r.client, tops, cops, uniswapAddresses, *r.cfg.FromETHAddress, initParams)
+		if err != nil {
+			return errors.New("failed to initialize UniswapV3: " + err.Error())
+		}
+		r.deps.UniswapV3Config = &uniswapV3Config
+		r.deps.UniswapV3PoolConfig = &poolConfig
+		log.Info().Msg("UniswapV3 initialized successfully")
 	}
 
 	return nil
