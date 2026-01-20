@@ -651,6 +651,9 @@ func (r *Runner) parseModes(ctx context.Context) error {
 	if cfg.LegacyTxMode && config.HasMode(config.ModeBlob, cfg.ParsedModes) {
 		return errors.New("blob transactions require eip-1559")
 	}
+	if config.HasMode(config.ModeUniswapV3, cfg.ParsedModes) && cfg.UniswapV3 == nil {
+		return errors.New("uniswapv3 mode requires the 'polycli loadtest uniswapv3' subcommand to configure contract addresses")
+	}
 
 	// Initialize mode-specific dependencies
 	for _, parsedMode := range cfg.ParsedModes {
@@ -678,9 +681,9 @@ func (r *Runner) parseModes(ctx context.Context) error {
 				// Validate that the chain has enough activity for RPC mode
 				if len(ia.TransactionIDs) == 0 || len(ia.Transactions) == 0 ||
 					len(ia.Addresses) == 0 || len(ia.BlockIDs) == 0 ||
-					len(ia.Contracts) == 0 || ia.BlockNumber == 0 {
-					return fmt.Errorf("insufficient chain activity for RPC mode: the chain must have at least some transaction history. Found %d transactions, %d addresses, %d contracts, %d blocks, current block number %d",
-						len(ia.TransactionIDs), len(ia.Addresses), len(ia.Contracts), len(ia.BlockIDs), ia.BlockNumber)
+					ia.BlockNumber == 0 {
+					return fmt.Errorf("insufficient chain activity for RPC mode: the chain must have at least some transaction history. Found %d transactions, %d addresses, %d blocks, current block number %d",
+						len(ia.TransactionIDs), len(ia.Addresses), len(ia.BlockIDs), ia.BlockNumber)
 				}
 				r.deps.IndexedActivity = ia
 				log.Info().Int("blockCount", len(ia.BlockNumbers)).Int("txCount", len(ia.TransactionIDs)).Msg("Fetched indexed activity")

@@ -1260,18 +1260,24 @@ func (ap *AccountPool) getSuggestedGasPrices(ctx context.Context) (*big.Int, *bi
 				return big.NewInt(0), big.NewInt(0)
 			}
 			gasTipCap = ap.biasGasPrice(gasTipCap)
+		} else {
+			log.Fatal().
+				Msg("Chain does not support base fee. Please set priority-gas-price flag with a value to use for gas tip cap")
 		}
 
 		// Handle gas price / max fee
 		if ap.cfg.ForceGasPrice != 0 {
 			gasPrice = new(big.Int).SetUint64(ap.cfg.ForceGasPrice)
-		} else {
+		} else if ap.cfg.ChainSupportBaseFee {
 			gasPrice, err = ap.client.SuggestGasPrice(ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("unable to suggest gas price")
 				return big.NewInt(0), big.NewInt(0)
 			}
 			gasPrice = ap.biasGasPrice(gasPrice)
+		} else {
+			log.Fatal().
+				Msg("Chain does not support base fee. Please set gas-price flag with a value to use for max fee per gas")
 		}
 	}
 

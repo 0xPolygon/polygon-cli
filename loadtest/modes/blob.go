@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"math/big"
-	"math/rand"
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/loadtest/config"
@@ -90,7 +89,7 @@ func (m *BlobMode) Execute(ctx context.Context, cfg *config.Config, deps *mode.D
 		},
 	}
 
-	err = appendBlobCommitment(&blobTx)
+	err = appendBlobCommitment(&blobTx, deps)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to parse blob")
 		return
@@ -186,11 +185,11 @@ func generateBlobCommitment(data []byte) (*blobCommitment, error) {
 }
 
 // appendBlobCommitment appends blob commitment data to a blob transaction.
-func appendBlobCommitment(tx *types.BlobTx) error {
+func appendBlobCommitment(tx *types.BlobTx, deps *mode.Dependencies) error {
 	var err error
 	var blobBytes []byte
 	var blobRefBytes []byte
-	blobLen := rand.Intn((params.BlobTxFieldElementsPerBlob * (params.BlobTxBytesPerFieldElement - 1)) - len(blobBytes))
+	blobLen := deps.RandIntn((params.BlobTxFieldElementsPerBlob * (params.BlobTxBytesPerFieldElement - 1)) - len(blobBytes))
 	blobRefBytes, _ = generateRandomBlobData(blobLen)
 
 	if blobRefBytes == nil {
