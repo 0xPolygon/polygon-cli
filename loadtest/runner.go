@@ -986,7 +986,14 @@ func (r *Runner) deployContracts(ctx context.Context, tops *bind.TransactOpts) e
 	}
 
 	// Initialize UniswapV3 if needed
-	if config.HasMode(config.ModeUniswapV3, r.cfg.ParsedModes) && r.cfg.UniswapV3 != nil {
+	if config.HasMode(config.ModeUniswapV3, r.cfg.ParsedModes) {
+		// Use default config if not provided (e.g., when using --mode uniswapv3 on root command)
+		if r.cfg.UniswapV3 == nil {
+			r.cfg.UniswapV3 = &config.UniswapV3Config{
+				PoolFees:        float64(uniswapv3.StandardTier),
+				SwapAmountInput: uniswapv3.SwapAmountInput.Uint64(),
+			}
+		}
 		log.Info().Msg("Initializing UniswapV3 contracts...")
 		uniswapAddresses := uniswapv3.UniswapV3Addresses{
 			FactoryV3:                          common.HexToAddress(r.cfg.UniswapV3.FactoryV3),
