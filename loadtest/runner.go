@@ -2,6 +2,7 @@ package loadtest
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"errors"
 	"math/big"
 	"math/rand"
@@ -129,7 +130,8 @@ func (r *Runner) initParams(ctx context.Context) error {
 	log.Trace().Interface("gasprice", gas).Msg("Retrieved current gas price")
 
 	if !r.cfg.LegacyTxMode {
-		gasTipCap, err := r.client.SuggestGasTipCap(ctx)
+		var gasTipCap *big.Int
+		gasTipCap, err = r.client.SuggestGasTipCap(ctx)
 		if err != nil {
 			return errors.New("unable to retrieve gas tip cap: " + err.Error())
 		}
@@ -239,7 +241,8 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 
 	// Add accounts based on configuration
 	if r.cfg.SendingAccountsFile != "" {
-		privateKeys, err := util.ReadPrivateKeysFromFile(r.cfg.SendingAccountsFile)
+		var privateKeys []*ecdsa.PrivateKey
+		privateKeys, err = util.ReadPrivateKeysFromFile(r.cfg.SendingAccountsFile)
 		if err != nil {
 			return errors.New("unable to read private keys from file: " + err.Error())
 		}
@@ -423,12 +426,14 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 	tops.GasTipCap = nil
 
 	// Parse modes before deploying contracts (deployContracts needs cfg.ParsedModes)
-	if err := r.parseModes(ctx); err != nil {
+	err = r.parseModes(ctx)
+	if err != nil {
 		return err
 	}
 
 	// Deploy contracts if needed
-	if err := r.deployContracts(tops); err != nil {
+	err = r.deployContracts(tops)
+	if err != nil {
 		return err
 	}
 
@@ -445,7 +450,8 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 	}
 
 	// Initialize modes
-	if err := r.initModes(ctx); err != nil {
+	err = r.initModes(ctx)
+	if err != nil {
 		return err
 	}
 
@@ -466,23 +472,25 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 
 			for requestID := range maxRequests {
 				if r.rl != nil {
-					if err := r.rl.Wait(ctx); err != nil {
-						log.Error().Int64("routineID", routineID).Int64("requestID", requestID).Err(err).Msg("Encountered a rate limiting error")
+					if waitErr := r.rl.Wait(ctx); waitErr != nil {
+						log.Error().Int64("routineID", routineID).Int64("requestID", requestID).Err(waitErr).Msg("Encountered a rate limiting error")
 					}
 				}
 
 				// Select mode for this request
 				selectedMode := r.selectMode(routineID, requestID)
 
-				account, err := r.accountPool.Next(ctx)
-				if err != nil {
-					log.Error().Int64("routineID", routineID).Int64("requestID", requestID).Err(err).Msg("Unable to get next account from account pool")
+				var account Account
+				account, tErr = r.accountPool.Next(ctx)
+				if tErr != nil {
+					log.Error().Int64("routineID", routineID).Int64("requestID", requestID).Err(tErr).Msg("Unable to get next account from account pool")
 					return
 				}
 
-				sendingTops, err := bind.NewKeyedTransactorWithChainID(account.PrivateKey(), chainID)
-				if err != nil {
-					log.Error().Int64("routineID", routineID).Int64("requestID", requestID).Err(err).Msg("Unable create transaction signer")
+				var sendingTops *bind.TransactOpts
+				sendingTops, tErr = bind.NewKeyedTransactorWithChainID(account.PrivateKey(), chainID)
+				if tErr != nil {
+					log.Error().Int64("routineID", routineID).Int64("requestID", requestID).Err(tErr).Msg("Unable create transaction signer")
 					return
 				}
 				sendingTops.Nonce = new(big.Int).SetUint64(account.Nonce())
