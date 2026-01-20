@@ -109,7 +109,8 @@ func (m *BlobMode) Execute(ctx context.Context, cfg *config.Config, deps *mode.D
 	defer func() { end = time.Now() }()
 
 	if cfg.EthCallOnly {
-		log.Error().Err(err).Msg("CallOnly not supported for blob transactions")
+		err = fmt.Errorf("CallOnly not supported for blob transactions")
+		log.Error().Err(err).Msg("Cannot use call-only mode with blob transactions")
 		return
 	} else if cfg.OutputRawTxOnly {
 		err = mode.OutputRawTransaction(stx)

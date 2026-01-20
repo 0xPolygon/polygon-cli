@@ -574,6 +574,10 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 func (r *Runner) parseModes(ctx context.Context) error {
 	cfg := r.cfg
 
+	if len(cfg.Modes) == 0 {
+		return errors.New("expected at least one mode")
+	}
+
 	// Set multi-mode flag
 	cfg.MultiMode = len(cfg.Modes) > 1
 
@@ -595,6 +599,9 @@ func (r *Runner) parseModes(ctx context.Context) error {
 
 	// Mode compatibility validation
 	if cfg.MultiMode {
+		if !config.HasUniqueModes(cfg.ParsedModes) {
+			return errors.New("duplicate modes detected, check input modes for duplicates")
+		}
 		if config.HasMode(config.ModeRandom, cfg.ParsedModes) {
 			return errors.New("random mode can't be used in combination with any other modes")
 		}
@@ -622,6 +629,12 @@ func (r *Runner) parseModes(ctx context.Context) error {
 	}
 	if config.HasMode(config.ModeContractCall, cfg.ParsedModes) && (cfg.ContractAddress == "" || cfg.ContractCallData == "") {
 		return errors.New("contract-call mode requires both --contract-address and --calldata flags")
+	}
+	if cfg.EthCallOnly && config.HasMode(config.ModeBlob, cfg.ParsedModes) {
+		return errors.New("using call only with blobs doesn't make sense")
+	}
+	if cfg.LegacyTxMode && config.HasMode(config.ModeBlob, cfg.ParsedModes) {
+		return errors.New("blob transactions require eip-1559")
 	}
 
 	// Initialize mode-specific dependencies
