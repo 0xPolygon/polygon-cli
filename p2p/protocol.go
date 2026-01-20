@@ -53,6 +53,16 @@ type conn struct {
 	// Cached values for prometheus labels to avoid repeated URLv4() calls
 	peerURL      string
 	peerFullname string
+
+	// Broadcast flags control what gets rebroadcasted to other peers
+	shouldBroadcastTx          bool
+	shouldBroadcastTxHashes    bool
+	shouldBroadcastBlocks      bool
+	shouldBroadcastBlockHashes bool
+
+	// Known caches track what this peer has seen to avoid redundant sends.
+	knownTxs    *Cache[common.Hash, struct{}]
+	knownBlocks *Cache[common.Hash, struct{}]
 }
 
 // EthProtocolOptions is the options used when creating a new eth protocol.
@@ -70,6 +80,12 @@ type EthProtocolOptions struct {
 	// Cache configurations
 	RequestsCache CacheOptions
 	ParentsCache  CacheOptions
+
+	// Broadcast flags control what gets rebroadcasted to other peers
+	ShouldBroadcastTx          bool
+	ShouldBroadcastTxHashes    bool
+	ShouldBroadcastBlocks      bool
+	ShouldBroadcastBlockHashes bool
 }
 
 // NewEthProtocol creates the new eth protocol. This will handle writing the
@@ -82,20 +98,26 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 		Run: func(p *ethp2p.Peer, rw ethp2p.MsgReadWriter) error {
 			peerURL := p.Node().URLv4()
 			c := &conn{
-				sensorID:     opts.SensorID,
-				node:         p.Node(),
-				logger:       log.With().Str("peer", peerURL).Logger(),
-				rw:           rw,
-				db:           opts.Database,
-				requests:     NewCache[uint64, common.Hash](opts.RequestsCache),
-				requestNum:   0,
-				parents:      NewCache[common.Hash, struct{}](opts.ParentsCache),
-				counter:      opts.MsgCounter,
-				peer:         p,
-				conns:        opts.Conns,
-				connectedAt:  time.Now(),
-				peerURL:      peerURL,
-				peerFullname: p.Fullname(),
+				sensorID:                   opts.SensorID,
+				node:                       p.Node(),
+				logger:                     log.With().Str("peer", peerURL).Logger(),
+				rw:                         rw,
+				db:                         opts.Database,
+				requests:                   NewCache[uint64, common.Hash](opts.RequestsCache),
+				requestNum:                 0,
+				parents:                    NewCache[common.Hash, struct{}](opts.ParentsCache),
+				counter:                    opts.MsgCounter,
+				peer:                       p,
+				conns:                      opts.Conns,
+				connectedAt:                time.Now(),
+				peerURL:                    peerURL,
+				peerFullname:               p.Fullname(),
+				shouldBroadcastTx:          opts.ShouldBroadcastTx,
+				shouldBroadcastTxHashes:    opts.ShouldBroadcastTxHashes,
+				shouldBroadcastBlocks:      opts.ShouldBroadcastBlocks,
+				shouldBroadcastBlockHashes: opts.ShouldBroadcastBlockHashes,
+				knownTxs:                   NewCache[common.Hash, struct{}](opts.Conns.KnownTxsOpts()),
+				knownBlocks:                NewCache[common.Hash, struct{}](opts.Conns.KnownBlocksOpts()),
 			}
 
 			head := c.conns.HeadBlock()
@@ -113,8 +135,8 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 			}
 
 			// Send the connection object to the conns manager for RPC broadcasting
-			opts.Conns.Add(c)
-			defer opts.Conns.Remove(c)
+			opts.Conns.AddConn(c)
+			defer opts.Conns.RemoveConn(c)
 
 			ctx := opts.Context
 
@@ -221,6 +243,12 @@ func (c *conn) readStatus(packet *eth.StatusPacket68) error {
 	if err != nil {
 		return err
 	}
+
+	defer func() {
+		if msgErr := msg.Discard(); msgErr != nil {
+			c.logger.Error().Err(msgErr).Msg("Failed to discard message")
+		}
+	}()
 
 	if msg.Code != eth.StatusMsg {
 		return errors.New("expected status message code")
@@ -339,11 +367,15 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.countMsgReceived(packet.Name(), float64(len(packet)))
 
-	// Collect unique hashes for database write.
+	// Collect unique hashes and numbers for database write and broadcasting.
 	uniqueHashes := make([]common.Hash, 0, len(packet))
+	uniqueNumbers := make([]uint64, 0, len(packet))
 
 	for _, entry := range packet {
 		hash := entry.Hash
+
+		// Mark as known from this peer
+		c.addKnownBlock(hash)
 
 		// Check what parts of the block we already have
 		cache, ok := c.conns.Blocks().Get(hash)
@@ -361,14 +393,56 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 		c.conns.Blocks().Add(hash, BlockCache{})
 		uniqueHashes = append(uniqueHashes, hash)
+		uniqueNumbers = append(uniqueNumbers, entry.Number)
 	}
 
 	// Write only unique hashes to the database.
-	if len(uniqueHashes) > 0 {
-		c.db.WriteBlockHashes(ctx, c.node, uniqueHashes, tfs)
+	if len(uniqueHashes) == 0 {
+		return nil
 	}
 
+	c.db.WriteBlockHashes(ctx, c.node, uniqueHashes, tfs)
+
+	// Broadcast block hashes to other peers
+	c.conns.BroadcastBlockHashes(uniqueHashes, uniqueNumbers)
+
 	return nil
+}
+
+// addKnownTx adds a transaction hash to the known tx cache.
+func (c *conn) addKnownTx(hash common.Hash) {
+	if !c.shouldBroadcastTx && !c.shouldBroadcastTxHashes {
+		return
+	}
+
+	c.knownTxs.Add(hash, struct{}{})
+}
+
+// addKnownBlock adds a block hash to the known block cache.
+func (c *conn) addKnownBlock(hash common.Hash) {
+	if !c.shouldBroadcastBlocks && !c.shouldBroadcastBlockHashes {
+		return
+	}
+
+	c.knownBlocks.Add(hash, struct{}{})
+}
+
+// hasKnownTx checks if a transaction hash is in the known tx cache.
+func (c *conn) hasKnownTx(hash common.Hash) bool {
+	if !c.shouldBroadcastTx && !c.shouldBroadcastTxHashes {
+		return false
+	}
+
+	return c.knownTxs.Contains(hash)
+}
+
+// hasKnownBlock checks if a block hash is in the known block cache.
+func (c *conn) hasKnownBlock(hash common.Hash) bool {
+	if !c.shouldBroadcastBlocks && !c.shouldBroadcastBlockHashes {
+		return false
+	}
+
+	return c.knownBlocks.Contains(hash)
 }
 
 func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
@@ -388,9 +462,25 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.countMsgReceived((&eth.TransactionsPacket{}).Name(), float64(len(txs)))
 
+	// Mark transactions as known from this peer
+	for _, tx := range txs {
+		c.addKnownTx(tx.Hash())
+	}
+
 	if len(txs) > 0 {
 		c.db.WriteTransactions(ctx, c.node, txs, tfs)
 	}
+
+	// Cache transactions for duplicate detection and serving to peers
+	hashes := make([]common.Hash, len(txs))
+	for i, tx := range txs {
+		c.conns.AddTx(tx.Hash(), tx)
+		hashes[i] = tx.Hash()
+	}
+
+	// Broadcast transactions or hashes to other peers
+	c.conns.BroadcastTxs(types.Transactions(txs))
+	c.conns.BroadcastTxHashes(hashes)
 
 	return nil
 }
@@ -403,8 +493,17 @@ func (c *conn) handleGetBlockHeaders(msg ethp2p.Msg) error {
 
 	c.countMsgReceived(request.Name(), 1)
 
-	response := &eth.BlockHeadersPacket{RequestId: request.RequestId}
-	c.countMsgSent(response.Name(), 0)
+	// Try to serve from cache if we have the block
+	var headers []*types.Header
+	if cache, ok := c.conns.Blocks().Peek(request.Origin.Hash); ok && cache.Header != nil {
+		headers = []*types.Header{cache.Header}
+	}
+
+	response := &eth.BlockHeadersPacket{
+		RequestId:           request.RequestId,
+		BlockHeadersRequest: headers,
+	}
+	c.countMsgSent(response.Name(), float64(len(headers)))
 	return ethp2p.Send(c.rw, eth.BlockHeadersMsg, response)
 }
 
@@ -454,8 +553,19 @@ func (c *conn) handleGetBlockBodies(msg ethp2p.Msg) error {
 
 	c.countMsgReceived(request.Name(), float64(len(request.GetBlockBodiesRequest)))
 
-	response := &eth.BlockBodiesPacket{RequestId: request.RequestId}
-	c.countMsgSent(response.Name(), 0)
+	// Try to serve from cache
+	var bodies []*eth.BlockBody
+	for _, hash := range request.GetBlockBodiesRequest {
+		if cache, ok := c.conns.Blocks().Peek(hash); ok && cache.Body != nil {
+			bodies = append(bodies, cache.Body)
+		}
+	}
+
+	response := &eth.BlockBodiesPacket{
+		RequestId:           request.RequestId,
+		BlockBodiesResponse: bodies,
+	}
+	c.countMsgSent(response.Name(), float64(len(bodies)))
 	return ethp2p.Send(c.rw, eth.BlockBodiesMsg, response)
 }
 
@@ -532,6 +642,9 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.countMsgReceived(packet.Name(), 1)
 
+	// Mark block as known from this peer
+	c.addKnownBlock(hash)
+
 	// Set the head block if newer.
 	if c.conns.UpdateHeadBlock(*packet) {
 		c.logger.Info().
@@ -563,6 +676,13 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		TD: packet.TD,
 	})
 
+	// Broadcast block or block hash to other peers
+	c.conns.BroadcastBlock(packet.Block, packet.TD)
+	c.conns.BroadcastBlockHashes(
+		[]common.Hash{hash},
+		[]uint64{packet.Block.Number().Uint64()},
+	)
+
 	return nil
 }
 
@@ -574,8 +694,19 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 
 	c.countMsgReceived(request.Name(), float64(len(request.GetPooledTransactionsRequest)))
 
-	response := &eth.PooledTransactionsPacket{RequestId: request.RequestId}
-	c.countMsgSent(response.Name(), 0)
+	// Try to serve from cache
+	var txs []*types.Transaction
+	for _, hash := range request.GetPooledTransactionsRequest {
+		if tx, ok := c.conns.GetTx(hash); ok {
+			txs = append(txs, tx)
+		}
+	}
+
+	response := &eth.PooledTransactionsPacket{
+		RequestId:                  request.RequestId,
+		PooledTransactionsResponse: txs,
+	}
+	c.countMsgSent(response.Name(), float64(len(txs)))
 	return ethp2p.Send(c.rw, eth.PooledTransactionsMsg, response)
 }
 
@@ -626,9 +757,25 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 
 	c.countMsgReceived(packet.Name(), float64(len(packet.PooledTransactionsResponse)))
 
+	// Mark transactions as known from this peer
+	for _, tx := range packet.PooledTransactionsResponse {
+		c.addKnownTx(tx.Hash())
+	}
+
 	if len(packet.PooledTransactionsResponse) > 0 {
 		c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse, tfs)
 	}
+
+	// Cache transactions for duplicate detection and serving to peers
+	hashes := make([]common.Hash, len(packet.PooledTransactionsResponse))
+	for i, tx := range packet.PooledTransactionsResponse {
+		c.conns.AddTx(tx.Hash(), tx)
+		hashes[i] = tx.Hash()
+	}
+
+	// Broadcast transactions or hashes to other peers
+	c.conns.BroadcastTxs(types.Transactions(packet.PooledTransactionsResponse))
+	c.conns.BroadcastTxHashes(hashes)
 
 	return nil
 }

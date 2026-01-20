@@ -52,6 +52,10 @@ type (
 		ShouldWriteTransactions      bool
 		ShouldWriteTransactionEvents bool
 		ShouldWritePeers             bool
+		ShouldBroadcastTx            bool
+		ShouldBroadcastTxHashes      bool
+		ShouldBroadcastBlocks        bool
+		ShouldBroadcastBlockHashes   bool
 		ShouldRunPprof               bool
 		PprofPort                    uint
 		ShouldRunPrometheus          bool
@@ -74,6 +78,9 @@ type (
 		RequestsCache                p2p.CacheOptions
 		ParentsCache                 p2p.CacheOptions
 		BlocksCache                  p2p.CacheOptions
+		TxsCache                     p2p.CacheOptions
+		KnownTxsCache                p2p.CacheOptions
+		KnownBlocksCache             p2p.CacheOptions
 
 		bootnodes    []*enode.Node
 		staticNodes  []*enode.Node
@@ -201,22 +208,33 @@ var SensorCmd = &cobra.Command{
 		// Create peer connection manager for broadcasting transactions
 		// and managing the global blocks cache
 		conns := p2p.NewConns(p2p.ConnsOptions{
-			BlocksCache: inputSensorParams.BlocksCache,
-			Head:        head,
+			BlocksCache:                inputSensorParams.BlocksCache,
+			TxsCache:                   inputSensorParams.TxsCache,
+			KnownTxsCache:              inputSensorParams.KnownTxsCache,
+			KnownBlocksCache:           inputSensorParams.KnownBlocksCache,
+			Head:                       head,
+			ShouldBroadcastTx:          inputSensorParams.ShouldBroadcastTx,
+			ShouldBroadcastTxHashes:    inputSensorParams.ShouldBroadcastTxHashes,
+			ShouldBroadcastBlocks:      inputSensorParams.ShouldBroadcastBlocks,
+			ShouldBroadcastBlockHashes: inputSensorParams.ShouldBroadcastBlockHashes,
 		})
 
 		opts := p2p.EthProtocolOptions{
-			Context:       cmd.Context(),
-			Database:      db,
-			GenesisHash:   common.HexToHash(inputSensorParams.GenesisHash),
-			RPC:           inputSensorParams.RPC,
-			SensorID:      inputSensorParams.SensorID,
-			NetworkID:     inputSensorParams.NetworkID,
-			Conns:         conns,
-			ForkID:        forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
-			MsgCounter:    msgCounter,
-			RequestsCache: inputSensorParams.RequestsCache,
-			ParentsCache:  inputSensorParams.ParentsCache,
+			Context:                    cmd.Context(),
+			Database:                   db,
+			GenesisHash:                common.HexToHash(inputSensorParams.GenesisHash),
+			RPC:                        inputSensorParams.RPC,
+			SensorID:                   inputSensorParams.SensorID,
+			NetworkID:                  inputSensorParams.NetworkID,
+			Conns:                      conns,
+			ForkID:                     forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
+			MsgCounter:                 msgCounter,
+			RequestsCache:              inputSensorParams.RequestsCache,
+			ParentsCache:               inputSensorParams.ParentsCache,
+			ShouldBroadcastTx:          inputSensorParams.ShouldBroadcastTx,
+			ShouldBroadcastTxHashes:    inputSensorParams.ShouldBroadcastTxHashes,
+			ShouldBroadcastBlocks:      inputSensorParams.ShouldBroadcastBlocks,
+			ShouldBroadcastBlockHashes: inputSensorParams.ShouldBroadcastBlockHashes,
 		}
 
 		config := ethp2p.Config{
@@ -460,6 +478,10 @@ will result in less chance of missing data but can significantly increase memory
 	f.BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
 		`write transaction events to database (this option can significantly increase CPU and memory usage)`)
 	f.BoolVar(&inputSensorParams.ShouldWritePeers, "write-peers", true, "write peers to database")
+	f.BoolVar(&inputSensorParams.ShouldBroadcastTx, "broadcast-tx", false, "broadcast full transactions to peers")
+	f.BoolVar(&inputSensorParams.ShouldBroadcastTxHashes, "broadcast-tx-hashes", false, "broadcast transaction hashes to peers")
+	f.BoolVar(&inputSensorParams.ShouldBroadcastBlocks, "broadcast-blocks", false, "broadcast full blocks to peers")
+	f.BoolVar(&inputSensorParams.ShouldBroadcastBlockHashes, "broadcast-block-hashes", false, "broadcast block hashes to peers")
 	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
 	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")
@@ -493,4 +515,10 @@ will result in less chance of missing data but can significantly increase memory
 	f.DurationVar(&inputSensorParams.ParentsCache.TTL, "parents-cache-ttl", 5*time.Minute, "time to live for parent hash cache entries (0 for no expiration)")
 	f.IntVar(&inputSensorParams.BlocksCache.MaxSize, "max-blocks", 1024, "maximum blocks to track across all peers (0 for no limit)")
 	f.DurationVar(&inputSensorParams.BlocksCache.TTL, "blocks-cache-ttl", 10*time.Minute, "time to live for block cache entries (0 for no expiration)")
+	f.IntVar(&inputSensorParams.TxsCache.MaxSize, "max-txs", 8192, "maximum transactions to cache for serving to peers (0 for no limit)")
+	f.DurationVar(&inputSensorParams.TxsCache.TTL, "txs-cache-ttl", 10*time.Minute, "time to live for transaction cache entries (0 for no expiration)")
+	f.IntVar(&inputSensorParams.KnownTxsCache.MaxSize, "max-known-txs", 8192, "maximum transaction hashes to track per peer (0 for no limit)")
+	f.DurationVar(&inputSensorParams.KnownTxsCache.TTL, "known-txs-cache-ttl", 5*time.Minute, "time to live for known transaction cache entries (0 for no expiration)")
+	f.IntVar(&inputSensorParams.KnownBlocksCache.MaxSize, "max-known-blocks", 1024, "maximum block hashes to track per peer (0 for no limit)")
+	f.DurationVar(&inputSensorParams.KnownBlocksCache.TTL, "known-blocks-cache-ttl", 5*time.Minute, "time to live for known block cache entries (0 for no expiration)")
 }

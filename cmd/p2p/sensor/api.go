@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/p2p"
@@ -165,30 +166,22 @@ func removePeerMessages(counter *prometheus.CounterVec, urls []string) error {
 		return err
 	}
 
-	var family *dto.MetricFamily
-	for _, f := range families {
-		if f.GetName() == "sensor_messages" {
-			family = f
-			break
+	// Find all matching metric families
+	for _, family := range families {
+		// Check for any sensor_messages metric (received, sent, etc.)
+		if !strings.Contains(family.GetName(), "sensor_messages") {
+			continue
 		}
-	}
 
-	// During DNS-discovery or when the server is taking a while to discover
-	// peers and has yet to receive a message, the sensor_messages prometheus
-	// metric may not exist yet.
-	if family == nil {
-		log.Trace().Msg("Could not find sensor_messages metric family")
-		return nil
-	}
+		for _, metric := range family.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				url := label.GetValue()
+				if label.GetName() != "url" || slices.Contains(urls, url) {
+					continue
+				}
 
-	for _, metric := range family.GetMetric() {
-		for _, label := range metric.GetLabel() {
-			url := label.GetValue()
-			if label.GetName() != "url" || slices.Contains(urls, url) {
-				continue
+				counter.DeletePartialMatch(prometheus.Labels{"url": url})
 			}
-
-			counter.DeletePartialMatch(prometheus.Labels{"url": url})
 		}
 	}
 
