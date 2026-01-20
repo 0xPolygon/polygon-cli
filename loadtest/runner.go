@@ -718,9 +718,8 @@ func (r *Runner) parseModes(ctx context.Context) error {
 	if cfg.LegacyTxMode && config.HasMode(config.ModeBlob, cfg.ParsedModes) {
 		return errors.New("blob transactions require eip-1559")
 	}
-	if config.HasMode(config.ModeUniswapV3, cfg.ParsedModes) && cfg.UniswapV3 == nil {
-		return errors.New("uniswapv3 mode requires the 'polycli loadtest uniswapv3' subcommand to configure contract addresses")
-	}
+	// UniswapV3 mode can be used via --mode flag with defaults, or via subcommand with custom config
+	// Default config is created in deployContracts if cfg.UniswapV3 is nil
 
 	// Initialize mode-specific dependencies
 	for _, parsedMode := range cfg.ParsedModes {
