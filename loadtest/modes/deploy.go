@@ -9,6 +9,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/loadtest/mode"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 func init() {
@@ -45,6 +46,7 @@ func (m *DeployMode) Init(ctx context.Context, cfg *config.Config, deps *mode.De
 func (m *DeployMode) Execute(ctx context.Context, cfg *config.Config, deps *mode.Dependencies, tops *bind.TransactOpts) (start, end time.Time, txHash common.Hash, err error) {
 	start = time.Now()
 	defer func() { end = time.Now() }()
+	var tx *types.Transaction
 
 	if cfg.EthCallOnly {
 		msg := mode.TransactOptsToCallMsg(cfg, tops.GasLimit)
@@ -52,32 +54,21 @@ func (m *DeployMode) Execute(ctx context.Context, cfg *config.Config, deps *mode
 		_, err = deps.Client.CallContract(ctx, msg, nil)
 	} else if cfg.OutputRawTxOnly {
 		tops.NoSend = true
-		var tx any
 		_, tx, _, err = tester.DeployLoadTester(tops, deps.Client)
 		if err != nil {
 			return
 		}
-		if tx != nil {
-			// Type assert to get hash and output
-			if typedTx, ok := tx.(interface{ Hash() common.Hash }); ok {
-				txHash = typedTx.Hash()
-			}
-			if typedTx, ok := tx.(interface{ MarshalBinary() ([]byte, error) }); ok {
-				rawTx, marshalErr := typedTx.MarshalBinary()
-				if marshalErr != nil {
-					err = marshalErr
-					return
-				}
-				err = mode.OutputRawBytes(rawTx)
-			}
+		txHash = tx.Hash()
+		rawTx, marshalErr := tx.MarshalBinary()
+		if marshalErr != nil {
+			err = marshalErr
+			return
 		}
+		err = mode.OutputRawBytes(rawTx)
 	} else {
-		var tx any
 		_, tx, _, err = tester.DeployLoadTester(tops, deps.Client)
-		if err == nil && tx != nil {
-			if typedTx, ok := tx.(interface{ Hash() common.Hash }); ok {
-				txHash = typedTx.Hash()
-			}
+		if err == nil {
+			txHash = tx.Hash()
 		}
 	}
 	return

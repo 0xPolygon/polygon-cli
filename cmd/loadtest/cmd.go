@@ -181,6 +181,6 @@ func initUniswapv3Flags() {
 	f.StringVar(&uniswapCfg.PoolToken1, "uniswap-pool-token-1-address", "", "address of pre-deployed ERC20 contract used in Uniswap pool Token0 // Token1")
 
 	// Pool and swap parameters.
-	f.Float64VarP(&uniswapCfg.PoolFees, "pool-fees", "f", float64(uniswapv3.StandardTier), "trading fees for UniswapV3 liquidity pool swaps (e.g. 0.3 means 0.3%%)")
+	f.Float64VarP(&uniswapCfg.PoolFees, "pool-fees", "f", float64(uniswapv3.StandardTier), "trading fees for UniswapV3 liquidity pool swaps (e.g. 0.3 means 0.3%)")
 	f.Uint64VarP(&uniswapCfg.SwapAmountInput, "swap-amount", "a", uniswapv3.SwapAmountInput.Uint64(), "amount of inbound token given as swap input")
 }

@@ -27,9 +27,8 @@ const _Mode_name = "ModeERC20ModeERC721ModeBlobModeContractCallModeDeployModeInc
 var _Mode_index = [...]uint8{0, 9, 19, 27, 43, 53, 66, 76, 86, 93, 102, 117, 130}
 
 func (i Mode) String() string {
-	idx := int(i) - 0
-	if i < 0 || idx >= len(_Mode_index)-1 {
+	if i < 0 || i >= Mode(len(_Mode_index)-1) {
 		return "Mode(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _Mode_name[_Mode_index[idx]:_Mode_index[idx+1]]
+	return _Mode_name[_Mode_index[i]:_Mode_index[i+1]]
 }

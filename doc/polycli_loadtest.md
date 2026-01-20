@@ -87,6 +87,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --adaptive-target-size uint              target queue size for adaptive rate limiting (speed up if smaller, back off if larger) (default 1000)
       --batch-size uint                        batch size for receipt fetching (default: 999) (default 999)
       --blob-fee-cap uint                      blob fee cap, or maximum blob fee per chunk, in Gwei (default 100000)
+      --block-batch-size uint                  number of blocks to fetch per RPC batch request for recall and rpc modes (default 25)
       --calldata string                        hex encoded calldata: function signature + encoded arguments (requires --mode contract-call and --contract-address)
       --chain-id uint                          chain ID for the transactions
       --check-balance-before-funding           check account balance before funding sending accounts (saves gas when accounts are already funded)
@@ -164,5 +165,5 @@ The command also inherits flags from parent commands.
 ## See also
 
 - [polycli](polycli.md) - A Swiss Army knife of blockchain tools.
-- [polycli loadtest uniswapv3](polycli_loadtest_uniswapv3.md) - Run Uniswapv3-like load test against an Eth/EVm style JSON-RPC endpoint.
+- [polycli loadtest uniswapv3](polycli_loadtest_uniswapv3.md) - Run UniswapV3-like load test against an Eth/EVM style JSON-RPC endpoint.
 
