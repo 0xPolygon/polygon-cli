@@ -159,10 +159,6 @@ func (c *Config) Validate() error {
 		return errors.New("when waiting for a receipt, use a max retry greater than 1")
 	}
 
-	if c.PreFundSendingAccounts && c.AccountFundingAmount != nil && c.AccountFundingAmount.Uint64() == 0 {
-		return errors.New("a non-zero funding amount is required when pre-funding sending accounts")
-	}
-
 	if c.EthCallOnly {
 		if c.PreFundSendingAccounts || c.SendingAccountsFile != "" || c.SendingAccountsCount > 0 {
 			return errors.New("pre-funding accounts with call only mode doesn't make sense")

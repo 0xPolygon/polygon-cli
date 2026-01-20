@@ -576,10 +576,19 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 	wg.Wait()
 	rateLimitCancel()
 
-	// Capture final block number for summary
-	r.finalBlockNumber, err = r.client.BlockNumber(ctx)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to get final block number for summary")
+	// Wait for all transactions to be mined (unless fire-and-forget or call-only)
+	if !cfg.FireAndForget && !cfg.EthCallOnly {
+		log.Debug().Msg("Waiting for remaining transactions to be completed and mined")
+		r.finalBlockNumber, err = r.waitForFinalBlock(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("There was an issue waiting for all transactions to be mined")
+		}
+	} else {
+		// Capture final block number for summary
+		r.finalBlockNumber, err = r.client.BlockNumber(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to get final block number for summary")
+		}
 	}
 
 	return nil
@@ -1166,6 +1175,77 @@ func (r *Runner) Close() {
 	if r.rpcClient != nil {
 		r.rpcClient.Close()
 	}
+}
+
+// waitForFinalBlock waits for all transactions to be mined by checking nonces.
+func (r *Runner) waitForFinalBlock(ctx context.Context) (uint64, error) {
+	cfg := r.cfg
+	var lastBlockNumber uint64
+	var err error
+	const checkInterval = 5 * time.Second
+	const maxRetries = 30
+
+	rateLimiter := rate.NewLimiter(rate.Limit(cfg.RateLimit), 1)
+	noncesToCheck := r.accountPool.Nonces(ctx, true)
+
+	for retry := 1; retry <= maxRetries; retry++ {
+		lastBlockNumber, err = r.client.BlockNumber(ctx)
+		if err != nil {
+			return 0, err
+		}
+		if cfg.EthCallOnly {
+			return lastBlockNumber, nil
+		}
+
+		var wg sync.WaitGroup
+		var remainingNoncesToCheck atomic.Int64
+		noncesToCheck.Range(func(key, value any) bool {
+			wg.Add(1)
+			remainingNoncesToCheck.Add(1)
+			address := key.(common.Address)
+			expectedNonce := value.(uint64)
+			go func(ctx context.Context, rl *rate.Limiter) {
+				defer wg.Done()
+				if waitErr := rl.Wait(ctx); waitErr != nil {
+					log.Error().Err(waitErr).Msg("Rate limiter wait error")
+					return
+				}
+				nonce, nonceErr := r.client.NonceAt(ctx, address, new(big.Int).SetUint64(lastBlockNumber))
+				if nonceErr != nil {
+					log.Error().Err(nonceErr).Str("address", address.String()).Msg("Unable to get nonce for account while checking for final block")
+					return
+				}
+				logEvent := log.Debug().
+					Str("address", address.String()).
+					Uint64("nonce", nonce).
+					Uint64("expectedNonce", expectedNonce).
+					Uint64("lastBlockNumber", lastBlockNumber)
+				if nonce < expectedNonce {
+					logEvent.Msg("not all transactions for account have been mined. waiting...")
+				} else {
+					remainingNoncesToCheck.Add(-1)
+					noncesToCheck.Delete(address)
+				}
+			}(ctx, rateLimiter)
+			return true
+		})
+		wg.Wait()
+
+		if remainingNoncesToCheck.Load() == 0 {
+			log.Debug().Uint64("lastBlockNumber", lastBlockNumber).Msg("All transactions mined")
+			return lastBlockNumber, nil
+		}
+
+		log.Debug().
+			Int64("remainingNonces", remainingNoncesToCheck.Load()).
+			Int("retry", retry).
+			Int("maxRetries", maxRetries).
+			Msg("Waiting for transactions to be mined...")
+		time.Sleep(checkInterval)
+	}
+
+	log.Error().Msg("Max retries reached waiting for transactions to be mined")
+	return lastBlockNumber, fmt.Errorf("max retries reached waiting for transactions to be mined")
 }
 
 // SetModes sets the modes to be used during load testing.
