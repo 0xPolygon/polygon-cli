@@ -359,7 +359,6 @@ func (r *Runner) Run(ctx context.Context) error {
 
 	timedOut := false
 	interrupted := false
-	mainLoopDone := false
 	var mainLoopErr error
 
 	// Wait for completion or interruption
@@ -381,13 +380,11 @@ func (r *Runner) Run(ctx context.Context) error {
 			}
 		}
 	case err := <-errCh:
-		mainLoopDone = true
 		mainLoopErr = err
 	}
 
-	if !mainLoopDone && (timedOut || interrupted) {
+	if timedOut || interrupted {
 		mainLoopErr = <-errCh
-		mainLoopDone = true
 	}
 	if mainLoopErr != nil {
 		log.Fatal().Err(mainLoopErr).Msg("Received critical error while running load test")
