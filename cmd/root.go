@@ -162,5 +162,6 @@ func NewPolycliCommand() *cobra.Command {
 		dockerlogger.Cmd,
 		contract.Cmd,
 	)
+
 	return cmd
 }
