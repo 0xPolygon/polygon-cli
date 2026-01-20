@@ -102,16 +102,16 @@ func (r *Runner) Init(ctx context.Context) error {
 	r.rpcClient = rpc
 	r.client = ethclient.NewClient(rpc)
 
-	// Initialize load test parameters
-	if err := r.initParams(ctx); err != nil {
-		return err
-	}
-
-	// Initialize dependencies
+	// Initialize dependencies early so mode parsing can use them.
 	r.deps = &mode.Dependencies{
 		Client:     r.client,
 		RPCClient:  r.rpcClient,
 		RandSource: r.randSrc,
+	}
+
+	// Initialize load test parameters
+	if err := r.initParams(ctx); err != nil {
+		return err
 	}
 
 	return nil
@@ -213,6 +213,11 @@ func (r *Runner) initParams(ctx context.Context) error {
 	r.cfg.FromETHAddress = &ethAddress
 	if r.cfg.ChainID == 0 {
 		r.cfg.ChainID = chainID.Uint64()
+	}
+
+	// Parse modes before account pool init so RPC mode can force call-only behavior.
+	if err := r.parseModes(ctx); err != nil {
+		return err
 	}
 
 	// Initialize account pool
@@ -339,7 +344,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	signal.Notify(sigCh, os.Interrupt)
 	defer signal.Stop(sigCh)
 
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	loadTestCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -352,17 +357,45 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}()
 
+	timedOut := false
+	interrupted := false
+	mainLoopDone := false
+	var mainLoopErr error
+
 	// Wait for completion or interruption
 	select {
 	case <-overallTimer.C:
 		log.Info().Msg("Time's up")
+		timedOut = true
+		cancel()
 	case <-sigCh:
 		log.Info().Msg("Interrupted.. Stopping load test")
+		interrupted = true
 		cancel()
-	case err := <-errCh:
-		if err != nil {
-			log.Fatal().Err(err).Msg("Received critical error while running load test")
+		if r.cfg.ShouldProduceSummary {
+			finalBlock, err := r.client.BlockNumber(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Unable to retrieve final block number")
+			} else {
+				r.finalBlockNumber = finalBlock
+			}
 		}
+	case err := <-errCh:
+		mainLoopDone = true
+		mainLoopErr = err
+	}
+
+	if !mainLoopDone && (timedOut || interrupted) {
+		mainLoopErr = <-errCh
+		mainLoopDone = true
+	}
+	if mainLoopErr != nil {
+		log.Fatal().Err(mainLoopErr).Msg("Received critical error while running load test")
+	}
+
+	if timedOut {
+		log.Info().Msg("Finished")
+		return nil
 	}
 
 	// Post-load-test operations use the original context (not the cancelled loadTestCtx)
@@ -440,12 +473,6 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 	tops.GasFeeCap = nil
 	tops.GasTipCap = nil
 
-	// Parse modes before deploying contracts (deployContracts needs cfg.ParsedModes)
-	err = r.parseModes(ctx)
-	if err != nil {
-		return err
-	}
-
 	// Deploy contracts if needed
 	err = r.deployContracts(ctx, tops)
 	if err != nil {
@@ -494,12 +521,21 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 			var startReq, endReq time.Time
 			var tErr error
 			var ltTxHash common.Hash
-
 			for requestID := range maxRequests {
+				if ctx.Err() != nil {
+					return
+				}
 				if r.rl != nil {
 					if waitErr := r.rl.Wait(ctx); waitErr != nil {
+						if errors.Is(waitErr, context.Canceled) || errors.Is(waitErr, context.DeadlineExceeded) {
+							return
+						}
 						log.Error().Int64("routineID", routineID).Int64("requestID", requestID).Err(waitErr).Msg("Encountered a rate limiting error")
 					}
+				}
+
+				if ctx.Err() != nil {
+					return
 				}
 
 				// Select mode for this request
@@ -524,6 +560,9 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 				if mustCheckMaxBaseFee {
 					waiting := false
 					for r.waitBaseFeeToDrop.Load() {
+						if ctx.Err() != nil {
+							return
+						}
 						if !waiting {
 							waiting = true
 							log.Debug().Int64("routineID", routineID).Int64("requestID", requestID).Msg("go routine is waiting for base fee to drop")
@@ -583,6 +622,10 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 	log.Trace().Msg("Finished starting go routines. Waiting..")
 	wg.Wait()
 	rateLimitCancel()
+
+	if ctx.Err() != nil {
+		return nil
+	}
 
 	// Wait for all transactions to be mined (unless fire-and-forget or call-only)
 	if !cfg.FireAndForget && !cfg.EthCallOnly {
