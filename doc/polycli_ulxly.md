@@ -63,8 +63,6 @@ The command also inherits flags from parent commands.
 
 - [polycli ulxly proof](polycli_ulxly_proof.md) - Generate a proof for a given range of deposits.
 
-- [polycli ulxly proof](polycli_ulxly_proof.md) - Generate a proof for a given range of deposits.
-
 - [polycli ulxly rollups-proof](polycli_ulxly_rollups-proof.md) - Generate a proof for a given range of rollups.
 
 - [polycli ulxly zero-proof](polycli_ulxly_zero-proof.md) - Create a proof that's filled with zeros.

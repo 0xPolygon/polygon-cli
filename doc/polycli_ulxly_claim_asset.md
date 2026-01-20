@@ -1,4 +1,4 @@
-# `polycli ulxly  claim asset`
+# `polycli ulxly claim asset`
 
 > Auto-generated documentation.
 
@@ -14,7 +14,7 @@
 Claim a deposit.
 
 ```bash
-polycli ulxly  claim asset [flags]
+polycli ulxly claim asset [flags]
 ```
 
 ## Usage

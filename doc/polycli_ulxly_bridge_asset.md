@@ -1,4 +1,4 @@
-# `polycli ulxly  bridge asset`
+# `polycli ulxly bridge asset`
 
 > Auto-generated documentation.
 
@@ -14,7 +14,7 @@
 Move ETH or an ERC20 between to chains.
 
 ```bash
-polycli ulxly  bridge asset [flags]
+polycli ulxly bridge asset [flags]
 ```
 
 ## Usage
