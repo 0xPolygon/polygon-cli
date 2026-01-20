@@ -315,8 +315,8 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		return nil
 	}
 	if r.cfg.AccountFundingAmount.Cmp(new(big.Int)) == 0 {
-		r.accountPool.SetFundingAmount(big.NewInt(1000000000000000000)) // 1 ETH
-		log.Debug().Msg("Multiple sending accounts detected with pre-funding enabled with zero funding amount - auto-setting funding amount to 1 ETH")
+		log.Info().Msg("account funding amount is zero. Skipping pre-funding of sending accounts.")
+		return nil
 	}
 
 	if err := r.accountPool.FundAccounts(ctx); err != nil {
@@ -879,6 +879,8 @@ func (r *Runner) handleNonceReuse(ctx context.Context, tops *bind.TransactOpts, 
 }
 
 func (r *Runner) deployContracts(ctx context.Context, tops *bind.TransactOpts) error {
+	cops := &bind.CallOpts{Context: ctx}
+
 	// Deploy LoadTester contract if needed
 	if r.cfg.LoadTestContractAddress == "" && config.AnyRequiresLoadTestContract(r.cfg.ParsedModes) {
 		ltAddr, _, _, err := tester.DeployLoadTester(tops, r.client)
@@ -892,6 +894,15 @@ func (r *Runner) deployContracts(ctx context.Context, tops *bind.TransactOpts) e
 		}
 		r.deps.LoadTesterContract = ltContract
 		log.Debug().Stringer("ltAddr", ltAddr).Msg("Deployed load test contract")
+
+		// Wait for contract to be mined and validated
+		err = util.BlockUntilSuccessful(ctx, r.client, func() error {
+			_, err := ltContract.GetCallCounter(cops)
+			return err
+		})
+		if err != nil {
+			return fmt.Errorf("failed waiting for load test contract to be mined: %w", err)
+		}
 	} else if r.cfg.LoadTestContractAddress != "" {
 		ltAddr := common.HexToAddress(r.cfg.LoadTestContractAddress)
 		r.deps.LoadTesterAddress = ltAddr
@@ -916,6 +927,21 @@ func (r *Runner) deployContracts(ctx context.Context, tops *bind.TransactOpts) e
 		}
 		r.deps.ERC20Contract = erc20Contract
 		log.Info().Stringer("erc20Addr", erc20Addr).Msg("Deployed ERC20 contract")
+
+		// Wait for contract to be mined and validate balance
+		err = util.BlockUntilSuccessful(ctx, r.client, func() error {
+			balance, err := erc20Contract.BalanceOf(cops, *r.cfg.FromETHAddress)
+			if err != nil {
+				return err
+			}
+			if balance.Cmp(new(big.Int)) == 0 {
+				return errors.New("ERC20 balance is zero")
+			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("failed waiting for ERC20 contract to be mined: %w", err)
+		}
 	} else if r.cfg.ERC20Address != "" {
 		erc20Addr := common.HexToAddress(r.cfg.ERC20Address)
 		r.deps.ERC20Address = erc20Addr
@@ -940,6 +966,15 @@ func (r *Runner) deployContracts(ctx context.Context, tops *bind.TransactOpts) e
 		}
 		r.deps.ERC721Contract = erc721Contract
 		log.Info().Stringer("erc721Addr", erc721Addr).Msg("Deployed ERC721 contract")
+
+		// Wait for contract to be mined and validated
+		err = util.BlockUntilSuccessful(ctx, r.client, func() error {
+			_, err := erc721Contract.BalanceOf(cops, *r.cfg.FromETHAddress)
+			return err
+		})
+		if err != nil {
+			return fmt.Errorf("failed waiting for ERC721 contract to be mined: %w", err)
+		}
 	} else if r.cfg.ERC721Address != "" {
 		erc721Addr := common.HexToAddress(r.cfg.ERC721Address)
 		r.deps.ERC721Address = erc721Addr
