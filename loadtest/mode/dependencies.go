@@ -2,6 +2,7 @@ package mode
 
 import (
 	"math/rand"
+	"sync"
 
 	"github.com/0xPolygon/polygon-cli/bindings/tester"
 	"github.com/0xPolygon/polygon-cli/bindings/tokens"
@@ -32,12 +33,27 @@ type Dependencies struct {
 	IndexedActivity    *IndexedActivity
 
 	// Random source for deterministic randomness
-	RandSource *rand.Rand
+	RandSource   *rand.Rand
+	RandSourceMu sync.Mutex
 
 	// UniswapV3 configuration (populated when uniswapv3 mode is used)
 	UniswapV3Config     *uniswap.UniswapV3Config
 	UniswapV3PoolConfig *uniswap.PoolConfig
 	UniswapV3Pool       *uniswapv3.IUniswapV3Pool
+}
+
+// RandIntn returns a deterministic random int while guarding concurrent access.
+func (d *Dependencies) RandIntn(n int) int {
+	d.RandSourceMu.Lock()
+	defer d.RandSourceMu.Unlock()
+	return d.RandSource.Intn(n)
+}
+
+// RandRead fills p with deterministic random data while guarding concurrent access.
+func (d *Dependencies) RandRead(p []byte) (int, error) {
+	d.RandSourceMu.Lock()
+	defer d.RandSourceMu.Unlock()
+	return d.RandSource.Read(p)
 }
 
 // IndexedActivity holds indexed blockchain activity data for RPC testing.

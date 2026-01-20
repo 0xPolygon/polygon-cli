@@ -44,7 +44,7 @@ func (m *StoreMode) Init(ctx context.Context, cfg *config.Config, deps *mode.Dep
 
 func (m *StoreMode) Execute(ctx context.Context, cfg *config.Config, deps *mode.Dependencies, tops *bind.TransactOpts) (start, end time.Time, txHash common.Hash, err error) {
 	inputData := make([]byte, cfg.StoreDataSize)
-	_, _ = io.ReadFull(mode.NewHexwordReader(deps.RandSource), inputData)
+	_, _ = io.ReadFull(mode.NewHexwordReader(deps), inputData)
 
 	start = time.Now()
 	defer func() { end = time.Now() }()

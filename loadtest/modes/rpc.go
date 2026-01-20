@@ -56,7 +56,7 @@ func (m *RPCMode) Execute(ctx context.Context, cfg *config.Config, deps *mode.De
 		return
 	}
 
-	funcNum := deps.RandSource.Intn(300)
+	funcNum := deps.RandIntn(300)
 	start = time.Now()
 	defer func() { end = time.Now() }()
 
@@ -66,7 +66,7 @@ func (m *RPCMode) Execute(ctx context.Context, cfg *config.Config, deps *mode.De
 	} else if funcNum < 21 {
 		log.Trace().Msg("eth_estimateGas")
 		var rawTxData []byte
-		pt := ia.Transactions[deps.RandSource.Intn(len(ia.Transactions))]
+		pt := ia.Transactions[deps.RandIntn(len(ia.Transactions))]
 		rawTxData, err = pt.MarshalJSON()
 		if err != nil {
 			log.Error().Err(err).Str("txHash", pt.Hash().String()).Msg("issue converting poly transaction to json")
@@ -88,31 +88,31 @@ func (m *RPCMode) Execute(ctx context.Context, cfg *config.Config, deps *mode.De
 		_, err = deps.Client.EstimateGas(ctx, cm)
 	} else if funcNum < 33 {
 		log.Trace().Msg("eth_getTransactionCount")
-		_, err = deps.Client.NonceAt(ctx, common.HexToAddress(ia.Addresses[deps.RandSource.Intn(len(ia.Addresses))]), nil)
+		_, err = deps.Client.NonceAt(ctx, common.HexToAddress(ia.Addresses[deps.RandIntn(len(ia.Addresses))]), nil)
 	} else if funcNum < 47 {
 		log.Trace().Msg("eth_getCode")
-		_, err = deps.Client.CodeAt(ctx, common.HexToAddress(ia.Contracts[deps.RandSource.Intn(len(ia.Contracts))]), nil)
+		_, err = deps.Client.CodeAt(ctx, common.HexToAddress(ia.Contracts[deps.RandIntn(len(ia.Contracts))]), nil)
 	} else if funcNum < 64 {
 		log.Trace().Msg("eth_getBlockByNumber")
-		_, err = deps.Client.BlockByNumber(ctx, big.NewInt(int64(deps.RandSource.Intn(int(ia.BlockNumber)))))
+		_, err = deps.Client.BlockByNumber(ctx, big.NewInt(int64(deps.RandIntn(int(ia.BlockNumber)))))
 	} else if funcNum < 84 {
 		log.Trace().Msg("eth_getTransactionByHash")
-		_, _, err = deps.Client.TransactionByHash(ctx, common.HexToHash(ia.TransactionIDs[deps.RandSource.Intn(len(ia.TransactionIDs))]))
+		_, _, err = deps.Client.TransactionByHash(ctx, common.HexToHash(ia.TransactionIDs[deps.RandIntn(len(ia.TransactionIDs))]))
 	} else if funcNum < 109 {
 		log.Trace().Msg("eth_getBalance")
-		_, err = deps.Client.BalanceAt(ctx, common.HexToAddress(ia.Addresses[deps.RandSource.Intn(len(ia.Addresses))]), nil)
+		_, err = deps.Client.BalanceAt(ctx, common.HexToAddress(ia.Addresses[deps.RandIntn(len(ia.Addresses))]), nil)
 	} else if funcNum < 142 {
 		log.Trace().Msg("eth_getTransactionReceipt")
-		_, err = deps.Client.TransactionReceipt(ctx, common.HexToHash(ia.TransactionIDs[deps.RandSource.Intn(len(ia.TransactionIDs))]))
+		_, err = deps.Client.TransactionReceipt(ctx, common.HexToHash(ia.TransactionIDs[deps.RandIntn(len(ia.TransactionIDs))]))
 	} else if funcNum < 192 {
 		log.Trace().Msg("eth_getLogs")
-		h := common.HexToHash(ia.BlockIDs[deps.RandSource.Intn(len(ia.BlockIDs))])
+		h := common.HexToHash(ia.BlockIDs[deps.RandIntn(len(ia.BlockIDs))])
 		_, err = deps.Client.FilterLogs(ctx, ethereum.FilterQuery{BlockHash: &h})
 	} else {
 		log.Trace().Msg("eth_call")
 
 		if len(ia.ERC20Addresses) != 0 {
-			erc20Str := string(ia.ERC20Addresses[deps.RandSource.Intn(len(ia.ERC20Addresses))])
+			erc20Str := string(ia.ERC20Addresses[deps.RandIntn(len(ia.ERC20Addresses))])
 			erc20Addr := common.HexToAddress(erc20Str)
 
 			log.Trace().
@@ -139,7 +139,7 @@ func (m *RPCMode) Execute(ctx context.Context, cfg *config.Config, deps *mode.De
 		}
 
 		if len(ia.ERC721Addresses) != 0 {
-			erc721Str := string(ia.ERC721Addresses[deps.RandSource.Intn(len(ia.ERC721Addresses))])
+			erc721Str := string(ia.ERC721Addresses[deps.RandIntn(len(ia.ERC721Addresses))])
 			erc721Addr := common.HexToAddress(erc721Str)
 
 			log.Trace().

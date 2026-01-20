@@ -67,7 +67,7 @@ func (m *RandomMode) Execute(ctx context.Context, cfg *config.Config, deps *mode
 	}
 
 	// Select a random mode
-	selectedMode := m.modes[deps.RandSource.Intn(len(m.modes))]
+	selectedMode := m.modes[deps.RandIntn(len(m.modes))]
 	return selectedMode.Execute(ctx, cfg, deps, tops)
 }
 
@@ -82,5 +82,5 @@ func GetRandomModeEnumValue(deps *mode.Dependencies) config.Mode {
 		config.ModeStore,
 		config.ModeTransaction,
 	}
-	return m[deps.RandSource.Intn(len(m))]
+	return m[deps.RandIntn(len(m))]
 }

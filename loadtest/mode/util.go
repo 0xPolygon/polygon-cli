@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math/rand"
 
 	"github.com/0xPolygon/polygon-cli/loadtest/config"
 	"github.com/ethereum/go-ethereum"
@@ -61,17 +60,19 @@ var hexwords = []byte{
 
 // HexwordReader provides a reader that generates hex-word patterns.
 type HexwordReader struct {
-	randSrc *rand.Rand
+	deps *Dependencies
 }
 
 // NewHexwordReader creates a new hexword reader with the given random source.
-func NewHexwordReader(randSrc *rand.Rand) io.Reader {
-	return &HexwordReader{randSrc: randSrc}
+func NewHexwordReader(deps *Dependencies) io.Reader {
+	return &HexwordReader{deps: deps}
 }
 
 func (h *HexwordReader) Read(p []byte) (n int, err error) {
+	h.deps.RandSourceMu.Lock()
+	defer h.deps.RandSourceMu.Unlock()
 	for i := range p {
-		p[i] = hexwords[h.randSrc.Intn(len(hexwords))]
+		p[i] = hexwords[h.deps.RandSource.Intn(len(hexwords))]
 	}
 	return len(p), nil
 }
@@ -79,7 +80,7 @@ func (h *HexwordReader) Read(p []byte) (n int, err error) {
 // GetRandomAddress generates a random Ethereum address using the given random source.
 func GetRandomAddress(deps *Dependencies) *common.Address {
 	addr := make([]byte, 20)
-	_, _ = deps.RandSource.Read(addr)
+	_, _ = deps.RandRead(addr)
 	ethAddr := common.BytesToAddress(addr)
 	return &ethAddr
 }

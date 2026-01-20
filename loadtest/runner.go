@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"net/http"
@@ -592,6 +593,37 @@ func (r *Runner) parseModes(ctx context.Context) error {
 		cfg.ParsedModes = append(cfg.ParsedModes, parsedMode)
 	}
 
+	// Mode compatibility validation
+	if cfg.MultiMode {
+		if config.HasMode(config.ModeRandom, cfg.ParsedModes) {
+			return errors.New("random mode can't be used in combination with any other modes")
+		}
+		if config.HasMode(config.ModeBlob, cfg.ParsedModes) {
+			return errors.New("blob mode should only be used by itself. Blob mode will take significantly longer than other transactions to finalize, and the address will be reserved, preventing other transactions from being made")
+		}
+		if config.HasMode(config.ModeRPC, cfg.ParsedModes) && !cfg.EthCallOnly {
+			return errors.New("rpc mode must be called with eth-call-only when multiple modes are used")
+		}
+		if cfg.OutputRawTxOnly {
+			return errors.New("raw output is not compatible with multiple modes")
+		}
+	} else if config.HasMode(config.ModeRPC, cfg.ParsedModes) {
+		// RPC mode is read-only testing, automatically enable call-only mode
+		log.Trace().Msg("Setting call only mode since we're doing RPC testing")
+		cfg.EthCallOnly = true
+	}
+	if cfg.OutputRawTxOnly {
+		if config.HasMode(config.ModeRPC, cfg.ParsedModes) {
+			return errors.New("raw output is not compatible with RPC mode")
+		}
+		if config.HasMode(config.ModeUniswapV3, cfg.ParsedModes) {
+			return errors.New("raw output is not compatible with UniswapV3 mode")
+		}
+	}
+	if config.HasMode(config.ModeContractCall, cfg.ParsedModes) && (cfg.ContractAddress == "" || cfg.ContractCallData == "") {
+		return errors.New("contract-call mode requires both --contract-address and --calldata flags")
+	}
+
 	// Initialize mode-specific dependencies
 	for _, parsedMode := range cfg.ParsedModes {
 		switch parsedMode {
@@ -602,6 +634,9 @@ func (r *Runner) parseModes(ctx context.Context) error {
 				if err != nil {
 					return errors.New("failed to fetch recall transactions: " + err.Error())
 				}
+				if len(txs) == 0 {
+					return errors.New("we weren't able to fetch any recall transactions")
+				}
 				r.deps.RecallTransactions = txs
 				log.Info().Int("count", len(txs)).Msg("Fetched recall transactions")
 			}
@@ -611,6 +646,13 @@ func (r *Runner) parseModes(ctx context.Context) error {
 				ia, err := modes.GetIndexedRecentActivity(ctx, r.client, r.rpcClient, cfg.RecallLength, cfg.BlockBatchSize)
 				if err != nil {
 					return errors.New("failed to fetch indexed activity: " + err.Error())
+				}
+				// Validate that the chain has enough activity for RPC mode
+				if len(ia.TransactionIDs) == 0 || len(ia.Transactions) == 0 ||
+					len(ia.Addresses) == 0 || len(ia.BlockIDs) == 0 ||
+					len(ia.Contracts) == 0 || ia.BlockNumber == 0 {
+					return fmt.Errorf("insufficient chain activity for RPC mode: the chain must have at least some transaction history. Found %d transactions, %d addresses, %d contracts, %d blocks, current block number %d",
+						len(ia.TransactionIDs), len(ia.Addresses), len(ia.Contracts), len(ia.BlockIDs), ia.BlockNumber)
 				}
 				r.deps.IndexedActivity = ia
 				log.Info().Int("blockCount", len(ia.BlockNumbers)).Int("txCount", len(ia.TransactionIDs)).Msg("Fetched indexed activity")

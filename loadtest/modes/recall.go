@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"math/big"
-	"slices"
 	"strings"
 	"time"
 
@@ -240,9 +238,13 @@ func GetIndexedRecentActivity(ctx context.Context, ec *ethclient.Client, c *ethr
 }
 
 func deduplicate(in []string) []string {
-	m := make(map[string]struct{}, len(in))
+	seen := make(map[string]struct{}, len(in))
+	result := make([]string, 0, len(in))
 	for _, s := range in {
-		m[s] = struct{}{}
+		if _, ok := seen[s]; !ok {
+			seen[s] = struct{}{}
+			result = append(result, s)
+		}
 	}
-	return slices.Collect(maps.Keys(m))
+	return result
 }
