@@ -107,8 +107,9 @@ func (r *Runner) Init(ctx context.Context) error {
 
 	// Initialize dependencies
 	r.deps = &mode.Dependencies{
-		Client:    r.client,
-		RPCClient: r.rpcClient,
+		Client:     r.client,
+		RPCClient:  r.rpcClient,
+		RandSource: r.randSrc,
 	}
 
 	return nil
