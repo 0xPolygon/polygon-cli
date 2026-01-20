@@ -94,7 +94,7 @@ func (r *Runner) Init(ctx context.Context) error {
 
 	goHTTPClient := &http.Client{Transport: transport}
 	rpcOption := ethrpc.WithHTTPClient(goHTTPClient)
-	rpc, err := ethrpc.DialOptions(ctx, r.cfg.RPCUrl, rpcOption)
+	rpc, err := ethrpc.DialOptions(ctx, r.cfg.RPCURL, rpcOption)
 	if err != nil {
 		return errors.New("unable to dial rpc: " + err.Error())
 	}

@@ -35,7 +35,7 @@ const (
 // Config holds all load test parameters.
 type Config struct {
 	// Network connection
-	RPCUrl  string
+	RPCURL  string
 	ChainID uint64
 	Proxy   string
 

@@ -41,7 +41,7 @@ var LoadtestCmd = &cobra.Command{
 	Long:  loadtestUsage,
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		cfg.RPCUrl, err = flag.GetRPCURL(cmd)
+		cfg.RPCURL, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
 		}
@@ -85,7 +85,7 @@ func init() {
 
 func initPersistentFlags() {
 	pf := LoadtestCmd.PersistentFlags()
-	pf.StringVarP(&cfg.RPCUrl, flag.RPCURL, "r", flag.DefaultRPCURL, "the RPC endpoint URL")
+	pf.StringVarP(&cfg.RPCURL, flag.RPCURL, "r", flag.DefaultRPCURL, "the RPC endpoint URL")
 	pf.Int64VarP(&cfg.Requests, "requests", "n", 1, "number of requests to perform for the benchmarking session (default of 1 leads to non-representative results)")
 	pf.Int64VarP(&cfg.Concurrency, "concurrency", "c", 1, "number of requests to perform concurrently (default: one at a time)")
 	pf.Int64VarP(&cfg.TimeLimit, "time-limit", "t", -1, "maximum seconds to spend benchmarking (default: no limit)")
