@@ -1218,7 +1218,8 @@ func (ap *AccountPool) isRefundingEnabled() bool {
 }
 
 func (ap *AccountPool) getSuggestedGasPrices(ctx context.Context) (*big.Int, *big.Int) {
-	var gasPrice, gasTipCap = big.NewInt(0), big.NewInt(0)
+	var gasPrice *big.Int
+	gasTipCap := big.NewInt(0)
 	var err error
 
 	if ap.cfg.LegacyTxMode {
