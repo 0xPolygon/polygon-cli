@@ -5,17 +5,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/rlp"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-
-	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 var (
@@ -34,9 +33,9 @@ var ENRCmd = &cobra.Command{
 			log.Error().Err(err).Msg("Unable to read input")
 			return err
 		}
-		lines := strings.Split(string(rawData), "\n")
+		lines := strings.SplitSeq(string(rawData), "\n")
 
-		for _, l := range lines {
+		for l := range lines {
 			var node *enode.Node
 			var err error
 			l = strings.TrimSpace(l)

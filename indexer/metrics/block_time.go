@@ -113,7 +113,7 @@ func (b *BlockTimeMetric) calculateAverage() {
 }
 
 // GetMetric returns the current block time statistics
-func (b *BlockTimeMetric) GetMetric() interface{} {
+func (b *BlockTimeMetric) GetMetric() any {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 

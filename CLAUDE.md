@@ -125,6 +125,175 @@ The tool supports configuration via:
 ## Development Memories
 - Use `make build` to build polycli
 
+## Code Quality Checklist
+
+**CRITICAL**: Before writing any code, systematically check these categories to avoid rework:
+
+### 0. Critical Thinking & Code Analysis (Meta-Level)
+**MOST IMPORTANT**: Think critically before implementing any suggestion or requirement.
+
+- **Analyze Existing Code First**: Before adding validation, checks, or features, thoroughly examine what already exists
+- **Question Redundancy**: If validation already exists earlier in the call chain, don't add duplicate checks
+- **Provide Feedback Before Implementation**: When a suggestion seems unnecessary or redundant, explain WHY rather than blindly implementing it
+- **Consider Token Efficiency**: Rework wastes time and tokens. Get it right the first time by applying this entire checklist systematically
+- **Defense-in-Depth vs Redundancy**:
+  - Defense-in-depth = validating at system boundaries (user input, external APIs, different layers)
+  - Redundancy = checking the same condition twice in the same function after it was already validated
+  - Apply defense-in-depth, avoid redundancy
+- **Evaluate Necessity**: Just because something CAN be added doesn't mean it SHOULD be. Ask: "Does this add value or just clutter?"
+
+**Questions to ask before writing ANY code:**
+1. "What validation/checks already exist in this call chain?"
+2. "Is this truly adding safety, or is it redundant?"
+3. "What value does this code provide?"
+4. "Am I implementing this because it was suggested, or because it's actually needed?"
+
+**Example of what NOT to do:**
+```go
+// Earlier in function (line 211)
+if report.EndBlock == math.MaxUint64 {
+    return fmt.Errorf("end block must be specified")
+}
+
+// ... code ...
+
+// Later in same function (line 231) - REDUNDANT
+if report.EndBlock == math.MaxUint64 {
+    return fmt.Errorf("internal error: end block cannot be math.MaxUint64")
+}
+totalBlocks := report.EndBlock - report.StartBlock + 1
+```
+This is pure redundancy - if the value can't be MaxUint64 (validated at line 211), checking again at line 231 adds zero value.
+
+### 1. Security
+- **HTML/Template Injection**: Always use `html.EscapeString()` for any data interpolated into HTML, even if currently from trusted sources
+- **Input Validation**: Validate all user inputs at boundaries (flags, API inputs)
+- **SQL Injection**: Use parameterized queries, never string concatenation
+- **Command Injection**: Never pass user input directly to shell commands
+- **Question to ask**: "What data is untrusted? Where does it flow? Is it escaped/validated at every output point?"
+
+### 2. Resource Management & Performance
+- **Goroutine Lifecycle**: Every goroutine must have a clear termination condition via context cancellation
+- **Timer Cleanup**: Use `time.NewTimer()` + `defer timer.Stop()`, never `time.After()` in select statements (causes goroutine leaks)
+- **Channel Buffers**: Use small fixed buffers (e.g., `concurrency*2`), never proportional to total dataset size
+- **Memory Allocation**: Consider behavior with 10x, 100x, 1000x expected input
+- **Question to ask**: "How does every goroutine, timer, and channel clean up on cancellation? What's the memory footprint at scale?"
+
+### 3. Context Propagation
+- **Never create root contexts**: Always thread `context.Context` through call chains; never use `context.Background()` in the middle of operations
+- **Cancellation Flow**: Context should flow through every I/O operation, long-running task, and goroutine
+- **Timeout Management**: Create child contexts with `context.WithTimeout(parentCtx, duration)`, not `context.WithTimeout(context.Background(), duration)`
+- **Question to ask**: "Does context flow through all long-running operations? Will Ctrl+C immediately stop everything?"
+
+### 4. Data Integrity & Determinism
+- **Completeness**: Data collection operations must fetch ALL requested data or fail entirely - never produce partial results
+- **Retry Logic**: Failed operations should retry (with backoff) before failing
+- **Idempotency**: Same input parameters should produce identical output every time
+- **Validation**: Verify expected vs actual data counts; fail loudly if mismatched
+- **Use Correct Data Source**: For blockchain data, prefer receipt fields over transaction fields (e.g., `effectiveGasPrice` from receipt works for both legacy and EIP-1559 txs, while `gasPrice` from transaction is missing in EIP-1559)
+- **Question to ask**: "If I run this twice with the same parameters, will I get identical results? What makes this non-deterministic? Am I reading from the authoritative data source?"
+
+### 5. Error Handling & Logging
+- **Error Wrapping**: Use `fmt.Errorf("context: %w", err)` to wrap errors with context
+- **Single-line Messages**: Put context before `%w` in single line: `fmt.Errorf("failed after %d attempts: %w", n, err)`
+- **Failure Modes**: Consider and handle all failure paths explicitly
+- **Logging Levels**: Use appropriate levels (Error for failures, Warn for retries, Info for progress)
+- **Progress Accuracy**: Progress counters must reflect ALL completed work (successes + final failures), not just successes, or progress will appear stuck during retries
+- **Question to ask**: "What can fail? How is each failure mode handled? Are errors properly wrapped? Is progress logging accurate during retries/failures?"
+
+### 6. Concurrency Patterns
+- **Channel Closing**: Close channels in the correct goroutine (usually the sender); use atomic counters to coordinate
+- **Channel Draining**: When using select with multiple channels and one closes, drain remaining channels to avoid missing messages
+- **Worker Pools**: Use `sync.WaitGroup` to wait for workers; protect shared state with mutexes or channels
+- **Race Conditions**: Run with `-race` flag during testing
+- **Goroutine Leaks**: Ensure every goroutine can exit on context cancellation
+- **Question to ask**: "Who closes each channel? Can any goroutine block forever? Does this have race conditions? Are all channel messages guaranteed to be read?"
+
+### 7. Testing & Validation
+- **Test Coverage**: Write tests for edge cases, not just happy paths
+- **Error Injection**: Test retry logic, failure modes, and error paths
+- **Resource Limits**: Test with large inputs to verify scalability
+- **Cancellation**: Test that context cancellation stops operations immediately
+- **Documentation Consistency**: Ensure documentation accurately describes implementation behavior (e.g., "blocks are skipped" vs "command fails on errors")
+- **Question to ask**: "What edge cases exist? How do I test failure modes? Does the documentation match what the code actually does?"
+
+### Common Patterns to Apply by Default
+
+```go
+// ✅ DO: Timer cleanup
+timer := time.NewTimer(500 * time.Millisecond)
+defer timer.Stop()
+select {
+case <-timer.C:
+case <-ctx.Done():
+    return ctx.Err()
+}
+
+// ❌ DON'T: Timer leak
+select {
+case <-time.After(500 * time.Millisecond): // Leaks if ctx cancels first
+case <-ctx.Done():
+}
+
+// ✅ DO: HTML escaping
+html := fmt.Sprintf(`<div>%s</div>`, html.EscapeString(userInput))
+
+// ❌ DON'T: HTML injection risk
+html := fmt.Sprintf(`<div>%s</div>`, userInput)
+
+// ✅ DO: Context propagation
+func outputPDF(ctx context.Context, ...) error {
+    timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+    defer cancel()
+    ...
+}
+
+// ❌ DON'T: Context.Background in call chain
+func outputPDF(...) error {
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    ...
+}
+
+// ✅ DO: Deterministic data collection with retries
+for attempt := 1; attempt <= maxRetries; attempt++ {
+    if data, err := fetch(); err == nil {
+        return data
+    }
+}
+return fmt.Errorf("failed after %d attempts", maxRetries)
+
+// ❌ DON'T: Skip failures (non-deterministic)
+if data, err := fetch(); err != nil {
+    log.Warn("skipping failed item")
+    continue
+}
+
+// ✅ DO: Fixed channel buffer
+ch := make(chan T, concurrency*2)
+
+// ❌ DON'T: Buffer proportional to input size
+ch := make(chan T, totalItems) // Can allocate GB of memory
+
+// ✅ DO: Goroutine with cancellation
+go func() {
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case item := <-inputChan:
+            process(item)
+        }
+    }
+}()
+
+// ❌ DON'T: Goroutine without cancellation path
+go func() {
+    for item := range inputChan { // Blocks forever if ctx cancels
+        process(item)
+    }
+}()
+```
+
 ## Code Style
 
 ### Cobra Flags

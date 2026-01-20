@@ -9,9 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
-	"github.com/0xPolygon/polygon-cli/util"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -173,17 +172,15 @@ var LoadtestCmd = &cobra.Command{
 	Short: "Run a generic load test against an Eth/EVM style JSON-RPC endpoint.",
 	Long:  loadTestUsage,
 	Args:  cobra.NoArgs,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		rpcUrl := flag_loader.GetRpcUrlFlagValue(cmd)
-		privateKey := flag_loader.GetPrivateKeyFlagValue(cmd)
-		if rpcUrl != nil {
-			inputLoadTestParams.RPCUrl = *rpcUrl
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		inputLoadTestParams.RPCUrl, err = flag.GetRPCURL(cmd)
+		if err != nil {
+			return err
 		}
-		if privateKey != nil {
-			inputLoadTestParams.PrivateKey = *privateKey
+		inputLoadTestParams.PrivateKey, err = flag.GetPrivateKey(cmd)
+		if err != nil {
+			return err
 		}
-	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
 		zerolog.DurationFieldUnit = time.Second
 		zerolog.DurationFieldInteger = true
 
@@ -196,14 +193,6 @@ var LoadtestCmd = &cobra.Command{
 
 func checkLoadtestFlags() error {
 	ltp := inputLoadTestParams
-
-	// Check `rpc-url` flag.
-	if ltp.RPCUrl == "" {
-		return fmt.Errorf("RPC URL is empty")
-	}
-	if err := util.ValidateUrl(ltp.RPCUrl); err != nil {
-		return err
-	}
 
 	if ltp.AdaptiveBackoffFactor <= 0.0 {
 		return fmt.Errorf("the backoff factor needs to be non-zero positive. Given: %f", ltp.AdaptiveBackoffFactor)
@@ -241,11 +230,11 @@ func initFlags() {
 
 	// Persistent flags.
 	pf := LoadtestCmd.PersistentFlags()
-	pf.StringVarP(&ltp.RPCUrl, "rpc-url", "r", "http://localhost:8545", "the RPC endpoint URL")
+	pf.StringVarP(&ltp.RPCUrl, flag.RPCURL, "r", flag.DefaultRPCURL, "the RPC endpoint URL")
 	pf.Int64VarP(&ltp.Requests, "requests", "n", 1, "number of requests to perform for the benchmarking session (default of 1 leads to non-representative results)")
 	pf.Int64VarP(&ltp.Concurrency, "concurrency", "c", 1, "number of requests to perform concurrently (default: one at a time)")
 	pf.Int64VarP(&ltp.TimeLimit, "time-limit", "t", -1, "maximum seconds to spend benchmarking (default: no limit)")
-	pf.StringVar(&ltp.PrivateKey, "private-key", codeQualityPrivateKey, "hex encoded private key to use for sending transactions")
+	pf.StringVar(&ltp.PrivateKey, flag.PrivateKey, codeQualityPrivateKey, "hex encoded private key to use for sending transactions")
 	pf.Uint64Var(&ltp.ChainID, "chain-id", 0, "chain ID for the transactions")
 	pf.StringVar(&ltp.ToAddress, "to-address", "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF", "recipient address for transactions")
 	pf.BoolVar(&ltp.RandomRecipients, "random-recipients", false, "send to random addresses instead of fixed address in transfer tests")
@@ -277,7 +266,7 @@ func initFlags() {
 	f.Uint64Var(&ltp.BlobFeeCap, "blob-fee-cap", 100000, "blob fee cap, or maximum blob fee per chunk, in Gwei")
 	f.Uint64Var(&ltp.SendingAccountsCount, "sending-accounts-count", 0, "number of sending accounts to use (avoids pool account queue)")
 	ltp.AccountFundingAmount = defaultAccountFundingAmount
-	f.Var(&flag_loader.BigIntValue{Val: ltp.AccountFundingAmount}, "account-funding-amount", "amount in wei to fund sending accounts (set to 0 to disable)")
+	f.Var(&flag.BigIntValue{Val: ltp.AccountFundingAmount}, "account-funding-amount", "amount in wei to fund sending accounts (set to 0 to disable)")
 	f.BoolVar(&ltp.PreFundSendingAccounts, "pre-fund-sending-accounts", false, "fund all sending accounts at start instead of on first use")
 	f.BoolVar(&ltp.RefundRemainingFunds, "refund-remaining-funds", false, "refund remaining balance to funding account after completion")
 	f.StringVar(&ltp.SendingAccountsFile, "sending-accounts-file", "", "file with sending account private keys, one per line (avoids pool queue and preserves accounts across runs)")
@@ -289,7 +278,7 @@ b, blob - send blob transactions
 cc, contract-call - make contract calls
 d, deploy - deploy contracts
 inc, increment - increment a counter
-r, random - random modes (excludes: blob, call, inscription, recall, rpc, uniswapv3)
+r, random - random modes (excludes: blob, call, recall, rpc, uniswapv3)
 R, recall - replay or simulate transactions
 rpc - call random rpc methods
 s, store - store bytes in a dynamic byte array

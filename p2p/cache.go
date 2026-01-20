@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+// CacheOptions contains configuration for LRU caches with TTL.
+type CacheOptions struct {
+	MaxSize int
+	TTL     time.Duration
+}
+
 // Cache is a thread-safe LRU cache with optional TTL-based expiration.
 type Cache[K comparable, V any] struct {
 	mu      sync.RWMutex
@@ -21,13 +27,13 @@ type entry[K comparable, V any] struct {
 	expiresAt time.Time
 }
 
-// NewCache creates a new cache with the given max size and optional TTL.
-// If maxSize <= 0, the cache has no size limit.
-// If ttl is 0, entries never expire based on time.
-func NewCache[K comparable, V any](maxSize int, ttl time.Duration) *Cache[K, V] {
+// NewCache creates a new cache with the given options.
+// If opts.MaxSize <= 0, the cache has no size limit.
+// If opts.TTL is 0, entries never expire based on time.
+func NewCache[K comparable, V any](opts CacheOptions) *Cache[K, V] {
 	return &Cache[K, V]{
-		maxSize: maxSize,
-		ttl:     ttl,
+		maxSize: opts.MaxSize,
+		ttl:     opts.TTL,
 		items:   make(map[K]*list.Element),
 		list:    list.New(),
 	}
@@ -94,6 +100,79 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 	return e.value, true
 }
 
+// Peek retrieves a value from the cache without updating LRU ordering.
+// Uses a read lock for better concurrency.
+func (c *Cache[K, V]) Peek(key K) (V, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	elem, ok := c.items[key]
+	if !ok {
+		var zero V
+		return zero, false
+	}
+
+	e := elem.Value.(*entry[K, V])
+
+	if c.ttl > 0 && time.Now().After(e.expiresAt) {
+		var zero V
+		return zero, false
+	}
+
+	return e.value, true
+}
+
+// Update atomically updates a value in the cache using the provided update function.
+// The update function receives the current value (or zero value if not found) and
+// returns the new value to store. This is thread-safe and prevents race conditions
+// in get-modify-add patterns.
+func (c *Cache[K, V]) Update(key K, updateFn func(V) V) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	now := time.Now()
+	expiresAt := time.Time{}
+	if c.ttl > 0 {
+		expiresAt = now.Add(c.ttl)
+	}
+
+	var currentVal V
+	if elem, ok := c.items[key]; ok {
+		e := elem.Value.(*entry[K, V])
+		if c.ttl == 0 || !now.After(e.expiresAt) {
+			currentVal = e.value
+			// Update existing entry
+			c.list.MoveToFront(elem)
+			e.value = updateFn(currentVal)
+			e.expiresAt = expiresAt
+			return
+		}
+		// Entry expired, remove it
+		c.list.Remove(elem)
+		delete(c.items, key)
+	}
+
+	// Create new entry
+	newVal := updateFn(currentVal)
+	e := &entry[K, V]{
+		key:       key,
+		value:     newVal,
+		expiresAt: expiresAt,
+	}
+	elem := c.list.PushFront(e)
+	c.items[key] = elem
+
+	// Enforce size limit
+	if c.maxSize > 0 && c.list.Len() > c.maxSize {
+		back := c.list.Back()
+		if back != nil {
+			c.list.Remove(back)
+			e := back.Value.(*entry[K, V])
+			delete(c.items, e.key)
+		}
+	}
+}
+
 // Contains checks if a key exists in the cache and is not expired.
 // Uses a read lock and doesn't update LRU ordering.
 func (c *Cache[K, V]) Contains(key K) bool {
@@ -114,15 +193,20 @@ func (c *Cache[K, V]) Contains(key K) bool {
 	return true
 }
 
-// Remove removes a key from the cache.
-func (c *Cache[K, V]) Remove(key K) {
+// Remove removes a key from the cache and returns the value if it existed.
+func (c *Cache[K, V]) Remove(key K) (V, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if elem, ok := c.items[key]; ok {
+		e := elem.Value.(*entry[K, V])
 		c.list.Remove(elem)
 		delete(c.items, key)
+		return e.value, true
 	}
+
+	var zero V
+	return zero, false
 }
 
 // Len returns the number of items in the cache.

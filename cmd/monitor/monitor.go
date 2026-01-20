@@ -117,7 +117,7 @@ const (
 )
 
 func monitor(ctx context.Context) error {
-	rpc, err := ethrpc.DialContext(ctx, rpcUrl)
+	rpc, err := ethrpc.DialContext(ctx, rpcURL)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to dial rpc")
 		return err
@@ -405,7 +405,7 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, to *big.Int, rpc *et
 		r := new(rpctypes.RawBlockResponse)
 		blms = append(blms, ethrpc.BatchElem{
 			Method: "eth_getBlockByNumber",
-			Args:   []interface{}{"0x" + i.Text(16), true},
+			Args:   []any{"0x" + i.Text(16), true},
 			Result: r,
 			Error:  nil,
 		})
@@ -668,12 +668,12 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 
 		// First initialization will render no gas price because the GasPriceChart will have no data.
 		if renderedBlocksMeanGasPrice == nil {
-			skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, ms.SafeBlock, ms.FinalizedBlock, "--", ms.PeerCount, ms.ChainID, rpcUrl)
+			skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, ms.SafeBlock, ms.FinalizedBlock, "--", ms.PeerCount, ms.ChainID, rpcURL)
 		} else {
 			if len(renderedBlocksMeanGasPrice) >= 1 {
 				// Under normal cases, the gas price will be derived from the last element of the GasPriceChart with 2 decimal places precision.
 				gasPriceStr := strconv.FormatFloat(renderedBlocksMeanGasPrice[len(renderedBlocksMeanGasPrice)-1]/1000000000, 'f', 2, 64)
-				skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, ms.SafeBlock, ms.FinalizedBlock, gasPriceStr, ms.PeerCount, ms.ChainID, rpcUrl)
+				skeleton.Current.Text = ui.GetCurrentText(skeleton.Current, ms.HeadBlock, ms.SafeBlock, ms.FinalizedBlock, gasPriceStr, ms.PeerCount, ms.ChainID, rpcURL)
 			}
 		}
 

@@ -26,11 +26,15 @@ func (n *nodb) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Bl
 }
 
 // WriteBlockHeaders does nothing.
-func (n *nodb) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time) {
+func (n *nodb) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time, isParent bool) {
 }
 
 // WriteBlockHashes does nothing.
 func (n *nodb) WriteBlockHashes(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
+}
+
+// WriteBlockHashFirstSeen does nothing.
+func (n *nodb) WriteBlockHashFirstSeen(ctx context.Context, hash common.Hash, tfsh time.Time) {
 }
 
 // WriteBlockBody does nothing.

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-cli/p2p"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/prometheus/client_golang/prometheus"
@@ -16,25 +17,53 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// nodeInfo represents information about the sensor node.
-type nodeInfo struct {
-	ENR string `json:"enr"`
-	URL string `json:"enode"`
+// peerData represents the metrics and connection information for a peer.
+// It includes both message counts (items sent/received) and packet counts
+// (number of p2p messages), along with connection timing information.
+type peerData struct {
+	Received        p2p.MessageCount `json:"received"`
+	Sent            p2p.MessageCount `json:"sent"`
+	PacketsReceived p2p.MessageCount `json:"packets_received"`
+	PacketsSent     p2p.MessageCount `json:"packets_sent"`
+	ConnectedAt     string           `json:"connected_at"`
+	DurationSeconds float64          `json:"duration_seconds"`
 }
 
-// peerInfo represents information about a connected peer.
-type peerInfo struct {
-	MessagesReceived p2p.MessageCount `json:"messages_received"`
-	MessagesSent     p2p.MessageCount `json:"messages_sent"`
-	ConnectedAt      string           `json:"connected_at"`
-	DurationSeconds  int64            `json:"duration_seconds"`
+// blockInfo represents basic block information.
+type blockInfo struct {
+	Hash   string `json:"hash"`
+	Number uint64 `json:"number"`
 }
 
-// handleAPI sets up the API for interacting with the sensor. The `/peers`
-// endpoint returns a list of all peers connected to the sensor, including the
-// types and counts of eth packets sent by and received from each peer.
-func handleAPI(server *ethp2p.Server, msgsReceived, msgsSent *prometheus.CounterVec, conns *p2p.Conns) {
-	http.HandleFunc("/peers", func(w http.ResponseWriter, r *http.Request) {
+// newBlockInfo creates a blockInfo from a types.Header.
+// Returns nil if the header is nil.
+func newBlockInfo(header *types.Header) *blockInfo {
+	if header == nil {
+		return nil
+	}
+
+	return &blockInfo{
+		Hash:   header.Hash().Hex(),
+		Number: header.Number.Uint64(),
+	}
+}
+
+// apiData represents all sensor information including node info and peer data.
+type apiData struct {
+	ENR       string              `json:"enr"`
+	URL       string              `json:"enode"`
+	PeerCount int                 `json:"peer_count"`
+	Peers     map[string]peerData `json:"peers"`
+	Head      *blockInfo          `json:"head_block"`
+	Oldest    *blockInfo          `json:"oldest_block"`
+}
+
+// handleAPI sets up the API for interacting with the sensor. All endpoints
+// return information about the sensor node and all connected peers, including
+// the types and counts of eth packets sent and received by each peer.
+func handleAPI(server *ethp2p.Server, counter *prometheus.CounterVec, conns *p2p.Conns) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -43,70 +72,84 @@ func handleAPI(server *ethp2p.Server, msgsReceived, msgsSent *prometheus.Counter
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
-		peers := make(map[string]peerInfo)
+		peers := make(map[string]peerData)
 		for _, peer := range server.Peers() {
 			url := peer.Node().URLv4()
-			nodeID := peer.Node().ID().String()
-			connectedAt := conns.GetPeerConnectedAt(nodeID)
-
-			peers[url] = peerInfo{
-				MessagesReceived: getPeerMessages(url, peer.Fullname(), msgsReceived),
-				MessagesSent:     getPeerMessages(url, peer.Fullname(), msgsSent),
-				ConnectedAt:      connectedAt.UTC().Format(time.RFC3339),
-				DurationSeconds:  int64(time.Since(connectedAt).Seconds()),
+			peerID := peer.Node().ID().String()
+			name := peer.Fullname()
+			connectedAt := conns.PeerConnectedAt(peerID)
+			if connectedAt.IsZero() {
+				continue
 			}
+
+			msgs := peerData{
+				Received:        getPeerMessages(counter, url, name, p2p.MsgReceived, false),
+				Sent:            getPeerMessages(counter, url, name, p2p.MsgSent, false),
+				PacketsReceived: getPeerMessages(counter, url, name, p2p.MsgReceived, true),
+				PacketsSent:     getPeerMessages(counter, url, name, p2p.MsgSent, true),
+				ConnectedAt:     connectedAt.UTC().Format(time.RFC3339),
+				DurationSeconds: time.Since(connectedAt).Seconds(),
+			}
+
+			peers[url] = msgs
 		}
 
-		if err := json.NewEncoder(w).Encode(peers); err != nil {
-			log.Error().Err(err).Msg("Failed to encode peers")
-		}
-	})
+		head := conns.HeadBlock()
+		oldest := conns.OldestBlock()
 
-	http.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
+		var headHeader *types.Header
+		if head.Block != nil {
+			headHeader = head.Block.Header()
 		}
 
-		info := nodeInfo{
-			ENR: server.NodeInfo().ENR,
-			URL: server.Self().URLv4(),
+		data := apiData{
+			ENR:       server.NodeInfo().ENR,
+			URL:       server.Self().URLv4(),
+			PeerCount: len(peers),
+			Peers:     peers,
+			Head:      newBlockInfo(headHeader),
+			Oldest:    newBlockInfo(oldest),
 		}
 
-		if err := json.NewEncoder(w).Encode(info); err != nil {
-			log.Error().Err(err).Msg("Failed to encode node info")
+		if err := json.NewEncoder(w).Encode(data); err != nil {
+			log.Error().Err(err).Msg("Failed to encode sensor data")
 		}
 	})
 
 	addr := fmt.Sprintf(":%d", inputSensorParams.APIPort)
-	if err := http.ListenAndServe(addr, nil); err != nil {
+	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Error().Err(err).Msg("Failed to start API handler")
 	}
 }
 
 // getPeerMessages retrieves the count of various types of eth packets sent by a
 // peer.
-func getPeerMessages(url, name string, counter *prometheus.CounterVec) p2p.MessageCount {
+func getPeerMessages(counter *prometheus.CounterVec, url, name string, direction p2p.Direction, isPacket bool) p2p.MessageCount {
 	return p2p.MessageCount{
-		BlockHeaders:        getCounterValue(new(eth.BlockHeadersPacket), url, name, counter),
-		BlockBodies:         getCounterValue(new(eth.BlockBodiesPacket), url, name, counter),
-		Blocks:              getCounterValue(new(eth.NewBlockPacket), url, name, counter),
-		BlockHashes:         getCounterValue(new(eth.NewBlockHashesPacket), url, name, counter),
-		BlockHeaderRequests: getCounterValue(new(eth.GetBlockHeadersPacket), url, name, counter),
-		BlockBodiesRequests: getCounterValue(new(eth.GetBlockBodiesPacket), url, name, counter),
-		Transactions: getCounterValue(new(eth.TransactionsPacket), url, name, counter) +
-			getCounterValue(new(eth.PooledTransactionsPacket), url, name, counter),
-		TransactionHashes:   getCounterValue(new(eth.NewPooledTransactionHashesPacket), url, name, counter),
-		TransactionRequests: getCounterValue(new(eth.GetPooledTransactionsRequest), url, name, counter),
+		BlockHeaders:        getCounterValue(new(eth.BlockHeadersPacket), counter, url, name, direction, isPacket),
+		BlockBodies:         getCounterValue(new(eth.BlockBodiesPacket), counter, url, name, direction, isPacket),
+		Blocks:              getCounterValue(new(eth.NewBlockPacket), counter, url, name, direction, isPacket),
+		BlockHashes:         getCounterValue(new(eth.NewBlockHashesPacket), counter, url, name, direction, isPacket),
+		BlockHeaderRequests: getCounterValue(new(eth.GetBlockHeadersPacket), counter, url, name, direction, isPacket),
+		BlockBodiesRequests: getCounterValue(new(eth.GetBlockBodiesPacket), counter, url, name, direction, isPacket),
+		Transactions: getCounterValue(new(eth.TransactionsPacket), counter, url, name, direction, isPacket) +
+			getCounterValue(new(eth.PooledTransactionsPacket), counter, url, name, direction, isPacket),
+		TransactionHashes:   getCounterValue(new(eth.NewPooledTransactionHashesPacket), counter, url, name, direction, isPacket),
+		TransactionRequests: getCounterValue(new(eth.GetPooledTransactionsRequest), counter, url, name, direction, isPacket),
 	}
 }
 
 // getCounterValue retrieves the count of packets for a specific type from the
 // Prometheus counter.
-func getCounterValue(packet eth.Packet, url, name string, counter *prometheus.CounterVec) int64 {
+func getCounterValue(packet eth.Packet, counter *prometheus.CounterVec, url, name string, direction p2p.Direction, isPacket bool) int64 {
 	metric := &dto.Metric{}
 
-	err := counter.WithLabelValues(packet.Name(), url, name).Write(metric)
+	messageName := packet.Name()
+	if isPacket {
+		messageName += p2p.PacketSuffix
+	}
+
+	err := counter.WithLabelValues(messageName, url, name, string(direction)).Write(metric)
 	if err != nil {
 		log.Error().Err(err).Send()
 		return 0

@@ -81,7 +81,7 @@ func NewPassthroughStoreWithConfig(rpcURL string, config *ChainStoreConfig) (*Pa
 // === BLOCK DATA (existing BlockStore methods) ===
 
 // GetBlock retrieves a block by hash or number
-func (s *PassthroughStore) GetBlock(ctx context.Context, blockHashOrNumber interface{}) (rpctypes.PolyBlock, error) {
+func (s *PassthroughStore) GetBlock(ctx context.Context, blockHashOrNumber any) (rpctypes.PolyBlock, error) {
 	var raw rpctypes.RawBlockResponse
 
 	switch v := blockHashOrNumber.(type) {
@@ -200,14 +200,14 @@ func (s *PassthroughStore) GetClientVersion(ctx context.Context) (string, error)
 }
 
 // GetSyncStatus retrieves the sync status (cached semi-statically)
-func (s *PassthroughStore) GetSyncStatus(ctx context.Context) (interface{}, error) {
+func (s *PassthroughStore) GetSyncStatus(ctx context.Context) (any, error) {
 	// Check cache first
 	if syncStatus, valid := s.cache.GetSyncStatus(s.config.SemiStaticTTL); valid {
 		return syncStatus, nil
 	}
 
 	// Try the call optimistically (eth_syncing is standard Ethereum RPC)
-	var result interface{}
+	var result any
 	err := s.client.CallContext(ctx, &result, "eth_syncing")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sync status: %w", err)
@@ -229,7 +229,7 @@ func (s *PassthroughStore) GetSafeBlock(ctx context.Context) (*big.Int, error) {
 
 	// Try engine_forkchoiceUpdatedV3 first (if supported)
 	if s.capabilities.IsMethodSupported("engine_forkchoiceUpdatedV3") {
-		var result map[string]interface{}
+		var result map[string]any
 		err := s.client.CallContext(ctx, &result, "eth_getBlockByNumber", "safe", false)
 		if err == nil && result != nil {
 			if numberHex, ok := result["number"].(string); ok {
@@ -266,7 +266,7 @@ func (s *PassthroughStore) GetFinalizedBlock(ctx context.Context) (*big.Int, err
 	}
 
 	// Try to get finalized block via eth_getBlockByNumber
-	var result map[string]interface{}
+	var result map[string]any
 	err := s.client.CallContext(ctx, &result, "eth_getBlockByNumber", "finalized", false)
 	if err == nil && result != nil {
 		if numberHex, ok := result["number"].(string); ok {
@@ -394,7 +394,7 @@ func (s *PassthroughStore) GetPendingTransactionCount(ctx context.Context) (*big
 		return nil, fmt.Errorf("txpool_status method not supported")
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	err := s.client.CallContext(ctx, &result, "txpool_status")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get txpool status: %w", err)
@@ -434,7 +434,7 @@ func (s *PassthroughStore) GetQueuedTransactionCount(ctx context.Context) (*big.
 		return nil, fmt.Errorf("txpool_status method not supported")
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	err := s.client.CallContext(ctx, &result, "txpool_status")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get txpool status: %w", err)
@@ -464,12 +464,12 @@ func (s *PassthroughStore) GetQueuedTransactionCount(ctx context.Context) (*big.
 }
 
 // GetTxPoolStatus retrieves the full txpool status (cached very frequently)
-func (s *PassthroughStore) GetTxPoolStatus(ctx context.Context) (map[string]interface{}, error) {
+func (s *PassthroughStore) GetTxPoolStatus(ctx context.Context) (map[string]any, error) {
 	if !s.capabilities.IsMethodSupported("txpool_status") {
 		return nil, fmt.Errorf("txpool_status method not supported")
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	err := s.client.CallContext(ctx, &result, "txpool_status")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get txpool status: %w", err)

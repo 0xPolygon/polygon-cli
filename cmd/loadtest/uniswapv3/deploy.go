@@ -3,11 +3,11 @@ package uniswapv3loadtest
 import (
 	"context"
 	"errors"
-	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"math/big"
 	"reflect"
 	"strings"
 
+	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"github.com/0xPolygon/polygon-cli/bindings/uniswapv3"
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -344,7 +344,7 @@ func deployOrInstantiateContract[T Contract](
 			log.Error().Err(err).Msg("Unable to deploy contract")
 			return
 		}
-		reflectedContractName := reflect.TypeOf(contract).Elem().Name()
+		reflectedContractName := reflect.TypeFor[T]().Name()
 		log.Debug().Str("name", reflectedContractName).Interface("address", address).Msg("Contract deployed")
 	} else {
 		// Otherwise, instantiate the contract.
@@ -354,7 +354,7 @@ func deployOrInstantiateContract[T Contract](
 			log.Error().Err(err).Msg("Unable to instantiate contract")
 			return
 		}
-		reflectedContractName := reflect.TypeOf(contract).Elem().Name()
+		reflectedContractName := reflect.TypeFor[T]().Name()
 		log.Debug().Str("name", reflectedContractName).Msg("Contract instantiated")
 	}
 

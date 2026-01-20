@@ -553,7 +553,7 @@ func SetUISkeleton(txPoolStatusSupported, zkEVMBatchesSupported, eip1559Supporte
 		totalWidgets++
 	}
 
-	topRowBlocks := []interface{}{
+	topRowBlocks := []any{
 		ui.NewCol((5.0-float64(totalWidgets-1))/5.0, termUi.Current),
 	}
 	if txPoolStatusSupported {

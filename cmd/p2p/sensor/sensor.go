@@ -3,11 +3,11 @@ package sensor
 import (
 	"context"
 	"crypto/ecdsa"
+	_ "embed"
 	"errors"
 	"fmt"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -28,6 +29,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/p2p"
 	"github.com/0xPolygon/polygon-cli/p2p/database"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
@@ -54,13 +56,6 @@ type (
 		ShouldBroadcastTxHashes      bool
 		ShouldBroadcastBlocks        bool
 		ShouldBroadcastBlockHashes   bool
-		MaxCachedTxs                 int
-		MaxCachedBlocks              int
-		MaxKnownTxs                  int
-		MaxKnownBlocks               int
-		MaxRequests                  int
-		CacheTTL                     time.Duration
-		PeerCacheTTL                 time.Duration
 		ShouldRunPprof               bool
 		PprofPort                    uint
 		ShouldRunPrometheus          bool
@@ -80,6 +75,12 @@ type (
 		DiscoveryDNS                 string
 		Database                     string
 		NoDiscovery                  bool
+		RequestsCache                p2p.CacheOptions
+		ParentsCache                 p2p.CacheOptions
+		BlocksCache                  p2p.CacheOptions
+		TxsCache                     p2p.CacheOptions
+		KnownTxsCache                p2p.CacheOptions
+		KnownBlocksCache             p2p.CacheOptions
 
 		bootnodes    []*enode.Node
 		staticNodes  []*enode.Node
@@ -90,6 +91,8 @@ type (
 )
 
 var (
+	//go:embed usage.md
+	sensorUsage       string
 	inputSensorParams sensorParams
 )
 
@@ -98,7 +101,7 @@ var (
 var SensorCmd = &cobra.Command{
 	Use:   "sensor [nodes file]",
 	Short: "Start a devp2p sensor that discovers other peers and will receive blocks and transactions.",
-	Long:  "If no nodes.json file exists, it will be created.",
+	Long:  sensorUsage,
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		inputSensorParams.NodesFile = args[0]
@@ -178,14 +181,14 @@ var SensorCmd = &cobra.Command{
 		// Fetch the latest block which will be used later when crafting the status
 		// message. This call will only be made once and stored in the head field
 		// until the sensor receives a new block it can overwrite it with.
-		block, err := getLatestBlock(inputSensorParams.RPC)
+		rpcBlock, err := getLatestBlock(inputSensorParams.RPC)
 		if err != nil {
 			return err
 		}
-		head := p2p.HeadBlock{
-			Hash:            block.Hash.ToHash(),
-			TotalDifficulty: block.TotalDifficulty.ToBigInt(),
-			Number:          block.Number.ToUint64(),
+
+		head := eth.NewBlockPacket{
+			Block: rpcBlock.ToBlock(),
+			TD:    rpcBlock.TotalDifficulty.ToBigInt(),
 		}
 
 		peersGauge := promauto.NewGauge(prometheus.GaugeOpts{
@@ -194,23 +197,22 @@ var SensorCmd = &cobra.Command{
 			Help:      "The number of peers the sensor is connected to",
 		})
 
-		msgsReceived := promauto.NewCounterVec(prometheus.CounterOpts{
+		msgCounter := promauto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "sensor",
-			Name:      "messages_received",
-			Help:      "The number and type of messages the sensor has received",
-		}, []string{"message", "url", "name"})
+			Name:      "messages",
+			Help:      "The number and type of messages the sensor has sent and received",
+		}, []string{"message", "url", "name", "direction"})
 
-		msgsSent := promauto.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "sensor",
-			Name:      "messages_sent",
-			Help:      "The number and type of messages the sensor has sent",
-		}, []string{"message", "url", "name"})
+		metrics := p2p.NewBlockMetrics(head.Block)
 
 		// Create peer connection manager for broadcasting transactions
+		// and managing the global blocks cache
 		conns := p2p.NewConns(p2p.ConnsOptions{
-			MaxCachedTxs:               inputSensorParams.MaxCachedTxs,
-			MaxCachedBlocks:            inputSensorParams.MaxCachedBlocks,
-			CacheTTL:                   inputSensorParams.CacheTTL,
+			BlocksCache:                inputSensorParams.BlocksCache,
+			TxsCache:                   inputSensorParams.TxsCache,
+			KnownTxsCache:              inputSensorParams.KnownTxsCache,
+			KnownBlocksCache:           inputSensorParams.KnownBlocksCache,
+			Head:                       head,
 			ShouldBroadcastTx:          inputSensorParams.ShouldBroadcastTx,
 			ShouldBroadcastTxHashes:    inputSensorParams.ShouldBroadcastTxHashes,
 			ShouldBroadcastBlocks:      inputSensorParams.ShouldBroadcastBlocks,
@@ -225,19 +227,14 @@ var SensorCmd = &cobra.Command{
 			SensorID:                   inputSensorParams.SensorID,
 			NetworkID:                  inputSensorParams.NetworkID,
 			Conns:                      conns,
-			Head:                       &head,
-			HeadMutex:                  &sync.RWMutex{},
 			ForkID:                     forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
-			MessagesReceived:           msgsReceived,
-			MessagesSent:               msgsSent,
+			MsgCounter:                 msgCounter,
+			RequestsCache:              inputSensorParams.RequestsCache,
+			ParentsCache:               inputSensorParams.ParentsCache,
 			ShouldBroadcastTx:          inputSensorParams.ShouldBroadcastTx,
 			ShouldBroadcastTxHashes:    inputSensorParams.ShouldBroadcastTxHashes,
 			ShouldBroadcastBlocks:      inputSensorParams.ShouldBroadcastBlocks,
 			ShouldBroadcastBlockHashes: inputSensorParams.ShouldBroadcastBlockHashes,
-			MaxKnownTxs:                inputSensorParams.MaxKnownTxs,
-			MaxKnownBlocks:             inputSensorParams.MaxKnownBlocks,
-			MaxRequests:                inputSensorParams.MaxRequests,
-			PeerCacheTTL:               inputSensorParams.PeerCacheTTL,
 		}
 
 		config := ethp2p.Config{
@@ -292,7 +289,7 @@ var SensorCmd = &cobra.Command{
 			go handlePrometheus()
 		}
 
-		go handleAPI(&server, msgsReceived, msgsSent, conns)
+		go handleAPI(&server, msgCounter, conns)
 
 		// Start the RPC server for receiving transactions
 		go handleRPC(conns, inputSensorParams.NetworkID)
@@ -306,16 +303,15 @@ var SensorCmd = &cobra.Command{
 				peersGauge.Set(float64(server.PeerCount()))
 				db.WritePeers(cmd.Context(), server.Peers(), time.Now())
 
+				metrics.Update(conns.HeadBlock().Block, conns.OldestBlock())
+
 				urls := []string{}
 				for _, peer := range server.Peers() {
 					urls = append(urls, peer.Node().URLv4())
 				}
 
-				if err := removePeerMessages(msgsReceived, urls); err != nil {
-					log.Error().Err(err).Msg("Failed to clean up received peer messages")
-				}
-				if err := removePeerMessages(msgsSent, urls); err != nil {
-					log.Error().Err(err).Msg("Failed to clean up sent peer messages")
+				if err := removePeerMessages(msgCounter, urls); err != nil {
+					log.Error().Err(err).Msg("Failed to clean up peer messages")
 				}
 
 				if err := p2p.WritePeers(inputSensorParams.NodesFile, urls); err != nil {
@@ -466,15 +462,11 @@ func init() {
 	f := SensorCmd.Flags()
 	f.StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", "comma separated nodes used for bootstrapping")
 	f.Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "filter discovered nodes by this network ID")
-	if err := SensorCmd.MarkFlagRequired("network-id"); err != nil {
-		log.Error().Err(err).Msg("Failed to mark network-id as required persistent flag")
-	}
+	flag.MarkFlagsRequired(SensorCmd, "network-id")
 	f.StringVarP(&inputSensorParams.ProjectID, "project-id", "p", "", "GCP project ID")
 	f.StringVarP(&inputSensorParams.DatabaseID, "database-id", "d", "", "datastore database ID")
 	f.StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "sensor ID when writing block/tx events")
-	if err := SensorCmd.MarkFlagRequired("sensor-id"); err != nil {
-		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")
-	}
+	flag.MarkFlagsRequired(SensorCmd, "sensor-id")
 	f.IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 2000, "maximum number of peers to connect to")
 	f.IntVarP(&inputSensorParams.MaxDatabaseConcurrency, "max-db-concurrency", "D", 10000,
 		`maximum number of concurrent database operations to perform (increasing this
@@ -490,13 +482,6 @@ will result in less chance of missing data but can significantly increase memory
 	f.BoolVar(&inputSensorParams.ShouldBroadcastTxHashes, "broadcast-tx-hashes", false, "broadcast transaction hashes to peers")
 	f.BoolVar(&inputSensorParams.ShouldBroadcastBlocks, "broadcast-blocks", false, "broadcast full blocks to peers")
 	f.BoolVar(&inputSensorParams.ShouldBroadcastBlockHashes, "broadcast-block-hashes", false, "broadcast block hashes to peers")
-	f.IntVar(&inputSensorParams.MaxCachedTxs, "max-cached-txs", 2048, "maximum number of transactions to cache for serving to peers")
-	f.IntVar(&inputSensorParams.MaxCachedBlocks, "max-cached-blocks", 128, "maximum number of blocks to cache for serving to peers")
-	f.DurationVar(&inputSensorParams.CacheTTL, "cache-ttl", 10*time.Minute, "time to live for cached transactions and blocks")
-	f.IntVar(&inputSensorParams.MaxKnownTxs, "max-known-txs", 8192, "maximum transaction hashes to track per peer")
-	f.IntVar(&inputSensorParams.MaxKnownBlocks, "max-known-blocks", 1024, "maximum block hashes to track per peer")
-	f.IntVar(&inputSensorParams.MaxRequests, "max-requests", 2048, "maximum request IDs to track per peer")
-	f.DurationVar(&inputSensorParams.PeerCacheTTL, "peer-cache-ttl", 5*time.Minute, "time to live for per-peer caches (known tx/block hashes and requests)")
 	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
 	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")
@@ -524,4 +509,16 @@ will result in less chance of missing data but can significantly increase memory
   - json (output to stdout)
   - none (no persistence)`)
 	f.BoolVar(&inputSensorParams.NoDiscovery, "no-discovery", false, "disable P2P peer discovery")
+	f.IntVar(&inputSensorParams.RequestsCache.MaxSize, "max-requests", 2048, "maximum request IDs to track per peer (0 for no limit)")
+	f.DurationVar(&inputSensorParams.RequestsCache.TTL, "requests-cache-ttl", 5*time.Minute, "time to live for requests cache entries (0 for no expiration)")
+	f.IntVar(&inputSensorParams.ParentsCache.MaxSize, "max-parents", 1024, "maximum parent block hashes to track per peer (0 for no limit)")
+	f.DurationVar(&inputSensorParams.ParentsCache.TTL, "parents-cache-ttl", 5*time.Minute, "time to live for parent hash cache entries (0 for no expiration)")
+	f.IntVar(&inputSensorParams.BlocksCache.MaxSize, "max-blocks", 1024, "maximum blocks to track across all peers (0 for no limit)")
+	f.DurationVar(&inputSensorParams.BlocksCache.TTL, "blocks-cache-ttl", 10*time.Minute, "time to live for block cache entries (0 for no expiration)")
+	f.IntVar(&inputSensorParams.TxsCache.MaxSize, "max-txs", 8192, "maximum transactions to cache for serving to peers (0 for no limit)")
+	f.DurationVar(&inputSensorParams.TxsCache.TTL, "txs-cache-ttl", 10*time.Minute, "time to live for transaction cache entries (0 for no expiration)")
+	f.IntVar(&inputSensorParams.KnownTxsCache.MaxSize, "max-known-txs", 8192, "maximum transaction hashes to track per peer (0 for no limit)")
+	f.DurationVar(&inputSensorParams.KnownTxsCache.TTL, "known-txs-cache-ttl", 5*time.Minute, "time to live for known transaction cache entries (0 for no expiration)")
+	f.IntVar(&inputSensorParams.KnownBlocksCache.MaxSize, "max-known-blocks", 1024, "maximum block hashes to track per peer (0 for no limit)")
+	f.DurationVar(&inputSensorParams.KnownBlocksCache.TTL, "known-blocks-cache-ttl", 5*time.Minute, "time to live for known block cache entries (0 for no expiration)")
 }

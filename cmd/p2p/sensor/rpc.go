@@ -45,7 +45,8 @@ func handleRPC(conns *p2p.Conns, networkID uint64) {
 	// Use network ID as chain ID for signature validation
 	chainID := new(big.Int).SetUint64(networkID)
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -85,7 +86,7 @@ func handleRPC(conns *p2p.Conns, networkID uint64) {
 
 	addr := fmt.Sprintf(":%d", inputSensorParams.RPCPort)
 	log.Info().Str("addr", addr).Msg("Starting JSON-RPC server")
-	if err := http.ListenAndServe(addr, nil); err != nil {
+	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Error().Err(err).Msg("Failed to start RPC server")
 	}
 }

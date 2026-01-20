@@ -6,12 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/0xPolygon/polygon-cli/abi"
-	"github.com/0xPolygon/polygon-cli/util"
-	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/rs/zerolog/log"
-	"github.com/spf13/cobra"
 	"io"
 	"math"
 	"math/big"
@@ -20,6 +14,13 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+
+	"github.com/0xPolygon/polygon-cli/abi"
+	"github.com/0xPolygon/polygon-cli/util"
+	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -278,11 +279,10 @@ func processNumericString(s string) *big.Int {
 	if strings.Contains(s, ":") {
 		log.Fatal().Str("string", s).Msg("Unknown number format")
 	}
-	if strings.HasPrefix(s, "0x") {
-		s = strings.TrimPrefix(s, "0x")
-		num, fullRead := new(big.Int).SetString(s, 16)
+	if result, ok := strings.CutPrefix(s, "0x"); ok {
+		num, fullRead := new(big.Int).SetString(result, 16)
 		if !fullRead {
-			log.Fatal().Str("input", s).Msg("Unable to read the full hex data?!")
+			log.Fatal().Str("input", result).Msg("Unable to read the full hex data?!")
 		}
 		return num
 	}
@@ -584,14 +584,13 @@ func rawArgsToStrings(rawArgs string, params []string) []string {
 	processedArgs := make([]string, count)
 	for k, arg := range argList {
 		if strings.HasPrefix(params[k], "uint") {
-			if strings.HasPrefix(arg, "0x") {
-				arg = strings.TrimPrefix(arg, "0x")
-				if len(arg) > 64 {
+			if result, ok := strings.CutPrefix(arg, "0x"); ok {
+				if len(result) > 64 {
 					// i think this is a bug but there is a test case that's somehow longer than 32 bytes
 					// https://github.com/ethereum/tests/blob/fd26aad70e24f042fcd135b2f0338b1c6bf1a324/src/GeneralStateTestsFiller/Cancun/stEIP1153-transientStorage/transStorageOKFiller.yml#L801
-					arg = arg[len(arg)-64:]
+					result = result[len(result)-64:]
 				}
-				n, _ := new(big.Int).SetString(arg, 16)
+				n, _ := new(big.Int).SetString(result, 16)
 				processedArgs[k] = n.String()
 			} else {
 				processedArgs[k] = arg

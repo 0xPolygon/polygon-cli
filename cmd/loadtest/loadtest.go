@@ -929,7 +929,7 @@ func mainLoop(ctx context.Context, c *ethclient.Client, rpc *ethrpc.Client) erro
 				if tErr == nil && inputLoadTestParams.WaitForReceipt {
 					receiptMaxRetries := inputLoadTestParams.ReceiptRetryMax
 					receiptRetryInitialDelayMs := inputLoadTestParams.ReceiptRetryInitialDelayMs
-					_, tErr = waitReceiptWithRetries(ctx, c, ltTxHash, receiptMaxRetries, receiptRetryInitialDelayMs)
+					_, tErr = util.WaitReceiptWithRetries(ctx, c, ltTxHash, receiptMaxRetries, receiptRetryInitialDelayMs)
 				}
 
 				if tErr != nil {
@@ -1608,7 +1608,7 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 		log.Error().Err(err).Msg("Unable to sign transaction")
 		return
 	}
-	log.Trace().Str("txId", originalTx.Hash().String()).Bool("callOnly", ltp.EthCallOnly).Msg("Attempting to replay transaction")
+	log.Trace().Str("txID", originalTx.Hash().String()).Bool("callOnly", ltp.EthCallOnly).Msg("Attempting to replay transaction")
 	txHash = stx.Hash()
 
 	t1 = time.Now()
@@ -1620,9 +1620,16 @@ func loadTestRecall(ctx context.Context, c *ethclient.Client, tops *bind.Transac
 		if ltp.EthCallOnlyLatestBlock {
 			_, err = c.CallContract(ctx, callMsg, nil)
 		} else {
-			callMsg.GasPrice = originalTx.GasPrice()
 			callMsg.GasFeeCap = new(big.Int).SetUint64(originalTx.MaxFeePerGas())
 			callMsg.GasTipCap = new(big.Int).SetUint64(originalTx.MaxPriorityFeePerGas())
+			if originalTx.MaxFeePerGas() == 0 && originalTx.MaxPriorityFeePerGas() == 0 {
+				callMsg.GasPrice = originalTx.GasPrice()
+				callMsg.GasFeeCap = nil
+				callMsg.GasTipCap = nil
+			} else {
+				callMsg.GasPrice = nil
+			}
+
 			_, err = c.CallContract(ctx, callMsg, originalTx.BlockNumber())
 		}
 		if err != nil {

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/spf13/cobra"
 )
@@ -17,7 +17,7 @@ var (
 	usage string
 
 	// flags
-	rpcUrl          string
+	rpcURL          string
 	batchSizeValue  string
 	subBatchSize    int
 	blockCacheLimit int
@@ -57,21 +57,25 @@ var MonitorCmd = &cobra.Command{
 	Long:         usage,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		rpcUrlFlagValue := flag_loader.GetRpcUrlFlagValue(cmd)
-		rpcUrl = *rpcUrlFlagValue
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		rpcURL, err = flag.GetRPCURL(cmd)
+		if err != nil {
+			return err
+		}
+
 		// By default, hide logs from `polycli monitor`.
 		verbosityFlag := cmd.Flag("verbosity")
 		if verbosityFlag != nil && !verbosityFlag.Changed {
 			util.SetLogLevel(util.Silent)
 		}
+
 		prettyFlag := cmd.Flag("pretty-logs")
 		if prettyFlag != nil && prettyFlag.Value.String() == "true" {
-			return util.SetLogMode(util.Console)
+			if err = util.SetLogMode(util.Console); err != nil {
+				return err
+			}
 		}
-		return nil
-	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
+
 		return checkFlags()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -81,7 +85,7 @@ var MonitorCmd = &cobra.Command{
 
 func init() {
 	f := MonitorCmd.Flags()
-	f.StringVarP(&rpcUrl, "rpc-url", "r", "http://localhost:8545", "the RPC endpoint URL")
+	f.StringVarP(&rpcURL, flag.RPCURL, "r", flag.DefaultRPCURL, "the RPC endpoint URL")
 	f.StringVarP(&batchSizeValue, "batch-size", "b", "auto", "number of requests per batch")
 	f.IntVarP(&subBatchSize, "sub-batch-size", "s", 50, "number of requests per sub-batch")
 	f.IntVarP(&blockCacheLimit, "cache-limit", "c", 200, "number of cached blocks for the LRU block data structure (Min 100)")
@@ -89,10 +93,6 @@ func init() {
 }
 
 func checkFlags() (err error) {
-	if err = util.ValidateUrl(rpcUrl); err != nil {
-		return
-	}
-
 	interval, err = time.ParseDuration(intervalStr)
 	if err != nil {
 		return err

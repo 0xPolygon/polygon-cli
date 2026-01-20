@@ -69,6 +69,7 @@ type JSONBlock struct {
 	TxCount         int       `json:"tx_count"`
 	UncleCount      int       `json:"uncle_count"`
 	TimeFirstSeen   time.Time `json:"time_first_seen"`
+	IsParent        bool      `json:"is_parent"`
 }
 
 // JSONBlockEvent represents a block event in JSON format.
@@ -78,6 +79,14 @@ type JSONBlockEvent struct {
 	PeerID    string    `json:"peer_id"`
 	Hash      string    `json:"hash"`
 	Timestamp time.Time `json:"timestamp"`
+}
+
+// JSONBlockHashFirstSeen represents a block hash announcement in JSON format.
+type JSONBlockHashFirstSeen struct {
+	Type          string    `json:"type"`
+	SensorID      string    `json:"sensor_id"`
+	Hash          string    `json:"hash"`
+	TimeFirstSeen time.Time `json:"time_first_seen"`
 }
 
 // JSONTransaction represents a transaction in JSON format.
@@ -179,7 +188,8 @@ func (j *JSONDatabase) writeBlock(block *types.Block, td *big.Int, tfs time.Time
 }
 
 // WriteBlockHeaders writes the block headers as JSON.
-func (j *JSONDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time) {
+// The isParent parameter indicates if these headers were fetched as parent blocks.
+func (j *JSONDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time, isParent bool) {
 	if !j.ShouldWriteBlocks() {
 		return
 	}
@@ -196,6 +206,7 @@ func (j *JSONDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.H
 			GasUsed:       header.GasUsed,
 			Difficulty:    header.Difficulty.String(),
 			TimeFirstSeen: tfs,
+			IsParent:      isParent,
 		}
 
 		if header.BaseFee != nil {
@@ -223,6 +234,21 @@ func (j *JSONDatabase) WriteBlockHashes(ctx context.Context, peer *enode.Node, h
 
 		j.Write(event)
 	}
+}
+
+// WriteBlockHashFirstSeen writes a partial block entry with just the hash
+// first seen time. For JSON output, this writes a separate record type.
+func (j *JSONDatabase) WriteBlockHashFirstSeen(ctx context.Context, hash common.Hash, tfsh time.Time) {
+	if !j.ShouldWriteBlocks() {
+		return
+	}
+
+	j.Write(JSONBlockHashFirstSeen{
+		Type:          "block_hash_first_seen",
+		SensorID:      j.sensorID,
+		Hash:          hash.Hex(),
+		TimeFirstSeen: tfsh,
+	})
 }
 
 // WriteBlockBody writes the block body as JSON.
@@ -330,7 +356,7 @@ func (j *JSONDatabase) WritePeers(ctx context.Context, peers []*p2p.Peer, tls ti
 
 // HasBlock always returns true to avoid unnecessary parent block fetching for JSON output.
 func (j *JSONDatabase) HasBlock(ctx context.Context, hash common.Hash) bool {
-	return true
+	return false
 }
 
 // MaxConcurrentWrites returns the max concurrency.

@@ -103,6 +103,15 @@ type Balancer struct {
 	lastRoot common.Hash
 }
 
+func generateZeroHashes(height uint8) []common.Hash {
+	zeroHashes := make([]common.Hash, height)
+	zeroHashes[0] = common.Hash{}
+	for i := 1; i < int(height); i++ {
+		zeroHashes[i] = crypto.Keccak256Hash(zeroHashes[i-1][:], zeroHashes[i-1][:])
+	}
+	return zeroHashes
+}
+
 func NewBalanceTree() (*Balancer, error) {
 	var depth uint8 = 192
 	zeroHashes := generateZeroHashes(depth)

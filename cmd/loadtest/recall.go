@@ -139,9 +139,9 @@ func rawTransactionToNewTx(pt rpctypes.PolyTransaction, nonce uint64, price, tip
 
 func rawTransactionToDynamicFeeTx(pt rpctypes.PolyTransaction, nonce uint64, price, tipCap *big.Int) *ethtypes.Transaction {
 	toAddr := pt.To()
-	chainId := new(big.Int).SetUint64(pt.ChainID())
+	chainID := new(big.Int).SetUint64(pt.ChainID())
 	dynamicFeeTx := &ethtypes.DynamicFeeTx{
-		ChainID:   chainId,
+		ChainID:   chainID,
 		To:        &toAddr,
 		Data:      pt.Data(),
 		Value:     pt.Value(),

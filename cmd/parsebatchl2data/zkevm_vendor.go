@@ -4,12 +4,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
+	"strconv"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/rs/zerolog/log"
-	"math/big"
-	"strconv"
 )
 
 // L2BlockRaw is the raw representation of a L2 block.
