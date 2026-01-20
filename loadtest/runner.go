@@ -897,8 +897,8 @@ func (r *Runner) deployContracts(ctx context.Context, tops *bind.TransactOpts) e
 
 		// Wait for contract to be mined and validated
 		err = util.BlockUntilSuccessful(ctx, r.client, func() error {
-			_, err := ltContract.GetCallCounter(cops)
-			return err
+			_, innerErr := ltContract.GetCallCounter(cops)
+			return innerErr
 		})
 		if err != nil {
 			return fmt.Errorf("failed waiting for load test contract to be mined: %w", err)
@@ -930,9 +930,9 @@ func (r *Runner) deployContracts(ctx context.Context, tops *bind.TransactOpts) e
 
 		// Wait for contract to be mined and validate balance
 		err = util.BlockUntilSuccessful(ctx, r.client, func() error {
-			balance, err := erc20Contract.BalanceOf(cops, *r.cfg.FromETHAddress)
-			if err != nil {
-				return err
+			balance, innerErr := erc20Contract.BalanceOf(cops, *r.cfg.FromETHAddress)
+			if innerErr != nil {
+				return innerErr
 			}
 			if balance.Cmp(new(big.Int)) == 0 {
 				return errors.New("ERC20 balance is zero")
@@ -969,8 +969,8 @@ func (r *Runner) deployContracts(ctx context.Context, tops *bind.TransactOpts) e
 
 		// Wait for contract to be mined and validated
 		err = util.BlockUntilSuccessful(ctx, r.client, func() error {
-			_, err := erc721Contract.BalanceOf(cops, *r.cfg.FromETHAddress)
-			return err
+			_, innerErr := erc721Contract.BalanceOf(cops, *r.cfg.FromETHAddress)
+			return innerErr
 		})
 		if err != nil {
 			return fmt.Errorf("failed waiting for ERC721 contract to be mined: %w", err)
