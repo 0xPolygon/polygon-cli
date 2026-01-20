@@ -340,15 +340,15 @@ func (r *Runner) Run(ctx context.Context) error {
 	defer signal.Stop(sigCh)
 
 	errCh := make(chan error)
-	ctx, cancel := context.WithCancel(ctx)
+	loadTestCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	go func() {
 		select {
-		case <-ctx.Done():
+		case <-loadTestCtx.Done():
 			return
 		default:
-			errCh <- r.mainLoop(ctx)
+			errCh <- r.mainLoop(loadTestCtx)
 		}
 	}()
 
@@ -365,7 +365,8 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}
 
-	// Post-load-test operations
+	// Post-load-test operations use the original context (not the cancelled loadTestCtx)
+	// to ensure summary/refund RPCs can complete successfully after SIGINT
 	r.postLoadTest(ctx)
 
 	log.Info().Msg("Finished")
@@ -382,6 +383,13 @@ func (r *Runner) postLoadTest(ctx context.Context) {
 		startTime := results[0].RequestTime
 		endTime := time.Now()
 		LightSummary(results, startTime, endTime, r.rl)
+	}
+
+	// Skip detailed summary and refunds in fire-and-forget or call-only modes.
+	// In these modes, transactions aren't tracked or no transactions are sent,
+	// making detailed summaries misleading and refunds unnecessary.
+	if cfg.FireAndForget || cfg.EthCallOnly {
+		return
 	}
 
 	// Output detailed summary if requested
@@ -640,6 +648,16 @@ func (r *Runner) parseModes(ctx context.Context) error {
 		}
 	} else if config.HasMode(config.ModeRPC, cfg.ParsedModes) {
 		// RPC mode is read-only testing, automatically enable call-only mode
+		// Validate incompatible options before auto-enabling
+		if cfg.AdaptiveRateLimit {
+			return errors.New("the adaptive rate limit is based on the pending transaction pool. It doesn't work with RPC mode which is read-only")
+		}
+		if cfg.WaitForReceipt {
+			return errors.New("waiting for receipts doesn't make sense with RPC mode which is read-only")
+		}
+		if cfg.PreFundSendingAccounts || cfg.SendingAccountsFile != "" || cfg.SendingAccountsCount > 0 {
+			return errors.New("pre-funding accounts doesn't make sense with RPC mode which is read-only")
+		}
 		log.Trace().Msg("Setting call only mode since we're doing RPC testing")
 		cfg.EthCallOnly = true
 	}
