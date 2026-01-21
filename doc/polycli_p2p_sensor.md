@@ -102,7 +102,7 @@ polycli p2p sensor amoy-nodes.json \
       --dial-ratio int                ratio of inbound to dialed connections (dial ratio of 2 allows 1/2 of connections to be dialed, setting to 0 defaults to 3)
       --discovery-dns string          DNS discovery ENR tree URL
       --discovery-port int            UDP P2P discovery port (default 30303)
-      --fork-id bytesHex              hex encoded fork ID (omit 0x) (default F097BC13)
+      --fork-id bytesHex              hex encoded fork ID (omit 0x) (default 22D523B2)
       --genesis-hash string           genesis block hash (default "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
   -h, --help                          help for sensor
       --key string                    hex-encoded private key (cannot be set with --key-file)
