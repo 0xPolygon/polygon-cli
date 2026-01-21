@@ -1,4 +1,4 @@
-package txgaschart
+package plot
 
 import (
 	"cmp"
@@ -42,8 +42,8 @@ var inputArgs = args{}
 //go:embed usage.md
 var usage string
 var Cmd = &cobra.Command{
-	Use:   "tx-gas-chart",
-	Short: "plot a chart of transaction gas prices and limits",
+	Use:   "plot",
+	Short: "Plot a chart of transaction gas prices and limits.",
 	Long:  usage,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {

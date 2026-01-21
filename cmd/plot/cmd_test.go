@@ -1,4 +1,4 @@
-package txgaschart
+package plot
 
 import (
 	"math"

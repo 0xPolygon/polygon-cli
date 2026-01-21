@@ -1,20 +1,20 @@
-# tx-gas-chart
+# plot
 
-`tx-gas-chart` generates visual charts analyzing transaction gas prices and limits across a range of blocks. It fetches block data from an Ethereum-compatible RPC endpoint and produces a PNG chart showing gas price distribution,
+`plot` generates visual charts analyzing transaction gas prices and limits across a range of blocks. It fetches block data from an Ethereum-compatible RPC endpoint and produces a PNG chart showing gas price distribution,
   transaction gas limits, block gas limits, and block gas usage over time.
 
 ## Basic Usage
 
 Generate a chart for the last 500 blocks:
 
-$ polycli tx-gas-chart --rpc-url http://localhost:8545
+$ polycli plot --rpc-url http://localhost:8545
 
 This will create a file named tx_gasprice_chart.png in the current directory.
 
 Analyzing Specific Block Ranges
 
 Analyze blocks 9356826 to 9358826:
-$ polycli tx-gas-chart --rpc-url https://sepolia.infura.io/v3/YOUR_API_KEY \
+$ polycli plot --rpc-url https://sepolia.infura.io/v3/YOUR_API_KEY \
   --start-block 9356826 \
   --end-block 9358826 \
   --output "sepolia_analysis.png"
@@ -22,7 +22,7 @@ $ polycli tx-gas-chart --rpc-url https://sepolia.infura.io/v3/YOUR_API_KEY \
 Highlighting Target Address Transactions
 Track transactions involving a specific address (either sent from or to):
 
-$ polycli tx-gas-chart --rpc-url http://localhost:8545 \
+$ polycli plot --rpc-url http://localhost:8545 \
   --target-address "0xeE76bECaF80fFe451c8B8AFEec0c21518Def02f9" \
   --start-block 1000 \
   --end-block 2000
@@ -34,14 +34,14 @@ Performance Options
 When fetching large block ranges, adjust rate limiting and concurrency:
 
 Process 10 blocks concurrently with 10 requests/second rate limit:
-$ polycli tx-gas-chart --rpc-url http://localhost:8545 \
+$ polycli plot --rpc-url http://localhost:8545 \
   --concurrency 10 \
   --rate-limit 10 \
   --start-block 1000 \
   --end-block 5000
 
 Remove rate limiting entirely (use with caution):
-$ polycli tx-gas-chart --rpc-url http://localhost:8545 \
+$ polycli plot --rpc-url http://localhost:8545 \
   --rate-limit -1 \
   --concurrency 20
 
@@ -50,12 +50,12 @@ Chart Scale Options
 Choose between logarithmic (default) and linear scale for the gas price axis:
 
 Use linear scale for gas prices:
-$ polycli tx-gas-chart --rpc-url http://localhost:8545 \
+$ polycli plot --rpc-url http://localhost:8545 \
   --scale "linear" \
   --output "linear_chart.png"
 
 Use logarithmic scale (default):
-$ polycli tx-gas-chart --rpc-url http://localhost:8545 \
+$ polycli plot --rpc-url http://localhost:8545 \
   --scale "log" \
   --output "log_chart.png"
 
@@ -71,19 +71,19 @@ The generated chart displays four key metrics:
 Example Use Cases
 
 Analyzing gas price patterns during network congestion:
-$ polycli tx-gas-chart --rpc-url https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY \
+$ polycli plot --rpc-url https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY \
   --start-block 18000000 \
   --end-block 18001000 \
   --scale log \
   --output mainnet_congestion.png
 
 Tracking your contract deployment gas costs:
-$ polycli tx-gas-chart --rpc-url http://localhost:8545 \
+$ polycli plot --rpc-url http://localhost:8545 \
   --target-address 0xYourContractAddress \
   --output my_contract_gas.png
 
 Analyzing test network behavior:
-$ polycli tx-gas-chart --rpc-url http://localhost:8545 \
+$ polycli plot --rpc-url http://localhost:8545 \
   --concurrency 1 \
   --rate-limit 4 \
   --output local_test.png
