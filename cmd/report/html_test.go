@@ -337,7 +337,7 @@ func TestGenerateHTMLEscaping(t *testing.T) {
 	// Create a report with potentially malicious data
 	report := &BlockReport{
 		ChainID:     1,
-		RpcUrl:      "<script>alert('xss')</script>",
+		RPCURL:      "<script>alert('xss')</script>",
 		StartBlock:  0,
 		EndBlock:    100,
 		GeneratedAt: time.Now(),
@@ -395,7 +395,7 @@ func TestGenerateHTMLWithBaseFee(t *testing.T) {
 
 	report := &BlockReport{
 		ChainID:     1,
-		RpcUrl:      "http://localhost:8545",
+		RPCURL:      "http://localhost:8545",
 		StartBlock:  0,
 		EndBlock:    100,
 		GeneratedAt: time.Now(),
@@ -426,7 +426,7 @@ func TestGenerateHTMLWithBaseFee(t *testing.T) {
 func TestGenerateHTMLWithoutBaseFee(t *testing.T) {
 	report := &BlockReport{
 		ChainID:     1,
-		RpcUrl:      "http://localhost:8545",
+		RPCURL:      "http://localhost:8545",
 		StartBlock:  0,
 		EndBlock:    100,
 		GeneratedAt: time.Now(),

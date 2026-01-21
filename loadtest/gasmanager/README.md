@@ -277,6 +277,6 @@ For consistent benchmarking:
 
 See Also
 
-- ../loadtestUsage.md
-- ../txgaschart/usage.md
-- Wave visualization examples: cmd/txgaschart/examples/
+- [Loadtest Usage](../../cmd/loadtest/loadtestUsage.md)
+- [tx-gas-chart Usage](../../cmd/txgaschart/usage.md)
+- [Wave visualization examples](../../cmd/txgaschart/examples/)

@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
-      - uses: crate-ci/typos@5c19779cb52ea50e151f5a10333ccd269227b5ae # v1.41.0
+      - uses: crate-ci/typos@bb4666ad77b539a6b4ce4eda7ebb6de553704021 # v1.42.0
 
   gen-doc:
     name: Check gen-doc generated files
@@ -186,7 +186,7 @@ jobs:
             sudo apt-get install ethereum
             geth --version
           fi
-      - name: Run loadtest againt ${{ matrix.tool }}
+      - name: Run loadtest against ${{ matrix.tool }}
         run: |
           ${{ matrix.tool }} --version
           make ${{ matrix.tool }} &

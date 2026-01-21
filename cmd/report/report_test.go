@@ -345,7 +345,7 @@ func TestCheckFlagsValidation(t *testing.T) {
 	// Helper to reset to valid defaults
 	resetToValidDefaults := func() {
 		inputReport = reportParams{
-			RpcUrl:      "http://localhost:8545",
+			RPCURL:      "http://localhost:8545",
 			StartBlock:  0,
 			EndBlock:    100,
 			OutputFile:  "",

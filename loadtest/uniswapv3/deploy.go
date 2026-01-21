@@ -1,4 +1,4 @@
-package uniswapv3loadtest
+package uniswapv3
 
 import (
 	"context"
@@ -344,7 +344,7 @@ func deployOrInstantiateContract[T Contract](
 			log.Error().Err(err).Msg("Unable to deploy contract")
 			return
 		}
-		reflectedContractName := reflect.TypeOf(contract).Elem().Name()
+		reflectedContractName := reflect.TypeFor[T]().Name()
 		log.Debug().Str("name", reflectedContractName).Interface("address", address).Msg("Contract deployed")
 	} else {
 		// Otherwise, instantiate the contract.
@@ -354,7 +354,7 @@ func deployOrInstantiateContract[T Contract](
 			log.Error().Err(err).Msg("Unable to instantiate contract")
 			return
 		}
-		reflectedContractName := reflect.TypeOf(contract).Elem().Name()
+		reflectedContractName := reflect.TypeFor[T]().Name()
 		log.Debug().Str("name", reflectedContractName).Msg("Contract instantiated")
 	}
 

@@ -32,7 +32,7 @@ const (
 
 type (
 	reportParams struct {
-		RpcUrl      string
+		RPCURL      string
 		StartBlock  uint64
 		EndBlock    uint64
 		OutputFile  string
@@ -61,7 +61,7 @@ var ReportCmd = &cobra.Command{
 		ctx := cmd.Context()
 
 		// Connect to RPC
-		ec, err := ethrpc.DialContext(ctx, inputReport.RpcUrl)
+		ec, err := ethrpc.DialContext(ctx, inputReport.RPCURL)
 		if err != nil {
 			return fmt.Errorf("failed to connect to RPC: %w", err)
 		}
@@ -119,7 +119,7 @@ var ReportCmd = &cobra.Command{
 		// If both are set by user (including 0,0), use them as-is
 
 		log.Info().
-			Str("rpc-url", inputReport.RpcUrl).
+			Str("rpc-url", inputReport.RPCURL).
 			Uint64("start-block", startBlock).
 			Uint64("end-block", endBlock).
 			Msg("Starting block analysis")
@@ -127,7 +127,7 @@ var ReportCmd = &cobra.Command{
 		// Initialize the report
 		report := &BlockReport{
 			ChainID:     chainID,
-			RpcUrl:      inputReport.RpcUrl,
+			RPCURL:      inputReport.RPCURL,
 			StartBlock:  startBlock,
 			EndBlock:    endBlock,
 			GeneratedAt: time.Now(),
@@ -152,7 +152,7 @@ var ReportCmd = &cobra.Command{
 
 func init() {
 	f := ReportCmd.Flags()
-	f.StringVar(&inputReport.RpcUrl, "rpc-url", "http://localhost:8545", "RPC endpoint URL")
+	f.StringVar(&inputReport.RPCURL, "rpc-url", "http://localhost:8545", "RPC endpoint URL")
 	f.Uint64Var(&inputReport.StartBlock, "start-block", BlockNotSet, "starting block number (default: auto-detect based on end-block or latest)")
 	f.Uint64Var(&inputReport.EndBlock, "end-block", BlockNotSet, "ending block number (default: auto-detect based on start-block or latest)")
 	f.StringVarP(&inputReport.OutputFile, "output", "o", "", "output file path (default: stdout for JSON, report.html for HTML, report.pdf for PDF)")
@@ -163,7 +163,7 @@ func init() {
 
 func checkFlags() error {
 	// Validate RPC URL
-	if err := util.ValidateUrl(inputReport.RpcUrl); err != nil {
+	if err := util.ValidateURL(inputReport.RPCURL); err != nil {
 		return err
 	}
 

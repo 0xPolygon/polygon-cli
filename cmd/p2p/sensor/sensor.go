@@ -29,6 +29,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/p2p"
 	"github.com/0xPolygon/polygon-cli/p2p/database"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
@@ -443,15 +444,11 @@ func init() {
 	f := SensorCmd.Flags()
 	f.StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", "comma separated nodes used for bootstrapping")
 	f.Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "filter discovered nodes by this network ID")
-	if err := SensorCmd.MarkFlagRequired("network-id"); err != nil {
-		log.Error().Err(err).Msg("Failed to mark network-id as required persistent flag")
-	}
+	flag.MarkFlagsRequired(SensorCmd, "network-id")
 	f.StringVarP(&inputSensorParams.ProjectID, "project-id", "p", "", "GCP project ID")
 	f.StringVarP(&inputSensorParams.DatabaseID, "database-id", "d", "", "datastore database ID")
 	f.StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "sensor ID when writing block/tx events")
-	if err := SensorCmd.MarkFlagRequired("sensor-id"); err != nil {
-		log.Error().Err(err).Msg("Failed to mark sensor-id as required persistent flag")
-	}
+	flag.MarkFlagsRequired(SensorCmd, "sensor-id")
 	f.IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 2000, "maximum number of peers to connect to")
 	f.IntVarP(&inputSensorParams.MaxDatabaseConcurrency, "max-db-concurrency", "D", 10000,
 		`maximum number of concurrent database operations to perform (increasing this
@@ -476,7 +473,7 @@ will result in less chance of missing data but can significantly increase memory
 	f.IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
 	f.StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "RPC endpoint used to fetch latest block")
 	f.StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "genesis block hash")
-	f.BytesHexVar(&inputSensorParams.ForkID, "fork-id", []byte{240, 151, 188, 19}, "hex encoded fork ID (omit 0x)")
+	f.BytesHexVar(&inputSensorParams.ForkID, "fork-id", []byte{34, 213, 35, 178}, "hex encoded fork ID (omit 0x)")
 	f.IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
 		`ratio of inbound to dialed connections (dial ratio of 2 allows 1/2 of connections to be dialed, setting to 0 defaults to 3)`)
 	f.StringVar(&inputSensorParams.NAT, "nat", "any", "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")

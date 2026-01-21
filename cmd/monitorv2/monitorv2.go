@@ -8,6 +8,7 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/chainstore"
 	"github.com/0xPolygon/polygon-cli/cmd/monitorv2/renderer"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/indexer"
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/rs/zerolog/log"
@@ -30,12 +31,18 @@ var MonitorV2Cmd = &cobra.Command{
 	Use:   "monitorv2",
 	Short: "Monitor v2 command stub.",
 	Long:  usage,
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		// Set default verbosity to Error level (300) if not explicitly set by user
 		verbosityFlag := cmd.Flag("verbosity")
 		if verbosityFlag != nil && !verbosityFlag.Changed {
 			util.SetLogLevel(300) // Error level
 		}
+
+		rpcURL, err = flag.GetRequiredRPCURL(cmd)
+		if err != nil {
+			return err
+		}
+
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -92,7 +99,7 @@ var MonitorV2Cmd = &cobra.Command{
 }
 
 func init() {
-	MonitorV2Cmd.Flags().StringVar(&rpcURL, "rpc-url", "", "RPC endpoint URL (required)")
+	MonitorV2Cmd.Flags().StringVar(&rpcURL, flag.RPCURL, "", "RPC endpoint URL (required)")
 	MonitorV2Cmd.Flags().StringVar(&rendererType, "renderer", "tui", "renderer type (json, tview, tui)")
 	MonitorV2Cmd.Flags().StringVar(&pprofAddr, "pprof", "", "pprof server address (e.g. 127.0.0.1:6060)")
 }

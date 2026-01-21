@@ -205,4 +205,4 @@ websocat ws://34.208.176.205:9944
 {"jsonrpc":"2.0", "id": 1, "method": "chain_subscribeNewHead", "params": []}
 ```
 
-If you add a new loadtest mode, don't forget to update the loadtest mode string by running the following command: `cd cmd/loadtest && stringer -type=loadTestMode`. You can install [stringer](https://pkg.go.dev/golang.org/x/tools/cmd/stringer) with `go install golang.org/x/tools/cmd/stringer@v0.37.0`.
+If you add a new loadtest mode, don't forget to update the loadtest mode string by running `make gen-load-test-modes`.
