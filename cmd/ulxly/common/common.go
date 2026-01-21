@@ -30,6 +30,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Claim-related error sentinels
+var (
+	ErrNotReadyForClaim      = errors.New("the claim transaction is not yet ready to be claimed, try again in a few blocks")
+	ErrDepositAlreadyClaimed = errors.New("the claim transaction has already been claimed")
+)
+
 const (
 	ArgGasLimit             = "gas-limit"
 	ArgChainID              = "chain-id"
@@ -500,4 +506,163 @@ func LogAndReturnJSONError(ctx context.Context, client *ethclient.Client, tx *ty
 
 	errLog.Msg("Unable to interact with bridge contract")
 	return customErr
+}
+
+// ParseDepositCountFromTransaction extracts the deposit count from a bridge transaction receipt.
+func ParseDepositCountFromTransaction(ctx context.Context, client *ethclient.Client, txHash ethcommon.Hash, bridgeContract *ulxly.Ulxly) (uint32, error) {
+	receipt, err := client.TransactionReceipt(ctx, txHash)
+	if err != nil {
+		return 0, err
+	}
+
+	// Check if the transaction was successful before trying to parse logs
+	if receipt.Status == 0 {
+		log.Error().Str("txHash", receipt.TxHash.String()).Msg("Bridge transaction failed")
+		return 0, fmt.Errorf("bridge transaction failed with hash: %s", receipt.TxHash.String())
+	}
+
+	// Convert []*types.Log to []types.Log
+	logs := make([]types.Log, len(receipt.Logs))
+	for i, l := range receipt.Logs {
+		logs[i] = *l
+	}
+
+	depositCount, err := ParseBridgeDepositCount(logs, bridgeContract)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to parse deposit count from logs")
+		return 0, err
+	}
+
+	return depositCount, nil
+}
+
+// ParseBridgeDepositCount parses the deposit count from bridge transaction logs.
+func ParseBridgeDepositCount(logs []types.Log, bridgeContract *ulxly.Ulxly) (uint32, error) {
+	for _, l := range logs {
+		// Try to parse the log as a BridgeEvent using the contract's filterer
+		bridgeEvent, err := bridgeContract.ParseBridgeEvent(l)
+		if err != nil {
+			// This log is not a bridge event, continue to next log
+			continue
+		}
+
+		// Successfully parsed a bridge event, return the deposit count
+		return bridgeEvent.DepositCount, nil
+	}
+
+	return 0, fmt.Errorf("bridge event not found in logs")
+}
+
+// GetDepositWhenReadyForClaim waits for a deposit to be ready for claiming.
+func GetDepositWhenReadyForClaim(depositNetwork, depositCount uint32, wait time.Duration) (*bridge_service.Deposit, error) {
+	var deposit *bridge_service.Deposit
+	var err error
+
+	waiter := time.After(wait)
+
+out:
+	for {
+		deposit, err = GetDeposit(depositNetwork, depositCount)
+		if err == nil {
+			log.Info().Msg("The deposit is ready to be claimed")
+			break out
+		}
+
+		select {
+		case <-waiter:
+			if wait != 0 {
+				err = fmt.Errorf("the deposit seems to be stuck after %s", wait.String())
+			}
+			break out
+		default:
+			if errors.Is(err, ErrNotReadyForClaim) || errors.Is(err, bridge_service.ErrNotFound) {
+				log.Info().Msg("retrying...")
+				time.Sleep(10 * time.Second)
+				continue
+			}
+			break out
+		}
+	}
+	return deposit, err
+}
+
+// GetDeposit retrieves a deposit and checks if it's ready for claiming.
+func GetDeposit(depositNetwork, depositCount uint32) (*bridge_service.Deposit, error) {
+	deposit, err := BridgeService.GetDeposit(depositNetwork, depositCount)
+	if err != nil {
+		return nil, err
+	}
+
+	if InputArgs.Legacy {
+		if !deposit.ReadyForClaim {
+			log.Error().Msg("The claim transaction is not yet ready to be claimed. Try again in a few blocks.")
+			return nil, ErrNotReadyForClaim
+		} else if deposit.ClaimTxHash != nil {
+			log.Info().Str("claimTxHash", deposit.ClaimTxHash.String()).Msg(ErrDepositAlreadyClaimed.Error())
+			return nil, ErrDepositAlreadyClaimed
+		}
+	}
+
+	return deposit, nil
+}
+
+// GetMerkleProofsExitRoots retrieves Merkle proofs and exit roots for a deposit.
+func GetMerkleProofsExitRoots(bridgeService bridge_service.BridgeService, deposit bridge_service.Deposit, proofGERHash string, l1InfoTreeIndex uint32) (*bridge_service.Proof, error) {
+	var ger *ethcommon.Hash
+	if len(proofGERHash) > 0 {
+		hash := ethcommon.HexToHash(proofGERHash)
+		ger = &hash
+	}
+
+	var proof *bridge_service.Proof
+	var err error
+	if ger != nil {
+		proof, err = bridgeService.GetProofByGer(deposit.NetworkID, deposit.DepositCnt, *ger)
+	} else if l1InfoTreeIndex > 0 {
+		proof, err = bridgeService.GetProofByL1InfoTreeIndex(deposit.NetworkID, deposit.DepositCnt, l1InfoTreeIndex)
+	} else {
+		proof, err = bridgeService.GetProof(deposit.NetworkID, deposit.DepositCnt)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("error getting proof for deposit %d on network %d: %w", deposit.DepositCnt, deposit.NetworkID, err)
+	}
+
+	if len(proof.MerkleProof) == 0 {
+		errMsg := "the Merkle Proofs cannot be retrieved, double check the input arguments and try again"
+		log.Error().
+			Str("url", bridgeService.Url()).
+			Uint32("NetworkID", deposit.NetworkID).
+			Uint32("DepositCnt", deposit.DepositCnt).
+			Msg(errMsg)
+		return nil, errors.New(errMsg)
+	}
+	if len(proof.RollupMerkleProof) == 0 {
+		errMsg := "the Rollup Merkle Proofs cannot be retrieved, double check the input arguments and try again"
+		log.Error().
+			Str("url", bridgeService.Url()).
+			Uint32("NetworkID", deposit.NetworkID).
+			Uint32("DepositCnt", deposit.DepositCnt).
+			Msg(errMsg)
+		return nil, errors.New(errMsg)
+	}
+
+	if proof.MainExitRoot == nil || proof.RollupExitRoot == nil {
+		errMsg := "the exit roots from the bridge service were empty"
+		log.Warn().
+			Uint32("DepositCnt", deposit.DepositCnt).
+			Uint32("OrigNet", deposit.OrigNet).
+			Uint32("DestNet", deposit.DestNet).
+			Uint32("NetworkID", deposit.NetworkID).
+			Stringer("OrigAddr", deposit.OrigAddr).
+			Stringer("DestAddr", deposit.DestAddr).
+			Msg("deposit can't be claimed!")
+		log.Error().
+			Str("url", bridgeService.Url()).
+			Uint32("NetworkID", deposit.NetworkID).
+			Uint32("DepositCnt", deposit.DepositCnt).
+			Msg(errMsg)
+		return nil, errors.New(errMsg)
+	}
+
+	return proof, nil
 }
