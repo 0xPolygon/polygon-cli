@@ -228,10 +228,6 @@ func parseFlags(ctx context.Context, client *ethrpc.Client) (*txGasChartConfig, 
 		log.Warn().Uint64("end_block", config.endBlock).Msg("end block was not set or set to a value higher than the latest block in the network, defaulting to latest block")
 	}
 
-	if config.startBlock > config.endBlock {
-		return nil, fmt.Errorf("start block %d cannot be greater than end block %d", config.startBlock, config.endBlock)
-	}
-
 	const defaultBlockRange = 500
 
 	if config.startBlock == math.MaxUint64 {
@@ -243,6 +239,10 @@ func parseFlags(ctx context.Context, client *ethrpc.Client) (*txGasChartConfig, 
 
 		log.Warn().Uint64("start_block", config.startBlock).
 			Msg("start block was not set, defaulting to last blocks")
+	}
+
+	if config.startBlock > config.endBlock {
+		return nil, fmt.Errorf("start block %d cannot be greater than end block %d", config.startBlock, config.endBlock)
 	}
 
 	config.rateLimiter = nil
