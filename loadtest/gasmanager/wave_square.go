@@ -18,28 +18,15 @@ func NewSquareWave(config WaveConfig) *SquareWave {
 	return c
 }
 
-// computeWave calculates the wave points based on the configuration
-// The square wave alternates between high and low values over its period.
+// computeWave alternates between high and low values over the period.
 func (c *SquareWave) computeWave(config WaveConfig) {
-	const start = float64(0)
-	const step = float64(1.0)
-	end := float64(config.Period)
-
-	c.points = make(map[float64]float64)
-
-	// Calculate the high and low values of the square wave.
+	period := float64(config.Period)
 	highValue := float64(config.Target) + float64(config.Amplitude)
 	lowValue := float64(config.Target) - float64(config.Amplitude)
+	halfPeriod := period / 2.0
 
-	// The duration of each state (high and low) is half the period.
-	halfPeriod := float64(config.Period) / 2.0
-
-	for x := start; x <= end; x += step {
-		// math.Mod finds the remainder of the division of x by the period.
-		timeInPeriod := math.Mod(x, float64(config.Period))
-
-		// Determine if the wave is in the first half or second half of the period.
-		if timeInPeriod < halfPeriod {
+	for x := 0.0; x <= period; x++ {
+		if math.Mod(x, period) < halfPeriod {
 			c.points[x] = highValue
 		} else {
 			c.points[x] = lowValue

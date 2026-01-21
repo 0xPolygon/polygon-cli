@@ -35,11 +35,14 @@ func (o *OscillatingGasProvider) Start(ctx context.Context) {
 // onNewHeader is called when a new block header is received.
 // It advances the wave and adds gas to the vault based on the new Y value of the wave.
 func (o *OscillatingGasProvider) onNewHeader(header *types.Header) {
-	log.Trace().Uint64("block_number", header.Number.Uint64()).Msg("oscillating gas provider processing new block header")
+	log.Trace().Uint64("block_number", header.Number.Uint64()).Msg("Processing new block header")
 	if o.vault != nil {
-		log.Trace().Float64("new_gas_amount", o.wave.Y()).Msg("adding gas to vault based on oscillation wave")
-		o.vault.AddGas(uint64(math.Floor(o.wave.Y())))
-		log.Trace().Uint64("available_budget", o.vault.GetAvailableBudget()).Msg("updated gas vault budget after oscillation")
+		gasAmount := uint64(math.Floor(o.wave.Y()))
+		o.vault.AddGas(gasAmount)
+		log.Trace().
+			Uint64("gas_added", gasAmount).
+			Uint64("available_budget", o.vault.GetAvailableBudget()).
+			Msg("Gas added from oscillation wave")
 	}
 	o.wave.MoveNext()
 }

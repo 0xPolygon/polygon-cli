@@ -11,16 +11,13 @@ import (
 
 // GasVault manages a budget of gas that can be added to and spent from.
 type GasVault struct {
-	mu                 *sync.Mutex
+	mu                 sync.Mutex
 	gasBudgetAvailable uint64
 }
 
 // NewGasVault creates a new GasVault instance.
 func NewGasVault() *GasVault {
-	return &GasVault{
-		mu:                 &sync.Mutex{},
-		gasBudgetAvailable: 0,
-	}
+	return &GasVault{}
 }
 
 // AddGas adds the specified amount of gas to the vault's available budget.
@@ -29,10 +26,10 @@ func (o *GasVault) AddGas(gas uint64) {
 	defer o.mu.Unlock()
 	if o.gasBudgetAvailable+gas < o.gasBudgetAvailable {
 		o.gasBudgetAvailable = math.MaxUint64
-		log.Trace().Uint64("available_budget_after", o.gasBudgetAvailable).Msg("gas budget in vault capped to max uint64")
+		log.Trace().Uint64("available_budget", o.gasBudgetAvailable).Msg("Gas budget capped to max uint64")
 	} else {
 		o.gasBudgetAvailable += gas
-		log.Trace().Uint64("available_budget_after", o.gasBudgetAvailable).Msg("new gas budget available in vault")
+		log.Trace().Uint64("available_budget", o.gasBudgetAvailable).Msg("Gas added to vault")
 	}
 }
 

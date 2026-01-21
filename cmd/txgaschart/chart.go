@@ -230,7 +230,7 @@ func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
 		}
 		sc, err := plotter.NewScatter(txGroups[uint64(group)])
 		if err != nil {
-			log.Error().Err(err).Msg("failed to create regular tx scatter plot")
+			log.Error().Err(err).Msg("Failed to create regular tx scatter plot")
 		} else {
 			sc.GlyphStyle.Color = txDotsColor
 			sc.GlyphStyle.Shape = draw.CircleGlyph{}
@@ -256,7 +256,7 @@ func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
 	if len(txGroups[0]) > 0 {
 		sc, err := plotter.NewScatter(txGroups[0])
 		if err != nil {
-			log.Error().Err(err).Msg("failed to create target tx scatter plot")
+			log.Error().Err(err).Msg("Failed to create target tx scatter plot")
 		} else {
 			sc.GlyphStyle.Color = targetTxDotsColor
 			sc.GlyphStyle.Shape = ThickCrossGlyph{Width: vg.Points(float64(targetTxDotsThickness))}

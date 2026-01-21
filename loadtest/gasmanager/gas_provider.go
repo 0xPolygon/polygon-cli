@@ -29,9 +29,9 @@ func NewGasProviderBase(client *ethclient.Client, vault *GasVault) *GasProviderB
 	}
 }
 
-// Start begins the operation of the GasProviderBase by invoking the onStart callback and starting to watch for new block headers.
+// Start begins the operation of the GasProviderBase by starting to watch for new block headers.
 func (o *GasProviderBase) Start(ctx context.Context) {
-	log.Trace().Msg("starting GasProviderBase")
+	log.Trace().Msg("Starting GasProviderBase")
 	go o.watchNewHeaders(ctx)
 }
 
@@ -40,33 +40,31 @@ func (o *GasProviderBase) watchNewHeaders(ctx context.Context) {
 	if o.onNewHeader == nil {
 		return
 	}
-	const intervalToCheckNewHeader = 1 * time.Second
-	log.Trace().Msg("starting to watch for new block headers")
+
+	const pollInterval = 1 * time.Second
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	log.Trace().Msg("Starting to watch for new block headers")
 	var lastHeader *types.Header
+
 	for {
 		select {
 		case <-ctx.Done():
-			log.Trace().Msg("stopping to watch for new block headers")
+			log.Trace().Msg("Stopping block header watch")
 			return
-		default:
-			log.Trace().Msg("fetching latest block header")
-			time.Sleep(intervalToCheckNewHeader)
-		}
-
-		header, err := o.client.HeaderByNumber(ctx, nil)
-		if err != nil {
-			log.Warn().Err(err).Msg("failed to fetch latest block header, retrying...")
-			continue
-		}
-
-		// Only trigger when there is a new header
-		if lastHeader == nil || header.Number.Cmp(lastHeader.Number) > 0 {
-			log.Trace().Uint64("block_number", header.Number.Uint64()).Msg("new block header detected")
-			if o.onNewHeader != nil {
-				log.Trace().Uint64("block_number", header.Number.Uint64()).Msg("triggering onNewHeader callback")
-				o.onNewHeader(header)
+		case <-ticker.C:
+			header, err := o.client.HeaderByNumber(ctx, nil)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to fetch latest block header, retrying")
+				continue
 			}
-			lastHeader = header
+
+			if lastHeader == nil || header.Number.Cmp(lastHeader.Number) > 0 {
+				log.Trace().Uint64("block_number", header.Number.Uint64()).Msg("New block header detected")
+				o.onNewHeader(header)
+				lastHeader = header
+			}
 		}
 	}
 }

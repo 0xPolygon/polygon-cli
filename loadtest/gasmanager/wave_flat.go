@@ -14,16 +14,10 @@ func NewFlatWave(config WaveConfig) *FlatWave {
 	return &c
 }
 
-// computeWave calculates the wave points based on the configuration
-// by setting all points to the target value.
+// computeWave sets all points to the target value.
 func (c *FlatWave) computeWave(config WaveConfig) {
-	const start = float64(0)
-	const step = float64(1.0)
-	end := float64(config.Period)
-
-	c.points = map[float64]float64{}
-
-	for x := start; x <= end; x += step {
-		c.points[float64(x)] = float64(config.Target)
+	target := float64(config.Target)
+	for x := 0.0; x <= float64(config.Period); x++ {
+		c.points[x] = target
 	}
 }

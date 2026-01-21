@@ -18,34 +18,16 @@ func NewTriangleWave(config WaveConfig) *TriangleWave {
 	return c
 }
 
-// computeWave calculates the wave points based on the configuration.
-// The triangle wave rises and falls linearly between its peak and trough over its period.
+// computeWave creates a triangle wave that rises and falls linearly.
 func (c *TriangleWave) computeWave(config WaveConfig) {
-	const start = float64(0)
-	const step = float64(1.0)
-	// Compute values for one full period.
-	end := float64(config.Period)
+	period := float64(config.Period)
+	amplitude := float64(config.Amplitude)
+	target := float64(config.Target)
+	peakToPeak := 2.0 * amplitude
 
-	c.points = make(map[float64]float64)
-
-	// Calculate the range of oscillation (peak-to-peak amplitude)
-	peakToPeak := 2.0 * float64(config.Amplitude)
-
-	for x := start; x <= end; x += step {
-		// Calculate the time relative to the current period.
-		timeInPeriod := math.Mod(x, float64(config.Period))
-
-		// Map the time within the period to a 0.0 to 1.0 range.
-		normalizedTime := timeInPeriod / float64(config.Period)
-
-		// The core of the triangle wave generation uses math.Abs and a sawtooth-like pattern.
-		// `abs(2*normalizedTime - 1)` creates a triangle wave that oscillates between 0 and 1.
-		// The final result is then scaled and shifted to match the config.
-		y := peakToPeak * math.Abs(2*normalizedTime-1)
-
-		// Shift the wave vertically and adjust for the base.
-		y = float64(config.Target) + float64(config.Amplitude) - y
-
-		c.points[x] = y
+	for x := 0.0; x <= period; x++ {
+		normalizedTime := math.Mod(x, period) / period
+		// abs(2*t - 1) creates a triangle oscillating between 0 and 1
+		c.points[x] = target + amplitude - peakToPeak*math.Abs(2*normalizedTime-1)
 	}
 }

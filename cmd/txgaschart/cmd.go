@@ -1,6 +1,7 @@
 package txgaschart
 
 import (
+	"cmp"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -161,53 +162,36 @@ func buildChart(cmd *cobra.Command) error {
 	return plotChart(chartMetadata)
 }
 
+// gasPriceCount holds a gas price and its occurrence count.
+type gasPriceCount struct {
+	gasPrice uint64
+	count    uint64
+}
+
 // logMostUsedGasPrices logs the most frequently used gas prices in the provided blocks metadata.
 func logMostUsedGasPrices(bm blocksMetadata) {
-	x := map[uint64]uint64{}
+	counts := make(map[uint64]uint64)
 	for _, b := range bm.blocks {
 		for _, t := range b.txs {
-			x[t.gasPrice]++
+			counts[t.gasPrice]++
 		}
 	}
 
-	ox := []struct {
-		gasPrice uint64
-		count    uint64
-	}{}
-	for k, v := range x {
-		ox = append(ox, struct {
-			gasPrice uint64
-			count    uint64
-		}{
-			gasPrice: k,
-			count:    v,
-		})
+	sorted := make([]gasPriceCount, 0, len(counts))
+	for price, count := range counts {
+		sorted = append(sorted, gasPriceCount{price, count})
 	}
-
-	slices.SortFunc(ox, func(a, b struct {
-		gasPrice uint64
-		count    uint64
-	}) int {
-		if a.count < b.count {
-			return 1
-		} else if a.count > b.count {
-			return -1
-		}
-		return 0
+	slices.SortFunc(sorted, func(a, b gasPriceCount) int {
+		return cmp.Compare(b.count, a.count) // descending
 	})
 
-	if len(ox) > 0 {
-		log.Debug().Msg("most used gas prices:")
-		max := 20
-		for _, v := range ox {
-			log.Debug().Uint64("gas_price_wei", v.gasPrice).
-				Uint64("count", v.count).
-				Msg("gas price usage")
-			max--
-			if max <= 0 {
-				break
-			}
+	for i, v := range sorted {
+		if i >= 20 {
+			break
 		}
+		log.Debug().Uint64("gas_price_wei", v.gasPrice).
+			Uint64("count", v.count).
+			Msg("Most used gas price")
 	}
 }
 
@@ -302,7 +286,7 @@ func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *e
 				}
 				blocksFromNetwork, err := util.GetBlockRange(ctx, blockNumber, blockNumber, client, false)
 				if err != nil {
-					log.Error().Err(err).Uint64("block_number", blockNumber).Msg("failed to fetch block, retrying...")
+					log.Warn().Err(err).Uint64("block_number", blockNumber).Msg("Failed to fetch block, retrying")
 					time.Sleep(time.Second)
 					continue
 				}
@@ -335,7 +319,7 @@ func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *e
 				for txi, tx := range txs {
 					from, err := util.GetSenderFromTx(ctx, tx)
 					if err != nil {
-						log.Error().Err(err).Uint64("block", b.number).Stringer("txHash", tx.Hash()).Msg("unable to get sender from tx, skipping tx")
+						log.Error().Err(err).Uint64("block", b.number).Stringer("txHash", tx.Hash()).Msg("Unable to get sender from tx, skipping")
 						continue
 					}
 

@@ -19,5 +19,6 @@ func NewFixedGasPriceStrategy(config FixedGasPriceConfig) *FixedGasPriceStrategy
 
 // GetGasPrice retrieves the fixed gas price.
 func (s *FixedGasPriceStrategy) GetGasPrice() *uint64 {
-	return &s.config.GasPriceWei
+	price := s.config.GasPriceWei
+	return &price
 }

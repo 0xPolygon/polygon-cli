@@ -18,26 +18,15 @@ func NewSineWave(config WaveConfig) *SineWave {
 	return c
 }
 
-// computeWave calculates the wave points based on the configuration
-// using the generalized sine wave formula.
-// The formula used is: y = A * sin(b(x)) + k
-// where:
-// A = Amplitude
-// b = (2π) / Period
-// k = Target (vertical shift)
+// computeWave calculates the wave points using: y = A * sin(2π/P * x) + T
+// where A = Amplitude, P = Period, T = Target (vertical shift)
 func (c *SineWave) computeWave(config WaveConfig) {
-	const start = float64(0)
-	const step = float64(1.0)
-	end := float64(config.Period)
+	period := float64(config.Period)
+	amplitude := float64(config.Amplitude)
+	target := float64(config.Target)
+	b := (2 * math.Pi) / period
 
-	c.points = map[float64]float64{}
-
-	// The `b` parameter in the generalized sine formula is derived from the period.
-	b := (2 * math.Pi) / float64(config.Period)
-
-	for x := start; x <= end; x += step {
-		// Apply the generalized sine formula: y = A * sin(b(x)) + k
-		y := float64(config.Amplitude)*math.Sin(b*x) + float64(config.Target)
-		c.points[float64(x)] = float64(y)
+	for x := 0.0; x <= period; x++ {
+		c.points[x] = amplitude*math.Sin(b*x) + target
 	}
 }
