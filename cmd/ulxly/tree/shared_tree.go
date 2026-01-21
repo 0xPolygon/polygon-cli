@@ -13,6 +13,7 @@ import (
 
 	"github.com/0xPolygon/cdk-rpc/types"
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
+	ulxlycommon "github.com/0xPolygon/polygon-cli/cmd/ulxly/common"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -312,26 +313,6 @@ func generateZeroHashes(height uint8) []common.Hash {
 	return zeroHashes
 }
 
-// DecodeGlobalIndex decodes a global index into its components
-func DecodeGlobalIndex(globalIndex *big.Int) (bool, uint32, uint32, error) {
-	const lengthGlobalIndexInBytes = 32
-	var buf [32]byte
-	gIBytes := globalIndex.FillBytes(buf[:])
-	if len(gIBytes) != lengthGlobalIndexInBytes {
-		return false, 0, 0, fmt.Errorf("invalid globalIndex length. Should be 32. Current length: %d", len(gIBytes))
-	}
-	mainnetFlag := big.NewInt(0).SetBytes([]byte{gIBytes[23]}).Uint64() == 1
-	rollupIndex := big.NewInt(0).SetBytes(gIBytes[24:28])
-	localRootIndex := big.NewInt(0).SetBytes(gIBytes[28:32])
-	if rollupIndex.Uint64() > 0xFFFFFFFF {
-		return false, 0, 0, fmt.Errorf("invalid rollupIndex length. Should be fit into uint32 type")
-	}
-	if localRootIndex.Uint64() > 0xFFFFFFFF {
-		return false, 0, 0, fmt.Errorf("invalid localRootIndex length. Should be fit into uint32 type")
-	}
-	return mainnetFlag, uint32(rollupIndex.Uint64()), uint32(localRootIndex.Uint64()), nil // nolint:gosec
-}
-
 // computeNullifierTree computes the nullifier tree root from raw claims data
 func computeNullifierTree(rawClaims []byte) (common.Hash, error) {
 	buf := bytes.NewBuffer(rawClaims)
@@ -349,7 +330,7 @@ func computeNullifierTree(rawClaims []byte) (common.Hash, error) {
 		if err != nil {
 			return common.Hash{}, err
 		}
-		mainnetFlag, rollupIndex, localExitRootIndex, err := DecodeGlobalIndex(claim.GlobalIndex)
+		mainnetFlag, rollupIndex, localExitRootIndex, err := ulxlycommon.DecodeGlobalIndex(claim.GlobalIndex)
 		if err != nil {
 			log.Error().Err(err).Msg("error decoding globalIndex")
 			return common.Hash{}, err

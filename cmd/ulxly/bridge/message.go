@@ -62,7 +62,7 @@ func bridgeMessage(cmd *cobra.Command, _ []string) error {
 	}
 
 	bridgeTxn, err := bridgeV2.BridgeMessage(auth, destinationNetwork, toAddress, isForced, callData)
-	if err = logAndReturnJSONError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
+	if err = ulxlycommon.LogAndReturnJSONError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
 		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}

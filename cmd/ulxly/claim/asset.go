@@ -79,7 +79,7 @@ func claimAsset(cmd *cobra.Command) error {
 	}
 
 	claimTxn, err := bridgeV2.ClaimAsset(auth, bridge_service.HashSliceToBytesArray(proof.MerkleProof), bridge_service.HashSliceToBytesArray(proof.RollupMerkleProof), deposit.GlobalIndex, *proof.MainExitRoot, *proof.RollupExitRoot, deposit.OrigNet, deposit.OrigAddr, deposit.DestNet, deposit.DestAddr, deposit.Amount, deposit.Metadata)
-	if err = logAndReturnJSONError(cmd.Context(), client, claimTxn, auth, err); err != nil {
+	if err = ulxlycommon.LogAndReturnJSONError(cmd.Context(), client, claimTxn, auth, err); err != nil {
 		return err
 	}
 	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())

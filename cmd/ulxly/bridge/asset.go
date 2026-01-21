@@ -86,7 +86,7 @@ func bridgeAsset(cmd *cobra.Command, _ []string) error {
 
 			// Approve the bridge contract to spend the tokens on behalf of the user
 			approveTxn, iErr := tokenContract.Approve(auth, bridgeAddress, value)
-			if iErr = logAndReturnJSONError(cmd.Context(), client, approveTxn, auth, iErr); iErr != nil {
+			if iErr = ulxlycommon.LogAndReturnJSONError(cmd.Context(), client, approveTxn, auth, iErr); iErr != nil {
 				return iErr
 			}
 			log.Info().Msg("approveTxn: " + approveTxn.Hash().String())
@@ -97,7 +97,7 @@ func bridgeAsset(cmd *cobra.Command, _ []string) error {
 	}
 
 	bridgeTxn, err := bridgeV2.BridgeAsset(auth, destinationNetwork, toAddress, value, tokenAddress, isForced, callData)
-	if err = logAndReturnJSONError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
+	if err = ulxlycommon.LogAndReturnJSONError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
 		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}

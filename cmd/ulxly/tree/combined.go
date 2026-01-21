@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
+	ulxlycommon "github.com/0xPolygon/polygon-cli/cmd/ulxly/common"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -47,7 +48,7 @@ func nullifierAndBalanceTree() error {
 	var err error
 
 	if combinedBalanceTreeOptions.Insecure {
-		client, err = createInsecureEthClient(combinedBalanceTreeOptions.RpcURL)
+		client, err = ulxlycommon.CreateInsecureEthClient(combinedBalanceTreeOptions.RpcURL)
 	} else {
 		client, err = ethclient.DialContext(context.Background(), combinedBalanceTreeOptions.RpcURL)
 	}

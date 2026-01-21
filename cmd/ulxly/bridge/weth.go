@@ -68,7 +68,7 @@ func bridgeWETHMessage(cmd *cobra.Command, _ []string) error {
 	callData := common.Hex2Bytes(strings.TrimPrefix(callDataString, "0x"))
 
 	bridgeTxn, err := bridgeV2.BridgeMessageWETH(auth, destinationNetwork, toAddress, value, isForced, callData)
-	if err = logAndReturnJSONError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
+	if err = ulxlycommon.LogAndReturnJSONError(cmd.Context(), client, bridgeTxn, auth, err); err != nil {
 		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}

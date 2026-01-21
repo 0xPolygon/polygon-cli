@@ -2,17 +2,14 @@ package tree
 
 import (
 	"context"
-	"crypto/tls"
 	_ "embed"
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"net/http"
 
+	ulxlycommon "github.com/0xPolygon/polygon-cli/cmd/ulxly/common"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
-	ethrpc "github.com/ethereum/go-ethereum/rpc"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -58,7 +55,7 @@ func balanceTree() error {
 	var err error
 
 	if balanceTreeOptions.Insecure {
-		client, err = createInsecureEthClient(balanceTreeOptions.RpcURL)
+		client, err = ulxlycommon.CreateInsecureEthClient(balanceTreeOptions.RpcURL)
 	} else {
 		client, err = ethclient.DialContext(context.Background(), balanceTreeOptions.RpcURL)
 	}
@@ -121,23 +118,4 @@ func balanceTree() error {
 
 	fmt.Println(string(jsonOutput))
 	return nil
-}
-
-// createInsecureEthClient creates an Ethereum client with TLS verification disabled
-func createInsecureEthClient(rpcURL string) (*ethclient.Client, error) {
-	// WARNING: This disables TLS certificate verification
-	log.Warn().Msg("WARNING: TLS certificate verification is disabled. This is unsafe for production use.")
-
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-
-	rpcClient, err := ethrpc.DialOptions(context.Background(), rpcURL, ethrpc.WithHTTPClient(httpClient))
-	if err != nil {
-		return nil, err
-	}
-
-	return ethclient.NewClient(rpcClient), nil
 }
