@@ -96,7 +96,7 @@ When adding a new command:
 2. Add the command to `cmd/root.go` in the `NewPolycliCommand()` function
 3. Create a usage documentation file (e.g., `yourCommandUsage.md`)
 4. Run `make gen-doc` to update the main documentation
-5. If adding a new loadtest mode, run `make gen-load-test-modes` after using stringer
+5. If adding a new loadtest mode, run `make gen-load-test-modes`
 
 ## CI/CD Considerations
 
