@@ -2,6 +2,9 @@
 package bridge
 
 import (
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/bridge/asset"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/bridge/message"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/bridge/weth"
 	ulxlycommon "github.com/0xPolygon/polygon-cli/cmd/ulxly/common"
 	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/spf13/cobra"
@@ -16,9 +19,9 @@ var BridgeCmd = &cobra.Command{
 
 func init() {
 	// Add subcommands
-	BridgeCmd.AddCommand(AssetCmd)
-	BridgeCmd.AddCommand(MessageCmd)
-	BridgeCmd.AddCommand(WethCmd)
+	BridgeCmd.AddCommand(asset.Cmd)
+	BridgeCmd.AddCommand(message.Cmd)
+	BridgeCmd.AddCommand(weth.Cmd)
 
 	// Add shared transaction flags (rpc-url, bridge-address, private-key, etc.)
 	ulxlycommon.AddTransactionFlags(BridgeCmd)

@@ -1,4 +1,5 @@
-package events
+// Package deposits provides the get-deposits command.
+package deposits
 
 import (
 	_ "embed"
@@ -20,20 +21,20 @@ var (
 	getDepositSmcOptions = &ulxlycommon.GetSmcOptions{}
 )
 
-//go:embed getDepositsUsage.md
-var getDepositsUsage string
+//go:embed usage.md
+var usage string
 
-var GetDepositCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use:          "get-deposits",
 	Short:        "Generate ndjson for each bridge deposit over a particular range of blocks.",
-	Long:         getDepositsUsage,
+	Long:         usage,
 	RunE:         readDeposit,
 	SilenceUsage: true,
 }
 
 func init() {
-	getDepositEvent.AddFlags(GetDepositCmd)
-	getDepositSmcOptions.AddFlags(GetDepositCmd)
+	getDepositEvent.AddFlags(Cmd)
+	getDepositSmcOptions.AddFlags(Cmd)
 }
 
 func readDeposit(cmd *cobra.Command, _ []string) error {

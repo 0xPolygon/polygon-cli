@@ -1,8 +1,11 @@
+// Package claim provides commands for claiming deposits on a particular chain.
 package claim
 
 import (
 	"time"
 
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/claim/asset"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/claim/message"
 	ulxlycommon "github.com/0xPolygon/polygon-cli/cmd/ulxly/common"
 	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/spf13/cobra"
@@ -15,8 +18,8 @@ var ClaimCmd = &cobra.Command{
 }
 
 func init() {
-	ClaimCmd.AddCommand(AssetCmd)
-	ClaimCmd.AddCommand(MessageCmd)
+	ClaimCmd.AddCommand(asset.Cmd)
+	ClaimCmd.AddCommand(message.Cmd)
 
 	// Add shared transaction flags (rpc-url, bridge-address, private-key, etc.)
 	ulxlycommon.AddTransactionFlags(ClaimCmd)

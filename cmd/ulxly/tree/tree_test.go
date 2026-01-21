@@ -1,4 +1,4 @@
-package ulxly_test
+package tree_test
 
 import (
 	"encoding/json"
@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/0xPolygon/polygon-cli/cmd/ulxly"
-	vectors "github.com/0xPolygon/polygon-cli/cmd/ulxly/testvectors"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/tree"
+	vectors "github.com/0xPolygon/polygon-cli/cmd/ulxly/tree/testvectors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
@@ -16,7 +16,7 @@ import (
 )
 
 func TestBalanceTree(t *testing.T) {
-	balancer, err := ulxly.NewBalanceTree()
+	balancer, err := tree.NewBalanceTree()
 	require.NoError(t, err)
 
 	data, err := os.ReadFile("testvectors/balancetree.json")
@@ -27,7 +27,7 @@ func TestBalanceTree(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, transition := range testVectors.Transitions {
-		token := ulxly.TokenInfo{
+		token := tree.TokenInfo{
 			OriginNetwork:      big.NewInt(0).SetUint64(uint64(transition.UpdateLeaf.Key.OriginNetwork)),
 			OriginTokenAddress: transition.UpdateLeaf.Key.OriginTokenAddress,
 		}
@@ -43,10 +43,10 @@ func TestBalanceTree(t *testing.T) {
 }
 
 func TestBalanceTree2(t *testing.T) {
-	balancer, err := ulxly.NewBalanceTree()
+	balancer, err := tree.NewBalanceTree()
 	require.NoError(t, err)
 
-	token := ulxly.TokenInfo{
+	token := tree.TokenInfo{
 		OriginNetwork:      big.NewInt(0),
 		OriginTokenAddress: common.HexToAddress("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"),
 	}
@@ -56,7 +56,7 @@ func TestBalanceTree2(t *testing.T) {
 	root, err := balancer.UpdateBalanceTree(token, totalTokenBalance)
 	require.NoError(t, err)
 
-	token2 := ulxly.TokenInfo{
+	token2 := tree.TokenInfo{
 		OriginNetwork:      big.NewInt(0),
 		OriginTokenAddress: common.HexToAddress("0xa23fd6e51aad88f6f4ce6ab8827279cfffb92300"),
 	}
@@ -81,7 +81,7 @@ func TestBalanceTree2(t *testing.T) {
 }
 
 func TestNullifierTree(t *testing.T) {
-	nullifier, err := ulxly.NewNullifierTree()
+	nullifier, err := tree.NewNullifierTree()
 	require.NoError(t, err)
 
 	data, err := os.ReadFile("testvectors/nullifiertree.json")
@@ -92,7 +92,7 @@ func TestNullifierTree(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, transition := range testVectors.Transitions {
-		n := ulxly.NullifierKey{
+		n := tree.NullifierKey{
 			NetworkID: transition.UpdateLeaf.Key.NetworkID,
 			Index:     transition.UpdateLeaf.Key.Index,
 		}
@@ -116,22 +116,22 @@ func BoolArrayToString(bits []bool) string {
 }
 
 func TestTokenString(t *testing.T) {
-	token := ulxly.TokenInfo{
+	token := tree.TokenInfo{
 		OriginNetwork:      big.NewInt(0),
 		OriginTokenAddress: common.HexToAddress("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"),
 	}
-	newToken, err := ulxly.TokenInfoStringToStruct(token.String())
+	newToken, err := tree.TokenInfoStringToStruct(token.String())
 	require.NoError(t, err)
 	assert.Equal(t, token.OriginNetwork.String(), newToken.OriginNetwork.String())
 	assert.Equal(t, token.OriginTokenAddress.String(), newToken.OriginTokenAddress.String())
 	assert.Equal(t, token, newToken)
 	assert.Equal(t, token.String(), newToken.String())
 
-	token2 := ulxly.TokenInfo{
+	token2 := tree.TokenInfo{
 		OriginNetwork:      big.NewInt(19),
 		OriginTokenAddress: common.HexToAddress("0xf00fd6e51aad88f6f4ce6ab8827279cfffb92006"),
 	}
-	newToken2, err := ulxly.TokenInfoStringToStruct(token2.String())
+	newToken2, err := tree.TokenInfoStringToStruct(token2.String())
 	require.NoError(t, err)
 	assert.Equal(t, token2.OriginNetwork.String(), newToken2.OriginNetwork.String())
 	assert.Equal(t, token2.OriginTokenAddress.String(), newToken2.OriginTokenAddress.String())
@@ -144,6 +144,6 @@ func TestCheckHash(t *testing.T) {
 	nullifierTreeRoot := common.HexToHash("0xe2c3ed4052eeb1d60514b4c38ece8d73a27f37fa5b36dcbf338e70de95798caa")
 	ler_counter := uint32(0)
 
-	initPessimisticRoot := crypto.Keccak256Hash(balanceTreeRoot.Bytes(), nullifierTreeRoot.Bytes(), ulxly.Uint32ToBytesLittleEndian(ler_counter))
+	initPessimisticRoot := crypto.Keccak256Hash(balanceTreeRoot.Bytes(), nullifierTreeRoot.Bytes(), tree.Uint32ToBytesLittleEndian(ler_counter))
 	assert.Equal(t, "0xc89c9c0f2ebd19afa9e5910097c43e56fb4aff3a06ddee8d7c9bae09bc769184", initPessimisticRoot.String())
 }

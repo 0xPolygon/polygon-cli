@@ -1,4 +1,5 @@
-package events
+// Package claims provides the get-claims command.
+package claims
 
 import (
 	_ "embed"
@@ -20,20 +21,20 @@ var (
 	getClaimSmcOptions = &ulxlycommon.GetSmcOptions{}
 )
 
-//go:embed getClaimsUsage.md
-var getClaimsUsage string
+//go:embed usage.md
+var usage string
 
-var GetClaimCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use:          "get-claims",
 	Short:        "Generate ndjson for each bridge claim over a particular range of blocks.",
-	Long:         getClaimsUsage,
+	Long:         usage,
 	RunE:         readClaim,
 	SilenceUsage: true,
 }
 
 func init() {
-	getClaimEvent.AddFlags(GetClaimCmd)
-	getClaimSmcOptions.AddFlags(GetClaimCmd)
+	getClaimEvent.AddFlags(Cmd)
+	getClaimSmcOptions.AddFlags(Cmd)
 }
 
 func readClaim(cmd *cobra.Command, _ []string) error {

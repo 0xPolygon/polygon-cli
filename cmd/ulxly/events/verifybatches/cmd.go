@@ -1,4 +1,5 @@
-package events
+// Package verifybatches provides the get-verify-batches command.
+package verifybatches
 
 import (
 	_ "embed"
@@ -22,20 +23,20 @@ var (
 	getVerifyBatchesOptions = &ulxlycommon.GetVerifyBatchesOptions{}
 )
 
-//go:embed getVerifyBatchesUsage.md
-var getVerifyBatchesUsage string
+//go:embed usage.md
+var usage string
 
-var GetVerifyBatchesCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use:          "get-verify-batches",
 	Short:        "Generate ndjson for each verify batch over a particular range of blocks.",
-	Long:         getVerifyBatchesUsage,
+	Long:         usage,
 	RunE:         readVerifyBatches,
 	SilenceUsage: true,
 }
 
 func init() {
-	getVerifyBatchesEvent.AddFlags(GetVerifyBatchesCmd)
-	getVerifyBatchesOptions.AddFlags(GetVerifyBatchesCmd)
+	getVerifyBatchesEvent.AddFlags(Cmd)
+	getVerifyBatchesOptions.AddFlags(Cmd)
 }
 
 func readVerifyBatches(cmd *cobra.Command, _ []string) error {

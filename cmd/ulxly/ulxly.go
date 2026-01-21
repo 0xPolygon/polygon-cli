@@ -6,9 +6,17 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly/bridge"
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly/claim"
-	"github.com/0xPolygon/polygon-cli/cmd/ulxly/events"
-	"github.com/0xPolygon/polygon-cli/cmd/ulxly/proof"
-	"github.com/0xPolygon/polygon-cli/cmd/ulxly/tree"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/claim/everything"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/events/claims"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/events/deposits"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/events/verifybatches"
+	proofdeposits "github.com/0xPolygon/polygon-cli/cmd/ulxly/proof/deposits"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/proof/empty"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/proof/rollups"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/proof/zero"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/tree/balance"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/tree/combined"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/tree/nullifier"
 )
 
 // ULxLyCmd is the root command for ulxly utilities.
@@ -23,21 +31,21 @@ func init() {
 	// Bridge and claim commands
 	ULxLyCmd.AddCommand(bridge.BridgeCmd)
 	ULxLyCmd.AddCommand(claim.ClaimCmd)
-	ULxLyCmd.AddCommand(claim.ClaimEverythingCmd)
+	ULxLyCmd.AddCommand(everything.Cmd)
 
 	// Proof commands
-	ULxLyCmd.AddCommand(proof.ProofCmd)
-	ULxLyCmd.AddCommand(proof.RollupsProofCmd)
-	ULxLyCmd.AddCommand(proof.EmptyProofCmd)
-	ULxLyCmd.AddCommand(proof.ZeroProofCmd)
+	ULxLyCmd.AddCommand(proofdeposits.Cmd)
+	ULxLyCmd.AddCommand(rollups.Cmd)
+	ULxLyCmd.AddCommand(empty.Cmd)
+	ULxLyCmd.AddCommand(zero.Cmd)
 
 	// Event commands
-	ULxLyCmd.AddCommand(events.GetDepositCmd)
-	ULxLyCmd.AddCommand(events.GetClaimCmd)
-	ULxLyCmd.AddCommand(events.GetVerifyBatchesCmd)
+	ULxLyCmd.AddCommand(deposits.Cmd)
+	ULxLyCmd.AddCommand(claims.Cmd)
+	ULxLyCmd.AddCommand(verifybatches.Cmd)
 
 	// Tree commands
-	ULxLyCmd.AddCommand(tree.BalanceTreeCmd)
-	ULxLyCmd.AddCommand(tree.NullifierTreeCmd)
-	ULxLyCmd.AddCommand(tree.NullifierAndBalanceTreeCmd)
+	ULxLyCmd.AddCommand(balance.Cmd)
+	ULxLyCmd.AddCommand(nullifier.Cmd)
+	ULxLyCmd.AddCommand(combined.Cmd)
 }

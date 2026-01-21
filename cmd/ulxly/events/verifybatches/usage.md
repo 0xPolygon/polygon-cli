@@ -39,4 +39,3 @@ output will be written as newline delimited JSON.
 This command is very specific for the ulxly bridge, and it's meant to
 serve as the input to the rollup-proof command.
 
-

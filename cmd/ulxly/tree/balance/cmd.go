@@ -1,4 +1,5 @@
-package tree
+// Package balance provides the compute-balance-tree command.
+package balance
 
 import (
 	"context"
@@ -8,6 +9,7 @@ import (
 	"math/big"
 
 	ulxlycommon "github.com/0xPolygon/polygon-cli/cmd/ulxly/common"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/tree"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/cobra"
@@ -22,15 +24,15 @@ const (
 	ArgInsecure           = "insecure"
 )
 
-//go:embed computeBalanceTreeUsage.md
-var computeBalanceTreeUsage string
+//go:embed usage.md
+var usage string
 
-var balanceTreeOptions = &BalanceTreeOptions{}
+var balanceTreeOptions = &tree.BalanceTreeOptions{}
 
-var BalanceTreeCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use:   "compute-balance-tree",
 	Short: "Compute the balance tree given the deposits.",
-	Long:  computeBalanceTreeUsage,
+	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return balanceTree()
 	},
@@ -38,7 +40,7 @@ var BalanceTreeCmd = &cobra.Command{
 }
 
 func init() {
-	f := BalanceTreeCmd.Flags()
+	f := Cmd.Flags()
 	f.StringVar(&balanceTreeOptions.L2ClaimsFile, ArgL2ClaimsFileName, "", "ndjson file with l2 claim events data")
 	f.StringVar(&balanceTreeOptions.L2DepositsFile, ArgL2DepositsFileName, "", "ndjson file with l2 deposit events data")
 	f.StringVar(&balanceTreeOptions.BridgeAddress, ArgBridgeAddress, "", "bridge address")
@@ -64,11 +66,11 @@ func balanceTree() error {
 		return err
 	}
 	defer client.Close()
-	l2RawClaimsData, l2RawDepositsData, err := getBalanceTreeData(balanceTreeOptions)
+	l2RawClaimsData, l2RawDepositsData, err := tree.GetBalanceTreeData(balanceTreeOptions)
 	if err != nil {
 		return err
 	}
-	root, balances, err := computeBalanceTree(client, bridgeAddress, l2RawClaimsData, l2NetworkID, l2RawDepositsData)
+	root, balances, err := tree.ComputeBalanceTree(client, bridgeAddress, l2RawClaimsData, l2NetworkID, l2RawDepositsData)
 	if err != nil {
 		return err
 	}
@@ -84,8 +86,8 @@ func balanceTree() error {
 			continue
 		}
 
-		var token TokenInfo
-		token, err = TokenInfoStringToStruct(tokenKey)
+		var token tree.TokenInfo
+		token, err = tree.TokenInfoStringToStruct(tokenKey)
 		if err != nil {
 			return err
 		}

@@ -1,17 +1,24 @@
-package proof
+// Package empty provides the proof empty command.
+package empty
 
 import (
+	_ "embed"
+	"encoding/json"
 	"fmt"
 
 	ulxlycommon "github.com/0xPolygon/polygon-cli/cmd/ulxly/common"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
-var EmptyProofCmd = &cobra.Command{
+//go:embed usage.md
+var usage string
+
+var Cmd = &cobra.Command{
 	Use:          "empty-proof",
 	Short:        "Create an empty proof.",
-	Long:         "Use this command to print an empty proof response that's filled with zero-valued siblings like 0x0000000000000000000000000000000000000000000000000000000000000000. This can be useful when you need to submit a dummy proof.",
+	Long:         usage,
 	RunE:         runEmptyProof,
 	SilenceUsage: true,
 }
@@ -27,4 +34,14 @@ func emptyProof() error {
 	copy(p.Siblings[:], e)
 	fmt.Println(proofString(p))
 	return nil
+}
+
+// proofString will create the json representation of the proof
+func proofString[T any](p T) string {
+	jsonBytes, err := json.Marshal(p)
+	if err != nil {
+		log.Error().Err(err).Msg("error marshalling proof to json")
+		return ""
+	}
+	return string(jsonBytes)
 }

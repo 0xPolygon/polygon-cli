@@ -1,4 +1,5 @@
-package claim
+// Package everything provides the claim-everything command.
+package everything
 
 import (
 	"context"
@@ -24,7 +25,7 @@ type DepositID struct {
 	NetworkID  uint32 `json:"network_id"`
 }
 
-var ClaimEverythingCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use:     "claim-everything",
 	Short:   "Attempt to claim as many deposits and messages as possible.",
 	PreRunE: ulxlycommon.PrepInputs,
@@ -36,15 +37,15 @@ var ClaimEverythingCmd = &cobra.Command{
 
 func init() {
 	// Add shared transaction flags (rpc-url, bridge-address, private-key, etc.)
-	ulxlycommon.AddTransactionFlags(ClaimEverythingCmd)
+	ulxlycommon.AddTransactionFlags(Cmd)
 
 	// Claim-everything specific flags
-	f := ClaimEverythingCmd.Flags()
+	f := Cmd.Flags()
 	f.StringSliceVar(&ulxlycommon.InputArgs.BridgeServiceURLs, ulxlycommon.ArgBridgeMappings, nil, "network ID to bridge service URL mappings (e.g. '1=http://network-1-bridgeurl,7=http://network-2-bridgeurl')")
 	f.IntVar(&ulxlycommon.InputArgs.BridgeLimit, ulxlycommon.ArgBridgeLimit, 25, "limit the number or responses returned by the bridge service when claiming")
 	f.IntVar(&ulxlycommon.InputArgs.BridgeOffset, ulxlycommon.ArgBridgeOffset, 0, "offset to specify for pagination of underlying bridge service deposits")
 	f.UintVar(&ulxlycommon.InputArgs.Concurrency, ulxlycommon.ArgConcurrency, 1, "worker pool size for claims")
-	flag.MarkFlagsRequired(ClaimEverythingCmd, ulxlycommon.ArgBridgeMappings)
+	flag.MarkFlagsRequired(Cmd, ulxlycommon.ArgBridgeMappings)
 }
 
 func claimEverything(cmd *cobra.Command) error {
@@ -278,4 +279,64 @@ func getDepositsForAddress(bridgeService bridge_service.BridgeService, destinati
 	}
 
 	return deposits, total, nil
+}
+
+func getMerkleProofsExitRoots(bridgeService bridge_service.BridgeService, deposit bridge_service.Deposit, proofGERHash string, l1InfoTreeIndex uint32) (*bridge_service.Proof, error) {
+	var ger *common.Hash
+	if len(proofGERHash) > 0 {
+		hash := common.HexToHash(proofGERHash)
+		ger = &hash
+	}
+
+	var proof *bridge_service.Proof
+	var err error
+	if ger != nil {
+		proof, err = bridgeService.GetProofByGer(deposit.NetworkID, deposit.DepositCnt, *ger)
+	} else if l1InfoTreeIndex > 0 {
+		proof, err = bridgeService.GetProofByL1InfoTreeIndex(deposit.NetworkID, deposit.DepositCnt, l1InfoTreeIndex)
+	} else {
+		proof, err = bridgeService.GetProof(deposit.NetworkID, deposit.DepositCnt)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("error getting proof for deposit %d on network %d: %w", deposit.DepositCnt, deposit.NetworkID, err)
+	}
+
+	if len(proof.MerkleProof) == 0 {
+		errMsg := "the Merkle Proofs cannot be retrieved, double check the input arguments and try again"
+		log.Error().
+			Str("url", bridgeService.Url()).
+			Uint32("NetworkID", deposit.NetworkID).
+			Uint32("DepositCnt", deposit.DepositCnt).
+			Msg(errMsg)
+		return nil, fmt.Errorf("%s", errMsg)
+	}
+	if len(proof.RollupMerkleProof) == 0 {
+		errMsg := "the Rollup Merkle Proofs cannot be retrieved, double check the input arguments and try again"
+		log.Error().
+			Str("url", bridgeService.Url()).
+			Uint32("NetworkID", deposit.NetworkID).
+			Uint32("DepositCnt", deposit.DepositCnt).
+			Msg(errMsg)
+		return nil, fmt.Errorf("%s", errMsg)
+	}
+
+	if proof.MainExitRoot == nil || proof.RollupExitRoot == nil {
+		errMsg := "the exit roots from the bridge service were empty"
+		log.Warn().
+			Uint32("DepositCnt", deposit.DepositCnt).
+			Uint32("OrigNet", deposit.OrigNet).
+			Uint32("DestNet", deposit.DestNet).
+			Uint32("NetworkID", deposit.NetworkID).
+			Stringer("OrigAddr", deposit.OrigAddr).
+			Stringer("DestAddr", deposit.DestAddr).
+			Msg("deposit can't be claimed!")
+		log.Error().
+			Str("url", bridgeService.Url()).
+			Uint32("NetworkID", deposit.NetworkID).
+			Uint32("DepositCnt", deposit.DepositCnt).
+			Msg(errMsg)
+		return nil, fmt.Errorf("%s", errMsg)
+	}
+
+	return proof, nil
 }

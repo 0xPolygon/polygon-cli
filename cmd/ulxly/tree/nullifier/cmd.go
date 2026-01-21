@@ -1,9 +1,11 @@
-package tree
+// Package nullifier provides the compute-nullifier-tree command.
+package nullifier
 
 import (
 	_ "embed"
 	"fmt"
 
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/tree"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cobra"
 )
@@ -12,15 +14,15 @@ const (
 	ArgFileName = "file-name"
 )
 
-//go:embed computeNullifierTreeUsage.md
-var computeNullifierTreeUsage string
+//go:embed usage.md
+var usage string
 
-var fileOptions = &FileOptions{}
+var fileOptions = &tree.FileOptions{}
 
-var NullifierTreeCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use:   "compute-nullifier-tree",
 	Short: "Compute the nullifier tree given the claims.",
-	Long:  computeNullifierTreeUsage,
+	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return nullifierTree(args)
 	},
@@ -28,16 +30,16 @@ var NullifierTreeCmd = &cobra.Command{
 }
 
 func init() {
-	NullifierTreeCmd.Flags().StringVar(&fileOptions.FileName, ArgFileName, "", "ndjson file with events data")
+	Cmd.Flags().StringVar(&fileOptions.FileName, ArgFileName, "", "ndjson file with events data")
 }
 
 func nullifierTree(args []string) error {
-	rawClaims, err := getInputData(args, fileOptions.FileName)
+	rawClaims, err := tree.GetInputData(args, fileOptions.FileName)
 	if err != nil {
 		return err
 	}
 	var root common.Hash
-	root, err = computeNullifierTree(rawClaims)
+	root, err = tree.ComputeNullifierTree(rawClaims)
 	if err != nil {
 		return err
 	}

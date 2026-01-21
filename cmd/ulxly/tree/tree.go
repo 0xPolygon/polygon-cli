@@ -32,7 +32,7 @@ func (t *TokenInfo) ToBits() []bool {
 	bits := make([]bool, 192)
 
 	// First 32 bits: OriginNetwork
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		if t.OriginNetwork.Bit(i) == 1 {
 			bits[i] = true
 		}
@@ -83,14 +83,14 @@ func (n *NullifierKey) ToBits() []bool {
 	bits := make([]bool, 64)
 
 	// First 32 bits: NetworkID
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		if (n.NetworkID>>i)&1 == 1 {
 			bits[i] = true
 		}
 	}
 
 	// Next 32 bits: Index
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		if (n.Index>>i)&1 == 1 {
 			bits[i+32] = true
 		}
@@ -314,7 +314,7 @@ func generateZeroHashes(height uint8) []common.Hash {
 }
 
 // computeNullifierTree computes the nullifier tree root from raw claims data
-func computeNullifierTree(rawClaims []byte) (common.Hash, error) {
+func ComputeNullifierTree(rawClaims []byte) (common.Hash, error) {
 	buf := bytes.NewBuffer(rawClaims)
 	scanner := bufio.NewScanner(buf)
 	scannerBuf := make([]byte, 0)
@@ -351,7 +351,7 @@ func computeNullifierTree(rawClaims []byte) (common.Hash, error) {
 }
 
 // computeBalanceTree computes the balance tree root from claims and deposits data
-func computeBalanceTree(client *ethclient.Client, bridgeAddress common.Address, l2RawClaims []byte, l2NetworkID uint32, l2RawDeposits []byte) (common.Hash, map[string]*big.Int, error) {
+func ComputeBalanceTree(client *ethclient.Client, bridgeAddress common.Address, l2RawClaims []byte, l2NetworkID uint32, l2RawDeposits []byte) (common.Hash, map[string]*big.Int, error) {
 	buf := bytes.NewBuffer(l2RawClaims)
 	scanner := bufio.NewScanner(buf)
 	scannerBuf := make([]byte, 0)
@@ -442,7 +442,7 @@ type BalanceTreeOptions struct {
 }
 
 // getInputData reads input data from file, args, or stdin
-func getInputData(args []string, fileName string) ([]byte, error) {
+func GetInputData(args []string, fileName string) ([]byte, error) {
 	if fileName != "" {
 		return os.ReadFile(fileName)
 	}
@@ -456,7 +456,7 @@ func getInputData(args []string, fileName string) ([]byte, error) {
 }
 
 // getBalanceTreeData reads the claims and deposits files
-func getBalanceTreeData(opts *BalanceTreeOptions) ([]byte, []byte, error) {
+func GetBalanceTreeData(opts *BalanceTreeOptions) ([]byte, []byte, error) {
 	claimsFileName := opts.L2ClaimsFile
 	file, err := os.Open(claimsFileName)
 	if err != nil {

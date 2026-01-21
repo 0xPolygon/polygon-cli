@@ -1,4 +1,5 @@
-package tree
+// Package combined provides the compute-balance-nullifier-tree command.
+package combined
 
 import (
 	"context"
@@ -7,6 +8,7 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
 	ulxlycommon "github.com/0xPolygon/polygon-cli/cmd/ulxly/common"
+	"github.com/0xPolygon/polygon-cli/cmd/ulxly/tree"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -15,15 +17,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-//go:embed computeBalanceNullifierTreeUsage.md
-var computeBalanceNullifierTreeUsage string
+const (
+	ArgL2ClaimsFileName   = "l2-claims-file"
+	ArgL2DepositsFileName = "l2-deposits-file"
+	ArgBridgeAddress      = "bridge-address"
+	ArgRPCURL             = "rpc-url"
+	ArgL2NetworkID        = "l2-network-id"
+	ArgInsecure           = "insecure"
+)
 
-var combinedBalanceTreeOptions = &BalanceTreeOptions{}
+//go:embed usage.md
+var usage string
 
-var NullifierAndBalanceTreeCmd = &cobra.Command{
+var combinedBalanceTreeOptions = &tree.BalanceTreeOptions{}
+
+var Cmd = &cobra.Command{
 	Use:   "compute-balance-nullifier-tree",
 	Short: "Compute the balance tree and the nullifier tree given the deposits and claims.",
-	Long:  computeBalanceNullifierTreeUsage,
+	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return nullifierAndBalanceTree()
 	},
@@ -31,7 +42,7 @@ var NullifierAndBalanceTreeCmd = &cobra.Command{
 }
 
 func init() {
-	f := NullifierAndBalanceTreeCmd.Flags()
+	f := Cmd.Flags()
 	f.StringVar(&combinedBalanceTreeOptions.L2ClaimsFile, ArgL2ClaimsFileName, "", "ndjson file with l2 claim events data")
 	f.StringVar(&combinedBalanceTreeOptions.L2DepositsFile, ArgL2DepositsFileName, "", "ndjson file with l2 deposit events data")
 	f.StringVar(&combinedBalanceTreeOptions.BridgeAddress, ArgBridgeAddress, "", "bridge address")
@@ -57,7 +68,7 @@ func nullifierAndBalanceTree() error {
 		return err
 	}
 	defer client.Close()
-	l2RawClaimsData, l2RawDepositsData, err := getBalanceTreeData(combinedBalanceTreeOptions)
+	l2RawClaimsData, l2RawDepositsData, err := tree.GetBalanceTreeData(combinedBalanceTreeOptions)
 	if err != nil {
 		return err
 	}
@@ -70,15 +81,15 @@ func nullifierAndBalanceTree() error {
 		return err
 	}
 	log.Info().Msgf("Last LER count: %d", ler_count)
-	balanceTreeRoot, _, err := computeBalanceTree(client, bridgeAddress, l2RawClaimsData, l2NetworkID, l2RawDepositsData)
+	balanceTreeRoot, _, err := tree.ComputeBalanceTree(client, bridgeAddress, l2RawClaimsData, l2NetworkID, l2RawDepositsData)
 	if err != nil {
 		return err
 	}
-	nullifierTreeRoot, err := computeNullifierTree(l2RawClaimsData)
+	nullifierTreeRoot, err := tree.ComputeNullifierTree(l2RawClaimsData)
 	if err != nil {
 		return err
 	}
-	initPessimisticRoot := crypto.Keccak256Hash(balanceTreeRoot.Bytes(), nullifierTreeRoot.Bytes(), Uint32ToBytesLittleEndian(ler_count))
+	initPessimisticRoot := crypto.Keccak256Hash(balanceTreeRoot.Bytes(), nullifierTreeRoot.Bytes(), tree.Uint32ToBytesLittleEndian(ler_count))
 	fmt.Printf(`
 	{
 		"balanceTreeRoot": "%s",

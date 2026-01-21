@@ -89,6 +89,7 @@ polycli ulxly bridge asset \
 ```
 
 [This](https://cardona-zkevm.polygonscan.com/tx/0x0294dae3cfb26881e5dde9f182531aa5be0818956d029d50e9872543f020df2e) is the transaction that was created and mined from running this command.
+
 ## Flags
 
 ```bash

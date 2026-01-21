@@ -1,4 +1,5 @@
-package proof
+// Package deposits provides the proof deposits command.
+package deposits
 
 import (
 	"bufio"
@@ -24,8 +25,8 @@ const (
 )
 
 var (
-	//go:embed proofUsage.md
-	proofUsage string
+	//go:embed usage.md
+	usage string
 
 	proofOptions *proofArgs
 	fileOptions  *fileArgs
@@ -39,10 +40,10 @@ type fileArgs struct {
 	FileName string
 }
 
-var ProofCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use:          "proof",
 	Short:        "Generate a proof for a given range of deposits.",
-	Long:         proofUsage,
+	Long:         usage,
 	RunE:         runProof,
 	SilenceUsage: true,
 }
@@ -51,7 +52,7 @@ func init() {
 	proofOptions = &proofArgs{}
 	fileOptions = &fileArgs{}
 
-	f := ProofCmd.Flags()
+	f := Cmd.Flags()
 	f.StringVar(&fileOptions.FileName, ArgFileName, "", "ndjson file with events data")
 	f.Uint32Var(&proofOptions.DepositCount, ArgDepositCount, 0, "deposit number to generate a proof for")
 }
