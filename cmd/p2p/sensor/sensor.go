@@ -473,7 +473,7 @@ will result in less chance of missing data but can significantly increase memory
 	f.IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
 	f.StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "RPC endpoint used to fetch latest block")
 	f.StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "genesis block hash")
-	f.BytesHexVar(&inputSensorParams.ForkID, "fork-id", []byte{240, 151, 188, 19}, "hex encoded fork ID (omit 0x)")
+	f.BytesHexVar(&inputSensorParams.ForkID, "fork-id", []byte{34, 213, 35, 178}, "hex encoded fork ID (omit 0x)")
 	f.IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
 		`ratio of inbound to dialed connections (dial ratio of 2 allows 1/2 of connections to be dialed, setting to 0 defaults to 3)`)
 	f.StringVar(&inputSensorParams.NAT, "nat", "any", "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")
