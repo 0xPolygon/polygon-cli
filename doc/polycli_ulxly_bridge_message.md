@@ -1,4 +1,4 @@
-# `polycli ulxly  bridge message`
+# `polycli ulxly bridge message`
 
 > Auto-generated documentation.
 
@@ -14,7 +14,7 @@
 Send some ETH along with data from one chain to another chain.
 
 ```bash
-polycli ulxly  bridge message [flags]
+polycli ulxly bridge message [flags]
 ```
 
 ## Usage

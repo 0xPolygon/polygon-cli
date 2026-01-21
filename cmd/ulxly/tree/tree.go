@@ -1,13 +1,19 @@
-package ulxly
+package tree
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
+	"os"
 	"strings"
 
 	"github.com/0xPolygon/cdk-rpc/types"
+	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
+	ulxlycommon "github.com/0xPolygon/polygon-cli/cmd/ulxly/common"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -26,7 +32,7 @@ func (t *TokenInfo) ToBits() []bool {
 	bits := make([]bool, 192)
 
 	// First 32 bits: OriginNetwork
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		if t.OriginNetwork.Bit(i) == 1 {
 			bits[i] = true
 		}
@@ -77,14 +83,14 @@ func (n *NullifierKey) ToBits() []bool {
 	bits := make([]bool, 64)
 
 	// First 32 bits: NetworkID
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		if (n.NetworkID>>i)&1 == 1 {
 			bits[i] = true
 		}
 	}
 
 	// Next 32 bits: Index
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		if (n.Index>>i)&1 == 1 {
 			bits[i+32] = true
 		}
@@ -295,4 +301,186 @@ func Uint32ToBytesLittleEndian(num uint32) []byte {
 	bytes := make([]byte, 4) // uint32 is 4 bytes
 	binary.LittleEndian.PutUint32(bytes, num)
 	return bytes
+}
+
+// https://eth2book.info/capella/part2/deposits-withdrawals/contract/
+func generateZeroHashes(height uint8) []common.Hash {
+	zeroHashes := make([]common.Hash, height)
+	zeroHashes[0] = common.Hash{}
+	for i := 1; i < int(height); i++ {
+		zeroHashes[i] = crypto.Keccak256Hash(zeroHashes[i-1][:], zeroHashes[i-1][:])
+	}
+	return zeroHashes
+}
+
+// computeNullifierTree computes the nullifier tree root from raw claims data
+func ComputeNullifierTree(rawClaims []byte) (common.Hash, error) {
+	buf := bytes.NewBuffer(rawClaims)
+	scanner := bufio.NewScanner(buf)
+	scannerBuf := make([]byte, 0)
+	scanner.Buffer(scannerBuf, 1024*1024)
+	nTree, err := NewNullifierTree()
+	if err != nil {
+		return common.Hash{}, err
+	}
+	var root common.Hash
+	for scanner.Scan() {
+		claim := new(ulxly.UlxlyClaimEvent)
+		err = json.Unmarshal(scanner.Bytes(), claim)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		mainnetFlag, rollupIndex, localExitRootIndex, err := ulxlycommon.DecodeGlobalIndex(claim.GlobalIndex)
+		if err != nil {
+			log.Error().Err(err).Msg("error decoding globalIndex")
+			return common.Hash{}, err
+		}
+		log.Info().Bool("MainnetFlag", mainnetFlag).Uint32("RollupIndex", rollupIndex).Uint32("LocalExitRootIndex", localExitRootIndex).Uint64("block-number", claim.Raw.BlockNumber).Msg("Adding Claim")
+		nullifierKey := NullifierKey{
+			NetworkID: claim.OriginNetwork,
+			Index:     localExitRootIndex,
+		}
+		root, err = nTree.UpdateNullifierTree(nullifierKey)
+		if err != nil {
+			log.Error().Err(err).Uint32("OriginNetwork: ", claim.OriginNetwork).Msg("error computing nullifierTree. Claim information: GlobalIndex: " + claim.GlobalIndex.String() + ", OriginAddress: " + claim.OriginAddress.String() + ", Amount: " + claim.Amount.String())
+			return common.Hash{}, err
+		}
+	}
+	log.Info().Msgf("Final nullifierTree root: %s", root.String())
+	return root, nil
+}
+
+// computeBalanceTree computes the balance tree root from claims and deposits data
+func ComputeBalanceTree(client *ethclient.Client, bridgeAddress common.Address, l2RawClaims []byte, l2NetworkID uint32, l2RawDeposits []byte) (common.Hash, map[string]*big.Int, error) {
+	buf := bytes.NewBuffer(l2RawClaims)
+	scanner := bufio.NewScanner(buf)
+	scannerBuf := make([]byte, 0)
+	scanner.Buffer(scannerBuf, 1024*1024)
+	bTree, err := NewBalanceTree()
+	if err != nil {
+		return common.Hash{}, nil, err
+	}
+	balances := make(map[string]*big.Int)
+	for scanner.Scan() {
+		l2Claim := new(ulxly.UlxlyClaimEvent)
+		err = json.Unmarshal(scanner.Bytes(), l2Claim)
+		if err != nil {
+			return common.Hash{}, nil, err
+		}
+		token := TokenInfo{
+			OriginNetwork:      big.NewInt(0).SetUint64(uint64(l2Claim.OriginNetwork)),
+			OriginTokenAddress: l2Claim.OriginAddress,
+		}
+		isMessage, err := checkClaimCalldata(client, bridgeAddress, l2Claim.Raw.TxHash)
+		if err != nil {
+			return common.Hash{}, nil, err
+		}
+		if isMessage {
+			token.OriginNetwork = big.NewInt(0)
+			token.OriginTokenAddress = common.Address{}
+		}
+		log.Info().Msgf("L2 Claim. isMessage: %v OriginNetwork: %d. TokenAddress: %s. Amount: %s", isMessage, token.OriginNetwork, token.OriginTokenAddress.String(), l2Claim.Amount.String())
+		if _, ok := balances[token.String()]; !ok {
+			balances[token.String()] = big.NewInt(0)
+		}
+		balances[token.String()] = big.NewInt(0).Add(balances[token.String()], l2Claim.Amount)
+
+	}
+	l2Buf := bytes.NewBuffer(l2RawDeposits)
+	l2Scanner := bufio.NewScanner(l2Buf)
+	l2ScannerBuf := make([]byte, 0)
+	l2Scanner.Buffer(l2ScannerBuf, 1024*1024)
+	for l2Scanner.Scan() {
+		l2Deposit := new(ulxly.UlxlyBridgeEvent)
+		err := json.Unmarshal(l2Scanner.Bytes(), l2Deposit)
+		if err != nil {
+			return common.Hash{}, nil, err
+		}
+		token := TokenInfo{
+			OriginNetwork:      big.NewInt(0).SetUint64(uint64(l2Deposit.OriginNetwork)),
+			OriginTokenAddress: l2Deposit.OriginAddress,
+		}
+		if _, ok := balances[token.String()]; !ok {
+			balances[token.String()] = big.NewInt(0)
+		}
+		balances[token.String()] = big.NewInt(0).Sub(balances[token.String()], l2Deposit.Amount)
+	}
+	// Now, the balance map is complete. Let's build the tree.
+	var root common.Hash
+	for t, balance := range balances {
+		if balance.Cmp(big.NewInt(0)) == 0 {
+			continue
+		}
+		token, err := TokenInfoStringToStruct(t)
+		if err != nil {
+			return common.Hash{}, nil, err
+		}
+		if token.OriginNetwork.Uint64() == uint64(l2NetworkID) {
+			continue
+		}
+		root, err = bTree.UpdateBalanceTree(token, balance)
+		if err != nil {
+			return common.Hash{}, nil, err
+		}
+		log.Info().Msgf("New balanceTree leaf. OriginNetwork: %s, TokenAddress: %s, Balance: %s, Root: %s", token.OriginNetwork.String(), token.OriginTokenAddress.String(), balance.String(), root.String())
+	}
+	log.Info().Msgf("Final balanceTree root: %s", root.String())
+
+	return root, balances, nil
+}
+
+// FileOptions holds options for file input
+type FileOptions struct {
+	FileName string
+}
+
+// BalanceTreeOptions holds options for the balance tree command
+type BalanceTreeOptions struct {
+	L2ClaimsFile, L2DepositsFile, BridgeAddress, RpcURL string
+	L2NetworkID                                         uint32
+	Insecure                                            bool
+}
+
+// getInputData reads input data from file, args, or stdin
+func GetInputData(args []string, fileName string) ([]byte, error) {
+	if fileName != "" {
+		return os.ReadFile(fileName)
+	}
+
+	if len(args) > 1 {
+		concat := strings.Join(args[1:], " ")
+		return []byte(concat), nil
+	}
+
+	return io.ReadAll(os.Stdin)
+}
+
+// getBalanceTreeData reads the claims and deposits files
+func GetBalanceTreeData(opts *BalanceTreeOptions) ([]byte, []byte, error) {
+	claimsFileName := opts.L2ClaimsFile
+	file, err := os.Open(claimsFileName)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer file.Close() // Ensure the file is closed after reading
+
+	// Read the entire file content
+	l2Claims, err := io.ReadAll(file)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	l2FileName := opts.L2DepositsFile
+	file2, err := os.Open(l2FileName)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer file2.Close() // Ensure the file is closed after reading
+
+	// Read the entire file content
+	l2Deposits, err := io.ReadAll(file2)
+	if err != nil {
+		return nil, nil, err
+	}
+	return l2Claims, l2Deposits, nil
 }

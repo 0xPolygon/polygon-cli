@@ -1,4 +1,4 @@
-# `polycli ulxly  bridge weth`
+# `polycli ulxly bridge weth`
 
 > Auto-generated documentation.
 
@@ -14,7 +14,7 @@
 For L2's that use a gas token, use this to transfer WETH to another chain.
 
 ```bash
-polycli ulxly  bridge weth [flags]
+polycli ulxly bridge weth [flags]
 ```
 
 ## Usage

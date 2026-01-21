@@ -1,4 +1,4 @@
-# `polycli ulxly  claim message`
+# `polycli ulxly claim message`
 
 > Auto-generated documentation.
 
@@ -14,7 +14,7 @@
 Claim a message.
 
 ```bash
-polycli ulxly  claim message [flags]
+polycli ulxly claim message [flags]
 ```
 
 ## Usage
