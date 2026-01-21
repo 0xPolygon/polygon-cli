@@ -62,7 +62,7 @@ func init() {
 	f.Uint64Var(&inputArgs.startBlock, "start-block", math.MaxUint64, "starting block number (inclusive)")
 	f.Uint64Var(&inputArgs.endBlock, "end-block", math.MaxUint64, "ending block number (inclusive)")
 	f.StringVar(&inputArgs.targetAddr, "target-address", "", "address that will have tx sent from or to highlighted in the chart")
-	f.StringVarP(&inputArgs.output, "output", "o", "tx_gasprice_chart.png", "where to save the chart image (default: tx_gasprice_chart.png)")
+	f.StringVarP(&inputArgs.output, "output", "o", "tx_gasprice_chart.png", "output file path")
 }
 
 // txGasChartConfig holds the configuration for generating the transaction gas chart.
@@ -209,7 +209,7 @@ func parseFlags(ctx context.Context, client *ethrpc.Client) (*txGasChartConfig, 
 
 	if config.endBlock == math.MaxUint64 || config.endBlock > h.Number.Uint64() {
 		config.endBlock = h.Number.Uint64()
-		log.Warn().Uint64("end_block", config.endBlock).Msg("end block was not set or set to a value higher than the latest block in the network, defaulting to latest block")
+		log.Warn().Uint64("end_block", config.endBlock).Msg("End block not set or exceeds latest, using latest block")
 	}
 
 	const defaultBlockRange = 500
@@ -221,8 +221,7 @@ func parseFlags(ctx context.Context, client *ethrpc.Client) (*txGasChartConfig, 
 			config.startBlock = config.endBlock - defaultBlockRange
 		}
 
-		log.Warn().Uint64("start_block", config.startBlock).
-			Msg("start block was not set, defaulting to last blocks")
+		log.Warn().Uint64("start_block", config.startBlock).Msg("Start block not set, using last 500 blocks")
 	}
 
 	if config.startBlock > config.endBlock {
@@ -268,7 +267,7 @@ func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *e
 	blocks.blocks = make([]block, config.endBlock-config.startBlock+1)
 	offset := config.startBlock
 
-	log.Info().Msg("reading blocks")
+	log.Info().Msg("Reading blocks")
 
 	wg := sync.WaitGroup{}
 	totalGasUsed := big.NewInt(0)
@@ -280,7 +279,7 @@ func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *e
 			defer func() { workers <- struct{}{} }() // release worker slot
 
 			for {
-				log.Trace().Uint64("block_number", blockNumber).Msg("processing block")
+				log.Trace().Uint64("block_number", blockNumber).Msg("Processing block")
 				if config.rateLimiter != nil {
 					_ = config.rateLimiter.Wait(ctx)
 				}
@@ -385,7 +384,7 @@ func loadBlocksMetadata(ctx context.Context, config *txGasChartConfig, client *e
 		} else {
 			// Result exceeds uint64 max, cap it to max value
 			blocks.avgBlockGasUsed = math.MaxUint64
-			log.Warn().Msg("average block gas used exceeds uint64 max, capping to max value")
+			log.Warn().Msg("Average block gas used exceeds uint64 max, capping")
 		}
 	}
 

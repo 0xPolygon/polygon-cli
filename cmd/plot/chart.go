@@ -10,46 +10,44 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/rs/zerolog/log"
 	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/font"
+	"gonum.org/v1/plot/font/liberation"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
 	"gonum.org/v1/plot/vg/draw"
 )
 
+func init() {
+	// Use Liberation Sans (sans-serif) instead of the default Liberation Serif
+	plot.DefaultFont = font.Font{Typeface: "Liberation", Variant: "Sans"}
+	plotter.DefaultFont = font.Font{Typeface: "Liberation", Variant: "Sans"}
+
+	// Register the Liberation font collection
+	font.DefaultCache.Add(liberation.Collection())
+}
+
 var (
-	lineThickness = 2
+	lineThickness = vg.Points(2)
 
-	gasBlockLimitLineColor     = color.NRGBA{130, 38, 89, 220}
-	gasBlockLimitLineColorName = "Purple"
-	gasBlockLimitLineThickness = lineThickness
-
-	gasTxsLimitLineColor     = color.NRGBA{255, 0, 189, 220}
-	gasTxsLimitLineColorName = "Pink"
-	gasTxsLimitLineThickness = lineThickness
-
-	gasUsedLineColor     = color.NRGBA{0, 255, 133, 220}
-	gasUsedLineColorName = "Green"
-	gasUsedLineThickness = lineThickness
-
-	avgGasUsedLineColor     = color.NRGBA{255, 193, 7, 220}
-	avgGasUsedLineColorName = "Orange"
-	avgGasUsedLineThickness = lineThickness
-
-	avgGasPriceAvgLineColor     = color.NRGBA{30, 144, 255, 220}
-	avgGasPriceAvgLineColorName = "Blue"
-	avgGasPriceAvgLineThickness = lineThickness
+	gasBlockLimitLineColor = color.NRGBA{130, 38, 89, 220}
+	gasTxsLimitLineColor   = color.NRGBA{255, 0, 189, 220}
+	gasUsedLineColor       = color.NRGBA{0, 255, 133, 220}
+	avgGasUsedLineColor    = color.NRGBA{255, 193, 7, 220}
+	avgGasPriceLineColor   = color.NRGBA{30, 144, 255, 220}
 
 	txDotsColor = color.NRGBA{0, 0, 0, 25}
-	txDotsSize1 = 3
-	txDotsSize2 = 4
-	txDotsSize3 = 5
-	txDotsSize4 = 6
-	txDotsSize5 = 7
-	txDotsSize6 = 8
+	txDotsSizes = []vg.Length{
+		vg.Points(3), // gasLimit <= 1M
+		vg.Points(4), // gasLimit <= 2M
+		vg.Points(5), // gasLimit <= 3M
+		vg.Points(6), // gasLimit <= 4M
+		vg.Points(7), // gasLimit <= 5M
+		vg.Points(8), // gasLimit > 5M
+	}
 
-	targetTxDotsThickness = 2
-	targetTxDotsSize      = 8
+	targetTxDotsThickness = vg.Points(2)
+	targetTxDotsSize      = vg.Points(8)
 	targetTxDotsColor     = color.NRGBA{255, 0, 0, 255}
-	targetTxDotsColorName = "Red"
 )
 
 // txGasChartMetadata holds metadata for generating the transaction gas chart.
@@ -100,19 +98,19 @@ func createHeader(p *plot.Plot, metadata txGasChartMetadata) {
 		scale = "linear"
 	}
 
-	title := fmt.Sprintf("ChainID: %d | Block range %d - %d | Scale: %s\n", metadata.chainID, metadata.startBlock, metadata.endBlock, scale)
-	title += fmt.Sprintf("Blocks: %d | Txs: %d", metadata.endBlock-metadata.startBlock, metadata.blocksMetadata.txCount)
+	title := fmt.Sprintf("ChainID: %d | Blocks %d - %d (%d) | Txs: %d | Scale: %s",
+		metadata.chainID, metadata.startBlock, metadata.endBlock,
+		metadata.endBlock-metadata.startBlock, metadata.blocksMetadata.txCount, scale)
 	if len(metadata.targetAddr) > 0 {
-		title += fmt.Sprintf(" | Target Txs: %d | Target Addr: %s\n", metadata.blocksMetadata.targetTxCount, metadata.targetAddr)
-	} else {
-		title += "\n"
+		title += fmt.Sprintf("\nTarget: %s (%d txs)", metadata.targetAddr, metadata.blocksMetadata.targetTxCount)
 	}
 
-	title += fmt.Sprintf("%s stars are target transactions | %s line is 30-block rolling avg gas price\n", targetTxDotsColorName, avgGasPriceAvgLineColorName)
-	title += fmt.Sprintf("Gas in %%, Y height = 100%% | %s line is block gas used | %s line is avg block gas used | %s line is block gas limit | %s line is txs gas limit",
-		gasUsedLineColorName, avgGasUsedLineColorName, gasBlockLimitLineColorName, gasTxsLimitLineColorName)
-
 	p.Title.Text = title
+
+	// Configure legend
+	p.Legend.Top = true
+	p.Legend.Left = true
+	p.Legend.TextStyle.Font.Size = vg.Points(10)
 }
 
 // createTxsDots creates scatter plots for transaction gas prices.
@@ -151,12 +149,7 @@ func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
 				if ticks[i].Label == "" {
 					continue
 				}
-				v := ticks[i].Value // this is the real value (e.g., 10000), not an exponent
-				if v >= 1 {
-					ticks[i].Label = humanize.Comma(int64(math.Round(v)))
-				} else {
-					ticks[i].Label = fmt.Sprintf("%g", v) // 0.1, 0.01, etc.
-				}
+				ticks[i].Label = formatSI(ticks[i].Value)
 			}
 			return ticks
 		})
@@ -171,12 +164,7 @@ func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
 				if ticks[i].Label == "" {
 					continue
 				}
-				v := ticks[i].Value
-				if v >= 1 {
-					ticks[i].Label = humanize.Comma(int64(math.Round(v)))
-				} else {
-					ticks[i].Label = fmt.Sprintf("%g", v) // 0.1, 0.01, etc.
-				}
+				ticks[i].Label = formatSI(ticks[i].Value)
 			}
 			return ticks
 		})
@@ -220,36 +208,21 @@ func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
 		}
 	}
 
-	// other transactions
-	for group := range len(txGroups) {
-		if group == 0 {
+	// other transactions (groups 1-6, index 0 is for target txs)
+	for group := 1; group <= 6; group++ {
+		points := txGroups[uint64(group)]
+		if len(points) == 0 {
 			continue
 		}
-		if len(txGroups[uint64(group)]) == 0 {
-			continue
-		}
-		sc, err := plotter.NewScatter(txGroups[uint64(group)])
+		sc, err := plotter.NewScatter(points)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to create regular tx scatter plot")
-		} else {
-			sc.GlyphStyle.Color = txDotsColor
-			sc.GlyphStyle.Shape = draw.CircleGlyph{}
-			switch group {
-			case 1:
-				sc.GlyphStyle.Radius = vg.Points(float64(txDotsSize1))
-			case 2:
-				sc.GlyphStyle.Radius = vg.Points(float64(txDotsSize2))
-			case 3:
-				sc.GlyphStyle.Radius = vg.Points(float64(txDotsSize3))
-			case 4:
-				sc.GlyphStyle.Radius = vg.Points(float64(txDotsSize4))
-			case 5:
-				sc.GlyphStyle.Radius = vg.Points(float64(txDotsSize5))
-			case 6:
-				sc.GlyphStyle.Radius = vg.Points(float64(txDotsSize6))
-			}
-			p.Add(sc)
+			log.Error().Err(err).Int("group", group).Msg("Failed to create scatter plot")
+			continue
 		}
+		sc.GlyphStyle.Color = txDotsColor
+		sc.GlyphStyle.Shape = draw.CircleGlyph{}
+		sc.GlyphStyle.Radius = txDotsSizes[group-1]
+		p.Add(sc)
 	}
 
 	// target transactions
@@ -257,25 +230,28 @@ func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
 		sc, err := plotter.NewScatter(txGroups[0])
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to create target tx scatter plot")
-		} else {
-			sc.GlyphStyle.Color = targetTxDotsColor
-			sc.GlyphStyle.Shape = ThickCrossGlyph{Width: vg.Points(float64(targetTxDotsThickness))}
-			sc.GlyphStyle.Radius = vg.Points(float64(targetTxDotsSize))
-			p.Add(sc)
+			return
 		}
+		sc.GlyphStyle.Color = targetTxDotsColor
+		sc.GlyphStyle.Shape = ThickCrossGlyph{Width: targetTxDotsThickness}
+		sc.GlyphStyle.Radius = targetTxDotsSize
+		p.Add(sc)
+		p.Legend.Add("Target transactions", sc)
 	}
 }
 
 // createLines creates line plots for various gas metrics.
 func createLines(p *plot.Plot, metadata txGasChartMetadata) {
-	var blocks []uint64
-	var perBlockAvgGasPrice = make(map[uint64]float64)
-	pointsBlockGasLimit := make(plotter.XYs, len(metadata.blocksMetadata.blocks))
-	pointsTxsGasLimit := make(plotter.XYs, len(metadata.blocksMetadata.blocks))
-	pointsAvgGasUsed := make(plotter.XYs, len(metadata.blocksMetadata.blocks))
-	pointsGasUsed := make(plotter.XYs, len(metadata.blocksMetadata.blocks))
+	numBlocks := len(metadata.blocksMetadata.blocks)
+	blocks := make([]uint64, numBlocks)
+	perBlockAvgGasPrice := make(map[uint64]float64, numBlocks)
+	pointsBlockGasLimit := make(plotter.XYs, numBlocks)
+	pointsTxsGasLimit := make(plotter.XYs, numBlocks)
+	pointsAvgGasUsed := make(plotter.XYs, numBlocks)
+	pointsGasUsed := make(plotter.XYs, numBlocks)
+
 	for i, b := range metadata.blocksMetadata.blocks {
-		blocks = append(blocks, b.number)
+		blocks[i] = b.number
 
 		// Protect avgGasPrice for logarithmic scale
 		avgGasPrice := float64(b.avgGasPrice)
@@ -297,31 +273,23 @@ func createLines(p *plot.Plot, metadata txGasChartMetadata) {
 		pointsGasUsed[i].Y = scaleGasToGasPrice(b.gasUsed, metadata)
 	}
 
-	lineXY := rollingMean(blocks, perBlockAvgGasPrice, 30)
-	line, _ := plotter.NewLine(lineXY)
-	line.Color = avgGasPriceAvgLineColor
-	line.Width = vg.Points(float64(avgGasPriceAvgLineThickness))
-	p.Add(line)
+	addLine := func(points plotter.XYs, c color.Color, label string) {
+		line, err := plotter.NewLine(points)
+		if err != nil {
+			log.Error().Err(err).Str("label", label).Msg("Failed to create line plot")
+			return
+		}
+		line.Color = c
+		line.Width = lineThickness
+		p.Add(line)
+		p.Legend.Add(label, line)
+	}
 
-	line, _ = plotter.NewLine(pointsGasUsed)
-	line.Color = gasUsedLineColor
-	line.Width = vg.Points(float64(gasUsedLineThickness))
-	p.Add(line)
-
-	line, _ = plotter.NewLine(pointsTxsGasLimit)
-	line.Color = gasTxsLimitLineColor
-	line.Width = vg.Points(float64(gasTxsLimitLineThickness))
-	p.Add(line)
-
-	line, _ = plotter.NewLine(pointsBlockGasLimit)
-	line.Color = gasBlockLimitLineColor
-	line.Width = vg.Points(float64(gasBlockLimitLineThickness))
-	p.Add(line)
-
-	line, _ = plotter.NewLine(pointsAvgGasUsed)
-	line.Color = avgGasUsedLineColor
-	line.Width = vg.Points(float64(avgGasUsedLineThickness))
-	p.Add(line)
+	addLine(rollingMean(blocks, perBlockAvgGasPrice, 30), avgGasPriceLineColor, "30-block avg gas price")
+	addLine(pointsGasUsed, gasUsedLineColor, "Block gas used")
+	addLine(pointsTxsGasLimit, gasTxsLimitLineColor, "Txs gas limit")
+	addLine(pointsBlockGasLimit, gasBlockLimitLineColor, "Block gas limit")
+	addLine(pointsAvgGasUsed, avgGasUsedLineColor, "Avg block gas used")
 }
 
 // save saves the plot to the specified output path.
@@ -374,6 +342,39 @@ func scaleGasToGasPrice(gasLimit uint64, metadata txGasChartMetadata) float64 {
 		y = 1
 	}
 	return y
+}
+
+// formatSI formats a number with intuitive suffixes (k, M, B, T).
+func formatSI(v float64) string {
+	if v < 1 {
+		return fmt.Sprintf("%g", v)
+	}
+
+	var suffix string
+	var scaled float64
+
+	switch {
+	case v >= 1e12:
+		scaled = v / 1e12
+		suffix = "T"
+	case v >= 1e9:
+		scaled = v / 1e9
+		suffix = "B"
+	case v >= 1e6:
+		scaled = v / 1e6
+		suffix = "M"
+	case v >= 1e3:
+		scaled = v / 1e3
+		suffix = "k"
+	default:
+		return fmt.Sprintf("%.0f", v)
+	}
+
+	// Remove trailing zeros and decimal point if not needed
+	formatted := fmt.Sprintf("%.2f", scaled)
+	formatted = strings.TrimRight(formatted, "0")
+	formatted = strings.TrimRight(formatted, ".")
+	return formatted + suffix
 }
 
 // ThickCrossGlyph draws an 'X' with configurable stroke width.
