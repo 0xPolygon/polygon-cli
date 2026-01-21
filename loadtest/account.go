@@ -22,8 +22,23 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// Structure used by the account pool to control the
-// current state of an account
+// AccountPoolConfig holds configuration for the account pool.
+type AccountPoolConfig struct {
+	FundingPrivateKey         *ecdsa.PrivateKey
+	FundingAmount             *big.Int
+	RateLimit                 float64
+	EthCallOnly               bool
+	RefundRemainingFunds      bool
+	CheckBalanceBeforeFunding bool
+	LegacyTxMode              bool
+	// Gas override settings
+	ForceGasPrice         uint64
+	ForcePriorityGasPrice uint64
+	GasPriceMultiplier    *big.Float
+	ChainSupportBaseFee   bool
+}
+
+// Account represents a single account used by the load test.
 type Account struct {
 	ready          bool
 	address        common.Address
@@ -34,7 +49,7 @@ type Account struct {
 	reusableNonces []uint64
 }
 
-// Creates a new account with the given private key.
+// newAccount creates a new account with the given private key.
 // The client is used to get the nonce of the account.
 func newAccount(ctx context.Context, client *ethclient.Client, clientRateLimiter *rate.Limiter, privateKey *ecdsa.PrivateKey, startNonce *uint64, mu *sync.Mutex) (*Account, error) {
 	publicKey := privateKey.Public()
@@ -82,22 +97,22 @@ func newAccount(ctx context.Context, client *ethclient.Client, clientRateLimiter
 	return acc, nil
 }
 
-// Returns the address of the account
-func (a *Account) Address(ctx context.Context) common.Address {
+// Address returns the address of the account.
+func (a *Account) Address() common.Address {
 	return a.address
 }
 
-// Returns the private key of the account
-func (a *Account) PrivateKey(ctx context.Context) *ecdsa.PrivateKey {
+// PrivateKey returns the private key of the account.
+func (a *Account) PrivateKey() *ecdsa.PrivateKey {
 	return a.privateKey
 }
 
-// Returns the nonce of the account
-func (a *Account) Nonce(ctx context.Context) uint64 {
+// Nonce returns the current nonce of the account.
+func (a *Account) Nonce() uint64 {
 	return a.nonce
 }
 
-// Structure to control accounts used by the tests
+// AccountPool manages a pool of accounts used for sending transactions.
 type AccountPool struct {
 	accounts          []*Account
 	accountsPositions map[common.Address]int
@@ -117,28 +132,27 @@ type AccountPool struct {
 
 	latestBlockNumber uint64
 	pendingTxsCache   *uint64
+
+	// Configuration passed during creation
+	cfg *AccountPoolConfig
 }
 
-// Creates a new account pool with the given funding private key.
-// The funding private key is used to fund the accounts in the pool.
-// The funding amount is the amount of ether to send to each account.
-// The client is used to interact with the network to get account information
-// and also to send transactions to fund accounts.
-func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivateKey *ecdsa.PrivateKey, fundingAmount *big.Int, rateLimit float64) (*AccountPool, error) {
-	if fundingPrivateKey == nil {
+// NewAccountPool creates a new account pool with the given configuration.
+func NewAccountPool(ctx context.Context, client *ethclient.Client, cfg *AccountPoolConfig) (*AccountPool, error) {
+	if cfg.FundingPrivateKey == nil {
 		log.Fatal().
 			Msg("fundingPrivateKey cannot be nil")
 	}
 
-	if fundingAmount == nil {
+	if cfg.FundingAmount == nil {
 		log.Fatal().
 			Msg("fundingAmount cannot be nil")
 	}
 
 	// Allow fundingAmount to be set to 0. Only check for negative fundingAmount.
-	if fundingAmount.Cmp(big.NewInt(0)) < 0 {
+	if cfg.FundingAmount.Cmp(big.NewInt(0)) < 0 {
 		log.Fatal().
-			Stringer("fundingAmount", fundingAmount).
+			Stringer("fundingAmount", cfg.FundingAmount).
 			Msg("fundingAmount must be greater or equal to zero")
 	}
 
@@ -167,12 +181,13 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 		currentAccountIndex: 0,
 		client:              client,
 		accounts:            make([]*Account, 0),
-		fundingPrivateKey:   fundingPrivateKey,
-		fundingAmount:       fundingAmount,
+		fundingPrivateKey:   cfg.FundingPrivateKey,
+		fundingAmount:       cfg.FundingAmount,
 		chainID:             chainID,
 		accountsPositions:   make(map[common.Address]int),
 		latestBlockNumber:   latestBlockNumber,
 		clientRateLimiter:   rate.NewLimiter(rate.Every(50*time.Millisecond), 1),
+		cfg:                 cfg,
 	}
 
 	if !ap.isFundingEnabled() {
@@ -190,6 +205,7 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, fundingPrivat
 	return ap, nil
 }
 
+// AllAccountsReady returns whether all accounts are ready for use.
 func (ap *AccountPool) AllAccountsReady() (bool, int, int) {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
@@ -202,9 +218,9 @@ func (ap *AccountPool) AllAccountsReady() (bool, int, int) {
 	return rdyCount == len(ap.accounts), rdyCount, len(ap.accounts)
 }
 
-// Adds N random accounts to the pool
+// AddRandomN adds N random accounts to the pool.
 func (ap *AccountPool) AddRandomN(ctx context.Context, n uint64) error {
-	for i := uint64(0); i < n; i++ {
+	for range n {
 		err := ap.AddRandom(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to add random account: %w", err)
@@ -213,7 +229,7 @@ func (ap *AccountPool) AddRandomN(ctx context.Context, n uint64) error {
 	return nil
 }
 
-// Adds a random account to the pool
+// AddRandom adds a random account to the pool.
 func (ap *AccountPool) AddRandom(ctx context.Context) error {
 	privateKey, err := crypto.GenerateKey()
 	if err != nil {
@@ -224,7 +240,7 @@ func (ap *AccountPool) AddRandom(ctx context.Context) error {
 	return ap.Add(ctx, privateKey, &forceNonce)
 }
 
-// Adds multiple accounts to the pool with the given private keys
+// AddN adds multiple accounts to the pool with the given private keys.
 func (ap *AccountPool) AddN(ctx context.Context, privateKeys ...*ecdsa.PrivateKey) error {
 	for _, privateKey := range privateKeys {
 		err := ap.Add(ctx, privateKey, nil)
@@ -236,7 +252,7 @@ func (ap *AccountPool) AddN(ctx context.Context, privateKeys ...*ecdsa.PrivateKe
 	return nil
 }
 
-// Adds an account to the pool with the given private key
+// Add adds an account to the pool with the given private key.
 func (ap *AccountPool) Add(ctx context.Context, privateKey *ecdsa.PrivateKey, startNonce *uint64) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
@@ -258,7 +274,7 @@ func (ap *AccountPool) Add(ctx context.Context, privateKey *ecdsa.PrivateKey, st
 	return nil
 }
 
-// Adds a reusable nonce to the account with the given address
+// AddReusableNonce adds a reusable nonce to the account with the given address.
 func (ap *AccountPool) AddReusableNonce(ctx context.Context, address common.Address, nonce uint64) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
@@ -286,7 +302,7 @@ func (ap *AccountPool) AddReusableNonce(ctx context.Context, address common.Addr
 	return nil
 }
 
-// Refreshes the nonce for the given address
+// RefreshNonce refreshes the nonce for the given address.
 func (ap *AccountPool) RefreshNonce(ctx context.Context, address common.Address) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
@@ -320,8 +336,7 @@ func (ap *AccountPool) RefreshNonce(ctx context.Context, address common.Address)
 }
 
 // NumberOfPendingTxs returns the difference between the internal nonce
-// and the network pending nonce for all accounts in the pool. It uses
-// caching to avoid making too many requests to the network.
+// and the network pending nonce for all accounts in the pool.
 func (ap *AccountPool) NumberOfPendingTxs(ctx context.Context) (uint64, error) {
 	err := ap.clientRateLimiter.Wait(ctx)
 	if err != nil {
@@ -396,7 +411,7 @@ func (ap *AccountPool) NumberOfPendingTxs(ctx context.Context) (uint64, error) {
 	return pendingTxs, nil
 }
 
-// Funds all accounts in the pool
+// FundAccounts funds all accounts in the pool.
 func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
@@ -643,29 +658,35 @@ func (ap *AccountPool) fundAccountsWithEOATransfers(ctx context.Context, tops *b
 					return
 				}
 				receipt, err := util.WaitReceipt(ctx, ap.client, tx.Hash())
-				if receipt != nil {
-					log.Debug().
+				if err != nil {
+					log.Error().
+						Err(err).
 						Stringer("address", tx.To()).
 						Stringer("txHash", tx.Hash()).
-						Msg("transaction to fund account confirmed")
+						Msg("failed to wait for transaction to fund account")
+					failed.Store(true)
 					return
-				} else if err == nil {
+				}
+				if receipt == nil {
 					log.Error().
 						Stringer("address", tx.To()).
 						Stringer("txHash", tx.Hash()).
 						Msg("transaction to fund account receipt is nil")
-				} else if err != nil {
-					log.Error().
-						Stringer("address", tx.To()).
-						Stringer("txHash", tx.Hash()).
-						Msg("failed to wait for transaction to fund account")
-				} else if receipt.Status != types.ReceiptStatusSuccessful {
+					failed.Store(true)
+					return
+				}
+				if receipt.Status != types.ReceiptStatusSuccessful {
 					log.Error().
 						Stringer("address", tx.To()).
 						Stringer("txHash", tx.Hash()).
 						Msg("transaction to fund account has failed")
+					failed.Store(true)
+					return
 				}
-				failed.Store(true)
+				log.Debug().
+					Stringer("address", tx.To()).
+					Stringer("txHash", tx.Hash()).
+					Msg("transaction to fund account confirmed")
 			}(ctx, tx, ap.clientRateLimiter)
 		}
 	}
@@ -692,11 +713,11 @@ func (ap *AccountPool) fundAccountsWithEOATransfers(ctx context.Context, tops *b
 	return nil
 }
 
+// ReturnFunds returns funds from all accounts back to the funding account.
 func (ap *AccountPool) ReturnFunds(ctx context.Context) error {
 	return ap.returnFunds(ctx, true)
 }
 
-// Return the funds from all accounts in the pool to the funding account
 func (ap *AccountPool) returnFunds(ctx context.Context, lock bool) error {
 	if lock {
 		ap.mu.Lock()
@@ -710,7 +731,7 @@ func (ap *AccountPool) returnFunds(ctx context.Context, lock bool) error {
 
 	if !ap.isRefundingEnabled() {
 		log.Debug().
-			Bool("refundRemainingFunds", inputLoadTestParams.RefundRemainingFunds).
+			Bool("refundRemainingFunds", ap.cfg.RefundRemainingFunds).
 			Msg("account refunding is disabled, skipping returning funds from sending accounts")
 		return nil
 	}
@@ -723,7 +744,7 @@ func (ap *AccountPool) returnFunds(ctx context.Context, lock bool) error {
 	if err != nil {
 		return err
 	}
-	gasPrice, _ := getSuggestedGasPrices(ctx, ap.client)
+	gasPrice, _ := ap.getSuggestedGasPrices(ctx)
 	txFee := new(big.Int).Mul(ethTransferGas, gasPrice)
 	// triple the txFee to account for gas price fluctuations and
 	// different ways to charge transactions, like op networks
@@ -932,7 +953,7 @@ func (ap *AccountPool) returnFunds(ctx context.Context, lock bool) error {
 	return nil
 }
 
-// Returns the nonces of all accounts in the pool
+// Nonces returns the nonces of all accounts in the pool.
 func (ap *AccountPool) Nonces(ctx context.Context, onlyUsed bool) *sync.Map {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
@@ -954,6 +975,7 @@ func (ap *AccountPool) Nonces(ctx context.Context, onlyUsed bool) *sync.Map {
 	return nonces
 }
 
+// NoncesOf returns the start nonce and current nonce for a given address.
 func (ap *AccountPool) NoncesOf(address common.Address) (startNonce, nonce uint64) {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
@@ -972,7 +994,7 @@ func (ap *AccountPool) NoncesOf(address common.Address) (startNonce, nonce uint6
 	return startNonce, nonce
 }
 
-// Returns the next account in the pool
+// Next returns the next account in the pool.
 func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
@@ -1005,6 +1027,11 @@ func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 	return accCopy, nil
 }
 
+// SetFundingAmount updates the funding amount for the pool.
+func (ap *AccountPool) SetFundingAmount(amount *big.Int) {
+	ap.fundingAmount = amount
+}
+
 func (ap *AccountPool) accountMustBeFunded(ctx context.Context, account *Account) (bool, error) {
 	// If funding amount is zero, skip funding entirely
 	if !ap.isFundingEnabled() {
@@ -1016,7 +1043,7 @@ func (ap *AccountPool) accountMustBeFunded(ctx context.Context, account *Account
 		return false, nil
 	}
 
-	if inputLoadTestParams.CheckBalanceBeforeFunding {
+	if ap.cfg.CheckBalanceBeforeFunding {
 		// Check if the account has enough balance
 		err := ap.clientRateLimiter.Wait(ctx)
 		if err != nil {
@@ -1034,7 +1061,6 @@ func (ap *AccountPool) accountMustBeFunded(ctx context.Context, account *Account
 	return true, nil
 }
 
-// Checks multiple conditions of the account and funds it if needed
 func (ap *AccountPool) fundAccountIfNeeded(ctx context.Context, account *Account, forcedNonce *uint64, waitToFund bool) (*types.Transaction, error) {
 	if mustBeFunded, err := ap.accountMustBeFunded(ctx, account); err != nil || !mustBeFunded {
 		return nil, err
@@ -1063,7 +1089,6 @@ func (ap *AccountPool) fundAccountIfNeeded(ctx context.Context, account *Account
 	return tx, nil
 }
 
-// Funds the account
 func (ap *AccountPool) fund(ctx context.Context, addr common.Address, forcedNonce *uint64, waitToFund bool) (*types.Transaction, error) {
 	// Fund the account
 	signedTx, err := ap.createEOATransferTx(ctx, ap.fundingPrivateKey, forcedNonce, addr, ap.fundingAmount)
@@ -1109,15 +1134,13 @@ func (ap *AccountPool) fund(ctx context.Context, addr common.Address, forcedNonc
 }
 
 func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.PrivateKey, forcedNonce *uint64, receiver common.Address, amount *big.Int) (*types.Transaction, error) {
-	ltp := inputLoadTestParams
-
 	tops, err := bind.NewKeyedTransactorWithChainID(sender, ap.chainID)
 	if err != nil {
 		log.Error().Err(err).Msg("unable create transaction signer")
 		return nil, err
 	}
 	tops.GasLimit = uint64(21000)
-	tops = configureTransactOpts(ctx, ap.client, tops)
+	tops = ap.configureTransactOpts(ctx, tops)
 
 	var nonce uint64
 
@@ -1138,7 +1161,7 @@ func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.Pr
 	}
 
 	var tx *types.Transaction
-	if ltp.LegacyTransactionMode {
+	if ap.cfg.LegacyTxMode {
 		tx = types.NewTx(&types.LegacyTx{
 			Nonce:    nonce,
 			To:       &receiver,
@@ -1171,19 +1194,11 @@ func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.Pr
 }
 
 func (ap *AccountPool) isFundingEnabled() bool {
-	if ap.isCallOnly() {
-		return false
-	}
-
-	if !ap.hasFundingAmount() {
-		return false
-	}
-
-	return true
+	return !ap.isCallOnly() && ap.hasFundingAmount()
 }
 
 func (ap *AccountPool) isCallOnly() bool {
-	return inputLoadTestParams.EthCallOnly
+	return ap.cfg.EthCallOnly
 }
 
 func (ap *AccountPool) hasFundingAmount() bool {
@@ -1197,7 +1212,7 @@ func (ap *AccountPool) isRefundingEnabled() bool {
 		return false
 	}
 
-	shouldRefund := inputLoadTestParams.RefundRemainingFunds
+	shouldRefund := ap.cfg.RefundRemainingFunds
 	if !shouldRefund {
 		log.Debug().
 			Msg("refund remaining funds is disabled")
@@ -1205,4 +1220,85 @@ func (ap *AccountPool) isRefundingEnabled() bool {
 	}
 
 	return true
+}
+
+func (ap *AccountPool) biasGasPrice(price *big.Int) *big.Int {
+	if ap.cfg.GasPriceMultiplier == nil {
+		return price
+	}
+	gasPriceFloat := new(big.Float).SetInt(price)
+	gasPriceFloat.Mul(gasPriceFloat, ap.cfg.GasPriceMultiplier)
+	result := new(big.Int)
+	gasPriceFloat.Int(result)
+	return result
+}
+
+func (ap *AccountPool) getSuggestedGasPrices(ctx context.Context) (*big.Int, *big.Int) {
+	var gasPrice *big.Int
+	gasTipCap := big.NewInt(0)
+	var err error
+
+	if ap.cfg.LegacyTxMode {
+		if ap.cfg.ForceGasPrice != 0 {
+			gasPrice = new(big.Int).SetUint64(ap.cfg.ForceGasPrice)
+		} else {
+			gasPrice, err = ap.client.SuggestGasPrice(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("unable to suggest gas price")
+				return big.NewInt(0), big.NewInt(0)
+			}
+			gasPrice = ap.biasGasPrice(gasPrice)
+		}
+	} else {
+		// Handle tip cap
+		if ap.cfg.ForcePriorityGasPrice != 0 {
+			gasTipCap = new(big.Int).SetUint64(ap.cfg.ForcePriorityGasPrice)
+		} else if ap.cfg.ChainSupportBaseFee {
+			gasTipCap, err = ap.client.SuggestGasTipCap(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("unable to suggest gas tip cap")
+				return big.NewInt(0), big.NewInt(0)
+			}
+			gasTipCap = ap.biasGasPrice(gasTipCap)
+		} else {
+			log.Fatal().
+				Msg("Chain does not support base fee. Please set priority-gas-price flag with a value to use for gas tip cap")
+		}
+
+		// Handle gas price / max fee
+		if ap.cfg.ForceGasPrice != 0 {
+			gasPrice = new(big.Int).SetUint64(ap.cfg.ForceGasPrice)
+		} else if ap.cfg.ChainSupportBaseFee {
+			gasPrice, err = ap.client.SuggestGasPrice(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("unable to suggest gas price")
+				return big.NewInt(0), big.NewInt(0)
+			}
+			gasPrice = ap.biasGasPrice(gasPrice)
+		} else {
+			log.Fatal().
+				Msg("Chain does not support base fee. Please set gas-price flag with a value to use for max fee per gas")
+		}
+	}
+
+	return gasPrice, gasTipCap
+}
+
+func (ap *AccountPool) configureTransactOpts(ctx context.Context, tops *bind.TransactOpts) *bind.TransactOpts {
+	gasPrice, gasTipCap := ap.getSuggestedGasPrices(ctx)
+	tops.GasPrice = gasPrice
+
+	if ap.cfg.LegacyTxMode {
+		return tops
+	}
+
+	tops.GasPrice = nil
+	tops.GasFeeCap = gasPrice
+	tops.GasTipCap = gasTipCap
+
+	if tops.GasTipCap.Cmp(tops.GasFeeCap) == 1 {
+		tops.GasTipCap = new(big.Int).Set(tops.GasFeeCap)
+	}
+
+	return tops
 }

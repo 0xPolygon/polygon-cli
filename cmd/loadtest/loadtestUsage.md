@@ -1,4 +1,4 @@
-The `loadtest` tool is meant to generate various types of load against RPC end points. It leverages the [`ethclient`](https://pkg.go.dev/github.com/ethereum/go-ethereum/ethclient) library Go Ethereum to interact with the blockchain.x
+The `loadtest` tool is meant to generate various types of load against RPC end points. It leverages the [`ethclient`](https://pkg.go.dev/github.com/ethereum/go-ethereum/ethclient) library Go Ethereum to interact with the blockchain.
 
 ```bash
 $ polycli wallet inspect  --mnemonic "code code code code code code code code code code code quality" --addresses 1
@@ -15,12 +15,17 @@ The `--mode` flag is important for this command.
   amounts. Each transaction is a single transfer.
 - `7`/`erc721` will run an ERC721 mint test which will mint an NFT
   over and over again.
-- `i`/`inc`/`increment` will call the increment function repeatedly on
+- `inc`/`increment` will call the increment function repeatedly on
   the load test contract. It's a minimal example of a contract call
   that will require an update to a contract's storage.
 - `s`/`store` is used to store random data in the smart contract
   storage. The amount of data stored per transaction is controlled
   with the `store-data-size` flag.
+- `b`/`blob` will send EIP-4844 blob transactions. Use `--blob-fee-cap`
+  to set the maximum blob fee per chunk.
+- `cc`/`contract-call` will call a specific contract function. Requires
+  `--contract-address` and `--calldata` flags. Use `--contract-call-payable`
+  if the function is payable.
 - `R`/`recall` will attempt to replay all of the transactions from the
   previous blocks. You can use `--recall-blocks` to specify how many
   previous blocks should be used to seed transaction history. It's
@@ -34,6 +39,10 @@ The `--mode` flag is important for this command.
   full blockchain networks. The approach is similar to `recall` mode
   where we'll fetch some recent blocks and then use that data to
   generate a variety of calls to the RPC server.
+- `v3`/`uniswapv3` will deploy UniswapV3 contracts and perform token
+  swaps. This mode can also be run as a subcommand (`polycli loadtest
+  uniswapv3`) which provides additional flags for specifying
+  pre-deployed contract addresses, pool fees, and swap amounts.
 
 The default private key is: `42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa`. We can use `wallet inspect` to get more information about this address, in particular its `ETHAddress` if you want to check balance or pre-mine value for this particular account.
 

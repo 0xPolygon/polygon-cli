@@ -1,4 +1,4 @@
-package uniswapv3loadtest
+package uniswapv3
 
 import (
 	"bytes"
