@@ -517,7 +517,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				if block, ok := ms.BlockCache.Get(i.String()); ok {
 					renderedBlocksTemp = append(renderedBlocksTemp, block.(rpctypes.PolyBlock))
 				} else {
-					// If for some reason the block is not in the cache after fetching, handle this case.
+					// Block not found in cache after fetching - this shouldn't happen but we handle it gracefully.
 					log.Warn().Str("blockNumber", i.String()).Msg("Block should be in cache but is not")
 				}
 			}
@@ -652,7 +652,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			if block, ok := ms.BlockCache.Get(i.String()); ok {
 				renderedBlocksTemp = append(renderedBlocksTemp, block.(rpctypes.PolyBlock))
 			} else {
-				// If for some reason the block is not in the cache after fetching, handle this case.
+				// Block not found in cache after fetching - this shouldn't happen but we handle it gracefully.
 				log.Warn().Str("blockNumber", i.String()).Msg("Block should be in cache but is not")
 			}
 		}
