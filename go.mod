@@ -175,7 +175,7 @@ require (
 	github.com/0xPolygon/cdk-contracts-tooling v0.0.1
 	github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327
 	github.com/chromedp/chromedp v0.14.2
-	github.com/cometbft/cometbft v0.38.19
+	github.com/cometbft/cometbft v0.38.21
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/fatih/color v1.18.0
 	github.com/gateway-fm/vectorized-poseidon-gold v1.0.0
