@@ -179,7 +179,7 @@ require (
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/fatih/color v1.18.0
 	github.com/gateway-fm/vectorized-poseidon-gold v1.0.0
-	github.com/gdamore/tcell/v2 v2.13.7
+	github.com/gdamore/tcell/v2 v2.13.8
 	github.com/go-errors/errors v1.5.1
 	github.com/google/tink/go v1.7.0
 	github.com/iden3/go-iden3-crypto v0.0.17
