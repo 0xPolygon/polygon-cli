@@ -4,8 +4,6 @@ go 1.24.0
 
 toolchain go1.24.1
 
-require gonum.org/v1/plot v0.14.0
-
 require (
 	cloud.google.com/go/datastore v1.21.0
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
@@ -42,10 +40,7 @@ require (
 require github.com/alecthomas/participle/v2 v2.1.4
 
 require (
-	git.sr.ht/~sbinet/gg v0.5.0 // indirect
 	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20251213223233-751f36331c62 // indirect
-	github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b // indirect
-	github.com/campoy/embedmd v1.0.0 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
@@ -60,15 +55,11 @@ require (
 	github.com/ethereum/go-bigmodexpfix v0.0.0-20250911101455-f9e208c548ab // indirect
 	github.com/ferranbt/fastssz v0.1.4 // indirect
 	github.com/gdamore/encoding v1.0.1 // indirect
-	github.com/go-fonts/liberation v0.3.1 // indirect
 	github.com/go-json-experiment/json v0.0.0-20250725192818-e39067aee2d2 // indirect
-	github.com/go-latex/latex v0.0.0-20230307184459-12ec69307ad9 // indirect
-	github.com/go-pdf/fpdf v0.8.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.4.0 // indirect
-	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
@@ -91,7 +82,6 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.37.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/image v0.11.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 )
@@ -190,6 +180,7 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/gateway-fm/vectorized-poseidon-gold v1.0.0
 	github.com/gdamore/tcell/v2 v2.13.7
+	github.com/go-echarts/go-echarts/v2 v2.6.7
 	github.com/go-errors/errors v1.5.1
 	github.com/google/tink/go v1.7.0
 	github.com/iden3/go-iden3-crypto v0.0.17
@@ -212,7 +203,7 @@ require (
 	github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a // indirect
 	github.com/dgraph-io/badger/v4 v4.2.0 // indirect
 	github.com/dgraph-io/ristretto v0.1.1 // indirect
-	github.com/dustin/go-humanize v1.0.1
+	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ethereum/go-verkle v0.2.2 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-kit/log v0.2.1 // indirect

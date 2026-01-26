@@ -9,6 +9,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// DefaultPollInterval is the default interval for polling new block headers.
+const DefaultPollInterval = 1 * time.Second
+
 // GasProvider defines the interface for gas providers.
 type GasProvider interface {
 	Start(ctx context.Context)
@@ -16,17 +19,24 @@ type GasProvider interface {
 
 // GasProviderBase provides common functionality for gas providers.
 type GasProviderBase struct {
-	client      *ethclient.Client
-	vault       *GasVault
-	onNewHeader func(header *types.Header)
+	client       *ethclient.Client
+	vault        *GasVault
+	pollInterval time.Duration
+	onNewHeader  func(header *types.Header)
 }
 
 // NewGasProviderBase creates a new GasProviderBase with the given Ethereum client and gas vault.
 func NewGasProviderBase(client *ethclient.Client, vault *GasVault) *GasProviderBase {
 	return &GasProviderBase{
-		client: client,
-		vault:  vault,
+		client:       client,
+		vault:        vault,
+		pollInterval: DefaultPollInterval,
 	}
+}
+
+// SetPollInterval sets the interval for polling new block headers.
+func (o *GasProviderBase) SetPollInterval(interval time.Duration) {
+	o.pollInterval = interval
 }
 
 // Start begins the operation of the GasProviderBase by starting to watch for new block headers.
@@ -41,11 +51,10 @@ func (o *GasProviderBase) watchNewHeaders(ctx context.Context) {
 		return
 	}
 
-	const pollInterval = 1 * time.Second
-	ticker := time.NewTicker(pollInterval)
+	ticker := time.NewTicker(o.pollInterval)
 	defer ticker.Stop()
 
-	log.Trace().Msg("Starting to watch for new block headers")
+	log.Trace().Dur("poll_interval", o.pollInterval).Msg("Starting to watch for new block headers")
 	var lastHeader *types.Header
 
 	for {
