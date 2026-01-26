@@ -1,58 +1,61 @@
 package plot
 
 import (
+	"bytes"
+	_ "embed"
 	"fmt"
-	"image/color"
-	"math"
-	"slices"
+	"html"
+	"html/template"
+	"os"
+	"regexp"
 	"strings"
 
-	"github.com/dustin/go-humanize"
+	"github.com/go-echarts/go-echarts/v2/charts"
+	"github.com/go-echarts/go-echarts/v2/opts"
 	"github.com/rs/zerolog/log"
-	"gonum.org/v1/plot"
-	"gonum.org/v1/plot/font"
-	"gonum.org/v1/plot/font/liberation"
-	"gonum.org/v1/plot/plotter"
-	"gonum.org/v1/plot/vg"
-	"gonum.org/v1/plot/vg/draw"
 )
 
-func init() {
-	// Use Liberation Sans (sans-serif) instead of the default Liberation Serif
-	plot.DefaultFont = font.Font{Typeface: "Liberation", Variant: "Sans"}
-	plotter.DefaultFont = font.Font{Typeface: "Liberation", Variant: "Sans"}
+//go:embed template.html
+var chartTemplate string
 
-	// Register the Liberation font collection
-	font.DefaultCache.Add(liberation.Collection())
-}
+const (
+	// Gas limit thresholds for grouping transactions (in gas units)
+	gasLimit1M = 1_000_000
+	gasLimit2M = 2_000_000
+	gasLimit3M = 3_000_000
+	gasLimit4M = 4_000_000
+	gasLimit5M = 5_000_000
+
+	// Number of gas limit groups (excluding target txs group)
+	numGasLimitGroups = 6
+)
 
 var (
-	lineThickness = vg.Points(2)
+	// Colors as hex strings for go-echarts
+	gasBlockLimitLineColor = "#822659"
+	gasTxsLimitLineColor   = "#FF00BD"
+	gasUsedLineColor       = "#00FF85"
+	avgGasUsedLineColor    = "#FFC107"
 
-	gasBlockLimitLineColor = color.NRGBA{130, 38, 89, 220}
-	gasTxsLimitLineColor   = color.NRGBA{255, 0, 189, 220}
-	gasUsedLineColor       = color.NRGBA{0, 255, 133, 220}
-	avgGasUsedLineColor    = color.NRGBA{255, 193, 7, 220}
-	avgGasPriceLineColor   = color.NRGBA{30, 144, 255, 220}
+	txDotsColor   = "#4682B4" // Steel blue
+	targetTxColor = "#FF0000" // Red
 
-	txDotsColor = color.NRGBA{0, 0, 0, 25}
-	txDotsSizes = []vg.Length{
-		vg.Points(3), // gasLimit <= 1M
-		vg.Points(4), // gasLimit <= 2M
-		vg.Points(5), // gasLimit <= 3M
-		vg.Points(6), // gasLimit <= 4M
-		vg.Points(7), // gasLimit <= 5M
-		vg.Points(8), // gasLimit > 5M
+	// Symbol sizes for gas limit groups (in pixels)
+	txDotsSizes = []int{6, 8, 10, 12, 14, 16}
+
+	// Gas limit group names for legend
+	gasLimitGroupNames = []string{
+		"Gas ≤1M",
+		"Gas ≤2M",
+		"Gas ≤3M",
+		"Gas ≤4M",
+		"Gas ≤5M",
+		"Gas >5M",
 	}
-
-	targetTxDotsThickness = vg.Points(2)
-	targetTxDotsSize      = vg.Points(8)
-	targetTxDotsColor     = color.NRGBA{255, 0, 0, 255}
 )
 
 // txGasChartMetadata holds metadata for generating the transaction gas chart.
 type txGasChartMetadata struct {
-	rpcURL  string
 	chainID uint64
 
 	targetAddr string
@@ -61,346 +64,428 @@ type txGasChartMetadata struct {
 
 	blocksMetadata blocksMetadata
 
-	scale string
+	renderer string
 
 	outputPath string
 }
 
+// formatSI formats a number with SI suffixes (k, M, B, T).
+func formatSI(v float64) string {
+	if v < 1 {
+		return fmt.Sprintf("%.2f", v)
+	}
+	switch {
+	case v >= 1e12:
+		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", v/1e12), "0"), ".") + "T"
+	case v >= 1e9:
+		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", v/1e9), "0"), ".") + "B"
+	case v >= 1e6:
+		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", v/1e6), "0"), ".") + "M"
+	case v >= 1e3:
+		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", v/1e3), "0"), ".") + "k"
+	default:
+		return fmt.Sprintf("%.0f", v)
+	}
+}
+
+// formatGasPrice formats a gas price in wei to the most convenient unit (wei, gwei, or ether).
+func formatGasPrice(wei uint64) string {
+	const (
+		gwei  = 1e9
+		ether = 1e18
+	)
+	v := float64(wei)
+	switch {
+	case v >= ether:
+		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.6f", v/ether), "0"), ".") + " ether"
+	case v >= gwei:
+		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", v/gwei), "0"), ".") + " gwei"
+	default:
+		return fmt.Sprintf("%d wei", wei)
+	}
+}
+
+// formatTxTooltip formats a tooltip for a transaction scatter point.
+func formatTxTooltip(seriesName string, blockNum uint64, blockHash string, txHash string, gasLimit, gasPrice uint64) string {
+	return fmt.Sprintf("<b>%s</b><br/>Block: %d<br/>Block Hash: %s<br/>Gas Limit: %s gas<br/>Gas Price: %s<br/>Transaction: %s",
+		html.EscapeString(seriesName),
+		blockNum,
+		html.EscapeString(blockHash),
+		formatSI(float64(gasLimit)),
+		formatGasPrice(gasPrice),
+		html.EscapeString(txHash))
+}
+
+// formatLineTooltip formats a tooltip for a line chart point.
+func formatLineTooltip(seriesName string, blockNum uint64, blockHash string, txCount int, value float64) string {
+	return fmt.Sprintf("<b>%s</b><br/>Block: %d<br/>Block Hash: %s<br/>Transaction Count: %d<br/>Value: %s gas",
+		html.EscapeString(seriesName),
+		blockNum,
+		html.EscapeString(blockHash),
+		txCount,
+		formatSI(value))
+}
+
 // plotChart generates and saves the transaction gas chart based on the provided metadata.
 func plotChart(metadata txGasChartMetadata) error {
-	p := plot.New()
-	createHeader(p, metadata)
-	createTxsDots(p, metadata)
-	createLines(p, metadata)
+	scatter := createScatterChart(metadata)
+	line := createLineChart(metadata)
 
-	p.X.Min = float64(metadata.startBlock)
-	p.X.Max = float64(metadata.endBlock) + (float64(metadata.endBlock-metadata.startBlock) * 0.02)
+	// Overlay line chart on scatter chart
+	scatter.Overlap(line)
 
-	// Protect min and max for logarithmic scale
-	if metadata.blocksMetadata.minTxGasPrice == 0 {
-		metadata.blocksMetadata.minTxGasPrice = 1
-	}
-	if metadata.blocksMetadata.maxTxGasPrice == 0 {
-		metadata.blocksMetadata.maxTxGasPrice = 1
-	}
-
-	p.Y.Min = float64(metadata.blocksMetadata.minTxGasPrice)
-	p.Y.Max = float64(metadata.blocksMetadata.maxTxGasPrice) * 1.02
-
-	return save(p, metadata)
+	return save(scatter, metadata)
 }
 
-// createHeader sets the title and header information for the plot.
-func createHeader(p *plot.Plot, metadata txGasChartMetadata) {
-	p.Title.TextStyle.Font.Size = vg.Points(14)
-	scale := "logarithmic"
-	if !strings.EqualFold(metadata.scale, "log") {
-		scale = "linear"
-	}
+// createScatterChart creates scatter series for transaction gas prices.
+func createScatterChart(metadata txGasChartMetadata) *charts.Scatter {
+	scatter := charts.NewScatter()
+	scatter.SetGlobalOptions(
+		charts.WithInitializationOpts(opts.Initialization{
+			Width:    "1600px",
+			Height:   "900px",
+			Renderer: metadata.renderer,
+		}),
+		charts.WithTitleOpts(opts.Title{
+			Title:    createTitle(metadata),
+			Left:     "center",
+			Top:      "2%",
+			Subtitle: createSubtitle(metadata),
+		}),
+		charts.WithLegendOpts(opts.Legend{
+			Show:   opts.Bool(true),
+			Top:    "8%",
+			Left:   "center",
+			Orient: "horizontal",
+		}),
+		charts.WithGridOpts(opts.Grid{
+			Top:    "15%", // Leave room for title and legend
+			Bottom: "10%", // Leave room for x-axis label and slider
+		}),
+		charts.WithToolboxOpts(opts.Toolbox{
+			Show: opts.Bool(true),
+			Feature: &opts.ToolBoxFeature{
+				SaveAsImage: &opts.ToolBoxFeatureSaveAsImage{
+					Show:  opts.Bool(true),
+					Title: "Save",
+				},
+				Restore: &opts.ToolBoxFeatureRestore{
+					Show:  opts.Bool(true),
+					Title: "Restore",
+				},
+				DataZoom: &opts.ToolBoxFeatureDataZoom{
+					Show:  opts.Bool(true),
+					Title: map[string]string{"zoom": "Zoom", "back": "Reset"},
+				},
+				DataView: &opts.ToolBoxFeatureDataView{
+					Show:  opts.Bool(true),
+					Title: "Data",
+				},
+			},
+		}),
+		charts.WithTooltipOpts(opts.Tooltip{
+			Show:      opts.Bool(true),
+			Trigger:   "item",
+			Enterable: opts.Bool(true),
+			Formatter: opts.FuncOpts(`function(params) { return params.name || params.seriesName; }`),
+		}),
+		charts.WithXAxisOpts(opts.XAxis{
+			Name:         "Block Number",
+			NameLocation: "center",
+			NameGap:      30,
+			Type:         "value",
+			Min:          metadata.startBlock,
+			Max:          metadata.endBlock,
+			AxisLabel: &opts.AxisLabel{
+				Formatter: "{value}",
+			},
+		}),
+		charts.WithYAxisOpts(opts.YAxis{
+			Name:     "Gas",
+			Type:     "log",
+			Min:      1, // For log scale, min must be at least 1
+			Max:      metadata.blocksMetadata.maxBlockGasLimit,
+			Position: "left",
+		}),
+		// X-axis zoom (inside + slider)
+		charts.WithDataZoomOpts(opts.DataZoom{
+			Type:       "inside",
+			Start:      0,
+			End:        100,
+			XAxisIndex: []int{0},
+		}),
+		charts.WithDataZoomOpts(opts.DataZoom{
+			Type:       "slider",
+			Start:      0,
+			End:        100,
+			XAxisIndex: []int{0},
+		}),
+		// Y-axis zoom (slider only, no mousewheel)
+		charts.WithDataZoomOpts(opts.DataZoom{
+			Type:       "slider",
+			Start:      0,
+			End:        100,
+			YAxisIndex: []int{0},
+			Orient:     "vertical",
+		}),
+	)
 
-	title := fmt.Sprintf("ChainID: %d | Blocks %d - %d (%d) | Txs: %d | Scale: %s",
-		metadata.chainID, metadata.startBlock, metadata.endBlock,
-		metadata.endBlock-metadata.startBlock, metadata.blocksMetadata.txCount, scale)
-	if len(metadata.targetAddr) > 0 {
-		title += fmt.Sprintf("\nTarget: %s (%d txs)", metadata.targetAddr, metadata.blocksMetadata.targetTxCount)
-	}
+	// Group transactions by gas limit
+	txGroups, targetTxs := groupTransactionsByGasLimit(metadata)
 
-	p.Title.Text = title
-
-	// Configure legend
-	p.Legend.Top = true
-	p.Legend.Left = true
-	p.Legend.TextStyle.Font.Size = vg.Points(10)
-}
-
-// createTxsDots creates scatter plots for transaction gas prices.
-func createTxsDots(p *plot.Plot, metadata txGasChartMetadata) {
-	p.X.Label.Text = "Block Number"
-
-	// Custom ticker for X axis (block numbers must be integers)
-	p.X.Tick.Marker = plot.TickerFunc(func(min, max float64) []plot.Tick {
-		ticks := plot.DefaultTicks{}.Ticks(min, max)
-		for i := range ticks {
-			if ticks[i].Label == "" {
-				continue
-			}
-			// Format as integer without decimal places
-			ticks[i].Label = humanize.Comma(int64(math.Round(ticks[i].Value)))
-		}
-		return ticks
-	})
-
-	if strings.EqualFold(metadata.scale, "log") {
-		p.Y.Scale = plot.LogScale{}
-		p.Y.Label.Text = "Gas Price (wei, log)"
-
-		// Custom ticker for logarithmic scale
-		p.Y.Tick.Marker = plot.TickerFunc(func(min, max float64) []plot.Tick {
-			// Protect against values <= 0
-			if min <= 0 {
-				min = 1
-			}
-			if max <= 0 {
-				max = 1
-			}
-
-			ticks := plot.LogTicks{}.Ticks(min, max)
-			for i := range ticks {
-				if ticks[i].Label == "" {
-					continue
-				}
-				ticks[i].Label = formatSI(ticks[i].Value)
-			}
-			return ticks
-		})
-	} else {
-		p.Y.Scale = plot.LinearScale{}
-		p.Y.Label.Text = "Gas Price (wei, linear)"
-
-		// Custom ticker for linear scale
-		p.Y.Tick.Marker = plot.TickerFunc(func(min, max float64) []plot.Tick {
-			ticks := plot.DefaultTicks{}.Ticks(min, max)
-			for i := range ticks {
-				if ticks[i].Label == "" {
-					continue
-				}
-				ticks[i].Label = formatSI(ticks[i].Value)
-			}
-			return ticks
-		})
-	}
-
-	txGroups := make(map[uint64]plotter.XYs)
-	txGroups[0] = make(plotter.XYs, 0) // target txs
-	txGroups[1] = make(plotter.XYs, 0) // gasLimit <= 1,000,000
-	txGroups[2] = make(plotter.XYs, 0) // gasLimit <= 2,000,000
-	txGroups[3] = make(plotter.XYs, 0) // gasLimit <= 3,000,000
-	txGroups[4] = make(plotter.XYs, 0) // gasLimit <= 4,000,000
-	txGroups[5] = make(plotter.XYs, 0) // gasLimit <= 5,000,000
-	txGroups[6] = make(plotter.XYs, 0) // gasLimit > 5,000,000
-
-	for _, b := range metadata.blocksMetadata.blocks {
-		for _, t := range b.txs {
-			// For plotting on a logarithmic Y scale we must avoid zero/negative values.
-			// Clamp gasPrice to at least 1 for visualization purposes; this means the
-			// plotted gas price may differ from the original t.gasPrice when it is <= 0.
-			gasPrice := t.gasPrice
-			if gasPrice <= 0 {
-				gasPrice = 1
-			}
-
-			// Use the local gasPrice variable (protected) in all appends
-			if t.target {
-				txGroups[0] = append(txGroups[0], plotter.XY{X: float64(b.number), Y: float64(gasPrice)})
-			} else if t.gasLimit <= 1000000 {
-				txGroups[1] = append(txGroups[1], plotter.XY{X: float64(b.number), Y: float64(gasPrice)})
-			} else if t.gasLimit <= 2000000 {
-				txGroups[2] = append(txGroups[2], plotter.XY{X: float64(b.number), Y: float64(gasPrice)})
-			} else if t.gasLimit <= 3000000 {
-				txGroups[3] = append(txGroups[3], plotter.XY{X: float64(b.number), Y: float64(gasPrice)})
-			} else if t.gasLimit <= 4000000 {
-				txGroups[4] = append(txGroups[4], plotter.XY{X: float64(b.number), Y: float64(gasPrice)})
-			} else if t.gasLimit <= 5000000 {
-				txGroups[5] = append(txGroups[5], plotter.XY{X: float64(b.number), Y: float64(gasPrice)})
-			} else {
-				txGroups[6] = append(txGroups[6], plotter.XY{X: float64(b.number), Y: float64(gasPrice)})
-			}
-		}
-	}
-
-	// other transactions (groups 1-6, index 0 is for target txs)
-	for group := 1; group <= 6; group++ {
-		points := txGroups[uint64(group)]
-		if len(points) == 0 {
+	// Add series for each gas limit group
+	for i, name := range gasLimitGroupNames {
+		if len(txGroups[i]) == 0 {
 			continue
 		}
-		sc, err := plotter.NewScatter(points)
-		if err != nil {
-			log.Error().Err(err).Int("group", group).Msg("Failed to create scatter plot")
-			continue
-		}
-		sc.GlyphStyle.Color = txDotsColor
-		sc.GlyphStyle.Shape = draw.CircleGlyph{}
-		sc.GlyphStyle.Radius = txDotsSizes[group-1]
-		p.Add(sc)
+		scatter.AddSeries(name, txGroups[i],
+			charts.WithItemStyleOpts(opts.ItemStyle{
+				Color:   txDotsColor,
+				Opacity: opts.Float(0.6),
+			}),
+			charts.WithScatterChartOpts(opts.ScatterChart{
+				SymbolSize: txDotsSizes[i],
+			}),
+		)
 	}
 
-	// target transactions
-	if len(txGroups[0]) > 0 {
-		sc, err := plotter.NewScatter(txGroups[0])
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to create target tx scatter plot")
-			return
-		}
-		sc.GlyphStyle.Color = targetTxDotsColor
-		sc.GlyphStyle.Shape = ThickCrossGlyph{Width: targetTxDotsThickness}
-		sc.GlyphStyle.Radius = targetTxDotsSize
-		p.Add(sc)
-		p.Legend.Add("Target transactions", sc)
+	// Add target transactions series
+	if len(targetTxs) > 0 {
+		scatter.AddSeries("Target Txs", targetTxs,
+			charts.WithItemStyleOpts(opts.ItemStyle{
+				Color:   targetTxColor,
+				Opacity: opts.Float(1),
+			}),
+			charts.WithScatterChartOpts(opts.ScatterChart{
+				Symbol:     "diamond",
+				SymbolSize: 16,
+			}),
+		)
 	}
+
+	return scatter
 }
 
-// createLines creates line plots for various gas metrics.
-func createLines(p *plot.Plot, metadata txGasChartMetadata) {
+// createLineChart creates line series for various gas metrics.
+func createLineChart(metadata txGasChartMetadata) *charts.Line {
+	line := charts.NewLine()
+
 	numBlocks := len(metadata.blocksMetadata.blocks)
-	blocks := make([]uint64, numBlocks)
-	perBlockAvgGasPrice := make(map[uint64]float64, numBlocks)
-	pointsBlockGasLimit := make(plotter.XYs, numBlocks)
-	pointsTxsGasLimit := make(plotter.XYs, numBlocks)
-	pointsAvgGasUsed := make(plotter.XYs, numBlocks)
-	pointsGasUsed := make(plotter.XYs, numBlocks)
+
+	pointsBlockGasLimit := make([]opts.LineData, numBlocks)
+	pointsTxsGasLimit := make([]opts.LineData, numBlocks)
+	pointsAvgGasUsed := make([]opts.LineData, numBlocks)
+	pointsGasUsed := make([]opts.LineData, numBlocks)
 
 	for i, b := range metadata.blocksMetadata.blocks {
-		blocks[i] = b.number
+		blockHash := b.Hash.Hex()
+		txCount := len(b.Txs)
 
-		// Protect avgGasPrice for logarithmic scale
-		avgGasPrice := float64(b.avgGasPrice)
-		if avgGasPrice <= 0 {
-			avgGasPrice = 1
+		pointsBlockGasLimit[i] = opts.LineData{
+			Value: []any{b.Number, b.GasLimit},
+			Name:  formatLineTooltip("Block Gas Limit", b.Number, blockHash, txCount, float64(b.GasLimit)),
 		}
-		perBlockAvgGasPrice[b.number] = avgGasPrice
-
-		pointsBlockGasLimit[i].X = float64(b.number)
-		pointsBlockGasLimit[i].Y = scaleGasToGasPrice(b.gasLimit, metadata)
-
-		pointsTxsGasLimit[i].X = float64(b.number)
-		pointsTxsGasLimit[i].Y = scaleGasToGasPrice(b.txsGasLimit, metadata)
-
-		pointsAvgGasUsed[i].X = float64(b.number)
-		pointsAvgGasUsed[i].Y = scaleGasToGasPrice(metadata.blocksMetadata.avgBlockGasUsed, metadata)
-
-		pointsGasUsed[i].X = float64(b.number)
-		pointsGasUsed[i].Y = scaleGasToGasPrice(b.gasUsed, metadata)
+		pointsTxsGasLimit[i] = opts.LineData{
+			Value: []any{b.Number, b.TxsGasLimit},
+			Name:  formatLineTooltip("Transaction Gas Limit", b.Number, blockHash, txCount, float64(b.TxsGasLimit)),
+		}
+		pointsAvgGasUsed[i] = opts.LineData{
+			Value: []any{b.Number, metadata.blocksMetadata.avgBlockGasUsed},
+			Name:  formatLineTooltip("Avg Block Gas Used", b.Number, blockHash, txCount, float64(metadata.blocksMetadata.avgBlockGasUsed)),
+		}
+		pointsGasUsed[i] = opts.LineData{
+			Value: []any{b.Number, b.GasUsed},
+			Name:  formatLineTooltip("Block Gas Used", b.Number, blockHash, txCount, float64(b.GasUsed)),
+		}
 	}
 
-	addLine := func(points plotter.XYs, c color.Color, label string) {
-		line, err := plotter.NewLine(points)
-		if err != nil {
-			log.Error().Err(err).Str("label", label).Msg("Failed to create line plot")
-			return
-		}
-		line.Color = c
-		line.Width = lineThickness
-		p.Add(line)
-		p.Legend.Add(label, line)
-	}
+	// Line chart options (all use the same Y-axis)
+	lineChartOpts := charts.WithLineChartOpts(opts.LineChart{
+		Symbol:     "circle",
+		SymbolSize: 4,
+		ShowSymbol: opts.Bool(true),
+		YAxisIndex: 0,
+	})
 
-	addLine(rollingMean(blocks, perBlockAvgGasPrice, 30), avgGasPriceLineColor, "30-block avg gas price")
-	addLine(pointsGasUsed, gasUsedLineColor, "Block gas used")
-	addLine(pointsTxsGasLimit, gasTxsLimitLineColor, "Txs gas limit")
-	addLine(pointsBlockGasLimit, gasBlockLimitLineColor, "Block gas limit")
-	addLine(pointsAvgGasUsed, avgGasUsedLineColor, "Avg block gas used")
+	line.AddSeries("Block Gas Used", pointsGasUsed,
+		charts.WithLineStyleOpts(opts.LineStyle{Color: gasUsedLineColor, Width: 2}),
+		charts.WithItemStyleOpts(opts.ItemStyle{Color: gasUsedLineColor}),
+		lineChartOpts,
+	).
+		AddSeries("Transaction Gas Limit", pointsTxsGasLimit,
+			charts.WithLineStyleOpts(opts.LineStyle{Color: gasTxsLimitLineColor, Width: 2}),
+			charts.WithItemStyleOpts(opts.ItemStyle{Color: gasTxsLimitLineColor}),
+			lineChartOpts,
+		).
+		AddSeries("Block Gas Limit", pointsBlockGasLimit,
+			charts.WithLineStyleOpts(opts.LineStyle{Color: gasBlockLimitLineColor, Width: 2}),
+			charts.WithItemStyleOpts(opts.ItemStyle{Color: gasBlockLimitLineColor}),
+			lineChartOpts,
+		).
+		AddSeries("Avg Block Gas Used", pointsAvgGasUsed,
+			charts.WithLineStyleOpts(opts.LineStyle{Color: avgGasUsedLineColor, Width: 2}),
+			charts.WithItemStyleOpts(opts.ItemStyle{Color: avgGasUsedLineColor}),
+			lineChartOpts,
+		)
+
+	return line
 }
 
-// save saves the plot to the specified output path.
-func save(p *plot.Plot, metadata txGasChartMetadata) error {
-	if err := p.Save(1600, 900, metadata.outputPath); err != nil {
-		return err
+// createTitle creates the chart title.
+func createTitle(metadata txGasChartMetadata) string {
+	return fmt.Sprintf("ChainID: %d | Blocks %d - %d (%d) | Transactions: %d",
+		metadata.chainID, metadata.startBlock, metadata.endBlock,
+		metadata.endBlock-metadata.startBlock, metadata.blocksMetadata.txCount)
+}
+
+// createSubtitle creates the chart subtitle (target address info if specified).
+func createSubtitle(metadata txGasChartMetadata) string {
+	if len(metadata.targetAddr) > 0 {
+		return fmt.Sprintf("Target: %s (%d transactions)", metadata.targetAddr, metadata.blocksMetadata.targetTxCount)
 	}
+	return ""
+}
+
+// groupTransactionsByGasLimit groups transactions by their gas limit into scatter data.
+// Returns a slice of groups (indexed 0-5 for ≤1M through >5M) and a separate slice for target txs.
+func groupTransactionsByGasLimit(metadata txGasChartMetadata) ([][]opts.ScatterData, []opts.ScatterData) {
+	txGroups := make([][]opts.ScatterData, numGasLimitGroups)
+	for i := range txGroups {
+		txGroups[i] = make([]opts.ScatterData, 0)
+	}
+	targetTxs := make([]opts.ScatterData, 0)
+
+	for _, b := range metadata.blocksMetadata.blocks {
+		blockHash := b.Hash.Hex()
+		for _, t := range b.Txs {
+			// Clamp gasLimit to at least 1 for logarithmic Y scale
+			gasLimit := t.GasLimit
+			if gasLimit <= 0 {
+				gasLimit = 1
+			}
+
+			groupIdx := gasLimitToGroupIndex(t.GasLimit)
+			seriesName := gasLimitGroupNames[groupIdx]
+			if t.Target {
+				seriesName = "Target Txs"
+			}
+
+			// Value: [blockNumber, gasLimit] with pre-formatted tooltip in Name
+			point := opts.ScatterData{
+				Value: []any{b.Number, gasLimit},
+				Name:  formatTxTooltip(seriesName, b.Number, blockHash, t.Hash.Hex(), t.GasLimit, t.GasPrice),
+			}
+
+			if t.Target {
+				targetTxs = append(targetTxs, point)
+				continue
+			}
+
+			txGroups[groupIdx] = append(txGroups[groupIdx], point)
+		}
+	}
+
+	return txGroups, targetTxs
+}
+
+// gasLimitToGroupIndex returns the group index (0-5) for a given gas limit.
+func gasLimitToGroupIndex(gasLimit uint64) int {
+	switch {
+	case gasLimit <= gasLimit1M:
+		return 0
+	case gasLimit <= gasLimit2M:
+		return 1
+	case gasLimit <= gasLimit3M:
+		return 2
+	case gasLimit <= gasLimit4M:
+		return 3
+	case gasLimit <= gasLimit5M:
+		return 4
+	default:
+		return 5
+	}
+}
+
+// templateData holds the data for rendering the chart template.
+type templateData struct {
+	Width        string
+	Height       string
+	Renderer     string
+	ChartOptions template.JS
+}
+
+// save saves the chart to the specified output path using the custom template.
+func save(chart *charts.Scatter, metadata txGasChartMetadata) error {
+	// Render chart to buffer to extract options JSON
+	var buf bytes.Buffer
+	if err := chart.Render(&buf); err != nil {
+		return fmt.Errorf("failed to render chart: %w", err)
+	}
+
+	// Extract the chart options JSON from the rendered HTML
+	chartOptions, err := extractChartOptions(buf.String())
+	if err != nil {
+		return fmt.Errorf("failed to extract chart options: %w", err)
+	}
+
+	// Prepare template data
+	data := templateData{
+		Width:        "1600px",
+		Height:       "900px",
+		Renderer:     metadata.renderer,
+		ChartOptions: template.JS(chartOptions),
+	}
+
+	// Parse and execute template
+	tmpl, err := template.New("chart").Parse(chartTemplate)
+	if err != nil {
+		return fmt.Errorf("failed to parse template: %w", err)
+	}
+
+	f, err := os.Create(metadata.outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer f.Close()
+
+	if err := tmpl.Execute(f, data); err != nil {
+		return fmt.Errorf("failed to execute template: %w", err)
+	}
+
 	log.Info().
 		Str("file", metadata.outputPath).
 		Msg("Chart saved successfully")
 	return nil
 }
 
-// rollingMean calculates the rolling mean of per-block average gas prices over a specified window.
-func rollingMean(blocks []uint64, perBlockAvg map[uint64]float64, window int) plotter.XYs {
-	slices.Sort(blocks)
-	points := make(plotter.XYs, len(blocks))
-	sum := 0.0
-	buffer := make([]float64, 0, window)
-	for i, b := range blocks {
-		val := perBlockAvg[b]
-		buffer = append(buffer, val)
-		sum += val
-		if len(buffer) > window {
-			sum -= buffer[0]
-			buffer = buffer[1:]
+// extractChartOptions extracts the echarts options JSON from rendered go-echarts HTML.
+func extractChartOptions(htmlContent string) (string, error) {
+	// go-echarts renders: let option_XXXXX = {...};
+	// Find the start of the options assignment
+	re := regexp.MustCompile(`let option_\w+ = `)
+	loc := re.FindStringIndex(htmlContent)
+	if loc == nil {
+		return "", fmt.Errorf("could not find chart options in rendered HTML")
+	}
+
+	// Start after "let option_XXX = "
+	start := loc[1]
+
+	// Find the matching closing brace by counting braces
+	braceCount := 0
+	end := start
+	for i := start; i < len(htmlContent); i++ {
+		switch htmlContent[i] {
+		case '{':
+			braceCount++
+		case '}':
+			braceCount--
+			if braceCount == 0 {
+				end = i + 1
+				return htmlContent[start:end], nil
+			}
 		}
-		points[i].X = float64(b)
-		points[i].Y = sum / float64(len(buffer))
-	}
-	return points
-}
-
-// scaleGasToGasPrice scales the gas limit to a corresponding gas price based on the provided metadata.
-func scaleGasToGasPrice(gasLimit uint64, metadata txGasChartMetadata) float64 {
-	minTxGasPrice := metadata.blocksMetadata.minTxGasPrice
-	maxTxGasPrice := metadata.blocksMetadata.maxTxGasPrice
-
-	maxBlockGasLimit := metadata.blocksMetadata.maxBlockGasLimit
-
-	if maxBlockGasLimit == 0 {
-		return 1
 	}
 
-	yRange := float64(maxTxGasPrice) - float64(minTxGasPrice)
-	proportion := float64(gasLimit) / float64(maxBlockGasLimit)
-	y := proportion*yRange + float64(minTxGasPrice)
-
-	if y < 1 {
-		y = 1
-	}
-	return y
-}
-
-// formatSI formats a number with intuitive suffixes (k, M, B, T).
-func formatSI(v float64) string {
-	if v < 1 {
-		return fmt.Sprintf("%g", v)
-	}
-
-	var suffix string
-	var scaled float64
-
-	switch {
-	case v >= 1e12:
-		scaled = v / 1e12
-		suffix = "T"
-	case v >= 1e9:
-		scaled = v / 1e9
-		suffix = "B"
-	case v >= 1e6:
-		scaled = v / 1e6
-		suffix = "M"
-	case v >= 1e3:
-		scaled = v / 1e3
-		suffix = "k"
-	default:
-		return fmt.Sprintf("%.0f", v)
-	}
-
-	// Remove trailing zeros and decimal point if not needed
-	formatted := fmt.Sprintf("%.2f", scaled)
-	formatted = strings.TrimRight(formatted, "0")
-	formatted = strings.TrimRight(formatted, ".")
-	return formatted + suffix
-}
-
-// ThickCrossGlyph draws an 'X' with configurable stroke width.
-type ThickCrossGlyph struct {
-	Width vg.Length
-}
-
-// DrawGlyph implements the GlyphDrawer interface.
-func (g ThickCrossGlyph) DrawGlyph(c *draw.Canvas, sty draw.GlyphStyle, p vg.Point) {
-	if !c.Contains(p) {
-		return
-	}
-	r := sty.Radius
-	ls := draw.LineStyle{Color: sty.Color, Width: g.Width}
-
-	// Horizontal
-	h := []vg.Point{{X: p.X - r, Y: p.Y}, {X: p.X + r, Y: p.Y}}
-	// Vertical
-	v := []vg.Point{{X: p.X, Y: p.Y - r}, {X: p.X, Y: p.Y + r}}
-	// Diagonal 1 (top-left -> bottom-right)
-	d1 := []vg.Point{{X: p.X - r, Y: p.Y + r}, {X: p.X + r, Y: p.Y - r}}
-	// Diagonal 2 (bottom-left -> top-right)
-	d2 := []vg.Point{{X: p.X - r, Y: p.Y - r}, {X: p.X + r, Y: p.Y + r}}
-
-	c.StrokeLines(ls, h)
-	c.StrokeLines(ls, v)
-	c.StrokeLines(ls, d1)
-	c.StrokeLines(ls, d2)
+	return "", fmt.Errorf("could not find matching closing brace for chart options")
 }
