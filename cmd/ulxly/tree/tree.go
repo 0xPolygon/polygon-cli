@@ -313,7 +313,7 @@ func generateZeroHashes(height uint8) []common.Hash {
 	return zeroHashes
 }
 
-// computeNullifierTree computes the nullifier tree root from raw claims data
+// ComputeNullifierTree computes the nullifier tree root from raw claims data
 func ComputeNullifierTree(rawClaims []byte) (common.Hash, error) {
 	buf := bytes.NewBuffer(rawClaims)
 	scanner := bufio.NewScanner(buf)
@@ -350,7 +350,7 @@ func ComputeNullifierTree(rawClaims []byte) (common.Hash, error) {
 	return root, nil
 }
 
-// computeBalanceTree computes the balance tree root from claims and deposits data
+// ComputeBalanceTree computes the balance tree root from claims and deposits data
 func ComputeBalanceTree(client *ethclient.Client, bridgeAddress common.Address, l2RawClaims []byte, l2NetworkID uint32, l2RawDeposits []byte) (common.Hash, map[string]*big.Int, error) {
 	buf := bytes.NewBuffer(l2RawClaims)
 	scanner := bufio.NewScanner(buf)
@@ -441,7 +441,7 @@ type BalanceTreeOptions struct {
 	Insecure                                            bool
 }
 
-// getInputData reads input data from file, args, or stdin
+// GetInputData reads input data from file, args, or stdin
 func GetInputData(args []string, fileName string) ([]byte, error) {
 	if fileName != "" {
 		return os.ReadFile(fileName)
@@ -455,7 +455,7 @@ func GetInputData(args []string, fileName string) ([]byte, error) {
 	return io.ReadAll(os.Stdin)
 }
 
-// getBalanceTreeData reads the claims and deposits files
+// GetBalanceTreeData reads the claims and deposits files
 func GetBalanceTreeData(opts *BalanceTreeOptions) ([]byte, []byte, error) {
 	claimsFileName := opts.L2ClaimsFile
 	file, err := os.Open(claimsFileName)

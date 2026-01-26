@@ -2,7 +2,7 @@
 // There are 2 primary functionalities:
 // - encoding
 // - decoding
-// All specifications of encoding and decoding adheres to Solidity's ABI specs:
+// All specifications of encoding and decoding adhere to Solidity's ABI specs:
 // https://docs.soliditylang.org/en/latest/abi-spec.html
 package abi
 
