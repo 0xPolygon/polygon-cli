@@ -175,7 +175,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@8b0419c685ef46cb79ec93fbdc131174afceb730 # v1.6.0
+        uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1.7.0
         with:
           version: ${{ env.FOUNDRY_VERSION }}
       - name: Install Geth
