@@ -473,7 +473,6 @@ func extractChartOptions(htmlContent string) (string, error) {
 
 	// Find the matching closing brace by counting braces
 	braceCount := 0
-	end := start
 	for i := start; i < len(htmlContent); i++ {
 		switch htmlContent[i] {
 		case '{':
@@ -481,8 +480,7 @@ func extractChartOptions(htmlContent string) (string, error) {
 		case '}':
 			braceCount--
 			if braceCount == 0 {
-				end = i + 1
-				return htmlContent[start:end], nil
+				return htmlContent[start : i+1], nil
 			}
 		}
 	}

@@ -74,18 +74,6 @@ func (v *GasVault) SpendOrWaitAvailableBudget(ctx context.Context, gas uint64) e
 	return nil
 }
 
-// trySpendBudget tries to spend the specified amount of gas from the vault's available budget.
-// It returns true if the gas was successfully spent, or false if there was insufficient budget.
-func (v *GasVault) trySpendBudget(gas uint64) bool {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	if gas <= v.gasBudgetAvailable {
-		v.gasBudgetAvailable -= gas
-		return true
-	}
-	return false
-}
-
 // GetAvailableBudget returns the current available gas budget in the vault.
 func (v *GasVault) GetAvailableBudget() uint64 {
 	v.mu.Lock()

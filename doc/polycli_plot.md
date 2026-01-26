@@ -21,111 +21,171 @@ polycli plot [flags]
 
 # plot
 
-`plot` generates visual charts analyzing transaction gas prices and limits across a range of blocks. It fetches block data from an Ethereum-compatible RPC endpoint and produces a PNG chart showing gas price distribution,
-  transaction gas limits, block gas limits, and block gas usage over time.
+`plot` generates interactive HTML charts analyzing transaction gas prices and limits across a range of blocks. It fetches block data from an Ethereum-compatible RPC endpoint and produces an HTML chart showing gas price distribution, transaction gas limits, block gas limits, and block gas usage over time.
 
 ## Basic Usage
 
 Generate a chart for the last 500 blocks:
 
-$ polycli plot --rpc-url http://localhost:8545
+```bash
+polycli plot --rpc-url http://localhost:8545
+```
 
-This will create a file named tx_gasprice_chart.png in the current directory.
+This will create a file named `plot.html` in the current directory.
 
-Analyzing Specific Block Ranges
+## Analyzing Specific Block Ranges
 
 Analyze blocks 9356826 to 9358826:
-$ polycli plot --rpc-url https://sepolia.infura.io/v3/YOUR_API_KEY \
+
+```bash
+polycli plot --rpc-url https://sepolia.infura.io/v3/YOUR_API_KEY \
   --start-block 9356826 \
   --end-block 9358826 \
-  --output "sepolia_analysis.png"
+  --output "sepolia_analysis.html"
+```
 
-Highlighting Target Address Transactions
+## Highlighting Target Address Transactions
+
 Track transactions involving a specific address (either sent from or to):
 
-$ polycli plot --rpc-url http://localhost:8545 \
+```bash
+polycli plot --rpc-url http://localhost:8545 \
   --target-address "0xeE76bECaF80fFe451c8B8AFEec0c21518Def02f9" \
   --start-block 1000 \
   --end-block 2000
+```
 
 Target transactions will be highlighted in the chart and logged during execution.
 
-Performance Options
+## Performance Options
 
-When fetching large block ranges, adjust rate limiting and concurrency:
+When fetching large block ranges, adjust rate limiting and concurrency.
 
 Process 10 blocks concurrently with 10 requests/second rate limit:
-$ polycli plot --rpc-url http://localhost:8545 \
+
+```bash
+polycli plot --rpc-url http://localhost:8545 \
   --concurrency 10 \
   --rate-limit 10 \
   --start-block 1000 \
   --end-block 5000
+```
 
 Remove rate limiting entirely (use with caution):
-$ polycli plot --rpc-url http://localhost:8545 \
+
+```bash
+polycli plot --rpc-url http://localhost:8545 \
   --rate-limit -1 \
   --concurrency 20
+```
 
-Chart Scale Options
+## Renderer Options
 
-Choose between logarithmic (default) and linear scale for the gas price axis:
+Choose between SVG (default) and Canvas rendering. Both output HTML files but use different rendering technologies.
 
-Use linear scale for gas prices:
-$ polycli plot --rpc-url http://localhost:8545 \
-  --scale "linear" \
-  --output "linear_chart.png"
+Use SVG renderer (default, sharper at any zoom level):
 
-Use logarithmic scale (default):
-$ polycli plot --rpc-url http://localhost:8545 \
-  --scale "log" \
-  --output "log_chart.png"
+```bash
+polycli plot --rpc-url http://localhost:8545 \
+  --renderer "svg" \
+  --output "svg_chart.html"
+```
 
-Understanding the Chart
+Use Canvas renderer (better performance for large datasets):
 
-The generated chart displays four key metrics:
+```bash
+polycli plot --rpc-url http://localhost:8545 \
+  --renderer "canvas" \
+  --output "canvas_chart.html"
+```
 
-1. Transaction Gas Prices: Individual transaction gas prices plotted as points, with target address transactions highlighted
-2. Transaction Gas Limits: Gas limits for individual transactions
-3. Block Gas Limits: Maximum gas limit per block
-4. Block Gas Used: Actual gas consumed per block
+## Understanding the Chart
 
-Example Use Cases
+The generated chart displays key metrics and is interactive:
+
+1. **Transaction Gas Prices**: Individual transaction gas prices plotted as points, with target address transactions highlighted
+2. **Transaction Gas Limits**: Gas limits for individual transactions (grouped by size)
+3. **Block Gas Limits**: Maximum gas limit per block
+4. **Block Gas Used**: Actual gas consumed per block
+5. **30-block Avg Gas Price**: Rolling average of gas prices
+
+Interactive features:
+- **Tooltips**: Hover over data points for details
+- **Zoom**: Use the slider or scroll to zoom into specific block ranges
+- **Legend Toggle**: Click legend items to show/hide series
+
+## Example Use Cases
 
 Analyzing gas price patterns during network congestion:
-$ polycli plot --rpc-url https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY \
+
+```bash
+polycli plot --rpc-url https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY \
   --start-block 18000000 \
   --end-block 18001000 \
-  --scale log \
-  --output mainnet_congestion.png
+  --output mainnet_congestion.html
+```
 
 Tracking your contract deployment gas costs:
-$ polycli plot --rpc-url http://localhost:8545 \
+
+```bash
+polycli plot --rpc-url http://localhost:8545 \
   --target-address 0xYourContractAddress \
-  --output my_contract_gas.png
+  --output my_contract_gas.html
+```
 
 Analyzing test network behavior:
-$ polycli plot --rpc-url http://localhost:8545 \
+
+```bash
+polycli plot --rpc-url http://localhost:8545 \
   --concurrency 1 \
   --rate-limit 4 \
-  --output local_test.png
+  --output local_test.html
+```
 
-Notes
+## Caching Block Data
 
-- If --start-block is not set, the command analyzes the last 500 blocks
-- If --end-block exceeds the latest block or is not set, it defaults to the latest block
+To avoid re-fetching block data from the RPC endpoint, use the `--cache` flag to store data in an NDJSON file:
+
+```bash
+# First run: fetches from RPC and writes to cache
+polycli plot --rpc-url http://localhost:8545 \
+  --start-block 1000 \
+  --end-block 2000 \
+  --cache blocks.ndjson
+
+# Subsequent runs: reads from cache (much faster)
+polycli plot --rpc-url http://localhost:8545 \
+  --start-block 1000 \
+  --end-block 2000 \
+  --cache blocks.ndjson
+
+# Target address filtering works with cache
+polycli plot --rpc-url http://localhost:8545 \
+  --cache blocks.ndjson \
+  --target-address 0xYourAddress
+```
+
+This is useful when iterating on chart options (renderer, target-address) without waiting for RPC queries.
+
+## Notes
+
+- If `--start-block` is not set, the command analyzes the last 500 blocks
+- If `--end-block` exceeds the latest block or is not set, it defaults to the latest block
 - The command logs the 20 most frequently used gas prices at debug level
-- Charts use PNG format and can be opened with any image viewer
+- Charts are saved in HTML format with interactive features
+- Cache files use NDJSON format (one JSON object per line) for efficient streaming
 
 ## Flags
 
 ```bash
+      --cache string            cache file path for block data (.ndjson); if set, reads from cache if exists, otherwise fetches and writes to cache
   -c, --concurrency uint        number of tasks to perform concurrently (default: one at a time) (default 1)
       --end-block uint          ending block number (inclusive) (default 18446744073709551615)
   -h, --help                    help for plot
-  -o, --output string           where to save the chart image (default: tx_gasprice_chart.png) (default "tx_gasprice_chart.png")
+  -o, --output string           output file path (default "plot.html")
       --rate-limit float        requests per second limit (use negative value to remove limit) (default 4)
+      --renderer string         chart renderer (options: svg, canvas) (default "svg")
       --rpc-url string          RPC URL of network (default "http://localhost:8545")
-      --scale string            scale for gas price axis (options: log, linear) (default "log")
       --start-block uint        starting block number (inclusive) (default 18446744073709551615)
       --target-address string   address that will have tx sent from or to highlighted in the chart
 ```
