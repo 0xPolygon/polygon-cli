@@ -317,6 +317,152 @@ go func() {
 }()
 ```
 
+## Additional Patterns & Lessons Learned
+
+### Random Variation Formula
+When implementing random variation within a percentage range:
+
+```go
+// ✅ DO: Correct uniform distribution
+variationMin := 1.0 - variation  // e.g., 0.7 for ±30%
+variationMax := 1.0 + variation  // e.g., 1.3 for ±30%
+factor := variationMin + rand.Float64() * (variationMax - variationMin)
+// Result: uniformly distributed between 0.7 and 1.3
+
+// ❌ DON'T: Incorrect - produces wrong range
+factor := variationMin + rand.Float64() * variationMax
+// Result: distributed between 0.7 and 2.0 (not ±30%!)
+```
+
+### Type Conversion Safety (big.Int and int64)
+When converting between types with different ranges:
+
+```go
+// ✅ DO: Check bounds before conversion
+numBlocks := len(blocks)
+if numBlocks == 0 {
+    avgGasUsed = 0
+} else if numBlocks > math.MaxInt64 {
+    log.Warn().Msg("value exceeds int64 max")
+    avgGasUsed = 0
+} else {
+    result := new(big.Int).Div(total, big.NewInt(int64(numBlocks)))
+    if result.IsUint64() {
+        avgGasUsed = result.Uint64()
+    } else {
+        avgGasUsed = math.MaxUint64
+        log.Warn().Msg("result exceeds uint64 max")
+    }
+}
+
+// ❌ DON'T: Blindly convert without checking
+avgGasUsed = new(big.Int).Div(total, big.NewInt(int64(len(blocks)))).Uint64()
+// Can panic if len(blocks) > MaxInt64 or result > MaxUint64
+```
+
+### Blocking Operations Must Accept Context
+Any operation that can block must accept `context.Context` for cancellation:
+
+```go
+// ✅ DO: Accept context, use ticker, handle cancellation
+func (v *Vault) SpendOrWait(ctx context.Context, amount uint64) error {
+    ticker := time.NewTicker(100 * time.Millisecond)
+    defer ticker.Stop()
+
+    for {
+        if v.trySpend(amount) {
+            return nil
+        }
+        select {
+        case <-ticker.C:
+            continue
+        case <-ctx.Done():
+            return ctx.Err()
+        }
+    }
+}
+
+// ❌ DON'T: Use bare time.Sleep in infinite loop
+func (v *Vault) SpendOrWait(amount uint64) {
+    for {
+        if v.trySpend(amount) {
+            break
+        }
+        time.Sleep(100 * time.Millisecond)  // Cannot be cancelled!
+    }
+}
+```
+
+### Constructor Validation
+Validate inputs in constructors and return errors:
+
+```go
+// ✅ DO: Validate and return error
+func NewDynamicPricer(config Config) (*DynamicPricer, error) {
+    if len(config.Prices) == 0 {
+        return nil, fmt.Errorf("config.Prices cannot be empty")
+    }
+    return &DynamicPricer{config: config}, nil
+}
+
+// ❌ DON'T: Panic on invalid input or allow invalid state
+func NewDynamicPricer(config Config) *DynamicPricer {
+    // Will panic on first use if Prices is empty
+    return &DynamicPricer{config: config}
+}
+```
+
+### Documentation Must Match Implementation
+Keep documentation (especially README files) synchronized with code:
+
+**Critical to document:**
+- Function signatures including context parameters and return types
+- Error return conditions (not just success path)
+- Async/timing behavior (e.g., "vault has zero budget until first block header received")
+- Cancellation behavior
+
+**Example:**
+```markdown
+<!-- ✅ DO: Accurate signature and behavior -->
+- **`SpendOrWaitAvailableBudget(context.Context, uint64) error`**:
+  Attempts to spend gas; blocks if insufficient budget is available or until context is cancelled.
+  Returns nil on success, ctx.Err() if cancelled.
+
+<!-- ❌ DON'T: Outdated or incomplete -->
+- **`SpendOrWaitAvailableBudget(uint64)`**:
+  Attempts to spend gas; blocks if insufficient budget is available.
+```
+
+### Test Coverage Requirements
+When adding new components, always include comprehensive unit tests:
+
+**Required test categories:**
+- Basic functionality (creation, getters, setters)
+- Edge cases (zero values, nil inputs, overflow, division by zero)
+- Error conditions (invalid configs, failed operations)
+- Concurrency (multiple goroutines, race conditions)
+- Context cancellation (immediate cancel, timeout, graceful shutdown)
+- Blocking/waiting behavior (wait then succeed, wait then timeout)
+
+**Pattern for concurrent tests:**
+```go
+func TestConcurrentAccess(t *testing.T) {
+    component := NewComponent()
+    const numGoroutines = 100
+    var wg sync.WaitGroup
+
+    for i := 0; i < numGoroutines; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            // Perform concurrent operations
+        }()
+    }
+    wg.Wait()
+    // Verify final state
+}
+```
+
 ## Code Style
 
 ### Cobra Flags

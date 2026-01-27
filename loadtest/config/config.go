@@ -110,6 +110,9 @@ type Config struct {
 	// UniswapV3-specific config (set by uniswapv3 subcommand)
 	UniswapV3 *UniswapV3Config
 
+	// Gas manager config (optional, for gas oscillation features)
+	GasManager *GasManagerConfig
+
 	// Computed fields (populated during initialization)
 	CurrentGasPrice       *big.Int
 	CurrentGasTipCap      *big.Int
@@ -123,6 +126,21 @@ type Config struct {
 	ParsedModes           []Mode
 	MultiMode             bool
 	BigGasPriceMultiplier *big.Float
+}
+
+// GasManagerConfig holds gas manager configuration for oscillation waves and pricing strategies.
+type GasManagerConfig struct {
+	// Oscillation wave options
+	OscillationWave string // flat, sine, square, triangle, sawtooth
+	Target          uint64 // target gas limit baseline
+	Period          uint64 // period in blocks
+	Amplitude       uint64 // amplitude of oscillation
+
+	// Pricing strategy options
+	PriceStrategy             string  // estimated, fixed, dynamic
+	FixedGasPriceWei          uint64  // for fixed strategy
+	DynamicGasPricesWei       string  // comma-separated prices for dynamic strategy
+	DynamicGasPricesVariation float64 // ±percentage variation for dynamic
 }
 
 // UniswapV3Config holds UniswapV3-specific configuration.
@@ -191,6 +209,25 @@ func (c *UniswapV3Config) Validate() error {
 
 	if (c.PoolToken0 != "") != (c.PoolToken1 != "") {
 		return errors.New("both pool tokens must be empty or specified. Specifying only one token is not allowed")
+	}
+
+	return nil
+}
+
+// Validate validates the GasManagerConfig and returns an error if any validation fails.
+func (c *GasManagerConfig) Validate() error {
+	switch c.OscillationWave {
+	case "flat", "sine", "square", "triangle", "sawtooth":
+		// Valid wave type.
+	default:
+		return fmt.Errorf("invalid oscillation wave type: %s", c.OscillationWave)
+	}
+
+	switch c.PriceStrategy {
+	case "estimated", "fixed", "dynamic":
+		// Valid strategy.
+	default:
+		return fmt.Errorf("invalid price strategy: %s", c.PriceStrategy)
 	}
 
 	return nil

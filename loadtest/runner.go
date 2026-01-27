@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,6 +20,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/bindings/tester"
 	"github.com/0xPolygon/polygon-cli/bindings/tokens"
 	"github.com/0xPolygon/polygon-cli/loadtest/config"
+	"github.com/0xPolygon/polygon-cli/loadtest/gasmanager"
 	"github.com/0xPolygon/polygon-cli/loadtest/mode"
 	"github.com/0xPolygon/polygon-cli/loadtest/modes"
 	"github.com/0xPolygon/polygon-cli/loadtest/uniswapv3"
@@ -48,6 +50,10 @@ type Runner struct {
 	// Mode execution
 	modes             []mode.Runner
 	waitBaseFeeToDrop atomic.Bool
+
+	// Gas manager
+	gasVault  *gasmanager.GasVault
+	gasPricer *gasmanager.GasPricer
 
 	// Clients
 	client    *ethclient.Client
@@ -111,6 +117,11 @@ func (r *Runner) Init(ctx context.Context) error {
 
 	// Initialize load test parameters
 	if err := r.initParams(ctx); err != nil {
+		return err
+	}
+
+	// Initialize gas manager if configured
+	if err := r.setupGasManager(ctx); err != nil {
 		return err
 	}
 
@@ -569,6 +580,14 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 				}
 
 				sendingTops = r.configureTransactOpts(ctx, sendingTops)
+
+				// Spend gas budget if gas vault is configured
+				if r.gasVault != nil && sendingTops.GasLimit > 0 {
+					if budgetErr := r.gasVault.SpendOrWaitAvailableBudget(ctx, sendingTops.GasLimit); budgetErr != nil {
+						log.Error().Err(budgetErr).Msg("Error waiting for gas budget")
+						return
+					}
+				}
 
 				// Execute the selected mode
 				startReq, endReq, ltTxHash, tErr = selectedMode.Execute(ctx, cfg, r.deps, sendingTops)
@@ -1135,8 +1154,12 @@ func (r *Runner) getSuggestedGasPrices(ctx context.Context) (*big.Int, *big.Int)
 	defer r.cachedGasPriceLock.Unlock()
 
 	bn := r.getLatestBlockNumber(ctx)
-	if r.cachedBlockNumber != nil && bn <= *r.cachedBlockNumber {
-		return r.cachedGasPrice, r.cachedGasTipCap
+
+	// Cache is used only when gas pricer is not used
+	if r.gasPricer == nil {
+		if r.cachedBlockNumber != nil && bn <= *r.cachedBlockNumber {
+			return r.cachedGasPrice, r.cachedGasTipCap
+		}
 	}
 
 	var gasPrice, gasTipCap = big.NewInt(0), big.NewInt(0)
@@ -1147,12 +1170,23 @@ func (r *Runner) getSuggestedGasPrices(ctx context.Context) (*big.Int, *big.Int)
 		if cfg.ForceGasPrice != 0 {
 			gasPrice = new(big.Int).SetUint64(cfg.ForceGasPrice)
 		} else {
-			gasPrice, pErr = r.client.SuggestGasPrice(ctx)
-			if pErr == nil {
-				gasPrice = r.biasGasPrice(gasPrice)
+			var gp *uint64
+			if r.gasPricer != nil {
+				gp = r.gasPricer.GetGasPrice()
+			}
+			if gp != nil {
+				gasPrice = big.NewInt(0).SetUint64(*gp)
 			} else {
-				log.Error().Err(pErr).Msg("Unable to suggest gas price")
-				return r.cachedGasPrice, r.cachedGasTipCap
+				if r.cachedBlockNumber != nil && bn <= *r.cachedBlockNumber {
+					return r.cachedGasPrice, r.cachedGasTipCap
+				}
+				gasPrice, pErr = r.client.SuggestGasPrice(ctx)
+				if pErr == nil {
+					gasPrice = r.biasGasPrice(gasPrice)
+				} else {
+					log.Error().Err(pErr).Msg("Unable to suggest gas price")
+					return r.cachedGasPrice, r.cachedGasTipCap
+				}
 			}
 		}
 	} else {
@@ -1161,12 +1195,16 @@ func (r *Runner) getSuggestedGasPrices(ctx context.Context) (*big.Int, *big.Int)
 			gasTipCap = new(big.Int).SetUint64(cfg.ForcePriorityGasPrice)
 			forcePriorityGasPrice = gasTipCap
 		} else if cfg.ChainSupportBaseFee {
-			gasTipCap, tErr = r.client.SuggestGasTipCap(ctx)
-			if tErr == nil {
-				gasTipCap = r.biasGasPrice(gasTipCap)
+			if r.cachedBlockNumber != nil && bn <= *r.cachedBlockNumber {
+				gasTipCap = r.cachedGasTipCap
 			} else {
-				log.Error().Err(tErr).Msg("Unable to suggest gas tip cap")
-				return r.cachedGasPrice, r.cachedGasTipCap
+				gasTipCap, tErr = r.client.SuggestGasTipCap(ctx)
+				if tErr == nil {
+					gasTipCap = r.biasGasPrice(gasTipCap)
+				} else {
+					log.Error().Err(tErr).Msg("Unable to suggest gas tip cap")
+					return r.cachedGasPrice, r.cachedGasTipCap
+				}
 			}
 		} else {
 			log.Fatal().Msg("Chain does not support base fee. Please set priority-gas-price flag with a value to use for gas tip cap")
@@ -1175,7 +1213,18 @@ func (r *Runner) getSuggestedGasPrices(ctx context.Context) (*big.Int, *big.Int)
 		if cfg.ForceGasPrice != 0 {
 			gasPrice = new(big.Int).SetUint64(cfg.ForceGasPrice)
 		} else if cfg.ChainSupportBaseFee {
-			gasPrice = r.suggestMaxFeePerGas(ctx, bn, forcePriorityGasPrice)
+			var gp *uint64
+			if r.gasPricer != nil {
+				gp = r.gasPricer.GetGasPrice()
+			}
+			if gp != nil {
+				gasPrice = big.NewInt(0).SetUint64(*gp)
+			} else {
+				if r.cachedBlockNumber != nil && bn <= *r.cachedBlockNumber {
+					return r.cachedGasPrice, r.cachedGasTipCap
+				}
+				gasPrice = r.suggestMaxFeePerGas(ctx, bn, forcePriorityGasPrice)
+			}
 		} else {
 			log.Fatal().Msg("Chain does not support base fee. Please set gas-price flag with a value to use for max fee per gas")
 		}
@@ -1185,11 +1234,14 @@ func (r *Runner) getSuggestedGasPrices(ctx context.Context) (*big.Int, *big.Int)
 	r.cachedGasPrice = gasPrice
 	r.cachedGasTipCap = gasTipCap
 
-	log.Debug().
-		Uint64("cachedBlockNumber", bn).
-		Interface("cachedGasPrice", r.cachedGasPrice).
-		Interface("cachedGasTipCap", r.cachedGasTipCap).
-		Msg("Updating gas prices")
+	// Only log when cache is used (gasPricer not active)
+	if r.gasPricer == nil {
+		log.Debug().
+			Uint64("cachedBlockNumber", bn).
+			Interface("cachedGasPrice", r.cachedGasPrice).
+			Interface("cachedGasTipCap", r.cachedGasTipCap).
+			Msg("Updating gas prices")
+	}
 
 	return r.cachedGasPrice, r.cachedGasTipCap
 }
@@ -1365,6 +1417,132 @@ func (r *Runner) GetClient() *ethclient.Client {
 // GetConfig returns the configuration.
 func (r *Runner) GetConfig() *config.Config {
 	return r.cfg
+}
+
+func (r *Runner) setupGasManager(ctx context.Context) error {
+	if r.cfg.GasManager == nil {
+		return nil
+	}
+
+	gasVault, err := r.setupGasVault(ctx)
+	if err != nil {
+		return err
+	}
+	r.gasVault = gasVault
+
+	gasPricer, err := r.setupGasPricer()
+	if err != nil {
+		return err
+	}
+	r.gasPricer = gasPricer
+
+	return nil
+}
+
+func (r *Runner) setupGasVault(ctx context.Context) (*gasmanager.GasVault, error) {
+	log.Trace().Msg("Setting up gas limiter")
+	gm := r.cfg.GasManager
+
+	waveCfg := gasmanager.WaveConfig{
+		Period:    gm.Period,
+		Amplitude: gm.Amplitude,
+		Target:    gm.Target,
+	}
+
+	wave, err := createWave(gm.OscillationWave, waveCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Trace().
+		Str("Wave", gm.OscillationWave).
+		Uint64("Period", gm.Period).
+		Uint64("Amplitude", gm.Amplitude).
+		Uint64("Target", gm.Target).
+		Msg("Using oscillation wave")
+
+	gasVault := gasmanager.NewGasVault()
+	gasProvider := gasmanager.NewOscillatingGasProvider(r.client, gasVault, wave)
+	gasProvider.Start(ctx)
+
+	return gasVault, nil
+}
+
+func createWave(waveType string, cfg gasmanager.WaveConfig) (gasmanager.Wave, error) {
+	switch waveType {
+	case "flat":
+		return gasmanager.NewFlatWave(cfg), nil
+	case "sine":
+		return gasmanager.NewSineWave(cfg), nil
+	case "sawtooth":
+		return gasmanager.NewSawtoothWave(cfg), nil
+	case "square":
+		return gasmanager.NewSquareWave(cfg), nil
+	case "triangle":
+		return gasmanager.NewTriangleWave(cfg), nil
+	default:
+		return nil, fmt.Errorf("unknown gas oscillation wave: %s", waveType)
+	}
+}
+
+func (r *Runner) setupGasPricer() (*gasmanager.GasPricer, error) {
+	gm := r.cfg.GasManager
+
+	strategy, err := createPriceStrategy(gm)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Trace().Str("Strategy", gm.PriceStrategy).Msg("Using gas price strategy")
+	return gasmanager.NewGasPricer(strategy), nil
+}
+
+func createPriceStrategy(gm *config.GasManagerConfig) (gasmanager.PriceStrategy, error) {
+	switch gm.PriceStrategy {
+	case "fixed":
+		return gasmanager.NewFixedGasPriceStrategy(gasmanager.FixedGasPriceConfig{
+			GasPriceWei: gm.FixedGasPriceWei,
+		}), nil
+	case "estimated":
+		return gasmanager.NewEstimatedGasPriceStrategy(), nil
+	case "dynamic":
+		return createDynamicPriceStrategy(gm)
+	default:
+		return nil, fmt.Errorf("unknown gas price strategy: %s", gm.PriceStrategy)
+	}
+}
+
+func createDynamicPriceStrategy(gm *config.GasManagerConfig) (gasmanager.PriceStrategy, error) {
+	gasPrices, err := parseDynamicGasPrices(gm.DynamicGasPricesWei)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(gasPrices) > 0 {
+		log.Trace().Any("GasPrices", gasPrices).Msg("Using custom dynamic gas prices")
+	}
+
+	return gasmanager.NewDynamicGasPriceStrategy(gasmanager.DynamicGasPriceConfig{
+		GasPrices: gasPrices,
+		Variation: gm.DynamicGasPricesVariation,
+	})
+}
+
+func parseDynamicGasPrices(pricesStr string) ([]uint64, error) {
+	if pricesStr == "" {
+		return nil, nil
+	}
+
+	parts := strings.Split(pricesStr, ",")
+	prices := make([]uint64, 0, len(parts))
+	for _, part := range parts {
+		price, err := strconv.ParseUint(strings.TrimSpace(part), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid gas price in dynamic gas prices list: %s", part)
+		}
+		prices = append(prices, price)
+	}
+	return prices, nil
 }
 
 // Run is a convenience function that creates a runner, initializes it, and runs the load test.

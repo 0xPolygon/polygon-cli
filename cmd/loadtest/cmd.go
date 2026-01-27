@@ -34,6 +34,9 @@ var cfg = &config.Config{
 // uniswapCfg holds UniswapV3-specific configuration.
 var uniswapCfg = &config.UniswapV3Config{}
 
+// gasManagerCfg holds gas manager configuration.
+var gasManagerCfg = &config.GasManagerConfig{}
+
 // LoadtestCmd represents the loadtest command.
 var LoadtestCmd = &cobra.Command{
 	Use:   "loadtest",
@@ -55,6 +58,8 @@ var LoadtestCmd = &cobra.Command{
 		return cfg.Validate()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Attach gas manager config.
+		cfg.GasManager = gasManagerCfg
 		return loadtest.Run(cmd.Context(), cfg)
 	},
 }
@@ -69,9 +74,10 @@ var uniswapv3Cmd = &cobra.Command{
 		return uniswapCfg.Validate()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Override mode to uniswapv3 and attach UniswapV3 config.
+		// Override mode to uniswapv3 and attach configs.
 		cfg.Modes = []string{"v3"}
 		cfg.UniswapV3 = uniswapCfg
+		cfg.GasManager = gasManagerCfg
 
 		return loadtest.Run(cmd.Context(), cfg)
 	},
@@ -115,6 +121,24 @@ func initPersistentFlags() {
 	pf.BoolVar(&cfg.LegacyTxMode, "legacy", false, "send a legacy transaction instead of an EIP1559 transaction")
 	pf.BoolVar(&cfg.FireAndForget, "fire-and-forget", false, "send transactions and load without waiting for it to be mined")
 	pf.BoolVar(&cfg.FireAndForget, "send-only", false, "alias for --fire-and-forget")
+
+	initGasManagerFlags()
+}
+
+func initGasManagerFlags() {
+	pf := LoadtestCmd.PersistentFlags()
+
+	// Oscillation wave
+	pf.StringVar(&gasManagerCfg.OscillationWave, "gas-manager-oscillation-wave", "flat", "type of oscillation wave (flat | sine | square | triangle | sawtooth)")
+	pf.Uint64Var(&gasManagerCfg.Target, "gas-manager-target", 30_000_000, "target gas limit for oscillation wave")
+	pf.Uint64Var(&gasManagerCfg.Period, "gas-manager-period", 1, "period in blocks for oscillation wave")
+	pf.Uint64Var(&gasManagerCfg.Amplitude, "gas-manager-amplitude", 0, "amplitude for oscillation wave")
+
+	// Pricing strategy
+	pf.StringVar(&gasManagerCfg.PriceStrategy, "gas-manager-price-strategy", "estimated", "gas price strategy (estimated | fixed | dynamic)")
+	pf.Uint64Var(&gasManagerCfg.FixedGasPriceWei, "gas-manager-fixed-gas-price-wei", 300000000, "fixed gas price in wei")
+	pf.StringVar(&gasManagerCfg.DynamicGasPricesWei, "gas-manager-dynamic-gas-prices-wei", "0,1000000,0,10000000,0,100000000", "comma-separated gas prices in wei for dynamic strategy")
+	pf.Float64Var(&gasManagerCfg.DynamicGasPricesVariation, "gas-manager-dynamic-gas-prices-variation", 0.3, "variation percentage for dynamic strategy")
 }
 
 func initFlags() {

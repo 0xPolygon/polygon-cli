@@ -52,6 +52,24 @@ Here is a simple example that runs 1000 requests at a max rate of 1 request per 
 $ polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 1000 --rate-limit 1 --mode t --rpc-url http://localhost:8888
 ```
 
+### Gas Manager
+
+The loadtest command includes a gas manager for controlling transaction gas limits and pricing. Use the `--gas-manager-*` flags to:
+
+- **Oscillate gas limits** with wave patterns (flat, sine, square, triangle, sawtooth)
+- **Control gas pricing** with strategies (estimated, fixed, dynamic)
+
+Example with sine wave oscillation:
+```bash
+$ polycli loadtest --rpc-url http://localhost:8545 \
+  --gas-manager-oscillation-wave sine \
+  --gas-manager-target 20000000 \
+  --gas-manager-amplitude 10000000 \
+  --gas-manager-period 100
+```
+
+See [Gas Manager README](../../loadtest/gasmanager/README.md) for detailed documentation.
+
 ### Load Test Contract
 
 The codebase has a contract that used for load testing. It's written in Solidity. The workflow for modifying this contract is.
