@@ -43,6 +43,9 @@ type cmdFundParams struct {
 	TokenAmount    *big.Int
 	ApproveSpender string
 	ApproveAmount  *big.Int
+
+	// Multicall3 batching
+	AccountsPerFundingTx uint64
 }
 
 var (
@@ -117,6 +120,7 @@ func init() {
 	// Contract parameters.
 	f.StringVar(&params.FunderAddress, "funder-address", "", "address of pre-deployed funder contract")
 	f.StringVar(&params.Multicall3Address, "multicall3-address", "", "address of pre-deployed multicall3 contract")
+	f.Uint64Var(&params.AccountsPerFundingTx, "accounts-per-funding-tx", 400, "number of accounts to fund per multicall3 transaction")
 
 	// RPC parameters.
 	f.Float64Var(&params.RateLimit, "rate-limit", 4, "requests per second limit (use negative value to remove limit)")

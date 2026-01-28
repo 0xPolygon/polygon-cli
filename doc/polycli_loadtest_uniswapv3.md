@@ -83,6 +83,7 @@ The command also inherits flags from parent commands.
       --adaptive-target-size uint                        target queue size for adaptive rate limiting (speed up if smaller, back off if larger) (default 1000)
       --batch-size uint                                  batch size for receipt fetching (default: 999) (default 999)
       --chain-id uint                                    chain ID for the transactions
+      --check-preconf                                    check for preconf status after sending tx
   -c, --concurrency int                                  number of requests to perform concurrently (default: one at a time) (default 1)
       --config string                                    config file (default is $HOME/.polygon-cli.yaml)
       --eth-amount-in-wei uint                           amount of ether in wei to send per transaction
@@ -104,6 +105,7 @@ The command also inherits flags from parent commands.
       --nonce uint                                       use this flag to manually set the starting nonce
       --output-mode string                               format mode for summary output (json | text) (default "text")
       --output-raw-tx-only                               output raw signed transaction hex without sending (works with most modes except RPC and UniswapV3)
+      --preconf-stats-file string                        base path for preconf stats JSON output (e.g., 'preconf' creates preconf-{timestamp}.json)
       --pretty-logs                                      output logs in pretty format instead of JSON (default true)
       --priority-gas-price uint                          gas tip price for EIP-1559 transactions
       --private-key string                               hex encoded private key to use for sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")

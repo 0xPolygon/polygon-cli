@@ -53,6 +53,8 @@ type Config struct {
 	RandomRecipients   bool
 	LegacyTxMode       bool
 	FireAndForget      bool
+	CheckForPreconf    bool
+	PreconfStatsFile   string
 	WaitForReceipt     bool
 	ReceiptRetryMax    uint
 	ReceiptRetryDelay  uint // initial delay in milliseconds
@@ -102,6 +104,8 @@ type Config struct {
 	RefundRemainingFunds      bool
 	SendingAccountsFile       string
 	CheckBalanceBeforeFunding bool
+	DumpSendingAccountsFile   string
+	AccountsPerFundingTx      uint64
 
 	// Summary output
 	ShouldProduceSummary bool
