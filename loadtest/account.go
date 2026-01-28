@@ -469,19 +469,19 @@ func (ap *AccountPool) FundAccounts(ctx context.Context) error {
 		return errors.New(errMsg)
 	}
 
-	// log.Debug().Msg("checking if multicall3 is supported")
-	// multicall3Addr, _ := util.IsMulticall3Supported(ctx, ap.client, true, tops, nil)
-	// if multicall3Addr != nil {
-	// 	log.Info().
-	// 		Stringer("address", multicall3Addr).
-	// 		Msg("multicall3 is supported and will be used to fund accounts")
-	// } else {
-	// 	log.Info().Msg("multicall3 is not supported, will use EOA transfers to fund accounts")
-	// }
+	log.Debug().Msg("checking if multicall3 is supported")
+	multicall3Addr, _ := util.IsMulticall3Supported(ctx, ap.client, true, tops, nil)
+	if multicall3Addr != nil {
+		log.Info().
+			Stringer("address", multicall3Addr).
+			Msg("multicall3 is supported and will be used to fund accounts")
+	} else {
+		log.Info().Msg("multicall3 is not supported, will use EOA transfers to fund accounts")
+	}
 
-	// if multicall3Addr != nil {
-	// 	return ap.fundAccountsWithMulticall3(ctx, tops, multicall3Addr)
-	// }
+	if multicall3Addr != nil {
+		return ap.fundAccountsWithMulticall3(ctx, tops, multicall3Addr)
+	}
 	return ap.fundAccountsWithEOATransfers(ctx, tops)
 }
 
@@ -489,16 +489,14 @@ func (ap *AccountPool) fundAccountsWithMulticall3(ctx context.Context, tops *bin
 	log.Debug().
 		Msg("funding sending accounts with multicall3")
 
-	// const defaultAccsToFundPerTx = 100
-	// accsToFundPerTx, err := util.Multicall3MaxAccountsToFundPerTx(ctx, ap.client)
-	// if err != nil {
-	// 	log.Warn().Err(err).
-	// 		Uint64("defaultAccsToFundPerTx", defaultAccsToFundPerTx).
-	// 		Msg("failed to get multicall3 max accounts to fund per tx, falling back to default")
-	// 	accsToFundPerTx = defaultAccsToFundPerTx
-	// }
-	var accsToFundPerTx uint64 = 100
-	var err error
+	const defaultAccsToFundPerTx = 100
+	accsToFundPerTx, err := util.Multicall3MaxAccountsToFundPerTx(ctx, ap.client)
+	if err != nil {
+		log.Warn().Err(err).
+			Uint64("defaultAccsToFundPerTx", defaultAccsToFundPerTx).
+			Msg("failed to get multicall3 max accounts to fund per tx, falling back to default")
+		accsToFundPerTx = defaultAccsToFundPerTx
+	}
 	log.Debug().Uint64("accsToFundPerTx", accsToFundPerTx).Msg("multicall3 max accounts to fund per tx")
 	chSize := (uint64(len(ap.accounts)) / accsToFundPerTx) + 1
 
@@ -1195,8 +1193,12 @@ func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.Pr
 			Data:      nil,
 			Value:     amount,
 		}
-		log.Info().Uint64("gasFeeCap", dynamicFeeTx.GasFeeCap.Uint64()).Uint64("gasTipCap", dynamicFeeTx.GasTipCap.Uint64()).Msg("Creating fund tx")
 		tx = types.NewTx(dynamicFeeTx)
+
+		log.Info().
+			Uint64("gasFeeCap", dynamicFeeTx.GasFeeCap.Uint64()).
+			Uint64("gasTipCap", dynamicFeeTx.GasTipCap.Uint64()).
+			Msg("Creating fund tx")
 	}
 
 	signedTx, err := tops.Signer(tops.From, tx)
