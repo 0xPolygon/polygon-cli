@@ -17,14 +17,15 @@ import (
 )
 
 type PreconfTracker struct {
-	client *ethclient.Client
+	client        *ethclient.Client
+	statsFilePath string
 
 	// metrics
 	preconfSuccess     atomic.Uint64
 	preconfFail        atomic.Uint64
 	totalTasks         atomic.Uint64
 	bothFailedCount    atomic.Uint64
-	uneffectivePreconf atomic.Uint64
+	ineffectivePreconf atomic.Uint64
 	falsePositiveCount atomic.Uint64
 	confidence         atomic.Uint64
 
@@ -33,9 +34,10 @@ type PreconfTracker struct {
 	blockDiffs       []uint64
 }
 
-func NewPreconfTracker(client *ethclient.Client) *PreconfTracker {
+func NewPreconfTracker(client *ethclient.Client, statsFilePath string) *PreconfTracker {
 	return &PreconfTracker{
 		client:           client,
+		statsFilePath:    statsFilePath,
 		preconfDurations: make([]time.Duration, 0, 1024),
 	}
 }
@@ -104,13 +106,13 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 
 	case preconfError != nil && receiptError == nil:
 		// Receipt arrived but preconf failed: preconf wasn't effective
-		pt.uneffectivePreconf.Add(1)
+		pt.ineffectivePreconf.Add(1)
 
 	case preconfError == nil && receiptError == nil:
 		// Both succeeded
 		if preconfDuration > receiptDuration {
 			// Receipt arrived before preconf: preconf wasn't effective
-			pt.uneffectivePreconf.Add(1)
+			pt.ineffectivePreconf.Add(1)
 		}
 		// Track block diff for confidence
 		blockDiff := receipt.BlockNumber.Uint64() - currentBlock
@@ -128,10 +130,14 @@ func (pt *PreconfTracker) Stats() {
 		Uint64("preconf_success", pt.preconfSuccess.Load()).
 		Uint64("preconf_fail", pt.preconfFail.Load()).
 		Uint64("both_failed", pt.bothFailedCount.Load()).
-		Uint64("uneffective_preconf", pt.uneffectivePreconf.Load()).
+		Uint64("ineffective_preconf", pt.ineffectivePreconf.Load()).
 		Uint64("false_positives", pt.falsePositiveCount.Load()).
 		Uint64("confidence", pt.confidence.Load()).
 		Msg("Preconf Tracker Stats")
+
+	if pt.statsFilePath == "" {
+		return
+	}
 
 	// Copy data under lock, then write files without holding lock
 	pt.mu.Lock()
@@ -141,15 +147,15 @@ func (pt *PreconfTracker) Stats() {
 	copy(blockDiffs, pt.blockDiffs)
 	pt.mu.Unlock()
 
-	timestamp := time.Now().Format("20060102_150405")
-	path := "preconf_durations_" + timestamp + ".csv"
+	timestamp := time.Now().Format(time.RFC3339)
+	path := pt.statsFilePath + "_durations_" + timestamp + ".csv"
 	if err := dumpDurationsCSV(path, durations); err != nil {
 		log.Error().Err(err).Msg("Error dumping preconf durations")
 	} else {
 		log.Info().Str("path", path).Msg("Dumped preconf durations into file")
 	}
 
-	path = "preconf_block_diffs_" + timestamp + ".csv"
+	path = pt.statsFilePath + "_block_diffs_" + timestamp + ".csv"
 	if err := dumpBlockDiff(path, blockDiffs); err != nil {
 		log.Error().Err(err).Msg("Error dumping preconf block diffs")
 	} else {

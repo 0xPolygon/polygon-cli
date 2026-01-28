@@ -130,7 +130,7 @@ func (r *Runner) Init(ctx context.Context) error {
 
 	// Initialize preconf tracker if configured
 	if r.cfg.CheckForPreconf {
-		r.preconfTracker = NewPreconfTracker(r.client)
+		r.preconfTracker = NewPreconfTracker(r.client, r.cfg.PreconfStatsFile)
 		log.Info().Msg("Preconf tracker initialized")
 	}
 

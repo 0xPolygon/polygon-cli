@@ -122,6 +122,7 @@ func initPersistentFlags() {
 	pf.BoolVar(&cfg.FireAndForget, "fire-and-forget", false, "send transactions and load without waiting for it to be mined")
 	pf.BoolVar(&cfg.FireAndForget, "send-only", false, "alias for --fire-and-forget")
 	pf.BoolVar(&cfg.CheckForPreconf, "check-preconf", false, "check for preconf status after sending tx")
+	pf.StringVar(&cfg.PreconfStatsFile, "preconf-stats-file", "", "base path for preconf stats output files (e.g., 'preconf' creates preconf_durations.csv and preconf_block_diffs.csv)")
 
 	initGasManagerFlags()
 }

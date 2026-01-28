@@ -54,6 +54,7 @@ type Config struct {
 	LegacyTxMode       bool
 	FireAndForget      bool
 	CheckForPreconf    bool
+	PreconfStatsFile   string
 	WaitForReceipt     bool
 	ReceiptRetryMax    uint
 	ReceiptRetryDelay  uint // initial delay in milliseconds
