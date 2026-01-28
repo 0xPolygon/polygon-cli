@@ -103,6 +103,7 @@ type Config struct {
 	RefundRemainingFunds      bool
 	SendingAccountsFile       string
 	CheckBalanceBeforeFunding bool
+	DumpSendingAccountsFile   string
 
 	// Summary output
 	ShouldProduceSummary bool

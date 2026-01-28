@@ -310,6 +310,13 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		return errors.New("unable to set account pool: " + err.Error())
 	}
 
+	// Dump private keys to file if configured
+	if r.cfg.DumpSendingAccountsFile != "" {
+		if err := r.dumpPrivateKeys(); err != nil {
+			return err
+		}
+	}
+
 	// Wait for all accounts to be ready
 	for {
 		rdy, rdyCount, accQty := r.accountPool.AllAccountsReady()
@@ -1341,6 +1348,31 @@ func (r *Runner) GetResults() []Sample {
 // GetAccountPool returns the account pool.
 func (r *Runner) GetAccountPool() *AccountPool {
 	return r.accountPool
+}
+
+// dumpPrivateKeys writes the private keys of all accounts in the pool to a file.
+func (r *Runner) dumpPrivateKeys() error {
+	pks := r.accountPool.GetPrivateKeys()
+
+	f, err := os.Create(r.cfg.DumpSendingAccountsFile)
+	if err != nil {
+		return fmt.Errorf("failed to create private keys file: %w", err)
+	}
+	defer f.Close()
+
+	for _, pk := range pks {
+		pkStr := util.GetPrivateKeyHex(pk)
+		if _, err := fmt.Fprintf(f, "%s\n", pkStr); err != nil {
+			return fmt.Errorf("failed to write private key: %w", err)
+		}
+	}
+
+	log.Info().
+		Str("file", r.cfg.DumpSendingAccountsFile).
+		Int("count", len(pks)).
+		Msg("dumped private keys to file")
+
+	return nil
 }
 
 // Close cleans up runner resources.
