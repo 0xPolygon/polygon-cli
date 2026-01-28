@@ -7,7 +7,7 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/util"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -21,7 +21,7 @@ var (
 	//go:embed usage.md
 	usage string
 
-	rpcUrl      string
+	rpcURL      string
 	blockNumber uint64
 	filePath    string
 	txData      string
@@ -32,12 +32,12 @@ var EcRecoverCmd = &cobra.Command{
 	Short: "Recovers and returns the public key of the signature.",
 	Long:  usage,
 	Args:  cobra.NoArgs,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		rpcUrlFlagValue := flag_loader.GetRpcUrlFlagValue(cmd)
-		rpcUrl = *rpcUrlFlagValue
-	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		return checkFlags()
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		rpcURL, err = flag.GetRPCURL(cmd)
+		if err != nil {
+			return err
+		}
+		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := cmd.Context()
@@ -88,12 +88,12 @@ var EcRecoverCmd = &cobra.Command{
 			}
 
 		} else { // block signer block-number, requires rcp-url
-			if rpcUrl == "" {
+			if rpcURL == "" {
 				log.Error().Msg("No RPC URL provided")
 				return
 			}
 			var rpc *ethrpc.Client
-			rpc, err = ethrpc.DialContext(ctx, rpcUrl)
+			rpc, err = ethrpc.DialContext(ctx, rpcURL)
 			if err != nil {
 				log.Error().Err(err).Msg("Unable to dial rpc")
 				return
@@ -128,21 +128,9 @@ var EcRecoverCmd = &cobra.Command{
 
 func init() {
 	f := EcRecoverCmd.Flags()
-	f.StringVarP(&rpcUrl, "rpc-url", "r", "", "the RPC endpoint URL")
+	f.StringVarP(&rpcURL, flag.RPCURL, "r", "", "the RPC endpoint URL")
 	f.Uint64VarP(&blockNumber, "block-number", "b", 0, "block number to check the extra data for (default: latest)")
 	f.StringVarP(&filePath, "file", "f", "", "path to a file containing block information in JSON format")
 	f.StringVarP(&txData, "tx", "t", "", "transaction data in hex format")
-
-	// The sources of decoding are mutually exclusive
 	EcRecoverCmd.MarkFlagsMutuallyExclusive("file", "block-number", "tx")
-}
-
-func checkFlags() error {
-	var err error
-	if rpcUrl != "" {
-		if err = util.ValidateUrl(rpcUrl); err != nil {
-			return err
-		}
-	}
-	return err
 }

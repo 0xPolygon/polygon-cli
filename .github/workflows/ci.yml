@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
-      - uses: crate-ci/typos@2d0ce569feab1f8752f1dde43cc2f2aa53236e06 # v1.40.0
+      - uses: crate-ci/typos@65120634e79d8374d1aa2f27e54baa0c364fff5a # v1.42.1
 
   gen-doc:
     name: Check gen-doc generated files
@@ -175,7 +175,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@8b0419c685ef46cb79ec93fbdc131174afceb730 # v1.6.0
+        uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1.7.0
         with:
           version: ${{ env.FOUNDRY_VERSION }}
       - name: Install Geth
@@ -186,7 +186,7 @@ jobs:
             sudo apt-get install ethereum
             geth --version
           fi
-      - name: Run loadtest againt ${{ matrix.tool }}
+      - name: Run loadtest against ${{ matrix.tool }}
         run: |
           ${{ matrix.tool }} --version
           make ${{ matrix.tool }} &

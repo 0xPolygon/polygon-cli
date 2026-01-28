@@ -65,7 +65,6 @@ This command is very specific for the ulxly bridge, and it's meant to
 serve as the input to the proof command.
 
 
-
 ## Flags
 
 ```bash

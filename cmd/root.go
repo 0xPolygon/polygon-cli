@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+
 	"github.com/0xPolygon/polygon-cli/cmd/abi"
 	"github.com/0xPolygon/polygon-cli/cmd/cdk"
 	"github.com/0xPolygon/polygon-cli/cmd/contract"
@@ -27,16 +30,16 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/parsebatchl2data"
 	"github.com/0xPolygon/polygon-cli/cmd/parseethwallet"
 	"github.com/0xPolygon/polygon-cli/cmd/publish"
+	"github.com/0xPolygon/polygon-cli/cmd/report"
 	"github.com/0xPolygon/polygon-cli/cmd/retest"
 	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz"
 	"github.com/0xPolygon/polygon-cli/cmd/signer"
+	"github.com/0xPolygon/polygon-cli/cmd/plot"
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly"
 	"github.com/0xPolygon/polygon-cli/cmd/version"
 	"github.com/0xPolygon/polygon-cli/cmd/wallet"
 	"github.com/0xPolygon/polygon-cli/cmd/wrapcontract"
 	"github.com/0xPolygon/polygon-cli/util"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -146,6 +149,7 @@ func NewPolycliCommand() *cobra.Command {
 		nodekey.NodekeyCmd,
 		p2p.P2pCmd,
 		parseethwallet.ParseETHWalletCmd,
+		report.ReportCmd,
 		retest.RetestCmd,
 		rpcfuzz.RPCFuzzCmd,
 		signer.SignerCmd,
@@ -158,6 +162,8 @@ func NewPolycliCommand() *cobra.Command {
 		publish.Cmd,
 		dockerlogger.Cmd,
 		contract.Cmd,
+		plot.Cmd,
 	)
+
 	return cmd
 }

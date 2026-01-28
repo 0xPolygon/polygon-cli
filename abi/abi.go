@@ -2,7 +2,7 @@
 // There are 2 primary functionalities:
 // - encoding
 // - decoding
-// All specifications of encoding and decoding adheres to Solidity's ABI specs:
+// All specifications of encoding and decoding adhere to Solidity's ABI specs:
 // https://docs.soliditylang.org/en/latest/abi-spec.html
 package abi
 
@@ -211,14 +211,14 @@ func (fs *FunctionSignature) Encode(functionArguments []string) (string, error) 
 }
 
 // EncodeInput encodes an object with the mapped function arg type.
-func (fat FunctionArgType) EncodeInput(object Object) (EncodedItem, error) {
+func (f FunctionArgType) EncodeInput(object Object) (EncodedItem, error) {
 	vals := make([]EncodedItem, 0)
 	tailLoc := 0 // idx ptr to beginning of tail location
 	var convertedVal string
 	var conversionErr error
 
 	switch {
-	case len(fat.Array) > 0:
+	case len(f.Array) > 0:
 		// Array must go first since a representation of it can evaluate to true on more than one of these instances.
 		// An array representation of `string[][3]`` would be something like:
 		//	{
@@ -228,11 +228,11 @@ func (fat FunctionArgType) EncodeInput(object Object) (EncodedItem, error) {
 		//	    "[3]",
 		//	  },
 		//	},
-		// numOfNestedLevel = count the nested level, i.e. len of fat.Array
+		// numOfNestedLevel = count the nested level, i.e. len of f.Array
 		// while numOfNestedLevel > 0: numOfNestedLevel-- and recurse
 		// when numOfNestedLevel == 0: iterate through each Array.Elements and do regular conversion when reach base type
-		subFat := fat
-		subFat.Array = subFat.Array[1:] // this is the scenario of numOfNestedLevel > 0: numOfNestedLevel-- and recurse
+		subF := f
+		subF.Array = subF.Array[1:] // this is the scenario of numOfNestedLevel > 0: numOfNestedLevel-- and recurse
 
 		lenOfArray := len(object.Array.Elements)
 		lenOfArrayHex, err := ConvertInt(fmt.Sprintf("%d", lenOfArray))
@@ -243,7 +243,7 @@ func (fat FunctionArgType) EncodeInput(object Object) (EncodedItem, error) {
 
 		// TODO: For a fixed size array, type[M], validate the number of len(object.Array.Elements) == "M"
 		for _, itemObject := range object.Array.Elements {
-			encodedInput, err := subFat.EncodeInput(itemObject)
+			encodedInput, err := subF.EncodeInput(itemObject)
 			if err != nil {
 				return EncodedItem{}, err
 			}
@@ -257,14 +257,14 @@ func (fat FunctionArgType) EncodeInput(object Object) (EncodedItem, error) {
 
 			vals = append(vals, encodedInput)
 		}
-	case fat.Tuple != nil:
+	case f.Tuple != nil:
 		// Tuple is less complicated than arrays since we just iterate through each items
-		if len(object.Tuple.Elements) != len(fat.Tuple.Elements) {
-			return EncodedItem{}, fmt.Errorf("Mismatched length of tuple elements. Expected: %d elements, received %d", len(fat.Tuple.Elements), len(object.Tuple.Elements))
+		if len(object.Tuple.Elements) != len(f.Tuple.Elements) {
+			return EncodedItem{}, fmt.Errorf("Mismatched length of tuple elements. Expected: %d elements, received %d", len(f.Tuple.Elements), len(object.Tuple.Elements))
 		}
 
 		for idx, tupleItemObject := range object.Tuple.Elements {
-			encodedInput, err := fat.Tuple.Elements[idx].EncodeInput(tupleItemObject)
+			encodedInput, err := f.Tuple.Elements[idx].EncodeInput(tupleItemObject)
 			if err != nil {
 				return EncodedItem{}, err
 			}
@@ -278,62 +278,62 @@ func (fat FunctionArgType) EncodeInput(object Object) (EncodedItem, error) {
 
 			vals = append(vals, encodedInput)
 		}
-	case strings.Contains(fat.Type, "string"):
+	case strings.Contains(f.Type, "string"):
 		stringVal := object.Val
 		if object.Stringval != "" {
 			stringVal = strings.Trim(object.Stringval, `"`) // TODO: maybe move this logic (the grabbed surrounding quotations) into the lexer?
 		}
 		convertedVal, conversionErr = ConvertString(stringVal)
 		if conversionErr != nil {
-			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, fat.Type, conversionErr)
+			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
 		}
 		return EncodedItem{Tail: convertedVal}, nil
-	case fat.Type == "bytes":
+	case f.Type == "bytes":
 		convertedVal, conversionErr = ConvertBytes(object.Val)
 		if conversionErr != nil {
-			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, fat.Type, conversionErr)
+			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
 		}
 		return EncodedItem{Tail: convertedVal}, nil
-	case strings.HasPrefix(fat.Type, "int"):
+	case strings.HasPrefix(f.Type, "int"):
 		// TODO: validate input is within int<size> limit
 		convertedVal, conversionErr = ConvertInt(object.Val)
 		if conversionErr != nil {
-			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, fat.Type, conversionErr)
+			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
 		}
 		return EncodedItem{Head: convertedVal}, nil
-	case strings.HasPrefix(fat.Type, "uint"):
+	case strings.HasPrefix(f.Type, "uint"):
 		// TODO: validate input is within uint<size> limit
 		convertedVal, conversionErr = ConvertUint(object.Val)
 		if conversionErr != nil {
-			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, fat.Type, conversionErr)
+			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
 		}
 		return EncodedItem{Head: convertedVal}, nil
-	case strings.Contains(fat.Type, "bool"):
+	case strings.Contains(f.Type, "bool"):
 		convertedVal, conversionErr = ConvertBool(object.Val)
 		if conversionErr != nil {
-			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, fat.Type, conversionErr)
+			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
 		}
 		return EncodedItem{Head: convertedVal}, nil
-	case strings.HasPrefix(fat.Type, "bytes"):
-		convertedVal, conversionErr = ConvertByteSize(object.Val, fat.Type)
+	case strings.HasPrefix(f.Type, "bytes"):
+		convertedVal, conversionErr = ConvertByteSize(object.Val, f.Type)
 		if conversionErr != nil {
-			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, fat.Type, conversionErr)
+			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
 		}
 		return EncodedItem{Head: convertedVal}, nil
-	case fat.Type == "address":
+	case f.Type == "address":
 		convertedVal, conversionErr = ConvertAddress(object.Val)
 		if conversionErr != nil {
-			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, fat.Type, conversionErr)
+			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
 		}
 		return EncodedItem{Head: convertedVal}, nil
 	default:
-		return EncodedItem{}, fmt.Errorf("Invalid type %s", fat.Type)
+		return EncodedItem{}, fmt.Errorf("Invalid type %s", f.Type)
 	}
 
 	// backfill dynamic types...
 	head := ""
 	tail := ""
-	if len(fat.Array) > 0 || fat.Tuple != nil {
+	if len(f.Array) > 0 || f.Tuple != nil {
 		for _, val := range vals {
 			currHead := val.Head
 			if val.Tail != "" {
@@ -353,7 +353,7 @@ func (fat FunctionArgType) EncodeInput(object Object) (EncodedItem, error) {
 	// made it here so, it's either tuple or array. so we must take into account the following non-dynamic (static) edge cases for tuple or array:
 	// - (T1,...,Tk) if Ti is static for all 1 <= i <= k
 	// - T[k] for any static T and any k >= 0
-	if fat.IsStaticType() {
+	if f.IsStaticType() {
 		return EncodedItem{Head: head + tail}, nil
 	}
 
@@ -381,37 +381,37 @@ func (fat FunctionArgType) EncodeInput(object Object) (EncodedItem, error) {
 // - bytes<M>: binary type of M bytes, 0 < M <= 32
 // - (T1,...,Tk) if Ti is static for all 1 <= i <= k
 // - T[k] for any static T and any k >= 0
-func (fat FunctionArgType) IsStaticType() bool {
+func (f FunctionArgType) IsStaticType() bool {
 	switch {
-	case len(fat.Array) > 0:
+	case len(f.Array) > 0:
 		// - T[k] for any static T and any k >= 0
-		arrayDimensions := len(fat.Array)
-		if fat.Array[arrayDimensions-1] == "[]" {
+		arrayDimensions := len(f.Array)
+		if f.Array[arrayDimensions-1] == "[]" {
 			return false
 		}
-		subFat := fat
-		subFat.Array = subFat.Array[:arrayDimensions-1]
-		return subFat.IsStaticType()
-	case fat.Tuple != nil:
+		subF := f
+		subF.Array = subF.Array[:arrayDimensions-1]
+		return subF.IsStaticType()
+	case f.Tuple != nil:
 		// - (T1,...,Tk) if Ti is static for all 1 <= i <= k
 		isStatic := true
-		for _, tupleTypeObject := range fat.Tuple.Elements {
+		for _, tupleTypeObject := range f.Tuple.Elements {
 			isStatic = isStatic && tupleTypeObject.IsStaticType()
 		}
 		return isStatic
-	case strings.Contains(fat.Type, "string"):
+	case strings.Contains(f.Type, "string"):
 		return false
-	case fat.Type == "bytes":
+	case f.Type == "bytes":
 		return false
-	case strings.HasPrefix(fat.Type, "int"):
+	case strings.HasPrefix(f.Type, "int"):
 		return true
-	case strings.HasPrefix(fat.Type, "uint"):
+	case strings.HasPrefix(f.Type, "uint"):
 		return true
-	case strings.Contains(fat.Type, "bool"):
+	case strings.Contains(f.Type, "bool"):
 		return true
-	case strings.HasPrefix(fat.Type, "bytes"):
+	case strings.HasPrefix(f.Type, "bytes"):
 		return true
-	case fat.Type == "address":
+	case f.Type == "address":
 		return true
 	}
 

@@ -6,9 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/0xPolygon/polygon-cli/cmd/flag_loader"
 	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz/argfuzz"
-	"github.com/0xPolygon/polygon-cli/util"
+	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/ethereum/go-ethereum/crypto"
 	fuzz "github.com/google/gofuzz"
 	"github.com/rs/zerolog/log"
@@ -20,7 +19,7 @@ var (
 	usage string
 
 	// flags
-	rpcUrl              string
+	rpcURL              string
 	testPrivateHexKey   string
 	testContractAddress string
 	testNamespaces      string
@@ -42,13 +41,15 @@ var RPCFuzzCmd = &cobra.Command{
 	Short: "Continually run a variety of RPC calls and fuzzers.",
 	Long:  usage,
 	Args:  cobra.NoArgs,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		rpcUrlPtr := flag_loader.GetRpcUrlFlagValue(cmd)
-		rpcUrl = *rpcUrlPtr
-		privateKeyPtr := flag_loader.GetPrivateKeyFlagValue(cmd)
-		testPrivateHexKey = *privateKeyPtr
-	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
+	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		rpcURL, err = flag.GetRequiredRPCURL(cmd)
+		if err != nil {
+			return err
+		}
+		testPrivateHexKey, err = flag.GetPrivateKey(cmd)
+		if err != nil {
+			return err
+		}
 		return checkFlags()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -59,8 +60,8 @@ var RPCFuzzCmd = &cobra.Command{
 func init() {
 	f := RPCFuzzCmd.Flags()
 
-	f.StringVarP(&rpcUrl, "rpc-url", "r", "http://localhost:8545", "RPC endpoint URL")
-	f.StringVar(&testPrivateHexKey, "private-key", codeQualityPrivateKey, "hex encoded private key to use for sending transactions")
+	f.StringVarP(&rpcURL, flag.RPCURL, "r", flag.DefaultRPCURL, "RPC endpoint URL")
+	f.StringVar(&testPrivateHexKey, flag.PrivateKey, codeQualityPrivateKey, "hex encoded private key to use for sending transactions")
 	f.StringVar(&testContractAddress, "contract-address", "", "address of contract to use for testing (if not specified, contract will be deployed automatically)")
 	f.StringVar(&testNamespaces, "namespaces", fmt.Sprintf("eth,web3,net,debug,%s", rpcTestRawHTTPNamespace), "comma separated list of RPC namespaces to test")
 	f.BoolVar(&testFuzz, "fuzz", false, "flag to indicate whether to fuzz input or not")
@@ -86,14 +87,6 @@ func init() {
 }
 
 func checkFlags() (err error) {
-	// Check rpc-url flag.
-	if rpcUrl == "" {
-		panic("RPC URL is empty")
-	}
-	if err = util.ValidateUrl(rpcUrl); err != nil {
-		return
-	}
-
 	// Ensure only one streamer type is selected
 	streamerCount := 0
 	if streamJSON {

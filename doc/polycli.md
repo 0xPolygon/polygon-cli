@@ -80,7 +80,11 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli parseethwallet](polycli_parseethwallet.md) - Extract the private key from an eth wallet.
 
+- [polycli plot](polycli_plot.md) - Plot a chart of transaction gas prices and limits.
+
 - [polycli publish](polycli_publish.md) - Publish transactions to the network with high-throughput.
+
+- [polycli report](polycli_report.md) - Generate a report analyzing a range of blocks from an Ethereum-compatible blockchain.
 
 - [polycli retest](polycli_retest.md) - Convert the standard ETH test fillers into something to be replayed against an RPC.
 
