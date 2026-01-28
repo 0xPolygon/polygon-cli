@@ -83,62 +83,45 @@ func internalWaitReceipt(ctx context.Context, client *ethclient.Client, txHash c
 	}
 }
 
-func WaitReceiptNew(ctx context.Context, client *ethclient.Client, txHash common.Hash) (*types.Receipt, error) {
-	var maxRetries uint = 20
-	var timeout time.Duration = time.Minute
-	var delay time.Duration = 3 * time.Second
-
-	// Create context with timeout
-	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	for attempt := uint(0); ; attempt++ {
-		receipt, err := client.TransactionReceipt(timeoutCtx, txHash)
-		if err == nil && receipt != nil {
-			return receipt, nil
-		}
-
-		// If maxRetries > 0 and we've reached the limit, exit
-		// Note: effectiveMaxRetries is always > 0 due to default above
-		if maxRetries > 0 && attempt >= maxRetries-1 {
-			return nil, fmt.Errorf("failed to get receipt after %d attempts: %w", maxRetries, err)
-		}
-
-		select {
-		case <-timeoutCtx.Done():
-			return nil, timeoutCtx.Err()
-		case <-time.After(delay):
-			// Continue
-		}
+// WaitPreconf waits for a preconf status check with a specified timeout.
+// Uses exponential backoff with jitter, similar to WaitReceiptWithTimeout.
+func WaitPreconf(ctx context.Context, client *ethclient.Client, txHash common.Hash, timeout time.Duration) (bool, error) {
+	if timeout == 0 {
+		timeout = 1 * time.Minute
 	}
-}
 
-func WaitPreconf(ctx context.Context, client *ethclient.Client, txHash common.Hash) (bool, error) {
-	var maxRetries uint = 20
-	var timeout time.Duration = time.Minute
-	var delay time.Duration = 1500 * time.Millisecond
-
-	// Create context with timeout
 	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	const initialDelayMs = 100
+
 	for attempt := uint(0); ; attempt++ {
-		var res interface{}
-		err := client.Client().CallContext(ctx, &res, "eth_checkPreconfStatus", txHash.Hex())
+		var res any
+		err := client.Client().CallContext(timeoutCtx, &res, "eth_checkPreconfStatus", txHash.Hex())
 		if err == nil {
 			return res.(bool), nil
 		}
 
-		// If maxRetries > 0 and we've reached the limit, exit
-		// Note: effectiveMaxRetries is always > 0 due to default above
-		if maxRetries > 0 && attempt >= maxRetries-1 {
-			return false, fmt.Errorf("failed to get receipt after %d attempts: %w", maxRetries, err)
+		// Calculate delay with exponential backoff and jitter
+		baseDelay := time.Duration(initialDelayMs) * time.Millisecond
+		exponentialDelay := baseDelay * time.Duration(1<<attempt)
+
+		maxDelay := 30 * time.Second
+		if exponentialDelay > maxDelay {
+			exponentialDelay = maxDelay
 		}
+
+		maxJitter := exponentialDelay / 2
+		if maxJitter <= 0 {
+			maxJitter = 1 * time.Millisecond
+		}
+		jitter := time.Duration(rand.Int63n(int64(maxJitter)))
+		totalDelay := exponentialDelay + jitter
 
 		select {
 		case <-timeoutCtx.Done():
 			return false, timeoutCtx.Err()
-		case <-time.After(delay):
+		case <-time.After(totalDelay):
 			// Continue
 		}
 	}

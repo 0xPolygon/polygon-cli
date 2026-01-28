@@ -60,7 +60,7 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 			preconfDuration = time.Since(preconfStartTime)
 		}()
 
-		preconfStatus, preconfError = util.WaitPreconf(context.Background(), pt.client, txHash)
+		preconfStatus, preconfError = util.WaitPreconf(context.Background(), pt.client, txHash, time.Minute)
 	}()
 
 	// wait for receipt
@@ -78,7 +78,7 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 			receiptDuration = time.Since(receiptTime)
 		}()
 
-		receipt, receiptError = util.WaitReceiptNew(context.Background(), pt.client, txHash)
+		receipt, receiptError = util.WaitReceiptWithTimeout(context.Background(), pt.client, txHash, time.Minute)
 	}()
 
 	wg.Wait()
