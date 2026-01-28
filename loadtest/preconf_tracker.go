@@ -93,38 +93,27 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 		pt.preconfFail.Add(1)
 	}
 
-	// both failed case. no tx inclusion in txpool or block
-	if preconfError != nil && receiptError != nil {
+	switch {
+	case preconfError != nil && receiptError != nil:
+		// Both failed: no tx inclusion in txpool or block
 		pt.bothFailedCount.Add(1)
-	}
 
-	// both result arrived
-	if preconfError == nil && receiptError == nil {
-		// receipt arrived early before preconf suggesting that
-		// preconf wasn't effective.
+	case preconfError == nil && receiptError != nil:
+		// False positive: preconf said tx is included but never got executed
+		pt.falsePositiveCount.Add(1)
+
+	case preconfError != nil && receiptError == nil:
+		// Receipt arrived but preconf failed: preconf wasn't effective
+		pt.uneffectivePreconf.Add(1)
+
+	case preconfError == nil && receiptError == nil:
+		// Both succeeded
 		if preconfDuration > receiptDuration {
+			// Receipt arrived before preconf: preconf wasn't effective
 			pt.uneffectivePreconf.Add(1)
 		}
-	}
-
-	// receipt arrived but preconf failed suggesting that
-	// preconf wasn't effective
-	if receiptError == nil && preconfError != nil {
-		pt.uneffectivePreconf.Add(1)
-	}
-
-	// false positive. preconf said tx is included but never got executed.
-	// not most accurate as we only check for receipts for 1m and not forever
-	if preconfError == nil && receiptError != nil {
-		pt.falsePositiveCount.Add(1)
-	}
-
-	// both result arrived
-	if preconfError == nil && receiptError == nil {
-		// after how many blocks did the tx got mined
+		// Track block diff for confidence
 		blockDiff := receipt.BlockNumber.Uint64() - currentBlock
-		// if receipt received in less than 10 blocks and preconf said
-		// true, increase the confidence meter.
 		if blockDiff < 10 {
 			pt.mu.Lock()
 			pt.blockDiffs = append(pt.blockDiffs, blockDiff)
@@ -144,24 +133,28 @@ func (pt *PreconfTracker) Stats() {
 		Uint64("confidence", pt.confidence.Load()).
 		Msg("Preconf Tracker Stats")
 
+	// Copy data under lock, then write files without holding lock
 	pt.mu.Lock()
-	path := "preconf_durations" + time.Now().String() + ".csv"
-	err := dumpDurationsCSV(path, pt.preconfDurations)
-	if err != nil {
+	durations := make([]time.Duration, len(pt.preconfDurations))
+	copy(durations, pt.preconfDurations)
+	blockDiffs := make([]uint64, len(pt.blockDiffs))
+	copy(blockDiffs, pt.blockDiffs)
+	pt.mu.Unlock()
+
+	timestamp := time.Now().Format("20060102_150405")
+	path := "preconf_durations_" + timestamp + ".csv"
+	if err := dumpDurationsCSV(path, durations); err != nil {
 		log.Error().Err(err).Msg("Error dumping preconf durations")
 	} else {
 		log.Info().Str("path", path).Msg("Dumped preconf durations into file")
 	}
 
-	path = "preconf_block_diffs" + time.Now().String() + ".csv"
-	err = dumpBlockDiff(path, pt.blockDiffs)
-	if err != nil {
+	path = "preconf_block_diffs_" + timestamp + ".csv"
+	if err := dumpBlockDiff(path, blockDiffs); err != nil {
 		log.Error().Err(err).Msg("Error dumping preconf block diffs")
 	} else {
 		log.Info().Str("path", path).Msg("Dumped preconf block diffs into file")
 	}
-
-	pt.mu.Unlock()
 }
 
 func dumpBlockDiff(path string, diffs []uint64) error {

@@ -94,6 +94,10 @@ func WaitPreconf(ctx context.Context, client *ethclient.Client, txHash common.Ha
 	defer cancel()
 
 	const initialDelayMs = 100
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	// Drain initial timer since we want to check immediately on first iteration
+	<-timer.C
 
 	for attempt := uint(0); ; attempt++ {
 		var res any
@@ -118,10 +122,11 @@ func WaitPreconf(ctx context.Context, client *ethclient.Client, txHash common.Ha
 		jitter := time.Duration(rand.Int63n(int64(maxJitter)))
 		totalDelay := exponentialDelay + jitter
 
+		timer.Reset(totalDelay)
 		select {
 		case <-timeoutCtx.Done():
 			return false, timeoutCtx.Err()
-		case <-time.After(totalDelay):
+		case <-timer.C:
 			// Continue
 		}
 	}

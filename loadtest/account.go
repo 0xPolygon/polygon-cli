@@ -1201,11 +1201,6 @@ func (ap *AccountPool) createEOATransferTx(ctx context.Context, sender *ecdsa.Pr
 			Value:     amount,
 		}
 		tx = types.NewTx(dynamicFeeTx)
-
-		log.Info().
-			Uint64("gasFeeCap", dynamicFeeTx.GasFeeCap.Uint64()).
-			Uint64("gasTipCap", dynamicFeeTx.GasTipCap.Uint64()).
-			Msg("Creating fund tx")
 	}
 
 	signedTx, err := tops.Signer(tops.From, tx)
