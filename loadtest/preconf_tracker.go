@@ -175,17 +175,20 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 }
 
 func (pt *PreconfTracker) Stats() {
-	log.Info().Uint64("total_tasks", pt.totalTasks.Load()).
-		Uint64("preconf_success", pt.preconfSuccess.Load()).
-		Uint64("preconf_fail", pt.preconfFail.Load()).
-		Uint64("both_failed", pt.bothFailedCount.Load()).
-		Uint64("ineffective_preconf", pt.ineffectivePreconf.Load()).
-		Uint64("false_positives", pt.falsePositiveCount.Load()).
-		Uint64("confidence", pt.confidence.Load()).
-		Uint64("receipt_success", pt.receiptSuccess.Load()).
-		Uint64("receipt_fail", pt.receiptFail.Load()).
-		Uint64("total_gas_used", pt.totalGasUsed.Load()).
-		Msg("Preconf Tracker Stats")
+	summary := PreconfSummary{
+		TotalTasks:         pt.totalTasks.Load(),
+		PreconfSuccess:     pt.preconfSuccess.Load(),
+		PreconfFail:        pt.preconfFail.Load(),
+		BothFailed:         pt.bothFailedCount.Load(),
+		IneffectivePreconf: pt.ineffectivePreconf.Load(),
+		FalsePositives:     pt.falsePositiveCount.Load(),
+		Confidence:         pt.confidence.Load(),
+		ReceiptSuccess:     pt.receiptSuccess.Load(),
+		ReceiptFail:        pt.receiptFail.Load(),
+		TotalGasUsed:       pt.totalGasUsed.Load(),
+	}
+
+	log.Info().Any("summary", summary).Msg("Preconf tracker stats")
 
 	if pt.statsFilePath == "" {
 		return
@@ -199,18 +202,7 @@ func (pt *PreconfTracker) Stats() {
 
 	// Build JSON output
 	output := PreconfStats{
-		Summary: PreconfSummary{
-			TotalTasks:         pt.totalTasks.Load(),
-			PreconfSuccess:     pt.preconfSuccess.Load(),
-			PreconfFail:        pt.preconfFail.Load(),
-			BothFailed:         pt.bothFailedCount.Load(),
-			IneffectivePreconf: pt.ineffectivePreconf.Load(),
-			FalsePositives:     pt.falsePositiveCount.Load(),
-			Confidence:         pt.confidence.Load(),
-			ReceiptSuccess:     pt.receiptSuccess.Load(),
-			ReceiptFail:        pt.receiptFail.Load(),
-			TotalGasUsed:       pt.totalGasUsed.Load(),
-		},
+		Summary:      summary,
 		Transactions: txResults,
 	}
 
@@ -220,14 +212,14 @@ func (pt *PreconfTracker) Stats() {
 
 	data, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
-		log.Error().Err(err).Msg("Error marshaling preconf stats")
+		log.Error().Err(err).Msg("Failed to marshal preconf stats")
 		return
 	}
 
 	if err := os.WriteFile(path, data, 0644); err != nil {
-		log.Error().Err(err).Msg("Error writing preconf stats file")
+		log.Error().Err(err).Msg("Failed to write preconf stats file")
 		return
 	}
 
-	log.Info().Str("path", path).Msg("Dumped preconf stats into file")
+	log.Info().Str("path", path).Msg("Wrote preconf stats file")
 }
