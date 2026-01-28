@@ -31,6 +31,7 @@ type AccountPoolConfig struct {
 	RefundRemainingFunds      bool
 	CheckBalanceBeforeFunding bool
 	LegacyTxMode              bool
+	AccountsPerFundingTx      uint64
 	// Gas override settings
 	ForceGasPrice         uint64
 	ForcePriorityGasPrice uint64
@@ -489,13 +490,19 @@ func (ap *AccountPool) fundAccountsWithMulticall3(ctx context.Context, tops *bin
 	log.Debug().
 		Msg("funding sending accounts with multicall3")
 
-	const defaultAccsToFundPerTx = 400
+	fallbackAccsPerTx := ap.cfg.AccountsPerFundingTx
+	if fallbackAccsPerTx == 0 {
+		fallbackAccsPerTx = 400
+	}
 	accsToFundPerTx, err := util.Multicall3MaxAccountsToFundPerTx(ctx, ap.client)
 	if err != nil {
 		log.Warn().Err(err).
-			Uint64("defaultAccsToFundPerTx", defaultAccsToFundPerTx).
-			Msg("failed to get multicall3 max accounts to fund per tx, falling back to default")
-		accsToFundPerTx = defaultAccsToFundPerTx
+			Uint64("fallback", fallbackAccsPerTx).
+			Msg("failed to get multicall3 max accounts to fund per tx, falling back to flag value")
+		accsToFundPerTx = fallbackAccsPerTx
+	}
+	if fallbackAccsPerTx > 0 && fallbackAccsPerTx < accsToFundPerTx {
+		accsToFundPerTx = fallbackAccsPerTx
 	}
 	log.Debug().Uint64("accsToFundPerTx", accsToFundPerTx).Msg("multicall3 max accounts to fund per tx")
 	chSize := (uint64(len(ap.accounts)) / accsToFundPerTx) + 1

@@ -151,6 +151,7 @@ func initFlags() {
 	f.BoolVar(&cfg.RefundRemainingFunds, "refund-remaining-funds", false, "refund remaining balance to funding account after completion")
 	f.StringVar(&cfg.SendingAccountsFile, "sending-accounts-file", "", "file with sending account private keys, one per line (avoids pool queue and preserves accounts across runs)")
 	f.StringVar(&cfg.DumpSendingAccountsFile, "dump-sending-accounts-file", "", "file path to dump generated private keys when using --sending-accounts-count")
+	f.Uint64Var(&cfg.AccountsPerFundingTx, "accounts-per-funding-tx", 400, "number of accounts to fund per multicall3 transaction")
 	f.Uint64Var(&cfg.MaxBaseFeeWei, "max-base-fee-wei", 0, "maximum base fee in wei (pause sending new transactions when exceeded, useful during network congestion)")
 	f.StringSliceVarP(&cfg.Modes, "mode", "m", []string{"t"}, `testing mode (can specify multiple like "d,t"):
 2, erc20 - send ERC20 tokens

@@ -368,13 +368,15 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 	log.Debug().
 		Msg("funding wallets with multicall3")
 
-	const defaultAccsToFundPerTx = 400
 	accsToFundPerTx, err := util.Multicall3MaxAccountsToFundPerTx(ctx, c)
 	if err != nil {
 		log.Warn().Err(err).
-			Uint64("defaultAccsToFundPerTx", defaultAccsToFundPerTx).
-			Msg("failed to get multicall3 max accounts to fund per tx, falling back to default")
-		accsToFundPerTx = defaultAccsToFundPerTx
+			Uint64("fallback", params.AccountsPerFundingTx).
+			Msg("failed to get multicall3 max accounts to fund per tx, falling back to flag value")
+		accsToFundPerTx = params.AccountsPerFundingTx
+	}
+	if params.AccountsPerFundingTx > 0 && params.AccountsPerFundingTx < accsToFundPerTx {
+		accsToFundPerTx = params.AccountsPerFundingTx
 	}
 	log.Debug().Uint64("accsToFundPerTx", accsToFundPerTx).Msg("multicall3 max accounts to fund per tx")
 	chSize := (uint64(len(wallets)) / accsToFundPerTx) + 1

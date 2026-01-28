@@ -104,6 +104,7 @@ type Config struct {
 	SendingAccountsFile       string
 	CheckBalanceBeforeFunding bool
 	DumpSendingAccountsFile   string
+	AccountsPerFundingTx      uint64
 
 	// Summary output
 	ShouldProduceSummary bool

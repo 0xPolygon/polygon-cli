@@ -259,6 +259,7 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		RefundRemainingFunds:      r.cfg.RefundRemainingFunds,
 		CheckBalanceBeforeFunding: r.cfg.CheckBalanceBeforeFunding,
 		LegacyTxMode:              r.cfg.LegacyTxMode,
+		AccountsPerFundingTx:      r.cfg.AccountsPerFundingTx,
 		ForceGasPrice:             r.cfg.ForceGasPrice,
 		ForcePriorityGasPrice:     r.cfg.ForcePriorityGasPrice,
 		GasPriceMultiplier:        r.cfg.BigGasPriceMultiplier,
