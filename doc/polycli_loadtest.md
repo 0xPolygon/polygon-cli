@@ -107,6 +107,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
 
 ```bash
       --account-funding-amount big.Int                   amount in wei to fund sending accounts (set to 0 to disable)
+      --accounts-per-funding-tx uint                     number of accounts to fund per multicall3 transaction (default 400)
       --adaptive-backoff-factor float                    multiplicative decrease factor for adaptive rate limiting (default 2)
       --adaptive-cycle-duration-seconds uint             interval in seconds to check queue size and adjust rates for adaptive rate limiting (default 10)
       --adaptive-rate-limit                              enable AIMD-style congestion control to automatically adjust request rate
@@ -118,9 +119,11 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --calldata string                                  hex encoded calldata: function signature + encoded arguments (requires --mode contract-call and --contract-address)
       --chain-id uint                                    chain ID for the transactions
       --check-balance-before-funding                     check account balance before funding sending accounts (saves gas when accounts are already funded)
+      --check-preconf                                    check for preconf status after sending tx
   -c, --concurrency int                                  number of requests to perform concurrently (default: one at a time) (default 1)
       --contract-address string                          contract address for --mode contract-call (requires --calldata)
       --contract-call-payable                            mark function as payable using value from --eth-amount-in-wei (requires --mode contract-call and --contract-address)
+      --dump-sending-accounts-file string                file path to dump generated private keys when using --sending-accounts-count
       --erc20-address string                             address of pre-deployed ERC20 contract
       --erc721-address string                            address of pre-deployed ERC721 contract
       --eth-amount-in-wei uint                           amount of ether in wei to send per transaction
@@ -159,6 +162,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --output-mode string                               format mode for summary output (json | text) (default "text")
       --output-raw-tx-only                               output raw signed transaction hex without sending (works with most modes except RPC and UniswapV3)
       --pre-fund-sending-accounts                        fund all sending accounts at start instead of on first use
+      --preconf-stats-file string                        base path for preconf stats JSON output (e.g., 'preconf' creates preconf-{timestamp}.json)
       --priority-gas-price uint                          gas tip price for EIP-1559 transactions
       --private-key string                               hex encoded private key to use for sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
       --proxy string                                     use the proxy specified

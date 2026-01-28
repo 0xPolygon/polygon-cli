@@ -2,9 +2,8 @@ package loadtest
 
 import (
 	"context"
-	"encoding/csv"
+	"encoding/json"
 	"os"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,11 +15,41 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// PreconfTxResult holds per-transaction preconf and receipt data.
+type PreconfTxResult struct {
+	TxHash            string `json:"tx_hash"`
+	PreconfDurationMs int64  `json:"preconf_duration_ms,omitempty"`
+	ReceiptDurationMs int64  `json:"receipt_duration_ms,omitempty"`
+	BlockDiff         uint64 `json:"block_diff,omitempty"`
+	GasUsed           uint64 `json:"gas_used,omitempty"`
+	Status            uint64 `json:"status,omitempty"` // 1 = success, 0 = fail
+}
+
+// PreconfSummary holds aggregate stats from the preconf tracker.
+type PreconfSummary struct {
+	TotalTasks         uint64 `json:"total_tasks"`
+	PreconfSuccess     uint64 `json:"preconf_success"`
+	PreconfFail        uint64 `json:"preconf_fail"`
+	BothFailed         uint64 `json:"both_failed"`
+	IneffectivePreconf uint64 `json:"ineffective_preconf"`
+	FalsePositives     uint64 `json:"false_positives"`
+	Confidence         uint64 `json:"confidence"`
+	ReceiptSuccess     uint64 `json:"receipt_success"`
+	ReceiptFail        uint64 `json:"receipt_fail"`
+	TotalGasUsed       uint64 `json:"total_gas_used"`
+}
+
+// PreconfStats is the JSON output structure containing summary and per-tx data.
+type PreconfStats struct {
+	Summary      PreconfSummary    `json:"summary"`
+	Transactions []PreconfTxResult `json:"transactions"`
+}
+
 type PreconfTracker struct {
 	client        *ethclient.Client
 	statsFilePath string
 
-	// metrics
+	// preconf metrics
 	preconfSuccess     atomic.Uint64
 	preconfFail        atomic.Uint64
 	totalTasks         atomic.Uint64
@@ -29,16 +58,20 @@ type PreconfTracker struct {
 	falsePositiveCount atomic.Uint64
 	confidence         atomic.Uint64
 
-	mu               sync.Mutex
-	preconfDurations []time.Duration
-	blockDiffs       []uint64
+	// receipt metrics
+	receiptSuccess atomic.Uint64
+	receiptFail    atomic.Uint64
+	totalGasUsed   atomic.Uint64
+
+	mu        sync.Mutex
+	txResults []PreconfTxResult
 }
 
 func NewPreconfTracker(client *ethclient.Client, statsFilePath string) *PreconfTracker {
 	return &PreconfTracker{
-		client:           client,
-		statsFilePath:    statsFilePath,
-		preconfDurations: make([]time.Duration, 0, 1024),
+		client:        client,
+		statsFilePath: statsFilePath,
+		txResults:     make([]PreconfTxResult, 0, 1024),
 	}
 }
 
@@ -85,15 +118,35 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 
 	wg.Wait()
 
+	// Build per-transaction result
+	result := PreconfTxResult{
+		TxHash: txHash.Hex(),
+	}
+
 	pt.totalTasks.Add(1)
 	if preconfStatus {
 		pt.preconfSuccess.Add(1)
-		pt.mu.Lock()
-		pt.preconfDurations = append(pt.preconfDurations, preconfDuration)
-		pt.mu.Unlock()
+		result.PreconfDurationMs = preconfDuration.Milliseconds()
 	} else {
 		pt.preconfFail.Add(1)
 	}
+
+	// Track receipt metrics
+	if receiptError == nil {
+		pt.receiptSuccess.Add(1)
+		pt.totalGasUsed.Add(receipt.GasUsed)
+		result.ReceiptDurationMs = receiptDuration.Milliseconds()
+		result.GasUsed = receipt.GasUsed
+		result.Status = receipt.Status
+		result.BlockDiff = receipt.BlockNumber.Uint64() - currentBlock
+	} else {
+		pt.receiptFail.Add(1)
+	}
+
+	// Append result under lock
+	pt.mu.Lock()
+	pt.txResults = append(pt.txResults, result)
+	pt.mu.Unlock()
 
 	switch {
 	case preconfError != nil && receiptError != nil:
@@ -114,12 +167,8 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 			// Receipt arrived before preconf: preconf wasn't effective
 			pt.ineffectivePreconf.Add(1)
 		}
-		// Track block diff for confidence
-		blockDiff := receipt.BlockNumber.Uint64() - currentBlock
-		if blockDiff < 10 {
-			pt.mu.Lock()
-			pt.blockDiffs = append(pt.blockDiffs, blockDiff)
-			pt.mu.Unlock()
+		// Track confidence (block diff < 10)
+		if result.BlockDiff < 10 {
 			pt.confidence.Add(1)
 		}
 	}
@@ -133,89 +182,52 @@ func (pt *PreconfTracker) Stats() {
 		Uint64("ineffective_preconf", pt.ineffectivePreconf.Load()).
 		Uint64("false_positives", pt.falsePositiveCount.Load()).
 		Uint64("confidence", pt.confidence.Load()).
+		Uint64("receipt_success", pt.receiptSuccess.Load()).
+		Uint64("receipt_fail", pt.receiptFail.Load()).
+		Uint64("total_gas_used", pt.totalGasUsed.Load()).
 		Msg("Preconf Tracker Stats")
 
 	if pt.statsFilePath == "" {
 		return
 	}
 
-	// Copy data under lock, then write files without holding lock
+	// Copy txResults under lock
 	pt.mu.Lock()
-	durations := make([]time.Duration, len(pt.preconfDurations))
-	copy(durations, pt.preconfDurations)
-	blockDiffs := make([]uint64, len(pt.blockDiffs))
-	copy(blockDiffs, pt.blockDiffs)
+	txResults := make([]PreconfTxResult, len(pt.txResults))
+	copy(txResults, pt.txResults)
 	pt.mu.Unlock()
 
+	// Build JSON output
+	output := PreconfStats{
+		Summary: PreconfSummary{
+			TotalTasks:         pt.totalTasks.Load(),
+			PreconfSuccess:     pt.preconfSuccess.Load(),
+			PreconfFail:        pt.preconfFail.Load(),
+			BothFailed:         pt.bothFailedCount.Load(),
+			IneffectivePreconf: pt.ineffectivePreconf.Load(),
+			FalsePositives:     pt.falsePositiveCount.Load(),
+			Confidence:         pt.confidence.Load(),
+			ReceiptSuccess:     pt.receiptSuccess.Load(),
+			ReceiptFail:        pt.receiptFail.Load(),
+			TotalGasUsed:       pt.totalGasUsed.Load(),
+		},
+		Transactions: txResults,
+	}
+
+	// Write JSON file
 	timestamp := time.Now().Format(time.RFC3339)
-	path := pt.statsFilePath + "_durations_" + timestamp + ".csv"
-	if err := dumpDurationsCSV(path, durations); err != nil {
-		log.Error().Err(err).Msg("Error dumping preconf durations")
-	} else {
-		log.Info().Str("path", path).Msg("Dumped preconf durations into file")
-	}
+	path := pt.statsFilePath + "-" + timestamp + ".json"
 
-	path = pt.statsFilePath + "_block_diffs_" + timestamp + ".csv"
-	if err := dumpBlockDiff(path, blockDiffs); err != nil {
-		log.Error().Err(err).Msg("Error dumping preconf block diffs")
-	} else {
-		log.Info().Str("path", path).Msg("Dumped preconf block diffs into file")
-	}
-}
-
-func dumpBlockDiff(path string, diffs []uint64) error {
-	f, err := os.Create(path)
+	data, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	w := csv.NewWriter(f)
-	defer w.Flush()
-
-	// header
-	if err := w.Write([]string{"idx", "diff"}); err != nil {
-		return err
+		log.Error().Err(err).Msg("Error marshaling preconf stats")
+		return
 	}
 
-	for i, d := range diffs {
-		row := []string{
-			strconv.Itoa(i),
-			strconv.FormatUint(d, 10),
-		}
-		if err := w.Write(row); err != nil {
-			return err
-		}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		log.Error().Err(err).Msg("Error writing preconf stats file")
+		return
 	}
 
-	return w.Error()
-}
-
-func dumpDurationsCSV(path string, durations []time.Duration) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	w := csv.NewWriter(f)
-	defer w.Flush()
-
-	// header
-	if err := w.Write([]string{"idx", "duration_ns", "duration_ms"}); err != nil {
-		return err
-	}
-
-	for i, d := range durations {
-		row := []string{
-			strconv.Itoa(i),
-			strconv.FormatInt(d.Nanoseconds(), 10),
-			strconv.FormatInt(d.Milliseconds(), 10),
-		}
-		if err := w.Write(row); err != nil {
-			return err
-		}
-	}
-
-	return w.Error()
+	log.Info().Str("path", path).Msg("Dumped preconf stats into file")
 }
