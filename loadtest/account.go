@@ -489,7 +489,7 @@ func (ap *AccountPool) fundAccountsWithMulticall3(ctx context.Context, tops *bin
 	log.Debug().
 		Msg("funding sending accounts with multicall3")
 
-	const defaultAccsToFundPerTx = 100
+	const defaultAccsToFundPerTx = 400
 	accsToFundPerTx, err := util.Multicall3MaxAccountsToFundPerTx(ctx, ap.client)
 	if err != nil {
 		log.Warn().Err(err).
