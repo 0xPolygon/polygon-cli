@@ -63,7 +63,7 @@ func runFunding(ctx context.Context) error {
 	} else if len(params.Seed) > 0 { // get addresses from seed
 		addresses, privateKeys, err = getAddressesAndKeysFromSeed(params.Seed, int(params.WalletsNumber))
 	} else { // get addresses from private key
-		addresses, privateKeys, err = getAddressesAndKeysFromPrivateKey(ctx, c)
+		addresses, privateKeys, err = getAddressesAndKeysFromPrivateKey()
 	}
 	// check errors after getting addresses
 	if err != nil {
@@ -141,7 +141,7 @@ func getAddressesAndKeysFromKeyFile(keyFilePath string) ([]common.Address, []*ec
 	return addresses, privateKeys, nil
 }
 
-func getAddressesAndKeysFromPrivateKey(ctx context.Context, c *ethclient.Client) ([]common.Address, []*ecdsa.PrivateKey, error) {
+func getAddressesAndKeysFromPrivateKey() ([]common.Address, []*ecdsa.PrivateKey, error) {
 	// Derive or generate a set of wallets.
 	var addresses []common.Address
 	var privateKeys []*ecdsa.PrivateKey
@@ -276,7 +276,7 @@ func generateWalletsWithKeys(n int) ([]common.Address, []*ecdsa.PrivateKey, erro
 	// Generate private keys.
 	privateKeys := make([]*ecdsa.PrivateKey, n)
 	addresses := make([]common.Address, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		pk, err := crypto.GenerateKey()
 		if err != nil {
 			log.Error().Err(err).Msg("Error generating key")
@@ -320,7 +320,7 @@ func saveToFile(fileName string, privateKeys []*ecdsa.PrivateKey) error {
 }
 
 // fundWallets funds multiple wallets using the provided Funder contract.
-func fundWallets(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, contract *funder.Funder, wallets []common.Address) error {
+func fundWallets(tops *bind.TransactOpts, contract *funder.Funder, wallets []common.Address) error {
 	// Fund wallets.
 	switch len(wallets) {
 	case 0:
@@ -346,7 +346,7 @@ func fundWalletsWithFunder(ctx context.Context, c *ethclient.Client, tops *bind.
 	// If ERC20 mode is enabled, fund with tokens instead of ETH
 	if params.TokenAddress != "" {
 		log.Info().Str("tokenAddress", params.TokenAddress).Msg("Starting ERC20 token funding (ETH funding disabled)")
-		if err = fundWalletsWithERC20(ctx, c, tops, privateKey, addresses, privateKeys); err != nil {
+		if err = fundWalletsWithERC20(ctx, c, tops, addresses, privateKeys); err != nil {
 			return err
 		}
 		log.Info().Msg("Wallet(s) funded with ERC20 tokens! 🪙")
@@ -357,7 +357,7 @@ func fundWalletsWithFunder(ctx context.Context, c *ethclient.Client, tops *bind.
 		if err != nil {
 			return err
 		}
-		if err = fundWallets(ctx, c, tops, contract, addresses); err != nil {
+		if err = fundWallets(tops, contract, addresses); err != nil {
 			return err
 		}
 	}
@@ -396,7 +396,7 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 	if params.RateLimit <= 0.0 {
 		rl = nil
 	}
-	for i := 0; i < len(wallets); i++ {
+	for i := range wallets {
 		wallet := wallets[i]
 		// if account is the funding account, skip it
 		if wallet == tops.From {
@@ -510,7 +510,7 @@ func getAddressesAndKeysFromSeed(seed string, numWallets int) ([]common.Address,
 	addresses := make([]common.Address, numWallets)
 	privateKeys := make([]*ecdsa.PrivateKey, numWallets)
 
-	for i := 0; i < numWallets; i++ {
+	for i := range numWallets {
 		// Create a deterministic string by combining seed with index and current date
 		// Format: seed_index_YYYYMMDD (e.g., "ephemeral_test_0_20241010")
 		currentDate := time.Now().Format("20060102") // YYYYMMDD format
@@ -541,7 +541,7 @@ func getAddressesAndKeysFromSeed(seed string, numWallets int) ([]common.Address,
 }
 
 // fundWalletsWithERC20 funds multiple wallets with ERC20 tokens by minting directly to each wallet and optionally approving a spender.
-func fundWalletsWithERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, privateKey *ecdsa.PrivateKey, wallets []common.Address, walletsPrivateKeys []*ecdsa.PrivateKey) error {
+func fundWalletsWithERC20(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, wallets []common.Address, walletsPrivateKeys []*ecdsa.PrivateKey) error {
 	if len(wallets) == 0 {
 		return errors.New("no wallet to fund with ERC20 tokens")
 	}
