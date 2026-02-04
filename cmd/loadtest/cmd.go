@@ -122,7 +122,7 @@ func initPersistentFlags() {
 	pf.BoolVar(&cfg.FireAndForget, "fire-and-forget", false, "send transactions and load without waiting for it to be mined")
 	pf.BoolVar(&cfg.FireAndForget, "send-only", false, "alias for --fire-and-forget")
 	pf.BoolVar(&cfg.CheckForPreconf, "check-preconf", false, "check for preconf status after sending tx")
-	pf.StringVar(&cfg.PreconfStatsFile, "preconf-stats-file", "", "base path for preconf stats JSON output (e.g., 'preconf' creates preconf-{timestamp}.json)")
+	pf.StringVar(&cfg.PreconfStatsFile, "preconf-stats-file", "", "path for preconf stats JSON output, updated every 2 seconds")
 
 	initGasManagerFlags()
 }

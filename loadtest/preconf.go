@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/montanaflynn/stats"
 	"github.com/rs/zerolog/log"
 )
 
@@ -37,6 +38,20 @@ type PreconfSummary struct {
 	ReceiptSuccess     uint64 `json:"receipt_success"`
 	ReceiptFail        uint64 `json:"receipt_fail"`
 	TotalGasUsed       uint64 `json:"total_gas_used"`
+
+	// Preconf duration percentiles (milliseconds)
+	PreconfP50 float64 `json:"preconf_p50,omitempty"`
+	PreconfP75 float64 `json:"preconf_p75,omitempty"`
+	PreconfP90 float64 `json:"preconf_p90,omitempty"`
+	PreconfP95 float64 `json:"preconf_p95,omitempty"`
+	PreconfP99 float64 `json:"preconf_p99,omitempty"`
+
+	// Receipt duration percentiles (milliseconds)
+	ReceiptP50 float64 `json:"receipt_p50,omitempty"`
+	ReceiptP75 float64 `json:"receipt_p75,omitempty"`
+	ReceiptP90 float64 `json:"receipt_p90,omitempty"`
+	ReceiptP95 float64 `json:"receipt_p95,omitempty"`
+	ReceiptP99 float64 `json:"receipt_p99,omitempty"`
 }
 
 // PreconfStats is the JSON output structure containing summary and per-tx data.
@@ -174,52 +189,121 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 	}
 }
 
-func (pt *PreconfTracker) Stats() {
-	summary := PreconfSummary{
-		TotalTasks:         pt.totalTasks.Load(),
-		PreconfSuccess:     pt.preconfSuccess.Load(),
-		PreconfFail:        pt.preconfFail.Load(),
-		BothFailed:         pt.bothFailedCount.Load(),
-		IneffectivePreconf: pt.ineffectivePreconf.Load(),
-		FalsePositives:     pt.falsePositiveCount.Load(),
-		Confidence:         pt.confidence.Load(),
-		ReceiptSuccess:     pt.receiptSuccess.Load(),
-		ReceiptFail:        pt.receiptFail.Load(),
-		TotalGasUsed:       pt.totalGasUsed.Load(),
-	}
+// Percentiles holds p50, p75, p90, p95, p99 values.
+type Percentiles struct {
+	P50 float64
+	P75 float64
+	P90 float64
+	P95 float64
+	P99 float64
+}
 
-	log.Info().Any("summary", summary).Msg("Preconf tracker stats")
+// calculatePercentiles computes p50, p75, p90, p95, p99 for a slice of durations.
+// Returns zero values if the input slice is empty.
+func calculatePercentiles(durations []float64) Percentiles {
+	if len(durations) == 0 {
+		return Percentiles{}
+	}
+	p50, _ := stats.Percentile(durations, 50)
+	p75, _ := stats.Percentile(durations, 75)
+	p90, _ := stats.Percentile(durations, 90)
+	p95, _ := stats.Percentile(durations, 95)
+	p99, _ := stats.Percentile(durations, 99)
+	return Percentiles{P50: p50, P75: p75, P90: p90, P95: p95, P99: p99}
+}
+
+// Start begins periodic stats file writing every 2 seconds until context is cancelled.
+func (pt *PreconfTracker) Start(ctx context.Context) {
+	if pt.statsFilePath == "" {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				pt.writeStatsFile()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+// Stats logs the final summary and writes the stats file.
+func (pt *PreconfTracker) Stats() {
+	output := pt.buildStats()
+	log.Info().Any("summary", output.Summary).Msg("Preconf tracker stats")
 
 	if pt.statsFilePath == "" {
 		return
 	}
-
-	// Copy txResults under lock
-	pt.mu.Lock()
-	txResults := make([]PreconfTxResult, len(pt.txResults))
-	copy(txResults, pt.txResults)
-	pt.mu.Unlock()
-
-	// Build JSON output
-	output := PreconfStats{
-		Summary:      summary,
-		Transactions: txResults,
-	}
-
-	// Write JSON file
-	timestamp := time.Now().Format(time.RFC3339)
-	path := pt.statsFilePath + "-" + timestamp + ".json"
-
 	data, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to marshal preconf stats")
 		return
 	}
-
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(pt.statsFilePath, data, 0644); err != nil {
 		log.Error().Err(err).Msg("Failed to write preconf stats file")
+	}
+}
+
+func (pt *PreconfTracker) writeStatsFile() {
+	data, err := json.MarshalIndent(pt.buildStats(), "", "  ")
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to marshal preconf stats")
 		return
 	}
+	if err := os.WriteFile(pt.statsFilePath, data, 0644); err != nil {
+		log.Error().Err(err).Msg("Failed to write preconf stats file")
+	}
+}
 
-	log.Info().Str("path", path).Msg("Wrote preconf stats file")
+func (pt *PreconfTracker) buildStats() PreconfStats {
+	pt.mu.Lock()
+	txResults := make([]PreconfTxResult, len(pt.txResults))
+	copy(txResults, pt.txResults)
+	pt.mu.Unlock()
+
+	var preconfDurations, receiptDurations []float64
+	for _, tx := range txResults {
+		if tx.PreconfDurationMs > 0 {
+			preconfDurations = append(preconfDurations, float64(tx.PreconfDurationMs))
+		}
+		if tx.ReceiptDurationMs > 0 {
+			receiptDurations = append(receiptDurations, float64(tx.ReceiptDurationMs))
+		}
+	}
+
+	preconfPct := calculatePercentiles(preconfDurations)
+	receiptPct := calculatePercentiles(receiptDurations)
+
+	return PreconfStats{
+		Summary: PreconfSummary{
+			TotalTasks:         pt.totalTasks.Load(),
+			PreconfSuccess:     pt.preconfSuccess.Load(),
+			PreconfFail:        pt.preconfFail.Load(),
+			BothFailed:         pt.bothFailedCount.Load(),
+			IneffectivePreconf: pt.ineffectivePreconf.Load(),
+			FalsePositives:     pt.falsePositiveCount.Load(),
+			Confidence:         pt.confidence.Load(),
+			ReceiptSuccess:     pt.receiptSuccess.Load(),
+			ReceiptFail:        pt.receiptFail.Load(),
+			TotalGasUsed:       pt.totalGasUsed.Load(),
+
+			PreconfP50: preconfPct.P50,
+			PreconfP75: preconfPct.P75,
+			PreconfP90: preconfPct.P90,
+			PreconfP95: preconfPct.P95,
+			PreconfP99: preconfPct.P99,
+
+			ReceiptP50: receiptPct.P50,
+			ReceiptP75: receiptPct.P75,
+			ReceiptP90: receiptPct.P90,
+			ReceiptP95: receiptPct.P95,
+			ReceiptP99: receiptPct.P99,
+		},
+		Transactions: txResults,
+	}
 }

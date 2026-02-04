@@ -105,7 +105,7 @@ The command also inherits flags from parent commands.
       --nonce uint                                       use this flag to manually set the starting nonce
       --output-mode string                               format mode for summary output (json | text) (default "text")
       --output-raw-tx-only                               output raw signed transaction hex without sending (works with most modes except RPC and UniswapV3)
-      --preconf-stats-file string                        base path for preconf stats JSON output (e.g., 'preconf' creates preconf-{timestamp}.json)
+      --preconf-stats-file string                        path for preconf stats JSON output, updated every 2 seconds
       --pretty-logs                                      output logs in pretty format instead of JSON (default true)
       --priority-gas-price uint                          gas tip price for EIP-1559 transactions
       --private-key string                               hex encoded private key to use for sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
