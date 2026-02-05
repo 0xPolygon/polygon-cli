@@ -577,52 +577,54 @@ func fundWalletsWithERC20(ctx context.Context, c *ethclient.Client, tops *bind.T
 
 	// If approve spender is specified, approve tokens from each wallet
 	if params.ApproveSpender != "" && len(walletsPrivateKeys) > 0 {
-		spenderAddress := common.HexToAddress(params.ApproveSpender)
-		log.Info().Str("spender", spenderAddress.String()).Str("amount", params.ApproveAmount.String()).Msg("Starting bulk approve for all wallets")
-
-		// Create ABI for approve(address, uint256) function
-		approveABI, err := abi.JSON(strings.NewReader(`[{"type":"function","name":"approve","inputs":[{"name":"spender","type":"address"},{"name":"amount","type":"uint256"}],"outputs":[{"name":"","type":"bool"}],"stateMutability":"nonpayable"}]`))
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to parse approve ABI")
+		if err := approveSpenderForWallets(ctx, c, tokenAddress, wallets, walletsPrivateKeys); err != nil {
 			return err
 		}
-
-		// Get chain ID for signing transactions
-		chainID, err := c.ChainID(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("Unable to get chain ID for approve transactions")
-			return err
-		}
-
-		// Approve from each wallet
-		for i, walletPrivateKey := range walletsPrivateKeys {
-			if i >= len(wallets) {
-				break // Safety check
-			}
-
-			wallet := wallets[i]
-			log.Debug().Int("wallet", i+1).Int("total", len(wallets)).Str("address", wallet.String()).Str("spender", spenderAddress.String()).Str("amount", params.ApproveAmount.String()).Msg("Approving spender from wallet")
-
-			// Create transaction options for this wallet
-			walletTops, err := bind.NewKeyedTransactorWithChainID(walletPrivateKey, chainID)
-			if err != nil {
-				log.Error().Err(err).Str("wallet", wallet.String()).Msg("Unable to create transaction signer for wallet")
-				return err
-			}
-
-			// Create bound contract for approve call
-			approveContract := bind.NewBoundContract(tokenAddress, approveABI, c, c, c)
-
-			// Call approve(address, uint256) function from this wallet
-			_, err = approveContract.Transact(walletTops, "approve", spenderAddress, params.ApproveAmount)
-			if err != nil {
-				log.Error().Err(err).Str("wallet", wallet.String()).Str("spender", spenderAddress.String()).Msg("Unable to approve spender from wallet")
-				return err
-			}
-		}
-
-		log.Info().Int("count", len(wallets)).Str("spender", spenderAddress.String()).Str("amount", params.ApproveAmount.String()).Msg("Successfully approved spender for all wallets")
 	}
 
+	return nil
+}
+
+func approveSpenderForWallets(ctx context.Context, c *ethclient.Client, tokenAddress common.Address, wallets []common.Address, walletsPrivateKeys []*ecdsa.PrivateKey) error {
+	spenderAddress := common.HexToAddress(params.ApproveSpender)
+	log.Info().Str("spender", spenderAddress.String()).Str("amount", params.ApproveAmount.String()).Msg("Starting bulk approve for all wallets")
+
+	// Create ABI for approve(address, uint256) function
+	approveABI, err := abi.JSON(strings.NewReader(`[{"type":"function","name":"approve","inputs":[{"name":"spender","type":"address"},{"name":"amount","type":"uint256"}],"outputs":[{"name":"","type":"bool"}],"stateMutability":"nonpayable"}]`))
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to parse approve ABI")
+		return err
+	}
+
+	chainID, err := c.ChainID(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to get chain ID for approve transactions")
+		return err
+	}
+
+	approveContract := bind.NewBoundContract(tokenAddress, approveABI, c, c, c)
+
+	for i, walletPrivateKey := range walletsPrivateKeys {
+		if i >= len(wallets) {
+			break
+		}
+
+		wallet := wallets[i]
+		log.Debug().Int("wallet", i+1).Int("total", len(wallets)).Str("address", wallet.String()).Str("spender", spenderAddress.String()).Str("amount", params.ApproveAmount.String()).Msg("Approving spender from wallet")
+
+		walletTops, err := bind.NewKeyedTransactorWithChainID(walletPrivateKey, chainID)
+		if err != nil {
+			log.Error().Err(err).Str("wallet", wallet.String()).Msg("Unable to create transaction signer for wallet")
+			return err
+		}
+
+		_, err = approveContract.Transact(walletTops, "approve", spenderAddress, params.ApproveAmount)
+		if err != nil {
+			log.Error().Err(err).Str("wallet", wallet.String()).Str("spender", spenderAddress.String()).Msg("Unable to approve spender from wallet")
+			return err
+		}
+	}
+
+	log.Info().Int("count", len(wallets)).Str("spender", spenderAddress.String()).Str("amount", params.ApproveAmount.String()).Msg("Successfully approved spender for all wallets")
 	return nil
 }
