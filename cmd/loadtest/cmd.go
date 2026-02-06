@@ -121,6 +121,8 @@ func initPersistentFlags() {
 	pf.BoolVar(&cfg.LegacyTxMode, "legacy", false, "send a legacy transaction instead of an EIP1559 transaction")
 	pf.BoolVar(&cfg.FireAndForget, "fire-and-forget", false, "send transactions and load without waiting for it to be mined")
 	pf.BoolVar(&cfg.FireAndForget, "send-only", false, "alias for --fire-and-forget")
+	pf.BoolVar(&cfg.CheckForPreconf, "check-preconf", false, "check for preconf status after sending tx")
+	pf.StringVar(&cfg.PreconfStatsFile, "preconf-stats-file", "", "path for preconf stats JSON output, updated every 2 seconds")
 
 	initGasManagerFlags()
 }
@@ -149,6 +151,8 @@ func initFlags() {
 	f.BoolVar(&cfg.PreFundSendingAccounts, "pre-fund-sending-accounts", false, "fund all sending accounts at start instead of on first use")
 	f.BoolVar(&cfg.RefundRemainingFunds, "refund-remaining-funds", false, "refund remaining balance to funding account after completion")
 	f.StringVar(&cfg.SendingAccountsFile, "sending-accounts-file", "", "file with sending account private keys, one per line (avoids pool queue and preserves accounts across runs)")
+	f.StringVar(&cfg.DumpSendingAccountsFile, "dump-sending-accounts-file", "", "file path to dump generated private keys when using --sending-accounts-count")
+	f.Uint64Var(&cfg.AccountsPerFundingTx, "accounts-per-funding-tx", 400, "number of accounts to fund per multicall3 transaction")
 	f.Uint64Var(&cfg.MaxBaseFeeWei, "max-base-fee-wei", 0, "maximum base fee in wei (pause sending new transactions when exceeded, useful during network congestion)")
 	f.StringSliceVarP(&cfg.Modes, "mode", "m", []string{"t"}, `testing mode (can specify multiple like "d,t"):
 2, erc20 - send ERC20 tokens

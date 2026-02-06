@@ -55,6 +55,9 @@ type Runner struct {
 	gasVault  *gasmanager.GasVault
 	gasPricer *gasmanager.GasPricer
 
+	// Preconf tracker
+	preconfTracker *PreconfTracker
+
 	// Clients
 	client    *ethclient.Client
 	rpcClient *ethrpc.Client
@@ -123,6 +126,13 @@ func (r *Runner) Init(ctx context.Context) error {
 	// Initialize gas manager if configured
 	if err := r.setupGasManager(ctx); err != nil {
 		return err
+	}
+
+	// Initialize preconf tracker if configured
+	if r.cfg.CheckForPreconf {
+		r.preconfTracker = NewPreconfTracker(r.client, r.cfg.PreconfStatsFile)
+		r.preconfTracker.Start(ctx)
+		log.Info().Msg("Preconf tracker initialized")
 	}
 
 	return nil
@@ -250,6 +260,7 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		RefundRemainingFunds:      r.cfg.RefundRemainingFunds,
 		CheckBalanceBeforeFunding: r.cfg.CheckBalanceBeforeFunding,
 		LegacyTxMode:              r.cfg.LegacyTxMode,
+		AccountsPerFundingTx:      r.cfg.AccountsPerFundingTx,
 		ForceGasPrice:             r.cfg.ForceGasPrice,
 		ForcePriorityGasPrice:     r.cfg.ForcePriorityGasPrice,
 		GasPriceMultiplier:        r.cfg.BigGasPriceMultiplier,
@@ -299,6 +310,13 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 	}
 	if err != nil {
 		return errors.New("unable to set account pool: " + err.Error())
+	}
+
+	// Dump private keys to file if configured
+	if r.cfg.DumpSendingAccountsFile != "" {
+		if err := r.dumpPrivateKeys(); err != nil {
+			return err
+		}
 	}
 
 	// Wait for all accounts to be ready
@@ -382,6 +400,9 @@ func (r *Runner) Run(ctx context.Context) error {
 		log.Info().Msg("Interrupted.. Stopping load test")
 		interrupted = true
 		cancel()
+		if r.preconfTracker != nil {
+			r.preconfTracker.Stats()
+		}
 		if r.cfg.ShouldProduceSummary {
 			finalBlock, err := r.client.BlockNumber(ctx)
 			if err != nil {
@@ -418,6 +439,11 @@ func (r *Runner) Run(ctx context.Context) error {
 func (r *Runner) postLoadTest(ctx context.Context) {
 	cfg := r.cfg
 	results := r.GetResults()
+
+	// Output preconf stats if tracker was used
+	if r.preconfTracker != nil {
+		r.preconfTracker.Stats()
+	}
 
 	// Always output a light summary if we have results
 	if len(results) > 0 {
@@ -595,6 +621,11 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 				// Record sample if not fire-and-forget
 				if !cfg.FireAndForget {
 					r.RecordSample(routineID, requestID, tErr, startReq, endReq, sendingTops.Nonce.Uint64())
+				}
+
+				// Track preconf if configured
+				if tErr == nil && cfg.CheckForPreconf && r.preconfTracker != nil {
+					go r.preconfTracker.Track(ltTxHash)
 				}
 
 				// Wait for receipt if configured
@@ -1319,6 +1350,31 @@ func (r *Runner) GetResults() []Sample {
 // GetAccountPool returns the account pool.
 func (r *Runner) GetAccountPool() *AccountPool {
 	return r.accountPool
+}
+
+// dumpPrivateKeys writes the private keys of all accounts in the pool to a file.
+func (r *Runner) dumpPrivateKeys() error {
+	pks := r.accountPool.GetPrivateKeys()
+
+	f, err := os.Create(r.cfg.DumpSendingAccountsFile)
+	if err != nil {
+		return fmt.Errorf("failed to create private keys file: %w", err)
+	}
+	defer f.Close()
+
+	for _, pk := range pks {
+		pkStr := util.GetPrivateKeyHex(pk)
+		if _, err := fmt.Fprintf(f, "%s\n", pkStr); err != nil {
+			return fmt.Errorf("failed to write private key: %w", err)
+		}
+	}
+
+	log.Info().
+		Str("file", r.cfg.DumpSendingAccountsFile).
+		Int("count", len(pks)).
+		Msg("dumped private keys to file")
+
+	return nil
 }
 
 // Close cleans up runner resources.

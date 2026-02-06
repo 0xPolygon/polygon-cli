@@ -82,3 +82,52 @@ func internalWaitReceipt(ctx context.Context, client *ethclient.Client, txHash c
 		}
 	}
 }
+
+// WaitPreconf waits for a preconf status check with a specified timeout.
+// Uses exponential backoff with jitter, similar to WaitReceiptWithTimeout.
+func WaitPreconf(ctx context.Context, client *ethclient.Client, txHash common.Hash, timeout time.Duration) (bool, error) {
+	if timeout == 0 {
+		timeout = 1 * time.Minute
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	const initialDelayMs = 100
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	// Drain initial timer since we want to check immediately on first iteration
+	<-timer.C
+
+	for attempt := uint(0); ; attempt++ {
+		var res any
+		err := client.Client().CallContext(timeoutCtx, &res, "eth_checkPreconfStatus", txHash.Hex())
+		if err == nil {
+			return res.(bool), nil
+		}
+
+		// Calculate delay with exponential backoff and jitter
+		baseDelay := time.Duration(initialDelayMs) * time.Millisecond
+		exponentialDelay := baseDelay * time.Duration(1<<attempt)
+
+		maxDelay := 30 * time.Second
+		if exponentialDelay > maxDelay {
+			exponentialDelay = maxDelay
+		}
+
+		maxJitter := exponentialDelay / 2
+		if maxJitter <= 0 {
+			maxJitter = 1 * time.Millisecond
+		}
+		jitter := time.Duration(rand.Int63n(int64(maxJitter)))
+		totalDelay := exponentialDelay + jitter
+
+		timer.Reset(totalDelay)
+		select {
+		case <-timeoutCtx.Done():
+			return false, timeoutCtx.Err()
+		case <-timer.C:
+			// Continue
+		}
+	}
+}
