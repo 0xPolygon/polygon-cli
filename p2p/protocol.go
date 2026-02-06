@@ -16,7 +16,6 @@ import (
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -30,7 +29,6 @@ type conn struct {
 	logger   zerolog.Logger
 	rw       ethp2p.MsgReadWriter
 	db       database.Database
-	counter  *prometheus.CounterVec
 	peer     *ethp2p.Peer
 
 	// requests is used to store the request ID and the block hash. This is used
@@ -50,9 +48,11 @@ type conn struct {
 	// connectedAt stores when this peer connection was established.
 	connectedAt time.Time
 
-	// Cached values for prometheus labels to avoid repeated URLv4() calls
-	peerURL      string
-	peerFullname string
+	// peerURL is cached to avoid repeated URLv4() calls.
+	peerURL string
+
+	// messages tracks per-peer message counts for API visibility.
+	messages *PeerMessages
 }
 
 // EthProtocolOptions is the options used when creating a new eth protocol.
@@ -65,7 +65,6 @@ type EthProtocolOptions struct {
 	NetworkID   uint64
 	Conns       *Conns
 	ForkID      forkid.ID
-	MsgCounter  *prometheus.CounterVec
 
 	// Cache configurations
 	RequestsCache CacheOptions
@@ -82,20 +81,19 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 		Run: func(p *ethp2p.Peer, rw ethp2p.MsgReadWriter) error {
 			peerURL := p.Node().URLv4()
 			c := &conn{
-				sensorID:     opts.SensorID,
-				node:         p.Node(),
-				logger:       log.With().Str("peer", peerURL).Logger(),
-				rw:           rw,
-				db:           opts.Database,
-				requests:     NewCache[uint64, common.Hash](opts.RequestsCache),
-				requestNum:   0,
-				parents:      NewCache[common.Hash, struct{}](opts.ParentsCache),
-				counter:      opts.MsgCounter,
-				peer:         p,
-				conns:        opts.Conns,
-				connectedAt:  time.Now(),
-				peerURL:      peerURL,
-				peerFullname: p.Fullname(),
+				sensorID:    opts.SensorID,
+				node:        p.Node(),
+				logger:      log.With().Str("peer", peerURL).Logger(),
+				rw:          rw,
+				db:          opts.Database,
+				requests:    NewCache[uint64, common.Hash](opts.RequestsCache),
+				requestNum:  0,
+				parents:     NewCache[common.Hash, struct{}](opts.ParentsCache),
+				peer:        p,
+				conns:       opts.Conns,
+				connectedAt: time.Now(),
+				peerURL:     peerURL,
+				messages:    NewPeerMessages(),
 			}
 
 			head := c.conns.HeadBlock()
@@ -199,21 +197,24 @@ func (c *conn) statusExchange(packet *eth.StatusPacket68) error {
 	return nil
 }
 
-// countMsg increments the prometheus counter for this connection with the given direction, message name, and count.
-func (c *conn) countMsg(direction Direction, messageName string, count float64) {
-	c.counter.WithLabelValues(messageName, c.peerURL, c.peerFullname, string(direction)).Add(count)
-}
-
-// countMsgReceived increments the prometheus counter for received messages.
+// countMsgReceived increments the global Prometheus counter and per-peer message tracking for received messages.
 func (c *conn) countMsgReceived(messageName string, count float64) {
-	c.countMsg(MsgReceived, messageName, count)
-	c.countMsg(MsgReceived, messageName+PacketSuffix, 1)
+	// Increment global Prometheus counter (low cardinality)
+	SensorMsgCounter.WithLabelValues(messageName, string(MsgReceived)).Add(count)
+	SensorMsgCounter.WithLabelValues(messageName+PacketSuffix, string(MsgReceived)).Add(1)
+
+	// Increment per-peer message tracking (for API visibility)
+	c.messages.IncrementReceived(messageName, int64(count))
 }
 
-// countMsgSent increments the prometheus counter for sent messages.
+// countMsgSent increments the global Prometheus counter and per-peer message tracking for sent messages.
 func (c *conn) countMsgSent(messageName string, count float64) {
-	c.countMsg(MsgSent, messageName, count)
-	c.countMsg(MsgSent, messageName+PacketSuffix, 1)
+	// Increment global Prometheus counter (low cardinality)
+	SensorMsgCounter.WithLabelValues(messageName, string(MsgSent)).Add(count)
+	SensorMsgCounter.WithLabelValues(messageName+PacketSuffix, string(MsgSent)).Add(1)
+
+	// Increment per-peer message tracking (for API visibility)
+	c.messages.IncrementSent(messageName, int64(count))
 }
 
 func (c *conn) readStatus(packet *eth.StatusPacket68) error {

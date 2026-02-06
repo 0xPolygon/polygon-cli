@@ -190,12 +190,6 @@ var SensorCmd = &cobra.Command{
 			Help:      "The number of peers the sensor is connected to",
 		})
 
-		msgCounter := promauto.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "sensor",
-			Name:      "messages",
-			Help:      "The number and type of messages the sensor has sent and received",
-		}, []string{"message", "url", "name", "direction"})
-
 		metrics := p2p.NewBlockMetrics(head.Block)
 
 		// Create peer connection manager for broadcasting transactions
@@ -214,7 +208,6 @@ var SensorCmd = &cobra.Command{
 			NetworkID:     inputSensorParams.NetworkID,
 			Conns:         conns,
 			ForkID:        forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
-			MsgCounter:    msgCounter,
 			RequestsCache: inputSensorParams.RequestsCache,
 			ParentsCache:  inputSensorParams.ParentsCache,
 		}
@@ -271,7 +264,7 @@ var SensorCmd = &cobra.Command{
 			go handlePrometheus()
 		}
 
-		go handleAPI(&server, msgCounter, conns)
+		go handleAPI(&server, conns)
 
 		// Start the RPC server for receiving transactions
 		go handleRPC(conns, inputSensorParams.NetworkID)
@@ -290,10 +283,6 @@ var SensorCmd = &cobra.Command{
 				urls := []string{}
 				for _, peer := range server.Peers() {
 					urls = append(urls, peer.Node().URLv4())
-				}
-
-				if err := removePeerMessages(msgCounter, urls); err != nil {
-					log.Error().Err(err).Msg("Failed to clean up peer messages")
 				}
 
 				if err := p2p.WritePeers(inputSensorParams.NodesFile, urls); err != nil {

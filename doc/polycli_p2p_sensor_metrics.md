@@ -33,8 +33,6 @@ Metric Type: CounterVec
 
 Variable Labels:
 - message
-- url
-- name
 - direction
 
 

@@ -8,6 +8,15 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+// SensorMsgCounter is a global Prometheus counter for tracking message counts.
+// It only uses "message" and "direction" labels to maintain O(1) cardinality
+// instead of tracking per-peer metrics which causes high cardinality issues.
+var SensorMsgCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "sensor",
+	Name:      "messages",
+	Help:      "The number and type of messages the sensor has sent and received",
+}, []string{"message", "direction"})
+
 // BlockMetrics contains Prometheus metrics for tracking head and oldest blocks.
 type BlockMetrics struct {
 	HeadBlockNumber    prometheus.Gauge

@@ -155,3 +155,30 @@ func (c *Conns) UpdateHeadBlock(packet eth.NewBlockPacket) bool {
 		return current, false
 	})
 }
+
+// GetPeerMessages returns a snapshot of message counts for a specific peer.
+// Returns nil if the peer is not found.
+func (c *Conns) GetPeerMessages(peerID string) *PeerMessages {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if cn, ok := c.conns[peerID]; ok {
+		msgs := cn.messages.Load()
+		return &msgs
+	}
+
+	return nil
+}
+
+// GetPeerName returns the fullname (client identifier) for a specific peer.
+// Returns empty string if the peer is not found.
+func (c *Conns) GetPeerName(peerID string) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if cn, ok := c.conns[peerID]; ok {
+		return cn.peer.Fullname()
+	}
+
+	return ""
+}
