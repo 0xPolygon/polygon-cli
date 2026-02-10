@@ -531,7 +531,7 @@ func GetSenderFromTx(ctx context.Context, tx rpctypes.PolyTransaction) (common.A
 	case 1: // EIP-2930 (Access List)
 		// For now, we can try with empty access list
 		// If you need full support, you'll need to add AccessList to PolyTransaction interface
-		sigHash, err = calculateEIP2930SigningHash(chainID, nonce, tx.GasPrice(), gas, to, value, data, []interface{}{})
+		sigHash, err = calculateEIP2930SigningHash(chainID, nonce, tx.GasPrice(), gas, to, value, data, []any{})
 	case 2: // EIP-1559
 		maxPriorityFee := new(big.Int).SetUint64(tx.MaxPriorityFeePerGas())
 		maxFee := new(big.Int).SetUint64(tx.MaxFeePerGas())
@@ -598,7 +598,7 @@ func GetSenderFromTx(ctx context.Context, tx rpctypes.PolyTransaction) (common.A
 
 // calculateLegacySigningHash calculates the signing hash for legacy (type 0) transactions
 func calculateLegacySigningHash(chainID uint64, nonce uint64, gasPrice *big.Int, gas uint64, to common.Address, value *big.Int, data []byte) ([]byte, error) {
-	var items []interface{}
+	var items []any
 
 	// Handle contract creation (to = zero address)
 	var toPtr *common.Address
@@ -608,7 +608,7 @@ func calculateLegacySigningHash(chainID uint64, nonce uint64, gasPrice *big.Int,
 
 	if chainID > 0 {
 		// EIP-155: RLP([nonce, gasPrice, gas, to, value, data, chainId, 0, 0])
-		items = []interface{}{
+		items = []any{
 			nonce,
 			gasPrice,
 			gas,
@@ -621,7 +621,7 @@ func calculateLegacySigningHash(chainID uint64, nonce uint64, gasPrice *big.Int,
 		}
 	} else {
 		// Pre-EIP-155: RLP([nonce, gasPrice, gas, to, value, data])
-		items = []interface{}{
+		items = []any{
 			nonce,
 			gasPrice,
 			gas,
@@ -639,14 +639,14 @@ func calculateLegacySigningHash(chainID uint64, nonce uint64, gasPrice *big.Int,
 }
 
 // calculateEIP2930SigningHash calculates the signing hash for EIP-2930 (type 1) transactions
-func calculateEIP2930SigningHash(chainID uint64, nonce uint64, gasPrice *big.Int, gas uint64, to common.Address, value *big.Int, data []byte, accessList []interface{}) ([]byte, error) {
+func calculateEIP2930SigningHash(chainID uint64, nonce uint64, gasPrice *big.Int, gas uint64, to common.Address, value *big.Int, data []byte, accessList []any) ([]byte, error) {
 	var toPtr *common.Address
 	if to != (common.Address{}) {
 		toPtr = &to
 	}
 
 	// EIP-2930: keccak256(0x01 || rlp([chainId, nonce, gasPrice, gas, to, value, data, accessList]))
-	items := []interface{}{
+	items := []any{
 		chainID,
 		nonce,
 		gasPrice,
@@ -675,7 +675,7 @@ func calculateEIP1559SigningHash(chainID uint64, nonce uint64, maxPriorityFee, m
 	}
 
 	// EIP-1559: keccak256(0x02 || rlp([chainId, nonce, maxPriorityFeePerGas, maxFeePerGas, gas, to, value, data, accessList]))
-	items := []interface{}{
+	items := []any{
 		chainID,
 		nonce,
 		maxPriorityFee,
@@ -684,7 +684,7 @@ func calculateEIP1559SigningHash(chainID uint64, nonce uint64, maxPriorityFee, m
 		toPtr,
 		value,
 		data,
-		[]interface{}{}, // empty access list
+		[]any{}, // empty access list
 	}
 
 	encoded, err := rlp.EncodeToBytes(items)
