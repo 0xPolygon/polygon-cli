@@ -129,8 +129,8 @@ func initPersistentFlags() {
 	pf.BoolVar(&cfg.FireAndForget, "send-only", false, "alias for --fire-and-forget")
 	pf.BoolVar(&preconfCfg.Enabled, "check-preconf", false, "check for preconf status after sending tx")
 	pf.StringVar(&preconfCfg.StatsFile, "preconf-stats-file", "", "path for preconf stats JSON output, updated every 2 seconds")
-	pf.IntVar(&preconfCfg.BatchSize, "preconf-batch-size", 100, "transactions per batch RPC call for preconf tracking")
-	pf.DurationVar(&preconfCfg.PollInterval, "preconf-poll-interval", 500*time.Millisecond, "interval between batch polls for preconf tracking")
+	pf.IntVar(&preconfCfg.BatchSize, "preconf-batch-size", 50, "transactions per batch RPC call for preconf tracking")
+	pf.DurationVar(&preconfCfg.PollInterval, "preconf-poll-interval", 100*time.Millisecond, "interval between batch polls for preconf tracking")
 	pf.DurationVar(&preconfCfg.Timeout, "preconf-timeout", time.Minute, "timeout for tracking each transaction")
 
 	initGasManagerFlags()

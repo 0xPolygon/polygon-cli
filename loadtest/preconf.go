@@ -29,16 +29,24 @@ type PreconfTxResult struct {
 
 // PreconfSummary holds aggregate stats from the preconf tracker.
 type PreconfSummary struct {
-	TotalTasks         uint64 `json:"total_tasks"`
-	PreconfSuccess     uint64 `json:"preconf_success"`
-	PreconfFail        uint64 `json:"preconf_fail"`
-	BothFailed         uint64 `json:"both_failed"`
-	IneffectivePreconf uint64 `json:"ineffective_preconf"`
-	FalsePositives     uint64 `json:"false_positives"`
-	Confidence         uint64 `json:"confidence"`
-	ReceiptSuccess     uint64 `json:"receipt_success"`
-	ReceiptFail        uint64 `json:"receipt_fail"`
-	TotalGasUsed       uint64 `json:"total_gas_used"`
+	TotalTasks uint64 `json:"total_tasks"`
+
+	// Preconf totals
+	PreconfSuccess uint64 `json:"preconf_success"` // preconf=true
+	PreconfFail    uint64 `json:"preconf_fail"`    // preconf=false
+
+	// Receipt totals
+	ReceiptSuccess uint64 `json:"receipt_success"` // receipt=yes
+	ReceiptFail    uint64 `json:"receipt_fail"`    // receipt=no
+
+	// 2x2 outcome matrix
+	BothConfirmed    uint64 `json:"both_confirmed"`    // preconf=true AND receipt=yes
+	PreconfOnly      uint64 `json:"preconf_only"`      // preconf=true AND receipt=no
+	ReceiptOnly      uint64 `json:"receipt_only"`      // preconf=false AND receipt=yes
+	NeitherConfirmed uint64 `json:"neither_confirmed"` // preconf=false AND receipt=no
+
+	Confidence   uint64 `json:"confidence"` // both_confirmed AND block_diff < 10
+	TotalGasUsed uint64 `json:"total_gas_used"`
 
 	// Preconf duration percentiles (milliseconds)
 	PreconfP50 float64 `json:"preconf_p50,omitempty"`
@@ -104,16 +112,24 @@ type PreconfTracker struct {
 	completed   []*trackedTx
 
 	// Metrics (atomic for lock-free access)
-	preconfSuccess     atomic.Uint64
-	preconfFail        atomic.Uint64
-	totalTasks         atomic.Uint64
-	bothFailedCount    atomic.Uint64
-	ineffectivePreconf atomic.Uint64
-	falsePositiveCount atomic.Uint64
-	confidence         atomic.Uint64
-	receiptSuccess     atomic.Uint64
-	receiptFail        atomic.Uint64
-	totalGasUsed       atomic.Uint64
+	totalTasks     atomic.Uint64
+	preconfSuccess atomic.Uint64
+	preconfFail    atomic.Uint64
+	receiptSuccess atomic.Uint64
+	receiptFail    atomic.Uint64
+
+	// 2x2 outcome matrix
+	bothConfirmed    atomic.Uint64
+	preconfOnly      atomic.Uint64
+	receiptOnly      atomic.Uint64
+	neitherConfirmed atomic.Uint64
+
+	confidence   atomic.Uint64
+	totalGasUsed atomic.Uint64
+
+	// Cached block number to reduce RPC calls
+	cachedBlock     atomic.Uint64
+	cachedBlockTime atomic.Int64
 
 	// Shutdown coordination
 	wg sync.WaitGroup
@@ -147,19 +163,29 @@ func (pt *PreconfTracker) Start(ctx context.Context) {
 	}
 }
 
+// getBlockNumber returns the current block number, cached to reduce RPC calls.
+// The cache is refreshed at most once per second.
+func (pt *PreconfTracker) getBlockNumber() uint64 {
+	now := time.Now().UnixNano()
+	lastUpdate := pt.cachedBlockTime.Load()
+	if now-lastUpdate < int64(time.Second) {
+		return pt.cachedBlock.Load()
+	}
+	if pt.cachedBlockTime.CompareAndSwap(lastUpdate, now) {
+		if block, err := pt.client.BlockNumber(context.Background()); err == nil {
+			pt.cachedBlock.Store(block)
+		}
+	}
+	return pt.cachedBlock.Load()
+}
+
 // RegisterTx adds a transaction hash to be tracked. Non-blocking.
 func (pt *PreconfTracker) RegisterTx(hash common.Hash) {
-	currentBlock, err := pt.client.BlockNumber(context.Background())
-	if err != nil {
-		log.Warn().Err(err).Str("hash", hash.Hex()).Msg("Failed to get current block for preconf tracking")
-		currentBlock = 0
-	}
-
 	pt.pendingMu.Lock()
 	pt.pending[hash] = &trackedTx{
 		hash:         hash,
 		registeredAt: time.Now(),
-		startBlock:   currentBlock,
+		startBlock:   pt.getBlockNumber(),
 	}
 	pt.pendingMu.Unlock()
 }
@@ -285,7 +311,7 @@ func (pt *PreconfTracker) getReceipts(ctx context.Context, hashes []common.Hash)
 
 	// Execute batch call
 	if err := pt.rpc.BatchCallContext(ctx, batch); err != nil {
-		log.Debug().Err(err).Int("count", len(hashes)).Msg("Batch receipt call failed")
+		log.Warn().Err(err).Int("count", len(hashes)).Msg("Batch receipt call failed")
 		return
 	}
 
@@ -300,6 +326,7 @@ func (pt *PreconfTracker) getReceipts(ctx context.Context, hashes []common.Hash)
 
 		if batch[i].Error != nil {
 			tx.receiptError = batch[i].Error
+			log.Debug().Err(batch[i].Error).Str("hash", hash.Hex()).Msg("Receipt batch element error")
 			continue
 		}
 
@@ -334,7 +361,7 @@ func (pt *PreconfTracker) getPreconfs(ctx context.Context, hashes []common.Hash)
 
 	// Execute batch call
 	if err := pt.rpc.BatchCallContext(ctx, batch); err != nil {
-		log.Debug().Err(err).Int("count", len(hashes)).Msg("Batch preconf call failed")
+		log.Warn().Err(err).Int("count", len(hashes)).Msg("Batch preconf call failed")
 		return
 	}
 
@@ -349,15 +376,13 @@ func (pt *PreconfTracker) getPreconfs(ctx context.Context, hashes []common.Hash)
 
 		if batch[i].Error != nil {
 			tx.preconfError = batch[i].Error
+			log.Debug().Err(batch[i].Error).Str("hash", hash.Hex()).Msg("Preconf batch element error")
 			continue
 		}
 
-		// Preconf result received (true = preconf confirmed)
-		// If false, we keep polling until timeout
-		if results[i] {
-			tx.preconfResult = &results[i]
-			tx.preconfTime = now.Sub(tx.registeredAt)
-		}
+		// Record preconf result (true = confirmed, false = not confirmed)
+		tx.preconfResult = &results[i]
+		tx.preconfTime = now.Sub(tx.registeredAt)
 	}
 	pt.pendingMu.Unlock()
 }
@@ -390,47 +415,40 @@ func (pt *PreconfTracker) checkTx() {
 func (pt *PreconfTracker) recordMetrics(tx *trackedTx) {
 	pt.totalTasks.Add(1)
 
-	preconfSuccess := tx.preconfResult != nil && *tx.preconfResult
-	receiptSuccess := tx.receipt != nil
+	preconfTrue := tx.preconfResult != nil && *tx.preconfResult
+	receiptOK := tx.receipt != nil
 
-	// Track preconf metrics
-	if preconfSuccess {
+	// Track preconf totals
+	if preconfTrue {
 		pt.preconfSuccess.Add(1)
 	} else {
 		pt.preconfFail.Add(1)
 	}
 
-	// Track receipt metrics
-	if receiptSuccess {
+	// Track receipt totals
+	if receiptOK {
 		pt.receiptSuccess.Add(1)
 		pt.totalGasUsed.Add(tx.receipt.GasUsed)
 	} else {
 		pt.receiptFail.Add(1)
 	}
 
-	// Track combined metrics
+	// Track 2x2 matrix
 	switch {
-	case !preconfSuccess && !receiptSuccess:
-		pt.bothFailedCount.Add(1)
-
-	case preconfSuccess && !receiptSuccess:
-		pt.falsePositiveCount.Add(1)
-
-	case !preconfSuccess && receiptSuccess:
-		pt.ineffectivePreconf.Add(1)
-
-	case preconfSuccess && receiptSuccess:
-		// Both succeeded - check if preconf was faster
-		if tx.preconfTime > tx.receiptTime {
-			pt.ineffectivePreconf.Add(1)
-		}
-		// Track confidence (block diff < 10)
+	case preconfTrue && receiptOK:
+		pt.bothConfirmed.Add(1)
 		if tx.startBlock > 0 {
 			blockDiff := tx.receipt.BlockNumber.Uint64() - tx.startBlock
 			if blockDiff < 10 {
 				pt.confidence.Add(1)
 			}
 		}
+	case preconfTrue && !receiptOK:
+		pt.preconfOnly.Add(1)
+	case !preconfTrue && receiptOK:
+		pt.receiptOnly.Add(1)
+	case !preconfTrue && !receiptOK:
+		pt.neitherConfirmed.Add(1)
 	}
 
 	// Add to completed list for stats
@@ -541,16 +559,19 @@ func (pt *PreconfTracker) buildStats() PreconfStats {
 
 	return PreconfStats{
 		Summary: PreconfSummary{
-			TotalTasks:         pt.totalTasks.Load(),
-			PreconfSuccess:     pt.preconfSuccess.Load(),
-			PreconfFail:        pt.preconfFail.Load(),
-			BothFailed:         pt.bothFailedCount.Load(),
-			IneffectivePreconf: pt.ineffectivePreconf.Load(),
-			FalsePositives:     pt.falsePositiveCount.Load(),
-			Confidence:         pt.confidence.Load(),
-			ReceiptSuccess:     pt.receiptSuccess.Load(),
-			ReceiptFail:        pt.receiptFail.Load(),
-			TotalGasUsed:       pt.totalGasUsed.Load(),
+			TotalTasks:     pt.totalTasks.Load(),
+			PreconfSuccess: pt.preconfSuccess.Load(),
+			PreconfFail:    pt.preconfFail.Load(),
+			ReceiptSuccess: pt.receiptSuccess.Load(),
+			ReceiptFail:    pt.receiptFail.Load(),
+
+			BothConfirmed:    pt.bothConfirmed.Load(),
+			PreconfOnly:      pt.preconfOnly.Load(),
+			ReceiptOnly:      pt.receiptOnly.Load(),
+			NeitherConfirmed: pt.neitherConfirmed.Load(),
+
+			Confidence:   pt.confidence.Load(),
+			TotalGasUsed: pt.totalGasUsed.Load(),
 
 			PreconfP50: pp.P50,
 			PreconfP75: pp.P75,
