@@ -37,6 +37,9 @@ var uniswapCfg = &config.UniswapV3Config{}
 // gasManagerCfg holds gas manager configuration.
 var gasManagerCfg = &config.GasManagerConfig{}
 
+// preconfCfg holds preconf tracking configuration.
+var preconfCfg = &config.PreconfConfig{}
+
 // LoadtestCmd represents the loadtest command.
 var LoadtestCmd = &cobra.Command{
 	Use:   "loadtest",
@@ -60,6 +63,8 @@ var LoadtestCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Attach gas manager config.
 		cfg.GasManager = gasManagerCfg
+		// Attach preconf config.
+		cfg.Preconf = preconfCfg
 		return loadtest.Run(cmd.Context(), cfg)
 	},
 }
@@ -78,6 +83,7 @@ var uniswapv3Cmd = &cobra.Command{
 		cfg.Modes = []string{"v3"}
 		cfg.UniswapV3 = uniswapCfg
 		cfg.GasManager = gasManagerCfg
+		cfg.Preconf = preconfCfg
 
 		return loadtest.Run(cmd.Context(), cfg)
 	},
@@ -121,8 +127,11 @@ func initPersistentFlags() {
 	pf.BoolVar(&cfg.LegacyTxMode, "legacy", false, "send a legacy transaction instead of an EIP1559 transaction")
 	pf.BoolVar(&cfg.FireAndForget, "fire-and-forget", false, "send transactions and load without waiting for it to be mined")
 	pf.BoolVar(&cfg.FireAndForget, "send-only", false, "alias for --fire-and-forget")
-	pf.BoolVar(&cfg.CheckForPreconf, "check-preconf", false, "check for preconf status after sending tx")
-	pf.StringVar(&cfg.PreconfStatsFile, "preconf-stats-file", "", "path for preconf stats JSON output, updated every 2 seconds")
+	pf.BoolVar(&preconfCfg.Enabled, "check-preconf", false, "check for preconf status after sending tx")
+	pf.StringVar(&preconfCfg.StatsFile, "preconf-stats-file", "", "path for preconf stats JSON output, updated every 2 seconds")
+	pf.IntVar(&preconfCfg.BatchSize, "preconf-batch-size", 100, "transactions per batch RPC call for preconf tracking")
+	pf.DurationVar(&preconfCfg.PollInterval, "preconf-poll-interval", 500*time.Millisecond, "interval between batch polls for preconf tracking")
+	pf.DurationVar(&preconfCfg.Timeout, "preconf-timeout", time.Minute, "timeout for tracking each transaction")
 
 	initGasManagerFlags()
 }

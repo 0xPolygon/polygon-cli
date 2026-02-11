@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/0xPolygon/polygon-cli/loadtest/uniswapv3"
 	"github.com/ethereum/go-ethereum/common"
@@ -51,11 +52,9 @@ type Config struct {
 	ToAddress          string
 	EthAmountInWei     uint64
 	RandomRecipients   bool
-	LegacyTxMode       bool
-	FireAndForget      bool
-	CheckForPreconf    bool
-	PreconfStatsFile   string
-	WaitForReceipt     bool
+	LegacyTxMode   bool
+	FireAndForget  bool
+	WaitForReceipt bool
 	ReceiptRetryMax    uint
 	ReceiptRetryDelay  uint // initial delay in milliseconds
 	OutputRawTxOnly    bool
@@ -117,6 +116,9 @@ type Config struct {
 	// Gas manager config (optional, for gas oscillation features)
 	GasManager *GasManagerConfig
 
+	// Preconf tracking config
+	Preconf *PreconfConfig
+
 	// Computed fields (populated during initialization)
 	CurrentGasPrice       *big.Int
 	CurrentGasTipCap      *big.Int
@@ -145,6 +147,15 @@ type GasManagerConfig struct {
 	FixedGasPriceWei          uint64  // for fixed strategy
 	DynamicGasPricesWei       string  // comma-separated prices for dynamic strategy
 	DynamicGasPricesVariation float64 // ±percentage variation for dynamic
+}
+
+// PreconfConfig holds preconf tracking configuration.
+type PreconfConfig struct {
+	Enabled      bool          // enable preconf tracking
+	StatsFile    string        // path for stats JSON output
+	BatchSize    int           // number of transactions per batch RPC call
+	PollInterval time.Duration // interval between batch polls
+	Timeout      time.Duration // timeout for tracking each transaction
 }
 
 // UniswapV3Config holds UniswapV3-specific configuration.
