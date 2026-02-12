@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -325,8 +326,14 @@ func (pt *PreconfTracker) getReceipts(ctx context.Context, hashes []common.Hash)
 		}
 
 		if batch[i].Error != nil {
+			// "missing required field" errors typically mean the tx isn't mined yet
+			// (some RPCs return {} instead of null for pending txs)
+			// Don't treat as permanent error - continue polling
+			if strings.Contains(batch[i].Error.Error(), "missing required field") {
+				continue
+			}
 			tx.receiptError = batch[i].Error
-			log.Debug().Err(batch[i].Error).Str("hash", hash.Hex()).Msg("Receipt batch element error")
+			log.Warn().Err(batch[i].Error).Str("hash", hash.Hex()).Msg("Receipt batch element error")
 			continue
 		}
 
@@ -376,7 +383,7 @@ func (pt *PreconfTracker) getPreconfs(ctx context.Context, hashes []common.Hash)
 
 		if batch[i].Error != nil {
 			tx.preconfError = batch[i].Error
-			log.Debug().Err(batch[i].Error).Str("hash", hash.Hex()).Msg("Preconf batch element error")
+			log.Warn().Err(batch[i].Error).Str("hash", hash.Hex()).Msg("Preconf batch element error")
 			continue
 		}
 
