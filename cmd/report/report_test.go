@@ -304,10 +304,7 @@ func TestBlockRangeLogic(t *testing.T) {
 				}
 			} else if end == BlockNotSet {
 				// Only end unspecified
-				end = start + (DefaultBlockRange - 1)
-				if end > tt.latestBlock {
-					end = tt.latestBlock
-				}
+				end = min(start+(DefaultBlockRange-1), tt.latestBlock)
 			}
 			// Both set: use as-is
 
