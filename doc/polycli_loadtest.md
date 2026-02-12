@@ -162,7 +162,10 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --output-mode string                               format mode for summary output (json | text) (default "text")
       --output-raw-tx-only                               output raw signed transaction hex without sending (works with most modes except RPC and UniswapV3)
       --pre-fund-sending-accounts                        fund all sending accounts at start instead of on first use
+      --preconf-batch-size int                           transactions per batch RPC call for preconf tracking (default 100)
+      --preconf-poll-interval duration                   interval between batch polls for preconf tracking (default 500ms)
       --preconf-stats-file string                        path for preconf stats JSON output, updated every 2 seconds
+      --preconf-timeout duration                         timeout for tracking each transaction (default 1m0s)
       --priority-gas-price uint                          gas tip price for EIP-1559 transactions
       --private-key string                               hex encoded private key to use for sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
       --proxy string                                     use the proxy specified

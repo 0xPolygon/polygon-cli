@@ -129,8 +129,8 @@ func (r *Runner) Init(ctx context.Context) error {
 	}
 
 	// Initialize preconf tracker if configured
-	if r.cfg.CheckForPreconf {
-		r.preconfTracker = NewPreconfTracker(r.client, r.cfg.PreconfStatsFile)
+	if r.cfg.Preconf != nil && r.cfg.Preconf.Enabled {
+		r.preconfTracker = NewPreconfTracker(r.client, r.rpcClient, r.cfg.Preconf)
 		r.preconfTracker.Start(ctx)
 		log.Info().Msg("Preconf tracker initialized")
 	}
@@ -624,8 +624,8 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 				}
 
 				// Track preconf if configured
-				if tErr == nil && cfg.CheckForPreconf && r.preconfTracker != nil {
-					go r.preconfTracker.Track(ltTxHash)
+				if tErr == nil && r.preconfTracker != nil {
+					r.preconfTracker.RegisterTx(ltTxHash)
 				}
 
 				// Wait for receipt if configured
