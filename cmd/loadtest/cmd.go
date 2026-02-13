@@ -36,6 +36,7 @@ var uniswapCfg = &config.UniswapV3Config{}
 
 // gasManagerCfg holds gas manager configuration.
 var gasManagerCfg = &config.GasManagerConfig{}
+var gasManagerEnabled bool
 
 // LoadtestCmd represents the loadtest command.
 var LoadtestCmd = &cobra.Command{
@@ -55,11 +56,20 @@ var LoadtestCmd = &cobra.Command{
 		zerolog.DurationFieldUnit = time.Second
 		zerolog.DurationFieldInteger = true
 
+		if gasManagerEnabled {
+			if err = gasManagerCfg.Validate(); err != nil {
+				return err
+			}
+		}
+
 		return cfg.Validate()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Attach gas manager config.
-		cfg.GasManager = gasManagerCfg
+		// Attach gas manager config only when explicitly enabled.
+		cfg.GasManager = nil
+		if gasManagerEnabled {
+			cfg.GasManager = gasManagerCfg
+		}
 		return loadtest.Run(cmd.Context(), cfg)
 	},
 }
@@ -77,7 +87,10 @@ var uniswapv3Cmd = &cobra.Command{
 		// Override mode to uniswapv3 and attach configs.
 		cfg.Modes = []string{"v3"}
 		cfg.UniswapV3 = uniswapCfg
-		cfg.GasManager = gasManagerCfg
+		cfg.GasManager = nil
+		if gasManagerEnabled {
+			cfg.GasManager = gasManagerCfg
+		}
 
 		return loadtest.Run(cmd.Context(), cfg)
 	},
@@ -129,6 +142,7 @@ func initPersistentFlags() {
 
 func initGasManagerFlags() {
 	pf := LoadtestCmd.PersistentFlags()
+	pf.BoolVar(&gasManagerEnabled, "gas-manager-enabled", false, "enable block-based gas manager (oscillation wave + gas budget vault)")
 
 	// Oscillation wave
 	pf.StringVar(&gasManagerCfg.OscillationWave, "gas-manager-oscillation-wave", "flat", "type of oscillation wave (flat | sine | square | triangle | sawtooth)")
