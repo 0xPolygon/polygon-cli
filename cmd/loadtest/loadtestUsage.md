@@ -54,7 +54,7 @@ $ polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 10
 
 ### Gas Manager
 
-The loadtest command includes a gas manager for controlling transaction gas limits and pricing. Use the `--gas-manager-*` flags to:
+The loadtest command includes an optional gas manager for controlling transaction gas limits and pricing. Enable it with `--gas-manager-enabled`, then use the `--gas-manager-*` flags to:
 
 - **Oscillate gas limits** with wave patterns (flat, sine, square, triangle, sawtooth)
 - **Control gas pricing** with strategies (estimated, fixed, dynamic)
@@ -62,6 +62,7 @@ The loadtest command includes a gas manager for controlling transaction gas limi
 Example with sine wave oscillation:
 ```bash
 $ polycli loadtest --rpc-url http://localhost:8545 \
+  --gas-manager-enabled \
   --gas-manager-oscillation-wave sine \
   --gas-manager-target 20000000 \
   --gas-manager-amplitude 10000000 \

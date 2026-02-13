@@ -75,7 +75,7 @@ $ polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 10
 
 ### Gas Manager
 
-The loadtest command includes a gas manager for controlling transaction gas limits and pricing. Use the `--gas-manager-*` flags to:
+The loadtest command includes an optional gas manager for controlling transaction gas limits and pricing. Enable it with `--gas-manager-enabled`, then use the `--gas-manager-*` flags to:
 
 - **Oscillate gas limits** with wave patterns (flat, sine, square, triangle, sawtooth)
 - **Control gas pricing** with strategies (estimated, fixed, dynamic)
@@ -83,6 +83,7 @@ The loadtest command includes a gas manager for controlling transaction gas limi
 Example with sine wave oscillation:
 ```bash
 $ polycli loadtest --rpc-url http://localhost:8545 \
+  --gas-manager-enabled \
   --gas-manager-oscillation-wave sine \
   --gas-manager-target 20000000 \
   --gas-manager-amplitude 10000000 \
@@ -134,6 +135,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --gas-manager-amplitude uint                       amplitude for oscillation wave
       --gas-manager-dynamic-gas-prices-variation float   variation percentage for dynamic strategy (default 0.3)
       --gas-manager-dynamic-gas-prices-wei string        comma-separated gas prices in wei for dynamic strategy (default "0,1000000,0,10000000,0,100000000")
+      --gas-manager-enabled                              enable block-based gas manager (oscillation wave + gas budget vault)
       --gas-manager-fixed-gas-price-wei uint             fixed gas price in wei (default 300000000)
       --gas-manager-oscillation-wave string              type of oscillation wave (flat | sine | square | triangle | sawtooth) (default "flat")
       --gas-manager-period uint                          period in blocks for oscillation wave (default 1)

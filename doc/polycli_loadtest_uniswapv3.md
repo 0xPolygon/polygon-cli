@@ -94,6 +94,7 @@ The command also inherits flags from parent commands.
       --gas-manager-amplitude uint                       amplitude for oscillation wave
       --gas-manager-dynamic-gas-prices-variation float   variation percentage for dynamic strategy (default 0.3)
       --gas-manager-dynamic-gas-prices-wei string        comma-separated gas prices in wei for dynamic strategy (default "0,1000000,0,10000000,0,100000000")
+      --gas-manager-enabled                              enable block-based gas manager (oscillation wave + gas budget vault)
       --gas-manager-fixed-gas-price-wei uint             fixed gas price in wei (default 300000000)
       --gas-manager-oscillation-wave string              type of oscillation wave (flat | sine | square | triangle | sawtooth) (default "flat")
       --gas-manager-period uint                          period in blocks for oscillation wave (default 1)
