@@ -126,10 +126,7 @@ func generateTxCountChart(report *BlockReport) string {
 	var circles strings.Builder
 	numPoints := 0
 	// Calculate number of data points to avoid division by zero
-	totalPoints := (len(report.Blocks) - 1) / step
-	if totalPoints < 1 {
-		totalPoints = 1
-	}
+	totalPoints := max((len(report.Blocks)-1)/step, 1)
 	for i := 0; i < len(report.Blocks); i += step {
 		block := report.Blocks[i]
 		x := padding + (float64(numPoints)/float64(totalPoints))*chartWidth
@@ -221,10 +218,7 @@ func generateGasUsageChart(report *BlockReport) string {
 	var circles strings.Builder
 	numPoints := 0
 	// Calculate number of data points to avoid division by zero
-	totalPoints := (len(report.Blocks) - 1) / step
-	if totalPoints < 1 {
-		totalPoints = 1
-	}
+	totalPoints := max((len(report.Blocks)-1)/step, 1)
 	for i := 0; i < len(report.Blocks); i += step {
 		block := report.Blocks[i]
 		x := padding + (float64(numPoints)/float64(totalPoints))*chartWidth
