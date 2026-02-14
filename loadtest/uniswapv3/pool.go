@@ -155,7 +155,7 @@ func createPool(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpt
 	return contract, nil
 }
 
-// computeSqrtPriceX96 calcules the square root of the price ratio of two reserves in a UniswapV3 pool.
+// computeSqrtPriceX96 calculates the square root of the price ratio of two reserves in a UniswapV3 pool.
 // https://uniswapv3book.com/docs/milestone_1/calculating-liquidity/#price-range-calculation
 func computeSqrtPriceX96(reserveA, reserveB *big.Int) *big.Int {
 	sqrtReserveA := new(big.Int).Sqrt(reserveA)
