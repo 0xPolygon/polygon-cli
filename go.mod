@@ -29,9 +29,9 @@ require (
 	github.com/tyler-smith/go-bip32 v1.0.0
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/xeipuuv/gojsonschema v1.2.0
-	golang.org/x/crypto v0.47.0
+	golang.org/x/crypto v0.48.0
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
-	golang.org/x/text v0.33.0
+	golang.org/x/text v0.34.0
 	golang.org/x/time v0.14.0
 	google.golang.org/api v0.265.0
 	google.golang.org/protobuf v1.36.11
@@ -160,8 +160,8 @@ require (
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.40.0 // indirect
-	golang.org/x/term v0.39.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/term v0.40.0 // indirect
 	google.golang.org/genproto v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251222181119-0a764e51fe1b // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260128011058-8636f8732409 // indirect
