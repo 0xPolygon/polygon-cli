@@ -148,9 +148,16 @@ func (t *TviewRenderer) createHomePage() {
 
 	// Set up selection handler for Enter key
 	t.homeTable.SetSelectedFunc(func(row, column int) {
-		if row > 0 && row-1 < len(t.blocks) { // Skip header row
-			// Navigate to block detail page
-			t.showBlockDetail(t.blocks[row-1])
+		if row > 0 { // Skip header row
+			t.blocksMu.RLock()
+			if row-1 < len(t.blocks) {
+				block := t.blocks[row-1]
+				t.blocksMu.RUnlock()
+				// Navigate to block detail page
+				t.showBlockDetail(block)
+				return
+			}
+			t.blocksMu.RUnlock()
 		}
 	})
 
@@ -387,14 +394,14 @@ func (t *TviewRenderer) updateTableHeaders() {
 }
 
 // getColumnValue gets the display value for a specific column and block
-func (t *TviewRenderer) getColumnValue(column ColumnDef, block rpctypes.PolyBlock, blockIndex int, blocks []rpctypes.PolyBlock) string {
+func (t *TviewRenderer) getColumnValue(column ColumnDef, block rpctypes.PolyBlock, blockIndex int, blocks []rpctypes.PolyBlock, blocksByHash map[string]rpctypes.PolyBlock) string {
 	switch column.Key {
 	case "number":
 		return block.Number().String()
 	case "time":
 		return formatBlockTime(block.Time())
 	case "interval":
-		return t.calculateBlockInterval(block, blockIndex, blocks)
+		return t.calculateBlockInterval(block, blockIndex, blocks, blocksByHash)
 	case "hash":
 		return truncateHash(block.Hash().Hex(), 10, 10)
 	case "signer":
@@ -428,31 +435,44 @@ func (t *TviewRenderer) updateTable() {
 	t.blocksMu.RLock()
 	blocks := make([]rpctypes.PolyBlock, len(t.blocks))
 	copy(blocks, t.blocks) // Copy for thread safety
+	blocksByHash := make(map[string]rpctypes.PolyBlock, len(t.blocksByHash))
+	for hash, block := range t.blocksByHash {
+		blocksByHash[hash] = block
+	}
 	t.blocksMu.RUnlock()
 
-	// Clear existing rows (except header)
-	rowCount := t.homeTable.GetRowCount()
-	numColumns := len(t.columns)
-	for row := 1; row < rowCount; row++ {
-		for col := 0; col < numColumns; col++ {
-			t.homeTable.SetCell(row, col, nil)
-		}
+	displayCount := len(blocks)
+	if displayCount > maxBlocks {
+		displayCount = maxBlocks
 	}
+	numColumns := len(t.columns)
 
 	// Add blocks to table (newest first)
-	for i, block := range blocks {
-		if i >= maxBlocks { // Limit blocks for performance
-			break
-		}
-
+	for i := 0; i < displayCount; i++ {
+		block := blocks[i]
 		row := i + 1 // +1 to account for header row
 
 		// Set cells for each active column
 		for col, column := range t.columns {
-			value := t.getColumnValue(column, block, i, blocks)
+			value := t.getColumnValue(column, block, i, blocks, blocksByHash)
+			if t.isHomeTableCellCached(i, col, value) {
+				continue
+			}
+
+			t.cacheHomeTableCell(i, col, value)
 			t.homeTable.SetCell(row, col, tview.NewTableCell(value).SetAlign(column.Align))
 		}
 	}
+
+	// Clear stale rows when the table shrinks.
+	for i := displayCount; i < t.homeTableRows; i++ {
+		row := i + 1
+		for col := 0; col < numColumns; col++ {
+			t.homeTable.SetCell(row, col, nil)
+		}
+	}
+	t.homeTableRows = displayCount
+	t.homeTableCache = t.homeTableCache[:displayCount]
 
 	// Update table title with current block count
 	title := fmt.Sprintf(" Blocks (%d) ", len(blocks))
@@ -460,6 +480,25 @@ func (t *TviewRenderer) updateTable() {
 
 	// Update headers with current sort indicators
 	t.updateTableHeaders()
+}
+
+func (t *TviewRenderer) isHomeTableCellCached(row, col int, value string) bool {
+	if row >= len(t.homeTableCache) || col >= len(t.homeTableCache[row]) {
+		return false
+	}
+	return t.homeTableCache[row][col] == value
+}
+
+func (t *TviewRenderer) cacheHomeTableCell(row, col int, value string) {
+	for len(t.homeTableCache) <= row {
+		t.homeTableCache = append(t.homeTableCache, make([]string, len(t.columns)))
+	}
+	if len(t.homeTableCache[row]) < len(t.columns) {
+		expanded := make([]string, len(t.columns))
+		copy(expanded, t.homeTableCache[row])
+		t.homeTableCache[row] = expanded
+	}
+	t.homeTableCache[row][col] = value
 }
 
 // updateChainInfo periodically updates the status section with chain information
@@ -545,10 +584,10 @@ func (t *TviewRenderer) refreshChainInfo(ctx context.Context) {
 		statusText += line
 	}
 
-	// Update the status section
-	// Direct Draw() call is safe from any goroutine according to tview docs
-	t.homeStatusPane.SetText(statusText)
-	t.throttledDraw()
+	// Update UI on the application goroutine.
+	t.app.QueueUpdateDraw(func() {
+		t.homeStatusPane.SetText(statusText)
+	})
 
 	log.Debug().Msg("Updated chain info in status section")
 }
@@ -590,10 +629,10 @@ func formatSyncStatus(syncStatus any) string {
 }
 
 // calculateBlockInterval calculates the time interval between a block and its parent
-func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index int, blocks []rpctypes.PolyBlock) string {
+func (t *TviewRenderer) calculateBlockInterval(block rpctypes.PolyBlock, index int, blocks []rpctypes.PolyBlock, blocksByHash map[string]rpctypes.PolyBlock) string {
 	// First try to look up parent block by hash (most accurate)
 	parentHash := block.ParentHash().Hex()
-	if parentBlock, exists := t.blocksByHash[parentHash]; exists {
+	if parentBlock, exists := blocksByHash[parentHash]; exists {
 		// Calculate interval in seconds
 		blockTime := block.Time()
 		parentTime := parentBlock.Time()
@@ -794,18 +833,17 @@ func (t *TviewRenderer) updateBlockInfo(ctx context.Context) {
 			return
 		case <-ticker.C:
 			t.fetchBlockInfo(ctx)
-			// Trigger a metrics pane update to reflect new block info
-			// Direct Draw() call is safe from any goroutine according to tview docs
-			if t.homeMetricsPane != nil {
-				// Force a metrics update by creating a dummy metrics update
-				// This will cause updateMetricsPane to be called with fresh block data
+			t.app.QueueUpdateDraw(func() {
+				if t.homeMetricsPane == nil {
+					return
+				}
+				// Force a metrics update so block info rows use fresh values.
 				t.updateMetricsPane(metrics.MetricUpdate{
 					Name:  "blockInfo",
 					Value: "update",
 					Time:  time.Now(),
 				})
-			}
-			t.throttledDraw()
+			})
 		}
 	}
 }

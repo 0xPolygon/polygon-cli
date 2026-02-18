@@ -180,6 +180,8 @@ type TviewRenderer struct {
 	homeStatusPane   *tview.TextView // Left pane: Status information (1/3 width)
 	homeMetricsPane  *tview.Table    // Right pane: Metrics table (2/3 width)
 	homeTable        *tview.Table
+	homeTableCache   [][]string // Cached table cell values for incremental redraw
+	homeTableRows    int        // Number of cached data rows
 	blockDetailPage  *tview.Flex     // Changed to Flex for side-by-side layout
 	blockDetailLeft  *tview.Table    // Left pane: Transaction table
 	blockDetailRight *tview.TextView // Right pane: Raw JSON
@@ -463,8 +465,15 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 				// Handle Enter key on home page (block selection)
 				if t.homeTable != nil {
 					row, _ := t.homeTable.GetSelection()
-					if row > 0 && row-1 < len(t.blocks) {
-						t.showBlockDetail(t.blocks[row-1])
+					if row > 0 {
+						t.blocksMu.RLock()
+						if row-1 < len(t.blocks) {
+							block := t.blocks[row-1]
+							t.blocksMu.RUnlock()
+							t.showBlockDetail(block)
+							return nil
+						}
+						t.blocksMu.RUnlock()
 					}
 				}
 				return nil
@@ -477,21 +486,18 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 				t.changeSortColumn(-1)
 				t.resortBlocks()
 				t.updateTable()
-				t.updateTableHeaders()
 				return nil
 			case '>':
 				// Move sort column right and redraw immediately
 				t.changeSortColumn(1)
 				t.resortBlocks()
 				t.updateTable()
-				t.updateTableHeaders()
 				return nil
 			case 'r', 'R':
 				// Reverse sort direction and redraw immediately
 				t.toggleSortDirection()
 				t.resortBlocks()
 				t.updateTable()
-				t.updateTableHeaders()
 				return nil
 			}
 		case "block-detail":
@@ -695,11 +701,11 @@ func (t *TviewRenderer) consumeBlocks(ctx context.Context) {
 			// Insert block in sorted order (always maintains descending order by block number)
 			t.insertBlockSorted(block)
 
-			// Update the table and apply view state
-			// Direct Draw() call is safe from any goroutine according to tview docs
-			t.updateTable()
-			t.applyViewState()
-			t.throttledDraw()
+			// UI updates must happen on the application goroutine.
+			t.app.QueueUpdateDraw(func() {
+				t.updateTable()
+				t.applyViewState()
+			})
 		}
 	}
 }
@@ -718,10 +724,10 @@ func (t *TviewRenderer) consumeMetrics(ctx context.Context) {
 				return
 			}
 
-			// Update the metrics pane
-			// Direct Draw() call is safe from any goroutine according to tview docs
-			t.updateMetricsPane(update)
-			t.throttledDraw()
+			// UI updates must happen on the application goroutine.
+			t.app.QueueUpdateDraw(func() {
+				t.updateMetricsPane(update)
+			})
 		}
 	}
 }
