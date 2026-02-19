@@ -1,6 +1,7 @@
 package sensor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -41,7 +42,8 @@ type rpcError struct {
 // It handles eth_sendRawTransaction requests, validates transaction signatures,
 // and broadcasts valid transactions to all connected peers.
 // Supports both single requests and batch requests per JSON-RPC 2.0 specification.
-func handleRPC(conns *p2p.Conns, networkID uint64) {
+// The server gracefully shuts down when the context is cancelled.
+func handleRPC(ctx context.Context, conns *p2p.Conns, networkID uint64) {
 	// Use network ID as chain ID for signature validation
 	chainID := new(big.Int).SetUint64(networkID)
 
@@ -85,8 +87,17 @@ func handleRPC(conns *p2p.Conns, networkID uint64) {
 	})
 
 	addr := fmt.Sprintf(":%d", inputSensorParams.RPCPort)
+	server := &http.Server{Addr: addr, Handler: mux}
+
+	go func() {
+		<-ctx.Done()
+		if err := server.Shutdown(context.Background()); err != nil {
+			log.Error().Err(err).Msg("Failed to shutdown RPC server")
+		}
+	}()
+
 	log.Info().Str("addr", addr).Msg("Starting JSON-RPC server")
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Error().Err(err).Msg("Failed to start RPC server")
 	}
 }

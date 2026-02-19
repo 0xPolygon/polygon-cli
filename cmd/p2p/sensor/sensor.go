@@ -274,21 +274,25 @@ var SensorCmd = &cobra.Command{
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
+		// Create a cancellable context for graceful shutdown of background goroutines.
+		ctx, cancel := context.WithCancel(cmd.Context())
+		defer cancel()
+
 		if inputSensorParams.ShouldRunPprof {
-			go handlePprof()
+			go handlePprof(ctx)
 		}
 
 		if inputSensorParams.ShouldRunPrometheus {
-			go handlePrometheus()
+			go handlePrometheus(ctx)
 		}
 
-		go handleAPI(&server, conns)
+		go handleAPI(ctx, &server, conns)
 
 		// Start the RPC server for receiving transactions
-		go handleRPC(conns, inputSensorParams.NetworkID)
+		go handleRPC(ctx, conns, inputSensorParams.NetworkID)
 
 		// Run DNS discovery immediately at startup.
-		go handleDNSDiscovery(&server, dnsLock)
+		go handleDNSDiscovery(ctx, &server, dnsLock)
 
 		for {
 			select {
@@ -307,7 +311,7 @@ var SensorCmd = &cobra.Command{
 					log.Error().Err(err).Msg("Failed to write nodes to file")
 				}
 			case <-ticker1h.C:
-				go handleDNSDiscovery(&server, dnsLock)
+				go handleDNSDiscovery(ctx, &server, dnsLock)
 			case <-signals:
 				// This gracefully stops the sensor so that the peers can be written to
 				// the nodes file.
@@ -325,10 +329,20 @@ var SensorCmd = &cobra.Command{
 // handlePprof starts a server for performance profiling using pprof on the
 // specified port. This allows for real-time monitoring and analysis of the
 // sensor's performance. The port number is configured through
-// inputSensorParams.PprofPort. An error is logged if the server fails to start.
-func handlePprof() {
+// inputSensorParams.PprofPort. The server gracefully shuts down when the
+// context is cancelled.
+func handlePprof(ctx context.Context) {
 	addr := fmt.Sprintf(":%d", inputSensorParams.PprofPort)
-	if err := http.ListenAndServe(addr, nil); err != nil {
+	server := &http.Server{Addr: addr}
+
+	go func() {
+		<-ctx.Done()
+		if err := server.Shutdown(context.Background()); err != nil {
+			log.Error().Err(err).Msg("Failed to shutdown pprof server")
+		}
+	}()
+
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Error().Err(err).Msg("Failed to start pprof")
 	}
 }
@@ -336,12 +350,23 @@ func handlePprof() {
 // handlePrometheus starts a server to expose Prometheus metrics at the /metrics
 // endpoint. This enables Prometheus to scrape and collect metrics data for
 // monitoring purposes. The port number is configured through
-// inputSensorParams.PrometheusPort. An error is logged if the server fails to
-// start.
-func handlePrometheus() {
-	http.Handle("/metrics", promhttp.Handler())
+// inputSensorParams.PrometheusPort. The server gracefully shuts down when the
+// context is cancelled.
+func handlePrometheus(ctx context.Context) {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+
 	addr := fmt.Sprintf(":%d", inputSensorParams.PrometheusPort)
-	if err := http.ListenAndServe(addr, nil); err != nil {
+	server := &http.Server{Addr: addr, Handler: mux}
+
+	go func() {
+		<-ctx.Done()
+		if err := server.Shutdown(context.Background()); err != nil {
+			log.Error().Err(err).Msg("Failed to shutdown Prometheus server")
+		}
+	}()
+
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Error().Err(err).Msg("Failed to start Prometheus handler")
 	}
 }
@@ -349,7 +374,8 @@ func handlePrometheus() {
 // handleDNSDiscovery performs DNS-based peer discovery and adds new peers to
 // the p2p server. It uses an iterator to discover peers incrementally rather
 // than loading all nodes at once. The lock channel prevents concurrent runs.
-func handleDNSDiscovery(server *ethp2p.Server, lock chan struct{}) {
+// Discovery stops when the context is cancelled.
+func handleDNSDiscovery(ctx context.Context, server *ethp2p.Server, lock chan struct{}) {
 	if len(inputSensorParams.DiscoveryDNS) == 0 {
 		return
 	}
@@ -357,6 +383,8 @@ func handleDNSDiscovery(server *ethp2p.Server, lock chan struct{}) {
 	select {
 	case lock <- struct{}{}:
 		defer func() { <-lock }()
+	case <-ctx.Done():
+		return
 	default:
 		log.Warn().Msg("DNS discovery already running, skipping")
 		return
@@ -377,6 +405,16 @@ func handleDNSDiscovery(server *ethp2p.Server, lock chan struct{}) {
 	// Add DNS-discovered peers using the iterator.
 	count := 0
 	for iter.Next() {
+		// Check for context cancellation to stop discovery promptly.
+		select {
+		case <-ctx.Done():
+			log.Info().
+				Int("discovered_peers", count).
+				Msg("DNS discovery interrupted")
+			return
+		default:
+		}
+
 		node := iter.Node()
 		log.Debug().
 			Str("enode", node.URLv4()).

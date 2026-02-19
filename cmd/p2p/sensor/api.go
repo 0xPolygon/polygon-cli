@@ -1,6 +1,7 @@
 package sensor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -57,7 +58,8 @@ type apiData struct {
 // handleAPI sets up the API for interacting with the sensor. All endpoints
 // return information about the sensor node and all connected peers, including
 // the types and counts of eth packets sent and received by each peer.
-func handleAPI(server *ethp2p.Server, conns *p2p.Conns) {
+// The server gracefully shuts down when the context is cancelled.
+func handleAPI(ctx context.Context, server *ethp2p.Server, conns *p2p.Conns) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -117,7 +119,16 @@ func handleAPI(server *ethp2p.Server, conns *p2p.Conns) {
 	})
 
 	addr := fmt.Sprintf(":%d", inputSensorParams.APIPort)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	httpServer := &http.Server{Addr: addr, Handler: mux}
+
+	go func() {
+		<-ctx.Done()
+		if err := httpServer.Shutdown(context.Background()); err != nil {
+			log.Error().Err(err).Msg("Failed to shutdown API server")
+		}
+	}()
+
+	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Error().Err(err).Msg("Failed to start API handler")
 	}
 }
