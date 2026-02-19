@@ -111,10 +111,7 @@ var ReportCmd = &cobra.Command{
 		} else if endBlock == BlockNotSet {
 			// Only end-block unspecified: analyze next DefaultBlockRange blocks from start-block
 			// But don't exceed the latest block
-			endBlock = startBlock + (DefaultBlockRange - 1)
-			if endBlock > latestBlock {
-				endBlock = latestBlock
-			}
+			endBlock = min(startBlock+(DefaultBlockRange-1), latestBlock)
 		}
 		// If both are set by user (including 0,0), use them as-is
 

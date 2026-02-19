@@ -197,12 +197,6 @@ var SensorCmd = &cobra.Command{
 			Help:      "The number of peers the sensor is connected to",
 		})
 
-		msgCounter := promauto.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "sensor",
-			Name:      "messages",
-			Help:      "The number and type of messages the sensor has sent and received",
-		}, []string{"message", "url", "name", "direction"})
-
 		metrics := p2p.NewBlockMetrics(head.Block)
 
 		// Create peer connection manager for broadcasting transactions
@@ -228,7 +222,6 @@ var SensorCmd = &cobra.Command{
 			NetworkID:                  inputSensorParams.NetworkID,
 			Conns:                      conns,
 			ForkID:                     forkid.ID{Hash: [4]byte(inputSensorParams.ForkID)},
-			MsgCounter:                 msgCounter,
 			RequestsCache:              inputSensorParams.RequestsCache,
 			ParentsCache:               inputSensorParams.ParentsCache,
 			ShouldBroadcastTx:          inputSensorParams.ShouldBroadcastTx,
@@ -289,7 +282,7 @@ var SensorCmd = &cobra.Command{
 			go handlePrometheus()
 		}
 
-		go handleAPI(&server, msgCounter, conns)
+		go handleAPI(&server, conns)
 
 		// Start the RPC server for receiving transactions
 		go handleRPC(conns, inputSensorParams.NetworkID)
@@ -308,10 +301,6 @@ var SensorCmd = &cobra.Command{
 				urls := []string{}
 				for _, peer := range server.Peers() {
 					urls = append(urls, peer.Node().URLv4())
-				}
-
-				if err := removePeerMessages(msgCounter, urls); err != nil {
-					log.Error().Err(err).Msg("Failed to clean up peer messages")
 				}
 
 				if err := p2p.WritePeers(inputSensorParams.NodesFile, urls); err != nil {
@@ -495,7 +484,7 @@ will result in less chance of missing data but can significantly increase memory
 	f.IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
 	f.StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "RPC endpoint used to fetch latest block")
 	f.StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "genesis block hash")
-	f.BytesHexVar(&inputSensorParams.ForkID, "fork-id", []byte{240, 151, 188, 19}, "hex encoded fork ID (omit 0x)")
+	f.BytesHexVar(&inputSensorParams.ForkID, "fork-id", []byte{34, 213, 35, 178}, "hex encoded fork ID (omit 0x)")
 	f.IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
 		`ratio of inbound to dialed connections (dial ratio of 2 allows 1/2 of connections to be dialed, setting to 0 defaults to 3)`)
 	f.StringVar(&inputSensorParams.NAT, "nat", "any", "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")

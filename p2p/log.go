@@ -109,3 +109,74 @@ func sum(ints ...int64) int64 {
 
 	return sum
 }
+
+// IncrementByName increments the appropriate field based on message name.
+func (mc *MessageCount) IncrementByName(name string, count int64) {
+	switch name {
+	case "BlockHeaders":
+		atomic.AddInt64(&mc.BlockHeaders, count)
+	case "BlockBodies":
+		atomic.AddInt64(&mc.BlockBodies, count)
+	case "NewBlock":
+		atomic.AddInt64(&mc.Blocks, count)
+	case "NewBlockHashes":
+		atomic.AddInt64(&mc.BlockHashes, count)
+	case "GetBlockHeaders":
+		atomic.AddInt64(&mc.BlockHeaderRequests, count)
+	case "GetBlockBodies":
+		atomic.AddInt64(&mc.BlockBodiesRequests, count)
+	case "Transactions", "PooledTransactions":
+		atomic.AddInt64(&mc.Transactions, count)
+	case "NewPooledTransactionHashes":
+		atomic.AddInt64(&mc.TransactionHashes, count)
+	case "GetPooledTransactions":
+		atomic.AddInt64(&mc.TransactionRequests, count)
+	case "Ping":
+		atomic.AddInt64(&mc.Pings, count)
+	case "NewWitness":
+		atomic.AddInt64(&mc.NewWitness, count)
+	case "NewWitnessHashes":
+		atomic.AddInt64(&mc.NewWitnessHashes, count)
+	case "GetWitness":
+		atomic.AddInt64(&mc.GetWitnessRequest, count)
+	case "Witness":
+		atomic.AddInt64(&mc.Witness, count)
+	}
+}
+
+// PeerMessages tracks message counts for a single peer connection.
+// This is used to provide per-peer visibility via the API without
+// creating high-cardinality Prometheus metrics.
+type PeerMessages struct {
+	Received        MessageCount
+	Sent            MessageCount
+	PacketsReceived MessageCount
+	PacketsSent     MessageCount
+}
+
+// NewPeerMessages creates a new PeerMessages instance.
+func NewPeerMessages() *PeerMessages {
+	return &PeerMessages{}
+}
+
+// IncrementReceived increments the received message count.
+func (pm *PeerMessages) IncrementReceived(name string, count int64) {
+	pm.Received.IncrementByName(name, count)
+	pm.PacketsReceived.IncrementByName(name, 1)
+}
+
+// IncrementSent increments the sent message count.
+func (pm *PeerMessages) IncrementSent(name string, count int64) {
+	pm.Sent.IncrementByName(name, count)
+	pm.PacketsSent.IncrementByName(name, 1)
+}
+
+// Load returns a snapshot of all message counts.
+func (pm *PeerMessages) Load() PeerMessages {
+	return PeerMessages{
+		Received:        pm.Received.Load(),
+		Sent:            pm.Sent.Load(),
+		PacketsReceived: pm.PacketsReceived.Load(),
+		PacketsSent:     pm.PacketsSent.Load(),
+	}
+}

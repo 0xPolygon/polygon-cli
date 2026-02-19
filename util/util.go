@@ -4,16 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"math/big"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/0xPolygon/polygon-cli/rpctypes"
 	"github.com/cenkalti/backoff"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/crypto"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rlp"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog/log"
 
@@ -375,6 +381,9 @@ func getZkEVMBatch(rpc *ethrpc.Client, batchType batch) (uint64, error) {
 func tryCastToUint64(val any) (uint64, error) {
 	switch t := val.(type) {
 	case float64:
+		if t < 0 || t > float64(math.MaxUint64) {
+			return 0, fmt.Errorf("value %v is out of range for uint64", t)
+		}
 		return uint64(t), nil
 	case string:
 		return convHexToUint64(t)
@@ -429,7 +438,11 @@ func WrapDeployedCode(deployedBytecode string, storageBytecode string) string {
 func GetHexString(data any) string {
 	var result string
 	if reflect.TypeOf(data).Kind() == reflect.Float64 {
-		result = fmt.Sprintf("%x", int64(data.(float64)))
+		f := data.(float64)
+		if f < 0 || f > float64(math.MaxUint64) {
+			log.Fatal().Float64("value", f).Msg("value out of range for uint64")
+		}
+		result = fmt.Sprintf("%x", uint64(f))
 	} else if reflect.TypeOf(data).Kind() == reflect.String {
 		var ok bool
 		result, ok = strings.CutPrefix(data.(string), "0x")
@@ -443,4 +456,243 @@ func GetHexString(data any) string {
 		result = "0" + result
 	}
 	return strings.ToLower(result)
+}
+
+func GetChainID(ctx context.Context, ec *ethrpc.Client) (*big.Int, error) {
+	var chainIDHex string
+	err := ec.CallContext(ctx, &chainIDHex, "eth_chainId")
+	if err != nil {
+		return nil, err
+	}
+	chainID, err := hexutil.DecodeBig(chainIDHex)
+	if err != nil {
+		return nil, err
+	}
+	return chainID, nil
+}
+
+// HeaderByBlockNumber retrieves a block header using rpc.BlockNumber.
+// If blockNum is nil, it defaults to latest block.
+// Examples:
+//   - HeaderByBlockNumber(ctx, client, nil) // latest
+//   - HeaderByBlockNumber(ctx, client, &rpc.LatestBlockNumber)
+//   - HeaderByBlockNumber(ctx, client, &rpc.FinalizedBlockNumber)
+//   - num := rpc.BlockNumber(12345); HeaderByBlockNumber(ctx, client, &num)
+func HeaderByBlockNumber(ctx context.Context, ec *ethrpc.Client, blockNum *ethrpc.BlockNumber) (*types.Header, error) {
+	var blockParam string
+	if blockNum == nil {
+		blockParam = ethrpc.LatestBlockNumber.String()
+	} else {
+		blockParam = blockNum.String()
+	}
+
+	var raw json.RawMessage
+	err := ec.CallContext(ctx, &raw, "eth_getBlockByNumber", blockParam, false)
+	if err != nil {
+		return nil, err
+	}
+
+	var block types.Header
+	err = json.Unmarshal(raw, &block)
+	if err != nil {
+		return nil, err
+	}
+	return &block, nil
+}
+
+// GetSenderFromTx recovers the sender address from a transaction without using types.Transaction
+func GetSenderFromTx(ctx context.Context, tx rpctypes.PolyTransaction) (common.Address, error) {
+	// Get transaction type
+	txType := tx.Type()
+
+	// For non-standard transaction types, we assume the sender is already set
+	if txType > 2 {
+		return tx.From(), nil
+	}
+
+	// Get transaction fields
+	chainID := tx.ChainID()
+	nonce := tx.Nonce()
+	value := tx.Value()
+	gas := tx.Gas()
+	to := tx.To()
+	data := tx.Data()
+	v := tx.V()
+	r := tx.R()
+	s := tx.S()
+
+	// Calculate the signing hash based on transaction type
+	var sigHash []byte
+	var err error
+
+	switch txType {
+	case 0: // Legacy transaction
+		sigHash, err = calculateLegacySigningHash(chainID, nonce, tx.GasPrice(), gas, to, value, data)
+	case 1: // EIP-2930 (Access List)
+		// For now, we can try with empty access list
+		// If you need full support, you'll need to add AccessList to PolyTransaction interface
+		sigHash, err = calculateEIP2930SigningHash(chainID, nonce, tx.GasPrice(), gas, to, value, data, []any{})
+	case 2: // EIP-1559
+		maxPriorityFee := new(big.Int).SetUint64(tx.MaxPriorityFeePerGas())
+		maxFee := new(big.Int).SetUint64(tx.MaxFeePerGas())
+		sigHash, err = calculateEIP1559SigningHash(chainID, nonce, maxPriorityFee, maxFee, gas, to, value, data)
+	default:
+		return common.Address{}, fmt.Errorf("unsupported transaction type: %d (0x%x)", txType, txType)
+	}
+
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed to calculate signing hash: %w", err)
+	}
+
+	// Normalize v value for recovery
+	var recoveryID byte
+	if txType == 0 {
+		// Legacy transaction with EIP-155
+		if chainID > 0 {
+			// EIP-155: v = chainId * 2 + 35 + {0,1}
+			// Extract recovery id: recoveryID = v - (chainId * 2 + 35)
+			vBig := new(big.Int).Set(v)
+			vBig.Sub(vBig, big.NewInt(35))
+			vBig.Sub(vBig, new(big.Int).Mul(new(big.Int).SetUint64(chainID), big.NewInt(2)))
+			recoveryID = byte(vBig.Uint64())
+		} else {
+			// Pre-EIP-155: v is 27 or 28
+			recoveryID = byte(v.Uint64() - 27)
+		}
+	} else {
+		// EIP-2930 and EIP-1559: v is 0 or 1 (or 27/28)
+		vVal := v.Uint64()
+		if vVal >= 27 {
+			recoveryID = byte(vVal - 27)
+		} else {
+			recoveryID = byte(vVal)
+		}
+	}
+
+	// Validate recoveryID
+	if recoveryID > 1 {
+		return common.Address{}, fmt.Errorf("invalid recovery id: %d (v=%s, chainID=%d, type=%d)", recoveryID, v.String(), chainID, txType)
+	}
+
+	// Build signature in the [R || S || V] format (65 bytes)
+	sig := make([]byte, 65)
+	// Use FillBytes to ensure proper padding with leading zeros
+	r.FillBytes(sig[0:32])
+	s.FillBytes(sig[32:64])
+	sig[64] = recoveryID
+
+	// Recover public key from signature using go-ethereum's crypto package
+	pubKey, err := crypto.Ecrecover(sigHash, sig)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed to recover public key: %w", err)
+	}
+
+	// Derive address from public key
+	// The public key returned by Ecrecover is 65 bytes: [0x04 || X || Y]
+	// We hash the X and Y coordinates (skip first byte) and take last 20 bytes
+	hash := crypto.Keccak256(pubKey[1:])
+	address := common.BytesToAddress(hash[12:])
+
+	return address, nil
+}
+
+// calculateLegacySigningHash calculates the signing hash for legacy (type 0) transactions
+func calculateLegacySigningHash(chainID uint64, nonce uint64, gasPrice *big.Int, gas uint64, to common.Address, value *big.Int, data []byte) ([]byte, error) {
+	var items []any
+
+	// Handle contract creation (to = zero address)
+	var toPtr *common.Address
+	if to != (common.Address{}) {
+		toPtr = &to
+	}
+
+	if chainID > 0 {
+		// EIP-155: RLP([nonce, gasPrice, gas, to, value, data, chainId, 0, 0])
+		items = []any{
+			nonce,
+			gasPrice,
+			gas,
+			toPtr,
+			value,
+			data,
+			chainID,
+			uint(0),
+			uint(0),
+		}
+	} else {
+		// Pre-EIP-155: RLP([nonce, gasPrice, gas, to, value, data])
+		items = []any{
+			nonce,
+			gasPrice,
+			gas,
+			toPtr,
+			value,
+			data,
+		}
+	}
+
+	encoded, err := rlp.EncodeToBytes(items)
+	if err != nil {
+		return nil, fmt.Errorf("failed to RLP encode legacy transaction: %w", err)
+	}
+	return crypto.Keccak256(encoded), nil
+}
+
+// calculateEIP2930SigningHash calculates the signing hash for EIP-2930 (type 1) transactions
+func calculateEIP2930SigningHash(chainID uint64, nonce uint64, gasPrice *big.Int, gas uint64, to common.Address, value *big.Int, data []byte, accessList []any) ([]byte, error) {
+	var toPtr *common.Address
+	if to != (common.Address{}) {
+		toPtr = &to
+	}
+
+	// EIP-2930: keccak256(0x01 || rlp([chainId, nonce, gasPrice, gas, to, value, data, accessList]))
+	items := []any{
+		chainID,
+		nonce,
+		gasPrice,
+		gas,
+		toPtr,
+		value,
+		data,
+		accessList,
+	}
+
+	encoded, err := rlp.EncodeToBytes(items)
+	if err != nil {
+		return nil, fmt.Errorf("failed to RLP encode EIP-2930 transaction: %w", err)
+	}
+
+	// Prepend transaction type byte (0x01)
+	typedData := append([]byte{0x01}, encoded...)
+	return crypto.Keccak256(typedData), nil
+}
+
+// calculateEIP1559SigningHash calculates the signing hash for EIP-1559 (type 2) transactions
+func calculateEIP1559SigningHash(chainID uint64, nonce uint64, maxPriorityFee, maxFee *big.Int, gas uint64, to common.Address, value *big.Int, data []byte) ([]byte, error) {
+	var toPtr *common.Address
+	if to != (common.Address{}) {
+		toPtr = &to
+	}
+
+	// EIP-1559: keccak256(0x02 || rlp([chainId, nonce, maxPriorityFeePerGas, maxFeePerGas, gas, to, value, data, accessList]))
+	items := []any{
+		chainID,
+		nonce,
+		maxPriorityFee,
+		maxFee,
+		gas,
+		toPtr,
+		value,
+		data,
+		[]any{}, // empty access list
+	}
+
+	encoded, err := rlp.EncodeToBytes(items)
+	if err != nil {
+		return nil, fmt.Errorf("failed to RLP encode EIP-1559 transaction: %w", err)
+	}
+
+	// Prepend transaction type byte (0x02)
+	typedData := append([]byte{0x02}, encoded...)
+	return crypto.Keccak256(typedData), nil
 }

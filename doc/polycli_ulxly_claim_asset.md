@@ -1,4 +1,4 @@
-# `polycli ulxly  claim asset`
+# `polycli ulxly claim asset`
 
 > Auto-generated documentation.
 
@@ -14,7 +14,7 @@
 Claim a deposit.
 
 ```bash
-polycli ulxly  claim asset [flags]
+polycli ulxly claim asset [flags]
 ```
 
 ## Usage
@@ -99,6 +99,7 @@ polycli ulxly claim asset \
 ```
 
 [Here](https://sepolia.etherscan.io/tx/0x21fee6e47a3b6733034fb963b20fe7accb0fb168257450f8f0053d6af8e4bc76) is the transaction that was created and mined based on this command.
+
 ## Flags
 
 ```bash
