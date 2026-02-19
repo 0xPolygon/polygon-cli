@@ -133,8 +133,8 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 			}
 
 			// Send the connection object to the conns manager for RPC broadcasting
-			opts.Conns.AddConn(c)
-			defer opts.Conns.RemoveConn(c)
+			opts.Conns.Add(c)
+			defer opts.Conns.Remove(c)
 
 			ctx := opts.Context
 

@@ -87,31 +87,31 @@ func NewConns(opts ConnsOptions) *Conns {
 	}
 }
 
-// AddConn adds a connection to the manager.
-func (c *Conns) AddConn(cn *conn) {
+// Add adds a connection to the manager.
+func (c *Conns) Add(cn *conn) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.conns[cn.node.ID().String()] = cn
 	cn.logger.Debug().Msg("Added connection")
 }
 
-// RemoveConn removes a connection from the manager when a peer disconnects.
-func (c *Conns) RemoveConn(cn *conn) {
+// Remove removes a connection from the manager when a peer disconnects.
+func (c *Conns) Remove(cn *conn) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.conns, cn.node.ID().String())
 	cn.logger.Debug().Msg("Removed connection")
 }
 
-// BroadcastTx broadcasts a single transaction to all connected peers and
-// returns the number of peers the transaction was successfully sent to.
+// BroadcastTx broadcasts a single transaction to all connected peers.
+// Returns the number of peers the transaction was successfully sent to.
 func (c *Conns) BroadcastTx(tx *types.Transaction) int {
 	return c.BroadcastTxs(types.Transactions{tx})
 }
 
 // BroadcastTxs broadcasts multiple transactions to all connected peers,
-// filtering out transactions that each peer already knows about, and returns
-// the number of peers the transactions were successfully sent to.
+// filtering out transactions that each peer already knows about.
+// Returns the number of peers the transactions were successfully sent to.
 // If broadcast flags are disabled, this is a no-op.
 func (c *Conns) BroadcastTxs(txs types.Transactions) int {
 	if !c.shouldBroadcastTx {
