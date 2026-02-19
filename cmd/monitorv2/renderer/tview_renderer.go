@@ -182,6 +182,8 @@ type TviewRenderer struct {
 	homeTable        *tview.Table
 	homeTableCache   [][]string // Cached table cell values for incremental redraw
 	homeTableRows    int        // Number of cached data rows
+	homeTableInnerW  int        // Cached inner width to detect resize-driven redraw invalidation
+	homeTableInnerH  int        // Cached inner height to detect resize-driven redraw invalidation
 	blockDetailPage  *tview.Flex     // Changed to Flex for side-by-side layout
 	blockDetailLeft  *tview.Table    // Left pane: Transaction table
 	blockDetailRight *tview.TextView // Right pane: Raw JSON

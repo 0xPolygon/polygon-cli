@@ -65,9 +65,7 @@ func (t *TviewRenderer) showBlockDetail(block rpctypes.PolyBlock) {
 	// Clear existing table rows (except header)
 	rowCount := t.blockDetailLeft.GetRowCount()
 	for row := 1; row < rowCount; row++ {
-		for col := 0; col < 5; col++ {
-			t.blockDetailLeft.SetCell(row, col, nil)
-		}
+		t.clearBlockDetailRow(row)
 	}
 
 	// Populate transaction table
@@ -132,4 +130,14 @@ func (t *TviewRenderer) showBlockDetail(block rpctypes.PolyBlock) {
 
 	// Set focus to the left pane (transaction table) by default
 	t.app.SetFocus(t.blockDetailLeft)
+}
+
+func (t *TviewRenderer) clearBlockDetailRow(row int) {
+	aligns := []int{tview.AlignRight, tview.AlignLeft, tview.AlignLeft, tview.AlignRight, tview.AlignLeft}
+	expansions := []int{1, 3, 3, 2, 2}
+	for col := 0; col < 5; col++ {
+		t.blockDetailLeft.SetCell(row, col, tview.NewTableCell("").
+			SetAlign(aligns[col]).
+			SetExpansion(expansions[col]))
+	}
 }

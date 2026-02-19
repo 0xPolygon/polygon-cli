@@ -445,31 +445,50 @@ func (t *TviewRenderer) updateTable() {
 	if displayCount > maxBlocks {
 		displayCount = maxBlocks
 	}
-	numColumns := len(t.columns)
+	_, _, innerW, innerH := t.homeTable.GetInnerRect()
+	forceFullRedraw := innerW != t.homeTableInnerW || innerH != t.homeTableInnerH
+	if forceFullRedraw {
+		t.homeTableInnerW = innerW
+		t.homeTableInnerH = innerH
+		t.homeTable.Clear()
+		t.homeTableCache = nil
+		t.homeTableRows = 0
+	}
 
 	// Add blocks to table (newest first)
 	for i := 0; i < displayCount; i++ {
 		block := blocks[i]
 		row := i + 1 // +1 to account for header row
+		rowValues := make([]string, len(t.columns))
+		rowChanged := forceFullRedraw
 
-		// Set cells for each active column
 		for col, column := range t.columns {
 			value := t.getColumnValue(column, block, i, blocks, blocksByHash)
-			if t.isHomeTableCellCached(i, col, value) {
-				continue
+			rowValues[col] = value
+			if !rowChanged && !t.isHomeTableCellCached(i, col, value) {
+				rowChanged = true
 			}
+		}
 
+		if !rowChanged {
+			continue
+		}
+
+		// Clear and repaint the full row to avoid lingering characters on redraw/resize.
+		t.clearHomeTableRow(row)
+		for col, column := range t.columns {
+			value := rowValues[col]
 			t.cacheHomeTableCell(i, col, value)
-			t.homeTable.SetCell(row, col, tview.NewTableCell(value).SetAlign(column.Align))
+			t.homeTable.SetCell(row, col, tview.NewTableCell(value).
+				SetAlign(column.Align).
+				SetExpansion(column.Expansion))
 		}
 	}
 
 	// Clear stale rows when the table shrinks.
 	for i := displayCount; i < t.homeTableRows; i++ {
 		row := i + 1
-		for col := 0; col < numColumns; col++ {
-			t.homeTable.SetCell(row, col, nil)
-		}
+		t.clearHomeTableRow(row)
 	}
 	t.homeTableRows = displayCount
 	t.homeTableCache = t.homeTableCache[:displayCount]
@@ -480,6 +499,14 @@ func (t *TviewRenderer) updateTable() {
 
 	// Update headers with current sort indicators
 	t.updateTableHeaders()
+}
+
+func (t *TviewRenderer) clearHomeTableRow(row int) {
+	for col, column := range t.columns {
+		t.homeTable.SetCell(row, col, tview.NewTableCell("").
+			SetAlign(column.Align).
+			SetExpansion(column.Expansion))
+	}
 }
 
 func (t *TviewRenderer) isHomeTableCellCached(row, col int, value string) bool {
