@@ -467,7 +467,7 @@ will result in less chance of missing data but can significantly increase memory
 	f.BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
 		`write transaction events to database (this option can significantly increase CPU and memory usage)`)
 	f.BoolVar(&inputSensorParams.ShouldWritePeers, "write-peers", true, "write peers to database")
-	f.BoolVar(&inputSensorParams.ShouldBroadcastTx, "broadcast-tx", false, "broadcast full transactions to peers")
+	f.BoolVar(&inputSensorParams.ShouldBroadcastTx, "broadcast-txs", false, "broadcast full transactions to peers")
 	f.BoolVar(&inputSensorParams.ShouldBroadcastTxHashes, "broadcast-tx-hashes", false, "broadcast transaction hashes to peers")
 	f.BoolVar(&inputSensorParams.ShouldBroadcastBlocks, "broadcast-blocks", false, "broadcast full blocks to peers")
 	f.BoolVar(&inputSensorParams.ShouldBroadcastBlockHashes, "broadcast-block-hashes", false, "broadcast block hashes to peers")

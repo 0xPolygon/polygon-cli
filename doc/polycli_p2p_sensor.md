@@ -96,8 +96,8 @@ polycli p2p sensor amoy-nodes.json \
   -b, --bootnodes string                  comma separated nodes used for bootstrapping
       --broadcast-block-hashes            broadcast block hashes to peers
       --broadcast-blocks                  broadcast full blocks to peers
-      --broadcast-tx                      broadcast full transactions to peers
       --broadcast-tx-hashes               broadcast transaction hashes to peers
+      --broadcast-txs                     broadcast full transactions to peers
       --database string                   which database to persist data to, options are:
                                             - datastore (GCP Datastore)
                                             - json (output to stdout)
