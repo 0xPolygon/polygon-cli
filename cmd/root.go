@@ -34,6 +34,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/retest"
 	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz"
 	"github.com/0xPolygon/polygon-cli/cmd/signer"
+	"github.com/0xPolygon/polygon-cli/cmd/tail"
 	"github.com/0xPolygon/polygon-cli/cmd/plot"
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly"
 	"github.com/0xPolygon/polygon-cli/cmd/version"
@@ -153,6 +154,7 @@ func NewPolycliCommand() *cobra.Command {
 		retest.RetestCmd,
 		rpcfuzz.RPCFuzzCmd,
 		signer.SignerCmd,
+		tail.TailCmd,
 		ulxly.ULxLyCmd,
 		version.VersionCmd,
 		wallet.WalletCmd,
