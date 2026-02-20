@@ -316,6 +316,7 @@ var SensorCmd = &cobra.Command{
 				// This gracefully stops the sensor so that the peers can be written to
 				// the nodes file.
 				log.Info().Msg("Stopping sensor...")
+				cancel()
 				return nil
 			case event := <-events:
 				log.Debug().Any("event", event).Send()
