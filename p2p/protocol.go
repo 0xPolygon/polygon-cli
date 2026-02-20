@@ -138,27 +138,10 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 
 			ctx := opts.Context
 
-			// Disconnect peer when context is cancelled to unblock ReadMsg.
-			go func() {
-				<-ctx.Done()
-				p.Disconnect(ethp2p.DiscQuitting)
-			}()
-
 			// Handle all the of the messages here.
 			for {
-				// Check for context cancellation before processing next message.
-				select {
-				case <-ctx.Done():
-					return nil
-				default:
-				}
-
 				msg, err := rw.ReadMsg()
 				if err != nil {
-					// Return nil on context cancellation to avoid error logging.
-					if ctx.Err() != nil {
-						return nil
-					}
 					return err
 				}
 
@@ -261,12 +244,6 @@ func (c *conn) readStatus(packet *eth.StatusPacket68) error {
 	if err != nil {
 		return err
 	}
-
-	defer func() {
-		if msgErr := msg.Discard(); msgErr != nil {
-			c.logger.Error().Err(msgErr).Msg("Failed to discard message")
-		}
-	}()
 
 	if msg.Code != eth.StatusMsg {
 		return errors.New("expected status message code")

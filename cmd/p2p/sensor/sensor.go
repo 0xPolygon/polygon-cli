@@ -6,7 +6,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -173,7 +172,10 @@ var SensorCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		db, err := newDatabase(cmd.Context())
+		ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+
+		db, err := newDatabase(ctx)
 		if err != nil {
 			return err
 		}
@@ -214,7 +216,7 @@ var SensorCmd = &cobra.Command{
 		})
 
 		opts := p2p.EthProtocolOptions{
-			Context:                    cmd.Context(),
+			Context:                    ctx,
 			Database:                   db,
 			GenesisHash:                common.HexToHash(inputSensorParams.GenesisHash),
 			RPC:                        inputSensorParams.RPC,
@@ -259,64 +261,36 @@ var SensorCmd = &cobra.Command{
 		if err = server.Start(); err != nil {
 			return err
 		}
-		defer server.Stop()
+		defer stopServer(&server)
 
 		events := make(chan *ethp2p.PeerEvent)
 		sub := server.SubscribeEvents(events)
 		defer sub.Unsubscribe()
 
-		ticker := time.NewTicker(2 * time.Second) // Ticker for recurring tasks every 2 seconds.
-		ticker1h := time.NewTicker(time.Hour)     // Ticker for running DNS discovery every hour.
+		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
-		defer ticker1h.Stop()
-
-		dnsLock := make(chan struct{}, 1)
-		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
-
-		// Create a cancellable context for graceful shutdown of background goroutines.
-		ctx, cancel := context.WithCancel(cmd.Context())
-		defer cancel()
 
 		if inputSensorParams.ShouldRunPprof {
-			go handlePprof(ctx)
+			go handlePprof()
 		}
 
 		if inputSensorParams.ShouldRunPrometheus {
-			go handlePrometheus(ctx)
+			go handlePrometheus()
 		}
 
-		go handleAPI(ctx, &server, conns)
-
-		// Start the RPC server for receiving transactions
-		go handleRPC(ctx, conns, inputSensorParams.NetworkID)
-
-		// Run DNS discovery immediately at startup.
-		go handleDNSDiscovery(ctx, &server, dnsLock)
+		go handleAPI(&server, conns)
+		go handleRPC(conns, inputSensorParams.NetworkID)
+		go handleDNSDiscovery(&server)
 
 		for {
 			select {
 			case <-ticker.C:
 				peersGauge.Set(float64(server.PeerCount()))
-				db.WritePeers(cmd.Context(), server.Peers(), time.Now())
-
+				db.WritePeers(ctx, server.Peers(), time.Now())
 				metrics.Update(conns.HeadBlock().Block, conns.OldestBlock())
-
-				urls := []string{}
-				for _, peer := range server.Peers() {
-					urls = append(urls, peer.Node().URLv4())
-				}
-
-				if err := p2p.WritePeers(inputSensorParams.NodesFile, urls); err != nil {
-					log.Error().Err(err).Msg("Failed to write nodes to file")
-				}
-			case <-ticker1h.C:
-				go handleDNSDiscovery(ctx, &server, dnsLock)
-			case <-signals:
-				// This gracefully stops the sensor so that the peers can be written to
-				// the nodes file.
+				writePeers(server.Peers())
+			case <-ctx.Done():
 				log.Info().Msg("Stopping sensor...")
-				cancel()
 				return nil
 			case event := <-events:
 				log.Debug().Any("event", event).Send()
@@ -327,23 +301,41 @@ var SensorCmd = &cobra.Command{
 	},
 }
 
+// writePeers writes the enode URLs of connected peers to the nodes file.
+func writePeers(peers []*ethp2p.Peer) {
+	urls := make([]string, 0, len(peers))
+	for _, peer := range peers {
+		urls = append(urls, peer.Node().URLv4())
+	}
+
+	if err := p2p.WritePeers(inputSensorParams.NodesFile, urls); err != nil {
+		log.Error().Err(err).Msg("Failed to write nodes to file")
+	}
+}
+
+// stopServer stops the p2p server with a timeout to avoid hanging on shutdown.
+// This is necessary because go-ethereum's discovery shutdown can deadlock.
+func stopServer(server *ethp2p.Server) {
+	done := make(chan struct{})
+
+	go func() {
+		server.Stop()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+	}
+}
+
 // handlePprof starts a server for performance profiling using pprof on the
 // specified port. This allows for real-time monitoring and analysis of the
 // sensor's performance. The port number is configured through
-// inputSensorParams.PprofPort. The server gracefully shuts down when the
-// context is cancelled.
-func handlePprof(ctx context.Context) {
+// inputSensorParams.PprofPort. An error is logged if the server fails to start.
+func handlePprof() {
 	addr := fmt.Sprintf(":%d", inputSensorParams.PprofPort)
-	server := &http.Server{Addr: addr}
-
-	go func() {
-		<-ctx.Done()
-		if err := server.Shutdown(context.Background()); err != nil {
-			log.Error().Err(err).Msg("Failed to shutdown pprof server")
-		}
-	}()
-
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Error().Err(err).Msg("Failed to start pprof")
 	}
 }
@@ -351,46 +343,36 @@ func handlePprof(ctx context.Context) {
 // handlePrometheus starts a server to expose Prometheus metrics at the /metrics
 // endpoint. This enables Prometheus to scrape and collect metrics data for
 // monitoring purposes. The port number is configured through
-// inputSensorParams.PrometheusPort. The server gracefully shuts down when the
-// context is cancelled.
-func handlePrometheus(ctx context.Context) {
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
-
+// inputSensorParams.PrometheusPort. An error is logged if the server fails to
+// start.
+func handlePrometheus() {
+	http.Handle("/metrics", promhttp.Handler())
 	addr := fmt.Sprintf(":%d", inputSensorParams.PrometheusPort)
-	server := &http.Server{Addr: addr, Handler: mux}
-
-	go func() {
-		<-ctx.Done()
-		if err := server.Shutdown(context.Background()); err != nil {
-			log.Error().Err(err).Msg("Failed to shutdown Prometheus server")
-		}
-	}()
-
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Error().Err(err).Msg("Failed to start Prometheus handler")
 	}
 }
 
 // handleDNSDiscovery performs DNS-based peer discovery and adds new peers to
 // the p2p server. It uses an iterator to discover peers incrementally rather
-// than loading all nodes at once. The lock channel prevents concurrent runs.
-// Discovery stops when the context is cancelled.
-func handleDNSDiscovery(ctx context.Context, server *ethp2p.Server, lock chan struct{}) {
+// than loading all nodes at once. Runs immediately and then hourly.
+func handleDNSDiscovery(server *ethp2p.Server) {
 	if len(inputSensorParams.DiscoveryDNS) == 0 {
 		return
 	}
 
-	select {
-	case lock <- struct{}{}:
-		defer func() { <-lock }()
-	case <-ctx.Done():
-		return
-	default:
-		log.Warn().Msg("DNS discovery already running, skipping")
-		return
-	}
+	discoverPeers(server)
 
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		discoverPeers(server)
+	}
+}
+
+// discoverPeers performs a single DNS discovery round.
+func discoverPeers(server *ethp2p.Server) {
 	log.Info().
 		Str("discovery-dns", inputSensorParams.DiscoveryDNS).
 		Msg("Starting DNS discovery")
@@ -403,27 +385,13 @@ func handleDNSDiscovery(ctx context.Context, server *ethp2p.Server, lock chan st
 	}
 	defer iter.Close()
 
-	// Add DNS-discovered peers using the iterator.
 	count := 0
 	for iter.Next() {
-		// Check for context cancellation to stop discovery promptly.
-		select {
-		case <-ctx.Done():
-			log.Info().
-				Int("discovered_peers", count).
-				Msg("DNS discovery interrupted")
-			return
-		default:
-		}
-
 		node := iter.Node()
 		log.Debug().
 			Str("enode", node.URLv4()).
 			Msg("Discovered peer through DNS")
 
-		// Add the peer to the static node set. The server itself handles whether to
-		// connect to the peer if it's already connected. If a node is part of the
-		// static peer set, the server will handle reconnecting after disconnects.
 		server.AddPeer(node)
 		count++
 	}
