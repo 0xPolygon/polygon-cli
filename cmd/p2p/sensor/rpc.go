@@ -85,7 +85,6 @@ func handleRPC(conns *p2p.Conns, networkID uint64) {
 	})
 
 	addr := fmt.Sprintf(":%d", inputSensorParams.RPCPort)
-
 	log.Info().Str("addr", addr).Msg("Starting JSON-RPC server")
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Error().Err(err).Msg("Failed to start RPC server")
