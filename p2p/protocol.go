@@ -440,9 +440,9 @@ func (c *conn) hasKnownBlock(hash common.Hash) bool {
 	return c.knownBlocks.Contains(hash)
 }
 
-// broadcastBlockHashes sends block hashes to a peer, filtering out hashes the peer
+// sendBlockHashes sends block hashes to a peer, filtering out hashes the peer
 // already knows about. Returns true if the send was successful.
-func (c *conn) broadcastBlockHashes(hashes []common.Hash, numbers []uint64) bool {
+func (c *conn) sendBlockHashes(hashes []common.Hash, numbers []uint64) bool {
 	// Filter hashes this peer doesn't know about
 	unknownHashes := make([]common.Hash, 0, len(hashes))
 	unknownNumbers := make([]uint64, 0, len(numbers))
