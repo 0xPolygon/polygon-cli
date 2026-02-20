@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/rs/zerolog/log"
 )
 
 // BlockCache stores the actual block data to avoid duplicate fetches and database queries.
@@ -17,6 +18,19 @@ type BlockCache struct {
 	Header *types.Header
 	Body   *eth.BlockBody
 	TD     *big.Int
+}
+
+// ConnsOptions contains configuration options for creating a new Conns manager.
+type ConnsOptions struct {
+	BlocksCache                CacheOptions
+	TxsCache                   CacheOptions
+	KnownTxsCache              CacheOptions
+	KnownBlocksCache           CacheOptions
+	Head                       eth.NewBlockPacket
+	ShouldBroadcastTx          bool
+	ShouldBroadcastTxHashes    bool
+	ShouldBroadcastBlocks      bool
+	ShouldBroadcastBlockHashes bool
 }
 
 // Conns manages a collection of active peer connections for transaction broadcasting.
@@ -29,18 +43,25 @@ type Conns struct {
 	// to avoid duplicate writes and requests.
 	blocks *Cache[common.Hash, BlockCache]
 
+	// txs caches transactions for serving to peers and duplicate detection
+	txs *Cache[common.Hash, *types.Transaction]
+
+	// knownTxsOpts and knownBlocksOpts store cache options for per-peer caches
+	knownTxsOpts    CacheOptions
+	knownBlocksOpts CacheOptions
+
 	// oldest stores the first block the sensor has seen so when fetching
 	// parent blocks, it does not request blocks older than this.
 	oldest *Locked[*types.Header]
 
 	// head keeps track of the current head block of the chain.
 	head *Locked[eth.NewBlockPacket]
-}
 
-// ConnsOptions contains configuration options for creating a new Conns manager.
-type ConnsOptions struct {
-	BlocksCache CacheOptions
-	Head        eth.NewBlockPacket
+	// Broadcast flags control what gets cached and rebroadcasted
+	shouldBroadcastTx          bool
+	shouldBroadcastTxHashes    bool
+	shouldBroadcastBlocks      bool
+	shouldBroadcastBlockHashes bool
 }
 
 // NewConns creates a new connection manager with a blocks cache.
@@ -52,10 +73,17 @@ func NewConns(opts ConnsOptions) *Conns {
 	oldest.Set(opts.Head.Block.Header())
 
 	return &Conns{
-		conns:  make(map[string]*conn),
-		blocks: NewCache[common.Hash, BlockCache](opts.BlocksCache),
-		oldest: oldest,
-		head:   head,
+		conns:                      make(map[string]*conn),
+		blocks:                     NewCache[common.Hash, BlockCache](opts.BlocksCache),
+		txs:                        NewCache[common.Hash, *types.Transaction](opts.TxsCache),
+		knownTxsOpts:               opts.KnownTxsCache,
+		knownBlocksOpts:            opts.KnownBlocksCache,
+		oldest:                     oldest,
+		head:                       head,
+		shouldBroadcastTx:          opts.ShouldBroadcastTx,
+		shouldBroadcastTxHashes:    opts.ShouldBroadcastTxHashes,
+		shouldBroadcastBlocks:      opts.ShouldBroadcastBlocks,
+		shouldBroadcastBlockHashes: opts.ShouldBroadcastBlockHashes,
 	}
 }
 
@@ -81,9 +109,15 @@ func (c *Conns) BroadcastTx(tx *types.Transaction) int {
 	return c.BroadcastTxs(types.Transactions{tx})
 }
 
-// BroadcastTxs broadcasts multiple transactions to all connected peers.
+// BroadcastTxs broadcasts multiple transactions to all connected peers,
+// filtering out transactions that each peer already knows about.
 // Returns the number of peers the transactions were successfully sent to.
+// If broadcast flags are disabled, this is a no-op.
 func (c *Conns) BroadcastTxs(txs types.Transactions) int {
+	if !c.shouldBroadcastTx {
+		return 0
+	}
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -93,10 +127,189 @@ func (c *Conns) BroadcastTxs(txs types.Transactions) int {
 
 	count := 0
 	for _, cn := range c.conns {
-		if err := ethp2p.Send(cn.rw, eth.TransactionsMsg, txs); err != nil {
+		// Filter transactions this peer doesn't know about
+		unknownTxs := make(types.Transactions, 0, len(txs))
+		for _, tx := range txs {
+			if !cn.hasKnownTx(tx.Hash()) {
+				unknownTxs = append(unknownTxs, tx)
+			}
+		}
+
+		if len(unknownTxs) == 0 {
 			continue
 		}
+
+		// Send as TransactionsPacket
+		packet := eth.TransactionsPacket(unknownTxs)
+		cn.countMsgSent(packet.Name(), float64(len(unknownTxs)))
+		if err := ethp2p.Send(cn.rw, eth.TransactionsMsg, packet); err != nil {
+			cn.logger.Debug().
+				Err(err).
+				Msg("Failed to send transactions")
+			continue
+		}
+
+		// Mark transactions as known for this peer
+		for _, tx := range unknownTxs {
+			cn.addKnownTx(tx.Hash())
+		}
+
 		count++
+	}
+
+	if count > 0 {
+		log.Debug().
+			Int("peers", count).
+			Int("txs", len(txs)).
+			Msg("Broadcasted transactions")
+	}
+
+	return count
+}
+
+// BroadcastTxHashes broadcasts transaction hashes to peers that don't already
+// know about them and returns the number of peers the hashes were successfully
+// sent to. If broadcast flags are disabled, this is a no-op.
+func (c *Conns) BroadcastTxHashes(hashes []common.Hash) int {
+	if !c.shouldBroadcastTxHashes {
+		return 0
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if len(hashes) == 0 {
+		return 0
+	}
+
+	count := 0
+	for _, cn := range c.conns {
+		// Filter hashes this peer doesn't know about
+		unknownHashes := make([]common.Hash, 0, len(hashes))
+		for _, hash := range hashes {
+			if !cn.hasKnownTx(hash) {
+				unknownHashes = append(unknownHashes, hash)
+			}
+		}
+
+		if len(unknownHashes) == 0 {
+			continue
+		}
+
+		// Send NewPooledTransactionHashesPacket
+		packet := eth.NewPooledTransactionHashesPacket{
+			Types:  make([]byte, len(unknownHashes)),
+			Sizes:  make([]uint32, len(unknownHashes)),
+			Hashes: unknownHashes,
+		}
+
+		cn.countMsgSent(packet.Name(), float64(len(unknownHashes)))
+		if err := ethp2p.Send(cn.rw, eth.NewPooledTransactionHashesMsg, packet); err != nil {
+			cn.logger.Debug().
+				Err(err).
+				Msg("Failed to send transaction hashes")
+			continue
+		}
+
+		// Mark hashes as known for this peer
+		for _, hash := range unknownHashes {
+			cn.addKnownTx(hash)
+		}
+
+		count++
+	}
+
+	if count > 0 {
+		log.Debug().
+			Int("peers", count).
+			Int("hashes", len(hashes)).
+			Msg("Broadcasted transaction hashes")
+	}
+
+	return count
+}
+
+// BroadcastBlock broadcasts a full block to peers that don't already know
+// about it and returns the number of peers the block was successfully sent to.
+// If broadcast flags are disabled, this is a no-op.
+func (c *Conns) BroadcastBlock(block *types.Block, td *big.Int) int {
+	if !c.shouldBroadcastBlocks {
+		return 0
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if block == nil {
+		return 0
+	}
+
+	hash := block.Hash()
+	count := 0
+
+	for _, cn := range c.conns {
+		// Skip if peer already knows about this block
+		if cn.hasKnownBlock(hash) {
+			continue
+		}
+
+		// Send NewBlockPacket
+		packet := eth.NewBlockPacket{
+			Block: block,
+			TD:    td,
+		}
+
+		cn.countMsgSent(packet.Name(), 1)
+		if err := ethp2p.Send(cn.rw, eth.NewBlockMsg, &packet); err != nil {
+			cn.logger.Debug().
+				Err(err).
+				Uint64("number", block.Number().Uint64()).
+				Msg("Failed to send block")
+			continue
+		}
+
+		// Mark block as known for this peer
+		cn.addKnownBlock(hash)
+		count++
+	}
+
+	if count > 0 {
+		log.Debug().
+			Int("peers", count).
+			Uint64("number", block.NumberU64()).
+			Msg("Broadcasted block")
+	}
+
+	return count
+}
+
+// BroadcastBlockHashes broadcasts block hashes with their corresponding block
+// numbers to peers that don't already know about them and returns the number
+// of peers the hashes were successfully sent to. If broadcast flags are disabled, this is a no-op.
+func (c *Conns) BroadcastBlockHashes(hashes []common.Hash, numbers []uint64) int {
+	if !c.shouldBroadcastBlockHashes {
+		return 0
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if len(hashes) == 0 || len(hashes) != len(numbers) {
+		return 0
+	}
+
+	count := 0
+	for _, cn := range c.conns {
+		if cn.sendBlockHashes(hashes, numbers) {
+			count++
+		}
+	}
+
+	if count > 0 {
+		log.Debug().
+			Int("peers", count).
+			Int("hashes", len(hashes)).
+			Msg("Broadcasted block hashes")
 	}
 
 	return count
@@ -128,6 +341,16 @@ func (c *Conns) PeerConnectedAt(peerID string) time.Time {
 	return time.Time{}
 }
 
+// AddTx adds a transaction to the shared cache for duplicate detection and serving.
+func (c *Conns) AddTx(hash common.Hash, tx *types.Transaction) {
+	c.txs.Add(hash, tx)
+}
+
+// GetTx retrieves a transaction from the shared cache.
+func (c *Conns) GetTx(hash common.Hash) (*types.Transaction, bool) {
+	return c.txs.Get(hash)
+}
+
 // Blocks returns the global blocks cache.
 func (c *Conns) Blocks() *Cache[common.Hash, BlockCache] {
 	return c.blocks
@@ -154,6 +377,36 @@ func (c *Conns) UpdateHeadBlock(packet eth.NewBlockPacket) bool {
 		}
 		return current, false
 	})
+}
+
+// KnownTxsOpts returns the cache options for per-peer known tx caches.
+func (c *Conns) KnownTxsOpts() CacheOptions {
+	return c.knownTxsOpts
+}
+
+// KnownBlocksOpts returns the cache options for per-peer known block caches.
+func (c *Conns) KnownBlocksOpts() CacheOptions {
+	return c.knownBlocksOpts
+}
+
+// ShouldBroadcastTx returns whether full transaction broadcasting is enabled.
+func (c *Conns) ShouldBroadcastTx() bool {
+	return c.shouldBroadcastTx
+}
+
+// ShouldBroadcastTxHashes returns whether transaction hash broadcasting is enabled.
+func (c *Conns) ShouldBroadcastTxHashes() bool {
+	return c.shouldBroadcastTxHashes
+}
+
+// ShouldBroadcastBlocks returns whether full block broadcasting is enabled.
+func (c *Conns) ShouldBroadcastBlocks() bool {
+	return c.shouldBroadcastBlocks
+}
+
+// ShouldBroadcastBlockHashes returns whether block hash broadcasting is enabled.
+func (c *Conns) ShouldBroadcastBlockHashes() bool {
+	return c.shouldBroadcastBlockHashes
 }
 
 // GetPeerMessages returns a snapshot of message counts for a specific peer.

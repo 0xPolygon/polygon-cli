@@ -24,7 +24,7 @@ type Cache[K comparable, V any] struct {
 type entry[K comparable, V any] struct {
 	key       K
 	value     V
-	expiresAt time.Time
+	expiresAt *time.Time // nil when TTL=0, saves 16 bytes per entry
 }
 
 // NewCache creates a new cache with the given options.
@@ -44,10 +44,10 @@ func (c *Cache[K, V]) Add(key K, value V) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	now := time.Now()
-	expiresAt := time.Time{}
+	var expiresAt *time.Time
 	if c.ttl > 0 {
-		expiresAt = now.Add(c.ttl)
+		t := time.Now().Add(c.ttl)
+		expiresAt = &t
 	}
 
 	if elem, ok := c.items[key]; ok {
@@ -89,7 +89,7 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 
 	e := elem.Value.(*entry[K, V])
 
-	if c.ttl > 0 && time.Now().After(e.expiresAt) {
+	if e.expiresAt != nil && time.Now().After(*e.expiresAt) {
 		c.list.Remove(elem)
 		delete(c.items, key)
 		var zero V
@@ -114,7 +114,7 @@ func (c *Cache[K, V]) Peek(key K) (V, bool) {
 
 	e := elem.Value.(*entry[K, V])
 
-	if c.ttl > 0 && time.Now().After(e.expiresAt) {
+	if e.expiresAt != nil && time.Now().After(*e.expiresAt) {
 		var zero V
 		return zero, false
 	}
@@ -131,15 +131,16 @@ func (c *Cache[K, V]) Update(key K, updateFn func(V) V) {
 	defer c.mu.Unlock()
 
 	now := time.Now()
-	expiresAt := time.Time{}
+	var expiresAt *time.Time
 	if c.ttl > 0 {
-		expiresAt = now.Add(c.ttl)
+		t := now.Add(c.ttl)
+		expiresAt = &t
 	}
 
 	var currentVal V
 	if elem, ok := c.items[key]; ok {
 		e := elem.Value.(*entry[K, V])
-		if c.ttl == 0 || !now.After(e.expiresAt) {
+		if e.expiresAt == nil || !now.After(*e.expiresAt) {
 			currentVal = e.value
 			// Update existing entry
 			c.list.MoveToFront(elem)
@@ -186,7 +187,7 @@ func (c *Cache[K, V]) Contains(key K) bool {
 
 	e := elem.Value.(*entry[K, V])
 
-	if c.ttl > 0 && time.Now().After(e.expiresAt) {
+	if e.expiresAt != nil && time.Now().After(*e.expiresAt) {
 		return false
 	}
 
