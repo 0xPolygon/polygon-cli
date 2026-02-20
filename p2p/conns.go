@@ -299,44 +299,10 @@ func (c *Conns) BroadcastBlockHashes(hashes []common.Hash, numbers []uint64) int
 	}
 
 	count := 0
-
 	for _, cn := range c.conns {
-		// Filter hashes this peer doesn't know about
-		unknownHashes := make([]common.Hash, 0, len(hashes))
-		unknownNumbers := make([]uint64, 0, len(numbers))
-
-		for i, hash := range hashes {
-			if !cn.hasKnownBlock(hash) {
-				unknownHashes = append(unknownHashes, hash)
-				unknownNumbers = append(unknownNumbers, numbers[i])
-			}
+		if cn.sendBlockHashes(hashes, numbers) {
+			count++
 		}
-
-		if len(unknownHashes) == 0 {
-			continue
-		}
-
-		// Send NewBlockHashesPacket
-		packet := make(eth.NewBlockHashesPacket, len(unknownHashes))
-		for i := range unknownHashes {
-			packet[i].Hash = unknownHashes[i]
-			packet[i].Number = unknownNumbers[i]
-		}
-
-		cn.countMsgSent(packet.Name(), float64(len(unknownHashes)))
-		if err := ethp2p.Send(cn.rw, eth.NewBlockHashesMsg, packet); err != nil {
-			cn.logger.Debug().
-				Err(err).
-				Msg("Failed to send block hashes")
-			continue
-		}
-
-		// Mark hashes as known for this peer
-		for _, hash := range unknownHashes {
-			cn.addKnownBlock(hash)
-		}
-
-		count++
 	}
 
 	if count > 0 {

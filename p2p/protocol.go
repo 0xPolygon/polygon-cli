@@ -440,6 +440,45 @@ func (c *conn) hasKnownBlock(hash common.Hash) bool {
 	return c.knownBlocks.Contains(hash)
 }
 
+// broadcastBlockHashes sends block hashes to a peer, filtering out hashes the peer
+// already knows about. Returns true if the send was successful.
+func (c *conn) broadcastBlockHashes(hashes []common.Hash, numbers []uint64) bool {
+	// Filter hashes this peer doesn't know about
+	unknownHashes := make([]common.Hash, 0, len(hashes))
+	unknownNumbers := make([]uint64, 0, len(numbers))
+
+	for i, hash := range hashes {
+		if !c.hasKnownBlock(hash) {
+			unknownHashes = append(unknownHashes, hash)
+			unknownNumbers = append(unknownNumbers, numbers[i])
+		}
+	}
+
+	if len(unknownHashes) == 0 {
+		return false
+	}
+
+	// Send NewBlockHashesPacket
+	packet := make(eth.NewBlockHashesPacket, len(unknownHashes))
+	for i := range unknownHashes {
+		packet[i].Hash = unknownHashes[i]
+		packet[i].Number = unknownNumbers[i]
+	}
+
+	c.countMsgSent(packet.Name(), float64(len(unknownHashes)))
+	if err := ethp2p.Send(c.rw, eth.NewBlockHashesMsg, packet); err != nil {
+		c.logger.Debug().Err(err).Msg("Failed to send block hashes")
+		return false
+	}
+
+	// Mark hashes as known for this peer
+	for _, hash := range unknownHashes {
+		c.addKnownBlock(hash)
+	}
+
+	return true
+}
+
 func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 	payload, err := io.ReadAll(msg.Payload)
 	if err != nil {
