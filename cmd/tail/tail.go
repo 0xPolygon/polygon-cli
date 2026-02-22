@@ -2,8 +2,10 @@ package tail
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 
@@ -15,6 +17,11 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
+
+// simpleBlock is a minimal structure to extract block number from JSON
+type simpleBlock struct {
+	Number string `json:"number"`
+}
 
 type tailParams struct {
 	RPCURL       string
@@ -140,11 +147,48 @@ func writeBlockRange(ctx context.Context, ec *ethrpc.Client, start, end uint64) 
 		return err
 	}
 
+	// Sort blocks by number to ensure correct order
+	sort.Slice(blocks, func(i, j int) bool {
+		numI, errI := extractBlockNumber(blocks[i])
+		numJ, errJ := extractBlockNumber(blocks[j])
+		if errI != nil || errJ != nil {
+			// If we can't parse, maintain original order
+			return i < j
+		}
+		return numI < numJ
+	})
+
+	// Validate no gaps and output blocks
+	expectedBlock := start
 	for _, block := range blocks {
+		blockNum, err := extractBlockNumber(block)
+		if err != nil {
+			return fmt.Errorf("unable to parse block number: %w", err)
+		}
+
+		// Check for gaps
+		if blockNum > expectedBlock {
+			log.Warn().
+				Uint64("expected", expectedBlock).
+				Uint64("received", blockNum).
+				Msg("Gap detected in block sequence")
+			// Continue anyway - the RPC may not have all blocks
+			expectedBlock = blockNum
+		}
+
 		if _, err := fmt.Fprintln(os.Stdout, string(*block)); err != nil {
 			return err
 		}
+		expectedBlock = blockNum + 1
 	}
 
 	return nil
+}
+
+func extractBlockNumber(block *json.RawMessage) (uint64, error) {
+	var sb simpleBlock
+	if err := json.Unmarshal(*block, &sb); err != nil {
+		return 0, err
+	}
+	return strconv.ParseUint(sb.Number, 0, 64)
 }
