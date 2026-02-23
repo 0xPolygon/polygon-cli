@@ -43,6 +43,12 @@ var TailCmd = &cobra.Command{
 	Long:  usage,
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, _ []string) (err error) {
+		// Set default verbosity to Error level if not explicitly set by user
+		verbosityFlag := cmd.Flag("verbosity")
+		if verbosityFlag != nil && !verbosityFlag.Changed {
+			util.SetLogLevel(300) // Error level
+		}
+
 		inputTail.RPCURL, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
