@@ -60,6 +60,7 @@ type Config struct {
 	ReceiptRetryDelay  uint // initial delay in milliseconds
 	OutputRawTxOnly    bool
 	StartNonce         uint64
+	StartNonceSet      bool `json:"-"`
 	GasPriceMultiplier float64
 
 	// Gas options

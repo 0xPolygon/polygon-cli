@@ -283,12 +283,12 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		if len(privateKeys) == 0 {
 			return errors.New("no private keys found in sending accounts file")
 		}
-		if len(privateKeys) > 1 && r.cfg.StartNonce > 0 {
+		if len(privateKeys) > 1 && r.cfg.StartNonceSet {
 			log.Fatal().Msg("nonce can't be set while using multiple sending accounts")
 		}
 		if len(privateKeys) == 1 {
 			var nonce *uint64
-			if r.cfg.StartNonce > 0 {
+			if r.cfg.StartNonceSet {
 				nonce = &r.cfg.StartNonce
 			}
 			err = r.accountPool.Add(ctx, privateKeys[0], nonce)
@@ -297,13 +297,13 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		}
 		r.cfg.SendingAccountsCount = uint64(len(privateKeys))
 	} else if r.cfg.SendingAccountsCount > 0 {
-		if r.cfg.StartNonce > 0 {
+		if r.cfg.StartNonceSet {
 			log.Fatal().Msg("nonce can't be set while using random multiple sending accounts")
 		}
 		err = r.accountPool.AddRandomN(ctx, r.cfg.SendingAccountsCount)
 	} else {
 		var nonce *uint64
-		if r.cfg.StartNonce > 0 {
+		if r.cfg.StartNonceSet {
 			nonce = &r.cfg.StartNonce
 		}
 		err = r.accountPool.Add(ctx, ecdsaPrivateKey, nonce)
@@ -528,7 +528,7 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 		return errors.New("failed to get current block number: " + err.Error())
 	}
 
-	if cfg.StartNonce <= 0 {
+	if !cfg.StartNonceSet {
 		err = r.accountPool.RefreshNonce(ctx, tops.From)
 		if err != nil {
 			return err
