@@ -24,7 +24,7 @@ type Cache[K comparable, V any] struct {
 type entry[K comparable, V any] struct {
 	key       K
 	value     V
-	expiresAt *time.Time // nil when TTL=0, saves 16 bytes per entry
+	expiresAt *time.Time
 }
 
 // NewCache creates a new cache with the given options.
