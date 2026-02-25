@@ -167,63 +167,33 @@ func (c *Conns) BroadcastTxs(txs types.Transactions) int {
 	return count
 }
 
-// BroadcastTxHashes broadcasts transaction hashes to peers that don't already
-// know about them and returns the number of peers the hashes were successfully
-// sent to. If broadcast flags are disabled, this is a no-op.
+// BroadcastTxHashes enqueues transaction hashes to per-peer broadcast queues.
+// Each peer has a dedicated goroutine that drains the queue and batches sends.
+// Returns the number of peers the hashes were enqueued to.
+// If broadcast flags are disabled, this is a no-op.
 func (c *Conns) BroadcastTxHashes(hashes []common.Hash) int {
-	if !c.shouldBroadcastTxHashes {
+	if !c.shouldBroadcastTxHashes || len(hashes) == 0 {
 		return 0
 	}
 
+	// Copy peers to avoid holding lock during sends
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if len(hashes) == 0 {
-		return 0
+	peers := make([]*conn, 0, len(c.conns))
+	for _, cn := range c.conns {
+		if cn.txAnnounce != nil {
+			peers = append(peers, cn)
+		}
 	}
+	c.mu.RUnlock()
 
 	count := 0
-	for _, cn := range c.conns {
-		// Filter hashes this peer doesn't know about
-		unknownHashes := make([]common.Hash, 0, len(hashes))
-		for _, hash := range hashes {
-			if !cn.hasKnownTx(hash) {
-				unknownHashes = append(unknownHashes, hash)
-			}
+	for _, cn := range peers {
+		select {
+		case cn.txAnnounce <- hashes:
+			count++
+		case <-cn.closeCh:
+			// Peer closing, skip
 		}
-
-		if len(unknownHashes) == 0 {
-			continue
-		}
-
-		// Send NewPooledTransactionHashesPacket
-		packet := eth.NewPooledTransactionHashesPacket{
-			Types:  make([]byte, len(unknownHashes)),
-			Sizes:  make([]uint32, len(unknownHashes)),
-			Hashes: unknownHashes,
-		}
-
-		cn.countMsgSent(packet.Name(), float64(len(unknownHashes)))
-		if err := ethp2p.Send(cn.rw, eth.NewPooledTransactionHashesMsg, packet); err != nil {
-			cn.logger.Debug().
-				Err(err).
-				Msg("Failed to send transaction hashes")
-			continue
-		}
-
-		// Mark hashes as known for this peer
-		for _, hash := range unknownHashes {
-			cn.addKnownTx(hash)
-		}
-
-		count++
-	}
-
-	if count > 0 {
-		log.Debug().
-			Int("peers", count).
-			Int("hashes", len(hashes)).
-			Msg("Broadcasted transaction hashes")
 	}
 
 	return count
@@ -283,33 +253,36 @@ func (c *Conns) BroadcastBlock(block *types.Block, td *big.Int) int {
 	return count
 }
 
-// BroadcastBlockHashes broadcasts block hashes with their corresponding block
-// numbers to peers that don't already know about them and returns the number
-// of peers the hashes were successfully sent to. If broadcast flags are disabled, this is a no-op.
+// BroadcastBlockHashes enqueues block hashes to per-peer broadcast queues.
+// Each peer has a dedicated goroutine that drains the queue and sends.
+// Returns the number of peers the hashes were enqueued to.
+// If broadcast flags are disabled, this is a no-op.
 func (c *Conns) BroadcastBlockHashes(hashes []common.Hash, numbers []uint64) int {
-	if !c.shouldBroadcastBlockHashes {
+	if !c.shouldBroadcastBlockHashes || len(hashes) == 0 || len(hashes) != len(numbers) {
 		return 0
+	}
+
+	// Build packet once, share across all peers
+	packet := make(eth.NewBlockHashesPacket, len(hashes))
+	for i := range hashes {
+		packet[i].Hash = hashes[i]
+		packet[i].Number = numbers[i]
 	}
 
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if len(hashes) == 0 || len(hashes) != len(numbers) {
-		return 0
-	}
-
 	count := 0
 	for _, cn := range c.conns {
-		if cn.sendBlockHashes(hashes, numbers) {
-			count++
+		if cn.blockAnnounce == nil {
+			continue
 		}
-	}
-
-	if count > 0 {
-		log.Debug().
-			Int("peers", count).
-			Int("hashes", len(hashes)).
-			Msg("Broadcasted block hashes")
+		// Non-blocking send, drop if queue full (matches Bor)
+		select {
+		case cn.blockAnnounce <- packet:
+			count++
+		default:
+		}
 	}
 
 	return count

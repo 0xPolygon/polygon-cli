@@ -22,6 +22,20 @@ import (
 	"github.com/0xPolygon/polygon-cli/p2p/database"
 )
 
+const (
+	// maxTxPacketSize is the target size for transaction announcement packets.
+	// Matches Bor's limit of 100KB.
+	maxTxPacketSize = 100 * 1024
+
+	// maxQueuedTxAnns is the maximum number of transaction announcements to
+	// queue before dropping oldest. Matches Bor.
+	maxQueuedTxAnns = 4096
+
+	// maxQueuedBlockAnns is the maximum number of block announcements to queue
+	// before dropping. Matches Bor.
+	maxQueuedBlockAnns = 4
+)
+
 // conn represents an individual connection with a peer.
 type conn struct {
 	sensorID string
@@ -63,6 +77,13 @@ type conn struct {
 
 	// messages tracks per-peer message counts for API visibility.
 	messages *PeerMessages
+
+	// Broadcast queues for per-peer rate limiting. These decouple message
+	// reception from broadcasting to prevent flooding peers with immediate
+	// broadcasts.
+	txAnnounce    chan []common.Hash
+	blockAnnounce chan eth.NewBlockHashesPacket
+	closeCh       chan struct{}
 }
 
 // EthProtocolOptions is the options used when creating a new eth protocol.
@@ -116,6 +137,23 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				knownTxs:                   NewCache[common.Hash, struct{}](opts.Conns.KnownTxsOpts()),
 				knownBlocks:                NewCache[common.Hash, struct{}](opts.Conns.KnownBlocksOpts()),
 				messages:                   NewPeerMessages(),
+				txAnnounce:                 make(chan []common.Hash),
+				blockAnnounce:              make(chan eth.NewBlockHashesPacket, maxQueuedBlockAnns),
+				closeCh:                    make(chan struct{}),
+			}
+
+			// Ensure cleanup happens on any exit path (including statusExchange failure)
+			defer func() {
+				close(c.closeCh)
+				opts.Conns.Remove(c)
+			}()
+
+			// Start broadcast loops for per-peer queued broadcasting
+			if opts.ShouldBroadcastTxHashes {
+				go c.txAnnouncementLoop()
+			}
+			if opts.ShouldBroadcastBlockHashes {
+				go c.blockAnnouncementLoop()
 			}
 
 			head := c.conns.HeadBlock()
@@ -134,7 +172,6 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 
 			// Send the connection object to the conns manager for RPC broadcasting
 			opts.Conns.Add(c)
-			defer opts.Conns.Remove(c)
 
 			ctx := opts.Context
 
@@ -398,8 +435,8 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.db.WriteBlockHashes(ctx, c.node, uniqueHashes, tfs)
 
-	// Broadcast block hashes to other peers
-	c.conns.BroadcastBlockHashes(uniqueHashes, uniqueNumbers)
+	// Broadcast block hashes to other peers asynchronously
+	go c.conns.BroadcastBlockHashes(uniqueHashes, uniqueNumbers)
 
 	return nil
 }
@@ -440,43 +477,131 @@ func (c *conn) hasKnownBlock(hash common.Hash) bool {
 	return c.knownBlocks.Contains(hash)
 }
 
-// sendBlockHashes sends block hashes to a peer, filtering out hashes the peer
-// already knows about. Returns true if the send was successful.
-func (c *conn) sendBlockHashes(hashes []common.Hash, numbers []uint64) bool {
-	// Filter hashes this peer doesn't know about
-	unknownHashes := make([]common.Hash, 0, len(hashes))
-	unknownNumbers := make([]uint64, 0, len(numbers))
+// txAnnouncementLoop schedules transaction hash announcements to the peer.
+// Matches Bor's announceTransactions pattern: async sends with internal queue.
+func (c *conn) txAnnouncementLoop() {
+	var (
+		queue  []common.Hash         // Queue of hashes to announce
+		done   chan struct{}         // Non-nil if background announcer is running
+		fail   = make(chan error, 1) // Channel used to receive network error
+		failed bool                  // Flag whether a send failed
+	)
 
-	for i, hash := range hashes {
-		if !c.hasKnownBlock(hash) {
-			unknownHashes = append(unknownHashes, hash)
-			unknownNumbers = append(unknownNumbers, numbers[i])
+	for {
+		// If there's no in-flight announce running, check if a new one is needed
+		if done == nil && len(queue) > 0 {
+			// Pile transaction hashes until we reach our allowed network limit
+			var (
+				count   int
+				pending []common.Hash
+				size    int
+			)
+			for count = 0; count < len(queue) && size < maxTxPacketSize; count++ {
+				hash := queue[count]
+				if !c.hasKnownTx(hash) {
+					pending = append(pending, hash)
+					size += common.HashLength
+				}
+			}
+			// Shift and trim queue
+			queue = queue[:copy(queue, queue[count:])]
+
+			// If there's anything available to transfer, fire up an async writer
+			if len(pending) > 0 {
+				done = make(chan struct{})
+				go func() {
+					if err := c.sendTxAnnouncements(pending); err != nil {
+						fail <- err
+						return
+					}
+					close(done)
+				}()
+			}
+		}
+
+		// Transfer goroutine may or may not have been started, listen for events
+		select {
+		case hashes := <-c.txAnnounce:
+			// If the connection failed, discard all transaction events
+			if failed {
+				continue
+			}
+			// New batch of transactions to be broadcast, queue them (with cap)
+			queue = append(queue, hashes...)
+			if len(queue) > maxQueuedTxAnns {
+				// Drop oldest to keep newest
+				queue = queue[:copy(queue, queue[len(queue)-maxQueuedTxAnns:])]
+			}
+
+		case <-done:
+			done = nil
+
+		case <-fail:
+			failed = true
+
+		case <-c.closeCh:
+			return
+		}
+	}
+}
+
+// sendTxAnnouncements sends a batch of transaction hashes to the peer.
+func (c *conn) sendTxAnnouncements(hashes []common.Hash) error {
+	packet := eth.NewPooledTransactionHashesPacket{
+		Types:  make([]byte, len(hashes)),
+		Sizes:  make([]uint32, len(hashes)),
+		Hashes: hashes,
+	}
+	c.countMsgSent(packet.Name(), float64(len(hashes)))
+	if err := ethp2p.Send(c.rw, eth.NewPooledTransactionHashesMsg, packet); err != nil {
+		c.logger.Debug().Err(err).Msg("Failed to send tx announcements")
+		return err
+	}
+	for _, hash := range hashes {
+		c.addKnownTx(hash)
+	}
+	return nil
+}
+
+// blockAnnouncementLoop drains the blockAnnounce queue and sends block
+// announcements. Matches Bor's broadcastBlocks pattern.
+func (c *conn) blockAnnouncementLoop() {
+	for {
+		select {
+		case packet := <-c.blockAnnounce:
+			if err := c.sendBlockAnnouncements(packet); err != nil {
+				return
+			}
+		case <-c.closeCh:
+			return
+		}
+	}
+}
+
+// sendBlockAnnouncements sends a batch of block hashes to the peer,
+// filtering out blocks the peer already knows about.
+func (c *conn) sendBlockAnnouncements(packet eth.NewBlockHashesPacket) error {
+	// Filter to only unknown blocks
+	var filtered eth.NewBlockHashesPacket
+	for _, entry := range packet {
+		if !c.hasKnownBlock(entry.Hash) {
+			filtered = append(filtered, entry)
 		}
 	}
 
-	if len(unknownHashes) == 0 {
-		return false
+	if len(filtered) == 0 {
+		return nil
 	}
 
-	// Send NewBlockHashesPacket
-	packet := make(eth.NewBlockHashesPacket, len(unknownHashes))
-	for i := range unknownHashes {
-		packet[i].Hash = unknownHashes[i]
-		packet[i].Number = unknownNumbers[i]
+	c.countMsgSent(filtered.Name(), float64(len(filtered)))
+	if err := ethp2p.Send(c.rw, eth.NewBlockHashesMsg, filtered); err != nil {
+		c.logger.Debug().Err(err).Msg("Failed to send block announcements")
+		return err
 	}
-
-	c.countMsgSent(packet.Name(), float64(len(unknownHashes)))
-	if err := ethp2p.Send(c.rw, eth.NewBlockHashesMsg, packet); err != nil {
-		c.logger.Debug().Err(err).Msg("Failed to send block hashes")
-		return false
+	for _, entry := range filtered {
+		c.addKnownBlock(entry.Hash)
 	}
-
-	// Mark hashes as known for this peer
-	for _, hash := range unknownHashes {
-		c.addKnownBlock(hash)
-	}
-
-	return true
+	return nil
 }
 
 func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
@@ -512,9 +637,9 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 		hashes[i] = tx.Hash()
 	}
 
-	// Broadcast transactions or hashes to other peers
-	c.conns.BroadcastTxs(types.Transactions(txs))
-	c.conns.BroadcastTxHashes(hashes)
+	// Broadcast transactions or hashes to other peers asynchronously
+	go c.conns.BroadcastTxs(types.Transactions(txs))
+	go c.conns.BroadcastTxHashes(hashes)
 
 	return nil
 }
@@ -710,9 +835,9 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		TD: packet.TD,
 	})
 
-	// Broadcast block or block hash to other peers
-	c.conns.BroadcastBlock(packet.Block, packet.TD)
-	c.conns.BroadcastBlockHashes(
+	// Broadcast block or block hash to other peers asynchronously
+	go c.conns.BroadcastBlock(packet.Block, packet.TD)
+	go c.conns.BroadcastBlockHashes(
 		[]common.Hash{hash},
 		[]uint64{packet.Block.Number().Uint64()},
 	)
@@ -807,9 +932,9 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 		hashes[i] = tx.Hash()
 	}
 
-	// Broadcast transactions or hashes to other peers
-	c.conns.BroadcastTxs(types.Transactions(packet.PooledTransactionsResponse))
-	c.conns.BroadcastTxHashes(hashes)
+	// Broadcast transactions or hashes to other peers asynchronously
+	go c.conns.BroadcastTxs(types.Transactions(packet.PooledTransactionsResponse))
+	go c.conns.BroadcastTxHashes(hashes)
 
 	return nil
 }
