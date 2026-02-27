@@ -96,17 +96,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				messages:    NewPeerMessages(),
 			}
 
-			head := c.conns.HeadBlock()
-			status := eth.StatusPacket68{
-				ProtocolVersion: uint32(version),
-				NetworkID:       opts.NetworkID,
-				Genesis:         opts.GenesisHash,
-				ForkID:          opts.ForkID,
-				Head:            head.Block.Hash(),
-				TD:              head.TD,
-			}
-			err := c.statusExchange(&status)
-			if err != nil {
+			if err := c.statusExchange(version, opts); err != nil {
 				return err
 			}
 
@@ -146,6 +136,8 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 					err = c.handlePooledTransactions(ctx, msg)
 				case eth.GetReceiptsMsg:
 					err = c.handleGetReceipts(msg)
+				case eth.BlockRangeUpdateMsg:
+					err = c.handleBlockRangeUpdate(msg)
 				default:
 					c.logger.Trace().Interface("msg", msg).Send()
 				}
@@ -166,18 +158,78 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 	}
 }
 
-// statusExchange will exchange status message between the nodes. It will return
-// an error if the nodes are incompatible.
-func (c *conn) statusExchange(packet *eth.StatusPacket68) error {
+// statusExchange performs the eth protocol handshake, using the appropriate
+// status packet format based on the negotiated protocol version.
+func (c *conn) statusExchange(version uint, opts EthProtocolOptions) error {
+	head := c.conns.HeadBlock()
+
+	if version >= eth.ETH69 {
+		status := eth.StatusPacket69{
+			ProtocolVersion: uint32(version),
+			NetworkID:       opts.NetworkID,
+			Genesis:         opts.GenesisHash,
+			ForkID:          opts.ForkID,
+			EarliestBlock:   head.Block.NumberU64(),
+			LatestBlock:     head.Block.NumberU64(),
+			LatestBlockHash: head.Block.Hash(),
+		}
+
+		return c.statusExchange69(&status)
+	}
+
+	status := eth.StatusPacket68{
+		ProtocolVersion: uint32(version),
+		NetworkID:       opts.NetworkID,
+		Genesis:         opts.GenesisHash,
+		ForkID:          opts.ForkID,
+		Head:            head.Block.Hash(),
+		TD:              head.TD,
+	}
+
+	return c.statusExchange68(&status)
+}
+
+// statusExchange68 will exchange status message for ETH68 and below.
+func (c *conn) statusExchange68(packet *eth.StatusPacket68) error {
 	errc := make(chan error, 2)
 
 	go func() {
 		c.countMsgSent((&eth.StatusPacket68{}).Name(), 1)
-		errc <- ethp2p.Send(c.rw, eth.StatusMsg, &packet)
+		errc <- ethp2p.Send(c.rw, eth.StatusMsg, packet)
 	}()
 
 	go func() {
-		errc <- c.readStatus(packet)
+		errc <- c.readStatus68(packet)
+	}()
+
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+
+	for range 2 {
+		select {
+		case err := <-errc:
+			if err != nil {
+				return err
+			}
+		case <-timeout.C:
+			return ethp2p.DiscReadTimeout
+		}
+	}
+
+	return nil
+}
+
+// statusExchange69 will exchange status message for ETH69.
+func (c *conn) statusExchange69(packet *eth.StatusPacket69) error {
+	errc := make(chan error, 2)
+
+	go func() {
+		c.countMsgSent((&eth.StatusPacket69{}).Name(), 1)
+		errc <- ethp2p.Send(c.rw, eth.StatusMsg, packet)
+	}()
+
+	go func() {
+		errc <- c.readStatus69(packet)
 	}()
 
 	timeout := time.NewTimer(5 * time.Second)
@@ -217,7 +269,7 @@ func (c *conn) countMsgSent(messageName string, count float64) {
 	c.messages.IncrementSent(messageName, int64(count))
 }
 
-func (c *conn) readStatus(packet *eth.StatusPacket68) error {
+func (c *conn) readStatus68(packet *eth.StatusPacket68) error {
 	msg, err := c.rw.ReadMsg()
 	if err != nil {
 		return err
@@ -228,19 +280,16 @@ func (c *conn) readStatus(packet *eth.StatusPacket68) error {
 	}
 
 	var status eth.StatusPacket68
-	err = msg.Decode(&status)
-	if err != nil {
+	if err := msg.Decode(&status); err != nil {
 		return err
 	}
 
 	if status.NetworkID != packet.NetworkID {
 		return fmt.Errorf("network ID mismatch: %d (!= %d)", status.NetworkID, packet.NetworkID)
 	}
-
 	if status.Genesis != packet.Genesis {
 		return fmt.Errorf("genesis mismatch: %v (!= %v)", status.Genesis, packet.Genesis)
 	}
-
 	if status.ForkID.Hash != packet.ForkID.Hash {
 		return fmt.Errorf("fork ID mismatch: %v (!= %v)", status.ForkID, packet.ForkID)
 	}
@@ -249,6 +298,60 @@ func (c *conn) readStatus(packet *eth.StatusPacket68) error {
 		Interface("status", status).
 		Str("fork_id", hex.EncodeToString(status.ForkID.Hash[:])).
 		Msg("New peer")
+
+	return nil
+}
+
+func (c *conn) readStatus69(packet *eth.StatusPacket69) error {
+	msg, err := c.rw.ReadMsg()
+	if err != nil {
+		return err
+	}
+
+	if msg.Code != eth.StatusMsg {
+		return errors.New("expected status message code")
+	}
+
+	var status eth.StatusPacket69
+	if err := msg.Decode(&status); err != nil {
+		return err
+	}
+
+	if status.NetworkID != packet.NetworkID {
+		return fmt.Errorf("network ID mismatch: %d (!= %d)", status.NetworkID, packet.NetworkID)
+	}
+	if status.Genesis != packet.Genesis {
+		return fmt.Errorf("genesis mismatch: %v (!= %v)", status.Genesis, packet.Genesis)
+	}
+	if status.ForkID.Hash != packet.ForkID.Hash {
+		return fmt.Errorf("fork ID mismatch: %v (!= %v)", status.ForkID, packet.ForkID)
+	}
+
+	c.logger.Info().
+		Interface("status", status).
+		Str("fork_id", hex.EncodeToString(status.ForkID.Hash[:])).
+		Uint64("earliest_block", status.EarliestBlock).
+		Uint64("latest_block", status.LatestBlock).
+		Msg("New peer")
+
+	return nil
+}
+
+// handleBlockRangeUpdate handles BlockRangeUpdateMsg (ETH69).
+// This message announces the peer's available block range.
+func (c *conn) handleBlockRangeUpdate(msg ethp2p.Msg) error {
+	var packet eth.BlockRangeUpdatePacket
+	if err := msg.Decode(&packet); err != nil {
+		c.logger.Warn().Err(err).Msg("Failed to decode BlockRangeUpdate")
+		return nil
+	}
+
+	c.countMsgReceived(packet.Name(), 1)
+	c.logger.Debug().
+		Uint64("earliest", packet.EarliestBlock).
+		Uint64("latest", packet.LatestBlock).
+		Hex("hash", packet.LatestBlockHash[:]).
+		Msg("Received BlockRangeUpdate")
 
 	return nil
 }
