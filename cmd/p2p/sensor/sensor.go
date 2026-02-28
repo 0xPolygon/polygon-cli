@@ -248,6 +248,7 @@ var SensorCmd = &cobra.Command{
 				p2p.NewEthProtocol(66, opts),
 				p2p.NewEthProtocol(67, opts),
 				p2p.NewEthProtocol(68, opts),
+				p2p.NewEthProtocol(69, opts),
 			},
 		}
 
