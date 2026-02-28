@@ -593,21 +593,8 @@ func (c *conn) txAnnouncementLoop() {
 	for {
 		// If there's no in-flight announce running, check if a new one is needed
 		if done == nil && len(queue) > 0 {
-			// Pile transaction hashes until we reach our allowed network limit
-			var (
-				count   int
-				pending []common.Hash
-				size    int
-			)
-			for count = 0; count < len(queue) && size < maxTxPacketSize; count++ {
-				hash := queue[count]
-				if !c.hasKnownTx(hash) {
-					pending = append(pending, hash)
-					size += common.HashLength
-				}
-			}
-			// Shift and trim queue
-			queue = queue[:copy(queue, queue[count:])]
+			var pending []common.Hash
+			pending, queue = c.prepareTxAnnouncements(queue)
 
 			// If there's anything available to transfer, fire up an async writer
 			if len(pending) > 0 {
@@ -625,15 +612,8 @@ func (c *conn) txAnnouncementLoop() {
 		// Transfer goroutine may or may not have been started, listen for events
 		select {
 		case hashes := <-c.txAnnounce:
-			// If the connection failed, discard all transaction events
-			if failed {
-				continue
-			}
-			// New batch of transactions to be broadcast, queue them (with cap)
-			queue = append(queue, hashes...)
-			if len(queue) > maxQueuedTxAnns {
-				// Drop oldest to keep newest
-				queue = queue[:copy(queue, queue[len(queue)-maxQueuedTxAnns:])]
+			if !failed {
+				queue = c.enqueueTxHashes(queue, hashes)
 			}
 
 		case <-done:
@@ -646,6 +626,30 @@ func (c *conn) txAnnouncementLoop() {
 			return
 		}
 	}
+}
+
+// prepareTxAnnouncements extracts a batch of unknown tx hashes from the queue
+// up to maxTxPacketSize bytes. Returns the pending hashes and remaining queue.
+func (c *conn) prepareTxAnnouncements(queue []common.Hash) (pending, remaining []common.Hash) {
+	var size int
+	var count int
+	for count = 0; count < len(queue) && size < maxTxPacketSize; count++ {
+		if hash := queue[count]; !c.hasKnownTx(hash) {
+			pending = append(pending, hash)
+			size += common.HashLength
+		}
+	}
+	remaining = queue[:copy(queue, queue[count:])]
+	return pending, remaining
+}
+
+// enqueueTxHashes adds hashes to the queue, dropping oldest if over capacity.
+func (c *conn) enqueueTxHashes(queue []common.Hash, hashes []common.Hash) []common.Hash {
+	queue = append(queue, hashes...)
+	if len(queue) > maxQueuedTxAnns {
+		queue = queue[:copy(queue, queue[len(queue)-maxQueuedTxAnns:])]
+	}
+	return queue
 }
 
 // sendTxAnnouncements sends a batch of transaction hashes to the peer.
@@ -672,7 +676,7 @@ func (c *conn) blockAnnouncementLoop() {
 	for {
 		select {
 		case packet := <-c.blockAnnounce:
-			if err := c.sendBlockAnnouncements(packet); err != nil {
+			if c.sendBlockAnnouncements(packet) != nil {
 				return
 			}
 		case <-c.closeCh:
