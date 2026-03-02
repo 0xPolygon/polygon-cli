@@ -833,7 +833,11 @@ func initChainlist() {
 		log.Debug().Err(err).Msg("Failed to fetch chainlist")
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Debug().Err(err).Msg("Failed to close chainlist response body")
+		}
+	}()
 
 	if resp.StatusCode != 200 {
 		log.Debug().Int("status", resp.StatusCode).Msg("Chainlist request failed")

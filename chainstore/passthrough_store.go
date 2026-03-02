@@ -550,7 +550,11 @@ func (s *PassthroughStore) MeasureConnectionLatency(ctx context.Context) (time.D
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to %s: %w", address, err)
 	}
-	defer conn.Close()
+	defer func() {
+		if closeErr := conn.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Msg("Failed to close latency measurement connection")
+		}
+	}()
 
 	latency := time.Since(start)
 

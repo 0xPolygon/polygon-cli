@@ -16,7 +16,6 @@ import (
 	_ "embed"
 
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/rpc"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/0xPolygon/polygon-cli/cmd/monitor/ui"
@@ -239,7 +238,7 @@ func getChainState(ctx context.Context, ec *ethclient.Client, txPoolStatusSuppor
 		return nil, fmt.Errorf("couldn't fetch block number: %s", err.Error())
 	}
 
-	safeBlock, err := ec.HeaderByNumber(ctx, big.NewInt(int64(rpc.SafeBlockNumber)))
+	safeBlock, err := ec.HeaderByNumber(ctx, big.NewInt(int64(ethrpc.SafeBlockNumber)))
 	if err != nil {
 		log.Debug().Err(err).Msg("Unable to fetch safe block number")
 		cs.SafeBlock = 0
@@ -247,7 +246,7 @@ func getChainState(ctx context.Context, ec *ethclient.Client, txPoolStatusSuppor
 		cs.SafeBlock = safeBlock.Number.Uint64()
 	}
 
-	finalizedBlock, err := ec.HeaderByNumber(ctx, big.NewInt(int64(rpc.FinalizedBlockNumber)))
+	finalizedBlock, err := ec.HeaderByNumber(ctx, big.NewInt(int64(ethrpc.FinalizedBlockNumber)))
 	if err != nil {
 		log.Debug().Err(err).Msg("Unable to fetch finalized block number")
 		cs.FinalizedBlock = 0

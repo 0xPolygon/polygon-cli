@@ -151,29 +151,33 @@ func writeMetricsMarkdown(metrics []metricInfo, outputPath string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to close %s: %v\n", outputPath, closeErr)
+		}
+	}()
 
-	fmt.Fprintln(f)
-	fmt.Fprintln(f, "## Sensor Metrics")
-	fmt.Fprintln(f)
+	_, _ = fmt.Fprintln(f)
+	_, _ = fmt.Fprintln(f, "## Sensor Metrics")
+	_, _ = fmt.Fprintln(f)
 
 	// Group metrics by category (BlockMetrics vs sensor.go metrics)
 	// For now, just output them in order with their descriptions
 	for _, m := range metrics {
-		fmt.Fprintf(f, "\n### %s\n", m.fullName())
-		fmt.Fprintln(f, m.Help)
-		fmt.Fprintln(f)
-		fmt.Fprintf(f, "Metric Type: %s\n", m.Type)
+		_, _ = fmt.Fprintf(f, "\n### %s\n", m.fullName())
+		_, _ = fmt.Fprintln(f, m.Help)
+		_, _ = fmt.Fprintln(f)
+		_, _ = fmt.Fprintf(f, "Metric Type: %s\n", m.Type)
 
 		if len(m.Labels) > 0 {
-			fmt.Fprintln(f)
-			fmt.Fprintln(f, "Variable Labels:")
+			_, _ = fmt.Fprintln(f)
+			_, _ = fmt.Fprintln(f, "Variable Labels:")
 			for _, label := range m.Labels {
-				fmt.Fprintf(f, "- %s\n", label)
+				_, _ = fmt.Fprintf(f, "- %s\n", label)
 			}
 		}
 
-		fmt.Fprintln(f)
+		_, _ = fmt.Fprintln(f)
 	}
 
 	return nil

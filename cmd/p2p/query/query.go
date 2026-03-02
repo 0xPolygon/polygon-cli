@@ -76,7 +76,11 @@ and the amount of blocks to query and print the results.`,
 			log.Error().Err(err).Msg("Dial failed")
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			if err := conn.Close(); err != nil {
+				log.Debug().Err(err).Msg("Failed to close p2p connection")
+			}
+		}()
 		if hello, status, err = conn.Peer(); err != nil {
 			log.Error().Err(err).Msg("Peer failed")
 			return

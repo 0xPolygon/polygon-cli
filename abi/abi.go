@@ -260,7 +260,7 @@ func (f FunctionArgType) EncodeInput(object Object) (EncodedItem, error) {
 	case f.Tuple != nil:
 		// Tuple is less complicated than arrays since we just iterate through each items
 		if len(object.Tuple.Elements) != len(f.Tuple.Elements) {
-			return EncodedItem{}, fmt.Errorf("Mismatched length of tuple elements. Expected: %d elements, received %d", len(f.Tuple.Elements), len(object.Tuple.Elements))
+			return EncodedItem{}, fmt.Errorf("mismatched length of tuple elements. Expected: %d elements, received %d", len(f.Tuple.Elements), len(object.Tuple.Elements))
 		}
 
 		for idx, tupleItemObject := range object.Tuple.Elements {
@@ -285,45 +285,45 @@ func (f FunctionArgType) EncodeInput(object Object) (EncodedItem, error) {
 		}
 		convertedVal, conversionErr = ConvertString(stringVal)
 		if conversionErr != nil {
-			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
+			return EncodedItem{}, fmt.Errorf("failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
 		}
 		return EncodedItem{Tail: convertedVal}, nil
 	case f.Type == "bytes":
 		convertedVal, conversionErr = ConvertBytes(object.Val)
 		if conversionErr != nil {
-			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
+			return EncodedItem{}, fmt.Errorf("failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
 		}
 		return EncodedItem{Tail: convertedVal}, nil
 	case strings.HasPrefix(f.Type, "int"):
 		// TODO: validate input is within int<size> limit
 		convertedVal, conversionErr = ConvertInt(object.Val)
 		if conversionErr != nil {
-			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
+			return EncodedItem{}, fmt.Errorf("failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
 		}
 		return EncodedItem{Head: convertedVal}, nil
 	case strings.HasPrefix(f.Type, "uint"):
 		// TODO: validate input is within uint<size> limit
 		convertedVal, conversionErr = ConvertUint(object.Val)
 		if conversionErr != nil {
-			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
+			return EncodedItem{}, fmt.Errorf("failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
 		}
 		return EncodedItem{Head: convertedVal}, nil
 	case strings.Contains(f.Type, "bool"):
 		convertedVal, conversionErr = ConvertBool(object.Val)
 		if conversionErr != nil {
-			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
+			return EncodedItem{}, fmt.Errorf("failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
 		}
 		return EncodedItem{Head: convertedVal}, nil
 	case strings.HasPrefix(f.Type, "bytes"):
 		convertedVal, conversionErr = ConvertByteSize(object.Val, f.Type)
 		if conversionErr != nil {
-			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
+			return EncodedItem{}, fmt.Errorf("failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
 		}
 		return EncodedItem{Head: convertedVal}, nil
 	case f.Type == "address":
 		convertedVal, conversionErr = ConvertAddress(object.Val)
 		if conversionErr != nil {
-			return EncodedItem{}, fmt.Errorf("Failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
+			return EncodedItem{}, fmt.Errorf("failed to convert %s to an %s type. %v", object.Val, f.Type, conversionErr)
 		}
 		return EncodedItem{Head: convertedVal}, nil
 	default:

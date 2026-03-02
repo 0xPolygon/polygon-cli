@@ -471,7 +471,9 @@ func processSolidityToString(data string, isYul bool) string {
 		log.Warn().Strs("args", args).Str("filename", solInput.Name()).Str("stdErr", bufErr.String()).Int("lines", len(lines)).Str("contract", data).Msg("soldity output does not contain 4 lines")
 	}
 
-	os.Remove(solInput.Name())
+	if err := os.Remove(solInput.Name()); err != nil {
+		log.Debug().Err(err).Str("filename", solInput.Name()).Msg("Failed to remove temporary solidity file")
+	}
 	return lines[len(lines)-2]
 }
 
@@ -535,7 +537,9 @@ func processLLLToString(data string) string {
 	if len(lines) != 2 {
 		log.Fatal().Int("lines", len(lines)).Str("contract", data).Msg("LLLC output does not contain 2 lines")
 	}
-	os.Remove(lllcInput.Name())
+	if err := os.Remove(lllcInput.Name()); err != nil {
+		log.Debug().Err(err).Str("filename", lllcInput.Name()).Msg("Failed to remove temporary lllc file")
+	}
 	return lines[0]
 }
 

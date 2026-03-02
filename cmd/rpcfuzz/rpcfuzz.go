@@ -342,7 +342,11 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHTTPC
 			log.Error().Err(err).Msg("Unable to send HTTP request")
 			break
 		}
-		defer response.Body.Close()
+		defer func() {
+			if err := response.Body.Close(); err != nil {
+				log.Debug().Err(err).Msg("Failed to close response body")
+			}
+		}()
 
 		// Read the response body.
 		var body []byte

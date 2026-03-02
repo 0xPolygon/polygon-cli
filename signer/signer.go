@@ -118,7 +118,11 @@ func (g *GCPKMS) ListKeyRingKeys(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer func() {
+		if err := c.Close(); err != nil {
+			log.Debug().Err(err).Msg("Failed to close KMS client")
+		}
+	}()
 	parent := fmt.Sprintf("projects/%s/locations/%s/keyRings/%s", InputOpts.GCPProjectID, InputOpts.GCPRegion, InputOpts.GCPKeyRingID)
 
 	req := &kmspb.ListCryptoKeysRequest{
@@ -161,7 +165,11 @@ func (g *GCPKMS) CreateKeyRing(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create kms client: %w", err)
 	}
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			log.Debug().Err(err).Msg("Failed to close KMS client")
+		}
+	}()
 
 	result, err := client.GetKeyRing(ctx, &kmspb.GetKeyRingRequest{Name: fmt.Sprintf("%s/keyRings/%s", parent, id)})
 	if err != nil {
@@ -197,7 +205,11 @@ func (g *GCPKMS) CreateKey(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create kms client: %w", err)
 	}
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			log.Debug().Err(err).Msg("Failed to close KMS client")
+		}
+	}()
 
 	req := &kmspb.CreateCryptoKeyRequest{
 		Parent:      parent,
@@ -232,7 +244,11 @@ func (g *GCPKMS) CreateImportJob(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create kms client: %w", err)
 	}
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			log.Debug().Err(err).Msg("Failed to close KMS client")
+		}
+	}()
 
 	req := &kmspb.CreateImportJobRequest{
 		Parent:      parent,
@@ -310,7 +326,7 @@ func wrapKeyForGCPKMS(ctx context.Context, client *kms.KeyManagementClient) ([]b
 	privateKey := make([]byte, (key.Curve.Params().N.BitLen()+7)/8)
 	privKey.PrivateKey, err = asn1.Marshal(ecPrivateKey{
 		Version:       1,
-		PrivateKey:    key.D.FillBytes(privateKey),
+		PrivateKey:    key.D.FillBytes(privateKey), //nolint:staticcheck
 		NamedCurveOID: nil,
 		PublicKey:     asn1.BitString{Bytes: elliptic.Marshal(key.Curve, key.X, key.Y)}, //nolint:staticcheck
 	})
