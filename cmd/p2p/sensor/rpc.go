@@ -166,7 +166,7 @@ func handleBatchRequest(w http.ResponseWriter, body []byte, conns *p2p.Conns, ch
 }
 
 // newResultResponse creates a success response.
-func newResultResponse(result any, id any) rpcResponse {
+func newResultResponse(result, id any) rpcResponse {
 	return rpcResponse{JSONRPC: "2.0", Result: result, ID: id}
 }
 
