@@ -36,6 +36,14 @@ const (
 	maxQueuedBlockAnns = 4
 )
 
+// protocolLengths maps protocol versions to their message counts.
+var protocolLengths = map[uint]uint64{
+	66: 17,
+	67: 17,
+	68: 17,
+	69: 18,
+}
+
 // conn represents an individual connection with a peer.
 type conn struct {
 	sensorID string
@@ -114,7 +122,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 	return ethp2p.Protocol{
 		Name:    "eth",
 		Version: version,
-		Length:  17,
+		Length:  protocolLengths[version],
 		Run: func(p *ethp2p.Peer, rw ethp2p.MsgReadWriter) error {
 			peerURL := p.Node().URLv4()
 			c := &conn{
