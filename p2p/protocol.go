@@ -644,7 +644,7 @@ func (c *conn) prepareTxAnnouncements(queue []common.Hash) (pending, remaining [
 }
 
 // enqueueTxHashes adds hashes to the queue, dropping oldest if over capacity.
-func (c *conn) enqueueTxHashes(queue []common.Hash, hashes []common.Hash) []common.Hash {
+func (c *conn) enqueueTxHashes(queue, hashes []common.Hash) []common.Hash {
 	queue = append(queue, hashes...)
 	if len(queue) > maxQueuedTxAnns {
 		queue = queue[:copy(queue, queue[len(queue)-maxQueuedTxAnns:])]
