@@ -425,7 +425,7 @@ func (ms *monitorStatus) getBlockRange(ctx context.Context, to *big.Int, rpc *et
 
 func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *ethrpc.Client, blms []ethrpc.BatchElem) error {
 	var wg sync.WaitGroup
-	var errs []error = make([]error, 0)
+	var errs = make([]error, 0)
 	var errorsMutex sync.Mutex
 
 	for i := 0; i < len(blms); i += subBatchSize {
@@ -502,9 +502,10 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 	var renderedBlocks rpctypes.SortableBlocks
 
 	redraw := func(ms *monitorStatus, force ...bool) {
-		if currentMode == monitorModeHelp {
+		switch currentMode {
+		case monitorModeHelp:
 			// TODO add some help context?
-		} else if currentMode == monitorModeSelectBlock {
+		case monitorModeSelectBlock:
 			toBlockNumber := ms.TopDisplayedBlock
 			fromBlockNumber := new(big.Int).Sub(toBlockNumber, big.NewInt(int64(windowSize-1)))
 			if fromBlockNumber.Cmp(zero) < 0 {
@@ -544,7 +545,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 			termui.Clear()
 			termui.Render(selectGrid)
 			return
-		} else if currentMode == monitorModeBlock {
+		case monitorModeBlock:
 			if ms.SelectedBlock == nil {
 				currentMode = monitorModeExplorer
 				blockTable.SelectedRow = 0
@@ -586,7 +587,7 @@ func renderMonitorUI(ctx context.Context, ec *ethclient.Client, ms *monitorStatu
 				Msg("Redrawing block mode")
 
 			return
-		} else if currentMode == monitorModeTransaction {
+		case monitorModeTransaction:
 			baseFee := ms.SelectedBlock.BaseFee()
 			transactions := ms.SelectedBlock.Transactions()
 			if len(transactions) > 0 {

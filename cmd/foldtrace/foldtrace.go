@@ -78,11 +78,12 @@ var FoldTraceCmd = &cobra.Command{
 			lastLabel = currentLabel
 
 			var metricValue uint64
-			if metricType == "gas" {
+			switch metricType {
+			case "gas":
 				metricValue = op.GasCost
-			} else if metricType == "actualgas" {
+			case "actualgas":
 				metricValue = getActualUsedGas(idx, td)
-			} else {
+			default:
 				metricValue = 1
 			}
 			currentMetricPath := strings.Join(contexts, ";") + ";" + currentLabel

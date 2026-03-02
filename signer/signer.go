@@ -279,7 +279,11 @@ func (g *GCPKMS) ImportKey(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create kms client: %w", err)
 	}
-	defer client.Close()
+	defer func() {
+		if closeErr := client.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Msg("Failed to close KMS client")
+		}
+	}()
 
 	wrappedKey, err := wrapKeyForGCPKMS(ctx, client)
 	if err != nil {
@@ -323,7 +327,7 @@ func wrapKeyForGCPKMS(ctx context.Context, client *kms.KeyManagementClient) ([]b
 			FullBytes: oidBytes,
 		},
 	}
-	privateKey := make([]byte, (key.Curve.Params().N.BitLen()+7)/8)
+	privateKey := make([]byte, (key.Params().N.BitLen()+7)/8)
 	privKey.PrivateKey, err = asn1.Marshal(ecPrivateKey{
 		Version:       1,
 		PrivateKey:    key.D.FillBytes(privateKey), //nolint:staticcheck
@@ -404,7 +408,11 @@ func (g *GCPKMS) Sign(ctx context.Context, tx *ethtypes.Transaction) error {
 	if err != nil {
 		return fmt.Errorf("failed to create kms client: %w", err)
 	}
-	defer client.Close()
+	defer func() {
+		if closeErr := client.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Msg("Failed to close KMS client")
+		}
+	}()
 
 	signer, err := GetSigner()
 	if err != nil {

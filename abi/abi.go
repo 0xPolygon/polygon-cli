@@ -327,7 +327,7 @@ func (f FunctionArgType) EncodeInput(object Object) (EncodedItem, error) {
 		}
 		return EncodedItem{Head: convertedVal}, nil
 	default:
-		return EncodedItem{}, fmt.Errorf("Invalid type %s", f.Type)
+		return EncodedItem{}, fmt.Errorf("invalid type %s", f.Type)
 	}
 
 	// backfill dynamic types...
@@ -433,13 +433,13 @@ func rightPadWithZeros(value string, targetLen int) string {
 // ConvertInt converts an int input to the 32 byte hex encoding, left padded with 0s
 func ConvertInt(value string) (string, error) {
 	if len(value) < 1 {
-		return "", fmt.Errorf("Error: expected at least one digit")
+		return "", fmt.Errorf("expected at least one digit")
 	}
 	bigInt := new(big.Int)
 
 	_, ok := bigInt.SetString(value, 10)
 	if !ok {
-		return "", fmt.Errorf("Error: Invalid integer string. Failed to convert %s to big int", value)
+		return "", fmt.Errorf("invalid integer string, failed to convert %s to big int", value)
 	}
 
 	var hexString string
@@ -469,17 +469,17 @@ func ConvertInt(value string) (string, error) {
 // ConvertUint converts a uint input to the 32 byte hex encoding, left padded with 0s
 func ConvertUint(value string) (string, error) {
 	if len(value) < 1 {
-		return "", fmt.Errorf("Error: expected at least one digit")
+		return "", fmt.Errorf("expected at least one digit")
 	}
 	if value[0] == '-' {
-		return "", fmt.Errorf("Error: Invalid integer string. %s can't be negative", value)
+		return "", fmt.Errorf("invalid integer string, %s can't be negative", value)
 	}
 
 	bigInt := new(big.Int)
 
 	_, ok := bigInt.SetString(value, 10)
 	if !ok {
-		return "", fmt.Errorf("Error: Invalid integer string. Failed to convert %s to big int", value)
+		return "", fmt.Errorf("invalid integer string, failed to convert %s to big int", value)
 	}
 
 	// Convert to hexadecimal representation
@@ -529,7 +529,7 @@ func ConvertString(value string) (string, error) {
 // NOTE: this is similar to ConvertString but `value` is expected to be a hex input already
 func ConvertBytes(value string) (string, error) {
 	if len(value)%2 != 0 {
-		return "", fmt.Errorf("Odd number of digits")
+		return "", fmt.Errorf("odd number of digits")
 	}
 
 	valueSize := len(value) / 2 // it's hex so / 2 for actual length in bytes
@@ -561,8 +561,8 @@ func ConvertByteSize(value string, byteType string) (string, error) {
 		return "", err
 	}
 
-	if !(byteSize > 0 && byteSize <= 32) {
-		return "", fmt.Errorf("Invalid size for type %s", byteType)
+	if byteSize <= 0 || byteSize > 32 {
+		return "", fmt.Errorf("invalid size for type %s", byteType)
 	}
 
 	value = strings.TrimPrefix(value, "0x")
@@ -574,7 +574,7 @@ func ConvertByteSize(value string, byteType string) (string, error) {
 	}
 
 	if len(value) != byteSize*2 {
-		return "", fmt.Errorf("Invalid string length %s", value)
+		return "", fmt.Errorf("invalid string length %s", value)
 	}
 
 	paddedHex := rightPadWithZeros(value, 64)
@@ -601,7 +601,7 @@ func GetFunctionSignatureObject(functionSig string) (FunctionSignature, error) {
 
 	functionSigObject, err := FunctionSignatureParser.ParseString("", functionSig)
 	if err != nil {
-		return FunctionSignature{}, fmt.Errorf("Failed to parse function sig %s. Error: %v", functionSig, err)
+		return FunctionSignature{}, fmt.Errorf("failed to parse function sig %s: %w", functionSig, err)
 	}
 
 	return *functionSigObject, nil
@@ -612,7 +612,7 @@ func GetFunctionSignatureObject(functionSig string) (FunctionSignature, error) {
 // Input: "someFuncName(uint256,(string,string)[][],(uint256,(bool,string)))(uint,string)"
 // Returns: "someFuncName(uint256,(string,string)[][],(uint256,(bool,string)))"
 func ExtractFunctionNameAndFunctionArgs(input string) (string, error) {
-	input = strings.Replace(input, " ", "", -1) // remove spaces per solidity doc: https://docs.soliditylang.org/en/latest/abi-spec.html#function-selector
+	input = strings.ReplaceAll(input, " ", "") // remove spaces per solidity doc: https://docs.soliditylang.org/en/latest/abi-spec.html#function-selector
 
 	var depth int
 	var endIndex int

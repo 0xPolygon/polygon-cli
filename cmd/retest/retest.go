@@ -600,11 +600,12 @@ func rawArgsToStrings(rawArgs string, params []string) []string {
 				processedArgs[k] = arg
 			}
 		} else if params[k] == "bool" {
-			if arg == "0x01" {
+			switch arg {
+			case "0x01":
 				processedArgs[k] = "true"
-			} else if arg == "0x00" {
+			case "0x00":
 				processedArgs[k] = "false"
-			} else {
+			default:
 				log.Fatal().Str("arg", arg).Msg("unrecognized bool type input")
 			}
 		} else {
@@ -620,7 +621,7 @@ func preProcessTypedString(data string, preserveSpace bool) string {
 	data = typeIndicator.ReplaceAllString(data, "")
 	data = strings.TrimPrefix(data, "0x")
 	if !preserveSpace {
-		data = strings.Replace(data, " ", "", -1)
+		data = strings.ReplaceAll(data, " ", "")
 	}
 	return data
 }

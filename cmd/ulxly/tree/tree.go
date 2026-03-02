@@ -272,10 +272,7 @@ func checkClaimCalldata(client *ethclient.Client, bridge common.Address, claimHa
 	// find the claim linked to the event using DFS
 	callStack := stack.New()
 	callStack.Push(*c)
-	for {
-		if callStack.Len() == 0 {
-			break
-		}
+	for callStack.Len() != 0 {
 
 		currentCallInterface := callStack.Pop()
 		currentCall, ok := currentCallInterface.(call)

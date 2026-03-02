@@ -177,7 +177,11 @@ func readCache(path string, targetAddr string) ([]block, bool) {
 		log.Warn().Err(err).Str("file", path).Msg("Failed to open cache file")
 		return nil, false
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("file", path).Msg("Failed to close cache file")
+		}
+	}()
 
 	var blocks []block
 	scanner := bufio.NewScanner(f)
