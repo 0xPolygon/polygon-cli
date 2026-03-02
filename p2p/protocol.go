@@ -231,9 +231,10 @@ func (c *conn) statusExchange(version uint, opts EthProtocolOptions) error {
 	head := c.conns.HeadBlock()
 
 	if version >= eth.ETH69 {
-		status := eth.StatusPacket69{
+		status := BorStatusPacket69{
 			ProtocolVersion: uint32(version),
 			NetworkID:       opts.NetworkID,
+			TD:              head.TD,
 			Genesis:         opts.GenesisHash,
 			ForkID:          opts.ForkID,
 			EarliestBlock:   head.Block.NumberU64(),
@@ -287,11 +288,11 @@ func (c *conn) statusExchange68(packet *eth.StatusPacket68) error {
 }
 
 // statusExchange69 will exchange status message for ETH69.
-func (c *conn) statusExchange69(packet *eth.StatusPacket69) error {
+func (c *conn) statusExchange69(packet *BorStatusPacket69) error {
 	errc := make(chan error, 2)
 
 	go func() {
-		c.countMsgSent((&eth.StatusPacket69{}).Name(), 1)
+		c.countMsgSent(packet.Name(), 1)
 		errc <- ethp2p.Send(c.rw, eth.StatusMsg, packet)
 	}()
 
@@ -369,7 +370,7 @@ func (c *conn) readStatus68(packet *eth.StatusPacket68) error {
 	return nil
 }
 
-func (c *conn) readStatus69(packet *eth.StatusPacket69) error {
+func (c *conn) readStatus69(packet *BorStatusPacket69) error {
 	msg, err := c.rw.ReadMsg()
 	if err != nil {
 		return err
@@ -379,7 +380,7 @@ func (c *conn) readStatus69(packet *eth.StatusPacket69) error {
 		return errors.New("expected status message code")
 	}
 
-	var status eth.StatusPacket69
+	var status BorStatusPacket69
 	if err := msg.Decode(&status); err != nil {
 		return err
 	}
