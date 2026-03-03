@@ -644,10 +644,6 @@ func (c *conn) txAnnouncementLoop() {
 // prepareTxAnnouncements extracts a batch of unknown tx hashes from the queue
 // up to maxTxPacketSize bytes. Returns the pending hashes and remaining queue.
 func (c *conn) prepareTxAnnouncements(queue []common.Hash) (pending, remaining []common.Hash) {
-	if !c.shouldBroadcastTx && !c.shouldBroadcastTxHashes {
-		return nil, nil
-	}
-
 	// Calculate max hashes we can send based on packet size limit
 	maxHashes := min(maxTxPacketSize/common.HashLength, len(queue))
 
@@ -676,22 +672,44 @@ func (c *conn) enqueueTxHashes(queue, hashes []common.Hash) []common.Hash {
 }
 
 // sendTxAnnouncements sends a batch of transaction hashes to the peer.
+// It looks up each transaction from the cache to populate Types and Sizes
+// as required by the ETH68 protocol.
 func (c *conn) sendTxAnnouncements(hashes []common.Hash) error {
-	packet := eth.NewPooledTransactionHashesPacket{
-		Types:  make([]byte, len(hashes)),
-		Sizes:  make([]uint32, len(hashes)),
-		Hashes: hashes,
+	// Build packet with actual Types and Sizes from cached transactions.
+	// Skip hashes where the transaction is no longer in cache.
+	var (
+		pending      []common.Hash
+		pendingTypes []byte
+		pendingSizes []uint32
+	)
+
+	for _, hash := range hashes {
+		tx, ok := c.conns.GetTx(hash)
+		if !ok || tx == nil {
+			continue
+		}
+		pending = append(pending, hash)
+		pendingTypes = append(pendingTypes, tx.Type())
+		pendingSizes = append(pendingSizes, uint32(tx.Size()))
 	}
-	c.countMsgSent(packet.Name(), float64(len(hashes)))
+
+	if len(pending) == 0 {
+		return nil
+	}
+
+	packet := eth.NewPooledTransactionHashesPacket{
+		Types:  pendingTypes,
+		Sizes:  pendingSizes,
+		Hashes: pending,
+	}
+	c.countMsgSent(packet.Name(), float64(len(pending)))
 	if err := ethp2p.Send(c.rw, eth.NewPooledTransactionHashesMsg, packet); err != nil {
 		c.logger.Debug().Err(err).Msg("Failed to send tx announcements")
 		return err
 	}
 
 	// Mark all hashes as known in a single lock operation
-	if c.shouldBroadcastTx || c.shouldBroadcastTxHashes {
-		c.knownTxs.AddMany(hashes, struct{}{})
-	}
+	c.knownTxs.AddMany(pending, struct{}{})
 	return nil
 }
 
