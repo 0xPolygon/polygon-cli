@@ -201,22 +201,3 @@ func BenchmarkBloomSetFilterNotContained(b *testing.B) {
 	}
 }
 
-func BenchmarkLRUFilterNotContained(b *testing.B) {
-	cache := NewLRU[common.Hash, struct{}](LRUOptions{MaxSize: 32768})
-
-	// Add 1000 hashes
-	for i := range 1000 {
-		hash := common.BytesToHash([]byte{byte(i >> 8), byte(i)})
-		cache.Add(hash, struct{}{})
-	}
-
-	// Create a batch of 100 hashes (mix of known and unknown)
-	batch := make([]common.Hash, 100)
-	for i := range batch {
-		batch[i] = common.BytesToHash([]byte{byte(i >> 8), byte(i)})
-	}
-
-	for b.Loop() {
-		cache.FilterNotContained(batch)
-	}
-}

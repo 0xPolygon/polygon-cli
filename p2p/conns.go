@@ -317,20 +317,18 @@ func (c *Conns) PeerConnectedAt(peerID string) time.Time {
 	return time.Time{}
 }
 
-// AddTx adds a transaction to the shared cache for duplicate detection and serving.
-func (c *Conns) AddTx(hash common.Hash, tx *types.Transaction) {
-	c.txs.Add(hash, tx)
-}
-
-// GetTx retrieves a transaction from the shared cache and updates LRU ordering.
-func (c *Conns) GetTx(hash common.Hash) (*types.Transaction, bool) {
-	return c.txs.Get(hash)
-}
-
-// GetTxs retrieves multiple transactions from the shared cache in a single lock operation.
-// Updates LRU ordering for found transactions.
-func (c *Conns) GetTxs(hashes []common.Hash) []*types.Transaction {
-	return c.txs.GetMany(hashes)
+// AddTxs adds multiple transactions to the shared cache in a single lock operation.
+// Returns the computed hashes for reuse by the caller.
+func (c *Conns) AddTxs(txs []*types.Transaction) []common.Hash {
+	if len(txs) == 0 {
+		return nil
+	}
+	hashes := make([]common.Hash, len(txs))
+	for i, tx := range txs {
+		hashes[i] = tx.Hash()
+	}
+	c.txs.AddBatch(hashes, txs)
+	return hashes
 }
 
 // PeekTx retrieves a transaction from the shared cache without updating LRU ordering.

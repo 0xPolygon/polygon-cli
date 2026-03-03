@@ -100,41 +100,6 @@ func (c *LRU[K, V]) Get(key K) (V, bool) {
 	return e.value, true
 }
 
-// GetMany retrieves multiple values from the cache and updates LRU ordering.
-// Uses a single write lock for all lookups, reducing lock contention compared
-// to calling Get in a loop. Returns a slice of values for keys that were found.
-func (c *LRU[K, V]) GetMany(keys []K) []V {
-	if len(keys) == 0 {
-		return nil
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	now := time.Now()
-	result := make([]V, 0, len(keys))
-
-	for _, key := range keys {
-		elem, ok := c.items[key]
-		if !ok {
-			continue
-		}
-
-		e := elem.Value.(*entry[K, V])
-
-		if e.expiresAt != nil && now.After(*e.expiresAt) {
-			c.list.Remove(elem)
-			delete(c.items, key)
-			continue
-		}
-
-		c.list.MoveToFront(elem)
-		result = append(result, e.value)
-	}
-
-	return result
-}
-
 // Peek retrieves a value from the cache without updating LRU ordering.
 // Uses a read lock for better concurrency.
 func (c *LRU[K, V]) Peek(key K) (V, bool) {
@@ -241,26 +206,6 @@ func (c *LRU[K, V]) Update(key K, updateFn func(V) V) {
 	}
 }
 
-// Contains checks if a key exists in the cache and is not expired.
-// Uses a read lock and doesn't update LRU ordering.
-func (c *LRU[K, V]) Contains(key K) bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	elem, ok := c.items[key]
-	if !ok {
-		return false
-	}
-
-	e := elem.Value.(*entry[K, V])
-
-	if e.expiresAt != nil && time.Now().After(*e.expiresAt) {
-		return false
-	}
-
-	return true
-}
-
 // Remove removes a key from the cache and returns the value if it existed.
 func (c *LRU[K, V]) Remove(key K) (V, bool) {
 	c.mu.Lock()
@@ -277,66 +222,11 @@ func (c *LRU[K, V]) Remove(key K) (V, bool) {
 	return zero, false
 }
 
-// Len returns the number of items in the cache.
-func (c *LRU[K, V]) Len() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.list.Len()
-}
-
-// Purge clears all items from the cache.
-func (c *LRU[K, V]) Purge() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.items = make(map[K]*list.Element)
-	c.list.Init()
-}
-
-// Keys returns all keys in the cache.
-func (c *LRU[K, V]) Keys() []K {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	keys := make([]K, 0, c.list.Len())
-	for elem := c.list.Front(); elem != nil; elem = elem.Next() {
-		e := elem.Value.(*entry[K, V])
-		keys = append(keys, e.key)
-	}
-	return keys
-}
-
-// FilterNotContained returns the subset of keys that are not in the cache.
-// Uses a single read lock for all lookups, reducing lock contention compared
-// to calling Contains in a loop.
-func (c *LRU[K, V]) FilterNotContained(keys []K) []K {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	now := time.Now()
-	result := make([]K, 0, len(keys))
-
-	for _, key := range keys {
-		elem, ok := c.items[key]
-		if !ok {
-			result = append(result, key)
-			continue
-		}
-
-		e := elem.Value.(*entry[K, V])
-		if e.expiresAt != nil && now.After(*e.expiresAt) {
-			result = append(result, key)
-		}
-	}
-
-	return result
-}
-
-// AddMany adds multiple keys with the same value to the cache.
+// AddBatch adds multiple key-value pairs to the cache.
 // Uses a single write lock for all additions, reducing lock contention
-// compared to calling Add in a loop.
-func (c *LRU[K, V]) AddMany(keys []K, value V) {
-	if len(keys) == 0 {
+// compared to calling Add in a loop. Keys and values must have the same length.
+func (c *LRU[K, V]) AddBatch(keys []K, values []V) {
+	if len(keys) == 0 || len(keys) != len(values) {
 		return
 	}
 
@@ -349,7 +239,9 @@ func (c *LRU[K, V]) AddMany(keys []K, value V) {
 		expiresAt = &t
 	}
 
-	for _, key := range keys {
+	for i, key := range keys {
+		value := values[i]
+
 		if elem, ok := c.items[key]; ok {
 			c.list.MoveToFront(elem)
 			e := elem.Value.(*entry[K, V])

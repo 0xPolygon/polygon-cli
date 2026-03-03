@@ -833,12 +833,8 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 		c.db.WriteTransactions(ctx, c.node, txs, tfs)
 	}
 
-	// Cache transactions for duplicate detection and serving to peers
-	hashes := make([]common.Hash, len(txs))
-	for i, tx := range txs {
-		c.conns.AddTx(tx.Hash(), tx)
-		hashes[i] = tx.Hash()
-	}
+	// Cache transactions for duplicate detection and serving to peers (single lock)
+	hashes := c.conns.AddTxs(txs)
 
 	// Broadcast transactions or hashes to other peers asynchronously
 	go c.conns.BroadcastTxs(types.Transactions(txs))
@@ -1123,12 +1119,8 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 		c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse, tfs)
 	}
 
-	// Cache transactions for duplicate detection and serving to peers
-	hashes := make([]common.Hash, len(packet.PooledTransactionsResponse))
-	for i, tx := range packet.PooledTransactionsResponse {
-		c.conns.AddTx(tx.Hash(), tx)
-		hashes[i] = tx.Hash()
-	}
+	// Cache transactions for duplicate detection and serving to peers (single lock)
+	hashes := c.conns.AddTxs(packet.PooledTransactionsResponse)
 
 	// Broadcast transactions or hashes to other peers asynchronously
 	go c.conns.BroadcastTxs(types.Transactions(packet.PooledTransactionsResponse))
