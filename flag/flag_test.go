@@ -162,10 +162,10 @@ func TestValuePriority(t *testing.T) {
 			cmd.Flags().String("flag", "", "flag")
 		}
 
-		os.Unsetenv("FLAG")
+		assert.NoError(t, os.Unsetenv("FLAG"))
 		if tc.envVarValue != nil {
 			v := strconv.Itoa(*tc.envVarValue)
-			os.Setenv("FLAG", v)
+			assert.NoError(t, os.Setenv("FLAG", v))
 		}
 
 		if tc.flagValue != nil {

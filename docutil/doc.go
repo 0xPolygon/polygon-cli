@@ -32,7 +32,11 @@ func genMarkdownDoc(cmd *cobra.Command, dir string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "warning: failed to close %s: %v\n", filename, closeErr)
+		}
+	}()
 
 	if err := genMarkdownPage(cmd, f); err != nil {
 		return err

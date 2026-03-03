@@ -446,7 +446,11 @@ func save(chart *charts.Scatter, metadata txGasChartMetadata) error {
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Error().Err(err).Str("file", metadata.outputPath).Msg("Failed to close output file")
+		}
+	}()
 
 	if err := tmpl.Execute(f, data); err != nil {
 		return fmt.Errorf("failed to execute template: %w", err)

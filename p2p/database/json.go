@@ -134,7 +134,7 @@ func (j *JSONDatabase) Write(v any) {
 		return
 	}
 
-	fmt.Fprintln(os.Stdout, string(data))
+	_, _ = fmt.Fprintln(os.Stdout, string(data))
 }
 
 // WriteBlock writes the block and the block event as JSON.

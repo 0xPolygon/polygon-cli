@@ -69,11 +69,11 @@ func generateStatCards(report *BlockReport) string {
 	}
 
 	for _, card := range cards {
-		sb.WriteString(fmt.Sprintf(`
+		fmt.Fprintf(&sb, `
             <div class="stat-card">
                 <h3>%s</h3>
                 <div class="value">%s</div>
-            </div>`, html.EscapeString(card.title), html.EscapeString(card.value)))
+            </div>`, html.EscapeString(card.title), html.EscapeString(card.value))
 	}
 
 	return sb.String()
@@ -112,14 +112,14 @@ func generateTxCountChart(report *BlockReport) string {
 	chartWidth := width - 2*padding
 	chartHeight := height - 2*padding
 
-	sb.WriteString(fmt.Sprintf(`
+	fmt.Fprintf(&sb, `
             <svg width="100%%" height="%.0f" viewBox="0 0 %.0f %.0f" class="line-chart">
                 <!-- Grid lines -->
                 <line x1="%.0f" y1="%.0f" x2="%.0f" y2="%.0f" stroke="#ddd" stroke-width="1"/>
                 <line x1="%.0f" y1="%.0f" x2="%.0f" y2="%.0f" stroke="#ddd" stroke-width="1"/>`,
 		height, width, height,
 		padding, padding, padding, height-padding,
-		padding, height-padding, width-padding, height-padding))
+		padding, height-padding, width-padding, height-padding)
 
 	// Build points for the line
 	var points []string
@@ -133,23 +133,23 @@ func generateTxCountChart(report *BlockReport) string {
 		y := height - padding - (float64(block.TxCount)/float64(maxTx))*chartHeight
 
 		points = append(points, fmt.Sprintf("%.2f,%.2f", x, y))
-		circles.WriteString(fmt.Sprintf(`
+		fmt.Fprintf(&circles, `
                 <circle cx="%.2f" cy="%.2f" r="3" fill="#3498db" class="chart-point">
                     <title>Block %d: %d transactions</title>
-                </circle>`, x, y, block.Number, block.TxCount))
+                </circle>`, x, y, block.Number, block.TxCount)
 		numPoints++
 	}
 
 	// Draw the line
-	sb.WriteString(fmt.Sprintf(`
+	fmt.Fprintf(&sb, `
                 <polyline points="%s" fill="none" stroke="#3498db" stroke-width="2"/>`,
-		strings.Join(points, " ")))
+		strings.Join(points, " "))
 
 	// Draw circles (points)
 	sb.WriteString(circles.String())
 
 	// Add axis labels
-	sb.WriteString(fmt.Sprintf(`
+	fmt.Fprintf(&sb, `
                 <text x="%.0f" y="%.0f" text-anchor="middle" font-size="12" fill="#666">Block Number</text>
                 <text x="20" y="%.0f" text-anchor="middle" font-size="12" fill="#666" transform="rotate(-90 20 %.0f)">Transactions</text>
                 <text x="%.0f" y="%.0f" text-anchor="start" font-size="10" fill="#666">%d</text>
@@ -163,7 +163,7 @@ func generateTxCountChart(report *BlockReport) string {
 		padding, height-padding+15, report.Blocks[0].Number,
 		width-padding, height-padding+15, report.Blocks[len(report.Blocks)-1].Number,
 		padding-35, height-padding+5,
-		padding-35, padding+5, maxTx))
+		padding-35, padding+5, maxTx)
 
 	sb.WriteString(`
         </div>`)
@@ -204,14 +204,14 @@ func generateGasUsageChart(report *BlockReport) string {
 	chartWidth := width - 2*padding
 	chartHeight := height - 2*padding
 
-	sb.WriteString(fmt.Sprintf(`
+	fmt.Fprintf(&sb, `
             <svg width="100%%" height="%.0f" viewBox="0 0 %.0f %.0f" class="line-chart">
                 <!-- Grid lines -->
                 <line x1="%.0f" y1="%.0f" x2="%.0f" y2="%.0f" stroke="#ddd" stroke-width="1"/>
                 <line x1="%.0f" y1="%.0f" x2="%.0f" y2="%.0f" stroke="#ddd" stroke-width="1"/>`,
 		height, width, height,
 		padding, padding, padding, height-padding,
-		padding, height-padding, width-padding, height-padding))
+		padding, height-padding, width-padding, height-padding)
 
 	// Build points for the line
 	var points []string
@@ -225,23 +225,23 @@ func generateGasUsageChart(report *BlockReport) string {
 		y := height - padding - (float64(block.GasUsed)/float64(maxGas))*chartHeight
 
 		points = append(points, fmt.Sprintf("%.2f,%.2f", x, y))
-		circles.WriteString(fmt.Sprintf(`
+		fmt.Fprintf(&circles, `
                 <circle cx="%.2f" cy="%.2f" r="3" fill="#9b59b6" class="chart-point">
                     <title>Block %d: %s gas</title>
-                </circle>`, x, y, block.Number, formatNumber(block.GasUsed)))
+                </circle>`, x, y, block.Number, formatNumber(block.GasUsed))
 		numPoints++
 	}
 
 	// Draw the line
-	sb.WriteString(fmt.Sprintf(`
+	fmt.Fprintf(&sb, `
                 <polyline points="%s" fill="none" stroke="#9b59b6" stroke-width="2"/>`,
-		strings.Join(points, " ")))
+		strings.Join(points, " "))
 
 	// Draw circles (points)
 	sb.WriteString(circles.String())
 
 	// Add axis labels
-	sb.WriteString(fmt.Sprintf(`
+	fmt.Fprintf(&sb, `
                 <text x="%.0f" y="%.0f" text-anchor="middle" font-size="12" fill="#666">Block Number</text>
                 <text x="20" y="%.0f" text-anchor="middle" font-size="12" fill="#666" transform="rotate(-90 20 %.0f)">Gas Used</text>
                 <text x="%.0f" y="%.0f" text-anchor="start" font-size="10" fill="#666">%d</text>
@@ -255,7 +255,7 @@ func generateGasUsageChart(report *BlockReport) string {
 		padding, height-padding+15, report.Blocks[0].Number,
 		width-padding, height-padding+15, report.Blocks[len(report.Blocks)-1].Number,
 		padding-35, height-padding+5,
-		padding-35, padding+5, formatNumber(maxGas)))
+		padding-35, padding+5, formatNumber(maxGas))
 
 	sb.WriteString(`
         </div>`)
@@ -338,12 +338,12 @@ func generateTop10Sections(report *BlockReport) string {
             <tbody>`)
 
 		for i, block := range report.Top10.BlocksByTxCount {
-			sb.WriteString(fmt.Sprintf(`
+			fmt.Fprintf(&sb, `
                 <tr>
                     <td>%d</td>
                     <td>%s</td>
                     <td>%s</td>
-                </tr>`, i+1, formatNumber(block.Number), formatNumber(block.TxCount)))
+                </tr>`, i+1, formatNumber(block.Number), formatNumber(block.TxCount))
 		}
 
 		sb.WriteString(`
@@ -370,14 +370,14 @@ func generateTop10Sections(report *BlockReport) string {
             <tbody>`)
 
 		for i, block := range report.Top10.BlocksByGasUsed {
-			sb.WriteString(fmt.Sprintf(`
+			fmt.Fprintf(&sb, `
                 <tr>
                     <td>%d</td>
                     <td>%s</td>
                     <td>%s</td>
                     <td>%s</td>
                     <td>%.2f%%</td>
-                </tr>`, i+1, formatNumber(block.Number), formatNumber(block.GasUsed), formatNumberWithUnits(block.GasLimit), block.GasUsedPercent))
+                </tr>`, i+1, formatNumber(block.Number), formatNumber(block.GasUsed), formatNumberWithUnits(block.GasLimit), block.GasUsedPercent)
 		}
 
 		sb.WriteString(`
@@ -404,14 +404,14 @@ func generateTop10Sections(report *BlockReport) string {
             <tbody>`)
 
 		for i, tx := range report.Top10.TransactionsByGas {
-			sb.WriteString(fmt.Sprintf(`
+			fmt.Fprintf(&sb, `
                 <tr>
                     <td>%d</td>
                     <td><code>%s</code></td>
                     <td>%s</td>
                     <td>%s</td>
                     <td>%s</td>
-                </tr>`, i+1, html.EscapeString(tx.Hash), formatNumber(tx.BlockNumber), formatNumberWithUnits(tx.GasLimit), formatNumber(tx.GasUsed)))
+                </tr>`, i+1, html.EscapeString(tx.Hash), formatNumber(tx.BlockNumber), formatNumberWithUnits(tx.GasLimit), formatNumber(tx.GasUsed))
 		}
 
 		sb.WriteString(`
@@ -438,14 +438,14 @@ func generateTop10Sections(report *BlockReport) string {
             <tbody>`)
 
 		for i, tx := range report.Top10.TransactionsByGasLimit {
-			sb.WriteString(fmt.Sprintf(`
+			fmt.Fprintf(&sb, `
                 <tr>
                     <td>%d</td>
                     <td><code>%s</code></td>
                     <td>%s</td>
                     <td>%s</td>
                     <td>%s</td>
-                </tr>`, i+1, html.EscapeString(tx.Hash), formatNumber(tx.BlockNumber), formatNumberWithUnits(tx.GasLimit), formatNumber(tx.GasUsed)))
+                </tr>`, i+1, html.EscapeString(tx.Hash), formatNumber(tx.BlockNumber), formatNumberWithUnits(tx.GasLimit), formatNumber(tx.GasUsed))
 		}
 
 		sb.WriteString(`
@@ -470,12 +470,12 @@ func generateTop10Sections(report *BlockReport) string {
             <tbody>`)
 
 		for i, gp := range report.Top10.MostUsedGasPrices {
-			sb.WriteString(fmt.Sprintf(`
+			fmt.Fprintf(&sb, `
                 <tr>
                     <td>%d</td>
                     <td>%s</td>
                     <td>%s</td>
-                </tr>`, i+1, formatNumber(gp.GasPrice), formatNumber(gp.Count)))
+                </tr>`, i+1, formatNumber(gp.GasPrice), formatNumber(gp.Count))
 		}
 
 		sb.WriteString(`
@@ -500,12 +500,12 @@ func generateTop10Sections(report *BlockReport) string {
             <tbody>`)
 
 		for i, gl := range report.Top10.MostUsedGasLimits {
-			sb.WriteString(fmt.Sprintf(`
+			fmt.Fprintf(&sb, `
                 <tr>
                     <td>%d</td>
                     <td>%s</td>
                     <td>%s</td>
-                </tr>`, i+1, formatNumberWithUnits(gl.GasLimit), formatNumber(gl.Count)))
+                </tr>`, i+1, formatNumberWithUnits(gl.GasLimit), formatNumber(gl.Count))
 		}
 
 		sb.WriteString(`

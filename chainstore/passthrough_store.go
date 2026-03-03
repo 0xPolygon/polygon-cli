@@ -550,7 +550,11 @@ func (s *PassthroughStore) MeasureConnectionLatency(ctx context.Context) (time.D
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to %s: %w", address, err)
 	}
-	defer conn.Close()
+	defer func() {
+		if closeErr := conn.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Msg("Failed to close latency measurement connection")
+		}
+	}()
 
 	latency := time.Since(start)
 
@@ -608,7 +612,11 @@ func (s *PassthroughStore) GetSignature(ctx context.Context, hexSignature string
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch signature: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Msg("Failed to close response body")
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
