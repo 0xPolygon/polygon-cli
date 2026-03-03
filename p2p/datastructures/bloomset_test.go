@@ -142,7 +142,7 @@ func TestBloomSetFalsePositiveRate(t *testing.T) {
 
 	// Add 32768 unique hashes (the design capacity)
 	// Use keccak256 to generate properly distributed hashes
-	for i := uint64(0); i < 32768; i++ {
+	for i := range uint64(32768) {
 		b.Add(generateTestHash(i))
 	}
 
@@ -196,8 +196,7 @@ func BenchmarkBloomSetFilterNotContained(b *testing.B) {
 		batch[i] = common.BytesToHash([]byte{byte(i >> 8), byte(i)})
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		bloom.FilterNotContained(batch)
 	}
 }
@@ -217,8 +216,7 @@ func BenchmarkLRUFilterNotContained(b *testing.B) {
 		batch[i] = common.BytesToHash([]byte{byte(i >> 8), byte(i)})
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		cache.FilterNotContained(batch)
 	}
 }
