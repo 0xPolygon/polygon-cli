@@ -343,8 +343,8 @@ func CallRPCAndValidate(ctx context.Context, rpcClient *rpc.Client, wrappedHTTPC
 			break
 		}
 		defer func() {
-			if err := response.Body.Close(); err != nil {
-				log.Debug().Err(err).Msg("Failed to close response body")
+			if closeErr := response.Body.Close(); closeErr != nil {
+				log.Debug().Err(closeErr).Msg("Failed to close response body")
 			}
 		}()
 

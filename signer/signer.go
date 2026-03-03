@@ -166,8 +166,8 @@ func (g *GCPKMS) CreateKeyRing(ctx context.Context) error {
 		return fmt.Errorf("failed to create kms client: %w", err)
 	}
 	defer func() {
-		if err := client.Close(); err != nil {
-			log.Debug().Err(err).Msg("Failed to close KMS client")
+		if closeErr := client.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Msg("Failed to close KMS client")
 		}
 	}()
 
@@ -206,8 +206,8 @@ func (g *GCPKMS) CreateKey(ctx context.Context) error {
 		return fmt.Errorf("failed to create kms client: %w", err)
 	}
 	defer func() {
-		if err := client.Close(); err != nil {
-			log.Debug().Err(err).Msg("Failed to close KMS client")
+		if closeErr := client.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Msg("Failed to close KMS client")
 		}
 	}()
 
@@ -245,8 +245,8 @@ func (g *GCPKMS) CreateImportJob(ctx context.Context) error {
 		return fmt.Errorf("failed to create kms client: %w", err)
 	}
 	defer func() {
-		if err := client.Close(); err != nil {
-			log.Debug().Err(err).Msg("Failed to close KMS client")
+		if closeErr := client.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Msg("Failed to close KMS client")
 		}
 	}()
 

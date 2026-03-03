@@ -460,8 +460,8 @@ func GetBalanceTreeData(opts *BalanceTreeOptions) ([]byte, []byte, error) {
 		return nil, nil, err
 	}
 	defer func() {
-		if err := file.Close(); err != nil {
-			log.Debug().Err(err).Str("file", claimsFileName).Msg("Failed to close claims file")
+		if closeErr := file.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Str("file", claimsFileName).Msg("Failed to close claims file")
 		}
 	}()
 
@@ -477,8 +477,8 @@ func GetBalanceTreeData(opts *BalanceTreeOptions) ([]byte, []byte, error) {
 		return nil, nil, err
 	}
 	defer func() {
-		if err := file2.Close(); err != nil {
-			log.Debug().Err(err).Str("file", l2FileName).Msg("Failed to close deposits file")
+		if closeErr := file2.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Str("file", l2FileName).Msg("Failed to close deposits file")
 		}
 	}()
 
