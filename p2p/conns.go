@@ -332,6 +332,11 @@ func (c *Conns) AddTxs(txs []*types.Transaction) []common.Hash {
 	return hashes
 }
 
+// GetTx retrieves a transaction from the shared cache and updates LRU ordering.
+func (c *Conns) GetTx(hash common.Hash) (*types.Transaction, bool) {
+	return c.txs.Get(hash)
+}
+
 // PeekTxs retrieves multiple transactions from the shared cache without updating LRU ordering.
 // Uses a single read lock for better concurrency when LRU ordering is not needed.
 func (c *Conns) PeekTxs(hashes []common.Hash) []*types.Transaction {
