@@ -413,3 +413,16 @@ func (c *Conns) GetPeerName(peerID string) string {
 
 	return ""
 }
+
+// GetPeerVersion returns the negotiated eth protocol version for a specific peer.
+// Returns 0 if the peer is not found.
+func (c *Conns) GetPeerVersion(peerID string) uint {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if cn, ok := c.conns[peerID]; ok {
+		return cn.version
+	}
+
+	return 0
+}

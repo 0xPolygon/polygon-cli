@@ -92,6 +92,9 @@ type conn struct {
 	txAnnounce    chan []common.Hash
 	blockAnnounce chan eth.NewBlockHashesPacket
 	closeCh       chan struct{}
+
+	// version stores the negotiated eth protocol version (e.g., 68 or 69).
+	version uint
 }
 
 // EthProtocolOptions is the options used when creating a new eth protocol.
@@ -148,6 +151,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				txAnnounce:                 make(chan []common.Hash),
 				blockAnnounce:              make(chan eth.NewBlockHashesPacket, maxQueuedBlockAnns),
 				closeCh:                    make(chan struct{}),
+				version:                    version,
 			}
 
 			// Ensure cleanup happens on any exit path (including statusExchange failure)
