@@ -71,7 +71,11 @@ func dockerlogger(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("error initializing Docker client: %v", err)
 	}
-	defer cli.Close()
+	defer func() {
+		if err := cli.Close(); err != nil {
+			fmt.Printf("warning: failed to close Docker client: %v\n", err)
+		}
+	}()
 
 	// Monitor logs
 	return monitorLogs(ctx, cli, dockerloggerInputArgs.network, &config)
@@ -177,14 +181,26 @@ func streamContainerLogs(ctx context.Context, cli *client.Client, containerID, c
 		fmt.Printf("Error streaming logs for %s: %v\n", serviceName, err)
 		return
 	}
-	defer logs.Close()
+	defer func() {
+		if err := logs.Close(); err != nil {
+			fmt.Printf("warning: failed to close log stream for %s: %v\n", serviceName, err)
+		}
+	}()
 
 	fmt.Printf("Started monitoring container: %s\n", serviceName)
 
 	// Create a pipe to demultiplex Docker's stdout/stderr stream
 	reader, writer := io.Pipe()
-	defer reader.Close()
-	defer writer.Close()
+	defer func() {
+		if err := reader.Close(); err != nil {
+			fmt.Printf("warning: failed to close pipe reader for %s: %v\n", serviceName, err)
+		}
+	}()
+	defer func() {
+		if err := writer.Close(); err != nil {
+			fmt.Printf("warning: failed to close pipe writer for %s: %v\n", serviceName, err)
+		}
+	}()
 
 	// Demultiplex the Docker log stream in a goroutine
 	go func() {
@@ -193,7 +209,7 @@ func streamContainerLogs(ctx context.Context, cli *client.Client, containerID, c
 		if err != nil && err != io.EOF {
 			fmt.Printf("Error demultiplexing logs for %s: %v\n", serviceName, err)
 		}
-		writer.Close()
+		_ = writer.Close()
 	}()
 
 	// Read demultiplexed logs line by line
@@ -219,8 +235,8 @@ func streamContainerLogs(ctx context.Context, cli *client.Client, containerID, c
 		timestamp := time.Now().UTC().Format("2006-01-02 15:04:05")
 
 		// Print with different colors for each component
-		timestampColor.Printf("[%s] ", timestamp)
-		serviceNameColor.Printf("[%s] ", serviceName)
+		_, _ = timestampColor.Printf("[%s] ", timestamp)
+		_, _ = serviceNameColor.Printf("[%s] ", serviceName)
 
 		// Colorize the log level within the message and print the rest normally
 		printColorizedLogLine(logLine, logLineLower)
@@ -259,16 +275,16 @@ func printColorizedLogLine(logLine, logLineLower string) {
 		if idx := strings.Index(logLineLower, patternLower); idx != -1 {
 			// Print everything before the log level
 			if idx > 0 {
-				messageColor.Print(logLine[:idx])
+				_, _ = messageColor.Print(logLine[:idx])
 			}
 
 			// Print the log level with its color (preserve original case)
 			levelEnd := idx + len(lp.pattern)
-			lp.color.Print(logLine[idx:levelEnd])
+			_, _ = lp.color.Print(logLine[idx:levelEnd])
 
 			// Print everything after the log level
 			if levelEnd < len(logLine) {
-				messageColor.Print(logLine[levelEnd:])
+				_, _ = messageColor.Print(logLine[levelEnd:])
 			}
 			fmt.Println()
 			foundLevel = true
@@ -278,7 +294,7 @@ func printColorizedLogLine(logLine, logLineLower string) {
 
 	// If no log level found, print the entire line normally
 	if !foundLevel {
-		messageColor.Println(logLine)
+		_, _ = messageColor.Println(logLine)
 	}
 }
 

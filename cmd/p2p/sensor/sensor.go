@@ -29,6 +29,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
+	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
 	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/p2p"
 	"github.com/0xPolygon/polygon-cli/p2p/database"
@@ -75,12 +76,12 @@ type (
 		DiscoveryDNS                 string
 		Database                     string
 		NoDiscovery                  bool
-		RequestsCache                p2p.CacheOptions
-		ParentsCache                 p2p.CacheOptions
-		BlocksCache                  p2p.CacheOptions
-		TxsCache                     p2p.CacheOptions
-		KnownTxsCache                p2p.CacheOptions
-		KnownBlocksCache             p2p.CacheOptions
+		RequestsCache                ds.LRUOptions
+		ParentsCache                 ds.LRUOptions
+		BlocksCache                  ds.LRUOptions
+		TxsCache                     ds.LRUOptions
+		KnownTxsBloom                ds.BloomSetOptions
+		KnownBlocksMax               int
 
 		bootnodes    []*enode.Node
 		staticNodes  []*enode.Node
@@ -207,8 +208,8 @@ var SensorCmd = &cobra.Command{
 		conns := p2p.NewConns(p2p.ConnsOptions{
 			BlocksCache:                inputSensorParams.BlocksCache,
 			TxsCache:                   inputSensorParams.TxsCache,
-			KnownTxsCache:              inputSensorParams.KnownTxsCache,
-			KnownBlocksCache:           inputSensorParams.KnownBlocksCache,
+			KnownTxsBloom:              inputSensorParams.KnownTxsBloom,
+			KnownBlocksMax:             inputSensorParams.KnownBlocksMax,
 			Head:                       head,
 			ShouldBroadcastTx:          inputSensorParams.ShouldBroadcastTx,
 			ShouldBroadcastTxHashes:    inputSensorParams.ShouldBroadcastTxHashes,
@@ -519,8 +520,9 @@ will result in less chance of missing data but can significantly increase memory
 	f.DurationVar(&inputSensorParams.BlocksCache.TTL, "blocks-cache-ttl", 10*time.Minute, "time to live for block cache entries (0 for no expiration)")
 	f.IntVar(&inputSensorParams.TxsCache.MaxSize, "max-txs", 32768, "maximum transactions to cache for serving to peers (0 for no limit)")
 	f.DurationVar(&inputSensorParams.TxsCache.TTL, "txs-cache-ttl", 10*time.Minute, "time to live for transaction cache entries (0 for no expiration)")
-	f.IntVar(&inputSensorParams.KnownTxsCache.MaxSize, "max-known-txs", 32768, "maximum transaction hashes to track per peer (0 for no limit)")
-	f.DurationVar(&inputSensorParams.KnownTxsCache.TTL, "known-txs-cache-ttl", 5*time.Minute, "time to live for known transaction cache entries (0 for no expiration)")
-	f.IntVar(&inputSensorParams.KnownBlocksCache.MaxSize, "max-known-blocks", 1024, "maximum block hashes to track per peer (0 for no limit)")
-	f.DurationVar(&inputSensorParams.KnownBlocksCache.TTL, "known-blocks-cache-ttl", 5*time.Minute, "time to live for known block cache entries (0 for no expiration)")
+	f.UintVar(&inputSensorParams.KnownTxsBloom.Size, "known-txs-bloom-size", 327680,
+		`bloom filter size in bits for tracking known transactions per peer (default ~40KB per filter,
+optimized for ~32K elements with ~1% false positive rate)`)
+	f.UintVar(&inputSensorParams.KnownTxsBloom.HashCount, "known-txs-bloom-hashes", 7, "number of hash functions for known txs bloom filter")
+	f.IntVar(&inputSensorParams.KnownBlocksMax, "max-known-blocks", 1024, "maximum block hashes to track per peer (0 for no limit)")
 }

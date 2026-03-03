@@ -81,14 +81,16 @@ func (w *WrappedPebbleIterator) Seek(key []byte) bool {
 func (w *WrappedPebbleIterator) SetReleaser(releaser util.Releaser) {
 }
 func (w *WrappedPebbleIterator) Release() {
-	w.Iterator.Close()
+	_ = w.Close()
 }
 func (p *PebbleDBWrapper) Get(key []byte) ([]byte, error) {
 	resp, closer, err := p.handle.Get(key)
 	if err != nil {
 		return nil, err
 	}
-	closer.Close()
+	if err := closer.Close(); err != nil {
+		return nil, err
+	}
 	return resp, nil
 }
 func (p *PebbleDBWrapper) Put(key []byte, value []byte) error {

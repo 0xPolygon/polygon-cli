@@ -251,7 +251,9 @@ func writeJSON(msg []*json.RawMessage) error {
 	}
 
 	for _, b := range msg {
-		fmt.Fprintln(f, string(*b))
+		if _, err := fmt.Fprintln(f, string(*b)); err != nil {
+			return err
+		}
 	}
 
 	return nil

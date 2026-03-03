@@ -246,21 +246,21 @@ func printBlockSummary(c *ethclient.Client, cfg *config.Config, ap *AccountPool,
 			log.Error().Msg("No transaction could be retrieved from the receipts")
 			return
 		}
-		p.Printf("Successful Tx: %v\tTotal Tx: %v\n", number.Decimal(successfulTx), number.Decimal(totalTx))
-		p.Printf("Total Mining Time: %s\n", totalMiningTime)
-		p.Printf("Total Transactions: %v\n", number.Decimal(totalTransactions))
-		p.Printf("Total Gas Used: %v\n", number.Decimal(totalGasUsed))
-		p.Printf("Transactions per sec: %v\n", number.Decimal(tps))
-		p.Printf("Gas Per Second: %v\n", number.Decimal(gaspersec))
-		p.Printf("Latencies - Min: %v\tMedian: %v\tMax: %v\n", number.Decimal(minLatency.Seconds()), number.Decimal(medianLatency.Seconds()), number.Decimal(maxLatency.Seconds()))
+		_, _ = p.Printf("Successful Tx: %v\tTotal Tx: %v\n", number.Decimal(successfulTx), number.Decimal(totalTx))
+		_, _ = p.Printf("Total Mining Time: %s\n", totalMiningTime)
+		_, _ = p.Printf("Total Transactions: %v\n", number.Decimal(totalTransactions))
+		_, _ = p.Printf("Total Gas Used: %v\n", number.Decimal(totalGasUsed))
+		_, _ = p.Printf("Transactions per sec: %v\n", number.Decimal(tps))
+		_, _ = p.Printf("Gas Per Second: %v\n", number.Decimal(gaspersec))
+		_, _ = p.Printf("Latencies - Min: %v\tMedian: %v\tMax: %v\n", number.Decimal(minLatency.Seconds()), number.Decimal(medianLatency.Seconds()), number.Decimal(maxLatency.Seconds()))
 		// Blocktime related metrics can only be calculated when there are at least two blocks
 		if len(bs) > 1 {
-			p.Printf("Mean Blocktime: %vs\n", number.Decimal(meanBlocktime))
-			p.Printf("Median Blocktime: %vs\n", number.Decimal(medianBlocktime))
-			p.Printf("Minimum Blocktime: %vs\n", number.Decimal(minBlocktime))
-			p.Printf("Maximum Blocktime: %vs\n", number.Decimal(maxBlocktime))
-			p.Printf("Blocktime Standard Deviation: %vs\n", number.Decimal(stddevBlocktime))
-			p.Printf("Blocktime Variance: %vs\n", number.Decimal(varianceBlocktime))
+			_, _ = p.Printf("Mean Blocktime: %vs\n", number.Decimal(meanBlocktime))
+			_, _ = p.Printf("Median Blocktime: %vs\n", number.Decimal(medianBlocktime))
+			_, _ = p.Printf("Minimum Blocktime: %vs\n", number.Decimal(minBlocktime))
+			_, _ = p.Printf("Maximum Blocktime: %vs\n", number.Decimal(maxBlocktime))
+			_, _ = p.Printf("Blocktime Standard Deviation: %vs\n", number.Decimal(stddevBlocktime))
+			_, _ = p.Printf("Blocktime Variance: %vs\n", number.Decimal(varianceBlocktime))
 		} else {
 			log.Debug().Int("Length of blockSummary", len(bs)).Msg("blockSummary is empty")
 		}
@@ -281,7 +281,7 @@ func printBlockSummary(c *ethclient.Client, cfg *config.Config, ap *AccountPool,
 		summaryOutput.Latencies = latencies
 
 		val, _ := json.MarshalIndent(summaryOutput, "", "    ")
-		p.Println(string(val))
+		_, _ = p.Println(string(val))
 	default:
 		log.Error().Str("mode", summaryOutputMode).Msg("Invalid mode for summary output")
 	}

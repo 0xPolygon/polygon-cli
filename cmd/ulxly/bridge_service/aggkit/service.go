@@ -29,7 +29,7 @@ func NewBridgeService(url string, insecure bool) (*BridgeService, error) {
 }
 
 func (s *BridgeService) GetDeposit(depositNetwork, depositCount uint32) (*bridge_service.Deposit, error) {
-	bridgeEndpoint := fmt.Sprintf("%s/%s/bridges?network_id=%d&deposit_count=%d", s.BridgeServiceBase.Url(), urlPath, depositNetwork, depositCount)
+	bridgeEndpoint := fmt.Sprintf("%s/%s/bridges?network_id=%d&deposit_count=%d", s.Url(), urlPath, depositNetwork, depositCount)
 	bridgeResp, bridgeRespError, statusCode, err := httpjson.HTTPGetWithError[getBridgesResponse, errorResponse](s.httpClient, bridgeEndpoint)
 	if err != nil {
 		return nil, err
@@ -93,7 +93,7 @@ func (s *BridgeService) getProof(depositNetwork, depositCount uint32, l1InfoTree
 			}
 		}
 	}
-	endpoint := fmt.Sprintf("%s/%s/claim-proof?network_id=%d&leaf_index=%d&deposit_count=%d", s.BridgeServiceBase.Url(), urlPath, depositNetwork, l1InfoTreeIndexValue, depositCount)
+	endpoint := fmt.Sprintf("%s/%s/claim-proof?network_id=%d&leaf_index=%d&deposit_count=%d", s.Url(), urlPath, depositNetwork, l1InfoTreeIndexValue, depositCount)
 	resp, respError, statusCode, err := httpjson.HTTPGetWithError[getClaimProofResponse, errorResponse](s.httpClient, endpoint)
 	if err != nil {
 		return nil, err
@@ -113,7 +113,7 @@ func (s *BridgeService) getProof(depositNetwork, depositCount uint32, l1InfoTree
 }
 
 func (s *BridgeService) getL1InfoTreeIndex(depositNetwork, depositCount uint32) (*uint32, error) {
-	l1InfoTreeIndexEndpoint := fmt.Sprintf("%s/%s/l1-info-tree-index?network_id=%d&deposit_count=%d", s.BridgeServiceBase.Url(), urlPath, depositNetwork, depositCount)
+	l1InfoTreeIndexEndpoint := fmt.Sprintf("%s/%s/l1-info-tree-index?network_id=%d&deposit_count=%d", s.Url(), urlPath, depositNetwork, depositCount)
 	l1InfoTreeIndex, l1InfoTreeIndexRespError, statusCode, err := httpjson.HTTPGetWithError[uint32, errorResponse](s.httpClient, l1InfoTreeIndexEndpoint)
 	if err != nil {
 		return nil, err

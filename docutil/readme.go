@@ -42,7 +42,7 @@ func updateContent(originalContent, delimiter string, newContent *bytes.Buffer) 
 	startIndex := strings.Index(originalContent, startTag)
 	endIndex := strings.Index(originalContent, endTag)
 	if startIndex == -1 || endIndex == -1 || endIndex <= startIndex {
-		return "", fmt.Errorf("Unable to find start and end tags or they are in the wrong order.")
+		return "", fmt.Errorf("unable to find start and end tags or they are in the wrong order")
 	}
 	startIndex += len(startTag)
 	return originalContent[:startIndex] + "\n" + newContent.String() + originalContent[endIndex:], nil

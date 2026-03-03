@@ -20,6 +20,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
 	"github.com/0xPolygon/polygon-cli/p2p/database"
 )
 
@@ -57,12 +58,12 @@ type conn struct {
 	// requests is used to store the request ID and the block hash. This is used
 	// when fetching block bodies because the eth protocol block bodies do not
 	// contain information about the block hash.
-	requests   *Cache[uint64, common.Hash]
+	requests   *ds.LRU[uint64, common.Hash]
 	requestNum uint64
 
 	// parents tracks hashes of blocks requested as parents to mark them
 	// with IsParent=true when writing to the database.
-	parents *Cache[common.Hash, struct{}]
+	parents *ds.LRU[common.Hash, struct{}]
 
 	// conns provides access to the global connection manager, which includes
 	// the blocks cache shared across all peers.
@@ -81,8 +82,10 @@ type conn struct {
 	shouldBroadcastBlockHashes bool
 
 	// Known caches track what this peer has seen to avoid redundant sends.
-	knownTxs    *Cache[common.Hash, struct{}]
-	knownBlocks *Cache[common.Hash, struct{}]
+	// knownTxs uses a bloom filter for memory efficiency (~40KB vs ~4MB per peer).
+	// knownBlocks uses a simple bounded set for lower memory overhead than the generic LRU.
+	knownTxs    *ds.BloomSet
+	knownBlocks *ds.BoundedSet[common.Hash]
 
 	// messages tracks per-peer message counts for API visibility.
 	messages *PeerMessages
@@ -110,8 +113,8 @@ type EthProtocolOptions struct {
 	ForkID      forkid.ID
 
 	// Cache configurations
-	RequestsCache CacheOptions
-	ParentsCache  CacheOptions
+	RequestsCache ds.LRUOptions
+	ParentsCache  ds.LRUOptions
 
 	// Broadcast flags control what gets rebroadcasted to other peers
 	ShouldBroadcastTx          bool
@@ -135,9 +138,9 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				logger:                     log.With().Str("peer", peerURL).Logger(),
 				rw:                         rw,
 				db:                         opts.Database,
-				requests:                   NewCache[uint64, common.Hash](opts.RequestsCache),
+				requests:                   ds.NewLRU[uint64, common.Hash](opts.RequestsCache),
 				requestNum:                 0,
-				parents:                    NewCache[common.Hash, struct{}](opts.ParentsCache),
+				parents:                    ds.NewLRU[common.Hash, struct{}](opts.ParentsCache),
 				peer:                       p,
 				conns:                      opts.Conns,
 				connectedAt:                time.Now(),
@@ -146,8 +149,8 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				shouldBroadcastTxHashes:    opts.ShouldBroadcastTxHashes,
 				shouldBroadcastBlocks:      opts.ShouldBroadcastBlocks,
 				shouldBroadcastBlockHashes: opts.ShouldBroadcastBlockHashes,
-				knownTxs:                   NewCache[common.Hash, struct{}](opts.Conns.KnownTxsOpts()),
-				knownBlocks:                NewCache[common.Hash, struct{}](opts.Conns.KnownBlocksOpts()),
+				knownTxs:                   ds.NewBloomSet(opts.Conns.KnownTxsOpts()),
+				knownBlocks:                ds.NewBoundedSet[common.Hash](opts.Conns.KnownBlocksMax()),
 				messages:                   NewPeerMessages(),
 				txAnnounce:                 make(chan []common.Hash),
 				blockAnnounce:              make(chan eth.NewBlockHashesPacket, maxQueuedBlockAnns),
@@ -567,7 +570,7 @@ func (c *conn) addKnownTx(hash common.Hash) {
 		return
 	}
 
-	c.knownTxs.Add(hash, struct{}{})
+	c.knownTxs.Add(hash)
 }
 
 // addKnownBlock adds a block hash to the known block cache.
@@ -576,7 +579,7 @@ func (c *conn) addKnownBlock(hash common.Hash) {
 		return
 	}
 
-	c.knownBlocks.Add(hash, struct{}{})
+	c.knownBlocks.Add(hash)
 }
 
 // hasKnownTx checks if a transaction hash is in the known tx cache.
@@ -652,16 +655,7 @@ func (c *conn) prepareTxAnnouncements(queue []common.Hash) (pending, remaining [
 	maxHashes := min(maxTxPacketSize/common.HashLength, len(queue))
 
 	// Filter out known hashes in a single lock operation
-	batch := queue[:maxHashes]
-	pending = c.knownTxs.FilterNotContained(batch)
-
-	// If we got fewer pending than the batch size, we processed some known hashes.
-	// Limit pending to maxTxPacketSize worth of hashes.
-	maxPending := maxTxPacketSize / common.HashLength
-	if len(pending) > maxPending {
-		pending = pending[:maxPending]
-	}
-
+	pending = c.knownTxs.FilterNotContained(queue[:maxHashes])
 	remaining = queue[:copy(queue, queue[maxHashes:])]
 	return pending, remaining
 }
@@ -713,7 +707,7 @@ func (c *conn) sendTxAnnouncements(hashes []common.Hash) error {
 	}
 
 	// Mark all hashes as known in a single lock operation
-	c.knownTxs.AddMany(pending, struct{}{})
+	c.knownTxs.AddMany(pending)
 	return nil
 }
 

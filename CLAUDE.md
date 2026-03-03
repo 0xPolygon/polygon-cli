@@ -111,7 +111,7 @@ Always run `make gen` before committing if you've changed anything that affects 
 
 ## Key Dependencies
 
-- Go 1.24+ required
+- Go 1.26+ required
 - Foundry (for smart contract compilation)
 - Docker (for generation tasks)
 - Additional tools: jq, bc, protoc (for development)

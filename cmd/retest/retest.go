@@ -471,7 +471,9 @@ func processSolidityToString(data string, isYul bool) string {
 		log.Warn().Strs("args", args).Str("filename", solInput.Name()).Str("stdErr", bufErr.String()).Int("lines", len(lines)).Str("contract", data).Msg("soldity output does not contain 4 lines")
 	}
 
-	os.Remove(solInput.Name())
+	if err := os.Remove(solInput.Name()); err != nil {
+		log.Debug().Err(err).Str("filename", solInput.Name()).Msg("Failed to remove temporary solidity file")
+	}
 	return lines[len(lines)-2]
 }
 
@@ -535,7 +537,9 @@ func processLLLToString(data string) string {
 	if len(lines) != 2 {
 		log.Fatal().Int("lines", len(lines)).Str("contract", data).Msg("LLLC output does not contain 2 lines")
 	}
-	os.Remove(lllcInput.Name())
+	if err := os.Remove(lllcInput.Name()); err != nil {
+		log.Debug().Err(err).Str("filename", lllcInput.Name()).Msg("Failed to remove temporary lllc file")
+	}
 	return lines[0]
 }
 
@@ -596,11 +600,12 @@ func rawArgsToStrings(rawArgs string, params []string) []string {
 				processedArgs[k] = arg
 			}
 		} else if params[k] == "bool" {
-			if arg == "0x01" {
+			switch arg {
+			case "0x01":
 				processedArgs[k] = "true"
-			} else if arg == "0x00" {
+			case "0x00":
 				processedArgs[k] = "false"
-			} else {
+			default:
 				log.Fatal().Str("arg", arg).Msg("unrecognized bool type input")
 			}
 		} else {
@@ -616,7 +621,7 @@ func preProcessTypedString(data string, preserveSpace bool) string {
 	data = typeIndicator.ReplaceAllString(data, "")
 	data = strings.TrimPrefix(data, "0x")
 	if !preserveSpace {
-		data = strings.Replace(data, " ", "", -1)
+		data = strings.ReplaceAll(data, " ", "")
 	}
 	return data
 }
