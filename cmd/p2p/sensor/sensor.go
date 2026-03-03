@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -335,6 +336,10 @@ func stopServer(server *ethp2p.Server) {
 // sensor's performance. The port number is configured through
 // inputSensorParams.PprofPort. An error is logged if the server fails to start.
 func handlePprof() {
+	// Enable mutex and block profiling to detect lock contention.
+	runtime.SetMutexProfileFraction(1)
+	runtime.SetBlockProfileRate(1)
+
 	addr := fmt.Sprintf(":%d", inputSensorParams.PprofPort)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Error().Err(err).Msg("Failed to start pprof")
@@ -512,9 +517,9 @@ will result in less chance of missing data but can significantly increase memory
 	f.DurationVar(&inputSensorParams.ParentsCache.TTL, "parents-cache-ttl", 5*time.Minute, "time to live for parent hash cache entries (0 for no expiration)")
 	f.IntVar(&inputSensorParams.BlocksCache.MaxSize, "max-blocks", 1024, "maximum blocks to track across all peers (0 for no limit)")
 	f.DurationVar(&inputSensorParams.BlocksCache.TTL, "blocks-cache-ttl", 10*time.Minute, "time to live for block cache entries (0 for no expiration)")
-	f.IntVar(&inputSensorParams.TxsCache.MaxSize, "max-txs", 8192, "maximum transactions to cache for serving to peers (0 for no limit)")
+	f.IntVar(&inputSensorParams.TxsCache.MaxSize, "max-txs", 32768, "maximum transactions to cache for serving to peers (0 for no limit)")
 	f.DurationVar(&inputSensorParams.TxsCache.TTL, "txs-cache-ttl", 10*time.Minute, "time to live for transaction cache entries (0 for no expiration)")
-	f.IntVar(&inputSensorParams.KnownTxsCache.MaxSize, "max-known-txs", 8192, "maximum transaction hashes to track per peer (0 for no limit)")
+	f.IntVar(&inputSensorParams.KnownTxsCache.MaxSize, "max-known-txs", 32768, "maximum transaction hashes to track per peer (0 for no limit)")
 	f.DurationVar(&inputSensorParams.KnownTxsCache.TTL, "known-txs-cache-ttl", 5*time.Minute, "time to live for known transaction cache entries (0 for no expiration)")
 	f.IntVar(&inputSensorParams.KnownBlocksCache.MaxSize, "max-known-blocks", 1024, "maximum block hashes to track per peer (0 for no limit)")
 	f.DurationVar(&inputSensorParams.KnownBlocksCache.TTL, "known-blocks-cache-ttl", 5*time.Minute, "time to live for known block cache entries (0 for no expiration)")

@@ -325,6 +325,11 @@ func (c *Conns) GetTx(hash common.Hash) (*types.Transaction, bool) {
 	return c.txs.Get(hash)
 }
 
+// GetTxs retrieves multiple transactions from the shared cache in a single lock operation.
+func (c *Conns) GetTxs(hashes []common.Hash) []*types.Transaction {
+	return c.txs.GetMany(hashes)
+}
+
 // Blocks returns the global blocks cache.
 func (c *Conns) Blocks() *Cache[common.Hash, BlockCache] {
 	return c.blocks
@@ -491,4 +496,15 @@ func calculateEffectiveGasPrice(tx *types.Transaction, baseFee *big.Int) *big.In
 		return new(big.Int).Set(price)
 	}
 	return nil
+// GetPeerVersion returns the negotiated eth protocol version for a specific peer.
+// Returns 0 if the peer is not found.
+func (c *Conns) GetPeerVersion(peerID string) uint {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if cn, ok := c.conns[peerID]; ok {
+		return cn.version
+	}
+
+	return 0
 }
