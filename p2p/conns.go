@@ -322,14 +322,27 @@ func (c *Conns) AddTx(hash common.Hash, tx *types.Transaction) {
 	c.txs.Add(hash, tx)
 }
 
-// GetTx retrieves a transaction from the shared cache.
+// GetTx retrieves a transaction from the shared cache and updates LRU ordering.
 func (c *Conns) GetTx(hash common.Hash) (*types.Transaction, bool) {
 	return c.txs.Get(hash)
 }
 
 // GetTxs retrieves multiple transactions from the shared cache in a single lock operation.
+// Updates LRU ordering for found transactions.
 func (c *Conns) GetTxs(hashes []common.Hash) []*types.Transaction {
 	return c.txs.GetMany(hashes)
+}
+
+// PeekTx retrieves a transaction from the shared cache without updating LRU ordering.
+// Uses a read lock for better concurrency when LRU ordering is not needed.
+func (c *Conns) PeekTx(hash common.Hash) (*types.Transaction, bool) {
+	return c.txs.Peek(hash)
+}
+
+// PeekTxs retrieves multiple transactions from the shared cache without updating LRU ordering.
+// Uses a single read lock for better concurrency when LRU ordering is not needed.
+func (c *Conns) PeekTxs(hashes []common.Hash) []*types.Transaction {
+	return c.txs.PeekMany(hashes)
 }
 
 // Blocks returns the global blocks cache.

@@ -682,7 +682,7 @@ func (c *conn) sendTxAnnouncements(hashes []common.Hash) error {
 	)
 
 	for _, hash := range hashes {
-		tx, ok := c.conns.GetTx(hash)
+		tx, ok := c.conns.PeekTx(hash)
 		if !ok || tx == nil {
 			continue
 		}
@@ -1056,8 +1056,8 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 
 	c.countMsgReceived(request.Name(), float64(len(request.GetPooledTransactionsRequest)))
 
-	// Try to serve from cache using batch lookup (single lock operation)
-	txs := c.conns.GetTxs(request.GetPooledTransactionsRequest)
+	// Try to serve from cache using batch lookup (single read lock operation)
+	txs := c.conns.PeekTxs(request.GetPooledTransactionsRequest)
 
 	response := &eth.PooledTransactionsPacket{
 		RequestId:                  request.RequestId,

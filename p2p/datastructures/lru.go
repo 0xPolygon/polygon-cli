@@ -157,6 +157,38 @@ func (c *LRU[K, V]) Peek(key K) (V, bool) {
 	return e.value, true
 }
 
+// PeekMany retrieves multiple values from the cache without updating LRU ordering.
+// Uses a single read lock for all lookups, providing better concurrency than GetMany
+// when LRU ordering updates are not needed.
+func (c *LRU[K, V]) PeekMany(keys []K) []V {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	now := time.Now()
+	result := make([]V, 0, len(keys))
+
+	for _, key := range keys {
+		elem, ok := c.items[key]
+		if !ok {
+			continue
+		}
+
+		e := elem.Value.(*entry[K, V])
+
+		if e.expiresAt != nil && now.After(*e.expiresAt) {
+			continue
+		}
+
+		result = append(result, e.value)
+	}
+
+	return result
+}
+
 // Update atomically updates a value in the cache using the provided update function.
 // The update function receives the current value (or zero value if not found) and
 // returns the new value to store. This is thread-safe and prevents race conditions
