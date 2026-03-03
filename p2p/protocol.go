@@ -673,26 +673,19 @@ func (c *conn) enqueueTxHashes(queue, hashes []common.Hash) []common.Hash {
 // It looks up each transaction from the cache to populate Types and Sizes
 // as required by the ETH68 protocol.
 func (c *conn) sendTxAnnouncements(hashes []common.Hash) error {
-	// Build packet with actual Types and Sizes from cached transactions.
+	// Batch lookup all transactions in a single lock operation.
 	// Skip hashes where the transaction is no longer in cache.
-	var (
-		pending      []common.Hash
-		pendingTypes []byte
-		pendingSizes []uint32
-	)
-
-	for _, hash := range hashes {
-		tx, ok := c.conns.GetTx(hash)
-		if !ok || tx == nil {
-			continue
-		}
-		pending = append(pending, hash)
-		pendingTypes = append(pendingTypes, tx.Type())
-		pendingSizes = append(pendingSizes, uint32(tx.Size()))
-	}
-
+	pending, txs := c.conns.PeekTxsWithHashes(hashes)
 	if len(pending) == 0 {
 		return nil
+	}
+
+	// Build Types and Sizes from the found transactions.
+	pendingTypes := make([]byte, len(txs))
+	pendingSizes := make([]uint32, len(txs))
+	for i, tx := range txs {
+		pendingTypes[i] = tx.Type()
+		pendingSizes[i] = uint32(tx.Size())
 	}
 
 	packet := eth.NewPooledTransactionHashesPacket{
@@ -833,12 +826,8 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 		c.db.WriteTransactions(ctx, c.node, txs, tfs)
 	}
 
-	// Cache transactions for duplicate detection and serving to peers
-	hashes := make([]common.Hash, len(txs))
-	for i, tx := range txs {
-		c.conns.AddTx(tx.Hash(), tx)
-		hashes[i] = tx.Hash()
-	}
+	// Cache transactions for duplicate detection and serving to peers (single lock)
+	hashes := c.conns.AddTxs(txs)
 
 	// Broadcast transactions or hashes to other peers asynchronously
 	go c.conns.BroadcastTxs(types.Transactions(txs))
@@ -1056,8 +1045,8 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 
 	c.countMsgReceived(request.Name(), float64(len(request.GetPooledTransactionsRequest)))
 
-	// Try to serve from cache using batch lookup (single lock operation)
-	txs := c.conns.GetTxs(request.GetPooledTransactionsRequest)
+	// Try to serve from cache using batch lookup (single read lock operation)
+	txs := c.conns.PeekTxs(request.GetPooledTransactionsRequest)
 
 	response := &eth.PooledTransactionsPacket{
 		RequestId:                  request.RequestId,
@@ -1123,12 +1112,8 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 		c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse, tfs)
 	}
 
-	// Cache transactions for duplicate detection and serving to peers
-	hashes := make([]common.Hash, len(packet.PooledTransactionsResponse))
-	for i, tx := range packet.PooledTransactionsResponse {
-		c.conns.AddTx(tx.Hash(), tx)
-		hashes[i] = tx.Hash()
-	}
+	// Cache transactions for duplicate detection and serving to peers (single lock)
+	hashes := c.conns.AddTxs(packet.PooledTransactionsResponse)
 
 	// Broadcast transactions or hashes to other peers asynchronously
 	go c.conns.BroadcastTxs(types.Transactions(packet.PooledTransactionsResponse))

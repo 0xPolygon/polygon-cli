@@ -318,19 +318,30 @@ func (c *Conns) PeerConnectedAt(peerID string) time.Time {
 	return time.Time{}
 }
 
-// AddTx adds a transaction to the shared cache for duplicate detection and serving.
-func (c *Conns) AddTx(hash common.Hash, tx *types.Transaction) {
-	c.txs.Add(hash, tx)
+// AddTxs adds multiple transactions to the shared cache in a single lock operation.
+// Returns the computed hashes for reuse by the caller.
+func (c *Conns) AddTxs(txs []*types.Transaction) []common.Hash {
+	if len(txs) == 0 {
+		return nil
+	}
+	hashes := make([]common.Hash, len(txs))
+	for i, tx := range txs {
+		hashes[i] = tx.Hash()
+	}
+	c.txs.AddBatch(hashes, txs)
+	return hashes
 }
 
-// GetTx retrieves a transaction from the shared cache.
-func (c *Conns) GetTx(hash common.Hash) (*types.Transaction, bool) {
-	return c.txs.Get(hash)
+// PeekTxs retrieves multiple transactions from the shared cache without updating LRU ordering.
+// Uses a single read lock for better concurrency when LRU ordering is not needed.
+func (c *Conns) PeekTxs(hashes []common.Hash) []*types.Transaction {
+	return c.txs.PeekMany(hashes)
 }
 
-// GetTxs retrieves multiple transactions from the shared cache in a single lock operation.
-func (c *Conns) GetTxs(hashes []common.Hash) []*types.Transaction {
-	return c.txs.GetMany(hashes)
+// PeekTxsWithHashes retrieves multiple transactions with their hashes from the cache.
+// Returns parallel slices of found hashes and transactions. Uses a single read lock.
+func (c *Conns) PeekTxsWithHashes(hashes []common.Hash) ([]common.Hash, []*types.Transaction) {
+	return c.txs.PeekManyWithKeys(hashes)
 }
 
 // Blocks returns the global blocks cache.

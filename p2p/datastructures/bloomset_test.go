@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-func TestBloomSet_AddAndContains(t *testing.T) {
+func TestBloomSetAddAndContains(t *testing.T) {
 	b := NewBloomSet(DefaultBloomSetOptions())
 
 	hash1 := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
@@ -33,7 +33,7 @@ func TestBloomSet_AddAndContains(t *testing.T) {
 	}
 }
 
-func TestBloomSet_AddMany(t *testing.T) {
+func TestBloomSetAddMany(t *testing.T) {
 	b := NewBloomSet(DefaultBloomSetOptions())
 
 	hashes := make([]common.Hash, 100)
@@ -51,7 +51,7 @@ func TestBloomSet_AddMany(t *testing.T) {
 	}
 }
 
-func TestBloomSet_FilterNotContained(t *testing.T) {
+func TestBloomSetFilterNotContained(t *testing.T) {
 	b := NewBloomSet(DefaultBloomSetOptions())
 
 	// Add some hashes
@@ -82,7 +82,7 @@ func TestBloomSet_FilterNotContained(t *testing.T) {
 	}
 }
 
-func TestBloomSet_Rotate(t *testing.T) {
+func TestBloomSetRotate(t *testing.T) {
 	b := NewBloomSet(DefaultBloomSetOptions())
 
 	hash1 := common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
@@ -116,7 +116,7 @@ func TestBloomSet_Rotate(t *testing.T) {
 	}
 }
 
-func TestBloomSet_MemoryUsage(t *testing.T) {
+func TestBloomSetMemoryUsage(t *testing.T) {
 	opts := DefaultBloomSetOptions()
 	b := NewBloomSet(opts)
 
@@ -136,13 +136,13 @@ func generateTestHash(seed uint64) common.Hash {
 	return crypto.Keccak256Hash(buf[:])
 }
 
-func TestBloomSet_FalsePositiveRate(t *testing.T) {
+func TestBloomSetFalsePositiveRate(t *testing.T) {
 	// Test that false positive rate is approximately as expected
 	b := NewBloomSet(DefaultBloomSetOptions())
 
 	// Add 32768 unique hashes (the design capacity)
 	// Use keccak256 to generate properly distributed hashes
-	for i := uint64(0); i < 32768; i++ {
+	for i := range uint64(32768) {
 		b.Add(generateTestHash(i))
 	}
 
@@ -162,7 +162,7 @@ func TestBloomSet_FalsePositiveRate(t *testing.T) {
 	t.Logf("False positive rate: %.2f%%", rate*100)
 }
 
-func BenchmarkBloomSet_Add(b *testing.B) {
+func BenchmarkBloomSetAdd(b *testing.B) {
 	bloom := NewBloomSet(DefaultBloomSetOptions())
 	hash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 
@@ -171,7 +171,7 @@ func BenchmarkBloomSet_Add(b *testing.B) {
 	}
 }
 
-func BenchmarkBloomSet_Contains(b *testing.B) {
+func BenchmarkBloomSetContains(b *testing.B) {
 	bloom := NewBloomSet(DefaultBloomSetOptions())
 	hash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 	bloom.Add(hash)
@@ -181,7 +181,7 @@ func BenchmarkBloomSet_Contains(b *testing.B) {
 	}
 }
 
-func BenchmarkBloomSet_FilterNotContained(b *testing.B) {
+func BenchmarkBloomSetFilterNotContained(b *testing.B) {
 	bloom := NewBloomSet(DefaultBloomSetOptions())
 
 	// Add 1000 hashes
@@ -196,29 +196,8 @@ func BenchmarkBloomSet_FilterNotContained(b *testing.B) {
 		batch[i] = common.BytesToHash([]byte{byte(i >> 8), byte(i)})
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		bloom.FilterNotContained(batch)
 	}
 }
 
-func BenchmarkLRU_FilterNotContained(b *testing.B) {
-	cache := NewLRU[common.Hash, struct{}](LRUOptions{MaxSize: 32768})
-
-	// Add 1000 hashes
-	for i := range 1000 {
-		hash := common.BytesToHash([]byte{byte(i >> 8), byte(i)})
-		cache.Add(hash, struct{}{})
-	}
-
-	// Create a batch of 100 hashes (mix of known and unknown)
-	batch := make([]common.Hash, 100)
-	for i := range batch {
-		batch[i] = common.BytesToHash([]byte{byte(i >> 8), byte(i)})
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		cache.FilterNotContained(batch)
-	}
-}
