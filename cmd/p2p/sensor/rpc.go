@@ -46,6 +46,7 @@ type rpcError struct {
 func handleRPC(conns *p2p.Conns, networkID uint64) {
 	// Use network ID as chain ID for signature validation
 	chainID := new(big.Int).SetUint64(networkID)
+	gpo := p2p.NewGasPriceOracle(conns)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +70,7 @@ func handleRPC(conns *p2p.Conns, networkID uint64) {
 		trimmed := strings.TrimSpace(string(body))
 		if len(trimmed) > 0 && trimmed[0] == '[' {
 			// Handle batch request
-			handleBatchRequest(w, body, conns, chainID)
+			handleBatchRequest(w, body, conns, chainID, gpo)
 			return
 		}
 
@@ -82,7 +83,7 @@ func handleRPC(conns *p2p.Conns, networkID uint64) {
 
 		// Process request (reuse same logic as batch)
 		var txs types.Transactions
-		resp := processRequest(req, conns, chainID, &txs)
+		resp := processRequest(req, conns, chainID, gpo, &txs)
 
 		// Broadcast any transactions
 		if len(txs) > 0 {
@@ -124,7 +125,7 @@ func writeError(w http.ResponseWriter, code int, message string, id any) {
 // handleBatchRequest processes JSON-RPC 2.0 batch requests.
 // For eth_sendRawTransaction requests, it collects valid transactions for batch broadcasting.
 // Returns a batch response with results or errors for each request.
-func handleBatchRequest(w http.ResponseWriter, body []byte, conns *p2p.Conns, chainID *big.Int) {
+func handleBatchRequest(w http.ResponseWriter, body []byte, conns *p2p.Conns, chainID *big.Int, gpo *p2p.GasPriceOracle) {
 	// Parse batch of requests
 	var requests []rpcRequest
 	if err := json.Unmarshal(body, &requests); err != nil {
@@ -143,7 +144,7 @@ func handleBatchRequest(w http.ResponseWriter, body []byte, conns *p2p.Conns, ch
 	txs := make(types.Transactions, 0)
 
 	for _, req := range requests {
-		resp := processRequest(req, conns, chainID, &txs)
+		resp := processRequest(req, conns, chainID, gpo, &txs)
 		responses = append(responses, resp)
 	}
 
@@ -181,7 +182,7 @@ func newErrorResponse(err *rpcError, id any) rpcResponse {
 
 // processRequest handles a single RPC request and returns a response.
 // For eth_sendRawTransaction, valid transactions are appended to txs for batch broadcasting.
-func processRequest(req rpcRequest, conns *p2p.Conns, chainID *big.Int, txs *types.Transactions) rpcResponse {
+func processRequest(req rpcRequest, conns *p2p.Conns, chainID *big.Int, gpo *p2p.GasPriceOracle, txs *types.Transactions) rpcResponse {
 	switch req.Method {
 	case "eth_sendRawTransaction":
 		tx, resp := validateTx(req, chainID)
@@ -202,7 +203,14 @@ func processRequest(req rpcRequest, conns *p2p.Conns, chainID *big.Int, txs *typ
 		return newResultResponse(hexutil.EncodeUint64(head.Block.NumberU64()), req.ID)
 
 	case "eth_gasPrice":
-		return newResultResponse(hexutil.EncodeBig(conns.SuggestGasPrice()), req.ID)
+		return newResultResponse(hexutil.EncodeBig(gpo.SuggestGasPrice()), req.ID)
+
+	case "eth_maxPriorityFeePerGas":
+		tip := gpo.SuggestGasTipCap()
+		if tip == nil {
+			tip = big.NewInt(1e9) // Default to 1 gwei
+		}
+		return newResultResponse(hexutil.EncodeBig(tip), req.ID)
 
 	case "eth_getBlockByHash":
 		result, err := getBlockByHash(req, conns)
@@ -245,72 +253,35 @@ func handleMethodResult(result any, err *rpcError, id any) rpcResponse {
 // transaction hex, unmarshaling it, and verifying the signature. Returns the transaction if valid
 // (with an empty response), or nil transaction with an error response if validation fails.
 func validateTx(req rpcRequest, chainID *big.Int) (*types.Transaction, rpcResponse) {
-	// Check params
-	if len(req.Params) == 0 {
-		return nil, rpcResponse{
-			JSONRPC: "2.0",
-			Error: &rpcError{
-				Code:    -32602,
-				Message: "Invalid params: missing raw transaction",
-			},
-			ID: req.ID,
-		}
+	invalidParams := func(msg string) rpcResponse {
+		return newErrorResponse(&rpcError{Code: -32602, Message: msg}, req.ID)
 	}
 
-	// Extract raw transaction hex string
+	if len(req.Params) == 0 {
+		return nil, invalidParams("Invalid params: missing raw transaction")
+	}
+
 	hex, ok := req.Params[0].(string)
 	if !ok {
-		return nil, rpcResponse{
-			JSONRPC: "2.0",
-			Error: &rpcError{
-				Code:    -32602,
-				Message: "Invalid params: raw transaction must be a hex string",
-			},
-			ID: req.ID,
-		}
+		return nil, invalidParams("Invalid params: raw transaction must be a hex string")
 	}
 
-	// Decode hex string to bytes
 	bytes, err := hexutil.Decode(hex)
 	if err != nil {
-		return nil, rpcResponse{
-			JSONRPC: "2.0",
-			Error: &rpcError{
-				Code:    -32602,
-				Message: fmt.Sprintf("Invalid transaction hex: %v", err),
-			},
-			ID: req.ID,
-		}
+		return nil, invalidParams(fmt.Sprintf("Invalid transaction hex: %v", err))
 	}
 
-	// Unmarshal transaction
 	tx := new(types.Transaction)
 	if err = tx.UnmarshalBinary(bytes); err != nil {
-		return nil, rpcResponse{
-			JSONRPC: "2.0",
-			Error: &rpcError{
-				Code:    -32602,
-				Message: fmt.Sprintf("Invalid transaction encoding: %v", err),
-			},
-			ID: req.ID,
-		}
+		return nil, invalidParams(fmt.Sprintf("Invalid transaction encoding: %v", err))
 	}
 
-	// Validate transaction signature
 	signer := types.LatestSignerForChainID(chainID)
 	sender, err := types.Sender(signer, tx)
 	if err != nil {
-		return nil, rpcResponse{
-			JSONRPC: "2.0",
-			Error: &rpcError{
-				Code:    -32602,
-				Message: fmt.Sprintf("Invalid transaction signature: %v", err),
-			},
-			ID: req.ID,
-		}
+		return nil, invalidParams(fmt.Sprintf("Invalid transaction signature: %v", err))
 	}
 
-	// Log the transaction
 	to := "nil"
 	if tx.To() != nil {
 		to = tx.To().Hex()

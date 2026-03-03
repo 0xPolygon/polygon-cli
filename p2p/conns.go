@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"math/big"
-	"sort"
 	"sync"
 	"time"
 
@@ -448,76 +447,6 @@ func (c *Conns) GetBlockByNumber(number uint64) (common.Hash, BlockCache, bool) 
 		}
 	}
 	return common.Hash{}, BlockCache{}, false
-}
-
-// SuggestGasPrice estimates the gas price based on recent blocks in the cache.
-// Follows a geth-style gas price oracle approach using the 60th percentile.
-func (c *Conns) SuggestGasPrice() *big.Int {
-	defaultGasPrice := big.NewInt(1e9) // 1 gwei
-
-	keys := c.blocks.Keys()
-	if len(keys) == 0 {
-		return defaultGasPrice
-	}
-
-	// Collect effective gas prices from transactions in cached blocks
-	var prices []*big.Int
-	for _, hash := range keys {
-		cache, ok := c.blocks.Peek(hash)
-		if !ok || cache.Body == nil || cache.Header == nil {
-			continue
-		}
-
-		baseFee := cache.Header.BaseFee
-		if baseFee == nil {
-			baseFee = big.NewInt(0)
-		}
-
-		for _, tx := range cache.Body.Transactions {
-			price := calculateEffectiveGasPrice(tx, baseFee)
-			if price != nil && price.Sign() > 0 {
-				prices = append(prices, price)
-			}
-		}
-	}
-
-	if len(prices) == 0 {
-		// Fallback to head block base fee + 1 gwei tip
-		head := c.HeadBlock()
-		if head.Block != nil && head.Block.BaseFee() != nil {
-			return new(big.Int).Add(head.Block.BaseFee(), big.NewInt(1e9))
-		}
-		return defaultGasPrice
-	}
-
-	// Sort and return 60th percentile (geth default)
-	sort.Slice(prices, func(i, j int) bool {
-		return prices[i].Cmp(prices[j]) < 0
-	})
-	return prices[len(prices)*60/100]
-}
-
-// calculateEffectiveGasPrice returns the effective gas price for a transaction.
-// For EIP-1559 transactions, this is min(maxFeePerGas, baseFee + maxPriorityFeePerGas).
-// For legacy transactions, this is the gas price directly.
-// Returns nil if the price cannot be determined.
-func calculateEffectiveGasPrice(tx *types.Transaction, baseFee *big.Int) *big.Int {
-	if tx.Type() == types.DynamicFeeTxType {
-		tip := tx.GasTipCap()
-		if tip == nil {
-			return nil
-		}
-		effectiveGasPrice := new(big.Int).Add(baseFee, tip)
-		if tx.GasFeeCap() != nil && effectiveGasPrice.Cmp(tx.GasFeeCap()) > 0 {
-			return new(big.Int).Set(tx.GasFeeCap())
-		}
-		return effectiveGasPrice
-	}
-	// Legacy transactions: use gas price directly
-	if price := tx.GasPrice(); price != nil {
-		return new(big.Int).Set(price)
-	}
-	return nil
 }
 
 // GetPeerVersion returns the negotiated eth protocol version for a specific peer.
