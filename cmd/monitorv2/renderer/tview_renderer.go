@@ -433,19 +433,20 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 		// Handle Escape key for breadcrumb-style navigation
 		if event.Key() == tcell.KeyEscape {
 			currentPage, _ = t.pages.GetFrontPage()
-			if currentPage == "tx-detail" {
+			switch currentPage {
+			case "tx-detail":
 				// From transaction detail, go back to block detail
 				t.pages.SwitchToPage("block-detail")
 				if t.blockDetailLeft != nil {
 					t.app.SetFocus(t.blockDetailLeft)
 				}
-			} else if currentPage == "home" {
+			case "home":
 				// On home page, reset table selection to top
 				if t.homeTable != nil {
 					t.homeTable.Select(1, 0) // Row 1 (first data row, since 0 is header)
 					t.app.SetFocus(t.homeTable)
 				}
-			} else {
+			default:
 				// From all other pages, go back to home
 				t.pages.SwitchToPage("home")
 				if t.homeTable != nil {
@@ -532,11 +533,12 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 			case tcell.KeyTab:
 				// Cycle focus between left pane, transaction JSON, and receipt JSON
 				focused := t.app.GetFocus()
-				if focused == t.txDetailLeft {
+				switch focused {
+				case t.txDetailLeft:
 					t.app.SetFocus(t.txDetailTxJSON)
-				} else if focused == t.txDetailTxJSON {
+				case t.txDetailTxJSON:
 					t.app.SetFocus(t.txDetailRcptJSON)
-				} else {
+				default:
 					t.app.SetFocus(t.txDetailLeft)
 				}
 				return nil
@@ -833,7 +835,11 @@ func initChainlist() {
 		log.Debug().Err(err).Msg("Failed to fetch chainlist")
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Debug().Err(err).Msg("Failed to close chainlist response body")
+		}
+	}()
 
 	if resp.StatusCode != 200 {
 		log.Debug().Int("status", resp.StatusCode).Msg("Chainlist request failed")

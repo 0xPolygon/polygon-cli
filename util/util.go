@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/crypto"
-	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rlp"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
@@ -42,16 +41,16 @@ type (
 
 func Ecrecover(block *types.Block) ([]byte, error) {
 	header := block.Header()
-	sigStart := len(header.Extra) - ethcrypto.SignatureLength
+	sigStart := len(header.Extra) - crypto.SignatureLength
 	if sigStart < 0 || sigStart > len(header.Extra) {
 		return nil, fmt.Errorf("unable to recover signature")
 	}
 	signature := header.Extra[sigStart:]
-	pubkey, err := ethcrypto.Ecrecover(clique.SealHash(header).Bytes(), signature)
+	pubkey, err := crypto.Ecrecover(clique.SealHash(header).Bytes(), signature)
 	if err != nil {
 		return nil, err
 	}
-	signer := ethcrypto.Keccak256(pubkey[1:])[12:]
+	signer := crypto.Keccak256(pubkey[1:])[12:]
 
 	return signer, nil
 }

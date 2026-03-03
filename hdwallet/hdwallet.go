@@ -292,21 +292,23 @@ func (p *PolyWallet) ExportHDAddresses(count int) (*PolyWalletExport, error) {
 	if len(derivationPathParts) > 1 && count > 1 {
 		missingElements := derivationPathAddressIndexPosition + 1 - len(derivationPathParts)
 		for i := range missingElements {
-			if i == 0 {
-				if missingElements == 4 {
+			switch i {
+			case 0:
+				switch missingElements {
+				case 4:
 					derivationPathParts = append(derivationPathParts, "60'")
-				} else if missingElements == 3 {
+				case 3:
 					derivationPathParts = append(derivationPathParts, "0'")
-				} else {
+				default:
 					derivationPathParts = append(derivationPathParts, "0")
 				}
-			} else if i == 1 {
+			case 1:
 				if missingElements == 4 {
 					derivationPathParts = append(derivationPathParts, "0'")
 				} else {
 					derivationPathParts = append(derivationPathParts, "0")
 				}
-			} else {
+			default:
 				derivationPathParts = append(derivationPathParts, "0")
 			}
 		}

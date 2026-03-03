@@ -82,7 +82,8 @@ func (c CustomMarshaller) MarshalJSON() ([]byte, error) {
 		fieldKind := f.Type.Kind()
 
 		v := instanceValue.Field(i)
-		if fieldKind == reflect.Array {
+		switch fieldKind {
+		case reflect.Array:
 			var fieldInterfaceValue any
 			if v.CanAddr() { // check if array is addressable
 				v = v.Slice(0, f.Type.Len())
@@ -95,15 +96,15 @@ func (c CustomMarshaller) MarshalJSON() ([]byte, error) {
 			} else {
 				result[f.Name] = v.Interface()
 			}
-		} else if fieldKind == reflect.Slice {
+		case reflect.Slice:
 			if f.Type.Elem().Kind() == reflect.Uint8 {
 				result[f.Name] = common.BytesToHash(v.Bytes())
 			} else {
 				result[f.Name] = v.Interface()
 			}
-		} else if fieldKind == reflect.Struct || fieldKind == reflect.Ptr {
+		case reflect.Struct, reflect.Ptr:
 			result[f.Name] = CustomMarshaller{v.Interface()}
-		} else {
+		default:
 			result[f.Name] = v.Interface()
 		}
 

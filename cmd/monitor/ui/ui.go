@@ -121,7 +121,7 @@ func formatParagraph(widget *widgets.Paragraph, content []string) string {
 			index := j*dy + i
 			if index < len(content) {
 				formatString := fmt.Sprintf("%%-%ds", columnWidths[j])
-				formattedInfo.WriteString(fmt.Sprintf(formatString, content[index]))
+				fmt.Fprintf(&formattedInfo, formatString, content[index])
 			}
 		}
 		formattedInfo.WriteString("\n")
@@ -155,11 +155,7 @@ func GetBlocksList(blocks []rpctypes.PolyBlock) ([]string, string) {
 		return nil, header
 	}
 
-	isMined := true
-
-	if blocks[0].Miner().String() == "0x0000000000000000000000000000000000000000" {
-		isMined = false
-	}
+	isMined := blocks[0].Miner().String() != "0x0000000000000000000000000000000000000000"
 
 	if !isMined {
 		header = strings.Replace(header, "AUTHOR", "SIGNER", 1)
@@ -230,11 +226,7 @@ func GetSelectedBlocksList(blocks []rpctypes.PolyBlock) ([]string, string) {
 		return nil, header
 	}
 
-	isMined := true
-
-	if blocks[0].Miner().String() == "0x0000000000000000000000000000000000000000" {
-		isMined = false
-	}
+	isMined := blocks[0].Miner().String() != "0x0000000000000000000000000000000000000000"
 
 	if !isMined {
 		header = strings.Replace(header, "AUTHOR", "SIGNER", 1)

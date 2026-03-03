@@ -61,8 +61,8 @@ and the amount of blocks to query and print the results.`,
 		var (
 			hello  *p2p.Hello
 			status *p2p.Status
-			start  uint64 = inputQueryParams.StartBlock
-			amount uint64 = inputQueryParams.Amount
+			start  = inputQueryParams.StartBlock
+			amount = inputQueryParams.Amount
 		)
 
 		opts := p2p.DialOpts{
@@ -76,7 +76,11 @@ and the amount of blocks to query and print the results.`,
 			log.Error().Err(err).Msg("Dial failed")
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			if closeErr := conn.Close(); closeErr != nil {
+				log.Debug().Err(closeErr).Msg("Failed to close p2p connection")
+			}
+		}()
 		if hello, status, err = conn.Peer(); err != nil {
 			log.Error().Err(err).Msg("Peer failed")
 			return
@@ -104,9 +108,9 @@ and the amount of blocks to query and print the results.`,
 		}
 
 		var (
-			headerStart uint64 = headers[0].Number.Uint64()
-			headerEnd   uint64 = headers[len(headers)-1].Number.Uint64()
-			end         uint64 = start + amount - 1
+			headerStart = headers[0].Number.Uint64()
+			headerEnd   = headers[len(headers)-1].Number.Uint64()
+			end         = start + amount - 1
 		)
 		if headerStart != start || headerEnd != end {
 			log.Error().Uint64("start", start).Uint64("end", end).Uint64("header start", headerStart).Uint64("header end", headerEnd).Msg("Received headers out of range")

@@ -71,7 +71,7 @@ func getInputData(args []string) (string, error) {
 }
 
 func getStorageBytecode() (string, error) {
-	var storageBytecode string = ""
+	var storageBytecode = ""
 
 	if jsonStorage != "" {
 		var storage map[string]string

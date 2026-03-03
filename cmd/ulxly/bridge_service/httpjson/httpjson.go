@@ -32,7 +32,11 @@ func HTTPGet[T any](client *http.Client, url string) (obj T, statusCode int, err
 	if err != nil {
 		return obj, 0, err
 	}
-	defer res.Body.Close()
+	defer func() {
+		if closeErr := res.Body.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Msg("Failed to close response body")
+		}
+	}()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -52,7 +56,11 @@ func HTTPGetWithError[T any, TError any](client *http.Client, url string) (obj T
 	if err != nil {
 		return obj, objError, 0, err
 	}
-	defer res.Body.Close()
+	defer func() {
+		if closeErr := res.Body.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Msg("Failed to close response body")
+		}
+	}()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {

@@ -24,7 +24,7 @@ func NewBridgeService(url string, insecure bool) (*BridgeService, error) {
 }
 
 func (s *BridgeService) GetDeposit(depositNetwork, depositCount uint32) (*bridge_service.Deposit, error) {
-	endpoint := fmt.Sprintf("%s/bridge?net_id=%d&deposit_cnt=%d", s.BridgeServiceBase.Url(), depositNetwork, depositCount)
+	endpoint := fmt.Sprintf("%s/bridge?net_id=%d&deposit_cnt=%d", s.Url(), depositNetwork, depositCount)
 	resp, _, err := httpjson.HTTPGet[GetDepositResponse](s.httpClient, endpoint)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func (s *BridgeService) GetDeposit(depositNetwork, depositCount uint32) (*bridge
 }
 
 func (s *BridgeService) GetDeposits(destinationAddress string, offset, limit int) ([]bridge_service.Deposit, int, error) {
-	url := fmt.Sprintf("%s/bridges/%s?offset=%d&limit=%d", s.BridgeServiceBase.Url(), destinationAddress, offset, limit)
+	url := fmt.Sprintf("%s/bridges/%s?offset=%d&limit=%d", s.Url(), destinationAddress, offset, limit)
 	resp, _, err := httpjson.HTTPGet[GetDepositsResponse](s.httpClient, url)
 	if err != nil {
 		return nil, 0, err
@@ -67,7 +67,7 @@ func (s *BridgeService) GetDeposits(destinationAddress string, offset, limit int
 }
 
 func (s *BridgeService) GetProof(depositNetwork, depositCount uint32) (*bridge_service.Proof, error) {
-	endpoint := fmt.Sprintf("%s/merkle-proof?net_id=%d&deposit_cnt=%d", s.BridgeServiceBase.Url(), depositNetwork, depositCount)
+	endpoint := fmt.Sprintf("%s/merkle-proof?net_id=%d&deposit_cnt=%d", s.Url(), depositNetwork, depositCount)
 
 	resp, _, err := httpjson.HTTPGet[GetProofResponse](s.httpClient, endpoint)
 	if err != nil {
@@ -79,7 +79,7 @@ func (s *BridgeService) GetProof(depositNetwork, depositCount uint32) (*bridge_s
 }
 
 func (s *BridgeService) GetProofByGer(depositNetwork, depositCount uint32, ger common.Hash) (*bridge_service.Proof, error) {
-	endpoint := fmt.Sprintf("%s/merkle-proof-by-ger?net_id=%d&deposit_cnt=%d&ger=%s", s.BridgeServiceBase.Url(), depositNetwork, depositCount, ger.String())
+	endpoint := fmt.Sprintf("%s/merkle-proof-by-ger?net_id=%d&deposit_cnt=%d&ger=%s", s.Url(), depositNetwork, depositCount, ger.String())
 
 	resp, _, err := httpjson.HTTPGet[GetProofResponse](s.httpClient, endpoint)
 	if err != nil {
