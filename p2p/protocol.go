@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"time"
 
-	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -21,6 +20,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
 	"github.com/0xPolygon/polygon-cli/p2p/database"
 )
 
@@ -46,36 +46,6 @@ var protocolLengths = map[uint]uint64{
 	69: 18,
 }
 
-// knownCache is a simple set-based cache for tracking known block hashes.
-// Unlike the generic Cache type, this uses mapset for lower memory overhead
-// per peer (~60% reduction). When the cache reaches capacity, the oldest
-// element is evicted via Pop().
-type knownCache struct {
-	hashes mapset.Set[common.Hash]
-	max    int
-}
-
-// newKnownCache creates a new knownCache with the specified maximum size.
-func newKnownCache(max int) *knownCache {
-	return &knownCache{
-		max:    max,
-		hashes: mapset.NewSet[common.Hash](),
-	}
-}
-
-// Add adds a hash to the cache, evicting the oldest element if at capacity.
-func (k *knownCache) Add(hash common.Hash) {
-	for k.hashes.Cardinality() >= k.max {
-		k.hashes.Pop()
-	}
-	k.hashes.Add(hash)
-}
-
-// Contains returns true if the hash exists in the cache.
-func (k *knownCache) Contains(hash common.Hash) bool {
-	return k.hashes.Contains(hash)
-}
-
 // conn represents an individual connection with a peer.
 type conn struct {
 	sensorID string
@@ -88,12 +58,12 @@ type conn struct {
 	// requests is used to store the request ID and the block hash. This is used
 	// when fetching block bodies because the eth protocol block bodies do not
 	// contain information about the block hash.
-	requests   *Cache[uint64, common.Hash]
+	requests   *ds.LRU[uint64, common.Hash]
 	requestNum uint64
 
 	// parents tracks hashes of blocks requested as parents to mark them
 	// with IsParent=true when writing to the database.
-	parents *Cache[common.Hash, struct{}]
+	parents *ds.LRU[common.Hash, struct{}]
 
 	// conns provides access to the global connection manager, which includes
 	// the blocks cache shared across all peers.
@@ -113,9 +83,9 @@ type conn struct {
 
 	// Known caches track what this peer has seen to avoid redundant sends.
 	// knownTxs uses a bloom filter for memory efficiency (~40KB vs ~4MB per peer).
-	// knownBlocks uses a simple mapset for lower memory overhead than the generic Cache.
-	knownTxs    *BloomSet
-	knownBlocks *knownCache
+	// knownBlocks uses a simple bounded set for lower memory overhead than the generic LRU.
+	knownTxs    *ds.BloomSet
+	knownBlocks *ds.BoundedSet[common.Hash]
 
 	// messages tracks per-peer message counts for API visibility.
 	messages *PeerMessages
@@ -143,8 +113,8 @@ type EthProtocolOptions struct {
 	ForkID      forkid.ID
 
 	// Cache configurations
-	RequestsCache CacheOptions
-	ParentsCache  CacheOptions
+	RequestsCache ds.LRUOptions
+	ParentsCache  ds.LRUOptions
 
 	// Broadcast flags control what gets rebroadcasted to other peers
 	ShouldBroadcastTx          bool
@@ -168,9 +138,9 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				logger:                     log.With().Str("peer", peerURL).Logger(),
 				rw:                         rw,
 				db:                         opts.Database,
-				requests:                   NewCache[uint64, common.Hash](opts.RequestsCache),
+				requests:                   ds.NewLRU[uint64, common.Hash](opts.RequestsCache),
 				requestNum:                 0,
-				parents:                    NewCache[common.Hash, struct{}](opts.ParentsCache),
+				parents:                    ds.NewLRU[common.Hash, struct{}](opts.ParentsCache),
 				peer:                       p,
 				conns:                      opts.Conns,
 				connectedAt:                time.Now(),
@@ -179,8 +149,8 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				shouldBroadcastTxHashes:    opts.ShouldBroadcastTxHashes,
 				shouldBroadcastBlocks:      opts.ShouldBroadcastBlocks,
 				shouldBroadcastBlockHashes: opts.ShouldBroadcastBlockHashes,
-				knownTxs:                   NewBloomSet(opts.Conns.KnownTxsOpts()),
-				knownBlocks:                newKnownCache(opts.Conns.KnownBlocksMax()),
+				knownTxs:                   ds.NewBloomSet(opts.Conns.KnownTxsOpts()),
+				knownBlocks:                ds.NewBoundedSet[common.Hash](opts.Conns.KnownBlocksMax()),
 				messages:                   NewPeerMessages(),
 				txAnnounce:                 make(chan []common.Hash),
 				blockAnnounce:              make(chan eth.NewBlockHashesPacket, maxQueuedBlockAnns),

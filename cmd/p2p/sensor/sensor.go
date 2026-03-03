@@ -29,6 +29,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
+	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
 	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/p2p"
 	"github.com/0xPolygon/polygon-cli/p2p/database"
@@ -75,11 +76,11 @@ type (
 		DiscoveryDNS                 string
 		Database                     string
 		NoDiscovery                  bool
-		RequestsCache                p2p.CacheOptions
-		ParentsCache                 p2p.CacheOptions
-		BlocksCache                  p2p.CacheOptions
-		TxsCache                     p2p.CacheOptions
-		KnownTxsBloom                p2p.BloomSetOptions
+		RequestsCache                ds.LRUOptions
+		ParentsCache                 ds.LRUOptions
+		BlocksCache                  ds.LRUOptions
+		TxsCache                     ds.LRUOptions
+		KnownTxsBloom                ds.BloomSetOptions
 		KnownBlocksMax               int
 
 		bootnodes    []*enode.Node

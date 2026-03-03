@@ -1,4 +1,4 @@
-package p2p
+package datastructures
 
 import (
 	"container/list"
@@ -6,14 +6,14 @@ import (
 	"time"
 )
 
-// CacheOptions contains configuration for LRU caches with TTL.
-type CacheOptions struct {
+// LRUOptions contains configuration for LRU caches with TTL.
+type LRUOptions struct {
 	MaxSize int
 	TTL     time.Duration
 }
 
-// Cache is a thread-safe LRU cache with optional TTL-based expiration.
-type Cache[K comparable, V any] struct {
+// LRU is a thread-safe LRU cache with optional TTL-based expiration.
+type LRU[K comparable, V any] struct {
 	mu      sync.RWMutex
 	maxSize int
 	ttl     time.Duration
@@ -27,11 +27,11 @@ type entry[K comparable, V any] struct {
 	expiresAt *time.Time
 }
 
-// NewCache creates a new cache with the given options.
+// NewLRU creates a new LRU cache with the given options.
 // If opts.MaxSize <= 0, the cache has no size limit.
 // If opts.TTL is 0, entries never expire based on time.
-func NewCache[K comparable, V any](opts CacheOptions) *Cache[K, V] {
-	return &Cache[K, V]{
+func NewLRU[K comparable, V any](opts LRUOptions) *LRU[K, V] {
+	return &LRU[K, V]{
 		maxSize: opts.MaxSize,
 		ttl:     opts.TTL,
 		items:   make(map[K]*list.Element),
@@ -40,7 +40,7 @@ func NewCache[K comparable, V any](opts CacheOptions) *Cache[K, V] {
 }
 
 // Add adds or updates a value in the cache.
-func (c *Cache[K, V]) Add(key K, value V) {
+func (c *LRU[K, V]) Add(key K, value V) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -77,7 +77,7 @@ func (c *Cache[K, V]) Add(key K, value V) {
 }
 
 // Get retrieves a value from the cache and updates LRU ordering.
-func (c *Cache[K, V]) Get(key K) (V, bool) {
+func (c *LRU[K, V]) Get(key K) (V, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -103,7 +103,7 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 // GetMany retrieves multiple values from the cache and updates LRU ordering.
 // Uses a single write lock for all lookups, reducing lock contention compared
 // to calling Get in a loop. Returns a slice of values for keys that were found.
-func (c *Cache[K, V]) GetMany(keys []K) []V {
+func (c *LRU[K, V]) GetMany(keys []K) []V {
 	if len(keys) == 0 {
 		return nil
 	}
@@ -137,7 +137,7 @@ func (c *Cache[K, V]) GetMany(keys []K) []V {
 
 // Peek retrieves a value from the cache without updating LRU ordering.
 // Uses a read lock for better concurrency.
-func (c *Cache[K, V]) Peek(key K) (V, bool) {
+func (c *LRU[K, V]) Peek(key K) (V, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -161,7 +161,7 @@ func (c *Cache[K, V]) Peek(key K) (V, bool) {
 // The update function receives the current value (or zero value if not found) and
 // returns the new value to store. This is thread-safe and prevents race conditions
 // in get-modify-add patterns.
-func (c *Cache[K, V]) Update(key K, updateFn func(V) V) {
+func (c *LRU[K, V]) Update(key K, updateFn func(V) V) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -211,7 +211,7 @@ func (c *Cache[K, V]) Update(key K, updateFn func(V) V) {
 
 // Contains checks if a key exists in the cache and is not expired.
 // Uses a read lock and doesn't update LRU ordering.
-func (c *Cache[K, V]) Contains(key K) bool {
+func (c *LRU[K, V]) Contains(key K) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -230,7 +230,7 @@ func (c *Cache[K, V]) Contains(key K) bool {
 }
 
 // Remove removes a key from the cache and returns the value if it existed.
-func (c *Cache[K, V]) Remove(key K) (V, bool) {
+func (c *LRU[K, V]) Remove(key K) (V, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -246,14 +246,14 @@ func (c *Cache[K, V]) Remove(key K) (V, bool) {
 }
 
 // Len returns the number of items in the cache.
-func (c *Cache[K, V]) Len() int {
+func (c *LRU[K, V]) Len() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.list.Len()
 }
 
 // Purge clears all items from the cache.
-func (c *Cache[K, V]) Purge() {
+func (c *LRU[K, V]) Purge() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -262,7 +262,7 @@ func (c *Cache[K, V]) Purge() {
 }
 
 // Keys returns all keys in the cache.
-func (c *Cache[K, V]) Keys() []K {
+func (c *LRU[K, V]) Keys() []K {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -277,7 +277,7 @@ func (c *Cache[K, V]) Keys() []K {
 // FilterNotContained returns the subset of keys that are not in the cache.
 // Uses a single read lock for all lookups, reducing lock contention compared
 // to calling Contains in a loop.
-func (c *Cache[K, V]) FilterNotContained(keys []K) []K {
+func (c *LRU[K, V]) FilterNotContained(keys []K) []K {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -303,7 +303,7 @@ func (c *Cache[K, V]) FilterNotContained(keys []K) []K {
 // AddMany adds multiple keys with the same value to the cache.
 // Uses a single write lock for all additions, reducing lock contention
 // compared to calling Add in a loop.
-func (c *Cache[K, V]) AddMany(keys []K, value V) {
+func (c *LRU[K, V]) AddMany(keys []K, value V) {
 	if len(keys) == 0 {
 		return
 	}

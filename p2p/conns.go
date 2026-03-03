@@ -11,6 +11,8 @@ import (
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
+
+	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
 )
 
 // BlockCache stores the actual block data to avoid duplicate fetches and database queries.
@@ -22,9 +24,9 @@ type BlockCache struct {
 
 // ConnsOptions contains configuration options for creating a new Conns manager.
 type ConnsOptions struct {
-	BlocksCache                CacheOptions
-	TxsCache                   CacheOptions
-	KnownTxsBloom              BloomSetOptions
+	BlocksCache                ds.LRUOptions
+	TxsCache                   ds.LRUOptions
+	KnownTxsBloom              ds.BloomSetOptions
 	KnownBlocksMax             int
 	Head                       eth.NewBlockPacket
 	ShouldBroadcastTx          bool
@@ -41,22 +43,22 @@ type Conns struct {
 
 	// blocks tracks blocks written to the database across all peers
 	// to avoid duplicate writes and requests.
-	blocks *Cache[common.Hash, BlockCache]
+	blocks *ds.LRU[common.Hash, BlockCache]
 
 	// txs caches transactions for serving to peers and duplicate detection
-	txs *Cache[common.Hash, *types.Transaction]
+	txs *ds.LRU[common.Hash, *types.Transaction]
 
 	// knownTxsOpts stores bloom filter options for per-peer known tx tracking
-	knownTxsOpts BloomSetOptions
+	knownTxsOpts ds.BloomSetOptions
 	// knownBlocksMax stores the maximum size for per-peer known block caches
 	knownBlocksMax int
 
 	// oldest stores the first block the sensor has seen so when fetching
 	// parent blocks, it does not request blocks older than this.
-	oldest *Locked[*types.Header]
+	oldest *ds.Locked[*types.Header]
 
 	// head keeps track of the current head block of the chain.
-	head *Locked[eth.NewBlockPacket]
+	head *ds.Locked[eth.NewBlockPacket]
 
 	// Broadcast flags control what gets cached and rebroadcasted
 	shouldBroadcastTx          bool
@@ -67,16 +69,16 @@ type Conns struct {
 
 // NewConns creates a new connection manager with a blocks cache.
 func NewConns(opts ConnsOptions) *Conns {
-	head := &Locked[eth.NewBlockPacket]{}
+	head := &ds.Locked[eth.NewBlockPacket]{}
 	head.Set(opts.Head)
 
-	oldest := &Locked[*types.Header]{}
+	oldest := &ds.Locked[*types.Header]{}
 	oldest.Set(opts.Head.Block.Header())
 
 	return &Conns{
 		conns:                      make(map[string]*conn),
-		blocks:                     NewCache[common.Hash, BlockCache](opts.BlocksCache),
-		txs:                        NewCache[common.Hash, *types.Transaction](opts.TxsCache),
+		blocks:                     ds.NewLRU[common.Hash, BlockCache](opts.BlocksCache),
+		txs:                        ds.NewLRU[common.Hash, *types.Transaction](opts.TxsCache),
 		knownTxsOpts:               opts.KnownTxsBloom,
 		knownBlocksMax:             opts.KnownBlocksMax,
 		oldest:                     oldest,
@@ -331,7 +333,7 @@ func (c *Conns) GetTxs(hashes []common.Hash) []*types.Transaction {
 }
 
 // Blocks returns the global blocks cache.
-func (c *Conns) Blocks() *Cache[common.Hash, BlockCache] {
+func (c *Conns) Blocks() *ds.LRU[common.Hash, BlockCache] {
 	return c.blocks
 }
 
@@ -359,7 +361,7 @@ func (c *Conns) UpdateHeadBlock(packet eth.NewBlockPacket) bool {
 }
 
 // KnownTxsOpts returns the bloom filter options for per-peer known tx tracking.
-func (c *Conns) KnownTxsOpts() BloomSetOptions {
+func (c *Conns) KnownTxsOpts() ds.BloomSetOptions {
 	return c.knownTxsOpts
 }
 

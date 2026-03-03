@@ -1,4 +1,4 @@
-package p2p
+package datastructures
 
 import (
 	"encoding/binary"
@@ -202,8 +202,8 @@ func BenchmarkBloomSet_FilterNotContained(b *testing.B) {
 	}
 }
 
-func BenchmarkCache_FilterNotContained(b *testing.B) {
-	cache := NewCache[common.Hash, struct{}](CacheOptions{MaxSize: 32768})
+func BenchmarkLRU_FilterNotContained(b *testing.B) {
+	cache := NewLRU[common.Hash, struct{}](LRUOptions{MaxSize: 32768})
 
 	// Add 1000 hashes
 	for i := range 1000 {
