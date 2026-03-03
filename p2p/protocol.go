@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -171,6 +172,9 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 			if err := c.statusExchange(version, opts); err != nil {
 				return err
 			}
+
+			// Update logger with peer name now that status exchange is complete
+			c.logger = log.With().Str("peer", peerURL).Str("peer_name", c.peer.Fullname()).Logger()
 
 			// Send the connection object to the conns manager for RPC broadcasting
 			opts.Conns.Add(c)
@@ -754,6 +758,61 @@ func (c *conn) sendBlockAnnouncements(packet eth.NewBlockHashesPacket) error {
 	return nil
 }
 
+// decodeTx attempts to decode a transaction from an RLP-encoded raw value.
+func (c *conn) decodeTx(raw []byte) *types.Transaction {
+	if len(raw) == 0 {
+		return nil
+	}
+
+	// Try decoding as RLP-wrapped bytes first (legacy format)
+	var bytes []byte
+	if rlp.DecodeBytes(raw, &bytes) == nil {
+		tx := new(types.Transaction)
+		err := tx.UnmarshalBinary(bytes)
+		if err == nil {
+			return tx
+		}
+
+		c.logger.Warn().
+			Err(err).
+			Uint8("type", bytes[0]).
+			Int("size", len(bytes)).
+			Str("hash", crypto.Keccak256Hash(bytes).Hex()).
+			Msg("Failed to decode transaction")
+
+		return nil
+	}
+
+	// Try decoding as raw binary (typed transaction format)
+	tx := new(types.Transaction)
+	err := tx.UnmarshalBinary(raw)
+	if err == nil {
+		return tx
+	}
+
+	c.logger.Warn().
+		Err(err).
+		Uint8("prefix", raw[0]).
+		Int("size", len(raw)).
+		Str("hash", crypto.Keccak256Hash(raw).Hex()).
+		Msg("Failed to decode transaction")
+
+	return nil
+}
+
+// decodeTxs decodes a list of transactions, returning only successfully decoded ones.
+func (c *conn) decodeTxs(rawTxs []rlp.RawValue) []*types.Transaction {
+	var txs []*types.Transaction
+
+	for _, raw := range rawTxs {
+		if tx := c.decodeTx(raw); tx != nil {
+			txs = append(txs, tx)
+		}
+	}
+
+	return txs
+}
+
 func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 	payload, err := io.ReadAll(msg.Payload)
 	if err != nil {
@@ -766,7 +825,7 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	txs := decodeTxs(rawTxs)
+	txs := c.decodeTxs(rawTxs)
 	tfs := time.Now()
 
 	c.countMsgReceived((&eth.TransactionsPacket{}).Name(), float64(len(txs)))
@@ -911,7 +970,7 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	body := &eth.BlockBody{
-		Transactions: decodeTxs(decoded.Transactions),
+		Transactions: c.decodeTxs(decoded.Transactions),
 		Uncles:       decoded.Uncles,
 		Withdrawals:  decoded.Withdrawals,
 	}
@@ -940,7 +999,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	block := types.NewBlockWithHeader(raw.Block.Header).WithBody(types.Body{
-		Transactions: decodeTxs(raw.Block.Txs),
+		Transactions: c.decodeTxs(raw.Block.Txs),
 		Uncles:       raw.Block.Uncles,
 		Withdrawals:  raw.Block.Withdrawals,
 	})
@@ -1054,7 +1113,7 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 	}
 
 	packet := &eth.PooledTransactionsPacket{
-		PooledTransactionsResponse: decodeTxs(raw.Txs),
+		PooledTransactionsResponse: c.decodeTxs(raw.Txs),
 	}
 
 	tfs := time.Now()
