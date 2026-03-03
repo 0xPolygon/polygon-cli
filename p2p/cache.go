@@ -100,6 +100,41 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 	return e.value, true
 }
 
+// GetMany retrieves multiple values from the cache and updates LRU ordering.
+// Uses a single write lock for all lookups, reducing lock contention compared
+// to calling Get in a loop. Returns a slice of values for keys that were found.
+func (c *Cache[K, V]) GetMany(keys []K) []V {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	now := time.Now()
+	result := make([]V, 0, len(keys))
+
+	for _, key := range keys {
+		elem, ok := c.items[key]
+		if !ok {
+			continue
+		}
+
+		e := elem.Value.(*entry[K, V])
+
+		if e.expiresAt != nil && now.After(*e.expiresAt) {
+			c.list.Remove(elem)
+			delete(c.items, key)
+			continue
+		}
+
+		c.list.MoveToFront(elem)
+		result = append(result, e.value)
+	}
+
+	return result
+}
+
 // Peek retrieves a value from the cache without updating LRU ordering.
 // Uses a read lock for better concurrency.
 func (c *Cache[K, V]) Peek(key K) (V, bool) {
@@ -237,4 +272,77 @@ func (c *Cache[K, V]) Keys() []K {
 		keys = append(keys, e.key)
 	}
 	return keys
+}
+
+// FilterNotContained returns the subset of keys that are not in the cache.
+// Uses a single read lock for all lookups, reducing lock contention compared
+// to calling Contains in a loop.
+func (c *Cache[K, V]) FilterNotContained(keys []K) []K {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	now := time.Now()
+	result := make([]K, 0, len(keys))
+
+	for _, key := range keys {
+		elem, ok := c.items[key]
+		if !ok {
+			result = append(result, key)
+			continue
+		}
+
+		e := elem.Value.(*entry[K, V])
+		if e.expiresAt != nil && now.After(*e.expiresAt) {
+			result = append(result, key)
+		}
+	}
+
+	return result
+}
+
+// AddMany adds multiple keys with the same value to the cache.
+// Uses a single write lock for all additions, reducing lock contention
+// compared to calling Add in a loop.
+func (c *Cache[K, V]) AddMany(keys []K, value V) {
+	if len(keys) == 0 {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var expiresAt *time.Time
+	if c.ttl > 0 {
+		t := time.Now().Add(c.ttl)
+		expiresAt = &t
+	}
+
+	for _, key := range keys {
+		if elem, ok := c.items[key]; ok {
+			c.list.MoveToFront(elem)
+			e := elem.Value.(*entry[K, V])
+			e.value = value
+			e.expiresAt = expiresAt
+			continue
+		}
+
+		e := &entry[K, V]{
+			key:       key,
+			value:     value,
+			expiresAt: expiresAt,
+		}
+		elem := c.list.PushFront(e)
+		c.items[key] = elem
+	}
+
+	// Enforce size limit after all additions
+	for c.maxSize > 0 && c.list.Len() > c.maxSize {
+		back := c.list.Back()
+		if back == nil {
+			break
+		}
+		c.list.Remove(back)
+		e := back.Value.(*entry[K, V])
+		delete(c.items, e.key)
+	}
 }

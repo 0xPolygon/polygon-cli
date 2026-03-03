@@ -640,15 +640,28 @@ func (c *conn) txAnnouncementLoop() {
 // prepareTxAnnouncements extracts a batch of unknown tx hashes from the queue
 // up to maxTxPacketSize bytes. Returns the pending hashes and remaining queue.
 func (c *conn) prepareTxAnnouncements(queue []common.Hash) (pending, remaining []common.Hash) {
-	var size int
-	var count int
-	for count = 0; count < len(queue) && size < maxTxPacketSize; count++ {
-		if hash := queue[count]; !c.hasKnownTx(hash) {
-			pending = append(pending, hash)
-			size += common.HashLength
-		}
+	if !c.shouldBroadcastTx && !c.shouldBroadcastTxHashes {
+		return nil, nil
 	}
-	remaining = queue[:copy(queue, queue[count:])]
+
+	// Calculate max hashes we can send based on packet size limit
+	maxHashes := maxTxPacketSize / common.HashLength
+	if maxHashes > len(queue) {
+		maxHashes = len(queue)
+	}
+
+	// Filter out known hashes in a single lock operation
+	batch := queue[:maxHashes]
+	pending = c.knownTxs.FilterNotContained(batch)
+
+	// If we got fewer pending than the batch size, we processed some known hashes.
+	// Limit pending to maxTxPacketSize worth of hashes.
+	maxPending := maxTxPacketSize / common.HashLength
+	if len(pending) > maxPending {
+		pending = pending[:maxPending]
+	}
+
+	remaining = queue[:copy(queue, queue[maxHashes:])]
 	return pending, remaining
 }
 
@@ -673,8 +686,10 @@ func (c *conn) sendTxAnnouncements(hashes []common.Hash) error {
 		c.logger.Debug().Err(err).Msg("Failed to send tx announcements")
 		return err
 	}
-	for _, hash := range hashes {
-		c.addKnownTx(hash)
+
+	// Mark all hashes as known in a single lock operation
+	if c.shouldBroadcastTx || c.shouldBroadcastTxHashes {
+		c.knownTxs.AddMany(hashes, struct{}{})
 	}
 	return nil
 }
@@ -969,13 +984,8 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 
 	c.countMsgReceived(request.Name(), float64(len(request.GetPooledTransactionsRequest)))
 
-	// Try to serve from cache
-	var txs []*types.Transaction
-	for _, hash := range request.GetPooledTransactionsRequest {
-		if tx, ok := c.conns.GetTx(hash); ok {
-			txs = append(txs, tx)
-		}
-	}
+	// Try to serve from cache using batch lookup (single lock operation)
+	txs := c.conns.GetTxs(request.GetPooledTransactionsRequest)
 
 	response := &eth.PooledTransactionsPacket{
 		RequestId:                  request.RequestId,

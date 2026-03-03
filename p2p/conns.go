@@ -324,6 +324,11 @@ func (c *Conns) GetTx(hash common.Hash) (*types.Transaction, bool) {
 	return c.txs.Get(hash)
 }
 
+// GetTxs retrieves multiple transactions from the shared cache in a single lock operation.
+func (c *Conns) GetTxs(hashes []common.Hash) []*types.Transaction {
+	return c.txs.GetMany(hashes)
+}
+
 // Blocks returns the global blocks cache.
 func (c *Conns) Blocks() *Cache[common.Hash, BlockCache] {
 	return c.blocks
