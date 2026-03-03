@@ -673,26 +673,19 @@ func (c *conn) enqueueTxHashes(queue, hashes []common.Hash) []common.Hash {
 // It looks up each transaction from the cache to populate Types and Sizes
 // as required by the ETH68 protocol.
 func (c *conn) sendTxAnnouncements(hashes []common.Hash) error {
-	// Build packet with actual Types and Sizes from cached transactions.
+	// Batch lookup all transactions in a single lock operation.
 	// Skip hashes where the transaction is no longer in cache.
-	var (
-		pending      []common.Hash
-		pendingTypes []byte
-		pendingSizes []uint32
-	)
-
-	for _, hash := range hashes {
-		tx, ok := c.conns.PeekTx(hash)
-		if !ok || tx == nil {
-			continue
-		}
-		pending = append(pending, hash)
-		pendingTypes = append(pendingTypes, tx.Type())
-		pendingSizes = append(pendingSizes, uint32(tx.Size()))
-	}
-
+	pending, txs := c.conns.PeekTxsWithHashes(hashes)
 	if len(pending) == 0 {
 		return nil
+	}
+
+	// Build Types and Sizes from the found transactions.
+	pendingTypes := make([]byte, len(txs))
+	pendingSizes := make([]uint32, len(txs))
+	for i, tx := range txs {
+		pendingTypes[i] = tx.Type()
+		pendingSizes[i] = uint32(tx.Size())
 	}
 
 	packet := eth.NewPooledTransactionHashesPacket{

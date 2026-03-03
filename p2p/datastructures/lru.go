@@ -124,7 +124,8 @@ func (c *LRU[K, V]) Peek(key K) (V, bool) {
 
 // PeekMany retrieves multiple values from the cache without updating LRU ordering.
 // Uses a single read lock for all lookups, providing better concurrency than GetMany
-// when LRU ordering updates are not needed.
+// when LRU ordering updates are not needed. Returns only found values (indices don't
+// correspond to input keys). Use PeekManyWithKeys if you need key-value pairs.
 func (c *LRU[K, V]) PeekMany(keys []K) []V {
 	if len(keys) == 0 {
 		return nil
@@ -152,6 +153,40 @@ func (c *LRU[K, V]) PeekMany(keys []K) []V {
 	}
 
 	return result
+}
+
+// PeekManyWithKeys retrieves multiple key-value pairs from the cache without updating
+// LRU ordering. Returns parallel slices of found keys and values. Uses a single read
+// lock for all lookups.
+func (c *LRU[K, V]) PeekManyWithKeys(keys []K) ([]K, []V) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	now := time.Now()
+	foundKeys := make([]K, 0, len(keys))
+	foundValues := make([]V, 0, len(keys))
+
+	for _, key := range keys {
+		elem, ok := c.items[key]
+		if !ok {
+			continue
+		}
+
+		e := elem.Value.(*entry[K, V])
+
+		if e.expiresAt != nil && now.After(*e.expiresAt) {
+			continue
+		}
+
+		foundKeys = append(foundKeys, key)
+		foundValues = append(foundValues, e.value)
+	}
+
+	return foundKeys, foundValues
 }
 
 // Update atomically updates a value in the cache using the provided update function.
