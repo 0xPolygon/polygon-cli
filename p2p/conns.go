@@ -191,11 +191,14 @@ func (c *Conns) BroadcastTxHashes(hashes []common.Hash) int {
 
 	count := 0
 	for _, cn := range peers {
+		// Non-blocking send, drop if queue full (matches Bor behavior)
 		select {
 		case cn.txAnnounce <- hashes:
 			count++
 		case <-cn.closeCh:
 			// Peer closing, skip
+		default:
+			// Channel full, skip to avoid goroutine leak
 		}
 	}
 
