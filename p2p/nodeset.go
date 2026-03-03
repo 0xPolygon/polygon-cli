@@ -97,7 +97,7 @@ func WriteURLs(file string, ns NodeSet) error {
 		}
 	}
 
-	urls := []string{}
+	var urls []string
 	for url := range m {
 		urls = append(urls, url)
 	}
@@ -130,7 +130,7 @@ func WritePeers(file string, urls []string) error {
 }
 
 func WriteDNSTreeNodes(file string, tree *dnsdisc.Tree) error {
-	urls := []string{}
+	var urls []string
 	for _, node := range tree.Nodes() {
 		urls = append(urls, node.URLv4())
 	}
