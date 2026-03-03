@@ -83,7 +83,7 @@ func (h *HTMLStreamer) StreamFinalSummary(summaries []TestSummary) error {
 }
 
 func (h *HTMLStreamer) writeHeader() {
-	fmt.Fprint(h.writer, `<!DOCTYPE html>
+	_, _ = fmt.Fprint(h.writer, `<!DOCTYPE html>
   <html>
   <head>
       <title>RPC Fuzz Test Results</title>
@@ -117,7 +117,7 @@ func (h *HTMLStreamer) writeHeader() {
 }
 
 func (h *HTMLStreamer) writeFooter(summaries []TestSummary) {
-	fmt.Fprint(h.writer, `        </tbody>
+	_, _ = fmt.Fprint(h.writer, `        </tbody>
       </table>
       <div class="summary">
           <h2>Summary</h2>
@@ -130,7 +130,7 @@ func (h *HTMLStreamer) writeFooter(summaries []TestSummary) {
 		totalFailed += s.TestsFailed
 
 		successRate := s.SuccessRate * 100
-		fmt.Fprintf(h.writer,
+		_, _ = fmt.Fprintf(h.writer,
 			`        <p><strong>%s</strong>: %d/%d passed (%.1f%%)</p>
   `,
 			html.EscapeString(s.TestName),
@@ -141,7 +141,7 @@ func (h *HTMLStreamer) writeFooter(summaries []TestSummary) {
 	}
 
 	overallRate := float64(totalPassed) / float64(totalRan) * 100
-	fmt.Fprintf(h.writer,
+	_, _ = fmt.Fprintf(h.writer,
 		`        <hr>
           <p><strong>Overall</strong>: %d tests completed, %d passed, %d failed (%.1f%% success rate)</p>
           <p>Generated at: %s</p>

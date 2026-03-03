@@ -70,7 +70,11 @@ func dataFromFile(filename string) (iter.Seq[string], inputDataSource, error) {
 
 	return func(yield func(string) bool) {
 		// Ensure the file is closed after the function exits
-		defer f.Close()
+		defer func() {
+			if closeErr := f.Close(); closeErr != nil {
+				log.Debug().Err(closeErr).Str("filename", filename).Msg("Failed to close file")
+			}
+		}()
 		s := bufio.NewScanner(f)
 		sBuf := make([]byte, 0)
 		s.Buffer(sBuf, scannerBufferSize)

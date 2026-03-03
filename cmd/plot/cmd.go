@@ -125,7 +125,11 @@ func writeCache(path string, blocks []block) error {
 	if err != nil {
 		return fmt.Errorf("failed to create cache file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Error().Err(err).Str("file", path).Msg("Failed to close cache file")
+		}
+	}()
 
 	writer := bufio.NewWriter(f)
 	encoder := json.NewEncoder(writer)
@@ -173,7 +177,11 @@ func readCache(path string, targetAddr string) ([]block, bool) {
 		log.Warn().Err(err).Str("file", path).Msg("Failed to open cache file")
 		return nil, false
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("file", path).Msg("Failed to close cache file")
+		}
+	}()
 
 	var blocks []block
 	scanner := bufio.NewScanner(f)

@@ -77,7 +77,7 @@ func Dial(n *enode.Node, opts DialOpts) (*rlpxConn, error) {
 		return nil, err
 	}
 	if _, err = conn.Handshake(conn.ourKey); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, err
 	}
 

@@ -65,7 +65,11 @@ var MonitorV2Cmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to create store: %w", err)
 		}
-		defer store.Close()
+		defer func() {
+			if err := store.Close(); err != nil {
+				log.Error().Err(err).Msg("Failed to close store")
+			}
+		}()
 
 		// Create indexer
 		idx := indexer.NewIndexer(store, indexer.DefaultConfig())

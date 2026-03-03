@@ -87,7 +87,11 @@ func main() {
 
 	f, err := deleteAndCreateFile(outputFilePath)
 	checkErr(err, "failed to create temp file")
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Error().Err(err).Str("filePath", outputFilePath).Msg("Failed to close output file")
+		}
+	}()
 	log.Info().
 		Str("filePath", outputFilePath).
 		Msg("file created for transactions")

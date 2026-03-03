@@ -305,7 +305,7 @@ func runFullScan(ctx context.Context, db KeyValueDB) (uint64, []uint64) {
 	return opCount, buckets
 }
 func writeData(ctx context.Context, db KeyValueDB, startIndex, writeLimit uint64, sequential bool) {
-	var i uint64 = startIndex
+	var i = startIndex
 	var wg sync.WaitGroup
 	pool := make(chan bool, degreeOfParallelism)
 	bar := getNewProgressBar(int64(writeLimit), "Writing data")

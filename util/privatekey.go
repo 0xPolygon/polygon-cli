@@ -18,7 +18,11 @@ func ReadPrivateKeysFromFile(sendingAddressesFile string) ([]*ecdsa.PrivateKey, 
 	if err != nil {
 		return nil, fmt.Errorf("unable to open sending addresses file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Debug().Err(err).Str("file", sendingAddressesFile).Msg("Failed to close private keys file")
+		}
+	}()
 
 	var privateKeys []*ecdsa.PrivateKey
 	scanner := bufio.NewScanner(file)

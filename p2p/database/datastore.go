@@ -394,10 +394,10 @@ func (d *Datastore) newDatastoreHeader(header *types.Header, tfs time.Time, isPa
 func (d *Datastore) writeFirstSeen(header *DatastoreHeader, block *DatastoreBlock, tfs time.Time) {
 	// Preserve earlier header timing if it exists
 	if block.DatastoreHeader != nil &&
-		!block.DatastoreHeader.TimeFirstSeen.IsZero() &&
-		block.DatastoreHeader.TimeFirstSeen.Before(tfs) {
-		header.TimeFirstSeen = block.DatastoreHeader.TimeFirstSeen
-		header.SensorFirstSeen = block.DatastoreHeader.SensorFirstSeen
+		!block.TimeFirstSeen.IsZero() &&
+		block.TimeFirstSeen.Before(tfs) {
+		header.TimeFirstSeen = block.TimeFirstSeen
+		header.SensorFirstSeen = block.SensorFirstSeen
 	}
 
 	// Set hash timing if it doesn't exist or if new timestamp is earlier
@@ -458,7 +458,7 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 
 		shouldWrite := false
 
-		if dsBlock.DatastoreHeader == nil || tfs.Before(dsBlock.DatastoreHeader.TimeFirstSeen) {
+		if dsBlock.DatastoreHeader == nil || tfs.Before(dsBlock.TimeFirstSeen) {
 			shouldWrite = true
 
 			// Create new header with current timing
@@ -561,7 +561,7 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, 
 		err := tx.Get(key, &block)
 
 		// If block header already exists and new timestamp is not earlier, don't overwrite
-		if err == nil && block.DatastoreHeader != nil && !tfs.Before(block.DatastoreHeader.TimeFirstSeen) {
+		if err == nil && block.DatastoreHeader != nil && !tfs.Before(block.TimeFirstSeen) {
 			return nil
 		}
 
