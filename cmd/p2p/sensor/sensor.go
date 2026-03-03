@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -335,6 +336,10 @@ func stopServer(server *ethp2p.Server) {
 // sensor's performance. The port number is configured through
 // inputSensorParams.PprofPort. An error is logged if the server fails to start.
 func handlePprof() {
+	// Enable mutex and block profiling to detect lock contention.
+	runtime.SetMutexProfileFraction(1)
+	runtime.SetBlockProfileRate(1)
+
 	addr := fmt.Sprintf(":%d", inputSensorParams.PprofPort)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Error().Err(err).Msg("Failed to start pprof")
