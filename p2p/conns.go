@@ -496,6 +496,8 @@ func calculateEffectiveGasPrice(tx *types.Transaction, baseFee *big.Int) *big.In
 		return new(big.Int).Set(price)
 	}
 	return nil
+}
+
 // GetPeerVersion returns the negotiated eth protocol version for a specific peer.
 // Returns 0 if the peer is not found.
 func (c *Conns) GetPeerVersion(peerID string) uint {
