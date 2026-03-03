@@ -24,8 +24,8 @@ type BlockCache struct {
 type ConnsOptions struct {
 	BlocksCache                CacheOptions
 	TxsCache                   CacheOptions
-	KnownTxsCache              CacheOptions
-	KnownBlocksCache           CacheOptions
+	KnownTxsBloom              BloomSetOptions
+	KnownBlocksMax             int
 	Head                       eth.NewBlockPacket
 	ShouldBroadcastTx          bool
 	ShouldBroadcastTxHashes    bool
@@ -46,9 +46,10 @@ type Conns struct {
 	// txs caches transactions for serving to peers and duplicate detection
 	txs *Cache[common.Hash, *types.Transaction]
 
-	// knownTxsOpts and knownBlocksOpts store cache options for per-peer caches
-	knownTxsOpts    CacheOptions
-	knownBlocksOpts CacheOptions
+	// knownTxsOpts stores bloom filter options for per-peer known tx tracking
+	knownTxsOpts BloomSetOptions
+	// knownBlocksMax stores the maximum size for per-peer known block caches
+	knownBlocksMax int
 
 	// oldest stores the first block the sensor has seen so when fetching
 	// parent blocks, it does not request blocks older than this.
@@ -76,8 +77,8 @@ func NewConns(opts ConnsOptions) *Conns {
 		conns:                      make(map[string]*conn),
 		blocks:                     NewCache[common.Hash, BlockCache](opts.BlocksCache),
 		txs:                        NewCache[common.Hash, *types.Transaction](opts.TxsCache),
-		knownTxsOpts:               opts.KnownTxsCache,
-		knownBlocksOpts:            opts.KnownBlocksCache,
+		knownTxsOpts:               opts.KnownTxsBloom,
+		knownBlocksMax:             opts.KnownBlocksMax,
 		oldest:                     oldest,
 		head:                       head,
 		shouldBroadcastTx:          opts.ShouldBroadcastTx,
@@ -357,14 +358,14 @@ func (c *Conns) UpdateHeadBlock(packet eth.NewBlockPacket) bool {
 	})
 }
 
-// KnownTxsOpts returns the cache options for per-peer known tx caches.
-func (c *Conns) KnownTxsOpts() CacheOptions {
+// KnownTxsOpts returns the bloom filter options for per-peer known tx tracking.
+func (c *Conns) KnownTxsOpts() BloomSetOptions {
 	return c.knownTxsOpts
 }
 
-// KnownBlocksOpts returns the cache options for per-peer known block caches.
-func (c *Conns) KnownBlocksOpts() CacheOptions {
-	return c.knownBlocksOpts
+// KnownBlocksMax returns the maximum size for per-peer known block caches.
+func (c *Conns) KnownBlocksMax() int {
+	return c.knownBlocksMax
 }
 
 // ShouldBroadcastTx returns whether full transaction broadcasting is enabled.

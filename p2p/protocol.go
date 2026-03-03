@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"time"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -43,6 +44,36 @@ var protocolLengths = map[uint]uint64{
 	67: 17,
 	68: 17,
 	69: 18,
+}
+
+// knownCache is a simple set-based cache for tracking known block hashes.
+// Unlike the generic Cache type, this uses mapset for lower memory overhead
+// per peer (~60% reduction). When the cache reaches capacity, the oldest
+// element is evicted via Pop().
+type knownCache struct {
+	hashes mapset.Set[common.Hash]
+	max    int
+}
+
+// newKnownCache creates a new knownCache with the specified maximum size.
+func newKnownCache(max int) *knownCache {
+	return &knownCache{
+		max:    max,
+		hashes: mapset.NewSet[common.Hash](),
+	}
+}
+
+// Add adds a hash to the cache, evicting the oldest element if at capacity.
+func (k *knownCache) Add(hash common.Hash) {
+	for k.hashes.Cardinality() >= k.max {
+		k.hashes.Pop()
+	}
+	k.hashes.Add(hash)
+}
+
+// Contains returns true if the hash exists in the cache.
+func (k *knownCache) Contains(hash common.Hash) bool {
+	return k.hashes.Contains(hash)
 }
 
 // conn represents an individual connection with a peer.
@@ -81,8 +112,10 @@ type conn struct {
 	shouldBroadcastBlockHashes bool
 
 	// Known caches track what this peer has seen to avoid redundant sends.
-	knownTxs    *Cache[common.Hash, struct{}]
-	knownBlocks *Cache[common.Hash, struct{}]
+	// knownTxs uses a bloom filter for memory efficiency (~40KB vs ~4MB per peer).
+	// knownBlocks uses a simple mapset for lower memory overhead than the generic Cache.
+	knownTxs    *BloomSet
+	knownBlocks *knownCache
 
 	// messages tracks per-peer message counts for API visibility.
 	messages *PeerMessages
@@ -146,8 +179,8 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				shouldBroadcastTxHashes:    opts.ShouldBroadcastTxHashes,
 				shouldBroadcastBlocks:      opts.ShouldBroadcastBlocks,
 				shouldBroadcastBlockHashes: opts.ShouldBroadcastBlockHashes,
-				knownTxs:                   NewCache[common.Hash, struct{}](opts.Conns.KnownTxsOpts()),
-				knownBlocks:                NewCache[common.Hash, struct{}](opts.Conns.KnownBlocksOpts()),
+				knownTxs:                   NewBloomSet(opts.Conns.KnownTxsOpts()),
+				knownBlocks:                newKnownCache(opts.Conns.KnownBlocksMax()),
 				messages:                   NewPeerMessages(),
 				txAnnounce:                 make(chan []common.Hash),
 				blockAnnounce:              make(chan eth.NewBlockHashesPacket, maxQueuedBlockAnns),
@@ -567,7 +600,7 @@ func (c *conn) addKnownTx(hash common.Hash) {
 		return
 	}
 
-	c.knownTxs.Add(hash, struct{}{})
+	c.knownTxs.Add(hash)
 }
 
 // addKnownBlock adds a block hash to the known block cache.
@@ -576,7 +609,7 @@ func (c *conn) addKnownBlock(hash common.Hash) {
 		return
 	}
 
-	c.knownBlocks.Add(hash, struct{}{})
+	c.knownBlocks.Add(hash)
 }
 
 // hasKnownTx checks if a transaction hash is in the known tx cache.
@@ -652,16 +685,7 @@ func (c *conn) prepareTxAnnouncements(queue []common.Hash) (pending, remaining [
 	maxHashes := min(maxTxPacketSize/common.HashLength, len(queue))
 
 	// Filter out known hashes in a single lock operation
-	batch := queue[:maxHashes]
-	pending = c.knownTxs.FilterNotContained(batch)
-
-	// If we got fewer pending than the batch size, we processed some known hashes.
-	// Limit pending to maxTxPacketSize worth of hashes.
-	maxPending := maxTxPacketSize / common.HashLength
-	if len(pending) > maxPending {
-		pending = pending[:maxPending]
-	}
-
+	pending = c.knownTxs.FilterNotContained(queue[:maxHashes])
 	remaining = queue[:copy(queue, queue[maxHashes:])]
 	return pending, remaining
 }
@@ -713,7 +737,7 @@ func (c *conn) sendTxAnnouncements(hashes []common.Hash) error {
 	}
 
 	// Mark all hashes as known in a single lock operation
-	c.knownTxs.AddMany(pending, struct{}{})
+	c.knownTxs.AddMany(pending)
 	return nil
 }
 
