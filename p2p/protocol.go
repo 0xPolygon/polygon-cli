@@ -645,10 +645,7 @@ func (c *conn) prepareTxAnnouncements(queue []common.Hash) (pending, remaining [
 	}
 
 	// Calculate max hashes we can send based on packet size limit
-	maxHashes := maxTxPacketSize / common.HashLength
-	if maxHashes > len(queue) {
-		maxHashes = len(queue)
-	}
+	maxHashes := min(maxTxPacketSize/common.HashLength, len(queue))
 
 	// Filter out known hashes in a single lock operation
 	batch := queue[:maxHashes]
