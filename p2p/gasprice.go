@@ -33,10 +33,9 @@ var (
 type GasPriceOracle struct {
 	conns *Conns
 
-	mu        sync.RWMutex
-	lastHead  common.Hash
-	lastPrice *big.Int
-	lastTip   *big.Int
+	mu       sync.RWMutex
+	lastHead common.Hash
+	lastTip  *big.Int
 }
 
 // NewGasPriceOracle creates a new gas price oracle that uses the given Conns for block data.
