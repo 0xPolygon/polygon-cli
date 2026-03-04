@@ -257,6 +257,19 @@ func (c *LRU[K, V]) Remove(key K) (V, bool) {
 	return zero, false
 }
 
+// Keys returns all keys in the cache in LRU order (most recent first).
+func (c *LRU[K, V]) Keys() []K {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	keys := make([]K, 0, c.list.Len())
+	for elem := c.list.Front(); elem != nil; elem = elem.Next() {
+		e := elem.Value.(*entry[K, V])
+		keys = append(keys, e.key)
+	}
+	return keys
+}
+
 // AddBatch adds multiple key-value pairs to the cache.
 // Uses a single write lock for all additions, reducing lock contention
 // compared to calling Add in a loop. Keys and values must have the same length.
