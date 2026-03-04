@@ -269,7 +269,6 @@ func (c *LRU[K, V]) Keys() []K {
 	}
 	return keys
 }
-
 // AddBatch adds multiple key-value pairs to the cache.
 // Uses a single write lock for all additions, reducing lock contention
 // compared to calling Add in a loop. Keys and values must have the same length.
