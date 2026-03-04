@@ -338,6 +338,7 @@ func (c *Conns) AddTxs(txs []*types.Transaction) []common.Hash {
 func (c *Conns) GetTx(hash common.Hash) (*types.Transaction, bool) {
 	return c.txs.Get(hash)
 }
+
 // PeekTxs retrieves multiple transactions from the shared cache without updating LRU ordering.
 // Uses a single read lock for better concurrency when LRU ordering is not needed.
 func (c *Conns) PeekTxs(hashes []common.Hash) []*types.Transaction {
@@ -447,6 +448,7 @@ func (c *Conns) GetBlockByNumber(number uint64) (common.Hash, BlockCache, bool) 
 	}
 	return common.Hash{}, BlockCache{}, false
 }
+
 // GetPeerVersion returns the negotiated eth protocol version for a specific peer.
 // Returns 0 if the peer is not found.
 func (c *Conns) GetPeerVersion(peerID string) uint {
