@@ -17,6 +17,7 @@ import (
 // (number of p2p messages), along with connection timing information.
 type peerData struct {
 	Name            string           `json:"name"`
+	ProtocolVersion uint             `json:"protocol_version"`
 	Received        p2p.MessageCount `json:"received"`
 	Sent            p2p.MessageCount `json:"sent"`
 	PacketsReceived p2p.MessageCount `json:"packets_received"`
@@ -85,6 +86,7 @@ func handleAPI(server *ethp2p.Server, conns *p2p.Conns) {
 
 			peers[url] = peerData{
 				Name:            conns.GetPeerName(peerID),
+				ProtocolVersion: conns.GetPeerVersion(peerID),
 				Received:        messages.Received,
 				Sent:            messages.Sent,
 				PacketsReceived: messages.PacketsReceived,

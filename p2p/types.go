@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 type Message interface {
@@ -85,6 +84,22 @@ type Status eth.StatusPacket68
 
 func (msg Status) Code() int     { return 16 }
 func (msg Status) ReqID() uint64 { return 0 }
+
+// BorStatusPacket69 is the Bor-compatible status packet for ETH69.
+// Bor's implementation includes the TD field which upstream go-ethereum removed.
+type BorStatusPacket69 struct {
+	ProtocolVersion uint32
+	NetworkID       uint64
+	TD              *big.Int
+	Genesis         common.Hash
+	ForkID          forkid.ID
+	EarliestBlock   uint64
+	LatestBlock     uint64
+	LatestBlockHash common.Hash
+}
+
+func (*BorStatusPacket69) Name() string { return "Status" }
+func (*BorStatusPacket69) Kind() byte   { return eth.StatusMsg }
 
 // NewBlockHashes is the network packet for the block announcements.
 type NewBlockHashes eth.NewBlockHashesPacket
@@ -434,51 +449,3 @@ type rawPooledTransactionsPacket struct {
 	Txs       []rlp.RawValue
 }
 
-// decodeTx attempts to decode a transaction from an RLP-encoded raw value.
-func decodeTx(raw []byte) *types.Transaction {
-	if len(raw) == 0 {
-		return nil
-	}
-
-	var bytes []byte
-	if rlp.DecodeBytes(raw, &bytes) == nil {
-		tx := new(types.Transaction)
-		if tx.UnmarshalBinary(bytes) == nil {
-			return tx
-		}
-
-		log.Warn().
-			Uint8("type", bytes[0]).
-			Int("size", len(bytes)).
-			Str("hash", crypto.Keccak256Hash(bytes).Hex()).
-			Msg("Failed to decode transaction")
-
-		return nil
-	}
-
-	tx := new(types.Transaction)
-	if tx.UnmarshalBinary(raw) == nil {
-		return tx
-	}
-
-	log.Warn().
-		Uint8("prefix", raw[0]).
-		Int("size", len(raw)).
-		Str("hash", crypto.Keccak256Hash(raw).Hex()).
-		Msg("Failed to decode transaction")
-
-	return nil
-}
-
-// decodeTxs decodes a list of transactions, returning only successfully decoded ones.
-func decodeTxs(rawTxs []rlp.RawValue) []*types.Transaction {
-	var txs []*types.Transaction
-
-	for _, raw := range rawTxs {
-		if tx := decodeTx(raw); tx != nil {
-			txs = append(txs, tx)
-		}
-	}
-
-	return txs
-}
