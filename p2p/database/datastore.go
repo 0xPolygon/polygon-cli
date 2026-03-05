@@ -54,6 +54,15 @@ type DatastoreEvent struct {
 	TTL      time.Time
 }
 
+// SensorTime records when a specific sensor first saw something.
+type SensorTime struct {
+	SensorID string
+	Time     time.Time
+}
+
+// SensorTimes is a slice of SensorTime entries.
+type SensorTimes = []SensorTime
+
 // DatastoreHeader stores the data in manner that can be easily written without
 // loss of precision.
 type DatastoreHeader struct {
@@ -77,7 +86,7 @@ type DatastoreHeader struct {
 	TTL                   time.Time
 	IsParent              bool
 	SensorFirstSeen       string
-	TimeFirstSeenBySensor map[string]time.Time `datastore:",noindex"`
+	TimeFirstSeenBySensor SensorTimes `datastore:",noindex"`
 }
 
 // DatastoreBlock represents a block stored in datastore.
@@ -88,7 +97,7 @@ type DatastoreBlock struct {
 	Uncles                    []*datastore.Key `datastore:",noindex"`
 	TimeFirstSeenHash         time.Time
 	SensorFirstSeenHash       string
-	TimeFirstSeenHashBySensor map[string]time.Time `datastore:",noindex"`
+	TimeFirstSeenHashBySensor SensorTimes `datastore:",noindex"`
 }
 
 // DatastoreTransaction represents a transaction stored in datastore. Data is
@@ -251,19 +260,19 @@ func (d *Datastore) writeBlockHashFirstSeen(ctx context.Context, hash common.Has
 		var block DatastoreBlock
 		err := tx.Get(key, &block)
 
-		newSensorMap := map[string]time.Time{d.sensorID: tfsh}
+		newSensorTime := SensorTimes{{SensorID: d.sensorID, Time: tfsh}}
 
 		// If block doesn't exist, create partial entry with just hash timing
 		if err != nil {
 			block.TimeFirstSeenHash = tfsh
 			block.SensorFirstSeenHash = d.sensorID
-			block.TimeFirstSeenHashBySensor = newSensorMap
+			block.TimeFirstSeenHashBySensor = newSensorTime
 			_, err = tx.Put(key, &block)
 			return err
 		}
 
-		// Always merge per-sensor map with current sensor's timestamp
-		block.TimeFirstSeenHashBySensor = mergeSensorTimes(block.TimeFirstSeenHashBySensor, newSensorMap)
+		// Always merge per-sensor times with current sensor's timestamp
+		block.TimeFirstSeenHashBySensor = mergeSensorTimes(block.TimeFirstSeenHashBySensor, newSensorTime)
 
 		// If global timestamp already set and not earlier, just update per-sensor map
 		if !block.TimeFirstSeenHash.IsZero() && !tfsh.Before(block.TimeFirstSeenHash) {
@@ -392,13 +401,11 @@ func (d *Datastore) newDatastoreHeader(header *types.Header, tfs time.Time, isPa
 		MixDigest:       header.MixDigest.String(),
 		Nonce:           fmt.Sprint(header.Nonce.Uint64()),
 		BaseFee:         header.BaseFee.String(),
-		TimeFirstSeen:   tfs,
-		TTL:             tfs.Add(d.ttl),
-		IsParent:        isParent,
-		SensorFirstSeen: d.sensorID,
-		TimeFirstSeenBySensor: map[string]time.Time{
-			d.sensorID: tfs,
-		},
+		TimeFirstSeen:         tfs,
+		TTL:                   tfs.Add(d.ttl),
+		IsParent:              isParent,
+		SensorFirstSeen:       d.sensorID,
+		TimeFirstSeenBySensor: SensorTimes{{SensorID: d.sensorID, Time: tfs}},
 	}
 }
 
@@ -451,7 +458,7 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 		// are nil we will just set them.
 		_ = tx.Get(key, &dsBlock)
 
-		newSensorMap := map[string]time.Time{d.sensorID: tfs}
+		newSensorTime := SensorTimes{{SensorID: d.sensorID, Time: tfs}}
 
 		if dsBlock.DatastoreHeader == nil || tfs.Before(dsBlock.TimeFirstSeen) {
 			// Create new header with current timing
@@ -474,9 +481,9 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 			dsBlock.DatastoreHeader = header
 		}
 
-		// Always merge per-sensor maps
-		dsBlock.DatastoreHeader.TimeFirstSeenBySensor = mergeSensorTimes(dsBlock.DatastoreHeader.TimeFirstSeenBySensor, newSensorMap)
-		dsBlock.TimeFirstSeenHashBySensor = mergeSensorTimes(dsBlock.TimeFirstSeenHashBySensor, newSensorMap)
+		// Always merge per-sensor times
+		dsBlock.DatastoreHeader.TimeFirstSeenBySensor = mergeSensorTimes(dsBlock.DatastoreHeader.TimeFirstSeenBySensor, newSensorTime)
+		dsBlock.TimeFirstSeenHashBySensor = mergeSensorTimes(dsBlock.TimeFirstSeenHashBySensor, newSensorTime)
 
 		if len(dsBlock.TotalDifficulty) == 0 {
 			dsBlock.TotalDifficulty = td.String()
@@ -561,7 +568,7 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, 
 		var block DatastoreBlock
 		_ = tx.Get(key, &block)
 
-		newSensorMap := map[string]time.Time{d.sensorID: tfs}
+		newSensorTime := SensorTimes{{SensorID: d.sensorID, Time: tfs}}
 
 		// Create or replace header if it doesn't exist or if timestamp is earlier
 		if block.DatastoreHeader == nil || tfs.Before(block.DatastoreHeader.TimeFirstSeen) {
@@ -584,9 +591,9 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, 
 			block.DatastoreHeader = newHeader
 		}
 
-		// Always merge per-sensor maps
-		block.DatastoreHeader.TimeFirstSeenBySensor = mergeSensorTimes(block.DatastoreHeader.TimeFirstSeenBySensor, newSensorMap)
-		block.TimeFirstSeenHashBySensor = mergeSensorTimes(block.TimeFirstSeenHashBySensor, newSensorMap)
+		// Always merge per-sensor times
+		block.DatastoreHeader.TimeFirstSeenBySensor = mergeSensorTimes(block.DatastoreHeader.TimeFirstSeenBySensor, newSensorTime)
+		block.TimeFirstSeenHashBySensor = mergeSensorTimes(block.TimeFirstSeenHashBySensor, newSensorTime)
 
 		_, err := tx.Put(key, &block)
 		return err
@@ -658,17 +665,26 @@ func (d *Datastore) writeTransactions(ctx context.Context, txs []*types.Transact
 	}
 }
 
-// mergeSensorTimes merges the provided maps, keeping the earliest timestamp
-// for each key. Nil maps are safely ignored.
-func mergeSensorTimes(maps ...map[string]time.Time) map[string]time.Time {
-	result := make(map[string]time.Time)
-	for _, m := range maps {
-		for key, ts := range m {
-			if existing, ok := result[key]; !ok || ts.Before(existing) {
-				result[key] = ts
+// mergeSensorTimes merges the provided slices, keeping the earliest timestamp
+// for each sensor. Nil slices are safely ignored.
+func mergeSensorTimes(slices ...SensorTimes) SensorTimes {
+	seen := make(map[string]int) // sensorID -> index in result
+	var result SensorTimes
+
+	for _, slice := range slices {
+		for _, st := range slice {
+			if idx, ok := seen[st.SensorID]; ok {
+				// Keep earlier timestamp
+				if st.Time.Before(result[idx].Time) {
+					result[idx].Time = st.Time
+				}
+			} else {
+				seen[st.SensorID] = len(result)
+				result = append(result, st)
 			}
 		}
 	}
+
 	return result
 }
 
