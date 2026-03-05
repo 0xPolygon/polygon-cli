@@ -20,8 +20,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
 	"github.com/0xPolygon/polygon-cli/p2p/database"
+	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
 )
 
 const (
@@ -1009,23 +1009,30 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
-	// Check if we already have the full block in the cache
-	if cache, ok := c.conns.Blocks().Peek(hash); ok && cache.TD != nil {
+	// Atomically check and add to cache to prevent duplicate writes from
+	// concurrent peers receiving the same block.
+	update := false
+	c.conns.Blocks().Update(hash, func(existing BlockCache) BlockCache {
+		if existing.TD != nil {
+			return existing // Already have full block
+		}
+		update = true
+		return BlockCache{
+			Header: packet.Block.Header(),
+			Body: &eth.BlockBody{
+				Transactions: packet.Block.Transactions(),
+				Uncles:       packet.Block.Uncles(),
+				Withdrawals:  packet.Block.Withdrawals(),
+			},
+			TD: packet.TD,
+		}
+	})
+
+	if !update {
 		return nil
 	}
 
 	c.db.WriteBlock(ctx, c.node, packet.Block, packet.TD, tfs)
-
-	// Update cache to store the full block
-	c.conns.Blocks().Add(hash, BlockCache{
-		Header: packet.Block.Header(),
-		Body: &eth.BlockBody{
-			Transactions: packet.Block.Transactions(),
-			Uncles:       packet.Block.Uncles(),
-			Withdrawals:  packet.Block.Withdrawals(),
-		},
-		TD: packet.TD,
-	})
 
 	// Broadcast block or block hash to other peers asynchronously
 	go c.conns.BroadcastBlock(packet.Block, packet.TD)
