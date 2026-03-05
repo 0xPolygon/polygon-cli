@@ -57,38 +57,38 @@ type DatastoreEvent struct {
 // DatastoreHeader stores the data in manner that can be easily written without
 // loss of precision.
 type DatastoreHeader struct {
-	ParentHash             *datastore.Key
-	UncleHash              string `datastore:",noindex"`
-	Coinbase               string `datastore:",noindex"`
-	Root                   string `datastore:",noindex"`
-	TxHash                 string `datastore:",noindex"`
-	ReceiptHash            string `datastore:",noindex"`
-	Bloom                  []byte `datastore:",noindex"`
-	Difficulty             string `datastore:",noindex"`
-	Number                 string
-	GasLimit               string `datastore:",noindex"`
-	GasUsed                string
-	Time                   time.Time
-	Extra                  []byte `datastore:",noindex"`
-	MixDigest              string `datastore:",noindex"`
-	Nonce                  string `datastore:",noindex"`
-	BaseFee                string `datastore:",noindex"`
-	TimeFirstSeen          time.Time
-	TTL                    time.Time
-	IsParent               bool
-	SensorFirstSeen        string
-	TimeFirstSeenBySensor  map[string]time.Time `datastore:",noindex"`
+	ParentHash            *datastore.Key
+	UncleHash             string `datastore:",noindex"`
+	Coinbase              string `datastore:",noindex"`
+	Root                  string `datastore:",noindex"`
+	TxHash                string `datastore:",noindex"`
+	ReceiptHash           string `datastore:",noindex"`
+	Bloom                 []byte `datastore:",noindex"`
+	Difficulty            string `datastore:",noindex"`
+	Number                string
+	GasLimit              string `datastore:",noindex"`
+	GasUsed               string
+	Time                  time.Time
+	Extra                 []byte `datastore:",noindex"`
+	MixDigest             string `datastore:",noindex"`
+	Nonce                 string `datastore:",noindex"`
+	BaseFee               string `datastore:",noindex"`
+	TimeFirstSeen         time.Time
+	TTL                   time.Time
+	IsParent              bool
+	SensorFirstSeen       string
+	TimeFirstSeenBySensor map[string]time.Time `datastore:",noindex"`
 }
 
 // DatastoreBlock represents a block stored in datastore.
 type DatastoreBlock struct {
 	*DatastoreHeader
-	TotalDifficulty            string           `datastore:",noindex"`
-	Transactions               []*datastore.Key `datastore:",noindex"`
-	Uncles                     []*datastore.Key `datastore:",noindex"`
-	TimeFirstSeenHash          time.Time
-	SensorFirstSeenHash        string
-	TimeFirstSeenHashBySensor  map[string]time.Time `datastore:",noindex"`
+	TotalDifficulty           string           `datastore:",noindex"`
+	Transactions              []*datastore.Key `datastore:",noindex"`
+	Uncles                    []*datastore.Key `datastore:",noindex"`
+	TimeFirstSeenHash         time.Time
+	SensorFirstSeenHash       string
+	TimeFirstSeenHashBySensor map[string]time.Time `datastore:",noindex"`
 }
 
 // DatastoreTransaction represents a transaction stored in datastore. Data is
@@ -372,19 +372,6 @@ func (d *Datastore) HasBlock(ctx context.Context, hash common.Hash) bool {
 	return err == nil && block.DatastoreHeader != nil
 }
 
-// mergeSensorTimes merges per-sensor timestamps, keeping the earliest timestamp for each sensor.
-func mergeSensorTimes(existing, new map[string]time.Time) map[string]time.Time {
-	if existing == nil {
-		existing = make(map[string]time.Time)
-	}
-	for sensorID, ts := range new {
-		if existingTs, ok := existing[sensorID]; !ok || ts.Before(existingTs) {
-			existing[sensorID] = ts
-		}
-	}
-	return existing
-}
-
 // newDatastoreHeader creates a DatastoreHeader from a types.Header. Some
 // values are converted into strings to prevent a loss of precision.
 func (d *Datastore) newDatastoreHeader(header *types.Header, tfs time.Time, isParent bool) *DatastoreHeader {
@@ -427,7 +414,7 @@ func (d *Datastore) writeFirstSeen(header *DatastoreHeader, block *DatastoreBloc
 
 	// Merge per-sensor header timing maps
 	if block.DatastoreHeader != nil {
-		header.TimeFirstSeenBySensor = mergeSensorTimes(block.DatastoreHeader.TimeFirstSeenBySensor, header.TimeFirstSeenBySensor)
+		header.TimeFirstSeenBySensor = mergeSensorTimes(header.TimeFirstSeenBySensor, block.DatastoreHeader.TimeFirstSeenBySensor)
 	}
 
 	// Set hash timing if it doesn't exist or if new timestamp is earlier
@@ -437,9 +424,7 @@ func (d *Datastore) writeFirstSeen(header *DatastoreHeader, block *DatastoreBloc
 	}
 
 	// Merge per-sensor hash timing maps and add current sensor
-	block.TimeFirstSeenHashBySensor = mergeSensorTimes(block.TimeFirstSeenHashBySensor, map[string]time.Time{
-		d.sensorID: tfs,
-	})
+	block.TimeFirstSeenHashBySensor = mergeSensorTimes(block.TimeFirstSeenHashBySensor, map[string]time.Time{d.sensorID: tfs})
 }
 
 // newDatastoreTransaction creates a DatastoreTransaction from a types.Transaction. Some
@@ -686,6 +671,20 @@ func (d *Datastore) writeTransactions(ctx context.Context, txs []*types.Transact
 	if _, err := d.client.PutMulti(ctx, keys, transactions); err != nil {
 		log.Error().Err(err).Msg("Failed to write transactions")
 	}
+}
+
+// mergeSensorTimes merges the provided maps, keeping the earliest timestamp
+// for each key. Nil maps are safely ignored.
+func mergeSensorTimes(maps ...map[string]time.Time) map[string]time.Time {
+	result := make(map[string]time.Time)
+	for _, m := range maps {
+		for key, ts := range m {
+			if existing, ok := result[key]; !ok || ts.Before(existing) {
+				result[key] = ts
+			}
+		}
+	}
+	return result
 }
 
 func (d *Datastore) NodeList(ctx context.Context, limit int) ([]string, error) {
