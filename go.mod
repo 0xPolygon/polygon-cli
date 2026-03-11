@@ -30,7 +30,7 @@ require (
 	golang.org/x/crypto v0.48.0
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
 	golang.org/x/text v0.34.0
-	golang.org/x/time v0.14.0
+	golang.org/x/time v0.15.0
 	google.golang.org/api v0.269.0
 	google.golang.org/protobuf v1.36.11
 )
@@ -100,7 +100,7 @@ require (
 	github.com/cockroachdb/redact v1.1.5 // indirect
 	github.com/consensys/gnark-crypto v0.19.2 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/deckarep/golang-set/v2 v2.6.0
+	github.com/deckarep/golang-set/v2 v2.8.0
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/getsentry/sentry-go v0.29.1 // indirect
