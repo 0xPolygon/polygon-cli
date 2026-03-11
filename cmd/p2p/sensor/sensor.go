@@ -50,6 +50,7 @@ type (
 		MaxDatabaseConcurrency       int
 		ShouldWriteBlocks            bool
 		ShouldWriteBlockEvents       bool
+		ShouldWriteFirstBlockEvent   bool
 		ShouldWriteTransactions      bool
 		ShouldWriteTransactionEvents bool
 		ShouldWritePeers             bool
@@ -438,6 +439,7 @@ func newDatabase(ctx context.Context) (database.Database, error) {
 			MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
 			ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
 			ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
+			ShouldWriteFirstBlockEvent:   inputSensorParams.ShouldWriteFirstBlockEvent,
 			ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
 			ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
 			ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
@@ -476,6 +478,9 @@ func init() {
 will result in less chance of missing data but can significantly increase memory usage)`)
 	f.BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "write blocks to database")
 	f.BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "write block events to database")
+	f.BoolVar(&inputSensorParams.ShouldWriteFirstBlockEvent, "write-first-block-event", false,
+		"write one block event per block on first-seen (alternative to --write-block-events)")
+	SensorCmd.MarkFlagsMutuallyExclusive("write-block-events", "write-first-block-event")
 	f.BoolVarP(&inputSensorParams.ShouldWriteTransactions, "write-txs", "t", true,
 		`write transactions to database (this option can significantly increase CPU and memory usage)`)
 	f.BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,

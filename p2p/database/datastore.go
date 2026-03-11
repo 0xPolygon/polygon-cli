@@ -35,6 +35,7 @@ type Datastore struct {
 	maxConcurrency               int
 	shouldWriteBlocks            bool
 	shouldWriteBlockEvents       bool
+	shouldWriteFirstBlockEvent   bool
 	shouldWriteTransactions      bool
 	shouldWriteTransactionEvents bool
 	shouldWritePeers             bool
@@ -53,15 +54,6 @@ type DatastoreEvent struct {
 	Time     time.Time
 	TTL      time.Time
 }
-
-// SensorTime records when a specific sensor first saw something.
-type SensorTime struct {
-	SensorID string
-	Time     time.Time
-}
-
-// SensorTimes is a slice of SensorTime entries.
-type SensorTimes = []SensorTime
 
 // DatastoreHeader stores the data in manner that can be easily written without
 // loss of precision.
@@ -82,22 +74,20 @@ type DatastoreHeader struct {
 	MixDigest             string `datastore:",noindex"`
 	Nonce                 string `datastore:",noindex"`
 	BaseFee               string `datastore:",noindex"`
-	TimeFirstSeen         time.Time
-	TTL                   time.Time
-	IsParent              bool
-	SensorFirstSeen       string
-	TimeFirstSeenBySensor SensorTimes `datastore:",noindex"`
+	TimeFirstSeen   time.Time
+	TTL             time.Time
+	IsParent        bool
+	SensorFirstSeen string
 }
 
 // DatastoreBlock represents a block stored in datastore.
 type DatastoreBlock struct {
 	*DatastoreHeader
-	TotalDifficulty           string           `datastore:",noindex"`
-	Transactions              []*datastore.Key `datastore:",noindex"`
-	Uncles                    []*datastore.Key `datastore:",noindex"`
-	TimeFirstSeenHash         time.Time
-	SensorFirstSeenHash       string
-	TimeFirstSeenHashBySensor SensorTimes `datastore:",noindex"`
+	TotalDifficulty     string           `datastore:",noindex"`
+	Transactions        []*datastore.Key `datastore:",noindex"`
+	Uncles              []*datastore.Key `datastore:",noindex"`
+	TimeFirstSeenHash   time.Time
+	SensorFirstSeenHash string
 }
 
 // DatastoreTransaction represents a transaction stored in datastore. Data is
@@ -138,6 +128,7 @@ type DatastoreOptions struct {
 	MaxConcurrency               int
 	ShouldWriteBlocks            bool
 	ShouldWriteBlockEvents       bool
+	ShouldWriteFirstBlockEvent   bool
 	ShouldWriteTransactions      bool
 	ShouldWriteTransactionEvents bool
 	ShouldWritePeers             bool
@@ -159,6 +150,7 @@ func NewDatastore(ctx context.Context, opts DatastoreOptions) Database {
 		maxConcurrency:               opts.MaxConcurrency,
 		shouldWriteBlocks:            opts.ShouldWriteBlocks,
 		shouldWriteBlockEvents:       opts.ShouldWriteBlockEvents,
+		shouldWriteFirstBlockEvent:   opts.ShouldWriteFirstBlockEvent,
 		shouldWriteTransactions:      opts.ShouldWriteTransactions,
 		shouldWriteTransactionEvents: opts.ShouldWriteTransactionEvents,
 		shouldWritePeers:             opts.ShouldWritePeers,
@@ -242,42 +234,40 @@ func (d *Datastore) WriteBlockHashes(ctx context.Context, peer *enode.Node, hash
 // WriteBlockHashFirstSeen writes a partial block entry with just the hash
 // first seen time if the block doesn't exist yet. If it exists, updates the
 // TimeFirstSeenHash if the new time is earlier.
-func (d *Datastore) WriteBlockHashFirstSeen(ctx context.Context, hash common.Hash, tfsh time.Time) {
+func (d *Datastore) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
 	if d.client == nil || !d.ShouldWriteBlocks() {
 		return
 	}
 
 	d.runAsync(func() {
-		d.writeBlockHashFirstSeen(ctx, hash, tfsh)
+		d.writeBlockHashFirstSeen(ctx, peer, hash, tfsh)
 	})
 }
 
 // writeBlockHashFirstSeen performs the actual transaction to write or update the block hash first seen time.
-func (d *Datastore) writeBlockHashFirstSeen(ctx context.Context, hash common.Hash, tfsh time.Time) {
+func (d *Datastore) writeBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
+	// Write block event if flag enabled (cache check in protocol.go already verified first-seen)
+	if d.shouldWriteFirstBlockEvent && peer != nil {
+		d.writeEvent(peer, BlockEventsKind, hash, BlocksKind, tfsh)
+	}
+
 	key := datastore.NameKey(BlocksKind, hash.Hex(), nil)
 
 	_, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
 		var block DatastoreBlock
 		err := tx.Get(key, &block)
 
-		newSensorTime := SensorTimes{{SensorID: d.sensorID, Time: tfsh}}
-
 		// If block doesn't exist, create partial entry with just hash timing
 		if err != nil {
 			block.TimeFirstSeenHash = tfsh
 			block.SensorFirstSeenHash = d.sensorID
-			block.TimeFirstSeenHashBySensor = newSensorTime
 			_, err = tx.Put(key, &block)
 			return err
 		}
 
-		// Always merge per-sensor times with current sensor's timestamp
-		block.TimeFirstSeenHashBySensor = mergeSensorTimes(block.TimeFirstSeenHashBySensor, newSensorTime)
-
-		// If global timestamp already set and not earlier, just update per-sensor map
+		// If timestamp already set and not earlier, no update needed
 		if !block.TimeFirstSeenHash.IsZero() && !tfsh.Before(block.TimeFirstSeenHash) {
-			_, err = tx.Put(key, &block)
-			return err
+			return nil
 		}
 
 		// Update with earlier timestamp
@@ -401,11 +391,10 @@ func (d *Datastore) newDatastoreHeader(header *types.Header, tfs time.Time, isPa
 		MixDigest:       header.MixDigest.String(),
 		Nonce:           fmt.Sprint(header.Nonce.Uint64()),
 		BaseFee:         header.BaseFee.String(),
-		TimeFirstSeen:         tfs,
-		TTL:                   tfs.Add(d.ttl),
-		IsParent:              isParent,
-		SensorFirstSeen:       d.sensorID,
-		TimeFirstSeenBySensor: SensorTimes{{SensorID: d.sensorID, Time: tfs}},
+		TimeFirstSeen:   tfs,
+		TTL:             tfs.Add(d.ttl),
+		IsParent:        isParent,
+		SensorFirstSeen: d.sensorID,
 	}
 }
 
@@ -458,8 +447,6 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 		// are nil we will just set them.
 		_ = tx.Get(key, &dsBlock)
 
-		newSensorTime := SensorTimes{{SensorID: d.sensorID, Time: tfs}}
-
 		if dsBlock.DatastoreHeader == nil || tfs.Before(dsBlock.TimeFirstSeen) {
 			// Create new header with current timing
 			header := d.newDatastoreHeader(block.Header(), tfs, false)
@@ -480,10 +467,6 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 
 			dsBlock.DatastoreHeader = header
 		}
-
-		// Always merge per-sensor times
-		dsBlock.DatastoreHeader.TimeFirstSeenBySensor = mergeSensorTimes(dsBlock.DatastoreHeader.TimeFirstSeenBySensor, newSensorTime)
-		dsBlock.TimeFirstSeenHashBySensor = mergeSensorTimes(dsBlock.TimeFirstSeenHashBySensor, newSensorTime)
 
 		if len(dsBlock.TotalDifficulty) == 0 {
 			dsBlock.TotalDifficulty = td.String()
@@ -568,8 +551,6 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, 
 		var block DatastoreBlock
 		_ = tx.Get(key, &block)
 
-		newSensorTime := SensorTimes{{SensorID: d.sensorID, Time: tfs}}
-
 		// Create or replace header if it doesn't exist or if timestamp is earlier
 		if block.DatastoreHeader == nil || tfs.Before(block.DatastoreHeader.TimeFirstSeen) {
 			newHeader := d.newDatastoreHeader(header, tfs, isParent)
@@ -590,10 +571,6 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, 
 
 			block.DatastoreHeader = newHeader
 		}
-
-		// Always merge per-sensor times
-		block.DatastoreHeader.TimeFirstSeenBySensor = mergeSensorTimes(block.DatastoreHeader.TimeFirstSeenBySensor, newSensorTime)
-		block.TimeFirstSeenHashBySensor = mergeSensorTimes(block.TimeFirstSeenHashBySensor, newSensorTime)
 
 		_, err := tx.Put(key, &block)
 		return err
@@ -665,27 +642,8 @@ func (d *Datastore) writeTransactions(ctx context.Context, txs []*types.Transact
 	}
 }
 
-// mergeSensorTimes merges the provided slices, keeping the earliest timestamp
-// for each sensor. Nil slices are safely ignored.
-func mergeSensorTimes(slices ...SensorTimes) SensorTimes {
-	seen := make(map[string]int) // sensorID -> index in result
-	var result SensorTimes
-
-	for _, slice := range slices {
-		for _, st := range slice {
-			if idx, ok := seen[st.SensorID]; ok {
-				// Keep earlier timestamp
-				if st.Time.Before(result[idx].Time) {
-					result[idx].Time = st.Time
-				}
-			} else {
-				seen[st.SensorID] = len(result)
-				result = append(result, st)
-			}
-		}
-	}
-
-	return result
+func (d *Datastore) ShouldWriteFirstBlockEvent() bool {
+	return d.shouldWriteFirstBlockEvent
 }
 
 func (d *Datastore) NodeList(ctx context.Context, limit int) ([]string, error) {
