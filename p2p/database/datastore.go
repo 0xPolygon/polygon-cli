@@ -235,7 +235,7 @@ func (d *Datastore) WriteBlockHashes(ctx context.Context, peer *enode.Node, hash
 // first seen time if the block doesn't exist yet. If it exists, updates the
 // TimeFirstSeenHash if the new time is earlier.
 func (d *Datastore) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
-	if d.client == nil || !d.ShouldWriteBlocks() {
+	if d.client == nil || (!d.ShouldWriteBlocks() && !d.shouldWriteFirstBlockEvent) {
 		return
 	}
 
@@ -249,6 +249,10 @@ func (d *Datastore) writeBlockHashFirstSeen(ctx context.Context, peer *enode.Nod
 	// Write block event if flag enabled (cache check in protocol.go already verified first-seen)
 	if d.shouldWriteFirstBlockEvent && peer != nil {
 		d.writeEvent(peer, BlockEventsKind, hash, BlocksKind, tfsh)
+	}
+
+	if !d.shouldWriteBlocks {
+		return
 	}
 
 	key := datastore.NameKey(BlocksKind, hash.Hex(), nil)
