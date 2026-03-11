@@ -123,4 +123,3 @@ func handleAPI(server *ethp2p.Server, conns *p2p.Conns) {
 		log.Error().Err(err).Msg("Failed to start API handler")
 	}
 }
-

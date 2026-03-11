@@ -29,10 +29,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
 	"github.com/0xPolygon/polygon-cli/flag"
 	"github.com/0xPolygon/polygon-cli/p2p"
 	"github.com/0xPolygon/polygon-cli/p2p/database"
+	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
 	"github.com/0xPolygon/polygon-cli/rpctypes"
 )
 

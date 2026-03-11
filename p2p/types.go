@@ -448,4 +448,3 @@ type rawPooledTransactionsPacket struct {
 	RequestId uint64
 	Txs       []rlp.RawValue
 }
-

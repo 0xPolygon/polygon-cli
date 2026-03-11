@@ -200,4 +200,3 @@ func BenchmarkBloomSetFilterNotContained(b *testing.B) {
 		bloom.FilterNotContained(batch)
 	}
 }
-
