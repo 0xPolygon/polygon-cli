@@ -398,6 +398,14 @@ func (d *Datastore) newDatastoreHeader(header *types.Header, tfs time.Time, isPa
 	}
 }
 
+// writeFirstSeen sets hash timing if it doesn't exist or if new timestamp is earlier.
+func (d *Datastore) writeFirstSeen(block *DatastoreBlock, tfs time.Time) {
+	if block.TimeFirstSeenHash.IsZero() || tfs.Before(block.TimeFirstSeenHash) {
+		block.TimeFirstSeenHash = tfs
+		block.SensorFirstSeenHash = d.sensorID
+	}
+}
+
 // newDatastoreTransaction creates a DatastoreTransaction from a types.Transaction. Some
 // values are converted into strings to prevent a loss of precision.
 func (d *Datastore) newDatastoreTransaction(tx *types.Transaction, tfs time.Time) *DatastoreTransaction {
@@ -447,32 +455,27 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 		// are nil we will just set them.
 		_ = tx.Get(key, &dsBlock)
 
+		modified := false
+
 		if dsBlock.DatastoreHeader == nil || tfs.Before(dsBlock.TimeFirstSeen) {
+			modified = true
+
 			// Create new header with current timing
 			header := d.newDatastoreHeader(block.Header(), tfs, false)
 
-			// Preserve earlier global timestamps from any earlier announcement
-			if dsBlock.DatastoreHeader != nil &&
-				!dsBlock.TimeFirstSeen.IsZero() &&
-				dsBlock.TimeFirstSeen.Before(tfs) {
-				header.TimeFirstSeen = dsBlock.TimeFirstSeen
-				header.SensorFirstSeen = dsBlock.SensorFirstSeen
-			}
-
 			// Set hash timing if it doesn't exist or if new timestamp is earlier
-			if dsBlock.TimeFirstSeenHash.IsZero() || tfs.Before(dsBlock.TimeFirstSeenHash) {
-				dsBlock.TimeFirstSeenHash = tfs
-				dsBlock.SensorFirstSeenHash = d.sensorID
-			}
+			d.writeFirstSeen(&dsBlock, tfs)
 
 			dsBlock.DatastoreHeader = header
 		}
 
 		if len(dsBlock.TotalDifficulty) == 0 {
+			modified = true
 			dsBlock.TotalDifficulty = td.String()
 		}
 
 		if dsBlock.Transactions == nil && len(block.Transactions()) > 0 {
+			modified = true
 			if d.shouldWriteTransactions {
 				d.writeTransactions(ctx, block.Transactions(), tfs)
 			}
@@ -484,6 +487,7 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 		}
 
 		if dsBlock.Uncles == nil && len(block.Uncles()) > 0 {
+			modified = true
 			dsBlock.Uncles = make([]*datastore.Key, 0, len(block.Uncles()))
 			for _, uncle := range block.Uncles() {
 				d.writeBlockHeader(ctx, uncle, tfs, false)
@@ -491,8 +495,12 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 			}
 		}
 
-		_, err := tx.Put(key, &dsBlock)
-		return err
+		if modified {
+			_, err := tx.Put(key, &dsBlock)
+			return err
+		}
+
+		return nil
 	}, datastore.MaxAttempts(MaxAttempts))
 
 	if err != nil {
@@ -549,30 +557,21 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, 
 
 	_, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
 		var block DatastoreBlock
-		_ = tx.Get(key, &block)
+		err := tx.Get(key, &block)
 
-		// Create or replace header if it doesn't exist or if timestamp is earlier
-		if block.DatastoreHeader == nil || tfs.Before(block.DatastoreHeader.TimeFirstSeen) {
-			newHeader := d.newDatastoreHeader(header, tfs, isParent)
-
-			// Preserve earlier global timestamps
-			if block.DatastoreHeader != nil &&
-				!block.TimeFirstSeen.IsZero() &&
-				block.TimeFirstSeen.Before(tfs) {
-				newHeader.TimeFirstSeen = block.TimeFirstSeen
-				newHeader.SensorFirstSeen = block.SensorFirstSeen
-			}
-
-			// Set hash timing if it doesn't exist or if new timestamp is earlier
-			if block.TimeFirstSeenHash.IsZero() || tfs.Before(block.TimeFirstSeenHash) {
-				block.TimeFirstSeenHash = tfs
-				block.SensorFirstSeenHash = d.sensorID
-			}
-
-			block.DatastoreHeader = newHeader
+		// If block header already exists and new timestamp is not earlier, don't overwrite
+		if err == nil && block.DatastoreHeader != nil && !tfs.Before(block.TimeFirstSeen) {
+			return nil
 		}
 
-		_, err := tx.Put(key, &block)
+		// Create new header with current timing
+		newHeader := d.newDatastoreHeader(header, tfs, isParent)
+
+		// Set hash timing if it doesn't exist or if new timestamp is earlier
+		d.writeFirstSeen(&block, tfs)
+
+		block.DatastoreHeader = newHeader
+		_, err = tx.Put(key, &block)
 		return err
 	}, datastore.MaxAttempts(MaxAttempts))
 
@@ -590,10 +589,10 @@ func (d *Datastore) writeBlockBody(ctx context.Context, body *eth.BlockBody, has
 			log.Debug().Err(err).Str("hash", hash.Hex()).Msg("Failed to fetch block when writing block body")
 		}
 
-		shouldWrite := false
+		modified := false
 
 		if block.Transactions == nil && len(body.Transactions) > 0 {
-			shouldWrite = true
+			modified = true
 			if d.shouldWriteTransactions {
 				d.writeTransactions(ctx, body.Transactions, tfs)
 			}
@@ -605,7 +604,7 @@ func (d *Datastore) writeBlockBody(ctx context.Context, body *eth.BlockBody, has
 		}
 
 		if block.Uncles == nil && len(body.Uncles) > 0 {
-			shouldWrite = true
+			modified = true
 			block.Uncles = make([]*datastore.Key, 0, len(body.Uncles))
 			for _, uncle := range body.Uncles {
 				d.writeBlockHeader(ctx, uncle, tfs, false)
@@ -613,7 +612,7 @@ func (d *Datastore) writeBlockBody(ctx context.Context, body *eth.BlockBody, has
 			}
 		}
 
-		if shouldWrite {
+		if modified {
 			_, err := tx.Put(key, &block)
 			return err
 		}
