@@ -175,7 +175,7 @@ func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *typ
 		return
 	}
 
-	if d.ShouldWriteBlockEvents() {
+	if d.ShouldWriteBlockEvents() || d.shouldWriteFirstBlockEvent {
 		d.runAsync(func() {
 			d.writeEvent(peer, BlockEventsKind, block.Hash(), BlocksKind, tfs)
 		})
