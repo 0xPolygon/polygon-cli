@@ -20,8 +20,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
 	"github.com/0xPolygon/polygon-cli/p2p/database"
+	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
 )
 
 const (
@@ -532,21 +532,27 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		// Mark as known from this peer
 		c.addKnownBlock(hash)
 
-		// Check what parts of the block we already have
-		cache, ok := c.conns.Blocks().Get(hash)
+		// Atomically check and add to cache to prevent duplicate writes from
+		// concurrent peers receiving the same block hash.
+		ok := c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
+			if cache != (BlockCache{}) {
+				return cache
+			}
+			return BlockCache{}
+		})
+
 		if ok {
 			continue
 		}
 
 		// Write hash first seen time immediately for new blocks
-		c.db.WriteBlockHashFirstSeen(ctx, hash, tfs)
+		c.db.WriteBlockHashFirstSeen(ctx, c.node, hash, tfs)
 
 		// Request only the parts we don't have
-		if err := c.getBlockData(hash, cache, false); err != nil {
+		if err := c.getBlockData(hash, BlockCache{}, false); err != nil {
 			return err
 		}
 
-		c.conns.Blocks().Add(hash, BlockCache{})
 		uniqueHashes = append(uniqueHashes, hash)
 		uniqueNumbers = append(uniqueNumbers, entry.Number)
 	}
@@ -1009,23 +1015,36 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
-	// Check if we already have the full block in the cache
-	if cache, ok := c.conns.Blocks().Peek(hash); ok && cache.TD != nil {
+	// Atomically check and add to cache to prevent duplicate writes from
+	// concurrent peers receiving the same block.
+	var exists bool
+	ok := c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
+		if cache.TD != nil {
+			exists = true
+			return cache
+		}
+
+		return BlockCache{
+			Header: packet.Block.Header(),
+			Body: &eth.BlockBody{
+				Transactions: packet.Block.Transactions(),
+				Uncles:       packet.Block.Uncles(),
+				Withdrawals:  packet.Block.Withdrawals(),
+			},
+			TD: packet.TD,
+		}
+	})
+
+	if exists {
 		return nil
 	}
 
-	c.db.WriteBlock(ctx, c.node, packet.Block, packet.TD, tfs)
+	// Write first-seen event for blocks arriving directly (not announced via hash first)
+	if !ok {
+		c.db.WriteBlockHashFirstSeen(ctx, c.node, hash, tfs)
+	}
 
-	// Update cache to store the full block
-	c.conns.Blocks().Add(hash, BlockCache{
-		Header: packet.Block.Header(),
-		Body: &eth.BlockBody{
-			Transactions: packet.Block.Transactions(),
-			Uncles:       packet.Block.Uncles(),
-			Withdrawals:  packet.Block.Withdrawals(),
-		},
-		TD: packet.TD,
-	})
+	c.db.WriteBlock(ctx, c.node, packet.Block, packet.TD, tfs)
 
 	// Broadcast block or block hash to other peers asynchronously
 	go c.conns.BroadcastBlock(packet.Block, packet.TD)

@@ -35,6 +35,7 @@ type Datastore struct {
 	maxConcurrency               int
 	shouldWriteBlocks            bool
 	shouldWriteBlockEvents       bool
+	shouldWriteFirstBlockEvent   bool
 	shouldWriteTransactions      bool
 	shouldWriteTransactionEvents bool
 	shouldWritePeers             bool
@@ -127,6 +128,7 @@ type DatastoreOptions struct {
 	MaxConcurrency               int
 	ShouldWriteBlocks            bool
 	ShouldWriteBlockEvents       bool
+	ShouldWriteFirstBlockEvent   bool
 	ShouldWriteTransactions      bool
 	ShouldWriteTransactionEvents bool
 	ShouldWritePeers             bool
@@ -148,6 +150,7 @@ func NewDatastore(ctx context.Context, opts DatastoreOptions) Database {
 		maxConcurrency:               opts.MaxConcurrency,
 		shouldWriteBlocks:            opts.ShouldWriteBlocks,
 		shouldWriteBlockEvents:       opts.ShouldWriteBlockEvents,
+		shouldWriteFirstBlockEvent:   opts.ShouldWriteFirstBlockEvent,
 		shouldWriteTransactions:      opts.ShouldWriteTransactions,
 		shouldWriteTransactionEvents: opts.ShouldWriteTransactionEvents,
 		shouldWritePeers:             opts.ShouldWritePeers,
@@ -231,18 +234,28 @@ func (d *Datastore) WriteBlockHashes(ctx context.Context, peer *enode.Node, hash
 // WriteBlockHashFirstSeen writes a partial block entry with just the hash
 // first seen time if the block doesn't exist yet. If it exists, updates the
 // TimeFirstSeenHash if the new time is earlier.
-func (d *Datastore) WriteBlockHashFirstSeen(ctx context.Context, hash common.Hash, tfsh time.Time) {
-	if d.client == nil || !d.ShouldWriteBlocks() {
+func (d *Datastore) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
+	if d.client == nil || (!d.ShouldWriteBlocks() && !d.shouldWriteFirstBlockEvent) {
 		return
 	}
 
 	d.runAsync(func() {
-		d.writeBlockHashFirstSeen(ctx, hash, tfsh)
+		d.writeBlockHashFirstSeen(ctx, peer, hash, tfsh)
 	})
 }
 
 // writeBlockHashFirstSeen performs the actual transaction to write or update the block hash first seen time.
-func (d *Datastore) writeBlockHashFirstSeen(ctx context.Context, hash common.Hash, tfsh time.Time) {
+func (d *Datastore) writeBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
+	// Write block event if flag enabled and block events are disabled (mutually exclusive).
+	// Cache check in protocol.go already verified first-seen.
+	if d.shouldWriteFirstBlockEvent && !d.ShouldWriteBlockEvents() && peer != nil {
+		d.writeEvent(peer, BlockEventsKind, hash, BlocksKind, tfsh)
+	}
+
+	if !d.shouldWriteBlocks {
+		return
+	}
+
 	key := datastore.NameKey(BlocksKind, hash.Hex(), nil)
 
 	_, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
@@ -390,17 +403,8 @@ func (d *Datastore) newDatastoreHeader(header *types.Header, tfs time.Time, isPa
 	}
 }
 
-// writeFirstSeen updates timing fields on a header and block, preserving earlier timestamps.
-func (d *Datastore) writeFirstSeen(header *DatastoreHeader, block *DatastoreBlock, tfs time.Time) {
-	// Preserve earlier header timing if it exists
-	if block.DatastoreHeader != nil &&
-		!block.TimeFirstSeen.IsZero() &&
-		block.TimeFirstSeen.Before(tfs) {
-		header.TimeFirstSeen = block.TimeFirstSeen
-		header.SensorFirstSeen = block.SensorFirstSeen
-	}
-
-	// Set hash timing if it doesn't exist or if new timestamp is earlier
+// writeFirstSeen sets hash timing if it doesn't exist or if new timestamp is earlier.
+func (d *Datastore) writeFirstSeen(block *DatastoreBlock, tfs time.Time) {
 	if block.TimeFirstSeenHash.IsZero() || tfs.Before(block.TimeFirstSeenHash) {
 		block.TimeFirstSeenHash = tfs
 		block.SensorFirstSeenHash = d.sensorID
@@ -456,27 +460,27 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 		// are nil we will just set them.
 		_ = tx.Get(key, &dsBlock)
 
-		shouldWrite := false
+		modified := false
 
 		if dsBlock.DatastoreHeader == nil || tfs.Before(dsBlock.TimeFirstSeen) {
-			shouldWrite = true
+			modified = true
 
 			// Create new header with current timing
 			header := d.newDatastoreHeader(block.Header(), tfs, false)
 
-			// Preserve earlier timestamps from any earlier announcement
-			d.writeFirstSeen(header, &dsBlock, tfs)
+			// Preserve earliest first-seen timestamp
+			d.writeFirstSeen(&dsBlock, tfs)
 
 			dsBlock.DatastoreHeader = header
 		}
 
 		if len(dsBlock.TotalDifficulty) == 0 {
-			shouldWrite = true
+			modified = true
 			dsBlock.TotalDifficulty = td.String()
 		}
 
 		if dsBlock.Transactions == nil && len(block.Transactions()) > 0 {
-			shouldWrite = true
+			modified = true
 			if d.shouldWriteTransactions {
 				d.writeTransactions(ctx, block.Transactions(), tfs)
 			}
@@ -488,7 +492,7 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 		}
 
 		if dsBlock.Uncles == nil && len(block.Uncles()) > 0 {
-			shouldWrite = true
+			modified = true
 			dsBlock.Uncles = make([]*datastore.Key, 0, len(block.Uncles()))
 			for _, uncle := range block.Uncles() {
 				d.writeBlockHeader(ctx, uncle, tfs, false)
@@ -496,7 +500,7 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 			}
 		}
 
-		if shouldWrite {
+		if modified {
 			_, err := tx.Put(key, &dsBlock)
 			return err
 		}
@@ -568,8 +572,8 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, 
 		// Create new header with current timing
 		newHeader := d.newDatastoreHeader(header, tfs, isParent)
 
-		// Preserve earlier timestamps from any earlier announcement or full block
-		d.writeFirstSeen(newHeader, &block, tfs)
+		// Preserve earliest first-seen timestamp
+		d.writeFirstSeen(&block, tfs)
 
 		block.DatastoreHeader = newHeader
 		_, err = tx.Put(key, &block)
@@ -590,10 +594,10 @@ func (d *Datastore) writeBlockBody(ctx context.Context, body *eth.BlockBody, has
 			log.Debug().Err(err).Str("hash", hash.Hex()).Msg("Failed to fetch block when writing block body")
 		}
 
-		shouldWrite := false
+		modified := false
 
 		if block.Transactions == nil && len(body.Transactions) > 0 {
-			shouldWrite = true
+			modified = true
 			if d.shouldWriteTransactions {
 				d.writeTransactions(ctx, body.Transactions, tfs)
 			}
@@ -605,7 +609,7 @@ func (d *Datastore) writeBlockBody(ctx context.Context, body *eth.BlockBody, has
 		}
 
 		if block.Uncles == nil && len(body.Uncles) > 0 {
-			shouldWrite = true
+			modified = true
 			block.Uncles = make([]*datastore.Key, 0, len(body.Uncles))
 			for _, uncle := range body.Uncles {
 				d.writeBlockHeader(ctx, uncle, tfs, false)
@@ -613,7 +617,7 @@ func (d *Datastore) writeBlockBody(ctx context.Context, body *eth.BlockBody, has
 			}
 		}
 
-		if shouldWrite {
+		if modified {
 			_, err := tx.Put(key, &block)
 			return err
 		}
@@ -640,6 +644,10 @@ func (d *Datastore) writeTransactions(ctx context.Context, txs []*types.Transact
 	if _, err := d.client.PutMulti(ctx, keys, transactions); err != nil {
 		log.Error().Err(err).Msg("Failed to write transactions")
 	}
+}
+
+func (d *Datastore) ShouldWriteFirstBlockEvent() bool {
+	return d.shouldWriteFirstBlockEvent
 }
 
 func (d *Datastore) NodeList(ctx context.Context, limit int) ([]string, error) {

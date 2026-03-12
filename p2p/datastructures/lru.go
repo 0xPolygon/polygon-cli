@@ -191,9 +191,10 @@ func (c *LRU[K, V]) PeekManyWithKeys(keys []K) ([]K, []V) {
 
 // Update atomically updates a value in the cache using the provided update function.
 // The update function receives the current value (or zero value if not found) and
-// returns the new value to store. This is thread-safe and prevents race conditions
-// in get-modify-add patterns.
-func (c *LRU[K, V]) Update(key K, updateFn func(V) V) {
+// returns the new value to store. Returns true if the key already existed (and was
+// not expired), false if a new entry was created. This is thread-safe and prevents
+// race conditions in get-modify-add patterns.
+func (c *LRU[K, V]) Update(key K, updateFn func(V) V) (existed bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -213,7 +214,7 @@ func (c *LRU[K, V]) Update(key K, updateFn func(V) V) {
 			c.list.MoveToFront(elem)
 			e.value = updateFn(currentVal)
 			e.expiresAt = expiresAt
-			return
+			return true
 		}
 		// Entry expired, remove it
 		c.list.Remove(elem)
@@ -239,6 +240,8 @@ func (c *LRU[K, V]) Update(key K, updateFn func(V) V) {
 			delete(c.items, e.key)
 		}
 	}
+
+	return false
 }
 
 // Remove removes a key from the cache and returns the value if it existed.

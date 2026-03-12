@@ -47,6 +47,7 @@ func newBlockInfo(header *types.Header) *blockInfo {
 
 // apiData represents all sensor information including node info and peer data.
 type apiData struct {
+	SensorID  string              `json:"sensor_id"`
 	ENR       string              `json:"enr"`
 	URL       string              `json:"enode"`
 	PeerCount int                 `json:"peer_count"`
@@ -105,6 +106,7 @@ func handleAPI(server *ethp2p.Server, conns *p2p.Conns) {
 		}
 
 		data := apiData{
+			SensorID:  inputSensorParams.SensorID,
 			ENR:       server.NodeInfo().ENR,
 			URL:       server.Self().URLv4(),
 			PeerCount: len(peers),
@@ -123,4 +125,3 @@ func handleAPI(server *ethp2p.Server, conns *p2p.Conns) {
 		log.Error().Err(err).Msg("Failed to start API handler")
 	}
 }
-

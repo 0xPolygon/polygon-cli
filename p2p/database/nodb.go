@@ -34,7 +34,7 @@ func (n *nodb) WriteBlockHashes(ctx context.Context, peer *enode.Node, hashes []
 }
 
 // WriteBlockHashFirstSeen does nothing.
-func (n *nodb) WriteBlockHashFirstSeen(ctx context.Context, hash common.Hash, tfsh time.Time) {
+func (n *nodb) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
 }
 
 // WriteBlockBody does nothing.
@@ -66,6 +66,11 @@ func (n *nodb) ShouldWriteBlocks() bool {
 
 // ShouldWriteBlockEvents returns false.
 func (n *nodb) ShouldWriteBlockEvents() bool {
+	return false
+}
+
+// ShouldWriteFirstBlockEvent returns false.
+func (n *nodb) ShouldWriteFirstBlockEvent() bool {
 	return false
 }
 
