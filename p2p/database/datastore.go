@@ -175,7 +175,7 @@ func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *typ
 		return
 	}
 
-	if d.ShouldWriteBlockEvents() || d.shouldWriteFirstBlockEvent {
+	if d.ShouldWriteBlockEvents() {
 		d.runAsync(func() {
 			d.writeEvent(peer, BlockEventsKind, block.Hash(), BlocksKind, tfs)
 		})
@@ -246,8 +246,9 @@ func (d *Datastore) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Nod
 
 // writeBlockHashFirstSeen performs the actual transaction to write or update the block hash first seen time.
 func (d *Datastore) writeBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
-	// Write block event if flag enabled (cache check in protocol.go already verified first-seen)
-	if d.shouldWriteFirstBlockEvent && peer != nil {
+	// Write block event if flag enabled and block events are disabled (mutually exclusive).
+	// Cache check in protocol.go already verified first-seen.
+	if d.shouldWriteFirstBlockEvent && !d.ShouldWriteBlockEvents() && peer != nil {
 		d.writeEvent(peer, BlockEventsKind, hash, BlocksKind, tfsh)
 	}
 

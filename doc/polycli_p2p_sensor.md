@@ -142,7 +142,7 @@ polycli p2p sensor amoy-nodes.json \
       --txs-cache-ttl duration        time to live for transaction cache entries (0 for no expiration) (default 10m0s)
       --write-block-events            write block events to database (default true)
   -B, --write-blocks                  write blocks to database (default true)
-      --write-first-block-event       write one block event per block on first-seen (use with --write-block-events=false to reduce write load)
+      --write-first-block-event       write one block event on first-seen only (requires --write-block-events=false)
       --write-peers                   write peers to database (default true)
       --write-tx-events               write transaction events to database (this option can significantly increase CPU and memory usage) (default true)
   -t, --write-txs                     write transactions to database (this option can significantly increase CPU and memory usage) (default true)

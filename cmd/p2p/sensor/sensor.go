@@ -479,7 +479,7 @@ will result in less chance of missing data but can significantly increase memory
 	f.BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "write blocks to database")
 	f.BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "write block events to database")
 	f.BoolVar(&inputSensorParams.ShouldWriteFirstBlockEvent, "write-first-block-event", false,
-		"write one block event per block on first-seen (use with --write-block-events=false to reduce write load)")
+		"write one block event on first-seen only (requires --write-block-events=false)")
 	f.BoolVarP(&inputSensorParams.ShouldWriteTransactions, "write-txs", "t", true,
 		`write transactions to database (this option can significantly increase CPU and memory usage)`)
 	f.BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,

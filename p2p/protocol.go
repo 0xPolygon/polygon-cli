@@ -532,8 +532,15 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		// Mark as known from this peer
 		c.addKnownBlock(hash)
 
-		// Check what parts of the block we already have
-		cache, ok := c.conns.Blocks().Get(hash)
+		// Atomically check and add to cache to prevent duplicate writes from
+		// concurrent peers receiving the same block hash.
+		ok := c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
+			if cache != (BlockCache{}) {
+				return cache
+			}
+			return BlockCache{}
+		})
+
 		if ok {
 			continue
 		}
@@ -542,11 +549,10 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		c.db.WriteBlockHashFirstSeen(ctx, c.node, hash, tfs)
 
 		// Request only the parts we don't have
-		if err := c.getBlockData(hash, cache, false); err != nil {
+		if err := c.getBlockData(hash, BlockCache{}, false); err != nil {
 			return err
 		}
 
-		c.conns.Blocks().Add(hash, BlockCache{})
 		uniqueHashes = append(uniqueHashes, hash)
 		uniqueNumbers = append(uniqueNumbers, entry.Number)
 	}
@@ -1011,12 +1017,13 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 
 	// Atomically check and add to cache to prevent duplicate writes from
 	// concurrent peers receiving the same block.
-	update := false
-	c.conns.Blocks().Update(hash, func(existing BlockCache) BlockCache {
-		if existing.TD != nil {
-			return existing // Already have full block
+	var exists bool
+	ok := c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
+		if cache.TD != nil {
+			exists = true
+			return cache
 		}
-		update = true
+
 		return BlockCache{
 			Header: packet.Block.Header(),
 			Body: &eth.BlockBody{
@@ -1028,8 +1035,13 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		}
 	})
 
-	if !update {
+	if exists {
 		return nil
+	}
+
+	// Write first-seen event for blocks arriving directly (not announced via hash first)
+	if !ok {
+		c.db.WriteBlockHashFirstSeen(ctx, c.node, hash, tfs)
 	}
 
 	c.db.WriteBlock(ctx, c.node, packet.Block, packet.TD, tfs)
