@@ -278,9 +278,7 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 	// Start worker goroutines
 	var wg sync.WaitGroup
 	for range concurrency {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for req := range blockChan {
 				// Check if worker context is canceled
 				if workerCtx.Err() != nil {
@@ -329,7 +327,7 @@ func generateReport(ctx context.Context, ec *ethrpc.Client, report *BlockReport,
 					close(retryChan) // No more retries needed
 				}
 			}
-		}()
+		})
 	}
 
 	// Monitor goroutine to close blockChan when all work is done

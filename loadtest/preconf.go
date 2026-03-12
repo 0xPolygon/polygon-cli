@@ -101,9 +101,7 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 	var preconfStatus bool
 	var preconfError error
 	var preconfDuration time.Duration
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 
 		preconfStartTime := time.Now()
 		defer func() {
@@ -111,15 +109,13 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 		}()
 
 		preconfStatus, preconfError = util.WaitPreconf(context.Background(), pt.client, txHash, time.Minute)
-	}()
+	})
 
 	// wait for receipt
 	var receipt *types.Receipt
 	var receiptError error
 	var receiptDuration time.Duration
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -129,7 +125,7 @@ func (pt *PreconfTracker) Track(txHash common.Hash) {
 		}()
 
 		receipt, receiptError = util.WaitReceiptWithTimeout(context.Background(), pt.client, txHash, time.Minute)
-	}()
+	})
 
 	wg.Wait()
 
