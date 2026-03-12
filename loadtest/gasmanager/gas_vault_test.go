@@ -189,14 +189,12 @@ func TestGasVault_ConcurrentAccess(t *testing.T) {
 
 	// Spawn multiple goroutines trying to spend gas concurrently
 	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			err := vault.SpendOrWaitAvailableBudget(ctx, spendAmount)
 			if err != nil {
 				errors <- err
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -229,24 +227,20 @@ func TestGasVault_ConcurrentAddAndSpend(t *testing.T) {
 
 	// Adders
 	for i := 0; i < numAdders; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			vault.AddGas(addAmount)
-		}()
+		})
 	}
 
 	// Spenders
 	errors := make(chan error, numSpenders)
 	for i := 0; i < numSpenders; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			err := vault.SpendOrWaitAvailableBudget(ctx, spendAmount)
 			if err != nil {
 				errors <- err
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -278,14 +272,12 @@ func TestGasVault_MultipleSpendersWaiting(t *testing.T) {
 
 	// Start multiple spenders that will all wait
 	for i := 0; i < numSpenders; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			err := vault.SpendOrWaitAvailableBudget(ctx, spendAmount)
 			if err == nil {
 				successCount <- 1
 			}
-		}()
+		})
 	}
 
 	// Give goroutines time to start waiting
