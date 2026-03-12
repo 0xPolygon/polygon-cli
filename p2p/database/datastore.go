@@ -468,7 +468,7 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 			// Create new header with current timing
 			header := d.newDatastoreHeader(block.Header(), tfs, false)
 
-			// Set hash timing if it doesn't exist or if new timestamp is earlier
+			// Preserve earliest first-seen timestamp
 			d.writeFirstSeen(&dsBlock, tfs)
 
 			dsBlock.DatastoreHeader = header
@@ -572,7 +572,7 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, 
 		// Create new header with current timing
 		newHeader := d.newDatastoreHeader(header, tfs, isParent)
 
-		// Set hash timing if it doesn't exist or if new timestamp is earlier
+		// Preserve earliest first-seen timestamp
 		d.writeFirstSeen(&block, tfs)
 
 		block.DatastoreHeader = newHeader
