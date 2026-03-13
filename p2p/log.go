@@ -89,6 +89,7 @@ func (c *MessageCount) IsEmpty() bool {
 	return sum(
 		c.BlockHeaders,
 		c.BlockBodies,
+		c.Blocks,
 		c.BlockHashes,
 		c.BlockHeaderRequests,
 		c.BlockBodiesRequests,
@@ -98,16 +99,19 @@ func (c *MessageCount) IsEmpty() bool {
 		c.Pings,
 		c.Errors,
 		c.Disconnects,
+		c.NewWitness,
+		c.NewWitnessHashes,
+		c.GetWitnessRequest,
+		c.Witness,
 	) == 0
 }
 
 func sum(ints ...int64) int64 {
-	var sum int64 = 0
+	var total int64
 	for _, i := range ints {
-		sum += i
+		total += i
 	}
-
-	return sum
+	return total
 }
 
 // IncrementByName increments the appropriate field based on message name.
