@@ -94,6 +94,10 @@ polycli p2p sensor amoy-nodes.json \
       --api-port uint                 port API server will listen on (default 8080)
       --blocks-cache-ttl duration     time to live for block cache entries (0 for no expiration) (default 10m0s)
   -b, --bootnodes string              comma separated nodes used for bootstrapping
+      --broadcast-block-hashes        broadcast block hashes to peers
+      --broadcast-blocks              broadcast full blocks to peers
+      --broadcast-tx-hashes           broadcast transaction hashes to peers
+      --broadcast-txs                 broadcast full transactions to peers
       --database string               which database to persist data to, options are:
                                         - datastore (GCP Datastore)
                                         - json (output to stdout)
@@ -107,12 +111,17 @@ polycli p2p sensor amoy-nodes.json \
   -h, --help                          help for sensor
       --key string                    hex-encoded private key (cannot be set with --key-file)
   -k, --key-file string               private key file (cannot be set with --key)
+      --known-txs-bloom-hashes uint   number of hash functions for known txs bloom filter (default 7)
+      --known-txs-bloom-size uint     bloom filter size in bits for tracking known transactions per peer (default ~40KB per filter,
+                                      optimized for ~32K elements with ~1% false positive rate) (default 327680)
       --max-blocks int                maximum blocks to track across all peers (0 for no limit) (default 1024)
   -D, --max-db-concurrency int        maximum number of concurrent database operations to perform (increasing this
                                       will result in less chance of missing data but can significantly increase memory usage) (default 10000)
+      --max-known-blocks int          maximum block hashes to track per peer (0 for no limit) (default 1024)
       --max-parents int               maximum parent block hashes to track per peer (0 for no limit) (default 1024)
   -m, --max-peers int                 maximum number of peers to connect to (default 2000)
       --max-requests int              maximum request IDs to track per peer (0 for no limit) (default 2048)
+      --max-txs int                   maximum transactions to cache for serving to peers (0 for no limit) (default 32768)
       --nat string                    NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
   -n, --network-id uint               filter discovered nodes by this network ID
       --no-discovery                  disable P2P peer discovery
@@ -130,8 +139,10 @@ polycli p2p sensor amoy-nodes.json \
       --static-nodes string           static nodes file
       --trusted-nodes string          trusted nodes file
       --ttl duration                  time to live (default 336h0m0s)
+      --txs-cache-ttl duration        time to live for transaction cache entries (0 for no expiration) (default 10m0s)
       --write-block-events            write block events to database (default true)
   -B, --write-blocks                  write blocks to database (default true)
+      --write-first-block-event       write one block event on first-seen only (requires --write-block-events=false)
       --write-peers                   write peers to database (default true)
       --write-tx-events               write transaction events to database (this option can significantly increase CPU and memory usage) (default true)
   -t, --write-txs                     write transactions to database (this option can significantly increase CPU and memory usage) (default true)

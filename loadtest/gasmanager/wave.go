@@ -70,11 +70,11 @@ func (w *wave) MoveNext() {
 	}
 }
 
-func (w *wave) Y() float64      { return w.points[w.x] }
-func (w *wave) X() float64      { return w.x }
-func (w *wave) Period() uint64  { return w.config.Period }
+func (w *wave) Y() float64        { return w.points[w.x] }
+func (w *wave) X() float64        { return w.x }
+func (w *wave) Period() uint64    { return w.config.Period }
 func (w *wave) Amplitude() uint64 { return w.config.Amplitude }
-func (w *wave) Target() uint64  { return w.config.Target }
+func (w *wave) Target() uint64    { return w.config.Target }
 
 // Wave computation functions
 

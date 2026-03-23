@@ -272,10 +272,7 @@ func checkClaimCalldata(client *ethclient.Client, bridge common.Address, claimHa
 	// find the claim linked to the event using DFS
 	callStack := stack.New()
 	callStack.Push(*c)
-	for {
-		if callStack.Len() == 0 {
-			break
-		}
+	for callStack.Len() != 0 {
 
 		currentCallInterface := callStack.Pop()
 		currentCall, ok := currentCallInterface.(call)
@@ -462,7 +459,11 @@ func GetBalanceTreeData(opts *BalanceTreeOptions) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	defer file.Close() // Ensure the file is closed after reading
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Str("file", claimsFileName).Msg("Failed to close claims file")
+		}
+	}()
 
 	// Read the entire file content
 	l2Claims, err := io.ReadAll(file)
@@ -475,7 +476,11 @@ func GetBalanceTreeData(opts *BalanceTreeOptions) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	defer file2.Close() // Ensure the file is closed after reading
+	defer func() {
+		if closeErr := file2.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Str("file", l2FileName).Msg("Failed to close deposits file")
+		}
+	}()
 
 	// Read the entire file content
 	l2Deposits, err := io.ReadAll(file2)

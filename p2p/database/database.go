@@ -30,7 +30,7 @@ type Database interface {
 
 	// WriteBlockHashFirstSeen writes a partial block entry with just the hash
 	// first seen time if the block doesn't exist yet.
-	WriteBlockHashFirstSeen(context.Context, common.Hash, time.Time)
+	WriteBlockHashFirstSeen(context.Context, *enode.Node, common.Hash, time.Time)
 
 	// WriteBlockBody will write the block bodies if ShouldWriteBlocks returns
 	// true.
@@ -51,6 +51,7 @@ type Database interface {
 	MaxConcurrentWrites() int
 	ShouldWriteBlocks() bool
 	ShouldWriteBlockEvents() bool
+	ShouldWriteFirstBlockEvent() bool
 	ShouldWriteTransactions() bool
 	ShouldWriteTransactionEvents() bool
 	ShouldWritePeers() bool

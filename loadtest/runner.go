@@ -903,16 +903,9 @@ func (r *Runner) isCurrentBaseFeeGreaterThanMax(ctx context.Context, maxBaseFee 
 
 func (r *Runner) handleNonceReuse(ctx context.Context, tops *bind.TransactOpts, tErr error) {
 	// Start with assumption that we can reuse the nonce
-	reuseNonce := true
+	reuseNonce := !strings.Contains(tErr.Error(), "replacement transaction underpriced") && !strings.Contains(tErr.Error(), "transaction underpriced") && !strings.Contains(tErr.Error(), "nonce too low") && !strings.Contains(tErr.Error(), "already known") && !strings.Contains(tErr.Error(), "could not replace existing")
 
 	// If it is an error that consumes the nonce, we can't retry it
-	if strings.Contains(tErr.Error(), "replacement transaction underpriced") ||
-		strings.Contains(tErr.Error(), "transaction underpriced") ||
-		strings.Contains(tErr.Error(), "nonce too low") ||
-		strings.Contains(tErr.Error(), "already known") ||
-		strings.Contains(tErr.Error(), "could not replace existing") {
-		reuseNonce = false
-	}
 
 	// If we can reuse the nonce, add it back to the account pool
 	if reuseNonce {
@@ -1360,7 +1353,11 @@ func (r *Runner) dumpPrivateKeys() error {
 	if err != nil {
 		return fmt.Errorf("failed to create private keys file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			log.Error().Err(closeErr).Msg("Failed to close private keys file")
+		}
+	}()
 
 	for _, pk := range pks {
 		pkStr := util.GetPrivateKeyHex(pk)

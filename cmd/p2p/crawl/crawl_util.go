@@ -186,7 +186,11 @@ func (c *crawler) updateNode(n *enode.Node) int {
 		log.Error().Err(err).Msg("Dial failed")
 		return nodeDialErr
 	}
-	defer conn.Close()
+	defer func() {
+		if closeErr := conn.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Msg("Failed to close connection")
+		}
+	}()
 
 	hello, status, err = conn.Peer()
 	if err != nil {

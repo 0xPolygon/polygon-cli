@@ -134,7 +134,7 @@ func (j *JSONDatabase) Write(v any) {
 		return
 	}
 
-	fmt.Fprintln(os.Stdout, string(data))
+	_, _ = fmt.Fprintln(os.Stdout, string(data))
 }
 
 // WriteBlock writes the block and the block event as JSON.
@@ -238,7 +238,7 @@ func (j *JSONDatabase) WriteBlockHashes(ctx context.Context, peer *enode.Node, h
 
 // WriteBlockHashFirstSeen writes a partial block entry with just the hash
 // first seen time. For JSON output, this writes a separate record type.
-func (j *JSONDatabase) WriteBlockHashFirstSeen(ctx context.Context, hash common.Hash, tfsh time.Time) {
+func (j *JSONDatabase) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
 	if !j.ShouldWriteBlocks() {
 		return
 	}
@@ -372,6 +372,11 @@ func (j *JSONDatabase) ShouldWriteBlocks() bool {
 // ShouldWriteBlockEvents returns the configured value.
 func (j *JSONDatabase) ShouldWriteBlockEvents() bool {
 	return j.shouldWriteBlockEvents
+}
+
+// ShouldWriteFirstBlockEvent returns false for JSON database.
+func (j *JSONDatabase) ShouldWriteFirstBlockEvent() bool {
+	return false
 }
 
 // ShouldWriteTransactions returns the configured value.

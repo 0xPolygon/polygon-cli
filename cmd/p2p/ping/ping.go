@@ -107,7 +107,11 @@ var PingCmd = &cobra.Command{
 				if err != nil {
 					log.Error().Err(err).Msg("Dial failed")
 				} else {
-					defer conn.Close()
+					defer func() {
+						if closeErr := conn.Close(); closeErr != nil {
+							log.Debug().Err(closeErr).Msg("Failed to close connection")
+						}
+					}()
 					if hello, status, err = conn.Peer(); err != nil {
 						log.Error().Err(err).Msg("Peer failed")
 					}

@@ -75,7 +75,7 @@ func (m *MarkdownStreamer) StreamFinalSummary(summaries []TestSummary) error {
 }
 
 func (m *MarkdownStreamer) writeHeader() {
-	fmt.Fprint(m.writer, `# RPC Fuzz Test Results
+	_, _ = fmt.Fprint(m.writer, `# RPC Fuzz Test Results
 
   ## Test Executions
 
@@ -85,7 +85,7 @@ func (m *MarkdownStreamer) writeHeader() {
 }
 
 func (m *MarkdownStreamer) writeFooter(summaries []TestSummary) {
-	fmt.Fprint(m.writer, `
+	_, _ = fmt.Fprint(m.writer, `
 
   ## Summary
 
@@ -98,7 +98,7 @@ func (m *MarkdownStreamer) writeFooter(summaries []TestSummary) {
 		totalFailed += s.TestsFailed
 
 		successRate := s.SuccessRate * 100
-		fmt.Fprintf(m.writer, "- **%s**: %d/%d passed (%.1f%%)\n",
+		_, _ = fmt.Fprintf(m.writer, "- **%s**: %d/%d passed (%.1f%%)\n",
 			s.TestName,
 			s.TestsPassed,
 			s.TestsRan,
@@ -107,7 +107,7 @@ func (m *MarkdownStreamer) writeFooter(summaries []TestSummary) {
 	}
 
 	overallRate := float64(totalPassed) / float64(totalRan) * 100
-	fmt.Fprintf(m.writer, `
+	_, _ = fmt.Fprintf(m.writer, `
   ---
   **Overall**: %d tests completed, %d passed, %d failed (%.1f%% success rate)
 

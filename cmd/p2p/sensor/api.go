@@ -17,6 +17,7 @@ import (
 // (number of p2p messages), along with connection timing information.
 type peerData struct {
 	Name            string           `json:"name"`
+	ProtocolVersion uint             `json:"protocol_version"`
 	Received        p2p.MessageCount `json:"received"`
 	Sent            p2p.MessageCount `json:"sent"`
 	PacketsReceived p2p.MessageCount `json:"packets_received"`
@@ -46,6 +47,7 @@ func newBlockInfo(header *types.Header) *blockInfo {
 
 // apiData represents all sensor information including node info and peer data.
 type apiData struct {
+	SensorID  string              `json:"sensor_id"`
 	ENR       string              `json:"enr"`
 	URL       string              `json:"enode"`
 	PeerCount int                 `json:"peer_count"`
@@ -85,6 +87,7 @@ func handleAPI(server *ethp2p.Server, conns *p2p.Conns) {
 
 			peers[url] = peerData{
 				Name:            conns.GetPeerName(peerID),
+				ProtocolVersion: conns.GetPeerVersion(peerID),
 				Received:        messages.Received,
 				Sent:            messages.Sent,
 				PacketsReceived: messages.PacketsReceived,
@@ -103,6 +106,7 @@ func handleAPI(server *ethp2p.Server, conns *p2p.Conns) {
 		}
 
 		data := apiData{
+			SensorID:  inputSensorParams.SensorID,
 			ENR:       server.NodeInfo().ENR,
 			URL:       server.Self().URLv4(),
 			PeerCount: len(peers),
@@ -121,4 +125,3 @@ func handleAPI(server *ethp2p.Server, conns *p2p.Conns) {
 		log.Error().Err(err).Msg("Failed to start API handler")
 	}
 }
-

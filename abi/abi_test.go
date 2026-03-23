@@ -193,17 +193,17 @@ func TestAbiEncode(t *testing.T) {
 					"0x1234567",
 				},
 			},
-			ErrMsg: "Invalid string length",
+			ErrMsg: "invalid string length",
 		},
 		{
-			Name: "Error: invalid bytes Encoding. Odd number of digits",
+			Name: "Error: invalid bytes Encoding. odd number of digits",
 			Input: AbiEncodeInput{
 				FunctionSignature: "f(bytes)",
 				FunctionInputs: []string{
 					"0x1234567",
 				},
 			},
-			ErrMsg: "Odd number of digits",
+			ErrMsg: "odd number of digits",
 		},
 		{
 			// cast calldata "f(string)(string)" "adfjkadhsffdhjksfdahjsfhadjsfasdhjfdsjlkfadshkjladfshjkadfskjladsfjkldfajhkdjafhkadsfjkldjksafjkhldsfhjksadflhj kldsafjklhadfsjkahlsdfkjlhasdfjkadfhslajkhsadfsjkl"
@@ -277,7 +277,7 @@ func TestAbiEncode(t *testing.T) {
 					`[12,34,"yes"]`,
 				},
 			},
-			ErrMsg: `Failed to convert`,
+			ErrMsg: `failed to convert`,
 		},
 		{
 			// cast calldata "f(uint256[][])" '[[12,34,567],[987,654,321,0],[99999999,99999]]'
@@ -319,7 +319,7 @@ func TestAbiEncode(t *testing.T) {
 					`("matic",["123 street ave.","321 ave st."], 9999)`,
 				},
 			},
-			ErrMsg: `Mismatched length of tuple elements`,
+			ErrMsg: `mismatched length of tuple elements`,
 		},
 		{
 			// cast calldata "getMultipliedAndAddNumber(uint256,bytes3,bool,string,address,int256[],string[],string[][],(string,uint256,bool[]))" 100000 "0x123456" true "abc" "0x6fda56c57b0acadb96ed5624ac500c0429d59429" "[1,2,3,4]" '["hi","bye","YOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOZ","test"]' '[["hi","bye","test"], ["hhhhh","byebye","bytebye","bytebyte"]]' '("yesyesyesyes", 369, [true,false,true])'
