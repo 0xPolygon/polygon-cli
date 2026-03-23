@@ -6,7 +6,9 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/0xPolygon/polygon-cli/p2p"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -141,35 +143,71 @@ func handleBatchRequest(w http.ResponseWriter, body []byte, conns *p2p.Conns, ch
 		return
 	}
 
-	// Process all requests and collect valid transactions for batch broadcasting
+	// Validate all transactions concurrently using a worker pool.
+	type validationResult struct {
+		tx       *types.Transaction
+		response rpcResponse
+	}
+
+	results := make([]validationResult, len(requests))
+	indices := make(chan int, len(requests))
+
+	// Feed indices for requests that need validation.
+	for i, req := range requests {
+		if req.Method != "eth_sendRawTransaction" {
+			results[i] = validationResult{
+				response: rpcResponse{
+					JSONRPC: "2.0",
+					Error: &rpcError{
+						Code:    -32601,
+						Message: "Method not found",
+					},
+					ID: req.ID,
+				},
+			}
+			continue
+		}
+		indices <- i
+	}
+	close(indices)
+
+	workers := runtime.NumCPU()
+	if workers > len(requests) {
+		workers = len(requests)
+	}
+
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range indices {
+				tx, response := validateTx(requests[i], chainID)
+				if tx != nil {
+					results[i] = validationResult{
+						tx: tx,
+						response: rpcResponse{
+							JSONRPC: "2.0",
+							Result:  tx.Hash().Hex(),
+							ID:      requests[i].ID,
+						},
+					}
+				} else {
+					results[i] = validationResult{response: response}
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Collect results.
 	responses := make([]rpcResponse, 0, len(requests))
 	txs := make(types.Transactions, 0)
-
-	for _, req := range requests {
-		if req.Method != "eth_sendRawTransaction" {
-			responses = append(responses, rpcResponse{
-				JSONRPC: "2.0",
-				Error: &rpcError{
-					Code:    -32601,
-					Message: "Method not found",
-				},
-				ID: req.ID,
-			})
-			continue
+	for _, r := range results {
+		responses = append(responses, r.response)
+		if r.tx != nil {
+			txs = append(txs, r.tx)
 		}
-
-		tx, response := validateTx(req, chainID)
-		if tx == nil {
-			responses = append(responses, response)
-			continue
-		}
-
-		txs = append(txs, tx)
-		responses = append(responses, rpcResponse{
-			JSONRPC: "2.0",
-			Result:  tx.Hash().Hex(),
-			ID:      req.ID,
-		})
 	}
 
 	// Broadcast all valid transactions in a single batch if there are any

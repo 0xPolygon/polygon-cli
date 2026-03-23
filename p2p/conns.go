@@ -3,6 +3,7 @@ package p2p
 import (
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -117,57 +118,75 @@ func (c *Conns) BroadcastTx(tx *types.Transaction) int {
 // Returns the number of peers the transactions were successfully sent to.
 // If broadcast flags are disabled, this is a no-op.
 func (c *Conns) BroadcastTxs(txs types.Transactions) int {
-	if !c.shouldBroadcastTx {
+	if !c.shouldBroadcastTx || len(txs) == 0 {
 		return 0
 	}
 
+	// Pre-compute hashes once to avoid redundant computation per peer.
+	hashes := make([]common.Hash, len(txs))
+	txByHash := make(map[common.Hash]*types.Transaction, len(txs))
+	for i, tx := range txs {
+		h := tx.Hash()
+		hashes[i] = h
+		txByHash[h] = tx
+	}
+
+	// Snapshot peers under lock, then release before sending.
 	c.mu.RLock()
-	defer c.mu.RUnlock()
+	peers := make([]*conn, 0, len(c.conns))
+	for _, cn := range c.conns {
+		peers = append(peers, cn)
+	}
+	c.mu.RUnlock()
 
-	if len(txs) == 0 {
+	if len(peers) == 0 {
 		return 0
 	}
 
-	count := 0
-	for _, cn := range c.conns {
-		// Filter transactions this peer doesn't know about
-		unknownTxs := make(types.Transactions, 0, len(txs))
-		for _, tx := range txs {
-			if !cn.hasKnownTx(tx.Hash()) {
-				unknownTxs = append(unknownTxs, tx)
+	// Send to all peers concurrently.
+	var count atomic.Int32
+	var wg sync.WaitGroup
+	for _, cn := range peers {
+		wg.Add(1)
+		go func(cn *conn) {
+			defer wg.Done()
+
+			// Batch bloom filter lookup: one lock acquisition per peer.
+			unknownHashes := cn.filterUnknownTxHashes(hashes)
+			if len(unknownHashes) == 0 {
+				return
 			}
-		}
 
-		if len(unknownTxs) == 0 {
-			continue
-		}
+			unknownTxs := make(types.Transactions, 0, len(unknownHashes))
+			for _, h := range unknownHashes {
+				unknownTxs = append(unknownTxs, txByHash[h])
+			}
 
-		// Send as TransactionsPacket
-		packet := eth.TransactionsPacket(unknownTxs)
-		cn.countMsgSent(packet.Name(), float64(len(unknownTxs)))
-		if err := ethp2p.Send(cn.rw, eth.TransactionsMsg, packet); err != nil {
-			cn.logger.Debug().
-				Err(err).
-				Msg("Failed to send transactions")
-			continue
-		}
+			packet := eth.TransactionsPacket(unknownTxs)
+			cn.countMsgSent(packet.Name(), float64(len(unknownTxs)))
+			if err := ethp2p.Send(cn.rw, eth.TransactionsMsg, packet); err != nil {
+				cn.logger.Debug().
+					Err(err).
+					Msg("Failed to send transactions")
+				return
+			}
 
-		// Mark transactions as known for this peer
-		for _, tx := range unknownTxs {
-			cn.addKnownTx(tx.Hash())
-		}
-
-		count++
+			// Batch bloom filter insert: one lock acquisition per peer.
+			cn.addKnownTxHashes(unknownHashes)
+			count.Add(1)
+		}(cn)
 	}
+	wg.Wait()
 
-	if count > 0 {
+	total := int(count.Load())
+	if total > 0 {
 		log.Debug().
-			Int("peers", count).
+			Int("peers", total).
 			Int("txs", len(txs)).
 			Msg("Broadcasted transactions")
 	}
 
-	return count
+	return total
 }
 
 // BroadcastTxHashes enqueues transaction hashes to per-peer broadcast queues.
