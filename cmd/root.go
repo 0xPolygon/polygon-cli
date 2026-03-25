@@ -28,6 +28,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/nodekey"
 	"github.com/0xPolygon/polygon-cli/cmd/p2p"
 	"github.com/0xPolygon/polygon-cli/cmd/parsebatchl2data"
+	"github.com/0xPolygon/polygon-cli/cmd/pos"
 	"github.com/0xPolygon/polygon-cli/cmd/parseethwallet"
 	"github.com/0xPolygon/polygon-cli/cmd/plot"
 	"github.com/0xPolygon/polygon-cli/cmd/publish"
@@ -163,6 +164,7 @@ func NewPolycliCommand() *cobra.Command {
 		dockerlogger.Cmd,
 		contract.Cmd,
 		plot.Cmd,
+		pos.POSCmd,
 	)
 
 	return cmd
