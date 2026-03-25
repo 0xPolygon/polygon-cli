@@ -125,7 +125,7 @@ require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
@@ -175,7 +175,7 @@ require (
 	github.com/chromedp/chromedp v0.14.2
 	github.com/cometbft/cometbft v0.38.21
 	github.com/docker/docker v28.5.2+incompatible
-	github.com/fatih/color v1.18.0
+	github.com/fatih/color v1.19.0
 	github.com/gateway-fm/vectorized-poseidon-gold v1.0.0
 	github.com/gdamore/tcell/v2 v2.13.8
 	github.com/go-echarts/go-echarts/v2 v2.7.1
