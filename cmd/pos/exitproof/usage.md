@@ -25,8 +25,8 @@ When a user burns tokens on the Polygon PoS sidechain, they must later submit a 
 |------|----------|---------|-------------|
 | `--l1-rpc-url` | yes | — | L1 (Ethereum) RPC URL |
 | `--l2-rpc-url` | yes | — | L2 (Polygon PoS) RPC URL |
-| `--tx-hash` | yes | — | burn transaction hash on L2 |
 | `--root-chain-address` | yes | — | `RootChain` contract address on L1 |
+| `--tx-hash` | yes | — | burn transaction hash on L2 |
 | `--checkpoint-id` | yes | — | checkpoint ID covering the burn block (visible on Polygonscan under the Checkpoint tab) |
 | `--checkpoint-stride` | no | `10000` | number of L2 blocks per checkpoint; override for local testnets that use a smaller value |
 | `--log-index` | no | `0` | index of the burn log within the receipt; `0` works for most ERC20 withdrawals — increase if the token emits extra logs before the burn event |
@@ -47,6 +47,7 @@ Writes `0x`-prefixed ABI-encoded payload bytes to stdout. All progress and diagn
 payload=$(polycli pos exit-proof \
   --l1-rpc-url "${L1_RPC_URL}" \
   --l2-rpc-url "${L2_RPC_URL}" \
+  --root-chain-address "${ROOT_CHAIN_ADDRESS}" \
   --tx-hash "${burn_tx_hash}" \
   --checkpoint-id "${CHECKPOINT_ID}")
 
