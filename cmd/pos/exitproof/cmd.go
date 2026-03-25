@@ -34,11 +34,10 @@ const (
 	flagTxHash           = "tx-hash"
 	flagRootChainAddress = "root-chain-address"
 	flagCheckpointID     = "checkpoint-id"
+	flagCheckpointStride = "checkpoint-stride"
 	flagLogIndex         = "log-index"
 
-	defaultL2RPCURL      = "https://polygon-rpc.com"
-	defaultL1RPCURL      = "https://eth.llamarpc.com"
-	defaultRootChainAddr = "0x86E4Dc95c7FBdBf52e33D563BbDB00823894C287"
+	defaultCheckpointStride = uint64(10000)
 
 	// headerFetchBatchSize is the number of block headers fetched per RPC batch call.
 	headerFetchBatchSize = 100
@@ -65,8 +64,9 @@ type inputArgs struct {
 	l2RPCURL      string
 	txHash        string
 	rootChainAddr string
-	checkpointID  uint64
-	logIndex      uint
+	checkpointID     uint64
+	checkpointStride uint64
+	logIndex         uint
 }
 
 var args = inputArgs{}
@@ -79,29 +79,17 @@ var Cmd = &cobra.Command{
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	PreRunE: func(cmd *cobra.Command, _ []string) error {
-		if args.l1RPCURL == "" {
-			return fmt.Errorf("--l1-rpc-url is required")
-		}
 		if err := util.ValidateURL(args.l1RPCURL); err != nil {
 			return fmt.Errorf("--l1-rpc-url: %w", err)
 		}
-		if args.l2RPCURL == "" {
-			return fmt.Errorf("--l2-rpc-url is required")
-		}
 		if err := util.ValidateURL(args.l2RPCURL); err != nil {
 			return fmt.Errorf("--l2-rpc-url: %w", err)
-		}
-		if args.txHash == "" {
-			return fmt.Errorf("--tx-hash is required")
 		}
 		if len(args.txHash) != 66 || !strings.HasPrefix(args.txHash, "0x") {
 			return fmt.Errorf("--tx-hash must be a 0x-prefixed 32-byte hex string")
 		}
 		if !common.IsHexAddress(args.rootChainAddr) {
 			return fmt.Errorf("--root-chain-address is not a valid hex address: %s", args.rootChainAddr)
-		}
-		if args.checkpointID == 0 {
-			return fmt.Errorf("--checkpoint-id is required")
 		}
 		return nil
 	},
@@ -112,12 +100,18 @@ var Cmd = &cobra.Command{
 
 func init() {
 	f := Cmd.Flags()
-	f.StringVar(&args.l1RPCURL, flagL1RPCURL, defaultL1RPCURL, "Ethereum RPC URL")
-	f.StringVar(&args.l2RPCURL, flagL2RPCURL, defaultL2RPCURL, "Polygon PoS RPC URL")
+	f.StringVar(&args.l1RPCURL, flagL1RPCURL, "", "Ethereum RPC URL")
+	f.StringVar(&args.l2RPCURL, flagL2RPCURL, "", "Polygon PoS RPC URL")
 	f.StringVar(&args.txHash, flagTxHash, "", "burn transaction hash on L2")
-	f.StringVar(&args.rootChainAddr, flagRootChainAddress, defaultRootChainAddr, "RootChain contract address on L1")
+	f.StringVar(&args.rootChainAddr, flagRootChainAddress, "", "RootChain contract address on L1")
 	f.Uint64Var(&args.checkpointID, flagCheckpointID, 0, "checkpoint ID that covers the burn block (visible on Polygonscan under the Checkpoint tab)")
+	f.Uint64Var(&args.checkpointStride, flagCheckpointStride, defaultCheckpointStride, "number of L2 blocks per checkpoint (10000 on mainnet; override for local testnets)")
 	f.UintVar(&args.logIndex, flagLogIndex, 0, "index of the burn log within the receipt (0 works for most ERC20 withdrawals; increase if the token emits extra logs before the burn event)")
+	_ = Cmd.MarkFlagRequired(flagL1RPCURL)
+	_ = Cmd.MarkFlagRequired(flagL2RPCURL)
+	_ = Cmd.MarkFlagRequired(flagTxHash)
+	_ = Cmd.MarkFlagRequired(flagRootChainAddress)
+	_ = Cmd.MarkFlagRequired(flagCheckpointID)
 }
 
 // checkpointInfo holds a single RootChain checkpoint.
@@ -164,7 +158,7 @@ func run(ctx context.Context) error {
 		Str("txHash", txHash.Hex()).
 		Uint64("blockNumber", burnReceipt.BlockNumber.Uint64()).
 		Uint("logIndex", args.logIndex).
-		Msg("burn receipt fetched")
+		Msg("Burn receipt fetched")
 
 	// Step 2: fetch the burn block header.
 	burnBlock, err := l2Client.BlockByNumber(ctx, burnReceipt.BlockNumber)
@@ -180,24 +174,27 @@ func run(ctx context.Context) error {
 	log.Info().
 		Uint("txIndex", txIndex).
 		Str("receiptsRoot", burnBlock.ReceiptHash().Hex()).
-		Msg("transaction index found")
+		Msg("Transaction index found")
 
 	// Step 4: fetch all block receipts.
 	blockReceipts, err := getBlockReceipts(ctx, rawRPC, burnReceipt.BlockNumber)
 	if err != nil {
 		return fmt.Errorf("fetch block receipts: %w", err)
 	}
-	log.Info().Int("count", len(blockReceipts)).Msg("block receipts fetched")
+	log.Info().Int("count", len(blockReceipts)).Msg("Block receipts fetched")
 
 	// Step 5: build the receipts MPT and generate a proof.
 	proofNodes, branchMask, err := buildReceiptProof(blockReceipts, txIndex, burnBlock.ReceiptHash())
 	if err != nil {
 		return fmt.Errorf("build receipt proof: %w", err)
 	}
-	log.Info().Int("proofDepth", len(proofNodes)).Msg("receipt MPT proof generated")
+	log.Info().Int("proofDepth", len(proofNodes)).Msg("Receipt MPT proof generated")
 
 	// Step 6: fetch the checkpoint from L1.
-	cp, err := fetchCheckpoint(ctx, l1Client, new(big.Int).SetUint64(args.checkpointID))
+	// The RootChain contract indexes checkpoints by (checkpointID * stride), not by the
+	// sequential checkpoint number visible in explorers.
+	headerBlockKey := new(big.Int).SetUint64(args.checkpointID * args.checkpointStride)
+	cp, err := fetchCheckpoint(ctx, l1Client, headerBlockKey)
 	if err != nil {
 		return fmt.Errorf("fetch checkpoint %d: %w", args.checkpointID, err)
 	}
@@ -209,14 +206,14 @@ func run(ctx context.Context) error {
 		Str("checkpointId", cp.HeaderNumber.String()).
 		Str("start", cp.Start.String()).
 		Str("end", cp.End.String()).
-		Msg("checkpoint found")
+		Msg("Checkpoint found")
 
 	// Step 7: build the binary Merkle block proof.
 	blockProof, err := buildBlockProof(ctx, rawRPC, cp, burnReceipt.BlockNumber.Uint64())
 	if err != nil {
 		return fmt.Errorf("build block proof: %w", err)
 	}
-	log.Info().Int("proofSiblings", len(blockProof)/32).Msg("block proof generated")
+	log.Info().Int("proofSiblings", len(blockProof)/32).Msg("Block proof generated")
 
 	// Step 8: RLP-encode the burn receipt.
 	receiptBytes, err := burnReceipt.MarshalBinary()
@@ -470,6 +467,9 @@ func fetchCheckpoint(ctx context.Context, l1Client *ethclient.Client, checkpoint
 	if err != nil {
 		return nil, fmt.Errorf("call headerBlocks: %w", err)
 	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("headerBlocks returned empty data — is --root-chain-address correct? (%s)", contractAddr.Hex())
+	}
 	res, err := parsedABI.Unpack("headerBlocks", result)
 	if err != nil {
 		return nil, fmt.Errorf("unpack headerBlocks: %w", err)
@@ -522,7 +522,7 @@ func buildBlockProof(ctx context.Context, rpc *ethrpc.Client, cp *checkpointInfo
 		Uint64("start", start).
 		Uint64("end", end).
 		Uint64("count", end-start+1).
-		Msg("fetching block hashes for checkpoint range")
+		Msg("Fetching block hashes for checkpoint range")
 
 	hashes, err := fetchBlockHashesBatched(ctx, rpc, start, end)
 	if err != nil {
@@ -576,7 +576,7 @@ func fetchBlockHashesBatched(ctx context.Context, rpc *ethrpc.Client, start, end
 		log.Debug().
 			Uint64("fetched", batchStart+batchLen).
 			Uint64("total", count).
-			Msg("block hashes fetched")
+			Msg("Block hashes fetched")
 	}
 
 	return hashes, nil

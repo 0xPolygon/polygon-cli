@@ -23,11 +23,12 @@ When a user burns tokens on the Polygon PoS sidechain, they must later submit a 
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
-| `--l1-rpc-url` | no | `https://eth.llamarpc.com` | L1 (Ethereum) RPC URL |
-| `--l2-rpc-url` | no | `https://polygon-rpc.com` | L2 (Polygon PoS) RPC URL |
+| `--l1-rpc-url` | yes | — | L1 (Ethereum) RPC URL |
+| `--l2-rpc-url` | yes | — | L2 (Polygon PoS) RPC URL |
 | `--tx-hash` | yes | — | burn transaction hash on L2 |
-| `--root-chain-address` | no | `0x86E4Dc95c7FBdBf52e33D563BbDB00823894C287` | `RootChain` contract address on L1 |
+| `--root-chain-address` | yes | — | `RootChain` contract address on L1 |
 | `--checkpoint-id` | yes | — | checkpoint ID covering the burn block (visible on Polygonscan under the Checkpoint tab) |
+| `--checkpoint-stride` | no | `10000` | number of L2 blocks per checkpoint; override for local testnets that use a smaller value |
 | `--log-index` | no | `0` | index of the burn log within the receipt; `0` works for most ERC20 withdrawals — increase if the token emits extra logs before the burn event |
 
 ## Output
@@ -66,9 +67,3 @@ cast send \
   "${POL_TOKEN_ADDRESS}"
 ```
 
-## Contract Addresses (Mainnet)
-
-| Contract | Address |
-|----------|---------|
-| `RootChain` | `0x86E4Dc95c7FBdBf52e33D563BbDB00823894C287` |
-| `WithdrawManagerProxy` | `0x2A88696e0fFA76bAA1338F2C74497cC013495922` |
