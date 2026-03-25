@@ -15,7 +15,7 @@ When a user burns tokens on the Polygon PoS sidechain, they must later submit a 
 1. Fetching the burn transaction receipt from L2 to determine the block number and transaction index.
 2. Fetching all receipts for the burn block via `eth_getBlockReceipts` and reconstructing the receipts Merkle Patricia Trie (MPT).
 3. Generating an MPT proof (sibling nodes from root to leaf) for the burn receipt.
-4. Querying the `RootChain` contract on L1 to find the checkpoint that covers the burn block.
+4. Fetching the checkpoint by its ID from the `RootChain` contract on L1.
 5. Fetching the block headers for the checkpoint range and building a binary Merkle proof that the burn block hash is included.
 6. ABI-encoding all of the above into the payload expected by `startExitWithBurntTokens(bytes)`.
 
@@ -44,25 +44,26 @@ Writes `0x`-prefixed ABI-encoded payload bytes to stdout. All progress and diagn
 
 # Step 3: generate the exit proof
 payload=$(polycli pos exit-proof \
-  --l2-rpc-url "${L2_RPC_URL}" \
   --l1-rpc-url "${L1_RPC_URL}" \
-  --tx-hash "${burn_tx_hash}")
+  --l2-rpc-url "${L2_RPC_URL}" \
+  --tx-hash "${burn_tx_hash}" \
+  --checkpoint-id "${CHECKPOINT_ID}")
 
 # Step 4: start the exit on L1
 cast send \
   --rpc-url "${L1_RPC_URL}" \
   --private-key "${PRIVATE_KEY}" \
-  "${WITHDRAW_MANAGER_PROXY}" \
+  "${WITHDRAW_MANAGER_PROXY_ADDRESS}" \
   "startExitWithBurntTokens(bytes)" \
   "${payload}"
 
-# Step 5: wait for the exit challenge period (~7 days), then process
+# Step 5: process the exit on L1
 cast send \
   --rpc-url "${L1_RPC_URL}" \
   --private-key "${PRIVATE_KEY}" \
-  "${WITHDRAW_MANAGER_PROXY}" \
+  "${WITHDRAW_MANAGER_PROXY_ADDRESS}" \
   "processExits(address)" \
-  "${MATIC_TOKEN_ADDRESS}"
+  "${POL_TOKEN_ADDRESS}"
 ```
 
 ## Contract Addresses (Mainnet)
