@@ -33,7 +33,6 @@ const (
 	flagL1RPCURL         = "l1-rpc-url"
 	flagTxHash           = "tx-hash"
 	flagRootChainAddress = "root-chain-address"
-	flagCheckpointID     = "checkpoint-id"
 	flagCheckpointStride = "checkpoint-stride"
 	flagLogIndex         = "log-index"
 
@@ -44,6 +43,7 @@ const (
 
 	// rootChainABI is the minimal ABI for the Polygon PoS RootChain contract.
 	rootChainABI = `[
+  {"name":"currentHeaderBlock","type":"function","stateMutability":"view","inputs":[],"outputs":[{"type":"uint256"}]},
   {"name":"headerBlocks","type":"function","stateMutability":"view",
    "inputs":[{"name":"headerNumber","type":"uint256"}],
    "outputs":[
@@ -60,11 +60,10 @@ const (
 var usage string
 
 type inputArgs struct {
-	l1RPCURL      string
-	l2RPCURL      string
-	txHash        string
-	rootChainAddr string
-	checkpointID     uint64
+	l1RPCURL         string
+	l2RPCURL         string
+	txHash           string
+	rootChainAddr    string
 	checkpointStride uint64
 	logIndex         uint
 }
@@ -104,14 +103,12 @@ func init() {
 	f.StringVar(&args.l2RPCURL, flagL2RPCURL, "", "Polygon PoS RPC URL")
 	f.StringVar(&args.rootChainAddr, flagRootChainAddress, "", "RootChain contract address on L1")
 	f.StringVar(&args.txHash, flagTxHash, "", "burn transaction hash on L2")
-	f.Uint64Var(&args.checkpointID, flagCheckpointID, 0, "checkpoint ID that covers the burn block (visible on Polygonscan under the Checkpoint tab)")
 	f.Uint64Var(&args.checkpointStride, flagCheckpointStride, defaultCheckpointStride, "number of L2 blocks per checkpoint (10000 on mainnet; override for local testnets)")
 	f.UintVar(&args.logIndex, flagLogIndex, 0, "index of the burn log within the receipt (0 works for most ERC20 withdrawals; increase if the token emits extra logs before the burn event)")
 	_ = Cmd.MarkFlagRequired(flagL1RPCURL)
 	_ = Cmd.MarkFlagRequired(flagL2RPCURL)
 	_ = Cmd.MarkFlagRequired(flagTxHash)
 	_ = Cmd.MarkFlagRequired(flagRootChainAddress)
-	_ = Cmd.MarkFlagRequired(flagCheckpointID)
 }
 
 // checkpointInfo holds a single RootChain checkpoint.
@@ -190,17 +187,10 @@ func run(ctx context.Context) error {
 	}
 	log.Info().Int("proofDepth", len(proofNodes)).Msg("Receipt MPT proof generated")
 
-	// Step 6: fetch the checkpoint from L1.
-	// The RootChain contract indexes checkpoints by (checkpointID * stride), not by the
-	// sequential checkpoint number visible in explorers.
-	headerBlockKey := new(big.Int).SetUint64(args.checkpointID * args.checkpointStride)
-	cp, err := fetchCheckpoint(ctx, l1Client, headerBlockKey)
+	// Step 6: find the checkpoint that covers the burn block.
+	cp, err := findCheckpoint(ctx, l1Client, burnReceipt.BlockNumber)
 	if err != nil {
-		return fmt.Errorf("fetch checkpoint %d: %w", args.checkpointID, err)
-	}
-	if burnReceipt.BlockNumber.Cmp(cp.Start) < 0 || burnReceipt.BlockNumber.Cmp(cp.End) > 0 {
-		return fmt.Errorf("checkpoint %d covers blocks [%s, %s] but burn block is %s",
-			args.checkpointID, cp.Start, cp.End, burnReceipt.BlockNumber)
+		return fmt.Errorf("find checkpoint: %w", err)
 	}
 	log.Info().
 		Str("checkpointId", cp.HeaderNumber.String()).
@@ -451,15 +441,78 @@ func compactToHex(compact []byte) (nibbles []byte, isLeaf bool) {
 	return decoded, isLeaf
 }
 
-// fetchCheckpoint fetches a single checkpoint by ID from the RootChain contract.
-func fetchCheckpoint(ctx context.Context, l1Client *ethclient.Client, checkpointID *big.Int) (*checkpointInfo, error) {
+// findCheckpoint binary-searches the RootChain contract for the checkpoint
+// whose [start, end] range contains burnBlockNumber.
+func findCheckpoint(ctx context.Context, l1Client *ethclient.Client, burnBlockNumber *big.Int) (*checkpointInfo, error) {
 	parsedABI, err := abi.JSON(strings.NewReader(rootChainABI))
 	if err != nil {
 		return nil, fmt.Errorf("parse rootchain ABI: %w", err)
 	}
 	contractAddr := common.HexToAddress(args.rootChainAddr)
+	stride := new(big.Int).SetUint64(args.checkpointStride)
 
-	callData, err := parsedABI.Pack("headerBlocks", checkpointID)
+	// currentHeaderBlock() returns the latest submitted checkpoint key (= N * stride).
+	currentHeaderBlock, err := callUint256(ctx, l1Client, parsedABI, contractAddr, "currentHeaderBlock")
+	if err != nil {
+		return nil, fmt.Errorf("get currentHeaderBlock: %w", err)
+	}
+	if currentHeaderBlock.Sign() == 0 {
+		return nil, fmt.Errorf("no checkpoints submitted yet (currentHeaderBlock=0)")
+	}
+
+	numCheckpoints := new(big.Int).Div(currentHeaderBlock, stride).Uint64()
+	log.Info().
+		Uint64("numCheckpoints", numCheckpoints).
+		Str("currentHeaderBlock", currentHeaderBlock.String()).
+		Msg("Searching for checkpoint")
+
+	lo, hi := uint64(1), numCheckpoints
+	for lo <= hi {
+		mid := (lo + hi) / 2
+		key := new(big.Int).Mul(new(big.Int).SetUint64(mid), stride)
+		cp, err := fetchCheckpointByKey(ctx, l1Client, parsedABI, contractAddr, key)
+		if err != nil {
+			return nil, fmt.Errorf("fetch checkpoint at key %s: %w", key, err)
+		}
+		switch {
+		case burnBlockNumber.Cmp(cp.Start) < 0:
+			hi = mid - 1
+		case burnBlockNumber.Cmp(cp.End) > 0:
+			lo = mid + 1
+		default:
+			return cp, nil
+		}
+	}
+	return nil, fmt.Errorf("no checkpoint found covering block %s (searched %d checkpoints)", burnBlockNumber, numCheckpoints)
+}
+
+// callUint256 calls a no-argument view function that returns a single uint256.
+func callUint256(ctx context.Context, l1Client *ethclient.Client, parsedABI abi.ABI, contractAddr common.Address, method string) (*big.Int, error) {
+	callData, err := parsedABI.Pack(method)
+	if err != nil {
+		return nil, fmt.Errorf("pack %s: %w", method, err)
+	}
+	result, err := l1Client.CallContract(ctx, ethereum.CallMsg{To: &contractAddr, Data: callData}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("call %s: %w", method, err)
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("%s returned empty data — is --root-chain-address correct? (%s)", method, contractAddr.Hex())
+	}
+	res, err := parsedABI.Unpack(method, result)
+	if err != nil {
+		return nil, fmt.Errorf("unpack %s: %w", method, err)
+	}
+	v, ok := res[0].(*big.Int)
+	if !ok {
+		return nil, fmt.Errorf("%s returned unexpected type %T", method, res[0])
+	}
+	return v, nil
+}
+
+// fetchCheckpointByKey fetches a single checkpoint by its raw headerBlocks key.
+func fetchCheckpointByKey(ctx context.Context, l1Client *ethclient.Client, parsedABI abi.ABI, contractAddr common.Address, key *big.Int) (*checkpointInfo, error) {
+	callData, err := parsedABI.Pack("headerBlocks", key)
 	if err != nil {
 		return nil, fmt.Errorf("pack headerBlocks: %w", err)
 	}
@@ -474,7 +527,7 @@ func fetchCheckpoint(ctx context.Context, l1Client *ethclient.Client, checkpoint
 	if err != nil {
 		return nil, fmt.Errorf("unpack headerBlocks: %w", err)
 	}
-	return unpackCheckpoint(checkpointID, res)
+	return unpackCheckpoint(key, res)
 }
 
 // unpackCheckpoint converts the abi.Unpack result of headerBlocks() to checkpointInfo.
