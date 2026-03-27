@@ -212,12 +212,21 @@ func run(ctx context.Context) error {
 	}
 
 	// Step 9: RLP-encode the receipt proof nodes.
-	rlpProofNodes, err := rlp.EncodeToBytes(proofNodes)
+	// Each proof node is already RLP-encoded (it's a trie node list like [path, value]).
+	// Using rlp.RawValue preserves each node as its own RLP list item in the outer list,
+	// so the contract's MerklePatriciaProof.verify can keccak256(toRlpBytes(node)) and
+	// match the trie hash. Encoding [][]byte directly would wrap each node in a byte-string
+	// prefix, causing a hash mismatch.
+	rawProofNodes := make([]rlp.RawValue, len(proofNodes))
+	for i, node := range proofNodes {
+		rawProofNodes[i] = rlp.RawValue(node)
+	}
+	rlpProofNodes, err := rlp.EncodeToBytes(rawProofNodes)
 	if err != nil {
 		return fmt.Errorf("rlp-encode receipt proof: %w", err)
 	}
 
-	// Step 10: ABI-encode the full exit payload.
+	// Step 10: RLP-encode the full exit payload.
 	txRoot := burnBlock.TxHash()
 	receiptRoot := burnBlock.ReceiptHash()
 	payload, err := encodeExitPayload(
@@ -299,7 +308,13 @@ func buildReceiptProof(receipts []*types.Receipt, txIndex uint, expectedRoot com
 		return nil, nil, fmt.Errorf("extract ordered proof nodes: %w", err)
 	}
 
-	mask := hexToCompact(keybytesToHex(targetKey))
+	// Encode the trie key as HP (hex-prefix) without the leaf terminator.
+	// WithdrawManager.verifyInclusion requires branchMaskBytes[0] == 0, which means
+	// the HP prefix byte must be 0x00 (even-length extension path). Including the
+	// terminator nibble (16) causes hexToCompact to produce a leaf prefix (0x20),
+	// which fails the on-chain check.
+	nibbles := keybytesToHex(targetKey)
+	mask := hexToCompact(nibbles[:len(nibbles)-1])
 	return nodes, mask, nil
 }
 
@@ -587,14 +602,22 @@ func buildBlockProof(ctx context.Context, rpc *ethrpc.Client, cp *checkpointInfo
 	return proof, nil
 }
 
-// fetchBlockHashesBatched fetches block hashes for [start, end] using batched RPC calls.
+// fetchBlockHashesBatched fetches block headers for [start, end] and computes the
+// Polygon checkpoint Merkle leaf for each block:
+//
+//	keccak256(abi.encodePacked(blockNumber_32, blockTime_32, txRoot_32, receiptsRoot_32))
+//
+// This matches the leaf formula used by getBlockHeader() in the matic-js SDK and
+// verified by WithdrawManager.checkBlockMembershipInCheckpoint on-chain.
 func fetchBlockHashesBatched(ctx context.Context, rpc *ethrpc.Client, start, end uint64) ([]common.Hash, error) {
 	count := end - start + 1
 	hashes := make([]common.Hash, count)
 
-	// We need the block hash for each block. eth_getBlockByNumber with false (txs not needed).
-	type blockResult struct {
-		Hash common.Hash `json:"hash"`
+	type blockHeader struct {
+		Number           hexutil.Big  `json:"number"`
+		Timestamp        hexutil.Big  `json:"timestamp"`
+		TransactionsRoot common.Hash  `json:"transactionsRoot"`
+		ReceiptsRoot     common.Hash  `json:"receiptsRoot"`
 	}
 
 	for batchStart := uint64(0); batchStart < count; batchStart += headerFetchBatchSize {
@@ -605,7 +628,7 @@ func fetchBlockHashesBatched(ctx context.Context, rpc *ethrpc.Client, start, end
 		batchLen := batchEnd - batchStart
 
 		elems := make([]ethrpc.BatchElem, batchLen)
-		results := make([]blockResult, batchLen)
+		results := make([]blockHeader, batchLen)
 		for i := uint64(0); i < batchLen; i++ {
 			blockNum := start + batchStart + i
 			elems[i] = ethrpc.BatchElem{
@@ -623,13 +646,20 @@ func fetchBlockHashesBatched(ctx context.Context, rpc *ethrpc.Client, start, end
 				blockNum := start + batchStart + uint64(i)
 				return nil, fmt.Errorf("fetch block %d: %w", blockNum, elem.Error)
 			}
-			hashes[batchStart+uint64(i)] = results[i].Hash
+			h := results[i]
+			// Compute the Polygon checkpoint leaf: keccak256(n_32 || ts_32 || txRoot || receiptsRoot)
+			var buf [128]byte
+			h.Number.ToInt().FillBytes(buf[0:32])
+			h.Timestamp.ToInt().FillBytes(buf[32:64])
+			copy(buf[64:96], h.TransactionsRoot[:])
+			copy(buf[96:128], h.ReceiptsRoot[:])
+			hashes[batchStart+uint64(i)] = crypto.Keccak256Hash(buf[:])
 		}
 
 		log.Debug().
 			Uint64("fetched", batchStart+batchLen).
 			Uint64("total", count).
-			Msg("Block hashes fetched")
+			Msg("Block headers fetched")
 	}
 
 	return hashes, nil
@@ -668,7 +698,11 @@ func merkleProof(leaves []common.Hash, leafIdx uint64) []byte {
 	return result
 }
 
-// encodeExitPayload ABI-encodes the 10-field exit payload for startExitWithBurntTokens(bytes).
+// encodeExitPayload RLP-encodes the 10-field exit payload for startExitWithBurntTokens(bytes).
+// The Polygon contracts (ExitPayloadReader.toExitPayload) RLP-decode the payload, so it must
+// be an RLP list — not ABI-encoded. The format matches the matic-js buildReferenceTxPayload:
+// [headerNumber, blockProof, blockNumber, blockTimestamp, txRoot, receiptRoot, receipt,
+//  receiptParentNodes, branchMask, logIndex]
 func encodeExitPayload(
 	headerNumber *big.Int,
 	blockProof []byte,
@@ -681,47 +715,31 @@ func encodeExitPayload(
 	branchMask []byte,
 	logIndex *big.Int,
 ) ([]byte, error) {
-	uint256Ty, err := abi.NewType("uint256", "", nil)
-	if err != nil {
-		return nil, err
-	}
-	bytesTy, err := abi.NewType("bytes", "", nil)
-	if err != nil {
-		return nil, err
-	}
-	bytes32Ty, err := abi.NewType("bytes32", "", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	arguments := abi.Arguments{
-		{Type: uint256Ty}, // headerNumber
-		{Type: bytesTy},   // blockProof
-		{Type: uint256Ty}, // blockNumber
-		{Type: uint256Ty}, // blockTimestamp
-		{Type: bytes32Ty}, // txRoot
-		{Type: bytes32Ty}, // receiptRoot
-		{Type: bytesTy},   // receipt
-		{Type: bytesTy},   // receiptParentNodes
-		{Type: bytesTy},   // branchMask
-		{Type: uint256Ty}, // logIndex
+	type rlpPayload struct {
+		HeaderNumber       *big.Int
+		BlockProof         []byte
+		BlockNumber        *big.Int
+		BlockTimestamp     *big.Int
+		TxRoot             []byte
+		ReceiptRoot        []byte
+		Receipt            []byte
+		ReceiptParentNodes []byte
+		BranchMask         []byte
+		LogIndex           *big.Int
 	}
 
-	var txRootArr [32]byte
-	copy(txRootArr[:], txRoot[:])
-	var receiptRootArr [32]byte
-	copy(receiptRootArr[:], receiptRoot[:])
+	p := rlpPayload{
+		HeaderNumber:       headerNumber,
+		BlockProof:         blockProof,
+		BlockNumber:        blockNumber,
+		BlockTimestamp:     blockTimestamp,
+		TxRoot:             txRoot[:],
+		ReceiptRoot:        receiptRoot[:],
+		Receipt:            receipt,
+		ReceiptParentNodes: receiptParentNodes,
+		BranchMask:         branchMask,
+		LogIndex:           logIndex,
+	}
 
-	return arguments.Pack(
-		headerNumber,
-		blockProof,
-		blockNumber,
-		blockTimestamp,
-		txRootArr,
-		receiptRootArr,
-		receipt,
-		receiptParentNodes,
-		branchMask,
-		logIndex,
-	)
+	return rlp.EncodeToBytes(p)
 }
