@@ -186,8 +186,8 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 					c.logger.Error().Err(err).Msg("Failed to write Pong response")
 				}
 			case *BlockHeaders:
-				atomic.AddInt64(&count.BlockHeaders, int64(len(msg.BlockHeadersRequest)))
-				c.logger.Trace().Msgf("Received %v BlockHeaders", len(msg.BlockHeadersRequest))
+				atomic.AddInt64(&count.BlockHeaders, int64(msg.List.Len()))
+				c.logger.Trace().Msgf("Received %v BlockHeaders", msg.List.Len())
 			case *GetBlockHeaders:
 				atomic.AddInt64(&count.BlockHeaderRequests, 1)
 				c.logger.Trace().Msgf("Received GetBlockHeaders request")
@@ -200,8 +200,8 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 					return err
 				}
 			case *BlockBodies:
-				atomic.AddInt64(&count.BlockBodies, int64(len(msg.BlockBodiesResponse)))
-				c.logger.Trace().Msgf("Received %v BlockBodies", len(msg.BlockBodiesResponse))
+				atomic.AddInt64(&count.BlockBodies, int64(msg.List.Len()))
+				c.logger.Trace().Msgf("Received %v BlockBodies", msg.List.Len())
 			case *GetBlockBodies:
 				atomic.AddInt64(&count.BlockBodiesRequests, int64(len(msg.GetBlockBodiesRequest)))
 				c.logger.Trace().Msgf("Received %v GetBlockBodies request", len(msg.GetBlockBodiesRequest))
@@ -280,11 +280,11 @@ func (c *rlpxConn) ReadAndServe(count *MessageCount) error {
 					log.Error().Err(err).Msg("Failed to write GetWitnessPacket request")
 				}
 			case *Transactions:
-				atomic.AddInt64(&count.Transactions, int64(len(*msg)))
-				c.logger.Trace().Msgf("Received %v Transactions", len(*msg))
+				atomic.AddInt64(&count.Transactions, int64(msg.Len()))
+				c.logger.Trace().Msgf("Received %v Transactions", msg.Len())
 			case *PooledTransactions:
-				atomic.AddInt64(&count.Transactions, int64(len(msg.PooledTransactionsResponse)))
-				c.logger.Trace().Msgf("Received %v PooledTransactions", len(msg.PooledTransactionsResponse))
+				atomic.AddInt64(&count.Transactions, int64(msg.List.Len()))
+				c.logger.Trace().Msgf("Received %v PooledTransactions", msg.List.Len())
 			case *NewPooledTransactionHashes:
 				if err := c.processNewPooledTransactionHashes(count, msg.Hashes); err != nil {
 					return err
@@ -415,8 +415,12 @@ func (c *rlpxConn) ListenHeaders() (eth.BlockHeadersRequest, error) {
 
 			switch msg := c.Read().(type) {
 			case *BlockHeaders:
-				c.logger.Trace().Msgf("Received %v BlockHeaders", len(msg.BlockHeadersRequest))
-				return msg.BlockHeadersRequest, nil
+				c.logger.Trace().Msgf("Received %v BlockHeaders", msg.List.Len())
+				headers, err := msg.List.Items()
+				if err != nil {
+					return nil, fmt.Errorf("failed to decode block headers: %w", err)
+				}
+				return headers, nil
 			case *Error:
 				c.logger.Trace().Err(msg.Unwrap()).Msg("Received Error")
 

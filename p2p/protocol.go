@@ -806,6 +806,31 @@ func (c *conn) decodeTxs(rawTxs []rlp.RawValue) []*types.Transaction {
 	return txs
 }
 
+// encodeBlockBody converts a block to an eth.BlockBody with RLP-encoded fields.
+func encodeBlockBody(block *types.Block) (*eth.BlockBody, error) {
+	txList, err := rlp.EncodeToRawList([]*types.Transaction(block.Transactions()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode transactions: %w", err)
+	}
+	uncleList, err := rlp.EncodeToRawList(block.Uncles())
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode uncles: %w", err)
+	}
+	var withdrawalList *rlp.RawList[*types.Withdrawal]
+	if withdrawals := block.Withdrawals(); withdrawals != nil {
+		wl, err := rlp.EncodeToRawList([]*types.Withdrawal(withdrawals))
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode withdrawals: %w", err)
+		}
+		withdrawalList = &wl
+	}
+	return &eth.BlockBody{
+		Transactions: txList,
+		Uncles:       uncleList,
+		Withdrawals:  withdrawalList,
+	}, nil
+}
+
 func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 	payload, err := io.ReadAll(msg.Payload)
 	if err != nil {
@@ -856,11 +881,15 @@ func (c *conn) handleGetBlockHeaders(msg ethp2p.Msg) error {
 		headers = []*types.Header{cache.Header}
 	}
 
-	response := &eth.BlockHeadersPacket{
-		RequestId:           request.RequestId,
-		BlockHeadersRequest: headers,
+	headerList, err := rlp.EncodeToRawList(headers)
+	if err != nil {
+		return fmt.Errorf("failed to encode headers: %w", err)
 	}
-	c.countMsgSent(response.Name(), float64(len(headers)))
+	response := &eth.BlockHeadersPacket{
+		RequestId: request.RequestId,
+		List:      headerList,
+	}
+	c.countMsgSent((*eth.BlockHeadersRequest)(nil).Name(), float64(len(headers)))
 	return ethp2p.Send(c.rw, eth.BlockHeadersMsg, response)
 }
 
@@ -872,12 +901,15 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 
 	tfs := time.Now()
 
-	headers := packet.BlockHeadersRequest
+	headers, err := packet.List.Items()
+	if err != nil {
+		return fmt.Errorf("failed to decode block headers: %w", err)
+	}
 	if len(headers) == 0 {
 		return nil
 	}
 
-	c.countMsgReceived(packet.Name(), float64(len(headers)))
+	c.countMsgReceived((*eth.BlockHeadersRequest)(nil).Name(), float64(len(headers)))
 
 	for _, header := range headers {
 		if err := c.getParentBlock(ctx, header); err != nil {
@@ -918,11 +950,20 @@ func (c *conn) handleGetBlockBodies(msg ethp2p.Msg) error {
 		}
 	}
 
-	response := &eth.BlockBodiesPacket{
-		RequestId:           request.RequestId,
-		BlockBodiesResponse: bodies,
+	// Convert to non-pointer slice for encoding
+	bodiesForRLP := make([]eth.BlockBody, len(bodies))
+	for i, b := range bodies {
+		bodiesForRLP[i] = *b
 	}
-	c.countMsgSent(response.Name(), float64(len(bodies)))
+	bodyList, err := rlp.EncodeToRawList(bodiesForRLP)
+	if err != nil {
+		return fmt.Errorf("failed to encode block bodies: %w", err)
+	}
+	response := &eth.BlockBodiesPacket{
+		RequestId: request.RequestId,
+		List:      bodyList,
+	}
+	c.countMsgSent((*eth.BlockBodiesResponse)(nil).Name(), float64(len(bodies)))
 	return ethp2p.Send(c.rw, eth.BlockBodiesMsg, response)
 }
 
@@ -938,7 +979,7 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	c.countMsgReceived((&eth.BlockBodiesPacket{}).Name(), float64(len(packet.BlockBodiesRLPResponse)))
+	c.countMsgReceived((*eth.BlockBodiesResponse)(nil).Name(), float64(len(packet.BlockBodiesRLPResponse)))
 
 	hash, ok := c.requests.Get(packet.RequestId)
 	if !ok {
@@ -958,10 +999,30 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
+	txs := c.decodeTxs(decoded.Transactions)
+	txList, err := rlp.EncodeToRawList(txs)
+	if err != nil {
+		c.logger.Warn().Err(err).Msg("Failed to encode transactions")
+		return nil
+	}
+	uncleList, err := rlp.EncodeToRawList(decoded.Uncles)
+	if err != nil {
+		c.logger.Warn().Err(err).Msg("Failed to encode uncles")
+		return nil
+	}
+	var withdrawalList *rlp.RawList[*types.Withdrawal]
+	if decoded.Withdrawals != nil {
+		wl, err := rlp.EncodeToRawList(decoded.Withdrawals)
+		if err != nil {
+			c.logger.Warn().Err(err).Msg("Failed to encode withdrawals")
+			return nil
+		}
+		withdrawalList = &wl
+	}
 	body := &eth.BlockBody{
-		Transactions: c.decodeTxs(decoded.Transactions),
-		Uncles:       decoded.Uncles,
-		Withdrawals:  decoded.Withdrawals,
+		Transactions: txList,
+		Uncles:       uncleList,
+		Withdrawals:  withdrawalList,
 	}
 
 	c.db.WriteBlockBody(ctx, body, hash, tfs)
@@ -982,7 +1043,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	var raw rawNewBlockPacket
-	if err := rlp.DecodeBytes(payload, &raw); err != nil {
+	if err = rlp.DecodeBytes(payload, &raw); err != nil {
 		c.logger.Warn().Err(err).Msg("Failed to decode new block")
 		return nil
 	}
@@ -1011,8 +1072,14 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 			Msg("Updated head block")
 	}
 
-	if err := c.getParentBlock(ctx, packet.Block.Header()); err != nil {
+	if err = c.getParentBlock(ctx, packet.Block.Header()); err != nil {
 		return err
+	}
+
+	// Create BlockBody with encoded RawLists
+	blockBody, err := encodeBlockBody(packet.Block)
+	if err != nil {
+		return fmt.Errorf("failed to encode block body: %w", err)
 	}
 
 	// Atomically check and add to cache to prevent duplicate writes from
@@ -1026,12 +1093,8 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 
 		return BlockCache{
 			Header: packet.Block.Header(),
-			Body: &eth.BlockBody{
-				Transactions: packet.Block.Transactions(),
-				Uncles:       packet.Block.Uncles(),
-				Withdrawals:  packet.Block.Withdrawals(),
-			},
-			TD: packet.TD,
+			Body:   blockBody,
+			TD:     packet.TD,
 		}
 	})
 
@@ -1067,9 +1130,13 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 	// Try to serve from cache using batch lookup (single read lock operation)
 	txs := c.conns.PeekTxs(request.GetPooledTransactionsRequest)
 
+	txList, err := rlp.EncodeToRawList(txs)
+	if err != nil {
+		return fmt.Errorf("failed to encode pooled transactions: %w", err)
+	}
 	response := &eth.PooledTransactionsPacket{
-		RequestId:                  request.RequestId,
-		PooledTransactionsResponse: txs,
+		RequestId: request.RequestId,
+		List:      txList,
 	}
 	c.countMsgSent(response.Name(), float64(len(txs)))
 	return ethp2p.Send(c.rw, eth.PooledTransactionsMsg, response)
@@ -1114,28 +1181,26 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 		return nil
 	}
 
-	packet := &eth.PooledTransactionsPacket{
-		PooledTransactionsResponse: c.decodeTxs(raw.Txs),
-	}
+	txs := c.decodeTxs(raw.Txs)
 
 	tfs := time.Now()
 
-	c.countMsgReceived(packet.Name(), float64(len(packet.PooledTransactionsResponse)))
+	c.countMsgReceived((*eth.PooledTransactionsPacket)(nil).Name(), float64(len(txs)))
 
 	// Mark transactions as known from this peer
-	for _, tx := range packet.PooledTransactionsResponse {
+	for _, tx := range txs {
 		c.addKnownTx(tx.Hash())
 	}
 
-	if len(packet.PooledTransactionsResponse) > 0 {
-		c.db.WriteTransactions(ctx, c.node, packet.PooledTransactionsResponse, tfs)
+	if len(txs) > 0 {
+		c.db.WriteTransactions(ctx, c.node, txs, tfs)
 	}
 
 	// Cache transactions for duplicate detection and serving to peers (single lock)
-	hashes := c.conns.AddTxs(packet.PooledTransactionsResponse)
+	hashes := c.conns.AddTxs(txs)
 
 	// Broadcast transactions or hashes to other peers asynchronously
-	go c.conns.BroadcastTxs(types.Transactions(packet.PooledTransactionsResponse))
+	go c.conns.BroadcastTxs(types.Transactions(txs))
 	go c.conns.BroadcastTxHashes(hashes)
 
 	return nil

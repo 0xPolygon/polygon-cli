@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/rs/zerolog/log"
 
 	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
@@ -143,7 +144,14 @@ func (c *Conns) BroadcastTxs(txs types.Transactions) int {
 		}
 
 		// Send as TransactionsPacket
-		packet := eth.TransactionsPacket(unknownTxs)
+		rawList, err := rlp.EncodeToRawList([]*types.Transaction(unknownTxs))
+		if err != nil {
+			cn.logger.Debug().
+				Err(err).
+				Msg("Failed to encode transactions")
+			continue
+		}
+		packet := &eth.TransactionsPacket{RawList: rawList}
 		cn.countMsgSent(packet.Name(), float64(len(unknownTxs)))
 		if err := ethp2p.Send(cn.rw, eth.TransactionsMsg, packet); err != nil {
 			cn.logger.Debug().

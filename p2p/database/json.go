@@ -261,8 +261,8 @@ func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, 
 		"type":            "block_body",
 		"sensor_id":       j.sensorID,
 		"hash":            hash.Hex(),
-		"tx_count":        len(body.Transactions),
-		"uncle_count":     len(body.Uncles),
+		"tx_count":        body.Transactions.Len(),
+		"uncle_count":     body.Uncles.Len(),
 		"time_first_seen": tfs,
 	}
 
