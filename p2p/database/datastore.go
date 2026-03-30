@@ -596,24 +596,33 @@ func (d *Datastore) writeBlockBody(ctx context.Context, body *eth.BlockBody, has
 
 		modified := false
 
-		if block.Transactions == nil && len(body.Transactions) > 0 {
-			modified = true
-			if d.shouldWriteTransactions {
-				d.writeTransactions(ctx, body.Transactions, tfs)
-			}
-
-			block.Transactions = make([]*datastore.Key, 0, len(body.Transactions))
-			for _, tx := range body.Transactions {
-				block.Transactions = append(block.Transactions, datastore.NameKey(TransactionsKind, tx.Hash().Hex(), nil))
+		if block.Transactions == nil && body.Transactions.Len() > 0 {
+			txs, err := body.Transactions.Items()
+			if err != nil {
+				log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode transactions from block body")
+			} else {
+				modified = true
+				if d.shouldWriteTransactions {
+					d.writeTransactions(ctx, txs, tfs)
+				}
+				block.Transactions = make([]*datastore.Key, 0, len(txs))
+				for _, tx := range txs {
+					block.Transactions = append(block.Transactions, datastore.NameKey(TransactionsKind, tx.Hash().Hex(), nil))
+				}
 			}
 		}
 
-		if block.Uncles == nil && len(body.Uncles) > 0 {
-			modified = true
-			block.Uncles = make([]*datastore.Key, 0, len(body.Uncles))
-			for _, uncle := range body.Uncles {
-				d.writeBlockHeader(ctx, uncle, tfs, false)
-				block.Uncles = append(block.Uncles, datastore.NameKey(BlocksKind, uncle.Hash().Hex(), nil))
+		if block.Uncles == nil && body.Uncles.Len() > 0 {
+			uncles, err := body.Uncles.Items()
+			if err != nil {
+				log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode uncles from block body")
+			} else {
+				modified = true
+				block.Uncles = make([]*datastore.Key, 0, len(uncles))
+				for _, uncle := range uncles {
+					d.writeBlockHeader(ctx, uncle, tfs, false)
+					block.Uncles = append(block.Uncles, datastore.NameKey(BlocksKind, uncle.Hash().Hex(), nil))
+				}
 			}
 		}
 
