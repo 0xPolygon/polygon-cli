@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -191,7 +190,7 @@ var SensorCmd = &cobra.Command{
 			return err
 		}
 
-		head := eth.NewBlockPacket{
+		head := p2p.NewBlockPacket{
 			Block: rpcBlock.ToBlock(),
 			TD:    rpcBlock.TotalDifficulty.ToBigInt(),
 		}

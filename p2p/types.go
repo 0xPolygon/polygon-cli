@@ -80,7 +80,7 @@ func (msg Pong) Code() int     { return 0x03 }
 func (msg Pong) ReqID() uint64 { return 0 }
 
 // Status is the network packet for the status message for eth/64 and later.
-type Status eth.StatusPacket68
+type Status StatusPacket68
 
 func (msg Status) Code() int     { return 16 }
 func (msg Status) ReqID() uint64 { return 0 }
@@ -99,10 +99,47 @@ type BorStatusPacket69 struct {
 }
 
 func (*BorStatusPacket69) Name() string { return "Status" }
-func (*BorStatusPacket69) Kind() byte   { return eth.StatusMsg }
+
+// StatusPacket68 is the status packet for eth/68 and below.
+// Removed in go-ethereum v1.17.2 but still needed for older protocol versions.
+type StatusPacket68 struct {
+	ProtocolVersion uint32
+	NetworkID       uint64
+	TD              *big.Int
+	Head            common.Hash
+	Genesis         common.Hash
+	ForkID          forkid.ID
+}
+
+func (*StatusPacket68) Name() string { return "Status" }
+
+// NewBlockHashesPacket is the network packet for block hash announcements.
+// Removed in go-ethereum v1.17.2 but still used by Bor/Polygon nodes.
+type NewBlockHashesPacket []struct {
+	Hash   common.Hash
+	Number uint64
+}
+
+func (NewBlockHashesPacket) Name() string { return "NewBlockHashes" }
+
+// NewBlockPacket is the network packet for the block propagation message.
+// Removed in go-ethereum v1.17.2 but still used by Bor/Polygon nodes.
+type NewBlockPacket struct {
+	Block *types.Block
+	TD    *big.Int
+}
+
+func (*NewBlockPacket) Name() string { return "NewBlock" }
+
+// ReceiptsRLPPacket is the network packet for block receipts distribution.
+// Removed in go-ethereum v1.17.2 but still needed for sending empty receipts responses.
+type ReceiptsRLPPacket struct {
+	RequestId uint64
+	eth.ReceiptsRLPResponse
+}
 
 // NewBlockHashes is the network packet for the block announcements.
-type NewBlockHashes eth.NewBlockHashesPacket
+type NewBlockHashes NewBlockHashesPacket
 
 func (msg NewBlockHashes) Code() int     { return 17 }
 func (msg NewBlockHashes) ReqID() uint64 { return 0 }
@@ -136,7 +173,7 @@ func (msg BlockBodies) Code() int     { return 22 }
 func (msg BlockBodies) ReqID() uint64 { return msg.RequestId }
 
 // NewBlock is the network packet for the block propagation message.
-type NewBlock eth.NewBlockPacket
+type NewBlock NewBlockPacket
 
 func (msg NewBlock) Code() int     { return 23 }
 func (msg NewBlock) ReqID() uint64 { return 0 }
