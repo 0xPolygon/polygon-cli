@@ -29,7 +29,7 @@ type ConnsOptions struct {
 	TxsCache                   ds.LRUOptions
 	KnownTxsBloom              ds.BloomSetOptions
 	KnownBlocksMax             int
-	Head                       eth.NewBlockPacket
+	Head                       NewBlockPacket
 	ShouldBroadcastTx          bool
 	ShouldBroadcastTxHashes    bool
 	ShouldBroadcastBlocks      bool
@@ -59,7 +59,7 @@ type Conns struct {
 	oldest *ds.Locked[*types.Header]
 
 	// head keeps track of the current head block of the chain.
-	head *ds.Locked[eth.NewBlockPacket]
+	head *ds.Locked[NewBlockPacket]
 
 	// Broadcast flags control what gets cached and rebroadcasted
 	shouldBroadcastTx          bool
@@ -70,7 +70,7 @@ type Conns struct {
 
 // NewConns creates a new connection manager with a blocks cache.
 func NewConns(opts ConnsOptions) *Conns {
-	head := &ds.Locked[eth.NewBlockPacket]{}
+	head := &ds.Locked[NewBlockPacket]{}
 	head.Set(opts.Head)
 
 	oldest := &ds.Locked[*types.Header]{}
@@ -238,7 +238,7 @@ func (c *Conns) BroadcastBlock(block *types.Block, td *big.Int) int {
 		}
 
 		// Send NewBlockPacket
-		packet := eth.NewBlockPacket{
+		packet := NewBlockPacket{
 			Block: block,
 			TD:    td,
 		}
@@ -277,7 +277,7 @@ func (c *Conns) BroadcastBlockHashes(hashes []common.Hash, numbers []uint64) int
 	}
 
 	// Build packet once, share across all peers
-	packet := make(eth.NewBlockHashesPacket, len(hashes))
+	packet := make(NewBlockHashesPacket, len(hashes))
 	for i := range hashes {
 		packet[i].Hash = hashes[i]
 		packet[i].Number = numbers[i]
@@ -367,14 +367,14 @@ func (c *Conns) OldestBlock() *types.Header {
 }
 
 // HeadBlock returns the current head block packet.
-func (c *Conns) HeadBlock() eth.NewBlockPacket {
+func (c *Conns) HeadBlock() NewBlockPacket {
 	return c.head.Get()
 }
 
 // UpdateHeadBlock updates the head block if the provided block is newer.
 // Returns true if the head block was updated, false otherwise.
-func (c *Conns) UpdateHeadBlock(packet eth.NewBlockPacket) bool {
-	return c.head.Update(func(current eth.NewBlockPacket) (eth.NewBlockPacket, bool) {
+func (c *Conns) UpdateHeadBlock(packet NewBlockPacket) bool {
+	return c.head.Update(func(current NewBlockPacket) (NewBlockPacket, bool) {
 		if current.Block == nil || (packet.Block.NumberU64() > current.Block.NumberU64() && packet.TD.Cmp(current.TD) == 1) {
 			return packet, true
 		}

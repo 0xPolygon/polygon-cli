@@ -94,7 +94,7 @@ type conn struct {
 	// reception from broadcasting to prevent flooding peers with immediate
 	// broadcasts.
 	txAnnounce    chan []common.Hash
-	blockAnnounce chan eth.NewBlockHashesPacket
+	blockAnnounce chan NewBlockHashesPacket
 	closeCh       chan struct{}
 
 	// version stores the negotiated eth protocol version (e.g., 68 or 69).
@@ -153,7 +153,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				knownBlocks:                ds.NewBoundedSet[common.Hash](opts.Conns.KnownBlocksMax()),
 				messages:                   NewPeerMessages(),
 				txAnnounce:                 make(chan []common.Hash),
-				blockAnnounce:              make(chan eth.NewBlockHashesPacket, maxQueuedBlockAnns),
+				blockAnnounce:              make(chan NewBlockHashesPacket, maxQueuedBlockAnns),
 				closeCh:                    make(chan struct{}),
 				version:                    version,
 			}
@@ -256,7 +256,7 @@ func (c *conn) statusExchange(version uint, opts EthProtocolOptions) error {
 		return c.statusExchange69(&status)
 	}
 
-	status := eth.StatusPacket68{
+	status := StatusPacket68{
 		ProtocolVersion: uint32(version),
 		NetworkID:       opts.NetworkID,
 		Genesis:         opts.GenesisHash,
@@ -269,11 +269,11 @@ func (c *conn) statusExchange(version uint, opts EthProtocolOptions) error {
 }
 
 // statusExchange68 will exchange status message for ETH68 and below.
-func (c *conn) statusExchange68(packet *eth.StatusPacket68) error {
+func (c *conn) statusExchange68(packet *StatusPacket68) error {
 	errc := make(chan error, 2)
 
 	go func() {
-		c.countMsgSent((&eth.StatusPacket68{}).Name(), 1)
+		c.countMsgSent((&StatusPacket68{}).Name(), 1)
 		errc <- ethp2p.Send(c.rw, eth.StatusMsg, packet)
 	}()
 
@@ -348,7 +348,7 @@ func (c *conn) countMsgSent(messageName string, count float64) {
 	c.messages.IncrementSent(messageName, int64(count))
 }
 
-func (c *conn) readStatus68(packet *eth.StatusPacket68) error {
+func (c *conn) readStatus68(packet *StatusPacket68) error {
 	msg, err := c.rw.ReadMsg()
 	if err != nil {
 		return err
@@ -358,7 +358,7 @@ func (c *conn) readStatus68(packet *eth.StatusPacket68) error {
 		return errors.New("expected status message code")
 	}
 
-	var status eth.StatusPacket68
+	var status StatusPacket68
 	if err := msg.Decode(&status); err != nil {
 		return err
 	}
@@ -513,7 +513,7 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 }
 
 func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
-	var packet eth.NewBlockHashesPacket
+	var packet NewBlockHashesPacket
 	if err := msg.Decode(&packet); err != nil {
 		return err
 	}
@@ -727,9 +727,9 @@ func (c *conn) blockAnnouncementLoop() {
 
 // sendBlockAnnouncements sends a batch of block hashes to the peer,
 // filtering out blocks the peer already knows about.
-func (c *conn) sendBlockAnnouncements(packet eth.NewBlockHashesPacket) error {
+func (c *conn) sendBlockAnnouncements(packet NewBlockHashesPacket) error {
 	// Filter to only unknown blocks
-	var filtered eth.NewBlockHashesPacket
+	var filtered NewBlockHashesPacket
 	for _, entry := range packet {
 		if !c.hasKnownBlock(entry.Hash) {
 			filtered = append(filtered, entry)
@@ -1053,7 +1053,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		Uncles:       raw.Block.Uncles,
 		Withdrawals:  raw.Block.Withdrawals,
 	})
-	packet := &eth.NewBlockPacket{Block: block, TD: raw.TD}
+	packet := &NewBlockPacket{Block: block, TD: raw.TD}
 
 	tfs := time.Now()
 	hash := packet.Block.Hash()
@@ -1214,7 +1214,7 @@ func (c *conn) handleGetReceipts(msg ethp2p.Msg) error {
 
 	c.countMsgReceived(request.Name(), float64(len(request.GetReceiptsRequest)))
 
-	response := &eth.ReceiptsRLPPacket{RequestId: request.RequestId}
+	response := &ReceiptsRLPPacket{RequestId: request.RequestId}
 	c.countMsgSent((&eth.ReceiptsRLPResponse{}).Name(), 0)
 	return ethp2p.Send(c.rw, eth.ReceiptsMsg, response)
 }
