@@ -108,7 +108,7 @@ maxBaseFeeWei != -1 => !legacy && priorityGasPrice == -1
 
 mode != "transaction" => gasLimit == -1 || gasLimit > 21000
 
--- These two flags are somewhat equivant in this context of mode==rpc
+-- These two flags are somewhat equivalent in this context of mode==rpc
 mode == "rpc" => ethCallOnly
 mode == "blob" => !legacy
 
