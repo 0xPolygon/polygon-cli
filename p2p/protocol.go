@@ -17,6 +17,7 @@ import (
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -90,6 +91,9 @@ type conn struct {
 	// messages tracks per-peer message counts for API visibility.
 	messages *PeerMessages
 
+	// msgCounter is the Prometheus counter for tracking message counts.
+	msgCounter *prometheus.CounterVec
+
 	// Broadcast queues for per-peer rate limiting. These decouple message
 	// reception from broadcasting to prevent flooding peers with immediate
 	// broadcasts.
@@ -132,6 +136,9 @@ type EthProtocolOptions struct {
 	ShouldBroadcastTxHashes    bool
 	ShouldBroadcastBlocks      bool
 	ShouldBroadcastBlockHashes bool
+
+	// MsgCounter is the Prometheus counter for tracking message counts.
+	MsgCounter *prometheus.CounterVec
 }
 
 // NewEthProtocol creates the new eth protocol. This will handle writing the
@@ -163,6 +170,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				knownTxs:                   ds.NewBloomSet(opts.Conns.KnownTxsOpts()),
 				knownBlocks:                ds.NewBoundedSet[common.Hash](opts.Conns.KnownBlocksMax()),
 				messages:                   NewPeerMessages(),
+				msgCounter:                 opts.MsgCounter,
 				txAnnounce:                 make(chan []common.Hash),
 				blockAnnounce:              make(chan NewBlockHashesPacket, maxQueuedBlockAnns),
 				closeCh:                    make(chan struct{}),
@@ -340,23 +348,17 @@ func (c *conn) statusExchange69(packet *BorStatusPacket69) error {
 	return nil
 }
 
-// countMsgReceived increments the global Prometheus counter and per-peer message tracking for received messages.
+// countMsgReceived increments the Prometheus counter and per-peer message tracking for received messages.
 func (c *conn) countMsgReceived(messageName string, count float64) {
-	// Increment global Prometheus counter (low cardinality)
-	SensorMsgCounter.WithLabelValues(messageName, string(MsgReceived)).Add(count)
-	SensorMsgCounter.WithLabelValues(messageName+PacketSuffix, string(MsgReceived)).Add(1)
-
-	// Increment per-peer message tracking (for API visibility)
+	c.msgCounter.WithLabelValues(messageName, string(MsgReceived)).Add(count)
+	c.msgCounter.WithLabelValues(messageName+PacketSuffix, string(MsgReceived)).Add(1)
 	c.messages.IncrementReceived(messageName, int64(count))
 }
 
-// countMsgSent increments the global Prometheus counter and per-peer message tracking for sent messages.
+// countMsgSent increments the Prometheus counter and per-peer message tracking for sent messages.
 func (c *conn) countMsgSent(messageName string, count float64) {
-	// Increment global Prometheus counter (low cardinality)
-	SensorMsgCounter.WithLabelValues(messageName, string(MsgSent)).Add(count)
-	SensorMsgCounter.WithLabelValues(messageName+PacketSuffix, string(MsgSent)).Add(1)
-
-	// Increment per-peer message tracking (for API visibility)
+	c.msgCounter.WithLabelValues(messageName, string(MsgSent)).Add(count)
+	c.msgCounter.WithLabelValues(messageName+PacketSuffix, string(MsgSent)).Add(1)
 	c.messages.IncrementSent(messageName, int64(count))
 }
 

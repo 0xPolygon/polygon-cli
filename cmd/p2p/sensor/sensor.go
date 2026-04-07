@@ -206,6 +206,12 @@ var SensorCmd = &cobra.Command{
 			Help:      "The number of peers the sensor is connected to",
 		})
 
+		msgCounter := promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "sensor",
+			Name:      "messages",
+			Help:      "Number and type of messages the sensor has sent and received",
+		}, []string{"message", "direction"})
+
 		metrics := p2p.NewBlockMetrics(head.Block)
 
 		// Create peer connection manager for broadcasting transactions
@@ -240,6 +246,7 @@ var SensorCmd = &cobra.Command{
 			ShouldBroadcastTxHashes:    inputSensorParams.ShouldBroadcastTxHashes,
 			ShouldBroadcastBlocks:      inputSensorParams.ShouldBroadcastBlocks,
 			ShouldBroadcastBlockHashes: inputSensorParams.ShouldBroadcastBlockHashes,
+			MsgCounter:                 msgCounter,
 		}
 
 		config := ethp2p.Config{
