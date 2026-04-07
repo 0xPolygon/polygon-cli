@@ -250,7 +250,6 @@ func run(ctx context.Context) error {
 	return nil
 }
 
-
 // getBlockReceipts calls eth_getBlockReceipts for the given block number.
 func getBlockReceipts(ctx context.Context, rpc *ethrpc.Client, blockNum *big.Int) ([]*types.Receipt, error) {
 	var receipts []*types.Receipt
@@ -614,10 +613,10 @@ func fetchBlockHashesBatched(ctx context.Context, rpc *ethrpc.Client, start, end
 	hashes := make([]common.Hash, count)
 
 	type blockHeader struct {
-		Number           hexutil.Big  `json:"number"`
-		Timestamp        hexutil.Big  `json:"timestamp"`
-		TransactionsRoot common.Hash  `json:"transactionsRoot"`
-		ReceiptsRoot     common.Hash  `json:"receiptsRoot"`
+		Number           hexutil.Big `json:"number"`
+		Timestamp        hexutil.Big `json:"timestamp"`
+		TransactionsRoot common.Hash `json:"transactionsRoot"`
+		ReceiptsRoot     common.Hash `json:"receiptsRoot"`
 	}
 
 	for batchStart := uint64(0); batchStart < count; batchStart += headerFetchBatchSize {
@@ -702,7 +701,8 @@ func merkleProof(leaves []common.Hash, leafIdx uint64) []byte {
 // The Polygon contracts (ExitPayloadReader.toExitPayload) RLP-decode the payload, so it must
 // be an RLP list — not ABI-encoded. The format matches the matic-js buildReferenceTxPayload:
 // [headerNumber, blockProof, blockNumber, blockTimestamp, txRoot, receiptRoot, receipt,
-//  receiptParentNodes, branchMask, logIndex]
+//
+//	receiptParentNodes, branchMask, logIndex]
 func encodeExitPayload(
 	headerNumber *big.Int,
 	blockProof []byte,
