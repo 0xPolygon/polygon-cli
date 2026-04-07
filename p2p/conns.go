@@ -1,8 +1,10 @@
 package p2p
 
 import (
+	"bytes"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -34,6 +36,9 @@ type ConnsOptions struct {
 	ShouldBroadcastTxHashes    bool
 	ShouldBroadcastBlocks      bool
 	ShouldBroadcastBlockHashes bool
+	BroadcastWorkers           int
+	TxBatchTimeout             time.Duration
+	TxBroadcastQueueSize       int
 }
 
 // Conns manages a collection of active peer connections for transaction broadcasting.
@@ -66,6 +71,12 @@ type Conns struct {
 	shouldBroadcastTxHashes    bool
 	shouldBroadcastBlocks      bool
 	shouldBroadcastBlockHashes bool
+
+	// txBroadcastCh is a buffered channel for async transaction broadcast
+	txBroadcastCh chan types.Transactions
+
+	// txBatchTimeout is the timeout for batching transactions before broadcast
+	txBatchTimeout time.Duration
 }
 
 // NewConns creates a new connection manager with a blocks cache.
@@ -76,7 +87,17 @@ func NewConns(opts ConnsOptions) *Conns {
 	oldest := &ds.Locked[*types.Header]{}
 	oldest.Set(opts.Head.Block.Header())
 
-	return &Conns{
+	txBatchTimeout := opts.TxBatchTimeout
+	if txBatchTimeout <= 0 {
+		txBatchTimeout = 500 * time.Millisecond
+	}
+
+	txBroadcastQueueSize := opts.TxBroadcastQueueSize
+	if txBroadcastQueueSize <= 0 {
+		txBroadcastQueueSize = 100000
+	}
+
+	c := &Conns{
 		conns:                      make(map[string]*conn),
 		blocks:                     ds.NewLRU[common.Hash, BlockCache](opts.BlocksCache),
 		txs:                        ds.NewLRU[common.Hash, *types.Transaction](opts.TxsCache),
@@ -88,7 +109,19 @@ func NewConns(opts ConnsOptions) *Conns {
 		shouldBroadcastTxHashes:    opts.ShouldBroadcastTxHashes,
 		shouldBroadcastBlocks:      opts.ShouldBroadcastBlocks,
 		shouldBroadcastBlockHashes: opts.ShouldBroadcastBlockHashes,
+		txBroadcastCh:              make(chan types.Transactions, txBroadcastQueueSize),
+		txBatchTimeout:             txBatchTimeout,
 	}
+
+	workers := opts.BroadcastWorkers
+	if workers <= 0 {
+		workers = 4
+	}
+	for i := 0; i < workers; i++ {
+		go c.txBroadcastLoop()
+	}
+
+	return c
 }
 
 // Add adds a connection to the manager.
@@ -107,75 +140,223 @@ func (c *Conns) Remove(cn *conn) {
 	cn.logger.Debug().Msg("Removed connection")
 }
 
+// snapshotPeers returns a copy of current peer connections.
+// The caller can safely iterate without holding the lock.
+func (c *Conns) snapshotPeers() []*conn {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	peers := make([]*conn, 0, len(c.conns))
+	for _, cn := range c.conns {
+		peers = append(peers, cn)
+	}
+	return peers
+}
+
 // BroadcastTx broadcasts a single transaction to all connected peers.
 // Returns the number of peers the transaction was successfully sent to.
 func (c *Conns) BroadcastTx(tx *types.Transaction) int {
 	return c.BroadcastTxs(types.Transactions{tx})
 }
 
-// BroadcastTxs broadcasts multiple transactions to all connected peers,
+// BroadcastTxs rebroadcasts transactions received from peers to all connected peers,
 // filtering out transactions that each peer already knows about.
 // Returns the number of peers the transactions were successfully sent to.
 // If broadcast flags are disabled, this is a no-op.
+// Note: For RPC-submitted transactions, use EnqueueTxBroadcast instead.
 func (c *Conns) BroadcastTxs(txs types.Transactions) int {
-	if !c.shouldBroadcastTx {
+	if !c.shouldBroadcastTx || len(txs) == 0 {
 		return 0
 	}
 
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	// Pre-compute transaction hashes once to avoid redundant Keccak256 computations
+	hashes := make([]common.Hash, len(txs))
+	txByHash := make(map[common.Hash]*types.Transaction, len(txs))
+	for i, tx := range txs {
+		h := tx.Hash()
+		hashes[i] = h
+		txByHash[h] = tx
+	}
 
-	if len(txs) == 0 {
+	peers := c.snapshotPeers()
+	if len(peers) == 0 {
 		return 0
 	}
 
-	count := 0
-	for _, cn := range c.conns {
-		// Filter transactions this peer doesn't know about
-		unknownTxs := make(types.Transactions, 0, len(txs))
-		for _, tx := range txs {
-			if !cn.hasKnownTx(tx.Hash()) {
-				unknownTxs = append(unknownTxs, tx)
+	// Broadcast concurrently to all peers
+	var count atomic.Int32
+	var wg sync.WaitGroup
+
+	for _, peer := range peers {
+		wg.Go(func() {
+			// Filter transactions this peer doesn't know about using batch bloom operation
+			unknownHashes := peer.filterUnknownTxHashes(hashes)
+			if len(unknownHashes) == 0 {
+				return
 			}
-		}
 
-		if len(unknownTxs) == 0 {
-			continue
-		}
+			// Build transaction list from pre-computed map
+			unknownTxs := make(types.Transactions, 0, len(unknownHashes))
+			for _, h := range unknownHashes {
+				if tx, ok := txByHash[h]; ok {
+					unknownTxs = append(unknownTxs, tx)
+				}
+			}
+			if len(unknownTxs) == 0 {
+				return
+			}
 
-		// Send as TransactionsPacket
-		rawList, err := rlp.EncodeToRawList([]*types.Transaction(unknownTxs))
-		if err != nil {
-			cn.logger.Debug().
-				Err(err).
-				Msg("Failed to encode transactions")
-			continue
-		}
-		packet := &eth.TransactionsPacket{RawList: rawList}
-		cn.countMsgSent(packet.Name(), float64(len(unknownTxs)))
-		if err := ethp2p.Send(cn.rw, eth.TransactionsMsg, packet); err != nil {
-			cn.logger.Debug().
-				Err(err).
-				Msg("Failed to send transactions")
-			continue
-		}
+			rawList, err := rlp.EncodeToRawList([]*types.Transaction(unknownTxs))
+			if err != nil {
+				peer.logger.Debug().Err(err).Msg("Failed to encode transactions")
+				return
+			}
+			packet := &eth.TransactionsPacket{RawList: rawList}
+			peer.countMsgSent(packet.Name(), float64(len(unknownTxs)))
+			if err := ethp2p.Send(peer.rw, eth.TransactionsMsg, packet); err != nil {
+				peer.logger.Debug().Err(err).Msg("Failed to send transactions")
+				return
+			}
 
-		// Mark transactions as known for this peer
-		for _, tx := range unknownTxs {
-			cn.addKnownTx(tx.Hash())
-		}
-
-		count++
+			peer.addKnownTxHashes(unknownHashes)
+			count.Add(1)
+		})
 	}
 
-	if count > 0 {
+	wg.Wait()
+
+	finalCount := int(count.Load())
+	if finalCount > 0 {
 		log.Debug().
-			Int("peers", count).
+			Int("peers", finalCount).
 			Int("txs", len(txs)).
 			Msg("Broadcasted transactions")
 	}
 
-	return count
+	return finalCount
+}
+
+// broadcastTxs sends RPC-submitted transactions to all peers via TransactionsMsg.
+// Used by txBroadcastLoop to process transactions from EnqueueTxBroadcast.
+func (c *Conns) broadcastTxs(txs types.Transactions, hashes []common.Hash, peers []*conn) {
+	rawList, err := rlp.EncodeToRawList([]*types.Transaction(txs))
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to encode transactions")
+		return
+	}
+	packet := &eth.TransactionsPacket{RawList: rawList}
+
+	// Pre-encode the entire message once to avoid re-encoding for each peer.
+	encodedMsg, err := rlp.EncodeToBytes(packet)
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to encode message")
+		return
+	}
+	msgSize := uint32(len(encodedMsg))
+
+	// Cache loop-invariant values
+	msgName := packet.Name()
+	txCount := float64(len(txs))
+	rebroadcasting := c.shouldBroadcastTx || c.shouldBroadcastTxHashes
+
+	for _, peer := range peers {
+		go func(peer *conn) {
+			peer.countMsgSent(msgName, txCount)
+
+			// Use WriteMsg directly with pre-encoded bytes instead of Send()
+			msg := ethp2p.Msg{
+				Code:    eth.TransactionsMsg,
+				Size:    msgSize,
+				Payload: bytes.NewReader(encodedMsg),
+			}
+			if err := peer.rw.WriteMsg(msg); err != nil {
+				peer.logger.Debug().Err(err).Msg("Failed to send transactions")
+				return
+			}
+
+			// Only track known hashes if rebroadcasting is enabled
+			if rebroadcasting {
+				peer.addKnownTxHashes(hashes)
+			}
+		}(peer)
+	}
+}
+
+// txBroadcastLoop is the worker that drains the broadcast channel and sends
+// transactions to all peers, batching up to max packet size per iteration.
+func (c *Conns) txBroadcastLoop() {
+	for {
+		batch, hashes := c.pullTxBatch()
+		if batch == nil {
+			return
+		}
+
+		peers := c.snapshotPeers()
+		if len(peers) == 0 {
+			continue
+		}
+
+		c.broadcastTxs(batch, hashes, peers)
+
+		log.Info().
+			Int("txs", len(batch)).
+			Int("peers", len(peers)).
+			Msg("Broadcasted transaction batch")
+	}
+}
+
+// pullTxBatch pulls transactions from the channel up to maxTxPacketSize.
+// Returns nil, nil when the channel is closed.
+func (c *Conns) pullTxBatch() (types.Transactions, []common.Hash) {
+	// Block for first item
+	txs, ok := <-c.txBroadcastCh
+	if !ok {
+		return nil, nil
+	}
+
+	// Pre-allocate with initial capacity
+	batch := make(types.Transactions, 0, len(txs))
+	hashes := make([]common.Hash, 0, len(txs))
+	var batchSize uint64
+
+	// Add transactions from first receive
+	for _, tx := range txs {
+		batch = append(batch, tx)
+		hashes = append(hashes, tx.Hash())
+		batchSize += tx.Size()
+	}
+
+	// Drain more until max size or timeout
+	timer := time.NewTimer(c.txBatchTimeout)
+	defer timer.Stop()
+
+	for batchSize < maxTxPacketSize {
+		select {
+		case txs, ok := <-c.txBroadcastCh:
+			if !ok {
+				return batch, hashes
+			}
+			for _, tx := range txs {
+				batch = append(batch, tx)
+				hashes = append(hashes, tx.Hash())
+				batchSize += tx.Size()
+			}
+		case <-timer.C:
+			return batch, hashes
+		}
+	}
+
+	return batch, hashes
+}
+
+// EnqueueTxBroadcast adds transactions to the broadcast channel for async sending.
+func (c *Conns) EnqueueTxBroadcast(txs types.Transactions) {
+	c.txBroadcastCh <- txs
+}
+
+// Close stops the broadcast worker.
+func (c *Conns) Close() {
+	close(c.txBroadcastCh)
 }
 
 // BroadcastTxHashes enqueues transaction hashes to per-peer broadcast queues.
@@ -199,14 +380,12 @@ func (c *Conns) BroadcastTxHashes(hashes []common.Hash) int {
 
 	count := 0
 	for _, cn := range peers {
-		// Non-blocking send, drop if queue full (matches Bor behavior)
+		// Block until announcement loop is ready or peer closes (matches Bor)
 		select {
 		case cn.txAnnounce <- hashes:
 			count++
 		case <-cn.closeCh:
 			// Peer closing, skip
-		default:
-			// Channel full, skip to avoid goroutine leak
 		}
 	}
 
@@ -217,54 +396,50 @@ func (c *Conns) BroadcastTxHashes(hashes []common.Hash) int {
 // about it and returns the number of peers the block was successfully sent to.
 // If broadcast flags are disabled, this is a no-op.
 func (c *Conns) BroadcastBlock(block *types.Block, td *big.Int) int {
-	if !c.shouldBroadcastBlocks {
-		return 0
-	}
-
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if block == nil {
+	if !c.shouldBroadcastBlocks || block == nil {
 		return 0
 	}
 
 	hash := block.Hash()
-	count := 0
 
-	for _, cn := range c.conns {
-		// Skip if peer already knows about this block
-		if cn.hasKnownBlock(hash) {
-			continue
-		}
-
-		// Send NewBlockPacket
-		packet := NewBlockPacket{
-			Block: block,
-			TD:    td,
-		}
-
-		cn.countMsgSent(packet.Name(), 1)
-		if err := ethp2p.Send(cn.rw, eth.NewBlockMsg, &packet); err != nil {
-			cn.logger.Debug().
-				Err(err).
-				Uint64("number", block.Number().Uint64()).
-				Msg("Failed to send block")
-			continue
-		}
-
-		// Mark block as known for this peer
-		cn.addKnownBlock(hash)
-		count++
+	peers := c.snapshotPeers()
+	if len(peers) == 0 {
+		return 0
 	}
 
-	if count > 0 {
+	// Broadcast concurrently to all peers
+	var count atomic.Int32
+	var wg sync.WaitGroup
+
+	for _, peer := range peers {
+		wg.Go(func() {
+			if peer.hasKnownBlock(hash) {
+				return
+			}
+
+			packet := NewBlockPacket{Block: block, TD: td}
+			peer.countMsgSent(packet.Name(), 1)
+			if err := ethp2p.Send(peer.rw, eth.NewBlockMsg, &packet); err != nil {
+				peer.logger.Debug().Err(err).Uint64("number", block.Number().Uint64()).Msg("Failed to send block")
+				return
+			}
+
+			peer.addKnownBlock(hash)
+			count.Add(1)
+		})
+	}
+
+	wg.Wait()
+
+	finalCount := int(count.Load())
+	if finalCount > 0 {
 		log.Debug().
-			Int("peers", count).
+			Int("peers", finalCount).
 			Uint64("number", block.NumberU64()).
 			Msg("Broadcasted block")
 	}
 
-	return count
+	return finalCount
 }
 
 // BroadcastBlockHashes enqueues block hashes to per-peer broadcast queues.
@@ -340,6 +515,11 @@ func (c *Conns) AddTxs(txs []*types.Transaction) []common.Hash {
 	}
 	c.txs.AddBatch(hashes, txs)
 	return hashes
+}
+
+// GetTx retrieves a transaction from the shared cache and updates LRU ordering.
+func (c *Conns) GetTx(hash common.Hash) (*types.Transaction, bool) {
+	return c.txs.Get(hash)
 }
 
 // PeekTxs retrieves multiple transactions from the shared cache without updating LRU ordering.
@@ -439,6 +619,19 @@ func (c *Conns) GetPeerName(peerID string) string {
 	return ""
 }
 
+// GetBlockByNumber iterates through the cache to find a block by its number.
+// Returns the hash, block cache, and true if found; empty values and false otherwise.
+func (c *Conns) GetBlockByNumber(number uint64) (common.Hash, BlockCache, bool) {
+	for _, hash := range c.blocks.Keys() {
+		if cache, ok := c.blocks.Peek(hash); ok && cache.Header != nil {
+			if cache.Header.Number.Uint64() == number {
+				return hash, cache, true
+			}
+		}
+	}
+	return common.Hash{}, BlockCache{}, false
+}
+
 // GetPeerVersion returns the negotiated eth protocol version for a specific peer.
 // Returns 0 if the peer is not found.
 func (c *Conns) GetPeerVersion(peerID string) uint {
@@ -450,4 +643,18 @@ func (c *Conns) GetPeerVersion(peerID string) uint {
 	}
 
 	return 0
+}
+
+// GetPeerLatestBlock returns the latest block hash and number for a peer.
+// Returns zero hash and 0 if the peer is not found or no block has been received.
+func (c *Conns) GetPeerLatestBlock(peerID string) (common.Hash, uint64) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if cn, ok := c.conns[peerID]; ok {
+		info := cn.latestBlock.Get()
+		return info.Hash, info.Number
+	}
+
+	return common.Hash{}, 0
 }

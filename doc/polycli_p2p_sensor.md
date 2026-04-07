@@ -30,6 +30,34 @@ created automatically.
 The bootnodes may change, so refer to the [Polygon Knowledge Layer][bootnodes]
 if the sensor is not discovering peers.
 
+## JSON-RPC Server
+
+The sensor runs a JSON-RPC server on port 8545 (configurable via `--rpc-port`)
+that supports a subset of Ethereum JSON-RPC methods using cached data.
+
+### Supported Methods
+
+| Method | Description |
+|--------|-------------|
+| `eth_chainId` | Returns the chain ID |
+| `eth_blockNumber` | Returns the current head block number |
+| `eth_gasPrice` | Returns suggested gas price based on recent blocks |
+| `eth_getBlockByHash` | Returns block by hash |
+| `eth_getBlockByNumber` | Returns block by number (if cached) |
+| `eth_getTransactionByHash` | Returns transaction by hash |
+| `eth_getTransactionByBlockHashAndIndex` | Returns transaction at index in block |
+| `eth_getBlockTransactionCountByHash` | Returns transaction count in block |
+| `eth_getUncleCountByBlockHash` | Returns uncle count in block |
+| `eth_sendRawTransaction` | Broadcasts signed transaction to peers |
+
+### Limitations
+
+Methods requiring state or receipts are not supported:
+- `eth_getBalance`, `eth_getCode`, `eth_call`, `eth_estimateGas`
+- `eth_getTransactionReceipt`, `eth_getLogs`
+
+Data is served from an LRU cache, so older blocks/transactions may not be available.
+
 ## Metrics
 
 The sensor exposes Prometheus metrics at `http://localhost:2112/metrics`
@@ -98,6 +126,7 @@ polycli p2p sensor amoy-nodes.json \
       --broadcast-blocks              broadcast full blocks to peers
       --broadcast-tx-hashes           broadcast transaction hashes to peers
       --broadcast-txs                 broadcast full transactions to peers
+      --broadcast-workers int         number of concurrent broadcast workers (default 4)
       --database string               which database to persist data to, options are:
                                         - datastore (GCP Datastore)
                                         - json (output to stdout)
@@ -132,6 +161,8 @@ polycli p2p sensor amoy-nodes.json \
   -p, --project-id string             GCP project ID
       --prom                          run Prometheus server (default true)
       --prom-port uint                port Prometheus runs on (default 2112)
+      --proxy-rpc                     proxy unsupported RPC methods to the --rpc endpoint
+      --proxy-rpc-timeout duration    timeout for proxied RPC requests (default 30s)
       --requests-cache-ttl duration   time to live for requests cache entries (0 for no expiration) (default 5m0s)
       --rpc string                    RPC endpoint used to fetch latest block (default "https://polygon-rpc.com")
       --rpc-port uint                 port for JSON-RPC server to receive transactions (default 8545)
@@ -139,6 +170,8 @@ polycli p2p sensor amoy-nodes.json \
       --static-nodes string           static nodes file
       --trusted-nodes string          trusted nodes file
       --ttl duration                  time to live (default 336h0m0s)
+      --tx-batch-timeout duration     timeout for batching transactions before broadcast (default 500ms)
+      --tx-broadcast-queue-size int   capacity of transaction broadcast queue (default 100000)
       --txs-cache-ttl duration        time to live for transaction cache entries (0 for no expiration) (default 10m0s)
       --write-block-events            write block events to database (default true)
   -B, --write-blocks                  write blocks to database (default true)

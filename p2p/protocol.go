@@ -99,6 +99,17 @@ type conn struct {
 
 	// version stores the negotiated eth protocol version (e.g., 68 or 69).
 	version uint
+
+	// latestBlock tracks the most recent block information received from this
+	// peer via NewBlock, NewBlockHashes, or BlockRangeUpdate messages.
+	// Hash and number are combined in a single struct to ensure consistency.
+	latestBlock *ds.Locked[latestBlock]
+}
+
+// latestBlock holds the hash and number of the latest block from a peer.
+type latestBlock struct {
+	Hash   common.Hash
+	Number uint64
 }
 
 // EthProtocolOptions is the options used when creating a new eth protocol.
@@ -156,6 +167,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				blockAnnounce:              make(chan NewBlockHashesPacket, maxQueuedBlockAnns),
 				closeCh:                    make(chan struct{}),
 				version:                    version,
+				latestBlock:                &ds.Locked[latestBlock]{},
 			}
 
 			// Ensure cleanup happens on any exit path (including statusExchange failure)
@@ -432,6 +444,14 @@ func (c *conn) handleBlockRangeUpdate(msg ethp2p.Msg) error {
 		Hex("hash", packet.LatestBlockHash[:]).
 		Msg("Received BlockRangeUpdate")
 
+	// Update latest block info atomically if this block is newer
+	c.latestBlock.Update(func(curr latestBlock) (latestBlock, bool) {
+		if packet.LatestBlock > curr.Number {
+			return latestBlock{Hash: packet.LatestBlockHash, Number: packet.LatestBlock}, true
+		}
+		return curr, false
+	})
+
 	return nil
 }
 
@@ -529,6 +549,14 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 	for _, entry := range packet {
 		hash := entry.Hash
 
+		// Update latest block info atomically if this block is newer
+		c.latestBlock.Update(func(current latestBlock) (latestBlock, bool) {
+			if entry.Number > current.Number {
+				return latestBlock{Hash: hash, Number: entry.Number}, true
+			}
+			return current, false
+		})
+
 		// Mark as known from this peer
 		c.addKnownBlock(hash)
 
@@ -588,13 +616,24 @@ func (c *conn) addKnownBlock(hash common.Hash) {
 	c.knownBlocks.Add(hash)
 }
 
-// hasKnownTx checks if a transaction hash is in the known tx cache.
-func (c *conn) hasKnownTx(hash common.Hash) bool {
+// filterUnknownTxHashes returns transaction hashes this peer doesn't know about.
+// Uses batch bloom filter operations for efficiency (single lock acquisition).
+func (c *conn) filterUnknownTxHashes(hashes []common.Hash) []common.Hash {
 	if !c.shouldBroadcastTx && !c.shouldBroadcastTxHashes {
-		return false
+		return nil
 	}
 
-	return c.knownTxs.Contains(hash)
+	return c.knownTxs.FilterNotContained(hashes)
+}
+
+// addKnownTxHashes marks multiple transaction hashes as known by this peer.
+// Uses batch bloom filter operations for efficiency (single lock acquisition).
+func (c *conn) addKnownTxHashes(hashes []common.Hash) {
+	if !c.shouldBroadcastTx && !c.shouldBroadcastTxHashes {
+		return
+	}
+
+	c.knownTxs.AddMany(hashes)
 }
 
 // hasKnownBlock checks if a block hash is in the known block cache.
@@ -923,11 +962,22 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 	c.db.WriteBlockHeaders(ctx, headers, tfs, isParent)
 
 	// Update cache to store headers
+	var head *types.Header
 	for _, header := range headers {
-		hash := header.Hash()
-		c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
+		c.conns.Blocks().Update(header.Hash(), func(cache BlockCache) BlockCache {
 			cache.Header = header
 			return cache
+		})
+
+		if head == nil || header.Number.Cmp(head.Number) > 0 {
+			head = header
+		}
+	}
+
+	if head != nil {
+		c.conns.UpdateHeadBlock(NewBlockPacket{
+			Block: types.NewBlockWithHeader(head),
+			TD:    c.conns.HeadBlock().TD,
 		})
 	}
 
@@ -1027,11 +1077,32 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.db.WriteBlockBody(ctx, body, hash, tfs)
 
-	// Update cache to store body
+	// Update cache and try to update head block if we now have complete block data.
+	var header *types.Header
 	c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
 		cache.Body = body
+		header = cache.Header
 		return cache
 	})
+
+	if header != nil {
+		// Decode RawLists back to slices for creating types.Block
+		blockTxs, _ := body.Transactions.Items()
+		blockUncles, _ := body.Uncles.Items()
+		var blockWithdrawals []*types.Withdrawal
+		if body.Withdrawals != nil {
+			blockWithdrawals, _ = body.Withdrawals.Items()
+		}
+		block := types.NewBlockWithHeader(header).WithBody(types.Body{
+			Transactions: blockTxs,
+			Uncles:       blockUncles,
+			Withdrawals:  blockWithdrawals,
+		})
+		c.conns.UpdateHeadBlock(NewBlockPacket{
+			Block: block,
+			TD:    c.conns.HeadBlock().TD,
+		})
+	}
 
 	return nil
 }
@@ -1059,6 +1130,15 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	hash := packet.Block.Hash()
 
 	c.countMsgReceived(packet.Name(), 1)
+
+	// Update latest block info atomically if this block is newer
+	blockNum := packet.Block.Number().Uint64()
+	c.latestBlock.Update(func(current latestBlock) (latestBlock, bool) {
+		if blockNum > current.Number {
+			return latestBlock{Hash: hash, Number: blockNum}, true
+		}
+		return current, false
+	})
 
 	// Mark block as known from this peer
 	c.addKnownBlock(hash)
@@ -1147,6 +1227,13 @@ func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) er
 	var name string
 
 	switch version {
+	case 66:
+		var txs NewPooledTransactionHashes66
+		if err := msg.Decode(&txs); err != nil {
+			return err
+		}
+		hashes = txs
+		name = "NewPooledTransactionHashes"
 	case 67, 68, 69:
 		var txs eth.NewPooledTransactionHashesPacket
 		if err := msg.Decode(&txs); err != nil {
