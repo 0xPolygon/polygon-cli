@@ -77,8 +77,9 @@ type Conns struct {
 
 	// txBatchTimeout is the timeout for batching transactions before broadcast
 	txBatchTimeout time.Duration
-	// broadcastMetrics tracks broadcast-related Prometheus metrics
-	broadcastMetrics *broadcastMetrics
+
+	// metrics tracks broadcast-related Prometheus metrics
+	metrics *metrics
 }
 
 // NewConns creates a new connection manager with a blocks cache.
@@ -113,7 +114,7 @@ func NewConns(opts ConnsOptions) *Conns {
 		shouldBroadcastBlockHashes: opts.ShouldBroadcastBlockHashes,
 		txBroadcastCh:              make(chan types.Transactions, txBroadcastQueueSize),
 		txBatchTimeout:             txBatchTimeout,
-		broadcastMetrics:           newBroadcastMetrics(),
+		metrics:                    newMetrics(),
 	}
 
 	workers := opts.BroadcastWorkers
@@ -273,7 +274,7 @@ func (c *Conns) broadcastTxs(txs types.Transactions, hashes []common.Hash, peers
 				Payload: bytes.NewReader(encodedMsg),
 			}
 			if err := peer.rw.WriteMsg(msg); err != nil {
-				c.broadcastMetrics.sendErrors.Inc()
+				c.metrics.sendErrors.Inc()
 				peer.logger.Debug().Err(err).Msg("Failed to send transactions")
 				return
 			}
@@ -295,8 +296,8 @@ func (c *Conns) txBroadcastLoop() {
 			return
 		}
 
-		c.broadcastMetrics.queueDepth.Set(float64(len(c.txBroadcastCh)))
-		c.broadcastMetrics.batchSize.Observe(float64(len(batch)))
+		c.metrics.queueDepth.Set(float64(len(c.txBroadcastCh)))
+		c.metrics.batchSize.Observe(float64(len(batch)))
 
 		peers := c.snapshotPeers()
 		if len(peers) == 0 {

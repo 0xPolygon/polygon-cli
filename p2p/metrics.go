@@ -73,16 +73,22 @@ func (m *BlockMetrics) Update(block *types.Block, oldest *types.Header) {
 	m.blockRange.Set(float64(hn - on))
 }
 
-// broadcastMetrics contains Prometheus metrics for tracking transaction broadcasts.
-type broadcastMetrics struct {
+// metrics contains Prometheus metrics for tracking transaction broadcasts.
+type metrics struct {
+	messages   *prometheus.CounterVec
 	queueDepth prometheus.Gauge
 	batchSize  prometheus.Histogram
 	sendErrors prometheus.Counter
 }
 
-// newBroadcastMetrics creates and registers all broadcast-related Prometheus metrics.
-func newBroadcastMetrics() *broadcastMetrics {
-	return &broadcastMetrics{
+// newMetrics creates and registers all broadcast-related Prometheus metrics.
+func newMetrics() *metrics {
+	return &metrics{
+		messages: promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "sensor",
+			Name:      "messages",
+			Help:      "Number and type of messages the sensor has sent and received",
+		}, []string{"message", "direction"}),
 		queueDepth: promauto.NewGauge(prometheus.GaugeOpts{
 			Namespace: "sensor",
 			Name:      "broadcast_queue_depth",
