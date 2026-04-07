@@ -18,6 +18,8 @@ import (
 type peerData struct {
 	Name            string           `json:"name"`
 	ProtocolVersion uint             `json:"protocol_version"`
+	BlockHash       string           `json:"block_hash,omitempty"`
+	BlockNumber     uint64           `json:"block_number,omitempty"`
 	Received        p2p.MessageCount `json:"received"`
 	Sent            p2p.MessageCount `json:"sent"`
 	PacketsReceived p2p.MessageCount `json:"packets_received"`
@@ -85,9 +87,18 @@ func handleAPI(server *ethp2p.Server, conns *p2p.Conns) {
 				continue
 			}
 
+			// Get latest block info for this peer
+			blockHash, blockNumber := conns.GetPeerLatestBlock(peerID)
+			var blockHashStr string
+			if blockNumber > 0 {
+				blockHashStr = blockHash.Hex()
+			}
+
 			peers[url] = peerData{
 				Name:            conns.GetPeerName(peerID),
 				ProtocolVersion: conns.GetPeerVersion(peerID),
+				BlockHash:       blockHashStr,
+				BlockNumber:     blockNumber,
 				Received:        messages.Received,
 				Sent:            messages.Sent,
 				PacketsReceived: messages.PacketsReceived,

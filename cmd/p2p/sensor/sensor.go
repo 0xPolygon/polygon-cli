@@ -57,6 +57,9 @@ type (
 		ShouldBroadcastTxHashes      bool
 		ShouldBroadcastBlocks        bool
 		ShouldBroadcastBlockHashes   bool
+		BroadcastWorkers             int
+		TxBatchTimeout               time.Duration
+		TxBroadcastQueueSize         int
 		ShouldRunPprof               bool
 		PprofPort                    uint
 		ShouldRunPrometheus          bool
@@ -76,6 +79,8 @@ type (
 		DiscoveryDNS                 string
 		Database                     string
 		NoDiscovery                  bool
+		ProxyRPC                     bool
+		ProxyRPCTimeout              time.Duration
 		RequestsCache                ds.LRUOptions
 		ParentsCache                 ds.LRUOptions
 		BlocksCache                  ds.LRUOptions
@@ -215,6 +220,9 @@ var SensorCmd = &cobra.Command{
 			ShouldBroadcastTxHashes:    inputSensorParams.ShouldBroadcastTxHashes,
 			ShouldBroadcastBlocks:      inputSensorParams.ShouldBroadcastBlocks,
 			ShouldBroadcastBlockHashes: inputSensorParams.ShouldBroadcastBlockHashes,
+			BroadcastWorkers:           inputSensorParams.BroadcastWorkers,
+			TxBatchTimeout:             inputSensorParams.TxBatchTimeout,
+			TxBroadcastQueueSize:       inputSensorParams.TxBroadcastQueueSize,
 		})
 
 		opts := p2p.EthProtocolOptions{
@@ -265,6 +273,7 @@ var SensorCmd = &cobra.Command{
 			return err
 		}
 		defer stopServer(&server)
+		defer conns.Close()
 
 		events := make(chan *ethp2p.PeerEvent)
 		sub := server.SubscribeEvents(events)
@@ -488,6 +497,9 @@ will result in less chance of missing data but can significantly increase memory
 	f.BoolVar(&inputSensorParams.ShouldBroadcastTxHashes, "broadcast-tx-hashes", false, "broadcast transaction hashes to peers")
 	f.BoolVar(&inputSensorParams.ShouldBroadcastBlocks, "broadcast-blocks", false, "broadcast full blocks to peers")
 	f.BoolVar(&inputSensorParams.ShouldBroadcastBlockHashes, "broadcast-block-hashes", false, "broadcast block hashes to peers")
+	f.IntVar(&inputSensorParams.BroadcastWorkers, "broadcast-workers", 4, "number of concurrent broadcast workers")
+	f.DurationVar(&inputSensorParams.TxBatchTimeout, "tx-batch-timeout", 500*time.Millisecond, "timeout for batching transactions before broadcast")
+	f.IntVar(&inputSensorParams.TxBroadcastQueueSize, "tx-broadcast-queue-size", 100000, "capacity of transaction broadcast queue")
 	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
 	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")
@@ -500,6 +512,8 @@ will result in less chance of missing data but can significantly increase memory
 	f.IntVar(&inputSensorParams.Port, "port", 30303, "TCP network listening port")
 	f.IntVar(&inputSensorParams.DiscoveryPort, "discovery-port", 30303, "UDP P2P discovery port")
 	f.StringVar(&inputSensorParams.RPC, "rpc", "https://polygon-rpc.com", "RPC endpoint used to fetch latest block")
+	f.BoolVar(&inputSensorParams.ProxyRPC, "proxy-rpc", false, "proxy unsupported RPC methods to the --rpc endpoint")
+	f.DurationVar(&inputSensorParams.ProxyRPCTimeout, "proxy-rpc-timeout", 30*time.Second, "timeout for proxied RPC requests")
 	f.StringVar(&inputSensorParams.GenesisHash, "genesis-hash", "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b", "genesis block hash")
 	f.BytesHexVar(&inputSensorParams.ForkID, "fork-id", []byte{34, 213, 35, 178}, "hex encoded fork ID (omit 0x)")
 	f.IntVar(&inputSensorParams.DialRatio, "dial-ratio", 0,
