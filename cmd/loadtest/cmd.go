@@ -125,9 +125,9 @@ func initPersistentFlags() {
 	pf.Float64Var(&cfg.GasPriceMultiplier, "gas-price-multiplier", 1, "a multiplier to increase or decrease the gas price")
 	pf.Int64Var(&cfg.Seed, "seed", 123456, "a seed for generating random values and addresses")
 	pf.Uint64Var(&cfg.ForceGasLimit, "gas-limit", 0, "manually specify gas limit (useful to avoid eth_estimateGas or when auto-computation fails)")
-	pf.Uint64Var(&cfg.ForceGasPrice, "gas-price", 0, "manually specify gas price (useful when auto-detection fails)")
+	pf.Var(&flag.GasValue{Val: &cfg.ForceGasPrice}, "gas-price", "gas price with unit support (e.g., \"100gwei\", \"1000000000\")")
 	pf.Uint64Var(&cfg.StartNonce, "nonce", 0, "use this flag to manually set the starting nonce")
-	pf.Uint64Var(&cfg.ForcePriorityGasPrice, "priority-gas-price", 0, "gas tip price for EIP-1559 transactions")
+	pf.Var(&flag.GasValue{Val: &cfg.ForcePriorityGasPrice}, "priority-gas-price", "gas tip for EIP-1559 with unit support (e.g., \"2gwei\")")
 	pf.BoolVar(&cfg.ShouldProduceSummary, "summarize", false, "produce execution summary after load test (can take a long time for large tests)")
 	pf.Uint64Var(&cfg.BatchSize, "batch-size", 999, "batch size for receipt fetching (default: 999)")
 	pf.StringVar(&cfg.SummaryOutputMode, "output-mode", "text", "format mode for summary output (json | text)")
@@ -167,6 +167,8 @@ func initFlags() {
 	f.StringVar(&cfg.SendingAccountsFile, "sending-accounts-file", "", "file with sending account private keys, one per line (avoids pool queue and preserves accounts across runs)")
 	f.StringVar(&cfg.DumpSendingAccountsFile, "dump-sending-accounts-file", "", "file path to dump generated private keys when using --sending-accounts-count")
 	f.Uint64Var(&cfg.AccountsPerFundingTx, "accounts-per-funding-tx", 400, "number of accounts to fund per multicall3 transaction")
+	f.BoolVar(&cfg.ParallelNonceFetch, "parallel-nonce-fetch", true, "fetch nonces for all accounts in parallel")
+	f.BoolVar(&cfg.StopOnInsufficientFunds, "stop-on-insufficient-funds", false, "stop sending from account when it encounters insufficient funds error")
 	f.Uint64Var(&cfg.MaxBaseFeeWei, "max-base-fee-wei", 0, "maximum base fee in wei (pause sending new transactions when exceeded, useful during network congestion)")
 	f.StringSliceVarP(&cfg.Modes, "mode", "m", []string{"t"}, `testing mode (can specify multiple like "d,t"):
 2, erc20 - send ERC20 tokens

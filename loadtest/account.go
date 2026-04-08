@@ -32,6 +32,8 @@ type AccountPoolConfig struct {
 	CheckBalanceBeforeFunding bool
 	LegacyTxMode              bool
 	AccountsPerFundingTx      uint64
+	ParallelNonceFetch        bool
+	StopOnInsufficientFunds   bool
 	// Gas override settings
 	ForceGasPrice         uint64
 	ForcePriorityGasPrice uint64
@@ -48,11 +50,14 @@ type Account struct {
 	nonce          uint64
 	funded         bool
 	reusableNonces []uint64
+	stopped        bool
 }
 
 // newAccount creates a new account with the given private key.
 // The client is used to get the nonce of the account.
-func newAccount(ctx context.Context, client *ethclient.Client, clientRateLimiter *rate.Limiter, privateKey *ecdsa.PrivateKey, startNonce *uint64, mu *sync.Mutex) (*Account, error) {
+// If fetchNonceInBackground is true, the nonce will be fetched in a background goroutine.
+// If false, the account is created but not marked as ready (caller must fetch nonce separately).
+func newAccount(ctx context.Context, client *ethclient.Client, clientRateLimiter *rate.Limiter, privateKey *ecdsa.PrivateKey, startNonce *uint64, mu *sync.Mutex, fetchNonceInBackground bool) (*Account, error) {
 	publicKey := privateKey.Public()
 	publicKeyECDSA, _ := publicKey.(*ecdsa.PublicKey)
 	address := crypto.PubkeyToAddress(*publicKeyECDSA)
@@ -63,13 +68,14 @@ func newAccount(ctx context.Context, client *ethclient.Client, clientRateLimiter
 		address:        address,
 		funded:         false,
 		reusableNonces: make([]uint64, 0),
+		stopped:        false,
 	}
 
 	if startNonce != nil {
 		acc.nonce = *startNonce
 		acc.startNonce = *startNonce
 		acc.ready = true
-	} else {
+	} else if fetchNonceInBackground {
 		go func(a *Account) {
 			for {
 				log.Trace().Stringer("addr", acc.address).Msg("loading nonce for account in background, account not ready to be used yet")
@@ -219,6 +225,90 @@ func (ap *AccountPool) AllAccountsReady() (bool, int, int) {
 	return rdyCount == len(ap.accounts), rdyCount, len(ap.accounts)
 }
 
+// FetchNoncesInParallel fetches nonces for all accounts that aren't ready yet,
+// in parallel without rate limiting. This is used when ParallelNonceFetch is enabled.
+func (ap *AccountPool) FetchNoncesInParallel(ctx context.Context) error {
+	ap.mu.Lock()
+	// Collect accounts that need nonce fetching
+	var accountsToFetch []*Account
+	for _, acc := range ap.accounts {
+		if !acc.ready {
+			accountsToFetch = append(accountsToFetch, acc)
+		}
+	}
+	ap.mu.Unlock()
+
+	if len(accountsToFetch) == 0 {
+		return nil
+	}
+
+	log.Info().Int("count", len(accountsToFetch)).Msg("Fetching nonces in parallel")
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(accountsToFetch))
+
+	for _, acc := range accountsToFetch {
+		wg.Add(1)
+		go func(a *Account) {
+			defer wg.Done()
+			nonce, err := ap.client.NonceAt(ctx, a.address, nil)
+			if err != nil {
+				errCh <- fmt.Errorf("failed to get nonce for %s: %w", a.address.Hex(), err)
+				return
+			}
+			ap.mu.Lock()
+			a.nonce = nonce
+			a.startNonce = nonce
+			a.ready = true
+			ap.mu.Unlock()
+		}(acc)
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	// Collect errors
+	var errs []error
+	for err := range errCh {
+		errs = append(errs, err)
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	log.Info().Int("count", len(accountsToFetch)).Msg("Nonces fetched successfully")
+	return nil
+}
+
+// StopAccount marks an account as stopped so it won't be used for further transactions.
+func (ap *AccountPool) StopAccount(address common.Address) error {
+	ap.mu.Lock()
+	defer ap.mu.Unlock()
+
+	accountPos, found := ap.accountsPositions[address]
+	if !found {
+		return fmt.Errorf("account not found in pool: %s", address.Hex())
+	}
+
+	ap.accounts[accountPos].stopped = true
+	log.Warn().Stringer("address", address).Msg("Account stopped")
+	return nil
+}
+
+// ActiveAccountCount returns the number of accounts that are not stopped.
+func (ap *AccountPool) ActiveAccountCount() int {
+	ap.mu.Lock()
+	defer ap.mu.Unlock()
+
+	count := 0
+	for _, acc := range ap.accounts {
+		if !acc.stopped {
+			count++
+		}
+	}
+	return count
+}
+
 // AddRandomN adds N random accounts to the pool.
 func (ap *AccountPool) AddRandomN(ctx context.Context, n uint64) error {
 	for range n {
@@ -270,7 +360,9 @@ func (ap *AccountPool) Add(ctx context.Context, privateKey *ecdsa.PrivateKey, st
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
 
-	account, err := newAccount(ctx, ap.client, ap.clientRateLimiter, privateKey, startNonce, &ap.mu)
+	// When parallel nonce fetch is enabled, don't fetch in background
+	fetchInBackground := !ap.cfg.ParallelNonceFetch
+	account, err := newAccount(ctx, ap.client, ap.clientRateLimiter, privateKey, startNonce, &ap.mu, fetchInBackground)
 	if err != nil {
 		return fmt.Errorf("failed to create account: %w", err)
 	}
@@ -1014,36 +1106,52 @@ func (ap *AccountPool) NoncesOf(address common.Address) (startNonce, nonce uint6
 }
 
 // Next returns the next account in the pool.
+// Skips stopped accounts. Returns an error if no active accounts are available.
 func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
 	if len(ap.accounts) == 0 {
 		return Account{}, fmt.Errorf("no accounts available")
 	}
-	account := ap.accounts[ap.currentAccountIndex]
 
-	_, err := ap.fundAccountIfNeeded(ctx, account, nil, true)
-	if err != nil {
-		return Account{}, err
+	// Find the next non-stopped account
+	startIndex := ap.currentAccountIndex
+	for {
+		account := ap.accounts[ap.currentAccountIndex]
+
+		// Move to next account for the next iteration
+		ap.currentAccountIndex++
+		if ap.currentAccountIndex >= len(ap.accounts) {
+			ap.currentAccountIndex = 0
+		}
+
+		// Skip stopped accounts
+		if account.stopped {
+			// If we've checked all accounts and they're all stopped
+			if ap.currentAccountIndex == startIndex {
+				return Account{}, fmt.Errorf("no active accounts available (all accounts stopped)")
+			}
+			continue
+		}
+
+		_, err := ap.fundAccountIfNeeded(ctx, account, nil, true)
+		if err != nil {
+			return Account{}, err
+		}
+		account.funded = true
+
+		accCopy := *account
+
+		// Check if the account has a reusable nonce
+		if len(account.reusableNonces) > 0 {
+			account.nonce = account.reusableNonces[0]
+			account.reusableNonces = account.reusableNonces[1:]
+		} else {
+			account.nonce++
+		}
+
+		return accCopy, nil
 	}
-	account.funded = true
-
-	accCopy := *account
-
-	// Check if the account has a reusable nonce
-	if len(account.reusableNonces) > 0 {
-		account.nonce = account.reusableNonces[0]
-		account.reusableNonces = account.reusableNonces[1:]
-	} else {
-		account.nonce++
-	}
-
-	// move current account index to next account
-	ap.currentAccountIndex++
-	if ap.currentAccountIndex >= len(ap.accounts) {
-		ap.currentAccountIndex = 0
-	}
-	return accCopy, nil
 }
 
 // SetFundingAmount updates the funding amount for the pool.

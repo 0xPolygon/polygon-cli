@@ -106,6 +106,8 @@ type Config struct {
 	CheckBalanceBeforeFunding bool
 	DumpSendingAccountsFile   string
 	AccountsPerFundingTx      uint64
+	ParallelNonceFetch        bool
+	StopOnInsufficientFunds   bool
 
 	// Summary output
 	ShouldProduceSummary bool

@@ -261,6 +261,8 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		CheckBalanceBeforeFunding: r.cfg.CheckBalanceBeforeFunding,
 		LegacyTxMode:              r.cfg.LegacyTxMode,
 		AccountsPerFundingTx:      r.cfg.AccountsPerFundingTx,
+		ParallelNonceFetch:        r.cfg.ParallelNonceFetch,
+		StopOnInsufficientFunds:   r.cfg.StopOnInsufficientFunds,
 		ForceGasPrice:             r.cfg.ForceGasPrice,
 		ForcePriorityGasPrice:     r.cfg.ForcePriorityGasPrice,
 		GasPriceMultiplier:        r.cfg.BigGasPriceMultiplier,
@@ -320,14 +322,22 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 	}
 
 	// Wait for all accounts to be ready
-	for {
-		rdy, rdyCount, accQty := r.accountPool.AllAccountsReady()
-		if rdy {
-			log.Info().Msg("All accounts are ready")
-			break
+	if r.cfg.ParallelNonceFetch {
+		// Fetch nonces in parallel without rate limiting
+		if err := r.accountPool.FetchNoncesInParallel(ctx); err != nil {
+			return errors.New("failed to fetch nonces in parallel: " + err.Error())
 		}
-		log.Info().Int("ready", rdyCount).Int("total", accQty).Msg("waiting for all accounts to be ready")
-		time.Sleep(time.Second)
+	} else {
+		// Original behavior: poll until all accounts ready
+		for {
+			rdy, rdyCount, accQty := r.accountPool.AllAccountsReady()
+			if rdy {
+				log.Info().Msg("All accounts are ready")
+				break
+			}
+			log.Info().Int("ready", rdyCount).Int("total", accQty).Msg("waiting for all accounts to be ready")
+			time.Sleep(time.Second)
+		}
 	}
 
 	// Pre-fund accounts if configured
@@ -649,6 +659,22 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 						Int64("request time", endReq.Sub(startReq).Milliseconds()).
 						Msg("recorded an error while sending transactions")
 
+					// Check for insufficient funds error and stop account if configured
+					if cfg.StopOnInsufficientFunds && isInsufficientFundsError(tErr) {
+						if stopErr := r.accountPool.StopAccount(sendingTops.From); stopErr != nil {
+							log.Error().Err(stopErr).Msg("Failed to stop account")
+						} else {
+							log.Warn().
+								Stringer("address", sendingTops.From).
+								Msg("Stopped sending from account due to insufficient funds")
+						}
+						// Check if all accounts are stopped
+						if r.accountPool.ActiveAccountCount() == 0 {
+							log.Error().Msg("All accounts stopped due to insufficient funds")
+							return
+						}
+					}
+
 					// Check nonce for reuse
 					if !cfg.EthCallOnly {
 						r.handleNonceReuse(ctx, sendingTops, tErr)
@@ -918,6 +944,16 @@ func (r *Runner) handleNonceReuse(ctx context.Context, tops *bind.TransactOpts, 
 				Msg("Unable to add reusable nonce to account pool")
 		}
 	}
+}
+
+// isInsufficientFundsError checks if an error is an insufficient funds error.
+func isInsufficientFundsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "insufficient funds") ||
+		strings.Contains(errStr, "insufficient balance")
 }
 
 func (r *Runner) deployContracts(ctx context.Context, tops *bind.TransactOpts) error {
