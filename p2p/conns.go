@@ -39,6 +39,8 @@ type ConnsOptions struct {
 	BroadcastWorkers           int
 	TxBatchTimeout             time.Duration
 	TxBroadcastQueueSize       int
+	MaxTxPacketSize            int
+	MaxQueuedTxs               int
 }
 
 // Conns manages a collection of active peer connections for transaction broadcasting.
@@ -54,8 +56,8 @@ type Conns struct {
 	// txs caches transactions for serving to peers and duplicate detection
 	txs *ds.LRU[common.Hash, *types.Transaction]
 
-	// knownTxsOpts stores bloom filter options for per-peer known tx tracking
-	knownTxsOpts ds.BloomSetOptions
+	// knownTxsBloom stores bloom filter options for per-peer known tx tracking
+	knownTxsBloom ds.BloomSetOptions
 	// knownBlocksMax stores the maximum size for per-peer known block caches
 	knownBlocksMax int
 
@@ -74,37 +76,56 @@ type Conns struct {
 
 	// txBroadcastCh is a buffered channel for async transaction broadcast
 	txBroadcastCh chan types.Transactions
-
 	// txBatchTimeout is the timeout for batching transactions before broadcast
 	txBatchTimeout time.Duration
+	// maxTxPacketSize is the target size in bytes for transaction broadcast packets
+	maxTxPacketSize int
+	// maxQueuedTxs is the maximum number of transactions to queue for announcement
+	maxQueuedTxs int
 
 	// metrics tracks broadcast-related Prometheus metrics
 	metrics *metrics
 }
 
+// setConnsDefaults sets default values for any unset options.
+func setConnsDefaults(opts *ConnsOptions) {
+	if opts.BroadcastWorkers <= 0 {
+		log.Warn().Int("default", 4).Msg("BroadcastWorkers not set, using default")
+		opts.BroadcastWorkers = 4
+	}
+	if opts.TxBatchTimeout <= 0 {
+		log.Warn().Dur("default", 500*time.Millisecond).Msg("TxBatchTimeout not set, using default")
+		opts.TxBatchTimeout = 500 * time.Millisecond
+	}
+	if opts.TxBroadcastQueueSize <= 0 {
+		log.Warn().Int("default", 100000).Msg("TxBroadcastQueueSize not set, using default")
+		opts.TxBroadcastQueueSize = 100_000
+	}
+	if opts.MaxTxPacketSize <= 0 {
+		log.Warn().Int("default", 100*1024).Msg("MaxTxPacketSize not set, using default")
+		opts.MaxTxPacketSize = 100 * 1024
+	}
+	if opts.MaxQueuedTxs <= 0 {
+		log.Warn().Int("default", 4096).Msg("MaxQueuedTxs not set, using default")
+		opts.MaxQueuedTxs = 4096
+	}
+}
+
 // NewConns creates a new connection manager with a blocks cache.
 func NewConns(opts ConnsOptions) *Conns {
+	setConnsDefaults(&opts)
+
 	head := &ds.Locked[NewBlockPacket]{}
 	head.Set(opts.Head)
 
 	oldest := &ds.Locked[*types.Header]{}
 	oldest.Set(opts.Head.Block.Header())
 
-	txBatchTimeout := opts.TxBatchTimeout
-	if txBatchTimeout <= 0 {
-		txBatchTimeout = 500 * time.Millisecond
-	}
-
-	txBroadcastQueueSize := opts.TxBroadcastQueueSize
-	if txBroadcastQueueSize <= 0 {
-		txBroadcastQueueSize = 100000
-	}
-
 	c := &Conns{
 		conns:                      make(map[string]*conn),
 		blocks:                     ds.NewLRU[common.Hash, BlockCache](opts.BlocksCache),
 		txs:                        ds.NewLRU[common.Hash, *types.Transaction](opts.TxsCache),
-		knownTxsOpts:               opts.KnownTxsBloom,
+		knownTxsBloom:              opts.KnownTxsBloom,
 		knownBlocksMax:             opts.KnownBlocksMax,
 		oldest:                     oldest,
 		head:                       head,
@@ -112,16 +133,14 @@ func NewConns(opts ConnsOptions) *Conns {
 		shouldBroadcastTxHashes:    opts.ShouldBroadcastTxHashes,
 		shouldBroadcastBlocks:      opts.ShouldBroadcastBlocks,
 		shouldBroadcastBlockHashes: opts.ShouldBroadcastBlockHashes,
-		txBroadcastCh:              make(chan types.Transactions, txBroadcastQueueSize),
-		txBatchTimeout:             txBatchTimeout,
+		txBroadcastCh:              make(chan types.Transactions, opts.TxBroadcastQueueSize),
+		txBatchTimeout:             opts.TxBatchTimeout,
+		maxTxPacketSize:            opts.MaxTxPacketSize,
+		maxQueuedTxs:               opts.MaxQueuedTxs,
 		metrics:                    newMetrics(),
 	}
 
-	workers := opts.BroadcastWorkers
-	if workers <= 0 {
-		workers = 4
-	}
-	for i := 0; i < workers; i++ {
+	for i := 0; i < opts.BroadcastWorkers; i++ {
 		go c.txBroadcastLoop()
 	}
 
@@ -338,7 +357,7 @@ func (c *Conns) pullTxBatch() (types.Transactions, []common.Hash) {
 	timer := time.NewTimer(c.txBatchTimeout)
 	defer timer.Stop()
 
-	for batchSize < maxTxPacketSize {
+	for batchSize < uint64(c.maxTxPacketSize) {
 		select {
 		case txs, ok := <-c.txBroadcastCh:
 			if !ok {
@@ -568,36 +587,6 @@ func (c *Conns) UpdateHeadBlock(packet NewBlockPacket) bool {
 		}
 		return current, false
 	})
-}
-
-// KnownTxsOpts returns the bloom filter options for per-peer known tx tracking.
-func (c *Conns) KnownTxsOpts() ds.BloomSetOptions {
-	return c.knownTxsOpts
-}
-
-// KnownBlocksMax returns the maximum size for per-peer known block caches.
-func (c *Conns) KnownBlocksMax() int {
-	return c.knownBlocksMax
-}
-
-// ShouldBroadcastTx returns whether full transaction broadcasting is enabled.
-func (c *Conns) ShouldBroadcastTx() bool {
-	return c.shouldBroadcastTx
-}
-
-// ShouldBroadcastTxHashes returns whether transaction hash broadcasting is enabled.
-func (c *Conns) ShouldBroadcastTxHashes() bool {
-	return c.shouldBroadcastTxHashes
-}
-
-// ShouldBroadcastBlocks returns whether full block broadcasting is enabled.
-func (c *Conns) ShouldBroadcastBlocks() bool {
-	return c.shouldBroadcastBlocks
-}
-
-// ShouldBroadcastBlockHashes returns whether block hash broadcasting is enabled.
-func (c *Conns) ShouldBroadcastBlockHashes() bool {
-	return c.shouldBroadcastBlockHashes
 }
 
 // GetPeerMessages returns a snapshot of message counts for a specific peer.

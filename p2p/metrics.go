@@ -73,7 +73,26 @@ func (m *BlockMetrics) Update(block *types.Block, oldest *types.Header) {
 	m.blockRange.Set(float64(hn - on))
 }
 
-// metrics contains Prometheus metrics for tracking transaction broadcasts.
+// NewPeersGauge creates and registers the peers gauge metric.
+func NewPeersGauge() prometheus.Gauge {
+	return promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "sensor",
+		Name:      "peers",
+		Help:      "Number of peers the sensor is connected to",
+	})
+}
+
+// NewRPCRequestsCounter creates and registers RPC requests counter metric.
+func NewRPCRequestsCounter() *prometheus.CounterVec {
+	return promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "sensor",
+		Subsystem: "rpc",
+		Name:      "requests",
+		Help:      "Number of RPC requests made",
+	}, []string{"method", "proxied"})
+}
+
+// metrics contains Prometheus metrics for tracking messages and broadcasts.
 type metrics struct {
 	messages   *prometheus.CounterVec
 	queueDepth prometheus.Gauge
@@ -81,7 +100,7 @@ type metrics struct {
 	sendErrors prometheus.Counter
 }
 
-// newMetrics creates and registers all broadcast-related Prometheus metrics.
+// newMetrics creates and registers all message and broadcast-related Prometheus metrics.
 func newMetrics() *metrics {
 	return &metrics{
 		messages: promauto.NewCounterVec(prometheus.CounterOpts{

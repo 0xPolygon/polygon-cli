@@ -25,14 +25,6 @@ import (
 )
 
 const (
-	// maxTxPacketSize is the target size for transaction announcement packets.
-	// Matches Bor's limit of 100KB.
-	maxTxPacketSize = 100 * 1024
-
-	// maxQueuedTxAnns is the maximum number of transaction announcements to
-	// queue before dropping oldest. Matches Bor.
-	maxQueuedTxAnns = 4096
-
 	// maxQueuedBlockAnns is the maximum number of block announcements to queue
 	// before dropping. Matches Bor.
 	maxQueuedBlockAnns = 4
@@ -160,8 +152,8 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				shouldBroadcastTxHashes:    opts.ShouldBroadcastTxHashes,
 				shouldBroadcastBlocks:      opts.ShouldBroadcastBlocks,
 				shouldBroadcastBlockHashes: opts.ShouldBroadcastBlockHashes,
-				knownTxs:                   ds.NewBloomSet(opts.Conns.KnownTxsOpts()),
-				knownBlocks:                ds.NewBoundedSet[common.Hash](opts.Conns.KnownBlocksMax()),
+				knownTxs:                   ds.NewBloomSet(opts.Conns.knownTxsBloom),
+				knownBlocks:                ds.NewBoundedSet[common.Hash](opts.Conns.knownBlocksMax),
 				messages:                   NewPeerMessages(),
 				txAnnounce:                 make(chan []common.Hash),
 				blockAnnounce:              make(chan NewBlockHashesPacket, maxQueuedBlockAnns),
@@ -688,10 +680,10 @@ func (c *conn) txAnnouncementLoop() {
 }
 
 // prepareTxAnnouncements extracts a batch of unknown tx hashes from the queue
-// up to maxTxPacketSize bytes. Returns the pending hashes and remaining queue.
+// up to MaxTxPacketSize bytes. Returns the pending hashes and remaining queue.
 func (c *conn) prepareTxAnnouncements(queue []common.Hash) (pending, remaining []common.Hash) {
 	// Calculate max hashes we can send based on packet size limit
-	maxHashes := min(maxTxPacketSize/common.HashLength, len(queue))
+	maxHashes := min(c.conns.maxTxPacketSize/common.HashLength, len(queue))
 
 	// Filter out known hashes in a single lock operation
 	pending = c.knownTxs.FilterNotContained(queue[:maxHashes])
@@ -702,8 +694,9 @@ func (c *conn) prepareTxAnnouncements(queue []common.Hash) (pending, remaining [
 // enqueueTxHashes adds hashes to the queue, dropping oldest if over capacity.
 func (c *conn) enqueueTxHashes(queue, hashes []common.Hash) []common.Hash {
 	queue = append(queue, hashes...)
-	if len(queue) > maxQueuedTxAnns {
-		queue = queue[:copy(queue, queue[len(queue)-maxQueuedTxAnns:])]
+	maxQueued := c.conns.maxQueuedTxs
+	if len(queue) > maxQueued {
+		queue = queue[:copy(queue, queue[len(queue)-maxQueued:])]
 	}
 	return queue
 }

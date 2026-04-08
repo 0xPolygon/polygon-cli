@@ -61,7 +61,17 @@ Metric Type: Gauge
 
 
 ### sensor_peers
-The number of peers the sensor is connected to
+Number of peers the sensor is connected to
 
 Metric Type: Gauge
+
+
+### sensor_rpc_requests
+Number of RPC requests made
+
+Metric Type: CounterVec
+
+Variable Labels:
+- method
+- proxied
 
