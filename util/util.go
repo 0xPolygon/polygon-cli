@@ -439,7 +439,7 @@ func GetHexString(data any) string {
 	if reflect.TypeOf(data).Kind() == reflect.Float64 {
 		f := data.(float64)
 		if f < 0 || f > float64(math.MaxUint64) {
-			log.Fatal().Float64("value", f).Msg("value out of range for uint64")
+			log.Fatal().Float64("value", f).Msg("Value out of range for uint64")
 		}
 		result = fmt.Sprintf("%x", uint64(f))
 	} else if reflect.TypeOf(data).Kind() == reflect.String {
@@ -449,7 +449,7 @@ func GetHexString(data any) string {
 			result = data.(string)
 		}
 	} else {
-		log.Fatal().Any("data", data).Msg("unknown storage data type")
+		log.Fatal().Any("data", data).Msg("Unknown storage data type")
 	}
 	if len(result)%2 != 0 {
 		result = "0" + result

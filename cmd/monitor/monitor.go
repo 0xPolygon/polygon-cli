@@ -452,7 +452,7 @@ func (ms *monitorStatus) processBatchesConcurrently(ctx context.Context, rpc *et
 				return nil
 			}
 			if err := backoff.Retry(retryable, b); err != nil {
-				log.Error().Err(err).Msg("unable to retry")
+				log.Error().Err(err).Msg("Unable to retry")
 				errorsMutex.Lock()
 				errs = append(errs, err)
 				errorsMutex.Unlock()

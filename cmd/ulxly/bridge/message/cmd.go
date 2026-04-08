@@ -50,7 +50,7 @@ func bridgeMessage(cmd *cobra.Command, _ []string) error {
 	// Initialize and assign variables required to send transaction payload
 	bridgeV2, toAddress, auth, err := ulxlycommon.GenerateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
-		log.Error().Err(err).Msg("error generating transaction payload")
+		log.Error().Err(err).Msg("Error generating transaction payload")
 		return err
 	}
 
@@ -67,7 +67,7 @@ func bridgeMessage(cmd *cobra.Command, _ []string) error {
 		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
-	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
+	log.Info().Msg("Bridge transaction: " + bridgeTxn.Hash().String())
 	if err = ulxlycommon.WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
 		return err
 	}

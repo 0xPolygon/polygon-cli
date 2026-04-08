@@ -471,7 +471,7 @@ func (r *Runner) postLoadTest(ctx context.Context) {
 
 	// Output detailed summary if requested
 	if cfg.ShouldProduceSummary && r.startBlockNumber > 0 && r.finalBlockNumber > 0 {
-		log.Info().Msg("Generating detailed summary...")
+		log.Info().Msg("Generating detailed summary")
 		if err := SummarizeResults(ctx, r.client, r.rpcClient, cfg, r.accountPool, results, r.startBlockNumber, r.finalBlockNumber); err != nil {
 			log.Error().Err(err).Msg("Failed to generate detailed summary")
 		}
@@ -479,7 +479,7 @@ func (r *Runner) postLoadTest(ctx context.Context) {
 
 	// Refund remaining funds if requested
 	if cfg.RefundRemainingFunds && r.accountPool != nil {
-		log.Info().Msg("Refunding remaining funds...")
+		log.Info().Msg("Refunding remaining funds")
 		if err := r.accountPool.ReturnFunds(ctx); err != nil {
 			log.Error().Err(err).Msg("Failed to refund remaining funds")
 		}
@@ -1072,7 +1072,7 @@ func (r *Runner) deployContracts(ctx context.Context, tops *bind.TransactOpts) e
 				SwapAmountInput: uniswapv3.SwapAmountInput.Uint64(),
 			}
 		}
-		log.Info().Msg("Initializing UniswapV3 contracts...")
+		log.Info().Msg("Initializing UniswapV3 contracts")
 		uniswapAddresses := uniswapv3.UniswapV3Addresses{
 			FactoryV3:                          common.HexToAddress(r.cfg.UniswapV3.FactoryV3),
 			Multicall:                          common.HexToAddress(r.cfg.UniswapV3.Multicall),

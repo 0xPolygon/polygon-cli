@@ -135,7 +135,7 @@ func (m *RPCMode) Execute(ctx context.Context, cfg *config.Config, deps *mode.De
 				err = nil
 			}
 		} else {
-			log.Warn().Msg("Unable to find deployed erc20 contract, skipping making calls...")
+			log.Warn().Msg("Unable to find deployed ERC20 contract, skipping calls")
 		}
 
 		if len(ia.ERC721Addresses) != 0 {
@@ -162,7 +162,7 @@ func (m *RPCMode) Execute(ctx context.Context, cfg *config.Config, deps *mode.De
 				err = nil
 			}
 		} else {
-			log.Warn().Msg("Unable to find deployed erc721 contract, skipping making calls...")
+			log.Warn().Msg("Unable to find deployed ERC721 contract, skipping calls")
 		}
 	}
 

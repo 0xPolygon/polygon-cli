@@ -40,7 +40,7 @@ func emptyProof() error {
 func proofString[T any](p T) string {
 	jsonBytes, err := json.Marshal(p)
 	if err != nil {
-		log.Error().Err(err).Msg("error marshalling proof to json")
+		log.Error().Err(err).Msg("Error marshalling proof to JSON")
 		return ""
 	}
 	return string(jsonBytes)

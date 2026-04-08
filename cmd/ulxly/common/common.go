@@ -364,7 +364,7 @@ func GenerateTransactionPayload(ctx context.Context, client *ethclient.Client, u
 func ensureCodePresent(ctx context.Context, client *ethclient.Client, address string) error {
 	code, err := client.CodeAt(ctx, ethcommon.HexToAddress(address), nil)
 	if err != nil {
-		log.Error().Err(err).Str("address", address).Msg("error getting code at address")
+		log.Error().Err(err).Str("address", address).Msg("Error getting code at address")
 		return err
 	}
 	if len(code) == 0 {
@@ -398,7 +398,7 @@ func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *type
 				continue
 			}
 			if r.Status != 0 {
-				log.Info().Interface("txHash", r.TxHash).Msg("transaction successful")
+				log.Info().Interface("txHash", r.TxHash).Msg("Transaction successful")
 				return nil
 			} else if r.Status == 0 {
 				log.Error().Interface("txHash", r.TxHash).Msg("Deposit transaction failed")
@@ -461,7 +461,7 @@ func LogAndReturnJSONError(ctx context.Context, client *ethclient.Client, tx *ty
 			castCmd += fmt.Sprintf(" --value %s", tx.Value().String())
 			castCmd += fmt.Sprintf(" %s", tx.To().String())
 			castCmd += fmt.Sprintf(" %s", ethcommon.Bytes2Hex(tx.Data()))
-			log.Info().Str("cmd", castCmd).Msg("use this command to replicate the call")
+			log.Info().Str("cmd", castCmd).Msg("Use this command to replicate the call")
 		}
 	}
 
@@ -484,7 +484,7 @@ func LogAndReturnJSONError(ctx context.Context, client *ethclient.Client, tx *ty
 
 	reason, decodeErr := smcerror.DecodeSmcErrorCode(jsonError.Data)
 	if decodeErr != nil {
-		log.Error().Err(err).Msg("unable to decode smart contract error")
+		log.Error().Err(err).Msg("Unable to decode smart contract error")
 		return err
 	}
 	errLog := log.Error().
@@ -529,7 +529,7 @@ func ParseDepositCountFromTransaction(ctx context.Context, client *ethclient.Cli
 
 	depositCount, err := ParseBridgeDepositCount(logs, bridgeContract)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to parse deposit count from logs")
+		log.Error().Err(err).Msg("Failed to parse deposit count from logs")
 		return 0, err
 	}
 
@@ -576,7 +576,7 @@ out:
 			break out
 		default:
 			if errors.Is(err, ErrNotReadyForClaim) || errors.Is(err, bridge_service.ErrNotFound) {
-				log.Info().Msg("retrying...")
+				log.Info().Msg("Retrying")
 				time.Sleep(10 * time.Second)
 				continue
 			}

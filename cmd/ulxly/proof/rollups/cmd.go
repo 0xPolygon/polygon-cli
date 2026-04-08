@@ -107,7 +107,7 @@ func readRollupsExitRootLeaves(rawLeaves []byte, rollupID uint32, completeMT boo
 		leaves[evt.RollupID] = evt
 	}
 	if err := scanner.Err(); err != nil {
-		log.Error().Err(err).Msg("there was an error reading the deposit file")
+		log.Error().Err(err).Msg("There was an error reading the deposit file")
 		return err
 	}
 	if rollupID > highestRollupID && !completeMT {
@@ -136,7 +136,7 @@ func readRollupsExitRootLeaves(rawLeaves []byte, rollupID uint32, completeMT boo
 	if err != nil {
 		return err
 	}
-	log.Info().Str("root", p.Root.String()).Msg("finished")
+	log.Info().Str("root", p.Root.String()).Msg("Finished")
 	fmt.Println(proofString(p))
 	return nil
 }
@@ -145,7 +145,7 @@ func readRollupsExitRootLeaves(rawLeaves []byte, rollupID uint32, completeMT boo
 func proofString[T any](p T) string {
 	jsonBytes, err := json.Marshal(p)
 	if err != nil {
-		log.Error().Err(err).Msg("error marshalling proof to json")
+		log.Error().Err(err).Msg("Error marshalling proof to JSON")
 		return ""
 	}
 	return string(jsonBytes)

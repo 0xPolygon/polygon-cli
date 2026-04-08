@@ -26,14 +26,14 @@ type InitParams struct {
 // Init initializes the UniswapV3 loadtest by deploying contracts and setting up the pool.
 // Returns the UniswapV3 config and pool config needed for running swaps.
 func Init(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, cops *bind.CallOpts, uniswapAddresses UniswapV3Addresses, recipient common.Address, params InitParams) (uniswapV3Config UniswapV3Config, poolConfig PoolConfig, err error) {
-	log.Info().Msg("Deploying UniswapV3 contracts...")
+	log.Info().Msg("Deploying UniswapV3 contracts")
 	uniswapV3Config, err = DeployUniswapV3(ctx, c, tops, cops, uniswapAddresses, recipient)
 	if err != nil {
 		return
 	}
 	log.Info().Interface("addresses", uniswapV3Config.GetAddresses()).Msg("UniswapV3 deployed")
 
-	log.Info().Msg("Deploying ERC20 tokens...")
+	log.Info().Msg("Deploying ERC20 tokens")
 	var token0 ContractConfig[tokens.ERC20]
 	token0, err = DeployERC20(
 		ctx, c, tops, cops, uniswapV3Config, "SwapperA", "SA", MintAmount, recipient, params.PoolToken0Address)

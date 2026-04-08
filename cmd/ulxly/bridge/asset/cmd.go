@@ -51,7 +51,7 @@ func bridgeAsset(cmd *cobra.Command, _ []string) error {
 	// Initialize and assign variables required to send transaction payload
 	bridgeV2, toAddress, auth, err := ulxlycommon.GenerateTransactionPayload(cmd.Context(), client, bridgeAddr, privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
-		log.Error().Err(err).Msg("error generating transaction payload")
+		log.Error().Err(err).Msg("Error generating transaction payload")
 		return err
 	}
 
@@ -67,13 +67,13 @@ func bridgeAsset(cmd *cobra.Command, _ []string) error {
 		// has enough allowance to transfer the tokens on behalf of the user
 		tokenContract, iErr := tokens.NewERC20(tokenAddress, client)
 		if iErr != nil {
-			log.Error().Err(iErr).Msg("error getting token contract")
+			log.Error().Err(iErr).Msg("Error getting token contract")
 			return iErr
 		}
 
 		allowance, iErr := tokenContract.Allowance(&bind.CallOpts{Pending: false}, auth.From, bridgeAddress)
 		if iErr != nil {
-			log.Error().Err(iErr).Msg("error getting token allowance")
+			log.Error().Err(iErr).Msg("Error getting token allowance")
 			return iErr
 		}
 
@@ -83,14 +83,14 @@ func bridgeAsset(cmd *cobra.Command, _ []string) error {
 				Str("tokenAddress", tokenAddress.String()).
 				Str("bridgeAddress", bridgeAddress.String()).
 				Str("userAddress", auth.From.String()).
-				Msg("approving bridge contract to spend tokens on behalf of user")
+				Msg("Approving bridge contract to spend tokens on behalf of user")
 
 			// Approve the bridge contract to spend the tokens on behalf of the user
 			approveTxn, iErr := tokenContract.Approve(auth, bridgeAddress, value)
 			if iErr = ulxlycommon.LogAndReturnJSONError(cmd.Context(), client, approveTxn, auth, iErr); iErr != nil {
 				return iErr
 			}
-			log.Info().Msg("approveTxn: " + approveTxn.Hash().String())
+			log.Info().Msg("Approve transaction: " + approveTxn.Hash().String())
 			if iErr = ulxlycommon.WaitMineTransaction(cmd.Context(), client, approveTxn, timeoutTxnReceipt); iErr != nil {
 				return iErr
 			}
@@ -102,7 +102,7 @@ func bridgeAsset(cmd *cobra.Command, _ []string) error {
 		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
-	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
+	log.Info().Msg("Bridge transaction: " + bridgeTxn.Hash().String())
 	if err = ulxlycommon.WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
 		return err
 	}

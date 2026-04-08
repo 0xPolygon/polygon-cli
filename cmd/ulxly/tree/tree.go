@@ -329,7 +329,7 @@ func ComputeNullifierTree(rawClaims []byte) (common.Hash, error) {
 		}
 		mainnetFlag, rollupIndex, localExitRootIndex, err := ulxlycommon.DecodeGlobalIndex(claim.GlobalIndex)
 		if err != nil {
-			log.Error().Err(err).Msg("error decoding globalIndex")
+			log.Error().Err(err).Msg("Error decoding globalIndex")
 			return common.Hash{}, err
 		}
 		log.Info().Bool("MainnetFlag", mainnetFlag).Uint32("RollupIndex", rollupIndex).Uint32("LocalExitRootIndex", localExitRootIndex).Uint64("block-number", claim.Raw.BlockNumber).Msg("Adding Claim")
@@ -339,7 +339,7 @@ func ComputeNullifierTree(rawClaims []byte) (common.Hash, error) {
 		}
 		root, err = nTree.UpdateNullifierTree(nullifierKey)
 		if err != nil {
-			log.Error().Err(err).Uint32("OriginNetwork: ", claim.OriginNetwork).Msg("error computing nullifierTree. Claim information: GlobalIndex: " + claim.GlobalIndex.String() + ", OriginAddress: " + claim.OriginAddress.String() + ", Amount: " + claim.Amount.String())
+			log.Error().Err(err).Uint32("OriginNetwork: ", claim.OriginNetwork).Msg("Error computing nullifierTree. Claim information: GlobalIndex: " + claim.GlobalIndex.String() + ", OriginAddress: " + claim.OriginAddress.String() + ", Amount: " + claim.Amount.String())
 			return common.Hash{}, err
 		}
 	}

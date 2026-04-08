@@ -70,7 +70,7 @@ var FoldTraceCmd = &cobra.Command{
 
 			if isCall(op.OP) {
 				if len(op.Stack) < 6 {
-					log.Warn().Int("stackLength", len(op.Stack)).Msg("detected a call with a stack that's too short")
+					log.Warn().Int("stackLength", len(op.Stack)).Msg("Detected a call with a stack that's too short")
 				} else {
 					currentLabel = op.OP + " to " + op.Stack[len(op.Stack)-2]
 				}
@@ -95,7 +95,7 @@ var FoldTraceCmd = &cobra.Command{
 				folded[currentMetricPath] += metricValue
 			}
 
-			log.Trace().Strs("context", contexts).Uint64("depth", currentDepth).Str("currentLabel", currentLabel).Uint64("pc", op.PC).Msg("trace operation")
+			log.Trace().Strs("context", contexts).Uint64("depth", currentDepth).Str("currentLabel", currentLabel).Uint64("pc", op.PC).Msg("Trace operation")
 
 		}
 		for context, metric := range folded {
@@ -125,7 +125,7 @@ func getActualUsedGas(index int, td *TraceData) uint64 {
 
 		return op.Gas - td.StructLogs[i].Gas
 	}
-	log.Warn().Uint64("pc", op.PC).Uint64("depth", op.Depth).Msg("unable to look ahead for gas use")
+	log.Warn().Uint64("pc", op.PC).Uint64("depth", op.Depth).Msg("Unable to look ahead for gas use")
 	return op.GasCost
 }
 
