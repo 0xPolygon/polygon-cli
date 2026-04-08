@@ -680,7 +680,7 @@ func (c *conn) txAnnouncementLoop() {
 }
 
 // prepareTxAnnouncements extracts a batch of unknown tx hashes from the queue
-// up to MaxTxPacketSize bytes. Returns the pending hashes and remaining queue.
+// up to maxTxPacketSize bytes. Returns the pending hashes and remaining queue.
 func (c *conn) prepareTxAnnouncements(queue []common.Hash) (pending, remaining []common.Hash) {
 	// Calculate max hashes we can send based on packet size limit
 	maxHashes := min(c.conns.maxTxPacketSize/common.HashLength, len(queue))
