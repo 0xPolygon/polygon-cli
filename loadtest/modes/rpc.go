@@ -69,18 +69,18 @@ func (m *RPCMode) Execute(ctx context.Context, cfg *config.Config, deps *mode.De
 		pt := ia.Transactions[deps.RandIntn(len(ia.Transactions))]
 		rawTxData, err = pt.MarshalJSON()
 		if err != nil {
-			log.Error().Err(err).Str("txHash", pt.Hash().String()).Msg("issue converting poly transaction to json")
+			log.Error().Err(err).Str("txHash", pt.Hash().String()).Msg("Issue converting poly transaction to JSON")
 			return
 		}
 		var txArgs apitypes.SendTxArgs
 		if err = json.Unmarshal(rawTxData, &txArgs); err != nil {
-			log.Error().Err(err).Str("txHash", pt.Hash().String()).Msg("unable to unmarshal poly transaction to json")
+			log.Error().Err(err).Str("txHash", pt.Hash().String()).Msg("Unable to unmarshal poly transaction to JSON")
 			return
 		}
 		var tx *ethtypes.Transaction
 		tx, err = txArgs.ToTransaction()
 		if err != nil {
-			log.Error().Err(err).Str("txArgs", txArgs.String()).Msg("unable to convert the arguments to a transaction")
+			log.Error().Err(err).Str("txArgs", txArgs.String()).Msg("Unable to convert the arguments to a transaction")
 			return
 		}
 		cm := mode.TxToCallMsg(cfg, tx)

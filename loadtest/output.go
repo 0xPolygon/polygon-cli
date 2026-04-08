@@ -262,7 +262,7 @@ func printBlockSummary(c *ethclient.Client, cfg *config.Config, ap *AccountPool,
 			_, _ = p.Printf("Blocktime Standard Deviation: %vs\n", number.Decimal(stddevBlocktime))
 			_, _ = p.Printf("Blocktime Variance: %vs\n", number.Decimal(varianceBlocktime))
 		} else {
-			log.Debug().Int("Length of blockSummary", len(bs)).Msg("blockSummary is empty")
+			log.Debug().Int("length", len(bs)).Msg("Block summary is empty")
 		}
 	case "json":
 		summaryOutput := SummaryOutput{}
