@@ -701,8 +701,7 @@ func merkleProof(leaves []common.Hash, leafIdx uint64) []byte {
 // The Polygon contracts (ExitPayloadReader.toExitPayload) RLP-decode the payload, so it must
 // be an RLP list — not ABI-encoded. The format matches the matic-js buildReferenceTxPayload:
 // [headerNumber, blockProof, blockNumber, blockTimestamp, txRoot, receiptRoot, receipt,
-//
-//	receiptParentNodes, branchMask, logIndex]
+// receiptParentNodes, branchMask, logIndex]
 func encodeExitPayload(
 	headerNumber *big.Int,
 	blockProof []byte,
