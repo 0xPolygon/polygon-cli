@@ -261,7 +261,7 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		CheckBalanceBeforeFunding: r.cfg.CheckBalanceBeforeFunding,
 		LegacyTxMode:              r.cfg.LegacyTxMode,
 		AccountsPerFundingTx:      r.cfg.AccountsPerFundingTx,
-		ParallelNonceFetch:        r.cfg.ParallelNonceFetch,
+		SequentialNonceFetch:      r.cfg.SequentialNonceFetch,
 		StopOnInsufficientFunds:   r.cfg.StopOnInsufficientFunds,
 		ForceGasPrice:             r.cfg.ForceGasPrice,
 		ForcePriorityGasPrice:     r.cfg.ForcePriorityGasPrice,
@@ -322,7 +322,7 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 	}
 
 	// Wait for all accounts to be ready
-	if r.cfg.ParallelNonceFetch {
+	if !r.cfg.SequentialNonceFetch {
 		// Fetch nonces in parallel without rate limiting
 		if err := r.accountPool.FetchNoncesInParallel(ctx); err != nil {
 			return errors.New("failed to fetch nonces in parallel: " + err.Error())

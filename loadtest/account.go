@@ -32,7 +32,7 @@ type AccountPoolConfig struct {
 	CheckBalanceBeforeFunding bool
 	LegacyTxMode              bool
 	AccountsPerFundingTx      uint64
-	ParallelNonceFetch        bool
+	SequentialNonceFetch      bool
 	StopOnInsufficientFunds   bool
 	// Gas override settings
 	ForceGasPrice         uint64
@@ -226,7 +226,7 @@ func (ap *AccountPool) AllAccountsReady() (bool, int, int) {
 }
 
 // FetchNoncesInParallel fetches nonces for all accounts that aren't ready yet,
-// in parallel without rate limiting. This is used when ParallelNonceFetch is enabled.
+// in parallel without rate limiting. This is the default behavior unless SequentialNonceFetch is enabled.
 func (ap *AccountPool) FetchNoncesInParallel(ctx context.Context) error {
 	ap.mu.Lock()
 	// Collect accounts that need nonce fetching
@@ -359,8 +359,8 @@ func (ap *AccountPool) Add(ctx context.Context, privateKey *ecdsa.PrivateKey, st
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
 
-	// When parallel nonce fetch is enabled, don't fetch in background
-	fetchInBackground := !ap.cfg.ParallelNonceFetch
+	// When sequential nonce fetch is enabled, fetch in background (original behavior)
+	fetchInBackground := ap.cfg.SequentialNonceFetch
 	account, err := newAccount(ctx, ap.client, ap.clientRateLimiter, privateKey, startNonce, &ap.mu, fetchInBackground)
 	if err != nil {
 		return fmt.Errorf("failed to create account: %w", err)

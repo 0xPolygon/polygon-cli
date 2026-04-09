@@ -136,6 +136,7 @@ func initPersistentFlags() {
 	pf.BoolVar(&cfg.FireAndForget, "send-only", false, "alias for --fire-and-forget")
 	pf.BoolVar(&cfg.CheckForPreconf, "check-preconf", false, "check for preconf status after sending tx")
 	pf.StringVar(&cfg.PreconfStatsFile, "preconf-stats-file", "", "path for preconf stats JSON output, updated every 2 seconds")
+	pf.BoolVar(&cfg.StopOnInsufficientFunds, "stop-on-insufficient-funds", false, "stop sending from account when it encounters insufficient funds error")
 
 	initGasManagerFlags()
 }
@@ -167,8 +168,7 @@ func initFlags() {
 	f.StringVar(&cfg.SendingAccountsFile, "sending-accounts-file", "", "file with sending account private keys, one per line (avoids pool queue and preserves accounts across runs)")
 	f.StringVar(&cfg.DumpSendingAccountsFile, "dump-sending-accounts-file", "", "file path to dump generated private keys when using --sending-accounts-count")
 	f.Uint64Var(&cfg.AccountsPerFundingTx, "accounts-per-funding-tx", 400, "number of accounts to fund per multicall3 transaction")
-	f.BoolVar(&cfg.ParallelNonceFetch, "parallel-nonce-fetch", true, "fetch nonces for all accounts in parallel")
-	f.BoolVar(&cfg.StopOnInsufficientFunds, "stop-on-insufficient-funds", false, "stop sending from account when it encounters insufficient funds error")
+	f.BoolVar(&cfg.SequentialNonceFetch, "sequential-nonce-fetch", false, "fetch nonces sequentially instead of in parallel (use if hitting rate limits)")
 	f.Uint64Var(&cfg.MaxBaseFeeWei, "max-base-fee-wei", 0, "maximum base fee in wei (pause sending new transactions when exceeded, useful during network congestion)")
 	f.StringSliceVarP(&cfg.Modes, "mode", "m", []string{"t"}, `testing mode (can specify multiple like "d,t"):
 2, erc20 - send ERC20 tokens
