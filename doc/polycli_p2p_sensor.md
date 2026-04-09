@@ -149,7 +149,9 @@ polycli p2p sensor amoy-nodes.json \
       --max-known-blocks int          maximum block hashes to track per peer (0 for no limit) (default 1024)
       --max-parents int               maximum parent block hashes to track per peer (0 for no limit) (default 1024)
   -m, --max-peers int                 maximum number of peers to connect to (default 2000)
+      --max-queued-txs int            maximum transaction announcements to queue per peer (default 4096)
       --max-requests int              maximum request IDs to track per peer (0 for no limit) (default 2048)
+      --max-tx-packet-size int        target size in bytes for transaction broadcast packets (default 102400)
       --max-txs int                   maximum transactions to cache for serving to peers (0 for no limit) (default 32768)
       --nat string                    NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
   -n, --network-id uint               filter discovered nodes by this network ID

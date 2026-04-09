@@ -15,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog/log"
 )
 
@@ -50,11 +49,11 @@ type rpcProxy struct {
 
 // rpcParams holds shared parameters for processing JSON-RPC requests.
 type rpcParams struct {
-	conns   *p2p.Conns
-	chainID *big.Int
-	gpo     *p2p.GasPriceOracle
-	proxy   *rpcProxy
-	counter *prometheus.CounterVec
+	conns    *p2p.Conns
+	chainID  *big.Int
+	gpo      *p2p.GasPriceOracle
+	proxy    *rpcProxy
+	requests *prometheus.CounterVec
 }
 
 // handleRPC sets up the JSON-RPC server for receiving and broadcasting transactions.
@@ -67,21 +66,11 @@ func handleRPC(conns *p2p.Conns, networkID uint64) {
 	chainID := new(big.Int).SetUint64(networkID)
 	gpo := p2p.NewGasPriceOracle(conns)
 
-	counter := promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: "sensor",
-			Subsystem: "rpc",
-			Name:      "calls",
-			Help:      "The number of RPC calls made",
-		},
-		[]string{"method", "proxied"},
-	)
-
 	params := &rpcParams{
-		conns:   conns,
-		chainID: chainID,
-		gpo:     gpo,
-		counter: counter,
+		conns:    conns,
+		chainID:  chainID,
+		gpo:      gpo,
+		requests: p2p.NewRPCRequestsCounter(),
 	}
 
 	if inputSensorParams.ProxyRPC {
@@ -132,12 +121,12 @@ func handleRPC(conns *p2p.Conns, networkID uint64) {
 
 		// If method not found and proxy is enabled, forward to upstream
 		if isMethodNotFound(resp) && params.proxy != nil {
-			params.counter.WithLabelValues(req.Method, "true").Inc()
+			params.requests.WithLabelValues(req.Method, "true").Inc()
 			proxyRPCRequest(w, r, body, params.proxy)
 			return
 		}
 
-		params.counter.WithLabelValues(req.Method, "false").Inc()
+		params.requests.WithLabelValues(req.Method, "false").Inc()
 
 		// Enqueue transactions for async broadcast
 		if len(txs) > 0 {
@@ -281,9 +270,9 @@ func handleBatchRequest(w http.ResponseWriter, r *http.Request, body []byte, par
 			if params.proxy != nil {
 				indices = append(indices, i)
 			}
-			params.counter.WithLabelValues(req.Method, "true").Inc()
+			params.requests.WithLabelValues(req.Method, "true").Inc()
 		} else {
-			params.counter.WithLabelValues(req.Method, "false").Inc()
+			params.requests.WithLabelValues(req.Method, "false").Inc()
 		}
 	}
 
