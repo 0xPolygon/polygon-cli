@@ -15,37 +15,33 @@ import (
 type metricInfo struct {
 	Name      string
 	Namespace string
+	Subsystem string
 	Help      string
 	Type      string // Gauge, Counter, Histogram, Summary, GaugeVec, CounterVec, etc.
 	Labels    []string
 	File      string
 }
 
-// fullName returns the complete metric name with namespace.
+// fullName returns the complete metric name with namespace and subsystem.
 func (m metricInfo) fullName() string {
+	parts := []string{}
 	if m.Namespace != "" {
-		return m.Namespace + "_" + m.Name
+		parts = append(parts, m.Namespace)
 	}
-	return m.Name
+	if m.Subsystem != "" {
+		parts = append(parts, m.Subsystem)
+	}
+	parts = append(parts, m.Name)
+	return strings.Join(parts, "_")
 }
 
 // genMetricsDoc generates a METRICS.md file documenting all Prometheus metrics.
 func genMetricsDoc(outputPath string) error {
-	metrics := []metricInfo{}
-
-	// Parse p2p package metrics
-	p2pMetrics, err := parseMetricsFile("p2p/metrics.go")
+	// All sensor metrics are defined in p2p/metrics.go
+	metrics, err := parseMetricsFile("p2p/metrics.go")
 	if err != nil {
 		return fmt.Errorf("failed to parse p2p/metrics.go: %w", err)
 	}
-	metrics = append(metrics, p2pMetrics...)
-
-	// Parse sensor command metrics
-	sensorMetrics, err := parseMetricsFile("cmd/p2p/sensor/sensor.go")
-	if err != nil {
-		return fmt.Errorf("failed to parse cmd/p2p/sensor/sensor.go: %w", err)
-	}
-	metrics = append(metrics, sensorMetrics...)
 
 	// Sort metrics by full name
 	sort.Slice(metrics, func(i, j int) bool {
@@ -113,6 +109,10 @@ func parseMetricsFile(filePath string) ([]metricInfo, error) {
 					case "Namespace":
 						if lit, ok := kv.Value.(*ast.BasicLit); ok {
 							metric.Namespace = strings.Trim(lit.Value, `"`)
+						}
+					case "Subsystem":
+						if lit, ok := kv.Value.(*ast.BasicLit); ok {
+							metric.Subsystem = strings.Trim(lit.Value, `"`)
 						}
 					case "Help":
 						if lit, ok := kv.Value.(*ast.BasicLit); ok {

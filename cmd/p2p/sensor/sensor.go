@@ -22,8 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -60,6 +58,8 @@ type (
 		BroadcastWorkers             int
 		TxBatchTimeout               time.Duration
 		TxBroadcastQueueSize         int
+		MaxTxPacketSize              int
+		MaxQueuedTxs                 int
 		ShouldRunPprof               bool
 		PprofPort                    uint
 		ShouldRunPrometheus          bool
@@ -200,12 +200,7 @@ var SensorCmd = &cobra.Command{
 			TD:    rpcBlock.TotalDifficulty.ToBigInt(),
 		}
 
-		peersGauge := promauto.NewGauge(prometheus.GaugeOpts{
-			Namespace: "sensor",
-			Name:      "peers",
-			Help:      "The number of peers the sensor is connected to",
-		})
-
+		peersGauge := p2p.NewPeersGauge()
 		metrics := p2p.NewBlockMetrics(head.Block)
 
 		// Create peer connection manager for broadcasting transactions
@@ -223,6 +218,8 @@ var SensorCmd = &cobra.Command{
 			BroadcastWorkers:           inputSensorParams.BroadcastWorkers,
 			TxBatchTimeout:             inputSensorParams.TxBatchTimeout,
 			TxBroadcastQueueSize:       inputSensorParams.TxBroadcastQueueSize,
+			MaxTxPacketSize:            inputSensorParams.MaxTxPacketSize,
+			MaxQueuedTxs:               inputSensorParams.MaxQueuedTxs,
 		})
 
 		opts := p2p.EthProtocolOptions{
@@ -499,7 +496,9 @@ will result in less chance of missing data but can significantly increase memory
 	f.BoolVar(&inputSensorParams.ShouldBroadcastBlockHashes, "broadcast-block-hashes", false, "broadcast block hashes to peers")
 	f.IntVar(&inputSensorParams.BroadcastWorkers, "broadcast-workers", 4, "number of concurrent broadcast workers")
 	f.DurationVar(&inputSensorParams.TxBatchTimeout, "tx-batch-timeout", 500*time.Millisecond, "timeout for batching transactions before broadcast")
-	f.IntVar(&inputSensorParams.TxBroadcastQueueSize, "tx-broadcast-queue-size", 100000, "capacity of transaction broadcast queue")
+	f.IntVar(&inputSensorParams.TxBroadcastQueueSize, "tx-broadcast-queue-size", 100_000, "capacity of transaction broadcast queue")
+	f.IntVar(&inputSensorParams.MaxTxPacketSize, "max-tx-packet-size", 100*1024, "target size in bytes for transaction broadcast packets")
+	f.IntVar(&inputSensorParams.MaxQueuedTxs, "max-queued-txs", 4096, "maximum transaction announcements to queue per peer")
 	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
 	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")

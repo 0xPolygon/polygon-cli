@@ -25,14 +25,6 @@ import (
 )
 
 const (
-	// maxTxPacketSize is the target size for transaction announcement packets.
-	// Matches Bor's limit of 100KB.
-	maxTxPacketSize = 100 * 1024
-
-	// maxQueuedTxAnns is the maximum number of transaction announcements to
-	// queue before dropping oldest. Matches Bor.
-	maxQueuedTxAnns = 4096
-
 	// maxQueuedBlockAnns is the maximum number of block announcements to queue
 	// before dropping. Matches Bor.
 	maxQueuedBlockAnns = 4
@@ -160,8 +152,8 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				shouldBroadcastTxHashes:    opts.ShouldBroadcastTxHashes,
 				shouldBroadcastBlocks:      opts.ShouldBroadcastBlocks,
 				shouldBroadcastBlockHashes: opts.ShouldBroadcastBlockHashes,
-				knownTxs:                   ds.NewBloomSet(opts.Conns.KnownTxsOpts()),
-				knownBlocks:                ds.NewBoundedSet[common.Hash](opts.Conns.KnownBlocksMax()),
+				knownTxs:                   ds.NewBloomSet(opts.Conns.knownTxsBloom),
+				knownBlocks:                ds.NewBoundedSet[common.Hash](opts.Conns.knownBlocksMax),
 				messages:                   NewPeerMessages(),
 				txAnnounce:                 make(chan []common.Hash),
 				blockAnnounce:              make(chan NewBlockHashesPacket, maxQueuedBlockAnns),
@@ -340,23 +332,17 @@ func (c *conn) statusExchange69(packet *BorStatusPacket69) error {
 	return nil
 }
 
-// countMsgReceived increments the global Prometheus counter and per-peer message tracking for received messages.
+// countMsgReceived increments the Prometheus counter and per-peer message tracking for received messages.
 func (c *conn) countMsgReceived(messageName string, count float64) {
-	// Increment global Prometheus counter (low cardinality)
-	SensorMsgCounter.WithLabelValues(messageName, string(MsgReceived)).Add(count)
-	SensorMsgCounter.WithLabelValues(messageName+PacketSuffix, string(MsgReceived)).Add(1)
-
-	// Increment per-peer message tracking (for API visibility)
+	c.conns.metrics.messages.WithLabelValues(messageName, string(MsgReceived)).Add(count)
+	c.conns.metrics.messages.WithLabelValues(messageName+PacketSuffix, string(MsgReceived)).Add(1)
 	c.messages.IncrementReceived(messageName, int64(count))
 }
 
-// countMsgSent increments the global Prometheus counter and per-peer message tracking for sent messages.
+// countMsgSent increments the Prometheus counter and per-peer message tracking for sent messages.
 func (c *conn) countMsgSent(messageName string, count float64) {
-	// Increment global Prometheus counter (low cardinality)
-	SensorMsgCounter.WithLabelValues(messageName, string(MsgSent)).Add(count)
-	SensorMsgCounter.WithLabelValues(messageName+PacketSuffix, string(MsgSent)).Add(1)
-
-	// Increment per-peer message tracking (for API visibility)
+	c.conns.metrics.messages.WithLabelValues(messageName, string(MsgSent)).Add(count)
+	c.conns.metrics.messages.WithLabelValues(messageName+PacketSuffix, string(MsgSent)).Add(1)
 	c.messages.IncrementSent(messageName, int64(count))
 }
 
@@ -697,7 +683,7 @@ func (c *conn) txAnnouncementLoop() {
 // up to maxTxPacketSize bytes. Returns the pending hashes and remaining queue.
 func (c *conn) prepareTxAnnouncements(queue []common.Hash) (pending, remaining []common.Hash) {
 	// Calculate max hashes we can send based on packet size limit
-	maxHashes := min(maxTxPacketSize/common.HashLength, len(queue))
+	maxHashes := min(c.conns.maxTxPacketSize/common.HashLength, len(queue))
 
 	// Filter out known hashes in a single lock operation
 	pending = c.knownTxs.FilterNotContained(queue[:maxHashes])
@@ -708,8 +694,9 @@ func (c *conn) prepareTxAnnouncements(queue []common.Hash) (pending, remaining [
 // enqueueTxHashes adds hashes to the queue, dropping oldest if over capacity.
 func (c *conn) enqueueTxHashes(queue, hashes []common.Hash) []common.Hash {
 	queue = append(queue, hashes...)
-	if len(queue) > maxQueuedTxAnns {
-		queue = queue[:copy(queue, queue[len(queue)-maxQueuedTxAnns:])]
+	maxQueued := c.conns.maxQueuedTxs
+	if len(queue) > maxQueued {
+		queue = queue[:copy(queue, queue[len(queue)-maxQueued:])]
 	}
 	return queue
 }
