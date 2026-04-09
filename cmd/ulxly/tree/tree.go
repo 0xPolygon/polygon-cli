@@ -113,7 +113,7 @@ func NewBalanceTree() (*Balancer, error) {
 	var depth uint8 = 192
 	zeroHashes := generateZeroHashes(depth)
 	initRoot := crypto.Keccak256Hash(zeroHashes[depth-1].Bytes(), zeroHashes[depth-1].Bytes())
-	log.Info().Msg("Initial Root: " + initRoot.String())
+	log.Info().Stringer("root", initRoot).Msg("Initial root")
 	return &Balancer{
 		tree: Tree{
 			zeroHashes: zeroHashes,
@@ -143,7 +143,7 @@ func NewNullifierTree() (*Nullifier, error) {
 	var depth uint8 = 64
 	zeroHashes := generateZeroHashes(depth)
 	initRoot := crypto.Keccak256Hash(zeroHashes[depth-1].Bytes(), zeroHashes[depth-1].Bytes())
-	log.Info().Msg("Initial Root: " + initRoot.String())
+	log.Info().Stringer("root", initRoot).Msg("Initial root")
 	return &Nullifier{
 		tree: Tree{
 			zeroHashes: zeroHashes,
@@ -339,7 +339,12 @@ func ComputeNullifierTree(rawClaims []byte) (common.Hash, error) {
 		}
 		root, err = nTree.UpdateNullifierTree(nullifierKey)
 		if err != nil {
-			log.Error().Err(err).Uint32("OriginNetwork: ", claim.OriginNetwork).Msg("Error computing nullifierTree. Claim information: GlobalIndex: " + claim.GlobalIndex.String() + ", OriginAddress: " + claim.OriginAddress.String() + ", Amount: " + claim.Amount.String())
+			log.Error().Err(err).
+				Uint32("OriginNetwork", claim.OriginNetwork).
+				Stringer("GlobalIndex", claim.GlobalIndex).
+				Stringer("OriginAddress", claim.OriginAddress).
+				Stringer("Amount", claim.Amount).
+				Msg("Error computing nullifierTree")
 			return common.Hash{}, err
 		}
 	}

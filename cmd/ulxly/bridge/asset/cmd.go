@@ -90,7 +90,7 @@ func bridgeAsset(cmd *cobra.Command, _ []string) error {
 			if iErr = ulxlycommon.LogAndReturnJSONError(cmd.Context(), client, approveTxn, auth, iErr); iErr != nil {
 				return iErr
 			}
-			log.Info().Msg("Approve transaction: " + approveTxn.Hash().String())
+			log.Info().Stringer("txHash", approveTxn.Hash()).Msg("Approve transaction sent")
 			if iErr = ulxlycommon.WaitMineTransaction(cmd.Context(), client, approveTxn, timeoutTxnReceipt); iErr != nil {
 				return iErr
 			}
@@ -102,7 +102,7 @@ func bridgeAsset(cmd *cobra.Command, _ []string) error {
 		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
-	log.Info().Msg("Bridge transaction: " + bridgeTxn.Hash().String())
+	log.Info().Stringer("txHash", bridgeTxn.Hash()).Msg("Bridge transaction sent")
 	if err = ulxlycommon.WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
 		return err
 	}

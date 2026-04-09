@@ -79,6 +79,6 @@ func claimMessage(cmd *cobra.Command) error {
 	if err = ulxlycommon.LogAndReturnJSONError(cmd.Context(), client, claimTxn, auth, err); err != nil {
 		return err
 	}
-	log.Info().Msg("Claim transaction: " + claimTxn.Hash().String())
+	log.Info().Stringer("txHash", claimTxn.Hash()).Msg("Claim transaction sent")
 	return ulxlycommon.WaitMineTransaction(cmd.Context(), client, claimTxn, timeoutTxnReceipt)
 }

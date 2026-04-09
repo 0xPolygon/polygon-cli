@@ -67,7 +67,7 @@ func bridgeMessage(cmd *cobra.Command, _ []string) error {
 		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
-	log.Info().Msg("Bridge transaction: " + bridgeTxn.Hash().String())
+	log.Info().Stringer("txHash", bridgeTxn.Hash()).Msg("Bridge transaction sent")
 	if err = ulxlycommon.WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
 		return err
 	}
