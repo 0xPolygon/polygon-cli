@@ -59,6 +59,7 @@ type Config struct {
 	ReceiptRetryMax    uint
 	ReceiptRetryDelay  uint // initial delay in milliseconds
 	OutputRawTxOnly    bool
+	PrivateTxs         bool
 	StartNonce         uint64
 	GasPriceMultiplier float64
 

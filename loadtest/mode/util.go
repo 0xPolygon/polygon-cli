@@ -1,6 +1,7 @@
 package mode
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -8,7 +9,9 @@ import (
 	"github.com/0xPolygon/polygon-cli/loadtest/config"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	ethrpc "github.com/ethereum/go-ethereum/rpc"
 )
 
 // hexwords are used for generating test data.
@@ -121,4 +124,14 @@ func TransactOptsToCallMsg(cfg *config.Config, gasLimit uint64) ethereum.CallMsg
 	cm.From = *cfg.FromETHAddress
 	cm.Gas = gasLimit
 	return *cm
+}
+
+// SendRawTransactionPrivate sends a signed transaction using eth_sendRawTransactionPrivate.
+func SendRawTransactionPrivate(ctx context.Context, rpcClient *ethrpc.Client, tx *types.Transaction) error {
+	rawTx, err := tx.MarshalBinary()
+	if err != nil {
+		return fmt.Errorf("failed to marshal transaction: %w", err)
+	}
+	var txHash common.Hash
+	return rpcClient.CallContext(ctx, &txHash, "eth_sendRawTransactionPrivate", hexutil.Encode(rawTx))
 }

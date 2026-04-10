@@ -115,6 +115,7 @@ func initPersistentFlags() {
 	pf.BoolVar(&cfg.EthCallOnly, "eth-call-only", false, "call contracts without sending transactions (incompatible with adaptive rate limiting and summarization)")
 	pf.BoolVar(&cfg.EthCallOnlyLatestBlock, "eth-call-only-latest", false, "execute on latest block instead of original block in call-only mode with recall")
 	pf.BoolVar(&cfg.OutputRawTxOnly, "output-raw-tx-only", false, "output raw signed transaction hex without sending (works with most modes except RPC and UniswapV3)")
+	pf.BoolVar(&cfg.PrivateTxs, "private-txs", false, "send transactions via eth_sendRawTransactionPrivate")
 	pf.Uint64Var(&cfg.EthAmountInWei, "eth-amount-in-wei", 0, "amount of ether in wei to send per transaction")
 	pf.Float64Var(&cfg.RateLimit, "rate-limit", 4, "requests per second limit (use negative value to remove limit)")
 	pf.BoolVar(&cfg.AdaptiveRateLimit, "adaptive-rate-limit", false, "enable AIMD-style congestion control to automatically adjust request rate")
