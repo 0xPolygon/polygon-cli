@@ -167,6 +167,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --preconf-stats-file string                        path for preconf stats JSON output, updated every 2 seconds
       --priority-gas-price gas                           gas tip for EIP-1559 with unit support (e.g., "2gwei")
       --private-key string                               hex encoded private key to use for sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
+      --private-txs                                      send transactions via eth_sendRawTransactionPrivate
       --proxy string                                     use the proxy specified
       --random-recipients                                send to random addresses instead of fixed address in transfer tests
       --rate-limit float                                 requests per second limit (use negative value to remove limit) (default 4)

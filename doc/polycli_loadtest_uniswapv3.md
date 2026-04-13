@@ -110,6 +110,7 @@ The command also inherits flags from parent commands.
       --pretty-logs                                      output logs in pretty format instead of JSON (default true)
       --priority-gas-price gas                           gas tip for EIP-1559 with unit support (e.g., "2gwei")
       --private-key string                               hex encoded private key to use for sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
+      --private-txs                                      send transactions via eth_sendRawTransactionPrivate
       --random-recipients                                send to random addresses instead of fixed address in transfer tests
       --rate-limit float                                 requests per second limit (use negative value to remove limit) (default 4)
   -n, --requests int                                     number of requests to perform for the benchmarking session (default of 1 leads to non-representative results) (default 1)
