@@ -207,8 +207,8 @@ github.com/getsentry/sentry-go v0.29.1 h1:DyZuChN8Hz3ARxGVV8ePaNXh1dQ7d76AiB117x
 github.com/getsentry/sentry-go v0.29.1/go.mod h1:x3AtIzN01d6SiWkderzaH28Tm0lgkafpJ5Bm3li39O0=
 github.com/gizak/termui/v3 v3.1.1-0.20231111080052-b3569a6cd52d h1:oAvxuiOB52vYAjVRwM2M7Ur8zciJG4G1tmJKcm9c56c=
 github.com/gizak/termui/v3 v3.1.1-0.20231111080052-b3569a6cd52d/go.mod h1:G7SWm+OY7CWC3dxqXjsPO4taVBtDDEO0otCjaLSlf/0=
-github.com/go-echarts/go-echarts/v2 v2.7.1 h1:fG7UXb+M4VT7pIipVFoEKE4IZpnC9+QX5WmpH3MTzCk=
-github.com/go-echarts/go-echarts/v2 v2.7.1/go.mod h1:Z+spPygZRIEyqod69r0WMnkN5RV3MwhYDtw601w3G8w=
+github.com/go-echarts/go-echarts/v2 v2.7.2 h1:lhypL1CekgqaLHM5V7fBPfaYGfimJ9dGylkk65aWlNI=
+github.com/go-echarts/go-echarts/v2 v2.7.2/go.mod h1:Z+spPygZRIEyqod69r0WMnkN5RV3MwhYDtw601w3G8w=
 github.com/go-errors/errors v1.5.1 h1:ZwEMSLRCapFLflTpT7NKaAc7ukJ8ZPEjzlxt8rPN8bk=
 github.com/go-errors/errors v1.5.1/go.mod h1:sIVyrIiJhuEF+Pj9Ebtd6P/rEYROXFi3BopGUQ5a5Og=
 github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433 h1:vymEbVwYFP/L05h5TKQxvkXoKxNvTpjxYKdF1Nlwuao=
