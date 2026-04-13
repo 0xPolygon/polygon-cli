@@ -197,6 +197,30 @@ func (c *Config) Validate() error {
 		return errors.New("gas price multiplier should be non-zero")
 	}
 
+	if c.PrivateTxs {
+		if err := c.validatePrivateTxsModes(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validatePrivateTxsModes checks that all specified modes support --private-txs.
+func (c *Config) validatePrivateTxsModes() error {
+	supported := map[string]bool{
+		"t": true, "transaction": true,
+		"b": true, "blob": true,
+		"cc": true, "contract-call": true,
+		"R": true, "recall": true,
+	}
+
+	for _, mode := range c.Modes {
+		if !supported[mode] {
+			return fmt.Errorf("--private-txs is not supported for mode %q; supported modes: transaction, blob, contract-call, recall", mode)
+		}
+	}
+
 	return nil
 }
 
