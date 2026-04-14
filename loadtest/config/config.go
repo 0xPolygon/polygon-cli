@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/0xPolygon/polygon-cli/loadtest/uniswapv3"
 	"github.com/ethereum/go-ethereum/common"
@@ -35,9 +36,11 @@ const (
 // Config holds all load test parameters.
 type Config struct {
 	// Network connection
-	RPCURL  string
-	ChainID uint64
-	Proxy   string
+	RPCURL     string
+	ChainID    uint64
+	Proxy      string
+	RPCHeaders string
+	Headers    map[string]string
 
 	// Test parameters
 	Requests    int64
@@ -262,4 +265,31 @@ func (c *GasManagerConfig) Validate() error {
 	}
 
 	return nil
+}
+
+// ParseRPCHeaders parses a comma-separated string of key:value pairs into a map.
+// Format: "key1:value1,key2:value2"
+// Values may contain colons (e.g., "Authorization:Bearer token").
+func ParseRPCHeaders(s string) (map[string]string, error) {
+	if s == "" {
+		return nil, nil
+	}
+
+	headers := make(map[string]string)
+	for _, pair := range strings.Split(s, ",") {
+		parts := strings.SplitN(pair, ":", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid header format %q, expected key:value", pair)
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if key == "" {
+			return nil, fmt.Errorf("empty header key in %q", pair)
+		}
+
+		headers[key] = value
+	}
+
+	return headers, nil
 }

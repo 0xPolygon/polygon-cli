@@ -108,6 +108,10 @@ func (r *Runner) Init(ctx context.Context) error {
 		return errors.New("unable to dial rpc: " + err.Error())
 	}
 	rpc.SetHeader("Accept-Encoding", "identity")
+	for key, value := range r.cfg.Headers {
+		rpc.SetHeader(key, value)
+		log.Debug().Str("header", key).Msg("Custom RPC header configured")
+	}
 	r.rpcClient = rpc
 	r.client = ethclient.NewClient(rpc)
 

@@ -56,6 +56,11 @@ var LoadtestCmd = &cobra.Command{
 		zerolog.DurationFieldUnit = time.Second
 		zerolog.DurationFieldInteger = true
 
+		cfg.Headers, err = config.ParseRPCHeaders(cfg.RPCHeaders)
+		if err != nil {
+			return err
+		}
+
 		if gasManagerEnabled {
 			if err = gasManagerCfg.Validate(); err != nil {
 				return err
@@ -138,6 +143,7 @@ func initPersistentFlags() {
 	pf.BoolVar(&cfg.CheckForPreconf, "check-preconf", false, "check for preconf status after sending tx")
 	pf.StringVar(&cfg.PreconfStatsFile, "preconf-stats-file", "", "path for preconf stats JSON output, updated every 2 seconds")
 	pf.BoolVar(&cfg.StopOnInsufficientFunds, "stop-on-insufficient-funds", false, "stop sending from account when it encounters insufficient funds error")
+	pf.StringVar(&cfg.RPCHeaders, "rpc-headers", "", "custom HTTP headers for RPC requests (format: \"key1:value1,key2:value2\")")
 
 	initGasManagerFlags()
 }
