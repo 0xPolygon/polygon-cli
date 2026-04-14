@@ -3,6 +3,7 @@ package common
 import (
 	"encoding/binary"
 	"fmt"
+	"slices"
 
 	"github.com/0xPolygon/polygon-cli/bindings/ulxly"
 	"github.com/ethereum/go-ethereum/common"
@@ -172,8 +173,8 @@ func Check(roots []common.Hash, leaf common.Hash, position uint32, siblings [32]
 	}
 
 	isProofValid := false
-	for i := len(roots) - 1; i >= 0; i-- {
-		if roots[i].Cmp(node) == 0 {
+	for _, v := range slices.Backward(roots) {
+		if v.Cmp(node) == 0 {
 			isProofValid = true
 			break
 		}
