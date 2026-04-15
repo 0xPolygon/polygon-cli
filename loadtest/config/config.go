@@ -140,6 +140,8 @@ type Config struct {
 
 // GasManagerConfig holds gas manager configuration for oscillation waves and pricing strategies.
 type GasManagerConfig struct {
+	Enabled bool
+
 	// Oscillation wave options
 	OscillationWave string // flat, sine, square, triangle, sawtooth
 	Target          uint64 // target gas limit baseline

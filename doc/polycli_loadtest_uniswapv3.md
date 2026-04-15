@@ -114,6 +114,7 @@ The command also inherits flags from parent commands.
       --random-recipients                                send to random addresses instead of fixed address in transfer tests
       --rate-limit float                                 requests per second limit (use negative value to remove limit) (default 4)
   -n, --requests int                                     number of requests to perform for the benchmarking session (default of 1 leads to non-representative results) (default 1)
+      --rpc-headers string                               custom HTTP headers for RPC requests (format: "key1:value1,key2:value2")
   -r, --rpc-url string                                   the RPC endpoint URL (default "http://localhost:8545")
       --seed int                                         a seed for generating random values and addresses (default 123456)
       --send-only                                        alias for --fire-and-forget

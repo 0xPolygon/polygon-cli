@@ -36,7 +36,6 @@ var uniswapCfg = &config.UniswapV3Config{}
 
 // gasManagerCfg holds gas manager configuration.
 var gasManagerCfg = &config.GasManagerConfig{}
-var gasManagerEnabled bool
 
 // LoadtestCmd represents the loadtest command.
 var LoadtestCmd = &cobra.Command{
@@ -44,7 +43,7 @@ var LoadtestCmd = &cobra.Command{
 	Short: "Run a generic load test against an Eth/EVM style JSON-RPC endpoint.",
 	Long:  loadtestUsage,
 	Args:  cobra.NoArgs,
-	PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		cfg.RPCURL, err = flag.GetRPCURL(cmd)
 		if err != nil {
 			return err
@@ -61,20 +60,19 @@ var LoadtestCmd = &cobra.Command{
 			return err
 		}
 
-		if gasManagerEnabled {
+		if gasManagerCfg.Enabled {
 			if err = gasManagerCfg.Validate(); err != nil {
 				return err
 			}
+			cfg.GasManager = gasManagerCfg
 		}
 
+		return nil
+	},
+	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return cfg.Validate()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Attach gas manager config only when explicitly enabled.
-		cfg.GasManager = nil
-		if gasManagerEnabled {
-			cfg.GasManager = gasManagerCfg
-		}
 		return loadtest.Run(cmd.Context(), cfg)
 	},
 }
@@ -92,11 +90,6 @@ var uniswapv3Cmd = &cobra.Command{
 		// Override mode to uniswapv3 and attach configs.
 		cfg.Modes = []string{"v3"}
 		cfg.UniswapV3 = uniswapCfg
-		cfg.GasManager = nil
-		if gasManagerEnabled {
-			cfg.GasManager = gasManagerCfg
-		}
-
 		return loadtest.Run(cmd.Context(), cfg)
 	},
 }
@@ -150,7 +143,7 @@ func initPersistentFlags() {
 
 func initGasManagerFlags() {
 	pf := LoadtestCmd.PersistentFlags()
-	pf.BoolVar(&gasManagerEnabled, "gas-manager-enabled", false, "enable block-based gas manager (oscillation wave + gas budget vault)")
+	pf.BoolVar(&gasManagerCfg.Enabled, "gas-manager-enabled", false, "enable block-based gas manager (oscillation wave + gas budget vault)")
 
 	// Oscillation wave
 	pf.StringVar(&gasManagerCfg.OscillationWave, "gas-manager-oscillation-wave", "flat", "type of oscillation wave (flat | sine | square | triangle | sawtooth)")
