@@ -72,7 +72,7 @@ func GetTxDataToSign() (*ethtypes.Transaction, error) {
 	var tx *ethtypes.Transaction
 	tx, err = txArgs.ToTransaction()
 	if err != nil {
-		log.Error().Err(err).Str("txArgs", txArgs.String()).Msg("unable to convert the arguments to a transaction")
+		log.Error().Err(err).Str("txArgs", txArgs.String()).Msg("Unable to convert arguments to a transaction")
 		return nil, err
 	}
 	return tx, nil
@@ -140,7 +140,7 @@ func (g *GCPKMS) ListKeyRingKeys(ctx context.Context) error {
 
 		pubKey, err := getPublicKeyByName(ctx, c, fmt.Sprintf("%s/cryptoKeyVersions/%d", resp.Name, InputOpts.GCPKeyVersion))
 		if err != nil {
-			log.Error().Err(err).Str("name", resp.Name).Msg("key not found")
+			log.Error().Err(err).Str("name", resp.Name).Msg("Key not found")
 			continue
 		}
 		ethAddress := gcpPubKeyToEthAddress(pubKey)
@@ -152,7 +152,7 @@ func (g *GCPKMS) ListKeyRingKeys(ctx context.Context) error {
 			Str("ProtectionLevel", resp.VersionTemplate.ProtectionLevel.String()).
 			Str("Algorithm", resp.VersionTemplate.Algorithm.String()).
 			Str("ETHAddress", ethAddress.String()).
-			Str("Name", resp.Name).Msg("got key")
+			Str("Name", resp.Name).Msg("Got key")
 	}
 	return nil
 }
@@ -179,10 +179,10 @@ func (g *GCPKMS) CreateKeyRing(ctx context.Context) error {
 		}
 	}
 	if err == nil {
-		log.Info().Str("name", result.Name).Msg("key ring already exists")
+		log.Info().Str("name", result.Name).Msg("Key ring already exists")
 		return nil
 	}
-	log.Info().Str("id", id).Msg("key ring not found - creating")
+	log.Info().Str("id", id).Msg("Key ring not found, creating")
 
 	req := &kmspb.CreateKeyRingRequest{
 		Parent:    parent,
@@ -227,12 +227,12 @@ func (g *GCPKMS) CreateKey(ctx context.Context) error {
 	result, err := client.CreateCryptoKey(ctx, req)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
-			log.Info().Str("parent", parent).Str("id", id).Msg("key already exists")
+			log.Info().Str("parent", parent).Str("id", id).Msg("Key already exists")
 			return nil
 		}
 		return fmt.Errorf("failed to create key: %w", err)
 	}
-	log.Info().Str("name", result.Name).Msg("created key")
+	log.Info().Str("name", result.Name).Msg("Created key")
 	return nil
 }
 
@@ -262,12 +262,12 @@ func (g *GCPKMS) CreateImportJob(ctx context.Context) error {
 	result, err := client.CreateImportJob(ctx, req)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
-			log.Info().Str("name", parent).Msg("import job already exists")
+			log.Info().Str("name", parent).Msg("Import job already exists")
 			return nil
 		}
 		return fmt.Errorf("failed to create import job: %w", err)
 	}
-	log.Info().Str("name", result.Name).Msg("created import job")
+	log.Info().Str("name", result.Name).Msg("Created import job")
 
 	return nil
 }
@@ -299,12 +299,12 @@ func (g *GCPKMS) ImportKey(ctx context.Context) error {
 	result, err := client.ImportCryptoKeyVersion(ctx, req)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
-			log.Info().Str("name", name).Msg("key already exists")
+			log.Info().Str("name", name).Msg("Key already exists")
 			return nil
 		}
 		return fmt.Errorf("failed to import key: %w", err)
 	}
-	log.Info().Str("name", result.Name).Msg("imported key")
+	log.Info().Str("name", result.Name).Msg("Imported key")
 	return nil
 }
 

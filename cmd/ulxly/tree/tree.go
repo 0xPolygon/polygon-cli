@@ -113,7 +113,7 @@ func NewBalanceTree() (*Balancer, error) {
 	var depth uint8 = 192
 	zeroHashes := generateZeroHashes(depth)
 	initRoot := crypto.Keccak256Hash(zeroHashes[depth-1].Bytes(), zeroHashes[depth-1].Bytes())
-	log.Info().Msg("Initial Root: " + initRoot.String())
+	log.Info().Stringer("root", initRoot).Msg("Initial root")
 	return &Balancer{
 		tree: Tree{
 			zeroHashes: zeroHashes,
@@ -143,7 +143,7 @@ func NewNullifierTree() (*Nullifier, error) {
 	var depth uint8 = 64
 	zeroHashes := generateZeroHashes(depth)
 	initRoot := crypto.Keccak256Hash(zeroHashes[depth-1].Bytes(), zeroHashes[depth-1].Bytes())
-	log.Info().Msg("Initial Root: " + initRoot.String())
+	log.Info().Stringer("root", initRoot).Msg("Initial root")
 	return &Nullifier{
 		tree: Tree{
 			zeroHashes: zeroHashes,
@@ -329,7 +329,7 @@ func ComputeNullifierTree(rawClaims []byte) (common.Hash, error) {
 		}
 		mainnetFlag, rollupIndex, localExitRootIndex, err := ulxlycommon.DecodeGlobalIndex(claim.GlobalIndex)
 		if err != nil {
-			log.Error().Err(err).Msg("error decoding globalIndex")
+			log.Error().Err(err).Msg("Error decoding globalIndex")
 			return common.Hash{}, err
 		}
 		log.Info().Bool("MainnetFlag", mainnetFlag).Uint32("RollupIndex", rollupIndex).Uint32("LocalExitRootIndex", localExitRootIndex).Uint64("block-number", claim.Raw.BlockNumber).Msg("Adding Claim")
@@ -339,7 +339,12 @@ func ComputeNullifierTree(rawClaims []byte) (common.Hash, error) {
 		}
 		root, err = nTree.UpdateNullifierTree(nullifierKey)
 		if err != nil {
-			log.Error().Err(err).Uint32("OriginNetwork: ", claim.OriginNetwork).Msg("error computing nullifierTree. Claim information: GlobalIndex: " + claim.GlobalIndex.String() + ", OriginAddress: " + claim.OriginAddress.String() + ", Amount: " + claim.Amount.String())
+			log.Error().Err(err).
+				Uint32("OriginNetwork", claim.OriginNetwork).
+				Stringer("GlobalIndex", claim.GlobalIndex).
+				Stringer("OriginAddress", claim.OriginAddress).
+				Stringer("Amount", claim.Amount).
+				Msg("Error computing nullifierTree")
 			return common.Hash{}, err
 		}
 	}

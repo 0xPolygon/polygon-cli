@@ -92,7 +92,7 @@ func readClaim(cmd *cobra.Command, _ []string) error {
 			)
 			mainnetFlag, rollupIndex, localExitRootIndex, err = ulxlycommon.DecodeGlobalIndex(evt.GlobalIndex)
 			if err != nil {
-				log.Error().Err(err).Msg("error decoding globalIndex")
+				log.Error().Err(err).Msg("Error decoding globalIndex")
 				return err
 			}
 			log.Info().Bool("claim-mainnetFlag", mainnetFlag).Uint32("claim-RollupIndex", rollupIndex).Uint32("claim-LocalExitRootIndex", localExitRootIndex).Uint64("block-number", evt.Raw.BlockNumber).Msg("Found Claim")
@@ -105,7 +105,7 @@ func readClaim(cmd *cobra.Command, _ []string) error {
 		}
 		err = evtV2Iterator.Close()
 		if err != nil {
-			log.Error().Err(err).Msg("error closing event iterator")
+			log.Error().Err(err).Msg("Error closing event iterator")
 		}
 		currentBlock = endBlock + 1
 	}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/0xPolygon/polygon-cli/loadtest/uniswapv3"
 	"github.com/ethereum/go-ethereum/common"
@@ -35,9 +36,11 @@ const (
 // Config holds all load test parameters.
 type Config struct {
 	// Network connection
-	RPCURL  string
-	ChainID uint64
-	Proxy   string
+	RPCURL     string
+	ChainID    uint64
+	Proxy      string
+	RPCHeaders string
+	Headers    map[string]string
 
 	// Test parameters
 	Requests    int64
@@ -59,6 +62,7 @@ type Config struct {
 	ReceiptRetryMax    uint
 	ReceiptRetryDelay  uint // initial delay in milliseconds
 	OutputRawTxOnly    bool
+	PrivateTxs         bool
 	StartNonce         uint64
 	GasPriceMultiplier float64
 
@@ -106,6 +110,8 @@ type Config struct {
 	CheckBalanceBeforeFunding bool
 	DumpSendingAccountsFile   string
 	AccountsPerFundingTx      uint64
+	SequentialNonceFetch      bool
+	StopOnInsufficientFunds   bool
 
 	// Summary output
 	ShouldProduceSummary bool
@@ -134,6 +140,8 @@ type Config struct {
 
 // GasManagerConfig holds gas manager configuration for oscillation waves and pricing strategies.
 type GasManagerConfig struct {
+	Enabled bool
+
 	// Oscillation wave options
 	OscillationWave string // flat, sine, square, triangle, sawtooth
 	Target          uint64 // target gas limit baseline
@@ -194,6 +202,30 @@ func (c *Config) Validate() error {
 		return errors.New("gas price multiplier should be non-zero")
 	}
 
+	if c.PrivateTxs {
+		if err := c.validatePrivateTxsModes(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validatePrivateTxsModes checks that all specified modes support --private-txs.
+func (c *Config) validatePrivateTxsModes() error {
+	supported := map[string]bool{
+		"t": true, "transaction": true,
+		"b": true, "blob": true,
+		"cc": true, "contract-call": true,
+		"R": true, "recall": true,
+	}
+
+	for _, mode := range c.Modes {
+		if !supported[mode] {
+			return fmt.Errorf("--private-txs is not supported for mode %q; supported modes: transaction, blob, contract-call, recall", mode)
+		}
+	}
+
 	return nil
 }
 
@@ -235,4 +267,31 @@ func (c *GasManagerConfig) Validate() error {
 	}
 
 	return nil
+}
+
+// ParseRPCHeaders parses a comma-separated string of key:value pairs into a map.
+// Format: "key1:value1,key2:value2"
+// Values may contain colons (e.g., "Authorization:Bearer token").
+func ParseRPCHeaders(s string) (map[string]string, error) {
+	if s == "" {
+		return nil, nil
+	}
+
+	headers := make(map[string]string)
+	for _, pair := range strings.Split(s, ",") {
+		parts := strings.SplitN(pair, ":", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid header format %q, expected key:value", pair)
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if key == "" {
+			return nil, fmt.Errorf("empty header key in %q", pair)
+		}
+
+		headers[key] = value
+	}
+
+	return headers, nil
 }

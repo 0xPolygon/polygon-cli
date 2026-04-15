@@ -117,18 +117,18 @@ func readDeposits(rawDeposits []byte, depositNumber uint32) error {
 			Uint32("deposit-count", evt.DepositCount).
 			Str("tx-hash", evt.Raw.TxHash.String()).
 			Str("root", common.Hash(imt.Roots[len(imt.Roots)-1]).String()).
-			Msg("adding event to tree")
+			Msg("Adding event to tree")
 		// There's no point adding more leaves if we can prove the deposit already?
 		if evt.DepositCount >= depositNumber {
 			break
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		log.Error().Err(err).Msg("there was an error reading the deposit file")
+		log.Error().Err(err).Msg("There was an error reading the deposit file")
 		return err
 	}
 
-	log.Info().Msg("finished")
+	log.Info().Msg("Finished")
 	p := imt.GetProof(depositNumber)
 	fmt.Println(proofString(p))
 	return nil
@@ -138,7 +138,7 @@ func readDeposits(rawDeposits []byte, depositNumber uint32) error {
 func proofString[T any](p T) string {
 	jsonBytes, err := json.Marshal(p)
 	if err != nil {
-		log.Error().Err(err).Msg("error marshalling proof to json")
+		log.Error().Err(err).Msg("Error marshalling proof to JSON")
 		return ""
 	}
 	return string(jsonBytes)

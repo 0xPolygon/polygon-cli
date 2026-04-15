@@ -100,7 +100,7 @@ The command also inherits flags from parent commands.
       --gas-manager-period uint                          period in blocks for oscillation wave (default 1)
       --gas-manager-price-strategy string                gas price strategy (estimated | fixed | dynamic) (default "estimated")
       --gas-manager-target uint                          target gas limit for oscillation wave (default 30000000)
-      --gas-price uint                                   manually specify gas price (useful when auto-detection fails)
+      --gas-price gas                                    gas price with unit support (e.g., "100gwei", "1000000000")
       --gas-price-multiplier float                       a multiplier to increase or decrease the gas price (default 1)
       --legacy                                           send a legacy transaction instead of an EIP1559 transaction
       --nonce uint                                       use this flag to manually set the starting nonce
@@ -108,14 +108,17 @@ The command also inherits flags from parent commands.
       --output-raw-tx-only                               output raw signed transaction hex without sending (works with most modes except RPC and UniswapV3)
       --preconf-stats-file string                        path for preconf stats JSON output, updated every 2 seconds
       --pretty-logs                                      output logs in pretty format instead of JSON (default true)
-      --priority-gas-price uint                          gas tip price for EIP-1559 transactions
+      --priority-gas-price gas                           gas tip for EIP-1559 with unit support (e.g., "2gwei")
       --private-key string                               hex encoded private key to use for sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
+      --private-txs                                      send transactions via eth_sendRawTransactionPrivate
       --random-recipients                                send to random addresses instead of fixed address in transfer tests
       --rate-limit float                                 requests per second limit (use negative value to remove limit) (default 4)
   -n, --requests int                                     number of requests to perform for the benchmarking session (default of 1 leads to non-representative results) (default 1)
+      --rpc-headers string                               custom HTTP headers for RPC requests (format: "key1:value1,key2:value2")
   -r, --rpc-url string                                   the RPC endpoint URL (default "http://localhost:8545")
       --seed int                                         a seed for generating random values and addresses (default 123456)
       --send-only                                        alias for --fire-and-forget
+      --stop-on-insufficient-funds                       stop sending from account when it encounters insufficient funds error
       --summarize                                        produce execution summary after load test (can take a long time for large tests)
   -t, --time-limit int                                   maximum seconds to spend benchmarking (default: no limit) (default -1)
       --to-address string                                recipient address for transactions (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")

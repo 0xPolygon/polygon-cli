@@ -82,7 +82,7 @@ func runFunding(ctx context.Context) error {
 	}
 
 	// Fund wallets.
-	log.Debug().Msg("checking if multicall3 is supported")
+	log.Debug().Msg("Checking if multicall3 is supported")
 	var multicall3Addr *common.Address
 	if len(params.Multicall3Address) > 0 {
 		addr := common.HexToAddress(params.Multicall3Address)
@@ -100,7 +100,7 @@ func runFunding(ctx context.Context) error {
 			Msg("multicall3 is supported and will be used to fund wallets")
 		err = fundWalletsWithMulticall3(ctx, c, tops, addresses, multicall3Addr)
 	} else {
-		log.Info().Msg("multicall3 is not supported, will use funder contract to fund wallets")
+		log.Info().Msg("Multicall3 is not supported, will use funder contract to fund wallets")
 		err = fundWalletsWithFunder(ctx, c, tops, privateKey, addresses, privateKeys)
 	}
 	if err != nil {
@@ -378,7 +378,7 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 	if params.AccountsPerFundingTx > 0 && params.AccountsPerFundingTx < accsToFundPerTx {
 		accsToFundPerTx = params.AccountsPerFundingTx
 	}
-	log.Debug().Uint64("accsToFundPerTx", accsToFundPerTx).Msg("multicall3 max accounts to fund per tx")
+	log.Debug().Uint64("accsToFundPerTx", accsToFundPerTx).Msg("Multicall3 max accounts to fund per tx")
 	chSize := (uint64(len(wallets)) / accsToFundPerTx) + 1
 
 	var txsCh chan *types.Transaction
@@ -412,7 +412,7 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 				if rl != nil {
 					iErr = rl.Wait(ctx)
 					if iErr != nil {
-						log.Error().Err(iErr).Msg("rate limiter wait failed before funding accounts with multicall3")
+						log.Error().Err(iErr).Msg("Rate limiter wait failed before funding accounts with multicall3")
 						return
 					}
 				}
@@ -434,7 +434,7 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 				}
 				if iErr != nil {
 					errCh <- iErr
-					log.Error().Err(iErr).Msg("failed to fund accounts with multicall3")
+					log.Error().Err(iErr).Msg("Failed to fund accounts with multicall3")
 					return
 				}
 				log.Info().
@@ -465,7 +465,7 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 		return combinedErrors
 	}
 
-	log.Info().Msg("all funding transactions sent, waiting for confirmation...")
+	log.Info().Msg("All funding transactions sent, waiting for confirmation")
 
 	// ensure the txs to fund sending accounts using multicall3 were mined successfully
 	for tx := range txsCh {
@@ -478,7 +478,7 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 
 		r, err := util.WaitReceipt(ctx, c, tx.Hash())
 		if err != nil {
-			log.Error().Err(err).Msg("failed to wait for transaction to fund accounts with multicall3")
+			log.Error().Err(err).Msg("Failed to wait for transaction to fund accounts with multicall3")
 			return err
 		}
 		if r == nil || r.Status != types.ReceiptStatusSuccessful {

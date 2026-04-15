@@ -460,7 +460,7 @@ func waitForReceipt(ctx context.Context, rpcClient *ethrpc.Client, txHash string
 		}
 
 		if result.TransactionHash == "" {
-			log.Info().Msg("Receipt not found, waiting more...")
+			log.Info().Msg("Receipt not found, waiting more")
 			time.Sleep(2 * time.Second)
 			continue
 		}

@@ -98,7 +98,7 @@ func (r *Runner) Init(ctx context.Context) error {
 			return errors.New("invalid proxy address: " + r.cfg.Proxy + ": " + err.Error())
 		}
 		transport.Proxy = http.ProxyURL(proxyURL)
-		log.Debug().Stringer("proxyURL", proxyURL).Msg("transport proxy configured")
+		log.Debug().Stringer("proxyURL", proxyURL).Msg("Transport proxy configured")
 	}
 
 	goHTTPClient := &http.Client{Transport: transport}
@@ -108,6 +108,10 @@ func (r *Runner) Init(ctx context.Context) error {
 		return errors.New("unable to dial rpc: " + err.Error())
 	}
 	rpc.SetHeader("Accept-Encoding", "identity")
+	for key, value := range r.cfg.Headers {
+		rpc.SetHeader(key, value)
+		log.Debug().Str("header", key).Msg("Custom RPC header configured")
+	}
 	r.rpcClient = rpc
 	r.client = ethclient.NewClient(rpc)
 
@@ -190,7 +194,7 @@ func (r *Runner) initParams(ctx context.Context) error {
 	log.Trace().
 		Str("addr", ethAddress.Hex()).
 		Interface("balance", accountBal).
-		Msg("funding account balance")
+		Msg("Funding account balance")
 
 	toAddr := common.HexToAddress(r.cfg.ToAddress)
 	amt := new(big.Int).SetUint64(r.cfg.EthAmountInWei)
@@ -201,7 +205,7 @@ func (r *Runner) initParams(ctx context.Context) error {
 	}
 	if header.BaseFee != nil {
 		r.cfg.ChainSupportBaseFee = true
-		log.Debug().Msg("Eip-1559 support detected")
+		log.Debug().Msg("EIP-1559 support detected")
 	}
 
 	chainID, err := r.client.ChainID(ctx)
@@ -261,6 +265,8 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		CheckBalanceBeforeFunding: r.cfg.CheckBalanceBeforeFunding,
 		LegacyTxMode:              r.cfg.LegacyTxMode,
 		AccountsPerFundingTx:      r.cfg.AccountsPerFundingTx,
+		SequentialNonceFetch:      r.cfg.SequentialNonceFetch,
+		StopOnInsufficientFunds:   r.cfg.StopOnInsufficientFunds,
 		ForceGasPrice:             r.cfg.ForceGasPrice,
 		ForcePriorityGasPrice:     r.cfg.ForcePriorityGasPrice,
 		GasPriceMultiplier:        r.cfg.BigGasPriceMultiplier,
@@ -284,7 +290,7 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 			return errors.New("no private keys found in sending accounts file")
 		}
 		if len(privateKeys) > 1 && r.cfg.StartNonce > 0 {
-			log.Fatal().Msg("nonce can't be set while using multiple sending accounts")
+			log.Fatal().Msg("Nonce cannot be set while using multiple sending accounts")
 		}
 		if len(privateKeys) == 1 {
 			var nonce *uint64
@@ -298,7 +304,7 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		r.cfg.SendingAccountsCount = uint64(len(privateKeys))
 	} else if r.cfg.SendingAccountsCount > 0 {
 		if r.cfg.StartNonce > 0 {
-			log.Fatal().Msg("nonce can't be set while using random multiple sending accounts")
+			log.Fatal().Msg("Nonce cannot be set while using random multiple sending accounts")
 		}
 		err = r.accountPool.AddRandomN(ctx, r.cfg.SendingAccountsCount)
 	} else {
@@ -320,36 +326,44 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 	}
 
 	// Wait for all accounts to be ready
-	for {
-		rdy, rdyCount, accQty := r.accountPool.AllAccountsReady()
-		if rdy {
-			log.Info().Msg("All accounts are ready")
-			break
+	if !r.cfg.SequentialNonceFetch {
+		// Fetch nonces in parallel without rate limiting
+		if err := r.accountPool.FetchNoncesInParallel(ctx); err != nil {
+			return errors.New("failed to fetch nonces in parallel: " + err.Error())
 		}
-		log.Info().Int("ready", rdyCount).Int("total", accQty).Msg("waiting for all accounts to be ready")
-		time.Sleep(time.Second)
+	} else {
+		// Original behavior: poll until all accounts ready
+		for {
+			rdy, rdyCount, accQty := r.accountPool.AllAccountsReady()
+			if rdy {
+				log.Info().Msg("All accounts are ready")
+				break
+			}
+			log.Info().Int("ready", rdyCount).Int("total", accQty).Msg("Waiting for all accounts to be ready")
+			time.Sleep(time.Second)
+		}
 	}
 
 	// Pre-fund accounts if configured
 	if r.cfg.SendingAccountsCount == 0 {
-		log.Info().Msg("No sending accounts to pre-fund. Skipping pre-funding of sending accounts.")
+		log.Info().Msg("No sending accounts to pre-fund, skipping")
 		return nil
 	}
 	if r.cfg.EthCallOnly {
-		log.Info().Msg("call only mode is enabled. Skipping pre-funding of sending accounts.")
+		log.Info().Msg("Call only mode enabled, skipping pre-funding")
 		return nil
 	}
 	if !r.cfg.PreFundSendingAccounts {
-		log.Info().Msg("pre-funding of sending accounts is disabled.")
+		log.Info().Msg("Pre-funding of sending accounts is disabled")
 		return nil
 	}
 	if r.cfg.AccountFundingAmount.Cmp(new(big.Int)) == 0 {
-		log.Info().Msg("account funding amount is zero. Skipping pre-funding of sending accounts.")
+		log.Info().Msg("Account funding amount is zero, skipping pre-funding")
 		return nil
 	}
 
 	if err := r.accountPool.FundAccounts(ctx); err != nil {
-		log.Error().Err(err).Msg("unable to fund sending accounts")
+		log.Error().Err(err).Msg("Unable to fund sending accounts")
 	}
 
 	return nil
@@ -397,7 +411,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		timedOut = true
 		cancel()
 	case <-sigCh:
-		log.Info().Msg("Interrupted.. Stopping load test")
+		log.Info().Msg("Interrupted, stopping load test")
 		interrupted = true
 		cancel()
 		if r.preconfTracker != nil {
@@ -461,7 +475,7 @@ func (r *Runner) postLoadTest(ctx context.Context) {
 
 	// Output detailed summary if requested
 	if cfg.ShouldProduceSummary && r.startBlockNumber > 0 && r.finalBlockNumber > 0 {
-		log.Info().Msg("Generating detailed summary...")
+		log.Info().Msg("Generating detailed summary")
 		if err := SummarizeResults(ctx, r.client, r.rpcClient, cfg, r.accountPool, results, r.startBlockNumber, r.finalBlockNumber); err != nil {
 			log.Error().Err(err).Msg("Failed to generate detailed summary")
 		}
@@ -469,7 +483,7 @@ func (r *Runner) postLoadTest(ctx context.Context) {
 
 	// Refund remaining funds if requested
 	if cfg.RefundRemainingFunds && r.accountPool != nil {
-		log.Info().Msg("Refunding remaining funds...")
+		log.Info().Msg("Refunding remaining funds")
 		if err := r.accountPool.ReturnFunds(ctx); err != nil {
 			log.Error().Err(err).Msg("Failed to refund remaining funds")
 		}
@@ -548,7 +562,7 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 	log.Debug().Msg("Starting main load test loop")
 	var wg sync.WaitGroup
 	for routineID := range maxRoutines {
-		log.Trace().Int64("routineID", routineID).Msg("starting concurrent routine")
+		log.Trace().Int64("routineID", routineID).Msg("Starting concurrent routine")
 		wg.Add(1)
 		go func(routineID int64) {
 			defer wg.Done()
@@ -599,7 +613,7 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 						}
 						if !waiting {
 							waiting = true
-							log.Debug().Int64("routineID", routineID).Int64("requestID", requestID).Msg("go routine is waiting for base fee to drop")
+							log.Debug().Int64("routineID", routineID).Int64("requestID", requestID).Msg("Goroutine waiting for base fee to drop")
 						}
 						time.Sleep(time.Second)
 					}
@@ -647,7 +661,23 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 						Any("gasFeeCap", sendingTops.GasFeeCap).
 						Any("gasTipCap", sendingTops.GasTipCap).
 						Int64("request time", endReq.Sub(startReq).Milliseconds()).
-						Msg("recorded an error while sending transactions")
+						Msg("Recorded an error while sending transaction")
+
+					// Check for insufficient funds error and stop account if configured
+					if cfg.StopOnInsufficientFunds && isInsufficientFundsError(tErr) {
+						if stopErr := r.accountPool.StopAccount(sendingTops.From); stopErr != nil {
+							log.Error().Err(stopErr).Msg("Failed to stop account")
+						} else {
+							log.Warn().
+								Stringer("address", sendingTops.From).
+								Msg("Stopped sending from account due to insufficient funds")
+						}
+						// Check if all accounts are stopped
+						if r.accountPool.ActiveAccountCount() == 0 {
+							log.Error().Msg("All accounts stopped due to insufficient funds")
+							return
+						}
+					}
 
 					// Check nonce for reuse
 					if !cfg.EthCallOnly {
@@ -666,7 +696,7 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 			}
 		}(routineID)
 	}
-	log.Trace().Msg("Finished starting go routines. Waiting..")
+	log.Trace().Msg("Finished starting goroutines, waiting")
 	wg.Wait()
 	rateLimitCancel()
 
@@ -839,7 +869,7 @@ func (r *Runner) setupBaseFeeMonitoring(ctx context.Context) (bool, context.Canc
 
 	r.waitBaseFeeToDrop.Store(false)
 	if mustCheckMaxBaseFee {
-		log.Info().Msg("max base fee monitoring enabled")
+		log.Info().Msg("Max base fee monitoring enabled")
 
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -883,7 +913,7 @@ func (r *Runner) setupBaseFeeMonitoring(ctx context.Context) (bool, context.Canc
 func (r *Runner) isCurrentBaseFeeGreaterThanMax(ctx context.Context, maxBaseFee uint64) (bool, *big.Int, error) {
 	header, err := r.client.HeaderByNumber(ctx, nil)
 	if errors.Is(err, context.Canceled) {
-		log.Debug().Msg("max base fee monitoring context canceled")
+		log.Debug().Msg("Max base fee monitoring context canceled")
 		return false, nil, nil
 	} else if err != nil {
 		log.Error().Err(err).Msg("Unable to get latest block header to check base fee")
@@ -918,6 +948,16 @@ func (r *Runner) handleNonceReuse(ctx context.Context, tops *bind.TransactOpts, 
 				Msg("Unable to add reusable nonce to account pool")
 		}
 	}
+}
+
+// isInsufficientFundsError checks if an error is an insufficient funds error.
+func isInsufficientFundsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "insufficient funds") ||
+		strings.Contains(errStr, "insufficient balance")
 }
 
 func (r *Runner) deployContracts(ctx context.Context, tops *bind.TransactOpts) error {
@@ -1036,7 +1076,7 @@ func (r *Runner) deployContracts(ctx context.Context, tops *bind.TransactOpts) e
 				SwapAmountInput: uniswapv3.SwapAmountInput.Uint64(),
 			}
 		}
-		log.Info().Msg("Initializing UniswapV3 contracts...")
+		log.Info().Msg("Initializing UniswapV3 contracts")
 		uniswapAddresses := uniswapv3.UniswapV3Addresses{
 			FactoryV3:                          common.HexToAddress(r.cfg.UniswapV3.FactoryV3),
 			Multicall:                          common.HexToAddress(r.cfg.UniswapV3.Multicall),
@@ -1310,7 +1350,7 @@ func (r *Runner) suggestMaxFeePerGas(ctx context.Context, blockNumber uint64, fo
 		Str("priorityFee", priorityFee.String()).
 		Str("baseFee", baseFee.String()).
 		Str("maxFeePerGas", maxFeePerGas.String()).
-		Msg("max fee updated")
+		Msg("Max fee updated")
 
 	return maxFeePerGas
 }
@@ -1369,7 +1409,7 @@ func (r *Runner) dumpPrivateKeys() error {
 	log.Info().
 		Str("file", r.cfg.DumpSendingAccountsFile).
 		Int("count", len(pks)).
-		Msg("dumped private keys to file")
+		Msg("Dumped private keys to file")
 
 	return nil
 }
@@ -1425,7 +1465,7 @@ func (r *Runner) waitForFinalBlock(ctx context.Context) (uint64, error) {
 					Uint64("expectedNonce", expectedNonce).
 					Uint64("lastBlockNumber", lastBlockNumber)
 				if nonce < expectedNonce {
-					logEvent.Msg("not all transactions for account have been mined. waiting...")
+					logEvent.Msg("Not all transactions for account have been mined, waiting")
 				} else {
 					remainingNoncesToCheck.Add(-1)
 					noncesToCheck.Delete(address)

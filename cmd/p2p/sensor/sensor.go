@@ -299,7 +299,7 @@ var SensorCmd = &cobra.Command{
 				metrics.Update(conns.HeadBlock().Block, conns.OldestBlock())
 				writePeers(server.Peers())
 			case <-ctx.Done():
-				log.Info().Msg("Stopping sensor...")
+				log.Info().Msg("Stopping sensor")
 				return nil
 			case event := <-events:
 				log.Debug().Any("event", event).Send()

@@ -51,14 +51,14 @@ func bridgeWETHMessage(cmd *cobra.Command, _ []string) error {
 	// Initialize and assign variables required to send transaction payload
 	bridgeV2, toAddress, auth, err := ulxlycommon.GenerateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
-		log.Error().Err(err).Msg("error generating transaction payload")
+		log.Error().Err(err).Msg("Error generating transaction payload")
 		return err
 	}
 
 	// Check if WETH is allowed
 	wethAddress, err := bridgeV2.WETHToken(&bind.CallOpts{Pending: false})
 	if err != nil {
-		log.Error().Err(err).Msg("error getting WETH address from the bridge smc")
+		log.Error().Err(err).Msg("Error getting WETH address from the bridge SMC")
 		return err
 	}
 	if wethAddress == (common.Address{}) {
@@ -73,7 +73,7 @@ func bridgeWETHMessage(cmd *cobra.Command, _ []string) error {
 		log.Info().Err(err).Str("calldata", callDataString).Msg("Bridge transaction failed")
 		return err
 	}
-	log.Info().Msg("bridgeTxn: " + bridgeTxn.Hash().String())
+	log.Info().Stringer("txHash", bridgeTxn.Hash()).Msg("Bridge transaction sent")
 	if err = ulxlycommon.WaitMineTransaction(cmd.Context(), client, bridgeTxn, timeoutTxnReceipt); err != nil {
 		return err
 	}

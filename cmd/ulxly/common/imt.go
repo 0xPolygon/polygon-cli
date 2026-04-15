@@ -129,7 +129,7 @@ func (s *IMT) GetProof(depositNum uint32) Proof {
 
 	r, err := Check(s.Roots, p.LeafHash, p.DepositCount, p.Siblings)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to validate proof")
+		log.Error().Err(err).Msg("Failed to validate proof")
 	}
 	p.Root = r
 	s.Proofs[depositNum] = *p
@@ -184,7 +184,7 @@ func Check(roots []common.Hash, leaf common.Hash, position uint32, siblings [32]
 		Bool("is-proof-valid", isProofValid).
 		Uint32("leaf-position", position).
 		Str("leaf-hash", leaf.String()).
-		Str("checked-root", node.String()).Msg("checking proof")
+		Str("checked-root", node.String()).Msg("Checking proof")
 	if !isProofValid {
 		return common.Hash{}, fmt.Errorf("invalid proof")
 	}

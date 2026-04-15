@@ -47,7 +47,7 @@ var CreateCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
-			log.Info().Str("address", acc.Address.String()).Msg("imported new account")
+			log.Info().Str("address", acc.Address.String()).Msg("Imported new account")
 			return nil
 		}
 		if opts.KMS == "GCP" {

@@ -184,7 +184,7 @@ func IsMulticall3Supported(ctx context.Context, c *ethclient.Client, tryDeployIf
 func Multicall3MaxAccountsToFundPerTx(ctx context.Context, c *ethclient.Client) (uint64, error) {
 	latestBlock, err := c.HeaderByNumber(ctx, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to get block gas limit")
+		log.Error().Err(err).Msg("Failed to get block gas limit")
 		return 0, err
 	}
 	return min(latestBlock.GasLimit/estimatedGasNeededToFundASingleAccount, maxAccsToFundPerTx), nil
@@ -232,7 +232,7 @@ func Multicall3FundAccountsWithERC20Token(ctx context.Context, c *ethclient.Clie
 
 	receipt, err := bind.WaitMined(ctx, c, approveTx.Hash())
 	if err != nil || receipt == nil || receipt.Status != 1 {
-		log.Error().Err(err).Msg("failed to mine approval transaction")
+		log.Error().Err(err).Msg("Failed to mine approval transaction")
 		return approveTx, nil, err
 	}
 
