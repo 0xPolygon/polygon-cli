@@ -95,6 +95,8 @@ The command also inherits flags from parent commands.
 
 - [polycli heimdall chain-id](polycli_heimdall_chain-id.md) - Print the CometBFT chain id.
 
+- [polycli heimdall checkpoint](polycli_heimdall_checkpoint.md) - Query checkpoint module endpoints.
+
 - [polycli heimdall client](polycli_heimdall_client.md) - Show Heimdall app + CometBFT versions.
 
 - [polycli heimdall find-block](polycli_heimdall_find-block.md) - Find the block height closest to a timestamp.
