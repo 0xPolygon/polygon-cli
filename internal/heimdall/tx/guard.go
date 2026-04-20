@@ -19,6 +19,7 @@ var L1MirroringMsgTypes = map[string]struct{}{
 	"MsgCheckpointNoAck":   {},
 	"MsgCpNoAck":           {},
 	"MsgEventRecordRequest": {},
+	"MsgEventRecord":       {},
 	"MsgClerkRecord":       {},
 	"MsgValidatorJoin":     {},
 	"MsgStakeJoin":         {},
