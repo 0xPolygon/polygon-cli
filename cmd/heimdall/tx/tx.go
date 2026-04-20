@@ -39,6 +39,12 @@ func Register(parent *cobra.Command, f *config.Flags) {
 		newRPCCmd(),
 		newPublishCmd(),
 	)
+	// The mktx/send/estimate umbrellas are attached separately so
+	// their child-msg factories can live in the tx/msgs sub-package
+	// without circular imports. Each umbrella owns its own copy of
+	// the registered msg subcommands (cobra command trees are single-
+	// parent).
+	registerMktxSendEstimate(parent, f)
 }
 
 // newRPCClient resolves the config and constructs an RPCClient. When
