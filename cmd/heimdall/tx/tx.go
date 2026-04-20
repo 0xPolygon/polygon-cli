@@ -27,18 +27,27 @@ var flags *config.Flags
 
 // Register attaches the tx-group subcommands directly to parent and
 // binds the shared flag struct for config resolution.
+//
+// Read-only subcommands (tx, receipt, logs, nonce, sequence, balance)
+// get `--watch DURATION` via render.EnableWatch so operators can watch
+// a value change over time. Publish is one-shot and rpc is a raw
+// passthrough; neither is watchable.
 func Register(parent *cobra.Command, f *config.Flags) {
 	flags = f
-	parent.AddCommand(
+	readOnly := []*cobra.Command{
 		newTxCmd(),
 		newReceiptCmd(),
 		newLogsCmd(),
 		newNonceCmd(),
 		newSequenceAliasCmd(),
 		newBalanceCmd(),
-		newRPCCmd(),
-		newPublishCmd(),
-	)
+	}
+	for _, c := range readOnly {
+		render.EnableWatch(c)
+		parent.AddCommand(c)
+	}
+	parent.AddCommand(newRPCCmd())
+	parent.AddCommand(newPublishCmd())
 	// The mktx/send/estimate umbrellas are attached separately so
 	// their child-msg factories can live in the tx/msgs sub-package
 	// without circular imports. Each umbrella owns its own copy of

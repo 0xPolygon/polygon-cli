@@ -52,6 +52,9 @@ var SpanCmd = &cobra.Command{
 
 // Register attaches the span umbrella command and all of its
 // subcommands to parent, wiring in the shared flag struct.
+//
+// Every span subcommand is read-only, so we apply render.EnableWatchTree
+// once here and every descendant gets a `--watch DURATION` flag.
 func Register(parent *cobra.Command, f *config.Flags) {
 	flags = f
 	SpanCmd.AddCommand(
@@ -66,6 +69,7 @@ func Register(parent *cobra.Command, f *config.Flags) {
 		newScoresCmd(),
 		newFindCmd(),
 	)
+	render.EnableWatchTree(SpanCmd)
 	parent.AddCommand(SpanCmd)
 }
 

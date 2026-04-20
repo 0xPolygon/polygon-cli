@@ -52,6 +52,7 @@ func Register(parent *cobra.Command, f *config.Flags) {
 		newParamsCmd(),
 		newAddressesCmd(),
 	)
+	render.EnableWatchTree(Cmd)
 	parent.AddCommand(Cmd)
 }
 

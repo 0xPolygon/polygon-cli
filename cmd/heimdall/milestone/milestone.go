@@ -60,6 +60,7 @@ func Register(parent *cobra.Command, f *config.Flags) {
 		newLatestCmd(),
 		newGetCmd(),
 	)
+	render.EnableWatchTree(MilestoneCmd)
 	parent.AddCommand(MilestoneCmd)
 }
 

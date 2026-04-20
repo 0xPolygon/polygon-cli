@@ -64,6 +64,7 @@ func Register(parent *cobra.Command, f *config.Flags) {
 		newSequenceCmd(),
 		newIsOldCmd(),
 	)
+	render.EnableWatchTree(TopupCmd)
 	parent.AddCommand(TopupCmd)
 }
 

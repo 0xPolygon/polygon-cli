@@ -38,9 +38,12 @@ var flags *config.Flags
 // Register attaches the chain-group subcommands directly to parent
 // and binds the shared flag struct for config resolution. parent is
 // typically the root heimdall cobra command.
+//
+// Every chain subcommand is read-only, so we wire in render.EnableWatch
+// to give them a `--watch DURATION` flag that repeats the call.
 func Register(parent *cobra.Command, f *config.Flags) {
 	flags = f
-	parent.AddCommand(
+	subs := []*cobra.Command{
 		newBlockCmd(),
 		newBlockNumberCmd(),
 		newAgeCmd(),
@@ -48,7 +51,11 @@ func Register(parent *cobra.Command, f *config.Flags) {
 		newChainIDCmd(),
 		newChainCmd(),
 		newClientCmd(),
-	)
+	}
+	for _, s := range subs {
+		render.EnableWatch(s)
+		parent.AddCommand(s)
+	}
 }
 
 // chainNames maps the well-known Heimdall v2 chain ids to their

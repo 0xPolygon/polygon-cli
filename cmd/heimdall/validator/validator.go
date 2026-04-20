@@ -88,6 +88,10 @@ func Register(parent *cobra.Command, f *config.Flags) {
 	)
 	// Attach shared flags to the top-level `validators` alias as well.
 	attachSetFlags(ValidatorsCmd.Flags())
+	// Read-only umbrella: wire `--watch` into every descendant plus
+	// the top-level alias.
+	render.EnableWatchTree(ValidatorCmd)
+	render.EnableWatch(ValidatorsCmd)
 	parent.AddCommand(ValidatorCmd)
 	parent.AddCommand(ValidatorsCmd)
 }

@@ -55,9 +55,14 @@ func newOpsCmd() *cobra.Command {
 
 // Register attaches the ops umbrella and its subcommands to parent,
 // wiring in the shared flag struct used for config resolution.
+//
+// Every ops subcommand is read-only, so we apply render.EnableWatchTree
+// once so each descendant picks up `--watch DURATION`.
 func Register(parent *cobra.Command, f *config.Flags) {
 	flags = f
-	parent.AddCommand(newOpsCmd())
+	cmd := newOpsCmd()
+	render.EnableWatchTree(cmd)
+	parent.AddCommand(cmd)
 }
 
 // newRPCClient resolves the heimdall config and constructs an RPC

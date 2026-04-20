@@ -52,6 +52,9 @@ var CheckpointCmd = &cobra.Command{
 
 // Register attaches the checkpoint umbrella command and all of its
 // subcommands to parent, wiring in the shared flag struct.
+//
+// Every checkpoint subcommand is read-only, so we apply
+// render.EnableWatchTree once here.
 func Register(parent *cobra.Command, f *config.Flags) {
 	flags = f
 	CheckpointCmd.AddCommand(
@@ -66,6 +69,7 @@ func Register(parent *cobra.Command, f *config.Flags) {
 		newSignaturesCmd(),
 		newOverviewCmd(),
 	)
+	render.EnableWatchTree(CheckpointCmd)
 	parent.AddCommand(CheckpointCmd)
 }
 
