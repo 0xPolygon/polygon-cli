@@ -1,0 +1,42 @@
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+        "node_info": {
+            "protocol_version": {
+                "p2p": "8",
+                "block": "11",
+                "app": "0"
+            },
+            "id": "97bf88a82c8ea822ff5a387f7b81b019c17b295a",
+            "listen_addr": "tcp://0.0.0.0:26656",
+            "network": "heimdallv2-80002",
+            "version": "0.38.19",
+            "channels": "40202122233038606100",
+            "moniker": "john-straylight",
+            "other": {
+                "tx_index": "on",
+                "rpc_address": "tcp://0.0.0.0:26657"
+            }
+        },
+        "sync_info": {
+            "latest_block_hash": "F3B9524F51CF2D83C8DBE45CA9103DAE9ED29B12044371F9B72881E99857284D",
+            "latest_app_hash": "D4CF4C3C6FC20FB630F38CC35C657519E4F63F49A96E7C39D25399C18C96FD9C",
+            "latest_block_height": "32634156",
+            "latest_block_time": "2026-04-20T18:51:09.770749069Z",
+            "earliest_block_hash": "126FC46CDC830BE779107E625C06E2148834504446ADE7451C1AE1D85ECBB35F",
+            "earliest_app_hash": "A968D2040EFD4B27D94F140C053531DCEB251F6FC8B4892865BD28BCEDEA0FA0",
+            "earliest_block_height": "29992725",
+            "earliest_block_time": "2026-03-21T18:05:44.87201003Z",
+            "catching_up": false
+        },
+        "validator_info": {
+            "address": "3AC9F0ADEE6282C86C625DE5EC9C99795A94F2AA",
+            "pub_key": {
+                "type": "cometbft/PubKeySecp256k1eth",
+                "value": "BE43vkRzQpGuYjGCmlgS1ZQzPuSf7CcpCaGkrm+7PpPH0N+rCONsPf5UTdiLUEgVvtRDB5LKUYc898XMU1z2WS4="
+            },
+            "voting_power": "0"
+        }
+    }
+}

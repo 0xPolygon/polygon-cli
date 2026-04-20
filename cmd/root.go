@@ -20,6 +20,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/fork"
 	"github.com/0xPolygon/polygon-cli/cmd/fund"
 	"github.com/0xPolygon/polygon-cli/cmd/hash"
+	"github.com/0xPolygon/polygon-cli/cmd/heimdall"
 	"github.com/0xPolygon/polygon-cli/cmd/loadtest"
 	"github.com/0xPolygon/polygon-cli/cmd/metricstodash"
 	"github.com/0xPolygon/polygon-cli/cmd/mnemonic"
@@ -142,6 +143,7 @@ func NewPolycliCommand() *cobra.Command {
 		fork.ForkCmd,
 		fund.FundCmd,
 		hash.HashCmd,
+		heimdall.HeimdallCmd,
 		loadtest.LoadtestCmd,
 		metricstodash.MetricsToDashCmd,
 		mnemonic.MnemonicCmd,

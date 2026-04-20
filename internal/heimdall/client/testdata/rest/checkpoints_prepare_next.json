@@ -1,0 +1,10 @@
+{
+  "checkpoint": {
+    "proposer": "0xb4d5335e0d89f4666b824ba098f920d83264a69a",
+    "start_block": "36984691",
+    "end_block": "36984947",
+    "root_hash": "IvAg+VePegQiDAKMvg70vVwK3Eybc2whAIvFvIQtEY0=",
+    "account_root_hash": "S2uZS5nSTjXoYmr0GaCH7HhJjZdiZeWHnXwiuSQcO5g=",
+    "bor_chain_id": "80002"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "checkpoint_list": [
+    {
+      "id": "38871",
+      "proposer": "0x09207a6efee346cb3e4a54ac18523e3715d38b3f",
+      "start_block": "36979059",
+      "end_block": "36979826",
+      "root_hash": "NRfvvV9YAjjav+cR70om6WDob+IIZjPVyIYMAcrzxy4=",
+      "bor_chain_id": "80002",
+      "timestamp": "1776696405"
+    },
+    {
+      "id": "38870",
+      "proposer": "0x915a2284d28bd93de7d6f31173b981204bb666e6",
+      "start_block": "36977779",
+      "end_block": "36979058",
+      "root_hash": "KgsD6rXyC70l9TkEmvg/RuNRuEEtH3+goumJ0Op0oIM=",
+      "bor_chain_id": "80002",
+      "timestamp": "1776695157"
+    },
+    {
+      "id": "38869",
+      "proposer": "0x6dc2dd54f24979ec26212794c71afefed722280c",
+      "start_block": "36977011",
+      "end_block": "36977778",
+      "root_hash": "qUOH4OVlHVoUP8nu/0DR9yKoxOr7L/cMgpLuUflxHm8=",
+      "bor_chain_id": "80002",
+      "timestamp": "1776693301"
+    }
+  ],
+  "pagination": {
+    "next_key": "AAAAAAAAl9Q=",
+    "total": "0"
+  }
+}

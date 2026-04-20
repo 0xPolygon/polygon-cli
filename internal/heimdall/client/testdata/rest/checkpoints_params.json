@@ -1,0 +1,8 @@
+{
+  "params": {
+    "checkpoint_buffer_time": "1500s",
+    "avg_checkpoint_length": "256",
+    "max_checkpoint_length": "8192",
+    "child_chain_block_interval": "10000"
+  }
+}
