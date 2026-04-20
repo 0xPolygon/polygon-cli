@@ -12,6 +12,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/chainparams"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/checkpoint"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/clerk"
+	"github.com/0xPolygon/polygon-cli/cmd/heimdall/decode"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/milestone"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/ops"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/span"
@@ -55,4 +56,5 @@ func init() {
 	heimdallutil.Register(HeimdallCmd, PersistentFlags)
 	ops.Register(HeimdallCmd, PersistentFlags)
 	wallet.Register(HeimdallCmd, PersistentFlags)
+	decode.Register(HeimdallCmd, PersistentFlags)
 }
