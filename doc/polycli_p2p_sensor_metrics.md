@@ -8,6 +8,24 @@ Difference between head and oldest block numbers
 Metric Type: Gauge
 
 
+### sensor_broadcast_batch_size
+Number of transactions per broadcast batch
+
+Metric Type: Histogram
+
+
+### sensor_broadcast_queue_depth
+Number of transaction batches in broadcast queue
+
+Metric Type: Gauge
+
+
+### sensor_broadcast_send_errors
+Number of failed broadcast sends
+
+Metric Type: Counter
+
+
 ### sensor_head_block_age
 Time since head block was received (in seconds)
 
@@ -27,7 +45,7 @@ Metric Type: Gauge
 
 
 ### sensor_messages
-The number and type of messages the sensor has sent and received
+Number and type of messages the sensor has sent and received
 
 Metric Type: CounterVec
 
@@ -43,7 +61,17 @@ Metric Type: Gauge
 
 
 ### sensor_peers
-The number of peers the sensor is connected to
+Number of peers the sensor is connected to
 
 Metric Type: Gauge
+
+
+### sensor_rpc_requests
+Number of RPC requests made
+
+Metric Type: CounterVec
+
+Variable Labels:
+- method
+- proxied
 

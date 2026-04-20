@@ -106,7 +106,7 @@ func claimEverything(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	log.Info().Uint32("networkID", currentNetworkID).Msg("current network")
+	log.Info().Uint32("networkID", currentNetworkID).Msg("Current network")
 
 	workPool := make(chan *bridge_service.Deposit, concurrency) // bounded chan for controlled concurrency
 
@@ -114,7 +114,7 @@ func claimEverything(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	log.Info().Int64("nonce", nonceCounter.Int64()).Msg("starting nonce")
+	log.Info().Int64("nonce", nonceCounter.Int64()).Msg("Starting nonce")
 	nonceMutex := sync.Mutex{}
 	nonceIncrement := big.NewInt(1)
 	retryNonces := make(chan *big.Int, concurrency) // bounded same as workPool
@@ -131,7 +131,7 @@ func claimEverything(cmd *cobra.Command) error {
 			defer wg.Done()
 
 			if deposit.DestNet != currentNetworkID {
-				log.Debug().Uint32("destination_network", deposit.DestNet).Msg("discarding deposit for different network")
+				log.Debug().Uint32("destination_network", deposit.DestNet).Msg("Discarding deposit for different network")
 				return
 			}
 			if deposit.ClaimTxHash != nil {
@@ -178,7 +178,7 @@ func claimEverything(cmd *cobra.Command) error {
 			}
 			dErr = ulxlycommon.WaitMineTransaction(cmd.Context(), client, claimTx, timeoutTxnReceipt)
 			if dErr != nil {
-				log.Error().Err(dErr).Msg("error while waiting for tx to mine")
+				log.Error().Err(dErr).Msg("Error while waiting for transaction to mine")
 			}
 		}(d)
 	}
@@ -241,7 +241,7 @@ func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeCont
 
 	proof, err := getMerkleProofsExitRoots(bridgeServiceFromMap, deposit, "", 0)
 	if err != nil {
-		log.Error().Err(err).Msg("error getting merkle proofs and exit roots from bridge service")
+		log.Error().Err(err).Msg("Error getting merkle proofs and exit roots from bridge service")
 		return nil, err
 	}
 
@@ -263,7 +263,7 @@ func claimSingleDeposit(cmd *cobra.Command, client *ethclient.Client, bridgeCont
 			Msg("attempt to claim deposit failed")
 		return nil, err
 	}
-	log.Info().Stringer("txhash", claimTx.Hash()).Msg("sent claim")
+	log.Info().Stringer("txhash", claimTx.Hash()).Msg("Sent claim")
 
 	return claimTx, nil
 }
@@ -275,7 +275,7 @@ func getDepositsForAddress(bridgeService bridge_service.BridgeService, destinati
 	}
 
 	if len(deposits) != total {
-		log.Warn().Int("total_deposits", total).Int("retrieved_deposits", len(deposits)).Msg("not all deposits were retrieved")
+		log.Warn().Int("total_deposits", total).Int("retrieved_deposits", len(deposits)).Msg("Not all deposits were retrieved")
 	}
 
 	return deposits, total, nil

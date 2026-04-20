@@ -116,6 +116,7 @@ func initPersistentFlags() {
 	pf.BoolVar(&cfg.EthCallOnly, "eth-call-only", false, "call contracts without sending transactions (incompatible with adaptive rate limiting and summarization)")
 	pf.BoolVar(&cfg.EthCallOnlyLatestBlock, "eth-call-only-latest", false, "execute on latest block instead of original block in call-only mode with recall")
 	pf.BoolVar(&cfg.OutputRawTxOnly, "output-raw-tx-only", false, "output raw signed transaction hex without sending (works with most modes except RPC and UniswapV3)")
+	pf.BoolVar(&cfg.PrivateTxs, "private-txs", false, "send transactions via eth_sendRawTransactionPrivate")
 	pf.Uint64Var(&cfg.EthAmountInWei, "eth-amount-in-wei", 0, "amount of ether in wei to send per transaction")
 	pf.Float64Var(&cfg.RateLimit, "rate-limit", 4, "requests per second limit (use negative value to remove limit)")
 	pf.BoolVar(&cfg.AdaptiveRateLimit, "adaptive-rate-limit", false, "enable AIMD-style congestion control to automatically adjust request rate")
@@ -126,9 +127,9 @@ func initPersistentFlags() {
 	pf.Float64Var(&cfg.GasPriceMultiplier, "gas-price-multiplier", 1, "a multiplier to increase or decrease the gas price")
 	pf.Int64Var(&cfg.Seed, "seed", 123456, "a seed for generating random values and addresses")
 	pf.Uint64Var(&cfg.ForceGasLimit, "gas-limit", 0, "manually specify gas limit (useful to avoid eth_estimateGas or when auto-computation fails)")
-	pf.Uint64Var(&cfg.ForceGasPrice, "gas-price", 0, "manually specify gas price (useful when auto-detection fails)")
+	pf.Var(&flag.GasValue{Val: &cfg.ForceGasPrice}, "gas-price", "gas price with unit support (e.g., \"100gwei\", \"1000000000\")")
 	pf.Uint64Var(&cfg.StartNonce, "nonce", 0, "use this flag to manually set the starting nonce")
-	pf.Uint64Var(&cfg.ForcePriorityGasPrice, "priority-gas-price", 0, "gas tip price for EIP-1559 transactions")
+	pf.Var(&flag.GasValue{Val: &cfg.ForcePriorityGasPrice}, "priority-gas-price", "gas tip for EIP-1559 with unit support (e.g., \"2gwei\")")
 	pf.BoolVar(&cfg.ShouldProduceSummary, "summarize", false, "produce execution summary after load test (can take a long time for large tests)")
 	pf.Uint64Var(&cfg.BatchSize, "batch-size", 999, "batch size for receipt fetching (default: 999)")
 	pf.StringVar(&cfg.SummaryOutputMode, "output-mode", "text", "format mode for summary output (json | text)")
@@ -137,6 +138,7 @@ func initPersistentFlags() {
 	pf.BoolVar(&cfg.FireAndForget, "send-only", false, "alias for --fire-and-forget")
 	pf.BoolVar(&cfg.CheckForPreconf, "check-preconf", false, "check for preconf status after sending tx")
 	pf.StringVar(&cfg.PreconfStatsFile, "preconf-stats-file", "", "path for preconf stats JSON output, updated every 2 seconds")
+	pf.BoolVar(&cfg.StopOnInsufficientFunds, "stop-on-insufficient-funds", false, "stop sending from account when it encounters insufficient funds error")
 
 	initGasManagerFlags()
 }
@@ -168,6 +170,7 @@ func initFlags() {
 	f.StringVar(&cfg.SendingAccountsFile, "sending-accounts-file", "", "file with sending account private keys, one per line (avoids pool queue and preserves accounts across runs)")
 	f.StringVar(&cfg.DumpSendingAccountsFile, "dump-sending-accounts-file", "", "file path to dump generated private keys when using --sending-accounts-count")
 	f.Uint64Var(&cfg.AccountsPerFundingTx, "accounts-per-funding-tx", 400, "number of accounts to fund per multicall3 transaction")
+	f.BoolVar(&cfg.SequentialNonceFetch, "sequential-nonce-fetch", false, "fetch nonces sequentially instead of in parallel (use if hitting rate limits)")
 	f.Uint64Var(&cfg.MaxBaseFeeWei, "max-base-fee-wei", 0, "maximum base fee in wei (pause sending new transactions when exceeded, useful during network congestion)")
 	f.StringSliceVarP(&cfg.Modes, "mode", "m", []string{"t"}, `testing mode (can specify multiple like "d,t"):
 2, erc20 - send ERC20 tokens

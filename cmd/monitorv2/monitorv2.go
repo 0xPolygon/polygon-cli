@@ -55,7 +55,7 @@ var MonitorV2Cmd = &cobra.Command{
 			go func() {
 				log.Info().Str("addr", pprofAddr).Msg("Starting pprof server")
 				if err := http.ListenAndServe(pprofAddr, nil); err != nil {
-					log.Error().Err(err).Msg("pprof server failed")
+					log.Error().Err(err).Msg("The pprof server failed")
 				}
 			}()
 		}

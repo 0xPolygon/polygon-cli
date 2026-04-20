@@ -82,6 +82,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli plot](polycli_plot.md) - Plot a chart of transaction gas prices and limits.
 
+- [polycli pos](polycli_pos.md) - Utilities for Polygon PoS.
+
 - [polycli publish](polycli_publish.md) - Publish transactions to the network with high-throughput.
 
 - [polycli report](polycli_report.md) - Generate a report analyzing a range of blocks from an Ethereum-compatible blockchain.

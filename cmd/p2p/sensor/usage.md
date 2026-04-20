@@ -9,6 +9,34 @@ created automatically.
 The bootnodes may change, so refer to the [Polygon Knowledge Layer][bootnodes]
 if the sensor is not discovering peers.
 
+## JSON-RPC Server
+
+The sensor runs a JSON-RPC server on port 8545 (configurable via `--rpc-port`)
+that supports a subset of Ethereum JSON-RPC methods using cached data.
+
+### Supported Methods
+
+| Method | Description |
+|--------|-------------|
+| `eth_chainId` | Returns the chain ID |
+| `eth_blockNumber` | Returns the current head block number |
+| `eth_gasPrice` | Returns suggested gas price based on recent blocks |
+| `eth_getBlockByHash` | Returns block by hash |
+| `eth_getBlockByNumber` | Returns block by number (if cached) |
+| `eth_getTransactionByHash` | Returns transaction by hash |
+| `eth_getTransactionByBlockHashAndIndex` | Returns transaction at index in block |
+| `eth_getBlockTransactionCountByHash` | Returns transaction count in block |
+| `eth_getUncleCountByBlockHash` | Returns uncle count in block |
+| `eth_sendRawTransaction` | Broadcasts signed transaction to peers |
+
+### Limitations
+
+Methods requiring state or receipts are not supported:
+- `eth_getBalance`, `eth_getCode`, `eth_call`, `eth_estimateGas`
+- `eth_getTransactionReceipt`, `eth_getLogs`
+
+Data is served from an LRU cache, so older blocks/transactions may not be available.
+
 ## Metrics
 
 The sensor exposes Prometheus metrics at `http://localhost:2112/metrics`

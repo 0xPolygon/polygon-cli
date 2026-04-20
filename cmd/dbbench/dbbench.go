@@ -390,7 +390,7 @@ benchLoop:
 				_, err := db.Get(tmpKey)
 				keyLock.Unlock()
 				if err != nil {
-					log.Error().Str("key", hex.EncodeToString(tmpKey)).Err(err).Msg("db random read error")
+					log.Error().Str("key", hex.EncodeToString(tmpKey)).Err(err).Msg("DB random read error")
 				}
 				wg.Done()
 				<-pool

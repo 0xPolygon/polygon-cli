@@ -173,7 +173,7 @@ func (wr *WrappedAddress) ToString() *ethcommon.Address {
 	}
 
 	if v.Kind() != reflect.String {
-		log.Fatal().Any("addr", wr.raw).Str("kind", v.Kind().String()).Msg("unknown source address type")
+		log.Fatal().Any("addr", wr.raw).Str("kind", v.Kind().String()).Msg("Unknown source address type")
 	}
 	addr := ethcommon.HexToAddress(v.Interface().(string))
 	wr.inner = &addr
@@ -343,7 +343,7 @@ func processTestDataString(data string) string {
 	if dataLabel.MatchString(data) {
 		label := dataLabel.FindStringSubmatch(data)
 		data = dataLabel.ReplaceAllString(data, "")
-		log.Trace().Str("label", label[1]).Msg("stripping label")
+		log.Trace().Str("label", label[1]).Msg("Stripping label")
 	}
 	data = strings.TrimSpace(data)
 	if data == "" {
@@ -361,7 +361,7 @@ func processTestDataString(data string) string {
 		case "solidity":
 			return processSolidityToString(data, false)
 		default:
-			log.Fatal().Str("type", rawType).Msg("unknown type designation")
+			log.Fatal().Str("type", rawType).Msg("Unknown type designation")
 		}
 	} else if strings.HasPrefix(data, "{") {
 		return processLLLToString(data)
@@ -372,7 +372,7 @@ func processTestDataString(data string) string {
 	} else if isStandardSolidityString(data) {
 		return processSolidityToString(data, false)
 	} else {
-		log.Fatal().Str("data", data).Msg("unknown data format")
+		log.Fatal().Str("data", data).Msg("Unknown data format")
 	}
 
 	return ""
@@ -403,7 +403,7 @@ func processSolidityFlags(contract string) (string, bool) {
 	}
 	if len(compilerOptions) == 2 {
 		if strings.TrimSpace(compilerOptions[1]) != "optimise" {
-			log.Fatal().Str("setting", compilerOptions[1]).Msg("only aware of the optimise setting... what is this?")
+			log.Fatal().Str("setting", compilerOptions[1]).Msg("Only aware of the optimise setting, what is this?")
 		}
 		shouldOptimize = true
 	}
@@ -464,11 +464,11 @@ func processSolidityToString(data string, isYul bool) string {
 	cmd.Stderr = bufErr
 	solcOut, err := cmd.Output()
 	if err != nil {
-		log.Fatal().Err(err).Str("filename", solInput.Name()).Str("stdErr", bufErr.String()).Str("contract", data).Strs("args", args).Msg("there was an error running solc/solidity for contracts")
+		log.Fatal().Err(err).Str("filename", solInput.Name()).Str("stdErr", bufErr.String()).Str("contract", data).Strs("args", args).Msg("There was an error running solc/solidity for contracts")
 	}
 	lines := strings.Split(string(solcOut), "\n")
 	if len(lines) < 4 {
-		log.Warn().Strs("args", args).Str("filename", solInput.Name()).Str("stdErr", bufErr.String()).Int("lines", len(lines)).Str("contract", data).Msg("soldity output does not contain 4 lines")
+		log.Warn().Strs("args", args).Str("filename", solInput.Name()).Str("stdErr", bufErr.String()).Int("lines", len(lines)).Str("contract", data).Msg("Solidity output does not contain 4 lines")
 	}
 
 	if err := os.Remove(solInput.Name()); err != nil {
@@ -500,13 +500,13 @@ func solidityStringToBin(data string) map[string]string {
 	cmd.Stderr = bufErr
 	solcOut, err := cmd.Output()
 	if err != nil {
-		log.Fatal().Err(err).Str("filename", solInput.Name()).Str("stdErr", bufErr.String()).Str("contract", data).Strs("args", args).Msg("there was an error running solc/solidity for contracts")
+		log.Fatal().Err(err).Str("filename", solInput.Name()).Str("stdErr", bufErr.String()).Str("contract", data).Strs("args", args).Msg("There was an error running solc/solidity for contracts")
 	}
 	matches := solcCompileMultiOut.FindAllStringSubmatch(string(solcOut), -1)
 	contractMap := make(map[string]string)
 	for _, contract := range matches {
 		if len(contract) != 3 {
-			log.Fatal().Int("contractLen", len(contract)).Msg("the number of matches in this compiled contract doesn't look right")
+			log.Fatal().Int("contractLen", len(contract)).Msg("The number of matches in this compiled contract doesn't look right")
 		}
 		contractMap[contract[1]] = contract[2]
 	}
@@ -531,7 +531,7 @@ func processLLLToString(data string) string {
 	cmd := exec.Command("lllc", lllcInput.Name())
 	lllcOut, err := cmd.Output()
 	if err != nil {
-		log.Fatal().Err(err).Stack().Str("contract", data).Msg("there was an error compiling the lll contract")
+		log.Fatal().Err(err).Stack().Str("contract", data).Msg("There was an error compiling the LLL contract")
 	}
 	lines := strings.Split(string(lllcOut), "\n")
 	if len(lines) != 2 {
@@ -547,10 +547,10 @@ func processAbiStringToString(data string) string {
 	data = preProcessTypedString(data, true)
 	matches := abiSpec.FindAllStringSubmatch(data, -1)
 	if len(matches) != 1 {
-		log.Fatal().Int("matches", len(matches)).Str("abi", data).Msg("unrecognized abi spec")
+		log.Fatal().Int("matches", len(matches)).Str("abi", data).Msg("Unrecognized ABI spec")
 	}
 	if len(matches[0]) != 4 {
-		log.Fatal().Int("matches", len(matches[0])).Str("abi", data).Msg("unrecognized abi spec")
+		log.Fatal().Int("matches", len(matches[0])).Str("abi", data).Msg("Unrecognized ABI spec")
 	}
 	funcName := matches[0][1]
 	funcParams := matches[0][2]
@@ -559,7 +559,7 @@ func processAbiStringToString(data string) string {
 	processedArgs := rawArgsToStrings(funcInputs, params)
 	encodedArgs, err := abi.AbiEncode(fmt.Sprintf("%s(%s)", funcName, funcParams), processedArgs)
 	if err != nil {
-		log.Fatal().Err(err).Str("funcName", funcName).Str("funcParams", funcParams).Str("funcInputs", funcInputs).Msg("failed to encode args in abi")
+		log.Fatal().Err(err).Str("funcName", funcName).Str("funcParams", funcParams).Str("funcInputs", funcInputs).Msg("Failed to encode args in ABI")
 	}
 
 	return encodedArgs
@@ -582,7 +582,7 @@ func rawArgsToStrings(rawArgs string, params []string) []string {
 		}
 	}
 	if len(argList) != count {
-		log.Fatal().Str("rawArgs", rawArgs).Int("argListLength", len(argList)).Int("paramCount", count).Msg("arg length mismatch")
+		log.Fatal().Str("rawArgs", rawArgs).Int("argListLength", len(argList)).Int("paramCount", count).Msg("Arg length mismatch")
 	}
 
 	processedArgs := make([]string, count)
@@ -606,10 +606,10 @@ func rawArgsToStrings(rawArgs string, params []string) []string {
 			case "0x00":
 				processedArgs[k] = "false"
 			default:
-				log.Fatal().Str("arg", arg).Msg("unrecognized bool type input")
+				log.Fatal().Str("arg", arg).Msg("Unrecognized bool type input")
 			}
 		} else {
-			log.Fatal().Str("type", params[k]).Msg("unknown type designation")
+			log.Fatal().Str("type", params[k]).Msg("Unknown type designation")
 		}
 	}
 
@@ -658,7 +658,7 @@ func storageToByteCode(storage map[string]EthTestNumeric) string {
 		if slot == "0x" || slot == "0" {
 			// special case that we encountered...
 			// https://github.com/ethereum/tests/blob/fd26aad70e24f042fcd135b2f0338b1c6bf1a324/src/EIPTestsFiller/InvalidRLP/bcForgedTest/bcForkBlockTestFiller.json#L222
-			log.Warn().Str("slot", slot).Msg("found a storage entry for invalid slot")
+			log.Warn().Str("slot", slot).Msg("Found a storage entry for invalid slot")
 		}
 
 		s := util.GetHexString(slot)
@@ -670,7 +670,7 @@ func storageToByteCode(storage map[string]EthTestNumeric) string {
 		bytecode += fmt.Sprintf("%02x%s%02x%s55", vPushCode, v, sPushCode, s)
 	}
 
-	log.Info().Str("storageInit", bytecode).Msg("produced code to initialize storage")
+	log.Info().Str("storageInit", bytecode).Msg("Produced code to initialize storage")
 	return bytecode
 }
 func WrapCode(inputData EthTestData) string {
@@ -707,7 +707,7 @@ var RetestCmd = &cobra.Command{
 	Short: "Convert the standard ETH test fillers into something to be replayed against an RPC.",
 	Long:  usage,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		log.Info().Msg("starting")
+		log.Info().Msg("Starting")
 		rawData, err := getInputData(cmd, args)
 		if err != nil {
 			return err

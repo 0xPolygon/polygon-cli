@@ -112,7 +112,7 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 	var maxNonce uint64
 	if inputFixNonceGapArgs.maxNonce != 0 {
 		maxNonce = inputFixNonceGapArgs.maxNonce
-		log.Info().Uint64("maxNonce", maxNonce).Msg("maxNonce loaded from --max-nonce flag")
+		log.Info().Uint64("maxNonce", maxNonce).Msg("Loaded max nonce from --max-nonce flag")
 	} else {
 		log.Info().Msg("--max-nonce flag not set")
 		maxNonce, err = getMaxNonce(addr)
@@ -124,7 +124,7 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 
 	// check if there is a nonce gap
 	if maxNonce == 0 || currentNonce >= maxNonce {
-		log.Info().Stringer("addr", addr).Msg("There is no nonce gap.")
+		log.Info().Stringer("addr", addr).Msg("There is no nonce gap")
 		return nil
 	}
 	log.Info().
@@ -170,15 +170,15 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 				log.Error().Err(err).Msg("Unable to sign tx")
 				return err
 			}
-			log.Info().Stringer("hash", signedTx.Hash()).Msgf("sending tx with nonce %d", txTemplate.Nonce)
+			log.Info().Stringer("hash", signedTx.Hash()).Msgf("Sending transaction with nonce %d", txTemplate.Nonce)
 
 			err = rpcClient.SendTransaction(cmd.Context(), signedTx)
 			if err != nil {
 				if strings.Contains(err.Error(), "nonce too low") {
-					log.Info().Stringer("hash", signedTx.Hash()).Msgf("another tx with nonce %d was mined while trying to increase the fee, skipping it", txTemplate.Nonce)
+					log.Info().Stringer("hash", signedTx.Hash()).Msgf("Another transaction with nonce %d was mined while trying to increase the fee, skipping", txTemplate.Nonce)
 					break out
 				} else if strings.Contains(err.Error(), "already known") {
-					log.Info().Stringer("hash", signedTx.Hash()).Msgf("same tx with nonce %d already exists, skipping it", txTemplate.Nonce)
+					log.Info().Stringer("hash", signedTx.Hash()).Msgf("Same transaction with nonce %d already exists, skipping", txTemplate.Nonce)
 					break out
 				} else if strings.Contains(err.Error(), "replacement transaction underpriced") ||
 					strings.Contains(err.Error(), "INTERNAL_ERROR: could not replace existing tx") {
@@ -195,11 +195,11 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 							txTemplateCopy.GasPrice = new(big.Int).Add(txTemplateCopy.GasPrice, big.NewInt(1))
 						}
 						tx = types.NewTx(&txTemplateCopy)
-						log.Info().Stringer("hash", signedTx.Hash()).Msgf("tx with nonce %d is underpriced, increasing fee. From %d To %d", txTemplate.Nonce, oldGasPrice, txTemplateCopy.GasPrice)
+						log.Info().Stringer("hash", signedTx.Hash()).Msgf("Transaction with nonce %d is underpriced, increasing fee from %d to %d", txTemplate.Nonce, oldGasPrice, txTemplateCopy.GasPrice)
 						time.Sleep(time.Second)
 						continue
 					} else {
-						log.Info().Stringer("hash", signedTx.Hash()).Msgf("another tx with nonce %d already exists, skipping it", txTemplate.Nonce)
+						log.Info().Stringer("hash", signedTx.Hash()).Msgf("Another transaction with nonce %d already exists, skipping", txTemplate.Nonce)
 						break out
 					}
 				}
@@ -214,7 +214,7 @@ func fixNonceGap(cmd *cobra.Command, args []string) error {
 	}
 
 	if lastTx != nil {
-		log.Info().Stringer("hash", lastTx.Hash()).Msg("waiting for the last tx to get mined")
+		log.Info().Stringer("hash", lastTx.Hash()).Msg("Waiting for the last transaction to get mined")
 		err := WaitMineTransaction(cmd.Context(), rpcClient, lastTx, 600)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to wait for last tx to get mined")
@@ -261,10 +261,10 @@ func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *type
 				continue
 			}
 			if r.Status != 0 {
-				log.Info().Stringer("hash", r.TxHash).Msg("transaction successful")
+				log.Info().Stringer("hash", r.TxHash).Msg("Transaction successful")
 				return nil
 			} else if r.Status == 0 {
-				log.Error().Stringer("hash", r.TxHash).Msg("transaction failed")
+				log.Error().Stringer("hash", r.TxHash).Msg("Transaction failed")
 				return nil
 			}
 			time.Sleep(1 * time.Second)
@@ -273,22 +273,22 @@ func WaitMineTransaction(ctx context.Context, client *ethclient.Client, tx *type
 }
 
 func getMaxNonce(addr common.Address) (uint64, error) {
-	log.Info().Msg("getting max nonce from txpool_content")
+	log.Info().Msg("Getting max nonce from txpool_content")
 	maxNonce, err := getMaxNonceFromTxPool(addr)
 	if err == nil {
-		log.Info().Uint64("maxNonce", maxNonce).Msg("maxNonce loaded from txpool_content")
+		log.Info().Uint64("maxNonce", maxNonce).Msg("Loaded max nonce from txpool_content")
 		return maxNonce, nil
 	}
-	log.Warn().Err(err).Msg("unable to get max nonce from txpool_content")
+	log.Warn().Err(err).Msg("Unable to get max nonce from txpool_content")
 
-	log.Info().Msg("getting max nonce from pending nonce")
+	log.Info().Msg("Getting max nonce from pending nonce")
 	// if the error is not about txpool_content, falls back to PendingNonceAt
 	maxNonce, err = rpcClient.PendingNonceAt(context.Background(), addr)
 	if err != nil {
 		return 0, err
 	}
 
-	log.Info().Uint64("maxNonce", maxNonce).Msg("maxNonce loaded from pending nonce")
+	log.Info().Uint64("maxNonce", maxNonce).Msg("Loaded max nonce from pending nonce")
 	return maxNonce, nil
 }
 
@@ -318,7 +318,7 @@ func getMaxNonceFromTxPool(addr common.Address) (uint64, error) {
 			nonceInt, ok := new(big.Int).SetString(nonce, 10)
 			if !ok {
 				err = fmt.Errorf("invalid nonce found: %s", nonce)
-				log.Warn().Err(err).Msg("unable to get txpool_content")
+				log.Warn().Err(err).Msg("Unable to get txpool_content")
 				return 0, err
 			}
 

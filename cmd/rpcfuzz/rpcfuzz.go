@@ -184,7 +184,7 @@ var (
 )
 
 func getConformanceContract(ctx context.Context, rpc *rpc.Client, chainID *big.Int) (conformanceContractAddrStr string, conformanceContract *tester.ConformanceTester, err error) {
-	log.Trace().Msg("Deploying Conformance contract...")
+	log.Trace().Msg("Deploying Conformance contract")
 	var conformanceContractAddr ethcommon.Address
 	ec := ethclient.NewClient(rpc)
 	tops, err := bind.NewKeyedTransactorWithChainID(testPrivateKey, chainID)
@@ -196,7 +196,7 @@ func getConformanceContract(ctx context.Context, rpc *rpc.Client, chainID *big.I
 	cops := new(bind.CallOpts)
 	conformanceContractAddr, conformanceContract, err = tester.DeployConformanceContract(ctx, ec, tops, cops)
 	conformanceContractAddrStr = conformanceContractAddr.String()
-	log.Trace().Msg("Finished Deploying Conformance contract...")
+	log.Trace().Msg("Finished deploying Conformance contract")
 
 	return
 }

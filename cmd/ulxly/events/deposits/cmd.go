@@ -96,7 +96,7 @@ func readDeposit(cmd *cobra.Command, _ []string) error {
 		}
 		err = evtV2Iterator.Close()
 		if err != nil {
-			log.Error().Err(err).Msg("error closing event iterator")
+			log.Error().Err(err).Msg("Error closing event iterator")
 		}
 		currentBlock = endBlock + 1
 	}

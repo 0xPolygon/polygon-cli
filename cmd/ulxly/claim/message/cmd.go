@@ -52,7 +52,7 @@ func claimMessage(cmd *cobra.Command) error {
 	// Initialize and assign variables required to send transaction payload
 	bridgeV2, _, auth, err := ulxlycommon.GenerateTransactionPayload(cmd.Context(), client, bridgeAddress, privateKey, gasLimit, destinationAddress, chainID)
 	if err != nil {
-		log.Error().Err(err).Msg("error generating transaction payload")
+		log.Error().Err(err).Msg("Error generating transaction payload")
 		return err
 	}
 
@@ -71,7 +71,7 @@ func claimMessage(cmd *cobra.Command) error {
 
 	proof, err := ulxlycommon.GetMerkleProofsExitRoots(ulxlycommon.BridgeService, *deposit, proofGERHash, proofL1InfoTreeIndex)
 	if err != nil {
-		log.Error().Err(err).Msg("error getting merkle proofs and exit roots from bridge service")
+		log.Error().Err(err).Msg("Error getting merkle proofs and exit roots from bridge service")
 		return err
 	}
 
@@ -79,6 +79,6 @@ func claimMessage(cmd *cobra.Command) error {
 	if err = ulxlycommon.LogAndReturnJSONError(cmd.Context(), client, claimTxn, auth, err); err != nil {
 		return err
 	}
-	log.Info().Msg("claimTxn: " + claimTxn.Hash().String())
+	log.Info().Stringer("txHash", claimTxn.Hash()).Msg("Claim transaction sent")
 	return ulxlycommon.WaitMineTransaction(cmd.Context(), client, claimTxn, timeoutTxnReceipt)
 }

@@ -326,7 +326,7 @@ func (p *PolyWallet) ExportHDAddresses(count int) (*PolyWalletExport, error) {
 		if err == nil {
 			firstIndex = idx
 		} else {
-			log.Warn().Msg("failed to identify the index of the address in the derivation path, starting at 0")
+			log.Warn().Msg("Failed to identify the index of the address in the derivation path, starting at 0")
 		}
 	}
 	lastIndex := firstIndex + count

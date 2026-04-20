@@ -193,7 +193,7 @@ func (p *poseidongoldWrapper) Sum(b []byte) []byte {
 	var err error
 	for {
 		n, _ := p.b.Read(buf)
-		log.Info().Bytes("current-buffer", buf).Msg("summing")
+		log.Info().Bytes("current-buffer", buf).Msg("Summing")
 		if n > 64 {
 			panic("What?? that shouldn't have happened")
 		}
@@ -205,7 +205,7 @@ func (p *poseidongoldWrapper) Sum(b []byte) []byte {
 			os.Exit(1)
 		}
 		if n < 64 {
-			log.Info().Int("n", n).Msg("done")
+			log.Info().Int("n", n).Msg("Done")
 			break
 		}
 

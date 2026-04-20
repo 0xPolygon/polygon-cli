@@ -141,7 +141,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --gas-manager-period uint                          period in blocks for oscillation wave (default 1)
       --gas-manager-price-strategy string                gas price strategy (estimated | fixed | dynamic) (default "estimated")
       --gas-manager-target uint                          target gas limit for oscillation wave (default 30000000)
-      --gas-price uint                                   manually specify gas price (useful when auto-detection fails)
+      --gas-price gas                                    gas price with unit support (e.g., "100gwei", "1000000000")
       --gas-price-multiplier float                       a multiplier to increase or decrease the gas price (default 1)
   -h, --help                                             help for loadtest
       --legacy                                           send a legacy transaction instead of an EIP1559 transaction
@@ -165,7 +165,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --output-raw-tx-only                               output raw signed transaction hex without sending (works with most modes except RPC and UniswapV3)
       --pre-fund-sending-accounts                        fund all sending accounts at start instead of on first use
       --preconf-stats-file string                        path for preconf stats JSON output, updated every 2 seconds
-      --priority-gas-price uint                          gas tip price for EIP-1559 transactions
+      --priority-gas-price gas                           gas tip for EIP-1559 with unit support (e.g., "2gwei")
       --private-key string                               hex encoded private key to use for sending transactions (default "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
       --proxy string                                     use the proxy specified
       --random-recipients                                send to random addresses instead of fixed address in transfer tests
@@ -180,6 +180,8 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --send-only                                        alias for --fire-and-forget
       --sending-accounts-count uint                      number of sending accounts to use (avoids pool account queue)
       --sending-accounts-file string                     file with sending account private keys, one per line (avoids pool queue and preserves accounts across runs)
+      --sequential-nonce-fetch                           fetch nonces sequentially instead of in parallel (use if hitting rate limits)
+      --stop-on-insufficient-funds                       stop sending from account when it encounters insufficient funds error
       --store-data-size uint                             number of bytes to store in contract for store mode (default 1024)
       --summarize                                        produce execution summary after load test (can take a long time for large tests)
   -t, --time-limit int                                   maximum seconds to spend benchmarking (default: no limit) (default -1)

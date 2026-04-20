@@ -40,7 +40,7 @@ var ParseBatchL2Data = &cobra.Command{
 
 		rawBatch, err := DecodeBatchV2(rawBatchL2Data)
 		if err != nil {
-			log.Error().Err(err).Msg("unable to decode l2 batch data")
+			log.Error().Err(err).Msg("Unable to decode L2 batch data")
 			tryRawBatch(rawBatchL2Data)
 			return err
 		}
@@ -54,7 +54,7 @@ var ParseBatchL2Data = &cobra.Command{
 			}{l2RawBlock.IndexL1InfoTree, l2RawBlock.DeltaTimestamp}
 			blockDataBytes, err := json.Marshal(blockData)
 			if err != nil {
-				log.Err(err).Msg("unable to marshal block data")
+				log.Err(err).Msg("Unable to marshal block data")
 				return err
 			}
 			fmt.Println(string(blockDataBytes))
@@ -94,24 +94,24 @@ func printTxData(rawL2Tx *L2TxRaw) error {
 	signer := types.NewEIP155Signer(rawL2Tx.Tx.ChainId())
 	sender, err := signer.Sender(rawL2Tx.Tx)
 	if err != nil {
-		log.Error().Err(err).Msg("unable to reccover sender")
+		log.Error().Err(err).Msg("Unable to recover sender")
 		return err
 	}
 	jsonTx, err := rawL2Tx.Tx.MarshalJSON()
 	if err != nil {
-		log.Error().Err(err).Msg("unable to json marshal tx")
+		log.Error().Err(err).Msg("Unable to JSON marshal transaction")
 		return err
 	}
 	txMap := make(map[string]string, 0)
 	err = json.Unmarshal(jsonTx, &txMap)
 	if err != nil {
-		log.Error().Err(err).Msg("unable to remarshal json tx")
+		log.Error().Err(err).Msg("Unable to remarshal JSON transaction")
 		return err
 	}
 	txMap["from"] = sender.String()
 	jsonTx, err = json.Marshal(txMap)
 	if err != nil {
-		log.Error().Err(err).Msg("unable to marhshal tx with from")
+		log.Error().Err(err).Msg("Unable to marshal transaction with from")
 		return err
 	}
 
@@ -122,7 +122,7 @@ func printTxData(rawL2Tx *L2TxRaw) error {
 func tryRawBatch(rawBatchL2Data []byte) {
 	rawBatch, err := DecodeForcedBatchV2(rawBatchL2Data)
 	if err != nil {
-		log.Error().Err(err).Msg("unable to decode raw l2 batch data")
+		log.Error().Err(err).Msg("Unable to decode raw L2 batch data")
 		return
 	}
 	for i, t := range rawBatch.Transactions {

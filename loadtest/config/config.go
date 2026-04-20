@@ -59,6 +59,7 @@ type Config struct {
 	ReceiptRetryMax    uint
 	ReceiptRetryDelay  uint // initial delay in milliseconds
 	OutputRawTxOnly    bool
+	PrivateTxs         bool
 	StartNonce         uint64
 	StartNonceSet      bool `json:"-"`
 	GasPriceMultiplier float64
@@ -107,6 +108,8 @@ type Config struct {
 	CheckBalanceBeforeFunding bool
 	DumpSendingAccountsFile   string
 	AccountsPerFundingTx      uint64
+	SequentialNonceFetch      bool
+	StopOnInsufficientFunds   bool
 
 	// Summary output
 	ShouldProduceSummary bool
