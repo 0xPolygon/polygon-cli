@@ -10,6 +10,7 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/chain"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/checkpoint"
+	"github.com/0xPolygon/polygon-cli/cmd/heimdall/clerk"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/milestone"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/span"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/tx"
@@ -43,4 +44,5 @@ func init() {
 	span.Register(HeimdallCmd, PersistentFlags)
 	milestone.Register(HeimdallCmd, PersistentFlags)
 	validator.Register(HeimdallCmd, PersistentFlags)
+	clerk.Register(HeimdallCmd, PersistentFlags)
 }

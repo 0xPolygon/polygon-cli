@@ -117,6 +117,8 @@ The command also inherits flags from parent commands.
 
 - [polycli heimdall span](polycli_heimdall_span.md) - Query bor/span module endpoints.
 
+- [polycli heimdall state-sync](polycli_heimdall_state-sync.md) - Query state-sync (clerk) module endpoints.
+
 - [polycli heimdall tx](polycli_heimdall_tx.md) - Show a transaction by hash.
 
 - [polycli heimdall validator](polycli_heimdall_validator.md) - Query stake module endpoints.
