@@ -11,8 +11,8 @@ cloud.google.com/go/datastore v1.22.0 h1:FOyx2Ag6ibD2wFkz9S8EiNrmBugia8pQOfpyJxi
 cloud.google.com/go/datastore v1.22.0/go.mod h1:aopSX+Whx0lHspWWBj+AjWt68/zjYsPfDe3LjWtqZg8=
 cloud.google.com/go/iam v1.7.0 h1:JD3zh0C6LHl16aCn5Akff0+GELdp1+4hmh6ndoFLl8U=
 cloud.google.com/go/iam v1.7.0/go.mod h1:tetWZW1PD/m6vcuY2Zj/aU0eCHNPuxedbnbRTyKXvdY=
-cloud.google.com/go/kms v1.28.0 h1:TeBvmmVF3EtrXXC8hiBo0uV8ntX8QBbZeEQFnVpE70k=
-cloud.google.com/go/kms v1.28.0/go.mod h1:YIyXZym11R5uovJJt4oN5eUL3oPmirF3yKeIh6QAf4U=
+cloud.google.com/go/kms v1.29.0 h1:bAW1C5FQf+6GhPkywQzPlsULALCG7c16qpXLFGV9ivY=
+cloud.google.com/go/kms v1.29.0/go.mod h1:YIyXZym11R5uovJJt4oN5eUL3oPmirF3yKeIh6QAf4U=
 cloud.google.com/go/longrunning v0.9.0 h1:0EzbDEGsAvOZNbqXopgniY0w0a1phvu5IdUFq8grmqY=
 cloud.google.com/go/longrunning v0.9.0/go.mod h1:pkTz846W7bF4o2SzdWJ40Hu0Re+UoNT6Q5t+igIcb8E=
 github.com/0xPolygon/cdk-contracts-tooling v0.0.1 h1:2HH8KpO1CZRl1zHfn0IYwJhPA7l91DOWrjdExmaB9Kk=
