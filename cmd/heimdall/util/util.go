@@ -27,7 +27,7 @@ var flags *config.Flags
 // Register so tests can wire their own parent for isolation.
 var Cmd = &cobra.Command{
 	Use:   "util",
-	Short: "Local helpers for addresses, base64, versions, and completions.",
+	Short: "Local helpers: addr, b64, version, completions.",
 	Long:  usage,
 	Args:  cobra.NoArgs,
 }

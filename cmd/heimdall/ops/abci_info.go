@@ -25,7 +25,7 @@ func newABCIInfoCmd() *cobra.Command {
 	var fields []string
 	cmd := &cobra.Command{
 		Use:   "abci-info",
-		Short: "Show CometBFT /abci_info: app identity and last block hash.",
+		Short: "Show CometBFT /abci_info app identity.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rpc, cfg, err := newRPCClient(cmd)

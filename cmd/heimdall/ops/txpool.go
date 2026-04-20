@@ -39,7 +39,7 @@ func newTxPoolCmd() *cobra.Command {
 	var fields []string
 	cmd := &cobra.Command{
 		Use:   "tx-pool",
-		Short: "Show CometBFT mempool size (and with --list, pending tx hashes).",
+		Short: "Show CometBFT mempool size (--list for hashes).",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if limit <= 0 {

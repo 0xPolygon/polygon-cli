@@ -20,7 +20,7 @@ func newVersionCmd() *cobra.Command {
 	var fields []string
 	cmd := &cobra.Command{
 		Use:   "version",
-		Short: "Print polycli version and, optionally, the connected node version.",
+		Short: "Print polycli and (optionally) node version.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := map[string]any{

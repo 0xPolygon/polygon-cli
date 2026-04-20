@@ -42,7 +42,7 @@ func newCommitCmd() *cobra.Command {
 	var fields []string
 	cmd := &cobra.Command{
 		Use:   "commit [HEIGHT]",
-		Short: "Fetch a signed CometBFT commit header at height (default latest).",
+		Short: "Fetch signed CometBFT commit header.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rpc, cfg, err := newRPCClient(cmd)

@@ -18,7 +18,7 @@ func newLatestIDCmd() *cobra.Command {
 	var fields []string
 	cmd := &cobra.Command{
 		Use:   "latest-id",
-		Short: "Latest L1 state-sync counter (requires eth_rpc_url on the node).",
+		Short: "Latest L1 state-sync counter (needs eth_rpc_url).",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rest, cfg, err := newRESTClient(cmd)

@@ -104,7 +104,7 @@ func newFindCmd() *cobra.Command {
 	var fields []string
 	cmd := &cobra.Command{
 		Use:   "find <BOR_BLOCK>",
-		Short: "Find the span covering a Bor block and its designated producer.",
+		Short: "Find span covering a Bor block.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			block, err := strconv.ParseUint(args[0], 10, 64)

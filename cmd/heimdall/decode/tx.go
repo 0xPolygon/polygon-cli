@@ -21,7 +21,7 @@ func newTxCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "tx <tx-raw>",
-		Short: "Decode a TxRaw (base64 or 0x-hex) and pretty-print its contents.",
+		Short: "Decode a TxRaw (base64 or 0x-hex).",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			raw, err := decodeInput("tx", args[0])

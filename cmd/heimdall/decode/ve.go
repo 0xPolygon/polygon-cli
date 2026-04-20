@@ -20,7 +20,7 @@ func newVECmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "ve <vote-extension>",
-		Short: "Decode CometBFT vote-extension bytes as heimdallv2.sidetxs.VoteExtension.",
+		Short: "Decode CometBFT vote-extension bytes.",
 		Long: strings.TrimSpace(`
 Decode CometBFT vote-extension bytes as heimdallv2.sidetxs.VoteExtension.
 

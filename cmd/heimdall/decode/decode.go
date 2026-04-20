@@ -33,7 +33,7 @@ func Register(parent *cobra.Command, f *config.Flags) {
 	flags = f
 	cmd := &cobra.Command{
 		Use:   "decode",
-		Short: "Offline proto decoders for Heimdall tx / msg / vote-extension bytes.",
+		Short: "Offline proto decoders for Heimdall bytes.",
 		Long:  usage,
 		Args:  cobra.NoArgs,
 	}

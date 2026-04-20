@@ -38,7 +38,7 @@ func newRangeCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "range",
-		Short: "Event-records since an id, optionally bounded by a timestamp.",
+		Short: "Event-records since an id (optional time bound).",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !cmd.Flags().Changed("from-id") {

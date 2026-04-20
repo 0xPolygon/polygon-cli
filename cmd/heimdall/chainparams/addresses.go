@@ -24,7 +24,7 @@ func newAddressesCmd() *cobra.Command {
 	var fields []string
 	cmd := &cobra.Command{
 		Use:   "addresses",
-		Short: "Print the L1 contract addresses + chain ids from chainmanager params.",
+		Short: "Print L1 contract addresses and chain ids.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rest, cfg, err := newRESTClient(cmd)

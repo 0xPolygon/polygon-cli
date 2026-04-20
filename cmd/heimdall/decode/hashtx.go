@@ -17,7 +17,7 @@ import (
 func newHashTxCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hash-tx <tx-raw>",
-		Short: "Compute the CometBFT SHA-256 hash of a TxRaw (hex or base64).",
+		Short: "CometBFT SHA-256 hash of a TxRaw.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			raw, err := decodeInput("tx", args[0])
