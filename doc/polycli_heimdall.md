@@ -103,6 +103,8 @@ The command also inherits flags from parent commands.
 
 - [polycli heimdall logs](polycli_heimdall_logs.md) - Query the CometBFT tx index.
 
+- [polycli heimdall milestone](polycli_heimdall_milestone.md) - Query milestone module endpoints.
+
 - [polycli heimdall nonce](polycli_heimdall_nonce.md) - Print an account's sequence number.
 
 - [polycli heimdall publish](polycli_heimdall_publish.md) - Broadcast a signed TxRaw (base64 or hex).
