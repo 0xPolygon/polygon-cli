@@ -67,25 +67,17 @@ type Preset struct {
 	ChainID string
 }
 
-// Built-in network presets.
-//
-// TODO: the public Polygon-hosted Heimdall endpoints were not
-// confirmable at scaffolding time; for `amoy` we fall back to the
-// in-cluster test node addresses documented in HEIMDALLCAST_REQUIREMENTS.md
-// §2. Replace with the published URLs once the operator handbook lists
-// them. `mainnet` uses the community-documented heimdall.polygon.technology
-// endpoints; verify before the first W1 user-facing release.
 var presets = map[string]Preset{
 	"amoy": {
 		Name:    "amoy",
-		RESTURL: "http://172.19.0.2:1317",
-		RPCURL:  "http://172.19.0.2:26657",
+		RESTURL: "https://heimdall-api-amoy.polygon.technology",
+		RPCURL:  "https://tendermint-api-amoy.polygon.technology",
 		ChainID: "heimdallv2-80002",
 	},
 	"mainnet": {
 		Name:    "mainnet",
 		RESTURL: "https://heimdall-api.polygon.technology",
-		RPCURL:  "https://heimdall.polygon.technology",
+		RPCURL:  "https://tendermint-api.polygon.technology",
 		ChainID: "heimdallv2-137",
 	},
 }
