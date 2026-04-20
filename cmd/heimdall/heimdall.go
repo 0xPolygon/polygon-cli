@@ -13,6 +13,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/checkpoint"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/clerk"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/milestone"
+	"github.com/0xPolygon/polygon-cli/cmd/heimdall/ops"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/span"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/topup"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/tx"
@@ -51,4 +52,5 @@ func init() {
 	topup.Register(HeimdallCmd, PersistentFlags)
 	chainparams.Register(HeimdallCmd, PersistentFlags)
 	heimdallutil.Register(HeimdallCmd, PersistentFlags)
+	ops.Register(HeimdallCmd, PersistentFlags)
 }
