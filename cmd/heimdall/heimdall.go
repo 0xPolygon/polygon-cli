@@ -19,6 +19,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/tx"
 	heimdallutil "github.com/0xPolygon/polygon-cli/cmd/heimdall/util"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/validator"
+	"github.com/0xPolygon/polygon-cli/cmd/heimdall/wallet"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/config"
 )
 
@@ -53,4 +54,5 @@ func init() {
 	chainparams.Register(HeimdallCmd, PersistentFlags)
 	heimdallutil.Register(HeimdallCmd, PersistentFlags)
 	ops.Register(HeimdallCmd, PersistentFlags)
+	wallet.Register(HeimdallCmd, PersistentFlags)
 }
