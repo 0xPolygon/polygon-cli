@@ -65,7 +65,6 @@ require (
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pion/dtls/v2 v2.2.12 // indirect
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/stun/v2 v2.0.0 // indirect
@@ -181,6 +180,7 @@ require (
 	github.com/google/tink/go v1.7.0
 	github.com/iden3/go-iden3-crypto v0.0.17
 	github.com/montanaflynn/stats v0.9.0
+	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/rivo/tview v0.42.0
 )
 
