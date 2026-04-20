@@ -10,6 +10,7 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/chain"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/checkpoint"
+	"github.com/0xPolygon/polygon-cli/cmd/heimdall/span"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/tx"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/config"
 )
@@ -37,4 +38,5 @@ func init() {
 	chain.Register(HeimdallCmd, PersistentFlags)
 	tx.Register(HeimdallCmd, PersistentFlags)
 	checkpoint.Register(HeimdallCmd, PersistentFlags)
+	span.Register(HeimdallCmd, PersistentFlags)
 }

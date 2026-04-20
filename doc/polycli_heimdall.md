@@ -113,5 +113,7 @@ The command also inherits flags from parent commands.
 
 - [polycli heimdall sequence](polycli_heimdall_sequence.md) - Alias of nonce; print an account's sequence.
 
+- [polycli heimdall span](polycli_heimdall_span.md) - Query bor/span module endpoints.
+
 - [polycli heimdall tx](polycli_heimdall_tx.md) - Show a transaction by hash.
 
