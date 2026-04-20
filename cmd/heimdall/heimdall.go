@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/chain"
+	"github.com/0xPolygon/polygon-cli/cmd/heimdall/chainparams"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/checkpoint"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/clerk"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/milestone"
@@ -47,4 +48,5 @@ func init() {
 	validator.Register(HeimdallCmd, PersistentFlags)
 	clerk.Register(HeimdallCmd, PersistentFlags)
 	topup.Register(HeimdallCmd, PersistentFlags)
+	chainparams.Register(HeimdallCmd, PersistentFlags)
 }
