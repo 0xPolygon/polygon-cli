@@ -1,9 +1,166 @@
 {
-  "jsonrpc": "2.0",
-  "id": 1,
-  "error": {
-    "code": -32602,
-    "message": "Invalid params",
-    "data": "error converting json params to arguments: illegal base64 data at input byte 64"
-  }
+    "jsonrpc": "2.0",
+    "id": -1,
+    "result": {
+        "hash": "94297F18F736A0C018E4871A5257384450673AC8441F8F7956523231D74D2A29",
+        "height": "31579117",
+        "index": 1,
+        "tx_result": {
+            "code": 0,
+            "data": "EiYKJC9oZWltZGFsbHYyLnRvcHVwLk1zZ1RvcHVwVHhSZXNwb25zZQ==",
+            "log": "",
+            "info": "",
+            "gas_wanted": "1000000",
+            "gas_used": "49109",
+            "events": [
+                {
+                    "type": "coin_spent",
+                    "attributes": [
+                        {
+                            "key": "spender",
+                            "value": "0x167fbe5a6d565a9589504085122f6c41791c07ee",
+                            "index": true
+                        },
+                        {
+                            "key": "amount",
+                            "value": "1000000000000000pol",
+                            "index": true
+                        }
+                    ]
+                },
+                {
+                    "type": "coin_received",
+                    "attributes": [
+                        {
+                            "key": "receiver",
+                            "value": "0xf1829676db577682e944fc3493d451b67ff3e29f",
+                            "index": true
+                        },
+                        {
+                            "key": "amount",
+                            "value": "1000000000000000pol",
+                            "index": true
+                        }
+                    ]
+                },
+                {
+                    "type": "transfer",
+                    "attributes": [
+                        {
+                            "key": "recipient",
+                            "value": "0xf1829676db577682e944fc3493d451b67ff3e29f",
+                            "index": true
+                        },
+                        {
+                            "key": "sender",
+                            "value": "0x167fbe5a6d565a9589504085122f6c41791c07ee",
+                            "index": true
+                        },
+                        {
+                            "key": "amount",
+                            "value": "1000000000000000pol",
+                            "index": true
+                        }
+                    ]
+                },
+                {
+                    "type": "message",
+                    "attributes": [
+                        {
+                            "key": "sender",
+                            "value": "0x167fbe5a6d565a9589504085122f6c41791c07ee",
+                            "index": true
+                        }
+                    ]
+                },
+                {
+                    "type": "tx",
+                    "attributes": [
+                        {
+                            "key": "fee",
+                            "value": "1000000000000000pol",
+                            "index": true
+                        },
+                        {
+                            "key": "fee_payer",
+                            "value": "0x167fbe5a6d565a9589504085122f6c41791c07ee",
+                            "index": true
+                        }
+                    ]
+                },
+                {
+                    "type": "tx",
+                    "attributes": [
+                        {
+                            "key": "acc_seq",
+                            "value": "0x167fbe5a6d565a9589504085122f6c41791c07ee/6142",
+                            "index": true
+                        }
+                    ]
+                },
+                {
+                    "type": "tx",
+                    "attributes": [
+                        {
+                            "key": "signature",
+                            "value": "azX7+sPae8MOcWezaD4TUPubqeLpMWNwwsqCCGcmQa9u6g9qJo3NYRdvpSSdIe4VYr3zVewHe7J41bi4MpD1FQA=",
+                            "index": true
+                        }
+                    ]
+                },
+                {
+                    "type": "message",
+                    "attributes": [
+                        {
+                            "key": "action",
+                            "value": "/heimdallv2.topup.MsgTopupTx",
+                            "index": true
+                        },
+                        {
+                            "key": "sender",
+                            "value": "0x167fbe5a6d565a9589504085122f6c41791c07ee",
+                            "index": true
+                        },
+                        {
+                            "key": "msg_index",
+                            "value": "0",
+                            "index": true
+                        }
+                    ]
+                },
+                {
+                    "type": "topup",
+                    "attributes": [
+                        {
+                            "key": "module",
+                            "value": "topup",
+                            "index": true
+                        },
+                        {
+                            "key": "sender",
+                            "value": "0x167fbe5a6d565a9589504085122f6c41791c07ee",
+                            "index": true
+                        },
+                        {
+                            "key": "recipient",
+                            "value": "0x90C9338FA5cb18D72B929E078AfD2D3818c3B13F",
+                            "index": true
+                        },
+                        {
+                            "key": "topup-amount",
+                            "value": "1000000000000000000",
+                            "index": true
+                        },
+                        {
+                            "key": "msg_index",
+                            "value": "0",
+                            "index": true
+                        }
+                    ]
+                }
+            ],
+            "codespace": ""
+        },
+        "tx": "CrsBCrgBChwvaGVpbWRhbGx2Mi50b3B1cC5Nc2dUb3B1cFR4EpcBCioweDE2N2ZiZTVhNmQ1NjVhOTU4OTUwNDA4NTEyMmY2YzQxNzkxYzA3ZWUSKjB4OTBDOTMzOEZBNWNiMThENzJCOTI5RTA3OEFmRDJEMzgxOGMzQjEzRhoTMTAwMDAwMDAwMDAwMDAwMDAwMCIgnglMF+sTV9rfOWQDU1yLsZIVx/15nsSOJeiF32lXUSsoowYw9YaIBRKSAQpxCmYKHy9jb3Ntb3MuY3J5cHRvLnNlY3AyNTZrMS5QdWJLZXkSQwpBBAOs8aPKX/pNeQtV1TvUkGPaQLL1SS4EAWvTRXU+7RY2827qxKVG6l8ERky8s+5QAgMFPCmtV5MeMbds9TTJ/5ISBAoCCAEY/i8SHQoXCgNwb2wSEDEwMDAwMDAwMDAwMDAwMDAQwIQ9GkFrNfv6w9p7ww5xZ7NoPhNQ+5up4ukxY3DCyoIIZyZBr27qD2omjc1hF2+lJJ0h7hVivfNV7Ad7snjVuLgykPUVAA=="
+    }
 }
