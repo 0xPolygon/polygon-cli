@@ -119,3 +119,19 @@ func varint(b []byte) (uint64, error) {
 	}
 	return v, nil
 }
+
+// appendRawVarint appends a raw varint (no tag) to b. Used by packed
+// repeated scalar encodings.
+func appendRawVarint(b []byte, v uint64) []byte {
+	return protowire.AppendVarint(b, v)
+}
+
+// consumePlainVarint reads one raw varint (no tag) from b and returns
+// its value plus the number of bytes consumed.
+func consumePlainVarint(b []byte) (uint64, int, error) {
+	v, n := protowire.ConsumeVarint(b)
+	if n < 0 {
+		return 0, 0, fmt.Errorf("proto: invalid varint: %w", protowire.ParseError(n))
+	}
+	return v, n, nil
+}
