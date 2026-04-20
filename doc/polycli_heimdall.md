@@ -119,3 +119,7 @@ The command also inherits flags from parent commands.
 
 - [polycli heimdall tx](polycli_heimdall_tx.md) - Show a transaction by hash.
 
+- [polycli heimdall validator](polycli_heimdall_validator.md) - Query stake module endpoints.
+
+- [polycli heimdall validators](polycli_heimdall_validators.md) - Alias for `validator set`.
+
