@@ -85,6 +85,8 @@ The command also inherits flags from parent commands.
 - [polycli](polycli.md) - A Swiss Army knife of blockchain tools.
 - [polycli heimdall age](polycli_heimdall_age.md) - Show the timestamp of a CometBFT block.
 
+- [polycli heimdall balance](polycli_heimdall_balance.md) - Show an account's balance for a denom.
+
 - [polycli heimdall block](polycli_heimdall_block.md) - Show a CometBFT block by height (or latest).
 
 - [polycli heimdall block-number](polycli_heimdall_block-number.md) - Print the latest CometBFT block height.
@@ -96,4 +98,18 @@ The command also inherits flags from parent commands.
 - [polycli heimdall client](polycli_heimdall_client.md) - Show Heimdall app + CometBFT versions.
 
 - [polycli heimdall find-block](polycli_heimdall_find-block.md) - Find the block height closest to a timestamp.
+
+- [polycli heimdall logs](polycli_heimdall_logs.md) - Query the CometBFT tx index.
+
+- [polycli heimdall nonce](polycli_heimdall_nonce.md) - Print an account's sequence number.
+
+- [polycli heimdall publish](polycli_heimdall_publish.md) - Broadcast a signed TxRaw (base64 or hex).
+
+- [polycli heimdall receipt](polycli_heimdall_receipt.md) - Show a transaction receipt (events + logs).
+
+- [polycli heimdall rpc](polycli_heimdall_rpc.md) - Invoke an arbitrary CometBFT JSON-RPC method.
+
+- [polycli heimdall sequence](polycli_heimdall_sequence.md) - Alias of nonce; print an account's sequence.
+
+- [polycli heimdall tx](polycli_heimdall_tx.md) - Show a transaction by hash.
 

@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/chain"
+	"github.com/0xPolygon/polygon-cli/cmd/heimdall/tx"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/config"
 )
 
@@ -33,4 +34,5 @@ var HeimdallCmd = &cobra.Command{
 func init() {
 	PersistentFlags.Register(HeimdallCmd)
 	chain.Register(HeimdallCmd, PersistentFlags)
+	tx.Register(HeimdallCmd, PersistentFlags)
 }
