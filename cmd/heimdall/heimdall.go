@@ -13,6 +13,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/milestone"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/span"
 	"github.com/0xPolygon/polygon-cli/cmd/heimdall/tx"
+	"github.com/0xPolygon/polygon-cli/cmd/heimdall/validator"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/config"
 )
 
@@ -41,4 +42,5 @@ func init() {
 	checkpoint.Register(HeimdallCmd, PersistentFlags)
 	span.Register(HeimdallCmd, PersistentFlags)
 	milestone.Register(HeimdallCmd, PersistentFlags)
+	validator.Register(HeimdallCmd, PersistentFlags)
 }
