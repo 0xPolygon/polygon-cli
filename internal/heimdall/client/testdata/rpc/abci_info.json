@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "response": {
+      "data": "heimdallapp",
+      "version": "./0xpolygon-deps/cosmos-sdk",
+      "last_block_height": "32620626",
+      "last_block_app_hash": "8YsZi1AdoUilNvOPuD7aRQONxIXNzUShveHNk3r8JRA="
+    }
+  }
+}

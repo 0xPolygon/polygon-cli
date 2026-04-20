@@ -1,0 +1,7 @@
+{
+  "params": {
+    "sprint_duration": "16",
+    "span_duration": "6400",
+    "producer_count": "11"
+  }
+}

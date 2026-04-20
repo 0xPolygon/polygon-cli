@@ -1,0 +1,7 @@
+{
+  "params": {
+    "max_milestone_proposition_length": "10",
+    "ff_milestone_threshold": "1000",
+    "ff_milestone_block_interval": "100"
+  }
+}

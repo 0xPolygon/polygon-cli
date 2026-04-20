@@ -1,0 +1,11 @@
+{
+  "checkpoint": {
+    "id": "38871",
+    "proposer": "0x09207a6efee346cb3e4a54ac18523e3715d38b3f",
+    "start_block": "36979059",
+    "end_block": "36979826",
+    "root_hash": "NRfvvV9YAjjav+cR70om6WDob+IIZjPVyIYMAcrzxy4=",
+    "bor_chain_id": "80002",
+    "timestamp": "1776696405"
+  }
+}

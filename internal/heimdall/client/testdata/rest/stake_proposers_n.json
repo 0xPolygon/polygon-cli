@@ -1,0 +1,64 @@
+{
+  "proposers": [
+    {
+      "val_id": "4",
+      "start_epoch": "187",
+      "end_epoch": "0",
+      "nonce": "3036",
+      "voting_power": "74613738",
+      "pub_key": "BDgaBF0KvnfJ1WEIa9HIrWjv8hsI2GWkkoVjzkPXudNnnJ2QvREAh8oCNOui6GnJhpQE99NfHSQGKjOhcn3KeMI=",
+      "signer": "0x4ad84f7014b7b44f723f284a85b1662337971439",
+      "last_updated": "1069563500338",
+      "jailed": false,
+      "proposer_priority": "-226083680"
+    },
+    {
+      "val_id": "28",
+      "start_epoch": "24629",
+      "end_epoch": "0",
+      "nonce": "8",
+      "voting_power": "60683572",
+      "pub_key": "BBpnuuPxUlaanDiLnVgTu3Z9Y617X4bZqWw73enJJV7x5A+w0Bz1efqt2aqIgR3xyTgpTQi+vDX7VkXjq7+jO3w=",
+      "signer": "0x0931ae0bd1787b1a2aa7ffa9af936662f46a71bc",
+      "last_updated": "1067267900030",
+      "jailed": false,
+      "proposer_priority": "-271572040"
+    },
+    {
+      "val_id": "1",
+      "start_epoch": "0",
+      "end_epoch": "0",
+      "nonce": "5314",
+      "voting_power": "63357123",
+      "pub_key": "BNwZ/fmoL9XEMn8xuWtrvgudRFZK2JwhOdtHxcst74esWE/AURdmPeLxeuXuUOztcoOlluEKrzP7NMTPX5jk/ac=",
+      "signer": "0x6ab3d36c46ecfb9b9c0bd51cb1c3da5a2c81cea6",
+      "last_updated": "1069563600597",
+      "jailed": false,
+      "proposer_priority": "-216655904"
+    },
+    {
+      "val_id": "16",
+      "start_epoch": "5457",
+      "end_epoch": "0",
+      "nonce": "421",
+      "voting_power": "71302411",
+      "pub_key": "BNDG5lAjilZoc3JsoOe+gc33nVh6EnjQpH6fJ/SZfT70e6y1V8VtEiLcY9MUUfjPRnhJorQh5kG5o5dXP3SGplY=",
+      "signer": "0x02f615e95563ef16f10354dba9e584e58d2d4314",
+      "last_updated": "1039096100069",
+      "jailed": false,
+      "proposer_priority": "-159910017"
+    },
+    {
+      "val_id": "18",
+      "start_epoch": "7923",
+      "end_epoch": "0",
+      "nonce": "133",
+      "voting_power": "71306136",
+      "pub_key": "BKk4dqBHlWSfSMWOmfJRXcR/dj5j10MfyYstpRuRnPgjuAQl8FhGDpUtqwpqVrXSpeyTgLn/heduVyzpKzYuS9g=",
+      "signer": "0x85ebd6dc97d56f62e371382b38eae91f3bb4ecb2",
+      "last_updated": "1033295600033",
+      "jailed": false,
+      "proposer_priority": "-112173471"
+    }
+  ]
+}

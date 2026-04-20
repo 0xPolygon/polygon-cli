@@ -1,0 +1,12 @@
+{
+  "milestone": {
+    "proposer": "0x6dc2dd54f24979ec26212794c71afefed722280c",
+    "start_block": "36981373",
+    "end_block": "36981373",
+    "hash": "yGangR1wGlSN72HpNHRVr/bl7vN9B6FV6uKBsRmbvDs=",
+    "bor_chain_id": "80002",
+    "milestone_id": "5c40dfd345378cd83580475ea0c62a7584c482c24a3851ed8a3a3d76ca8066ac",
+    "timestamp": "1776697846",
+    "total_difficulty": "178740647"
+  }
+}

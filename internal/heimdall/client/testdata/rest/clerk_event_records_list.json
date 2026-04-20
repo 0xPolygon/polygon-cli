@@ -1,0 +1,31 @@
+{
+  "event_records": [
+    {
+      "id": "1",
+      "contract": "0x4f9cd8a945ee035523979d7a120a23999d17d8c0",
+      "data": "AAAAAAAAAAAAAAAAIcc2C0nQ/BryZyA+ZZ9x3yI0z/sAAAAAAAAAAAAAAAATsO3ZMSiGrAxzEW52cgi+0RmWeQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD0JE=",
+      "tx_hash": "0x892bb3124b6f887d0ab25c0eb45316650af7e69dd748f0d8fd6676909afd043b",
+      "log_index": "102",
+      "bor_chain_id": "80002",
+      "record_time": "2023-11-20T08:53:53.566771186Z"
+    },
+    {
+      "id": "2",
+      "contract": "0x4f9cd8a945ee035523979d7a120a23999d17d8c0",
+      "data": "AAAAAAAAAAAAAAAAIcc2C0nQ/BryZyA+ZZ9x3yI0z/sAAAAAAAAAAAAAAAA/0KU/S/hTmFqV9Os/nJ/eH44rUwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAmJaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD0JI=",
+      "tx_hash": "0x1cf5a4639c81138dda71193703fb6ed6a8455d54af02451a6fb534800f2fc44c",
+      "log_index": "106",
+      "bor_chain_id": "80002",
+      "record_time": "2023-11-20T08:59:49.872823585Z"
+    },
+    {
+      "id": "3",
+      "contract": "0x4f9cd8a945ee035523979d7a120a23999d17d8c0",
+      "data": "AAAAAAAAAAAAAAAAIcc2C0nQ/BryZyA+ZZ9x3yI0z/sAAAAAAAAAAAAAAAA/0KU/S/hTmFqV9Os/nJ/eH44rUwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABWvHXi1jEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD0JM=",
+      "tx_hash": "0x842dc773adeb94b1e3f9e02063e7586d9ede2b233e31734d4a48c3620b2f85b0",
+      "log_index": "64",
+      "bor_chain_id": "80002",
+      "record_time": "2023-11-20T08:59:49.872823585Z"
+    }
+  ]
+}
