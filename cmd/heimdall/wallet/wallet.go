@@ -21,13 +21,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/config"
+	sharedwallet "github.com/0xPolygon/polygon-cli/internal/heimdall/wallet"
 )
 
 //go:embed usage.md
@@ -102,45 +101,14 @@ func bindKeystoreFlags(cmd *cobra.Command, s *keystoreSharedFlags) {
 }
 
 // resolveKeystoreDir returns the keystore directory to use per the
-// precedence rule documented on the package doc comment. It creates
-// the directory if missing only when that directory is the final
-// fallback (~/.polycli/keystores). All other code paths resolve an
-// already-existing directory or an operator-chosen one.
-//
-// The returned path is absolute and logged at debug so operators can
-// see why a given path was chosen.
+// precedence rule documented on the package doc comment. It delegates
+// to internal/heimdall/wallet.ResolveKeystoreDir with createDefault=true
+// so the polycli fallback directory is materialised on first use — the
+// wallet subcommands are keystore-management commands and an operator
+// who types `polycli heimdall wallet list` on a fresh machine wants an
+// empty dir, not an error.
 func resolveKeystoreDir(override string) (string, error) {
-	switch {
-	case override != "":
-		abs, err := filepath.Abs(override)
-		if err != nil {
-			return "", fmt.Errorf("resolving --keystore-dir %q: %w", override, err)
-		}
-		log.Debug().Str("source", "flag").Str("path", abs).Msg("heimdall wallet keystore dir")
-		return abs, nil
-	case os.Getenv("ETH_KEYSTORE") != "":
-		abs, err := filepath.Abs(os.Getenv("ETH_KEYSTORE"))
-		if err != nil {
-			return "", fmt.Errorf("resolving ETH_KEYSTORE %q: %w", os.Getenv("ETH_KEYSTORE"), err)
-		}
-		log.Debug().Str("source", "env").Str("path", abs).Msg("heimdall wallet keystore dir")
-		return abs, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolving home directory: %w", err)
-	}
-	foundry := filepath.Join(home, ".foundry", "keystores")
-	if st, err := os.Stat(foundry); err == nil && st.IsDir() {
-		log.Debug().Str("source", "foundry").Str("path", foundry).Msg("heimdall wallet keystore dir")
-		return foundry, nil
-	}
-	polycli := filepath.Join(home, ".polycli", "keystores")
-	if err := os.MkdirAll(polycli, 0o700); err != nil {
-		return "", fmt.Errorf("creating %s: %w", polycli, err)
-	}
-	log.Debug().Str("source", "default").Str("path", polycli).Msg("heimdall wallet keystore dir")
-	return polycli, nil
+	return sharedwallet.ResolveKeystoreDir(override, true)
 }
 
 // readPassword returns the password for a keystore operation. The
