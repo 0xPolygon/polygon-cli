@@ -55,7 +55,8 @@ valid range is `1..count`.
 ## Flags
 
 ```bash
-  -h, --help   help for milestone
+  -h, --help             help for milestone
+      --watch duration   repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

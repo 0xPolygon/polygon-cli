@@ -62,7 +62,8 @@ node). polycli heimdall does not talk to Bor.
 ## Flags
 
 ```bash
-  -h, --help   help for span
+  -h, --help             help for span
+      --watch duration   repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.
@@ -102,7 +103,7 @@ The command also inherits flags from parent commands.
 - [polycli heimdall](polycli_heimdall.md) - Query and interact with a Heimdall v2 node.
 - [polycli heimdall span downtime](polycli_heimdall_span_downtime.md) - Show planned downtime for a producer (or `none`).
 
-- [polycli heimdall span find](polycli_heimdall_span_find.md) - Find the span covering a Bor block and its designated producer.
+- [polycli heimdall span find](polycli_heimdall_span_find.md) - Find span covering a Bor block.
 
 - [polycli heimdall span get](polycli_heimdall_span_get.md) - Fetch one span by id.
 

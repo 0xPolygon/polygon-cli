@@ -95,9 +95,15 @@ The command also inherits flags from parent commands.
 
 - [polycli heimdall chain-id](polycli_heimdall_chain-id.md) - Print the CometBFT chain id.
 
+- [polycli heimdall chainmanager](polycli_heimdall_chainmanager.md) - Query chainmanager module endpoints.
+
 - [polycli heimdall checkpoint](polycli_heimdall_checkpoint.md) - Query checkpoint module endpoints.
 
 - [polycli heimdall client](polycli_heimdall_client.md) - Show Heimdall app + CometBFT versions.
+
+- [polycli heimdall decode](polycli_heimdall_decode.md) - Offline proto decoders for Heimdall bytes.
+
+- [polycli heimdall estimate](polycli_heimdall_estimate.md) - Simulate a transaction and report gas usage.
 
 - [polycli heimdall find-block](polycli_heimdall_find-block.md) - Find the block height closest to a timestamp.
 
@@ -105,7 +111,11 @@ The command also inherits flags from parent commands.
 
 - [polycli heimdall milestone](polycli_heimdall_milestone.md) - Query milestone module endpoints.
 
+- [polycli heimdall mktx](polycli_heimdall_mktx.md) - Build a signed TxRaw without broadcasting.
+
 - [polycli heimdall nonce](polycli_heimdall_nonce.md) - Print an account's sequence number.
+
+- [polycli heimdall ops](polycli_heimdall_ops.md) - Node-operator commands backed by CometBFT JSON-RPC.
 
 - [polycli heimdall publish](polycli_heimdall_publish.md) - Broadcast a signed TxRaw (base64 or hex).
 
@@ -113,15 +123,23 @@ The command also inherits flags from parent commands.
 
 - [polycli heimdall rpc](polycli_heimdall_rpc.md) - Invoke an arbitrary CometBFT JSON-RPC method.
 
+- [polycli heimdall send](polycli_heimdall_send.md) - Build, sign, and broadcast a transaction.
+
 - [polycli heimdall sequence](polycli_heimdall_sequence.md) - Alias of nonce; print an account's sequence.
 
 - [polycli heimdall span](polycli_heimdall_span.md) - Query bor/span module endpoints.
 
 - [polycli heimdall state-sync](polycli_heimdall_state-sync.md) - Query state-sync (clerk) module endpoints.
 
+- [polycli heimdall topup](polycli_heimdall_topup.md) - Query topup (dividend account) module endpoints.
+
 - [polycli heimdall tx](polycli_heimdall_tx.md) - Show a transaction by hash.
+
+- [polycli heimdall util](polycli_heimdall_util.md) - Local helpers: addr, b64, version, completions.
 
 - [polycli heimdall validator](polycli_heimdall_validator.md) - Query stake module endpoints.
 
 - [polycli heimdall validators](polycli_heimdall_validators.md) - Alias for `validator set`.
+
+- [polycli heimdall wallet](polycli_heimdall_wallet.md) - Manage keystores, keys, and message signatures.
 

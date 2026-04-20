@@ -24,6 +24,7 @@ polycli heimdall logs <QUERY> [flags]
   -h, --help                help for logs
       --limit int           max results per page (default 30)
       --page int            page number (1-indexed) (default 1)
+      --watch duration      repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

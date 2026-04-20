@@ -52,7 +52,8 @@ polycli heimdall checkpoint overview
 ## Flags
 
 ```bash
-  -h, --help   help for checkpoint
+  -h, --help             help for checkpoint
+      --watch duration   repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

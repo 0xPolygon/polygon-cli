@@ -20,7 +20,8 @@ polycli heimdall age [HEIGHT] [flags]
 ## Flags
 
 ```bash
-  -h, --help   help for age
+  -h, --help             help for age
+      --watch duration   repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

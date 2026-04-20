@@ -20,7 +20,8 @@ polycli heimdall chain-id [flags]
 ## Flags
 
 ```bash
-  -h, --help   help for chain-id
+  -h, --help             help for chain-id
+      --watch duration   repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

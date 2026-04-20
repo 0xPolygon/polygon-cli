@@ -22,6 +22,7 @@ polycli heimdall state-sync is-old <TX_HASH> <LOG_INDEX> [flags]
 ```bash
   -f, --field stringArray   pluck one or more fields (repeatable)
   -h, --help                help for is-old
+      --watch duration      repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

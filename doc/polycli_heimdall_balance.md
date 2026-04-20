@@ -24,6 +24,7 @@ polycli heimdall balance <ADDRESS> [flags]
   -f, --field stringArray   pluck one or more fields (repeatable, --json only)
   -h, --help                help for balance
       --human               format amount with decimals
+      --watch duration      repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

@@ -20,7 +20,8 @@ polycli heimdall block-number [flags]
 ## Flags
 
 ```bash
-  -h, --help   help for block-number
+  -h, --help             help for block-number
+      --watch duration   repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

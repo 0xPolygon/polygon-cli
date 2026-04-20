@@ -11,7 +11,7 @@
 
 ## Description
 
-Event-records since an id, optionally bounded by a timestamp.
+Event-records since an id (optional time bound).
 
 ```bash
 polycli heimdall state-sync range [flags]
@@ -26,6 +26,7 @@ polycli heimdall state-sync range [flags]
   -h, --help                help for range
       --limit int           maximum entries to return
       --to-time string      RFC3339 upper bound on record_time
+      --watch duration      repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

@@ -23,6 +23,7 @@ polycli heimdall receipt <HASH> [flags]
       --confirmations int   wait until tip is at least tx.height + N
   -f, --field stringArray   pluck one or more fields (repeatable)
   -h, --help                help for receipt
+      --watch duration      repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

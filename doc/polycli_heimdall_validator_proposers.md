@@ -22,6 +22,7 @@ polycli heimdall validator proposers [N] [flags]
 ```bash
   -f, --field stringArray   pluck one or more fields (repeatable)
   -h, --help                help for proposers
+      --watch duration      repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

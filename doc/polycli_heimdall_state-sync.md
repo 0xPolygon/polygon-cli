@@ -62,7 +62,8 @@ polycli heimdall state-sync is-old 0x48bd44a3...5c6bf8 423
 ## Flags
 
 ```bash
-  -h, --help   help for state-sync
+  -h, --help             help for state-sync
+      --watch duration   repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.
@@ -106,11 +107,11 @@ The command also inherits flags from parent commands.
 
 - [polycli heimdall state-sync is-old](polycli_heimdall_state-sync_is-old.md) - Check whether an L1 state-sync event was already replayed.
 
-- [polycli heimdall state-sync latest-id](polycli_heimdall_state-sync_latest-id.md) - Latest L1 state-sync counter (requires eth_rpc_url on the node).
+- [polycli heimdall state-sync latest-id](polycli_heimdall_state-sync_latest-id.md) - Latest L1 state-sync counter (needs eth_rpc_url).
 
 - [polycli heimdall state-sync list](polycli_heimdall_state-sync_list.md) - Paginated event-record history (page-based).
 
-- [polycli heimdall state-sync range](polycli_heimdall_state-sync_range.md) - Event-records since an id, optionally bounded by a timestamp.
+- [polycli heimdall state-sync range](polycli_heimdall_state-sync_range.md) - Event-records since an id (optional time bound).
 
 - [polycli heimdall state-sync sequence](polycli_heimdall_state-sync_sequence.md) - Dedup sequence key for an L1 state-sync event.
 

@@ -20,7 +20,8 @@ polycli heimdall validator get <ID> [flags]
 ## Flags
 
 ```bash
-  -h, --help   help for get
+  -h, --help             help for get
+      --watch duration   repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

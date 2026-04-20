@@ -24,6 +24,7 @@ polycli heimdall validators [flags]
   -h, --help                help for validators
       --limit int           truncate output to the first N validators (0 = unlimited)
       --sort string         sort order: power|id|signer (power is descending) (default "power")
+      --watch duration      repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

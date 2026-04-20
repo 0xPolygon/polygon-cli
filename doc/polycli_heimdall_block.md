@@ -23,6 +23,7 @@ polycli heimdall block [HEIGHT] [flags]
   -f, --field stringArray   pluck one or more fields (repeatable)
       --full                include the full tx list in output
   -h, --help                help for block
+      --watch duration      repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

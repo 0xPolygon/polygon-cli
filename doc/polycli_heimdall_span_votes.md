@@ -22,6 +22,7 @@ polycli heimdall span votes [VAL_ID] [flags]
 ```bash
   -f, --field stringArray   pluck one or more fields (repeatable)
   -h, --help                help for votes
+      --watch duration      repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

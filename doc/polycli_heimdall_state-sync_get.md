@@ -23,6 +23,7 @@ polycli heimdall state-sync get <ID> [flags]
       --base64 data         preserve raw base64 for data (default 0x-hex)
   -f, --field stringArray   pluck one or more fields (repeatable)
   -h, --help                help for get
+      --watch duration      repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

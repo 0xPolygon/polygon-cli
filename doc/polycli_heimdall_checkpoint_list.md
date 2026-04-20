@@ -25,6 +25,7 @@ polycli heimdall checkpoint list [flags]
       --limit int           maximum entries to return (default 10)
       --page string         pagination key from a previous response
       --reverse             newest-first ordering (default true)
+      --watch duration      repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

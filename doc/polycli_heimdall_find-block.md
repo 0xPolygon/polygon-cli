@@ -20,7 +20,8 @@ polycli heimdall find-block <TIMESTAMP> [flags]
 ## Flags
 
 ```bash
-  -h, --help   help for find-block
+  -h, --help             help for find-block
+      --watch duration   repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.

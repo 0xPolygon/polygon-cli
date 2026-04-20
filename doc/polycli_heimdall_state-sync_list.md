@@ -25,6 +25,7 @@ polycli heimdall state-sync list [flags]
   -h, --help                help for list
       --limit int           maximum entries per page
       --page int            page number (1-indexed) (default 1)
+      --watch duration      repeat every DURATION (e.g. 5s) until Ctrl-C; 0 disables
 ```
 
 The command also inherits flags from parent commands.
