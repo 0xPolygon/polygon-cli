@@ -68,10 +68,10 @@ func (c *crawler) run(timeout time.Duration, nthreads int) p2p.NodeSet {
 		go c.runIterator(doneCh, it)
 	}
 	var (
-		added        uint64
-		dialErr      uint64
-		peerErr      uint64
-		incompatible uint64
+		added        atomic.Uint64
+		dialErr      atomic.Uint64
+		peerErr      atomic.Uint64
+		incompatible atomic.Uint64
 		wg           sync.WaitGroup
 	)
 	wg.Add(nthreads)
@@ -83,13 +83,13 @@ func (c *crawler) run(timeout time.Duration, nthreads int) p2p.NodeSet {
 				case n := <-c.ch:
 					switch c.updateNode(n) {
 					case nodeAdded:
-						atomic.AddUint64(&added, 1)
+						added.Add(1)
 					case nodeDialErr:
-						atomic.AddUint64(&dialErr, 1)
+						dialErr.Add(1)
 					case nodePeerErr:
-						atomic.AddUint64(&peerErr, 1)
+						peerErr.Add(1)
 					case nodeIncompatible:
-						atomic.AddUint64(&incompatible, 1)
+						incompatible.Add(1)
 					}
 				case <-c.closed:
 					return
@@ -116,10 +116,10 @@ loop:
 			break loop
 		case <-statusTicker.C:
 			log.Info().
-				Uint64("added", atomic.LoadUint64(&added)).
-				Uint64("dial_err", atomic.LoadUint64(&dialErr)).
-				Uint64("peer_err", atomic.LoadUint64(&peerErr)).
-				Uint64("incompatible", atomic.LoadUint64(&incompatible)).
+				Uint64("added", added.Load()).
+				Uint64("dial_err", dialErr.Load()).
+				Uint64("peer_err", peerErr.Load()).
+				Uint64("incompatible", incompatible.Load()).
 				Msg("Crawling in progress")
 		}
 	}
