@@ -666,19 +666,33 @@ func fetchBlockHashesBatched(ctx context.Context, rpc *ethrpc.Client, start, end
 
 // merkleProof builds a binary Merkle tree from the given leaf hashes and returns
 // the concatenated sibling hashes (proof) for leafIdx.
-// Construction matches the matic.js MerkleTree: odd-length layers duplicate the last leaf.
-// Internal nodes: keccak256(left || right).
+//
+// Construction matches matic.js's MerkleTree (and pos-contracts/pos-portal test
+// helpers): pad the leaf layer to the next power of 2 with zero hashes, then
+// build a complete binary tree by hashing keccak256(left || right) per pair.
+// The on-chain verifier (Merkle.checkMembership in pos-contracts) requires this
+// exact shape — it asserts index < 2^proofHeight and walks a fixed-depth tree.
+//
+// Earlier revisions tried to handle odd layers by duplicating the last node
+// per-layer. That happens to coincide with matic.js when the leaf count is
+// already a power of 2 (mainnet's 128-block checkpoints), but produces a
+// different root for any other leaf count — which on a fast-cadence devnet
+// surfaced as WITHDRAW_BLOCK_NOT_A_PART_OF_SUBMITTED_HEADER reverts whenever
+// validators submitted a non-power-of-2 checkpoint range.
 func merkleProof(leaves []common.Hash, leafIdx uint64) []byte {
-	layer := make([]common.Hash, len(leaves))
+	// Pad to the next power of 2 with zero hashes. nextPow2(0) = 1.
+	n := uint64(len(leaves))
+	size := uint64(1)
+	for size < n {
+		size <<= 1
+	}
+	layer := make([]common.Hash, size)
 	copy(layer, leaves)
+	// remaining entries are already the zero hash (Go zero-initializes).
 
 	var siblings []common.Hash
 	pos := leafIdx
-
 	for len(layer) > 1 {
-		if len(layer)%2 == 1 {
-			layer = append(layer, layer[len(layer)-1])
-		}
 		sibling := pos ^ 1
 		siblings = append(siblings, layer[sibling])
 
@@ -687,7 +701,7 @@ func merkleProof(leaves []common.Hash, leafIdx uint64) []byte {
 			next[i] = crypto.Keccak256Hash(layer[i*2][:], layer[i*2+1][:])
 		}
 		layer = next
-		pos = pos / 2
+		pos /= 2
 	}
 
 	result := make([]byte, len(siblings)*32)
