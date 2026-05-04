@@ -84,6 +84,11 @@ func (n *nodb) ShouldWriteTransactionEvents() bool {
 	return false
 }
 
+// ShouldWriteFirstTransactionEvent returns false.
+func (n *nodb) ShouldWriteFirstTransactionEvent() bool {
+	return false
+}
+
 // ShouldWritePeers returns false.
 func (n *nodb) ShouldWritePeers() bool {
 	return false

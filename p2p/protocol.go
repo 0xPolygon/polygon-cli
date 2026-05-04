@@ -1234,7 +1234,7 @@ func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) er
 
 	c.countMsgReceived(name, float64(len(hashes)))
 
-	if !c.db.ShouldWriteTransactions() || !c.db.ShouldWriteTransactionEvents() {
+	if !c.db.ShouldWriteTransactions() && !c.db.ShouldWriteTransactionEvents() {
 		return nil
 	}
 

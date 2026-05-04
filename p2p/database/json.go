@@ -384,6 +384,11 @@ func (j *JSONDatabase) ShouldWriteTransactions() bool {
 	return j.shouldWriteTransactions
 }
 
+// ShouldWriteFirstTransactionEvent returns false for JSON database.
+func (j *JSONDatabase) ShouldWriteFirstTransactionEvent() bool {
+	return false
+}
+
 // ShouldWriteTransactionEvents returns the configured value.
 func (j *JSONDatabase) ShouldWriteTransactionEvents() bool {
 	return j.shouldWriteTransactionEvents
