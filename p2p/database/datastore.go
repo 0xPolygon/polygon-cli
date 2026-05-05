@@ -174,7 +174,6 @@ func (d *Datastore) runAsync(fn func()) {
 }
 
 // Close is a no-op for the semaphore-based datastore.
-func (d *Datastore) Close() {}
 
 // WriteBlock writes the block and the block event to datastore.
 func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {

@@ -404,5 +404,3 @@ func (j *JSONDatabase) NodeList(ctx context.Context, limit int) ([]string, error
 	return []string{}, nil
 }
 
-// Close is a no-op for JSON database as writes are synchronous.
-func (j *JSONDatabase) Close() {}

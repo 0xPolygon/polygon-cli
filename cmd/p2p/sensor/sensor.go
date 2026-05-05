@@ -271,7 +271,6 @@ var SensorCmd = &cobra.Command{
 			return err
 		}
 		defer stopServer(&server)
-		defer db.Close()
 		defer conns.Close()
 
 		events := make(chan *ethp2p.PeerEvent)
