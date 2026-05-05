@@ -173,8 +173,6 @@ func (d *Datastore) runAsync(fn func()) {
 	}()
 }
 
-// Close is a no-op for the semaphore-based datastore.
-
 // WriteBlock writes the block and the block event to datastore.
 func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
 	if d.client == nil {
@@ -293,7 +291,6 @@ func (d *Datastore) writeBlockHashFirstSeen(ctx context.Context, peer *enode.Nod
 	}
 }
 
-// WriteTransactions will write the transactions and transaction events to datastore.
 // WriteTransactions will write the transactions and transaction events to datastore.
 func (d *Datastore) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
 	if d.client == nil {
