@@ -98,3 +98,6 @@ func (n *nodb) ShouldWritePeers() bool {
 func (n *nodb) NodeList(ctx context.Context, limit int) ([]string, error) {
 	return []string{}, nil
 }
+
+// Close is a no-op for nodb as no writes occur.
+func (n *nodb) Close() {}

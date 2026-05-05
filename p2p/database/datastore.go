@@ -1,9 +1,11 @@
 package database
 
 import (
+	"container/list"
 	"context"
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/datastore"
@@ -26,6 +28,34 @@ const (
 	MaxAttempts           = 5
 )
 
+// writeJobType identifies the type of database write operation.
+type writeJobType int
+
+const (
+	jobWriteTransactions writeJobType = iota
+	jobWriteTransactionEvents
+)
+
+// writeJob represents a database write operation queued for processing.
+type writeJob struct {
+	jobType writeJobType
+	ctx     context.Context
+	data    any
+}
+
+// txWriteData holds data for writing transactions.
+type txWriteData struct {
+	txs []*types.Transaction
+	tfs time.Time
+}
+
+// txEventWriteData holds data for writing transaction events.
+type txEventWriteData struct {
+	peer   *enode.Node
+	hashes []common.Hash
+	tfs    time.Time
+}
+
 // Datastore wraps the datastore client, stores the sensorID, and other
 // information needed when writing blocks and transactions.
 type Datastore struct {
@@ -40,8 +70,18 @@ type Datastore struct {
 	shouldWriteTransactionEvents     bool
 	shouldWriteFirstTransactionEvent bool
 	shouldWritePeers                 bool
-	jobs                             chan struct{}
 	ttl                              time.Duration
+
+	// Semaphore for non-transaction writes (blocks, peers, etc.)
+	jobs chan struct{}
+
+	// Worker pool with unbounded queue for transaction writes only
+	queue      *list.List // Unbounded linked list of writeJob
+	queueMu    sync.Mutex
+	queueCond  *sync.Cond // Signal workers when job available
+	numWorkers int
+	wg         sync.WaitGroup
+	closed     bool
 }
 
 // DatastoreEvent can represent a peer sending the sensor a transaction hash or
@@ -128,6 +168,7 @@ type DatastoreOptions struct {
 	SensorID                         string
 	ChainID                          uint64
 	MaxConcurrency                   int
+	WriteWorkers                     int
 	ShouldWriteBlocks                bool
 	ShouldWriteBlockEvents           bool
 	ShouldWriteFirstBlockEvent       bool
@@ -146,7 +187,7 @@ func NewDatastore(ctx context.Context, opts DatastoreOptions) Database {
 		log.Error().Err(err).Msg("Could not connect to Datastore")
 	}
 
-	return &Datastore{
+	d := &Datastore{
 		client:                           client,
 		sensorID:                         opts.SensorID,
 		chainID:                          new(big.Int).SetUint64(opts.ChainID),
@@ -158,13 +199,104 @@ func NewDatastore(ctx context.Context, opts DatastoreOptions) Database {
 		shouldWriteTransactionEvents:     opts.ShouldWriteTransactionEvents,
 		shouldWriteFirstTransactionEvent: opts.ShouldWriteFirstTransactionEvent,
 		shouldWritePeers:                 opts.ShouldWritePeers,
-		jobs:                             make(chan struct{}, opts.MaxConcurrency),
 		ttl:                              opts.TTL,
+		jobs:                             make(chan struct{}, opts.MaxConcurrency),
+		queue:                            list.New(),
+		numWorkers:                       opts.WriteWorkers,
 	}
+	d.queueCond = sync.NewCond(&d.queueMu)
+
+	// Start worker pool for transaction writes
+	for i := 0; i < d.numWorkers; i++ {
+		d.wg.Add(1)
+		go d.writeWorker()
+	}
+
+	log.Info().Int("workers", opts.WriteWorkers).Msg("Started datastore transaction write workers")
+
+	return d
+}
+
+// enqueue adds a job to the unbounded queue (never blocks, never drops).
+func (d *Datastore) enqueue(job writeJob) {
+	d.queueMu.Lock()
+	d.queue.PushBack(job)
+	queueLen := d.queue.Len()
+	d.queueMu.Unlock()
+
+	d.queueCond.Signal()
+
+	// Log warning if queue is growing large
+	if queueLen > 10000 && queueLen%10000 == 0 {
+		log.Warn().Int("queue_len", queueLen).Msg("Write queue growing large")
+	}
+}
+
+// dequeue blocks until a job is available or queue is closed.
+func (d *Datastore) dequeue() (writeJob, bool) {
+	d.queueMu.Lock()
+	defer d.queueMu.Unlock()
+
+	for d.queue.Len() == 0 && !d.closed {
+		d.queueCond.Wait()
+	}
+
+	if d.closed && d.queue.Len() == 0 {
+		return writeJob{}, false
+	}
+
+	elem := d.queue.Front()
+	d.queue.Remove(elem)
+	return elem.Value.(writeJob), true
+}
+
+// writeWorker is a worker goroutine that processes jobs from the queue.
+func (d *Datastore) writeWorker() {
+	defer d.wg.Done()
+	for {
+		job, ok := d.dequeue()
+		if !ok {
+			return // Queue closed
+		}
+		d.processJob(job)
+	}
+}
+
+// processJob handles a single write job based on its type.
+func (d *Datastore) processJob(job writeJob) {
+	switch job.jobType {
+	case jobWriteTransactions:
+		data := job.data.(*txWriteData)
+		d.writeTransactions(job.ctx, data.txs, data.tfs)
+	case jobWriteTransactionEvents:
+		data := job.data.(*txEventWriteData)
+		d.writeEvents(job.ctx, data.peer, TransactionEventsKind, data.hashes, TransactionsKind, data.tfs)
+	}
+}
+
+// Close gracefully shuts down workers after draining the queue.
+// Close gracefully shuts down workers after draining the queue.
+func (d *Datastore) Close() {
+	d.queueMu.Lock()
+	d.closed = true
+	d.queueMu.Unlock()
+
+	d.queueCond.Broadcast() // Wake all workers
+	d.wg.Wait()             // Wait for all jobs to complete
+
+	log.Info().Msg("Datastore write workers stopped")
+}
+
+// QueueLen returns current queue depth for monitoring.
+func (d *Datastore) QueueLen() int {
+	d.queueMu.Lock()
+	defer d.queueMu.Unlock()
+	return d.queue.Len()
 }
 
 // runAsync executes the provided function asynchronously with concurrency control.
 // It uses the jobs channel as a semaphore to limit concurrent operations.
+// Used for non-transaction writes (blocks, peers, etc.).
 func (d *Datastore) runAsync(fn func()) {
 	d.jobs <- struct{}{}
 	go func() {
@@ -298,8 +430,13 @@ func (d *Datastore) WriteTransactions(ctx context.Context, peer *enode.Node, txs
 	}
 
 	if d.ShouldWriteTransactions() {
-		d.runAsync(func() {
-			d.writeTransactions(ctx, txs, tfs)
+		d.enqueue(writeJob{
+			jobType: jobWriteTransactions,
+			ctx:     ctx,
+			data: &txWriteData{
+				txs: txs,
+				tfs: tfs,
+			},
 		})
 	}
 
@@ -309,8 +446,14 @@ func (d *Datastore) WriteTransactions(ctx context.Context, peer *enode.Node, txs
 			hashes = append(hashes, tx.Hash())
 		}
 
-		d.runAsync(func() {
-			d.writeEvents(ctx, peer, TransactionEventsKind, hashes, TransactionsKind, tfs)
+		d.enqueue(writeJob{
+			jobType: jobWriteTransactionEvents,
+			ctx:     ctx,
+			data: &txEventWriteData{
+				peer:   peer,
+				hashes: hashes,
+				tfs:    tfs,
+			},
 		})
 	}
 }

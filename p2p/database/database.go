@@ -48,6 +48,10 @@ type Database interface {
 	// client has not been initialized this will always return true.
 	HasBlock(context.Context, common.Hash) bool
 
+	// Close gracefully shuts down the database, waiting for pending writes to
+	// complete before returning.
+	Close()
+
 	MaxConcurrentWrites() int
 	ShouldWriteBlocks() bool
 	ShouldWriteBlockEvents() bool

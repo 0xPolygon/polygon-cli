@@ -879,15 +879,24 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 		c.addKnownTx(tx.Hash())
 	}
 
-	if len(txs) > 0 {
-		c.db.WriteTransactions(ctx, c.node, txs, tfs)
+	// Check cache FIRST to filter out already-seen transactions
+	newTxs := make([]*types.Transaction, 0, len(txs))
+	for _, tx := range txs {
+		if _, exists := c.conns.GetTx(tx.Hash()); !exists {
+			newTxs = append(newTxs, tx)
+		}
 	}
 
-	// Cache transactions for duplicate detection and serving to peers (single lock)
-	hashes := c.conns.AddTxs(txs)
+	// Add to cache BEFORE writing (prevents duplicate writes from other peers)
+	hashes := c.conns.AddTxs(newTxs)
+
+	// Only write NEW transactions (cache miss = needs DB write)
+	if len(newTxs) > 0 {
+		c.db.WriteTransactions(ctx, c.node, newTxs, tfs)
+	}
 
 	// Broadcast transactions or hashes to other peers asynchronously
-	go c.conns.BroadcastTxs(types.Transactions(txs))
+	go c.conns.BroadcastTxs(types.Transactions(newTxs))
 	go c.conns.BroadcastTxHashes(hashes)
 
 	return nil
@@ -1266,15 +1275,24 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 		c.addKnownTx(tx.Hash())
 	}
 
-	if len(txs) > 0 {
-		c.db.WriteTransactions(ctx, c.node, txs, tfs)
+	// Check cache FIRST to filter out already-seen transactions
+	newTxs := make([]*types.Transaction, 0, len(txs))
+	for _, tx := range txs {
+		if _, exists := c.conns.GetTx(tx.Hash()); !exists {
+			newTxs = append(newTxs, tx)
+		}
 	}
 
-	// Cache transactions for duplicate detection and serving to peers (single lock)
-	hashes := c.conns.AddTxs(txs)
+	// Add to cache BEFORE writing (prevents duplicate writes from other peers)
+	hashes := c.conns.AddTxs(newTxs)
+
+	// Only write NEW transactions (cache miss = needs DB write)
+	if len(newTxs) > 0 {
+		c.db.WriteTransactions(ctx, c.node, newTxs, tfs)
+	}
 
 	// Broadcast transactions or hashes to other peers asynchronously
-	go c.conns.BroadcastTxs(types.Transactions(txs))
+	go c.conns.BroadcastTxs(types.Transactions(newTxs))
 	go c.conns.BroadcastTxHashes(hashes)
 
 	return nil

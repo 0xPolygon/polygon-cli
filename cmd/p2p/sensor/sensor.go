@@ -45,6 +45,7 @@ type (
 		SensorID                     string
 		MaxPeers                     int
 		MaxDatabaseConcurrency       int
+		WriteWorkers                 int
 		ShouldWriteBlocks            bool
 		ShouldWriteBlockEvents       bool
 		ShouldWriteFirstBlockEvent   bool
@@ -271,6 +272,7 @@ var SensorCmd = &cobra.Command{
 			return err
 		}
 		defer stopServer(&server)
+		defer db.Close()
 		defer conns.Close()
 
 		events := make(chan *ethp2p.PeerEvent)
@@ -443,6 +445,7 @@ func newDatabase(ctx context.Context) (database.Database, error) {
 			SensorID:                         inputSensorParams.SensorID,
 			ChainID:                          inputSensorParams.NetworkID,
 			MaxConcurrency:                   inputSensorParams.MaxDatabaseConcurrency,
+			WriteWorkers:                     inputSensorParams.WriteWorkers,
 			ShouldWriteBlocks:                inputSensorParams.ShouldWriteBlocks,
 			ShouldWriteBlockEvents:           inputSensorParams.ShouldWriteBlockEvents,
 			ShouldWriteFirstBlockEvent:       inputSensorParams.ShouldWriteFirstBlockEvent,
@@ -483,6 +486,8 @@ func init() {
 	f.IntVarP(&inputSensorParams.MaxDatabaseConcurrency, "max-db-concurrency", "D", 10000,
 		`maximum number of concurrent database operations to perform (increasing this
 will result in less chance of missing data but can significantly increase memory usage)`)
+	f.IntVar(&inputSensorParams.WriteWorkers, "write-workers", 100,
+		"number of transaction write worker goroutines")
 	f.BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "write blocks to database")
 	f.BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "write block events to database")
 	f.BoolVar(&inputSensorParams.ShouldWriteFirstBlockEvent, "write-first-block-event", false,
