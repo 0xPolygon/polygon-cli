@@ -97,13 +97,13 @@ type DatastoreBlock struct {
 type DatastoreTransaction struct {
 	Data            []byte `datastore:",noindex"`
 	From            string
-	Gas             string
-	GasFeeCap       string
-	GasPrice        string
-	GasTipCap       string
-	Nonce           string
+	Gas             string `datastore:",noindex"`
+	GasFeeCap       string `datastore:",noindex"`
+	GasPrice        string `datastore:",noindex"`
+	GasTipCap       string `datastore:",noindex"`
+	Nonce           string `datastore:",noindex"`
 	To              string
-	Value           string
+	Value           string `datastore:",noindex"`
 	V, R, S         string `datastore:",noindex"`
 	Time            time.Time
 	TimeFirstSeen   time.Time
