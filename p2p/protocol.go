@@ -1251,8 +1251,14 @@ func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) er
 		return nil
 	}
 
-	request := &eth.GetPooledTransactionsPacket{GetPooledTransactionsRequest: hashes}
-	c.countMsgSent(request.Name(), float64(len(hashes)))
+	// Filter out transactions we already have in cache to avoid redundant fetches.
+	unknown := c.conns.FilterUnknownTxHashes(hashes)
+	if len(unknown) == 0 {
+		return nil
+	}
+
+	request := &eth.GetPooledTransactionsPacket{GetPooledTransactionsRequest: unknown}
+	c.countMsgSent(request.Name(), float64(len(unknown)))
 	return ethp2p.Send(c.rw, eth.GetPooledTransactionsMsg, request)
 }
 

@@ -189,6 +189,35 @@ func (c *LRU[K, V]) PeekManyWithKeys(keys []K) ([]K, []V) {
 	return foundKeys, foundValues
 }
 
+// FilterMissing returns keys that are NOT present in the cache (or are expired).
+// Uses a single read lock for all lookups.
+func (c *LRU[K, V]) FilterMissing(keys []K) []K {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	now := time.Now()
+	missing := make([]K, 0, len(keys))
+
+	for _, key := range keys {
+		elem, ok := c.items[key]
+		if !ok {
+			missing = append(missing, key)
+			continue
+		}
+
+		e := elem.Value.(*entry[K, V])
+		if e.expiresAt != nil && now.After(*e.expiresAt) {
+			missing = append(missing, key)
+		}
+	}
+
+	return missing
+}
+
 // Update atomically updates a value in the cache using the provided update function.
 // The update function receives the current value (or zero value if not found) and
 // returns the new value to store. Returns true if the key already existed (and was
