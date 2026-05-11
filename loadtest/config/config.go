@@ -64,6 +64,7 @@ type Config struct {
 	OutputRawTxOnly    bool
 	PrivateTxs         bool
 	StartNonce         uint64
+	StartNonceSet      bool `json:"-"`
 	GasPriceMultiplier float64
 
 	// Gas options

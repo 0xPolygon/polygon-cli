@@ -602,8 +602,8 @@ func (c *conn) addKnownBlock(hash common.Hash) {
 	c.knownBlocks.Add(hash)
 }
 
-// filterUnknownTxHashes returns transaction hashes this peer doesn't know about.
-// Uses batch bloom filter operations for efficiency (single lock acquisition).
+// filterUnknownTxHashes returns hashes that the peer does not know about.
+// Uses batch bloom filter lookup to acquire the lock once.
 func (c *conn) filterUnknownTxHashes(hashes []common.Hash) []common.Hash {
 	if !c.shouldBroadcastTx && !c.shouldBroadcastTxHashes {
 		return nil
@@ -612,8 +612,8 @@ func (c *conn) filterUnknownTxHashes(hashes []common.Hash) []common.Hash {
 	return c.knownTxs.FilterNotContained(hashes)
 }
 
-// addKnownTxHashes marks multiple transaction hashes as known by this peer.
-// Uses batch bloom filter operations for efficiency (single lock acquisition).
+// addKnownTxHashes marks multiple transaction hashes as known for this peer.
+// Uses batch bloom filter insert to acquire the lock once.
 func (c *conn) addKnownTxHashes(hashes []common.Hash) {
 	if !c.shouldBroadcastTx && !c.shouldBroadcastTxHashes {
 		return

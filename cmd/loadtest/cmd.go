@@ -48,6 +48,7 @@ var LoadtestCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		cfg.StartNonceSet = cmd.Flags().Changed("nonce")
 		cfg.PrivateKey, err = flag.GetPrivateKey(cmd)
 		if err != nil {
 			return err
