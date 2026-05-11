@@ -29,18 +29,19 @@ const (
 // Datastore wraps the datastore client, stores the sensorID, and other
 // information needed when writing blocks and transactions.
 type Datastore struct {
-	client                       *datastore.Client
-	sensorID                     string
-	chainID                      *big.Int
-	maxConcurrency               int
-	shouldWriteBlocks            bool
-	shouldWriteBlockEvents       bool
-	shouldWriteFirstBlockEvent   bool
-	shouldWriteTransactions      bool
-	shouldWriteTransactionEvents bool
-	shouldWritePeers             bool
-	jobs                         chan struct{}
-	ttl                          time.Duration
+	client                           *datastore.Client
+	sensorID                         string
+	chainID                          *big.Int
+	maxConcurrency                   int
+	shouldWriteBlocks                bool
+	shouldWriteBlockEvents           bool
+	shouldWriteFirstBlockEvent       bool
+	shouldWriteTransactions          bool
+	shouldWriteTransactionEvents     bool
+	shouldWriteFirstTransactionEvent bool
+	shouldWritePeers                 bool
+	ttl                              time.Duration
+	jobs                             chan struct{}
 }
 
 // DatastoreEvent can represent a peer sending the sensor a transaction hash or
@@ -94,20 +95,21 @@ type DatastoreBlock struct {
 // not indexed because there is a max sized for indexed byte slices, which Data
 // will occasionally exceed.
 type DatastoreTransaction struct {
-	Data          []byte `datastore:",noindex"`
-	From          string
-	Gas           string
-	GasFeeCap     string
-	GasPrice      string
-	GasTipCap     string
-	Nonce         string
-	To            string
-	Value         string
-	V, R, S       string `datastore:",noindex"`
-	Time          time.Time
-	TimeFirstSeen time.Time
-	TTL           time.Time
-	Type          int16
+	Data            []byte `datastore:",noindex"`
+	From            string
+	Gas             string `datastore:",noindex"`
+	GasFeeCap       string `datastore:",noindex"`
+	GasPrice        string `datastore:",noindex"`
+	GasTipCap       string `datastore:",noindex"`
+	Nonce           string `datastore:",noindex"`
+	To              string
+	Value           string `datastore:",noindex"`
+	V, R, S         string `datastore:",noindex"`
+	Time            time.Time
+	TimeFirstSeen   time.Time
+	TTL             time.Time
+	Type            int16
+	SensorFirstSeen string
 }
 
 type DatastorePeer struct {
@@ -121,18 +123,19 @@ type DatastorePeer struct {
 
 // DatastoreOptions is used when creating a NewDatastore.
 type DatastoreOptions struct {
-	ProjectID                    string
-	DatabaseID                   string
-	SensorID                     string
-	ChainID                      uint64
-	MaxConcurrency               int
-	ShouldWriteBlocks            bool
-	ShouldWriteBlockEvents       bool
-	ShouldWriteFirstBlockEvent   bool
-	ShouldWriteTransactions      bool
-	ShouldWriteTransactionEvents bool
-	ShouldWritePeers             bool
-	TTL                          time.Duration
+	ProjectID                        string
+	DatabaseID                       string
+	SensorID                         string
+	ChainID                          uint64
+	MaxConcurrency                   int
+	ShouldWriteBlocks                bool
+	ShouldWriteBlockEvents           bool
+	ShouldWriteFirstBlockEvent       bool
+	ShouldWriteTransactions          bool
+	ShouldWriteTransactionEvents     bool
+	ShouldWriteFirstTransactionEvent bool
+	ShouldWritePeers                 bool
+	TTL                              time.Duration
 }
 
 // NewDatastore connects to datastore and creates the client. This should
@@ -144,18 +147,19 @@ func NewDatastore(ctx context.Context, opts DatastoreOptions) Database {
 	}
 
 	return &Datastore{
-		client:                       client,
-		sensorID:                     opts.SensorID,
-		chainID:                      new(big.Int).SetUint64(opts.ChainID),
-		maxConcurrency:               opts.MaxConcurrency,
-		shouldWriteBlocks:            opts.ShouldWriteBlocks,
-		shouldWriteBlockEvents:       opts.ShouldWriteBlockEvents,
-		shouldWriteFirstBlockEvent:   opts.ShouldWriteFirstBlockEvent,
-		shouldWriteTransactions:      opts.ShouldWriteTransactions,
-		shouldWriteTransactionEvents: opts.ShouldWriteTransactionEvents,
-		shouldWritePeers:             opts.ShouldWritePeers,
-		jobs:                         make(chan struct{}, opts.MaxConcurrency),
-		ttl:                          opts.TTL,
+		client:                           client,
+		sensorID:                         opts.SensorID,
+		chainID:                          new(big.Int).SetUint64(opts.ChainID),
+		maxConcurrency:                   opts.MaxConcurrency,
+		shouldWriteBlocks:                opts.ShouldWriteBlocks,
+		shouldWriteBlockEvents:           opts.ShouldWriteBlockEvents,
+		shouldWriteFirstBlockEvent:       opts.ShouldWriteFirstBlockEvent,
+		shouldWriteTransactions:          opts.ShouldWriteTransactions,
+		shouldWriteTransactionEvents:     opts.ShouldWriteTransactionEvents,
+		shouldWriteFirstTransactionEvent: opts.ShouldWriteFirstTransactionEvent,
+		shouldWritePeers:                 opts.ShouldWritePeers,
+		jobs:                             make(chan struct{}, opts.MaxConcurrency),
+		ttl:                              opts.TTL,
 	}
 }
 
@@ -432,22 +436,23 @@ func (d *Datastore) newDatastoreTransaction(tx *types.Transaction, tfs time.Time
 	}
 
 	return &DatastoreTransaction{
-		Data:          tx.Data(),
-		From:          from,
-		Gas:           fmt.Sprint(tx.Gas()),
-		GasFeeCap:     tx.GasFeeCap().String(),
-		GasPrice:      tx.GasPrice().String(),
-		GasTipCap:     tx.GasTipCap().String(),
-		Nonce:         fmt.Sprint(tx.Nonce()),
-		To:            to,
-		Value:         tx.Value().String(),
-		V:             v.String(),
-		R:             r.String(),
-		S:             s.String(),
-		Time:          tx.Time(),
-		TimeFirstSeen: tfs,
-		TTL:           tfs.Add(d.ttl),
-		Type:          int16(tx.Type()),
+		Data:            tx.Data(),
+		From:            from,
+		Gas:             fmt.Sprint(tx.Gas()),
+		GasFeeCap:       tx.GasFeeCap().String(),
+		GasPrice:        tx.GasPrice().String(),
+		GasTipCap:       tx.GasTipCap().String(),
+		Nonce:           fmt.Sprint(tx.Nonce()),
+		To:              to,
+		Value:           tx.Value().String(),
+		V:               v.String(),
+		R:               r.String(),
+		S:               s.String(),
+		Time:            tx.Time(),
+		TimeFirstSeen:   tfs,
+		TTL:             tfs.Add(d.ttl),
+		Type:            int16(tx.Type()),
+		SensorFirstSeen: d.sensorID,
 	}
 }
 
@@ -639,24 +644,46 @@ func (d *Datastore) writeBlockBody(ctx context.Context, body *eth.BlockBody, has
 	}
 }
 
-// writeTransactions will write the transactions to datastore and return the
-// transaction hashes.
+// writeTransactions will write the transactions to datastore, skipping
+// transactions that already exist with an earlier or equal TimeFirstSeen.
 func (d *Datastore) writeTransactions(ctx context.Context, txs []*types.Transaction, tfs time.Time) {
 	keys := make([]*datastore.Key, 0, len(txs))
-	transactions := make([]*DatastoreTransaction, 0, len(txs))
-
 	for _, tx := range txs {
 		keys = append(keys, datastore.NameKey(TransactionsKind, tx.Hash().Hex(), nil))
+	}
+
+	// Fetch existing transactions to check TimeFirstSeen
+	existing := make([]*DatastoreTransaction, len(keys))
+	_ = d.client.GetMulti(ctx, keys, existing) // Ignore errors - missing keys return nil
+
+	transactions := make([]*DatastoreTransaction, 0, len(txs))
+	keysToWrite := make([]*datastore.Key, 0, len(txs))
+
+	for i, tx := range txs {
+		// Skip if existing record has an earlier or equal TimeFirstSeen
+		if existing[i] != nil && !existing[i].TimeFirstSeen.IsZero() && !tfs.Before(existing[i].TimeFirstSeen) {
+			continue
+		}
+
+		keysToWrite = append(keysToWrite, keys[i])
 		transactions = append(transactions, d.newDatastoreTransaction(tx, tfs))
 	}
 
-	if _, err := d.client.PutMulti(ctx, keys, transactions); err != nil {
+	if len(keysToWrite) == 0 {
+		return
+	}
+
+	if _, err := d.client.PutMulti(ctx, keysToWrite, transactions); err != nil {
 		log.Error().Err(err).Msg("Failed to write transactions")
 	}
 }
 
 func (d *Datastore) ShouldWriteFirstBlockEvent() bool {
 	return d.shouldWriteFirstBlockEvent
+}
+
+func (d *Datastore) ShouldWriteFirstTransactionEvent() bool {
+	return d.shouldWriteFirstTransactionEvent
 }
 
 func (d *Datastore) NodeList(ctx context.Context, limit int) ([]string, error) {

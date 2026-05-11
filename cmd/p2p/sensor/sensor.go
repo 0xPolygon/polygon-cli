@@ -35,58 +35,59 @@ import (
 
 type (
 	sensorParams struct {
-		Bootnodes                    string
-		NetworkID                    uint64
-		NodesFile                    string
-		StaticNodesFile              string
-		TrustedNodesFile             string
-		ProjectID                    string
-		DatabaseID                   string
-		SensorID                     string
-		MaxPeers                     int
-		MaxDatabaseConcurrency       int
-		ShouldWriteBlocks            bool
-		ShouldWriteBlockEvents       bool
-		ShouldWriteFirstBlockEvent   bool
-		ShouldWriteTransactions      bool
-		ShouldWriteTransactionEvents bool
-		ShouldWritePeers             bool
-		ShouldBroadcastTx            bool
-		ShouldBroadcastTxHashes      bool
-		ShouldBroadcastBlocks        bool
-		ShouldBroadcastBlockHashes   bool
-		BroadcastWorkers             int
-		TxBatchTimeout               time.Duration
-		TxBroadcastQueueSize         int
-		MaxTxPacketSize              int
-		MaxQueuedTxs                 int
-		ShouldRunPprof               bool
-		PprofPort                    uint
-		ShouldRunPrometheus          bool
-		PrometheusPort               uint
-		APIPort                      uint
-		RPCPort                      uint
-		KeyFile                      string
-		PrivateKey                   string
-		Port                         int
-		DiscoveryPort                int
-		RPC                          string
-		GenesisHash                  string
-		ForkID                       []byte
-		DialRatio                    int
-		NAT                          string
-		TTL                          time.Duration
-		DiscoveryDNS                 string
-		Database                     string
-		NoDiscovery                  bool
-		ProxyRPC                     bool
-		ProxyRPCTimeout              time.Duration
-		RequestsCache                ds.LRUOptions
-		ParentsCache                 ds.LRUOptions
-		BlocksCache                  ds.LRUOptions
-		TxsCache                     ds.LRUOptions
-		KnownTxsBloom                ds.BloomSetOptions
-		KnownBlocksMax               int
+		Bootnodes                        string
+		NetworkID                        uint64
+		NodesFile                        string
+		StaticNodesFile                  string
+		TrustedNodesFile                 string
+		ProjectID                        string
+		DatabaseID                       string
+		SensorID                         string
+		MaxPeers                         int
+		MaxDatabaseConcurrency           int
+		ShouldWriteBlocks                bool
+		ShouldWriteBlockEvents           bool
+		ShouldWriteFirstBlockEvent       bool
+		ShouldWriteTransactions          bool
+		ShouldWriteTransactionEvents     bool
+		ShouldWriteFirstTransactionEvent bool
+		ShouldWritePeers                 bool
+		ShouldBroadcastTx                bool
+		ShouldBroadcastTxHashes          bool
+		ShouldBroadcastBlocks            bool
+		ShouldBroadcastBlockHashes       bool
+		BroadcastWorkers                 int
+		TxBatchTimeout                   time.Duration
+		TxBroadcastQueueSize             int
+		MaxTxPacketSize                  int
+		MaxQueuedTxs                     int
+		ShouldRunPprof                   bool
+		PprofPort                        uint
+		ShouldRunPrometheus              bool
+		PrometheusPort                   uint
+		APIPort                          uint
+		RPCPort                          uint
+		KeyFile                          string
+		PrivateKey                       string
+		Port                             int
+		DiscoveryPort                    int
+		RPC                              string
+		GenesisHash                      string
+		ForkID                           []byte
+		DialRatio                        int
+		NAT                              string
+		TTL                              time.Duration
+		DiscoveryDNS                     string
+		Database                         string
+		NoDiscovery                      bool
+		ProxyRPC                         bool
+		ProxyRPCTimeout                  time.Duration
+		RequestsCache                    ds.LRUOptions
+		ParentsCache                     ds.LRUOptions
+		BlocksCache                      ds.LRUOptions
+		TxsCache                         ds.LRUOptions
+		KnownTxsBloom                    ds.BloomSetOptions
+		KnownBlocksMax                   int
 
 		bootnodes    []*enode.Node
 		staticNodes  []*enode.Node
@@ -437,18 +438,19 @@ func newDatabase(ctx context.Context) (database.Database, error) {
 	switch inputSensorParams.Database {
 	case "datastore":
 		return database.NewDatastore(ctx, database.DatastoreOptions{
-			ProjectID:                    inputSensorParams.ProjectID,
-			DatabaseID:                   inputSensorParams.DatabaseID,
-			SensorID:                     inputSensorParams.SensorID,
-			ChainID:                      inputSensorParams.NetworkID,
-			MaxConcurrency:               inputSensorParams.MaxDatabaseConcurrency,
-			ShouldWriteBlocks:            inputSensorParams.ShouldWriteBlocks,
-			ShouldWriteBlockEvents:       inputSensorParams.ShouldWriteBlockEvents,
-			ShouldWriteFirstBlockEvent:   inputSensorParams.ShouldWriteFirstBlockEvent,
-			ShouldWriteTransactions:      inputSensorParams.ShouldWriteTransactions,
-			ShouldWriteTransactionEvents: inputSensorParams.ShouldWriteTransactionEvents,
-			ShouldWritePeers:             inputSensorParams.ShouldWritePeers,
-			TTL:                          inputSensorParams.TTL,
+			ProjectID:                        inputSensorParams.ProjectID,
+			DatabaseID:                       inputSensorParams.DatabaseID,
+			SensorID:                         inputSensorParams.SensorID,
+			ChainID:                          inputSensorParams.NetworkID,
+			MaxConcurrency:                   inputSensorParams.MaxDatabaseConcurrency,
+			ShouldWriteBlocks:                inputSensorParams.ShouldWriteBlocks,
+			ShouldWriteBlockEvents:           inputSensorParams.ShouldWriteBlockEvents,
+			ShouldWriteFirstBlockEvent:       inputSensorParams.ShouldWriteFirstBlockEvent,
+			ShouldWriteTransactions:          inputSensorParams.ShouldWriteTransactions,
+			ShouldWriteTransactionEvents:     inputSensorParams.ShouldWriteTransactionEvents,
+			ShouldWriteFirstTransactionEvent: inputSensorParams.ShouldWriteFirstTransactionEvent,
+			ShouldWritePeers:                 inputSensorParams.ShouldWritePeers,
+			TTL:                              inputSensorParams.TTL,
 		}), nil
 	case "json":
 		return database.NewJSONDatabase(database.JSONDatabaseOptions{
@@ -489,6 +491,8 @@ will result in less chance of missing data but can significantly increase memory
 		`write transactions to database (this option can significantly increase CPU and memory usage)`)
 	f.BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
 		`write transaction events to database (this option can significantly increase CPU and memory usage)`)
+	f.BoolVar(&inputSensorParams.ShouldWriteFirstTransactionEvent, "write-first-tx-event", false,
+		"write one transaction event on first-seen only (requires --write-tx-events=false)")
 	f.BoolVar(&inputSensorParams.ShouldWritePeers, "write-peers", true, "write peers to database")
 	f.BoolVar(&inputSensorParams.ShouldBroadcastTx, "broadcast-txs", false, "broadcast full transactions to peers")
 	f.BoolVar(&inputSensorParams.ShouldBroadcastTxHashes, "broadcast-tx-hashes", false, "broadcast transaction hashes to peers")

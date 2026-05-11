@@ -54,6 +54,7 @@ type Database interface {
 	ShouldWriteFirstBlockEvent() bool
 	ShouldWriteTransactions() bool
 	ShouldWriteTransactionEvents() bool
+	ShouldWriteFirstTransactionEvent() bool
 	ShouldWritePeers() bool
 
 	// NodeList will return a list of enode URLs.

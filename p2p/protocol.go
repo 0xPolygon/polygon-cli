@@ -832,6 +832,36 @@ func (c *conn) decodeTxs(rawTxs []rlp.RawValue) []*types.Transaction {
 	return txs
 }
 
+// processTransactions handles the common logic for processing incoming transactions
+// from both TransactionsMsg and PooledTransactionsMsg. It marks transactions as known,
+// filters duplicates via cache, writes new transactions to database, and broadcasts.
+func (c *conn) processTransactions(ctx context.Context, txs []*types.Transaction, tfs time.Time) {
+	// Mark transactions as known from this peer
+	for _, tx := range txs {
+		c.addKnownTx(tx.Hash())
+	}
+
+	// Check cache FIRST to filter out already-seen transactions
+	newTxs := make([]*types.Transaction, 0, len(txs))
+	for _, tx := range txs {
+		if _, exists := c.conns.GetTx(tx.Hash()); !exists {
+			newTxs = append(newTxs, tx)
+		}
+	}
+
+	// Add to cache BEFORE writing (prevents duplicate writes from other peers)
+	hashes := c.conns.AddTxs(newTxs)
+
+	// Only write NEW transactions (cache miss = needs DB write)
+	if len(newTxs) > 0 {
+		c.db.WriteTransactions(ctx, c.node, newTxs, tfs)
+	}
+
+	// Broadcast transactions or hashes to other peers asynchronously
+	go c.conns.BroadcastTxs(types.Transactions(newTxs))
+	go c.conns.BroadcastTxHashes(hashes)
+}
+
 // encodeBlockBody converts a block to an eth.BlockBody with RLP-encoded fields.
 func encodeBlockBody(block *types.Block) (*eth.BlockBody, error) {
 	txList, err := rlp.EncodeToRawList([]*types.Transaction(block.Transactions()))
@@ -870,25 +900,8 @@ func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	txs := c.decodeTxs(rawTxs)
-	tfs := time.Now()
-
 	c.countMsgReceived((&eth.TransactionsPacket{}).Name(), float64(len(txs)))
-
-	// Mark transactions as known from this peer
-	for _, tx := range txs {
-		c.addKnownTx(tx.Hash())
-	}
-
-	if len(txs) > 0 {
-		c.db.WriteTransactions(ctx, c.node, txs, tfs)
-	}
-
-	// Cache transactions for duplicate detection and serving to peers (single lock)
-	hashes := c.conns.AddTxs(txs)
-
-	// Broadcast transactions or hashes to other peers asynchronously
-	go c.conns.BroadcastTxs(types.Transactions(txs))
-	go c.conns.BroadcastTxHashes(hashes)
+	c.processTransactions(ctx, txs, time.Now())
 
 	return nil
 }
@@ -1234,7 +1247,7 @@ func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) er
 
 	c.countMsgReceived(name, float64(len(hashes)))
 
-	if !c.db.ShouldWriteTransactions() || !c.db.ShouldWriteTransactionEvents() {
+	if !c.db.ShouldWriteTransactions() && !c.db.ShouldWriteTransactionEvents() {
 		return nil
 	}
 
@@ -1256,26 +1269,8 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 	}
 
 	txs := c.decodeTxs(raw.Txs)
-
-	tfs := time.Now()
-
 	c.countMsgReceived((*eth.PooledTransactionsPacket)(nil).Name(), float64(len(txs)))
-
-	// Mark transactions as known from this peer
-	for _, tx := range txs {
-		c.addKnownTx(tx.Hash())
-	}
-
-	if len(txs) > 0 {
-		c.db.WriteTransactions(ctx, c.node, txs, tfs)
-	}
-
-	// Cache transactions for duplicate detection and serving to peers (single lock)
-	hashes := c.conns.AddTxs(txs)
-
-	// Broadcast transactions or hashes to other peers asynchronously
-	go c.conns.BroadcastTxs(types.Transactions(txs))
-	go c.conns.BroadcastTxHashes(hashes)
+	c.processTransactions(ctx, txs, time.Now())
 
 	return nil
 }

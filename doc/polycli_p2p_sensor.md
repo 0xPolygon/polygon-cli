@@ -178,6 +178,7 @@ polycli p2p sensor amoy-nodes.json \
       --write-block-events            write block events to database (default true)
   -B, --write-blocks                  write blocks to database (default true)
       --write-first-block-event       write one block event on first-seen only (requires --write-block-events=false)
+      --write-first-tx-event          write one transaction event on first-seen only (requires --write-tx-events=false)
       --write-peers                   write peers to database (default true)
       --write-tx-events               write transaction events to database (this option can significantly increase CPU and memory usage) (default true)
   -t, --write-txs                     write transactions to database (this option can significantly increase CPU and memory usage) (default true)
