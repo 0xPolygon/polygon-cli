@@ -278,7 +278,7 @@ func ParseRPCHeaders(s string) (map[string]string, error) {
 	}
 
 	headers := make(map[string]string)
-	for _, pair := range strings.Split(s, ",") {
+	for pair := range strings.SplitSeq(s, ",") {
 		parts := strings.SplitN(pair, ":", 2)
 		if len(parts) != 2 {
 			return nil, fmt.Errorf("invalid header format %q, expected key:value", pair)
