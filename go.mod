@@ -31,7 +31,7 @@ require (
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
 	golang.org/x/text v0.37.0
 	golang.org/x/time v0.15.0
-	google.golang.org/api v0.278.0
+	google.golang.org/api v0.279.0
 	google.golang.org/protobuf v1.36.11
 )
 
@@ -192,7 +192,7 @@ require (
 	cloud.google.com/go/longrunning v0.9.0 // indirect
 	github.com/0xPolygon/cdk-rpc v0.0.0-20250213125803-179882ad6229
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/btcsuite/btcd/btcec/v2 v2.3.6
+	github.com/btcsuite/btcd/btcec/v2 v2.5.0
 	github.com/cockroachdb/fifo v0.0.0-20240816210425-c5d0cb0b6fc0 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/cometbft/cometbft-db v0.14.1 // indirect
