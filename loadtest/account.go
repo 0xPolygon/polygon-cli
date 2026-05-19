@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"slices"
 	"strings"
 	"sync"
@@ -39,6 +40,14 @@ type AccountPoolConfig struct {
 	ForcePriorityGasPrice uint64
 	GasPriceMultiplier    *big.Float
 	ChainSupportBaseFee   bool
+
+	// DuplicateNonceRate controls how often Next() returns the same nonce twice
+	// in a row for the same account. The probability of duplication is
+	// rate / (rate + 1): 0 = disabled, 1 = 50%, 4 = 80%. Used to induce nonce
+	// contention during reorgs / split networks. Requires fire-and-forget.
+	DuplicateNonceRate float64
+	// Seed seeds the duplicate-nonce RNG so runs are reproducible.
+	Seed int64
 }
 
 // Account represents a single account used by the load test.
@@ -140,6 +149,9 @@ type AccountPool struct {
 	latestBlockNumber uint64
 	pendingTxsCache   *uint64
 
+	// dupNonceRand drives the duplicate-nonce roll in Next(). Guarded by mu.
+	dupNonceRand *rand.Rand
+
 	// Configuration passed during creation
 	cfg *AccountPoolConfig
 }
@@ -194,6 +206,7 @@ func NewAccountPool(ctx context.Context, client *ethclient.Client, cfg *AccountP
 		accountsPositions:   make(map[common.Address]int),
 		latestBlockNumber:   latestBlockNumber,
 		clientRateLimiter:   rate.NewLimiter(rate.Every(50*time.Millisecond), 1),
+		dupNonceRand:        rand.New(rand.NewSource(cfg.Seed)),
 		cfg:                 cfg,
 	}
 
@@ -1104,6 +1117,18 @@ func (ap *AccountPool) NoncesOf(address common.Address) (startNonce, nonce uint6
 	return startNonce, nonce
 }
 
+// rollDuplicateNonce returns true if the next call to Next() for the same
+// account should receive the same nonce as this call (causing a deliberate
+// nonce collision). The probability is DuplicateNonceRate / (DuplicateNonceRate + 1):
+// rate=0 → 0%, rate=1 → 50%, rate=4 → 80%. Caller must hold ap.mu.
+func (ap *AccountPool) rollDuplicateNonce() bool {
+	if ap.cfg.DuplicateNonceRate <= 0 {
+		return false
+	}
+	p := ap.cfg.DuplicateNonceRate / (ap.cfg.DuplicateNonceRate + 1)
+	return ap.dupNonceRand.Float64() < p
+}
+
 // Next returns the next account in the pool.
 // Skips stopped accounts. Returns an error if no active accounts are available.
 func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
@@ -1145,9 +1170,12 @@ func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 		if len(account.reusableNonces) > 0 {
 			account.nonce = account.reusableNonces[0]
 			account.reusableNonces = account.reusableNonces[1:]
-		} else {
+		} else if !ap.rollDuplicateNonce() {
 			account.nonce++
 		}
+		// If rollDuplicateNonce() returned true, leave account.nonce unchanged
+		// so the next caller for this account receives the same nonce, causing
+		// a collision with the tx we are about to return.
 
 		return accCopy, nil
 	}
