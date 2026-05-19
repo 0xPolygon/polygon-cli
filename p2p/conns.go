@@ -561,6 +561,12 @@ func (c *Conns) PeekTxsWithHashes(hashes []common.Hash) ([]common.Hash, []*types
 	return c.txs.PeekManyWithKeys(hashes)
 }
 
+// FilterUnknownTxHashes returns only the hashes that are NOT in the transaction cache.
+// Uses a single read lock for efficient batch checking.
+func (c *Conns) FilterUnknownTxHashes(hashes []common.Hash) []common.Hash {
+	return c.txs.FilterMissing(hashes)
+}
+
 // Blocks returns the global blocks cache.
 func (c *Conns) Blocks() *ds.LRU[common.Hash, BlockCache] {
 	return c.blocks

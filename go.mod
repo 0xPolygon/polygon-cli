@@ -27,11 +27,11 @@ require (
 	github.com/tyler-smith/go-bip32 v1.0.0
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/xeipuuv/gojsonschema v1.2.0
-	golang.org/x/crypto v0.50.0
+	golang.org/x/crypto v0.51.0
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
-	golang.org/x/text v0.36.0
+	golang.org/x/text v0.37.0
 	golang.org/x/time v0.15.0
-	google.golang.org/api v0.277.0
+	google.golang.org/api v0.279.0
 	google.golang.org/protobuf v1.36.11
 )
 
@@ -156,8 +156,8 @@ require (
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/term v0.42.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
 	google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260427160629-7cedc36a6bc4 // indirect
@@ -167,7 +167,7 @@ require (
 )
 
 require (
-	cloud.google.com/go/kms v1.30.0
+	cloud.google.com/go/kms v1.31.0
 	github.com/0xPolygon/cdk-contracts-tooling v0.0.1
 	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc
@@ -193,7 +193,7 @@ require (
 	cloud.google.com/go/longrunning v0.9.0 // indirect
 	github.com/0xPolygon/cdk-rpc v0.0.0-20250213125803-179882ad6229
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/btcsuite/btcd/btcec/v2 v2.3.6
+	github.com/btcsuite/btcd/btcec/v2 v2.5.0
 	github.com/cockroachdb/fifo v0.0.0-20240816210425-c5d0cb0b6fc0 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/cometbft/cometbft-db v0.14.1 // indirect
