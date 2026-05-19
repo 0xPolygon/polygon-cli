@@ -391,13 +391,11 @@ func (r *Runner) Run(ctx context.Context) error {
 	loadTestCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// The goroutine must always write to errCh exactly once so the drain
+	// below can never deadlock. Don't gate on loadTestCtx.Done() — mainLoop
+	// itself respects ctx and returns promptly when cancelled.
 	go func() {
-		select {
-		case <-loadTestCtx.Done():
-			return
-		default:
-			errCh <- r.mainLoop(loadTestCtx)
-		}
+		errCh <- r.mainLoop(loadTestCtx)
 	}()
 
 	timedOut := false
