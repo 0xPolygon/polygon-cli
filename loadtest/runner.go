@@ -387,36 +387,44 @@ func (r *Runner) Run(ctx context.Context) error {
 	signal.Notify(sigCh, os.Interrupt)
 	defer signal.Stop(sigCh)
 
+	// Always print a light summary of whatever samples were collected,
+	// regardless of how Run exits (normal, interrupt, timeout, mainLoop error).
+	// endTime is captured below, before postLoadTest, so the TPS denominator
+	// reflects load-generation time, not post-test cleanup (refunds, detailed
+	// summary, etc.).
+	var endTime time.Time
+	defer func() {
+		if endTime.IsZero() {
+			endTime = time.Now()
+		}
+		results := r.GetResults()
+		if len(results) > 0 {
+			LightSummary(results, results[0].RequestTime, endTime, r.rl)
+		}
+	}()
+
 	errCh := make(chan error, 1)
 	loadTestCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// The goroutine must always write to errCh exactly once so the drain
+	// below can never deadlock. Don't gate on loadTestCtx.Done() — mainLoop
+	// itself respects ctx and returns promptly when cancelled.
 	go func() {
-		select {
-		case <-loadTestCtx.Done():
-			return
-		default:
-			errCh <- r.mainLoop(loadTestCtx)
-		}
+		errCh <- r.mainLoop(loadTestCtx)
 	}()
 
-	timedOut := false
-	interrupted := false
 	var mainLoopErr error
+	mainLoopDrained := false
 
 	// Wait for completion or interruption
 	select {
 	case <-overallTimer.C:
 		log.Info().Msg("Time's up")
-		timedOut = true
 		cancel()
 	case <-sigCh:
 		log.Info().Msg("Interrupted, stopping load test")
-		interrupted = true
 		cancel()
-		if r.preconfTracker != nil {
-			r.preconfTracker.Stats()
-		}
 		if r.cfg.ShouldProduceSummary {
 			finalBlock, err := r.client.BlockNumber(ctx)
 			if err != nil {
@@ -427,29 +435,38 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	case err := <-errCh:
 		mainLoopErr = err
+		mainLoopDrained = true
 	}
 
-	if timedOut || interrupted {
+	// Drain mainLoop result if we exited the select via timeout or interrupt.
+	// The spawned goroutine always writes exactly once to errCh, so this is safe.
+	if !mainLoopDrained {
 		mainLoopErr = <-errCh
 	}
 	if mainLoopErr != nil {
-		log.Fatal().Err(mainLoopErr).Msg("Received critical error while running load test")
+		log.Error().Err(mainLoopErr).Msg("Load test main loop returned an error")
 	}
 
-	if timedOut {
-		log.Info().Msg("Finished")
-		return nil
-	}
+	// Capture endTime before postLoadTest so LightSummary's TPS reflects
+	// load-generation duration, not post-test RPC work.
+	endTime = time.Now()
 
 	// Post-load-test operations use the original context (not the cancelled loadTestCtx)
-	// to ensure summary/refund RPCs can complete successfully after SIGINT
+	// to ensure summary/refund RPCs can complete successfully after SIGINT.
 	r.postLoadTest(ctx)
 
 	log.Info().Msg("Finished")
+
+	// Propagate genuine mainLoop errors as a non-zero exit code via Cobra.
+	// Context cancellation from SIGINT/timeout is expected and not an error.
+	if mainLoopErr != nil && !errors.Is(mainLoopErr, context.Canceled) {
+		return mainLoopErr
+	}
 	return nil
 }
 
 // postLoadTest handles post-load-test operations like summary and fund refunding.
+// Note: LightSummary is printed via a deferred call in Run, not here.
 func (r *Runner) postLoadTest(ctx context.Context) {
 	cfg := r.cfg
 	results := r.GetResults()
@@ -457,13 +474,6 @@ func (r *Runner) postLoadTest(ctx context.Context) {
 	// Output preconf stats if tracker was used
 	if r.preconfTracker != nil {
 		r.preconfTracker.Stats()
-	}
-
-	// Always output a light summary if we have results
-	if len(results) > 0 {
-		startTime := results[0].RequestTime
-		endTime := time.Now()
-		LightSummary(results, startTime, endTime, r.rl)
 	}
 
 	// Skip detailed summary and refunds in fire-and-forget or call-only modes.
