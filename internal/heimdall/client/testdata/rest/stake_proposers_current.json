@@ -1,0 +1,14 @@
+{
+  "validator": {
+    "val_id": "4",
+    "start_epoch": "187",
+    "end_epoch": "0",
+    "nonce": "3036",
+    "voting_power": "74613738",
+    "pub_key": "BDgaBF0KvnfJ1WEIa9HIrWjv8hsI2GWkkoVjzkPXudNnnJ2QvREAh8oCNOui6GnJhpQE99NfHSQGKjOhcn3KeMI=",
+    "signer": "0x4ad84f7014b7b44f723f284a85b1662337971439",
+    "last_updated": "1069563500338",
+    "jailed": false,
+    "proposer_priority": "-226083680"
+  }
+}

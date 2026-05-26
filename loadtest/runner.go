@@ -271,6 +271,8 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		ForcePriorityGasPrice:     r.cfg.ForcePriorityGasPrice,
 		GasPriceMultiplier:        r.cfg.BigGasPriceMultiplier,
 		ChainSupportBaseFee:       r.cfg.ChainSupportBaseFee,
+		DuplicateNonceRate:        r.cfg.DuplicateNonceRate,
+		Seed:                      r.cfg.Seed,
 	}
 
 	var err error

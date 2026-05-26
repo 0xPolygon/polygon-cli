@@ -1,0 +1,5 @@
+{
+  "code": 13,
+  "message": "collections: not found: key '99999999' of type github.com/cosmos/gogoproto/heimdallv2.clerk.EventRecord",
+  "details": []
+}

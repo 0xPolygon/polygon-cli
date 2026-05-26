@@ -1,0 +1,11 @@
+{
+  "checkpoint": {
+    "id": "0",
+    "proposer": "",
+    "start_block": "0",
+    "end_block": "0",
+    "root_hash": null,
+    "bor_chain_id": "",
+    "timestamp": "0"
+  }
+}

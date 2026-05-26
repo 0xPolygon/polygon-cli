@@ -20,6 +20,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/fork"
 	"github.com/0xPolygon/polygon-cli/cmd/fund"
 	"github.com/0xPolygon/polygon-cli/cmd/hash"
+	"github.com/0xPolygon/polygon-cli/cmd/heimdall"
 	"github.com/0xPolygon/polygon-cli/cmd/loadtest"
 	"github.com/0xPolygon/polygon-cli/cmd/metricstodash"
 	"github.com/0xPolygon/polygon-cli/cmd/mnemonic"
@@ -35,7 +36,9 @@ import (
 	"github.com/0xPolygon/polygon-cli/cmd/report"
 	"github.com/0xPolygon/polygon-cli/cmd/retest"
 	"github.com/0xPolygon/polygon-cli/cmd/rpcfuzz"
+	"github.com/0xPolygon/polygon-cli/cmd/sendtx"
 	"github.com/0xPolygon/polygon-cli/cmd/signer"
+	"github.com/0xPolygon/polygon-cli/cmd/tail"
 	"github.com/0xPolygon/polygon-cli/cmd/ulxly"
 	"github.com/0xPolygon/polygon-cli/cmd/version"
 	"github.com/0xPolygon/polygon-cli/cmd/wallet"
@@ -142,6 +145,7 @@ func NewPolycliCommand() *cobra.Command {
 		fork.ForkCmd,
 		fund.FundCmd,
 		hash.HashCmd,
+		heimdall.HeimdallCmd,
 		loadtest.LoadtestCmd,
 		metricstodash.MetricsToDashCmd,
 		mnemonic.MnemonicCmd,
@@ -153,7 +157,9 @@ func NewPolycliCommand() *cobra.Command {
 		report.ReportCmd,
 		retest.RetestCmd,
 		rpcfuzz.RPCFuzzCmd,
+		sendtx.SendtxCmd,
 		signer.SignerCmd,
+		tail.TailCmd,
 		ulxly.ULxLyCmd,
 		version.VersionCmd,
 		wallet.WalletCmd,

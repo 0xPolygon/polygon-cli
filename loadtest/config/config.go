@@ -64,7 +64,9 @@ type Config struct {
 	OutputRawTxOnly    bool
 	PrivateTxs         bool
 	StartNonce         uint64
+	StartNonceSet      bool `json:"-"`
 	GasPriceMultiplier float64
+	DuplicateNonceRate float64
 
 	// Gas options
 	ForceGasLimit         uint64
@@ -206,6 +208,13 @@ func (c *Config) Validate() error {
 		if err := c.validatePrivateTxsModes(); err != nil {
 			return err
 		}
+	}
+
+	if c.DuplicateNonceRate < 0 {
+		return fmt.Errorf("--duplicate-nonce-rate must be >= 0, got %f", c.DuplicateNonceRate)
+	}
+	if c.DuplicateNonceRate > 0 && !c.FireAndForget {
+		return errors.New("--duplicate-nonce-rate requires --fire-and-forget (duplicate-nonce txs have no receipt to wait for)")
 	}
 
 	return nil
