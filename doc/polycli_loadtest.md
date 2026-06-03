@@ -45,8 +45,9 @@ The `--mode` flag is important for this command.
 - `b`/`blob` will send EIP-4844 blob transactions. Use `--blob-fee-cap`
   to set the maximum blob fee per chunk.
 - `cc`/`contract-call` will call a specific contract function. Requires
-  `--contract-address` and `--calldata` flags. Use `--contract-call-payable`
-  if the function is payable.
+  `--contract-address` and either `--calldata` (hex string) or
+  `--calldata-file` (path to a file containing the hex calldata). Use
+  `--contract-call-payable` if the function is payable.
 - `R`/`recall` will attempt to replay all of the transactions from the
   previous blocks. You can use `--recall-blocks` to specify how many
   previous blocks should be used to seed transaction history. It's
@@ -118,6 +119,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --blob-fee-cap uint                                blob fee cap, or maximum blob fee per chunk, in Gwei (default 100000)
       --block-batch-size uint                            number of blocks to fetch per RPC batch request for recall and rpc modes (default 25)
       --calldata string                                  hex encoded calldata: function signature + encoded arguments (requires --mode contract-call and --contract-address)
+      --calldata-file string                             path to a file containing hex encoded calldata (alternative to --calldata; mutually exclusive with it)
       --chain-id uint                                    chain ID for the transactions
       --check-balance-before-funding                     check account balance before funding sending accounts (saves gas when accounts are already funded)
       --check-preconf                                    check for preconf status after sending tx
@@ -125,6 +127,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --contract-address string                          contract address for --mode contract-call (requires --calldata)
       --contract-call-payable                            mark function as payable using value from --eth-amount-in-wei (requires --mode contract-call and --contract-address)
       --dump-sending-accounts-file string                file path to dump generated private keys when using --sending-accounts-count
+      --duplicate-nonce-rate float                       ratio of duplicate-nonce txs to fresh txs (0 disables; 1 = 50% duplicates, 4 = 80%); requires --fire-and-forget
       --erc20-address string                             address of pre-deployed ERC20 contract
       --erc721-address string                            address of pre-deployed ERC721 contract
       --eth-amount-in-wei uint                           amount of ether in wei to send per transaction

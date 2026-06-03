@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"strings"
 
 	"github.com/0xPolygon/polygon-cli/loadtest/uniswapv3"
@@ -98,9 +99,10 @@ type Config struct {
 	StoreDataSize       uint64
 	RecallLength        uint64
 	BlockBatchSize      uint64
-	ContractAddress     string
-	ContractCallData    string
-	ContractCallPayable bool
+	ContractAddress      string
+	ContractCallData     string
+	ContractCallDataFile string
+	ContractCallPayable  bool
 	BlobFeeCap          uint64
 
 	// Account pool options
@@ -208,6 +210,17 @@ func (c *Config) Validate() error {
 		if err := c.validatePrivateTxsModes(); err != nil {
 			return err
 		}
+	}
+
+	if c.ContractCallDataFile != "" {
+		if c.ContractCallData != "" {
+			return errors.New("--calldata and --calldata-file are mutually exclusive")
+		}
+		data, err := os.ReadFile(c.ContractCallDataFile)
+		if err != nil {
+			return fmt.Errorf("unable to read calldata file %q: %w", c.ContractCallDataFile, err)
+		}
+		c.ContractCallData = strings.TrimSpace(string(data))
 	}
 
 	if c.DuplicateNonceRate < 0 {

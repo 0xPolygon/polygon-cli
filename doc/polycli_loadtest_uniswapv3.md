@@ -86,6 +86,7 @@ The command also inherits flags from parent commands.
       --check-preconf                                    check for preconf status after sending tx
   -c, --concurrency int                                  number of requests to perform concurrently (default: one at a time) (default 1)
       --config string                                    config file (default is $HOME/.polygon-cli.yaml)
+      --duplicate-nonce-rate float                       ratio of duplicate-nonce txs to fresh txs (0 disables; 1 = 50% duplicates, 4 = 80%); requires --fire-and-forget
       --eth-amount-in-wei uint                           amount of ether in wei to send per transaction
       --eth-call-only                                    call contracts without sending transactions (incompatible with adaptive rate limiting and summarization)
       --eth-call-only-latest                             execute on latest block instead of original block in call-only mode with recall
