@@ -4,9 +4,11 @@ package config
 
 import (
 	"crypto/ecdsa"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"strings"
 
 	"github.com/0xPolygon/polygon-cli/loadtest/uniswapv3"
@@ -93,13 +95,14 @@ type Config struct {
 	ERC721Address           string
 
 	// Mode-specific options
-	StoreDataSize       uint64
-	RecallLength        uint64
-	BlockBatchSize      uint64
-	ContractAddress     string
-	ContractCallData    string
-	ContractCallPayable bool
-	BlobFeeCap          uint64
+	StoreDataSize        uint64
+	RecallLength         uint64
+	BlockBatchSize       uint64
+	ContractAddress      string
+	ContractCallData     string
+	ContractCallDataFile string
+	ContractCallPayable  bool
+	BlobFeeCap           uint64
 
 	// Account pool options
 	SendingAccountsCount      uint64
@@ -208,6 +211,50 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if err := c.resolveContractCallData(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// resolveContractCallData loads --calldata-file into ContractCallData when set.
+// This lets contract-call payloads exceed the OS single-argument limit
+// (MAX_ARG_STRLEN, 128 KiB on Linux), which caps the inline --calldata flag at
+// roughly 64 KB of calldata. The file holds the same hex encoding as --calldata
+// (function signature + encoded arguments, optional 0x prefix). All whitespace
+// is stripped, so line-wrapped hex dumps (e.g. from `xxd`/`od`) are accepted as
+// readily as a single line. The two flags are mutually exclusive. The hex is
+// validated here so an unusable payload fails fast, before any transactions are
+// sent.
+func (c *Config) resolveContractCallData() error {
+	if c.ContractCallDataFile == "" {
+		return nil
+	}
+	if c.ContractCallData != "" {
+		return errors.New("--calldata and --calldata-file are mutually exclusive; specify only one")
+	}
+
+	data, err := os.ReadFile(c.ContractCallDataFile)
+	if err != nil {
+		return fmt.Errorf("unable to read --calldata-file %q: %w", c.ContractCallDataFile, err)
+	}
+
+	// Strip all whitespace (incl. interior newlines from wrapped hex dumps),
+	// not just the surrounding bytes. strings.Fields splits on any unicode
+	// whitespace run; joining yields a single contiguous hex string.
+	calldata := strings.Join(strings.Fields(string(data)), "")
+	// Empty-check the hex body AFTER removing a leading 0x, so a file holding
+	// only "0x" (which decodes to zero bytes without error) is rejected too.
+	hexBody := strings.TrimPrefix(calldata, "0x")
+	if hexBody == "" {
+		return fmt.Errorf("--calldata-file %q is empty", c.ContractCallDataFile)
+	}
+	if _, err := hex.DecodeString(hexBody); err != nil {
+		return fmt.Errorf("--calldata-file %q does not contain valid hex calldata: %w", c.ContractCallDataFile, err)
+	}
+
+	c.ContractCallData = calldata
 	return nil
 }
 

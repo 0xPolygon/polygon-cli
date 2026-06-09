@@ -24,8 +24,9 @@ The `--mode` flag is important for this command.
 - `b`/`blob` will send EIP-4844 blob transactions. Use `--blob-fee-cap`
   to set the maximum blob fee per chunk.
 - `cc`/`contract-call` will call a specific contract function. Requires
-  `--contract-address` and `--calldata` flags. Use `--contract-call-payable`
-  if the function is payable.
+  `--contract-address` and `--calldata` (or `--calldata-file` for payloads
+  too large for a shell argument). Use `--contract-call-payable` if the
+  function is payable.
 - `R`/`recall` will attempt to replay all of the transactions from the
   previous blocks. You can use `--recall-blocks` to specify how many
   previous blocks should be used to seed transaction history. It's

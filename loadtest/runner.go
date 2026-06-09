@@ -800,7 +800,7 @@ func (r *Runner) parseModes(ctx context.Context) error {
 		}
 	}
 	if config.HasMode(config.ModeContractCall, cfg.ParsedModes) && (cfg.ContractAddress == "" || cfg.ContractCallData == "") {
-		return errors.New("contract-call mode requires both --contract-address and --calldata flags")
+		return errors.New("contract-call mode requires --contract-address and either --calldata or --calldata-file")
 	}
 	if cfg.EthCallOnly && config.HasMode(config.ModeBlob, cfg.ParsedModes) {
 		return errors.New("using call only with blobs doesn't make sense")
