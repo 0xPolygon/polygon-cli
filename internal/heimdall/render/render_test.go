@@ -256,10 +256,10 @@ func TestPluckNestedObjectSurvives(t *testing.T) {
 	}
 }
 
-// TestStringifyFloatBounds asserts that only float64 values whose
-// integral form fits int64 are rendered as integers; out-of-range
-// magnitudes (total difficulty, stake amounts) must not go through the
-// int64 conversion, which is undefined for them.
+// TestStringifyFloatBounds asserts that integral float64 values render
+// as plain digits without ever passing through a float-to-int
+// conversion (undefined for out-of-range values), and that absurd
+// magnitudes stay in exponent form.
 func TestStringifyFloatBounds(t *testing.T) {
 	cases := []struct {
 		in   float64
@@ -268,9 +268,13 @@ func TestStringifyFloatBounds(t *testing.T) {
 		{42, "42"},
 		{-7, "-7"},
 		{3.5, "3.5"},
-		{1e22, "1e+22"},                                // > 2^63: stays float-formatted
-		{float64(1 << 63), "9.223372036854776e+18"},    // exactly 2^63: excluded
-		{-(float64(1 << 63)), "-9223372036854775808"},  // exactly -2^63: still valid int64
+		// Around 2^63 FormatFloat emits the shortest round-trip
+		// digits; the key property is no int64 wraparound.
+		{float64(1 << 63), "9223372036854776000"},
+		{-(float64(1 << 63)), "-9223372036854776000"},
+		{1e20, "100000000000000000000"},               // large but under the 1e21 cap
+		{1e21, "1e+21"},                               // at the cap: exponent form
+		{1e22, "1e+22"},
 		{-1e30, "-1e+30"},
 	}
 	for _, c := range cases {
