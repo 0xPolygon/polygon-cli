@@ -24,15 +24,15 @@ func newListCmd() *cobra.Command {
 			accounts := ks.Accounts()
 			w := cmd.OutOrStdout()
 			if len(accounts) == 0 {
-				fmt.Fprintf(w, "(no keys in %s)\n", dir)
+				_, _ = fmt.Fprintf(w, "(no keys in %s)\n", dir)
 				return nil
 			}
 			for _, a := range accounts {
 				if addressesOnly {
-					fmt.Fprintln(w, a.Address.Hex())
+					_, _ = fmt.Fprintln(w, a.Address.Hex())
 					continue
 				}
-				fmt.Fprintf(w, "%s\t%s\n", a.Address.Hex(), a.URL.Path)
+				_, _ = fmt.Fprintf(w, "%s\t%s\n", a.Address.Hex(), a.URL.Path)
 			}
 			return nil
 		},

@@ -60,16 +60,16 @@ func newTestServer(t *testing.T, accountNumber, sequence uint64, extraRoutes map
 	ts := &heimdallTestServer{}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/cosmos/auth/v1beta1/accounts/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, accountJSON(accountNumber, sequence))
+		_, _ = fmt.Fprint(w, accountJSON(accountNumber, sequence))
 	})
 	mux.HandleFunc("/cosmos/tx/v1beta1/txs", func(w http.ResponseWriter, r *http.Request) {
 		ts.broadcastHits.Add(1)
 		// Success envelope with a deterministic hash.
-		fmt.Fprint(w, `{"tx_response":{"txhash":"ABCDEF","code":0,"height":"0"}}`)
+		_, _ = fmt.Fprint(w, `{"tx_response":{"txhash":"ABCDEF","code":0,"height":"0"}}`)
 	})
 	mux.HandleFunc("/cosmos/tx/v1beta1/simulate", func(w http.ResponseWriter, r *http.Request) {
 		ts.simulateHits.Add(1)
-		fmt.Fprint(w, `{"gas_info":{"gas_wanted":"200000","gas_used":"123456"}}`)
+		_, _ = fmt.Fprint(w, `{"gas_info":{"gas_wanted":"200000","gas_used":"123456"}}`)
 	})
 	// CometBFT RPC (WaitForInclusion polls this via POST JSON-RPC).
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -82,10 +82,10 @@ func newTestServer(t *testing.T, accountNumber, sequence uint64, extraRoutes map
 			_ = json.Unmarshal(body, &req)
 			switch req.Method {
 			case "tx":
-				fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%d,"result":{"hash":"ABCDEF","height":"42"}}`, req.ID)
+				_, _ = fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%d,"result":{"hash":"ABCDEF","height":"42"}}`, req.ID)
 				return
 			case "status":
-				fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%d,"result":{"sync_info":{"latest_block_height":"100"}}}`, req.ID)
+				_, _ = fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%d,"result":{"sync_info":{"latest_block_height":"100"}}}`, req.ID)
 				return
 			}
 		}
@@ -280,7 +280,7 @@ func TestSendWithdrawDryRunDoesNotBroadcast(t *testing.T) {
 	// is provably not broadcasting.
 	mux := http.NewServeMux()
 	mux.HandleFunc("/cosmos/auth/v1beta1/accounts/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, accountJSON(25, 51129))
+		_, _ = fmt.Fprint(w, accountJSON(25, 51129))
 	})
 	var broadcastHits atomic.Int64
 	mux.HandleFunc("/cosmos/tx/v1beta1/txs", func(w http.ResponseWriter, r *http.Request) {

@@ -33,7 +33,7 @@ func newB64Cmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), out)
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), out)
 			return nil
 		},
 	}

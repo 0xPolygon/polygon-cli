@@ -22,10 +22,10 @@ func promptPassword(in io.Reader, errW io.Writer, label string, confirm bool) (s
 	}
 
 	readOnce := func(prompt string) (string, error) {
-		fmt.Fprintf(errW, "%s: ", prompt)
+		_, _ = fmt.Fprintf(errW, "%s: ", prompt)
 		if f, ok := in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
 			raw, err := term.ReadPassword(int(f.Fd()))
-			fmt.Fprintln(errW)
+			_, _ = fmt.Fprintln(errW)
 			if err != nil {
 				return "", fmt.Errorf("reading password: %w", err)
 			}

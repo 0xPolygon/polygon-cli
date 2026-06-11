@@ -9,7 +9,6 @@
 package chain
 
 import (
-	_ "embed"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -26,9 +25,6 @@ import (
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/config"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
-
-//go:embed usage.md
-var usage string
 
 // Flags is injected by the caller. The persistent flag set on the
 // root heimdall command is the source of truth for global config

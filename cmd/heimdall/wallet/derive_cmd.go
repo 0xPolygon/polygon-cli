@@ -54,9 +54,9 @@ func newDeriveCmd() *cobra.Command {
 					return err
 				}
 				if showKey {
-					fmt.Fprintf(w, "%s\t%s\t%s\n", finalPath, addr.Hex(), "0x"+hex.EncodeToString(crypto.FromECDSA(priv)))
+					_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", finalPath, addr.Hex(), "0x"+hex.EncodeToString(crypto.FromECDSA(priv)))
 				} else {
-					fmt.Fprintf(w, "%s\t%s\n", finalPath, addr.Hex())
+					_, _ = fmt.Fprintf(w, "%s\t%s\n", finalPath, addr.Hex())
 				}
 			}
 			return nil

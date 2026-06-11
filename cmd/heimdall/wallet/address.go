@@ -39,22 +39,22 @@ func newAddressCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				fmt.Fprintln(w, crypto.PubkeyToAddress(priv.PublicKey).Hex())
-				return nil
+				_, err = fmt.Fprintln(w, crypto.PubkeyToAddress(priv.PublicKey).Hex())
+				return err
 			case mnemonic != "":
 				_, _, addr, err := deriveFromMnemonic(mnemonic, bipPass, path, index)
 				if err != nil {
 					return err
 				}
-				fmt.Fprintln(w, addr.Hex())
-				return nil
+				_, err = fmt.Fprintln(w, addr.Hex())
+				return err
 			case shared.KeystoreFile != "":
 				addr, err := addressFromKeystoreFile(shared.KeystoreFile)
 				if err != nil {
 					return err
 				}
-				fmt.Fprintln(w, addr.Hex())
-				return nil
+				_, err = fmt.Fprintln(w, addr.Hex())
+				return err
 			}
 			// No explicit source — list every address in the keystore.
 			dir, err := resolveKeystoreDir(shared.KeystoreDir)
@@ -67,7 +67,7 @@ func newAddressCmd() *cobra.Command {
 				return &client.UsageError{Msg: fmt.Sprintf("no keys in keystore %s; pass --private-key, --mnemonic, or --keystore-file to inspect another source", dir)}
 			}
 			for _, a := range accounts {
-				fmt.Fprintln(w, a.Address.Hex())
+				_, _ = fmt.Fprintln(w, a.Address.Hex())
 			}
 			return nil
 		},

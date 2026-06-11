@@ -161,12 +161,12 @@ func TestFoundryKeystoreCompat(t *testing.T) {
 		t.Fatal("no foundry fixture files")
 	}
 	for _, e := range entries {
-		data, err := os.ReadFile(filepath.Join(fixtureDir, e.Name()))
-		if err != nil {
-			t.Fatalf("read fixture file: %v", err)
+		data, rerr := os.ReadFile(filepath.Join(fixtureDir, e.Name()))
+		if rerr != nil {
+			t.Fatalf("read fixture file: %v", rerr)
 		}
-		if err := os.WriteFile(filepath.Join(ksDir, e.Name()), data, 0o600); err != nil {
-			t.Fatalf("copy fixture file: %v", err)
+		if werr := os.WriteFile(filepath.Join(ksDir, e.Name()), data, 0o600); werr != nil {
+			t.Fatalf("copy fixture file: %v", werr)
 		}
 	}
 

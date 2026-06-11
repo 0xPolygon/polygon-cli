@@ -21,7 +21,7 @@ func TestEnableWatchPassThrough(t *testing.T) {
 		Use: "stub",
 		RunE: func(c *cobra.Command, _ []string) error {
 			atomic.AddInt32(&calls, 1)
-			fmt.Fprintln(c.OutOrStdout(), "hello")
+			_, _ = fmt.Fprintln(c.OutOrStdout(), "hello")
 			return nil
 		},
 	}
@@ -49,7 +49,7 @@ func TestEnableWatchLoopsUntilCancel(t *testing.T) {
 		Use: "stub",
 		RunE: func(c *cobra.Command, _ []string) error {
 			atomic.AddInt32(&calls, 1)
-			fmt.Fprintln(c.OutOrStdout(), "tick")
+			_, _ = fmt.Fprintln(c.OutOrStdout(), "tick")
 			return nil
 		},
 	}

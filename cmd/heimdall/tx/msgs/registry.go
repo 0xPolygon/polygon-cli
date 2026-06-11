@@ -95,12 +95,3 @@ func BuildChildren(mode Mode, globalFlags *config.Flags) []*cobra.Command {
 	return out
 }
 
-// resetRegistryForTest clears the registry. Intended for tests only.
-// Kept unexported and short-named because it is not part of the
-// public surface; test files in this package can call it via
-// internal access.
-func resetRegistryForTest() {
-	registryMu.Lock()
-	defer registryMu.Unlock()
-	registry = map[string]registryEntry{}
-}

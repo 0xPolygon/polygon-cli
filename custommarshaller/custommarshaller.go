@@ -67,7 +67,7 @@ func (c CustomMarshaller) MarshalJSON() ([]byte, error) {
 	instanceType := reflect.TypeOf(c.any)
 	instanceValue := reflect.ValueOf(c.any)
 
-	if instanceType.Kind() == reflect.Ptr {
+	if instanceType.Kind() == reflect.Pointer {
 		instanceType = instanceType.Elem()
 		instanceValue = instanceValue.Elem()
 	}
@@ -102,7 +102,7 @@ func (c CustomMarshaller) MarshalJSON() ([]byte, error) {
 			} else {
 				result[f.Name] = v.Interface()
 			}
-		case reflect.Struct, reflect.Ptr:
+		case reflect.Struct, reflect.Pointer:
 			result[f.Name] = CustomMarshaller{v.Interface()}
 		default:
 			result[f.Name] = v.Interface()

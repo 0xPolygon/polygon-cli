@@ -67,13 +67,13 @@ func EnableWatch(cmd *cobra.Command) {
 			c.SetOut(outWriter)
 
 			clearScreen(outWriter, isTTY)
-			fmt.Fprintf(outWriter, "--- %s (every %s) ---\n", time.Now().UTC().Format(time.RFC3339), interval)
+			_, _ = fmt.Fprintf(outWriter, "--- %s (every %s) ---\n", time.Now().UTC().Format(time.RFC3339), interval)
 			_, _ = io.Copy(outWriter, &buf)
 			if err != nil {
 				// Stream the error alongside the snapshot but don't
 				// abort the loop — a transient node blip shouldn't
 				// kill a long-running watch.
-				fmt.Fprintf(c.ErrOrStderr(), "watch: %v\n", err)
+				_, _ = fmt.Fprintf(c.ErrOrStderr(), "watch: %v\n", err)
 			}
 			if !timerReset(timer, interval) {
 				return nil

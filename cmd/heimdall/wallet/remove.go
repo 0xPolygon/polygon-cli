@@ -45,7 +45,7 @@ func newRemoveCmd() *cobra.Command {
 			if err := ks.Delete(acc, password); err != nil {
 				return fmt.Errorf("deleting keystore entry: %w", err)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "removed %s\n", acc.Address.Hex())
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "removed %s\n", acc.Address.Hex())
 			return nil
 		},
 	}
@@ -56,7 +56,7 @@ func newRemoveCmd() *cobra.Command {
 // confirm reads a y/N answer from the command's input stream (or
 // stdin if nothing is wired up). Default is No.
 func confirm(cmd *cobra.Command, prompt string) bool {
-	fmt.Fprint(cmd.ErrOrStderr(), prompt)
+	_, _ = fmt.Fprint(cmd.ErrOrStderr(), prompt)
 	in := cmd.InOrStdin()
 	scanner := bufio.NewScanner(in)
 	if !scanner.Scan() {

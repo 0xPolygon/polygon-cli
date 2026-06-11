@@ -60,24 +60,24 @@ func newBalanceCmd() *cobra.Command {
 			opts := renderOpts(cmd, cfg, fields)
 			if opts.JSON {
 				var generic any
-				if err := json.Unmarshal(body, &generic); err != nil {
-					return fmt.Errorf("decoding balance for json: %w", err)
+				if jerr := json.Unmarshal(body, &generic); jerr != nil {
+					return fmt.Errorf("decoding balance for json: %w", jerr)
 				}
 				return render.RenderJSON(cmd.OutOrStdout(), generic, opts)
 			}
 
 			var resp balanceResponse
-			if err := json.Unmarshal(body, &resp); err != nil {
-				return fmt.Errorf("decoding balance: %w (body=%q)", err, truncate(body, 256))
+			if jerr := json.Unmarshal(body, &resp); jerr != nil {
+				return fmt.Errorf("decoding balance: %w (body=%q)", jerr, truncate(body, 256))
 			}
 			amount := resp.Balance.Amount
 			if amount == "" {
 				amount = "0"
 			}
 			if human {
-				formatted, err := formatDecimal(amount, 18)
-				if err != nil {
-					return err
+				formatted, ferr := formatDecimal(amount, 18)
+				if ferr != nil {
+					return ferr
 				}
 				_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", formatted, d)
 				return err

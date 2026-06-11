@@ -30,9 +30,9 @@ func newVerifyCmd() *cobra.Command {
 			}
 			var ok bool
 			if raw {
-				hash, err := parseHex(args[1], "hash")
-				if err != nil {
-					return err
+				hash, perr := parseHex(args[1], "hash")
+				if perr != nil {
+					return perr
 				}
 				if len(hash) != 32 {
 					return &client.UsageError{Msg: fmt.Sprintf("--raw input must decode to 32 bytes, got %d", len(hash))}
@@ -43,7 +43,7 @@ func newVerifyCmd() *cobra.Command {
 				}
 			} else {
 				payload := []byte(args[1])
-				if decoded, err := parseHex(args[1], "message"); err == nil {
+				if decoded, perr := parseHex(args[1], "message"); perr == nil {
 					payload = decoded
 				}
 				ok, err = verifyPersonal(addr, payload, sig)
@@ -53,10 +53,10 @@ func newVerifyCmd() *cobra.Command {
 			}
 			w := cmd.OutOrStdout()
 			if !ok {
-				fmt.Fprintln(w, "mismatch")
+				_, _ = fmt.Fprintln(w, "mismatch")
 				return &client.UsageError{Msg: "signature does not match address"}
 			}
-			fmt.Fprintln(w, "ok")
+			_, _ = fmt.Fprintln(w, "ok")
 			return nil
 		},
 	}

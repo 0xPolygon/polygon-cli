@@ -71,24 +71,6 @@ func newTestServer(t *testing.T, routes map[string][]byte) *httptest.Server {
 	return srv
 }
 
-// newTestCmd sets up the chain subcommand group against the fixture
-// server. Returns a cobra.Command with the target subcommand already
-// positioned as root so tests can invoke with cmd.SetArgs.
-func newTestCmd(t *testing.T, srv *httptest.Server) *cobra.Command {
-	t.Helper()
-	root := &cobra.Command{Use: "h", SilenceUsage: true}
-	f := &config.Flags{}
-	f.Register(root)
-	Register(root, f)
-	// Force the fixture server as both REST and RPC so config.Resolve
-	// is happy. `--chain-id` is auto-resolved via the amoy preset.
-	root.SetArgs([]string{
-		"--rest-url", srv.URL,
-		"--rpc-url", srv.URL,
-	})
-	return root
-}
-
 // runCmd executes the given root command with args prepended by the
 // persistent URL overrides, returns stdout/stderr.
 func runCmd(t *testing.T, srv *httptest.Server, args ...string) (string, string, error) {

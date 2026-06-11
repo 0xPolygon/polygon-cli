@@ -94,11 +94,11 @@ func decodeTxRaw(raw []byte) (*decodedTx, error) {
 	msgs := make([]map[string]interface{}, 0, len(body.Messages))
 	for _, any := range body.Messages {
 		m := map[string]interface{}{"type_url": any.TypeURL}
-		if decoded, err := hproto.Decode(any.TypeURL, any.Value); err == nil {
+		if decoded, derr := hproto.Decode(any.TypeURL, any.Value); derr == nil {
 			m["value"] = decoded
 		} else {
 			m["value_b64"] = base64.StdEncoding.EncodeToString(any.Value)
-			m["decode_error"] = err.Error()
+			m["decode_error"] = derr.Error()
 		}
 		msgs = append(msgs, m)
 	}

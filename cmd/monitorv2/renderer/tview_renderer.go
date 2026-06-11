@@ -214,8 +214,6 @@ type TviewRenderer struct {
 	currentBlockMu sync.RWMutex
 
 	// Throttling for UI updates
-	lastDrawTime    time.Time
-	drawMu          sync.Mutex
 	minDrawInterval time.Duration
 
 	// Transaction counters for metrics - removed unused fields
@@ -623,39 +621,6 @@ func (t *TviewRenderer) Start(ctx context.Context) error {
 	return nil
 }
 
-// throttledDraw performs a Draw() operation with throttling to prevent overwhelming the UI
-func (t *TviewRenderer) throttledDraw() {
-	t.drawMu.Lock()
-	defer t.drawMu.Unlock()
-
-	now := time.Now()
-	elapsed := now.Sub(t.lastDrawTime)
-
-	if elapsed < t.minDrawInterval {
-		// Too soon since last draw, skip this one
-		return
-	}
-
-	// Save current focus if a modal is active
-	var currentFocus tview.Primitive
-	if t.isModalCurrentlyActive() {
-		currentFocus = t.app.GetFocus()
-	}
-
-	t.lastDrawTime = now
-	t.app.Draw()
-
-	// Restore focus to modal if it was stolen during draw
-	if t.isModalCurrentlyActive() && currentFocus != nil {
-		// Small delay to ensure the draw is complete before restoring focus
-		go func() {
-			time.Sleep(1 * time.Millisecond)
-			t.app.QueueUpdateDraw(func() {
-				t.app.SetFocus(currentFocus)
-			})
-		}()
-	}
-}
 
 // getCachedSigner gets the signer for a block, using LRU cache to avoid expensive Ecrecover calls
 func (t *TviewRenderer) getCachedSigner(block rpctypes.PolyBlock) string {

@@ -36,15 +36,15 @@ func newAddrCmd() *cobra.Command {
 			}
 			w := cmd.OutOrStdout()
 			if showAll {
-				fmt.Fprintf(w, "hex=%s\n", hexAddr)
-				fmt.Fprintf(w, "bech32=%s\n", bechAddr)
+				_, _ = fmt.Fprintf(w, "hex=%s\n", hexAddr)
+				_, _ = fmt.Fprintf(w, "bech32=%s\n", bechAddr)
 				return nil
 			}
 			// Default: print the *other* form from what the user supplied.
 			if isHexAddressInput(args[0]) {
-				fmt.Fprintln(w, bechAddr)
+				_, _ = fmt.Fprintln(w, bechAddr)
 			} else {
-				fmt.Fprintln(w, hexAddr)
+				_, _ = fmt.Fprintln(w, hexAddr)
 			}
 			return nil
 		},
@@ -68,13 +68,13 @@ func ConvertAddress(value, hrp string) (hexAddr, bechAddr string, err error) {
 		return "", "", &client.UsageError{Msg: "address value is empty"}
 	}
 	if isHexAddressInput(value) {
-		raw, err := decodeHexAddress(value)
-		if err != nil {
-			return "", "", err
+		raw, derr := decodeHexAddress(value)
+		if derr != nil {
+			return "", "", derr
 		}
-		bech, err := encodeBech32(hrp, raw)
-		if err != nil {
-			return "", "", err
+		bech, berr := encodeBech32(hrp, raw)
+		if berr != nil {
+			return "", "", berr
 		}
 		return "0x" + hex.EncodeToString(raw), bech, nil
 	}

@@ -131,7 +131,7 @@ func TestAddressesHappyPath(t *testing.T) {
 	idxBor := strings.Index(stdout, "bor_chain_id=")
 	idxHeimdall := strings.Index(stdout, "heimdall_chain_id=")
 	idxPol := strings.Index(stdout, "pol_token_address=")
-	if !(idxBor < idxHeimdall && idxHeimdall < idxPol) {
+	if idxBor >= idxHeimdall || idxHeimdall >= idxPol {
 		t.Errorf("addresses not alphabetized: bor=%d heimdall=%d pol=%d", idxBor, idxHeimdall, idxPol)
 	}
 }

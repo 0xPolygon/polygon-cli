@@ -49,10 +49,10 @@ func newNewMnemonicCmd() *cobra.Command {
 			if printOnly {
 				// Operator just wants the mnemonic + derived key, no
 				// keystore side-effect. Useful for scripting.
-				fmt.Fprintf(w, "address     %s\n", addr.Hex())
-				fmt.Fprintf(w, "path        %s\n", finalPath)
-				fmt.Fprintf(w, "mnemonic    %s\n", mnemonic)
-				fmt.Fprintln(errW, "WARNING: the mnemonic above is the only copy. Record it now; it will not be shown again.")
+				_, _ = fmt.Fprintf(w, "address     %s\n", addr.Hex())
+				_, _ = fmt.Fprintf(w, "path        %s\n", finalPath)
+				_, _ = fmt.Fprintf(w, "mnemonic    %s\n", mnemonic)
+				_, _ = fmt.Fprintln(errW, "WARNING: the mnemonic above is the only copy. Record it now; it will not be shown again.")
 				return nil
 			}
 
@@ -74,14 +74,14 @@ func newNewMnemonicCmd() *cobra.Command {
 				// accidental shift in the derivation logic.
 				return fmt.Errorf("keystore recorded %s but derivation produced %s", acc.Address.Hex(), addr.Hex())
 			}
-			fmt.Fprintf(w, "address     %s\n", acc.Address.Hex())
-			fmt.Fprintf(w, "path        %s\n", finalPath)
-			fmt.Fprintf(w, "keyfile     %s\n", acc.URL.Path)
-			fmt.Fprintf(w, "mnemonic    %s\n", mnemonic)
-			fmt.Fprintln(errW, strings.Repeat("!", 70))
-			fmt.Fprintln(errW, "WARNING: the mnemonic above is the ONLY copy polycli will print.")
-			fmt.Fprintln(errW, "Record it somewhere safe; losing it means losing the key.")
-			fmt.Fprintln(errW, strings.Repeat("!", 70))
+			_, _ = fmt.Fprintf(w, "address     %s\n", acc.Address.Hex())
+			_, _ = fmt.Fprintf(w, "path        %s\n", finalPath)
+			_, _ = fmt.Fprintf(w, "keyfile     %s\n", acc.URL.Path)
+			_, _ = fmt.Fprintf(w, "mnemonic    %s\n", mnemonic)
+			_, _ = fmt.Fprintln(errW, strings.Repeat("!", 70))
+			_, _ = fmt.Fprintln(errW, "WARNING: the mnemonic above is the ONLY copy polycli will print.")
+			_, _ = fmt.Fprintln(errW, "Record it somewhere safe; losing it means losing the key.")
+			_, _ = fmt.Fprintln(errW, strings.Repeat("!", 70))
 			return nil
 		},
 	}

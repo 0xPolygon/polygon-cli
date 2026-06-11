@@ -172,14 +172,13 @@ func writeBlockRange(ctx context.Context, ec *ethrpc.Client, start, end uint64) 
 			return fmt.Errorf("unable to parse block number: %w", err)
 		}
 
-		// Check for gaps
+		// Check for gaps. Continue anyway - the RPC may not have all
+		// blocks; expectedBlock is re-derived from blockNum below.
 		if blockNum > expectedBlock {
 			log.Warn().
 				Uint64("expected", expectedBlock).
 				Uint64("received", blockNum).
 				Msg("Gap detected in block sequence")
-			// Continue anyway - the RPC may not have all blocks
-			expectedBlock = blockNum
 		}
 
 		if _, err := fmt.Fprintln(os.Stdout, string(*block)); err != nil {

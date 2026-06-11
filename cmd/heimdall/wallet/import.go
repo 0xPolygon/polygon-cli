@@ -115,7 +115,7 @@ func newImportCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("importing derived key: %w", err)
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "path     %s\n", finalPath)
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "path     %s\n", finalPath)
 				return printImport(cmd, acc.Address.Hex(), acc.URL.Path)
 			}
 		},
@@ -151,7 +151,7 @@ func readSourcePassword(pwFile, label string) (string, error) {
 // both the direct and derived import paths.
 func printImport(cmd *cobra.Command, address, path string) error {
 	w := cmd.OutOrStdout()
-	fmt.Fprintf(w, "address  %s\n", address)
-	fmt.Fprintf(w, "keyfile  %s\n", path)
+	_, _ = fmt.Fprintf(w, "address  %s\n", address)
+	_, _ = fmt.Fprintf(w, "keyfile  %s\n", path)
 	return nil
 }

@@ -48,7 +48,7 @@ func newChangePasswordCmd() *cobra.Command {
 			if err := ks.Update(acc, oldPw, newPw); err != nil {
 				return fmt.Errorf("updating keystore entry: %w", err)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "updated %s\n", acc.Address.Hex())
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "updated %s\n", acc.Address.Hex())
 			return nil
 		},
 	}

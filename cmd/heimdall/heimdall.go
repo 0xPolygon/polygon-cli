@@ -92,7 +92,7 @@ func wireExitCodes(root *cobra.Command) {
 				// Print the error ourselves (cobra won't, because
 				// SilenceErrors is set) and map it to the correct
 				// cast-style exit code.
-				fmt.Fprintf(cmd.ErrOrStderr(), "Error: %s\n", err.Error())
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Error: %s\n", err.Error())
 				code := client.ExitCode(err)
 				if code == 0 {
 					code = config.ExitNodeErr

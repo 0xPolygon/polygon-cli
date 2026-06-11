@@ -32,13 +32,6 @@ import (
 //go:embed usage.md
 var usage string
 
-// flags is injected by Register. None of the wallet subcommands call
-// config.Resolve — the heimdall network config is irrelevant to local
-// key management — but we keep the handle for symmetry with the other
-// command groups so future additions (e.g. reading the default chain
-// id for tx signing hints) have it without re-plumbing.
-var flags *config.Flags
-
 // newWalletCmd builds a fresh `wallet` umbrella. Constructed per
 // Register call so tests that re-wire a parent do not accumulate
 // duplicate subcommands on a shared command tree.
@@ -70,10 +63,11 @@ func newWalletCmd() *cobra.Command {
 }
 
 // Register attaches the wallet umbrella command and its subcommands to
-// parent. The shared flag struct is stored for future use; wallet
-// subcommands do not currently consume it.
-func Register(parent *cobra.Command, f *config.Flags) {
-	flags = f
+// parent. None of the wallet subcommands call config.Resolve — the
+// heimdall network config is irrelevant to local key management — so
+// the shared Flags handle is accepted only for signature symmetry
+// with the other command groups.
+func Register(parent *cobra.Command, _ *config.Flags) {
 	parent.AddCommand(newWalletCmd())
 }
 

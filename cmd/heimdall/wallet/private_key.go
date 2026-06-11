@@ -45,7 +45,7 @@ func newPrivateKeyCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("decrypting keystore entry: %w", err)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "0x%s\n", hex.EncodeToString(crypto.FromECDSA(priv)))
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "0x%s\n", hex.EncodeToString(crypto.FromECDSA(priv)))
 			return nil
 		},
 	}

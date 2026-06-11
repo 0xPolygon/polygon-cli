@@ -36,9 +36,9 @@ func newSignCmd() *cobra.Command {
 			var sig []byte
 			if raw {
 				// For --raw the argument is always hex (0x-optional).
-				hashBytes, err := parseHex(msg, "hash")
-				if err != nil {
-					return err
+				hashBytes, perr := parseHex(msg, "hash")
+				if perr != nil {
+					return perr
 				}
 				if len(hashBytes) != 32 {
 					return &client.UsageError{Msg: fmt.Sprintf("--raw input must decode to 32 bytes, got %d", len(hashBytes))}
@@ -51,7 +51,7 @@ func newSignCmd() *cobra.Command {
 				// EIP-191 personal_sign. If the argument is hex, sign
 				// the raw decoded bytes to match cast's behaviour.
 				payload := []byte(msg)
-				if decoded, err := parseHex(msg, "message"); err == nil {
+				if decoded, perr := parseHex(msg, "message"); perr == nil {
 					payload = decoded
 				}
 				sig, err = signPersonal(priv, payload)
@@ -59,7 +59,7 @@ func newSignCmd() *cobra.Command {
 					return err
 				}
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "0x%s\n", hex.EncodeToString(sig))
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "0x%s\n", hex.EncodeToString(sig))
 			return nil
 		},
 	}

@@ -116,8 +116,8 @@ func Execute(cmd *cobra.Command, opts *TxOpts, mode Mode, plan *Plan) error {
 			return &client.UsageError{Msg: "signer address is empty; cannot fetch account info"}
 		}
 		fetcher := &htx.RESTAccountFetcher{Client: clients.REST}
-		if err := b.ResolveAccount(ctx, fetcher, plan.SignerAddress); err != nil {
-			return err
+		if rerr := b.ResolveAccount(ctx, fetcher, plan.SignerAddress); rerr != nil {
+			return rerr
 		}
 	}
 
@@ -133,15 +133,15 @@ func Execute(cmd *cobra.Command, opts *TxOpts, mode Mode, plan *Plan) error {
 	b.WithGasLimit(gasLimit)
 
 	if opts.Fee != "" {
-		coin, err := parseFeeCoin(opts.Fee, clients.Cfg.Denom)
-		if err != nil {
-			return &client.UsageError{Msg: err.Error()}
+		coin, ferr := parseFeeCoin(opts.Fee, clients.Cfg.Denom)
+		if ferr != nil {
+			return &client.UsageError{Msg: ferr.Error()}
 		}
 		b.WithFee(coin)
 	} else if opts.GasPrice > 0 {
-		coin, err := computeFeeFromGasPrice(opts.GasPrice, gasLimit, clients.Cfg.Denom)
-		if err != nil {
-			return err
+		coin, ferr := computeFeeFromGasPrice(opts.GasPrice, gasLimit, clients.Cfg.Denom)
+		if ferr != nil {
+			return ferr
 		}
 		b.WithFee(coin)
 	}
@@ -193,8 +193,8 @@ func runSend(ctx context.Context, out io.Writer, clients *Clients, raw []byte, o
 	if res == nil { // --curl
 		return nil
 	}
-	if err := printBroadcastResult(out, res, opts.JSONOut); err != nil {
-		return err
+	if perr := printBroadcastResult(out, res, opts.JSONOut); perr != nil {
+		return perr
 	}
 	if opts.Async {
 		return nil
@@ -204,8 +204,8 @@ func runSend(ctx context.Context, out io.Writer, clients *Clients, raw []byte, o
 		return err
 	}
 	if opts.Confirmations > 0 {
-		if err := htx.WaitForConfirmations(ctx, clients.RPC, height, opts.Confirmations, 0); err != nil {
-			return err
+		if werr := htx.WaitForConfirmations(ctx, clients.RPC, height, opts.Confirmations, 0); werr != nil {
+			return werr
 		}
 	}
 	if opts.JSONOut {

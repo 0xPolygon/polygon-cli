@@ -52,9 +52,9 @@ func newTxPoolCmd() *cobra.Command {
 			opts := renderOpts(cmd, cfg, fields)
 
 			if !list {
-				raw, err := callEmpty(cmd.Context(), rpc, "num_unconfirmed_txs")
-				if err != nil {
-					return err
+				raw, cerr := callEmpty(cmd.Context(), rpc, "num_unconfirmed_txs")
+				if cerr != nil {
+					return cerr
 				}
 				if raw == nil {
 					return nil // --curl
@@ -67,8 +67,8 @@ func newTxPoolCmd() *cobra.Command {
 					return render.RenderJSON(cmd.OutOrStdout(), generic, opts)
 				}
 				var s cometUnconfirmedSummary
-				if err := json.Unmarshal(raw, &s); err != nil {
-					return fmt.Errorf("decoding num_unconfirmed_txs: %w", err)
+				if jerr := json.Unmarshal(raw, &s); jerr != nil {
+					return fmt.Errorf("decoding num_unconfirmed_txs: %w", jerr)
 				}
 				out := map[string]any{
 					"n_txs":       s.NTxs,

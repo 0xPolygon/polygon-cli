@@ -297,7 +297,7 @@ func newTestRESTClient(t *testing.T, handler http.Handler) *client.RESTClient {
 func TestBroadcastHappyPath(t *testing.T) {
 	h := http.NewServeMux()
 	h.HandleFunc("/cosmos/tx/v1beta1/txs", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"tx_response":{"txhash":"ABCDEF","code":0,"height":"100"}}`)
+		_, _ = fmt.Fprint(w, `{"tx_response":{"txhash":"ABCDEF","code":0,"height":"100"}}`)
 	})
 	rest := newTestRESTClient(t, h)
 	res, err := Broadcast(context.Background(), rest, []byte{0x01, 0x02}, BroadcastModeSync)
@@ -318,7 +318,7 @@ func TestBroadcastHappyPath(t *testing.T) {
 func TestBroadcastNonZeroCode(t *testing.T) {
 	h := http.NewServeMux()
 	h.HandleFunc("/cosmos/tx/v1beta1/txs", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"tx_response":{"txhash":"DEAD","code":13,"codespace":"sdk","raw_log":"insufficient fees"}}`)
+		_, _ = fmt.Fprint(w, `{"tx_response":{"txhash":"DEAD","code":13,"codespace":"sdk","raw_log":"insufficient fees"}}`)
 	})
 	rest := newTestRESTClient(t, h)
 	res, err := Broadcast(context.Background(), rest, []byte{0x01}, BroadcastModeSync)
@@ -336,7 +336,7 @@ func TestBroadcastNonZeroCode(t *testing.T) {
 func TestSimulateHappyPath(t *testing.T) {
 	h := http.NewServeMux()
 	h.HandleFunc("/cosmos/tx/v1beta1/simulate", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"gas_info":{"gas_wanted":"200000","gas_used":"137842"}}`)
+		_, _ = fmt.Fprint(w, `{"gas_info":{"gas_wanted":"200000","gas_used":"137842"}}`)
 	})
 	rest := newTestRESTClient(t, h)
 	res, err := Simulate(context.Background(), rest, []byte{0x01})
@@ -406,10 +406,10 @@ func TestWaitForInclusionFindsTx(t *testing.T) {
 		if call < 3 {
 			// Return a JSON-RPC error ("not found") for the first two
 			// calls so we exercise the polling loop.
-			fmt.Fprint(w, `{"jsonrpc":"2.0","id":0,"error":{"code":-1,"message":"tx not found"}}`)
+			_, _ = fmt.Fprint(w, `{"jsonrpc":"2.0","id":0,"error":{"code":-1,"message":"tx not found"}}`)
 			return
 		}
-		fmt.Fprint(w, `{"jsonrpc":"2.0","id":0,"result":{"hash":"DEADBEEF","height":"42"}}`)
+		_, _ = fmt.Fprint(w, `{"jsonrpc":"2.0","id":0,"result":{"hash":"DEADBEEF","height":"42"}}`)
 	})
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
@@ -433,7 +433,7 @@ func TestWaitForInclusionFindsTx(t *testing.T) {
 func TestRESTAccountFetcher(t *testing.T) {
 	h := http.NewServeMux()
 	h.HandleFunc("/cosmos/auth/v1beta1/accounts/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"account":{"@type":"/cosmos.auth.v1beta1.BaseAccount","address":"0xabc","account_number":"25","sequence":"51129"}}`)
+		_, _ = fmt.Fprint(w, `{"account":{"@type":"/cosmos.auth.v1beta1.BaseAccount","address":"0xabc","account_number":"25","sequence":"51129"}}`)
 	})
 	rest := newTestRESTClient(t, h)
 	f := &RESTAccountFetcher{Client: rest}

@@ -20,17 +20,12 @@ import (
 //go:embed usage.md
 var usage string
 
-// flags is injected by Register. Decoders do not use the network, but
-// keep the shared Flags handle in case future subcommands need it (for
-// instance, a --json flag inherited from the root).
-var flags *config.Flags
-
 // Register attaches the decode umbrella and its children to parent.
 // The umbrella command is created fresh on every call so tests that
 // build a throwaway root do not accumulate duplicate subcommands on a
-// shared global.
-func Register(parent *cobra.Command, f *config.Flags) {
-	flags = f
+// shared global. Decoders are offline, so the shared Flags handle is
+// accepted only for signature symmetry with the other command groups.
+func Register(parent *cobra.Command, _ *config.Flags) {
 	cmd := &cobra.Command{
 		Use:   "decode",
 		Short: "Offline proto decoders for Heimdall bytes.",

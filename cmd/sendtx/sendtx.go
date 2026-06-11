@@ -164,7 +164,7 @@ func produceBatches(ctx context.Context, filename string, batchSize int, out cha
 	if err != nil {
 		return fmt.Errorf("opening file: %w", err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
@@ -230,7 +230,7 @@ func sendBatch(ctx context.Context, client *http.Client, rpcURL string, txs []st
 	if err != nil {
 		return fmt.Errorf("sending request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close()        //nolint:errcheck
 	io.Copy(io.Discard, resp.Body) //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {

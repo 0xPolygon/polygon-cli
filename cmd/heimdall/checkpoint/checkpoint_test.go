@@ -208,7 +208,7 @@ func TestLastNoAckAnnotatesAge(t *testing.T) {
 	mustContain(t, stdout, "1776695056")
 	mustContain(t, stdout, "UTC")
 	// The annotator always suffixes with "ago" or "from now".
-	if !(strings.Contains(stdout, "ago") || strings.Contains(stdout, "from now")) {
+	if !strings.Contains(stdout, "ago") && !strings.Contains(stdout, "from now") {
 		t.Errorf("expected age suffix in output: %q", stdout)
 	}
 }

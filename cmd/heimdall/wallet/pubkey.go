@@ -68,10 +68,10 @@ func newPublicKeyCmd() *cobra.Command {
 			compressed := crypto.CompressPubkey(&priv.PublicKey)
 			w := cmd.OutOrStdout()
 			if !compressedOnly {
-				fmt.Fprintf(w, "uncompressed  0x%s\n", hex.EncodeToString(uncompressed))
+				_, _ = fmt.Fprintf(w, "uncompressed  0x%s\n", hex.EncodeToString(uncompressed))
 			}
 			if !uncompressedOnly {
-				fmt.Fprintf(w, "compressed    0x%s\n", hex.EncodeToString(compressed))
+				_, _ = fmt.Fprintf(w, "compressed    0x%s\n", hex.EncodeToString(compressed))
 			}
 			return nil
 		},

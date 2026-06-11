@@ -36,8 +36,8 @@ func newNewCmd() *cobra.Command {
 				return fmt.Errorf("writing keystore entry: %w", err)
 			}
 			w := cmd.OutOrStdout()
-			fmt.Fprintf(w, "address  %s\n", acc.Address.Hex())
-			fmt.Fprintf(w, "keyfile  %s\n", acc.URL.Path)
+			_, _ = fmt.Fprintf(w, "address  %s\n", acc.Address.Hex())
+			_, _ = fmt.Fprintf(w, "keyfile  %s\n", acc.URL.Path)
 			return nil
 		},
 	}

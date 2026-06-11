@@ -2,6 +2,7 @@ package hash
 
 import (
 	"bytes"
+	stdsha3 "crypto/sha3"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -118,13 +119,13 @@ func getHash(name string) (hash.Hash, error) {
 	case "ripemd160":
 		return ripemd160.New(), nil
 	case "sha3_224":
-		return sha3.New224(), nil
+		return stdsha3.New224(), nil
 	case "sha3_256":
-		return sha3.New256(), nil
+		return stdsha3.New256(), nil
 	case "sha3_384":
-		return sha3.New384(), nil
+		return stdsha3.New384(), nil
 	case "sha3_512":
-		return sha3.New512(), nil
+		return stdsha3.New512(), nil
 	case "sha512_224":
 		return sha512.New512_224(), nil
 	case "sha512_256":

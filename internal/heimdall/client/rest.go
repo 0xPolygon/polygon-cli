@@ -39,7 +39,7 @@ func (t *HTTPTransport) Do(req *http.Request) ([]byte, int, error) {
 	if err != nil {
 		return nil, 0, &NetworkError{Err: err}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, resp.StatusCode, &NetworkError{Err: err}
@@ -66,7 +66,7 @@ func (t *CurlTransport) Do(req *http.Request) ([]byte, int, error) {
 	}
 	t.Last = cmd
 	if t.Out != nil {
-		fmt.Fprintln(t.Out, cmd)
+		_, _ = fmt.Fprintln(t.Out, cmd)
 	}
 	return nil, 0, nil
 }

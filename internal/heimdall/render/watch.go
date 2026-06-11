@@ -30,7 +30,7 @@ func Watch(ctx context.Context, out, errOut io.Writer, interval time.Duration, f
 	// output immediately.
 	snap, err := fn(ctx)
 	if err != nil {
-		fmt.Fprintf(errOut, "watch: %v\n", err)
+		_, _ = fmt.Fprintf(errOut, "watch: %v\n", err)
 	} else {
 		writeSnapshot(out, prev, snap, time.Now())
 		prev = snap
@@ -46,7 +46,7 @@ func Watch(ctx context.Context, out, errOut io.Writer, interval time.Duration, f
 		case <-timer.C:
 			snap, err := fn(ctx)
 			if err != nil {
-				fmt.Fprintf(errOut, "watch: %v\n", err)
+				_, _ = fmt.Fprintf(errOut, "watch: %v\n", err)
 			} else if snap != prev {
 				writeSnapshot(out, prev, snap, time.Now())
 				prev = snap
@@ -57,11 +57,11 @@ func Watch(ctx context.Context, out, errOut io.Writer, interval time.Duration, f
 }
 
 func writeSnapshot(w io.Writer, prev, snap string, at time.Time) {
-	fmt.Fprintf(w, "--- %s ---\n", at.UTC().Format(time.RFC3339))
+	_, _ = fmt.Fprintf(w, "--- %s ---\n", at.UTC().Format(time.RFC3339))
 	if prev == "" {
 		_, _ = io.Copy(w, bytesBuf(snap))
 		if !hasTrailingNewline(snap) {
-			fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w)
 		}
 		return
 	}
@@ -83,12 +83,12 @@ func writeDiff(w io.Writer, before, after string) {
 	}
 	for _, l := range beforeLines {
 		if _, ok := afterSet[l]; !ok {
-			fmt.Fprintf(w, "- %s\n", l)
+			_, _ = fmt.Fprintf(w, "- %s\n", l)
 		}
 	}
 	for _, l := range afterLines {
 		if _, ok := beforeSet[l]; !ok {
-			fmt.Fprintf(w, "+ %s\n", l)
+			_, _ = fmt.Fprintf(w, "+ %s\n", l)
 		}
 	}
 }

@@ -83,8 +83,8 @@ func newNonceLikeCmd(use, short string) *cobra.Command {
 			opts := renderOpts(cmd, cfg, fields)
 			if opts.JSON {
 				var generic any
-				if err := json.Unmarshal(raw, &generic); err != nil {
-					return fmt.Errorf("decoding account for json: %w", err)
+				if jerr := json.Unmarshal(raw, &generic); jerr != nil {
+					return fmt.Errorf("decoding account for json: %w", jerr)
 				}
 				return render.RenderJSON(cmd.OutOrStdout(), generic, opts)
 			}
