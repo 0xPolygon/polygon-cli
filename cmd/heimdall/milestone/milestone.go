@@ -59,6 +59,7 @@ func Register(parent *cobra.Command, f *config.Flags) {
 		newCountCmd(),
 		newLatestCmd(),
 		newGetCmd(),
+		newVotesCmd(),
 	)
 	render.EnableWatchTree(MilestoneCmd)
 	parent.AddCommand(MilestoneCmd)
@@ -75,6 +76,24 @@ func newRESTClient(cmd *cobra.Command) (*client.RESTClient, *config.Config, erro
 		return nil, nil, &client.UsageError{Msg: err.Error()}
 	}
 	c := client.NewRESTClient(cfg.RESTURL, cfg.Timeout, cfg.RPCHeaders, cfg.Insecure)
+	if cfg.Curl {
+		c.Transport = &client.CurlTransport{Out: cmd.OutOrStdout(), Headers: cfg.RPCHeaders}
+	}
+	return c, cfg, nil
+}
+
+// newRPCClient resolves the config and constructs an RPCClient
+// against the CometBFT endpoint. When --curl is set the RPC call does
+// not execute; it prints an equivalent curl command instead.
+func newRPCClient(cmd *cobra.Command) (*client.RPCClient, *config.Config, error) {
+	if flags == nil {
+		return nil, nil, &client.UsageError{Msg: "milestone package not registered (flags unset)"}
+	}
+	cfg, err := config.Resolve(flags)
+	if err != nil {
+		return nil, nil, &client.UsageError{Msg: err.Error()}
+	}
+	c := client.NewRPCClient(cfg.RPCURL, cfg.Timeout, cfg.RPCHeaders, cfg.Insecure)
 	if cfg.Curl {
 		c.Transport = &client.CurlTransport{Out: cmd.OutOrStdout(), Headers: cfg.RPCHeaders}
 	}

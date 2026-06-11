@@ -85,6 +85,7 @@ func runCmd(t *testing.T, restURL string, args ...string) (string, string, error
 		newCountCmd(),
 		newLatestCmd(),
 		newGetCmd(),
+		newVotesCmd(),
 	)
 
 	root := &cobra.Command{Use: "h", SilenceUsage: true}

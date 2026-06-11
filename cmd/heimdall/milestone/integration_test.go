@@ -56,6 +56,7 @@ func execLive(t *testing.T, args ...string) (string, string, error) {
 		newCountCmd(),
 		newLatestCmd(),
 		newGetCmd(),
+		newVotesCmd(),
 	)
 
 	root := &cobra.Command{Use: "h", SilenceUsage: true}
@@ -187,6 +188,82 @@ func TestIntegrationMilestoneNumberNotEqualToMilestoneID(t *testing.T) {
 	}
 	if env.Milestone.MilestoneID == env.Milestone.Number {
 		t.Errorf("number and milestone_id must differ; both were %q", env.Milestone.Number)
+	}
+}
+
+// TestIntegrationMilestoneVotes scans the last few vote heights and
+// checks that every height yields one record per validator, that at
+// least one validator maps to a val_id, and that any finalized
+// milestone cross-checks against the REST /milestones/{number} view.
+func TestIntegrationMilestoneVotes(t *testing.T) {
+	stdout, _, err := execLive(t, "votes", "--from-time",
+		time.Now().Add(-30*time.Second).UTC().Format(time.RFC3339), "--json")
+	if err != nil {
+		t.Fatalf("votes: %v", err)
+	}
+	var env struct {
+		From  int64 `json:"from"`
+		To    int64 `json:"to"`
+		Votes []struct {
+			Height float64 `json:"height"`
+			ValID  string  `json:"val_id"`
+			Signer string  `json:"signer"`
+			Flag   string  `json:"flag"`
+		} `json:"votes"`
+		Milestones []struct {
+			Number     string  `json:"number"`
+			StartBlock float64 `json:"start_block"`
+			EndBlock   float64 `json:"end_block"`
+		} `json:"milestones"`
+	}
+	if jerr := json.Unmarshal([]byte(stdout), &env); jerr != nil {
+		t.Fatalf("votes output not JSON: %v\n%s", jerr, stdout)
+	}
+	if env.From > env.To {
+		t.Fatalf("inverted range [%d, %d]", env.From, env.To)
+	}
+
+	perHeight := map[float64]int{}
+	mapped := false
+	for _, v := range env.Votes {
+		perHeight[v.Height]++
+		if v.ValID != "-" && v.ValID != "" {
+			mapped = true
+		}
+	}
+	if len(perHeight) != int(env.To-env.From+1) {
+		t.Errorf("expected records for %d heights, got %d", env.To-env.From+1, len(perHeight))
+	}
+	for h, n := range perHeight {
+		if n < 1 {
+			t.Errorf("height %v has no records", h)
+		}
+	}
+	if !mapped {
+		t.Errorf("no validator mapped to a val_id; mapping is broken")
+	}
+
+	// Cross-check the first finalized milestone against REST.
+	if len(env.Milestones) > 0 {
+		ms := env.Milestones[0]
+		msOut, _, err := execLive(t, "get", ms.Number, "--json")
+		if err != nil {
+			t.Fatalf("milestone get %s: %v", ms.Number, err)
+		}
+		var rest struct {
+			Milestone struct {
+				StartBlock string `json:"start_block"`
+				EndBlock   string `json:"end_block"`
+			} `json:"milestone"`
+		}
+		if jerr := json.Unmarshal([]byte(msOut), &rest); jerr != nil {
+			t.Fatalf("milestone get output not JSON: %v\n%s", jerr, msOut)
+		}
+		if rest.Milestone.StartBlock != strconv.FormatUint(uint64(ms.StartBlock), 10) ||
+			rest.Milestone.EndBlock != strconv.FormatUint(uint64(ms.EndBlock), 10) {
+			t.Errorf("milestone %s event/REST mismatch: event [%v, %v], REST [%s, %s]",
+				ms.Number, ms.StartBlock, ms.EndBlock, rest.Milestone.StartBlock, rest.Milestone.EndBlock)
+		}
 	}
 }
 

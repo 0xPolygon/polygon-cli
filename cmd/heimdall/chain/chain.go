@@ -22,6 +22,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/comet"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/config"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
@@ -149,39 +150,13 @@ func resolveHeight(ctx context.Context, rpc *client.RPCClient, arg string) (stri
 
 // --- CometBFT response types ---
 //
-// We decode only the fields actually used; everything else stays in
-// the raw JSON (and is available via --json / --field).
+// The shared response types and fetch helpers live in
+// internal/heimdall/comet so the milestone family can reuse them; the
+// aliases below keep this package's call sites unchanged.
 
-type cometStatus struct {
-	NodeInfo struct {
-		Version string `json:"version"`
-		Network string `json:"network"`
-		Moniker string `json:"moniker"`
-	} `json:"node_info"`
-	SyncInfo struct {
-		LatestBlockHeight   string `json:"latest_block_height"`
-		LatestBlockTime     string `json:"latest_block_time"`
-		EarliestBlockHeight string `json:"earliest_block_height"`
-		CatchingUp          bool   `json:"catching_up"`
-	} `json:"sync_info"`
-}
+type cometStatus = comet.Status
 
-type cometBlock struct {
-	BlockID struct {
-		Hash string `json:"hash"`
-	} `json:"block_id"`
-	Block struct {
-		Header struct {
-			ChainID         string `json:"chain_id"`
-			Height          string `json:"height"`
-			Time            string `json:"time"`
-			ProposerAddress string `json:"proposer_address"`
-		} `json:"header"`
-		Data struct {
-			Txs []string `json:"txs"`
-		} `json:"data"`
-	} `json:"block"`
-}
+type cometBlock = comet.Block
 
 type cometABCIInfo struct {
 	Response struct {
@@ -191,48 +166,14 @@ type cometABCIInfo struct {
 	} `json:"response"`
 }
 
-// fetchStatus calls the CometBFT /status RPC and returns the decoded
-// struct. Returns (nil, nil) when running under --curl.
+// fetchStatus delegates to comet.FetchStatus.
 func fetchStatus(ctx context.Context, rpc *client.RPCClient) (*cometStatus, error) {
-	raw, err := rpc.Call(ctx, "status", nil)
-	if err != nil {
-		return nil, fmt.Errorf("fetching status: %w", err)
-	}
-	if raw == nil {
-		return nil, nil
-	}
-	var st cometStatus
-	if err := json.Unmarshal(raw, &st); err != nil {
-		return nil, fmt.Errorf("decoding status: %w", err)
-	}
-	return &st, nil
+	return comet.FetchStatus(ctx, rpc)
 }
 
-// fetchBlock calls CometBFT /block at the given height (empty ==
-// latest). Returns the typed struct, the raw result bytes (for --json
-// passthrough), and any error. Both return values are nil when --curl
-// short-circuits.
+// fetchBlock delegates to comet.FetchBlock.
 func fetchBlock(ctx context.Context, rpc *client.RPCClient, height string) (*cometBlock, json.RawMessage, error) {
-	// CometBFT's reflect-based RPC requires an explicit `height`
-	// key in params; a missing or empty params object returns
-	// "reflect: Call with too few input arguments". Pass nil height
-	// to request the latest block.
-	params := map[string]any{"height": nil}
-	if height != "" {
-		params["height"] = height
-	}
-	raw, err := rpc.Call(ctx, "block", params)
-	if err != nil {
-		return nil, nil, fmt.Errorf("fetching block: %w", err)
-	}
-	if raw == nil {
-		return nil, nil, nil
-	}
-	var blk cometBlock
-	if err := json.Unmarshal(raw, &blk); err != nil {
-		return nil, nil, fmt.Errorf("decoding block: %w", err)
-	}
-	return &blk, raw, nil
+	return comet.FetchBlock(ctx, rpc, height)
 }
 
 // fetchABCIInfo calls CometBFT /abci_info.
