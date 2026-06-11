@@ -122,7 +122,7 @@ func runCmdNamed(t *testing.T, restURL, topLevel string, args ...string) (string
 	root := &cobra.Command{Use: "h", SilenceUsage: true}
 	f := &config.Flags{}
 	f.Register(root)
-	flags = f
+	pkg.Flags = f
 	root.AddCommand(local, validators)
 
 	var stdout, stderr bytes.Buffer

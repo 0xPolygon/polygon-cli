@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -36,7 +37,7 @@ func newBalanceCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rest, cfg, err := newRESTClient(cmd)
+			rest, cfg, err := pkg.RESTClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -57,7 +58,7 @@ func newBalanceCmd() *cobra.Command {
 				return nil // --curl
 			}
 
-			opts := renderOpts(cmd, cfg, fields)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
 			if opts.JSON {
 				var generic any
 				if jerr := json.Unmarshal(body, &generic); jerr != nil {
@@ -68,7 +69,7 @@ func newBalanceCmd() *cobra.Command {
 
 			var resp balanceResponse
 			if jerr := json.Unmarshal(body, &resp); jerr != nil {
-				return fmt.Errorf("decoding balance: %w (body=%q)", jerr, truncate(body, 256))
+				return fmt.Errorf("decoding balance: %w (body=%q)", jerr, cmdutil.Truncate(body, 256))
 			}
 			amount := resp.Balance.Amount
 			if amount == "" {

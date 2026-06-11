@@ -16,6 +16,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/comet"
 	hproto "github.com/0xPolygon/polygon-cli/internal/heimdall/proto"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
@@ -80,7 +81,7 @@ carries the previous height's vote extensions as its first transaction.
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rpc, cfg, err := newRPCClient(cmd)
+			rpc, cfg, err := pkg.RPCClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -99,7 +100,7 @@ carries the previous height's vote extensions as its first transaction.
 				return err
 			}
 
-			rest, _, err := newRESTClient(cmd)
+			rest, _, err := pkg.RESTClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -118,7 +119,7 @@ carries the previous height's vote extensions as its first transaction.
 				records = filterMissing(records)
 			}
 
-			opts := renderOpts(cmd, cfg, fields)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
 			out := cmd.OutOrStdout()
 			if cfg.JSON {
 				env := map[string]any{
@@ -441,7 +442,7 @@ func fetchValIDMap(ctx context.Context, rest *client.RESTClient) (map[string]val
 	if status == 0 && body == nil {
 		return map[string]validatorInfo{}, nil // --curl
 	}
-	m, err := decodeJSONMap(body, "validator set")
+	m, err := cmdutil.DecodeJSONMap(body, "validator set")
 	if err != nil {
 		return nil, err
 	}

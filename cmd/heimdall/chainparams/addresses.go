@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -27,7 +28,7 @@ func newAddressesCmd() *cobra.Command {
 		Short: "Print L1 contract addresses and chain ids.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rest, cfg, err := newRESTClient(cmd)
+			rest, cfg, err := pkg.RESTClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -38,7 +39,7 @@ func newAddressesCmd() *cobra.Command {
 			if status == 0 && body == nil {
 				return nil
 			}
-			m, err := decodeJSONMap(body, "chainmanager params")
+			m, err := cmdutil.DecodeJSONMap(body, "chainmanager params")
 			if err != nil {
 				return err
 			}
@@ -46,7 +47,7 @@ func newAddressesCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			opts := renderOpts(cmd, cfg, fields)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
 			if opts.JSON {
 				// Convert to map[string]any so RenderJSON honours --field
 				// plucking over the derived view.

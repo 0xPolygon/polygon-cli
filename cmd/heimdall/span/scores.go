@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -23,31 +24,12 @@ type scoresResponse struct {
 // descending (tie-broken by ascending validator id for determinism),
 // with one validator per line.
 func newScoresCmd() *cobra.Command {
-	var fields []string
-	cmd := &cobra.Command{
+	return pkg.NewGetCmd(cmdutil.Get{
 		Use:   "scores",
 		Short: "Show validator performance scores (desc).",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			rest, cfg, err := newRESTClient(cmd)
-			if err != nil {
-				return err
-			}
-			body, status, err := rest.Get(cmd.Context(), "/bor/validator-performance-score", nil)
-			if err != nil {
-				return err
-			}
-			if status == 0 && body == nil {
-				return nil
-			}
-			opts := renderOpts(cmd, cfg, fields)
-			if opts.JSON {
-				m, jerr := decodeJSONMap(body, "validator performance scores")
-				if jerr != nil {
-					return jerr
-				}
-				return render.RenderJSON(cmd.OutOrStdout(), m, opts)
-			}
+		Path:  "/bor/validator-performance-score",
+		Label: "validator performance scores",
+		RenderBody: func(cmd *cobra.Command, body []byte, opts render.Options) error {
 			var resp scoresResponse
 			if jerr := json.Unmarshal(body, &resp); jerr != nil {
 				return fmt.Errorf("decoding validator performance scores: %w", jerr)
@@ -66,9 +48,7 @@ func newScoresCmd() *cobra.Command {
 			}
 			return render.RenderTable(cmd.OutOrStdout(), table, opts)
 		},
-	}
-	cmd.Flags().StringArrayVarP(&fields, "field", "f", nil, "pluck one or more fields (repeatable)")
-	return cmd
+	})
 }
 
 type scoreRow struct {

@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -14,7 +15,8 @@ import (
 // /bor/producers/planned-downtime/{id}. On HTTP 404 ("no planned
 // downtime found") the command prints `none` and exits 0, because for
 // operators the absence of a planned downtime record is a normal
-// answer rather than a failure.
+// answer rather than a failure. That 404 special case keeps it off the
+// generic Get builder.
 func newDowntimeCmd() *cobra.Command {
 	var fields []string
 	cmd := &cobra.Command{
@@ -26,7 +28,7 @@ func newDowntimeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rest, cfg, err := newRESTClient(cmd)
+			rest, cfg, err := pkg.RESTClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -42,8 +44,8 @@ func newDowntimeCmd() *cobra.Command {
 			if status == 0 && body == nil {
 				return nil
 			}
-			opts := renderOpts(cmd, cfg, fields)
-			m, err := decodeJSONMap(body, "planned downtime")
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
+			m, err := cmdutil.DecodeJSONMap(body, "planned downtime")
 			if err != nil {
 				return err
 			}

@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -44,7 +45,7 @@ func runGet(cmd *cobra.Command, idArg string, base64 bool, fields ...string) err
 	if err != nil {
 		return &client.UsageError{Msg: fmt.Sprintf("event-record id must be a positive integer, got %q", idArg)}
 	}
-	rest, cfg, err := newRESTClient(cmd)
+	rest, cfg, err := pkg.RESTClient(cmd)
 	if err != nil {
 		return err
 	}
@@ -55,8 +56,9 @@ func runGet(cmd *cobra.Command, idArg string, base64 bool, fields ...string) err
 	if status == 0 && body == nil {
 		return nil
 	}
-	opts := renderOpts(cmd, cfg, fields, base64)
-	m, err := decodeJSONMap(body, "clerk event-record")
+	opts := cmdutil.RenderOpts(cmd, cfg, fields)
+	opts.Raw = opts.Raw || base64
+	m, err := cmdutil.DecodeJSONMap(body, "clerk event-record")
 	if err != nil {
 		return err
 	}

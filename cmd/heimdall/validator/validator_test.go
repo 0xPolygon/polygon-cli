@@ -7,9 +7,10 @@ import (
 	"testing"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 )
 
-// --- normalizeSignerAddress / normalizeTxHash ---
+// --- cmdutil.NormalizeHex (signer) / cmdutil.NormalizeTxHash ---
 
 func TestNormalizeSignerAddress(t *testing.T) {
 	const raw = "4AD84F7014B7B44F723F284A85B1662337971439"
@@ -27,7 +28,7 @@ func TestNormalizeSignerAddress(t *testing.T) {
 		{"zz" + raw[2:], "", true},
 	}
 	for _, c := range cases {
-		got, err := normalizeSignerAddress(c.in)
+		got, err := cmdutil.NormalizeHex(c.in, 20, "signer")
 		if (err != nil) != c.wantErr {
 			t.Errorf("in=%q err=%v wantErr=%v", c.in, err, c.wantErr)
 			continue
@@ -52,7 +53,7 @@ func TestNormalizeTxHash(t *testing.T) {
 		{"zz" + raw[2:], "", true},
 	}
 	for _, c := range cases {
-		got, err := normalizeTxHash(c.in)
+		got, err := cmdutil.NormalizeTxHash(c.in)
 		if (err != nil) != c.wantErr {
 			t.Errorf("in=%q err=%v wantErr=%v", c.in, err, c.wantErr)
 			continue
@@ -475,22 +476,22 @@ func TestIsL1UnreachableUnit(t *testing.T) {
 	other := []byte(`{"code":5,"message":"not found"}`)
 	notJSON := []byte(`<html>502 Bad Gateway</html>`)
 
-	if !isL1Unreachable(code13, nil) {
+	if !cmdutil.IsL1Unreachable(code13, nil) {
 		t.Error("expected true for code 13 body")
 	}
-	if isL1Unreachable(other, nil) {
+	if cmdutil.IsL1Unreachable(other, nil) {
 		t.Error("expected false for non-13 code")
 	}
-	if isL1Unreachable(notJSON, nil) {
+	if cmdutil.IsL1Unreachable(notJSON, nil) {
 		t.Error("expected false for non-JSON body")
 	}
 	hErr := &client.HTTPError{StatusCode: 500, Body: code13}
-	if !isL1Unreachable(nil, hErr) {
+	if !cmdutil.IsL1Unreachable(nil, hErr) {
 		t.Error("expected true when body comes from HTTPError")
 	}
 	// Transport-level error string without body.
 	connErr := errors.New("dial tcp 172.19.0.2:1317: connect: connection refused")
-	if !isL1Unreachable(nil, connErr) {
+	if !cmdutil.IsL1Unreachable(nil, connErr) {
 		t.Error("expected true for connection-refused transport error")
 	}
 }

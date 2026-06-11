@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -41,7 +42,7 @@ func runGet(cmd *cobra.Command, numArg string) error {
 	if err != nil {
 		return &client.UsageError{Msg: fmt.Sprintf("milestone number must be a positive integer, got %q", numArg)}
 	}
-	rest, cfg, err := newRESTClient(cmd)
+	rest, cfg, err := pkg.RESTClient(cmd)
 	if err != nil {
 		return err
 	}
@@ -52,7 +53,7 @@ func runGet(cmd *cobra.Command, numArg string) error {
 			// 404 — try to enrich with a valid-range hint. If the
 			// count lookup itself fails, return the original error.
 			if count, cerr := fetchCount(cmd.Context(), rest); cerr == nil {
-				opts := renderOpts(cmd, cfg, nil)
+				opts := cmdutil.RenderOpts(cmd, cfg, nil)
 				if number == 0 || number > count {
 					hint := render.Hint{
 						Key:  "milestone-range",
@@ -67,8 +68,8 @@ func runGet(cmd *cobra.Command, numArg string) error {
 	if status == 0 && body == nil {
 		return nil
 	}
-	opts := renderOpts(cmd, cfg, nil)
-	m, err := decodeJSONMap(body, "milestone")
+	opts := cmdutil.RenderOpts(cmd, cfg, nil)
+	m, err := cmdutil.DecodeJSONMap(body, "milestone")
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,6 @@
 package proto
 
-import "fmt"
+import "google.golang.org/protobuf/encoding/protowire"
 
 // Stake module Msg type URLs.
 const (
@@ -44,52 +44,18 @@ func (m *MsgValidatorJoin) Marshal() []byte {
 // UnmarshalMsgValidatorJoin parses the message bytes.
 func UnmarshalMsgValidatorJoin(b []byte) (*MsgValidatorJoin, error) {
 	out := &MsgValidatorJoin{}
-	for len(b) > 0 {
-		num, _, val, n, err := consumeField(b)
-		if err != nil {
-			return nil, fmt.Errorf("MsgValidatorJoin: %w", err)
-		}
-		switch num {
-		case 1:
-			out.From = string(val)
-		case 2:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.ValID = v
-		case 3:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.ActivationEpoch = v
-		case 4:
-			out.Amount = string(val)
-		case 5:
-			out.SignerPubKey = append([]byte(nil), val...)
-		case 6:
-			out.TxHash = append([]byte(nil), val...)
-		case 7:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.LogIndex = v
-		case 8:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.BlockNumber = v
-		case 9:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.Nonce = v
-		}
-		b = b[n:]
+	if err := unmarshalFields(b, "MsgValidatorJoin", map[protowire.Number]fieldHandler{
+		1: setString(&out.From),
+		2: setUint64(&out.ValID),
+		3: setUint64(&out.ActivationEpoch),
+		4: setString(&out.Amount),
+		5: setBytes(&out.SignerPubKey),
+		6: setBytes(&out.TxHash),
+		7: setUint64(&out.LogIndex),
+		8: setUint64(&out.BlockNumber),
+		9: setUint64(&out.Nonce),
+	}); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -129,44 +95,16 @@ func (m *MsgStakeUpdate) Marshal() []byte {
 // UnmarshalMsgStakeUpdate parses the message bytes.
 func UnmarshalMsgStakeUpdate(b []byte) (*MsgStakeUpdate, error) {
 	out := &MsgStakeUpdate{}
-	for len(b) > 0 {
-		num, _, val, n, err := consumeField(b)
-		if err != nil {
-			return nil, fmt.Errorf("MsgStakeUpdate: %w", err)
-		}
-		switch num {
-		case 1:
-			out.From = string(val)
-		case 2:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.ValID = v
-		case 3:
-			out.NewAmount = string(val)
-		case 4:
-			out.TxHash = append([]byte(nil), val...)
-		case 5:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.LogIndex = v
-		case 6:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.BlockNumber = v
-		case 7:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.Nonce = v
-		}
-		b = b[n:]
+	if err := unmarshalFields(b, "MsgStakeUpdate", map[protowire.Number]fieldHandler{
+		1: setString(&out.From),
+		2: setUint64(&out.ValID),
+		3: setString(&out.NewAmount),
+		4: setBytes(&out.TxHash),
+		5: setUint64(&out.LogIndex),
+		6: setUint64(&out.BlockNumber),
+		7: setUint64(&out.Nonce),
+	}); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -206,44 +144,16 @@ func (m *MsgSignerUpdate) Marshal() []byte {
 // UnmarshalMsgSignerUpdate parses the message bytes.
 func UnmarshalMsgSignerUpdate(b []byte) (*MsgSignerUpdate, error) {
 	out := &MsgSignerUpdate{}
-	for len(b) > 0 {
-		num, _, val, n, err := consumeField(b)
-		if err != nil {
-			return nil, fmt.Errorf("MsgSignerUpdate: %w", err)
-		}
-		switch num {
-		case 1:
-			out.From = string(val)
-		case 2:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.ValID = v
-		case 3:
-			out.NewSignerPubKey = append([]byte(nil), val...)
-		case 4:
-			out.TxHash = append([]byte(nil), val...)
-		case 5:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.LogIndex = v
-		case 6:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.BlockNumber = v
-		case 7:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.Nonce = v
-		}
-		b = b[n:]
+	if err := unmarshalFields(b, "MsgSignerUpdate", map[protowire.Number]fieldHandler{
+		1: setString(&out.From),
+		2: setUint64(&out.ValID),
+		3: setBytes(&out.NewSignerPubKey),
+		4: setBytes(&out.TxHash),
+		5: setUint64(&out.LogIndex),
+		6: setUint64(&out.BlockNumber),
+		7: setUint64(&out.Nonce),
+	}); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -283,48 +193,16 @@ func (m *MsgValidatorExit) Marshal() []byte {
 // UnmarshalMsgValidatorExit parses the message bytes.
 func UnmarshalMsgValidatorExit(b []byte) (*MsgValidatorExit, error) {
 	out := &MsgValidatorExit{}
-	for len(b) > 0 {
-		num, _, val, n, err := consumeField(b)
-		if err != nil {
-			return nil, fmt.Errorf("MsgValidatorExit: %w", err)
-		}
-		switch num {
-		case 1:
-			out.From = string(val)
-		case 2:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.ValID = v
-		case 3:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.DeactivationEpoch = v
-		case 4:
-			out.TxHash = append([]byte(nil), val...)
-		case 5:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.LogIndex = v
-		case 6:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.BlockNumber = v
-		case 7:
-			v, err := varint(val)
-			if err != nil {
-				return nil, err
-			}
-			out.Nonce = v
-		}
-		b = b[n:]
+	if err := unmarshalFields(b, "MsgValidatorExit", map[protowire.Number]fieldHandler{
+		1: setString(&out.From),
+		2: setUint64(&out.ValID),
+		3: setUint64(&out.DeactivationEpoch),
+		4: setBytes(&out.TxHash),
+		5: setUint64(&out.LogIndex),
+		6: setUint64(&out.BlockNumber),
+		7: setUint64(&out.Nonce),
+	}); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

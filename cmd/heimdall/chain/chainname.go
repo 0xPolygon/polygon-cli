@@ -15,7 +15,7 @@ func newChainCmd() *cobra.Command {
 		Short: "Print the human-readable chain name.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rpc, _, err := newRPCClient(cmd)
+			rpc, _, err := pkg.RPCClient(cmd)
 			if err != nil {
 				return err
 			}

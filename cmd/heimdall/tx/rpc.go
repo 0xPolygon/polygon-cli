@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -27,7 +28,7 @@ func newRPCCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rpc, cfg, err := newRPCClient(cmd)
+			rpc, cfg, err := pkg.RPCClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -38,7 +39,7 @@ func newRPCCmd() *cobra.Command {
 			if raw == nil {
 				return nil // --curl
 			}
-			opts := renderOpts(cmd, cfg, fields)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
 			var generic any
 			if err := json.Unmarshal(raw, &generic); err != nil {
 				return fmt.Errorf("decoding rpc response: %w", err)

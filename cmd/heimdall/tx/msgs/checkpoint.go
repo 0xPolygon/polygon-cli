@@ -31,13 +31,13 @@ func init() {
 func newCheckpointCmd(mode Mode, globalFlags *config.Flags) *cobra.Command {
 	opts := &TxOpts{Global: globalFlags}
 	var (
-		proposerFlag        string
-		startBlock          uint64
-		endBlock            uint64
-		rootHashHex         string
-		accountRootHashHex  string
-		borChainID          string
-		iAmAValidator       bool
+		proposerFlag       string
+		startBlock         uint64
+		endBlock           uint64
+		rootHashHex        string
+		accountRootHashHex string
+		borChainID         string
+		iAmAValidator      bool
 	)
 
 	cmd := &cobra.Command{
@@ -56,22 +56,12 @@ are doing.
 				return &client.UsageError{Msg: "MsgCheckpoint is validator-only; re-run with --i-am-a-validator"}
 			}
 
-			proposer := strings.TrimSpace(proposerFlag)
-			if proposer == "" {
-				signer, err := ResolveSigningKey(opts, cmd.InOrStdin())
-				if err != nil {
-					return err
-				}
-				proposer = strings.ToLower(signer.Address.Hex())
-			} else {
-				p, err := lowerEthAddress("proposer", proposer)
-				if err != nil {
-					return err
-				}
-				proposer = p
+			proposer, err := signerOrFlagAddress(cmd, opts, "proposer", proposerFlag)
+			if err != nil {
+				return err
 			}
 
-			if err := requireNonEmptyString("bor-chain-id", borChainID); err != nil {
+			if err = requireNonEmptyString("bor-chain-id", borChainID); err != nil {
 				return err
 			}
 
@@ -87,19 +77,14 @@ are doing.
 				return err
 			}
 
-			plan := &Plan{
-				Msgs: []htx.Msg{&htx.CheckpointMsg{
-					Proposer:        proposer,
-					StartBlock:      startBlock,
-					EndBlock:        endBlock,
-					RootHash:        rootHash,
-					AccountRootHash: accRootHash,
-					BorChainID:      strings.TrimSpace(borChainID),
-				}},
-				MsgShortType:  checkpointMsgShort,
-				SignerAddress: proposer,
-			}
-			return Execute(cmd, opts, mode, plan)
+			return executeSingleMsg(cmd, opts, mode, checkpointMsgShort, proposer, &htx.CheckpointMsg{
+				Proposer:        proposer,
+				StartBlock:      startBlock,
+				EndBlock:        endBlock,
+				RootHash:        rootHash,
+				AccountRootHash: accRootHash,
+				BorChainID:      strings.TrimSpace(borChainID),
+			})
 		},
 	}
 	RegisterFlags(cmd, opts, mode)

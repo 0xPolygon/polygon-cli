@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -32,7 +33,7 @@ func runGet(cmd *cobra.Command, idArg string) error {
 	if err != nil {
 		return &client.UsageError{Msg: fmt.Sprintf("checkpoint id must be a positive integer, got %q", idArg)}
 	}
-	rest, cfg, err := newRESTClient(cmd)
+	rest, cfg, err := pkg.RESTClient(cmd)
 	if err != nil {
 		return err
 	}
@@ -45,8 +46,8 @@ func runGet(cmd *cobra.Command, idArg string) error {
 	}
 	// --field is valid here but not a flag on the umbrella; honour the
 	// global --json and --raw only.
-	opts := renderOpts(cmd, cfg, nil)
-	m, err := decodeJSONMap(body, "checkpoint")
+	opts := cmdutil.RenderOpts(cmd, cfg, nil)
+	m, err := cmdutil.DecodeJSONMap(body, "checkpoint")
 	if err != nil {
 		return err
 	}

@@ -80,9 +80,9 @@ func PubKeyAny(keyBytes []byte) *Any {
 // SignModeDirect and SignModeAminoJSON are the two values of
 // cosmos.tx.signing.v1beta1.SignMode that polycli supports.
 const (
-	SignModeDirect     int32 = 1
-	SignModeAminoJSON  int32 = 127
-	SignModeUnspecif   int32 = 0
+	SignModeDirect    int32 = 1
+	SignModeAminoJSON int32 = 127
+	SignModeUnspecif  int32 = 0
 )
 
 // ModeInfoSingle is the ModeInfo.Single sub-message.

@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 )
 
 // newHealthCmd builds `ops health`. Prints "OK" on success, returns a
@@ -15,11 +17,11 @@ func newHealthCmd() *cobra.Command {
 		Short: "Probe CometBFT /health; exit 0 on success.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rpc, _, err := newRPCClient(cmd)
+			rpc, _, err := pkg.RPCClient(cmd)
 			if err != nil {
 				return err
 			}
-			raw, err := callEmpty(cmd.Context(), rpc, "health")
+			raw, err := cmdutil.CallEmpty(cmd.Context(), rpc, "health")
 			if err != nil {
 				return err
 			}

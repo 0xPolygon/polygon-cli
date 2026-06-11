@@ -68,6 +68,11 @@ func appendSubmessage(b []byte, fieldNum protowire.Number, encode func() []byte)
 	return b
 }
 
+// errInvalidVarint wraps a protowire varint parse failure.
+func errInvalidVarint(n int) error {
+	return fmt.Errorf("proto: invalid varint: %w", protowire.ParseError(n))
+}
+
 // consumeField reads one (number, type, value, n) record from the
 // start of b. Returns an error on malformed input.
 func consumeField(b []byte) (protowire.Number, protowire.Type, []byte, int, error) {
@@ -79,7 +84,7 @@ func consumeField(b []byte) (protowire.Number, protowire.Type, []byte, int, erro
 	case protowire.VarintType:
 		v, n := protowire.ConsumeVarint(b[tagLen:])
 		if n < 0 {
-			return 0, 0, nil, 0, fmt.Errorf("proto: invalid varint: %w", protowire.ParseError(n))
+			return 0, 0, nil, 0, errInvalidVarint(n)
 		}
 		// Re-encode the varint as raw bytes so callers can re-decode
 		// uniformly; callers interpret based on fieldNum + expected
@@ -115,9 +120,22 @@ func consumeField(b []byte) (protowire.Number, protowire.Type, []byte, int, erro
 func varint(b []byte) (uint64, error) {
 	v, n := protowire.ConsumeVarint(b)
 	if n < 0 {
-		return 0, fmt.Errorf("proto: invalid varint: %w", protowire.ParseError(n))
+		return 0, errInvalidVarint(n)
 	}
 	return v, nil
+}
+
+// ConsumeField exposes consumeField for sibling packages (e.g. the
+// heimdall decode command) so they don't carry their own copy of the
+// wire-format record parser.
+func ConsumeField(b []byte) (protowire.Number, protowire.Type, []byte, int, error) {
+	return consumeField(b)
+}
+
+// Varint exposes varint for sibling packages; it reads a varint from a
+// value slice returned by ConsumeField.
+func Varint(b []byte) (uint64, error) {
+	return varint(b)
 }
 
 // appendRawVarint appends a raw varint (no tag) to b. Used by packed
@@ -131,7 +149,59 @@ func appendRawVarint(b []byte, v uint64) []byte {
 func consumePlainVarint(b []byte) (uint64, int, error) {
 	v, n := protowire.ConsumeVarint(b)
 	if n < 0 {
-		return 0, 0, fmt.Errorf("proto: invalid varint: %w", protowire.ParseError(n))
+		return 0, 0, errInvalidVarint(n)
 	}
 	return v, n, nil
+}
+
+// fieldHandler decodes a single field's value slice into a message
+// field.
+type fieldHandler func(val []byte) error
+
+// unmarshalFields walks every wire-format record in b and dispatches
+// the value to the handler registered for its field number; unknown
+// field numbers are skipped. Errors from consumeField are wrapped with
+// msgName, handler errors are returned as-is.
+func unmarshalFields(b []byte, msgName string, fields map[protowire.Number]fieldHandler) error {
+	for len(b) > 0 {
+		num, _, val, n, err := consumeField(b)
+		if err != nil {
+			return fmt.Errorf("%s: %w", msgName, err)
+		}
+		if h, ok := fields[num]; ok {
+			if err := h(val); err != nil {
+				return err
+			}
+		}
+		b = b[n:]
+	}
+	return nil
+}
+
+// setString returns a handler that stores a string field.
+func setString(dst *string) fieldHandler {
+	return func(val []byte) error {
+		*dst = string(val)
+		return nil
+	}
+}
+
+// setBytes returns a handler that copies a bytes field.
+func setBytes(dst *[]byte) fieldHandler {
+	return func(val []byte) error {
+		*dst = append([]byte(nil), val...)
+		return nil
+	}
+}
+
+// setUint64 returns a handler that decodes a varint field.
+func setUint64(dst *uint64) fieldHandler {
+	return func(val []byte) error {
+		v, err := varint(val)
+		if err != nil {
+			return err
+		}
+		*dst = v
+		return nil
+	}
 }

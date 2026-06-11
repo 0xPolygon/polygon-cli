@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -45,14 +46,14 @@ func newTxPoolCmd() *cobra.Command {
 			if limit <= 0 {
 				return &client.UsageError{Msg: fmt.Sprintf("--limit must be positive, got %d", limit)}
 			}
-			rpc, cfg, err := newRPCClient(cmd)
+			rpc, cfg, err := pkg.RPCClient(cmd)
 			if err != nil {
 				return err
 			}
-			opts := renderOpts(cmd, cfg, fields)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
 
 			if !list {
-				raw, cerr := callEmpty(cmd.Context(), rpc, "num_unconfirmed_txs")
+				raw, cerr := cmdutil.CallEmpty(cmd.Context(), rpc, "num_unconfirmed_txs")
 				if cerr != nil {
 					return cerr
 				}
@@ -60,7 +61,7 @@ func newTxPoolCmd() *cobra.Command {
 					return nil // --curl
 				}
 				if opts.JSON {
-					generic, derr := decodeGeneric(raw)
+					generic, derr := cmdutil.DecodeGeneric(raw)
 					if derr != nil {
 						return derr
 					}
@@ -87,7 +88,7 @@ func newTxPoolCmd() *cobra.Command {
 				return nil // --curl
 			}
 			if opts.JSON {
-				generic, derr := decodeGeneric(raw)
+				generic, derr := cmdutil.DecodeGeneric(raw)
 				if derr != nil {
 					return derr
 				}

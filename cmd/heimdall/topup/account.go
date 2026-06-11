@@ -2,52 +2,30 @@ package topup
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/spf13/cobra"
 
-	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 )
 
 // newAccountCmd builds `topup account <ADDR>` → GET
 // /topup/dividend-account/{address}. Prints the `user` and
-// `fee_amount` fields of the dividend account.
+// `fee_amount` fields of the dividend account. The
+// { "dividend_account": {...} } envelope is unwrapped for KV output.
 func newAccountCmd() *cobra.Command {
-	var fields []string
-	cmd := &cobra.Command{
+	return pkg.NewGetCmd(cmdutil.Get{
 		Use:   "account <ADDR>",
 		Short: "Fetch the dividend account for an address.",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			addr, err := normalizeAddress(args[0])
+		Label: "topup dividend-account",
+		Build: func(_ *cobra.Command, args []string) (string, url.Values, error) {
+			addr, err := cmdutil.NormalizeAddress(args[0])
 			if err != nil {
-				return err
+				return "", nil, err
 			}
-			rest, cfg, err := newRESTClient(cmd)
-			if err != nil {
-				return err
-			}
-			body, status, err := rest.Get(cmd.Context(), fmt.Sprintf("/topup/dividend-account/%s", addr), nil)
-			if err != nil {
-				return err
-			}
-			if status == 0 && body == nil {
-				return nil
-			}
-			opts := renderOpts(cmd, cfg, fields)
-			m, err := decodeJSONMap(body, "topup dividend-account")
-			if err != nil {
-				return err
-			}
-			if opts.JSON {
-				return render.RenderJSON(cmd.OutOrStdout(), m, opts)
-			}
-			// Unwrap the { "dividend_account": {...} } envelope for KV.
-			if inner, ok := m["dividend_account"].(map[string]any); ok {
-				return render.RenderKV(cmd.OutOrStdout(), inner, opts)
-			}
-			return render.RenderKV(cmd.OutOrStdout(), m, opts)
+			return fmt.Sprintf("/topup/dividend-account/%s", addr), nil, nil
 		},
-	}
-	cmd.Flags().StringArrayVarP(&fields, "field", "f", nil, "pluck one or more fields (repeatable)")
-	return cmd
+		UnwrapKey: "dividend_account",
+	})
 }

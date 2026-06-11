@@ -3,6 +3,7 @@ package validator
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -21,11 +22,11 @@ func newStatusCmd() *cobra.Command {
 		Short: "Check whether an address is in the current validator set.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			addr, err := normalizeSignerAddress(args[0])
+			addr, err := cmdutil.NormalizeHex(args[0], 20, "signer")
 			if err != nil {
 				return err
 			}
-			rest, cfg, err := newRESTClient(cmd)
+			rest, cfg, err := pkg.RESTClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -36,8 +37,8 @@ func newStatusCmd() *cobra.Command {
 			if status == 0 && body == nil {
 				return nil
 			}
-			opts := renderOpts(cmd, cfg, fields)
-			m, err := decodeJSONMap(body, "validator-status")
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
+			m, err := cmdutil.DecodeJSONMap(body, "validator-status")
 			if err != nil {
 				return err
 			}

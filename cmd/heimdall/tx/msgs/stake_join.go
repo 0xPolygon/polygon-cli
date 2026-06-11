@@ -26,10 +26,7 @@ func newStakeJoinCmd(mode Mode, globalFlags *config.Flags) *cobra.Command {
 		activationEpoch uint64
 		amount          string
 		signerPubKeyHex string
-		txHashHex       string
-		logIndex        uint64
-		blockNumber     uint64
-		nonce           uint64
+		l1Ref           stakeL1Ref
 	)
 	cmd := &cobra.Command{
 		Use:   "stake-join",
@@ -42,25 +39,15 @@ Produced by the bridge after a StakingInfo event; manual use requires
 `),
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			from := strings.TrimSpace(fromFlag)
-			if from == "" {
-				signer, err := ResolveSigningKey(opts, cmd.InOrStdin())
-				if err != nil {
-					return err
-				}
-				from = strings.ToLower(signer.Address.Hex())
-			} else {
-				p, err := lowerEthAddress("from-msg", from)
-				if err != nil {
-					return err
-				}
-				from = p
+			from, err := signerOrFlagAddress(cmd, opts, "from-msg", fromFlag)
+			if err != nil {
+				return err
 			}
-			if valID == 0 {
-				return &client.UsageError{Msg: "--val-id is required"}
+			if err = requireNonZero("val-id", valID); err != nil {
+				return err
 			}
-			if strings.TrimSpace(amount) == "" {
-				return &client.UsageError{Msg: "--amount is required"}
+			if err = requireNonEmptyString("amount", amount); err != nil {
+				return err
 			}
 			pubKey, err := parseHexBytes("signer-pub-key", signerPubKeyHex, 0)
 			if err != nil {
@@ -69,33 +56,25 @@ Produced by the bridge after a StakingInfo event; manual use requires
 			if len(pubKey) == 0 {
 				return &client.UsageError{Msg: "--signer-pub-key is required"}
 			}
-			txHash, err := parseHexBytes("tx-hash", txHashHex, 32)
+			txHash, err := l1Ref.txHash()
 			if err != nil {
 				return err
 			}
-			plan := &Plan{
-				Msgs: []htx.Msg{&htx.ValidatorJoinMsg{
-					From: from, ValID: valID, ActivationEpoch: activationEpoch,
-					Amount: strings.TrimSpace(amount), SignerPubKey: pubKey,
-					TxHash: txHash, LogIndex: logIndex,
-					BlockNumber: blockNumber, Nonce: nonce,
-				}},
-				MsgShortType:  validatorJoinMsgShort,
-				SignerAddress: from,
-			}
-			return Execute(cmd, opts, mode, plan)
+			return executeSingleMsg(cmd, opts, mode, validatorJoinMsgShort, from, &htx.ValidatorJoinMsg{
+				From: from, ValID: valID, ActivationEpoch: activationEpoch,
+				Amount: strings.TrimSpace(amount), SignerPubKey: pubKey,
+				TxHash: txHash, LogIndex: l1Ref.logIndex,
+				BlockNumber: l1Ref.blockNumber, Nonce: l1Ref.nonce,
+			})
 		},
 	}
 	RegisterFlags(cmd, opts, mode)
 	f := cmd.Flags()
-	f.StringVar(&fromFlag, "from-msg", "", "MsgValidatorJoin.from address (default: signer)")
+	registerFromMsgFlag(f, &fromFlag, validatorJoinMsgShort)
 	f.Uint64Var(&valID, "val-id", 0, "validator id")
 	f.Uint64Var(&activationEpoch, "activation-epoch", 0, "activation epoch")
 	f.StringVar(&amount, "amount", "", "stake amount (decimal string)")
 	f.StringVar(&signerPubKeyHex, "signer-pub-key", "", "validator signer pubkey (hex)")
-	f.StringVar(&txHashHex, "tx-hash", "", "L1 tx hash (32 bytes hex)")
-	f.Uint64Var(&logIndex, "log-index", 0, "L1 log index")
-	f.Uint64Var(&blockNumber, "block-number", 0, "L1 block number")
-	f.Uint64Var(&nonce, "nonce-l1", 0, "L1 stake nonce")
+	l1Ref.registerFlags(f)
 	return cmd
 }

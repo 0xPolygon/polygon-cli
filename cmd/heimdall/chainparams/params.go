@@ -3,6 +3,7 @@ package chainparams
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -20,35 +21,16 @@ import (
 // Default human output unwraps the `params` envelope for KV rendering.
 // --json preserves the raw server shape.
 func newParamsCmd() *cobra.Command {
-	var fields []string
-	cmd := &cobra.Command{
+	return pkg.NewGetCmd(cmdutil.Get{
 		Use:   "params",
 		Short: "Fetch the chainmanager module parameters.",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			rest, cfg, err := newRESTClient(cmd)
-			if err != nil {
-				return err
-			}
-			body, status, err := rest.Get(cmd.Context(), "/chainmanager/params", nil)
-			if err != nil {
-				return err
-			}
-			if status == 0 && body == nil {
-				// --curl short-circuit.
-				return nil
-			}
-			opts := renderOpts(cmd, cfg, fields)
-			m, err := decodeJSONMap(body, "chainmanager params")
-			if err != nil {
-				return err
-			}
-			if opts.JSON {
-				return render.RenderJSON(cmd.OutOrStdout(), m, opts)
-			}
-			// --field addresses the raw server shape so the envelope
-			// stays visible in the path. Only unwrap the `params`
-			// envelope for the default (no --field) KV render.
+		Path:  "/chainmanager/params",
+		Label: "chainmanager params",
+		// --field addresses the raw server shape so the envelope
+		// stays visible in the path. Only unwrap the `params`
+		// envelope for the default (no --field) KV render — which is
+		// why this is a Render hook rather than UnwrapKey.
+		Render: func(cmd *cobra.Command, m map[string]any, opts render.Options) error {
 			if len(opts.Fields) > 0 {
 				return render.RenderKV(cmd.OutOrStdout(), m, opts)
 			}
@@ -57,7 +39,5 @@ func newParamsCmd() *cobra.Command {
 			}
 			return render.RenderKV(cmd.OutOrStdout(), m, opts)
 		},
-	}
-	cmd.Flags().StringArrayVarP(&fields, "field", "f", nil, "pluck one or more fields (repeatable)")
-	return cmd
+	})
 }

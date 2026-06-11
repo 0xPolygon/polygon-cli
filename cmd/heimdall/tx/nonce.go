@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -37,7 +38,7 @@ func fetchAccount(ctx context.Context, rest *client.RESTClient, addr string) (*a
 	}
 	var out accountResponse
 	if err := json.Unmarshal(body, &out); err != nil {
-		return nil, body, fmt.Errorf("decoding account: %w (body=%q)", err, truncate(body, 256))
+		return nil, body, fmt.Errorf("decoding account: %w (body=%q)", err, cmdutil.Truncate(body, 256))
 	}
 	return &out, body, nil
 }
@@ -69,7 +70,7 @@ func newNonceLikeCmd(use, short string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rest, cfg, err := newRESTClient(cmd)
+			rest, cfg, err := pkg.RESTClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -80,7 +81,7 @@ func newNonceLikeCmd(use, short string) *cobra.Command {
 			if raw == nil {
 				return nil // --curl
 			}
-			opts := renderOpts(cmd, cfg, fields)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
 			if opts.JSON {
 				var generic any
 				if jerr := json.Unmarshal(raw, &generic); jerr != nil {

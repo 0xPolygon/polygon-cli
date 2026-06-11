@@ -16,7 +16,7 @@ func newAgeCmd() *cobra.Command {
 		Short: "Show the timestamp of a CometBFT block.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rpc, _, err := newRPCClient(cmd)
+			rpc, _, err := pkg.RPCClient(cmd)
 			if err != nil {
 				return err
 			}

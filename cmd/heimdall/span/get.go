@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -30,7 +31,7 @@ func runGet(cmd *cobra.Command, idArg string) error {
 	if err != nil {
 		return err
 	}
-	rest, cfg, err := newRESTClient(cmd)
+	rest, cfg, err := pkg.RESTClient(cmd)
 	if err != nil {
 		return err
 	}
@@ -41,8 +42,8 @@ func runGet(cmd *cobra.Command, idArg string) error {
 	if status == 0 && body == nil {
 		return nil
 	}
-	opts := renderOpts(cmd, cfg, nil)
-	m, err := decodeJSONMap(body, "span")
+	opts := cmdutil.RenderOpts(cmd, cfg, nil)
+	m, err := cmdutil.DecodeJSONMap(body, "span")
 	if err != nil {
 		return err
 	}

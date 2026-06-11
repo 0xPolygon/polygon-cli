@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/config"
 	htx "github.com/0xPolygon/polygon-cli/internal/heimdall/tx"
 )
@@ -21,13 +20,10 @@ func init() {
 func newStakeUpdateCmd(mode Mode, globalFlags *config.Flags) *cobra.Command {
 	opts := &TxOpts{Global: globalFlags}
 	var (
-		fromFlag    string
-		valID       uint64
-		newAmount   string
-		txHashHex   string
-		logIndex    uint64
-		blockNumber uint64
-		nonce       uint64
+		fromFlag  string
+		valID     uint64
+		newAmount string
+		l1Ref     stakeL1Ref
 	)
 	cmd := &cobra.Command{
 		Use:   "stake-update",
@@ -40,50 +36,32 @@ Produced by the bridge after a StakeUpdate event; manual use requires
 `),
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			from := strings.TrimSpace(fromFlag)
-			if from == "" {
-				signer, err := ResolveSigningKey(opts, cmd.InOrStdin())
-				if err != nil {
-					return err
-				}
-				from = strings.ToLower(signer.Address.Hex())
-			} else {
-				p, err := lowerEthAddress("from-msg", from)
-				if err != nil {
-					return err
-				}
-				from = p
-			}
-			if valID == 0 {
-				return &client.UsageError{Msg: "--val-id is required"}
-			}
-			if strings.TrimSpace(newAmount) == "" {
-				return &client.UsageError{Msg: "--new-amount is required"}
-			}
-			txHash, err := parseHexBytes("tx-hash", txHashHex, 32)
+			from, err := signerOrFlagAddress(cmd, opts, "from-msg", fromFlag)
 			if err != nil {
 				return err
 			}
-			plan := &Plan{
-				Msgs: []htx.Msg{&htx.StakeUpdateMsg{
-					From: from, ValID: valID, NewAmount: strings.TrimSpace(newAmount),
-					TxHash: txHash, LogIndex: logIndex,
-					BlockNumber: blockNumber, Nonce: nonce,
-				}},
-				MsgShortType:  stakeUpdateMsgShort,
-				SignerAddress: from,
+			if err = requireNonZero("val-id", valID); err != nil {
+				return err
 			}
-			return Execute(cmd, opts, mode, plan)
+			if err = requireNonEmptyString("new-amount", newAmount); err != nil {
+				return err
+			}
+			txHash, err := l1Ref.txHash()
+			if err != nil {
+				return err
+			}
+			return executeSingleMsg(cmd, opts, mode, stakeUpdateMsgShort, from, &htx.StakeUpdateMsg{
+				From: from, ValID: valID, NewAmount: strings.TrimSpace(newAmount),
+				TxHash: txHash, LogIndex: l1Ref.logIndex,
+				BlockNumber: l1Ref.blockNumber, Nonce: l1Ref.nonce,
+			})
 		},
 	}
 	RegisterFlags(cmd, opts, mode)
 	f := cmd.Flags()
-	f.StringVar(&fromFlag, "from-msg", "", "MsgStakeUpdate.from address (default: signer)")
+	registerFromMsgFlag(f, &fromFlag, stakeUpdateMsgShort)
 	f.Uint64Var(&valID, "val-id", 0, "validator id")
 	f.StringVar(&newAmount, "new-amount", "", "new stake amount (decimal string)")
-	f.StringVar(&txHashHex, "tx-hash", "", "L1 tx hash (32 bytes hex)")
-	f.Uint64Var(&logIndex, "log-index", 0, "L1 log index")
-	f.Uint64Var(&blockNumber, "block-number", 0, "L1 block number")
-	f.Uint64Var(&nonce, "nonce-l1", 0, "L1 stake nonce")
+	l1Ref.registerFlags(f)
 	return cmd
 }

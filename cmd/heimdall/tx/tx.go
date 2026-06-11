@@ -10,20 +10,19 @@ package tx
 import (
 	"encoding/hex"
 	"fmt"
-	"io"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/config"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
-// flags is injected by the caller via Register; every RunE uses
-// config.Resolve on it to obtain a resolved *config.Config.
-var flags *config.Flags
+// pkg carries the package name and the flag struct injected via
+// Register; cmdutil derives clients and render options from it.
+var pkg = &cmdutil.Pkg{Name: "tx"}
 
 // Register attaches the tx-group subcommands directly to parent and
 // binds the shared flag struct for config resolution.
@@ -33,7 +32,7 @@ var flags *config.Flags
 // a value change over time. Publish is one-shot and rpc is a raw
 // passthrough; neither is watchable.
 func Register(parent *cobra.Command, f *config.Flags) {
-	flags = f
+	pkg.Flags = f
 	readOnly := []*cobra.Command{
 		newTxCmd(),
 		newReceiptCmd(),
@@ -54,64 +53,6 @@ func Register(parent *cobra.Command, f *config.Flags) {
 	// the registered msg subcommands (cobra command trees are single-
 	// parent).
 	registerMktxSendEstimate(parent, f)
-}
-
-// newRPCClient resolves the config and constructs an RPCClient. When
-// --curl is set the RPC call does not execute; it prints an
-// equivalent curl command instead.
-func newRPCClient(cmd *cobra.Command) (*client.RPCClient, *config.Config, error) {
-	if flags == nil {
-		return nil, nil, &client.UsageError{Msg: "tx package not registered (flags unset)"}
-	}
-	cfg, err := config.Resolve(flags)
-	if err != nil {
-		return nil, nil, &client.UsageError{Msg: err.Error()}
-	}
-	c := client.NewRPCClient(cfg.RPCURL, cfg.Timeout, cfg.RPCHeaders, cfg.Insecure)
-	if cfg.Curl {
-		c.Transport = &client.CurlTransport{Out: cmd.OutOrStdout(), Headers: cfg.RPCHeaders}
-	}
-	return c, cfg, nil
-}
-
-// newRESTClient resolves the config and constructs a RESTClient.
-func newRESTClient(cmd *cobra.Command) (*client.RESTClient, *config.Config, error) {
-	if flags == nil {
-		return nil, nil, &client.UsageError{Msg: "tx package not registered (flags unset)"}
-	}
-	cfg, err := config.Resolve(flags)
-	if err != nil {
-		return nil, nil, &client.UsageError{Msg: err.Error()}
-	}
-	c := client.NewRESTClient(cfg.RESTURL, cfg.Timeout, cfg.RPCHeaders, cfg.Insecure)
-	if cfg.Curl {
-		c.Transport = &client.CurlTransport{Out: cmd.OutOrStdout(), Headers: cfg.RPCHeaders}
-	}
-	return c, cfg, nil
-}
-
-// renderOpts turns a resolved config into a render.Options instance,
-// honouring --json, --field, --color, --raw, and TTY detection.
-func renderOpts(cmd *cobra.Command, cfg *config.Config, fields []string) render.Options {
-	return render.Options{
-		JSON:   cfg.JSON,
-		Raw:    cfg.Raw,
-		Fields: fields,
-		Color:  cfg.Color,
-		IsTTY:  isTerminal(cmd.OutOrStdout()),
-	}
-}
-
-func isTerminal(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeCharDevice != 0
 }
 
 // normalizeHash accepts a tx hash with or without `0x` prefix and
@@ -145,11 +86,4 @@ func validateAddress(raw string) (string, error) {
 		return "", &client.UsageError{Msg: fmt.Sprintf("address must be 20 bytes (40 hex chars), got %d", len(b))}
 	}
 	return "0x" + strings.ToLower(s), nil
-}
-
-func truncate(b []byte, n int) string {
-	if len(b) <= n {
-		return string(b)
-	}
-	return string(b[:n]) + "..."
 }

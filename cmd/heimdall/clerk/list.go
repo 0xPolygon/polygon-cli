@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -38,11 +39,12 @@ func newListCmd() *cobra.Command {
 		Short: "Paginated event-record history (page-based).",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rest, cfg, err := newRESTClient(cmd)
+			rest, cfg, err := pkg.RESTClient(cmd)
 			if err != nil {
 				return err
 			}
-			opts := renderOpts(cmd, cfg, fields, base64)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
+			opts.Raw = opts.Raw || base64
 			// Surface the pagination-limit hint when --limit is not
 			// explicitly set. The hint catalogue is generic; we emit it
 			// here so users who hit /clerk/event-records/list without a
@@ -64,7 +66,7 @@ func newListCmd() *cobra.Command {
 				return nil
 			}
 			if opts.JSON {
-				m, jerr := decodeJSONMap(body, "clerk list")
+				m, jerr := cmdutil.DecodeJSONMap(body, "clerk list")
 				if jerr != nil {
 					return jerr
 				}

@@ -2,47 +2,27 @@ package span
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/spf13/cobra"
 
-	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 )
 
 // newSeedCmd builds `span seed <ID>` → GET /bor/spans/seed/{id}.
 // Prints seed (already 0x-hex upstream) and seed_author.
 func newSeedCmd() *cobra.Command {
-	var fields []string
-	cmd := &cobra.Command{
+	return pkg.NewGetCmd(cmdutil.Get{
 		Use:   "seed <ID>",
 		Short: "Show seed and seed_author for a span.",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Label: "span seed",
+		Build: func(cmd *cobra.Command, args []string) (string, url.Values, error) {
 			id, err := parseSpanID("span id", args[0])
 			if err != nil {
-				return err
+				return "", nil, err
 			}
-			rest, cfg, err := newRESTClient(cmd)
-			if err != nil {
-				return err
-			}
-			body, status, err := rest.Get(cmd.Context(), fmt.Sprintf("/bor/spans/seed/%d", id), nil)
-			if err != nil {
-				return err
-			}
-			if status == 0 && body == nil {
-				return nil
-			}
-			opts := renderOpts(cmd, cfg, fields)
-			m, err := decodeJSONMap(body, "span seed")
-			if err != nil {
-				return err
-			}
-			if opts.JSON {
-				return render.RenderJSON(cmd.OutOrStdout(), m, opts)
-			}
-			return render.RenderKV(cmd.OutOrStdout(), m, opts)
+			return fmt.Sprintf("/bor/spans/seed/%d", id), nil, nil
 		},
-	}
-	cmd.Flags().StringArrayVarP(&fields, "field", "f", nil, "pluck one or more fields (repeatable)")
-	return cmd
+	})
 }

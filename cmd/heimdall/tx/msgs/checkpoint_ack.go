@@ -53,43 +53,28 @@ operator intends to mirror (advisory — not part of the proto).
 				return err
 			}
 
-			from := strings.TrimSpace(fromFlag)
-			if from == "" {
-				signer, err := ResolveSigningKey(opts, cmd.InOrStdin())
-				if err != nil {
-					return err
-				}
-				from = strings.ToLower(signer.Address.Hex())
-			} else {
-				p, err := lowerEthAddress("from", from)
-				if err != nil {
-					return err
-				}
-				from = p
+			from, err := signerOrFlagAddress(cmd, opts, "from", fromFlag)
+			if err != nil {
+				return err
 			}
 			rootHash, err := parseHexBytes("root-hash", rootHashHex, 32)
 			if err != nil {
 				return err
 			}
 
-			plan := &Plan{
-				Msgs: []htx.Msg{&htx.CpAckMsg{
-					From:       from,
-					Number:     number,
-					Proposer:   strings.ToLower(strings.TrimSpace(proposer)),
-					StartBlock: startBlock,
-					EndBlock:   endBlock,
-					RootHash:   rootHash,
-				}},
-				MsgShortType:  checkpointAckMsgShort,
-				SignerAddress: from,
-			}
-			return Execute(cmd, opts, mode, plan)
+			return executeSingleMsg(cmd, opts, mode, checkpointAckMsgShort, from, &htx.CpAckMsg{
+				From:       from,
+				Number:     number,
+				Proposer:   strings.ToLower(strings.TrimSpace(proposer)),
+				StartBlock: startBlock,
+				EndBlock:   endBlock,
+				RootHash:   rootHash,
+			})
 		},
 	}
 	RegisterFlags(cmd, opts, mode)
 	f := cmd.Flags()
-	f.StringVar(&fromFlag, "from-msg", "", "MsgCpAck.from address (default: signer)")
+	registerFromMsgFlag(f, &fromFlag, checkpointAckMsgShort)
 	f.Uint64Var(&number, "number", 0, "checkpoint number on Heimdall")
 	f.StringVar(&proposer, "proposer", "", "original proposer address of the checkpoint")
 	f.Uint64Var(&startBlock, "start-block", 0, "bor start block number")

@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -22,7 +23,7 @@ func newBlockCmd() *cobra.Command {
 		Short:   "Show a CometBFT block by height (or latest).",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rpc, cfg, err := newRPCClient(cmd)
+			rpc, cfg, err := pkg.RPCClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -44,7 +45,7 @@ func newBlockCmd() *cobra.Command {
 				return nil // --curl
 			}
 
-			opts := renderOpts(cmd, cfg, fields)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
 
 			// --json passes through the full result with render's
 			// byte-field normalization.

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 )
 
 // --- normalizeCheckpointHash ---
@@ -395,18 +396,18 @@ func TestIsL1Unreachable(t *testing.T) {
 	other := []byte(`{"code":5,"message":"not found"}`)
 	notJSON := []byte(`<html>502 Bad Gateway</html>`)
 
-	if !isL1Unreachable(code13, nil) {
+	if !cmdutil.IsL1Unreachable(code13, nil) {
 		t.Error("expected true for code 13")
 	}
-	if isL1Unreachable(other, nil) {
+	if cmdutil.IsL1Unreachable(other, nil) {
 		t.Error("expected false for non-13 code")
 	}
-	if isL1Unreachable(notJSON, nil) {
+	if cmdutil.IsL1Unreachable(notJSON, nil) {
 		t.Error("expected false for non-JSON body")
 	}
 	// Wrapped HTTPError with the body on the error itself still works.
 	hErr := &client.HTTPError{StatusCode: 500, Body: code13}
-	if !isL1Unreachable(nil, hErr) {
+	if !cmdutil.IsL1Unreachable(nil, hErr) {
 		t.Error("expected true when body comes from HTTPError")
 	}
 }

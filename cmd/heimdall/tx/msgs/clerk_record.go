@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/config"
 	htx "github.com/0xPolygon/polygon-cli/internal/heimdall/tx"
 )
@@ -23,14 +22,14 @@ func init() {
 func newClerkRecordCmd(mode Mode, globalFlags *config.Flags) *cobra.Command {
 	opts := &TxOpts{Global: globalFlags}
 	var (
-		fromFlag        string
-		txHash          string
-		logIndex        uint64
-		blockNumber     uint64
-		contractAddr    string
-		dataHex         string
-		recordID        uint64
-		chainID         string
+		fromFlag     string
+		txHash       string
+		logIndex     uint64
+		blockNumber  uint64
+		contractAddr string
+		dataHex      string
+		recordID     uint64
+		chainID      string
 	)
 	cmd := &cobra.Command{
 		Use:   "clerk-record",
@@ -43,53 +42,38 @@ Produced by the bridge after an L1 StateSync event; manual use requires
 `),
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			from := strings.TrimSpace(fromFlag)
-			if from == "" {
-				signer, err := ResolveSigningKey(opts, cmd.InOrStdin())
-				if err != nil {
-					return err
-				}
-				from = strings.ToLower(signer.Address.Hex())
-			} else {
-				p, err := lowerEthAddress("from-msg", from)
-				if err != nil {
-					return err
-				}
-				from = p
+			from, err := signerOrFlagAddress(cmd, opts, "from-msg", fromFlag)
+			if err != nil {
+				return err
 			}
-			if strings.TrimSpace(txHash) == "" {
-				return &client.UsageError{Msg: "--tx-hash is required"}
+			if err = requireNonEmptyString("tx-hash", txHash); err != nil {
+				return err
 			}
-			if strings.TrimSpace(contractAddr) == "" {
-				return &client.UsageError{Msg: "--contract-address is required"}
+			if err = requireNonEmptyString("contract-address", contractAddr); err != nil {
+				return err
 			}
 			caddr, err := lowerEthAddress("contract-address", contractAddr)
 			if err != nil {
 				return err
 			}
-			if recordID == 0 {
-				return &client.UsageError{Msg: "--id is required"}
+			if err = requireNonZero("id", recordID); err != nil {
+				return err
 			}
 			data, err := parseHexBytes("data", dataHex, 0)
 			if err != nil {
 				return err
 			}
-			plan := &Plan{
-				Msgs: []htx.Msg{&htx.ClerkEventRecordMsg{
-					From: from, TxHash: strings.TrimSpace(txHash),
-					LogIndex: logIndex, BlockNumber: blockNumber,
-					ContractAddress: caddr, Data: data,
-					ID: recordID, ChainID: strings.TrimSpace(chainID),
-				}},
-				MsgShortType:  clerkRecordMsgShort,
-				SignerAddress: from,
-			}
-			return Execute(cmd, opts, mode, plan)
+			return executeSingleMsg(cmd, opts, mode, clerkRecordMsgShort, from, &htx.ClerkEventRecordMsg{
+				From: from, TxHash: strings.TrimSpace(txHash),
+				LogIndex: logIndex, BlockNumber: blockNumber,
+				ContractAddress: caddr, Data: data,
+				ID: recordID, ChainID: strings.TrimSpace(chainID),
+			})
 		},
 	}
 	RegisterFlags(cmd, opts, mode)
 	f := cmd.Flags()
-	f.StringVar(&fromFlag, "from-msg", "", "MsgEventRecord.from address (default: signer)")
+	registerFromMsgFlag(f, &fromFlag, clerkRecordMsgShort)
 	f.StringVar(&txHash, "tx-hash", "", "L1 tx hash (hex string; proto field is string)")
 	f.Uint64Var(&logIndex, "log-index", 0, "L1 log index")
 	f.Uint64Var(&blockNumber, "block-number", 0, "L1 block number")

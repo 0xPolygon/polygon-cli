@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -60,7 +61,7 @@ func newPublishCmd() *cobra.Command {
 				return &client.UsageError{Msg: "publish requires --yes"}
 			}
 
-			rest, cfg, err := newRESTClient(cmd)
+			rest, cfg, err := pkg.RESTClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -71,7 +72,7 @@ func newPublishCmd() *cobra.Command {
 			if status == 0 && respBody == nil {
 				return nil // --curl
 			}
-			opts := renderOpts(cmd, cfg, fields)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
 			var generic any
 			if err := json.Unmarshal(respBody, &generic); err != nil {
 				return fmt.Errorf("decoding broadcast response: %w", err)

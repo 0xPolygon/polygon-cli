@@ -1,7 +1,6 @@
 package clerk
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -9,8 +8,26 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
-	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 )
+
+// buildTxEventQuery validates the <TX_HASH> <LOG_INDEX> argument pair
+// shared by `sequence` and `is-old` and turns it into the
+// tx_hash/log_index query both endpoints expect.
+func buildTxEventQuery(args []string) (url.Values, error) {
+	hash, err := cmdutil.NormalizeTxHash(args[0])
+	if err != nil {
+		return nil, err
+	}
+	logIndex, err := strconv.ParseUint(args[1], 10, 64)
+	if err != nil {
+		return nil, &client.UsageError{Msg: fmt.Sprintf("log_index must be a non-negative integer, got %q", args[1])}
+	}
+	q := url.Values{}
+	q.Set("tx_hash", hash)
+	q.Set("log_index", strconv.FormatUint(logIndex, 10))
+	return q, nil
+}
 
 // newSequenceCmd builds `state-sync sequence <TX_HASH> <LOG_INDEX>` →
 // GET /clerk/sequence?tx_hash=…&log_index=…. Like `is-old`, this
@@ -18,55 +35,18 @@ import (
 // `eth_rpc_url` will return gRPC code 13, which we surface as an
 // L1-not-configured hint.
 func newSequenceCmd() *cobra.Command {
-	var fields []string
-	cmd := &cobra.Command{
-		Use:   "sequence <TX_HASH> <LOG_INDEX>",
-		Short: "Dedup sequence key for an L1 state-sync event.",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			hash, err := normalizeTxHash(args[0])
+	return pkg.NewGetCmd(cmdutil.Get{
+		Use:    "sequence <TX_HASH> <LOG_INDEX>",
+		Short:  "Dedup sequence key for an L1 state-sync event.",
+		Args:   cobra.ExactArgs(2),
+		Label:  "clerk sequence",
+		L1Hint: true,
+		Build: func(cmd *cobra.Command, args []string) (string, url.Values, error) {
+			q, err := buildTxEventQuery(args)
 			if err != nil {
-				return err
+				return "", nil, err
 			}
-			logIndex, err := strconv.ParseUint(args[1], 10, 64)
-			if err != nil {
-				return &client.UsageError{Msg: fmt.Sprintf("log_index must be a non-negative integer, got %q", args[1])}
-			}
-			rest, cfg, err := newRESTClient(cmd)
-			if err != nil {
-				return err
-			}
-			q := url.Values{}
-			q.Set("tx_hash", hash)
-			q.Set("log_index", strconv.FormatUint(logIndex, 10))
-			body, status, err := rest.Get(cmd.Context(), "/clerk/sequence", q)
-			opts := renderOpts(cmd, cfg, fields, false)
-			if err != nil {
-				if isL1Unreachable(body, err) {
-					_ = render.WriteHint(cmd.ErrOrStderr(), render.HintL1NotConfigured, opts)
-				}
-				return err
-			}
-			if status == 0 && body == nil {
-				return nil
-			}
-			var gerr gRPCErrorBody
-			if jerr := json.Unmarshal(body, &gerr); jerr == nil && gerr.Code != 0 {
-				if gerr.Code == gRPCCodeUnavailable {
-					_ = render.WriteHint(cmd.ErrOrStderr(), render.HintL1NotConfigured, opts)
-				}
-				return fmt.Errorf("clerk sequence failed: code=%d %s", gerr.Code, gerr.Message)
-			}
-			m, err := decodeJSONMap(body, "clerk sequence")
-			if err != nil {
-				return err
-			}
-			if opts.JSON {
-				return render.RenderJSON(cmd.OutOrStdout(), m, opts)
-			}
-			return render.RenderKV(cmd.OutOrStdout(), m, opts)
+			return "/clerk/sequence", q, nil
 		},
-	}
-	cmd.Flags().StringArrayVarP(&fields, "field", "f", nil, "pluck one or more fields (repeatable)")
-	return cmd
+	})
 }

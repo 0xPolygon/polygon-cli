@@ -3,6 +3,7 @@ package milestone
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -13,40 +14,19 @@ import (
 // the response body exposes only `milestone_id` (which is *not* the
 // same value — see the package usage docs).
 func newLatestCmd() *cobra.Command {
-	var fields []string
-	cmd := &cobra.Command{
+	return pkg.NewGetCmd(cmdutil.Get{
 		Use:   "latest",
 		Short: "Show the latest milestone.",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			rest, cfg, err := newRESTClient(cmd)
-			if err != nil {
-				return err
-			}
-			body, status, err := rest.Get(cmd.Context(), "/milestones/latest", nil)
-			if err != nil {
-				return err
-			}
-			if status == 0 && body == nil {
-				return nil
-			}
-			opts := renderOpts(cmd, cfg, fields)
-			m, err := decodeJSONMap(body, "milestone latest")
-			if err != nil {
-				return err
-			}
-			if opts.JSON {
-				return render.RenderJSON(cmd.OutOrStdout(), m, opts)
-			}
+		Path:  "/milestones/latest",
+		Label: "milestone latest",
+		Render: func(cmd *cobra.Command, m map[string]any, opts render.Options) error {
 			// The server does not tell us the latest "number" — it's
 			// implicitly equal to `milestone count`. Passing 0 here
 			// suppresses the number-label row; renderMilestoneKV still
 			// prints milestone_id from the body.
 			return renderMilestoneKV(cmd, m, opts, 0)
 		},
-	}
-	cmd.Flags().StringArrayVarP(&fields, "field", "f", nil, "pluck one or more fields (repeatable)")
-	return cmd
+	})
 }
 
 // renderMilestoneKV unwraps the { "milestone": {...} } envelope,

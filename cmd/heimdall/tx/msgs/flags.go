@@ -32,6 +32,10 @@ const (
 	ModeEstimate
 )
 
+// dryRunFlag is the broadcast-skipping flag name shared by the flag
+// registration and the per-mode hidden-flag tweaks below.
+const dryRunFlag = "dry-run"
+
 // String returns the umbrella command name for a mode. Used in
 // usage/error strings.
 func (m Mode) String() string {
@@ -133,7 +137,7 @@ func RegisterFlags(cmd *cobra.Command, opts *TxOpts, mode Mode) {
 
 	// Sign / broadcast.
 	f.StringVar(&opts.SignMode, "sign-mode", "direct", "signing mode (direct|amino-json)")
-	f.BoolVar(&opts.DryRun, "dry-run", false, "build the tx but do not broadcast")
+	f.BoolVar(&opts.DryRun, dryRunFlag, false, "build the tx but do not broadcast")
 	f.BoolVar(&opts.Async, "async", false, "use BROADCAST_MODE_ASYNC and skip inclusion polling")
 	f.Uint64Var(&opts.Confirmations, "confirmations", 0, "after inclusion, wait for N additional blocks")
 	f.BoolVar(&opts.Force, "force", false, "bypass safety guards for L1-mirroring message types")
@@ -143,16 +147,12 @@ func RegisterFlags(cmd *cobra.Command, opts *TxOpts, mode Mode) {
 
 	// Mode-specific tweaks.
 	switch mode {
-	case ModeMkTx:
-		// `mktx` is a pure build; hide broadcast-only flags so `--help`
-		// doesn't advertise things that do nothing.
+	case ModeMkTx, ModeEstimate:
+		// `mktx` is a pure build and `estimate` never broadcasts; hide
+		// broadcast-only flags so `--help` doesn't advertise things
+		// that do nothing.
 		_ = cmd.Flags().MarkHidden("async")
 		_ = cmd.Flags().MarkHidden("confirmations")
-		_ = cmd.Flags().MarkHidden("dry-run")
-	case ModeEstimate:
-		// `estimate` never broadcasts either.
-		_ = cmd.Flags().MarkHidden("async")
-		_ = cmd.Flags().MarkHidden("confirmations")
-		_ = cmd.Flags().MarkHidden("dry-run")
+		_ = cmd.Flags().MarkHidden(dryRunFlag)
 	}
 }

@@ -24,10 +24,7 @@ func newSignerUpdateCmd(mode Mode, globalFlags *config.Flags) *cobra.Command {
 		fromFlag           string
 		valID              uint64
 		newSignerPubKeyHex string
-		txHashHex          string
-		logIndex           uint64
-		blockNumber        uint64
-		nonce              uint64
+		l1Ref              stakeL1Ref
 	)
 	cmd := &cobra.Command{
 		Use:   "signer-update",
@@ -40,22 +37,12 @@ Produced by the bridge after a SignerChange event; manual use requires
 `),
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			from := strings.TrimSpace(fromFlag)
-			if from == "" {
-				signer, err := ResolveSigningKey(opts, cmd.InOrStdin())
-				if err != nil {
-					return err
-				}
-				from = strings.ToLower(signer.Address.Hex())
-			} else {
-				p, err := lowerEthAddress("from-msg", from)
-				if err != nil {
-					return err
-				}
-				from = p
+			from, err := signerOrFlagAddress(cmd, opts, "from-msg", fromFlag)
+			if err != nil {
+				return err
 			}
-			if valID == 0 {
-				return &client.UsageError{Msg: "--val-id is required"}
+			if err = requireNonZero("val-id", valID); err != nil {
+				return err
 			}
 			pubKey, err := parseHexBytes("new-signer-pub-key", newSignerPubKeyHex, 0)
 			if err != nil {
@@ -64,30 +51,22 @@ Produced by the bridge after a SignerChange event; manual use requires
 			if len(pubKey) == 0 {
 				return &client.UsageError{Msg: "--new-signer-pub-key is required"}
 			}
-			txHash, err := parseHexBytes("tx-hash", txHashHex, 32)
+			txHash, err := l1Ref.txHash()
 			if err != nil {
 				return err
 			}
-			plan := &Plan{
-				Msgs: []htx.Msg{&htx.SignerUpdateMsg{
-					From: from, ValID: valID, NewSignerPubKey: pubKey,
-					TxHash: txHash, LogIndex: logIndex,
-					BlockNumber: blockNumber, Nonce: nonce,
-				}},
-				MsgShortType:  signerUpdateMsgShort,
-				SignerAddress: from,
-			}
-			return Execute(cmd, opts, mode, plan)
+			return executeSingleMsg(cmd, opts, mode, signerUpdateMsgShort, from, &htx.SignerUpdateMsg{
+				From: from, ValID: valID, NewSignerPubKey: pubKey,
+				TxHash: txHash, LogIndex: l1Ref.logIndex,
+				BlockNumber: l1Ref.blockNumber, Nonce: l1Ref.nonce,
+			})
 		},
 	}
 	RegisterFlags(cmd, opts, mode)
 	f := cmd.Flags()
-	f.StringVar(&fromFlag, "from-msg", "", "MsgSignerUpdate.from address (default: signer)")
+	registerFromMsgFlag(f, &fromFlag, signerUpdateMsgShort)
 	f.Uint64Var(&valID, "val-id", 0, "validator id")
 	f.StringVar(&newSignerPubKeyHex, "new-signer-pub-key", "", "new signer pubkey (hex)")
-	f.StringVar(&txHashHex, "tx-hash", "", "L1 tx hash (32 bytes hex)")
-	f.Uint64Var(&logIndex, "log-index", 0, "L1 log index")
-	f.Uint64Var(&blockNumber, "block-number", 0, "L1 block number")
-	f.Uint64Var(&nonce, "nonce-l1", 0, "L1 stake nonce")
+	l1Ref.registerFlags(f)
 	return cmd
 }

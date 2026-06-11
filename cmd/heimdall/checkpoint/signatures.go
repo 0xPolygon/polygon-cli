@@ -1,43 +1,32 @@
 package checkpoint
 
 import (
+	"net/url"
+
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
 // newSignaturesCmd builds `checkpoint signatures <TX_HASH>` → GET
-// /checkpoints/signatures/{hash}. Tolerates the `0x` prefix.
+// /checkpoints/signatures/{hash}. Tolerates the `0x` prefix. Output is
+// always JSON; the shape is too nested for the KV renderer.
 func newSignaturesCmd() *cobra.Command {
-	var fields []string
-	cmd := &cobra.Command{
+	return pkg.NewGetCmd(cmdutil.Get{
 		Use:   "signatures <TX_HASH>",
 		Short: "Aggregated validator signatures for a checkpoint tx.",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Label: "signatures",
+		Build: func(cmd *cobra.Command, args []string) (string, url.Values, error) {
 			hash, err := normalizeCheckpointHash(args[0])
 			if err != nil {
-				return err
+				return "", nil, err
 			}
-			rest, cfg, err := newRESTClient(cmd)
-			if err != nil {
-				return err
-			}
-			body, status, err := rest.Get(cmd.Context(), "/checkpoints/signatures/"+hash, nil)
-			if err != nil {
-				return err
-			}
-			if status == 0 && body == nil {
-				return nil
-			}
-			opts := renderOpts(cmd, cfg, fields)
-			m, err := decodeJSONMap(body, "signatures")
-			if err != nil {
-				return err
-			}
+			return "/checkpoints/signatures/" + hash, nil, nil
+		},
+		Render: func(cmd *cobra.Command, m map[string]any, opts render.Options) error {
 			return render.RenderJSON(cmd.OutOrStdout(), m, opts)
 		},
-	}
-	cmd.Flags().StringArrayVarP(&fields, "field", "f", nil, "pluck one or more fields (repeatable)")
-	return cmd
+	})
 }

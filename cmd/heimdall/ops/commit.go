@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -44,8 +45,10 @@ func newCommitCmd() *cobra.Command {
 		Use:   "commit [HEIGHT]",
 		Short: "Fetch signed CometBFT commit header.",
 		Args:  cobra.MaximumNArgs(1),
+		// Custom RunE rather than cmdutil.RPC: /commit takes a height
+		// param, so the builder's empty-params call does not apply.
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rpc, cfg, err := newRPCClient(cmd)
+			rpc, cfg, err := pkg.RPCClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -70,9 +73,9 @@ func newCommitCmd() *cobra.Command {
 			if raw == nil {
 				return nil // --curl
 			}
-			opts := renderOpts(cmd, cfg, fields)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
 			if opts.JSON {
-				generic, derr := decodeGeneric(raw)
+				generic, derr := cmdutil.DecodeGeneric(raw)
 				if derr != nil {
 					return derr
 				}

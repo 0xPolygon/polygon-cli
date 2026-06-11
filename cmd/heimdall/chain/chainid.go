@@ -15,7 +15,7 @@ func newChainIDCmd() *cobra.Command {
 		Short:   "Print the CometBFT chain id.",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rpc, _, err := newRPCClient(cmd)
+			rpc, _, err := pkg.RPCClient(cmd)
 			if err != nil {
 				return err
 			}

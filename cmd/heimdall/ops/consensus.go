@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -54,8 +55,11 @@ is frequently disabled via RPC.EnableConsensusEndpoints=false in
 config.toml. If the node rejects the call with a method-not-enabled
 error, that's a node-side configuration, not a bug in polycli.`,
 		Args: cobra.NoArgs,
+		// Custom RunE rather than cmdutil.RPC: the cost warning must be
+		// printed after client construction but before the call, and the
+		// builder has no pre-call hook.
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rpc, cfg, err := newRPCClient(cmd)
+			rpc, cfg, err := pkg.RPCClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -65,16 +69,16 @@ error, that's a node-side configuration, not a bug in polycli.`,
 				"warning: /dump_consensus_state is expensive; avoid on a node under load"); werr != nil {
 				return werr
 			}
-			raw, err := callEmpty(cmd.Context(), rpc, "dump_consensus_state")
+			raw, err := cmdutil.CallEmpty(cmd.Context(), rpc, "dump_consensus_state")
 			if err != nil {
 				return err
 			}
 			if raw == nil {
 				return nil // --curl
 			}
-			opts := renderOpts(cmd, cfg, fields)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
 			if opts.JSON {
-				generic, derr := decodeGeneric(raw)
+				generic, derr := cmdutil.DecodeGeneric(raw)
 				if derr != nil {
 					return derr
 				}

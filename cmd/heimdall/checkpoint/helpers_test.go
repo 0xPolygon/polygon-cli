@@ -100,7 +100,7 @@ func runCmd(t *testing.T, restURL string, args ...string) (string, string, error
 	f := &config.Flags{}
 	f.Register(root)
 	// Re-bind the package-level flags so subcommand RunE resolves config.
-	flags = f
+	pkg.Flags = f
 	root.AddCommand(local)
 
 	var stdout, stderr bytes.Buffer

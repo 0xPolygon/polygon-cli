@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -31,31 +32,11 @@ type cometStatus struct {
 // newStatusCmd builds `ops status`. Default output is a KV summary;
 // --json passes the full /status result through.
 func newStatusCmd() *cobra.Command {
-	var fields []string
-	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "Show CometBFT /status: height, sync, moniker, own validator.",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			rpc, cfg, err := newRPCClient(cmd)
-			if err != nil {
-				return err
-			}
-			raw, err := callEmpty(cmd.Context(), rpc, "status")
-			if err != nil {
-				return err
-			}
-			if raw == nil {
-				return nil // --curl
-			}
-			opts := renderOpts(cmd, cfg, fields)
-			if opts.JSON {
-				generic, derr := decodeGeneric(raw)
-				if derr != nil {
-					return derr
-				}
-				return render.RenderJSON(cmd.OutOrStdout(), generic, opts)
-			}
+	return pkg.NewRPCCmd(cmdutil.RPC{
+		Use:    "status",
+		Short:  "Show CometBFT /status: height, sync, moniker, own validator.",
+		Method: "status",
+		Render: func(cmd *cobra.Command, raw json.RawMessage, opts render.Options) error {
 			var st cometStatus
 			if err := json.Unmarshal(raw, &st); err != nil {
 				return fmt.Errorf("decoding status: %w", err)
@@ -73,8 +54,5 @@ func newStatusCmd() *cobra.Command {
 			}
 			return render.RenderKV(cmd.OutOrStdout(), out, opts)
 		},
-	}
-	f := cmd.Flags()
-	f.StringArrayVarP(&fields, "field", "f", nil, "pluck one or more fields (repeatable)")
-	return cmd
+	})
 }

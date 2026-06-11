@@ -2,9 +2,11 @@ package span
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -12,44 +14,26 @@ import (
 //   - no args:  GET /bor/producer-votes          (all voters)
 //   - one arg:  GET /bor/producer-votes/{val_id} (single voter)
 func newVotesCmd() *cobra.Command {
-	var fields []string
-	cmd := &cobra.Command{
+	return pkg.NewGetCmd(cmdutil.Get{
 		Use:   "votes [VAL_ID]",
 		Short: "Show producer-set votes (all or by voter id).",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			rest, cfg, err := newRESTClient(cmd)
-			if err != nil {
-				return err
-			}
-			var path string
+		Label: "producer votes",
+		Build: func(cmd *cobra.Command, args []string) (string, url.Values, error) {
 			if len(args) == 0 {
-				path = "/bor/producer-votes"
-			} else {
-				id, perr := parseSpanID("validator id", args[0])
-				if perr != nil {
-					return perr
-				}
-				path = fmt.Sprintf("/bor/producer-votes/%d", id)
+				return "/bor/producer-votes", nil, nil
 			}
-			body, status, err := rest.Get(cmd.Context(), path, nil)
+			id, err := parseSpanID("validator id", args[0])
 			if err != nil {
-				return err
+				return "", nil, err
 			}
-			if status == 0 && body == nil {
-				return nil
-			}
-			opts := renderOpts(cmd, cfg, fields)
-			m, err := decodeJSONMap(body, "producer votes")
-			if err != nil {
-				return err
-			}
-			// Both shapes are best presented as JSON: the all-votes
-			// response is a nested map keyed by validator id, and the
-			// single-voter response is a small object with a list.
+			return fmt.Sprintf("/bor/producer-votes/%d", id), nil, nil
+		},
+		// Both shapes are best presented as JSON: the all-votes
+		// response is a nested map keyed by validator id, and the
+		// single-voter response is a small object with a list.
+		Render: func(cmd *cobra.Command, m map[string]any, opts render.Options) error {
 			return render.RenderJSON(cmd.OutOrStdout(), m, opts)
 		},
-	}
-	cmd.Flags().StringArrayVarP(&fields, "field", "f", nil, "pluck one or more fields (repeatable)")
-	return cmd
+	})
 }

@@ -26,7 +26,7 @@ func newFindBlockCmd() *cobra.Command {
 				return &client.UsageError{Msg: err.Error()}
 			}
 
-			rpc, _, err := newRPCClient(cmd)
+			rpc, _, err := pkg.RPCClient(cmd)
 			if err != nil {
 				return err
 			}

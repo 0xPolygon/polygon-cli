@@ -12,8 +12,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -21,16 +19,15 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/comet"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/config"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
-// Flags is injected by the caller. The persistent flag set on the
-// root heimdall command is the source of truth for global config
-// resolution. Store it as a package variable so each RunE can call
-// config.Resolve.
-var flags *config.Flags
+// pkg carries the package name and the flag struct injected via
+// Register; cmdutil derives clients and render options from it.
+var pkg = &cmdutil.Pkg{Name: "chain"}
 
 // Register attaches the chain-group subcommands directly to parent
 // and binds the shared flag struct for config resolution. parent is
@@ -39,7 +36,7 @@ var flags *config.Flags
 // Every chain subcommand is read-only, so we wire in render.EnableWatch
 // to give them a `--watch DURATION` flag that repeats the call.
 func Register(parent *cobra.Command, f *config.Flags) {
-	flags = f
+	pkg.Flags = f
 	subs := []*cobra.Command{
 		newBlockCmd(),
 		newBlockNumberCmd(),
@@ -64,49 +61,6 @@ var chainNames = map[string]string{
 }
 
 // --- shared helpers ---
-
-// newRPCClient resolves the config and constructs an RPCClient. When
-// --curl is set the RPC call does not execute; it prints an
-// equivalent curl command instead.
-func newRPCClient(cmd *cobra.Command) (*client.RPCClient, *config.Config, error) {
-	if flags == nil {
-		return nil, nil, &client.UsageError{Msg: "chain package not registered (flags unset)"}
-	}
-	cfg, err := config.Resolve(flags)
-	if err != nil {
-		return nil, nil, &client.UsageError{Msg: err.Error()}
-	}
-	c := client.NewRPCClient(cfg.RPCURL, cfg.Timeout, cfg.RPCHeaders, cfg.Insecure)
-	if cfg.Curl {
-		c.Transport = &client.CurlTransport{Out: cmd.OutOrStdout(), Headers: cfg.RPCHeaders}
-	}
-	return c, cfg, nil
-}
-
-// renderOpts turns a resolved config into a render.Options instance,
-// honouring --json, --field, --color, --raw, and TTY detection.
-func renderOpts(cmd *cobra.Command, cfg *config.Config, fields []string) render.Options {
-	return render.Options{
-		JSON:   cfg.JSON,
-		Raw:    cfg.Raw,
-		Fields: fields,
-		Color:  cfg.Color,
-		IsTTY:  isTerminal(cmd.OutOrStdout()),
-	}
-}
-
-// isTerminal returns true if w is an *os.File attached to a terminal.
-func isTerminal(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeCharDevice != 0
-}
 
 // resolveHeight converts a CLI height argument (empty, "latest",
 // "earliest", or a bare decimal) into the `height` param accepted by

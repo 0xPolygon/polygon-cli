@@ -3,6 +3,7 @@ package chain
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -16,7 +17,7 @@ func newClientCmd() *cobra.Command {
 		Short: "Show Heimdall app + CometBFT versions.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rpc, cfg, err := newRPCClient(cmd)
+			rpc, cfg, err := pkg.RPCClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -36,7 +37,7 @@ func newClientCmd() *cobra.Command {
 				return nil
 			}
 
-			opts := renderOpts(cmd, cfg, fields)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
 			out := map[string]any{
 				"heimdall_app":     abci.Response.Data,
 				"heimdall_version": abci.Response.Version,

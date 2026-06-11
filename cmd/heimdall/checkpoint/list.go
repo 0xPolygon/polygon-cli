@@ -7,7 +7,9 @@ import (
 	"strconv"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -25,19 +27,20 @@ func newListCmd() *cobra.Command {
 		limit   int
 		reverse bool
 		page    string
-		fields  []string
 	)
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "Paginated checkpoint history.",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+	return pkg.NewGetCmd(cmdutil.Get{
+		Use:         "list",
+		Short:       "Paginated checkpoint history.",
+		Label:       "checkpoint list",
+		FieldsUsage: "pluck one or more fields (repeatable, --json only)",
+		Flags: func(fs *pflag.FlagSet) {
+			fs.IntVar(&limit, "limit", 10, "maximum entries to return")
+			fs.BoolVar(&reverse, "reverse", true, "newest-first ordering")
+			fs.StringVar(&page, "page", "", "pagination key from a previous response")
+		},
+		Build: func(cmd *cobra.Command, args []string) (string, url.Values, error) {
 			if limit <= 0 {
 				limit = 10
-			}
-			rest, cfg, err := newRESTClient(cmd)
-			if err != nil {
-				return err
 			}
 			q := url.Values{}
 			q.Set("pagination.limit", strconv.Itoa(limit))
@@ -45,27 +48,15 @@ func newListCmd() *cobra.Command {
 			if page != "" {
 				q.Set("pagination.key", page)
 			}
-			body, status, err := rest.Get(cmd.Context(), "/checkpoints/list", q)
-			if err != nil {
-				return err
-			}
-			if status == 0 && body == nil {
-				return nil
-			}
-			opts := renderOpts(cmd, cfg, fields)
-			if opts.JSON {
-				m, jerr := decodeJSONMap(body, "checkpoint list")
-				if jerr != nil {
-					return jerr
-				}
-				return render.RenderJSON(cmd.OutOrStdout(), m, opts)
-			}
+			return "/checkpoints/list", q, nil
+		},
+		RenderBody: func(cmd *cobra.Command, body []byte, opts render.Options) error {
 			var resp listResponse
 			if jerr := json.Unmarshal(body, &resp); jerr != nil {
 				return fmt.Errorf("decoding checkpoint list: %w", jerr)
 			}
 			if len(resp.CheckpointList) == 0 {
-				_, err = fmt.Fprintln(cmd.OutOrStdout(), "(no checkpoints)")
+				_, err := fmt.Fprintln(cmd.OutOrStdout(), "(no checkpoints)")
 				return err
 			}
 			// RenderTable applies byte-field normalization when opts.Raw
@@ -80,11 +71,5 @@ func newListCmd() *cobra.Command {
 			}
 			return nil
 		},
-	}
-	f := cmd.Flags()
-	f.IntVar(&limit, "limit", 10, "maximum entries to return")
-	f.BoolVar(&reverse, "reverse", true, "newest-first ordering")
-	f.StringVar(&page, "page", "", "pagination key from a previous response")
-	f.StringArrayVarP(&fields, "field", "f", nil, "pluck one or more fields (repeatable, --json only)")
-	return cmd
+	})
 }

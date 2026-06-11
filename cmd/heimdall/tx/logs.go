@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -39,7 +40,7 @@ func newLogsCmd() *cobra.Command {
 			if page <= 0 {
 				page = 1
 			}
-			rpc, cfg, err := newRPCClient(cmd)
+			rpc, cfg, err := pkg.RPCClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -62,7 +63,7 @@ func newLogsCmd() *cobra.Command {
 				return fmt.Errorf("decoding tx_search: %w", err)
 			}
 
-			opts := renderOpts(cmd, cfg, fields)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
 			if opts.JSON {
 				var generic any
 				if err := json.Unmarshal(raw, &generic); err != nil {

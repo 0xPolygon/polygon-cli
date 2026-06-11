@@ -73,15 +73,10 @@ from --from unless --user is set explicitly. --amount defaults to
 				amount = "0"
 			}
 
-			plan := &Plan{
-				Msgs: []htx.Msg{&htx.WithdrawFeeMsg{
-					Proposer: proposer,
-					Amount:   amount,
-				}},
-				MsgShortType:  withdrawMsgShort,
-				SignerAddress: proposer,
-			}
-			return Execute(cmd, opts, mode, plan)
+			return executeSingleMsg(cmd, opts, mode, withdrawMsgShort, proposer, &htx.WithdrawFeeMsg{
+				Proposer: proposer,
+				Amount:   amount,
+			})
 		},
 	}
 	RegisterFlags(cmd, opts, mode)

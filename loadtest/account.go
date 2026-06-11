@@ -1126,7 +1126,9 @@ func (ap *AccountPool) rollDuplicateNonce() bool {
 		return false
 	}
 	p := ap.cfg.DuplicateNonceRate / (ap.cfg.DuplicateNonceRate + 1)
-	return ap.dupNonceRand.Float64() < p
+	// math/rand is deliberate: the roll only shapes the load pattern and must
+	// stay reproducible from cfg.Seed; nothing security-sensitive derives from it.
+	return ap.dupNonceRand.Float64() < p // NOSONAR (go:S2245)
 }
 
 // Next returns the next account in the pool.

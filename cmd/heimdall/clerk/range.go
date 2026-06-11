@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -44,7 +45,7 @@ func newRangeCmd() *cobra.Command {
 			if !cmd.Flags().Changed("from-id") {
 				return &client.UsageError{Msg: "--from-id is required"}
 			}
-			rest, cfg, err := newRESTClient(cmd)
+			rest, cfg, err := pkg.RESTClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -63,9 +64,10 @@ func newRangeCmd() *cobra.Command {
 			if status == 0 && body == nil {
 				return nil
 			}
-			opts := renderOpts(cmd, cfg, fields, base64)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
+			opts.Raw = opts.Raw || base64
 			if opts.JSON {
-				m, jerr := decodeJSONMap(body, "clerk range")
+				m, jerr := cmdutil.DecodeJSONMap(body, "clerk range")
 				if jerr != nil {
 					return jerr
 				}

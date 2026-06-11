@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -20,15 +21,15 @@ func newVerifyCmd() *cobra.Command {
 		Short: "Verify a submitted Merkle proof for a dividend account.",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			addr, err := normalizeAddress(args[0])
+			addr, err := cmdutil.NormalizeAddress(args[0])
 			if err != nil {
 				return err
 			}
-			proof, err := normalizeHexBytes(args[1], "proof")
+			proof, err := cmdutil.NormalizeHexBytes(args[1], "proof")
 			if err != nil {
 				return err
 			}
-			rest, cfg, err := newRESTClient(cmd)
+			rest, cfg, err := pkg.RESTClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -41,8 +42,8 @@ func newVerifyCmd() *cobra.Command {
 			if status == 0 && body == nil {
 				return nil
 			}
-			opts := renderOpts(cmd, cfg, fields)
-			m, err := decodeJSONMap(body, "topup verify")
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
+			m, err := cmdutil.DecodeJSONMap(body, "topup verify")
 			if err != nil {
 				return err
 			}

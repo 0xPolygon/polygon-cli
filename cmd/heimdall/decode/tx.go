@@ -44,10 +44,10 @@ func newTxCmd() *cobra.Command {
 
 // decodedTx is the JSON-friendly shape produced by `decode tx`.
 type decodedTx struct {
-	TxHashSHA256 string         `json:"tx_hash_sha256"`
-	Body         decodedTxBody  `json:"body"`
-	AuthInfo     decodedAuth    `json:"auth_info"`
-	Signatures   []string       `json:"signatures"`
+	TxHashSHA256 string        `json:"tx_hash_sha256"`
+	Body         decodedTxBody `json:"body"`
+	AuthInfo     decodedAuth   `json:"auth_info"`
+	Signatures   []string      `json:"signatures"`
 }
 
 type decodedTxBody struct {

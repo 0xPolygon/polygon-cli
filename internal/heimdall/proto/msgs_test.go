@@ -95,7 +95,7 @@ func TestVoteProducersRoundTripPacked(t *testing.T) {
 
 func TestSetProducerDowntimeRoundTrip(t *testing.T) {
 	in := &MsgSetProducerDowntime{
-		Producer: "0xaaa",
+		Producer:      "0xaaa",
 		DowntimeRange: BlockRange{StartBlock: 100, EndBlock: 200},
 	}
 	got, err := UnmarshalMsgSetProducerDowntime(in.Marshal())
@@ -110,7 +110,7 @@ func TestSetProducerDowntimeRoundTrip(t *testing.T) {
 func TestTopupRoundTrip(t *testing.T) {
 	in := &MsgTopupTx{
 		Proposer: "0x1", User: "0x2", Fee: "1000",
-		TxHash: []byte{0xde, 0xad, 0xbe, 0xef},
+		TxHash:   []byte{0xde, 0xad, 0xbe, 0xef},
 		LogIndex: 1, BlockNumber: 100,
 	}
 	got, err := UnmarshalMsgTopupTx(in.Marshal())
@@ -126,8 +126,8 @@ func TestValidatorJoinRoundTrip(t *testing.T) {
 	in := &MsgValidatorJoin{
 		From: "0x1", ValID: 42, ActivationEpoch: 1, Amount: "1000",
 		SignerPubKey: []byte{0x04, 0x01, 0x02},
-		TxHash: []byte{0xbe, 0xef},
-		LogIndex: 1, BlockNumber: 100, Nonce: 5,
+		TxHash:       []byte{0xbe, 0xef},
+		LogIndex:     1, BlockNumber: 100, Nonce: 5,
 	}
 	got, err := UnmarshalMsgValidatorJoin(in.Marshal())
 	if err != nil {

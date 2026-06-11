@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -62,7 +63,7 @@ func runSet(cmd *cobra.Command, _ []string) error {
 	if setFlags.limit < 0 {
 		return &client.UsageError{Msg: fmt.Sprintf("--limit must be non-negative, got %d", setFlags.limit)}
 	}
-	rest, cfg, err := newRESTClient(cmd)
+	rest, cfg, err := pkg.RESTClient(cmd)
 	if err != nil {
 		return err
 	}
@@ -73,7 +74,7 @@ func runSet(cmd *cobra.Command, _ []string) error {
 	if status == 0 && body == nil {
 		return nil
 	}
-	opts := renderOpts(cmd, cfg, setFlags.fields)
+	opts := cmdutil.RenderOpts(cmd, cfg, setFlags.fields)
 
 	var resp setResponse
 	if jerr := json.Unmarshal(body, &resp); jerr != nil {
@@ -88,7 +89,7 @@ func runSet(cmd *cobra.Command, _ []string) error {
 	if opts.JSON {
 		// Preserve the envelope shape but apply sort/limit to the
 		// validators array so scripts see the same view as the KV table.
-		full, jerr := decodeJSONMap(body, "validator set")
+		full, jerr := cmdutil.DecodeJSONMap(body, "validator set")
 		if jerr != nil {
 			return jerr
 		}

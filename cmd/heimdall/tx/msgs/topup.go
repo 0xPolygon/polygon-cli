@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/config"
 	htx "github.com/0xPolygon/polygon-cli/internal/heimdall/tx"
 )
@@ -41,43 +40,28 @@ manual use is a replay. Refuses without --force.
 `),
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			prop := strings.TrimSpace(proposer)
-			if prop == "" {
-				signer, err := ResolveSigningKey(opts, cmd.InOrStdin())
-				if err != nil {
-					return err
-				}
-				prop = strings.ToLower(signer.Address.Hex())
-			} else {
-				p, err := lowerEthAddress("proposer", prop)
-				if err != nil {
-					return err
-				}
-				prop = p
+			prop, err := signerOrFlagAddress(cmd, opts, "proposer", proposer)
+			if err != nil {
+				return err
 			}
-			if err := requireNonEmptyString("user", user); err != nil {
+			if err = requireNonEmptyString("user", user); err != nil {
 				return err
 			}
 			u, err := lowerEthAddress("user", user)
 			if err != nil {
 				return err
 			}
-			if strings.TrimSpace(fee) == "" {
-				return &client.UsageError{Msg: "--fee is required"}
+			if err = requireNonEmptyString("fee", fee); err != nil {
+				return err
 			}
 			txHash, err := parseHexBytes("tx-hash", txHashHex, 32)
 			if err != nil {
 				return err
 			}
-			plan := &Plan{
-				Msgs: []htx.Msg{&htx.TopupMsg{
-					Proposer: prop, User: u, Fee: strings.TrimSpace(fee),
-					TxHash: txHash, LogIndex: logIndex, BlockNumber: blockNumber,
-				}},
-				MsgShortType:  topupMsgShort,
-				SignerAddress: prop,
-			}
-			return Execute(cmd, opts, mode, plan)
+			return executeSingleMsg(cmd, opts, mode, topupMsgShort, prop, &htx.TopupMsg{
+				Proposer: prop, User: u, Fee: strings.TrimSpace(fee),
+				TxHash: txHash, LogIndex: logIndex, BlockNumber: blockNumber,
+			})
 		},
 	}
 	RegisterFlags(cmd, opts, mode)

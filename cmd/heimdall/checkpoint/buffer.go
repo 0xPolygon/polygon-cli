@@ -6,40 +6,22 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
 // newBufferCmd builds `checkpoint buffer` → GET /checkpoints/buffer.
 // When the proposer is the zero address we print `empty` plus the
 // buffer-empty hint rather than rendering the meaningless zeros.
+// JSON passthrough is preserved; the empty-buffer hint is a
+// human-readable affordance, not a structural one.
 func newBufferCmd() *cobra.Command {
-	var fields []string
-	cmd := &cobra.Command{
+	return pkg.NewGetCmd(cmdutil.Get{
 		Use:   "buffer",
 		Short: "Show the in-flight (buffered) checkpoint.",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			rest, cfg, err := newRESTClient(cmd)
-			if err != nil {
-				return err
-			}
-			body, status, err := rest.Get(cmd.Context(), "/checkpoints/buffer", nil)
-			if err != nil {
-				return err
-			}
-			if status == 0 && body == nil {
-				return nil
-			}
-			opts := renderOpts(cmd, cfg, fields)
-			m, err := decodeJSONMap(body, "checkpoint buffer")
-			if err != nil {
-				return err
-			}
-			// Preserve JSON passthrough; the empty-buffer hint is a
-			// human-readable affordance, not a structural one.
-			if opts.JSON {
-				return render.RenderJSON(cmd.OutOrStdout(), m, opts)
-			}
+		Path:  "/checkpoints/buffer",
+		Label: "checkpoint buffer",
+		Render: func(cmd *cobra.Command, m map[string]any, opts render.Options) error {
 			if isBufferEmpty(m) {
 				if _, werr := fmt.Fprintln(cmd.OutOrStdout(), "empty"); werr != nil {
 					return werr
@@ -48,9 +30,7 @@ func newBufferCmd() *cobra.Command {
 			}
 			return renderCheckpointKV(cmd, m, opts)
 		},
-	}
-	cmd.Flags().StringArrayVarP(&fields, "field", "f", nil, "pluck one or more fields (repeatable)")
-	return cmd
+	})
 }
 
 // isBufferEmpty returns true if the inner checkpoint has a zero-address
@@ -85,4 +65,3 @@ func isZeroOrEmptyAddress(s string) bool {
 	}
 	return true
 }
-

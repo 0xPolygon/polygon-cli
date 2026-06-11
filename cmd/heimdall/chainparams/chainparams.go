@@ -16,14 +16,10 @@ package chainparams
 
 import (
 	_ "embed"
-	"encoding/json"
-	"fmt"
-	"io"
-	"os"
 
 	"github.com/spf13/cobra"
 
-	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/config"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
@@ -31,8 +27,11 @@ import (
 //go:embed usage.md
 var usage string
 
-// flags is injected by the caller via Register.
-var flags *config.Flags
+// pkg carries the package name and the flag struct injected via
+// Register; cmdutil derives clients and render options from it. The
+// name is "chainmanager" (the command name) so the "not registered"
+// error reads the same as before the cmdutil extraction.
+var pkg = &cmdutil.Pkg{Name: "chainmanager"}
 
 // Cmd is the umbrella `chainmanager` command (alias `cm`).
 // Subcommands are attached by Register.
@@ -47,68 +46,11 @@ var Cmd = &cobra.Command{
 // Register attaches the chainmanager umbrella command and its
 // subcommands to parent, wiring in the shared flag struct.
 func Register(parent *cobra.Command, f *config.Flags) {
-	flags = f
+	pkg.Flags = f
 	Cmd.AddCommand(
 		newParamsCmd(),
 		newAddressesCmd(),
 	)
 	render.EnableWatchTree(Cmd)
 	parent.AddCommand(Cmd)
-}
-
-// newRESTClient resolves the config and constructs a RESTClient. When
-// --curl is set the HTTP call is replaced by a printed curl command.
-func newRESTClient(cmd *cobra.Command) (*client.RESTClient, *config.Config, error) {
-	if flags == nil {
-		return nil, nil, &client.UsageError{Msg: "chainmanager package not registered (flags unset)"}
-	}
-	cfg, err := config.Resolve(flags)
-	if err != nil {
-		return nil, nil, &client.UsageError{Msg: err.Error()}
-	}
-	c := client.NewRESTClient(cfg.RESTURL, cfg.Timeout, cfg.RPCHeaders, cfg.Insecure)
-	if cfg.Curl {
-		c.Transport = &client.CurlTransport{Out: cmd.OutOrStdout(), Headers: cfg.RPCHeaders}
-	}
-	return c, cfg, nil
-}
-
-// renderOpts turns a resolved config into a render.Options instance,
-// honouring --json, --field, --color, --raw, and TTY detection.
-func renderOpts(cmd *cobra.Command, cfg *config.Config, fields []string) render.Options {
-	return render.Options{
-		JSON:   cfg.JSON,
-		Raw:    cfg.Raw,
-		Fields: fields,
-		Color:  cfg.Color,
-		IsTTY:  isTerminal(cmd.OutOrStdout()),
-	}
-}
-
-func isTerminal(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeCharDevice != 0
-}
-
-// decodeJSONMap decodes raw into a map[string]any.
-func decodeJSONMap(raw []byte, label string) (map[string]any, error) {
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, fmt.Errorf("decoding %s: %w (body=%q)", label, err, truncate(raw, 256))
-	}
-	return m, nil
-}
-
-func truncate(b []byte, n int) string {
-	if len(b) <= n {
-		return string(b)
-	}
-	return string(b[:n]) + "..."
 }

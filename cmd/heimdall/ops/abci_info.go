@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -22,31 +23,11 @@ type cometABCIInfo struct {
 // newABCIInfoCmd builds `ops abci-info`. Default output is a KV
 // summary of the ABCI-reported app identity and latest block hash.
 func newABCIInfoCmd() *cobra.Command {
-	var fields []string
-	cmd := &cobra.Command{
-		Use:   "abci-info",
-		Short: "Show CometBFT /abci_info app identity.",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			rpc, cfg, err := newRPCClient(cmd)
-			if err != nil {
-				return err
-			}
-			raw, err := callEmpty(cmd.Context(), rpc, "abci_info")
-			if err != nil {
-				return err
-			}
-			if raw == nil {
-				return nil // --curl
-			}
-			opts := renderOpts(cmd, cfg, fields)
-			if opts.JSON {
-				generic, derr := decodeGeneric(raw)
-				if derr != nil {
-					return derr
-				}
-				return render.RenderJSON(cmd.OutOrStdout(), generic, opts)
-			}
+	return pkg.NewRPCCmd(cmdutil.RPC{
+		Use:    "abci-info",
+		Short:  "Show CometBFT /abci_info app identity.",
+		Method: "abci_info",
+		Render: func(cmd *cobra.Command, raw json.RawMessage, opts render.Options) error {
 			var info cometABCIInfo
 			if err := json.Unmarshal(raw, &info); err != nil {
 				return fmt.Errorf("decoding abci_info: %w", err)
@@ -59,8 +40,5 @@ func newABCIInfoCmd() *cobra.Command {
 			}
 			return render.RenderKV(cmd.OutOrStdout(), out, opts)
 		},
-	}
-	f := cmd.Flags()
-	f.StringArrayVarP(&fields, "field", "f", nil, "pluck one or more fields (repeatable)")
-	return cmd
+	})
 }

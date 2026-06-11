@@ -5,11 +5,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
 // newProducersCmd builds `span producers <ID>` as a derived subcommand:
-// fetch the span and print only the selected_producers[] array.
+// fetch the span and print only the selected_producers[] array. It does
+// not fit the generic Get builder because --json emits the plucked
+// producers array rather than the full response object.
 func newProducersCmd() *cobra.Command {
 	var fields []string
 	cmd := &cobra.Command{
@@ -21,7 +24,7 @@ func newProducersCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rest, cfg, err := newRESTClient(cmd)
+			rest, cfg, err := pkg.RESTClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -32,8 +35,8 @@ func newProducersCmd() *cobra.Command {
 			if status == 0 && body == nil {
 				return nil
 			}
-			opts := renderOpts(cmd, cfg, fields)
-			m, err := decodeJSONMap(body, "span")
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
+			m, err := cmdutil.DecodeJSONMap(body, "span")
 			if err != nil {
 				return err
 			}

@@ -94,4 +94,3 @@ func BuildChildren(mode Mode, globalFlags *config.Flags) []*cobra.Command {
 	}
 	return out
 }
-

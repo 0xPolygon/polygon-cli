@@ -22,13 +22,13 @@ func init() {
 func newSpanProposeCmd(mode Mode, globalFlags *config.Flags) *cobra.Command {
 	opts := &TxOpts{Global: globalFlags}
 	var (
-		spanID      uint64
-		proposer    string
-		startBlock  uint64
-		endBlock    uint64
-		chainID     string
-		seedHex     string
-		seedAuthor  string
+		spanID     uint64
+		proposer   string
+		startBlock uint64
+		endBlock   uint64
+		chainID    string
+		seedHex    string
+		seedAuthor string
 	)
 	cmd := &cobra.Command{
 		Use:   "span-propose",
@@ -42,25 +42,15 @@ validator signers.
 `),
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			prop := strings.TrimSpace(proposer)
-			if prop == "" {
-				signer, err := ResolveSigningKey(opts, cmd.InOrStdin())
-				if err != nil {
-					return err
-				}
-				prop = strings.ToLower(signer.Address.Hex())
-			} else {
-				p, err := lowerEthAddress("proposer", prop)
-				if err != nil {
-					return err
-				}
-				prop = p
-			}
-			if err := requireNonEmptyString("chain-id", chainID); err != nil {
+			prop, err := signerOrFlagAddress(cmd, opts, "proposer", proposer)
+			if err != nil {
 				return err
 			}
-			if spanID == 0 {
-				return &client.UsageError{Msg: "--span-id is required"}
+			if err = requireNonEmptyString("chain-id", chainID); err != nil {
+				return err
+			}
+			if err = requireNonZero("span-id", spanID); err != nil {
+				return err
 			}
 			seed, err := parseHexBytes("seed", seedHex, 32)
 			if err != nil {
@@ -79,17 +69,12 @@ validator signers.
 				}
 				author = p
 			}
-			plan := &Plan{
-				Msgs: []htx.Msg{&htx.ProposeSpanMsg{
-					SpanID: spanID, Proposer: prop,
-					StartBlock: startBlock, EndBlock: endBlock,
-					ChainID: strings.TrimSpace(chainID),
-					Seed:    seed, SeedAuthor: author,
-				}},
-				MsgShortType:  proposeSpanMsgShort,
-				SignerAddress: prop,
-			}
-			return Execute(cmd, opts, mode, plan)
+			return executeSingleMsg(cmd, opts, mode, proposeSpanMsgShort, prop, &htx.ProposeSpanMsg{
+				SpanID: spanID, Proposer: prop,
+				StartBlock: startBlock, EndBlock: endBlock,
+				ChainID: strings.TrimSpace(chainID),
+				Seed:    seed, SeedAuthor: author,
+			})
 		},
 	}
 	RegisterFlags(cmd, opts, mode)

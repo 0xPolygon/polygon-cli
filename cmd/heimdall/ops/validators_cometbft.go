@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -55,7 +56,7 @@ jailed status, etc).`,
 			if page <= 0 {
 				return &client.UsageError{Msg: fmt.Sprintf("--page must be positive, got %d", page)}
 			}
-			rpc, cfg, err := newRPCClient(cmd)
+			rpc, cfg, err := pkg.RPCClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -88,9 +89,9 @@ jailed status, etc).`,
 			if raw == nil {
 				return nil // --curl
 			}
-			opts := renderOpts(cmd, cfg, fields)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
 			if opts.JSON {
-				generic, derr := decodeGeneric(raw)
+				generic, derr := cmdutil.DecodeGeneric(raw)
 				if derr != nil {
 					return derr
 				}

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -111,7 +112,7 @@ func newFindCmd() *cobra.Command {
 			if err != nil {
 				return &client.UsageError{Msg: fmt.Sprintf("bor block must be a non-negative integer, got %q", args[0])}
 			}
-			rest, cfg, err := newRESTClient(cmd)
+			rest, cfg, err := pkg.RESTClient(cmd)
 			if err != nil {
 				return err
 			}
@@ -120,7 +121,7 @@ func newFindCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			opts := renderOpts(cmd, cfg, fields)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
 			if err := renderFindResult(cmd, opts, out); err != nil {
 				return err
 			}

@@ -121,7 +121,7 @@ func runCmd(t *testing.T, restURL string, args ...string) (string, string, error
 	root := &cobra.Command{Use: "h", SilenceUsage: true}
 	f := &config.Flags{}
 	f.Register(root)
-	flags = f
+	pkg.Flags = f
 	root.AddCommand(local)
 
 	var stdout, stderr bytes.Buffer

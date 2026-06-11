@@ -36,8 +36,8 @@ Validator-only. Downtime range is inclusive [start-block, end-block].
 `),
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if strings.TrimSpace(producer) == "" {
-				return &client.UsageError{Msg: "--producer is required"}
+			if err := requireNonEmptyString("producer", producer); err != nil {
+				return err
 			}
 			p, err := lowerEthAddress("producer", producer)
 			if err != nil {
@@ -54,16 +54,11 @@ Validator-only. Downtime range is inclusive [start-block, end-block].
 				}
 				signerAddr = strings.ToLower(signer.Address.Hex())
 			}
-			plan := &Plan{
-				Msgs: []htx.Msg{&htx.SetProducerDowntimeMsg{
-					Producer:   p,
-					StartBlock: startBlock,
-					EndBlock:   endBlock,
-				}},
-				MsgShortType:  setProducerDowntimeMsgShort,
-				SignerAddress: signerAddr,
-			}
-			return Execute(cmd, opts, mode, plan)
+			return executeSingleMsg(cmd, opts, mode, setProducerDowntimeMsgShort, signerAddr, &htx.SetProducerDowntimeMsg{
+				Producer:   p,
+				StartBlock: startBlock,
+				EndBlock:   endBlock,
+			})
 		},
 	}
 	RegisterFlags(cmd, opts, mode)

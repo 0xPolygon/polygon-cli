@@ -11,15 +11,13 @@ package span
 
 import (
 	_ "embed"
-	"encoding/json"
 	"fmt"
-	"io"
-	"os"
 	"strconv"
 
 	"github.com/spf13/cobra"
 
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/client"
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/config"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
@@ -27,8 +25,9 @@ import (
 //go:embed usage.md
 var usage string
 
-// flags is injected by the caller via Register.
-var flags *config.Flags
+// pkg carries the package name and the flag struct injected via
+// Register; cmdutil derives clients and render options from it.
+var pkg = &cmdutil.Pkg{Name: "span"}
 
 // SpanCmd is the umbrella `span` command. Subcommands are attached by
 // Register.
@@ -56,7 +55,7 @@ var SpanCmd = &cobra.Command{
 // Every span subcommand is read-only, so we apply render.EnableWatchTree
 // once here and every descendant gets a `--watch DURATION` flag.
 func Register(parent *cobra.Command, f *config.Flags) {
-	flags = f
+	pkg.Flags = f
 	SpanCmd.AddCommand(
 		newParamsCmd(),
 		newLatestCmd(),
@@ -73,57 +72,6 @@ func Register(parent *cobra.Command, f *config.Flags) {
 	parent.AddCommand(SpanCmd)
 }
 
-// newRESTClient resolves the config and constructs a RESTClient. When
-// --curl is set the HTTP call is replaced by a printed curl command.
-func newRESTClient(cmd *cobra.Command) (*client.RESTClient, *config.Config, error) {
-	if flags == nil {
-		return nil, nil, &client.UsageError{Msg: "span package not registered (flags unset)"}
-	}
-	cfg, err := config.Resolve(flags)
-	if err != nil {
-		return nil, nil, &client.UsageError{Msg: err.Error()}
-	}
-	c := client.NewRESTClient(cfg.RESTURL, cfg.Timeout, cfg.RPCHeaders, cfg.Insecure)
-	if cfg.Curl {
-		c.Transport = &client.CurlTransport{Out: cmd.OutOrStdout(), Headers: cfg.RPCHeaders}
-	}
-	return c, cfg, nil
-}
-
-// renderOpts turns a resolved config into a render.Options instance,
-// honouring --json, --field, --color, --raw, and TTY detection.
-func renderOpts(cmd *cobra.Command, cfg *config.Config, fields []string) render.Options {
-	return render.Options{
-		JSON:   cfg.JSON,
-		Raw:    cfg.Raw,
-		Fields: fields,
-		Color:  cfg.Color,
-		IsTTY:  isTerminal(cmd.OutOrStdout()),
-	}
-}
-
-func isTerminal(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeCharDevice != 0
-}
-
-// decodeJSONMap decodes raw into a map[string]any. Used by REST
-// responses whose top-level shape is always an object.
-func decodeJSONMap(raw []byte, label string) (map[string]any, error) {
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, fmt.Errorf("decoding %s: %w (body=%q)", label, err, truncate(raw, 256))
-	}
-	return m, nil
-}
-
 // parseSpanID validates a CLI-provided span/validator/producer id and
 // returns it as uint64. We accept only unsigned base-10 integers.
 func parseSpanID(label, raw string) (uint64, error) {
@@ -132,11 +80,4 @@ func parseSpanID(label, raw string) (uint64, error) {
 		return 0, &client.UsageError{Msg: fmt.Sprintf("%s must be a positive integer, got %q", label, raw)}
 	}
 	return v, nil
-}
-
-func truncate(b []byte, n int) string {
-	if len(b) <= n {
-		return string(b)
-	}
-	return string(b[:n]) + "..."
 }

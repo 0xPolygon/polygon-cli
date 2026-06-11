@@ -34,29 +34,14 @@ refuses without --force.
 `),
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			from := strings.TrimSpace(fromFlag)
-			if from == "" {
-				signer, err := ResolveSigningKey(opts, cmd.InOrStdin())
-				if err != nil {
-					return err
-				}
-				from = strings.ToLower(signer.Address.Hex())
-			} else {
-				p, err := lowerEthAddress("from-msg", from)
-				if err != nil {
-					return err
-				}
-				from = p
+			from, err := signerOrFlagAddress(cmd, opts, "from-msg", fromFlag)
+			if err != nil {
+				return err
 			}
-			plan := &Plan{
-				Msgs:          []htx.Msg{&htx.CpNoAckMsg{From: from}},
-				MsgShortType:  checkpointNoAckMsgShort,
-				SignerAddress: from,
-			}
-			return Execute(cmd, opts, mode, plan)
+			return executeSingleMsg(cmd, opts, mode, checkpointNoAckMsgShort, from, &htx.CpNoAckMsg{From: from})
 		},
 	}
 	RegisterFlags(cmd, opts, mode)
-	cmd.Flags().StringVar(&fromFlag, "from-msg", "", "MsgCpNoAck.from address (default: signer)")
+	registerFromMsgFlag(cmd.Flags(), &fromFlag, checkpointNoAckMsgShort)
 	return cmd
 }

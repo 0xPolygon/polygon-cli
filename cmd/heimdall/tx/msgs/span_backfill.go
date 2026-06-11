@@ -36,32 +36,17 @@ span drifts from bor's. Validator-only.
 `),
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			prop := strings.TrimSpace(proposer)
-			if prop == "" {
-				signer, err := ResolveSigningKey(opts, cmd.InOrStdin())
-				if err != nil {
-					return err
-				}
-				prop = strings.ToLower(signer.Address.Hex())
-			} else {
-				p, err := lowerEthAddress("proposer", prop)
-				if err != nil {
-					return err
-				}
-				prop = p
+			prop, err := signerOrFlagAddress(cmd, opts, "proposer", proposer)
+			if err != nil {
+				return err
 			}
 			if err := requireNonEmptyString("bor-chain-id", chainID); err != nil {
 				return err
 			}
-			plan := &Plan{
-				Msgs: []htx.Msg{&htx.BackfillSpansMsg{
-					Proposer: prop, ChainID: strings.TrimSpace(chainID),
-					LatestSpanID: latestSpanID, LatestBorSpanID: latestBorSpanID,
-				}},
-				MsgShortType:  backfillSpansMsgShort,
-				SignerAddress: prop,
-			}
-			return Execute(cmd, opts, mode, plan)
+			return executeSingleMsg(cmd, opts, mode, backfillSpansMsgShort, prop, &htx.BackfillSpansMsg{
+				Proposer: prop, ChainID: strings.TrimSpace(chainID),
+				LatestSpanID: latestSpanID, LatestBorSpanID: latestBorSpanID,
+			})
 		},
 	}
 	RegisterFlags(cmd, opts, mode)

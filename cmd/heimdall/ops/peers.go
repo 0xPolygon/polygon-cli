@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/0xPolygon/polygon-cli/internal/heimdall/cmdutil"
 	"github.com/0xPolygon/polygon-cli/internal/heimdall/render"
 )
 
@@ -37,20 +38,20 @@ func newPeersCmd() *cobra.Command {
 		Short: "List peers from CometBFT /net_info.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rpc, cfg, err := newRPCClient(cmd)
+			rpc, cfg, err := pkg.RPCClient(cmd)
 			if err != nil {
 				return err
 			}
-			raw, err := callEmpty(cmd.Context(), rpc, "net_info")
+			raw, err := cmdutil.CallEmpty(cmd.Context(), rpc, "net_info")
 			if err != nil {
 				return err
 			}
 			if raw == nil {
 				return nil // --curl
 			}
-			opts := renderOpts(cmd, cfg, fields)
+			opts := cmdutil.RenderOpts(cmd, cfg, fields)
 			if opts.JSON || verbose {
-				generic, derr := decodeGeneric(raw)
+				generic, derr := cmdutil.DecodeGeneric(raw)
 				if derr != nil {
 					return derr
 				}

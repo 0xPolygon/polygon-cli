@@ -14,19 +14,19 @@ import (
 // pick them up.
 func TestW4SubcommandsRegistered(t *testing.T) {
 	want := map[string]bool{
-		"checkpoint":           false,
-		"checkpoint-ack":       false,
-		"checkpoint-noack":     false,
-		"span-propose":         false,
-		"span-backfill":        false,
-		"span-vote-producers":  false,
-		"span-set-downtime":    false,
-		"topup":                false,
-		"stake-join":           false,
-		"stake-update":         false,
-		"signer-update":        false,
-		"stake-exit":           false,
-		"clerk-record":         false,
+		"checkpoint":          false,
+		"checkpoint-ack":      false,
+		"checkpoint-noack":    false,
+		"span-propose":        false,
+		"span-backfill":       false,
+		"span-vote-producers": false,
+		"span-set-downtime":   false,
+		"topup":               false,
+		"stake-join":          false,
+		"stake-update":        false,
+		"signer-update":       false,
+		"stake-exit":          false,
+		"clerk-record":        false,
 	}
 	for _, n := range Names() {
 		if _, ok := want[n]; ok {

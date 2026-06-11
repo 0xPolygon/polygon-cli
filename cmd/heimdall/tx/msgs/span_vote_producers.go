@@ -40,19 +40,9 @@ for; order matters on-chain. Validator-only.
 `),
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			v := strings.TrimSpace(voter)
-			if v == "" {
-				signer, err := ResolveSigningKey(opts, cmd.InOrStdin())
-				if err != nil {
-					return err
-				}
-				v = strings.ToLower(signer.Address.Hex())
-			} else {
-				p, err := lowerEthAddress("voter", v)
-				if err != nil {
-					return err
-				}
-				v = p
+			v, err := signerOrFlagAddress(cmd, opts, "voter", voter)
+			if err != nil {
+				return err
 			}
 			if strings.TrimSpace(votesCSV) == "" {
 				return &client.UsageError{Msg: "--votes is required (comma-separated validator ids)"}
@@ -61,17 +51,12 @@ for; order matters on-chain. Validator-only.
 			if err != nil {
 				return err
 			}
-			if voterID == 0 {
-				return &client.UsageError{Msg: "--voter-id is required"}
+			if err := requireNonZero("voter-id", voterID); err != nil {
+				return err
 			}
-			plan := &Plan{
-				Msgs: []htx.Msg{&htx.VoteProducersMsg{
-					Voter: v, VoterID: voterID, Votes: votes,
-				}},
-				MsgShortType:  voteProducersMsgShort,
-				SignerAddress: v,
-			}
-			return Execute(cmd, opts, mode, plan)
+			return executeSingleMsg(cmd, opts, mode, voteProducersMsgShort, v, &htx.VoteProducersMsg{
+				Voter: v, VoterID: voterID, Votes: votes,
+			})
 		},
 	}
 	RegisterFlags(cmd, opts, mode)
