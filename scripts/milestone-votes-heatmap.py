@@ -17,10 +17,18 @@ vertical bands identify network-wide events (usually bor, not
 heimdall). The healthy state is deliberately near-white so anomalies
 are the only ink that draws attention.
 
+Row labels include the validator's registered name when available.
+Names are not stored on heimdall or in the L1 staking contracts; they
+are profile data served by Polygon's staking API, so the script
+fetches them from there (best-effort: a missing or unreachable API
+just leaves names blank). --names picks the network, with auto
+matching the data's signers against both networks.
+
 Usage:
     polycli heimdall milestone votes --json > votes.json
     scripts/milestone-votes-heatmap.py votes.json
     scripts/milestone-votes-heatmap.py votes.json -o heatmap.png --sort misses
+    scripts/milestone-votes-heatmap.py votes.json --names off
     polycli heimdall milestone votes --json | scripts/milestone-votes-heatmap.py -
 
 Requires matplotlib and numpy (pip install matplotlib numpy).
@@ -29,6 +37,8 @@ Requires matplotlib and numpy (pip install matplotlib numpy).
 import argparse
 import json
 import sys
+import urllib.error
+import urllib.request
 
 import numpy as np
 import matplotlib
@@ -57,6 +67,59 @@ STATE_COLORS = {
     NO_PROP: "#8e6bb8",
     ABSENT: "#c0392b",
 }
+
+
+# Validator display names are off-chain profile data served by
+# Polygon's staking API (they exist neither on heimdall nor in the L1
+# staking contracts). Keyed by lowercase signer address.
+STAKING_API_URLS = {
+    "mainnet": "https://staking-api.polygon.technology/api/v2/validators?limit=1000",
+    "amoy": "https://staking-api-amoy.polygon.technology/api/v2/validators?limit=1000",
+}
+
+
+def fetch_names(network):
+    """Return {lowercase signer: name} from the staking API, or {} on
+    any failure — names are decoration, never worth failing the run."""
+    url = STAKING_API_URLS[network]
+    # The staking API rejects urllib's default User-Agent with a 403.
+    req = urllib.request.Request(url, headers={"User-Agent": "milestone-votes-heatmap/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            payload = json.load(resp)
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as e:
+        print(f"warning: could not fetch {network} validator names: {e}", file=sys.stderr)
+        return {}
+    names = {}
+    for v in payload.get("result", []):
+        signer = str(v.get("signer", "")).lower()
+        name = str(v.get("name", "")).strip()
+        if signer and name:
+            names[signer] = name
+    return names
+
+
+def resolve_names(mode, data):
+    """Build the signer->name map for --names MODE.
+
+    auto fetches both networks and keeps whichever matches more of the
+    signers present in the data — this also catches captures made
+    against a node whose REST/RPC endpoints were cross-wired.
+    """
+    if mode == "off":
+        return {}
+    if mode != "auto":
+        return fetch_names(mode)
+    signers = {v["signer"].lower() for v in data["votes"]}
+    best, best_hits = {}, 0
+    for network in STAKING_API_URLS:
+        names = fetch_names(network)
+        hits = sum(1 for s in signers if s in names)
+        if hits > best_hits:
+            best, best_hits = names, hits
+    if not best_hits:
+        print("warning: no validator names matched this data on any network", file=sys.stderr)
+    return best
 
 
 def classify(vote):
@@ -164,15 +227,16 @@ def render(matrix, row_meta, milestones, data, output, dpi):
         vmax=ABSENT,
     )
 
+    name_w = min(20, max((len(m["name"]) for m in row_meta), default=0))
+    labels = []
+    for m in row_meta:
+        name = m["name"][:name_w]
+        label = f"val {m['val_id']:>3}  "
+        if name_w:
+            label += f"{name:<{name_w}}  "
+        labels.append(label + short_addr(m["signer"]))
     ax.set_yticks(range(n_rows))
-    ax.set_yticklabels(
-        [
-            f"val {m['val_id']}  {short_addr(m['signer'])}"
-            for m in row_meta
-        ],
-        fontsize=8,
-        fontfamily="monospace",
-    )
+    ax.set_yticklabels(labels, fontsize=8, fontfamily="monospace")
 
     tick_step = max(1, n_cols // 12)
     ticks = list(range(0, n_cols, tick_step))
@@ -213,11 +277,13 @@ def print_problem_summary(row_meta, n_cols):
         print("no problem cells: every validator covered every milestone")
         return
     problems.sort(key=lambda m: m["problems"], reverse=True)
+    name_w = max((len(m["name"]) for m in problems[:10]), default=0)
     print("validators with problem cells (not covered / behind / absent):")
     for m in problems[:10]:
         pct = 100.0 * m["problems"] / n_cols
+        name = f"{m['name']:<{name_w}}  " if name_w else ""
         print(
-            f"  val {m['val_id']:>4}  {m['signer']}  "
+            f"  val {m['val_id']:>4}  {name}{m['signer']}  "
             f"{m['problems']:>5}/{n_cols} ({pct:.1f}%)"
         )
 
@@ -238,6 +304,13 @@ def main():
         default="power",
         help="row order: voting power (stable identity) or problem count (worst rows on top)",
     )
+    parser.add_argument(
+        "--names",
+        choices=["auto", "amoy", "mainnet", "off"],
+        default="auto",
+        help="fetch validator display names from the Polygon staking API "
+        "(auto picks the network whose validators match the data)",
+    )
     parser.add_argument("--dpi", type=int, default=150, help="output image dpi")
     args = parser.parse_args()
 
@@ -252,7 +325,14 @@ def main():
     if "votes" not in data:
         sys.exit("input does not look like `milestone votes --json` output (no .votes key)")
 
+    names = resolve_names(args.names, data)
     matrix, row_meta, milestones = build_matrix(data)
+    for m in row_meta:
+        name = names.get(m["signer"].lower(), "")
+        if not name and names:
+            # Staking-dashboard convention for unregistered validators.
+            name = "Anonymous" if m["val_id"] == "-" else f"Anonymous {m['val_id']}"
+        m["name"] = name
     matrix, row_meta = sort_rows(matrix, row_meta, args.sort)
     render(matrix, row_meta, milestones, data, output, args.dpi)
     print_problem_summary(row_meta, matrix.shape[1])
