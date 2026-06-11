@@ -45,7 +45,8 @@ func FindAccount(ks *keystore.KeyStore, identifier string) (accounts.Account, er
 	// Integer index — operators often prefer `--account 0` to referring
 	// to an address by heart. Only accept this when the string is a
 	// pure unsigned integer that does not also look like an address.
-	if n, err := strconv.ParseUint(identifier, 10, 32); err == nil {
+	// bitSize 31 keeps int(n) safe even on 32-bit platforms.
+	if n, err := strconv.ParseUint(identifier, 10, 31); err == nil {
 		list := ks.Accounts()
 		if int(n) >= len(list) {
 			return accounts.Account{}, &client.UsageError{

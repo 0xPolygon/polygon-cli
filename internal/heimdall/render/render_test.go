@@ -255,3 +255,27 @@ func TestPluckNestedObjectSurvives(t *testing.T) {
 		t.Errorf("unexpected shape: %v", out)
 	}
 }
+
+// TestStringifyFloatBounds asserts that only float64 values whose
+// integral form fits int64 are rendered as integers; out-of-range
+// magnitudes (total difficulty, stake amounts) must not go through the
+// int64 conversion, which is undefined for them.
+func TestStringifyFloatBounds(t *testing.T) {
+	cases := []struct {
+		in   float64
+		want string
+	}{
+		{42, "42"},
+		{-7, "-7"},
+		{3.5, "3.5"},
+		{1e22, "1e+22"},                                // > 2^63: stays float-formatted
+		{float64(1 << 63), "9.223372036854776e+18"},    // exactly 2^63: excluded
+		{-(float64(1 << 63)), "-9223372036854775808"},  // exactly -2^63: still valid int64
+		{-1e30, "-1e+30"},
+	}
+	for _, c := range cases {
+		if got := stringify(c.in); got != c.want {
+			t.Errorf("stringify(%v) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

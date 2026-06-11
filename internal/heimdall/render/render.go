@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strings"
 )
@@ -236,8 +237,12 @@ func stringify(v any) string {
 		return vv
 	case float64:
 		// json.Unmarshal yields float64 for numbers; render as int
-		// when integral to match cast output style.
-		if vv == float64(int64(vv)) {
+		// when integral to match cast output style. The bounds checks
+		// matter: converting an out-of-range float64 to int64 is
+		// undefined per the Go spec, and chain quantities (total
+		// difficulty, stake amounts) do exceed 2^63. 1<<63 is exactly
+		// representable as a float64; math.MaxInt64 is not.
+		if vv == math.Trunc(vv) && vv >= -(1<<63) && vv < 1<<63 {
 			return fmt.Sprintf("%d", int64(vv))
 		}
 		return fmt.Sprintf("%v", vv)
