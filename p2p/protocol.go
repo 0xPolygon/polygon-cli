@@ -1282,7 +1282,7 @@ func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) err
 }
 
 func (c *conn) handleGetReceipts(msg ethp2p.Msg) error {
-	var request eth.GetReceiptsPacket
+	var request eth.GetReceiptsPacket69
 	if err := msg.Decode(&request); err != nil {
 		return err
 	}
