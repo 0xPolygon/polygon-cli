@@ -1,0 +1,83 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "round_state": {
+      "height": "32634175",
+      "round": 0,
+      "step": 3,
+      "start_time": "2026-04-20T16:30:00Z",
+      "commit_time": "2026-04-20T16:29:55Z",
+      "validators": {
+        "validators": [
+          {
+            "address": "6DC2DD54F24979EC26212794C71AFEFED722280C",
+            "pub_key": {
+              "type": "cometbft/PubKeySecp256k1eth",
+              "value": "BHSbTmnF/fSpo6UNgfskp/9Io9o28VXeqb4JkabQDCVXqlrNRLFogOWG9PVgUQKozGH9as0clBZojMGxy/Uilhs="
+            },
+            "voting_power": "80000015",
+            "proposer_priority": "-216292540"
+          },
+          {
+            "address": "09207A6EFEE346CB3E4A54AC18523E3715D38B3F",
+            "pub_key": {
+              "type": "cometbft/PubKeySecp256k1eth",
+              "value": "BKxH5sAqQJpLe+yHXx2+CEj/IJ7M1B3UYG8zzabr1E4xmoLIYJ787pvb5hVzZRAOKtGozm3VLZvtT5NSlb81L9s="
+            },
+            "voting_power": "76318569",
+            "proposer_priority": "234672216"
+          }
+        ],
+        "proposer": {
+          "address": "6DC2DD54F24979EC26212794C71AFEFED722280C",
+          "pub_key": {
+            "type": "cometbft/PubKeySecp256k1eth",
+            "value": "BHSbTmnF/fSpo6UNgfskp/9Io9o28VXeqb4JkabQDCVXqlrNRLFogOWG9PVgUQKozGH9as0clBZojMGxy/Uilhs="
+          },
+          "voting_power": "80000015",
+          "proposer_priority": "-216292540"
+        }
+      },
+      "proposal": null,
+      "proposal_block": null,
+      "proposal_block_parts": null,
+      "locked_round": -1,
+      "locked_block": null,
+      "locked_block_parts": null,
+      "valid_round": -1,
+      "valid_block": null,
+      "valid_block_parts": null,
+      "votes": [
+        {
+          "round": 0,
+          "prevotes": [
+            "Vote{0:6DC2DD54F249 32634175/00/SIGNED_MSG_TYPE_PREVOTE(Prevote) 7F1482E234DD @ 2026-04-20T16:30:00.5Z}",
+            "nil-Vote"
+          ],
+          "prevotes_bit_array": "BA{2:x_} 80000015/156318584 = 0.51",
+          "precommits": [
+            "nil-Vote",
+            "nil-Vote"
+          ],
+          "precommits_bit_array": "BA{2:__} 0/156318584 = 0.00"
+        }
+      ],
+      "commit_round": -1,
+      "last_commit": {
+        "votes": [
+          "Vote{0:6DC2DD54F249 32634174/00/SIGNED_MSG_TYPE_PRECOMMIT(Precommit) 7F1482E234DD @ 2026-04-20T16:29:55.2Z}",
+          "Vote{1:09207A6EFEE3 32634174/00/SIGNED_MSG_TYPE_PRECOMMIT(Precommit) 7F1482E234DD @ 2026-04-20T16:29:55.3Z}"
+        ],
+        "votes_bit_array": "BA{2:xx} 156318584/156318584 = 1.00",
+        "peer_maj_23s": {}
+      },
+      "last_validators": {
+        "validators": [],
+        "proposer": null
+      },
+      "triggered_timeout_precommit": false
+    },
+    "peers": []
+  }
+}

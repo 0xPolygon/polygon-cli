@@ -1,6 +1,8 @@
 [default]
 extend-ignore-re = [
   "Selector:0.*Signature:.*", # polycli abi
+  "cosmos1[a-z0-9]{38}",      # bech32 addresses in heimdall docs/tests
+  "BA\\{[0-9]+:",             # CometBFT BitArray notation, e.g. BA{2:x_}
 ]
 
 [default.extend-identifiers]

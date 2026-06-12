@@ -1,0 +1,9 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32603,
+    "message": "Internal error",
+    "data": "method GetConsensusState not enabled, please check your RPC.EnableConsensusEndpoints under config.toml file"
+  }
+}

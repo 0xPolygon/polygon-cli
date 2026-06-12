@@ -1,0 +1,5 @@
+{
+  "code": 13,
+  "message": "failed to get latest state counter from L1",
+  "details": []
+}

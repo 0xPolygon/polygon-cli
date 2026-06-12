@@ -48,6 +48,7 @@ var LoadtestCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		cfg.StartNonceSet = cmd.Flags().Changed("nonce")
 		cfg.PrivateKey, err = flag.GetPrivateKey(cmd)
 		if err != nil {
 			return err
@@ -126,6 +127,7 @@ func initPersistentFlags() {
 	pf.Uint64Var(&cfg.ForceGasLimit, "gas-limit", 0, "manually specify gas limit (useful to avoid eth_estimateGas or when auto-computation fails)")
 	pf.Var(&flag.GasValue{Val: &cfg.ForceGasPrice}, "gas-price", "gas price with unit support (e.g., \"100gwei\", \"1000000000\")")
 	pf.Uint64Var(&cfg.StartNonce, "nonce", 0, "use this flag to manually set the starting nonce")
+	pf.Float64Var(&cfg.DuplicateNonceRate, "duplicate-nonce-rate", 0, "ratio of duplicate-nonce txs to fresh txs (0 disables; 1 = 50% duplicates, 4 = 80%); requires --fire-and-forget")
 	pf.Var(&flag.GasValue{Val: &cfg.ForcePriorityGasPrice}, "priority-gas-price", "gas tip for EIP-1559 with unit support (e.g., \"2gwei\")")
 	pf.BoolVar(&cfg.ShouldProduceSummary, "summarize", false, "produce execution summary after load test (can take a long time for large tests)")
 	pf.Uint64Var(&cfg.BatchSize, "batch-size", 999, "batch size for receipt fetching (default: 999)")
@@ -191,6 +193,7 @@ v3, uniswapv3 - perform UniswapV3 swaps`)
 	f.Uint64Var(&cfg.BlockBatchSize, "block-batch-size", 25, "number of blocks to fetch per RPC batch request for recall and rpc modes")
 	f.StringVar(&cfg.ContractAddress, "contract-address", "", "contract address for --mode contract-call (requires --calldata)")
 	f.StringVar(&cfg.ContractCallData, "calldata", "", "hex encoded calldata: function signature + encoded arguments (requires --mode contract-call and --contract-address)")
+	f.StringVar(&cfg.ContractCallDataFile, "calldata-file", "", "path to a file containing hex encoded calldata (alternative to --calldata; mutually exclusive with it)")
 	f.BoolVar(&cfg.ContractCallPayable, "contract-call-payable", false, "mark function as payable using value from --eth-amount-in-wei (requires --mode contract-call and --contract-address)")
 	f.StringVar(&cfg.Proxy, "proxy", "", "use the proxy specified")
 	f.BoolVar(&cfg.WaitForReceipt, "wait-for-receipt", false, "wait for transaction receipt to be mined instead of just sending")

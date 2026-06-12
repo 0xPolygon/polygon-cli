@@ -1,0 +1,5 @@
+{
+  "code": 5,
+  "message": "checkpoint signatures not set for the given tx hash",
+  "details": []
+}

@@ -76,7 +76,7 @@ func FuzzRPCArgs(args *[]any, c fuzz.Continue) {
 			(*args)[i] = c.Float32()
 		case reflect.Float64:
 			(*args)[i] = c.Float64()
-		case reflect.Ptr:
+		case reflect.Pointer:
 			c.Fuzz(d)
 			(*args)[i] = d
 		default:

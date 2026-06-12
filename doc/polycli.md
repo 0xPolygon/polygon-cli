@@ -62,6 +62,8 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli hash](polycli_hash.md) - Provide common crypto hashing functions.
 
+- [polycli heimdall](polycli_heimdall.md) - Query and interact with a Heimdall v2 node.
+
 - [polycli loadtest](polycli_loadtest.md) - Run a generic load test against an Eth/EVM style JSON-RPC endpoint.
 
 - [polycli metrics-to-dash](polycli_metrics-to-dash.md) - Create a dashboard from an Openmetrics / Prometheus response.
@@ -92,7 +94,11 @@ Polycli is a collection of tools that are meant to be useful while building, tes
 
 - [polycli rpcfuzz](polycli_rpcfuzz.md) - Continually run a variety of RPC calls and fuzzers.
 
+- [polycli sendtx](polycli_sendtx.md) - Send raw transactions to a JSON-RPC endpoint in batches.
+
 - [polycli signer](polycli_signer.md) - Utilities for security signing transactions.
+
+- [polycli tail](polycli_tail.md) - Tail full blocks from a JSON-RPC endpoint as NDJSON.
 
 - [polycli ulxly](polycli_ulxly.md) - Utilities for interacting with the uLxLy bridge.
 
