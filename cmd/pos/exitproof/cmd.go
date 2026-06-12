@@ -620,11 +620,7 @@ func fetchBlockHashesBatched(ctx context.Context, rpc *ethrpc.Client, start, end
 	}
 
 	for batchStart := uint64(0); batchStart < count; batchStart += headerFetchBatchSize {
-		batchEnd := batchStart + headerFetchBatchSize
-		if batchEnd > count {
-			batchEnd = count
-		}
-		batchLen := batchEnd - batchStart
+		batchLen := min(batchStart+headerFetchBatchSize, count) - batchStart
 
 		elems := make([]ethrpc.BatchElem, batchLen)
 		results := make([]blockHeader, batchLen)
