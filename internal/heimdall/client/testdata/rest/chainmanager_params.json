@@ -1,0 +1,18 @@
+{
+  "params": {
+    "chain_params": {
+      "bor_chain_id": "80002",
+      "heimdall_chain_id": "heimdallv2-80002",
+      "pol_token_address": "0x3fd0a53f4bf853985a95f4eb3f9c9fde1f8e2b53",
+      "staking_manager_address": "0x4ae8f648b1ec892b6cc68c89cc088583964d08be",
+      "slash_manager_address": "0x9e699267858ce513eacf3b66420334785f9c8e4c",
+      "root_chain_address": "0xbd07d7e1e93c8d4b2a261327f3c28a8ea7167209",
+      "staking_info_address": "0x5e3111a5d928d24718c1a7897261d0b9087002ed",
+      "state_sender_address": "0x49e307fa5a58ff1834e0f8a60eb2a9609e6a5f50",
+      "state_receiver_address": "0x0000000000000000000000000000000000001001",
+      "validator_set_address": "0x0000000000000000000000000000000000001000"
+    },
+    "main_chain_tx_confirmations": "64",
+    "bor_chain_tx_confirmations": "512"
+  }
+}

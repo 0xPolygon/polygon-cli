@@ -180,6 +180,10 @@ type TviewRenderer struct {
 	homeStatusPane   *tview.TextView // Left pane: Status information (1/3 width)
 	homeMetricsPane  *tview.Table    // Right pane: Metrics table (2/3 width)
 	homeTable        *tview.Table
+	homeTableCache   [][]string // Cached table cell values for incremental redraw
+	homeTableRows    int        // Number of cached data rows
+	homeTableInnerW  int        // Cached inner width to detect resize-driven redraw invalidation
+	homeTableInnerH  int        // Cached inner height to detect resize-driven redraw invalidation
 	blockDetailPage  *tview.Flex     // Changed to Flex for side-by-side layout
 	blockDetailLeft  *tview.Table    // Left pane: Transaction table
 	blockDetailRight *tview.TextView // Right pane: Raw JSON
@@ -210,8 +214,6 @@ type TviewRenderer struct {
 	currentBlockMu sync.RWMutex
 
 	// Throttling for UI updates
-	lastDrawTime    time.Time
-	drawMu          sync.Mutex
 	minDrawInterval time.Duration
 
 	// Transaction counters for metrics - removed unused fields
@@ -464,8 +466,15 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 				// Handle Enter key on home page (block selection)
 				if t.homeTable != nil {
 					row, _ := t.homeTable.GetSelection()
-					if row > 0 && row-1 < len(t.blocks) {
-						t.showBlockDetail(t.blocks[row-1])
+					if row > 0 {
+						t.blocksMu.RLock()
+						if row-1 < len(t.blocks) {
+							block := t.blocks[row-1]
+							t.blocksMu.RUnlock()
+							t.showBlockDetail(block)
+							return nil
+						}
+						t.blocksMu.RUnlock()
 					}
 				}
 				return nil
@@ -478,21 +487,18 @@ func (t *TviewRenderer) setupKeyboardShortcuts() {
 				t.changeSortColumn(-1)
 				t.resortBlocks()
 				t.updateTable()
-				t.updateTableHeaders()
 				return nil
 			case '>':
 				// Move sort column right and redraw immediately
 				t.changeSortColumn(1)
 				t.resortBlocks()
 				t.updateTable()
-				t.updateTableHeaders()
 				return nil
 			case 'r', 'R':
 				// Reverse sort direction and redraw immediately
 				t.toggleSortDirection()
 				t.resortBlocks()
 				t.updateTable()
-				t.updateTableHeaders()
 				return nil
 			}
 		case "block-detail":
@@ -615,39 +621,6 @@ func (t *TviewRenderer) Start(ctx context.Context) error {
 	return nil
 }
 
-// throttledDraw performs a Draw() operation with throttling to prevent overwhelming the UI
-func (t *TviewRenderer) throttledDraw() {
-	t.drawMu.Lock()
-	defer t.drawMu.Unlock()
-
-	now := time.Now()
-	elapsed := now.Sub(t.lastDrawTime)
-
-	if elapsed < t.minDrawInterval {
-		// Too soon since last draw, skip this one
-		return
-	}
-
-	// Save current focus if a modal is active
-	var currentFocus tview.Primitive
-	if t.isModalCurrentlyActive() {
-		currentFocus = t.app.GetFocus()
-	}
-
-	t.lastDrawTime = now
-	t.app.Draw()
-
-	// Restore focus to modal if it was stolen during draw
-	if t.isModalCurrentlyActive() && currentFocus != nil {
-		// Small delay to ensure the draw is complete before restoring focus
-		go func() {
-			time.Sleep(1 * time.Millisecond)
-			t.app.QueueUpdateDraw(func() {
-				t.app.SetFocus(currentFocus)
-			})
-		}()
-	}
-}
 
 // getCachedSigner gets the signer for a block, using LRU cache to avoid expensive Ecrecover calls
 func (t *TviewRenderer) getCachedSigner(block rpctypes.PolyBlock) string {
@@ -697,11 +670,11 @@ func (t *TviewRenderer) consumeBlocks(ctx context.Context) {
 			// Insert block in sorted order (always maintains descending order by block number)
 			t.insertBlockSorted(block)
 
-			// Update the table and apply view state
-			// Direct Draw() call is safe from any goroutine according to tview docs
-			t.updateTable()
-			t.applyViewState()
-			t.throttledDraw()
+			// UI updates must happen on the application goroutine.
+			t.app.QueueUpdateDraw(func() {
+				t.updateTable()
+				t.applyViewState()
+			})
 		}
 	}
 }
@@ -720,10 +693,10 @@ func (t *TviewRenderer) consumeMetrics(ctx context.Context) {
 				return
 			}
 
-			// Update the metrics pane
-			// Direct Draw() call is safe from any goroutine according to tview docs
-			t.updateMetricsPane(update)
-			t.throttledDraw()
+			// UI updates must happen on the application goroutine.
+			t.app.QueueUpdateDraw(func() {
+				t.updateMetricsPane(update)
+			})
 		}
 	}
 }

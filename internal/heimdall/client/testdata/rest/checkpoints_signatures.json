@@ -1,0 +1,12 @@
+{
+  "signatures": [
+    {
+      "signer": "0x02f615e95563ef16f10354dba9e584e58d2d4314",
+      "signature": "iM/8R8c8PaMCA3kvqAjoo6SywW7s/4KpHcqQWG5Lg+Y3xjuC0/iAmRmY3kUbqc9GBaYBuE0HUlBAS+qMj4upbgE="
+    },
+    {
+      "signer": "0x09207a6efee346cb3e4a54ac18523e3715d38b3f",
+      "signature": "kBhSC6WnifiZtkBTN/KPMXlW5gMIBgQGdPbhdVR0smI5tOc0MOgBUMJbAIxYz9Gc4zy63PNG5K5tRHMNslsLSwA="
+    }
+  ]
+}
