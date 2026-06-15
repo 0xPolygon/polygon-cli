@@ -168,7 +168,7 @@ require (
 require (
 	cloud.google.com/go/kms v1.31.0
 	github.com/0xPolygon/cdk-contracts-tooling v0.0.1
-	github.com/btcsuite/btcd/btcutil v1.1.6
+	github.com/btcsuite/btcd/btcutil v1.2.0
 	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc
 	github.com/chromedp/chromedp v0.15.1
 	github.com/cometbft/cometbft v0.38.21
@@ -181,7 +181,7 @@ require (
 	github.com/google/tink/go v1.7.0
 	github.com/iden3/go-iden3-crypto v0.0.17
 	github.com/montanaflynn/stats v0.9.0
-	github.com/pelletier/go-toml/v2 v2.2.4
+	github.com/pelletier/go-toml/v2 v2.3.1
 	github.com/rivo/tview v0.42.0
 )
 
