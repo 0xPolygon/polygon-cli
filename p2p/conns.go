@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
+	"github.com/0xPolygon/polygon-cli/util"
 )
 
 // BlockCache stores the actual block data to avoid duplicate fetches and database queries.
@@ -41,6 +42,10 @@ type ConnsOptions struct {
 	TxBroadcastQueueSize       int
 	MaxTxPacketSize            int
 	MaxQueuedTxs               int
+
+	// ValidatorSet, when non-nil, restricts block rebroadcasting to blocks
+	// whose recovered signer is a known validator.
+	ValidatorSet *ValidatorSet
 }
 
 // Conns manages a collection of active peer connections for transaction broadcasting.
@@ -82,6 +87,10 @@ type Conns struct {
 	maxTxPacketSize int
 	// maxQueuedTxs is the maximum number of transactions to queue for announcement
 	maxQueuedTxs int
+
+	// validators, when non-nil, is the validator set used to gate block
+	// rebroadcasting by signer.
+	validators *ValidatorSet
 
 	// metrics tracks broadcast-related Prometheus metrics
 	metrics *metrics
@@ -137,6 +146,7 @@ func NewConns(opts ConnsOptions) *Conns {
 		txBatchTimeout:             opts.TxBatchTimeout,
 		maxTxPacketSize:            opts.MaxTxPacketSize,
 		maxQueuedTxs:               opts.MaxQueuedTxs,
+		validators:                 opts.ValidatorSet,
 		metrics:                    newMetrics(),
 	}
 
@@ -502,6 +512,23 @@ func (c *Conns) BroadcastBlockHashes(hashes []common.Hash, numbers []uint64) int
 	}
 
 	return count
+}
+
+// IsKnownSigner reports whether the block header was signed by a known
+// validator. When signer validation is disabled (no signer set configured),
+// it returns true so all blocks are eligible for rebroadcast. A header whose
+// signature cannot be recovered is treated as unknown.
+func (c *Conns) IsKnownSigner(header *types.Header) bool {
+	if c.validators == nil {
+		return true
+	}
+
+	sig, err := util.Ecrecover(header)
+	if err != nil {
+		return false
+	}
+
+	return c.validators.IsAuthorized(common.BytesToAddress(sig))
 }
 
 // Nodes returns all currently connected peer nodes.

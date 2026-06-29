@@ -68,9 +68,8 @@ var EcRecoverCmd = &cobra.Command{
 				return
 			}
 
-			block := types.NewBlockWithHeader(&header)
 			blockNumber = header.Number.Uint64()
-			signerBytes, err = util.Ecrecover(block)
+			signerBytes, err = util.Ecrecover(&header)
 
 		} else if txData != "" { // transaction signer from data
 
@@ -115,7 +114,7 @@ var EcRecoverCmd = &cobra.Command{
 				log.Error().Err(err).Msg("Unable to retrieve block")
 				return
 			}
-			signerBytes, err = util.Ecrecover(block)
+			signerBytes, err = util.Ecrecover(block.Header())
 		}
 
 		if err != nil {

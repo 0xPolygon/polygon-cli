@@ -39,8 +39,9 @@ type (
 	}
 )
 
-func Ecrecover(block *types.Block) ([]byte, error) {
-	header := block.Header()
+// Ecrecover recovers the signer address from a block header's seal
+// (the last SignatureLength bytes of Extra) using the clique seal hash.
+func Ecrecover(header *types.Header) ([]byte, error) {
 	sigStart := len(header.Extra) - crypto.SignatureLength
 	if sigStart < 0 || sigStart > len(header.Extra) {
 		return nil, fmt.Errorf("unable to recover signature")

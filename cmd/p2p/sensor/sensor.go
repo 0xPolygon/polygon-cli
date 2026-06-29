@@ -61,6 +61,8 @@ type (
 		TxBroadcastQueueSize             int
 		MaxTxPacketSize                  int
 		MaxQueuedTxs                     int
+		HeimdallURL                      string
+		ValidatorSetRefresh              time.Duration
 		ShouldRunPprof                   bool
 		PprofPort                        uint
 		ShouldRunPrometheus              bool
@@ -204,6 +206,18 @@ var SensorCmd = &cobra.Command{
 		peersGauge := p2p.NewPeersGauge()
 		metrics := p2p.NewBlockMetrics(head.Block)
 
+		// When block rebroadcasting is enabled, load the validator signer set
+		// from Heimdall so we only rebroadcast blocks signed by a known
+		// validator. The initial fetch is blocking and fatal on failure so we
+		// never rebroadcast against an empty signer set.
+		var validators *p2p.ValidatorSet
+		if inputSensorParams.ShouldBroadcastBlocks || inputSensorParams.ShouldBroadcastBlockHashes {
+			validators = p2p.NewValidatorSet(inputSensorParams.HeimdallURL, inputSensorParams.ValidatorSetRefresh)
+			if err = validators.Start(ctx); err != nil {
+				return fmt.Errorf("failed to load validator set from %s: %w", inputSensorParams.HeimdallURL, err)
+			}
+		}
+
 		// Create peer connection manager for broadcasting transactions
 		// and managing the global blocks cache
 		conns := p2p.NewConns(p2p.ConnsOptions{
@@ -221,6 +235,7 @@ var SensorCmd = &cobra.Command{
 			TxBroadcastQueueSize:       inputSensorParams.TxBroadcastQueueSize,
 			MaxTxPacketSize:            inputSensorParams.MaxTxPacketSize,
 			MaxQueuedTxs:               inputSensorParams.MaxQueuedTxs,
+			ValidatorSet:               validators,
 		})
 
 		opts := p2p.EthProtocolOptions{
@@ -503,6 +518,8 @@ will result in less chance of missing data but can significantly increase memory
 	f.IntVar(&inputSensorParams.TxBroadcastQueueSize, "tx-broadcast-queue-size", 100_000, "capacity of transaction broadcast queue")
 	f.IntVar(&inputSensorParams.MaxTxPacketSize, "max-tx-packet-size", 100*1024, "target size in bytes for transaction broadcast packets")
 	f.IntVar(&inputSensorParams.MaxQueuedTxs, "max-queued-txs", 4096, "maximum transaction announcements to queue per peer")
+	f.StringVar(&inputSensorParams.HeimdallURL, "heimdall-url", "https://heimdall-api.polygon.technology", "heimdall REST URL for the validator signer set (used to validate blocks before rebroadcast)")
+	f.DurationVar(&inputSensorParams.ValidatorSetRefresh, "validator-set-refresh", 5*time.Minute, "interval to refresh the validator signer set from heimdall")
 	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
 	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")

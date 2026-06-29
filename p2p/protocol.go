@@ -528,9 +528,8 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.countMsgReceived(packet.Name(), float64(len(packet)))
 
-	// Collect unique hashes and numbers for database write and broadcasting.
+	// Collect unique hashes for the database write.
 	uniqueHashes := make([]common.Hash, 0, len(packet))
-	uniqueNumbers := make([]uint64, 0, len(packet))
 
 	for _, entry := range packet {
 		hash := entry.Hash
@@ -568,7 +567,6 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		}
 
 		uniqueHashes = append(uniqueHashes, hash)
-		uniqueNumbers = append(uniqueNumbers, entry.Number)
 	}
 
 	// Write only unique hashes to the database.
@@ -578,8 +576,9 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.db.WriteBlockHashes(ctx, c.node, uniqueHashes, tfs)
 
-	// Broadcast block hashes to other peers asynchronously
-	go c.conns.BroadcastBlockHashes(uniqueHashes, uniqueNumbers)
+	// Rebroadcast of announced block hashes is deferred to handleBlockHeaders,
+	// where the fetched header lets us validate the block signer first. Body
+	// requests (getBlockData above) are intentionally not gated.
 
 	return nil
 }
@@ -981,6 +980,17 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 		})
 	}
 
+	// Rebroadcast the announced block hash now that the header is available,
+	// but only if the block was signed by a known validator. Parent fetches
+	// are not announcements, so they are not rebroadcast. (getBlockData uses
+	// Amount:1, so each response is a single announced header.)
+	if !isParent && c.conns.IsKnownSigner(headers[0]) {
+		go c.conns.BroadcastBlockHashes(
+			[]common.Hash{headers[0].Hash()},
+			[]uint64{headers[0].Number.Uint64()},
+		)
+	}
+
 	return nil
 }
 
@@ -1188,6 +1198,13 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	c.db.WriteBlock(ctx, c.node, packet.Block, packet.TD, tfs)
+
+	// Only rebroadcast blocks signed by a known validator. Persistence above is
+	// unconditional; signer validation gates rebroadcast only.
+	if !c.conns.IsKnownSigner(packet.Block.Header()) {
+		c.logger.Debug().Str("hash", hash.Hex()).Msg("Skipping rebroadcast: unknown block signer")
+		return nil
+	}
 
 	// Broadcast block or block hash to other peers asynchronously
 	go c.conns.BroadcastBlock(packet.Block, packet.TD)
