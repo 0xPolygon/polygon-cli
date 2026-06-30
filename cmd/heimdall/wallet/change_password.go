@@ -16,8 +16,8 @@ import (
 // rewritten in-place rather than duplicated.
 func newChangePasswordCmd() *cobra.Command {
 	var (
-		shared         keystoreSharedFlags
-		newPassword    string
+		shared          keystoreSharedFlags
+		newPassword     string
 		newPasswordFile string
 	)
 	cmd := &cobra.Command{

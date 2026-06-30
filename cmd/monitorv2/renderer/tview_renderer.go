@@ -180,10 +180,10 @@ type TviewRenderer struct {
 	homeStatusPane   *tview.TextView // Left pane: Status information (1/3 width)
 	homeMetricsPane  *tview.Table    // Right pane: Metrics table (2/3 width)
 	homeTable        *tview.Table
-	homeTableCache   [][]string // Cached table cell values for incremental redraw
-	homeTableRows    int        // Number of cached data rows
-	homeTableInnerW  int        // Cached inner width to detect resize-driven redraw invalidation
-	homeTableInnerH  int        // Cached inner height to detect resize-driven redraw invalidation
+	homeTableCache   [][]string      // Cached table cell values for incremental redraw
+	homeTableRows    int             // Number of cached data rows
+	homeTableInnerW  int             // Cached inner width to detect resize-driven redraw invalidation
+	homeTableInnerH  int             // Cached inner height to detect resize-driven redraw invalidation
 	blockDetailPage  *tview.Flex     // Changed to Flex for side-by-side layout
 	blockDetailLeft  *tview.Table    // Left pane: Transaction table
 	blockDetailRight *tview.TextView // Right pane: Raw JSON
@@ -620,7 +620,6 @@ func (t *TviewRenderer) Start(ctx context.Context) error {
 
 	return nil
 }
-
 
 // getCachedSigner gets the signer for a block, using LRU cache to avoid expensive Ecrecover calls
 func (t *TviewRenderer) getCachedSigner(block rpctypes.PolyBlock) string {

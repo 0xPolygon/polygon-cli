@@ -84,4 +84,3 @@ func ExitCode(err error) int {
 	}
 	return config.ExitNodeErr
 }
-

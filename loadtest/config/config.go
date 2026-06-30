@@ -96,14 +96,14 @@ type Config struct {
 	ERC721Address           string
 
 	// Mode-specific options
-	StoreDataSize       uint64
-	RecallLength        uint64
-	BlockBatchSize      uint64
+	StoreDataSize        uint64
+	RecallLength         uint64
+	BlockBatchSize       uint64
 	ContractAddress      string
 	ContractCallData     string
 	ContractCallDataFile string
 	ContractCallPayable  bool
-	BlobFeeCap          uint64
+	BlobFeeCap           uint64
 
 	// Account pool options
 	SendingAccountsCount      uint64

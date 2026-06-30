@@ -37,9 +37,9 @@ func fixedECDSAKey(t *testing.T) *ecdsa.PrivateKey {
 // fakeAccountFetcher returns fixed account info and records the
 // calls it received.
 type fakeAccountFetcher struct {
-	calls  []string
+	calls   []string
 	return_ Account
-	err    error
+	err     error
 }
 
 func (f *fakeAccountFetcher) FetchAccount(_ context.Context, addr string) (*Account, error) {

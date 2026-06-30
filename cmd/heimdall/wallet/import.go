@@ -14,11 +14,12 @@ import (
 // the polycli/cast-shared keystore directory.
 //
 // Accepts three mutually-exclusive sources:
-//   --private-key HEX             : 32-byte secp256k1 private key
-//   --keystore-file PATH          : a v3 JSON keystore (asks for its
-//                                   password, then re-encrypts under
-//                                   the new password)
-//   --mnemonic MNEMONIC (with optional --path / --index)
+//
+//	--private-key HEX             : 32-byte secp256k1 private key
+//	--keystore-file PATH          : a v3 JSON keystore (asks for its
+//	                                password, then re-encrypts under
+//	                                the new password)
+//	--mnemonic MNEMONIC (with optional --path / --index)
 func newImportCmd() *cobra.Command {
 	var (
 		shared       keystoreSharedFlags

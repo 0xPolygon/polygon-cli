@@ -403,4 +403,3 @@ func (j *JSONDatabase) ShouldWritePeers() bool {
 func (j *JSONDatabase) NodeList(ctx context.Context, limit int) ([]string, error) {
 	return []string{}, nil
 }
-

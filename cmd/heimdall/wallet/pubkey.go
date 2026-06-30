@@ -20,9 +20,9 @@ import (
 // Source precedence: <address> positional > --private-key > --keystore-file.
 func newPublicKeyCmd() *cobra.Command {
 	var (
-		shared        keystoreSharedFlags
-		privateKey    string
-		compressedOnly bool
+		shared           keystoreSharedFlags
+		privateKey       string
+		compressedOnly   bool
 		uncompressedOnly bool
 	)
 	cmd := &cobra.Command{
