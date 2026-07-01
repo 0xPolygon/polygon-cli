@@ -964,53 +964,15 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.db.WriteBlockHeaders(ctx, headers, tfs, isParent)
 
-	// Cache and possibly rebroadcast each header. Recovering the signer once
-	// per header lets us both decide whether to retain the payload in the
-	// serving cache and whether to rebroadcast the announced hash.
+	// Cache each header and, for the announced header, perform the deferred
+	// signer-validated hash rebroadcast.
 	var head *types.Header
 	for i, header := range headers {
-		signer, known, rerr := c.conns.RecoverSigner(header)
-
-		// Only retain validator-signed headers in the serving cache (unless
-		// caching is unrestricted). Unknown-signer headers are still written to
-		// the database above.
-		if c.conns.ShouldCachePayload(known) {
-			c.conns.Blocks().Update(header.Hash(), func(cache BlockCache) BlockCache {
-				cache.Header = header
-				return cache
-			})
-		}
+		c.cacheAndAnnounceHeader(header, isParent, i == 0)
 
 		if head == nil || header.Number.Cmp(head.Number) > 0 {
 			head = header
 		}
-
-		// When signer validation is enabled, the announced hash rebroadcast was
-		// deferred until now so the fetched header could be validated first.
-		// Only the announced header (getBlockData uses Amount:1) is considered;
-		// parent fetches are not announcements. When validation is disabled,
-		// handleNewBlockHashes already rebroadcast the hash immediately.
-		if !c.conns.ValidatesSigners() || isParent || i != 0 {
-			continue
-		}
-
-		if known {
-			go c.conns.BroadcastBlockHashes(
-				[]common.Hash{header.Hash()},
-				[]uint64{header.Number.Uint64()},
-			)
-			continue
-		}
-
-		c.logger.Debug().
-			Str("hash", header.Hash().Hex()).
-			Uint64("number", header.Number.Uint64()).
-			Str("signer", signer.Hex()).
-			Str("peer_id", c.node.ID().String()).
-			Uint("eth_version", c.version).
-			Time("peer_connected_at", c.connectedAt).
-			AnErr("recover_err", rerr).
-			Msg("Skipping block hash rebroadcast, signer not in validator set")
 	}
 
 	if head != nil {
@@ -1021,6 +983,45 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	return nil
+}
+
+// cacheAndAnnounceHeader recovers the signer of a fetched header and, when its
+// signer is a known validator (or caching is unrestricted), retains it in the
+// serving cache. For the announced header (not a parent fetch) it performs the
+// deferred hash rebroadcast when signer validation is enabled — rebroadcasting
+// validator-signed blocks and logging the rest. When validation is disabled the
+// hash was already rebroadcast in handleNewBlockHashes.
+func (c *conn) cacheAndAnnounceHeader(header *types.Header, isParent, announce bool) {
+	signer, known, rerr := c.conns.RecoverSigner(header)
+
+	if c.conns.ShouldCachePayload(known) {
+		c.conns.Blocks().Update(header.Hash(), func(cache BlockCache) BlockCache {
+			cache.Header = header
+			return cache
+		})
+	}
+
+	if !announce || isParent || !c.conns.ValidatesSigners() {
+		return
+	}
+
+	if known {
+		go c.conns.BroadcastBlockHashes(
+			[]common.Hash{header.Hash()},
+			[]uint64{header.Number.Uint64()},
+		)
+		return
+	}
+
+	c.logger.Debug().
+		Str("hash", header.Hash().Hex()).
+		Uint64("number", header.Number.Uint64()).
+		Str("signer", signer.Hex()).
+		Str("peer_id", c.node.ID().String()).
+		Uint("eth_version", c.version).
+		Time("peer_connected_at", c.connectedAt).
+		AnErr("recover_err", rerr).
+		Msg("Skipping block hash rebroadcast, signer not in validator set")
 }
 
 func (c *conn) handleGetBlockBodies(msg ethp2p.Msg) error {
@@ -1082,36 +1083,10 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	var decoded rawBlockBody
-	if err := rlp.DecodeBytes(packet.BlockBodiesRLPResponse[0], &decoded); err != nil {
-		c.logger.Warn().Err(err).Msg("Failed to decode block body")
-		return nil
-	}
-
-	txs := c.decodeTxs(decoded.Transactions)
-	txList, err := rlp.EncodeToRawList(txs)
+	body, err := c.buildBlockBody(packet.BlockBodiesRLPResponse[0])
 	if err != nil {
-		c.logger.Warn().Err(err).Msg("Failed to encode transactions")
+		c.logger.Warn().Err(err).Msg("Failed to build block body")
 		return nil
-	}
-	uncleList, err := rlp.EncodeToRawList(decoded.Uncles)
-	if err != nil {
-		c.logger.Warn().Err(err).Msg("Failed to encode uncles")
-		return nil
-	}
-	var withdrawalList *rlp.RawList[*types.Withdrawal]
-	if decoded.Withdrawals != nil {
-		wl, err := rlp.EncodeToRawList(decoded.Withdrawals)
-		if err != nil {
-			c.logger.Warn().Err(err).Msg("Failed to encode withdrawals")
-			return nil
-		}
-		withdrawalList = &wl
-	}
-	body := &eth.BlockBody{
-		Transactions: txList,
-		Uncles:       uncleList,
-		Withdrawals:  withdrawalList,
 	}
 
 	c.db.WriteBlockBody(ctx, body, hash, tfs)
@@ -1155,6 +1130,39 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	return nil
+}
+
+// buildBlockBody decodes a raw RLP block body and re-encodes it into an
+// eth.BlockBody of raw lists.
+func (c *conn) buildBlockBody(raw []byte) (*eth.BlockBody, error) {
+	var decoded rawBlockBody
+	if err := rlp.DecodeBytes(raw, &decoded); err != nil {
+		return nil, fmt.Errorf("failed to decode block body: %w", err)
+	}
+
+	txList, err := rlp.EncodeToRawList(c.decodeTxs(decoded.Transactions))
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode transactions: %w", err)
+	}
+	uncleList, err := rlp.EncodeToRawList(decoded.Uncles)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode uncles: %w", err)
+	}
+
+	var withdrawalList *rlp.RawList[*types.Withdrawal]
+	if decoded.Withdrawals != nil {
+		wl, err := rlp.EncodeToRawList(decoded.Withdrawals)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode withdrawals: %w", err)
+		}
+		withdrawalList = &wl
+	}
+
+	return &eth.BlockBody{
+		Transactions: txList,
+		Uncles:       uncleList,
+		Withdrawals:  withdrawalList,
+	}, nil
 }
 
 func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
@@ -1211,37 +1219,13 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	// retained in the serving cache nor rebroadcast.
 	signer, known, rerr := c.conns.RecoverSigner(packet.Block.Header())
 
-	if c.conns.ShouldCachePayload(known) {
-		// Create BlockBody with encoded RawLists
-		blockBody, encErr := encodeBlockBody(packet.Block)
-		if encErr != nil {
-			return fmt.Errorf("failed to encode block body: %w", encErr)
-		}
-
-		// Atomically check and add to cache to prevent duplicate writes from
-		// concurrent peers receiving the same block.
-		var exists bool
-		ok := c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
-			if cache.TD != nil {
-				exists = true
-				return cache
-			}
-
-			return BlockCache{
-				Header: packet.Block.Header(),
-				Body:   blockBody,
-				TD:     packet.TD,
-			}
-		})
-
-		if exists {
-			return nil
-		}
-
-		// Write first-seen event for blocks arriving directly (not announced via hash first)
-		if !ok {
-			c.db.WriteBlockHashFirstSeen(ctx, c.node, hash, tfs)
-		}
+	cached, err := c.cacheFullBlock(ctx, packet, hash, known, tfs)
+	if err != nil {
+		return err
+	}
+	if cached {
+		// Already fully cached by a concurrent peer; nothing more to do.
+		return nil
 	}
 
 	c.db.WriteBlock(ctx, c.node, packet.Block, packet.TD, tfs)
@@ -1271,6 +1255,45 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	)
 
 	return nil
+}
+
+// cacheFullBlock retains a full block in the serving cache when its signer is a
+// known validator (or caching is unrestricted). It returns cached=true if the
+// block was already fully cached (by a concurrent peer), so the caller can stop
+// early. Unknown-signer blocks are skipped here and recorded to the database by
+// the caller instead.
+func (c *conn) cacheFullBlock(ctx context.Context, packet *NewBlockPacket, hash common.Hash, known bool, tfs time.Time) (cached bool, err error) {
+	if !c.conns.ShouldCachePayload(known) {
+		return false, nil
+	}
+
+	blockBody, err := encodeBlockBody(packet.Block)
+	if err != nil {
+		return false, fmt.Errorf("failed to encode block body: %w", err)
+	}
+
+	// Atomically check and add to cache to prevent duplicate writes from
+	// concurrent peers receiving the same block.
+	existed := c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
+		if cache.TD != nil {
+			cached = true
+			return cache
+		}
+		return BlockCache{
+			Header: packet.Block.Header(),
+			Body:   blockBody,
+			TD:     packet.TD,
+		}
+	})
+	if cached {
+		return true, nil
+	}
+
+	// Write first-seen event for blocks arriving directly (not announced via hash first).
+	if !existed {
+		c.db.WriteBlockHashFirstSeen(ctx, c.node, hash, tfs)
+	}
+	return false, nil
 }
 
 func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
