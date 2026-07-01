@@ -72,11 +72,17 @@ peers via `--broadcast-txs`, `--broadcast-tx-hashes`, `--broadcast-blocks`, and
 
 When block rebroadcasting is enabled (`--broadcast-blocks` or
 `--broadcast-block-hashes`), the sensor validates the block signer before
-rebroadcasting: it recovers the signer from the block header and only
-rebroadcasts blocks signed by an address in the current Heimdall validator set.
-Blocks from unknown signers are still persisted and their bodies are still
-requested (so the sensor can record and serve them) — they are simply not
-rebroadcast to peers.
+rebroadcasting by default (`--validate-block-signer`, enabled by default): it
+recovers the signer from the block header and only rebroadcasts blocks signed by
+an address in the current Heimdall validator set. Set
+`--validate-block-signer=false` to rebroadcast every block regardless of signer.
+
+By default (`--cache-only-validated-blocks`), blocks from unknown signers are
+still recorded to the database and their headers/bodies are still requested, but
+they are not kept in the in-memory serving cache — so the sensor neither
+rebroadcasts them nor serves them to peers on request, and they cannot evict
+legitimate blocks from the cache. Set `--cache-only-validated-blocks=false` to
+cache every block while still gating rebroadcast by signer.
 
 The validator set is fetched from `--heimdall-url` at startup (the sensor aborts
 if this initial fetch fails) and refreshed on the `--validator-set-refresh`
@@ -145,6 +151,7 @@ polycli p2p sensor amoy-nodes.json \
       --broadcast-tx-hashes              broadcast transaction hashes to peers
       --broadcast-txs                    broadcast full transactions to peers
       --broadcast-workers int            number of concurrent broadcast workers (default 4)
+      --cache-only-validated-blocks      only cache and serve blocks signed by a known validator (unknown-signer blocks are still recorded to the database); has no effect without --validate-block-signer (default true)
       --database string                  which database to persist data to, options are:
                                            - datastore (GCP Datastore)
                                            - json (output to stdout)
@@ -155,7 +162,7 @@ polycli p2p sensor amoy-nodes.json \
       --discovery-port int               UDP P2P discovery port (default 30303)
       --fork-id bytesHex                 hex encoded fork ID (omit 0x) (default 22D523B2)
       --genesis-hash string              genesis block hash (default "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
-      --heimdall-url string              heimdall REST URL for the validator signer set (used to validate blocks before rebroadcast) (default "https://heimdall-api.polygon.technology")
+      --heimdall-url string              heimdall REST URL for the validator set (used to validate blocks before rebroadcast) (default "https://heimdall-api.polygon.technology")
   -h, --help                             help for sensor
       --key string                       hex-encoded private key (cannot be set with --key-file)
   -k, --key-file string                  private key file (cannot be set with --key)
@@ -194,7 +201,8 @@ polycli p2p sensor amoy-nodes.json \
       --tx-batch-timeout duration        timeout for batching transactions before broadcast (default 500ms)
       --tx-broadcast-queue-size int      capacity of transaction broadcast queue (default 100000)
       --txs-cache-ttl duration           time to live for transaction cache entries (0 for no expiration) (default 10m0s)
-      --validator-set-refresh duration   interval to refresh the validator signer set from heimdall (default 5m0s)
+      --validate-block-signer            only rebroadcast blocks signed by a validator in the heimdall validator set (default true)
+      --validator-set-refresh duration   interval to refresh the validator set from heimdall (default 5m0s)
       --write-block-events               write block events to database (default true)
   -B, --write-blocks                     write blocks to database (default true)
       --write-first-block-event          write one block event on first-seen only (requires --write-block-events=false)

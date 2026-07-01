@@ -46,6 +46,11 @@ type ConnsOptions struct {
 	// ValidatorSet, when non-nil, restricts block rebroadcasting to blocks
 	// whose recovered signer is a known validator.
 	ValidatorSet *ValidatorSet
+
+	// CacheOnlyValidatedBlocks, when true, keeps only validator-signed blocks
+	// in the serving cache. Unknown-signer blocks are still persisted to the
+	// database but their header/body are not cached or served to peers.
+	CacheOnlyValidatedBlocks bool
 }
 
 // Conns manages a collection of active peer connections for transaction broadcasting.
@@ -91,6 +96,10 @@ type Conns struct {
 	// validators, when non-nil, is the validator set used to gate block
 	// rebroadcasting by signer.
 	validators *ValidatorSet
+
+	// cacheOnlyValidated, when true, keeps only validator-signed blocks in the
+	// serving cache (unknown-signer blocks are recorded to the database only).
+	cacheOnlyValidated bool
 
 	// metrics tracks broadcast-related Prometheus metrics
 	metrics *metrics
@@ -147,6 +156,7 @@ func NewConns(opts ConnsOptions) *Conns {
 		maxTxPacketSize:            opts.MaxTxPacketSize,
 		maxQueuedTxs:               opts.MaxQueuedTxs,
 		validators:                 opts.ValidatorSet,
+		cacheOnlyValidated:         opts.CacheOnlyValidatedBlocks,
 		metrics:                    newMetrics(),
 	}
 
@@ -514,21 +524,40 @@ func (c *Conns) BroadcastBlockHashes(hashes []common.Hash, numbers []uint64) int
 	return count
 }
 
-// IsKnownSigner reports whether the block header was signed by a known
-// validator. When signer validation is disabled (no signer set configured),
-// it returns true so all blocks are eligible for rebroadcast. A header whose
-// signature cannot be recovered is treated as unknown.
-func (c *Conns) IsKnownSigner(header *types.Header) bool {
+// ValidatesSigners reports whether block signer validation is enabled (i.e. a
+// validator set is configured). When false, blocks are rebroadcast without
+// checking the signer.
+func (c *Conns) ValidatesSigners() bool {
+	return c.validators != nil
+}
+
+// ShouldCachePayload reports whether a block whose signer-known status is
+// `known` should have its header/body retained in the serving cache. When
+// cache-only-validated is disabled, all blocks are cached. When enabled, only
+// blocks with a known validator signer are cached; unknown-signer blocks are
+// recorded to the database only.
+func (c *Conns) ShouldCachePayload(known bool) bool {
+	return !c.cacheOnlyValidated || known
+}
+
+// RecoverSigner recovers the block signer from the header and reports whether
+// it is the signer of a known validator. When signer validation is disabled
+// (no validator set configured) it returns (zero address, true, nil) so all
+// blocks are eligible for rebroadcast. If the signature cannot be recovered it
+// returns (zero address, false, err). The recovered address is returned so
+// callers can log it when a block is not rebroadcast.
+func (c *Conns) RecoverSigner(header *types.Header) (common.Address, bool, error) {
 	if c.validators == nil {
-		return true
+		return common.Address{}, true, nil
 	}
 
 	sig, err := util.Ecrecover(header)
 	if err != nil {
-		return false
+		return common.Address{}, false, err
 	}
 
-	return c.validators.IsAuthorized(common.BytesToAddress(sig))
+	addr := common.BytesToAddress(sig)
+	return addr, c.validators.HasSigner(addr), nil
 }
 
 // Nodes returns all currently connected peer nodes.

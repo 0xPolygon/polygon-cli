@@ -106,8 +106,8 @@ func (v *ValidatorSet) refreshLoop(ctx context.Context) {
 	}
 }
 
-// IsAuthorized reports whether addr is the signer address of a known validator.
-func (v *ValidatorSet) IsAuthorized(addr common.Address) bool {
+// HasSigner reports whether addr is the signer address of a known validator.
+func (v *ValidatorSet) HasSigner(addr common.Address) bool {
 	signers := v.signers.Get()
 	_, ok := signers[addr]
 	return ok

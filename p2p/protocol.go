@@ -528,8 +528,10 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.countMsgReceived(packet.Name(), float64(len(packet)))
 
-	// Collect unique hashes for the database write.
+	// Collect unique hashes (and their numbers) for the database write and,
+	// when signer validation is disabled, for immediate rebroadcast.
 	uniqueHashes := make([]common.Hash, 0, len(packet))
+	uniqueNumbers := make([]uint64, 0, len(packet))
 
 	for _, entry := range packet {
 		hash := entry.Hash
@@ -545,16 +547,13 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		// Mark as known from this peer
 		c.addKnownBlock(hash)
 
-		// Atomically check and add to cache to prevent duplicate writes from
-		// concurrent peers receiving the same block hash.
-		ok := c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
-			if cache != (BlockCache{}) {
-				return cache
-			}
-			return BlockCache{}
+		// Atomically reserve the cache slot to prevent duplicate writes from
+		// concurrent peers receiving the same block hash. The value is left
+		// unchanged; we only care whether the entry already existed.
+		existed := c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
+			return cache
 		})
-
-		if ok {
+		if existed {
 			continue
 		}
 
@@ -567,6 +566,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		}
 
 		uniqueHashes = append(uniqueHashes, hash)
+		uniqueNumbers = append(uniqueNumbers, entry.Number)
 	}
 
 	// Write only unique hashes to the database.
@@ -576,9 +576,13 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.db.WriteBlockHashes(ctx, c.node, uniqueHashes, tfs)
 
-	// Rebroadcast of announced block hashes is deferred to handleBlockHeaders,
-	// where the fetched header lets us validate the block signer first. Body
-	// requests (getBlockData above) are intentionally not gated.
+	// When signer validation is enabled, defer the hash rebroadcast to
+	// handleBlockHeaders so the fetched header can be validated first. Body
+	// requests (getBlockData above) are intentionally not gated. When
+	// validation is disabled, rebroadcast the announced hashes immediately.
+	if !c.conns.ValidatesSigners() {
+		go c.conns.BroadcastBlockHashes(uniqueHashes, uniqueNumbers)
+	}
 
 	return nil
 }
@@ -960,17 +964,53 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.db.WriteBlockHeaders(ctx, headers, tfs, isParent)
 
-	// Update cache to store headers
+	// Cache and possibly rebroadcast each header. Recovering the signer once
+	// per header lets us both decide whether to retain the payload in the
+	// serving cache and whether to rebroadcast the announced hash.
 	var head *types.Header
-	for _, header := range headers {
-		c.conns.Blocks().Update(header.Hash(), func(cache BlockCache) BlockCache {
-			cache.Header = header
-			return cache
-		})
+	for i, header := range headers {
+		signer, known, rerr := c.conns.RecoverSigner(header)
+
+		// Only retain validator-signed headers in the serving cache (unless
+		// caching is unrestricted). Unknown-signer headers are still written to
+		// the database above.
+		if c.conns.ShouldCachePayload(known) {
+			c.conns.Blocks().Update(header.Hash(), func(cache BlockCache) BlockCache {
+				cache.Header = header
+				return cache
+			})
+		}
 
 		if head == nil || header.Number.Cmp(head.Number) > 0 {
 			head = header
 		}
+
+		// When signer validation is enabled, the announced hash rebroadcast was
+		// deferred until now so the fetched header could be validated first.
+		// Only the announced header (getBlockData uses Amount:1) is considered;
+		// parent fetches are not announcements. When validation is disabled,
+		// handleNewBlockHashes already rebroadcast the hash immediately.
+		if !c.conns.ValidatesSigners() || isParent || i != 0 {
+			continue
+		}
+
+		if known {
+			go c.conns.BroadcastBlockHashes(
+				[]common.Hash{header.Hash()},
+				[]uint64{header.Number.Uint64()},
+			)
+			continue
+		}
+
+		c.logger.Debug().
+			Str("hash", header.Hash().Hex()).
+			Uint64("number", header.Number.Uint64()).
+			Str("signer", signer.Hex()).
+			Str("peer_id", c.node.ID().String()).
+			Uint("eth_version", c.version).
+			Time("peer_connected_at", c.connectedAt).
+			AnErr("recover_err", rerr).
+			Msg("Skipping block hash rebroadcast, signer not in validator set")
 	}
 
 	if head != nil {
@@ -978,17 +1018,6 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 			Block: types.NewBlockWithHeader(head),
 			TD:    c.conns.HeadBlock().TD,
 		})
-	}
-
-	// Rebroadcast the announced block hash now that the header is available,
-	// but only if the block was signed by a known validator. Parent fetches
-	// are not announcements, so they are not rebroadcast. (getBlockData uses
-	// Amount:1, so each response is a single announced header.)
-	if !isParent && c.conns.IsKnownSigner(headers[0]) {
-		go c.conns.BroadcastBlockHashes(
-			[]common.Hash{headers[0].Hash()},
-			[]uint64{headers[0].Number.Uint64()},
-		)
 	}
 
 	return nil
@@ -1087,13 +1116,24 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.db.WriteBlockBody(ctx, body, hash, tfs)
 
-	// Update cache and try to update head block if we now have complete block data.
+	// When cache-only-validated is enabled, only retain the body if we already
+	// hold a (validator-signed) header for this block. Unknown-signer blocks
+	// have no cached header, so their body is written to the database above but
+	// not cached or served. When disabled, cache the body unconditionally.
+	retainBody := true
+	if c.conns.cacheOnlyValidated {
+		cache, _ := c.conns.Blocks().Peek(hash)
+		retainBody = cache.Header != nil
+	}
+
 	var header *types.Header
-	c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
-		cache.Body = body
-		header = cache.Header
-		return cache
-	})
+	if retainBody {
+		c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
+			cache.Body = body
+			header = cache.Header
+			return cache
+		})
+	}
 
 	if header != nil {
 		// Decode RawLists back to slices for creating types.Block
@@ -1166,43 +1206,60 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 
-	// Create BlockBody with encoded RawLists
-	blockBody, err := encodeBlockBody(packet.Block)
-	if err != nil {
-		return fmt.Errorf("failed to encode block body: %w", err)
-	}
+	// Recover the block signer up front. Unknown-signer blocks are recorded to
+	// the database below but, when cache-only-validated is enabled, are neither
+	// retained in the serving cache nor rebroadcast.
+	signer, known, rerr := c.conns.RecoverSigner(packet.Block.Header())
 
-	// Atomically check and add to cache to prevent duplicate writes from
-	// concurrent peers receiving the same block.
-	var exists bool
-	ok := c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
-		if cache.TD != nil {
-			exists = true
-			return cache
+	if c.conns.ShouldCachePayload(known) {
+		// Create BlockBody with encoded RawLists
+		blockBody, encErr := encodeBlockBody(packet.Block)
+		if encErr != nil {
+			return fmt.Errorf("failed to encode block body: %w", encErr)
 		}
 
-		return BlockCache{
-			Header: packet.Block.Header(),
-			Body:   blockBody,
-			TD:     packet.TD,
+		// Atomically check and add to cache to prevent duplicate writes from
+		// concurrent peers receiving the same block.
+		var exists bool
+		ok := c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
+			if cache.TD != nil {
+				exists = true
+				return cache
+			}
+
+			return BlockCache{
+				Header: packet.Block.Header(),
+				Body:   blockBody,
+				TD:     packet.TD,
+			}
+		})
+
+		if exists {
+			return nil
 		}
-	})
 
-	if exists {
-		return nil
-	}
-
-	// Write first-seen event for blocks arriving directly (not announced via hash first)
-	if !ok {
-		c.db.WriteBlockHashFirstSeen(ctx, c.node, hash, tfs)
+		// Write first-seen event for blocks arriving directly (not announced via hash first)
+		if !ok {
+			c.db.WriteBlockHashFirstSeen(ctx, c.node, hash, tfs)
+		}
 	}
 
 	c.db.WriteBlock(ctx, c.node, packet.Block, packet.TD, tfs)
 
 	// Only rebroadcast blocks signed by a known validator. Persistence above is
-	// unconditional; signer validation gates rebroadcast only.
-	if !c.conns.IsKnownSigner(packet.Block.Header()) {
-		c.logger.Debug().Str("hash", hash.Hex()).Msg("Skipping rebroadcast: unknown block signer")
+	// unconditional; signer validation gates rebroadcast (and caching) only.
+	if !known {
+		c.logger.Debug().
+			Str("hash", hash.Hex()).
+			Uint64("number", packet.Block.NumberU64()).
+			Str("signer", signer.Hex()).
+			Str("peer_id", c.node.ID().String()).
+			Uint("eth_version", c.version).
+			Str("td", packet.TD.String()).
+			Int("tx_count", len(packet.Block.Transactions())).
+			Time("peer_connected_at", c.connectedAt).
+			AnErr("recover_err", rerr).
+			Msg("Skipping full block rebroadcast, signer not in validator set")
 		return nil
 	}
 
