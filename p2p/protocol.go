@@ -999,6 +999,11 @@ func (c *conn) cacheAndAnnounceHeader(header *types.Header, isParent, announce b
 			cache.Header = header
 			return cache
 		})
+	} else {
+		// Unknown-signer block under cache-only-validated: drop the entry so any
+		// body cached provisionally (before this header arrived) is evicted and
+		// never served. The block is still recorded to the database elsewhere.
+		c.conns.Blocks().Remove(header.Hash())
 	}
 
 	if !announce || isParent || !c.conns.ValidatesSigners() {
@@ -1032,10 +1037,12 @@ func (c *conn) handleGetBlockBodies(msg ethp2p.Msg) error {
 
 	c.countMsgReceived(request.Name(), float64(len(request.GetBlockBodiesRequest)))
 
-	// Try to serve from cache
+	// Try to serve from cache. Require the header to be cached too: we only
+	// cache validated headers, so this ensures we never serve a body that is
+	// only held provisionally (its signer not yet validated).
 	var bodies []*eth.BlockBody
 	for _, hash := range request.GetBlockBodiesRequest {
-		if cache, ok := c.conns.Blocks().Peek(hash); ok && cache.Body != nil {
+		if cache, ok := c.conns.Blocks().Peek(hash); ok && cache.Header != nil && cache.Body != nil {
 			bodies = append(bodies, cache.Body)
 		}
 	}
@@ -1091,14 +1098,18 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.db.WriteBlockBody(ctx, body, hash, tfs)
 
-	// When cache-only-validated is enabled, only retain the body if we already
-	// hold a (validator-signed) header for this block. Unknown-signer blocks
-	// have no cached header, so their body is written to the database above but
-	// not cached or served. When disabled, cache the body unconditionally.
+	// When cache-only-validated is enabled, only retain the body if the block
+	// already has a cache entry (the announcement marker, or a cached header).
+	// The header and body responses can arrive in any order, so we do NOT gate
+	// on the header being present yet: a body that arrives first is held
+	// provisionally and completed once the validated header arrives. If the
+	// header turns out to be from an unknown signer, cacheAndAnnounceHeader
+	// evicts the entry, and a provisional body is never served before its header
+	// is cached (see handleGetBlockBodies). When disabled, cache the body
+	// unconditionally. The body is written to the database above regardless.
 	retainBody := true
 	if c.conns.cacheOnlyValidated {
-		cache, _ := c.conns.Blocks().Peek(hash)
-		retainBody = cache.Header != nil
+		_, retainBody = c.conns.Blocks().Peek(hash)
 	}
 
 	var header *types.Header
