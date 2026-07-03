@@ -48,3 +48,44 @@ jobs:
           file_glob: true
           file: out/*.tar.gz
           overwrite: true
+
+  macos-release:
+    # A CGO-only dependency (vectorized-poseidon-gold) prevents cross-compiling
+    # darwin binaries from linux, so each architecture is built natively on its
+    # own macOS runner: macos-13 (Intel/amd64) and macos-14 (Apple Silicon/arm64).
+    strategy:
+      matrix:
+        runner:
+          - macos-13
+          - macos-14
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+
+      - name: Install go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Perform darwin build
+        run: make cross-darwin
+
+      - name: Compress binary
+        run: |
+          cd out
+          arch=$(go env GOARCH)
+          tar czf polycli_${GITHUB_REF#refs/tags/}_darwin_${arch}.tar.gz polycli_${GITHUB_REF#refs/tags/}_darwin_${arch}
+
+      - name: Get git tag
+        run: echo "tag=$(git describe --tags --exact-match HEAD)" >> $GITHUB_ENV
+
+      - name: Publish binaries
+        uses: svenstaro/upload-release-action@b98a3b12e86552593f3e4e577ca8a62aa2f3f22b # 2.11.4
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ env.tag }}
+          release_name: ${{ env.tag }}
+          file_glob: true
+          file: out/*.tar.gz
+          overwrite: true
