@@ -54,6 +54,20 @@ cross: $(BUILD_DIR) ## Cross-compile go binaries using CGO.
 			-o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_amd64 \
 			main.go
 
+.PHONY: cross-darwin
+cross-darwin: $(BUILD_DIR) ## Build a darwin release binary for the host architecture (requires CGO, must run on macOS).
+# Notes:
+# - A transitive dependency (vectorized-poseidon-gold) is CGO-only, so darwin
+#   binaries cannot be cross-compiled from linux and must be built natively on a
+#   macOS runner (one per architecture: amd64 on Intel, arm64 on Apple Silicon).
+# - Unlike the linux builds, darwin does not support fully static libc binaries,
+#   so the static external linking flags are omitted here.
+	echo "Building $(BIN_NAME)_$(GIT_TAG)_darwin_$$(go env GOARCH)..."
+	CGO_ENABLED=1 GOOS=darwin go build \
+			-ldflags '$(VERSION_FLAGS) -s -w' \
+			-o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_darwin_$$(go env GOARCH) \
+			main.go
+
 .PHONY: simplecross
 simplecross: $(BUILD_DIR) ## Cross-compile go binaries without using CGO.
 	GOOS=linux  GOARCH=arm64 go build -o $(BUILD_DIR)/$(BIN_NAME)_$(GIT_TAG)_linux_arm64  main.go
