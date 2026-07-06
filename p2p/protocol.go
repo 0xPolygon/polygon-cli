@@ -547,26 +547,34 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		// Mark as known from this peer
 		c.addKnownBlock(hash)
 
-		// Atomically reserve the cache slot to prevent duplicate writes from
-		// concurrent peers receiving the same block hash. The value is left
-		// unchanged; we only care whether the entry already existed.
-		existed := c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
-			return cache
-		})
-		if existed {
+		// Skip only if we already hold the complete block. A hash-only or
+		// partial cache entry must still (re-)fetch: other peers announcing the
+		// same hash give additional fetch attempts, so a single peer that never
+		// serves the header/body no longer strands the block as a hash-only
+		// marker.
+		cache, ok := c.conns.Blocks().Peek(hash)
+		if ok && cache.Header != nil && cache.Body != nil {
 			continue
 		}
 
-		// Write hash first seen time immediately for new blocks
-		c.db.WriteBlockHashFirstSeen(ctx, c.node, hash, tfs)
-
-		// Request only the parts we don't have
-		if err := c.getBlockData(hash, BlockCache{}, false); err != nil {
-			return err
+		// Reserve the cache slot atomically. existed marks first-seen so the
+		// hash-first-seen event and block-event write happen exactly once, even
+		// across re-announcements from multiple peers.
+		existed := c.conns.Blocks().Update(hash, func(v BlockCache) BlockCache {
+			return v
+		})
+		if !existed {
+			// Write hash first seen time immediately for new blocks.
+			c.db.WriteBlockHashFirstSeen(ctx, c.node, hash, tfs)
+			uniqueHashes = append(uniqueHashes, hash)
+			uniqueNumbers = append(uniqueNumbers, entry.Number)
 		}
 
-		uniqueHashes = append(uniqueHashes, hash)
-		uniqueNumbers = append(uniqueNumbers, entry.Number)
+		// Request only the parts we don't have yet (getBlockData inspects the
+		// cache entry and asks for the missing header and/or body).
+		if err := c.getBlockData(hash, cache, false); err != nil {
+			return err
+		}
 	}
 
 	// Write only unique hashes to the database.
