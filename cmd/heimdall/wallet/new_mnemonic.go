@@ -15,12 +15,12 @@ import (
 // prominent warning.
 func newNewMnemonicCmd() *cobra.Command {
 	var (
-		shared     keystoreSharedFlags
-		words      int
-		bipPass    string
-		path       string
-		index      uint32
-		printOnly  bool
+		shared    keystoreSharedFlags
+		words     int
+		bipPass   string
+		path      string
+		index     uint32
+		printOnly bool
 	)
 	cmd := &cobra.Command{
 		Use:   "new-mnemonic",

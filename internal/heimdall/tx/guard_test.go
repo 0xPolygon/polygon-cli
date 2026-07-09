@@ -65,11 +65,11 @@ func TestRequireForceAllowsSafeTypes(t *testing.T) {
 
 func TestShortMsgName(t *testing.T) {
 	cases := map[string]string{
-		"MsgTopupTx":                       "MsgTopupTx",
-		"/heimdallv2.topup.MsgTopupTx":     "MsgTopupTx",
-		"heimdallv2.topup.MsgTopupTx":      "MsgTopupTx",
-		"":                                  "",
-		"no/path":                           "path",
+		"MsgTopupTx":                   "MsgTopupTx",
+		"/heimdallv2.topup.MsgTopupTx": "MsgTopupTx",
+		"heimdallv2.topup.MsgTopupTx":  "MsgTopupTx",
+		"":                             "",
+		"no/path":                      "path",
 	}
 	for in, want := range cases {
 		if got := shortMsgName(in); got != want {

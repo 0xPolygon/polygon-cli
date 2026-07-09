@@ -230,13 +230,13 @@ func resolveNetworkName(f *Flags) (string, error) {
 }
 
 type fileConfig struct {
-	DefaultNetwork string                    `toml:"default_network"`
-	RESTURL        string                    `toml:"rest_url"`
-	RPCURL         string                    `toml:"rpc_url"`
-	ChainID        string                    `toml:"chain_id"`
-	Denom          string                    `toml:"denom"`
-	TimeoutSec     int                       `toml:"timeout"`
-	Networks       map[string]fileConfigNet  `toml:"networks"`
+	DefaultNetwork string                   `toml:"default_network"`
+	RESTURL        string                   `toml:"rest_url"`
+	RPCURL         string                   `toml:"rpc_url"`
+	ChainID        string                   `toml:"chain_id"`
+	Denom          string                   `toml:"denom"`
+	TimeoutSec     int                      `toml:"timeout"`
+	Networks       map[string]fileConfigNet `toml:"networks"`
 }
 
 type fileConfigNet struct {

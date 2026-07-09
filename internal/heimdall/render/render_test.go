@@ -272,8 +272,8 @@ func TestStringifyFloatBounds(t *testing.T) {
 		// digits; the key property is no int64 wraparound.
 		{float64(1 << 63), "9223372036854776000"},
 		{-(float64(1 << 63)), "-9223372036854776000"},
-		{1e20, "100000000000000000000"},               // large but under the 1e21 cap
-		{1e21, "1e+21"},                               // at the cap: exponent form
+		{1e20, "100000000000000000000"}, // large but under the 1e21 cap
+		{1e21, "1e+21"},                 // at the cap: exponent form
 		{1e22, "1e+22"},
 		{-1e30, "-1e+30"},
 	}

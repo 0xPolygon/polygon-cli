@@ -13,21 +13,21 @@ import "fmt"
 //
 // Wording is taken verbatim from HEIMDALLCAST_REQUIREMENTS.md §3.3.
 var L1MirroringMsgTypes = map[string]struct{}{
-	"MsgTopupTx":           {},
-	"MsgCheckpointAck":     {},
-	"MsgCpAck":             {},
-	"MsgCheckpointNoAck":   {},
-	"MsgCpNoAck":           {},
+	"MsgTopupTx":            {},
+	"MsgCheckpointAck":      {},
+	"MsgCpAck":              {},
+	"MsgCheckpointNoAck":    {},
+	"MsgCpNoAck":            {},
 	"MsgEventRecordRequest": {},
-	"MsgEventRecord":       {},
-	"MsgClerkRecord":       {},
-	"MsgValidatorJoin":     {},
-	"MsgStakeJoin":         {},
-	"MsgValidatorUpdate":   {},
-	"MsgStakeUpdate":       {},
-	"MsgSignerUpdate":      {},
-	"MsgValidatorExit":     {},
-	"MsgStakeExit":         {},
+	"MsgEventRecord":        {},
+	"MsgClerkRecord":        {},
+	"MsgValidatorJoin":      {},
+	"MsgStakeJoin":          {},
+	"MsgValidatorUpdate":    {},
+	"MsgStakeUpdate":        {},
+	"MsgSignerUpdate":       {},
+	"MsgValidatorExit":      {},
+	"MsgStakeExit":          {},
 }
 
 // RequireForce returns an error if msgType is an L1-mirroring type and

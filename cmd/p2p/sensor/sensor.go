@@ -61,6 +61,10 @@ type (
 		TxBroadcastQueueSize             int
 		MaxTxPacketSize                  int
 		MaxQueuedTxs                     int
+		ValidateBlockSigner              bool
+		CacheOnlyValidatedBlocks         bool
+		HeimdallURL                      string
+		ValidatorSetRefresh              time.Duration
 		ShouldRunPprof                   bool
 		PprofPort                        uint
 		ShouldRunPrometheus              bool
@@ -177,6 +181,18 @@ var SensorCmd = &cobra.Command{
 			return err
 		}
 
+		// Signer validation only runs when rebroadcasting blocks, so the
+		// heimdall flags are only required in that case.
+		if inputSensorParams.ValidateBlockSigner &&
+			(inputSensorParams.ShouldBroadcastBlocks || inputSensorParams.ShouldBroadcastBlockHashes) {
+			if inputSensorParams.HeimdallURL == "" {
+				return errors.New("--heimdall-url is required when --validate-block-signer is enabled with block broadcasting")
+			}
+			if inputSensorParams.ValidatorSetRefresh <= 0 {
+				return errors.New("--validator-set-refresh must be greater than zero when --validate-block-signer is enabled with block broadcasting")
+			}
+		}
+
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -204,6 +220,19 @@ var SensorCmd = &cobra.Command{
 		peersGauge := p2p.NewPeersGauge()
 		metrics := p2p.NewBlockMetrics(head.Block)
 
+		// When block rebroadcasting is enabled and signer validation is on, load
+		// the validator set from Heimdall so we only rebroadcast blocks signed
+		// by a known validator. The initial fetch is blocking and fatal on
+		// failure so we never rebroadcast against an empty validator set.
+		var validators *p2p.ValidatorSet
+		if inputSensorParams.ValidateBlockSigner &&
+			(inputSensorParams.ShouldBroadcastBlocks || inputSensorParams.ShouldBroadcastBlockHashes) {
+			validators = p2p.NewValidatorSet(inputSensorParams.HeimdallURL, inputSensorParams.ValidatorSetRefresh)
+			if err = validators.Start(ctx); err != nil {
+				return fmt.Errorf("failed to load validator set from %s: %w", inputSensorParams.HeimdallURL, err)
+			}
+		}
+
 		// Create peer connection manager for broadcasting transactions
 		// and managing the global blocks cache
 		conns := p2p.NewConns(p2p.ConnsOptions{
@@ -221,6 +250,8 @@ var SensorCmd = &cobra.Command{
 			TxBroadcastQueueSize:       inputSensorParams.TxBroadcastQueueSize,
 			MaxTxPacketSize:            inputSensorParams.MaxTxPacketSize,
 			MaxQueuedTxs:               inputSensorParams.MaxQueuedTxs,
+			ValidatorSet:               validators,
+			CacheOnlyValidatedBlocks:   inputSensorParams.CacheOnlyValidatedBlocks,
 		})
 
 		opts := p2p.EthProtocolOptions{
@@ -503,6 +534,10 @@ will result in less chance of missing data but can significantly increase memory
 	f.IntVar(&inputSensorParams.TxBroadcastQueueSize, "tx-broadcast-queue-size", 100_000, "capacity of transaction broadcast queue")
 	f.IntVar(&inputSensorParams.MaxTxPacketSize, "max-tx-packet-size", 100*1024, "target size in bytes for transaction broadcast packets")
 	f.IntVar(&inputSensorParams.MaxQueuedTxs, "max-queued-txs", 4096, "maximum transaction announcements to queue per peer")
+	f.BoolVar(&inputSensorParams.ValidateBlockSigner, "validate-block-signer", true, "only rebroadcast blocks signed by a validator in the heimdall validator set")
+	f.BoolVar(&inputSensorParams.CacheOnlyValidatedBlocks, "cache-only-validated-blocks", true, "only cache and serve blocks signed by a known validator (unknown-signer blocks are still recorded to the database); has no effect without --validate-block-signer")
+	f.StringVar(&inputSensorParams.HeimdallURL, "heimdall-url", "https://heimdall-api.polygon.technology", "heimdall REST URL for the validator set (used to validate blocks before rebroadcast)")
+	f.DurationVar(&inputSensorParams.ValidatorSetRefresh, "validator-set-refresh", 5*time.Minute, "interval to refresh the validator set from heimdall")
 	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
 	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")

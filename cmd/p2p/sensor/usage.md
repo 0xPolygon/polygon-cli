@@ -43,6 +43,30 @@ The sensor exposes Prometheus metrics at `http://localhost:2112/metrics`
 (configurable via `--prom-port`). For a complete list of available metrics, see
 [polycli_p2p_sensor_metrics.md](polycli_p2p_sensor_metrics.md).
 
+## Rebroadcasting
+
+The sensor can rebroadcast the transactions and blocks it receives back to its
+peers via `--broadcast-txs`, `--broadcast-tx-hashes`, `--broadcast-blocks`, and
+`--broadcast-block-hashes`.
+
+When block rebroadcasting is enabled (`--broadcast-blocks` or
+`--broadcast-block-hashes`), the sensor validates the block signer before
+rebroadcasting by default (`--validate-block-signer`, enabled by default): it
+recovers the signer from the block header and only rebroadcasts blocks signed by
+an address in the current Heimdall validator set. Set
+`--validate-block-signer=false` to rebroadcast every block regardless of signer.
+
+By default (`--cache-only-validated-blocks`), blocks from unknown signers are
+still recorded to the database and their headers/bodies are still requested, but
+they are not kept in the in-memory serving cache — so the sensor neither
+rebroadcasts them nor serves them to peers on request, and they cannot evict
+legitimate blocks from the cache. Set `--cache-only-validated-blocks=false` to
+cache every block while still gating rebroadcast by signer.
+
+The validator set is fetched from `--heimdall-url` at startup (the sensor aborts
+if this initial fetch fails) and refreshed on the `--validator-set-refresh`
+interval.
+
 ## Examples
 
 ### Mainnet
