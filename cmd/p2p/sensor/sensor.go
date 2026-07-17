@@ -42,6 +42,7 @@ type (
 		TrustedNodesFile                 string
 		ProjectID                        string
 		DatabaseID                       string
+		ClickHouseDSN                    string
 		SensorID                         string
 		MaxPeers                         int
 		MaxDatabaseConcurrency           int
@@ -483,6 +484,21 @@ func newDatabase(ctx context.Context) (database.Database, error) {
 			ShouldWritePeers:                 inputSensorParams.ShouldWritePeers,
 			TTL:                              inputSensorParams.TTL,
 		}), nil
+	case "clickhouse":
+		return database.NewClickHouse(ctx, database.ClickHouseOptions{
+			DSN:                              inputSensorParams.ClickHouseDSN,
+			SensorID:                         inputSensorParams.SensorID,
+			ChainID:                          inputSensorParams.NetworkID,
+			MaxConcurrency:                   inputSensorParams.MaxDatabaseConcurrency,
+			ShouldWriteBlocks:                inputSensorParams.ShouldWriteBlocks,
+			ShouldWriteBlockEvents:           inputSensorParams.ShouldWriteBlockEvents,
+			ShouldWriteFirstBlockEvent:       inputSensorParams.ShouldWriteFirstBlockEvent,
+			ShouldWriteTransactions:          inputSensorParams.ShouldWriteTransactions,
+			ShouldWriteTransactionEvents:     inputSensorParams.ShouldWriteTransactionEvents,
+			ShouldWriteFirstTransactionEvent: inputSensorParams.ShouldWriteFirstTransactionEvent,
+			ShouldWritePeers:                 inputSensorParams.ShouldWritePeers,
+			TTL:                              inputSensorParams.TTL,
+		}), nil
 	case "json":
 		return database.NewJSONDatabase(database.JSONDatabaseOptions{
 			SensorID:                     inputSensorParams.SensorID,
@@ -508,6 +524,8 @@ func init() {
 	flag.MarkFlagsRequired(SensorCmd, "network-id")
 	f.StringVarP(&inputSensorParams.ProjectID, "project-id", "p", "", "GCP project ID")
 	f.StringVarP(&inputSensorParams.DatabaseID, "database-id", "d", "", "datastore database ID")
+	f.StringVar(&inputSensorParams.ClickHouseDSN, "clickhouse-dsn", "",
+		"ClickHouse DSN, e.g. clickhouse://user:pass@host:9000/sensor (used with --database=clickhouse)")
 	f.StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "sensor ID when writing block/tx events")
 	flag.MarkFlagsRequired(SensorCmd, "sensor-id")
 	f.IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 2000, "maximum number of peers to connect to")
@@ -564,6 +582,7 @@ will result in less chance of missing data but can significantly increase memory
 	f.StringVar(&inputSensorParams.Database, "database", "none",
 		`which database to persist data to, options are:
   - datastore (GCP Datastore)
+  - clickhouse (ClickHouse, see --clickhouse-dsn)
   - json (output to stdout)
   - none (no persistence)`)
 	f.BoolVar(&inputSensorParams.NoDiscovery, "no-discovery", false, "disable P2P peer discovery")
