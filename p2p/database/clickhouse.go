@@ -109,9 +109,9 @@ func NewClickHouse(ctx context.Context, opts ClickHouseOptions) Database {
 	c.conn = conn
 
 	c.blocks = newRowBatcher(ctx, "blocks", chBlockBatch, func(fctx context.Context, rows []chBlock) error {
-		return c.flush(fctx, "INSERT INTO blocks (hash, number, parent_hash, block_time, coinbase, signer, difficulty, total_difficulty, gas_used, gas_limit, base_fee, tx_count, uncle_count, sensor_id, ingested_at)", func(b driver.Batch) error {
+		return c.flush(fctx, "INSERT INTO blocks (hash, number, parent_hash, block_time, coinbase, signer, difficulty, total_difficulty, gas_used, gas_limit, base_fee, tx_count, uncle_count, uncle_hash, state_root, tx_root, receipt_root, logs_bloom, extra_data, mix_digest, nonce, sensor_id, ingested_at)", func(b driver.Batch) error {
 			for _, r := range rows {
-				if err := b.Append(r.hash, r.number, r.parentHash, r.blockTime, r.coinbase, r.signer, r.difficulty, r.totalDifficulty, r.gasUsed, r.gasLimit, r.baseFee, r.txCount, r.uncleCount, c.sensorID, r.ingestedAt); err != nil {
+				if err := b.Append(r.hash, r.number, r.parentHash, r.blockTime, r.coinbase, r.signer, r.difficulty, r.totalDifficulty, r.gasUsed, r.gasLimit, r.baseFee, r.txCount, r.uncleCount, r.uncleHash, r.stateRoot, r.txRoot, r.receiptRoot, r.logsBloom, r.extraData, r.mixDigest, r.nonce, c.sensorID, r.ingestedAt); err != nil {
 					return err
 				}
 			}
@@ -196,6 +196,14 @@ type chBlock struct {
 	baseFee         uint64
 	txCount         uint32
 	uncleCount      uint16
+	uncleHash       string
+	stateRoot       string
+	txRoot          string
+	receiptRoot     string
+	logsBloom       []byte
+	extraData       []byte
+	mixDigest       string
+	nonce           uint64
 	ingestedAt      time.Time
 }
 
@@ -398,6 +406,14 @@ func (c *ClickHouse) newBlock(h *types.Header, td *big.Int, tfs time.Time, txCou
 		baseFee:         baseFee,
 		txCount:         uint32(txCount),
 		uncleCount:      uint16(uncleCount),
+		uncleHash:       h.UncleHash.Hex(),
+		stateRoot:       h.Root.Hex(),
+		txRoot:          h.TxHash.Hex(),
+		receiptRoot:     h.ReceiptHash.Hex(),
+		logsBloom:       h.Bloom.Bytes(),
+		extraData:       h.Extra,
+		mixDigest:       h.MixDigest.Hex(),
+		nonce:           h.Nonce.Uint64(),
 		ingestedAt:      tfs,
 	}
 }
