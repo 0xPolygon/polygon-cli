@@ -11,10 +11,15 @@ RUN go mod download
 
 COPY . .
 
-# CGO is required (e.g. vectorized-poseidon-gold has no pure-Go path). The
-# golang image ships a C toolchain; buildx builds each target platform natively
-# under QEMU, so this works multi-arch without cross-compilers.
-RUN CGO_ENABLED=1 go build -trimpath -o /polycli main.go
+# Reuse the Makefile's build target so the binary is version-stamped exactly like
+# a normal `make build` (needs make + git; git describe reads the tags from the
+# build context — the publish workflow checks out with fetch-depth: 0). CGO is on
+# by default (vectorized-poseidon-gold has no pure-Go path); buildx builds each
+# target platform natively under QEMU, so no cross-compilers are needed.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends make \
+  && rm -rf /var/lib/apt/lists/* \
+  && make build
 
 # distroless/base has glibc for the dynamically-linked (CGO) binary.
 FROM gcr.io/distroless/base-debian12:nonroot
@@ -22,6 +27,6 @@ FROM gcr.io/distroless/base-debian12:nonroot
 # The sensor writes a nodes.json discovery cache to its working directory.
 WORKDIR /data
 
-COPY --from=build /polycli /usr/local/bin/polycli
+COPY --from=build /src/out/polycli /usr/local/bin/polycli
 
 ENTRYPOINT ["/usr/local/bin/polycli"]
