@@ -181,7 +181,7 @@ require (
 	github.com/go-errors/errors v1.5.1
 	github.com/google/tink/go v1.7.0
 	github.com/iden3/go-iden3-crypto v0.0.17
-	github.com/montanaflynn/stats v0.9.0
+	github.com/montanaflynn/stats v0.10.0
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/rivo/tview v0.42.0
 )
