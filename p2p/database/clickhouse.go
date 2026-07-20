@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -90,76 +91,82 @@ func NewClickHouse(ctx context.Context, opts ClickHouseOptions) Database {
 		shouldWritePeers:                 opts.ShouldWritePeers,
 	}
 
-	chOpts, err := clickhouse.ParseDSN(opts.DSN)
+	conn, err := connectClickHouse(ctx, opts.DSN)
 	if err != nil {
-		log.Error().Err(err).Msg("Could not parse ClickHouse DSN")
-		return c
-	}
-
-	conn, err := clickhouse.Open(chOpts)
-	if err != nil {
-		log.Error().Err(err).Msg("Could not connect to ClickHouse")
-		return c
-	}
-
-	if err := conn.Ping(ctx); err != nil {
-		log.Error().Err(err).Msg("Could not ping ClickHouse")
+		log.Error().Err(err).Msg("Could not initialize ClickHouse connection")
 		return c
 	}
 	c.conn = conn
 
-	c.blocks = newRowBatcher(ctx, "blocks", chBlockBatch, func(fctx context.Context, rows []chBlock) error {
-		return c.flush(fctx, "INSERT INTO blocks (hash, number, parent_hash, block_time, coinbase, signer, difficulty, total_difficulty, gas_used, gas_limit, base_fee, tx_count, uncle_count, uncle_hash, state_root, tx_root, receipt_root, logs_bloom, extra_data, mix_digest, nonce, sensor_id, ingested_at)", func(b driver.Batch) error {
-			for _, r := range rows {
-				if err := b.Append(r.hash, r.number, r.parentHash, r.blockTime, r.coinbase, r.signer, r.difficulty, r.totalDifficulty, r.gasUsed, r.gasLimit, r.baseFee, r.txCount, r.uncleCount, r.uncleHash, r.stateRoot, r.txRoot, r.receiptRoot, r.logsBloom, r.extraData, r.mixDigest, r.nonce, c.sensorID, r.ingestedAt); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	})
-	c.blockEvt = newRowBatcher(ctx, "block_events", chBlockEventBatch, func(fctx context.Context, rows []chEvent) error {
-		return c.flush(fctx, "INSERT INTO block_events (block_hash, sensor_id, peer_id, seen_at)", func(b driver.Batch) error {
-			for _, r := range rows {
-				if err := b.Append(r.hash, c.sensorID, r.peerID, r.seenAt); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	})
-	c.txs = newRowBatcher(ctx, "transactions", chTxBatch, func(fctx context.Context, rows []chTx) error {
-		return c.flush(fctx, "INSERT INTO transactions (hash, from_address, to_address, value, gas, gas_price, gas_fee_cap, gas_tip_cap, nonce, tx_type, first_seen, sensor_id, ingested_at)", func(b driver.Batch) error {
-			for _, r := range rows {
-				if err := b.Append(r.hash, r.from, r.to, r.value, r.gas, r.gasPrice, r.gasFeeCap, r.gasTipCap, r.nonce, r.txType, r.firstSeen, c.sensorID, r.ingestedAt); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	})
-	c.txEvt = newRowBatcher(ctx, "transaction_events", chTxEventBatch, func(fctx context.Context, rows []chEvent) error {
-		return c.flush(fctx, "INSERT INTO transaction_events (tx_hash, sensor_id, peer_id, seen_at)", func(b driver.Batch) error {
-			for _, r := range rows {
-				if err := b.Append(r.hash, c.sensorID, r.peerID, r.seenAt); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	})
-	c.peers = newRowBatcher(ctx, "peers", chPeerBatch, func(fctx context.Context, rows []chPeer) error {
-		return c.flush(fctx, "INSERT INTO peers (peer_id, name, url, caps, last_seen_by, time_last_seen)", func(b driver.Batch) error {
-			for _, r := range rows {
-				if err := b.Append(r.peerID, r.name, r.url, r.caps, c.sensorID, r.timeLastSeen); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	})
+	c.startBatchers(ctx)
 
 	return c
+}
+
+// connectClickHouse parses the DSN, opens a connection, and verifies
+// connectivity with a ping.
+func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
+	chOpts, err := clickhouse.ParseDSN(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse ClickHouse DSN: %w", err)
+	}
+
+	conn, err := clickhouse.Open(chOpts)
+	if err != nil {
+		return nil, fmt.Errorf("could not connect to ClickHouse: %w", err)
+	}
+
+	if err := conn.Ping(ctx); err != nil {
+		return nil, fmt.Errorf("could not ping ClickHouse: %w", err)
+	}
+	return conn, nil
+}
+
+// startBatchers creates the background row batchers, one per target table. Each
+// batcher's append closure only needs to map a row to its column values; the
+// surrounding batch/flush/error handling lives in newInsertBatcher.
+func (c *ClickHouse) startBatchers(ctx context.Context) {
+	c.blocks = newInsertBatcher(ctx, c, "blocks", chBlockBatch,
+		"INSERT INTO blocks (hash, number, parent_hash, block_time, coinbase, signer, difficulty, total_difficulty, gas_used, gas_limit, base_fee, tx_count, uncle_count, uncle_hash, state_root, tx_root, receipt_root, logs_bloom, extra_data, mix_digest, nonce, sensor_id, ingested_at)",
+		func(b driver.Batch, r chBlock) error {
+			return b.Append(r.hash, r.number, r.parentHash, r.blockTime, r.coinbase, r.signer, r.difficulty, r.totalDifficulty, r.gasUsed, r.gasLimit, r.baseFee, r.txCount, r.uncleCount, r.uncleHash, r.stateRoot, r.txRoot, r.receiptRoot, r.logsBloom, r.extraData, r.mixDigest, r.nonce, c.sensorID, r.ingestedAt)
+		})
+	c.blockEvt = newInsertBatcher(ctx, c, "block_events", chBlockEventBatch,
+		"INSERT INTO block_events (block_hash, sensor_id, peer_id, seen_at)",
+		func(b driver.Batch, r chEvent) error {
+			return b.Append(r.hash, c.sensorID, r.peerID, r.seenAt)
+		})
+	c.txs = newInsertBatcher(ctx, c, "transactions", chTxBatch,
+		"INSERT INTO transactions (hash, from_address, to_address, value, gas, gas_price, gas_fee_cap, gas_tip_cap, nonce, tx_type, first_seen, sensor_id, ingested_at)",
+		func(b driver.Batch, r chTx) error {
+			return b.Append(r.hash, r.from, r.to, r.value, r.gas, r.gasPrice, r.gasFeeCap, r.gasTipCap, r.nonce, r.txType, r.firstSeen, c.sensorID, r.ingestedAt)
+		})
+	c.txEvt = newInsertBatcher(ctx, c, "transaction_events", chTxEventBatch,
+		"INSERT INTO transaction_events (tx_hash, sensor_id, peer_id, seen_at)",
+		func(b driver.Batch, r chEvent) error {
+			return b.Append(r.hash, c.sensorID, r.peerID, r.seenAt)
+		})
+	c.peers = newInsertBatcher(ctx, c, "peers", chPeerBatch,
+		"INSERT INTO peers (peer_id, name, url, caps, last_seen_by, time_last_seen)",
+		func(b driver.Batch, r chPeer) error {
+			return b.Append(r.peerID, r.name, r.url, r.caps, c.sensorID, r.timeLastSeen)
+		})
+}
+
+// newInsertBatcher wraps newRowBatcher with the common flush behaviour: prepare
+// the INSERT, append each row via appendRow, and send. Only appendRow varies
+// per table.
+func newInsertBatcher[T any](ctx context.Context, c *ClickHouse, name string, maxRows int, query string, appendRow func(driver.Batch, T) error) *rowBatcher[T] {
+	return newRowBatcher(ctx, name, maxRows, func(fctx context.Context, rows []T) error {
+		return c.flush(fctx, query, func(b driver.Batch) error {
+			for _, r := range rows {
+				if err := appendRow(b, r); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	})
 }
 
 // flush prepares a batch for the given INSERT, appends every row via the
