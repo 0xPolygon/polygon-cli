@@ -82,7 +82,11 @@ func TestClickHouseWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open verify conn: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Errorf("close verify conn: %v", err)
+		}
+	}()
 
 	checkCount(t, conn, "blocks", block.Hash().Hex())
 	checkCount(t, conn, "transactions", tx.Hash().Hex())

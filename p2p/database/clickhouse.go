@@ -356,7 +356,11 @@ func (c *ClickHouse) NodeList(ctx context.Context, limit int) ([]string, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close ClickHouse rows")
+		}
+	}()
 
 	nodelist := []string{}
 	for rows.Next() {
