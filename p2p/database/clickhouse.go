@@ -176,11 +176,14 @@ func (c *ClickHouse) startBatchers(ctx context.Context) {
 		func(b driver.Batch, r chBlock) error {
 			return b.Append(r.hash, r.number, r.parentHash, r.blockTime, r.coinbase, r.signer, r.difficulty, r.totalDifficulty, r.gasUsed, r.gasLimit, r.baseFee, r.txCount, r.uncleCount, r.uncleHash, r.stateRoot, r.txRoot, r.receiptRoot, r.logsBloom, r.extraData, r.mixDigest, r.nonce, c.sensorID, r.ingestedAt, r.isParent)
 		})
+	// block_events and transaction_events share the same row shape and column
+	// order, so both batchers use the same append function.
+	appendEvent := func(b driver.Batch, r chEvent) error {
+		return b.Append(r.hash, c.sensorID, r.peerID, r.seenAt)
+	}
 	c.blockEvt = newInsertBatcher(ctx, c, "block_events", chBlockEventBatch,
 		"INSERT INTO block_events (block_hash, sensor_id, peer_id, seen_at)",
-		func(b driver.Batch, r chEvent) error {
-			return b.Append(r.hash, c.sensorID, r.peerID, r.seenAt)
-		})
+		appendEvent)
 	c.txs = newInsertBatcher(ctx, c, "transactions", chTxBatch,
 		"INSERT INTO transactions (hash, from_address, to_address, value, gas, gas_price, gas_fee_cap, gas_tip_cap, nonce, tx_type, sensor_id, ingested_at)",
 		func(b driver.Batch, r chTx) error {
@@ -188,9 +191,7 @@ func (c *ClickHouse) startBatchers(ctx context.Context) {
 		})
 	c.txEvt = newInsertBatcher(ctx, c, "transaction_events", chTxEventBatch,
 		"INSERT INTO transaction_events (tx_hash, sensor_id, peer_id, seen_at)",
-		func(b driver.Batch, r chEvent) error {
-			return b.Append(r.hash, c.sensorID, r.peerID, r.seenAt)
-		})
+		appendEvent)
 	c.peers = newInsertBatcher(ctx, c, "peers", chPeerBatch,
 		"INSERT INTO peers (peer_id, name, url, caps, last_seen_by, time_last_seen)",
 		func(b driver.Batch, r chPeer) error {
@@ -305,7 +306,7 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 		c.blockEvt.add(chEvent{hash: block.Hash().Hex(), peerID: peer.URLv4(), seenAt: tfs})
 	}
 	if c.shouldWriteBlocks {
-		c.blocks.add(c.newBlock(block.Header(), td, tfs, len(block.Transactions()), len(block.Uncles()), false))
+		c.blocks.add(newChBlock(block.Header(), td, tfs, len(block.Transactions()), len(block.Uncles()), false))
 	}
 	if c.shouldWriteTransactions {
 		c.writeTxs(block.Transactions(), tfs)
@@ -321,7 +322,7 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	// counts. isParent marks headers fetched as ancestors during backfill so
 	// parent-vs-live analysis can distinguish them.
 	for _, h := range headers {
-		c.blocks.add(c.newBlock(h, big.NewInt(0), tfs, 0, 0, isParent))
+		c.blocks.add(newChBlock(h, big.NewInt(0), tfs, 0, 0, isParent))
 	}
 }
 
@@ -343,21 +344,21 @@ func (c *ClickHouse) WriteBlockHashes(ctx context.Context, peer *enode.Node, has
 	if c.conn == nil || !c.shouldWriteBlockEvents || peer == nil {
 		return
 	}
+	peerID := peer.URLv4()
 	for _, hash := range hashes {
-		c.blockEvt.add(chEvent{hash: hash.Hex(), peerID: peer.URLv4(), seenAt: tfs})
+		c.blockEvt.add(chEvent{hash: hash.Hex(), peerID: peerID, seenAt: tfs})
 	}
 }
 
 func (c *ClickHouse) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
-	if c.conn == nil {
+	// Skip when full block events are enabled: WriteBlockHashes already records
+	// every sighting, and the earliest first-seen is derived at query time from
+	// block_events (see the block_first_seen materialized view). This mirrors
+	// the Datastore backend's first-block-event behavior.
+	if c.conn == nil || peer == nil || !c.shouldWriteFirstBlockEvent || c.shouldWriteBlockEvents {
 		return
 	}
-	// Earliest first-seen is derived at query time from block_events (see the
-	// block_first_seen materialized view), so we only need to record the event.
-	// This mirrors the Datastore backend's first-block-event behavior.
-	if c.shouldWriteFirstBlockEvent && !c.shouldWriteBlockEvents && peer != nil {
-		c.blockEvt.add(chEvent{hash: hash.Hex(), peerID: peer.URLv4(), seenAt: tfsh})
-	}
+	c.blockEvt.add(chEvent{hash: hash.Hex(), peerID: peer.URLv4(), seenAt: tfsh})
 }
 
 func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
@@ -372,8 +373,9 @@ func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, tx
 	// this fires once per first-seen tx in both cases (mirroring the
 	// first-block-event behavior for blocks).
 	if peer != nil && (c.shouldWriteTransactionEvents || c.shouldWriteFirstTransactionEvent) {
+		peerID := peer.URLv4()
 		for _, tx := range txs {
-			c.txEvt.add(chEvent{hash: tx.Hash().Hex(), peerID: peer.URLv4(), seenAt: tfs})
+			c.txEvt.add(chEvent{hash: tx.Hash().Hex(), peerID: peerID, seenAt: tfs})
 		}
 	}
 }
@@ -395,7 +397,9 @@ func (c *ClickHouse) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time
 
 // HasBlock reports whether the block already exists. It is called once per new
 // block (not per event), so a lightweight indexed point lookup is cheap and
-// preserves the parent-backfill behavior of the Datastore backend.
+// preserves the parent-backfill behavior of the Datastore backend. Without a
+// connection it reports true so the sensor never attempts a backfill it could
+// not persist.
 func (c *ClickHouse) HasBlock(ctx context.Context, hash common.Hash) bool {
 	if c.conn == nil {
 		return true
@@ -448,7 +452,9 @@ func (c *ClickHouse) ShouldWritePeers() bool { return c.shouldWritePeers }
 
 // --- helpers ---------------------------------------------------------------
 
-func (c *ClickHouse) newBlock(h *types.Header, td *big.Int, tfs time.Time, txCount, uncleCount int, isParent bool) chBlock {
+// newChBlock maps a header (plus data not carried on the header itself) to a
+// blocks-table row.
+func newChBlock(h *types.Header, td *big.Int, tfs time.Time, txCount, uncleCount int, isParent bool) chBlock {
 	baseFee := uint64(0)
 	if h.BaseFee != nil {
 		baseFee = h.BaseFee.Uint64()

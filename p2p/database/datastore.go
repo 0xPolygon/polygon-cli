@@ -726,7 +726,7 @@ func (d *Datastore) Close() error {
 	if d.client == nil {
 		return nil
 	}
-	for i := 0; i < cap(d.jobs); i++ {
+	for range cap(d.jobs) {
 		d.jobs <- struct{}{}
 	}
 	return d.client.Close()
