@@ -13,13 +13,15 @@ ARG TARGETARCH
 
 WORKDIR /src
 
-# make reuses the Makefile's version stamping; gcc-aarch64-linux-gnu is the same
-# cross compiler the release workflow (make cross) uses for arm64. amd64 uses the
-# native gcc already in the golang image. NOTE: because vectorized-poseidon-gold
-# compiles the amd64 path with -march=native, the amd64 image must be built on an
-# amd64 host (true on the ubuntu-latest CI runner); arm64 cross-compiles cleanly.
+# make reuses the Makefile's version stamping; gcc-aarch64-linux-gnu +
+# libc6-dev-arm64-cross are the cross compiler and target libc headers for the
+# arm64 CGO build (the slim golang image, unlike the release runner, ships
+# neither). amd64 uses the native gcc already in the golang image. NOTE: because
+# vectorized-poseidon-gold compiles the amd64 path with -march=native, the amd64
+# image must be built on an amd64 host (true on the ubuntu-latest CI runner);
+# arm64 cross-compiles cleanly.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends make gcc-aarch64-linux-gnu \
+  && apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross make \
   && rm -rf /var/lib/apt/lists/*
 
 # Cache modules first (same cache mount as the build step so they aren't
