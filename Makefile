@@ -29,6 +29,17 @@ $(BUILD_DIR): ## Create the build folder.
 build: $(BUILD_DIR) ## Build go binary.
 	go build -ldflags "$(VERSION_FLAGS)" -o $(BUILD_DIR)/$(BIN_NAME) main.go
 
+.PHONY: docker-build
+docker-build: $(BUILD_DIR) ## Build a fully static linux binary for the Dockerfile (GOARCH/CC come from the environment).
+# Fully static (netgo + -extldflags "-static") like the `cross` target, so the
+# image can ship on distroless/static. GOARCH and CC are set by the Dockerfile
+# so it can cross-compile on the native build platform instead of emulating.
+	CGO_ENABLED=1 GOOS=linux go build \
+			-ldflags '$(VERSION_FLAGS) -s -w -linkmode external -extldflags "-static"' \
+			-tags netgo \
+			-o $(BUILD_DIR)/$(BIN_NAME) \
+			main.go
+
 .PHONY: install
 install: build ## Install the go binary.
 	$(RM) $(INSTALL_DIR)/$(BIN_NAME)
