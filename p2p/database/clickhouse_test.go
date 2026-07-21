@@ -28,6 +28,7 @@ func TestClickHouseWrites(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := NewClickHouse(ctx, ClickHouseOptions{
 		DSN:                          dsn,
 		SensorID:                     "test-sensor",
@@ -38,7 +39,6 @@ func TestClickHouseWrites(t *testing.T) {
 		ShouldWriteTransactions:      true,
 		ShouldWriteTransactionEvents: true,
 		ShouldWritePeers:             true,
-		TTL:                          14 * 24 * time.Hour,
 	})
 
 	now := time.Now().UTC()
@@ -74,9 +74,10 @@ func TestClickHouseWrites(t *testing.T) {
 	db.WriteTransactions(ctx, nil, []*types.Transaction{tx}, now)
 	db.WritePeers(ctx, nil, now) // empty peer slice is fine; exercises the path
 
-	// Trigger the drain flush and give it a moment to complete.
-	cancel()
-	time.Sleep(750 * time.Millisecond)
+	// Close drains the buffered rows synchronously before we verify them.
+	if err := db.Close(); err != nil {
+		t.Fatalf("close db: %v", err)
+	}
 
 	conn, err := clickhouse.Open(mustParseDSN(t, dsn))
 	if err != nil {

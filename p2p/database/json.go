@@ -403,3 +403,8 @@ func (j *JSONDatabase) ShouldWritePeers() bool {
 func (j *JSONDatabase) NodeList(ctx context.Context, limit int) ([]string, error) {
 	return []string{}, nil
 }
+
+// Close does nothing; records are written to stdout unbuffered.
+func (j *JSONDatabase) Close() error {
+	return nil
+}

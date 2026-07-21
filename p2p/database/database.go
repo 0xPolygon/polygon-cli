@@ -32,8 +32,12 @@ type Database interface {
 	// first seen time if the block doesn't exist yet.
 	WriteBlockHashFirstSeen(context.Context, *enode.Node, common.Hash, time.Time)
 
-	// WriteBlockBody will write the block bodies if ShouldWriteBlocks returns
-	// true.
+	// WriteBlockBody will write the transactions carried in the block body,
+	// subject to the backend's transaction-writing setting. The block row itself
+	// is written via WriteBlock/WriteBlockHeaders. Backends that store
+	// transactions in their own table (e.g. ClickHouse) gate this on
+	// ShouldWriteTransactions; the Datastore backend gates on ShouldWriteBlocks
+	// because it also links the transactions and uncles onto the block entity.
 	WriteBlockBody(context.Context, *eth.BlockBody, common.Hash, time.Time)
 
 	// WriteTransactions will write the both the transaction and transaction
@@ -59,4 +63,10 @@ type Database interface {
 
 	// NodeList will return a list of enode URLs.
 	NodeList(ctx context.Context, limit int) ([]string, error)
+
+	// Close flushes any buffered writes and releases the underlying database
+	// connection. It blocks until in-flight writes have drained (or their
+	// shutdown flush times out). Implementations with no resources to release
+	// return nil.
+	Close() error
 }

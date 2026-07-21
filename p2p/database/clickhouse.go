@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -25,17 +26,24 @@ import (
 // append ClickHouse is built for. Buffers are fixed-size and drop-on-full so a
 // slow/unavailable database can never exhaust memory or stall the sensor.
 const (
-	chFlushInterval   = 1 * time.Second
-	chFlushTimeout    = 30 * time.Second
-	chBlockBatch      = 5000
-	chBlockEventBatch = 50000
-	chTxBatch         = 20000
-	chTxEventBatch    = 50000
-	chPeerBatch       = 2000
+	chFlushInterval = 1 * time.Second
+	chFlushTimeout  = 30 * time.Second
+	// chMaxFlushAttempts bounds retries of a failed batch insert before the
+	// batch is dropped. Retries are immediate: a fresh connection is acquired
+	// each attempt, which recovers from stale-connection and transient errors
+	// without delaying shutdown.
+	chMaxFlushAttempts = 3
+	chBlockBatch       = 5000
+	chBlockEventBatch  = 50000
+	chTxBatch          = 20000
+	chTxEventBatch     = 50000
+	chPeerBatch        = 2000
 )
 
 // ClickHouse implements the Database interface backed by a ClickHouse cluster.
-// See clickhouse_schema.sql for the table definitions this writer targets.
+// The table definitions this writer targets (and the block_first_seen
+// materialized view) live in the sensor-network-tools repo
+// (clickhouse_schema.sql), not this repo.
 type ClickHouse struct {
 	conn                             driver.Conn
 	sensorID                         string
@@ -54,6 +62,11 @@ type ClickHouse struct {
 	txs      *rowBatcher[chTx]
 	txEvt    *rowBatcher[chEvent]
 	peers    *rowBatcher[chPeer]
+
+	// cancel stops the batcher goroutines; wg tracks them so Close can wait for
+	// their final drain flush before the connection is closed.
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
 // ClickHouseOptions is used when creating a NewClickHouse.
@@ -69,14 +82,15 @@ type ClickHouseOptions struct {
 	ShouldWriteTransactionEvents     bool
 	ShouldWriteFirstTransactionEvent bool
 	ShouldWritePeers                 bool
-	TTL                              time.Duration
 }
 
 // NewClickHouse connects to ClickHouse, verifies connectivity, and starts the
-// background batch flushers. The provided context governs the lifetime of the
-// flusher goroutines; when it is cancelled they flush any buffered rows and
-// exit. If the connection cannot be established the returned Database no-ops all
-// writes (mirroring the Datastore backend) so the sensor keeps running.
+// background batch flushers. The flusher goroutines run until either the
+// provided context is cancelled or Close is called, at which point they flush
+// any buffered rows and exit. Callers should defer Close to guarantee buffered
+// rows are drained before shutdown. If the connection cannot be established the
+// returned Database no-ops all writes (mirroring the Datastore backend) so the
+// sensor keeps running.
 func NewClickHouse(ctx context.Context, opts ClickHouseOptions) Database {
 	c := &ClickHouse{
 		sensorID:                         opts.SensorID,
@@ -98,9 +112,27 @@ func NewClickHouse(ctx context.Context, opts ClickHouseOptions) Database {
 	}
 	c.conn = conn
 
-	c.startBatchers(ctx)
+	// Derive a cancellable context so Close can stop the batchers independently
+	// of the parent context.
+	bctx, cancel := context.WithCancel(ctx)
+	c.cancel = cancel
+	c.startBatchers(bctx)
 
 	return c
+}
+
+// Close stops the batcher goroutines, waits for their final drain flush to
+// complete, and closes the connection. It is safe to call on a no-op instance
+// (connection never established).
+func (c *ClickHouse) Close() error {
+	if c.cancel != nil {
+		c.cancel()
+	}
+	c.wg.Wait()
+	if c.conn != nil {
+		return c.conn.Close()
+	}
+	return nil
 }
 
 // connectClickHouse parses the DSN, opens a connection, and verifies
@@ -109,6 +141,19 @@ func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
 	chOpts, err := clickhouse.ParseDSN(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse ClickHouse DSN: %w", err)
+	}
+
+	// Apply writer-friendly defaults when the DSN doesn't set them. LZ4
+	// compression is a large network win on the wide blocks table, and the pool
+	// is sized for the concurrent per-table flushers plus the occasional query.
+	if chOpts.Compression == nil {
+		chOpts.Compression = &clickhouse.Compression{Method: clickhouse.CompressionLZ4}
+	}
+	if chOpts.MaxIdleConns == 0 {
+		chOpts.MaxIdleConns = 10
+	}
+	if chOpts.MaxOpenConns == 0 {
+		chOpts.MaxOpenConns = 20
 	}
 
 	conn, err := clickhouse.Open(chOpts)
@@ -127,9 +172,9 @@ func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
 // surrounding batch/flush/error handling lives in newInsertBatcher.
 func (c *ClickHouse) startBatchers(ctx context.Context) {
 	c.blocks = newInsertBatcher(ctx, c, "blocks", chBlockBatch,
-		"INSERT INTO blocks (hash, number, parent_hash, block_time, coinbase, signer, difficulty, total_difficulty, gas_used, gas_limit, base_fee, tx_count, uncle_count, uncle_hash, state_root, tx_root, receipt_root, logs_bloom, extra_data, mix_digest, nonce, sensor_id, ingested_at)",
+		"INSERT INTO blocks (hash, number, parent_hash, block_time, coinbase, signer, difficulty, total_difficulty, gas_used, gas_limit, base_fee, tx_count, uncle_count, uncle_hash, state_root, tx_root, receipt_root, logs_bloom, extra_data, mix_digest, nonce, sensor_id, ingested_at, is_parent)",
 		func(b driver.Batch, r chBlock) error {
-			return b.Append(r.hash, r.number, r.parentHash, r.blockTime, r.coinbase, r.signer, r.difficulty, r.totalDifficulty, r.gasUsed, r.gasLimit, r.baseFee, r.txCount, r.uncleCount, r.uncleHash, r.stateRoot, r.txRoot, r.receiptRoot, r.logsBloom, r.extraData, r.mixDigest, r.nonce, c.sensorID, r.ingestedAt)
+			return b.Append(r.hash, r.number, r.parentHash, r.blockTime, r.coinbase, r.signer, r.difficulty, r.totalDifficulty, r.gasUsed, r.gasLimit, r.baseFee, r.txCount, r.uncleCount, r.uncleHash, r.stateRoot, r.txRoot, r.receiptRoot, r.logsBloom, r.extraData, r.mixDigest, r.nonce, c.sensorID, r.ingestedAt, r.isParent)
 		})
 	c.blockEvt = newInsertBatcher(ctx, c, "block_events", chBlockEventBatch,
 		"INSERT INTO block_events (block_hash, sensor_id, peer_id, seen_at)",
@@ -137,9 +182,9 @@ func (c *ClickHouse) startBatchers(ctx context.Context) {
 			return b.Append(r.hash, c.sensorID, r.peerID, r.seenAt)
 		})
 	c.txs = newInsertBatcher(ctx, c, "transactions", chTxBatch,
-		"INSERT INTO transactions (hash, from_address, to_address, value, gas, gas_price, gas_fee_cap, gas_tip_cap, nonce, tx_type, first_seen, sensor_id, ingested_at)",
+		"INSERT INTO transactions (hash, from_address, to_address, value, gas, gas_price, gas_fee_cap, gas_tip_cap, nonce, tx_type, sensor_id, ingested_at)",
 		func(b driver.Batch, r chTx) error {
-			return b.Append(r.hash, r.from, r.to, r.value, r.gas, r.gasPrice, r.gasFeeCap, r.gasTipCap, r.nonce, r.txType, r.firstSeen, c.sensorID, r.ingestedAt)
+			return b.Append(r.hash, r.from, r.to, r.value, r.gas, r.gasPrice, r.gasFeeCap, r.gasTipCap, r.nonce, r.txType, c.sensorID, r.ingestedAt)
 		})
 	c.txEvt = newInsertBatcher(ctx, c, "transaction_events", chTxEventBatch,
 		"INSERT INTO transaction_events (tx_hash, sensor_id, peer_id, seen_at)",
@@ -154,37 +199,44 @@ func (c *ClickHouse) startBatchers(ctx context.Context) {
 }
 
 // newInsertBatcher wraps newRowBatcher with the common flush behaviour: prepare
-// the INSERT, append each row via appendRow, and send. Only appendRow varies
-// per table.
+// the INSERT, append each row via appendRow, and send, retrying transient
+// failures. Only appendRow varies per table.
 func newInsertBatcher[T any](ctx context.Context, c *ClickHouse, name string, maxRows int, query string, appendRow func(driver.Batch, T) error) *rowBatcher[T] {
-	return newRowBatcher(ctx, name, maxRows, func(fctx context.Context, rows []T) error {
-		return c.flush(fctx, query, func(b driver.Batch) error {
-			for _, r := range rows {
-				if err := appendRow(b, r); err != nil {
-					return err
-				}
+	return newRowBatcher(ctx, &c.wg, name, maxRows, func(rows []T) error {
+		var err error
+		for attempt := 1; attempt <= chMaxFlushAttempts; attempt++ {
+			if err = flushBatch(c.conn, query, rows, appendRow); err == nil {
+				return nil
 			}
-			return nil
-		})
+			if attempt < chMaxFlushAttempts {
+				log.Warn().Err(err).Str("table", name).Int("attempt", attempt).Int("rows", len(rows)).
+					Msg("ClickHouse batch insert failed; retrying")
+			}
+		}
+		return err
 	})
 }
 
-// flush prepares a batch for the given INSERT, appends every row via the
-// provided callback, and sends it. It uses a detached, time-bounded context so
-// a flush triggered during shutdown (parent context already cancelled) still
-// completes.
-func (c *ClickHouse) flush(_ context.Context, query string, append func(driver.Batch) error) error {
-	fctx, cancel := context.WithTimeout(context.Background(), chFlushTimeout)
+// flushBatch prepares, fills, and sends a single INSERT. It runs on a detached,
+// time-bounded context so a flush triggered during shutdown (parent context
+// already cancelled) still completes.
+func flushBatch[T any](conn driver.Conn, query string, rows []T, appendRow func(driver.Batch, T) error) error {
+	ctx, cancel := context.WithTimeout(context.Background(), chFlushTimeout)
 	defer cancel()
 
-	b, err := c.conn.PrepareBatch(fctx, query)
+	b, err := conn.PrepareBatch(ctx, query)
 	if err != nil {
-		return err
+		return fmt.Errorf("prepare batch: %w", err)
 	}
-	if err := append(b); err != nil {
-		return err
+	for _, r := range rows {
+		if err := appendRow(b, r); err != nil {
+			return fmt.Errorf("append row: %w", err)
+		}
 	}
-	return b.Send()
+	if err := b.Send(); err != nil {
+		return fmt.Errorf("send batch: %w", err)
+	}
+	return nil
 }
 
 // --- row types -------------------------------------------------------------
@@ -212,6 +264,7 @@ type chBlock struct {
 	mixDigest       string
 	nonce           uint64
 	ingestedAt      time.Time
+	isParent        bool
 }
 
 type chEvent struct {
@@ -231,7 +284,6 @@ type chTx struct {
 	gasTipCap  *big.Int
 	nonce      uint64
 	txType     uint8
-	firstSeen  time.Time
 	ingestedAt time.Time
 }
 
@@ -253,7 +305,7 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 		c.blockEvt.add(chEvent{hash: block.Hash().Hex(), peerID: peer.URLv4(), seenAt: tfs})
 	}
 	if c.shouldWriteBlocks {
-		c.blocks.add(c.newBlock(block.Header(), td, tfs, len(block.Transactions()), len(block.Uncles())))
+		c.blocks.add(c.newBlock(block.Header(), td, tfs, len(block.Transactions()), len(block.Uncles()), false))
 	}
 	if c.shouldWriteTransactions {
 		c.writeTxs(block.Transactions(), tfs)
@@ -264,10 +316,12 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	if c.conn == nil || !c.shouldWriteBlocks {
 		return
 	}
-	// A header alone carries no transaction/uncle counts; they default to 0 and
-	// are populated by the full-block (NewBlock) path when available.
+	// A header alone carries no transaction/uncle counts, so they are written as
+	// 0; the full-block (NewBlock) path writes a separate row with the real
+	// counts. isParent marks headers fetched as ancestors during backfill so
+	// parent-vs-live analysis can distinguish them.
 	for _, h := range headers {
-		c.blocks.add(c.newBlock(h, big.NewInt(0), tfs, 0, 0))
+		c.blocks.add(c.newBlock(h, big.NewInt(0), tfs, 0, 0, isParent))
 	}
 }
 
@@ -313,7 +367,11 @@ func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, tx
 	if c.shouldWriteTransactions {
 		c.writeTxs(txs, tfs)
 	}
-	if c.shouldWriteTransactionEvents && peer != nil {
+	// Record a transaction event when either the full event stream or the
+	// first-seen-only mode is enabled. processTransactions dedups upstream, so
+	// this fires once per first-seen tx in both cases (mirroring the
+	// first-block-event behavior for blocks).
+	if peer != nil && (c.shouldWriteTransactionEvents || c.shouldWriteFirstTransactionEvent) {
 		for _, tx := range txs {
 			c.txEvt.add(chEvent{hash: tx.Hash().Hex(), peerID: peer.URLv4(), seenAt: tfs})
 		}
@@ -354,7 +412,7 @@ func (c *ClickHouse) NodeList(ctx context.Context, limit int) ([]string, error) 
 	rows, err := c.conn.Query(ctx,
 		"SELECT peer_id FROM block_events GROUP BY peer_id ORDER BY max(seen_at) DESC LIMIT ?", limit)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query node list: %w", err)
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
@@ -371,7 +429,10 @@ func (c *ClickHouse) NodeList(ctx context.Context, limit int) ([]string, error) 
 		}
 		nodelist = append(nodelist, peerID)
 	}
-	return nodelist, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nodelist, fmt.Errorf("iterate node list: %w", err)
+	}
+	return nodelist, nil
 }
 
 func (c *ClickHouse) MaxConcurrentWrites() int           { return c.maxConcurrency }
@@ -387,7 +448,7 @@ func (c *ClickHouse) ShouldWritePeers() bool { return c.shouldWritePeers }
 
 // --- helpers ---------------------------------------------------------------
 
-func (c *ClickHouse) newBlock(h *types.Header, td *big.Int, tfs time.Time, txCount, uncleCount int) chBlock {
+func (c *ClickHouse) newBlock(h *types.Header, td *big.Int, tfs time.Time, txCount, uncleCount int, isParent bool) chBlock {
 	baseFee := uint64(0)
 	if h.BaseFee != nil {
 		baseFee = h.BaseFee.Uint64()
@@ -426,6 +487,7 @@ func (c *ClickHouse) newBlock(h *types.Header, td *big.Int, tfs time.Time, txCou
 		mixDigest:       h.MixDigest.Hex(),
 		nonce:           h.Nonce.Uint64(),
 		ingestedAt:      tfs,
+		isParent:        isParent,
 	}
 }
 
@@ -453,7 +515,6 @@ func (c *ClickHouse) writeTxs(txs []*types.Transaction, tfs time.Time) {
 			gasTipCap:  new(big.Int).Set(tx.GasTipCap()),
 			nonce:      tx.Nonce(),
 			txType:     tx.Type(),
-			firstSeen:  tfs,
 			ingestedAt: tfs,
 		})
 	}
@@ -469,18 +530,22 @@ type rowBatcher[T any] struct {
 	name    string
 	in      chan T
 	maxRows int
-	flush   func(context.Context, []T) error
+	flush   func([]T) error
 	dropped atomic.Uint64
 }
 
-func newRowBatcher[T any](ctx context.Context, name string, maxRows int, flush func(context.Context, []T) error) *rowBatcher[T] {
+func newRowBatcher[T any](ctx context.Context, wg *sync.WaitGroup, name string, maxRows int, flush func([]T) error) *rowBatcher[T] {
 	b := &rowBatcher[T]{
 		name:    name,
 		in:      make(chan T, maxRows*2),
 		maxRows: maxRows,
 		flush:   flush,
 	}
-	go b.loop(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		b.loop(ctx)
+	}()
 	return b
 }
 
@@ -501,7 +566,7 @@ func (b *rowBatcher[T]) loop(ctx context.Context) {
 		if len(buf) == 0 {
 			return
 		}
-		if err := b.flush(ctx, buf); err != nil {
+		if err := b.flush(buf); err != nil {
 			log.Error().Err(err).Str("table", b.name).Int("rows", len(buf)).Msg("ClickHouse batch insert failed")
 		}
 		buf = buf[:0]

@@ -303,7 +303,10 @@ func (d *Datastore) WriteTransactions(ctx context.Context, peer *enode.Node, txs
 		})
 	}
 
-	if d.ShouldWriteTransactionEvents() {
+	// Write transaction events when either the full event stream or the
+	// first-seen-only mode is enabled. Duplicate transactions are filtered
+	// upstream, so this records one event per first-seen tx in both cases.
+	if peer != nil && (d.ShouldWriteTransactionEvents() || d.shouldWriteFirstTransactionEvent) {
 		hashes := make([]common.Hash, 0, len(txs))
 		for _, tx := range txs {
 			hashes = append(hashes, tx.Hash())
@@ -713,4 +716,18 @@ func (d *Datastore) NodeList(ctx context.Context, limit int) ([]string, error) {
 	}
 
 	return nodelist, nil
+}
+
+// Close waits for in-flight async writes to finish, then releases the
+// underlying Datastore client. Acquiring every slot in the jobs semaphore
+// guarantees no write is in progress, since datastore.Client.Close must not be
+// called concurrently with pending operations.
+func (d *Datastore) Close() error {
+	if d.client == nil {
+		return nil
+	}
+	for i := 0; i < cap(d.jobs); i++ {
+		d.jobs <- struct{}{}
+	}
+	return d.client.Close()
 }

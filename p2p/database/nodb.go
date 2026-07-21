@@ -98,3 +98,8 @@ func (n *nodb) ShouldWritePeers() bool {
 func (n *nodb) NodeList(ctx context.Context, limit int) ([]string, error) {
 	return []string{}, nil
 }
+
+// Close does nothing.
+func (n *nodb) Close() error {
+	return nil
+}

@@ -204,6 +204,12 @@ var SensorCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		// Drain buffered writes and release the connection on shutdown.
+		defer func() {
+			if err := db.Close(); err != nil {
+				log.Error().Err(err).Msg("Failed to close database")
+			}
+		}()
 
 		// Fetch the latest block which will be used later when crafting the status
 		// message. This call will only be made once and stored in the head field
@@ -497,7 +503,6 @@ func newDatabase(ctx context.Context) (database.Database, error) {
 			ShouldWriteTransactionEvents:     inputSensorParams.ShouldWriteTransactionEvents,
 			ShouldWriteFirstTransactionEvent: inputSensorParams.ShouldWriteFirstTransactionEvent,
 			ShouldWritePeers:                 inputSensorParams.ShouldWritePeers,
-			TTL:                              inputSensorParams.TTL,
 		}), nil
 	case "json":
 		return database.NewJSONDatabase(database.JSONDatabaseOptions{
