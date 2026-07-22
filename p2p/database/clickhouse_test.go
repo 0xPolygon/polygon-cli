@@ -75,8 +75,8 @@ func TestClickHouseWrites(t *testing.T) {
 	db.WritePeers(ctx, nil, now) // empty peer slice is fine; exercises the path
 
 	// Close drains the buffered rows synchronously before we verify them.
-	if err := db.Close(); err != nil {
-		t.Fatalf("close db: %v", err)
+	if cerr := db.Close(); cerr != nil {
+		t.Fatalf("close db: %v", cerr)
 	}
 
 	conn, err := clickhouse.Open(mustParseDSN(t, dsn))

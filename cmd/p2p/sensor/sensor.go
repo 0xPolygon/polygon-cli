@@ -206,8 +206,8 @@ var SensorCmd = &cobra.Command{
 		}
 		// Drain buffered writes and release the connection on shutdown.
 		defer func() {
-			if err := db.Close(); err != nil {
-				log.Error().Err(err).Msg("Failed to close database")
+			if cerr := db.Close(); cerr != nil {
+				log.Error().Err(cerr).Msg("Failed to close database")
 			}
 		}()
 
