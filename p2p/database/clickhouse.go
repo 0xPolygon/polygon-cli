@@ -19,19 +19,16 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Default batching parameters. ClickHouse strongly prefers large, infrequent
-// inserts over many small ones, so every Write* call only enqueues a row into
-// an in-memory buffer; a background goroutine flushes it in batches. This keeps
-// the sensor hot path non-blocking and turns the write pattern into the bulk
-// append ClickHouse is built for. Buffers are fixed-size and drop-on-full so a
-// slow/unavailable database can never exhaust memory or stall the sensor.
+// Default batching parameters. Write* calls only enqueue rows; a background
+// goroutine flushes them in batches, since ClickHouse prefers large, infrequent
+// inserts. Buffers are fixed-size and drop-on-full so a slow database can never
+// stall the sensor or exhaust memory.
 const (
 	chFlushInterval = 1 * time.Second
 	chFlushTimeout  = 30 * time.Second
-	// chMaxFlushAttempts bounds retries of a failed batch insert before the
-	// batch is dropped. Retries are immediate: a fresh connection is acquired
-	// each attempt, which recovers from stale-connection and transient errors
-	// without delaying shutdown.
+	// chMaxFlushAttempts bounds retries of a failed batch insert. Each retry is
+	// immediate with a fresh connection, recovering from stale-connection and
+	// transient errors without delaying shutdown.
 	chMaxFlushAttempts = 3
 	chBlockBatch       = 5000
 	chBlockEventBatch  = 50000
@@ -85,12 +82,9 @@ type ClickHouseOptions struct {
 }
 
 // NewClickHouse connects to ClickHouse, verifies connectivity, and starts the
-// background batch flushers. The flusher goroutines run until either the
-// provided context is cancelled or Close is called, at which point they flush
-// any buffered rows and exit. Callers should defer Close to guarantee buffered
-// rows are drained before shutdown. If the connection cannot be established the
-// returned Database no-ops all writes (mirroring the Datastore backend) so the
-// sensor keeps running.
+// background batch flushers. Callers should defer Close to drain buffered rows
+// on shutdown. If the connection cannot be established the returned Database
+// no-ops all writes (mirroring the Datastore backend) so the sensor keeps running.
 func NewClickHouse(ctx context.Context, opts ClickHouseOptions) Database {
 	c := &ClickHouse{
 		sensorID:                         opts.SensorID,
@@ -143,9 +137,9 @@ func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
 		return nil, fmt.Errorf("could not parse ClickHouse DSN: %w", err)
 	}
 
-	// Apply writer-friendly defaults when the DSN doesn't set them. LZ4
-	// compression is a large network win on the wide blocks table, and the pool
-	// is sized for the concurrent per-table flushers plus the occasional query.
+	// Writer-friendly defaults when the DSN omits them: LZ4 compression is a
+	// network win on the wide blocks table, and the pool is sized for the
+	// concurrent per-table flushers plus the occasional query.
 	if chOpts.Compression == nil {
 		chOpts.Compression = &clickhouse.Compression{Method: clickhouse.CompressionLZ4}
 	}
@@ -168,8 +162,8 @@ func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
 }
 
 // startBatchers creates the background row batchers, one per target table. Each
-// batcher's append closure only needs to map a row to its column values; the
-// surrounding batch/flush/error handling lives in newInsertBatcher.
+// batcher's append closure maps a row to its column values; the batch/flush/error
+// handling lives in newInsertBatcher.
 func (c *ClickHouse) startBatchers(ctx context.Context) {
 	c.blocks = newInsertBatcher(ctx, c, "blocks", chBlockBatch,
 		"INSERT INTO blocks (hash, number, parent_hash, block_time, coinbase, signer, difficulty, total_difficulty, gas_used, gas_limit, base_fee, tx_count, uncle_count, uncle_hash, state_root, tx_root, receipt_root, logs_bloom, extra_data, mix_digest, nonce, sensor_id, ingested_at, is_parent)",
@@ -200,8 +194,8 @@ func (c *ClickHouse) startBatchers(ctx context.Context) {
 }
 
 // newInsertBatcher wraps newRowBatcher with the common flush behaviour: prepare
-// the INSERT, append each row via appendRow, and send, retrying transient
-// failures. Only appendRow varies per table.
+// the INSERT, append rows, send, retrying transient failures. Only appendRow
+// varies per table.
 func newInsertBatcher[T any](ctx context.Context, c *ClickHouse, name string, maxRows int, query string, appendRow func(driver.Batch, T) error) *rowBatcher[T] {
 	return newRowBatcher(ctx, &c.wg, name, maxRows, func(rows []T) error {
 		var err error
@@ -317,10 +311,9 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	if c.conn == nil || !c.shouldWriteBlocks {
 		return
 	}
-	// A header alone carries no transaction/uncle counts, so they are written as
-	// 0; the full-block (NewBlock) path writes a separate row with the real
-	// counts. isParent marks headers fetched as ancestors during backfill so
-	// parent-vs-live analysis can distinguish them.
+	// A header carries no tx/uncle counts, so they are written as 0; the
+	// full-block (NewBlock) path writes a separate row with the real counts.
+	// isParent marks headers fetched as ancestors during backfill.
 	for _, h := range headers {
 		c.blocks.add(newChBlock(h, big.NewInt(0), tfs, 0, 0, isParent))
 	}
@@ -352,9 +345,8 @@ func (c *ClickHouse) WriteBlockHashes(ctx context.Context, peer *enode.Node, has
 
 func (c *ClickHouse) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
 	// Skip when full block events are enabled: WriteBlockHashes already records
-	// every sighting, and the earliest first-seen is derived at query time from
-	// block_events (see the block_first_seen materialized view). This mirrors
-	// the Datastore backend's first-block-event behavior.
+	// every sighting, and first-seen is derived at query time from block_events
+	// (see the block_first_seen materialized view).
 	if c.conn == nil || peer == nil || !c.shouldWriteFirstBlockEvent || c.shouldWriteBlockEvents {
 		return
 	}
@@ -370,8 +362,7 @@ func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, tx
 	}
 	// Record a transaction event when either the full event stream or the
 	// first-seen-only mode is enabled. processTransactions dedups upstream, so
-	// this fires once per first-seen tx in both cases (mirroring the
-	// first-block-event behavior for blocks).
+	// this fires once per first-seen tx in both cases.
 	if peer != nil && (c.shouldWriteTransactionEvents || c.shouldWriteFirstTransactionEvent) {
 		peerID := peer.URLv4()
 		for _, tx := range txs {
@@ -395,11 +386,9 @@ func (c *ClickHouse) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time
 	}
 }
 
-// HasBlock reports whether the block already exists. It is called once per new
-// block (not per event), so a lightweight indexed point lookup is cheap and
-// preserves the parent-backfill behavior of the Datastore backend. Without a
-// connection it reports true so the sensor never attempts a backfill it could
-// not persist.
+// HasBlock reports whether the block already exists. Called once per new block
+// (not per event), so an indexed point lookup is cheap. Without a connection it
+// reports true so the sensor never attempts a backfill it could not persist.
 func (c *ClickHouse) HasBlock(ctx context.Context, hash common.Hash) bool {
 	if c.conn == nil {
 		return true
@@ -463,9 +452,7 @@ func newChBlock(h *types.Header, td *big.Int, tfs time.Time, txCount, uncleCount
 		td = big.NewInt(0)
 	}
 	// Recover the block signer from the header seal so signer-based analytics
-	// (double-signers, stolen/sealing blocks, reorgs) don't have to ecrecover on
-	// every query. Uses the same recovery as the sensor's block-signer validation
-	// and the data-analysis tools. Left empty when it can't be recovered.
+	// don't have to ecrecover on every query. Left empty when it can't be recovered.
 	var signer string
 	if sig, err := util.Ecrecover(h); err == nil {
 		signer = common.BytesToAddress(sig).Hex()
@@ -528,10 +515,10 @@ func (c *ClickHouse) writeTxs(txs []*types.Transaction, tfs time.Time) {
 
 // --- batching --------------------------------------------------------------
 
-// rowBatcher buffers rows and flushes them in bulk, either when the buffer
-// reaches maxRows or on a fixed interval. add is non-blocking: when the buffer
-// is full rows are dropped and counted (logged periodically) so the sensor hot
-// path is never stalled by a slow database. The buffer is a fixed size.
+// rowBatcher buffers rows and flushes them in bulk when the buffer reaches
+// maxRows or on a fixed interval. add is non-blocking: rows are dropped and
+// counted when the fixed-size buffer is full, so a slow database never stalls
+// the sensor hot path.
 type rowBatcher[T any] struct {
 	name    string
 	in      chan T
