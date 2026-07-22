@@ -224,9 +224,9 @@ func (d *Datastore) WriteBlockBody(ctx context.Context, body *eth.BlockBody, has
 	})
 }
 
-// WriteBlockHashes will write the block events to datastore.
-func (d *Datastore) WriteBlockHashes(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
-	if d.client == nil || !d.ShouldWriteBlockEvents() || len(hashes) == 0 {
+// WriteBlockEvents appends an inbound block event per hash for the given peer.
+func (d *Datastore) WriteBlockEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
+	if d.client == nil || peer == nil || len(hashes) == 0 {
 		return
 	}
 
@@ -235,11 +235,10 @@ func (d *Datastore) WriteBlockHashes(ctx context.Context, peer *enode.Node, hash
 	})
 }
 
-// WriteBlockHashFirstSeen writes a partial block entry with just the hash
-// first seen time if the block doesn't exist yet. If it exists, updates the
-// TimeFirstSeenHash if the new time is earlier.
+// WriteBlockHashFirstSeen stamps the block entity's earliest hash-first-seen
+// time. The block event itself is written separately via WriteBlockEvents.
 func (d *Datastore) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
-	if d.client == nil || (!d.ShouldWriteBlocks() && !d.shouldWriteFirstBlockEvent) {
+	if d.client == nil || !d.ShouldWriteBlocks() {
 		return
 	}
 
@@ -250,16 +249,6 @@ func (d *Datastore) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Nod
 
 // writeBlockHashFirstSeen performs the actual transaction to write or update the block hash first seen time.
 func (d *Datastore) writeBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
-	// Write block event if flag enabled and block events are disabled (mutually exclusive).
-	// Cache check in protocol.go already verified first-seen.
-	if d.shouldWriteFirstBlockEvent && !d.ShouldWriteBlockEvents() && peer != nil {
-		d.writeEvent(peer, BlockEventsKind, hash, BlocksKind, tfsh)
-	}
-
-	if !d.shouldWriteBlocks {
-		return
-	}
-
 	key := datastore.NameKey(BlocksKind, hash.Hex(), nil)
 
 	_, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
@@ -291,28 +280,28 @@ func (d *Datastore) writeBlockHashFirstSeen(ctx context.Context, peer *enode.Nod
 	}
 }
 
-// WriteTransactions will write the transactions and transaction events to datastore.
+// WriteTransactions writes the transaction bodies to datastore. Transaction
+// events are recorded separately via WriteTransactionEvents.
 func (d *Datastore) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
-	if d.client == nil {
+	if d.client == nil || !d.ShouldWriteTransactions() {
 		return
 	}
 
-	if d.ShouldWriteTransactions() {
-		d.runAsync(func() {
-			d.writeTransactions(ctx, txs, tfs)
-		})
+	d.runAsync(func() {
+		d.writeTransactions(ctx, txs, tfs)
+	})
+}
+
+// WriteTransactionEvents appends an inbound transaction event per hash for the
+// given peer.
+func (d *Datastore) WriteTransactionEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
+	if d.client == nil || peer == nil || len(hashes) == 0 {
+		return
 	}
 
-	if d.ShouldWriteTransactionEvents() {
-		hashes := make([]common.Hash, 0, len(txs))
-		for _, tx := range txs {
-			hashes = append(hashes, tx.Hash())
-		}
-
-		d.runAsync(func() {
-			d.writeEvents(ctx, peer, TransactionEventsKind, hashes, TransactionsKind, tfs)
-		})
-	}
+	d.runAsync(func() {
+		d.writeEvents(ctx, peer, TransactionEventsKind, hashes, TransactionsKind, tfs)
+	})
 }
 
 // WritePeers writes the connected peers to datastore.
@@ -713,4 +702,18 @@ func (d *Datastore) NodeList(ctx context.Context, limit int) ([]string, error) {
 	}
 
 	return nodelist, nil
+}
+
+// Close waits for in-flight async writes to finish, then releases the
+// underlying Datastore client. Acquiring every slot in the jobs semaphore
+// guarantees no write is in progress, since datastore.Client.Close must not be
+// called concurrently with pending operations.
+func (d *Datastore) Close() error {
+	if d.client == nil {
+		return nil
+	}
+	for range cap(d.jobs) {
+		d.jobs <- struct{}{}
+	}
+	return d.client.Close()
 }

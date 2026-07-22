@@ -152,8 +152,10 @@ polycli p2p sensor amoy-nodes.json \
       --broadcast-txs                    broadcast full transactions to peers
       --broadcast-workers int            number of concurrent broadcast workers (default 4)
       --cache-only-validated-blocks      only cache and serve blocks signed by a known validator (unknown-signer blocks are still recorded to the database); has no effect without --validate-block-signer (default true)
+      --clickhouse-dsn string            ClickHouse DSN, e.g. clickhouse://user:pass@host:9000/sensor (used with --database=clickhouse)
       --database string                  which database to persist data to, options are:
                                            - datastore (GCP Datastore)
+                                           - clickhouse (ClickHouse, see --clickhouse-dsn)
                                            - json (output to stdout)
                                            - none (no persistence) (default "none")
   -d, --database-id string               datastore database ID

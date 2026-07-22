@@ -211,7 +211,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				case eth.NewBlockMsg:
 					err = c.handleNewBlock(ctx, msg)
 				case eth.NewPooledTransactionHashesMsg:
-					err = c.handleNewPooledTransactionHashes(version, msg)
+					err = c.handleNewPooledTransactionHashes(ctx, version, msg)
 				case eth.GetPooledTransactionsMsg:
 					err = c.handleGetPooledTransactions(msg)
 				case eth.PooledTransactionsMsg:
@@ -518,6 +518,20 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 	return c.getBlockData(header.ParentHash, cache, true)
 }
 
+// eventHashes selects which announced hashes to record as inbound events: every
+// announcement for the full per-peer stream, only the first-seen hashes for
+// first-seen mode, or none if neither is enabled.
+func eventHashes(all, firstSeen []common.Hash, full, firstOnly bool) []common.Hash {
+	switch {
+	case full:
+		return all
+	case firstOnly:
+		return firstSeen
+	default:
+		return nil
+	}
+}
+
 func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 	var packet NewBlockHashesPacket
 	if err := msg.Decode(&packet); err != nil {
@@ -528,13 +542,15 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.countMsgReceived(packet.Name(), float64(len(packet)))
 
-	// Collect unique hashes (and their numbers) for the database write and,
-	// when signer validation is disabled, for immediate rebroadcast.
+	// allHashes is every announced hash (the full per-peer event stream);
+	// uniqueHashes are the first-seen ones (for first-seen events and rebroadcast).
+	allHashes := make([]common.Hash, 0, len(packet))
 	uniqueHashes := make([]common.Hash, 0, len(packet))
 	uniqueNumbers := make([]uint64, 0, len(packet))
 
 	for _, entry := range packet {
 		hash := entry.Hash
+		allHashes = append(allHashes, hash)
 
 		// Update latest block info atomically if this block is newer
 		c.latestBlock.Update(func(current latestBlock) (latestBlock, bool) {
@@ -577,12 +593,15 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		}
 	}
 
-	// Write only unique hashes to the database.
+	// Record inbound block events: the full per-peer stream (every peer that
+	// announced) or only the first-seen hashes, per the flags.
+	c.db.WriteBlockEvents(ctx, c.node,
+		eventHashes(allHashes, uniqueHashes, c.db.ShouldWriteBlockEvents(), c.db.ShouldWriteFirstBlockEvent()), tfs)
+
+	// Only newly-seen hashes are rebroadcast.
 	if len(uniqueHashes) == 0 {
 		return nil
 	}
-
-	c.db.WriteBlockHashes(ctx, c.node, uniqueHashes, tfs)
 
 	// When signer validation is enabled, defer the hash rebroadcast to
 	// handleBlockHeaders so the fetched header can be validated first. Body
@@ -1338,7 +1357,7 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 	return ethp2p.Send(c.rw, eth.PooledTransactionsMsg, response)
 }
 
-func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) error {
+func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, version uint, msg ethp2p.Msg) error {
 	var hashes []common.Hash
 	var name string
 
@@ -1363,7 +1382,26 @@ func (c *conn) handleNewPooledTransactionHashes(version uint, msg ethp2p.Msg) er
 
 	c.countMsgReceived(name, float64(len(hashes)))
 
-	if !c.db.ShouldWriteTransactions() && !c.db.ShouldWriteTransactionEvents() {
+	if !c.db.ShouldWriteTransactions() && !c.db.ShouldWriteTransactionEvents() && !c.db.ShouldWriteFirstTransactionEvent() {
+		return nil
+	}
+
+	// Record inbound tx events: the full per-peer stream (every announcement)
+	// or only the first-seen hashes, per the flags. Done independently of the
+	// fetch dedup below so re-announcements from other peers are still recorded.
+	if c.db.ShouldWriteTransactionEvents() || c.db.ShouldWriteFirstTransactionEvent() {
+		firstSeen := make([]common.Hash, 0, len(hashes))
+		for _, hash := range hashes {
+			if c.conns.MarkTxSeen(hash) {
+				firstSeen = append(firstSeen, hash)
+			}
+		}
+		c.db.WriteTransactionEvents(ctx, c.node,
+			eventHashes(hashes, firstSeen, c.db.ShouldWriteTransactionEvents(), c.db.ShouldWriteFirstTransactionEvent()), time.Now())
+	}
+
+	// Transaction bodies are only fetched when we're persisting them.
+	if !c.db.ShouldWriteTransactions() {
 		return nil
 	}
 
