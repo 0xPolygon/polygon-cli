@@ -333,8 +333,8 @@ func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, ha
 	c.writeTxs(txs, tfs)
 }
 
-func (c *ClickHouse) WriteBlockHashes(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
-	if c.conn == nil || !c.shouldWriteBlockEvents || peer == nil {
+func (c *ClickHouse) WriteBlockEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
+	if c.conn == nil || peer == nil {
 		return
 	}
 	peerID := peer.URLv4()
@@ -343,32 +343,27 @@ func (c *ClickHouse) WriteBlockHashes(ctx context.Context, peer *enode.Node, has
 	}
 }
 
+// WriteBlockHashFirstSeen is a no-op: ClickHouse derives earliest first-seen at
+// query time from the block_events stream (see the block_first_seen
+// materialized view), so no per-block stamp is needed.
 func (c *ClickHouse) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
-	// Skip when full block events are enabled: WriteBlockHashes already records
-	// every sighting, and first-seen is derived at query time from block_events
-	// (see the block_first_seen materialized view).
-	if c.conn == nil || peer == nil || !c.shouldWriteFirstBlockEvent || c.shouldWriteBlockEvents {
+}
+
+func (c *ClickHouse) WriteTransactionEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
+	if c.conn == nil || peer == nil {
 		return
 	}
-	c.blockEvt.add(chEvent{hash: hash.Hex(), peerID: peer.URLv4(), seenAt: tfsh})
+	peerID := peer.URLv4()
+	for _, hash := range hashes {
+		c.txEvt.add(chEvent{hash: hash.Hex(), peerID: peerID, seenAt: tfs})
+	}
 }
 
 func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
-	if c.conn == nil {
+	if c.conn == nil || !c.shouldWriteTransactions {
 		return
 	}
-	if c.shouldWriteTransactions {
-		c.writeTxs(txs, tfs)
-	}
-	// Record a transaction event when either the full event stream or the
-	// first-seen-only mode is enabled. processTransactions dedups upstream, so
-	// this fires once per first-seen tx in both cases.
-	if peer != nil && (c.shouldWriteTransactionEvents || c.shouldWriteFirstTransactionEvent) {
-		peerID := peer.URLv4()
-		for _, tx := range txs {
-			c.txEvt.add(chEvent{hash: tx.Hash().Hex(), peerID: peerID, seenAt: tfs})
-		}
-	}
+	c.writeTxs(txs, tfs)
 }
 
 func (c *ClickHouse) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time.Time) {

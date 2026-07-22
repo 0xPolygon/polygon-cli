@@ -29,8 +29,8 @@ func (n *nodb) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Bl
 func (n *nodb) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time, isParent bool) {
 }
 
-// WriteBlockHashes does nothing.
-func (n *nodb) WriteBlockHashes(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
+// WriteBlockEvents does nothing.
+func (n *nodb) WriteBlockEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
 }
 
 // WriteBlockHashFirstSeen does nothing.
@@ -43,6 +43,10 @@ func (n *nodb) WriteBlockBody(ctx context.Context, body *eth.BlockBody, hash com
 
 // WriteTransactions does nothing.
 func (n *nodb) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
+}
+
+// WriteTransactionEvents does nothing.
+func (n *nodb) WriteTransactionEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
 }
 
 // WritePeers does nothing.

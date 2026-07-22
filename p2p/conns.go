@@ -66,6 +66,12 @@ type Conns struct {
 	// txs caches transactions for serving to peers and duplicate detection
 	txs *ds.LRU[common.Hash, *types.Transaction]
 
+	// announcedTxs tracks tx hashes seen in any inbound announcement, so the
+	// first-seen transaction event is recorded exactly once (the tx analog of
+	// the blocks cache's first-seen check). Separate from txs so it isn't
+	// affected by the fetch/serve dedup.
+	announcedTxs *ds.LRU[common.Hash, struct{}]
+
 	// knownTxsBloom stores bloom filter options for per-peer known tx tracking
 	knownTxsBloom ds.BloomSetOptions
 	// knownBlocksMax stores the maximum size for per-peer known block caches
@@ -143,6 +149,7 @@ func NewConns(opts ConnsOptions) *Conns {
 		conns:                      make(map[string]*conn),
 		blocks:                     ds.NewLRU[common.Hash, BlockCache](opts.BlocksCache),
 		txs:                        ds.NewLRU[common.Hash, *types.Transaction](opts.TxsCache),
+		announcedTxs:               ds.NewLRU[common.Hash, struct{}](opts.TxsCache),
 		knownTxsBloom:              opts.KnownTxsBloom,
 		knownBlocksMax:             opts.KnownBlocksMax,
 		oldest:                     oldest,
@@ -621,6 +628,14 @@ func (c *Conns) PeekTxsWithHashes(hashes []common.Hash) ([]common.Hash, []*types
 // Uses a single read lock for efficient batch checking.
 func (c *Conns) FilterUnknownTxHashes(hashes []common.Hash) []common.Hash {
 	return c.txs.FilterMissing(hashes)
+}
+
+// MarkTxSeen records that a tx hash was seen in an inbound announcement and
+// reports whether this is the first time (across all peers). Used to write the
+// first-seen transaction event exactly once.
+func (c *Conns) MarkTxSeen(hash common.Hash) (firstSeen bool) {
+	existed := c.announcedTxs.Update(hash, func(v struct{}) struct{} { return v })
+	return !existed
 }
 
 // Blocks returns the global blocks cache.

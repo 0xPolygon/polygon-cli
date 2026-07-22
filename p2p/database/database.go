@@ -24,12 +24,16 @@ type Database interface {
 	// returns true.
 	WriteBlockHeaders(context.Context, []*types.Header, time.Time, bool)
 
-	// WriteBlockHashes will write the block hashes if ShouldWriteBlockEvents
-	// returns true.
-	WriteBlockHashes(context.Context, *enode.Node, []common.Hash, time.Time)
+	// WriteBlockEvents appends an inbound block event (peer, hash, time) for
+	// each hash — one per peer we received the announcement from. The caller
+	// decides which hashes to pass (every announcement for the full per-peer
+	// stream, or just the first-seen ones); the backend only appends.
+	WriteBlockEvents(context.Context, *enode.Node, []common.Hash, time.Time)
 
-	// WriteBlockHashFirstSeen writes a partial block entry with just the hash
-	// first seen time if the block doesn't exist yet.
+	// WriteBlockHashFirstSeen records the earliest sighting of a block hash on
+	// the block entity itself (Datastore's TimeFirstSeenHash). Backends that
+	// derive first-seen from the event stream (e.g. ClickHouse) treat it as a
+	// no-op.
 	WriteBlockHashFirstSeen(context.Context, *enode.Node, common.Hash, time.Time)
 
 	// WriteBlockBody writes the transactions carried in the block body (the block
@@ -39,10 +43,16 @@ type Database interface {
 	// because it links the transactions and uncles onto the block entity.
 	WriteBlockBody(context.Context, *eth.BlockBody, common.Hash, time.Time)
 
-	// WriteTransactions will write the both the transaction and transaction
-	// event to the database if ShouldWriteTransactions and
-	// ShouldWriteTransactionEvents return true, respectively.
+	// WriteTransactions writes the transaction bodies if ShouldWriteTransactions
+	// returns true. Transaction events are recorded separately via
+	// WriteTransactionEvents at announcement time.
 	WriteTransactions(context.Context, *enode.Node, []*types.Transaction, time.Time)
+
+	// WriteTransactionEvents appends an inbound transaction event (peer, hash,
+	// time) for each hash — the tx mirror of WriteBlockEvents. The caller
+	// decides which hashes to pass (every announcement for the full per-peer
+	// stream, or just the first-seen ones); the backend only appends.
+	WriteTransactionEvents(context.Context, *enode.Node, []common.Hash, time.Time)
 
 	// WritePeers will write the connected peers to the database.
 	WritePeers(context.Context, []*p2p.Peer, time.Time)

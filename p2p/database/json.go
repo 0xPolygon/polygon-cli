@@ -217,9 +217,9 @@ func (j *JSONDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.H
 	}
 }
 
-// WriteBlockHashes writes the block events as JSON.
-func (j *JSONDatabase) WriteBlockHashes(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
-	if !j.ShouldWriteBlockEvents() || len(hashes) == 0 || peer == nil {
+// WriteBlockEvents writes the block events as JSON.
+func (j *JSONDatabase) WriteBlockEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
+	if peer == nil || len(hashes) == 0 {
 		return
 	}
 
@@ -272,7 +272,6 @@ func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, 
 // WriteTransactions writes the transactions and transaction events as JSON.
 func (j *JSONDatabase) WriteTransactions(_ context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
 	j.writeTxs(txs, tfs)
-	j.writeTxEvents(peer, txs, tfs)
 }
 
 func (j *JSONDatabase) writeTxs(txs []*types.Transaction, tfs time.Time) {
@@ -315,17 +314,17 @@ func (j *JSONDatabase) writeTxs(txs []*types.Transaction, tfs time.Time) {
 	}
 }
 
-func (j *JSONDatabase) writeTxEvents(peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
-	if !j.ShouldWriteTransactionEvents() || peer == nil {
+func (j *JSONDatabase) WriteTransactionEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
+	if peer == nil || len(hashes) == 0 {
 		return
 	}
 
-	for _, tx := range txs {
+	for _, hash := range hashes {
 		event := JSONTransactionEvent{
 			Type:      "transaction_event",
 			SensorID:  j.sensorID,
 			PeerID:    peer.URLv4(),
-			Hash:      tx.Hash().Hex(),
+			Hash:      hash.Hex(),
 			Timestamp: tfs,
 		}
 
