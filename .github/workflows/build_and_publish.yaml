@@ -24,7 +24,7 @@ jobs:
       # No QEMU needed: the Dockerfile cross-compiles on the native build
       # platform and the final stage only COPYs the static binary.
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Checkout repository
         uses: actions/checkout@v4
