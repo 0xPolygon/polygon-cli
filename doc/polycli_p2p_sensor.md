@@ -34,15 +34,13 @@ if the sensor is not discovering peers.
 
 The two persistent backends store different shapes, and are documented separately:
 
-- ClickHouse — [schema](/cmd/p2p/sensor/schema-clickhouse.md),
-  [write paths](/cmd/p2p/sensor/write-paths-clickhouse.md)
-- Datastore — [schema](/cmd/p2p/sensor/schema-datastore.md),
-  [write paths](/cmd/p2p/sensor/write-paths-datastore.md)
+- [ClickHouse data model](/cmd/p2p/sensor/clickhouse.md) — tables and write paths
+- [Datastore data model](/cmd/p2p/sensor/datastore.md) — kinds and write paths
 
 The ClickHouse backend is append-only and batched; the Datastore backend does a
 read-modify-write per entity. Select one with `--database`, and for ClickHouse pass
-`--clickhouse-dsn`. The ClickHouse DDL lives in `clickhouse_schema.sql` in the
-sensor-network-tools and polygon-infrastructure repos, not here.
+`--clickhouse-dsn`. The ClickHouse DDL lives in `clickhouse/schema.sql` in the
+sensor-network-tools repo, not here.
 
 ## JSON-RPC Server
 
@@ -51,22 +49,23 @@ that supports a subset of Ethereum JSON-RPC methods using cached data.
 
 ### Supported Methods
 
-| Method | Description |
-|--------|-------------|
-| `eth_chainId` | Returns the chain ID |
-| `eth_blockNumber` | Returns the current head block number |
-| `eth_gasPrice` | Returns suggested gas price based on recent blocks |
-| `eth_getBlockByHash` | Returns block by hash |
-| `eth_getBlockByNumber` | Returns block by number (if cached) |
-| `eth_getTransactionByHash` | Returns transaction by hash |
-| `eth_getTransactionByBlockHashAndIndex` | Returns transaction at index in block |
-| `eth_getBlockTransactionCountByHash` | Returns transaction count in block |
-| `eth_getUncleCountByBlockHash` | Returns uncle count in block |
-| `eth_sendRawTransaction` | Broadcasts signed transaction to peers |
+| Method                                  | Description                                        |
+| --------------------------------------- | -------------------------------------------------- |
+| `eth_chainId`                           | Returns the chain ID                               |
+| `eth_blockNumber`                       | Returns the current head block number              |
+| `eth_gasPrice`                          | Returns suggested gas price based on recent blocks |
+| `eth_getBlockByHash`                    | Returns block by hash                              |
+| `eth_getBlockByNumber`                  | Returns block by number (if cached)                |
+| `eth_getTransactionByHash`              | Returns transaction by hash                        |
+| `eth_getTransactionByBlockHashAndIndex` | Returns transaction at index in block              |
+| `eth_getBlockTransactionCountByHash`    | Returns transaction count in block                 |
+| `eth_getUncleCountByBlockHash`          | Returns uncle count in block                       |
+| `eth_sendRawTransaction`                | Broadcasts signed transaction to peers             |
 
 ### Limitations
 
 Methods requiring state or receipts are not supported:
+
 - `eth_getBalance`, `eth_getCode`, `eth_call`, `eth_estimateGas`
 - `eth_getTransactionReceipt`, `eth_getLogs`
 
