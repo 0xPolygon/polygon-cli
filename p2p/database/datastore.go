@@ -224,12 +224,14 @@ func (d *Datastore) WriteBlockBody(ctx context.Context, body *eth.BlockBody, has
 	})
 }
 
-// WriteBlockEvents appends an inbound block event per hash for the given peer.
-func (d *Datastore) WriteBlockEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
-	if d.client == nil || peer == nil || len(hashes) == 0 {
+// WriteBlockEvents appends an inbound block event per announcement for the given
+// peer. Announced heights are unused here: Datastore keys events by block key.
+func (d *Datastore) WriteBlockEvents(ctx context.Context, peer *enode.Node, anns []BlockAnnouncement, tfs time.Time) {
+	if d.client == nil || peer == nil || len(anns) == 0 {
 		return
 	}
 
+	hashes := Hashes(anns)
 	d.runAsync(func() {
 		d.writeEvents(ctx, peer, BlockEventsKind, hashes, BlocksKind, tfs)
 	})

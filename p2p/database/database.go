@@ -12,6 +12,27 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
+// BlockAnnouncement is an announced block hash together with its height, as
+// carried by eth NewBlockHashes. Backends that key observations by block number
+// (ClickHouse) need the height at announcement time; backends that key by hash
+// (Datastore, JSON) ignore it.
+//
+// p2p.NewBlockHashesPacket is a slice of this type, so a decoded packet can be
+// passed straight to WriteBlockEvents with no copy or conversion.
+type BlockAnnouncement struct {
+	Hash   common.Hash
+	Number uint64
+}
+
+// Hashes drops the heights, for backends that only store hashes.
+func Hashes(anns []BlockAnnouncement) []common.Hash {
+	hashes := make([]common.Hash, 0, len(anns))
+	for _, ann := range anns {
+		hashes = append(hashes, ann.Hash)
+	}
+	return hashes
+}
+
 // Database represents a database solution to write block and transaction data
 // to. To use another database solution, just implement these methods and
 // update the sensor to use the new connection.
@@ -24,11 +45,11 @@ type Database interface {
 	// returns true.
 	WriteBlockHeaders(context.Context, []*types.Header, time.Time, bool)
 
-	// WriteBlockEvents appends an inbound block event (peer, hash, time) for
-	// each hash — one per peer we received the announcement from. The caller
-	// decides which hashes to pass (every announcement for the full per-peer
+	// WriteBlockEvents appends an inbound block event (peer, hash, height, time)
+	// for each announcement — one per peer we received the announcement from. The
+	// caller decides which announcements to pass (every one for the full per-peer
 	// stream, or just the first-seen ones); the backend only appends.
-	WriteBlockEvents(context.Context, *enode.Node, []common.Hash, time.Time)
+	WriteBlockEvents(context.Context, *enode.Node, []BlockAnnouncement, time.Time)
 
 	// WriteBlockHashFirstSeen records the earliest sighting of a block hash on
 	// the block entity itself (Datastore's TimeFirstSeenHash). Backends that

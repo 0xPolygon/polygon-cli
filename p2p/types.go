@@ -18,6 +18,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/rs/zerolog"
+
+	"github.com/0xPolygon/polygon-cli/p2p/database"
 )
 
 type Message interface {
@@ -115,10 +117,12 @@ func (*StatusPacket68) Name() string { return "Status" }
 
 // NewBlockHashesPacket is the network packet for block hash announcements.
 // Removed in go-ethereum v1.17.2 but still used by Bor/Polygon nodes.
-type NewBlockHashesPacket []struct {
-	Hash   common.Hash
-	Number uint64
-}
+//
+// The element type is database.BlockAnnouncement rather than an anonymous struct
+// so a decoded packet can be handed straight to Database.WriteBlockEvents with no
+// copy or conversion. RLP is unaffected: the wire format follows the field order,
+// not whether the element struct is named.
+type NewBlockHashesPacket []database.BlockAnnouncement
 
 func (NewBlockHashesPacket) Name() string { return "NewBlockHashes" }
 

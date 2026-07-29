@@ -532,6 +532,18 @@ func eventHashes(all, firstSeen []common.Hash, full, firstOnly bool) []common.Ha
 	}
 }
 
+// eventAnnouncements is eventHashes for announcements that carry their height.
+func eventAnnouncements(all, firstSeen []database.BlockAnnouncement, full, firstOnly bool) []database.BlockAnnouncement {
+	switch {
+	case full:
+		return all
+	case firstOnly:
+		return firstSeen
+	default:
+		return nil
+	}
+}
+
 func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 	var packet NewBlockHashesPacket
 	if err := msg.Decode(&packet); err != nil {
@@ -542,15 +554,13 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.countMsgReceived(packet.Name(), float64(len(packet)))
 
-	// allHashes is every announced hash (the full per-peer event stream);
-	// uniqueHashes are the first-seen ones (for first-seen events and rebroadcast).
-	allHashes := make([]common.Hash, 0, len(packet))
-	uniqueHashes := make([]common.Hash, 0, len(packet))
-	uniqueNumbers := make([]uint64, 0, len(packet))
+	// The decoded packet is itself the full per-peer event stream, and is passed
+	// to the database as-is. uniqueAnns collects the first-seen subset, for
+	// first-seen events and rebroadcast.
+	uniqueAnns := make([]database.BlockAnnouncement, 0, len(packet))
 
 	for _, entry := range packet {
 		hash := entry.Hash
-		allHashes = append(allHashes, hash)
 
 		// Update latest block info atomically if this block is newer
 		c.latestBlock.Update(func(current latestBlock) (latestBlock, bool) {
@@ -582,8 +592,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 		if !existed {
 			// Write hash first seen time immediately for new blocks.
 			c.db.WriteBlockHashFirstSeen(ctx, c.node, hash, tfs)
-			uniqueHashes = append(uniqueHashes, hash)
-			uniqueNumbers = append(uniqueNumbers, entry.Number)
+			uniqueAnns = append(uniqueAnns, entry)
 		}
 
 		// Request only the parts we don't have yet (getBlockData inspects the
@@ -596,10 +605,10 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 	// Record inbound block events: the full per-peer stream (every peer that
 	// announced) or only the first-seen hashes, per the flags.
 	c.db.WriteBlockEvents(ctx, c.node,
-		eventHashes(allHashes, uniqueHashes, c.db.ShouldWriteBlockEvents(), c.db.ShouldWriteFirstBlockEvent()), tfs)
+		eventAnnouncements(packet, uniqueAnns, c.db.ShouldWriteBlockEvents(), c.db.ShouldWriteFirstBlockEvent()), tfs)
 
 	// Only newly-seen hashes are rebroadcast.
-	if len(uniqueHashes) == 0 {
+	if len(uniqueAnns) == 0 {
 		return nil
 	}
 
@@ -608,6 +617,12 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 	// requests (getBlockData above) are intentionally not gated. When
 	// validation is disabled, rebroadcast the announced hashes immediately.
 	if !c.conns.ValidatesSigners() {
+		uniqueHashes := make([]common.Hash, 0, len(uniqueAnns))
+		uniqueNumbers := make([]uint64, 0, len(uniqueAnns))
+		for _, ann := range uniqueAnns {
+			uniqueHashes = append(uniqueHashes, ann.Hash)
+			uniqueNumbers = append(uniqueNumbers, ann.Number)
+		}
 		go c.conns.BroadcastBlockHashes(uniqueHashes, uniqueNumbers)
 	}
 

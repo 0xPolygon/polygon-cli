@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"sync"
@@ -31,16 +32,36 @@ const (
 	// transient errors without delaying shutdown.
 	chMaxFlushAttempts = 3
 	chBlockBatch       = 5000
+	chBlockBodyBatch   = 5000
+	chBlockTxBatch     = 20000
 	chBlockEventBatch  = 50000
 	chTxBatch          = 20000
 	chTxEventBatch     = 50000
 	chPeerBatch        = 2000
 )
 
+// Sighting sources, recorded on block_sightings.source / tx_sightings.source so
+// consumers can distinguish a hash announcement from a delivered header or body.
+const (
+	srcHashAnnounce  = "hash_announce"
+	srcNewBlock      = "new_block"
+	srcHeader        = "header"
+	srcHeaderBackfil = "header_backfill"
+	srcFullTx        = "full_tx"
+)
+
 // ClickHouse implements the Database interface backed by a ClickHouse cluster.
-// The table definitions this writer targets (and the block_first_seen
-// materialized view) live in the sensor-network-tools repo
-// (clickhouse_schema.sql), not this repo.
+// The table definitions this writer targets (and the rollup materialized views)
+// live in clickhouse_schema.sql, in the sensor-network-tools and
+// polygon-infrastructure repos rather than this one.
+//
+// The schema separates content-addressed facts from observations, and this writer
+// is structured to match. Every row it writes into a fact table (blocks,
+// block_bodies, block_txs, transactions) is complete and a pure function of the
+// hash it is keyed by, so two sensors seeing the same block emit byte-identical
+// rows and no write can ever partially overwrite another. Everything
+// observational -- which sensor, which peer, when, and how the block was learned
+// -- goes into the sighting streams instead.
 type ClickHouse struct {
 	conn                             driver.Conn
 	sensorID                         string
@@ -54,11 +75,13 @@ type ClickHouse struct {
 	shouldWriteFirstTransactionEvent bool
 	shouldWritePeers                 bool
 
-	blocks   *rowBatcher[chBlock]
-	blockEvt *rowBatcher[chEvent]
-	txs      *rowBatcher[chTx]
-	txEvt    *rowBatcher[chEvent]
-	peers    *rowBatcher[chPeer]
+	blocks      *rowBatcher[chBlock]
+	blockBodies *rowBatcher[chBlockBody]
+	blockTxs    *rowBatcher[chBlockTx]
+	blockEvt    *rowBatcher[chBlockSighting]
+	txs         *rowBatcher[chTx]
+	txEvt       *rowBatcher[chTxSighting]
+	peers       *rowBatcher[chPeerSnapshot]
 
 	// cancel stops the batcher goroutines; wg tracks them so Close can wait for
 	// their final drain flush before the connection is closed.
@@ -166,30 +189,39 @@ func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
 // handling lives in newInsertBatcher.
 func (c *ClickHouse) startBatchers(ctx context.Context) {
 	c.blocks = newInsertBatcher(ctx, c, "blocks", chBlockBatch,
-		"INSERT INTO blocks (hash, number, parent_hash, block_time, coinbase, signer, difficulty, total_difficulty, gas_used, gas_limit, base_fee, tx_count, uncle_count, uncle_hash, state_root, tx_root, receipt_root, logs_bloom, extra_data, mix_digest, nonce, sensor_id, ingested_at, is_parent)",
+		"INSERT INTO blocks (number, hash, parent_hash, block_time, signer, coinbase, difficulty, gas_used, gas_limit, base_fee, uncle_hash, state_root, tx_root, receipt_root, logs_bloom, extra_data, mix_digest, nonce, withdrawals_root, blob_gas_used, excess_blob_gas, parent_beacon_root)",
 		func(b driver.Batch, r chBlock) error {
-			return b.Append(r.hash, r.number, r.parentHash, r.blockTime, r.coinbase, r.signer, r.difficulty, r.totalDifficulty, r.gasUsed, r.gasLimit, r.baseFee, r.txCount, r.uncleCount, r.uncleHash, r.stateRoot, r.txRoot, r.receiptRoot, r.logsBloom, r.extraData, r.mixDigest, r.nonce, c.sensorID, r.ingestedAt, r.isParent)
+			return b.Append(r.number, r.hash, r.parentHash, r.blockTime, r.signer, r.coinbase, r.difficulty, r.gasUsed, r.gasLimit, r.baseFee, r.uncleHash, r.stateRoot, r.txRoot, r.receiptRoot, r.logsBloom, r.extraData, r.mixDigest, r.nonce, r.withdrawalsRoot, r.blobGasUsed, r.excessBlobGas, r.parentBeaconRoot)
 		})
-	// block_events and transaction_events share the same row shape and column
-	// order, so both batchers use the same append function.
-	appendEvent := func(b driver.Batch, r chEvent) error {
-		return b.Append(r.hash, c.sensorID, r.peerID, r.seenAt)
-	}
-	c.blockEvt = newInsertBatcher(ctx, c, "block_events", chBlockEventBatch,
-		"INSERT INTO block_events (block_hash, sensor_id, peer_id, seen_at)",
-		appendEvent)
+	c.blockBodies = newInsertBatcher(ctx, c, "block_bodies", chBlockBodyBatch,
+		"INSERT INTO block_bodies (hash, tx_count, uncle_count, uncles, size_bytes)",
+		func(b driver.Batch, r chBlockBody) error {
+			return b.Append(r.hash, r.txCount, r.uncleCount, r.uncles, r.sizeBytes)
+		})
+	c.blockTxs = newInsertBatcher(ctx, c, "block_txs", chBlockTxBatch,
+		"INSERT INTO block_txs (block_hash, tx_index, tx_hash, seen_date)",
+		func(b driver.Batch, r chBlockTx) error {
+			return b.Append(r.blockHash, r.txIndex, r.txHash, r.seenDate)
+		})
+	c.blockEvt = newInsertBatcher(ctx, c, "block_sightings", chBlockEventBatch,
+		"INSERT INTO block_sightings (block_number, block_hash, sensor_id, node_id, source, seen_at, total_difficulty)",
+		func(b driver.Batch, r chBlockSighting) error {
+			return b.Append(r.blockNumber, r.blockHash, c.sensorID, r.nodeID, r.source, r.seenAt, r.totalDifficulty)
+		})
 	c.txs = newInsertBatcher(ctx, c, "transactions", chTxBatch,
-		"INSERT INTO transactions (hash, from_address, to_address, value, gas, gas_price, gas_fee_cap, gas_tip_cap, nonce, tx_type, sensor_id, ingested_at)",
+		"INSERT INTO transactions (hash, from_address, to_address, value, gas, gas_price, gas_fee_cap, gas_tip_cap, nonce, tx_type, chain_id, input_selector, input_size, access_list_size, blob_count, auth_list_size, seen_date)",
 		func(b driver.Batch, r chTx) error {
-			return b.Append(r.hash, r.from, r.to, r.value, r.gas, r.gasPrice, r.gasFeeCap, r.gasTipCap, r.nonce, r.txType, c.sensorID, r.ingestedAt)
+			return b.Append(r.hash, r.from, r.to, r.value, r.gas, r.gasPrice, r.gasFeeCap, r.gasTipCap, r.nonce, r.txType, r.chainID, r.inputSelector, r.inputSize, r.accessListSize, r.blobCount, r.authListSize, r.seenDate)
 		})
-	c.txEvt = newInsertBatcher(ctx, c, "transaction_events", chTxEventBatch,
-		"INSERT INTO transaction_events (tx_hash, sensor_id, peer_id, seen_at)",
-		appendEvent)
-	c.peers = newInsertBatcher(ctx, c, "peers", chPeerBatch,
-		"INSERT INTO peers (peer_id, name, url, caps, last_seen_by, time_last_seen)",
-		func(b driver.Batch, r chPeer) error {
-			return b.Append(r.peerID, r.name, r.url, r.caps, c.sensorID, r.timeLastSeen)
+	c.txEvt = newInsertBatcher(ctx, c, "tx_sightings", chTxEventBatch,
+		"INSERT INTO tx_sightings (tx_hash, sensor_id, node_id, source, seen_at)",
+		func(b driver.Batch, r chTxSighting) error {
+			return b.Append(r.txHash, c.sensorID, r.nodeID, r.source, r.seenAt)
+		})
+	c.peers = newInsertBatcher(ctx, c, "peer_snapshots", chPeerBatch,
+		"INSERT INTO peer_snapshots (sensor_id, node_id, name, url, caps, seen_at)",
+		func(b driver.Batch, r chPeerSnapshot) error {
+			return b.Append(c.sensorID, r.nodeID, r.name, r.url, r.caps, r.seenAt)
 		})
 }
 
@@ -236,58 +268,94 @@ func flushBatch[T any](conn driver.Conn, query string, rows []T, appendRow func(
 
 // --- row types -------------------------------------------------------------
 
+// chBlock is a header row. Every field is derived from the header itself, so any
+// two sensors that see this hash produce an identical row. Nothing observational
+// (which sensor, when, how it was learned) belongs here -- see chBlockSighting.
 type chBlock struct {
-	hash            string
-	number          uint64
-	parentHash      string
-	blockTime       time.Time
-	coinbase        string
-	signer          string
-	difficulty      uint64
-	totalDifficulty *big.Int
-	gasUsed         uint64
-	gasLimit        uint64
-	baseFee         uint64
-	txCount         uint32
-	uncleCount      uint16
-	uncleHash       string
-	stateRoot       string
-	txRoot          string
-	receiptRoot     string
-	logsBloom       []byte
-	extraData       []byte
-	mixDigest       string
-	nonce           uint64
-	ingestedAt      time.Time
-	isParent        bool
+	number           uint64
+	hash             string
+	parentHash       string
+	blockTime        time.Time
+	signer           string
+	coinbase         string
+	difficulty       uint64
+	gasUsed          uint64
+	gasLimit         uint64
+	baseFee          *big.Int
+	uncleHash        string
+	stateRoot        string
+	txRoot           string
+	receiptRoot      string
+	logsBloom        []byte
+	extraData        []byte
+	mixDigest        string
+	nonce            uint64
+	withdrawalsRoot  string
+	blobGasUsed      uint64
+	excessBlobGas    uint64
+	parentBeaconRoot string
 }
 
-type chEvent struct {
-	hash   string
-	peerID string
-	seenAt time.Time
+// chBlockBody holds the facts a header cannot carry. Written only when a body or
+// a full block is actually delivered, which is what keeps the header path from
+// having to invent a tx_count.
+type chBlockBody struct {
+	hash       string
+	txCount    uint32
+	uncleCount uint16
+	uncles     []string
+	sizeBytes  uint32
+}
+
+type chBlockTx struct {
+	blockHash string
+	txIndex   uint32
+	txHash    string
+	seenDate  time.Time
+}
+
+type chBlockSighting struct {
+	blockNumber     uint64
+	blockHash       string
+	nodeID          string
+	source          string
+	seenAt          time.Time
+	totalDifficulty *big.Int
 }
 
 type chTx struct {
-	hash       string
-	from       string
-	to         string
-	value      *big.Int
-	gas        uint64
-	gasPrice   *big.Int
-	gasFeeCap  *big.Int
-	gasTipCap  *big.Int
-	nonce      uint64
-	txType     uint8
-	ingestedAt time.Time
+	hash           string
+	from           string
+	to             string
+	value          *big.Int
+	gas            uint64
+	gasPrice       *big.Int
+	gasFeeCap      *big.Int
+	gasTipCap      *big.Int
+	nonce          uint64
+	txType         uint8
+	chainID        uint64
+	inputSelector  string
+	inputSize      uint32
+	accessListSize uint16
+	blobCount      uint8
+	authListSize   uint8
+	seenDate       time.Time
 }
 
-type chPeer struct {
-	peerID       string
-	name         string
-	url          string
-	caps         []string
-	timeLastSeen time.Time
+type chTxSighting struct {
+	txHash string
+	nodeID string
+	source string
+	seenAt time.Time
+}
+
+type chPeerSnapshot struct {
+	nodeID string
+	name   string
+	url    string
+	caps   []string
+	seenAt time.Time
 }
 
 // --- Database interface ----------------------------------------------------
@@ -296,11 +364,21 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 	if c.conn == nil {
 		return
 	}
+	// The announced total difficulty is an attribute of this announcement, not of
+	// the block, so it rides on the sighting rather than the block row.
 	if c.shouldWriteBlockEvents && peer != nil {
-		c.blockEvt.add(chEvent{hash: block.Hash().Hex(), peerID: peer.URLv4(), seenAt: tfs})
+		c.blockEvt.add(chBlockSighting{
+			blockNumber:     block.NumberU64(),
+			blockHash:       block.Hash().Hex(),
+			nodeID:          peer.ID().String(),
+			source:          srcNewBlock,
+			seenAt:          tfs,
+			totalDifficulty: td,
+		})
 	}
 	if c.shouldWriteBlocks {
-		c.blocks.add(newChBlock(block.Header(), td, tfs, len(block.Transactions()), len(block.Uncles()), false))
+		c.blocks.add(newChBlock(block.Header()))
+		c.writeBlockBody(block.Hash(), block.Transactions(), block.Uncles(), block.Size(), tfs)
 	}
 	if c.shouldWriteTransactions {
 		c.writeTxs(block.Transactions(), tfs)
@@ -311,41 +389,72 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	if c.conn == nil || !c.shouldWriteBlocks {
 		return
 	}
-	// A header carries no tx/uncle counts, so they are written as 0; the
-	// full-block (NewBlock) path writes a separate row with the real counts.
-	// isParent marks headers fetched as ancestors during backfill.
+	// A header row is complete on its own: the fields a header cannot carry
+	// (tx/uncle counts, size) live in block_bodies and are written only when a
+	// body actually arrives, so this path can never overwrite them.
+	source := srcHeader
+	if isParent {
+		source = srcHeaderBackfil
+	}
 	for _, h := range headers {
-		c.blocks.add(newChBlock(h, big.NewInt(0), tfs, 0, 0, isParent))
+		c.blocks.add(newChBlock(h))
+		if c.shouldWriteBlockEvents {
+			c.blockEvt.add(chBlockSighting{
+				blockNumber:     h.Number.Uint64(),
+				blockHash:       h.Hash().Hex(),
+				source:          source,
+				seenAt:          tfs,
+				totalDifficulty: big.NewInt(0),
+			})
+		}
 	}
 }
 
 func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, hash common.Hash, tfs time.Time) {
-	if c.conn == nil || !c.shouldWriteTransactions {
+	if c.conn == nil {
 		return
 	}
-	// The block row is written from the header path; here we only persist the
-	// transactions carried in the body (no read-modify-write on blocks).
 	txs, err := body.Transactions.Items()
 	if err != nil {
 		log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode transactions from block body")
 		return
 	}
-	c.writeTxs(txs, tfs)
+	// The header row comes from the header path; here we record the body facts
+	// (keyed by hash, since the height is not known on this path) and the
+	// transactions themselves. No read-modify-write on blocks.
+	if c.shouldWriteBlocks {
+		uncles, err := body.Uncles.Items()
+		if err != nil {
+			log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode uncles from block body")
+			uncles = nil
+		}
+		c.writeBlockBody(hash, txs, uncles, 0, tfs)
+	}
+	if c.shouldWriteTransactions {
+		c.writeTxs(txs, tfs)
+	}
 }
 
-func (c *ClickHouse) WriteBlockEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
+func (c *ClickHouse) WriteBlockEvents(ctx context.Context, peer *enode.Node, anns []BlockAnnouncement, tfs time.Time) {
 	if c.conn == nil || peer == nil {
 		return
 	}
-	peerID := peer.URLv4()
-	for _, hash := range hashes {
-		c.blockEvt.add(chEvent{hash: hash.Hex(), peerID: peerID, seenAt: tfs})
+	nodeID := peer.ID().String()
+	for _, ann := range anns {
+		c.blockEvt.add(chBlockSighting{
+			blockNumber:     ann.Number,
+			blockHash:       ann.Hash.Hex(),
+			nodeID:          nodeID,
+			source:          srcHashAnnounce,
+			seenAt:          tfs,
+			totalDifficulty: big.NewInt(0),
+		})
 	}
 }
 
-// WriteBlockHashFirstSeen is a no-op: ClickHouse derives earliest first-seen at
-// query time from the block_events stream (see the block_first_seen
-// materialized view), so no per-block stamp is needed.
+// WriteBlockHashFirstSeen is a no-op: ClickHouse derives earliest first-seen from
+// the block_sightings stream (see the block_sighting_first materialized view and
+// the v_block_latency view), so no per-block stamp is needed.
 func (c *ClickHouse) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
 }
 
@@ -353,14 +462,37 @@ func (c *ClickHouse) WriteTransactionEvents(ctx context.Context, peer *enode.Nod
 	if c.conn == nil || peer == nil {
 		return
 	}
-	peerID := peer.URLv4()
+	nodeID := peer.ID().String()
 	for _, hash := range hashes {
-		c.txEvt.add(chEvent{hash: hash.Hex(), peerID: peerID, seenAt: tfs})
+		c.txEvt.add(chTxSighting{
+			txHash: hash.Hex(),
+			nodeID: nodeID,
+			source: srcHashAnnounce,
+			seenAt: tfs,
+		})
 	}
 }
 
 func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
-	if c.conn == nil || !c.shouldWriteTransactions {
+	if c.conn == nil {
+		return
+	}
+	// A delivered transaction body is also a sighting, and a distinct one from a
+	// hash announcement. It is recorded only under the full per-peer stream flag:
+	// in first-sighting-only mode this would multiply rows on the largest table
+	// without adding a first-sighting the announcement stream did not already have.
+	if c.shouldWriteTransactionEvents && peer != nil {
+		nodeID := peer.ID().String()
+		for _, tx := range txs {
+			c.txEvt.add(chTxSighting{
+				txHash: tx.Hash().Hex(),
+				nodeID: nodeID,
+				source: srcFullTx,
+				seenAt: tfs,
+			})
+		}
+	}
+	if !c.shouldWriteTransactions {
 		return
 	}
 	c.writeTxs(txs, tfs)
@@ -370,13 +502,15 @@ func (c *ClickHouse) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time
 	if c.conn == nil || !c.shouldWritePeers {
 		return
 	}
+	// node_id is the devp2p node id, matching what the sighting streams record, so
+	// peers and sightings are joinable. The enode URL is a column here, not the key.
 	for _, peer := range peers {
-		c.peers.add(chPeer{
-			peerID:       peer.ID().String(),
-			name:         peer.Fullname(),
-			url:          peer.Node().URLv4(),
-			caps:         peer.Info().Caps,
-			timeLastSeen: tls,
+		c.peers.add(chPeerSnapshot{
+			nodeID: peer.ID().String(),
+			name:   peer.Fullname(),
+			url:    peer.Node().URLv4(),
+			caps:   peer.Info().Caps,
+			seenAt: tls,
 		})
 	}
 }
@@ -393,12 +527,15 @@ func (c *ClickHouse) HasBlock(ctx context.Context, hash common.Hash) bool {
 	return err == nil && exists == 1
 }
 
+// NodeList returns the most recently seen peers' enode URLs. It reads the narrow
+// peers_current rollup rather than grouping over the sighting firehose, which is
+// what the previous implementation did.
 func (c *ClickHouse) NodeList(ctx context.Context, limit int) ([]string, error) {
 	if c.conn == nil {
 		return []string{}, nil
 	}
 	rows, err := c.conn.Query(ctx,
-		"SELECT peer_id FROM block_events GROUP BY peer_id ORDER BY max(seen_at) DESC LIMIT ?", limit)
+		"SELECT url FROM peers_current FINAL WHERE url != '' ORDER BY last_seen DESC LIMIT ?", limit)
 	if err != nil {
 		return nil, fmt.Errorf("query node list: %w", err)
 	}
@@ -436,15 +573,13 @@ func (c *ClickHouse) ShouldWritePeers() bool { return c.shouldWritePeers }
 
 // --- helpers ---------------------------------------------------------------
 
-// newChBlock maps a header (plus data not carried on the header itself) to a
-// blocks-table row.
-func newChBlock(h *types.Header, td *big.Int, tfs time.Time, txCount, uncleCount int, isParent bool) chBlock {
-	baseFee := uint64(0)
+// newChBlock maps a header to a blocks-table row. Deliberately takes nothing but
+// the header: everything it writes is a pure function of the header, which is what
+// makes duplicate rows for a hash byte-identical and dedup safe.
+func newChBlock(h *types.Header) chBlock {
+	baseFee := new(big.Int)
 	if h.BaseFee != nil {
-		baseFee = h.BaseFee.Uint64()
-	}
-	if td == nil {
-		td = big.NewInt(0)
+		baseFee.Set(h.BaseFee)
 	}
 	// Recover the block signer from the header seal so signer-based analytics
 	// don't have to ecrecover on every query. Left empty when it can't be recovered.
@@ -452,34 +587,73 @@ func newChBlock(h *types.Header, td *big.Int, tfs time.Time, txCount, uncleCount
 	if sig, err := util.Ecrecover(h); err == nil {
 		signer = common.BytesToAddress(sig).Hex()
 	}
-	return chBlock{
-		hash:            h.Hash().Hex(),
-		number:          h.Number.Uint64(),
-		parentHash:      h.ParentHash.Hex(),
-		blockTime:       time.Unix(int64(h.Time), 0).UTC(),
-		coinbase:        h.Coinbase.Hex(),
-		signer:          signer,
-		difficulty:      h.Difficulty.Uint64(),
-		totalDifficulty: new(big.Int).Set(td),
-		gasUsed:         h.GasUsed,
-		gasLimit:        h.GasLimit,
-		baseFee:         baseFee,
-		txCount:         uint32(txCount),
-		uncleCount:      uint16(uncleCount),
-		uncleHash:       h.UncleHash.Hex(),
-		stateRoot:       h.Root.Hex(),
-		txRoot:          h.TxHash.Hex(),
-		receiptRoot:     h.ReceiptHash.Hex(),
-		logsBloom:       h.Bloom.Bytes(),
-		extraData:       h.Extra,
-		mixDigest:       h.MixDigest.Hex(),
-		nonce:           h.Nonce.Uint64(),
-		ingestedAt:      tfs,
-		isParent:        isParent,
+	b := chBlock{
+		number:      h.Number.Uint64(),
+		hash:        h.Hash().Hex(),
+		parentHash:  h.ParentHash.Hex(),
+		blockTime:   time.Unix(int64(h.Time), 0).UTC(),
+		signer:      signer,
+		coinbase:    h.Coinbase.Hex(),
+		difficulty:  h.Difficulty.Uint64(),
+		gasUsed:     h.GasUsed,
+		gasLimit:    h.GasLimit,
+		baseFee:     baseFee,
+		uncleHash:   h.UncleHash.Hex(),
+		stateRoot:   h.Root.Hex(),
+		txRoot:      h.TxHash.Hex(),
+		receiptRoot: h.ReceiptHash.Hex(),
+		logsBloom:   h.Bloom.Bytes(),
+		extraData:   h.Extra,
+		mixDigest:   h.MixDigest.Hex(),
+		nonce:       h.Nonce.Uint64(),
+	}
+	// Post-Shanghai / post-Cancun fields are pointers on the header and absent on
+	// older chains; the columns default to '' / 0 in that case.
+	if h.WithdrawalsHash != nil {
+		b.withdrawalsRoot = h.WithdrawalsHash.Hex()
+	}
+	if h.BlobGasUsed != nil {
+		b.blobGasUsed = *h.BlobGasUsed
+	}
+	if h.ExcessBlobGas != nil {
+		b.excessBlobGas = *h.ExcessBlobGas
+	}
+	if h.ParentBeaconRoot != nil {
+		b.parentBeaconRoot = h.ParentBeaconRoot.Hex()
+	}
+	return b
+}
+
+// writeBlockBody records the body facts and the ordered block -> tx mapping. size
+// is 0 when the body arrived on its own (the encoded size is only known when the
+// whole block was delivered).
+func (c *ClickHouse) writeBlockBody(hash common.Hash, txs []*types.Transaction, uncles []*types.Header, size uint64, tfs time.Time) {
+	uncleHashes := make([]string, 0, len(uncles))
+	for _, u := range uncles {
+		uncleHashes = append(uncleHashes, u.Hash().Hex())
+	}
+	c.blockBodies.add(chBlockBody{
+		hash:       hash.Hex(),
+		txCount:    uint32(len(txs)),
+		uncleCount: uint16(len(uncles)),
+		uncles:     uncleHashes,
+		sizeBytes:  uint32(size),
+	})
+
+	blockHash := hash.Hex()
+	seenDate := tfs.UTC().Truncate(24 * time.Hour)
+	for i, tx := range txs {
+		c.blockTxs.add(chBlockTx{
+			blockHash: blockHash,
+			txIndex:   uint32(i),
+			txHash:    tx.Hash().Hex(),
+			seenDate:  seenDate,
+		})
 	}
 }
 
 func (c *ClickHouse) writeTxs(txs []*types.Transaction, tfs time.Time) {
+	seenDate := tfs.UTC().Truncate(24 * time.Hour)
 	for _, tx := range txs {
 		var from, to string
 		chainID := tx.ChainId()
@@ -492,18 +666,35 @@ func (c *ClickHouse) writeTxs(txs []*types.Transaction, tfs time.Time) {
 		if tx.To() != nil {
 			to = tx.To().Hex()
 		}
+		// The calldata itself is not stored, but its selector and size are: that is
+		// what makes contract-interaction analysis possible at negligible cost.
+		var selector string
+		data := tx.Data()
+		if len(data) >= 4 {
+			selector = "0x" + hex.EncodeToString(data[:4])
+		}
+		txChainID := uint64(0)
+		if id := tx.ChainId(); id != nil && id.IsUint64() {
+			txChainID = id.Uint64()
+		}
 		c.txs.add(chTx{
-			hash:       tx.Hash().Hex(),
-			from:       from,
-			to:         to,
-			value:      new(big.Int).Set(tx.Value()),
-			gas:        tx.Gas(),
-			gasPrice:   new(big.Int).Set(tx.GasPrice()),
-			gasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
-			gasTipCap:  new(big.Int).Set(tx.GasTipCap()),
-			nonce:      tx.Nonce(),
-			txType:     tx.Type(),
-			ingestedAt: tfs,
+			hash:           tx.Hash().Hex(),
+			from:           from,
+			to:             to,
+			value:          new(big.Int).Set(tx.Value()),
+			gas:            tx.Gas(),
+			gasPrice:       new(big.Int).Set(tx.GasPrice()),
+			gasFeeCap:      new(big.Int).Set(tx.GasFeeCap()),
+			gasTipCap:      new(big.Int).Set(tx.GasTipCap()),
+			nonce:          tx.Nonce(),
+			txType:         tx.Type(),
+			chainID:        txChainID,
+			inputSelector:  selector,
+			inputSize:      uint32(len(data)),
+			accessListSize: uint16(len(tx.AccessList())),
+			blobCount:      uint8(len(tx.BlobHashes())),
+			authListSize:   uint8(len(tx.SetCodeAuthorizations())),
+			seenDate:       seenDate,
 		})
 	}
 }
