@@ -287,3 +287,88 @@ func checkCount(t *testing.T, conn driver.Conn, query, arg string) {
 		t.Fatalf("expected at least one row from %q for %s, got none", query, arg)
 	}
 }
+
+// TestClickHouseProductionFlagsRecordProvenance is the regression test for two
+// instances of the same defect: provenance events gated on the flag that controls
+// the full per-peer announcement stream, rather than on "either event flag is set".
+//
+// Production runs write_block_events=false / write_first_block_event=true and the
+// same pair for transactions. Under that configuration new_block, header,
+// header_backfill, body and full_tx were all silently dropped -- the sensors looked
+// healthy and the volume-bounded first-event rows kept arriving, so nothing pointed
+// at the gap. The block sources were fixed first; full_tx survived one more round
+// and is why this test asserts both sides together.
+//
+// These sources are not volume. Per (block, sensor) the per-peer streams are
+// hash_announce at ~52 rows and tx hash_announce at ~8, both scaling with
+// --max-peers; the provenance sources are 1-8 rows and full_tx ~2 per transaction.
+func TestClickHouseProductionFlagsRecordProvenance(t *testing.T) {
+	dsn := clickHouseDSN(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// The exact terraform default flag set, which is the point of the test.
+	db := NewClickHouse(ctx, ClickHouseOptions{
+		DSN:                              dsn,
+		SensorID:                         "test-sensor-prod-flags",
+		ChainID:                          137,
+		MaxConcurrency:                   10,
+		ShouldWriteBlocks:                true,
+		ShouldWriteBlockEvents:           false,
+		ShouldWriteFirstBlockEvent:       true,
+		ShouldWriteTransactions:          true,
+		ShouldWriteTransactionEvents:     false,
+		ShouldWriteFirstTransactionEvent: true,
+		ShouldWritePeers:                 true,
+	})
+
+	now := time.Now().UTC()
+	header, _ := signedHeader(t, 4242, now)
+
+	// The nonce must vary per run. These tables are append-only and the test asserts
+	// on row presence, so a fixed nonce yields a fixed transaction hash and rows left
+	// behind by an earlier run satisfy the assertion -- the test then passes even with
+	// the defect reintroduced, which is how the first draft of it failed to catch the
+	// very bug it exists for. Block hashes are already unique per run because
+	// signedHeader seals with a fresh key.
+	tx := types.NewTx(&types.LegacyTx{
+		Nonce:    uint64(now.UnixNano()),
+		GasPrice: big.NewInt(2_000_000_000),
+		Gas:      21_000,
+		Value:    big.NewInt(1),
+	})
+	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx}})
+	peer := testPeer(t)
+
+	db.WriteBlock(ctx, peer, block, big.NewInt(555), now)
+	db.WriteBlockHeaders(ctx, []*types.Header{header}, now, false)
+	db.WriteTransactions(ctx, peer, []*types.Transaction{tx}, now)
+
+	if cerr := db.Close(); cerr != nil {
+		t.Fatalf("close db: %v", cerr)
+	}
+
+	conn := verifyConn(t, dsn)
+	blockHash := block.Hash().Hex()
+
+	for _, source := range []string{"new_block", "header"} {
+		checkCount(t, conn,
+			"SELECT count() FROM block_events WHERE block_hash = ? AND source = '"+source+"'", blockHash)
+	}
+
+	// The one that regressed after the block-side fix.
+	checkCount(t, conn,
+		"SELECT count() FROM tx_events WHERE tx_hash = ? AND source = 'full_tx'", tx.Hash().Hex())
+
+	// total_difficulty rides on new_block alone, so losing that source loses the
+	// column entirely -- assert the value survived, not just the row.
+	var td big.Int
+	if err := conn.QueryRow(context.Background(),
+		"SELECT total_difficulty FROM block_events WHERE block_hash = ? AND source = 'new_block' LIMIT 1",
+		blockHash).Scan(&td); err != nil {
+		t.Fatalf("scan total_difficulty: %v", err)
+	}
+	if td.Uint64() != 555 {
+		t.Fatalf("total_difficulty: want 555 got %s", td.String())
+	}
+}

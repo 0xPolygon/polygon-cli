@@ -371,9 +371,7 @@ flowchart LR
     A4 --> T3
     A4 --> T5
     A5 --> T5
-    A5 -->|"source=full_tx
-    only with the full
-    per-peer stream on"| T6
+    A5 -->|"source=full_tx"| T6
     A6 -->|"source=hash_announce"| T6
     A7 --> T7
     A8 -.->|"point read, bloom index"| T1
@@ -388,7 +386,7 @@ flowchart LR
 | `WriteBlockBody`          | `block_bodies`, `block_txs`, `transactions`                           | No event: bodies arrive only when requested           |
 | `WriteBlockEvents`        | `block_events`                                                        | Takes `[]BlockAnnouncement`, so heights reach the row |
 | `WriteBlockHashFirstSeen` | nothing                                                               | Derived instead, see below                            |
-| `WriteTransactions`       | `transactions`, `tx_events`                                           | Event gated on the full per-peer stream flag          |
+| `WriteTransactions`       | `transactions`, `tx_events`                                           | Event under either tx-event flag                      |
 | `WriteTransactionEvents`  | `tx_events`                                                           |                                                       |
 | `WritePeers`              | `peers`                                                               | Own ticker, not the 2s metrics tick                   |
 | `HasBlock`                | —                                                                     | Reads `blocks` by hash, once per new header           |
@@ -444,9 +442,13 @@ Batch sizes are per table (`chBlockBatch` and friends): 5,000 blocks, 5,000 bodi
 20,000 block-txs, 50,000 block events, 20,000 transactions, 50,000 tx events,
 2,000 peers.
 
-`tx_events` is the volume driver. The `--write-tx-events` /
-`--write-first-tx-event` pair controls whether it receives every announcement or
-only first events; production runs the latter.
+`tx_events` is the volume driver, and only its `hash_announce` rows are: every peer
+that announces a hash produces one, so the count scales with `--max-peers`. The
+`--write-tx-events` / `--write-first-tx-event` pair is what bounds it — whether the
+table receives every announcement or only first events. `full_tx` rows are recorded
+under either flag, because a delivered body is roughly 2 rows per transaction per
+sensor rather than a per-peer stream. Blocks work the same way, via
+`recordsBlockEvents` / `recordsTxEvents`.
 
 Peer snapshots are their own cadence. The 2s tick in `sensor.go` still drives the
 Prometheus gauge and the local peer file, but persisting up to `--max-peers` rows

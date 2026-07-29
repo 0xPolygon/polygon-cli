@@ -366,6 +366,15 @@ func (c *ClickHouse) recordsBlockEvents() bool {
 	return c.shouldWriteBlockEvents || c.shouldWriteFirstBlockEvent
 }
 
+// recordsTxEvents is the transaction mirror of recordsBlockEvents. full_tx is a
+// delivered transaction body -- about 2 rows per transaction per sensor, since the
+// sensor's LRU filters repeats, measured at 4.5 GiB over the 14-day TTL for the
+// mainnet fleet. hash_announce by contrast is 8+ rows per transaction per sensor and
+// climbs with peer count, which is what shouldWriteTransactionEvents exists to bound.
+func (c *ClickHouse) recordsTxEvents() bool {
+	return c.shouldWriteTransactionEvents || c.shouldWriteFirstTransactionEvent
+}
+
 func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
 	if c.conn == nil {
 		return
@@ -496,7 +505,7 @@ func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, tx
 	// A delivered body is a distinct event from a hash announcement, but recorded
 	// only under the full per-peer stream flag: in first-event-only mode it would
 	// multiply rows on the largest table without adding a new first-event.
-	if c.shouldWriteTransactionEvents && peer != nil {
+	if c.recordsTxEvents() && peer != nil {
 		nodeID := peer.ID().String()
 		for _, tx := range txs {
 			c.txEvt.add(chTxEvent{
