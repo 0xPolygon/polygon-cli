@@ -22,7 +22,7 @@ hash. Two sensors that see the same block therefore produce byte-identical rows,
 so deduplication is a storage optimisation rather than a correctness requirement
 and readers never need `FINAL`.
 
-**Observation tables** are append-only sighting streams — one row per (thing,
+**Observation tables** are append-only event streams — one row per (thing,
 sensor, peer, time). Everything situational lives here and nowhere else: which
 sensor, which peer, when, how the block was learned, and the announced total
 difficulty.
@@ -37,7 +37,7 @@ erDiagram
     blocks {
         UInt64 number PK
         String hash PK
-        String parent_hash FK
+        String parent_hash FK "-> blocks.hash, the parent block"
         DateTime block_time "header consensus timestamp"
         LowCardinality signer "precomputed ecrecover"
         LowCardinality coinbase
@@ -94,7 +94,7 @@ erDiagram
         Date seen_date "partition and TTL key"
     }
 
-    block_sightings {
+    block_events {
         UInt64 block_number PK "denormalised, leads sort key"
         String block_hash PK
         LowCardinality sensor_id PK
@@ -104,7 +104,7 @@ erDiagram
         UInt256 total_difficulty "from the announcement"
     }
 
-    tx_sightings {
+    tx_events {
         String tx_hash PK
         LowCardinality sensor_id
         LowCardinality node_id FK
@@ -124,21 +124,25 @@ erDiagram
     blocks         ||--o| block_bodies : "hash (when a body is seen)"
     blocks         ||--o{ block_txs : "block_hash"
     block_txs      }o--|| transactions : "tx_hash"
-    blocks         ||--o{ block_sightings : "number + hash"
-    transactions   ||--o{ tx_sightings : "hash"
-    peer_snapshots ||--o{ block_sightings : "node_id"
-    peer_snapshots ||--o{ tx_sightings : "node_id"
-    blocks         ||--o{ blocks : "parent_hash"
+    blocks         ||--o{ block_events : "number + hash"
+    transactions   ||--o{ tx_events : "hash"
+    peer_snapshots ||--o{ block_events : "node_id"
+    peer_snapshots ||--o{ tx_events : "node_id"
 ```
+
+`blocks.parent_hash` points at another `blocks.hash`, forming the chain that reorg
+and fork analysis walks. It is annotated on the column rather than drawn as a
+relationship, because a self-reference renders as an easily-missed loop (or nothing
+at all) depending on the mermaid version.
 
 | Table | Engine | Sort key | Retention |
 | --- | --- | --- | --- |
 | `blocks` | `ReplacingMergeTree` (no version) | `(number, hash)` | forever |
 | `block_bodies` | `ReplacingMergeTree` | `(hash)` | forever |
-| `block_txs` | `ReplacingMergeTree` | `(block_hash, tx_index)` | 90d |
+| `block_txs` | `ReplacingMergeTree` | `(block_hash, tx_index)` | forever |
 | `transactions` | `ReplacingMergeTree` | `(hash)` | 14d |
-| `block_sightings` | `MergeTree` | `(block_number, block_hash, sensor_id, seen_at)` | 14d |
-| `tx_sightings` | `MergeTree` | `(tx_hash, seen_at)` | 14d |
+| `block_events` | `MergeTree` | `(block_number, block_hash, sensor_id, seen_at)` | 14d |
+| `tx_events` | `MergeTree` | `(tx_hash, seen_at)` | 14d |
 | `peer_snapshots` | `MergeTree` | `(sensor_id, node_id, seen_at)` | 3d |
 
 Things the diagram cannot carry:
@@ -152,17 +156,18 @@ Things the diagram cannot carry:
   separately and they race), so the height is not reliably known on that path.
   Carrying `number` would mean writing `0` when unknown, reintroducing the exact
   partial-row problem the split removes. The height is one join away.
-- **`peer_snapshots` → sightings is a join on `node_id`, not a foreign key.** It
+- **`peer_snapshots` → events is a join on `node_id`, not a foreign key.** It
   works only because both sides record the devp2p node id. Get this wrong and the
   join silently returns nothing.
 - **`logs_bloom` and `extra_data` are raw bytes in a `String` column, not hex.**
   Readers that re-run ecrecover depend on it; hex-decoding `extra_data` corrupts it
   and silently breaks every signer-derived metric.
-- **`seen_date` on `transactions` and `block_txs` is an ingest fact**, present only
-  so expiry is a cheap whole-partition drop. A transaction first seen either side
-  of midnight yields two rows in two partitions; because the columns are
-  content-addressed those rows are identical, so it costs bytes rather than
-  correctness.
+- **`seen_date` on `transactions` and `block_txs` is an ingest fact**, not a
+  consensus one. On `transactions` it makes expiry a whole-partition drop; on
+  `block_txs`, which is kept forever, it only partitions (monthly, so partitions
+  don't accumulate). A row first seen either side of a partition boundary is written
+  twice, but being content-addressed the copies are identical, so it costs bytes
+  rather than correctness.
 
 ## Derived layer
 
@@ -176,8 +181,8 @@ detection are defined once rather than in each consumer.
 ```mermaid
 flowchart LR
     subgraph sensor["Written by the sensor"]
-        BS[(block_sightings)]
-        TS[(tx_sightings)]
+        BS[(block_events)]
+        TS[(tx_events)]
         PS[(peer_snapshots)]
         BL[(blocks)]
         BB[(block_bodies)]
@@ -190,9 +195,9 @@ flowchart LR
     end
 
     subgraph rollups["Rollups: AggregatingMergeTree fed by MVs"]
-        BSF[("block_sighting_first
+        BSF[("block_events_first
         per block x sensor - 400d")]
-        TSF[("tx_sighting_first
+        TSF[("tx_events_first
         per tx, fleet-wide - 90d")]
         BF[("block_forks
         per height - forever")]

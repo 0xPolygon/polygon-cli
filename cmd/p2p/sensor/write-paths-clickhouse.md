@@ -57,9 +57,9 @@ flowchart LR
         T1[(blocks)]
         T2[(block_bodies)]
         T3[(block_txs)]
-        T4[(block_sightings)]
+        T4[(block_events)]
         T5[(transactions)]
-        T6[(tx_sightings)]
+        T6[(tx_events)]
         T7[(peer_snapshots)]
     end
 
@@ -107,20 +107,20 @@ flowchart LR
 
 | Method | Writes | Notes |
 | --- | --- | --- |
-| `WriteBlock` | `blocks`, `block_bodies`, `block_txs`, `block_sightings`, `transactions` | The only path with the full block, so the only one that knows `size_bytes` |
-| `WriteBlockHeaders` | `blocks`, `block_sightings` | `isParent` selects `source = 'header_backfill'` |
-| `WriteBlockBody` | `block_bodies`, `block_txs`, `transactions` | No sighting: bodies arrive only when requested |
-| `WriteBlockEvents` | `block_sightings` | Takes `[]BlockAnnouncement`, so heights reach the row |
+| `WriteBlock` | `blocks`, `block_bodies`, `block_txs`, `block_events`, `transactions` | The only path with the full block, so the only one that knows `size_bytes` |
+| `WriteBlockHeaders` | `blocks`, `block_events` | `isParent` selects `source = 'header_backfill'` |
+| `WriteBlockBody` | `block_bodies`, `block_txs`, `transactions` | No event: bodies arrive only when requested |
+| `WriteBlockEvents` | `block_events` | Takes `[]BlockAnnouncement`, so heights reach the row |
 | `WriteBlockHashFirstSeen` | nothing | Derived instead, see below |
-| `WriteTransactions` | `transactions`, `tx_sightings` | Sighting gated on the full per-peer stream flag |
-| `WriteTransactionEvents` | `tx_sightings` | |
+| `WriteTransactions` | `transactions`, `tx_events` | Event gated on the full per-peer stream flag |
+| `WriteTransactionEvents` | `tx_events` | |
 | `WritePeers` | `peer_snapshots` | Own ticker, not the 2s metrics tick |
 | `HasBlock` | — | Reads `blocks` by hash, once per new header |
 
 ## Five things worth reading off this
 
 **`WriteBlockHashFirstSeen` is a no-op.** Earliest first-seen is derived from the
-sighting stream by the `block_sighting_first` materialized view, so there is nothing
+event stream by the `block_events_first` materialized view, so there is nothing
 to stamp on the block. The interface method stays because the Datastore backend
 does need it.
 
@@ -137,31 +137,31 @@ parent backfill — permanently replaced the real counts with zeros. There is no
 regression test for exactly that ordering
 (`TestClickHouseHeaderDoesNotClobberBody`).
 
-**`total_difficulty` rides on the sighting, not the block.** It comes from the
+**`total_difficulty` rides on the event, not the block.** It comes from the
 `NewBlock` announcement, so it is an attribute of that announcement rather than of
-the block. Header and hash-announce sightings write `0`.
+the block. Header and hash-announce events write `0`.
 
-**Block heights have to reach `WriteBlockEvents`.** `block_sightings` leads its sort
+**Block heights have to reach `WriteBlockEvents`.** `block_events` leads its sort
 key with `block_number`, which is what lets a reader fetch a whole range in one
 query instead of one point lookup per hash. `NewBlockHashes` carries the numbers, so
 the interface takes `[]database.BlockAnnouncement` rather than bare hashes —
 and since `p2p.NewBlockHashesPacket` is defined as a slice of exactly that type, a
 decoded packet is handed to the backend with no copy or conversion.
 
-**Peer identity is the devp2p node id**, not the enode URL, on both sighting
-streams — so sightings join to `peer_snapshots` / `peers_current`. The Datastore
+**Peer identity is the devp2p node id**, not the enode URL, on both event
+streams — so events join to `peer_snapshots` / `peers_current`. The Datastore
 backend uses `peer.URLv4()` here, which is why peers and events cannot be joined on
 that backend.
 
 ## Write volume
 
 Batch sizes are per table (`chBlockBatch` and friends): 5,000 blocks, 5,000 bodies,
-20,000 block-txs, 50,000 block sightings, 20,000 transactions, 50,000 tx sightings,
+20,000 block-txs, 50,000 block events, 20,000 transactions, 50,000 tx events,
 2,000 peers.
 
-`tx_sightings` is the volume driver. The `--write-tx-events` /
+`tx_events` is the volume driver. The `--write-tx-events` /
 `--write-first-tx-event` pair controls whether it receives every announcement or
-only first sightings; production runs the latter.
+only first events; production runs the latter.
 
 Peer snapshots are their own cadence. The 2s tick in `sensor.go` still drives the
 Prometheus gauge and the local peer file, but persisting up to `--max-peers` rows

@@ -121,8 +121,8 @@ func TestClickHouseWrites(t *testing.T) {
 	checkCount(t, conn, "SELECT count() FROM transactions WHERE hash = ?", tx.Hash().Hex())
 
 	// Observation stream, and the rollup the materialized view maintains off it.
-	checkCount(t, conn, "SELECT count() FROM block_sightings WHERE block_hash = ?", blockHash)
-	checkCount(t, conn, "SELECT count() FROM block_sighting_first WHERE block_hash = ?", blockHash)
+	checkCount(t, conn, "SELECT count() FROM block_events WHERE block_hash = ?", blockHash)
+	checkCount(t, conn, "SELECT count() FROM block_events_first WHERE block_hash = ?", blockHash)
 
 	// Round-tripped header fields. base_fee is UInt256, so it must be scanned as
 	// a big.Int rather than the uint64 the old schema used.
@@ -144,7 +144,7 @@ func TestClickHouseWrites(t *testing.T) {
 		t.Fatalf("signer mismatch: want %s got %s", wantSigner, signer)
 	}
 
-	// The sighting must carry the announced total difficulty and the peer's node
+	// The event must carry the announced total difficulty and the peer's node
 	// id (not its enode URL), since node id is what joins to the peer tables.
 	var (
 		td     big.Int
@@ -152,9 +152,9 @@ func TestClickHouseWrites(t *testing.T) {
 		source string
 	)
 	row = conn.QueryRow(context.Background(),
-		"SELECT total_difficulty, node_id, source FROM block_sightings WHERE block_hash = ? AND source = 'new_block' LIMIT 1", blockHash)
+		"SELECT total_difficulty, node_id, source FROM block_events WHERE block_hash = ? AND source = 'new_block' LIMIT 1", blockHash)
 	if err := row.Scan(&td, &nodeID, &source); err != nil {
-		t.Fatalf("scan sighting: %v", err)
+		t.Fatalf("scan event: %v", err)
 	}
 	if td.Uint64() != 100 {
 		t.Fatalf("total_difficulty: want 100 got %s", td.String())
@@ -234,11 +234,11 @@ func TestClickHouseHeaderDoesNotClobberBody(t *testing.T) {
 		t.Fatalf("tx_count was clobbered by the header write: want %d got %d", len(txs), txCount)
 	}
 
-	// Both sightings should be recorded, distinguishable by source, and the
+	// Both events should be recorded, distinguishable by source, and the
 	// backfilled header must be tagged as such.
 	var sources []string
 	rows, err := conn.Query(context.Background(),
-		"SELECT DISTINCT source FROM block_sightings WHERE block_hash = ? ORDER BY source", blockHash)
+		"SELECT DISTINCT source FROM block_events WHERE block_hash = ? ORDER BY source", blockHash)
 	if err != nil {
 		t.Fatalf("query sources: %v", err)
 	}

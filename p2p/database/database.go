@@ -12,13 +12,12 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-// BlockAnnouncement is an announced block hash together with its height, as
-// carried by eth NewBlockHashes. Backends that key observations by block number
-// (ClickHouse) need the height at announcement time; backends that key by hash
-// (Datastore, JSON) ignore it.
+// BlockAnnouncement is an announced block hash with its height, as carried by eth
+// NewBlockHashes. ClickHouse keys observations by block number and needs the
+// height; hash-keyed backends ignore it.
 //
-// p2p.NewBlockHashesPacket is a slice of this type, so a decoded packet can be
-// passed straight to WriteBlockEvents with no copy or conversion.
+// p2p.NewBlockHashesPacket is a slice of this type, so a decoded packet reaches
+// WriteBlockEvents with no copy or conversion.
 type BlockAnnouncement struct {
 	Hash   common.Hash
 	Number uint64

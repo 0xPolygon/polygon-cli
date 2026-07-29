@@ -319,11 +319,9 @@ var SensorCmd = &cobra.Command{
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 
-		// Peer snapshots go to the database on their own, slower cadence. The 2s
-		// tick above drives in-process metrics and the local peer file, which are
-		// cheap; persisting up to --max-peers rows every 2s is not, and the only
-		// question that data answers ("who is connected now") does not need that
-		// resolution.
+		// Peer snapshots persist on their own slower cadence: the 2s tick above is
+		// cheap in-process work, but writing up to --max-peers rows every 2s is not,
+		// and "who is connected now" does not need that resolution.
 		peerSnapshotTicker := time.NewTicker(inputSensorParams.PeerSnapshotInterval)
 		defer peerSnapshotTicker.Stop()
 

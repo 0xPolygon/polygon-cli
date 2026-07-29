@@ -118,10 +118,9 @@ func (*StatusPacket68) Name() string { return "Status" }
 // NewBlockHashesPacket is the network packet for block hash announcements.
 // Removed in go-ethereum v1.17.2 but still used by Bor/Polygon nodes.
 //
-// The element type is database.BlockAnnouncement rather than an anonymous struct
-// so a decoded packet can be handed straight to Database.WriteBlockEvents with no
-// copy or conversion. RLP is unaffected: the wire format follows the field order,
-// not whether the element struct is named.
+// The element type is database.BlockAnnouncement so a decoded packet passes
+// straight to Database.WriteBlockEvents. RLP is unaffected: the wire format
+// follows field order, not whether the element struct is named.
 type NewBlockHashesPacket []database.BlockAnnouncement
 
 func (NewBlockHashesPacket) Name() string { return "NewBlockHashes" }

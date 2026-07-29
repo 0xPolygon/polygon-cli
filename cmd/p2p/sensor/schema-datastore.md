@@ -22,7 +22,7 @@ keys — a key can point at an entity that does not exist yet, and routinely doe
 erDiagram
     blocks {
         string __key__ PK "NameKey = block hash hex"
-        Key ParentHash FK "-> blocks"
+        Key ParentHash FK "-> blocks (parent block)"
         string Number "STRING, indexed - see note"
         string GasUsed "indexed"
         time Time "indexed"
@@ -34,7 +34,7 @@ erDiagram
         string SensorFirstSeenHash "indexed"
         string TotalDifficulty "noindex"
         KeyList Transactions "noindex -> transactions"
-        KeyList Uncles "noindex -> blocks"
+        KeyList Uncles "noindex -> blocks (uncle headers)"
         string UncleHash "noindex"
         string Coinbase "noindex"
         string Root "noindex"
@@ -98,10 +98,13 @@ erDiagram
 
     blocks             ||--o{ block_events : "Hash"
     transactions       ||--o{ transaction_events : "Hash"
-    blocks             ||--o{ blocks : "ParentHash"
     blocks             }o--o{ transactions : "Transactions key list"
-    blocks             }o--o{ blocks : "Uncles key list"
 ```
+
+`ParentHash` and the `Uncles` key list both reference other `blocks` entities. They
+are annotated on their columns rather than drawn as relationships, since a
+self-reference renders as an easily-missed loop (or nothing) depending on the
+mermaid version.
 
 `block_events` and `transaction_events` are the *same* Go struct
 (`DatastoreEvent`); they are separated only by the kind passed at key-creation
@@ -144,13 +147,13 @@ Not a migration map — the grain differs on purpose — but useful for orientat
 | --- | --- |
 | `blocks` (header fields) | `blocks` |
 | `blocks.Transactions` / `Uncles` key lists | `block_txs` / `block_bodies.uncles` |
-| `blocks.TotalDifficulty` | `block_sightings.total_difficulty` |
-| `blocks.TimeFirstSeen` / `SensorFirstSeen` | `block_sighting_first` (derived) |
-| `blocks.TimeFirstSeenHash` | `block_sightings` with `source = 'hash_announce'` |
-| `blocks.IsParent` | `block_sightings` with `source = 'header_backfill'` |
-| `block_events` | `block_sightings` |
+| `blocks.TotalDifficulty` | `block_events.total_difficulty` |
+| `blocks.TimeFirstSeen` / `SensorFirstSeen` | `block_events_first` (derived) |
+| `blocks.TimeFirstSeenHash` | `block_events` with `source = 'hash_announce'` |
+| `blocks.IsParent` | `block_events` with `source = 'header_backfill'` |
+| `block_events` | `block_events` |
 | `transactions` | `transactions` (+ `tx_type`, selector, chain id) |
-| `transaction_events` | `tx_sightings` |
+| `transaction_events` | `tx_events` |
 | `peers` | `peer_snapshots` → `peers_current` |
 | `TTL` field + cleanup job | `TTL` clauses, whole-partition drops |
 | n/a | `block_forks`, `v_*` views |

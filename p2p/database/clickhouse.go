@@ -40,8 +40,8 @@ const (
 	chPeerBatch        = 2000
 )
 
-// Sighting sources, recorded on block_sightings.source / tx_sightings.source so
-// consumers can distinguish a hash announcement from a delivered header or body.
+// Event sources, so consumers can tell a hash announcement from a delivered
+// header or body.
 const (
 	srcHashAnnounce  = "hash_announce"
 	srcNewBlock      = "new_block"
@@ -51,17 +51,14 @@ const (
 )
 
 // ClickHouse implements the Database interface backed by a ClickHouse cluster.
-// The table definitions this writer targets (and the rollup materialized views)
-// live in clickhouse_schema.sql, in the sensor-network-tools and
-// polygon-infrastructure repos rather than this one.
+// The table definitions live in clickhouse_schema.sql, in the sensor-network-tools
+// and polygon-infrastructure repos rather than here.
 //
-// The schema separates content-addressed facts from observations, and this writer
-// is structured to match. Every row it writes into a fact table (blocks,
-// block_bodies, block_txs, transactions) is complete and a pure function of the
-// hash it is keyed by, so two sensors seeing the same block emit byte-identical
-// rows and no write can ever partially overwrite another. Everything
-// observational -- which sensor, which peer, when, and how the block was learned
-// -- goes into the sighting streams instead.
+// The schema separates content-addressed facts from observations and this writer
+// matches it: every row written to a fact table (blocks, block_bodies, block_txs,
+// transactions) is complete and a pure function of its hash, so two sensors emit
+// byte-identical rows and no write can partially overwrite another. Everything
+// observational goes to the event streams.
 type ClickHouse struct {
 	conn                             driver.Conn
 	sensorID                         string
@@ -78,9 +75,9 @@ type ClickHouse struct {
 	blocks      *rowBatcher[chBlock]
 	blockBodies *rowBatcher[chBlockBody]
 	blockTxs    *rowBatcher[chBlockTx]
-	blockEvt    *rowBatcher[chBlockSighting]
+	blockEvt    *rowBatcher[chBlockEvent]
 	txs         *rowBatcher[chTx]
-	txEvt       *rowBatcher[chTxSighting]
+	txEvt       *rowBatcher[chTxEvent]
 	peers       *rowBatcher[chPeerSnapshot]
 
 	// cancel stops the batcher goroutines; wg tracks them so Close can wait for
@@ -203,9 +200,9 @@ func (c *ClickHouse) startBatchers(ctx context.Context) {
 		func(b driver.Batch, r chBlockTx) error {
 			return b.Append(r.blockHash, r.txIndex, r.txHash, r.seenDate)
 		})
-	c.blockEvt = newInsertBatcher(ctx, c, "block_sightings", chBlockEventBatch,
-		"INSERT INTO block_sightings (block_number, block_hash, sensor_id, node_id, source, seen_at, total_difficulty)",
-		func(b driver.Batch, r chBlockSighting) error {
+	c.blockEvt = newInsertBatcher(ctx, c, "block_events", chBlockEventBatch,
+		"INSERT INTO block_events (block_number, block_hash, sensor_id, node_id, source, seen_at, total_difficulty)",
+		func(b driver.Batch, r chBlockEvent) error {
 			return b.Append(r.blockNumber, r.blockHash, c.sensorID, r.nodeID, r.source, r.seenAt, r.totalDifficulty)
 		})
 	c.txs = newInsertBatcher(ctx, c, "transactions", chTxBatch,
@@ -213,9 +210,9 @@ func (c *ClickHouse) startBatchers(ctx context.Context) {
 		func(b driver.Batch, r chTx) error {
 			return b.Append(r.hash, r.from, r.to, r.value, r.gas, r.gasPrice, r.gasFeeCap, r.gasTipCap, r.nonce, r.txType, r.chainID, r.inputSelector, r.inputSize, r.accessListSize, r.blobCount, r.authListSize, r.seenDate)
 		})
-	c.txEvt = newInsertBatcher(ctx, c, "tx_sightings", chTxEventBatch,
-		"INSERT INTO tx_sightings (tx_hash, sensor_id, node_id, source, seen_at)",
-		func(b driver.Batch, r chTxSighting) error {
+	c.txEvt = newInsertBatcher(ctx, c, "tx_events", chTxEventBatch,
+		"INSERT INTO tx_events (tx_hash, sensor_id, node_id, source, seen_at)",
+		func(b driver.Batch, r chTxEvent) error {
 			return b.Append(r.txHash, c.sensorID, r.nodeID, r.source, r.seenAt)
 		})
 	c.peers = newInsertBatcher(ctx, c, "peer_snapshots", chPeerBatch,
@@ -270,7 +267,7 @@ func flushBatch[T any](conn driver.Conn, query string, rows []T, appendRow func(
 
 // chBlock is a header row. Every field is derived from the header itself, so any
 // two sensors that see this hash produce an identical row. Nothing observational
-// (which sensor, when, how it was learned) belongs here -- see chBlockSighting.
+// (which sensor, when, how it was learned) belongs here -- see chBlockEvent.
 type chBlock struct {
 	number           uint64
 	hash             string
@@ -314,7 +311,7 @@ type chBlockTx struct {
 	seenDate  time.Time
 }
 
-type chBlockSighting struct {
+type chBlockEvent struct {
 	blockNumber     uint64
 	blockHash       string
 	nodeID          string
@@ -343,7 +340,7 @@ type chTx struct {
 	seenDate       time.Time
 }
 
-type chTxSighting struct {
+type chTxEvent struct {
 	txHash string
 	nodeID string
 	source string
@@ -364,10 +361,10 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 	if c.conn == nil {
 		return
 	}
-	// The announced total difficulty is an attribute of this announcement, not of
-	// the block, so it rides on the sighting rather than the block row.
+	// Announced total difficulty describes the announcement, not the block, so it
+	// rides on the event.
 	if c.shouldWriteBlockEvents && peer != nil {
-		c.blockEvt.add(chBlockSighting{
+		c.blockEvt.add(chBlockEvent{
 			blockNumber:     block.NumberU64(),
 			blockHash:       block.Hash().Hex(),
 			nodeID:          peer.ID().String(),
@@ -389,9 +386,8 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	if c.conn == nil || !c.shouldWriteBlocks {
 		return
 	}
-	// A header row is complete on its own: the fields a header cannot carry
-	// (tx/uncle counts, size) live in block_bodies and are written only when a
-	// body actually arrives, so this path can never overwrite them.
+	// A header row is complete on its own: the fields it cannot carry (tx/uncle
+	// counts, size) live in block_bodies, so this path can never overwrite them.
 	source := srcHeader
 	if isParent {
 		source = srcHeaderBackfil
@@ -399,7 +395,7 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	for _, h := range headers {
 		c.blocks.add(newChBlock(h))
 		if c.shouldWriteBlockEvents {
-			c.blockEvt.add(chBlockSighting{
+			c.blockEvt.add(chBlockEvent{
 				blockNumber:     h.Number.Uint64(),
 				blockHash:       h.Hash().Hex(),
 				source:          source,
@@ -419,9 +415,8 @@ func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, ha
 		log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode transactions from block body")
 		return
 	}
-	// The header row comes from the header path; here we record the body facts
-	// (keyed by hash, since the height is not known on this path) and the
-	// transactions themselves. No read-modify-write on blocks.
+	// The header row comes from the header path; record only the body facts (keyed
+	// by hash, since the height is unknown here) and the transactions.
 	if c.shouldWriteBlocks {
 		uncles, err := body.Uncles.Items()
 		if err != nil {
@@ -441,7 +436,7 @@ func (c *ClickHouse) WriteBlockEvents(ctx context.Context, peer *enode.Node, ann
 	}
 	nodeID := peer.ID().String()
 	for _, ann := range anns {
-		c.blockEvt.add(chBlockSighting{
+		c.blockEvt.add(chBlockEvent{
 			blockNumber:     ann.Number,
 			blockHash:       ann.Hash.Hex(),
 			nodeID:          nodeID,
@@ -452,9 +447,8 @@ func (c *ClickHouse) WriteBlockEvents(ctx context.Context, peer *enode.Node, ann
 	}
 }
 
-// WriteBlockHashFirstSeen is a no-op: ClickHouse derives earliest first-seen from
-// the block_sightings stream (see the block_sighting_first materialized view and
-// the v_block_latency view), so no per-block stamp is needed.
+// WriteBlockHashFirstSeen is a no-op: earliest first-seen is derived from
+// block_events by the block_events_first materialized view.
 func (c *ClickHouse) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
 }
 
@@ -464,7 +458,7 @@ func (c *ClickHouse) WriteTransactionEvents(ctx context.Context, peer *enode.Nod
 	}
 	nodeID := peer.ID().String()
 	for _, hash := range hashes {
-		c.txEvt.add(chTxSighting{
+		c.txEvt.add(chTxEvent{
 			txHash: hash.Hex(),
 			nodeID: nodeID,
 			source: srcHashAnnounce,
@@ -477,14 +471,13 @@ func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, tx
 	if c.conn == nil {
 		return
 	}
-	// A delivered transaction body is also a sighting, and a distinct one from a
-	// hash announcement. It is recorded only under the full per-peer stream flag:
-	// in first-sighting-only mode this would multiply rows on the largest table
-	// without adding a first-sighting the announcement stream did not already have.
+	// A delivered body is a distinct event from a hash announcement, but recorded
+	// only under the full per-peer stream flag: in first-event-only mode it would
+	// multiply rows on the largest table without adding a new first-event.
 	if c.shouldWriteTransactionEvents && peer != nil {
 		nodeID := peer.ID().String()
 		for _, tx := range txs {
-			c.txEvt.add(chTxSighting{
+			c.txEvt.add(chTxEvent{
 				txHash: tx.Hash().Hex(),
 				nodeID: nodeID,
 				source: srcFullTx,
@@ -502,8 +495,8 @@ func (c *ClickHouse) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time
 	if c.conn == nil || !c.shouldWritePeers {
 		return
 	}
-	// node_id is the devp2p node id, matching what the sighting streams record, so
-	// peers and sightings are joinable. The enode URL is a column here, not the key.
+	// node_id matches what the event streams record, so peers and events are
+	// joinable. The enode URL is a column, not the key.
 	for _, peer := range peers {
 		c.peers.add(chPeerSnapshot{
 			nodeID: peer.ID().String(),
@@ -527,9 +520,8 @@ func (c *ClickHouse) HasBlock(ctx context.Context, hash common.Hash) bool {
 	return err == nil && exists == 1
 }
 
-// NodeList returns the most recently seen peers' enode URLs. It reads the narrow
-// peers_current rollup rather than grouping over the sighting firehose, which is
-// what the previous implementation did.
+// NodeList returns the most recently seen peers' enode URLs, from the narrow
+// peers_current rollup rather than grouping over the event firehose.
 func (c *ClickHouse) NodeList(ctx context.Context, limit int) ([]string, error) {
 	if c.conn == nil {
 		return []string{}, nil
@@ -573,9 +565,9 @@ func (c *ClickHouse) ShouldWritePeers() bool { return c.shouldWritePeers }
 
 // --- helpers ---------------------------------------------------------------
 
-// newChBlock maps a header to a blocks-table row. Deliberately takes nothing but
-// the header: everything it writes is a pure function of the header, which is what
-// makes duplicate rows for a hash byte-identical and dedup safe.
+// newChBlock maps a header to a blocks-table row. Takes nothing but the header, so
+// everything it writes is a pure function of it -- which is what makes duplicate
+// rows for a hash byte-identical.
 func newChBlock(h *types.Header) chBlock {
 	baseFee := new(big.Int)
 	if h.BaseFee != nil {
@@ -607,8 +599,8 @@ func newChBlock(h *types.Header) chBlock {
 		mixDigest:   h.MixDigest.Hex(),
 		nonce:       h.Nonce.Uint64(),
 	}
-	// Post-Shanghai / post-Cancun fields are pointers on the header and absent on
-	// older chains; the columns default to '' / 0 in that case.
+	// Post-Shanghai/Cancun fields are pointers, absent on older chains; the columns
+	// default to '' / 0.
 	if h.WithdrawalsHash != nil {
 		b.withdrawalsRoot = h.WithdrawalsHash.Hex()
 	}
@@ -625,8 +617,7 @@ func newChBlock(h *types.Header) chBlock {
 }
 
 // writeBlockBody records the body facts and the ordered block -> tx mapping. size
-// is 0 when the body arrived on its own (the encoded size is only known when the
-// whole block was delivered).
+// is 0 when the body arrived alone, since the encoded size needs the whole block.
 func (c *ClickHouse) writeBlockBody(hash common.Hash, txs []*types.Transaction, uncles []*types.Header, size uint64, tfs time.Time) {
 	uncleHashes := make([]string, 0, len(uncles))
 	for _, u := range uncles {
@@ -666,8 +657,8 @@ func (c *ClickHouse) writeTxs(txs []*types.Transaction, tfs time.Time) {
 		if tx.To() != nil {
 			to = tx.To().Hex()
 		}
-		// The calldata itself is not stored, but its selector and size are: that is
-		// what makes contract-interaction analysis possible at negligible cost.
+		// Selector and size but not the calldata: enough for contract-interaction
+		// analysis at negligible cost.
 		var selector string
 		data := tx.Data()
 		if len(data) >= 4 {

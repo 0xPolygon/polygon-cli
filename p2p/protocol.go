@@ -554,9 +554,9 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.countMsgReceived(packet.Name(), float64(len(packet)))
 
-	// The decoded packet is itself the full per-peer event stream, and is passed
-	// to the database as-is. uniqueAnns collects the first-seen subset, for
-	// first-seen events and rebroadcast.
+	// The decoded packet is the full per-peer event stream, passed as-is.
+	// uniqueAnns collects the first-seen subset for first-seen events and
+	// rebroadcast.
 	uniqueAnns := make([]database.BlockAnnouncement, 0, len(packet))
 
 	for _, entry := range packet {
