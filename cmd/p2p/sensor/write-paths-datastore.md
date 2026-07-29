@@ -133,7 +133,7 @@ nested round trips re-run with it, up to five times.
 | `NodeList` | query | Scans `block_events` ordered by `-Time`, collecting distinct `PeerId` |
 
 Note that `WriteBlockHeaders` and `WriteBlockBody` deliberately write **no** events:
-headers and bodies only arrive because the sensor asked for them, so the sighting is
+headers and bodies only arrive because the sensor asked for them, so the event is
 recorded when the hash announcement comes in instead.
 
 ## Why this differs from ClickHouse
@@ -142,7 +142,7 @@ recorded when the hash announcement comes in instead.
 | --- | --- | --- |
 | Write shape | read-modify-write per entity | append-only, batched |
 | Contention | 4 paths on the same `blocks` entity | none; writers never read |
-| "Keep the earliest sighting" | `tx.Get` then conditional `tx.Put` | derived at read time from the sighting stream |
+| "Keep the earliest event" | `tx.Get` then conditional `tx.Put` | derived at read time from the event stream |
 | `WriteBlockHashFirstSeen` | its own transaction on `blocks` | no-op |
 | Backpressure | semaphore, blocks the caller | fixed buffers, drop-on-full |
 | Peer id in events | enode URL (`peer.URLv4()`) | devp2p node id |

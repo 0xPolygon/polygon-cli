@@ -50,7 +50,7 @@ type Database interface {
 	// stream, or just the first-seen ones); the backend only appends.
 	WriteBlockEvents(context.Context, *enode.Node, []BlockAnnouncement, time.Time)
 
-	// WriteBlockHashFirstSeen records the earliest sighting of a block hash on
+	// WriteBlockHashFirstSeen records the earliest event for a block hash on
 	// the block entity itself (Datastore's TimeFirstSeenHash). Backends that
 	// derive first-seen from the event stream (e.g. ClickHouse) treat it as a
 	// no-op.
