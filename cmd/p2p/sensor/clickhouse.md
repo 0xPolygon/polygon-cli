@@ -134,15 +134,21 @@ and fork analysis walks. It is annotated on the column rather than drawn as a
 relationship, because a self-reference renders as an easily-missed loop (or nothing
 at all) depending on the mermaid version.
 
-| Table          | Engine                            | Sort key                                         | Retention |
-| -------------- | --------------------------------- | ------------------------------------------------ | --------- |
-| `blocks`       | `ReplacingMergeTree` (no version) | `(number, hash)`                                 | forever   |
-| `block_bodies` | `ReplacingMergeTree`              | `(hash)`                                         | forever   |
-| `block_txs`    | `ReplacingMergeTree`              | `(block_hash, tx_index)`                         | forever   |
-| `transactions` | `ReplacingMergeTree`              | `(hash)`                                         | 14d       |
-| `block_events` | `MergeTree`                       | `(block_number, block_hash, sensor_id, seen_at)` | 14d       |
-| `tx_events`    | `MergeTree`                       | `(tx_hash, seen_at)`                             | 14d       |
-| `peers`        | `MergeTree`                       | `(sensor_id, node_id, seen_at)`                  | 14d       |
+| Table                   | Engine                            | Sort key                                         | Retention |
+| ----------------------- | --------------------------------- | ------------------------------------------------ | --------- |
+| `blocks`                | `ReplacingMergeTree` (no version) | `(number, hash)`                                 | forever   |
+| `block_bodies`          | `ReplacingMergeTree`              | `(hash)`                                         | forever   |
+| `block_txs`             | `ReplacingMergeTree`              | `(block_hash, tx_index)`                         | forever   |
+| `transactions`          | `ReplacingMergeTree`              | `(hash)`                                         | 14d       |
+| `block_events`          | `MergeTree`                       | `(block_number, block_hash, sensor_id, seen_at)` | 14d       |
+| `tx_events`             | `MergeTree`                       | `(tx_hash, seen_at)`                             | 14d       |
+| `peers`                 | `MergeTree`                       | `(sensor_id, node_id, seen_at)`                  | 14d       |
+| `block_events_first`    | `AggregatingMergeTree`            | `(block_number, block_hash, sensor_id, source)`  | 14d       |
+| `tx_events_first`       | `AggregatingMergeTree`            | `(tx_hash)`                                      | 14d       |
+| `block_forks`           | `AggregatingMergeTree`            | `(number)`                                       | forever   |
+| `peers_current`         | `ReplacingMergeTree(last_seen)`   | `(sensor_id, node_id)`                           | 14d       |
+| `reorg_detections`      | `MergeTree`                       | `(start_block, depth, detected_at)`              | forever   |
+| `block_latency_metrics` | `MergeTree`                       | `(scope, hours_analyzed, timestamp)`             | forever   |
 
 **Retention is 14 days or forever, never anything in between.** Observations and
 anything derived from them expire at 14 days; the content-addressed facts and the
@@ -396,11 +402,12 @@ need it.
 
 Because that rollup is keyed by `source`, it replaces both Datastore column pairs at
 once — `TimeFirstSeenHash`/`SensorFirstSeenHash` is `source = 'hash_announce'` and
-`TimeFirstSeen`/`SensorFirstSeen` is `source = 'header'` — and keeps them for 400 days
-rather than only as long as the 14-day raw stream. `v_block_provenance` presents it.
-**Any latency read must restrict to the propagation sources** (`hash_announce`,
-`new_block`), which `v_block_latency` does: the sensor-requested sources carry no peer
-and their timestamps say when it chose to fetch, not how fast the block arrived.
+`TimeFirstSeen`/`SensorFirstSeen` is `source = 'header'`. It expires at 14 days like
+its source, so it is a pre-aggregation for query speed rather than a retention play;
+`v_block_provenance` presents it. **Any latency read must restrict to the propagation
+sources** (`hash_announce`, `new_block`), which `v_block_latency` does: the
+sensor-requested sources carry no peer and their timestamps say when it chose to
+fetch, not how fast the block arrived.
 
 **`blocks` is written by two paths, and that is safe.** Both `WriteBlock` and
 `WriteBlockHeaders` write a _complete_ header row — every column is a pure function
