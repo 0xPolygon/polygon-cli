@@ -353,13 +353,26 @@ type chPeerSnapshot struct {
 
 // --- Database interface ----------------------------------------------------
 
+// recordsBlockEvents reports whether block_events should be written at all.
+//
+// The provenance sources -- new_block, header, header_backfill, body -- are about
+// one row per block per sensor, measured at 2.8 MB/day across the mainnet fleet, so
+// they follow this rather than shouldWriteBlockEvents. That flag exists to bound the
+// hash_announce firehose, which is ~52 rows per block per sensor and scales with
+// peer count. Gating provenance behind it meant the production config
+// (write_block_events=false, write_first_block_event=true) silently recorded no
+// total_difficulty, no header timing and no header_backfill marker at all.
+func (c *ClickHouse) recordsBlockEvents() bool {
+	return c.shouldWriteBlockEvents || c.shouldWriteFirstBlockEvent
+}
+
 func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
 	if c.conn == nil {
 		return
 	}
 	// Announced total difficulty describes the announcement, not the block, so it
 	// rides on the event.
-	if c.shouldWriteBlockEvents && peer != nil {
+	if c.recordsBlockEvents() && peer != nil {
 		c.blockEvt.add(chBlockEvent{
 			blockNumber:     block.NumberU64(),
 			blockHash:       block.Hash().Hex(),
@@ -390,7 +403,7 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	}
 	for _, h := range headers {
 		c.blocks.add(newChBlock(h))
-		if c.shouldWriteBlockEvents {
+		if c.recordsBlockEvents() {
 			c.blockEvt.add(chBlockEvent{
 				blockNumber:     h.Number.Uint64(),
 				blockHash:       h.Hash().Hex(),
@@ -415,7 +428,7 @@ func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, an
 	// Record that the body arrived, and when. Like the header sources this carries
 	// no peer -- the sensor requested it -- so it is excluded from the propagation
 	// rollup, but it makes "which sensor got the body, and when" answerable.
-	if c.shouldWriteBlockEvents {
+	if c.recordsBlockEvents() {
 		c.blockEvt.add(chBlockEvent{
 			blockNumber:     ann.Number,
 			blockHash:       hash.Hex(),
