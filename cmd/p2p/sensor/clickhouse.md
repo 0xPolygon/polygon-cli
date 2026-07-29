@@ -258,7 +258,7 @@ Two traps in the derived layer:
   `argMax`.
 - **Timestamp names carry their scope.** `sensor_first_seen` / `sensor_last_seen` are
   one sensor's earliest and latest; plain `first_seen` / `last_seen` are across every
-  sensor; `first_seen_latency` is how far behind the earliest sensor a given sensor
+  sensor; `first_seen_latency_ms` is how far behind the earliest sensor a given sensor
   was. `v_block_latency` exposes the first two side by side, so a per-sensor value is
   never mistaken for a fleet-wide one. `tx_events_first` keeps a plain `first_seen`
   because its grain is per transaction, which is already across sensors.
