@@ -256,6 +256,12 @@ Two traps in the derived layer:
   fans out over unmerged snapshots — measured at 3x inflation on a freshly loaded
   database (74 rows covering 27 distinct peers). `v_peers` collapses them with
   `argMax`.
+- **Timestamp names carry their scope.** `sensor_first_seen` / `sensor_last_seen` are
+  one sensor's earliest and latest; plain `first_seen` / `last_seen` are across every
+  sensor; `first_seen_latency` is how far behind the earliest sensor a given sensor
+  was. `v_block_latency` exposes the first two side by side, so a per-sensor value is
+  never mistaken for a fleet-wide one. `tx_events_first` keeps a plain `first_seen`
+  because its grain is per transaction, which is already across sensors.
 - **`v_block_latency.latency_ms` is `NULL` when the header has not been seen.** A
   hash announcement is routinely recorded before its header, and the join would
   otherwise supply `block_time = epoch` and yield a ~1.8e12 ms "latency" that
