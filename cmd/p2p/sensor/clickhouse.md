@@ -142,7 +142,12 @@ at all) depending on the mermaid version.
 | `transactions` | `ReplacingMergeTree`              | `(hash)`                                         | 14d       |
 | `block_events` | `MergeTree`                       | `(block_number, block_hash, sensor_id, seen_at)` | 14d       |
 | `tx_events`    | `MergeTree`                       | `(tx_hash, seen_at)`                             | 14d       |
-| `peers`        | `MergeTree`                       | `(sensor_id, node_id, seen_at)`                  | 3d        |
+| `peers`        | `MergeTree`                       | `(sensor_id, node_id, seen_at)`                  | 14d       |
+
+**Retention is 14 days or forever, never anything in between.** Observations and
+anything derived from them expire at 14 days; the content-addressed facts and the
+analysis-job tables are kept. So the growth question is only about the `forever`
+group — `block_txs` dominates it at roughly 92 GiB/year on mainnet.
 
 Things the diagram cannot carry:
 
@@ -206,13 +211,13 @@ flowchart LR
 
     subgraph rollups["Rollups: AggregatingMergeTree fed by MVs"]
         BSF[("block_events_first
-        per block x sensor x source - 400d")]
+        per block x sensor x source - 14d")]
         TSF[("tx_events_first
-        per tx, fleet-wide - 90d")]
+        per tx, fleet-wide - 14d")]
         BF[("block_forks
         per height - forever")]
         PC[("peers_current
-        per sensor x peer - 30d")]
+        per sensor x peer - 14d")]
     end
 
     subgraph views["Read surface"]
