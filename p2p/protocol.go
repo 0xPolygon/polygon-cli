@@ -47,10 +47,11 @@ type conn struct {
 	db       database.Database
 	peer     *ethp2p.Peer
 
-	// requests is used to store the request ID and the block hash. This is used
-	// when fetching block bodies because the eth protocol block bodies do not
-	// contain information about the block hash.
-	requests   *ds.LRU[uint64, common.Hash]
+	// requests is used to store the request ID and the announced block (hash and
+	// height). This is used when fetching block bodies because the eth protocol
+	// block bodies carry neither the hash nor the height of the block they belong
+	// to, and observations are keyed by height.
+	requests   *ds.LRU[uint64, database.BlockAnnouncement]
 	requestNum uint64
 
 	// parents tracks hashes of blocks requested as parents to mark them
@@ -141,7 +142,7 @@ func NewEthProtocol(version uint, opts EthProtocolOptions) ethp2p.Protocol {
 				logger:                     log.With().Str("peer", peerURL).Logger(),
 				rw:                         rw,
 				db:                         opts.Database,
-				requests:                   ds.NewLRU[uint64, common.Hash](opts.RequestsCache),
+				requests:                   ds.NewLRU[uint64, database.BlockAnnouncement](opts.RequestsCache),
 				requestNum:                 0,
 				parents:                    ds.NewLRU[common.Hash, struct{}](opts.ParentsCache),
 				peer:                       p,
@@ -445,7 +446,8 @@ func (c *conn) handleBlockRangeUpdate(msg ethp2p.Msg) error {
 // peer based on what parts of the block we already have. It will return an error
 // if sending either of the requests failed. The isParent parameter indicates if
 // this block is being fetched as a parent block.
-func (c *conn) getBlockData(hash common.Hash, cache BlockCache, isParent bool) error {
+func (c *conn) getBlockData(ann database.BlockAnnouncement, cache BlockCache, isParent bool) error {
+	hash := ann.Hash
 	// Only request header if we don't have it
 	if cache.Header == nil {
 		headersRequest := &GetBlockHeaders{
@@ -470,7 +472,7 @@ func (c *conn) getBlockData(hash common.Hash, cache BlockCache, isParent bool) e
 	// Only request body if we don't have it
 	if cache.Body == nil {
 		c.requestNum++
-		c.requests.Add(c.requestNum, hash)
+		c.requests.Add(c.requestNum, ann)
 
 		bodiesRequest := &GetBlockBodies{
 			RequestId:             c.requestNum,
@@ -515,7 +517,13 @@ func (c *conn) getParentBlock(ctx context.Context, header *types.Header) error {
 		Str("number", new(big.Int).Sub(header.Number, big.NewInt(1)).String()).
 		Msg("Fetching missing parent block")
 
-	return c.getBlockData(header.ParentHash, cache, true)
+	// The parent sits one below this header, so the height is known without
+	// fetching it.
+	parent := database.BlockAnnouncement{
+		Hash:   header.ParentHash,
+		Number: header.Number.Uint64() - 1,
+	}
+	return c.getBlockData(parent, cache, true)
 }
 
 // eventHashes selects which announced hashes to record as inbound events: every
@@ -597,7 +605,7 @@ func (c *conn) handleNewBlockHashes(ctx context.Context, msg ethp2p.Msg) error {
 
 		// Request only the parts we don't have yet (getBlockData inspects the
 		// cache entry and asks for the missing header and/or body).
-		if err := c.getBlockData(hash, cache, false); err != nil {
+		if err := c.getBlockData(entry, cache, false); err != nil {
 			return err
 		}
 	}
@@ -1120,11 +1128,12 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.countMsgReceived((*eth.BlockBodiesResponse)(nil).Name(), float64(len(packet.BlockBodiesRLPResponse)))
 
-	hash, ok := c.requests.Get(packet.RequestId)
+	ann, ok := c.requests.Get(packet.RequestId)
 	if !ok {
 		c.logger.Warn().Msg("No block hash found for block body")
 		return nil
 	}
+	hash := ann.Hash
 	c.requests.Remove(packet.RequestId)
 
 	// Check if we already have the body in the cache
@@ -1138,7 +1147,7 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	c.db.WriteBlockBody(ctx, body, hash, tfs)
+	c.db.WriteBlockBody(ctx, body, ann, tfs)
 
 	// When cache-only-validated is enabled, only retain the body if the block
 	// already has a cache entry (the announcement marker, or a cached header).

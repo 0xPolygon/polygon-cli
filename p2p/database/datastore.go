@@ -214,7 +214,8 @@ func (d *Datastore) WriteBlockHeaders(ctx context.Context, headers []*types.Head
 // requested. The block events will be written when the hash is received
 // instead. It will write the uncles and transactions to datastore if they
 // don't already exist.
-func (d *Datastore) WriteBlockBody(ctx context.Context, body *eth.BlockBody, hash common.Hash, tfs time.Time) {
+func (d *Datastore) WriteBlockBody(ctx context.Context, body *eth.BlockBody, ann BlockAnnouncement, tfs time.Time) {
+	hash := ann.Hash
 	if d.client == nil || !d.ShouldWriteBlocks() {
 		return
 	}

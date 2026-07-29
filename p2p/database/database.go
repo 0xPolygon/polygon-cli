@@ -57,11 +57,13 @@ type Database interface {
 	WriteBlockHashFirstSeen(context.Context, *enode.Node, common.Hash, time.Time)
 
 	// WriteBlockBody writes the transactions carried in the block body (the block
-	// row itself comes from WriteBlock/WriteBlockHeaders). Backends with a
+	// row itself comes from WriteBlock/WriteBlockHeaders). The announcement carries
+	// the height, which the eth block body does not, so backends that key
+	// observations by block number can record the body's arrival. Backends with a
 	// separate transactions table (e.g. ClickHouse) gate this on
 	// ShouldWriteTransactions; the Datastore backend gates on ShouldWriteBlocks
 	// because it links the transactions and uncles onto the block entity.
-	WriteBlockBody(context.Context, *eth.BlockBody, common.Hash, time.Time)
+	WriteBlockBody(context.Context, *eth.BlockBody, BlockAnnouncement, time.Time)
 
 	// WriteTransactions writes the transaction bodies if ShouldWriteTransactions
 	// returns true. Transaction events are recorded separately via

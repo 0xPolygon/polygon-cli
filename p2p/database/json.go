@@ -254,7 +254,8 @@ func (j *JSONDatabase) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.
 }
 
 // WriteBlockBody writes the block body as JSON.
-func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, hash common.Hash, tfs time.Time) {
+func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, ann BlockAnnouncement, tfs time.Time) {
+	hash := ann.Hash
 	if !j.ShouldWriteBlocks() {
 		return
 	}

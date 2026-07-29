@@ -47,6 +47,7 @@ const (
 	srcNewBlock       = "new_block"
 	srcHeader         = "header"
 	srcHeaderBackfill = "header_backfill"
+	srcBody           = "body"
 	srcFullTx         = "full_tx"
 )
 
@@ -401,14 +402,27 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	}
 }
 
-func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, hash common.Hash, tfs time.Time) {
+func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, ann BlockAnnouncement, tfs time.Time) {
 	if c.conn == nil {
 		return
 	}
+	hash := ann.Hash
 	txs, err := body.Transactions.Items()
 	if err != nil {
 		log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode transactions from block body")
 		return
+	}
+	// Record that the body arrived, and when. Like the header sources this carries
+	// no peer -- the sensor requested it -- so it is excluded from the propagation
+	// rollup, but it makes "which sensor got the body, and when" answerable.
+	if c.shouldWriteBlockEvents {
+		c.blockEvt.add(chBlockEvent{
+			blockNumber:     ann.Number,
+			blockHash:       hash.Hex(),
+			source:          srcBody,
+			seenAt:          tfs,
+			totalDifficulty: big.NewInt(0),
+		})
 	}
 	// The header row comes from the header path; record only the body facts (keyed
 	// by hash, since the height is unknown here) and the transactions.

@@ -98,7 +98,7 @@ erDiagram
         String block_hash PK
         LowCardinality sensor_id PK
         LowCardinality node_id FK "devp2p node id"
-        LowCardinality source "hash_announce new_block header header_backfill"
+        LowCardinality source "hash_announce new_block header header_backfill body"
         DateTime64 seen_at PK "ms precision"
         UInt256 total_difficulty "from the announcement"
     }
@@ -206,7 +206,7 @@ flowchart LR
 
     subgraph rollups["Rollups: AggregatingMergeTree fed by MVs"]
         BSF[("block_events_first
-        per block x sensor - 400d")]
+        per block x sensor x source - 400d")]
         TSF[("tx_events_first
         per tx, fleet-wide - 90d")]
         BF[("block_forks
@@ -217,6 +217,7 @@ flowchart LR
 
     subgraph views["Read surface"]
         VBL[v_block_latency]
+        VBP[v_block_provenance]
         VB[v_blocks]
         VF[v_forks]
         VSC[v_sensor_coverage]
@@ -230,8 +231,9 @@ flowchart LR
     BL -->|MV| BF
     PS -->|MV| PC
 
-    BSF --> VBL
+    BSF -->|"propagation sources only"| VBL
     BL --> VBL
+    BSF -->|"every source"| VBP
     BSF --> VSC
     BF --> VF
     PC --> VP
@@ -377,9 +379,17 @@ flowchart LR
 ### Five things worth reading off this
 
 **`WriteBlockHashFirstSeen` is a no-op.** Earliest first-seen is derived from the
-event stream by the `block_events_first` materialized view, so there is nothing
-to stamp on the block. The interface method stays because the Datastore backend
-does need it.
+event stream by the `block_events_first` materialized view, so there is nothing to
+stamp on the block. The interface method stays because the Datastore backend does
+need it.
+
+Because that rollup is keyed by `source`, it replaces both Datastore column pairs at
+once — `TimeFirstSeenHash`/`SensorFirstSeenHash` is `source = 'hash_announce'` and
+`TimeFirstSeen`/`SensorFirstSeen` is `source = 'header'` — and keeps them for 400 days
+rather than only as long as the 14-day raw stream. `v_block_provenance` presents it.
+**Any latency read must restrict to the propagation sources** (`hash_announce`,
+`new_block`), which `v_block_latency` does: the sensor-requested sources carry no peer
+and their timestamps say when it chose to fetch, not how fast the block arrived.
 
 **`blocks` is written by two paths, and that is safe.** Both `WriteBlock` and
 `WriteBlockHeaders` write a _complete_ header row — every column is a pure function
