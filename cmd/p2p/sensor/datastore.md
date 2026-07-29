@@ -156,7 +156,7 @@ Not a migration map — the grain differs on purpose — but useful for orientat
 | `block_events`                             | `block_events`                                   |
 | `transactions`                             | `transactions` (+ `tx_type`, selector, chain id) |
 | `transaction_events`                       | `tx_events`                                      |
-| `peers`                                    | `peer_snapshots` → `peers_current`               |
+| `peers`                                    | `peers` → `peers_current`                        |
 | `TTL` field + cleanup job                  | `TTL` clauses, whole-partition drops             |
 | n/a                                        | `block_forks`, `v_*` views                       |
 

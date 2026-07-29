@@ -186,9 +186,9 @@ func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
 // handling lives in newInsertBatcher.
 func (c *ClickHouse) startBatchers(ctx context.Context) {
 	c.blocks = newInsertBatcher(ctx, c, "blocks", chBlockBatch,
-		"INSERT INTO blocks (number, hash, parent_hash, block_time, signer, coinbase, difficulty, gas_used, gas_limit, base_fee, uncle_hash, state_root, tx_root, receipt_root, logs_bloom, extra_data, mix_digest, nonce, withdrawals_root, blob_gas_used, excess_blob_gas, parent_beacon_root)",
+		"INSERT INTO blocks (number, hash, parent_hash, block_time, signer, coinbase, difficulty, gas_used, gas_limit, base_fee, uncle_hash, state_root, tx_root, receipt_root, logs_bloom, extra_data, mix_digest, nonce)",
 		func(b driver.Batch, r chBlock) error {
-			return b.Append(r.number, r.hash, r.parentHash, r.blockTime, r.signer, r.coinbase, r.difficulty, r.gasUsed, r.gasLimit, r.baseFee, r.uncleHash, r.stateRoot, r.txRoot, r.receiptRoot, r.logsBloom, r.extraData, r.mixDigest, r.nonce, r.withdrawalsRoot, r.blobGasUsed, r.excessBlobGas, r.parentBeaconRoot)
+			return b.Append(r.number, r.hash, r.parentHash, r.blockTime, r.signer, r.coinbase, r.difficulty, r.gasUsed, r.gasLimit, r.baseFee, r.uncleHash, r.stateRoot, r.txRoot, r.receiptRoot, r.logsBloom, r.extraData, r.mixDigest, r.nonce)
 		})
 	c.blockBodies = newInsertBatcher(ctx, c, "block_bodies", chBlockBodyBatch,
 		"INSERT INTO block_bodies (hash, tx_count, uncle_count, uncles, size_bytes)",
@@ -215,8 +215,8 @@ func (c *ClickHouse) startBatchers(ctx context.Context) {
 		func(b driver.Batch, r chTxEvent) error {
 			return b.Append(r.txHash, c.sensorID, r.nodeID, r.source, r.seenAt)
 		})
-	c.peers = newInsertBatcher(ctx, c, "peer_snapshots", chPeerBatch,
-		"INSERT INTO peer_snapshots (sensor_id, node_id, name, url, caps, seen_at)",
+	c.peers = newInsertBatcher(ctx, c, "peers", chPeerBatch,
+		"INSERT INTO peers (sensor_id, node_id, name, url, caps, seen_at)",
 		func(b driver.Batch, r chPeerSnapshot) error {
 			return b.Append(c.sensorID, r.nodeID, r.name, r.url, r.caps, r.seenAt)
 		})
@@ -269,28 +269,24 @@ func flushBatch[T any](conn driver.Conn, query string, rows []T, appendRow func(
 // two sensors that see this hash produce an identical row. Nothing observational
 // (which sensor, when, how it was learned) belongs here -- see chBlockEvent.
 type chBlock struct {
-	number           uint64
-	hash             string
-	parentHash       string
-	blockTime        time.Time
-	signer           string
-	coinbase         string
-	difficulty       uint64
-	gasUsed          uint64
-	gasLimit         uint64
-	baseFee          *big.Int
-	uncleHash        string
-	stateRoot        string
-	txRoot           string
-	receiptRoot      string
-	logsBloom        []byte
-	extraData        []byte
-	mixDigest        string
-	nonce            uint64
-	withdrawalsRoot  string
-	blobGasUsed      uint64
-	excessBlobGas    uint64
-	parentBeaconRoot string
+	number      uint64
+	hash        string
+	parentHash  string
+	blockTime   time.Time
+	signer      string
+	coinbase    string
+	difficulty  uint64
+	gasUsed     uint64
+	gasLimit    uint64
+	baseFee     *big.Int
+	uncleHash   string
+	stateRoot   string
+	txRoot      string
+	receiptRoot string
+	logsBloom   []byte
+	extraData   []byte
+	mixDigest   string
+	nonce       uint64
 }
 
 // chBlockBody holds the facts a header cannot carry. Written only when a body or
@@ -568,6 +564,12 @@ func (c *ClickHouse) ShouldWritePeers() bool { return c.shouldWritePeers }
 // newChBlock maps a header to a blocks-table row. Takes nothing but the header, so
 // everything it writes is a pure function of it -- which is what makes duplicate
 // rows for a hash byte-identical.
+//
+// mix_digest and nonce are all-zero on Bor but stored anyway: clique's
+// encodeSigHeader includes them unconditionally, so a consumer re-running ecrecover
+// needs them, as it needs base_fee. The post-Shanghai/Cancun header fields are
+// deliberately not stored -- clique panics if any of them is non-nil, so they can
+// never take part in the seal hash.
 func newChBlock(h *types.Header) chBlock {
 	baseFee := new(big.Int)
 	if h.BaseFee != nil {
@@ -579,7 +581,7 @@ func newChBlock(h *types.Header) chBlock {
 	if sig, err := util.Ecrecover(h); err == nil {
 		signer = common.BytesToAddress(sig).Hex()
 	}
-	b := chBlock{
+	return chBlock{
 		number:      h.Number.Uint64(),
 		hash:        h.Hash().Hex(),
 		parentHash:  h.ParentHash.Hex(),
@@ -599,21 +601,6 @@ func newChBlock(h *types.Header) chBlock {
 		mixDigest:   h.MixDigest.Hex(),
 		nonce:       h.Nonce.Uint64(),
 	}
-	// Post-Shanghai/Cancun fields are pointers, absent on older chains; the columns
-	// default to '' / 0.
-	if h.WithdrawalsHash != nil {
-		b.withdrawalsRoot = h.WithdrawalsHash.Hex()
-	}
-	if h.BlobGasUsed != nil {
-		b.blobGasUsed = *h.BlobGasUsed
-	}
-	if h.ExcessBlobGas != nil {
-		b.excessBlobGas = *h.ExcessBlobGas
-	}
-	if h.ParentBeaconRoot != nil {
-		b.parentBeaconRoot = h.ParentBeaconRoot.Hex()
-	}
-	return b
 }
 
 // writeBlockBody records the body facts and the ordered block -> tx mapping. size

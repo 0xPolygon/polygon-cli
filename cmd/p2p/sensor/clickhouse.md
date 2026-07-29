@@ -57,10 +57,6 @@ erDiagram
         String extra_data "RAW BYTES not hex"
         String mix_digest
         UInt64 nonce
-        String withdrawals_root
-        UInt64 blob_gas_used
-        UInt64 excess_blob_gas
-        String parent_beacon_root
     }
 
     block_bodies {
@@ -116,7 +112,7 @@ erDiagram
         DateTime64 seen_at PK
     }
 
-    peer_snapshots {
+    peers {
         LowCardinality sensor_id PK
         String node_id PK
         String name "client version"
@@ -130,8 +126,8 @@ erDiagram
     block_txs      }o--|| transactions : "tx_hash"
     blocks         ||--o{ block_events : "number + hash"
     transactions   ||--o{ tx_events : "hash"
-    peer_snapshots ||--o{ block_events : "node_id"
-    peer_snapshots ||--o{ tx_events : "node_id"
+    peers ||--o{ block_events : "node_id"
+    peers ||--o{ tx_events : "node_id"
 ```
 
 `blocks.parent_hash` points at another `blocks.hash`, forming the chain that reorg
@@ -139,15 +135,15 @@ and fork analysis walks. It is annotated on the column rather than drawn as a
 relationship, because a self-reference renders as an easily-missed loop (or nothing
 at all) depending on the mermaid version.
 
-| Table            | Engine                            | Sort key                                         | Retention |
-| ---------------- | --------------------------------- | ------------------------------------------------ | --------- |
-| `blocks`         | `ReplacingMergeTree` (no version) | `(number, hash)`                                 | forever   |
-| `block_bodies`   | `ReplacingMergeTree`              | `(hash)`                                         | forever   |
-| `block_txs`      | `ReplacingMergeTree`              | `(block_hash, tx_index)`                         | forever   |
-| `transactions`   | `ReplacingMergeTree`              | `(hash)`                                         | 14d       |
-| `block_events`   | `MergeTree`                       | `(block_number, block_hash, sensor_id, seen_at)` | 14d       |
-| `tx_events`      | `MergeTree`                       | `(tx_hash, seen_at)`                             | 14d       |
-| `peer_snapshots` | `MergeTree`                       | `(sensor_id, node_id, seen_at)`                  | 3d        |
+| Table          | Engine                            | Sort key                                         | Retention |
+| -------------- | --------------------------------- | ------------------------------------------------ | --------- |
+| `blocks`       | `ReplacingMergeTree` (no version) | `(number, hash)`                                 | forever   |
+| `block_bodies` | `ReplacingMergeTree`              | `(hash)`                                         | forever   |
+| `block_txs`    | `ReplacingMergeTree`              | `(block_hash, tx_index)`                         | forever   |
+| `transactions` | `ReplacingMergeTree`              | `(hash)`                                         | 14d       |
+| `block_events` | `MergeTree`                       | `(block_number, block_hash, sensor_id, seen_at)` | 14d       |
+| `tx_events`    | `MergeTree`                       | `(tx_hash, seen_at)`                             | 14d       |
+| `peers`        | `MergeTree`                       | `(sensor_id, node_id, seen_at)`                  | 3d        |
 
 Things the diagram cannot carry:
 
@@ -160,12 +156,19 @@ Things the diagram cannot carry:
   separately and they race), so the height is not reliably known on that path.
   Carrying `number` would mean writing `0` when unknown, reintroducing the exact
   partial-row problem the split removes. The height is one join away.
-- **`peer_snapshots` → events is a join on `node_id`, not a foreign key.** It
+- **`peers` → events is a join on `node_id`, not a foreign key.** It
   works only because both sides record the devp2p node id. Get this wrong and the
   join silently returns nothing.
 - **`logs_bloom` and `extra_data` are raw bytes in a `String` column, not hex.**
   Readers that re-run ecrecover depend on it; hex-decoding `extra_data` corrupts it
   and silently breaks every signer-derived metric.
+- **The post-Shanghai/Cancun header fields are deliberately absent.** `mix_digest`
+  and `nonce` are all-zero on Bor but stored, because clique's `encodeSigHeader`
+  includes them unconditionally and ecrecover needs them (as it needs `base_fee`).
+  `withdrawals_root`, `blob_gas_used`, `excess_blob_gas` and `parent_beacon_root` are
+  not stored: clique _panics_ if any is non-nil, so they can never take part in the
+  seal hash, and they are absent from mainnet and amoy headers. Add one back with
+  `ALTER TABLE ADD COLUMN` if that ever changes.
 - **`seen_date` on `transactions` and `block_txs` is an ingest fact**, not a
   consensus one. On `transactions` it makes expiry a whole-partition drop; on
   `block_txs`, which is kept forever, it only partitions (monthly, so partitions
@@ -187,7 +190,7 @@ flowchart LR
     subgraph sensor["Written by the sensor"]
         BS[(block_events)]
         TS[(tx_events)]
-        PS[(peer_snapshots)]
+        PS[(peers)]
         BL[(blocks)]
         BB[(block_bodies)]
         TX[(transactions)]
@@ -311,7 +314,7 @@ flowchart LR
         T4[(block_events)]
         T5[(transactions)]
         T6[(tx_events)]
-        T7[(peer_snapshots)]
+        T7[(peers)]
     end
 
     M1 --> H1
@@ -365,7 +368,7 @@ flowchart LR
 | `WriteBlockHashFirstSeen` | nothing                                                               | Derived instead, see below                                                 |
 | `WriteTransactions`       | `transactions`, `tx_events`                                           | Event gated on the full per-peer stream flag                               |
 | `WriteTransactionEvents`  | `tx_events`                                                           |                                                                            |
-| `WritePeers`              | `peer_snapshots`                                                      | Own ticker, not the 2s metrics tick                                        |
+| `WritePeers`              | `peers`                                                               | Own ticker, not the 2s metrics tick                                        |
 | `HasBlock`                | —                                                                     | Reads `blocks` by hash, once per new header                                |
 
 ### Five things worth reading off this
@@ -400,7 +403,7 @@ and since `p2p.NewBlockHashesPacket` is defined as a slice of exactly that type,
 decoded packet is handed to the backend with no copy or conversion.
 
 **Peer identity is the devp2p node id**, not the enode URL, on both event
-streams — so events join to `peer_snapshots` / `peers_current`. The Datastore
+streams — so events join to `peers` / `peers_current`. The Datastore
 backend uses `peer.URLv4()` here, which is why peers and events cannot be joined on
 that backend.
 
