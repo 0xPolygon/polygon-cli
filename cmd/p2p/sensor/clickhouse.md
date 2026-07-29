@@ -64,7 +64,6 @@ erDiagram
         UInt32 tx_count
         UInt16 uncle_count
         Array uncles
-        UInt32 size_bytes
     }
 
     block_txs {
@@ -151,6 +150,10 @@ Things the diagram cannot carry:
   is nothing to order them by. `block_time` is header-derived, which means a hash's
   duplicates always land in the same partition and the dedup key can actually
   collapse — a dedup key that spans partitions never merges.
+- **No encoded block size is stored.** It is only knowable from a full `NewBlock`,
+  not from a body delivered on its own, so it is not a function of the hash. Storing
+  it let two sensors write differing rows for one block, and the engine picked
+  arbitrarily — measured, the `0` won and the real size was discarded.
 - **`block_bodies` and `block_txs` are keyed by hash alone, with no `number`.** A
   body can arrive before, or without, its header (the sensor requests the two
   separately and they race), so the height is not reliably known on that path.
@@ -359,17 +362,17 @@ flowchart LR
 
 ### Per-method detail
 
-| Method                    | Writes                                                                | Notes                                                                      |
-| ------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `WriteBlock`              | `blocks`, `block_bodies`, `block_txs`, `block_events`, `transactions` | The only path with the full block, so the only one that knows `size_bytes` |
-| `WriteBlockHeaders`       | `blocks`, `block_events`                                              | `isParent` selects `source = 'header_backfill'`                            |
-| `WriteBlockBody`          | `block_bodies`, `block_txs`, `transactions`                           | No event: bodies arrive only when requested                                |
-| `WriteBlockEvents`        | `block_events`                                                        | Takes `[]BlockAnnouncement`, so heights reach the row                      |
-| `WriteBlockHashFirstSeen` | nothing                                                               | Derived instead, see below                                                 |
-| `WriteTransactions`       | `transactions`, `tx_events`                                           | Event gated on the full per-peer stream flag                               |
-| `WriteTransactionEvents`  | `tx_events`                                                           |                                                                            |
-| `WritePeers`              | `peers`                                                               | Own ticker, not the 2s metrics tick                                        |
-| `HasBlock`                | —                                                                     | Reads `blocks` by hash, once per new header                                |
+| Method                    | Writes                                                                | Notes                                                 |
+| ------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------- |
+| `WriteBlock`              | `blocks`, `block_bodies`, `block_txs`, `block_events`, `transactions` | The only path with the whole block                    |
+| `WriteBlockHeaders`       | `blocks`, `block_events`                                              | `isParent` selects `source = 'header_backfill'`       |
+| `WriteBlockBody`          | `block_bodies`, `block_txs`, `transactions`                           | No event: bodies arrive only when requested           |
+| `WriteBlockEvents`        | `block_events`                                                        | Takes `[]BlockAnnouncement`, so heights reach the row |
+| `WriteBlockHashFirstSeen` | nothing                                                               | Derived instead, see below                            |
+| `WriteTransactions`       | `transactions`, `tx_events`                                           | Event gated on the full per-peer stream flag          |
+| `WriteTransactionEvents`  | `tx_events`                                                           |                                                       |
+| `WritePeers`              | `peers`                                                               | Own ticker, not the 2s metrics tick                   |
+| `HasBlock`                | —                                                                     | Reads `blocks` by hash, once per new header           |
 
 ### Five things worth reading off this
 
@@ -381,7 +384,7 @@ does need it.
 **`blocks` is written by two paths, and that is safe.** Both `WriteBlock` and
 `WriteBlockHeaders` write a _complete_ header row — every column is a pure function
 of the header — so ordering between them cannot matter. The fields a header cannot
-carry (`tx_count`, `uncle_count`, `size_bytes`, `uncles`) go to `block_bodies`,
+carry (`tx_count`, `uncle_count`, `uncles`) go to `block_bodies`,
 which the header path never touches.
 
 This is the defect the schema redesign fixed. Previously the header path wrote

@@ -191,9 +191,9 @@ func (c *ClickHouse) startBatchers(ctx context.Context) {
 			return b.Append(r.number, r.hash, r.parentHash, r.blockTime, r.signer, r.coinbase, r.difficulty, r.gasUsed, r.gasLimit, r.baseFee, r.uncleHash, r.stateRoot, r.txRoot, r.receiptRoot, r.logsBloom, r.extraData, r.mixDigest, r.nonce)
 		})
 	c.blockBodies = newInsertBatcher(ctx, c, "block_bodies", chBlockBodyBatch,
-		"INSERT INTO block_bodies (hash, tx_count, uncle_count, uncles, size_bytes)",
+		"INSERT INTO block_bodies (hash, tx_count, uncle_count, uncles)",
 		func(b driver.Batch, r chBlockBody) error {
-			return b.Append(r.hash, r.txCount, r.uncleCount, r.uncles, r.sizeBytes)
+			return b.Append(r.hash, r.txCount, r.uncleCount, r.uncles)
 		})
 	c.blockTxs = newInsertBatcher(ctx, c, "block_txs", chBlockTxBatch,
 		"INSERT INTO block_txs (block_hash, tx_index, tx_hash, seen_date)",
@@ -297,7 +297,6 @@ type chBlockBody struct {
 	txCount    uint32
 	uncleCount uint16
 	uncles     []string
-	sizeBytes  uint32
 }
 
 type chBlockTx struct {
@@ -371,7 +370,7 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 	}
 	if c.shouldWriteBlocks {
 		c.blocks.add(newChBlock(block.Header()))
-		c.writeBlockBody(block.Hash(), block.Transactions(), block.Uncles(), block.Size(), tfs)
+		c.writeBlockBody(block.Hash(), block.Transactions(), block.Uncles(), tfs)
 	}
 	if c.shouldWriteTransactions {
 		c.writeTxs(block.Transactions(), tfs)
@@ -419,7 +418,7 @@ func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, ha
 			log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode uncles from block body")
 			uncles = nil
 		}
-		c.writeBlockBody(hash, txs, uncles, 0, tfs)
+		c.writeBlockBody(hash, txs, uncles, tfs)
 	}
 	if c.shouldWriteTransactions {
 		c.writeTxs(txs, tfs)
@@ -603,9 +602,12 @@ func newChBlock(h *types.Header) chBlock {
 	}
 }
 
-// writeBlockBody records the body facts and the ordered block -> tx mapping. size
-// is 0 when the body arrived alone, since the encoded size needs the whole block.
-func (c *ClickHouse) writeBlockBody(hash common.Hash, txs []*types.Transaction, uncles []*types.Header, size uint64, tfs time.Time) {
+// writeBlockBody records the body facts and the ordered block -> tx mapping.
+//
+// Deliberately stores no encoded block size: it is only knowable from a full
+// NewBlock, not from a body delivered on its own, so it is not a function of the
+// hash and two sensors could write differing rows for one block.
+func (c *ClickHouse) writeBlockBody(hash common.Hash, txs []*types.Transaction, uncles []*types.Header, tfs time.Time) {
 	uncleHashes := make([]string, 0, len(uncles))
 	for _, u := range uncles {
 		uncleHashes = append(uncleHashes, u.Hash().Hex())
@@ -615,7 +617,6 @@ func (c *ClickHouse) writeBlockBody(hash common.Hash, txs []*types.Transaction, 
 		txCount:    uint32(len(txs)),
 		uncleCount: uint16(len(uncles)),
 		uncles:     uncleHashes,
-		sizeBytes:  uint32(size),
 	})
 
 	blockHash := hash.Hex()
