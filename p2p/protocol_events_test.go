@@ -96,7 +96,7 @@ func TestBlockEventFullVsFirst(t *testing.T) {
 				t.Fatalf("%s: recorded %d block events, want %d", tc.name, rec.blockEvents, tc.want)
 			}
 			// The announced height must reach the backend: observations are keyed
-			// by block number, and a zero here would silently mis-key every row.
+			// by block number, and a zero here would silently key every row to 0.
 			for _, number := range rec.blockNumbers {
 				if number != 200 {
 					t.Fatalf("%s: recorded block number %d, want 200", tc.name, number)

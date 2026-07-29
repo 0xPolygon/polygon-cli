@@ -43,11 +43,11 @@ const (
 // Event sources, so consumers can tell a hash announcement from a delivered
 // header or body.
 const (
-	srcHashAnnounce  = "hash_announce"
-	srcNewBlock      = "new_block"
-	srcHeader        = "header"
-	srcHeaderBackfil = "header_backfill"
-	srcFullTx        = "full_tx"
+	srcHashAnnounce   = "hash_announce"
+	srcNewBlock       = "new_block"
+	srcHeader         = "header"
+	srcHeaderBackfill = "header_backfill"
+	srcFullTx         = "full_tx"
 )
 
 // ClickHouse implements the Database interface backed by a ClickHouse cluster.
@@ -390,7 +390,7 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	// counts, size) live in block_bodies, so this path can never overwrite them.
 	source := srcHeader
 	if isParent {
-		source = srcHeaderBackfil
+		source = srcHeaderBackfill
 	}
 	for _, h := range headers {
 		c.blocks.add(newChBlock(h))
