@@ -20,17 +20,21 @@ import (
 
 // Test block heights live in a reserved band far above any real chain head, one
 // per test, so a test row is never mistaken for chain data and two tests never
-// collide on a height. This matters because these tests write to a real database
+// collide on a height. Spaced by ten, so a test needing a parent or child can
+// derive height-1 or height+1 without landing on another test's block -- deriving a
+// parent as height-1 from consecutive constants collided, and the resulting failure
+// appeared only when the whole suite ran. This matters because these tests write to a real database
 // that is usually the local-stack one holding live sensor data: heights 42 and
 // 4242 previously produced rows that looked exactly like a transaction included in
 // four competing blocks, which is a real reorg signature.
 const (
-	heightWrites          = 900_000_001
-	heightHeaderNoClobber = 900_000_002
-	heightProductionFlags = 900_000_003
-	heightParentCancel    = 900_000_004
-	heightTotalDiff       = 900_000_005
-	heightLowercase       = 900_000_006
+	heightWrites          = 900_000_010
+	heightHeaderNoClobber = 900_000_020
+	heightProductionFlags = 900_000_030
+	heightParentCancel    = 900_000_040
+	heightTotalDiff       = 900_000_050
+	heightLowercase       = 900_000_060
+	heightHeaderEvents    = 900_000_070
 )
 
 // The integration tests in this file are skipped unless
@@ -596,5 +600,67 @@ func TestAddressesAreStoredLowercase(t *testing.T) {
 	}
 	if want := strings.ToLower(mixedCoinbase.Hex()); to != want {
 		t.Fatalf("to_address: want %s got %s", want, to)
+	}
+}
+
+// TestHeaderEventsDoNotRequireWriteBlocks is the third and last instance of the
+// provenance-gating defect, after new_block/body and full_tx.
+//
+// WriteBlockHeaders returned early on !shouldWriteBlocks, before reaching
+// recordsBlockEvents, which made header and header_backfill the only two provenance
+// sources that also required --write-blocks. A fleet with it off still requests
+// headers -- getBlockData has no such gate -- so the events were produced and thrown
+// away, silently emptying v_block_provenance's header rows and losing the
+// header_backfill marker that replaced Datastore's IsParent.
+//
+// The header row and the header event are separate concerns and are now gated
+// separately.
+func TestHeaderEventsDoNotRequireWriteBlocks(t *testing.T) {
+	dsn := clickHouseDSN(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Block facts off, block events on.
+	db := NewClickHouse(ctx, ClickHouseOptions{
+		DSN:                        dsn,
+		SensorID:                   "test-sensor-header-events",
+		ChainID:                    137,
+		MaxConcurrency:             10,
+		ShouldWriteBlocks:          false,
+		ShouldWriteBlockEvents:     false,
+		ShouldWriteFirstBlockEvent: true,
+	})
+
+	now := time.Now().UTC()
+	header, _ := signedHeader(t, heightHeaderEvents, now)
+	parent, _ := signedHeader(t, heightHeaderEvents-1, now)
+
+	db.WriteBlockHeaders(ctx, []*types.Header{header}, now, false)
+	db.WriteBlockHeaders(ctx, []*types.Header{parent}, now, true)
+	if cerr := db.Close(); cerr != nil {
+		t.Fatalf("close db: %v", cerr)
+	}
+
+	conn := verifyConn(t, dsn)
+
+	// Both header sources must be recorded on the event flag alone.
+	for hash, want := range map[string]string{
+		header.Hash().Hex(): "header",
+		parent.Hash().Hex(): "header_backfill",
+	} {
+		checkCount(t, conn,
+			"SELECT count() FROM block_events WHERE block_hash = ? AND source = '"+want+"'", hash)
+	}
+
+	// And the fact row must still be suppressed -- the two gates are independent, so
+	// this proves the fix separated them rather than just widening one.
+	var blocks uint64
+	if err := conn.QueryRow(context.Background(),
+		"SELECT count() FROM blocks WHERE number IN (?, ?)",
+		uint64(heightHeaderEvents), uint64(heightHeaderEvents-1)).Scan(&blocks); err != nil {
+		t.Fatalf("scan blocks: %v", err)
+	}
+	if blocks != 0 {
+		t.Fatalf("write_blocks=false should write no blocks rows, got %d", blocks)
 	}
 }

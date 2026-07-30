@@ -196,6 +196,13 @@ Things the diagram cannot carry:
   that is not a function of the key, so without a version the surviving row's value
   was arbitrary. As a version it resolves to the latest sighting, which also means a
   re-announced pending transaction's 14 days restart from when it was last seen.
+- **Fact rows and provenance events are gated separately, per write path.** A
+  `blocks` row needs `--write-blocks`; an event needs either block-event flag. Mixing
+  them is the defect that recurred three times — `new_block`/`header`/`body` behind
+  `--write-block-events` alone, then `full_tx` behind `--write-tx-events` alone, then
+  `header`/`header_backfill` behind `--write-blocks` because `WriteBlockHeaders`
+  returned early before reaching the event check. Headers are requested regardless of
+  `--write-blocks`, so that last one produced the events and discarded them.
 - **`ttl_only_drop_parts` requires a partition no coarser than the TTL.** It
   suppresses row-level expiry and drops a part only once every row in it has
   expired, so a partition spanning longer than the TTL pins expired rows. Both
@@ -402,7 +409,7 @@ flowchart LR
 | Method                    | Writes                                                                | Notes                                                 |
 | ------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------- |
 | `WriteBlock`              | `blocks`, `block_bodies`, `block_txs`, `block_events`, `transactions` | The only path with the whole block                    |
-| `WriteBlockHeaders`       | `blocks`, `block_events`                                              | `isParent` selects `source = 'header_backfill'`       |
+| `WriteBlockHeaders`       | `blocks`, `block_events`                                              | `isParent` picks `header_backfill`; gated separately  |
 | `WriteBlockBody`          | `block_bodies`, `block_txs`, `transactions`                           | No event: bodies arrive only when requested           |
 | `WriteBlockEvents`        | `block_events`                                                        | Takes `[]BlockAnnouncement`, so heights reach the row |
 | `WriteBlockHashFirstSeen` | nothing                                                               | Derived instead, see below                            |

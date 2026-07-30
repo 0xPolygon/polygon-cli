@@ -434,17 +434,25 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 }
 
 func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time, isParent bool) {
-	if c.conn == nil || !c.shouldWriteBlocks {
+	// The header row and the header event are separate concerns, gated separately.
+	// Returning early on !shouldWriteBlocks made header and header_backfill the only
+	// two provenance sources that also required --write-blocks, so a fleet with it
+	// off recorded new_block, body, hash_announce and full_tx but silently dropped
+	// header timing and the backfill marker -- and headers are still requested in
+	// that configuration, so the events were produced and thrown away.
+	if c.conn == nil || (!c.shouldWriteBlocks && !c.recordsBlockEvents()) {
 		return
 	}
-	// A header row is complete on its own: the fields it cannot carry (tx/uncle
-	// counts, size) live in block_bodies, so this path can never overwrite them.
 	source := srcHeader
 	if isParent {
 		source = srcHeaderBackfill
 	}
 	for _, h := range headers {
-		c.blocks.add(newChBlock(h))
+		// A header row is complete on its own: the fields it cannot carry (tx/uncle
+		// counts) live in block_bodies, so this path can never overwrite them.
+		if c.shouldWriteBlocks {
+			c.blocks.add(newChBlock(h))
+		}
 		if c.recordsBlockEvents() {
 			c.blockEvt.add(chBlockEvent{
 				blockNumber:     h.Number.Uint64(),
