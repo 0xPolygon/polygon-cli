@@ -194,6 +194,12 @@ var SensorCmd = &cobra.Command{
 				return errors.New("--validator-set-refresh must be greater than zero when --validate-block-signer is enabled with block broadcasting")
 			}
 		}
+		// Validated here rather than discovered at time.NewTicker, which panics on a
+		// non-positive interval -- and it would panic after the p2p ports are bound
+		// and the database is open, i.e. a crash loop rather than a startup error.
+		if inputSensorParams.PeerSnapshotInterval <= 0 {
+			return errors.New("--peer-snapshot-interval must be greater than zero")
+		}
 
 		return nil
 	},

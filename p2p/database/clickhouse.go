@@ -1,6 +1,7 @@
 package database
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -85,8 +86,11 @@ type ClickHouse struct {
 	txEvt       *rowBatcher[chTxEvent]
 	peers       *rowBatcher[chPeerSnapshot]
 
-	// discarded counts writes dropped because the backend was never reachable, so
-	// the periodic warning can say how much has been lost.
+	// discarded approximates the rows dropped because the backend was never
+	// reachable -- incremented by every Write* that returns on a nil connection --
+	// so the periodic warning can say how much has been lost. It previously counted
+	// HasBlock calls instead, which made it read 0 forever in exactly the
+	// configurations where everything was being dropped.
 	discarded atomic.Uint64
 
 	// cancel stops the batcher goroutines; wg tracks them so Close can wait for
@@ -417,6 +421,7 @@ func (c *ClickHouse) recordsTxEvents() bool {
 
 func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
 	if c.conn == nil {
+		c.discarded.Add(1 + uint64(len(block.Transactions())))
 		return
 	}
 	// Which peer announced which total difficulty is an observation, so it rides on
@@ -436,12 +441,17 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 	}
 	// Only ever written from here, and never as 0: an absent row is how "no peer
 	// announced it to us" is expressed, so writing 0 would recreate the sentinel
-	// this table exists to remove. Not gated on shouldWriteBlocks -- it is a fact
-	// about the announcement we just received, like the event above.
-	if td != nil && td.Sign() > 0 {
+	// this table exists to remove.
+	//
+	// Gated on shouldWriteBlocks like every other fact row. Ungated, this was the
+	// one write that happened with every flag off -- forever-kept rows with no
+	// blocks row to join to, invisible to v_blocks yet accumulating permanently.
+	// The value is copied because rows sit in the batcher for up to a second and
+	// td aliases the caller's big.Int.
+	if c.shouldWriteBlocks && td != nil && td.Sign() > 0 {
 		c.blockTD.add(chBlockTD{
 			hash:            block.Hash().Hex(),
-			totalDifficulty: td,
+			totalDifficulty: new(big.Int).Set(td),
 		})
 	}
 	if c.shouldWriteBlocks {
@@ -460,7 +470,11 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	// off recorded new_block, body, hash_announce and full_tx but silently dropped
 	// header timing and the backfill marker -- and headers are still requested in
 	// that configuration, so the events were produced and thrown away.
-	if c.conn == nil || (!c.shouldWriteBlocks && !c.recordsBlockEvents()) {
+	if c.conn == nil {
+		c.discarded.Add(uint64(len(headers)))
+		return
+	}
+	if !c.shouldWriteBlocks && !c.recordsBlockEvents() {
 		return
 	}
 	source := srcHeader
@@ -487,17 +501,17 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 
 func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, ann BlockAnnouncement, tfs time.Time) {
 	if c.conn == nil {
+		c.discarded.Add(1)
 		return
 	}
 	hash := ann.Hash
-	txs, err := body.Transactions.Items()
-	if err != nil {
-		log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode transactions from block body")
-		return
-	}
-	// Record that the body arrived, and when. Like the header sources this carries
-	// no peer -- the sensor requested it -- so it is excluded from the propagation
-	// rollup, but it makes "which sensor got the body, and when" answerable.
+
+	// The body arrived: that is true whether or not it decodes, so the event is
+	// recorded first. Like the header sources it carries no peer -- the sensor
+	// requested it -- so it is excluded from the propagation rollup, but it makes
+	// "which sensor got the body, and when" answerable. Recording it first also
+	// keeps the two decode-failure paths below consistent: previously a failed
+	// transaction decode skipped the event while a failed uncle decode kept it.
 	if c.recordsBlockEvents() {
 		c.blockEvt.add(chBlockEvent{
 			blockNumber:     ann.Number,
@@ -507,21 +521,32 @@ func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, an
 			totalDifficulty: big.NewInt(0),
 		})
 	}
-	// The header row comes from the header path; record only the body facts (keyed
-	// by hash, since the height is unknown here) and the transactions.
+
+	txs, err := body.Transactions.Items()
+	if err != nil {
+		// Nothing downstream is derivable: block_bodies needs the count, block_txs
+		// and transactions need the transactions themselves.
+		log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode transactions from block body")
+		return
+	}
+
+	// Each fact is skipped exactly when ITS inputs are undecodable, no wider.
+	// block_bodies carries uncle facts, so a failed uncle decode skips only that
+	// row -- writing it with uncle_count = 0 against the NewBlock path's real value
+	// made the merge survivor arbitrary (the size_bytes defect), but the
+	// transaction facts are pure functions of the transactions, which decoded
+	// fine, and the first version of this fix threw those away too. Unreachable
+	// either way on Bor, which produces no uncles.
+	uncles, uncleErr := body.Uncles.Items()
+	if uncleErr != nil {
+		log.Error().Err(uncleErr).Str("hash", hash.Hex()).Msg("Failed to decode uncles from block body")
+	}
 	if c.shouldWriteBlocks {
-		uncles, err := body.Uncles.Items()
-		if err != nil {
-			// Return rather than write a partial row. uncle_count and uncles must be
-			// pure functions of the block hash: continuing here wrote 0 and [] while
-			// the NewBlock path wrote the true values for the same hash, so the
-			// surviving row after a merge was arbitrary -- the defect that removed the
-			// size_bytes column. The transaction decode above returns for the same
-			// reason. Unreachable in practice on Bor, which produces no uncles.
-			log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode uncles from block body")
-			return
+		if uncleErr == nil {
+			c.writeBlockBody(hash, txs, uncles, tfs)
+		} else {
+			c.writeBlockTxs(hash, txs, tfs)
 		}
-		c.writeBlockBody(hash, txs, uncles, tfs)
 	}
 	if c.shouldWriteTransactions {
 		c.writeTxs(txs, tfs)
@@ -529,7 +554,11 @@ func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, an
 }
 
 func (c *ClickHouse) WriteBlockEvents(ctx context.Context, peer *enode.Node, anns []BlockAnnouncement, tfs time.Time) {
-	if c.conn == nil || peer == nil {
+	if c.conn == nil {
+		c.discarded.Add(uint64(len(anns)))
+		return
+	}
+	if peer == nil {
 		return
 	}
 	nodeID := peer.ID().String()
@@ -551,7 +580,11 @@ func (c *ClickHouse) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.No
 }
 
 func (c *ClickHouse) WriteTransactionEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
-	if c.conn == nil || peer == nil {
+	if c.conn == nil {
+		c.discarded.Add(uint64(len(hashes)))
+		return
+	}
+	if peer == nil {
 		return
 	}
 	nodeID := peer.ID().String()
@@ -567,6 +600,7 @@ func (c *ClickHouse) WriteTransactionEvents(ctx context.Context, peer *enode.Nod
 
 func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
 	if c.conn == nil {
+		c.discarded.Add(uint64(len(txs)))
 		return
 	}
 	// A delivered body is a distinct event from a hash announcement, and worth
@@ -590,7 +624,11 @@ func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, tx
 }
 
 func (c *ClickHouse) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time.Time) {
-	if c.conn == nil || !c.shouldWritePeers {
+	if c.conn == nil {
+		c.discarded.Add(uint64(len(peers)))
+		return
+	}
+	if !c.shouldWritePeers {
 		return
 	}
 	// node_id matches what the event streams record, so peers and events are
@@ -641,7 +679,6 @@ func (c *ClickHouse) startUnavailableWarning(ctx context.Context) {
 // specifically; startUnavailableWarning is what makes it visible.
 func (c *ClickHouse) HasBlock(ctx context.Context, hash common.Hash) bool {
 	if c.conn == nil {
-		c.discarded.Add(1)
 		return true
 	}
 	var exists uint8
@@ -748,7 +785,7 @@ func newChBlock(h *types.Header) chBlock {
 		txRoot:      h.TxHash.Hex(),
 		receiptRoot: h.ReceiptHash.Hex(),
 		logsBloom:   h.Bloom.Bytes(),
-		extraData:   h.Extra,
+		extraData:   bytes.Clone(h.Extra), // aliased peer memory; rows outlive the call
 		mixDigest:   h.MixDigest.Hex(),
 		nonce:       h.Nonce.Uint64(),
 	}
@@ -770,7 +807,13 @@ func (c *ClickHouse) writeBlockBody(hash common.Hash, txs []*types.Transaction, 
 		uncleCount: uint16(len(uncles)),
 		uncles:     uncleHashes,
 	})
+	c.writeBlockTxs(hash, txs, tfs)
+}
 
+// writeBlockTxs records the ordered block -> transaction mapping alone, for the
+// case where the body facts row cannot be written (undecodable uncles) but the
+// transactions decoded fine.
+func (c *ClickHouse) writeBlockTxs(hash common.Hash, txs []*types.Transaction, tfs time.Time) {
 	blockHash := hash.Hex()
 	seenDate := tfs.UTC().Truncate(24 * time.Hour)
 	for i, tx := range txs {

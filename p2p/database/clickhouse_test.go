@@ -37,6 +37,34 @@ const (
 	heightHeaderEvents    = 900_000_070
 )
 
+// cleanupTestHeights removes everything the given test heights produced, in
+// dependency order (hash-keyed tables first, via the blocks rows). Registered by
+// every test that writes blocks: block_forks has no TTL and v_forks no height
+// filter, so without this each run's fresh sealing key added another competing
+// hash per height -- six heights wide-N "forks" after N runs, unfilterable and
+// permanent.
+func cleanupTestHeights(t *testing.T, conn driver.Conn, heights ...uint64) {
+	t.Helper()
+	t.Cleanup(func() {
+		ctx := context.Background()
+		for _, h := range heights {
+			for _, q := range []string{
+				"ALTER TABLE block_txs DELETE WHERE block_hash IN (SELECT hash FROM blocks WHERE number = ?) SETTINGS mutations_sync = 1",
+				"ALTER TABLE block_bodies DELETE WHERE hash IN (SELECT hash FROM blocks WHERE number = ?) SETTINGS mutations_sync = 1",
+				"ALTER TABLE block_total_difficulty DELETE WHERE hash IN (SELECT hash FROM blocks WHERE number = ?) SETTINGS mutations_sync = 1",
+				"ALTER TABLE blocks DELETE WHERE number = ? SETTINGS mutations_sync = 1",
+				"ALTER TABLE block_events DELETE WHERE block_number = ? SETTINGS mutations_sync = 1",
+				"ALTER TABLE block_events_first DELETE WHERE block_number = ? SETTINGS mutations_sync = 1",
+				"ALTER TABLE block_forks DELETE WHERE number = ? SETTINGS mutations_sync = 1",
+			} {
+				if err := conn.Exec(ctx, q, h); err != nil {
+					t.Logf("cleanup height %d: %v", h, err)
+				}
+			}
+		}
+	})
+}
+
 // The integration tests in this file are skipped unless
 // POLYCLI_TEST_CLICKHOUSE_DSN is set, e.g.
 //
@@ -142,8 +170,12 @@ func TestClickHouseWrites(t *testing.T) {
 
 	now := time.Now().UTC()
 	header, wantSigner := signedHeader(t, heightWrites, now)
+	// The nonce varies per run: with it fixed, each run mapped the SAME tx hash to
+	// a fresh block hash (the sealing key is fresh, so the header hash changes),
+	// and block_txs accumulated one-transaction-in-N-competing-blocks -- a real
+	// reorg signature, manufactured by the test suite.
 	tx := types.NewTx(&types.LegacyTx{
-		Nonce:    1,
+		Nonce:    uint64(now.UnixNano()),
 		GasPrice: big.NewInt(2_000_000_000),
 		Gas:      21_000,
 		Value:    big.NewInt(1),
@@ -162,6 +194,7 @@ func TestClickHouseWrites(t *testing.T) {
 	}
 
 	conn := verifyConn(t, dsn)
+	cleanupTestHeights(t, conn, heightWrites)
 	blockHash := block.Hash().Hex()
 
 	// Fact tables.
@@ -256,9 +289,9 @@ func TestClickHouseHeaderDoesNotClobberBody(t *testing.T) {
 	now := time.Now().UTC()
 	header, _ := signedHeader(t, heightHeaderNoClobber, now)
 	txs := []*types.Transaction{
-		types.NewTx(&types.LegacyTx{Nonce: 1, GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(1)}),
-		types.NewTx(&types.LegacyTx{Nonce: 2, GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(2)}),
-		types.NewTx(&types.LegacyTx{Nonce: 3, GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(3)}),
+		types.NewTx(&types.LegacyTx{Nonce: uint64(now.UnixNano()) + 1, GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(1)}),
+		types.NewTx(&types.LegacyTx{Nonce: uint64(now.UnixNano()) + 2, GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(2)}),
+		types.NewTx(&types.LegacyTx{Nonce: uint64(now.UnixNano()) + 3, GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(3)}),
 	}
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs})
 	peer := testPeer(t)
@@ -273,6 +306,7 @@ func TestClickHouseHeaderDoesNotClobberBody(t *testing.T) {
 	}
 
 	conn := verifyConn(t, dsn)
+	cleanupTestHeights(t, conn, heightHeaderNoClobber)
 	blockHash := block.Hash().Hex()
 
 	var txCount uint32
@@ -399,6 +433,7 @@ func TestClickHouseProductionFlagsRecordProvenance(t *testing.T) {
 	}
 
 	conn := verifyConn(t, dsn)
+	cleanupTestHeights(t, conn, heightProductionFlags)
 	blockHash := block.Hash().Hex()
 
 	for _, source := range []string{"new_block", "header"} {
@@ -456,6 +491,7 @@ func TestClickHouseWritesSurviveParentContextCancel(t *testing.T) {
 	}
 
 	conn := verifyConn(t, dsn)
+	cleanupTestHeights(t, conn, heightParentCancel)
 	blockHash := header.Hash().Hex()
 	checkCount(t, conn, "SELECT count() FROM blocks WHERE hash = ?", blockHash)
 }
@@ -490,6 +526,7 @@ func TestClickHouseTotalDifficultySurvivesEventExpiry(t *testing.T) {
 	}
 
 	conn := verifyConn(t, dsn)
+	cleanupTestHeights(t, conn, heightTotalDiff)
 	blockHash := block.Hash().Hex()
 
 	// Expire every observation of this block, which is what the 14-day TTL does.
@@ -565,6 +602,7 @@ func TestAddressesAreStoredLowercase(t *testing.T) {
 	}
 
 	conn := verifyConn(t, dsn)
+	cleanupTestHeights(t, conn, heightLowercase)
 
 	// The signer must round-trip as the lowercase form of the recovered address,
 	// proving it is lowercased rather than merely absent.
@@ -642,6 +680,7 @@ func TestHeaderEventsDoNotRequireWriteBlocks(t *testing.T) {
 	}
 
 	conn := verifyConn(t, dsn)
+	cleanupTestHeights(t, conn, heightHeaderEvents, heightHeaderEvents-1)
 
 	// Both header sources must be recorded on the event flag alone.
 	for hash, want := range map[string]string{
@@ -690,12 +729,26 @@ func TestUnavailableBackendKeepsWarning(t *testing.T) {
 	if ch.conn != nil {
 		t.Skip("unexpectedly connected")
 	}
-	// HasBlock on a nil conn must suppress backfill and count the loss.
+	// HasBlock on a nil conn must suppress backfill. It is a read, so it must NOT
+	// count toward discarded -- counting it made the warning report call volume,
+	// and read 0 forever under --write-blocks=false, where HasBlock is unreachable.
 	if !db.HasBlock(ctx, [32]byte{1}) {
 		t.Fatal("HasBlock should return true with no connection, to suppress backfill")
 	}
-	if got := ch.discarded.Load(); got == 0 {
-		t.Fatal("discarded counter did not increment")
+	if got := ch.discarded.Load(); got != 0 {
+		t.Fatalf("HasBlock counted toward discarded: %d", got)
+	}
+
+	// Writes are what the counter measures: a block with two transactions is three
+	// rows lost.
+	now := time.Now().UTC()
+	header, _ := signedHeader(t, heightWrites, now)
+	tx1 := types.NewTx(&types.LegacyTx{Nonce: uint64(now.UnixNano()), GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(1)})
+	tx2 := types.NewTx(&types.LegacyTx{Nonce: uint64(now.UnixNano()) + 1, GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(1)})
+	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx1, tx2}})
+	db.WriteBlock(ctx, testPeer(t), block, big.NewInt(1), now)
+	if got := ch.discarded.Load(); got != 3 {
+		t.Fatalf("discarded: want 3 (block + 2 txs), got %d", got)
 	}
 	// The warner goroutine must be registered with the WaitGroup so Close waits.
 	done := make(chan struct{})

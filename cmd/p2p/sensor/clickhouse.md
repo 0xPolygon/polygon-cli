@@ -70,7 +70,7 @@ erDiagram
         String block_hash PK
         UInt32 tx_index PK
         String tx_hash FK
-        Date seen_date "version column, TTL clock"
+        Date seen_date "version column; no TTL, kept forever"
     }
 
     transactions {
@@ -134,21 +134,22 @@ and fork analysis walks. It is annotated on the column rather than drawn as a
 relationship, because a self-reference renders as an easily-missed loop (or nothing
 at all) depending on the mermaid version.
 
-| Table                   | Engine                            | Sort key                                         | Retention |
-| ----------------------- | --------------------------------- | ------------------------------------------------ | --------- |
-| `blocks`                | `ReplacingMergeTree` (no version) | `(number, hash)`                                 | forever   |
-| `block_bodies`          | `ReplacingMergeTree`              | `(hash)`                                         | forever   |
-| `block_txs`             | `ReplacingMergeTree`              | `(block_hash, tx_index)`                         | forever   |
-| `transactions`          | `ReplacingMergeTree`              | `(hash)`                                         | 14d       |
-| `block_events`          | `MergeTree`                       | `(block_number, block_hash, sensor_id, seen_at)` | 14d       |
-| `tx_events`             | `MergeTree`                       | `(tx_hash, seen_at)`                             | 14d       |
-| `peers`                 | `MergeTree`                       | `(sensor_id, node_id, seen_at)`                  | 14d       |
-| `block_events_first`    | `AggregatingMergeTree`            | `(block_number, block_hash, sensor_id, source)`  | 14d       |
-| `tx_events_first`       | `AggregatingMergeTree`            | `(tx_hash)`                                      | 14d       |
-| `block_forks`           | `AggregatingMergeTree`            | `(number)`                                       | forever   |
-| `peers_current`         | `ReplacingMergeTree(last_seen)`   | `(sensor_id, node_id)`                           | 14d       |
-| `reorg_detections`      | `MergeTree`                       | `(start_block, depth, detected_at)`              | forever   |
-| `block_latency_metrics` | `MergeTree`                       | `(scope, hours_analyzed, timestamp)`             | forever   |
+| Table                    | Engine                                 | Sort key                                         | Retention |
+| ------------------------ | -------------------------------------- | ------------------------------------------------ | --------- |
+| `blocks`                 | `ReplacingMergeTree` (no version)      | `(number, hash)`                                 | forever   |
+| `block_bodies`           | `ReplacingMergeTree`                   | `(hash)`                                         | forever   |
+| `block_txs`              | `ReplacingMergeTree`                   | `(block_hash, tx_index)`                         | forever   |
+| `transactions`           | `ReplacingMergeTree`                   | `(hash)`                                         | 14d       |
+| `block_events`           | `MergeTree`                            | `(block_number, block_hash, sensor_id, seen_at)` | 14d       |
+| `tx_events`              | `MergeTree`                            | `(tx_hash, seen_at)`                             | 14d       |
+| `peers`                  | `MergeTree`                            | `(sensor_id, node_id, seen_at)`                  | 14d       |
+| `block_total_difficulty` | `ReplacingMergeTree(total_difficulty)` | `(hash)`                                         | forever   |
+| `block_events_first`     | `AggregatingMergeTree`                 | `(block_number, block_hash, sensor_id, source)`  | 14d       |
+| `tx_events_first`        | `AggregatingMergeTree`                 | `(tx_hash)`                                      | 14d       |
+| `block_forks`            | `AggregatingMergeTree`                 | `(number)`                                       | forever   |
+| `peers_current`          | `ReplacingMergeTree(last_seen)`        | `(sensor_id, node_id)`                           | 14d       |
+| `reorg_detections`       | `MergeTree`                            | `(start_block, depth, detected_at)`              | forever   |
+| `block_latency_metrics`  | `MergeTree`                            | `(scope, hours_analyzed, timestamp)`             | forever   |
 
 **Retention is 14 days or forever, never anything in between.** Observations and
 anything derived from them expire at 14 days; the content-addressed facts and the
@@ -190,19 +191,27 @@ Things the diagram cannot carry:
   partitions permanently: 10.07% of `transactions` rows survived a full
   `OPTIMIZE FINAL`, 115k hashes spanning partitions. A transaction has no intrinsic
   timestamp — unlike a block, whose header supplies one — so `seen_date` could not
-  be made key-derived, and both tables now bucket on their own key
-  (`cityHash64(hash) % 16`).
+  be made key-derived, and both tables now bucket on their own key —
+  `cityHash64(hash)` for `transactions`, `cityHash64(block_hash)` for `block_txs`,
+  16 buckets each.
 - **`seen_date` is the version column on both tables.** It is the one column there
   that is not a function of the key, so without a version the surviving row's value
   was arbitrary. As a version it resolves to the latest sighting, which also means a
   re-announced pending transaction's 14 days restart from when it was last seen.
+- **Addresses are stored lowercase** — `signer`, `coinbase`, `from_address`,
+  `to_address`, via `addressHex`, never `common.Address.Hex()`, whose EIP-55
+  checksum is a display format. ClickHouse compares case-sensitively and every
+  validator identity in this pipeline is lowercase, so a checksummed address joins
+  to nothing and raises nothing. Hashes are lowercase by construction.
 - **Fact rows and provenance events are gated separately, per write path.** A
   `blocks` row needs `--write-blocks`; an event needs either block-event flag. Mixing
   them is the defect that recurred three times — `new_block`/`header`/`body` behind
   `--write-block-events` alone, then `full_tx` behind `--write-tx-events` alone, then
   `header`/`header_backfill` behind `--write-blocks` because `WriteBlockHeaders`
-  returned early before reaching the event check. Headers are requested regardless of
-  `--write-blocks`, so that last one produced the events and discarded them.
+  returned early before reaching the event check. Live headers are requested
+  regardless of `--write-blocks`, so `header` events were produced and discarded;
+  `header_backfill` could not even be produced there, parent backfill itself being
+  gated on `--write-blocks` in `getParentBlock`.
 - **`ttl_only_drop_parts` requires a partition no coarser than the TTL.** It
   suppresses row-level expiry and drops a part only once every row in it has
   expired, so a partition spanning longer than the TTL pins expired rows. Both
@@ -387,6 +396,8 @@ flowchart LR
     A1 -->|"source=hash_announce"| T4
     A2 --> T1
     A2 -->|"tx_count, uncles"| T2
+    A2 -->|"announced value,
+    never 0"| T9[block_total_difficulty]
     A2 --> T3
     A2 -->|"source=new_block
     + total_difficulty"| T4
@@ -397,6 +408,7 @@ flowchart LR
     A4 --> T2
     A4 --> T3
     A4 --> T5
+    A4 -->|"source=body"| T4
     A5 --> T5
     A5 -->|"source=full_tx"| T6
     A6 -->|"source=hash_announce"| T6
@@ -459,7 +471,8 @@ header clobber a real value. It used to be read out of `block_events_first`, whi
 worked only while that rollup outlived the raw stream; once retention was
 normalised both were 14 days and `v_blocks.total_difficulty` returned `0` for every
 older block — the same value that means "no peer ever announced it to us". Now
-absence carries that meaning and the column is `Nullable`, so there is no sentinel.
+absence carries that meaning and `v_blocks` exposes it as `Nullable` (the table
+column itself is a plain `UInt256`), so there is no sentinel.
 `TestClickHouseTotalDifficultySurvivesEventExpiry` covers it.
 
 **Block heights have to reach `WriteBlockEvents`.** `block_events` leads its sort
@@ -478,7 +491,8 @@ that backend.
 
 Batch sizes are per table (`chBlockBatch` and friends): 5,000 blocks, 5,000 bodies,
 20,000 block-txs, 50,000 block events, 20,000 transactions, 50,000 tx events,
-2,000 peers.
+2,000 peers — and `block_total_difficulty` reuses the 5,000 of bodies, its rows
+being at most one per block, the same cardinality.
 
 `tx_events` is the volume driver, and only its `hash_announce` rows are: every peer
 that announces a hash produces one, so the count scales with `--max-peers`. The

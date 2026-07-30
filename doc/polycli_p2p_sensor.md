@@ -222,8 +222,8 @@ polycli p2p sensor amoy-nodes.json \
       --validator-set-refresh duration    interval to refresh the validator set from heimdall (default 5m0s)
       --write-block-events                write block events to database (default true)
   -B, --write-blocks                      write blocks to database (default true)
-      --write-first-block-event           write one block event on first-seen only (requires --write-block-events=false)
-      --write-first-tx-event              write one transaction event on first-seen only (requires --write-tx-events=false)
+      --write-first-block-event           write one block event on first-seen only; ignored when --write-block-events is set
+      --write-first-tx-event              write one transaction event on first-seen only; ignored when --write-tx-events is set
       --write-peers                       write peers to database (default true)
       --write-tx-events                   write transaction events to database (this option can significantly increase CPU and memory usage) (default true)
   -t, --write-txs                         write transactions to database (this option can significantly increase CPU and memory usage) (default true)

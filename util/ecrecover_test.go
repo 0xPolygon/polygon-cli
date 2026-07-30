@@ -30,6 +30,7 @@ func TestEcrecoverDoesNotPanicOnUntrustedHeader(t *testing.T) {
 		{"excess_blob_gas", func(h *types.Header) { h.ExcessBlobGas = &gas }},
 		{"blob_gas_used", func(h *types.Header) { h.BlobGasUsed = &gas }},
 		{"parent_beacon_root", func(h *types.Header) { h.ParentBeaconRoot = &hash }},
+		{"slot_number", func(h *types.Header) { h.SlotNumber = &gas }}, // EIP-7843, geth v1.17.4
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := &types.Header{
