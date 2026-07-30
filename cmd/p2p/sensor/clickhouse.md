@@ -138,8 +138,8 @@ at all) depending on the mermaid version.
 | ------------------------ | -------------------------------------- | ------------------------------------------------ | --------- |
 | `blocks`                 | `ReplacingMergeTree` (no version)      | `(number, hash)`                                 | forever   |
 | `block_bodies`           | `ReplacingMergeTree`                   | `(hash)`                                         | forever   |
-| `block_txs`              | `ReplacingMergeTree`                   | `(block_hash, tx_index)`                         | forever   |
-| `transactions`           | `ReplacingMergeTree`                   | `(hash)`                                         | 14d       |
+| `block_txs`              | `ReplacingMergeTree(seen_date)`        | `(block_hash, tx_index)`                         | forever   |
+| `transactions`           | `ReplacingMergeTree(seen_date)`        | `(hash)`                                         | 14d       |
 | `block_events`           | `MergeTree`                            | `(block_number, block_hash, sensor_id, seen_at)` | 14d       |
 | `tx_events`              | `MergeTree`                            | `(tx_hash, seen_at)`                             | 14d       |
 | `peers`                  | `MergeTree`                            | `(sensor_id, node_id, seen_at)`                  | 14d       |
@@ -289,6 +289,7 @@ flowchart LR
     TX --> VTP
     BL --> VB
     BB --> VB
+    BTD[(block_total_difficulty)] --> VB
     RD --> VR
 ```
 
@@ -296,6 +297,13 @@ flowchart LR
 `validated`). Its sort key `(scope, hours_analyzed, timestamp)` turns the job's
 previous-run lookup into a reverse primary-index seek; on Datastore the same read
 had to over-fetch 1000 rows and linearly scan for the matching pair.
+
+Every `v_*` view distinguishes "not seen" from a zero value with a `has_*` flag
+and `NULL`s: `v_blocks.has_body` (so `tx_count`/`uncle_count` are `Nullable`, and
+`uncles` is `[]` only because arrays cannot be),
+`v_blocks.have_total_difficulty`, `v_block_latency.has_header` (so `block_time`,
+`signer` and `latency_ms` are `Nullable`), and `v_tx_propagation.has_tx`. Filter on
+the flag rather than testing a column for 0.
 
 Three traps in the derived layer:
 
@@ -419,17 +427,17 @@ flowchart LR
 
 ### Per-method detail
 
-| Method                    | Writes                                                                | Notes                                                 |
-| ------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------- |
-| `WriteBlock`              | `blocks`, `block_bodies`, `block_txs`, `block_events`, `transactions` | The only path with the whole block                    |
-| `WriteBlockHeaders`       | `blocks`, `block_events`                                              | `isParent` picks `header_backfill`; gated separately  |
-| `WriteBlockBody`          | `block_bodies`, `block_txs`, `transactions`, `block_events`           | Event `source = 'body'`                               |
-| `WriteBlockEvents`        | `block_events`                                                        | Takes `[]BlockAnnouncement`, so heights reach the row |
-| `WriteBlockHashFirstSeen` | nothing                                                               | Derived instead, see below                            |
-| `WriteTransactions`       | `transactions`, `tx_events`                                           | Event under either tx-event flag                      |
-| `WriteTransactionEvents`  | `tx_events`                                                           |                                                       |
-| `WritePeers`              | `peers`                                                               | Own ticker, not the 2s metrics tick                   |
-| `HasBlock`                | —                                                                     | Reads `blocks` by hash, once per new header           |
+| Method                    | Writes                                                                                          | Notes                                                 |
+| ------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `WriteBlock`              | `blocks`, `block_bodies`, `block_total_difficulty`, `block_txs`, `block_events`, `transactions` | The only path with the whole block                    |
+| `WriteBlockHeaders`       | `blocks`, `block_events`                                                                        | `isParent` picks `header_backfill`; gated separately  |
+| `WriteBlockBody`          | `block_bodies`, `block_txs`, `transactions`, `block_events`                                     | Event `source = 'body'`                               |
+| `WriteBlockEvents`        | `block_events`                                                                                  | Takes `[]BlockAnnouncement`, so heights reach the row |
+| `WriteBlockHashFirstSeen` | nothing                                                                                         | Derived instead, see below                            |
+| `WriteTransactions`       | `transactions`, `tx_events`                                                                     | Event under either tx-event flag                      |
+| `WriteTransactionEvents`  | `tx_events`                                                                                     |                                                       |
+| `WritePeers`              | `peers`                                                                                         | Own ticker, not the 2s metrics tick                   |
+| `HasBlock`                | —                                                                                               | Reads `blocks` by hash, once per new header           |
 
 ### Five things worth reading off this
 
