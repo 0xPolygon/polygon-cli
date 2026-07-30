@@ -196,6 +196,14 @@ Things the diagram cannot carry:
   that is not a function of the key, so without a version the surviving row's value
   was arbitrary. As a version it resolves to the latest sighting, which also means a
   re-announced pending transaction's 14 days restart from when it was last seen.
+- **`ttl_only_drop_parts` requires a partition no coarser than the TTL.** It
+  suppresses row-level expiry and drops a part only once every row in it has
+  expired, so a partition spanning longer than the TTL pins expired rows. Both
+  `*_first` rollups partitioned monthly against a 14-day TTL: once background
+  merges combined a month's inserts into one part, a row from the 1st survived
+  until the 31st's row expired — 44 days, sawtoothing with the calendar. Every
+  table using the setting now partitions daily; the two that cannot
+  (`peers_current`, hash-bucketed `transactions`) do not use it.
 - **Dedup happens on merge, so duplicates are transient, not absent.** Correct
   partitioning makes them converge; it does not stop an unmerged part from holding
   two rows for a key. A reader that must not double-count still needs `FINAL` or
