@@ -287,7 +287,7 @@ flowchart LR
 previous-run lookup into a reverse primary-index seek; on Datastore the same read
 had to over-fetch 1000 rows and linearly scan for the matching pair.
 
-Two traps in the derived layer:
+Three traps in the derived layer:
 
 - **`v_peers` is not optional convenience.** `peers_current` is a genuine upsert
   target, so unlike the fact tables its rows are _not_ identical. Joining it raw
@@ -386,7 +386,7 @@ flowchart LR
 
     A1 -->|"source=hash_announce"| T4
     A2 --> T1
-    A2 -->|"tx_count, uncles, size"| T2
+    A2 -->|"tx_count, uncles"| T2
     A2 --> T3
     A2 -->|"source=new_block
     + total_difficulty"| T4
@@ -410,7 +410,7 @@ flowchart LR
 | ------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------- |
 | `WriteBlock`              | `blocks`, `block_bodies`, `block_txs`, `block_events`, `transactions` | The only path with the whole block                    |
 | `WriteBlockHeaders`       | `blocks`, `block_events`                                              | `isParent` picks `header_backfill`; gated separately  |
-| `WriteBlockBody`          | `block_bodies`, `block_txs`, `transactions`                           | No event: bodies arrive only when requested           |
+| `WriteBlockBody`          | `block_bodies`, `block_txs`, `transactions`, `block_events`           | Event `source = 'body'`                               |
 | `WriteBlockEvents`        | `block_events`                                                        | Takes `[]BlockAnnouncement`, so heights reach the row |
 | `WriteBlockHashFirstSeen` | nothing                                                               | Derived instead, see below                            |
 | `WriteTransactions`       | `transactions`, `tx_events`                                           | Event under either tx-event flag                      |

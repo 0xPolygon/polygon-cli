@@ -664,3 +664,45 @@ func TestHeaderEventsDoNotRequireWriteBlocks(t *testing.T) {
 		t.Fatalf("write_blocks=false should write no blocks rows, got %d", blocks)
 	}
 }
+
+// TestUnavailableBackendKeepsWarning covers the degraded path, which used to be
+// invisible: one error at startup and then every write silently discarded while the
+// sensor peered and looked healthy. A ClickHouse auth failure did exactly that for
+// an hour across two sensors.
+//
+// It also guards the shutdown hang found while writing it -- the warning goroutine
+// listened on the caller's context while Close only cancels its own, so Close waited
+// forever on a goroutine nothing could stop.
+func TestUnavailableBackendKeepsWarning(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	db := NewClickHouse(ctx, ClickHouseOptions{
+		DSN:               "clickhouse://127.0.0.1:1/nope",
+		SensorID:          "warn",
+		ChainID:           137,
+		MaxConcurrency:    1,
+		ShouldWriteBlocks: true,
+	})
+	ch, ok := db.(*ClickHouse)
+	if !ok {
+		t.Fatal("not a *ClickHouse")
+	}
+	if ch.conn != nil {
+		t.Skip("unexpectedly connected")
+	}
+	// HasBlock on a nil conn must suppress backfill and count the loss.
+	if !db.HasBlock(ctx, [32]byte{1}) {
+		t.Fatal("HasBlock should return true with no connection, to suppress backfill")
+	}
+	if got := ch.discarded.Load(); got == 0 {
+		t.Fatal("discarded counter did not increment")
+	}
+	// The warner goroutine must be registered with the WaitGroup so Close waits.
+	done := make(chan struct{})
+	go func() { _ = db.Close(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close hung: the warning goroutine is not stopping on cancel")
+	}
+}

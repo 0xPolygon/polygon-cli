@@ -548,13 +548,13 @@ will result in less chance of missing data but can significantly increase memory
 	f.BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "write blocks to database")
 	f.BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "write block events to database")
 	f.BoolVar(&inputSensorParams.ShouldWriteFirstBlockEvent, "write-first-block-event", false,
-		"write one block event on first-seen only (requires --write-block-events=false)")
+		"write one block event on first-seen only; ignored when --write-block-events is set")
 	f.BoolVarP(&inputSensorParams.ShouldWriteTransactions, "write-txs", "t", true,
 		`write transactions to database (this option can significantly increase CPU and memory usage)`)
 	f.BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
 		`write transaction events to database (this option can significantly increase CPU and memory usage)`)
 	f.BoolVar(&inputSensorParams.ShouldWriteFirstTransactionEvent, "write-first-tx-event", false,
-		"write one transaction event on first-seen only (requires --write-tx-events=false)")
+		"write one transaction event on first-seen only; ignored when --write-tx-events is set")
 	f.BoolVar(&inputSensorParams.ShouldWritePeers, "write-peers", true, "write peers to database")
 	f.DurationVar(&inputSensorParams.PeerSnapshotInterval, "peer-snapshot-interval", 30*time.Second,
 		`how often to persist the connected-peer set (requires --write-peers); lower

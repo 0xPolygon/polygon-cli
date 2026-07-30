@@ -39,6 +39,8 @@ const (
 	chTxBatch          = 20000
 	chTxEventBatch     = 50000
 	chPeerBatch        = 2000
+	// How often to restate that the backend is unreachable.
+	chUnavailableWarnInterval = 1 * time.Minute
 )
 
 // Event sources, so consumers can tell a hash announcement from a delivered
@@ -83,6 +85,10 @@ type ClickHouse struct {
 	txEvt       *rowBatcher[chTxEvent]
 	peers       *rowBatcher[chPeerSnapshot]
 
+	// discarded counts writes dropped because the backend was never reachable, so
+	// the periodic warning can say how much has been lost.
+	discarded atomic.Uint64
+
 	// cancel stops the batcher goroutines; wg tracks them so Close can wait for
 	// their final drain flush before the connection is closed.
 	cancel context.CancelFunc
@@ -124,7 +130,21 @@ func NewClickHouse(ctx context.Context, opts ClickHouseOptions) Database {
 
 	conn, err := connectClickHouse(ctx, opts.DSN)
 	if err != nil {
-		log.Error().Err(err).Msg("Could not initialize ClickHouse connection")
+		// The sensor keeps running so a database outage does not take down a vantage
+		// point, but that degradation used to be invisible: one error at startup and
+		// then every write silently discarded, while the sensor peered, tracked the
+		// head and looked entirely healthy. That is exactly what a ClickHouse auth
+		// failure did -- two sensors ran for an hour writing nothing.
+		//
+		// So keep saying so. A dead backend is now visible in the logs for as long as
+		// it is dead, not only in the line that scrolled past at boot.
+		log.Error().Err(err).Msg("Could not initialize ClickHouse connection; ALL WRITES WILL BE DISCARDED")
+		// Its own cancel, stored on c, so Close stops it. Without this Close waits on
+		// a goroutine nothing can stop -- the same defect as the batchers inheriting
+		// the caller's context, and it hangs shutdown rather than losing rows.
+		wctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+		c.cancel = cancel
+		c.startUnavailableWarning(wctx)
 		return c
 	}
 	c.conn = conn
@@ -492,8 +512,14 @@ func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, an
 	if c.shouldWriteBlocks {
 		uncles, err := body.Uncles.Items()
 		if err != nil {
+			// Return rather than write a partial row. uncle_count and uncles must be
+			// pure functions of the block hash: continuing here wrote 0 and [] while
+			// the NewBlock path wrote the true values for the same hash, so the
+			// surviving row after a merge was arbitrary -- the defect that removed the
+			// size_bytes column. The transaction decode above returns for the same
+			// reason. Unreachable in practice on Bor, which produces no uncles.
 			log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode uncles from block body")
-			uncles = nil
+			return
 		}
 		c.writeBlockBody(hash, txs, uncles, tfs)
 	}
@@ -583,8 +609,39 @@ func (c *ClickHouse) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time
 // HasBlock reports whether the block already exists. Called once per new block
 // (not per event), so an indexed point lookup is cheap. Without a connection it
 // reports true so the sensor never attempts a backfill it could not persist.
+// startUnavailableWarning re-logs while the backend is unreachable, so the failure
+// keeps showing up in logs and alerting instead of scrolling past once at startup.
+// It does not reconnect: a sensor whose database was down at boot needs a restart,
+// and pretending otherwise would hide that.
+func (c *ClickHouse) startUnavailableWarning(ctx context.Context) {
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		ticker := time.NewTicker(chUnavailableWarnInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				log.Error().
+					Uint64("rows_discarded", c.discarded.Load()).
+					Msg("ClickHouse is unavailable; every write is being discarded")
+			}
+		}
+	}()
+}
+
+// HasBlock reports whether the block is already stored, which the sensor uses to
+// decide whether to backfill a parent.
+//
+// With no connection it returns true -- "we have it" -- to suppress backfill rather
+// than let every block queue parent requests that can never be satisfied. That is
+// the safer degradation, but it does mean a dead backend is silent in this path
+// specifically; startUnavailableWarning is what makes it visible.
 func (c *ClickHouse) HasBlock(ctx context.Context, hash common.Hash) bool {
 	if c.conn == nil {
+		c.discarded.Add(1)
 		return true
 	}
 	var exists uint8
