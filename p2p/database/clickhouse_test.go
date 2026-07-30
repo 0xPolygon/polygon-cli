@@ -372,3 +372,40 @@ func TestClickHouseProductionFlagsRecordProvenance(t *testing.T) {
 		t.Fatalf("total_difficulty: want 555 got %s", td.String())
 	}
 }
+
+// TestClickHouseWritesSurviveParentContextCancel is the regression test for silent
+// shutdown data loss.
+//
+// The sensor shuts down by cancelling its signal context, and only stops serving
+// peers afterwards (stopServer/conns.Close are deferred later than db.Close, so
+// they run first). While the p2p server winds down, peers keep delivering blocks.
+// When the batcher context inherited the caller's, cancellation drained and
+// stopped the batchers at the instant of SIGINT, so every row written during that
+// window went into the buffered channel with no reader -- never flushed, and not
+// counted as dropped because the channel had capacity, so nothing logged it.
+//
+// Close, and only Close, may stop the batchers.
+func TestClickHouseWritesSurviveParentContextCancel(t *testing.T) {
+	dsn := clickHouseDSN(t)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	db := newTestClickHouse(t, dsn, ctx)
+
+	// SIGINT arrives.
+	cancel()
+	time.Sleep(300 * time.Millisecond)
+
+	// A peer delivers a block while the p2p server is still winding down.
+	now := time.Now().UTC()
+	header, _ := signedHeader(t, 424242, now)
+	db.WriteBlockHeaders(ctx, []*types.Header{header}, now, false)
+
+	// Only now does the sensor close the database, which must drain.
+	if cerr := db.Close(); cerr != nil {
+		t.Fatalf("close db: %v", cerr)
+	}
+
+	conn := verifyConn(t, dsn)
+	blockHash := header.Hash().Hex()
+	checkCount(t, conn, "SELECT count() FROM blocks WHERE hash = ?", blockHash)
+}

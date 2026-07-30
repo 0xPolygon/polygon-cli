@@ -127,9 +127,14 @@ func NewClickHouse(ctx context.Context, opts ClickHouseOptions) Database {
 	}
 	c.conn = conn
 
-	// Derive a cancellable context so Close can stop the batchers independently
-	// of the parent context.
-	bctx, cancel := context.WithCancel(ctx)
+	// The batchers must outlive the caller's context, so their own cancellation is
+	// detached from it -- context.WithCancel(ctx) would inherit it and defeat the
+	// point. The sensor shuts down on signal-context cancellation and only stops
+	// serving peers afterwards, so an inherited context makes the batchers drain
+	// and exit while peers are still writing; those rows land in the buffered
+	// channel with no reader, are never flushed, and are not counted as dropped,
+	// so the loss is silent. Close is the only thing that may stop them.
+	bctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	c.cancel = cancel
 	c.startBatchers(bctx)
 
@@ -502,9 +507,9 @@ func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, tx
 	if c.conn == nil {
 		return
 	}
-	// A delivered body is a distinct event from a hash announcement, but recorded
-	// only under the full per-peer stream flag: in first-event-only mode it would
-	// multiply rows on the largest table without adding a new first-event.
+	// A delivered body is a distinct event from a hash announcement, and worth
+	// recording under either flag: measured at ~2 rows per transaction per sensor,
+	// since the sensor's LRU filters repeats, so it is not a per-peer stream.
 	if c.recordsTxEvents() && peer != nil {
 		nodeID := peer.ID().String()
 		for _, tx := range txs {
