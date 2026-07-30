@@ -154,7 +154,8 @@ at all) depending on the mermaid version.
 **Retention is 14 days or forever, never anything in between.** Observations and
 anything derived from them expire at 14 days; the content-addressed facts and the
 analysis-job tables are kept. So the growth question is only about the `forever`
-group — `block_txs` dominates it at roughly 92 GiB/year on mainnet.
+group — `block_txs` dominates it at roughly 47 GiB/year on mainnet (36.9 B/row on
+disk after merge, ~91 transactions per block).
 
 Things the diagram cannot carry:
 
