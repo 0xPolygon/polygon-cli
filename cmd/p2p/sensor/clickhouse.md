@@ -70,7 +70,7 @@ erDiagram
         String block_hash PK
         UInt32 tx_index PK
         String tx_hash FK
-        Date seen_date "partition and TTL key"
+        Date seen_date "version column, TTL clock"
     }
 
     transactions {
@@ -90,7 +90,7 @@ erDiagram
         UInt16 access_list_size
         UInt8 blob_count
         UInt8 auth_list_size
-        Date seen_date "partition and TTL key"
+        Date seen_date "version column, TTL clock"
     }
 
     block_events {
@@ -183,12 +183,24 @@ Things the diagram cannot carry:
   not stored: clique _panics_ if any is non-nil, so they can never take part in the
   seal hash, and they are absent from mainnet and amoy headers. Add one back with
   `ALTER TABLE ADD COLUMN` if that ever changes.
-- **`seen_date` on `transactions` and `block_txs` is an ingest fact**, not a
-  consensus one. On `transactions` it makes expiry a whole-partition drop; on
-  `block_txs`, which is kept forever, it only partitions (monthly, so partitions
-  don't accumulate). A row first seen either side of a partition boundary is written
-  twice, but being content-addressed the copies are identical, so it costs bytes
-  rather than correctness.
+- **A fact table's partition key must be a function of its dedup key**, because
+  `ReplacingMergeTree` merges only within a partition. `blocks` satisfies this via
+  header-derived `block_time`. `transactions` and `block_txs` originally partitioned
+  on `seen_date`, which is ingest-derived, and so stranded duplicates in separate
+  partitions permanently: 10.07% of `transactions` rows survived a full
+  `OPTIMIZE FINAL`, 115k hashes spanning partitions. A transaction has no intrinsic
+  timestamp — unlike a block, whose header supplies one — so `seen_date` could not
+  be made key-derived, and both tables now bucket on their own key
+  (`cityHash64(hash) % 16`).
+- **`seen_date` is the version column on both tables.** It is the one column there
+  that is not a function of the key, so without a version the surviving row's value
+  was arbitrary. As a version it resolves to the latest sighting, which also means a
+  re-announced pending transaction's 14 days restart from when it was last seen.
+- **Dedup happens on merge, so duplicates are transient, not absent.** Correct
+  partitioning makes them converge; it does not stop an unmerged part from holding
+  two rows for a key. A reader that must not double-count still needs `FINAL` or
+  `LIMIT 1 BY` — what it no longer needs is to compensate for inflation that never
+  converges.
 
 ### Derived layer
 
