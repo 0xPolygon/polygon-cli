@@ -5,11 +5,13 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -28,6 +30,7 @@ const (
 	heightProductionFlags = 900_000_003
 	heightParentCancel    = 900_000_004
 	heightTotalDiff       = 900_000_005
+	heightLowercase       = 900_000_006
 )
 
 // The integration tests in this file are skipped unless
@@ -68,7 +71,36 @@ func signedHeader(t *testing.T, number int64, blockTime time.Time) (*types.Heade
 		t.Fatalf("sign header: %v", err)
 	}
 	copy(header.Extra[len(header.Extra)-crypto.SignatureLength:], sig)
-	return header, crypto.PubkeyToAddress(priv.PublicKey).Hex()
+	// Lowercase, because that is what the writer stores -- see addressHex.
+	return header, strings.ToLower(crypto.PubkeyToAddress(priv.PublicKey).Hex())
+}
+
+// signedHeaderWithCoinbase is signedHeader for tests that need a specific coinbase.
+// The seal covers Coinbase, so it must be set BEFORE signing; assigning it to an
+// already-sealed header silently invalidates the signature and ecrecover then
+// returns a different address entirely.
+func signedHeaderWithCoinbase(t *testing.T, number int64, blockTime time.Time, coinbase common.Address) (*types.Header, string) {
+	t.Helper()
+	priv, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	header := &types.Header{
+		Number:     big.NewInt(number),
+		Time:       uint64(blockTime.Unix()),
+		Difficulty: big.NewInt(7),
+		GasLimit:   30_000_000,
+		GasUsed:    21_000,
+		BaseFee:    big.NewInt(1_000_000_000),
+		Coinbase:   coinbase,
+		Extra:      make([]byte, crypto.SignatureLength),
+	}
+	sig, err := crypto.Sign(clique.SealHash(header).Bytes(), priv)
+	if err != nil {
+		t.Fatalf("sign header: %v", err)
+	}
+	copy(header.Extra[len(header.Extra)-crypto.SignatureLength:], sig)
+	return header, strings.ToLower(crypto.PubkeyToAddress(priv.PublicKey).Hex())
 }
 
 func testPeer(t *testing.T) *enode.Node {
@@ -479,5 +511,90 @@ func TestClickHouseTotalDifficultySurvivesEventExpiry(t *testing.T) {
 	}
 	if td == nil || td.Cmp(wantTD) != 0 {
 		t.Fatalf("total_difficulty: want %s got %v", wantTD, td)
+	}
+}
+
+// TestAddressesAreStoredLowercase guards the address casing convention.
+//
+// common.Address.Hex() applies the EIP-55 checksum and returns mixed case. Stored
+// that way, an address column cannot be joined: ClickHouse comparison is
+// case-sensitive and every validator identity in this pipeline -- the Polygon
+// staking API, block-latency, data-analysis -- is lowercase. The join returns no
+// rows and no error, so the wrong answer looks like a real one.
+func TestAddressesAreStoredLowercase(t *testing.T) {
+	dsn := clickHouseDSN(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	db := newTestClickHouse(t, dsn, ctx)
+
+	now := time.Now().UTC()
+	// A coinbase whose checksummed form is mixed case, set before sealing.
+	mixedCoinbase := common.HexToAddress("0x25B9fC2ED95BBAa9c030e57C860545a17694F90D")
+	header, wantSigner := signedHeaderWithCoinbase(t, heightLowercase, now, mixedCoinbase)
+	// Signed, so types.Sender can recover from_address -- an unsigned transaction
+	// yields an empty sender and the assertion below would test nothing.
+	senderKey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("generate sender key: %v", err)
+	}
+	chainID := big.NewInt(137)
+	tx, err := types.SignTx(
+		types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(now.UnixNano()),
+			GasPrice: big.NewInt(2_000_000_000),
+			Gas:      21_000,
+			To:       &mixedCoinbase,
+			Value:    big.NewInt(1),
+		}),
+		types.LatestSignerForChainID(chainID), senderKey)
+	if err != nil {
+		t.Fatalf("sign tx: %v", err)
+	}
+	wantFrom := strings.ToLower(crypto.PubkeyToAddress(senderKey.PublicKey).Hex())
+	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx}})
+
+	db.WriteBlock(ctx, testPeer(t), block, big.NewInt(1), now)
+	db.WriteTransactions(ctx, testPeer(t), []*types.Transaction{tx}, now)
+	if cerr := db.Close(); cerr != nil {
+		t.Fatalf("close db: %v", cerr)
+	}
+
+	conn := verifyConn(t, dsn)
+
+	// The signer must round-trip as the lowercase form of the recovered address,
+	// proving it is lowercased rather than merely absent.
+	var signer, coinbase string
+	if err := conn.QueryRow(context.Background(),
+		"SELECT signer, coinbase FROM blocks WHERE hash = ? LIMIT 1",
+		block.Hash().Hex()).Scan(&signer, &coinbase); err != nil {
+		t.Fatalf("scan blocks: %v", err)
+	}
+	if signer != wantSigner {
+		t.Fatalf("signer: want %s got %s", wantSigner, signer)
+	}
+	if want := strings.ToLower(mixedCoinbase.Hex()); coinbase != want {
+		t.Fatalf("coinbase: want %s got %s", want, coinbase)
+	}
+
+	var from, to string
+	if err := conn.QueryRow(context.Background(),
+		"SELECT from_address, to_address FROM transactions WHERE hash = ? LIMIT 1",
+		tx.Hash().Hex()).Scan(&from, &to); err != nil {
+		t.Fatalf("scan transactions: %v", err)
+	}
+	for name, got := range map[string]string{"from_address": from, "to_address": to} {
+		if got == "" {
+			t.Fatalf("%s was empty", name)
+		}
+		if got != strings.ToLower(got) {
+			t.Fatalf("%s is not lowercase: %s", name, got)
+		}
+	}
+	if from != wantFrom {
+		t.Fatalf("from_address: want %s got %s", wantFrom, from)
+	}
+	if want := strings.ToLower(mixedCoinbase.Hex()); to != want {
+		t.Fatalf("to_address: want %s got %s", want, to)
 	}
 }

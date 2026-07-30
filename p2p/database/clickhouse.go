@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -637,6 +638,24 @@ func (c *ClickHouse) ShouldWritePeers() bool { return c.shouldWritePeers }
 // needs them, as it needs base_fee. The post-Shanghai/Cancun header fields are
 // deliberately not stored -- clique panics if any of them is non-nil, so they can
 // never take part in the seal hash.
+// addressHex renders an address as lowercase 0x hex.
+//
+// NOT common.Address.Hex(), which applies the EIP-55 checksum and so returns mixed
+// case. That is a display format -- it exists so a human can spot a mistyped
+// address -- and these come from ecrecover and RLP, never from typing. Stored mixed
+// case, an address column silently fails to join: ClickHouse string comparison is
+// case-sensitive, and the Polygon staking API, block-latency and data-analysis all
+// key validators on lowercase. Measured against the live validator set, 0 of 3
+// real-chain signers matched as stored and all 3 matched lowercased -- a join that
+// returns no rows and no error, so "no blocks had a known signer" reads as an
+// answer rather than a bug.
+//
+// Hashes need no equivalent: common.Hash.Hex() is already lowercase, having no
+// checksum to apply.
+func addressHex(a common.Address) string {
+	return strings.ToLower(a.Hex())
+}
+
 func newChBlock(h *types.Header) chBlock {
 	baseFee := new(big.Int)
 	if h.BaseFee != nil {
@@ -646,7 +665,7 @@ func newChBlock(h *types.Header) chBlock {
 	// don't have to ecrecover on every query. Left empty when it can't be recovered.
 	var signer string
 	if sig, err := util.Ecrecover(h); err == nil {
-		signer = common.BytesToAddress(sig).Hex()
+		signer = addressHex(common.BytesToAddress(sig))
 	}
 	return chBlock{
 		number:      h.Number.Uint64(),
@@ -654,7 +673,7 @@ func newChBlock(h *types.Header) chBlock {
 		parentHash:  h.ParentHash.Hex(),
 		blockTime:   time.Unix(int64(h.Time), 0).UTC(),
 		signer:      signer,
-		coinbase:    h.Coinbase.Hex(),
+		coinbase:    addressHex(h.Coinbase),
 		difficulty:  h.Difficulty.Uint64(),
 		gasUsed:     h.GasUsed,
 		gasLimit:    h.GasLimit,
@@ -708,10 +727,10 @@ func (c *ClickHouse) writeTxs(txs []*types.Transaction, tfs time.Time) {
 			chainID = c.chainID
 		}
 		if addr, err := types.Sender(types.LatestSignerForChainID(chainID), tx); err == nil {
-			from = addr.Hex()
+			from = addressHex(addr)
 		}
 		if tx.To() != nil {
-			to = tx.To().Hex()
+			to = addressHex(*tx.To())
 		}
 		// Selector and size but not the calldata: enough for contract-interaction
 		// analysis at negligible cost.
