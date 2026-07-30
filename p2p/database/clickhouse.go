@@ -75,6 +75,7 @@ type ClickHouse struct {
 
 	blocks      *rowBatcher[chBlock]
 	blockBodies *rowBatcher[chBlockBody]
+	blockTD     *rowBatcher[chBlockTD]
 	blockTxs    *rowBatcher[chBlockTx]
 	blockEvt    *rowBatcher[chBlockEvent]
 	txs         *rowBatcher[chTx]
@@ -201,6 +202,11 @@ func (c *ClickHouse) startBatchers(ctx context.Context) {
 		func(b driver.Batch, r chBlockBody) error {
 			return b.Append(r.hash, r.txCount, r.uncleCount, r.uncles)
 		})
+	c.blockTD = newInsertBatcher(ctx, c, "block_total_difficulty", chBlockBodyBatch,
+		"INSERT INTO block_total_difficulty (hash, total_difficulty)",
+		func(b driver.Batch, r chBlockTD) error {
+			return b.Append(r.hash, r.totalDifficulty)
+		})
 	c.blockTxs = newInsertBatcher(ctx, c, "block_txs", chBlockTxBatch,
 		"INSERT INTO block_txs (block_hash, tx_index, tx_hash, seen_date)",
 		func(b driver.Batch, r chBlockTx) error {
@@ -305,6 +311,14 @@ type chBlockBody struct {
 	uncles     []string
 }
 
+// chBlockTD is the announced total difficulty, which only a NewBlock carries. It
+// is a separate table rather than a blocks column because the header path does not
+// know it and would have to write 0, letting a header clobber a real value.
+type chBlockTD struct {
+	hash            string
+	totalDifficulty *big.Int
+}
+
 type chBlockTx struct {
 	blockHash string
 	txIndex   uint32
@@ -384,8 +398,11 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 	if c.conn == nil {
 		return
 	}
-	// Announced total difficulty describes the announcement, not the block, so it
-	// rides on the event.
+	// Which peer announced which total difficulty is an observation, so it rides on
+	// the event. The value itself is a property of the block, so it also goes to its
+	// own forever-kept table -- the events expire at 14 days, and reading the block's
+	// total difficulty out of a rollup that expires is what made it read 0 for every
+	// block older than that.
 	if c.recordsBlockEvents() && peer != nil {
 		c.blockEvt.add(chBlockEvent{
 			blockNumber:     block.NumberU64(),
@@ -393,6 +410,16 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 			nodeID:          peer.ID().String(),
 			source:          srcNewBlock,
 			seenAt:          tfs,
+			totalDifficulty: td,
+		})
+	}
+	// Only ever written from here, and never as 0: an absent row is how "no peer
+	// announced it to us" is expressed, so writing 0 would recreate the sentinel
+	// this table exists to remove. Not gated on shouldWriteBlocks -- it is a fact
+	// about the announcement we just received, like the event above.
+	if td != nil && td.Sign() > 0 {
+		c.blockTD.add(chBlockTD{
+			hash:            block.Hash().Hex(),
 			totalDifficulty: td,
 		})
 	}

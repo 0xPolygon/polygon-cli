@@ -27,6 +27,7 @@ const (
 	heightHeaderNoClobber = 900_000_002
 	heightProductionFlags = 900_000_003
 	heightParentCancel    = 900_000_004
+	heightTotalDiff       = 900_000_005
 )
 
 // The integration tests in this file are skipped unless
@@ -421,4 +422,62 @@ func TestClickHouseWritesSurviveParentContextCancel(t *testing.T) {
 	conn := verifyConn(t, dsn)
 	blockHash := header.Hash().Hex()
 	checkCount(t, conn, "SELECT count() FROM blocks WHERE hash = ?", blockHash)
+}
+
+// TestClickHouseTotalDifficultySurvivesEventExpiry is the regression test for
+// total_difficulty decaying to zero.
+//
+// total_difficulty reaches the sensor only on a NewBlock announcement, so it used
+// to be carried on block_events_first purely to outlive the raw event stream. When
+// retention was normalised that rollup became 14 days itself, while blocks stayed
+// forever -- so v_blocks returned 0 for every block older than the TTL, which is
+// also the documented value for "no peer ever announced it to us". The two cases
+// were indistinguishable.
+//
+// It now lives in its own forever-kept, hash-keyed table, and absence rather than 0
+// means never announced. Deleting the events stands in for the TTL expiring them.
+func TestClickHouseTotalDifficultySurvivesEventExpiry(t *testing.T) {
+	dsn := clickHouseDSN(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	db := newTestClickHouse(t, dsn, ctx)
+
+	now := time.Now().UTC()
+	header, _ := signedHeader(t, heightTotalDiff, now)
+	block := types.NewBlockWithHeader(header)
+	wantTD := big.NewInt(987654321)
+
+	db.WriteBlock(ctx, testPeer(t), block, wantTD, now)
+	if cerr := db.Close(); cerr != nil {
+		t.Fatalf("close db: %v", cerr)
+	}
+
+	conn := verifyConn(t, dsn)
+	blockHash := block.Hash().Hex()
+
+	// Expire every observation of this block, which is what the 14-day TTL does.
+	for _, tbl := range []string{"block_events", "block_events_first"} {
+		if err := conn.Exec(context.Background(),
+			"ALTER TABLE "+tbl+" DELETE WHERE block_hash = ? SETTINGS mutations_sync = 1",
+			blockHash); err != nil {
+			t.Fatalf("expire %s: %v", tbl, err)
+		}
+	}
+
+	var (
+		have bool
+		td   *big.Int
+	)
+	if err := conn.QueryRow(context.Background(),
+		"SELECT have_total_difficulty, total_difficulty FROM v_blocks WHERE hash = ? LIMIT 1",
+		blockHash).Scan(&have, &td); err != nil {
+		t.Fatalf("scan v_blocks: %v", err)
+	}
+	if !have {
+		t.Fatal("total difficulty was lost with the events it was announced in")
+	}
+	if td == nil || td.Cmp(wantTD) != 0 {
+		t.Fatalf("total_difficulty: want %s got %v", wantTD, td)
+	}
 }

@@ -100,7 +100,7 @@ erDiagram
         LowCardinality node_id FK "devp2p node id"
         LowCardinality source "hash_announce new_block header header_backfill body"
         DateTime64 seen_at PK "ms precision"
-        UInt256 total_difficulty "from the announcement"
+        UInt256 total_difficulty "announced value, 0 otherwise"
     }
 
     tx_events {
@@ -440,9 +440,20 @@ parent backfill — permanently replaced the real counts with zeros. There is no
 regression test for exactly that ordering
 (`TestClickHouseHeaderDoesNotClobberBody`).
 
-**`total_difficulty` rides on the event, not the block.** It comes from the
-`NewBlock` announcement, so it is an attribute of that announcement rather than of
-the block. Header and hash-announce events write `0`.
+**`total_difficulty` is written twice, to two different kinds of table.** _Which
+peer announced which value_ is an observation, so it rides on the `block_events`
+row (header and hash-announce events write `0` there). _The value itself_ is a
+property of the block, so it also goes to `block_total_difficulty` — hash-keyed and
+kept forever, written only by the `NewBlock` path and never as `0`.
+
+It needs its own table rather than a `blocks` column for the same reason
+`block_bodies` does: the header path does not know it and would write `0`, letting a
+header clobber a real value. It used to be read out of `block_events_first`, which
+worked only while that rollup outlived the raw stream; once retention was
+normalised both were 14 days and `v_blocks.total_difficulty` returned `0` for every
+older block — the same value that means "no peer ever announced it to us". Now
+absence carries that meaning and the column is `Nullable`, so there is no sentinel.
+`TestClickHouseTotalDifficultySurvivesEventExpiry` covers it.
 
 **Block heights have to reach `WriteBlockEvents`.** `block_events` leads its sort
 key with `block_number`, which is what lets a reader fetch a whole range in one
