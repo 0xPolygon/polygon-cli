@@ -16,6 +16,19 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
+// Test block heights live in a reserved band far above any real chain head, one
+// per test, so a test row is never mistaken for chain data and two tests never
+// collide on a height. This matters because these tests write to a real database
+// that is usually the local-stack one holding live sensor data: heights 42 and
+// 4242 previously produced rows that looked exactly like a transaction included in
+// four competing blocks, which is a real reorg signature.
+const (
+	heightWrites          = 900_000_001
+	heightHeaderNoClobber = 900_000_002
+	heightProductionFlags = 900_000_003
+	heightParentCancel    = 900_000_004
+)
+
 // The integration tests in this file are skipped unless
 // POLYCLI_TEST_CLICKHOUSE_DSN is set, e.g.
 //
@@ -91,7 +104,7 @@ func TestClickHouseWrites(t *testing.T) {
 	db := newTestClickHouse(t, dsn, ctx)
 
 	now := time.Now().UTC()
-	header, wantSigner := signedHeader(t, 42, now)
+	header, wantSigner := signedHeader(t, heightWrites, now)
 	tx := types.NewTx(&types.LegacyTx{
 		Nonce:    1,
 		GasPrice: big.NewInt(2_000_000_000),
@@ -137,7 +150,7 @@ func TestClickHouseWrites(t *testing.T) {
 	if err := row.Scan(&number, &gasUsed, &baseFee, &signer); err != nil {
 		t.Fatalf("scan block: %v", err)
 	}
-	if number != 42 || gasUsed != 21_000 || baseFee.Uint64() != 1_000_000_000 {
+	if number != heightWrites || gasUsed != 21_000 || baseFee.Uint64() != 1_000_000_000 {
 		t.Fatalf("unexpected block fields: number=%d gas_used=%d base_fee=%s", number, gasUsed, baseFee.String())
 	}
 	if signer != wantSigner {
@@ -204,7 +217,7 @@ func TestClickHouseHeaderDoesNotClobberBody(t *testing.T) {
 	db := newTestClickHouse(t, dsn, ctx)
 
 	now := time.Now().UTC()
-	header, _ := signedHeader(t, 4242, now)
+	header, _ := signedHeader(t, heightHeaderNoClobber, now)
 	txs := []*types.Transaction{
 		types.NewTx(&types.LegacyTx{Nonce: 1, GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(1)}),
 		types.NewTx(&types.LegacyTx{Nonce: 2, GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(2)}),
@@ -323,7 +336,7 @@ func TestClickHouseProductionFlagsRecordProvenance(t *testing.T) {
 	})
 
 	now := time.Now().UTC()
-	header, _ := signedHeader(t, 4242, now)
+	header, _ := signedHeader(t, heightProductionFlags, now)
 
 	// The nonce must vary per run. These tables are append-only and the test asserts
 	// on row presence, so a fixed nonce yields a fixed transaction hash and rows left
@@ -397,7 +410,7 @@ func TestClickHouseWritesSurviveParentContextCancel(t *testing.T) {
 
 	// A peer delivers a block while the p2p server is still winding down.
 	now := time.Now().UTC()
-	header, _ := signedHeader(t, 424242, now)
+	header, _ := signedHeader(t, heightParentCancel, now)
 	db.WriteBlockHeaders(ctx, []*types.Header{header}, now, false)
 
 	// Only now does the sensor close the database, which must drain.
