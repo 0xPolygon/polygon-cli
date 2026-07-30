@@ -17,6 +17,7 @@ import (
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -845,9 +846,17 @@ func (c *conn) decodeTx(raw []byte) *types.Transaction {
 			return tx
 		}
 
+		// bytes[0] only after a length check: 0x80 is a valid RLP empty string, so
+		// DecodeBytes succeeds with an empty slice and indexing it panicked. That
+		// panic runs on the peer's own Protocol.Run goroutine, which geth does not
+		// recover around, so a three-byte message from any peer killed the process.
+		txType := -1
+		if len(bytes) > 0 {
+			txType = int(bytes[0])
+		}
 		c.logger.Warn().
 			Err(err).
-			Uint8("type", bytes[0]).
+			Int("type", txType).
 			Int("size", len(bytes)).
 			Str("hash", crypto.Keccak256Hash(bytes).Hex()).
 			Msg("Failed to decode transaction")
@@ -862,14 +871,49 @@ func (c *conn) decodeTx(raw []byte) *types.Transaction {
 		return tx
 	}
 
+	// raw is guaranteed non-empty by the guard at the top of this function; the
+	// length check is repeated so the two log sites read the same way and neither
+	// depends on a guard twenty lines above it.
+	prefix := -1
+	if len(raw) > 0 {
+		prefix = int(raw[0])
+	}
 	c.logger.Warn().
 		Err(err).
-		Uint8("prefix", raw[0]).
+		Int("prefix", prefix).
 		Int("size", len(raw)).
 		Str("hash", crypto.Keccak256Hash(raw).Hex()).
 		Msg("Failed to decode transaction")
 
 	return nil
+}
+
+// decodeTxsStrict decodes every transaction or fails.
+//
+// decodeTxs below is lenient on purpose: a Transactions or PooledTransactions packet
+// is a batch of INDEPENDENT transactions, so dropping one that will not decode loses
+// exactly that transaction. A block body is not a batch -- the block hash commits to
+// txRoot, which commits to every transaction in order -- so silently dropping one
+// yields a body that is not the body for that hash. Re-encoded and written, it gave
+// block_bodies a tx_count short by the dropped transactions and shifted every later
+// block_txs.tx_index down, keyed by a hash whose real contents were different. Both
+// tables are ReplacingMergeTree, so the corrupt row could win the merge against an
+// honest sensor's and persist.
+//
+// This does not verify the body against the header's txRoot -- the header arrives on
+// a separate round trip and may not be held yet -- so a peer can still substitute a
+// well-formed body for a hash it does not belong to. Failing closed on undecodable
+// input is the part that can be done here.
+func (c *conn) decodeTxsStrict(rawTxs []rlp.RawValue) ([]*types.Transaction, error) {
+	txs := make([]*types.Transaction, 0, len(rawTxs))
+	for i, raw := range rawTxs {
+		tx := c.decodeTx(raw)
+		if tx == nil {
+			return nil, fmt.Errorf("transaction %d of %d failed to decode", i, len(rawTxs))
+		}
+		txs = append(txs, tx)
+	}
+	return txs, nil
 }
 
 // decodeTxs decodes a list of transactions, returning only successfully decoded ones.
@@ -1202,7 +1246,11 @@ func (c *conn) buildBlockBody(raw []byte) (*eth.BlockBody, error) {
 		return nil, fmt.Errorf("failed to decode block body: %w", err)
 	}
 
-	txList, err := rlp.EncodeToRawList(c.decodeTxs(decoded.Transactions))
+	txs, err := c.decodeTxsStrict(decoded.Transactions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode block body transactions: %w", err)
+	}
+	txList, err := rlp.EncodeToRawList(txs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode transactions: %w", err)
 	}
@@ -1239,11 +1287,35 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
+	// Strict, and then checked against the header. A NewBlock carries its own
+	// header, so unlike the BlockBodies path the body can be verified rather than
+	// merely required to parse: DeriveSha over the transactions must equal
+	// header.TxHash, which the block hash commits to.
+	//
+	// Lenient decoding here silently dropped undecodable transactions and kept the
+	// peer's header, so block_bodies got a tx_count short by the drops and block_txs
+	// had every later tx_index shifted down -- keyed by a real block hash whose real
+	// contents differed. Both are ReplacingMergeTree, so that row could beat an
+	// honest sensor's and persist.
+	txs, err := c.decodeTxsStrict(raw.Block.Txs)
+	if err != nil {
+		c.logger.Warn().Err(err).Msg("Dropping new block with undecodable transactions")
+		return nil
+	}
 	block := types.NewBlockWithHeader(raw.Block.Header).WithBody(types.Body{
-		Transactions: c.decodeTxs(raw.Block.Txs),
+		Transactions: txs,
 		Uncles:       raw.Block.Uncles,
 		Withdrawals:  raw.Block.Withdrawals,
 	})
+	if root := types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)); root != raw.Block.Header.TxHash {
+		c.logger.Warn().
+			Str("hash", block.Hash().Hex()).
+			Str("want_tx_root", raw.Block.Header.TxHash.Hex()).
+			Str("got_tx_root", root.Hex()).
+			Int("txs", len(txs)).
+			Msg("Dropping new block whose body does not match its header")
+		return nil
+	}
 	packet := &NewBlockPacket{Block: block, TD: raw.TD}
 
 	tfs := time.Now()

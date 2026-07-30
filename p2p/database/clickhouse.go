@@ -87,10 +87,15 @@ type ClickHouse struct {
 	peers       *rowBatcher[chPeerSnapshot]
 
 	// discarded approximates the rows dropped because the backend was never
-	// reachable -- incremented by every Write* that returns on a nil connection --
-	// so the periodic warning can say how much has been lost. It previously counted
-	// HasBlock calls instead, which made it read 0 forever in exactly the
-	// configurations where everything was being dropped.
+	// reachable, so the periodic warning can say roughly how much has been lost. It
+	// previously counted HasBlock calls instead, which made it read 0 forever in
+	// exactly the configurations where everything was being dropped.
+	//
+	// Approximate in one direction on purpose: the nil-connection check precedes
+	// each method's flag gates, because with no connection the flags are moot -- so
+	// a fleet running --write-peers=false still counts the peer rows it would not
+	// have written. Erring toward over-reporting a dead backend is the right way
+	// round; the number is a magnitude for an operator, not an accounting figure.
 	discarded atomic.Uint64
 
 	// cancel stops the batcher goroutines; wg tracks them so Close can wait for
@@ -421,7 +426,9 @@ func (c *ClickHouse) recordsTxEvents() bool {
 
 func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
 	if c.conn == nil {
-		c.discarded.Add(1 + uint64(len(block.Transactions())))
+		// blocks + block_bodies + block_total_difficulty + the event, then one
+		// block_txs and one transactions row per transaction.
+		c.discarded.Add(4 + 2*uint64(len(block.Transactions())))
 		return
 	}
 	// Which peer announced which total difficulty is an observation, so it rides on
@@ -431,12 +438,16 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 	// block older than that.
 	if c.recordsBlockEvents() && peer != nil {
 		c.blockEvt.add(chBlockEvent{
-			blockNumber:     block.NumberU64(),
-			blockHash:       block.Hash().Hex(),
-			nodeID:          peer.ID().String(),
-			source:          srcNewBlock,
-			seenAt:          tfs,
-			totalDifficulty: td,
+			blockNumber: block.NumberU64(),
+			blockHash:   block.Hash().Hex(),
+			nodeID:      peer.ID().String(),
+			source:      srcNewBlock,
+			seenAt:      tfs,
+			// Copied like the blockTD row below: rows sit in the batcher up to a
+			// second, and this pointer is raw.TD, also held in the block cache for
+			// ~10 minutes and handed to BroadcastBlock. Nothing mutates it today; it
+			// was the one alias left in an otherwise uniform copy discipline.
+			totalDifficulty: copyBig(td),
 		})
 	}
 	// Only ever written from here, and never as 0: an absent row is how "no peer
@@ -451,7 +462,7 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 	if c.shouldWriteBlocks && td != nil && td.Sign() > 0 {
 		c.blockTD.add(chBlockTD{
 			hash:            block.Hash().Hex(),
-			totalDifficulty: new(big.Int).Set(td),
+			totalDifficulty: copyBig(td),
 		})
 	}
 	if c.shouldWriteBlocks {
@@ -740,6 +751,15 @@ func (c *ClickHouse) ShouldWritePeers() bool { return c.shouldWritePeers }
 // needs them, as it needs base_fee. The post-Shanghai/Cancun header fields are
 // deliberately not stored -- clique panics if any of them is non-nil, so they can
 // never take part in the seal hash.
+// copyBig returns a defensive copy, or nil for nil. big.Int carries an internal
+// slice, so Set is the copy that matters, not the struct assignment.
+func copyBig(v *big.Int) *big.Int {
+	if v == nil {
+		return nil
+	}
+	return new(big.Int).Set(v)
+}
+
 // addressHex renders an address as lowercase 0x hex.
 //
 // NOT common.Address.Hex(), which applies the EIP-55 checksum and so returns mixed

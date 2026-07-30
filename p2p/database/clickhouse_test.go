@@ -47,8 +47,20 @@ func cleanupTestHeights(t *testing.T, conn driver.Conn, heights ...uint64) {
 	t.Helper()
 	t.Cleanup(func() {
 		ctx := context.Background()
+
+		// Order matters: every statement below identifies its rows through a table
+		// that a LATER statement deletes, so reversing any pair silently leaves rows
+		// behind. Getting this wrong is why two earlier attempts still leaked --
+		// deleting tx_events first emptied the subquery that finds the transactions.
+		//
+		// transactions is reachable two ways, and both are needed: WriteTransactions
+		// writes tx_events for it, but writeTxs is ALSO called from WriteBlockBody,
+		// which writes no tx_events at all -- so a body-only test leaves transactions
+		// rows that no tx_events row points at.
 		for _, h := range heights {
 			for _, q := range []string{
+				"ALTER TABLE transactions DELETE WHERE hash IN (SELECT tx_hash FROM block_txs WHERE block_hash IN (SELECT hash FROM blocks WHERE number = ?)) SETTINGS mutations_sync = 1",
+				"ALTER TABLE tx_events_first DELETE WHERE tx_hash IN (SELECT tx_hash FROM block_txs WHERE block_hash IN (SELECT hash FROM blocks WHERE number = ?)) SETTINGS mutations_sync = 1",
 				"ALTER TABLE block_txs DELETE WHERE block_hash IN (SELECT hash FROM blocks WHERE number = ?) SETTINGS mutations_sync = 1",
 				"ALTER TABLE block_bodies DELETE WHERE hash IN (SELECT hash FROM blocks WHERE number = ?) SETTINGS mutations_sync = 1",
 				"ALTER TABLE block_total_difficulty DELETE WHERE hash IN (SELECT hash FROM blocks WHERE number = ?) SETTINGS mutations_sync = 1",
@@ -60,6 +72,19 @@ func cleanupTestHeights(t *testing.T, conn driver.Conn, heights ...uint64) {
 				if err := conn.Exec(ctx, q, h); err != nil {
 					t.Logf("cleanup height %d: %v", h, err)
 				}
+			}
+		}
+
+		// Whatever the test wrote under its own sensor id, by any path. Last, because
+		// the height-keyed statements above use tx_events to find nothing but this
+		// catches what they could not reach.
+		for _, q := range []string{
+			"ALTER TABLE transactions DELETE WHERE hash IN (SELECT tx_hash FROM tx_events WHERE sensor_id LIKE 'test-sensor%') SETTINGS mutations_sync = 1",
+			"ALTER TABLE tx_events_first DELETE WHERE tx_hash IN (SELECT tx_hash FROM tx_events WHERE sensor_id LIKE 'test-sensor%') SETTINGS mutations_sync = 1",
+			"ALTER TABLE tx_events DELETE WHERE sensor_id LIKE 'test-sensor%' SETTINGS mutations_sync = 1",
+		} {
+			if err := conn.Exec(ctx, q); err != nil {
+				t.Logf("tx-side cleanup: %v", err)
 			}
 		}
 	})
@@ -747,8 +772,10 @@ func TestUnavailableBackendKeepsWarning(t *testing.T) {
 	tx2 := types.NewTx(&types.LegacyTx{Nonce: uint64(now.UnixNano()) + 1, GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(1)})
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx1, tx2}})
 	db.WriteBlock(ctx, testPeer(t), block, big.NewInt(1), now)
-	if got := ch.discarded.Load(); got != 3 {
-		t.Fatalf("discarded: want 3 (block + 2 txs), got %d", got)
+	// 4 block-level rows (blocks, block_bodies, block_total_difficulty, the event)
+	// plus block_txs and transactions per transaction.
+	if got := ch.discarded.Load(); got != 8 {
+		t.Fatalf("discarded: want 8 (4 block rows + 2 per tx), got %d", got)
 	}
 	// The warner goroutine must be registered with the WaitGroup so Close waits.
 	done := make(chan struct{})
