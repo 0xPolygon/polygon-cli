@@ -94,7 +94,7 @@ func TestBuildBlockBodyRejectsUndecodableTx(t *testing.T) {
 		t.Fatalf("encode body: %v", err)
 	}
 
-	if _, err := c.buildBlockBody(raw); err == nil {
+	if _, buildErr := c.buildBlockBody(raw); buildErr == nil {
 		t.Fatal("accepted a body with an undecodable transaction; the tx_index mapping would be silently shifted")
 	}
 
