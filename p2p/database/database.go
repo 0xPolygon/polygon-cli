@@ -12,36 +12,61 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
+// BlockAnnouncement is an announced block hash with its height, as carried by eth
+// NewBlockHashes. ClickHouse keys observations by block number and needs the
+// height; hash-keyed backends ignore it.
+//
+// p2p.NewBlockHashesPacket is a slice of this type, so a decoded packet reaches
+// WriteBlockEvents with no copy or conversion.
+type BlockAnnouncement struct {
+	Hash   common.Hash
+	Number uint64
+}
+
+// Hashes drops the heights, for backends that only store hashes.
+func Hashes(anns []BlockAnnouncement) []common.Hash {
+	hashes := make([]common.Hash, 0, len(anns))
+	for _, ann := range anns {
+		hashes = append(hashes, ann.Hash)
+	}
+	return hashes
+}
+
 // Database represents a database solution to write block and transaction data
 // to. To use another database solution, just implement these methods and
 // update the sensor to use the new connection.
 type Database interface {
-	// WriteBlock will write the both the block and block event to the database
-	// if ShouldWriteBlocks and ShouldWriteBlockEvents return true, respectively.
+	// WriteBlock records a block delivered whole (NewBlock). The block row is
+	// written if ShouldWriteBlocks returns true; the event is written if either
+	// ShouldWriteBlockEvents or ShouldWriteFirstBlockEvent returns true, because
+	// a whole-block delivery is one event per block per sensor and is the only
+	// place a block first seen this way is observed.
 	WriteBlock(context.Context, *enode.Node, *types.Block, *big.Int, time.Time)
 
 	// WriteBlockHeaders will write the block headers if ShouldWriteBlocks
 	// returns true.
 	WriteBlockHeaders(context.Context, []*types.Header, time.Time, bool)
 
-	// WriteBlockEvents appends an inbound block event (peer, hash, time) for
-	// each hash — one per peer we received the announcement from. The caller
-	// decides which hashes to pass (every announcement for the full per-peer
+	// WriteBlockEvents appends an inbound block event (peer, hash, height, time)
+	// for each announcement — one per peer we received the announcement from. The
+	// caller decides which announcements to pass (every one for the full per-peer
 	// stream, or just the first-seen ones); the backend only appends.
-	WriteBlockEvents(context.Context, *enode.Node, []common.Hash, time.Time)
+	WriteBlockEvents(context.Context, *enode.Node, []BlockAnnouncement, time.Time)
 
-	// WriteBlockHashFirstSeen records the earliest sighting of a block hash on
+	// WriteBlockHashFirstSeen records the earliest event for a block hash on
 	// the block entity itself (Datastore's TimeFirstSeenHash). Backends that
 	// derive first-seen from the event stream (e.g. ClickHouse) treat it as a
 	// no-op.
 	WriteBlockHashFirstSeen(context.Context, *enode.Node, common.Hash, time.Time)
 
 	// WriteBlockBody writes the transactions carried in the block body (the block
-	// row itself comes from WriteBlock/WriteBlockHeaders). Backends with a
+	// row itself comes from WriteBlock/WriteBlockHeaders). The announcement carries
+	// the height, which the eth block body does not, so backends that key
+	// observations by block number can record the body's arrival. Backends with a
 	// separate transactions table (e.g. ClickHouse) gate this on
 	// ShouldWriteTransactions; the Datastore backend gates on ShouldWriteBlocks
 	// because it links the transactions and uncles onto the block entity.
-	WriteBlockBody(context.Context, *eth.BlockBody, common.Hash, time.Time)
+	WriteBlockBody(context.Context, *eth.BlockBody, BlockAnnouncement, time.Time)
 
 	// WriteTransactions writes the transaction bodies if ShouldWriteTransactions
 	// returns true. Transaction events are recorded separately via

@@ -41,7 +41,24 @@ type (
 
 // Ecrecover recovers the signer address from a block header's seal
 // (the last SignatureLength bytes of Extra) using the clique seal hash.
-func Ecrecover(header *types.Header) ([]byte, error) {
+//
+// The header may come straight off the p2p wire, so treat it as untrusted.
+// clique's encodeSigHeader panics rather than errors on any post-Merge trailing
+// field it does not expect -- WithdrawalsHash, ExcessBlobGas, BlobGasUsed,
+// ParentBeaconRoot, and as of go-ethereum v1.17.4 SlotNumber. Every one is
+// rlp:"optional", so a peer sets them at will, and a caller running on a peer
+// goroutine takes the whole process down with it.
+//
+// The panic is converted to an error rather than pre-checked field by field on
+// purpose: that set grows with the geth releases that add one, and a hand-kept
+// field list would silently stop covering it at the next dependency bump.
+func Ecrecover(header *types.Header) (signer []byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			signer, err = nil, fmt.Errorf("unable to recover signature, clique rejected the header: %v", r)
+		}
+	}()
+
 	sigStart := len(header.Extra) - crypto.SignatureLength
 	if sigStart < 0 || sigStart > len(header.Extra) {
 		return nil, fmt.Errorf("unable to recover signature")
@@ -51,9 +68,8 @@ func Ecrecover(header *types.Header) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	signer := crypto.Keccak256(pubkey[1:])[12:]
 
-	return signer, nil
+	return crypto.Keccak256(pubkey[1:])[12:], nil
 }
 
 func EcrecoverTx(tx *types.Transaction) ([]byte, error) {

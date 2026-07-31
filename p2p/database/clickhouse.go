@@ -1,9 +1,12 @@
 package database
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,16 +34,36 @@ const (
 	// transient errors without delaying shutdown.
 	chMaxFlushAttempts = 3
 	chBlockBatch       = 5000
+	chBlockBodyBatch   = 5000
+	chBlockTxBatch     = 20000
 	chBlockEventBatch  = 50000
 	chTxBatch          = 20000
 	chTxEventBatch     = 50000
 	chPeerBatch        = 2000
+	// How often to restate that the backend is unreachable.
+	chUnavailableWarnInterval = 1 * time.Minute
+)
+
+// Event sources, so consumers can tell a hash announcement from a delivered
+// header or body.
+const (
+	srcHashAnnounce   = "hash_announce"
+	srcNewBlock       = "new_block"
+	srcHeader         = "header"
+	srcHeaderBackfill = "header_backfill"
+	srcBody           = "body"
+	srcFullTx         = "full_tx"
 )
 
 // ClickHouse implements the Database interface backed by a ClickHouse cluster.
-// The table definitions this writer targets (and the block_first_seen
-// materialized view) live in the sensor-network-tools repo
-// (clickhouse_schema.sql), not this repo.
+// The table definitions live in clickhouse_schema.sql, in the sensor-network-tools
+// and polygon-infrastructure repos rather than here.
+//
+// The schema separates content-addressed facts from observations and this writer
+// matches it: every row written to a fact table (blocks, block_bodies, block_txs,
+// transactions) is complete and a pure function of its hash, so two sensors emit
+// byte-identical rows and no write can partially overwrite another. Everything
+// observational goes to the event streams.
 type ClickHouse struct {
 	conn                             driver.Conn
 	sensorID                         string
@@ -54,11 +77,26 @@ type ClickHouse struct {
 	shouldWriteFirstTransactionEvent bool
 	shouldWritePeers                 bool
 
-	blocks   *rowBatcher[chBlock]
-	blockEvt *rowBatcher[chEvent]
-	txs      *rowBatcher[chTx]
-	txEvt    *rowBatcher[chEvent]
-	peers    *rowBatcher[chPeer]
+	blocks      *rowBatcher[chBlock]
+	blockBodies *rowBatcher[chBlockBody]
+	blockTD     *rowBatcher[chBlockTD]
+	blockTxs    *rowBatcher[chBlockTx]
+	blockEvt    *rowBatcher[chBlockEvent]
+	txs         *rowBatcher[chTx]
+	txEvt       *rowBatcher[chTxEvent]
+	peers       *rowBatcher[chPeerSnapshot]
+
+	// discarded approximates the rows dropped because the backend was never
+	// reachable, so the periodic warning can say roughly how much has been lost. It
+	// previously counted HasBlock calls instead, which made it read 0 forever in
+	// exactly the configurations where everything was being dropped.
+	//
+	// Approximate in one direction on purpose: the nil-connection check precedes
+	// each method's flag gates, because with no connection the flags are moot -- so
+	// a fleet running --write-peers=false still counts the peer rows it would not
+	// have written. Erring toward over-reporting a dead backend is the right way
+	// round; the number is a magnitude for an operator, not an accounting figure.
+	discarded atomic.Uint64
 
 	// cancel stops the batcher goroutines; wg tracks them so Close can wait for
 	// their final drain flush before the connection is closed.
@@ -101,14 +139,33 @@ func NewClickHouse(ctx context.Context, opts ClickHouseOptions) Database {
 
 	conn, err := connectClickHouse(ctx, opts.DSN)
 	if err != nil {
-		log.Error().Err(err).Msg("Could not initialize ClickHouse connection")
+		// The sensor keeps running so a database outage does not take down a vantage
+		// point, but that degradation used to be invisible: one error at startup and
+		// then every write silently discarded, while the sensor peered, tracked the
+		// head and looked entirely healthy. That is exactly what a ClickHouse auth
+		// failure did -- two sensors ran for an hour writing nothing.
+		//
+		// So keep saying so. A dead backend is now visible in the logs for as long as
+		// it is dead, not only in the line that scrolled past at boot.
+		log.Error().Err(err).Msg("Could not initialize ClickHouse connection; ALL WRITES WILL BE DISCARDED")
+		// Its own cancel, stored on c, so Close stops it. Without this Close waits on
+		// a goroutine nothing can stop -- the same defect as the batchers inheriting
+		// the caller's context, and it hangs shutdown rather than losing rows.
+		wctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+		c.cancel = cancel
+		c.startUnavailableWarning(wctx)
 		return c
 	}
 	c.conn = conn
 
-	// Derive a cancellable context so Close can stop the batchers independently
-	// of the parent context.
-	bctx, cancel := context.WithCancel(ctx)
+	// The batchers must outlive the caller's context, so their own cancellation is
+	// detached from it -- context.WithCancel(ctx) would inherit it and defeat the
+	// point. The sensor shuts down on signal-context cancellation and only stops
+	// serving peers afterwards, so an inherited context makes the batchers drain
+	// and exit while peers are still writing; those rows land in the buffered
+	// channel with no reader, are never flushed, and are not counted as dropped,
+	// so the loss is silent. Close is the only thing that may stop them.
+	bctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	c.cancel = cancel
 	c.startBatchers(bctx)
 
@@ -166,30 +223,44 @@ func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
 // handling lives in newInsertBatcher.
 func (c *ClickHouse) startBatchers(ctx context.Context) {
 	c.blocks = newInsertBatcher(ctx, c, "blocks", chBlockBatch,
-		"INSERT INTO blocks (hash, number, parent_hash, block_time, coinbase, signer, difficulty, total_difficulty, gas_used, gas_limit, base_fee, tx_count, uncle_count, uncle_hash, state_root, tx_root, receipt_root, logs_bloom, extra_data, mix_digest, nonce, sensor_id, ingested_at, is_parent)",
+		"INSERT INTO blocks (number, hash, parent_hash, block_time, signer, coinbase, difficulty, gas_used, gas_limit, base_fee, uncle_hash, state_root, tx_root, receipt_root, logs_bloom, extra_data, mix_digest, nonce)",
 		func(b driver.Batch, r chBlock) error {
-			return b.Append(r.hash, r.number, r.parentHash, r.blockTime, r.coinbase, r.signer, r.difficulty, r.totalDifficulty, r.gasUsed, r.gasLimit, r.baseFee, r.txCount, r.uncleCount, r.uncleHash, r.stateRoot, r.txRoot, r.receiptRoot, r.logsBloom, r.extraData, r.mixDigest, r.nonce, c.sensorID, r.ingestedAt, r.isParent)
+			return b.Append(r.number, r.hash, r.parentHash, r.blockTime, r.signer, r.coinbase, r.difficulty, r.gasUsed, r.gasLimit, r.baseFee, r.uncleHash, r.stateRoot, r.txRoot, r.receiptRoot, r.logsBloom, r.extraData, r.mixDigest, r.nonce)
 		})
-	// block_events and transaction_events share the same row shape and column
-	// order, so both batchers use the same append function.
-	appendEvent := func(b driver.Batch, r chEvent) error {
-		return b.Append(r.hash, c.sensorID, r.peerID, r.seenAt)
-	}
+	c.blockBodies = newInsertBatcher(ctx, c, "block_bodies", chBlockBodyBatch,
+		"INSERT INTO block_bodies (hash, tx_count, uncle_count, uncles)",
+		func(b driver.Batch, r chBlockBody) error {
+			return b.Append(r.hash, r.txCount, r.uncleCount, r.uncles)
+		})
+	c.blockTD = newInsertBatcher(ctx, c, "block_total_difficulty", chBlockBodyBatch,
+		"INSERT INTO block_total_difficulty (hash, total_difficulty)",
+		func(b driver.Batch, r chBlockTD) error {
+			return b.Append(r.hash, r.totalDifficulty)
+		})
+	c.blockTxs = newInsertBatcher(ctx, c, "block_txs", chBlockTxBatch,
+		"INSERT INTO block_txs (block_hash, tx_index, tx_hash, seen_date)",
+		func(b driver.Batch, r chBlockTx) error {
+			return b.Append(r.blockHash, r.txIndex, r.txHash, r.seenDate)
+		})
 	c.blockEvt = newInsertBatcher(ctx, c, "block_events", chBlockEventBatch,
-		"INSERT INTO block_events (block_hash, sensor_id, peer_id, seen_at)",
-		appendEvent)
-	c.txs = newInsertBatcher(ctx, c, "transactions", chTxBatch,
-		"INSERT INTO transactions (hash, from_address, to_address, value, gas, gas_price, gas_fee_cap, gas_tip_cap, nonce, tx_type, sensor_id, ingested_at)",
-		func(b driver.Batch, r chTx) error {
-			return b.Append(r.hash, r.from, r.to, r.value, r.gas, r.gasPrice, r.gasFeeCap, r.gasTipCap, r.nonce, r.txType, c.sensorID, r.ingestedAt)
+		"INSERT INTO block_events (block_number, block_hash, sensor_id, node_id, source, seen_at, total_difficulty)",
+		func(b driver.Batch, r chBlockEvent) error {
+			return b.Append(r.blockNumber, r.blockHash, c.sensorID, r.nodeID, r.source, r.seenAt, r.totalDifficulty)
 		})
-	c.txEvt = newInsertBatcher(ctx, c, "transaction_events", chTxEventBatch,
-		"INSERT INTO transaction_events (tx_hash, sensor_id, peer_id, seen_at)",
-		appendEvent)
+	c.txs = newInsertBatcher(ctx, c, "transactions", chTxBatch,
+		"INSERT INTO transactions (hash, from_address, to_address, value, gas, gas_price, gas_fee_cap, gas_tip_cap, nonce, tx_type, chain_id, input_selector, input_size, access_list_size, blob_count, auth_list_size, seen_date)",
+		func(b driver.Batch, r chTx) error {
+			return b.Append(r.hash, r.from, r.to, r.value, r.gas, r.gasPrice, r.gasFeeCap, r.gasTipCap, r.nonce, r.txType, r.chainID, r.inputSelector, r.inputSize, r.accessListSize, r.blobCount, r.authListSize, r.seenDate)
+		})
+	c.txEvt = newInsertBatcher(ctx, c, "tx_events", chTxEventBatch,
+		"INSERT INTO tx_events (tx_hash, sensor_id, node_id, source, seen_at)",
+		func(b driver.Batch, r chTxEvent) error {
+			return b.Append(r.txHash, c.sensorID, r.nodeID, r.source, r.seenAt)
+		})
 	c.peers = newInsertBatcher(ctx, c, "peers", chPeerBatch,
-		"INSERT INTO peers (peer_id, name, url, caps, last_seen_by, time_last_seen)",
-		func(b driver.Batch, r chPeer) error {
-			return b.Append(r.peerID, r.name, r.url, r.caps, c.sensorID, r.timeLastSeen)
+		"INSERT INTO peers (sensor_id, node_id, name, url, caps, seen_at)",
+		func(b driver.Batch, r chPeerSnapshot) error {
+			return b.Append(c.sensorID, r.nodeID, r.name, r.url, r.caps, r.seenAt)
 		})
 }
 
@@ -236,71 +307,167 @@ func flushBatch[T any](conn driver.Conn, query string, rows []T, appendRow func(
 
 // --- row types -------------------------------------------------------------
 
+// chBlock is a header row. Every field is derived from the header itself, so any
+// two sensors that see this hash produce an identical row. Nothing observational
+// (which sensor, when, how it was learned) belongs here -- see chBlockEvent.
 type chBlock struct {
-	hash            string
-	number          uint64
-	parentHash      string
-	blockTime       time.Time
-	coinbase        string
-	signer          string
-	difficulty      uint64
-	totalDifficulty *big.Int
-	gasUsed         uint64
-	gasLimit        uint64
-	baseFee         uint64
-	txCount         uint32
-	uncleCount      uint16
-	uncleHash       string
-	stateRoot       string
-	txRoot          string
-	receiptRoot     string
-	logsBloom       []byte
-	extraData       []byte
-	mixDigest       string
-	nonce           uint64
-	ingestedAt      time.Time
-	isParent        bool
+	number      uint64
+	hash        string
+	parentHash  string
+	blockTime   time.Time
+	signer      string
+	coinbase    string
+	difficulty  uint64
+	gasUsed     uint64
+	gasLimit    uint64
+	baseFee     *big.Int
+	uncleHash   string
+	stateRoot   string
+	txRoot      string
+	receiptRoot string
+	logsBloom   []byte
+	extraData   []byte
+	mixDigest   string
+	nonce       uint64
 }
 
-type chEvent struct {
-	hash   string
-	peerID string
-	seenAt time.Time
+// chBlockBody holds the facts a header cannot carry. Written only when a body or
+// a full block is actually delivered, which is what keeps the header path from
+// having to invent a tx_count.
+type chBlockBody struct {
+	hash       string
+	txCount    uint32
+	uncleCount uint16
+	uncles     []string
+}
+
+// chBlockTD is the announced total difficulty, which only a NewBlock carries. It
+// is a separate table rather than a blocks column because the header path does not
+// know it and would have to write 0, letting a header clobber a real value.
+type chBlockTD struct {
+	hash            string
+	totalDifficulty *big.Int
+}
+
+type chBlockTx struct {
+	blockHash string
+	txIndex   uint32
+	txHash    string
+	seenDate  time.Time
+}
+
+type chBlockEvent struct {
+	blockNumber     uint64
+	blockHash       string
+	nodeID          string
+	source          string
+	seenAt          time.Time
+	totalDifficulty *big.Int
 }
 
 type chTx struct {
-	hash       string
-	from       string
-	to         string
-	value      *big.Int
-	gas        uint64
-	gasPrice   *big.Int
-	gasFeeCap  *big.Int
-	gasTipCap  *big.Int
-	nonce      uint64
-	txType     uint8
-	ingestedAt time.Time
+	hash           string
+	from           string
+	to             string
+	value          *big.Int
+	gas            uint64
+	gasPrice       *big.Int
+	gasFeeCap      *big.Int
+	gasTipCap      *big.Int
+	nonce          uint64
+	txType         uint8
+	chainID        uint64
+	inputSelector  string
+	inputSize      uint32
+	accessListSize uint16
+	blobCount      uint8
+	authListSize   uint8
+	seenDate       time.Time
 }
 
-type chPeer struct {
-	peerID       string
-	name         string
-	url          string
-	caps         []string
-	timeLastSeen time.Time
+type chTxEvent struct {
+	txHash string
+	nodeID string
+	source string
+	seenAt time.Time
+}
+
+type chPeerSnapshot struct {
+	nodeID string
+	name   string
+	url    string
+	caps   []string
+	seenAt time.Time
 }
 
 // --- Database interface ----------------------------------------------------
 
+// recordsBlockEvents reports whether block_events should be written at all.
+//
+// The provenance sources -- new_block, header, header_backfill, body -- are about
+// one row per block per sensor, measured at 2.8 MB/day across the mainnet fleet, so
+// they follow this rather than shouldWriteBlockEvents. That flag exists to bound the
+// hash_announce firehose, which is ~52 rows per block per sensor and scales with
+// peer count. Gating provenance behind it meant the production config
+// (write_block_events=false, write_first_block_event=true) silently recorded no
+// total_difficulty, no header timing and no header_backfill marker at all.
+func (c *ClickHouse) recordsBlockEvents() bool {
+	return c.shouldWriteBlockEvents || c.shouldWriteFirstBlockEvent
+}
+
+// recordsTxEvents is the transaction mirror of recordsBlockEvents. full_tx is a
+// delivered transaction body -- about 2 rows per transaction per sensor, since the
+// sensor's LRU filters repeats, measured at 4.5 GiB over the 14-day TTL for the
+// mainnet fleet. hash_announce by contrast is 8+ rows per transaction per sensor and
+// climbs with peer count, which is what shouldWriteTransactionEvents exists to bound.
+func (c *ClickHouse) recordsTxEvents() bool {
+	return c.shouldWriteTransactionEvents || c.shouldWriteFirstTransactionEvent
+}
+
 func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
 	if c.conn == nil {
+		// blocks + block_bodies + block_total_difficulty + the event, then one
+		// block_txs and one transactions row per transaction.
+		c.discarded.Add(4 + 2*uint64(len(block.Transactions())))
 		return
 	}
-	if c.shouldWriteBlockEvents && peer != nil {
-		c.blockEvt.add(chEvent{hash: block.Hash().Hex(), peerID: peer.URLv4(), seenAt: tfs})
+	// Which peer announced which total difficulty is an observation, so it rides on
+	// the event. The value itself is a property of the block, so it also goes to its
+	// own forever-kept table -- the events expire at 14 days, and reading the block's
+	// total difficulty out of a rollup that expires is what made it read 0 for every
+	// block older than that.
+	if c.recordsBlockEvents() && peer != nil {
+		c.blockEvt.add(chBlockEvent{
+			blockNumber: block.NumberU64(),
+			blockHash:   block.Hash().Hex(),
+			nodeID:      peer.ID().String(),
+			source:      srcNewBlock,
+			seenAt:      tfs,
+			// Copied like the blockTD row below: rows sit in the batcher up to a
+			// second, and this pointer is raw.TD, also held in the block cache for
+			// ~10 minutes and handed to BroadcastBlock. Nothing mutates it today; it
+			// was the one alias left in an otherwise uniform copy discipline.
+			totalDifficulty: copyBig(td),
+		})
+	}
+	// Only ever written from here, and never as 0: an absent row is how "no peer
+	// announced it to us" is expressed, so writing 0 would recreate the sentinel
+	// this table exists to remove.
+	//
+	// Gated on shouldWriteBlocks like every other fact row. Ungated, this was the
+	// one write that happened with every flag off -- forever-kept rows with no
+	// blocks row to join to, invisible to v_blocks yet accumulating permanently.
+	// The value is copied because rows sit in the batcher for up to a second and
+	// td aliases the caller's big.Int.
+	if c.shouldWriteBlocks && td != nil && td.Sign() > 0 {
+		c.blockTD.add(chBlockTD{
+			hash:            block.Hash().Hex(),
+			totalDifficulty: copyBig(td),
+		})
 	}
 	if c.shouldWriteBlocks {
-		c.blocks.add(newChBlock(block.Header(), td, tfs, len(block.Transactions()), len(block.Uncles()), false))
+		c.blocks.add(newChBlock(block.Header()))
+		c.writeBlockBody(block.Hash(), block.Transactions(), block.Uncles(), tfs)
 	}
 	if c.shouldWriteTransactions {
 		c.writeTxs(block.Transactions(), tfs)
@@ -308,75 +475,182 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 }
 
 func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Header, tfs time.Time, isParent bool) {
-	if c.conn == nil || !c.shouldWriteBlocks {
+	// The header row and the header event are separate concerns, gated separately.
+	// Returning early on !shouldWriteBlocks made header and header_backfill the only
+	// two provenance sources that also required --write-blocks, so a fleet with it
+	// off recorded new_block, body, hash_announce and full_tx but silently dropped
+	// header timing and the backfill marker -- and headers are still requested in
+	// that configuration, so the events were produced and thrown away.
+	if c.conn == nil {
+		c.discarded.Add(uint64(len(headers)))
 		return
 	}
-	// A header carries no tx/uncle counts, so they are written as 0; the
-	// full-block (NewBlock) path writes a separate row with the real counts.
-	// isParent marks headers fetched as ancestors during backfill.
+	if !c.shouldWriteBlocks && !c.recordsBlockEvents() {
+		return
+	}
+	source := srcHeader
+	if isParent {
+		source = srcHeaderBackfill
+	}
 	for _, h := range headers {
-		c.blocks.add(newChBlock(h, big.NewInt(0), tfs, 0, 0, isParent))
+		// A header row is complete on its own: the fields it cannot carry (tx/uncle
+		// counts) live in block_bodies, so this path can never overwrite them.
+		if c.shouldWriteBlocks {
+			c.blocks.add(newChBlock(h))
+		}
+		if c.recordsBlockEvents() {
+			c.blockEvt.add(chBlockEvent{
+				blockNumber:     h.Number.Uint64(),
+				blockHash:       h.Hash().Hex(),
+				source:          source,
+				seenAt:          tfs,
+				totalDifficulty: big.NewInt(0),
+			})
+		}
 	}
 }
 
-func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, hash common.Hash, tfs time.Time) {
-	if c.conn == nil || !c.shouldWriteTransactions {
+func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, ann BlockAnnouncement, tfs time.Time) {
+	if c.conn == nil {
+		c.discarded.Add(1)
 		return
 	}
-	// The block row is written from the header path; here we only persist the
-	// transactions carried in the body (no read-modify-write on blocks).
+	hash := ann.Hash
+
+	// The body arrived: that is true whether or not it decodes, so the event is
+	// recorded first. Like the header sources it carries no peer -- the sensor
+	// requested it -- so it is excluded from the propagation rollup, but it makes
+	// "which sensor got the body, and when" answerable. Recording it first also
+	// keeps the two decode-failure paths below consistent: previously a failed
+	// transaction decode skipped the event while a failed uncle decode kept it.
+	if c.recordsBlockEvents() {
+		c.blockEvt.add(chBlockEvent{
+			blockNumber:     ann.Number,
+			blockHash:       hash.Hex(),
+			source:          srcBody,
+			seenAt:          tfs,
+			totalDifficulty: big.NewInt(0),
+		})
+	}
+
 	txs, err := body.Transactions.Items()
 	if err != nil {
+		// Nothing downstream is derivable: block_bodies needs the count, block_txs
+		// and transactions need the transactions themselves.
 		log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode transactions from block body")
 		return
 	}
-	c.writeTxs(txs, tfs)
+
+	// Each fact is skipped exactly when ITS inputs are undecodable, no wider.
+	// block_bodies carries uncle facts, so a failed uncle decode skips only that
+	// row -- writing it with uncle_count = 0 against the NewBlock path's real value
+	// made the merge survivor arbitrary (the size_bytes defect), but the
+	// transaction facts are pure functions of the transactions, which decoded
+	// fine, and the first version of this fix threw those away too. Unreachable
+	// either way on Bor, which produces no uncles.
+	uncles, uncleErr := body.Uncles.Items()
+	if uncleErr != nil {
+		log.Error().Err(uncleErr).Str("hash", hash.Hex()).Msg("Failed to decode uncles from block body")
+	}
+	if c.shouldWriteBlocks {
+		if uncleErr == nil {
+			c.writeBlockBody(hash, txs, uncles, tfs)
+		} else {
+			c.writeBlockTxs(hash, txs, tfs)
+		}
+	}
+	if c.shouldWriteTransactions {
+		c.writeTxs(txs, tfs)
+	}
 }
 
-func (c *ClickHouse) WriteBlockEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
-	if c.conn == nil || peer == nil {
+func (c *ClickHouse) WriteBlockEvents(ctx context.Context, peer *enode.Node, anns []BlockAnnouncement, tfs time.Time) {
+	if c.conn == nil {
+		c.discarded.Add(uint64(len(anns)))
 		return
 	}
-	peerID := peer.URLv4()
-	for _, hash := range hashes {
-		c.blockEvt.add(chEvent{hash: hash.Hex(), peerID: peerID, seenAt: tfs})
+	if peer == nil {
+		return
+	}
+	nodeID := peer.ID().String()
+	for _, ann := range anns {
+		c.blockEvt.add(chBlockEvent{
+			blockNumber:     ann.Number,
+			blockHash:       ann.Hash.Hex(),
+			nodeID:          nodeID,
+			source:          srcHashAnnounce,
+			seenAt:          tfs,
+			totalDifficulty: big.NewInt(0),
+		})
 	}
 }
 
-// WriteBlockHashFirstSeen is a no-op: ClickHouse derives earliest first-seen at
-// query time from the block_events stream (see the block_first_seen
-// materialized view), so no per-block stamp is needed.
+// WriteBlockHashFirstSeen is a no-op: earliest first-seen is derived from
+// block_events by the block_events_first materialized view.
 func (c *ClickHouse) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
 }
 
 func (c *ClickHouse) WriteTransactionEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
-	if c.conn == nil || peer == nil {
+	if c.conn == nil {
+		c.discarded.Add(uint64(len(hashes)))
 		return
 	}
-	peerID := peer.URLv4()
+	if peer == nil {
+		return
+	}
+	nodeID := peer.ID().String()
 	for _, hash := range hashes {
-		c.txEvt.add(chEvent{hash: hash.Hex(), peerID: peerID, seenAt: tfs})
+		c.txEvt.add(chTxEvent{
+			txHash: hash.Hex(),
+			nodeID: nodeID,
+			source: srcHashAnnounce,
+			seenAt: tfs,
+		})
 	}
 }
 
 func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
-	if c.conn == nil || !c.shouldWriteTransactions {
+	if c.conn == nil {
+		c.discarded.Add(uint64(len(txs)))
+		return
+	}
+	// A delivered body is a distinct event from a hash announcement, and worth
+	// recording under either flag: measured at ~2 rows per transaction per sensor,
+	// since the sensor's LRU filters repeats, so it is not a per-peer stream.
+	if c.recordsTxEvents() && peer != nil {
+		nodeID := peer.ID().String()
+		for _, tx := range txs {
+			c.txEvt.add(chTxEvent{
+				txHash: tx.Hash().Hex(),
+				nodeID: nodeID,
+				source: srcFullTx,
+				seenAt: tfs,
+			})
+		}
+	}
+	if !c.shouldWriteTransactions {
 		return
 	}
 	c.writeTxs(txs, tfs)
 }
 
 func (c *ClickHouse) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time.Time) {
-	if c.conn == nil || !c.shouldWritePeers {
+	if c.conn == nil {
+		c.discarded.Add(uint64(len(peers)))
 		return
 	}
+	if !c.shouldWritePeers {
+		return
+	}
+	// node_id matches what the event streams record, so peers and events are
+	// joinable. The enode URL is a column, not the key.
 	for _, peer := range peers {
-		c.peers.add(chPeer{
-			peerID:       peer.ID().String(),
-			name:         peer.Fullname(),
-			url:          peer.Node().URLv4(),
-			caps:         peer.Info().Caps,
-			timeLastSeen: tls,
+		c.peers.add(chPeerSnapshot{
+			nodeID: peer.ID().String(),
+			name:   peer.Fullname(),
+			url:    peer.Node().URLv4(),
+			caps:   peer.Info().Caps,
+			seenAt: tls,
 		})
 	}
 }
@@ -384,6 +658,36 @@ func (c *ClickHouse) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time
 // HasBlock reports whether the block already exists. Called once per new block
 // (not per event), so an indexed point lookup is cheap. Without a connection it
 // reports true so the sensor never attempts a backfill it could not persist.
+// startUnavailableWarning re-logs while the backend is unreachable, so the failure
+// keeps showing up in logs and alerting instead of scrolling past once at startup.
+// It does not reconnect: a sensor whose database was down at boot needs a restart,
+// and pretending otherwise would hide that.
+func (c *ClickHouse) startUnavailableWarning(ctx context.Context) {
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		ticker := time.NewTicker(chUnavailableWarnInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				log.Error().
+					Uint64("rows_discarded", c.discarded.Load()).
+					Msg("ClickHouse is unavailable; every write is being discarded")
+			}
+		}
+	}()
+}
+
+// HasBlock reports whether the block is already stored, which the sensor uses to
+// decide whether to backfill a parent.
+//
+// With no connection it returns true -- "we have it" -- to suppress backfill rather
+// than let every block queue parent requests that can never be satisfied. That is
+// the safer degradation, but it does mean a dead backend is silent in this path
+// specifically; startUnavailableWarning is what makes it visible.
 func (c *ClickHouse) HasBlock(ctx context.Context, hash common.Hash) bool {
 	if c.conn == nil {
 		return true
@@ -393,12 +697,14 @@ func (c *ClickHouse) HasBlock(ctx context.Context, hash common.Hash) bool {
 	return err == nil && exists == 1
 }
 
+// NodeList returns the most recently seen peers' enode URLs, from the narrow
+// peers_current rollup rather than grouping over the event firehose.
 func (c *ClickHouse) NodeList(ctx context.Context, limit int) ([]string, error) {
 	if c.conn == nil {
 		return []string{}, nil
 	}
 	rows, err := c.conn.Query(ctx,
-		"SELECT peer_id FROM block_events GROUP BY peer_id ORDER BY max(seen_at) DESC LIMIT ?", limit)
+		"SELECT url FROM peers_current FINAL WHERE url != '' ORDER BY last_seen DESC LIMIT ?", limit)
 	if err != nil {
 		return nil, fmt.Errorf("query node list: %w", err)
 	}
@@ -436,50 +742,112 @@ func (c *ClickHouse) ShouldWritePeers() bool { return c.shouldWritePeers }
 
 // --- helpers ---------------------------------------------------------------
 
-// newChBlock maps a header (plus data not carried on the header itself) to a
-// blocks-table row.
-func newChBlock(h *types.Header, td *big.Int, tfs time.Time, txCount, uncleCount int, isParent bool) chBlock {
-	baseFee := uint64(0)
-	if h.BaseFee != nil {
-		baseFee = h.BaseFee.Uint64()
+// copyBig returns a defensive copy, or nil for nil. big.Int carries an internal
+// slice, so Set is the copy that matters, not the struct assignment.
+func copyBig(v *big.Int) *big.Int {
+	if v == nil {
+		return nil
 	}
-	if td == nil {
-		td = big.NewInt(0)
+	return new(big.Int).Set(v)
+}
+
+// addressHex renders an address as lowercase 0x hex.
+//
+// NOT common.Address.Hex(), which applies the EIP-55 checksum and so returns mixed
+// case. That is a display format -- it exists so a human can spot a mistyped
+// address -- and these come from ecrecover and RLP, never from typing. Stored mixed
+// case, an address column silently fails to join: ClickHouse string comparison is
+// case-sensitive, and the Polygon staking API, block-latency and data-analysis all
+// key validators on lowercase. Measured against the live validator set, 0 of 3
+// real-chain signers matched as stored and all 3 matched lowercased -- a join that
+// returns no rows and no error, so "no blocks had a known signer" reads as an
+// answer rather than a bug.
+//
+// Hashes need no equivalent: common.Hash.Hex() is already lowercase, having no
+// checksum to apply.
+func addressHex(a common.Address) string {
+	return strings.ToLower(a.Hex())
+}
+
+// newChBlock maps a header to a blocks-table row. Takes nothing but the header, so
+// everything it writes is a pure function of it -- which is what makes duplicate
+// rows for a hash byte-identical.
+//
+// mix_digest and nonce are all-zero on Bor but stored anyway: clique's
+// encodeSigHeader includes them unconditionally, so a consumer re-running ecrecover
+// needs them, as it needs base_fee. The post-Shanghai/Cancun header fields are
+// deliberately not stored -- clique panics if any of them is non-nil, so they can
+// never take part in the seal hash.
+func newChBlock(h *types.Header) chBlock {
+	baseFee := new(big.Int)
+	if h.BaseFee != nil {
+		baseFee.Set(h.BaseFee)
 	}
 	// Recover the block signer from the header seal so signer-based analytics
 	// don't have to ecrecover on every query. Left empty when it can't be recovered.
 	var signer string
 	if sig, err := util.Ecrecover(h); err == nil {
-		signer = common.BytesToAddress(sig).Hex()
+		signer = addressHex(common.BytesToAddress(sig))
 	}
 	return chBlock{
-		hash:            h.Hash().Hex(),
-		number:          h.Number.Uint64(),
-		parentHash:      h.ParentHash.Hex(),
-		blockTime:       time.Unix(int64(h.Time), 0).UTC(),
-		coinbase:        h.Coinbase.Hex(),
-		signer:          signer,
-		difficulty:      h.Difficulty.Uint64(),
-		totalDifficulty: new(big.Int).Set(td),
-		gasUsed:         h.GasUsed,
-		gasLimit:        h.GasLimit,
-		baseFee:         baseFee,
-		txCount:         uint32(txCount),
-		uncleCount:      uint16(uncleCount),
-		uncleHash:       h.UncleHash.Hex(),
-		stateRoot:       h.Root.Hex(),
-		txRoot:          h.TxHash.Hex(),
-		receiptRoot:     h.ReceiptHash.Hex(),
-		logsBloom:       h.Bloom.Bytes(),
-		extraData:       h.Extra,
-		mixDigest:       h.MixDigest.Hex(),
-		nonce:           h.Nonce.Uint64(),
-		ingestedAt:      tfs,
-		isParent:        isParent,
+		number:      h.Number.Uint64(),
+		hash:        h.Hash().Hex(),
+		parentHash:  h.ParentHash.Hex(),
+		blockTime:   time.Unix(int64(h.Time), 0).UTC(),
+		signer:      signer,
+		coinbase:    addressHex(h.Coinbase),
+		difficulty:  h.Difficulty.Uint64(),
+		gasUsed:     h.GasUsed,
+		gasLimit:    h.GasLimit,
+		baseFee:     baseFee,
+		uncleHash:   h.UncleHash.Hex(),
+		stateRoot:   h.Root.Hex(),
+		txRoot:      h.TxHash.Hex(),
+		receiptRoot: h.ReceiptHash.Hex(),
+		logsBloom:   h.Bloom.Bytes(),
+		extraData:   bytes.Clone(h.Extra), // aliased peer memory; rows outlive the call
+		mixDigest:   h.MixDigest.Hex(),
+		nonce:       h.Nonce.Uint64(),
+	}
+}
+
+// writeBlockBody records the body facts and the ordered block -> tx mapping.
+//
+// Deliberately stores no encoded block size: it is only knowable from a full
+// NewBlock, not from a body delivered on its own, so it is not a function of the
+// hash and two sensors could write differing rows for one block.
+func (c *ClickHouse) writeBlockBody(hash common.Hash, txs []*types.Transaction, uncles []*types.Header, tfs time.Time) {
+	uncleHashes := make([]string, 0, len(uncles))
+	for _, u := range uncles {
+		uncleHashes = append(uncleHashes, u.Hash().Hex())
+	}
+	c.blockBodies.add(chBlockBody{
+		hash:       hash.Hex(),
+		txCount:    uint32(len(txs)),
+		uncleCount: uint16(len(uncles)),
+		uncles:     uncleHashes,
+	})
+	c.writeBlockTxs(hash, txs, tfs)
+}
+
+// writeBlockTxs records the ordered block -> transaction mapping alone, for the
+// case where the body facts row cannot be written (undecodable uncles) but the
+// transactions decoded fine.
+func (c *ClickHouse) writeBlockTxs(hash common.Hash, txs []*types.Transaction, tfs time.Time) {
+	blockHash := hash.Hex()
+	seenDate := tfs.UTC().Truncate(24 * time.Hour)
+	for i, tx := range txs {
+		c.blockTxs.add(chBlockTx{
+			blockHash: blockHash,
+			txIndex:   uint32(i),
+			txHash:    tx.Hash().Hex(),
+			seenDate:  seenDate,
+		})
 	}
 }
 
 func (c *ClickHouse) writeTxs(txs []*types.Transaction, tfs time.Time) {
+	seenDate := tfs.UTC().Truncate(24 * time.Hour)
 	for _, tx := range txs {
 		var from, to string
 		chainID := tx.ChainId()
@@ -487,23 +855,40 @@ func (c *ClickHouse) writeTxs(txs []*types.Transaction, tfs time.Time) {
 			chainID = c.chainID
 		}
 		if addr, err := types.Sender(types.LatestSignerForChainID(chainID), tx); err == nil {
-			from = addr.Hex()
+			from = addressHex(addr)
 		}
 		if tx.To() != nil {
-			to = tx.To().Hex()
+			to = addressHex(*tx.To())
+		}
+		// Selector and size but not the calldata: enough for contract-interaction
+		// analysis at negligible cost.
+		var selector string
+		data := tx.Data()
+		if len(data) >= 4 {
+			selector = "0x" + hex.EncodeToString(data[:4])
+		}
+		txChainID := uint64(0)
+		if id := tx.ChainId(); id != nil && id.IsUint64() {
+			txChainID = id.Uint64()
 		}
 		c.txs.add(chTx{
-			hash:       tx.Hash().Hex(),
-			from:       from,
-			to:         to,
-			value:      new(big.Int).Set(tx.Value()),
-			gas:        tx.Gas(),
-			gasPrice:   new(big.Int).Set(tx.GasPrice()),
-			gasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
-			gasTipCap:  new(big.Int).Set(tx.GasTipCap()),
-			nonce:      tx.Nonce(),
-			txType:     tx.Type(),
-			ingestedAt: tfs,
+			hash:           tx.Hash().Hex(),
+			from:           from,
+			to:             to,
+			value:          new(big.Int).Set(tx.Value()),
+			gas:            tx.Gas(),
+			gasPrice:       new(big.Int).Set(tx.GasPrice()),
+			gasFeeCap:      new(big.Int).Set(tx.GasFeeCap()),
+			gasTipCap:      new(big.Int).Set(tx.GasTipCap()),
+			nonce:          tx.Nonce(),
+			txType:         tx.Type(),
+			chainID:        txChainID,
+			inputSelector:  selector,
+			inputSize:      uint32(len(data)),
+			accessListSize: uint16(len(tx.AccessList())),
+			blobCount:      uint8(len(tx.BlobHashes())),
+			authListSize:   uint8(len(tx.SetCodeAuthorizations())),
+			seenDate:       seenDate,
 		})
 	}
 }

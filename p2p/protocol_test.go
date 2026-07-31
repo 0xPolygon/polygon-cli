@@ -81,7 +81,7 @@ func newTestConn(rw ethp2p.MsgReadWriter, conns *Conns) *conn {
 		logger:      zerolog.Nop(),
 		rw:          rw,
 		db:          database.NoDatabase(),
-		requests:    ds.NewLRU[uint64, common.Hash](ds.LRUOptions{MaxSize: 1024}),
+		requests:    ds.NewLRU[uint64, database.BlockAnnouncement](ds.LRUOptions{MaxSize: 1024}),
 		parents:     ds.NewLRU[common.Hash, struct{}](ds.LRUOptions{MaxSize: 1024}),
 		conns:       conns,
 		messages:    NewPeerMessages(),
@@ -177,7 +177,7 @@ func TestHandleBlockBodiesRetainsBodyBeforeHeader(t *testing.T) {
 	// The announcement created a hash-only marker; the header has NOT arrived yet.
 	conns.Blocks().Update(hash, func(bc BlockCache) BlockCache { return bc })
 	const reqID = 7
-	c.requests.Add(reqID, hash)
+	c.requests.Add(reqID, database.BlockAnnouncement{Hash: hash, Number: 4242})
 
 	// Body response arrives before the header.
 	if err := c.handleBlockBodies(ctx, makeBodies(t, reqID)); err != nil {

@@ -78,6 +78,7 @@ type JSONBlockEvent struct {
 	SensorID  string    `json:"sensor_id"`
 	PeerID    string    `json:"peer_id"`
 	Hash      string    `json:"hash"`
+	Number    uint64    `json:"number,omitempty"`
 	Timestamp time.Time `json:"timestamp"`
 }
 
@@ -218,17 +219,18 @@ func (j *JSONDatabase) WriteBlockHeaders(ctx context.Context, headers []*types.H
 }
 
 // WriteBlockEvents writes the block events as JSON.
-func (j *JSONDatabase) WriteBlockEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
-	if peer == nil || len(hashes) == 0 {
+func (j *JSONDatabase) WriteBlockEvents(ctx context.Context, peer *enode.Node, anns []BlockAnnouncement, tfs time.Time) {
+	if peer == nil || len(anns) == 0 {
 		return
 	}
 
-	for _, hash := range hashes {
+	for _, ann := range anns {
 		event := JSONBlockEvent{
 			Type:      "block_hash",
 			SensorID:  j.sensorID,
 			PeerID:    peer.URLv4(),
-			Hash:      hash.Hex(),
+			Hash:      ann.Hash.Hex(),
+			Number:    ann.Number,
 			Timestamp: tfs,
 		}
 
@@ -252,7 +254,8 @@ func (j *JSONDatabase) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.
 }
 
 // WriteBlockBody writes the block body as JSON.
-func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, hash common.Hash, tfs time.Time) {
+func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, ann BlockAnnouncement, tfs time.Time) {
+	hash := ann.Hash
 	if !j.ShouldWriteBlocks() {
 		return
 	}

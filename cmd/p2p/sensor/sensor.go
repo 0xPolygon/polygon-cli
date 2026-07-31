@@ -53,6 +53,7 @@ type (
 		ShouldWriteTransactionEvents     bool
 		ShouldWriteFirstTransactionEvent bool
 		ShouldWritePeers                 bool
+		PeerSnapshotInterval             time.Duration
 		ShouldBroadcastTx                bool
 		ShouldBroadcastTxHashes          bool
 		ShouldBroadcastBlocks            bool
@@ -193,6 +194,12 @@ var SensorCmd = &cobra.Command{
 				return errors.New("--validator-set-refresh must be greater than zero when --validate-block-signer is enabled with block broadcasting")
 			}
 		}
+		// Validated here rather than discovered at time.NewTicker, which panics on a
+		// non-positive interval -- and it would panic after the p2p ports are bound
+		// and the database is open, i.e. a crash loop rather than a startup error.
+		if inputSensorParams.PeerSnapshotInterval <= 0 {
+			return errors.New("--peer-snapshot-interval must be greater than zero")
+		}
 
 		return nil
 	},
@@ -318,6 +325,12 @@ var SensorCmd = &cobra.Command{
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 
+		// Peer snapshots persist on their own slower cadence: the 2s tick above is
+		// cheap in-process work, but writing up to --max-peers rows every 2s is not,
+		// and "who is connected now" does not need that resolution.
+		peerSnapshotTicker := time.NewTicker(inputSensorParams.PeerSnapshotInterval)
+		defer peerSnapshotTicker.Stop()
+
 		if inputSensorParams.ShouldRunPprof {
 			go handlePprof()
 		}
@@ -334,9 +347,10 @@ var SensorCmd = &cobra.Command{
 			select {
 			case <-ticker.C:
 				peersGauge.Set(float64(server.PeerCount()))
-				db.WritePeers(ctx, server.Peers(), time.Now())
 				metrics.Update(conns.HeadBlock().Block, conns.OldestBlock())
 				writePeers(server.Peers())
+			case <-peerSnapshotTicker.C:
+				db.WritePeers(ctx, server.Peers(), time.Now())
 			case <-ctx.Done():
 				log.Info().Msg("Stopping sensor")
 				return nil
@@ -540,14 +554,17 @@ will result in less chance of missing data but can significantly increase memory
 	f.BoolVarP(&inputSensorParams.ShouldWriteBlocks, "write-blocks", "B", true, "write blocks to database")
 	f.BoolVar(&inputSensorParams.ShouldWriteBlockEvents, "write-block-events", true, "write block events to database")
 	f.BoolVar(&inputSensorParams.ShouldWriteFirstBlockEvent, "write-first-block-event", false,
-		"write one block event on first-seen only (requires --write-block-events=false)")
+		"write one block event on first-seen only; ignored when --write-block-events is set")
 	f.BoolVarP(&inputSensorParams.ShouldWriteTransactions, "write-txs", "t", true,
 		`write transactions to database (this option can significantly increase CPU and memory usage)`)
 	f.BoolVar(&inputSensorParams.ShouldWriteTransactionEvents, "write-tx-events", true,
 		`write transaction events to database (this option can significantly increase CPU and memory usage)`)
 	f.BoolVar(&inputSensorParams.ShouldWriteFirstTransactionEvent, "write-first-tx-event", false,
-		"write one transaction event on first-seen only (requires --write-tx-events=false)")
+		"write one transaction event on first-seen only; ignored when --write-tx-events is set")
 	f.BoolVar(&inputSensorParams.ShouldWritePeers, "write-peers", true, "write peers to database")
+	f.DurationVar(&inputSensorParams.PeerSnapshotInterval, "peer-snapshot-interval", 30*time.Second,
+		`how often to persist the connected-peer set (requires --write-peers); lower
+values multiply write volume by up to --max-peers rows per tick`)
 	f.BoolVar(&inputSensorParams.ShouldBroadcastTx, "broadcast-txs", false, "broadcast full transactions to peers")
 	f.BoolVar(&inputSensorParams.ShouldBroadcastTxHashes, "broadcast-tx-hashes", false, "broadcast transaction hashes to peers")
 	f.BoolVar(&inputSensorParams.ShouldBroadcastBlocks, "broadcast-blocks", false, "broadcast full blocks to peers")

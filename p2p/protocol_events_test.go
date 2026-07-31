@@ -19,11 +19,15 @@ import (
 type recordingDB struct {
 	database.Database
 	blockEvents, txEvents                  int
+	blockNumbers                           []uint64
 	fullBlock, firstBlock, fullTx, firstTx bool
 }
 
-func (r *recordingDB) WriteBlockEvents(_ context.Context, _ *enode.Node, hashes []common.Hash, _ time.Time) {
-	r.blockEvents += len(hashes)
+func (r *recordingDB) WriteBlockEvents(_ context.Context, _ *enode.Node, anns []database.BlockAnnouncement, _ time.Time) {
+	r.blockEvents += len(anns)
+	for _, ann := range anns {
+		r.blockNumbers = append(r.blockNumbers, ann.Number)
+	}
 }
 
 func (r *recordingDB) WriteTransactionEvents(_ context.Context, _ *enode.Node, hashes []common.Hash, _ time.Time) {
@@ -91,7 +95,31 @@ func TestBlockEventFullVsFirst(t *testing.T) {
 			if rec.blockEvents != tc.want {
 				t.Fatalf("%s: recorded %d block events, want %d", tc.name, rec.blockEvents, tc.want)
 			}
+			// The announced height must reach the backend: observations are keyed
+			// by block number, and a zero here would silently key every row to 0.
+			for _, number := range rec.blockNumbers {
+				if number != 200 {
+					t.Fatalf("%s: recorded block number %d, want 200", tc.name, number)
+				}
+			}
 		})
+	}
+}
+
+func TestEventAnnouncements(t *testing.T) {
+	all := []database.BlockAnnouncement{{Hash: common.Hash{1}, Number: 1}, {Hash: common.Hash{2}, Number: 2}}
+	first := []database.BlockAnnouncement{{Hash: common.Hash{1}, Number: 1}}
+	if got := eventAnnouncements(all, first, true, false); len(got) != 2 {
+		t.Errorf("full: got %d announcements, want 2", len(got))
+	}
+	if got := eventAnnouncements(all, first, false, true); len(got) != 1 {
+		t.Errorf("first: got %d announcements, want 1", len(got))
+	}
+	if got := eventAnnouncements(all, first, false, false); got != nil {
+		t.Errorf("neither: got %v, want nil", got)
+	}
+	if got := eventAnnouncements(all, first, true, true); len(got) != 2 {
+		t.Errorf("full takes precedence: got %d announcements, want 2", len(got))
 	}
 }
 

@@ -173,13 +173,29 @@ func (d *Datastore) runAsync(fn func()) {
 	}()
 }
 
+// recordsBlockEvents reports whether a block event should be written for a block
+// delivered whole (NewBlock), as opposed to announced by hash.
+//
+// A NewBlock delivery is one event per block per sensor, so it follows either
+// flag rather than shouldWriteBlockEvents alone. That flag exists to bound the
+// hash-announcement firehose (~52 events per block per sensor, scaling with peer
+// count), which WriteBlockEvents handles. Gating this write behind it meant the
+// production config (write-block-events=false, write-first-block-event=true)
+// recorded no event at all for blocks whose NewBlock arrived before any
+// NewBlockHashes -- common on Bor, where the sensor is often a direct peer of a
+// propagator. Later hash announcements do not close the gap: the block is
+// already fully cached, so they are skipped as duplicates.
+func (d *Datastore) recordsBlockEvents() bool {
+	return d.shouldWriteBlockEvents || d.shouldWriteFirstBlockEvent
+}
+
 // WriteBlock writes the block and the block event to datastore.
 func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
 	if d.client == nil {
 		return
 	}
 
-	if d.ShouldWriteBlockEvents() {
+	if d.recordsBlockEvents() && peer != nil {
 		d.runAsync(func() {
 			d.writeEvent(peer, BlockEventsKind, block.Hash(), BlocksKind, tfs)
 		})
@@ -214,7 +230,8 @@ func (d *Datastore) WriteBlockHeaders(ctx context.Context, headers []*types.Head
 // requested. The block events will be written when the hash is received
 // instead. It will write the uncles and transactions to datastore if they
 // don't already exist.
-func (d *Datastore) WriteBlockBody(ctx context.Context, body *eth.BlockBody, hash common.Hash, tfs time.Time) {
+func (d *Datastore) WriteBlockBody(ctx context.Context, body *eth.BlockBody, ann BlockAnnouncement, tfs time.Time) {
+	hash := ann.Hash
 	if d.client == nil || !d.ShouldWriteBlocks() {
 		return
 	}
@@ -224,12 +241,14 @@ func (d *Datastore) WriteBlockBody(ctx context.Context, body *eth.BlockBody, has
 	})
 }
 
-// WriteBlockEvents appends an inbound block event per hash for the given peer.
-func (d *Datastore) WriteBlockEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
-	if d.client == nil || peer == nil || len(hashes) == 0 {
+// WriteBlockEvents appends an inbound block event per announcement for the given
+// peer. Announced heights are unused here: Datastore keys events by block key.
+func (d *Datastore) WriteBlockEvents(ctx context.Context, peer *enode.Node, anns []BlockAnnouncement, tfs time.Time) {
+	if d.client == nil || peer == nil || len(anns) == 0 {
 		return
 	}
 
+	hashes := Hashes(anns)
 	d.runAsync(func() {
 		d.writeEvents(ctx, peer, BlockEventsKind, hashes, BlocksKind, tfs)
 	})
