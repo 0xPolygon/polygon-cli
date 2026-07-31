@@ -36,8 +36,11 @@ func Hashes(anns []BlockAnnouncement) []common.Hash {
 // to. To use another database solution, just implement these methods and
 // update the sensor to use the new connection.
 type Database interface {
-	// WriteBlock will write the both the block and block event to the database
-	// if ShouldWriteBlocks and ShouldWriteBlockEvents return true, respectively.
+	// WriteBlock records a block delivered whole (NewBlock). The block row is
+	// written if ShouldWriteBlocks returns true; the event is written if either
+	// ShouldWriteBlockEvents or ShouldWriteFirstBlockEvent returns true, because
+	// a whole-block delivery is one event per block per sensor and is the only
+	// place a block first seen this way is observed.
 	WriteBlock(context.Context, *enode.Node, *types.Block, *big.Int, time.Time)
 
 	// WriteBlockHeaders will write the block headers if ShouldWriteBlocks

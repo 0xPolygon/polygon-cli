@@ -173,13 +173,29 @@ func (d *Datastore) runAsync(fn func()) {
 	}()
 }
 
+// recordsBlockEvents reports whether a block event should be written for a block
+// delivered whole (NewBlock), as opposed to announced by hash.
+//
+// A NewBlock delivery is one event per block per sensor, so it follows either
+// flag rather than shouldWriteBlockEvents alone. That flag exists to bound the
+// hash-announcement firehose (~52 events per block per sensor, scaling with peer
+// count), which WriteBlockEvents handles. Gating this write behind it meant the
+// production config (write-block-events=false, write-first-block-event=true)
+// recorded no event at all for blocks whose NewBlock arrived before any
+// NewBlockHashes -- common on Bor, where the sensor is often a direct peer of a
+// propagator. Later hash announcements do not close the gap: the block is
+// already fully cached, so they are skipped as duplicates.
+func (d *Datastore) recordsBlockEvents() bool {
+	return d.shouldWriteBlockEvents || d.shouldWriteFirstBlockEvent
+}
+
 // WriteBlock writes the block and the block event to datastore.
 func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
 	if d.client == nil {
 		return
 	}
 
-	if d.ShouldWriteBlockEvents() {
+	if d.recordsBlockEvents() && peer != nil {
 		d.runAsync(func() {
 			d.writeEvent(peer, BlockEventsKind, block.Hash(), BlocksKind, tfs)
 		})
