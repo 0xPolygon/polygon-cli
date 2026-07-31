@@ -742,15 +742,6 @@ func (c *ClickHouse) ShouldWritePeers() bool { return c.shouldWritePeers }
 
 // --- helpers ---------------------------------------------------------------
 
-// newChBlock maps a header to a blocks-table row. Takes nothing but the header, so
-// everything it writes is a pure function of it -- which is what makes duplicate
-// rows for a hash byte-identical.
-//
-// mix_digest and nonce are all-zero on Bor but stored anyway: clique's
-// encodeSigHeader includes them unconditionally, so a consumer re-running ecrecover
-// needs them, as it needs base_fee. The post-Shanghai/Cancun header fields are
-// deliberately not stored -- clique panics if any of them is non-nil, so they can
-// never take part in the seal hash.
 // copyBig returns a defensive copy, or nil for nil. big.Int carries an internal
 // slice, so Set is the copy that matters, not the struct assignment.
 func copyBig(v *big.Int) *big.Int {
@@ -778,6 +769,15 @@ func addressHex(a common.Address) string {
 	return strings.ToLower(a.Hex())
 }
 
+// newChBlock maps a header to a blocks-table row. Takes nothing but the header, so
+// everything it writes is a pure function of it -- which is what makes duplicate
+// rows for a hash byte-identical.
+//
+// mix_digest and nonce are all-zero on Bor but stored anyway: clique's
+// encodeSigHeader includes them unconditionally, so a consumer re-running ecrecover
+// needs them, as it needs base_fee. The post-Shanghai/Cancun header fields are
+// deliberately not stored -- clique panics if any of them is non-nil, so they can
+// never take part in the seal hash.
 func newChBlock(h *types.Header) chBlock {
 	baseFee := new(big.Int)
 	if h.BaseFee != nil {
