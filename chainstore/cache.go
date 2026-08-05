@@ -2,6 +2,7 @@ package chainstore
 
 import (
 	"math/big"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -11,6 +12,39 @@ type CachedValue[T any] struct {
 	value     T
 	timestamp time.Time
 	ttl       time.Duration
+}
+
+// feeHistoryCacheKey identifies an eth_feeHistory request. The percentile
+// slice is serialized so the key does not retain caller-owned mutable memory.
+type feeHistoryCacheKey struct {
+	blockCount        int
+	newestBlock       string
+	rewardPercentiles string
+}
+
+func newFeeHistoryCacheKey(blockCount int, newestBlock string, rewardPercentiles []float64) feeHistoryCacheKey {
+	return feeHistoryCacheKey{
+		blockCount:        blockCount,
+		newestBlock:       newestBlock,
+		rewardPercentiles: serializeRewardPercentiles(rewardPercentiles),
+	}
+}
+
+func serializeRewardPercentiles(rewardPercentiles []float64) string {
+	if rewardPercentiles == nil {
+		return "null"
+	}
+
+	serialized := make([]byte, 0, len(rewardPercentiles)*8+2)
+	serialized = append(serialized, '[')
+	for i, percentile := range rewardPercentiles {
+		if i > 0 {
+			serialized = append(serialized, ',')
+		}
+		serialized = strconv.AppendFloat(serialized, percentile, 'g', -1, 64)
+	}
+	serialized = append(serialized, ']')
+	return string(serialized)
 }
 
 // NewCachedValue creates a new cached value
@@ -57,8 +91,8 @@ type ChainCache struct {
 	baseFeeBlock *big.Int
 
 	// Frequent data (30-60 second TTL)
-	gasPrice   *CachedValue[*big.Int]
-	feeHistory *CachedValue[*FeeHistoryResult]
+	gasPrice     *CachedValue[*big.Int]
+	feeHistories map[feeHistoryCacheKey]*CachedValue[*FeeHistoryResult]
 
 	// Very frequent data (5-10 second TTL)
 	pendingTxCount *CachedValue[*big.Int]
@@ -71,7 +105,8 @@ type ChainCache struct {
 // NewChainCache creates a new chain cache
 func NewChainCache() *ChainCache {
 	return &ChainCache{
-		signatures: make(map[string]*CachedValue[[]Signature]),
+		feeHistories: make(map[feeHistoryCacheKey]*CachedValue[*FeeHistoryResult]),
+		signatures:   make(map[string]*CachedValue[[]Signature]),
 	}
 }
 
@@ -200,20 +235,38 @@ func (cc *ChainCache) SetGasPrice(gasPrice *big.Int, ttl time.Duration) {
 }
 
 // GetFeeHistory gets cached fee history
-func (cc *ChainCache) GetFeeHistory(ttl time.Duration) (*FeeHistoryResult, bool) {
-	cc.mu.RLock()
-	defer cc.mu.RUnlock()
-	if cc.feeHistory == nil {
+func (cc *ChainCache) GetFeeHistory(blockCount int, newestBlock string, rewardPercentiles []float64) (*FeeHistoryResult, bool) {
+	key := newFeeHistoryCacheKey(blockCount, newestBlock, rewardPercentiles)
+
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+
+	cached, exists := cc.feeHistories[key]
+	if !exists {
 		return nil, false
 	}
-	return cc.feeHistory.Get()
+
+	feeHistory, valid := cached.Get()
+	if !valid {
+		delete(cc.feeHistories, key)
+		return nil, false
+	}
+	return feeHistory, true
 }
 
 // SetFeeHistory caches fee history
-func (cc *ChainCache) SetFeeHistory(feeHistory *FeeHistoryResult, ttl time.Duration) {
+func (cc *ChainCache) SetFeeHistory(blockCount int, newestBlock string, rewardPercentiles []float64, feeHistory *FeeHistoryResult, ttl time.Duration) {
+	key := newFeeHistoryCacheKey(blockCount, newestBlock, rewardPercentiles)
+
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
-	cc.feeHistory = NewCachedValue(feeHistory, ttl)
+
+	for cachedKey, cached := range cc.feeHistories {
+		if !cached.IsValid() {
+			delete(cc.feeHistories, cachedKey)
+		}
+	}
+	cc.feeHistories[key] = NewCachedValue(feeHistory, ttl)
 }
 
 // GetPendingTxCount gets cached pending transaction count

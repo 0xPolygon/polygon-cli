@@ -362,8 +362,8 @@ func (s *PassthroughStore) GetGasPrice(ctx context.Context) (*big.Int, error) {
 
 // GetFeeHistory retrieves fee history (cached frequently)
 func (s *PassthroughStore) GetFeeHistory(ctx context.Context, blockCount int, newestBlock string, rewardPercentiles []float64) (*FeeHistoryResult, error) {
-	// Check cache first (simple cache key for now)
-	if feeHistory, valid := s.cache.GetFeeHistory(s.config.FrequentTTL); valid {
+	// Check cache first
+	if feeHistory, valid := s.cache.GetFeeHistory(blockCount, newestBlock, rewardPercentiles); valid {
 		return feeHistory, nil
 	}
 
@@ -378,7 +378,7 @@ func (s *PassthroughStore) GetFeeHistory(ctx context.Context, blockCount int, ne
 	}
 
 	// Cache the result
-	s.cache.SetFeeHistory(&result, s.config.FrequentTTL)
+	s.cache.SetFeeHistory(blockCount, newestBlock, rewardPercentiles, &result, s.config.FrequentTTL)
 
 	return &result, nil
 }
