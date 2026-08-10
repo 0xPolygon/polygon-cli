@@ -212,8 +212,14 @@ func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
 		return nil, fmt.Errorf("could not connect to ClickHouse: %w", err)
 	}
 
+	// Diagnostic, not fatal. Open does no I/O -- the pool dials lazily and replaces
+	// broken connections, and every flush already retries (newInsertBatcher) -- so a
+	// backend that is not up *yet* recovers once it is. Failing here instead returns
+	// a no-op instance that nothing reconnects, which discarded every row on a whole
+	// sensor fleet that started 12s before ClickHouse finished binding.
 	if err := conn.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("could not ping ClickHouse: %w", err)
+		log.Warn().Err(err).
+			Msg("Could not ping ClickHouse at startup; continuing, the connection pool will retry on first write")
 	}
 	return conn, nil
 }
@@ -660,8 +666,8 @@ func (c *ClickHouse) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time
 // reports true so the sensor never attempts a backfill it could not persist.
 // startUnavailableWarning re-logs while the backend is unreachable, so the failure
 // keeps showing up in logs and alerting instead of scrolling past once at startup.
-// It does not reconnect: a sensor whose database was down at boot needs a restart,
-// and pretending otherwise would hide that.
+// It does not reconnect, and now only runs for DSN/config failures -- an
+// unreachable backend keeps its connection and retries per flush instead.
 func (c *ClickHouse) startUnavailableWarning(ctx context.Context) {
 	c.wg.Add(1)
 	go func() {
