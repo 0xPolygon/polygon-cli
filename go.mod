@@ -57,7 +57,7 @@ require (
 	github.com/gdamore/encoding v1.0.1 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.7.1 // indirect
-	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
@@ -178,8 +178,8 @@ require (
 	github.com/0xPolygon/cdk-contracts-tooling v0.0.1
 	github.com/ClickHouse/clickhouse-go/v2 v2.47.0
 	github.com/btcsuite/btcd/btcutil v1.2.0
-	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc
-	github.com/chromedp/chromedp v0.15.1
+	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f
+	github.com/chromedp/chromedp v0.16.0
 	github.com/cometbft/cometbft v0.38.21
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/fatih/color v1.19.0
