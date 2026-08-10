@@ -174,7 +174,7 @@ require (
 )
 
 require (
-	cloud.google.com/go/kms v1.31.0
+	cloud.google.com/go/kms v1.33.0
 	github.com/0xPolygon/cdk-contracts-tooling v0.0.1
 	github.com/ClickHouse/clickhouse-go/v2 v2.48.0
 	github.com/btcsuite/btcd/btcutil v1.2.0
@@ -197,7 +197,7 @@ require (
 require (
 	cloud.google.com/go/auth v0.20.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
-	cloud.google.com/go/iam v1.7.0 // indirect
+	cloud.google.com/go/iam v1.11.0 // indirect
 	cloud.google.com/go/longrunning v1.2.0 // indirect
 	github.com/0xPolygon/cdk-rpc v0.0.0-20250213125803-179882ad6229
 	github.com/Microsoft/go-winio v0.6.2 // indirect
