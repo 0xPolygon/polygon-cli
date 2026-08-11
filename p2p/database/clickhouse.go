@@ -3,7 +3,9 @@ package database
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -42,6 +44,11 @@ const (
 	chPeerBatch        = 2000
 	// How often to restate that the backend is unreachable.
 	chUnavailableWarnInterval = 1 * time.Minute
+	// chHasBlockTimeout bounds the HasBlock point lookup. It runs synchronously in
+	// the per-peer message loop, so without a deadline an unreachable backend would
+	// stall that peer for the pool's dial timeout on every block. An indexed lookup
+	// against a healthy backend is far below this.
+	chHasBlockTimeout = 2 * time.Second
 )
 
 // Event sources, so consumers can tell a hash announcement from a delivered
@@ -145,8 +152,10 @@ func NewClickHouse(ctx context.Context, opts ClickHouseOptions) Database {
 		// head and looked entirely healthy. That is exactly what a ClickHouse auth
 		// failure did -- two sensors ran for an hour writing nothing.
 		//
-		// So keep saying so. A dead backend is now visible in the logs for as long as
-		// it is dead, not only in the line that scrolled past at boot.
+		// So keep saying so. Only a malformed DSN reaches this branch now; a backend
+		// that is merely unreachable keeps its connection and reports per flush. Either
+		// way the failure stays in the logs for as long as it lasts, rather than only
+		// in the line that scrolled past at boot.
 		log.Error().Err(err).Msg("Could not initialize ClickHouse connection; ALL WRITES WILL BE DISCARDED")
 		// Its own cancel, stored on c, so Close stops it. Without this Close waits on
 		// a goroutine nothing can stop -- the same defect as the batchers inheriting
@@ -186,8 +195,9 @@ func (c *ClickHouse) Close() error {
 	return nil
 }
 
-// connectClickHouse parses the DSN, opens a connection, and verifies
-// connectivity with a ping.
+// connectClickHouse parses the DSN and opens a connection. It pings only to
+// surface an unreachable backend in the logs; the ping result does not gate the
+// returned connection, so a nil error does not mean ClickHouse is reachable.
 func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
 	chOpts, err := clickhouse.ParseDSN(dsn)
 	if err != nil {
@@ -206,14 +216,27 @@ func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
 	if chOpts.MaxOpenConns == 0 {
 		chOpts.MaxOpenConns = 20
 	}
+	// The driver's 30s default would consume a whole chFlushTimeout window on a
+	// single dial against a down backend, and it is the ceiling on how long any
+	// operation waits for a fresh pool connection. Both callers here would rather
+	// fail fast: flushes retry on the next tick, and HasBlock degrades to true.
+	if chOpts.DialTimeout == 0 {
+		chOpts.DialTimeout = 5 * time.Second
+	}
 
 	conn, err := clickhouse.Open(chOpts)
 	if err != nil {
 		return nil, fmt.Errorf("could not connect to ClickHouse: %w", err)
 	}
 
+	// Diagnostic, not fatal. Open does no I/O -- the pool dials lazily and replaces
+	// broken connections, and every flush already retries (newInsertBatcher) -- so a
+	// backend that is not up *yet* recovers once it is. Failing here instead returns
+	// a no-op instance that nothing reconnects, which discarded every row on a whole
+	// sensor fleet that started 12s before ClickHouse finished binding.
 	if err := conn.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("could not ping ClickHouse: %w", err)
+		log.Warn().Err(err).
+			Msg("Could not ping ClickHouse at startup; continuing, the connection pool will retry on first write")
 	}
 	return conn, nil
 }
@@ -655,13 +678,10 @@ func (c *ClickHouse) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time
 	}
 }
 
-// HasBlock reports whether the block already exists. Called once per new block
-// (not per event), so an indexed point lookup is cheap. Without a connection it
-// reports true so the sensor never attempts a backfill it could not persist.
-// startUnavailableWarning re-logs while the backend is unreachable, so the failure
-// keeps showing up in logs and alerting instead of scrolling past once at startup.
-// It does not reconnect: a sensor whose database was down at boot needs a restart,
-// and pretending otherwise would hide that.
+// startUnavailableWarning re-logs while the sensor has no connection at all, so the
+// failure keeps showing up in logs and alerting instead of scrolling past once at
+// startup. It does not reconnect, and now only runs for DSN/config failures -- an
+// unreachable backend keeps its connection and retries per flush instead.
 func (c *ClickHouse) startUnavailableWarning(ctx context.Context) {
 	c.wg.Add(1)
 	go func() {
@@ -684,17 +704,32 @@ func (c *ClickHouse) startUnavailableWarning(ctx context.Context) {
 // HasBlock reports whether the block is already stored, which the sensor uses to
 // decide whether to backfill a parent.
 //
-// With no connection it returns true -- "we have it" -- to suppress backfill rather
-// than let every block queue parent requests that can never be satisfied. That is
-// the safer degradation, but it does mean a dead backend is silent in this path
-// specifically; startUnavailableWarning is what makes it visible.
+// When the lookup cannot be answered -- no connection, or a query that fails or
+// exceeds chHasBlockTimeout -- it returns true, "we have it", to suppress backfill
+// rather than let every block queue parent requests that can never be satisfied.
+// That is the safer degradation, but it does mean a dead backend is quiet in this
+// path specifically; the per-flush insert errors are what make it visible.
+//
+// The deadline matters because this runs inline in the per-peer message loop on a
+// context with no deadline of its own: an unreachable backend would otherwise block
+// that peer for the driver's dial timeout on every single block.
 func (c *ClickHouse) HasBlock(ctx context.Context, hash common.Hash) bool {
 	if c.conn == nil {
 		return true
 	}
+
+	queryCtx, cancel := context.WithTimeout(ctx, chHasBlockTimeout)
+	defer cancel()
+
 	var exists uint8
-	err := c.conn.QueryRow(ctx, "SELECT 1 FROM blocks WHERE hash = ? LIMIT 1", hash.Hex()).Scan(&exists)
-	return err == nil && exists == 1
+	if err := c.conn.QueryRow(queryCtx, "SELECT 1 FROM blocks WHERE hash = ? LIMIT 1", hash.Hex()).Scan(&exists); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false
+		}
+		log.Debug().Err(err).Msg("Could not check whether block is stored; assuming it is to suppress backfill")
+		return true
+	}
+	return exists == 1
 }
 
 // NodeList returns the most recently seen peers' enode URLs, from the narrow
