@@ -774,7 +774,7 @@ func (c *conn) sendTxAnnouncements(hashes []common.Hash) error {
 		pendingSizes[i] = uint32(tx.Size())
 	}
 
-	packet := eth.NewPooledTransactionHashesPacket{
+	packet := eth.NewPooledTransactionHashesPacket71{
 		Types:  pendingTypes,
 		Sizes:  pendingSizes,
 		Hashes: pending,
@@ -1466,7 +1466,7 @@ func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, version uin
 		hashes = txs
 		name = "NewPooledTransactionHashes"
 	case 67, 68, 69:
-		var txs eth.NewPooledTransactionHashesPacket
+		var txs eth.NewPooledTransactionHashesPacket71
 		if err := msg.Decode(&txs); err != nil {
 			return err
 		}
