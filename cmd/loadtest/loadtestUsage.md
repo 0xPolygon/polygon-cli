@@ -53,6 +53,19 @@ Here is a simple example that runs 1000 requests at a max rate of 1 request per 
 $ polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 1000 --rate-limit 1 --mode t --rpc-url http://localhost:8888
 ```
 
+### Separate Broadcast Endpoint
+
+By default, all RPC calls (gas estimation, chain ID, nonces, receipts, and transaction broadcast) go to `--rpc-url`. The `--send-rpc-url` flag routes only the transaction broadcast (`eth_sendRawTransaction`, or `eth_sendRawTransactionPrivate` when combined with `--private-txs`) to a secondary endpoint while everything else, including account funding, stays on `--rpc-url`. This is useful for:
+
+- **Private mempools**: an endpoint that only accepts `eth_sendRawTransactionPrivate`.
+- **Gossip-only broadcasters**: a light client connected to the p2p network that can broadcast transactions but has no chain state to answer other queries.
+
+```bash
+$ polycli loadtest --rpc-url http://fullnode:8545 --send-rpc-url http://broadcaster:8545 --mode t
+```
+
+Like `--private-txs`, this flag is only supported by the modes that broadcast transactions explicitly: `transaction`, `blob`, `contract-call`, and `recall`.
+
 ### Gas Manager
 
 The loadtest command includes an optional gas manager for controlling transaction gas limits and pricing. Enable it with `--gas-manager-enabled`, then use the `--gas-manager-*` flags to:

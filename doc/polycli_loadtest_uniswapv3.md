@@ -119,6 +119,7 @@ The command also inherits flags from parent commands.
   -r, --rpc-url string                                   the RPC endpoint URL (default "http://localhost:8545")
       --seed int                                         a seed for generating random values and addresses (default 123456)
       --send-only                                        alias for --fire-and-forget
+      --send-rpc-url string                              secondary RPC endpoint used only to broadcast transactions (eth_sendRawTransaction / eth_sendRawTransactionPrivate); all other calls use --rpc-url
       --stop-on-insufficient-funds                       stop sending from account when it encounters insufficient funds error
       --summarize                                        produce execution summary after load test (can take a long time for large tests)
   -t, --time-limit int                                   maximum seconds to spend benchmarking (default: no limit) (default -1)

@@ -58,9 +58,12 @@ type Runner struct {
 	// Preconf tracker
 	preconfTracker *PreconfTracker
 
-	// Clients
-	client    *ethclient.Client
-	rpcClient *ethrpc.Client
+	// Clients. sendClient/sendRPCClient are used only to broadcast
+	// transactions; they alias client/rpcClient unless --send-rpc-url is set.
+	client        *ethclient.Client
+	rpcClient     *ethrpc.Client
+	sendClient    *ethclient.Client
+	sendRPCClient *ethrpc.Client
 
 	// Gas price caching
 	cachedBlockNumber       *uint64
@@ -81,11 +84,9 @@ func NewRunner(cfg *config.Config) (*Runner, error) {
 	}, nil
 }
 
-// Init sets up the runner, including clients and account pool.
-func (r *Runner) Init(ctx context.Context) error {
-	log.Info().Msg("Initializing load test runner")
-
-	// Configure HTTP transport
+// dialRPC dials an RPC endpoint with its own HTTP transport, applying the
+// configured proxy and custom headers.
+func (r *Runner) dialRPC(ctx context.Context, rpcURL string) (*ethrpc.Client, error) {
 	connLimit := 2 * int(r.cfg.Concurrency)
 	transport := &http.Transport{
 		MaxIdleConns:        connLimit,
@@ -95,7 +96,7 @@ func (r *Runner) Init(ctx context.Context) error {
 	if r.cfg.Proxy != "" {
 		proxyURL, err := url.Parse(r.cfg.Proxy)
 		if err != nil {
-			return errors.New("invalid proxy address: " + r.cfg.Proxy + ": " + err.Error())
+			return nil, errors.New("invalid proxy address: " + r.cfg.Proxy + ": " + err.Error())
 		}
 		transport.Proxy = http.ProxyURL(proxyURL)
 		log.Debug().Stringer("proxyURL", proxyURL).Msg("Transport proxy configured")
@@ -103,23 +104,49 @@ func (r *Runner) Init(ctx context.Context) error {
 
 	goHTTPClient := &http.Client{Transport: transport}
 	rpcOption := ethrpc.WithHTTPClient(goHTTPClient)
-	rpc, err := ethrpc.DialOptions(ctx, r.cfg.RPCURL, rpcOption)
+	rpc, err := ethrpc.DialOptions(ctx, rpcURL, rpcOption)
 	if err != nil {
-		return errors.New("unable to dial rpc: " + err.Error())
+		return nil, errors.New("unable to dial rpc: " + err.Error())
 	}
 	rpc.SetHeader("Accept-Encoding", "identity")
 	for key, value := range r.cfg.Headers {
 		rpc.SetHeader(key, value)
 		log.Debug().Str("header", key).Msg("Custom RPC header configured")
 	}
+	return rpc, nil
+}
+
+// Init sets up the runner, including clients and account pool.
+func (r *Runner) Init(ctx context.Context) error {
+	log.Info().Msg("Initializing load test runner")
+
+	rpc, err := r.dialRPC(ctx, r.cfg.RPCURL)
+	if err != nil {
+		return err
+	}
 	r.rpcClient = rpc
 	r.client = ethclient.NewClient(rpc)
 
+	if r.cfg.SendRPCURL != "" {
+		sendRPC, err := r.dialRPC(ctx, r.cfg.SendRPCURL)
+		if err != nil {
+			return err
+		}
+		r.sendRPCClient = sendRPC
+		r.sendClient = ethclient.NewClient(sendRPC)
+		log.Info().Str("sendRPCURL", r.cfg.SendRPCURL).Msg("Using separate RPC endpoint for transaction broadcast")
+	} else {
+		r.sendRPCClient = r.rpcClient
+		r.sendClient = r.client
+	}
+
 	// Initialize dependencies early so mode parsing can use them.
 	r.deps = &mode.Dependencies{
-		Client:     r.client,
-		RPCClient:  r.rpcClient,
-		RandSource: r.randSrc,
+		Client:        r.client,
+		RPCClient:     r.rpcClient,
+		SendClient:    r.sendClient,
+		SendRPCClient: r.sendRPCClient,
+		RandSource:    r.randSrc,
 	}
 
 	// Initialize load test parameters
@@ -1428,6 +1455,9 @@ func (r *Runner) dumpPrivateKeys() error {
 
 // Close cleans up runner resources.
 func (r *Runner) Close() {
+	if r.sendRPCClient != nil && r.sendRPCClient != r.rpcClient {
+		r.sendRPCClient.Close()
+	}
 	if r.rpcClient != nil {
 		r.rpcClient.Close()
 	}

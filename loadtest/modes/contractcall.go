@@ -125,9 +125,9 @@ func (m *ContractCallMode) Execute(ctx context.Context, cfg *config.Config, deps
 	} else if cfg.OutputRawTxOnly {
 		err = mode.OutputRawTransaction(stx)
 	} else if cfg.PrivateTxs {
-		err = mode.SendRawTransactionPrivate(ctx, deps.RPCClient, stx)
+		err = mode.SendRawTransactionPrivate(ctx, deps.SendRPCClient, stx)
 	} else {
-		err = deps.Client.SendTransaction(ctx, stx)
+		err = deps.SendClient.SendTransaction(ctx, stx)
 	}
 	return
 }

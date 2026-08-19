@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/0xPolygon/polygon-cli/loadtest/uniswapv3"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -38,6 +39,7 @@ const (
 type Config struct {
 	// Network connection
 	RPCURL     string
+	SendRPCURL string
 	ChainID    uint64
 	Proxy      string
 	RPCHeaders string
@@ -207,7 +209,16 @@ func (c *Config) Validate() error {
 	}
 
 	if c.PrivateTxs {
-		if err := c.validatePrivateTxsModes(); err != nil {
+		if err := c.validateModesSupportRawSend("--private-txs"); err != nil {
+			return err
+		}
+	}
+
+	if c.SendRPCURL != "" {
+		if err := util.ValidateURL(c.SendRPCURL); err != nil {
+			return fmt.Errorf("invalid --send-rpc-url %q: %w", c.SendRPCURL, err)
+		}
+		if err := c.validateModesSupportRawSend("--send-rpc-url"); err != nil {
 			return err
 		}
 	}
@@ -233,8 +244,11 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// validatePrivateTxsModes checks that all specified modes support --private-txs.
-func (c *Config) validatePrivateTxsModes() error {
+// validateModesSupportRawSend checks that all specified modes broadcast their
+// transactions explicitly (rather than inside contract bindings), which is
+// required by flags that alter how transactions are sent, such as
+// --private-txs and --send-rpc-url.
+func (c *Config) validateModesSupportRawSend(flagName string) error {
 	supported := map[string]bool{
 		"t": true, "transaction": true,
 		"b": true, "blob": true,
@@ -244,7 +258,7 @@ func (c *Config) validatePrivateTxsModes() error {
 
 	for _, mode := range c.Modes {
 		if !supported[mode] {
-			return fmt.Errorf("--private-txs is not supported for mode %q; supported modes: transaction, blob, contract-call, recall", mode)
+			return fmt.Errorf("%s is not supported for mode %q; supported modes: transaction, blob, contract-call, recall", flagName, mode)
 		}
 	}
 
