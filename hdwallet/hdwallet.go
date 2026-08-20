@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -326,10 +327,14 @@ func (p *PolyWallet) ExportHDAddresses(count int) (*PolyWalletExport, error) {
 
 		lastDerivationPathPart := derivationPathParts[len(derivationPathParts)-1]
 		lastDerivationPathPart = strings.ReplaceAll(lastDerivationPathPart, "'", "")
-		idx, idxErr := strconv.Atoi(lastDerivationPathPart)
-		if idxErr == nil {
-			firstIndex = idx
-		} else {
+		// bip32 child indexes are uint32, so parse with an explicit 32-bit bound
+		idx, idxErr := strconv.ParseUint(lastDerivationPathPart, 10, 32)
+		switch {
+		case idxErr == nil && idx <= uint64(math.MaxInt):
+			firstIndex = int(idx)
+		case errors.Is(idxErr, strconv.ErrRange):
+			return nil, fmt.Errorf("address index %s in derivation path exceeds the maximum bip32 child index: %w", lastDerivationPathPart, idxErr)
+		default:
 			log.Warn().Msg("Failed to identify the index of the address in the derivation path, starting at 0")
 		}
 	}
