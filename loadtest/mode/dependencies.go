@@ -20,6 +20,11 @@ type Dependencies struct {
 	Client    *ethclient.Client
 	RPCClient *ethrpc.Client
 
+	// SendClient/SendRPCClient are used only to broadcast signed
+	// transactions. They alias Client/RPCClient unless --send-rpc-url is set.
+	SendClient    *ethclient.Client
+	SendRPCClient *ethrpc.Client
+
 	// Contract instances
 	LoadTesterContract *tester.LoadTester
 	LoadTesterAddress  common.Address

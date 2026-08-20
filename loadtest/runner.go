@@ -58,9 +58,12 @@ type Runner struct {
 	// Preconf tracker
 	preconfTracker *PreconfTracker
 
-	// Clients
-	client    *ethclient.Client
-	rpcClient *ethrpc.Client
+	// Clients. sendClient/sendRPCClient are used only to broadcast
+	// transactions; they alias client/rpcClient unless --send-rpc-url is set.
+	client        *ethclient.Client
+	rpcClient     *ethrpc.Client
+	sendClient    *ethclient.Client
+	sendRPCClient *ethrpc.Client
 
 	// Gas price caching
 	cachedBlockNumber       *uint64
@@ -81,11 +84,9 @@ func NewRunner(cfg *config.Config) (*Runner, error) {
 	}, nil
 }
 
-// Init sets up the runner, including clients and account pool.
-func (r *Runner) Init(ctx context.Context) error {
-	log.Info().Msg("Initializing load test runner")
-
-	// Configure HTTP transport
+// dialRPC dials an RPC endpoint with its own HTTP transport, applying the
+// configured proxy and custom headers.
+func (r *Runner) dialRPC(ctx context.Context, rpcURL string) (*ethrpc.Client, error) {
 	connLimit := 2 * int(r.cfg.Concurrency)
 	transport := &http.Transport{
 		MaxIdleConns:        connLimit,
@@ -95,7 +96,7 @@ func (r *Runner) Init(ctx context.Context) error {
 	if r.cfg.Proxy != "" {
 		proxyURL, err := url.Parse(r.cfg.Proxy)
 		if err != nil {
-			return errors.New("invalid proxy address: " + r.cfg.Proxy + ": " + err.Error())
+			return nil, errors.New("invalid proxy address: " + r.cfg.Proxy + ": " + err.Error())
 		}
 		transport.Proxy = http.ProxyURL(proxyURL)
 		log.Debug().Stringer("proxyURL", proxyURL).Msg("Transport proxy configured")
@@ -103,23 +104,49 @@ func (r *Runner) Init(ctx context.Context) error {
 
 	goHTTPClient := &http.Client{Transport: transport}
 	rpcOption := ethrpc.WithHTTPClient(goHTTPClient)
-	rpc, err := ethrpc.DialOptions(ctx, r.cfg.RPCURL, rpcOption)
+	rpc, err := ethrpc.DialOptions(ctx, rpcURL, rpcOption)
 	if err != nil {
-		return errors.New("unable to dial rpc: " + err.Error())
+		return nil, errors.New("unable to dial rpc: " + err.Error())
 	}
 	rpc.SetHeader("Accept-Encoding", "identity")
 	for key, value := range r.cfg.Headers {
 		rpc.SetHeader(key, value)
 		log.Debug().Str("header", key).Msg("Custom RPC header configured")
 	}
+	return rpc, nil
+}
+
+// Init sets up the runner, including clients and account pool.
+func (r *Runner) Init(ctx context.Context) error {
+	log.Info().Msg("Initializing load test runner")
+
+	rpc, err := r.dialRPC(ctx, r.cfg.RPCURL)
+	if err != nil {
+		return err
+	}
 	r.rpcClient = rpc
 	r.client = ethclient.NewClient(rpc)
 
+	if r.cfg.SendRPCURL != "" {
+		sendRPC, err := r.dialRPC(ctx, r.cfg.SendRPCURL)
+		if err != nil {
+			return err
+		}
+		r.sendRPCClient = sendRPC
+		r.sendClient = ethclient.NewClient(sendRPC)
+		log.Info().Str("sendRPCURL", r.cfg.SendRPCURL).Msg("Using separate RPC endpoint for transaction broadcast")
+	} else {
+		r.sendRPCClient = r.rpcClient
+		r.sendClient = r.client
+	}
+
 	// Initialize dependencies early so mode parsing can use them.
 	r.deps = &mode.Dependencies{
-		Client:     r.client,
-		RPCClient:  r.rpcClient,
-		RandSource: r.randSrc,
+		Client:        r.client,
+		RPCClient:     r.rpcClient,
+		SendClient:    r.sendClient,
+		SendRPCClient: r.sendRPCClient,
+		RandSource:    r.randSrc,
 	}
 
 	// Initialize load test parameters
@@ -520,6 +547,10 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 	defer rateLimitCancel()
 	if cfg.AdaptiveRateLimit && r.rl != nil {
 		go r.updateRateLimit(rateLimitCtx)
+	}
+	if cfg.RateLimitRampDuration > 0 && r.rl != nil {
+		r.rl.SetLimit(rate.Limit(rampStartRate(cfg.RateLimit)))
+		go r.rampUpRateLimit(rateLimitCtx)
 	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
@@ -1170,6 +1201,49 @@ func (r *Runner) updateRateLimit(ctx context.Context) {
 	}
 }
 
+// rampStartRate returns the initial rate for the ramp: 1% of the target,
+// but no lower than 1 TPS and never above the target itself.
+func rampStartRate(targetRate float64) float64 {
+	return min(max(targetRate/100, 1), targetRate)
+}
+
+// rampUpRateLimit linearly increases the rate limit from rampStartRate to the
+// full --rate-limit value over --rate-limit-ramp-duration, then exits,
+// leaving the fixed rate limit in place.
+func (r *Runner) rampUpRateLimit(ctx context.Context) {
+	cfg := r.cfg
+	targetRate := cfg.RateLimit
+	startRate := rampStartRate(targetRate)
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	startTime := time.Now()
+	log.Info().
+		Float64("startRateLimit", startRate).
+		Float64("targetRateLimit", targetRate).
+		Dur("rampDuration", cfg.RateLimitRampDuration).
+		Msg("Starting rate limit ramp up")
+
+	for {
+		select {
+		case <-ticker.C:
+			elapsed := time.Since(startTime)
+			if elapsed >= cfg.RateLimitRampDuration {
+				r.rl.SetLimit(rate.Limit(targetRate))
+				log.Info().Float64("rateLimit", targetRate).Msg("Rate limit ramp up complete")
+				return
+			}
+			progress := float64(elapsed) / float64(cfg.RateLimitRampDuration)
+			newLimit := startRate + (targetRate-startRate)*progress
+			r.rl.SetLimit(rate.Limit(newLimit))
+			log.Trace().Float64("rateLimit", newLimit).Msg("Ramping up rate limit")
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 func (r *Runner) configureTransactOpts(ctx context.Context, tops *bind.TransactOpts) *bind.TransactOpts {
 	gasPrice, gasTipCap := r.getSuggestedGasPrices(ctx)
 	tops.GasPrice = gasPrice
@@ -1428,6 +1502,9 @@ func (r *Runner) dumpPrivateKeys() error {
 
 // Close cleans up runner resources.
 func (r *Runner) Close() {
+	if r.sendRPCClient != nil && r.sendRPCClient != r.rpcClient {
+		r.sendRPCClient.Close()
+	}
 	if r.rpcClient != nil {
 		r.rpcClient.Close()
 	}
