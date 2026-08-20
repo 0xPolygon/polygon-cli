@@ -6,7 +6,9 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -22,6 +24,7 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/ripemd160" //nolint:staticcheck
 	"golang.org/x/crypto/sha3"
+	"golang.org/x/sync/errgroup"
 )
 
 type (
@@ -228,13 +231,14 @@ func (p *PolyWallet) ExportRootAddress() (*PolyWalletExport, error) {
 	}
 
 	pwe.RootKey = rootKey.String()
-	pwe.HexPublicKey = hex.EncodeToString(rootKey.PublicKey().Key)
+	rootPubKey := rootKey.PublicKey()
+	rootUncompressedPubKey := toUncompressedPubKey(rootKey)
+	pwe.HexPublicKey = hex.EncodeToString(rootPubKey.Key)
 	pwe.HexPrivateKey = hex.EncodeToString(rootKey.Key)
 	pwe.WIF = toWIF(rootKey)
-	pwe.BTCAddress = toBTCAddress(rootKey)
-	rootEthAddress := toETHAddress(rootKey)
-	pwe.ETHAddress = rootEthAddress.String()
-	pwe.HexFullPublicKey = hex.EncodeToString(toUncompressedPubKey(rootKey))
+	pwe.BTCAddress = toBTCAddress(rootPubKey)
+	pwe.ETHAddress = RawPubKeyToETHAddress(rootUncompressedPubKey).String()
+	pwe.HexFullPublicKey = hex.EncodeToString(rootUncompressedPubKey)
 	addr, err := GetPublicKeyFromSeed(p.rawSeed, SignatureSecp256k1, true)
 	if err != nil {
 		return nil, err
@@ -331,30 +335,62 @@ func (p *PolyWallet) ExportHDAddresses(count int) (*PolyWalletExport, error) {
 	}
 	lastIndex := firstIndex + count
 
-	for i := firstIndex; i < lastIndex; i = i + 1 {
-		// TODO if we want to provide support for hardened addresses it would need to be accommodated here
-		currentPath := p.derivationPath
-		if lastIndex-firstIndex > 1 {
-			currentPath = strings.Join(derivationPathParts[:len(derivationPathParts)-1], "/") + "/" + strconv.Itoa(i)
-		}
-
-		k, err := p.GetKeyForPath(currentPath)
+	if count == 1 {
+		k, err := p.GetKeyForPath(p.derivationPath)
 		if err != nil {
 			return nil, err
 		}
-
-		pae := new(PolyAddressExport)
-		pae.Path = currentPath
-		pae.HexPublicKey = hex.EncodeToString(k.PublicKey().Key)
-		pae.HexPrivateKey = hex.EncodeToString(k.Key)
-		pae.WIF = toWIF(k)
-		pae.BTCAddress = toBTCAddress(k)
-		ethAddress := toETHAddress(k)
-		pae.ETHAddress = ethAddress.String()
-		pae.HexFullPublicKey = hex.EncodeToString(toUncompressedPubKey(k))
-		pwe.Addresses = append(pwe.Addresses, pae)
+		pwe.Addresses = append(pwe.Addresses, exportAddress(p.derivationPath, k))
+		return pwe, nil
 	}
+	if count < 1 {
+		return pwe, nil
+	}
+	if int64(lastIndex-1) > math.MaxUint32 {
+		return nil, fmt.Errorf("address index %d exceeds the maximum bip32 child index %d", lastIndex-1, uint32(math.MaxUint32))
+	}
+
+	// TODO if we want to provide support for hardened addresses it would need to be accommodated here
+	// Derive the shared parent key once, then derive a single child per address
+	// rather than re-deriving the full path from the master key every time.
+	parentPath := strings.Join(derivationPathParts[:len(derivationPathParts)-1], "/")
+	parentKey, err := p.GetKeyForPath(parentPath)
+	if err != nil {
+		return nil, err
+	}
+
+	addresses := make([]*PolyAddressExport, count)
+	g := new(errgroup.Group)
+	g.SetLimit(runtime.NumCPU())
+	for i := firstIndex; i < lastIndex; i = i + 1 {
+		g.Go(func() error {
+			k, err := parentKey.NewChildKey(uint32(i))
+			if err != nil {
+				return fmt.Errorf("failed to derive child key %d of %s: %w", i, parentPath, err)
+			}
+			addresses[i-firstIndex] = exportAddress(parentPath+"/"+strconv.Itoa(i), k)
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	pwe.Addresses = addresses
 	return pwe, nil
+}
+
+func exportAddress(path string, k *bip32.Key) *PolyAddressExport {
+	pubKey := k.PublicKey()
+	uncompressedPubKey := toUncompressedPubKey(k)
+	pae := new(PolyAddressExport)
+	pae.Path = path
+	pae.HexPublicKey = hex.EncodeToString(pubKey.Key)
+	pae.HexPrivateKey = hex.EncodeToString(k.Key)
+	pae.WIF = toWIF(k)
+	pae.BTCAddress = toBTCAddress(pubKey)
+	pae.ETHAddress = RawPubKeyToETHAddress(uncompressedPubKey).String()
+	pae.HexFullPublicKey = hex.EncodeToString(uncompressedPubKey)
+	return pae
 }
 
 // https://en.bitcoin.it/wiki/Wallet_import_format
@@ -369,11 +405,6 @@ func toWIF(prvKey *bip32.Key) string {
 	return base58.Encode(h3)
 }
 
-func toETHAddress(prvKey *bip32.Key) common.Address {
-	concat := toUncompressedPubKey(prvKey)
-	return RawPubKeyToETHAddress(concat)
-
-}
 func RawPubKeyToETHAddress(concat []byte) common.Address {
 	h := sha3.NewLegacyKeccak256()
 	h.Write(concat)
@@ -401,8 +432,7 @@ func toUncompressedPubKey(prvKey *bip32.Key) []byte {
 }
 
 // https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses
-func toBTCAddress(prvKey *bip32.Key) string {
-	publicKey := prvKey.PublicKey()
+func toBTCAddress(publicKey *bip32.Key) string {
 	h := sha256.Sum256(publicKey.Key)
 	ripe160 := ripemd160.New()
 	ripe160.Write(h[:])
