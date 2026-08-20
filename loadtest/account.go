@@ -419,6 +419,43 @@ func (ap *AccountPool) AddReusableNonce(ctx context.Context, address common.Addr
 	return nil
 }
 
+// FastForwardNonce sets the nonce of the account with the given address to
+// nextNonce when it is higher than the current value, and drops any reusable
+// nonces below nextNonce since the network already considers them used. It
+// never rewinds the nonce, so a stale error message can't undo progress made
+// by concurrent in-flight transactions. It returns whether the nonce was
+// updated.
+func (ap *AccountPool) FastForwardNonce(ctx context.Context, address common.Address, nextNonce uint64) (bool, error) {
+	ap.mu.Lock()
+	defer ap.mu.Unlock()
+
+	accountPos, found := ap.accountsPositions[address]
+	if !found {
+		return false, fmt.Errorf("account not found in pool: %s", address.Hex())
+	}
+
+	account := ap.accounts[accountPos]
+
+	// reusableNonces is kept sorted ascending, so cut everything below nextNonce
+	firstValid, _ := slices.BinarySearch(account.reusableNonces, nextNonce)
+	if firstValid > 0 {
+		account.reusableNonces = account.reusableNonces[firstValid:]
+	}
+
+	if nextNonce <= account.nonce {
+		return false, nil
+	}
+
+	log.Debug().
+		Stringer("address", address).
+		Uint64("oldNonce", account.nonce).
+		Uint64("newNonce", nextNonce).
+		Msg("Fast-forwarding account nonce")
+
+	account.nonce = nextNonce
+	return true, nil
+}
+
 // RefreshNonce refreshes the nonce for the given address.
 func (ap *AccountPool) RefreshNonce(ctx context.Context, address common.Address) error {
 	ap.mu.Lock()

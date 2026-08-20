@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -974,11 +975,34 @@ func (r *Runner) isCurrentBaseFeeGreaterThanMax(ctx context.Context, maxBaseFee 
 	return false, nil, nil
 }
 
+// nonceTooLowRegexp matches geth-style nonce errors like
+// "nonce too low: next nonce 78, tx nonce 44" and captures the next nonce
+// expected by the network.
+var nonceTooLowRegexp = regexp.MustCompile(`nonce too low: next nonce (\d+), tx nonce \d+`)
+
 func (r *Runner) handleNonceReuse(ctx context.Context, tops *bind.TransactOpts, tErr error) {
+	errMsg := tErr.Error()
+
 	// Start with assumption that we can reuse the nonce
-	reuseNonce := !strings.Contains(tErr.Error(), "replacement transaction underpriced") && !strings.Contains(tErr.Error(), "transaction underpriced") && !strings.Contains(tErr.Error(), "nonce too low") && !strings.Contains(tErr.Error(), "already known") && !strings.Contains(tErr.Error(), "could not replace existing")
+	reuseNonce := !strings.Contains(errMsg, "replacement transaction underpriced") && !strings.Contains(errMsg, "transaction underpriced") && !strings.Contains(errMsg, "nonce too low") && !strings.Contains(errMsg, "already known") && !strings.Contains(errMsg, "could not replace existing")
 
 	// If it is an error that consumes the nonce, we can't retry it
+
+	// If the node told us the nonce it expects next, fast-forward the account
+	// to it instead of grinding through nonces one failed tx at a time. If the
+	// message doesn't match, keep the default increment behavior.
+	if match := nonceTooLowRegexp.FindStringSubmatch(errMsg); match != nil {
+		nextNonce, parseErr := strconv.ParseUint(match[1], 10, 64)
+		if parseErr == nil {
+			if _, ffErr := r.accountPool.FastForwardNonce(ctx, tops.From, nextNonce); ffErr != nil {
+				log.Error().
+					Str("address", tops.From.String()).
+					Uint64("nextNonce", nextNonce).
+					Err(ffErr).
+					Msg("Unable to fast-forward account nonce")
+			}
+		}
+	}
 
 	// If we can reuse the nonce, add it back to the account pool
 	if reuseNonce {
