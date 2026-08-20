@@ -327,13 +327,15 @@ func (p *PolyWallet) ExportHDAddresses(count int) (*PolyWalletExport, error) {
 
 		lastDerivationPathPart := derivationPathParts[len(derivationPathParts)-1]
 		lastDerivationPathPart = strings.ReplaceAll(lastDerivationPathPart, "'", "")
-		// bip32 child indexes are uint32, so parse with an explicit 32-bit bound
-		idx, idxErr := strconv.ParseUint(lastDerivationPathPart, 10, 32)
+		// Non-hardened bip32 child indexes are bounded by 2^31-1, so parse
+		// with an explicit 31-bit bound, which also guarantees the value
+		// fits in an int on 32-bit platforms.
+		idx, idxErr := strconv.ParseUint(lastDerivationPathPart, 10, 31)
 		switch {
-		case idxErr == nil && idx <= uint64(math.MaxInt):
+		case idxErr == nil:
 			firstIndex = int(idx)
 		case errors.Is(idxErr, strconv.ErrRange):
-			return nil, fmt.Errorf("address index %s in derivation path exceeds the maximum bip32 child index: %w", lastDerivationPathPart, idxErr)
+			return nil, fmt.Errorf("address index %s in derivation path exceeds the maximum non-hardened bip32 child index: %w", lastDerivationPathPart, idxErr)
 		default:
 			log.Warn().Msg("Failed to identify the index of the address in the derivation path, starting at 0")
 		}
