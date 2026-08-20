@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // validConfig returns a minimal config that passes Validate.
@@ -10,7 +11,70 @@ func validConfig() *Config {
 	return &Config{
 		AdaptiveBackoffFactor: 2,
 		GasPriceMultiplier:    1,
+		RateLimit:             4,
 		Modes:                 []string{"t"},
+	}
+}
+
+func TestValidateRateLimitRampDuration(t *testing.T) {
+	tests := []struct {
+		name              string
+		rampDuration      time.Duration
+		rateLimit         float64
+		adaptiveRateLimit bool
+		wantErr           string
+	}{
+		{
+			name:      "no ramp",
+			rateLimit: 4,
+		},
+		{
+			name:         "valid ramp",
+			rampDuration: 3 * time.Minute,
+			rateLimit:    100,
+		},
+		{
+			name:         "negative duration",
+			rampDuration: -time.Minute,
+			rateLimit:    100,
+			wantErr:      "--rate-limit-ramp-duration must be positive",
+		},
+		{
+			name:              "mutually exclusive with adaptive",
+			rampDuration:      3 * time.Minute,
+			rateLimit:         100,
+			adaptiveRateLimit: true,
+			wantErr:           "--rate-limit-ramp-duration and --adaptive-rate-limit are mutually exclusive",
+		},
+		{
+			name:         "requires positive rate limit",
+			rampDuration: 3 * time.Minute,
+			rateLimit:    -1,
+			wantErr:      "--rate-limit-ramp-duration requires a positive --rate-limit",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig()
+			cfg.RateLimitRampDuration = tt.rampDuration
+			cfg.RateLimit = tt.rateLimit
+			cfg.AdaptiveRateLimit = tt.adaptiveRateLimit
+
+			err := cfg.Validate()
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Validate() unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("Validate() expected error containing %q, got nil", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Validate() error %q does not contain %q", err.Error(), tt.wantErr)
+			}
+		})
 	}
 }
 

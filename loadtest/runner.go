@@ -548,6 +548,10 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 	if cfg.AdaptiveRateLimit && r.rl != nil {
 		go r.updateRateLimit(rateLimitCtx)
 	}
+	if cfg.RateLimitRampDuration > 0 && r.rl != nil {
+		r.rl.SetLimit(rate.Limit(rampStartRate(cfg.RateLimit)))
+		go r.rampUpRateLimit(rateLimitCtx)
+	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
@@ -1191,6 +1195,49 @@ func (r *Runner) updateRateLimit(ctx context.Context) {
 				r.rl.SetLimit(r.rl.Limit() / rate.Limit(cfg.AdaptiveBackoffFactor))
 				log.Info().Float64("New Rate Limit (RPS)", float64(r.rl.Limit())).Uint64("Current Tx Pool Size", txPoolSize).Uint64("Steady State Tx Pool Size", cfg.AdaptiveTargetSize).Msg("Backed off rate limit")
 			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// rampStartRate returns the initial rate for the ramp: 1% of the target,
+// but no lower than 1 TPS and never above the target itself.
+func rampStartRate(targetRate float64) float64 {
+	return min(max(targetRate/100, 1), targetRate)
+}
+
+// rampUpRateLimit linearly increases the rate limit from rampStartRate to the
+// full --rate-limit value over --rate-limit-ramp-duration, then exits,
+// leaving the fixed rate limit in place.
+func (r *Runner) rampUpRateLimit(ctx context.Context) {
+	cfg := r.cfg
+	targetRate := cfg.RateLimit
+	startRate := rampStartRate(targetRate)
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	startTime := time.Now()
+	log.Info().
+		Float64("startRateLimit", startRate).
+		Float64("targetRateLimit", targetRate).
+		Dur("rampDuration", cfg.RateLimitRampDuration).
+		Msg("Starting rate limit ramp up")
+
+	for {
+		select {
+		case <-ticker.C:
+			elapsed := time.Since(startTime)
+			if elapsed >= cfg.RateLimitRampDuration {
+				r.rl.SetLimit(rate.Limit(targetRate))
+				log.Info().Float64("rateLimit", targetRate).Msg("Rate limit ramp up complete")
+				return
+			}
+			progress := float64(elapsed) / float64(cfg.RateLimitRampDuration)
+			newLimit := startRate + (targetRate-startRate)*progress
+			r.rl.SetLimit(rate.Limit(newLimit))
+			log.Trace().Float64("rateLimit", newLimit).Msg("Ramping up rate limit")
 		case <-ctx.Done():
 			return
 		}

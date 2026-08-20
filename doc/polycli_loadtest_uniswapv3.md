@@ -114,6 +114,7 @@ The command also inherits flags from parent commands.
       --private-txs                                      send transactions via eth_sendRawTransactionPrivate
       --random-recipients                                send to random addresses instead of fixed address in transfer tests
       --rate-limit float                                 requests per second limit (use negative value to remove limit) (default 4)
+      --rate-limit-ramp-duration duration                linearly ramp rate limit from max(1% of --rate-limit, 1 TPS) to full --rate-limit over this duration (e.g. 3m; 0 disables ramp)
   -n, --requests int                                     number of requests to perform for the benchmarking session (default of 1 leads to non-representative results) (default 1)
       --rpc-headers string                               custom HTTP headers for RPC requests (format: "key1:value1,key2:value2")
   -r, --rpc-url string                                   the RPC endpoint URL (default "http://localhost:8545")

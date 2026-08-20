@@ -118,6 +118,7 @@ func initPersistentFlags() {
 	pf.BoolVar(&cfg.PrivateTxs, "private-txs", false, "send transactions via eth_sendRawTransactionPrivate")
 	pf.Uint64Var(&cfg.EthAmountInWei, "eth-amount-in-wei", 0, "amount of ether in wei to send per transaction")
 	pf.Float64Var(&cfg.RateLimit, "rate-limit", 4, "requests per second limit (use negative value to remove limit)")
+	pf.DurationVar(&cfg.RateLimitRampDuration, "rate-limit-ramp-duration", 0, "linearly ramp rate limit from max(1% of --rate-limit, 1 TPS) to full --rate-limit over this duration (e.g. 3m; 0 disables ramp)")
 	pf.BoolVar(&cfg.AdaptiveRateLimit, "adaptive-rate-limit", false, "enable AIMD-style congestion control to automatically adjust request rate")
 	pf.Uint64Var(&cfg.AdaptiveTargetSize, "adaptive-target-size", 1000, "target queue size for adaptive rate limiting (speed up if smaller, back off if larger)")
 	pf.Uint64Var(&cfg.AdaptiveRateLimitIncrement, "adaptive-rate-limit-increment", 50, "size of additive increases for adaptive rate limiting")

@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/0xPolygon/polygon-cli/loadtest/uniswapv3"
 	"github.com/0xPolygon/polygon-cli/util"
@@ -79,6 +80,7 @@ type Config struct {
 
 	// Rate limiting
 	RateLimit                  float64
+	RateLimitRampDuration      time.Duration
 	AdaptiveRateLimit          bool
 	AdaptiveTargetSize         uint64
 	AdaptiveRateLimitIncrement uint64
@@ -206,6 +208,18 @@ func (c *Config) Validate() error {
 
 	if c.GasPriceMultiplier == 0 {
 		return errors.New("gas price multiplier should be non-zero")
+	}
+
+	if c.RateLimitRampDuration < 0 {
+		return errors.New("--rate-limit-ramp-duration must be positive")
+	}
+	if c.RateLimitRampDuration > 0 {
+		if c.AdaptiveRateLimit {
+			return errors.New("--rate-limit-ramp-duration and --adaptive-rate-limit are mutually exclusive")
+		}
+		if c.RateLimit <= 0 {
+			return errors.New("--rate-limit-ramp-duration requires a positive --rate-limit to ramp up to")
+		}
 	}
 
 	if c.PrivateTxs {

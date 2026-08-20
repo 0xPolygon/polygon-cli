@@ -187,6 +187,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --proxy string                                     use the proxy specified
       --random-recipients                                send to random addresses instead of fixed address in transfer tests
       --rate-limit float                                 requests per second limit (use negative value to remove limit) (default 4)
+      --rate-limit-ramp-duration duration                linearly ramp rate limit from max(1% of --rate-limit, 1 TPS) to full --rate-limit over this duration (e.g. 3m; 0 disables ramp)
       --recall-blocks uint                               number of blocks that we'll attempt to fetch for recall (default 50)
       --receipt-retry-initial-delay-ms uint              initial delay in milliseconds for receipt polling (uses exponential backoff with jitter) (default 100)
       --receipt-retry-max uint                           maximum polling attempts for transaction receipt with --wait-for-receipt (default 30)
