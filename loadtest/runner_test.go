@@ -3,7 +3,78 @@ package loadtest
 import (
 	"strconv"
 	"testing"
+
+	"github.com/0xPolygon/polygon-cli/loadtest/config"
+	"github.com/ethereum/go-ethereum/common"
 )
+
+func TestComputeReverseTxsPerAccount(t *testing.T) {
+	newPool := func(n int) *AccountPool {
+		accounts := make([]*Account, n)
+		for i := range accounts {
+			accounts[i] = &Account{address: common.BytesToAddress([]byte{byte(i + 1), byte(i >> 8)}), ready: true}
+		}
+		return newTestAccountPool(accounts...)
+	}
+
+	tests := []struct {
+		name              string
+		concurrency       int64
+		requests          int64
+		accounts          int
+		wantErr           bool
+		wantTxsPerAccount uint64
+	}{
+		{
+			name:              "even split",
+			concurrency:       250,
+			requests:          10,
+			accounts:          500,
+			wantTxsPerAccount: 5,
+		},
+		{
+			name:              "single account",
+			concurrency:       2,
+			requests:          10,
+			accounts:          1,
+			wantTxsPerAccount: 20,
+		},
+		{
+			name:        "uneven split",
+			concurrency: 3,
+			requests:    7,
+			accounts:    2,
+			wantErr:     true,
+		},
+		{
+			name:        "more accounts than requests",
+			concurrency: 1,
+			requests:    250,
+			accounts:    500,
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Runner{
+				cfg: &config.Config{
+					Concurrency: tt.concurrency,
+					Requests:    tt.requests,
+				},
+				accountPool: newPool(tt.accounts),
+			}
+
+			err := r.computeReverseTxsPerAccount()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr = %v", err, tt.wantErr)
+			}
+			if err == nil && r.reverseTxsPerAccount != tt.wantTxsPerAccount {
+				t.Errorf("reverseTxsPerAccount = %d, want %d", r.reverseTxsPerAccount, tt.wantTxsPerAccount)
+			}
+		})
+	}
+}
 
 func TestNonceTooLowRegexp(t *testing.T) {
 	tests := []struct {
