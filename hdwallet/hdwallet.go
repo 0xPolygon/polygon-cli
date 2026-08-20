@@ -326,8 +326,8 @@ func (p *PolyWallet) ExportHDAddresses(count int) (*PolyWalletExport, error) {
 
 		lastDerivationPathPart := derivationPathParts[len(derivationPathParts)-1]
 		lastDerivationPathPart = strings.ReplaceAll(lastDerivationPathPart, "'", "")
-		idx, err := strconv.Atoi(lastDerivationPathPart)
-		if err == nil {
+		idx, idxErr := strconv.Atoi(lastDerivationPathPart)
+		if idxErr == nil {
 			firstIndex = idx
 		} else {
 			log.Warn().Msg("Failed to identify the index of the address in the derivation path, starting at 0")
@@ -336,9 +336,9 @@ func (p *PolyWallet) ExportHDAddresses(count int) (*PolyWalletExport, error) {
 	lastIndex := firstIndex + count
 
 	if count == 1 {
-		k, err := p.GetKeyForPath(p.derivationPath)
-		if err != nil {
-			return nil, err
+		k, keyErr := p.GetKeyForPath(p.derivationPath)
+		if keyErr != nil {
+			return nil, keyErr
 		}
 		pwe.Addresses = append(pwe.Addresses, exportAddress(p.derivationPath, k))
 		return pwe, nil
