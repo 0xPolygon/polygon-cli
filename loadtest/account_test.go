@@ -217,7 +217,7 @@ func TestNextReverseNonceOrderReusableNonce(t *testing.T) {
 
 	// Simulate a failed send of nonce 14: it goes back as reusable and must be
 	// handed out next without moving the descending counter.
-	if err := ap.AddReusableNonce(ctx, addr, 14); err != nil {
+	if err = ap.AddReusableNonce(ctx, addr, 14); err != nil {
 		t.Fatalf("AddReusableNonce returned error: %v", err)
 	}
 
