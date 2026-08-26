@@ -28,6 +28,10 @@ type rpcRequest struct {
 // makes during construction and nonce fetching. It records the peak number of
 // concurrent eth_getTransactionCount calls and can fail the first N of them.
 type fakeRPC struct {
+	// t reports write failures from handler goroutines. Safe because the
+	// server is closed during test cleanup, which waits for outstanding
+	// requests before the test finishes.
+	t      *testing.T
 	server *httptest.Server
 
 	mu           sync.Mutex
@@ -42,7 +46,7 @@ type fakeRPC struct {
 
 func newFakeRPC(t *testing.T, failFirstN int, nonceLatency time.Duration) *fakeRPC {
 	t.Helper()
-	f := &fakeRPC{failFirstN: failFirstN, nonceLatency: nonceLatency}
+	f := &fakeRPC{t: t, failFirstN: failFirstN, nonceLatency: nonceLatency}
 	f.server = httptest.NewServer(http.HandlerFunc(f.handle))
 	t.Cleanup(f.server.Close)
 	return f
@@ -57,7 +61,9 @@ func (f *fakeRPC) handle(w http.ResponseWriter, r *http.Request) {
 
 	writeResult := func(result string) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%s,"result":%q}`, req.ID, result)
+		if _, err := fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%s,"result":%q}`, req.ID, result); err != nil {
+			f.t.Errorf("failed to write rpc response: %v", err)
+		}
 	}
 
 	switch req.Method {
