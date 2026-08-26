@@ -201,7 +201,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --send-rpc-url string                              secondary RPC endpoint used only to broadcast transactions (eth_sendRawTransaction / eth_sendRawTransactionPrivate); all other calls use --rpc-url
       --sending-accounts-count uint                      number of sending accounts to use (avoids pool account queue)
       --sending-accounts-file string                     file with sending account private keys, one per line (avoids pool queue and preserves accounts across runs)
-      --sequential-nonce-fetch                           fetch nonces sequentially instead of in parallel (use if hitting rate limits)
+      --sequential-nonce-fetch                           fetch nonces one at a time through the rate limiter instead of in parallel bounded by --concurrency
       --stop-on-insufficient-funds                       stop sending from account when it encounters insufficient funds error
       --store-data-size uint                             number of bytes to store in contract for store mode (default 1024)
       --summarize                                        produce execution summary after load test (can take a long time for large tests)
