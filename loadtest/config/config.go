@@ -71,6 +71,7 @@ type Config struct {
 	StartNonceSet      bool `json:"-"`
 	GasPriceMultiplier float64
 	DuplicateNonceRate float64
+	ReverseNonceOrder  bool
 
 	// Gas options
 	ForceGasLimit         uint64
@@ -253,6 +254,27 @@ func (c *Config) Validate() error {
 	}
 	if c.DuplicateNonceRate > 0 && !c.FireAndForget {
 		return errors.New("--duplicate-nonce-rate requires --fire-and-forget (duplicate-nonce txs have no receipt to wait for)")
+	}
+
+	if c.ReverseNonceOrder {
+		if !c.FireAndForget {
+			return errors.New("--reverse-nonce-order requires --fire-and-forget (queued txs can't be mined until the lowest nonce is sent, so waiting for receipts would deadlock)")
+		}
+		if c.WaitForReceipt {
+			return errors.New("--reverse-nonce-order is incompatible with --wait-for-receipt")
+		}
+		if c.EthCallOnly {
+			return errors.New("--reverse-nonce-order doesn't make sense with --eth-call-only (no transactions are sent)")
+		}
+		if c.DuplicateNonceRate > 0 {
+			return errors.New("--reverse-nonce-order is incompatible with --duplicate-nonce-rate")
+		}
+		if c.AdaptiveRateLimit {
+			return errors.New("--reverse-nonce-order is incompatible with --adaptive-rate-limit (pending tx tracking assumes ascending nonces)")
+		}
+		if c.Requests <= 0 || c.Concurrency <= 0 {
+			return errors.New("--reverse-nonce-order requires positive --requests and --concurrency")
+		}
 	}
 
 	return nil

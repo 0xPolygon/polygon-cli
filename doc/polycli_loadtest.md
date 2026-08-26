@@ -193,6 +193,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --receipt-retry-max uint                           maximum polling attempts for transaction receipt with --wait-for-receipt (default 30)
       --refund-remaining-funds                           refund remaining balance to funding account after completion
   -n, --requests int                                     number of requests to perform for the benchmarking session (default of 1 leads to non-representative results) (default 1)
+      --reverse-nonce-order                              send each account's txs in descending nonce order, from highest planned nonce down to the current one, to stress queued vs pending txpool dynamics; total requests must divide evenly across accounts; requires --fire-and-forget
       --rpc-headers string                               custom HTTP headers for RPC requests (format: "key1:value1,key2:value2")
   -r, --rpc-url string                                   the RPC endpoint URL (default "http://localhost:8545")
       --seed int                                         a seed for generating random values and addresses (default 123456)

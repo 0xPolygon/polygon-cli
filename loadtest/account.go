@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"math/rand"
 	"slices"
@@ -40,6 +41,12 @@ type AccountPoolConfig struct {
 	ForcePriorityGasPrice uint64
 	GasPriceMultiplier    *big.Float
 	ChainSupportBaseFee   bool
+
+	// ReverseNonceOrder makes Next() hand out each account's nonces in
+	// descending order, from a precomputed highest nonce down to the account's
+	// starting nonce (see PrepareReverseNonces). Used to stress queued vs
+	// pending txpool dynamics. Requires fire-and-forget.
+	ReverseNonceOrder bool
 
 	// DuplicateNonceRate controls how often Next() returns the same nonce twice
 	// in a row for the same account. The probability of duplication is
@@ -417,6 +424,85 @@ func (ap *AccountPool) AddReusableNonce(ctx context.Context, address common.Addr
 		Msg("Reusable nonce added to account")
 
 	return nil
+}
+
+// PrepareReverseNonces prepares all accounts for reverse nonce order sending.
+// For each account, the current nonce becomes the floor (startNonce) and the
+// nonce counter is moved to the top of the account's planned range
+// (startNonce + txsPerAccount - 1). Next() then walks the range downward.
+// Must be called after all account nonces have been fetched and after any
+// setup transactions (contract deployments) have been accounted for, and
+// before the first call to Next().
+func (ap *AccountPool) PrepareReverseNonces(txsPerAccount uint64) error {
+	if txsPerAccount == 0 {
+		return fmt.Errorf("txsPerAccount must be greater than zero")
+	}
+
+	ap.mu.Lock()
+	defer ap.mu.Unlock()
+
+	for _, account := range ap.accounts {
+		if !account.ready {
+			return fmt.Errorf("account %s nonce is not ready", account.address.Hex())
+		}
+		if account.nonce > math.MaxUint64-(txsPerAccount-1) {
+			return fmt.Errorf("account %s nonce %d + %d txs per account overflows uint64", account.address.Hex(), account.nonce, txsPerAccount)
+		}
+		account.startNonce = account.nonce
+		account.nonce += txsPerAccount - 1
+
+		log.Debug().
+			Stringer("address", account.address).
+			Uint64("floorNonce", account.startNonce).
+			Uint64("topNonce", account.nonce).
+			Msg("Prepared account for reverse nonce order")
+	}
+
+	return nil
+}
+
+// AccountCount returns the total number of accounts in the pool.
+func (ap *AccountPool) AccountCount() int {
+	ap.mu.Lock()
+	defer ap.mu.Unlock()
+	return len(ap.accounts)
+}
+
+// FastForwardNonce sets the nonce of the account with the given address to
+// nextNonce when it is higher than the current value, and drops any reusable
+// nonces below nextNonce since the network already considers them used. It
+// never rewinds the nonce, so a stale error message can't undo progress made
+// by concurrent in-flight transactions. It returns whether the nonce was
+// updated.
+func (ap *AccountPool) FastForwardNonce(ctx context.Context, address common.Address, nextNonce uint64) (bool, error) {
+	ap.mu.Lock()
+	defer ap.mu.Unlock()
+
+	accountPos, found := ap.accountsPositions[address]
+	if !found {
+		return false, fmt.Errorf("account not found in pool: %s", address.Hex())
+	}
+
+	account := ap.accounts[accountPos]
+
+	// reusableNonces is kept sorted ascending, so cut everything below nextNonce
+	firstValid, _ := slices.BinarySearch(account.reusableNonces, nextNonce)
+	if firstValid > 0 {
+		account.reusableNonces = account.reusableNonces[firstValid:]
+	}
+
+	if nextNonce <= account.nonce {
+		return false, nil
+	}
+
+	log.Debug().
+		Stringer("address", address).
+		Uint64("oldNonce", account.nonce).
+		Uint64("newNonce", nextNonce).
+		Msg("Fast-forwarding account nonce")
+
+	account.nonce = nextNonce
+	return true, nil
 }
 
 // RefreshNonce refreshes the nonce for the given address.
@@ -1167,6 +1253,23 @@ func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 		account.funded = true
 
 		accCopy := *account
+
+		if ap.cfg.ReverseNonceOrder {
+			// Failed nonces are re-sent as-is; they don't move the descending
+			// counter since their slot in the range was already consumed.
+			if len(account.reusableNonces) > 0 {
+				accCopy.nonce = account.reusableNonces[0]
+				account.reusableNonces = account.reusableNonces[1:]
+			} else if account.nonce > account.startNonce {
+				account.nonce--
+			} else {
+				// The floor nonce is being handed out now; the account's range
+				// is exhausted, so stop it to guard against extra requests
+				// re-sending nonces below the floor (uint64 underflow).
+				account.stopped = true
+			}
+			return accCopy, nil
+		}
 
 		// Check if the account has a reusable nonce
 		if len(account.reusableNonces) > 0 {
