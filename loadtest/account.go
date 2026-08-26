@@ -35,6 +35,9 @@ type AccountPoolConfig struct {
 	AccountsPerFundingTx      uint64
 	SequentialNonceFetch      bool
 	StopOnInsufficientFunds   bool
+	// Concurrency bounds the number of in-flight requests the parallel nonce
+	// sweep issues. Values <= 0 fall back to a single request at a time.
+	Concurrency int64
 	// Gas override settings
 	ForceGasPrice         uint64
 	ForcePriorityGasPrice uint64
@@ -238,8 +241,21 @@ func (ap *AccountPool) AllAccountsReady() (bool, int, int) {
 	return rdyCount == len(ap.accounts), rdyCount, len(ap.accounts)
 }
 
-// FetchNoncesInParallel fetches nonces for all accounts that aren't ready yet,
-// in parallel without rate limiting. This is the default behavior unless SequentialNonceFetch is enabled.
+// nonceFetchMaxAttempts is how many times the parallel nonce sweep tries a
+// single eth_getTransactionCount before giving up on that account. Managed and
+// load-balanced endpoints shed load with 429s / 5xx under a large sweep, so a
+// bounded retry lets the run survive transient rejections.
+const nonceFetchMaxAttempts = 5
+
+// nonceFetchInitialBackoff is the delay before the second attempt; it doubles
+// on every subsequent attempt.
+const nonceFetchInitialBackoff = 250 * time.Millisecond
+
+// FetchNoncesInParallel fetches nonces for all accounts that aren't ready yet.
+// Fetches run concurrently but no more than Concurrency requests are in flight
+// at once, so a large --sending-accounts-file doesn't hit the endpoint with one
+// request per account simultaneously. This is the default behavior unless
+// SequentialNonceFetch is enabled.
 func (ap *AccountPool) FetchNoncesInParallel(ctx context.Context) error {
 	ap.mu.Lock()
 	// Collect accounts that need nonce fetching
@@ -255,16 +271,41 @@ func (ap *AccountPool) FetchNoncesInParallel(ctx context.Context) error {
 		return nil
 	}
 
-	log.Info().Int("count", len(accountsToFetch)).Msg("Fetching nonces in parallel")
+	concurrency := int(ap.cfg.Concurrency)
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+	if concurrency > len(accountsToFetch) {
+		concurrency = len(accountsToFetch)
+	}
+
+	log.Info().
+		Int("count", len(accountsToFetch)).
+		Int("concurrency", concurrency).
+		Msg("Fetching nonces in parallel")
 
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(accountsToFetch))
+	// sem bounds in-flight requests; acquiring a slot before spawning keeps the
+	// number of live goroutines bounded too.
+	sem := make(chan struct{}, concurrency)
 
+	var canceled bool
 	for _, acc := range accountsToFetch {
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			canceled = true
+		}
+		if canceled {
+			break
+		}
+
 		wg.Add(1)
 		go func(a *Account) {
 			defer wg.Done()
-			nonce, err := ap.client.NonceAt(ctx, a.address, nil)
+			defer func() { <-sem }()
+			nonce, err := ap.fetchNonceWithRetry(ctx, a.address)
 			if err != nil {
 				errCh <- fmt.Errorf("failed to get nonce for %s: %w", a.address.Hex(), err)
 				return
@@ -280,6 +321,10 @@ func (ap *AccountPool) FetchNoncesInParallel(ctx context.Context) error {
 	wg.Wait()
 	close(errCh)
 
+	if canceled {
+		return ctx.Err()
+	}
+
 	// Collect errors
 	var errs []error
 	for err := range errCh {
@@ -291,6 +336,44 @@ func (ap *AccountPool) FetchNoncesInParallel(ctx context.Context) error {
 
 	log.Info().Int("count", len(accountsToFetch)).Msg("Nonces fetched successfully")
 	return nil
+}
+
+// fetchNonceWithRetry gets the nonce for an address, retrying with exponential
+// backoff so a transiently overloaded endpoint doesn't abort the whole run.
+func (ap *AccountPool) fetchNonceWithRetry(ctx context.Context, address common.Address) (uint64, error) {
+	backoff := nonceFetchInitialBackoff
+	var lastErr error
+	for attempt := 1; attempt <= nonceFetchMaxAttempts; attempt++ {
+		nonce, err := ap.client.NonceAt(ctx, address, nil)
+		if err == nil {
+			return nonce, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil {
+			return 0, ctx.Err()
+		}
+		if attempt == nonceFetchMaxAttempts {
+			break
+		}
+
+		log.Warn().
+			Err(err).
+			Stringer("addr", address).
+			Int("attempt", attempt).
+			Dur("backoff", backoff).
+			Msg("Failed to get nonce for account, retrying")
+
+		timer := time.NewTimer(backoff)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return 0, ctx.Err()
+		}
+		timer.Stop()
+		backoff *= 2
+	}
+	return 0, fmt.Errorf("failed after %d attempts: %w", nonceFetchMaxAttempts, lastErr)
 }
 
 // StopAccount marks an account as stopped so it won't be used for further transactions.
