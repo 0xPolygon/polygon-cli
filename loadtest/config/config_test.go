@@ -144,3 +144,88 @@ func TestValidateSendRPCURL(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateReverseNonceOrder(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*Config)
+		wantErr string
+	}{
+		{
+			name: "valid with fire-and-forget",
+			mutate: func(c *Config) {
+				c.FireAndForget = true
+			},
+		},
+		{
+			name:    "requires fire-and-forget",
+			mutate:  func(c *Config) {},
+			wantErr: "--reverse-nonce-order requires --fire-and-forget",
+		},
+		{
+			name: "incompatible with wait-for-receipt",
+			mutate: func(c *Config) {
+				c.FireAndForget = true
+				c.WaitForReceipt = true
+				c.ReceiptRetryMax = 5
+			},
+			wantErr: "--reverse-nonce-order is incompatible with --wait-for-receipt",
+		},
+		{
+			name: "incompatible with eth-call-only",
+			mutate: func(c *Config) {
+				c.FireAndForget = true
+				c.EthCallOnly = true
+			},
+			wantErr: "--reverse-nonce-order doesn't make sense with --eth-call-only",
+		},
+		{
+			name: "incompatible with duplicate-nonce-rate",
+			mutate: func(c *Config) {
+				c.FireAndForget = true
+				c.DuplicateNonceRate = 1
+			},
+			wantErr: "--reverse-nonce-order is incompatible with --duplicate-nonce-rate",
+		},
+		{
+			name: "incompatible with adaptive-rate-limit",
+			mutate: func(c *Config) {
+				c.FireAndForget = true
+				c.AdaptiveRateLimit = true
+			},
+			wantErr: "--reverse-nonce-order is incompatible with --adaptive-rate-limit",
+		},
+		{
+			name: "requires positive requests",
+			mutate: func(c *Config) {
+				c.FireAndForget = true
+				c.Requests = 0
+			},
+			wantErr: "--reverse-nonce-order requires positive --requests and --concurrency",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig()
+			cfg.ReverseNonceOrder = true
+			cfg.Requests = 10
+			cfg.Concurrency = 2
+			tt.mutate(cfg)
+
+			err := cfg.Validate()
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Validate() unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("Validate() expected error containing %q, got nil", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Validate() error %q does not contain %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}

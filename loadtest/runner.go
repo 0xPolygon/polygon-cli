@@ -5,12 +5,14 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,6 +48,11 @@ type Runner struct {
 
 	startBlockNumber uint64
 	finalBlockNumber uint64
+
+	// reverseTxsPerAccount is the size of each account's descending nonce
+	// range when --reverse-nonce-order is enabled. Computed and validated in
+	// initAccountPool, applied via PrepareReverseNonces in mainLoop.
+	reverseTxsPerAccount uint64
 
 	// Mode execution
 	modes             []mode.Runner
@@ -300,6 +307,7 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		GasPriceMultiplier:        r.cfg.BigGasPriceMultiplier,
 		ChainSupportBaseFee:       r.cfg.ChainSupportBaseFee,
 		DuplicateNonceRate:        r.cfg.DuplicateNonceRate,
+		ReverseNonceOrder:         r.cfg.ReverseNonceOrder,
 		Seed:                      r.cfg.Seed,
 	}
 
@@ -346,6 +354,14 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 	}
 	if err != nil {
 		return errors.New("unable to set account pool: " + err.Error())
+	}
+
+	// Validate reverse nonce order parameters before funding accounts or
+	// sending anything, so misconfigured runs are blocked right away.
+	if r.cfg.ReverseNonceOrder {
+		if err := r.computeReverseTxsPerAccount(); err != nil {
+			return err
+		}
 	}
 
 	// Dump private keys to file if configured
@@ -395,6 +411,43 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 	if err := r.accountPool.FundAccounts(ctx); err != nil {
 		log.Error().Err(err).Msg("Unable to fund sending accounts")
 	}
+
+	return nil
+}
+
+// computeReverseTxsPerAccount computes the size of each account's descending
+// nonce range for --reverse-nonce-order and stores it in the runner. The total
+// number of requests (concurrency * requests) must divide evenly across the
+// accounts, otherwise the per-account nonce ranges wouldn't line up and some
+// queued transactions could never become pending.
+func (r *Runner) computeReverseTxsPerAccount() error {
+	concurrency := r.cfg.Concurrency
+	requests := r.cfg.Requests
+
+	if requests > math.MaxInt64/concurrency {
+		return fmt.Errorf("--reverse-nonce-order: total requests overflow (concurrency %d * requests %d)", concurrency, requests)
+	}
+	totalRequests := concurrency * requests
+
+	accountCount := int64(r.accountPool.AccountCount())
+	if accountCount == 0 {
+		return errors.New("--reverse-nonce-order: no sending accounts in pool")
+	}
+	if totalRequests%accountCount != 0 {
+		return fmt.Errorf("--reverse-nonce-order: total requests (concurrency %d * requests %d = %d) must divide evenly across %d sending accounts", concurrency, requests, totalRequests, accountCount)
+	}
+
+	r.reverseTxsPerAccount = uint64(totalRequests / accountCount)
+
+	if r.cfg.TimeLimit > 0 {
+		log.Warn().Msg("--time-limit with --reverse-nonce-order: stopping early strands queued transactions that will never become pending")
+	}
+
+	log.Info().
+		Int64("totalRequests", totalRequests).
+		Int64("accounts", accountCount).
+		Uint64("txsPerAccount", r.reverseTxsPerAccount).
+		Msg("Reverse nonce order enabled")
 
 	return nil
 }
@@ -597,6 +650,16 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 	err = r.initModes(ctx)
 	if err != nil {
 		return err
+	}
+
+	// Move each account's nonce to the top of its planned range so the send
+	// loop walks nonces downward. Done as late as possible so setup
+	// transactions (contract deployments, nonce refresh) are reflected in the
+	// per-account floor nonces.
+	if cfg.ReverseNonceOrder {
+		if err = r.accountPool.PrepareReverseNonces(r.reverseTxsPerAccount); err != nil {
+			return fmt.Errorf("failed to prepare reverse nonce order: %w", err)
+		}
 	}
 
 	// Setup max base fee monitoring
@@ -975,11 +1038,36 @@ func (r *Runner) isCurrentBaseFeeGreaterThanMax(ctx context.Context, maxBaseFee 
 	return false, nil, nil
 }
 
+// nonceTooLowRegexp matches geth-style nonce errors like
+// "nonce too low: next nonce 78, tx nonce 44" and captures the next nonce
+// expected by the network.
+var nonceTooLowRegexp = regexp.MustCompile(`nonce too low: next nonce (\d+), tx nonce \d+`)
+
 func (r *Runner) handleNonceReuse(ctx context.Context, tops *bind.TransactOpts, tErr error) {
+	errMsg := tErr.Error()
+
 	// Start with assumption that we can reuse the nonce
-	reuseNonce := !strings.Contains(tErr.Error(), "replacement transaction underpriced") && !strings.Contains(tErr.Error(), "transaction underpriced") && !strings.Contains(tErr.Error(), "nonce too low") && !strings.Contains(tErr.Error(), "already known") && !strings.Contains(tErr.Error(), "could not replace existing")
+	reuseNonce := !strings.Contains(errMsg, "replacement transaction underpriced") && !strings.Contains(errMsg, "transaction underpriced") && !strings.Contains(errMsg, "nonce too low") && !strings.Contains(errMsg, "already known") && !strings.Contains(errMsg, "could not replace existing")
 
 	// If it is an error that consumes the nonce, we can't retry it
+
+	// If the node told us the nonce it expects next, fast-forward the account
+	// to it instead of grinding through nonces one failed tx at a time. If the
+	// message doesn't match, keep the default increment behavior. Skipped in
+	// reverse nonce order mode, where jumping the counter forward would
+	// corrupt the descending sequence.
+	if match := nonceTooLowRegexp.FindStringSubmatch(errMsg); match != nil && !r.cfg.ReverseNonceOrder {
+		nextNonce, parseErr := strconv.ParseUint(match[1], 10, 64)
+		if parseErr == nil {
+			if _, ffErr := r.accountPool.FastForwardNonce(ctx, tops.From, nextNonce); ffErr != nil {
+				log.Error().
+					Str("address", tops.From.String()).
+					Uint64("nextNonce", nextNonce).
+					Err(ffErr).
+					Msg("Unable to fast-forward account nonce")
+			}
+		}
+	}
 
 	// If we can reuse the nonce, add it back to the account pool
 	if reuseNonce {
