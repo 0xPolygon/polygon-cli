@@ -1492,10 +1492,6 @@ func (r *Runner) suggestMaxFeePerGas(ctx context.Context, blockNumber uint64, fo
 		return nil
 	}
 
-	if r.cachedBlockNumber != nil && blockNumber <= *r.cachedBlockNumber && r.cachedGasPrice != nil {
-		return r.cachedGasPrice
-	}
-
 	feeHistory, err := r.client.FeeHistory(ctx, 5, nil, []float64{0.5})
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to get fee history while checking MaxFeePerGas")
@@ -1510,13 +1506,6 @@ func (r *Runner) suggestMaxFeePerGas(ctx context.Context, blockNumber uint64, fo
 	maxFeePerGas := new(big.Int)
 	maxFeePerGas.Mul(baseFee, big.NewInt(2))
 	maxFeePerGas.Add(maxFeePerGas, priorityFee)
-
-	const blocksToWait = 5
-	isDecreasing := r.cachedGasPrice != nil && maxFeePerGas.Uint64() <= r.cachedGasPrice.Uint64()
-	canDecrease := blockNumber+blocksToWait <= header.Number.Uint64()
-	if isDecreasing && !canDecrease && r.cachedGasPrice != nil {
-		return r.cachedGasPrice
-	}
 
 	r.cachedGasPrice = maxFeePerGas
 
