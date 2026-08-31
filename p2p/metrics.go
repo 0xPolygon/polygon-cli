@@ -126,3 +126,33 @@ func newMetrics() *metrics {
 		}),
 	}
 }
+
+// Transaction rebroadcast filter metrics (see txfilter.go). These are
+// package-level rather than constructor-registered because a filter is built
+// per sensor but many per test run, and promauto panics on duplicate
+// registration.
+var (
+	txFilterDropped = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "sensor",
+		Name:      "rebroadcast_filtered",
+		Help:      "Transactions withheld from rebroadcast, by reason",
+	}, []string{"reason"})
+
+	txFilterAllowed = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "sensor",
+		Name:      "rebroadcast_allowed",
+		Help:      "Transactions passed to rebroadcast",
+	})
+
+	txFilterNonceLookups = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "sensor",
+		Name:      "rebroadcast_nonce_lookups",
+		Help:      "Account nonce lookups made against the RPC fallback, by result",
+	}, []string{"result"})
+
+	txFilterKnownSenders = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "sensor",
+		Name:      "rebroadcast_known_senders",
+		Help:      "Accounts in the nonce cache used by the stale-transaction gate",
+	})
+)

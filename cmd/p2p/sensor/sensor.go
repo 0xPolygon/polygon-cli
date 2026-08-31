@@ -65,6 +65,13 @@ type (
 		MaxQueuedTxs                     int
 		ValidateBlockSigner              bool
 		CacheOnlyValidatedBlocks         bool
+		GateStaleTxs                     bool
+		GateStaleTxsRPC                  bool
+		RebroadcastMinTip                uint64
+		RebroadcastRateLimit             float64
+		RebroadcastBurst                 int
+		RebroadcastGateLogOnly           bool
+		AccountNoncesCache               ds.LRUOptions
 		HeimdallURL                      string
 		ValidatorSetRefresh              time.Duration
 		ShouldRunPprof                   bool
@@ -247,6 +254,39 @@ var SensorCmd = &cobra.Command{
 			}
 		}
 
+		// The gates only matter when the sensor echoes transactions at all.
+		broadcastsTxs := inputSensorParams.ShouldBroadcastTx || inputSensorParams.ShouldBroadcastTxHashes
+		if broadcastsTxs && inputSensorParams.RebroadcastMinTip == 0 {
+			log.Warn().
+				Msg("Rebroadcasting transactions with no tip floor; set --rebroadcast-min-tip (25gwei on Polygon) to stop echoing unminable transactions")
+		}
+
+		// Build the transaction rebroadcast gates. They only ever withhold an
+		// echo: every transaction the sensor sees is still recorded. The filter
+		// is nil when no gate is enabled, which the broadcast path treats as
+		// allow-everything.
+		var txFilter *p2p.TxFilter
+		if broadcastsTxs {
+			nonceRPC := ""
+			if inputSensorParams.GateStaleTxsRPC {
+				nonceRPC = inputSensorParams.RPC
+			}
+			txFilter, err = p2p.NewTxFilter(ctx, p2p.TxFilterOptions{
+				ChainID:        inputSensorParams.NetworkID,
+				GateStaleTxs:   inputSensorParams.GateStaleTxs,
+				NonceCache:     inputSensorParams.AccountNoncesCache,
+				NonceRPCURL:    nonceRPC,
+				MinTip:         inputSensorParams.RebroadcastMinTip,
+				RateLimit:      inputSensorParams.RebroadcastRateLimit,
+				RateLimitBurst: inputSensorParams.RebroadcastBurst,
+				LogOnly:        inputSensorParams.RebroadcastGateLogOnly,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to create transaction rebroadcast filter: %w", err)
+			}
+			defer txFilter.Close()
+		}
+
 		// Create peer connection manager for broadcasting transactions
 		// and managing the global blocks cache
 		conns := p2p.NewConns(p2p.ConnsOptions{
@@ -266,6 +306,7 @@ var SensorCmd = &cobra.Command{
 			MaxQueuedTxs:               inputSensorParams.MaxQueuedTxs,
 			ValidatorSet:               validators,
 			CacheOnlyValidatedBlocks:   inputSensorParams.CacheOnlyValidatedBlocks,
+			TxFilter:                   txFilter,
 		})
 
 		opts := p2p.EthProtocolOptions{
@@ -578,6 +619,29 @@ values multiply write volume by up to --max-peers rows per tick`)
 	f.BoolVar(&inputSensorParams.CacheOnlyValidatedBlocks, "cache-only-validated-blocks", true, "only cache and serve blocks signed by a known validator (unknown-signer blocks are still recorded to the database); has no effect without --validate-block-signer")
 	f.StringVar(&inputSensorParams.HeimdallURL, "heimdall-url", "https://heimdall-api.polygon.technology", "heimdall REST URL for the validator set (used to validate blocks before rebroadcast)")
 	f.DurationVar(&inputSensorParams.ValidatorSetRefresh, "validator-set-refresh", 5*time.Minute, "interval to refresh the validator set from heimdall")
+	f.BoolVar(&inputSensorParams.GateStaleTxs, "gate-stale-txs", true,
+		`only rebroadcast transactions whose nonce is at or above the sender's known
+next nonce; stale ones can never be mined, so echoing them only amplifies replay
+traffic (they are still recorded to the database)`)
+	f.BoolVar(&inputSensorParams.GateStaleTxsRPC, "gate-stale-txs-rpc", true,
+		`look up nonces from --rpc for senders not yet seen in a block; lookups are
+asynchronous and the transaction that triggers one is still rebroadcast`)
+	f.Var(&flag.GasValue{Val: &inputSensorParams.RebroadcastMinTip}, "rebroadcast-min-tip",
+		`withhold transactions offering less than this tip from rebroadcast, with unit
+support (e.g. "25gwei"); bor will not include anything below 25gwei on Polygon, so
+those are unminable regardless (0 disables)`)
+	f.Float64Var(&inputSensorParams.RebroadcastRateLimit, "rebroadcast-rate-limit", 0,
+		`cap rebroadcast throughput in transactions per second, a backstop that bounds
+amplification even when the gates above miss (0 for no limit)`)
+	f.IntVar(&inputSensorParams.RebroadcastBurst, "rebroadcast-burst", 0,
+		"token bucket depth for --rebroadcast-rate-limit (defaults to one second of the rate)")
+	f.BoolVar(&inputSensorParams.RebroadcastGateLogOnly, "rebroadcast-gate-log-only", false,
+		`evaluate the rebroadcast gates and count what they would drop, but rebroadcast
+everything anyway; use it to size the problem before enforcing`)
+	f.IntVar(&inputSensorParams.AccountNoncesCache.MaxSize, "max-account-nonces", 65536,
+		"maximum sender nonces to track for --gate-stale-txs (0 for no limit)")
+	f.DurationVar(&inputSensorParams.AccountNoncesCache.TTL, "account-nonces-ttl", time.Hour,
+		"time to live for tracked sender nonces (0 for no expiration)")
 	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
 	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")

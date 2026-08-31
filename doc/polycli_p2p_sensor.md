@@ -101,6 +101,52 @@ The validator set is fetched from `--heimdall-url` at startup (the sensor aborts
 if this initial fetch fails) and refreshed on the `--validator-set-refresh`
 interval.
 
+### Transaction rebroadcast gates
+
+Rebroadcasting a transaction is only useful if that transaction could still be
+mined. Echoing one that cannot — a replayed historical transaction, or one
+priced below what the chain will include — amplifies junk across the network:
+the sensor fetches the body, then announces it to every peer. Because a sensor
+carries far more peers than an ordinary node, that amplification is large.
+
+Three gates apply when transaction rebroadcasting is on (`--broadcast-txs` or
+`--broadcast-tx-hashes`). They run cheapest-first and only ever withhold an
+*echo*: everything the sensor sees is still recorded to the database and still
+served to peers that ask for it, the same split `--validate-block-signer` uses
+for blocks.
+
+- **Tip floor** (`--rebroadcast-min-tip`, disabled by default): withholds
+  transactions offering less than the given tip, which accepts units — e.g.
+  `--rebroadcast-min-tip=25gwei`. Bor will not include anything below 25 gwei on
+  Polygon, so those transactions are unminable no matter what else is true. The
+  check needs no sender recovery and no lookup.
+- **Stale nonce** (`--gate-stale-txs`, enabled by default): withholds
+  transactions whose nonce is below their sender's next usable nonce. The sensor
+  tracks sender nonces from the transactions of every block it already observes,
+  so the common case costs nothing extra. Senders that have not appeared in an
+  observed block are looked up against `--rpc` asynchronously
+  (`--gate-stale-txs-rpc`, enabled by default); the transaction that triggers a
+  lookup is still rebroadcast, and the result gates later ones from that sender.
+  `--max-account-nonces` and `--account-nonces-ttl` size that map. Only blocks
+  that pass the signer check feed it, so a peer that is not a known validator
+  cannot poison a sender's nonce with a fabricated block and get that sender's
+  real transactions withheld.
+- **Rate cap** (`--rebroadcast-rate-limit`, disabled by default): a token bucket
+  over rebroadcast transactions per second, with `--rebroadcast-burst` as the
+  depth. It bounds worst-case amplification even when the gates above miss
+  something. It runs last, so transactions the other gates rejected do not spend
+  the budget.
+
+To size the problem before enforcing anything, run with
+`--rebroadcast-gate-log-only`: every gate is evaluated and its
+`sensor_rebroadcast_filtered` counters move, but nothing is actually withheld.
+
+Withheld transactions are counted by
+`sensor_rebroadcast_filtered{reason="stale_nonce"|"low_tip"|"rate_limited"}` and
+passing ones by `sensor_rebroadcast_allowed`. The nonce map is reported by
+`sensor_rebroadcast_known_senders`, and fallback lookups by
+`sensor_rebroadcast_nonce_lookups{result="ok"|"error"|"dropped"}`.
+
 ## Examples
 
 ### Mainnet
@@ -156,6 +202,7 @@ polycli p2p sensor amoy-nodes.json \
 ## Flags
 
 ```bash
+      --account-nonces-ttl duration       time to live for tracked sender nonces (0 for no expiration) (default 1h0m0s)
       --api-port uint                     port API server will listen on (default 8080)
       --blocks-cache-ttl duration         time to live for block cache entries (0 for no expiration) (default 10m0s)
   -b, --bootnodes string                  comma separated nodes used for bootstrapping
@@ -176,6 +223,11 @@ polycli p2p sensor amoy-nodes.json \
       --discovery-dns string              DNS discovery ENR tree URL
       --discovery-port int                UDP P2P discovery port (default 30303)
       --fork-id bytesHex                  hex encoded fork ID (omit 0x) (default 22D523B2)
+      --gate-stale-txs                    only rebroadcast transactions whose nonce is at or above the sender's known
+                                          next nonce; stale ones can never be mined, so echoing them only amplifies replay
+                                          traffic (they are still recorded to the database) (default true)
+      --gate-stale-txs-rpc                look up nonces from --rpc for senders not yet seen in a block; lookups are
+                                          asynchronous and the transaction that triggers one is still rebroadcast (default true)
       --genesis-hash string               genesis block hash (default "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
       --heimdall-url string               heimdall REST URL for the validator set (used to validate blocks before rebroadcast) (default "https://heimdall-api.polygon.technology")
   -h, --help                              help for sensor
@@ -184,6 +236,7 @@ polycli p2p sensor amoy-nodes.json \
       --known-txs-bloom-hashes uint       number of hash functions for known txs bloom filter (default 7)
       --known-txs-bloom-size uint         bloom filter size in bits for tracking known transactions per peer (default ~40KB per filter,
                                           optimized for ~32K elements with ~1% false positive rate) (default 327680)
+      --max-account-nonces int            maximum sender nonces to track for --gate-stale-txs (0 for no limit) (default 65536)
       --max-blocks int                    maximum blocks to track across all peers (0 for no limit) (default 1024)
   -D, --max-db-concurrency int            maximum number of concurrent database operations to perform (increasing this
                                           will result in less chance of missing data but can significantly increase memory usage) (default 10000)
@@ -208,6 +261,14 @@ polycli p2p sensor amoy-nodes.json \
       --prom-port uint                    port Prometheus runs on (default 2112)
       --proxy-rpc                         proxy unsupported RPC methods to the --rpc endpoint
       --proxy-rpc-timeout duration        timeout for proxied RPC requests (default 30s)
+      --rebroadcast-burst int             token bucket depth for --rebroadcast-rate-limit (defaults to one second of the rate)
+      --rebroadcast-gate-log-only         evaluate the rebroadcast gates and count what they would drop, but rebroadcast
+                                          everything anyway; use it to size the problem before enforcing
+      --rebroadcast-min-tip gas           withhold transactions offering less than this tip from rebroadcast, with unit
+                                          support (e.g. "25gwei"); bor will not include anything below 25gwei on Polygon, so
+                                          those are unminable regardless (0 disables)
+      --rebroadcast-rate-limit float      cap rebroadcast throughput in transactions per second, a backstop that bounds
+                                          amplification even when the gates above miss (0 for no limit)
       --requests-cache-ttl duration       time to live for requests cache entries (0 for no expiration) (default 5m0s)
       --rpc string                        RPC endpoint used to fetch latest block (default "https://polygon-rpc.com")
       --rpc-port uint                     port for JSON-RPC server to receive transactions (default 8545)

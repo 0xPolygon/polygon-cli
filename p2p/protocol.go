@@ -954,9 +954,28 @@ func (c *conn) processTransactions(ctx context.Context, txs []*types.Transaction
 		c.db.WriteTransactions(ctx, c.node, newTxs, tfs)
 	}
 
+	// Gate what gets echoed back out. Everything above this point is
+	// unconditional: the sensor records every transaction it sees. Only the
+	// rebroadcast is filtered, the same split the block path uses for signer
+	// validation. A nil filter allows everything.
+	bcastTxs := c.conns.TxFilter().Allow(newTxs)
+	if len(bcastTxs) == 0 {
+		return
+	}
+
+	// Recompute hashes from the filtered set so the announcement matches the
+	// bodies we are willing to serve.
+	bcastHashes := hashes
+	if len(bcastTxs) != len(newTxs) {
+		bcastHashes = make([]common.Hash, len(bcastTxs))
+		for i, tx := range bcastTxs {
+			bcastHashes[i] = tx.Hash()
+		}
+	}
+
 	// Broadcast transactions or hashes to other peers asynchronously
-	go c.conns.BroadcastTxs(types.Transactions(newTxs))
-	go c.conns.BroadcastTxHashes(hashes)
+	go c.conns.BroadcastTxs(types.Transactions(bcastTxs))
+	go c.conns.BroadcastTxHashes(bcastHashes)
 }
 
 // encodeBlockBody converts a block to an eth.BlockBody with RLP-encoded fields.
@@ -1229,6 +1248,13 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 			Uncles:       blockUncles,
 			Withdrawals:  blockWithdrawals,
 		})
+
+		// Feed sender nonces to the rebroadcast filter. Only blocks whose
+		// header we hold get here, and when cache-only-validated is on that
+		// header is signer-validated -- so an unvalidated peer cannot poison
+		// the nonce map by serving a body full of high-nonce transactions.
+		c.conns.ObserveMinedTxs(blockTxs)
+
 		c.conns.UpdateHeadBlock(NewBlockPacket{
 			Block: block,
 			TD:    c.conns.HeadBlock().TD,
@@ -1380,6 +1406,13 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 			Msg("Skipping full block rebroadcast, signer not in validator set")
 		return nil
 	}
+
+	// Every mined transaction advances its sender's nonce, which is what the
+	// stale-transaction gate checks against. Gated on the same signer check as
+	// the rebroadcast below: a peer that is not a known validator must not be
+	// able to poison the nonce map with a fabricated block, which would make us
+	// withhold a victim sender's real transactions.
+	c.conns.ObserveMinedTxs(packet.Block.Transactions())
 
 	// Broadcast block or block hash to other peers asynchronously
 	go c.conns.BroadcastBlock(packet.Block, packet.TD)

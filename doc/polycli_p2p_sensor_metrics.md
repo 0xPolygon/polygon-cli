@@ -66,6 +66,36 @@ Number of peers the sensor is connected to
 Metric Type: Gauge
 
 
+### sensor_rebroadcast_allowed
+Transactions passed to rebroadcast
+
+Metric Type: Counter
+
+
+### sensor_rebroadcast_filtered
+Transactions withheld from rebroadcast, by reason
+
+Metric Type: CounterVec
+
+Variable Labels:
+- reason
+
+
+### sensor_rebroadcast_known_senders
+Accounts in the nonce cache used by the stale-transaction gate
+
+Metric Type: Gauge
+
+
+### sensor_rebroadcast_nonce_lookups
+Account nonce lookups made against the RPC fallback, by result
+
+Metric Type: CounterVec
+
+Variable Labels:
+- result
+
+
 ### sensor_rpc_requests
 Number of RPC requests made
 

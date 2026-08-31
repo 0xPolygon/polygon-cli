@@ -51,6 +51,10 @@ type ConnsOptions struct {
 	// in the serving cache. Unknown-signer blocks are still persisted to the
 	// database but their header/body are not cached or served to peers.
 	CacheOnlyValidatedBlocks bool
+
+	// TxFilter, when non-nil, gates which peer-sourced transactions are
+	// rebroadcast. It does not affect what is recorded to the database.
+	TxFilter *TxFilter
 }
 
 // Conns manages a collection of active peer connections for transaction broadcasting.
@@ -106,6 +110,10 @@ type Conns struct {
 	// cacheOnlyValidated, when true, keeps only validator-signed blocks in the
 	// serving cache (unknown-signer blocks are recorded to the database only).
 	cacheOnlyValidated bool
+
+	// txFilter, when non-nil, gates transaction rebroadcasting. A nil filter
+	// allows everything (see TxFilter.Allow).
+	txFilter *TxFilter
 
 	// metrics tracks broadcast-related Prometheus metrics
 	metrics *metrics
@@ -164,6 +172,7 @@ func NewConns(opts ConnsOptions) *Conns {
 		maxQueuedTxs:               opts.MaxQueuedTxs,
 		validators:                 opts.ValidatorSet,
 		cacheOnlyValidated:         opts.CacheOnlyValidatedBlocks,
+		txFilter:                   opts.TxFilter,
 		metrics:                    newMetrics(),
 	}
 
@@ -636,6 +645,18 @@ func (c *Conns) FilterUnknownTxHashes(hashes []common.Hash) []common.Hash {
 func (c *Conns) MarkTxSeen(hash common.Hash) (firstSeen bool) {
 	existed := c.announcedTxs.Update(hash, func(v struct{}) struct{} { return v })
 	return !existed
+}
+
+// TxFilter returns the rebroadcast filter, which may be nil when no gate is
+// enabled. A nil filter allows everything.
+func (c *Conns) TxFilter() *TxFilter {
+	return c.txFilter
+}
+
+// ObserveMinedTxs feeds the transactions of an observed block to the
+// rebroadcast filter, which uses them to track sender nonces.
+func (c *Conns) ObserveMinedTxs(txs []*types.Transaction) {
+	c.txFilter.ObserveMined(txs)
 }
 
 // Blocks returns the global blocks cache.
