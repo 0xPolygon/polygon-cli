@@ -516,3 +516,22 @@ func TestSyncTrackerConcurrentRecord(t *testing.T) {
 	}
 	tracker.Stats()
 }
+
+func TestSyncTrackerCanonicalReceiptWithoutBlockNumber(t *testing.T) {
+	// preconfirmation=false is authoritative, so this receipt is canonical even
+	// though it carries no block fields to read a block number from.
+	no := false
+	tracker := NewSyncTracker()
+	tracker.Record(common.Hash{}, &SyncReceipt{Preconfirmation: &no}, time.Millisecond, nil)
+
+	if got := tracker.canonical.Load(); got != 1 {
+		t.Errorf("canonical count = %d, want 1", got)
+	}
+	results := tracker.Results()
+	if len(results) != 1 {
+		t.Fatalf("results = %d, want 1", len(results))
+	}
+	if results[0].BlockNumber != 0 {
+		t.Errorf("block number = %d, want 0", results[0].BlockNumber)
+	}
+}

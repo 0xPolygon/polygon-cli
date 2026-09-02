@@ -236,7 +236,11 @@ func (t *SyncTracker) Record(txHash common.Hash, receipt *SyncReceipt, elapsed t
 		t.speculative.Add(1)
 	} else {
 		t.canonical.Add(1)
-		result.BlockNumber = receipt.BlockNumber.ToInt().Uint64()
+		// A node can call a receipt canonical with the marker while leaving the
+		// block fields out, so this stays guarded.
+		if receipt.BlockNumber != nil {
+			result.BlockNumber = receipt.BlockNumber.ToInt().Uint64()
+		}
 	}
 	if receipt.GasUsed != nil {
 		result.GasUsed = uint64(*receipt.GasUsed)
@@ -277,8 +281,9 @@ func (t *SyncTracker) Stats() {
 		return
 	}
 
-	var durations []float64
-	for _, r := range t.Results() {
+	results := t.Results()
+	durations := make([]float64, 0, len(results))
+	for _, r := range results {
 		durations = append(durations, float64(r.DurationMs))
 	}
 	pct := func(p float64) float64 {

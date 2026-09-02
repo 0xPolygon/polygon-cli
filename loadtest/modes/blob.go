@@ -111,15 +111,9 @@ func (m *BlobMode) Execute(ctx context.Context, cfg *config.Config, deps *mode.D
 		err = fmt.Errorf("CallOnly not supported for blob transactions")
 		log.Error().Err(err).Msg("Cannot use call-only mode with blob transactions")
 		return
-	} else if cfg.OutputRawTxOnly {
-		err = mode.OutputRawTransaction(stx)
-	} else if cfg.SyncTxs {
-		err = mode.SendRawTransactionSync(ctx, deps, cfg, stx)
-	} else if cfg.PrivateTxs {
-		err = mode.SendRawTransactionPrivate(ctx, deps.SendRPCClient, stx)
-	} else {
-		err = deps.SendClient.SendTransaction(ctx, stx)
 	}
+
+	err = mode.SendSignedTransaction(ctx, deps, cfg, stx)
 	return
 }
 

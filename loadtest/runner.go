@@ -560,11 +560,10 @@ func (r *Runner) postLoadTest(ctx context.Context) {
 	cfg := r.cfg
 	results := r.GetResults()
 
-	// Output preconf stats if tracker was used
-	if r.deps != nil && r.deps.SyncTracker != nil {
+	// Output tracker stats. SyncTracker.Stats is a no-op on a nil tracker.
+	if r.deps != nil {
 		r.deps.SyncTracker.Stats()
 	}
-
 	if r.preconfTracker != nil {
 		r.preconfTracker.Stats()
 	}
@@ -1727,7 +1726,6 @@ func (r *Runner) waitForFinalBlock(ctx context.Context) (uint64, error) {
 			timer.Stop()
 			return lastBlockNumber, ctx.Err()
 		}
-		timer.Stop()
 	}
 
 	log.Error().Msg("Max retries reached waiting for transactions to be mined")

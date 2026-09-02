@@ -246,6 +246,7 @@ func (c *Config) Validate() error {
 			return err
 		}
 	}
+
 	if c.SyncTxTimeout < 0 {
 		return fmt.Errorf("--sync-tx-timeout must not be negative, got %s", c.SyncTxTimeout)
 	}

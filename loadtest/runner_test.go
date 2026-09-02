@@ -171,12 +171,6 @@ func TestCachedPricesNeverReturnsNil(t *testing.T) {
 			if gasTipCap.Int64() != tt.wantTipCap {
 				t.Errorf("gas tip cap = %s, want %d", gasTipCap, tt.wantTipCap)
 			}
-
-			// The values must be usable the way the caller uses them.
-			if gasTipCap.Cmp(gasPrice) > 0 {
-				gasTipCap = new(big.Int).Set(gasPrice)
-			}
-			_ = gasTipCap
 		})
 	}
 }
