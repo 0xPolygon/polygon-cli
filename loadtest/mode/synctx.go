@@ -142,17 +142,19 @@ func SendRawTransactionSync(ctx context.Context, deps *Dependencies, cfg *config
 		}
 	}
 
-	logSyncOutcome(tx.Hash(), raw, elapsed, err)
+	LogReceiptTrace(tx.Hash(), raw, elapsed, err,
+		"Sync transaction receipt", "Sync transaction submission failed")
 
 	deps.SyncTracker.Record(tx.Hash(), receipt, elapsed, err)
 
 	return err
 }
 
-// logSyncOutcome trace-logs the raw receipt (or the RPC error) of one
-// synchronous submission so the node's answers can be audited later, e.g. by
-// diffing them against eth_getTransactionReceipt.
-func logSyncOutcome(txHash common.Hash, raw json.RawMessage, elapsed time.Duration, err error) {
+// LogReceiptTrace trace-logs a raw receipt (or the error that stood in for
+// one) so the node's answers can be audited later, e.g. by diffing them
+// against eth_getTransactionReceipt. It is shared by the synchronous send path
+// and the runner's --wait-for-receipt polling, which differ only in message.
+func LogReceiptTrace(txHash common.Hash, raw json.RawMessage, elapsed time.Duration, err error, okMsg, failMsg string) {
 	if zerolog.GlobalLevel() > zerolog.TraceLevel {
 		return
 	}
@@ -174,7 +176,7 @@ func logSyncOutcome(txHash common.Hash, raw json.RawMessage, elapsed time.Durati
 		if len(raw) > 0 {
 			event = event.Str("rawResult", string(raw))
 		}
-		event.Msg("Sync transaction submission failed")
+		event.Msg(failMsg)
 		return
 	}
 
@@ -185,7 +187,7 @@ func logSyncOutcome(txHash common.Hash, raw json.RawMessage, elapsed time.Durati
 		Str("txHash", txHash.Hex()).
 		Int64("durationMs", elapsed.Milliseconds()).
 		RawJSON("receipt", raw).
-		Msg("Sync transaction receipt")
+		Msg(okMsg)
 }
 
 // SyncErrorCode returns the EIP-7966 error code carried by an

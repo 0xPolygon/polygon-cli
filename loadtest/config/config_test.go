@@ -321,3 +321,66 @@ func TestValidateSyncTxs(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateReceiptPollInterval(t *testing.T) {
+	tests := []struct {
+		name            string
+		waitForReceipt  bool
+		pollInterval    time.Duration
+		receiptRetryMax uint
+		wantErr         string
+	}{
+		{
+			name:            "backoff mode still requires retry max",
+			waitForReceipt:  true,
+			receiptRetryMax: 1,
+			wantErr:         "use a max retry greater than 1",
+		},
+		{
+			name:            "interval mode ignores retry max",
+			waitForReceipt:  true,
+			pollInterval:    50 * time.Millisecond,
+			receiptRetryMax: 1,
+		},
+		{
+			name:           "negative interval",
+			waitForReceipt: true,
+			pollInterval:   -time.Second,
+			wantErr:        "--receipt-poll-interval must not be negative",
+		},
+		{
+			name:         "interval requires wait-for-receipt",
+			pollInterval: 50 * time.Millisecond,
+			wantErr:      "--receipt-poll-interval requires --wait-for-receipt",
+		},
+		{
+			name:            "valid interval",
+			waitForReceipt:  true,
+			pollInterval:    50 * time.Millisecond,
+			receiptRetryMax: 30,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig()
+			cfg.WaitForReceipt = tt.waitForReceipt
+			cfg.ReceiptPollInterval = tt.pollInterval
+			cfg.ReceiptRetryMax = tt.receiptRetryMax
+
+			err := cfg.Validate()
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Validate() unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("Validate() expected error containing %q, got nil", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Validate() error %q does not contain %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}

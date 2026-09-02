@@ -211,6 +211,10 @@ v3, uniswapv3 - perform UniswapV3 swaps`)
 	f.BoolVar(&cfg.WaitForReceipt, "wait-for-receipt", false, "wait for transaction receipt to be mined instead of just sending")
 	f.UintVar(&cfg.ReceiptRetryMax, "receipt-retry-max", 30, "maximum polling attempts for transaction receipt with --wait-for-receipt")
 	f.UintVar(&cfg.ReceiptRetryDelay, "receipt-retry-initial-delay-ms", 100, "initial delay in milliseconds for receipt polling (uses exponential backoff with jitter)")
+	f.DurationVar(&cfg.ReceiptPollInterval, "receipt-poll-interval", 0,
+		`fixed interval between receipt polls with --wait-for-receipt; when set, polling is
+bounded only by the receipt timeout and --receipt-retry-max is ignored (0 uses
+exponential backoff with jitter)`)
 	f.BoolVar(&cfg.CheckBalanceBeforeFunding, "check-balance-before-funding", false, "check account balance before funding sending accounts (saves gas when accounts are already funded)")
 }
 

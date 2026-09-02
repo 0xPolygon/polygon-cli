@@ -127,17 +127,40 @@ preconfirmation pipeline (`SubmitTxForPreconf` and the preconfirmation receipt i
 
 At verbosity 700 (trace) each synchronous submission is also logged individually: the
 node's raw receipt verbatim as JSON on success, or the RPC error with its code and data on
-failure. Pair with `--log-format json` for machine-parseable lines that can be checked for
+failure. Pair with `--pretty-logs=false` for machine-parseable lines that can be checked for
 correctness later, e.g. by diffing against `eth_getTransactionReceipt`:
 
 ```bash
-$ polycli loadtest --rpc-url http://localhost:8545 --mode t --sync-txs -v 700 --log-format json
+$ polycli loadtest --rpc-url http://localhost:8545 --mode t --sync-txs -v 700 --pretty-logs=false
 ```
 
 Like `--private-txs`, `--sync-txs` is only supported by `transaction`, `blob`,
 `contract-call`, and `recall`, and the two flags are mutually exclusive.
 
 [eip-7966]: https://eips.ethereum.org/EIPS/eip-7966
+
+### Waiting for Receipts
+
+`--wait-for-receipt` polls `eth_getTransactionReceipt` after each send, in the same
+goroutine that sent the transaction, so each worker blocks until its transaction is mined
+before sending the next one. By default polling uses exponential backoff with jitter,
+starting at `--receipt-retry-initial-delay-ms` and giving up after `--receipt-retry-max`
+attempts or one minute, whichever comes first.
+
+`--receipt-poll-interval` switches to polling at a fixed interval instead. In this mode
+`--receipt-retry-max` is ignored and polling is bounded only by the one-minute timeout.
+Backoff can overshoot the moment the receipt appeared by the length of the current backoff
+step, so a small fixed interval also makes the wait duration a usable receipt-latency
+measurement, at the cost of steadier RPC load:
+
+```bash
+$ polycli loadtest --rpc-url http://localhost:8545 --mode t --wait-for-receipt --receipt-poll-interval 50ms
+```
+
+At verbosity 700 (trace) each raw receipt is logged verbatim as JSON with the tx hash and
+the wait duration, the same shape as the `--sync-txs` receipt logs. Combined with
+`--sync-txs`, this logs the speculative receipt and the canonical one separately per
+transaction.
 
 ### Gas Manager
 

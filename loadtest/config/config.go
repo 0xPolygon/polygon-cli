@@ -54,27 +54,28 @@ type Config struct {
 	Seed        int64
 
 	// Transaction options
-	PrivateKey         string
-	ToAddress          string
-	EthAmountInWei     uint64
-	RandomRecipients   bool
-	LegacyTxMode       bool
-	FireAndForget      bool
-	CheckForPreconf    bool
-	PreconfStatsFile   string
-	WaitForReceipt     bool
-	ReceiptRetryMax    uint
-	ReceiptRetryDelay  uint // initial delay in milliseconds
-	OutputRawTxOnly    bool
-	PrivateTxs         bool
-	SyncTxs            bool
-	SyncTxTimeout      time.Duration
-	SyncTxTimeoutInt   bool
-	StartNonce         uint64
-	StartNonceSet      bool `json:"-"`
-	GasPriceMultiplier float64
-	DuplicateNonceRate float64
-	ReverseNonceOrder  bool
+	PrivateKey          string
+	ToAddress           string
+	EthAmountInWei      uint64
+	RandomRecipients    bool
+	LegacyTxMode        bool
+	FireAndForget       bool
+	CheckForPreconf     bool
+	PreconfStatsFile    string
+	WaitForReceipt      bool
+	ReceiptRetryMax     uint
+	ReceiptRetryDelay   uint // initial delay in milliseconds
+	ReceiptPollInterval time.Duration
+	OutputRawTxOnly     bool
+	PrivateTxs          bool
+	SyncTxs             bool
+	SyncTxTimeout       time.Duration
+	SyncTxTimeoutInt    bool
+	StartNonce          uint64
+	StartNonceSet       bool `json:"-"`
+	GasPriceMultiplier  float64
+	DuplicateNonceRate  float64
+	ReverseNonceOrder   bool
 
 	// Gas options
 	ForceGasLimit         uint64
@@ -197,8 +198,17 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("the backoff factor needs to be non-zero positive. Given: %f", c.AdaptiveBackoffFactor)
 	}
 
-	if c.WaitForReceipt && c.ReceiptRetryMax <= 1 {
+	// Retry max only governs the exponential backoff schedule; fixed-interval
+	// polling is bounded by the receipt timeout instead.
+	if c.WaitForReceipt && c.ReceiptPollInterval == 0 && c.ReceiptRetryMax <= 1 {
 		return errors.New("when waiting for a receipt, use a max retry greater than 1")
+	}
+
+	if c.ReceiptPollInterval < 0 {
+		return fmt.Errorf("--receipt-poll-interval must not be negative, got %s", c.ReceiptPollInterval)
+	}
+	if c.ReceiptPollInterval > 0 && !c.WaitForReceipt {
+		return errors.New("--receipt-poll-interval requires --wait-for-receipt")
 	}
 
 	if c.EthCallOnly {

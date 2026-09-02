@@ -1,7 +1,9 @@
 package util
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"time"
@@ -9,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	ethrpc "github.com/ethereum/go-ethereum/rpc"
 )
 
 // WaitReceipt waits for a transaction receipt with default parameters.
@@ -79,6 +82,87 @@ func internalWaitReceipt(ctx context.Context, client *ethclient.Client, txHash c
 			return nil, timeoutCtx.Err()
 		case <-time.After(totalDelay):
 			// Continue
+		}
+	}
+}
+
+// ReceiptWaitOpts controls how WaitReceiptRaw polls for a receipt.
+type ReceiptWaitOpts struct {
+	// MaxAttempts caps the number of polls in backoff mode (0 means unbounded
+	// within Timeout). Ignored when Interval is set.
+	MaxAttempts uint
+	// InitialDelay is the starting delay for exponential backoff, default
+	// 100ms. Ignored when Interval is set.
+	InitialDelay time.Duration
+	// Interval, when positive, switches to fixed-interval polling bounded only
+	// by Timeout.
+	Interval time.Duration
+	// Timeout bounds the whole wait, default 1 minute.
+	Timeout time.Duration
+}
+
+var jsonNull = []byte("null")
+
+// WaitReceiptRaw polls eth_getTransactionReceipt until the receipt exists and
+// returns it as raw JSON, so callers can log or inspect fields beyond what
+// types.Receipt models. Polling is either exponential backoff with jitter
+// (matching WaitReceiptWithRetries) or a fixed interval, per opts.
+func WaitReceiptRaw(ctx context.Context, rpc *ethrpc.Client, txHash common.Hash, opts ReceiptWaitOpts) (json.RawMessage, error) {
+	timeout := opts.Timeout
+	if timeout == 0 {
+		timeout = 1 * time.Minute
+	}
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	initialDelay := opts.InitialDelay
+	if initialDelay == 0 {
+		initialDelay = 100 * time.Millisecond
+	} else if initialDelay < 10*time.Millisecond {
+		initialDelay = 10 * time.Millisecond
+	}
+
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	<-timer.C
+
+	for attempt := uint(0); ; attempt++ {
+		var raw json.RawMessage
+		err := rpc.CallContext(timeoutCtx, &raw, "eth_getTransactionReceipt", txHash)
+		// A pending or unknown transaction is a null result with no error at
+		// the RPC layer, so both outcomes mean "not yet" here.
+		if err == nil && len(raw) > 0 && !bytes.Equal(raw, jsonNull) {
+			return raw, nil
+		}
+
+		var delay time.Duration
+		if opts.Interval > 0 {
+			// Fixed-interval polling is bounded only by the timeout.
+			delay = opts.Interval
+		} else {
+			if opts.MaxAttempts > 0 && attempt >= opts.MaxAttempts-1 {
+				if err == nil {
+					err = fmt.Errorf("transaction %s has no receipt", txHash.Hex())
+				}
+				return nil, fmt.Errorf("failed to get receipt after %d attempts: %w", opts.MaxAttempts, err)
+			}
+			delay = initialDelay * time.Duration(1<<attempt)
+			maxDelay := 30 * time.Second
+			if delay > maxDelay {
+				delay = maxDelay
+			}
+			maxJitter := delay / 2
+			if maxJitter <= 0 {
+				maxJitter = 1 * time.Millisecond
+			}
+			delay += time.Duration(rand.Int63n(int64(maxJitter)))
+		}
+
+		timer.Reset(delay)
+		select {
+		case <-timeoutCtx.Done():
+			return nil, timeoutCtx.Err()
+		case <-timer.C:
 		}
 	}
 }

@@ -636,3 +636,25 @@ func TestSendRawTransactionSyncNoReceiptLogBelowTrace(t *testing.T) {
 		t.Errorf("receipt logged below trace level: %s", out)
 	}
 }
+
+func TestLogReceiptTraceCustomMessages(t *testing.T) {
+	// The runner's --wait-for-receipt path reuses this helper with its own
+	// messages; make sure they carry through on both outcomes.
+	buf := captureTraceLogs(t, zerolog.TraceLevel)
+
+	hash := common.HexToHash("0xf00d")
+	raw := json.RawMessage(`{"transactionHash":"0xf00d","status":"0x1"}`)
+	LogReceiptTrace(hash, raw, 42*time.Millisecond, nil, "Transaction receipt", "Receipt wait failed")
+	LogReceiptTrace(hash, nil, 42*time.Millisecond, fmt.Errorf("boom"), "Transaction receipt", "Receipt wait failed")
+
+	out := buf.String()
+	if !strings.Contains(out, "Transaction receipt") {
+		t.Errorf("success message missing: %s", out)
+	}
+	if !strings.Contains(out, `"status":"0x1"`) {
+		t.Errorf("raw receipt missing: %s", out)
+	}
+	if !strings.Contains(out, "Receipt wait failed") || !strings.Contains(out, "boom") {
+		t.Errorf("failure message missing: %s", out)
+	}
+}

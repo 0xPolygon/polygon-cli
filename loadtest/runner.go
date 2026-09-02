@@ -3,6 +3,7 @@ package loadtest
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -758,9 +759,19 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 					go r.preconfTracker.Track(ltTxHash)
 				}
 
-				// Wait for receipt if configured
+				// Wait for receipt if configured. This blocks the sending
+				// goroutine; the raw receipt is trace-logged so it can be
+				// audited later.
 				if tErr == nil && cfg.WaitForReceipt {
-					_, tErr = util.WaitReceiptWithRetries(ctx, r.client, ltTxHash, cfg.ReceiptRetryMax, cfg.ReceiptRetryDelay)
+					waitStart := time.Now()
+					var rawReceipt json.RawMessage
+					rawReceipt, tErr = util.WaitReceiptRaw(ctx, r.rpcClient, ltTxHash, util.ReceiptWaitOpts{
+						MaxAttempts:  cfg.ReceiptRetryMax,
+						InitialDelay: time.Duration(cfg.ReceiptRetryDelay) * time.Millisecond,
+						Interval:     cfg.ReceiptPollInterval,
+					})
+					mode.LogReceiptTrace(ltTxHash, rawReceipt, time.Since(waitStart), tErr,
+						"Transaction receipt", "Receipt wait failed")
 				}
 
 				// Handle errors
