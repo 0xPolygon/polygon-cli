@@ -166,6 +166,12 @@ func (r *Runner) Init(ctx context.Context) error {
 		return err
 	}
 
+	// Initialize the synchronous submission tracker if configured. It lives on
+	// deps because the send helper records into it from inside each mode.
+	if r.cfg.SyncTxs {
+		r.deps.SyncTracker = mode.NewSyncTracker()
+	}
+
 	// Initialize preconf tracker if configured
 	if r.cfg.CheckForPreconf {
 		r.preconfTracker = NewPreconfTracker(r.client, r.cfg.PreconfStatsFile)
@@ -555,6 +561,10 @@ func (r *Runner) postLoadTest(ctx context.Context) {
 	results := r.GetResults()
 
 	// Output preconf stats if tracker was used
+	if r.deps != nil && r.deps.SyncTracker != nil {
+		r.deps.SyncTracker.Stats()
+	}
+
 	if r.preconfTracker != nil {
 		r.preconfTracker.Stats()
 	}

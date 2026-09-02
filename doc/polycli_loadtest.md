@@ -87,6 +87,70 @@ $ polycli loadtest --rpc-url http://fullnode:8545 --send-rpc-url http://broadcas
 
 Like `--private-txs`, this flag is only supported by the modes that broadcast transactions explicitly: `transaction`, `blob`, `contract-call`, and `recall`.
 
+### Synchronous Sending (EIP-7966)
+
+`--sync-txs` broadcasts with [`eth_sendRawTransactionSync`][eip-7966] instead of
+`eth_sendRawTransaction`. That call does not return when the transaction is accepted; it
+returns when the node has a receipt for it, or fails when its timeout elapses. On a chain
+that preconfirms, the receipt can arrive well before canonical inclusion, which is what
+makes this useful for measuring preconfirmation latency.
+
+```bash
+$ polycli loadtest --rpc-url http://localhost:8545 --mode t --sync-txs --concurrency 20
+```
+
+`--sync-tx-timeout` sets how long the node should wait, in whole milliseconds. Leave it at
+`0` to omit the parameter so the node applies its own default. EIP-7966 recommends 2
+seconds; bor defaults to 20 seconds (`--rpc.txsync.defaulttimeout`) and silently clamps
+anything above `--rpc.txsync.maxtimeout`, 1 minute by default, rather than rejecting it.
+
+The value goes on the wire as a hex quantity, because bor takes the parameter as
+`*hexutil.Uint64`, which unmarshals only from a quoted hex string and rejects a bare JSON
+number. EIP-7966 describes the parameter as an integer instead, and servers implementing it
+literally reject the hex form, so `--sync-tx-timeout-int` switches encodings. Against bor,
+leave it off.
+
+**This changes what the latency numbers mean.** Every other send path measures time to
+*accept* a transaction; with `--sync-txs` the recorded request duration is time to
+*receipt*. Because each request now blocks for the life of the transaction, `--concurrency`
+becomes the number of transactions in flight rather than the number of submissions per
+moment, and you will need a much higher value to reach the same send rate.
+
+At the end of a run the sync tracker logs a summary:
+
+- `receipts`, split into `speculative` and `canonical`
+- `reverted` and `no_status` for receipts that came back unsuccessful or without a status
+- `timeouts`, `queued`, `nonce_gaps` — EIP-7966 error codes 4, 5 and 6. A timeout means the
+  transaction reached the mempool but produced no receipt in time; it may still be mined
+  afterwards. A nonce gap carries the node's expected nonce in the error data.
+- `rejected` — the transaction was refused before the wait began
+- `p50_ms`, `p90_ms`, `p99_ms` of the synchronous call
+
+Bor implements only code 4 of that set. A transaction it refuses to accept fails before the
+wait starts and comes back with bor's own codes, which are counted too: `-38011`
+(nonce too high) as a nonce gap, and `-38010` (nonce too low), `-38013` (intrinsic gas),
+`-38014` (insufficient funds) and `-38026` (client limit exceeded) as `rejected`.
+
+The speculative/canonical split comes from the receipt itself where possible. Bor's
+preconfirmation pipeline marks a preconfirmed receipt with `"preconfirmation": true` and
+leaves its `blockHash` null, and that marker is taken as authoritative. EIP-7966 defines no
+such field, so for any other node the split falls back to reading the block fields: a
+receipt with no block cannot be canonical. A node that both omits the marker and fills in a
+speculative block number is indistinguishable from one answering canonically. To confirm
+canonical inclusion independently, combine with `--wait-for-receipt`, which polls for the
+receipt after the synchronous call returns — that pairing measures the speculative receipt
+and the canonical one separately.
+
+Note that stock bor without preconfirmations enabled only ever returns canonical receipts:
+it waits on chain events and requires both a block number and a block hash before
+answering, so `speculative` stays at zero. The speculative path needs bor's
+preconfirmation pipeline (`SubmitTxForPreconf` and the preconfirmation receipt index).
+
+Like `--private-txs`, `--sync-txs` is only supported by `transaction`, `blob`,
+`contract-call`, and `recall`, and the two flags are mutually exclusive.
+
+[eip-7966]: https://eips.ethereum.org/EIPS/eip-7966
+
 ### Gas Manager
 
 The loadtest command includes an optional gas manager for controlling transaction gas limits and pricing. Enable it with `--gas-manager-enabled`, then use the `--gas-manager-*` flags to:
@@ -205,6 +269,12 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --stop-on-insufficient-funds                       stop sending from account when it encounters insufficient funds error
       --store-data-size uint                             number of bytes to store in contract for store mode (default 1024)
       --summarize                                        produce execution summary after load test (can take a long time for large tests)
+      --sync-tx-timeout duration                         maximum time the node should wait for a receipt with --sync-txs, sent in whole
+                                                         milliseconds (0 omits the parameter so the node applies its own default)
+      --sync-tx-timeout-int                              send the --sync-tx-timeout value as a bare JSON integer instead of a hex quantity;
+                                                         bor wants hex (the default), while servers implementing EIP-7966 literally want an integer
+      --sync-txs                                         send transactions via eth_sendRawTransactionSync (EIP-7966), which blocks until
+                                                         the node has a receipt; useful for measuring preconfirmation latency
   -t, --time-limit int                                   maximum seconds to spend benchmarking (default: no limit) (default -1)
       --to-address string                                recipient address for transactions (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
       --wait-for-receipt                                 wait for transaction receipt to be mined instead of just sending

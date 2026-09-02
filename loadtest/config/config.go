@@ -67,6 +67,9 @@ type Config struct {
 	ReceiptRetryDelay  uint // initial delay in milliseconds
 	OutputRawTxOnly    bool
 	PrivateTxs         bool
+	SyncTxs            bool
+	SyncTxTimeout      time.Duration
+	SyncTxTimeoutInt   bool
 	StartNonce         uint64
 	StartNonceSet      bool `json:"-"`
 	GasPriceMultiplier float64
@@ -227,6 +230,27 @@ func (c *Config) Validate() error {
 		if err := c.validateModesSupportRawSend("--private-txs"); err != nil {
 			return err
 		}
+	}
+
+	if c.SyncTxs {
+		if c.PrivateTxs {
+			return errors.New("--sync-txs and --private-txs are mutually exclusive (each sends via a different RPC method)")
+		}
+		if c.EthCallOnly {
+			return errors.New("--sync-txs doesn't make sense with --eth-call-only, which never sends a transaction")
+		}
+		if c.OutputRawTxOnly {
+			return errors.New("--sync-txs doesn't make sense with --output-raw-tx-only, which never sends a transaction")
+		}
+		if err := c.validateModesSupportRawSend("--sync-txs"); err != nil {
+			return err
+		}
+	}
+	if c.SyncTxTimeout < 0 {
+		return fmt.Errorf("--sync-tx-timeout must not be negative, got %s", c.SyncTxTimeout)
+	}
+	if c.SyncTxTimeout > 0 && c.SyncTxTimeout < time.Millisecond {
+		return fmt.Errorf("--sync-tx-timeout is sent in whole milliseconds, so %s rounds to zero; use 0 to let the node apply its default", c.SyncTxTimeout)
 	}
 
 	if c.SendRPCURL != "" {

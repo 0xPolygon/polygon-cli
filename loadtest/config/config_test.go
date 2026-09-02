@@ -229,3 +229,95 @@ func TestValidateReverseNonceOrder(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateSyncTxs(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*Config)
+		wantErr string
+	}{
+		{
+			name:   "sync txs alone",
+			mutate: func(c *Config) { c.SyncTxs = true },
+		},
+		{
+			name: "sync txs with timeout",
+			mutate: func(c *Config) {
+				c.SyncTxs = true
+				c.SyncTxTimeout = 2 * time.Second
+			},
+		},
+		{
+			name: "sync and private are exclusive",
+			mutate: func(c *Config) {
+				c.SyncTxs = true
+				c.PrivateTxs = true
+			},
+			wantErr: "--sync-txs and --private-txs are mutually exclusive",
+		},
+		{
+			name: "sync with call only",
+			mutate: func(c *Config) {
+				c.SyncTxs = true
+				c.EthCallOnly = true
+			},
+			wantErr: "--sync-txs doesn't make sense with --eth-call-only",
+		},
+		{
+			name: "sync with raw output",
+			mutate: func(c *Config) {
+				c.SyncTxs = true
+				c.OutputRawTxOnly = true
+			},
+			wantErr: "--sync-txs doesn't make sense with --output-raw-tx-only",
+		},
+		{
+			name: "sync with an unsupported mode",
+			mutate: func(c *Config) {
+				c.SyncTxs = true
+				c.Modes = []string{"d"}
+			},
+			wantErr: "--sync-txs is not supported for mode \"d\"",
+		},
+		{
+			name:    "negative timeout",
+			mutate:  func(c *Config) { c.SyncTxTimeout = -time.Second },
+			wantErr: "--sync-tx-timeout must not be negative",
+		},
+		{
+			name:    "sub-millisecond timeout rounds to zero",
+			mutate:  func(c *Config) { c.SyncTxTimeout = 500 * time.Microsecond },
+			wantErr: "rounds to zero",
+		},
+		{
+			// The pairing that measures speculative then canonical inclusion.
+			name: "sync with wait for receipt",
+			mutate: func(c *Config) {
+				c.SyncTxs = true
+				c.WaitForReceipt = true
+				c.ReceiptRetryMax = 30
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := validConfig()
+			tt.mutate(c)
+
+			err := c.Validate()
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Validate() = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("Validate() = nil, want error containing %q", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("Validate() = %q, want it to contain %q", err, tt.wantErr)
+			}
+		})
+	}
+}

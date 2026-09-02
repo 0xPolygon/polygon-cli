@@ -113,6 +113,8 @@ func (m *BlobMode) Execute(ctx context.Context, cfg *config.Config, deps *mode.D
 		return
 	} else if cfg.OutputRawTxOnly {
 		err = mode.OutputRawTransaction(stx)
+	} else if cfg.SyncTxs {
+		err = mode.SendRawTransactionSync(ctx, deps, cfg, stx)
 	} else if cfg.PrivateTxs {
 		err = mode.SendRawTransactionPrivate(ctx, deps.SendRPCClient, stx)
 	} else {
