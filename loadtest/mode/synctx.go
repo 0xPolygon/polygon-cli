@@ -2,6 +2,7 @@ package mode
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/montanaflynn/stats"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/0xPolygon/polygon-cli/loadtest/config"
@@ -126,14 +128,64 @@ func SendRawTransactionSync(ctx context.Context, deps *Dependencies, cfg *config
 		}
 	}
 
-	var receipt *SyncReceipt
+	// Decode into raw JSON first so the receipt can be logged verbatim; the
+	// SyncReceipt only models the handful of fields the tracker classifies on.
+	var raw json.RawMessage
 	start := time.Now()
-	err = deps.SendRPCClient.CallContext(ctx, &receipt, "eth_sendRawTransactionSync", params...)
+	err = deps.SendRPCClient.CallContext(ctx, &raw, "eth_sendRawTransactionSync", params...)
 	elapsed := time.Since(start)
+
+	var receipt *SyncReceipt
+	if err == nil && len(raw) > 0 {
+		if uErr := json.Unmarshal(raw, &receipt); uErr != nil {
+			err = fmt.Errorf("failed to decode sync receipt: %w", uErr)
+		}
+	}
+
+	logSyncOutcome(tx.Hash(), raw, elapsed, err)
 
 	deps.SyncTracker.Record(tx.Hash(), receipt, elapsed, err)
 
 	return err
+}
+
+// logSyncOutcome trace-logs the raw receipt (or the RPC error) of one
+// synchronous submission so the node's answers can be audited later, e.g. by
+// diffing them against eth_getTransactionReceipt.
+func logSyncOutcome(txHash common.Hash, raw json.RawMessage, elapsed time.Duration, err error) {
+	if zerolog.GlobalLevel() > zerolog.TraceLevel {
+		return
+	}
+
+	if err != nil {
+		event := log.Trace().
+			Str("txHash", txHash.Hex()).
+			Int64("durationMs", elapsed.Milliseconds()).
+			Err(err)
+		if code, ok := SyncErrorCode(err); ok {
+			event = event.Int("errorCode", code)
+		}
+		var dataErr ethrpc.DataError
+		if errors.As(err, &dataErr) {
+			event = event.Any("errorData", dataErr.ErrorData())
+		}
+		// Raw is only non-empty here when the result failed to decode; log it
+		// as a string since it may not be valid JSON.
+		if len(raw) > 0 {
+			event = event.Str("rawResult", string(raw))
+		}
+		event.Msg("Sync transaction submission failed")
+		return
+	}
+
+	if len(raw) == 0 {
+		raw = json.RawMessage("null")
+	}
+	log.Trace().
+		Str("txHash", txHash.Hex()).
+		Int64("durationMs", elapsed.Milliseconds()).
+		RawJSON("receipt", raw).
+		Msg("Sync transaction receipt")
 }
 
 // SyncErrorCode returns the EIP-7966 error code carried by an

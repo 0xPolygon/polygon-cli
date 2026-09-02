@@ -125,6 +125,15 @@ it waits on chain events and requires both a block number and a block hash befor
 answering, so `speculative` stays at zero. The speculative path needs bor's
 preconfirmation pipeline (`SubmitTxForPreconf` and the preconfirmation receipt index).
 
+At verbosity 700 (trace) each synchronous submission is also logged individually: the
+node's raw receipt verbatim as JSON on success, or the RPC error with its code and data on
+failure. Pair with `--log-format json` for machine-parseable lines that can be checked for
+correctness later, e.g. by diffing against `eth_getTransactionReceipt`:
+
+```bash
+$ polycli loadtest --rpc-url http://localhost:8545 --mode t --sync-txs -v 700 --log-format json
+```
+
 Like `--private-txs`, `--sync-txs` is only supported by `transaction`, `blob`,
 `contract-call`, and `recall`, and the two flags are mutually exclusive.
 

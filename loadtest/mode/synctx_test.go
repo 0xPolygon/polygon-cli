@@ -1,11 +1,13 @@
 package mode
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -15,6 +17,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/0xPolygon/polygon-cli/loadtest/config"
 )
@@ -533,5 +537,102 @@ func TestSyncTrackerCanonicalReceiptWithoutBlockNumber(t *testing.T) {
 	}
 	if results[0].BlockNumber != 0 {
 		t.Errorf("block number = %d, want 0", results[0].BlockNumber)
+	}
+}
+
+// captureTraceLogs redirects the global logger into a buffer at the given
+// level and restores it when the test finishes.
+func captureTraceLogs(t *testing.T, level zerolog.Level) *bytes.Buffer {
+	t.Helper()
+	origLogger := log.Logger
+	origLevel := zerolog.GlobalLevel()
+	t.Cleanup(func() {
+		log.Logger = origLogger
+		zerolog.SetGlobalLevel(origLevel)
+	})
+
+	var buf bytes.Buffer
+	log.Logger = zerolog.New(&buf)
+	zerolog.SetGlobalLevel(level)
+	return &buf
+}
+
+func TestSendRawTransactionSyncMalformedReceipt(t *testing.T) {
+	// A result that is valid JSON but not a receipt must surface as an error,
+	// not as a receipt or a silent nil.
+	tx := testTx(t)
+	rpc := &syncRPC{result: map[string]any{"status": []string{"0x1"}}}
+
+	tracker, err := send(t, rpc, &config.Config{}, tx)
+	if err == nil || !strings.Contains(err.Error(), "failed to decode sync receipt") {
+		t.Fatalf("err = %v, want a decode error", err)
+	}
+	if got := tracker.receipts.Load(); got != 0 {
+		t.Errorf("receipt count = %d, want 0", got)
+	}
+	if got := tracker.otherErrs.Load(); got != 1 {
+		t.Errorf("other error count = %d, want 1", got)
+	}
+}
+
+func TestSendRawTransactionSyncTraceLogsRawReceipt(t *testing.T) {
+	buf := captureTraceLogs(t, zerolog.TraceLevel)
+
+	tx := testTx(t)
+	receipt := canonicalReceipt(tx.Hash())
+	// A field SyncReceipt does not model proves the receipt is logged verbatim.
+	receipt["effectiveGasPrice"] = "0x77359400"
+	rpc := &syncRPC{result: receipt}
+
+	if _, err := send(t, rpc, &config.Config{}, tx); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Sync transaction receipt") {
+		t.Fatalf("expected a trace receipt log, got: %s", out)
+	}
+	if !strings.Contains(out, `"effectiveGasPrice":"0x77359400"`) {
+		t.Errorf("raw receipt not logged verbatim: %s", out)
+	}
+	if !strings.Contains(out, tx.Hash().Hex()) {
+		t.Errorf("tx hash missing from receipt log: %s", out)
+	}
+}
+
+func TestSendRawTransactionSyncTraceLogsErrors(t *testing.T) {
+	buf := captureTraceLogs(t, zerolog.TraceLevel)
+
+	tx := testTx(t)
+	rpc := &syncRPC{errCode: SyncErrTimeout, errMsg: "receipt wait timed out", errData: "0xabc"}
+
+	if _, err := send(t, rpc, &config.Config{}, tx); err == nil {
+		t.Fatal("expected the rpc error to be returned")
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Sync transaction submission failed") {
+		t.Fatalf("expected a trace error log, got: %s", out)
+	}
+	if !strings.Contains(out, `"errorCode":4`) {
+		t.Errorf("error code missing from log: %s", out)
+	}
+	if !strings.Contains(out, `"errorData":"0xabc"`) {
+		t.Errorf("error data missing from log: %s", out)
+	}
+}
+
+func TestSendRawTransactionSyncNoReceiptLogBelowTrace(t *testing.T) {
+	buf := captureTraceLogs(t, zerolog.InfoLevel)
+
+	tx := testTx(t)
+	rpc := &syncRPC{result: canonicalReceipt(tx.Hash())}
+
+	if _, err := send(t, rpc, &config.Config{}, tx); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if out := buf.String(); strings.Contains(out, "Sync transaction receipt") {
+		t.Errorf("receipt logged below trace level: %s", out)
 	}
 }
