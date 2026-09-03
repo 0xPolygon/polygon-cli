@@ -122,12 +122,8 @@ func (m *ContractCallMode) Execute(ctx context.Context, cfg *config.Config, deps
 
 	if cfg.EthCallOnly {
 		_, err = deps.Client.CallContract(ctx, mode.TxToCallMsg(cfg, stx), nil)
-	} else if cfg.OutputRawTxOnly {
-		err = mode.OutputRawTransaction(stx)
-	} else if cfg.PrivateTxs {
-		err = mode.SendRawTransactionPrivate(ctx, deps.SendRPCClient, stx)
 	} else {
-		err = deps.SendClient.SendTransaction(ctx, stx)
+		err = mode.SendSignedTransaction(ctx, deps, cfg, stx)
 	}
 	return
 }

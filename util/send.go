@@ -13,7 +13,8 @@ import (
 )
 
 // SendTx is a simple wrapper to send a transaction from one Ethereum address to another.
-func SendTx(ctx context.Context, c *ethclient.Client, privateKey *ecdsa.PrivateKey, to *common.Address, amount *big.Int, data []byte, gasLimit uint64) error {
+// A nil gasPrice uses the client's suggested gas price.
+func SendTx(ctx context.Context, c *ethclient.Client, privateKey *ecdsa.PrivateKey, to *common.Address, amount, gasPrice *big.Int, data []byte, gasLimit uint64) error {
 	// Get the chaind id.
 	chainID, err := c.ChainID(ctx)
 	if err != nil {
@@ -28,11 +29,12 @@ func SendTx(ctx context.Context, c *ethclient.Client, privateKey *ecdsa.PrivateK
 		return err
 	}
 
-	// Get suggested gas price.
-	var gasPrice *big.Int
-	gasPrice, err = c.SuggestGasPrice(ctx)
-	if err != nil {
-		return err
+	// Get suggested gas price unless one was provided.
+	if gasPrice == nil {
+		gasPrice, err = c.SuggestGasPrice(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Create and sign the transaction.

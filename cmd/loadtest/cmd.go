@@ -116,6 +116,15 @@ func initPersistentFlags() {
 	pf.BoolVar(&cfg.EthCallOnlyLatestBlock, "eth-call-only-latest", false, "execute on latest block instead of original block in call-only mode with recall")
 	pf.BoolVar(&cfg.OutputRawTxOnly, "output-raw-tx-only", false, "output raw signed transaction hex without sending (works with most modes except RPC and UniswapV3)")
 	pf.BoolVar(&cfg.PrivateTxs, "private-txs", false, "send transactions via eth_sendRawTransactionPrivate")
+	pf.BoolVar(&cfg.SyncTxs, "sync-txs", false,
+		`send transactions via eth_sendRawTransactionSync (EIP-7966), which blocks until
+the node has a receipt; useful for measuring preconfirmation latency`)
+	pf.BoolVar(&cfg.SyncTxTimeoutInt, "sync-tx-timeout-int", false,
+		`send the --sync-tx-timeout value as a bare JSON integer instead of a hex quantity;
+bor wants hex (the default), while servers implementing EIP-7966 literally want an integer`)
+	pf.DurationVar(&cfg.SyncTxTimeout, "sync-tx-timeout", 0,
+		`maximum time the node should wait for a receipt with --sync-txs, sent in whole
+milliseconds (0 omits the parameter so the node applies its own default)`)
 	pf.Uint64Var(&cfg.EthAmountInWei, "eth-amount-in-wei", 0, "amount of ether in wei to send per transaction")
 	pf.Float64Var(&cfg.RateLimit, "rate-limit", 4, "requests per second limit (use negative value to remove limit)")
 	pf.DurationVar(&cfg.RateLimitRampDuration, "rate-limit-ramp-duration", 0, "linearly ramp rate limit from max(1% of --rate-limit, 1 TPS) to full --rate-limit over this duration (e.g. 3m; 0 disables ramp)")
@@ -202,6 +211,10 @@ v3, uniswapv3 - perform UniswapV3 swaps`)
 	f.BoolVar(&cfg.WaitForReceipt, "wait-for-receipt", false, "wait for transaction receipt to be mined instead of just sending")
 	f.UintVar(&cfg.ReceiptRetryMax, "receipt-retry-max", 30, "maximum polling attempts for transaction receipt with --wait-for-receipt")
 	f.UintVar(&cfg.ReceiptRetryDelay, "receipt-retry-initial-delay-ms", 100, "initial delay in milliseconds for receipt polling (uses exponential backoff with jitter)")
+	f.DurationVar(&cfg.ReceiptPollInterval, "receipt-poll-interval", 0,
+		`fixed interval between receipt polls with --wait-for-receipt; when set, polling is
+bounded only by the receipt timeout and --receipt-retry-max is ignored (0 uses
+exponential backoff with jitter)`)
 	f.BoolVar(&cfg.CheckBalanceBeforeFunding, "check-balance-before-funding", false, "check account balance before funding sending accounts (saves gas when accounts are already funded)")
 }
 
