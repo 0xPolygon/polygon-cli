@@ -38,6 +38,10 @@ type cmdFundParams struct {
 
 	RateLimit float64
 
+	// Gas price parameters
+	GasPrice         uint64
+	PriorityGasPrice uint64
+
 	// ERC20 specific parameters
 	TokenAddress   string
 	TokenAmount    *big.Int
@@ -124,6 +128,10 @@ func init() {
 
 	// RPC parameters.
 	f.Float64Var(&params.RateLimit, "rate-limit", 4, "requests per second limit (use negative value to remove limit)")
+
+	// Gas price parameters.
+	f.Var(&flag.GasValue{Val: &params.GasPrice}, "gas-price", "gas price with unit support (e.g., \"100gwei\", \"1000000000\")")
+	f.Var(&flag.GasValue{Val: &params.PriorityGasPrice}, "priority-gas-price", "gas tip for EIP-1559 with unit support (e.g., \"2gwei\")")
 }
 
 func checkFlags() error {
@@ -139,6 +147,11 @@ func checkFlags() error {
 	}
 	if params.OutputFile == "" {
 		return errors.New("the output file is not specified")
+	}
+
+	// Validate gas price parameters
+	if params.GasPrice != 0 && params.PriorityGasPrice != 0 && params.GasPrice < params.PriorityGasPrice {
+		return errors.New("gas price must be greater than or equal to priority gas price")
 	}
 
 	// ERC20 specific validations
