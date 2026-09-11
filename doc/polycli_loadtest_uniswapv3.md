@@ -124,6 +124,12 @@ The command also inherits flags from parent commands.
       --send-rpc-url string                              secondary RPC endpoint used only to broadcast transactions (eth_sendRawTransaction / eth_sendRawTransactionPrivate); all other calls use --rpc-url
       --stop-on-insufficient-funds                       stop sending from account when it encounters insufficient funds error
       --summarize                                        produce execution summary after load test (can take a long time for large tests)
+      --sync-tx-timeout duration                         maximum time the node should wait for a receipt with --sync-txs, sent in whole
+                                                         milliseconds (0 omits the parameter so the node applies its own default)
+      --sync-tx-timeout-int                              send the --sync-tx-timeout value as a bare JSON integer instead of a hex quantity;
+                                                         bor wants hex (the default), while servers implementing EIP-7966 literally want an integer
+      --sync-txs                                         send transactions via eth_sendRawTransactionSync (EIP-7966), which blocks until
+                                                         the node has a receipt; useful for measuring preconfirmation latency
   -t, --time-limit int                                   maximum seconds to spend benchmarking (default: no limit) (default -1)
       --to-address string                                recipient address for transactions (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
   -v, --verbosity string                                 log level (string or int):

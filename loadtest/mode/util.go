@@ -135,3 +135,19 @@ func SendRawTransactionPrivate(ctx context.Context, rpcClient *ethrpc.Client, tx
 	var txHash common.Hash
 	return rpcClient.CallContext(ctx, &txHash, "eth_sendRawTransactionPrivate", hexutil.Encode(rawTx))
 }
+
+// SendSignedTransaction broadcasts a signed transaction using whichever send
+// path the configuration selects. Modes that build and sign their own
+// transactions share this so a new send method only has to be wired in once.
+func SendSignedTransaction(ctx context.Context, deps *Dependencies, cfg *config.Config, tx *types.Transaction) error {
+	switch {
+	case cfg.OutputRawTxOnly:
+		return OutputRawTransaction(tx)
+	case cfg.SyncTxs:
+		return SendRawTransactionSync(ctx, deps, cfg, tx)
+	case cfg.PrivateTxs:
+		return SendRawTransactionPrivate(ctx, deps.SendRPCClient, tx)
+	default:
+		return deps.SendClient.SendTransaction(ctx, tx)
+	}
+}

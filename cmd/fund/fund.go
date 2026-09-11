@@ -54,6 +54,9 @@ func runFunding(ctx context.Context) error {
 		log.Error().Err(err).Msg("Unable create transaction signer")
 		return err
 	}
+	if err = applyGasPriceOverrides(ctx, c, tops); err != nil {
+		return err
+	}
 
 	var addresses []common.Address
 	var privateKeys []*ecdsa.PrivateKey
@@ -181,6 +184,54 @@ func dialRpc(ctx context.Context) (*ethclient.Client, error) {
 }
 
 // Initialize parameters.
+// chainSupportsEIP1559 reports whether the chain supports EIP-1559 dynamic fee
+// transactions, caching the result of the first lookup.
+var chainSupportsEIP1559Cache *bool
+
+func chainSupportsEIP1559(ctx context.Context, c *ethclient.Client) (bool, error) {
+	if chainSupportsEIP1559Cache != nil {
+		return *chainSupportsEIP1559Cache, nil
+	}
+	header, err := c.HeaderByNumber(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("unable to fetch latest block header: %w", err)
+	}
+	supported := header.BaseFee != nil
+	chainSupportsEIP1559Cache = &supported
+	return supported, nil
+}
+
+// applyGasPriceOverrides applies the --gas-price and --priority-gas-price flag
+// values to the given transactor. On EIP-1559 chains, --gas-price sets the max
+// fee per gas and --priority-gas-price sets the gas tip cap; on legacy chains,
+// --gas-price sets the gas price and --priority-gas-price is ignored. Fields
+// without a corresponding flag are left nil so the client suggests them.
+func applyGasPriceOverrides(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts) error {
+	if params.GasPrice == 0 && params.PriorityGasPrice == 0 {
+		return nil
+	}
+	supportsEIP1559, err := chainSupportsEIP1559(ctx, c)
+	if err != nil {
+		return err
+	}
+	if supportsEIP1559 {
+		if params.GasPrice != 0 {
+			tops.GasFeeCap = new(big.Int).SetUint64(params.GasPrice)
+		}
+		if params.PriorityGasPrice != 0 {
+			tops.GasTipCap = new(big.Int).SetUint64(params.PriorityGasPrice)
+		}
+		return nil
+	}
+	if params.PriorityGasPrice != 0 {
+		log.Warn().Msg("Chain does not support EIP-1559, ignoring --priority-gas-price")
+	}
+	if params.GasPrice != 0 {
+		tops.GasPrice = new(big.Int).SetUint64(params.GasPrice)
+	}
+	return nil
+}
+
 func initializeParams(ctx context.Context, c *ethclient.Client) (*ecdsa.PrivateKey, *big.Int, error) {
 	// Parse the private key.
 	trimmedHexPrivateKey := strings.TrimPrefix(params.PrivateKey, "0x")
@@ -223,7 +274,11 @@ func deployOrInstantiateFunderContract(ctx context.Context, c *ethclient.Client,
 		// Note: `funderContractBalanceInWei` represents the initial balance of the Funder contract.
 		// The contract needs initial funds to be able to fund wallets.
 		funderContractBalanceInWei := new(big.Int).Mul(fundingAmountInWei, big.NewInt(int64(numAddresses)))
-		if err = util.SendTx(ctx, c, privateKey, &contractAddress, funderContractBalanceInWei, nil, uint64(30000)); err != nil {
+		var gasPrice *big.Int
+		if params.GasPrice != 0 {
+			gasPrice = new(big.Int).SetUint64(params.GasPrice)
+		}
+		if err = util.SendTx(ctx, c, privateKey, &contractAddress, funderContractBalanceInWei, gasPrice, nil, uint64(30000)); err != nil {
 			return nil, err
 		}
 	} else {
@@ -406,6 +461,9 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 
 		if uint64(len(accs)) == accsToFundPerTx || i == len(wallets)-1 {
 			wg.Add(1)
+			// Give each goroutine its own copy since the multicall3 helpers
+			// mutate tops.Value.
+			topsCopy := *tops
 			go func(tops *bind.TransactOpts, accs []common.Address) {
 				defer wg.Done()
 				var iErr error
@@ -443,7 +501,7 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 					Uint64("of", uint64(len(wallets))).
 					Msg("multicall3 transaction to fund accounts sent")
 				txsCh <- tx
-			}(tops, accs)
+			}(&topsCopy, accs)
 			accs = []common.Address{}
 		}
 	}
@@ -615,6 +673,9 @@ func approveSpenderForWallets(ctx context.Context, c *ethclient.Client, tokenAdd
 		walletTops, err := bind.NewKeyedTransactorWithChainID(walletPrivateKey, chainID)
 		if err != nil {
 			log.Error().Err(err).Str("wallet", wallet.String()).Msg("Unable to create transaction signer for wallet")
+			return err
+		}
+		if err = applyGasPriceOverrides(ctx, c, walletTops); err != nil {
 			return err
 		}
 

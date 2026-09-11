@@ -33,6 +33,10 @@ type Dependencies struct {
 	ERC721Contract     *tokens.ERC721
 	ERC721Address      common.Address
 
+	// SyncTracker aggregates eth_sendRawTransactionSync outcomes when
+	// --sync-txs is set. Nil otherwise, which records nothing.
+	SyncTracker *SyncTracker
+
 	// Mode-specific data
 	RecallTransactions []rpctypes.PolyTransaction
 	IndexedActivity    *IndexedActivity

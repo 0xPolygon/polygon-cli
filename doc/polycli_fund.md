@@ -91,11 +91,13 @@ $ cast balance 0x5D8121cf716B70d3e345adB58157752304eED5C3
       --eth-amount big.Int             amount of wei to send to each wallet (default 50000000000000000)
   -f, --file string                    output JSON file path for storing addresses and private keys of funded wallets (default "wallets.json")
       --funder-address string          address of pre-deployed funder contract
+      --gas-price gas                  gas price with unit support (e.g., "100gwei", "1000000000")
       --hd-derivation                  derive wallets to fund from private key in deterministic way (default true)
   -h, --help                           help for fund
       --key-file string                file containing accounts private keys, one per line
       --multicall3-address string      address of pre-deployed multicall3 contract
   -n, --number uint                    number of wallets to fund (default 10)
+      --priority-gas-price gas         gas tip for EIP-1559 with unit support (e.g., "2gwei")
       --private-key string             hex encoded private key to use for sending transactions (default "0x42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa")
       --rate-limit float               requests per second limit (use negative value to remove limit) (default 4)
   -r, --rpc-url string                 RPC endpoint URL (default "http://localhost:8545")
