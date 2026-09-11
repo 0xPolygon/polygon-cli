@@ -819,6 +819,8 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 					Any("nonce", sendingTops.Nonce).
 					Str("mode", selectedMode.Name()).
 					Str("sendingAddress", sendingTops.From.String()).
+					Time("sentAt", startReq).
+					Int64("sendMs", endReq.Sub(startReq).Milliseconds()).
 					Msg("Request")
 			}
 		}(routineID)

@@ -5,10 +5,17 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+func init() {
+	// Millisecond/nanosecond-precision timestamps so per-transaction send
+	// and receipt times can be correlated with node logs.
+	zerolog.TimeFieldFormat = time.RFC3339Nano
+}
 
 // Verbosity levels.
 // https://pkg.go.dev/github.com/rs/zerolog#readme-leveled-logging
