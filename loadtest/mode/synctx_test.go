@@ -644,8 +644,8 @@ func TestLogReceiptTraceCustomMessages(t *testing.T) {
 
 	hash := common.HexToHash("0xf00d")
 	raw := json.RawMessage(`{"transactionHash":"0xf00d","status":"0x1"}`)
-	LogReceiptTrace(hash, raw, 42*time.Millisecond, nil, "Transaction receipt", "Receipt wait failed")
-	LogReceiptTrace(hash, nil, 42*time.Millisecond, fmt.Errorf("boom"), "Transaction receipt", "Receipt wait failed")
+	LogReceiptTrace(hash, raw, time.Now(), 42*time.Millisecond, nil, "Transaction receipt", "Receipt wait failed")
+	LogReceiptTrace(hash, nil, time.Now(), 42*time.Millisecond, fmt.Errorf("boom"), "Transaction receipt", "Receipt wait failed")
 
 	out := buf.String()
 	if !strings.Contains(out, "Transaction receipt") {

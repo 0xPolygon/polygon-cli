@@ -142,7 +142,7 @@ func SendRawTransactionSync(ctx context.Context, deps *Dependencies, cfg *config
 		}
 	}
 
-	LogReceiptTrace(tx.Hash(), raw, elapsed, err,
+	LogReceiptTrace(tx.Hash(), raw, start, elapsed, err,
 		"Sync transaction receipt", "Sync transaction submission failed")
 
 	deps.SyncTracker.Record(tx.Hash(), receipt, elapsed, err)
@@ -154,7 +154,7 @@ func SendRawTransactionSync(ctx context.Context, deps *Dependencies, cfg *config
 // one) so the node's answers can be audited later, e.g. by diffing them
 // against eth_getTransactionReceipt. It is shared by the synchronous send path
 // and the runner's --wait-for-receipt polling, which differ only in message.
-func LogReceiptTrace(txHash common.Hash, raw json.RawMessage, elapsed time.Duration, err error, okMsg, failMsg string) {
+func LogReceiptTrace(txHash common.Hash, raw json.RawMessage, sentAt time.Time, elapsed time.Duration, err error, okMsg, failMsg string) {
 	if zerolog.GlobalLevel() > zerolog.TraceLevel {
 		return
 	}
@@ -162,6 +162,7 @@ func LogReceiptTrace(txHash common.Hash, raw json.RawMessage, elapsed time.Durat
 	if err != nil {
 		event := log.Trace().
 			Str("txHash", txHash.Hex()).
+			Time("sentAt", sentAt).
 			Int64("durationMs", elapsed.Milliseconds()).
 			Err(err)
 		if code, ok := SyncErrorCode(err); ok {
@@ -185,6 +186,7 @@ func LogReceiptTrace(txHash common.Hash, raw json.RawMessage, elapsed time.Durat
 	}
 	log.Trace().
 		Str("txHash", txHash.Hex()).
+		Time("sentAt", sentAt).
 		Int64("durationMs", elapsed.Milliseconds()).
 		RawJSON("receipt", raw).
 		Msg(okMsg)

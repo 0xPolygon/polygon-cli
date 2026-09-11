@@ -770,7 +770,7 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 						InitialDelay: time.Duration(cfg.ReceiptRetryDelay) * time.Millisecond,
 						Interval:     cfg.ReceiptPollInterval,
 					})
-					mode.LogReceiptTrace(ltTxHash, rawReceipt, time.Since(waitStart), tErr,
+					mode.LogReceiptTrace(ltTxHash, rawReceipt, startReq, time.Since(waitStart), tErr,
 						"Transaction receipt", "Receipt wait failed")
 				}
 
