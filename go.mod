@@ -29,7 +29,7 @@ require (
 	github.com/xeipuuv/gojsonschema v1.2.0
 	golang.org/x/crypto v0.56.0
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
-	golang.org/x/text v0.41.0
+	golang.org/x/text v0.42.0
 	golang.org/x/time v0.15.0
 	google.golang.org/api v0.297.0
 	google.golang.org/protobuf v1.36.12
@@ -160,7 +160,7 @@ require (
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.22.0
+	golang.org/x/sync v0.23.0
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.45.0
 	google.golang.org/genproto v0.0.0-20260715232425-e75dac1f907d // indirect
