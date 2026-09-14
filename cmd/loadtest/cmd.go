@@ -104,6 +104,7 @@ func init() {
 func initPersistentFlags() {
 	pf := LoadtestCmd.PersistentFlags()
 	pf.StringVarP(&cfg.RPCURL, flag.RPCURL, "r", flag.DefaultRPCURL, "the RPC endpoint URL")
+	pf.StringVar(&cfg.SendRPCURL, "send-rpc-url", "", "secondary RPC endpoint used only to broadcast transactions (eth_sendRawTransaction / eth_sendRawTransactionPrivate); all other calls use --rpc-url")
 	pf.Int64VarP(&cfg.Requests, "requests", "n", 1, "number of requests to perform for the benchmarking session (default of 1 leads to non-representative results)")
 	pf.Int64VarP(&cfg.Concurrency, "concurrency", "c", 1, "number of requests to perform concurrently (default: one at a time)")
 	pf.Int64VarP(&cfg.TimeLimit, "time-limit", "t", -1, "maximum seconds to spend benchmarking (default: no limit)")
@@ -115,8 +116,18 @@ func initPersistentFlags() {
 	pf.BoolVar(&cfg.EthCallOnlyLatestBlock, "eth-call-only-latest", false, "execute on latest block instead of original block in call-only mode with recall")
 	pf.BoolVar(&cfg.OutputRawTxOnly, "output-raw-tx-only", false, "output raw signed transaction hex without sending (works with most modes except RPC and UniswapV3)")
 	pf.BoolVar(&cfg.PrivateTxs, "private-txs", false, "send transactions via eth_sendRawTransactionPrivate")
+	pf.BoolVar(&cfg.SyncTxs, "sync-txs", false,
+		`send transactions via eth_sendRawTransactionSync (EIP-7966), which blocks until
+the node has a receipt; useful for measuring preconfirmation latency`)
+	pf.BoolVar(&cfg.SyncTxTimeoutInt, "sync-tx-timeout-int", false,
+		`send the --sync-tx-timeout value as a bare JSON integer instead of a hex quantity;
+bor wants hex (the default), while servers implementing EIP-7966 literally want an integer`)
+	pf.DurationVar(&cfg.SyncTxTimeout, "sync-tx-timeout", 0,
+		`maximum time the node should wait for a receipt with --sync-txs, sent in whole
+milliseconds (0 omits the parameter so the node applies its own default)`)
 	pf.Uint64Var(&cfg.EthAmountInWei, "eth-amount-in-wei", 0, "amount of ether in wei to send per transaction")
 	pf.Float64Var(&cfg.RateLimit, "rate-limit", 4, "requests per second limit (use negative value to remove limit)")
+	pf.DurationVar(&cfg.RateLimitRampDuration, "rate-limit-ramp-duration", 0, "linearly ramp rate limit from max(1% of --rate-limit, 1 TPS) to full --rate-limit over this duration (e.g. 3m; 0 disables ramp)")
 	pf.BoolVar(&cfg.AdaptiveRateLimit, "adaptive-rate-limit", false, "enable AIMD-style congestion control to automatically adjust request rate")
 	pf.Uint64Var(&cfg.AdaptiveTargetSize, "adaptive-target-size", 1000, "target queue size for adaptive rate limiting (speed up if smaller, back off if larger)")
 	pf.Uint64Var(&cfg.AdaptiveRateLimitIncrement, "adaptive-rate-limit-increment", 50, "size of additive increases for adaptive rate limiting")
@@ -128,6 +139,7 @@ func initPersistentFlags() {
 	pf.Var(&flag.GasValue{Val: &cfg.ForceGasPrice}, "gas-price", "gas price with unit support (e.g., \"100gwei\", \"1000000000\")")
 	pf.Uint64Var(&cfg.StartNonce, "nonce", 0, "use this flag to manually set the starting nonce")
 	pf.Float64Var(&cfg.DuplicateNonceRate, "duplicate-nonce-rate", 0, "ratio of duplicate-nonce txs to fresh txs (0 disables; 1 = 50% duplicates, 4 = 80%); requires --fire-and-forget")
+	pf.BoolVar(&cfg.ReverseNonceOrder, "reverse-nonce-order", false, "send each account's txs in descending nonce order, from highest planned nonce down to the current one, to stress queued vs pending txpool dynamics; total requests must divide evenly across accounts; requires --fire-and-forget")
 	pf.Var(&flag.GasValue{Val: &cfg.ForcePriorityGasPrice}, "priority-gas-price", "gas tip for EIP-1559 with unit support (e.g., \"2gwei\")")
 	pf.BoolVar(&cfg.ShouldProduceSummary, "summarize", false, "produce execution summary after load test (can take a long time for large tests)")
 	pf.Uint64Var(&cfg.BatchSize, "batch-size", 999, "batch size for receipt fetching (default: 999)")
@@ -170,7 +182,7 @@ func initFlags() {
 	f.StringVar(&cfg.SendingAccountsFile, "sending-accounts-file", "", "file with sending account private keys, one per line (avoids pool queue and preserves accounts across runs)")
 	f.StringVar(&cfg.DumpSendingAccountsFile, "dump-sending-accounts-file", "", "file path to dump generated private keys when using --sending-accounts-count")
 	f.Uint64Var(&cfg.AccountsPerFundingTx, "accounts-per-funding-tx", 400, "number of accounts to fund per multicall3 transaction")
-	f.BoolVar(&cfg.SequentialNonceFetch, "sequential-nonce-fetch", false, "fetch nonces sequentially instead of in parallel (use if hitting rate limits)")
+	f.BoolVar(&cfg.SequentialNonceFetch, "sequential-nonce-fetch", false, "fetch nonces one at a time through the rate limiter instead of in parallel bounded by --concurrency")
 	f.Uint64Var(&cfg.MaxBaseFeeWei, "max-base-fee-wei", 0, "maximum base fee in wei (pause sending new transactions when exceeded, useful during network congestion)")
 	f.StringSliceVarP(&cfg.Modes, "mode", "m", []string{"t"}, `testing mode (can specify multiple like "d,t"):
 2, erc20 - send ERC20 tokens
@@ -199,6 +211,10 @@ v3, uniswapv3 - perform UniswapV3 swaps`)
 	f.BoolVar(&cfg.WaitForReceipt, "wait-for-receipt", false, "wait for transaction receipt to be mined instead of just sending")
 	f.UintVar(&cfg.ReceiptRetryMax, "receipt-retry-max", 30, "maximum polling attempts for transaction receipt with --wait-for-receipt")
 	f.UintVar(&cfg.ReceiptRetryDelay, "receipt-retry-initial-delay-ms", 100, "initial delay in milliseconds for receipt polling (uses exponential backoff with jitter)")
+	f.DurationVar(&cfg.ReceiptPollInterval, "receipt-poll-interval", 0,
+		`fixed interval between receipt polls with --wait-for-receipt; when set, polling is
+bounded only by the receipt timeout and --receipt-retry-max is ignored (0 uses
+exponential backoff with jitter)`)
 	f.BoolVar(&cfg.CheckBalanceBeforeFunding, "check-balance-before-funding", false, "check account balance before funding sending accounts (saves gas when accounts are already funded)")
 }
 

@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"math/rand"
 	"slices"
@@ -35,11 +36,20 @@ type AccountPoolConfig struct {
 	AccountsPerFundingTx      uint64
 	SequentialNonceFetch      bool
 	StopOnInsufficientFunds   bool
+	// Concurrency bounds the number of in-flight requests the parallel nonce
+	// sweep issues. Values <= 0 fall back to a single request at a time.
+	Concurrency int64
 	// Gas override settings
 	ForceGasPrice         uint64
 	ForcePriorityGasPrice uint64
 	GasPriceMultiplier    *big.Float
 	ChainSupportBaseFee   bool
+
+	// ReverseNonceOrder makes Next() hand out each account's nonces in
+	// descending order, from a precomputed highest nonce down to the account's
+	// starting nonce (see PrepareReverseNonces). Used to stress queued vs
+	// pending txpool dynamics. Requires fire-and-forget.
+	ReverseNonceOrder bool
 
 	// DuplicateNonceRate controls how often Next() returns the same nonce twice
 	// in a row for the same account. The probability of duplication is
@@ -238,8 +248,21 @@ func (ap *AccountPool) AllAccountsReady() (bool, int, int) {
 	return rdyCount == len(ap.accounts), rdyCount, len(ap.accounts)
 }
 
-// FetchNoncesInParallel fetches nonces for all accounts that aren't ready yet,
-// in parallel without rate limiting. This is the default behavior unless SequentialNonceFetch is enabled.
+// nonceFetchMaxAttempts is how many times the parallel nonce sweep tries a
+// single eth_getTransactionCount before giving up on that account. Managed and
+// load-balanced endpoints shed load with 429s / 5xx under a large sweep, so a
+// bounded retry lets the run survive transient rejections.
+const nonceFetchMaxAttempts = 5
+
+// nonceFetchInitialBackoff is the delay before the second attempt; it doubles
+// on every subsequent attempt.
+const nonceFetchInitialBackoff = 250 * time.Millisecond
+
+// FetchNoncesInParallel fetches nonces for all accounts that aren't ready yet.
+// Fetches run concurrently but no more than Concurrency requests are in flight
+// at once, so a large --sending-accounts-file doesn't hit the endpoint with one
+// request per account simultaneously. This is the default behavior unless
+// SequentialNonceFetch is enabled.
 func (ap *AccountPool) FetchNoncesInParallel(ctx context.Context) error {
 	ap.mu.Lock()
 	// Collect accounts that need nonce fetching
@@ -255,16 +278,41 @@ func (ap *AccountPool) FetchNoncesInParallel(ctx context.Context) error {
 		return nil
 	}
 
-	log.Info().Int("count", len(accountsToFetch)).Msg("Fetching nonces in parallel")
+	concurrency := int(ap.cfg.Concurrency)
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+	if concurrency > len(accountsToFetch) {
+		concurrency = len(accountsToFetch)
+	}
+
+	log.Info().
+		Int("count", len(accountsToFetch)).
+		Int("concurrency", concurrency).
+		Msg("Fetching nonces in parallel")
 
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(accountsToFetch))
+	// sem bounds in-flight requests; acquiring a slot before spawning keeps the
+	// number of live goroutines bounded too.
+	sem := make(chan struct{}, concurrency)
 
+	var canceled bool
 	for _, acc := range accountsToFetch {
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			canceled = true
+		}
+		if canceled {
+			break
+		}
+
 		wg.Add(1)
 		go func(a *Account) {
 			defer wg.Done()
-			nonce, err := ap.client.NonceAt(ctx, a.address, nil)
+			defer func() { <-sem }()
+			nonce, err := ap.fetchNonceWithRetry(ctx, a.address)
 			if err != nil {
 				errCh <- fmt.Errorf("failed to get nonce for %s: %w", a.address.Hex(), err)
 				return
@@ -280,6 +328,10 @@ func (ap *AccountPool) FetchNoncesInParallel(ctx context.Context) error {
 	wg.Wait()
 	close(errCh)
 
+	if canceled {
+		return ctx.Err()
+	}
+
 	// Collect errors
 	var errs []error
 	for err := range errCh {
@@ -291,6 +343,44 @@ func (ap *AccountPool) FetchNoncesInParallel(ctx context.Context) error {
 
 	log.Info().Int("count", len(accountsToFetch)).Msg("Nonces fetched successfully")
 	return nil
+}
+
+// fetchNonceWithRetry gets the nonce for an address, retrying with exponential
+// backoff so a transiently overloaded endpoint doesn't abort the whole run.
+func (ap *AccountPool) fetchNonceWithRetry(ctx context.Context, address common.Address) (uint64, error) {
+	backoff := nonceFetchInitialBackoff
+	var lastErr error
+	for attempt := 1; attempt <= nonceFetchMaxAttempts; attempt++ {
+		nonce, err := ap.client.NonceAt(ctx, address, nil)
+		if err == nil {
+			return nonce, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil {
+			return 0, ctx.Err()
+		}
+		if attempt == nonceFetchMaxAttempts {
+			break
+		}
+
+		log.Warn().
+			Err(err).
+			Stringer("addr", address).
+			Int("attempt", attempt).
+			Dur("backoff", backoff).
+			Msg("Failed to get nonce for account, retrying")
+
+		timer := time.NewTimer(backoff)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return 0, ctx.Err()
+		}
+		timer.Stop()
+		backoff *= 2
+	}
+	return 0, fmt.Errorf("failed after %d attempts: %w", nonceFetchMaxAttempts, lastErr)
 }
 
 // StopAccount marks an account as stopped so it won't be used for further transactions.
@@ -417,6 +507,85 @@ func (ap *AccountPool) AddReusableNonce(ctx context.Context, address common.Addr
 		Msg("Reusable nonce added to account")
 
 	return nil
+}
+
+// PrepareReverseNonces prepares all accounts for reverse nonce order sending.
+// For each account, the current nonce becomes the floor (startNonce) and the
+// nonce counter is moved to the top of the account's planned range
+// (startNonce + txsPerAccount - 1). Next() then walks the range downward.
+// Must be called after all account nonces have been fetched and after any
+// setup transactions (contract deployments) have been accounted for, and
+// before the first call to Next().
+func (ap *AccountPool) PrepareReverseNonces(txsPerAccount uint64) error {
+	if txsPerAccount == 0 {
+		return fmt.Errorf("txsPerAccount must be greater than zero")
+	}
+
+	ap.mu.Lock()
+	defer ap.mu.Unlock()
+
+	for _, account := range ap.accounts {
+		if !account.ready {
+			return fmt.Errorf("account %s nonce is not ready", account.address.Hex())
+		}
+		if account.nonce > math.MaxUint64-(txsPerAccount-1) {
+			return fmt.Errorf("account %s nonce %d + %d txs per account overflows uint64", account.address.Hex(), account.nonce, txsPerAccount)
+		}
+		account.startNonce = account.nonce
+		account.nonce += txsPerAccount - 1
+
+		log.Debug().
+			Stringer("address", account.address).
+			Uint64("floorNonce", account.startNonce).
+			Uint64("topNonce", account.nonce).
+			Msg("Prepared account for reverse nonce order")
+	}
+
+	return nil
+}
+
+// AccountCount returns the total number of accounts in the pool.
+func (ap *AccountPool) AccountCount() int {
+	ap.mu.Lock()
+	defer ap.mu.Unlock()
+	return len(ap.accounts)
+}
+
+// FastForwardNonce sets the nonce of the account with the given address to
+// nextNonce when it is higher than the current value, and drops any reusable
+// nonces below nextNonce since the network already considers them used. It
+// never rewinds the nonce, so a stale error message can't undo progress made
+// by concurrent in-flight transactions. It returns whether the nonce was
+// updated.
+func (ap *AccountPool) FastForwardNonce(ctx context.Context, address common.Address, nextNonce uint64) (bool, error) {
+	ap.mu.Lock()
+	defer ap.mu.Unlock()
+
+	accountPos, found := ap.accountsPositions[address]
+	if !found {
+		return false, fmt.Errorf("account not found in pool: %s", address.Hex())
+	}
+
+	account := ap.accounts[accountPos]
+
+	// reusableNonces is kept sorted ascending, so cut everything below nextNonce
+	firstValid, _ := slices.BinarySearch(account.reusableNonces, nextNonce)
+	if firstValid > 0 {
+		account.reusableNonces = account.reusableNonces[firstValid:]
+	}
+
+	if nextNonce <= account.nonce {
+		return false, nil
+	}
+
+	log.Debug().
+		Stringer("address", address).
+		Uint64("oldNonce", account.nonce).
+		Uint64("newNonce", nextNonce).
+		Msg("Fast-forwarding account nonce")
+
+	account.nonce = nextNonce
+	return true, nil
 }
 
 // RefreshNonce refreshes the nonce for the given address.
@@ -1167,6 +1336,23 @@ func (ap *AccountPool) Next(ctx context.Context) (Account, error) {
 		account.funded = true
 
 		accCopy := *account
+
+		if ap.cfg.ReverseNonceOrder {
+			// Failed nonces are re-sent as-is; they don't move the descending
+			// counter since their slot in the range was already consumed.
+			if len(account.reusableNonces) > 0 {
+				accCopy.nonce = account.reusableNonces[0]
+				account.reusableNonces = account.reusableNonces[1:]
+			} else if account.nonce > account.startNonce {
+				account.nonce--
+			} else {
+				// The floor nonce is being handed out now; the account's range
+				// is exhausted, so stop it to guard against extra requests
+				// re-sending nonces below the floor (uint64 underflow).
+				account.stopped = true
+			}
+			return accCopy, nil
+		}
 
 		// Check if the account has a reusable nonce
 		if len(account.reusableNonces) > 0 {

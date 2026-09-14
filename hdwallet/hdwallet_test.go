@@ -348,6 +348,69 @@ func TestPaddedPublicKey(t *testing.T) {
 	}
 }
 
+// TestExportHDAddressesMatchesPerPathDerivation verifies that the batched,
+// parallel derivation in ExportHDAddresses produces exactly the same keys as
+// deriving each address independently from the master key via GetKeyForPath.
+// Golden values were captured from the output of the pre-optimization
+// implementation.
+func TestExportHDAddressesMatchesPerPathDerivation(t *testing.T) {
+	const mnemonic = "code code code code code code code code code code code quality"
+	const count = 500
+
+	pw, err := NewPolyWallet(mnemonic, "")
+	require.NoError(t, err)
+
+	export, err := pw.ExportHDAddresses(count)
+	require.NoError(t, err)
+	require.Len(t, export.Addresses, count)
+
+	// Golden values from the pre-optimization implementation.
+	first := export.Addresses[0]
+	assert.Equal(t, "m/44'/60'/0'/0/0", first.Path)
+	assert.Equal(t, "0x85dA99c8a7C2C95964c8EfD687E95E632Fc533D6", first.ETHAddress)
+	assert.Equal(t, "42b6e34dc21598a807dc19d7784c71b2a7a01f6480dc6f58258f78e539f1a1fa", first.HexPrivateKey)
+	assert.Equal(t, "03507cf9a75e053cda6922467721ddb10412da9bec30620347d9529cc77fca2433", first.HexPublicKey)
+	assert.Equal(t, "1HdqWQqsVD41pKNHVrpFGNHqW6t3fuAfkh", first.BTCAddress)
+	assert.Equal(t, "KyTPrvjtqbyu9J4bRAvJgnBeYAdrdvCAToceM1RwDGFjEAdra6Fa", first.WIF)
+	last := export.Addresses[count-1]
+	assert.Equal(t, "m/44'/60'/0'/0/499", last.Path)
+	assert.Equal(t, "0x927C2d5aEab7BEFfb2e61C151f2524D00169d146", last.ETHAddress)
+	assert.Equal(t, "c29ee1a8886b2f1f592f3e4156d2d57842f0674f05b5e831b49c99b4ab233019", last.HexPrivateKey)
+
+	// Re-derive every address independently on a fresh wallet and compare.
+	reference, err := NewPolyWallet(mnemonic, "")
+	require.NoError(t, err)
+
+	for i, addr := range export.Addresses {
+		expectedPath := fmt.Sprintf("m/44'/60'/0'/0/%d", i)
+		require.Equal(t, expectedPath, addr.Path)
+
+		k, err := reference.GetKeyForPath(expectedPath)
+		require.NoError(t, err)
+
+		pubKey := k.PublicKey()
+		uncompressedPubKey := toUncompressedPubKey(k)
+		assert.Equal(t, hex.EncodeToString(k.Key), addr.HexPrivateKey, "path %s", expectedPath)
+		assert.Equal(t, hex.EncodeToString(pubKey.Key), addr.HexPublicKey, "path %s", expectedPath)
+		assert.Equal(t, hex.EncodeToString(uncompressedPubKey), addr.HexFullPublicKey, "path %s", expectedPath)
+		assert.Equal(t, RawPubKeyToETHAddress(uncompressedPubKey).String(), addr.ETHAddress, "path %s", expectedPath)
+		assert.Equal(t, toWIF(k), addr.WIF, "path %s", expectedPath)
+		assert.Equal(t, toBTCAddress(pubKey), addr.BTCAddress, "path %s", expectedPath)
+	}
+}
+
+func BenchmarkExportHDAddresses(b *testing.B) {
+	const mnemonic = "code code code code code code code code code code code quality"
+	pw, err := NewPolyWallet(mnemonic, "")
+	require.NoError(b, err)
+
+	b.ResetTimer()
+	for b.Loop() {
+		_, err := pw.ExportHDAddresses(500)
+		require.NoError(b, err)
+	}
+}
+
 func TestDerivationPath(t *testing.T) {
 	type testCase struct {
 		derivationPathInput  string

@@ -102,12 +102,8 @@ func (m *RecallMode) Execute(ctx context.Context, cfg *config.Config, deps *mode
 		}
 		// we're not going to return the error in the case because there is no point retrying
 		err = nil
-	} else if cfg.OutputRawTxOnly {
-		err = mode.OutputRawTransaction(stx)
-	} else if cfg.PrivateTxs {
-		err = mode.SendRawTransactionPrivate(ctx, deps.RPCClient, stx)
 	} else {
-		err = deps.Client.SendTransaction(ctx, stx)
+		err = mode.SendSignedTransaction(ctx, deps, cfg, stx)
 	}
 	return
 }

@@ -3,14 +3,17 @@ package loadtest
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,6 +50,11 @@ type Runner struct {
 	startBlockNumber uint64
 	finalBlockNumber uint64
 
+	// reverseTxsPerAccount is the size of each account's descending nonce
+	// range when --reverse-nonce-order is enabled. Computed and validated in
+	// initAccountPool, applied via PrepareReverseNonces in mainLoop.
+	reverseTxsPerAccount uint64
+
 	// Mode execution
 	modes             []mode.Runner
 	waitBaseFeeToDrop atomic.Bool
@@ -58,9 +66,12 @@ type Runner struct {
 	// Preconf tracker
 	preconfTracker *PreconfTracker
 
-	// Clients
-	client    *ethclient.Client
-	rpcClient *ethrpc.Client
+	// Clients. sendClient/sendRPCClient are used only to broadcast
+	// transactions; they alias client/rpcClient unless --send-rpc-url is set.
+	client        *ethclient.Client
+	rpcClient     *ethrpc.Client
+	sendClient    *ethclient.Client
+	sendRPCClient *ethrpc.Client
 
 	// Gas price caching
 	cachedBlockNumber       *uint64
@@ -81,11 +92,9 @@ func NewRunner(cfg *config.Config) (*Runner, error) {
 	}, nil
 }
 
-// Init sets up the runner, including clients and account pool.
-func (r *Runner) Init(ctx context.Context) error {
-	log.Info().Msg("Initializing load test runner")
-
-	// Configure HTTP transport
+// dialRPC dials an RPC endpoint with its own HTTP transport, applying the
+// configured proxy and custom headers.
+func (r *Runner) dialRPC(ctx context.Context, rpcURL string) (*ethrpc.Client, error) {
 	connLimit := 2 * int(r.cfg.Concurrency)
 	transport := &http.Transport{
 		MaxIdleConns:        connLimit,
@@ -95,7 +104,7 @@ func (r *Runner) Init(ctx context.Context) error {
 	if r.cfg.Proxy != "" {
 		proxyURL, err := url.Parse(r.cfg.Proxy)
 		if err != nil {
-			return errors.New("invalid proxy address: " + r.cfg.Proxy + ": " + err.Error())
+			return nil, errors.New("invalid proxy address: " + r.cfg.Proxy + ": " + err.Error())
 		}
 		transport.Proxy = http.ProxyURL(proxyURL)
 		log.Debug().Stringer("proxyURL", proxyURL).Msg("Transport proxy configured")
@@ -103,23 +112,49 @@ func (r *Runner) Init(ctx context.Context) error {
 
 	goHTTPClient := &http.Client{Transport: transport}
 	rpcOption := ethrpc.WithHTTPClient(goHTTPClient)
-	rpc, err := ethrpc.DialOptions(ctx, r.cfg.RPCURL, rpcOption)
+	rpc, err := ethrpc.DialOptions(ctx, rpcURL, rpcOption)
 	if err != nil {
-		return errors.New("unable to dial rpc: " + err.Error())
+		return nil, errors.New("unable to dial rpc: " + err.Error())
 	}
 	rpc.SetHeader("Accept-Encoding", "identity")
 	for key, value := range r.cfg.Headers {
 		rpc.SetHeader(key, value)
 		log.Debug().Str("header", key).Msg("Custom RPC header configured")
 	}
+	return rpc, nil
+}
+
+// Init sets up the runner, including clients and account pool.
+func (r *Runner) Init(ctx context.Context) error {
+	log.Info().Msg("Initializing load test runner")
+
+	rpc, err := r.dialRPC(ctx, r.cfg.RPCURL)
+	if err != nil {
+		return err
+	}
 	r.rpcClient = rpc
 	r.client = ethclient.NewClient(rpc)
 
+	if r.cfg.SendRPCURL != "" {
+		sendRPC, err := r.dialRPC(ctx, r.cfg.SendRPCURL)
+		if err != nil {
+			return err
+		}
+		r.sendRPCClient = sendRPC
+		r.sendClient = ethclient.NewClient(sendRPC)
+		log.Info().Str("sendRPCURL", r.cfg.SendRPCURL).Msg("Using separate RPC endpoint for transaction broadcast")
+	} else {
+		r.sendRPCClient = r.rpcClient
+		r.sendClient = r.client
+	}
+
 	// Initialize dependencies early so mode parsing can use them.
 	r.deps = &mode.Dependencies{
-		Client:     r.client,
-		RPCClient:  r.rpcClient,
-		RandSource: r.randSrc,
+		Client:        r.client,
+		RPCClient:     r.rpcClient,
+		SendClient:    r.sendClient,
+		SendRPCClient: r.sendRPCClient,
+		RandSource:    r.randSrc,
 	}
 
 	// Initialize load test parameters
@@ -130,6 +165,12 @@ func (r *Runner) Init(ctx context.Context) error {
 	// Initialize gas manager if configured
 	if err := r.setupGasManager(ctx); err != nil {
 		return err
+	}
+
+	// Initialize the synchronous submission tracker if configured. It lives on
+	// deps because the send helper records into it from inside each mode.
+	if r.cfg.SyncTxs {
+		r.deps.SyncTracker = mode.NewSyncTracker()
 	}
 
 	// Initialize preconf tracker if configured
@@ -267,11 +308,13 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		AccountsPerFundingTx:      r.cfg.AccountsPerFundingTx,
 		SequentialNonceFetch:      r.cfg.SequentialNonceFetch,
 		StopOnInsufficientFunds:   r.cfg.StopOnInsufficientFunds,
+		Concurrency:               r.cfg.Concurrency,
 		ForceGasPrice:             r.cfg.ForceGasPrice,
 		ForcePriorityGasPrice:     r.cfg.ForcePriorityGasPrice,
 		GasPriceMultiplier:        r.cfg.BigGasPriceMultiplier,
 		ChainSupportBaseFee:       r.cfg.ChainSupportBaseFee,
 		DuplicateNonceRate:        r.cfg.DuplicateNonceRate,
+		ReverseNonceOrder:         r.cfg.ReverseNonceOrder,
 		Seed:                      r.cfg.Seed,
 	}
 
@@ -320,6 +363,14 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		return errors.New("unable to set account pool: " + err.Error())
 	}
 
+	// Validate reverse nonce order parameters before funding accounts or
+	// sending anything, so misconfigured runs are blocked right away.
+	if r.cfg.ReverseNonceOrder {
+		if err := r.computeReverseTxsPerAccount(); err != nil {
+			return err
+		}
+	}
+
 	// Dump private keys to file if configured
 	if r.cfg.DumpSendingAccountsFile != "" {
 		if err := r.dumpPrivateKeys(); err != nil {
@@ -329,7 +380,7 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 
 	// Wait for all accounts to be ready
 	if !r.cfg.SequentialNonceFetch {
-		// Fetch nonces in parallel without rate limiting
+		// Fetch nonces in parallel, bounded by --concurrency in-flight requests
 		if err := r.accountPool.FetchNoncesInParallel(ctx); err != nil {
 			return errors.New("failed to fetch nonces in parallel: " + err.Error())
 		}
@@ -367,6 +418,43 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 	if err := r.accountPool.FundAccounts(ctx); err != nil {
 		log.Error().Err(err).Msg("Unable to fund sending accounts")
 	}
+
+	return nil
+}
+
+// computeReverseTxsPerAccount computes the size of each account's descending
+// nonce range for --reverse-nonce-order and stores it in the runner. The total
+// number of requests (concurrency * requests) must divide evenly across the
+// accounts, otherwise the per-account nonce ranges wouldn't line up and some
+// queued transactions could never become pending.
+func (r *Runner) computeReverseTxsPerAccount() error {
+	concurrency := r.cfg.Concurrency
+	requests := r.cfg.Requests
+
+	if requests > math.MaxInt64/concurrency {
+		return fmt.Errorf("--reverse-nonce-order: total requests overflow (concurrency %d * requests %d)", concurrency, requests)
+	}
+	totalRequests := concurrency * requests
+
+	accountCount := int64(r.accountPool.AccountCount())
+	if accountCount == 0 {
+		return errors.New("--reverse-nonce-order: no sending accounts in pool")
+	}
+	if totalRequests%accountCount != 0 {
+		return fmt.Errorf("--reverse-nonce-order: total requests (concurrency %d * requests %d = %d) must divide evenly across %d sending accounts", concurrency, requests, totalRequests, accountCount)
+	}
+
+	r.reverseTxsPerAccount = uint64(totalRequests / accountCount)
+
+	if r.cfg.TimeLimit > 0 {
+		log.Warn().Msg("--time-limit with --reverse-nonce-order: stopping early strands queued transactions that will never become pending")
+	}
+
+	log.Info().
+		Int64("totalRequests", totalRequests).
+		Int64("accounts", accountCount).
+		Uint64("txsPerAccount", r.reverseTxsPerAccount).
+		Msg("Reverse nonce order enabled")
 
 	return nil
 }
@@ -473,7 +561,10 @@ func (r *Runner) postLoadTest(ctx context.Context) {
 	cfg := r.cfg
 	results := r.GetResults()
 
-	// Output preconf stats if tracker was used
+	// Output tracker stats. SyncTracker.Stats is a no-op on a nil tracker.
+	if r.deps != nil {
+		r.deps.SyncTracker.Stats()
+	}
 	if r.preconfTracker != nil {
 		r.preconfTracker.Stats()
 	}
@@ -521,6 +612,10 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 	if cfg.AdaptiveRateLimit && r.rl != nil {
 		go r.updateRateLimit(rateLimitCtx)
 	}
+	if cfg.RateLimitRampDuration > 0 && r.rl != nil {
+		r.rl.SetLimit(rate.Limit(rampStartRate(cfg.RateLimit)))
+		go r.rampUpRateLimit(rateLimitCtx)
+	}
 
 	tops, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
 	if err != nil {
@@ -565,6 +660,16 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 	err = r.initModes(ctx)
 	if err != nil {
 		return err
+	}
+
+	// Move each account's nonce to the top of its planned range so the send
+	// loop walks nonces downward. Done as late as possible so setup
+	// transactions (contract deployments, nonce refresh) are reflected in the
+	// per-account floor nonces.
+	if cfg.ReverseNonceOrder {
+		if err = r.accountPool.PrepareReverseNonces(r.reverseTxsPerAccount); err != nil {
+			return fmt.Errorf("failed to prepare reverse nonce order: %w", err)
+		}
 	}
 
 	// Setup max base fee monitoring
@@ -654,9 +759,19 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 					go r.preconfTracker.Track(ltTxHash)
 				}
 
-				// Wait for receipt if configured
+				// Wait for receipt if configured. This blocks the sending
+				// goroutine; the raw receipt is trace-logged so it can be
+				// audited later.
 				if tErr == nil && cfg.WaitForReceipt {
-					_, tErr = util.WaitReceiptWithRetries(ctx, r.client, ltTxHash, cfg.ReceiptRetryMax, cfg.ReceiptRetryDelay)
+					waitStart := time.Now()
+					var rawReceipt json.RawMessage
+					rawReceipt, tErr = util.WaitReceiptRaw(ctx, r.rpcClient, ltTxHash, util.ReceiptWaitOpts{
+						MaxAttempts:  cfg.ReceiptRetryMax,
+						InitialDelay: time.Duration(cfg.ReceiptRetryDelay) * time.Millisecond,
+						Interval:     cfg.ReceiptPollInterval,
+					})
+					mode.LogReceiptTrace(ltTxHash, rawReceipt, time.Since(waitStart), tErr,
+						"Transaction receipt", "Receipt wait failed")
 				}
 
 				// Handle errors
@@ -943,11 +1058,36 @@ func (r *Runner) isCurrentBaseFeeGreaterThanMax(ctx context.Context, maxBaseFee 
 	return false, nil, nil
 }
 
+// nonceTooLowRegexp matches geth-style nonce errors like
+// "nonce too low: next nonce 78, tx nonce 44" and captures the next nonce
+// expected by the network.
+var nonceTooLowRegexp = regexp.MustCompile(`nonce too low: next nonce (\d+), tx nonce \d+`)
+
 func (r *Runner) handleNonceReuse(ctx context.Context, tops *bind.TransactOpts, tErr error) {
+	errMsg := tErr.Error()
+
 	// Start with assumption that we can reuse the nonce
-	reuseNonce := !strings.Contains(tErr.Error(), "replacement transaction underpriced") && !strings.Contains(tErr.Error(), "transaction underpriced") && !strings.Contains(tErr.Error(), "nonce too low") && !strings.Contains(tErr.Error(), "already known") && !strings.Contains(tErr.Error(), "could not replace existing")
+	reuseNonce := !strings.Contains(errMsg, "replacement transaction underpriced") && !strings.Contains(errMsg, "transaction underpriced") && !strings.Contains(errMsg, "nonce too low") && !strings.Contains(errMsg, "already known") && !strings.Contains(errMsg, "could not replace existing")
 
 	// If it is an error that consumes the nonce, we can't retry it
+
+	// If the node told us the nonce it expects next, fast-forward the account
+	// to it instead of grinding through nonces one failed tx at a time. If the
+	// message doesn't match, keep the default increment behavior. Skipped in
+	// reverse nonce order mode, where jumping the counter forward would
+	// corrupt the descending sequence.
+	if match := nonceTooLowRegexp.FindStringSubmatch(errMsg); match != nil && !r.cfg.ReverseNonceOrder {
+		nextNonce, parseErr := strconv.ParseUint(match[1], 10, 64)
+		if parseErr == nil {
+			if _, ffErr := r.accountPool.FastForwardNonce(ctx, tops.From, nextNonce); ffErr != nil {
+				log.Error().
+					Str("address", tops.From.String()).
+					Uint64("nextNonce", nextNonce).
+					Err(ffErr).
+					Msg("Unable to fast-forward account nonce")
+			}
+		}
+	}
 
 	// If we can reuse the nonce, add it back to the account pool
 	if reuseNonce {
@@ -1170,6 +1310,49 @@ func (r *Runner) updateRateLimit(ctx context.Context) {
 	}
 }
 
+// rampStartRate returns the initial rate for the ramp: 1% of the target,
+// but no lower than 1 TPS and never above the target itself.
+func rampStartRate(targetRate float64) float64 {
+	return min(max(targetRate/100, 1), targetRate)
+}
+
+// rampUpRateLimit linearly increases the rate limit from rampStartRate to the
+// full --rate-limit value over --rate-limit-ramp-duration, then exits,
+// leaving the fixed rate limit in place.
+func (r *Runner) rampUpRateLimit(ctx context.Context) {
+	cfg := r.cfg
+	targetRate := cfg.RateLimit
+	startRate := rampStartRate(targetRate)
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	startTime := time.Now()
+	log.Info().
+		Float64("startRateLimit", startRate).
+		Float64("targetRateLimit", targetRate).
+		Dur("rampDuration", cfg.RateLimitRampDuration).
+		Msg("Starting rate limit ramp up")
+
+	for {
+		select {
+		case <-ticker.C:
+			elapsed := time.Since(startTime)
+			if elapsed >= cfg.RateLimitRampDuration {
+				r.rl.SetLimit(rate.Limit(targetRate))
+				log.Info().Float64("rateLimit", targetRate).Msg("Rate limit ramp up complete")
+				return
+			}
+			progress := float64(elapsed) / float64(cfg.RateLimitRampDuration)
+			newLimit := startRate + (targetRate-startRate)*progress
+			r.rl.SetLimit(rate.Limit(newLimit))
+			log.Trace().Float64("rateLimit", newLimit).Msg("Ramping up rate limit")
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 func (r *Runner) configureTransactOpts(ctx context.Context, tops *bind.TransactOpts) *bind.TransactOpts {
 	gasPrice, gasTipCap := r.getSuggestedGasPrices(ctx)
 	tops.GasPrice = gasPrice
@@ -1225,6 +1408,33 @@ func (r *Runner) biasGasPrice(price *big.Int) *big.Int {
 	return result
 }
 
+// cachedPrices returns the cached gas price and tip cap, substituting zero for
+// either one that has not been populated yet. Every fallback path in
+// getSuggestedGasPrices can be reached before the cache is first written -- an
+// RPC error on the very first call does exactly that -- and callers dereference
+// the result without checking, so returning nil from there panics the run.
+//
+// Zero-priced transactions are rejected by the node and surface as recorded
+// send errors, which is the same outcome the account pool settles for and a far
+// better one than a stack trace. The RPC error itself is already logged at each
+// fallback site.
+//
+// The values are copies: they outlive the lock, every sending goroutine holds
+// one at once, and handing out the cached pointers would make any in-place
+// arithmetic by a caller a silent data race on shared state.
+//
+// The caller must hold cachedGasPriceLock.
+func (r *Runner) cachedPrices() (*big.Int, *big.Int) {
+	gasPrice, gasTipCap := new(big.Int), new(big.Int)
+	if r.cachedGasPrice != nil {
+		gasPrice.Set(r.cachedGasPrice)
+	}
+	if r.cachedGasTipCap != nil {
+		gasTipCap.Set(r.cachedGasTipCap)
+	}
+	return gasPrice, gasTipCap
+}
+
 func (r *Runner) getSuggestedGasPrices(ctx context.Context) (*big.Int, *big.Int) {
 	r.cachedGasPriceLock.Lock()
 	defer r.cachedGasPriceLock.Unlock()
@@ -1234,7 +1444,7 @@ func (r *Runner) getSuggestedGasPrices(ctx context.Context) (*big.Int, *big.Int)
 	// Cache is used only when gas pricer is not used
 	if r.gasPricer == nil {
 		if r.cachedBlockNumber != nil && bn <= *r.cachedBlockNumber {
-			return r.cachedGasPrice, r.cachedGasTipCap
+			return r.cachedPrices()
 		}
 	}
 
@@ -1254,14 +1464,14 @@ func (r *Runner) getSuggestedGasPrices(ctx context.Context) (*big.Int, *big.Int)
 				gasPrice = big.NewInt(0).SetUint64(*gp)
 			} else {
 				if r.cachedBlockNumber != nil && bn <= *r.cachedBlockNumber {
-					return r.cachedGasPrice, r.cachedGasTipCap
+					return r.cachedPrices()
 				}
 				gasPrice, pErr = r.client.SuggestGasPrice(ctx)
 				if pErr == nil {
 					gasPrice = r.biasGasPrice(gasPrice)
 				} else {
 					log.Error().Err(pErr).Msg("Unable to suggest gas price")
-					return r.cachedGasPrice, r.cachedGasTipCap
+					return r.cachedPrices()
 				}
 			}
 		}
@@ -1272,14 +1482,14 @@ func (r *Runner) getSuggestedGasPrices(ctx context.Context) (*big.Int, *big.Int)
 			forcePriorityGasPrice = gasTipCap
 		} else if cfg.ChainSupportBaseFee {
 			if r.cachedBlockNumber != nil && bn <= *r.cachedBlockNumber {
-				gasTipCap = r.cachedGasTipCap
+				_, gasTipCap = r.cachedPrices()
 			} else {
 				gasTipCap, tErr = r.client.SuggestGasTipCap(ctx)
 				if tErr == nil {
 					gasTipCap = r.biasGasPrice(gasTipCap)
 				} else {
 					log.Error().Err(tErr).Msg("Unable to suggest gas tip cap")
-					return r.cachedGasPrice, r.cachedGasTipCap
+					return r.cachedPrices()
 				}
 			}
 		} else {
@@ -1297,9 +1507,14 @@ func (r *Runner) getSuggestedGasPrices(ctx context.Context) (*big.Int, *big.Int)
 				gasPrice = big.NewInt(0).SetUint64(*gp)
 			} else {
 				if r.cachedBlockNumber != nil && bn <= *r.cachedBlockNumber {
-					return r.cachedGasPrice, r.cachedGasTipCap
+					return r.cachedPrices()
 				}
 				gasPrice = r.suggestMaxFeePerGas(ctx, bn, forcePriorityGasPrice)
+				if gasPrice == nil {
+					// suggestMaxFeePerGas already logged why. Keep the last
+					// known price rather than caching a nil one.
+					return r.cachedPrices()
+				}
 			}
 		} else {
 			log.Fatal().Msg("Chain does not support base fee. Please set gas-price flag with a value to use for max fee per gas")
@@ -1319,7 +1534,7 @@ func (r *Runner) getSuggestedGasPrices(ctx context.Context) (*big.Int, *big.Int)
 			Msg("Updating gas prices")
 	}
 
-	return r.cachedGasPrice, r.cachedGasTipCap
+	return r.cachedPrices()
 }
 
 func (r *Runner) suggestMaxFeePerGas(ctx context.Context, blockNumber uint64, forcePriorityFee *big.Int) *big.Int {
@@ -1428,6 +1643,9 @@ func (r *Runner) dumpPrivateKeys() error {
 
 // Close cleans up runner resources.
 func (r *Runner) Close() {
+	if r.sendRPCClient != nil && r.sendRPCClient != r.rpcClient {
+		r.sendRPCClient.Close()
+	}
 	if r.rpcClient != nil {
 		r.rpcClient.Close()
 	}
@@ -1441,10 +1659,22 @@ func (r *Runner) waitForFinalBlock(ctx context.Context) (uint64, error) {
 	const checkInterval = 5 * time.Second
 	const maxRetries = 30
 
-	rateLimiter := rate.NewLimiter(rate.Limit(cfg.RateLimit), 1)
+	// A non-positive --rate-limit means no limit, the same reading the main loop
+	// applies. Constructing a limiter from it instead produced a negative
+	// rate.Limit, whose tokens never replenish: the first nonce check took the
+	// initial token and every later one blocked on Wait forever, so wg.Wait
+	// below never returned and the run hung after sending.
+	var rateLimiter *rate.Limiter
+	if cfg.RateLimit > 0 {
+		rateLimiter = rate.NewLimiter(rate.Limit(cfg.RateLimit), 1)
+	}
 	noncesToCheck := r.accountPool.Nonces(ctx, true)
 
 	for retry := 1; retry <= maxRetries; retry++ {
+		if err = ctx.Err(); err != nil {
+			return lastBlockNumber, err
+		}
+
 		lastBlockNumber, err = r.client.BlockNumber(ctx)
 		if err != nil {
 			return 0, err
@@ -1462,9 +1692,11 @@ func (r *Runner) waitForFinalBlock(ctx context.Context) (uint64, error) {
 			expectedNonce := value.(uint64)
 			go func(ctx context.Context, rl *rate.Limiter) {
 				defer wg.Done()
-				if waitErr := rl.Wait(ctx); waitErr != nil {
-					log.Error().Err(waitErr).Msg("Rate limiter wait error")
-					return
+				if rl != nil {
+					if waitErr := rl.Wait(ctx); waitErr != nil {
+						log.Error().Err(waitErr).Msg("Rate limiter wait error")
+						return
+					}
 				}
 				nonce, nonceErr := r.client.NonceAt(ctx, address, new(big.Int).SetUint64(lastBlockNumber))
 				if nonceErr != nil {
@@ -1497,7 +1729,14 @@ func (r *Runner) waitForFinalBlock(ctx context.Context) (uint64, error) {
 			Int("retry", retry).
 			Int("maxRetries", maxRetries).
 			Msg("Waiting for transactions to be mined...")
-		time.Sleep(checkInterval)
+
+		timer := time.NewTimer(checkInterval)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return lastBlockNumber, ctx.Err()
+		}
 	}
 
 	log.Error().Msg("Max retries reached waiting for transactions to be mined")

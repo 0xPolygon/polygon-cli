@@ -9,8 +9,10 @@ import (
 	"math/big"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/0xPolygon/polygon-cli/loadtest/uniswapv3"
+	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -38,6 +40,7 @@ const (
 type Config struct {
 	// Network connection
 	RPCURL     string
+	SendRPCURL string
 	ChainID    uint64
 	Proxy      string
 	RPCHeaders string
@@ -51,23 +54,28 @@ type Config struct {
 	Seed        int64
 
 	// Transaction options
-	PrivateKey         string
-	ToAddress          string
-	EthAmountInWei     uint64
-	RandomRecipients   bool
-	LegacyTxMode       bool
-	FireAndForget      bool
-	CheckForPreconf    bool
-	PreconfStatsFile   string
-	WaitForReceipt     bool
-	ReceiptRetryMax    uint
-	ReceiptRetryDelay  uint // initial delay in milliseconds
-	OutputRawTxOnly    bool
-	PrivateTxs         bool
-	StartNonce         uint64
-	StartNonceSet      bool `json:"-"`
-	GasPriceMultiplier float64
-	DuplicateNonceRate float64
+	PrivateKey          string
+	ToAddress           string
+	EthAmountInWei      uint64
+	RandomRecipients    bool
+	LegacyTxMode        bool
+	FireAndForget       bool
+	CheckForPreconf     bool
+	PreconfStatsFile    string
+	WaitForReceipt      bool
+	ReceiptRetryMax     uint
+	ReceiptRetryDelay   uint // initial delay in milliseconds
+	ReceiptPollInterval time.Duration
+	OutputRawTxOnly     bool
+	PrivateTxs          bool
+	SyncTxs             bool
+	SyncTxTimeout       time.Duration
+	SyncTxTimeoutInt    bool
+	StartNonce          uint64
+	StartNonceSet       bool `json:"-"`
+	GasPriceMultiplier  float64
+	DuplicateNonceRate  float64
+	ReverseNonceOrder   bool
 
 	// Gas options
 	ForceGasLimit         uint64
@@ -77,6 +85,7 @@ type Config struct {
 
 	// Rate limiting
 	RateLimit                  float64
+	RateLimitRampDuration      time.Duration
 	AdaptiveRateLimit          bool
 	AdaptiveTargetSize         uint64
 	AdaptiveRateLimitIncrement uint64
@@ -189,8 +198,17 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("the backoff factor needs to be non-zero positive. Given: %f", c.AdaptiveBackoffFactor)
 	}
 
-	if c.WaitForReceipt && c.ReceiptRetryMax <= 1 {
+	// Retry max only governs the exponential backoff schedule; fixed-interval
+	// polling is bounded by the receipt timeout instead.
+	if c.WaitForReceipt && c.ReceiptPollInterval == 0 && c.ReceiptRetryMax <= 1 {
 		return errors.New("when waiting for a receipt, use a max retry greater than 1")
+	}
+
+	if c.ReceiptPollInterval < 0 {
+		return fmt.Errorf("--receipt-poll-interval must not be negative, got %s", c.ReceiptPollInterval)
+	}
+	if c.ReceiptPollInterval > 0 && !c.WaitForReceipt {
+		return errors.New("--receipt-poll-interval requires --wait-for-receipt")
 	}
 
 	if c.EthCallOnly {
@@ -206,8 +224,51 @@ func (c *Config) Validate() error {
 		return errors.New("gas price multiplier should be non-zero")
 	}
 
+	if c.RateLimitRampDuration < 0 {
+		return errors.New("--rate-limit-ramp-duration must be positive")
+	}
+	if c.RateLimitRampDuration > 0 {
+		if c.AdaptiveRateLimit {
+			return errors.New("--rate-limit-ramp-duration and --adaptive-rate-limit are mutually exclusive")
+		}
+		if c.RateLimit <= 0 {
+			return errors.New("--rate-limit-ramp-duration requires a positive --rate-limit to ramp up to")
+		}
+	}
+
 	if c.PrivateTxs {
-		if err := c.validatePrivateTxsModes(); err != nil {
+		if err := c.validateModesSupportRawSend("--private-txs"); err != nil {
+			return err
+		}
+	}
+
+	if c.SyncTxs {
+		if c.PrivateTxs {
+			return errors.New("--sync-txs and --private-txs are mutually exclusive (each sends via a different RPC method)")
+		}
+		if c.EthCallOnly {
+			return errors.New("--sync-txs doesn't make sense with --eth-call-only, which never sends a transaction")
+		}
+		if c.OutputRawTxOnly {
+			return errors.New("--sync-txs doesn't make sense with --output-raw-tx-only, which never sends a transaction")
+		}
+		if err := c.validateModesSupportRawSend("--sync-txs"); err != nil {
+			return err
+		}
+	}
+
+	if c.SyncTxTimeout < 0 {
+		return fmt.Errorf("--sync-tx-timeout must not be negative, got %s", c.SyncTxTimeout)
+	}
+	if c.SyncTxTimeout > 0 && c.SyncTxTimeout < time.Millisecond {
+		return fmt.Errorf("--sync-tx-timeout is sent in whole milliseconds, so %s rounds to zero; use 0 to let the node apply its default", c.SyncTxTimeout)
+	}
+
+	if c.SendRPCURL != "" {
+		if err := util.ValidateURL(c.SendRPCURL); err != nil {
+			return fmt.Errorf("invalid --send-rpc-url %q: %w", c.SendRPCURL, err)
+		}
+		if err := c.validateModesSupportRawSend("--send-rpc-url"); err != nil {
 			return err
 		}
 	}
@@ -230,11 +291,35 @@ func (c *Config) Validate() error {
 		return errors.New("--duplicate-nonce-rate requires --fire-and-forget (duplicate-nonce txs have no receipt to wait for)")
 	}
 
+	if c.ReverseNonceOrder {
+		if !c.FireAndForget {
+			return errors.New("--reverse-nonce-order requires --fire-and-forget (queued txs can't be mined until the lowest nonce is sent, so waiting for receipts would deadlock)")
+		}
+		if c.WaitForReceipt {
+			return errors.New("--reverse-nonce-order is incompatible with --wait-for-receipt")
+		}
+		if c.EthCallOnly {
+			return errors.New("--reverse-nonce-order doesn't make sense with --eth-call-only (no transactions are sent)")
+		}
+		if c.DuplicateNonceRate > 0 {
+			return errors.New("--reverse-nonce-order is incompatible with --duplicate-nonce-rate")
+		}
+		if c.AdaptiveRateLimit {
+			return errors.New("--reverse-nonce-order is incompatible with --adaptive-rate-limit (pending tx tracking assumes ascending nonces)")
+		}
+		if c.Requests <= 0 || c.Concurrency <= 0 {
+			return errors.New("--reverse-nonce-order requires positive --requests and --concurrency")
+		}
+	}
+
 	return nil
 }
 
-// validatePrivateTxsModes checks that all specified modes support --private-txs.
-func (c *Config) validatePrivateTxsModes() error {
+// validateModesSupportRawSend checks that all specified modes broadcast their
+// transactions explicitly (rather than inside contract bindings), which is
+// required by flags that alter how transactions are sent, such as
+// --private-txs and --send-rpc-url.
+func (c *Config) validateModesSupportRawSend(flagName string) error {
 	supported := map[string]bool{
 		"t": true, "transaction": true,
 		"b": true, "blob": true,
@@ -244,7 +329,7 @@ func (c *Config) validatePrivateTxsModes() error {
 
 	for _, mode := range c.Modes {
 		if !supported[mode] {
-			return fmt.Errorf("--private-txs is not supported for mode %q; supported modes: transaction, blob, contract-call, recall", mode)
+			return fmt.Errorf("%s is not supported for mode %q; supported modes: transaction, blob, contract-call, recall", flagName, mode)
 		}
 	}
 

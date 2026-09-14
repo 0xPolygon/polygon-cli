@@ -20,6 +20,11 @@ type Dependencies struct {
 	Client    *ethclient.Client
 	RPCClient *ethrpc.Client
 
+	// SendClient/SendRPCClient are used only to broadcast signed
+	// transactions. They alias Client/RPCClient unless --send-rpc-url is set.
+	SendClient    *ethclient.Client
+	SendRPCClient *ethrpc.Client
+
 	// Contract instances
 	LoadTesterContract *tester.LoadTester
 	LoadTesterAddress  common.Address
@@ -27,6 +32,10 @@ type Dependencies struct {
 	ERC20Address       common.Address
 	ERC721Contract     *tokens.ERC721
 	ERC721Address      common.Address
+
+	// SyncTracker aggregates eth_sendRawTransactionSync outcomes when
+	// --sync-txs is set. Nil otherwise, which records nothing.
+	SyncTracker *SyncTracker
 
 	// Mode-specific data
 	RecallTransactions []rpctypes.PolyTransaction

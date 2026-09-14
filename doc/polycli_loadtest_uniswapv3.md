@@ -114,13 +114,22 @@ The command also inherits flags from parent commands.
       --private-txs                                      send transactions via eth_sendRawTransactionPrivate
       --random-recipients                                send to random addresses instead of fixed address in transfer tests
       --rate-limit float                                 requests per second limit (use negative value to remove limit) (default 4)
+      --rate-limit-ramp-duration duration                linearly ramp rate limit from max(1% of --rate-limit, 1 TPS) to full --rate-limit over this duration (e.g. 3m; 0 disables ramp)
   -n, --requests int                                     number of requests to perform for the benchmarking session (default of 1 leads to non-representative results) (default 1)
+      --reverse-nonce-order                              send each account's txs in descending nonce order, from highest planned nonce down to the current one, to stress queued vs pending txpool dynamics; total requests must divide evenly across accounts; requires --fire-and-forget
       --rpc-headers string                               custom HTTP headers for RPC requests (format: "key1:value1,key2:value2")
   -r, --rpc-url string                                   the RPC endpoint URL (default "http://localhost:8545")
       --seed int                                         a seed for generating random values and addresses (default 123456)
       --send-only                                        alias for --fire-and-forget
+      --send-rpc-url string                              secondary RPC endpoint used only to broadcast transactions (eth_sendRawTransaction / eth_sendRawTransactionPrivate); all other calls use --rpc-url
       --stop-on-insufficient-funds                       stop sending from account when it encounters insufficient funds error
       --summarize                                        produce execution summary after load test (can take a long time for large tests)
+      --sync-tx-timeout duration                         maximum time the node should wait for a receipt with --sync-txs, sent in whole
+                                                         milliseconds (0 omits the parameter so the node applies its own default)
+      --sync-tx-timeout-int                              send the --sync-tx-timeout value as a bare JSON integer instead of a hex quantity;
+                                                         bor wants hex (the default), while servers implementing EIP-7966 literally want an integer
+      --sync-txs                                         send transactions via eth_sendRawTransactionSync (EIP-7966), which blocks until
+                                                         the node has a receipt; useful for measuring preconfirmation latency
   -t, --time-limit int                                   maximum seconds to spend benchmarking (default: no limit) (default -1)
       --to-address string                                recipient address for transactions (default "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
   -v, --verbosity string                                 log level (string or int):

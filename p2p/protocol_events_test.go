@@ -42,7 +42,7 @@ func (r *recordingDB) ShouldWriteTransactions() bool          { return false }
 
 func makeTxAnnounce(t *testing.T, hash common.Hash) ethp2p.Msg {
 	t.Helper()
-	return encodeMsg(t, eth.NewPooledTransactionHashesMsg, &eth.NewPooledTransactionHashesPacket{
+	return encodeMsg(t, eth.NewPooledTransactionHashesMsg, &eth.NewPooledTransactionHashesPacket71{
 		Types:  []byte{0},
 		Sizes:  []uint32{100},
 		Hashes: []common.Hash{hash},
